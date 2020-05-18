@@ -28,6 +28,7 @@
 
 #if USE(LIBWEBRTC)
 
+#include "LibWebRTCNetworkMessages.h"
 #include "LibWebRTCSocketClient.h"
 #include "Logging.h"
 #include "NetworkConnectionToWebProcess.h"
@@ -35,7 +36,6 @@
 #include "NetworkRTCResolver.h"
 #include "NetworkRTCSocket.h"
 #include "WebRTCResolverMessages.h"
-#include "WebRTCSocketMessages.h"
 #include <WebCore/LibWebRTCMacros.h>
 #include <webrtc/rtc_base/async_packet_socket.h>
 #include <webrtc/rtc_base/logging.h>
@@ -118,7 +118,7 @@ void NetworkRTCProvider::createSocket(LibWebRTCSocketIdentifier identifier, std:
     if (!socket) {
         sendFromMainThread([this, identifier, size = m_sockets.size()](IPC::Connection& connection) {
             RELEASE_LOG_ERROR_IF_ALLOWED("createSocket with %u sockets is unable to create a new socket", size);
-            connection.send(Messages::WebRTCSocket::SignalClose(1), identifier);
+            connection.send(Messages::LibWebRTCNetwork::SignalClose(identifier, 1), 0);
         });
         return;
     }
@@ -137,7 +137,7 @@ void NetworkRTCProvider::createServerTCPSocket(LibWebRTCSocketIdentifier identif
 {
     if (!m_isListeningSocketAuthorized) {
         if (m_connection)
-            m_connection->connection().send(Messages::WebRTCSocket::SignalClose(1), identifier);
+            m_connection->connection().send(Messages::LibWebRTCNetwork::SignalClose(identifier, 1), 0);
         return;
     }
 
@@ -158,7 +158,7 @@ void NetworkRTCProvider::createClientTCPSocket(LibWebRTCSocketIdentifier identif
 {
     auto* session = m_connection->networkSession();
     if (!session) {
-        m_connection->connection().send(Messages::WebRTCSocket::SignalClose(1), identifier);
+        m_connection->connection().send(Messages::LibWebRTCNetwork::SignalClose(identifier, 1), 0);
         return;
     }
     callOnRTCNetworkThread([this, identifier, localAddress = RTCNetwork::isolatedCopy(localAddress.value), remoteAddress = RTCNetwork::isolatedCopy(remoteAddress.value), proxyInfo = proxyInfoFromSession(remoteAddress, *session), userAgent = WTFMove(userAgent).isolatedCopy(), options]() {
@@ -172,8 +172,10 @@ void NetworkRTCProvider::createClientTCPSocket(LibWebRTCSocketIdentifier identif
 void NetworkRTCProvider::wrapNewTCPConnection(LibWebRTCSocketIdentifier identifier, LibWebRTCSocketIdentifier newConnectionSocketIdentifier)
 {
     callOnRTCNetworkThread([this, identifier, newConnectionSocketIdentifier]() {
-        std::unique_ptr<rtc::AsyncPacketSocket> socket = m_pendingIncomingSockets.take(newConnectionSocketIdentifier);
-        addSocket(identifier, makeUnique<LibWebRTCSocketClient>(identifier, *this, WTFMove(socket), Socket::Type::ServerConnectionTCP));
+        auto socket = m_pendingIncomingSockets.take(newConnectionSocketIdentifier);
+        RELEASE_LOG_IF(!socket, WebRTC, "NetworkRTCProvider::wrapNewTCPConnection received an invalid socket identifier");
+        if (socket)
+            addSocket(identifier, makeUnique<LibWebRTCSocketClient>(identifier, *this, WTFMove(socket), Socket::Type::ServerConnectionTCP));
     });
 }
 
@@ -191,7 +193,7 @@ void NetworkRTCProvider::newConnection(Socket& serverSocket, std::unique_ptr<rtc
 {
     auto incomingSocketIdentifier = LibWebRTCSocketIdentifier::generate();
     sendFromMainThread([identifier = serverSocket.identifier(), incomingSocketIdentifier, remoteAddress = RTCNetwork::isolatedCopy(newSocket->GetRemoteAddress())](IPC::Connection& connection) {
-        connection.send(Messages::WebRTCSocket::SignalNewConnection(incomingSocketIdentifier, RTCNetwork::SocketAddress(remoteAddress)), identifier);
+        connection.send(Messages::LibWebRTCNetwork::SignalNewConnection(identifier, incomingSocketIdentifier, RTCNetwork::SocketAddress(remoteAddress)), 0);
     });
     m_pendingIncomingSockets.add(incomingSocketIdentifier, WTFMove(newSocket));
 }
@@ -201,65 +203,46 @@ void NetworkRTCProvider::didReceiveNetworkRTCSocketMessage(IPC::Connection& conn
     NetworkRTCSocket(makeObjectIdentifier<LibWebRTCSocketIdentifierType>(decoder.destinationID()), *this).didReceiveMessage(connection, decoder);
 }
 
-#if PLATFORM(COCOA)
 
-void NetworkRTCProvider::createResolver(uint64_t identifier, const String& address)
+void NetworkRTCProvider::createResolver(LibWebRTCResolverIdentifier identifier, const String& address)
 {
-    ASSERT(m_resolvers.isValidKey(identifier));
-    ASSERT(!address.isEmpty());
-    if (!m_resolvers.isValidKey(identifier) || address.isEmpty())
-        return;
-
-    auto resolver = NetworkRTCResolver::create(identifier, [this, identifier](WebCore::DNSAddressesOrError&& result) mutable {
+    WebCore::DNSCompletionHandler completionHandler = [this, identifier](auto&& result) {
         if (!result.has_value()) {
             if (result.error() != WebCore::DNSError::Cancelled)
                 m_connection->connection().send(Messages::WebRTCResolver::ResolvedAddressError(1), identifier);
             return;
         }
 
-        auto addresses = WTF::map(result.value(), [] (auto& address) {
-            return RTCNetwork::IPAddress { rtc::IPAddress { address.getSinAddr() } };
-        });
-
-        m_connection->connection().send(Messages::WebRTCResolver::SetResolvedAddress(addresses), identifier);
-    });
-    resolver->start(address);
-    m_resolvers.add(identifier, WTFMove(resolver));
-}
-
-void NetworkRTCProvider::stopResolver(uint64_t identifier)
-{
-    if (auto resolver = m_resolvers.take(identifier))
-        resolver->stop();
-}
-
-#else
-
-void NetworkRTCProvider::createResolver(uint64_t identifier, const String& address)
-{
-    auto completionHandler = [this, identifier](WebCore::DNSAddressesOrError&& result) mutable {
-        if (!result.has_value()) {
-            if (result.error() != WebCore::DNSError::Cancelled)
-                m_connection->connection().send(Messages::WebRTCResolver::ResolvedAddressError(1), identifier);
-            return;
+        Vector<RTCNetwork::IPAddress> ipAddresses;
+        ipAddresses.reserveInitialCapacity(result.value().size());
+        for (auto& address : result.value()) {
+            if (address.isIPv4())
+                ipAddresses.uncheckedAppend(rtc::IPAddress { address.ipv4Address() });
+            else if (address.isIPv6())
+                ipAddresses.uncheckedAppend(rtc::IPAddress { address.ipv6Address() });
         }
 
-        auto addresses = WTF::map(result.value(), [] (auto& address) {
-            return RTCNetwork::IPAddress { rtc::IPAddress { address.getSinAddr() } };
-        });
-
-        m_connection->connection().send(Messages::WebRTCResolver::SetResolvedAddress(addresses), identifier);
+        m_connection->connection().send(Messages::WebRTCResolver::SetResolvedAddress(ipAddresses), identifier);
     };
 
-    WebCore::resolveDNS(address, identifier, WTFMove(completionHandler));
-}
-
-void NetworkRTCProvider::stopResolver(uint64_t identifier)
-{
-    WebCore::stopResolveDNS(identifier);
-}
-
+#if PLATFORM(COCOA)
+    auto resolver = NetworkRTCResolver::create(identifier, WTFMove(completionHandler));
+    resolver->start(address);
+    m_resolvers.add(identifier, WTFMove(resolver));
+#else
+    WebCore::resolveDNS(address, identifier.toUInt64(), WTFMove(completionHandler));
 #endif
+}
+
+void NetworkRTCProvider::stopResolver(LibWebRTCResolverIdentifier identifier)
+{
+#if PLATFORM(COCOA)
+    if (auto resolver = m_resolvers.take(identifier))
+        resolver->stop();
+#else
+    WebCore::stopResolveDNS(identifier.toUInt64());
+#endif
+}
 
 void NetworkRTCProvider::closeListeningSockets(Function<void()>&& completionHandler)
 {
@@ -281,7 +264,7 @@ void NetworkRTCProvider::closeListeningSockets(Function<void()>&& completionHand
         callOnMainThread([provider = makeRef(*this), listeningSocketIdentifiers = WTFMove(listeningSocketIdentifiers), completionHandler = WTFMove(completionHandler)] {
             if (provider->m_connection) {
                 for (auto identifier : listeningSocketIdentifiers)
-                    provider->m_connection->connection().send(Messages::WebRTCSocket::SignalClose(ECONNABORTED), identifier);
+                    provider->m_connection->connection().send(Messages::LibWebRTCNetwork::SignalClose(identifier, ECONNABORTED), 0);
             }
             completionHandler();
         });

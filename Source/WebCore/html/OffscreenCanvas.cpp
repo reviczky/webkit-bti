@@ -30,6 +30,7 @@
 
 #include "CSSValuePool.h"
 #include "CanvasRenderingContext.h"
+#include "Document.h"
 #include "ImageBitmap.h"
 #include "JSBlob.h"
 #include "JSDOMPromiseDeferred.h"
@@ -257,7 +258,26 @@ void OffscreenCanvas::convertToBlob(ImageEncodeOptions&& options, Ref<DeferredPr
 
 void OffscreenCanvas::didDraw(const FloatRect& rect)
 {
+    clearCopiedImage();
     notifyObserversCanvasChanged(rect);
+}
+
+Image* OffscreenCanvas::copiedImage() const
+{
+    if (m_detached)
+        return nullptr;
+
+    if (!m_copiedImage && buffer()) {
+        if (m_context)
+            m_context->paintRenderingResultsToCanvas();
+        m_copiedImage = buffer()->copyImage(CopyBackingStore, PreserveResolution::Yes);
+    }
+    return m_copiedImage.get();
+}
+
+void OffscreenCanvas::clearCopiedImage() const
+{
+    m_copiedImage = nullptr;
 }
 
 SecurityOrigin* OffscreenCanvas::securityOrigin() const
@@ -316,6 +336,7 @@ std::unique_ptr<ImageBuffer> OffscreenCanvas::takeImageBuffer() const
     if (size().isEmpty())
         return nullptr;
 
+    clearCopiedImage();
     return setImageBuffer(m_detached ? nullptr : ImageBuffer::create(size(), RenderingMode::Unaccelerated));
 }
 
@@ -327,6 +348,7 @@ void OffscreenCanvas::reset()
 
     m_hasCreatedImageBuffer = false;
     setImageBuffer(nullptr);
+    clearCopiedImage();
 
     notifyObserversCanvasResized();
 }

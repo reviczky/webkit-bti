@@ -28,8 +28,6 @@
 #include "config.h"
 #include "RuntimeType.h"
 
-#include "JSCInlines.h"
-
 namespace JSC {
 
 RuntimeType runtimeTypeForValue(VM& vm, JSValue value)
@@ -51,7 +49,7 @@ RuntimeType runtimeTypeForValue(VM& vm, JSValue value)
         return TypeBoolean;
     if (value.isObject())
         return TypeObject;
-    if (value.isFunction(vm))
+    if (value.isCallable(vm))
         return TypeFunction;
     if (value.isSymbol())
         return TypeSymbol;

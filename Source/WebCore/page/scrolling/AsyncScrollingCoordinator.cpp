@@ -70,6 +70,23 @@ void AsyncScrollingCoordinator::scrollingStateTreePropertiesChanged()
     scheduleTreeStateCommit();
 }
 
+#if PLATFORM(COCOA)
+void AsyncScrollingCoordinator::handleWheelEventPhase(ScrollingNodeID nodeID, PlatformWheelEventPhase phase)
+{
+    ASSERT(isMainThread());
+
+    if (!m_page)
+        return;
+
+    auto* frameView = frameViewForScrollingNode(nodeID);
+    if (!frameView)
+        return;
+
+    if (auto* scrollableArea = frameView->scrollableAreaForScrollingNodeID(nodeID))
+        scrollableArea->scrollAnimator().handleWheelEventPhase(phase);
+}
+#endif
+
 #if ENABLE(CSS_SCROLL_SNAP)
 static inline void setStateScrollingNodeSnapOffsetsAsFloat(ScrollingStateScrollingNode& node, ScrollEventAxis axis, const Vector<LayoutUnit>* snapOffsets, const Vector<ScrollOffsetRange<LayoutUnit>>* snapOffsetRanges, float deviceScaleFactor)
 {
@@ -138,8 +155,6 @@ void AsyncScrollingCoordinator::frameViewLayoutUpdated(FrameView& frameView)
 
     auto* page = frameView.frame().page();
     if (page && page->isMonitoringWheelEvents()) {
-        LOG_WITH_STREAM(WheelEventTestMonitor, stream << "    AsyncScrollingCoordinator::frameViewLayoutUpdated: Expects wheel event test trigger: " << page->isMonitoringWheelEvents());
-
         auto* node = m_scrollingStateTree->stateNodeForID(frameView.scrollingNodeID());
         if (!is<ScrollingStateFrameScrollingNode>(node))
             return;
@@ -262,6 +277,12 @@ bool AsyncScrollingCoordinator::requestScrollPositionUpdate(ScrollableArea& scro
     if (!stateNode)
         return false;
 
+#if PLATFORM(MAC)
+    if (m_page && m_page->isMonitoringWheelEvents()) {
+        LOG_WITH_STREAM(WheelEventTestMonitor, stream << "    (!) AsyncScrollingCoordinator::requestScrollPositionUpdate: Adding deferral on " << scrollingNodeID << " for reason " << WheelEventTestMonitor::RequestedScrollPosition);
+        m_page->wheelEventTestMonitor()->deferForReason(reinterpret_cast<WheelEventTestMonitor::ScrollableAreaIdentifier>(scrollingNodeID), WheelEventTestMonitor::RequestedScrollPosition);
+    }
+#endif
     stateNode->setRequestedScrollData({ scrollPosition, scrollType, clamping });
     return true;
 }
@@ -269,6 +290,30 @@ bool AsyncScrollingCoordinator::requestScrollPositionUpdate(ScrollableArea& scro
 void AsyncScrollingCoordinator::applyScrollingTreeLayerPositions()
 {
     m_scrollingTree->applyLayerPositions();
+}
+
+void AsyncScrollingCoordinator::synchronizeStateFromScrollingTree()
+{
+    ASSERT(isMainThread());
+
+    m_scrollingTree->traverseScrollingTree([&](ScrollingNodeID nodeID, ScrollingNodeType, Optional<FloatPoint> scrollPosition, Optional<FloatPoint> layoutViewportOrigin) {
+        if (scrollPosition) {
+            LOG_WITH_STREAM(Scrolling, stream << "AsyncScrollingCoordinator::synchronizeStateFromScrollingTree - node " << nodeID << " scroll position " << scrollPosition);
+            updateScrollPositionAfterAsyncScroll(nodeID, scrollPosition.value(), layoutViewportOrigin, ScrollType::User, ScrollingLayerPositionAction::Set);
+        }
+    });
+}
+
+void AsyncScrollingCoordinator::noteScrollingThreadSyncCompleteForNode(ScrollingNodeID nodeID)
+{
+#if PLATFORM(MAC)
+    if (m_page && m_page->isMonitoringWheelEvents()) {
+        LOG_WITH_STREAM(WheelEventTestMonitor, stream << "    (!) AsyncScrollingCoordinator::scheduleUpdateScrollPositionAfterAsyncScroll: Removing deferral on " << nodeID << " for reason " << WheelEventTestMonitor::ScrollingThreadSyncNeeded);
+        m_page->wheelEventTestMonitor()->removeDeferralForReason(reinterpret_cast<WheelEventTestMonitor::ScrollableAreaIdentifier>(nodeID), WheelEventTestMonitor::ScrollingThreadSyncNeeded);
+    }
+#else
+    UNUSED_PARAM(nodeID);
+#endif
 }
 
 void AsyncScrollingCoordinator::scheduleUpdateScrollPositionAfterAsyncScroll(ScrollingNodeID nodeID, const FloatPoint& scrollPosition, const Optional<FloatPoint>& layoutViewportOrigin, ScrollingLayerPositionAction scrollingLayerPositionAction)
@@ -286,6 +331,10 @@ void AsyncScrollingCoordinator::scheduleUpdateScrollPositionAfterAsyncScroll(Scr
         m_updateNodeScrollPositionTimer.stop();
         updateScrollPositionAfterAsyncScroll(m_scheduledScrollUpdate.nodeID, m_scheduledScrollUpdate.scrollPosition, m_scheduledScrollUpdate.layoutViewportOrigin, ScrollType::User, m_scheduledScrollUpdate.updateLayerPositionAction);
         updateScrollPositionAfterAsyncScroll(nodeID, scrollPosition, layoutViewportOrigin, ScrollType::User, scrollingLayerPositionAction);
+        
+        if (m_scheduledScrollUpdate.nodeID != nodeID)
+            noteScrollingThreadSyncCompleteForNode(m_scheduledScrollUpdate.nodeID);
+        noteScrollingThreadSyncCompleteForNode(nodeID);
         return;
     }
 
@@ -296,6 +345,7 @@ void AsyncScrollingCoordinator::scheduleUpdateScrollPositionAfterAsyncScroll(Scr
 void AsyncScrollingCoordinator::updateScrollPositionAfterAsyncScrollTimerFired()
 {
     updateScrollPositionAfterAsyncScroll(m_scheduledScrollUpdate.nodeID, m_scheduledScrollUpdate.scrollPosition, m_scheduledScrollUpdate.layoutViewportOrigin, ScrollType::User, m_scheduledScrollUpdate.updateLayerPositionAction);
+    noteScrollingThreadSyncCompleteForNode(m_scheduledScrollUpdate.nodeID);
 }
 
 FrameView* AsyncScrollingCoordinator::frameViewForScrollingNode(ScrollingNodeID scrollingNodeID) const
@@ -356,7 +406,7 @@ void AsyncScrollingCoordinator::updateScrollPositionAfterAsyncScroll(ScrollingNo
     }
 
     // Overflow-scroll area.
-    if (auto* scrollableArea = frameView.scrollableAreaForScrollLayerID(scrollingNodeID)) {
+    if (auto* scrollableArea = frameView.scrollableAreaForScrollingNodeID(scrollingNodeID)) {
         auto previousScrollType = scrollableArea->currentScrollType();
         scrollableArea->setCurrentScrollType(scrollType);
         scrollableArea->notifyScrollPositionChanged(roundedIntPoint(scrollPosition));
@@ -606,25 +656,6 @@ void AsyncScrollingCoordinator::setNodeLayers(ScrollingNodeID nodeID, const Node
     }
 }
 
-void AsyncScrollingCoordinator::setRectRelativeToParentNode(ScrollingNodeID nodeID, const LayoutRect& parentRelativeScrollableRect)
-{
-    auto* stateNode = m_scrollingStateTree->stateNodeForID(nodeID);
-    ASSERT(stateNode);
-    if (!stateNode)
-        return;
-
-    if (is<ScrollingStateFrameHostingNode>(*stateNode)) {
-        auto& frameHostingStateNode = downcast<ScrollingStateFrameHostingNode>(*stateNode);
-        frameHostingStateNode.setParentRelativeScrollableRect(parentRelativeScrollableRect);
-        return;
-    }
-
-    if (is<ScrollingStateScrollingNode>(stateNode)) {
-        auto& scrollingStateNode = downcast<ScrollingStateScrollingNode>(*stateNode);
-        scrollingStateNode.setParentRelativeScrollableRect(parentRelativeScrollableRect);
-    }
-}
-
 void AsyncScrollingCoordinator::setFrameScrollingNodeState(ScrollingNodeID nodeID, const FrameView& frameView)
 {
     auto* stateNode = m_scrollingStateTree->stateNodeForID(nodeID);
@@ -751,18 +782,38 @@ void AsyncScrollingCoordinator::setRelatedOverflowScrollingNodes(ScrollingNodeID
         ASSERT_NOT_REACHED();
 }
 
-void AsyncScrollingCoordinator::setSynchronousScrollingReasons(FrameView& frameView, SynchronousScrollingReasons reasons)
+void AsyncScrollingCoordinator::setSynchronousScrollingReasons(ScrollingNodeID nodeID, OptionSet<SynchronousScrollingReason> reasons)
 {
-    auto* scrollingStateNode = static_cast<ScrollingStateFrameScrollingNode*>(m_scrollingStateTree->stateNodeForID(frameView.scrollingNodeID()));
-    if (!scrollingStateNode)
+    auto* node = m_scrollingStateTree->stateNodeForID(nodeID);
+    if (!is<ScrollingStateScrollingNode>(node))
         return;
 
-    // The FrameView's GraphicsLayer is likely to be out-of-synch with the PlatformLayer
-    // at this point. So we'll update it before we switch back to main thread scrolling
-    // in order to avoid layer positioning bugs.
-    if (reasons)
-        reconcileScrollPosition(frameView, ScrollingLayerPositionAction::Set);
-    scrollingStateNode->setSynchronousScrollingReasons(reasons);
+    auto& scrollingStateNode = downcast<ScrollingStateScrollingNode>(*node);
+    if (reasons && is<ScrollingStateFrameScrollingNode>(scrollingStateNode)) {
+        // The FrameView's GraphicsLayer is likely to be out-of-synch with the PlatformLayer
+        // at this point. So we'll update it before we switch back to main thread scrolling
+        // in order to avoid layer positioning bugs.
+        if (auto* frameView = frameViewForScrollingNode(nodeID))
+            reconcileScrollPosition(*frameView, ScrollingLayerPositionAction::Set);
+    }
+
+    // FIXME: Ideally all the "synchronousScrollingReasons" functions should be #ifdeffed.
+#if ENABLE(SCROLLING_THREAD)
+    scrollingStateNode.setSynchronousScrollingReasons(reasons);
+#endif
+}
+
+bool AsyncScrollingCoordinator::hasSynchronousScrollingReasons(ScrollingNodeID nodeID) const
+{
+    auto* node = m_scrollingStateTree->stateNodeForID(nodeID);
+    if (!is<ScrollingStateScrollingNode>(node))
+        return false;
+
+#if ENABLE(SCROLLING_THREAD)
+    return downcast<ScrollingStateScrollingNode>(*node).hasSynchronousScrollingReasons();
+#else
+    return false;
+#endif
 }
 
 bool AsyncScrollingCoordinator::isRubberBandInProgress() const
@@ -811,7 +862,15 @@ String AsyncScrollingCoordinator::scrollingStateTreeAsText(ScrollingStateTreeAsT
         return m_scrollingStateTree->rootStateNode()->scrollingStateTreeAsText(behavior);
     }
 
-    return String();
+    return emptyString();
+}
+
+String AsyncScrollingCoordinator::scrollingTreeAsText(ScrollingStateTreeAsTextBehavior behavior) const
+{
+    if (!m_scrollingTree)
+        return emptyString();
+
+    return m_scrollingTree->scrollingTreeAsText(behavior);
 }
 
 #if PLATFORM(COCOA)
@@ -826,42 +885,12 @@ void AsyncScrollingCoordinator::setActiveScrollSnapIndices(ScrollingNodeID scrol
     if (!frameView)
         return;
     
-    if (scrollingNodeID == frameView->scrollingNodeID()) {
-        frameView->setCurrentHorizontalSnapPointIndex(horizontalIndex);
-        frameView->setCurrentVerticalSnapPointIndex(verticalIndex);
-        return;
-    }
-    
-    // Overflow-scroll area.
-    if (auto* scrollableArea = frameView->scrollableAreaForScrollLayerID(scrollingNodeID)) {
+    if (auto* scrollableArea = frameView->scrollableAreaForScrollingNodeID(scrollingNodeID)) {
         scrollableArea->setCurrentHorizontalSnapPointIndex(horizontalIndex);
         scrollableArea->setCurrentVerticalSnapPointIndex(verticalIndex);
     }
 }
 
-void AsyncScrollingCoordinator::deferWheelEventTestCompletionForReason(WheelEventTestMonitor::ScrollableAreaIdentifier identifier, WheelEventTestMonitor::DeferReason reason) const
-{
-    ASSERT(isMainThread());
-    if (!m_page || !m_page->isMonitoringWheelEvents())
-        return;
-
-    if (const auto& trigger = m_page->wheelEventTestMonitor()) {
-        LOG_WITH_STREAM(WheelEventTestMonitor, stream << "    (!) AsyncScrollingCoordinator::deferForReason: Deferring " << identifier << " for reason " << reason);
-        trigger->deferForReason(identifier, reason);
-    }
-}
-
-void AsyncScrollingCoordinator::removeWheelEventTestCompletionDeferralForReason(WheelEventTestMonitor::ScrollableAreaIdentifier identifier, WheelEventTestMonitor::DeferReason reason) const
-{
-    ASSERT(isMainThread());
-    if (!m_page || !m_page->isMonitoringWheelEvents())
-        return;
-
-    if (const auto& trigger = m_page->wheelEventTestMonitor()) {
-        LOG_WITH_STREAM(WheelEventTestMonitor, stream << "    (!) AsyncScrollingCoordinator::removeWheelEventTestCompletionDeferralForReason: Deferring " << identifier << " for reason " << reason);
-        trigger->removeDeferralForReason(identifier, reason);
-    }
-}
 #endif
 
 #if ENABLE(CSS_SCROLL_SNAP)
@@ -887,10 +916,10 @@ void AsyncScrollingCoordinator::reportExposedUnfilledArea(MonotonicTime timestam
         m_page->performanceLoggingClient()->logScrollingEvent(PerformanceLoggingClient::ScrollingEvent::ExposedTilelessArea, timestamp, unfilledArea);
 }
 
-void AsyncScrollingCoordinator::reportSynchronousScrollingReasonsChanged(MonotonicTime timestamp, SynchronousScrollingReasons reasons)
+void AsyncScrollingCoordinator::reportSynchronousScrollingReasonsChanged(MonotonicTime timestamp, OptionSet<SynchronousScrollingReason> reasons)
 {
     if (m_page && m_page->performanceLoggingClient())
-        m_page->performanceLoggingClient()->logScrollingEvent(PerformanceLoggingClient::ScrollingEvent::SwitchedScrollingMode, timestamp, reasons);
+        m_page->performanceLoggingClient()->logScrollingEvent(PerformanceLoggingClient::ScrollingEvent::SwitchedScrollingMode, timestamp, reasons.toRaw());
 }
 
 } // namespace WebCore

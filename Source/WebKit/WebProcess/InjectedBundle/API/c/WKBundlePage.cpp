@@ -40,6 +40,7 @@
 #include "InjectedBundlePageLoaderClient.h"
 #include "InjectedBundlePageResourceLoadClient.h"
 #include "InjectedBundlePageUIClient.h"
+#include "InjectedBundleScriptWorld.h"
 #include "PageBanner.h"
 #include "WKAPICast.h"
 #include "WKArray.h"
@@ -120,7 +121,7 @@ void WKBundlePageSetUIClient(WKBundlePageRef pageRef, WKBundlePageUIClientBase* 
 
 void WKBundlePageSetFullScreenClient(WKBundlePageRef pageRef, WKBundlePageFullScreenClientBase* wkClient)
 {
-#if defined(ENABLE_FULLSCREEN_API) && ENABLE_FULLSCREEN_API
+#if ENABLE(FULLSCREEN_API)
     WebKit::toImpl(pageRef)->initializeInjectedBundleFullScreenClient(wkClient);
 #else
     UNUSED_PARAM(pageRef);
@@ -130,7 +131,7 @@ void WKBundlePageSetFullScreenClient(WKBundlePageRef pageRef, WKBundlePageFullSc
 
 void WKBundlePageWillEnterFullScreen(WKBundlePageRef pageRef)
 {
-#if defined(ENABLE_FULLSCREEN_API) && ENABLE_FULLSCREEN_API
+#if ENABLE(FULLSCREEN_API)
     WebKit::toImpl(pageRef)->fullScreenManager()->willEnterFullScreen();
 #else
     UNUSED_PARAM(pageRef);
@@ -139,7 +140,7 @@ void WKBundlePageWillEnterFullScreen(WKBundlePageRef pageRef)
 
 void WKBundlePageDidEnterFullScreen(WKBundlePageRef pageRef)
 {
-#if defined(ENABLE_FULLSCREEN_API) && ENABLE_FULLSCREEN_API
+#if ENABLE(FULLSCREEN_API)
     WebKit::toImpl(pageRef)->fullScreenManager()->didEnterFullScreen();
 #else
     UNUSED_PARAM(pageRef);
@@ -148,7 +149,7 @@ void WKBundlePageDidEnterFullScreen(WKBundlePageRef pageRef)
 
 void WKBundlePageWillExitFullScreen(WKBundlePageRef pageRef)
 {
-#if defined(ENABLE_FULLSCREEN_API) && ENABLE_FULLSCREEN_API
+#if ENABLE(FULLSCREEN_API)
     WebKit::toImpl(pageRef)->fullScreenManager()->willExitFullScreen();
 #else
     UNUSED_PARAM(pageRef);
@@ -157,7 +158,7 @@ void WKBundlePageWillExitFullScreen(WKBundlePageRef pageRef)
 
 void WKBundlePageDidExitFullScreen(WKBundlePageRef pageRef)
 {
-#if defined(ENABLE_FULLSCREEN_API) && ENABLE_FULLSCREEN_API
+#if ENABLE(FULLSCREEN_API)
     WebKit::toImpl(pageRef)->fullScreenManager()->didExitFullScreen();
 #else
     UNUSED_PARAM(pageRef);
@@ -171,7 +172,7 @@ WKBundlePageGroupRef WKBundlePageGetPageGroup(WKBundlePageRef pageRef)
 
 WKBundleFrameRef WKBundlePageGetMainFrame(WKBundlePageRef pageRef)
 {
-    return toAPI(WebKit::toImpl(pageRef)->mainWebFrame());
+    return toAPI(&WebKit::toImpl(pageRef)->mainWebFrame());
 }
 
 WKFrameHandleRef WKBundleFrameCreateFrameHandle(WKBundleFrameRef bundleFrameRef)
@@ -693,7 +694,7 @@ void WKBundlePageSetUseTestingViewportConfiguration(WKBundlePageRef pageRef, boo
 }
 #endif
 
-void WKBundlePageStartMonitoringScrollOperations(WKBundlePageRef pageRef)
+void WKBundlePageStartMonitoringScrollOperations(WKBundlePageRef pageRef, bool clearLatchingState)
 {
     WebKit::WebPage* webPage = WebKit::toImpl(pageRef);
     WebCore::Page* page = webPage ? webPage->corePage() : nullptr;
@@ -701,10 +702,10 @@ void WKBundlePageStartMonitoringScrollOperations(WKBundlePageRef pageRef)
     if (!page)
         return;
 
-    page->ensureWheelEventTestMonitor();
+    page->startMonitoringWheelEvents(clearLatchingState);
 }
 
-bool WKBundlePageRegisterScrollOperationCompletionCallback(WKBundlePageRef pageRef, WKBundlePageTestNotificationCallback callback, void* context)
+bool WKBundlePageRegisterScrollOperationCompletionCallback(WKBundlePageRef pageRef, WKBundlePageTestNotificationCallback callback, bool expectWheelEndOrCancel, bool expectMomentumEnd, void* context)
 {
     if (!callback)
         return false;
@@ -714,9 +715,11 @@ bool WKBundlePageRegisterScrollOperationCompletionCallback(WKBundlePageRef pageR
     if (!page || !page->isMonitoringWheelEvents())
         return false;
     
-    page->ensureWheelEventTestMonitor().setTestCallbackAndStartNotificationTimer([=]() {
-        callback(context);
-    });
+    if (auto wheelEventTestMonitor = page->wheelEventTestMonitor()) {
+        wheelEventTestMonitor->setTestCallbackAndStartMonitoring(expectWheelEndOrCancel, expectMomentumEnd, [=]() {
+            callback(context);
+        });
+    }
     return true;
 }
 
@@ -788,7 +791,12 @@ bool WKBundlePageIsSuspended(WKBundlePageRef pageRef)
 
 void WKBundlePageAddUserScript(WKBundlePageRef pageRef, WKStringRef source, _WKUserScriptInjectionTime injectionTime, WKUserContentInjectedFrames injectedFrames)
 {
-    WebKit::toImpl(pageRef)->addUserScript(WebKit::toWTFString(source), WebKit::toUserContentInjectedFrames(injectedFrames), WebKit::toUserScriptInjectionTime(injectionTime));
+    WebKit::toImpl(pageRef)->addUserScript(WebKit::toWTFString(source), WebKit::InjectedBundleScriptWorld::normalWorld(), WebKit::toUserContentInjectedFrames(injectedFrames), WebKit::toUserScriptInjectionTime(injectionTime));
+}
+
+void WKBundlePageAddUserScriptInWorld(WKBundlePageRef page, WKStringRef source, WKBundleScriptWorldRef scriptWorld, _WKUserScriptInjectionTime injectionTime, WKUserContentInjectedFrames injectedFrames)
+{
+    WebKit::toImpl(page)->addUserScript(WebKit::toWTFString(source), *WebKit::toImpl(scriptWorld), WebKit::toUserContentInjectedFrames(injectedFrames), WebKit::toUserScriptInjectionTime(injectionTime));
 }
 
 void WKBundlePageAddUserStyleSheet(WKBundlePageRef pageRef, WKStringRef source, WKUserContentInjectedFrames injectedFrames)

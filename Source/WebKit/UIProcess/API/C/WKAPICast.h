@@ -31,7 +31,6 @@
 #include "InjectedBundleHitTestResultMediaType.h"
 #include "PluginModuleInfo.h"
 #include "ProcessTerminationReason.h"
-#include "ResourceCachesToClear.h"
 #include "WKBundleHitTestResult.h"
 #include "WKContext.h"
 #include "WKCookieManager.h"
@@ -248,6 +247,7 @@ inline WKProcessTerminationReason toAPI(ProcessTerminationReason reason)
         FALLTHROUGH;
     case ProcessTerminationReason::RequestedByClient:
         return kWKProcessTerminationReasonRequestedByClient;
+    case ProcessTerminationReason::RequestedByNetworkProcess:
     case ProcessTerminationReason::Crash:
         return kWKProcessTerminationReasonCrash;
     }
@@ -354,19 +354,6 @@ inline WebCore::CredentialPersistence toCredentialPersistence(WKCredentialPersis
     default:
         return WebCore::CredentialPersistenceNone;
     }
-}
-
-inline ResourceCachesToClear toResourceCachesToClear(WKResourceCachesToClear wkResourceCachesToClear)
-{
-    switch (wkResourceCachesToClear) {
-    case WKResourceCachesToClearAll:
-        return AllResourceCaches;
-    case WKResourceCachesToClearInMemoryOnly:
-        return InMemoryResourceCachesOnly;
-    }
-
-    ASSERT_NOT_REACHED();
-    return AllResourceCaches;
 }
 
 inline WebCore::HTTPCookieAcceptPolicy toHTTPCookieAcceptPolicy(WKHTTPCookieAcceptPolicy policy)
@@ -509,25 +496,25 @@ inline WebCore::WebGLLoadPolicy toWebGLLoadPolicy(WKWebGLLoadPolicy webGLLoadPol
 {
     switch (webGLLoadPolicy) {
     case kWKWebGLLoadPolicyLoadNormally:
-        return WebCore::WebGLAllowCreation;
+        return WebCore::WebGLLoadPolicy::WebGLAllowCreation;
     case kWKWebGLLoadPolicyBlocked:
-        return WebCore::WebGLBlockCreation;
+        return WebCore::WebGLLoadPolicy::WebGLBlockCreation;
     case kWKWebGLLoadPolicyPending:
-        return WebCore::WebGLPendingCreation;
+        return WebCore::WebGLLoadPolicy::WebGLPendingCreation;
     }
     
     ASSERT_NOT_REACHED();
-    return WebCore::WebGLAllowCreation;
+    return WebCore::WebGLLoadPolicy::WebGLAllowCreation;
 }
 
 inline WKWebGLLoadPolicy toAPI(WebCore::WebGLLoadPolicy webGLLoadPolicy)
 {
     switch (webGLLoadPolicy) {
-    case WebCore::WebGLAllowCreation:
+    case WebCore::WebGLLoadPolicy::WebGLAllowCreation:
         return kWKWebGLLoadPolicyLoadNormally;
-    case WebCore::WebGLBlockCreation:
+    case WebCore::WebGLLoadPolicy::WebGLBlockCreation:
         return kWKWebGLLoadPolicyBlocked;
-    case WebCore::WebGLPendingCreation:
+    case WebCore::WebGLLoadPolicy::WebGLPendingCreation:
         return kWKWebGLLoadPolicyPending;
     }
 
@@ -547,6 +534,10 @@ inline WKWebGLLoadPolicy toAPI(WebCore::WebGLLoadPolicy webGLLoadPolicy)
 
 #if defined(WIN32) || defined(_WIN32)
 #include "WKAPICastWin.h"
+#endif
+
+#if defined(__SCE__)
+#include "WKAPICastPlayStation.h"
 #endif
 
 #endif // WKAPICast_h

@@ -29,7 +29,6 @@
 #if ENABLE(DFG_JIT)
 
 #include "DFGGraph.h"
-#include "JSCInlines.h"
 #include "TrackedReferences.h"
 
 namespace JSC { namespace DFG {
@@ -486,7 +485,7 @@ ResultType AbstractValue::resultType() const
 
 void AbstractValue::dump(PrintStream& out) const
 {
-    dumpInContext(out, 0);
+    dumpInContext(out, nullptr);
 }
 
 void AbstractValue::dumpInContext(PrintStream& out, DumpContext* context) const

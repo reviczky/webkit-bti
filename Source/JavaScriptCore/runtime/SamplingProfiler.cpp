@@ -35,28 +35,21 @@
 #include "HeapIterationScope.h"
 #include "HeapUtil.h"
 #include "InlineCallFrame.h"
-#include "Interpreter.h"
-#include "JSCInlines.h"
-#include "JSFunction.h"
+#include "JSObjectInlines.h"
 #include "LLIntPCRanges.h"
 #include "MachineContext.h"
-#include "MarkedBlock.h"
+#include "MarkedBlockInlines.h"
 #include "MarkedBlockSet.h"
-#include "MarkedSpaceInlines.h"
 #include "NativeExecutable.h"
-#include "PCToCodeOriginMap.h"
 #include "SlotVisitor.h"
-#include "StrongInlines.h"
 #include "VM.h"
 #include "WasmCallee.h"
 #include "WasmCalleeRegistry.h"
-#include <thread>
 #include <wtf/FilePrintStream.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefPtr.h>
 #include <wtf/StackTrace.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/text/StringConcatenateNumbers.h>
 
 namespace JSC {
 
@@ -293,7 +286,7 @@ private:
     void* m_machineFrame;
 };
 
-SamplingProfiler::SamplingProfiler(VM& vm, RefPtr<Stopwatch>&& stopwatch)
+SamplingProfiler::SamplingProfiler(VM& vm, Ref<Stopwatch>&& stopwatch)
     : m_isPaused(false)
     , m_isShutDown(false)
     , m_vm(vm)
@@ -523,10 +516,8 @@ void SamplingProfiler::processUnverifiedStackTraces(const AbstractLocker&)
             auto setFallbackFrameType = [&] {
                 ASSERT(!alreadyHasExecutable);
                 FrameType result = FrameType::Unknown;
-                CallData callData;
-                CallType callType;
-                callType = getCallData(m_vm, calleeCell, callData);
-                if (callType == CallType::Host)
+                auto callData = getCallData(m_vm, calleeCell);
+                if (callData.type == CallData::Type::Native)
                     result = FrameType::Host;
 
                 stackFrame.frameType = result;

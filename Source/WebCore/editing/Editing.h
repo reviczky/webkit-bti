@@ -41,6 +41,8 @@ class RenderBlock;
 class VisiblePosition;
 class VisibleSelection;
 
+struct SimpleRange;
+
 // -------------------------------------------------------------------------
 // Node
 // -------------------------------------------------------------------------
@@ -98,13 +100,13 @@ bool isNodeRendered(const Node&);
 bool isRenderedAsNonInlineTableImageOrHR(const Node*);
 bool isNonTableCellHTMLBlockElement(const Node*);
 
-bool isNodeVisiblyContainedWithin(Node&, const Range&);
+bool isNodeVisiblyContainedWithin(Node&, const SimpleRange&);
 
 bool areIdenticalElements(const Node&, const Node&);
 
 bool positionBeforeOrAfterNodeIsCandidate(Node&);
 
-WEBCORE_EXPORT HashSet<RefPtr<HTMLImageElement>> visibleImageElementsInRangeWithNonLoadedImages(const Range&);
+WEBCORE_EXPORT HashSet<RefPtr<HTMLImageElement>> visibleImageElementsInRangeWithNonLoadedImages(const SimpleRange&);
 
 // -------------------------------------------------------------------------
 // Position
@@ -153,6 +155,8 @@ int indexForVisiblePosition(Node&, const VisiblePosition&, bool forSelectionPres
 WEBCORE_EXPORT VisiblePosition visiblePositionForPositionWithOffset(const VisiblePosition&, int offset);
 WEBCORE_EXPORT VisiblePosition visiblePositionForIndex(int index, ContainerNode* scope);
 VisiblePosition visiblePositionForIndexUsingCharacterIterator(Node&, int index); // FIXME: Why do we need this version?
+
+WEBCORE_EXPORT VisiblePosition closestEditablePositionInElementForAbsolutePoint(const Element&, const IntPoint&);
 
 // -------------------------------------------------------------------------
 // HTMLElement

@@ -75,6 +75,8 @@ namespace WebCore {
     macro(EnterPictureInPictureEvent) \
     macro(ExtendableEvent) \
     macro(ExtendableMessageEvent) \
+    macro(FakeXRDevice) \
+    macro(FakeXRInputController) \
     macro(FetchEvent) \
     macro(FileSystem) \
     macro(FileSystemDirectoryEntry) \
@@ -149,6 +151,7 @@ namespace WebCore {
     macro(MediaKeyStatusMap) \
     macro(MediaKeySystemAccess) \
     macro(MediaKeys) \
+    macro(MediaQueryListEvent) \
     macro(MediaRecorder) \
     macro(MediaRecorderErrorEvent) \
     macro(MediaSource) \
@@ -179,6 +182,7 @@ namespace WebCore {
     macro(PerformanceMeasure) \
     macro(PerformanceObserver) \
     macro(PerformanceObserverEntryList) \
+    macro(PerformancePaintTiming) \
     macro(PerformanceResourceTiming) \
     macro(PerformanceServerTiming) \
     macro(PointerEvent) \
@@ -235,6 +239,26 @@ namespace WebCore {
     macro(WorkletGlobalScope) \
     macro(WritableStream) \
     macro(XMLHttpRequest) \
+    macro(XR) \
+    macro(XRBoundedReferenceSpace) \
+    macro(XRFrame) \
+    macro(XRInputSource) \
+    macro(XRInputSourceArray) \
+    macro(XRInputSourceEvent) \
+    macro(XRInputSourcesChangeEvent) \
+    macro(XRPose) \
+    macro(XRReferenceSpace) \
+    macro(XRReferenceSpaceEvent) \
+    macro(XRRenderState) \
+    macro(XRRigidTransform) \
+    macro(XRSession) \
+    macro(XRSessionEvent) \
+    macro(XRSpace) \
+    macro(XRTest) \
+    macro(XRView) \
+    macro(XRViewerPose) \
+    macro(XRViewport) \
+    macro(XRWebGLLayer) \
     macro(appendFromJS) \
     macro(associatedReadableByteStreamController) \
     macro(autoAllocateChunkSize) \
@@ -245,6 +269,7 @@ namespace WebCore {
     macro(byobRequest) \
     macro(caches) \
     macro(cancel) \
+    macro(cancelAnimationFrame) \
     macro(cancelIdleCallback) \
     macro(cloneArrayBuffer) \
     macro(close) \
@@ -320,6 +345,7 @@ namespace WebCore {
     macro(readableStreamController) \
     macro(reader) \
     macro(readyPromiseCapability) \
+    macro(requestAnimationFrame) \
     macro(requestIdleCallback) \
     macro(response) \
     macro(responseCacheIsValid) \

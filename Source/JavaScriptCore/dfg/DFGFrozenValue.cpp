@@ -29,7 +29,6 @@
 #if ENABLE(DFG_JIT)
 
 #include "DFGLazyJSValue.h"
-#include "JSCInlines.h"
 
 namespace JSC { namespace DFG {
 
@@ -53,7 +52,7 @@ void FrozenValue::dumpInContext(PrintStream& out, DumpContext* context) const
 
 void FrozenValue::dump(PrintStream& out) const
 {
-    dumpInContext(out, 0);
+    dumpInContext(out, nullptr);
 }
 
 } } // namespace JSC::DFG

@@ -37,7 +37,6 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RunLoop.h>
 #include <wtf/StdLibExtras.h>
-#include <wtf/ThreadSpecific.h>
 #include <wtf/Threading.h>
 
 namespace WTF {
@@ -84,7 +83,7 @@ void dispatchFunctionsFromMainThread()
 
     while (true) {
         {
-            std::lock_guard<Lock> lock(mainThreadFunctionQueueMutex);
+            auto locker = holdLock(mainThreadFunctionQueueMutex);
             if (!functionQueue().size())
                 break;
 
@@ -124,7 +123,7 @@ void callOnMainThread(Function<void()>&& function)
     bool needToSchedule = false;
 
     {
-        std::lock_guard<Lock> lock(mainThreadFunctionQueueMutex);
+        auto locker = holdLock(mainThreadFunctionQueueMutex);
         needToSchedule = functionQueue().size() == 0;
         functionQueue().append(WTFMove(function));
     }
@@ -175,7 +174,7 @@ static void callOnMainAndWait(WTF::Function<void()>&& function, MainStyle mainSt
     auto functionImpl = [&, function = WTFMove(function)] {
         function();
 
-        std::lock_guard<Lock> lock(mutex);
+        auto locker = holdLock(mutex);
         isFinished = true;
         conditionVariable.notifyOne();
     };

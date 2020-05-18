@@ -28,8 +28,6 @@
 
 #if ENABLE(WEBASSEMBLY)
 
-#include "FunctionPrototype.h"
-#include "JSCInlines.h"
 #include "JSWebAssemblyHelpers.h"
 #include "JSWebAssemblyTable.h"
 
@@ -166,6 +164,7 @@ void WebAssemblyTablePrototype::finishCreation(VM& vm)
 {
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
+    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 }
 
 WebAssemblyTablePrototype::WebAssemblyTablePrototype(VM& vm, Structure* structure)

@@ -115,13 +115,13 @@ WK_EXPORT bool WKBundlePageIsUsingEphemeralSession(WKBundlePageRef page);
 
 WK_EXPORT bool WKBundlePageIsControlledByAutomation(WKBundlePageRef page);
 
-WK_EXPORT void WKBundlePageStartMonitoringScrollOperations(WKBundlePageRef page);
+WK_EXPORT void WKBundlePageStartMonitoringScrollOperations(WKBundlePageRef page, bool clearLatchingState);
 
 WK_EXPORT WKStringRef WKBundlePageCopyGroupIdentifier(WKBundlePageRef page);
 
 typedef void (*WKBundlePageTestNotificationCallback)(void* context);
 // Returns true  if the callback function will be called, else false.
-WK_EXPORT bool WKBundlePageRegisterScrollOperationCompletionCallback(WKBundlePageRef, WKBundlePageTestNotificationCallback, void* context);
+WK_EXPORT bool WKBundlePageRegisterScrollOperationCompletionCallback(WKBundlePageRef, WKBundlePageTestNotificationCallback, bool expectWheelEndOrCancel, bool expectMomentumEnd, void* context);
 
 // Call the given callback after both a postTask() on the page's document's ScriptExecutionContext, and a zero-delay timer.
 WK_EXPORT void WKBundlePageCallAfterTasksAndTimers(WKBundlePageRef, WKBundlePageTestNotificationCallback, void* context);

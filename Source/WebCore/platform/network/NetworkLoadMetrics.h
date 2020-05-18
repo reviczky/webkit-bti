@@ -27,10 +27,10 @@
 #pragma once
 
 #include "HTTPHeaderMap.h"
+#include <wtf/Box.h>
 #include <wtf/Optional.h>
 #include <wtf/Seconds.h>
-#include <wtf/persistence/PersistentDecoder.h>
-#include <wtf/persistence/PersistentEncoder.h>
+#include <wtf/persistence/PersistentCoder.h>
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(COCOA)
@@ -46,16 +46,44 @@ enum class NetworkLoadPriority : uint8_t {
     Unknown,
 };
 
-class NetworkLoadMetrics {
+class NetworkLoadMetricsWithoutNonTimingData {
+    WTF_MAKE_FAST_ALLOCATED(NetworkLoadMetricsWithoutNonTimingData);
+public:
+    NetworkLoadMetricsWithoutNonTimingData() = default;
+
+    bool isComplete() const { return complete; }
+    void markComplete() { complete = true; }
+
+    Seconds fetchStart;
+
+    // These should be treated as deltas to fetchStart.
+    // They should be in ascending order as listed here.
+    Seconds domainLookupStart { -1 };     // -1 if no DNS.
+    Seconds domainLookupEnd { -1 };       // -1 if no DNS.
+    Seconds connectStart { -1 };          // -1 if reused connection.
+    Seconds secureConnectionStart { -1 }; // -1 if no secure connection.
+    Seconds connectEnd { -1 };            // -1 if reused connection.
+    Seconds requestStart;
+    Seconds responseStart;
+    Seconds responseEnd;
+
+    // ALPN Protocol ID: https://w3c.github.io/resource-timing/#bib-RFC7301
+    String protocol;
+    bool complete { false };
+};
+
+class NetworkLoadMetrics : public NetworkLoadMetricsWithoutNonTimingData {
 public:
     NetworkLoadMetrics()
+        : NetworkLoadMetricsWithoutNonTimingData()
     {
-        reset();
     }
 
     NetworkLoadMetrics isolatedCopy() const
     {
         NetworkLoadMetrics copy;
+
+        copy.fetchStart = fetchStart;
 
         copy.domainLookupStart = domainLookupStart;
         copy.domainLookupEnd = domainLookupEnd;
@@ -84,39 +112,10 @@ public:
         return copy;
     }
 
-    void reset()
-    {
-        domainLookupStart = Seconds(-1);
-        domainLookupEnd = Seconds(-1);
-        connectStart = Seconds(-1);
-        secureConnectionStart = Seconds(-1);
-        connectEnd = Seconds(-1);
-        requestStart = Seconds(0);
-        responseStart = Seconds(0);
-        responseEnd = Seconds(0);
-        complete = false;
-        protocol = String();
-        clearNonTimingData();
-    }
-
-    void clearNonTimingData()
-    {
-        remoteAddress = String();
-        connectionIdentifier = String();
-        tlsProtocol = String();
-        tlsCipher = String();
-        priority = NetworkLoadPriority::Unknown;
-        requestHeaders.clear();
-        requestHeaderBytesSent = std::numeric_limits<uint32_t>::max();
-        requestBodyBytesSent = std::numeric_limits<uint64_t>::max();
-        responseHeaderBytesReceived = std::numeric_limits<uint32_t>::max();
-        responseBodyBytesReceived = std::numeric_limits<uint64_t>::max();
-        responseBodyDecodedSize = std::numeric_limits<uint64_t>::max();
-    }
-
     bool operator==(const NetworkLoadMetrics& other) const
     {
-        return domainLookupStart == other.domainLookupStart
+        return fetchStart == other.fetchStart
+            && domainLookupStart == other.domainLookupStart
             && domainLookupEnd == other.domainLookupEnd
             && connectStart == other.connectStart
             && secureConnectionStart == other.secureConnectionStart
@@ -144,25 +143,8 @@ public:
         return !(*this == other);
     }
 
-    bool isComplete() const { return complete; }
-    void markComplete() { complete = true; }
-
     template<class Encoder> void encode(Encoder&) const;
-    template<class Decoder> static bool decode(Decoder&, NetworkLoadMetrics&);
-
-    // These should be treated as deltas to LoadTiming's fetchStart.
-    // They should be in ascending order as listed here.
-    Seconds domainLookupStart;     // -1 if no DNS.
-    Seconds domainLookupEnd;       // -1 if no DNS.
-    Seconds connectStart;          // -1 if reused connection.
-    Seconds secureConnectionStart; // -1 if no secure connection.
-    Seconds connectEnd;            // -1 if reused connection.
-    Seconds requestStart;
-    Seconds responseStart;
-    Seconds responseEnd;
-
-    // ALPN Protocol ID: https://w3c.github.io/resource-timing/#bib-RFC7301
-    String protocol;
+    template<class Decoder> static WARN_UNUSED_RETURN bool decode(Decoder&, NetworkLoadMetrics&);
 
     String remoteAddress;
     String connectionIdentifier;
@@ -170,26 +152,25 @@ public:
     String tlsProtocol;
     String tlsCipher;
 
-    // Whether or not all of the properties (0 or otherwise) have been set.
-    NetworkLoadPriority priority;
-    bool complete { false };
+    NetworkLoadPriority priority { NetworkLoadPriority::Unknown };
 
     HTTPHeaderMap requestHeaders;
 
-    uint64_t requestHeaderBytesSent;
-    uint64_t responseHeaderBytesReceived;
-    uint64_t requestBodyBytesSent;
-    uint64_t responseBodyBytesReceived;
-    uint64_t responseBodyDecodedSize;
+    uint64_t requestHeaderBytesSent { std::numeric_limits<uint32_t>::max() };
+    uint64_t responseHeaderBytesReceived { std::numeric_limits<uint32_t>::max() };
+    uint64_t requestBodyBytesSent { std::numeric_limits<uint64_t>::max() };
+    uint64_t responseBodyBytesReceived { std::numeric_limits<uint64_t>::max() };
+    uint64_t responseBodyDecodedSize { std::numeric_limits<uint64_t>::max() };
 };
 
 #if PLATFORM(COCOA)
-WEBCORE_EXPORT void copyTimingData(NSDictionary *timingData, NetworkLoadMetrics&);
+WEBCORE_EXPORT Box<NetworkLoadMetrics> copyTimingData(NSDictionary *timingData);
 #endif
 
 template<class Encoder>
 void NetworkLoadMetrics::encode(Encoder& encoder) const
 {
+    encoder << fetchStart;
     encoder << domainLookupStart;
     encoder << domainLookupEnd;
     encoder << connectStart;
@@ -216,7 +197,8 @@ void NetworkLoadMetrics::encode(Encoder& encoder) const
 template<class Decoder>
 bool NetworkLoadMetrics::decode(Decoder& decoder, NetworkLoadMetrics& metrics)
 {
-    return decoder.decode(metrics.domainLookupStart)
+    return decoder.decode(metrics.fetchStart)
+        && decoder.decode(metrics.domainLookupStart)
         && decoder.decode(metrics.domainLookupEnd)
         && decoder.decode(metrics.connectStart)
         && decoder.decode(metrics.secureConnectionStart)

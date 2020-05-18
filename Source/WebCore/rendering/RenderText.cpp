@@ -195,16 +195,6 @@ inline RenderText::RenderText(Node& node, const String& text)
     ASSERT(!m_text.isNull());
     setIsText();
     m_canUseSimpleFontCodePath = computeCanUseSimpleFontCodePath();
-
-    // FIXME: Find out how to increment the visually non empty character count when the font becomes available.
-    auto isTextVisible = false;
-    if (auto* parentElement = node.parentElement()) {
-        auto* style = parentElement->renderer() ? &parentElement->renderer()->style() : nullptr;
-        isTextVisible = style && style->visibility() == Visibility::Visible && !style->fontCascade().isLoadingCustomFonts();
-    }
-
-    if (isTextVisible)
-        view().frameView().incrementVisuallyNonEmptyCharacterCount(text);
 }
 
 RenderText::RenderText(Text& textNode, const String& text)
@@ -290,7 +280,7 @@ void RenderText::removeAndDestroyTextBoxes()
     else
         m_lineBoxes.invalidateParentChildLists();
 #endif
-    m_lineBoxes.deleteAll();
+    deleteLineBoxes();
 }
 
 void RenderText::willBeDestroyed()
@@ -1092,9 +1082,9 @@ IntPoint RenderText::firstRunLocation() const
     return IntPoint(first->rect().location());
 }
 
-void RenderText::setSelectionState(SelectionState state)
+void RenderText::setSelectionState(HighlightState state)
 {
-    if (state != SelectionNone)
+    if (state != HighlightState::None)
         ensureLineBoxes();
 
     RenderObject::setSelectionState(state);
@@ -1176,6 +1166,8 @@ void RenderText::setRenderedText(const String& newText)
     if (style.textTransform() != TextTransform::None)
         m_text = applyTextTransform(style, m_text, previousCharacter());
 
+    // At rendering time, if certain fonts are used, these characters get swapped out with higher-quality PUA characters.
+    // See RenderBlock::updateSecurityDiscCharacters().
     switch (style.textSecurity()) {
     case TextSecurity::None:
         break;
@@ -1308,10 +1300,15 @@ String RenderText::textWithoutConvertingBackslashToYenSymbol() const
 void RenderText::dirtyLineBoxes(bool fullLayout)
 {
     if (fullLayout)
-        m_lineBoxes.deleteAll();
+        deleteLineBoxes();
     else if (!m_linesDirty)
         m_lineBoxes.dirtyAll();
     m_linesDirty = false;
+}
+
+void RenderText::deleteLineBoxes()
+{
+    m_lineBoxes.deleteAll();
 }
 
 std::unique_ptr<InlineTextBox> RenderText::createTextBox()
@@ -1446,7 +1443,7 @@ LayoutRect RenderText::collectSelectionRectsForLineBoxes(const RenderLayerModelO
     ASSERT(!needsLayout());
     ASSERT(!simpleLineLayout());
 
-    if (selectionState() == SelectionNone)
+    if (selectionState() == HighlightState::None)
         return LayoutRect();
     if (!containingBlock())
         return LayoutRect();
@@ -1455,16 +1452,16 @@ LayoutRect RenderText::collectSelectionRectsForLineBoxes(const RenderLayerModelO
     // We include a selection while endPos > 0
     unsigned startOffset;
     unsigned endOffset;
-    if (selectionState() == SelectionInside) {
+    if (selectionState() == HighlightState::Inside) {
         // We are fully selected.
         startOffset = 0;
         endOffset = text().length();
     } else {
         startOffset = view().selection().startOffset();
         endOffset = view().selection().endOffset();
-        if (selectionState() == SelectionStart)
+        if (selectionState() == HighlightState::Start)
             endOffset = text().length();
-        else if (selectionState() == SelectionEnd)
+        else if (selectionState() == HighlightState::End)
             startOffset = 0;
     }
 

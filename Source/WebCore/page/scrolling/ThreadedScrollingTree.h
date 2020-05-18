@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(ASYNC_SCROLLING)
+#if ENABLE(ASYNC_SCROLLING) && ENABLE(SCROLLING_THREAD)
 
 #include "ScrollingStateTree.h"
 #include "ScrollingTree.h"
@@ -44,30 +44,25 @@ class ThreadedScrollingTree : public ScrollingTree {
 public:
     virtual ~ThreadedScrollingTree();
 
-    void commitTreeState(std::unique_ptr<ScrollingStateTree>) override;
-
     ScrollingEventResult handleWheelEvent(const PlatformWheelEvent&) override;
+
+    ScrollingEventResult handleWheelEventAfterMainThread(const PlatformWheelEvent&);
 
     // Can be called from any thread. Will try to handle the wheel event on the scrolling thread.
     // Returns true if the wheel event can be handled on the scrolling thread and false if the
     // event must be sent again to the WebCore event handler.
-    ScrollingEventResult tryToHandleWheelEvent(const PlatformWheelEvent&) override;
+    ScrollingEventResult tryToHandleWheelEvent(const PlatformWheelEvent&, CompletionFunction&&) override;
 
     void invalidate() override;
-
-    void incrementPendingCommitCount();
-    void decrementPendingCommitCount();
 
 protected:
     explicit ThreadedScrollingTree(AsyncScrollingCoordinator&);
 
     void scrollingTreeNodeDidScroll(ScrollingTreeScrollingNode&, ScrollingLayerPositionAction = ScrollingLayerPositionAction::Sync) override;
 #if PLATFORM(MAC)
-    void handleWheelEventPhase(PlatformWheelEventPhase) override;
+    void handleWheelEventPhase(ScrollingNodeID, PlatformWheelEventPhase) override;
     void setActiveScrollSnapIndices(ScrollingNodeID, unsigned horizontalIndex, unsigned verticalIndex) override;
-
-    void deferWheelEventTestCompletionForReason(WheelEventTestMonitor::ScrollableAreaIdentifier, WheelEventTestMonitor::DeferReason) override;
-    void removeWheelEventTestCompletionDeferralForReason(WheelEventTestMonitor::ScrollableAreaIdentifier, WheelEventTestMonitor::DeferReason) override;
+    void scrollingTreeNodeRequestsScroll(ScrollingNodeID, const FloatPoint& /*scrollPosition*/, ScrollType, ScrollClamping) override;
 #endif
 
 #if PLATFORM(COCOA)
@@ -75,23 +70,17 @@ protected:
 #endif
 
     void reportExposedUnfilledArea(MonotonicTime, unsigned unfilledArea) override;
-    void reportSynchronousScrollingReasonsChanged(MonotonicTime, SynchronousScrollingReasons) override;
+    void reportSynchronousScrollingReasonsChanged(MonotonicTime, OptionSet<SynchronousScrollingReason>) override;
 
 private:
     bool isThreadedScrollingTree() const override { return true; }
-    void applyLayerPositions() override;
+    void propagateSynchronousScrollingReasons(const HashSet<ScrollingNodeID>&) override;
 
     RefPtr<AsyncScrollingCoordinator> m_scrollingCoordinator;
-
-    void waitForPendingCommits();
-
-    Lock m_pendingCommitCountMutex;
-    unsigned m_pendingCommitCount { 0 };
-    Condition m_commitCondition;
 };
 
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_SCROLLING_TREE(WebCore::ThreadedScrollingTree, isThreadedScrollingTree())
 
-#endif // ENABLE(ASYNC_SCROLLING)
+#endif // ENABLE(ASYNC_SCROLLING) && ENABLE(SCROLLING_THREAD)

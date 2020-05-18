@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -119,6 +119,9 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Unsigned, shadowChickenLogSize, 1000, Normal, nullptr) \
     v(Unsigned, shadowChickenMaxTailDeletedFramesSize, 128, Normal, nullptr) \
     \
+    v(Bool, useIterationIntrinsics, true, Normal, nullptr) \
+    \
+    v(Bool, useOSLog, false, Normal, "Log dataLog()s to os_log instead of stderr") \
     /* dumpDisassembly implies dumpDFGDisassembly. */ \
     v(Bool, dumpDisassembly, false, Normal, "dumps disassembly of all JIT compiled code upon compilation") \
     v(Bool, asyncDisassembly, false, Normal, nullptr) \
@@ -381,6 +384,8 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Bool, validateExceptionChecks, false, Normal, "Verifies that needed exception checks are performed.") \
     v(Unsigned, unexpectedExceptionStackTraceLimit, 100, Normal, "Stack trace limit for debugging unexpected exceptions observed in the VM") \
     \
+    v(Bool, validateDFGClobberize, false, Normal, "Emits extra validation code in the DFG/FTL for the Clobberize phase")\
+    \
     v(Bool, useExecutableAllocationFuzz, false, Normal, nullptr) \
     v(Unsigned, fireExecutableAllocationFuzzAt, 0, Normal, nullptr) \
     v(Unsigned, fireExecutableAllocationFuzzAtOrAfter, 0, Normal, nullptr) \
@@ -467,14 +472,22 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Bool, useFastTLSForWasmContext, true, Normal, "If true, we will store context in fast TLS. If false, we will pin it to a register.") \
     v(Bool, wasmBBQUsesAir, true, Normal, nullptr) \
     v(Bool, useWasmLLInt, true, Normal, nullptr) \
+    v(Bool, useBBQJIT, true, Normal, "allows the BBQ JIT to be used if true") \
+    v(Bool, useOMGJIT, true, Normal, "allows the OMG JIT to be used if true") \
+    v(Bool, useWasmLLIntPrologueOSR, true, Normal, "allows prologue OSR from Wasm LLInt if true") \
+    v(Bool, useWasmLLIntLoopOSR, true, Normal, "allows loop OSR from Wasm LLInt if true") \
+    v(Bool, useWasmLLIntEpilogueOSR, true, Normal, "allows epilogue OSR from Wasm LLInt if true") \
+    v(OptionRange, wasmFunctionIndexRangeToCompile, 0, Normal, "wasm function index range to allow compilation on, e.g. 1:100") \
     v(Bool, wasmLLIntTiersUpToBBQ, true, Normal, nullptr) \
     v(Size, webAssemblyBBQAirModeThreshold, isIOS() ? (10 * MB) : 0, Normal, "If 0, we always use BBQ Air. If Wasm module code size hits this threshold, we compile Wasm module with B3 BBQ mode.") \
     v(Bool, useWebAssemblyStreamingApi, enableWebAssemblyStreamingApi, Normal, "Allow to run WebAssembly's Streaming API") \
     v(Bool, useEagerWebAssemblyModuleHashing, false, Normal, "Unnamed WebAssembly modules are identified in backtraces through their hash, if available.") \
-    v(Bool, useWebAssemblyReferences, true, Normal, "Allow types from the wasm references spec.") \
+    v(Bool, useWebAssemblyReferences, false, Normal, "Allow types from the wasm references spec.") \
     v(Bool, useWebAssemblyMultiValues, true, Normal, "Allow types from the wasm mulit-values spec.") \
     v(Bool, useWeakRefs, false, Normal, "Expose the WeakRef constructor.") \
-    v(Bool, useBigInt, false, Normal, "If true, we will enable BigInt support.") \
+    v(Bool, useBigInt, true, Normal, "If true, we will enable BigInt support.") \
+    v(Bool, useIntlLocale, false, Normal, "Expose the Intl.Locale constructor.") \
+    v(Bool, useIntlRelativeTimeFormat, false, Normal, "Expose the Intl.RelativeTimeFormat constructor.") \
     v(Bool, useArrayAllocationProfiling, true, Normal, "If true, we will use our normal array allocation profiling. If false, the allocation profile will always claim to be undecided.") \
     v(Bool, forcePolyProto, false, Normal, "If true, create_this will always create an object with a poly proto structure.") \
     v(Bool, forceMiniVMMode, false, Normal, "If true, it will force mini VM mode on.") \
@@ -492,7 +505,8 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Bool, useUnlinkedCodeBlockJettisoning, false, Normal, "If true, UnlinkedCodeBlock can be jettisoned.") \
     v(Bool, forceOSRExitToLLInt, false, Normal, "If true, we always exit to the LLInt. If false, we exit to whatever is most convenient.") \
     v(Unsigned, getByValICMaxNumberOfIdentifiers, 4, Normal, "Number of identifiers we see in the LLInt that could cause us to bail on generating an IC for get_by_val.") \
-    v(Bool, useClassFields, false, Normal, "If true, the parser will understand data fields inside classes.") \
+    v(Bool, usePublicClassFields, true, Normal, "If true, the parser will understand public data fields inside classes.") \
+    v(Bool, useRandomizingExecutableIslandAllocation, false, Normal, "For the arm64 ExecutableAllocator, if true, select which region to use randomly. This is useful for testing that jump islands work.") \
 
 enum OptionEquivalence {
     SameOption,
@@ -529,7 +543,6 @@ enum OptionEquivalence {
     v(enableOSRExitFuzz, useOSRExitFuzz, SameOption) \
     v(enableDollarVM, useDollarVM, SameOption) \
     v(enableWebAssembly, useWebAssembly, SameOption) \
-    v(verboseDFGByteCodeParsing, verboseDFGBytecodeParsing, SameOption) \
     v(maximumOptimizationCandidateInstructionCount, maximumOptimizationCandidateBytecodeCost, SameOption) \
     v(maximumFunctionForCallInlineCandidateInstructionCount, maximumFunctionForCallInlineCandidateBytecodeCost, SameOption) \
     v(maximumFunctionForClosureCallInlineCandidateInstructionCount, maximumFunctionForClosureCallInlineCandidateBytecodeCost, SameOption) \
@@ -560,7 +573,7 @@ public:
         RELEASE_ASSERT(!value);
 
         m_state = Uninitialized;
-        m_rangeString = 0;
+        m_rangeString = nullptr;
         m_lowLimit = 0;
         m_highLimit = 0;
         return *this;

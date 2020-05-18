@@ -104,18 +104,6 @@ public:
     bool shouldTakeUIBackgroundAssertion() const { return m_shouldTakeUIBackgroundAssertion; }
     void setShouldTakeUIBackgroundAssertion(bool shouldTakeUIBackgroundAssertion) { m_shouldTakeUIBackgroundAssertion = shouldTakeUIBackgroundAssertion; }
 
-    bool shouldCaptureAudioInUIProcess() const { return m_shouldCaptureAudioInUIProcess; }
-    void setShouldCaptureAudioInUIProcess(bool shouldCaptureAudioInUIProcess) { m_shouldCaptureAudioInUIProcess = shouldCaptureAudioInUIProcess; }
-
-    bool shouldCaptureAudioInGPUProcess() const { return m_shouldCaptureAudioInGPUProcess; }
-    void setShouldCaptureAudioInGPUProcess(bool shouldCaptureAudioInGPUProcess) { m_shouldCaptureAudioInGPUProcess = shouldCaptureAudioInGPUProcess; }
-
-    bool shouldCaptureVideoInUIProcess() const { return m_shouldCaptureVideoInUIProcess; }
-    void setShouldCaptureVideoInUIProcess(bool shouldCaptureVideoInUIProcess) { m_shouldCaptureVideoInUIProcess = shouldCaptureVideoInUIProcess; }
-
-    bool shouldCaptureVideoInGPUProcess() const { return m_shouldCaptureVideoInGPUProcess; }
-    void setShouldCaptureVideoInGPUProcess(bool shouldCaptureVideoInGPUProcess) { m_shouldCaptureVideoInGPUProcess = shouldCaptureVideoInGPUProcess; }
-
     bool shouldCaptureDisplayInUIProcess() const { return m_shouldCaptureDisplayInUIProcess; }
     void setShouldCaptureDisplayInUIProcess(bool shouldCaptureDisplayInUIProcess) { m_shouldCaptureDisplayInUIProcess = shouldCaptureDisplayInUIProcess; }
 
@@ -143,9 +131,9 @@ public:
     const WTF::String& customWebContentServiceBundleIdentifier() const { return m_customWebContentServiceBundleIdentifier; }
     void setCustomWebContentServiceBundleIdentifier(const WTF::String& customWebContentServiceBundleIdentifier) { m_customWebContentServiceBundleIdentifier = customWebContentServiceBundleIdentifier; }
 
-#if PLATFORM(COCOA)
-    bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
-    void setSuppressesConnectionTerminationOnSystemChange(bool suppressesConnectionTerminationOnSystemChange) { m_suppressesConnectionTerminationOnSystemChange = suppressesConnectionTerminationOnSystemChange; }
+#if PLATFORM(GTK) && !USE(GTK4)
+    bool useSystemAppearanceForScrollbars() const { return m_useSystemAppearanceForScrollbars; }
+    void setUseSystemAppearanceForScrollbars(bool useSystemAppearanceForScrollbars) { m_useSystemAppearanceForScrollbars = useSystemAppearanceForScrollbars; }
 #endif
 
 private:
@@ -160,10 +148,6 @@ private:
     Vector<WTF::String> m_overrideLanguages;
     bool m_alwaysRunsAtBackgroundPriority { false };
     bool m_shouldTakeUIBackgroundAssertion { true };
-    bool m_shouldCaptureAudioInUIProcess { false };
-    bool m_shouldCaptureAudioInGPUProcess { false };
-    bool m_shouldCaptureVideoInUIProcess { false };
-    bool m_shouldCaptureVideoInGPUProcess { false };
     bool m_shouldCaptureDisplayInUIProcess { DEFAULT_CAPTURE_DISPLAY_IN_UI_PROCESS };
     ProcessID m_presentingApplicationPID { getCurrentProcessID() };
     Optional<bool> m_processSwapsOnNavigationFromClient;
@@ -178,8 +162,8 @@ private:
     bool m_shouldConfigureJSCForTesting { false };
     bool m_isJITEnabled { true };
     bool m_usesSingleWebProcess { false };
-#if PLATFORM(COCOA)
-    bool m_suppressesConnectionTerminationOnSystemChange { false };
+#if PLATFORM(GTK) && !USE(GTK4)
+    bool m_useSystemAppearanceForScrollbars { false };
 #endif
 };
 

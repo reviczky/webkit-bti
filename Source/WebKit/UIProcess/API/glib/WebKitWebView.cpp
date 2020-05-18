@@ -1,8 +1,7 @@
 /*
- * Copyright (C) 2011 Igalia S.L.
  * Portions Copyright (c) 2011 Motorola Mobility, Inc.  All rights reserved.
  * Copyright (C) 2014 Collabora Ltd.
- * Copyright (C) 2017 Igalia S.L.
+ * Copyright (C) 2011, 2017, 2020 Igalia S.L.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -2321,7 +2320,7 @@ void webkitWebViewSetIcon(WebKitWebView* webView, const LinkIcon& icon, API::Dat
 }
 #endif
 
-WebPageProxy* webkitWebViewCreateNewPage(WebKitWebView* webView, const WindowFeatures& windowFeatures, WebKitNavigationAction* navigationAction)
+RefPtr<WebPageProxy> webkitWebViewCreateNewPage(WebKitWebView* webView, const WindowFeatures& windowFeatures, WebKitNavigationAction* navigationAction)
 {
     WebKitWebView* newWebView;
     g_signal_emit(webView, signals[CREATE], 0, navigationAction, &newWebView);
@@ -2335,8 +2334,7 @@ WebPageProxy* webkitWebViewCreateNewPage(WebKitWebView* webView, const WindowFea
 
     webkitWindowPropertiesUpdateFromWebWindowFeatures(newWebView->priv->windowProperties.get(), windowFeatures);
 
-    RefPtr<WebPageProxy> newPage = &getPage(newWebView);
-    return newPage.leakRef();
+    return makeRefPtr(getPage(newWebView));
 }
 
 void webkitWebViewReadyToShowPage(WebKitWebView* webView)
@@ -2350,7 +2348,7 @@ void webkitWebViewRunAsModal(WebKitWebView* webView)
 
     webView->priv->modalLoop = adoptGRef(g_main_loop_new(0, FALSE));
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && !USE(GTK4)
 // This is to suppress warnings about gdk_threads_leave and gdk_threads_enter.
     ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     gdk_threads_leave();
@@ -2358,7 +2356,7 @@ void webkitWebViewRunAsModal(WebKitWebView* webView)
 
     g_main_loop_run(webView->priv->modalLoop.get());
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && !USE(GTK4)
     gdk_threads_enter();
     ALLOW_DEPRECATED_DECLARATIONS_END
 #endif
@@ -2439,7 +2437,11 @@ void webkitWebViewSetCurrentScriptDialogUserInput(WebKitWebView* webView, const 
     if (!webView->priv->currentScriptDialog)
         return;
 
-    // FIXME: Add API to ask the user in case default implementation is not being used.
+    if (webkitScriptDialogIsUserHandled(webView->priv->currentScriptDialog)) {
+        // FIXME: Add API to ask the user in case default implementation is not being used.
+        return;
+    }
+
     if (webkitScriptDialogIsRunning(webView->priv->currentScriptDialog))
         webkitScriptDialogSetUserInput(webView->priv->currentScriptDialog, userInput);
 }
@@ -2449,7 +2451,11 @@ void webkitWebViewAcceptCurrentScriptDialog(WebKitWebView* webView)
     if (!webView->priv->currentScriptDialog)
         return;
 
-    // FIXME: Add API to ask the user in case default implementation is not being used.
+    if (webkitScriptDialogIsUserHandled(webView->priv->currentScriptDialog)) {
+        // FIXME: Add API to ask the user in case default implementation is not being used.
+        return;
+    }
+
     if (webkitScriptDialogIsRunning(webView->priv->currentScriptDialog))
         webkitScriptDialogAccept(webView->priv->currentScriptDialog);
 }
@@ -2459,7 +2465,11 @@ void webkitWebViewDismissCurrentScriptDialog(WebKitWebView* webView)
     if (!webView->priv->currentScriptDialog)
         return;
 
-    // FIXME: Add API to ask the user in case default implementation is not being used.
+    if (webkitScriptDialogIsUserHandled(webView->priv->currentScriptDialog)) {
+        // FIXME: Add API to ask the user in case default implementation is not being used.
+        return;
+    }
+
     if (webkitScriptDialogIsRunning(webView->priv->currentScriptDialog))
         webkitScriptDialogDismiss(webView->priv->currentScriptDialog);
 }
@@ -2580,11 +2590,6 @@ void webkitWebViewRunFileChooserRequest(WebKitWebView* webView, WebKitFileChoose
 }
 
 #if PLATFORM(GTK)
-static void contextMenuDismissed(GtkMenuShell*, WebKitWebView* webView)
-{
-    g_signal_emit(webView, signals[CONTEXT_MENU_DISMISSED], 0, NULL);
-}
-
 void webkitWebViewPopulateContextMenu(WebKitWebView* webView, const Vector<WebContextMenuItemData>& proposedMenu, const WebHitTestResultData& hitTestResultData, GVariant* userData)
 {
     WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(webView);
@@ -2606,7 +2611,9 @@ void webkitWebViewPopulateContextMenu(WebKitWebView* webView, const Vector<WebCo
     webkitContextMenuPopulate(contextMenu.get(), contextMenuItems);
     contextMenuProxy->populate(contextMenuItems);
 
-    g_signal_connect(contextMenuProxy->gtkMenu(), "deactivate", G_CALLBACK(contextMenuDismissed), webView);
+    g_signal_connect(contextMenuProxy->gtkWidget(), WebContextMenuProxyGtk::widgetDismissedSignal, G_CALLBACK(+[](GtkWidget*, WebKitWebView* webView) {
+        g_signal_emit(webView, signals[CONTEXT_MENU_DISMISSED], 0, nullptr);
+    }), webView);
 
     // Clear the menu to make sure it's useless after signal emission.
     webkit_context_menu_remove_all(contextMenu.get());
@@ -2989,7 +2996,7 @@ void webkit_web_view_load_plain_text(WebKitWebView* webView, const gchar* plainT
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
     g_return_if_fail(plainText);
 
-    getPage(webView).loadData({ reinterpret_cast<const uint8_t*>(plainText), plainText ? strlen(plainText) : 0 }, "text/plain"_s, "UTF-8"_s, WTF::blankURL().string());
+    getPage(webView).loadData({ reinterpret_cast<const uint8_t*>(plainText), plainText ? strlen(plainText) : 0 }, "text/plain"_s, "UTF-8"_s, aboutBlankURL().string());
 }
 
 /**
@@ -3684,7 +3691,7 @@ void webkit_web_view_run_javascript(WebKitWebView* webView, const gchar* script,
     g_return_if_fail(script);
 
     GRefPtr<GTask> task = adoptGRef(g_task_new(webView, cancellable, callback, userData));
-    getPage(webView).runJavaScriptInMainFrame({ String::fromUTF8(script), false, WTF::nullopt, true }, [task = WTFMove(task)](API::SerializedScriptValue* serializedScriptValue, Optional<ExceptionDetails> details, WebKit::CallbackBase::Error) {
+    getPage(webView).runJavaScriptInMainFrame({ String::fromUTF8(script), URL { }, false, WTF::nullopt, true }, [task = WTFMove(task)](API::SerializedScriptValue* serializedScriptValue, Optional<ExceptionDetails> details, WebKit::CallbackBase::Error) {
         ExceptionDetails exceptionDetails;
         if (details)
             exceptionDetails = *details;
@@ -3786,7 +3793,7 @@ void webkit_web_view_run_javascript_in_world(WebKitWebView* webView, const gchar
 
     GRefPtr<GTask> task = adoptGRef(g_task_new(webView, cancellable, callback, userData));
     auto world = API::ContentWorld::sharedWorldWithName(String::fromUTF8(worldName));
-    getPage(webView).runJavaScriptInMainFrameScriptWorld({ String::fromUTF8(script), false, WTF::nullopt, true }, world.get(), [task = WTFMove(task)](API::SerializedScriptValue* serializedScriptValue, Optional<ExceptionDetails> details, WebKit::CallbackBase::Error) {
+    getPage(webView).runJavaScriptInFrameInScriptWorld({ String::fromUTF8(script), URL { }, false, WTF::nullopt, true }, WTF::nullopt, world.get(), [task = WTFMove(task)](API::SerializedScriptValue* serializedScriptValue, Optional<ExceptionDetails> details, WebKit::CallbackBase::Error) {
         ExceptionDetails exceptionDetails;
         if (details)
             exceptionDetails = *details;
@@ -3828,7 +3835,7 @@ static void resourcesStreamReadCallback(GObject* object, GAsyncResult* result, g
 
     WebKitWebView* webView = WEBKIT_WEB_VIEW(g_task_get_source_object(task.get()));
     gpointer outputStreamData = g_memory_output_stream_get_data(G_MEMORY_OUTPUT_STREAM(object));
-    getPage(webView).runJavaScriptInMainFrame({ String::fromUTF8(reinterpret_cast<const gchar*>(outputStreamData)), false, WTF::nullopt, true},
+    getPage(webView).runJavaScriptInMainFrame({ String::fromUTF8(reinterpret_cast<const gchar*>(outputStreamData)), URL { }, false, WTF::nullopt, true },
         [task](API::SerializedScriptValue* serializedScriptValue, Optional<ExceptionDetails> details, WebKit::CallbackBase::Error) {
             ExceptionDetails exceptionDetails;
             if (details)

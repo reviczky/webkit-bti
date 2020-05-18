@@ -54,12 +54,14 @@ struct VectorMalloc;
 using VectorMalloc = FastMalloc;
 #endif
 
+struct AnyThreadsAccessTraits;
+struct MainThreadAccessTraits;
 template<typename> class CompletionHandler;
 template<typename T> struct DumbPtrTraits;
 template<typename T> struct DumbValueTraits;
 template<typename> class Function;
-template<typename> class LazyNeverDestroyed;
-template<typename> class NeverDestroyed;
+template<typename, typename = AnyThreadsAccessTraits> class LazyNeverDestroyed;
+template<typename, typename = AnyThreadsAccessTraits> class NeverDestroyed;
 template<typename> class OptionSet;
 template<typename> class Optional;
 template<typename T> class Packed;
@@ -68,6 +70,7 @@ template<typename T, typename = DumbPtrTraits<T>> class Ref;
 template<typename T, typename = DumbPtrTraits<T>> class RefPtr;
 template<typename> class StringBuffer;
 template<typename, typename = void> class StringTypeAdapter;
+template<typename T> class UniqueRef;
 template<typename T> class WeakPtr;
 
 template<typename> struct DefaultHash { using Hash = void; };
@@ -125,6 +128,7 @@ using WTF::StringView;
 using WTF::TextPosition;
 using WTF::TextStream;
 using WTF::URL;
+using WTF::UniqueRef;
 using WTF::Variant;
 using WTF::Vector;
 

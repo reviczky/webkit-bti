@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2005-2020 Apple Inc. All rights reserved.
  * Copyright (C) 2014 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -35,7 +35,6 @@
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
 #include "LocalizedStrings.h"
-#include "MediaControlElements.h"
 #include "Page.h"
 #include "PaintInfo.h"
 #include "RenderStyle.h"
@@ -54,7 +53,6 @@
 #endif
 
 #if ENABLE(DATALIST_ELEMENT)
-#include "HTMLCollection.h"
 #include "HTMLDataListElement.h"
 #include "HTMLOptionElement.h"
 #include "HTMLParserIdioms.h"
@@ -172,7 +170,7 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
             style.setHeight(WTFMove(controlSize.height));
 
         // Min-Width / Min-Height
-        LengthSize minControlSize = Theme::singleton().minimumControlSize(part, style.fontCascade(), style.effectiveZoom());
+        LengthSize minControlSize = Theme::singleton().minimumControlSize(part, style.fontCascade(), { style.minWidth(), style.minHeight() }, style.effectiveZoom());
         if (minControlSize.width != style.minWidth())
             style.setMinWidth(WTFMove(minControlSize.width));
         if (minControlSize.height != style.minHeight())
@@ -1064,8 +1062,7 @@ void RenderTheme::paintSliderTicks(const RenderObject& o, const PaintInfo& paint
         return;
 
     auto& input = downcast<HTMLInputElement>(*o.node());
-
-    if (!input.list())
+    if (!input.isRangeControl() || !input.list())
         return;
 
     auto& dataList = downcast<HTMLDataListElement>(*input.list());
@@ -1117,12 +1114,9 @@ void RenderTheme::paintSliderTicks(const RenderObject& o, const PaintInfo& paint
         tickRegionSideMargin = trackBounds.y() + (thumbSize.width() - tickSize.width() * zoomFactor) / 2.0;
         tickRegionWidth = trackBounds.height() - thumbSize.width();
     }
-    Ref<HTMLCollection> options = dataList.options();
     GraphicsContextStateSaver stateSaver(paintInfo.context());
     paintInfo.context().setFillColor(o.style().visitedDependentColorWithColorFilter(CSSPropertyColor));
-    for (unsigned i = 0; Node* node = options->item(i); i++) {
-        ASSERT(is<HTMLOptionElement>(*node));
-        HTMLOptionElement& optionElement = downcast<HTMLOptionElement>(*node);
+    for (auto& optionElement : dataList.suggestions()) {
         String value = optionElement.value();
         if (!input.isValidValue(value))
             continue;
@@ -1353,28 +1347,15 @@ Color RenderTheme::systemColor(CSSValueID cssValueId, OptionSet<StyleColor::Opti
     }
 }
 
-Color RenderTheme::activeTextSearchHighlightColor(OptionSet<StyleColor::Options> options) const
+Color RenderTheme::textSearchHighlightColor(OptionSet<StyleColor::Options> options) const
 {
     auto& cache = colorCache(options);
-    if (!cache.activeTextSearchHighlightColor.isValid())
-        cache.activeTextSearchHighlightColor = platformActiveTextSearchHighlightColor(options);
-    return cache.activeTextSearchHighlightColor;
+    if (!cache.textSearchHighlightColor.isValid())
+        cache.textSearchHighlightColor = platformTextSearchHighlightColor(options);
+    return cache.textSearchHighlightColor;
 }
 
-Color RenderTheme::inactiveTextSearchHighlightColor(OptionSet<StyleColor::Options> options) const
-{
-    auto& cache = colorCache(options);
-    if (!cache.inactiveTextSearchHighlightColor.isValid())
-        cache.inactiveTextSearchHighlightColor = platformInactiveTextSearchHighlightColor(options);
-    return cache.inactiveTextSearchHighlightColor;
-}
-
-Color RenderTheme::platformActiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const
-{
-    return Color(255, 150, 50); // Orange.
-}
-
-Color RenderTheme::platformInactiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const
+Color RenderTheme::platformTextSearchHighlightColor(OptionSet<StyleColor::Options>) const
 {
     return Color(255, 255, 0); // Yellow.
 }

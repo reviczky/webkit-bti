@@ -42,8 +42,6 @@ messages -> WebProcessProxy LegacyReceiver {
     GetGPUProcessConnection() -> (struct WebKit::GPUProcessConnectionInfo connectionInfo) Synchronous
 #endif
 
-    SetIsHoldingLockedFiles(bool isHoldingLockedFiles)
-
     DidExceedActiveMemoryLimit()
     DidExceedInactiveMemoryLimit()
     DidExceedCPULimit()
@@ -72,10 +70,6 @@ messages -> WebProcessProxy LegacyReceiver {
     StopDisplayLink(unsigned observerID, uint32_t displayID)
 #endif
 
-#if PLATFORM(IOS_FAMILY)
-    ProcessWasResumed() -> () Async
-#endif
-
     # Plug-in messages.
     void AddPlugInAutoStartOriginHash(String pageOrigin, uint32_t hash)
     void PlugInDidReceiveUserInteraction(uint32_t hash)
@@ -84,4 +78,7 @@ messages -> WebProcessProxy LegacyReceiver {
     SendMessageToWebContext(struct WebKit::UserMessage userMessage)
     SendMessageToWebContextWithReply(struct WebKit::UserMessage userMessage) -> (struct WebKit::UserMessage replyMessage) Async
 #endif
+
+    DidCreateSleepDisabler(WebCore::SleepDisablerIdentifier identifier, String reason, bool display)
+    DidDestroySleepDisabler(WebCore::SleepDisablerIdentifier identifier)
 }

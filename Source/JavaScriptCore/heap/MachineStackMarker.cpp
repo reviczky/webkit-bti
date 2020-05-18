@@ -24,8 +24,6 @@
 
 #include "ConservativeRoots.h"
 #include "MachineContext.h"
-#include <setjmp.h>
-#include <stdlib.h>
 #include <wtf/BitVector.h>
 #include <wtf/PageBlock.h>
 #include <wtf/StdLibExtras.h>
@@ -137,8 +135,8 @@ bool MachineThreads::tryCopyOtherThreadStacks(const AbstractLocker& locker, void
 {
     // Prevent two VMs from suspending each other's threads at the same time,
     // which can cause deadlock: <rdar://problem/20300842>.
-    static Lock mutex;
-    std::lock_guard<Lock> lock(mutex);
+    static Lock suspendLock;
+    auto suspendLocker = holdLock(suspendLock);
 
     *size = 0;
 

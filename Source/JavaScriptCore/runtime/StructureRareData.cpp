@@ -30,9 +30,9 @@
 #include "JSImmutableButterfly.h"
 #include "JSPropertyNameEnumerator.h"
 #include "JSString.h"
-#include "JSCInlines.h"
 #include "ObjectPropertyConditionSet.h"
 #include "ObjectToStringAdaptiveStructureWatchpoint.h"
+#include "StructureChain.h"
 
 namespace JSC {
 
@@ -86,8 +86,8 @@ public:
     ObjectToStringAdaptiveInferredPropertyValueWatchpoint(const ObjectPropertyCondition&, StructureRareData*);
 
 private:
-    bool isValid() const override;
-    void handleFire(VM&, const FireDetail&) override;
+    bool isValid() const final;
+    void handleFire(VM&, const FireDetail&) final;
 
     StructureRareData* m_structureRareData;
 };

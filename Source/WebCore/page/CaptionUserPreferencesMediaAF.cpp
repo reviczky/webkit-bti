@@ -36,10 +36,8 @@
 #include "HTMLMediaElement.h"
 #include "LocalizedStrings.h"
 #include "Logging.h"
-#include "MediaControlElements.h"
 #include "TextTrackList.h"
 #include "UserStyleSheetTypes.h"
-#include "VTTCue.h"
 #include <algorithm>
 #include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
@@ -682,9 +680,9 @@ String CaptionUserPreferencesMediaAF::displayNameForTrack(AudioTrack* track) con
 
 static String trackDisplayName(TextTrack* track)
 {
-    if (track == TextTrack::captionMenuOffItem())
+    if (track == &TextTrack::captionMenuOffItem())
         return textTrackOffMenuItemText();
-    if (track == TextTrack::captionMenuAutomaticItem())
+    if (track == &TextTrack::captionMenuAutomaticItem())
         return textTrackAutomaticMenuItemText();
 
     StringBuilder displayNameBuilder;
@@ -720,129 +718,36 @@ String CaptionUserPreferencesMediaAF::displayNameForTrack(TextTrack* track) cons
     return trackDisplayName(track);
 }
 
-int CaptionUserPreferencesMediaAF::textTrackSelectionScore(TextTrack* track, HTMLMediaElement* mediaElement) const
-{
-    CaptionDisplayMode displayMode = captionDisplayMode();
-    if (displayMode == Manual)
-        return 0;
-
-    bool legacyOverride = mediaElement->webkitClosedCaptionsVisible();
-    if (displayMode == AlwaysOn && (!userPrefersSubtitles() && !userPrefersCaptions() && !legacyOverride))
-        return 0;
-    if (track->kind() != TextTrack::Kind::Captions && track->kind() != TextTrack::Kind::Subtitles && track->kind() != TextTrack::Kind::Forced)
-        return 0;
-    if (!track->isMainProgramContent())
-        return 0;
-
-    bool trackHasOnlyForcedSubtitles = track->containsOnlyForcedSubtitles();
-    if (!legacyOverride && ((trackHasOnlyForcedSubtitles && displayMode != ForcedOnly) || (!trackHasOnlyForcedSubtitles && displayMode == ForcedOnly)))
-        return 0;
-
-    Vector<String> userPreferredCaptionLanguages = preferredLanguages();
-
-    if ((displayMode == Automatic && !legacyOverride) || trackHasOnlyForcedSubtitles) {
-
-        if (!mediaElement || !mediaElement->player())
-            return 0;
-
-        String textTrackLanguage = track->validBCP47Language();
-        if (textTrackLanguage.isEmpty())
-            return 0;
-
-        Vector<String> languageList;
-        languageList.reserveCapacity(1);
-
-        String audioTrackLanguage;
-        if (testingMode())
-            audioTrackLanguage = primaryAudioTrackLanguageOverride();
-        else
-            audioTrackLanguage = mediaElement->player()->languageOfPrimaryAudioTrack();
-
-        if (audioTrackLanguage.isEmpty())
-            return 0;
-
-        bool exactMatch;
-        if (trackHasOnlyForcedSubtitles) {
-            languageList.append(audioTrackLanguage);
-            size_t offset = indexOfBestMatchingLanguageInList(textTrackLanguage, languageList, exactMatch);
-
-            // Only consider a forced-only track if it IS in the same language as the primary audio track.
-            if (offset)
-                return 0;
-        } else {
-            languageList.append(defaultLanguage());
-
-            // Only enable a text track if the current audio track is NOT in the user's preferred language ...
-            size_t offset = indexOfBestMatchingLanguageInList(audioTrackLanguage, languageList, exactMatch);
-            if (!offset)
-                return 0;
-
-            // and the text track matches the user's preferred language.
-            offset = indexOfBestMatchingLanguageInList(textTrackLanguage, languageList, exactMatch);
-            if (offset)
-                return 0;
-        }
-
-        userPreferredCaptionLanguages = languageList;
-    }
-
-    int trackScore = 0;
-
-    if (userPrefersCaptions()) {
-        // When the user prefers accessibility tracks, rank is SDH, then CC, then subtitles.
-        if (track->kind() == TextTrack::Kind::Subtitles)
-            trackScore = 1;
-        else if (track->isClosedCaptions())
-            trackScore = 2;
-        else
-            trackScore = 3;
-    } else {
-        // When the user prefers translation tracks, rank is subtitles, then SDH, then CC tracks.
-        if (track->kind() == TextTrack::Kind::Subtitles)
-            trackScore = 3;
-        else if (!track->isClosedCaptions())
-            trackScore = 2;
-        else
-            trackScore = 1;
-    }
-
-    return trackScore + textTrackLanguageSelectionScore(track, userPreferredCaptionLanguages);
-}
-
 static bool textTrackCompare(const RefPtr<TextTrack>& a, const RefPtr<TextTrack>& b)
 {
     String preferredLanguageDisplayName = displayNameForLanguageLocale(languageIdentifier(defaultLanguage()));
     String aLanguageDisplayName = displayNameForLanguageLocale(languageIdentifier(a->validBCP47Language()));
-    String bLanguageDisplayName = displayNameForLanguageLocale(languageIdentifier(b->language()));
+    String bLanguageDisplayName = displayNameForLanguageLocale(languageIdentifier(b->validBCP47Language()));
 
     // Tracks in the user's preferred language are always at the top of the menu.
     bool aIsPreferredLanguage = !codePointCompare(aLanguageDisplayName, preferredLanguageDisplayName);
     bool bIsPreferredLanguage = !codePointCompare(bLanguageDisplayName, preferredLanguageDisplayName);
-    if ((aIsPreferredLanguage || bIsPreferredLanguage) && (aIsPreferredLanguage != bIsPreferredLanguage))
+    if (aIsPreferredLanguage != bIsPreferredLanguage)
         return aIsPreferredLanguage;
 
     // Tracks not in the user's preferred language sort first by language ...
-    if (codePointCompare(aLanguageDisplayName, bLanguageDisplayName))
-        return codePointCompare(aLanguageDisplayName, bLanguageDisplayName) < 0;
+    if (auto languageDisplayNameComparison = codePointCompare(aLanguageDisplayName, bLanguageDisplayName))
+        return languageDisplayNameComparison < 0;
 
     // ... but when tracks have the same language, main program content sorts next highest ...
     bool aIsMainContent = a->isMainProgramContent();
     bool bIsMainContent = b->isMainProgramContent();
-    if ((aIsMainContent || bIsMainContent) && (aIsMainContent != bIsMainContent))
+    if (aIsMainContent != bIsMainContent)
         return aIsMainContent;
 
-    // ... and main program trakcs sort higher than CC tracks ...
+    // ... and main program tracks sort higher than CC tracks ...
     bool aIsCC = a->isClosedCaptions();
     bool bIsCC = b->isClosedCaptions();
-    if ((aIsCC || bIsCC) && (aIsCC != bIsCC)) {
-        if (aIsCC)
-            return aIsMainContent;
-        return bIsMainContent;
-    }
+    if (aIsCC != bIsCC)
+        return aIsCC;
 
     // ... and tracks of the same type and language sort by the menu item text.
-    auto trackDisplayComparison = codePointCompare(trackDisplayName(a.get()), trackDisplayName(b.get()));
-    if (trackDisplayComparison)
+    if (auto trackDisplayComparison = codePointCompare(trackDisplayName(a.get()), trackDisplayName(b.get())))
         return trackDisplayComparison < 0;
 
     // ... and if the menu item text is the same, compare the unique IDs
@@ -976,8 +881,8 @@ Vector<RefPtr<TextTrack>> CaptionUserPreferencesMediaAF::sortedTrackListForMenu(
 
     std::sort(tracksForMenu.begin(), tracksForMenu.end(), textTrackCompare);
 
-    tracksForMenu.insert(0, TextTrack::captionMenuOffItem());
-    tracksForMenu.insert(1, TextTrack::captionMenuAutomaticItem());
+    tracksForMenu.insert(0, &TextTrack::captionMenuOffItem());
+    tracksForMenu.insert(1, &TextTrack::captionMenuAutomaticItem());
 
     return tracksForMenu;
 }

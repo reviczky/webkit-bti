@@ -302,7 +302,10 @@ void RenderTreeUpdater::updateRendererStyle(RenderElement& renderer, RenderStyle
     if (RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextEnabled()) {
         if (!m_document.view() || !m_document.view()->layoutContext().layoutTreeContent())
             return;
-        if (auto* layoutBox = m_document.view()->layoutContext().layoutTreeContent()->layoutBoxForRenderer(renderer))
+        auto& layoutContext = m_document.view()->layoutContext();
+        if (minimalStyleDifference >= StyleDifference::LayoutPositionedMovementOnly || renderer.needsLayout())
+            layoutContext.invalidateLayoutState();
+        if (auto* layoutBox = layoutContext.layoutTreeContent()->layoutBoxForRenderer(renderer))
             layoutBox->updateStyle(renderer.style());
     }
 #endif
@@ -397,7 +400,7 @@ void RenderTreeUpdater::createRenderer(Element& element, RenderStyle&& style)
     }
 #endif
 
-    m_builder.attach(insertionPosition, WTFMove(newRenderer));
+    m_builder.attach(insertionPosition.parent(), WTFMove(newRenderer), insertionPosition.nextSibling());
 
     auto* textManipulationController = m_document.textManipulationControllerIfExists();
     if (UNLIKELY(textManipulationController))
@@ -475,14 +478,14 @@ void RenderTreeUpdater::createTextRenderer(Text& textNode, const Style::TextUpda
         auto newDisplayContentsAnonymousWrapper = WebCore::createRenderer<RenderInline>(textNode.document(), RenderStyle::clone(**textUpdate->inheritedDisplayContentsStyle));
         newDisplayContentsAnonymousWrapper->initializeStyle();
         auto& displayContentsAnonymousWrapper = *newDisplayContentsAnonymousWrapper;
-        m_builder.attach(renderTreePosition, WTFMove(newDisplayContentsAnonymousWrapper));
+        m_builder.attach(renderTreePosition.parent(), WTFMove(newDisplayContentsAnonymousWrapper), renderTreePosition.nextSibling());
 
         textRenderer->setInlineWrapperForDisplayContents(&displayContentsAnonymousWrapper);
         m_builder.attach(displayContentsAnonymousWrapper, WTFMove(textRenderer));
         return;
     }
 
-    m_builder.attach(renderTreePosition, WTFMove(textRenderer));
+    m_builder.attach(renderTreePosition.parent(), WTFMove(textRenderer), renderTreePosition.nextSibling());
 }
 
 void RenderTreeUpdater::updateTextRenderer(Text& text, const Style::TextUpdate* textUpdate)
@@ -555,7 +558,7 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
 
     auto& document = root.document();
     auto* timeline = document.existingTimeline();
-    auto& animationController = document.frame()->animation();    
+    auto& animationController = document.frame()->legacyAnimation();    
 
     auto pop = [&] (unsigned depth) {
         while (teardownStack.size() > depth) {
@@ -570,9 +573,9 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
             case TeardownType::RendererUpdateCancelingAnimations:
                 if (timeline) {
                     if (document.renderTreeBeingDestroyed())
-                        timeline->willDestroyRendererForElement(element);
+                        timeline->cancelDeclarativeAnimationsForElement(element, WebAnimation::Silently::Yes);
                     else if (teardownType == TeardownType::RendererUpdateCancelingAnimations)
-                        timeline->cancelDeclarativeAnimationsForElement(element);
+                        timeline->cancelDeclarativeAnimationsForElement(element, WebAnimation::Silently::No);
                 }
                 animationController.cancelAnimations(element);
                 break;

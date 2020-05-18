@@ -37,6 +37,7 @@
 #include "WebProcessProxy.h"
 #include "WebResourceLoadStatisticsTelemetry.h"
 #include "WebsiteDataStore.h"
+#include <JavaScriptCore/ConsoleTypes.h>
 #include <WebCore/DocumentStorageAccess.h>
 #include <WebCore/KeyedCoding.h>
 #include <WebCore/NetworkStorageSession.h>
@@ -316,13 +317,21 @@ void ResourceLoadStatisticsMemoryStore::requestStorageAccess(SubFrameDomain&& su
     auto& subFrameStatistic = ensureResourceStatisticsForRegistrableDomain(subFrameDomain);
     switch (cookieAccess(subFrameStatistic, topFrameDomain)) {
     case CookieAccess::CannotRequest:
-        RELEASE_LOG_INFO_IF(debugLoggingEnabled(), ITPDebug, "Cannot grant storage access to %{public}s since its cookies are blocked in third-party contexts and it has not received user interaction as first-party.", subFrameDomain.string().utf8().data());
+        if (UNLIKELY(debugLoggingEnabled())) {
+            RELEASE_LOG_INFO(ITPDebug, "Cannot grant storage access to %" PUBLIC_LOG_STRING " since its cookies are blocked in third-party contexts and it has not received user interaction as first-party.", subFrameDomain.string().utf8().data());
+            debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("[ITP] Cannot grant storage access to '"_s, subFrameDomain.string(), "' since its cookies are blocked in third-party contexts and it has not received user interaction as first-party."_s));
+        }
         completionHandler(StorageAccessStatus::CannotRequestAccess);
         return;
+
     case CookieAccess::BasedOnCookiePolicy:
-        RELEASE_LOG_INFO_IF(debugLoggingEnabled(), ITPDebug, "No need to grant storage access to %{public}s since its cookies are not blocked in third-party contexts. Note that the underlying cookie policy may still block this third-party from setting cookies.", subFrameDomain.string().utf8().data());
+        if (UNLIKELY(debugLoggingEnabled())) {
+            RELEASE_LOG_INFO(ITPDebug, "No need to grant storage access to %" PUBLIC_LOG_STRING " since its cookies are not blocked in third-party contexts. Note that the underlying cookie policy may still block this third-party from setting cookies.", subFrameDomain.string().utf8().data());
+            debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("[ITP] No need to grant storage access to '"_s, subFrameDomain.string(), "' since its cookies are not blocked in third-party contexts. Note that the underlying cookie policy may still block this third-party from setting cookies."_s));
+        }
         completionHandler(StorageAccessStatus::HasAccess);
         return;
+
     case CookieAccess::OnlyIfGranted:
         // Handled below.
         break;
@@ -330,13 +339,20 @@ void ResourceLoadStatisticsMemoryStore::requestStorageAccess(SubFrameDomain&& su
 
     auto userWasPromptedEarlier = hasUserGrantedStorageAccessThroughPrompt(subFrameStatistic, topFrameDomain);
     if (userWasPromptedEarlier == StorageAccessPromptWasShown::No) {
-        RELEASE_LOG_INFO_IF(debugLoggingEnabled(), ITPDebug, "About to ask the user whether they want to grant storage access to %{public}s under %{public}s or not.", subFrameDomain.string().utf8().data(), topFrameDomain.string().utf8().data());
+        if (UNLIKELY(debugLoggingEnabled())) {
+            RELEASE_LOG_INFO(ITPDebug, "About to ask the user whether they want to grant storage access to %" PUBLIC_LOG_STRING " under %" PUBLIC_LOG_STRING " or not.", subFrameDomain.string().utf8().data(), topFrameDomain.string().utf8().data());
+            debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("[ITP] About to ask the user whether they want to grant storage access to '"_s, subFrameDomain.string(), "' under '"_s, topFrameDomain.string(), "' or not."_s));
+        }
         completionHandler(StorageAccessStatus::RequiresUserPrompt);
         return;
     }
 
-    if (userWasPromptedEarlier == StorageAccessPromptWasShown::Yes)
-        RELEASE_LOG_INFO_IF(debugLoggingEnabled(), ITPDebug, "Storage access was granted to %{public}s under %{public}s.", subFrameDomain.string().utf8().data(), topFrameDomain.string().utf8().data());
+    if (userWasPromptedEarlier == StorageAccessPromptWasShown::Yes) {
+        if (UNLIKELY(debugLoggingEnabled())) {
+            RELEASE_LOG_INFO(ITPDebug, "Storage access was granted to %" PUBLIC_LOG_STRING " under %" PUBLIC_LOG_STRING ".", subFrameDomain.string().utf8().data(), topFrameDomain.string().utf8().data());
+            debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("[ITP] Storage access was granted to '"_s, subFrameDomain.string(), "' under '"_s, topFrameDomain.string(), "'."_s));
+        }
+    }
 
     subFrameStatistic.timesAccessedAsFirstPartyDueToStorageAccessAPI++;
 
@@ -353,7 +369,11 @@ void ResourceLoadStatisticsMemoryStore::requestStorageAccessUnderOpener(DomainIn
     if (domainInNeedOfStorageAccess == openerDomain)
         return;
 
-    RELEASE_LOG_INFO_IF(debugLoggingEnabled(), ITPDebug, "[Temporary combatibility fix] Storage access was granted for %{public}s under opener page from %{public}s, with user interaction in the opened window.", domainInNeedOfStorageAccess.string().utf8().data(), openerDomain.string().utf8().data());
+    if (UNLIKELY(debugLoggingEnabled())) {
+        RELEASE_LOG_INFO(ITPDebug, "[Temporary combatibility fix] Storage access was granted for %" PUBLIC_LOG_STRING " under opener page from %" PUBLIC_LOG_STRING ", with user interaction in the opened window.", domainInNeedOfStorageAccess.string().utf8().data(), openerDomain.string().utf8().data());
+        debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("[ITP] Storage access was granted for '"_s, domainInNeedOfStorageAccess.string(), "' under opener page from '"_s, openerDomain.string(), "', with user interaction in the opened window."_s));
+    }
+
     grantStorageAccessInternal(WTFMove(domainInNeedOfStorageAccess), WTFMove(openerDomain), WTF::nullopt, openerPageID, StorageAccessPromptWasShown::No, [](StorageAccessWasGranted) { });
 }
 
@@ -422,7 +442,11 @@ Vector<RegistrableDomain> ResourceLoadStatisticsMemoryStore::ensurePrevalentReso
         auto& manualResourceStatistic = ensureResourceStatisticsForRegistrableDomain(debugManualPrevalentResource());
         setPrevalentResource(manualResourceStatistic, ResourceLoadPrevalence::High);
         domainsToBlock.uncheckedAppend(debugManualPrevalentResource());
-        RELEASE_LOG_INFO(ITPDebug, "Did set %{public}s as prevalent resource for the purposes of ITP Debug Mode.", debugManualPrevalentResource().string().utf8().data());
+
+        if (debugLoggingEnabled()) {
+            RELEASE_LOG_INFO(ITPDebug, "Did set %" PUBLIC_LOG_STRING " as prevalent resource for the purposes of ITP Debug Mode.", debugManualPrevalentResource().string().utf8().data());
+            debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("[ITP] Did set '"_s, debugManualPrevalentResource().string(), "' as prevalent resource for the purposes of ITP Debug Mode."_s));
+        }
     }
     
     return domainsToBlock;
@@ -450,6 +474,14 @@ void ResourceLoadStatisticsMemoryStore::logFrameNavigation(const RegistrableDoma
             if (isRedirect || wasNavigatedAfterShortDelayWithoutUserInteraction) {
                 if (redirectingDomainStatistics.topFrameUniqueRedirectsTo.add(targetDomain).isNewEntry)
                     statisticsWereUpdated = true;
+                if (isRedirect && redirectingDomainStatistics.topFrameUniqueRedirectsToSinceSameSiteStrictEnforcement.add(targetDomain).isNewEntry) {
+                    statisticsWereUpdated = true;
+
+                    if (UNLIKELY(debugLoggingEnabled())) {
+                        RELEASE_LOG_INFO(ITPDebug, "Did set %" PUBLIC_LOG_STRING " as making a top frame redirect to %" PUBLIC_LOG_STRING ".", sourceDomain.string().utf8().data(), targetDomain.string().utf8().data());
+                        debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("Did set '", sourceDomain.string(), "' as making a top frame redirect to '", targetDomain.string(), "'."));
+                    }
+                }
                 auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(targetDomain);
                 if (targetStatistics.topFrameUniqueRedirectsFrom.add(sourceDomain).isNewEntry)
                     statisticsWereUpdated = true;
@@ -551,9 +583,15 @@ void ResourceLoadStatisticsMemoryStore::dumpResourceLoadStatistics(CompletionHan
 
     StringBuilder result;
     result.appendLiteral("Resource load statistics:\n\n");
+    Vector<String> sortedMapEntries;
     for (auto& mapEntry : m_resourceStatisticsMap.values())
-        result.append(mapEntry.toString());
+        sortedMapEntries.append(mapEntry.toString());
 
+    std::sort(sortedMapEntries.begin(), sortedMapEntries.end(), WTF::codePointCompareLessThan);
+
+    for (auto& entry : sortedMapEntries)
+        result.append(entry);
+    
     auto thirdPartyData = aggregatedThirdPartyData();
     if (!thirdPartyData.isEmpty()) {
         result.append("\nITP Data:\n");
@@ -682,6 +720,7 @@ void ResourceLoadStatisticsMemoryStore::setTopFrameUniqueRedirectTo(const TopFra
 
     auto& statistics = ensureResourceStatisticsForRegistrableDomain(topFrameDomain);
     statistics.topFrameUniqueRedirectsTo.add(redirectDomain);
+    statistics.topFrameUniqueRedirectsToSinceSameSiteStrictEnforcement.add(redirectDomain);
     // For consistency, make sure we also have a statistics entry for the redirect domain.
     ensureResourceStatisticsForRegistrableDomain(redirectDomain);
 }
@@ -838,16 +877,21 @@ void ResourceLoadStatisticsMemoryStore::updateCookieBlocking(CompletionHandler<v
 
     RegistrableDomainsToBlockCookiesFor domainsToBlock { domainsToBlockAndDeleteCookiesFor, domainsToBlockButKeepCookiesFor, domainsWithUserInteractionAsFirstParty };
 
-    if (debugLoggingEnabled() && !domainsToBlockAndDeleteCookiesFor.isEmpty() && !domainsToBlockButKeepCookiesFor.isEmpty())
-        debugLogDomainsInBatches("block", domainsToBlock);
+    if (debugLoggingEnabled() && (!domainsToBlockAndDeleteCookiesFor.isEmpty() || !domainsToBlockButKeepCookiesFor.isEmpty()))
+        debugLogDomainsInBatches("Applying cross-site tracking restrictions", domainsToBlock);
 
     RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), store = makeRef(store()), domainsToBlock = crossThreadCopy(domainsToBlock), completionHandler = WTFMove(completionHandler)] () mutable {
         store->callUpdatePrevalentDomainsToBlockCookiesForHandler(domainsToBlock, [weakThis = WTFMove(weakThis), store = store.copyRef(), completionHandler = WTFMove(completionHandler)]() mutable {
             store->statisticsQueue().dispatch([weakThis = WTFMove(weakThis), completionHandler = WTFMove(completionHandler)]() mutable {
                 completionHandler();
+
                 if (!weakThis)
                     return;
-                RELEASE_LOG_INFO_IF(weakThis->debugLoggingEnabled(), ITPDebug, "Done updating cookie blocking.");
+
+                if (UNLIKELY(weakThis->debugLoggingEnabled())) {
+                    RELEASE_LOG_INFO(ITPDebug, "Done applying cross-site tracking restrictions.");
+                    weakThis->debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, "[ITP] Done applying cross-site tracking restrictions."_s);
+                }
             });
         });
     });
@@ -908,7 +952,21 @@ bool ResourceLoadStatisticsMemoryStore::shouldRemoveAllButCookiesFor(ResourceLoa
     return isRemovalEnabled && !isResourceGrandfathered && !hasHadUnexpiredRecentUserInteraction(resourceStatistic, window);
 }
 
-Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>> ResourceLoadStatisticsMemoryStore::registrableDomainsToRemoveWebsiteDataFor()
+bool ResourceLoadStatisticsMemoryStore::shouldEnforceSameSiteStrictFor(ResourceLoadStatistics& resourceStatistic, bool shouldCheckForGrandfathering)
+{
+    if ((!isSameSiteStrictEnforcementEnabled() && !shouldEnforceSameSiteStrictForSpecificDomain(resourceStatistic.registrableDomain))
+        || (shouldCheckForGrandfathering && resourceStatistic.grandfathered))
+        return false;
+
+    if (resourceStatistic.topFrameUniqueRedirectsToSinceSameSiteStrictEnforcement.size() > parameters().minimumTopFrameRedirectsForSameSiteStrictEnforcement) {
+        resourceStatistic.topFrameUniqueRedirectsToSinceSameSiteStrictEnforcement.clear();
+        return true;
+    }
+
+    return false;
+}
+
+RegistrableDomainsToDeleteOrRestrictWebsiteDataFor ResourceLoadStatisticsMemoryStore::registrableDomainsToDeleteOrRestrictWebsiteDataFor()
 {
     ASSERT(!RunLoop::isMain());
 
@@ -918,20 +976,40 @@ Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>> ResourceLoadStatistics
     if (shouldClearGrandfathering)
         clearEndOfGrandfatheringTimeStamp();
 
-    Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>> domainsToRemoveWebsiteDataFor;
+    auto now = WallTime::now();
+    auto oldestUserInteraction = now;
+    RegistrableDomainsToDeleteOrRestrictWebsiteDataFor toDeleteOrRestrictFor;
     for (auto& statistic : m_resourceStatisticsMap.values()) {
-        if (shouldRemoveAllWebsiteDataFor(statistic, shouldCheckForGrandfathering))
-            domainsToRemoveWebsiteDataFor.append(std::make_pair(statistic.registrableDomain, WebsiteDataToRemove::All));
-        else if (shouldRemoveAllButCookiesFor(statistic, shouldCheckForGrandfathering)) {
-            domainsToRemoveWebsiteDataFor.append(std::make_pair(statistic.registrableDomain, WebsiteDataToRemove::AllButCookies));
-            statistic.gotLinkDecorationFromPrevalentResource = false;
+        if (shouldExemptFromWebsiteDataDeletion(statistic.registrableDomain))
+            continue;
+        oldestUserInteraction = std::min(oldestUserInteraction, statistic.mostRecentUserInteractionTime);
+        if (shouldRemoveAllWebsiteDataFor(statistic, shouldCheckForGrandfathering)) {
+            toDeleteOrRestrictFor.domainsToDeleteAllCookiesFor.append(statistic.registrableDomain);
+            toDeleteOrRestrictFor.domainsToDeleteAllNonCookieWebsiteDataFor.append(statistic.registrableDomain);
+        } else {
+            if (shouldRemoveAllButCookiesFor(statistic, shouldCheckForGrandfathering)) {
+                toDeleteOrRestrictFor.domainsToDeleteAllNonCookieWebsiteDataFor.append(statistic.registrableDomain);
+                statistic.gotLinkDecorationFromPrevalentResource = false;
+            }
+            if (shouldEnforceSameSiteStrictFor(statistic, shouldCheckForGrandfathering)) {
+                toDeleteOrRestrictFor.domainsToEnforceSameSiteStrictFor.append(statistic.registrableDomain);
+
+                if (UNLIKELY(debugLoggingEnabled())) {
+                    RELEASE_LOG_INFO(ITPDebug, "Scheduled %" PUBLIC_LOG_STRING " to have its cookies set to SameSite=strict.", statistic.registrableDomain.string().utf8().data());
+                    debugBroadcastConsoleMessage(MessageSource::ITPDebug, MessageLevel::Info, makeString("Scheduled '", statistic.registrableDomain.string(), "' to have its cookies set to SameSite=strict'."));
+                }
+            }
         }
 
         if (shouldClearGrandfathering && statistic.grandfathered)
             statistic.grandfathered = false;
     }
 
-    return domainsToRemoveWebsiteDataFor;
+    // Give the user enough time to interact with websites until we remove non-cookie website data.
+    if (!parameters().isRunningTest && now - oldestUserInteraction > parameters().minimumTimeBetweenDataRecordsRemoval)
+        toDeleteOrRestrictFor.domainsToDeleteAllNonCookieWebsiteDataFor.clear();
+
+    return toDeleteOrRestrictFor;
 }
 
 void ResourceLoadStatisticsMemoryStore::pruneStatisticsIfNeeded()
@@ -962,6 +1040,23 @@ void ResourceLoadStatisticsMemoryStore::setLastSeen(const RegistrableDomain& dom
 
     auto& statistics = ensureResourceStatisticsForRegistrableDomain(domain);
     statistics.lastSeen = WallTime::fromRawSeconds(seconds.seconds());
+}
+
+void ResourceLoadStatisticsMemoryStore::removeDataForDomain(const RegistrableDomain& domain)
+{
+    m_resourceStatisticsMap.remove(domain);
+    
+    for (auto& statistic : m_resourceStatisticsMap) {
+        statistic.value.topFrameUniqueRedirectsTo.remove(domain);
+        statistic.value.topFrameUniqueRedirectsToSinceSameSiteStrictEnforcement.remove(domain);
+        statistic.value.topFrameUniqueRedirectsFrom.remove(domain);
+        statistic.value.topFrameLinkDecorationsFrom.remove(domain);
+        statistic.value.topFrameLoadedThirdPartyScripts.remove(domain);
+        statistic.value.subframeUnderTopFrameDomains.remove(domain);
+        statistic.value.subresourceUnderTopFrameDomains.remove(domain);
+        statistic.value.subresourceUniqueRedirectsTo.remove(domain);
+        statistic.value.subresourceUniqueRedirectsFrom.remove(domain);
+    }
 }
 
 void ResourceLoadStatisticsMemoryStore::setPrevalentResource(const RegistrableDomain& domain)

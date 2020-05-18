@@ -125,9 +125,10 @@ public:
     void grantStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::StorageAccessPromptWasShown, CompletionHandler<void(WebCore::StorageAccessWasGranted)>&&) override;
 
     void logFrameNavigation(const NavigatedToDomain&, const TopFrameDomain&, const NavigatedFromDomain&, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser) override;
-    void logUserInteraction(const TopFrameDomain&, CompletionHandler<void()>&&) override;
     void logCrossSiteLoadWithLinkDecoration(const NavigatedFromDomain&, const NavigatedToDomain&) override;
+    void clearTopFrameUniqueRedirectsToSinceSameSiteStrictEnforcement(const NavigatedToDomain&, CompletionHandler<void()>&&);
 
+    void logUserInteraction(const TopFrameDomain&, CompletionHandler<void()>&&) override;
     void clearUserInteraction(const RegistrableDomain&, CompletionHandler<void()>&&) override;
     bool hasHadUserInteraction(const RegistrableDomain&, OperatingDatesWindow) override;
 
@@ -137,13 +138,19 @@ public:
     Seconds getMostRecentlyUpdatedTimestamp(const RegistrableDomain&, const TopFrameDomain&) const;
     bool isNewResourceLoadStatisticsDatabaseFile() const { return m_isNewResourceLoadStatisticsDatabaseFile; }
     void setIsNewResourceLoadStatisticsDatabaseFile(bool isNewResourceLoadStatisticsDatabaseFile) { m_isNewResourceLoadStatisticsDatabaseFile = isNewResourceLoadStatisticsDatabaseFile; }
+    void removeDataForDomain(const RegistrableDomain&) override;
+    bool domainIDExistsInDatabase(int);
+    Optional<Vector<String>> checkForMissingTablesInSchema();
 
 private:
     void openITPDatabase();
-    bool isCorrectTableSchema();
+    void addMissingTablesIfNecessary();
+    void enableForeignKeys();
+    bool isMigrationNecessary();
+    void migrateDataToNewTablesIfNecessary();
     bool hasStorageAccess(const TopFrameDomain&, const SubFrameDomain&) const;
     Vector<WebResourceLoadStatisticsStore::ThirdPartyDataForSpecificFirstParty> getThirdPartyDataForSpecificFirstPartyDomains(unsigned, const RegistrableDomain&) const;
-    void openAndDropOldDatabaseIfNecessary();
+    void openAndUpdateSchemaIfNecessary();
     String getDomainStringFromDomainID(unsigned) const;
     String getSubStatisticStatement(const String&) const;
     void appendSubStatisticList(StringBuilder&, const String& tableName, const String& domain) const;
@@ -157,7 +164,7 @@ private:
     void resetTelemetryPreparedStatements() const;
     void resetTelemetryStatements() const;
     void calculateTelemetryData(PrevalentResourceDatabaseTelemetry&) const;
-    bool insertObservedDomain(const ResourceLoadStatistics&);
+    bool insertObservedDomain(const ResourceLoadStatistics&) WARN_UNUSED_RETURN;
     void insertDomainRelationships(const ResourceLoadStatistics&);
     void insertDomainRelationshipList(const String&, const HashSet<RegistrableDomain>&, unsigned);
     bool insertDomainRelationship(WebCore::SQLiteStatement&, unsigned domainID, const RegistrableDomain& topFrameDomain);
@@ -178,6 +185,7 @@ private:
         bool hadUserInteraction;
         bool grandfathered;
         bool isScheduledForAllButCookieDataRemoval;
+        unsigned topFrameUniqueRedirectsToSinceSameSiteStrictEnforcement;
     };
     Vector<DomainData> domains() const;
     bool hasHadUnexpiredRecentUserInteraction(const DomainData&, OperatingDatesWindow);
@@ -212,10 +220,11 @@ private:
     void removeDataRecords(CompletionHandler<void()>&&);
     void pruneStatisticsIfNeeded() override;
     enum class AddedRecord { No, Yes };
-    std::pair<AddedRecord, unsigned> ensureResourceStatisticsForRegistrableDomain(const RegistrableDomain&);
+    std::pair<AddedRecord, Optional<unsigned>> ensureResourceStatisticsForRegistrableDomain(const RegistrableDomain&) WARN_UNUSED_RETURN;
     bool shouldRemoveAllWebsiteDataFor(const DomainData&, bool shouldCheckForGrandfathering);
     bool shouldRemoveAllButCookiesFor(const DomainData&, bool shouldCheckForGrandfathering);
-    Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>> registrableDomainsToRemoveWebsiteDataFor() override;
+    bool shouldEnforceSameSiteStrictFor(DomainData&, bool shouldCheckForGrandfathering);
+    RegistrableDomainsToDeleteOrRestrictWebsiteDataFor registrableDomainsToDeleteOrRestrictWebsiteDataFor() override;
     bool isDatabaseStore() const final { return true; }
 
     bool createUniqueIndices();
@@ -257,6 +266,13 @@ private:
     mutable WebCore::SQLiteStatement m_getAllSubStatisticsStatement;
     mutable WebCore::SQLiteStatement m_storageAccessExistsStatement;
     mutable WebCore::SQLiteStatement m_getMostRecentlyUpdatedTimestampStatement;
+    mutable WebCore::SQLiteStatement m_linkDecorationExistsStatement;
+    mutable WebCore::SQLiteStatement m_scriptLoadExistsStatement;
+    mutable WebCore::SQLiteStatement m_subFrameExistsStatement;
+    mutable WebCore::SQLiteStatement m_subResourceExistsStatement;
+    mutable WebCore::SQLiteStatement m_uniqueRedirectExistsStatement;
+    mutable WebCore::SQLiteStatement m_observedDomainsExistsStatement;
+    mutable WebCore::SQLiteStatement m_removeAllDataStatement;
     PAL::SessionID m_sessionID;
     bool m_isNewResourceLoadStatisticsDatabaseFile { false };
 };

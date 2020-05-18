@@ -48,6 +48,7 @@ public:
     using MacroAssemblerX86Common::branchAdd32;
     using MacroAssemblerX86Common::or32;
     using MacroAssemblerX86Common::or16;
+    using MacroAssemblerX86Common::or8;
     using MacroAssemblerX86Common::sub32;
     using MacroAssemblerX86Common::load8;
     using MacroAssemblerX86Common::load32;
@@ -94,6 +95,12 @@ public:
     {
         move(TrustedImmPtr(address.m_ptr), scratchRegister());
         or16(imm, Address(scratchRegister()));
+    }
+
+    void or8(TrustedImm32 imm, AbsoluteAddress address)
+    {
+        move(TrustedImmPtr(address.m_ptr), scratchRegister());
+        or8(imm, Address(scratchRegister()));
     }
 
     void sub32(TrustedImm32 imm, AbsoluteAddress address)
@@ -434,7 +441,13 @@ public:
 
     void and64(TrustedImmPtr imm, RegisterID srcDest)
     {
-        intptr_t intValue = imm.asIntptr();
+        static_assert(sizeof(void*) == sizeof(int64_t));
+        and64(TrustedImm64(bitwise_cast<int64_t>(imm.m_value)), srcDest);
+    }
+
+    void and64(TrustedImm64 imm, RegisterID srcDest)
+    {
+        int64_t intValue = imm.m_value;
         if (intValue <= std::numeric_limits<int32_t>::max()
             && intValue >= std::numeric_limits<int32_t>::min()) {
             and64(TrustedImm32(static_cast<int32_t>(intValue)), srcDest);
@@ -1783,7 +1796,7 @@ public:
         // instructions are the same. Otherwise, we need to: subtract int64_t::min(); truncate double to
         // uint64_t; then add back int64_t::min() in the destination gpr.
 
-        Jump large = branchDouble(DoubleGreaterThanOrEqual, src, int64Min);
+        Jump large = branchDouble(DoubleGreaterThanOrEqualAndOrdered, src, int64Min);
         m_assembler.cvttsd2siq_rr(src, dest);
         Jump done = jump();
         large.link(this);
@@ -1816,7 +1829,7 @@ public:
         // instructions are the same. Otherwise, we need to: subtract int64_t::min(); truncate double to
         // uint64_t; then add back int64_t::min() in the destination gpr.
 
-        Jump large = branchFloat(DoubleGreaterThanOrEqual, src, int64Min);
+        Jump large = branchFloat(DoubleGreaterThanOrEqualAndOrdered, src, int64Min);
         m_assembler.cvttss2siq_rr(src, dest);
         Jump done = jump();
         large.link(this);

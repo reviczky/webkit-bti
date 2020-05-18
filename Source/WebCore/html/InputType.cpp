@@ -592,10 +592,11 @@ void InputType::handleBlurEvent()
 {
 }
 
-void InputType::accessKeyAction(bool)
+bool InputType::accessKeyAction(bool)
 {
     ASSERT(element());
     element()->focus(false);
+    return false;
 }
 
 void InputType::addSearchResult()
@@ -926,7 +927,7 @@ String InputType::defaultToolTip() const
 }
 
 #if ENABLE(DATALIST_ELEMENT)
-void InputType::listAttributeTargetChanged()
+void InputType::dataListMayHaveChanged()
 {
 }
 

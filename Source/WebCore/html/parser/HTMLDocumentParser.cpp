@@ -45,11 +45,18 @@
 #include "ScriptElement.h"
 #include "ThrowOnDynamicMarkupInsertionCountIncrementer.h"
 
+#include <wtf/SystemTracing.h>
+
 namespace WebCore {
 
 using namespace HTMLNames;
 
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HTMLDocumentParser);
+
+static bool isMainDocumentLoadingFromHTTP(const Document& document)
+{
+    return !document.ownerElement() && document.url().protocolIsInHTTPFamily();
+}
 
 HTMLDocumentParser::HTMLDocumentParser(HTMLDocument& document)
     : ScriptableDocumentParser(document)
@@ -60,6 +67,7 @@ HTMLDocumentParser::HTMLDocumentParser(HTMLDocument& document)
     , m_parserScheduler(makeUnique<HTMLParserScheduler>(*this))
     , m_xssAuditorDelegate(document)
     , m_preloader(makeUnique<HTMLResourcePreloader>(document))
+    , m_shouldEmitTracePoints(isMainDocumentLoadingFromHTTP(document))
 {
 }
 
@@ -74,6 +82,7 @@ inline HTMLDocumentParser::HTMLDocumentParser(DocumentFragment& fragment, Elemen
     , m_tokenizer(m_options)
     , m_treeBuilder(makeUnique<HTMLTreeBuilder>(*this, fragment, contextElement, parserContentPolicy(), m_options))
     , m_xssAuditorDelegate(fragment.document())
+    , m_shouldEmitTracePoints(false) // Avoid emitting trace points when parsing fragments like outerHTML.
 {
     // https://html.spec.whatwg.org/multipage/syntax.html#parsing-html-fragments
     if (contextElement.isHTMLElement())
@@ -302,7 +311,17 @@ void HTMLDocumentParser::pumpTokenizer(SynchronousMode mode)
 
     m_xssAuditor.init(document(), &m_xssAuditorDelegate);
 
+    auto emitTracePoint = [this](TracePointCode code) {
+        if (!m_shouldEmitTracePoints)
+            return;
+
+        auto position = textPosition();
+        tracePoint(code, position.m_line.oneBasedInt(), position.m_column.oneBasedInt());
+    };
+
+    emitTracePoint(ParseHTMLStart);
     bool shouldResume = pumpTokenizerLoop(mode, isParsingFragment(), session);
+    emitTracePoint(ParseHTMLEnd);
 
     // Ensure we haven't been totally deref'ed after pumping. Any caller of this
     // function should be holding a RefPtr to this to ensure we weren't deleted.
@@ -314,7 +333,7 @@ void HTMLDocumentParser::pumpTokenizer(SynchronousMode mode)
     if (shouldResume)
         m_parserScheduler->scheduleForResume();
 
-    if (isWaitingForScripts()) {
+    if (isWaitingForScripts() && !isDetached()) {
         ASSERT(m_tokenizer.isInDataState());
         if (!m_preloadScanner) {
             m_preloadScanner = makeUnique<HTMLPreloadScanner>(m_options, document()->url(), document()->deviceScaleFactor());
@@ -372,7 +391,7 @@ void HTMLDocumentParser::insert(SegmentedString&& source)
     m_input.insertAtCurrentInsertionPoint(WTFMove(source));
     pumpTokenizerIfPossible(ForceSynchronous);
 
-    if (isWaitingForScripts()) {
+    if (isWaitingForScripts() && !isDetached()) {
         // Check the document.write() output with a separate preload scanner as
         // the main scanner can't deal with insertions.
         if (!m_insertionPreloadScanner)

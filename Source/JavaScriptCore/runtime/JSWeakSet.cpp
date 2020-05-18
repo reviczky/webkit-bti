@@ -26,15 +26,8 @@
 #include "config.h"
 #include "JSWeakSet.h"
 
-#include "JSCInlines.h"
-
 namespace JSC {
 
 const ClassInfo JSWeakSet::s_info = { "WeakSet", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSWeakSet) };
-
-String JSWeakSet::toStringName(const JSC::JSObject*, JSGlobalObject*)
-{
-    return "Object"_s;
-}
 
 }

@@ -96,7 +96,7 @@ public:
 #endif
 #endif
 
-#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+#if ENABLE(VIDEO_PRESENTATION_MODE)
     void setVideoFullscreenFrame(FloatRect) final;
 #endif
 
@@ -127,7 +127,7 @@ private:
     void didMoveToNewDocument(Document& oldDocument, Document& newDocument) final;
     void setDisplayMode(DisplayMode) final;
 
-    PlatformMediaSession::MediaType presentationType() const final { return PlatformMediaSession::Video; }
+    PlatformMediaSession::MediaType presentationType() const final { return PlatformMediaSession::MediaType::Video; }
 
     std::unique_ptr<HTMLImageLoader> m_imageLoader;
 

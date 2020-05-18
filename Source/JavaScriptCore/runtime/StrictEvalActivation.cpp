@@ -26,9 +26,6 @@
 #include "config.h"
 #include "StrictEvalActivation.h"
 
-#include "JSGlobalObject.h"
-#include "JSCInlines.h"
-
 namespace JSC {
 
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(StrictEvalActivation);
@@ -40,7 +37,7 @@ StrictEvalActivation::StrictEvalActivation(VM& vm, Structure* structure, JSScope
 {
 }
 
-bool StrictEvalActivation::deleteProperty(JSCell*, JSGlobalObject*, PropertyName)
+bool StrictEvalActivation::deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&)
 {
     return false;
 }

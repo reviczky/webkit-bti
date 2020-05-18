@@ -98,14 +98,14 @@ class Path;
 class TextRun;
 class TransformationMatrix;
 
-enum TextDrawingMode {
-    TextModeFill = 1 << 0,
-    TextModeStroke = 1 << 1,
+enum class TextDrawingMode : uint8_t {
+    Fill = 1 << 0,
+    Stroke = 1 << 1,
 #if ENABLE(LETTERPRESS)
-    TextModeLetterpress = 1 << 2,
+    Letterpress = 1 << 2,
 #endif
 };
-typedef unsigned TextDrawingModeFlags;
+using TextDrawingModeFlags = OptionSet<TextDrawingMode>;
 
 enum StrokeStyle {
     NoStroke,
@@ -173,28 +173,28 @@ struct GraphicsContextState {
     }
 
     enum Change : uint32_t {
-        StrokeGradientChange                    = 1 << 1,
-        StrokePatternChange                     = 1 << 2,
-        FillGradientChange                      = 1 << 3,
-        FillPatternChange                       = 1 << 4,
-        StrokeThicknessChange                   = 1 << 5,
-        StrokeColorChange                       = 1 << 6,
-        StrokeStyleChange                       = 1 << 7,
-        FillColorChange                         = 1 << 8,
-        FillRuleChange                          = 1 << 9,
-        ShadowChange                            = 1 << 10,
-        ShadowsIgnoreTransformsChange           = 1 << 11,
-        AlphaChange                             = 1 << 12,
-        CompositeOperationChange                = 1 << 13,
-        BlendModeChange                         = 1 << 14,
-        TextDrawingModeChange                   = 1 << 15,
-        ShouldAntialiasChange                   = 1 << 16,
-        ShouldSmoothFontsChange                 = 1 << 17,
-        ShouldSubpixelQuantizeFontsChange       = 1 << 18,
-        DrawLuminanceMaskChange                 = 1 << 19,
-        ImageInterpolationQualityChange         = 1 << 20,
+        StrokeGradientChange                    = 1 << 0,
+        StrokePatternChange                     = 1 << 1,
+        FillGradientChange                      = 1 << 2,
+        FillPatternChange                       = 1 << 3,
+        StrokeThicknessChange                   = 1 << 4,
+        StrokeColorChange                       = 1 << 5,
+        StrokeStyleChange                       = 1 << 6,
+        FillColorChange                         = 1 << 7,
+        FillRuleChange                          = 1 << 8,
+        ShadowChange                            = 1 << 9,
+        ShadowsIgnoreTransformsChange           = 1 << 10,
+        AlphaChange                             = 1 << 11,
+        CompositeOperationChange                = 1 << 12,
+        BlendModeChange                         = 1 << 13,
+        TextDrawingModeChange                   = 1 << 14,
+        ShouldAntialiasChange                   = 1 << 15,
+        ShouldSmoothFontsChange                 = 1 << 16,
+        ShouldSubpixelQuantizeFontsChange       = 1 << 17,
+        DrawLuminanceMaskChange                 = 1 << 18,
+        ImageInterpolationQualityChange         = 1 << 19,
 #if HAVE(OS_DARK_MODE_SUPPORT)
-        UseDarkAppearanceChange                 = 1 << 21,
+        UseDarkAppearanceChange                 = 1 << 20,
 #endif
     };
     typedef OptionSet<Change> StateChangeFlags;
@@ -210,7 +210,7 @@ struct GraphicsContextState {
     float strokeThickness { 0 };
     float shadowBlur { 0 };
 
-    TextDrawingModeFlags textDrawingMode { TextModeFill };
+    TextDrawingModeFlags textDrawingMode { TextDrawingMode::Fill };
 
     Color strokeColor { Color::black };
     Color fillColor { Color::black };
@@ -273,7 +273,8 @@ public:
     enum class PaintInvalidationReasons : uint8_t {
         None,
         InvalidatingControlTints,
-        InvalidatingImagesWithAsyncDecodes
+        InvalidatingImagesWithAsyncDecodes,
+        DetectingContentfulPaint
     };
     GraphicsContext(PaintInvalidationReasons);
 
@@ -292,6 +293,7 @@ public:
     bool performingPaintInvalidation() const { return m_paintInvalidationReasons != PaintInvalidationReasons::None; }
     bool invalidatingControlTints() const { return m_paintInvalidationReasons == PaintInvalidationReasons::InvalidatingControlTints; }
     bool invalidatingImagesWithAsyncDecodes() const { return m_paintInvalidationReasons == PaintInvalidationReasons::InvalidatingImagesWithAsyncDecodes; }
+    bool detectingContentfulPaint() const { return m_paintInvalidationReasons == PaintInvalidationReasons::DetectingContentfulPaint; }
 
     WEBCORE_EXPORT void setStrokeThickness(float);
     float strokeThickness() const { return m_state.strokeThickness; }
@@ -513,6 +515,9 @@ public:
     FloatSize scaleFactor() const;
     FloatSize scaleFactorForDrawing(const FloatRect& destRect, const FloatRect& srcRect) const;
 
+    void setContentfulPaintDetected() { m_contenfulPaintDetected = true; }
+    bool contenfulPaintDetected() const { return m_contenfulPaintDetected; }
+
 #if OS(WINDOWS)
     HDC getWindowsContext(const IntRect&, bool supportAlphaBlend); // The passed in rect is used to create a bitmap for compositing inside transparency layers.
     void releaseWindowsContext(HDC, const IntRect&, bool supportAlphaBlend); // The passed in HDC should be the one handed back by getWindowsContext.
@@ -598,6 +603,8 @@ public:
 
     bool supportsInternalLinks() const;
 
+    GraphicsContextImpl* impl() { return m_impl.get(); }
+
 private:
     void platformInit(PlatformGraphicsContext*);
     void platformDestroy();
@@ -659,6 +666,7 @@ private:
 
     const PaintInvalidationReasons m_paintInvalidationReasons { PaintInvalidationReasons::None };
     unsigned m_transparencyCount { 0 };
+    bool m_contenfulPaintDetected { false };
 };
 
 class GraphicsContextStateSaver {

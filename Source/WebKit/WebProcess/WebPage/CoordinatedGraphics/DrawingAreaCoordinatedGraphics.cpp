@@ -204,8 +204,10 @@ void DrawingAreaCoordinatedGraphics::forceRepaint()
         // Call setShouldNotifyAfterNextScheduledLayerFlush(false) here to
         // prevent layerHostDidFlushLayers() from being called a second time.
         m_layerTreeHost->setShouldNotifyAfterNextScheduledLayerFlush(false);
+#if USE(COORDINATED_GRAPHICS)
         layerHostDidFlushLayers();
-    }
+#endif
+        }
 }
 
 bool DrawingAreaCoordinatedGraphics::forceRepaintAsync(CallbackID callbackID)
@@ -338,14 +340,18 @@ void DrawingAreaCoordinatedGraphics::setRootCompositingLayer(GraphicsLayer* grap
     enterAcceleratedCompositingMode(graphicsLayer);
 }
 
-void DrawingAreaCoordinatedGraphics::scheduleCompositingLayerFlush()
+void DrawingAreaCoordinatedGraphics::scheduleRenderingUpdate()
 {
+    if (m_layerTreeStateIsFrozen)
+        return;
+
     if (m_layerTreeHost)
         m_layerTreeHost->scheduleLayerFlush();
     else
         setNeedsDisplay();
 }
 
+#if USE(COORDINATED_GRAPHICS)
 void DrawingAreaCoordinatedGraphics::layerHostDidFlushLayers()
 {
     ASSERT(m_layerTreeHost);
@@ -362,15 +368,14 @@ void DrawingAreaCoordinatedGraphics::layerHostDidFlushLayers()
         m_compositingAccordingToProxyMessages = true;
     }
 }
+#endif
 
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
 RefPtr<DisplayRefreshMonitor> DrawingAreaCoordinatedGraphics::createDisplayRefreshMonitor(PlatformDisplayID displayID)
 {
     if (!m_layerTreeHost || m_wantsToExitAcceleratedCompositingMode || exitAcceleratedCompositingModePending())
         return nullptr;
     return m_layerTreeHost->createDisplayRefreshMonitor(displayID);
 }
-#endif
 
 void DrawingAreaCoordinatedGraphics::activityStateDidChange(OptionSet<ActivityState::Flag> changed, ActivityStateChangeID, const Vector<CallbackID>&)
 {
@@ -590,6 +595,8 @@ void DrawingAreaCoordinatedGraphics::enterAcceleratedCompositingMode(GraphicsLay
         m_layerTreeHost = nullptr;
         return;
 #endif
+        if (m_layerTreeStateIsFrozen)
+            m_layerTreeHost->setLayerFlushSchedulingEnabled(false);
         if (m_isPaintingSuspended)
             m_layerTreeHost->pauseRendering();
     }

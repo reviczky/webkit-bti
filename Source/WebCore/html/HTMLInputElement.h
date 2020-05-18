@@ -276,7 +276,7 @@ public:
 #if ENABLE(DATALIST_ELEMENT)
     WEBCORE_EXPORT RefPtr<HTMLElement> list() const;
     RefPtr<HTMLDataListElement> dataList() const;
-    void listAttributeTargetChanged();
+    void dataListMayHaveChanged();
 #endif
 
     Vector<Ref<HTMLInputElement>> radioButtonGroup() const;
@@ -391,7 +391,7 @@ private:
 
     bool canStartSelection() const final;
 
-    void accessKeyAction(bool sendMouseEvents) final;
+    bool accessKeyAction(bool sendMouseEvents) final;
 
     void parseAttribute(const QualifiedName&, const AtomString&) final;
     bool isPresentationAttribute(const QualifiedName&) const final;

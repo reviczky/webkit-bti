@@ -47,6 +47,8 @@ public:
     bool operator==(DownloadID other) const { return m_downloadID == other.m_downloadID; }
     bool operator!=(DownloadID other) const { return m_downloadID != other.m_downloadID; }
 
+    explicit operator bool() const { return downloadID(); }
+
     uint64_t downloadID() const { return m_downloadID; }
 private:
     uint64_t m_downloadID { 0 };
@@ -61,7 +63,7 @@ template<> struct ArgumentCoder<WebKit::DownloadID> {
     {
         encoder << downloadID.downloadID();
     }
-    static bool decode(Decoder& decoder, WebKit::DownloadID& downloadID)
+    static WARN_UNUSED_RETURN bool decode(Decoder& decoder, WebKit::DownloadID& downloadID)
     {
         uint64_t id;
         if (!decoder.decode(id))

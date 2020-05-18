@@ -158,7 +158,7 @@ bool selectionBelongsToObject(AccessibilityObject* coreObject, VisibleSelection&
     if (selection.isNone())
         return false;
 
-    RefPtr<Range> range = selection.toNormalizedRange();
+    auto range = selection.toNormalizedRange();
     if (!range)
         return false;
 
@@ -168,12 +168,12 @@ bool selectionBelongsToObject(AccessibilityObject* coreObject, VisibleSelection&
     // node is actually inside the region, at least partially.
     auto& node = *coreObject->node();
     auto* lastDescendant = node.lastDescendant();
-    unsigned lastOffset = lastOffsetInNode(lastDescendant);
-    auto intersectsResult = range->intersectsNode(node);
+    unsigned lastOffset = lastDescendant->length();
+    auto intersectsResult = createLiveRange(*range)->intersectsNode(node);
     return !intersectsResult.hasException()
         && intersectsResult.releaseReturnValue()
-        && (&range->endContainer() != &node || range->endOffset())
-        && (&range->startContainer() != lastDescendant || range->startOffset() != lastOffset);
+        && (range->end.container.ptr() != &node || range->end.offset)
+        && (range->start.container.ptr() != lastDescendant || range->start.offset != lastOffset);
 }
 
 AXCoreObject* objectFocusedAndCaretOffsetUnignored(AXCoreObject* referenceObject, int& offset)
@@ -247,10 +247,10 @@ AXCoreObject* objectFocusedAndCaretOffsetUnignored(AXCoreObject* referenceObject
         offset = 0;
     else if (!isStartOfLine(endPosition)) {
         RefPtr<Range> range = makeRange(startPosition, endPosition.previous());
-        offset = TextIterator::rangeLength(range.get(), true) + 1;
+        offset = (range ? characterCount(*range, TextIteratorEmitsCharactersBetweenAllVisiblePositions) : 0) + 1;
     } else {
         RefPtr<Range> range = makeRange(startPosition, endPosition);
-        offset = TextIterator::rangeLength(range.get(), true);
+        offset = range ? characterCount(*range, TextIteratorEmitsCharactersBetweenAllVisiblePositions) : 0;
     }
 
     return firstUnignoredParent;

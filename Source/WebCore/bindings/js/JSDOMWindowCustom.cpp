@@ -24,7 +24,6 @@
 #include "DOMWindowIndexedDatabase.h"
 #include "DOMWindowWebDatabase.h"
 #include "Frame.h"
-#include "HTMLCollection.h"
 #include "HTMLDocument.h"
 #include "HTMLFrameOwnerElement.h"
 #include "HTTPParsers.h"
@@ -38,7 +37,6 @@
 #include "JSEvent.h"
 #include "JSEventListener.h"
 #include "JSHTMLAudioElement.h"
-#include "JSHTMLCollection.h"
 #include "JSHTMLOptionElement.h"
 #include "JSIDBFactory.h"
 #include "JSRemoteDOMWindow.h"
@@ -60,7 +58,6 @@
 #if ENABLE(USER_MESSAGE_HANDLERS)
 #include "JSWebKitNamespace.h"
 #endif
-
 
 namespace WebCore {
 using namespace JSC;
@@ -197,7 +194,7 @@ bool JSDOMWindow::getOwnPropertySlot(JSObject* object, JSGlobalObject* lexicalGl
 
     // FIXME: this needs more explanation.
     // (Particularly, is it correct that this exists here but not in getOwnPropertySlotByIndex?)
-    slot.setWatchpointSet(thisObject->m_windowCloseWatchpoints);
+    slot.setWatchpointSet(thisObject->m_windowCloseWatchpoints.get());
 
     // (2) Regular own properties.
     PropertySlot slotCopy = slot;
@@ -314,13 +311,13 @@ bool JSDOMWindow::putByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, 
     return Base::putByIndex(thisObject, lexicalGlobalObject, index, value, shouldThrow);
 }
 
-bool JSDOMWindow::deleteProperty(JSCell* cell, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName)
+bool JSDOMWindow::deleteProperty(JSCell* cell, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, DeletePropertySlot& slot)
 {
     JSDOMWindow* thisObject = jsCast<JSDOMWindow*>(cell);
     // Only allow deleting properties by frames in the same origin.
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped(), ThrowSecurityError))
         return false;
-    return Base::deleteProperty(thisObject, lexicalGlobalObject, propertyName);
+    return Base::deleteProperty(thisObject, lexicalGlobalObject, propertyName, slot);
 }
 
 bool JSDOMWindow::deletePropertyByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, unsigned propertyName)
@@ -543,7 +540,7 @@ JSValue JSDOMWindow::queueMicrotask(JSGlobalObject& lexicalGlobalObject, CallFra
         return throwException(&lexicalGlobalObject, scope, createNotEnoughArgumentsError(&lexicalGlobalObject));
 
     JSValue functionValue = callFrame.uncheckedArgument(0);
-    if (UNLIKELY(!functionValue.isFunction(vm)))
+    if (UNLIKELY(!functionValue.isCallable(vm)))
         return JSValue::decode(throwArgumentMustBeFunctionError(lexicalGlobalObject, scope, 0, "callback", "Window", "queueMicrotask"));
 
     scope.release();
@@ -624,7 +621,7 @@ static inline JSC::EncodedJSValue jsDOMWindowInstanceFunctionOpenDatabaseBody(JS
 
 template<> inline JSDOMWindow* IDLOperation<JSDOMWindow>::cast(JSGlobalObject& lexicalGlobalObject, CallFrame& callFrame)
 {
-    return toJSDOMWindow(lexicalGlobalObject.vm(), callFrame.thisValue().toThis(&lexicalGlobalObject, NotStrictMode));
+    return toJSDOMWindow(lexicalGlobalObject.vm(), callFrame.thisValue().toThis(&lexicalGlobalObject, JSC::ECMAMode::sloppy()));
 }
 
 EncodedJSValue JSC_HOST_CALL jsDOMWindowInstanceFunctionOpenDatabase(JSGlobalObject* globalObject, CallFrame* callFrame)

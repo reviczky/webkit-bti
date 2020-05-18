@@ -27,20 +27,14 @@
 #include "JSRunLoopTimer.h"
 
 #include "IncrementalSweeper.h"
-#include "JSCInlines.h"
-#include "JSObject.h"
-#include "JSString.h"
-
-#include <wtf/MainThread.h>
+#include "VM.h"
+#include <mutex>
 #include <wtf/NoTailCalls.h>
-#include <wtf/Threading.h>
 
 #if USE(GLIB_EVENT_LOOP)
 #include <glib.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
 #endif
-
-#include <mutex>
 
 namespace JSC {
 
@@ -295,7 +289,7 @@ void JSRunLoopTimer::timerDidFire()
         }
     }
 
-    std::lock_guard<JSLock> lock(m_apiLock.get());
+    auto locker = holdLock(m_apiLock.get());
     RefPtr<VM> vm = m_apiLock->vm();
     if (!vm) {
         // The VM has been destroyed, so we should just give up.

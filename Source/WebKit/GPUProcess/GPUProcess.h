@@ -34,11 +34,17 @@
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/WeakPtr.h>
 
+namespace WebCore {
+class NowPlayingManager;
+}
+
 namespace WebKit {
 
 class GPUConnectionToWebProcess;
 struct GPUProcessCreationParameters;
 struct GPUProcessSessionParameters;
+class LayerHostingContext;
+class RemoteAudioSessionProxyManager;
 
 class GPUProcess : public AuxiliaryProcess, public ThreadSafeRefCounted<GPUProcess>, public CanMakeWeakPtr<GPUProcess> {
     WTF_MAKE_NONCOPYABLE(GPUProcess);
@@ -62,6 +68,12 @@ public:
     const String& mediaKeysStorageDirectory(PAL::SessionID) const;
 #endif
 
+#if ENABLE(GPU_PROCESS) && USE(AUDIO_SESSION)
+    RemoteAudioSessionProxyManager& audioSessionManager() const;
+#endif
+
+    WebCore::NowPlayingManager& nowPlayingManager();
+
 private:
     void lowMemoryHandler(Critical);
 
@@ -83,10 +95,23 @@ private:
 
     void processDidTransitionToForeground();
     void processDidTransitionToBackground();
+#if ENABLE(MEDIA_STREAM)
     void setMockCaptureDevicesEnabled(bool);
+    void setOrientationForMediaCapture(uint64_t orientation);
+    void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture, WebCore::ProcessIdentifier, CompletionHandler<void()>&&);
+#endif
 
     // Connections to WebProcesses.
     HashMap<WebCore::ProcessIdentifier, Ref<GPUConnectionToWebProcess>> m_webProcessConnections;
+
+#if ENABLE(MEDIA_STREAM)
+    struct MediaCaptureAccess {
+        bool allowAudioCapture { false };
+        bool allowVideoCapture { false };
+        bool allowDisplayCapture { false };
+    };
+    HashMap<WebCore::ProcessIdentifier, MediaCaptureAccess> m_mediaCaptureAccessMap;
+#endif
 
     struct GPUSession {
         String mediaCacheDirectory;
@@ -95,6 +120,14 @@ private:
 #endif
     };
     HashMap<PAL::SessionID, GPUSession> m_sessions;
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    std::unique_ptr<LayerHostingContext> m_contextForVisibilityPropagation;
+    bool m_canShowWhileLocked { false };
+#endif
+    std::unique_ptr<WebCore::NowPlayingManager> m_nowPlayingManager;
+#if ENABLE(GPU_PROCESS) && USE(AUDIO_SESSION)
+    mutable std::unique_ptr<RemoteAudioSessionProxyManager> m_audioSessionManager;
+#endif
 };
 
 } // namespace WebKit

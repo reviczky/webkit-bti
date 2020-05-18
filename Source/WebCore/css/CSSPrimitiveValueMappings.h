@@ -4514,6 +4514,7 @@ inline bool CSSPrimitiveValue::convertingToLengthRequiresNonNullStyle(int length
     case CSSUnitType::CSS_EMS:
     case CSSUnitType::CSS_EXS:
     case CSSUnitType::CSS_CHS:
+    case CSSUnitType::CSS_LHS:
         return lengthConversion & (FixedIntegerConversion | FixedFloatConversion);
     default:
         return false;
@@ -5208,7 +5209,6 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(TextZoom textZoom)
     m_value.valueID = CSSValueNormal;
 }
 
-#if ENABLE(POINTER_EVENTS)
 template<> inline CSSPrimitiveValue::CSSPrimitiveValue(TouchAction touchAction)
     : CSSValue(PrimitiveClass)
 {
@@ -5257,7 +5257,6 @@ template<> inline CSSPrimitiveValue::operator OptionSet<TouchAction>() const
     ASSERT_NOT_REACHED();
     return TouchAction::Auto;
 }
-#endif
 
 #if ENABLE(CSS_SCROLL_SNAP)
 

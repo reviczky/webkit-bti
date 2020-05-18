@@ -244,10 +244,14 @@ ElementUpdates TreeResolver::resolveElement(Element& element)
     auto beforeUpdate = resolvePseudoStyle(element, update, PseudoId::Before);
     auto afterUpdate = resolvePseudoStyle(element, update, PseudoId::After);
 
-#if ENABLE(POINTER_EVENTS) && PLATFORM(IOS_FAMILY)
+#if PLATFORM(IOS_FAMILY)
     // FIXME: Track this exactly.
-    if (update.style->touchActions() != TouchAction::Auto && !m_document.quirks().shouldDisablePointerEventsQuirk() && RuntimeEnabledFeatures::sharedFeatures().pointerEventsEnabled())
+    if (update.style->touchActions() != TouchAction::Auto && !m_document.quirks().shouldDisablePointerEventsQuirk())
         m_document.setMayHaveElementsWithNonAutoTouchAction();
+#endif
+#if ENABLE(EDITABLE_REGION)
+    if (update.style->userModify() != UserModify::ReadOnly)
+        m_document.setMayHaveEditableElements();
 #endif
 
     return { WTFMove(update), descendantsToResolve, WTFMove(beforeUpdate), WTFMove(afterUpdate) };
@@ -261,20 +265,15 @@ ElementUpdate TreeResolver::resolvePseudoStyle(Element& element, const ElementUp
         return { };
 
     auto pseudoStyle = scope().resolver.pseudoStyleForElement(element, { pseudoId }, *elementUpdate.style, parentBoxStyleForPseudo(elementUpdate), &scope().selectorFilter);
-    if (!pseudoElementRendererIsNeeded(pseudoStyle.get()))
+    if (!pseudoStyle)
         return { };
 
-    PseudoElement* pseudoElement = pseudoId == PseudoId::Before ? element.beforePseudoElement() : element.afterPseudoElement();
-    if (!pseudoElement) {
-        auto newPseudoElement = PseudoElement::create(element, pseudoId);
-        pseudoElement = newPseudoElement.ptr();
-        if (pseudoId == PseudoId::Before)
-            element.setBeforePseudoElement(WTFMove(newPseudoElement));
-        else
-            element.setAfterPseudoElement(WTFMove(newPseudoElement));
-    }
+    auto* pseudoElement = pseudoId == PseudoId::Before ? element.beforePseudoElement() : element.afterPseudoElement();
+    bool hasAnimations = pseudoElement && pseudoElement->isTargetedByKeyframeEffectRequiringPseudoElement();
+    if (!pseudoElementRendererIsNeeded(pseudoStyle.get()) && !hasAnimations)
+        return { };
 
-    return createAnimatedElementUpdate(WTFMove(pseudoStyle), *pseudoElement, elementUpdate.change);
+    return createAnimatedElementUpdate(WTFMove(pseudoStyle), element.ensurePseudoElement(pseudoId), elementUpdate.change);
 }
 
 const RenderStyle* TreeResolver::parentBoxStyle() const
@@ -333,7 +332,7 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(std::unique_ptr<RenderSt
 
     // Old code path for CSS Animations and CSS Transitions.
     if (!RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled()) {
-        auto& animationController = m_document.frame()->animation();
+        auto& animationController = m_document.frame()->legacyAnimation();
 
         auto animationUpdate = animationController.updateAnimations(element, *newStyle, oldStyle);
         animationImpact.add(animationUpdate.impact);

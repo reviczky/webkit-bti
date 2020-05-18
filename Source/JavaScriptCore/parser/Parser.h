@@ -176,6 +176,7 @@ public:
         , m_isLexicalScope(false)
         , m_isGlobalCodeScope(false)
         , m_isSimpleCatchParameterScope(false)
+        , m_isCatchBlockScope(false)
         , m_isFunctionBoundary(false)
         , m_isValidStrictMode(true)
         , m_hasArguments(false)
@@ -219,12 +220,12 @@ public:
     ScopeLabelInfo* getLabel(const Identifier* label)
     {
         if (!m_labels)
-            return 0;
+            return nullptr;
         for (int i = m_labels->size(); i > 0; i--) {
             if (m_labels->at(i - 1).uid == label->impl())
                 return &m_labels->at(i - 1);
         }
-        return 0;
+        return nullptr;
     }
 
     void setSourceParseMode(SourceParseMode mode)
@@ -298,6 +299,9 @@ public:
 
     void setIsSimpleCatchParameterScope() { m_isSimpleCatchParameterScope = true; }
     bool isSimpleCatchParameterScope() { return m_isSimpleCatchParameterScope; }
+
+    void setIsCatchBlockScope() { m_isCatchBlockScope = true; }
+    bool isCatchBlockScope() { return m_isCatchBlockScope; }
 
     void setIsLexicalScope() 
     { 
@@ -829,6 +833,7 @@ private:
     bool m_isLexicalScope;
     bool m_isGlobalCodeScope;
     bool m_isSimpleCatchParameterScope;
+    bool m_isCatchBlockScope;
     bool m_isFunctionBoundary;
     bool m_isValidStrictMode;
     bool m_hasArguments;
@@ -901,7 +906,7 @@ class Parser {
     WTF_MAKE_FAST_ALLOCATED;
 
 public:
-    Parser(VM&, const SourceCode&, JSParserBuiltinMode, JSParserStrictMode, JSParserScriptMode, SourceParseMode, SuperBinding, ConstructorKind defaultConstructorKindForTopLevelFunction = ConstructorKind::None, DerivedContextType = DerivedContextType::None, bool isEvalContext = false, EvalContextType = EvalContextType::None, DebuggerParseData* = nullptr);
+    Parser(VM&, const SourceCode&, JSParserBuiltinMode, JSParserStrictMode, JSParserScriptMode, SourceParseMode, SuperBinding, ConstructorKind defaultConstructorKindForTopLevelFunction = ConstructorKind::None, DerivedContextType = DerivedContextType::None, bool isEvalContext = false, EvalContextType = EvalContextType::None, DebuggerParseData* = nullptr, bool isInsideOrdinaryFunction = false);
     ~Parser();
 
     template <class ParsedNode>
@@ -972,7 +977,7 @@ private:
         
         void setPopped()
         {
-            m_parser = 0;
+            m_parser = nullptr;
         }
         
     private:
@@ -1280,7 +1285,11 @@ private:
         if (!m_lexer->isReparsingFunction() && m_statementDepth == 1 && (hasDeclaredParameter(*ident) || hasDeclaredVariable(*ident)))
             return DeclarationResult::InvalidDuplicateDeclaration;
 
-        return currentLexicalDeclarationScope()->declareLexicalVariable(ident, type == DeclarationType::ConstDeclaration, importType);
+        ScopeRef scope = currentLexicalDeclarationScope();
+        if (scope->isCatchBlockScope() && scope.containingScope()->hasLexicallyDeclaredVariable(*ident))
+            return DeclarationResult::InvalidDuplicateDeclaration;
+
+        return scope->declareLexicalVariable(ident, type == DeclarationType::ConstDeclaration, importType);
     }
 
     std::pair<DeclarationResultMask, ScopeRef> declareFunction(const Identifier* ident)
@@ -1295,6 +1304,11 @@ private:
             return std::make_pair(variableScope->declareFunction(ident, declareAsVar, isSloppyModeHoistingCandidate), variableScope);
         }
 
+        bool declareAsVar = false;
+        ScopeRef lexicalVariableScope = currentLexicalDeclarationScope();
+        if (lexicalVariableScope->isCatchBlockScope() && lexicalVariableScope.containingScope()->hasLexicallyDeclaredVariable(*ident))
+            return std::make_pair(DeclarationResult::InvalidDuplicateDeclaration, lexicalVariableScope);
+
         if (!strictMode()) {
             ASSERT(currentScope()->isFunction() || closestParentOrdinaryFunctionNonLexicalScope()->isEvalContext());
 
@@ -1306,18 +1320,14 @@ private:
             // there are is a let/class/const with the same name). Note that this mean we only do the "var" hoisting 
             // binding if the block evaluates. For example, this means we wont won't perform the binding if it's inside
             // the untaken branch of an if statement.
-            bool declareAsVar = false;
             bool isSloppyModeHoistingCandidate = true;
-            ScopeRef lexicalVariableScope = currentLexicalDeclarationScope();
             ScopeRef varScope = currentVariableScope();
             varScope->addSloppyModeHoistableFunctionCandidate(ident);
             ASSERT(varScope != lexicalVariableScope);
             return std::make_pair(lexicalVariableScope->declareFunction(ident, declareAsVar, isSloppyModeHoistingCandidate), lexicalVariableScope);
         }
 
-        bool declareAsVar = false;
         bool isSloppyModeHoistingCandidate = false;
-        ScopeRef lexicalVariableScope = currentLexicalDeclarationScope();
         return std::make_pair(lexicalVariableScope->declareFunction(ident, declareAsVar, isSloppyModeHoistingCandidate), lexicalVariableScope);
     }
 
@@ -1367,7 +1377,7 @@ private:
     
     const SourceProviderCacheItem* findCachedFunctionInfo(int openBracePos) 
     {
-        return m_functionCache ? m_functionCache->get(openBracePos) : 0;
+        return m_functionCache ? m_functionCache->get(openBracePos) : nullptr;
     }
 
     Parser();
@@ -1572,10 +1582,10 @@ private:
     ScopeLabelInfo* getLabel(const Identifier* label)
     {
         ScopeRef current = currentScope();
-        ScopeLabelInfo* result = 0;
+        ScopeLabelInfo* result = nullptr;
         while (!(result = current->getLabel(label))) {
             if (!current.hasContainingScope())
-                return 0;
+                return nullptr;
             current = current.containingScope();
         }
         return result;
@@ -1611,7 +1621,7 @@ private:
     template <class TreeBuilder> TreeSourceElements parseSingleFunction(TreeBuilder&, Optional<int> functionConstructorParametersEndPosition);
     template <class TreeBuilder> TreeSourceElements parseInstanceFieldInitializerSourceElements(TreeBuilder&, const Vector<JSTextPosition>&);
     template <class TreeBuilder> TreeStatement parseStatementListItem(TreeBuilder&, const Identifier*& directive, unsigned* directiveLiteralLength);
-    template <class TreeBuilder> TreeStatement parseStatement(TreeBuilder&, const Identifier*& directive, unsigned* directiveLiteralLength = 0);
+    template <class TreeBuilder> TreeStatement parseStatement(TreeBuilder&, const Identifier*& directive, unsigned* directiveLiteralLength = nullptr);
     enum class ExportType { Exported, NotExported };
     template <class TreeBuilder> TreeStatement parseClassDeclaration(TreeBuilder&, ExportType = ExportType::NotExported, DeclarationDefaultContext = DeclarationDefaultContext::Standard);
     template <class TreeBuilder> TreeStatement parseFunctionDeclaration(TreeBuilder&, ExportType = ExportType::NotExported, DeclarationDefaultContext = DeclarationDefaultContext::Standard, Optional<int> functionConstructorParametersEndPosition = WTF::nullopt);
@@ -1635,8 +1645,11 @@ private:
     template <class TreeBuilder> TreeStatement parseExpressionStatement(TreeBuilder&);
     template <class TreeBuilder> TreeStatement parseExpressionOrLabelStatement(TreeBuilder&, bool allowFunctionDeclarationAsStatement);
     template <class TreeBuilder> TreeStatement parseIfStatement(TreeBuilder&);
-    template <class TreeBuilder> TreeStatement parseBlockStatement(TreeBuilder&);
-    template <class TreeBuilder> TreeExpression parseExpression(TreeBuilder&);
+    template <class TreeBuilder> TreeStatement parseBlockStatement(TreeBuilder&, bool isCatchBlock = false);
+
+    enum class IsOnlyChildOfStatement { Yes, No };
+    template <class TreeBuilder> TreeExpression parseExpression(TreeBuilder&, IsOnlyChildOfStatement = IsOnlyChildOfStatement::No);
+
     template <class TreeBuilder> TreeExpression parseAssignmentExpression(TreeBuilder&, ExpressionErrorClassifier&);
     template <class TreeBuilder> TreeExpression parseAssignmentExpression(TreeBuilder&);
     template <class TreeBuilder> TreeExpression parseAssignmentExpressionOrPropagateErrorClass(TreeBuilder&);
@@ -1940,6 +1953,7 @@ private:
     DebuggerParseData* m_debuggerParseData;
     CallOrApplyDepthScope* m_callOrApplyDepthScope { nullptr };
     bool m_seenTaggedTemplate { false };
+    bool m_isInsideOrdinaryFunction;
 };
 
 
@@ -2010,7 +2024,7 @@ std::unique_ptr<ParsedNode> Parser<LexerType>::parse(ParserError& error, const I
         // we ran out of stack while parsing. If we see an error while parsing eval or program
         // code we assume that it was a syntax error since running out of stack is much less
         // likely, and we are currently unable to distinguish between the two cases.
-        if (isFunctionMetadataNode(static_cast<ParsedNode*>(0)) || m_hasStackOverflow)
+        if (isFunctionMetadataNode(static_cast<ParsedNode*>(nullptr)) || m_hasStackOverflow)
             error = ParserError(ParserError::StackOverflow, ParserError::SyntaxErrorNone, m_token);
         else {
             ParserError::SyntaxErrorType errorType = ParserError::SyntaxErrorIrrecoverable;
@@ -2044,7 +2058,8 @@ std::unique_ptr<ParsedNode> parse(
     DerivedContextType derivedContextType = DerivedContextType::None,
     EvalContextType evalContextType = EvalContextType::None,
     DebuggerParseData* debuggerParseData = nullptr,
-    const Vector<JSTextPosition>* instanceFieldLocations = nullptr)
+    const Vector<JSTextPosition>* instanceFieldLocations = nullptr,
+    bool isInsideOrdinaryFunction = false)
 {
     ASSERT(!source.provider()->source().isNull());
 
@@ -2054,7 +2069,7 @@ std::unique_ptr<ParsedNode> parse(
 
     std::unique_ptr<ParsedNode> result;
     if (source.provider()->source().is8Bit()) {
-        Parser<Lexer<LChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKindForTopLevelFunction, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData);
+        Parser<Lexer<LChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKindForTopLevelFunction, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData, isInsideOrdinaryFunction);
         result = parser.parse<ParsedNode>(error, name, parseMode, isEvalNode<ParsedNode>() ? ParsingContext::Eval : ParsingContext::Program, WTF::nullopt, instanceFieldLocations);
         if (positionBeforeLastNewline)
             *positionBeforeLastNewline = parser.positionBeforeLastNewline();
@@ -2067,7 +2082,7 @@ std::unique_ptr<ParsedNode> parse(
         }
     } else {
         ASSERT_WITH_MESSAGE(defaultConstructorKindForTopLevelFunction == ConstructorKind::None, "BuiltinExecutables's special constructors should always use a 8-bit string");
-        Parser<Lexer<UChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKindForTopLevelFunction, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData);
+        Parser<Lexer<UChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKindForTopLevelFunction, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData, isInsideOrdinaryFunction);
         result = parser.parse<ParsedNode>(error, name, parseMode, isEvalNode<ParsedNode>() ? ParsingContext::Eval : ParsingContext::Program, WTF::nullopt, instanceFieldLocations);
         if (positionBeforeLastNewline)
             *positionBeforeLastNewline = parser.positionBeforeLastNewline();

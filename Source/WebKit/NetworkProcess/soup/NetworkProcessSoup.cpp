@@ -30,7 +30,6 @@
 #include "NetworkCache.h"
 #include "NetworkProcessCreationParameters.h"
 #include "NetworkSessionSoup.h"
-#include "ResourceCachesToClear.h"
 #include "WebCookieManager.h"
 #include "WebKitCachedResolver.h"
 #include <WebCore/CertificateInfo.h>
@@ -160,14 +159,6 @@ void NetworkProcess::allowSpecificHTTPSCertificateForHost(const CertificateInfo&
     SoupNetworkSession::allowSpecificHTTPSCertificateForHost(certificateInfo, host);
 }
 
-void NetworkProcess::clearCacheForAllOrigins(uint32_t cachesToClear)
-{
-    if (cachesToClear == InMemoryResourceCachesOnly)
-        return;
-
-    clearDiskCache(-WallTime::infinity(), [] { });
-}
-
 void NetworkProcess::clearDiskCache(WallTime modifiedSince, CompletionHandler<void()>&& completionHandler)
 {
     auto aggregator = CallbackAggregator::create(WTFMove(completionHandler));
@@ -188,17 +179,6 @@ void NetworkProcess::setNetworkProxySettings(const SoupNetworkProxySettings& set
     forEachNetworkSession([](const auto& session) {
         static_cast<const NetworkSessionSoup&>(session).soupNetworkSession().setupProxy();
     });
-}
-
-void NetworkProcess::platformPrepareToSuspend(CompletionHandler<void()>&& completionHandler)
-{
-    notImplemented();
-    completionHandler();
-}
-
-void NetworkProcess::platformProcessDidResume()
-{
-    notImplemented();
 }
 
 void NetworkProcess::platformProcessDidTransitionToForeground()

@@ -36,17 +36,14 @@
 #include "InspectorAgent.h"
 #include "InspectorBackendDispatcher.h"
 #include "InspectorConsoleAgent.h"
-#include "InspectorFrontendChannel.h"
 #include "InspectorFrontendRouter.h"
 #include "InspectorHeapAgent.h"
 #include "InspectorScriptProfilerAgent.h"
-#include "JSCInlines.h"
 #include "JSGlobalObject.h"
 #include "JSGlobalObjectAuditAgent.h"
 #include "JSGlobalObjectConsoleClient.h"
 #include "JSGlobalObjectDebuggerAgent.h"
 #include "JSGlobalObjectRuntimeAgent.h"
-#include "ScriptArguments.h"
 #include "ScriptCallStack.h"
 #include "ScriptCallStackFactory.h"
 #include <wtf/StackTrace.h>
@@ -247,9 +244,9 @@ void JSGlobalObjectInspectorController::frontendInitialized()
 #endif
 }
 
-Ref<Stopwatch> JSGlobalObjectInspectorController::executionStopwatch()
+Stopwatch& JSGlobalObjectInspectorController::executionStopwatch() const
 {
-    return m_executionStopwatch.copyRef();
+    return m_executionStopwatch;
 }
 
 JSGlobalObjectScriptDebugServer& JSGlobalObjectInspectorController::scriptDebugServer()

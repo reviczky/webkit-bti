@@ -38,12 +38,10 @@
 #include "FTLState.h"
 #include "GetterSetter.h"
 #include "JSPropertyNameEnumerator.h"
-#include "JSScope.h"
-#include "JSCInlines.h"
 #include "RegExpObject.h"
 #include "ScopedArguments.h"
-#include "ScopedArgumentsTable.h"
 #include "ShadowChicken.h"
+#include "StructureChain.h"
 
 namespace JSC { namespace FTL {
 
@@ -71,6 +69,7 @@ AbstractHeapRepository::AbstractHeapRepository()
 #undef NUMBERED_ABSTRACT_HEAP_INITIALIZATION
 
     , JSString_value(JSRopeString_fiber0)
+    , JSWrapperObject_internalValue(const_cast<AbstractHeap&>(JSInternalFieldObjectImpl_internalFields[static_cast<unsigned>(JSWrapperObject::Field::WrappedValue)]))
 
     , absolute(&root, "absolute")
 {

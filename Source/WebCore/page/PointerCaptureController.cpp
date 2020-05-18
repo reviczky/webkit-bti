@@ -25,8 +25,6 @@
 #include "config.h"
 #include "PointerCaptureController.h"
 
-#if ENABLE(POINTER_EVENTS)
-
 #include "Document.h"
 #include "Element.h"
 #include "EventHandler.h"
@@ -146,7 +144,7 @@ void PointerCaptureController::elementWasRemoved(Element& element)
             // When the pointer capture target override is no longer connected, the pending pointer capture target override and pointer capture target
             // override nodes SHOULD be cleared and also a PointerEvent named lostpointercapture corresponding to the captured pointer SHOULD be fired
             // at the document.
-            ASSERT(WTF::isInBounds<PointerID>(keyAndValue.key));
+            ASSERT(isInBounds<PointerID>(keyAndValue.key));
             auto pointerId = static_cast<PointerID>(keyAndValue.key);
             auto pointerType = capturingData.pointerType;
             releasePointerCapture(&element, pointerId);
@@ -463,8 +461,11 @@ void PointerCaptureController::cancelPointer(PointerID pointerId, const IntPoint
 #endif
 
     auto& target = capturingData.targetOverride;
-    if (!target)
-        target = m_page.mainFrame().eventHandler().hitTestResultAtPoint(documentPoint, HitTestRequest::ReadOnly | HitTestRequest::Active | HitTestRequest::DisallowUserAgentShadowContent | HitTestRequest::AllowChildFrameContent).innerNonSharedElement();
+    if (!target) {
+        constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::AllowChildFrameContent };
+        // FIXME: The target will always be nullptr when we exit this scope.
+        target = m_page.mainFrame().eventHandler().hitTestResultAtPoint(documentPoint, hitType).innerNonSharedElement();
+    }
 
     if (!target)
         return;
@@ -525,5 +526,3 @@ void PointerCaptureController::processPendingPointerCapture(PointerID pointerId)
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(POINTER_EVENTS)

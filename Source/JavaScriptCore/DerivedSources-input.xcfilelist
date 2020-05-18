@@ -4,7 +4,6 @@ $(PROJECT_DIR)/KeywordLookupGenerator.py
 $(PROJECT_DIR)/Scripts/UpdateContents.py
 $(PROJECT_DIR)/Scripts/generate-combined-inspector-json.py
 $(PROJECT_DIR)/Scripts/generate-js-builtins.py
-$(PROJECT_DIR)/Scripts/generateIntlCanonicalizeLanguage.py
 $(PROJECT_DIR)/Scripts/jsmin.py
 $(PROJECT_DIR)/Scripts/lazywriter.py
 $(PROJECT_DIR)/Scripts/wkbuiltins/__init__.py
@@ -90,6 +89,7 @@ $(PROJECT_DIR)/inspector/protocol/DOMDebugger.json
 $(PROJECT_DIR)/inspector/protocol/DOMStorage.json
 $(PROJECT_DIR)/inspector/protocol/Database.json
 $(PROJECT_DIR)/inspector/protocol/Debugger.json
+$(PROJECT_DIR)/inspector/protocol/Browser.json
 $(PROJECT_DIR)/inspector/protocol/GenericTypes.json
 $(PROJECT_DIR)/inspector/protocol/Heap.json
 $(PROJECT_DIR)/inspector/protocol/IndexedDB.json
@@ -136,11 +136,14 @@ $(PROJECT_DIR)/runtime/IntlCollatorConstructor.cpp
 $(PROJECT_DIR)/runtime/IntlCollatorPrototype.cpp
 $(PROJECT_DIR)/runtime/IntlDateTimeFormatConstructor.cpp
 $(PROJECT_DIR)/runtime/IntlDateTimeFormatPrototype.cpp
+$(PROJECT_DIR)/runtime/IntlLocalePrototype.cpp
 $(PROJECT_DIR)/runtime/IntlNumberFormatConstructor.cpp
 $(PROJECT_DIR)/runtime/IntlNumberFormatPrototype.cpp
 $(PROJECT_DIR)/runtime/IntlObject.cpp
 $(PROJECT_DIR)/runtime/IntlPluralRulesConstructor.cpp
 $(PROJECT_DIR)/runtime/IntlPluralRulesPrototype.cpp
+$(PROJECT_DIR)/runtime/IntlRelativeTimeFormatConstructor.cpp
+$(PROJECT_DIR)/runtime/IntlRelativeTimeFormatPrototype.cpp
 $(PROJECT_DIR)/runtime/JSDataViewPrototype.cpp
 $(PROJECT_DIR)/runtime/JSGlobalObject.cpp
 $(PROJECT_DIR)/runtime/JSInternalPromiseConstructor.cpp

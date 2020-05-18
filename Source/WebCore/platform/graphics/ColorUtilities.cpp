@@ -44,6 +44,14 @@ ColorComponents::ColorComponents(const FloatComponents& floatComponents)
     components[3] = clampedColorComponent(floatComponents.components[3]);
 }
 
+bool areEssentiallyEqual(const FloatComponents& a, const FloatComponents& b)
+{
+    return WTF::areEssentiallyEqual(a.components[0], b.components[0])
+        && WTF::areEssentiallyEqual(a.components[1], b.components[1])
+        && WTF::areEssentiallyEqual(a.components[2], b.components[2])
+        && WTF::areEssentiallyEqual(a.components[3], b.components[3]);
+}
+
 // These are the standard sRGB <-> linearRGB conversion functions (https://en.wikipedia.org/wiki/SRGB).
 float linearToSRGBColorComponent(float c)
 {
@@ -220,7 +228,7 @@ ColorMatrix::ColorMatrix()
     makeIdentity();
 }
 
-ColorMatrix::ColorMatrix(float values[20])
+ColorMatrix::ColorMatrix(const float values[20])
 {
     m_matrix[0][0] = values[0];
     m_matrix[0][1] = values[1];

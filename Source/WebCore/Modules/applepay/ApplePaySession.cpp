@@ -63,16 +63,19 @@
 #include "Settings.h"
 #include "UserGestureIndicator.h"
 #include <wtf/IsoMallocInlines.h>
+#include <wtf/RunLoop.h>
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/ApplePaySessionAdditions.cpp>
+namespace WebCore {
+
+static void finishConverting(PaymentMethodUpdate& convertedUpdate, ApplePayPaymentMethodUpdate&& update)
+{
+#if ENABLE(APPLE_PAY_INSTALLMENTS)
+    convertedUpdate.setInstallmentGroupIdentifier(update.installmentGroupIdentifier);
 #else
-namespace WebCore {
-static void finishConverting(PaymentMethodUpdate&, ApplePayPaymentMethodUpdate&&) { }
-}
+    UNUSED_PARAM(convertedUpdate);
+    UNUSED_PARAM(update);
 #endif
-
-namespace WebCore {
+}
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(ApplePaySession);
 

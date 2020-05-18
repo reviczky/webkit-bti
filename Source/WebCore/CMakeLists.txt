@@ -18,10 +18,6 @@ list(APPEND WebCore_UNIFIED_SOURCE_LIST_FILES
     "Sources.txt"
 )
 
-set(WebCore_INCLUDE_DIRECTORIES
-    "${PAL_FRAMEWORK_HEADERS_DIR}"
-)
-
 set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${CMAKE_BINARY_DIR}"
     "${WebCore_DERIVED_SOURCES_DIR}"
@@ -68,6 +64,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/webgpu/WHLSL"
     "${WEBCORE_DIR}/Modules/webgpu/WHLSL/AST"
     "${WEBCORE_DIR}/Modules/websockets"
+    "${WEBCORE_DIR}/Modules/webxr"
     "${WEBCORE_DIR}/accessibility"
     "${WEBCORE_DIR}/accessibility/isolatedtree"
     "${WEBCORE_DIR}/animation"
@@ -103,6 +100,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/inspector/agents/worker"
     "${WEBCORE_DIR}/layout"
     "${WEBCORE_DIR}/layout/blockformatting"
+    "${WEBCORE_DIR}/layout/blockformatting/tablewrapper"
     "${WEBCORE_DIR}/layout/displaytree"
     "${WEBCORE_DIR}/layout/floats"
     "${WEBCORE_DIR}/layout/inlineformatting"
@@ -145,7 +143,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/network"
     "${WEBCORE_DIR}/platform/sql"
     "${WEBCORE_DIR}/platform/text"
-    "${WEBCORE_DIR}/platform/vr"
+    "${WEBCORE_DIR}/platform/xr"
     "${WEBCORE_DIR}/plugins"
     "${WEBCORE_DIR}/rendering"
     "${WEBCORE_DIR}/rendering/line"
@@ -170,12 +168,6 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/worklets"
     "${WEBCORE_DIR}/xml"
     "${WEBCORE_DIR}/xml/parser"
-)
-
-set(WebCore_SYSTEM_INCLUDE_DIRECTORIES
-    ${LIBXML2_INCLUDE_DIR}
-    ${LIBXSLT_INCLUDE_DIR}
-    ${ZLIB_INCLUDE_DIRS}
 )
 
 set(WebCore_IDL_INCLUDES
@@ -647,7 +639,7 @@ set(WebCore_NON_SVG_IDL_FILES
     css/FontFaceSet.idl
     css/MediaList.idl
     css/MediaQueryList.idl
-    css/MediaQueryListListener.idl
+    css/MediaQueryListEvent.idl
     css/StyleMedia.idl
     css/StyleSheet.idl
     css/StyleSheetList.idl
@@ -661,7 +653,6 @@ set(WebCore_NON_SVG_IDL_FILES
     css/typedom/TypedOMCSSUnparsedValue.idl
 
     css/WebKitCSSMatrix.idl
-    css/WebKitCSSViewportRule.idl
 
     dom/AbortController.idl
     dom/AbortSignal.idl
@@ -946,6 +937,7 @@ set(WebCore_NON_SVG_IDL_FILES
     page/PerformanceObserverCallback.idl
     page/PerformanceObserverEntryList.idl
     page/PerformanceNavigation.idl
+    page/PerformancePaintTiming.idl
     page/PerformanceResourceTiming.idl
     page/PerformanceServerTiming.idl
     page/PerformanceTiming.idl
@@ -1190,6 +1182,42 @@ if (ENABLE_GAMEPAD)
     )
 endif ()
 
+if (ENABLE_WEBXR)
+    list(APPEND WebCore_NON_SVG_IDL_FILES
+        Modules/webxr/NavigatorWebXR.idl
+        Modules/webxr/WebXRBoundedReferenceSpace.idl
+        Modules/webxr/WebXRFrame.idl
+        Modules/webxr/WebXRInputSource.idl
+        Modules/webxr/WebXRInputSourceArray.idl
+        Modules/webxr/WebXRPose.idl
+        Modules/webxr/WebXRReferenceSpace.idl
+        Modules/webxr/WebXRRenderState.idl
+        Modules/webxr/WebXRRigidTransform.idl
+        Modules/webxr/WebXRSession.idl
+        Modules/webxr/WebXRSpace.idl
+        Modules/webxr/WebXRSystem.idl
+        Modules/webxr/WebXRView.idl
+        Modules/webxr/WebXRViewerPose.idl
+        Modules/webxr/WebXRViewport.idl
+        Modules/webxr/WebXRWebGLLayer.idl
+        Modules/webxr/XREnvironmentBlendMode.idl
+        Modules/webxr/XREye.idl
+        Modules/webxr/XRFrameRequestCallback.idl
+        Modules/webxr/XRHandedness.idl
+        Modules/webxr/XRInputSourceEvent.idl
+        Modules/webxr/XRInputSourcesChangeEvent.idl
+        Modules/webxr/XRReferenceSpaceEvent.idl
+        Modules/webxr/XRReferenceSpaceType.idl
+        Modules/webxr/XRRenderStateInit.idl
+        Modules/webxr/XRSessionEvent.idl
+        Modules/webxr/XRSessionInit.idl
+        Modules/webxr/XRSessionMode.idl
+        Modules/webxr/XRTargetRayMode.idl
+        Modules/webxr/XRVisibilityState.idl
+        Modules/webxr/XRWebGLLayerInit.idl
+    )
+endif ()
+
 set(WebCore_IDL_FILES
     ${WebCore_NON_SVG_IDL_FILES}
     ${WebCore_SVG_IDL_FILES}
@@ -1220,19 +1248,22 @@ set(WebCore_PLUG_INS_RESOURCES
 )
 
 set(WebCore_LIBRARIES
+    LibXml2::LibXml2
     SQLite::SQLite3
-    ${LIBXML2_LIBRARIES}
-    ${LIBXSLT_LIBRARIES}
-    ${ZLIB_LIBRARIES}
-    PAL${DEBUG_SUFFIX}
+    WebKit::JavaScriptCore
+    WebKit::PAL
+    ZLIB::ZLIB
 )
+
+if (ENABLE_XSLT)
+    list(APPEND WebCore_LIBRARIES LibXslt::LibXslt)
+endif ()
 
 set(WebCoreTestSupport_LIBRARIES
     WebKit::JavaScriptCore
+    WebKit::PAL
 )
-if (NOT WTF_OS_WINDOWS)
-    list(APPEND WebCoreTestSupport_LIBRARIES WebCore)
-endif ()
+set(WebCoreTestSupport_DEPENDENCIES WebCoreTestSupportBindings)
 
 if (ENABLE_LEGACY_ENCRYPTED_MEDIA)
     list(APPEND WebCore_SOURCES
@@ -1297,6 +1328,8 @@ if (ENABLE_WEBGL)
     list(APPEND WebCore_SOURCES
         html/canvas/ANGLEInstancedArrays.cpp
         html/canvas/EXTBlendMinMax.cpp
+        html/canvas/EXTColorBufferFloat.cpp
+        html/canvas/EXTColorBufferHalfFloat.cpp
         html/canvas/EXTFragDepth.cpp
         html/canvas/EXTShaderTextureLOD.cpp
         html/canvas/EXTTextureFilterAnisotropic.cpp
@@ -1310,6 +1343,7 @@ if (ENABLE_WEBGL)
         html/canvas/OESVertexArrayObject.cpp
         html/canvas/WebGL2RenderingContext.cpp
         html/canvas/WebGLBuffer.cpp
+        html/canvas/WebGLColorBufferFloat.cpp
         html/canvas/WebGLCompressedTextureASTC.cpp
         html/canvas/WebGLCompressedTextureATC.cpp
         html/canvas/WebGLCompressedTextureETC.cpp
@@ -1347,6 +1381,8 @@ if (ENABLE_WEBGL)
     list(APPEND WebCore_IDL_FILES
         html/canvas/ANGLEInstancedArrays.idl
         html/canvas/EXTBlendMinMax.idl
+        html/canvas/EXTColorBufferFloat.idl
+        html/canvas/EXTColorBufferHalfFloat.idl
         html/canvas/EXTFragDepth.idl
         html/canvas/EXTShaderTextureLOD.idl
         html/canvas/EXTTextureFilterAnisotropic.idl
@@ -1361,6 +1397,7 @@ if (ENABLE_WEBGL)
         html/canvas/WebGL2RenderingContext.idl
         html/canvas/WebGLActiveInfo.idl
         html/canvas/WebGLBuffer.idl
+        html/canvas/WebGLColorBufferFloat.idl
         html/canvas/WebGLCompressedTextureASTC.idl
         html/canvas/WebGLCompressedTextureATC.idl
         html/canvas/WebGLCompressedTextureETC.idl
@@ -1625,6 +1662,26 @@ list(APPEND WebCoreTestSupport_SOURCES
     testing/js/WebCoreTestSupport.cpp
 )
 
+
+if (ENABLE_WEBXR)
+    list(APPEND WebCoreTestSupport_IDL_FILES
+        testing/FakeXRBoundsPoint.idl
+        testing/FakeXRButtonStateInit.idl
+        testing/FakeXRInputSourceInit.idl
+        testing/FakeXRRigidTransformInit.idl
+        testing/FakeXRViewInit.idl
+        testing/WebFakeXRDevice.idl
+        testing/WebFakeXRInputController.idl
+        testing/WebXRTest.idl
+        testing/XRSimulateUserActivationFunction.idl
+    )
+    list(APPEND WebCoreTestSupport_SOURCES
+        testing/WebFakeXRDevice.cpp
+        testing/WebFakeXRInputController.cpp
+        testing/WebXRTest.cpp
+    )
+endif ()
+
 # Modules that the bindings generator scripts may use
 set(SCRIPTS_RESOLVE_SUPPLEMENTAL
     ${WEBCORE_DIR}/bindings/scripts/IDLParser.pm
@@ -1642,6 +1699,7 @@ set(MAKE_NAMES_DEPENDENCIES
     ${WEBCORE_DIR}/bindings/scripts/StaticString.pm
 )
 set(SUPPLEMENTAL_DEPENDENCY_FILE ${WebCore_DERIVED_SOURCES_DIR}/supplemental_dependency.tmp)
+set(ISO_SUBSPACES_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMIsoSubspaces.h)
 set(WINDOW_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMWindowConstructors.idl)
 set(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/WorkerGlobalScopeConstructors.idl)
 set(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DedicatedWorkerGlobalScopeConstructors.idl)
@@ -1649,15 +1707,17 @@ set(SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/Se
 set(WORKLETGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/WorkletGlobalScopeConstructors.idl)
 set(PAINTWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/PaintWorkletGlobalScopeConstructors.idl)
 
-WEBKIT_FRAMEWORK_DECLARE(WebCore)
-WEBKIT_INCLUDE_CONFIG_FILES_IF_EXISTS()
+set(WebCore_INTERFACE_LIBRARIES WebCore)
+set(WebCore_INTERFACE_INCLUDE_DIRECTORIES ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR})
 
-WEBKIT_MAKE_FORWARDING_HEADERS(WebCore
-    TARGET_NAME WebCorePrivateFrameworkHeaders
-    DESTINATION ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR}/WebCore
-    FILES ${WebCore_PRIVATE_FRAMEWORK_HEADERS}
-    FLATTENED
+set(WebCoreTestSupport_INTERFACE_LIBRARIES WebCoreTestSupport)
+set(WebCoreTestSupport_INTERFACE_INCLUDE_DIRECTORIES
+    ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR}/WebCoreTestSupport
 )
+
+WEBKIT_FRAMEWORK_DECLARE(WebCore)
+WEBKIT_FRAMEWORK_DECLARE(WebCoreTestSupport)
+WEBKIT_INCLUDE_CONFIG_FILES_IF_EXISTS()
 
 # Generate CommandLineAPIModuleSource.h
 add_custom_command(
@@ -1805,11 +1865,17 @@ list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/PlugInsResourcesData.
 ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/css/StyleResolver.cpp PlugInsResourcesData.cpp PlugInsResources.h)
 
 set(FEATURE_DEFINES_JAVASCRIPT "LANGUAGE_JAVASCRIPT ${FEATURE_DEFINES_WITH_SPACE_SEPARATOR}")
+
+GENERATE_SETTINGS_MACROS(${WEBCORE_DIR}/page/Settings.yaml Settings.h)
+list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/Settings.h)
+list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/Settings.cpp)
+list(APPEND WebCoreTestSupport_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/InternalSettingsGenerated.cpp)
 list(APPEND WebCoreTestSupport_IDL_FILES ${WebCore_DERIVED_SOURCES_DIR}/InternalSettingsGenerated.idl)
 
 GENERATE_BINDINGS(WebCoreBindings
     OUTPUT_SOURCE WebCore_SOURCES
     INPUT_FILES ${WebCore_IDL_FILES}
+    PP_INPUT_FILES ${WebCore_IDL_FILES} ${WebCoreTestSupport_IDL_FILES}
     BASE_DIR ${WEBCORE_DIR}
     IDL_INCLUDES ${WebCore_IDL_INCLUDES} ${WebCore_DERIVED_SOURCES_DIR}
     FEATURES ${FEATURE_DEFINES_JAVASCRIPT}
@@ -1817,14 +1883,20 @@ GENERATE_BINDINGS(WebCoreBindings
     GENERATOR JS
     SUPPLEMENTAL_DEPFILE ${SUPPLEMENTAL_DEPENDENCY_FILE}
     PP_EXTRA_OUTPUT
-        ${WINDOW_CONSTRUCTORS_FILE} ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE} ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
+        ${ISO_SUBSPACES_HEADER_FILE} ${WINDOW_CONSTRUCTORS_FILE} ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE} ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
     PP_EXTRA_ARGS
+        --isoSubspacesHeaderFile ${ISO_SUBSPACES_HEADER_FILE}
         --windowConstructorsFile ${WINDOW_CONSTRUCTORS_FILE}
         --workerGlobalScopeConstructorsFile ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
         --dedicatedWorkerGlobalScopeConstructorsFile ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
         --serviceWorkerGlobalScopeConstructorsFile ${SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
         --workletGlobalScopeConstructorsFile ${WORKLETGLOBALSCOPE_CONSTRUCTORS_FILE}
         --paintWorkletGlobalScopeConstructorsFile ${PAINTWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE})
+list(APPEND WebCore_DEPENDENCIES WebCoreBindings)
+
+if (ENABLE_WEBINSPECTORUI)
+    list(APPEND WebCore_DEPENDENCIES WebInspectorUI)
+endif ()
 
 GENERATE_BINDINGS(WebCoreTestSupportBindings
     OUTPUT_SOURCE WebCoreTestSupport_SOURCES
@@ -1835,8 +1907,11 @@ GENERATE_BINDINGS(WebCoreTestSupportBindings
     DESTINATION ${WebCore_DERIVED_SOURCES_DIR}
     GENERATOR JS)
 
-# WebCoreTestSupportBindings needs InternalSettingsGenerated.idl
-add_dependencies(WebCoreTestSupportBindings WebCore)
+# WebCoreTestSupportBindings needs to have a direct or indirect
+# dependency to WebCoreBindings for CMake Visual Studio generator to
+# eliminate duplicated custom commands. Otherwise,
+# GenerateSettings.rb will be triggered in both projects.
+add_dependencies(WebCoreTestSupportBindings WebCoreBindings)
 
 # WebCore JS Builtins
 
@@ -1920,11 +1995,6 @@ list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/EventTargetInterfaces
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/EventTargetFactory.cpp)
 
 
-GENERATE_SETTINGS_MACROS(${WEBCORE_DIR}/page/Settings.yaml Settings.h)
-list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/Settings.h)
-list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/Settings.cpp)
-list(APPEND WebCoreTestSupport_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/InternalSettingsGenerated.cpp)
-
 GENERATE_FONT_NAMES(${WEBCORE_DIR}/css/WebKitFontFamilyNames.in)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/WebKitFontFamilyNames.cpp)
 
@@ -1965,10 +2035,15 @@ if (MSVC)
     WEBKIT_ADD_PRECOMPILED_HEADER("WebCorePrefix.h" "WebCorePrefix.cpp" WebCore_SOURCES)
 endif ()
 
-WEBKIT_FRAMEWORK(WebCore)
+WEBKIT_COPY_FILES(WebCore_CopyPrivateHeaders
+    DESTINATION ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR}/WebCore
+    FILES ${WebCore_PRIVATE_FRAMEWORK_HEADERS}
+    FLATTENED
+)
+list(APPEND WebCore_INTERFACE_DEPENDENCIES WebCore_CopyPrivateHeaders)
 
-add_dependencies(WebCore WebCoreBindings)
-add_dependencies(WebCorePrivateFrameworkHeaders WebCoreBindings)
+WEBKIT_FRAMEWORK(WebCore)
+WEBKIT_FRAMEWORK_TARGET(WebCore)
 
 if (APPLE)
     set_target_properties(WebCore PROPERTIES LINK_FLAGS "-sub_library libobjc -umbrella WebKit -allowable_client WebCoreTestSupport -allowable_client WebKit2 -allowable_client WebKitLegacy")
@@ -1982,32 +2057,31 @@ if (CMAKE_COMPILER_IS_GNUCXX AND "${LOWERCASE_CMAKE_HOST_SYSTEM_PROCESSOR}" MATC
     WEBKIT_ADD_TARGET_CXX_FLAGS(WebCore -fno-tree-sra)
 endif ()
 
-# Include paths of WebCore doesn't propagate to targets using WebKit
-# because WebCore is linked to WebKit as a PRIVATE library. Forwarding
-# headers generated by generate-forwarding-headers.pl needs include
-# paths of WebCore.
-add_library(WebCoreHeaderInterface INTERFACE)
-target_include_directories(WebCoreHeaderInterface INTERFACE ${WebCore_INCLUDE_DIRECTORIES})
-target_include_directories(WebCoreHeaderInterface SYSTEM INTERFACE ${WebCore_SYSTEM_INCLUDE_DIRECTORIES})
-target_link_libraries(WebCoreHeaderInterface INTERFACE ${WebCore_LIBRARIES})
-
 if (MSVC)
     WEBKIT_ADD_PRECOMPILED_HEADER("WebCoreTestSupportPrefix.h" "testing/js/WebCoreTestSupportPrefix.cpp" WebCoreTestSupport_SOURCES)
 endif ()
 
-add_library(WebCoreTestSupport ${WebCoreTestSupport_LIBRARY_TYPE} ${WebCoreTestSupport_SOURCES})
-add_dependencies(WebCoreTestSupport WebCore WebCoreTestSupportBindings)
-target_include_directories(WebCoreTestSupport PUBLIC ${WebCoreTestSupport_INCLUDE_DIRECTORIES} ${WebCore_INCLUDE_DIRECTORIES})
-target_include_directories(WebCoreTestSupport PRIVATE ${WebCoreTestSupport_PRIVATE_INCLUDE_DIRECTORIES} ${WebCore_PRIVATE_INCLUDE_DIRECTORIES})
-target_include_directories(WebCoreTestSupport SYSTEM PUBLIC ${WebCoreTestSupport_SYSTEM_INCLUDE_DIRECTORIES} ${WebCore_SYSTEM_INCLUDE_DIRECTORIES})
-target_link_libraries(WebCoreTestSupport PRIVATE ${WebCoreTestSupport_LIBRARIES})
+WEBKIT_COPY_FILES(Copy_WebCoreTestSupportPrivateHeaders
+    DESTINATION ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR}/WebCoreTestSupport
+    FILES testing/js/WebCoreTestSupport.h
+    FLATTENED
+)
+list(APPEND WebCoreTestSupport_INTERFACE_DEPENDENCIES Copy_WebCoreTestSupportPrivateHeaders)
 
-if (WebCoreTestSupport_OUTPUT_NAME)
-    set_target_properties(WebCoreTestSupport PROPERTIES OUTPUT_NAME ${WebCoreTestSupport_OUTPUT_NAME})
-    if (MSVC)
-        add_compile_options(/WX-)
-    endif ()
+list(APPEND WebCoreTestSupport_INCLUDE_DIRECTORIES ${WebCore_INCLUDE_DIRECTORIES})
+list(APPEND WebCoreTestSupport_PRIVATE_INCLUDE_DIRECTORIES ${WebCore_PRIVATE_INCLUDE_DIRECTORIES})
+list(APPEND WebCoreTestSupport_SYSTEM_INCLUDE_DIRECTORIES ${WebCore_SYSTEM_INCLUDE_DIRECTORIES})
+
+if (WebCore_LIBRARY_TYPE STREQUAL SHARED)
+    list(APPEND WebCoreTestSupport_LIBRARIES WebCore)
+else ()
+    list(APPEND WebCoreTestSupport_LIBRARIES ${WebCore_LIBRARIES})
+    list(APPEND WebCoreTestSupport_PRIVATE_LIBRARIES ${WebCore_PRIVATE_LIBRARIES})
+    list(APPEND WebCoreTestSupport_DEPENDENCIES WebCore)
 endif ()
+
+WEBKIT_FRAMEWORK(WebCoreTestSupport)
+WEBKIT_FRAMEWORK_TARGET(WebCoreTestSupport)
 
 if (${WebCore_LIBRARY_TYPE} MATCHES "SHARED")
     set_target_properties(WebCore PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})

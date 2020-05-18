@@ -340,7 +340,7 @@ public:
     ExpressionNode* createRegExp(const JSTokenLocation& location, const Identifier& pattern, const Identifier& flags, const JSTextPosition& start)
     {
         if (Yarr::hasError(Yarr::checkSyntax(pattern.string(), flags.string())))
-            return 0;
+            return nullptr;
         RegExpNode* node = new (m_parserArena) RegExpNode(location, pattern, flags);
         int size = pattern.length() + 2; // + 2 for the two /'s
         JSTextPosition end = start + size;
@@ -971,7 +971,7 @@ public:
     
     void appendArrayPatternSkipEntry(ArrayPattern node, const JSTokenLocation& location)
     {
-        node->appendIndex(ArrayPatternNode::BindingType::Elision, location, 0, nullptr);
+        node->appendIndex(ArrayPatternNode::BindingType::Elision, location, nullptr, nullptr);
     }
 
     void appendArrayPatternEntry(ArrayPattern node, const JSTokenLocation& location, DestructuringPattern pattern, ExpressionNode* defaultValue)
@@ -1458,10 +1458,10 @@ ExpressionNode* ASTBuilder::makeBinaryNode(const JSTokenLocation& location, int 
         return makeCoalesceNode(location, lhs.first, rhs.first);
 
     case OR:
-        return new (m_parserArena) LogicalOpNode(location, lhs.first, rhs.first, OpLogicalOr);
+        return new (m_parserArena) LogicalOpNode(location, lhs.first, rhs.first, LogicalOperator::Or);
 
     case AND:
-        return new (m_parserArena) LogicalOpNode(location, lhs.first, rhs.first, OpLogicalAnd);
+        return new (m_parserArena) LogicalOpNode(location, lhs.first, rhs.first, LogicalOperator::And);
 
     case BITOR:
         return makeBitOrNode(location, lhs.first, rhs.first, rhs.second.hasAssignment);
@@ -1536,7 +1536,7 @@ ExpressionNode* ASTBuilder::makeBinaryNode(const JSTokenLocation& location, int 
         return makePowNode(location, lhs.first, rhs.first, rhs.second.hasAssignment);
     }
     CRASH();
-    return 0;
+    return nullptr;
 }
 
 ExpressionNode* ASTBuilder::makeAssignNode(const JSTokenLocation& location, ExpressionNode* loc, Operator op, ExpressionNode* expr, bool locHasAssignments, bool exprHasAssignments, const JSTextPosition& start, const JSTextPosition& divot, const JSTextPosition& end)
@@ -1548,7 +1548,8 @@ ExpressionNode* ASTBuilder::makeAssignNode(const JSTokenLocation& location, Expr
 
     if (loc->isResolveNode()) {
         ResolveNode* resolve = static_cast<ResolveNode*>(loc);
-        if (op == OpEqual) {
+
+        if (op == Operator::Equal) {
             if (expr->isBaseFuncExprNode()) {
                 auto metadata = static_cast<BaseFuncExprNode*>(expr)->metadata();
                 metadata->setEcmaName(resolve->identifier());
@@ -1558,20 +1559,41 @@ ExpressionNode* ASTBuilder::makeAssignNode(const JSTokenLocation& location, Expr
             setExceptionLocation(node, start, divot, end);
             return node;
         }
+
+        if (op == Operator::CoalesceEq || op == Operator::OrEq || op == Operator::AndEq)
+            return new (m_parserArena) ShortCircuitReadModifyResolveNode(location, resolve->identifier(), op, expr, exprHasAssignments, divot, start, end);
+
         return new (m_parserArena) ReadModifyResolveNode(location, resolve->identifier(), op, expr, exprHasAssignments, divot, start, end);
     }
+
     if (loc->isBracketAccessorNode()) {
         BracketAccessorNode* bracket = static_cast<BracketAccessorNode*>(loc);
-        if (op == OpEqual)
+
+        if (op == Operator::Equal)
             return new (m_parserArena) AssignBracketNode(location, bracket->base(), bracket->subscript(), expr, locHasAssignments, exprHasAssignments, bracket->divot(), start, end);
+
+        if (op == Operator::CoalesceEq || op == Operator::OrEq || op == Operator::AndEq) {
+            auto* node = new (m_parserArena) ShortCircuitReadModifyBracketNode(location, bracket->base(), bracket->subscript(), op, expr, locHasAssignments, exprHasAssignments, divot, start, end);
+            node->setSubexpressionInfo(bracket->divot(), bracket->divotEnd().offset);
+            return node;
+        }
+
         ReadModifyBracketNode* node = new (m_parserArena) ReadModifyBracketNode(location, bracket->base(), bracket->subscript(), op, expr, locHasAssignments, exprHasAssignments, divot, start, end);
         node->setSubexpressionInfo(bracket->divot(), bracket->divotEnd().offset);
         return node;
     }
+
     ASSERT(loc->isDotAccessorNode());
     DotAccessorNode* dot = static_cast<DotAccessorNode*>(loc);
-    if (op == OpEqual)
+
+    if (op == Operator::Equal)
         return new (m_parserArena) AssignDotNode(location, dot->base(), dot->identifier(), expr, exprHasAssignments, dot->divot(), start, end);
+
+    if (op == Operator::CoalesceEq || op == Operator::OrEq || op == Operator::AndEq) {
+        auto* node = new (m_parserArena) ShortCircuitReadModifyDotNode(location, dot->base(), dot->identifier(), op, expr, exprHasAssignments, divot, start, end);
+        node->setSubexpressionInfo(dot->divot(), dot->divotEnd().offset);
+        return node;
+    }
 
     ReadModifyDotNode* node = new (m_parserArena) ReadModifyDotNode(location, dot->base(), dot->identifier(), op, expr, exprHasAssignments, divot, start, end);
     node->setSubexpressionInfo(dot->divot(), dot->divotEnd().offset);

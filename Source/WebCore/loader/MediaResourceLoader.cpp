@@ -41,6 +41,13 @@
 
 namespace WebCore {
 
+static bool shouldRecordResponsesForTesting = false;
+
+void MediaResourceLoader::recordResponsesForTesting()
+{
+    shouldRecordResponsesForTesting = true;
+}
+
 MediaResourceLoader::MediaResourceLoader(Document& document, HTMLMediaElement& mediaElement, const String& crossOriginMode)
     : ContextDestructionObserver(&document)
     , m_document(makeWeakPtr(document))
@@ -74,7 +81,7 @@ RefPtr<PlatformMediaResource> MediaResourceLoader::requestResource(ResourceReque
     if (m_mediaElement)
         request.setInspectorInitiatorNodeIdentifier(InspectorInstrumentation::identifierForNode(*m_mediaElement));
 
-#if HAVE(AVFOUNDATION_LOADER_DELEGATE) && PLATFORM(MAC)
+#if PLATFORM(MAC)
     // FIXME: Workaround for <rdar://problem/26071607>. We are not able to do CORS checking on 304 responses because they are usually missing the headers we need.
     if (!m_crossOriginMode.isNull())
         request.makeUnconditional();
@@ -118,7 +125,7 @@ void MediaResourceLoader::removeResource(MediaResource& mediaResource)
 void MediaResourceLoader::addResponseForTesting(const ResourceResponse& response)
 {
     const auto maximumResponsesForTesting = 5;
-    if (m_responsesForTesting.size() > maximumResponsesForTesting)
+    if (!shouldRecordResponsesForTesting || m_responsesForTesting.size() > maximumResponsesForTesting)
         return;
     m_responsesForTesting.append(response);
 }
@@ -175,7 +182,7 @@ void MediaResource::responseReceived(CachedResource& resource, const ResourceRes
         m_client->responseReceived(*this, response, [this, protectedThis = makeRef(*this), completionHandler = completionHandlerCaller.release()] (auto shouldContinue) mutable {
             if (completionHandler)
                 completionHandler();
-            if (shouldContinue == PolicyChecker::ShouldContinue::No)
+            if (shouldContinue == ShouldContinuePolicyCheck::No)
                 stop();
         });
 
@@ -221,7 +228,7 @@ void MediaResource::dataReceived(CachedResource& resource, const char* data, int
         m_client->dataReceived(*this, data, dataLength);
 }
 
-void MediaResource::notifyFinished(CachedResource& resource)
+void MediaResource::notifyFinished(CachedResource& resource, const NetworkLoadMetrics& metrics)
 {
     ASSERT_UNUSED(resource, &resource == m_resource);
 
@@ -230,7 +237,7 @@ void MediaResource::notifyFinished(CachedResource& resource)
         if (m_resource->loadFailedOrCanceled())
             m_client->loadFailed(*this, m_resource->resourceError());
         else
-            m_client->loadFinished(*this);
+            m_client->loadFinished(*this, metrics);
     }
     stop();
 }

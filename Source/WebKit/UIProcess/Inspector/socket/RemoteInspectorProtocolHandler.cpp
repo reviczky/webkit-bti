@@ -28,9 +28,9 @@
 
 #if ENABLE(REMOTE_INSPECTOR)
 
+#include "APIContentWorld.h"
 #include "APILoaderClient.h"
 #include "APINavigation.h"
-#include "APIUserContentWorld.h"
 #include "WebPageGroup.h"
 #include "WebPageProxy.h"
 #include "WebScriptMessageHandler.h"
@@ -52,7 +52,7 @@ public:
 
     ~ScriptMessageClient() { }
 
-    void didPostMessage(WebPageProxy& page, FrameInfoData&&, WebCore::SerializedScriptValue& serializedScriptValue) override
+    void didPostMessage(WebPageProxy& page, FrameInfoData&&, API::ContentWorld&, WebCore::SerializedScriptValue& serializedScriptValue) override
     {
         auto tokens = serializedScriptValue.toString().split(":");
         if (tokens.size() != 3)
@@ -60,6 +60,15 @@ public:
 
         URL requestURL { { }, page.pageLoadState().url() };
         m_inspectorProtocolHandler.inspect(requestURL.hostAndPort(), tokens[0].toUIntStrict(), tokens[1].toUIntStrict(), tokens[2]);
+    }
+    
+    bool supportsAsyncReply() override
+    {
+        return false;
+    }
+    
+    void didPostMessageWithAsyncReply(WebPageProxy&, FrameInfoData&&, API::ContentWorld&, WebCore::SerializedScriptValue&, WTF::Function<void(API::SerializedScriptValue*, const String&)>&&) override
+    {
     }
 
 private:
@@ -109,7 +118,7 @@ void RemoteInspectorProtocolHandler::inspect(const String& hostAndPort, Connecti
 
 void RemoteInspectorProtocolHandler::runScript(const String& script)
 {
-    m_page.runJavaScriptInMainFrame({ script, false, WTF::nullopt, false }, 
+    m_page.runJavaScriptInMainFrame({ script, URL { }, false, WTF::nullopt, false }, 
         [](API::SerializedScriptValue*, Optional<WebCore::ExceptionDetails> exceptionDetails, CallbackBase::Error) {
             if (exceptionDetails)
                 LOG_ERROR("Exception running script \"%s\"", exceptionDetails->message.utf8().data());
@@ -157,7 +166,7 @@ void RemoteInspectorProtocolHandler::platformStartTask(WebPageProxy& pageProxy, 
     m_inspectorClient = makeUnique<RemoteInspectorClient>(requestURL, *this);
 
     // Setup target postMessage listener
-    auto handler = WebScriptMessageHandler::create(makeUnique<ScriptMessageClient>(*this), "inspector", API::UserContentWorld::normalWorld());
+    auto handler = WebScriptMessageHandler::create(makeUnique<ScriptMessageClient>(*this), "inspector", API::ContentWorld::pageContentWorld());
     pageProxy.pageGroup().userContentController().addUserScriptMessageHandler(handler.get());
 
     // Setup loader client to get notified of page load

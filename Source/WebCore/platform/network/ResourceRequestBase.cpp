@@ -27,9 +27,11 @@
 #include "ResourceRequestBase.h"
 
 #include "HTTPHeaderNames.h"
+#include "Logging.h"
 #include "PublicSuffix.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
+#include "SecurityOrigin.h"
 #include "SecurityPolicy.h"
 #include <wtf/PointerComparison.h>
 
@@ -165,12 +167,10 @@ void ResourceRequestBase::removeCredentials()
 {
     updateResourceRequest(); 
 
-    if (m_url.user().isEmpty() && m_url.pass().isEmpty())
+    if (!m_url.hasCredentials())
         return;
 
-    m_url.setUser(String());
-    m_url.setPass(String());
-
+    m_url.removeCredentials();
     m_platformRequestUpdated = false;
 }
 
@@ -378,7 +378,15 @@ bool ResourceRequestBase::hasHTTPReferrer() const
 
 void ResourceRequestBase::setHTTPReferrer(const String& httpReferrer)
 {
-    setHTTPHeaderField(HTTPHeaderName::Referer, httpReferrer);
+    // https://w3c.github.io/webappsec-referrer-policy/#determine-requests-referrer
+    constexpr size_t maxLength = 4096;
+    if (httpReferrer.length() > maxLength) {
+        RELEASE_LOG(Loading, "Truncating HTTP referer");
+        String origin = SecurityOrigin::create(URL(URL(), httpReferrer))->toString();
+        if (origin.length() <= maxLength)
+            setHTTPHeaderField(HTTPHeaderName::Referer, origin);
+    } else
+        setHTTPHeaderField(HTTPHeaderName::Referer, httpReferrer);
 }
 
 void ResourceRequestBase::setExistingHTTPReferrerToOriginString()
@@ -442,25 +450,6 @@ void ResourceRequestBase::clearHTTPUserAgent()
     updateResourceRequest(); 
 
     m_httpHeaderFields.remove(HTTPHeaderName::UserAgent);
-
-    m_platformRequestUpdated = false;
-}
-
-String ResourceRequestBase::httpAccept() const
-{
-    return httpHeaderField(HTTPHeaderName::Accept);
-}
-
-void ResourceRequestBase::setHTTPAccept(const String& httpAccept)
-{
-    setHTTPHeaderField(HTTPHeaderName::Accept, httpAccept);
-}
-
-void ResourceRequestBase::clearHTTPAccept()
-{
-    updateResourceRequest(); 
-
-    m_httpHeaderFields.remove(HTTPHeaderName::Accept);
 
     m_platformRequestUpdated = false;
 }

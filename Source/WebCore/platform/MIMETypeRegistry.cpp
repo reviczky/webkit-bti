@@ -58,12 +58,6 @@
 #include "PreviewConverter.h"
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/AdditionalSystemPreviewTypes.h>
-#else
-#define ADDITIONAL_SYSTEM_PREVIEW_TYPES
-#endif
-
 namespace WebCore {
 
 const HashSet<String, ASCIICaseInsensitiveHash>& MIMETypeRegistry::supportedImageMIMETypes()
@@ -82,7 +76,9 @@ const HashSet<String, ASCIICaseInsensitiveHash>& MIMETypeRegistry::supportedImag
 
         "image/x-icon"_s, // Favicons don't have a MIME type in the registry either.
         "image/pjpeg"_s, //  We only get one MIME type per UTI, hence our need to add these manually
-
+#if HAVE(WEBP)
+        "image/webp"_s,
+#endif
 #if PLATFORM(IOS_FAMILY)
         // Add malformed image mimetype for compatibility with Mail and to handle malformed mimetypes from the net
         // These were removed for <rdar://problem/6564538> Re-enable UTI code in WebCore now that MobileCoreServices exists
@@ -274,12 +270,6 @@ const HashSet<String, ASCIICaseInsensitiveHash>& MIMETypeRegistry::unsupportedTe
     return unsupportedTextMIMETypes;
 }
 
-Optional<HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>>& overriddenMimeTypesMap()
-{
-    static NeverDestroyed<Optional<HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>>> map;
-    return map;
-}
-
 const std::initializer_list<TypeExtensionPair>& commonMediaTypes()
 {
     // A table of common media MIME types and file extensions used when a platform's
@@ -366,7 +356,7 @@ const std::initializer_list<TypeExtensionPair>& commonMediaTypes()
     return commonMediaTypes;
 }
 
-const HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>& commonMimeTypesMap()
+static const HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>& commonMimeTypesMap()
 {
     ASSERT(isMainThread());
     static NeverDestroyed<HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>> mimeTypesMap = [] {
@@ -391,12 +381,6 @@ const HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>& commonMimeTypes
 
 static const Vector<String>* typesForCommonExtension(const String& extension)
 {
-    if (overriddenMimeTypesMap().hasValue()) {
-        auto mapEntry = overriddenMimeTypesMap()->find(extension);
-        if (mapEntry == overriddenMimeTypesMap()->end())
-            return nullptr;
-        return &mapEntry->value;
-    }
     auto mapEntry = commonMimeTypesMap().find(extension);
     if (mapEntry == commonMimeTypesMap().end())
         return nullptr;
@@ -635,6 +619,12 @@ bool MIMETypeRegistry::isXMLMIMEType(const String& mimeType)
     return true;
 }
 
+bool MIMETypeRegistry::isXMLEntityMIMEType(StringView mimeType)
+{
+    return equalLettersIgnoringASCIICase(mimeType, "text/xml-external-parsed-entity")
+        || equalLettersIgnoringASCIICase(mimeType, "application/xml-external-parsed-entity");
+}
+
 bool MIMETypeRegistry::isJavaAppletMIMEType(const String& mimeType)
 {
     // Since this set is very limited and is likely to remain so we won't bother with the overhead
@@ -696,7 +686,8 @@ const HashSet<String, ASCIICaseInsensitiveHash>& MIMETypeRegistry::systemPreview
         // Unofficial, but supported because we documented them.
         "model/usd",
         "model/vnd.pixar.usd",
-        ADDITIONAL_SYSTEM_PREVIEW_TYPES
+        // Reality files.
+        "model/vnd.reality"
     };
     return systemPreviewMIMETypes;
 }
@@ -787,16 +778,10 @@ String MIMETypeRegistry::getNormalizedMIMEType(const String& mimeType)
 
 String MIMETypeRegistry::appendFileExtensionIfNecessary(const String& filename, const String& mimeType)
 {
-    if (filename.isEmpty())
-        return emptyString();
-
-    if (equalIgnoringASCIICase(mimeType, defaultMIMEType()))
+    if (filename.isEmpty() || filename.contains('.') || equalIgnoringASCIICase(mimeType, defaultMIMEType()))
         return filename;
 
-    if (filename.reverseFind('.') != notFound)
-        return filename;
-
-    String preferredExtension = getPreferredExtensionForMIMEType(mimeType);
+    auto preferredExtension = getPreferredExtensionForMIMEType(mimeType);
     if (preferredExtension.isEmpty())
         return filename;
 

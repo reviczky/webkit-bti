@@ -34,6 +34,8 @@ ALLOW_UNUSED_PARAMETERS_END
 #include <wtf/MainThread.h>
 #include <wtf/darwin/WeakLinking.h>
 
+WTF_WEAK_LINK_FORCE_IMPORT(webrtc::setApplicationStatus);
+
 namespace WebCore {
 
 UniqueRef<LibWebRTCProvider> LibWebRTCProvider::create()
@@ -54,7 +56,7 @@ std::unique_ptr<webrtc::VideoDecoderFactory> LibWebRTCProviderCocoa::createDecod
 {
     ASSERT(isMainThread());
 
-    auto codecSupport = m_supportsVP8 ? webrtc::WebKitCodecSupport::H264AndVP8 : webrtc::WebKitCodecSupport::H264;
+    auto codecSupport = m_supportsH265 ? webrtc::WebKitCodecSupport::H264VP8AndH265 : webrtc::WebKitCodecSupport::H264AndVP8;
     return webrtc::createWebKitDecoderFactory(codecSupport);
 }
 
@@ -62,7 +64,7 @@ std::unique_ptr<webrtc::VideoEncoderFactory> LibWebRTCProviderCocoa::createEncod
 {
     ASSERT(isMainThread());
 
-    auto codecSupport = m_supportsVP8 ? webrtc::WebKitCodecSupport::H264AndVP8 : webrtc::WebKitCodecSupport::H264;
+    auto codecSupport = m_supportsH265 ? webrtc::WebKitCodecSupport::H264VP8AndH265 : webrtc::WebKitCodecSupport::H264AndVP8;
     return webrtc::createWebKitEncoderFactory(codecSupport);
 }
 
@@ -73,7 +75,11 @@ void LibWebRTCProviderCocoa::setActive(bool value)
 
 bool LibWebRTCProvider::webRTCAvailable()
 {
-    return !isNullFunctionPointer(rtc::LogMessage::LogToDebug);
+#if PLATFORM(IOS)
+    return true;
+#else
+    return !!webrtc::setApplicationStatus;
+#endif
 }
 
 } // namespace WebCore

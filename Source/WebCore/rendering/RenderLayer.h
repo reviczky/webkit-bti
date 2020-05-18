@@ -50,8 +50,10 @@
 #include "PaintInfo.h"
 #include "RenderBox.h"
 #include "RenderPtr.h"
+#include "ScrollBehavior.h"
 #include "ScrollableArea.h"
 #include <memory>
+#include <wtf/Markable.h>
 #include <wtf/WeakPtr.h>
 
 namespace WTF {
@@ -83,6 +85,7 @@ class TransformationMatrix;
 
 enum BorderRadiusClippingRule { IncludeSelfForBorderRadius, DoNotIncludeSelfForBorderRadius };
 enum IncludeSelfOrNot { IncludeSelf, ExcludeSelf };
+enum CrossFrameBoundaries { No, Yes };
 
 enum RepaintStatus {
     NeedsNormalRepaint,
@@ -134,7 +137,10 @@ struct ScrollRectToVisibleOptions {
     const ScrollAlignment& alignX { ScrollAlignment::alignCenterIfNeeded };
     const ScrollAlignment& alignY { ScrollAlignment::alignCenterIfNeeded };
     ShouldAllowCrossOriginScrolling shouldAllowCrossOriginScrolling { ShouldAllowCrossOriginScrolling::No };
+    ScrollBehavior behavior { ScrollBehavior::Auto };
 };
+
+using ScrollingScope = uint64_t;
 
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderLayer);
 class RenderLayer final : public ScrollableArea {
@@ -427,9 +433,9 @@ public:
 
     LayoutRect rect() const { return LayoutRect(location(), size()); }
 
-    IntSize visibleSize() const override;
-    IntSize contentsSize() const override;
-    IntSize reachableTotalContentsSize() const override;
+    IntSize visibleSize() const final;
+    IntSize contentsSize() const final;
+    IntSize reachableTotalContentsSize() const final;
 
     int scrollWidth() const;
     int scrollHeight() const;
@@ -439,12 +445,14 @@ public:
     // Scrolling methods for layers that can scroll their overflow.
     void scrollByRecursively(const IntSize& delta, ScrollableArea** scrolledArea = nullptr);
 
-    bool requestScrollPositionUpdate(const ScrollPosition&, ScrollType = ScrollType::User, ScrollClamping = ScrollClamping::Clamped) override;
+    bool requestScrollPositionUpdate(const ScrollPosition&, ScrollType = ScrollType::User, ScrollClamping = ScrollClamping::Clamped) final;
 
     WEBCORE_EXPORT void scrollToOffset(const ScrollOffset&, ScrollType = ScrollType::Programmatic, ScrollClamping = ScrollClamping::Clamped);
+    WEBCORE_EXPORT void scrollToOffsetWithAnimation(const ScrollOffset&, ScrollType = ScrollType::Programmatic, ScrollClamping = ScrollClamping::Clamped);
 
-    void scrollToXPosition(int x, ScrollType, ScrollClamping = ScrollClamping::Clamped);
-    void scrollToYPosition(int y, ScrollType, ScrollClamping = ScrollClamping::Clamped);
+    void scrollToXPosition(int x, ScrollType, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
+    void scrollToYPosition(int y, ScrollType, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
+    void setScrollPosition(const ScrollPosition&, ScrollType, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
 
     // These are only used by marquee.
     void scrollToXOffset(int x) { scrollToOffset(ScrollOffset(x, scrollOffset().y()), ScrollType::Programmatic, ScrollClamping::Unclamped); }
@@ -453,7 +461,11 @@ public:
     void setPostLayoutScrollPosition(Optional<ScrollPosition>);
     void applyPostLayoutScrollPositionIfNeeded();
 
-    void availableContentSizeChanged(AvailableSizeChangeReason) override;
+    // Returns the nearest enclosing layer that is scrollable.
+    // FIXME: This can return the RenderView's layer when callers probably want the FrameView as a ScrollableArea.
+    RenderLayer* enclosingScrollableLayer(IncludeSelfOrNot, CrossFrameBoundaries) const;
+
+    void availableContentSizeChanged(AvailableSizeChangeReason) final;
 
     // "absoluteRect" is in scaled document coordinates.
     void scrollRectToVisible(const LayoutRect& absoluteRect, bool insideFixed, const ScrollRectToVisibleOptions&);
@@ -471,21 +483,21 @@ public:
     bool hasHorizontalScrollbar() const { return horizontalScrollbar(); }
     bool hasVerticalScrollbar() const { return verticalScrollbar(); }
 
-    bool horizontalScrollbarHiddenByStyle() const override;
-    bool verticalScrollbarHiddenByStyle() const override;
+    bool horizontalScrollbarHiddenByStyle() const final;
+    bool verticalScrollbarHiddenByStyle() const final;
 
     // ScrollableArea overrides
-    ScrollPosition scrollPosition() const override { return m_scrollPosition; }
+    ScrollPosition scrollPosition() const final { return m_scrollPosition; }
 
-    Scrollbar* horizontalScrollbar() const override { return m_hBar.get(); }
-    Scrollbar* verticalScrollbar() const override { return m_vBar.get(); }
-    ScrollableArea* enclosingScrollableArea() const override;
+    Scrollbar* horizontalScrollbar() const final { return m_hBar.get(); }
+    Scrollbar* verticalScrollbar() const final { return m_vBar.get(); }
+    ScrollableArea* enclosingScrollableArea() const final;
 
-    bool isScrollableOrRubberbandable() override;
-    bool hasScrollableOrRubberbandableAncestor() override;
+    bool isScrollableOrRubberbandable() final;
+    bool hasScrollableOrRubberbandableAncestor() final;
     bool useDarkAppearance() const final;
 #if ENABLE(CSS_SCROLL_SNAP)
-    void updateSnapOffsets() override;
+    void updateSnapOffsets() final;
 #endif
 
     bool requiresScrollPositionReconciliation() const { return m_requiresScrollPositionReconciliation; }
@@ -493,12 +505,12 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
 #if ENABLE(IOS_TOUCH_EVENTS)
-    bool handleTouchEvent(const PlatformTouchEvent&) override;
+    bool handleTouchEvent(const PlatformTouchEvent&) final;
 #endif
     
-    void didStartScroll() override;
-    void didEndScroll() override;
-    void didUpdateScroll() override;
+    void didStartScroll() final;
+    void didEndScroll() final;
+    void didUpdateScroll() final;
 #endif
 
     // Returns true when the layer could do touch scrolling, but doesn't look at whether there is actually scrollable overflow.
@@ -510,9 +522,9 @@ public:
     int horizontalScrollbarHeight(OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize) const;
 
     bool hasOverflowControls() const;
-    bool isPointInResizeControl(const IntPoint& absolutePoint) const;
+    bool isPointInResizeControl(IntPoint localPoint) const;
     bool hitTestOverflowControls(HitTestResult&, const IntPoint& localPoint);
-    IntSize offsetFromResizeCorner(const IntPoint& absolutePoint) const;
+    IntSize offsetFromResizeCorner(const IntPoint& localPoint) const;
 
     void paintOverflowControls(GraphicsContext&, const IntPoint&, const IntRect& damageRect, bool paintingOverlayControls = false);
     void paintScrollCorner(GraphicsContext&, const IntPoint&, const IntRect& damageRect);
@@ -623,9 +635,8 @@ public:
     // Gets the nearest enclosing positioned ancestor layer (also includes
     // the <html> layer and the root layer).
     RenderLayer* enclosingAncestorForPosition(PositionType) const;
-
-    // Returns the nearest enclosing layer that is scrollable.
-    RenderLayer* enclosingScrollableLayer() const;
+    
+    RenderLayer* enclosingLayerInContainingBlockOrder() const;
 
     // The layer relative to which clipping rects for this layer are computed.
     RenderLayer* clippingRootForPainting() const;
@@ -684,7 +695,7 @@ public:
     // front.  The hitTest method looks for mouse events by walking
     // layers that intersect the point from front to back.
     void paint(GraphicsContext&, const LayoutRect& damageRect, const LayoutSize& subpixelOffset = LayoutSize(), OptionSet<PaintBehavior> = PaintBehavior::Normal,
-        RenderObject* subtreePaintRoot = nullptr, OptionSet<PaintLayerFlag> = { }, SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin);
+        RenderObject* subtreePaintRoot = nullptr, OptionSet<PaintLayerFlag> = { }, SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin, EventRegionContext* = nullptr);
     bool hitTest(const HitTestRequest&, HitTestResult&);
     bool hitTest(const HitTestRequest&, const HitTestLocation&, HitTestResult&);
     void paintOverlayScrollbars(GraphicsContext&, const LayoutRect& damageRect, OptionSet<PaintBehavior>, RenderObject* subtreePaintRoot = nullptr);
@@ -790,13 +801,12 @@ public:
     // Get the perspective transform, which is applied to transformed sublayers.
     // Returns true if the layer has a -webkit-perspective.
     // Note that this transform has the perspective-origin baked in.
-    TransformationMatrix perspectiveTransform() const;
+    TransformationMatrix perspectiveTransform(const LayoutRect& layerRect) const;
     FloatPoint perspectiveOrigin() const;
     bool preserves3D() const { return renderer().style().transformStyle3D() == TransformStyle3D::Preserve3D; }
     bool has3DTransform() const { return m_transform && !m_transform->isAffine(); }
     bool hasTransformedAncestor() const { return m_hasTransformedAncestor; }
 
-    void filterNeedsRepaint();
     bool hasFilter() const { return renderer().hasFilter(); }
     bool hasFilterOutsets() const { return !filterOutsets().isZero(); }
     IntOutsets filterOutsets() const;
@@ -847,15 +857,19 @@ public:
     RenderLayerBacking* ensureBacking();
     void clearBacking(bool layerBeingDestroyed = false);
 
-    GraphicsLayer* layerForHorizontalScrollbar() const override;
-    GraphicsLayer* layerForVerticalScrollbar() const override;
-    GraphicsLayer* layerForScrollCorner() const override;
+    GraphicsLayer* layerForHorizontalScrollbar() const final;
+    GraphicsLayer* layerForVerticalScrollbar() const final;
+    GraphicsLayer* layerForScrollCorner() const final;
 
-    bool usesCompositedScrolling() const override;
-    bool usesAsyncScrolling() const override;
+    bool usesCompositedScrolling() const final;
+    bool usesAsyncScrolling() const final;
 
     bool hasCompositedScrollingAncestor() const { return m_hasCompositedScrollingAncestor; }
     void setHasCompositedScrollingAncestor(bool hasCompositedScrollingAncestor) { m_hasCompositedScrollingAncestor = hasCompositedScrollingAncestor; }
+
+    // Layers with the same ScrollingScope are scrolled by some common ancestor scroller. Used for async scrolling.
+    Optional<ScrollingScope> boxScrollingScope() const { return m_boxScrollingScope; }
+    Optional<ScrollingScope> contentsScrollingScope() const { return m_contentsScrollingScope; }
 
     bool paintsWithTransparency(OptionSet<PaintBehavior> paintBehavior) const
     {
@@ -910,7 +924,12 @@ public:
 
     WEBCORE_EXPORT bool isTransparentRespectingParentFrames() const;
 
-    void invalidateEventRegion();
+    // Invalidation can fail if there is no enclosing compositing layer (e.g. nested iframe)
+    // or the layer does not maintain an event region.
+    enum class EventRegionInvalidationReason { Paint, Style, NonCompositedFrame };
+    bool invalidateEventRegion(EventRegionInvalidationReason);
+
+    String debugDescription() const final;
 
 private:
 
@@ -1026,13 +1045,13 @@ private:
 
     Path computeClipPath(const LayoutSize& offsetFromRoot, LayoutRect& rootRelativeBounds, WindRule&) const;
 
-    bool setupClipPath(GraphicsContext&, const LayerPaintingInfo&, const LayoutSize& offsetFromRoot, LayoutRect& rootRelativeBounds, bool& rootRelativeBoundsComputed);
+    bool setupClipPath(GraphicsContext&, const LayerPaintingInfo&, const LayoutSize& offsetFromRoot, Optional<LayoutRect>& rootRelativeBounds);
 
     void ensureLayerFilters();
     void clearLayerFilters();
 
     RenderLayerFilters* filtersForPainting(GraphicsContext&, OptionSet<PaintLayerFlag>) const;
-    GraphicsContext* setupFilters(GraphicsContext& destinationContext, LayerPaintingInfo&, OptionSet<PaintLayerFlag>, const LayoutSize& offsetFromRoot, LayoutRect& rootRelativeBounds, bool& rootRelativeBoundsComputed);
+    GraphicsContext* setupFilters(GraphicsContext& destinationContext, LayerPaintingInfo&, OptionSet<PaintLayerFlag>, const LayoutSize& offsetFromRoot, Optional<LayoutRect>& rootRelativeBounds);
     void applyFilters(GraphicsContext& originalContext, const LayerPaintingInfo&, const LayerFragments&);
 
     void paintLayer(GraphicsContext&, const LayerPaintingInfo&, OptionSet<PaintLayerFlag>);
@@ -1077,7 +1096,7 @@ private:
     
     bool hitTestContents(const HitTestRequest&, HitTestResult&, const LayoutRect& layerBounds, const HitTestLocation&, HitTestFilter) const;
     bool hitTestContentsForFragments(const LayerFragments&, const HitTestRequest&, HitTestResult&, const HitTestLocation&, HitTestFilter, bool& insideClipRect) const;
-    bool hitTestResizerInFragments(const LayerFragments&, const HitTestLocation&) const;
+    bool hitTestResizerInFragments(const LayerFragments&, const HitTestLocation&, LayoutPoint& pointInFragment) const;
     RenderLayer* hitTestTransformedLayerInFragments(RenderLayer* rootLayer, RenderLayer* containerLayer, const HitTestRequest&, HitTestResult&,
         const LayoutRect& hitTestRect, const HitTestLocation&, const HitTestingTransformState* = nullptr, double* zOffset = nullptr);
 
@@ -1092,39 +1111,37 @@ private:
     bool shouldBeSelfPaintingLayer() const;
 
     // ScrollableArea interface
-    void invalidateScrollbarRect(Scrollbar&, const IntRect&) override;
-    void invalidateScrollCornerRect(const IntRect&) override;
-    bool isActive() const override;
-    bool isScrollCornerVisible() const override;
-    IntRect scrollCornerRect() const override;
-    IntRect convertFromScrollbarToContainingView(const Scrollbar&, const IntRect&) const override;
-    IntRect convertFromContainingViewToScrollbar(const Scrollbar&, const IntRect&) const override;
-    IntPoint convertFromScrollbarToContainingView(const Scrollbar&, const IntPoint&) const override;
-    IntPoint convertFromContainingViewToScrollbar(const Scrollbar&, const IntPoint&) const override;
-    void setScrollOffset(const ScrollOffset&) override;
-    ScrollingNodeID scrollingNodeID() const override;
+    bool isRenderLayer() const final { return true; }
+    void invalidateScrollbarRect(Scrollbar&, const IntRect&) final;
+    void invalidateScrollCornerRect(const IntRect&) final;
+    bool isActive() const final;
+    bool isScrollCornerVisible() const final;
+    IntRect scrollCornerRect() const final;
+    IntRect convertFromScrollbarToContainingView(const Scrollbar&, const IntRect&) const final;
+    IntRect convertFromContainingViewToScrollbar(const Scrollbar&, const IntRect&) const final;
+    IntPoint convertFromScrollbarToContainingView(const Scrollbar&, const IntPoint&) const final;
+    IntPoint convertFromContainingViewToScrollbar(const Scrollbar&, const IntPoint&) const final;
+    void setScrollOffset(const ScrollOffset&) final;
+    ScrollingNodeID scrollingNodeID() const final;
 
-    IntRect visibleContentRectInternal(VisibleContentRectIncludesScrollbars, VisibleContentRectBehavior) const override;
-    IntSize overhangAmount() const override;
-    IntPoint lastKnownMousePosition() const override;
-    bool isHandlingWheelEvent() const override;
-    bool shouldSuspendScrollAnimations() const override;
-    IntRect scrollableAreaBoundingBox(bool* isInsideFixed = nullptr) const override;
-    bool isRubberBandInProgress() const override;
-    bool forceUpdateScrollbarsOnMainThreadForPerformanceTesting() const override;
+    IntRect visibleContentRectInternal(VisibleContentRectIncludesScrollbars, VisibleContentRectBehavior) const final;
+    IntSize overhangAmount() const final;
+    IntPoint lastKnownMousePositionInView() const final;
+    bool isHandlingWheelEvent() const final;
+    bool shouldSuspendScrollAnimations() const final;
+    IntRect scrollableAreaBoundingBox(bool* isInsideFixed = nullptr) const final;
+    bool isRubberBandInProgress() const final;
+    bool forceUpdateScrollbarsOnMainThreadForPerformanceTesting() const final;
 #if ENABLE(CSS_SCROLL_SNAP)
-    bool isScrollSnapInProgress() const override;
+    bool isScrollSnapInProgress() const final;
 #endif
-    bool usesMockScrollAnimator() const override;
-    void logMockScrollAnimatorMessage(const String&) const override;
+    bool usesMockScrollAnimator() const final;
+    void logMockScrollAnimatorMessage(const String&) const final;
 
 #if ENABLE(IOS_TOUCH_EVENTS)
     void registerAsTouchEventListenerForScrolling();
     void unregisterAsTouchEventListenerForScrolling();
 #endif
-
-    // Rectangle encompassing the scroll corner and resizer rect.
-    LayoutRect scrollCornerAndResizerRect() const;
 
     // NOTE: This should only be called by the overridden setScrollOffset from ScrollableArea.
     void scrollTo(const ScrollPosition&);
@@ -1191,11 +1208,17 @@ private:
     LayoutUnit overflowLeft() const;
     LayoutUnit overflowRight() const;
 
-    IntRect rectForHorizontalScrollbar(const IntRect& borderBoxRect) const;
-    IntRect rectForVerticalScrollbar(const IntRect& borderBoxRect) const;
-
-    LayoutUnit verticalScrollbarStart(int minX, int maxX) const;
-    LayoutUnit horizontalScrollbarStart(int minX) const;
+    struct OverflowControlRects {
+        IntRect horizontalScrollbar;
+        IntRect verticalScrollbar;
+        IntRect scrollCorner;
+        IntRect resizer;
+        IntRect scrollCornerOrResizerRect() const
+        {
+            return !scrollCorner.isEmpty() ? scrollCorner : resizer;
+        }
+    };
+    OverflowControlRects overflowControlsRects() const;
 
     bool overflowControlsIntersectRect(const IntRect& localRect) const;
 
@@ -1317,6 +1340,9 @@ private:
     
     IntPoint m_cachedOverlayScrollbarOffset;
 
+    Markable<ScrollingScope, IntegralMarkableTraits<ScrollingScope, 0>> m_boxScrollingScope;
+    Markable<ScrollingScope, IntegralMarkableTraits<ScrollingScope, 0>> m_contentsScrollingScope;
+
     std::unique_ptr<RenderMarquee> m_marquee; // Used for <marquee>.
     
     // Cached normal flow values for absolute positioned elements with static left/top values.
@@ -1409,3 +1435,7 @@ void showLayerTree(const WebCore::RenderLayer*);
 void showPaintOrderTree(const WebCore::RenderLayer*);
 void showLayerTree(const WebCore::RenderObject*);
 #endif
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::RenderLayer)
+    static bool isType(const WebCore::ScrollableArea& area) { return area.isRenderLayer(); }
+SPECIALIZE_TYPE_TRAITS_END()

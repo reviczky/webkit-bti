@@ -111,7 +111,7 @@ void WebLoaderStrategy::loadResource(Frame& frame, CachedResource& resource, Res
         if (loader)
             scheduleLoad(*loader, resource.get(), referrerPolicy == ReferrerPolicy::NoReferrerWhenDowngrade);
         else
-            RELEASE_LOG_IF_ALLOWED("loadResource: Unable to create SubresourceLoader (frame=%p", &frame);
+            RELEASE_LOG_IF(RELEASE_LOG_IS_ALLOWED, Network, "%p - [webPageID=%" PRIu64 ", frameID=%" PRIu64 "] WebLoaderStrategy::loadResource: Unable to create SubresourceLoader", this, frame->pageID().valueOr(PageIdentifier()).toUInt64(), frame->frameID().valueOr(FrameIdentifier()).toUInt64());
         completionHandler(WTFMove(loader));
     });
 }
@@ -243,11 +243,8 @@ bool WebLoaderStrategy::tryLoadingUsingURLSchemeHandler(ResourceLoader& resource
     if (!webFrameLoaderClient)
         return false;
 
-    auto* webFrame = webFrameLoaderClient->webFrame();
-    if (!webFrame)
-        return false;
-
-    auto* webPage = webFrame->page();
+    auto& webFrame = webFrameLoaderClient->webFrame();
+    auto* webPage = webFrame.page();
     if (!webPage)
         return false;
 
@@ -258,12 +255,14 @@ bool WebLoaderStrategy::tryLoadingUsingURLSchemeHandler(ResourceLoader& resource
     LOG(NetworkScheduling, "(WebProcess) WebLoaderStrategy::scheduleLoad, URL '%s' will be handled by a UIProcess URL scheme handler.", resourceLoader.url().string().utf8().data());
     WEBLOADERSTRATEGY_RELEASE_LOG_IF_ALLOWED("tryLoadingUsingURLSchemeHandler: URL will be handled by a UIProcess URL scheme handler");
 
-    handler->startNewTask(resourceLoader, *webFrame);
+    handler->startNewTask(resourceLoader, webFrame);
     return true;
 }
 
-static void addParametersFromFrame(const Frame* frame, NetworkResourceLoadParameters& parameters)
+static void addParametersShared(const Frame* frame, NetworkResourceLoadParameters& parameters)
 {
+    parameters.crossOriginAccessControlCheckEnabled = CrossOriginAccessControlCheckDisabler::singleton().crossOriginAccessControlCheckEnabled();
+
     if (!frame)
         return;
 
@@ -274,7 +273,7 @@ static void addParametersFromFrame(const Frame* frame, NetworkResourceLoadParame
 
     if (auto* ownerElement = frame->ownerElement()) {
         if (auto* parentFrame = ownerElement->document().frame())
-            parameters.parentFrameID = parentFrame->loader().client().frameID();
+            parameters.parentFrameID = parentFrame->loader().frameID();
     }
 }
 
@@ -311,7 +310,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     loadParameters.maximumBufferingTime = maximumBufferingTime;
     loadParameters.options = resourceLoader.options();
     loadParameters.preflightPolicy = resourceLoader.options().preflightPolicy;
-    addParametersFromFrame(frame, loadParameters);
+    addParametersShared(frame, loadParameters);
 
 #if ENABLE(SERVICE_WORKER)
     loadParameters.serviceWorkersMode = resourceLoader.options().serviceWorkersMode;
@@ -326,14 +325,17 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
         if (auto* contentSecurityPolicy = document->contentSecurityPolicy())
             loadParameters.cspResponseHeaders = contentSecurityPolicy->responseHeaders();
     }
+    
+    auto* webFrameLoaderClient = frame ? toWebFrameLoaderClient(frame->loader().client()) : nullptr;
+    auto* webFrame = webFrameLoaderClient ? &webFrameLoaderClient->webFrame() : nullptr;
+    auto* webPage = webFrame ? webFrame->page() : nullptr;
+    if (webPage)
+        loadParameters.isNavigatingToAppBoundDomain = webPage->isNavigatingToAppBoundDomain();
 
 #if ENABLE(CONTENT_EXTENSIONS)
     if (document) {
         loadParameters.mainDocumentURL = document->topDocument().url();
         // FIXME: Instead of passing userContentControllerIdentifier, the NetworkProcess should be able to get it using webPageId.
-        auto* webFrameLoaderClient = toWebFrameLoaderClient(resourceLoader.frame()->loader().client());
-        auto* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
-        auto* webPage = webFrame ? webFrame->page() : nullptr;
         if (webPage)
             loadParameters.userContentControllerIdentifier = webPage->userContentControllerIdentifier();
     }
@@ -395,12 +397,6 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     }
 
     auto loader = WebResourceLoader::create(resourceLoader, trackingParameters);
-    if (resourceLoader.originalRequest().hasUpload()) {
-        if (m_loadersWithUploads.isEmpty())
-            WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessPool::SetWebProcessHasUploads(Process::identifier()), 0);
-        m_loadersWithUploads.add(loader.ptr());
-    }
-
     m_webResourceLoaders.set(identifier, WTFMove(loader));
 }
 
@@ -461,9 +457,6 @@ void WebLoaderStrategy::remove(ResourceLoader* resourceLoader)
         return;
 
     WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::RemoveLoadIdentifier(identifier), 0);
-
-    if (m_loadersWithUploads.remove(loader.get()) && m_loadersWithUploads.isEmpty())
-        WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessPool::ClearWebProcessHasUploads { Process::identifier() }, 0);
 
     // It's possible that this WebResourceLoader might be just about to message back to the NetworkProcess (e.g. ContinueWillSendRequest)
     // but there's no point in doing so anymore.
@@ -528,7 +521,7 @@ static bool shouldClearReferrerOnHTTPSToHTTPRedirect(Frame* frame)
 Optional<WebLoaderStrategy::SyncLoadResult> WebLoaderStrategy::tryLoadingSynchronouslyUsingURLSchemeHandler(FrameLoader& frameLoader, ResourceLoadIdentifier identifier, const ResourceRequest& request)
 {
     auto* webFrameLoaderClient = toWebFrameLoaderClient(frameLoader.client());
-    auto* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
+    auto* webFrame = webFrameLoaderClient ? &webFrameLoaderClient->webFrame() : nullptr;
     auto* webPage = webFrame ? webFrame->page() : nullptr;
     if (!webPage)
         return WTF::nullopt;
@@ -548,7 +541,7 @@ Optional<WebLoaderStrategy::SyncLoadResult> WebLoaderStrategy::tryLoadingSynchro
 void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsigned long resourceLoadIdentifier, const ResourceRequest& request, ClientCredentialPolicy clientCredentialPolicy,  const FetchOptions& options, const HTTPHeaderMap& originalRequestHeaders, ResourceError& error, ResourceResponse& response, Vector<char>& data)
 {
     auto* webFrameLoaderClient = toWebFrameLoaderClient(frameLoader.client());
-    auto* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
+    auto* webFrame = webFrameLoaderClient ? &webFrameLoaderClient->webFrame() : nullptr;
     auto* webPage = webFrame ? webFrame->page() : nullptr;
     auto* page = webPage ? webPage->corePage() : nullptr;
 
@@ -601,16 +594,16 @@ void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsi
             loadParameters.cspResponseHeaders = contentSecurityPolicy->responseHeaders();
     }
     loadParameters.originalRequestHeaders = originalRequestHeaders;
-    addParametersFromFrame(webFrame->coreFrame(), loadParameters);
+    
+    if (webPage)
+        loadParameters.isNavigatingToAppBoundDomain = webPage->isNavigatingToAppBoundDomain();
+
+    addParametersShared(webFrame->coreFrame(), loadParameters);
 
     data.shrink(0);
 
     HangDetectionDisabler hangDetectionDisabler;
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
-
-    bool shouldNotifyOfUpload = request.hasUpload() && m_loadersWithUploads.isEmpty();
-    if (shouldNotifyOfUpload)
-        WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessPool::SetWebProcessHasUploads { Process::identifier() }, 0);
 
     if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad(loadParameters), Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::Reply(error, response, data), 0)) {
         WEBLOADERSTRATEGY_WITH_FRAMELOADER_RELEASE_LOG_ERROR_IF_ALLOWED("loadResourceSynchronously: failed sending synchronous network process message");
@@ -619,14 +612,18 @@ void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsi
         response = ResourceResponse();
         error = internalError(request.url());
     }
-
-    if (shouldNotifyOfUpload)
-        WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessPool::ClearWebProcessHasUploads { Process::identifier() }, 0);
 }
 
 void WebLoaderStrategy::pageLoadCompleted(Page& page)
 {
     WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::PageLoadCompleted(WebPage::fromCorePage(page).identifier()), 0);
+}
+
+void WebLoaderStrategy::browsingContextRemoved(Frame& frame)
+{
+    ASSERT(frame.page());
+    auto& page = WebPage::fromCorePage(*frame.page());
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::BrowsingContextRemoved(page.webPageProxyIdentifier(), page.identifier(), WebFrame::fromCoreFrame(frame)->frameID()), 0);
 }
 
 static uint64_t generateLoadIdentifier()
@@ -642,8 +639,16 @@ bool WebLoaderStrategy::usePingLoad() const
 
 void WebLoaderStrategy::startPingLoad(Frame& frame, ResourceRequest& request, const HTTPHeaderMap& originalRequestHeaders, const FetchOptions& options, ContentSecurityPolicyImposition policyCheck, PingLoadCompletionHandler&& completionHandler)
 {
+    auto* webFrame = WebFrame::fromCoreFrame(frame);
     auto* document = frame.document();
-    if (!document) {
+    if (!document || !webFrame) {
+        if (completionHandler)
+            completionHandler(internalError(request.url()), { });
+        return;
+    }
+
+    auto* webPage = webFrame->page();
+    if (!webPage) {
         if (completionHandler)
             completionHandler(internalError(request.url()), { });
         return;
@@ -651,6 +656,9 @@ void WebLoaderStrategy::startPingLoad(Frame& frame, ResourceRequest& request, co
 
     NetworkResourceLoadParameters loadParameters;
     loadParameters.identifier = generateLoadIdentifier();
+    loadParameters.webPageProxyID = webPage->webPageProxyIdentifier();
+    loadParameters.webPageID = webPage->identifier();
+    loadParameters.webFrameID = webFrame->frameID();
     loadParameters.request = request;
     loadParameters.sourceOrigin = &document->securityOrigin();
     loadParameters.topOrigin = &document->topOrigin();
@@ -667,16 +675,14 @@ void WebLoaderStrategy::startPingLoad(Frame& frame, ResourceRequest& request, co
         if (auto* contentSecurityPolicy = document->contentSecurityPolicy())
             loadParameters.cspResponseHeaders = contentSecurityPolicy->responseHeaders();
     }
-    addParametersFromFrame(&frame, loadParameters);
-
+    addParametersShared(&frame, loadParameters);
+    
+    loadParameters.isNavigatingToAppBoundDomain = webPage->isNavigatingToAppBoundDomain();
+    
 #if ENABLE(CONTENT_EXTENSIONS)
     loadParameters.mainDocumentURL = document->topDocument().url();
     // FIXME: Instead of passing userContentControllerIdentifier, we should just pass webPageId to NetworkProcess.
-    WebFrameLoaderClient* webFrameLoaderClient = toWebFrameLoaderClient(frame.loader().client());
-    WebFrame* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
-    WebPage* webPage = webFrame ? webFrame->page() : nullptr;
-    if (webPage)
-        loadParameters.userContentControllerIdentifier = webPage->userContentControllerIdentifier();
+    loadParameters.userContentControllerIdentifier = webPage->userContentControllerIdentifier();
 #endif
 
     if (completionHandler)
@@ -699,18 +705,14 @@ void WebLoaderStrategy::preconnectTo(FrameLoader& frameLoader, const URL& url, S
         completionHandler(internalError(url));
         return;
     }
-    auto* webFrame = webFrameLoaderClient->webFrame();
-    if (!webFrame) {
-        completionHandler(internalError(url));
-        return;
-    }
-    auto* webPage = webFrame->page();
+    auto& webFrame = webFrameLoaderClient->webFrame();
+    auto* webPage = webFrame.page();
     if (!webPage) {
         completionHandler(internalError(url));
         return;
     }
 
-    preconnectTo(ResourceRequest { url }, *webPage, *webFrame, storedCredentialsPolicy, WTFMove(completionHandler));
+    preconnectTo(ResourceRequest { url }, *webPage, webFrame, storedCredentialsPolicy, WTFMove(completionHandler));
 }
 
 void WebLoaderStrategy::preconnectTo(WebCore::ResourceRequest&& request, WebPage& webPage, WebFrame& webFrame, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, PreconnectCompletionHandler&& completionHandler)
@@ -724,6 +726,13 @@ void WebLoaderStrategy::preconnectTo(WebCore::ResourceRequest&& request, WebPage
 
     NetworkResourceLoadParameters parameters;
     parameters.request = WTFMove(request);
+    if (parameters.request.httpUserAgent().isEmpty()) {
+        // FIXME: we add user-agent to the preconnect request because otherwise the preconnect
+        // gets thrown away by CFNetwork when using an HTTPS proxy (<rdar://problem/59434166>).
+        String webPageUserAgent = webPage.userAgent(parameters.request.url());
+        if (!webPageUserAgent.isEmpty())
+            parameters.request.setHTTPUserAgent(webPageUserAgent);
+    }
     parameters.webPageProxyID = webPage.webPageProxyIdentifier();
     parameters.webPageID = webPage.identifier();
     parameters.webFrameID = webFrame.frameID();
@@ -736,6 +745,7 @@ void WebLoaderStrategy::preconnectTo(WebCore::ResourceRequest&& request, WebPage
     parameters.shouldRestrictHTTPResponseAccess = shouldPerformSecurityChecks();
     // FIXME: Use the proper destination once all fetch options are passed.
     parameters.options.destination = FetchOptions::Destination::EmptyString;
+    parameters.isNavigatingToAppBoundDomain = webPage.isNavigatingToAppBoundDomain();
 
     WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::PreconnectTo(preconnectionIdentifier, WTFMove(parameters)), 0);
 }

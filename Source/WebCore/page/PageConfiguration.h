@@ -63,6 +63,7 @@ class ProgressTrackerClient;
 class SocketProvider;
 class StorageNamespaceProvider;
 class UserContentProvider;
+class UserContentURLPattern;
 class ValidationMessageClient;
 class VisitedLinkStore;
 class WebGLStateTracker;
@@ -71,7 +72,7 @@ class SpeechSynthesisClient;
 class PageConfiguration {
     WTF_MAKE_NONCOPYABLE(PageConfiguration); WTF_MAKE_FAST_ALLOCATED;
 public:
-    WEBCORE_EXPORT PageConfiguration(PAL::SessionID, UniqueRef<EditorClient>&&, Ref<SocketProvider>&&, UniqueRef<LibWebRTCProvider>&&, Ref<CacheStorageProvider>&&, Ref<BackForwardClient>&&, Ref<CookieJar>&&, UniqueRef<ProgressTrackerClient>&&, UniqueRef<MediaRecorderProvider>&&);
+    WEBCORE_EXPORT PageConfiguration(PAL::SessionID, UniqueRef<EditorClient>&&, Ref<SocketProvider>&&, UniqueRef<LibWebRTCProvider>&&, Ref<CacheStorageProvider>&&, Ref<BackForwardClient>&&, Ref<CookieJar>&&, UniqueRef<ProgressTrackerClient>&&, UniqueRef<FrameLoaderClient>&&, UniqueRef<MediaRecorderProvider>&&);
     WEBCORE_EXPORT ~PageConfiguration();
     PageConfiguration(PageConfiguration&&);
 
@@ -104,7 +105,7 @@ public:
     Ref<BackForwardClient> backForwardClient;
     Ref<CookieJar> cookieJar;
     std::unique_ptr<ValidationMessageClient> validationMessageClient;
-    FrameLoaderClient* loaderClientForMainFrame { nullptr };
+    UniqueRef<FrameLoaderClient> loaderClientForMainFrame;
     std::unique_ptr<DiagnosticLoggingClient> diagnosticLoggingClient;
     std::unique_ptr<PerformanceLoggingClient> performanceLoggingClient;
 #if ENABLE(WEBGL)
@@ -125,8 +126,11 @@ public:
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
     RefPtr<DeviceOrientationUpdateProvider> deviceOrientationUpdateProvider;
 #endif
-    Vector<String> corsDisablingPatterns;
+    Vector<UserContentURLPattern> corsDisablingPatterns;
     UniqueRef<MediaRecorderProvider> mediaRecorderProvider;
+    bool loadsSubresources { true };
+    bool loadsFromNetwork { true };
+    bool userScriptsShouldWaitUntilNotification { true };
 };
 
 }

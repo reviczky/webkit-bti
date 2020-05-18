@@ -37,6 +37,7 @@
 
 #define ASSERT_JIT_OFFSET(actual, expected) ASSERT_WITH_MESSAGE(actual == expected, "JIT Offset \"%s\" should be %d, not %d.\n", #expected, static_cast<int>(expected), static_cast<int>(actual));
 
+#include "ByValInfo.h"
 #include "CodeBlock.h"
 #include "CommonSlowPaths.h"
 #include "JITDisassembler.h"
@@ -226,7 +227,7 @@ namespace JSC {
         }
 
         template<typename Op>
-        static void compilePutByValWithCachedId(VM& vm, CodeBlock* codeBlock, ByValInfo* byValInfo, ReturnAddressPtr returnAddress, PutKind putKind, const Identifier& propertyName)
+        static void compilePutByValWithCachedId(VM& vm, CodeBlock* codeBlock, ByValInfo* byValInfo, ReturnAddressPtr returnAddress, PutKind putKind, CacheableIdentifier propertyName)
         {
             JIT jit(vm, codeBlock);
             jit.m_bytecodeIndex = byValInfo->bytecodeIndex;
@@ -253,11 +254,10 @@ namespace JSC {
         CompilationResult privateCompile(JITCompilationEffort);
         
         void privateCompileGetByVal(const ConcurrentJSLocker&, ByValInfo*, ReturnAddressPtr, JITArrayMode);
-        void privateCompileGetByValWithCachedId(ByValInfo*, ReturnAddressPtr, const Identifier&);
         template<typename Op>
         void privateCompilePutByVal(const ConcurrentJSLocker&, ByValInfo*, ReturnAddressPtr, JITArrayMode);
         template<typename Op>
-        void privateCompilePutByValWithCachedId(ByValInfo*, ReturnAddressPtr, PutKind, const Identifier&);
+        void privateCompilePutByValWithCachedId(ByValInfo*, ReturnAddressPtr, PutKind, CacheableIdentifier);
 
         void privateCompileHasIndexedProperty(ByValInfo*, ReturnAddressPtr, JITArrayMode);
 
@@ -296,6 +296,9 @@ namespace JSC {
         }
 
         void privateCompileExceptionHandlers();
+
+        void advanceToNextCheckpoint();
+        void emitJumpSlowToHotForCheckpoint(Jump);
 
         void addSlowCase(Jump);
         void addSlowCase(const JumpList&);
@@ -340,6 +343,7 @@ namespace JSC {
         enum WriteBarrierMode { UnconditionalWriteBarrier, ShouldFilterBase, ShouldFilterValue, ShouldFilterBaseAndValue };
         // value register in write barrier is used before any scratch registers
         // so may safely be the same as either of the scratch registers.
+        void emitWriteBarrier(VirtualRegister owner, WriteBarrierMode);
         void emitWriteBarrier(VirtualRegister owner, VirtualRegister value, WriteBarrierMode);
         void emitWriteBarrier(JSCell* owner, VirtualRegister value, WriteBarrierMode);
         void emitWriteBarrier(JSCell* owner);
@@ -397,11 +401,11 @@ namespace JSC {
         template<typename Op>
         JumpList emitFloatTypedArrayPutByVal(Op, PatchableJump& badType, TypedArrayType);
 
-        // Identifier check helper for GetByVal and PutByVal.
-        void emitByValIdentifierCheck(ByValInfo*, RegisterID cell, RegisterID scratch, const Identifier&, JumpList& slowCases);
+        // Identifier check helper for PutByVal.
+        void emitByValIdentifierCheck(RegisterID cell, RegisterID scratch, CacheableIdentifier, JumpList& slowCases);
 
         template<typename Op>
-        JITPutByIdGenerator emitPutByValWithCachedId(ByValInfo*, Op, PutKind, const Identifier&, JumpList& doneCases, JumpList& slowCases);
+        JITPutByIdGenerator emitPutByValWithCachedId(Op, PutKind, CacheableIdentifier, JumpList& doneCases, JumpList& slowCases);
 
         enum FinalObjectMode { MayBeFinal, KnownNotFinal };
 
@@ -500,7 +504,9 @@ namespace JSC {
         void emit_op_identity_with_profile(const Instruction*);
         void emit_op_debug(const Instruction*);
         void emit_op_del_by_id(const Instruction*);
+        void emitSlow_op_del_by_id(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emit_op_del_by_val(const Instruction*);
+        void emitSlow_op_del_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emit_op_div(const Instruction*);
         void emit_op_end(const Instruction*);
         void emit_op_enter(const Instruction*);
@@ -525,6 +531,11 @@ namespace JSC {
         void emit_op_is_undefined_or_null(const Instruction*);
         void emit_op_is_boolean(const Instruction*);
         void emit_op_is_number(const Instruction*);
+#if USE(BIGINT32)
+        void emit_op_is_big_int(const Instruction*);
+#else
+        NO_RETURN void emit_op_is_big_int(const Instruction*);
+#endif
         void emit_op_is_object(const Instruction*);
         void emit_op_is_cell_with_type(const Instruction*);
         void emit_op_jeq_null(const Instruction*);
@@ -672,6 +683,11 @@ namespace JSC {
         void emitSlow_op_put_to_scope(const Instruction*, Vector<SlowCaseEntry>::iterator&);
 
         void emitSlowCaseCall(const Instruction*, Vector<SlowCaseEntry>::iterator&, SlowPathFunction);
+
+        void emit_op_iterator_open(const Instruction*);
+        void emitSlow_op_iterator_open(const Instruction*, Vector<SlowCaseEntry>::iterator&);
+        void emit_op_iterator_next(const Instruction*);
+        void emitSlow_op_iterator_next(const Instruction*, Vector<SlowCaseEntry>::iterator&);
 
         void emitRightShift(const Instruction*, bool isUnsigned);
         void emitRightShiftSlowCase(const Instruction*, Vector<SlowCaseEntry>::iterator&, bool isUnsigned);
@@ -908,11 +924,14 @@ namespace JSC {
 
         Vector<CallRecord> m_calls;
         Vector<Label> m_labels;
+        HashMap<BytecodeIndex, Label> m_checkpointLabels;
         Vector<JITGetByIdGenerator> m_getByIds;
         Vector<JITGetByValGenerator> m_getByVals;
         Vector<JITGetByIdWithThisGenerator> m_getByIdsWithThis;
         Vector<JITPutByIdGenerator> m_putByIds;
         Vector<JITInByIdGenerator> m_inByIds;
+        Vector<JITDelByIdGenerator> m_delByIds;
+        Vector<JITDelByValGenerator> m_delByVals;
         Vector<JITInstanceOfGenerator> m_instanceOfs;
         Vector<ByValCompilationInfo> m_byValCompilationInfo;
         Vector<CallCompilationInfo> m_callCompilationInfo;
@@ -934,6 +953,8 @@ namespace JSC {
         unsigned m_getByIdWithThisIndex { UINT_MAX };
         unsigned m_putByIdIndex { UINT_MAX };
         unsigned m_inByIdIndex { UINT_MAX };
+        unsigned m_delByValIndex { UINT_MAX };
+        unsigned m_delByIdIndex { UINT_MAX };
         unsigned m_instanceOfIndex { UINT_MAX };
         unsigned m_byValInstructionIndex { UINT_MAX };
         unsigned m_callLinkInfoIndex { UINT_MAX };

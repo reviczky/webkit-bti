@@ -47,8 +47,11 @@ enum class LinkTimeConstant : int32_t;
     macro(getAsyncGeneratorInternalField) \
     macro(getArrayIteratorInternalField) \
     macro(getStringIteratorInternalField) \
+    macro(getMapIteratorInternalField) \
+    macro(getSetIteratorInternalField) \
     macro(idWithProfile) \
     macro(isObject) \
+    macro(isConstructor) \
     macro(isJSArray) \
     macro(isProxyObject) \
     macro(isDerivedArray) \
@@ -60,12 +63,15 @@ enum class LinkTimeConstant : int32_t;
     macro(isSet) \
     macro(isStringIterator) \
     macro(isArrayIterator) \
+    macro(isMapIterator) \
+    macro(isSetIterator) \
     macro(isUndefinedOrNull) \
     macro(tailCallForwardArguments) \
     macro(throwTypeError) \
     macro(throwRangeError) \
     macro(throwOutOfMemoryError) \
     macro(tryGetById) \
+    macro(tryGetByIdWithWellKnownSymbol) \
     macro(putByIdDirect) \
     macro(putByIdDirectPrivate) \
     macro(putByValDirect) \
@@ -74,6 +80,8 @@ enum class LinkTimeConstant : int32_t;
     macro(putAsyncGeneratorInternalField) \
     macro(putArrayIteratorInternalField) \
     macro(putStringIteratorInternalField) \
+    macro(putMapIteratorInternalField) \
+    macro(putSetIteratorInternalField) \
     macro(toNumber) \
     macro(toString) \
     macro(toObject) \
@@ -122,9 +130,12 @@ enum class LinkTimeConstant : int32_t;
     macro(GeneratorStateCompleted) \
     macro(GeneratorStateExecuting) \
     macro(arrayIteratorFieldIndex) \
-    macro(arrayIteratorFieldIsDone) \
     macro(arrayIteratorFieldIteratedObject) \
     macro(arrayIteratorFieldKind) \
+    macro(mapIteratorFieldMapBucket) \
+    macro(mapIteratorFieldKind) \
+    macro(setIteratorFieldSetBucket) \
+    macro(setIteratorFieldKind) \
     macro(stringIteratorFieldIndex) \
     macro(stringIteratorFieldIteratedString) \
     macro(asyncGeneratorFieldSuspendReason) \

@@ -27,15 +27,6 @@
 #include "config.h"
 #include "GeneratorFunctionPrototype.h"
 
-#include "BuiltinExecutables.h"
-#include "BuiltinNames.h"
-#include "Error.h"
-#include "JSArray.h"
-#include "JSCInlines.h"
-#include "JSFunction.h"
-#include "JSString.h"
-#include "Lexer.h"
-
 namespace JSC {
 
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(GeneratorFunctionPrototype);
@@ -52,7 +43,7 @@ void GeneratorFunctionPrototype::finishCreation(VM& vm)
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
     putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(0), PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
-    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, "GeneratorFunction"_s), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
+    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 }
 
 } // namespace JSC

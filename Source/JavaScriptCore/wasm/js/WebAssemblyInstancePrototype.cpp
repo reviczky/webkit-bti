@@ -28,8 +28,7 @@
 
 #if ENABLE(WEBASSEMBLY)
 
-#include "FunctionPrototype.h"
-#include "JSCInlines.h"
+#include "AuxiliaryBarrierInlines.h"
 #include "JSModuleNamespaceObject.h"
 #include "JSWebAssemblyInstance.h"
 
@@ -86,6 +85,8 @@ Structure* WebAssemblyInstancePrototype::createStructure(VM& vm, JSGlobalObject*
 void WebAssemblyInstancePrototype::finishCreation(VM& vm)
 {
     Base::finishCreation(vm);
+    ASSERT(inherits(vm, info()));
+    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 }
 
 WebAssemblyInstancePrototype::WebAssemblyInstancePrototype(VM& vm, Structure* structure)

@@ -27,8 +27,6 @@
 #include "PutByIdVariant.h"
 
 #include "CallLinkStatus.h"
-#include "JSCInlines.h"
-#include <wtf/ListDump.h>
 
 namespace JSC {
 
@@ -285,7 +283,7 @@ bool PutByIdVariant::finalize(VM& vm)
 
 void PutByIdVariant::dump(PrintStream& out) const
 {
-    dumpInContext(out, 0);
+    dumpInContext(out, nullptr);
 }
 
 void PutByIdVariant::dumpInContext(PrintStream& out, DumpContext* context) const

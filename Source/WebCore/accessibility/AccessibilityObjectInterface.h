@@ -25,11 +25,11 @@
 
 #pragma once
 
+#include "FrameLoaderClient.h"
 #include "HTMLTextFormControlElement.h"
 #include "LayoutRect.h"
 #include "Range.h"
 #include "TextIterator.h"
-#include "TextIteratorBehavior.h"
 #include "VisiblePosition.h"
 #include "VisibleSelection.h"
 #include <wtf/RefCounted.h>
@@ -48,6 +48,10 @@ typedef struct _WebKitAccessible AccessibilityObjectWrapper;
 #else
 class AccessibilityObjectWrapper;
 #endif
+
+namespace WTF {
+class TextStream;
+}
 
 namespace WebCore {
 
@@ -70,7 +74,6 @@ struct ScrollRectToVisibleOptions;
 
 typedef unsigned AXID;
 extern const AXID InvalidAXID;
-typedef unsigned AXIsolatedTreeID;    
 
 enum class AccessibilityRole {
     Annotation = 1,
@@ -206,14 +209,14 @@ enum class AccessibilityRole {
     Tab,
     Table,
     TableHeaderContainer,
-    TextArea,
-    TextGroup,
     Term,
+    TextArea,
+    TextField,
+    TextGroup,
     Time,
     Tree,
     TreeGrid,
     TreeItem,
-    TextField,
     ToggleButton,
     Toolbar,
     Unknown,
@@ -486,9 +489,13 @@ public:
     virtual bool isAccessibilityNodeObject() const = 0;
     virtual bool isAccessibilityRenderObject() const = 0;
     virtual bool isAccessibilityScrollbar() const = 0;
-    virtual bool isAccessibilityScrollView() const = 0;
+    virtual bool isAccessibilityScrollViewInstance() const = 0;
     virtual bool isAccessibilitySVGRoot() const = 0;
     virtual bool isAccessibilitySVGElement() const = 0;
+    virtual bool isAccessibilityTableInstance() const = 0;
+    virtual bool isAccessibilityTableColumnInstance() const = 0;
+    virtual bool isAccessibilityProgressIndicatorInstance() const = 0;
+    virtual bool isAXIsolatedObjectInstance() const = 0;
 
     virtual bool isAttachmentElement() const = 0;
     virtual bool isHeading() const = 0;
@@ -506,7 +513,7 @@ public:
     bool isCheckbox() const { return roleValue() == AccessibilityRole::CheckBox; }
     bool isRadioButton() const { return roleValue() == AccessibilityRole::RadioButton; }
     bool isListBox() const { return roleValue() == AccessibilityRole::ListBox; }
-    virtual bool isNativeListBox() const = 0;
+    virtual bool isNativeListBox() const { return false; };
     virtual bool isListBoxOption() const = 0;
     virtual bool isAttachment() const = 0;
     virtual bool isMediaTimeline() const = 0;
@@ -529,14 +536,54 @@ public:
     virtual bool isOrderedList() const = 0;
     virtual bool isDescriptionList() const = 0;
 
+    // Table support.
     virtual bool isTable() const = 0;
+    virtual bool isExposable() const = 0;
     virtual bool isDataTable() const = 0;
-    virtual bool isTableRow() const = 0;
-    virtual bool isTableColumn() const = 0;
+    virtual int tableLevel() const = 0;
+    virtual bool supportsSelectedRows() const = 0;
+    virtual AccessibilityChildrenVector columns() = 0;
+    virtual AccessibilityChildrenVector rows() = 0;
+    virtual unsigned columnCount() = 0;
+    virtual unsigned rowCount() = 0;
+    // All the cells in the table.
+    virtual AccessibilityChildrenVector cells() = 0;
+    virtual AXCoreObject* cellForColumnAndRow(unsigned column, unsigned row) = 0;
+    virtual AccessibilityChildrenVector columnHeaders() = 0;
+    virtual AccessibilityChildrenVector rowHeaders() = 0;
+    virtual AccessibilityChildrenVector visibleRows() = 0;
+    // Returns an object that contains, as children, all the objects that act as headers.
+    virtual AXCoreObject* headerContainer() = 0;
+    virtual int axColumnCount() const = 0;
+    virtual int axRowCount() const = 0;
+
+    // Table cell support.
     virtual bool isTableCell() const = 0;
+    // Returns the start location and row span of the cell.
+    virtual std::pair<unsigned, unsigned> rowIndexRange() const = 0;
+    // Returns the start location and column span of the cell.
+    virtual std::pair<unsigned, unsigned> columnIndexRange() const = 0;
+    virtual bool isColumnHeaderCell() const = 0;
+    virtual bool isRowHeaderCell() const = 0;
+    virtual int axColumnIndex() const = 0;
+    virtual int axRowIndex() const = 0;
+
+    // Table column support.
+    virtual bool isTableColumn() const = 0;
+    virtual unsigned columnIndex() const = 0;
+    virtual AXCoreObject* columnHeader() = 0;
+
+    // Table row support.
+    virtual bool isTableRow() const = 0;
+    virtual unsigned rowIndex() const = 0;
+
+    // ARIA tree/grid row support.
+    virtual bool isARIATreeGridRow() const = 0;
+    virtual AccessibilityChildrenVector disclosedRows() = 0; // Also implemented by ARIATreeItems.
+    virtual AXCoreObject* disclosedByRow() const = 0;
+
     virtual bool isFieldset() const = 0;
     virtual bool isGroup() const = 0;
-    virtual bool isARIATreeGridRow() const = 0;
     virtual bool isImageMapLink() const = 0;
     virtual bool isMenuList() const = 0;
     virtual bool isMenuListPopup() const = 0;
@@ -576,8 +623,8 @@ public:
     bool isSplitter() const { return roleValue() == AccessibilityRole::Splitter; }
     bool isToolbar() const { return roleValue() == AccessibilityRole::Toolbar; }
     bool isSummary() const { return roleValue() == AccessibilityRole::Summary; }
+    bool isBlockquote() const { return roleValue() == AccessibilityRole::Blockquote; }
 
-    virtual bool isBlockquote() const = 0;
     virtual bool isLandmark() const = 0;
     virtual bool isRangeControl() const = 0;
     virtual bool isMeter() const = 0;
@@ -594,7 +641,7 @@ public:
     virtual bool isIndeterminate() const = 0;
     virtual bool isLoaded() const = 0;
     virtual bool isMultiSelectable() const = 0;
-    // FIXME should need just one since onscreen should be !offscreen.
+    // FIXME: should need just one since onscreen should be !offscreen.
     virtual bool isOnScreen() const = 0;
     virtual bool isOffScreen() const = 0;
     virtual bool isPressed() const = 0;
@@ -618,9 +665,9 @@ public:
     virtual bool hasMisspelling() const = 0;
     virtual RefPtr<Range> getMisspellingRange(RefPtr<Range> const& start, AccessibilitySearchDirection) const = 0;
     virtual bool hasPlainText() const = 0;
-    virtual bool hasSameFont(RenderObject*) const = 0;
-    virtual bool hasSameFontColor(RenderObject*) const = 0;
-    virtual bool hasSameStyle(RenderObject*) const = 0;
+    virtual bool hasSameFont(const AXCoreObject&) const = 0;
+    virtual bool hasSameFontColor(const AXCoreObject&) const = 0;
+    virtual bool hasSameStyle(const AXCoreObject&) const = 0;
     bool isStaticText() const { return roleValue() == AccessibilityRole::StaticText; }
     virtual bool hasUnderline() const = 0;
     virtual bool hasHighlighting() const = 0;
@@ -649,7 +696,6 @@ public:
 
     virtual unsigned blockquoteLevel() const = 0;
     virtual int headingLevel() const = 0;
-    virtual int tableLevel() const = 0;
     virtual AccessibilityButtonState checkboxOrRadioValue() const = 0;
     virtual String valueDescription() const = 0;
     virtual float valueForRange() const = 0;
@@ -712,11 +758,11 @@ public:
     virtual int posInSet() const = 0;
 
     // ARIA drag and drop
-    virtual bool supportsARIADropping() const = 0;
-    virtual bool supportsARIADragging() const = 0;
-    virtual bool isARIAGrabbed() = 0;
+    virtual bool supportsDropping() const = 0;
+    virtual bool supportsDragging() const = 0;
+    virtual bool isGrabbed() = 0;
     virtual void setARIAGrabbed(bool) = 0;
-    virtual Vector<String> determineARIADropEffects() = 0;
+    virtual Vector<String> determineDropEffects() const = 0;
 
     // Called on the root AX object to return the deepest available element.
     virtual AXCoreObject* accessibilityHitTest(const IntPoint&) const = 0;
@@ -772,9 +818,9 @@ public:
     {
         // If text is empty we return true.
         return text.isEmpty()
-            || findPlainText(title(), text, CaseInsensitive)
-            || findPlainText(accessibilityDescription(), text, CaseInsensitive)
-            || findPlainText(stringValue(), text, CaseInsensitive);
+            || containsPlainText(title(), text, CaseInsensitive)
+            || containsPlainText(accessibilityDescription(), text, CaseInsensitive)
+            || containsPlainText(stringValue(), text, CaseInsensitive);
     }
 
     // Methods for determining accessibility text.
@@ -829,6 +875,10 @@ public:
     virtual String accessKey() const = 0;
     virtual String actionVerb() const = 0;
     virtual Widget* widget() const = 0;
+    virtual PlatformWidget platformWidget() const = 0;
+#if PLATFORM(COCOA)
+    virtual RemoteAXObjectRef remoteParentObject() const = 0;
+#endif
     virtual Widget* widgetForAttachmentView() const = 0;
     virtual Page* page() const = 0;
     virtual Document* document() const = 0;
@@ -836,6 +886,7 @@ public:
     virtual Frame* frame() const = 0;
     virtual Frame* mainFrame() const = 0;
     virtual Document* topDocument() const = 0;
+    virtual ScrollView* scrollView() const = 0;
     virtual ScrollView* scrollViewAncestor() const = 0;
     virtual String language() const = 0;
     // 1-based, to match the aria-level spec.
@@ -864,10 +915,12 @@ public:
     virtual void childrenChanged() = 0;
     virtual void textChanged() = 0;
     virtual void updateAccessibilityRole() = 0;
+
     virtual const AccessibilityChildrenVector& children(bool updateChildrenIfNeeded = true) = 0;
     virtual void addChildren() = 0;
     virtual void addChild(AXCoreObject*) = 0;
     virtual void insertChild(AXCoreObject*, unsigned) = 0;
+    Vector<AXID> childrenIDs();
 
     virtual bool shouldIgnoreAttributeRole() const = 0;
 
@@ -889,8 +942,8 @@ public:
     virtual AXCoreObject* activeDescendant() const = 0;
     virtual void handleActiveDescendantChanged() = 0;
     virtual void handleAriaExpandedChanged() = 0;
-    virtual bool isDescendantOfObject(const AXCoreObject*) const = 0;
-    virtual bool isAncestorOfObject(const AXCoreObject*) const = 0;
+    bool isDescendantOfObject(const AXCoreObject*) const;
+    bool isAncestorOfObject(const AXCoreObject*) const;
     virtual AXCoreObject* firstAnonymousBlockChild() const = 0;
 
     virtual bool hasAttribute(const QualifiedName&) const = 0;
@@ -971,8 +1024,6 @@ public:
 
     // Used by an ARIA tree to get all its rows.
     virtual void ariaTreeRows(AccessibilityChildrenVector&) = 0;
-    // Used by an ARIA tree item to get all of its direct rows that it can disclose.
-    virtual void ariaTreeItemDisclosedRows(AccessibilityChildrenVector&) = 0;
     // Used by an ARIA tree item to get only its content, and not its child tree items and groups.
     virtual void ariaTreeItemContent(AccessibilityChildrenVector&) = 0;
 
@@ -1123,6 +1174,7 @@ public:
     virtual AXCoreObject* highestEditableAncestor() = 0;
 
     virtual const AccessibilityScrollView* ancestorAccessibilityScrollView(bool includeSelf) const = 0;
+    virtual AXCoreObject* webAreaObject() const = 0;
 
     virtual void setIsIgnoredFromParentData(AccessibilityIsIgnoredFromParentData&) = 0;
     virtual void clearIsIgnoredFromParentData() = 0;
@@ -1131,6 +1183,8 @@ public:
     virtual uint64_t sessionID() const = 0;
     virtual String documentURI() const = 0;
     virtual String documentEncoding() const = 0;
+    virtual AccessibilityChildrenVector documentLinks() = 0;
+
 private:
     // Detaches this object from the objects it references and it is referenced by.
     virtual void detachRemoteParts(AccessibilityDetachmentType) = 0;
@@ -1159,6 +1213,14 @@ inline void AXCoreObject::detachWrapper(AccessibilityDetachmentType detachmentTy
     m_wrapper = nullptr;
 }
 #endif
+
+inline Vector<AXID> AXCoreObject::childrenIDs()
+{
+    Vector<AXID> childrenIDs;
+    for (const auto& child : children())
+        childrenIDs.append(child->objectID());
+    return childrenIDs;
+}
 
 namespace Accessibility {
 
@@ -1207,6 +1269,37 @@ template<typename T, typename U> inline T retrieveValueFromMainThread(U&& lambda
     return value;
 }
 
+#if PLATFORM(COCOA)
+template<typename T, typename U> inline T retrieveAutoreleasedValueFromMainThread(U&& lambda)
+{
+    if (isMainThread())
+        return lambda().autorelease();
+
+    RetainPtr<T> value;
+    callOnMainThreadAndWait([&value, &lambda] {
+        value = lambda();
+    });
+    return value.autorelease();
+}
+#endif
+
 } // namespace Accessibility
+
+inline bool AXCoreObject::isDescendantOfObject(const AXCoreObject* axObject) const
+{
+    return axObject && axObject->hasChildren()
+        && Accessibility::findAncestor<AXCoreObject>(*this, false, [axObject] (const AXCoreObject& object) {
+            return &object == axObject;
+        }) != nullptr;
+}
+
+inline bool AXCoreObject::isAncestorOfObject(const AXCoreObject* axObject) const
+{
+    return axObject && (this == axObject || axObject->isDescendantOfObject(this));
+}
+
+// Logging helpers.
+WTF::TextStream& operator<<(WTF::TextStream&, AccessibilityRole);
+WTF::TextStream& operator<<(WTF::TextStream&, const AXCoreObject&);
 
 } // namespace WebCore

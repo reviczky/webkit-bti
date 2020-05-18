@@ -28,10 +28,6 @@
 #include "StringIteratorPrototype.h"
 
 #include "JSCBuiltins.h"
-#include "JSCInlines.h"
-#include "JSGlobalObject.h"
-#include "JSStringIterator.h"
-#include "ObjectConstructor.h"
 
 namespace JSC {
 
@@ -41,8 +37,8 @@ void StringIteratorPrototype::finishCreation(VM& vm, JSGlobalObject* globalObjec
 {
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
-    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, "String Iterator"_s), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
     JSC_BUILTIN_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->next, stringIteratorPrototypeNextCodeGenerator, static_cast<unsigned>(PropertyAttribute::DontEnum));
+    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 }
 
 } // namespace JSC

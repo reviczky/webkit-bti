@@ -28,9 +28,7 @@
 
 #if ENABLE(WEBASSEMBLY)
 
-#include "FunctionPrototype.h"
 #include "JSArrayBuffer.h"
-#include "JSCInlines.h"
 #include "JSWebAssemblyMemory.h"
 #include "JSWebAssemblyHelpers.h"
 
@@ -109,6 +107,7 @@ void WebAssemblyMemoryPrototype::finishCreation(VM& vm)
 {
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
+    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 }
 
 WebAssemblyMemoryPrototype::WebAssemblyMemoryPrototype(VM& vm, Structure* structure)

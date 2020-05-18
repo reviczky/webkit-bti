@@ -21,6 +21,7 @@
 #pragma once
 
 #include "ActivityState.h"
+#include "AnimationFrameRate.h"
 #include "DisabledAdaptations.h"
 #include "Document.h"
 #include "FindOptions.h"
@@ -40,7 +41,6 @@
 #include "UserInterfaceLayoutDirection.h"
 #include "ViewportArguments.h"
 #include "VisibilityState.h"
-#include "WheelEventTestMonitor.h"
 #include <memory>
 #include <pal/SessionID.h>
 #include <wtf/Assertions.h>
@@ -141,12 +141,16 @@ class StorageNamespaceProvider;
 class UserContentProvider;
 class UserContentURLPattern;
 class UserInputBridge;
+class UserScript;
+class UserStyleSheet;
 class ValidationMessageClient;
 class VisibleSelection;
 class VisitedLinkStore;
 class WebGLStateTracker;
 class WheelEventDeltaFilter;
+class WheelEventTestMonitor;
 
+using PlatformDisplayID = uint32_t;
 using SharedStringHash = uint32_t;
 
 enum class CanWrap : bool;
@@ -159,6 +163,11 @@ enum class EventThrottlingBehavior : bool { Responsive, Unresponsive };
 enum class CompositingPolicy : bool {
     Normal,
     Conservative, // Used in low memory situations.
+};
+
+enum class FinalizeRenderingUpdateFlags : uint8_t {
+    ApplyScrollingTreeLayerPositions    = 1 << 0,
+    InvalidateImagesWithAsyncDecodes    = 1 << 1,
 };
 
 class Page : public Supplementable<Page>, public CanMakeWeakPtr<Page> {
@@ -241,9 +250,7 @@ public:
 #endif
     UserInputBridge& userInputBridge() const { return *m_userInputBridge; }
     InspectorController& inspectorController() const { return *m_inspectorController; }
-#if ENABLE(POINTER_EVENTS)
     PointerCaptureController& pointerCaptureController() const { return *m_pointerCaptureController; }
-#endif
 #if ENABLE(POINTER_LOCK)
     PointerLockController& pointerLockController() const { return *m_pointerLockController; }
 #endif
@@ -254,6 +261,7 @@ public:
     bool shouldEnableICECandidateFilteringByDefault() const { return m_shouldEnableICECandidateFilteringByDefault; }
 
     void didChangeMainDocument();
+    void mainFrameDidChangeToNonInitialEmptyDocument();
 
     PerformanceMonitor* performanceMonitor() { return m_performanceMonitor.get(); }
 
@@ -266,10 +274,10 @@ public:
 
     WEBCORE_EXPORT String scrollingStateTreeAsText();
     WEBCORE_EXPORT String synchronousScrollingReasonsAsText();
-    WEBCORE_EXPORT Ref<DOMRectList> nonFastScrollableRects();
+    WEBCORE_EXPORT Ref<DOMRectList> nonFastScrollableRectsForTesting();
 
-    WEBCORE_EXPORT Ref<DOMRectList> touchEventRectsForEvent(const String& eventName);
-    WEBCORE_EXPORT Ref<DOMRectList> passiveTouchEventListenerRects();
+    WEBCORE_EXPORT Ref<DOMRectList> touchEventRectsForEventForTesting(const String& eventName);
+    WEBCORE_EXPORT Ref<DOMRectList> passiveTouchEventListenerRectsForTesting();
 
     Settings& settings() const { return *m_settings; }
     ProgressTracker& progress() const { return *m_progress; }
@@ -283,6 +291,8 @@ public:
     WEBCORE_EXPORT bool findString(const String&, FindOptions, DidWrap* = nullptr);
     WEBCORE_EXPORT uint32_t replaceRangesWithText(const Vector<Ref<Range>>& rangesToReplace, const String& replacementText, bool selectionOnly);
     WEBCORE_EXPORT uint32_t replaceSelectionWithText(const String& replacementText);
+
+    WEBCORE_EXPORT void revealCurrentSelection();
 
     WEBCORE_EXPORT RefPtr<Range> rangeOfString(const String&, Range*, FindOptions);
 
@@ -349,8 +359,11 @@ public:
     float deviceScaleFactor() const { return m_deviceScaleFactor; }
     WEBCORE_EXPORT void setDeviceScaleFactor(float);
 
-    float initialScale() const { return m_initialScale; }
-    WEBCORE_EXPORT void setInitialScale(float);
+    float initialScaleIgnoringContentSize() const { return m_initialScaleIgnoringContentSize; }
+    WEBCORE_EXPORT void setInitialScaleIgnoringContentSize(float);
+
+    void windowScreenDidChange(PlatformDisplayID);
+    PlatformDisplayID displayID() const { return m_displayID; }
 
     float topContentInset() const { return m_topContentInset; }
     WEBCORE_EXPORT void setTopContentInset(float);
@@ -426,13 +439,14 @@ public:
     ServicesOverlayController& servicesOverlayController() { return *m_servicesOverlayController; }
 #endif
 
-#if PLATFORM(MAC)
+#if ENABLE(WHEEL_EVENT_LATCHING)
     ScrollLatchingState* latchingState();
-    void pushNewLatchingState();
+    const Vector<ScrollLatchingState>& latchingStateStack() const { return m_latchingState; }
+    void pushNewLatchingState(ScrollLatchingState&&);
     void popLatchingState();
     void resetLatchingState();
     void removeLatchingStateForTarget(Element&);
-#endif // PLATFORM(MAC)
+#endif // ENABLE(WHEEL_EVENT_LATCHING)
 
 #if ENABLE(APPLE_PAY)
     PaymentCoordinator& paymentCoordinator() const { return *m_paymentCoordinator; }
@@ -472,6 +486,11 @@ public:
 
     WEBCORE_EXPORT void layoutIfNeeded();
     WEBCORE_EXPORT void updateRendering();
+    
+    WEBCORE_EXPORT void finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags>);
+    
+    WEBCORE_EXPORT void scheduleRenderingUpdate();
+    void scheduleTimedRenderingUpdate();
 
     WEBCORE_EXPORT void suspendScriptedAnimations();
     WEBCORE_EXPORT void resumeScriptedAnimations();
@@ -502,6 +521,8 @@ public:
 
     bool hasCustomHTMLTokenizerTimeDelay() const;
     double customHTMLTokenizerTimeDelay() const;
+
+    WEBCORE_EXPORT void setCORSDisablingPatterns(Vector<UserContentURLPattern>&&);
 
     WEBCORE_EXPORT void setMemoryCacheClientCallsEnabled(bool);
     bool areMemoryCacheClientCallsEnabled() const { return m_areMemoryCacheClientCallsEnabled; }
@@ -645,10 +666,10 @@ public:
     WEBCORE_EXPORT void playbackTargetPickerWasDismissed(uint64_t);
 #endif
 
-    RefPtr<WheelEventTestMonitor> wheelEventTestMonitor() const { return m_wheelEventTestMonitor; }
-    WEBCORE_EXPORT WheelEventTestMonitor& ensureWheelEventTestMonitor();
-    void clearWheelEventTestMonitor() { m_wheelEventTestMonitor = nullptr; }
-    bool isMonitoringWheelEvents() const { return !!m_wheelEventTestMonitor; }
+    WEBCORE_EXPORT RefPtr<WheelEventTestMonitor> wheelEventTestMonitor() const;
+    WEBCORE_EXPORT void clearWheelEventTestMonitor();
+    WEBCORE_EXPORT void startMonitoringWheelEvents(bool clearLatchingState);
+    WEBCORE_EXPORT bool isMonitoringWheelEvents() const;
 
 #if ENABLE(VIDEO)
     bool allowsMediaDocumentInlinePlayback() const { return m_allowsMediaDocumentInlinePlayback; }
@@ -697,8 +718,16 @@ public:
     bool isOnlyNonUtilityPage() const;
     bool isUtilityPage() const { return m_isUtilityPage; }
 
-    bool isLowPowerModeEnabled() const;
+    bool loadsSubresources() const { return m_loadsSubresources; }
+    bool loadsFromNetwork() const { return m_loadsFromNetwork; }
+
+    bool isLowPowerModeEnabled() const { return m_throttlingReasons.contains(ThrottlingReason::LowPowerMode); }
+    bool canUpdateThrottlingReason(ThrottlingReason reason) const { return !m_throttlingReasonsOverridenForTesting.contains(reason); }
     WEBCORE_EXPORT void setLowPowerModeEnabledOverrideForTesting(Optional<bool>);
+    WEBCORE_EXPORT void setOutsideViewportThrottlingEnabledForTesting(bool);
+
+    OptionSet<ThrottlingReason> throttlingReasons() const { return m_throttlingReasons; }
+    Seconds preferredRenderingUpdateInterval() const;
 
     WEBCORE_EXPORT void applicationWillResignActive();
     WEBCORE_EXPORT void applicationDidEnterBackground();
@@ -719,6 +748,16 @@ public:
     void forEachMediaElement(const WTF::Function<void(HTMLMediaElement&)>&);
 
     bool shouldDisableCorsForRequestTo(const URL&) const;
+
+    WEBCORE_EXPORT void injectUserStyleSheet(UserStyleSheet&);
+    WEBCORE_EXPORT void removeInjectedUserStyleSheet(UserStyleSheet&);
+
+    bool shouldFireEvents() const { return m_shouldFireEvents; }
+    void setShouldFireEvents(bool shouldFireEvents) { m_shouldFireEvents = shouldFireEvents; }
+
+    bool hasBeenNotifiedToInjectUserScripts() const { return m_hasBeenNotifiedToInjectUserScripts; }
+    WEBCORE_EXPORT void notifyToInjectUserScripts();
+    void addUserScriptAwaitingNotification(DOMWrapperWorld&, const UserScript&);
 
 private:
     struct Navigation {
@@ -757,6 +796,10 @@ private:
     void updateDOMTimerAlignmentInterval();
     void domTimerAlignmentIntervalIncreaseTimerFired();
 
+    void doAfterUpdateRendering();
+
+    WheelEventTestMonitor& ensureWheelEventTestMonitor();
+
     const std::unique_ptr<Chrome> m_chrome;
     const std::unique_ptr<DragCaretController> m_dragCaretController;
 
@@ -769,9 +812,7 @@ private:
 #endif
     const std::unique_ptr<UserInputBridge> m_userInputBridge;
     const std::unique_ptr<InspectorController> m_inspectorController;
-#if ENABLE(POINTER_EVENTS)
     const std::unique_ptr<PointerCaptureController> m_pointerCaptureController;
-#endif
 #if ENABLE(POINTER_LOCK)
     const std::unique_ptr<PointerLockController> m_pointerLockController;
 #endif
@@ -802,6 +843,8 @@ private:
     UniqueRef<MediaRecorderProvider> m_mediaRecorderProvider;
     UniqueRef<LibWebRTCProvider> m_libWebRTCProvider;
     RTCController m_rtcController;
+
+    PlatformDisplayID m_displayID { 0 };
 
     int m_nestedRunLoopCount { 0 };
     WTF::Function<void()> m_unnestCallback;
@@ -844,7 +887,7 @@ private:
 #if ENABLE(TEXT_AUTOSIZING)
     float m_textAutosizingWidth { 0 };
 #endif
-    float m_initialScale { 1.0f };
+    float m_initialScaleIgnoringContentSize { 1.0f };
     
     bool m_suppressScrollbarAnimations { false };
     
@@ -963,12 +1006,13 @@ private:
 
     std::unique_ptr<PerformanceMonitor> m_performanceMonitor;
     std::unique_ptr<LowPowerModeNotifier> m_lowPowerModeNotifier;
-    Optional<bool> m_lowPowerModeEnabledOverrideForTesting;
+    OptionSet<ThrottlingReason> m_throttlingReasons;
+    OptionSet<ThrottlingReason> m_throttlingReasonsOverridenForTesting;
 
     Optional<Navigation> m_navigationToLogWhenVisible;
 
     std::unique_ptr<PerformanceLogging> m_performanceLogging;
-#if PLATFORM(MAC)
+#if ENABLE(WHEEL_EVENT_LATCHING)
     Vector<ScrollLatchingState> m_latchingState;
 #endif
 #if PLATFORM(MAC) && (ENABLE(SERVICE_CONTROLS) || ENABLE(TELEPHONE_NUMBER_DETECTION))
@@ -997,6 +1041,12 @@ private:
 #endif
 
     Vector<UserContentURLPattern> m_corsDisablingPatterns;
+    Vector<UserStyleSheet> m_userStyleSheetsPendingInjection;
+    bool m_shouldFireEvents { true };
+    bool m_loadsSubresources { true };
+    bool m_loadsFromNetwork { true };
+    bool m_hasBeenNotifiedToInjectUserScripts { false };
+    Vector<std::pair<Ref<DOMWrapperWorld>, UniqueRef<UserScript>>> m_userScriptsAwaitingNotification;
 };
 
 inline PageGroup& Page::group()

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -71,7 +71,6 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << urlSchemesRegisteredAsCORSEnabled;
     encoder << urlSchemesRegisteredAsAlwaysRevalidated;
     encoder << urlSchemesRegisteredAsCachePartitioned;
-    encoder << urlSchemesServiceWorkersCanHandle;
     encoder << urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
     encoder.encodeEnum(cacheModel);
     encoder << shouldAlwaysUseComplexTextCodePath;
@@ -141,10 +140,10 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 
 #if PLATFORM(COCOA)
     encoder << mediaMIMETypes;
+    encoder << screenProperties;
 #endif
 
 #if PLATFORM(MAC)
-    encoder << screenProperties;
     encoder << useOverlayScrollbars;
 #endif
 
@@ -159,21 +158,42 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #if PLATFORM(IOS)
     encoder << compilerServiceExtensionHandle;
     encoder << contentFilterExtensionHandle;
-    encoder << launchServicesOpenExtensionHandle;
-    encoder << diagnosticsExtensionHandle;
+    encoder << frontboardServiceExtensionHandle;
 #endif
-    
+
+#if PLATFORM(IOS_FAMILY)
+    encoder << diagnosticsExtensionHandle;
+    encoder << runningboardExtensionHandle;
+    encoder << dynamicMachExtensionHandles;
+    encoder << dynamicIOKitExtensionHandles;
+#endif
+
 #if PLATFORM(COCOA)
     encoder << neHelperExtensionHandle;
     encoder << neSessionManagerExtensionHandle;
+    encoder << mapDBExtensionHandle;
     encoder << systemHasBattery;
-    encoder << mimeTypesMap;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
     encoder << currentUserInterfaceIdiomIsPad;
+    encoder << supportsPictureInPicture;
     encoder << cssValueToSystemColorMap;
     encoder << focusRingColor;
+    encoder << localizedDeviceModel;
+#endif
+
+#if PLATFORM(COCOA)
+    // FIXME(207716): The following should be removed when the GPU process is complete.
+    encoder << mediaExtensionHandles;
+#if ENABLE(CFPREFS_DIRECT_MODE)
+    encoder << preferencesExtensionHandles;
+    encoder << encodedGlobalPreferences;
+#endif
+#endif
+
+#if PLATFORM(GTK)
+    encoder << useSystemAppearanceForScrollbars;
 #endif
 }
 
@@ -249,8 +269,6 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!decoder.decode(parameters.urlSchemesRegisteredAsAlwaysRevalidated))
         return false;
     if (!decoder.decode(parameters.urlSchemesRegisteredAsCachePartitioned))
-        return false;
-    if (!decoder.decode(parameters.urlSchemesServiceWorkersCanHandle))
         return false;
     if (!decoder.decode(parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest))
         return false;
@@ -371,14 +389,15 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
 #if PLATFORM(COCOA)
     if (!decoder.decode(parameters.mediaMIMETypes))
         return false;
-#endif
 
-#if PLATFORM(MAC)
     Optional<WebCore::ScreenProperties> screenProperties;
     decoder >> screenProperties;
     if (!screenProperties)
         return false;
     parameters.screenProperties = WTFMove(*screenProperties);
+#endif
+
+#if PLATFORM(MAC)
     if (!decoder.decode(parameters.useOverlayScrollbars))
         return false;
 #endif
@@ -411,17 +430,37 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     parameters.contentFilterExtensionHandle = WTFMove(*contentFilterExtensionHandle);
 
-    Optional<Optional<SandboxExtension::Handle>> launchServicesOpenExtensionHandle;
-    decoder >> launchServicesOpenExtensionHandle;
-    if (!launchServicesOpenExtensionHandle)
+    Optional<Optional<SandboxExtension::Handle>> frontboardServiceExtensionHandle;
+    decoder >> frontboardServiceExtensionHandle;
+    if (!frontboardServiceExtensionHandle)
         return false;
-    parameters.launchServicesOpenExtensionHandle = WTFMove(*launchServicesOpenExtensionHandle);
+    parameters.frontboardServiceExtensionHandle = WTFMove(*frontboardServiceExtensionHandle);
+#endif
 
+#if PLATFORM(IOS_FAMILY)
     Optional<Optional<SandboxExtension::Handle>> diagnosticsExtensionHandle;
     decoder >> diagnosticsExtensionHandle;
     if (!diagnosticsExtensionHandle)
         return false;
     parameters.diagnosticsExtensionHandle = WTFMove(*diagnosticsExtensionHandle);
+
+    Optional<Optional<SandboxExtension::Handle>> runningboardExtensionHandle;
+    decoder >> runningboardExtensionHandle;
+    if (!runningboardExtensionHandle)
+        return false;
+    parameters.runningboardExtensionHandle = WTFMove(*runningboardExtensionHandle);
+
+    Optional<SandboxExtension::HandleArray> dynamicMachExtensionHandles;
+    decoder >> dynamicMachExtensionHandles;
+    if (!dynamicMachExtensionHandles)
+        return false;
+    parameters.dynamicMachExtensionHandles = WTFMove(*dynamicMachExtensionHandles);
+
+    Optional<SandboxExtension::HandleArray> dynamicIOKitExtensionHandles;
+    decoder >> dynamicIOKitExtensionHandles;
+    if (!dynamicIOKitExtensionHandles)
+        return false;
+    parameters.dynamicIOKitExtensionHandles = WTFMove(*dynamicIOKitExtensionHandles);
 #endif
 
 #if PLATFORM(COCOA)
@@ -437,21 +476,24 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     parameters.neSessionManagerExtensionHandle = WTFMove(*neSessionManagerExtensionHandle);
 
+    Optional<Optional<SandboxExtension::Handle>> mapDBExtensionHandle;
+    decoder >> mapDBExtensionHandle;
+    if (!mapDBExtensionHandle)
+        return false;
+    parameters.mapDBExtensionHandle = WTFMove(*mapDBExtensionHandle);
+
     Optional<bool> systemHasBattery;
     decoder >> systemHasBattery;
     if (!systemHasBattery)
         return false;
     parameters.systemHasBattery = WTFMove(*systemHasBattery);
-
-    Optional<Optional<HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>>> mimeTypesMap;
-    decoder >> mimeTypesMap;
-    if (!mimeTypesMap)
-        return false;
-    parameters.mimeTypesMap = WTFMove(*mimeTypesMap);
 #endif
 
 #if PLATFORM(IOS_FAMILY)
     if (!decoder.decode(parameters.currentUserInterfaceIdiomIsPad))
+        return false;
+
+    if (!decoder.decode(parameters.supportsPictureInPicture))
         return false;
 
     Optional<WebCore::RenderThemeIOS::CSSValueToSystemColorMap> cssValueToSystemColorMap;
@@ -465,6 +507,41 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!focusRingColor)
         return false;
     parameters.focusRingColor = WTFMove(*focusRingColor);
+    
+    if (!decoder.decode(parameters.localizedDeviceModel))
+        return false;
+#endif
+
+#if PLATFORM(COCOA)
+    // FIXME(207716): The following should be removed when the GPU process is complete.
+    Optional<SandboxExtension::HandleArray> mediaExtensionHandles;
+    decoder >> mediaExtensionHandles;
+    if (!mediaExtensionHandles)
+        return false;
+    parameters.mediaExtensionHandles = WTFMove(*mediaExtensionHandles);
+    // FIXME(207716): End region to remove.
+
+#if ENABLE(CFPREFS_DIRECT_MODE)
+    Optional<Optional<SandboxExtension::HandleArray>> preferencesExtensionHandles;
+    decoder >> preferencesExtensionHandles;
+    if (!preferencesExtensionHandles)
+        return false;
+    parameters.preferencesExtensionHandles = WTFMove(*preferencesExtensionHandles);
+
+    Optional<String> encodedGlobalPreferences;
+    decoder >> encodedGlobalPreferences;
+    if (!encodedGlobalPreferences)
+        return false;
+    parameters.encodedGlobalPreferences = WTFMove(*encodedGlobalPreferences);
+#endif
+#endif
+
+#if PLATFORM(GTK)
+    Optional<bool> useSystemAppearanceForScrollbars;
+    decoder >> useSystemAppearanceForScrollbars;
+    if (!useSystemAppearanceForScrollbars)
+        return false;
+    parameters.useSystemAppearanceForScrollbars = WTFMove(*useSystemAppearanceForScrollbars);
 #endif
 
     return true;

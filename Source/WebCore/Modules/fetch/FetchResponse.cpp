@@ -56,7 +56,7 @@ Ref<FetchResponse> FetchResponse::create(ScriptExecutionContext& context, Option
     auto fetchResponse = adoptRef(*new FetchResponse(context, WTFMove(body), WTFMove(headers), WTFMove(response)));
     fetchResponse->updateContentType();
     if (!isSynthetic)
-        fetchResponse->m_filteredResponse = ResourceResponseBase::filter(fetchResponse->m_internalResponse);
+        fetchResponse->m_filteredResponse = ResourceResponseBase::filter(fetchResponse->m_internalResponse, ResourceResponse::PerformExposeAllHeadersCheck::Yes);
     if (isOpaque)
         fetchResponse->setBodyAsOpaque();
     return fetchResponse;
@@ -151,7 +151,7 @@ ExceptionOr<Ref<FetchResponse>> FetchResponse::redirect(ScriptExecutionContext& 
     URL requestURL = context.completeURL(url);
     if (!requestURL.isValid())
         return Exception { TypeError, makeString("Redirection URL '", requestURL.string(), "' is invalid") };
-    if (!requestURL.user().isEmpty() || !requestURL.pass().isEmpty())
+    if (requestURL.hasCredentials())
         return Exception { TypeError, "Redirection URL contains credentials"_s };
     if (!ResourceResponse::isRedirectionStatusCode(status))
         return Exception { RangeError, makeString("Status code ", status, "is not a redirection status code") };
@@ -236,7 +236,7 @@ void FetchResponse::fetch(ScriptExecutionContext& context, FetchRequest& request
         return;
     }
 
-    InspectorInstrumentation::willFetch(context, request.url());
+    InspectorInstrumentation::willFetch(context, request.url().string());
 
     auto response = adoptRef(*new FetchResponse(context, FetchBody { }, FetchHeaders::create(FetchHeaders::Guard::Immutable), { }));
 
@@ -331,7 +331,8 @@ FetchResponse::BodyLoader::~BodyLoader()
 static uint64_t nextOpaqueLoadIdentifier { 0 };
 void FetchResponse::BodyLoader::didReceiveResponse(const ResourceResponse& resourceResponse)
 {
-    m_response.m_filteredResponse = ResourceResponseBase::filter(resourceResponse);
+    auto performCheck = m_credentials == FetchOptions::Credentials::Include ? ResourceResponse::PerformExposeAllHeadersCheck::No : ResourceResponse::PerformExposeAllHeadersCheck::Yes;
+    m_response.m_filteredResponse = ResourceResponseBase::filter(resourceResponse, performCheck);
     m_response.m_internalResponse = resourceResponse;
     m_response.m_internalResponse.setType(m_response.m_filteredResponse->type());
     if (resourceResponse.tainting() == ResourceResponse::Tainting::Opaque) {
@@ -385,6 +386,7 @@ void FetchResponse::BodyLoader::didReceiveData(const char* data, size_t size)
 
 bool FetchResponse::BodyLoader::start(ScriptExecutionContext& context, const FetchRequest& request)
 {
+    m_credentials = request.fetchOptions().credentials;
     m_loader = makeUnique<FetchLoader>(*this, &m_response.m_body->consumer());
     m_loader->start(context, request);
     return m_loader->isStarted();

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2018 Apple Inc.  All rights reserved.
+ * Copyright (C) 2006-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,8 +30,6 @@
 #endif
 
 #if PLATFORM(MAC)
-#include <wtf/HashMap.h>
-
 OBJC_CLASS NSScreen;
 OBJC_CLASS NSWindow;
 #ifdef NSGEOMETRY_TYPES_SAME_AS_CGGEOMETRY_TYPES
@@ -58,13 +56,19 @@ class FloatSize;
 class Widget;
 
 using PlatformDisplayID = uint32_t;
+
+#if PLATFORM(MAC)
+
 using IORegistryGPUID = int64_t; // Global IOKit I/O registryID that can match a GPU across process boundaries.
+
+#endif
 
 int screenDepth(Widget*);
 int screenDepthPerComponent(Widget*);
 bool screenIsMonochrome(Widget*);
 
 bool screenHasInvertedColors();
+
 #if USE(GLIB)
 double screenDPI();
 void setScreenDPIObserverHandler(Function<void()>&&, void*);
@@ -76,7 +80,7 @@ FloatRect screenAvailableRect(Widget*);
 WEBCORE_EXPORT bool screenSupportsExtendedColor(Widget* = nullptr);
 
 #if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
-bool screenSupportsHighDynamicRange(Widget* = nullptr);
+WEBCORE_EXPORT bool screenSupportsHighDynamicRange(Widget* = nullptr);
 #else
 constexpr bool screenSupportsHighDynamicRange(Widget* = nullptr) { return false; }
 #endif
@@ -85,8 +89,15 @@ constexpr bool screenSupportsHighDynamicRange(Widget* = nullptr) { return false;
 WEBCORE_EXPORT CGColorSpaceRef screenColorSpace(Widget* = nullptr);
 #endif
 
-#if PLATFORM(MAC)
 struct ScreenProperties;
+struct ScreenData;
+    
+WEBCORE_EXPORT ScreenProperties collectScreenProperties();
+WEBCORE_EXPORT void setScreenProperties(const ScreenProperties&);
+const ScreenData* screenData(PlatformDisplayID screendisplayID);
+WEBCORE_EXPORT PlatformDisplayID primaryScreenDisplayID();
+    
+#if PLATFORM(MAC)
 
 WEBCORE_EXPORT PlatformDisplayID displayID(NSScreen *);
 
@@ -102,10 +113,7 @@ WEBCORE_EXPORT NSRect toDeviceSpace(const FloatRect&, NSWindow *source);
 
 NSPoint flipScreenPoint(const NSPoint&, NSScreen *);
 
-WEBCORE_EXPORT ScreenProperties collectScreenProperties();
-WEBCORE_EXPORT void setScreenProperties(const ScreenProperties&);
-
-WEBCORE_EXPORT PlatformDisplayID primaryScreenDisplayID();
+WEBCORE_EXPORT void setShouldOverrideScreenSupportsHighDynamicRange(bool shouldOverride, bool supportsHighDynamicRange);
 
 uint32_t primaryOpenGLDisplayMask();
 uint32_t displayMaskForDisplay(PlatformDisplayID);

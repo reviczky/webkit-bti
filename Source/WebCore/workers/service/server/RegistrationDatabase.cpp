@@ -160,14 +160,14 @@ void RegistrationDatabase::openSQLiteDatabase(const String& fullFilename)
     
     String errorMessage = ensureValidRecordsTable();
     if (!errorMessage.isNull()) {
-        RELEASE_LOG_ERROR(ServiceWorker, "ensureValidRecordsTable failed, reason: %{public}s", errorMessage.utf8().data());
+        RELEASE_LOG_ERROR(ServiceWorker, "ensureValidRecordsTable failed, reason: %" PUBLIC_LOG_STRING, errorMessage.utf8().data());
         doRecoveryAttempt();
         return;
     }
     
     errorMessage = importRecords();
     if (!errorMessage.isNull()) {
-        RELEASE_LOG_ERROR(ServiceWorker, "importRecords failed, reason: %{public}s", errorMessage.utf8().data());
+        RELEASE_LOG_ERROR(ServiceWorker, "importRecords failed, reason: %" PUBLIC_LOG_STRING, errorMessage.utf8().data());
         doRecoveryAttempt();
         return;
     }
@@ -342,11 +342,11 @@ void RegistrationDatabase::doPushChanges(const Vector<ServiceWorkerContextData>&
         data.contentSecurityPolicy.encode(cspEncoder);
 
         WTF::Persistence::Encoder scriptResourceMapEncoder;
-        scriptResourceMapEncoder.encode(data.scriptResourceMap);
+        scriptResourceMapEncoder << data.scriptResourceMap;
 
         if (sql.bindText(1, data.registration.key.toDatabaseKey()) != SQLITE_OK
             || sql.bindText(2, data.registration.scopeURL.protocolHostAndPort()) != SQLITE_OK
-            || sql.bindText(3, data.registration.scopeURL.path()) != SQLITE_OK
+            || sql.bindText(3, data.registration.scopeURL.path().toString()) != SQLITE_OK
             || sql.bindText(4, data.registration.key.topOrigin().databaseIdentifier()) != SQLITE_OK
             || sql.bindDouble(5, data.registration.lastUpdateTime.secondsSinceEpoch().value()) != SQLITE_OK
             || sql.bindText(6, updateViaCacheToString(data.registration.updateViaCache)) != SQLITE_OK
@@ -381,6 +381,7 @@ String RegistrationDatabase::importRecords()
         auto key = ServiceWorkerRegistrationKey::fromDatabaseKey(sql.getColumnText(0));
         auto originURL = URL { URL(), sql.getColumnText(1) };
         auto scopePath = sql.getColumnText(2);
+        auto scopeURL = URL { originURL, scopePath };
         auto topOrigin = SecurityOriginData::fromDatabaseIdentifier(sql.getColumnText(3));
         auto lastUpdateCheckTime = WallTime::fromRawSeconds(sql.getColumnDouble(4));
         auto updateViaCache = stringToUpdateViaCache(sql.getColumnText(5));
@@ -391,33 +392,37 @@ String RegistrationDatabase::importRecords()
         Vector<uint8_t> contentSecurityPolicyData;
         sql.getColumnBlobAsVector(9, contentSecurityPolicyData);
         WTF::Persistence::Decoder cspDecoder(contentSecurityPolicyData.data(), contentSecurityPolicyData.size());
-        ContentSecurityPolicyResponseHeaders contentSecurityPolicy;
-        if (contentSecurityPolicyData.size() && !ContentSecurityPolicyResponseHeaders::decode(cspDecoder, contentSecurityPolicy))
-            continue;
+        Optional<ContentSecurityPolicyResponseHeaders> contentSecurityPolicy;
+        if (contentSecurityPolicyData.size()) {
+            cspDecoder >> contentSecurityPolicy;
+            if (!contentSecurityPolicy)
+                continue;
+        }
 
         auto referrerPolicy = sql.getColumnText(10);
 
         Vector<uint8_t> scriptResourceMapData;
         sql.getColumnBlobAsVector(11, scriptResourceMapData);
-        HashMap<URL, ServiceWorkerContextData::ImportedScript> scriptResourceMap;
+        Optional<HashMap<URL, ServiceWorkerContextData::ImportedScript>> scriptResourceMap;
 
         WTF::Persistence::Decoder scriptResourceMapDecoder(scriptResourceMapData.data(), scriptResourceMapData.size());
         if (scriptResourceMapData.size()) {
-            if (!scriptResourceMapDecoder.decode(scriptResourceMap))
+            scriptResourceMapDecoder >> scriptResourceMap;
+            if (!scriptResourceMap)
                 continue;
         }
 
         // Validate the input for this registration.
         // If any part of this input is invalid, let's skip this registration.
         // FIXME: Should we return an error skipping *all* registrations?
-        if (!key || !originURL.isValid() || !topOrigin || !updateViaCache || !scriptURL.isValid() || !workerType)
+        if (!key || !originURL.isValid() || !topOrigin || !updateViaCache || !scriptURL.isValid() || !workerType || !scopeURL.isValid())
             continue;
 
         auto workerIdentifier = ServiceWorkerIdentifier::generate();
         auto registrationIdentifier = ServiceWorkerRegistrationIdentifier::generate();
         auto serviceWorkerData = ServiceWorkerData { workerIdentifier, scriptURL, ServiceWorkerState::Activated, *workerType, registrationIdentifier };
-        auto registration = ServiceWorkerRegistrationData { WTFMove(*key), registrationIdentifier, URL(originURL, scopePath), *updateViaCache, lastUpdateCheckTime, WTF::nullopt, WTF::nullopt, WTFMove(serviceWorkerData) };
-        auto contextData = ServiceWorkerContextData { WTF::nullopt, WTFMove(registration), workerIdentifier, WTFMove(script), WTFMove(contentSecurityPolicy), WTFMove(referrerPolicy), WTFMove(scriptURL), *workerType, true, WTFMove(scriptResourceMap) };
+        auto registration = ServiceWorkerRegistrationData { WTFMove(*key), registrationIdentifier, WTFMove(scopeURL), *updateViaCache, lastUpdateCheckTime, WTF::nullopt, WTF::nullopt, WTFMove(serviceWorkerData) };
+        auto contextData = ServiceWorkerContextData { WTF::nullopt, WTFMove(registration), workerIdentifier, WTFMove(script), WTFMove(*contentSecurityPolicy), WTFMove(referrerPolicy), WTFMove(scriptURL), *workerType, true, WTFMove(*scriptResourceMap) };
 
         callOnMainThread([protectedThis = makeRef(*this), contextData = contextData.isolatedCopy()]() mutable {
             protectedThis->addRegistrationToStore(WTFMove(contextData));

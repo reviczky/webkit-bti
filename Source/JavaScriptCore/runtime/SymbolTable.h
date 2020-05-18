@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -635,24 +635,36 @@ public:
         return m_arguments->length();
     }
     
-    void setArgumentsLength(VM& vm, uint32_t length)
+    bool trySetArgumentsLength(VM& vm, uint32_t length)
     {
-        if (UNLIKELY(!m_arguments))
-            m_arguments.set(vm, this, ScopedArgumentsTable::create(vm, length));
-        else
-            m_arguments.set(vm, this, m_arguments->setLength(vm, length));
+        if (UNLIKELY(!m_arguments)) {
+            ScopedArgumentsTable* table = ScopedArgumentsTable::tryCreate(vm, length);
+            if (UNLIKELY(!table))
+                return false;
+            m_arguments.set(vm, this, table);
+        } else {
+            ScopedArgumentsTable* table = m_arguments->trySetLength(vm, length);
+            if (UNLIKELY(!table))
+                return false;
+            m_arguments.set(vm, this, table);
+        }
+        return true;
     }
-    
+
     ScopeOffset argumentOffset(uint32_t i) const
     {
         ASSERT_WITH_SECURITY_IMPLICATION(m_arguments);
         return m_arguments->get(i);
     }
     
-    void setArgumentOffset(VM& vm, uint32_t i, ScopeOffset offset)
+    bool trySetArgumentOffset(VM& vm, uint32_t i, ScopeOffset offset)
     {
         ASSERT_WITH_SECURITY_IMPLICATION(m_arguments);
-        m_arguments.set(vm, this, m_arguments->set(vm, i, offset));
+        auto* maybeCloned = m_arguments->trySet(vm, i, offset);
+        if (!maybeCloned)
+            return false;
+        m_arguments.set(vm, this, maybeCloned);
+        return true;
     }
     
     ScopedArgumentsTable* arguments() const

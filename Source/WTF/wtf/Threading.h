@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2020 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Justin Haygood <jhaygood@reaktix.com>
  * Copyright (C) 2017 Yusuke Suzuki <utatane.tea@gmail.com>
  *
@@ -82,6 +82,16 @@ enum class GCThreadType : uint8_t {
     Helper,
 };
 
+enum class ThreadType : uint8_t {
+    Unknown = 0,
+    JavaScript,
+    Compiler,
+    GarbageCollection,
+    Network,
+    Graphics,
+    Audio,
+};
+
 class Thread : public ThreadSafeRefCounted<Thread> {
 public:
     friend class ThreadGroup;
@@ -91,7 +101,7 @@ public:
 
     // Returns nullptr if thread creation failed.
     // The thread name must be a literal since on some platforms it's passed in to the thread.
-    WTF_EXPORT_PRIVATE static Ref<Thread> create(const char* threadName, Function<void()>&&);
+    WTF_EXPORT_PRIVATE static Ref<Thread> create(const char* threadName, Function<void()>&&, ThreadType threadType = ThreadType::Unknown);
 
     // Returns Thread object.
     static Thread& current();
@@ -128,7 +138,7 @@ public:
 
     SpecificStorage& specificStorage() { return m_specificStorage; };
 
-    class ThreadHolder;
+    struct ThreadHolder;
 #endif
 
     WTF_EXPORT_PRIVATE void changePriority(int);
@@ -235,7 +245,7 @@ protected:
     void initializeInThread();
 
     // Internal platform-specific Thread establishment implementation.
-    bool establishHandle(NewThreadContext*);
+    bool establishHandle(NewThreadContext*, Optional<size_t>);
 
 #if USE(PTHREADS)
     void establishPlatformSpecificHandle(PlatformThreadHandle);
@@ -306,6 +316,8 @@ protected:
     bool m_isDestroyedOnce : 1;
     bool m_isCompilationThread: 1;
     unsigned m_gcThreadType : 2;
+
+    bool m_didUnregisterFromAllThreads { false };
 
     // Lock & ParkingLot rely on ThreadSpecific. But Thread object can be destroyed even after ThreadSpecific things are destroyed.
     // Use WordLock since WordLock does not depend on ThreadSpecific and this "Thread".
@@ -379,4 +391,5 @@ inline Thread& Thread::current()
 } // namespace WTF
 
 using WTF::Thread;
+using WTF::ThreadType;
 using WTF::GCThreadType;

@@ -31,9 +31,6 @@
 
 namespace WebCore {
 
-WEBCORE_EXPORT Optional<HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>>& overriddenMimeTypesMap();
-WEBCORE_EXPORT const HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>& commonMimeTypesMap();
-
 struct TypeExtensionPair {
     ASCIILiteral type;
     ASCIILiteral extension;
@@ -125,6 +122,9 @@ public:
     // Check to see if a MIME type is one where an XML document should be created
     // rather than an HTML document.
     WEBCORE_EXPORT static bool isXMLMIMEType(const String& mimeType);
+
+    // Check to see if a MIME type is for an XML external entity resource.
+    WEBCORE_EXPORT static bool isXMLEntityMIMEType(StringView mimeType);
 
     // Used in page load algorithm to decide whether to display as a text
     // document in a frame. Not a good idea to use elsewhere, because that code

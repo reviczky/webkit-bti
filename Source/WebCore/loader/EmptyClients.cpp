@@ -521,7 +521,7 @@ Ref<DocumentLoader> EmptyFrameLoaderClient::createDocumentLoader(const ResourceR
     return DocumentLoader::create(request, substituteData);
 }
 
-RefPtr<Frame> EmptyFrameLoaderClient::createFrame(const URL&, const String&, HTMLFrameOwnerElement&, const String&)
+RefPtr<Frame> EmptyFrameLoaderClient::createFrame(const String&, HTMLFrameOwnerElement&)
 {
     return nullptr;
 }
@@ -582,7 +582,7 @@ public:
     EmptyMediaRecorderProvider() = default;
 private:
 #if ENABLE(MEDIA_STREAM) && PLATFORM(COCOA)
-    std::unique_ptr<MediaRecorderPrivate> createMediaRecorderPrivate(const MediaStreamPrivate&) final { return nullptr; }
+    std::unique_ptr<MediaRecorderPrivate> createMediaRecorderPrivate(MediaStreamPrivate&) final { return nullptr; }
 #endif
 };
 
@@ -597,6 +597,7 @@ PageConfiguration pageConfigurationWithEmptyClients(PAL::SessionID sessionID)
         adoptRef(*new EmptyBackForwardClient),
         CookieJar::create(adoptRef(*new EmptyStorageSessionProvider)),
         makeUniqueRef<EmptyProgressTrackerClient>(),
+        makeUniqueRef<EmptyFrameLoaderClient>(),
         makeUniqueRef<EmptyMediaRecorderProvider>()
     };
 
@@ -619,9 +620,6 @@ PageConfiguration pageConfigurationWithEmptyClients(PAL::SessionID sessionID)
 
     static NeverDestroyed<EmptyInspectorClient> dummyInspectorClient;
     pageConfiguration.inspectorClient = &dummyInspectorClient.get();
-
-    static NeverDestroyed<EmptyFrameLoaderClient> dummyFrameLoaderClient;
-    pageConfiguration.loaderClientForMainFrame = &dummyFrameLoaderClient.get();
 
     pageConfiguration.diagnosticLoggingClient = makeUnique<EmptyDiagnosticLoggingClient>();
 

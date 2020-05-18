@@ -55,6 +55,7 @@ public:
     Document* document() { return m_document.get(); }
     const String& crossOriginMode() const { return m_crossOriginMode; }
 
+    WEBCORE_EXPORT static void recordResponsesForTesting();
     Vector<ResourceResponse> responsesForTesting() const { return m_responsesForTesting; }
     void addResponseForTesting(const ResourceResponse&);
 
@@ -83,7 +84,7 @@ public:
     bool shouldCacheResponse(CachedResource&, const ResourceResponse&) override;
     void dataSent(CachedResource&, unsigned long long, unsigned long long) override;
     void dataReceived(CachedResource&, const char*, int) override;
-    void notifyFinished(CachedResource&) override;
+    void notifyFinished(CachedResource&, const NetworkLoadMetrics&) override;
 
 private:
     MediaResource(MediaResourceLoader&, CachedResourceHandle<CachedRawResource>);

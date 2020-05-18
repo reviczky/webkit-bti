@@ -27,7 +27,7 @@
 #include "JSInternalPromise.h"
 
 #include "BuiltinNames.h"
-#include "JSCInlines.h"
+#include "JSObjectInlines.h"
 
 namespace JSC {
 
@@ -38,6 +38,11 @@ JSInternalPromise* JSInternalPromise::create(VM& vm, Structure* structure)
     JSInternalPromise* promise = new (NotNull, allocateCell<JSInternalPromise>(vm.heap)) JSInternalPromise(vm, structure);
     promise->finishCreation(vm);
     return promise;
+}
+
+JSInternalPromise* JSInternalPromise::createWithInitialValues(VM& vm, Structure* structure)
+{
+    return create(vm, structure);
 }
 
 Structure* JSInternalPromise::createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
@@ -57,16 +62,15 @@ JSInternalPromise* JSInternalPromise::then(JSGlobalObject* globalObject, JSFunct
 
     JSObject* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().thenPublicName()));
     RETURN_IF_EXCEPTION(scope, nullptr);
-    CallData callData;
-    CallType callType = JSC::getCallData(vm, function, callData);
-    ASSERT(callType != CallType::None);
+    auto callData = JSC::getCallData(vm, function);
+    ASSERT(callData.type != CallData::Type::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(onFulfilled ? onFulfilled : jsUndefined());
     arguments.append(onRejected ? onRejected : jsUndefined());
     ASSERT(!arguments.hasOverflowed());
 
-    RELEASE_AND_RETURN(scope, jsCast<JSInternalPromise*>(call(globalObject, function, callType, callData, this, arguments)));
+    RELEASE_AND_RETURN(scope, jsCast<JSInternalPromise*>(call(globalObject, function, callData, this, arguments)));
 }
 
 } // namespace JSC

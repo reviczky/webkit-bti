@@ -28,7 +28,6 @@
 
 #include "AsyncFunctionPrototype.h"
 #include "FunctionConstructor.h"
-#include "JSCInlines.h"
 
 namespace JSC {
 
@@ -45,7 +44,7 @@ static EncodedJSValue JSC_HOST_CALL callAsyncFunctionConstructor(JSGlobalObject*
 static EncodedJSValue JSC_HOST_CALL constructAsyncFunctionConstructor(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
     ArgList args(callFrame);
-    return JSValue::encode(constructFunction(globalObject, callFrame, args, FunctionConstructionMode::Async));
+    return JSValue::encode(constructFunction(globalObject, callFrame, args, FunctionConstructionMode::Async, callFrame->newTarget()));
 }
 
 AsyncFunctionConstructor::AsyncFunctionConstructor(VM& vm, Structure* structure)

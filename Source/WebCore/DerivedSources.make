@@ -64,6 +64,7 @@ VPATH = \
     $(WebCore)/Modules/webdriver \
     $(WebCore)/Modules/webgpu \
     $(WebCore)/Modules/websockets \
+    $(WebCore)/Modules/webxr \
     $(WebCore)/accessibility \
     $(WebCore)/animation \
     $(WebCore)/bindings/js \
@@ -102,6 +103,7 @@ JS_BINDING_IDLS = \
     $(WebCore)/Modules/applepay/ApplePayError.idl \
     $(WebCore)/Modules/applepay/ApplePayErrorCode.idl \
     $(WebCore)/Modules/applepay/ApplePayErrorContactField.idl \
+    $(WebCore)/Modules/applepay/ApplePayInstallmentConfiguration.idl \
     $(WebCore)/Modules/applepay/ApplePayLineItem.idl \
     $(WebCore)/Modules/applepay/ApplePayMerchantCapability.idl \
     $(WebCore)/Modules/applepay/ApplePayPayment.idl \
@@ -117,6 +119,9 @@ JS_BINDING_IDLS = \
     $(WebCore)/Modules/applepay/ApplePayRequestBase.idl \
     $(WebCore)/Modules/applepay/ApplePaySession.idl \
     $(WebCore)/Modules/applepay/ApplePaySessionError.idl \
+    $(WebCore)/Modules/applepay/ApplePaySetup.idl \
+    $(WebCore)/Modules/applepay/ApplePaySetupFeature.idl \
+    $(WebCore)/Modules/applepay/ApplePaySetupFeatureType.idl \
     $(WebCore)/Modules/applepay/ApplePayShippingContactSelectedEvent.idl \
     $(WebCore)/Modules/applepay/ApplePayShippingContactUpdate.idl \
     $(WebCore)/Modules/applepay/ApplePayShippingMethod.idl \
@@ -460,6 +465,37 @@ JS_BINDING_IDLS = \
     $(WebCore)/Modules/webgpu/WorkerNavigatorGPU.idl \
     $(WebCore)/Modules/websockets/CloseEvent.idl \
     $(WebCore)/Modules/websockets/WebSocket.idl \
+    $(WebCore)/Modules/webxr/NavigatorWebXR.idl \
+    $(WebCore)/Modules/webxr/WebXRBoundedReferenceSpace.idl \
+    $(WebCore)/Modules/webxr/WebXRFrame.idl \
+    $(WebCore)/Modules/webxr/WebXRInputSourceArray.idl \
+    $(WebCore)/Modules/webxr/WebXRInputSource.idl \
+    $(WebCore)/Modules/webxr/WebXRPose.idl \
+    $(WebCore)/Modules/webxr/WebXRReferenceSpace.idl \
+    $(WebCore)/Modules/webxr/WebXRRenderState.idl \
+    $(WebCore)/Modules/webxr/WebXRRigidTransform.idl \
+    $(WebCore)/Modules/webxr/WebXRSession.idl \
+    $(WebCore)/Modules/webxr/WebXRSpace.idl \
+    $(WebCore)/Modules/webxr/WebXRSystem.idl \
+    $(WebCore)/Modules/webxr/WebXRViewerPose.idl \
+    $(WebCore)/Modules/webxr/WebXRView.idl \
+    $(WebCore)/Modules/webxr/WebXRViewport.idl \
+    $(WebCore)/Modules/webxr/WebXRWebGLLayer.idl \
+    $(WebCore)/Modules/webxr/XREnvironmentBlendMode.idl \
+    $(WebCore)/Modules/webxr/XREye.idl \
+    $(WebCore)/Modules/webxr/XRFrameRequestCallback.idl \
+    $(WebCore)/Modules/webxr/XRHandedness.idl \
+    $(WebCore)/Modules/webxr/XRInputSourceEvent.idl \
+    $(WebCore)/Modules/webxr/XRInputSourcesChangeEvent.idl \
+    $(WebCore)/Modules/webxr/XRReferenceSpaceEvent.idl \
+    $(WebCore)/Modules/webxr/XRReferenceSpaceType.idl \
+    $(WebCore)/Modules/webxr/XRRenderStateInit.idl \
+    $(WebCore)/Modules/webxr/XRSessionEvent.idl \
+    $(WebCore)/Modules/webxr/XRSessionInit.idl \
+    $(WebCore)/Modules/webxr/XRSessionMode.idl \
+    $(WebCore)/Modules/webxr/XRTargetRayMode.idl \
+    $(WebCore)/Modules/webxr/XRVisibilityState.idl \
+    $(WebCore)/Modules/webxr/XRWebGLLayerInit.idl \
     $(WebCore)/accessibility/AccessibilityRole.idl \
     $(WebCore)/accessibility/AriaAttributes.idl \
     $(WebCore)/animation/Animatable.idl \
@@ -547,7 +583,7 @@ JS_BINDING_IDLS = \
     $(WebCore)/css/FontFaceSet.idl \
     $(WebCore)/css/MediaList.idl \
     $(WebCore)/css/MediaQueryList.idl \
-    $(WebCore)/css/MediaQueryListListener.idl \
+    $(WebCore)/css/MediaQueryListEvent.idl \
     $(WebCore)/css/StyleMedia.idl \
     $(WebCore)/css/StyleSheet.idl \
     $(WebCore)/css/StyleSheetList.idl \
@@ -559,7 +595,6 @@ JS_BINDING_IDLS = \
     $(WebCore)/css/typedom/TypedOMCSSUnitValue.idl \
     $(WebCore)/css/typedom/TypedOMCSSUnparsedValue.idl \
     $(WebCore)/css/WebKitCSSMatrix.idl \
-    $(WebCore)/css/WebKitCSSViewportRule.idl \
     $(WebCore)/dom/AbortController.idl \
     $(WebCore)/dom/AbortSignal.idl \
     $(WebCore)/dom/AnimationEvent.idl \
@@ -798,6 +833,8 @@ JS_BINDING_IDLS = \
     $(WebCore)/html/canvas/CanvasTransform.idl \
     $(WebCore)/html/canvas/CanvasUserInterface.idl \
     $(WebCore)/html/canvas/EXTBlendMinMax.idl \
+    $(WebCore)/html/canvas/EXTColorBufferFloat.idl \
+    $(WebCore)/html/canvas/EXTColorBufferHalfFloat.idl \
     $(WebCore)/html/canvas/EXTFragDepth.idl \
     $(WebCore)/html/canvas/EXTShaderTextureLOD.idl \
     $(WebCore)/html/canvas/EXTTextureFilterAnisotropic.idl \
@@ -818,6 +855,7 @@ JS_BINDING_IDLS = \
     $(WebCore)/html/canvas/WebGL2RenderingContext.idl \
     $(WebCore)/html/canvas/WebGLActiveInfo.idl \
     $(WebCore)/html/canvas/WebGLBuffer.idl \
+    $(WebCore)/html/canvas/WebGLColorBufferFloat.idl \
     $(WebCore)/html/canvas/WebGLCompressedTextureASTC.idl \
     $(WebCore)/html/canvas/WebGLCompressedTextureATC.idl \
     $(WebCore)/html/canvas/WebGLCompressedTextureETC.idl \
@@ -895,6 +933,7 @@ JS_BINDING_IDLS = \
     $(WebCore)/page/PerformanceObserver.idl \
     $(WebCore)/page/PerformanceObserverCallback.idl \
     $(WebCore)/page/PerformanceObserverEntryList.idl \
+    $(WebCore)/page/PerformancePaintTiming.idl \
     $(WebCore)/page/PerformanceResourceTiming.idl \
     $(WebCore)/page/PerformanceServerTiming.idl \
     $(WebCore)/page/PerformanceTiming.idl \
@@ -1087,6 +1126,15 @@ JS_BINDING_IDLS = \
     $(WebCore)/testing/MockWebAuthenticationConfiguration.idl \
     $(WebCore)/testing/ServiceWorkerInternals.idl \
     $(WebCore)/testing/TypeConversions.idl \
+    $(WebCore)/testing/FakeXRBoundsPoint.idl \
+    $(WebCore)/testing/FakeXRButtonStateInit.idl \
+    $(WebCore)/testing/FakeXRInputSourceInit.idl \
+    $(WebCore)/testing/FakeXRRigidTransformInit.idl \
+    $(WebCore)/testing/FakeXRViewInit.idl \
+    $(WebCore)/testing/WebFakeXRDevice.idl \
+    $(WebCore)/testing/WebFakeXRInputController.idl \
+    $(WebCore)/testing/WebXRTest.idl \
+    $(WebCore)/testing/XRSimulateUserActivationFunction.idl \
     $(WebCore)/workers/AbstractWorker.idl \
     $(WebCore)/workers/DedicatedWorkerGlobalScope.idl \
     $(WebCore)/workers/Worker.idl \
@@ -1719,6 +1767,7 @@ JS_BINDINGS_SCRIPTS = $(COMMON_BINDINGS_SCRIPTS) bindings/scripts/CodeGeneratorJ
 
 SUPPLEMENTAL_DEPENDENCY_FILE = SupplementalDependencies.txt
 SUPPLEMENTAL_MAKEFILE_DEPS = SupplementalDependencies.dep
+ISO_SUBSPACES_HEADER_FILE = DOMIsoSubspaces.h
 WINDOW_CONSTRUCTORS_FILE = DOMWindowConstructors.idl
 WORKERGLOBALSCOPE_CONSTRUCTORS_FILE = WorkerGlobalScopeConstructors.idl
 DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE = DedicatedWorkerGlobalScopeConstructors.idl
@@ -1739,6 +1788,7 @@ endef
 IDL_INTERMEDIATE_FILES = \
     $(SUPPLEMENTAL_MAKEFILE_DEPS) \
     $(SUPPLEMENTAL_DEPENDENCY_FILE) \
+    $(ISO_SUBSPACES_HEADER_FILE) \
     $(WINDOW_CONSTRUCTORS_FILE) \
     $(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE) \
     $(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) \
@@ -1750,7 +1800,7 @@ IDL_INTERMEDIATE_PATTERNS = $(subst .,%,$(IDL_INTERMEDIATE_FILES))
 
 $(IDL_INTERMEDIATE_PATTERNS) : $(PREPROCESS_IDLS_SCRIPTS) $(JS_BINDING_IDLS) $(PLATFORM_FEATURE_DEFINES) DerivedSources.make
 	$(foreach f,$(JS_BINDING_IDLS),@echo $(f)>>$(IDL_FILES_TMP)$(NL))
-	$(PERL) $(WebCore)/bindings/scripts/preprocess-idls.pl --defines "$(FEATURE_AND_PLATFORM_DEFINES) $(ADDITIONAL_IDL_DEFINES) LANGUAGE_JAVASCRIPT" --idlFilesList $(IDL_FILES_TMP) --supplementalDependencyFile $(SUPPLEMENTAL_DEPENDENCY_FILE) --windowConstructorsFile $(WINDOW_CONSTRUCTORS_FILE) --workerGlobalScopeConstructorsFile $(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --dedicatedWorkerGlobalScopeConstructorsFile $(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --serviceWorkerGlobalScopeConstructorsFile $(SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --workletGlobalScopeConstructorsFile $(WORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --paintWorkletGlobalScopeConstructorsFile $(PAINTWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --supplementalMakefileDeps $(SUPPLEMENTAL_MAKEFILE_DEPS)
+	$(PERL) $(WebCore)/bindings/scripts/preprocess-idls.pl --defines "$(FEATURE_AND_PLATFORM_DEFINES) $(ADDITIONAL_IDL_DEFINES) LANGUAGE_JAVASCRIPT" --idlFilesList $(IDL_FILES_TMP) --supplementalDependencyFile $(SUPPLEMENTAL_DEPENDENCY_FILE) --isoSubspacesHeaderFile $(ISO_SUBSPACES_HEADER_FILE) --windowConstructorsFile $(WINDOW_CONSTRUCTORS_FILE) --workerGlobalScopeConstructorsFile $(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --dedicatedWorkerGlobalScopeConstructorsFile $(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --serviceWorkerGlobalScopeConstructorsFile $(SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --workletGlobalScopeConstructorsFile $(WORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --paintWorkletGlobalScopeConstructorsFile $(PAINTWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --supplementalMakefileDeps $(SUPPLEMENTAL_MAKEFILE_DEPS)
 	$(DELETE) $(IDL_FILES_TMP)
 
 JS%.cpp JS%.h : %.idl $(JS_BINDINGS_SCRIPTS) $(IDL_ATTRIBUTES_FILE) $(IDL_INTERMEDIATE_FILES) $(PLATFORM_FEATURE_DEFINES)

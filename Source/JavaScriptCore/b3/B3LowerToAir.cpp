@@ -29,16 +29,13 @@
 #if ENABLE(B3_JIT)
 
 #include "AirBlockInsertionSet.h"
-#include "AirCCallSpecial.h"
 #include "AirCode.h"
 #include "AirHelpers.h"
 #include "AirInsertionSet.h"
 #include "AirInstInlines.h"
 #include "AirPrintSpecial.h"
-#include "AirStackSlot.h"
 #include "B3ArgumentRegValue.h"
 #include "B3AtomicValue.h"
-#include "B3BasicBlockInlines.h"
 #include "B3BlockWorklist.h"
 #include "B3CCallValue.h"
 #include "B3CheckSpecial.h"
@@ -53,7 +50,6 @@
 #include "B3PhiChildren.h"
 #include "B3Procedure.h"
 #include "B3SlotBaseValue.h"
-#include "B3StackSlot.h"
 #include "B3UpsilonValue.h"
 #include "B3UseCounts.h"
 #include "B3ValueInlines.h"
@@ -62,7 +58,6 @@
 #include "B3WasmAddressValue.h"
 #include <wtf/IndexMap.h>
 #include <wtf/IndexSet.h>
-#include <wtf/ListDump.h>
 
 #if !ASSERT_ENABLED
 IGNORE_RETURN_TYPE_WARNINGS_BEGIN
@@ -1592,28 +1587,28 @@ private:
             case NotEqual:
                 return createRelCond(MacroAssembler::NotEqual, MacroAssembler::DoubleNotEqualOrUnordered);
             case Equal:
-                return createRelCond(MacroAssembler::Equal, MacroAssembler::DoubleEqual);
+                return createRelCond(MacroAssembler::Equal, MacroAssembler::DoubleEqualAndOrdered);
             case LessThan:
-                return createRelCond(MacroAssembler::LessThan, MacroAssembler::DoubleLessThan);
+                return createRelCond(MacroAssembler::LessThan, MacroAssembler::DoubleLessThanAndOrdered);
             case GreaterThan:
-                return createRelCond(MacroAssembler::GreaterThan, MacroAssembler::DoubleGreaterThan);
+                return createRelCond(MacroAssembler::GreaterThan, MacroAssembler::DoubleGreaterThanAndOrdered);
             case LessEqual:
-                return createRelCond(MacroAssembler::LessThanOrEqual, MacroAssembler::DoubleLessThanOrEqual);
+                return createRelCond(MacroAssembler::LessThanOrEqual, MacroAssembler::DoubleLessThanOrEqualAndOrdered);
             case GreaterEqual:
-                return createRelCond(MacroAssembler::GreaterThanOrEqual, MacroAssembler::DoubleGreaterThanOrEqual);
+                return createRelCond(MacroAssembler::GreaterThanOrEqual, MacroAssembler::DoubleGreaterThanOrEqualAndOrdered);
             case EqualOrUnordered:
                 // The integer condition is never used in this case.
                 return createRelCond(MacroAssembler::Equal, MacroAssembler::DoubleEqualOrUnordered);
             case Above:
                 // We use a bogus double condition because these integer comparisons won't got down that
                 // path anyway.
-                return createRelCond(MacroAssembler::Above, MacroAssembler::DoubleEqual);
+                return createRelCond(MacroAssembler::Above, MacroAssembler::DoubleEqualAndOrdered);
             case Below:
-                return createRelCond(MacroAssembler::Below, MacroAssembler::DoubleEqual);
+                return createRelCond(MacroAssembler::Below, MacroAssembler::DoubleEqualAndOrdered);
             case AboveEqual:
-                return createRelCond(MacroAssembler::AboveOrEqual, MacroAssembler::DoubleEqual);
+                return createRelCond(MacroAssembler::AboveOrEqual, MacroAssembler::DoubleEqualAndOrdered);
             case BelowEqual:
-                return createRelCond(MacroAssembler::BelowOrEqual, MacroAssembler::DoubleEqual);
+                return createRelCond(MacroAssembler::BelowOrEqual, MacroAssembler::DoubleEqualAndOrdered);
             case BitAnd: {
                 Value* left = value->child(0);
                 Value* right = value->child(1);

@@ -32,6 +32,7 @@
 #include "MessageSender.h"
 #include "SampleBufferDisplayLayerIdentifier.h"
 #include <WebCore/SampleBufferDisplayLayer.h>
+#include <wtf/MediaTime.h>
 
 namespace WebCore {
 class ImageTransferSessionVT;
@@ -44,21 +45,23 @@ namespace WebKit {
 class RemoteSampleBufferDisplayLayer : public WebCore::SampleBufferDisplayLayer::Client, public IPC::MessageReceiver, private IPC::MessageSender {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static std::unique_ptr<RemoteSampleBufferDisplayLayer> create(SampleBufferDisplayLayerIdentifier, Ref<IPC::Connection>&&, bool hideRootLayer, WebCore::IntSize);
+    static std::unique_ptr<RemoteSampleBufferDisplayLayer> create(SampleBufferDisplayLayerIdentifier, Ref<IPC::Connection>&&);
     ~RemoteSampleBufferDisplayLayer();
+
+    using LayerInitializationCallback = CompletionHandler<void(Optional<LayerHostingContextID>)>;
+    void initialize(bool hideRootLayer, WebCore::IntSize, LayerInitializationCallback&&);
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
-    Optional<LayerHostingContextID> contextID();
     CGRect bounds() const;
     
 private:
-    RemoteSampleBufferDisplayLayer(SampleBufferDisplayLayerIdentifier, Ref<IPC::Connection>&&, bool hideRootLayer, WebCore::IntSize);
+    RemoteSampleBufferDisplayLayer(SampleBufferDisplayLayerIdentifier, Ref<IPC::Connection>&&);
 
     void updateDisplayMode(bool hideDisplayLayer, bool hideRootLayer);
     void updateAffineTransform(CGAffineTransform);
-    void updateBoundsAndPosition(CGRect, CGPoint);
+    void updateBoundsAndPosition(CGRect, WebCore::MediaSample::VideoRotation);
     void flush();
     void flushAndRemoveImage();
     void enqueueSample(WebCore::RemoteVideoSample&&);

@@ -133,6 +133,7 @@ public:
     static void applyValueTextAlign(BuilderState&, CSSValue&);
     static void applyValueWebkitLocale(BuilderState&, CSSValue&);
     static void applyValueWebkitTextOrientation(BuilderState&, CSSValue&);
+    static void applyValueTextOrientation(BuilderState&, CSSValue&);
 #if ENABLE(TEXT_AUTOSIZING)
     static void applyValueWebkitTextSizeAdjust(BuilderState&, CSSValue&);
 #endif
@@ -757,6 +758,11 @@ inline void BuilderCustom::applyValueWebkitTextOrientation(BuilderState& builder
     builderState.setTextOrientation(downcast<CSSPrimitiveValue>(value));
 }
 
+inline void BuilderCustom::applyValueTextOrientation(BuilderState& builderState, CSSValue& value)
+{
+    builderState.setTextOrientation(downcast<CSSPrimitiveValue>(value));
+}
+
 #if ENABLE(TEXT_AUTOSIZING)
 inline void BuilderCustom::applyValueWebkitTextSizeAdjust(BuilderState& builderState, CSSValue& value)
 {
@@ -813,9 +819,10 @@ inline void BuilderCustom::applyTextOrBoxShadowValue(BuilderState& builderState,
         ShadowStyle shadowStyle = shadowValue.style && shadowValue.style->valueID() == CSSValueInset ? ShadowStyle::Inset : ShadowStyle::Normal;
         Color color;
         if (shadowValue.color)
-            color = builderState.colorFromPrimitiveValue(*shadowValue.color);
+            color = builderState.colorFromPrimitiveValueWithResolvedCurrentColor(*shadowValue.color);
         else
             color = builderState.style().color();
+
         auto shadowData = makeUnique<ShadowData>(LayoutPoint(x, y), blur, spread, shadowStyle, property == CSSPropertyWebkitBoxShadow, color.isValid() ? color : Color::transparent);
         if (property == CSSPropertyTextShadow)
             builderState.style().setTextShadow(WTFMove(shadowData), !isFirstEntry); // add to the list if this is not the first entry
@@ -1615,14 +1622,14 @@ inline void BuilderCustom::applyValueFontSize(BuilderState& builderState, CSSVal
     } else {
         fontDescription.setIsAbsoluteSize(parentIsAbsoluteSize || !(primitiveValue.isPercentage() || primitiveValue.isFontRelativeLength()));
         if (primitiveValue.isLength()) {
-            size = primitiveValue.computeLength<float>(CSSToLengthConversionData(&builderState.parentStyle(), builderState.rootElementStyle(), builderState.document().renderView(), 1.0f, true));
+            size = primitiveValue.computeLength<float>(CSSToLengthConversionData(&builderState.parentStyle(), builderState.rootElementStyle(), &builderState.parentStyle(), builderState.document().renderView(), 1.0f, CSSPropertyFontSize));
             if (primitiveValue.isViewportPercentageLength())
                 builderState.style().setHasViewportUnits();
         } else if (primitiveValue.isPercentage())
             size = (primitiveValue.floatValue() * parentSize) / 100.0f;
         else if (primitiveValue.isCalculatedPercentageWithLength()) {
             const auto& conversionData = builderState.cssToLengthConversionData();
-            CSSToLengthConversionData parentConversionData { &builderState.parentStyle(), conversionData.rootStyle(), builderState.document().renderView(), 1.0f, true };
+            CSSToLengthConversionData parentConversionData { &builderState.parentStyle(), conversionData.rootStyle(), &builderState.parentStyle(), builderState.document().renderView(), 1.0f, CSSPropertyFontSize };
             size = primitiveValue.cssCalcValue()->createCalculationValue(parentConversionData)->evaluate(parentSize);
         } else
             return;

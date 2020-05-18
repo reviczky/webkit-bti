@@ -43,6 +43,10 @@ OBJC_CLASS NSString;
 OBJC_CLASS NSArray;
 #endif
 
+#if PLATFORM(GTK)
+#include "SelectionData.h"
+#endif
+
 #if PLATFORM(WIN)
 #include "COMPtr.h"
 #include "WCDataObject.h"
@@ -62,7 +66,6 @@ class Element;
 class Frame;
 class PasteboardStrategy;
 class Range;
-class SelectionData;
 class SharedBuffer;
 
 enum class PlainTextURLReadingPolicy : bool { IgnoreURL, AllowURL };
@@ -87,6 +90,7 @@ struct PasteboardWebContent {
     Vector<RefPtr<SharedBuffer>> clientData;
 #endif
 #if PLATFORM(GTK)
+    String contentOrigin;
     bool canSmartCopyOrDelete;
     String text;
     String markup;
@@ -136,17 +140,20 @@ public:
 
     virtual ~PasteboardWebContentReader() = default;
 
-#if PLATFORM(COCOA)
-    virtual bool readWebArchive(SharedBuffer&) = 0;
+#if PLATFORM(COCOA) || PLATFORM(GTK)
     virtual bool readFilePath(const String&, PresentationSize preferredPresentationSize = { }, const String& contentType = { }) = 0;
     virtual bool readFilePaths(const Vector<String>&) = 0;
     virtual bool readHTML(const String&) = 0;
-    virtual bool readRTFD(SharedBuffer&) = 0;
-    virtual bool readRTF(SharedBuffer&) = 0;
     virtual bool readImage(Ref<SharedBuffer>&&, const String& type, PresentationSize preferredPresentationSize = { }) = 0;
     virtual bool readURL(const URL&, const String& title) = 0;
-    virtual bool readDataBuffer(SharedBuffer&, const String& type, const String& name, PresentationSize preferredPresentationSize = { }) = 0;
     virtual bool readPlainText(const String&) = 0;
+#endif
+
+#if PLATFORM(COCOA)
+    virtual bool readWebArchive(SharedBuffer&) = 0;
+    virtual bool readRTFD(SharedBuffer&) = 0;
+    virtual bool readRTF(SharedBuffer&) = 0;
+    virtual bool readDataBuffer(SharedBuffer&, const String& type, const String& name, PresentationSize preferredPresentationSize = { }) = 0;
 #endif
 };
 
@@ -172,6 +179,9 @@ public:
 #if PLATFORM(GTK)
     explicit Pasteboard(const String& name);
     explicit Pasteboard(SelectionData&);
+#if ENABLE(DRAG_SUPPORT)
+    explicit Pasteboard(SelectionData&&);
+#endif
 #endif
 
 #if PLATFORM(WIN)
@@ -250,6 +260,9 @@ public:
 #endif
 
 #if PLATFORM(COCOA)
+#if ENABLE(DRAG_SUPPORT)
+    WEBCORE_EXPORT static String nameOfDragPasteboard();
+#endif
     static bool shouldTreatCocoaTypeAsFile(const String&);
     WEBCORE_EXPORT static NSArray *supportedFileUploadPasteboardTypes();
     int64_t changeCount() const;
@@ -310,9 +323,7 @@ private:
 #endif
 
 #if PLATFORM(GTK)
-    void writeToClipboard();
-    void readFromClipboard();
-    Ref<SelectionData> m_selectionData;
+    Optional<SelectionData> m_selectionData;
     String m_name;
 #endif
 
