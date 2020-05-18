@@ -30,7 +30,6 @@
 #pragma once
 
 #include "ArrayProfile.h"
-#include "ByValInfo.h"
 #include "BytecodeConventions.h"
 #include "CallLinkInfo.h"
 #include "CodeBlockHash.h"
@@ -95,6 +94,7 @@ class MetadataTable;
 class PCToCodeOriginMap;
 class RegisterAtOffsetList;
 class StructureStubInfo;
+struct ByValInfo;
 
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CodeBlockRareData);
 
@@ -222,9 +222,7 @@ public:
 
     void dumpMathICStats();
 
-    bool isStrictMode() const { return m_unlinkedCode->isStrictMode(); }
     bool isConstructor() const { return m_unlinkedCode->isConstructor(); }
-    ECMAMode ecmaMode() const { return isStrictMode() ? StrictMode : NotStrictMode; }
     CodeType codeType() const { return m_unlinkedCode->codeType(); }
 
     JSParserScriptMode scriptMode() const { return m_unlinkedCode->scriptMode(); }
@@ -232,11 +230,10 @@ public:
     bool hasInstalledVMTrapBreakpoints() const;
     bool installVMTrapBreakpoints();
 
-    inline bool isKnownNotImmediate(VirtualRegister reg)
+    inline bool isKnownCell(VirtualRegister reg)
     {
-        if (reg == thisRegister() && !isStrictMode())
-            return true;
-
+        // FIXME: Consider adding back the optimization where we return true if `reg` is `this` and we're in sloppy mode.
+        // https://bugs.webkit.org/show_bug.cgi?id=210145
         if (reg.isConstant())
             return getConstant(reg).isCell();
 
@@ -312,9 +309,10 @@ public:
 
     StructureStubInfo* addStubInfo(AccessType);
 
-    // O(n) operation. Use getStubInfoMap() unless you really only intend to get one
-    // stub info.
+    // O(n) operation. Use getICStatusMap() unless you really only intend to get one stub info.
     StructureStubInfo* findStubInfo(CodeOrigin);
+    // O(n) operation. Use getICStatusMap() unless you really only intend to get one by-val-info.
+    ByValInfo* findByValInfo(CodeOrigin);
 
     ByValInfo* addByValInfo();
 
@@ -406,6 +404,7 @@ public:
     }
 
     const InstructionStream& instructions() const { return m_unlinkedCode->instructions(); }
+    const Instruction* instructionAt(BytecodeIndex index) const { return instructions().at(index).ptr(); }
 
     size_t predictedMachineCodeSize();
 
@@ -1058,16 +1057,23 @@ template <typename ExecutableType>
 Exception* ScriptExecutable::prepareForExecution(VM& vm, JSFunction* function, JSScope* scope, CodeSpecializationKind kind, CodeBlock*& resultCodeBlock)
 {
     if (hasJITCodeFor(kind)) {
-        if (std::is_same<ExecutableType, EvalExecutable>::value)
-            resultCodeBlock = jsCast<CodeBlock*>(jsCast<EvalExecutable*>(this)->codeBlock());
-        else if (std::is_same<ExecutableType, ProgramExecutable>::value)
-            resultCodeBlock = jsCast<CodeBlock*>(jsCast<ProgramExecutable*>(this)->codeBlock());
-        else if (std::is_same<ExecutableType, ModuleProgramExecutable>::value)
-            resultCodeBlock = jsCast<CodeBlock*>(jsCast<ModuleProgramExecutable*>(this)->codeBlock());
-        else if (std::is_same<ExecutableType, FunctionExecutable>::value)
-            resultCodeBlock = jsCast<CodeBlock*>(jsCast<FunctionExecutable*>(this)->codeBlockFor(kind));
-        else
-            RELEASE_ASSERT_NOT_REACHED();
+        if constexpr (std::is_same<ExecutableType, EvalExecutable>::value) {
+            resultCodeBlock = jsCast<CodeBlock*>(jsCast<ExecutableType*>(this)->codeBlock());
+            return nullptr;
+        }
+        if constexpr (std::is_same<ExecutableType, ProgramExecutable>::value) {
+            resultCodeBlock = jsCast<CodeBlock*>(jsCast<ExecutableType*>(this)->codeBlock());
+            return nullptr;
+        }
+        if constexpr (std::is_same<ExecutableType, ModuleProgramExecutable>::value) {
+            resultCodeBlock = jsCast<CodeBlock*>(jsCast<ExecutableType*>(this)->codeBlock());
+            return nullptr;
+        }
+        if constexpr (std::is_same<ExecutableType, FunctionExecutable>::value) {
+            resultCodeBlock = jsCast<CodeBlock*>(jsCast<ExecutableType*>(this)->codeBlockFor(kind));
+            return nullptr;
+        }
+        RELEASE_ASSERT_NOT_REACHED();
         return nullptr;
     }
     return prepareForExecutionImpl(vm, function, scope, kind, resultCodeBlock);

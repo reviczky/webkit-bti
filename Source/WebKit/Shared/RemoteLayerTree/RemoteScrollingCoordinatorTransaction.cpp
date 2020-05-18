@@ -50,52 +50,52 @@ using namespace WebCore;
 
 template<> struct ArgumentCoder<ScrollingStateNode> {
     static void encode(Encoder&, const ScrollingStateNode&);
-    static bool decode(Decoder&, ScrollingStateNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStateScrollingNode> {
     static void encode(Encoder&, const ScrollingStateScrollingNode&);
-    static bool decode(Decoder&, ScrollingStateScrollingNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateScrollingNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStateFrameHostingNode> {
     static void encode(Encoder&, const ScrollingStateFrameHostingNode&);
-    static bool decode(Decoder&, ScrollingStateFrameHostingNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateFrameHostingNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStateFrameScrollingNode> {
     static void encode(Encoder&, const ScrollingStateFrameScrollingNode&);
-    static bool decode(Decoder&, ScrollingStateFrameScrollingNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateFrameScrollingNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStateOverflowScrollingNode> {
     static void encode(Encoder&, const ScrollingStateOverflowScrollingNode&);
-    static bool decode(Decoder&, ScrollingStateOverflowScrollingNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateOverflowScrollingNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStateOverflowScrollProxyNode> {
     static void encode(Encoder&, const ScrollingStateOverflowScrollProxyNode&);
-    static bool decode(Decoder&, ScrollingStateOverflowScrollProxyNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateOverflowScrollProxyNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStateFixedNode> {
     static void encode(Encoder&, const ScrollingStateFixedNode&);
-    static bool decode(Decoder&, ScrollingStateFixedNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateFixedNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStateStickyNode> {
     static void encode(Encoder&, const ScrollingStateStickyNode&);
-    static bool decode(Decoder&, ScrollingStateStickyNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStateStickyNode&);
 };
 
 template<> struct ArgumentCoder<ScrollingStatePositionedNode> {
     static void encode(Encoder&, const ScrollingStatePositionedNode&);
-    static bool decode(Decoder&, ScrollingStatePositionedNode&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollingStatePositionedNode&);
 };
 
 template<> struct ArgumentCoder<RequestedScrollData> {
     static void encode(Encoder&, const RequestedScrollData&);
-    static bool decode(Decoder&, RequestedScrollData&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, RequestedScrollData&);
 };
 
 } // namespace IPC
@@ -157,6 +157,7 @@ void ArgumentCoder<ScrollingStateScrollingNode>::encode(Encoder& encoder, const 
     SCROLLING_NODE_ENCODE(ScrollingStateScrollingNode::CurrentVerticalSnapOffsetIndex, currentVerticalSnapPointIndex)
 #endif
     SCROLLING_NODE_ENCODE(ScrollingStateScrollingNode::ScrollableAreaParams, scrollableAreaParameters)
+    // UI-side compositing can't do synchronous scrolling so don't encode synchronousScrollingReasons.
     SCROLLING_NODE_ENCODE(ScrollingStateScrollingNode::RequestedScrollPosition, requestedScrollData)
 
     if (node.hasChangedProperty(ScrollingStateScrollingNode::ScrollContainerLayer))
@@ -178,7 +179,6 @@ void ArgumentCoder<ScrollingStateFrameScrollingNode>::encode(Encoder& encoder, c
 
     SCROLLING_NODE_ENCODE(ScrollingStateFrameScrollingNode::FrameScaleFactor, frameScaleFactor)
     SCROLLING_NODE_ENCODE(ScrollingStateFrameScrollingNode::EventTrackingRegion, eventTrackingRegions)
-    SCROLLING_NODE_ENCODE(ScrollingStateFrameScrollingNode::ReasonsForSynchronousScrolling, synchronousScrollingReasons)
     SCROLLING_NODE_ENCODE_ENUM(ScrollingStateFrameScrollingNode::BehaviorForFixedElements, scrollBehaviorForFixedElements)
     SCROLLING_NODE_ENCODE(ScrollingStateFrameScrollingNode::HeaderHeight, headerHeight)
     SCROLLING_NODE_ENCODE(ScrollingStateFrameScrollingNode::FooterHeight, footerHeight)
@@ -207,7 +207,6 @@ void ArgumentCoder<ScrollingStateFrameScrollingNode>::encode(Encoder& encoder, c
 void ArgumentCoder<ScrollingStateFrameHostingNode>::encode(Encoder& encoder, const ScrollingStateFrameHostingNode& node)
 {
     encoder << static_cast<const ScrollingStateNode&>(node);
-    // ParentRelativeScrollableRect isn't used so we don't encode it.
 }
 
 void ArgumentCoder<ScrollingStateOverflowScrollingNode>::encode(Encoder& encoder, const ScrollingStateOverflowScrollingNode& node)
@@ -296,7 +295,6 @@ bool ArgumentCoder<ScrollingStateFrameScrollingNode>::decode(Decoder& decoder, S
 
     SCROLLING_NODE_DECODE(ScrollingStateFrameScrollingNode::FrameScaleFactor, float, setFrameScaleFactor);
     SCROLLING_NODE_DECODE(ScrollingStateFrameScrollingNode::EventTrackingRegion, EventTrackingRegions, setEventTrackingRegions);
-    SCROLLING_NODE_DECODE(ScrollingStateFrameScrollingNode::ReasonsForSynchronousScrolling, SynchronousScrollingReasons, setSynchronousScrollingReasons);
     SCROLLING_NODE_DECODE_ENUM(ScrollingStateFrameScrollingNode::BehaviorForFixedElements, ScrollBehaviorForFixedElements, setScrollBehaviorForFixedElements);
 
     SCROLLING_NODE_DECODE(ScrollingStateFrameScrollingNode::HeaderHeight, int, setHeaderHeight);
@@ -669,7 +667,6 @@ static void dump(TextStream& ts, const ScrollingStateFrameScrollingNode& node, b
         }
     }
 
-    // FIXME: dump synchronousScrollingReasons
     // FIXME: dump scrollableAreaParameters
     // FIXME: dump scrollBehaviorForFixedElements
 

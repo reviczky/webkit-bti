@@ -1446,10 +1446,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
     /**
      * WebKitSettings:allow-top-navigation-to-data-urls:
      *
-     * Whether or not the top frame is allowed to navigate to data URLs. It is encouraged to disable it
+     * Whether or not the top frame is allowed to navigate to data URLs. It is disabled by default
      * due to the risk it poses when loading untrusted URLs, with data URLs being used in scamming
      * and phishing attacks. In contrast, a scenario where it could be enabled could be an app that
-     * embeds a WebView and you have control of the pages being shown instead of a generic browser.
+     * embeds a WebView and you have control of the pages being show instead of a generic browser.
      *
      * Since: 2.28
      */
@@ -1458,7 +1458,7 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         g_param_spec_boolean("allow-top-navigation-to-data-urls",
             _("Allow top frame navigation to data URLs"),
             _("Whether or not top frame navigation is allowed to data URLs"),
-            TRUE,
+            FALSE,
             readWriteConstructParamFlags));
 
 #if PLATFORM(GTK)
@@ -3801,4 +3801,10 @@ void webkit_settings_set_enable_media(WebKitSettings* settings, gboolean enabled
 
     priv->preferences->setMediaEnabled(enabled);
     g_object_notify(G_OBJECT(settings), "enable-media");
+}
+
+void webkitSettingsSetMediaCaptureRequiresSecureConnection(WebKitSettings* settings, bool required)
+{
+    WebKitSettingsPrivate* priv = settings->priv;
+    priv->preferences->setMediaCaptureRequiresSecureConnection(required);
 }

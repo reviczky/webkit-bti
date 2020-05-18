@@ -29,6 +29,7 @@
 
 #include "AXObjectCache.h"
 #include "Chrome.h"
+#include "ChromeClient.h"
 #include "Document.h"
 #include "Editing.h"
 #include "Editor.h"
@@ -77,9 +78,9 @@ static inline bool isFocusScopeOwner(const Element& element)
         return true;
     if (is<HTMLSlotElement>(element)) {
         ShadowRoot* root = element.containingShadowRoot();
-        if (root && root->host() && !hasCustomFocusLogic(*root->host()))
+        if (!root || !root->host() || !hasCustomFocusLogic(*root->host()))
             return true;
-    } 
+    }
     return false;
 }
 
@@ -820,8 +821,11 @@ bool FocusController::setFocusedElement(Element* element, Frame& newFocusedFrame
     RefPtr<Document> oldDocument = oldFocusedFrame ? oldFocusedFrame->document() : nullptr;
     
     Element* oldFocusedElement = oldDocument ? oldDocument->focusedElement() : nullptr;
-    if (oldFocusedElement == element)
+    if (oldFocusedElement == element) {
+        if (element)
+            m_page.chrome().client().elementDidRefocus(*element);
         return true;
+    }
 
     // FIXME: Might want to disable this check for caretBrowsing
     if (oldFocusedElement && oldFocusedElement->isRootEditableElement() && !relinquishesEditingFocus(oldFocusedElement))
@@ -967,7 +971,8 @@ static void updateFocusCandidateIfNeeded(FocusDirection direction, const FocusCa
         // If 2 nodes are intersecting, do hit test to find which node in on top.
         LayoutUnit x = intersectionRect.x() + intersectionRect.width() / 2;
         LayoutUnit y = intersectionRect.y() + intersectionRect.height() / 2;
-        HitTestResult result = candidate.visibleNode->document().page()->mainFrame().eventHandler().hitTestResultAtPoint(IntPoint(x, y), HitTestRequest::ReadOnly | HitTestRequest::Active | HitTestRequest::IgnoreClipping | HitTestRequest::DisallowUserAgentShadowContent | HitTestRequest::AllowChildFrameContent);
+        constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::IgnoreClipping, HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::AllowChildFrameContent };
+        HitTestResult result = candidate.visibleNode->document().page()->mainFrame().eventHandler().hitTestResultAtPoint(IntPoint(x, y), hitType);
         if (candidate.visibleNode->contains(result.innerNode())) {
             closest = candidate;
             return;

@@ -39,10 +39,11 @@
 #include "AirPhaseScope.h"
 #include "AirRegLiveness.h"
 #include "AirStackAllocation.h"
-#include "AirTmpInlines.h"
 #include "AirTmpMap.h"
 #include <wtf/ListDump.h>
 #include <wtf/Range.h>
+
+using WTF::Range;
 
 namespace JSC { namespace B3 { namespace Air {
 

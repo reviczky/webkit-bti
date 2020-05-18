@@ -1348,13 +1348,13 @@ Object.defineProperty(Number, "abbreviate",
         if (num < 1000)
             return num.toLocaleString();
 
-        if (num < 1000000)
+        if (num < 1_000_000)
             return WI.UIString("%.1fK").format(Math.round(num / 100) / 10);
 
-        if (num < 1000000000)
-            return WI.UIString("%.1fM").format(Math.round(num / 100000) / 10);
+        if (num < 1_000_000_000)
+            return WI.UIString("%.1fM").format(Math.round(num / 100_000) / 10);
 
-        return WI.UIString("%.1fB").format(Math.round(num / 100000000) / 10);
+        return WI.UIString("%.1fB").format(Math.round(num / 100_000_000) / 10);
     }
 });
 
@@ -1642,11 +1642,6 @@ function isWebKitInternalScript(url)
         return true;
 
     return url && url.startsWith("__Web") && url.endsWith("__");
-}
-
-function isWebKitExtensionScheme(scheme)
-{
-    return scheme && scheme.endsWith("-extension");
 }
 
 function isFunctionStringNativeCode(str)

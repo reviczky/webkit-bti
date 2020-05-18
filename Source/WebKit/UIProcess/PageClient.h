@@ -54,13 +54,13 @@ OBJC_CLASS CALayer;
 OBJC_CLASS NSFileWrapper;
 OBJC_CLASS NSMenu;
 OBJC_CLASS NSSet;
+OBJC_CLASS NSTextAlternatives;
 OBJC_CLASS UIGestureRecognizer;
 OBJC_CLASS WKDrawingView;
 OBJC_CLASS _WKRemoteObjectRegistry;
 
 #if USE(APPKIT)
 OBJC_CLASS WKView;
-OBJC_CLASS NSTextAlternatives;
 #endif
 #endif
 
@@ -88,6 +88,7 @@ class WebMediaSessionManager;
 class SelectionData;
 #endif
 
+enum class MouseEventPolicy : uint8_t;
 enum class RouteSharingPolicy : uint8_t;
 enum class ScrollbarStyle : uint8_t;
 enum class TextIndicatorWindowLifetime : uint8_t;
@@ -105,6 +106,10 @@ using FloatBoxExtent = RectEdges<float>;
 
 #if ENABLE(DRAG_SUPPORT)
 struct DragItem;
+#endif
+
+#if ENABLE(ATTACHMENT_ELEMENT)
+struct PromisedAttachmentInfo;
 #endif
 }
 
@@ -135,6 +140,7 @@ class WebProcessProxy;
 enum class ContinueUnsafeLoad : bool { No, Yes };
 
 struct FocusedElementInformation;
+struct FrameInfoData;
 struct InteractionInformationAtPosition;
 struct WebAutocorrectionContext;
 struct WebHitTestResultData;
@@ -196,6 +202,11 @@ public:
     // Return whether the view is visible.
     virtual bool isViewVisible() = 0;
 
+#if PLATFORM(IOS_FAMILY)
+    // Return whether the application is visible.
+    virtual bool isApplicationVisible() = 0;
+#endif
+
     // Return whether the view is visible, or occluded by another window.
     virtual bool isViewVisibleOrOccluded() { return isViewVisible(); }
 
@@ -219,7 +230,7 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     // FIXME: Adopt the WKUIDelegatePrivate callback on iOS and remove this.
-    virtual void decidePolicyForGeolocationPermissionRequest(WebFrameProxy&, API::SecurityOrigin&, Function<void(bool)>&) = 0;
+    virtual void decidePolicyForGeolocationPermissionRequest(WebFrameProxy&, const FrameInfoData&, Function<void(bool)>&) = 0;
 #endif
 
     virtual void didStartProvisionalLoadForMainFrame() { };
@@ -228,7 +239,7 @@ public:
 
     virtual void handleDownloadRequest(DownloadProxy&) = 0;
 
-    virtual bool handleRunOpenPanel(WebPageProxy*, WebFrameProxy*, API::OpenPanelParameters*, WebOpenPanelResultListenerProxy*) { return false; }
+    virtual bool handleRunOpenPanel(WebPageProxy*, WebFrameProxy*, const FrameInfoData&, API::OpenPanelParameters*, WebOpenPanelResultListenerProxy*) { return false; }
     virtual bool showShareSheet(const WebCore::ShareDataWithParsedURL&, WTF::CompletionHandler<void (bool)>&&) { return false; }
 
     virtual void didChangeContentSize(const WebCore::IntSize&) = 0;
@@ -239,11 +250,12 @@ public:
     
 #if ENABLE(DRAG_SUPPORT)
 #if PLATFORM(GTK)
-    virtual void startDrag(Ref<WebCore::SelectionData>&&, WebCore::DragOperation, RefPtr<ShareableBitmap>&& dragImage) = 0;
+    virtual void startDrag(WebCore::SelectionData&&, WebCore::DragOperation, RefPtr<ShareableBitmap>&& dragImage) = 0;
 #else
     virtual void startDrag(const WebCore::DragItem&, const ShareableBitmap::Handle&) { }
 #endif
     virtual void didPerformDragOperation(bool) { }
+    virtual void didPerformDragControllerAction() { }
 #endif // ENABLE(DRAG_SUPPORT)
 
     virtual void setCursor(const WebCore::Cursor&) = 0;
@@ -298,8 +310,13 @@ public:
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     virtual void didCreateContextForVisibilityPropagation(LayerHostingContextID) { }
+    virtual void didCreateContextInGPUProcessForVisibilityPropagation(LayerHostingContextID) { }
 #endif
-    
+
+#if ENABLE(GPU_PROCESS)
+    virtual void gpuProcessCrashed() { }
+#endif
+
     virtual void doneWithKeyEvent(const NativeWebKeyboardEvent&, bool wasEventHandled) = 0;
 #if ENABLE(TOUCH_EVENTS)
     virtual void doneWithTouchEvent(const NativeWebTouchEvent&, bool wasEventHandled) = 0;
@@ -339,8 +356,16 @@ public:
     virtual void enterAcceleratedCompositingMode(const LayerTreeContext&) = 0;
     virtual void exitAcceleratedCompositingMode() = 0;
     virtual void updateAcceleratedCompositingMode(const LayerTreeContext&) = 0;
+    virtual void didFirstLayerFlush(const LayerTreeContext&) { }
 
     virtual void takeFocus(WebCore::FocusDirection) { }
+
+#if USE(DICTATION_ALTERNATIVES)
+    virtual uint64_t addDictationAlternatives(NSTextAlternatives *) = 0;
+    virtual void removeDictationAlternatives(uint64_t dictationContext) = 0;
+    virtual void showDictationAlternativeUI(const WebCore::FloatRect& boundingBoxOfDictatedText, uint64_t dictationContext) = 0;
+    virtual Vector<String> dictationAlternatives(uint64_t dictationContext) = 0;
+#endif
 
 #if PLATFORM(MAC)
     virtual void pluginFocusOrWindowFocusChanged(uint64_t pluginComplexTextInputIdentifier, bool pluginHasFocusAndWindowHasFocus) = 0;
@@ -365,18 +390,10 @@ public:
     virtual NSView *inspectorAttachmentView() = 0;
     virtual _WKRemoteObjectRegistry *remoteObjectRegistry() = 0;
 
-#if USE(APPKIT)
     virtual void intrinsicContentSizeDidChange(const WebCore::IntSize& intrinsicContentSize) = 0;
-#if USE(DICTATION_ALTERNATIVES)
-    virtual uint64_t addDictationAlternatives(const RetainPtr<NSTextAlternatives>&) = 0;
-    virtual void removeDictationAlternatives(uint64_t dictationContext) = 0;
-    virtual void showDictationAlternativeUI(const WebCore::FloatRect& boundingBoxOfDictatedText, uint64_t dictationContext) = 0;
-    virtual Vector<String> dictationAlternatives(uint64_t dictationContext) = 0;
-#endif // USE(DICTATION_ALTERNATIVES)
-#if USE(INSERTION_UNDO_GROUPING)
+
     virtual void registerInsertionUndoGrouping() = 0;
-#endif // USE(INSERTION_UNDO_GROUPING)
-#endif // USE(APPKIT)
+
     virtual void setEditableElementIsFocused(bool) = 0;
 #endif // PLATFORM(MAC)
 
@@ -395,12 +412,13 @@ public:
     virtual void updateInputContextAfterBlurringAndRefocusingElement() = 0;
     virtual void elementDidBlur() = 0;
     virtual void focusedElementDidChangeInputMode(WebCore::InputMode) = 0;
-    virtual void didReceiveEditorStateUpdateAfterFocus() = 0;
+    virtual void didUpdateEditorState() = 0;
     virtual bool isFocusingElement() = 0;
     virtual bool interpretKeyEvent(const NativeWebKeyboardEvent&, bool isCharEvent) = 0;
     virtual void positionInformationDidChange(const InteractionInformationAtPosition&) = 0;
     virtual void saveImageToLibrary(Ref<WebCore::SharedBuffer>&&) = 0;
     virtual void showPlaybackTargetPicker(bool hasVideo, const WebCore::IntRect& elementRect, WebCore::RouteSharingPolicy, const String&) = 0;
+    virtual void showDataDetectorsUIForPositionInformation(const InteractionInformationAtPosition&) = 0;
     virtual void disableDoubleTapGesturesDuringTapIfNecessary(uint64_t requestID) = 0;
     virtual void handleSmartMagnificationInformationForPotentialTap(uint64_t requestID, const WebCore::FloatRect& renderRect, bool fitEntireRect, double viewportMinimumScale, double viewportMaximumScale, bool nodeIsRootLevel) = 0;
     virtual double minimumZoomScale() const = 0;
@@ -452,6 +470,8 @@ public:
     virtual bool scrollingUpdatesDisabledForTesting() { return false; }
 
     virtual bool hasSafeBrowsingWarning() const { return false; }
+
+    virtual void setMouseEventPolicy(WebCore::MouseEventPolicy) { }
     
 #if PLATFORM(MAC)
     virtual void didPerformImmediateActionHitTest(const WebHitTestResultData&, bool contentPreventsDefault, API::Object*) = 0;
@@ -496,6 +516,7 @@ public:
     virtual void didInsertAttachment(API::Attachment&, const String& source) { }
     virtual void didRemoveAttachment(API::Attachment&) { }
     virtual void didInvalidateDataForAttachment(API::Attachment&) { }
+    virtual void writePromisedAttachmentToPasteboard(WebCore::PromisedAttachmentInfo&&) { }
 #if PLATFORM(COCOA)
     virtual NSFileWrapper *allocFileWrapperInstance() const { return nullptr; }
     virtual NSSet *serializableFileWrapperClasses() const { return nullptr; }
@@ -506,7 +527,7 @@ public:
     virtual RetainPtr<WKDrawingView> createDrawingView(WebCore::GraphicsLayer::EmbeddedViewID) { return nullptr; }
 #endif
 
-#if ENABLE(POINTER_EVENTS) && PLATFORM(COCOA)
+#if PLATFORM(COCOA)
     virtual void cancelPointersForGestureRecognizer(UIGestureRecognizer*) { }
     virtual WTF::Optional<unsigned> activeTouchIdentifierForGestureRecognizer(UIGestureRecognizer*) { return WTF::nullopt; }
 #endif

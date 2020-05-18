@@ -26,7 +26,7 @@
 #include "config.h"
 #include "FunctionRareData.h"
 
-#include "JSCInlines.h"
+#include "JSCellInlines.h"
 #include "ObjectAllocationProfileInlines.h"
 
 namespace JSC {
@@ -73,8 +73,8 @@ FunctionRareData::FunctionRareData(VM& vm, ExecutableBase* executable)
     , m_executable(vm, this, executable)
     , m_hasReifiedLength(false)
     , m_hasReifiedName(false)
-    , m_hasModifiedLength(false)
-    , m_hasModifiedName(false)
+    , m_hasModifiedLengthForNonHostFunction(false)
+    , m_hasModifiedNameForNonHostFunction(false)
 {
 }
 

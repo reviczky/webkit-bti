@@ -135,6 +135,7 @@ GraphicsLayer::GraphicsLayer(Type type, GraphicsLayerClient& layerClient)
     , m_masksToBounds(false)
     , m_drawsContent(false)
     , m_contentsVisible(true)
+    , m_contentsRectClipsDescendants(false)
     , m_acceleratesDrawing(false)
     , m_usesDisplayListDrawing(false)
     , m_appliesPageScale(false)
@@ -1004,6 +1005,11 @@ void GraphicsLayer::dumpProperties(TextStream& ts, LayerTreeAsTextBehavior behav
         ts << indent << "(event region" << m_eventRegion;
         ts << indent << ")\n";
     }
+    
+#if ENABLE(SCROLLING_THREAD)
+    if ((behavior & LayerTreeAsTextDebug) && m_scrollingNodeID)
+        ts << indent << "(scrolling node " << m_scrollingNodeID << ")\n";
+#endif
 
     if (behavior & LayerTreeAsTextIncludePaintingPhases && paintingPhase())
         ts << indent << "(paintingPhases " << paintingPhase() << ")\n";

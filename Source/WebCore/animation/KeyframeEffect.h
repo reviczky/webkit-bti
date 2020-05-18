@@ -37,7 +37,7 @@
 #include "KeyframeList.h"
 #include "RenderStyle.h"
 #include "StyleProperties.h"
-#include "WebAnimationUtilities.h"
+#include "WebAnimationTypes.h"
 #include <wtf/Ref.h>
 
 namespace WebCore {
@@ -50,7 +50,7 @@ class KeyframeEffect : public AnimationEffect
 public:
     static ExceptionOr<Ref<KeyframeEffect>> create(JSC::JSGlobalObject&, Element*, JSC::Strong<JSC::JSObject>&&, Optional<Variant<double, KeyframeEffectOptions>>&&);
     static ExceptionOr<Ref<KeyframeEffect>> create(JSC::JSGlobalObject&, Ref<KeyframeEffect>&&);
-    static Ref<KeyframeEffect> create(const Element&);
+    static Ref<KeyframeEffect> create(const Element&, PseudoId);
     ~KeyframeEffect() { }
 
     bool isKeyframeEffect() const final { return true; }
@@ -102,9 +102,16 @@ public:
     const Vector<ParsedKeyframe>& parsedKeyframes() const { return m_parsedKeyframes; }
 
     Element* target() const { return m_target.get(); }
+    Element* targetElementOrPseudoElement() const;
     void setTarget(RefPtr<Element>&&);
 
+    bool targetsPseudoElement() const;
+    const String pseudoElement() const;
+    ExceptionOr<void> setPseudoElement(const String&);
+
+    Vector<JSC::Strong<JSC::JSObject>> getBindingsKeyframes(JSC::JSGlobalObject&);
     Vector<JSC::Strong<JSC::JSObject>> getKeyframes(JSC::JSGlobalObject&);
+    ExceptionOr<void> setBindingsKeyframes(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&);
     ExceptionOr<void> setKeyframes(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&);
 
     IterationCompositeOperation iterationComposite() const { return m_iterationCompositeOperation; }
@@ -117,7 +124,7 @@ public:
     void invalidate() override;
     void animationDidTick() final;
     void animationDidPlay() final;
-    void animationDidSeek() final;
+    void animationDidChangeTimingProperties() final;
     void animationWasCanceled() final;
     void animationSuspensionStateDidChange(bool) final;
     void animationTimelineDidChange(AnimationTimeline*) final;
@@ -157,15 +164,19 @@ public:
 
     const RenderStyle* unanimatedStyle() const { return m_unanimatedStyle.get(); }
 
-private:
-    KeyframeEffect(Element*);
+    bool requiresPseudoElement() const;
 
-    enum class AcceleratedAction : uint8_t { Play, Pause, Seek, Stop };
+private:
+    KeyframeEffect(Element*, PseudoId);
+
+    enum class AcceleratedAction : uint8_t { Play, Pause, UpdateTiming, Stop };
     enum class BlendingKeyframesSource : uint8_t { CSSAnimation, CSSTransition, WebAnimation };
     enum class AcceleratedProperties : uint8_t { None, Some, All };
 
+    Document* document() const;
     void updateEffectStackMembership();
     void copyPropertiesFromSource(Ref<KeyframeEffect>&&);
+    void didChangeTargetElementOrPseudoElement(Element*);
     ExceptionOr<void> processKeyframes(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&);
     void addPendingAcceleratedAction(AcceleratedAction);
     void updateAcceleratedActions();
@@ -191,8 +202,8 @@ private:
     KeyframeList m_blendingKeyframes { emptyString() };
     Vector<ParsedKeyframe> m_parsedKeyframes;
     Vector<AcceleratedAction> m_pendingAcceleratedActions;
-    WeakPtr<Element> m_target;
-
+    RefPtr<Element> m_target;
+    PseudoId m_pseudoId { PseudoId::None };
     std::unique_ptr<const RenderStyle> m_unanimatedStyle;
 
     AcceleratedAction m_lastRecordedAcceleratedAction { AcceleratedAction::Stop };

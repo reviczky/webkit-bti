@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2004-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
  * Copyright (C) 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  * Copyright (C) 2011 Motorola Mobility. All rights reserved.
  *
@@ -44,7 +44,6 @@
 #include "HTMLBDIElement.h"
 #include "HTMLBRElement.h"
 #include "HTMLButtonElement.h"
-#include "HTMLCollection.h"
 #include "HTMLDocument.h"
 #include "HTMLElementFactory.h"
 #include "HTMLFieldSetElement.h"
@@ -60,10 +59,10 @@
 #include "NodeTraversal.h"
 #include "RenderElement.h"
 #include "ScriptController.h"
+#include "ScriptDisallowedScope.h"
 #include "ShadowRoot.h"
 #include "SimulatedClick.h"
 #include "StyleProperties.h"
-#include "SubframeLoader.h"
 #include "Text.h"
 #include "XMLNames.h"
 #include "markup.h"
@@ -506,9 +505,9 @@ static Ref<DocumentFragment> textToFragment(Document& document, const String& te
 // http://www.whatwg.org/specs/web-apps/current-work/multipage/common-dom-interfaces.html#limited-to-only-known-values
 static inline const AtomString& toValidDirValue(const AtomString& value)
 {
-    static NeverDestroyed<AtomString> ltrValue("ltr", AtomString::ConstructFromLiteral);
-    static NeverDestroyed<AtomString> rtlValue("rtl", AtomString::ConstructFromLiteral);
-    static NeverDestroyed<AtomString> autoValue("auto", AtomString::ConstructFromLiteral);
+    static MainThreadNeverDestroyed<const AtomString> ltrValue("ltr", AtomString::ConstructFromLiteral);
+    static MainThreadNeverDestroyed<const AtomString> rtlValue("rtl", AtomString::ConstructFromLiteral);
+    static MainThreadNeverDestroyed<const AtomString> autoValue("auto", AtomString::ConstructFromLiteral);
     if (equalLettersIgnoringASCIICase(value, "ltr"))
         return ltrValue;
     if (equalLettersIgnoringASCIICase(value, "rtl"))
@@ -661,14 +660,32 @@ String HTMLElement::contentEditable() const
     return "inherit"_s;
 }
 
+static const AtomString& trueName()
+{
+    static MainThreadNeverDestroyed<const AtomString> trueValue("true", AtomString::ConstructFromLiteral);
+    return trueValue.get();
+}
+
+static const AtomString& falseName()
+{
+    static MainThreadNeverDestroyed<const AtomString> falseValue("false", AtomString::ConstructFromLiteral);
+    return falseValue.get();
+}
+
+static const AtomString& plaintextOnlyName()
+{
+    static MainThreadNeverDestroyed<const AtomString> plaintextOnlyValue("plaintext-only", AtomString::ConstructFromLiteral);
+    return plaintextOnlyValue.get();
+}
+
 ExceptionOr<void> HTMLElement::setContentEditable(const String& enabled)
 {
     if (equalLettersIgnoringASCIICase(enabled, "true"))
-        setAttributeWithoutSynchronization(contenteditableAttr, AtomString("true", AtomString::ConstructFromLiteral));
+        setAttributeWithoutSynchronization(contenteditableAttr, trueName());
     else if (equalLettersIgnoringASCIICase(enabled, "false"))
-        setAttributeWithoutSynchronization(contenteditableAttr, AtomString("false", AtomString::ConstructFromLiteral));
+        setAttributeWithoutSynchronization(contenteditableAttr, falseName());
     else if (equalLettersIgnoringASCIICase(enabled, "plaintext-only"))
-        setAttributeWithoutSynchronization(contenteditableAttr, AtomString("plaintext-only", AtomString::ConstructFromLiteral));
+        setAttributeWithoutSynchronization(contenteditableAttr, plaintextOnlyName());
     else if (equalLettersIgnoringASCIICase(enabled, "inherit"))
         removeAttribute(contenteditableAttr);
     else
@@ -683,9 +700,7 @@ bool HTMLElement::draggable() const
 
 void HTMLElement::setDraggable(bool value)
 {
-    setAttributeWithoutSynchronization(draggableAttr, value
-        ? AtomString("true", AtomString::ConstructFromLiteral)
-        : AtomString("false", AtomString::ConstructFromLiteral));
+    setAttributeWithoutSynchronization(draggableAttr, value ? trueName() : falseName());
 }
 
 bool HTMLElement::spellcheck() const
@@ -695,9 +710,7 @@ bool HTMLElement::spellcheck() const
 
 void HTMLElement::setSpellcheck(bool enable)
 {
-    setAttributeWithoutSynchronization(spellcheckAttr, enable
-        ? AtomString("true", AtomString::ConstructFromLiteral)
-        : AtomString("false", AtomString::ConstructFromLiteral));
+    setAttributeWithoutSynchronization(spellcheckAttr, enable ? trueName() : falseName());
 }
 
 void HTMLElement::click()
@@ -705,9 +718,9 @@ void HTMLElement::click()
     simulateClick(*this, nullptr, SendNoEvents, DoNotShowPressedLook, SimulatedClickSource::Bindings);
 }
 
-void HTMLElement::accessKeyAction(bool sendMouseEvents)
+bool HTMLElement::accessKeyAction(bool sendMouseEvents)
 {
-    dispatchSimulatedClick(nullptr, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
+    return dispatchSimulatedClick(nullptr, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
 String HTMLElement::title() const
@@ -741,7 +754,7 @@ bool HTMLElement::rendererIsEverNeeded()
             return false;
     } else if (hasTagName(noembedTag)) {
         RefPtr<Frame> frame = document().frame();
-        if (frame && frame->loader().subframeLoader().allowPlugins())
+        if (frame && frame->loader().arePluginsEnabled())
             return false;
     }
     return StyledElement::rendererIsEverNeeded();
@@ -767,12 +780,14 @@ FormAssociatedElement* HTMLElement::asFormAssociatedElement()
     return nullptr;
 }
 
-static inline bool elementAffectsDirectionality(const Node& node)
+static bool elementAffectsDirectionality(const HTMLElement& element)
 {
-    if (!is<HTMLElement>(node))
-        return false;
-    const HTMLElement& element = downcast<HTMLElement>(node);
     return is<HTMLBDIElement>(element) || element.hasAttributeWithoutSynchronization(dirAttr);
+}
+
+static bool elementAffectsDirectionality(const Node& node)
+{
+    return is<HTMLElement>(node) && elementAffectsDirectionality(downcast<HTMLElement>(node));
 }
 
 static void setHasDirAutoFlagRecursively(Node* firstNode, bool flag, Node* lastNode = nullptr)
@@ -885,10 +900,10 @@ void HTMLElement::adjustDirectionalityIfNeededAfterChildAttributeChanged(Element
     setHasDirAutoFlagRecursively(child, false);
     if (!renderer() || renderer()->style().direction() == textDirection)
         return;
-    for (auto& elementToAdjust : elementLineage(this)) {
-        if (elementAffectsDirectionality(elementToAdjust)) {
-            elementToAdjust.invalidateStyleForSubtree();
-            return;
+    for (auto& element : lineageOfType<HTMLElement>(*this)) {
+        if (elementAffectsDirectionality(element)) {
+            element.invalidateStyleForSubtree();
+            break;
         }
     }
 }
@@ -1099,7 +1114,9 @@ bool HTMLElement::shouldAutocorrect() const
 
 void HTMLElement::setAutocorrect(bool autocorrect)
 {
-    setAttributeWithoutSynchronization(autocorrectAttr, autocorrect ? AtomString("on", AtomString::ConstructFromLiteral) : AtomString("off", AtomString::ConstructFromLiteral));
+    static MainThreadNeverDestroyed<const AtomString> onName("on", AtomString::ConstructFromLiteral);
+    static MainThreadNeverDestroyed<const AtomString> offName("off", AtomString::ConstructFromLiteral);
+    setAttributeWithoutSynchronization(autocorrectAttr, autocorrect ? onName.get() : offName.get());
 }
 
 #endif

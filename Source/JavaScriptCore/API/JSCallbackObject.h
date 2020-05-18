@@ -123,13 +123,6 @@ public:
     
 template <class Parent>
 class JSCallbackObject final : public Parent {
-protected:
-    JSCallbackObject(JSGlobalObject*, Structure*, JSClassRef, void* data);
-    JSCallbackObject(VM&, JSClassRef, Structure*);
-
-    void finishCreation(JSGlobalObject*);
-    void finishCreation(VM&);
-
 public:
     using Base = Parent;
     static constexpr unsigned StructureFlags = Base::StructureFlags | ProhibitsPropertyCaching | OverridesGetOwnPropertySlot | InterceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero | ImplementsHasInstance | OverridesGetPropertyNames | OverridesGetCallData;
@@ -190,6 +183,12 @@ public:
     using Parent::methodTable;
 
 private:
+    JSCallbackObject(JSGlobalObject*, Structure*, JSClassRef, void* data);
+    JSCallbackObject(VM&, JSClassRef, Structure*);
+
+    void finishCreation(JSGlobalObject*);
+    void finishCreation(VM&);
+
     static IsoSubspace* subspaceForImpl(VM&, SubspaceAccess);
     static String className(const JSObject*, VM&);
     static String toStringName(const JSObject*, JSGlobalObject*);
@@ -202,15 +201,15 @@ private:
     static bool put(JSCell*, JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
     static bool putByIndex(JSCell*, JSGlobalObject*, unsigned, JSValue, bool shouldThrow);
 
-    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName);
+    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
     static bool deletePropertyByIndex(JSCell*, JSGlobalObject*, unsigned);
 
     static bool customHasInstance(JSObject*, JSGlobalObject*, JSValue);
 
     static void getOwnNonIndexPropertyNames(JSObject*, JSGlobalObject*, PropertyNameArray&, EnumerationMode);
 
-    static ConstructType getConstructData(JSCell*, ConstructData&);
-    static CallType getCallData(JSCell*, CallData&);
+    static CallData getConstructData(JSCell*);
+    static CallData getCallData(JSCell*);
 
     static void visitChildren(JSCell* cell, SlotVisitor& visitor)
     {

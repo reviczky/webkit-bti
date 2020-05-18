@@ -54,9 +54,9 @@ WorkerSWClientConnection::~WorkerSWClientConnection()
     for (auto& callback : getRegistrationsRequests.values())
         callback({ });
 
-    auto whenRegistrationReadyRequests = WTFMove(m_whenRegistrationReadyRequests);
-    for (auto& callback : whenRegistrationReadyRequests.values())
-        callback({ });
+    auto unregisterRequests = WTFMove(m_unregisterRequests);
+    for (auto& callback : unregisterRequests.values())
+        callback(Exception { TypeError, "context stopped"_s });
 }
 
 void WorkerSWClientConnection::matchRegistration(SecurityOriginData&& topOrigin, const URL& clientURL, RegistrationCallback&& callback)
@@ -155,14 +155,6 @@ bool WorkerSWClientConnection::mayHaveServiceWorkerRegisteredForOrigin(const Sec
     return true;
 }
 
-void WorkerSWClientConnection::syncTerminateWorker(ServiceWorkerIdentifier identifier)
-{
-    callOnMainThread([identifier]() mutable {
-        auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnection();
-        connection.syncTerminateWorker(identifier);
-    });
-}
-
 void WorkerSWClientConnection::registerServiceWorkerClient(const SecurityOrigin& topOrigin, const ServiceWorkerClientData& data, const Optional<ServiceWorkerRegistrationIdentifier>& identifier, const String& userAgent)
 {
     callOnMainThread([topOrigin = topOrigin.isolatedCopy(), data = crossThreadCopy(data), identifier, userAgent = crossThreadCopy(userAgent)] {
@@ -189,6 +181,22 @@ void WorkerSWClientConnection::scheduleJob(DocumentOrWorkerIdentifier identifier
     callOnMainThread([identifier, data = crossThreadCopy(data)]() mutable {
         auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnection();
         connection.scheduleJob(identifier, data);
+    });
+}
+
+void WorkerSWClientConnection::scheduleUnregisterJobInServer(ServiceWorkerRegistrationIdentifier registrationIdentifier, DocumentOrWorkerIdentifier contextIdentifier, CompletionHandler<void(ExceptionOr<bool>&&)>&& callback)
+{
+    uint64_t requestIdentifier = ++m_lastRequestIdentifier;
+    m_unregisterRequests.add(requestIdentifier, WTFMove(callback));
+
+    callOnMainThread([thread = m_thread.copyRef(), requestIdentifier, registrationIdentifier, contextIdentifier]() mutable {
+        auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnection();
+        connection.scheduleUnregisterJobInServer(registrationIdentifier, contextIdentifier, [thread = WTFMove(thread), requestIdentifier](auto&& result) {
+            thread->runLoop().postTaskForMode([requestIdentifier, result = crossThreadCopy(result)](auto& scope) mutable {
+                auto callback = downcast<WorkerGlobalScope>(scope).swClientConnection().m_unregisterRequests.take(requestIdentifier);
+                callback(WTFMove(result));
+            }, WorkerRunLoop::defaultMode());
+        });
     });
 }
 

@@ -31,11 +31,10 @@
 #include "MediaRecorderPrivate.h"
 #include <WebCore/MediaRecorderPrivate.h>
 
+namespace WebKit {
 using namespace WebCore;
 
-namespace WebKit {
-
-std::unique_ptr<WebCore::MediaRecorderPrivate> MediaRecorderProvider::createMediaRecorderPrivate(const MediaStreamPrivate& stream)
+std::unique_ptr<WebCore::MediaRecorderPrivate> MediaRecorderProvider::createMediaRecorderPrivate(MediaStreamPrivate& stream)
 {
 #if ENABLE(GPU_PROCESS)
     if (m_useGPUProcess)

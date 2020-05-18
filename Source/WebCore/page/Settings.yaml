@@ -197,8 +197,6 @@ forceFTPDirectoryListings:
   initial: false
 developerExtrasEnabled:
   initial: false
-scriptMarkupEnabled:
-  initial: true
 needsSiteSpecificQuirks:
   initial: false
   inspectorOverride: true
@@ -361,6 +359,9 @@ requestIdleCallbackEnabled:
   initial: false
 
 HTTPSUpgradeEnabled:
+  initial: false
+
+inProcessCookieCacheEnabled:
   initial: false
 
 thirdPartyIframeRedirectBlockingEnabled:
@@ -540,7 +541,7 @@ useImageDocumentForSubframePDF:
   initial: false
 dataDetectorTypes:
   type: DataDetectorTypes
-  initial: DataDetectorTypeNone
+  initial: 
   conditional: DATA_DETECTION
 
 # Allow SourceBuffers to store up to 304MB each, enough for approximately five minutes
@@ -746,6 +747,7 @@ pluginsEnabled:
 usesBackForwardCache:
   initial: false
   onChange: usesBackForwardCacheChanged
+  excludeFromInternalSettings: true
 
 dnsPrefetchingEnabled:
   initial: false
@@ -857,8 +859,8 @@ clientCoordinatesRelativeToLayoutViewport:
 incompleteImageBorderEnabled:
   initial: false
 
-shouldDeferAsynchronousScriptsUntilAfterDocumentLoad:
-  initial: false
+shouldDeferAsynchronousScriptsUntilAfterDocumentLoadOrFirstPaint:
+  initial: true
 
 shouldIgnoreMetaViewport:
   initial: false
@@ -908,6 +910,9 @@ isFirstPartyWebsiteDataRemovalLiveOnTestingEnabled:
 isFirstPartyWebsiteDataRemovalReproTestingEnabled:
   initial: false
 
+isSameSiteStrictEnforcementEnabled:
+  initial: false
+
 isLoggedInAPIEnabled:
   initial: false
 
@@ -919,6 +924,9 @@ legacyGetUserMediaEnabled:
   conditional: MEDIA_STREAM
 
 isInAppBrowserPrivacyEnabled:
+  initial: false
+
+NeedsInAppBrowserPrivacyQuirks:
   initial: false
 
 isAccessibilityIsolatedTreeEnabled:
@@ -947,3 +955,7 @@ mediaCaptureRequiresSecureConnection:
 
 shouldUseServiceWorkerShortTimeout:
   initial: false
+
+# Clients should use per-navigation "allowsContentJavaScript" policies instead
+scriptMarkupEnabled:
+    initial: true

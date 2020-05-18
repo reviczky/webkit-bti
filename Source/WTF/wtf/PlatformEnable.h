@@ -214,10 +214,6 @@
 #define ENABLE_CSS_BOX_DECORATION_BREAK 1
 #endif
 
-#if !defined(ENABLE_CSS_DEVICE_ADAPTATION)
-#define ENABLE_CSS_DEVICE_ADAPTATION 0
-#endif
-
 #if !defined(ENABLE_CSS_COMPOSITING)
 #define ENABLE_CSS_COMPOSITING 0
 #endif
@@ -232,10 +228,6 @@
 
 #if !defined(ENABLE_CUSTOM_CURSOR_SUPPORT)
 #define ENABLE_CUSTOM_CURSOR_SUPPORT 1
-#endif
-
-#if !defined(ENABLE_CUSTOM_SCHEME_HANDLER)
-#define ENABLE_CUSTOM_SCHEME_HANDLER 0
 #endif
 
 #if !defined(ENABLE_DARK_MODE_CSS)
@@ -262,6 +254,10 @@
 #define ENABLE_ENCRYPTED_MEDIA 0
 #endif
 
+#if !defined(ENABLE_FAST_JIT_PERMISSIONS)
+#define ENABLE_FAST_JIT_PERMISSIONS 0
+#endif
+
 #if !defined(ENABLE_FILTERS_LEVEL_2)
 #define ENABLE_FILTERS_LEVEL_2 0
 #endif
@@ -272,6 +268,12 @@
 
 #if !defined(ENABLE_FULLSCREEN_API)
 #define ENABLE_FULLSCREEN_API 0
+#endif
+
+#if ((PLATFORM(IOS) || PLATFORM(WATCHOS) || PLATFORM(MACCATALYST)) && HAVE(AVKIT)) || PLATFORM(MAC)
+#if !defined(ENABLE_VIDEO_PRESENTATION_MODE)
+#define ENABLE_VIDEO_PRESENTATION_MODE 1
+#endif
 #endif
 
 #if !defined(ENABLE_GAMEPAD)
@@ -330,10 +332,6 @@
 
 #if !defined(ENABLE_INSPECTOR_TELEMETRY)
 #define ENABLE_INSPECTOR_TELEMETRY 0
-#endif
-
-#if !defined(ENABLE_INTL)
-#define ENABLE_INTL 0
 #endif
 
 #if !defined(ENABLE_LAYOUT_FORMATTING_CONTEXT)
@@ -418,6 +416,10 @@
 #define ENABLE_PAYMENT_REQUEST 0
 #endif
 
+#if !defined(ENABLE_PERIODIC_MEMORY_MONITOR)
+#define ENABLE_PERIODIC_MEMORY_MONITOR 0
+#endif
+
 #if !defined(ENABLE_POINTER_LOCK)
 #define ENABLE_POINTER_LOCK 1
 #endif
@@ -439,6 +441,10 @@
 #if ASAN_ENABLED || !defined(NDEBUG)
 #define ENABLE_SECURITY_ASSERTIONS 1
 #endif
+#endif
+
+#if !defined(ENABLE_SEPARATED_WX_HEAP)
+#define ENABLE_SEPARATED_WX_HEAP 0
 #endif
 
 #if !defined(ENABLE_SMOOTH_SCROLLING)
@@ -545,6 +551,10 @@
 #define ENABLE_DATA_DETECTION 0
 #endif
 
+#if !defined(ENABLE_FILE_SHARE)
+#define ENABLE_FILE_SHARE 1
+#endif
+
 /*
  * Enable this to put each IsoHeap and other allocation categories into their own malloc heaps, so that tools like vmmap can show how big each heap is.
  * Turn BENABLE_MALLOC_HEAP_BREAKDOWN on in bmalloc together when using this.
@@ -553,6 +563,9 @@
 #define ENABLE_MALLOC_HEAP_BREAKDOWN 0
 #endif
 
+#if !defined(ENABLE_CFPREFS_DIRECT_MODE)
+#define ENABLE_CFPREFS_DIRECT_MODE 0
+#endif
 
 
 
@@ -577,11 +590,9 @@
 #define ENABLE_JIT 1
 #endif
 #else
-/* Disable JIT and force C_LOOP on all other 32bit architectures. */
+/* Disable JIT on all other 32bit architectures. */
 #undef ENABLE_JIT
 #define ENABLE_JIT 0
-#undef ENABLE_C_LOOP
-#define ENABLE_C_LOOP 1
 #endif
 #endif
 
@@ -717,10 +728,6 @@
 #define ENABLE_DFG_REGISTER_ALLOCATION_VALIDATION 1
 #endif
 
-#if !defined(ENABLE_SEPARATED_WX_HEAP) && PLATFORM(IOS_FAMILY) && CPU(ARM64) && (!ENABLE(FAST_JIT_PERMISSIONS) || !CPU(ARM64E))
-#define ENABLE_SEPARATED_WX_HEAP 1
-#endif
-
 /* Determine if we need to enable Computed Goto Opcodes or not: */
 #if HAVE(COMPUTED_GOTO) || !ENABLE(C_LOOP)
 #define ENABLE_COMPUTED_GOTO_OPCODES 1
@@ -817,6 +824,9 @@
 #define ENABLE_OPENTYPE_MATH 1
 #endif
 
+#if !defined(ENABLE_INLINE_PATH_DATA) && USE(CG)
+#define ENABLE_INLINE_PATH_DATA 1
+#endif
 
 /* Disable SharedArrayBuffers until Spectre security concerns are mitigated. */
 #define ENABLE_SHARED_ARRAY_BUFFER 0
@@ -824,6 +834,19 @@
 
 #if ((PLATFORM(COCOA) || PLATFORM(PLAYSTATION) || PLATFORM(WPE)) && ENABLE(ASYNC_SCROLLING)) || PLATFORM(GTK)
 #define ENABLE_KINETIC_SCROLLING 1
+#endif
+
+#if PLATFORM(MAC)
+// FIXME: Maybe this can be combined with ENABLE_KINETIC_SCROLLING.
+#define ENABLE_WHEEL_EVENT_LATCHING 1
+#endif
+
+#if !defined(ENABLE_SCROLLING_THREAD)
+#if USE(NICOSIA)
+#define ENABLE_SCROLLING_THREAD 1
+#else
+#define ENABLE_SCROLLING_THREAD 0
+#endif
 #endif
 
 /* This feature works by embedding the OpcodeID in the 32 bit just before the generated LLint code
@@ -862,4 +885,8 @@
 
 #if ENABLE(WEBGL2) && !ENABLE(WEBGL)
 #error "ENABLE(WEBGL2) requires ENABLE(WEBGL)"
+#endif
+
+#if CPU(ARM64) && CPU(ADDRESS64)
+#define USE_JUMP_ISLANDS 1
 #endif

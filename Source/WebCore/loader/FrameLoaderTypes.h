@@ -112,6 +112,11 @@ Optional<PolicyCheckIdentifier> PolicyCheckIdentifier::decode(Decoder& decoder)
     return PolicyCheckIdentifier { *process, policyCheck };
 }
 
+enum class ShouldContinuePolicyCheck : bool {
+    Yes,
+    No
+};
+
 enum class NewFrameOpenerPolicy : uint8_t {
     Suppress,
     Allow
@@ -160,11 +165,6 @@ enum UnloadEventPolicy {
     UnloadEventPolicyUnloadAndPageHide
 };
 
-enum ShouldSendReferrer {
-    MaybeSendReferrer,
-    NeverSendReferrer
-};
-
 // Passed to FrameLoader::urlSelected() and ScriptController::executeIfJavaScriptURL()
 // to control whether, in the case of a JavaScript URL, executeIfJavaScriptURL() should
 // replace the document. It is a FIXME to eliminate this extra parameter from
@@ -174,7 +174,7 @@ enum ShouldReplaceDocumentIfJavaScriptURL {
     DoNotReplaceDocumentIfJavaScriptURL
 };
 
-enum WebGLLoadPolicy {
+enum class WebGLLoadPolicy : uint8_t {
     WebGLBlockCreation,
     WebGLAllowCreation,
     WebGLPendingCreation
@@ -222,9 +222,14 @@ Optional<SystemPreviewInfo> SystemPreviewInfo::decode(Decoder& decoder)
     return { { WTFMove(*element), WTFMove(*previewRect), WTFMove(*isPreview) } };
 }
 
-enum class LoadCompletionType : uint8_t {
+enum class LoadCompletionType : bool {
     Finish,
     Cancel
+};
+
+enum class AllowsContentJavaScript : bool {
+    Yes,
+    No,
 };
 
 } // namespace WebCore
@@ -263,6 +268,15 @@ template<> struct EnumTraits<WebCore::ShouldOpenExternalURLsPolicy> {
         WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow,
         WebCore::ShouldOpenExternalURLsPolicy::ShouldAllowExternalSchemes,
         WebCore::ShouldOpenExternalURLsPolicy::ShouldAllow
+    >;
+};
+
+template<> struct EnumTraits<WebCore::WebGLLoadPolicy> {
+    using values = EnumValues<
+        WebCore::WebGLLoadPolicy,
+        WebCore::WebGLLoadPolicy::WebGLBlockCreation,
+        WebCore::WebGLLoadPolicy::WebGLAllowCreation,
+        WebCore::WebGLLoadPolicy::WebGLPendingCreation
     >;
 };
 

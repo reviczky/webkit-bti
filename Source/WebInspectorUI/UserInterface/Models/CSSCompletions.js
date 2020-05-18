@@ -165,10 +165,7 @@ WI.CSSCompletions = class CSSCompletions
         }
 
         target.CSSAgent.getSupportedCSSProperties(propertyNamesCallback);
-
-        // COMPATIBILITY (iOS 9): CSS.getSupportedSystemFontFamilyNames did not exist.
-        if (target.hasCommand("CSS.getSupportedSystemFontFamilyNames"))
-            target.CSSAgent.getSupportedSystemFontFamilyNames(fontFamilyNamesCallback);
+        target.CSSAgent.getSupportedSystemFontFamilyNames(fontFamilyNamesCallback);
     }
 
     static completeUnbalancedValue(value)
@@ -357,3 +354,21 @@ WI.CSSCompletions = class CSSCompletions
 };
 
 WI.CSSCompletions.cssNameCompletions = null;
+
+WI.CSSCompletions.lengthUnits = new Set([
+    "ch",
+    "cm",
+    "em",
+    "ex",
+    "in",
+    "mm",
+    "pc",
+    "pt",
+    "px",
+    "q",
+    "rem",
+    "vh",
+    "vmax",
+    "vmin",
+    "vw",
+]);

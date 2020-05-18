@@ -164,12 +164,6 @@ CSSPropertyID CSSProperty::resolveDirectionAwareProperty(CSSPropertyID propertyI
 bool CSSProperty::isDescriptorOnly(CSSPropertyID propertyID)
 {
     switch (propertyID) {
-#if ENABLE(CSS_DEVICE_ADAPTATION)
-    case CSSPropertyMinZoom:
-    case CSSPropertyMaxZoom:
-    case CSSPropertyOrientation:
-    case CSSPropertyUserZoom:
-#endif
     case CSSPropertySrc:
     case CSSPropertyUnicodeRange:
     case CSSPropertyFontDisplay:
@@ -212,6 +206,38 @@ bool CSSProperty::isDirectionAwareProperty(CSSPropertyID propertyID)
     case CSSPropertyMinBlockSize:
     case CSSPropertyMaxInlineSize:
     case CSSPropertyMaxBlockSize:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool CSSProperty::isColorProperty(CSSPropertyID propertyId)
+{
+    switch (propertyId) {
+    case CSSPropertyColor:
+    case CSSPropertyBackgroundColor:
+    case CSSPropertyBorderBottomColor:
+    case CSSPropertyBorderLeftColor:
+    case CSSPropertyBorderRightColor:
+    case CSSPropertyBorderTopColor:
+    case CSSPropertyFill:
+    case CSSPropertyFloodColor:
+    case CSSPropertyLightingColor:
+    case CSSPropertyOutlineColor:
+    case CSSPropertyStopColor:
+    case CSSPropertyStroke:
+    case CSSPropertyStrokeColor:
+    case CSSPropertyBorderBlockEndColor:
+    case CSSPropertyBorderBlockStartColor:
+    case CSSPropertyBorderInlineEndColor:
+    case CSSPropertyBorderInlineStartColor:
+    case CSSPropertyColumnRuleColor:
+    case CSSPropertyWebkitTextEmphasisColor:
+    case CSSPropertyWebkitTextFillColor:
+    case CSSPropertyWebkitTextStrokeColor:
+    case CSSPropertyTextDecorationColor:
+    case CSSPropertyCaretColor:
         return true;
     default:
         return false;

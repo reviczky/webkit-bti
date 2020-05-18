@@ -29,7 +29,16 @@
 
 namespace WebCore {
 
-typedef unsigned SynchronousScrollingReasons;
+enum class SynchronousScrollingReason {
+    // Flags for frame scrolling.
+    ForcedOnMainThread                                          = 1 << 0,
+    HasViewportConstrainedObjectsWithoutSupportingFixedLayers   = 1 << 1,
+    HasNonLayerViewportConstrainedObjects                       = 1 << 2,
+    IsImageDocument                                             = 1 << 3,
+    // Flags for frame and overflow scrolling.
+    HasSlowRepaintObjects                                       = 1 << 4,
+    DescendantScrollersHaveSynchronousScrolling                 = 1 << 5,
+};
 
 enum class ScrollingNodeType : uint8_t {
     MainFrame,
@@ -89,7 +98,8 @@ struct ScrollableAreaParameters {
 enum class ScrollingEventResult {
     DidNotHandleEvent,
     DidHandleEvent,
-    SendToMainThread
+    SendToScrollingThread,
+    SendToMainThread,
 };
 
 enum class ViewportRectStability {

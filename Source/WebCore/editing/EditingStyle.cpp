@@ -752,7 +752,7 @@ static const CSSPropertyID textOnlyProperties[] = {
 TriState EditingStyle::triStateOfStyle(EditingStyle* style) const
 {
     if (!style || !style->m_mutableStyle)
-        return FalseTriState;
+        return TriState::False;
     return triStateOfStyle(*style->m_mutableStyle, DoNotIgnoreTextOnlyProperties);
 }
 
@@ -760,7 +760,7 @@ template<typename T>
 TriState EditingStyle::triStateOfStyle(T& styleToCompare, ShouldIgnoreTextOnlyProperties shouldIgnoreTextOnlyProperties) const
 {
     if (!m_mutableStyle)
-        return TrueTriState;
+        return TriState::True;
 
     RefPtr<MutableStyleProperties> difference = getPropertiesNotIn(*m_mutableStyle, styleToCompare);
 
@@ -768,22 +768,22 @@ TriState EditingStyle::triStateOfStyle(T& styleToCompare, ShouldIgnoreTextOnlyPr
         difference->removePropertiesInSet(textOnlyProperties, WTF_ARRAY_LENGTH(textOnlyProperties));
 
     if (difference->isEmpty())
-        return TrueTriState;
+        return TriState::True;
     if (difference->propertyCount() == m_mutableStyle->propertyCount())
-        return FalseTriState;
+        return TriState::False;
 
-    return MixedTriState;
+    return TriState::Indeterminate;
 }
 
 TriState EditingStyle::triStateOfStyle(const VisibleSelection& selection) const
 {
     if (!selection.isCaretOrRange())
-        return FalseTriState;
+        return TriState::False;
 
     if (selection.isCaret())
         return triStateOfStyle(EditingStyle::styleAtSelectionStart(selection).get());
 
-    TriState state = FalseTriState;
+    TriState state = TriState::False;
     bool nodeIsStart = true;
     for (Node* node = selection.start().deprecatedNode(); node; node = NodeTraversal::next(*node)) {
         if (node->renderer() && node->hasEditableStyle()) {
@@ -793,7 +793,7 @@ TriState EditingStyle::triStateOfStyle(const VisibleSelection& selection) const
                 state = nodeState;
                 nodeIsStart = false;
             } else if (state != nodeState && node->isTextNode()) {
-                state = MixedTriState;
+                state = TriState::Indeterminate;
                 break;
             }
         }
@@ -1366,6 +1366,30 @@ void EditingStyle::removeStyleFromRulesAndContext(StyledElement& element, Node* 
         if (!computedStyle->m_mutableStyle->getPropertyCSSValue(CSSPropertyBackgroundColor))
             computedStyle->m_mutableStyle->setProperty(CSSPropertyBackgroundColor, CSSValueTransparent);
 
+        RefPtr<EditingStyle> computedStyleOfElement;
+        auto replaceSemanticColorWithComputedValue = [&](const CSSPropertyID id) {
+            auto color = m_mutableStyle->propertyAsColor(id);
+            if (!color || (color->isVisible() && !color->isSemantic()))
+                return;
+
+            if (!computedStyleOfElement)
+                computedStyleOfElement = EditingStyle::create(&element, EditingPropertiesInEffect);
+
+            if (!computedStyleOfElement->m_mutableStyle)
+                return;
+
+            auto computedValue = computedStyleOfElement->m_mutableStyle->getPropertyValue(id);
+            if (!computedValue)
+                return;
+
+            m_mutableStyle->setProperty(id, computedValue);
+        };
+
+        // Replace semantic color identifiers like -apple-system-label with RGB values so that comparsions in getPropertiesNotIn below would work.
+        replaceSemanticColorWithComputedValue(CSSPropertyColor);
+        replaceSemanticColorWithComputedValue(CSSPropertyCaretColor);
+        replaceSemanticColorWithComputedValue(CSSPropertyBackgroundColor);
+
         removePropertiesInStyle(computedStyle->m_mutableStyle.get(), styleFromMatchedRules.get());
         m_mutableStyle = getPropertiesNotIn(*m_mutableStyle, *computedStyle->m_mutableStyle);
     }
@@ -1458,7 +1482,7 @@ int EditingStyle::legacyFontSize(Document& document) const
 
 bool EditingStyle::hasStyle(CSSPropertyID propertyID, const String& value)
 {
-    return EditingStyle::create(propertyID, value)->triStateOfStyle(this) != FalseTriState;
+    return EditingStyle::create(propertyID, value)->triStateOfStyle(this) != TriState::False;
 }
 
 RefPtr<EditingStyle> EditingStyle::styleAtSelectionStart(const VisibleSelection& selection, bool shouldUseBackgroundColorInEffect)
@@ -1473,8 +1497,8 @@ RefPtr<EditingStyle> EditingStyle::styleAtSelectionStart(const VisibleSelection&
     // e.g. if pos was at Position("hello", 5) in <b>hello<div>world</div></b>, we want Position("world", 0) instead. 
     // We only do this for range because caret at Position("hello", 5) in <b>hello</b>world should give you font-weight: bold. 
     Node* positionNode = position.containerNode(); 
-    if (selection.isRange() && positionNode && positionNode->isTextNode() && position.computeOffsetInContainerNode() == positionNode->maxCharacterOffset()) 
-        position = nextVisuallyDistinctCandidate(position); 
+    if (selection.isRange() && is<Text>(positionNode) && static_cast<unsigned>(position.computeOffsetInContainerNode()) == downcast<Text>(*positionNode).length())
+        position = nextVisuallyDistinctCandidate(position);
 
     Element* element = position.element();
     if (!element)
@@ -1488,7 +1512,7 @@ RefPtr<EditingStyle> EditingStyle::styleAtSelectionStart(const VisibleSelection&
     // and find the background color of the common ancestor.
     if (shouldUseBackgroundColorInEffect && (selection.isRange() || hasTransparentBackgroundColor(style->m_mutableStyle.get()))) {
         if (auto range = selection.toNormalizedRange()) {
-            if (auto value = backgroundColorInEffect(range->commonAncestorContainer()))
+            if (auto value = backgroundColorInEffect(createLiveRange(*range)->commonAncestorContainer()))
                 style->setProperty(CSSPropertyBackgroundColor, value->cssText());
         }
     }
@@ -1587,10 +1611,17 @@ Ref<EditingStyle> EditingStyle::inverseTransformColorIfNeeded(Element& element)
     if (!m_mutableStyle || !renderer || !renderer->style().hasAppleColorFilter())
         return *this;
 
-    bool hasColor = m_mutableStyle->getPropertyCSSValue(CSSPropertyColor);
-    bool hasCaretColor = m_mutableStyle->getPropertyCSSValue(CSSPropertyCaretColor);
-    bool hasBackgroundColor = m_mutableStyle->getPropertyCSSValue(CSSPropertyBackgroundColor);
-    if (!hasColor && !hasCaretColor && !hasBackgroundColor)
+    auto colorForPropertyIfInvertible = [&](CSSPropertyID id) -> Optional<Color> {
+        auto color = m_mutableStyle->propertyAsColor(id);
+        if (!color || !color->isVisible() || color->isSemantic())
+            return WTF::nullopt;
+        return color;
+    };
+
+    auto color = colorForPropertyIfInvertible(CSSPropertyColor);
+    auto caretColor = colorForPropertyIfInvertible(CSSPropertyCaretColor);
+    auto backgroundColor = colorForPropertyIfInvertible(CSSPropertyBackgroundColor);
+    if (!color && !caretColor && !backgroundColor)
         return *this;
 
     auto styleWithInvertedColors = copy();
@@ -1603,13 +1634,13 @@ Ref<EditingStyle> EditingStyle::inverseTransformColorIfNeeded(Element& element)
         styleWithInvertedColors->m_mutableStyle->setProperty(propertyID, newColor.cssText());
     };
 
-    if (hasColor)
+    if (color)
         invertedColor(CSSPropertyColor);
 
-    if (hasCaretColor)
+    if (caretColor)
         invertedColor(CSSPropertyCaretColor);
 
-    if (hasBackgroundColor)
+    if (backgroundColor)
         invertedColor(CSSPropertyBackgroundColor);
 
     return styleWithInvertedColors;
@@ -1655,7 +1686,7 @@ StyleChange::StyleChange(EditingStyle* style, const Position& position)
         getPropertiesNotIn(*style->style(), computedStyle) : MutableStyleProperties::create();
 
     reconcileTextDecorationProperties(mutableStyle.get());
-    bool shouldStyleWithCSS = document->frame()->editor().shouldStyleWithCSS();
+    bool shouldStyleWithCSS = document->editor().shouldStyleWithCSS();
     if (!shouldStyleWithCSS)
         extractTextStyles(*document, *mutableStyle, computedStyle.useFixedFontDefaultSize());
 

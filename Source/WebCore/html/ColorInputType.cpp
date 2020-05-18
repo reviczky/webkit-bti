@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
- * Copyright (C) 2015-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -38,7 +38,6 @@
 #include "CSSPropertyNames.h"
 #include "Chrome.h"
 #include "Color.h"
-#include "ElementChildIterator.h"
 #include "Event.h"
 #include "HTMLDataListElement.h"
 #include "HTMLDivElement.h"
@@ -95,8 +94,9 @@ bool ColorInputType::isKeyboardFocusable(KeyboardEvent*) const
         return false;
 
     return element()->isTextFormControlFocusable();
-#endif
+#else
     return false;
+#endif
 }
 
 bool ColorInputType::isColorControl() const
@@ -143,11 +143,14 @@ void ColorInputType::createShadowSubtree()
     ASSERT(element());
     ASSERT(element()->shadowRoot());
 
+    static MainThreadNeverDestroyed<const AtomString> webkitColorSwatchName("-webkit-color-swatch", AtomString::ConstructFromLiteral);
+    static MainThreadNeverDestroyed<const AtomString> webkitColorSwatchWrapperName("-webkit-color-swatch-wrapper", AtomString::ConstructFromLiteral);
+
     Document& document = element()->document();
     auto wrapperElement = HTMLDivElement::create(document);
-    wrapperElement->setPseudo(AtomString("-webkit-color-swatch-wrapper", AtomString::ConstructFromLiteral));
+    wrapperElement->setPseudo(webkitColorSwatchWrapperName);
     auto colorSwatch = HTMLDivElement::create(document);
-    colorSwatch->setPseudo(AtomString("-webkit-color-swatch", AtomString::ConstructFromLiteral));
+    colorSwatch->setPseudo(webkitColorSwatchName);
     wrapperElement->appendChild(colorSwatch);
     element()->userAgentShadowRoot()->appendChild(wrapperElement);
 
@@ -287,13 +290,9 @@ Vector<Color> ColorInputType::suggestedColors() const
 #if ENABLE(DATALIST_ELEMENT)
     ASSERT(element());
     if (auto dataList = element()->dataList()) {
-        Ref<HTMLCollection> options = dataList->options();
-        unsigned length = options->length();
-        suggestions.reserveInitialCapacity(length);
-        for (unsigned i = 0; i != length; ++i) {
-            auto value = downcast<HTMLOptionElement>(*options->item(i)).value();
-            if (isValidSimpleColor(value))
-                suggestions.uncheckedAppend(Color(value));
+        for (auto& option : dataList->suggestions()) {
+            if (auto color = parseSimpleColorValue(option.value()))
+                suggestions.append(*color);
         }
     }
 #endif

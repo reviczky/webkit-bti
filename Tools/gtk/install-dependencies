@@ -125,7 +125,7 @@ function installDependenciesWithApt {
         libopenjp2-7-dev \
         libopus-dev \
         libpango1.0-dev \
-        $(aptIfElse libpng-dev libpng12-dev) \
+        libpng-dev \
         libpulse-dev \
         librsvg2-dev \
         libseccomp-dev \
@@ -133,6 +133,7 @@ function installDependenciesWithApt {
         libsoup2.4-dev \
         libsqlite3-dev \
         libsrtp2-dev \
+        libsystemd-dev \
         libtasn1-6-dev \
         libtheora-dev \
         libtool \
@@ -177,6 +178,10 @@ function installDependenciesWithApt {
         ruby-highline \
         weston \
         xvfb"
+
+    # These are dependencies necessary for building with the Flatpak SDK.
+    packages="$packages \
+        flatpak"
 
     # These are dependencies necessary for building the jhbuild.
     packages="$packages \
@@ -241,9 +246,18 @@ function installDependenciesWithApt {
     # These are dependencies necessary for using webkit-patch
     packages="$packages \
         git-svn \
+        python3-secretstorage \
         subversion"
 
     apt-get install $packages
+
+    # Ubuntu Bionic doesn't ship pipenv. So fallback to the pip3 install path.
+    if apt-cache show pipenv &>/dev/null; then
+        apt-get install pipenv
+    else
+        apt-get install -y python3-pip
+        pip3 install pipenv
+    fi
 }
 
 function installDependenciesWithPacman {
@@ -307,6 +321,7 @@ function installDependenciesWithPacman {
         libsecret \
         libsoup \
         libsrtp \
+        libsystemd \
         sqlite \
         libtasn1 \
         libtheora \
@@ -347,6 +362,11 @@ function installDependenciesWithPacman {
         ttf-liberation \
         weston \
         xorg-server-xvfb"
+
+    # These are dependencies necessary for building with the Flatpak SDK.
+    packages="$packages \
+        flatpak \
+        python-pipenv"
 
     # These are dependencies necessary for building the jhbuild.
     # Note: Could not find libegl-mesa
@@ -402,6 +422,7 @@ function installDependenciesWithPacman {
 
     # These are dependencies necessary for using webkit-patch
     packages="$packages \
+        python-secretstorage \
         svn"
     pacman -S --needed $packages
 
@@ -492,6 +513,7 @@ function installDependenciesWithDnf {
         redhat-rpm-config \
         ruby \
         sqlite-devel \
+        systemd-devel \
         upower-devel \
         woff2-devel"
 
@@ -521,6 +543,11 @@ function installDependenciesWithDnf {
         rubygem-highline \
         weston-devel \
         xorg-x11-server-Xvfb"
+
+    # These are dependencies necessary for building with the Flatpak SDK.
+    packages="$packages \
+        flatpak \
+        pipenv"
 
     # These are dependencies necessary for building the jhbuild.
     packages="$packages \
@@ -569,6 +596,7 @@ function installDependenciesWithDnf {
     # These are dependencies necessary for using webkit-patch
     packages="$packages
         git-svn \
+        python3-secretstorage \
         subversion"
 
     dnf install $packages

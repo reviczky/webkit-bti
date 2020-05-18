@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,12 +38,9 @@
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(COCOA)
-#include <wtf/MachSendRight.h>
-#endif
-
-#if PLATFORM(MAC)
 #include <WebCore/PlatformScreen.h>
 #include <WebCore/ScreenProperties.h>
+#include <wtf/MachSendRight.h>
 #endif
 
 #if USE(SOUP)
@@ -73,7 +70,7 @@ struct WebProcessCreationParameters {
     WebProcessCreationParameters& operator=(WebProcessCreationParameters&&);
 
     void encode(IPC::Encoder&) const;
-    static bool decode(IPC::Decoder&, WebProcessCreationParameters&);
+    static WARN_UNUSED_RETURN bool decode(IPC::Decoder&, WebProcessCreationParameters&);
 
     String injectedBundlePath;
     SandboxExtension::Handle injectedBundlePathExtensionHandle;
@@ -103,7 +100,6 @@ struct WebProcessCreationParameters {
     Vector<String> urlSchemesRegisteredAsCORSEnabled;
     Vector<String> urlSchemesRegisteredAsAlwaysRevalidated;
     Vector<String> urlSchemesRegisteredAsCachePartitioned;
-    Vector<String> urlSchemesServiceWorkersCanHandle;
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
 
     Vector<String> fontWhitelist;
@@ -124,6 +120,7 @@ struct WebProcessCreationParameters {
     bool fullKeyboardAccessEnabled { false };
     bool memoryCacheDisabled { false };
     bool attrStyleEnabled { false };
+    bool useGPUProcessForMedia { false };
 
 #if ENABLE(SERVICE_CONTROLS)
     bool hasImageServices { false };
@@ -179,6 +176,7 @@ struct WebProcessCreationParameters {
 
 #if PLATFORM(COCOA)
     Vector<String> mediaMIMETypes;
+    WebCore::ScreenProperties screenProperties;
 #endif
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
@@ -186,7 +184,6 @@ struct WebProcessCreationParameters {
 #endif
 
 #if PLATFORM(MAC)
-    WebCore::ScreenProperties screenProperties;
     bool useOverlayScrollbars { true };
 #endif
 
@@ -201,21 +198,41 @@ struct WebProcessCreationParameters {
 #if PLATFORM(IOS)
     Optional<SandboxExtension::Handle> compilerServiceExtensionHandle;
     Optional<SandboxExtension::Handle> contentFilterExtensionHandle;
-    Optional<SandboxExtension::Handle> launchServicesOpenExtensionHandle;
+    Optional<SandboxExtension::Handle> frontboardServiceExtensionHandle;
+#endif
+
+#if PLATFORM(IOS_FAMILY)
     Optional<SandboxExtension::Handle> diagnosticsExtensionHandle;
+    Optional<SandboxExtension::Handle> runningboardExtensionHandle;
+    SandboxExtension::HandleArray dynamicMachExtensionHandles;
+    SandboxExtension::HandleArray dynamicIOKitExtensionHandles;
 #endif
 
 #if PLATFORM(COCOA)
     Optional<SandboxExtension::Handle> neHelperExtensionHandle;
     Optional<SandboxExtension::Handle> neSessionManagerExtensionHandle;
+    Optional<SandboxExtension::Handle> mapDBExtensionHandle;
     bool systemHasBattery { false };
-    Optional<HashMap<String, Vector<String>, ASCIICaseInsensitiveHash>> mimeTypesMap;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
     bool currentUserInterfaceIdiomIsPad { false };
+    bool supportsPictureInPicture { false };
     WebCore::RenderThemeIOS::CSSValueToSystemColorMap cssValueToSystemColorMap;
     WebCore::Color focusRingColor;
+    String localizedDeviceModel;
+#endif
+
+#if PLATFORM(COCOA)
+    SandboxExtension::HandleArray mediaExtensionHandles; // FIXME(207716): Remove when GPU process is complete.
+#if ENABLE(CFPREFS_DIRECT_MODE)
+    Optional<SandboxExtension::HandleArray> preferencesExtensionHandles;
+    String encodedGlobalPreferences;
+#endif
+#endif
+
+#if PLATFORM(GTK)
+    bool useSystemAppearanceForScrollbars { false };
 #endif
 };
 

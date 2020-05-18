@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "AXIsolatedTree.h"
 #include "AXTextStateChangeIntent.h"
 #include "AccessibilityObject.h"
 #include "Range.h"
@@ -41,12 +42,12 @@
 #include <wtf/glib/GRefPtr.h>
 #endif
 
+namespace WTF {
+class TextStream;
+}
+
 namespace WebCore {
 
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-class AXIsolatedObject;
-class AXIsolatedTree;
-#endif
 class Document;
 class HTMLAreaElement;
 class HTMLTextFormControlElement;
@@ -142,11 +143,12 @@ enum PostType { PostSynchronously, PostAsynchronously };
 
 class AXObjectCache {
     WTF_MAKE_NONCOPYABLE(AXObjectCache); WTF_MAKE_FAST_ALLOCATED;
+    friend WTF::TextStream& operator<<(WTF::TextStream&, AXObjectCache&);
 public:
     explicit AXObjectCache(Document&);
     ~AXObjectCache();
 
-    WEBCORE_EXPORT static AXCoreObject* focusedUIElementForPage(const Page*);
+    WEBCORE_EXPORT AXCoreObject* focusedUIElementForPage(const Page*);
 
     // Returns the root object for the entire document.
     WEBCORE_EXPORT AXCoreObject* rootObject();
@@ -178,9 +180,6 @@ private:
     using DOMObjectVariant = Variant<std::nullptr_t, RenderObject*, Node*, Widget*>;
     void cacheAndInitializeWrapper(AccessibilityObject*, DOMObjectVariant = nullptr);
     void attachWrapper(AXCoreObject*);
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-    void attachWrapper(AXIsolatedObject*, WebAccessibilityObjectWrapper*);
-#endif
 
 public:
     void childrenChanged(Node*, Node* newChild = nullptr);
@@ -199,17 +198,6 @@ public:
     void deferAttributeChangeIfNeeded(const QualifiedName&, Element*);
     void recomputeIsIgnored(RenderObject* renderer);
 
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-    WEBCORE_EXPORT static bool clientSupportsIsolatedTree();
-private:
-    AXCoreObject* isolatedTreeRootObject();
-    static AXCoreObject* isolatedTreeFocusedObject(Document&);
-    void setIsolatedTreeFocusedObject(Node*);
-    static Ref<AXIsolatedTree> generateIsolatedTree(PageIdentifier, Document&);
-    static Ref<AXIsolatedObject> createIsolatedTreeHierarchy(AXCoreObject&, AXID, AXObjectCache*, AXIsolatedTree&, Vector<Ref<AXIsolatedObject>>&, bool isRoot);
-#endif
-
-public:
     WEBCORE_EXPORT bool canUseSecondaryAXThread();
 
 #if ENABLE(ACCESSIBILITY)
@@ -316,7 +304,12 @@ public:
         AXRequiredStatusChanged,
         AXTextChanged,
         AXAriaAttributeChanged,
-        AXElementBusyChanged
+        AXElementBusyChanged,
+        AXDraggingStarted,
+        AXDraggingEnded,
+        AXDraggingEnteredDropZone,
+        AXDraggingDropped,
+        AXDraggingExitedDropZone
     };
 
     void postNotification(RenderObject*, AXNotification, PostTarget = TargetElement, PostType = PostAsynchronously);
@@ -366,8 +359,21 @@ public:
     void performDeferredCacheUpdate();
     void deferTextReplacementNotificationForTextControl(HTMLTextFormControlElement&, const String& previousValue);
 
-    RefPtr<Range> rangeMatchesTextNearRange(RefPtr<Range>, const String&);
-    
+    Optional<SimpleRange> rangeMatchesTextNearRange(const SimpleRange&, const String&);
+
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    WEBCORE_EXPORT static bool isIsolatedTreeEnabled();
+private:
+    static bool clientSupportsIsolatedTree();
+    AXCoreObject* isolatedTreeRootObject();
+    AXCoreObject* isolatedTreeFocusedObject();
+    void setIsolatedTreeFocusedObject(Node*);
+    static Ref<AXIsolatedTree> generateIsolatedTree(PageIdentifier, Document&);
+    RefPtr<AXIsolatedTree> getOrCreateIsolatedTree() const;
+    void updateIsolatedTree(AXCoreObject&, AXNotification);
+    void updateIsolatedTree(const Vector<std::pair<RefPtr<AXCoreObject>, AXNotification>>&);
+    static void initializeSecondaryAXThread();
+#endif
 
 protected:
     void postPlatformNotification(AXCoreObject*, AXNotification);
@@ -376,10 +382,10 @@ protected:
     void platformPerformDeferredCacheUpdate();
 
 #if PLATFORM(COCOA)
-    void postTextStateChangePlatformNotification(AccessibilityObject*, const AXTextStateChangeIntent&, const VisibleSelection&);
+    void postTextStateChangePlatformNotification(AXCoreObject*, const AXTextStateChangeIntent&, const VisibleSelection&);
     void postTextStateChangePlatformNotification(AccessibilityObject*, AXTextEditType, const String&, const VisiblePosition&);
-    void postTextReplacementPlatformNotificationForTextControl(AccessibilityObject*, const String& deletedText, const String& insertedText, HTMLTextFormControlElement&);
-    void postTextReplacementPlatformNotification(AccessibilityObject*, AXTextEditType, const String&, AXTextEditType, const String&, const VisiblePosition&);
+    void postTextReplacementPlatformNotificationForTextControl(AXCoreObject*, const String& deletedText, const String& insertedText, HTMLTextFormControlElement&);
+    void postTextReplacementPlatformNotification(AXCoreObject*, AXTextEditType, const String&, AXTextEditType, const String&, const VisiblePosition&);
 #else
     static AXTextChange textChangeForEditType(AXTextEditType);
     void nodeTextChangePlatformNotification(AccessibilityObject*, AXTextChange, unsigned, const String&);
@@ -456,7 +462,7 @@ private:
 
     // aria-modal related
     void findModalNodes();
-    void updateCurrentModalNode();
+    Node* currentModalNode();
     bool isNodeVisible(Node*) const;
     void handleModalChange(Node*);
 
@@ -482,17 +488,18 @@ private:
     
     Timer m_liveRegionChangedPostTimer;
     ListHashSet<RefPtr<AccessibilityObject>> m_liveRegionObjectsSet;
-    
+
     Timer m_focusModalNodeTimer;
     Node* m_currentModalNode;
     ListHashSet<Node*> m_modalNodesSet;
-    
+    bool m_modalNodesInitialized { false };
+
     Timer m_performCacheUpdateTimer;
 
     AXTextStateChangeIntent m_textSelectionIntent;
-    ListHashSet<Element*> m_deferredRecomputeIsIgnoredList;
+    WeakHashSet<Element> m_deferredRecomputeIsIgnoredList;
     ListHashSet<Node*> m_deferredTextChangedList;
-    ListHashSet<Element*> m_deferredSelectedChildredChangedList;
+    WeakHashSet<Element> m_deferredSelectedChildredChangedList;
     ListHashSet<RefPtr<AXCoreObject>> m_deferredChildrenChangedList;
     ListHashSet<Node*> m_deferredChildrenChangedNodeList;
     HashMap<Element*, String> m_deferredTextFormControlValue;
@@ -620,5 +627,7 @@ inline AXAttributeCacheEnabler::AXAttributeCacheEnabler(AXObjectCache*) { }
 inline AXAttributeCacheEnabler::~AXAttributeCacheEnabler() { }
 
 #endif
+
+WTF::TextStream& operator<<(WTF::TextStream&, AXObjectCache::AXNotification);
 
 } // namespace WebCore

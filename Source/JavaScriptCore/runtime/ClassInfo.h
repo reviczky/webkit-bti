@@ -47,10 +47,10 @@ struct MethodTable {
     using VisitChildrenFunctionPtr = void (*)(JSCell*, SlotVisitor&);
     VisitChildrenFunctionPtr METHOD_TABLE_ENTRY(visitChildren);
 
-    using GetCallDataFunctionPtr = CallType (*)(JSCell*, CallData&);
+    using GetCallDataFunctionPtr = CallData (*)(JSCell*);
     GetCallDataFunctionPtr METHOD_TABLE_ENTRY(getCallData);
 
-    using GetConstructDataFunctionPtr = ConstructType (*)(JSCell*, ConstructData&);
+    using GetConstructDataFunctionPtr = CallData (*)(JSCell*);
     GetConstructDataFunctionPtr METHOD_TABLE_ENTRY(getConstructData);
 
     using PutFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, PropertyName propertyName, JSValue, PutPropertySlot&);
@@ -59,7 +59,7 @@ struct MethodTable {
     using PutByIndexFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, unsigned propertyName, JSValue, bool shouldThrow);
     PutByIndexFunctionPtr METHOD_TABLE_ENTRY(putByIndex);
 
-    using DeletePropertyFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, PropertyName);
+    using DeletePropertyFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
     DeletePropertyFunctionPtr METHOD_TABLE_ENTRY(deleteProperty);
 
     using DeletePropertyByIndexFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, unsigned);

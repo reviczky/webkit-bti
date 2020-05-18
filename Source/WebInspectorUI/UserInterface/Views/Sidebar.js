@@ -42,7 +42,8 @@ WI.Sidebar = class Sidebar extends WI.View
         if (hasNavigationBar) {
             this.element.classList.add("has-navigation-bar");
 
-            this._navigationBar = new WI.NavigationBar(null, null, "tablist");
+            const navigationBarElement = null;
+            this._navigationBar = new WI.NavigationBar(navigationBarElement, {role: "tablist"});
             this._navigationBar.addEventListener(WI.NavigationBar.Event.NavigationItemSelected, this._navigationItemSelected, this);
             this.addSubview(this._navigationBar);
         }
@@ -147,11 +148,12 @@ WI.Sidebar = class Sidebar extends WI.View
 
     get minimumWidth()
     {
+        let minimumWidth = WI.Sidebar.AbsoluteMinimumWidth;
         if (this._navigationBar)
-            return Math.max(WI.Sidebar.AbsoluteMinimumWidth, this._navigationBar.minimumWidth);
+            minimumWidth = Math.max(minimumWidth, this._navigationBar.minimumWidth);
         if (this._selectedSidebarPanel)
-            return Math.max(WI.Sidebar.AbsoluteMinimumWidth, this._selectedSidebarPanel.minimumWidth);
-        return WI.Sidebar.AbsoluteMinimumWidth;
+            minimumWidth = Math.max(minimumWidth, this._selectedSidebarPanel.minimumWidth);
+        return minimumWidth;
     }
 
     get maximumWidth()

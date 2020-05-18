@@ -43,6 +43,11 @@ WI.GeneralStyleDetailsSidebarPanel = class GeneralStyleDetailsSidebarPanel exten
 
     get panel() { return this._panel; }
 
+    get minimumWidth()
+    {
+        return Math.max(super.minimumWidth, this._panel.minimumWidth || 0);
+    }
+
     supportsDOMNode(nodeToInspect)
     {
         return nodeToInspect.nodeType() === Node.ELEMENT_NODE;
@@ -236,24 +241,12 @@ WI.GeneralStyleDetailsSidebarPanel = class GeneralStyleDetailsSidebarPanel exten
 
     _handleForcedPseudoClassCheckboxKeydown(pseudoClass, event)
     {
-        if (event.key !== "Tab")
+        if (event.key !== "Tab" || event.shiftKey)
             return;
 
-        let pseudoClasses = WI.CSSManager.ForceablePseudoClasses;
-        let index = pseudoClasses.indexOf(pseudoClass);
-        if (event.shiftKey) {
-            if (index > 0) {
-                this._forcedPseudoClassCheckboxes[pseudoClasses[index - 1]].focus();
-                event.preventDefault();
-            } else {
-                this._filterBar.inputField.focus();
-                event.preventDefault();
-            }
-        } else {
-            if (index < pseudoClasses.length - 1) {
-                this._forcedPseudoClassCheckboxes[pseudoClasses[index + 1]].focus();
-                event.preventDefault();
-            } else if (this._panel.focusFirstSection) {
+        if (WI.CSSManager.ForceablePseudoClasses.lastValue === pseudoClass) {
+            // Last checkbox is currently focused.
+            if (this._panel.focusFirstSection) {
                 this._panel.focusFirstSection();
                 event.preventDefault();
             }
@@ -425,16 +418,11 @@ WI.GeneralStyleDetailsSidebarPanel = class GeneralStyleDetailsSidebarPanel exten
 
     _handleFilterBarInputFieldKeyDown(event)
     {
-        if (event.key !== "Tab")
+        if (event.key !== "Tab" || !event.shiftKey)
             return;
 
-        if (event.shiftKey) {
-            if (this._panel.focusLastSection) {
-                this._panel.focusLastSection();
-                event.preventDefault();
-            }
-        } else {
-            this._forcedPseudoClassCheckboxes[WI.CSSManager.ForceablePseudoClasses[0]].focus();
+        if (this._panel.focusLastSection) {
+            this._panel.focusLastSection();
             event.preventDefault();
         }
     }

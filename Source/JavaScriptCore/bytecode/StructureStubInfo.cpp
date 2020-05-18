@@ -27,8 +27,6 @@
 #include "StructureStubInfo.h"
 
 #include "CacheableIdentifierInlines.h"
-#include "JSObject.h"
-#include "JSCInlines.h"
 #include "PolymorphicAccess.h"
 #include "Repatch.h"
 
@@ -42,10 +40,6 @@ static constexpr bool verbose = false;
 
 StructureStubInfo::StructureStubInfo(AccessType accessType)
     : accessType(accessType)
-    , m_cacheType(CacheType::Unset)
-    , countdown(1) // For a totally clear stub, we'll patch it after the first execution.
-    , repatchCount(0)
-    , numberOfCoolDowns(0)
     , bufferingCountdown(Options::repatchBufferingCountdown())
     , resetByGC(false)
     , tookSlowPath(false)
@@ -67,7 +61,7 @@ void StructureStubInfo::initGetByIdSelf(CodeBlock* codeBlock, Structure* baseObj
 {
     ASSERT(hasConstantIdentifier);
     setCacheType(CacheType::GetByIdSelf);
-    m_getByIdSelfIdentifier = identifier;
+    m_identifier = identifier;
     codeBlock->vm().heap.writeBarrier(codeBlock);
     
     u.byIdSelf.baseObjectStructure.set(
@@ -85,18 +79,22 @@ void StructureStubInfo::initStringLength()
     setCacheType(CacheType::StringLength);
 }
 
-void StructureStubInfo::initPutByIdReplace(CodeBlock* codeBlock, Structure* baseObjectStructure, PropertyOffset offset)
+void StructureStubInfo::initPutByIdReplace(CodeBlock* codeBlock, Structure* baseObjectStructure, PropertyOffset offset, CacheableIdentifier identifier)
 {
     setCacheType(CacheType::PutByIdReplace);
-    
+    m_identifier = identifier;
+    codeBlock->vm().heap.writeBarrier(codeBlock);
+
     u.byIdSelf.baseObjectStructure.set(
         codeBlock->vm(), codeBlock, baseObjectStructure);
     u.byIdSelf.offset = offset;
 }
 
-void StructureStubInfo::initInByIdSelf(CodeBlock* codeBlock, Structure* baseObjectStructure, PropertyOffset offset)
+void StructureStubInfo::initInByIdSelf(CodeBlock* codeBlock, Structure* baseObjectStructure, PropertyOffset offset, CacheableIdentifier identifier)
 {
     setCacheType(CacheType::InByIdSelf);
+    m_identifier = identifier;
+    codeBlock->vm().heap.writeBarrier(codeBlock);
 
     u.byIdSelf.baseObjectStructure.set(
         codeBlock->vm(), codeBlock, baseObjectStructure);
@@ -140,7 +138,7 @@ void StructureStubInfo::aboutToDie()
 }
 
 AccessGenerationResult StructureStubInfo::addAccessCase(
-    const GCSafeConcurrentJSLocker& locker, CodeBlock* codeBlock, CacheableIdentifier ident, std::unique_ptr<AccessCase> accessCase)
+    const GCSafeConcurrentJSLocker& locker, JSGlobalObject* globalObject, CodeBlock* codeBlock, CacheableIdentifier ident, std::unique_ptr<AccessCase> accessCase)
 {
     checkConsistency();
 
@@ -165,7 +163,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
                 return result;
 
             if (!result.buffered()) {
-                bufferedStructures.clear();
+                clearBufferedStructures();
                 return result;
             }
         } else {
@@ -188,7 +186,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
                 return result;
 
             if (!result.buffered()) {
-                bufferedStructures.clear();
+                clearBufferedStructures();
                 return result;
             }
             
@@ -204,7 +202,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         if (!result.buffered()) {
             if (StructureStubInfoInternal::verbose)
                 dataLog("Didn't buffer anything, bailing.\n");
-            bufferedStructures.clear();
+            clearBufferedStructures();
             return result;
         }
         
@@ -217,9 +215,9 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         
         // Forget the buffered structures so that all future attempts to cache get fully handled by the
         // PolymorphicAccess.
-        bufferedStructures.clear();
+        clearBufferedStructures();
         
-        result = u.stub->regenerate(locker, vm, codeBlock, *this);
+        result = u.stub->regenerate(locker, vm, globalObject, codeBlock, *this);
         
         if (StructureStubInfoInternal::verbose)
             dataLog("Regeneration result: ", result, "\n");
@@ -240,7 +238,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
 
 void StructureStubInfo::reset(CodeBlock* codeBlock)
 {
-    bufferedStructures.clear();
+    clearBufferedStructures();
 
     if (m_cacheType == CacheType::Unset)
         return;
@@ -276,6 +274,12 @@ void StructureStubInfo::reset(CodeBlock* codeBlock)
     case AccessType::InstanceOf:
         resetInstanceOf(*this);
         break;
+    case AccessType::DeleteByID:
+        resetDelBy(codeBlock, *this, DelByKind::Normal);
+        break;
+    case AccessType::DeleteByVal:
+        resetDelBy(codeBlock, *this, DelByKind::NormalByVal);
+        break;
     }
     
     deref();
@@ -284,15 +288,20 @@ void StructureStubInfo::reset(CodeBlock* codeBlock)
 
 void StructureStubInfo::visitAggregate(SlotVisitor& visitor)
 {
+    {
+        auto locker = holdLock(m_bufferedStructuresLock);
+        for (auto& bufferedStructure : m_bufferedStructures)
+            bufferedStructure.byValId().visitAggregate(visitor);
+    }
     switch (m_cacheType) {
     case CacheType::Unset:
     case CacheType::ArrayLength:
     case CacheType::StringLength:
+        return;
     case CacheType::PutByIdReplace:
     case CacheType::InByIdSelf:
-        return;
     case CacheType::GetByIdSelf:
-        m_getByIdSelfIdentifier.visitAggregate(visitor);
+        m_identifier.visitAggregate(visitor);
         return;
     case CacheType::Stub:
         u.stub->visitAggregate(visitor);
@@ -306,12 +315,13 @@ void StructureStubInfo::visitAggregate(SlotVisitor& visitor)
 void StructureStubInfo::visitWeakReferences(CodeBlock* codeBlock)
 {
     VM& vm = codeBlock->vm();
-    
-    bufferedStructures.removeIf(
-        [&] (auto& pair) -> bool {
-            Structure* structure = pair.first;
-            return !vm.heap.isMarked(structure);
-        });
+    {
+        auto locker = holdLock(m_bufferedStructuresLock);
+        m_bufferedStructures.removeIf(
+            [&] (auto& entry) -> bool {
+                return !vm.heap.isMarked(entry.structure());
+            });
+    }
 
     switch (m_cacheType) {
     case CacheType::GetByIdSelf:
@@ -393,8 +403,18 @@ bool StructureStubInfo::containsPC(void* pc) const
 
 void StructureStubInfo::setCacheType(CacheType newCacheType)
 {
-    if (m_cacheType == CacheType::GetByIdSelf)
-        m_getByIdSelfIdentifier = nullptr;
+    switch (m_cacheType) {
+    case CacheType::Unset:
+    case CacheType::ArrayLength:
+    case CacheType::StringLength:
+    case CacheType::Stub:
+        break;
+    case CacheType::PutByIdReplace:
+    case CacheType::InByIdSelf:
+    case CacheType::GetByIdSelf:
+        m_identifier = nullptr;
+        break;
+    }
     m_cacheType = newCacheType;
 }
 

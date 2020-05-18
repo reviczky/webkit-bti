@@ -27,6 +27,7 @@
 #include "JSDOMPromiseDeferred.h"
 
 #include "DOMWindow.h"
+#include "EventLoop.h"
 #include "JSDOMPromise.h"
 #include "JSDOMWindow.h"
 #include <JavaScriptCore/BuiltinNames.h>
@@ -71,6 +72,9 @@ void DeferredPromise::callFunction(JSGlobalObject& lexicalGlobalObject, ResolveM
     case ResolveMode::Reject:
         deferred()->reject(&lexicalGlobalObject, resolution);
         break;
+    case ResolveMode::RejectAsHandled:
+        deferred()->rejectAsHandled(&lexicalGlobalObject, resolution);
+        break;
     }
 
     if (m_mode == Mode::ClearPromiseOnResolve)
@@ -92,7 +96,7 @@ void DeferredPromise::whenSettled(Function<void()>&& callback)
     DOMPromise::whenPromiseIsSettled(globalObject(), deferred(), WTFMove(callback));
 }
 
-void DeferredPromise::reject()
+void DeferredPromise::reject(RejectAsHandled rejectAsHandled)
 {
     if (shouldIgnoreRequestToFulfill())
         return;
@@ -101,10 +105,10 @@ void DeferredPromise::reject()
     ASSERT(m_globalObject);
     auto& lexicalGlobalObject = *m_globalObject;
     JSC::JSLockHolder locker(&lexicalGlobalObject);
-    reject(lexicalGlobalObject, JSC::jsUndefined());
+    reject(lexicalGlobalObject, JSC::jsUndefined(), rejectAsHandled);
 }
 
-void DeferredPromise::reject(std::nullptr_t)
+void DeferredPromise::reject(std::nullptr_t, RejectAsHandled rejectAsHandled)
 {
     if (shouldIgnoreRequestToFulfill())
         return;
@@ -113,10 +117,10 @@ void DeferredPromise::reject(std::nullptr_t)
     ASSERT(m_globalObject);
     auto& lexicalGlobalObject = *m_globalObject;
     JSC::JSLockHolder locker(&lexicalGlobalObject);
-    reject(lexicalGlobalObject, JSC::jsNull());
+    reject(lexicalGlobalObject, JSC::jsNull(), rejectAsHandled);
 }
 
-void DeferredPromise::reject(Exception exception)
+void DeferredPromise::reject(Exception exception, RejectAsHandled rejectAsHandled)
 {
     if (shouldIgnoreRequestToFulfill())
         return;
@@ -134,7 +138,7 @@ void DeferredPromise::reject(Exception exception)
         auto error = scope.exception()->value();
         scope.clearException();
 
-        reject<IDLAny>(error);
+        reject<IDLAny>(error, rejectAsHandled);
         return;
     }
 
@@ -145,10 +149,10 @@ void DeferredPromise::reject(Exception exception)
         return;
     }
 
-    reject(lexicalGlobalObject, error);
+    reject(lexicalGlobalObject, error, rejectAsHandled);
 }
 
-void DeferredPromise::reject(ExceptionCode ec, const String& message)
+void DeferredPromise::reject(ExceptionCode ec, const String& message, RejectAsHandled rejectAsHandled)
 {
     if (shouldIgnoreRequestToFulfill())
         return;
@@ -166,7 +170,7 @@ void DeferredPromise::reject(ExceptionCode ec, const String& message)
         auto error = scope.exception()->value();
         scope.clearException();
 
-        reject<IDLAny>(error);
+        reject<IDLAny>(error, rejectAsHandled);
         return;
     }
 
@@ -178,10 +182,10 @@ void DeferredPromise::reject(ExceptionCode ec, const String& message)
     }
 
 
-    reject(lexicalGlobalObject, error);
+    reject(lexicalGlobalObject, error, rejectAsHandled);
 }
 
-void DeferredPromise::reject(const JSC::PrivateName& privateName)
+void DeferredPromise::reject(const JSC::PrivateName& privateName, RejectAsHandled rejectAsHandled)
 {
     if (shouldIgnoreRequestToFulfill())
         return;
@@ -190,7 +194,7 @@ void DeferredPromise::reject(const JSC::PrivateName& privateName)
     ASSERT(m_globalObject);
     JSC::JSGlobalObject* lexicalGlobalObject = m_globalObject.get();
     JSC::JSLockHolder locker(lexicalGlobalObject);
-    reject(*lexicalGlobalObject, JSC::Symbol::create(lexicalGlobalObject->vm(), privateName.uid()));
+    reject(*lexicalGlobalObject, JSC::Symbol::create(lexicalGlobalObject->vm(), privateName.uid()), rejectAsHandled);
 }
 
 void rejectPromiseWithExceptionIfAny(JSC::JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject& globalObject, JSPromise& promise)
@@ -224,15 +228,14 @@ JSC::EncodedJSValue createRejectedPromiseWithTypeError(JSC::JSGlobalObject& lexi
     if (cause == RejectedPromiseWithTypeErrorCause::NativeGetter)
         rejectionValue->setNativeGetterTypeError();
 
-    CallData callData;
-    auto callType = getCallData(lexicalGlobalObject.vm(), rejectFunction, callData);
-    ASSERT(callType != CallType::None);
+    auto callData = getCallData(lexicalGlobalObject.vm(), rejectFunction);
+    ASSERT(callData.type != CallData::Type::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(rejectionValue);
     ASSERT(!arguments.hasOverflowed());
 
-    return JSValue::encode(call(&lexicalGlobalObject, rejectFunction, callType, callData, promiseConstructor, arguments));
+    return JSValue::encode(call(&lexicalGlobalObject, rejectFunction, callData, promiseConstructor, arguments));
 }
 
 static inline JSC::JSValue parseAsJSON(JSC::JSGlobalObject* lexicalGlobalObject, const String& data)

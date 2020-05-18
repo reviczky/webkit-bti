@@ -31,9 +31,7 @@
 #include "RenderThemeCocoa.h"
 
 #if USE(SYSTEM_PREVIEW)
-#if HAVE(IOSURFACE)
 #include "IOSurface.h"
-#endif
 #include <wtf/RetainPtr.h>
 #endif
 
@@ -67,7 +65,7 @@ public:
 
     WEBCORE_EXPORT static void setFocusRingColor(const Color&);
 
-protected:
+private:
     LengthBox popupInternalPaddingBox(const RenderStyle&) const override;
     
     FontCascadeDescription& cachedSystemFontDescription(CSSValueID systemFontID) const override;
@@ -126,7 +124,7 @@ protected:
 #endif
 
 #if ENABLE(TOUCH_EVENTS)
-    Color platformTapHighlightColor() const override { return 0x4D1A1A1A; }
+    Color platformTapHighlightColor() const override { return SimpleColor { 0x4D1A1A1A }; }
 #endif
 
     bool shouldHaveSpinButton(const HTMLInputElement&) const override;
@@ -169,10 +167,8 @@ private:
 
 #if USE(SYSTEM_PREVIEW)
     RetainPtr<CIContext> m_ciContext;
-#if HAVE(IOSURFACE)
     std::unique_ptr<IOSurface> m_largeBadgeSurface;
     std::unique_ptr<IOSurface> m_smallBadgeSurface;
-#endif
 #endif
 
     bool m_shouldMockBoldSystemFontForAccessibility { false };

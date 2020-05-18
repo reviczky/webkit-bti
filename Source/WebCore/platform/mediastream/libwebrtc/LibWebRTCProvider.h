@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "DocumentIdentifier.h"
 #include "LibWebRTCMacros.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/Expected.h>
@@ -58,6 +59,7 @@ class PeerConnectionFactoryInterface;
 namespace WebCore {
 
 class LibWebRTCAudioModule;
+struct PeerConnectionFactoryAndThreads;
 struct RTCRtpCapabilities;
 
 enum class MDNSRegisterError { NotImplemented, BadParameter, DNSSD, Internal, Timeout };
@@ -78,14 +80,10 @@ public:
     using IPAddressOrError = Expected<String, MDNSRegisterError>;
     using MDNSNameOrError = Expected<String, MDNSRegisterError>;
 
-    virtual void unregisterMDNSNames(uint64_t documentIdentifier)
-    {
-        UNUSED_PARAM(documentIdentifier);
-    }
+    virtual void unregisterMDNSNames(DocumentIdentifier) { }
 
-    virtual void registerMDNSName(uint64_t documentIdentifier, const String& ipAddress, CompletionHandler<void(MDNSNameOrError&&)>&& callback)
+    virtual void registerMDNSName(DocumentIdentifier, const String& ipAddress, CompletionHandler<void(MDNSNameOrError&&)>&& callback)
     {
-        UNUSED_PARAM(documentIdentifier);
         UNUSED_PARAM(ipAddress);
         callback(makeUnexpected(MDNSRegisterError::NotImplemented));
     }
@@ -106,7 +104,7 @@ public:
     void disableEnumeratingAllNetworkInterfaces();
     void enableEnumeratingAllNetworkInterfaces();
 
-    void supportsVP8(bool value) { m_supportsVP8 = value; }
+    void supportsH265(bool value) { m_supportsH265 = value; }
     virtual void disableNonLocalhostConnections() { m_disableNonLocalhostConnections = true; }
 
     rtc::RTCCertificateGenerator& certificateGenerator();
@@ -119,7 +117,6 @@ public:
     void setEnableLogging(bool);
     void setEnableWebRTCEncryption(bool);
     void setUseDTLS10(bool);
-    void setUseGPUProcess(bool);
 
     class SuspendableSocketFactory : public rtc::PacketSocketFactory {
     public:
@@ -138,16 +135,19 @@ protected:
     virtual std::unique_ptr<webrtc::VideoDecoderFactory> createDecoderFactory();
     virtual std::unique_ptr<webrtc::VideoEncoderFactory> createEncoderFactory();
 
+    virtual void startedNetworkThread() { };
+
+    PeerConnectionFactoryAndThreads& getStaticFactoryAndThreads(bool useNetworkThreadWithSocketServer);
+
     bool m_enableEnumeratingAllNetworkInterfaces { false };
     // FIXME: Remove m_useNetworkThreadWithSocketServer member variable and make it a global.
     bool m_useNetworkThreadWithSocketServer { true };
 
     rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> m_factory;
     bool m_disableNonLocalhostConnections { false };
-    bool m_supportsVP8 { false };
+    bool m_supportsH265 { false };
     bool m_enableLogging { true };
     bool m_useDTLS10 { false };
-    bool m_useGPUProcess { false };
 #endif
 };
 

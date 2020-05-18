@@ -121,17 +121,17 @@ GraphicsContextState::StateChangeFlags GraphicsContextStateChange::changesFromSt
 void GraphicsContextStateChange::accumulate(const GraphicsContextState& state, GraphicsContextState::StateChangeFlags flags)
 {
     // FIXME: This code should move to GraphicsContextState.
-    if (flags.contains(GraphicsContextState::StrokeGradientChange))
+    if (flags.containsAny({ GraphicsContextState::StrokeColorChange, GraphicsContextState::StrokeGradientChange, GraphicsContextState::StrokePatternChange })) {
+        m_state.strokeColor = state.strokeColor;
         m_state.strokeGradient = state.strokeGradient;
-
-    if (flags.contains(GraphicsContextState::StrokePatternChange))
         m_state.strokePattern = state.strokePattern;
+    }
 
-    if (flags.contains(GraphicsContextState::FillGradientChange))
+    if (flags.containsAny({ GraphicsContextState::FillColorChange, GraphicsContextState::FillGradientChange, GraphicsContextState::FillPatternChange })) {
+        m_state.fillColor = state.fillColor;
         m_state.fillGradient = state.fillGradient;
-
-    if (flags.contains(GraphicsContextState::FillPatternChange))
         m_state.fillPattern = state.fillPattern;
+    }
 
     if (flags.contains(GraphicsContextState::ShadowChange)) {
         // FIXME: Deal with state.shadowsUseLegacyRadius.
@@ -145,12 +145,6 @@ void GraphicsContextStateChange::accumulate(const GraphicsContextState& state, G
 
     if (flags.contains(GraphicsContextState::TextDrawingModeChange))
         m_state.textDrawingMode = state.textDrawingMode;
-
-    if (flags.contains(GraphicsContextState::StrokeColorChange))
-        m_state.strokeColor = state.strokeColor;
-
-    if (flags.contains(GraphicsContextState::FillColorChange))
-        m_state.fillColor = state.fillColor;
 
     if (flags.contains(GraphicsContextState::StrokeStyleChange))
         m_state.strokeStyle = state.strokeStyle;
@@ -206,6 +200,9 @@ void GraphicsContextStateChange::apply(GraphicsContext& context) const
     if (m_changeFlags.contains(GraphicsContextState::FillPatternChange))
         context.setFillPattern(*m_state.fillPattern);
 
+    if (m_changeFlags.contains(GraphicsContextState::ShadowsIgnoreTransformsChange))
+        context.setShadowsIgnoreTransforms(m_state.shadowsIgnoreTransforms);
+
     if (m_changeFlags.contains(GraphicsContextState::ShadowChange)) {
 #if USE(CG)
         if (m_state.shadowsUseLegacyRadius)
@@ -248,9 +245,6 @@ void GraphicsContextStateChange::apply(GraphicsContext& context) const
     if (m_changeFlags.contains(GraphicsContextState::ShouldSubpixelQuantizeFontsChange))
         context.setShouldSubpixelQuantizeFonts(m_state.shouldSubpixelQuantizeFonts);
 
-    if (m_changeFlags.contains(GraphicsContextState::ShadowsIgnoreTransformsChange))
-        context.setShadowsIgnoreTransforms(m_state.shadowsIgnoreTransforms);
-
     if (m_changeFlags.contains(GraphicsContextState::DrawLuminanceMaskChange))
         context.setDrawLuminanceMask(m_state.drawLuminanceMask);
 
@@ -291,7 +285,7 @@ void GraphicsContextStateChange::dump(TextStream& ts) const
         ts.dumpProperty("stroke-thickness", m_state.strokeThickness);
 
     if (m_changeFlags.contains(GraphicsContextState::TextDrawingModeChange))
-        ts.dumpProperty("text-drawing-mode", m_state.textDrawingMode);
+        ts.dumpProperty("text-drawing-mode", m_state.textDrawingMode.toRaw());
 
     if (m_changeFlags.contains(GraphicsContextState::StrokeColorChange))
         ts.dumpProperty("stroke-color", m_state.strokeColor);
@@ -717,7 +711,7 @@ ImageDrawResult GraphicsContext::drawImage(Image& image, const FloatPoint& desti
 
 ImageDrawResult GraphicsContext::drawImage(Image& image, const FloatRect& destination, const ImagePaintingOptions& imagePaintingOptions)
 {
-    FloatRect srcRect(FloatPoint(), image.size());
+    FloatRect srcRect(FloatPoint(), image.size(imagePaintingOptions.orientation()));
     return drawImage(image, destination, srcRect, imagePaintingOptions);
 }
 

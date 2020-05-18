@@ -892,7 +892,16 @@ static Ref<CSSValue> valueForGridTrackList(GridTrackSizingDirection direction, R
     auto& autoRepeatTrackSizes = isRowAxis ? style.gridAutoRepeatColumns() : style.gridAutoRepeatRows();
 
     // Handle the 'none' case.
-    if (trackSizes.isEmpty() && autoRepeatTrackSizes.isEmpty())
+    bool trackListIsEmpty = trackSizes.isEmpty() && autoRepeatTrackSizes.isEmpty();
+    if (isRenderGrid && trackListIsEmpty) {
+        // For grids we should consider every listed track, whether implicitly or explicitly
+        // created. Empty grids have a sole grid line per axis.
+        auto& grid = downcast<RenderGrid>(*renderer);
+        auto& positions = isRowAxis ? grid.columnPositions() : grid.rowPositions();
+        trackListIsEmpty = positions.size() == 1;
+    }
+
+    if (trackListIsEmpty)
         return CSSValuePool::singleton().createIdentifierValue(CSSValueNone);
 
     auto list = CSSValueList::createSpaceSeparated();
@@ -959,14 +968,14 @@ static Ref<CSSValue> valueForGridPosition(const GridPosition& position)
 
 static Ref<CSSValue> createTransitionPropertyValue(const Animation& animation)
 {
-    switch (animation.animationMode()) {
-    case Animation::AnimateNone:
+    switch (animation.property().mode) {
+    case Animation::TransitionMode::None:
         return CSSValuePool::singleton().createIdentifierValue(CSSValueNone);
-    case Animation::AnimateAll:
+    case Animation::TransitionMode::All:
         return CSSValuePool::singleton().createIdentifierValue(CSSValueAll);
-    case Animation::AnimateSingleProperty:
-        return CSSValuePool::singleton().createValue(getPropertyNameString(animation.property()), CSSUnitType::CSS_STRING);
-    case Animation::AnimateUnknownProperty:
+    case Animation::TransitionMode::SingleProperty:
+        return CSSValuePool::singleton().createValue(getPropertyNameString(animation.property().id), CSSUnitType::CSS_STRING);
+    case Animation::TransitionMode::UnknownProperty:
         return CSSValuePool::singleton().createValue(animation.unknownProperty(), CSSUnitType::CSS_STRING);
     }
     ASSERT_NOT_REACHED();
@@ -1278,7 +1287,7 @@ static Ref<CSSValue> createTimingFunctionValue(const TimingFunction& timingFunct
     }
     case TimingFunction::StepsFunction: {
         auto& function = downcast<StepsTimingFunction>(timingFunction);
-        return CSSStepsTimingFunctionValue::create(function.numberOfSteps(), function.stepAtStart());
+        return CSSStepsTimingFunctionValue::create(function.numberOfSteps(), function.stepPosition());
     }
     case TimingFunction::SpringFunction: {
         auto& function = downcast<SpringTimingFunction>(timingFunction);
@@ -1433,7 +1442,6 @@ static Ref<CSSPrimitiveValue> valueForFamily(const AtomString& family)
     return CSSValuePool::singleton().createFontFamilyValue(family);
 }
 
-#if ENABLE(POINTER_EVENTS)
 static Ref<CSSValue> touchActionFlagsToCSSValue(OptionSet<TouchAction> touchActions)
 {
     auto& cssValuePool = CSSValuePool::singleton();
@@ -1457,7 +1465,6 @@ static Ref<CSSValue> touchActionFlagsToCSSValue(OptionSet<TouchAction> touchActi
         return cssValuePool.createIdentifierValue(CSSValueAuto);
     return list;
 }
-#endif
 
 static Ref<CSSValue> renderTextDecorationFlagsToCSSValue(OptionSet<TextDecoration> textDecoration)
 {
@@ -2121,6 +2128,17 @@ static bool isImplicitlyInheritedGridOrFlexProperty(CSSPropertyID propertyID)
     }
 }
 
+static bool nonInheritedColorPropertyHasValueCurrentColor(CSSPropertyID propertyID, const RenderStyle* style)
+{
+    if (CSSProperty::isInheritedProperty(propertyID) || !CSSProperty::isColorProperty(propertyID))
+        return false;
+
+    if (!style)
+        return true;
+
+    return RenderStyle::isCurrentColor(style->unresolvedColorForProperty(propertyID));
+}
+
 // In CSS 2.1 the returned object should actually contain the "used values"
 // rather then the "computed values" (despite the name saying otherwise).
 //
@@ -2157,6 +2175,10 @@ static inline bool hasValidStyleForProperty(Element& element, CSSPropertyID prop
 
         if (maybeExplicitlyInherited) {
             auto* style = currentElement->renderStyle();
+            // While most color properties are not inherited, the value 'currentcolor' resolves to the value of the inherited 'color' property.
+            if (nonInheritedColorPropertyHasValueCurrentColor(propertyID, style))
+                isInherited = true;
+
             maybeExplicitlyInherited = !style || style->hasExplicitlyInheritedProperties();
         }
 
@@ -2178,7 +2200,19 @@ static bool updateStyleIfNeededForProperty(Element& element, CSSPropertyID prope
 
     document.styleScope().flushPendingUpdate();
 
-    if (hasValidStyleForProperty(element, propertyID))
+    auto hasValidStyle = [&] {
+        auto shorthand = shorthandForProperty(propertyID);
+        if (shorthand.length()) {
+            for (auto longhand : shorthand) {
+                if (!hasValidStyleForProperty(element, longhand))
+                    return false;
+            }
+            return true;
+        }
+        return hasValidStyleForProperty(element, propertyID);
+    }();
+
+    if (hasValidStyle)
         return false;
 
     document.updateStyleIfNeeded();
@@ -2193,7 +2227,7 @@ static inline const RenderStyle* computeRenderStyleForProperty(Element& element,
         if (auto timeline = element.document().existingTimeline())
             ownedStyle = timeline->animatedStyleForRenderer(*renderer);
         else
-            ownedStyle = renderer->animation().animatedStyleForRenderer(*renderer);
+            ownedStyle = renderer->legacyAnimation().animatedStyleForRenderer(*renderer);
         if (pseudoElementSpecifier != PseudoId::None && !element.isPseudoElement()) {
             // FIXME: This cached pseudo style will only exist if the animation has been run at least once.
             return ownedStyle->getCachedPseudoStyle(pseudoElementSpecifier);
@@ -2458,7 +2492,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
             break;
 
         case CSSPropertyBackgroundColor:
-            return cssValuePool.createColorValue(m_allowVisitedStyle? style.visitedDependentColor(CSSPropertyBackgroundColor) : style.backgroundColor());
+            return m_allowVisitedStyle ? cssValuePool.createColorValue(style.visitedDependentColor(CSSPropertyBackgroundColor)) : currentColorOrValidColor(&style, style.backgroundColor());
         case CSSPropertyBackgroundImage:
         case CSSPropertyWebkitMaskImage: {
             auto& layers = propertyID == CSSPropertyWebkitMaskImage ? style.maskLayers() : style.backgroundLayers();
@@ -3403,10 +3437,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         case CSSPropertyWebkitTapHighlightColor:
             return currentColorOrValidColor(&style, style.tapHighlightColor());
 #endif
-#if ENABLE(POINTER_EVENTS)
         case CSSPropertyTouchAction:
             return touchActionFlagsToCSSValue(style.touchActions());
-#endif
 #if PLATFORM(IOS_FAMILY)
         case CSSPropertyWebkitTouchCallout:
             return cssValuePool.createIdentifierValue(style.touchCalloutEnabled() ? CSSValueDefault : CSSValueNone);
@@ -3507,6 +3539,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         case CSSPropertyWebkitTextCombine:
             return cssValuePool.createValue(style.textCombine());
         case CSSPropertyWebkitTextOrientation:
+            return CSSPrimitiveValue::create(style.textOrientation());
+        case CSSPropertyTextOrientation:
             return CSSPrimitiveValue::create(style.textOrientation());
         case CSSPropertyWebkitLineBoxContain:
             return createLineBoxContainValue(style.lineBoxContain());
@@ -3812,14 +3846,6 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         case CSSPropertyTransformOriginY:
         case CSSPropertyTransformOriginZ:
             break;
-
-#if ENABLE(CSS_DEVICE_ADAPTATION)
-        case CSSPropertyMaxZoom:
-        case CSSPropertyMinZoom:
-        case CSSPropertyOrientation:
-        case CSSPropertyUserZoom:
-            break;
-#endif
 
         case CSSPropertyBufferedRendering:
         case CSSPropertyClipRule:

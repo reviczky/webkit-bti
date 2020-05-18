@@ -118,8 +118,8 @@ public:
     TaggedNativeFunction nativeFunction();
     TaggedNativeFunction nativeConstructor();
 
-    JS_EXPORT_PRIVATE static ConstructType getConstructData(JSCell*, ConstructData&);
-    JS_EXPORT_PRIVATE static CallType getCallData(JSCell*, CallData&);
+    JS_EXPORT_PRIVATE static CallData getConstructData(JSCell*);
+    JS_EXPORT_PRIVATE static CallData getCallData(JSCell*);
 
     static inline ptrdiff_t offsetOfExecutableOrRareData()
     {
@@ -164,7 +164,7 @@ public:
     };
     PropertyStatus reifyLazyPropertyIfNeeded(VM&, JSGlobalObject*, PropertyName);
 
-    bool areNameAndLengthOriginal(VM&);
+    bool canAssumeNameAndLengthAreOriginal(VM&);
 
 protected:
     JS_EXPORT_PRIVATE JSFunction(VM&, NativeExecutable*, JSGlobalObject*, Structure*);
@@ -179,7 +179,7 @@ protected:
 
     static bool put(JSCell*, JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
 
-    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName);
+    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
 
     static void visitChildren(JSCell*, SlotVisitor&);
 

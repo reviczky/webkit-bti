@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,13 +27,13 @@
 
 #include "DrawingAreaInfo.h"
 #include "LayerTreeContext.h"
+#include "SandboxExtension.h"
 #include "SessionState.h"
-#include "WebCompiledContentRuleListData.h"
+#include "UserContentControllerParameters.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebPageGroupData.h"
 #include "WebPageProxyIdentifier.h"
 #include "WebPreferencesStore.h"
-#include "WebUserContentControllerDataTypes.h"
 #include <WebCore/ActivityState.h>
 #include <WebCore/Color.h>
 #include <WebCore/FloatSize.h>
@@ -84,6 +84,8 @@ struct WebPageCreationParameters {
     bool useFixedLayout;
     WebCore::IntSize fixedLayoutSize;
 
+    Optional<WebCore::FloatRect> viewExposedRect;
+
     bool alwaysShowsHorizontalScroller;
     bool alwaysShowsVerticalScroller;
 
@@ -97,9 +99,9 @@ struct WebPageCreationParameters {
     
     String userAgent;
 
+    bool itemStatesWereRestoredByAPIRequest { false };
     Vector<BackForwardListItemState> itemStates;
 
-    UserContentControllerIdentifier userContentControllerID;
     uint64_t visitedLinkTableID;
     bool canRunBeforeUnloadConfirmPanel;
     bool canRunModal;
@@ -118,6 +120,7 @@ struct WebPageCreationParameters {
     bool mediaPlaybackIsSuspended { false };
 
     WebCore::IntSize minimumSizeForAutoLayout;
+    WebCore::IntSize sizeToContentAutoSizeMaximumSize;
     bool autoSizingShouldExpandToViewHeight;
     Optional<WebCore::IntSize> viewportSizeForCSSViewportUnits;
     
@@ -194,14 +197,7 @@ struct WebPageCreationParameters {
     bool iceCandidateFilteringEnabled { true };
     bool enumeratingAllNetworkInterfacesEnabled { false };
 
-    // UserContentController members
-    Vector<std::pair<ContentWorldIdentifier, String>> userContentWorlds;
-    Vector<WebUserScriptData> userScripts;
-    Vector<WebUserStyleSheetData> userStyleSheets;
-    Vector<WebScriptMessageHandlerData> messageHandlers;
-#if ENABLE(CONTENT_EXTENSIONS)
-    Vector<std::pair<String, WebCompiledContentRuleListData>> contentRuleLists;
-#endif
+    UserContentControllerParameters userContentControllerParameters;
 
     Optional<WebCore::Color> backgroundColor;
 
@@ -209,12 +205,21 @@ struct WebPageCreationParameters {
 
     String overriddenMediaType;
     Vector<String> corsDisablingPatterns;
+    bool userScriptsShouldWaitUntilNotification { true };
+    bool loadsSubresources { true };
+    bool loadsFromNetwork { true };
+
+    bool crossOriginAccessControlCheckEnabled { true };
+    String processDisplayName;
 
     bool shouldCaptureAudioInUIProcess { false };
     bool shouldCaptureAudioInGPUProcess { false };
     bool shouldCaptureVideoInUIProcess { false };
     bool shouldCaptureVideoInGPUProcess { false };
     bool shouldCaptureDisplayInUIProcess { false };
+    bool shouldRenderCanvasInGPUProcess { false };
+    bool needsInAppBrowserPrivacyQuirks { false };
+    bool limitsNavigationsToAppBoundDomains { false };
 
 #if PLATFORM(GTK)
     String themeName;

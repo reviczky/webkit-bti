@@ -38,22 +38,24 @@ using namespace WebCore;
  */
 
 
-API::UserContentWorld& webkitUserContentWorld(const char* worldName)
+API::ContentWorld& webkitContentWorld(const char* worldName)
 {
-    static NeverDestroyed<HashMap<CString, RefPtr<API::UserContentWorld>>> map;
-    return *map.get().ensure(worldName, [worldName = String::fromUTF8(worldName)] { return API::UserContentWorld::worldWithName(worldName); }).iterator->value;
+    static NeverDestroyed<HashMap<CString, RefPtr<API::ContentWorld>>> map;
+    return *map.get().ensure(worldName, [worldName = String::fromUTF8(worldName)] {
+        return API::ContentWorld::sharedWorldWithName(worldName);
+    }).iterator->value;
 }
 
 static inline UserContentInjectedFrames toUserContentInjectedFrames(WebKitUserContentInjectedFrames injectedFrames)
 {
     switch (injectedFrames) {
     case WEBKIT_USER_CONTENT_INJECT_TOP_FRAME:
-        return InjectInTopFrameOnly;
+        return UserContentInjectedFrames::InjectInTopFrameOnly;
     case WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES:
-        return InjectInAllFrames;
+        return UserContentInjectedFrames::InjectInAllFrames;
     default:
         ASSERT_NOT_REACHED();
-        return InjectInAllFrames;
+        return UserContentInjectedFrames::InjectInAllFrames;
     }
 }
 
@@ -74,12 +76,12 @@ static inline UserScriptInjectionTime toUserScriptInjectionTime(WebKitUserScript
 {
     switch (injectionTime) {
     case WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START:
-        return InjectAtDocumentStart;
+        return UserScriptInjectionTime::DocumentStart;
     case WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END:
-        return InjectAtDocumentEnd;
+        return UserScriptInjectionTime::DocumentEnd;
     default:
         ASSERT_NOT_REACHED();
-        return InjectAtDocumentStart;
+        return UserScriptInjectionTime::DocumentStart;
     }
 }
 
@@ -95,7 +97,7 @@ static inline Vector<String> toStringVector(const char* const* strv)
 }
 
 struct _WebKitUserStyleSheet {
-    _WebKitUserStyleSheet(const gchar* source, WebKitUserContentInjectedFrames injectedFrames, WebKitUserStyleLevel level, const char* const* whitelist, const char* const* blacklist, API::UserContentWorld& world)
+    _WebKitUserStyleSheet(const gchar* source, WebKitUserContentInjectedFrames injectedFrames, WebKitUserStyleLevel level, const char* const* whitelist, const char* const* blacklist, API::ContentWorld& world)
         : userStyleSheet(adoptRef(new API::UserStyleSheet(UserStyleSheet {
             String::fromUTF8(source), URL { },
             toStringVector(whitelist), toStringVector(blacklist),
@@ -171,7 +173,7 @@ WebKitUserStyleSheet* webkit_user_style_sheet_new(const gchar* source, WebKitUse
 {
     g_return_val_if_fail(source, nullptr);
     WebKitUserStyleSheet* userStyleSheet = static_cast<WebKitUserStyleSheet*>(fastMalloc(sizeof(WebKitUserStyleSheet)));
-    new (userStyleSheet) WebKitUserStyleSheet(source, injectedFrames, level, whitelist, blacklist, API::UserContentWorld::normalWorld());
+    new (userStyleSheet) WebKitUserStyleSheet(source, injectedFrames, level, whitelist, blacklist, API::ContentWorld::pageContentWorld());
     return userStyleSheet;
 }
 
@@ -197,7 +199,7 @@ WebKitUserStyleSheet* webkit_user_style_sheet_new_for_world(const gchar* source,
     g_return_val_if_fail(worldName, nullptr);
 
     WebKitUserStyleSheet* userStyleSheet = static_cast<WebKitUserStyleSheet*>(fastMalloc(sizeof(WebKitUserStyleSheet)));
-    new (userStyleSheet) WebKitUserStyleSheet(source, injectedFrames, level, whitelist, blacklist, webkitUserContentWorld(worldName));
+    new (userStyleSheet) WebKitUserStyleSheet(source, injectedFrames, level, whitelist, blacklist, webkitContentWorld(worldName));
     return userStyleSheet;
 }
 
@@ -207,12 +209,12 @@ API::UserStyleSheet& webkitUserStyleSheetGetUserStyleSheet(WebKitUserStyleSheet*
 }
 
 struct _WebKitUserScript {
-    _WebKitUserScript(const gchar* source, WebKitUserContentInjectedFrames injectedFrames, WebKitUserScriptInjectionTime injectionTime, const gchar* const* whitelist, const gchar* const* blacklist, API::UserContentWorld& world)
+    _WebKitUserScript(const gchar* source, WebKitUserContentInjectedFrames injectedFrames, WebKitUserScriptInjectionTime injectionTime, const gchar* const* whitelist, const gchar* const* blacklist, API::ContentWorld& world)
         : userScript(adoptRef(new API::UserScript(UserScript {
             String::fromUTF8(source), URL { },
             toStringVector(whitelist), toStringVector(blacklist),
             toUserScriptInjectionTime(injectionTime),
-            toUserContentInjectedFrames(injectedFrames) }, world)))
+            toUserContentInjectedFrames(injectedFrames), WebCore::WaitForNotificationBeforeInjecting::No }, world)))
         , referenceCount(1)
     {
     }
@@ -283,7 +285,7 @@ WebKitUserScript* webkit_user_script_new(const gchar* source, WebKitUserContentI
 {
     g_return_val_if_fail(source, nullptr);
     WebKitUserScript* userScript = static_cast<WebKitUserScript*>(fastMalloc(sizeof(WebKitUserScript)));
-    new (userScript) WebKitUserScript(source, injectedFrames, injectionTime, whitelist, blacklist, API::UserContentWorld::normalWorld());
+    new (userScript) WebKitUserScript(source, injectedFrames, injectionTime, whitelist, blacklist, API::ContentWorld::pageContentWorld());
     return userScript;
 }
 
@@ -309,7 +311,7 @@ WebKitUserScript* webkit_user_script_new_for_world(const gchar* source, WebKitUs
     g_return_val_if_fail(worldName, nullptr);
 
     WebKitUserScript* userScript = static_cast<WebKitUserScript*>(fastMalloc(sizeof(WebKitUserScript)));
-    new (userScript) WebKitUserScript(source, injectedFrames, injectionTime, whitelist, blacklist, webkitUserContentWorld(worldName));
+    new (userScript) WebKitUserScript(source, injectedFrames, injectionTime, whitelist, blacklist, webkitContentWorld(worldName));
     return userScript;
 }
 

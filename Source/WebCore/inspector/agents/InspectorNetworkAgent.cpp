@@ -171,6 +171,16 @@ private:
     int m_statusCode;
 };
 
+Ref<Inspector::Protocol::Network::WebSocketFrame> buildWebSocketMessage(const WebSocketFrame& frame)
+{
+    return Inspector::Protocol::Network::WebSocketFrame::create()
+        .setOpcode(frame.opCode)
+        .setMask(frame.masked)
+        .setPayloadData(frame.opCode == 1 ? String::fromUTF8WithLatin1Fallback(frame.payload, frame.payloadLength) : base64Encode(frame.payload, frame.payloadLength))
+        .setPayloadLength(frame.payloadLength)
+        .release();
+}
+
 } // namespace
 
 InspectorNetworkAgent::InspectorNetworkAgent(WebAgentContext& context)
@@ -203,27 +213,32 @@ static Ref<JSON::Object> buildObjectForHeaders(const HTTPHeaderMap& headers)
     return headersObject;
 }
 
-Ref<Inspector::Protocol::Network::ResourceTiming> InspectorNetworkAgent::buildObjectForTiming(const NetworkLoadMetrics& timing, ResourceLoader& resourceLoader)
+Ref<Inspector::Protocol::Network::ResourceTiming> InspectorNetworkAgent::buildObjectForTiming(const NetworkLoadMetrics* timing, ResourceLoader& resourceLoader)
 {
     auto& loadTiming = resourceLoader.loadTiming();
 
     auto elapsedTimeSince = [&] (const MonotonicTime& time) {
-        return m_environment.executionStopwatch()->elapsedTimeSince(time).seconds();
+        return m_environment.executionStopwatch().elapsedTimeSince(time).seconds();
     };
+    Optional<NetworkLoadMetrics> empty;
+    if (!timing) {
+        empty.emplace();
+        timing = &empty.value();
+    }
 
     return Inspector::Protocol::Network::ResourceTiming::create()
         .setStartTime(elapsedTimeSince(loadTiming.startTime()))
         .setRedirectStart(elapsedTimeSince(loadTiming.redirectStart()))
         .setRedirectEnd(elapsedTimeSince(loadTiming.redirectEnd()))
         .setFetchStart(elapsedTimeSince(loadTiming.fetchStart()))
-        .setDomainLookupStart(timing.domainLookupStart.milliseconds())
-        .setDomainLookupEnd(timing.domainLookupEnd.milliseconds())
-        .setConnectStart(timing.connectStart.milliseconds())
-        .setConnectEnd(timing.connectEnd.milliseconds())
-        .setSecureConnectionStart(timing.secureConnectionStart.milliseconds())
-        .setRequestStart(timing.requestStart.milliseconds())
-        .setResponseStart(timing.responseStart.milliseconds())
-        .setResponseEnd(timing.responseEnd.milliseconds())
+        .setDomainLookupStart(timing->domainLookupStart.milliseconds())
+        .setDomainLookupEnd(timing->domainLookupEnd.milliseconds())
+        .setConnectStart(timing->connectStart.milliseconds())
+        .setConnectEnd(timing->connectEnd.milliseconds())
+        .setSecureConnectionStart(timing->secureConnectionStart.milliseconds())
+        .setRequestStart(timing->requestStart.milliseconds())
+        .setResponseStart(timing->responseStart.milliseconds())
+        .setResponseEnd(timing->responseEnd.milliseconds())
         .release();
 }
 
@@ -341,7 +356,7 @@ RefPtr<Inspector::Protocol::Network::Response> InspectorNetworkAgent::buildObjec
         .release();
 
     if (resourceLoader)
-        responseObject->setTiming(buildObjectForTiming(response.deprecatedNetworkLoadMetrics(), *resourceLoader));
+        responseObject->setTiming(buildObjectForTiming(response.deprecatedNetworkLoadMetricsOrNull(), *resourceLoader));
 
     if (auto& certificateInfo = response.certificateInfo()) {
         auto securityPayload = Inspector::Protocol::Security::Security::create()
@@ -383,7 +398,7 @@ RefPtr<Inspector::Protocol::Network::Response> InspectorNetworkAgent::buildObjec
 Ref<Inspector::Protocol::Network::CachedResource> InspectorNetworkAgent::buildObjectForCachedResource(CachedResource* cachedResource)
 {
     auto resourceObject = Inspector::Protocol::Network::CachedResource::create()
-        .setUrl(cachedResource->url())
+        .setUrl(cachedResource->url().string())
         .setType(InspectorPageAgent::cachedResourceTypeJSON(*cachedResource))
         .setBodySize(cachedResource->encodedSize())
         .release();
@@ -400,7 +415,7 @@ Ref<Inspector::Protocol::Network::CachedResource> InspectorNetworkAgent::buildOb
 
 double InspectorNetworkAgent::timestamp()
 {
-    return m_environment.executionStopwatch()->elapsedTime().seconds();
+    return m_environment.executionStopwatch().elapsedTime().seconds();
 }
 
 void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& redirectResponse, InspectorPageAgent::ResourceType type)
@@ -441,9 +456,9 @@ void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLo
     auto protocolResourceType = InspectorPageAgent::resourceTypeJSON(type);
 
     Document* document = loader && loader->frame() ? loader->frame()->document() : nullptr;
-    auto initiatorObject = buildInitiatorObject(document, request);
+    auto initiatorObject = buildInitiatorObject(document, &request);
 
-    String url = loader ? loader->url().string() : request.url();
+    String url = loader ? loader->url().string() : request.url().string();
     m_frontendDispatcher->requestWillBeSent(requestId, frameId, loaderId, url, buildObjectForResourceRequest(request), sendTimestamp, walltime.secondsSinceEpoch().seconds(), initiatorObject, buildObjectForResourceResponse(redirectResponse, nullptr), type != InspectorPageAgent::OtherResource ? &protocolResourceType : nullptr, targetId.isEmpty() ? nullptr : &targetId);
 }
 
@@ -561,7 +576,7 @@ void InspectorNetworkAgent::didFinishLoading(unsigned long identifier, DocumentL
     double elapsedFinishTime;
     if (resourceLoader && networkLoadMetrics.isComplete()) {
         MonotonicTime fetchStart = resourceLoader->loadTiming().fetchStart();
-        Seconds fetchStartInInspector = m_environment.executionStopwatch()->elapsedTimeSince(fetchStart);
+        Seconds fetchStartInInspector = m_environment.executionStopwatch().elapsedTimeSince(fetchStart);
         elapsedFinishTime = (fetchStartInInspector + networkLoadMetrics.responseEnd).seconds();
     } else
         elapsedFinishTime = timestamp();
@@ -621,7 +636,7 @@ void InspectorNetworkAgent::didLoadResourceFromMemoryCache(DocumentLoader* loade
 
     m_resourcesData->resourceCreated(requestId, loaderId, resource);
 
-    auto initiatorObject = buildInitiatorObject(loader->frame() ? loader->frame()->document() : nullptr, resource.resourceRequest());
+    auto initiatorObject = buildInitiatorObject(loader->frame() ? loader->frame()->document() : nullptr, &resource.resourceRequest());
 
     // FIXME: It would be ideal to generate the Network.Response with the MemoryCache source
     // instead of whatever ResourceResponse::Source the CachedResources's response has.
@@ -691,7 +706,7 @@ void InspectorNetworkAgent::didScheduleStyleRecalculation(Document& document)
         m_styleRecalculationInitiator = buildInitiatorObject(&document);
 }
 
-RefPtr<Inspector::Protocol::Network::Initiator> InspectorNetworkAgent::buildInitiatorObject(Document* document, Optional<const ResourceRequest&> resourceRequest)
+RefPtr<Inspector::Protocol::Network::Initiator> InspectorNetworkAgent::buildInitiatorObject(Document* document, const ResourceRequest* resourceRequest)
 {
     // FIXME: Worker support.
     if (!isMainThread()) {
@@ -770,24 +785,11 @@ void InspectorNetworkAgent::didCloseWebSocket(unsigned long identifier)
 
 void InspectorNetworkAgent::didReceiveWebSocketFrame(unsigned long identifier, const WebSocketFrame& frame)
 {
-    auto frameObject = Inspector::Protocol::Network::WebSocketFrame::create()
-        .setOpcode(frame.opCode)
-        .setMask(frame.masked)
-        .setPayloadData(String::fromUTF8WithLatin1Fallback(frame.payload, frame.payloadLength))
-        .setPayloadLength(frame.payloadLength)
-        .release();
-    m_frontendDispatcher->webSocketFrameReceived(IdentifiersFactory::requestId(identifier), timestamp(), WTFMove(frameObject));
+    m_frontendDispatcher->webSocketFrameReceived(IdentifiersFactory::requestId(identifier), timestamp(), buildWebSocketMessage(frame));
 }
-
 void InspectorNetworkAgent::didSendWebSocketFrame(unsigned long identifier, const WebSocketFrame& frame)
 {
-    auto frameObject = Inspector::Protocol::Network::WebSocketFrame::create()
-        .setOpcode(frame.opCode)
-        .setMask(frame.masked)
-        .setPayloadData(String::fromUTF8WithLatin1Fallback(frame.payload, frame.payloadLength))
-        .setPayloadLength(frame.payloadLength)
-        .release();
-    m_frontendDispatcher->webSocketFrameSent(IdentifiersFactory::requestId(identifier), timestamp(), WTFMove(frameObject));
+    m_frontendDispatcher->webSocketFrameSent(IdentifiersFactory::requestId(identifier), timestamp(), buildWebSocketMessage(frame));
 }
 
 void InspectorNetworkAgent::didReceiveWebSocketFrameError(unsigned long identifier, const String& errorMessage)
@@ -967,7 +969,7 @@ void InspectorNetworkAgent::getSerializedCertificate(ErrorString& errorString, c
     }
 
     WTF::Persistence::Encoder encoder;
-    encoder << certificate.value();
+    WTF::Persistence::Coder<WebCore::CertificateInfo>::encode(encoder, certificate.value());
     *serializedCertificate = base64Encode(encoder.buffer(), encoder.bufferSize());
 }
 

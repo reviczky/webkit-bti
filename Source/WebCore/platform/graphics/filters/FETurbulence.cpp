@@ -27,7 +27,7 @@
 #include "FETurbulence.h"
 
 #include "Filter.h"
-#include <JavaScriptCore/Uint8ClampedArray.h>
+#include "ImageData.h"
 #include <wtf/MathExtras.h>
 #include <wtf/ParallelJobs.h>
 #include <wtf/text/TextStream.h>
@@ -382,7 +382,7 @@ void FETurbulence::fillRegion(Uint8ClampedArray& pixelArray, const PaintingData&
             point.setX(point.x() + 1);
             FloatPoint localPoint = inverseTransfrom.mapPoint(point);
             ColorComponents values = calculateTurbulenceValueForPoint(paintingData, stitchData, localPoint);
-            pixelArray.setRange(values.components, 4, indexOfPixelChannel);
+            pixelArray.setRange(values.components.data(), 4, indexOfPixelChannel);
             indexOfPixelChannel += 4;
         }
     }
@@ -395,7 +395,8 @@ void FETurbulence::fillRegionWorker(FillRegionParameters* parameters)
 
 void FETurbulence::platformApplySoftware()
 {
-    Uint8ClampedArray* pixelArray = createUnmultipliedImageResult();
+    auto* resultImage = createUnmultipliedImageResult();
+    auto* pixelArray = resultImage ? resultImage->data() : nullptr;
     if (!pixelArray)
         return;
 

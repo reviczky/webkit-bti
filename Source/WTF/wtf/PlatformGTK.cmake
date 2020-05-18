@@ -45,7 +45,14 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     list(APPEND WTF_SOURCES
         linux/CurrentProcessMemoryStatus.cpp
         linux/MemoryFootprintLinux.cpp
-        linux/MemoryPressureHandlerLinux.cpp
+
+        unix/MemoryPressureHandlerUnix.cpp
+    )
+elseif (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+    list(APPEND WTF_SOURCES
+        generic/MemoryFootprintGeneric.cpp
+
+        unix/MemoryPressureHandlerUnix.cpp
     )
 else ()
     list(APPEND WTF_SOURCES
@@ -55,12 +62,16 @@ else ()
 endif ()
 
 list(APPEND WTF_LIBRARIES
-    ${CMAKE_THREAD_LIBS_INIT}
     ${GLIB_GIO_LIBRARIES}
     ${GLIB_GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
-    ${ZLIB_LIBRARIES}
+    Threads::Threads
+    ZLIB::ZLIB
 )
+
+if (Systemd_FOUND)
+    list(APPEND WTF_LIBRARIES Systemd::Systemd)
+endif ()
 
 list(APPEND WTF_SYSTEM_INCLUDE_DIRECTORIES
     ${GIO_UNIX_INCLUDE_DIRS}

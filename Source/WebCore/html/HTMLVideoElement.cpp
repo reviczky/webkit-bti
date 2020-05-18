@@ -132,6 +132,9 @@ bool HTMLVideoElement::isPresentationAttribute(const QualifiedName& name) const
 void HTMLVideoElement::parseAttribute(const QualifiedName& name, const AtomString& value)
 {
     if (name == posterAttr) {
+        if (hasAvailableVideoFrame())
+            return;
+
         // Force a poster recalc by setting m_displayMode to Unknown directly before calling updateDisplayState.
         HTMLMediaElement::setDisplayMode(Unknown);
         updateDisplayState();
@@ -161,7 +164,6 @@ void HTMLVideoElement::parseAttribute(const QualifiedName& name, const AtomStrin
         }
 #endif
     }
-
 }
 
 bool HTMLVideoElement::supportsFullscreen(HTMLMediaElementEnums::VideoFullscreenMode videoFullscreenMode) const
@@ -278,7 +280,7 @@ void HTMLVideoElement::setDisplayMode(DisplayMode mode)
 
 void HTMLVideoElement::updateDisplayState()
 {
-    if (posterImageURL().isEmpty())
+    if (posterImageURL().isEmpty() || hasAvailableVideoFrame())
         setDisplayMode(Video);
     else if (displayMode() < Poster)
         setDisplayMode(Poster);
@@ -346,7 +348,7 @@ bool HTMLVideoElement::webkitSupportsFullscreen()
 
 bool HTMLVideoElement::webkitDisplayingFullscreen()
 {
-    return isFullscreen();
+    return isFullscreen() && !waitingToEnterFullscreen();
 }
 
 void HTMLVideoElement::ancestorWillEnterFullscreen()
@@ -376,7 +378,7 @@ void HTMLVideoElement::setWebkitWirelessVideoPlaybackDisabled(bool disabled)
 void HTMLVideoElement::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
 {
     if (m_imageLoader)
-        m_imageLoader->elementDidMoveToNewDocument();
+        m_imageLoader->elementDidMoveToNewDocument(oldDocument);
     HTMLMediaElement::didMoveToNewDocument(oldDocument, newDocument);
 }
 
@@ -544,7 +546,7 @@ void HTMLVideoElement::setPictureInPictureAPITestEnabled(bool enabled)
 
 #endif
 
-#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+#if ENABLE(VIDEO_PRESENTATION_MODE)
 void HTMLVideoElement::setVideoFullscreenFrame(FloatRect frame)
 {
     HTMLMediaElement::setVideoFullscreenFrame(frame);

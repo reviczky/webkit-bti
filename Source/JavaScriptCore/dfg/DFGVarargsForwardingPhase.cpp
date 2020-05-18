@@ -34,7 +34,6 @@
 #include "DFGForAllKills.h"
 #include "DFGGraph.h"
 #include "DFGPhase.h"
-#include "JSCInlines.h"
 #include <wtf/ListDump.h>
 
 namespace JSC { namespace DFG {
@@ -97,7 +96,7 @@ private:
         // Find the index of the last node in this block to use the candidate, and look for escaping
         // sites.
         unsigned lastUserIndex = candidateNodeIndex;
-        Vector<VirtualRegister, 2> relevantLocals; // This is a set. We expect it to be a small set.
+        Vector<Operand, 2> relevantLocals; // This is a set. We expect it to be a small set.
         for (unsigned nodeIndex = candidateNodeIndex + 1; nodeIndex < block->size(); ++nodeIndex) {
             Node* node = block->at(nodeIndex);
 
@@ -115,10 +114,9 @@ private:
             case MovHint:
                 if (node->child1() != candidate)
                     break;
-                ASSERT_WITH_MESSAGE(!node->unlinkedOperand().isTmp(), "We don't currently support a tmp referring to an arguments object.");
                 lastUserIndex = nodeIndex;
-                if (!relevantLocals.contains(node->unlinkedOperand().virtualRegister()))
-                    relevantLocals.append(node->unlinkedOperand().virtualRegister());
+                if (!relevantLocals.contains(node->unlinkedOperand()))
+                    relevantLocals.append(node->unlinkedOperand());
                 break;
                 
             case CheckVarargs:
@@ -127,16 +125,17 @@ private:
                 m_graph.doToChildren(
                     node,
                     [&] (Edge edge) {
-                        if (edge == candidate)
+                        if (edge == candidate) {
                             lastUserIndex = nodeIndex;
-                        
-                        if (edge.willNotHaveCheck())
-                            return;
-                        
-                        if (alreadyChecked(edge.useKind(), SpecObject))
-                            return;
-                        
-                        sawEscape = true;
+
+                            if (edge.willNotHaveCheck())
+                                return;
+
+                            if (alreadyChecked(edge.useKind(), SpecObject))
+                                return;
+
+                            sawEscape = true;
+                        }
                     });
                 if (sawEscape) {
                     if (verbose)
@@ -198,6 +197,7 @@ private:
             case FilterPutByIdStatus:
             case FilterCallLinkStatus:
             case FilterInByIdStatus:
+            case FilterDeleteByStatus:
                 break;
 
             case GetByOffset: {
@@ -243,6 +243,8 @@ private:
                             relevantLocals[i--] = relevantLocals.last();
                             relevantLocals.removeLast();
                             lastUserIndex = nodeIndex;
+                            ASSERT(!relevantLocals.contains(operand));
+                            break;
                         }
                     }
                 });
@@ -399,6 +401,7 @@ private:
             case FilterPutByIdStatus:
             case FilterCallLinkStatus:
             case FilterInByIdStatus:
+            case FilterDeleteByStatus:
                 if (node->child1().node() == candidate)
                     node->remove(m_graph);
                 break;

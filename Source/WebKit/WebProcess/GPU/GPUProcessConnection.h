@@ -28,7 +28,9 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "Connection.h"
+#include "MessageReceiverMap.h"
 #include "SampleBufferDisplayLayerManager.h"
+#include <WebCore/PlatformMediaSession.h>
 #include <wtf/RefCounted.h>
 #include <wtf/text/WTFString.h>
 
@@ -37,6 +39,10 @@ class DataReference;
 }
 
 namespace WebKit {
+
+class RemoteCDMFactory;
+class RemoteMediaPlayerManager;
+class RemoteLegacyCDMFactory;
 
 class GPUProcessConnection : public RefCounted<GPUProcessConnection>, IPC::Connection::Client {
 public:
@@ -47,6 +53,7 @@ public:
     ~GPUProcessConnection();
     
     IPC::Connection& connection() { return m_connection.get(); }
+    IPC::MessageReceiverMap& messageReceiverMap() { return m_messageReceiverMap; }
 
 #if HAVE(AUDIT_TOKEN)
     void setAuditToken(Optional<audit_token_t> auditToken) { m_auditToken = auditToken; }
@@ -56,16 +63,33 @@ public:
     SampleBufferDisplayLayerManager& sampleBufferDisplayLayerManager();
 #endif
 
+    RemoteMediaPlayerManager& mediaPlayerManager();
+
+#if ENABLE(ENCRYPTED_MEDIA)
+    RemoteCDMFactory& cdmFactory();
+#endif
+
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+    RemoteLegacyCDMFactory& legacyCDMFactory();
+#endif
+
 private:
     GPUProcessConnection(IPC::Connection::Identifier);
 
     // IPC::Connection::Client
     void didClose(IPC::Connection&) override;
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
+    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) final;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+
+    bool dispatchMessage(IPC::Connection&, IPC::Decoder&);
+    bool dispatchSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
+
+    void didReceiveRemoteCommand(WebCore::PlatformMediaSession::RemoteControlCommandType, Optional<double>);
 
     // The connection from the web process to the GPU process.
     Ref<IPC::Connection> m_connection;
+    IPC::MessageReceiverMap m_messageReceiverMap;
 
 #if HAVE(AUDIT_TOKEN)
     Optional<audit_token_t> m_auditToken;

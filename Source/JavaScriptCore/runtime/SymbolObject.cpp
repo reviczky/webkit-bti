@@ -27,7 +27,7 @@
 #include "config.h"
 #include "SymbolObject.h"
 
-#include "JSCInlines.h"
+#include "JSGlobalObject.h"
 
 namespace JSC {
 
@@ -45,11 +45,6 @@ void SymbolObject::finishCreation(VM& vm, Symbol* symbol)
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
     setInternalValue(vm, symbol);
-}
-
-String SymbolObject::toStringName(const JSObject*, JSGlobalObject*)
-{
-    return "Object"_s;
 }
 
 JSValue SymbolObject::defaultValue(const JSObject* object, JSGlobalObject*, PreferredPrimitiveType)

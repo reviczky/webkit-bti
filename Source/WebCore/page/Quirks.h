@@ -56,11 +56,15 @@ public:
     bool shouldDispatchedSimulatedMouseEventsAssumeDefaultPrevented(EventTarget*) const;
     Optional<Event::IsCancelable> simulatedMouseEventTypeForTarget(EventTarget*) const;
     bool shouldMakeTouchEventNonCancelableForTarget(EventTarget*) const;
+    bool shouldPreventPointerMediaQueryFromEvaluatingToCoarse() const;
+    bool shouldPreventDispatchOfTouchEvent(const AtomString&, EventTarget*) const;
 #endif
     bool shouldDisablePointerEventsQuirk() const;
     bool needsInputModeNoneImplicitly(const HTMLElement&) const;
     bool needsDeferKeyDownAndKeyPressTimersUntilNextEditingCommand() const;
     bool shouldDisableContentChangeObserverTouchEventAdjustment() const;
+
+    bool needsMillisecondResolutionForHighResTimeStamp() const;
 
     WEBCORE_EXPORT bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
     WEBCORE_EXPORT bool shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreas() const;
@@ -70,6 +74,8 @@ public:
     WEBCORE_EXPORT bool shouldAvoidScrollingWhenFocusedContentIsVisible() const;
     WEBCORE_EXPORT bool shouldUseLegacySelectPopoverDismissalBehaviorInDataActivation() const;
     WEBCORE_EXPORT bool shouldIgnoreAriaForFastPathContentObservationCheck() const;
+    WEBCORE_EXPORT bool shouldLayOutAtMinimumWindowWidthWhenIgnoringScalingConstraints() const;
+    WEBCORE_EXPORT bool shouldIgnoreContentObservationForSyntheticClick(bool isFirstSyntheticClickOnPage) const;
 
     WEBCORE_EXPORT bool needsYouTubeMouseOutQuirk() const;
     
@@ -77,12 +83,14 @@ public:
 
     bool needsGMailOverflowScrollQuirk() const;
     bool needsYouTubeOverflowScrollQuirk() const;
+    bool needsFullscreenDisplayNoneQuirk() const;
 
     bool shouldOpenAsAboutBlank(const String&) const;
 
     bool needsPreloadAutoQuirk() const;
 
     bool shouldBypassBackForwardCache() const;
+    bool shouldBypassAsyncScriptDeferring() const;
 
     static bool shouldMakeEventListenerPassive(const EventTarget&, const AtomString& eventType, const EventListener&);
 
@@ -91,6 +99,8 @@ public:
 #endif
 
     bool shouldDisableElementFullscreenQuirk() const;
+
+    bool needsCanPlayAfterSeekedQuirk() const;
 
 private:
     bool needsQuirks() const;
@@ -108,11 +118,14 @@ private:
     mutable Optional<bool> m_needsGMailOverflowScrollQuirk;
     mutable Optional<bool> m_needsYouTubeOverflowScrollQuirk;
     mutable Optional<bool> m_needsPreloadAutoQuirk;
+    mutable Optional<bool> m_needsFullscreenDisplayNoneQuirk;
 #endif
     mutable Optional<bool> m_shouldDisableElementFullscreenQuirk;
 #if ENABLE(TOUCH_EVENTS)
     mutable Optional<bool> m_shouldDispatchSimulatedMouseEventsQuirk;
 #endif
+    mutable Optional<bool> m_needsCanPlayAfterSeekedQuirk;
+    mutable Optional<bool> m_shouldBypassAsyncScriptDeferring;
 };
 
 }

@@ -21,6 +21,7 @@
 #include "config.h"
 #include "Color.h"
 
+#include "ColorUtilities.h"
 #include <gdk/gdk.h>
 
 namespace WebCore {
@@ -35,10 +36,16 @@ Color::Color(const GdkRGBA& c)
 
 Color::operator GdkRGBA() const
 {
-    if (isExtended())
-        return { asExtended().red(), asExtended().green(), asExtended().blue(), asExtended().alpha() };
+    if (isExtended()) {
+        auto asRGBA = toSRGBAComponentsLossy();
+        return { asRGBA.components[0], asRGBA.components[1], asRGBA.components[2], asRGBA.components[3] };
+    }
 
+#if USE(GTK4)
+    float red, green, blue, alpha;
+#else
     double red, green, blue, alpha;
+#endif
     getRGBA(red, green, blue, alpha);
     return { red, green, blue, alpha };
 }

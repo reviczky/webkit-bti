@@ -43,9 +43,6 @@ inline bool isInWebProcess() { return true; }
 bool isInWebProcess();
 bool isInNetworkProcess();
 
-WEBCORE_EXPORT void setApplicationSDKVersion(uint32_t);
-WEBCORE_EXPORT uint32_t applicationSDKVersion();
-
 WEBCORE_EXPORT void setApplicationBundleIdentifier(const String&);
 WEBCORE_EXPORT String applicationBundleIdentifier();
 WEBCORE_EXPORT void clearApplicationBundleIdentifierTestingOverride();
@@ -63,6 +60,7 @@ WEBCORE_EXPORT bool isITunes();
 WEBCORE_EXPORT bool isMicrosoftMessenger();
 WEBCORE_EXPORT bool isMicrosoftMyDay();
 WEBCORE_EXPORT bool isMicrosoftOutlook();
+WEBCORE_EXPORT bool isMiniBrowser();
 bool isQuickenEssentials();
 WEBCORE_EXPORT bool isSafari();
 bool isSolidStateNetworksDownloader();
@@ -86,7 +84,10 @@ WEBCORE_EXPORT bool isSafariViewService();
 WEBCORE_EXPORT bool isIMDb();
 WEBCORE_EXPORT bool isWebBookmarksD();
 WEBCORE_EXPORT bool isDumpRenderTree();
+WEBCORE_EXPORT bool isMiniBrowser();
 bool isMobileStore();
+WEBCORE_EXPORT bool isJesusCalling();
+WEBCORE_EXPORT bool isFamilyHealthApp();
 bool isSpringBoard();
 WEBCORE_EXPORT bool isWebProcess();
 WEBCORE_EXPORT bool isIBooks();
@@ -100,6 +101,11 @@ WEBCORE_EXPORT bool isAppleApplication();
 WEBCORE_EXPORT bool isEvernote();
 WEBCORE_EXPORT bool isEventbrite();
 WEBCORE_EXPORT bool isDataActivation();
+WEBCORE_EXPORT bool isNews();
+WEBCORE_EXPORT bool isStocks();
+WEBCORE_EXPORT bool isFeedly();
+WEBCORE_EXPORT bool isPocketCity();
+WEBCORE_EXPORT bool isEssentialSkeleton();
 
 } // IOSApplication
 

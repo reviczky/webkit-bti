@@ -35,16 +35,17 @@
 namespace WebCore {
 
 class CompositeEditCommand;
+class Document;
 class EditCommand;
 class EditCommandComposition;
 class EditorClient;
 class Event;
-class Frame;
 class Range;
 class TextCheckerClient;
 class VisibleSelection;
 
 struct DictationAlternative;
+struct SimpleRange;
 struct TextCheckingResult;
 
 #if USE(AUTOCORRECTION_PANEL)
@@ -60,7 +61,7 @@ class AlternativeTextController {
     WTF_MAKE_NONCOPYABLE(AlternativeTextController);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    explicit AlternativeTextController(Frame& frame) UNLESS_ENABLED( : m_frame(frame) { })
+    explicit AlternativeTextController(Document& document) UNLESS_ENABLED(: m_document(document) { })
     ~AlternativeTextController() UNLESS_ENABLED({ })
 
     void startAlternativeTextUITimer(AlternativeTextType) UNLESS_ENABLED({ })
@@ -88,7 +89,7 @@ public:
     bool isAutomaticSpellingCorrectionEnabled() UNLESS_ENABLED({ return false; })
     bool shouldRemoveMarkersUponEditing();
 
-    void recordAutocorrectionResponse(AutocorrectionResponse, const String& replacedString, Range* replacementRange) UNLESS_ENABLED({ UNUSED_PARAM(replacedString); UNUSED_PARAM(replacementRange); })
+    void recordAutocorrectionResponse(AutocorrectionResponse, const String& replacedString, const SimpleRange& replacementRange) UNLESS_ENABLED({ UNUSED_PARAM(replacedString); UNUSED_PARAM(replacementRange); })
     void markReversed(Range& changedRange) UNLESS_ENABLED({ UNUSED_PARAM(changedRange); })
     void markCorrection(Range& replacedRange, const String& replacedString) UNLESS_ENABLED({ UNUSED_PARAM(replacedRange); UNUSED_PARAM(replacedString); })
 
@@ -115,19 +116,16 @@ private:
     };
 
     String dismissSoon(ReasonForDismissingAlternativeText);
-    void applyAlternativeTextToRange(const Range&, const String& alternative, AlternativeTextType, OptionSet<DocumentMarker::MarkerType>);
     void timerFired();
     void recordSpellcheckerResponseForModifiedCorrection(Range& rangeOfCorrection, const String& corrected, const String& correction);
-    String markerDescriptionForAppliedAlternativeText(AlternativeTextType, DocumentMarker::MarkerType);
 
     bool shouldStartTimerFor(const DocumentMarker&, int endOffset) const;
     bool respondToMarkerAtEndOfWord(const DocumentMarker&, const Position& endOfWordPosition);
 
-    AlternativeTextClient* alternativeTextClient();
     EditorClient* editorClient();
     
     TextCheckerClient* textChecker();
-    FloatRect rootViewRectForRange(const Range*) const;
+    FloatRect rootViewRectForRange(const SimpleRange&) const;
     void markPrecedingWhitespaceForDeletedAutocorrectionAfterCommand(EditCommand*);
 
     Timer m_timer;
@@ -141,8 +139,13 @@ private:
     String m_originalStringForLastDeletedAutocorrection;
     Position m_positionForLastDeletedAutocorrection;
 #endif
+#if USE(DICTATION_ALTERNATIVES) || USE(AUTOCORRECTION_PANEL)
+    String markerDescriptionForAppliedAlternativeText(AlternativeTextType, DocumentMarker::MarkerType);
+    void applyAlternativeTextToRange(const Range&, const String&, AlternativeTextType, OptionSet<DocumentMarker::MarkerType>);
+    AlternativeTextClient* alternativeTextClient();
+#endif
 
-    Frame& m_frame;
+    Document& m_document;
 };
 
 #undef UNLESS_ENABLED

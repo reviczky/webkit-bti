@@ -42,16 +42,10 @@
 #include <wtf/Locker.h>
 #include <wtf/LoggingAccumulator.h>
 #include <wtf/PrintStream.h>
-#include <wtf/RetainPtr.h>
 #include <wtf/StackTrace.h>
-#include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/WTFString.h>
-
-#if HAVE(SIGNAL_H)
-#include <signal.h>
-#endif
 
 #if USE(CF)
 #include <CoreFoundation/CFString.h>
@@ -72,6 +66,10 @@
 #if OS(DARWIN)
 #include <sys/sysctl.h>
 #include <unistd.h>
+#endif
+
+#if USE(JOURNALD)
+#include <wtf/StringPrintStream.h>
 #endif
 
 namespace WTF {
@@ -268,10 +266,10 @@ void WTFReportArgumentAssertionFailure(const char* file, int line, const char* f
     printCallSite(file, line, function);
 }
 
-class CrashLogPrintStream : public PrintStream {
+class CrashLogPrintStream final : public PrintStream {
 public:
     WTF_ATTRIBUTE_PRINTF(2, 0)
-    void vprintf(const char* format, va_list argList) override
+    void vprintf(const char* format, va_list argList) final
     {
         vprintf_stderr_common(format, argList);
     }
@@ -307,7 +305,7 @@ void WTFCrash()
 #if COMPILER(GCC_COMPATIBLE)
     __builtin_trap();
 #else
-    ((void(*)())0)();
+    ((void(*)())nullptr)();
 #endif // COMPILER(GCC_COMPATIBLE)
 #endif // ASAN_ENABLED
 }
@@ -512,7 +510,7 @@ WTFLogChannel* WTFLogChannelByName(WTFLogChannel* channels[], size_t count, cons
             return channel;
     }
 
-    return 0;
+    return nullptr;
 }
 
 static void setStateOfAllChannels(WTFLogChannel* channels[], size_t channelCount, WTFLogChannelState state)
@@ -523,7 +521,7 @@ static void setStateOfAllChannels(WTFLogChannel* channels[], size_t channelCount
 
 void WTFInitializeLogChannelStatesFromString(WTFLogChannel* channels[], size_t count, const char* logLevel)
 {
-#if !RELEASE_LOG_DISABLED
+#if USE(OS_LOG) && !RELEASE_LOG_DISABLED
     for (size_t i = 0; i < count; ++i) {
         WTFLogChannel* channel = channels[i];
         channel->osLogChannel = os_log_create(channel->subsystem, channel->name);
@@ -577,12 +575,23 @@ void WTFReleaseLogStackTrace(WTFLogChannel* channel)
         for (int frameNumber = 1; frameNumber < stackTrace->size(); ++frameNumber) {
             auto stackFrame = stack[frameNumber];
             auto demangled = WTF::StackTrace::demangle(stackFrame);
+#if USE(OS_LOG)
             if (demangled && demangled->demangledName())
                 os_log(channel->osLogChannel, "%-3d %p %{public}s", frameNumber, stackFrame, demangled->demangledName());
             else if (demangled && demangled->mangledName())
                 os_log(channel->osLogChannel, "%-3d %p %{public}s", frameNumber, stackFrame, demangled->mangledName());
             else
                 os_log(channel->osLogChannel, "%-3d %p", frameNumber, stackFrame);
+#elif USE(JOURNALD)
+            StringPrintStream out;
+            if (demangled && demangled->demangledName())
+                out.printf("%-3d %p %s", frameNumber, stackFrame, demangled->demangledName());
+            else if (demangled && demangled->mangledName())
+                out.printf("%-3d %p %s", frameNumber, stackFrame, demangled->mangledName());
+            else
+                out.printf("%-3d %p", frameNumber, stackFrame);
+            sd_journal_send("WEBKIT_SUBSYSTEM=%s", channel->subsystem, "WEBKIT_CHANNEL=%s", channel->name, "MESSAGE=%s", out.toCString().data(), nullptr);
+#endif
         }
     }
 }

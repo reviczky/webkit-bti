@@ -36,16 +36,16 @@
 
 namespace JSC {
 
-inline Structure* Structure::create(VM& vm, JSGlobalObject* globalObject, JSValue prototype, const TypeInfo& typeInfo, const ClassInfo* classInfo, IndexingType indexingType, unsigned inlineCapacity)
+inline Structure* Structure::create(VM& vm, JSGlobalObject* globalObject, JSValue prototype, const TypeInfo& typeInfo, const ClassInfo* classInfo, IndexingType indexingModeIncludingHistory, unsigned inlineCapacity)
 {
     ASSERT(vm.structureStructure);
     ASSERT(classInfo);
     if (auto* object = prototype.getObject()) {
-        ASSERT(!object->anyObjectInChainMayInterceptIndexedAccesses(vm) || hasSlowPutArrayStorage(indexingType) || !hasIndexedProperties(indexingType));
+        ASSERT(!object->anyObjectInChainMayInterceptIndexedAccesses(vm) || hasSlowPutArrayStorage(indexingModeIncludingHistory) || !hasIndexedProperties(indexingModeIncludingHistory));
         object->didBecomePrototype();
     }
 
-    Structure* structure = new (NotNull, allocateCell<Structure>(vm.heap)) Structure(vm, globalObject, prototype, typeInfo, classInfo, indexingType, inlineCapacity);
+    Structure* structure = new (NotNull, allocateCell<Structure>(vm.heap)) Structure(vm, globalObject, prototype, typeInfo, classInfo, indexingModeIncludingHistory, inlineCapacity);
     structure->finishCreation(vm);
     return structure;
 }
@@ -224,7 +224,7 @@ inline bool Structure::hasIndexingHeader(const JSCell* cell) const
     
     if (!isTypedView(typedArrayTypeForType(m_blob.type())))
         return false;
-    
+
     return jsCast<const JSArrayBufferView*>(cell)->mode() == WastefulTypedArray;
 }
 
@@ -279,7 +279,7 @@ ALWAYS_INLINE JSValue prototypeForLookupPrimitiveImpl(JSGlobalObject* globalObje
     if (structure->typeInfo().type() == StringType)
         return globalObject->stringPrototype();
     
-    if (structure->typeInfo().type() == BigIntType)
+    if (structure->typeInfo().type() == HeapBigIntType)
         return globalObject->bigIntPrototype();
 
     ASSERT(structure->typeInfo().type() == SymbolType);

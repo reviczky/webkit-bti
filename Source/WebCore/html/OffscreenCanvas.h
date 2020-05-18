@@ -101,7 +101,7 @@ public:
 
     void didDraw(const FloatRect&) final;
 
-    Image* copiedImage() const final { return nullptr; }
+    Image* copiedImage() const final;
     bool hasCreatedImageBuffer() const final { return m_hasCreatedImageBuffer; }
 
     SecurityOrigin* securityOrigin() const final;
@@ -136,12 +136,16 @@ private:
 
     void reset();
 
+    void clearCopiedImage() const;
+
     std::unique_ptr<CanvasRenderingContext> m_context;
 
     // m_hasCreatedImageBuffer means we tried to malloc the buffer. We didn't necessarily get it.
     mutable bool m_hasCreatedImageBuffer { false };
 
     bool m_detached { false };
+
+    mutable RefPtr<Image> m_copiedImage;
 };
 
 }

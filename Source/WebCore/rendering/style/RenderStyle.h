@@ -31,7 +31,6 @@
 #include "CSSPropertyNames.h"
 #include "Color.h"
 #include "CounterDirectives.h"
-#include "DataRef.h"
 #include "FilterOperations.h"
 #include "FontCascadeDescription.h"
 #include "GapLength.h"
@@ -68,6 +67,7 @@
 #include "TransformOperations.h"
 #include "UnicodeBidi.h"
 #include <memory>
+#include <wtf/DataRef.h>
 #include <wtf/Forward.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/OptionSet.h>
@@ -191,14 +191,6 @@ public:
 
     void setHasViewportUnits(bool v = true) { m_nonInheritedFlags.hasViewportUnits = v; }
     bool hasViewportUnits() const { return m_nonInheritedFlags.hasViewportUnits; }
-
-    bool affectedByHover() const { return m_nonInheritedFlags.affectedByHover; }
-    bool affectedByActive() const { return m_nonInheritedFlags.affectedByActive; }
-    bool affectedByDrag() const { return m_nonInheritedFlags.affectedByDrag; }
-
-    void setAffectedByHover() { m_nonInheritedFlags.affectedByHover = true; }
-    void setAffectedByActive() { m_nonInheritedFlags.affectedByActive = true; }
-    void setAffectedByDrag() { m_nonInheritedFlags.affectedByDrag = true; }
 
     void setColumnStylesFromPaginationMode(const Pagination::Mode&);
     
@@ -399,6 +391,7 @@ public:
     const Length& specifiedLineHeight() const;
     WEBCORE_EXPORT const Length& lineHeight() const;
     WEBCORE_EXPORT int computedLineHeight() const;
+    int computeLineHeight(const Length&) const;
 
     WhiteSpace whiteSpace() const { return static_cast<WhiteSpace>(m_inheritedFlags.whiteSpace); }
     static bool autoWrap(WhiteSpace);
@@ -621,6 +614,8 @@ public:
     const Length& transformOriginX() const { return m_rareNonInheritedData->transform->x; }
     const Length& transformOriginY() const { return m_rareNonInheritedData->transform->y; }
     float transformOriginZ() const { return m_rareNonInheritedData->transform->z; }
+    LengthPoint transformOriginXY() const { return m_rareNonInheritedData->transform->originXY(); }
+
     TransformBox transformBox() const { return m_rareNonInheritedData->transform->transformBox; }
 
     TextEmphasisFill textEmphasisFill() const { return static_cast<TextEmphasisFill>(m_rareInheritedData->textEmphasisFill); }
@@ -689,6 +684,8 @@ public:
     bool hasPerspective() const { return m_rareNonInheritedData->perspective > 0; }
     const Length& perspectiveOriginX() const { return m_rareNonInheritedData->perspectiveOriginX; }
     const Length& perspectiveOriginY() const { return m_rareNonInheritedData->perspectiveOriginY; }
+    LengthPoint perspectiveOrigin() const { return m_rareNonInheritedData->perspectiveOrigin(); }
+
     const LengthSize& pageSize() const { return m_rareNonInheritedData->pageSize; }
     PageSizeType pageSizeType() const { return static_cast<PageSizeType>(m_rareNonInheritedData->pageSizeType); }
 
@@ -698,11 +695,10 @@ public:
     int initialLetterDrop() const { return initialLetter().width(); }
     int initialLetterHeight() const { return initialLetter().height(); }
 
-#if ENABLE(POINTER_EVENTS)
-    OptionSet<TouchAction> touchActions() const { return OptionSet<TouchAction>::fromRaw(m_rareNonInheritedData->touchActions); }
+    OptionSet<TouchAction> touchActions() const { return m_rareNonInheritedData->touchActions; }
     // 'touch-action' behavior depends on values in ancestors. We use an additional inherited property to implement that.
-    OptionSet<TouchAction> effectiveTouchActions() const { return OptionSet<TouchAction>::fromRaw(m_rareInheritedData->effectiveTouchActions); }
-#endif
+    OptionSet<TouchAction> effectiveTouchActions() const { return m_rareInheritedData->effectiveTouchActions; }
+    OptionSet<EventListenerRegionType> eventListenerRegionTypes() const { return m_rareInheritedData->eventListenerRegionTypes; }
 
 #if ENABLE(CSS_SCROLL_SNAP)
     // Scroll snap port style.
@@ -741,7 +737,7 @@ public:
 #if ENABLE(TEXT_AUTOSIZING)
     TextSizeAdjustment textSizeAdjust() const { return m_rareInheritedData->textSizeAdjust; }
     AutosizeStatus autosizeStatus() const;
-    bool isIdempotentTextAutosizingCandidate() const;
+    bool isIdempotentTextAutosizingCandidate(Optional<AutosizeStatus> overrideStatus = WTF::nullopt) const;
 #endif
 
     TextSecurity textSecurity() const { return static_cast<TextSecurity>(m_rareInheritedData->textSecurity); }
@@ -1235,10 +1231,9 @@ public:
     
     void setInitialLetter(const IntSize& size) { SET_VAR(m_rareNonInheritedData, initialLetter, size); }
     
-#if ENABLE(POINTER_EVENTS)
-    void setTouchActions(OptionSet<TouchAction> touchActions) { SET_VAR(m_rareNonInheritedData, touchActions, touchActions.toRaw()); }
-    void setEffectiveTouchActions(OptionSet<TouchAction> touchActions) { SET_VAR(m_rareInheritedData, effectiveTouchActions, touchActions.toRaw()); }
-#endif
+    void setTouchActions(OptionSet<TouchAction> touchActions) { SET_VAR(m_rareNonInheritedData, touchActions, touchActions); }
+    void setEffectiveTouchActions(OptionSet<TouchAction> touchActions) { SET_VAR(m_rareInheritedData, effectiveTouchActions, touchActions); }
+    void setEventListenerRegionTypes(OptionSet<EventListenerRegionType> eventListenerTypes) { SET_VAR(m_rareInheritedData, eventListenerRegionTypes, eventListenerTypes); }
 
 #if ENABLE(CSS_SCROLL_SNAP)
     void setScrollSnapType(const ScrollSnapType&);
@@ -1452,6 +1447,9 @@ public:
     bool lastChildState() const { return m_nonInheritedFlags.lastChildState; }
     void setLastChildState() { setUnique(); m_nonInheritedFlags.lastChildState = true; }
 
+    Color unresolvedColorForProperty(CSSPropertyID colorProperty, bool visitedLink = false) const;
+    Color colorResolvingCurrentColor(const Color&) const;
+
     WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID) const;
     WEBCORE_EXPORT Color visitedDependentColorWithColorFilter(CSSPropertyID) const;
 
@@ -1517,6 +1515,7 @@ public:
     static Length initialOneLength() { return Length(1, Fixed); }
     static short initialWidows() { return 2; }
     static short initialOrphans() { return 2; }
+    // Returning -100% percent here means the line-height is not set.
     static Length initialLineHeight() { return Length(-100.0f, Percent); }
     static TextAlignMode initialTextAlign() { return TextAlignMode::Start; }
     static OptionSet<TextDecoration> initialTextDecoration() { return OptionSet<TextDecoration> { }; }
@@ -1587,7 +1586,7 @@ public:
     static const TransformOperations& initialTransform() { static NeverDestroyed<TransformOperations> ops; return ops; }
     static Length initialTransformOriginX() { return Length(50.0f, Percent); }
     static Length initialTransformOriginY() { return Length(50.0f, Percent); }
-    static TransformBox initialTransformBox() { return TransformBox::BorderBox; }
+    static TransformBox initialTransformBox() { return TransformBox::ViewBox; }
     static PointerEvents initialPointerEvents() { return PointerEvents::Auto; }
     static float initialTransformOriginZ() { return 0; }
     static TransformStyle3D initialTransformStyle3D() { return TransformStyle3D::Flat; }
@@ -1596,7 +1595,7 @@ public:
     static Length initialPerspectiveOriginX() { return Length(50.0f, Percent); }
     static Length initialPerspectiveOriginY() { return Length(50.0f, Percent); }
     static Color initialBackgroundColor() { return Color::transparent; }
-    static Color initialTextEmphasisColor() { return Color(); }
+    static Color initialTextEmphasisColor() { return currentColor(); }
     static TextEmphasisFill initialTextEmphasisFill() { return TextEmphasisFill::Filled; }
     static TextEmphasisMark initialTextEmphasisMark() { return TextEmphasisMark::None; }
     static const AtomString& initialTextEmphasisCustomMark() { return nullAtom(); }
@@ -1636,9 +1635,7 @@ public:
 
     static WillChangeData* initialWillChange() { return nullptr; }
 
-#if ENABLE(POINTER_EVENTS)
     static TouchAction initialTouchActions() { return TouchAction::Auto; }
-#endif
 
 #if ENABLE(CSS_SCROLL_SNAP)
     static ScrollSnapType initialScrollSnapType();
@@ -1745,7 +1742,10 @@ public:
     void getShadowInlineDirectionExtent(const ShadowData*, LayoutUnit& logicalLeft, LayoutUnit& logicalRight) const;
     void getShadowBlockDirectionExtent(const ShadowData*, LayoutUnit& logicalTop, LayoutUnit& logicalBottom) const;
 
-    static Color invalidColor() { return Color(); }
+    // In RenderStyle invalid color value is used to signify 'currentcolor' which resolves to color().
+    static Color currentColor() { return { }; }
+    static bool isCurrentColor(const Color& color) { return !color.isValid(); }
+
     const Color& borderLeftColor() const { return m_surroundData->border.left().color(); }
     const Color& borderRightColor() const { return m_surroundData->border.right().color(); }
     const Color& borderTopColor() const { return m_surroundData->border.top().color(); }
@@ -1812,9 +1812,6 @@ private:
         unsigned emptyState : 1;
         unsigned firstChildState : 1;
         unsigned lastChildState : 1;
-        unsigned affectedByHover : 1;
-        unsigned affectedByActive : 1;
-        unsigned affectedByDrag : 1;
         unsigned isLink : 1;
 
         unsigned styleType : 4; // PseudoId
@@ -1881,7 +1878,7 @@ private:
     static bool isDisplayGridBox(DisplayType);
     static bool isDisplayFlexibleOrGridBox(DisplayType);
 
-    Color colorIncludingFallback(CSSPropertyID colorProperty, bool visitedLink) const;
+    Color colorResolvingCurrentColor(CSSPropertyID colorProperty, bool visitedLink) const;
 
     bool changeAffectsVisualOverflow(const RenderStyle&) const;
     bool changeRequiresLayout(const RenderStyle&, OptionSet<StyleDifferenceContextSensitiveProperty>& changedContextSensitiveProperties) const;
@@ -1946,9 +1943,6 @@ inline bool RenderStyle::NonInheritedFlags::operator==(const NonInheritedFlags& 
         && emptyState == other.emptyState
         && firstChildState == other.firstChildState
         && lastChildState == other.lastChildState
-        && affectedByHover == other.affectedByHover
-        && affectedByActive == other.affectedByActive
-        && affectedByDrag == other.affectedByDrag
         && isLink == other.isLink
         && styleType == other.styleType
         && pseudoBits == other.pseudoBits;

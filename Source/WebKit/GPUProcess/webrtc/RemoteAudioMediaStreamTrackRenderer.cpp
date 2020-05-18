@@ -33,9 +33,8 @@
 #include <WebCore/CARingBuffer.h>
 #include <WebCore/WebAudioBufferList.h>
 
-using namespace WebCore;
-
 namespace WebKit {
+using namespace WebCore;
 
 #if !RELEASE_LOG_DISABLED
 static const void* nextLogIdentifier()
@@ -89,11 +88,6 @@ void RemoteAudioMediaStreamTrackRenderer::stop()
 void RemoteAudioMediaStreamTrackRenderer::clear()
 {
     m_renderer->clear();
-}
-
-void RemoteAudioMediaStreamTrackRenderer::setMuted(bool value)
-{
-    m_renderer->setMuted(value);
 }
 
 void RemoteAudioMediaStreamTrackRenderer::setVolume(float value)

@@ -26,22 +26,8 @@
 #include "DateInstance.h"
 #include "DatePrototype.h"
 #include "JSDateMath.h"
-#include "JSFunction.h"
 #include "JSGlobalObject.h"
 #include "JSString.h"
-#include "ObjectPrototype.h"
-#include "JSCInlines.h"
-#include <math.h>
-#include <time.h>
-#include <wtf/MathExtras.h>
-
-#if HAVE(SYS_TIME_H)
-#include <sys/time.h>
-#endif
-
-#if HAVE(SYS_TIMEB_H)
-#include <sys/timeb.h>
-#endif
 
 namespace JSC {
 
@@ -143,7 +129,9 @@ JSObject* constructDate(JSGlobalObject* globalObject, JSValue newTarget, const A
         value = millisecondsFromComponents(globalObject, args, WTF::LocalTime);
     RETURN_IF_EXCEPTION(scope, nullptr);
 
-    Structure* dateStructure = InternalFunction::createSubclassStructure(globalObject, globalObject->dateConstructor(), newTarget, globalObject->dateStructure());
+    Structure* dateStructure = !newTarget || newTarget == globalObject->dateConstructor()
+        ? globalObject->dateStructure()
+        : InternalFunction::createSubclassStructure(globalObject, asObject(newTarget), getFunctionRealm(vm, asObject(newTarget))->dateStructure());
     RETURN_IF_EXCEPTION(scope, nullptr);
 
     return DateInstance::create(vm, dateStructure, value);

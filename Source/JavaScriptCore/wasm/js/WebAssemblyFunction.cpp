@@ -28,10 +28,7 @@
 
 #if ENABLE(WEBASSEMBLY)
 
-#include "B3Compilation.h"
-#include "FrameTracers.h"
-#include "JSCInlines.h"
-#include "JSFunctionInlines.h"
+#include "JSCJSValueInlines.h"
 #include "JSObject.h"
 #include "JSToWasm.h"
 #include "JSWebAssemblyHelpers.h"
@@ -41,7 +38,6 @@
 #include "LLIntThunks.h"
 #include "LinkBuffer.h"
 #include "ProtoCallFrameInlines.h"
-#include "VM.h"
 #include "WasmCallee.h"
 #include "WasmCallingConvention.h"
 #include "WasmContextInlines.h"
@@ -50,7 +46,6 @@
 #include "WasmMemoryInformation.h"
 #include "WasmModuleInformation.h"
 #include "WasmSignatureInlines.h"
-#include <wtf/FastTLS.h>
 #include <wtf/StackPointer.h>
 #include <wtf/SystemTracing.h>
 

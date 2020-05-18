@@ -69,28 +69,11 @@ class ScrollableArea;
 struct AccessibilityText {
     String text;
     AccessibilityTextSource textSource;
-    Vector<RefPtr<AXCoreObject>> textElements;
     
     AccessibilityText(const String& t, const AccessibilityTextSource& s)
         : text(t)
         , textSource(s)
     { }
-
-    AccessibilityText(const String& t, const AccessibilityTextSource& s, Vector<AXCoreObject*> elements)
-        : text(t)
-        , textSource(s)
-    {
-        textElements.reserveCapacity(elements.size());
-        for (auto element : elements)
-            textElements.uncheckedAppend(element);
-    }
-
-    AccessibilityText(const String& t, const AccessibilityTextSource& s, AXCoreObject* element)
-        : text(t)
-        , textSource(s)
-    {
-        textElements.append(element);
-    }
 };
 
 bool nodeHasPresentationRole(Node*);
@@ -110,9 +93,13 @@ public:
     bool isAccessibilityNodeObject() const override { return false; }
     bool isAccessibilityRenderObject() const override { return false; }
     bool isAccessibilityScrollbar() const override { return false; }
-    bool isAccessibilityScrollView() const override { return false; }
+    bool isAccessibilityScrollViewInstance() const override { return false; }
     bool isAccessibilitySVGRoot() const override { return false; }
     bool isAccessibilitySVGElement() const override { return false; }
+    bool isAccessibilityTableInstance() const override { return false; }
+    bool isAccessibilityTableColumnInstance() const override { return false; }
+    bool isAccessibilityProgressIndicatorInstance() const override { return false; }
+    bool isAXIsolatedObjectInstance() const override { return false; }
 
     bool isAttachmentElement() const override { return false; }
     bool isHeading() const override { return false; }
@@ -148,14 +135,52 @@ public:
     bool isOrderedList() const override { return false; }
     bool isDescriptionList() const override { return false; }
 
+    // Table support.
     bool isTable() const override { return false; }
+    bool isExposable() const override { return true; }
     bool isDataTable() const override { return false; }
-    bool isTableRow() const override { return false; }
-    bool isTableColumn() const override { return false; }
+    int tableLevel() const override { return 0; }
+    bool supportsSelectedRows() const override { return false; }
+    AccessibilityChildrenVector columns() override { return AccessibilityChildrenVector(); }
+    AccessibilityChildrenVector rows() override { return AccessibilityChildrenVector(); }
+    unsigned columnCount() override { return 0; }
+    unsigned rowCount() override { return 0; }
+    AccessibilityChildrenVector cells() override { return AccessibilityChildrenVector(); }
+    AXCoreObject* cellForColumnAndRow(unsigned, unsigned) override { return nullptr; }
+    AccessibilityChildrenVector columnHeaders() override { return AccessibilityChildrenVector(); }
+    AccessibilityChildrenVector rowHeaders() override { return AccessibilityChildrenVector(); }
+    AccessibilityChildrenVector visibleRows() override { return AccessibilityChildrenVector(); }
+    AXCoreObject* headerContainer() override { return nullptr; }
+    int axColumnCount() const override { return 0; }
+    int axRowCount() const override { return 0; }
+
+    // Table cell support.
     bool isTableCell() const override { return false; }
+    // Returns the start location and row span of the cell.
+    std::pair<unsigned, unsigned> rowIndexRange() const override { return { 0, 1 }; }
+    // Returns the start location and column span of the cell.
+    std::pair<unsigned, unsigned> columnIndexRange() const override { return { 0, 1 }; }
+    bool isColumnHeaderCell() const override { return false; }
+    bool isRowHeaderCell() const override { return false; }
+    int axColumnIndex() const override { return -1; }
+    int axRowIndex() const override { return -1; }
+
+    // Table column support.
+    bool isTableColumn() const override { return false; }
+    unsigned columnIndex() const override { return 0; }
+    AXCoreObject* columnHeader() override { return nullptr; }
+
+    // Table row support.
+    bool isTableRow() const override { return false; }
+    unsigned rowIndex() const override { return 0; }
+
+    // ARIA tree/grid row support.
+    bool isARIATreeGridRow() const override { return false; }
+    AccessibilityChildrenVector disclosedRows() override; // ARIATreeItem implementation. AccessibilityARIAGridRow overrides this method.
+    AXCoreObject* disclosedByRow() const override { return nullptr; }
+
     bool isFieldset() const override { return false; }
     bool isGroup() const override { return false; }
-    bool isARIATreeGridRow() const override { return false; }
     bool isImageMapLink() const override { return false; }
     bool isMenuList() const override { return false; }
     bool isMenuListPopup() const override { return false; }
@@ -172,7 +197,6 @@ public:
     bool isARIATextControl() const override;
     bool isNonNativeTextControl() const override;
     bool isButton() const override;
-    bool isBlockquote() const override;
     bool isLandmark() const override;
     bool isRangeControl() const override;
     bool isMeter() const override;
@@ -211,9 +235,9 @@ public:
     bool hasMisspelling() const override;
     RefPtr<Range> getMisspellingRange(RefPtr<Range> const& start, AccessibilitySearchDirection) const override;
     bool hasPlainText() const override { return false; }
-    bool hasSameFont(RenderObject*) const override { return false; }
-    bool hasSameFontColor(RenderObject*) const override { return false; }
-    bool hasSameStyle(RenderObject*) const override { return false; }
+    bool hasSameFont(const AXCoreObject&) const override { return false; }
+    bool hasSameFontColor(const AXCoreObject&) const override { return false; }
+    bool hasSameStyle(const AXCoreObject&) const override { return false; }
     bool hasUnderline() const override { return false; }
     bool hasHighlighting() const override;
 
@@ -240,7 +264,6 @@ public:
 
     unsigned blockquoteLevel() const override;
     int headingLevel() const override { return 0; }
-    int tableLevel() const override { return 0; }
     AccessibilityButtonState checkboxOrRadioValue() const override;
     String valueDescription() const override { return String(); }
     float valueForRange() const override { return 0.0f; }
@@ -305,11 +328,11 @@ public:
     int posInSet() const override;
 
     // ARIA drag and drop
-    bool supportsARIADropping() const override { return false; }
-    bool supportsARIADragging() const override { return false; }
-    bool isARIAGrabbed() override { return false; }
+    bool supportsDropping() const override { return false; }
+    bool supportsDragging() const override { return false; }
+    bool isGrabbed() override { return false; }
     void setARIAGrabbed(bool) override { }
-    Vector<String> determineARIADropEffects() override { return { }; }
+    Vector<String> determineDropEffects() const override { return { }; }
 
     // Called on the root AX object to return the deepest available element.
     AXCoreObject* accessibilityHitTest(const IntPoint&) const override { return nullptr; }
@@ -336,7 +359,7 @@ public:
     // Text selection
 private:
     RefPtr<Range> rangeOfStringClosestToRangeInDirection(Range*, AccessibilitySearchDirection, Vector<String> const&) const;
-    RefPtr<Range> selectionRange() const;
+    Optional<SimpleRange> selectionRange() const;
     RefPtr<Range> findTextRange(Vector<String> const& searchStrings, RefPtr<Range> const& start, AccessibilitySearchTextDirection) const;
 public:
     Vector<RefPtr<Range>> findTextRanges(AccessibilitySearchTextCriteria const&) const override;
@@ -420,6 +443,10 @@ public:
     String accessKey() const override { return nullAtom(); }
     String actionVerb() const override;
     Widget* widget() const override { return nullptr; }
+    PlatformWidget platformWidget() const override { return nullptr; }
+#if PLATFORM(COCOA)
+    RemoteAXObjectRef remoteParentObject() const override;
+#endif
     Widget* widgetForAttachmentView() const override { return nullptr; }
     Page* page() const override;
     Document* document() const override;
@@ -427,6 +454,7 @@ public:
     Frame* frame() const override;
     Frame* mainFrame() const override;
     Document* topDocument() const override;
+    ScrollView* scrollView() const override { return nullptr; }
     ScrollView* scrollViewAncestor() const override;
     String language() const override;
     // 1-based, to match the aria-level spec.
@@ -484,8 +512,6 @@ public:
     AccessibilityObject* activeDescendant() const override { return nullptr; }
     void handleActiveDescendantChanged() override { }
     void handleAriaExpandedChanged() override { }
-    bool isDescendantOfObject(const AXCoreObject*) const override;
-    bool isAncestorOfObject(const AXCoreObject*) const override;
     AccessibilityObject* firstAnonymousBlockChild() const override;
 
     WEBCORE_EXPORT static AccessibilityRole ariaRoleToWebCoreRole(const String&);
@@ -570,8 +596,6 @@ public:
 
     // Used by an ARIA tree to get all its rows.
     void ariaTreeRows(AccessibilityChildrenVector&) override;
-    // Used by an ARIA tree item to get all of its direct rows that it can disclose.
-    void ariaTreeItemDisclosedRows(AccessibilityChildrenVector&) override;
     // Used by an ARIA tree item to get only its content, and not its child tree items and groups.
     void ariaTreeItemContent(AccessibilityChildrenVector&) override;
 
@@ -721,6 +745,7 @@ public:
     AccessibilityObject* highestEditableAncestor() override;
 
     const AccessibilityScrollView* ancestorAccessibilityScrollView(bool includeSelf) const override;
+    AccessibilityObject* webAreaObject() const override { return nullptr; }
 
     void clearIsIgnoredFromParentData() override { m_isIgnoredFromParentData = AccessibilityIsIgnoredFromParentData(); }
     void setIsIgnoredFromParentDataForChild(AXCoreObject*) override;
@@ -728,6 +753,7 @@ public:
     uint64_t sessionID() const override;
     String documentURI() const override;
     String documentEncoding() const override;
+    AccessibilityChildrenVector documentLinks() override { return AccessibilityChildrenVector(); }
 
 protected:
     AccessibilityObject() = default;

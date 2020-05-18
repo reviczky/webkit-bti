@@ -1207,4 +1207,23 @@ String unacceptableTLSCertificate()
 }
 #endif
 
+#if ENABLE(WEB_AUTHN)
+// On macOS, Touch ID prompt is not guaranteed to show on top of the UI client, and therefore additional
+// information is provided to help users to make decisions.
+String makeCredentialTouchIDPromptTitle(const String& bundleName, const String& domain)
+{
+    return formatLocalizedString(WEB_UI_CFSTRING("“%@” would like to use Touch ID for “%@”.", "Allow the specified bundle to use Touch ID to sign in to the specified website on this device"), bundleName.createCFString().get(), domain.createCFString().get());
+}
+
+String getAssertionTouchIDPromptTitle(const String& bundleName, const String& domain)
+{
+    return formatLocalizedString(WEB_UI_CFSTRING("“%@” would like to sign in to “%@”.", "Allow the specified bundle to sign in to the specified website"), bundleName.createCFString().get(), domain.createCFString().get());
+}
+
+String genericTouchIDPromptTitle()
+{
+    return WEB_UI_STRING("Continue with Touch ID.", "Continue with Touch ID.");
+}
+#endif // ENABLE(WEB_AUTHN)
+
 } // namespace WebCore

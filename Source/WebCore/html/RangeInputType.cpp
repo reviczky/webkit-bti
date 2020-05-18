@@ -35,6 +35,7 @@
 #include "AXObjectCache.h"
 #include "ElementChildIterator.h"
 #include "EventNames.h"
+#include "HTMLCollection.h"
 #include "HTMLInputElement.h"
 #include "HTMLParserIdioms.h"
 #include "InputTypeNames.h"
@@ -254,9 +255,10 @@ void RangeInputType::createShadowSubtree()
     ASSERT(element());
     ASSERT(element()->userAgentShadowRoot());
 
+    static MainThreadNeverDestroyed<const AtomString> webkitSliderRunnableTrackName("-webkit-slider-runnable-track", AtomString::ConstructFromLiteral);
     Document& document = element()->document();
     auto track = HTMLDivElement::create(document);
-    track->setPseudo(AtomString("-webkit-slider-runnable-track", AtomString::ConstructFromLiteral));
+    track->setPseudo(webkitSliderRunnableTrackName);
     track->appendChild(SliderThumbElement::create(document));
     auto container = SliderContainerElement::create(document);
     container->appendChild(track);
@@ -314,12 +316,10 @@ String RangeInputType::serialize(const Decimal& value) const
 }
 
 // FIXME: Could share this with BaseClickableWithKeyInputType and BaseCheckableInputType if we had a common base class.
-void RangeInputType::accessKeyAction(bool sendMouseEvents)
+bool RangeInputType::accessKeyAction(bool sendMouseEvents)
 {
-    InputType::accessKeyAction(sendMouseEvents);
-
-    if (auto* element = this->element())
-        element->dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
+    auto* element = this->element();
+    return InputType::accessKeyAction(sendMouseEvents) || (element && element->dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents));
 }
 
 void RangeInputType::attributeChanged(const QualifiedName& name)
@@ -373,7 +373,7 @@ bool RangeInputType::shouldRespectListAttribute()
 }
 
 #if ENABLE(DATALIST_ELEMENT)
-void RangeInputType::listAttributeTargetChanged()
+void RangeInputType::dataListMayHaveChanged()
 {
     m_tickMarkValuesDirty = true;
     RefPtr<HTMLElement> sliderTrackElement = this->sliderTrackElement();

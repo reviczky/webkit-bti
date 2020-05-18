@@ -58,7 +58,7 @@ struct ResourceLoadStatistics {
     WEBCORE_EXPORT static WallTime reduceTimeResolution(WallTime);
 
     WEBCORE_EXPORT void encode(KeyedEncoder&) const;
-    WEBCORE_EXPORT bool decode(KeyedDecoder&, unsigned modelVersion);
+    WEBCORE_EXPORT WARN_UNUSED_RETURN bool decode(KeyedDecoder&, unsigned modelVersion);
 
     WEBCORE_EXPORT String toString() const;
 
@@ -79,6 +79,7 @@ struct ResourceLoadStatistics {
 
     // Top frame stats
     HashSet<RegistrableDomain> topFrameUniqueRedirectsTo;
+    HashSet<RegistrableDomain> topFrameUniqueRedirectsToSinceSameSiteStrictEnforcement;
     HashSet<RegistrableDomain> topFrameUniqueRedirectsFrom;
     HashSet<RegistrableDomain> topFrameLinkDecorationsFrom;
     bool gotLinkDecorationFromPrevalentResource { false };
@@ -98,6 +99,8 @@ struct ResourceLoadStatistics {
     unsigned dataRecordsRemoved { 0 };
     unsigned timesAccessedAsFirstPartyDueToUserInteraction { 0 };
     unsigned timesAccessedAsFirstPartyDueToStorageAccessAPI { 0 };
+
+    enum class IsEphemeral : bool { No, Yes };
 
     enum class NavigatorAPI : uint64_t {
         AppVersion = 1 << 0,

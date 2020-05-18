@@ -102,12 +102,14 @@ WEBCORE_EXPORT bool atBoundaryOfGranularity(const VisiblePosition&, TextGranular
 WEBCORE_EXPORT bool withinTextUnitOfGranularity(const VisiblePosition&, TextGranularity, SelectionDirection);
 WEBCORE_EXPORT VisiblePosition positionOfNextBoundaryOfGranularity(const VisiblePosition&, TextGranularity, SelectionDirection);
 WEBCORE_EXPORT RefPtr<Range> enclosingTextUnitOfGranularity(const VisiblePosition&, TextGranularity, SelectionDirection);
-WEBCORE_EXPORT int distanceBetweenPositions(const VisiblePosition&, const VisiblePosition&);
+WEBCORE_EXPORT std::ptrdiff_t distanceBetweenPositions(const VisiblePosition&, const VisiblePosition&);
 WEBCORE_EXPORT RefPtr<Range> wordRangeFromPosition(const VisiblePosition&);
 WEBCORE_EXPORT VisiblePosition closestWordBoundaryForPosition(const VisiblePosition& position);
 WEBCORE_EXPORT void charactersAroundPosition(const VisiblePosition&, UChar32& oneAfter, UChar32& oneBefore, UChar32& twoBefore);
 WEBCORE_EXPORT RefPtr<Range> rangeExpandedAroundPositionByCharacters(const VisiblePosition&, int numberOfCharactersToExpand);
 WEBCORE_EXPORT RefPtr<Range> rangeExpandedByCharactersInDirectionAtWordBoundary(const VisiblePosition&, int numberOfCharactersToExpand, SelectionDirection);
+enum class WithinWordBoundary : bool { No, Yes };
+WEBCORE_EXPORT std::pair<VisiblePosition, WithinWordBoundary> wordBoundaryForPositionWithoutCrossingLine(const VisiblePosition&);
 
 // helper function
 enum BoundarySearchContextAvailability { DontHaveMoreContext, MayHaveMoreContext };

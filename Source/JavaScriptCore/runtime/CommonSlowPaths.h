@@ -244,6 +244,7 @@ SLOW_PATH_HIDDEN_DECL(slow_path_typeof);
 SLOW_PATH_HIDDEN_DECL(slow_path_is_object);
 SLOW_PATH_HIDDEN_DECL(slow_path_is_object_or_null);
 SLOW_PATH_HIDDEN_DECL(slow_path_is_function);
+SLOW_PATH_HIDDEN_DECL(slow_path_is_constructor);
 SLOW_PATH_HIDDEN_DECL(slow_path_in_by_id);
 SLOW_PATH_HIDDEN_DECL(slow_path_in_by_val);
 SLOW_PATH_HIDDEN_DECL(slow_path_del_by_val);
@@ -282,6 +283,12 @@ SLOW_PATH_HIDDEN_DECL(slow_path_new_generator);
 SLOW_PATH_HIDDEN_DECL(slow_path_new_array_with_spread);
 SLOW_PATH_HIDDEN_DECL(slow_path_new_array_buffer);
 SLOW_PATH_HIDDEN_DECL(slow_path_spread);
+SLOW_PATH_HIDDEN_DECL(iterator_open_try_fast_narrow);
+SLOW_PATH_HIDDEN_DECL(iterator_open_try_fast_wide16);
+SLOW_PATH_HIDDEN_DECL(iterator_open_try_fast_wide32);
+SLOW_PATH_HIDDEN_DECL(iterator_next_try_fast_narrow);
+SLOW_PATH_HIDDEN_DECL(iterator_next_try_fast_wide16);
+SLOW_PATH_HIDDEN_DECL(iterator_next_try_fast_wide32);
 
 using SlowPathFunction = SlowPathReturnType(SLOW_PATH *)(CallFrame*, const Instruction*);
 

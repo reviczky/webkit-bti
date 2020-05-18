@@ -49,10 +49,12 @@ public:
     }
 
     bool isEmpty() const { return m_registrableDomain.isEmpty() || m_registrableDomain == "nullOrigin"_s; }
+    String& string() { return m_registrableDomain; }
     const String& string() const { return m_registrableDomain; }
 
     bool operator!=(const RegistrableDomain& other) const { return m_registrableDomain != other.m_registrableDomain; }
     bool operator==(const RegistrableDomain& other) const { return m_registrableDomain == other.m_registrableDomain; }
+    bool operator==(const char* other) const { return m_registrableDomain == other; }
 
     bool matches(const URL& url) const
     {

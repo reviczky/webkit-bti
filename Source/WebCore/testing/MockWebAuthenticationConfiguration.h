@@ -61,13 +61,19 @@ struct MockWebAuthenticationConfiguration {
         MaliciousPayload
     };
 
+    enum class UserVerification : uint8_t {
+        No,
+        Yes,
+        Cancel
+    };
+
     struct LocalConfiguration {
-        bool acceptAuthentication { false };
+        UserVerification userVerification { UserVerification::No };
         bool acceptAttestation { false };
         String privateKeyBase64;
         String userCertificateBase64;
         String intermediateCACertificateBase64;
-        String preferredUserhandleBase64;
+        String preferredCredentialIdBase64;
 
         template<class Encoder> void encode(Encoder&) const;
         template<class Decoder> static Optional<LocalConfiguration> decode(Decoder&);
@@ -112,7 +118,7 @@ struct MockWebAuthenticationConfiguration {
 template<class Encoder>
 void MockWebAuthenticationConfiguration::LocalConfiguration::encode(Encoder& encoder) const
 {
-    encoder << acceptAuthentication << acceptAttestation << privateKeyBase64 << userCertificateBase64 << intermediateCACertificateBase64 << preferredUserhandleBase64;
+    encoder << userVerification << acceptAttestation << privateKeyBase64 << userCertificateBase64 << intermediateCACertificateBase64 << preferredCredentialIdBase64;
 }
 
 template<class Decoder>
@@ -120,11 +126,11 @@ Optional<MockWebAuthenticationConfiguration::LocalConfiguration> MockWebAuthenti
 {
     MockWebAuthenticationConfiguration::LocalConfiguration result;
 
-    Optional<bool> acceptAuthentication;
-    decoder >> acceptAuthentication;
-    if (!acceptAuthentication)
+    Optional<UserVerification> userVerification;
+    decoder >> userVerification;
+    if (!userVerification)
         return WTF::nullopt;
-    result.acceptAuthentication = *acceptAuthentication;
+    result.userVerification = *userVerification;
 
     Optional<bool> acceptAttestation;
     decoder >> acceptAttestation;
@@ -150,11 +156,11 @@ Optional<MockWebAuthenticationConfiguration::LocalConfiguration> MockWebAuthenti
         return WTF::nullopt;
     result.intermediateCACertificateBase64 = WTFMove(*intermediateCACertificateBase64);
 
-    Optional<String> preferredUserhandleBase64;
-    decoder >> preferredUserhandleBase64;
-    if (!preferredUserhandleBase64)
+    Optional<String> preferredCredentialIdBase64;
+    decoder >> preferredCredentialIdBase64;
+    if (!preferredCredentialIdBase64)
         return WTF::nullopt;
-    result.preferredUserhandleBase64 = WTFMove(*preferredUserhandleBase64);
+    result.preferredCredentialIdBase64 = WTFMove(*preferredCredentialIdBase64);
 
     return result;
 }
@@ -294,6 +300,15 @@ template<> struct EnumTraits<WebCore::MockWebAuthenticationConfiguration::NfcErr
         WebCore::MockWebAuthenticationConfiguration::NfcError::WrongTagType,
         WebCore::MockWebAuthenticationConfiguration::NfcError::NoConnections,
         WebCore::MockWebAuthenticationConfiguration::NfcError::MaliciousPayload
+    >;
+};
+
+template<> struct EnumTraits<WebCore::MockWebAuthenticationConfiguration::UserVerification> {
+    using values = EnumValues<
+        WebCore::MockWebAuthenticationConfiguration::UserVerification,
+        WebCore::MockWebAuthenticationConfiguration::UserVerification::No,
+        WebCore::MockWebAuthenticationConfiguration::UserVerification::Yes,
+        WebCore::MockWebAuthenticationConfiguration::UserVerification::Cancel
     >;
 };
 

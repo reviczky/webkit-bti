@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2009-2020 Apple Inc. All rights reserved.
  * Copyright (C) 2011 Google Inc. All rights reserved.
  * Copyright (C) 2009 Joseph Pecoraro
  *
@@ -262,7 +262,7 @@ public:
             data->setBoolean("enabled"_s, !!node->document().fullscreenManager().fullscreenElement());
 #endif // ENABLE(FULLSCREEN_API)
 
-        auto timestamp = m_domAgent.m_environment.executionStopwatch()->elapsedTime().seconds();
+        auto timestamp = m_domAgent.m_environment.executionStopwatch().elapsedTime().seconds();
         m_domAgent.m_frontendDispatcher->didFireEvent(nodeId, event.type(), timestamp, data->size() ? WTFMove(data) : nullptr);
     }
 
@@ -1114,7 +1114,7 @@ void InspectorDOMAgent::inspect(Node* inspectedNode)
     RefPtr<Node> node = inspectedNode;
     setSearchingForNode(ignored, false, nullptr, false);
 
-    if (node->nodeType() != Node::ELEMENT_NODE && node->nodeType() != Node::DOCUMENT_NODE)
+    if (!node->isElementNode() && !node->isDocumentNode())
         node = node->parentNode();
     m_nodeToFocus = node;
 
@@ -1159,7 +1159,7 @@ void InspectorDOMAgent::mouseDidMoveOverElement(const HitTestResult& result, uns
 void InspectorDOMAgent::highlightMousedOverNode()
 {
     Node* node = m_mousedOverNode.get();
-    while (node && node->nodeType() == Node::TEXT_NODE)
+    if (node && node->isTextNode())
         node = node->parentNode();
     if (node && m_inspectModeHighlightConfig)
         m_overlay->highlightNode(node, *m_inspectModeHighlightConfig);
@@ -1291,8 +1291,7 @@ void InspectorDOMAgent::highlightSelector(ErrorString& errorString, const JSON::
             SelectorChecker::CheckingContext context(SelectorChecker::Mode::ResolvingStyle);
             context.pseudoId = pseudoId;
 
-            unsigned ignoredSpecificity;
-            if (selectorChecker.match(*selector, descendantElement, context, ignoredSpecificity)) {
+            if (selectorChecker.match(*selector, descendantElement, context)) {
                 if (seenNodes.add(&descendantElement))
                     nodeList.append(descendantElement);
             }
@@ -1770,7 +1769,7 @@ Ref<Inspector::Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEv
         JSC::JSLockHolder lock(scriptListener.isolatedWorld().vm());
 
         if (document) {
-            handlerObject = scriptListener.jsFunction(*document);
+            handlerObject = scriptListener.ensureJSFunction(*document);
             exec = execStateFromNode(scriptListener.isolatedWorld(), document);
         }
 
@@ -2592,7 +2591,7 @@ void InspectorDOMAgent::mediaMetricsTimerFired()
 
             int nodeId = pushNodePathToFrontend(mediaElement);
             if (nodeId) {
-                auto timestamp = m_environment.executionStopwatch()->elapsedTime().seconds();
+                auto timestamp = m_environment.executionStopwatch().elapsedTime().seconds();
                 m_frontendDispatcher->powerEfficientPlaybackStateChanged(nodeId, timestamp, iterator->value.isPowerEfficient);
             }
         }

@@ -35,8 +35,10 @@
 #include "FrameView.h"
 #include "GraphicsContext.h"
 #include "HTMLNames.h"
+#include "HTMLTextFormControlElement.h"
 #include "HitTestLocation.h"
 #include "HitTestResult.h"
+#include "ImageBuffer.h"
 #include "InlineElementBox.h"
 #include "InlineIterator.h"
 #include "InlineTextBox.h"
@@ -62,6 +64,7 @@
 #include "RenderSVGResourceClipper.h"
 #include "RenderSVGRoot.h"
 #include "RenderTableCell.h"
+#include "RenderTextControl.h"
 #include "RenderTextFragment.h"
 #include "RenderTheme.h"
 #include "RenderTreeBuilder.h"
@@ -376,16 +379,10 @@ void RenderBlock::removePositionedObjectsIfNeeded(const RenderStyle& oldStyle, c
     if (oldStyle.position() == newStyle.position() && hadTransform == willHaveTransform)
         return;
 
-    // We are no longer the containing block for fixed descendants.
-    if (hadTransform && !willHaveTransform) {
-        // Our positioned descendants will be inserted into a new containing block's positioned objects list during the next layout.
-        removePositionedObjects(nullptr, NewContainingBlock);
-        return;
-    }
-
-    // We are no longer the containing block for absolute positioned descendants.
-    if (newStyle.position() == PositionType::Static && !willHaveTransform) {
-        // Our positioned descendants will be inserted into a new containing block's positioned objects list during the next layout.
+    // We are no longer the containing block for out-of-flow descendants.
+    bool outOfFlowDescendantsHaveNewContainingBlock = (hadTransform && !willHaveTransform) || (newStyle.position() == PositionType::Static && !willHaveTransform);
+    if (outOfFlowDescendantsHaveNewContainingBlock) {
+        // Our out-of-flow descendants will be inserted into a new containing block's positioned objects list during the next layout.
         removePositionedObjects(nullptr, NewContainingBlock);
         return;
     }
@@ -1097,16 +1094,11 @@ void RenderBlock::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     // Check if we need to do anything at all.
     // FIXME: Could eliminate the isDocumentElementRenderer() check if we fix background painting so that the RenderView
     // paints the root's background.
-    if (!isDocumentElementRenderer()) {
-        LayoutRect overflowBox = overflowRectForPaintRejection();
+    if (!isDocumentElementRenderer() && !paintInfo.paintBehavior.contains(PaintBehavior::CompositedOverflowScrollContent)) {
+        LayoutRect overflowBox = visualOverflowRect();
         flipForWritingMode(overflowBox);
         overflowBox.moveBy(adjustedPaintOffset);
-        if (!overflowBox.intersects(paintInfo.rect)
-#if PLATFORM(IOS_FAMILY)
-            // FIXME: This may be applicable to non-iOS ports.
-            && (!hasLayer() || !layer()->isComposited())
-#endif
-        )
+        if (!overflowBox.intersects(paintInfo.rect))
             return;
     }
 
@@ -1257,13 +1249,19 @@ void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
 
         if (visibleToHitTesting()) {
             auto borderRegion = approximateAsRegion(style().getRoundedBorderFor(borderRect));
-            paintInfo.eventRegionContext->unite(borderRegion, style());
+            paintInfo.eventRegionContext->unite(borderRegion, style(), isTextControl() && downcast<RenderTextControl>(*this).textFormControlElement().isInnerTextElementEditable());
         }
 
-        // No need to check descendants if we don't have overflow and the area is already covered.
-        bool needsTraverseDescendants = hasVisualOverflow() || !paintInfo.eventRegionContext->contains(enclosingIntRect(borderRect));
-#if PLATFORM(IOS_FAMILY) && ENABLE(POINTER_EVENTS)
-        needsTraverseDescendants = needsTraverseDescendants || document().mayHaveElementsWithNonAutoTouchAction();
+        bool needsTraverseDescendants = hasVisualOverflow() || containsFloats() || !paintInfo.eventRegionContext->contains(enclosingIntRect(borderRect)) || view().needsEventRegionUpdateForNonCompositedFrame();
+#if PLATFORM(IOS_FAMILY)
+        needsTraverseDescendants |= document().mayHaveElementsWithNonAutoTouchAction();
+#endif
+#if ENABLE(EDITABLE_REGION)
+        // We treat the entire text control as editable to match users' expectation even
+        // though it's actually the inner text element of the control that is editable.
+        // So, no need to traverse to find the inner text element in this case.
+        if (!isTextControl())
+            needsTraverseDescendants |= document().mayHaveEditableElements();
 #endif
         if (!needsTraverseDescendants)
             return;
@@ -1294,8 +1292,8 @@ void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
         paintSelection(paintInfo, scrolledOffset); // Fill in gaps in selection on lines and between blocks.
 
     // 4. paint floats.
-    if (paintPhase == PaintPhase::Float || paintPhase == PaintPhase::Selection || paintPhase == PaintPhase::TextClip)
-        paintFloats(paintInfo, scrolledOffset, paintPhase == PaintPhase::Selection || paintPhase == PaintPhase::TextClip);
+    if (paintPhase == PaintPhase::Float || paintPhase == PaintPhase::Selection || paintPhase == PaintPhase::TextClip || paintPhase == PaintPhase::EventRegion)
+        paintFloats(paintInfo, scrolledOffset, paintPhase == PaintPhase::Selection || paintPhase == PaintPhase::TextClip || paintPhase == PaintPhase::EventRegion);
 
     // 5. paint outline.
     if ((paintPhase == PaintPhase::Outline || paintPhase == PaintPhase::SelfOutline) && hasOutline() && style().visibility() == Visibility::Visible)
@@ -1400,7 +1398,7 @@ bool RenderBlock::shouldPaintSelectionGaps() const
     if (settings().selectionPaintingWithoutSelectionGapsEnabled())
         return false;
 
-    return selectionState() != SelectionNone && style().visibility() == Visibility::Visible && isSelectionRoot();
+    return selectionState() != HighlightState::None && style().visibility() == Visibility::Visible && isSelectionRoot();
 }
 
 bool RenderBlock::isSelectionRoot() const
@@ -1550,7 +1548,7 @@ GapRects RenderBlock::selectionGaps(RenderBlock& rootBlock, const LayoutPoint& r
         result = blockSelectionGaps(rootBlock, rootBlockPhysicalPosition, offsetFromRootBlock, lastLogicalTop, lastLogicalLeft, lastLogicalRight, cache, paintInfo);
 
     // Fill the vertical gap all the way to the bottom of our block if the selection extends past our block.
-    if (&rootBlock == this && (selectionState() != SelectionBoth && selectionState() != SelectionEnd) && !isRubyBase() && !isRubyText()) {
+    if (&rootBlock == this && (selectionState() != HighlightState::Both && selectionState() != HighlightState::End) && !isRubyBase() && !isRubyText()) {
         result.uniteCenter(blockSelectionGap(rootBlock, rootBlockPhysicalPosition, offsetFromRootBlock,
             lastLogicalTop, lastLogicalLeft, lastLogicalRight, logicalHeight(), cache, paintInfo));
     }
@@ -1571,7 +1569,7 @@ GapRects RenderBlock::blockSelectionGaps(RenderBlock& rootBlock, const LayoutPoi
 
     // Jump right to the first block child that contains some selected objects.
     RenderBox* curr;
-    for (curr = firstChildBox(); curr && curr->selectionState() == SelectionNone; curr = curr->nextSiblingBox()) { }
+    for (curr = firstChildBox(); curr && curr->selectionState() == HighlightState::None; curr = curr->nextSiblingBox()) { }
     
     if (!curr)
         return result;
@@ -1579,8 +1577,8 @@ GapRects RenderBlock::blockSelectionGaps(RenderBlock& rootBlock, const LayoutPoi
     LogicalSelectionOffsetCaches childCache(*this, cache);
 
     for (bool sawSelectionEnd = false; curr && !sawSelectionEnd; curr = curr->nextSiblingBox()) {
-        SelectionState childState = curr->selectionState();
-        if (childState == SelectionBoth || childState == SelectionEnd)
+        HighlightState childState = curr->selectionState();
+        if (childState == HighlightState::Both || childState == HighlightState::End)
             sawSelectionEnd = true;
 
         if (curr->isFloatingOrOutOfFlowPositioned())
@@ -1595,10 +1593,10 @@ GapRects RenderBlock::blockSelectionGaps(RenderBlock& rootBlock, const LayoutPoi
         }
 
         bool paintsOwnSelection = curr->shouldPaintSelectionGaps() || curr->isTable(); // FIXME: Eventually we won't special-case table like this.
-        bool fillBlockGaps = (paintsOwnSelection || (curr->canBeSelectionLeaf() && childState != SelectionNone)) && !isRubyBase() && !isRubyText();
+        bool fillBlockGaps = (paintsOwnSelection || (curr->canBeSelectionLeaf() && childState != HighlightState::None)) && !isRubyBase() && !isRubyText();
         if (fillBlockGaps) {
             // We need to fill the vertical gap above this object.
-            if (childState == SelectionEnd || childState == SelectionInside) {
+            if (childState == HighlightState::End || childState == HighlightState::Inside) {
                 // Fill the gap above the object.
                 result.uniteCenter(blockSelectionGap(rootBlock, rootBlockPhysicalPosition, offsetFromRootBlock,
                     lastLogicalTop, lastLogicalLeft, lastLogicalRight, curr->logicalTop(), cache, paintInfo));
@@ -1606,8 +1604,8 @@ GapRects RenderBlock::blockSelectionGaps(RenderBlock& rootBlock, const LayoutPoi
 
             // Only fill side gaps for objects that paint their own selection if we know for sure the selection is going to extend all the way *past*
             // our object.  We know this if the selection did not end inside our object.
-            if (paintsOwnSelection && (childState == SelectionStart || sawSelectionEnd))
-                childState = SelectionNone;
+            if (paintsOwnSelection && (childState == HighlightState::Start || sawSelectionEnd))
+                childState = HighlightState::None;
 
             // Fill side gaps on this object based off its state.
             bool leftGap, rightGap;
@@ -1624,7 +1622,7 @@ GapRects RenderBlock::blockSelectionGaps(RenderBlock& rootBlock, const LayoutPoi
             lastLogicalTop = blockDirectionOffset(rootBlock, offsetFromRootBlock) + curr->logicalBottom();
             lastLogicalLeft = logicalLeftSelectionOffset(rootBlock, curr->logicalBottom(), cache);
             lastLogicalRight = logicalRightSelectionOffset(rootBlock, curr->logicalBottom(), cache);
-        } else if (childState != SelectionNone && is<RenderBlock>(*curr)) {
+        } else if (childState != HighlightState::None && is<RenderBlock>(*curr)) {
             // We must be a block that has some selected object inside it, so recur.
             result.unite(downcast<RenderBlock>(*curr).selectionGaps(rootBlock, rootBlockPhysicalPosition, LayoutSize(offsetFromRootBlock.width() + curr->x(), offsetFromRootBlock.height() + curr->y()),
                 lastLogicalTop, lastLogicalLeft, lastLogicalRight, childCache, paintInfo));
@@ -1688,15 +1686,11 @@ LayoutRect RenderBlock::logicalRightSelectionGap(RenderBlock& rootBlock, const L
     return gapRect;
 }
 
-void RenderBlock::getSelectionGapInfo(SelectionState state, bool& leftGap, bool& rightGap)
+void RenderBlock::getSelectionGapInfo(HighlightState state, bool& leftGap, bool& rightGap)
 {
     bool ltr = style().isLeftToRightDirection();
-    leftGap = (state == RenderObject::SelectionInside) ||
-              (state == RenderObject::SelectionEnd && ltr) ||
-              (state == RenderObject::SelectionStart && !ltr);
-    rightGap = (state == RenderObject::SelectionInside) ||
-               (state == RenderObject::SelectionStart && ltr) ||
-               (state == RenderObject::SelectionEnd && !ltr);
+    leftGap = (state == RenderObject::HighlightState::Inside) || (state == RenderObject::HighlightState::End && ltr) || (state == RenderObject::HighlightState::Start && !ltr);
+    rightGap = (state == RenderObject::HighlightState::Inside) || (state == RenderObject::HighlightState::Start && ltr) || (state == RenderObject::HighlightState::End && !ltr);
 }
 
 LayoutUnit RenderBlock::logicalLeftSelectionOffset(RenderBlock& rootBlock, LayoutUnit position, const LogicalSelectionOffsetCaches& cache)
@@ -1786,12 +1780,24 @@ void RenderBlock::removePositionedObjects(const RenderBlock* newContainingBlockC
         if (containingBlockState == NewContainingBlock)
             renderer->setChildNeedsLayout(MarkOnlyThis);
         // It is the parent block's job to add positioned children to positioned objects list of its containing block.
-        // Dirty the parent to ensure this happens.
+        // Dirty the parent to ensure this happens. We also need to make sure the new containing block is dirty as well so
+        // that it gets to these new positioned objects.
         auto* parent = renderer->parent();
-        while (parent && !parent->isRenderBlock())
+        while (parent && !is<RenderBlock>(parent))
             parent = parent->parent();
         if (parent)
             parent->setChildNeedsLayout();
+
+        if (renderer->isFixedPositioned())
+            view().setNeedsLayout();
+        else if (auto* newContainingBlock = containingBlock()) {
+            // During style change, at this point the renderer's containing block is still "this" renderer, and "this" renderer is still positioned.
+            // FIXME: During subtree moving, this is mostly invalid but either the subtree is detached (we don't even get here) or renderers
+            // are already marked dirty.
+            for (; newContainingBlock && !newContainingBlock->canContainAbsolutelyPositionedObjects(); newContainingBlock = newContainingBlock->containingBlock()) { }
+            if (newContainingBlock)
+                newContainingBlock->setNeedsLayout();
+        }
     }
     for (auto* renderer : renderersToRemove)
         removePositionedObject(*renderer);
@@ -1988,8 +1994,6 @@ Node* RenderBlock::nodeForHitTest() const
     // If we are in the margins of block elements that are part of a
     // continuation we're actually still inside the enclosing element
     // that was split. Use the appropriate inner node.
-    if (isRenderView())
-        return &document();
     return continuation() ? continuation()->element() : element();
 }
 
@@ -2018,25 +2022,7 @@ bool RenderBlock::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
         switch (style().clipPath()->type()) {
         case ClipPathOperation::Shape: {
             auto& clipPath = downcast<ShapeClipPathOperation>(*style().clipPath());
-
-            LayoutRect referenceBoxRect;
-            switch (clipPath.referenceBox()) {
-            case CSSBoxType::MarginBox:
-                referenceBoxRect = marginBoxRect();
-                break;
-            case CSSBoxType::PaddingBox:
-                referenceBoxRect = paddingBoxRect();
-                break;
-            case CSSBoxType::FillBox:
-            case CSSBoxType::ContentBox:
-                referenceBoxRect = contentBoxRect();
-                break;
-            case CSSBoxType::StrokeBox:
-            case CSSBoxType::ViewBox:
-            case CSSBoxType::BorderBox:
-            case CSSBoxType::BoxMissing:
-                referenceBoxRect = borderBoxRect();
-            }
+            auto referenceBoxRect = referenceBox(clipPath.referenceBox());
             if (!clipPath.pathForReferenceRect(referenceBoxRect).contains(locationInContainer.point() - localOffset, clipPath.windRule()))
                 return false;
             break;
@@ -2809,13 +2795,6 @@ LayoutRect RenderBlock::rectWithOutlineForRepaint(const RenderLayerModelObject* 
     return r;
 }
 
-void RenderBlock::updateDragState(bool dragOn)
-{
-    RenderBox::updateDragState(dragOn);
-    if (RenderBoxModelObject* continuation = this->continuation())
-        continuation->updateDragState(dragOn);
-}
-
 const RenderStyle& RenderBlock::outlineStyleForRepaint() const
 {
     if (auto* continuation = this->continuation())
@@ -3133,7 +3112,13 @@ TextRun RenderBlock::constructTextRun(StringView stringView, const RenderStyle& 
         if (flags & RespectDirectionOverride)
             directionalOverride |= isOverride(style.unicodeBidi());
     }
-    return TextRun(stringView, 0, 0, expansion, textDirection, directionalOverride);
+
+    // This works because:
+    // 1. TextRun owns its text string. Its member is a String, not a StringView
+    // 2. This replacement doesn't affect string indices. We're replacing a single Unicode code unit with another Unicode code unit.
+    // How convenient.
+    auto updatedString = RenderBlock::updateSecurityDiscCharacters(style, stringView.toStringWithoutCopying());
+    return TextRun(WTFMove(updatedString), 0, 0, expansion, textDirection, directionalOverride);
 }
 
 TextRun RenderBlock::constructTextRun(const String& string, const RenderStyle& style, ExpansionBehavior expansion, TextRunFlags flags)
@@ -3510,6 +3495,31 @@ bool RenderBlock::hitTestExcludedChildrenInBorder(const HitTestRequest& request,
         childHitTest = HitTestChildBlockBackground;
     LayoutPoint childPoint = flipForWritingModeForChild(legend, accumulatedOffset);
     return legend->nodeAtPoint(request, result, locationInContainer, childPoint, childHitTest);
+}
+
+String RenderBlock::updateSecurityDiscCharacters(const RenderStyle& style, String&& string)
+{
+#if !PLATFORM(COCOA)
+    UNUSED_PARAM(style);
+    return WTFMove(string);
+#else
+    if (style.textSecurity() == TextSecurity::None)
+        return WTFMove(string);
+    // This PUA character in the system font is used to render password field dots on Cocoa platforms.
+    constexpr UChar textSecurityDiscPUACodePoint = 0xF79A;
+    auto& font = style.fontCascade().primaryFont();
+    if (!(font.platformData().isSystemFont() && font.glyphForCharacter(textSecurityDiscPUACodePoint)))
+        return WTFMove(string);
+
+    // See RenderText::setRenderedText()
+#if PLATFORM(IOS_FAMILY)
+    constexpr UChar discCharacterToReplace = blackCircle;
+#else
+    constexpr UChar discCharacterToReplace = bullet;
+#endif
+
+    return string.replace(discCharacterToReplace, textSecurityDiscPUACodePoint);
+#endif
 }
     
 } // namespace WebCore

@@ -23,10 +23,6 @@
 #include "DateInstance.h"
 
 #include "JSDateMath.h"
-#include "JSGlobalObject.h"
-#include "JSCInlines.h"
-#include <math.h>
-#include <wtf/MathExtras.h>
 
 namespace JSC {
 
@@ -48,6 +44,11 @@ void DateInstance::finishCreation(VM& vm, double time)
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
     m_internalNumber = timeClip(time);
+}
+
+String DateInstance::toStringName(const JSObject*, JSGlobalObject*)
+{
+    return "Date"_s;
 }
 
 const GregorianDateTime* DateInstance::calculateGregorianDateTime(VM& vm) const

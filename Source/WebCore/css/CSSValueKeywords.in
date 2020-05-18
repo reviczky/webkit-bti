@@ -977,30 +977,18 @@ ease-out
 ease-in-out
 step-start
 step-end
+jump-start
+jump-end
+jump-none
+jump-both
+// start
+// end
 
 //
 // CSS_PROP_ZOOM
 //
 document
 reset
-
-#if defined(ENABLE_CSS_DEVICE_ADAPTATION) && ENABLE_CSS_DEVICE_ADAPTATION
-//
-// CSS_PROP_USER_ZOOM
-//
-// fixed
-zoom
-
-//
-// CSS_PROP_MIN_WIDTH
-// CSS_PROP_MAX_WIDTH
-// CSS_PROP_MIN_HEIGHT
-// CSS_PROP_MAX_HEIGHT
-//
-// auto
-device-width
-device-height
-#endif
 
 //
 // CSS_PROP_POINTER_EVENTS
@@ -1378,7 +1366,6 @@ style
 scroll-position
 //contents
 
-#if defined(ENABLE_POINTER_EVENTS) && ENABLE_POINTER_EVENTS
 // touch-action
 // auto
 // none
@@ -1386,7 +1373,6 @@ manipulation
 pan-x
 pan-y
 pinch-zoom
-#endif
 
 // scroll-behavior
 // auto

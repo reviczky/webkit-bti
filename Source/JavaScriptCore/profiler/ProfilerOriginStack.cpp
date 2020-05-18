@@ -29,7 +29,6 @@
 #include "CodeOrigin.h"
 #include "InlineCallFrame.h"
 #include "JSGlobalObject.h"
-#include "JSCInlines.h"
 #include "ProfilerDatabase.h"
 
 namespace JSC { namespace Profiler {
@@ -102,7 +101,7 @@ JSValue OriginStack::toJS(JSGlobalObject* globalObject) const
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-    JSArray* result = constructEmptyArray(globalObject, 0);
+    JSArray* result = constructEmptyArray(globalObject, nullptr);
     RETURN_IF_EXCEPTION(scope, { });
     
     for (unsigned i = 0; i < m_stack.size(); ++i) {

@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef EventDispatcher_h
-#define EventDispatcher_h
+#pragma once
 
 #include "CallbackID.h"
 #include "Connection.h"
@@ -44,6 +43,7 @@
 
 namespace WebCore {
 class ThreadedScrollingTree;
+using PlatformDisplayID = uint32_t;
 }
 
 namespace WebKit {
@@ -56,7 +56,7 @@ public:
     static Ref<EventDispatcher> create();
     ~EventDispatcher();
 
-#if ENABLE(ASYNC_SCROLLING)
+#if ENABLE(SCROLLING_THREAD)
     void addScrollingTreeForPage(WebPage*);
     void removeScrollingTreeForPage(WebPage*);
 #endif
@@ -85,7 +85,6 @@ private:
     void gestureEvent(WebCore::PageIdentifier, const WebGestureEvent&);
 #endif
 
-
     // This is called on the main thread.
     void dispatchWheelEvent(WebCore::PageIdentifier, const WebWheelEvent&);
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -96,12 +95,16 @@ private:
 #endif
 
 #if ENABLE(ASYNC_SCROLLING)
-    void sendDidReceiveEvent(WebCore::PageIdentifier, const WebEvent&, bool didHandleEvent);
+    static void sendDidReceiveEvent(WebCore::PageIdentifier, WebEvent::Type, bool didHandleEvent);
+#endif
+
+#if ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
+    void displayWasRefreshed(WebCore::PlatformDisplayID);
 #endif
 
     Ref<WorkQueue> m_queue;
 
-#if ENABLE(ASYNC_SCROLLING)
+#if ENABLE(SCROLLING_THREAD)
     Lock m_scrollingTreesMutex;
     HashMap<WebCore::PageIdentifier, RefPtr<WebCore::ThreadedScrollingTree>> m_scrollingTrees;
 #endif
@@ -113,5 +116,3 @@ private:
 };
 
 } // namespace WebKit
-
-#endif // EventDispatcher_h
