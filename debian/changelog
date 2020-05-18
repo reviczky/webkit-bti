@@ -1,5 +1,6 @@
-webkit2gtk (2.28.2-3) UNRELEASED; urgency=medium
+webkit2gtk (2.29.1-1) UNRELEASED; urgency=medium
 
+  * New upstream development release (Closes: #945237).
   * debian/watch, debian/gbp.conf:
     + Update for 2.29.x packages in experimental.
 
