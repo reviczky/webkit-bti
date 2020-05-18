@@ -3,6 +3,10 @@ webkit2gtk (2.29.1-1) UNRELEASED; urgency=medium
   * New upstream development release (Closes: #945237).
   * debian/watch, debian/gbp.conf:
     + Update for 2.29.x packages in experimental.
+  * Refresh all patches.
+  * debian/patches/dont-fallback-to-libwpe.patch,
+    debian/patches/user-agent-branding.patch:
+    + Drop these patches, they are now included upstream.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 18 May 2020 14:00:33 +0200
 
