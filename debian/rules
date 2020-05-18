@@ -80,8 +80,7 @@ endif
 
 # openjpeg2 is not in Ubuntu main yet https://launchpad.net/bugs/711061
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_OPENJPEG=OFF
-	CPPFLAGS += -DUSER_AGENT_GTK_DISTRIBUTOR_NAME='"Ubuntu"'
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_OPENJPEG=OFF -DUSER_AGENT_BRANDING="Ubuntu"
 endif
 
 # gstreamer1.0-libav is not in Ubuntu "main"

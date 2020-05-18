@@ -7,6 +7,9 @@ webkit2gtk (2.29.1-1) UNRELEASED; urgency=medium
   * debian/patches/dont-fallback-to-libwpe.patch,
     debian/patches/user-agent-branding.patch:
     + Drop these patches, they are now included upstream.
+  * debian/rules:
+    + Replace USER_AGENT_GTK_DISTRIBUTOR_NAME with the new
+      USER_AGENT_BRANDING build option in Ubuntu.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 18 May 2020 14:00:33 +0200
 
