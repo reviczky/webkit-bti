@@ -58,6 +58,10 @@
 #include "PreviewConverter.h"
 #endif
 
+#if USE(GSTREAMER) && ENABLE(VIDEO)
+#include "ImageDecoderGStreamer.h"
+#endif
+
 namespace WebCore {
 
 const HashSet<String, ASCIICaseInsensitiveHash>& MIMETypeRegistry::supportedImageMIMETypes()
@@ -436,6 +440,11 @@ bool MIMETypeRegistry::isSupportedImageVideoOrSVGMIMEType(const String& mimeType
         return true;
 #endif
 
+#if USE(GSTREAMER) && ENABLE(VIDEO)
+    if (ImageDecoderGStreamer::supportsContainerType(mimeType))
+        return true;
+#endif
+
     return false;
 }
 
@@ -447,10 +456,12 @@ std::unique_ptr<MIMETypeRegistryThreadGlobalData> MIMETypeRegistry::createMIMETy
     CFIndex count = CFArrayGetCount(supportedTypes.get());
     for (CFIndex i = 0; i < count; i++) {
         CFStringRef supportedType = reinterpret_cast<CFStringRef>(CFArrayGetValueAtIndex(supportedTypes.get(), i));
-        if (isSupportedImageType(supportedType)) {
-            String mimeType = MIMETypeForImageType(supportedType);
-            supportedImageMIMETypesForEncoding.add(mimeType);
-        }
+        if (!isSupportedImageType(supportedType))
+            continue;
+        String mimeType = MIMETypeForImageType(supportedType);
+        if (mimeType.isEmpty())
+            continue;
+        supportedImageMIMETypesForEncoding.add(mimeType);
     }
 #else
     HashSet<String, ASCIICaseInsensitiveHash> supportedImageMIMETypesForEncoding = std::initializer_list<String> {

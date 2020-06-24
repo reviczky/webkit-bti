@@ -190,8 +190,10 @@ UIProcess/API/glib/WebKitWebView.cpp @no-unify
 UIProcess/API/glib/WebKitWebViewAccessible.cpp @no-unify
 UIProcess/API/glib/WebKitWebViewSessionState.cpp @no-unify
 UIProcess/API/glib/WebKitWebsiteData.cpp @no-unify
+UIProcess/API/glib/WebKitWebsiteDataAccessPermissionRequest.cpp @no-unify
 UIProcess/API/glib/WebKitWebsiteDataManager.cpp @no-unify
 UIProcess/API/glib/WebKitWindowProperties.cpp @no-unify
+UIProcess/API/glib/WebKitWebsitePolicies.cpp @no-unify
 
 UIProcess/API/gtk/DragSourceGtk3.cpp @no-unify
 UIProcess/API/gtk/DragSourceGtk4.cpp @no-unify
@@ -221,6 +223,9 @@ UIProcess/Automation/cairo/WebAutomationSessionCairo.cpp
 UIProcess/Automation/gtk/WebAutomationSessionGtk.cpp
 
 UIProcess/CoordinatedGraphics/DrawingAreaProxyCoordinatedGraphics.cpp
+
+UIProcess/Gamepad/gtk/UIGamepadProviderGtk.cpp
+UIProcess/Gamepad/manette/UIGamepadProviderManette.cpp
 
 UIProcess/geoclue/GeoclueGeolocationProvider.cpp
 

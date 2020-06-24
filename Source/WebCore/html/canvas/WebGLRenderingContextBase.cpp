@@ -4593,8 +4593,8 @@ ExceptionOr<void> WebGLRenderingContextBase::texImageSourceHelper(TexImageFuncti
             return { };
         texImageImpl(functionID, target, level, internalformat, xoffset, yoffset, zoffset, format, type, image.get(), GraphicsContextGL::DOMSource::Video, m_unpackFlipY, m_unpackPremultiplyAlpha, inputSourceImageRect, depth, unpackImageHeight);
         return { };
-#endif // ENABLE(VIDEO)
     }
+#endif // ENABLE(VIDEO)
     );
 
     return WTF::visit(visitor, source);
@@ -5012,7 +5012,9 @@ bool WebGLRenderingContextBase::validateTexFuncParameters(const char* functionNa
     // temporary data based on this combination, so it must be legal.
     if (sourceType == SourceHTMLImageElement
         || sourceType == SourceHTMLCanvasElement
+#if ENABLE(VIDEO)
         || sourceType == SourceHTMLVideoElement
+#endif
         || sourceType == SourceImageData
         || sourceType == SourceImageBitmap) {
         if (!validateTexImageSourceFormatAndType(functionName, functionType, internalformat, format, type))
@@ -6267,9 +6269,9 @@ RefPtr<WebGLTexture> WebGLRenderingContextBase::validateTexture2DBinding(const c
 
 bool WebGLRenderingContextBase::validateLocationLength(const char* functionName, const String& string)
 {
-    const unsigned maxWebGLLocationLength = 256;
+    unsigned maxWebGLLocationLength = isWebGL2() ? 1024 : 256;
     if (string.length() > maxWebGLLocationLength) {
-        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, functionName, "location length > 256");
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, functionName, "location length is too large");
         return false;
     }
     return true;
@@ -6826,6 +6828,14 @@ WebGLBuffer* WebGLRenderingContextBase::validateBufferDataParameters(const char*
     case GraphicsContextGL::STATIC_DRAW:
     case GraphicsContextGL::DYNAMIC_DRAW:
         return buffer;
+    case GraphicsContextGL::STREAM_COPY:
+    case GraphicsContextGL::STATIC_COPY:
+    case GraphicsContextGL::DYNAMIC_COPY:
+    case GraphicsContextGL::STREAM_READ:
+    case GraphicsContextGL::STATIC_READ:
+    case GraphicsContextGL::DYNAMIC_READ:
+        if (isWebGL2())
+            return buffer;
     }
     synthesizeGLError(GraphicsContextGL::INVALID_ENUM, functionName, "invalid usage");
     return nullptr;
@@ -7526,6 +7536,13 @@ void WebGLRenderingContextBase::dispatchContextChangedNotification()
     queueTaskToDispatchEvent(*canvas, TaskSource::WebGL, WebGLContextEvent::create(eventNames().webglcontextchangedEvent, Event::CanBubble::No, Event::IsCancelable::Yes, emptyString()));
 }
 
+void WebGLRenderingContextBase::prepareForDisplay()
+{
+    if (!m_context)
+        return;
+
+    m_context->prepareForDisplay();
+}
 
 } // namespace WebCore
 

@@ -32,7 +32,6 @@
 #include "CachedRawResource.h"
 #include "CachedResourceLoader.h"
 #include "CrossOriginAccessControl.h"
-#include "CustomHeaderFields.h"
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
 #include "Document.h"
@@ -127,7 +126,7 @@ void SubresourceLoader::create(Frame& frame, CachedResource& resource, ResourceR
         return completionHandler(WTFMove(subloader));
     }
 #endif
-    subloader->init(WTFMove(request), [subloader = subloader.copyRef(), completionHandler = WTFMove(completionHandler)] (bool initialized) mutable {
+    subloader->init(WTFMove(request), [subloader, completionHandler = WTFMove(completionHandler)] (bool initialized) mutable {
         if (!initialized)
             return completionHandler(nullptr);
         completionHandler(WTFMove(subloader));
@@ -352,6 +351,11 @@ void SubresourceLoader::didReceiveResponse(const ResourceResponse& response, Com
 
     CompletionHandlerCallingScope completionHandlerCaller(WTFMove(policyCompletionHandler));
 
+    if (response.containsInvalidHTTPHeaders()) {
+        didFail(ResourceError(errorDomainWebKitInternal, 0, request().url(), "Response contained invalid HTTP headers", ResourceError::Type::General));
+        return;
+    }
+
 #if USE(QUICK_LOOK)
     if (shouldCreatePreviewLoaderForResponse(response)) {
         m_previewLoader = makeUnique<LegacyPreviewLoader>(*this, response);
@@ -436,6 +440,7 @@ void SubresourceLoader::didReceiveResponse(const ResourceResponse& response, Com
             return;
         }
     }
+
     m_resource->responseReceived(response);
     if (reachedTerminalState())
         return;
@@ -590,9 +595,7 @@ static void logResourceLoaded(Frame* frame, CachedResource::Type type)
         break;
 #endif
     case CachedResource::Type::LinkPrefetch:
-#if ENABLE(VIDEO_TRACK)
     case CachedResource::Type::TextTrackResource:
-#endif
         resourceType = DiagnosticLoggingKeys::otherKey();
         break;
     }
@@ -658,6 +661,8 @@ Expected<void, String> SubresourceLoader::checkRedirectionCrossOriginAccessContr
     // Implementing https://fetch.spec.whatwg.org/#concept-http-redirect-fetch step 10.
     if (crossOriginFlag && redirectingToNewOrigin)
         m_origin = SecurityOrigin::createUnique();
+
+    newRequest.redirectAsGETIfNeeded(previousRequest, redirectResponse);
 
     // Implementing https://fetch.spec.whatwg.org/#concept-http-redirect-fetch step 14.
     updateReferrerPolicy(redirectResponse.httpHeaderField(HTTPHeaderName::ReferrerPolicy));

@@ -28,6 +28,7 @@
 #include "APIUserInitiatedAction.h"
 #include "AuxiliaryProcessProxy.h"
 #include "BackgroundProcessResponsivenessTimer.h"
+#include "DisplayLinkObserverID.h"
 #include "MessageReceiverMap.h"
 #include "NetworkProcessProxy.h"
 #include "PluginInfoStore.h"
@@ -74,6 +75,7 @@ struct PluginInfo;
 struct PrewarmInformation;
 struct SecurityOriginData;
 enum class ThirdPartyCookieBlockingMode : uint8_t;
+using PlatformDisplayID = uint32_t;
 }
 
 namespace WebKit {
@@ -92,7 +94,7 @@ class WebPageProxy;
 class WebProcessPool;
 class WebUserContentControllerProxy;
 class WebsiteDataStore;
-enum class WebsiteDataType;
+enum class WebsiteDataType : uint32_t;
 struct BackForwardListItemState;
 struct UserMessage;
 struct WebNavigationDataStore;
@@ -242,6 +244,8 @@ public:
 
     void windowServerConnectionStateChanged();
 
+    void setIsHoldingLockedFiles(bool);
+
     ProcessThrottler& throttler() final { return m_throttler; }
 
     void isResponsive(CompletionHandler<void(bool isWebProcessResponsive)>&&);
@@ -281,8 +285,8 @@ public:
 #endif
 
 #if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
-    void startDisplayLink(unsigned observerID, uint32_t displayID);
-    void stopDisplayLink(unsigned observerID, uint32_t displayID);
+    void startDisplayLink(DisplayLinkObserverID, WebCore::PlatformDisplayID);
+    void stopDisplayLink(DisplayLinkObserverID, WebCore::PlatformDisplayID);
 #endif
 
     // Called when the web process has crashed or we know that it will terminate soon.
@@ -384,6 +388,19 @@ public:
 
     bool hasSleepDisabler() const;
 
+#if PLATFORM(COCOA)
+    bool hasNetworkExtensionSandboxAccess() const { return m_hasNetworkExtensionSandboxAccess; }
+    void markHasNetworkExtensionSandboxAccess() { m_hasNetworkExtensionSandboxAccess = true; }
+#endif
+#if PLATFORM(IOS)
+    bool hasManagedSessionSandboxAccess() const { return m_hasManagedSessionSandboxAccess; }
+    void markHasManagedSessionSandboxAccess() { m_hasManagedSessionSandboxAccess = true; }
+#endif
+
+#if ENABLE(ROUTING_ARBITRATION)
+    AudioSessionRoutingArbitratorProxy& audioSessionRoutingArbitrator() { return m_routingArbitrator.get(); }
+#endif
+
 protected:
     WebProcessProxy(WebProcessPool&, WebsiteDataStore*, IsPrewarmed);
 
@@ -473,6 +490,7 @@ private:
     void logDiagnosticMessageForResourceLimitTermination(const String& limitKey);
     
     void updateRegistrationWithDataStore();
+    Vector<String> platformOverrideLanguages() const;
 
     void maybeShutDown();
 
@@ -535,6 +553,7 @@ private:
 
     int m_numberOfTimesSuddenTerminationWasDisabled;
     ProcessThrottler m_throttler;
+    std::unique_ptr<ProcessThrottler::BackgroundActivity> m_activityForHoldingLockedFiles;
     ForegroundWebProcessToken m_foregroundToken;
     BackgroundWebProcessToken m_backgroundToken;
 
@@ -571,6 +590,12 @@ private:
     bool m_isPrewarmed;
 #if ENABLE(ATTACHMENT_ELEMENT) && PLATFORM(IOS_FAMILY)
     bool m_hasIssuedAttachmentElementRelatedSandboxExtensions { false };
+#endif
+#if PLATFORM(COCOA)
+    bool m_hasNetworkExtensionSandboxAccess { false };
+#endif
+#if PLATFORM(IOS)
+    bool m_hasManagedSessionSandboxAccess { false };
 #endif
     Optional<UseLazyStop> m_shouldStartResponsivenessTimerWhenLaunched;
 

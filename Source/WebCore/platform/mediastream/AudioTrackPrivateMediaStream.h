@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO_TRACK) && ENABLE(MEDIA_STREAM)
+#if ENABLE(MEDIA_STREAM)
 
 #include "AudioTrackPrivate.h"
 #include "MediaStreamTrackPrivate.h"
@@ -40,7 +40,7 @@ class AudioTrackPrivateMediaStream final
     , private RealtimeMediaSource::AudioSampleObserver {
     WTF_MAKE_NONCOPYABLE(AudioTrackPrivateMediaStream)
 public:
-    static RefPtr<AudioTrackPrivateMediaStream> create(MediaStreamTrackPrivate& streamTrack)
+    static Ref<AudioTrackPrivateMediaStream> create(MediaStreamTrackPrivate& streamTrack)
     {
         return adoptRef(*new AudioTrackPrivateMediaStream(streamTrack));
     }
@@ -113,4 +113,4 @@ SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::AudioTrackPrivateMediaStream)
     static bool isType(const WebCore::AudioTrackPrivate& track) { return track.isBackedByMediaStreamTrack(); }
 SPECIALIZE_TYPE_TRAITS_END()
 
-#endif // ENABLE(VIDEO_TRACK) && ENABLE(MEDIA_STREAM)
+#endif // ENABLE(MEDIA_STREAM)

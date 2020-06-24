@@ -317,7 +317,9 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
         launchOptions.extraInitializationData.add("inspector-process"_s, "1"_s);
 
     auto overrideLanguages = m_processPool->configuration().overrideLanguages();
-    if (overrideLanguages.size()) {
+    if (overrideLanguages.isEmpty())
+        overrideLanguages = platformOverrideLanguages();
+    if (!overrideLanguages.isEmpty()) {
         StringBuilder languageString;
         for (size_t i = 0; i < overrideLanguages.size(); ++i) {
             if (i)
@@ -331,6 +333,11 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
 
     if (isPrewarmed())
         launchOptions.extraInitializationData.add("is-prewarmed"_s, "1"_s);
+
+#if PLATFORM(PLAYSTATION)
+    launchOptions.processPath = m_processPool->webProcessPath();
+    launchOptions.userId = m_processPool->userId();
+#endif
 
     if (processPool().shouldMakeNextWebProcessLaunchFailForTesting()) {
         processPool().setShouldMakeNextWebProcessLaunchFailForTesting(false);
@@ -413,6 +420,7 @@ void WebProcessProxy::shutDown()
 
     m_responsivenessTimer.invalidate();
     m_backgroundResponsivenessTimer.invalidate();
+    m_activityForHoldingLockedFiles = nullptr;
     m_audibleMediaActivity = WTF::nullopt;
 
     for (auto& frame : copyToVector(m_frameMap.values()))
@@ -424,8 +432,13 @@ void WebProcessProxy::shutDown()
     m_webUserContentControllerProxies.clear();
 
     m_userInitiatedActionMap.clear();
+    m_sleepDisablers.clear();
 
     m_processPool->disconnectProcess(this);
+
+#if ENABLE(ROUTING_ARBITRATION)
+    m_routingArbitrator->processDidTerminate();
+#endif
 }
 
 WebPageProxy* WebProcessProxy::webPage(WebPageProxyIdentifier pageID)
@@ -642,6 +655,11 @@ bool WebProcessProxy::fullKeyboardAccessEnabled()
 {
     return false;
 }
+
+Vector<String> WebProcessProxy::platformOverrideLanguages() const
+{
+    return { };
+}
 #endif
 
 bool WebProcessProxy::hasProvisionalPageWithID(WebPageProxyIdentifier pageID) const
@@ -837,6 +855,8 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch()
         if (provisionalPage)
             provisionalPage->processDidTerminate();
     }
+
+    m_sleepDisablers.clear();
 }
 
 void WebProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
@@ -1371,7 +1391,6 @@ void WebProcessProxy::didSetAssertionType(ProcessAssertionType type)
     
     case ProcessAssertionType::MediaPlayback:
     case ProcessAssertionType::UnboundedNetworking:
-    case ProcessAssertionType::DependentProcessLink:
         ASSERT_NOT_REACHED();
     }
 
@@ -1395,6 +1414,19 @@ void WebProcessProxy::updateAudibleMediaAssertions()
     } else {
         RELEASE_LOG(ProcessSuspension, "%p - Releasing MediaPlayback assertion for WebProcess with PID %d", this, processIdentifier());
         m_audibleMediaActivity = WTF::nullopt;
+    }
+}
+
+void WebProcessProxy::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
+{
+    if (!isHoldingLockedFiles) {
+        RELEASE_LOG(ProcessSuspension, "UIProcess is releasing a background assertion because the WebContent process is no longer holding locked files");
+        m_activityForHoldingLockedFiles = nullptr;
+        return;
+    }
+    if (!m_activityForHoldingLockedFiles) {
+        RELEASE_LOG(ProcessSuspension, "UIProcess is taking a background assertion because the WebContent process is holding locked files");
+        m_activityForHoldingLockedFiles = m_throttler.backgroundActivity("Holding locked files"_s).moveToUniquePtr();
     }
 }
 
@@ -1550,6 +1582,9 @@ void WebProcessProxy::didStartProvisionalLoadForMainFrame(const URL& url)
 
     // This process has been used for several registrable domains already.
     if (m_registrableDomain && m_registrableDomain->isEmpty())
+        return;
+
+    if (url.protocolIsAbout())
         return;
 
     auto registrableDomain = WebCore::RegistrableDomain { url };

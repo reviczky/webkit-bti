@@ -66,6 +66,7 @@
 #include "TypedArrayInlines.h"
 #include "VMInspector.h"
 #include "WasmCapabilities.h"
+#include "WasmFaultSignalHandler.h"
 #include "WasmMemory.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,6 +84,7 @@
 #include <wtf/URL.h>
 #include <wtf/WallTime.h>
 #include <wtf/text/StringBuilder.h>
+#include <wtf/threads/Signals.h>
 
 #if OS(WINDOWS)
 #include <direct.h>
@@ -103,10 +105,6 @@
 #include <readline/history.h>
 #include <readline/readline.h>
 #undef Function
-#endif
-
-#if HAVE(SIGNAL_H)
-#include <signal.h>
 #endif
 
 #if COMPILER(MSVC)
@@ -1881,6 +1879,17 @@ EncodedJSValue JSC_HOST_CALL functionDollarAgentStart(JSGlobalObject* globalObje
     Lock didStartLock;
     Condition didStartCondition;
     bool didStart = false;
+
+    auto isGigacageMemoryExhausted = [&](Gigacage::Kind kind) {
+        if (!Gigacage::isEnabled(kind))
+            return false;
+        if (Gigacage::footprint(kind) < Gigacage::size(kind) * 0.8)
+            return false;
+        return true;
+    };
+
+    if (isGigacageMemoryExhausted(Gigacage::JSValue) || isGigacageMemoryExhausted(Gigacage::Primitive))
+        return JSValue::encode(throwOutOfMemoryError(globalObject, scope, "Gigacage is exhausted"_s));
     
     Thread::create(
         "JSC Agent",
@@ -2252,7 +2261,7 @@ EncodedJSValue JSC_HOST_CALL functionCreateHeapBigInt(JSGlobalObject* globalObje
         return JSValue::encode(bigInt);
     ASSERT(bigInt.isBigInt32());
     int32_t value = bigInt.bigInt32AsInt32();
-    return JSValue::encode(JSBigInt::createFrom(vm, value));
+    RELEASE_AND_RETURN(scope, JSValue::encode(JSBigInt::createFrom(globalObject, value)));
 #else
     return JSValue::encode(bigInt);
 #endif
@@ -2497,6 +2506,43 @@ EncodedJSValue JSC_HOST_CALL functionAsDoubleNumber(JSGlobalObject* globalObject
 #endif
 
 int jscmain(int argc, char** argv);
+
+#if OS(DARWIN) || OS(LINUX)
+static size_t memoryLimit;
+
+static void crashIfExceedingMemoryLimit()
+{
+    if (!memoryLimit)
+        return;
+    MemoryFootprint footprint = MemoryFootprint::now();
+    if (footprint.current > memoryLimit) {
+        dataLogLn("Crashing because current footprint: ", footprint.current, " exceeds limit: ", memoryLimit);
+        CRASH();
+    }
+}
+
+static void startMemoryMonitoringThreadIfNeeded()
+{
+    char* memoryLimitString = getenv("JSCTEST_memoryLimit");
+    if (!memoryLimitString)
+        return;
+
+    if (sscanf(memoryLimitString, "%zu", &memoryLimit) != 1) {
+        dataLogLn("WARNING: malformed JSCTEST_memoryLimit environment variable");
+        return;
+    }
+
+    if (!memoryLimit)
+        return;
+
+    Thread::create("jsc Memory Monitor", [=] {
+        while (true) {
+            sleep(Seconds::fromMilliseconds(5));
+            crashIfExceedingMemoryLimit();
+        }
+    });
+}
+#endif // OS(DARWIN) || OS(LINUX)
 
 static double s_desiredTimeout;
 static double s_timeoutMultiplier = 1.0;
@@ -2858,12 +2904,20 @@ static void runInteractive(GlobalObject* globalObject)
         NakedPtr<Exception> evaluationException;
         JSValue returnValue = evaluate(globalObject, jscSource(line, sourceOrigin, sourceOrigin.string()), JSValue(), evaluationException);
 #endif
-        CString result;
+        Expected<CString, UTF8ConversionError> utf8;
         if (evaluationException) {
             fputs("Exception: ", stdout);
-            result = evaluationException->value().toWTFString(globalObject).utf8();
+            utf8 = evaluationException->value().toWTFString(globalObject).tryGetUtf8();
         } else
-            result = returnValue.toWTFString(globalObject).utf8();
+            utf8 = returnValue.toWTFString(globalObject).tryGetUtf8();
+
+        CString result;
+        if (utf8)
+            result = utf8.value();
+        else if (utf8.error() == UTF8ConversionError::OutOfMemory)
+            result = "OutOfMemory while processing string";
+        else
+            result = "Error while processing string";
         fwrite(result.data(), sizeof(char), result.length(), stdout);
         putchar('\n');
 
@@ -2882,8 +2936,8 @@ static NO_RETURN void printUsageStatement(bool help = false)
     fprintf(stderr, "  -h|--help  Prints this help message\n");
     fprintf(stderr, "  -i         Enables interactive mode (default if no files are specified)\n");
     fprintf(stderr, "  -m         Execute as a module\n");
-#if HAVE(SIGNAL_H)
-    fprintf(stderr, "  -s         Installs signal handlers that exit on a crash (Unix platforms only)\n");
+#if OS(UNIX)
+    fprintf(stderr, "  -s         Installs signal handlers that exit on a crash (Unix platforms only, lldb will not work with this option) \n");
 #endif
     fprintf(stderr, "  -p <file>  Outputs profiling data to a file\n");
     fprintf(stderr, "  -x         Output exit code before terminating\n");
@@ -2919,6 +2973,7 @@ static bool isMJSFile(char *filename)
 
 void CommandLine::parseArguments(int argc, char** argv)
 {
+    Options::AllowUnfinalizedAccessScope scope;
     Options::initialize();
     
     if (Options::dumpOptions()) {
@@ -2974,11 +3029,28 @@ void CommandLine::parseArguments(int argc, char** argv)
             continue;
         }
         if (!strcmp(arg, "-s")) {
-#if HAVE(SIGNAL_H)
-            signal(SIGILL, _exit);
-            signal(SIGFPE, _exit);
-            signal(SIGBUS, _exit);
-            signal(SIGSEGV, _exit);
+#if OS(UNIX)
+            SignalAction (*exit)(Signal, SigInfo&, PlatformRegisters&) = [] (Signal, SigInfo&, PlatformRegisters&) {
+                dataLogLn("Signal handler hit. Exiting with status 0");
+                _exit(0);
+                return SignalAction::ForceDefault;
+            };
+
+            addSignalHandler(Signal::IllegalInstruction, SignalHandler(exit));
+            addSignalHandler(Signal::AccessFault, SignalHandler(exit));
+            addSignalHandler(Signal::FloatingPoint, SignalHandler(exit));
+            // once we do this lldb won't work anymore because we will exit on any breakpoints it sets.
+            addSignalHandler(Signal::Breakpoint, SignalHandler(exit));
+
+            activateSignalHandlersFor(Signal::IllegalInstruction);
+            activateSignalHandlersFor(Signal::AccessFault);
+            activateSignalHandlersFor(Signal::FloatingPoint);
+            activateSignalHandlersFor(Signal::Breakpoint);
+
+#if !OS(DARWIN)
+            addSignalHandler(Signal::Abort, SignalHandler(exit));
+            activateSignalHandlersFor(Signal::Abort);
+#endif
 #endif
             continue;
         }
@@ -3110,6 +3182,10 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
     Worker worker(Workers::singleton());
     
     VM& vm = VM::create(LargeHeap).leakRef();
+#if ENABLE(WEBASSEMBLY)
+    Wasm::enableFastMemory();
+#endif
+
     int result;
     bool success = true;
     GlobalObject* globalObject = nullptr;
@@ -3214,13 +3290,23 @@ int jscmain(int argc, char** argv)
     // comes first.
     CommandLine options(argc, argv);
 
-    processConfigFile(Options::configFile(), "jsc");
-    if (options.m_dump)
-        JSC::Options::dumpGeneratedBytecodes() = true;
+    {
+        Options::AllowUnfinalizedAccessScope scope;
+        processConfigFile(Options::configFile(), "jsc");
+        if (options.m_dump)
+            Options::dumpGeneratedBytecodes() = true;
+    }
 
     // Initialize JSC before getting VM.
     JSC::initializeThreading();
     initializeTimeoutIfNeeded();
+
+#if OS(DARWIN) || OS(LINUX)
+    startMemoryMonitoringThreadIfNeeded();
+#endif
+
+    if (Options::useSuperSampler())
+        enableSuperSampler();
 
     bool gigacageDisableRequested = false;
 #if GIGACAGE_ENABLED && !COMPILER(MSVC)
@@ -3242,6 +3328,8 @@ int jscmain(int argc, char** argv)
     Box<Critical> memoryPressureCriticalState = Box<Critical>::create(Critical::No);
     Box<Synchronous> memoryPressureSynchronousState = Box<Synchronous>::create(Synchronous::No);
     memoryPressureHandler.setLowMemoryHandler([=] (Critical critical, Synchronous synchronous) {
+        crashIfExceedingMemoryLimit();
+
         // We set these racily with respect to reading them from the JS execution thread.
         *memoryPressureCriticalState = critical;
         *memoryPressureSynchronousState = synchronous;

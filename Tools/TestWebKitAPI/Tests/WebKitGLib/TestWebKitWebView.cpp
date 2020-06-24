@@ -1133,6 +1133,21 @@ static void testWebViewIsPlayingAudio(IsPlayingAudioWebViewTest* test, gconstpoi
     g_assert_false(webkit_web_view_is_playing_audio(test->m_webView));
 }
 
+static void testWebViewIsAudioMuted(WebViewTest* test, gconstpointer)
+{
+    g_assert_false(webkit_web_view_get_is_muted(test->m_webView));
+    webkit_web_view_set_is_muted(test->m_webView, TRUE);
+    g_assert_true(webkit_web_view_get_is_muted(test->m_webView));
+    webkit_web_view_set_is_muted(test->m_webView, FALSE);
+    g_assert_false(webkit_web_view_get_is_muted(test->m_webView));
+}
+
+static void testWebViewAutoplayPolicy(WebViewTest* test, gconstpointer)
+{
+    WebKitWebsitePolicies* policies = webkit_web_view_get_website_policies(test->m_webView);
+    g_assert_cmpint(webkit_website_policies_get_autoplay_policy(policies), ==, WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND);
+}
+
 static void testWebViewBackgroundColor(WebViewTest* test, gconstpointer)
 {
 #if PLATFORM(GTK)
@@ -1389,6 +1404,8 @@ void beforeAll()
 #if PLATFORM(WPE)
     FrameDisplayedTest::add("WebKitWebView", "frame-displayed", testWebViewFrameDisplayed);
 #endif
+    WebViewTest::add("WebKitWebView", "is-audio-muted", testWebViewIsAudioMuted);
+    WebViewTest::add("WebKitWebView", "autoplay-policy", testWebViewAutoplayPolicy);
 }
 
 void afterAll()

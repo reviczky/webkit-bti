@@ -334,6 +334,22 @@ WebAudioEnabled:
   defaultValue: true
   condition: ENABLE(WEB_AUDIO)
 
+PrefixedWebAudioEnabled:
+  type: bool
+  defaultValue: true
+  condition: ENABLE(WEB_AUDIO)
+  humanReadableName: "Prefixed WebAudio API"
+  humanReadableDescription: "Prefixed WebAudio API"
+  category: internal
+
+ModernUnprefixedWebAudioEnabled:
+  type: bool
+  defaultValue: false
+  condition: ENABLE(WEB_AUDIO)
+  humanReadableName: "Modern WebAudio API"
+  humanReadableDescription: "Modern and unprefixed WebAudio API"
+  category: experimental
+
 AttachmentElementEnabled:
   type: bool
   defaultValue: false
@@ -355,17 +371,17 @@ CaretBrowsingEnabled:
 ShouldDisplaySubtitles:
   type: bool
   defaultValue: false
-  condition: ENABLE(VIDEO_TRACK)
+  condition: ENABLE(VIDEO)
 
 ShouldDisplayCaptions:
   type: bool
   defaultValue: false
-  condition: ENABLE(VIDEO_TRACK)
+  condition: ENABLE(VIDEO)
 
 ShouldDisplayTextDescriptions:
   type: bool
   defaultValue: false
-  condition: ENABLE(VIDEO_TRACK)
+  condition: ENABLE(VIDEO)
 
 NotificationsEnabled:
   type: bool
@@ -1313,8 +1329,8 @@ ImageBitmapEnabled:
 HTTP3Enabled:
   type: bool
   defaultValue: false
-  humanReadableName: "HTTP3"
-  humanReadableDescription: "Enable HTTP3"
+  humanReadableName: "HTTP/3"
+  humanReadableDescription: "Enable HTTP/3"
   category: experimental
   webcoreBinding: none
   condition: HAVE(CFNETWORK_ALTERNATIVE_SERVICE)
@@ -1548,7 +1564,7 @@ CSSShadowPartsEnabled:
 GenericCueAPIEnabled:
   type: bool
   defaultValue: true
-  condition: ENABLE(VIDEO_TRACK)
+  condition: ENABLE(VIDEO)
   humanReadableName: "Generic Text Track Cue API"
   humanReadableDescription: "Enable Generic Text Track Cue API"
   category: experimental
@@ -1607,6 +1623,15 @@ IsITPDatabaseEnabled:
   humanReadableDescription: "Enable Intelligent Tracking Prevention Database Backend"
   webcoreBinding: RuntimeEnabledFeatures
   category: internal
+
+ReadableByteStreamAPIEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "ReadableByteStream"
+  humanReadableDescription: "Enable Readable Byte Streams"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+  condition: ENABLE(STREAMS_API)
 
 ServiceWorkersEnabled:
   type: bool
@@ -1852,7 +1877,7 @@ EnterKeyHintEnabled:
 
 ReferrerPolicyAttributeEnabled:
   type: bool
-  defaultValue: false
+  defaultValue: true
   humanReadableName: "Referrer Policy attribute"
   humanReadableDescription: "Enable Referrer Policy attribute"
   category: experimental
@@ -1988,7 +2013,7 @@ DialogElementEnabled:
 
 IsAccessibilityIsolatedTreeEnabled:
     type: bool
-    defaultValue: true
+    defaultValue: false
     humanReadableName: "Isolated Accessibility Tree Mode"
     humanReadableDescription: "Enable an accessibility hierarchy for VoiceOver that can be accessed on a secondary thread for improved performance"
     webcoreBinding: RuntimeEnabledFeatures

@@ -27,7 +27,7 @@
 #include "JSScope.h"
 
 #include "AbstractModuleRecord.h"
-#include "JSGlobalObject.h"
+#include "JSCInlines.h"
 #include "JSLexicalEnvironment.h"
 #include "JSModuleEnvironment.h"
 #include "JSWithScope.h"
@@ -337,6 +337,10 @@ void JSScope::collectClosureVariablesUnderTDZ(JSScope* scope, VariableEnvironmen
         ConcurrentJSLocker locker(symbolTable->m_lock);
         for (auto end = symbolTable->end(locker), iter = symbolTable->begin(locker); iter != end; ++iter)
             result.add(iter->key);
+        if (symbolTable->hasPrivateNames()) {
+            for (auto name : symbolTable->privateNames())
+                result.usePrivateName(name);    
+        }
     }
 }
 

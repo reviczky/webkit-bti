@@ -1,6 +1,6 @@
 /*
  *  Copyright (c) 2015, Canon Inc. All rights reserved.
- *  Copyright (C) 2018-2019 Apple Inc. All rights reserved.
+ *  Copyright (C) 2018-2020 Apple Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions
@@ -45,11 +45,16 @@ namespace WebCore {
     macro(AnimationPlaybackEvent) \
     macro(AnimationTimeline) \
     macro(ApplePaySession) \
+    macro(ApplePaySetup) \
+    macro(ApplePaySetupFeature) \
     macro(AttachmentElement) \
     macro(Audio) \
+    macro(AudioContext) \
     macro(AuthenticatorAssertionResponse) \
     macro(AuthenticatorAttestationResponse) \
     macro(AuthenticatorResponse) \
+    macro(BaseAudioContext) \
+    macro(BeforeLoadEvent) \
     macro(BlobEvent) \
     macro(Cache) \
     macro(CacheStorage) \
@@ -162,9 +167,11 @@ namespace WebCore {
     macro(NavigatorCredentials) \
     macro(NavigatorMediaDevices) \
     macro(NavigatorUserMedia) \
+    macro(OfflineAudioContext) \
     macro(OffscreenCanvas) \
     macro(OffscreenCanvasRenderingContext2D) \
     macro(PaintRenderingContext2D) \
+    macro(PannerNode) \
     macro(PaymentAddress) \
     macro(PaymentMethodChangeEvent) \
     macro(PaymentRequest) \
@@ -239,13 +246,13 @@ namespace WebCore {
     macro(WorkletGlobalScope) \
     macro(WritableStream) \
     macro(XMLHttpRequest) \
-    macro(XR) \
     macro(XRBoundedReferenceSpace) \
     macro(XRFrame) \
     macro(XRInputSource) \
     macro(XRInputSourceArray) \
     macro(XRInputSourceEvent) \
     macro(XRInputSourcesChangeEvent) \
+    macro(XRLayer) \
     macro(XRPose) \
     macro(XRReferenceSpace) \
     macro(XRReferenceSpaceEvent) \
@@ -254,6 +261,7 @@ namespace WebCore {
     macro(XRSession) \
     macro(XRSessionEvent) \
     macro(XRSpace) \
+    macro(XRSystem) \
     macro(XRTest) \
     macro(XRView) \
     macro(XRViewerPose) \
@@ -269,6 +277,7 @@ namespace WebCore {
     macro(byobRequest) \
     macro(caches) \
     macro(cancel) \
+    macro(cancelAlgorithm) \
     macro(cancelAnimationFrame) \
     macro(cancelIdleCallback) \
     macro(cloneArrayBuffer) \
@@ -332,6 +341,7 @@ namespace WebCore {
     macro(privateGetStats) \
     macro(pull) \
     macro(pullAgain) \
+    macro(pullAlgorithm) \
     macro(pulling) \
     macro(queue) \
     macro(queuedAddIceCandidate) \
@@ -355,6 +365,7 @@ namespace WebCore {
     macro(setBodyFromInputRequest) \
     macro(setStatus) \
     macro(showModalDialog) \
+    macro(start) \
     macro(startConsumingStream) \
     macro(started) \
     macro(startedPromise) \
@@ -379,6 +390,7 @@ namespace WebCore {
     macro(visualViewport) \
     macro(webkit) \
     macro(webkitAudioContext) \
+    macro(webkitAudioPannerNode) \
     macro(webkitIDBCursor) \
     macro(webkitIDBDatabase) \
     macro(webkitIDBFactory) \
@@ -388,6 +400,7 @@ namespace WebCore {
     macro(webkitIDBRequest) \
     macro(webkitIDBTransaction) \
     macro(webkitIndexedDB) \
+    macro(webkitOfflineAudioContext) \
     macro(window) \
     macro(writing) \
     WEBCORE_ADDITIONAL_PRIVATE_IDENTIFIERS(macro) \

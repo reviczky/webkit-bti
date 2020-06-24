@@ -87,6 +87,8 @@ private:
 
     // This is called on the main thread.
     void dispatchWheelEvent(WebCore::PageIdentifier, const WebWheelEvent&);
+    void dispatchWheelEventViaMainThread(WebCore::PageIdentifier, const WebWheelEvent&);
+
 #if ENABLE(IOS_TOUCH_EVENTS)
     void dispatchTouchEvents();
 #endif
@@ -100,6 +102,10 @@ private:
 
 #if ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
     void displayWasRefreshed(WebCore::PlatformDisplayID);
+#endif
+
+#if ENABLE(SCROLLING_THREAD)
+    void displayDidRefreshOnScrollingThread(WebCore::PlatformDisplayID);
 #endif
 
     Ref<WorkQueue> m_queue;

@@ -26,7 +26,7 @@
 #include "config.h"
 #include "RemoteSampleBufferDisplayLayer.h"
 
-#if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(VIDEO_TRACK) && ENABLE(MEDIA_STREAM)
+#if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)
 
 #include "SampleBufferDisplayLayerMessages.h"
 #include <WebCore/ImageTransferSessionVT.h>
@@ -98,8 +98,6 @@ void RemoteSampleBufferDisplayLayer::flushAndRemoveImage()
 
 void RemoteSampleBufferDisplayLayer::enqueueSample(WebCore::RemoteVideoSample&& remoteSample)
 {
-    m_mediaTime = remoteSample.time();
-
     if (!m_imageTransferSession || m_imageTransferSession->pixelFormat() != remoteSample.videoFormat())
         m_imageTransferSession = ImageTransferSessionVT::create(remoteSample.videoFormat());
 
@@ -132,12 +130,6 @@ void RemoteSampleBufferDisplayLayer::sampleBufferDisplayLayerStatusDidChange(Web
     send(Messages::SampleBufferDisplayLayer::SetDidFail { m_sampleBufferDisplayLayer->didFail() });
 }
 
-WTF::MediaTime RemoteSampleBufferDisplayLayer::streamTime() const
-{
-    // This is only an approximation which will clear all samples enqueued in m_sampleBufferDisplayLayer except the one being pushed.
-    return m_mediaTime;
 }
 
-}
-
-#endif // PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(VIDEO_TRACK) && ENABLE(MEDIA_STREAM)
+#endif // PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)

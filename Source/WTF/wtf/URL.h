@@ -39,6 +39,7 @@ OBJC_CLASS NSURL;
 
 namespace WTF {
 
+class PrintStream;
 class TextStream;
 
 class URLTextEncoding {
@@ -166,9 +167,6 @@ public:
     unsigned pathEnd() const;
     unsigned pathAfterLastSlash() const;
 
-    operator const String&() const { return m_string; }
-    operator StringView() const { return m_string; }
-
 #if USE(CF)
     WTF_EXPORT_PRIVATE URL(CFURLRef);
     WTF_EXPORT_PRIVATE RetainPtr<CFURLRef> createCFURL() const;
@@ -179,13 +177,10 @@ public:
     WTF_EXPORT_PRIVATE operator NSURL *() const;
 #endif
 
-#ifdef __OBJC__
-    operator NSString *() const { return m_string; }
-#endif
-
 #ifndef NDEBUG
     void print() const;
 #endif
+    WTF_EXPORT_PRIVATE void dump(PrintStream& out) const;
 
     template<typename Encoder> void encode(Encoder&) const;
     template<typename Decoder> static WARN_UNUSED_RETURN bool decode(Decoder&, URL&);
@@ -195,7 +190,6 @@ private:
     friend class URLParser;
 
     WTF_EXPORT_PRIVATE void invalidate();
-    void copyToBuffer(Vector<char, 512>& buffer) const;
     unsigned hostStart() const;
     unsigned credentialsEnd() const;
     void remove(unsigned start, unsigned length);

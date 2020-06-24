@@ -378,7 +378,7 @@ void FindController::hideFindUI()
 
 bool FindController::updateFindIndicator(Frame& selectedFrame, bool isShowingOverlay, bool shouldAnimate)
 {
-    auto indicator = TextIndicator::createWithSelectionInFrame(selectedFrame, TextIndicatorOptionIncludeMarginIfRangeMatchesSelection, shouldAnimate ? TextIndicatorPresentationTransition::Bounce : TextIndicatorPresentationTransition::None);
+    auto indicator = TextIndicator::createWithSelectionInFrame(selectedFrame, { TextIndicatorOption::IncludeMarginIfRangeMatchesSelection }, shouldAnimate ? TextIndicatorPresentationTransition::Bounce : TextIndicatorPresentationTransition::None);
     if (!indicator)
         return false;
 
@@ -509,8 +509,8 @@ void FindController::drawRect(PageOverlay&, GraphicsContext& graphicsContext, co
 {
     const int borderWidth = 1;
 
-    Color overlayBackgroundColor(0.1f, 0.1f, 0.1f, 0.25f);
-    Color shadowColor(0.0f, 0.0f, 0.0f, 0.5f);
+    auto overlayBackgroundColor = makeSimpleColorFromFloats(0.1f, 0.1f, 0.1f, 0.25f);
+    auto shadowColor = makeSimpleColorFromFloats(0.0f, 0.0f, 0.0f, 0.5f);
 
     IntRect borderInflatedDirtyRect = dirtyRect;
     borderInflatedDirtyRect.inflate(borderWidth);

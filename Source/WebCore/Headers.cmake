@@ -40,6 +40,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/indexeddb/IDBActiveDOMObject.h
     Modules/indexeddb/IDBDatabaseIdentifier.h
+    Modules/indexeddb/IDBDatabaseNameAndVersionRequest.h
     Modules/indexeddb/IDBGetAllResult.h
     Modules/indexeddb/IDBGetResult.h
     Modules/indexeddb/IDBKey.h
@@ -72,6 +73,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/indexeddb/shared/IDBCursorInfo.h
     Modules/indexeddb/shared/IDBCursorRecord.h
     Modules/indexeddb/shared/IDBDatabaseInfo.h
+    Modules/indexeddb/shared/IDBDatabaseNameAndVersion.h
     Modules/indexeddb/shared/IDBError.h
     Modules/indexeddb/shared/IDBGetAllRecordsData.h
     Modules/indexeddb/shared/IDBGetRecordData.h
@@ -495,6 +497,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     editing/CompositionHighlight.h
     editing/CompositionUnderline.h
     editing/DictationAlternative.h
+    editing/DictationContext.h
     editing/DictionaryPopupInfo.h
     editing/EditAction.h
     editing/Editing.h
@@ -530,10 +533,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     fileapi/AsyncFileStream.h
     fileapi/Blob.h
-    fileapi/BlobLineEndings.h
     fileapi/BlobPropertyBag.h
+    fileapi/EndingType.h
     fileapi/File.h
-    fileapi/FileError.h
     fileapi/FileList.h
     fileapi/FileReaderLoader.h
     fileapi/FileReaderLoaderClient.h
@@ -1078,8 +1080,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/AudioTrackPrivate.h
     platform/graphics/BitmapImage.h
     platform/graphics/Color.h
+    platform/graphics/ColorComponents.h
     platform/graphics/ColorHash.h
+    platform/graphics/ColorMatrix.h
     platform/graphics/ColorSpace.h
+    platform/graphics/ColorTypes.h
     platform/graphics/ColorUtilities.h
     platform/graphics/ComplexTextController.h
     platform/graphics/ConcreteImageBuffer.h
@@ -1183,6 +1188,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/RemoteVideoSample.h
     platform/graphics/RenderingMode.h
     platform/graphics/RoundedRect.h
+    platform/graphics/SimpleColor.h
     platform/graphics/StringTruncator.h
     platform/graphics/TabSize.h
     platform/graphics/TextRun.h
@@ -1251,6 +1257,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/mediastream/VideoPreset.h
     platform/mediastream/WebAudioSourceProvider.h
 
+    platform/mediastream/libwebrtc/LibWebRTCEnumTraits.h
     platform/mediastream/libwebrtc/LibWebRTCMacros.h
     platform/mediastream/libwebrtc/LibWebRTCProvider.h
     platform/mediastream/libwebrtc/LibWebRTCSocketIdentifier.h
@@ -1302,6 +1309,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/ResourceRequestBase.h
     platform/network/ResourceResponseBase.h
     platform/network/SameSiteInfo.h
+    platform/network/ShouldRelaxThirdPartyCookieBlocking.h
     platform/network/SocketStreamError.h
     platform/network/SocketStreamHandle.h
     platform/network/SocketStreamHandleClient.h
@@ -1474,6 +1482,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/StyleChange.h
     style/StyleScope.h
+    style/StyleUpdate.h
     style/StyleValidity.h
 
     svg/SVGLengthContext.h

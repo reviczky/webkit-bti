@@ -30,7 +30,7 @@
 #include "SymbolTable.h"
 
 #include "CodeBlock.h"
-#include "SlotVisitorInlines.h"
+#include "JSCJSValueInlines.h"
 #include "TypeProfiler.h"
 
 namespace JSC {
@@ -180,6 +180,11 @@ SymbolTable* SymbolTable::cloneScopePart(VM& vm)
             auto end = m_rareData->m_uniqueTypeSetMap.end();
             for (; iter != end; ++iter)
                 result->m_rareData->m_uniqueTypeSetMap.set(iter->key, iter->value);
+        }
+
+        {
+            for (auto name : m_rareData->m_privateNames)
+                result->m_rareData->m_privateNames.add(name);
         }
     }
     

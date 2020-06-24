@@ -546,6 +546,7 @@ const NumberOfTypedArrayTypesExcludingDataView = constexpr NumberOfTypedArrayTyp
 # Type flags constants.
 const MasqueradesAsUndefined = constexpr MasqueradesAsUndefined
 const ImplementsDefaultHasInstance = constexpr ImplementsDefaultHasInstance
+const OverridesGetPrototypeOutOfLine = constexpr OverridesGetPrototypeOutOfLine
 
 # Bytecode operand constants.
 const FirstConstantRegisterIndexNarrow = constexpr FirstConstantRegisterIndex8
@@ -567,6 +568,7 @@ const HashFlags8BitBuffer = constexpr StringImpl::s_hashFlag8BitBuffer
 
 # Copied from PropertyOffset.h
 const firstOutOfLineOffset = constexpr firstOutOfLineOffset
+const knownPolyProtoOffset = constexpr knownPolyProtoOffset
 
 # ResolveType
 const GlobalProperty = constexpr GlobalProperty
@@ -1769,7 +1771,14 @@ slowPathOp(greater)
 slowPathOp(greatereq)
 slowPathOp(has_generic_property)
 slowPathOp(has_indexed_property)
-slowPathOp(has_structure_property)
+
+if not JSVALUE64
+    slowPathOp(has_structure_property)
+    slowPathOp(has_own_structure_property)
+    slowPathOp(in_structure_property)
+    slowPathOp(get_prototype_of)
+end
+
 slowPathOp(in_by_id)
 slowPathOp(in_by_val)
 slowPathOp(is_function)

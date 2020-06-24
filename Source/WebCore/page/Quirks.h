@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,6 +36,7 @@ class EventListener;
 class EventTarget;
 class HTMLElement;
 class LayoutUnit;
+class SpaceSplitString;
 
 class Quirks {
     WTF_MAKE_NONCOPYABLE(Quirks); WTF_MAKE_FAST_ALLOCATED;
@@ -49,6 +50,7 @@ public:
     bool needsSeekingSupportDisabled() const;
     bool needsPerDocumentAutoplayBehavior() const;
     bool shouldAutoplayForArbitraryUserGesture() const;
+    bool shouldAutoplayWebAudioForArbitraryUserGesture() const;
     bool hasBrokenEncryptedMediaAPISupportQuirk() const;
     bool shouldStripQuotationMarkInFontFaceSetFamily() const;
 #if ENABLE(TOUCH_EVENTS)
@@ -102,6 +104,11 @@ public:
 
     bool needsCanPlayAfterSeekedQuirk() const;
 
+    bool shouldAvoidPastingImagesAsWebContent() const;
+
+    enum StorageAccessResult : bool { ShouldNotCancelEvent, ShouldCancelEvent };
+    StorageAccessResult triggerOptionalStorageAccessQuirk(const AtomString& eventType, const SpaceSplitString& classNames) const;
+
 private:
     bool needsQuirks() const;
 
@@ -119,6 +126,7 @@ private:
     mutable Optional<bool> m_needsYouTubeOverflowScrollQuirk;
     mutable Optional<bool> m_needsPreloadAutoQuirk;
     mutable Optional<bool> m_needsFullscreenDisplayNoneQuirk;
+    mutable Optional<bool> m_shouldAvoidPastingImagesAsWebContent;
 #endif
     mutable Optional<bool> m_shouldDisableElementFullscreenQuirk;
 #if ENABLE(TOUCH_EVENTS)

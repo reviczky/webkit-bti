@@ -118,6 +118,7 @@
 #include <pal/FileSizeFormatter.h>
 #include <pal/system/Sound.h>
 #include <pal/text/KillRing.h>
+#include <wtf/SetForScope.h>
 #include <wtf/unicode/CharacterNames.h>
 
 #if PLATFORM(MAC)
@@ -1269,7 +1270,10 @@ bool Editor::insertTextWithoutSendingTextEvent(const String& text, bool selectIn
     if (!shouldInsertText(text, createLiveRange(selection.toNormalizedRange()).get(), EditorInsertAction::Typed))
         return true;
 
-    updateMarkersForWordsAffectedByEditing(isSpaceOrNewline(text[0]));
+    // FIXME: Should pass false to updateMarkersForWordsAffectedByEditing() to not remove markers if
+    // a leading or trailing no-break space is being inserted. See <https://webkit.org/b/212098>.
+    bool isStartOfNewWord = isSpaceOrNewline(selection.visibleStart().characterBefore());
+    updateMarkersForWordsAffectedByEditing(isSpaceOrNewline(text[0]) || isStartOfNewWord);
 
     bool shouldConsiderApplyingAutocorrection = false;
     if (text == " " || text == "\t")
@@ -1444,13 +1448,15 @@ void Editor::performCutOrCopy(EditorActionSpecifier action)
     }
 }
 
-void Editor::paste()
+void Editor::paste(FromMenuOrKeyBinding fromMenuOrKeyBinding)
 {
-    paste(*Pasteboard::createForCopyAndPaste());
+    paste(*Pasteboard::createForCopyAndPaste(), fromMenuOrKeyBinding);
 }
 
-void Editor::paste(Pasteboard& pasteboard)
+void Editor::paste(Pasteboard& pasteboard, FromMenuOrKeyBinding fromMenuOrKeyBinding)
 {
+    SetForScope<bool> pasteScope { m_pastingFromMenuOrKeyBinding, fromMenuOrKeyBinding == FromMenuOrKeyBinding::Yes };
+
     if (!dispatchClipboardEvent(findEventTargetFromSelection(), ClipboardEventKind::Paste))
         return; // DHTML did the whole operation
     if (!canPaste())
@@ -1463,8 +1469,10 @@ void Editor::paste(Pasteboard& pasteboard)
         pasteAsPlainTextWithPasteboard(pasteboard);
 }
 
-void Editor::pasteAsPlainText()
+void Editor::pasteAsPlainText(FromMenuOrKeyBinding fromMenuOrKeyBinding)
 {
+    SetForScope<bool> pasteScope { m_pastingFromMenuOrKeyBinding, fromMenuOrKeyBinding == FromMenuOrKeyBinding::Yes };
+
     if (!dispatchClipboardEvent(findEventTargetFromSelection(), ClipboardEventKind::PasteAsPlainText))
         return;
     if (!canPaste())
@@ -1473,8 +1481,10 @@ void Editor::pasteAsPlainText()
     pasteAsPlainTextWithPasteboard(*Pasteboard::createForCopyAndPaste());
 }
 
-void Editor::pasteAsQuotation()
+void Editor::pasteAsQuotation(FromMenuOrKeyBinding fromMenuOrKeyBinding)
 {
+    SetForScope<bool> pasteScope { m_pastingFromMenuOrKeyBinding, fromMenuOrKeyBinding == FromMenuOrKeyBinding::Yes };
+
     if (!dispatchClipboardEvent(findEventTargetFromSelection(), ClipboardEventKind::PasteAsQuotation))
         return;
     if (!canPaste())
@@ -3021,12 +3031,15 @@ void Editor::updateMarkersForWordsAffectedByEditing(bool doNotRemoveIfSelectionA
         endOfLastWord = endOfWord(endOfSelection, LeftWordIfOnBoundary);
     }
 
+    auto originalEndOfFirstWord = endOfFirstWord;
+    auto originalStartOfLastWord = startOfLastWord;
+
     // If doNotRemoveIfSelectionAtWordBoundary is true, and first word ends at the start of selection,
     // we choose next word as the first word.
     if (doNotRemoveIfSelectionAtWordBoundary && endOfFirstWord == startOfSelection) {
         startOfFirstWord = nextWordPosition(startOfFirstWord);
         endOfFirstWord = endOfWord(startOfFirstWord, RightWordIfOnBoundary);
-        if (startOfFirstWord == endOfSelection)
+        if (startOfFirstWord == originalStartOfLastWord)
             return;
     }
 
@@ -3035,7 +3048,7 @@ void Editor::updateMarkersForWordsAffectedByEditing(bool doNotRemoveIfSelectionA
     if (doNotRemoveIfSelectionAtWordBoundary && startOfLastWord == endOfSelection) {
         startOfLastWord = previousWordPosition(startOfLastWord);
         endOfLastWord = endOfWord(startOfLastWord, RightWordIfOnBoundary);
-        if (endOfLastWord == startOfSelection)
+        if (endOfLastWord == originalEndOfFirstWord)
             return;
     }
 

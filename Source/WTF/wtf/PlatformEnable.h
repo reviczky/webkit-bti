@@ -95,7 +95,10 @@
 #include <wtf/PlatformEnableWinCairo.h>
 #endif
 
-
+/* --------- PlayStation port --------- */
+#if PLATFORM(PLAYSTATION)
+#include <wtf/PlatformEnablePlayStation.h>
+#endif
 
 /* ---------  ENABLE macro defaults --------- */
 
@@ -252,10 +255,6 @@
 
 #if !defined(ENABLE_ENCRYPTED_MEDIA)
 #define ENABLE_ENCRYPTED_MEDIA 0
-#endif
-
-#if !defined(ENABLE_FAST_JIT_PERMISSIONS)
-#define ENABLE_FAST_JIT_PERMISSIONS 0
 #endif
 
 #if !defined(ENABLE_FILTERS_LEVEL_2)
@@ -483,12 +482,16 @@
 #define ENABLE_TOUCH_EVENTS 0
 #endif
 
-#if !defined(ENABLE_VIDEO)
-#define ENABLE_VIDEO 0
+#if !defined(ENABLE_TOUCH_ACTION_REGIONS)
+#define ENABLE_TOUCH_ACTION_REGIONS 0
 #endif
 
-#if !defined(ENABLE_VIDEO_TRACK)
-#define ENABLE_VIDEO_TRACK 0
+#if !defined(ENABLE_WHEEL_EVENT_REGIONS)
+#define ENABLE_WHEEL_EVENT_REGIONS 0
+#endif
+
+#if !defined(ENABLE_VIDEO)
+#define ENABLE_VIDEO 0
 #endif
 
 #if !defined(ENABLE_DATACUE_VALUE)
@@ -862,10 +865,6 @@
 
 
 /* Asserts, invariants for macro definitions */
-
-#if ENABLE(VIDEO_TRACK) && !ENABLE(VIDEO)
-#error "ENABLE(VIDEO_TRACK) requires ENABLE(VIDEO)"
-#endif
 
 #if ENABLE(MEDIA_CONTROLS_SCRIPT) && !ENABLE(VIDEO)
 #error "ENABLE(MEDIA_CONTROLS_SCRIPT) requires ENABLE(VIDEO)"

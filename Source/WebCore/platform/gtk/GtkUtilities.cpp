@@ -50,7 +50,11 @@ IntPoint convertWidgetPointToScreenPoint(GtkWidget* widget, const IntPoint& poin
     if (!toplevelWidget || !gtk_widget_is_toplevel(toplevelWidget) || !GTK_IS_WINDOW(toplevelWidget))
         return point;
 
+#if USE(GTK4)
+    double xInWindow, yInWindow;
+#else
     int xInWindow, yInWindow;
+#endif
     gtk_widget_translate_coordinates(widget, toplevelWidget, point.x(), point.y(), &xInWindow, &yInWindow);
 
     const auto origin = gtkWindowGetOrigin(toplevelWidget);
@@ -67,6 +71,49 @@ bool widgetIsOnscreenToplevelWindow(GtkWidget* widget)
 #else
     return isToplevelWidget && GTK_IS_WINDOW(widget) && !GTK_IS_OFFSCREEN_WINDOW(widget);
 #endif // USE(GTK4)
+}
+
+IntPoint widgetRootCoords(GtkWidget* widget, int x, int y)
+{
+#if USE(GTK4)
+    UNUSED_PARAM(widget);
+    return { x, y };
+#else
+    int xRoot, yRoot;
+    gdk_window_get_root_coords(gtk_widget_get_window(widget), x, y, &xRoot, &yRoot);
+    return { xRoot, yRoot };
+#endif
+}
+
+void widgetDevicePosition(GtkWidget* widget, GdkDevice* device, double* x, double* y, GdkModifierType* state)
+{
+#if USE(GTK4)
+    gdk_surface_get_device_position(gtk_native_get_surface(gtk_widget_get_native(widget)), device, x, y, state);
+#else
+    int xInt, yInt;
+    gdk_window_get_device_position(gtk_widget_get_window(widget), device, &xInt, &yInt, state);
+    *x = xInt;
+    *y = yInt;
+#endif
+}
+
+unsigned widgetKeyvalToKeycode(GtkWidget* widget, unsigned keyval)
+{
+    unsigned keycode = 0;
+    GUniqueOutPtr<GdkKeymapKey> keys;
+    int keysCount;
+    auto* display = gtk_widget_get_display(widget);
+
+#if USE(GTK4)
+    if (gdk_display_map_keyval(display, keyval, &keys.outPtr(), &keysCount) && keysCount)
+        keycode = keys.get()[0].keycode;
+#else
+    GdkKeymap* keymap = gdk_keymap_get_for_display(display);
+    if (gdk_keymap_get_entries_for_keyval(keymap, keyval, &keys.outPtr(), &keysCount) && keysCount)
+        keycode = keys.get()[0].keycode;
+#endif
+
+    return keycode;
 }
 
 template<>
@@ -102,49 +149,40 @@ unsigned stateModifierForGdkButton(unsigned button)
     return 1 << (8 + button - 1);
 }
 
-DragOperation gdkDragActionToDragOperation(GdkDragAction gdkAction)
+OptionSet<DragOperation> gdkDragActionToDragOperation(GdkDragAction gdkAction)
 {
-    // We have no good way to detect DragOperationEvery other than
-    // to use it when all applicable flags are on.
-    if (gdkAction & GDK_ACTION_COPY
-        && gdkAction & GDK_ACTION_MOVE
-        && gdkAction & GDK_ACTION_LINK)
-        return DragOperationEvery;
-
-    unsigned action = DragOperationNone;
+    OptionSet<DragOperation> action;
     if (gdkAction & GDK_ACTION_COPY)
-        action |= DragOperationCopy;
+        action.add(DragOperation::Copy);
     if (gdkAction & GDK_ACTION_MOVE)
-        action |= DragOperationMove;
+        action.add(DragOperation::Move);
     if (gdkAction & GDK_ACTION_LINK)
-        action |= DragOperationLink;
+        action.add(DragOperation::Link);
 
-    return static_cast<DragOperation>(action);
+    return action;
 }
 
-GdkDragAction dragOperationToGdkDragActions(DragOperation coreAction)
+GdkDragAction dragOperationToGdkDragActions(OptionSet<DragOperation> coreAction)
 {
     unsigned gdkAction = 0;
-    if (coreAction == DragOperationNone)
-        return static_cast<GdkDragAction>(gdkAction);
 
-    if (coreAction & DragOperationCopy)
+    if (coreAction.contains(DragOperation::Copy))
         gdkAction |= GDK_ACTION_COPY;
-    if (coreAction & DragOperationMove)
+    if (coreAction.contains(DragOperation::Move))
         gdkAction |= GDK_ACTION_MOVE;
-    if (coreAction & DragOperationLink)
+    if (coreAction.contains(DragOperation::Link))
         gdkAction |= GDK_ACTION_LINK;
 
     return static_cast<GdkDragAction>(gdkAction);
 }
 
-GdkDragAction dragOperationToSingleGdkDragAction(DragOperation coreAction)
+GdkDragAction dragOperationToSingleGdkDragAction(OptionSet<DragOperation> coreAction)
 {
-    if (coreAction == DragOperationEvery || coreAction & DragOperationCopy)
+    if (coreAction.contains(DragOperation::Copy))
         return GDK_ACTION_COPY;
-    if (coreAction & DragOperationMove)
+    if (coreAction.contains(DragOperation::Move))
         return GDK_ACTION_MOVE;
-    if (coreAction & DragOperationLink)
+    if (coreAction.contains(DragOperation::Link))
         return GDK_ACTION_LINK;
     return static_cast<GdkDragAction>(0);
 }

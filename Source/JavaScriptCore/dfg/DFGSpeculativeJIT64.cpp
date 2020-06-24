@@ -2136,9 +2136,11 @@ void SpeculativeJIT::compile(Node* node)
 {
     NodeType op = node->op();
 
-    if (validateDFGDoesGC) {
-        bool expectDoesGC = doesGC(m_jit.graph(), node);
-        m_jit.store8(TrustedImm32(expectDoesGC), vm().heap.addressOfExpectDoesGC());
+    if constexpr (validateDFGDoesGC) {
+        if (Options::validateDoesGC()) {
+            bool expectDoesGC = doesGC(m_jit.graph(), node);
+            m_jit.store32(TrustedImm32(DoesGCCheck::encode(expectDoesGC, node->index(), node->op())), vm().heap.addressOfDoesGC());
+        }
     }
 
 #if ENABLE(DFG_REGISTER_ALLOCATION_VALIDATION)
@@ -4988,6 +4990,14 @@ void SpeculativeJIT::compile(Node* node)
         compileHasStructureProperty(node);
         break;
     }
+    case HasOwnStructureProperty: {
+        compileHasOwnStructureProperty(node);
+        break;
+    }
+    case InStructureProperty: {
+        compileInStructureProperty(node);
+        break;
+    }
     case HasIndexedProperty: {
         compileHasIndexedProperty(node);
         break;
@@ -5042,8 +5052,9 @@ void SpeculativeJIT::compile(Node* node)
         compileCallDOMGetter(node);
         break;
 
-    case CheckSubClass:
-        compileCheckSubClass(node);
+    case CheckJSCast:
+    case CheckNotJSCast:
+        compileCheckJSCast(node);
         break;
 
     case ExtractCatchLocal: {
@@ -5534,7 +5545,7 @@ void SpeculativeJIT::compile(Node* node)
     case MultiPutByOffset:
     case MultiDeleteByOffset:
     case FiatInt52:
-    case CheckBadCell:
+    case CheckBadValue:
     case BottomValue:
     case PhantomNewObject:
     case PhantomNewFunction:
@@ -5729,7 +5740,7 @@ void SpeculativeJIT::compileDateGet(Node* node)
         callback(resultRegs.payloadGPR());
         m_jit.boxInt32(resultRegs.payloadGPR(), resultRegs);
 
-        addSlowPathGenerator(slowPathCall(slowCases, this, operation, resultRegs, &vm(), baseGPR));
+        addSlowPathGenerator(slowPathCall(slowCases, this, operation, NeedToSpill, ExceptionCheckRequirement::CheckNotNeeded, resultRegs, &vm(), baseGPR));
 
         jsValueResult(resultRegs, node);
     };

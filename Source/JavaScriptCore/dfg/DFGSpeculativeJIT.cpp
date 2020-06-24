@@ -891,7 +891,7 @@ void SpeculativeJIT::checkArray(Node* node)
         DFG_ASSERT(m_graph, node, arrayMode.isSomeTypedArrayView());
 
         if (arrayMode.type() == Array::AnyTypedArray)
-            speculationCheck(BadType, JSValueSource::unboxedCell(baseReg), nullptr, m_jit.branchIfNotType(baseReg, JSType(FirstTypedArrayType), JSType(LastTypedArrayTypeExcludingDataView)));
+            speculationCheck(BadType, JSValueSource::unboxedCell(baseReg), nullptr, m_jit.branchIfNotType(baseReg, JSTypeRange { JSType(FirstTypedArrayType), JSType(LastTypedArrayTypeExcludingDataView) }));
         else
             speculateCellTypeWithoutTypeFiltering(node->child1(), baseReg, typeForTypedArrayType(arrayMode.typedArrayType()));
         break;
@@ -1868,11 +1868,11 @@ bool SpeculativeJIT::compilePeepHoleBranch(Node* node, MacroAssembler::Relationa
             else if (!needsTypeCheck(node->child2(), SpecOther))
                 nonSpeculativePeepholeBranchNullOrUndefined(node->child1(), branchNode);
             else {
-                nonSpeculativePeepholeBranch(node, branchNode, condition, operation);
+                genericJSValuePeepholeBranch(node, branchNode, condition, operation);
                 return true;
             }
         } else {
-            nonSpeculativePeepholeBranch(node, branchNode, condition, operation);
+            genericJSValuePeepholeBranch(node, branchNode, condition, operation);
             return true;
         }
 
@@ -7247,7 +7247,7 @@ void SpeculativeJIT::cageTypedArrayStorage(GPRReg baseReg, GPRReg storageReg)
         return;
     }
     
-    if (Gigacage::canPrimitiveGigacageBeDisabled()) {
+    if (!Gigacage::disablingPrimitiveGigacageIsForbidden()) {
         VM& vm = this->vm();
         if (vm.primitiveGigacageEnabled().isStillValid())
             m_jit.graph().watchpoints().addLazily(vm.primitiveGigacageEnabled());
@@ -9663,17 +9663,17 @@ void SpeculativeJIT::compileCheckIsConstant(Node* node)
 {
     if (node->child1().useKind() == CellUse) {
         SpeculateCellOperand cell(this, node->child1());
-        speculationCheck(BadCell, JSValueSource::unboxedCell(cell.gpr()), node->child1(), m_jit.branchWeakPtr(JITCompiler::NotEqual, cell.gpr(), node->cellOperand()->cell()));
+        speculationCheck(BadConstantValue, JSValueSource::unboxedCell(cell.gpr()), node->child1(), m_jit.branchWeakPtr(JITCompiler::NotEqual, cell.gpr(), node->cellOperand()->cell()));
     } else {
         ASSERT(!node->constant()->value().isCell() || !node->constant()->value());
         JSValueOperand operand(this, node->child1());
         JSValueRegs regs = operand.jsValueRegs();
 
 #if USE(JSVALUE64)
-        speculationCheck(BadCache, regs, node->child1(), m_jit.branch64(JITCompiler::NotEqual, regs.gpr(), TrustedImm64(JSValue::encode(node->constant()->value()))));
+        speculationCheck(BadConstantValue, regs, node->child1(), m_jit.branch64(JITCompiler::NotEqual, regs.gpr(), TrustedImm64(JSValue::encode(node->constant()->value()))));
 #else
-        speculationCheck(BadCache, regs, node->child1(), m_jit.branch32(JITCompiler::NotEqual, regs.tagGPR(), TrustedImm32(node->constant()->value().tag())));
-        speculationCheck(BadCache, regs, node->child1(), m_jit.branch32(JITCompiler::NotEqual, regs.payloadGPR(), TrustedImm32(node->constant()->value().payload())));
+        speculationCheck(BadConstantValue, regs, node->child1(), m_jit.branch32(JITCompiler::NotEqual, regs.tagGPR(), TrustedImm32(node->constant()->value().tag())));
+        speculationCheck(BadConstantValue, regs, node->child1(), m_jit.branch32(JITCompiler::NotEqual, regs.payloadGPR(), TrustedImm32(node->constant()->value().payload())));
 #endif
     }
 
@@ -9999,9 +9999,24 @@ void SpeculativeJIT::compileCallDOMGetter(Node* node)
     jsValueResult(result.regs(), node);
 }
 
-void SpeculativeJIT::compileCheckSubClass(Node* node)
+void SpeculativeJIT::compileCheckJSCast(Node* node)
 {
+    DFG_ASSERT(m_jit.graph(), node, node->op() == CheckJSCast || node->op() == CheckNotJSCast);
     const ClassInfo* classInfo = node->classInfo();
+    if (classInfo->inheritsJSTypeRange) {
+        SpeculateCellOperand base(this, node->child1());
+        GPRReg baseGPR = base.gpr();
+
+        CCallHelpers::Jump checkFailed;
+        if (node->op() == CheckJSCast)
+            checkFailed = m_jit.branchIfNotType(baseGPR, classInfo->inheritsJSTypeRange.value());
+        else
+            checkFailed = m_jit.branchIfType(baseGPR, classInfo->inheritsJSTypeRange.value());
+        speculationCheck(BadType, JSValueSource::unboxedCell(baseGPR), node->child1(), checkFailed);
+        noResult(node);
+        return;
+    }
+
     if (!classInfo->checkSubClassSnippet) {
         SpeculateCellOperand base(this, node->child1());
         GPRTemporary other(this);
@@ -10016,11 +10031,17 @@ void SpeculativeJIT::compileCheckSubClass(Node* node)
         m_jit.move(CCallHelpers::TrustedImmPtr(node->classInfo()), specifiedGPR);
 
         CCallHelpers::Label loop = m_jit.label();
-        auto done = m_jit.branchPtr(CCallHelpers::Equal, otherGPR, specifiedGPR);
+        auto found = m_jit.branchPtr(CCallHelpers::Equal, otherGPR, specifiedGPR);
         m_jit.loadPtr(CCallHelpers::Address(otherGPR, ClassInfo::offsetOfParentClass()), otherGPR);
         m_jit.branchTestPtr(CCallHelpers::NonZero, otherGPR).linkTo(loop, &m_jit);
-        speculationCheck(BadType, JSValueSource::unboxedCell(baseGPR), node->child1(), m_jit.jump());
-        done.link(&m_jit);
+        if (node->op() == CheckJSCast) {
+            speculationCheck(BadType, JSValueSource::unboxedCell(baseGPR), node->child1(), m_jit.jump());
+            found.link(&m_jit);
+        } else {
+            auto notFound = m_jit.jump();
+            speculationCheck(BadType, JSValueSource::unboxedCell(baseGPR), node->child1(), found);
+            notFound.link(&m_jit);
+        }
         noResult(node);
         return;
     }
@@ -10041,7 +10062,12 @@ void SpeculativeJIT::compileCheckSubClass(Node* node)
 
     SnippetParams params(this, WTFMove(regs), WTFMove(gpScratch), WTFMove(fpScratch));
     CCallHelpers::JumpList failureCases = snippet->generator()->run(m_jit, params);
-    speculationCheck(BadType, JSValueSource::unboxedCell(baseGPR), node->child1(), failureCases);
+    if (node->op() == CheckJSCast)
+        speculationCheck(BadType, JSValueSource::unboxedCell(baseGPR), node->child1(), failureCases);
+    else {
+        speculationCheck(BadType, JSValueSource::unboxedCell(baseGPR), node->child1(), m_jit.jump());
+        failureCases.link(&m_jit);
+    }
     noResult(node);
 }
 
@@ -11233,7 +11259,7 @@ void SpeculativeJIT::emitSwitchIntJump(
         m_jit.branch32(JITCompiler::AboveOrEqual, value, Imm32(table.ctiOffsets.size())),
         data->fallThrough.block);
     m_jit.move(TrustedImmPtr(table.ctiOffsets.begin()), scratch);
-    m_jit.loadPtr(JITCompiler::BaseIndex(scratch, value, JITCompiler::timesPtr()), scratch);
+    m_jit.loadPtr(JITCompiler::BaseIndex(scratch, value, JITCompiler::ScalePtr), scratch);
     
     m_jit.farJump(scratch, JSSwitchPtrTag);
     data->didUseJumpTable = true;
@@ -12818,12 +12844,44 @@ void SpeculativeJIT::compileHasStructureProperty(Node* node)
         MacroAssembler::Address(enumerator.gpr(), JSPropertyNameEnumerator::cachedStructureIDOffset())));
 
     moveTrueTo(resultRegs.payloadGPR());
-    MacroAssembler::Jump done = m_jit.jump();
-
-    done.link(&m_jit);
 
     addSlowPathGenerator(slowPathCall(wrongStructure, this, operationHasGenericProperty, resultRegs, TrustedImmPtr::weakPointer(m_graph, m_graph.globalObjectFor(node->origin.semantic)), baseRegs, propertyGPR));
     blessedBooleanResult(resultRegs.payloadGPR(), node);
+}
+
+template <typename Function>
+void SpeculativeJIT::compileHasOwnStructurePropertyImpl(Node* node, Function slowPath)
+{
+    SpeculateCellOperand base(this, node->child1());
+    SpeculateCellOperand property(this, node->child2());
+    SpeculateCellOperand enumerator(this, node->child3());
+    JSValueRegsTemporary result(this);
+
+    GPRReg baseGPR = base.gpr();
+    GPRReg propertyGPR = property.gpr();
+    JSValueRegs resultRegs = result.regs();
+
+    CCallHelpers::JumpList wrongStructure;
+
+    m_jit.load32(MacroAssembler::Address(baseGPR, JSCell::structureIDOffset()), resultRegs.payloadGPR());
+    wrongStructure.append(m_jit.branch32(MacroAssembler::NotEqual,
+        resultRegs.payloadGPR(),
+        MacroAssembler::Address(enumerator.gpr(), JSPropertyNameEnumerator::cachedStructureIDOffset())));
+
+    moveTrueTo(resultRegs.payloadGPR());
+
+    addSlowPathGenerator(slowPathCall(wrongStructure, this, slowPath, resultRegs, TrustedImmPtr::weakPointer(m_graph, m_graph.globalObjectFor(node->origin.semantic)), baseGPR, propertyGPR));
+    blessedBooleanResult(resultRegs.payloadGPR(), node);
+}
+
+void SpeculativeJIT::compileHasOwnStructureProperty(Node* node)
+{
+    compileHasOwnStructurePropertyImpl(node, operationHasOwnStructureProperty);
+}
+
+void SpeculativeJIT::compileInStructureProperty(Node* node)
+{
+    compileHasOwnStructurePropertyImpl(node, operationInStructureProperty);
 }
 
 void SpeculativeJIT::compileGetPropertyEnumerator(Node* node)
@@ -13901,6 +13959,8 @@ void SpeculativeJIT::compileGetPrototypeOf(Node* node)
         return;
     }
     case ObjectUse: {
+        // FIXME: Add fast path based on OverridesGetPrototype type info flag
+        // https://bugs.webkit.org/show_bug.cgi?id=213191
         SpeculateCellOperand value(this, node->child1());
         JSValueRegsTemporary result(this);
 
@@ -14339,7 +14399,7 @@ void SpeculativeJIT::cachedPutById(CodeOrigin codeOrigin, GPRReg baseGPR, JSValu
     JITPutByIdGenerator gen(
         m_jit.codeBlock(), codeOrigin, callSite, usedRegisters, identifier,
         JSValueRegs::payloadOnly(baseGPR), valueRegs,
-        scratchGPR, ecmaMode, putKind);
+        scratchGPR, ecmaMode, putKind, PrivateFieldAccessKind::None);
 
     gen.generateFastPath(m_jit);
 
@@ -14403,7 +14463,7 @@ void SpeculativeJIT::genericJSValueNonPeepholeCompare(Node* node, MacroAssembler
     unblessedBooleanResult(resultGPR, node, UseChildrenCalledExplicitly);
 }
 
-void SpeculativeJIT::nonSpeculativePeepholeBranch(Node* node, Node* branchNode, MacroAssembler::RelationalCondition cond, S_JITOperation_GJJ helperFunction)
+void SpeculativeJIT::genericJSValuePeepholeBranch(Node* node, Node* branchNode, MacroAssembler::RelationalCondition cond, S_JITOperation_GJJ helperFunction)
 {
     BasicBlock* taken = branchNode->branchData()->taken.block;
     BasicBlock* notTaken = branchNode->branchData()->notTaken.block;
@@ -14420,8 +14480,11 @@ void SpeculativeJIT::nonSpeculativePeepholeBranch(Node* node, Node* branchNode, 
         notTaken = tmp;
     }
 
-    JSValueOperand arg1(this, node->child1());
-    JSValueOperand arg2(this, node->child2());
+    JSValueOperand arg1(this, node->child1(), ManualOperandSpeculation);
+    JSValueOperand arg2(this, node->child2(), ManualOperandSpeculation);
+    speculate(node, node->child1());
+    speculate(node, node->child2());
+
     JSValueRegs arg1Regs = arg1.jsValueRegs();
     JSValueRegs arg2Regs = arg2.jsValueRegs();
 

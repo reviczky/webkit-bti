@@ -255,6 +255,10 @@ loadDeferringEnabled:
   initial: true
 webAudioEnabled:
   initial: false
+prefixedWebAudioEnabled:
+  initial: false
+modernUnprefixedWebAudioEnabled:
+  initial: false
 paginateDuringLayoutEnabled:
   initial: false
 fullScreenEnabled:
@@ -318,16 +322,16 @@ backspaceKeyNavigationEnabled:
   initial: true
 shouldDisplaySubtitles:
   initial: false
-  conditional: VIDEO_TRACK
+  conditional: VIDEO
 shouldDisplayCaptions:
   initial: false
-  conditional: VIDEO_TRACK
+  conditional: VIDEO
 shouldDisplayTextDescriptions:
   initial: false
-  conditional: VIDEO_TRACK
+  conditional: VIDEO
 genericCueAPIEnabled:
   initial: false
-  conditional: VIDEO_TRACK
+  conditional: VIDEO
 useGPUProcessForMedia:
   initial: false
   conditional: GPU_PROCESS
@@ -471,6 +475,10 @@ textAutosizingUsesIdempotentMode:
   initial: false
   onChange: setNeedsRecalcStyleInAllFrames
   conditional: TEXT_AUTOSIZING
+idempotentModeAutosizingOnlyHonorsPercentages:
+  initial: false
+  conditional: TEXT_AUTOSIZING
+  # This is only set before the main frame load, so there's no need to specify setNeedsRecalcStyleInAllFrames.
 
 subpixelAntialiasedLayerTextEnabled:
   initial: false
@@ -687,6 +695,9 @@ allowMediaContentTypesRequiringHardwareSupportAsFallback:
 
 storageAccessAPIEnabled:
   initial: true
+
+storageAccessAPIPerPageScopeEnabled:
+  initial: false
 
 timeWithoutMouseMovementBeforeHidingControls:
   type: Seconds

@@ -194,8 +194,7 @@ ResourceResponse ResourceResponseBase::filter(const ResourceResponse& response, 
     return filteredResponse;
 }
 
-// FIXME: Name does not make it clear this is true for HTTPS!
-bool ResourceResponseBase::isHTTP() const
+bool ResourceResponseBase::isInHTTPFamily() const
 {
     lazyInit(CommonFieldsOnly);
 
@@ -837,6 +836,15 @@ bool ResourceResponseBase::compare(const ResourceResponse& a, const ResourceResp
             return false;
     }
     return ResourceResponse::platformCompare(a, b);
+}
+
+bool ResourceResponseBase::containsInvalidHTTPHeaders() const
+{
+    for (auto& header : httpHeaderFields()) {
+        if (!isValidHTTPHeaderValue(stripLeadingAndTrailingHTTPSpaces(header.value)))
+            return true;
+    }
+    return false;
 }
 
 }

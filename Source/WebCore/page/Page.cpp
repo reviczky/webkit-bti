@@ -37,10 +37,10 @@
 #include "ContextMenuClient.h"
 #include "ContextMenuController.h"
 #include "CookieJar.h"
-#include "CustomHeaderFields.h"
 #include "DOMRect.h"
 #include "DOMRectList.h"
 #include "DatabaseProvider.h"
+#include "DebugPageOverlays.h"
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
 #include "DocumentLoader.h"
@@ -298,6 +298,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_corsDisablingPatterns(WTFMove(pageConfiguration.corsDisablingPatterns))
     , m_loadsSubresources(pageConfiguration.loadsSubresources)
     , m_loadsFromNetwork(pageConfiguration.loadsFromNetwork)
+    , m_shouldRelaxThirdPartyCookieBlocking(pageConfiguration.shouldRelaxThirdPartyCookieBlocking)
 {
     updateTimerThrottlingState();
 
@@ -434,6 +435,8 @@ ScrollingCoordinator* Page::scrollingCoordinator()
         m_scrollingCoordinator = chrome().client().createScrollingCoordinator(*this);
         if (!m_scrollingCoordinator)
             m_scrollingCoordinator = ScrollingCoordinator::create(this);
+
+        m_scrollingCoordinator->windowScreenDidChange(m_displayID, m_displayNominalFramesPerSecond);
     }
 
     return m_scrollingCoordinator.get();
@@ -1069,11 +1072,15 @@ void Page::setPageScaleFactor(float scale, const IntPoint& origin, bool inStable
 #endif
     }
 
+#if ENABLE(VIDEO)
     if (inStableState) {
         forEachMediaElement([] (HTMLMediaElement& element) {
             element.pageScaleFactorChanged();
         });
     }
+#else
+    UNUSED_PARAM(inStableState);
+#endif
 }
 
 void Page::setDelegatesScaling(bool delegatesScaling)
@@ -1108,17 +1115,21 @@ void Page::setDeviceScaleFactor(float scaleFactor)
     pageOverlayController().didChangeDeviceScaleFactor();
 }
 
-void Page::windowScreenDidChange(PlatformDisplayID displayID)
+void Page::windowScreenDidChange(PlatformDisplayID displayID, Optional<unsigned> nominalFramesPerSecond)
 {
-    if (displayID == m_displayID)
+    if (displayID == m_displayID && nominalFramesPerSecond == m_displayNominalFramesPerSecond)
         return;
 
     m_displayID = displayID;
+    m_displayNominalFramesPerSecond = nominalFramesPerSecond;
 
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (frame->document())
             frame->document()->windowScreenDidChange(displayID);
     }
+
+    if (m_scrollingCoordinator)
+        m_scrollingCoordinator->windowScreenDidChange(displayID, nominalFramesPerSecond);
 
     renderingUpdateScheduler().windowScreenDidChange(displayID);
 
@@ -1136,10 +1147,11 @@ void Page::setUserInterfaceLayoutDirection(UserInterfaceLayoutDirection userInte
         return;
 
     m_userInterfaceLayoutDirection = userInterfaceLayoutDirection;
-
+#if ENABLE(VIDEO)
     forEachMediaElement([] (HTMLMediaElement& element) {
         element.userInterfaceLayoutDirectionChanged();
     });
+#endif
 }
 
 #if ENABLE(VIDEO)
@@ -1354,6 +1366,11 @@ void Page::updateRendering()
 
     layoutIfNeeded();
 
+#if ENABLE(ASYNC_SCROLLING)
+    if (auto* scrollingCoordinator = this->scrollingCoordinator())
+        scrollingCoordinator->willStartRenderingUpdate();
+#endif
+
     // Timestamps should not change while serving the rendering update steps.
     Vector<WeakPtr<Document>> initialDocuments;
     forEachDocument([&initialDocuments] (Document& document) {
@@ -1433,7 +1450,7 @@ void Page::doAfterUpdateRendering()
         document.updateHighlightPositions();
     });
 
-#if ENABLE(VIDEO_TRACK)
+#if ENABLE(VIDEO)
     forEachDocument([] (Document& document) {
         document.updateTextTrackRepresentationImageIfNeeded();
     });
@@ -1445,8 +1462,14 @@ void Page::doAfterUpdateRendering()
         document->updateTouchEventRegions();
 #endif
 
+    DebugPageOverlays::doAfterUpdateRendering(*this);
+
     if (UNLIKELY(isMonitoringWheelEvents()))
         wheelEventTestMonitor()->checkShouldFireCallbacks();
+
+    forEachDocument([] (Document& document) {
+        document.prepareCanvasesForDisplayIfNeeded();
+    });
 
 #if ASSERT_ENABLED
     for (Frame* child = mainFrame().tree().firstRenderedChild(); child; child = child->tree().traverseNextRendered()) {
@@ -1472,6 +1495,8 @@ void Page::finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags> flags
         scrollingCoordinator->commitTreeStateIfNeeded();
         if (flags.contains(FinalizeRenderingUpdateFlags::ApplyScrollingTreeLayerPositions))
             scrollingCoordinator->applyScrollingTreeLayerPositions();
+            
+        scrollingCoordinator->didCompleteRenderingUpdate();
     }
 #endif
 }
@@ -2459,7 +2484,7 @@ void Page::hiddenPageCSSAnimationSuspensionStateChanged()
     }
 }
 
-#if ENABLE(VIDEO_TRACK)
+#if ENABLE(VIDEO)
 
 void Page::captionPreferencesChanged()
 {
@@ -3011,6 +3036,8 @@ void Page::forEachMediaElement(const Function<void(HTMLMediaElement&)>& functor)
     forEachDocument([&] (Document& document) {
         document.forEachMediaElement(functor);
     });
+#else
+    UNUSED_PARAM(functor);
 #endif
 }
 

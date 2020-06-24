@@ -29,7 +29,8 @@
 #include "Attachment.h"
 #include "MessageNames.h"
 #include "StringReference.h"
-#include <wtf/EnumTraits.h>
+#include <WebCore/ContextMenuItem.h>
+#include <wtf/OptionSet.h>
 #include <wtf/Vector.h>
 
 #if HAVE(QOS_CLASSES)
@@ -40,7 +41,8 @@ namespace IPC {
 
 class DataReference;
 class ImportanceAssertion;
-enum class ShouldDispatchWhenWaitingForSyncReply;
+enum class MessageFlags : uint8_t;
+enum class ShouldDispatchWhenWaitingForSyncReply : uint8_t;
 
 class Decoder {
     WTF_MAKE_FAST_ALLOCATED;
@@ -98,7 +100,7 @@ public:
     template<typename E, std::enable_if_t<std::is_enum<E>::value>* = nullptr>
     WARN_UNUSED_RETURN bool decode(E& enumValue)
     {
-        typename std::underlying_type<E>::type value;
+        std::underlying_type_t<E> value;
         if (!decode(value))
             return false;
         if (!WTF::isValidEnum<E>(value))
@@ -111,22 +113,11 @@ public:
     template<typename E, std::enable_if_t<std::is_enum<E>::value>* = nullptr>
     Decoder& operator>>(Optional<E>& optional)
     {
-        Optional<typename std::underlying_type<E>::type> value;
+        Optional<std::underlying_type_t<E>> value;
         *this >> value;
         if (value && WTF::isValidEnum<E>(*value))
             optional = static_cast<E>(*value);
         return *this;
-    }
-
-    template<typename E>
-    WARN_UNUSED_RETURN bool decodeEnum(E& result)
-    {
-        // FIXME: Remove this after migrating all uses of this function to decode() or operator>>() with WTF::isValidEnum check.
-        typename std::underlying_type<E>::type value;
-        if (!decode(value))
-            return false;
-        result = static_cast<E>(value);
-        return true;
     }
 
     template<typename T>
@@ -191,7 +182,7 @@ private:
 
     Vector<Attachment> m_attachments;
 
-    uint8_t m_messageFlags;
+    OptionSet<MessageFlags> m_messageFlags;
     MessageName m_messageName;
 
     uint64_t m_destinationID;

@@ -177,6 +177,7 @@ set(WTF_PUBLIC_HEADERS
     PlatformCPU.h
     PlatformEnable.h
     PlatformEnableCocoa.h
+    PlatformEnablePlayStation.h
     PlatformEnableWinApple.h
     PlatformEnableWinCairo.h
     PlatformHave.h
@@ -264,6 +265,7 @@ set(WTF_PUBLIC_HEADERS
     TimingScope.h
     TinyLRUCache.h
     TinyPtrSet.h
+    TranslatedProcess.h
     TriState.h
     TypeCasts.h
     URL.h

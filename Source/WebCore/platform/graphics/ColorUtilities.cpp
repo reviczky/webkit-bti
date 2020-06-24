@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2017, 2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,34 +26,14 @@
 #include "config.h"
 #include "ColorUtilities.h"
 
-#include "Color.h"
-#include <wtf/MathExtras.h>
+#include "ColorComponents.h"
+#include "ColorMatrix.h"
+#include "ColorTypes.h"
 
 namespace WebCore {
 
-FloatComponents::FloatComponents(const Color& color)
-{
-    color.getRGBA(components[0], components[1], components[2], components[3]);
-}
-
-ColorComponents::ColorComponents(const FloatComponents& floatComponents)
-{
-    components[0] = clampedColorComponent(floatComponents.components[0]);
-    components[1] = clampedColorComponent(floatComponents.components[1]);
-    components[2] = clampedColorComponent(floatComponents.components[2]);
-    components[3] = clampedColorComponent(floatComponents.components[3]);
-}
-
-bool areEssentiallyEqual(const FloatComponents& a, const FloatComponents& b)
-{
-    return WTF::areEssentiallyEqual(a.components[0], b.components[0])
-        && WTF::areEssentiallyEqual(a.components[1], b.components[1])
-        && WTF::areEssentiallyEqual(a.components[2], b.components[2])
-        && WTF::areEssentiallyEqual(a.components[3], b.components[3]);
-}
-
-// These are the standard sRGB <-> linearRGB conversion functions (https://en.wikipedia.org/wiki/SRGB).
-float linearToSRGBColorComponent(float c)
+// These are the standard sRGB <-> linearRGB / standard DisplayP3 <-> LinearDisplayP3 conversion functions (https://en.wikipedia.org/wiki/SRGB).
+float linearToRGBColorComponent(float c)
 {
     if (c < 0.0031308f)
         return 12.92f * c;
@@ -61,7 +41,7 @@ float linearToSRGBColorComponent(float c)
     return clampTo<float>(1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f, 0, 1);
 }
 
-float sRGBToLinearColorComponent(float c)
+float rgbToLinearColorComponent(float c)
 {
     if (c <= 0.04045f)
         return c / 12.92f;
@@ -69,63 +49,124 @@ float sRGBToLinearColorComponent(float c)
     return clampTo<float>(std::pow((c + 0.055f) / 1.055f, 2.4f), 0, 1);
 }
 
-FloatComponents sRGBColorToLinearComponents(const Color& color)
+LinearSRGBA<float> toLinearSRGBA(const SRGBA<float>& color)
 {
-    float r, g, b, a;
-    color.getRGBA(r, g, b, a);
     return {
-        sRGBToLinearColorComponent(r),
-        sRGBToLinearColorComponent(g),
-        sRGBToLinearColorComponent(b),
-        a
+        rgbToLinearColorComponent(color.red),
+        rgbToLinearColorComponent(color.green),
+        rgbToLinearColorComponent(color.blue),
+        color.alpha
     };
 }
 
-FloatComponents sRGBToLinearComponents(const FloatComponents& sRGBColor)
+SRGBA<float> toSRGBA(const LinearSRGBA<float>& color)
 {
     return {
-        sRGBToLinearColorComponent(sRGBColor.components[0]),
-        sRGBToLinearColorComponent(sRGBColor.components[1]),
-        sRGBToLinearColorComponent(sRGBColor.components[2]),
-        sRGBColor.components[3]
+        linearToRGBColorComponent(color.red),
+        linearToRGBColorComponent(color.green),
+        linearToRGBColorComponent(color.blue),
+        color.alpha
     };
 }
 
-FloatComponents linearToSRGBComponents(const FloatComponents& linearRGB)
+LinearDisplayP3<float> toLinearDisplayP3(const DisplayP3<float>& color)
 {
     return {
-        linearToSRGBColorComponent(linearRGB.components[0]),
-        linearToSRGBColorComponent(linearRGB.components[1]),
-        linearToSRGBColorComponent(linearRGB.components[2]),
-        linearRGB.components[3]
+        rgbToLinearColorComponent(color.red),
+        rgbToLinearColorComponent(color.green),
+        rgbToLinearColorComponent(color.blue),
+        color.alpha
     };
 }
 
-// This is similar to sRGBToLinearColorComponent but for some reason
-// https://www.w3.org/TR/2008/REC-WCAG20-20081211/#relativeluminancedef
-// doesn't use the standard sRGB -> linearRGB threshold of 0.04045.
-static float sRGBToLinearColorComponentForLuminance(float c)
+DisplayP3<float> toDisplayP3(const LinearDisplayP3<float>& color)
 {
-    if (c <= 0.03928f)
-        return c / 12.92f;
-
-    return clampTo<float>(std::pow((c + 0.055f) / 1.055f, 2.4f), 0, 1);
+    return {
+        linearToRGBColorComponent(color.red),
+        linearToRGBColorComponent(color.green),
+        linearToRGBColorComponent(color.blue),
+        color.alpha
+    };
 }
 
-float luminance(const FloatComponents& sRGBComponents)
+static LinearSRGBA<float> toLinearSRGBA(const XYZA<float>& color)
 {
-    // Values from https://www.w3.org/TR/2008/REC-WCAG20-20081211/#relativeluminancedef
-    return 0.2126f * sRGBToLinearColorComponentForLuminance(sRGBComponents.components[0])
-        + 0.7152f * sRGBToLinearColorComponentForLuminance(sRGBComponents.components[1])
-        + 0.0722f * sRGBToLinearColorComponentForLuminance(sRGBComponents.components[2]);
+    // https://en.wikipedia.org/wiki/SRGB
+    // http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+    constexpr ColorMatrix<3, 3> xyzToLinearSRGBMatrix {
+         3.2404542f, -1.5371385f, -0.4985314f,
+        -0.9692660f,  1.8760108f,  0.0415560f,
+         0.0556434f, -0.2040259f,  1.0572252f
+    };
+    return asLinearSRGBA(xyzToLinearSRGBMatrix.transformedColorComponents(asColorComponents(color)));
 }
 
-float contrastRatio(const FloatComponents& componentsA, const FloatComponents& componentsB)
+static XYZA<float> toXYZ(const LinearSRGBA<float>& color)
+{
+    // https://en.wikipedia.org/wiki/SRGB
+    // http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+    constexpr ColorMatrix<3, 3> linearSRGBToXYZMatrix {
+        0.4124564f,  0.3575761f,  0.1804375f,
+        0.2126729f,  0.7151522f,  0.0721750f,
+        0.0193339f,  0.1191920f,  0.9503041f
+    };
+    return asXYZA(linearSRGBToXYZMatrix.transformedColorComponents(asColorComponents(color)));
+}
+
+static LinearDisplayP3<float> toLinearDisplayP3(const XYZA<float>& color)
+{
+    // https://drafts.csswg.org/css-color/#color-conversion-code
+    constexpr ColorMatrix<3, 3> xyzToLinearDisplayP3Matrix {
+         2.493496911941425f,  -0.9313836179191239f, -0.4027107844507168f,
+        -0.8294889695615747f,  1.7626640603183463f,  0.0236246858419436f,
+         0.0358458302437845f, -0.0761723892680418f,  0.9568845240076872f
+    };
+    return asLinearDisplayP3(xyzToLinearDisplayP3Matrix.transformedColorComponents(asColorComponents(color)));
+}
+
+static XYZA<float> toXYZ(const LinearDisplayP3<float>& color)
+{
+    // https://drafts.csswg.org/css-color/#color-conversion-code
+    constexpr ColorMatrix<3, 3> linearDisplayP3ToXYZMatrix {
+        0.4865709486482162f, 0.2656676931690931f, 0.198217285234363f,
+        0.2289745640697488f, 0.6917385218365064f, 0.079286914093745f,
+        0.0f,                0.0451133818589026f, 1.043944368900976f
+    };
+    return asXYZA(linearDisplayP3ToXYZMatrix.transformedColorComponents(asColorComponents(color)));
+}
+
+SRGBA<float> toSRGBA(const DisplayP3<float>& color)
+{
+    return toSRGBA(toLinearSRGBA(toXYZ(toLinearDisplayP3(color))));
+}
+
+DisplayP3<float> toDisplayP3(const SRGBA<float>& color)
+{
+    return toDisplayP3(toLinearDisplayP3(toXYZ(toLinearSRGBA(color))));
+}
+
+float lightness(const SRGBA<float>& color)
+{
+    auto [r, g, b, a] = color;
+    auto [min, max] = std::minmax({ r, g, b });
+    return 0.5f * (max + min);
+}
+
+float luminance(const SRGBA<float>& color)
+{
+    // NOTE: This is the equivalent of toXYZA(toLinearSRGBA(color)).y
+    // FIMXE: If we can generalize ColorMatrix a bit more, it might be nice to write this as:
+    //      return toLinearSRGBA(color) * linearSRGBToXYZMatrix.row(1);
+    auto [r, g, b, a] = toLinearSRGBA(color);
+    return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+}
+
+float contrastRatio(const SRGBA<float>& colorA, const SRGBA<float>& colorB)
 {
     // Uses the WCAG 2.0 definition of contrast ratio.
     // https://www.w3.org/TR/WCAG20/#contrast-ratiodef
-    float lighterLuminance = luminance(componentsA);
-    float darkerLuminance = luminance(componentsB);
+    float lighterLuminance = luminance(colorA);
+    float darkerLuminance = luminance(colorB);
 
     if (lighterLuminance < darkerLuminance)
         std::swap(lighterLuminance, darkerLuminance);
@@ -133,15 +174,12 @@ float contrastRatio(const FloatComponents& componentsA, const FloatComponents& c
     return (lighterLuminance + 0.05) / (darkerLuminance + 0.05);
 }
 
-FloatComponents sRGBToHSL(const FloatComponents& sRGBColor)
+HSLA<float> toHSLA(const SRGBA<float>& color)
 {
     // http://en.wikipedia.org/wiki/HSL_color_space.
-    float r = sRGBColor.components[0];
-    float g = sRGBColor.components[1];
-    float b = sRGBColor.components[2];
+    auto [r, g, b, alpha] = color;
 
-    float max = std::max(std::max(r, g), b);
-    float min = std::min(std::min(r, g), b);
+    auto [min, max] = std::minmax({ r, g, b });
     float chroma = max - min;
 
     float hue;
@@ -172,7 +210,7 @@ FloatComponents sRGBToHSL(const FloatComponents& sRGBColor)
         hue,
         saturation,
         lightness,
-        sRGBColor.components[3]
+        alpha
     };
 }
 
@@ -195,11 +233,9 @@ static float calcHue(float temp1, float temp2, float hueVal)
 // Explanation of this algorithm can be found in the CSS Color 4 Module
 // specification at https://drafts.csswg.org/css-color-4/#hsl-to-rgb with
 // further explanation available at http://en.wikipedia.org/wiki/HSL_color_space
-FloatComponents HSLToSRGB(const FloatComponents& hslColor)
+SRGBA<float> toSRGBA(const HSLA<float>& color)
 {
-    float hue = hslColor.components[0];
-    float saturation = hslColor.components[1];
-    float lightness = hslColor.components[2];
+    auto [hue, saturation, lightness, alpha] = color;
 
     // Convert back to RGB.
     if (!saturation) {
@@ -207,7 +243,7 @@ FloatComponents HSLToSRGB(const FloatComponents& hslColor)
             lightness,
             lightness,
             lightness,
-            hslColor.components[3]
+            alpha
         };
     }
     
@@ -219,149 +255,19 @@ FloatComponents HSLToSRGB(const FloatComponents& hslColor)
         calcHue(temp1, temp2, hue + 2.0f),
         calcHue(temp1, temp2, hue),
         calcHue(temp1, temp2, hue - 2.0f),
-        hslColor.components[3]
+        alpha
     };
 }
 
-ColorMatrix::ColorMatrix()
+SRGBA<float> premultiplied(const SRGBA<float>& color)
 {
-    makeIdentity();
-}
-
-ColorMatrix::ColorMatrix(const float values[20])
-{
-    m_matrix[0][0] = values[0];
-    m_matrix[0][1] = values[1];
-    m_matrix[0][2] = values[2];
-    m_matrix[0][3] = values[3];
-    m_matrix[0][4] = values[4];
-
-    m_matrix[1][0] = values[5];
-    m_matrix[1][1] = values[6];
-    m_matrix[1][2] = values[7];
-    m_matrix[1][3] = values[8];
-    m_matrix[1][4] = values[9];
-
-    m_matrix[2][0] = values[10];
-    m_matrix[2][1] = values[11];
-    m_matrix[2][2] = values[12];
-    m_matrix[2][3] = values[13];
-    m_matrix[2][4] = values[14];
-
-    m_matrix[3][0] = values[15];
-    m_matrix[3][1] = values[16];
-    m_matrix[3][2] = values[17];
-    m_matrix[3][3] = values[18];
-    m_matrix[3][4] = values[19];
-}
-
-void ColorMatrix::makeIdentity()
-{
-    memset(m_matrix, 0, sizeof(m_matrix));
-    m_matrix[0][0] = 1;
-    m_matrix[1][1] = 1;
-    m_matrix[2][2] = 1;
-    m_matrix[3][3] = 1;
-}
-
-ColorMatrix ColorMatrix::grayscaleMatrix(float amount)
-{
-    ColorMatrix matrix;
-
-    float oneMinusAmount = clampTo(1 - amount, 0.0, 1.0);
-
-    // Values from https://www.w3.org/TR/filter-effects-1/#grayscaleEquivalent
-    matrix.m_matrix[0][0] = 0.2126f + 0.7874f * oneMinusAmount;
-    matrix.m_matrix[0][1] = 0.7152f - 0.7152f * oneMinusAmount;
-    matrix.m_matrix[0][2] = 0.0722f - 0.0722f * oneMinusAmount;
-
-    matrix.m_matrix[1][0] = 0.2126f - 0.2126f * oneMinusAmount;
-    matrix.m_matrix[1][1] = 0.7152f + 0.2848f * oneMinusAmount;
-    matrix.m_matrix[1][2] = 0.0722f - 0.0722f * oneMinusAmount;
-
-    matrix.m_matrix[2][0] = 0.2126f - 0.2126f * oneMinusAmount;
-    matrix.m_matrix[2][1] = 0.7152f - 0.7152f * oneMinusAmount;
-    matrix.m_matrix[2][2] = 0.0722f + 0.9278f * oneMinusAmount;
-    
-    return matrix;
-}
-
-ColorMatrix ColorMatrix::saturationMatrix(float amount)
-{
-    ColorMatrix matrix;
-
-    // Values from https://www.w3.org/TR/filter-effects-1/#feColorMatrixElement
-    matrix.m_matrix[0][0] = 0.213f + 0.787f * amount;
-    matrix.m_matrix[0][1] = 0.715f - 0.715f * amount;
-    matrix.m_matrix[0][2] = 0.072f - 0.072f * amount;
-
-    matrix.m_matrix[1][0] = 0.213f - 0.213f * amount;
-    matrix.m_matrix[1][1] = 0.715f + 0.285f * amount;
-    matrix.m_matrix[1][2] = 0.072f - 0.072f * amount;
-
-    matrix.m_matrix[2][0] = 0.213f - 0.213f * amount;
-    matrix.m_matrix[2][1] = 0.715f - 0.715f * amount;
-    matrix.m_matrix[2][2] = 0.072f + 0.928f * amount;
-
-    return matrix;
-}
-
-ColorMatrix ColorMatrix::hueRotateMatrix(float angleInDegrees)
-{
-    float cosHue = cos(deg2rad(angleInDegrees));
-    float sinHue = sin(deg2rad(angleInDegrees));
-
-    ColorMatrix matrix;
-
-    // Values from https://www.w3.org/TR/filter-effects-1/#feColorMatrixElement
-    matrix.m_matrix[0][0] = 0.213f + cosHue * 0.787f - sinHue * 0.213f;
-    matrix.m_matrix[0][1] = 0.715f - cosHue * 0.715f - sinHue * 0.715f;
-    matrix.m_matrix[0][2] = 0.072f - cosHue * 0.072f + sinHue * 0.928f;
-
-    matrix.m_matrix[1][0] = 0.213f - cosHue * 0.213f + sinHue * 0.143f;
-    matrix.m_matrix[1][1] = 0.715f + cosHue * 0.285f + sinHue * 0.140f;
-    matrix.m_matrix[1][2] = 0.072f - cosHue * 0.072f - sinHue * 0.283f;
-
-    matrix.m_matrix[2][0] = 0.213f - cosHue * 0.213f - sinHue * 0.787f;
-    matrix.m_matrix[2][1] = 0.715f - cosHue * 0.715f + sinHue * 0.715f;
-    matrix.m_matrix[2][2] = 0.072f + cosHue * 0.928f + sinHue * 0.072f;
-
-    return matrix;
-}
-
-ColorMatrix ColorMatrix::sepiaMatrix(float amount)
-{
-    ColorMatrix matrix;
-
-    float oneMinusAmount = clampTo(1 - amount, 0.0, 1.0);
-
-    // Values from https://www.w3.org/TR/filter-effects-1/#sepiaEquivalent
-    matrix.m_matrix[0][0] = 0.393f + 0.607f * oneMinusAmount;
-    matrix.m_matrix[0][1] = 0.769f - 0.769f * oneMinusAmount;
-    matrix.m_matrix[0][2] = 0.189f - 0.189f * oneMinusAmount;
-
-    matrix.m_matrix[1][0] = 0.349f - 0.349f * oneMinusAmount;
-    matrix.m_matrix[1][1] = 0.686f + 0.314f * oneMinusAmount;
-    matrix.m_matrix[1][2] = 0.168f - 0.168f * oneMinusAmount;
-
-    matrix.m_matrix[2][0] = 0.272f - 0.272f * oneMinusAmount;
-    matrix.m_matrix[2][1] = 0.534f - 0.534f * oneMinusAmount;
-    matrix.m_matrix[2][2] = 0.131f + 0.869f * oneMinusAmount;
-
-    return matrix;
-}
-
-void ColorMatrix::transformColorComponents(FloatComponents& colorComonents) const
-{
-    float red = colorComonents.components[0];
-    float green = colorComonents.components[1];
-    float blue = colorComonents.components[2];
-    float alpha = colorComonents.components[3];
-
-    colorComonents.components[0] = m_matrix[0][0] * red + m_matrix[0][1] * green + m_matrix[0][2] * blue + m_matrix[0][3] * alpha + m_matrix[0][4];
-    colorComonents.components[1] = m_matrix[1][0] * red + m_matrix[1][1] * green + m_matrix[1][2] * blue + m_matrix[1][3] * alpha + m_matrix[1][4];
-    colorComonents.components[2] = m_matrix[2][0] * red + m_matrix[2][1] * green + m_matrix[2][2] * blue + m_matrix[2][3] * alpha + m_matrix[2][4];
-    colorComonents.components[3] = m_matrix[3][0] * red + m_matrix[3][1] * green + m_matrix[3][2] * blue + m_matrix[3][3] * alpha + m_matrix[3][4];
+    auto [r, g, b, a] = color;
+    return {
+        r * a,
+        g * a,
+        b * a,
+        a
+    };
 }
 
 } // namespace WebCore

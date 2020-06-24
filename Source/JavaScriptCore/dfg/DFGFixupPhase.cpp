@@ -1028,6 +1028,23 @@ private:
                 m_insertionSet.insertNode(
                     m_indexInBlock, SpecNone, ForceOSRExit, node->origin);
             }
+
+            {
+                auto indexSpeculation = m_graph.varArgChild(node, 1)->prediction();
+                if (!isInt32Speculation(indexSpeculation) 
+                    && isFullNumberSpeculation(indexSpeculation)
+                    && node->arrayMode().isSpecific()
+                    && node->arrayMode().isInBounds()
+                    && !m_graph.hasExitSite(node->origin.semantic, Overflow)) {
+
+                    Node* newIndex = m_insertionSet.insertNode(
+                        m_indexInBlock, SpecInt32Only, DoubleAsInt32, node->origin,
+                        Edge(m_graph.varArgChild(node, 1).node(), DoubleRepUse));
+                    newIndex->setArithMode(Arith::CheckOverflow);
+                    m_graph.varArgChild(node, 1).setNode(newIndex);
+                }
+            }
+            
             
             node->setArrayMode(
                 node->arrayMode().refine(
@@ -1169,6 +1186,22 @@ private:
             Edge& child1 = m_graph.varArgChild(node, 0);
             Edge& child2 = m_graph.varArgChild(node, 1);
             Edge& child3 = m_graph.varArgChild(node, 2);
+
+            {
+                auto indexSpeculation = child2->prediction();
+                if (!isInt32Speculation(indexSpeculation) 
+                    && isFullNumberSpeculation(indexSpeculation)
+                    && node->arrayMode().isSpecific()
+                    && node->arrayMode().isInBounds()
+                    && !m_graph.hasExitSite(node->origin.semantic, Overflow)) {
+
+                    Node* newIndex = m_insertionSet.insertNode(
+                        m_indexInBlock, SpecInt32Only, DoubleAsInt32, node->origin,
+                        Edge(child2.node(), DoubleRepUse));
+                    newIndex->setArithMode(Arith::CheckOverflow);
+                    child2.setNode(newIndex);
+                }
+            }
 
             node->setArrayMode(
                 node->arrayMode().refine(
@@ -2146,6 +2179,13 @@ private:
             fixEdge<KnownCellUse>(node->child3());
             break;
         }
+        case HasOwnStructureProperty:
+        case InStructureProperty: {
+            fixEdge<CellUse>(node->child1());
+            fixEdge<KnownStringUse>(node->child2());
+            fixEdge<KnownCellUse>(node->child3());
+            break;
+        }
         case HasIndexedProperty: {
             node->setArrayMode(
                 node->arrayMode().refine(
@@ -2502,8 +2542,9 @@ private:
             break;
         }
 
-        case CheckSubClass: {
-            fixupCheckSubClass(node);
+        case CheckJSCast:
+        case CheckNotJSCast: {
+            fixupCheckJSCast(node);
             break;
         }
 
@@ -2691,7 +2732,7 @@ private:
         case SuperSamplerBegin:
         case SuperSamplerEnd:
         case ForceOSRExit:
-        case CheckBadCell:
+        case CheckBadValue:
         case CheckNotEmpty:
         case AssertNotEmpty:
         case CheckTraps:
@@ -3996,14 +4037,15 @@ private:
         }
 
         Node* thisNode = m_graph.varArgChild(node, 1).node();
-        Node* checkSubClass = m_insertionSet.insertNode(m_indexInBlock, SpecNone, CheckSubClass, node->origin, OpInfo(signature->classInfo), Edge(thisNode));
+        Node* checkSubClass = m_insertionSet.insertNode(m_indexInBlock, SpecNone, CheckJSCast, node->origin, OpInfo(signature->classInfo), Edge(thisNode));
         node->convertToCallDOM(m_graph);
-        fixupCheckSubClass(checkSubClass);
+        fixupCheckJSCast(checkSubClass);
         fixupCallDOM(node);
+        RELEASE_ASSERT(node->child1().node() == thisNode);
         return true;
     }
 
-    void fixupCheckSubClass(Node* node)
+    void fixupCheckJSCast(Node* node)
     {
         fixEdge<CellUse>(node->child1());
     }

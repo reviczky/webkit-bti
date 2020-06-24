@@ -136,7 +136,6 @@ public:
     WEBCORE_EXPORT Vector<ManipulationFailure> completeManipulation(const Vector<ManipulationItem>&);
 
 private:
-    bool isInManipulatedElement(Element&);
     void observeParagraphs(const Position& start, const Position& end);
     void scheduleObservationUpdate();
 
@@ -150,8 +149,29 @@ private:
         Vector<ManipulationToken> tokens;
     };
 
+    struct ManipulationUnit {
+        Ref<Node> node;
+        Vector<ManipulationToken> tokens;
+        bool areAllTokensExcluded { true };
+        bool firstTokenContainsDelimiter { false };
+        bool lastTokenContainsDelimiter { false };
+    };
+    ManipulationUnit createUnit(const Vector<String>&, Node&);
+    void parse(ManipulationUnit&, const String&, Node&);
+
     void addItem(ManipulationItemData&&);
+    void addItemIfPossible(Vector<ManipulationUnit>&&);
     void flushPendingItemsForCallback();
+
+    enum class IsNodeManipulated : bool { No, Yes };
+    struct NodeInsertion {
+        RefPtr<Node> parentIfDifferentFromCommonAncestor;
+        Ref<Node> child;
+        IsNodeManipulated isChildManipulated { IsNodeManipulated::Yes };
+    };
+    using NodeEntry = std::pair<Ref<Node>, Ref<Node>>;
+    Vector<Ref<Node>> getPath(Node*, Node*);
+    void updateInsertions(Vector<NodeEntry>&, const Vector<Ref<Node>>&, Node*, HashSet<Ref<Node>>&, Vector<NodeInsertion>&, IsNodeManipulated = IsNodeManipulated::Yes);
     Optional<ManipulationFailureType> replace(const ManipulationItemData&, const Vector<ManipulationToken>&);
 
     WeakPtr<Document> m_document;

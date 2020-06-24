@@ -169,7 +169,7 @@ inline JSObject* constructGenericTypedArrayViewWithArguments(JSGlobalObject* glo
             // 3) The base object might have indexed getters.
             // it should not be observable that we do not use the iterator.
 
-            if (!iteratorFunc.isUndefined()
+            if (!iteratorFunc.isUndefinedOrNull()
                 && (iteratorFunc != object->globalObject(vm)->arrayProtoValuesFunction()
                     || lengthSlot.isAccessor() || lengthSlot.isCustom() || lengthSlot.isTaintedByOpaqueObject()
                     || hasAnyArrayStorage(object->indexingType()))) {
@@ -234,15 +234,10 @@ EncodedJSValue JSC_HOST_CALL constructGenericTypedArrayView(JSGlobalObject* glob
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
         if (argCount > 2) {
-            if (ViewClass::TypedArrayStorageType == TypeDataView) {
-                // If the DataView byteLength is present but undefined, treat it as missing.
-                JSValue byteLengthValue = callFrame->uncheckedArgument(2);
-                if (!byteLengthValue.isUndefined()) {
-                    length = byteLengthValue.toIndex(globalObject, "byteLength");
-                    RETURN_IF_EXCEPTION(scope, encodedJSValue());
-                }
-            } else {
-                length = callFrame->uncheckedArgument(2).toIndex(globalObject, "length");
+            // If the length value is present but undefined, treat it as missing.
+            JSValue lengthValue = callFrame->uncheckedArgument(2);
+            if (!lengthValue.isUndefined()) {
+                length = lengthValue.toIndex(globalObject, ViewClass::TypedArrayStorageType == TypeDataView ? "byteLength" : "length");
                 RETURN_IF_EXCEPTION(scope, encodedJSValue());
             }
         }

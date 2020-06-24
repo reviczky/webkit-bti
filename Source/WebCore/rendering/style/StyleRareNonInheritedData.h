@@ -154,6 +154,8 @@ public:
     Length shapeMargin;
     float shapeImageThreshold;
 
+    int order;
+
     RefPtr<ClipPathOperation> clipPath;
 
     Color textDecorationColor;
@@ -164,8 +166,6 @@ public:
     Color visitedLinkBorderRightColor;
     Color visitedLinkBorderTopColor;
     Color visitedLinkBorderBottomColor;
-
-    int order;
 
     StyleContentAlignmentData alignContent;
     StyleSelfAlignmentData alignItems;
@@ -203,7 +203,7 @@ public:
 
 #if ENABLE(APPLE_PAY)
     unsigned applePayButtonStyle : 2;
-    unsigned applePayButtonType : 3;
+    unsigned applePayButtonType : 4;
 #endif
 
     unsigned objectFit : 3; // ObjectFit

@@ -95,7 +95,9 @@ namespace WebCore {
     M(ResourceLoadObserver) \
     M(ResourceLoadStatistics) \
     M(Scrolling) \
+    M(ScrollingTree) \
     M(ScrollLatching) \
+    M(Selection) \
     M(Services) \
     M(ServiceWorker) \
     M(SpellingAndGrammar) \
@@ -113,6 +115,7 @@ namespace WebCore {
     M(WebGPU) \
     M(WebRTC) \
     M(WebRTCStats) \
+    M(XR) \
     M(WheelEventTestMonitor) \
 
 #undef DECLARE_LOG_CHANNEL

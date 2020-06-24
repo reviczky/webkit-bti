@@ -195,7 +195,7 @@ WI.SearchSidebarPanel = class SearchSidebarPanel extends WI.NavigationSidebarPan
             if (!frame)
                 return;
 
-            var resource = frame.url === url ? frame.mainResource : frame.resourceForURL(url);
+            let resource = frame.url === url ? frame.mainResource : frame.resourcesForURL(url).firstValue;
             if (!resource)
                 return;
 
@@ -286,7 +286,7 @@ WI.SearchSidebarPanel = class SearchSidebarPanel extends WI.NavigationSidebarPan
                         continue;
 
                     // FIXME: This should use a frame to do resourceForURL, but DOMAgent does not provide a frameId.
-                    var resource = WI.networkManager.resourceForURL(domNode.ownerDocument.documentURL);
+                    let resource = WI.networkManager.resourcesForURL(domNode.ownerDocument.documentURL).firstValue;
                     if (!resource)
                         continue;
 
@@ -318,7 +318,7 @@ WI.SearchSidebarPanel = class SearchSidebarPanel extends WI.NavigationSidebarPan
 
         WI.domManager.ensureDocument();
 
-        if (target.hasDomain("Page"))
+        if (target.hasCommand("Page.searchInResources"))
             countPromise(target.PageAgent.searchInResources(searchQuery, isCaseSensitive, isRegex), resourcesCallback);
 
         setTimeout(searchScripts.bind(this, WI.debuggerManager.searchableScripts), 0);

@@ -124,6 +124,7 @@ HTMLCanvasElement::HTMLCanvasElement(const QualifiedName& tagName, Document& doc
     , ActiveDOMObject(document)
 {
     ASSERT(hasTagName(canvasTag));
+    addObserver(document);
 }
 
 Ref<HTMLCanvasElement> HTMLCanvasElement::create(Document& document)
@@ -146,6 +147,7 @@ HTMLCanvasElement::~HTMLCanvasElement()
     // downcasts the CanvasBase object to HTMLCanvasElement. That invokes virtual methods, which should be
     // avoided in destructors, but works as long as it's done before HTMLCanvasElement destructs completely.
     notifyObserversCanvasDestroyed();
+    document().clearCanvasPreparation(this);
 
     m_context = nullptr; // Ensure this goes away before the ImageBuffer.
     setImageBuffer(nullptr);
@@ -994,6 +996,44 @@ void HTMLCanvasElement::eventListenersDidChange()
     m_hasRelevantWebGLEventListener = hasEventListeners(eventNames().webglcontextchangedEvent)
         || hasEventListeners(eventNames().webglcontextlostEvent)
         || hasEventListeners(eventNames().webglcontextrestoredEvent);
+#endif
+}
+
+void HTMLCanvasElement::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
+{
+    oldDocument.clearCanvasPreparation(this);
+    removeObserver(oldDocument);
+    addObserver(newDocument);
+
+    HTMLElement::didMoveToNewDocument(oldDocument, newDocument);
+}
+
+void HTMLCanvasElement::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
+{
+    if (removalType.disconnectedFromDocument) {
+        oldParentOfRemovedTree.document().clearCanvasPreparation(this);
+        removeObserver(oldParentOfRemovedTree.document());
+    }
+
+    HTMLElement::removedFromAncestor(removalType, oldParentOfRemovedTree);
+}
+
+bool HTMLCanvasElement::needsPreparationForDisplay()
+{
+#if ENABLE(WEBGL)
+    return is<WebGLRenderingContextBase>(m_context.get());
+#else
+    return false;
+#endif
+}
+
+void HTMLCanvasElement::prepareForDisplay()
+{
+#if ENABLE(WEBGL)
+    ASSERT(needsPreparationForDisplay());
+
+    if (is<WebGLRenderingContextBase>(m_context.get()))
+        downcast<WebGLRenderingContextBase>(m_context.get())->prepareForDisplay();
 #endif
 }
 

@@ -51,8 +51,8 @@
 namespace WebCore {
 
 class AnimationTimeline;
-class AudioContext;
 class AudioTrack;
+class BaseAudioContext;
 class CacheStorageConnection;
 class DOMRect;
 class DOMRectList;
@@ -106,11 +106,18 @@ class TimeRanges;
 class TypeConversions;
 class UnsuspendableActiveDOMObject;
 class VoidCallback;
+class WebAnimation;
 class WebGLRenderingContext;
+class WebKitAudioContext;
 class WindowProxy;
 class XMLHttpRequest;
 
-#if ENABLE(VIDEO_TRACK)
+#if ENABLE(ENCRYPTED_MEDIA)
+class MediaKeys;
+class MediaKeySession;
+#endif
+
+#if ENABLE(VIDEO)
 class TextTrackCueGeneric;
 #endif
 
@@ -239,6 +246,7 @@ public:
     };
     Vector<AcceleratedAnimation> acceleratedAnimationsForElement(Element&);
     unsigned numberOfAnimationTimelineInvalidations() const;
+    double timeToNextAnimationTick(WebAnimation&) const;
 
     // For animations testing, we need a way to get at pseudo elements.
     ExceptionOr<RefPtr<Element>> pseudoElement(Element&, const String&);
@@ -277,6 +285,7 @@ public:
 
     ExceptionOr<void> setScrollViewPosition(int x, int y);
     ExceptionOr<void> unconstrainedScrollTo(Element&, double x, double y);
+    ExceptionOr<void> scrollBySimulatingWheelEvent(Element&, double deltaX, double deltaY);
 
     ExceptionOr<Ref<DOMRect>> layoutViewportRect();
     ExceptionOr<Ref<DOMRect>> visualViewportRect();
@@ -349,6 +358,7 @@ public:
     bool hasSpellingMarker(int from, int length);
     bool hasGrammarMarker(int from, int length);
     bool hasAutocorrectedMarker(int from, int length);
+    bool hasDictationAlternativesMarker(int from, int length);
     void setContinuousSpellCheckingEnabled(bool);
     void setAutomaticQuoteSubstitutionEnabled(bool);
     void setAutomaticLinkDetectionEnabled(bool);
@@ -556,6 +566,7 @@ public:
     void reloadExpiredOnly();
 
     void enableFixedWidthAutoSizeMode(bool enabled, int width, int height);
+    void enableSizeToContentAutoSizeMode(bool enabled, int width, int height);
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     void initializeMockCDM();
@@ -611,12 +622,9 @@ public:
     ExceptionOr<void> setCaptionsStyleSheetOverride(const String&);
     ExceptionOr<void> setPrimaryAudioTrackLanguageOverride(const String&);
     ExceptionOr<void> setCaptionDisplayMode(const String&);
-#if ENABLE(VIDEO_TRACK)
+#if ENABLE(VIDEO)
     RefPtr<TextTrackCueGeneric> createGenericCue(double startTime, double endTime, String text);
     ExceptionOr<String> textTrackBCP47Language(TextTrack&);
-#endif
-
-#if ENABLE(VIDEO)
     Ref<TimeRanges> createTimeRanges(Float32Array& startTimes, Float32Array& endTimes);
     double closestTimeToTimeRanges(double time, TimeRanges&);
 #endif
@@ -668,7 +676,7 @@ public:
 #endif
 
 #if ENABLE(WEB_AUDIO)
-    void setAudioContextRestrictions(AudioContext&, StringView restrictionsString);
+    void setAudioContextRestrictions(const Variant<RefPtr<BaseAudioContext>, RefPtr<WebKitAudioContext>>&, StringView restrictionsString);
     void useMockAudioDestinationCocoa();
 #endif
 
@@ -780,6 +788,8 @@ public:
     void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack&);
     void setMediaStreamTrackIdentifier(MediaStreamTrack&, String&& id);
     void setMediaStreamSourceInterrupted(MediaStreamTrack&, bool);
+    bool isMediaStreamSourceInterrupted(MediaStreamTrack&) const;
+    bool isMediaStreamSourceEnded(MediaStreamTrack&) const;
     bool isMockRealtimeMediaSourceCenterEnabled();
     bool shouldAudioTrackPlay(const AudioTrack&);
 #endif
@@ -962,16 +972,16 @@ public:
         bool useBoundingRectAndPaintAllContentForComplexRanges { false };
         bool computeEstimatedBackgroundColor { false };
         bool respectTextColor { false };
-        
-        WebCore::TextIndicatorOptions core()
+
+        OptionSet<WebCore::TextIndicatorOption> coreOptions()
         {
-            WebCore::TextIndicatorOptions options = 0;
+            OptionSet<WebCore::TextIndicatorOption> options;
             if (useBoundingRectAndPaintAllContentForComplexRanges)
-                options = options | TextIndicatorOptionUseBoundingRectAndPaintAllContentForComplexRanges;
+                options.add(TextIndicatorOption::UseBoundingRectAndPaintAllContentForComplexRanges);
             if (computeEstimatedBackgroundColor)
-                options = options | TextIndicatorOptionComputeEstimatedBackgroundColor;
+                options.add(TextIndicatorOption::ComputeEstimatedBackgroundColor);
             if (respectTextColor)
-                options = options | TextIndicatorOptionRespectTextColor;
+                options.add(TextIndicatorOption::RespectTextColor);
             return options;
         }
     };
@@ -982,10 +992,6 @@ public:
 
 #if ENABLE(WEB_AUTHN)
     void setMockWebAuthenticationConfiguration(const MockWebAuthenticationConfiguration&);
-#endif
-
-#if ENABLE(PICTURE_IN_PICTURE_API)
-    void setPictureInPictureAPITestEnabled(HTMLVideoElement&, bool);
 #endif
 
     int processIdentifier() const;
@@ -1021,6 +1027,11 @@ public:
 
 #if ENABLE(WEBXR)
     ExceptionOr<RefPtr<WebXRTest>> xrTest();
+#endif
+
+#if ENABLE(ENCRYPTED_MEDIA)
+    unsigned mediaKeysInternalInstanceObjectRefCount(const MediaKeys&) const;
+    unsigned mediaKeySessionInternalInstanceSessionObjectRefCount(const MediaKeySession&) const;
 #endif
 
 private:

@@ -29,14 +29,16 @@
 #include "Attachment.h"
 #include "MessageNames.h"
 #include "StringReference.h"
-#include <wtf/EnumTraits.h>
+#include <WebCore/ContextMenuItem.h>
+#include <wtf/OptionSet.h>
 #include <wtf/Vector.h>
 
 namespace IPC {
 
 class DataReference;
-enum class ShouldDispatchWhenWaitingForSyncReply;
+enum class MessageFlags : uint8_t;
 enum class MessageName : uint16_t;
+enum class ShouldDispatchWhenWaitingForSyncReply : uint8_t;
 
 class Encoder final {
     WTF_MAKE_FAST_ALLOCATED;
@@ -61,13 +63,6 @@ public:
     void encodeFixedLengthData(const uint8_t* data, size_t, size_t alignment);
     void encodeVariableLengthByteArray(const DataReference&);
 
-    template<typename E>
-    void encodeEnum(E enumValue)
-    {
-        // FIXME: Remove this after migrating all uses of this function to encode() or operator<<() with WTF::isValidEnum check.
-        encode(static_cast<typename std::underlying_type<E>::type>(enumValue));
-    }
-
     template<typename T, std::enable_if_t<!std::is_enum<typename std::remove_const_t<std::remove_reference_t<T>>>::value && !std::is_arithmetic<typename std::remove_const_t<std::remove_reference_t<T>>>::value>* = nullptr>
     void encode(T&& t)
     {
@@ -77,8 +72,8 @@ public:
     template<typename E, std::enable_if_t<std::is_enum<E>::value>* = nullptr>
     Encoder& operator<<(E&& enumValue)
     {
-        ASSERT(WTF::isValidEnum<E>(static_cast<typename std::underlying_type<E>::type>(enumValue)));
-        encode(static_cast<typename std::underlying_type<E>::type>(enumValue));
+        ASSERT(WTF::isValidEnum<E>(WTF::enumToUnderlyingType<E>(enumValue)));
+        encode(WTF::enumToUnderlyingType<E>(enumValue));
         return *this;
     }
 
@@ -111,11 +106,13 @@ private:
     template<typename E, std::enable_if_t<std::is_enum<E>::value>* = nullptr>
     void encode(E enumValue)
     {
-        ASSERT(WTF::isValidEnum<E>(static_cast<typename std::underlying_type<E>::type>(enumValue)));
-        encode(static_cast<typename std::underlying_type<E>::type>(enumValue));
+        ASSERT(WTF::isValidEnum<E>(WTF::enumToUnderlyingType<E>(enumValue)));
+        encode(WTF::enumToUnderlyingType<E>(enumValue));
     }
 
     void encodeHeader();
+    const OptionSet<MessageFlags>& messageFlags() const;
+    OptionSet<MessageFlags>& messageFlags();
 
     MessageName m_messageName;
     uint64_t m_destinationID;

@@ -96,7 +96,6 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     \
     v(Bool, crashIfCantAllocateJITMemory, false, Normal, nullptr) \
     v(Unsigned, jitMemoryReservationSize, 0, Normal, "Set this number to change the executable allocation size in ExecutableAllocatorFixedVMPool. (In bytes.)") \
-    v(Bool, useSeparatedWXHeap, false, Normal, nullptr) \
     \
     v(Bool, forceCodeBlockLiveness, false, Normal, nullptr) \
     v(Bool, forceICFailure, false, Normal, nullptr) \
@@ -135,9 +134,9 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(OptionRange, bytecodeRangeToJITCompile, 0, Normal, "bytecode size range to allow compilation on, e.g. 1:100") \
     v(OptionRange, bytecodeRangeToDFGCompile, 0, Normal, "bytecode size range to allow DFG compilation on, e.g. 1:100") \
     v(OptionRange, bytecodeRangeToFTLCompile, 0, Normal, "bytecode size range to allow FTL compilation on, e.g. 1:100") \
-    v(OptionString, jitWhitelist, nullptr, Normal, "file with list of function signatures to allow compilation on") \
-    v(OptionString, dfgWhitelist, nullptr, Normal, "file with list of function signatures to allow DFG compilation on") \
-    v(OptionString, ftlWhitelist, nullptr, Normal, "file with list of function signatures to allow FTL compilation on") \
+    v(OptionString, jitAllowlist, nullptr, Normal, "file with newline separated list of function signatures to allow compilation on") \
+    v(OptionString, dfgAllowlist, nullptr, Normal, "file with newline separated list of function signatures to allow DFG compilation on") \
+    v(OptionString, ftlAllowlist, nullptr, Normal, "file with newline separated list of function signatures to allow FTL compilation on") \
     v(Bool, dumpSourceAtDFGTime, false, Normal, "dumps source code of JS function being DFG compiled") \
     v(Bool, dumpBytecodeAtDFGTime, false, Normal, "dumps bytecode of JS function being DFG compiled") \
     v(Bool, dumpGraphAfterParsing, false, Normal, nullptr) \
@@ -153,6 +152,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Bool, logCompilationChanges, false, Normal, nullptr) \
     v(Bool, useProbeOSRExit, false, Normal, nullptr) \
     v(Bool, printEachOSRExit, false, Normal, nullptr) \
+    v(Bool, validateDoesGC, ASSERT_ENABLED, Normal, nullptr) \
     v(Bool, validateGraph, false, Normal, nullptr) \
     v(Bool, validateGraphAtEachPhase, false, Normal, nullptr) \
     v(Bool, verboseValidationFailure, false, Normal, nullptr) \
@@ -366,7 +366,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Bool, collectSamplingProfilerDataForJSCShell, false, Normal, "This corresponds to the JSC shell's --sample option.") \
     v(Unsigned, samplingProfilerTopFunctionsCount, 12, Normal, "Number of top functions to report when using the command line interface.") \
     v(Unsigned, samplingProfilerTopBytecodesCount, 40, Normal, "Number of top bytecodes to report when using the command line interface.") \
-    v(OptionString, samplingProfilerPath, nullptr, Normal, "The path to the directory to write sampiling profiler output to. This probably will not work with WK2 unless the path is in the whitelist.") \
+    v(OptionString, samplingProfilerPath, nullptr, Normal, "The path to the directory to write sampiling profiler output to. This probably will not work with WK2 unless the path is in the sandbox.") \
     v(Bool, sampleCCode, false, Normal, "Causes the sampling profiler to record profiling data for C frames.") \
     \
     v(Bool, alwaysGeneratePCToCodeOriginMap, false, Normal, "This will make sure we always generate a PCToCodeOriginMap for JITed code.") \
@@ -421,6 +421,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Bool, useB3TailDup, true, Normal, nullptr) \
     v(Unsigned, maxB3TailDupBlockSize, 3, Normal, nullptr) \
     v(Unsigned, maxB3TailDupBlockSuccessors, 3, Normal, nullptr) \
+    v(Bool, useB3HoistLoopInvariantValues, false, Normal, nullptr) \
     \
     v(Bool, useDollarVM, false, Restricted, "installs the $vm debugging tool in global objects") \
     v(OptionString, functionOverrides, nullptr, Restricted, "file with debugging overrides for function bodies") \
@@ -453,6 +454,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Unsigned, webAssemblyBBQAirOptimizationLevel, 0, Normal, "Air Optimization level for BBQ Web Assembly module compilations.") \
     v(Unsigned, webAssemblyBBQB3OptimizationLevel, 1, Normal, "B3 Optimization level for BBQ Web Assembly module compilations.") \
     v(Unsigned, webAssemblyOMGOptimizationLevel, Options::defaultB3OptLevel(), Normal, "B3 Optimization level for OMG Web Assembly module compilations.") \
+    v(Unsigned, webAssemblyBBQFallbackSize, 60000, Normal, "Limit of Wasm function size above which we fallback to BBQ compilation mode.") \
     \
     v(Bool, useBBQTierUpChecks, true, Normal, "Enables tier up checks for our BBQ code.") \
     v(Bool, useWebAssemblyOSR, true, Normal, nullptr) \
@@ -486,8 +488,6 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Bool, useWebAssemblyMultiValues, true, Normal, "Allow types from the wasm mulit-values spec.") \
     v(Bool, useWeakRefs, false, Normal, "Expose the WeakRef constructor.") \
     v(Bool, useBigInt, true, Normal, "If true, we will enable BigInt support.") \
-    v(Bool, useIntlLocale, false, Normal, "Expose the Intl.Locale constructor.") \
-    v(Bool, useIntlRelativeTimeFormat, false, Normal, "Expose the Intl.RelativeTimeFormat constructor.") \
     v(Bool, useArrayAllocationProfiling, true, Normal, "If true, we will use our normal array allocation profiling. If false, the allocation profile will always claim to be undecided.") \
     v(Bool, forcePolyProto, false, Normal, "If true, create_this will always create an object with a poly proto structure.") \
     v(Bool, forceMiniVMMode, false, Normal, "If true, it will force mini VM mode on.") \
@@ -507,6 +507,9 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(Unsigned, getByValICMaxNumberOfIdentifiers, 4, Normal, "Number of identifiers we see in the LLInt that could cause us to bail on generating an IC for get_by_val.") \
     v(Bool, usePublicClassFields, true, Normal, "If true, the parser will understand public data fields inside classes.") \
     v(Bool, useRandomizingExecutableIslandAllocation, false, Normal, "For the arm64 ExecutableAllocator, if true, select which region to use randomly. This is useful for testing that jump islands work.") \
+    v(Bool, exposeProfilersOnGlobalObject, false, Normal, "If true, we will expose functions to enable/disable both the sampling profiler and the super sampler") \
+    v(Bool, allowUnsupportedTiers, false, Normal, "If true, we will not disable DFG or FTL when an experimental feature is enabled.") \
+    v(Bool, usePrivateClassFields, false, Normal, "If true, the parser will understand private data fields inside classes.") \
 
 enum OptionEquivalence {
     SameOption,
@@ -548,8 +551,16 @@ enum OptionEquivalence {
     v(maximumFunctionForClosureCallInlineCandidateInstructionCount, maximumFunctionForClosureCallInlineCandidateBytecodeCost, SameOption) \
     v(maximumFunctionForConstructInlineCandidateInstructionCount, maximumFunctionForConstructInlineCandidateBytecoodeCost, SameOption) \
     v(maximumFTLCandidateInstructionCount, maximumFTLCandidateBytecodeCost, SameOption) \
-    v(maximumInliningCallerSize, maximumInliningCallerBytecodeCost, SameOption) \
+    v(maximumInliningCallerSize, maximumInliningCallerBytecodeCost, SameOption)
 
+enum ExperimentalOptionFlags {
+    LLIntAndBaselineOnly = 0,
+    SupportsDFG = 1 << 0,
+    SupportsFTL = 1 << 1,
+};
+
+#define FOR_EACH_JSC_EXPERIMENTAL_OPTION(v) \
+    v(usePrivateClassFields, LLIntAndBaselineOnly, "https://bugs.webkit.org/show_bug.cgi?id=212781", "https://bugs.webkit.org/show_bug.cgi?id=212784")
 
 constexpr size_t countNumberOfJSCOptions()
 {
@@ -603,6 +614,9 @@ struct OptionsStorage {
     using OptionRange = JSC::OptionRange;
     using OptionString = const char*;
     using GCLogLevel = GCLogging::Level;
+
+    bool allowUnfinalizedAccess;
+    bool isFinalized;
 
 #define DECLARE_OPTION(type_, name_, defaultValue_, availability_, description_) \
     type_ name_; \

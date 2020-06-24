@@ -27,8 +27,8 @@
 #include "config.h"
 #include "IntlPluralRulesPrototype.h"
 
-#include "Error.h"
 #include "IntlPluralRules.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
@@ -41,7 +41,7 @@ static EncodedJSValue JSC_HOST_CALL IntlPluralRulesPrototypeFuncResolvedOptions(
 
 namespace JSC {
 
-const ClassInfo IntlPluralRulesPrototype::s_info = { "Object", &Base::s_info, &pluralRulesPrototypeTable, nullptr, CREATE_METHOD_TABLE(IntlPluralRulesPrototype) };
+const ClassInfo IntlPluralRulesPrototype::s_info = { "Intl.PluralRules", &Base::s_info, &pluralRulesPrototypeTable, nullptr, CREATE_METHOD_TABLE(IntlPluralRulesPrototype) };
 
 /* Source for IntlPluralRulesPrototype.lut.h
 @begin pluralRulesPrototypeTable

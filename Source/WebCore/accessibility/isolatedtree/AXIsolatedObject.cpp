@@ -44,7 +44,12 @@ AXIsolatedObject::AXIsolatedObject(AXCoreObject& object, AXIsolatedTreeID treeID
     ASSERT(isMainThread());
     if (auto tree = AXIsolatedTree::treeForID(m_treeID))
         m_cachedTree = tree;
-    initializeAttributeData(object, parentID == InvalidAXID);
+    if (m_id != InvalidAXID)
+        initializeAttributeData(object, parentID == InvalidAXID);
+    else {
+        // Should never happen under normal circumstances.
+        ASSERT_NOT_REACHED();
+    }
 }
 
 Ref<AXIsolatedObject> AXIsolatedObject::create(AXCoreObject& object, AXIsolatedTreeID treeID, AXID parentID)
@@ -84,7 +89,6 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& object, bool isRoot
     setProperty(AXPropertyName::IsGroup, object.isGroup());
     setProperty(AXPropertyName::IsHeading, object.isHeading());
     setProperty(AXPropertyName::IsHovered, object.isHovered());
-    setProperty(AXPropertyName::IsImage, object.isImage());
     setProperty(AXPropertyName::IsImageMapLink, object.isImageMapLink());
     setProperty(AXPropertyName::IsIndeterminate, object.isIndeterminate());
     setProperty(AXPropertyName::IsInlineText, object.isInlineText());
@@ -349,7 +353,7 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& object, bool isRoot
     
     int r, g, b;
     object.colorValue(r, g, b);
-    setProperty(AXPropertyName::ColorValue, Color(r, g, b));
+    setProperty(AXPropertyName::ColorValue, makeSimpleColor(r, g, b));
     
     if (bool isMathElement = object.isMathElement()) {
         setProperty(AXPropertyName::IsMathElement, isMathElement);
@@ -455,12 +459,6 @@ void AXIsolatedObject::setProperty(AXPropertyName propertyName, AttributeValueVa
         m_attributeMap.remove(propertyName);
     else
         m_attributeMap.set(propertyName, value);
-}
-
-void AXIsolatedObject::appendChild(AXID axID)
-{
-    ASSERT(isMainThread());
-    m_childrenIDs.append(axID);
 }
 
 void AXIsolatedObject::setParent(AXID parent)
@@ -698,10 +696,10 @@ void AXIsolatedObject::setPreventKeyboardDOMEventDispatch(bool value)
 
 void AXIsolatedObject::colorValue(int& r, int& g, int& b) const
 {
-    auto color = colorAttributeValue(AXPropertyName::ColorValue);
-    r = color.red();
-    g = color.green();
-    b = color.blue();
+    auto color = colorAttributeValue(AXPropertyName::ColorValue).toSRGBASimpleColorLossy();
+    r = color.redComponent();
+    g = color.greenComponent();
+    b = color.blueComponent();
 }
 
 AXCoreObject* AXIsolatedObject::accessibilityHitTest(const IntPoint& point) const
@@ -1058,6 +1056,15 @@ bool AXIsolatedObject::isNativeTextControl() const
 {
     ASSERT_NOT_REACHED();
     return false;
+}
+
+PlainTextRange AXIsolatedObject::selectedTextRange() const
+{
+    return Accessibility::retrieveValueFromMainThread<PlainTextRange>([this] () -> PlainTextRange {
+        if (auto* object = associatedAXObject())
+            return object->selectedTextRange();
+        return PlainTextRange();
+    });
 }
 
 bool AXIsolatedObject::isListBoxOption() const

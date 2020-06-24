@@ -1354,9 +1354,11 @@ void JIT::emit_op_new_array_with_size(const Instruction* currentInstruction)
 }
 
 #if USE(JSVALUE64)
-void JIT::emit_op_has_structure_property(const Instruction* currentInstruction)
+
+template <typename OpCodeType>
+void JIT::emit_op_has_structure_propertyImpl(const Instruction* currentInstruction)
 {
-    auto bytecode = currentInstruction->as<OpHasStructureProperty>();
+    auto bytecode = currentInstruction->as<OpCodeType>();
     VirtualRegister dst = bytecode.m_dst;
     VirtualRegister base = bytecode.m_base;
     VirtualRegister enumerator = bytecode.m_enumerator;
@@ -1370,6 +1372,21 @@ void JIT::emit_op_has_structure_property(const Instruction* currentInstruction)
     
     move(TrustedImm64(JSValue::encode(jsBoolean(true))), regT0);
     emitPutVirtualRegister(dst);
+}
+
+void JIT::emit_op_has_structure_property(const Instruction* currentInstruction)
+{
+    emit_op_has_structure_propertyImpl<OpHasStructureProperty>(currentInstruction);
+}
+
+void JIT::emit_op_has_own_structure_property(const Instruction* currentInstruction)
+{
+    emit_op_has_structure_propertyImpl<OpHasOwnStructureProperty>(currentInstruction);
+}
+
+void JIT::emit_op_in_structure_property(const Instruction* currentInstruction)
+{
+    emit_op_has_structure_propertyImpl<OpInStructureProperty>(currentInstruction);
 }
 
 void JIT::privateCompileHasIndexedProperty(ByValInfo* byValInfo, ReturnAddressPtr returnAddress, JITArrayMode arrayMode)
@@ -1506,6 +1523,26 @@ void JIT::emit_op_get_direct_pname(const Instruction* currentInstruction)
     done.link(this);
     emitValueProfilingSite(bytecode.metadata(m_codeBlock));
     emitPutVirtualRegister(dst, regT0);
+}
+
+void JIT::emit_op_get_prototype_of(const Instruction* currentInstruction)
+{
+    auto bytecode = currentInstruction->as<OpGetPrototypeOf>();
+    emitGetVirtualRegister(bytecode.m_value, regT0);
+
+    addSlowCase(branchIfNotCell(regT0));
+    addSlowCase(branchIfNotObject(regT0));
+
+    emitLoadStructure(vm(), regT0, regT2, regT1);
+    addSlowCase(branchTest32(NonZero, Address(regT2, Structure::outOfLineTypeFlagsOffset()), TrustedImm32(OverridesGetPrototypeOutOfLine)));
+
+    load64(Address(regT2, Structure::prototypeOffset()), regT2);
+    Jump hasMonoProto = branchTest64(NonZero, regT2);
+    load64(Address(regT0, offsetRelativeToBase(knownPolyProtoOffset)), regT2);
+    hasMonoProto.link(this);
+
+    emitValueProfilingSite(bytecode.metadata(m_codeBlock));
+    emitStoreCell(bytecode.m_dst, regT2);
 }
 
 void JIT::emit_op_enumerator_structure_pname(const Instruction* currentInstruction)

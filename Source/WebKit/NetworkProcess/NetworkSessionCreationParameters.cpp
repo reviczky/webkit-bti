@@ -60,6 +60,7 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
 #if USE(SOUP)
     encoder << cookiePersistentStoragePath;
     encoder << cookiePersistentStorageType;
+    encoder << persistentCredentialStorageEnabled;
 #endif
 #if USE(CURL)
     encoder << cookiePersistentStorageFile;
@@ -77,7 +78,6 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << testSpeedMultiplier;
     encoder << suppressesConnectionTerminationOnSystemChange;
     encoder << allowsServerPreconnect;
-    encoder << isInAppBrowserPrivacyEnabled;
     encoder << requiresSecureHTTPSProxyConnection;
     encoder << preventsSystemHTTPProxyAuthentication;
     encoder << resourceLoadStatisticsParameters;
@@ -163,6 +163,11 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
     decoder >> cookiePersistentStorageType;
     if (!cookiePersistentStorageType)
         return WTF::nullopt;
+
+    Optional<bool> persistentCredentialStorageEnabled;
+    decoder >> persistentCredentialStorageEnabled;
+    if (!persistentCredentialStorageEnabled)
+        return WTF::nullopt;
 #endif
 
 #if USE(CURL)
@@ -236,11 +241,6 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
     decoder >> allowsServerPreconnect;
     if (!allowsServerPreconnect)
         return WTF::nullopt;
-    
-    Optional<bool> isInAppBrowserPrivacyEnabled;
-    decoder >> isInAppBrowserPrivacyEnabled;
-    if (!isInAppBrowserPrivacyEnabled)
-        return WTF::nullopt;
 
     Optional<bool> requiresSecureHTTPSProxyConnection;
     decoder >> requiresSecureHTTPSProxyConnection;
@@ -278,6 +278,7 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
 #if USE(SOUP)
         , WTFMove(*cookiePersistentStoragePath)
         , WTFMove(*cookiePersistentStorageType)
+        , WTFMove(*persistentCredentialStorageEnabled)
 #endif
 #if USE(CURL)
         , WTFMove(*cookiePersistentStorageFile)
@@ -295,7 +296,6 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
         , WTFMove(*testSpeedMultiplier)
         , WTFMove(*suppressesConnectionTerminationOnSystemChange)
         , WTFMove(*allowsServerPreconnect)
-        , WTFMove(*isInAppBrowserPrivacyEnabled)
         , WTFMove(*requiresSecureHTTPSProxyConnection)
         , WTFMove(*preventsSystemHTTPProxyAuthentication)
         , WTFMove(*resourceLoadStatisticsParameters)

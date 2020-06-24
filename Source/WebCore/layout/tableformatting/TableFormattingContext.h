@@ -31,6 +31,7 @@
 #include "TableFormattingState.h"
 #include "TableGrid.h"
 #include <wtf/IsoMalloc.h>
+#include <wtf/UniqueRef.h>
 
 namespace WebCore {
 namespace Layout {
@@ -43,6 +44,8 @@ class TableFormattingContext final : public FormattingContext {
 public:
     TableFormattingContext(const ContainerBox& formattingContextRoot, TableFormattingState&);
     void layoutInFlowContent(InvalidationState&, const ConstraintsForInFlowContent&) override;
+
+    static UniqueRef<TableGrid> ensureTableGrid(const ContainerBox& tableBox);
 
 private:
     class TableLayout {
@@ -63,17 +66,19 @@ private:
     class Geometry : public FormattingContext::Geometry {
     public:
         LayoutUnit cellHeigh(const ContainerBox&) const;
-        Optional<LayoutUnit> computedColumnWidth(const ContainerBox& columnBox) const;
-        FormattingContext::IntrinsicWidthConstraints intrinsicWidthConstraintsForCell(const ContainerBox& cellBox);
+        Edges computedCellBorder(const TableGrid::Cell&) const;
+        Optional<LayoutUnit> computedColumnWidth(const ContainerBox& columnBox);
+        FormattingContext::IntrinsicWidthConstraints intrinsicWidthConstraintsForCell(const TableGrid::Cell&);
         InlineLayoutUnit usedBaselineForCell(const ContainerBox& cellBox);
 
     private:
         friend class TableFormattingContext;
-        Geometry(const TableFormattingContext&);
+        Geometry(const TableFormattingContext&, const TableGrid&);
 
         const TableFormattingContext& formattingContext() const { return downcast<TableFormattingContext>(FormattingContext::Geometry::formattingContext()); }
+        const TableGrid& m_grid;
     };
-    TableFormattingContext::Geometry geometry() const { return Geometry(*this); }
+    TableFormattingContext::Geometry geometry() const { return Geometry(*this, formattingState().tableGrid()); }
     TableFormattingContext::TableLayout tableLayout() const { return TableLayout(*this, formattingState().tableGrid()); }
 
     IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
@@ -82,7 +87,6 @@ private:
     void setUsedGeometryForRows(LayoutUnit availableHorizontalSpace);
     void setUsedGeometryForSections(const ConstraintsForInFlowContent&);
 
-    void ensureTableGrid();
     IntrinsicWidthConstraints computedPreferredWidthForColumns();
     void computeAndDistributeExtraSpace(LayoutUnit availableHorizontalSpace, Optional<LayoutUnit> availableVerticalSpace);
 
@@ -90,8 +94,9 @@ private:
     TableFormattingState& formattingState() { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
 };
 
-inline TableFormattingContext::Geometry::Geometry(const TableFormattingContext& tableFormattingContext)
+inline TableFormattingContext::Geometry::Geometry(const TableFormattingContext& tableFormattingContext, const TableGrid& grid)
     : FormattingContext::Geometry(tableFormattingContext)
+    , m_grid(grid)
 {
 }
 

@@ -107,6 +107,7 @@ class LinearTimingFunction;
 class NativeImageHandle;
 class Notification;
 class PasteboardCustomData;
+class PaymentInstallmentConfiguration;
 class ProtectionSpace;
 class Region;
 class ResourceError;
@@ -440,12 +441,6 @@ template<> struct ArgumentCoder<WebCore::ResourceError> {
 template<> struct ArgumentCoder<WebCore::WindowFeatures> {
     static void encode(Encoder&, const WebCore::WindowFeatures&);
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::WindowFeatures&);
-};
-
-template<> struct ArgumentCoder<WebCore::Color> {
-    static void encode(Encoder&, const WebCore::Color&);
-    static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::Color&);
-    static Optional<WebCore::Color> decode(Decoder&);
 };
 
 #if ENABLE(DRAG_SUPPORT)
@@ -877,6 +872,13 @@ template<> struct ArgumentCoder<Ref<WebCore::ImageData>> {
     static void encode(Encoder&, const Ref<WebCore::ImageData>&);
     static Optional<Ref<WebCore::ImageData>> decode(Decoder&);
 };
+
+#if HAVE(PASSKIT_INSTALLMENTS)
+template<> struct ArgumentCoder<WebCore::PaymentInstallmentConfiguration> {
+    static void encode(Encoder&, const WebCore::PaymentInstallmentConfiguration&);
+    static Optional<WebCore::PaymentInstallmentConfiguration> decode(Decoder&);
+};
+#endif
 
 } // namespace IPC
 

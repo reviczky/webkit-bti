@@ -206,6 +206,7 @@ _expected_results = {
             'name': 'DidCreateWebProcessConnection',
             'parameters': (
                 ('IPC::MachPort', 'connectionIdentifier'),
+                ('OptionSet<WebKit::SelectionFlags>', 'flags'),
             ),
             'conditions': ('PLATFORM(MAC)'),
         },
@@ -270,6 +271,16 @@ _expected_superclass_results = {
             'reply_parameters': (
                 ('bool', 'flag'),
                 ('uint64_t', 'value'),
+            ),
+            'conditions': ('ENABLE(TEST_FEATURE)'),
+        },
+        {
+            'name': 'TestAsyncMessageWithConnection',
+            'parameters': (
+                ('int', 'value'),
+            ),
+            'reply_parameters': (
+                ('bool', 'flag'),
             ),
             'conditions': ('ENABLE(TEST_FEATURE)'),
         },

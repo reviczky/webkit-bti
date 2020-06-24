@@ -401,7 +401,14 @@ namespace JSC {
         template<typename Op>
         JumpList emitFloatTypedArrayPutByVal(Op, PatchableJump& badType, TypedArrayType);
 
-        // Identifier check helper for PutByVal.
+        template<typename Op>
+        ECMAMode ecmaMode(Op);
+
+        // Determines the type of private field access for a bytecode.
+        template<typename Op>
+        PrivateFieldAccessKind privateFieldAccessKind(Op);
+
+        // Identifier check helper for GetByVal and PutByVal.
         void emitByValIdentifierCheck(RegisterID cell, RegisterID scratch, CacheableIdentifier, JumpList& slowCases);
 
         template<typename Op>
@@ -521,6 +528,7 @@ namespace JSC {
         void emit_op_get_by_id_direct(const Instruction*);
         void emit_op_get_by_val(const Instruction*);
         void emit_op_get_argument_by_val(const Instruction*);
+        void emit_op_get_prototype_of(const Instruction*);
         void emit_op_in_by_id(const Instruction*);
         void emit_op_init_lazy_reg(const Instruction*);
         void emit_op_overrides_has_instance(const Instruction*);
@@ -618,7 +626,11 @@ namespace JSC {
         void emit_op_unexpected_load(const Instruction*);
         void emit_op_unsigned(const Instruction*);
         void emit_op_urshift(const Instruction*);
+        template <typename OpCodeType>
+        void emit_op_has_structure_propertyImpl(const Instruction*);
         void emit_op_has_structure_property(const Instruction*);
+        void emit_op_has_own_structure_property(const Instruction*);
+        void emit_op_in_structure_property(const Instruction*);
         void emit_op_has_indexed_property(const Instruction*);
         void emit_op_get_direct_pname(const Instruction*);
         void emit_op_enumerator_structure_pname(const Instruction*);
