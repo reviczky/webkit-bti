@@ -129,7 +129,7 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-@@ -51,7 +51,11 @@ struct SameSizeAsFontCascadeDescription
+@@ -52,7 +52,11 @@ struct SameSizeAsFontCascadeDescription
      unsigned bitfields3 : 10;
  };
  
