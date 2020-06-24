@@ -36,6 +36,7 @@
 #include "FrameLoader.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
+#include "HTMLScriptElement.h"
 #include "IgnoreDestructiveWriteCountIncrementer.h"
 #include "InlineClassicScript.h"
 #include "LoadableClassicScript.h"
@@ -181,8 +182,8 @@ bool ScriptElement::prepareScript(const TextPosition& scriptStartPosition, Legac
     if (wasParserInserted && !hasAsyncAttribute())
         m_forceAsync = true;
 
-    // FIXME: HTML5 spec says we should check that all children are either comments or empty text nodes.
-    if (!hasSourceAttribute() && !m_element.firstChild())
+    auto sourceText = scriptContent();
+    if (!hasSourceAttribute() && sourceText.isEmpty())
         return false;
 
     if (!m_element.isConnected())
@@ -266,7 +267,7 @@ bool ScriptElement::prepareScript(const TextPosition& scriptStartPosition, Legac
     } else {
         ASSERT(scriptType == ScriptType::Classic);
         TextPosition position = document.isInDocumentWrite() ? TextPosition() : scriptStartPosition;
-        executeClassicScript(ScriptSourceCode(scriptContent(), URL(document.url()), position, JSC::SourceProviderSourceType::Program, InlineClassicScript::create(*this)));
+        executeClassicScript(ScriptSourceCode(sourceText, URL(document.url()), position, JSC::SourceProviderSourceType::Program, InlineClassicScript::create(*this)));
     }
 
     return true;
@@ -393,7 +394,7 @@ void ScriptElement::executeClassicScript(const ScriptSourceCode& sourceCode)
         return;
 
     IgnoreDestructiveWriteCountIncrementer ignoreDesctructiveWriteCountIncrementer(m_isExternalScript ? &document : nullptr);
-    CurrentScriptIncrementer currentScriptIncrementer(document, m_element);
+    CurrentScriptIncrementer currentScriptIncrementer(document, *this);
 
     WTFBeginSignpost(this, "Execute Script Element", "executing classic script from URL: %{public}s async: %d defer: %d", m_isExternalScript ? sourceCode.url().string().utf8().data() : "inline", hasAsyncAttribute(), hasDeferAttribute());
     frame->script().evaluateIgnoringException(sourceCode);
@@ -412,7 +413,7 @@ void ScriptElement::executeModuleScript(LoadableModuleScript& loadableModuleScri
         return;
 
     IgnoreDestructiveWriteCountIncrementer ignoreDesctructiveWriteCountIncrementer(&document);
-    CurrentScriptIncrementer currentScriptIncrementer(document, m_element);
+    CurrentScriptIncrementer currentScriptIncrementer(document, *this);
 
     WTFBeginSignpost(this, "Execute Script Element", "executing module script");
     frame->script().linkAndEvaluateModuleScript(loadableModuleScript);

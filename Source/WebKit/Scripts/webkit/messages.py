@@ -140,7 +140,7 @@ def message_to_struct_declaration(receiver, message):
 
     result.append('class %s {\n' % message.name)
     result.append('public:\n')
-    result.append('    typedef %s Arguments;\n' % arguments_type(message))
+    result.append('    using Arguments = %s;\n' % arguments_type(message))
     result.append('\n')
     result.append('    static IPC::MessageName name() { return IPC::MessageName::%s_%s; }\n' % (receiver.name, message.name))
     result.append('    static const bool isSync = %s;\n' % ('false', 'true')[message.reply_parameters != None and not message.has_attribute(ASYNC_ATTRIBUTE)])
@@ -206,6 +206,7 @@ def types_that_cannot_be_forward_declared():
         'MediaTime',
         'String',
         'WebCore::ColorSpace',
+        'WebCore::DictationContext',
         'WebCore::DocumentIdentifier',
         'WebCore::DocumentOrWorkerIdentifier',
         'WebCore::FetchIdentifier',
@@ -213,6 +214,7 @@ def types_that_cannot_be_forward_declared():
         'WebCore::LibWebRTCSocketIdentifier',
         'WebCore::MediaSessionIdentifier',
         'WebCore::PageIdentifier',
+        'WebCore::PluginLoadClientPolicy',
         'WebCore::PointerID',
         'WebCore::ProcessIdentifier',
         'WebCore::RealtimeMediaSourceIdentifier',
@@ -228,6 +230,7 @@ def types_that_cannot_be_forward_declared():
         'WebKit::ActivityStateChangeID',
         'WebKit::AudioMediaStreamTrackRendererIdentifier',
         'WebKit::ContentWorldIdentifier',
+        'WebKit::DisplayLinkObserverID',
         'WebKit::GeolocationIdentifier',
         'WebKit::ImageBufferBackendHandle',
         'WebKit::ImageBufferFlushIdentifier',
@@ -238,6 +241,7 @@ def types_that_cannot_be_forward_declared():
         'WebKit::MDNSRegisterIdentifier',
         'WebKit::MediaPlayerPrivateRemoteIdentifier',
         'WebKit::MediaRecorderIdentifier',
+        'WebKit::PluginProcessType',
         'WebKit::RemoteAudioDestinationIdentifier',
         'WebKit::RemoteAudioSessionIdentifier',
         'WebKit::RemoteCDMIdentifier',
@@ -472,7 +476,10 @@ def async_message_statement(receiver, message):
         dispatch_function_args.insert(0, 'connection')
 
     if message.has_attribute(WANTS_CONNECTION_ATTRIBUTE):
-        dispatch_function_args.insert(0, 'connection')
+        if message.has_attribute(ASYNC_ATTRIBUTE):
+            dispatch_function += 'WantsConnection'
+        else:
+            dispatch_function_args.insert(0, 'connection')
 
     result = []
     result.append('    if (decoder.messageName() == Messages::%s::%s::name()) {\n' % (receiver.name, message.name))
@@ -583,6 +590,8 @@ def headers_for_type(type):
         'WebCore::DocumentOrWorkerIdentifier': ['<WebCore/ServiceWorkerTypes.h>'],
         'WebKit::DocumentEditingContextRequest': ['"DocumentEditingContext.h"'],
         'WebCore::DragHandlingMethod': ['<WebCore/DragActions.h>'],
+        'WebCore::DragOperation': ['<WebCore/DragActions.h>'],
+        'WebCore::DragSourceAction': ['<WebCore/DragActions.h>'],
         'WebCore::ExceptionDetails': ['<WebCore/JSDOMExceptionHandling.h>'],
         'WebCore::FileChooserSettings': ['<WebCore/FileChooser.h>'],
         'WebCore::ShareDataWithParsedURL': ['<WebCore/ShareData.h>'],
@@ -609,11 +618,13 @@ def headers_for_type(type):
         'WebCore::PaymentAuthorizationResult': ['<WebCore/ApplePaySessionPaymentRequest.h>'],
         'WebCore::PaymentMethodUpdate': ['<WebCore/ApplePaySessionPaymentRequest.h>'],
         'WebCore::PluginInfo': ['<WebCore/PluginData.h>'],
+        'WebCore::PluginLoadClientPolicy': ['<WebCore/PluginData.h>'],
         'WebCore::PolicyAction': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::ShouldContinuePolicyCheck': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::PolicyCheckIdentifier': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::ProcessIdentifier': ['<WebCore/ProcessIdentifier.h>'],
         'WebCore::RecentSearch': ['<WebCore/SearchPopupMenu.h>'],
+        'WebCore::RequestStorageAccessResult': ['<WebCore/DocumentStorageAccess.h>'],
         'WebCore::RouteSharingPolicy': ['<WebCore/AudioSession.h>'],
         'WebCore::SWServerConnectionIdentifier': ['<WebCore/ServiceWorkerTypes.h>'],
         'WebCore::SelectionDirection': ['<WebCore/VisibleSelection.h>'],
@@ -629,6 +640,7 @@ def headers_for_type(type):
         'WebCore::ShouldNotifyWhenResolved': ['<WebCore/ServiceWorkerTypes.h>'],
         'WebCore::ShouldSample': ['<WebCore/DiagnosticLoggingClient.h>'],
         'WebCore::StorageAccessPromptWasShown': ['<WebCore/DocumentStorageAccess.h>'],
+        'WebCore::StorageAccessScope': ['<WebCore/DocumentStorageAccess.h>'],
         'WebCore::StorageAccessWasGranted': ['<WebCore/DocumentStorageAccess.h>'],
         'WebCore::SupportedPluginIdentifier': ['<WebCore/PluginData.h>'],
         'WebCore::SystemPreviewInfo': ['<WebCore/FrameLoaderTypes.h>'],
@@ -654,6 +666,7 @@ def headers_for_type(type):
         'WebKit::PageState': ['"SessionState.h"'],
         'WebKit::PaymentSetupConfiguration': ['"PaymentSetupConfigurationWebKit.h"'],
         'WebKit::PaymentSetupFeatures': ['"ApplePayPaymentSetupFeaturesWebKit.h"'],
+        'WebKit::PluginProcessType': ['"PluginProcessAttributes.h"'],
         'WebKit::RespectSelectionAnchor': ['"GestureTypes.h"'],
         'WebKit::SelectionFlags': ['"GestureTypes.h"'],
         'WebKit::SelectionTouch': ['"GestureTypes.h"'],
@@ -926,11 +939,11 @@ def generate_message_names_header(receivers):
     result.append('\n')
     result.append('template<>\n')
     result.append('class HasCustomIsValidEnum<IPC::MessageName> : public std::true_type { };\n')
-    result.append('template<typename E, typename T, typename = std::enable_if_t<std::is_same<E, IPC::MessageName>::value>>\n')
+    result.append('template<typename E, typename T, std::enable_if_t<std::is_same_v<E, IPC::MessageName>>* = nullptr>\n')
     result.append('bool isValidEnum(T messageName)\n')
     result.append('{\n')
-    result.append('    static_assert(sizeof(T) == sizeof(IPC::MessageName), "isValidEnum<MessageName> should only be called with 16-bit types");\n')
-    result.append('    return IPC::isValidMessageName(static_cast<IPC::MessageName>(messageName));\n')
+    result.append('    static_assert(sizeof(T) == sizeof(E), "isValidEnum<IPC::MessageName> should only be called with 16-bit types");\n')
+    result.append('    return IPC::isValidMessageName(static_cast<E>(messageName));\n')
     result.append('};\n')
     result.append('\n')
     result.append('} // namespace WTF\n')

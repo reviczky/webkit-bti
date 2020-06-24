@@ -81,8 +81,8 @@ class WebProcessPool;
 class WebProcessProxy;
 class WebResourceLoadStatisticsStore;
 enum class CacheModel : uint8_t;
-enum class WebsiteDataFetchOption;
-enum class WebsiteDataType;
+enum class WebsiteDataFetchOption : uint8_t;
+enum class WebsiteDataType : uint32_t;
 struct WebsiteDataRecord;
 struct WebsiteDataStoreParameters;
 
@@ -172,6 +172,7 @@ public:
     void domainIDExistsInDatabase(int domainID, CompletionHandler<void(bool)>&&);
     void statisticsDatabaseHasAllTables(CompletionHandler<void(bool)>&&);
     void mergeStatisticForTesting(const URL&, const URL& topFrameUrl1, const URL& topFrameUrl2, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&&);
+    void insertExpiredStatisticForTesting(const URL&, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&&);
     void setNotifyPagesWhenDataRecordsWereScanned(bool, CompletionHandler<void()>&&);
     void setIsRunningResourceLoadStatisticsTest(bool, CompletionHandler<void()>&&);
     void setPruneEntriesDownTo(size_t, CompletionHandler<void()>&&);
@@ -241,6 +242,11 @@ public:
     const WebCore::CurlProxySettings& networkProxySettings() const { return m_proxySettings; }
 #endif
 
+#if USE(SOUP)
+    void setPersistentCredentialStorageEnabled(bool);
+    bool persistentCredentialStorageEnabled() const { return m_persistentCredentialStorageEnabled && isPersistent(); }
+#endif
+
     static void allowWebsiteDataRecordsForAllOrigins();
 
 #if HAVE(SEC_KEY_PROXY)
@@ -298,7 +304,9 @@ public:
     void ensureAppBoundDomains(CompletionHandler<void(const HashSet<WebCore::RegistrableDomain>&)>&&) const;
     void reinitializeAppBoundDomains();
     static void setAppBoundDomainsForTesting(HashSet<WebCore::RegistrableDomain>&&, CompletionHandler<void()>&&);
-
+    void updateBundleIdentifierInNetworkProcess(const String&, CompletionHandler<void()>&&);
+    void clearBundleIdentifierInNetworkProcess(CompletionHandler<void()>&&);
+    
 private:
     enum class ForceReinitialization : bool { No, Yes };
     void initializeAppBoundDomains(ForceReinitialization = ForceReinitialization::No);
@@ -315,7 +323,7 @@ private:
 
     enum class ShouldCreateDirectory { No, Yes };
     static WTF::String tempDirectoryFileSystemRepresentation(const WTF::String& directoryName, ShouldCreateDirectory = ShouldCreateDirectory::Yes);
-    static WTF::String cacheDirectoryFileSystemRepresentation(const WTF::String& directoryName);
+    static WTF::String cacheDirectoryFileSystemRepresentation(const WTF::String& directoryName, ShouldCreateDirectory = ShouldCreateDirectory::Yes);
     static WTF::String websiteDataDirectoryFileSystemRepresentation(const WTF::String& directoryName);
 
     HashSet<RefPtr<WebProcessPool>> processPools(size_t limit = std::numeric_limits<size_t>::max()) const;
@@ -365,11 +373,16 @@ private:
     WebCore::CurlProxySettings m_proxySettings;
 #endif
 
+#if USE(SOUP)
+    bool m_persistentCredentialStorageEnabled { true };
+#endif
+
     HashSet<WebCore::Cookie> m_pendingCookies;
     
     WeakHashSet<WebProcessProxy> m_processes;
 
     bool m_isItpStateExplicitlySet { false };
+    bool m_isInAppBrowserPrivacyTestModeEnabled { false };
 
 #if HAVE(SEC_KEY_PROXY)
     Vector<Ref<SecKeyProxyStore>> m_secKeyProxyStores;

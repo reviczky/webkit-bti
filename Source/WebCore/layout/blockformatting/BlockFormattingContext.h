@@ -27,6 +27,7 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "BlockFormattingState.h"
 #include "FormattingContext.h"
 #include <wtf/HashMap.h>
 #include <wtf/IsoMalloc.h>
@@ -37,7 +38,6 @@ class LayoutUnit;
 
 namespace Layout {
 
-class BlockFormattingState;
 class Box;
 class FloatingContext;
 
@@ -52,8 +52,8 @@ public:
 
 protected:
     struct ConstraintsPair {
-        const ConstraintsForInFlowContent formattingContextRoot;
-        const ConstraintsForInFlowContent containingBlock;
+        ConstraintsForInFlowContent formattingContextRoot;
+        ConstraintsForInFlowContent containingBlock;
     };
     void placeInFlowPositionedChildren(const ContainerBox&, const HorizontalConstraints&);
 
@@ -65,10 +65,10 @@ protected:
     void computePositionToAvoidFloats(const FloatingContext&, const Box&, const ConstraintsPair&);
     void computeVerticalPositionForFloatClear(const FloatingContext&, const Box&);
 
-    void precomputeVerticalPositionForAncestors(const Box&, const ConstraintsPair&);
     void precomputeVerticalPositionForBoxAndAncestors(const Box&, const ConstraintsPair&);
 
     IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
+
     LayoutUnit verticalPositionWithMargin(const Box&, const UsedVerticalMargin&, const VerticalConstraints&) const;
 
     // This class implements positioning and sizing for boxes participating in a block formatting context.
@@ -85,10 +85,12 @@ protected:
 
         IntrinsicWidthConstraints intrinsicWidthConstraints(const Box&);
 
+        ContentWidthAndMargin computedWidthAndMargin(const Box&, const HorizontalConstraints&, Optional<LayoutUnit> availableWidthFloatAvoider);
+
     private:
         ContentHeightAndMargin inFlowNonReplacedHeightAndMargin(const Box&, const HorizontalConstraints&, const OverrideVerticalValues&);
-        ContentWidthAndMargin inFlowNonReplacedWidthAndMargin(const Box&, const HorizontalConstraints&, const OverrideHorizontalValues&) const;
-        ContentWidthAndMargin inFlowReplacedWidthAndMargin(const ReplacedBox&, const HorizontalConstraints&, const OverrideHorizontalValues&) const;
+        ContentWidthAndMargin inFlowNonReplacedWidthAndMargin(const Box&, const HorizontalConstraints&, const OverrideHorizontalValues&);
+        ContentWidthAndMargin inFlowReplacedWidthAndMargin(const ReplacedBox&, const HorizontalConstraints&, const OverrideHorizontalValues&);
 
         const BlockFormattingContext& formattingContext() const { return downcast<BlockFormattingContext>(FormattingContext::Geometry::formattingContext()); }
     };
@@ -147,6 +149,8 @@ protected:
 
     class Quirks : public FormattingContext::Quirks {
     public:
+        Quirks(const BlockFormattingContext&);
+
         bool needsStretching(const Box&) const;
         LayoutUnit stretchedInFlowHeight(const Box&, ContentHeightAndMargin);
 
@@ -154,11 +158,8 @@ protected:
         bool shouldIgnoreMarginBefore(const Box&) const;
         bool shouldIgnoreMarginAfter(const Box&) const;
 
-    private:
-        friend class BlockFormattingContext;
-        Quirks(const BlockFormattingContext&);
-
         const BlockFormattingContext& formattingContext() const { return downcast<BlockFormattingContext>(FormattingContext::Quirks::formattingContext()); }
+        BlockFormattingContext::Geometry geometry() const { return formattingContext().geometry(); }
 
     };
     BlockFormattingContext::Quirks quirks() const { return Quirks(*this); }

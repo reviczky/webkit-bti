@@ -70,13 +70,6 @@ static JSValue createCollatorConstructor(VM& vm, JSObject* object)
     return IntlCollatorConstructor::create(vm, IntlCollatorConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlCollatorPrototype*>(globalObject->collatorStructure()->storedPrototypeObject()));
 }
 
-static JSValue createNumberFormatConstructor(VM& vm, JSObject* object)
-{
-    IntlObject* intlObject = jsCast<IntlObject*>(object);
-    JSGlobalObject* globalObject = intlObject->globalObject(vm);
-    return IntlNumberFormatConstructor::create(vm, IntlNumberFormatConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlNumberFormatPrototype*>(globalObject->numberFormatStructure()->storedPrototypeObject()));
-}
-
 static JSValue createDateTimeFormatConstructor(VM& vm, JSObject* object)
 {
     IntlObject* intlObject = jsCast<IntlObject*>(object);
@@ -84,11 +77,32 @@ static JSValue createDateTimeFormatConstructor(VM& vm, JSObject* object)
     return IntlDateTimeFormatConstructor::create(vm, IntlDateTimeFormatConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlDateTimeFormatPrototype*>(globalObject->dateTimeFormatStructure()->storedPrototypeObject()));
 }
 
+static JSValue createLocaleConstructor(VM& vm, JSObject* object)
+{
+    IntlObject* intlObject = jsCast<IntlObject*>(object);
+    JSGlobalObject* globalObject = intlObject->globalObject(vm);
+    return IntlLocaleConstructor::create(vm, IntlLocaleConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlLocalePrototype*>(globalObject->localeStructure()->storedPrototypeObject()));
+}
+
+static JSValue createNumberFormatConstructor(VM& vm, JSObject* object)
+{
+    IntlObject* intlObject = jsCast<IntlObject*>(object);
+    JSGlobalObject* globalObject = intlObject->globalObject(vm);
+    return IntlNumberFormatConstructor::create(vm, IntlNumberFormatConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlNumberFormatPrototype*>(globalObject->numberFormatStructure()->storedPrototypeObject()));
+}
+
 static JSValue createPluralRulesConstructor(VM& vm, JSObject* object)
 {
     IntlObject* intlObject = jsCast<IntlObject*>(object);
     JSGlobalObject* globalObject = intlObject->globalObject(vm);
     return IntlPluralRulesConstructor::create(vm, IntlPluralRulesConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlPluralRulesPrototype*>(globalObject->pluralRulesStructure()->storedPrototypeObject()));
+}
+
+static JSValue createRelativeTimeFormatConstructor(VM& vm, JSObject* object)
+{
+    IntlObject* intlObject = jsCast<IntlObject*>(object);
+    JSGlobalObject* globalObject = intlObject->globalObject(vm);
+    return IntlRelativeTimeFormatConstructor::create(vm, IntlRelativeTimeFormatConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlRelativeTimeFormatPrototype*>(globalObject->relativeTimeFormatStructure()->storedPrototypeObject()));
 }
 
 }
@@ -102,8 +116,10 @@ namespace JSC {
   getCanonicalLocales   intlObjectFuncGetCanonicalLocales            DontEnum|Function 1
   Collator              createCollatorConstructor                    DontEnum|PropertyCallback
   DateTimeFormat        createDateTimeFormatConstructor              DontEnum|PropertyCallback
+  Locale                createLocaleConstructor                      DontEnum|PropertyCallback
   NumberFormat          createNumberFormatConstructor                DontEnum|PropertyCallback
   PluralRules           createPluralRulesConstructor                 DontEnum|PropertyCallback
+  RelativeTimeFormat    createRelativeTimeFormatConstructor          DontEnum|PropertyCallback
 @end
 */
 
@@ -133,17 +149,9 @@ IntlObject* IntlObject::create(VM& vm, JSGlobalObject* globalObject, Structure* 
     return object;
 }
 
-void IntlObject::finishCreation(VM& vm, JSGlobalObject* globalObject)
+void IntlObject::finishCreation(VM& vm, JSGlobalObject*)
 {
     Base::finishCreation(vm);
-    if (Options::useIntlLocale()) {
-        auto* localeConstructor = IntlLocaleConstructor::create(vm, IntlLocaleConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlLocalePrototype*>(globalObject->localeStructure()->storedPrototypeObject()));
-        putDirectWithoutTransition(vm, vm.propertyNames->Locale, localeConstructor, static_cast<unsigned>(PropertyAttribute::DontEnum));
-    }
-    if (Options::useIntlRelativeTimeFormat()) {
-        auto* relativeTimeFormatConstructor = IntlRelativeTimeFormatConstructor::create(vm, IntlRelativeTimeFormatConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlRelativeTimeFormatPrototype*>(globalObject->relativeTimeFormatStructure()->storedPrototypeObject()));
-        putDirectWithoutTransition(vm, vm.propertyNames->RelativeTimeFormat, relativeTimeFormatConstructor, static_cast<unsigned>(PropertyAttribute::DontEnum));
-    }
 }
 
 Structure* IntlObject::createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
@@ -188,6 +196,32 @@ String languageTagForLocaleID(const char* localeID, bool isImmortal)
     return String(buffer.data(), buffer.size());
 }
 
+// Ensure we have xx-ZZ whenever we have xx-Yyyy-ZZ.
+static void addScriptlessLocaleIfNeeded(HashSet<String>& availableLocales, StringView locale)
+{
+    if (locale.length() < 10)
+        return;
+
+    Vector<StringView, 3> subtags;
+    for (auto subtag : locale.split('-')) {
+        if (subtags.size() == 3)
+            return;
+        subtags.append(subtag);
+    }
+
+    if (subtags.size() != 3 || subtags[1].length() != 4 || subtags[2].length() > 3)
+        return;
+
+    Vector<char, 12> buffer;
+    ASSERT(subtags[0].is8Bit() && subtags[0].isAllASCII());
+    buffer.append(reinterpret_cast<const char*>(subtags[0].characters8()), subtags[0].length());
+    buffer.append('-');
+    ASSERT(subtags[2].is8Bit() && subtags[2].isAllASCII());
+    buffer.append(reinterpret_cast<const char*>(subtags[2].characters8()), subtags[2].length());
+
+    availableLocales.add(StringImpl::createStaticStringImpl(buffer.data(), buffer.size()));
+}
+
 const HashSet<String>& intlAvailableLocales()
 {
     static NeverDestroyed<HashSet<String>> cachedAvailableLocales;
@@ -200,8 +234,10 @@ const HashSet<String>& intlAvailableLocales()
         int32_t count = uloc_countAvailable();
         for (int32_t i = 0; i < count; ++i) {
             String locale = languageTagForLocaleID(uloc_getAvailable(i), isImmortal);
-            if (!locale.isEmpty())
-                availableLocales.add(locale);
+            if (locale.isEmpty())
+                continue;
+            availableLocales.add(locale);
+            addScriptlessLocaleIfNeeded(availableLocales, locale);
         }
     });
     return availableLocales;
@@ -219,8 +255,10 @@ const HashSet<String>& intlCollatorAvailableLocales()
         int32_t count = ucol_countAvailable();
         for (int32_t i = 0; i < count; ++i) {
             String locale = languageTagForLocaleID(ucol_getAvailable(i), isImmortal);
-            if (!locale.isEmpty())
-                availableLocales.add(locale);
+            if (locale.isEmpty())
+                continue;
+            availableLocales.add(locale);
+            addScriptlessLocaleIfNeeded(availableLocales, locale);
         }
     });
     return availableLocales;

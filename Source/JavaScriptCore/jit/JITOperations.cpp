@@ -697,6 +697,117 @@ void JIT_OPERATION operationPutByIdDirectNonStrictOptimize(JSGlobalObject* globa
         repatchPutByID(globalObject, codeBlock, baseObject, structure, identifier, slot, *stubInfo, Direct);
 }
 
+} // extern "C"
+
+using PutPrivateFieldCallback = std::function<void(VM&, CodeBlock*, Structure*, PutPropertySlot&, const Identifier&)>;
+ALWAYS_INLINE static void putPrivateField(VM& vm, JSGlobalObject* globalObject, CallFrame* callFrame, JSValue baseValue, CacheableIdentifier identifier, JSValue value, const PutPrivateFieldCallback& callback = PutPrivateFieldCallback())
+{
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    Identifier ident = Identifier::fromUid(vm, identifier.uid());
+    ASSERT(ident.isPrivateName());
+
+    JSObject* baseObject = asObject(baseValue);
+    CodeBlock* codeBlock = callFrame->codeBlock();
+    Structure* oldStructure = baseObject->structure(vm);
+
+    PutPropertySlot putSlot(baseObject, true, codeBlock->putByIdContext());
+    baseObject->putPrivateField(globalObject, ident, value, putSlot);
+    RETURN_IF_EXCEPTION(scope, void());
+
+    if (callback)
+        callback(vm, codeBlock, oldStructure, putSlot, ident);
+}
+
+ALWAYS_INLINE static void definePrivateField(VM& vm, JSGlobalObject* globalObject, CallFrame* callFrame, JSValue baseValue, CacheableIdentifier identifier, JSValue value, const PutPrivateFieldCallback& callback = PutPrivateFieldCallback())
+{
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    Identifier ident = Identifier::fromUid(vm, identifier.uid());
+    ASSERT(ident.isPrivateName());
+
+    JSObject* baseObject = asObject(baseValue);
+    CodeBlock* codeBlock = callFrame->codeBlock();
+    Structure* oldStructure = baseObject->structure(vm);
+
+    PutPropertySlot putSlot(baseObject, true, codeBlock->putByIdContext());
+    baseObject->definePrivateField(globalObject, ident, value, putSlot);
+    RETURN_IF_EXCEPTION(scope, void());
+
+    if (callback)
+        callback(vm, codeBlock, oldStructure, putSlot, ident);
+}
+
+extern "C" {
+
+void JIT_OPERATION operationPutByIdDefinePrivateFieldStrict(JSGlobalObject* globalObject, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t rawCacheableIdentifier)
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+
+    CacheableIdentifier identifier = CacheableIdentifier::createFromRawBits(rawCacheableIdentifier);
+    JSValue value = JSValue::decode(encodedValue);
+    JSValue baseValue = JSValue::decode(encodedBase);
+
+    definePrivateField(vm, globalObject, callFrame, baseValue, identifier, value);
+}
+
+void JIT_OPERATION operationPutByIdDefinePrivateFieldStrictOptimize(JSGlobalObject* globalObject, StructureStubInfo* stubInfo, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t rawCacheableIdentifier)
+{
+    SuperSamplerScope superSamplerScope(false);
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    CacheableIdentifier identifier = CacheableIdentifier::createFromRawBits(rawCacheableIdentifier);
+    AccessType accessType = static_cast<AccessType>(stubInfo->accessType);
+    JSValue value = JSValue::decode(encodedValue);
+    JSObject* baseObject = asObject(JSValue::decode(encodedBase));
+
+    definePrivateField(vm, globalObject, callFrame, baseObject, identifier, value, [=](VM& vm, CodeBlock* codeBlock, Structure* oldStructure, PutPropertySlot& putSlot, const Identifier& ident) {
+        LOG_IC((ICEvent::OperationPutByIdDefinePrivateFieldFieldStrictOptimize, baseObject->classInfo(vm), ident, putSlot.base() == baseObject));
+
+        ASSERT_UNUSED(accessType, accessType == static_cast<AccessType>(stubInfo->accessType));
+
+        if (stubInfo->considerCachingBy(vm, codeBlock, oldStructure, identifier))
+            repatchPutByID(globalObject, codeBlock, baseObject, oldStructure, identifier, putSlot, *stubInfo, DirectPrivateFieldCreate);
+    });
+}
+
+void JIT_OPERATION operationPutByIdPutPrivateFieldStrict(JSGlobalObject* globalObject, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t rawCacheableIdentifier)
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+
+    CacheableIdentifier identifier = CacheableIdentifier::createFromRawBits(rawCacheableIdentifier);
+    JSValue value = JSValue::decode(encodedValue);
+    JSValue baseValue = JSValue::decode(encodedBase);
+
+    putPrivateField(vm, globalObject, callFrame, baseValue, identifier, value);
+}
+
+void JIT_OPERATION operationPutByIdPutPrivateFieldStrictOptimize(JSGlobalObject* globalObject, StructureStubInfo* stubInfo, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t rawCacheableIdentifier)
+{
+    SuperSamplerScope superSamplerScope(false);
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    NativeCallFrameTracer tracer(vm, callFrame);
+
+    CacheableIdentifier identifier = CacheableIdentifier::createFromRawBits(rawCacheableIdentifier);
+    AccessType accessType = static_cast<AccessType>(stubInfo->accessType);
+    JSValue value = JSValue::decode(encodedValue);
+    JSObject* baseObject = asObject(JSValue::decode(encodedBase));
+
+    putPrivateField(vm, globalObject, callFrame, baseObject, identifier, value, [&](VM& vm, CodeBlock* codeBlock, Structure* oldStructure, PutPropertySlot& putSlot, const Identifier& ident) {
+        LOG_IC((ICEvent::OperationPutByIdPutPrivateFieldFieldStrictOptimize, baseObject->classInfo(vm), ident, putSlot.base() == baseObject));
+
+        ASSERT_UNUSED(accessType, accessType == static_cast<AccessType>(stubInfo->accessType));
+
+        if (stubInfo->considerCachingBy(vm, codeBlock, oldStructure, identifier))
+            repatchPutByID(globalObject, codeBlock, baseObject, oldStructure, identifier, putSlot, *stubInfo, DirectPrivateFieldPut);
+    });
+}
+
 static void putByVal(JSGlobalObject* globalObject, JSValue baseValue, JSValue subscript, JSValue value, ByValInfo* byValInfo, ECMAMode ecmaMode)
 {
     VM& vm = globalObject->vm();
@@ -721,7 +832,7 @@ static void putByVal(JSGlobalObject* globalObject, JSValue baseValue, JSValue su
         baseValue.putByIndex(globalObject, i, value, ecmaMode.isStrict());
         return;
     } 
-    if (subscript.isInt32()) {
+    if (subscript.isNumber()) {
         byValInfo->tookSlowPath = true;
         if (baseValue.isObject())
             byValInfo->arrayProfile->setOutOfBounds();
@@ -1976,7 +2087,8 @@ ALWAYS_INLINE static JSValue getByVal(JSGlobalObject* globalObject, CallFrame* c
 
         if (i >= 0)
             RELEASE_AND_RETURN(scope, baseValue.get(globalObject, static_cast<uint32_t>(i)));
-    }
+    } else if (subscript.isNumber() && baseValue.isCell() && arrayProfile)
+        arrayProfile->setOutOfBounds();
 
     baseValue.requireObjectCoercible(globalObject);
     RETURN_IF_EXCEPTION(scope, JSValue());
@@ -2638,6 +2750,19 @@ void JIT_OPERATION operationExceptionFuzz(JSGlobalObject* globalObject)
 #endif // COMPILER(GCC_COMPATIBLE)
 }
 
+void JIT_OPERATION operationExceptionFuzzWithCallFrame(VM* vmPointer)
+{
+    VM& vm = *vmPointer;
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    UNUSED_PARAM(scope);
+#if COMPILER(GCC_COMPATIBLE)
+    void* returnPC = __builtin_return_address(0);
+    doExceptionFuzzing(callFrame->lexicalGlobalObject(vm), scope, "JITOperations", returnPC);
+#endif // COMPILER(GCC_COMPATIBLE)
+}
+
 EncodedJSValue JIT_OPERATION operationValueAdd(JSGlobalObject* globalObject, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
 {
     VM& vm = globalObject->vm();
@@ -2841,10 +2966,10 @@ EncodedJSValue JIT_OPERATION operationArithNegate(JSGlobalObject* globalObject, 
 
 #if USE(BIGINT32)
     if (primValue.isBigInt32())
-        return JSValue::encode(JSBigInt::unaryMinus(vm, primValue.bigInt32AsInt32()));
+        RELEASE_AND_RETURN(scope, JSValue::encode(JSBigInt::unaryMinus(globalObject, primValue.bigInt32AsInt32())));
 #endif
     if (primValue.isHeapBigInt())
-        return JSValue::encode(JSBigInt::unaryMinus(vm, primValue.asHeapBigInt()));
+        RELEASE_AND_RETURN(scope, JSValue::encode(JSBigInt::unaryMinus(globalObject, primValue.asHeapBigInt())));
 
     double number = primValue.toNumber(globalObject);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
@@ -2869,13 +2994,15 @@ EncodedJSValue JIT_OPERATION operationArithNegateProfiled(JSGlobalObject* global
 
 #if USE(BIGINT32)
     if (primValue.isBigInt32()) {
-        JSValue result = JSBigInt::unaryMinus(vm, primValue.bigInt32AsInt32());
+        JSValue result = JSBigInt::unaryMinus(globalObject, primValue.bigInt32AsInt32());
+        RETURN_IF_EXCEPTION(scope, { });
         arithProfile->observeResult(result);
         return JSValue::encode(result);
     }
 #endif
     if (primValue.isHeapBigInt()) {
-        JSValue result = JSBigInt::unaryMinus(vm, primValue.asHeapBigInt());
+        JSValue result = JSBigInt::unaryMinus(globalObject, primValue.asHeapBigInt());
+        RETURN_IF_EXCEPTION(scope, { });
         arithProfile->observeResult(result);
         return JSValue::encode(result);
     }
@@ -2911,13 +3038,15 @@ EncodedJSValue JIT_OPERATION operationArithNegateProfiledOptimize(JSGlobalObject
 
 #if USE(BIGINT32)
     if (primValue.isBigInt32()) {
-        JSValue result = JSBigInt::unaryMinus(vm, primValue.bigInt32AsInt32());
+        JSValue result = JSBigInt::unaryMinus(globalObject, primValue.bigInt32AsInt32());
+        RETURN_IF_EXCEPTION(scope, { });
         arithProfile->observeResult(result);
         return JSValue::encode(result);
     }
 #endif
     if (primValue.isHeapBigInt()) {
-        JSValue result = JSBigInt::unaryMinus(vm, primValue.asHeapBigInt());
+        JSValue result = JSBigInt::unaryMinus(globalObject, primValue.asHeapBigInt());
+        RETURN_IF_EXCEPTION(scope, { });
         arithProfile->observeResult(result);
         return JSValue::encode(result);
     }
@@ -2953,10 +3082,10 @@ EncodedJSValue JIT_OPERATION operationArithNegateOptimize(JSGlobalObject* global
 #if USE(BIGINT32)
     // FIXME: why does this function profile the argument but not the result?
     if (primValue.isBigInt32())
-        return JSValue::encode(JSBigInt::unaryMinus(vm, primValue.bigInt32AsInt32()));
+        RELEASE_AND_RETURN(scope, JSValue::encode(JSBigInt::unaryMinus(globalObject, primValue.bigInt32AsInt32())));
 #endif
     if (primValue.isHeapBigInt())
-        return JSValue::encode(JSBigInt::unaryMinus(vm, primValue.asHeapBigInt()));
+        RELEASE_AND_RETURN(scope, JSValue::encode(JSBigInt::unaryMinus(globalObject, primValue.asHeapBigInt())));
 
     double number = primValue.toNumber(globalObject);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());

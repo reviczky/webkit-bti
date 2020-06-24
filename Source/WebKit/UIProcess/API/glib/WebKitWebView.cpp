@@ -60,9 +60,11 @@
 #include "WebKitUserMessagePrivate.h"
 #include "WebKitWebContextPrivate.h"
 #include "WebKitWebResourcePrivate.h"
+#include "WebKitWebViewInternal.h"
 #include "WebKitWebViewPrivate.h"
 #include "WebKitWebViewSessionStatePrivate.h"
 #include "WebKitWebsiteDataManagerPrivate.h"
+#include "WebKitWebsitePoliciesPrivate.h"
 #include "WebKitWindowPropertiesPrivate.h"
 #include "WebPageMessages.h"
 #include <JavaScriptCore/APICast.h>
@@ -199,7 +201,9 @@ enum {
     PROP_IS_CONTROLLED_BY_AUTOMATION,
     PROP_AUTOMATION_PRESENTATION_TYPE,
     PROP_EDITABLE,
-    PROP_PAGE_ID
+    PROP_PAGE_ID,
+    PROP_IS_MUTED,
+    PROP_WEBSITE_POLICIES
 };
 
 typedef HashMap<uint64_t, GRefPtr<WebKitWebResource> > LoadingResourcesMap;
@@ -301,6 +305,7 @@ struct _WebKitWebViewPrivate {
     GRefPtr<WebKitAuthenticationRequest> authenticationRequest;
 
     GRefPtr<WebKitWebsiteDataManager> websiteDataManager;
+    GRefPtr<WebKitWebsitePolicies> websitePolicies;
 };
 
 static guint signals[LAST_SIGNAL] = { 0, };
@@ -754,7 +759,10 @@ static void webkitWebViewConstructed(GObject* object)
         webkitWebsiteDataManagerAddProcessPool(priv->websiteDataManager.get(), webkitWebContextGetProcessPool(priv->context.get()));
     }
 
-    webkitWebContextCreatePageForWebView(priv->context.get(), webView, priv->userContentManager.get(), priv->relatedView);
+    if (!priv->websitePolicies)
+        priv->websitePolicies = adoptGRef(webkit_website_policies_new());
+
+    webkitWebContextCreatePageForWebView(priv->context.get(), webView, priv->userContentManager.get(), priv->relatedView, priv->websitePolicies.get());
 
     priv->loadObserver = makeUnique<PageLoadStateObserver>(webView);
     getPage(webView).pageLoadState().addObserver(*priv->loadObserver);
@@ -834,6 +842,12 @@ static void webkitWebViewSetProperty(GObject* object, guint propId, const GValue
     case PROP_EDITABLE:
         webkit_web_view_set_editable(webView, g_value_get_boolean(value));
         break;
+    case PROP_IS_MUTED:
+        webkit_web_view_set_is_muted(webView, g_value_get_boolean(value));
+        break;
+    case PROP_WEBSITE_POLICIES:
+        webView->priv->websitePolicies = static_cast<WebKitWebsitePolicies*>(g_value_get_object(value));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
     }
@@ -895,6 +909,12 @@ static void webkitWebViewGetProperty(GObject* object, guint propId, GValue* valu
         break;
     case PROP_PAGE_ID:
         g_value_set_uint64(value, webkit_web_view_get_page_id(webView));
+        break;
+    case PROP_IS_MUTED:
+        g_value_set_boolean(value, webkit_web_view_get_is_muted(webView));
+        break;
+    case PROP_WEBSITE_POLICIES:
+        g_value_set_object(value, webkit_web_view_get_website_policies(webView));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -1264,6 +1284,41 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
             _("The page identifier."),
             0, G_MAXUINT64, 0,
             WEBKIT_PARAM_READABLE));
+
+    /**
+     * WebKitWebView:is-muted:
+     *
+     * Whether the #WebKitWebView audio is muted. When %TRUE, audio is silenced.
+     * It may still be playing, i.e. #WebKitWebView:is-playing-audio may be %TRUE.
+     *
+     * Since: 2.30
+     */
+    g_object_class_install_property(
+        gObjectClass,
+        PROP_IS_MUTED,
+        g_param_spec_boolean(
+            "is-muted",
+            "Is Muted",
+            _("Whether the view audio is muted"),
+            FALSE,
+            WEBKIT_PARAM_READWRITE));
+
+    /**
+     * WebKitWebView:website-policies:
+     *
+     * The #WebKitWebsitePolicies for the view.
+     *
+     * Since: 2.30
+     */
+    g_object_class_install_property(
+        gObjectClass,
+        PROP_WEBSITE_POLICIES,
+        g_param_spec_object(
+            "website-policies",
+            _("Default Website Policies"),
+            _("The default policy object for sites loaded in this view"),
+            WEBKIT_TYPE_WEBSITE_POLICIES,
+            static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 
     /**
      * WebKitWebView::load-changed:
@@ -2192,13 +2247,25 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
         WEBKIT_TYPE_USER_MESSAGE);
 }
 
-static void webkitWebViewCancelAuthenticationRequest(WebKitWebView* webView)
+static void webkitWebViewCompleteAuthenticationRequest(WebKitWebView* webView)
 {
-    if (!webView->priv->authenticationRequest)
+    WebKitWebViewPrivate* priv = webView->priv;
+    if (!priv->authenticationRequest)
         return;
 
-    webkit_authentication_request_cancel(webView->priv->authenticationRequest.get());
-    webView->priv->authenticationRequest.clear();
+    if (priv->mainResource) {
+        if (auto* response = webkit_web_resource_get_response(priv->mainResource.get())) {
+            auto statusCode = webkit_uri_response_get_status_code(response);
+            if (statusCode != SOUP_STATUS_UNAUTHORIZED && statusCode != SOUP_STATUS_PROXY_AUTHENTICATION_REQUIRED && statusCode < 500) {
+                webkitAuthenticationRequestDidAuthenticate(priv->authenticationRequest.get());
+                priv->authenticationRequest = nullptr;
+                return;
+            }
+        }
+    }
+
+    webkit_authentication_request_cancel(priv->authenticationRequest.get());
+    priv->authenticationRequest = nullptr;
 }
 
 void webkitWebViewCreatePage(WebKitWebView* webView, Ref<API::PageConfiguration>&& configuration)
@@ -2246,7 +2313,7 @@ void webkitWebViewLoadChanged(WebKitWebView* webView, WebKitLoadEvent loadEvent)
         webkitWebViewCancelFaviconRequest(webView);
         webkitWebViewWatchForChangesInFavicon(webView);
 #endif
-        webkitWebViewCancelAuthenticationRequest(webView);
+        webkitWebViewCompleteAuthenticationRequest(webView);
         priv->loadingResourcesMap.clear();
         priv->mainResource = nullptr;
         webView->priv->isActiveURIChangeBlocked = false;
@@ -2268,7 +2335,7 @@ void webkitWebViewLoadChanged(WebKitWebView* webView, WebKitLoadEvent loadEvent)
         break;
     }
     case WEBKIT_LOAD_FINISHED:
-        webkitWebViewCancelAuthenticationRequest(webView);
+        webkitWebViewCompleteAuthenticationRequest(webView);
         break;
     default:
         break;
@@ -2279,7 +2346,7 @@ void webkitWebViewLoadChanged(WebKitWebView* webView, WebKitLoadEvent loadEvent)
 
 void webkitWebViewLoadFailed(WebKitWebView* webView, WebKitLoadEvent loadEvent, const char* failingURI, GError *error)
 {
-    webkitWebViewCancelAuthenticationRequest(webView);
+    webkitWebViewCompleteAuthenticationRequest(webView);
 
     gboolean returnValue;
     g_signal_emit(webView, signals[LOAD_FAILED], 0, loadEvent, failingURI, error, &returnValue);
@@ -2288,7 +2355,7 @@ void webkitWebViewLoadFailed(WebKitWebView* webView, WebKitLoadEvent loadEvent, 
 
 void webkitWebViewLoadFailedWithTLSErrors(WebKitWebView* webView, const char* failingURI, GError* error, GTlsCertificateFlags tlsErrors, GTlsCertificate* certificate)
 {
-    webkitWebViewCancelAuthenticationRequest(webView);
+    webkitWebViewCompleteAuthenticationRequest(webView);
 
     WebKitTLSErrorsPolicy tlsErrorsPolicy = webkit_web_context_get_tls_errors_policy(webView->priv->context.get());
     if (tlsErrorsPolicy == WEBKIT_TLS_ERRORS_POLICY_FAIL) {
@@ -2637,7 +2704,9 @@ void webkitWebViewSubmitFormRequest(WebKitWebView* webView, WebKitFormSubmission
 
 void webkitWebViewHandleAuthenticationChallenge(WebKitWebView* webView, AuthenticationChallengeProxy* authenticationChallenge)
 {
-    webView->priv->authenticationRequest = adoptGRef(webkitAuthenticationRequestCreate(authenticationChallenge, webView->priv->isEphemeral));
+    auto* websiteDataManager = webkit_web_view_get_website_data_manager(webView);
+    webView->priv->authenticationRequest = adoptGRef(webkitAuthenticationRequestCreate(authenticationChallenge,
+        webView->priv->isEphemeral, webkit_website_data_manager_get_persistent_credential_storage_enabled(websiteDataManager)));
     gboolean returnValue;
     g_signal_emit(webView, signals[AUTHENTICATE], 0, webView->priv->authenticationRequest.get(), &returnValue);
 }
@@ -3167,6 +3236,43 @@ gboolean webkit_web_view_is_playing_audio(WebKitWebView* webView)
 }
 
 /**
+ * webkit_web_view_set_is_muted:
+ * @web_view: a #WebKitWebView
+ * @muted: mute flag
+ *
+ * Sets the mute state of @web_view.
+ *
+ * Since: 2.30
+ */
+void webkit_web_view_set_is_muted(WebKitWebView* webView, gboolean muted)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+
+    if (webkit_web_view_get_is_muted (webView) == muted)
+        return;
+
+    getPage(webView).setMuted(muted ? WebCore::MediaProducer::AudioIsMuted : WebCore::MediaProducer::NoneMuted);
+    g_object_notify(G_OBJECT(webView), "is-muted");
+}
+
+/**
+ * webkit_web_view_get_is_muted:
+ * @web_view: a #WebKitWebView
+ *
+ * Gets the mute state of @web_view.
+ *
+ * Returns: %TRUE if @web_view audio is muted or %FALSE is audio is not muted.
+ *
+ * Since: 2.30
+ */
+gboolean webkit_web_view_get_is_muted(WebKitWebView* webView)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), FALSE);
+
+    return getPage(webView).isAudioMuted();
+}
+
+/**
  * webkit_web_view_go_back:
  * @web_view: a #WebKitWebView
  *
@@ -3671,6 +3777,27 @@ static void webkitWebViewRunJavaScriptCallback(API::SerializedScriptValue* wkSer
         reinterpret_cast<GDestroyNotify>(webkit_javascript_result_unref));
 }
 
+static void webkitWebViewRunJavaScriptWithParams(WebKitWebView* webView, const gchar* script, RunJavaScriptParameters&& params, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer userData)
+{
+    GRefPtr<GTask> task = adoptGRef(g_task_new(webView, cancellable, callback, userData));
+
+    getPage(webView).runJavaScriptInMainFrame(WTFMove(params), [task = WTFMove(task)](API::SerializedScriptValue* serializedScriptValue, Optional<ExceptionDetails> details, WebKit::CallbackBase::Error) {
+        ExceptionDetails exceptionDetails;
+        if (details)
+            exceptionDetails = *details;
+        webkitWebViewRunJavaScriptCallback(serializedScriptValue, exceptionDetails, task.get());
+    });
+}
+
+void webkitWebViewRunJavascriptWithoutForcedUserGestures(WebKitWebView* webView, const gchar* script, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer userData)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
+    g_return_if_fail(script);
+
+    RunJavaScriptParameters params = { String::fromUTF8(script), URL { }, false, WTF::nullopt, false };
+    webkitWebViewRunJavaScriptWithParams(webView, script, WTFMove(params), cancellable, callback, userData);
+}
+
 /**
  * webkit_web_view_run_javascript:
  * @web_view: a #WebKitWebView
@@ -3690,13 +3817,8 @@ void webkit_web_view_run_javascript(WebKitWebView* webView, const gchar* script,
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
     g_return_if_fail(script);
 
-    GRefPtr<GTask> task = adoptGRef(g_task_new(webView, cancellable, callback, userData));
-    getPage(webView).runJavaScriptInMainFrame({ String::fromUTF8(script), URL { }, false, WTF::nullopt, true }, [task = WTFMove(task)](API::SerializedScriptValue* serializedScriptValue, Optional<ExceptionDetails> details, WebKit::CallbackBase::Error) {
-        ExceptionDetails exceptionDetails;
-        if (details)
-            exceptionDetails = *details;
-        webkitWebViewRunJavaScriptCallback(serializedScriptValue, exceptionDetails, task.get());
-    });
+    RunJavaScriptParameters params = { String::fromUTF8(script), URL { }, false, WTF::nullopt, true };
+    webkitWebViewRunJavaScriptWithParams(webView, script, WTFMove(params), cancellable, callback, userData);
 }
 
 /**
@@ -4554,4 +4676,26 @@ WebKitInputMethodContext* webkit_web_view_get_input_method_context(WebKitWebView
     return webView->priv->view->inputMethodContext();
 #endif
 
+}
+
+/**
+ * webkit_web_view_get_website_policies:
+ * @web_view: a #WebKitWebView
+ *
+ * Gets the default website policies set on construction in the
+ * @web_view. These can be overridden on a per-origin basis via the
+ * #WebKitWebView::decide-policy signal handler.
+ *
+ * See also webkit_policy_decision_use_with_policies().
+ *
+ * Returns: (transfer none): the default #WebKitWebsitePolicies
+ *     associated with the view.
+ *
+ * Since: 2.30
+ */
+WebKitWebsitePolicies* webkit_web_view_get_website_policies(WebKitWebView* webView)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), nullptr);
+
+    return webView->priv->websitePolicies.get();
 }

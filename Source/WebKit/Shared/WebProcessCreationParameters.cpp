@@ -72,14 +72,14 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << urlSchemesRegisteredAsAlwaysRevalidated;
     encoder << urlSchemesRegisteredAsCachePartitioned;
     encoder << urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
-    encoder.encodeEnum(cacheModel);
+    encoder << cacheModel;
     encoder << shouldAlwaysUseComplexTextCodePath;
     encoder << shouldEnableMemoryPressureReliefLogging;
     encoder << shouldSuppressMemoryPressureHandler;
     encoder << shouldUseFontSmoothing;
     encoder << fontWhitelist;
     encoder << terminationTimeout;
-    encoder << languages;
+    encoder << overrideLanguages;
 #if USE(GSTREAMER)
     encoder << gstreamerOptions;
 #endif
@@ -157,20 +157,17 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     
 #if PLATFORM(IOS)
     encoder << compilerServiceExtensionHandle;
-    encoder << contentFilterExtensionHandle;
-    encoder << frontboardServiceExtensionHandle;
 #endif
 
+    encoder << containerManagerExtensionHandle;
+    
 #if PLATFORM(IOS_FAMILY)
-    encoder << diagnosticsExtensionHandle;
-    encoder << runningboardExtensionHandle;
+    encoder << diagnosticsExtensionHandles;
     encoder << dynamicMachExtensionHandles;
     encoder << dynamicIOKitExtensionHandles;
 #endif
 
 #if PLATFORM(COCOA)
-    encoder << neHelperExtensionHandle;
-    encoder << neSessionManagerExtensionHandle;
     encoder << mapDBExtensionHandle;
     encoder << systemHasBattery;
 #endif
@@ -188,7 +185,6 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << mediaExtensionHandles;
 #if ENABLE(CFPREFS_DIRECT_MODE)
     encoder << preferencesExtensionHandles;
-    encoder << encodedGlobalPreferences;
 #endif
 #endif
 
@@ -272,7 +268,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     if (!decoder.decode(parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest))
         return false;
-    if (!decoder.decodeEnum(parameters.cacheModel))
+    if (!decoder.decode(parameters.cacheModel))
         return false;
     if (!decoder.decode(parameters.shouldAlwaysUseComplexTextCodePath))
         return false;
@@ -286,7 +282,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     if (!decoder.decode(parameters.terminationTimeout))
         return false;
-    if (!decoder.decode(parameters.languages))
+    if (!decoder.decode(parameters.overrideLanguages))
         return false;
 #if USE(GSTREAMER)
     if (!decoder.decode(parameters.gstreamerOptions))
@@ -423,32 +419,20 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!compilerServiceExtensionHandle)
         return false;
     parameters.compilerServiceExtensionHandle = WTFMove(*compilerServiceExtensionHandle);
-
-    Optional<Optional<SandboxExtension::Handle>> contentFilterExtensionHandle;
-    decoder >> contentFilterExtensionHandle;
-    if (!contentFilterExtensionHandle)
-        return false;
-    parameters.contentFilterExtensionHandle = WTFMove(*contentFilterExtensionHandle);
-
-    Optional<Optional<SandboxExtension::Handle>> frontboardServiceExtensionHandle;
-    decoder >> frontboardServiceExtensionHandle;
-    if (!frontboardServiceExtensionHandle)
-        return false;
-    parameters.frontboardServiceExtensionHandle = WTFMove(*frontboardServiceExtensionHandle);
 #endif
 
-#if PLATFORM(IOS_FAMILY)
-    Optional<Optional<SandboxExtension::Handle>> diagnosticsExtensionHandle;
-    decoder >> diagnosticsExtensionHandle;
-    if (!diagnosticsExtensionHandle)
+    Optional<Optional<SandboxExtension::Handle>> containerManagerExtensionHandle;
+    decoder >> containerManagerExtensionHandle;
+    if (!containerManagerExtensionHandle)
         return false;
-    parameters.diagnosticsExtensionHandle = WTFMove(*diagnosticsExtensionHandle);
+    parameters.containerManagerExtensionHandle = WTFMove(*containerManagerExtensionHandle);
 
-    Optional<Optional<SandboxExtension::Handle>> runningboardExtensionHandle;
-    decoder >> runningboardExtensionHandle;
-    if (!runningboardExtensionHandle)
+#if PLATFORM(IOS_FAMILY)
+    Optional<SandboxExtension::HandleArray> diagnosticsExtensionHandles;
+    decoder >> diagnosticsExtensionHandles;
+    if (!diagnosticsExtensionHandles)
         return false;
-    parameters.runningboardExtensionHandle = WTFMove(*runningboardExtensionHandle);
+    parameters.diagnosticsExtensionHandles = WTFMove(*diagnosticsExtensionHandles);
 
     Optional<SandboxExtension::HandleArray> dynamicMachExtensionHandles;
     decoder >> dynamicMachExtensionHandles;
@@ -464,18 +448,6 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
 #endif
 
 #if PLATFORM(COCOA)
-    Optional<Optional<SandboxExtension::Handle>> neHelperExtensionHandle;
-    decoder >> neHelperExtensionHandle;
-    if (!neHelperExtensionHandle)
-        return false;
-    parameters.neHelperExtensionHandle = WTFMove(*neHelperExtensionHandle);
-
-    Optional<Optional<SandboxExtension::Handle>> neSessionManagerExtensionHandle;
-    decoder >> neSessionManagerExtensionHandle;
-    if (!neSessionManagerExtensionHandle)
-        return false;
-    parameters.neSessionManagerExtensionHandle = WTFMove(*neSessionManagerExtensionHandle);
-
     Optional<Optional<SandboxExtension::Handle>> mapDBExtensionHandle;
     decoder >> mapDBExtensionHandle;
     if (!mapDBExtensionHandle)
@@ -527,12 +499,6 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!preferencesExtensionHandles)
         return false;
     parameters.preferencesExtensionHandles = WTFMove(*preferencesExtensionHandles);
-
-    Optional<String> encodedGlobalPreferences;
-    decoder >> encodedGlobalPreferences;
-    if (!encodedGlobalPreferences)
-        return false;
-    parameters.encodedGlobalPreferences = WTFMove(*encodedGlobalPreferences);
 #endif
 #endif
 

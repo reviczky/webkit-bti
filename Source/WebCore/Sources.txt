@@ -34,6 +34,7 @@ loader/cache/CachedApplicationManifest.cpp
 #endif
 
 Modules/async-clipboard/Clipboard.cpp
+Modules/async-clipboard/ClipboardImageReader.cpp
 Modules/async-clipboard/ClipboardItem.cpp
 Modules/async-clipboard/ClipboardItemBindingsDataSource.cpp
 Modules/async-clipboard/ClipboardItemPasteboardDataSource.cpp
@@ -87,6 +88,7 @@ Modules/indexeddb/IDBCursor.cpp
 Modules/indexeddb/IDBCursorWithValue.cpp
 Modules/indexeddb/IDBDatabase.cpp
 Modules/indexeddb/IDBDatabaseIdentifier.cpp
+Modules/indexeddb/IDBDatabaseNameAndVersionRequest.cpp
 Modules/indexeddb/IDBFactory.cpp
 Modules/indexeddb/IDBGetAllResult.cpp
 Modules/indexeddb/IDBGetResult.cpp
@@ -240,6 +242,7 @@ Modules/webaudio/AudioParamTimeline.cpp
 Modules/webaudio/AudioProcessingEvent.cpp
 Modules/webaudio/AudioScheduledSourceNode.cpp
 Modules/webaudio/AudioSummingJunction.cpp
+Modules/webaudio/BaseAudioContext.cpp
 Modules/webaudio/BiquadDSPKernel.cpp
 Modules/webaudio/BiquadFilterNode.cpp
 Modules/webaudio/BiquadProcessor.cpp
@@ -267,6 +270,9 @@ Modules/webaudio/ScriptProcessorNode.cpp
 Modules/webaudio/WaveShaperDSPKernel.cpp
 Modules/webaudio/WaveShaperNode.cpp
 Modules/webaudio/WaveShaperProcessor.cpp
+Modules/webaudio/WebKitAudioContext.cpp
+Modules/webaudio/WebKitAudioPannerNode.cpp
+Modules/webaudio/WebKitOfflineAudioContext.cpp
 
 Modules/webauthn/AuthenticatorCoordinator.cpp
 Modules/webauthn/AuthenticatorAssertionResponse.cpp
@@ -418,6 +424,7 @@ Modules/webxr/WebXRBoundedReferenceSpace.cpp @no-unify
 Modules/webxr/WebXRFrame.cpp @no-unify
 Modules/webxr/WebXRInputSourceArray.cpp @no-unify
 Modules/webxr/WebXRInputSource.cpp @no-unify
+Modules/webxr/WebXRLayer.cpp @no-unify
 Modules/webxr/WebXRPose.cpp @no-unify
 Modules/webxr/WebXRReferenceSpace.cpp @no-unify
 Modules/webxr/WebXRRenderState.cpp @no-unify
@@ -1040,7 +1047,6 @@ editing/CreateLinkCommand.cpp
 editing/CustomUndoStep.cpp
 editing/DeleteFromTextNodeCommand.cpp
 editing/DeleteSelectionCommand.cpp
-editing/DictationAlternative.cpp
 editing/DictationCommand.cpp
 editing/EditAction.cpp
 editing/EditCommand.cpp
@@ -1134,10 +1140,10 @@ html/DOMURL.cpp
 html/DateInputType.cpp
 html/DateTimeInputType.cpp
 html/DateTimeLocalInputType.cpp
+html/DirectoryFileListCreator.cpp
 html/EmailInputType.cpp
 html/EnterKeyHint.cpp
 html/FTPDirectoryDocument.cpp
-html/FileListCreator.cpp
 html/FeaturePolicy.cpp
 html/FileInputType.cpp
 html/FormAssociatedElement.cpp
@@ -1347,6 +1353,33 @@ html/canvas/WebGLVertexArrayObject.cpp
 html/canvas/WebGLVertexArrayObjectBase.cpp
 html/canvas/WebGLVertexArrayObjectOES.cpp
 
+html/track/AudioTrack.cpp
+html/track/AudioTrackList.cpp
+html/track/BufferedLineReader.cpp
+html/track/DataCue.cpp
+html/track/InbandDataTextTrack.cpp
+html/track/InbandGenericTextTrack.cpp
+html/track/InbandTextTrack.cpp
+html/track/InbandWebVTTTextTrack.cpp
+html/track/LoadableTextTrack.cpp
+html/track/TextTrack.cpp
+html/track/TextTrackCue.cpp
+html/track/TextTrackCueGeneric.cpp
+html/track/TextTrackCueList.cpp
+html/track/TextTrackList.cpp
+html/track/TrackBase.cpp
+html/track/TrackEvent.cpp
+html/track/TrackListBase.cpp
+html/track/VTTCue.cpp
+html/track/VTTRegion.cpp
+html/track/VTTRegionList.cpp
+html/track/VTTScanner.cpp
+html/track/VideoTrack.cpp
+html/track/VideoTrackList.cpp
+html/track/WebVTTElement.cpp
+html/track/WebVTTParser.cpp
+html/track/WebVTTTokenizer.cpp
+
 html/forms/FileIconLoader.cpp
 
 html/parser/CSSPreloadScanner.cpp
@@ -1463,11 +1496,11 @@ layout/blockformatting/BlockFormattingState.cpp
 layout/blockformatting/BlockMarginCollapse.cpp
 layout/blockformatting/PrecomputedBlockMarginCollapse.cpp
 layout/blockformatting/tablewrapper/TableWrapperBlockFormattingContext.cpp
+layout/blockformatting/tablewrapper/TableWrapperBlockFormattingContextQuirks.cpp
 layout/displaytree/DisplayBox.cpp
 layout/displaytree/DisplayInlineContent.cpp
 layout/displaytree/DisplayPainter.cpp
 layout/floats/FloatAvoider.cpp
-layout/floats/FloatBox.cpp
 layout/floats/FloatingContext.cpp
 layout/floats/FloatingState.cpp
 layout/inlineformatting/InlineFormattingContext.cpp
@@ -1582,6 +1615,7 @@ loader/cache/CachedSVGDocument.cpp
 loader/cache/CachedSVGDocumentReference.cpp
 loader/cache/CachedSVGFont.cpp
 loader/cache/CachedScript.cpp
+loader/cache/CachedTextTrack.cpp
 loader/cache/CachedXSLStyleSheet.cpp
 loader/cache/KeepaliveRequestTracker.cpp
 loader/cache/MemoryCache.cpp
@@ -1938,9 +1972,12 @@ platform/graphics/Region.cpp
 platform/graphics/RemoteVideoSample.cpp
 platform/graphics/RoundedRect.cpp
 platform/graphics/ShadowBlur.cpp
+platform/graphics/SimpleColor.cpp
 platform/graphics/StringTruncator.cpp
 platform/graphics/SurrogatePairAwareTextIterator.cpp
 platform/graphics/TextRun.cpp
+platform/graphics/TextTrackRepresentation.cpp
+platform/graphics/TrackPrivateBase.cpp
 platform/graphics/VelocityData.cpp
 platform/graphics/WOFFFileFormat.cpp
 platform/graphics/WidthIterator.cpp
@@ -2116,8 +2153,7 @@ platform/text/TextEncoding.cpp
 platform/text/TextEncodingDetectorICU.cpp
 platform/text/TextEncodingRegistry.cpp
 
-platform/xr/PlatformXR.cpp @no-unify
-platform/xr/openxr/PlatformXR.cpp @no-unify
+platform/xr/openxr/PlatformXROpenXR.cpp @no-unify
 
 plugins/DOMMimeType.cpp
 plugins/DOMMimeTypeArray.cpp
@@ -2714,6 +2750,7 @@ JSAudioBufferCallback.cpp
 JSAudioBufferSourceNode.cpp
 JSAudioConfiguration.cpp
 JSAudioContext.cpp
+JSAudioContextState.cpp
 JSAudioDestinationNode.cpp
 JSAudioListener.cpp
 JSAudioNode.cpp
@@ -2727,6 +2764,7 @@ JSAuthenticatorAttestationResponse.cpp
 JSAuthenticatorResponse.cpp
 JSAuthenticatorTransport.cpp
 JSBarProp.cpp
+JSBaseAudioContext.cpp
 JSBasicCredential.cpp
 JSBeforeLoadEvent.cpp
 JSBeforeUnloadEvent.cpp
@@ -2734,7 +2772,7 @@ JSBiquadFilterNode.cpp
 JSBlob.cpp
 JSBlobCallback.cpp
 JSBlobEvent.cpp
-JSBlobLineEndings.cpp
+JSEndingType.cpp
 JSBlobPropertyBag.cpp
 JSByteLengthQueuingStrategy.cpp
 JSCDATASection.cpp
@@ -2884,6 +2922,7 @@ JSDeviceMotionEvent.cpp
 JSDeviceOrientationEvent.cpp
 JSDeviceOrientationOrMotionPermissionState.cpp
 JSDeviceOrientationOrMotionEvent.cpp
+JSDistanceModelType.cpp
 JSDocument.cpp
 JSDocumentAndElementEventHandlers.cpp
 JSDocumentFragment.cpp
@@ -2922,7 +2961,6 @@ JSFetchRequestRedirect.cpp
 JSFetchResponse.cpp
 JSFile.cpp
 JSFileCallback.cpp
-JSFileError.cpp
 JSFileList.cpp
 JSFileReader.cpp
 JSFileReaderSync.cpp
@@ -3182,6 +3220,7 @@ JSOverflowEvent.cpp
 JSPageTransitionEvent.cpp
 JSPaintRenderingContext2D.cpp
 JSPannerNode.cpp
+JSPanningModelType.cpp
 JSParentNode.cpp
 JSPath2D.cpp
 JSPayerErrorFields.cpp
@@ -3538,7 +3577,10 @@ JSWebGPUSwapChain.cpp
 JSWebGPUTexture.cpp
 JSWebGPUTextureView.cpp
 JSWebKitAnimationEvent.cpp
+JSWebKitAudioContext.cpp
+JSWebKitAudioPannerNode.cpp
 JSWebKitCSSMatrix.cpp
+JSWebKitOfflineAudioContext.cpp
 JSWebKitPlaybackTargetAvailabilityEvent.cpp
 JSWebKitPoint.cpp
 JSWebKitTransitionEvent.cpp
@@ -3578,6 +3620,7 @@ JSXRFrameRequestCallback.cpp
 JSXRHandedness.cpp
 JSWebXRInputSource.cpp
 JSWebXRInputSourceArray.cpp
+JSXRInteractionMode.cpp
 JSXRInputSourceEvent.cpp
 JSXRInputSourcesChangeEvent.cpp
 JSWebXRPose.cpp
@@ -3598,6 +3641,7 @@ JSWebXRView.cpp
 JSWebXRViewerPose.cpp
 JSWebXRViewport.cpp
 JSXRVisibilityState.cpp
+JSWebXRLayer.cpp
 JSWebXRWebGLLayer.cpp
 JSXRWebGLLayerInit.cpp
 
@@ -3692,8 +3736,6 @@ JSWebGLVertexArrayObjectOES.cpp
 
 #endif
 
-#if ENABLE_VIDEO_TRACK
-
 JSAudioTrack.cpp
 JSAudioTrackList.cpp
 JSDataCue.cpp
@@ -3713,8 +3755,6 @@ JSVideoTrackList.cpp
 JSAudioTrackMediaSource.cpp
 JSTextTrackMediaSource.cpp
 JSVideoTrackMediaSource.cpp
-#endif
-
 #endif
 
 #if ENABLE_QUOTA

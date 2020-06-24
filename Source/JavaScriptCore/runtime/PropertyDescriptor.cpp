@@ -28,10 +28,9 @@
 #include "PropertyDescriptor.h"
 
 #include "GetterSetter.h"
-#include "JSObject.h"
+#include "JSCJSValueInlines.h"
 
 namespace JSC {
-unsigned PropertyDescriptor::defaultAttributes = PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly;
 
 bool PropertyDescriptor::writable() const
 {

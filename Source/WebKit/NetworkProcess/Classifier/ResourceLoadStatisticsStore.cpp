@@ -52,9 +52,6 @@ namespace WebKit {
 using namespace WebCore;
 
 constexpr Seconds minimumStatisticsProcessingInterval { 5_s };
-constexpr unsigned operatingDatesWindowLong { 30 };
-constexpr unsigned operatingDatesWindowShort { 7 };
-constexpr Seconds operatingTimeWindowForLiveOnTesting { 1_h };
 
 static String domainsToString(const Vector<RegistrableDomain>& domains)
 {
@@ -133,8 +130,6 @@ ResourceLoadStatisticsStore::ResourceLoadStatisticsStore(WebResourceLoadStatisti
     , m_shouldIncludeLocalhost(shouldIncludeLocalhost)
 {
     ASSERT(!RunLoop::isMain());
-
-    includeTodayAsOperatingDateIfNecessary();
 }
 
 ResourceLoadStatisticsStore::~ResourceLoadStatisticsStore()
@@ -211,8 +206,8 @@ void ResourceLoadStatisticsStore::removeDataRecords(CompletionHandler<void()>&& 
 
     setDataRecordsBeingRemoved(true);
 
-    RunLoop::main().dispatch([store = makeRef(m_store), domainsToDeleteOrRestrictWebsiteDataFor = crossThreadCopy(domainsToDeleteOrRestrictWebsiteDataFor), completionHandler = WTFMove(completionHandler), weakThis = makeWeakPtr(*this), shouldNotifyPagesWhenDataRecordsWereScanned = m_parameters.shouldNotifyPagesWhenDataRecordsWereScanned, workQueue = m_workQueue.copyRef()] () mutable {
-        store->deleteAndRestrictWebsiteDataForRegistrableDomains(WebResourceLoadStatisticsStore::monitoredDataTypes(), WTFMove(domainsToDeleteOrRestrictWebsiteDataFor), shouldNotifyPagesWhenDataRecordsWereScanned, [completionHandler = WTFMove(completionHandler), weakThis = WTFMove(weakThis), workQueue = workQueue.copyRef()](const HashSet<RegistrableDomain>& domainsWithDeletedWebsiteData) mutable {
+    RunLoop::main().dispatch([store = makeRef(m_store), domainsToDeleteOrRestrictWebsiteDataFor = crossThreadCopy(domainsToDeleteOrRestrictWebsiteDataFor), completionHandler = WTFMove(completionHandler), weakThis = makeWeakPtr(*this), shouldNotifyPagesWhenDataRecordsWereScanned = m_parameters.shouldNotifyPagesWhenDataRecordsWereScanned, workQueue = m_workQueue] () mutable {
+        store->deleteAndRestrictWebsiteDataForRegistrableDomains(WebResourceLoadStatisticsStore::monitoredDataTypes(), WTFMove(domainsToDeleteOrRestrictWebsiteDataFor), shouldNotifyPagesWhenDataRecordsWereScanned, [completionHandler = WTFMove(completionHandler), weakThis = WTFMove(weakThis), workQueue](const HashSet<RegistrableDomain>& domainsWithDeletedWebsiteData) mutable {
             workQueue->dispatch([domainsWithDeletedWebsiteData = crossThreadCopy(domainsWithDeletedWebsiteData), completionHandler = WTFMove(completionHandler), weakThis = WTFMove(weakThis)] () mutable {
                 if (!weakThis) {
                     completionHandler();
@@ -270,8 +265,8 @@ void ResourceLoadStatisticsStore::grandfatherExistingWebsiteData(CompletionHandl
 {
     ASSERT(!RunLoop::isMain());
 
-    RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), callback = WTFMove(callback), shouldNotifyPagesWhenDataRecordsWereScanned = m_parameters.shouldNotifyPagesWhenDataRecordsWereScanned, workQueue = m_workQueue.copyRef(), store = makeRef(m_store)] () mutable {
-        store->registrableDomainsWithWebsiteData(WebResourceLoadStatisticsStore::monitoredDataTypes(), shouldNotifyPagesWhenDataRecordsWereScanned, [weakThis = WTFMove(weakThis), callback = WTFMove(callback), workQueue = workQueue.copyRef()] (HashSet<RegistrableDomain>&& domainsWithWebsiteData) mutable {
+    RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), callback = WTFMove(callback), shouldNotifyPagesWhenDataRecordsWereScanned = m_parameters.shouldNotifyPagesWhenDataRecordsWereScanned, workQueue = m_workQueue, store = makeRef(m_store)] () mutable {
+        store->registrableDomainsWithWebsiteData(WebResourceLoadStatisticsStore::monitoredDataTypes(), shouldNotifyPagesWhenDataRecordsWereScanned, [weakThis = WTFMove(weakThis), callback = WTFMove(callback), workQueue] (HashSet<RegistrableDomain>&& domainsWithWebsiteData) mutable {
             workQueue->dispatch([weakThis = WTFMove(weakThis), domainsWithWebsiteData = crossThreadCopy(domainsWithWebsiteData), callback = WTFMove(callback)] () mutable {
                 if (!weakThis) {
                     callback();
@@ -444,103 +439,12 @@ void ResourceLoadStatisticsStore::updateCookieBlockingForDomains(const Registrab
     ASSERT(!RunLoop::isMain());
     
     RunLoop::main().dispatch([store = makeRef(m_store), domainsToBlock = crossThreadCopy(domainsToBlock), completionHandler = WTFMove(completionHandler)] () mutable {
-        store->callUpdatePrevalentDomainsToBlockCookiesForHandler(domainsToBlock, [store = store.copyRef(), completionHandler = WTFMove(completionHandler)]() mutable {
+        store->callUpdatePrevalentDomainsToBlockCookiesForHandler(domainsToBlock, [store, completionHandler = WTFMove(completionHandler)]() mutable {
             store->statisticsQueue().dispatch([completionHandler = WTFMove(completionHandler)]() mutable {
                 completionHandler();
             });
         });
     });
-}
-    
-
-Optional<Seconds> ResourceLoadStatisticsStore::statisticsEpirationTime() const
-{
-    ASSERT(!RunLoop::isMain());
-
-    if (m_parameters.timeToLiveUserInteraction)
-        return WallTime::now().secondsSinceEpoch() - m_parameters.timeToLiveUserInteraction.value();
-    
-    if (m_operatingDates.size() >= operatingDatesWindowLong)
-        return m_operatingDates.first().secondsSinceEpoch();
-    
-    return WTF::nullopt;
-}
-
-Vector<OperatingDate> ResourceLoadStatisticsStore::mergeOperatingDates(const Vector<OperatingDate>& existingDates, Vector<OperatingDate>&& newDates)
-{
-    if (existingDates.isEmpty())
-        return WTFMove(newDates);
-    
-    Vector<OperatingDate> mergedDates(existingDates.size() + newDates.size());
-    
-    // Merge the two sorted vectors of dates.
-    std::merge(existingDates.begin(), existingDates.end(), newDates.begin(), newDates.end(), mergedDates.begin());
-    // Remove duplicate dates.
-    removeRepeatedElements(mergedDates);
-    
-    // Drop old dates until the Vector size reaches operatingDatesWindowLong.
-    while (mergedDates.size() > operatingDatesWindowLong)
-        mergedDates.remove(0);
-    
-    return mergedDates;
-}
-
-void ResourceLoadStatisticsStore::mergeOperatingDates(Vector<OperatingDate>&& newDates)
-{
-    ASSERT(!RunLoop::isMain());
-
-    m_operatingDates = mergeOperatingDates(m_operatingDates, WTFMove(newDates));
-}
-
-void ResourceLoadStatisticsStore::includeTodayAsOperatingDateIfNecessary()
-{
-    ASSERT(!RunLoop::isMain());
-
-    auto today = OperatingDate::today();
-    if (!m_operatingDates.isEmpty() && today <= m_operatingDates.last())
-        return;
-
-    while (m_operatingDates.size() >= operatingDatesWindowLong)
-        m_operatingDates.remove(0);
-
-    m_operatingDates.append(today);
-}
-
-bool ResourceLoadStatisticsStore::hasStatisticsExpired(WallTime mostRecentUserInteractionTime, OperatingDatesWindow operatingDatesWindow) const
-{
-    ASSERT(!RunLoop::isMain());
-
-    unsigned operatingDatesWindowInDays = 0;
-    switch (operatingDatesWindow) {
-    case OperatingDatesWindow::Long:
-        operatingDatesWindowInDays = operatingDatesWindowLong;
-        break;
-    case OperatingDatesWindow::Short:
-        operatingDatesWindowInDays = operatingDatesWindowShort;
-        break;
-    case OperatingDatesWindow::ForLiveOnTesting:
-        return WallTime::now() > mostRecentUserInteractionTime + operatingTimeWindowForLiveOnTesting;
-    case OperatingDatesWindow::ForReproTesting:
-        return true;
-    }
-
-    if (m_operatingDates.size() >= operatingDatesWindowInDays) {
-        if (OperatingDate::fromWallTime(mostRecentUserInteractionTime) < m_operatingDates.first())
-            return true;
-    }
-    
-    // If we don't meet the real criteria for an expired statistic, check the user setting for a tighter restriction (mainly for testing).
-    if (m_parameters.timeToLiveUserInteraction) {
-        if (WallTime::now() > mostRecentUserInteractionTime + m_parameters.timeToLiveUserInteraction.value())
-            return true;
-    }
-    
-    return false;
-}
-
-bool ResourceLoadStatisticsStore::hasStatisticsExpired(const ResourceLoadStatistics& resourceStatistic, OperatingDatesWindow operatingDatesWindow) const
-{
-    return hasStatisticsExpired(resourceStatistic.mostRecentUserInteractionTime, operatingDatesWindow);
 }
 
 bool ResourceLoadStatisticsStore::shouldEnforceSameSiteStrictForSpecificDomain(const RegistrableDomain& domain) const
@@ -589,7 +493,7 @@ void ResourceLoadStatisticsStore::removeAllStorageAccess(CompletionHandler<void(
 {
     ASSERT(!RunLoop::isMain());
     RunLoop::main().dispatch([store = makeRef(m_store), completionHandler = WTFMove(completionHandler)]() mutable {
-        store->removeAllStorageAccess([store = store.copyRef(), completionHandler = WTFMove(completionHandler)]() mutable {
+        store->removeAllStorageAccess([store, completionHandler = WTFMove(completionHandler)]() mutable {
             store->statisticsQueue().dispatch([completionHandler = WTFMove(completionHandler)]() mutable {
                 completionHandler();
             });

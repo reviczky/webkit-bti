@@ -53,6 +53,7 @@
 #include "WebKitWebContextPrivate.h"
 #include "WebKitWebViewPrivate.h"
 #include "WebKitWebsiteDataManagerPrivate.h"
+#include "WebKitWebsitePoliciesPrivate.h"
 #include "WebNotificationManagerProxy.h"
 #include "WebProcessMessages.h"
 #include "WebURLSchemeHandler.h"
@@ -69,6 +70,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/URLParser.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/WTFGType.h>
@@ -402,7 +404,7 @@ static void webkitWebContextConstructed(GObject* object)
         priv->websiteDataManager = adoptGRef(webkit_website_data_manager_new("local-storage-directory", priv->localStorageDirectory.data(), nullptr));
 
     if (!webkit_website_data_manager_is_ephemeral(priv->websiteDataManager.get()))
-        WebKit::LegacyGlobalSettings::singleton().setHSTSStorageDirectory(FileSystem::stringFromFileSystemRepresentation(webkit_website_data_manager_get_hsts_cache_directory(priv->websiteDataManager.get())));
+        configuration.setHSTSStorageDirectory(FileSystem::stringFromFileSystemRepresentation(webkit_website_data_manager_get_hsts_cache_directory(priv->websiteDataManager.get())));
 
     priv->processPool = WebProcessPool::create(configuration);
     priv->processPool->setPrimaryDataStore(webkitWebsiteDataManagerGetDataStore(priv->websiteDataManager.get()));
@@ -1273,13 +1275,16 @@ void webkit_web_context_register_uri_scheme(WebKitWebContext* context, const cha
     g_return_if_fail(scheme);
     g_return_if_fail(callback);
 
-    // List from Source/WTF/URLParser.cpp, enum Scheme.
-    g_return_if_fail(g_ascii_strcasecmp(scheme, "ws") != 0);
-    g_return_if_fail(g_ascii_strcasecmp(scheme, "wss") != 0);
-    g_return_if_fail(g_ascii_strcasecmp(scheme, "file") != 0);
-    g_return_if_fail(g_ascii_strcasecmp(scheme, "ftp") != 0);
-    g_return_if_fail(g_ascii_strcasecmp(scheme, "http") != 0);
-    g_return_if_fail(g_ascii_strcasecmp(scheme, "https") != 0);
+    auto canonicalizedScheme = WTF::URLParser::maybeCanonicalizeScheme(scheme);
+    if (!canonicalizedScheme) {
+        g_critical("Cannot register invalid URI scheme %s", scheme);
+        return;
+    }
+
+    if (WTF::URLParser::isSpecialScheme(canonicalizedScheme.value())) {
+        g_warning("Registering special URI scheme %s is no longer allowed", scheme);
+        return;
+    }
 
     auto handler = WebKitURISchemeHandler::create(context, callback, userData, destroyNotify);
     auto addResult = context->priv->uriSchemeHandlers.set(String::fromUTF8(scheme), WTFMove(handler));
@@ -1897,7 +1902,7 @@ WebProcessPool& webkitWebContextGetProcessPool(WebKitWebContext* context)
     return *context->priv->processPool;
 }
 
-void webkitWebContextCreatePageForWebView(WebKitWebContext* context, WebKitWebView* webView, WebKitUserContentManager* userContentManager, WebKitWebView* relatedView)
+void webkitWebContextCreatePageForWebView(WebKitWebContext* context, WebKitWebView* webView, WebKitUserContentManager* userContentManager, WebKitWebView* relatedView, WebKitWebsitePolicies* defaultWebsitePolicies)
 {
     auto pageConfiguration = API::PageConfiguration::create();
     pageConfiguration->setProcessPool(context->priv->processPool.get());
@@ -1910,6 +1915,7 @@ void webkitWebContextCreatePageForWebView(WebKitWebContext* context, WebKitWebVi
     if (!manager)
         manager = context->priv->websiteDataManager.get();
     pageConfiguration->setWebsiteDataStore(&webkitWebsiteDataManagerGetDataStore(manager));
+    pageConfiguration->setDefaultWebsitePolicies(webkitWebsitePoliciesGetWebsitePolicies(defaultWebsitePolicies));
     webkitWebViewCreatePage(webView, WTFMove(pageConfiguration));
 
     auto& page = webkitWebViewGetPage(webView);

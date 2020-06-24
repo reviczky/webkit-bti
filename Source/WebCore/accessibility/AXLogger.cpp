@@ -29,6 +29,9 @@
 #include "config.h"
 #include "AXLogger.h"
 
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+#include "AXIsolatedObject.h"
+#endif
 #include "AXObjectCache.h"
 #include "Logging.h"
 #include <wtf/text/TextStream.h>
@@ -60,7 +63,7 @@ void AXLogger::log(const String& message)
 #endif
 }
 
-void AXLogger::log(const RefPtr<AXCoreObject>& object)
+void AXLogger::log(RefPtr<AXCoreObject> object)
 {
     TextStream stream(TextStream::LineMode::MultipleLine);
 
@@ -95,6 +98,13 @@ void AXLogger::log(const std::pair<RefPtr<AXCoreObject>, AXObjectCache::AXNotifi
         stream << *notification.first;
     else
         stream << "null";
+    LOG(Accessibility, "%s", stream.release().utf8().data());
+}
+
+void AXLogger::log(AccessibilityObjectInclusion inclusion)
+{
+    TextStream stream(TextStream::LineMode::SingleLine);
+    stream.dumpProperty("ObjectInclusion", inclusion);
     LOG(Accessibility, "%s", stream.release().utf8().data());
 }
 
@@ -575,6 +585,25 @@ TextStream& operator<<(TextStream& stream, AccessibilityRole role)
     return stream;
 }
 
+TextStream& operator<<(TextStream& stream, AccessibilityObjectInclusion inclusion)
+{
+    switch (inclusion) {
+    case AccessibilityObjectInclusion::IncludeObject:
+        stream << "IncludeObject";
+        break;
+    case AccessibilityObjectInclusion::IgnoreObject:
+        stream << "IgnoreObject";
+        break;
+    case AccessibilityObjectInclusion::DefaultBehavior:
+        stream << "DefaultBehavior";
+        break;
+    default:
+        break;
+    }
+
+    return stream;
+}
+
 TextStream& operator<<(TextStream& stream, AXObjectCache::AXNotification notification)
 {
     switch (notification) {
@@ -706,7 +735,7 @@ TextStream& operator<<(TextStream& stream, AXIsolatedTree& tree)
 {
     TextStream::GroupScope groupScope(stream);
     stream << "treeID " << tree.treeID();
-    stream.dumpProperty("rootNodeID", tree.m_rootNodeID);
+    stream.dumpProperty("rootNodeID", tree.rootNode()->objectID());
     stream.dumpProperty("focusedNodeID", tree.m_focusedNodeID);
     AXLogger::add(stream, tree.rootNode(), true);
     return stream;

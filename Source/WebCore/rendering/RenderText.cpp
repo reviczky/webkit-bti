@@ -739,7 +739,7 @@ static float maxWordFragmentWidth(RenderText& renderer, const RenderStyle& style
     Vector<int, 8> hyphenLocations;
     ASSERT(word.length() >= minimumSuffixLength);
     unsigned hyphenLocation = word.length() - minimumSuffixLength;
-    while ((hyphenLocation = lastHyphenLocation(word, hyphenLocation, style.locale())) >= std::max(minimumPrefixLength, 1U))
+    while ((hyphenLocation = lastHyphenLocation(word, hyphenLocation, style.computedLocale())) >= std::max(minimumPrefixLength, 1U))
         hyphenLocations.append(hyphenLocation);
 
     if (hyphenLocations.isEmpty())
@@ -793,7 +793,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Fo
     auto& string = text();
     unsigned length = string.length();
     auto iteratorMode = mapLineBreakToIteratorMode(style.lineBreak());
-    LazyLineBreakIterator breakIterator(string, style.locale(), iteratorMode);
+    LazyLineBreakIterator breakIterator(string, style.computedLocale(), iteratorMode);
     bool needsWordSpacing = false;
     bool ignoringSpaces = false;
     bool isSpace = false;
@@ -808,7 +808,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Fo
     float maxWordWidth = std::numeric_limits<float>::max();
     unsigned minimumPrefixLength = 0;
     unsigned minimumSuffixLength = 0;
-    if (style.hyphens() == Hyphens::Auto && canHyphenate(style.locale())) {
+    if (style.hyphens() == Hyphens::Auto && canHyphenate(style.computedLocale())) {
         maxWordWidth = 0;
 
         // Map 'hyphenate-limit-{before,after}: auto;' to 2.
@@ -1143,9 +1143,9 @@ String applyTextTransform(const RenderStyle& style, const String& text, UChar pr
     case TextTransform::Capitalize:
         return capitalize(text, previousCharacter); // FIXME: Need to take locale into account.
     case TextTransform::Uppercase:
-        return text.convertToUppercaseWithLocale(style.locale());
+        return text.convertToUppercaseWithLocale(style.computedLocale());
     case TextTransform::Lowercase:
-        return text.convertToLowercaseWithLocale(style.locale());
+        return text.convertToLowercaseWithLocale(style.computedLocale());
     }
     ASSERT_NOT_REACHED();
     return text;
@@ -1400,7 +1400,7 @@ float RenderText::width(unsigned from, unsigned len, const FontCascade& f, float
         w = f.width(run, fallbackFonts, glyphOverflow);
     }
 
-    return w;
+    return clampTo(w, 0.f);
 }
 
 IntRect RenderText::linesBoundingBox() const

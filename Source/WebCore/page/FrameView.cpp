@@ -35,7 +35,6 @@
 #include "CachedResourceLoader.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
-#include "CustomHeaderFields.h"
 #include "DOMWindow.h"
 #include "DebugPageOverlays.h"
 #include "DeprecatedGlobalSettings.h"
@@ -365,9 +364,7 @@ void FrameView::recalculateScrollbarOverlayStyle()
         // Reduce the background color from RGB to a lightness value
         // and determine which scrollbar style to use based on a lightness
         // heuristic.
-        double hue, saturation, lightness;
-        backgroundColor.getHSL(hue, saturation, lightness);
-        if (lightness <= .5 && backgroundColor.isVisible())
+        if (backgroundColor.lightness() <= .5f && backgroundColor.isVisible())
             computedOverlayStyle = ScrollbarOverlayStyleLight;
         else if (!backgroundColor.isVisible() && useDarkAppearance())
             computedOverlayStyle = ScrollbarOverlayStyleLight;
@@ -2195,11 +2192,11 @@ bool FrameView::scrollToFragment(const URL& url)
 
 bool FrameView::scrollToFragmentInternal(const String& fragmentIdentifier)
 {
-    LOG(Scrolling, "FrameView::scrollToFragmentInternal %s", fragmentIdentifier.utf8().data());
-
     // If our URL has no ref, then we have no place we need to jump to.
     if (fragmentIdentifier.isNull())
         return false;
+
+    LOG_WITH_STREAM(Scrolling, stream << *this << " scrollToFragmentInternal " << fragmentIdentifier);
 
     ASSERT(frame().document());
     auto& document = *frame().document();
@@ -3148,14 +3145,14 @@ bool FrameView::safeToPropagateScrollToParent() const
 void FrameView::scrollToAnchor()
 {
     RefPtr<ContainerNode> anchorNode = m_maintainScrollPositionAnchor;
-
-    LOG_WITH_STREAM(Scrolling, stream << "FrameView::scrollToAnchor() " << anchorNode.get());
-
     if (!anchorNode)
         return;
 
+    LOG_WITH_STREAM(Scrolling, stream << *this << " scrollToAnchor() " << anchorNode.get());
+
     if (!anchorNode->renderer())
         return;
+
     m_shouldScrollToFocusedElement = false;
     m_delayedScrollToFocusedElementTimer.stop();
 
@@ -3482,19 +3479,18 @@ void FrameView::performSizeToContentAutoSize()
     auto* document = frame().document();
     auto* renderView = document->renderView();
 
-    IntSize minAutoSize(1, 1);
-
     // Start from the minimum size and allow it to grow.
-    resize(minAutoSize.width(), minAutoSize.height());
-    IntSize size = frameRect().size();
+    auto minAutoSize = IntSize { 1, 1 };
+    resize(minAutoSize);
+    auto size = frameRect().size();
     // Do the resizing twice. The first time is basically a rough calculation using the preferred width
     // which may result in a height change during the second iteration.
+    // Let's ignore renderers with viewport units first and resolve these boxes during the second phase of the autosizing.
+    resetOverriddenViewportWidthForCSSViewportUnits();
     for (int i = 0; i < 2; i++) {
         // Update various sizes including contentsSize, scrollHeight, etc.
         document->updateLayoutIgnorePendingStylesheets();
-        int width = renderView->minPreferredLogicalWidth();
-        int height = renderView->documentRect().height();
-        IntSize newSize(width, height);
+        auto newSize = IntSize { renderView->minPreferredLogicalWidth(), renderView->documentRect().height() };
 
         // Check to see if a scrollbar is needed for a given dimension and
         // if so, increase the other dimension to account for the scrollbar.
@@ -3505,7 +3501,6 @@ void FrameView::performSizeToContentAutoSize()
             if (!localHorizontalScrollbar)
                 localHorizontalScrollbar = createScrollbar(HorizontalScrollbar);
             newSize.expand(0, localHorizontalScrollbar->occupiedHeight());
-
             // Don't bother checking for a vertical scrollbar because the width is at
             // already greater the maximum.
         } else if (newSize.height() > m_autoSizeConstraint.height()) {
@@ -3513,7 +3508,6 @@ void FrameView::performSizeToContentAutoSize()
             if (!localVerticalScrollbar)
                 localVerticalScrollbar = createScrollbar(VerticalScrollbar);
             newSize.expand(localVerticalScrollbar->occupiedWidth(), 0);
-
             // Don't bother checking for a horizontal scrollbar because the height is
             // already greater the maximum.
         }
@@ -3546,6 +3540,9 @@ void FrameView::performSizeToContentAutoSize()
         // on pages (e.g. quirks mode) where the body/document resize to the view size,
         // we'll end up not shrinking back down after resizing to the computed preferred width.
         resize(newSize.width(), i ? newSize.height() : minAutoSize.height());
+        // Protect the content from evergrowing layout.
+        auto preferredViewportWidth = std::min(newSize.width(), m_autoSizeConstraint.width());
+        overrideViewportWidthForCSSViewportUnits(preferredViewportWidth);
         // Force the scrollbar state to avoid the scrollbar code adding them and causing them to be needed. For example,
         // a vertical scrollbar may cause text to wrap and thus increase the height (which is the only reason the scollbar is needed).
         setVerticalScrollbarLock(false);
@@ -3553,7 +3550,6 @@ void FrameView::performSizeToContentAutoSize()
         setScrollbarModes(horizonalScrollbarMode, verticalScrollbarMode, true, true);
     }
     // All the resizing above may have invalidated style (for example if viewport units are being used).
-
     document->updateStyleIfNeeded();
     // FIXME: Use the final layout's result as the content size (webkit.org/b/173561).
     document->updateLayoutIgnorePendingStylesheets();
@@ -4245,7 +4241,7 @@ void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect
     if (fillWithWarningColor) {
         IntRect debugRect = frameRect();
         debugRect.intersect(dirtyRect);
-        context.fillRect(debugRect, Color(255, 64, 255));
+        context.fillRect(debugRect, makeSimpleColor(255, 64, 255));
     }
 #endif
 
@@ -4596,6 +4592,7 @@ void FrameView::enableSizeToContentAutoSizeMode(bool enable, const IntSize& view
 
 void FrameView::enableAutoSizeMode(bool enable, const IntSize& viewSize, AutoSizeMode mode)
 {
+    ASSERT(frame().isMainFrame());
     ASSERT(!enable || !viewSize.isEmpty());
     if (m_shouldAutoSize == enable && m_autoSizeConstraint == viewSize)
         return;
@@ -4609,7 +4606,7 @@ void FrameView::enableAutoSizeMode(bool enable, const IntSize& viewSize, AutoSiz
     setNeedsLayoutAfterViewConfigurationChange();
     layoutContext().scheduleLayout();
     if (m_shouldAutoSize) {
-        overrideViewportSizeForCSSViewportUnits({ m_autoSizeConstraint.width(), m_overrideViewportSize ? m_overrideViewportSize->height : WTF::nullopt });
+        overrideViewportWidthForCSSViewportUnits(m_autoSizeConstraint.width());
         return;
     }
 
@@ -5093,7 +5090,7 @@ bool FrameView::wheelEvent(const PlatformWheelEvent& wheelEvent)
 #if ENABLE(ASYNC_SCROLLING)
     if (auto scrollingCoordinator = this->scrollingCoordinator()) {
         if (scrollingCoordinator->coordinatesScrollingForFrameView(*this))
-            return scrollingCoordinator->handleWheelEvent(*this, wheelEvent) != ScrollingEventResult::DidNotHandleEvent;
+            return scrollingCoordinator->handleWheelEvent(*this, wheelEvent);
     }
 #endif
 
@@ -5409,6 +5406,16 @@ void FrameView::clearViewportSizeOverrideForCSSViewportUnits()
 void FrameView::setViewportSizeForCSSViewportUnits(IntSize size)
 {
     overrideViewportSizeForCSSViewportUnits({ size.width(), size.height() });
+}
+
+void FrameView::overrideViewportWidthForCSSViewportUnits(int width)
+{
+    overrideViewportSizeForCSSViewportUnits({ width, m_overrideViewportSize ? m_overrideViewportSize->height : WTF::nullopt });
+}
+
+void FrameView::resetOverriddenViewportWidthForCSSViewportUnits()
+{
+    overrideViewportSizeForCSSViewportUnits({ { }, m_overrideViewportSize ? m_overrideViewportSize->height : WTF::nullopt });
 }
 
 void FrameView::overrideViewportSizeForCSSViewportUnits(OverrideViewportSize size)

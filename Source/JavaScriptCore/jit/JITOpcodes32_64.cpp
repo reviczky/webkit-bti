@@ -1131,9 +1131,10 @@ void JIT::emit_op_check_tdz(const Instruction* currentInstruction)
     addSlowCase(branchIfEmpty(regT0));
 }
 
-void JIT::emit_op_has_structure_property(const Instruction* currentInstruction)
+template <typename OpCodeType>
+void JIT::emit_op_has_structure_propertyImpl(const Instruction* currentInstruction)
 {
-    auto bytecode = currentInstruction->as<OpHasStructureProperty>();
+    auto bytecode = currentInstruction->as<OpCodeType>();
     VirtualRegister dst = bytecode.m_dst;
     VirtualRegister base = bytecode.m_base;
     VirtualRegister enumerator = bytecode.m_enumerator;
@@ -1148,6 +1149,21 @@ void JIT::emit_op_has_structure_property(const Instruction* currentInstruction)
     
     move(TrustedImm32(1), regT0);
     emitStoreBool(dst, regT0);
+}
+
+void JIT::emit_op_has_structure_property(const Instruction* currentInstruction)
+{
+    emit_op_has_structure_propertyImpl<OpHasStructureProperty>(currentInstruction);
+}
+
+void JIT::emit_op_has_own_structure_property(const Instruction* currentInstruction)
+{
+    emit_op_has_structure_propertyImpl<OpHasOwnStructureProperty>(currentInstruction);
+}
+
+void JIT::emit_op_in_structure_property(const Instruction* currentInstruction)
+{
+    emit_op_has_structure_propertyImpl<OpInStructureProperty>(currentInstruction);
 }
 
 void JIT::privateCompileHasIndexedProperty(ByValInfo* byValInfo, ReturnAddressPtr returnAddress, JITArrayMode arrayMode)
@@ -1304,7 +1320,7 @@ void JIT::emit_op_enumerator_structure_pname(const Instruction* currentInstructi
     inBounds.link(this);
 
     loadPtr(Address(regT1, JSPropertyNameEnumerator::cachedPropertyNamesVectorOffset()), regT1);
-    loadPtr(BaseIndex(regT1, regT0, timesPtr()), regT0);
+    loadPtr(BaseIndex(regT1, regT0, ScalePtr), regT0);
     move(TrustedImm32(JSValue::CellTag), regT2);
 
     done.link(this);
@@ -1329,7 +1345,7 @@ void JIT::emit_op_enumerator_generic_pname(const Instruction* currentInstruction
     inBounds.link(this);
 
     loadPtr(Address(regT1, JSPropertyNameEnumerator::cachedPropertyNamesVectorOffset()), regT1);
-    loadPtr(BaseIndex(regT1, regT0, timesPtr()), regT0);
+    loadPtr(BaseIndex(regT1, regT0, ScalePtr), regT0);
     move(TrustedImm32(JSValue::CellTag), regT2);
     
     done.link(this);

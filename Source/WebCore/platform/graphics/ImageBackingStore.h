@@ -160,7 +160,7 @@ public:
         }
 
         if (!m_premultiplyAlpha)
-            pixel = makePremultipliedRGBA(pixel.redComponent(), pixel.greenComponent(), pixel.blueComponent(), pixel.alphaComponent(), false);
+            pixel = premultiplyFlooring(pixel);
 
         unsigned d = 255 - a;
 
@@ -169,10 +169,12 @@ public:
         b = fastDivideBy255(b * a + pixel.blueComponent() * d);
         a += fastDivideBy255(d * pixel.alphaComponent());
 
-        if (m_premultiplyAlpha)
-            *dest = makeRGBA(r, g, b, a).value();
-        else
-            *dest = makeUnPremultipliedRGBA(r, g, b, a).value();
+        auto result = makeSimpleColor(r, g, b, a);
+
+        if (!m_premultiplyAlpha)
+            result = unpremultiply(result);
+
+        *dest = result.valueAsARGB();
     }
 
     static bool isOverSize(const IntSize& size)
@@ -224,10 +226,12 @@ private:
         if (m_premultiplyAlpha && !a)
             return 0;
 
-        if (m_premultiplyAlpha && a < 255)
-            return makePremultipliedRGBA(r, g, b, a, false).value();
+        auto result = makeSimpleColor(r, g, b, a);
 
-        return makeRGBA(r, g, b, a).value();
+        if (m_premultiplyAlpha && a < 255)
+            result = premultiplyFlooring(result);
+
+        return result.valueAsARGB();
     }
 
     RefPtr<SharedBuffer::DataSegment> m_pixels;

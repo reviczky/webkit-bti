@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,6 +45,8 @@ public:
     static constexpr RegisterID dataTempRegister = ARM64Registers::ip0;
     static constexpr RegisterID memoryTempRegister = ARM64Registers::ip1;
 
+    static constexpr RegisterID InvalidGPRReg = ARM64Registers::InvalidGPRReg;
+
     RegisterID scratchRegister()
     {
         RELEASE_ASSERT(m_allowScratchRegister);
@@ -84,10 +86,9 @@ public:
     static JumpLinkType computeJumpType(JumpType jumpType, const uint8_t* from, const uint8_t* to) { return Assembler::computeJumpType(jumpType, from, to); }
     static JumpLinkType computeJumpType(LinkRecord& record, const uint8_t* from, const uint8_t* to) { return Assembler::computeJumpType(record, from, to); }
     static int jumpSizeDelta(JumpType jumpType, JumpLinkType jumpLinkType) { return Assembler::jumpSizeDelta(jumpType, jumpLinkType); }
-    template <Assembler::CopyFunction copy>
-    static void link(LinkRecord& record, uint8_t* from, const uint8_t* fromInstruction, uint8_t* to) { return Assembler::link<copy>(record, from, fromInstruction, to); }
 
-    static constexpr Scale ScalePtr = TimesEight;
+    template <Assembler::CopyFunction copy>
+    ALWAYS_INLINE static void link(LinkRecord& record, uint8_t* from, const uint8_t* fromInstruction, uint8_t* to) { return Assembler::link<copy>(record, from, fromInstruction, to); }
 
     static bool isCompactPtrAlignedAddressOffset(ptrdiff_t value)
     {
@@ -150,13 +151,18 @@ public:
 
     void add32(RegisterID a, RegisterID b, RegisterID dest)
     {
-        ASSERT(a != ARM64Registers::sp && b != ARM64Registers::sp);
+        ASSERT(a != ARM64Registers::sp || b != ARM64Registers::sp);
+        if (b == ARM64Registers::sp)
+            std::swap(a, b);
         m_assembler.add<32>(dest, a, b);
     }
 
     void add32(RegisterID src, RegisterID dest)
     {
-        m_assembler.add<32>(dest, dest, src);
+        if (src == ARM64Registers::sp)
+            m_assembler.add<32>(dest, src, dest);
+        else
+            m_assembler.add<32>(dest, dest, src);
     }
 
     void add32(TrustedImm32 imm, RegisterID dest)
@@ -219,6 +225,12 @@ public:
     void add32(Address src, RegisterID dest)
     {
         load32(src, getCachedDataTempRegisterIDAndInvalidate());
+        add32(dataTempRegister, dest);
+    }
+
+    void add32(AbsoluteAddress src, RegisterID dest)
+    {
+        load32(src.m_ptr, getCachedDataTempRegisterIDAndInvalidate());
         add32(dataTempRegister, dest);
     }
 
@@ -436,7 +448,32 @@ public:
         move(imm, getCachedDataTempRegisterIDAndInvalidate());
         m_assembler.and_<64>(dest, dest, dataTempRegister);
     }
-    
+
+    void clearBit64(RegisterID bitToClear, RegisterID dest, RegisterID scratchForMask = InvalidGPRReg)
+    {
+        if (scratchForMask == InvalidGPRReg)
+            scratchForMask = scratchRegister();
+
+        move(TrustedImm32(1), scratchForMask);
+        lshift64(bitToClear, scratchForMask);
+        clearBits64WithMask(scratchForMask, dest);
+    }
+
+    enum class ClearBitsAttributes {
+        OKToClobberMask,
+        MustPreserveMask
+    };
+
+    void clearBits64WithMask(RegisterID mask, RegisterID dest, ClearBitsAttributes = ClearBitsAttributes::OKToClobberMask)
+    {
+        clearBits64WithMask(dest, mask, dest);
+    }
+
+    void clearBits64WithMask(RegisterID src, RegisterID mask, RegisterID dest, ClearBitsAttributes = ClearBitsAttributes::OKToClobberMask)
+    {
+        m_assembler.bic<64>(dest, src, mask);
+    }
+
     void countLeadingZeros32(RegisterID src, RegisterID dest)
     {
         m_assembler.clz<32>(dest, src);
@@ -459,6 +496,18 @@ public:
         // Arm does not have a count trailing zeros only a count leading zeros.
         m_assembler.rbit<64>(dest, src);
         m_assembler.clz<64>(dest, dest);
+    }
+
+    void countTrailingZeros64WithoutNullCheck(RegisterID src, RegisterID dest)
+    {
+#if ASSERT_ENABLED
+        Jump notZero = branchTest64(NonZero, src);
+        abortWithReason(MacroAssemblerOops, __LINE__);
+        notZero.link(this);
+#endif
+        // Arm did not need an explicit null check to begin with. So, we can do
+        // exactly the same thing as in countTrailingZeros64().
+        countTrailingZeros64(src, dest);
     }
 
     void byteSwap16(RegisterID dst)
@@ -1418,6 +1467,17 @@ public:
     void store64(RegisterID src, const void* address)
     {
         store<64>(src, address);
+    }
+
+    void store64(TrustedImm64 imm, const void* address)
+    {
+        if (!imm.m_value) {
+            store64(ARM64Registers::zr, address);
+            return;
+        }
+
+        moveToCachedReg(imm, dataMemoryTempRegister());
+        store64(dataTempRegister, address);
     }
 
     void store64(TrustedImm32 imm, ImplicitAddress address)
@@ -2447,9 +2507,9 @@ public:
 
     void signExtend32ToPtr(TrustedImm32 imm, RegisterID dest)
     {
-        move(TrustedImmPtr(reinterpret_cast<void*>(static_cast<intptr_t>(imm.m_value))), dest);
+        move(TrustedImm64(imm.m_value), dest);
     }
-    
+
     void signExtend32ToPtr(RegisterID src, RegisterID dest)
     {
         m_assembler.sxtw(dest, src);
@@ -3274,6 +3334,17 @@ public:
 
     // Jumps, calls, returns
 
+    // duplicate MacroAssembler's loadPtr for loading call targets.
+    template<typename... Args>
+    ALWAYS_INLINE void loadPtr(Args... args)
+    {
+#if CPU(ADDRESS64)
+        load64(args...);
+#else
+        load32(args...);
+#endif
+    }
+
     ALWAYS_INLINE Call call(PtrTag)
     {
         AssemblerLabel pointerLabel = m_assembler.label();
@@ -3294,7 +3365,7 @@ public:
 
     ALWAYS_INLINE Call call(Address address, PtrTag tag)
     {
-        load64(address, getCachedDataTempRegisterIDAndInvalidate());
+        loadPtr(address, getCachedDataTempRegisterIDAndInvalidate());
         return call(dataTempRegister, tag);
     }
 
@@ -3323,20 +3394,20 @@ public:
 
     void farJump(Address address, PtrTag)
     {
-        load64(address, getCachedDataTempRegisterIDAndInvalidate());
+        loadPtr(address, getCachedDataTempRegisterIDAndInvalidate());
         m_assembler.br(dataTempRegister);
     }
     
     void farJump(BaseIndex address, PtrTag)
     {
-        load64(address, getCachedDataTempRegisterIDAndInvalidate());
+        loadPtr(address, getCachedDataTempRegisterIDAndInvalidate());
         m_assembler.br(dataTempRegister);
     }
 
     void farJump(AbsoluteAddress address, PtrTag)
     {
         move(TrustedImmPtr(address.m_ptr), getCachedDataTempRegisterIDAndInvalidate());
-        load64(Address(dataTempRegister), dataTempRegister);
+        loadPtr(Address(dataTempRegister), dataTempRegister);
         m_assembler.br(dataTempRegister);
     }
 

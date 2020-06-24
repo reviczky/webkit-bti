@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -188,6 +188,10 @@ void JIT_OPERATION operationPutByIdStrictOptimize(JSGlobalObject*, StructureStub
 void JIT_OPERATION operationPutByIdNonStrictOptimize(JSGlobalObject*, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t) WTF_INTERNAL;
 void JIT_OPERATION operationPutByIdDirectStrictOptimize(JSGlobalObject*, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t) WTF_INTERNAL;
 void JIT_OPERATION operationPutByIdDirectNonStrictOptimize(JSGlobalObject*, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t) WTF_INTERNAL;
+void JIT_OPERATION operationPutByIdDefinePrivateFieldStrict(JSGlobalObject*, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t) WTF_INTERNAL;
+void JIT_OPERATION operationPutByIdDefinePrivateFieldStrictOptimize(JSGlobalObject*, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t) WTF_INTERNAL;
+void JIT_OPERATION operationPutByIdPutPrivateFieldStrict(JSGlobalObject*, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t) WTF_INTERNAL;
+void JIT_OPERATION operationPutByIdPutPrivateFieldStrictOptimize(JSGlobalObject*, StructureStubInfo*, EncodedJSValue encodedValue, EncodedJSValue encodedBase, uintptr_t) WTF_INTERNAL;
 
 void JIT_OPERATION operationPutByValOptimize(JSGlobalObject*, EncodedJSValue, EncodedJSValue, EncodedJSValue, ByValInfo*, ECMAMode) WTF_INTERNAL;
 void JIT_OPERATION operationDirectPutByValOptimize(JSGlobalObject*, EncodedJSValue, EncodedJSValue, EncodedJSValue, ByValInfo*, ECMAMode) WTF_INTERNAL;
@@ -282,6 +286,7 @@ void JIT_OPERATION operationWriteBarrierSlowPath(VM*, JSCell*);
 void JIT_OPERATION operationOSRWriteBarrier(VM*, JSCell*);
 
 void JIT_OPERATION operationExceptionFuzz(JSGlobalObject*);
+void JIT_OPERATION operationExceptionFuzzWithCallFrame(VM*);
 
 int32_t JIT_OPERATION operationCheckIfExceptionIsUncatchableAndNotifyProfiler(VM*);
 size_t JIT_OPERATION operationInstanceOfCustom(JSGlobalObject*, EncodedJSValue encodedValue, JSObject* constructor, EncodedJSValue encodedHasInstance) WTF_INTERNAL;

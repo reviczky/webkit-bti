@@ -73,6 +73,7 @@ class ThrowScope;
 struct HashTable;
 struct HashTableValue;
 
+JS_EXPORT_PRIVATE bool isTerminatedExecutionException(VM&, Exception*);
 JS_EXPORT_PRIVATE Exception* throwTypeError(JSGlobalObject*, ThrowScope&, const String&);
 extern JS_EXPORT_PRIVATE const ASCIILiteral NonExtensibleObjectPropertyDefineError;
 extern JS_EXPORT_PRIVATE const ASCIILiteral ReadonlyPropertyWriteError;
@@ -90,6 +91,12 @@ COMPILE_ASSERT(PropertyAttribute::DontDelete < FirstInternalAttribute, DontDelet
 COMPILE_ASSERT(PropertyAttribute::Accessor < FirstInternalAttribute, Accessor_is_below_FirstInternalAttribute);
 
 class JSFinalObject;
+
+#if ASSERT_ENABLED
+#define JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED JS_EXPORT_PRIVATE
+#else
+#define JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED
+#endif
 
 class JSObject : public JSCell {
     friend class BatchedTransitionOptimizer;
@@ -169,15 +176,24 @@ public:
     template<typename CallbackWhenNoException> typename std::result_of<CallbackWhenNoException(bool, PropertySlot&)>::type getPropertySlot(JSGlobalObject*, PropertyName, CallbackWhenNoException) const;
     template<typename CallbackWhenNoException> typename std::result_of<CallbackWhenNoException(bool, PropertySlot&)>::type getPropertySlot(JSGlobalObject*, PropertyName, PropertySlot&, CallbackWhenNoException) const;
 
-    static bool getOwnPropertySlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
+private:
+    static bool getOwnPropertySlotImpl(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
+public:
+    JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED static bool getOwnPropertySlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
+
     JS_EXPORT_PRIVATE static bool getOwnPropertySlotByIndex(JSObject*, JSGlobalObject*, unsigned propertyName, PropertySlot&);
     bool getOwnPropertySlotInline(JSGlobalObject*, PropertyName, PropertySlot&);
-    static void doPutPropertySecurityCheck(JSObject*, JSGlobalObject*, PropertyName, PutPropertySlot&);
+    JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED static void doPutPropertySecurityCheck(JSObject*, JSGlobalObject*, PropertyName, PutPropertySlot&);
 
     // The key difference between this and getOwnPropertySlot is that getOwnPropertySlot
     // currently returns incorrect results for the DOM window (with non-own properties)
     // being returned. Once this is fixed we should migrate code & remove this method.
     JS_EXPORT_PRIVATE bool getOwnPropertyDescriptor(JSGlobalObject*, PropertyName, PropertyDescriptor&);
+
+    static bool getPrivateFieldSlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
+    inline bool getPrivateField(JSGlobalObject*, PropertyName, PropertySlot&);
+    inline void putPrivateField(JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
+    inline void definePrivateField(JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
 
     unsigned getArrayLength() const
     {
@@ -1330,6 +1346,7 @@ inline void JSObject::nukeStructureAndSetButterfly(VM& vm, StructureID oldStruct
 
 inline JSObject* asObject(JSCell* cell)
 {
+    ASSERT(cell);
     ASSERT(cell->isObject());
     return jsCast<JSObject*>(cell);
 }
@@ -1352,11 +1369,9 @@ inline JSValue JSObject::getPrototypeDirect(VM& vm) const
 
 inline JSValue JSObject::getPrototype(VM& vm, JSGlobalObject* globalObject)
 {
-    auto getPrototypeMethod = methodTable(vm)->getPrototype;
-    MethodTable::GetPrototypeFunctionPtr defaultGetPrototype = JSObject::getPrototype;
-    if (LIKELY(getPrototypeMethod == defaultGetPrototype))
+    if (LIKELY(!structure(vm)->typeInfo().overridesGetPrototype()))
         return getPrototypeDirect(vm);
-    return getPrototypeMethod(this, globalObject);
+    return methodTable(vm)->getPrototype(this, globalObject);
 }
 
 // Normally, we never shrink the butterfly so if we know an offset is valid for some
@@ -1428,7 +1443,7 @@ ALWAYS_INLINE void JSObject::fillCustomGetterPropertySlot(VM& vm, PropertySlot& 
 // It may seem crazy to inline a function this large, especially a virtual function,
 // but it makes a big difference to property lookup that derived classes can inline their
 // base class call to this.
-ALWAYS_INLINE bool JSObject::getOwnPropertySlot(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
+ALWAYS_INLINE bool JSObject::getOwnPropertySlotImpl(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
 {
     VM& vm = getVM(globalObject);
     Structure* structure = object->structure(vm);
@@ -1439,9 +1454,16 @@ ALWAYS_INLINE bool JSObject::getOwnPropertySlot(JSObject* object, JSGlobalObject
     return false;
 }
 
+#if !ASSERT_ENABLED
+ALWAYS_INLINE bool JSObject::getOwnPropertySlot(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
+{
+    return getOwnPropertySlotImpl(object, globalObject, propertyName, slot);
+}
+
 ALWAYS_INLINE void JSObject::doPutPropertySecurityCheck(JSObject*, JSGlobalObject*, PropertyName, PutPropertySlot&)
 {
 }
+#endif
 
 // It may seem crazy to inline a function this large but it makes a big difference
 // since this is function very hot in variable lookup
@@ -1490,7 +1512,10 @@ inline JSValue JSObject::get(JSGlobalObject* globalObject, PropertyName property
     auto scope = DECLARE_THROW_SCOPE(vm);
     PropertySlot slot(this, PropertySlot::InternalMethodType::Get);
     bool hasProperty = const_cast<JSObject*>(this)->getPropertySlot(globalObject, propertyName, slot);
-    EXCEPTION_ASSERT(!scope.exception() || !hasProperty);
+
+    EXCEPTION_ASSERT(!scope.exception() || isTerminatedExecutionException(vm, scope.exception()) || !hasProperty);
+    RETURN_IF_EXCEPTION(scope, jsUndefined());
+
     if (hasProperty)
         RELEASE_AND_RETURN(scope, slot.getValue(globalObject, propertyName));
 
@@ -1503,7 +1528,10 @@ inline JSValue JSObject::get(JSGlobalObject* globalObject, unsigned propertyName
     auto scope = DECLARE_THROW_SCOPE(vm);
     PropertySlot slot(this, PropertySlot::InternalMethodType::Get);
     bool hasProperty = const_cast<JSObject*>(this)->getPropertySlot(globalObject, propertyName, slot);
-    EXCEPTION_ASSERT(!scope.exception() || !hasProperty);
+
+    EXCEPTION_ASSERT(!scope.exception() || isTerminatedExecutionException(vm, scope.exception()) || !hasProperty);
+    RETURN_IF_EXCEPTION(scope, jsUndefined());
+
     if (hasProperty)
         RELEASE_AND_RETURN(scope, slot.getValue(globalObject, propertyName));
 

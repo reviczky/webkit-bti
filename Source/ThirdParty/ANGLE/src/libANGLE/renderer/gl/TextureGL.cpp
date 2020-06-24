@@ -164,12 +164,10 @@ angle::Result TextureGL::setImage(const gl::Context *context,
                                   GLenum format,
                                   GLenum type,
                                   const gl::PixelUnpackState &unpack,
+                                  gl::Buffer *unpackBuffer,
                                   const uint8_t *pixels)
 {
     const angle::FeaturesGL &features = GetFeaturesGL(context);
-
-    const gl::Buffer *unpackBuffer =
-        context->getState().getTargetBuffer(gl::BufferBinding::PixelUnpack);
 
     gl::TextureTarget target = index.getTarget();
     size_t level             = static_cast<size_t>(index.getLevelIndex());
@@ -619,8 +617,7 @@ angle::Result TextureGL::copyImage(const gl::Context *context,
 
     gl::TextureTarget target = index.getTarget();
     size_t level             = static_cast<size_t>(index.getLevelIndex());
-    GLenum type              = GL_NONE;
-    ANGLE_TRY(source->getImplementationColorReadType(context, &type));
+    GLenum type              = source->getImplementationColorReadType(context);
     nativegl::CopyTexImageImageFormat copyTexImageFormat =
         nativegl::GetCopyTexImageImageFormat(functions, features, internalFormat, type);
 
@@ -716,7 +713,17 @@ angle::Result TextureGL::copyImage(const gl::Context *context,
             ASSERT(nativegl::UseTexImage2D(getType()));
             stateManager->bindFramebuffer(GL_READ_FRAMEBUFFER,
                                           sourceFramebufferGL->getFramebufferID());
-            if (requiresInitialization)
+            if (features.emulateCopyTexImage2DFromRenderbuffers.enabled && readBuffer &&
+                readBuffer->type() == GL_RENDERBUFFER)
+            {
+                BlitGL *blitter = GetBlitGL(context);
+                ANGLE_TRY(blitter->blitColorBufferWithShader(
+                    context, source, mTextureID, target, level, clippedArea,
+                    gl::Rectangle(destOffset.x, destOffset.y, clippedArea.width,
+                                  clippedArea.height),
+                    GL_NEAREST, true));
+            }
+            else if (requiresInitialization)
             {
                 ANGLE_GL_TRY(context, functions->copyTexSubImage2D(
                                           ToGLenum(target), static_cast<GLint>(level), destOffset.x,
@@ -784,10 +791,24 @@ angle::Result TextureGL::copySubImage(const gl::Context *context,
         if (nativegl::UseTexImage2D(getType()))
         {
             ASSERT(clippedOffset.z == 0);
-            ANGLE_GL_TRY(context, functions->copyTexSubImage2D(
-                                      ToGLenum(target), static_cast<GLint>(level), clippedOffset.x,
-                                      clippedOffset.y, clippedArea.x, clippedArea.y,
-                                      clippedArea.width, clippedArea.height));
+            if (features.emulateCopyTexImage2DFromRenderbuffers.enabled &&
+                source->getReadColorAttachment() &&
+                source->getReadColorAttachment()->type() == GL_RENDERBUFFER)
+            {
+                BlitGL *blitter = GetBlitGL(context);
+                ANGLE_TRY(blitter->blitColorBufferWithShader(
+                    context, source, mTextureID, target, level, clippedArea,
+                    gl::Rectangle(clippedOffset.x, clippedOffset.y, clippedArea.width,
+                                  clippedArea.height),
+                    GL_NEAREST, true));
+            }
+            else
+            {
+                ANGLE_GL_TRY(context, functions->copyTexSubImage2D(
+                                          ToGLenum(target), static_cast<GLint>(level),
+                                          clippedOffset.x, clippedOffset.y, clippedArea.x,
+                                          clippedArea.y, clippedArea.width, clippedArea.height));
+            }
         }
         else
         {
@@ -1522,7 +1543,7 @@ angle::Result TextureGL::setBaseLevel(const gl::Context *context, GLuint baseLev
         mLocalDirtyBits.set(gl::Texture::DIRTY_BIT_BASE_LEVEL);
 
         // Signal to the GL layer that the Impl has dirty bits.
-        onStateChange(angle::SubjectMessage::SubjectChanged);
+        onStateChange(angle::SubjectMessage::DirtyBitsFlagged);
 
         stateManager->bindTexture(getType(), mTextureID);
         ANGLE_GL_TRY(context, functions->texParameteri(ToGLenum(getType()), GL_TEXTURE_BASE_LEVEL,
@@ -1542,7 +1563,7 @@ angle::Result TextureGL::setMaxLevel(const gl::Context *context, GLuint maxLevel
         mLocalDirtyBits.set(gl::Texture::DIRTY_BIT_MAX_LEVEL);
 
         // Signal to the GL layer that the Impl has dirty bits.
-        onStateChange(angle::SubjectMessage::SubjectChanged);
+        onStateChange(angle::SubjectMessage::DirtyBitsFlagged);
 
         stateManager->bindTexture(getType(), mTextureID);
         ANGLE_GL_TRY(context,
@@ -1562,7 +1583,7 @@ angle::Result TextureGL::setMinFilter(const gl::Context *context, GLenum filter)
         mLocalDirtyBits.set(gl::Texture::DIRTY_BIT_MIN_FILTER);
 
         // Signal to the GL layer that the Impl has dirty bits.
-        onStateChange(angle::SubjectMessage::SubjectChanged);
+        onStateChange(angle::SubjectMessage::DirtyBitsFlagged);
 
         stateManager->bindTexture(getType(), mTextureID);
         ANGLE_GL_TRY(context,
@@ -1581,7 +1602,7 @@ angle::Result TextureGL::setMagFilter(const gl::Context *context, GLenum filter)
         mLocalDirtyBits.set(gl::Texture::DIRTY_BIT_MAG_FILTER);
 
         // Signal to the GL layer that the Impl has dirty bits.
-        onStateChange(angle::SubjectMessage::SubjectChanged);
+        onStateChange(angle::SubjectMessage::DirtyBitsFlagged);
 
         stateManager->bindTexture(getType(), mTextureID);
         ANGLE_GL_TRY(context,
@@ -1607,11 +1628,25 @@ angle::Result TextureGL::setSwizzle(const gl::Context *context, GLint swizzle[4]
         mLocalDirtyBits.set(gl::Texture::DIRTY_BIT_SWIZZLE_ALPHA);
 
         // Signal to the GL layer that the Impl has dirty bits.
-        onStateChange(angle::SubjectMessage::SubjectChanged);
+        onStateChange(angle::SubjectMessage::DirtyBitsFlagged);
 
         stateManager->bindTexture(getType(), mTextureID);
-        ANGLE_GL_TRY(context, functions->texParameteriv(ToGLenum(getType()),
-                                                        GL_TEXTURE_SWIZZLE_RGBA, swizzle));
+        if (functions->standard == STANDARD_GL_ES)
+        {
+            ANGLE_GL_TRY(context, functions->texParameteri(ToGLenum(getType()),
+                                                           GL_TEXTURE_SWIZZLE_R, swizzle[0]));
+            ANGLE_GL_TRY(context, functions->texParameteri(ToGLenum(getType()),
+                                                           GL_TEXTURE_SWIZZLE_G, swizzle[1]));
+            ANGLE_GL_TRY(context, functions->texParameteri(ToGLenum(getType()),
+                                                           GL_TEXTURE_SWIZZLE_B, swizzle[2]));
+            ANGLE_GL_TRY(context, functions->texParameteri(ToGLenum(getType()),
+                                                           GL_TEXTURE_SWIZZLE_A, swizzle[3]));
+        }
+        else
+        {
+            ANGLE_GL_TRY(context, functions->texParameteriv(ToGLenum(getType()),
+                                                            GL_TEXTURE_SWIZZLE_RGBA, swizzle));
+        }
     }
     return angle::Result::Continue;
 }
@@ -1775,7 +1810,7 @@ void TextureGL::setLevelInfo(const gl::Context *context,
     if (updateWorkarounds)
     {
         mLocalDirtyBits |= GetLevelWorkaroundDirtyBits();
-        onStateChange(angle::SubjectMessage::SubjectChanged);
+        onStateChange(angle::SubjectMessage::DirtyBitsFlagged);
     }
 }
 

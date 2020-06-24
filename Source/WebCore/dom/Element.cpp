@@ -87,6 +87,7 @@
 #include "PointerEvent.h"
 #include "PointerLockController.h"
 #include "PseudoClassChangeInvalidation.h"
+#include "Quirks.h"
 #include "RenderFragmentedFlow.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
@@ -359,6 +360,9 @@ bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const 
     bool didNotSwallowEvent = true;
 
     if (dispatchPointerEventIfNeeded(*this, mouseEvent.get(), platformEvent, didNotSwallowEvent) == ShouldIgnoreMouseEvent::Yes)
+        return false;
+
+    if (hasClass() && Quirks::StorageAccessResult::ShouldCancelEvent == document().quirks().triggerOptionalStorageAccessQuirk(eventType, classNames()))
         return false;
 
     ASSERT(!mouseEvent->target() || mouseEvent->target() != relatedTarget);
@@ -1964,6 +1968,12 @@ void Element::invalidateStyleInternal()
 void Element::invalidateStyleForSubtreeInternal()
 {
     Node::invalidateStyle(Style::Validity::SubtreeInvalid);
+}
+
+void Element::invalidateEventListenerRegions()
+{
+    // Event listener region is updated via style update.
+    invalidateStyleInternal();
 }
 
 bool Element::hasDisplayContents() const
@@ -3892,6 +3902,21 @@ PropertyToTransitionMap& Element::ensureCompletedTransitionsByProperty()
 PropertyToTransitionMap& Element::ensureRunningTransitionsByProperty()
 {
     return ensureAnimationRareData().runningTransitionsByProperty();
+}
+
+const RenderStyle* Element::lastStyleChangeEventStyle() const
+{
+    if (auto* animationData = animationRareData())
+        return animationData->lastStyleChangeEventStyle();
+    return nullptr;
+}
+
+void Element::setLastStyleChangeEventStyle(std::unique_ptr<const RenderStyle>&& style)
+{
+    if (auto* animationData = animationRareData())
+        animationData->setLastStyleChangeEventStyle(WTFMove(style));
+    else if (style)
+        ensureAnimationRareData().setLastStyleChangeEventStyle(WTFMove(style));
 }
 
 #if ENABLE(RESIZE_OBSERVER)

@@ -36,7 +36,6 @@
 #include "CachedResourceLoader.h"
 #include "Cookie.h"
 #include "CookieJar.h"
-#include "CustomHeaderFields.h"
 #include "DOMWrapperWorld.h"
 #include "Document.h"
 #include "DocumentLoader.h"
@@ -345,32 +344,36 @@ void InspectorPageAgent::willDestroyFrontendAndBackend(Inspector::DisconnectReas
 
 void InspectorPageAgent::enable(ErrorString& errorString)
 {
-    if (m_instrumentingAgents.inspectorPageAgent() == this) {
+    if (m_instrumentingAgents.enabledPageAgent() == this) {
         errorString = "Page domain already enabled"_s;
         return;
     }
 
-    m_instrumentingAgents.setInspectorPageAgent(this);
+    m_instrumentingAgents.setEnabledPageAgent(this);
 
     auto& stopwatch = m_environment.executionStopwatch();
     stopwatch.reset();
     stopwatch.start();
 
-#if HAVE(OS_DARK_MODE_SUPPORT)
+#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
     defaultAppearanceDidChange(m_inspectedPage.defaultUseDarkAppearance());
 #endif
 }
 
 void InspectorPageAgent::disable(ErrorString&)
 {
-    m_instrumentingAgents.setInspectorPageAgent(nullptr);
+    m_instrumentingAgents.setEnabledPageAgent(nullptr);
 
     ErrorString unused;
     setShowPaintRects(unused, false);
+#if !PLATFORM(IOS_FAMILY)
     setShowRulers(unused, false);
+#endif
     overrideUserAgent(unused, nullptr);
     setEmulatedMedia(unused, emptyString());
+#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
     setForcedAppearance(unused, emptyString());
+#endif
 
     auto& inspectedPageSettings = m_inspectedPage.settings();
     inspectedPageSettings.setAuthorAndUserStylesEnabledInspectorOverride(WTF::nullopt);
@@ -701,7 +704,7 @@ void InspectorPageAgent::searchInResource(ErrorString& errorString, const String
     bool caseSensitive = optionalCaseSensitive ? *optionalCaseSensitive : false;
 
     if (optionalRequestId) {
-        if (InspectorNetworkAgent* networkAgent = m_instrumentingAgents.inspectorNetworkAgent()) {
+        if (auto* networkAgent = m_instrumentingAgents.enabledNetworkAgent()) {
             networkAgent->searchInRequest(errorString, *optionalRequestId, query, caseSensitive, isRegex, results);
             return;
         }
@@ -766,14 +769,16 @@ void InspectorPageAgent::searchInResources(ErrorString&, const String& text, con
         }
     }
 
-    if (InspectorNetworkAgent* networkAgent = m_instrumentingAgents.inspectorNetworkAgent())
+    if (auto* networkAgent = m_instrumentingAgents.enabledNetworkAgent())
         networkAgent->searchOtherRequests(regex, result);
 }
 
+#if !PLATFORM(IOS_FAMILY)
 void InspectorPageAgent::setShowRulers(ErrorString&, bool showRulers)
 {
     m_overlay->setShowRulers(showRulers);
 }
+#endif
 
 void InspectorPageAgent::setShowPaintRects(ErrorString&, bool show)
 {
@@ -869,10 +874,12 @@ void InspectorPageAgent::frameClearedScheduledNavigation(Frame& frame)
     m_frontendDispatcher->frameClearedScheduledNavigation(frameId(&frame));
 }
 
+#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
 void InspectorPageAgent::defaultAppearanceDidChange(bool useDarkAppearance)
 {
     m_frontendDispatcher->defaultAppearanceDidChange(useDarkAppearance ? Inspector::Protocol::Page::Appearance::Dark : Inspector::Protocol::Page::Appearance::Light);
 }
+#endif
 
 void InspectorPageAgent::didClearWindowObjectInWorld(Frame& frame, DOMWrapperWorld& world)
 {
@@ -1008,13 +1015,9 @@ void InspectorPageAgent::setEmulatedMedia(ErrorString&, const String& media)
     document->evaluateMediaQueriesAndReportChanges();
 }
 
+#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
 void InspectorPageAgent::setForcedAppearance(ErrorString&, const String& appearance)
 {
-    if (appearance == m_forcedAppearance)
-        return;
-
-    m_forcedAppearance = appearance;
-
     if (appearance == "Light"_s)
         m_inspectedPage.setUseDarkAppearanceOverride(false);
     else if (appearance == "Dark"_s)
@@ -1022,6 +1025,7 @@ void InspectorPageAgent::setForcedAppearance(ErrorString&, const String& appeara
     else
         m_inspectedPage.setUseDarkAppearanceOverride(WTF::nullopt);
 }
+#endif
 
 void InspectorPageAgent::applyUserAgentOverride(String& userAgent)
 {
@@ -1037,7 +1041,7 @@ void InspectorPageAgent::applyEmulatedMedia(String& media)
 
 void InspectorPageAgent::snapshotNode(ErrorString& errorString, int nodeId, String* outDataURL)
 {
-    InspectorDOMAgent* domAgent = m_instrumentingAgents.inspectorDOMAgent();
+    InspectorDOMAgent* domAgent = m_instrumentingAgents.persistentDOMAgent();
     ASSERT(domAgent);
     Node* node = domAgent->assertNode(errorString, nodeId);
     if (!node)
@@ -1069,9 +1073,9 @@ void InspectorPageAgent::snapshotRect(ErrorString& errorString, int x, int y, in
     *outDataURL = snapshot->toDataURL("image/png"_s, WTF::nullopt, PreserveResolution::Yes);
 }
 
+#if ENABLE(WEB_ARCHIVE) && USE(CF)
 void InspectorPageAgent::archive(ErrorString& errorString, String* data)
 {
-#if ENABLE(WEB_ARCHIVE) && USE(CF)
     auto archive = LegacyWebArchive::create(m_inspectedPage.mainFrame());
     if (!archive) {
         errorString = "Could not create web archive for main frame"_s;
@@ -1080,10 +1084,7 @@ void InspectorPageAgent::archive(ErrorString& errorString, String* data)
 
     RetainPtr<CFDataRef> buffer = archive->rawDataRepresentation();
     *data = base64Encode(CFDataGetBytePtr(buffer.get()), CFDataGetLength(buffer.get()));
-#else
-    UNUSED_PARAM(data);
-    errorString = "Not supported"_s;
-#endif
 }
+#endif
 
 } // namespace WebCore

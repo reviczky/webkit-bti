@@ -77,15 +77,16 @@ void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
         encoder << requestSandboxExtension;
     }
 
-    encoder.encodeEnum(contentSniffingPolicy);
-    encoder.encodeEnum(contentEncodingSniffingPolicy);
-    encoder.encodeEnum(storedCredentialsPolicy);
-    encoder.encodeEnum(clientCredentialPolicy);
-    encoder.encodeEnum(shouldPreconnectOnly);
+    encoder << contentSniffingPolicy;
+    encoder << contentEncodingSniffingPolicy;
+    encoder << storedCredentialsPolicy;
+    encoder << clientCredentialPolicy;
+    encoder << shouldPreconnectOnly;
     encoder << shouldClearReferrerOnHTTPSToHTTPRedirect;
     encoder << needsCertificateInfo;
     encoder << isMainFrameNavigation;
     encoder << isMainResourceNavigationForAnyFrame;
+    encoder << shouldRelaxThirdPartyCookieBlocking;
     encoder << maximumBufferingTime;
 
     encoder << static_cast<bool>(sourceOrigin);
@@ -100,7 +101,7 @@ void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
 
     encoder << shouldRestrictHTTPResponseAccess;
 
-    encoder.encodeEnum(preflightPolicy);
+    encoder << preflightPolicy;
 
     encoder << shouldEnableCrossOriginResourcePolicy;
 
@@ -180,15 +181,15 @@ Optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::decode(IP
         result.resourceSandboxExtension = SandboxExtension::create(WTFMove(*resourceSandboxExtensionHandle));
     }
 
-    if (!decoder.decodeEnum(result.contentSniffingPolicy))
+    if (!decoder.decode(result.contentSniffingPolicy))
         return WTF::nullopt;
-    if (!decoder.decodeEnum(result.contentEncodingSniffingPolicy))
+    if (!decoder.decode(result.contentEncodingSniffingPolicy))
         return WTF::nullopt;
-    if (!decoder.decodeEnum(result.storedCredentialsPolicy))
+    if (!decoder.decode(result.storedCredentialsPolicy))
         return WTF::nullopt;
-    if (!decoder.decodeEnum(result.clientCredentialPolicy))
+    if (!decoder.decode(result.clientCredentialPolicy))
         return WTF::nullopt;
-    if (!decoder.decodeEnum(result.shouldPreconnectOnly))
+    if (!decoder.decode(result.shouldPreconnectOnly))
         return WTF::nullopt;
     if (!decoder.decode(result.shouldClearReferrerOnHTTPSToHTTPRedirect))
         return WTF::nullopt;
@@ -197,6 +198,8 @@ Optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::decode(IP
     if (!decoder.decode(result.isMainFrameNavigation))
         return WTF::nullopt;
     if (!decoder.decode(result.isMainResourceNavigationForAnyFrame))
+        return WTF::nullopt;
+    if (!decoder.decode(result.shouldRelaxThirdPartyCookieBlocking))
         return WTF::nullopt;
     if (!decoder.decode(result.maximumBufferingTime))
         return WTF::nullopt;
@@ -236,7 +239,7 @@ Optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::decode(IP
         return WTF::nullopt;
     result.shouldRestrictHTTPResponseAccess = *shouldRestrictHTTPResponseAccess;
 
-    if (!decoder.decodeEnum(result.preflightPolicy))
+    if (!decoder.decode(result.preflightPolicy))
         return WTF::nullopt;
 
     Optional<bool> shouldEnableCrossOriginResourcePolicy;

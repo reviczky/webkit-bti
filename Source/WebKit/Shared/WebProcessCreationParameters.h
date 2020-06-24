@@ -52,6 +52,10 @@
 #include <WebCore/RenderThemeIOS.h>
 #endif
 
+#if ENABLE(NETSCAPE_PLUGIN_API)
+#include <WebCore/PluginData.h>
+#endif
+
 namespace API {
 class Data;
 }
@@ -103,7 +107,7 @@ struct WebProcessCreationParameters {
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
 
     Vector<String> fontWhitelist;
-    Vector<String> languages;
+    Vector<String> overrideLanguages;
 #if USE(GSTREAMER)
     Vector<String> gstreamerOptions;
 #endif
@@ -159,7 +163,7 @@ struct WebProcessCreationParameters {
     Vector<String> plugInAutoStartOrigins;
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
-    HashMap<String, HashMap<String, HashMap<String, uint8_t>>> pluginLoadClientPolicies;
+    HashMap<String, HashMap<String, HashMap<String, WebCore::PluginLoadClientPolicy>>> pluginLoadClientPolicies;
 #endif
 
 #if PLATFORM(COCOA)
@@ -197,20 +201,17 @@ struct WebProcessCreationParameters {
     
 #if PLATFORM(IOS)
     Optional<SandboxExtension::Handle> compilerServiceExtensionHandle;
-    Optional<SandboxExtension::Handle> contentFilterExtensionHandle;
-    Optional<SandboxExtension::Handle> frontboardServiceExtensionHandle;
 #endif
 
+    Optional<SandboxExtension::Handle> containerManagerExtensionHandle;
+
 #if PLATFORM(IOS_FAMILY)
-    Optional<SandboxExtension::Handle> diagnosticsExtensionHandle;
-    Optional<SandboxExtension::Handle> runningboardExtensionHandle;
+    SandboxExtension::HandleArray diagnosticsExtensionHandles;
     SandboxExtension::HandleArray dynamicMachExtensionHandles;
     SandboxExtension::HandleArray dynamicIOKitExtensionHandles;
 #endif
 
 #if PLATFORM(COCOA)
-    Optional<SandboxExtension::Handle> neHelperExtensionHandle;
-    Optional<SandboxExtension::Handle> neSessionManagerExtensionHandle;
     Optional<SandboxExtension::Handle> mapDBExtensionHandle;
     bool systemHasBattery { false };
 #endif
@@ -227,7 +228,6 @@ struct WebProcessCreationParameters {
     SandboxExtension::HandleArray mediaExtensionHandles; // FIXME(207716): Remove when GPU process is complete.
 #if ENABLE(CFPREFS_DIRECT_MODE)
     Optional<SandboxExtension::HandleArray> preferencesExtensionHandles;
-    String encodedGlobalPreferences;
 #endif
 #endif
 

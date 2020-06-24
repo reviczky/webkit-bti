@@ -2274,6 +2274,28 @@ EncodedJSValue JIT_OPERATION operationHasGenericProperty(JSGlobalObject* globalO
     RELEASE_AND_RETURN(scope, JSValue::encode(jsBoolean(base->hasPropertyGeneric(globalObject, propertyName, PropertySlot::InternalMethodType::GetOwnProperty))));
 }
 
+EncodedJSValue JIT_OPERATION operationInStructureProperty(JSGlobalObject* globalObject, JSCell* base, JSString* property)
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    return JSValue::encode(jsBoolean(CommonSlowPaths::opInByVal(globalObject, base, property)));
+}
+
+EncodedJSValue JIT_OPERATION operationHasOwnStructureProperty(JSGlobalObject* globalObject, JSCell* base, JSString* property)
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    auto propertyName = property->toIdentifier(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+    scope.release();
+    return JSValue::encode(jsBoolean(objectPrototypeHasOwnProperty(globalObject, base, propertyName)));
+}
+
 size_t JIT_OPERATION operationHasIndexedPropertyByInt(JSGlobalObject* globalObject, JSCell* baseCell, int32_t subscript, int32_t internalMethodType)
 {
     VM& vm = globalObject->vm();
@@ -3246,22 +3268,8 @@ EncodedJSValue JIT_OPERATION operationGetPrototypeOf(JSGlobalObject* globalObjec
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    JSValue thisValue = JSValue::decode(encodedValue).toThis(globalObject, ECMAMode::strict());
-    if (thisValue.isUndefinedOrNull())
-        return throwVMError(globalObject, scope, createNotAnObjectError(globalObject, thisValue));
-
-    JSObject* thisObject = jsDynamicCast<JSObject*>(vm, thisValue);
-    if (!thisObject) {
-        JSObject* prototype = thisValue.synthesizePrototype(globalObject);
-        EXCEPTION_ASSERT(!!scope.exception() == !prototype);
-        if (UNLIKELY(!prototype))
-            return JSValue::encode(JSValue());
-        return JSValue::encode(prototype);
-    }
-
-    RELEASE_AND_RETURN(scope, JSValue::encode(thisObject->getPrototype(vm, globalObject)));
+    JSValue value = JSValue::decode(encodedValue);
+    return JSValue::encode(value.getPrototype(globalObject));
 }
 
 EncodedJSValue JIT_OPERATION operationDateGetFullYear(VM* vmPointer, DateInstance* date)
@@ -3270,7 +3278,7 @@ EncodedJSValue JIT_OPERATION operationDateGetFullYear(VM* vmPointer, DateInstanc
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->year()));
@@ -3282,7 +3290,7 @@ EncodedJSValue JIT_OPERATION operationDateGetUTCFullYear(VM* vmPointer, DateInst
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->year()));
@@ -3294,7 +3302,7 @@ EncodedJSValue JIT_OPERATION operationDateGetMonth(VM* vmPointer, DateInstance* 
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->month()));
@@ -3306,7 +3314,7 @@ EncodedJSValue JIT_OPERATION operationDateGetUTCMonth(VM* vmPointer, DateInstanc
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->month()));
@@ -3318,7 +3326,7 @@ EncodedJSValue JIT_OPERATION operationDateGetDate(VM* vmPointer, DateInstance* d
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->monthDay()));
@@ -3330,7 +3338,7 @@ EncodedJSValue JIT_OPERATION operationDateGetUTCDate(VM* vmPointer, DateInstance
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->monthDay()));
@@ -3342,7 +3350,7 @@ EncodedJSValue JIT_OPERATION operationDateGetDay(VM* vmPointer, DateInstance* da
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->weekDay()));
@@ -3354,7 +3362,7 @@ EncodedJSValue JIT_OPERATION operationDateGetUTCDay(VM* vmPointer, DateInstance*
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->weekDay()));
@@ -3366,7 +3374,7 @@ EncodedJSValue JIT_OPERATION operationDateGetHours(VM* vmPointer, DateInstance* 
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->hour()));
@@ -3378,7 +3386,7 @@ EncodedJSValue JIT_OPERATION operationDateGetUTCHours(VM* vmPointer, DateInstanc
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->hour()));
@@ -3390,7 +3398,7 @@ EncodedJSValue JIT_OPERATION operationDateGetMinutes(VM* vmPointer, DateInstance
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->minute()));
@@ -3402,7 +3410,7 @@ EncodedJSValue JIT_OPERATION operationDateGetUTCMinutes(VM* vmPointer, DateInsta
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->minute()));
@@ -3414,7 +3422,7 @@ EncodedJSValue JIT_OPERATION operationDateGetSeconds(VM* vmPointer, DateInstance
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->second()));
@@ -3426,7 +3434,7 @@ EncodedJSValue JIT_OPERATION operationDateGetUTCSeconds(VM* vmPointer, DateInsta
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTimeUTC(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->second()));
@@ -3438,7 +3446,7 @@ EncodedJSValue JIT_OPERATION operationDateGetTimezoneOffset(VM* vmPointer, DateI
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(-gregorianDateTime->utcOffsetInMinute()));
@@ -3450,7 +3458,7 @@ EncodedJSValue JIT_OPERATION operationDateGetYear(VM* vmPointer, DateInstance* d
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm);
+    const GregorianDateTime* gregorianDateTime = date->gregorianDateTime(vm.dateCache);
     if (!gregorianDateTime)
         return JSValue::encode(jsNaN());
     return JSValue::encode(jsNumber(gregorianDateTime->year() - 1900));

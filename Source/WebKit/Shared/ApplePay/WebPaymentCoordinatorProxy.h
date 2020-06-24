@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,10 +38,8 @@
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
 
-#if HAVE(PASSKIT_PAYMENT_SETUP)
 OBJC_CLASS PKPaymentSetupViewController;
 OBJC_CLASS UIViewController;
-#endif
 
 namespace IPC {
 class Connection;
@@ -113,7 +111,7 @@ private:
     
     // PaymentAuthorizationPresenter::Client
     void presenterDidAuthorizePayment(PaymentAuthorizationPresenter&, const WebCore::Payment&) final;
-    void presenterDidFinish(PaymentAuthorizationPresenter&, WebCore::PaymentSessionError&&, bool didReachFinalState) final;
+    void presenterDidFinish(PaymentAuthorizationPresenter&, WebCore::PaymentSessionError&&) final;
     void presenterDidSelectPaymentMethod(PaymentAuthorizationPresenter&, const WebCore::PaymentMethod&) final;
     void presenterDidSelectShippingContact(PaymentAuthorizationPresenter&, const WebCore::PaymentContact&) final;
     void presenterDidSelectShippingMethod(PaymentAuthorizationPresenter&, const WebCore::ApplePaySessionPaymentRequest::ShippingMethod&) final;
@@ -132,22 +130,18 @@ private:
     void abortPaymentSession();
     void cancelPaymentSession();
 
-#if HAVE(PASSKIT_PAYMENT_SETUP)
     void getSetupFeatures(const PaymentSetupConfiguration&, CompletionHandler<void(const PaymentSetupFeatures&)>&&);
     void beginApplePaySetup(const PaymentSetupConfiguration&, const PaymentSetupFeatures&, CompletionHandler<void(bool)>&&);
     void endApplePaySetup();
     void platformBeginApplePaySetup(const PaymentSetupConfiguration&, const PaymentSetupFeatures&, CompletionHandler<void(bool)>&&);
     void platformEndApplePaySetup();
-#endif
 
     bool canBegin() const;
     bool canCancel() const;
     bool canCompletePayment() const;
     bool canAbort() const;
 
-    void didCancelPaymentSession(WebCore::PaymentSessionError&& = { });
-    void didReachFinalState();
-    void hidePaymentUI();
+    void didReachFinalState(WebCore::PaymentSessionError&& = { });
 
     void platformCanMakePayments(CompletionHandler<void(bool)>&&);
     void platformCanMakePaymentsWithActiveCard(const String& merchantIdentifier, const String& domainName, WTF::Function<void(bool)>&& completionHandler);
@@ -158,6 +152,7 @@ private:
     void platformCompleteShippingContactSelection(const Optional<WebCore::ShippingContactUpdate>&);
     void platformCompletePaymentMethodSelection(const Optional<WebCore::PaymentMethodUpdate>&);
     void platformCompletePaymentSession(const Optional<WebCore::PaymentAuthorizationResult>&);
+    void platformHidePaymentUI();
 #if PLATFORM(COCOA)
     RetainPtr<PKPaymentRequest> platformPaymentRequest(const URL& originatingURL, const Vector<URL>& linkIconURLs, const WebCore::ApplePaySessionPaymentRequest&);
 #endif
@@ -186,6 +181,9 @@ private:
 
         // PaymentMethodSelected - Dispatching the paymentmethodselected event and waiting for a reply.
         PaymentMethodSelected,
+
+        // Completing - Completing the payment and waiting for presenterDidFinish to be called.
+        Completing,
     } m_state { State::Idle };
 
     enum class MerchantValidationState {

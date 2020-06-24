@@ -62,8 +62,7 @@ public:
     enum class ProcessType {
         Web,
 #if ENABLE(NETSCAPE_PLUGIN_API)
-        Plugin32,
-        Plugin64,
+        Plugin,
 #endif
         Network,
 #if ENABLE(GPU_PROCESS)
@@ -84,6 +83,11 @@ public:
 #if ENABLE(DEVELOPER_MODE)
         String processCmdPrefix;
 #endif
+#endif
+
+#if PLATFORM(PLAYSTATION)
+        String processPath;
+        int32_t userId { -1 };
 #endif
     };
 

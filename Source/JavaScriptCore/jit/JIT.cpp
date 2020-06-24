@@ -292,6 +292,7 @@ void JIT::privateCompileMainPass()
         DEFINE_SLOW_OP(push_with_scope)
         DEFINE_SLOW_OP(create_lexical_environment)
         DEFINE_SLOW_OP(get_by_val_with_this)
+        DEFINE_SLOW_OP(get_private_name)
         DEFINE_SLOW_OP(put_by_id_with_this)
         DEFINE_SLOW_OP(put_by_val_with_this)
         DEFINE_SLOW_OP(resolve_scope_for_hoisting_func_decl_in_eval)
@@ -317,6 +318,9 @@ void JIT::privateCompileMainPass()
         DEFINE_SLOW_OP(create_async_generator)
         DEFINE_SLOW_OP(new_generator)
         DEFINE_SLOW_OP(pow)
+#if !USE(JSVALUE64)
+        DEFINE_SLOW_OP(get_prototype_of)
+#endif
 
         DEFINE_OP(op_add)
         DEFINE_OP(op_bitnot)
@@ -460,6 +464,8 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_put_to_arguments)
 
         DEFINE_OP(op_has_structure_property)
+        DEFINE_OP(op_has_own_structure_property)
+        DEFINE_OP(op_in_structure_property)
         DEFINE_OP(op_has_indexed_property)
         DEFINE_OP(op_get_direct_pname)
         DEFINE_OP(op_enumerator_structure_pname)
@@ -467,6 +473,10 @@ void JIT::privateCompileMainPass()
             
         DEFINE_OP(op_log_shadow_chicken_prologue)
         DEFINE_OP(op_log_shadow_chicken_tail)
+
+#if USE(JSVALUE64)
+        DEFINE_OP(op_get_prototype_of)
+#endif
         default:
             RELEASE_ASSERT_NOT_REACHED();
         }
@@ -616,10 +626,14 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_SLOW_OP(nstricteq)
         DEFINE_SLOWCASE_SLOW_OP(get_direct_pname)
         DEFINE_SLOWCASE_SLOW_OP(has_structure_property)
+        DEFINE_SLOWCASE_SLOW_OP(has_own_structure_property)
+        DEFINE_SLOWCASE_SLOW_OP(in_structure_property)
         DEFINE_SLOWCASE_SLOW_OP(resolve_scope)
         DEFINE_SLOWCASE_SLOW_OP(check_tdz)
         DEFINE_SLOWCASE_SLOW_OP(to_property_key)
-
+#if USE(JSVALUE64)
+        DEFINE_SLOWCASE_SLOW_OP(get_prototype_of)
+#endif
         default:
             RELEASE_ASSERT_NOT_REACHED();
         }

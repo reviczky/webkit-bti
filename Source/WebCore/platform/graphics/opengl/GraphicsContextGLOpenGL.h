@@ -62,7 +62,7 @@ typedef struct __IOSurface* IOSurfaceRef;
 
 #if USE(NICOSIA)
 namespace Nicosia {
-class GC3DLayer;
+class GCGLLayer;
 }
 #endif
 
@@ -79,7 +79,7 @@ class HostWindow;
 class ImageBuffer;
 class ImageData;
 #if USE(TEXTURE_MAPPER)
-class TextureMapperGC3DPlatformLayer;
+class TextureMapperGCGLPlatformLayer;
 #endif
 
 typedef WTF::HashMap<CString, uint64_t> ShaderNameHash;
@@ -275,7 +275,9 @@ public:
     void getFloatv(GCGLenum pname, GCGLfloat* value) final;
     void getFramebufferAttachmentParameteriv(GCGLenum target, GCGLenum attachment, GCGLenum pname, GCGLint* value) final;
     void getIntegerv(GCGLenum pname, GCGLint* value) final;
+    void getIntegeri_v(GCGLenum pname, GCGLuint index, GCGLint* value) final;
     void getInteger64v(GCGLenum pname, GCGLint64* value) final;
+    void getInteger64i_v(GCGLenum pname, GCGLuint index, GCGLint64* value) final;
     void getProgramiv(PlatformGLObject program, GCGLenum pname, GCGLint* value) final;
 #if !USE(ANGLE)
     void getNonBuiltInActiveSymbolCount(PlatformGLObject program, GCGLenum pname, GCGLint* value);
@@ -554,7 +556,7 @@ public:
 #endif
 
 #if USE(OPENGL) || USE(ANGLE)
-    void allocateIOSurfaceBackingStore(IntSize);
+    bool allocateIOSurfaceBackingStore(IntSize);
     void updateFramebufferTextureBackingStoreFromLayer();
 #if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     void updateCGLContext();
@@ -660,6 +662,8 @@ public:
     using PlatformDisplayID = uint32_t;
     void screenDidChange(PlatformDisplayID);
 #endif
+
+    void prepareForDisplay();
 
 private:
     GraphicsContextGLOpenGL(GraphicsContextGLAttributes, HostWindow*, Destination = Destination::Offscreen, GraphicsContextGLOpenGL* sharedContext = nullptr);
@@ -878,11 +882,11 @@ private:
     ListHashSet<GCGLenum> m_syntheticErrors;
 
 #if USE(NICOSIA) && USE(TEXTURE_MAPPER)
-    friend class Nicosia::GC3DLayer;
-    std::unique_ptr<Nicosia::GC3DLayer> m_nicosiaLayer;
+    friend class Nicosia::GCGLLayer;
+    std::unique_ptr<Nicosia::GCGLLayer> m_nicosiaLayer;
 #elif USE(TEXTURE_MAPPER)
-    friend class TextureMapperGC3DPlatformLayer;
-    std::unique_ptr<TextureMapperGC3DPlatformLayer> m_texmapLayer;
+    friend class TextureMapperGCGLPlatformLayer;
+    std::unique_ptr<TextureMapperGCGLPlatformLayer> m_texmapLayer;
 #elif !PLATFORM(COCOA)
     friend class GraphicsContextGLOpenGLPrivate;
     std::unique_ptr<GraphicsContextGLOpenGLPrivate> m_private;

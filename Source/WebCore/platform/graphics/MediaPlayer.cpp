@@ -38,10 +38,7 @@
 #include "PlatformTimeRanges.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
-
-#if ENABLE(VIDEO_TRACK)
 #include "InbandTextTrackPrivate.h"
-#endif
 
 #if ENABLE(MEDIA_SOURCE)
 #include "MediaSourcePrivateClient.h"
@@ -54,7 +51,7 @@
 #if USE(GSTREAMER)
 #include "MediaPlayerPrivateGStreamer.h"
 #define PlatformMediaEngineClassName MediaPlayerPrivateGStreamer
-#if ENABLE(MEDIA_SOURCE) && ENABLE(VIDEO_TRACK)
+#if ENABLE(MEDIA_SOURCE)
 #include "MediaPlayerPrivateGStreamerMSE.h"
 #endif
 #endif // USE(GSTREAMER)
@@ -267,7 +264,7 @@ static void buildMediaEnginesVector()
         PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
 #endif
 
-#if USE(GSTREAMER) && ENABLE(MEDIA_SOURCE) && ENABLE(VIDEO_TRACK)
+#if USE(GSTREAMER) && ENABLE(MEDIA_SOURCE)
     if (DeprecatedGlobalSettings::isGStreamerEnabled())
         MediaPlayerPrivateGStreamerMSE::registerMediaEngine(addMediaEngine);
 #endif
@@ -441,7 +438,7 @@ bool MediaPlayer::load(const URL& url, const ContentType& contentType, const Str
     AtomString containerType = m_contentType.containerType();
     if (containerType.isEmpty() || containerType == applicationOctetStream() || containerType == textPlain()) {
         if (m_url.protocolIsData())
-            m_contentType = ContentType(mimeTypeFromDataURL(m_url));
+            m_contentType = ContentType(mimeTypeFromDataURL(m_url.string()));
         else {
             auto lastPathComponent = url.lastPathComponent();
             size_t pos = lastPathComponent.reverseFind('.');
@@ -1377,8 +1374,6 @@ RefPtr<PlatformMediaResourceLoader> MediaPlayer::createResourceLoader()
     return client().mediaPlayerCreateResourceLoader();
 }
 
-#if ENABLE(VIDEO_TRACK)
-
 void MediaPlayer::addAudioTrack(AudioTrackPrivate& track)
 {
     client().mediaPlayerDidAddAudioTrack(track);
@@ -1443,8 +1438,6 @@ Vector<RefPtr<PlatformTextTrack>> MediaPlayer::outOfBandTrackSources()
 }
 
 #endif
-
-#endif // ENABLE(VIDEO_TRACK)
 
 void MediaPlayer::resetMediaEngines()
 {

@@ -309,12 +309,13 @@ void Frame::invalidateContentEventRegionsIfNeeded()
         return;
     bool hasTouchActionElements = false;
     bool hasEditableElements = false;
-#if PLATFORM(IOS)
+#if ENABLE(TOUCH_ACTION_REGIONS)
     hasTouchActionElements = m_doc->mayHaveElementsWithNonAutoTouchAction();
 #endif
 #if ENABLE(EDITABLE_REGION)
     hasEditableElements = m_doc->mayHaveEditableElements();
 #endif
+    // FIXME: This needs to look at wheel event handlers too.
     if (!hasTouchActionElements && !hasEditableElements)
         return;
     if (!m_doc->renderView()->compositor().viewNeedsToInvalidateEventRegionOfEnclosingCompositingLayerForRepaint())
@@ -539,7 +540,13 @@ bool Frame::requestDOMPasteAccess()
     if (m_settings->javaScriptCanAccessClipboard() && m_settings->DOMPasteAllowed())
         return true;
 
-    if (!m_settings->domPasteAccessRequestsEnabled() || !m_doc)
+    if (!m_doc)
+        return false;
+
+    if (editor().isPastingFromMenuOrKeyBinding())
+        return true;
+
+    if (!m_settings->domPasteAccessRequestsEnabled())
         return false;
 
     auto gestureToken = UserGestureIndicator::currentUserGesture();
@@ -664,7 +671,7 @@ void Frame::injectUserScriptImmediately(DOMWrapperWorld& world, const UserScript
         return;
     if (script.injectedFrames() == UserContentInjectedFrames::InjectInTopFrameOnly && !isMainFrame())
         return;
-    if (!UserContentURLPattern::matchesPatterns(document->url(), script.whitelist(), script.blacklist()))
+    if (!UserContentURLPattern::matchesPatterns(document->url(), script.allowlist(), script.blocklist()))
         return;
     if (!m_script->shouldAllowUserAgentScripts(*document))
         return;

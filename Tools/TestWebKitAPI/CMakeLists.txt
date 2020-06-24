@@ -83,6 +83,7 @@ set(TestWTF_SOURCES
     Tests/WTF/Scope.cpp
     Tests/WTF/ScopedLambda.cpp
     Tests/WTF/SetForScope.cpp
+    Tests/WTF/StdLibExtras.cpp
     Tests/WTF/StringBuilder.cpp
     Tests/WTF/StringConcatenate.cpp
     Tests/WTF/StringHasher.cpp
@@ -129,8 +130,9 @@ if (ENABLE_WEBCORE)
         Tests/WebCore/AffineTransform.cpp
         Tests/WebCore/CSSParser.cpp
         Tests/WebCore/CalculationValue.cpp
-        Tests/WebCore/ComplexTextController.cpp
         Tests/WebCore/ColorTests.cpp
+        Tests/WebCore/ComplexTextController.cpp
+        Tests/WebCore/ContextMenuAction.cpp
         Tests/WebCore/ExtendedColorTests.cpp
         Tests/WebCore/FileMonitor.cpp
         Tests/WebCore/FloatPointTests.cpp

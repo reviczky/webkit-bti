@@ -243,14 +243,15 @@ public:
     PluginInfoStore& pluginInfoStore() { return m_pluginInfoStore; }
 
     void setPluginLoadClientPolicy(WebCore::PluginLoadClientPolicy, const String& host, const String& bundleIdentifier, const String& versionString);
-    void resetPluginLoadClientPolicies(HashMap<String, HashMap<String, HashMap<String, uint8_t>>>&&);
+    void resetPluginLoadClientPolicies(HashMap<String, HashMap<String, HashMap<String, WebCore::PluginLoadClientPolicy>>>&&);
     void clearPluginClientPolicies();
-    const HashMap<String, HashMap<String, HashMap<String, uint8_t>>>& pluginLoadClientPolicies() const { return m_pluginLoadClientPolicies; }
+    const HashMap<String, HashMap<String, HashMap<String, WebCore::PluginLoadClientPolicy>>>& pluginLoadClientPolicies() const { return m_pluginLoadClientPolicies; }
 #endif
 
 #if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
-    void startDisplayLink(IPC::Connection&, unsigned observerID, uint32_t displayID);
-    void stopDisplayLink(IPC::Connection&, unsigned observerID, uint32_t displayID);
+    Optional<unsigned> nominalFramesPerSecondForDisplay(WebCore::PlatformDisplayID);
+    void startDisplayLink(IPC::Connection&, DisplayLinkObserverID, WebCore::PlatformDisplayID);
+    void stopDisplayLink(IPC::Connection&, DisplayLinkObserverID, WebCore::PlatformDisplayID);
     void stopDisplayLinks(IPC::Connection&);
 #endif
 
@@ -439,7 +440,7 @@ public:
     void updateHiddenPageThrottlingAutoIncreaseLimit();
 
     void setMemoryCacheDisabled(bool);
-    void setFontWhitelist(API::Array*);
+    void setFontAllowList(API::Array*);
 
     UserObservablePageCounter::Token userObservablePageCount()
     {
@@ -503,6 +504,7 @@ public:
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     void didCommitCrossSiteLoadWithDataTransfer(PAL::SessionID, const WebCore::RegistrableDomain& fromDomain, const WebCore::RegistrableDomain& toDomain, OptionSet<WebCore::CrossSiteNavigationDataTransfer::Flag>, WebPageProxyIdentifier, WebCore::PageIdentifier);
+    void setDomainsWithUserInteraction(HashSet<WebCore::RegistrableDomain>&&);
     void seedResourceLoadStatisticsForTesting(const WebCore::RegistrableDomain& firstPartyDomain, const WebCore::RegistrableDomain& thirdPartyDomain, bool shouldScheduleNotification, CompletionHandler<void()>&&);
 #endif
 
@@ -532,6 +534,12 @@ public:
 
 #if ENABLE(CFPREFS_DIRECT_MODE)
     void notifyPreferencesChanged(const String& domain, const String& key, const Optional<String>& encodedValue);
+#endif
+
+#if PLATFORM(PLAYSTATION)
+    const String& webProcessPath() const { return m_resolvedPaths.webProcessPath; }
+    const String& networkProcessPath() const { return m_resolvedPaths.networkProcessPath; }
+    int32_t userId() const { return m_userId; }
 #endif
 
 private:
@@ -739,7 +747,7 @@ private:
 #endif
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
-    HashMap<String, HashMap<String, HashMap<String, uint8_t>>> m_pluginLoadClientPolicies;
+    HashMap<String, HashMap<String, HashMap<String, WebCore::PluginLoadClientPolicy>>> m_pluginLoadClientPolicies;
 #endif
 
 #if ENABLE(GAMEPAD)
@@ -759,6 +767,11 @@ private:
         String cookieStorageDirectory;
         String containerCachesDirectory;
         String containerTemporaryDirectory;
+#endif
+
+#if PLATFORM(PLAYSTATION)
+        String webProcessPath;
+        String networkProcessPath;
 #endif
 
         Vector<String> additionalWebProcessSandboxExtensionPaths;
@@ -798,6 +811,10 @@ private:
     };
     Optional<AudibleMediaActivity> m_audibleMediaActivity;
 
+#if PLATFORM(PLAYSTATION)
+    int32_t m_userId { -1 };
+#endif
+
 #if PLATFORM(IOS)
     // FIXME: Delayed process launch is currently disabled on iOS for performance reasons (rdar://problem/49074131).
     bool m_isDelayedWebProcessLaunchDisabled { true };
@@ -805,6 +822,10 @@ private:
     bool m_isDelayedWebProcessLaunchDisabled { false };
 #endif
     bool m_useSeparateServiceWorkerProcess { false };
+
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    HashSet<WebCore::RegistrableDomain> m_domainsWithUserInteraction;
+#endif
 };
 
 template<typename T>

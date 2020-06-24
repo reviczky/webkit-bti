@@ -30,7 +30,6 @@
 #include "StyleResolveForDocument.h"
 
 #include "CSSFontSelector.h"
-#include "DOMWindow.h"
 #include "Document.h"
 #include "FontCascade.h"
 #include "Frame.h"
@@ -64,7 +63,7 @@ RenderStyle resolveForDocument(const Document& document)
     documentStyle.setZoom(!document.printing() ? renderView.frame().pageZoomFactor() : 1);
     documentStyle.setPageScaleTransform(renderView.frame().frameScaleFactor());
     FontCascadeDescription documentFontDescription = documentStyle.fontDescription();
-    documentFontDescription.setLocale(document.contentLanguage());
+    documentFontDescription.setSpecifiedLocale(document.contentLanguage());
     documentStyle.setFontDescription(WTFMove(documentFontDescription));
 
     // This overrides any -webkit-user-modify inherited from the parent iframe.
@@ -74,11 +73,7 @@ RenderStyle resolveForDocument(const Document& document)
         documentStyle.setTextSizeAdjust(TextSizeAdjustment(NoTextSizeAdjustment));
 #endif
 
-    auto regionTypes = Adjuster::computeEventListenerRegionTypes(document, { });
-    if (auto* window = document.domWindow())
-        regionTypes.add(Adjuster::computeEventListenerRegionTypes(*window, { }));
-
-    documentStyle.setEventListenerRegionTypes(regionTypes);
+    Adjuster::adjustEventListenerRegionTypesForRootStyle(documentStyle, document);
 
     Element* docElement = document.documentElement();
     RenderObject* docElementRenderer = docElement ? docElement->renderer() : nullptr;
@@ -113,7 +108,7 @@ RenderStyle resolveForDocument(const Document& document)
     const Settings& settings = renderView.frame().settings();
 
     FontCascadeDescription fontDescription;
-    fontDescription.setLocale(document.contentLanguage());
+    fontDescription.setSpecifiedLocale(document.contentLanguage());
     fontDescription.setRenderingMode(settings.fontRenderingMode());
     fontDescription.setOneFamily(standardFamily);
     fontDescription.setShouldAllowUserInstalledFonts(settings.shouldAllowUserInstalledFonts() ? AllowUserInstalledFonts::Yes : AllowUserInstalledFonts::No);

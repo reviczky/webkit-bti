@@ -72,6 +72,7 @@ struct NetworkSessionCreationParameters {
 #if USE(SOUP)
     String cookiePersistentStoragePath;
     SoupCookiePersistentStorageType cookiePersistentStorageType { SoupCookiePersistentStorageType::Text };
+    bool persistentCredentialStorageEnabled { true };
 #endif
 #if USE(CURL)
     String cookiePersistentStorageFile;
@@ -90,7 +91,6 @@ struct NetworkSessionCreationParameters {
     unsigned testSpeedMultiplier { 1 };
     bool suppressesConnectionTerminationOnSystemChange { false };
     bool allowsServerPreconnect { true };
-    bool isInAppBrowserPrivacyEnabled { false };
     bool requiresSecureHTTPSProxyConnection { false };
     bool preventsSystemHTTPProxyAuthentication { false };
     

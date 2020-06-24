@@ -27,7 +27,10 @@
 
 #if ENABLE(APPLE_PAY_INSTALLMENTS)
 
+#include "ApplePayInstallmentItem.h"
+#include "ApplePayInstallmentRetailChannel.h"
 #include "ApplePaySetupFeatureTypeWebCore.h"
+#include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -38,9 +41,12 @@ struct ApplePayInstallmentConfiguration {
     String openToBuyThresholdAmount;
     String bindingTotalAmount;
     String currencyCode;
+    bool isInStorePurchase { false };
     String merchantIdentifier;
     String referrerIdentifier;
-    bool isInStorePurchase { false };
+    Vector<ApplePayInstallmentItem> items;
+    String applicationMetadata;
+    ApplePayInstallmentRetailChannel retailChannel { ApplePayInstallmentRetailChannel::Unknown };
 };
 
 } // namespace WebCore

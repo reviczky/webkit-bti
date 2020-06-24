@@ -2350,9 +2350,12 @@ static Ref<CSSValue> paintOrder(PaintOrder paintOrder)
     return paintOrderList;
 }
 
-inline static bool isFlexOrGrid(ContainerNode* element)
+inline static bool isFlexOrGridItem(RenderObject* renderer)
 {
-    return element && element->computedStyle() && element->computedStyle()->isDisplayFlexibleOrGridBox();
+    if (!renderer || !renderer->isBox())
+        return false;
+    auto& box = downcast<RenderBox>(*renderer);
+    return box.isFlexItem() || box.isGridItem();
 }
 
 RefPtr<CSSValue> ComputedStyleExtractor::customPropertyValue(const String& propertyName)
@@ -2951,9 +2954,9 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         case CSSPropertyListStyleType:
             return cssValuePool.createValue(style.listStyleType());
         case CSSPropertyWebkitLocale:
-            if (style.locale().isNull())
+            if (style.specifiedLocale().isNull())
                 return cssValuePool.createIdentifierValue(CSSValueAuto);
-            return cssValuePool.createValue(style.locale(), CSSUnitType::CSS_STRING);
+            return cssValuePool.createValue(style.specifiedLocale(), CSSUnitType::CSS_STRING);
         case CSSPropertyMarginTop:
             return zoomAdjustedPaddingOrMarginPixelValue<&RenderStyle::marginTop, &RenderBoxModelObject::marginTop>(style, renderer);
         case CSSPropertyMarginRight: {
@@ -2990,16 +2993,14 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         }
         case CSSPropertyMinHeight:
             if (style.minHeight().isAuto()) {
-                auto* styledElement = this->styledElement();
-                if (styledElement && isFlexOrGrid(styledElement->parentNode()))
+                if (isFlexOrGridItem(renderer))
                     return cssValuePool.createIdentifierValue(CSSValueAuto);
                 return zoomAdjustedPixelValue(0, style);
             }
             return zoomAdjustedPixelValueForLength(style.minHeight(), style);
         case CSSPropertyMinWidth:
             if (style.minWidth().isAuto()) {
-                auto* styledElement = this->styledElement();
-                if (styledElement && isFlexOrGrid(styledElement->parentNode()))
+                if (isFlexOrGridItem(renderer))
                     return cssValuePool.createIdentifierValue(CSSValueAuto);
                 return zoomAdjustedPixelValue(0, style);
             }

@@ -102,7 +102,8 @@ public:
     public:
         virtual ~VideoSampleObserver() = default;
 
-        virtual void videoSampleAvailable(MediaSample&) { }
+        // May be called on a background thread.
+        virtual void videoSampleAvailable(MediaSample&) = 0;
     };
 
     virtual ~RealtimeMediaSource() = default;
@@ -123,6 +124,7 @@ public:
     void start();
     void stop();
     virtual void requestToEnd(Observer& callingObserver);
+    bool isEnded() const { return m_isEnded; }
 
     bool muted() const { return m_muted; }
     void setMuted(bool);
@@ -213,7 +215,7 @@ public:
 
     // Testing only
     virtual void delaySamples(Seconds) { };
-    void setInterruptedForTesting(bool);
+    virtual void setInterruptedForTesting(bool);
 
     virtual bool setShouldApplyRotation(bool) { return false; }
 
@@ -247,6 +249,8 @@ protected:
 
     void forEachObserver(const Function<void(Observer&)>&);
 
+    void end(Observer* = nullptr);
+
 private:
     virtual void startProducingData() { }
     virtual void stopProducingData() { }
@@ -278,7 +282,9 @@ private:
     mutable RecursiveLock m_videoSampleObserversLock;
     HashSet<VideoSampleObserver*> m_videoSampleObservers;
 
+    // Set on the main thread from constraints.
     IntSize m_size;
+    // Set on sample generation thread.
     IntSize m_intrinsicSize;
     double m_frameRate { 30 };
     double m_aspectRatio { 0 };

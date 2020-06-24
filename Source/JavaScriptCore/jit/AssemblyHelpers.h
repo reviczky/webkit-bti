@@ -44,6 +44,7 @@
 #include "TagRegistersMode.h"
 #include "TypeofType.h"
 #include "VM.h"
+#include <wtf/Optional.h>
 
 namespace JSC {
 
@@ -102,6 +103,15 @@ public:
             store32(src.gpr(), dst);
     }
 
+    void storeReg(Reg src, Address dst)
+    {
+#if USE(JSVALUE64)
+        store64FromReg(src, dst);
+#else
+        store32FromReg(src, dst);
+#endif
+    }
+
 #if USE(JSVALUE64)
     void load64ToReg(Address src, Reg dst)
     {
@@ -118,6 +128,15 @@ public:
             loadFloat(src, dst.fpr());
         else
             load32(src, dst.gpr());
+    }
+
+    void loadReg(Address src, Reg dst)
+    {
+#if USE(JSVALUE64)
+        load64ToReg(src, dst);
+#else
+        load32ToReg(src, dst);
+#endif
     }
 
     template<typename T>
@@ -498,7 +517,7 @@ public:
     {
 #if USE(JSVALUE64)
         move(MacroAssembler::TrustedImm64(JSValue::NumberTag), GPRInfo::numberTagRegister);
-        orPtr(MacroAssembler::TrustedImm32(JSValue::OtherTag), GPRInfo::numberTagRegister, GPRInfo::notCellMaskRegister);
+        or64(MacroAssembler::TrustedImm32(JSValue::OtherTag), GPRInfo::numberTagRegister, GPRInfo::notCellMaskRegister);
 #endif
     }
 
@@ -540,6 +559,37 @@ public:
     {
         push(address);
     }
+
+    // dest = base + index << shift.
+    void shiftAndAdd(RegisterID base, RegisterID index, uint8_t shift, RegisterID dest, Optional<RegisterID> optionalScratch = { })
+    {
+        ASSERT(shift < 32);
+        if (shift <= 3) {
+            x86Lea64(BaseIndex(base, index, static_cast<Scale>(shift)), dest);
+            return;
+        }
+
+        RegisterID scratch = dest;
+        bool needToPreserveIndexRegister = false;
+        if (base == dest) {
+            scratch = optionalScratch ? optionalScratch.value() : scratchRegister();
+            if (base == scratch) {
+                scratch = index;
+                needToPreserveIndexRegister = true;
+            } else if (index == scratch)
+                needToPreserveIndexRegister = true;
+            if (needToPreserveIndexRegister)
+                push(index);
+        }
+
+        move(index, scratch);
+        lshift64(TrustedImm32(shift), scratch);
+        m_assembler.leaq_mr(0, base, scratch, 0, dest);
+
+        if (needToPreserveIndexRegister)
+            pop(index);
+    }
+
 #endif // CPU(X86_64)
 
 #if CPU(ARM_THUMB2) || CPU(ARM64)
@@ -581,6 +631,16 @@ public:
     {
         loadPtr(address, linkRegister);
     }
+
+#if CPU(ARM64)
+    // dest = base + index << shift.
+    void shiftAndAdd(RegisterID base, RegisterID index, uint8_t shift, RegisterID dest, Optional<RegisterID> = { })
+    {
+        ASSERT(shift < 32);
+        ASSERT(base != index);
+        getEffectiveAddress(BaseIndex(base, index, static_cast<Scale>(shift)), dest);
+    }
+#endif // CPU(ARM64)
 #endif
 
 #if CPU(MIPS)
@@ -625,25 +685,30 @@ public:
 
     void emitGetFromCallFrameHeaderPtr(VirtualRegister entry, GPRReg to, GPRReg from = GPRInfo::callFrameRegister)
     {
+        ASSERT(entry.isHeader());
         loadPtr(Address(from, entry.offset() * sizeof(Register)), to);
     }
     void emitGetFromCallFrameHeader32(VirtualRegister entry, GPRReg to, GPRReg from = GPRInfo::callFrameRegister)
     {
+        ASSERT(entry.isHeader());
         load32(Address(from, entry.offset() * sizeof(Register)), to);
     }
 #if USE(JSVALUE64)
     void emitGetFromCallFrameHeader64(VirtualRegister entry, GPRReg to, GPRReg from = GPRInfo::callFrameRegister)
     {
+        ASSERT(entry.isHeader());
         load64(Address(from, entry.offset() * sizeof(Register)), to);
     }
 #endif // USE(JSVALUE64)
     void emitPutToCallFrameHeader(GPRReg from, VirtualRegister entry)
     {
+        ASSERT(entry.isHeader());
         storePtr(from, Address(GPRInfo::callFrameRegister, entry.offset() * sizeof(Register)));
     }
 
     void emitPutToCallFrameHeader(void* value, VirtualRegister entry)
     {
+        ASSERT(entry.isHeader());
         storePtr(TrustedImmPtr(value), Address(GPRInfo::callFrameRegister, entry.offset() * sizeof(Register)));
     }
 
@@ -981,30 +1046,38 @@ public:
     }
     
     // Note that first and last are inclusive.
-    Jump branchIfType(GPRReg cellGPR, JSType first, Optional<JSType> last = WTF::nullopt)
+    Jump branchIfType(GPRReg cellGPR, JSTypeRange range)
     {
-        if (last && *last != first) {
-            ASSERT(*last > first);
-            GPRReg scratch = scratchRegister();
-            load8(Address(cellGPR, JSCell::typeInfoTypeOffset()), scratch);
-            sub32(TrustedImm32(first), scratch);
-            return branch32(BelowOrEqual, scratch, TrustedImm32(*last - first));
-        }
+        if (range.last == range.first)
+            return branch8(Equal, Address(cellGPR, JSCell::typeInfoTypeOffset()), TrustedImm32(range.first));
 
-        return branch8(Equal, Address(cellGPR, JSCell::typeInfoTypeOffset()), TrustedImm32(first));
+        ASSERT(range.last > range.first);
+        GPRReg scratch = scratchRegister();
+        load8(Address(cellGPR, JSCell::typeInfoTypeOffset()), scratch);
+        sub32(TrustedImm32(range.first), scratch);
+        return branch32(BelowOrEqual, scratch, TrustedImm32(range.last - range.first));
     }
 
-    Jump branchIfNotType(GPRReg cellGPR, JSType first, Optional<JSType> last = WTF::nullopt)
+    Jump branchIfType(GPRReg cellGPR, JSType type)
     {
-        if (last && *last != first) {
-            ASSERT(*last > first);
-            GPRReg scratch = scratchRegister();
-            load8(Address(cellGPR, JSCell::typeInfoTypeOffset()), scratch);
-            sub32(TrustedImm32(first), scratch);
-            return branch32(Above, scratch, TrustedImm32(*last - first));
-        }
+        return branchIfType(cellGPR, JSTypeRange { type, type });
+    }
 
-        return branch8(NotEqual, Address(cellGPR, JSCell::typeInfoTypeOffset()), TrustedImm32(first));
+    Jump branchIfNotType(GPRReg cellGPR, JSTypeRange range)
+    {
+        if (range.last == range.first)
+            return branch8(NotEqual, Address(cellGPR, JSCell::typeInfoTypeOffset()), TrustedImm32(range.first));
+
+        ASSERT(range.last > range.first);
+        GPRReg scratch = scratchRegister();
+        load8(Address(cellGPR, JSCell::typeInfoTypeOffset()), scratch);
+        sub32(TrustedImm32(range.first), scratch);
+        return branch32(Above, scratch, TrustedImm32(range.last - range.first));
+    }
+
+    Jump branchIfNotType(GPRReg cellGPR, JSType type)
+    {
+        return branchIfNotType(cellGPR, JSTypeRange { type, type });
     }
 
     // FIXME: rename these to make it clear that they require their input to be a cell.
@@ -1691,15 +1764,18 @@ public:
     {
 #if GIGACAGE_ENABLED
         if (Gigacage::isEnabled(kind)) {
-            if (kind != Gigacage::Primitive || Gigacage::isDisablingPrimitiveGigacageForbidden())
+            if (kind != Gigacage::Primitive || Gigacage::disablingPrimitiveGigacageIsForbidden())
                 cageWithoutUntagging(kind, storage);
             else {
 #if CPU(ARM64E)
                 if (length == scratch)
                     scratch = getCachedMemoryTempRegisterIDAndInvalidate();
 #endif
+                JumpList done;
+                done.append(branchTest8(NonZero, AbsoluteAddress(&Gigacage::disablePrimitiveGigacageRequested)));
+
                 loadPtr(Gigacage::addressOfBasePtr(kind), scratch);
-                Jump done = branchTest64(Zero, scratch);
+                done.append(branchTest64(Zero, scratch));
 #if CPU(ARM64E)
                 GPRReg tempReg = getCachedDataTempRegisterIDAndInvalidate();
                 move(storage, tempReg);
@@ -1876,8 +1952,8 @@ public:
     // that allocator is non-null; allocator can be null as a signal that we don't know what the
     // value of allocatorGPR is. Additionally, if the allocator is not null, then there is no need
     // to populate allocatorGPR - this code will ignore the contents of allocatorGPR.
-    void emitAllocateWithNonNullAllocator(GPRReg resultGPR, const JITAllocator& allocator, GPRReg allocatorGPR, GPRReg scratchGPR, JumpList& slowPath);
-    
+    void emitAllocateWithNonNullAllocator(GPRReg resultGPR, const JITAllocator&, GPRReg allocatorGPR, GPRReg scratchGPR, JumpList& slowPath, Optional<GPRReg> scratchGPR2 = { }, Optional<GPRReg> scratchGPR3 = { });
+
     void emitAllocate(GPRReg resultGPR, const JITAllocator& allocator, GPRReg allocatorGPR, GPRReg scratchGPR, JumpList& slowPath);
     
     template<typename StructureType>

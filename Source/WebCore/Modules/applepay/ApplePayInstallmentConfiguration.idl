@@ -33,7 +33,10 @@
     DOMString openToBuyThresholdAmount;
     DOMString bindingTotalAmount;
     DOMString currencyCode;
+    boolean isInStorePurchase;
     DOMString merchantIdentifier;
     DOMString referrerIdentifier;
-    boolean isInStorePurchase;
+    sequence<ApplePayInstallmentItem> items;
+    JSON applicationMetadata;
+    ApplePayInstallmentRetailChannel retailChannel = "unknown";
 };

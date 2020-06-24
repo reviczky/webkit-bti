@@ -68,6 +68,7 @@
 #include "Settings.h"
 #include "StyleResolver.h"
 #include "TiledBacking.h"
+#include <wtf/SystemTracing.h>
 #include <wtf/text/TextStream.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -471,7 +472,10 @@ void RenderLayerBacking::updateDebugIndicators(bool showBorder, bool showRepaint
     
     if (m_contentsContainmentLayer)
         m_contentsContainmentLayer->setShowDebugBorder(showBorder);
-    
+
+    if (m_childContainmentLayer)
+        m_childContainmentLayer->setShowDebugBorder(showBorder);
+
     if (m_backgroundLayer) {
         m_backgroundLayer->setShowDebugBorder(showBorder);
         m_backgroundLayer->setShowRepaintCounter(showRepaintCounter);
@@ -611,7 +615,7 @@ static LayoutRect clippingLayerBox(const RenderBox& renderBox)
     return result;
 }
 
-static LayoutRect overflowControlsHostLayerBox(const RenderBox& renderBox)
+static LayoutRect overflowControlsHostLayerRect(const RenderBox& renderBox)
 {
     return renderBox.paddingBoxRectIncludingScrollbar();
 }
@@ -1412,7 +1416,7 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
     }
 
     if (m_overflowControlsContainer) {
-        LayoutRect overflowControlsBox = overflowControlsHostLayerBox(downcast<RenderBox>(renderer()));
+        LayoutRect overflowControlsBox = overflowControlsHostLayerRect(downcast<RenderBox>(renderer()));
         LayoutSize boxOffsetFromGraphicsLayer = toLayoutSize(overflowControlsBox.location()) + rendererOffset.fromPrimaryGraphicsLayer();
         SnappedRectInfo snappedBoxInfo = snappedGraphicsLayer(boxOffsetFromGraphicsLayer, overflowControlsBox.size(), deviceScaleFactor);
 
@@ -1699,7 +1703,7 @@ bool RenderLayerBacking::maintainsEventRegion() const
     if (renderer().view().needsEventRegionUpdateForNonCompositedFrame())
         return true;
 
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(TOUCH_ACTION_REGIONS)
     if (renderer().document().mayHaveElementsWithNonAutoTouchAction())
         return true;
 #endif
@@ -1726,6 +1730,8 @@ void RenderLayerBacking::updateEventRegion()
     if (!maintainsEventRegion())
         return;
 
+    TraceScope scope(ComputeEventRegionsStart, ComputeEventRegionsEnd);
+
     auto updateEventRegionForLayer = [&](GraphicsLayer& graphicsLayer) {
         GraphicsContext nullContext(nullptr);
         EventRegion eventRegion;
@@ -1734,7 +1740,7 @@ void RenderLayerBacking::updateEventRegion()
 
         if (renderer().visibleToHitTesting()) {
             if (&graphicsLayer == m_scrollContainerLayer) {
-                eventRegionContext.unite(enclosingIntRect(FloatRect({ }, graphicsLayer.size())), RenderStyle::defaultStyle());
+                eventRegionContext.unite(enclosingIntRect(FloatRect({ }, graphicsLayer.size())), renderer().style());
                 graphicsLayer.setEventRegion(WTFMove(eventRegion));
                 return;
             }
@@ -1742,7 +1748,7 @@ void RenderLayerBacking::updateEventRegion()
             if (&graphicsLayer == m_scrolledContentsLayer) {
                 // Initialize scrolled contents layer with layer-sized event region as it can all used for scrolling.
                 // This avoids generating unnecessarily complex event regions. We still need to to do the paint to capture touch-action regions.
-                eventRegionContext.unite(enclosingIntRect(FloatRect(-layerOffset, graphicsLayer.size())), RenderStyle::defaultStyle());
+                eventRegionContext.unite(enclosingIntRect(FloatRect(-layerOffset, graphicsLayer.size())), renderer().style());
             }
         }
 
@@ -2965,7 +2971,7 @@ void RenderLayerBacking::setContentsNeedDisplayInRect(const LayoutRect& r, Graph
 
     if (m_scrolledContentsLayer && m_scrolledContentsLayer->drawsContent()) {
         FloatRect layerDirtyRect = pixelSnappedRectForPainting;
-        layerDirtyRect.move(-m_scrolledContentsLayer->offsetFromRenderer() + toLayoutSize(m_scrolledContentsLayer->scrollOffset()) - m_subpixelOffsetFromRenderer);
+        layerDirtyRect.move(-m_scrolledContentsLayer->offsetFromRenderer() + toLayoutSize(m_owningLayer.scrollOffset()) - m_subpixelOffsetFromRenderer);
         m_scrolledContentsLayer->setNeedsDisplayInRect(layerDirtyRect, shouldClip);
     }
 }
@@ -3082,10 +3088,11 @@ OptionSet<RenderLayer::PaintLayerFlag> RenderLayerBacking::paintFlagsForLayer(co
     return paintFlags;
 }
 
+#if ENABLE(TOUCH_ACTION_REGIONS) || ENABLE(WHEEL_EVENT_REGIONS)
 struct PatternDescription {
     ASCIILiteral name;
     FloatSize phase;
-    RGBA32 fillColor;
+    SimpleColor fillColor;
 };
 
 static RefPtr<Pattern> patternForDescription(PatternDescription description, FloatSize contentOffset, GraphicsContext& destContext)
@@ -3124,7 +3131,9 @@ static RefPtr<Pattern> patternForDescription(PatternDescription description, Flo
 
     return fillPattern;
 };
+#endif
 
+#if ENABLE(TOUCH_ACTION_REGIONS)
 static RefPtr<Pattern> patternForTouchAction(TouchAction touchAction, FloatSize contentOffset, GraphicsContext& destContext)
 {
     auto toIndex = [](TouchAction touchAction) -> unsigned {
@@ -3145,7 +3154,7 @@ static RefPtr<Pattern> patternForTouchAction(TouchAction touchAction, FloatSize 
         return 0;
     };
 
-    constexpr auto fillColor = makeRGBA(0, 0, 0, 128);
+    constexpr auto fillColor = makeSimpleColor(0, 0, 0, 128);
 
     static const PatternDescription patternDescriptions[] = {
         { "auto"_s, { }, fillColor },
@@ -3162,10 +3171,12 @@ static RefPtr<Pattern> patternForTouchAction(TouchAction touchAction, FloatSize 
 
     return patternForDescription(patternDescriptions[actionIndex], contentOffset, destContext);
 }
+#endif
 
+#if ENABLE(WHEEL_EVENT_REGIONS)
 static RefPtr<Pattern> patternForEventListenerRegionType(EventListenerRegionType type, FloatSize contentOffset, GraphicsContext& destContext)
 {
-    constexpr auto fillColor = makeRGBA(0, 128, 0, 128);
+    constexpr auto fillColor = makeSimpleColor(0, 128, 0, 128);
 
     auto patternAndPhase = [&]() -> PatternDescription {
         switch (type) {
@@ -3180,6 +3191,7 @@ static RefPtr<Pattern> patternForEventListenerRegionType(EventListenerRegionType
 
     return patternForDescription(patternAndPhase, contentOffset, destContext);
 }
+#endif
 
 void RenderLayerBacking::paintDebugOverlays(const GraphicsLayer* graphicsLayer, GraphicsContext& context)
 {
@@ -3193,12 +3205,15 @@ void RenderLayerBacking::paintDebugOverlays(const GraphicsLayer* graphicsLayer, 
     auto contentOffset = roundedIntSize(contentOffsetInCompositingLayer());
     context.translate(-contentOffset);
 
+#if ENABLE(TOUCH_ACTION_REGIONS) || ENABLE(WHEEL_EVENT_REGIONS) || ENABLE(EDITABLE_REGION)
     auto visibleDebugOverlayRegions = renderer().settings().visibleDebugOverlayRegions();
+#endif
 
     // The interactive part.
+#if ENABLE(TOUCH_ACTION_REGIONS)
     // Paint rects for touch action.
     if (visibleDebugOverlayRegions & TouchActionRegion) {
-        Color regionColor(0, 0, 255, 50);
+        constexpr auto regionColor = makeSimpleColor(0, 0, 255, 50);
         context.setFillColor(regionColor);
         for (auto rect : eventRegion.region().rects())
             context.fillRect(rect);
@@ -3225,7 +3240,9 @@ void RenderLayerBacking::paintDebugOverlays(const GraphicsLayer* graphicsLayer, 
                 context.fillRect(rect);
         }
     }
+#endif
 
+#if ENABLE(WHEEL_EVENT_REGIONS)
     if (visibleDebugOverlayRegions & WheelEventHandlerRegion) {
         for (auto type : { EventListenerRegionType::Wheel, EventListenerRegionType::NonPassiveWheel }) {
             auto fillPattern = patternForEventListenerRegionType(type, contentOffsetInCompositingLayer(), context);
@@ -3236,11 +3253,12 @@ void RenderLayerBacking::paintDebugOverlays(const GraphicsLayer* graphicsLayer, 
                 context.fillRect(rect);
         }
     }
+#endif
 
 #if ENABLE(EDITABLE_REGION)
     // Paint rects for editable elements.
     if (visibleDebugOverlayRegions & EditableElementRegion) {
-        context.setFillColor({ 128, 0, 128, 50 });
+        context.setFillColor(makeSimpleColor(128, 0, 128, 50));
         for (auto rect : eventRegion.rectsForEditableElements())
             context.fillRect(rect);
     }

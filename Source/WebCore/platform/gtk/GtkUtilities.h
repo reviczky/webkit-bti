@@ -31,6 +31,9 @@ class IntPoint;
 
 IntPoint convertWidgetPointToScreenPoint(GtkWidget*, const IntPoint&);
 bool widgetIsOnscreenToplevelWindow(GtkWidget*);
+IntPoint widgetRootCoords(GtkWidget*, int, int);
+void widgetDevicePosition(GtkWidget*, GdkDevice*, double*, double*, GdkModifierType*);
+unsigned widgetKeyvalToKeycode(GtkWidget*, unsigned);
 
 template<typename GdkEventType>
 WallTime wallTimeForEvent(const GdkEventType* event)
@@ -48,8 +51,8 @@ String defaultGtkSystemFont();
 
 WEBCORE_EXPORT unsigned stateModifierForGdkButton(unsigned button);
 
-WEBCORE_EXPORT DragOperation gdkDragActionToDragOperation(GdkDragAction);
-WEBCORE_EXPORT GdkDragAction dragOperationToGdkDragActions(DragOperation);
-WEBCORE_EXPORT GdkDragAction dragOperationToSingleGdkDragAction(DragOperation);
+WEBCORE_EXPORT OptionSet<DragOperation> gdkDragActionToDragOperation(GdkDragAction);
+WEBCORE_EXPORT GdkDragAction dragOperationToGdkDragActions(OptionSet<DragOperation>);
+WEBCORE_EXPORT GdkDragAction dragOperationToSingleGdkDragAction(OptionSet<DragOperation>);
 
 } // namespace WebCore

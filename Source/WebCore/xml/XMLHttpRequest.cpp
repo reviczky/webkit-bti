@@ -178,7 +178,7 @@ ExceptionOr<Document*> XMLHttpRequest::responseXML()
 
         // The W3C spec requires the final MIME type to be some valid XML type, or text/html.
         // If it is text/html, then the responseType of "document" must have been supplied explicitly.
-        if ((m_response.isHTTP() && !responseIsXML() && !isHTML)
+        if ((m_response.isInHTTPFamily() && !responseIsXML() && !isHTML)
             || (isHTML && responseType() == ResponseType::EmptyString)) {
             m_responseDocument = nullptr;
         } else {
@@ -530,10 +530,6 @@ ExceptionOr<void> XMLHttpRequest::send(Blob& body)
             const String& blobType = body.type();
             if (!blobType.isEmpty() && isValidContentType(blobType))
                 m_requestHeaders.set(HTTPHeaderName::ContentType, blobType);
-            else {
-                // From FileAPI spec, whenever media type cannot be determined, empty string must be returned.
-                m_requestHeaders.set(HTTPHeaderName::ContentType, emptyString());
-            }
         }
 
         m_requestEntityBody = FormData::create();
@@ -854,7 +850,7 @@ String XMLHttpRequest::responseMIMEType() const
     if (mimeType.isEmpty()) {
         // Same logic as externalEntityMimeTypeAllowed() in XMLDocumentParserLibxml2.cpp. Keep them in sync.
         String contentType;
-        if (m_response.isHTTP())
+        if (m_response.isInHTTPFamily())
             contentType = m_response.httpHeaderField(HTTPHeaderName::ContentType);
         else
             contentType = m_response.mimeType();

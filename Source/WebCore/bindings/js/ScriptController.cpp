@@ -25,7 +25,6 @@
 #include "CachedScriptFetcher.h"
 #include "CommonVM.h"
 #include "ContentSecurityPolicy.h"
-#include "CustomHeaderFields.h"
 #include "DOMWrapperWorld.h"
 #include "DocumentLoader.h"
 #include "Event.h"
@@ -748,12 +747,12 @@ void ScriptController::executeAsynchronousUserAgentScriptInWorld(DOMWrapperWorld
         resolveCompletionHandler = nullptr;
     });
 
-    auto* fulfillHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction = sharedResolveFunction.copyRef()] (JSGlobalObject*, CallFrame* callFrame) mutable {
+    auto* fulfillHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction] (JSGlobalObject*, CallFrame* callFrame) mutable {
         sharedResolveFunction->run(callFrame->argument(0));
         return JSValue::encode(jsUndefined());
     });
 
-    auto* rejectHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction = sharedResolveFunction.copyRef()] (JSGlobalObject* globalObject, CallFrame* callFrame) mutable {
+    auto* rejectHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction] (JSGlobalObject* globalObject, CallFrame* callFrame) mutable {
         sharedResolveFunction->run(makeUnexpected(ExceptionDetails { callFrame->argument(0).toWTFString(globalObject) }));
         return JSValue::encode(jsUndefined());
     });
@@ -764,10 +763,10 @@ void ScriptController::executeAsynchronousUserAgentScriptInWorld(DOMWrapperWorld
             sharedResolveFunction->run(makeUnexpected(ExceptionDetails { "Completion handler for function call is no longer reachable"_s }));
     });
 
-    world.vm().heap.addFinalizer(fulfillHandler, [finalizeGuard = finalizeGuard.copyRef()](JSCell*) {
+    world.vm().heap.addFinalizer(fulfillHandler, [finalizeGuard](JSCell*) {
         finalizeGuard->run();
     });
-    world.vm().heap.addFinalizer(rejectHandler, [finalizeGuard = finalizeGuard.copyRef()](JSCell*) {
+    world.vm().heap.addFinalizer(rejectHandler, [finalizeGuard](JSCell*) {
         finalizeGuard->run();
     });
 
@@ -807,16 +806,15 @@ bool ScriptController::canExecuteScripts(ReasonForCallingCanExecuteScripts reaso
     return m_frame.loader().client().allowScript(m_frame.settings().isScriptEnabled());
 }
 
-bool ScriptController::executeIfJavaScriptURL(const URL& url, RefPtr<SecurityOrigin> requesterSecurityOrigin, ShouldReplaceDocumentIfJavaScriptURL shouldReplaceDocumentIfJavaScriptURL)
+void ScriptController::executeJavaScriptURL(const URL& url, RefPtr<SecurityOrigin> requesterSecurityOrigin, ShouldReplaceDocumentIfJavaScriptURL shouldReplaceDocumentIfJavaScriptURL)
 {
-    if (!url.protocolIsJavaScript())
-        return false;
+    ASSERT(url.protocolIsJavaScript());
 
     if (requesterSecurityOrigin && !requesterSecurityOrigin->canAccess(m_frame.document()->securityOrigin()))
-        return true;
+        return;
 
     if (!m_frame.page() || !m_frame.document()->contentSecurityPolicy()->allowJavaScriptURLs(m_frame.document()->url().string(), eventHandlerPosition().m_line))
-        return true;
+        return;
 
     // We need to hold onto the Frame here because executing script can
     // destroy the frame.
@@ -836,17 +834,17 @@ bool ScriptController::executeIfJavaScriptURL(const URL& url, RefPtr<SecurityOri
     // If executing script caused this frame to be removed from the page, we
     // don't want to try to replace its document!
     if (!m_frame.page())
-        return true;
+        return;
 
     if (!result)
-        return true;
+        return;
 
     String scriptResult;
     bool isString = result.getString(globalObject, scriptResult);
-    RETURN_IF_EXCEPTION(throwScope, true);
+    RETURN_IF_EXCEPTION(throwScope, void());
 
     if (!isString)
-        return true;
+        return;
 
     // FIXME: We should always replace the document, but doing so
     //        synchronously can cause crashes:
@@ -866,7 +864,6 @@ bool ScriptController::executeIfJavaScriptURL(const URL& url, RefPtr<SecurityOri
         if (RefPtr<DocumentLoader> loader = m_frame.document()->loader())
             loader->writer().replaceDocumentWithResultOfExecutingJavascriptURL(scriptResult, ownerDocument.get());
     }
-    return true;
 }
 
 } // namespace WebCore

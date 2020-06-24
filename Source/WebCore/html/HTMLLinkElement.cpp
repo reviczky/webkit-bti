@@ -244,9 +244,7 @@ String HTMLLinkElement::as() const
         || (RuntimeEnabledFeatures::sharedFeatures().mediaPreloadingEnabled()
             && (equalLettersIgnoringASCIICase(as, "video")
                 || equalLettersIgnoringASCIICase(as, "audio")))
-#if ENABLE(VIDEO_TRACK)
         || equalLettersIgnoringASCIICase(as, "track")
-#endif
         || equalLettersIgnoringASCIICase(as, "font"))
         return as.convertToASCIILowercase();
     return String();
@@ -273,7 +271,8 @@ void HTMLLinkElement::process()
         attributeWithoutSynchronization(typeAttr),
         attributeWithoutSynchronization(crossoriginAttr),
         attributeWithoutSynchronization(imagesrcsetAttr),
-        attributeWithoutSynchronization(imagesizesAttr)
+        attributeWithoutSynchronization(imagesizesAttr),
+        referrerPolicy(),
     };
 
     m_linkLoader.loadLink(params, document());
@@ -337,6 +336,7 @@ void HTMLLinkElement::process()
         if (document().contentSecurityPolicy()->allowStyleWithNonce(attributeWithoutSynchronization(HTMLNames::nonceAttr)))
             options.contentSecurityPolicyImposition = ContentSecurityPolicyImposition::SkipPolicyCheck;
         options.integrity = m_integrityMetadataForPendingSheetRequest;
+        options.referrerPolicy = params.referrerPolicy;
 
         auto request = createPotentialAccessControlRequest(WTFMove(url), WTFMove(options), document(), crossOrigin());
         request.setPriority(WTFMove(priority));
@@ -524,9 +524,9 @@ bool HTMLLinkElement::sheetLoaded()
     return false;
 }
 
-void HTMLLinkElement::dispatchPendingLoadEvents()
+void HTMLLinkElement::dispatchPendingLoadEvents(Page* page)
 {
-    linkLoadEventSender().dispatchPendingEvents();
+    linkLoadEventSender().dispatchPendingEvents(page);
 }
 
 void HTMLLinkElement::dispatchPendingEvent(LinkEventSender* eventSender)
@@ -664,6 +664,23 @@ void HTMLLinkElement::removePendingSheet()
     }
 
     m_styleScope->removePendingSheet(*this);
+}
+
+void HTMLLinkElement::setReferrerPolicyForBindings(const AtomString& value)
+{
+    setAttributeWithoutSynchronization(referrerpolicyAttr, value);
+}
+
+String HTMLLinkElement::referrerPolicyForBindings() const
+{
+    return referrerPolicyToString(referrerPolicy());
+}
+
+ReferrerPolicy HTMLLinkElement::referrerPolicy() const
+{
+    if (RuntimeEnabledFeatures::sharedFeatures().referrerPolicyAttributeEnabled())
+        return parseReferrerPolicy(attributeWithoutSynchronization(referrerpolicyAttr), ReferrerPolicySource::ReferrerPolicyAttribute).valueOr(ReferrerPolicy::EmptyString);
+    return ReferrerPolicy::EmptyString;
 }
 
 } // namespace WebCore

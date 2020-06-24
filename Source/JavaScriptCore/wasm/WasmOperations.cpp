@@ -232,8 +232,6 @@ static void doOSREntry(Instance* instance, Probe::Context& context, BBQCallee& c
 
 inline bool shouldJIT(unsigned functionIndex)
 {
-    if (!VM::canUseJIT())
-        return false;
     if (!Options::useOMGJIT())
         return false;
     if (!Options::wasmFunctionIndexRangeToCompile().isInRange(functionIndex))
@@ -270,6 +268,11 @@ void JIT_OPERATION operationWasmTriggerOSREntryNow(Probe::Context& context)
     dataLogLnIf(Options::verboseOSR(), "Consider OMGForOSREntryPlan for [", functionIndex, "] loopIndex#", loopIndex, " with executeCounter = ", tierUp, " ", RawPointer(callee.replacement()));
 
     if (!Options::useWebAssemblyOSR()) {
+        if (!wasmFunctionSizeCanBeOMGCompiled(instance->module().moduleInformation().functions[functionIndex].data.size())) {
+            tierUp.deferIndefinitely();
+            return returnWithoutOSREntry();
+        }
+
         if (shouldTriggerOMGCompile(tierUp, callee.replacement(), functionIndex))
             triggerOMGReplacementCompile(tierUp, callee.replacement(), instance, codeBlock, functionIndex);
 
@@ -336,6 +339,9 @@ void JIT_OPERATION operationWasmTriggerOSREntryNow(Probe::Context& context)
         return returnWithoutOSREntry();
 
     if (!triggeredSlowPathToStartCompilation) {
+        if (!wasmFunctionSizeCanBeOMGCompiled(instance->module().moduleInformation().functions[functionIndex].data.size()))
+            return returnWithoutOSREntry();
+
         triggerOMGReplacementCompile(tierUp, callee.replacement(), instance, codeBlock, functionIndex);
 
         if (!callee.replacement())

@@ -40,6 +40,7 @@
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/PublicSuffix.h>
 #include <WebCore/SharedBuffer.h>
+#include <WebCore/ShouldRelaxThirdPartyCookieBlocking.h>
 #include <WebCore/SoupNetworkSession.h>
 #include <WebCore/TextEncoding.h>
 #include <wtf/MainThread.h>
@@ -58,8 +59,6 @@ NetworkDataTaskSoup::NetworkDataTaskSoup(NetworkSession& session, NetworkDataTas
     , m_timeoutSource(RunLoop::main(), this, &NetworkDataTaskSoup::timeoutFired)
 {
     m_session->registerNetworkDataTask(*this);
-    if (m_scheduledFailureType != NoFailure)
-        return;
 
     auto request = requestWithCredentials;
     if (request.url().protocolIsInHTTPFamily()) {
@@ -156,7 +155,7 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
     bool shouldBlockCookies = wasBlockingCookies == WasBlockingCookies::Yes ? true : m_storedCredentialsPolicy == StoredCredentialsPolicy::EphemeralStateless;
     if (!shouldBlockCookies) {
         if (auto* networkStorageSession = m_session->networkStorageSession())
-            shouldBlockCookies = networkStorageSession->shouldBlockCookies(m_currentRequest, m_frameID, m_pageID);
+            shouldBlockCookies = networkStorageSession->shouldBlockCookies(m_currentRequest, m_frameID, m_pageID, WebCore::ShouldRelaxThirdPartyCookieBlocking::No);
     }
     if (shouldBlockCookies)
         soup_message_disable_feature(soupMessage.get(), SOUP_TYPE_COOKIE_JAR);
@@ -231,11 +230,6 @@ void NetworkDataTaskSoup::resume()
         return;
 
     m_state = State::Running;
-
-    if (m_scheduledFailureType != NoFailure) {
-        ASSERT(m_failureTimer.isActive());
-        return;
-    }
 
     startTimeout();
 
@@ -460,6 +454,11 @@ bool NetworkDataTaskSoup::tlsConnectionAcceptCertificate(GTlsCertificate* certif
     return false;
 }
 
+bool NetworkDataTaskSoup::persistentCredentialStorageEnabled() const
+{
+    return static_cast<NetworkSessionSoup&>(*m_session).persistentCredentialStorageEnabled();
+}
+
 void NetworkDataTaskSoup::applyAuthenticationToRequest(ResourceRequest& request)
 {
     if (m_user.isEmpty() && m_password.isEmpty())
@@ -530,7 +529,7 @@ void NetworkDataTaskSoup::authenticate(AuthenticationChallenge&& challenge)
     // of all request latency, versus a one-time latency for the small subset of requests that
     // use HTTP authentication. In the end, this doesn't matter much, because persistent credentials
     // will become session credentials after the first use.
-    if (m_storedCredentialsPolicy == StoredCredentialsPolicy::Use) {
+    if (m_storedCredentialsPolicy == StoredCredentialsPolicy::Use && persistentCredentialStorageEnabled()) {
         auto protectionSpace = challenge.protectionSpace();
         m_session->networkStorageSession()->getCredentialFromPersistentStorage(protectionSpace, m_cancellable.get(),
             [this, protectedThis = makeRef(*this), authChallenge = WTFMove(challenge)] (Credential&& credential) mutable {
@@ -569,7 +568,7 @@ void NetworkDataTaskSoup::continueAuthenticate(AuthenticationChallenge&& challen
                 if (credential.persistence() == CredentialPersistenceForSession || credential.persistence() == CredentialPersistencePermanent)
                     m_session->networkStorageSession()->credentialStorage().set(m_partition, credential, challenge.protectionSpace(), challenge.failureResponse().url());
 
-                if (credential.persistence() == CredentialPersistencePermanent) {
+                if (credential.persistence() == CredentialPersistencePermanent && persistentCredentialStorageEnabled()) {
                     m_protectionSpaceForPersistentStorage = challenge.protectionSpace();
                     m_credentialForPersistentStorage = credential;
                 }
@@ -881,7 +880,7 @@ void NetworkDataTaskSoup::didGetHeaders()
     // since we are waiting until we know that this authentication succeeded before actually storing.
     // This is because we want to avoid hitting the disk twice (once to add and once to remove) for
     // incorrect credentials or polluting the keychain with invalid credentials.
-    if (!isAuthenticationFailureStatusCode(m_soupMessage->status_code) && m_soupMessage->status_code < 500) {
+    if (!isAuthenticationFailureStatusCode(m_soupMessage->status_code) && m_soupMessage->status_code < 500 && persistentCredentialStorageEnabled()) {
         m_session->networkStorageSession()->saveCredentialToPersistentStorage(m_protectionSpaceForPersistentStorage, m_credentialForPersistentStorage);
         m_protectionSpaceForPersistentStorage = ProtectionSpace();
         m_credentialForPersistentStorage = Credential();
@@ -992,7 +991,7 @@ void NetworkDataTaskSoup::didWriteDownload(gsize bytesWritten)
     ASSERT(bytesWritten == m_readBuffer.size());
     auto* download = m_session->networkProcess().downloadManager().download(m_pendingDownloadID);
     ASSERT(download);
-    download->didReceiveData(bytesWritten);
+    download->didReceiveData(bytesWritten, 0, 0);
     read();
 }
 
@@ -1132,7 +1131,7 @@ bool NetworkDataTaskSoup::shouldAllowHSTSProtocolUpgrade() const
     // Follow Apple's HSTS abuse mitigation 2:
     // "Ignore HSTS State for Subresource Requests to Blocked Domains"
     return isTopLevelNavigation()
-        || m_currentRequest.allowCookies();
+        && !m_isBlockingCookies;
 }
 
 void NetworkDataTaskSoup::protocolUpgradedViaHSTS(SoupMessage* soupMessage)

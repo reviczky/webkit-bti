@@ -32,6 +32,7 @@
 
 #include "AnimationBase.h"
 #include "CSSFontSelector.h"
+#include "DOMWindow.h"
 #include "Element.h"
 #include "EventNames.h"
 #include "FrameView.h"
@@ -191,6 +192,15 @@ static OptionSet<TouchAction> computeEffectiveTouchActions(const RenderStyle& st
         return { TouchAction::None };
 
     return sharedTouchActions;
+}
+
+void Adjuster::adjustEventListenerRegionTypesForRootStyle(RenderStyle& rootStyle, const Document& document)
+{
+    auto regionTypes = computeEventListenerRegionTypes(document, { });
+    if (auto* window = document.domWindow())
+        regionTypes.add(computeEventListenerRegionTypes(*window, { }));
+
+    rootStyle.setEventListenerRegionTypes(regionTypes);
 }
 
 OptionSet<EventListenerRegionType> Adjuster::computeEventListenerRegionTypes(const EventTarget& eventTarget, OptionSet<EventListenerRegionType> parentTypes)
@@ -597,6 +607,7 @@ void Adjuster::adjustForSiteSpecificQuirks(RenderStyle& style) const
         if (style.overflowY() == Overflow::Hidden && m_element->idForStyleResolution() == idValue)
             style.setOverflowY(Overflow::Auto);
     }
+#if ENABLE(VIDEO)
     if (m_document.quirks().needsFullscreenDisplayNoneQuirk()) {
         if (is<HTMLDivElement>(m_element) && style.display() == DisplayType::None) {
             static MainThreadNeverDestroyed<const AtomString> instreamNativeVideoDivClass("instream-native-video--mobile", AtomString::ConstructFromLiteral);
@@ -610,6 +621,7 @@ void Adjuster::adjustForSiteSpecificQuirks(RenderStyle& style) const
             }
         }
     }
+#endif
 }
 
 #if ENABLE(TEXT_AUTOSIZING)
@@ -627,7 +639,9 @@ auto Adjuster::adjustmentForTextAutosizing(const RenderStyle& style, const Eleme
     AdjustmentForTextAutosizing adjustmentForTextAutosizing;
 
     auto& document = element.document();
-    if (!document.settings().textAutosizingEnabled() || !document.settings().textAutosizingUsesIdempotentMode())
+    if (!document.settings().textAutosizingEnabled()
+        || !document.settings().textAutosizingUsesIdempotentMode()
+        || document.settings().idempotentModeAutosizingOnlyHonorsPercentages())
         return adjustmentForTextAutosizing;
 
     auto newStatus = AutosizeStatus::computeStatus(style);

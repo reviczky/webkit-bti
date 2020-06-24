@@ -1733,16 +1733,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 break;
             }
             break;
+
         case IsConstructor:
             // FIXME: We can speculate constructability from child's m_structure.
             // https://bugs.webkit.org/show_bug.cgi?id=211796
-            if (!(child.m_type & (SpecFunction | SpecProxyObject))) {
-                setConstant(node, jsBoolean(false));
-                constantWasSet = true;
-                break;
-            }
-
             break;
+
         case IsCellWithType: {
             Optional<SpeculatedType> filter = node->speculatedTypeForQuery();
             if (!filter) {
@@ -2707,7 +2703,10 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         JSValue childConst = forNode(node->child1()).value();
         if (childConst && (childConst.isNumber() || childConst.isBigInt())) {
             didFoldClobberWorld();
-            setConstant(node, childConst);
+            if (childConst.isCell())
+                setConstant(node, *m_graph.freeze(childConst.asCell()));
+            else
+                setConstant(node, childConst);
             break;
         }
 
@@ -3511,10 +3510,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             didFoldClobberStructures();
         clearForNode(node); // The result is not a JS value.
         break;
-    case CheckSubClass: {
+    case CheckJSCast: {
+        const ClassInfo* classInfo = node->classInfo();
         JSValue constant = forNode(node->child1()).value();
         if (constant) {
-            if (constant.isCell() && constant.asCell()->inherits(m_vm, node->classInfo())) {
+            if (constant.isCell() && constant.asCell()->inherits(m_vm, classInfo)) {
+                ASSERT(!classInfo->inheritsJSTypeRange || classInfo->inheritsJSTypeRange->contains(constant.asCell()->type()));
                 m_state.setShouldTryConstantFolding(true);
                 ASSERT(constant);
                 break;
@@ -3523,12 +3524,31 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
 
         AbstractValue& value = forNode(node->child1());
 
-        if (value.m_structure.isSubClassOf(node->classInfo()))
+        if (value.m_structure.isSubClassOf(classInfo))
             m_state.setShouldTryConstantFolding(true);
 
-        filterClassInfo(value, node->classInfo());
+        filterClassInfo(value, classInfo);
         break;
     }
+    case CheckNotJSCast: {
+        const ClassInfo* classInfo = node->classInfo();
+        JSValue constant = forNode(node->child1()).value();
+        if (constant) {
+            if (constant.isCell() && !constant.asCell()->inherits(m_vm, classInfo)) {
+                ASSERT(!classInfo->inheritsJSTypeRange || !classInfo->inheritsJSTypeRange->contains(constant.asCell()->type()));
+                m_state.setShouldTryConstantFolding(true);
+                ASSERT(constant);
+                break;
+            }
+        }
+
+        AbstractValue& value = forNode(node->child1());
+
+        if (value.m_structure.isNotSubClassOf(classInfo))
+            m_state.setShouldTryConstantFolding(true);
+        break;
+    }
+
     case CallDOMGetter: {
         CallDOMGetterData* callDOMGetterData = node->callDOMGetterData();
         DOMJIT::CallDOMGetterSnippet* snippet = callDOMGetterData->snippet;
@@ -3700,9 +3720,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             bool canFold = !value.m_structure.isClear();
             JSValue prototype;
             value.m_structure.forEach([&] (RegisteredStructure structure) {
-                auto getPrototypeMethod = structure->classInfo()->methodTable.getPrototype;
-                MethodTable::GetPrototypeFunctionPtr defaultGetPrototype = JSObject::getPrototype;
-                if (getPrototypeMethod != defaultGetPrototype) {
+                if (structure->typeInfo().overridesGetPrototype()) {
                     canFold = false;
                     return;
                 }
@@ -4114,6 +4132,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         clobberWorld();
         break;
     }
+    case InStructureProperty:
+    case HasOwnStructureProperty:
     case HasStructureProperty: {
         setNonCellTypeForNode(node, SpecBoolean);
         clobberWorld();
@@ -4280,7 +4300,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
 
     case ForceOSRExit:
-    case CheckBadCell:
+    case CheckBadValue:
         m_state.setIsValid(false);
         break;
         

@@ -545,6 +545,9 @@ static inline void setLogicalWidthForTextRun(RootInlineBox* lineBox, BidiRun* ru
     if (!measuredWidth)
         measuredWidth = renderer.width(run->m_start, run->m_stop - run->m_start, xPos, lineInfo.isFirstLine(), &fallbackFonts, &glyphOverflow);
 
+    ASSERT(measuredWidth >= 0);
+    ASSERT(hyphenWidth >= 0);
+
     run->box()->setLogicalWidth(measuredWidth + hyphenWidth);
     if (!fallbackFonts.isEmpty()) {
         ASSERT(run->box()->behavesLikeText());
@@ -2092,6 +2095,8 @@ void ComplexLineLayout::addOverflowFromInlineChildren()
 
     LayoutUnit endPadding = m_flow.hasOverflowClip() ? m_flow.paddingEnd() : 0_lu;
     // FIXME: Need to find another way to do this, since scrollbars could show when we don't want them to.
+    if (!endPadding)
+        endPadding = m_flow.endPaddingWidthForCaret();
     if (m_flow.hasOverflowClip() && !endPadding && m_flow.element() && m_flow.element()->isRootEditableElement() && style().isLeftToRightDirection())
         endPadding = 1;
     for (RootInlineBox* curr = firstRootBox(); curr; curr = curr->nextRootBox()) {

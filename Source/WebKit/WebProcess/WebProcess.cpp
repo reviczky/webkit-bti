@@ -83,6 +83,7 @@
 #include "WebsiteDataType.h"
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/MemoryStatistics.h>
+#include <JavaScriptCore/WasmFaultSignalHandler.h>
 #include <WebCore/AXObjectCache.h>
 #include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/AuthenticationChallenge.h>
@@ -125,6 +126,7 @@
 #include <WebCore/Settings.h>
 #include <WebCore/UserGestureIndicator.h>
 #include <wtf/Algorithms.h>
+#include <wtf/CallbackAggregator.h>
 #include <wtf/Language.h>
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
@@ -143,6 +145,10 @@
 #if PLATFORM(COCOA)
 #include "ObjCObjectGraph.h"
 #include "UserMediaCaptureManager.h"
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+#include "WebSQLiteDatabaseTracker.h"
 #endif
 
 #if ENABLE(SEC_ITEM_SHIM)
@@ -222,6 +228,9 @@ WebProcess::WebProcess()
     , m_pluginProcessConnectionManager(PluginProcessConnectionManager::create())
 #endif
     , m_nonVisibleProcessCleanupTimer(*this, &WebProcess::nonVisibleProcessCleanupTimerFired)
+#if PLATFORM(IOS_FAMILY)
+    , m_webSQLiteDatabaseTracker([this](bool isHoldingLockedFiles) { parentProcessConnection()->send(Messages::WebProcessProxy::SetIsHoldingLockedFiles(isHoldingLockedFiles), 0); })
+#endif
 {
     // Initialize our platform strategies.
     WebPlatformStrategies::initialize();
@@ -382,8 +391,8 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 
     setCacheModel(parameters.cacheModel);
 
-    if (!parameters.languages.isEmpty())
-        overrideUserPreferredLanguages(parameters.languages);
+    if (!parameters.overrideLanguages.isEmpty())
+        overrideUserPreferredLanguages(parameters.overrideLanguages);
 
     m_textCheckerState = parameters.textCheckerState;
 
@@ -465,6 +474,10 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     ServiceWorkerProvider::setSharedProvider(WebServiceWorkerProvider::singleton());
 #endif
 
+#if ENABLE(WEBASSEMBLY)
+    JSC::Wasm::enableFastMemory();
+#endif
+
 #if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     WebResourceLoadObserver::setShouldLogUserInteraction(parameters.shouldLogUserInteraction);
 #endif
@@ -495,8 +508,12 @@ void WebProcess::setWebsiteDataStoreParameters(WebProcessDataStoreParameters&& p
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     m_thirdPartyCookieBlockingMode = parameters.thirdPartyCookieBlockingMode;
-    if (parameters.resourceLoadStatisticsEnabled && !ResourceLoadObserver::sharedIfExists())
-        ResourceLoadObserver::setShared(*new WebResourceLoadObserver(parameters.sessionID.isEphemeral() ? WebCore::ResourceLoadStatistics::IsEphemeral::Yes : WebCore::ResourceLoadStatistics::IsEphemeral::No));
+    if (parameters.resourceLoadStatisticsEnabled) {
+        if (!ResourceLoadObserver::sharedIfExists())
+            ResourceLoadObserver::setShared(*new WebResourceLoadObserver(parameters.sessionID.isEphemeral() ? WebCore::ResourceLoadStatistics::IsEphemeral::Yes : WebCore::ResourceLoadStatistics::IsEphemeral::No));
+        ResourceLoadObserver::shared().setDomainsWithUserInteraction(WTFMove(parameters.domainsWithUserInteraction));
+    }
+    
 #endif
 
     resetPlugInAutoStartOriginHashes(WTFMove(parameters.plugInAutoStartOriginHashes));
@@ -632,9 +649,9 @@ void WebProcess::setShouldUseFontSmoothing(bool useFontSmoothing)
     WebCore::FontCascade::setShouldUseSmoothing(useFontSmoothing);
 }
 
-void WebProcess::userPreferredLanguagesChanged(const Vector<String>& languages) const
+void WebProcess::userPreferredLanguagesChanged() const
 {
-    overrideUserPreferredLanguages(languages);
+    WTF::languageDidChange();
 }
 
 void WebProcess::fullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled)
@@ -965,14 +982,14 @@ void WebProcess::plugInDidReceiveUserInteraction(const String& pageOrigin, const
     parentProcessConnection()->send(Messages::WebProcessProxy::PlugInDidReceiveUserInteraction(plugInOriginHash), 0);
 }
 
-void WebProcess::setPluginLoadClientPolicy(uint8_t policy, const String& host, const String& bundleIdentifier, const String& versionString)
+void WebProcess::setPluginLoadClientPolicy(WebCore::PluginLoadClientPolicy policy, const String& host, const String& bundleIdentifier, const String& versionString)
 {
 #if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
-    WebPluginInfoProvider::singleton().setPluginLoadClientPolicy(static_cast<PluginLoadClientPolicy>(policy), host, bundleIdentifier, versionString);
+    WebPluginInfoProvider::singleton().setPluginLoadClientPolicy(policy, host, bundleIdentifier, versionString);
 #endif
 }
 
-void WebProcess::resetPluginLoadClientPolicies(const HashMap<WTF::String, HashMap<WTF::String, HashMap<WTF::String, uint8_t>>>& pluginLoadClientPolicies)
+void WebProcess::resetPluginLoadClientPolicies(const HashMap<WTF::String, HashMap<WTF::String, HashMap<WTF::String, WebCore::PluginLoadClientPolicy>>>& pluginLoadClientPolicies)
 {
 #if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
     clearPluginClientPolicies();
@@ -980,7 +997,7 @@ void WebProcess::resetPluginLoadClientPolicies(const HashMap<WTF::String, HashMa
     for (auto& hostPair : pluginLoadClientPolicies) {
         for (auto& bundleIdentifierPair : hostPair.value) {
             for (auto& versionPair : bundleIdentifierPair.value)
-                WebPluginInfoProvider::singleton().setPluginLoadClientPolicy(static_cast<PluginLoadClientPolicy>(versionPair.value), hostPair.key, bundleIdentifierPair.key, versionPair.key);
+                WebPluginInfoProvider::singleton().setPluginLoadClientPolicy(versionPair.value, hostPair.key, bundleIdentifierPair.key, versionPair.key);
         }
     }
 #endif
@@ -988,7 +1005,7 @@ void WebProcess::resetPluginLoadClientPolicies(const HashMap<WTF::String, HashMa
 
 void WebProcess::isJITEnabled(CompletionHandler<void(bool)>&& completionHandler)
 {
-    completionHandler(JSC::VM::canUseJIT());
+    completionHandler(JSC::Options::useJIT());
 }
 
 void WebProcess::clearPluginClientPolicies()
@@ -1423,6 +1440,7 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, CompletionHandler<v
 #endif
 
 #if PLATFORM(IOS_FAMILY)
+    m_webSQLiteDatabaseTracker.setIsSuspended(true);
     SQLiteDatabase::setIsDatabaseOpeningForbidden(true);
     if (DatabaseTracker::isInitialized())
         DatabaseTracker::singleton().closeAllDatabases(CurrentQueryBehavior::Interrupt);
@@ -1430,44 +1448,29 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, CompletionHandler<v
     updateFreezerStatus();
 #endif
 
-    markAllLayersVolatile([this, completionHandler = WTFMove(completionHandler)](bool success) mutable {
-        if (success)
-            RELEASE_LOG_IF_ALLOWED(ProcessSuspension, "markAllLayersVolatile: Successfuly marked all layers as volatile");
-        else
-            RELEASE_LOG_IF_ALLOWED(ProcessSuspension, "markAllLayersVolatile: Failed to mark all layers as volatile");
-
+    markAllLayersVolatile([this, completionHandler = WTFMove(completionHandler)]() mutable {
         RELEASE_LOG_IF_ALLOWED(ProcessSuspension, "prepareToSuspend: Process is ready to suspend");
         completionHandler();
     });
 }
 
-void WebProcess::markAllLayersVolatile(WTF::Function<void(bool)>&& completionHandler)
+void WebProcess::markAllLayersVolatile(CompletionHandler<void()>&& completionHandler)
 {
     RELEASE_LOG_IF_ALLOWED(ProcessSuspension, "markAllLayersVolatile:");
-    ASSERT(!m_pageMarkingLayersAsVolatileCounter);
-    m_countOfPagesFailingToMarkVolatile = 0;
-
-    m_pageMarkingLayersAsVolatileCounter = makeUnique<PageMarkingLayersAsVolatileCounter>([this, completionHandler = WTFMove(completionHandler)] (RefCounterEvent) {
-        if (m_pageMarkingLayersAsVolatileCounter->value())
-            return;
-
-        completionHandler(m_countOfPagesFailingToMarkVolatile == 0);
-        m_pageMarkingLayersAsVolatileCounter = nullptr;
-    });
-    auto token = m_pageMarkingLayersAsVolatileCounter->count();
-    for (auto& page : m_pageMap.values())
-        page->markLayersVolatile([token, this] (bool succeeded) {
-            if (!succeeded)
-                ++m_countOfPagesFailingToMarkVolatile;
+    auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
+    for (auto& page : m_pageMap.values()) {
+        page->markLayersVolatile([this, callbackAggregator, pageID = page->identifier()] (bool succeeded) {
+            if (succeeded)
+                RELEASE_LOG_IF_ALLOWED(ProcessSuspension, "markAllLayersVolatile: Successfuly marked layers as volatile for webPageID=%" PRIu64, pageID.toUInt64());
+            else
+                RELEASE_LOG_ERROR_IF_ALLOWED(ProcessSuspension, "markAllLayersVolatile: Failed to mark layers as volatile for webPageID=%" PRIu64, pageID.toUInt64());
         });
+    }
 }
 
 void WebProcess::cancelMarkAllLayersVolatile()
 {
-    if (!m_pageMarkingLayersAsVolatileCounter)
-        return;
-
-    m_pageMarkingLayersAsVolatileCounter = nullptr;
+    RELEASE_LOG_IF_ALLOWED(ProcessSuspension, "cancelMarkAllLayersVolatile:");
     for (auto& page : m_pageMap.values())
         page->cancelMarkLayersVolatile();
 }
@@ -1501,6 +1504,7 @@ void WebProcess::processDidResume()
     unfreezeAllLayerTrees();
     
 #if PLATFORM(IOS_FAMILY)
+    m_webSQLiteDatabaseTracker.setIsSuspended(false);
     SQLiteDatabase::setIsDatabaseOpeningForbidden(false);
     accessibilityProcessSuspendedNotification(false);
 #endif
@@ -1894,6 +1898,11 @@ void WebProcess::setThirdPartyCookieBlockingMode(ThirdPartyCookieBlockingMode th
 {
     m_thirdPartyCookieBlockingMode = thirdPartyCookieBlockingMode;
     completionHandler();
+}
+
+void WebProcess::setDomainsWithUserInteraction(HashSet<WebCore::RegistrableDomain>&& domains)
+{
+    ResourceLoadObserver::shared().setDomainsWithUserInteraction(WTFMove(domains));
 }
 #endif
 

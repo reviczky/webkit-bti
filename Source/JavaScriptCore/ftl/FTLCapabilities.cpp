@@ -159,7 +159,7 @@ inline CapabilityLevel canCompile(Node* node)
     case InvalidationPoint:
     case StringCharAt:
     case CheckIsConstant:
-    case CheckBadCell:
+    case CheckBadValue:
     case CheckNotEmpty:
     case AssertNotEmpty:
     case CheckIdent:
@@ -280,6 +280,8 @@ inline CapabilityLevel canCompile(Node* node)
     case BooleanToNumber:
     case HasGenericProperty:
     case HasStructureProperty:
+    case HasOwnStructureProperty:
+    case InStructureProperty:
     case HasIndexedProperty:
     case GetDirectPname:
     case GetEnumerableLength:
@@ -362,7 +364,8 @@ inline CapabilityLevel canCompile(Node* node)
     case ToLowerCase:
     case NumberToStringWithRadix:
     case NumberToStringWithValidRadixConstant:
-    case CheckSubClass:
+    case CheckJSCast:
+    case CheckNotJSCast:
     case CallDOM:
     case CallDOMGetter:
     case ArraySlice:

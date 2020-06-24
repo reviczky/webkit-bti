@@ -187,8 +187,6 @@ void RealtimeMediaSource::updateHasStartedProducingData()
 
 void RealtimeMediaSource::videoSampleAvailable(MediaSample& mediaSample)
 {
-    // FIXME: Migrate RealtimeMediaSource clients to non main thread processing.
-    ASSERT(isMainThread());
 #if !RELEASE_LOG_DISABLED
     ++m_frameCount;
 
@@ -250,15 +248,24 @@ void RealtimeMediaSource::stop()
 
 void RealtimeMediaSource::requestToEnd(Observer& callingObserver)
 {
-    if (!m_isProducingData)
-        return;
-
     bool hasObserverPreventingStopping = false;
     forEachObserver([&](auto& observer) {
         if (observer.preventSourceFromStopping())
             hasObserverPreventingStopping = true;
     });
     if (hasObserverPreventingStopping)
+        return;
+
+    end(&callingObserver);
+}
+
+void RealtimeMediaSource::end(Observer* callingObserver)
+{
+    ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER);
+
+    ASSERT(isMainThread());
+
+    if (m_isEnded)
         return;
 
     auto protectedThis = makeRef(*this);
@@ -268,7 +275,7 @@ void RealtimeMediaSource::requestToEnd(Observer& callingObserver)
     hasEnded();
 
     forEachObserver([&callingObserver](auto& observer) {
-        if (&observer != &callingObserver)
+        if (&observer != callingObserver)
             observer.sourceStopped();
     });
 }
@@ -966,8 +973,11 @@ void RealtimeMediaSource::setIntrinsicSize(const IntSize& size)
     auto currentSize = this->size();
     m_intrinsicSize = size;
 
-    if (currentSize != this->size())
-        notifySettingsDidChangeObservers({ RealtimeMediaSourceSettings::Flag::Width, RealtimeMediaSourceSettings::Flag::Height });
+    if (currentSize != this->size()) {
+        scheduleDeferredTask([this] {
+            notifySettingsDidChangeObservers({ RealtimeMediaSourceSettings::Flag::Width, RealtimeMediaSourceSettings::Flag::Height });
+        });
+    }
 }
 
 const IntSize RealtimeMediaSource::intrinsicSize() const
