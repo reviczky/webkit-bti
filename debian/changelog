@@ -1,3 +1,11 @@
+webkit2gtk (2.28.2-3) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    + Remove disabling of openjpeg on Ubuntu, it's in main now (thanks,
+      Sebastien Bacher)
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 07 Jul 2020 16:33:35 +0200
+
 webkit2gtk (2.28.2-2) unstable; urgency=high
 
   * debian/patches/dont-fallback-to-libwpe.patch:

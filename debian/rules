@@ -78,9 +78,8 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
 endif
 
-# openjpeg2 is not in Ubuntu main yet https://launchpad.net/bugs/711061
+# set the distributor agent for Ubuntu
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_OPENJPEG=OFF
 	CPPFLAGS += -DUSER_AGENT_GTK_DISTRIBUTOR_NAME='"Ubuntu"'
 endif
 
