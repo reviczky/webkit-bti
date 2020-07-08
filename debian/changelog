@@ -4,6 +4,8 @@ webkit2gtk (2.29.3-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Remove disabling of openjpeg on Ubuntu, it's in main now (thanks,
       Sebastien Bacher)
+  * debian/copyright:
+    + Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 07 Jul 2020 16:41:43 +0200
 
