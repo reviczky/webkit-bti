@@ -58,8 +58,7 @@ using RunLoopMode = unsigned;
 class RunLoop final : public FunctionDispatcher {
     WTF_MAKE_NONCOPYABLE(RunLoop);
 public:
-    // Must be called from the main thread (except for the Mac platform, where it
-    // can be called from any thread).
+    // Must be called from the main thread.
     WTF_EXPORT_PRIVATE static void initializeMain();
 #if USE(WEB_THREAD)
     WTF_EXPORT_PRIVATE static void initializeWeb();
@@ -209,8 +208,11 @@ private:
 
     void performWork();
 
-    Lock m_functionQueueLock;
-    Deque<Function<void()>> m_functionQueue;
+    Deque<Function<void()>> m_currentIteration;
+
+    Lock m_nextIterationLock;
+    Deque<Function<void()>> m_nextIteration;
+
     bool m_isFunctionDispatchSuspended { false };
     bool m_hasSuspendedFunctions { false };
 

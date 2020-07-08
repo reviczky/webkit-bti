@@ -726,8 +726,8 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     WebCore::setAdditionalSupportedImageTypes(parameters.additionalSupportedImageTypes);
 #endif
 
-#if ENABLE(TINT_COLOR_SUPPORT)
-    setTintColor(parameters.tintColor);
+#if HAVE(APP_ACCENT_COLORS)
+    setAccentColor(parameters.accentColor);
 #endif
 
     m_needsFontAttributes = parameters.needsFontAttributes;
@@ -772,6 +772,9 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     RELEASE_LOG_IF_ALLOWED(Process, "WebPage: Created context with ID %d for visibility propagation from UIProcess", m_contextForVisibilityPropagation->contextID());
     send(Messages::WebPageProxy::DidCreateContextForVisibilityPropagation(m_contextForVisibilityPropagation->contextID()));
 #endif
+
+    if (parameters.shouldEnableVP9Decoder)
+        WebProcess::singleton().enableVP9Decoder();
 
     updateThrottleState();
 }
@@ -1534,7 +1537,7 @@ void WebPage::platformDidReceiveLoadParameters(const LoadParameters& loadParamet
 
 void WebPage::loadRequest(LoadParameters&& loadParameters)
 {
-    setIsNavigatingToAppBoundDomain(loadParameters.isNavigatingToAppBoundDomain);
+    setIsNavigatingToAppBoundDomain(loadParameters.isNavigatingToAppBoundDomain, &m_mainFrame.get());
 
     SendStopResponsivenessTimer stopper;
 
@@ -1572,7 +1575,7 @@ NO_RETURN void WebPage::loadRequestWaitingForProcessLaunch(LoadParameters&&, URL
 
 void WebPage::loadDataImpl(uint64_t navigationID, bool shouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& websitePolicies, Ref<SharedBuffer>&& sharedBuffer, const String& MIMEType, const String& encodingName, const URL& baseURL, const URL& unreachableURL, const UserData& userData, Optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy)
 {
-    setIsNavigatingToAppBoundDomain(isNavigatingToAppBoundDomain);
+    setIsNavigatingToAppBoundDomain(isNavigatingToAppBoundDomain, &m_mainFrame.get());
 
     SendStopResponsivenessTimer stopper;
 
@@ -2406,7 +2409,7 @@ void WebPage::paintSnapshotAtSize(const IntRect& rect, const IntSize& bitmapSize
 
     if (options & SnapshotOptionsPaintSelectionRectangle) {
         FloatRect selectionRectangle = frame.selection().selectionBounds();
-        graphicsContext.setStrokeColor(makeSimpleColor(0xFF, 0, 0));
+        graphicsContext.setStrokeColor(makeSimpleColor(255, 0, 0));
         graphicsContext.strokeRect(selectionRectangle, 1);
     }
 }
@@ -3284,11 +3287,11 @@ void WebPage::setLayerHostingMode(LayerHostingMode layerHostingMode)
 
 void WebPage::didReceivePolicyDecision(FrameIdentifier frameID, uint64_t listenerID, PolicyDecision&& policyDecision)
 {
-    setIsNavigatingToAppBoundDomain(policyDecision.isNavigatingToAppBoundDomain);
-
     WebFrame* frame = WebProcess::singleton().webFrame(frameID);
     if (!frame)
         return;
+
+    setIsNavigatingToAppBoundDomain(policyDecision.isNavigatingToAppBoundDomain, frame);
     frame->didReceivePolicyDecision(listenerID, WTFMove(policyDecision));
 }
 
@@ -3430,7 +3433,7 @@ void WebPage::runJavaScript(WebFrame* frame, RunJavaScriptParameters&& parameter
     // disappear during script execution.
 
     if (!frame || !frame->coreFrame()) {
-        send(Messages::WebPageProxy::ScriptValueCallback({ }, ExceptionDetails { "Unable to execute JavaScript: Page is in invalid state"_s }, callbackID));
+        send(Messages::WebPageProxy::ScriptValueCallback({ }, ExceptionDetails { "Unable to execute JavaScript: Target frame could not be found in the page"_s, 0, 0, ExceptionDetails::Type::InvalidTargetFrame }, callbackID));
         return;
     }
 
@@ -3457,8 +3460,8 @@ void WebPage::runJavaScript(WebFrame* frame, RunJavaScriptParameters&& parameter
 
         send(Messages::WebPageProxy::ScriptValueCallback(dataReference, details, callbackID));
     };
-    if (shouldEnableInAppBrowserPrivacyProtections()) {
-        send(Messages::WebPageProxy::ScriptValueCallback({ }, ExceptionDetails { "Unable to execute JavaScript"_s }, callbackID));
+    if (frame->shouldEnableInAppBrowserPrivacyProtections()) {
+        send(Messages::WebPageProxy::ScriptValueCallback({ }, ExceptionDetails { "Unable to execute JavaScript in a frame that is not in an app-bound domain"_s, 0, 0, ExceptionDetails::Type::AppBoundDomain }, callbackID));
         if (auto* document = m_page->mainFrame().document())
             document->addConsoleMessage(MessageSource::Security, MessageLevel::Warning, "Ignoring user script injection for non-app bound domain.");
         RELEASE_LOG_ERROR_IF_ALLOWED(Loading, "runJavaScript: Ignoring user script injection for non app-bound domain");
@@ -3728,7 +3731,8 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
         m_drawingArea->updatePreferences(store);
 
 #if USE(LIBWEBRTC)
-    m_page->libWebRTCProvider().supportsH265(RuntimeEnabledFeatures::sharedFeatures().webRTCH265CodecEnabled());
+    m_page->libWebRTCProvider().setH265Support(RuntimeEnabledFeatures::sharedFeatures().webRTCH265CodecEnabled());
+    m_page->libWebRTCProvider().setVP9Support(RuntimeEnabledFeatures::sharedFeatures().webRTCVP9CodecEnabled());
 #endif
 
 #if ENABLE(GPU_PROCESS)
@@ -4182,12 +4186,12 @@ void WebPage::setActiveOpenPanelResultListener(Ref<WebOpenPanelResultListener>&&
     m_activeOpenPanelResultListener = WTFMove(openPanelResultListener);
 }
 
-bool WebPage::findStringFromInjectedBundle(const String& target, FindOptions options)
+bool WebPage::findStringFromInjectedBundle(const String& target, OptionSet<FindOptions> options)
 {
     return m_page->findString(target, core(options));
 }
 
-void WebPage::findStringMatchesFromInjectedBundle(const String& target, FindOptions options)
+void WebPage::findStringMatchesFromInjectedBundle(const String& target, OptionSet<FindOptions> options)
 {
     findController().findStringMatches(target, options, 0);
 }
@@ -4197,14 +4201,14 @@ void WebPage::replaceStringMatchesFromInjectedBundle(const Vector<uint32_t>& mat
     findController().replaceMatches(matchIndices, replacementText, selectionOnly);
 }
 
-void WebPage::findString(const String& string, uint32_t options, uint32_t maxMatchCount, Optional<CallbackID> callbackID)
+void WebPage::findString(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount, CompletionHandler<void(bool)>&& completionHandler)
 {
-    findController().findString(string, static_cast<FindOptions>(options), maxMatchCount, callbackID);
+    findController().findString(string, options, maxMatchCount, WTFMove(completionHandler));
 }
 
-void WebPage::findStringMatches(const String& string, uint32_t options, uint32_t maxMatchCount)
+void WebPage::findStringMatches(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount)
 {
-    findController().findStringMatches(string, static_cast<FindOptions>(options), maxMatchCount);
+    findController().findStringMatches(string, options, maxMatchCount);
 }
 
 void WebPage::getImageForFindMatch(uint32_t matchIndex)
@@ -4227,9 +4231,9 @@ void WebPage::hideFindUI()
     findController().hideFindUI();
 }
 
-void WebPage::countStringMatches(const String& string, uint32_t options, uint32_t maxMatchCount)
+void WebPage::countStringMatches(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount)
 {
-    findController().countStringMatches(string, static_cast<FindOptions>(options), maxMatchCount);
+    findController().countStringMatches(string, options, maxMatchCount);
 }
 
 void WebPage::replaceMatches(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly, CallbackID callbackID)
@@ -4300,12 +4304,12 @@ void WebPage::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vector<St
 }
 #endif
 
-void WebPage::didChooseFilesForOpenPanel(const Vector<String>& files)
+void WebPage::didChooseFilesForOpenPanel(const Vector<String>& files, const Vector<String>& replacementFiles)
 {
     if (!m_activeOpenPanelResultListener)
         return;
 
-    m_activeOpenPanelResultListener->didChooseFiles(files);
+    m_activeOpenPanelResultListener->didChooseFiles(files, replacementFiles);
     m_activeOpenPanelResultListener = nullptr;
 }
 
@@ -5414,18 +5418,18 @@ void WebPage::hasMarkedText(CompletionHandler<void(bool)>&& completionHandler)
     completionHandler(m_page->focusController().focusedOrMainFrame().editor().hasComposition());
 }
 
-void WebPage::getMarkedRangeAsync(CallbackID callbackID)
+void WebPage::getMarkedRangeAsync(CompletionHandler<void(const EditingRange&)>&& completionHandler)
 {
     Frame& frame = m_page->focusController().focusedOrMainFrame();
     auto editingRange = EditingRange::fromRange(frame, frame.editor().compositionRange().get());
-    send(Messages::WebPageProxy::EditingRangeCallback(editingRange, callbackID));
+    completionHandler(editingRange);
 }
 
-void WebPage::getSelectedRangeAsync(CallbackID callbackID)
+void WebPage::getSelectedRangeAsync(CompletionHandler<void(const EditingRange&)>&& completionHandler)
 {
     Frame& frame = m_page->focusController().focusedOrMainFrame();
     auto editingRange = EditingRange::fromRange(frame, createLiveRange(frame.selection().selection().toNormalizedRange()).get());
-    send(Messages::WebPageProxy::EditingRangeCallback(editingRange, callbackID));
+    completionHandler(editingRange);
 }
 
 void WebPage::characterIndexForPointAsync(const WebCore::IntPoint& point, CallbackID callbackID)
@@ -6620,9 +6624,9 @@ void WebPage::setUserInterfaceLayoutDirection(uint32_t direction)
 
 #if ENABLE(GAMEPAD)
 
-void WebPage::gamepadActivity(const Vector<GamepadData>& gamepadDatas, bool shouldMakeGamepadsVisible)
+void WebPage::gamepadActivity(const Vector<GamepadData>& gamepadDatas, EventMakesGamepadsVisible eventVisibilty)
 {
-    WebGamepadProvider::singleton().gamepadActivity(gamepadDatas, shouldMakeGamepadsVisible);
+    WebGamepadProvider::singleton().gamepadActivity(gamepadDatas, eventVisibilty);
 }
 
 #endif
@@ -7161,9 +7165,9 @@ void WebPage::animationDidFinishForElement(const WebCore::Element&)
 
 #endif
 
-void WebPage::setIsNavigatingToAppBoundDomain(Optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain)
+void WebPage::setIsNavigatingToAppBoundDomain(Optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, WebFrame* frame)
 {
-    m_isNavigatingToAppBoundDomain = isNavigatingToAppBoundDomain;
+    frame->setIsNavigatingToAppBoundDomain(isNavigatingToAppBoundDomain);
     
     m_navigationHasOccured = true;
 }
@@ -7172,14 +7176,6 @@ void WebPage::notifyPageOfAppBoundBehavior()
 {
     if (!m_navigationHasOccured && !m_limitsNavigationsToAppBoundDomains)
         send(Messages::WebPageProxy::SetHasExecutedAppBoundBehaviorBeforeNavigation());
-}
-
-bool WebPage::shouldEnableInAppBrowserPrivacyProtections()
-{
-    if (m_needsInAppBrowserPrivacyQuirks)
-        return false;
-
-    return isNavigatingToAppBoundDomain() && isNavigatingToAppBoundDomain() == NavigatingToAppBoundDomain::No;
 }
 
 } // namespace WebKit

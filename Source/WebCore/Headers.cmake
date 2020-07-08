@@ -89,6 +89,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/mediasession/MediaSessionEvents.h
     Modules/mediasession/MediaSessionMetadata.h
+    Modules/mediasession/PlaybackTargetClientContextIdentifier.h
     Modules/mediasession/WebMediaSessionManager.h
     Modules/mediasession/WebMediaSessionManagerClient.h
 
@@ -664,6 +665,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     html/forms/FileIconLoader.h
 
+    html/parser/ParsingUtilities.h
     html/parser/HTMLParserIdioms.h
 
     html/track/AudioTrack.h
@@ -1081,8 +1083,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/BitmapImage.h
     platform/graphics/Color.h
     platform/graphics/ColorComponents.h
+    platform/graphics/ColorConversion.h
     platform/graphics/ColorHash.h
     platform/graphics/ColorMatrix.h
+    platform/graphics/ColorSerialization.h
     platform/graphics/ColorSpace.h
     platform/graphics/ColorTypes.h
     platform/graphics/ColorUtilities.h

@@ -57,7 +57,6 @@ set(TestWTF_SOURCES
     Tests/WTF/ListHashSet.cpp
     Tests/WTF/Lock.cpp
     Tests/WTF/Logger.cpp
-    Tests/WTF/MD5.cpp
     Tests/WTF/Markable.cpp
     Tests/WTF/MathExtras.cpp
     Tests/WTF/MediaTime.cpp
@@ -89,6 +88,7 @@ set(TestWTF_SOURCES
     Tests/WTF/StringHasher.cpp
     Tests/WTF/StringImpl.cpp
     Tests/WTF/StringOperators.cpp
+    Tests/WTF/StringParsingBuffer.cpp
     Tests/WTF/StringView.cpp
     Tests/WTF/SynchronizedFixedQueue.cpp
     Tests/WTF/TextBreakIterator.cpp

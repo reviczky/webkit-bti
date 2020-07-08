@@ -90,6 +90,14 @@
 </tr>
 <tr>
 <td class="function_type">
+<a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="returnvalue">WebKitSecurityOrigin</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitAuthenticationRequest.html#webkit-authentication-request-get-security-origin" title="webkit_authentication_request_get_security_origin ()">webkit_authentication_request_get_security_origin</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
@@ -451,6 +459,35 @@ webkit_authentication_request_get_port
 .</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-authentication-request-get-security-origin"></a><h3>webkit_authentication_request_get_security_origin ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="returnvalue">WebKitSecurityOrigin</span></a> *
+webkit_authentication_request_get_security_origin
+                               (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> that this authentication challenge is applicable to.</p>
+<div class="refsect3">
+<a name="webkit-authentication-request-get-security-origin.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>request</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-authentication-request-get-security-origin.returns"></a><h4>Returns</h4>
+<p>a newly created <a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a>. </p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
 </div>
 <hr>
 <div class="refsect2">

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  *
  * This library is free software; you can redistribute it and/or
@@ -31,6 +31,7 @@
 #include "LengthBox.h"
 #include "MediaProducer.h"
 #include "Pagination.h"
+#include "PlaybackTargetClientContextIdentifier.h"
 #include "RTCController.h"
 #include "Region.h"
 #include "RegistrableDomain.h"
@@ -654,18 +655,18 @@ public:
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
-    void addPlaybackTargetPickerClient(uint64_t);
-    void removePlaybackTargetPickerClient(uint64_t);
-    void showPlaybackTargetPicker(uint64_t, const IntPoint&, bool, RouteSharingPolicy, const String&);
-    void playbackTargetPickerClientStateDidChange(uint64_t, MediaProducer::MediaStateFlags);
+    void addPlaybackTargetPickerClient(PlaybackTargetClientContextIdentifier);
+    void removePlaybackTargetPickerClient(PlaybackTargetClientContextIdentifier);
+    void showPlaybackTargetPicker(PlaybackTargetClientContextIdentifier, const IntPoint&, bool, RouteSharingPolicy, const String&);
+    void playbackTargetPickerClientStateDidChange(PlaybackTargetClientContextIdentifier, MediaProducer::MediaStateFlags);
     WEBCORE_EXPORT void setMockMediaPlaybackTargetPickerEnabled(bool);
     WEBCORE_EXPORT void setMockMediaPlaybackTargetPickerState(const String&, MediaPlaybackTargetContext::State);
     WEBCORE_EXPORT void mockMediaPlaybackTargetPickerDismissPopup();
 
-    WEBCORE_EXPORT void setPlaybackTarget(uint64_t, Ref<MediaPlaybackTarget>&&);
-    WEBCORE_EXPORT void playbackTargetAvailabilityDidChange(uint64_t, bool);
-    WEBCORE_EXPORT void setShouldPlayToPlaybackTarget(uint64_t, bool);
-    WEBCORE_EXPORT void playbackTargetPickerWasDismissed(uint64_t);
+    WEBCORE_EXPORT void setPlaybackTarget(PlaybackTargetClientContextIdentifier, Ref<MediaPlaybackTarget>&&);
+    WEBCORE_EXPORT void playbackTargetAvailabilityDidChange(PlaybackTargetClientContextIdentifier, bool);
+    WEBCORE_EXPORT void setShouldPlayToPlaybackTarget(PlaybackTargetClientContextIdentifier, bool);
+    WEBCORE_EXPORT void playbackTargetPickerWasDismissed(PlaybackTargetClientContextIdentifier);
 #endif
 
     WEBCORE_EXPORT RefPtr<WheelEventTestMonitor> wheelEventTestMonitor() const;
@@ -740,6 +741,12 @@ public:
     PerformanceLogging& performanceLogging() const { return *m_performanceLogging; }
 
     void configureLoggingChannel(const String&, WTFLogChannelState, WTFLogLevel);
+
+#if ENABLE(EDITABLE_REGION)
+    bool shouldBuildEditableRegion() const;
+    bool isEditableRegionEnabled() const { return m_isEditableRegionEnabled; }
+    WEBCORE_EXPORT void setEditableRegionEnabled(bool = true);
+#endif
 
     WEBCORE_EXPORT Vector<Ref<Element>> editableElementsInRect(const FloatRect&) const;
 
@@ -1001,6 +1008,10 @@ private:
     bool m_inUpdateRendering { false };
     bool m_hasResourceLoadClient { false };
     bool m_delegatesScaling { false };
+
+#if ENABLE(EDITABLE_REGION)
+    bool m_isEditableRegionEnabled { false };
+#endif
 
     UserInterfaceLayoutDirection m_userInterfaceLayoutDirection { UserInterfaceLayoutDirection::LTR };
     

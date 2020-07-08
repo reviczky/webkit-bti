@@ -27,9 +27,10 @@
 
 #include "ColorComponents.h"
 #include "ColorSpace.h"
+#include "ColorTypes.h"
+#include "ColorUtilities.h"
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
-#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
@@ -47,15 +48,20 @@ public:
 
     WEBCORE_EXPORT unsigned hash() const;
 
-    WEBCORE_EXPORT String cssText() const;
-
     Ref<ExtendedColor> colorWithAlpha(float) const;
     Ref<ExtendedColor> invertedColorWithAlpha(float) const;
 
-    SRGBA<float> toSRGBALossy() const;
-
     bool isWhite() const;
     bool isBlack() const;
+
+    // This will convert non-sRGB colorspace colors into sRGB.
+    template<typename T> constexpr SRGBA<T> toSRGBALossy() const
+    {
+        if constexpr (std::is_same_v<T, float>)
+            return toSRGBAFloatComponentsLossy();
+        else if constexpr (std::is_same_v<T, uint8_t>)
+            return convertToComponentBytes(toSRGBAFloatComponentsLossy());
+    }
 
 private:
     ExtendedColor(float c1, float c2, float c3, float alpha, ColorSpace colorSpace)
@@ -63,6 +69,8 @@ private:
         , m_colorSpace(colorSpace)
     {
     }
+
+    WEBCORE_EXPORT SRGBA<float> toSRGBAFloatComponentsLossy() const;
 
     ColorComponents<float> m_components;
     ColorSpace m_colorSpace;

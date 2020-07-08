@@ -84,6 +84,9 @@ class PageGroup;
 class RegistrableDomain;
 class ResourceRequest;
 class UserGestureToken;
+
+enum class EventMakesGamepadsVisible : bool;
+
 struct BackForwardItemIdentifier;
 struct MessagePortIdentifier;
 struct MessageWithMessagePorts;
@@ -328,6 +331,8 @@ public:
     void setUseGPUProcessForMedia(bool);
 #endif
 
+    void enableVP9Decoder();
+
 private:
     WebProcess();
     ~WebProcess();
@@ -399,7 +404,7 @@ private:
 
 #if ENABLE(GAMEPAD)
     void setInitialGamepads(const Vector<GamepadData>&);
-    void gamepadConnected(const GamepadData&);
+    void gamepadConnected(const GamepadData&, WebCore::EventMakesGamepadsVisible);
     void gamepadDisconnected(unsigned index);
 #endif
 
@@ -639,6 +644,7 @@ private:
 #endif
 
     bool m_useGPUProcessForMedia { false };
+    bool m_vp9DecoderEnabled { false };
 };
 
 } // namespace WebKit
