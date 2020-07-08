@@ -27,6 +27,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_authentication_request_get_proposed_credential@Base 2.5.3
  webkit_authentication_request_get_realm@Base 2.5.3
  webkit_authentication_request_get_scheme@Base 2.5.3
+ webkit_authentication_request_get_security_origin@Base 2.29.3
  webkit_authentication_request_get_type@Base 2.5.3
  webkit_authentication_request_is_for_proxy@Base 2.5.3
  webkit_authentication_request_is_retry@Base 2.5.3
