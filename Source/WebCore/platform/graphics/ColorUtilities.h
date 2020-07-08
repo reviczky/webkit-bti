@@ -26,52 +26,69 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <math.h>
 
 namespace WebCore {
 
-template<typename> struct DisplayP3;
-template<typename> struct HSLA;
-template<typename> struct LinearDisplayP3;
-template<typename> struct LinearSRGBA;
 template<typename> struct SRGBA;
-
-// 0-1 components, result is clamped.
-float linearToRGBColorComponent(float);
-float rgbToLinearColorComponent(float);
-
-LinearSRGBA<float> toLinearSRGBA(const SRGBA<float>&);
-SRGBA<float> toSRGBA(const LinearSRGBA<float>&);
-
-LinearDisplayP3<float> toLinearDisplayP3(const DisplayP3<float>&);
-DisplayP3<float> toDisplayP3(const LinearDisplayP3<float>&);
-
-SRGBA<float> toSRGBA(const DisplayP3<float>&);
-DisplayP3<float> toDisplayP3(const SRGBA<float>&);
-
-WEBCORE_EXPORT HSLA<float> toHSLA(const SRGBA<float>&);
-WEBCORE_EXPORT SRGBA<float> toSRGBA(const HSLA<float>&);
 
 float lightness(const SRGBA<float>&);
 float luminance(const SRGBA<float>&);
-
 float contrastRatio(const SRGBA<float>&, const SRGBA<float>&);
 
 SRGBA<float> premultiplied(const SRGBA<float>&);
+SRGBA<float> unpremultiplied(const SRGBA<float>&);
+
+SRGBA<uint8_t> premultipliedFlooring(SRGBA<uint8_t>);
+SRGBA<uint8_t> premultipliedCeiling(SRGBA<uint8_t>);
+SRGBA<uint8_t> unpremultiplied(SRGBA<uint8_t>);
 
 inline uint8_t convertPrescaledToComponentByte(float f)
 {
-    return std::clamp(static_cast<int>(std::lroundf(f)), 0, 255);
+    return std::clamp(std::lround(f), 0l, 255l);
 }
 
 inline uint8_t convertToComponentByte(float f)
 {
-    return std::clamp(static_cast<int>(std::lroundf(f * 255.0f)), 0, 255);
+    return std::clamp(std::lround(f * 255.0f), 0l, 255l);
+}
+
+constexpr uint8_t clampToComponentByte(int c)
+{
+    return static_cast<uint8_t>(std::clamp(c, 0, 0xFF));
+}
+
+constexpr uint8_t clampToComponentFloat(float f)
+{
+    return std::clamp(f, 0.0f, 1.0f);
 }
 
 constexpr float convertToComponentFloat(uint8_t byte)
 {
     return byte / 255.0f;
+}
+
+template<template<typename> typename ColorType> inline ColorType<uint8_t> convertToComponentBytes(const ColorType<float>& color)
+{
+    auto components = asColorComponents(color);
+    return { convertToComponentByte(components[0]), convertToComponentByte(components[1]), convertToComponentByte(components[2]), convertToComponentByte(components[3]) };
+}
+
+template<template<typename> typename ColorType> constexpr ColorType<float> convertToComponentFloats(const ColorType<uint8_t>& color)
+{
+    auto components = asColorComponents(color);
+    return { convertToComponentFloat(components[0]), convertToComponentFloat(components[1]), convertToComponentFloat(components[2]), convertToComponentFloat(components[3]) };
+}
+
+template<template<typename> typename ColorType> constexpr ColorType<uint8_t> clampToComponentBytes(int r, int g, int b, int a)
+{
+    return { clampToComponentByte(r), clampToComponentByte(g), clampToComponentByte(b), clampToComponentByte(a) };
+}
+
+template<template<typename> typename ColorType> constexpr ColorType<float> clampToComponentFloats(float r, float g, float b, float a)
+{
+    return { clampToComponentFloat(r), clampToComponentFloat(g), clampToComponentFloat(b), clampToComponentFloat(a) };
 }
 
 constexpr uint16_t fastMultiplyBy255(uint16_t value)

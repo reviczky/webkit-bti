@@ -35,6 +35,7 @@
 #include "CachedResourceLoader.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "ColorBlending.h"
 #include "DOMWindow.h"
 #include "DebugPageOverlays.h"
 #include "DeprecatedGlobalSettings.h"
@@ -933,19 +934,19 @@ bool FrameView::isScrollSnapInProgress() const
 {
     if (scrollbarsSuppressed())
         return false;
-    
+
     // If the scrolling thread updates the scroll position for this FrameView, then we should return
     // ScrollingCoordinator::isScrollSnapInProgress().
     if (auto scrollingCoordinator = this->scrollingCoordinator()) {
-        if (!scrollingCoordinator->shouldUpdateScrollLayerPositionSynchronously(*this))
-            return scrollingCoordinator->isScrollSnapInProgress();
+        if (scrollingCoordinator->isScrollSnapInProgress(scrollingNodeID()))
+            return true;
     }
-    
+
     // If the main thread updates the scroll position for this FrameView, we should return
     // ScrollAnimator::isScrollSnapInProgress().
     if (ScrollAnimator* scrollAnimator = existingScrollAnimator())
         return scrollAnimator->isScrollSnapInProgress();
-    
+
     return false;
 }
 
@@ -2180,11 +2181,8 @@ bool FrameView::scrollToFragment(const URL& url)
     if (scrollToFragmentInternal(fragmentIdentifier.toString()))
         return true;
 
-    // Try again after decoding the ref, based on the document's encoding.
-    if (TextResourceDecoder* decoder = frame().document()->decoder()) {
-        if (scrollToFragmentInternal(decodeURLEscapeSequences(fragmentIdentifier, decoder->encoding())))
-            return true;
-    }
+    if (scrollToFragmentInternal(decodeURLEscapeSequences(fragmentIdentifier)))
+        return true;
 
     resetScrollAnchor();
     return false;
@@ -4037,11 +4035,11 @@ Color FrameView::documentBackgroundColor() const
     if (!bodyBackgroundColor.isValid()) {
         if (!htmlBackgroundColor.isValid())
             return Color();
-        return baseBackgroundColor().blend(htmlBackgroundColor);
+        return blendSourceOver(baseBackgroundColor(), htmlBackgroundColor);
     }
 
     if (!htmlBackgroundColor.isValid())
-        return baseBackgroundColor().blend(bodyBackgroundColor);
+        return blendSourceOver(baseBackgroundColor(), bodyBackgroundColor);
 
     // We take the aggregate of the base background color
     // the <html> background color, and the <body>
@@ -4050,7 +4048,7 @@ Color FrameView::documentBackgroundColor() const
     // technically part of the document background, but it
     // otherwise poses problems when the aggregate is not
     // fully opaque.
-    return baseBackgroundColor().blend(htmlBackgroundColor).blend(bodyBackgroundColor);
+    return blendSourceOver(blendSourceOver(baseBackgroundColor(), htmlBackgroundColor), bodyBackgroundColor);
 }
 
 bool FrameView::hasCustomScrollbars() const

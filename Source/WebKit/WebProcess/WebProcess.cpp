@@ -1049,9 +1049,9 @@ void WebProcess::setInitialGamepads(const Vector<WebKit::GamepadData>& gamepadDa
     WebGamepadProvider::singleton().setInitialGamepads(gamepadDatas);
 }
 
-void WebProcess::gamepadConnected(const GamepadData& gamepadData)
+void WebProcess::gamepadConnected(const GamepadData& gamepadData, WebCore::EventMakesGamepadsVisible eventVisibility)
 {
-    WebGamepadProvider::singleton().gamepadConnected(gamepadData);
+    WebGamepadProvider::singleton().gamepadConnected(gamepadData, eventVisibility);
 }
 
 void WebProcess::gamepadDisconnected(unsigned index)
@@ -1946,6 +1946,15 @@ void WebProcess::setUseGPUProcessForMedia(bool useGPUProcessForMedia)
 #endif
 }
 #endif
+
+void WebProcess::enableVP9Decoder()
+{
+    if (m_vp9DecoderEnabled)
+        return;
+
+    m_vp9DecoderEnabled = true;
+    LibWebRTCProvider::registerWebKitVP9Decoder();
+}
 
 } // namespace WebKit
 

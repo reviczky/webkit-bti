@@ -108,15 +108,6 @@ public:
             m_colorData.extendedColor->deref();
     }
 
-    // Returns the color serialized according to HTML5
-    // <https://html.spec.whatwg.org/multipage/scripting.html#fill-and-stroke-styles> (10 September 2015)
-    WEBCORE_EXPORT String serialized() const;
-
-    WEBCORE_EXPORT String cssText() const;
-
-    // Returns the color serialized as either #RRGGBB or #RRGGBBAA
-    String nameForRenderTreeAsText() const;
-
     bool isValid() const { return isExtended() || (m_colorData.simpleColorAndFlags & validSimpleColorBit); }
 
     bool isOpaque() const { return isExtended() ? asExtended().alpha() == 1.0 : asSimple().isOpaque(); }
@@ -130,10 +121,7 @@ public:
     WEBCORE_EXPORT std::pair<ColorSpace, ColorComponents<float>> colorSpaceAndComponents() const;
 
     // This will convert non-sRGB colorspace colors into sRGB.
-    WEBCORE_EXPORT SimpleColor toSRGBASimpleColorLossy() const;
-
-    // This will convert non-sRGB colorspace colors into sRGB.
-    WEBCORE_EXPORT SRGBA<float> toSRGBALossy() const;
+    template<typename T> SRGBA<T> toSRGBALossy() const;
 
     WEBCORE_EXPORT Color lightened() const;
     WEBCORE_EXPORT Color darkened() const;
@@ -141,12 +129,7 @@ public:
     WEBCORE_EXPORT float luminance() const;
 
     // FIXME: Replace remaining uses with luminance.
-    WEBCORE_EXPORT bool isDark() const;
     WEBCORE_EXPORT float lightness() const;
-
-    // This is an implementation of Porter-Duff's "source-over" equation
-    Color blend(const Color&) const;
-    Color blendWithWhite() const;
 
     Color invertedColorWithAlpha(Optional<float> alpha) const;
     Color invertedColorWithAlpha(float alpha) const;
@@ -180,14 +163,14 @@ public:
     WEBCORE_EXPORT operator D2D1_VECTOR_4F() const;
 #endif
 
-    static constexpr SimpleColor black { 0xFF000000 };
-    static constexpr SimpleColor white { 0xFFFFFFFF };
-    static constexpr SimpleColor darkGray { 0xFF808080 };
-    static constexpr SimpleColor gray { 0xFFA0A0A0 };
-    static constexpr SimpleColor lightGray { 0xFFC0C0C0 };
-    static constexpr SimpleColor transparent { 0x00000000 };
-    static constexpr SimpleColor cyan { 0xFF00FFFF };
-    static constexpr SimpleColor yellow { 0xFFFFFF00 };
+    static constexpr auto black = makeSimpleColor(0, 0, 0);
+    static constexpr auto white = makeSimpleColor(255, 255, 255);
+    static constexpr auto darkGray = makeSimpleColor(128, 128, 128);
+    static constexpr auto gray = makeSimpleColor(160, 160, 160);
+    static constexpr auto lightGray = makeSimpleColor(192, 192, 192);
+    static constexpr auto transparent = makeSimpleColor(0, 0, 0, 0);
+    static constexpr auto cyan = makeSimpleColor(0, 255, 255);
+    static constexpr auto yellow = makeSimpleColor(255, 255, 0);
 
     bool isExtended() const { return !(m_colorData.simpleColorAndFlags & invalidSimpleColor); }
     bool isSimple() const { return !isExtended(); }
@@ -239,9 +222,6 @@ bool operator!=(const Color&, const Color&);
 // One or both must be extended colors.
 bool extendedColorsEqual(const Color&, const Color&);
 
-Color blend(const Color& from, const Color& to, double progress);
-Color blendWithoutPremultiply(const Color& from, const Color& to, double progress);
-
 #if USE(CG)
 WEBCORE_EXPORT CGColorRef cachedCGColor(const Color&);
 #endif
@@ -285,6 +265,13 @@ inline unsigned Color::hash() const
     return WTF::intHash(m_colorData.simpleColorAndFlags);
 }
 
+template<typename T> SRGBA<T> Color::toSRGBALossy() const
+{
+    if (isExtended())
+        return asExtended().toSRGBALossy<T>();
+    return asSimple().asSRGBA<T>();
+}
+
 inline Color Color::invertedColorWithAlpha(Optional<float> alpha) const
 {
     return alpha ? invertedColorWithAlpha(alpha.value()) : *this;
@@ -314,12 +301,12 @@ inline const ExtendedColor& Color::asExtended() const
 inline const SimpleColor Color::asSimple() const
 {
     ASSERT(isSimple());
-    return { static_cast<uint32_t>(m_colorData.simpleColorAndFlags >> 32) };
+    return makeSimpleColor(asSRGBA(Packed::RGBA { static_cast<uint32_t>(m_colorData.simpleColorAndFlags >> 32) }));
 }
 
 inline void Color::setSimpleColor(SimpleColor simpleColor)
 {
-    m_colorData.simpleColorAndFlags = static_cast<uint64_t>(simpleColor.value()) << 32;
+    m_colorData.simpleColorAndFlags = static_cast<uint64_t>(Packed::RGBA { simpleColor.asSRGBA<uint8_t>() }.value) << 32;
     tagAsValid();
 }
 
@@ -363,7 +350,7 @@ void Color::encode(Encoder& encoder) const
     // FIXME: This should encode whether the color is semantic.
 
     encoder << true;
-    encoder << asSimple().value();
+    encoder << Packed::RGBA { asSimple().asSRGBA<uint8_t>() }.value;
 }
 
 template<class Decoder>
@@ -403,7 +390,7 @@ Optional<Color> Color::decode(Decoder& decoder)
     if (!decoder.decode(value))
         return WTF::nullopt;
 
-    return Color { SimpleColor { value } };
+    return Color { makeSimpleColor(asSRGBA(Packed::RGBA { value })) };
 }
 
 } // namespace WebCore

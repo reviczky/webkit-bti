@@ -3143,31 +3143,34 @@ static bool shouldTreatURLProtocolAsAppBound(const URL& requestURL)
 bool WebPageProxy::setIsNavigatingToAppBoundDomainAndCheckIfPermitted(bool isMainFrame, const URL& requestURL, Optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain)
 {
 #if PLATFORM(IOS_FAMILY)
-    if (isMainFrame) {
-        if (WEB_PAGE_PROXY_ADDITIONS_SETISNAVIGATINGTOAPPBOUNDDOMAIN)
-            return true;
-        if (!isNavigatingToAppBoundDomain) {
-            m_isNavigatingToAppBoundDomain = WTF::nullopt;
-            return true;
-        }
-        if (m_ignoresAppBoundDomains)
-            return true;
-        
-        if (shouldTreatURLProtocolAsAppBound(requestURL)) {
-            isNavigatingToAppBoundDomain = NavigatingToAppBoundDomain::Yes;
-            m_limitsNavigationsToAppBoundDomains = true;
-        }
-        if (m_limitsNavigationsToAppBoundDomains) {
-            if (*isNavigatingToAppBoundDomain == NavigatingToAppBoundDomain::No)
-                return false;
-            m_configuration->setWebViewCategory(WebViewCategory::AppBoundDomain);
-            m_isNavigatingToAppBoundDomain = NavigatingToAppBoundDomain::Yes;
-        } else {
-            if (m_hasExecutedAppBoundBehaviorBeforeNavigation)
+    if (WEB_PAGE_PROXY_ADDITIONS_SETISNAVIGATINGTOAPPBOUNDDOMAIN)
+        return true;
+    if (!isNavigatingToAppBoundDomain) {
+        m_isNavigatingToAppBoundDomain = WTF::nullopt;
+        return true;
+    }
+    if (m_ignoresAppBoundDomains)
+        return true;
+
+    if (shouldTreatURLProtocolAsAppBound(requestURL)) {
+        isNavigatingToAppBoundDomain = NavigatingToAppBoundDomain::Yes;
+        m_limitsNavigationsToAppBoundDomains = true;
+    }
+    if (m_limitsNavigationsToAppBoundDomains) {
+        if (*isNavigatingToAppBoundDomain == NavigatingToAppBoundDomain::No) {
+            if (isMainFrame)
                 return false;
             m_configuration->setWebViewCategory(WebViewCategory::InAppBrowser);
             m_isNavigatingToAppBoundDomain = NavigatingToAppBoundDomain::No;
+            return true;
         }
+        m_configuration->setWebViewCategory(WebViewCategory::AppBoundDomain);
+        m_isNavigatingToAppBoundDomain = NavigatingToAppBoundDomain::Yes;
+    } else {
+        if (m_hasExecutedAppBoundBehaviorBeforeNavigation)
+            return false;
+        m_configuration->setWebViewCategory(WebViewCategory::InAppBrowser);
+        m_isNavigatingToAppBoundDomain = NavigatingToAppBoundDomain::No;
     }
 #else
     UNUSED_PARAM(isMainFrame);
@@ -4024,7 +4027,7 @@ void WebPageProxy::pluginZoomFactorDidChange(double pluginZoomFactor)
     m_pluginZoomFactor = pluginZoomFactor;
 }
 
-void WebPageProxy::findStringMatches(const String& string, FindOptions options, unsigned maxMatchCount)
+void WebPageProxy::findStringMatches(const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount)
 {
     if (string.isEmpty()) {
         didFindStringMatches(string, Vector<Vector<WebCore::IntRect>> (), 0);
@@ -4034,22 +4037,9 @@ void WebPageProxy::findStringMatches(const String& string, FindOptions options, 
     send(Messages::WebPage::FindStringMatches(string, options, maxMatchCount));
 }
 
-void WebPageProxy::findString(const String& string, FindOptions options, unsigned maxMatchCount, Function<void (bool, CallbackBase::Error)>&& callbackFunction)
+void WebPageProxy::findString(const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount, CompletionHandler<void(bool)>&& callbackFunction)
 {
-    Optional<CallbackID> callbackID;
-    if (callbackFunction)
-        callbackID = m_callbacks.put(WTFMove(callbackFunction), m_process->throttler().backgroundActivity("WebPageProxy::findString"_s));
-
-    send(Messages::WebPage::FindString(string, options, maxMatchCount, callbackID));
-}
-
-void WebPageProxy::findStringCallback(bool found, CallbackID callbackID)
-{
-    auto callback = m_callbacks.take<BoolCallback>(callbackID);
-    if (!callback)
-        return;
-
-    callback->performCallbackWithReturnValue(found);
+    sendWithAsyncReply(Messages::WebPage::FindString(string, options, maxMatchCount), WTFMove(callbackFunction));
 }
 
 void WebPageProxy::getImageForFindMatch(int32_t matchIndex)
@@ -4072,7 +4062,7 @@ void WebPageProxy::hideFindUI()
     send(Messages::WebPage::HideFindUI());
 }
 
-void WebPageProxy::countStringMatches(const String& string, FindOptions options, unsigned maxMatchCount)
+void WebPageProxy::countStringMatches(const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount)
 {
     if (!hasRunningProcess())
         return;
@@ -4872,7 +4862,7 @@ void WebPageProxy::didFinishLoadForFrame(FrameIdentifier frameID, FrameInfoData&
 
     if (isMainFrame) {
         reportPageLoadResult();
-        pageClient().didFinishLoadForMainFrame();
+        pageClient().didFinishNavigation(navigation.get());
 
         if (navigation)
             navigation->setClientNavigationActivity(nullptr);
@@ -4926,7 +4916,7 @@ void WebPageProxy::didFailLoadForFrame(FrameIdentifier frameID, FrameInfoData&& 
 
     if (isMainFrame) {
         reportPageLoadResult(error);
-        pageClient().didFailLoadForMainFrame();
+        pageClient().didFailNavigation(navigation.get());
         if (navigation)
             navigation->setClientNavigationActivity(nullptr);
     }
@@ -5204,16 +5194,20 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
             }
             receivedNavigationPolicyDecision(policyAction, navigation.get(), processSwapRequestedByClient, frame, WTFMove(policies), WTFMove(sender));
         };
-        
+
+#if PLATFORM(COCOA)
         if (policyAction != PolicyAction::Ignore) {
             if (!setIsNavigatingToAppBoundDomainAndCheckIfPermitted(frame->isMainFrame(), navigation->currentRequest().url(), isAppBoundDomain)) {
-                auto error = ResourceError { String { }, 0, navigation->currentRequest().url(), "App-bound domain failure"_s };
+                auto error = errorForUnpermittedAppBoundDomainNavigation(navigation->currentRequest().url());
                 m_navigationClient->didFailProvisionalNavigationWithError(*this, FrameInfoData { frameInfo }, navigation.get(), error, userDataObject);
                 RELEASE_LOG_ERROR_IF_ALLOWED(Loading, "Ignoring request to load this main resource because it is attempting to navigate away from an app-bound domain or navigate after using restricted APIs");
                 completionHandler(PolicyAction::Ignore);
                 return;
             }
+            if (frame->isMainFrame())
+                m_isTopFrameNavigatingToAppBoundDomain = m_isNavigatingToAppBoundDomain;
         }
+#endif
 
         if (!m_pageClient)
             return completionHandler(policyAction);
@@ -6683,7 +6677,7 @@ void WebPageProxy::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vect
 }
 #endif
 
-void WebPageProxy::didChooseFilesForOpenPanel(const Vector<String>& fileURLs)
+void WebPageProxy::didChooseFilesForOpenPanel(const Vector<String>& fileURLs, const Vector<String>&)
 {
     if (!hasRunningProcess())
         return;
@@ -6693,7 +6687,7 @@ void WebPageProxy::didChooseFilesForOpenPanel(const Vector<String>& fileURLs)
     send(Messages::WebPage::ExtendSandboxForFilesFromOpenPanel(WTFMove(sandboxExtensionHandles)));
 #endif
 
-    send(Messages::WebPage::DidChooseFilesForOpenPanel(fileURLs));
+    send(Messages::WebPage::DidChooseFilesForOpenPanel(fileURLs, { }));
 
     m_openPanelResultListener->invalidate();
     m_openPanelResultListener = nullptr;
@@ -7152,20 +7146,6 @@ void WebPageProxy::unsignedCallback(uint64_t result, CallbackID callbackID)
     }
 
     callback->performCallbackWithReturnValue(result);
-}
-
-void WebPageProxy::editingRangeCallback(const EditingRange& range, CallbackID callbackID)
-{
-    MESSAGE_CHECK(m_process, range.isValid());
-
-    auto callback = m_callbacks.take<EditingRangeCallback>(callbackID);
-    if (!callback) {
-        // FIXME: Log error or assert.
-        // this can validly happen if a load invalidated the callback, though
-        return;
-    }
-
-    callback->performCallbackWithReturnValue(range);
 }
 
 void WebPageProxy::editorStateChanged(const EditorState& editorState)
@@ -7793,8 +7773,8 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     parameters.smartInsertDeleteEnabled = m_isSmartInsertDeleteEnabled;
     parameters.additionalSupportedImageTypes = m_configuration->additionalSupportedImageTypes();
 #endif
-#if ENABLE(TINT_COLOR_SUPPORT)
-    parameters.tintColor = pageClient().tintColor();
+#if HAVE(APP_ACCENT_COLORS)
+    parameters.accentColor = pageClient().accentColor();
 #endif
     parameters.shouldScaleViewToFitDocument = m_shouldScaleViewToFitDocument;
     parameters.userInterfaceLayoutDirection = pageClient().userInterfaceLayoutDirection();
@@ -7846,6 +7826,7 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     parameters.shouldCaptureVideoInUIProcess = preferences().captureVideoInUIProcessEnabled();
     parameters.shouldCaptureVideoInGPUProcess = preferences().captureVideoInGPUProcessEnabled();
     parameters.shouldRenderCanvasInGPUProcess = preferences().renderCanvasInGPUProcessEnabled();
+    parameters.shouldEnableVP9Decoder = preferences().vp9DecoderEnabled();
     parameters.shouldCaptureDisplayInUIProcess = m_process->processPool().configuration().shouldCaptureDisplayInUIProcess();
     parameters.limitsNavigationsToAppBoundDomains = m_limitsNavigationsToAppBoundDomains;
     parameters.shouldRelaxThirdPartyCookieBlocking = m_configuration->shouldRelaxThirdPartyCookieBlocking();
@@ -7912,9 +7893,9 @@ void WebPageProxy::backForwardClear()
 
 #if ENABLE(GAMEPAD)
 
-void WebPageProxy::gamepadActivity(const Vector<GamepadData>& gamepadDatas, bool shouldMakeGamepadsVisible)
+void WebPageProxy::gamepadActivity(const Vector<GamepadData>& gamepadDatas, EventMakesGamepadsVisible eventVisibility)
 {
-    send(Messages::WebPage::GamepadActivity(gamepadDatas, shouldMakeGamepadsVisible));
+    send(Messages::WebPage::GamepadActivity(gamepadDatas, eventVisibility));
 }
 
 #endif
@@ -8741,26 +8722,24 @@ void WebPageProxy::hasMarkedText(CompletionHandler<void(bool)>&& callback)
     sendWithAsyncReply(Messages::WebPage::HasMarkedText(), WTFMove(callback));
 }
 
-void WebPageProxy::getMarkedRangeAsync(WTF::Function<void (EditingRange, CallbackBase::Error)>&& callbackFunction)
+void WebPageProxy::getMarkedRangeAsync(CompletionHandler<void(const EditingRange&)>&& callbackFunction)
 {
     if (!hasRunningProcess()) {
-        callbackFunction(EditingRange(), CallbackBase::Error::Unknown);
+        callbackFunction(EditingRange());
         return;
     }
 
-    auto callbackID = m_callbacks.put(WTFMove(callbackFunction), m_process->throttler().backgroundActivity("WebPageProxy::getMarkedRangeAsync"_s));
-    send(Messages::WebPage::GetMarkedRangeAsync(callbackID));
+    sendWithAsyncReply(Messages::WebPage::GetMarkedRangeAsync(), WTFMove(callbackFunction));
 }
 
-void WebPageProxy::getSelectedRangeAsync(WTF::Function<void (EditingRange, CallbackBase::Error)>&& callbackFunction)
+void WebPageProxy::getSelectedRangeAsync(CompletionHandler<void(const EditingRange&)>&& callbackFunction)
 {
     if (!hasRunningProcess()) {
-        callbackFunction(EditingRange(), CallbackBase::Error::Unknown);
+        callbackFunction(EditingRange());
         return;
     }
 
-    auto callbackID = m_callbacks.put(WTFMove(callbackFunction), m_process->throttler().backgroundActivity("WebPageProxy::getSelectedRangeAsync"_s));
-    send(Messages::WebPage::GetSelectedRangeAsync(callbackID));
+    sendWithAsyncReply(Messages::WebPage::GetSelectedRangeAsync(), WTFMove(callbackFunction));
 }
 
 void WebPageProxy::characterIndexForPointAsync(const WebCore::IntPoint& point, WTF::Function<void (uint64_t, CallbackBase::Error)>&& callbackFunction)
@@ -9144,22 +9123,22 @@ void WebPageProxy::didResignInputElementStrongPasswordAppearance(const UserData&
 }
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS_FAMILY)
-void WebPageProxy::addPlaybackTargetPickerClient(uint64_t contextId)
+void WebPageProxy::addPlaybackTargetPickerClient(PlaybackTargetClientContextIdentifier contextId)
 {
     pageClient().mediaSessionManager().addPlaybackTargetPickerClient(*this, contextId);
 }
 
-void WebPageProxy::removePlaybackTargetPickerClient(uint64_t contextId)
+void WebPageProxy::removePlaybackTargetPickerClient(PlaybackTargetClientContextIdentifier contextId)
 {
     pageClient().mediaSessionManager().removePlaybackTargetPickerClient(*this, contextId);
 }
 
-void WebPageProxy::showPlaybackTargetPicker(uint64_t contextId, const WebCore::FloatRect& rect, bool hasVideo)
+void WebPageProxy::showPlaybackTargetPicker(PlaybackTargetClientContextIdentifier contextId, const WebCore::FloatRect& rect, bool hasVideo)
 {
     pageClient().mediaSessionManager().showPlaybackTargetPicker(*this, contextId, pageClient().rootViewToScreen(IntRect(rect)), hasVideo, useDarkAppearance());
 }
 
-void WebPageProxy::playbackTargetPickerClientStateDidChange(uint64_t contextId, WebCore::MediaProducer::MediaStateFlags state)
+void WebPageProxy::playbackTargetPickerClientStateDidChange(PlaybackTargetClientContextIdentifier contextId, WebCore::MediaProducer::MediaStateFlags state)
 {
     pageClient().mediaSessionManager().clientStateDidChange(*this, contextId, state);
 }
@@ -9179,7 +9158,7 @@ void WebPageProxy::mockMediaPlaybackTargetPickerDismissPopup()
     pageClient().mediaSessionManager().mockMediaPlaybackTargetPickerDismissPopup();
 }
 
-void WebPageProxy::setPlaybackTarget(uint64_t contextId, Ref<MediaPlaybackTarget>&& target)
+void WebPageProxy::setPlaybackTarget(PlaybackTargetClientContextIdentifier contextId, Ref<MediaPlaybackTarget>&& target)
 {
     if (!hasRunningProcess())
         return;
@@ -9187,7 +9166,7 @@ void WebPageProxy::setPlaybackTarget(uint64_t contextId, Ref<MediaPlaybackTarget
     send(Messages::WebPage::PlaybackTargetSelected(contextId, target->targetContext()));
 }
 
-void WebPageProxy::externalOutputDeviceAvailableDidChange(uint64_t contextId, bool available)
+void WebPageProxy::externalOutputDeviceAvailableDidChange(PlaybackTargetClientContextIdentifier contextId, bool available)
 {
     if (!hasRunningProcess())
         return;
@@ -9195,7 +9174,7 @@ void WebPageProxy::externalOutputDeviceAvailableDidChange(uint64_t contextId, bo
     send(Messages::WebPage::PlaybackTargetAvailabilityDidChange(contextId, available));
 }
 
-void WebPageProxy::setShouldPlayToPlaybackTarget(uint64_t contextId, bool shouldPlay)
+void WebPageProxy::setShouldPlayToPlaybackTarget(PlaybackTargetClientContextIdentifier contextId, bool shouldPlay)
 {
     if (!hasRunningProcess())
         return;
@@ -9203,7 +9182,7 @@ void WebPageProxy::setShouldPlayToPlaybackTarget(uint64_t contextId, bool should
     send(Messages::WebPage::SetShouldPlayToPlaybackTarget(contextId, shouldPlay));
 }
 
-void WebPageProxy::playbackTargetPickerWasDismissed(uint64_t contextId)
+void WebPageProxy::playbackTargetPickerWasDismissed(PlaybackTargetClientContextIdentifier contextId)
 {
     if (!hasRunningProcess())
         return;

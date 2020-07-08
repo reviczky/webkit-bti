@@ -24,15 +24,12 @@
 
 #pragma once
 
+#include "DateComponents.h"
 #include "FileChooser.h"
 #include "HTMLTextFormControlElement.h"
 #include "StepRange.h"
 #include <memory>
 #include <wtf/WeakPtr.h>
-
-#if PLATFORM(IOS_FAMILY)
-#include "DateComponents.h"
-#endif
 
 namespace WebCore {
 
@@ -125,15 +122,12 @@ public:
     WEBCORE_EXPORT bool isTelephoneField() const;
     WEBCORE_EXPORT bool isURLField() const;
     WEBCORE_EXPORT bool isDateField() const;
-    WEBCORE_EXPORT bool isDateTimeField() const;
     WEBCORE_EXPORT bool isDateTimeLocalField() const;
     WEBCORE_EXPORT bool isMonthField() const;
     WEBCORE_EXPORT bool isTimeField() const;
     WEBCORE_EXPORT bool isWeekField() const;
 
-#if PLATFORM(IOS_FAMILY)
     DateComponents::Type dateType() const;
-#endif
 
     HTMLElement* containerElement() const;
     

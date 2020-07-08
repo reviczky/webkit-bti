@@ -84,7 +84,7 @@ private:
     AXCoreObject* associatedAXObject() const
     {
         ASSERT(isMainThread());
-        return axObjectCache()->objectFromAXID(objectID());
+        return m_id != InvalidAXID ? axObjectCache()->objectFromAXID(m_id) : nullptr;
     }
 
     enum class AXPropertyName : uint16_t {
@@ -703,13 +703,13 @@ private:
     // Attribute setters.
     void setARIAGrabbed(bool) override;
     void setIsExpanded(bool) override;
-    void setValue(float) override;
+    bool setValue(float) override;
     void setSelected(bool) override;
     void setSelectedRows(AccessibilityChildrenVector&) override;
     void setFocused(bool) override;
     void setSelectedText(const String&) override;
     void setSelectedTextRange(const PlainTextRange&) override;
-    void setValue(const String&) override;
+    bool setValue(const String&) override;
 #if PLATFORM(COCOA) && !PLATFORM(IOS_FAMILY)
     void setCaretBrowsingEnabled(bool) override;
 #endif
@@ -721,6 +721,7 @@ private:
     FloatRect convertFrameToSpace(const FloatRect&, AccessibilityConversionSpace) const override { return FloatRect(); }
     void increment() override { }
     void decrement() override { }
+    bool performDismissAction() override;
     void scrollToMakeVisible() const override { }
     void scrollToMakeVisibleWithSubFocus(const IntRect&) const override { }
     void scrollToGlobalPoint(const IntPoint&) const override { }

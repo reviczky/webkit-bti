@@ -320,6 +320,7 @@
     <keyword type="function" name="webkit_authentication_request_set_can_save_credentials ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-set-can-save-credentials" since="2.30"/>
     <keyword type="function" name="webkit_authentication_request_get_host ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-host" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_get_port ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-port" since="2.2"/>
+    <keyword type="function" name="webkit_authentication_request_get_security_origin ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-security-origin" since="2.30"/>
     <keyword type="function" name="webkit_authentication_request_is_retry ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-is-retry" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_get_proposed_credential ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-proposed-credential" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_set_proposed_credential ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-set-proposed-credential" since="2.30"/>
