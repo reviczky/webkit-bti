@@ -8,4 +8,3 @@ user-agent-branding.patch
 prefer-pthread.patch
 dont-detect-sse2.patch
 reduce-memory-overheads.patch
-dont-fallback-to-libwpe.patch
