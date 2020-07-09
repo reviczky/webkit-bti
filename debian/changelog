@@ -1,4 +1,4 @@
-webkit2gtk (2.28.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.28.3-1) unstable; urgency=high
 
   * New upstream release.
   * debian/rules:
@@ -9,7 +9,7 @@ webkit2gtk (2.28.3-1) UNRELEASED; urgency=medium
   * debian/copyright:
     + Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 09 Jul 2020 10:35:55 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 09 Jul 2020 12:20:00 +0200
 
 webkit2gtk (2.28.2-2) unstable; urgency=high
 
