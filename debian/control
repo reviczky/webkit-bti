@@ -47,10 +47,6 @@ Build-Depends: gawk,
                libgstreamer1.0-dev (>= 1.13.1),
                libgstreamer-plugins-base1.0-dev (>= 1.13.1),
                libenchant-2-dev,
-               gtk-doc-tools,
-               libglib2.0-doc,
-               libgtk-3-doc,
-               libsoup2.4-doc,
                geoclue-2.0,
                libsecret-1-dev,
                gobject-introspection (>= 1.32.0),
@@ -60,6 +56,10 @@ Build-Depends: gawk,
                libegl1-mesa-dev,
                libgl1-mesa-dev [!armel !armhf !arm64],
                libgles2-mesa-dev
+Build-Depends-Indep: gtk-doc-tools,
+               libglib2.0-doc,
+               libgtk-3-doc,
+               libsoup2.4-doc
 Build-Conflicts: gir-repository-dev
 Standards-Version: 4.5.0
 Rules-Requires-Root: no
@@ -195,6 +195,7 @@ Description: Web content engine library for GTK - development files
  This package contains the development files.
 
 Package: libwebkit2gtk-4.0-doc
+Build-Profiles: <!nodoc>
 Section: doc
 Architecture: all
 Multi-Arch: foreign

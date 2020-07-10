@@ -47,7 +47,9 @@ ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS
 endif
 
-ifneq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
+ifeq (,$(filter %-doc,$(shell dh_listpackages)))
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GTKDOC=OFF
+else ifneq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GTKDOC=OFF
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GTKDOC=ON
