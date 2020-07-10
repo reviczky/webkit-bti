@@ -4,6 +4,13 @@ webkit2gtk (2.29.4-1) UNRELEASED; urgency=medium
   * debian/control:
     + Install libgl1-mesa-dev unconditionally. The decision of which gl
       library to use is now taken directly by cmake.
+  * Don't build the documentation in binary-arch builds and with the nodoc
+    build profile.
+    + debian/control:
+      - Move gtk-doc-tools and *-doc to Build-Depends-Indep.
+      - Add Build-Profiles: <!nodoc> to libwebkit2gtk-4.0-doc
+    + debian/rules:
+      - Use dh_listpackages to decide whether to build the documentation.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 29 Jul 2020 23:17:24 +0200
 
