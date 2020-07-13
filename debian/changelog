@@ -1,3 +1,15 @@
+webkit2gtk (2.28.3-2~deb10u1) buster-security; urgency=medium
+
+  * Rebuild for buster-security.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/control:
+    + Remove Breaks for Evolution < 3.34.1.
+    + Remove build dependency on libwpebackend-fdo-1.0-dev.
+    + Switch build dependency from libenchant-2-dev to libenchant-dev.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 14 Jul 2020 01:38:23 +0200
+
 webkit2gtk (2.28.3-2) unstable; urgency=high
 
   * The WebKitGTK security advisory WSA-2020-0006 lists the following
