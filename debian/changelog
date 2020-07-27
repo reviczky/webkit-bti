@@ -1,3 +1,13 @@
+webkit2gtk (2.28.3-3) UNRELEASED; urgency=medium
+
+  * Enable OpenGL ES in arm:
+    + debian/rules:
+      - Build with -DENABLE_GLES2=ON in armel/armhf/arm64.
+    + debian/control:
+      - Always depend on libgl1-mesa-dev.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 27 Jul 2020 16:20:14 +0200
+
 webkit2gtk (2.28.3-2) unstable; urgency=high
 
   * The WebKitGTK security advisory WSA-2020-0006 lists the following

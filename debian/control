@@ -54,7 +54,7 @@ Build-Depends: gawk,
                mesa-common-dev,
                ninja-build,
                libegl1-mesa-dev,
-               libgl1-mesa-dev [!armel !armhf !arm64],
+               libgl1-mesa-dev,
                libgles2-mesa-dev
 Build-Depends-Indep: gtk-doc-tools,
                libglib2.0-doc,
