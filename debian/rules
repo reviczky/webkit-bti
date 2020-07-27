@@ -42,11 +42,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),sh3 sh4))
         CPPFLAGS += -mlra -fno-move-loop-invariants
 endif
 
-# Enable OpenGL ES in arm
-ifneq (,$(filter $(DEB_HOST_ARCH),armel armhf arm64))
-	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GLES2
-endif
-
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS
