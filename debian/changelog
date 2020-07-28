@@ -1,12 +1,13 @@
-webkit2gtk (2.28.3-3) UNRELEASED; urgency=medium
+webkit2gtk (2.28.4-1) UNRELEASED; urgency=high
 
+  * New upstream release.
   * Enable OpenGL ES in arm:
     + debian/patches/use-gles-on-arm.patch:
       - Set ENABLE_GLES2_DEFAULT to ON on arm.
     + debian/control:
       - Always depend on libgl1-mesa-dev.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 27 Jul 2020 16:20:14 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 28 Jul 2020 17:12:20 +0200
 
 webkit2gtk (2.28.3-2) unstable; urgency=high
 
