@@ -153,7 +153,6 @@ DocumentLoader::DocumentLoader(const ResourceRequest& request, const SubstituteD
     , m_request(request)
     , m_originalSubstituteDataWasValid(substituteData.isValid())
     , m_substituteResourceDeliveryTimer(*this, &DocumentLoader::substituteResourceDeliveryTimerFired)
-    , m_dataLoadTimer(*this, &DocumentLoader::handleSubstituteDataLoadNow)
     , m_applicationCacheHost(makeUnique<ApplicationCacheHost>(*this))
 {
 }
@@ -492,16 +491,6 @@ void DocumentLoader::handleSubstituteDataLoadNow()
     responseReceived(response, nullptr);
 }
 
-void DocumentLoader::startDataLoadTimer()
-{
-    m_dataLoadTimer.startOneShot(0_s);
-
-#if HAVE(RUNLOOP_TIMER)
-    if (SchedulePairHashSet* scheduledPairs = m_frame->page()->scheduledRunLoopPairs())
-        m_dataLoadTimer.schedule(*scheduledPairs);
-#endif
-}
-
 #if ENABLE(SERVICE_WORKER)
 bool DocumentLoader::setControllingServiceWorkerRegistration(ServiceWorkerRegistrationData&& data)
 {
@@ -711,8 +700,20 @@ bool DocumentLoader::tryLoadingSubstituteData()
 
     if (!m_deferMainResourceDataLoad || frameLoader()->loadsSynchronously())
         handleSubstituteDataLoadNow();
-    else
-        startDataLoadTimer();
+    else {
+        auto loadData = [this, weakDataLoadToken = makeWeakPtr(m_dataLoadToken)] {
+            if (!weakDataLoadToken)
+                return;
+            m_dataLoadToken.clear();
+            handleSubstituteDataLoadNow();
+        };
+
+#if USE(COCOA_EVENT_LOOP)
+        RunLoop::dispatch(*m_frame->page()->scheduledRunLoopPairs(), WTFMove(loadData));
+#else
+        RunLoop::current().dispatch(WTFMove(loadData));
+#endif
+    }
 
     return true;
 }
@@ -1086,7 +1087,10 @@ void DocumentLoader::commitData(const char* bytes, size_t length)
         bool hasBegun = m_writer.begin(documentURL(), false);
         m_writer.setDocumentWasLoadedAsPartOfNavigation();
 
-        auto& document = *m_frame->document();
+        auto* documentOrNull = m_frame ? m_frame->document() : nullptr;
+        if (!documentOrNull)
+            return;
+        auto& document = *documentOrNull;
 
         if (SecurityPolicy::allowSubstituteDataAccessToLocal() && m_originalSubstituteDataWasValid) {
             // If this document was loaded with substituteData, then the document can
@@ -2005,7 +2009,7 @@ void DocumentLoader::cancelMainResourceLoad(const ResourceError& resourceError)
 
     RELEASE_LOG_IF_ALLOWED("cancelMainResourceLoad: (type = %d, code = %d)", static_cast<int>(error.type()), error.errorCode());
 
-    m_dataLoadTimer.stop();
+    m_dataLoadToken.clear();
 
     cancelPolicyCheckIfNeeded();
 

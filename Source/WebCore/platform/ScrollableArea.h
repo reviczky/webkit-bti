@@ -47,11 +47,6 @@ class ScrollAnimator;
 class GraphicsLayer;
 class TiledBacking;
 
-// scrollPosition is in content coordinates (0,0 is at scrollOrigin), so may have negative components.
-typedef IntPoint ScrollPosition;
-// scrollOffset() is the value used by scrollbars (min is 0,0), and should never have negative components.
-typedef IntPoint ScrollOffset;
-
 inline int offsetForOrientation(ScrollOffset offset, ScrollbarOrientation orientation)
 {
     switch (orientation) {
@@ -87,6 +82,8 @@ public:
     virtual bool requestScrollPositionUpdate(const ScrollPosition&, ScrollType = ScrollType::User, ScrollClamping = ScrollClamping::Clamped) { return false; }
 
     WEBCORE_EXPORT bool handleWheelEvent(const PlatformWheelEvent&);
+
+    bool usesScrollSnap() const;
 
 #if ENABLE(CSS_SCROLL_SNAP)
     WEBCORE_EXPORT const Vector<LayoutUnit>* horizontalSnapOffsets() const;
@@ -305,6 +302,7 @@ public:
     // Returns the bounding box of this scrollable area, in the coordinate system of the enclosing scroll view.
     virtual IntRect scrollableAreaBoundingBox(bool* = nullptr) const = 0;
 
+    virtual bool isUserScrollInProgress() const { return false; }
     virtual bool isRubberBandInProgress() const { return false; }
     virtual bool isScrollSnapInProgress() const { return false; }
 

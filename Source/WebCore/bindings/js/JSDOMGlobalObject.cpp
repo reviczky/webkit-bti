@@ -32,6 +32,7 @@
 #include "JSDOMPromiseDeferred.h"
 #include "JSDOMWindow.h"
 #include "JSEventListener.h"
+#include "JSIDBSerializationGlobalObject.h"
 #include "JSMediaStream.h"
 #include "JSMediaStreamTrack.h"
 #include "JSRTCIceCandidate.h"
@@ -170,6 +171,10 @@ ScriptExecutionContext* JSDOMGlobalObject::scriptExecutionContext() const
     if (inherits<JSWorkletGlobalScopeBase>(vm()))
         return jsCast<const JSWorkletGlobalScopeBase*>(this)->scriptExecutionContext();
 #endif
+#if ENABLE(INDEXED_DATABASE)
+    if (inherits<JSIDBSerializationGlobalObject>(vm()))
+        return jsCast<const JSIDBSerializationGlobalObject*>(this)->scriptExecutionContext();
+#endif
     dataLog("Unexpected global object: ", JSValue(this), "\n");
     RELEASE_ASSERT_NOT_REACHED();
     return nullptr;
@@ -227,6 +232,11 @@ void JSDOMGlobalObject::promiseRejectionTracker(JSGlobalObject* jsGlobalObject, 
         context->ensureRejectedPromiseTracker().promiseHandled(globalObject, *promise);
         break;
     }
+}
+
+void JSDOMGlobalObject::reportUncaughtExceptionAtEventLoop(JSGlobalObject* jsGlobalObject, JSC::Exception* exception)
+{
+    reportException(jsGlobalObject, exception);
 }
 
 JSDOMGlobalObject& callerGlobalObject(JSGlobalObject& lexicalGlobalObject, CallFrame& callFrame)

@@ -27,15 +27,16 @@
 
 #if ENABLE(WEB_AUDIO)
 
+#include "ChannelCountMode.h"
+#include "ChannelInterpretation.h"
 #include <wtf/Optional.h>
-#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
 struct AudioNodeOptions {
     Optional<unsigned> channelCount;
-    String channelCountMode;
-    String channelInterpretation;
+    Optional<ChannelCountMode> channelCountMode;
+    Optional<ChannelInterpretation> channelInterpretation;
 };
 
 } // namespace WebCore

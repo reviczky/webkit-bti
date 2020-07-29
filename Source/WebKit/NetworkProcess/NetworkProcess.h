@@ -83,6 +83,7 @@ class StorageQuotaManager;
 class NetworkStorageSession;
 class ResourceError;
 class SWServer;
+class UserContentURLPattern;
 enum class HTTPCookieAcceptPolicy : uint8_t;
 enum class IncludeHttpOnlyCookies : bool;
 enum class StoredCredentialsPolicy : uint8_t;
@@ -248,7 +249,6 @@ public:
     void setMinimumTimeBetweenDataRecordsRemoval(PAL::SessionID, Seconds, CompletionHandler<void()>&&);
     void setNotifyPagesWhenDataRecordsWereScanned(PAL::SessionID, bool value, CompletionHandler<void()>&&);
     void setIsRunningResourceLoadStatisticsTest(PAL::SessionID, bool value, CompletionHandler<void()>&&);
-    void setNotifyPagesWhenTelemetryWasCaptured(PAL::SessionID, bool value, CompletionHandler<void()>&&);
     void setResourceLoadStatisticsEnabled(PAL::SessionID, bool);
     void setResourceLoadStatisticsLogTestingEvent(bool);
     void setResourceLoadStatisticsDebugMode(PAL::SessionID, bool debugMode, CompletionHandler<void()>&&d);
@@ -354,6 +354,8 @@ public:
     void resetServiceWorkerFetchTimeoutForTesting(CompletionHandler<void()>&&);
     Seconds serviceWorkerFetchTimeout() const { return m_serviceWorkerFetchTimeout; }
 
+    static Seconds randomClosedPortDelay();
+
     void cookieAcceptPolicyChanged(WebCore::HTTPCookieAcceptPolicy);
     void hasAppBoundSession(PAL::SessionID, CompletionHandler<void(bool)>&&) const;
     void clearAppBoundSession(PAL::SessionID, CompletionHandler<void()>&&);
@@ -361,6 +363,9 @@ public:
     void broadcastConsoleMessage(PAL::SessionID, JSC::MessageSource, JSC::MessageLevel, const String& message);
     void updateBundleIdentifier(String&&, CompletionHandler<void()>&&);
     void clearBundleIdentifier(CompletionHandler<void()>&&);
+
+    bool shouldDisableCORSForRequestTo(WebCore::PageIdentifier, const URL&) const;
+    void setCORSDisablingPatterns(WebCore::PageIdentifier, Vector<String>&&);
 
 private:
     void platformInitializeNetworkProcess(const NetworkProcessCreationParameters&);
@@ -463,6 +468,7 @@ private:
     HashSet<WebCore::SecurityOriginData> indexedDatabaseOrigins(const String& path);
     Ref<WebIDBServer> createWebIDBServer(PAL::SessionID);
     void setSessionStorageQuotaManagerIDBRootPath(PAL::SessionID, const String& idbRootPath);
+    void removeWebIDBServerIfPossible(PAL::SessionID);
 #endif
 
 #if ENABLE(SERVICE_WORKER)
@@ -597,6 +603,8 @@ private:
 
     static const Seconds defaultServiceWorkerFetchTimeout;
     Seconds m_serviceWorkerFetchTimeout { defaultServiceWorkerFetchTimeout };
+
+    HashMap<WebCore::PageIdentifier, Vector<WebCore::UserContentURLPattern>> m_extensionCORSDisablingPatterns;
 };
 
 } // namespace WebKit

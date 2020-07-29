@@ -397,6 +397,10 @@
 #define ENABLE_OFFSCREEN_CANVAS 0
 #endif
 
+#if !defined(ENABLE_THUNDER)
+#define ENABLE_THUNDER 0
+#endif
+
 #if !defined(ENABLE_ORIENTATION_EVENTS)
 #define ENABLE_ORIENTATION_EVENTS 0
 #endif
@@ -602,13 +606,6 @@
 /* FIXME: This should be turned into an #error invariant */
 /* The FTL *does not* work on 32-bit platforms. Disable it even if someone asked us to enable it. */
 #if USE(JSVALUE32_64)
-#undef ENABLE_FTL_JIT
-#define ENABLE_FTL_JIT 0
-#endif
-
-/* FIXME: This should be turned into an #error invariant */
-/* The FTL is disabled on the iOS simulator, mostly for simplicity. */
-#if PLATFORM(IOS_FAMILY_SIMULATOR)
 #undef ENABLE_FTL_JIT
 #define ENABLE_FTL_JIT 0
 #endif

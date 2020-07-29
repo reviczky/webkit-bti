@@ -65,7 +65,7 @@ GPUProcess/webrtc/LibWebRTCCodecsProxy.mm
 
 Platform/cf/ModuleCF.cpp
 
-Platform/cg/CGUtilities.cpp
+Platform/cg/ImageUtilitiesCG.cpp
 
 Platform/classifier/cocoa/ResourceLoadStatisticsClassifierCocoa.cpp
 Platform/classifier/ResourceLoadStatisticsClassifier.cpp
@@ -220,6 +220,7 @@ Shared/RemoteLayerTree/RemoteLayerBackingStoreCollection.mm
 Shared/RemoteLayerTree/RemoteLayerTreePropertyApplier.mm
 Shared/RemoteLayerTree/RemoteLayerTreeTransaction.mm
 Shared/RemoteLayerTree/RemoteScrollingCoordinatorTransaction.cpp
+Shared/RemoteLayerTree/RemoteScrollingUIState.cpp
 
 UIProcess/_WKWebViewPrintFormatter.mm
 UIProcess/ApplicationStateTracker.mm
@@ -414,6 +415,8 @@ UIProcess/Inspector/mac/RemoteWebInspectorProxyMac.mm
 UIProcess/Inspector/mac/WebInspectorProxyMac.mm
 UIProcess/Inspector/mac/WKInspectorViewController.mm
 UIProcess/Inspector/mac/WKInspectorWKWebView.mm
+
+UIProcess/Network/NetworkProcessProxyCocoa.mm
 
 UIProcess/ios/forms/WKAirPlayRoutePicker.mm
 UIProcess/ios/forms/WKDatePickerViewController.mm

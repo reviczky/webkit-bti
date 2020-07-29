@@ -80,6 +80,7 @@
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/StorageQuotaManager.h>
+#include <WebCore/UserContentURLPattern.h>
 #include <wtf/Algorithms.h>
 #include <wtf/CallbackAggregator.h>
 #include <wtf/OptionSet.h>
@@ -97,6 +98,7 @@
 #include "NetworkCacheCoders.h"
 
 #if PLATFORM(COCOA)
+#include "LaunchServicesDatabaseObserver.h"
 #include "NetworkSessionCocoa.h"
 #endif
 
@@ -162,6 +164,9 @@ NetworkProcess::NetworkProcess(AuxiliaryProcessInitializationParameters&& parame
     addSupplement<WebCookieManager>();
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
     addSupplement<LegacyCustomProtocolManager>();
+#endif
+#if PLATFORM(COCOA)
+    addSupplement<LaunchServicesDatabaseObserver>();
 #endif
 #if PLATFORM(COCOA) && ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
     LegacyCustomProtocolManager::networkProcessCreated(*this);
@@ -415,7 +420,9 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
 
     m_storageManagerSet->addConnection(connection.connection());
 
+#if ENABLE(INDEXED_DATABASE)
     webIDBServer(sessionID).addConnection(connection.connection(), identifier);
+#endif
 }
 
 void NetworkProcess::clearCachedCredentials()
@@ -596,8 +603,10 @@ void NetworkProcess::destroySession(PAL::SessionID sessionID)
 #endif
 
     m_storageManagerSet->remove(sessionID);
-    if (auto webIDBServer = m_webIDBServers.take(sessionID))
-        webIDBServer->close();
+
+#if ENABLE(INDEXED_DATABASE)
+    removeWebIDBServerIfPossible(sessionID);
+#endif
 }
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
@@ -859,19 +868,6 @@ void NetworkProcess::setIsRunningResourceLoadStatisticsTest(PAL::SessionID sessi
     if (auto* networkSession = this->networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
             resourceLoadStatistics->setIsRunningTest(value, WTFMove(completionHandler));
-        else
-            completionHandler();
-    } else {
-        ASSERT_NOT_REACHED();
-        completionHandler();
-    }
-}
-
-void NetworkProcess::setNotifyPagesWhenTelemetryWasCaptured(PAL::SessionID sessionID, bool value, CompletionHandler<void()>&& completionHandler)
-{
-    if (auto* networkSession = this->networkSession(sessionID)) {
-        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->setNotifyPagesWhenTelemetryWasCaptured(value, WTFMove(completionHandler));
         else
             completionHandler();
     } else {
@@ -1408,6 +1404,10 @@ void NetworkProcess::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifi
         return;
 #endif
 
+    auto* networkSession = this->networkSession(sessionID);
+    if (!networkSession)
+        return;
+
     NetworkLoadParameters parameters;
     parameters.request = ResourceRequest { url };
     parameters.webPageProxyID = webPageProxyID;
@@ -1421,7 +1421,7 @@ void NetworkProcess::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifi
     parameters.storedCredentialsPolicy = storedCredentialsPolicy;
     parameters.shouldPreconnectOnly = PreconnectOnly::Yes;
 
-    (new PreconnectTask(*this, sessionID, WTFMove(parameters), [](const WebCore::ResourceError&) { }))->start();
+    (new PreconnectTask(*networkSession, WTFMove(parameters), [](const WebCore::ResourceError&) { }))->start();
 #else
     UNUSED_PARAM(url);
     UNUSED_PARAM(userAgent);
@@ -2506,6 +2506,24 @@ void NetworkProcess::setSessionStorageQuotaManagerIDBRootPath(PAL::SessionID ses
     sessionStorageQuotaManager->setIDBRootPath(idbRootPath);
 }
 
+void NetworkProcess::removeWebIDBServerIfPossible(PAL::SessionID sessionID)
+{
+    ASSERT(RunLoop::isMain());
+
+    auto iterator = m_webIDBServers.find(sessionID);
+    if (iterator == m_webIDBServers.end())
+        return;
+
+    if (m_networkSessions.contains(sessionID))
+        return;
+
+    if (iterator->value->hasConnection())
+        return;
+
+    iterator->value->close();
+    m_webIDBServers.remove(iterator);
+}
+
 #endif // ENABLE(INDEXED_DATABASE)
 
 void NetworkProcess::syncLocalStorage(CompletionHandler<void()>&& completionHandler)
@@ -2737,8 +2755,13 @@ void NetworkProcess::getLocalStorageOriginDetails(PAL::SessionID sessionID, Comp
 void NetworkProcess::connectionToWebProcessClosed(IPC::Connection& connection, PAL::SessionID sessionID)
 {
     m_storageManagerSet->removeConnection(connection);
-    if (auto* webIDBServer = m_webIDBServers.get(sessionID))
-        webIDBServer->removeConnection(connection);
+
+#if ENABLE(INDEXED_DATABASE)
+    auto* webIDBServer = m_webIDBServers.get(sessionID);
+    ASSERT(webIDBServer);
+    webIDBServer->removeConnection(connection);
+    removeWebIDBServerIfPossible(sessionID);
+#endif
 }
 
 NetworkConnectionToWebProcess* NetworkProcess::webProcessConnection(ProcessIdentifier identifier) const
@@ -2757,6 +2780,13 @@ void NetworkProcess::resetServiceWorkerFetchTimeoutForTesting(CompletionHandler<
 {
     m_serviceWorkerFetchTimeout = defaultServiceWorkerFetchTimeout;
     completionHandler();
+}
+
+static constexpr auto delayMax = 100_ms;
+static constexpr auto delayMin = 10_ms;
+Seconds NetworkProcess::randomClosedPortDelay()
+{
+    return delayMin + Seconds::fromMilliseconds(static_cast<double>(cryptographicallyRandomNumber())) % delayMax;
 }
 
 void NetworkProcess::hasAppBoundSession(PAL::SessionID sessionID, CompletionHandler<void(bool)>&& completionHandler) const
@@ -2801,6 +2831,30 @@ void NetworkProcess::clearBundleIdentifier(CompletionHandler<void()>&& completio
     WebCore::clearApplicationBundleIdentifierTestingOverride();
 #endif
     completionHandler();
+}
+
+bool NetworkProcess::shouldDisableCORSForRequestTo(PageIdentifier pageIdentifier, const URL& url) const
+{
+    return WTF::anyOf(m_extensionCORSDisablingPatterns.get(pageIdentifier), [&] (const auto& pattern) {
+        return pattern.matches(url);
+    });
+}
+
+void NetworkProcess::setCORSDisablingPatterns(PageIdentifier pageIdentifier, Vector<String>&& patterns)
+{
+    Vector<UserContentURLPattern> parsedPatterns;
+    parsedPatterns.reserveInitialCapacity(patterns.size());
+    for (auto&& pattern : WTFMove(patterns)) {
+        UserContentURLPattern parsedPattern(WTFMove(pattern));
+        if (parsedPattern.isValid())
+            parsedPatterns.uncheckedAppend(WTFMove(parsedPattern));
+    }
+    parsedPatterns.shrinkToFit();
+    if (parsedPatterns.isEmpty()) {
+        m_extensionCORSDisablingPatterns.remove(pageIdentifier);
+        return;
+    }
+    m_extensionCORSDisablingPatterns.set(pageIdentifier, WTFMove(parsedPatterns));
 }
 
 } // namespace WebKit

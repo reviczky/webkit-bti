@@ -35,6 +35,7 @@
 #include "ControlFlowProfiler.h"
 #include "DateInstanceCache.h"
 #include "DeleteAllCodeEffort.h"
+#include "DisallowVMEntry.h"
 #include "ExceptionEventLocation.h"
 #include "ExecutableAllocator.h"
 #include "FunctionHasExecutedCache.h"
@@ -94,6 +95,7 @@
 #endif
 
 namespace WTF {
+class RunLoop;
 class SimpleStats;
 } // namespace WTF
 using WTF::SimpleStats;
@@ -126,6 +128,7 @@ class Identifier;
 class Interpreter;
 class IntlCollator;
 class IntlDateTimeFormat;
+class IntlDisplayNames;
 class IntlLocale;
 class IntlNumberFormat;
 class IntlPluralRules;
@@ -158,7 +161,7 @@ class JSWebAssemblyTable;
 class LLIntOffsetsExtractor;
 class NativeExecutable;
 class ObjCCallbackFunction;
-class PromiseTimer;
+class DeferredWorkTimer;
 class RegExp;
 class RegExpCache;
 class Register;
@@ -312,7 +315,8 @@ public:
     JS_EXPORT_PRIVATE static bool sharedInstanceExists();
     JS_EXPORT_PRIVATE static VM& sharedInstance();
 
-    JS_EXPORT_PRIVATE static Ref<VM> create(HeapType = SmallHeap);
+    JS_EXPORT_PRIVATE static Ref<VM> create(HeapType = SmallHeap, WTF::RunLoop* = nullptr);
+    JS_EXPORT_PRIVATE static RefPtr<VM> tryCreate(HeapType = SmallHeap, WTF::RunLoop* = nullptr);
     static Ref<VM> createContextGroup(HeapType = SmallHeap);
     JS_EXPORT_PRIVATE ~VM();
 
@@ -353,10 +357,7 @@ private:
 
     unsigned m_id;
     RefPtr<JSLock> m_apiLock;
-#if USE(CF)
-    // These need to be initialized before heap below.
-    RetainPtr<CFRunLoopRef> m_runLoop;
-#endif
+    Ref<WTF::RunLoop> m_runLoop;
 
     WeakRandom m_random;
     Integrity::Random m_integrityRandom;
@@ -378,6 +379,7 @@ public:
     std::unique_ptr<IsoHeapCellType> callbackObjectHeapCellType;
     std::unique_ptr<IsoHeapCellType> dateInstanceHeapCellType;
     std::unique_ptr<IsoHeapCellType> errorInstanceHeapCellType;
+    std::unique_ptr<IsoHeapCellType> finalizationRegistryCellType;
     std::unique_ptr<IsoHeapCellType> globalLexicalEnvironmentHeapCellType;
     std::unique_ptr<IsoHeapCellType> globalObjectHeapCellType;
     std::unique_ptr<IsoHeapCellType> injectedScriptHostSpaceHeapCellType;
@@ -400,6 +402,7 @@ public:
 #endif
     std::unique_ptr<IsoHeapCellType> intlCollatorHeapCellType;
     std::unique_ptr<IsoHeapCellType> intlDateTimeFormatHeapCellType;
+    std::unique_ptr<IsoHeapCellType> intlDisplayNamesHeapCellType;
     std::unique_ptr<IsoHeapCellType> intlLocaleHeapCellType;
     std::unique_ptr<IsoHeapCellType> intlNumberFormatHeapCellType;
     std::unique_ptr<IsoHeapCellType> intlPluralRulesHeapCellType;
@@ -551,12 +554,14 @@ public:
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedFunctionCodeBlockSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedModuleProgramCodeBlockSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedProgramCodeBlockSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(finalizationRegistrySpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakObjectRefSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakSetSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakMapSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(withScopeSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlCollatorSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlDateTimeFormatSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlDisplayNamesSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlLocaleSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlNumberFormatSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlPluralRulesSpace)
@@ -710,8 +715,8 @@ public:
     Weak<NativeExecutable> m_slowBoundExecutable;
     Weak<NativeExecutable> m_slowCanConstructBoundExecutable;
 
-    Ref<PromiseTimer> promiseTimer;
-    
+    Ref<DeferredWorkTimer> deferredWorkTimer;
+
     JSCell* currentlyDestructingCallbackObject;
     const ClassInfo* currentlyDestructingCallbackObjectClassInfo { nullptr };
 
@@ -946,6 +951,7 @@ public:
     bool hasCheckpointOSRSideState() const { return m_checkpointSideState.size(); }
     void scanSideState(ConservativeRoots&) const;
 
+    unsigned disallowVMEntryCount { 0 };
     VMEntryScope* entryScope;
 
     JSObject* stringRecursionCheckFirstObject { nullptr };
@@ -1079,10 +1085,7 @@ public:
     bool needExceptionCheck() const { return m_needExceptionCheck; }
 #endif
 
-#if USE(CF)
-    CFRunLoopRef runLoop() const { return m_runLoop.get(); }
-    JS_EXPORT_PRIVATE void setRunLoop(CFRunLoopRef);
-#endif // USE(CF)
+    WTF::RunLoop& runLoop() const { return m_runLoop; }
 
     static void setCrashOnVMCreation(bool);
 
@@ -1099,10 +1102,14 @@ public:
         SetForScope<Exception*> m_savedLastException;
     };
 
+    void addLoopHintExecutionCounter(const Instruction*);
+    uint64_t* getLoopHintExecutionCounter(const Instruction*);
+    void removeLoopHintExecutionCounter(const Instruction*);
+
 private:
     friend class LLIntOffsetsExtractor;
 
-    VM(VMType, HeapType);
+    VM(VMType, HeapType, WTF::RunLoop* = nullptr, bool* success = nullptr);
     static VM*& sharedInstanceInternal();
     void createNativeThunk();
 
@@ -1223,6 +1230,9 @@ private:
 
     WTF::Function<void(VM&)> m_onEachMicrotaskTick;
     uintptr_t m_currentWeakRefVersion { 0 };
+
+    Lock m_loopHintExecutionCountLock;
+    HashMap<const Instruction*, std::pair<unsigned, std::unique_ptr<uint64_t>>> m_loopHintExecutionCounts;
 
     VM* m_prev; // Required by DoublyLinkedListNode.
     VM* m_next; // Required by DoublyLinkedListNode.

@@ -28,11 +28,13 @@
 #include "ActiveDOMObject.h"
 #include "AsyncAudioDecoder.h"
 #include "AudioBus.h"
+#include "AudioContextOptions.h"
 #include "AudioContextState.h"
 #include "AudioDestinationNode.h"
 #include "EventTarget.h"
 #include "MediaCanStartListener.h"
 #include "MediaProducer.h"
+#include "PeriodicWaveConstraints.h"
 #include "PlatformMediaSession.h"
 #include "ScriptExecutionContext.h"
 #include "VisibilityChangeClient.h"
@@ -151,7 +153,7 @@ public:
     ExceptionOr<Ref<ChannelSplitterNode>> createChannelSplitter(size_t numberOfOutputs);
     ExceptionOr<Ref<ChannelMergerNode>> createChannelMerger(size_t numberOfInputs);
     ExceptionOr<Ref<OscillatorNode>> createOscillator();
-    ExceptionOr<Ref<PeriodicWave>> createPeriodicWave(Float32Array& real, Float32Array& imaginary);
+    ExceptionOr<Ref<PeriodicWave>> createPeriodicWave(Vector<float>&& real, Vector<float>&& imaginary, const PeriodicWaveConstraints& = { });
 
     // When a source node has no more processing to do (has finished playing), then it tells the context to dereference it.
     void notifyNodeFinishedProcessing(AudioNode*);
@@ -284,7 +286,7 @@ public:
     };
 
 protected:
-    explicit BaseAudioContext(Document&);
+    explicit BaseAudioContext(Document&, const AudioContextOptions& = { });
     BaseAudioContext(Document&, AudioBuffer* renderTarget);
     
     static bool isSampleRateRangeGood(float sampleRate);

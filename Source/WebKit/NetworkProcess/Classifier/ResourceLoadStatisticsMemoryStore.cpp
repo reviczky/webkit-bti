@@ -98,12 +98,12 @@ void ResourceLoadStatisticsMemoryStore::setPersistentStorage(ResourceLoadStatist
     m_persistentStorage = makeWeakPtr(persistentStorage);
 }
 
-void ResourceLoadStatisticsMemoryStore::calculateAndSubmitTelemetry() const
+void ResourceLoadStatisticsMemoryStore::calculateAndSubmitTelemetry(NotifyPagesForTesting shouldNotifyPagesForTesting) const
 {
     ASSERT(!RunLoop::isMain());
 
     if (parameters().shouldSubmitTelemetry)
-        WebResourceLoadStatisticsTelemetry::calculateAndSubmit(*this);
+        WebResourceLoadStatisticsTelemetry::calculateAndSubmit(*this, shouldNotifyPagesForTesting);
 }
 
 static void ensureThirdPartyDataForSpecificFirstPartyDomain(Vector<WebResourceLoadStatisticsStore::ThirdPartyDataForSpecificFirstParty>& thirdPartyDataForSpecificFirstPartyDomain, const RegistrableDomain& firstPartyDomain, bool thirdPartyHasStorageAccess)
@@ -139,7 +139,7 @@ Vector<WebResourceLoadStatisticsStore::ThirdPartyData> ResourceLoadStatisticsMem
 
     Vector<WebResourceLoadStatisticsStore::ThirdPartyData> thirdPartyDataList;
     for (auto& statistic : m_resourceStatisticsMap.values()) {
-        if (hasBeenThirdParty(statistic) && statistic.isPrevalentResource)
+        if (hasBeenThirdParty(statistic) && (thirdPartyCookieBlockingMode() == ThirdPartyCookieBlockingMode::All || statistic.isPrevalentResource))
             thirdPartyDataList.append(WebResourceLoadStatisticsStore::ThirdPartyData { statistic.registrableDomain, getThirdPartyDataForSpecificFirstPartyDomains(statistic) });
     }
     std::sort(thirdPartyDataList.rbegin(), thirdPartyDataList.rend());

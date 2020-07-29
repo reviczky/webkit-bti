@@ -49,8 +49,6 @@ using namespace WebCore;
 RemoteScrollingCoordinatorProxy::RemoteScrollingCoordinatorProxy(WebPageProxy& webPageProxy)
     : m_webPageProxy(webPageProxy)
     , m_scrollingTree(RemoteScrollingTree::create(*this))
-    , m_requestedScrollInfo(nullptr)
-    , m_propagatesMainFrameScrolls(true)
 {
 }
 
@@ -258,6 +256,12 @@ String RemoteScrollingCoordinatorProxy::scrollingTreeAsText() const
 bool RemoteScrollingCoordinatorProxy::hasScrollableMainFrame() const
 {
     auto* rootNode = m_scrollingTree->rootNode();
+    return rootNode && rootNode->canHaveScrollbars();
+}
+
+bool RemoteScrollingCoordinatorProxy::hasScrollableOrZoomedMainFrame() const
+{
+    auto* rootNode = m_scrollingTree->rootNode();
     if (!rootNode)
         return false;
 
@@ -285,6 +289,24 @@ void RemoteScrollingCoordinatorProxy::setTouchActionsForTouchIdentifier(OptionSe
 void RemoteScrollingCoordinatorProxy::clearTouchActionsForTouchIdentifier(unsigned touchIdentifier)
 {
     m_touchActionsByTouchIdentifier.remove(touchIdentifier);
+}
+
+void RemoteScrollingCoordinatorProxy::sendUIStateChangedIfNecessary()
+{
+    if (!m_uiState.changes())
+        return;
+
+    m_webPageProxy.send(Messages::RemoteScrollingCoordinator::ScrollingStateInUIProcessChanged(m_uiState));
+    m_uiState.clearChanges();
+}
+
+void RemoteScrollingCoordinatorProxy::resetStateAfterProcessExited()
+{
+#if ENABLE(CSS_SCROLL_SNAP)
+    m_currentHorizontalSnapPointIndex = 0;
+    m_currentVerticalSnapPointIndex = 0;
+#endif
+    m_uiState.reset();
 }
 
 } // namespace WebKit

@@ -141,7 +141,11 @@ ALWAYS_INLINE static void fireWatchpointsAndClearStubIfNeeded(VM& vm, StructureS
 {
     if (result.shouldResetStubAndFireWatchpoints()) {
         result.fireWatchpoints(vm);
-        stubInfo.reset(codeBlock);
+
+        {
+            GCSafeConcurrentJSLocker locker(codeBlock->m_lock, vm.heap);
+            stubInfo.reset(locker, codeBlock);
+        }
     }
 }
 
@@ -158,6 +162,8 @@ inline FunctionPtr<CFunctionPtrTag> appropriateOptimizingGetByFunction(GetByKind
         return operationGetByIdDirectOptimize;
     case GetByKind::NormalByVal:
         return operationGetByValOptimize;
+    case GetByKind::PrivateName:
+        return operationGetPrivateNameOptimize;
     }
     RELEASE_ASSERT_NOT_REACHED();
 }
@@ -175,6 +181,8 @@ inline FunctionPtr<CFunctionPtrTag> appropriateGetByFunction(GetByKind kind)
         return operationGetByIdDirect;
     case GetByKind::NormalByVal:
         return operationGetByValGeneric;
+    case GetByKind::PrivateName:
+        return operationGetPrivateName;
     }
     RELEASE_ASSERT_NOT_REACHED();
 }
@@ -194,6 +202,7 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
         if (!baseValue.isCell())
             return GiveUpOnCache;
         JSCell* baseCell = baseValue.asCell();
+        const bool isPrivate = kind == GetByKind::PrivateName;
 
         std::unique_ptr<AccessCase> newCase;
 
@@ -206,7 +215,7 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
                     bool generatedCodeInline = InlineAccess::generateArrayLength(stubInfo, jsCast<JSArray*>(baseCell));
                     if (generatedCodeInline) {
                         ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation, appropriateOptimizingGetByFunction(kind));
-                        stubInfo.initArrayLength();
+                        stubInfo.initArrayLength(locker);
                         return RetryCacheLater;
                     }
                 }
@@ -217,7 +226,7 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
                     bool generatedCodeInline = InlineAccess::generateStringLength(stubInfo);
                     if (generatedCodeInline) {
                         ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation, appropriateOptimizingGetByFunction(kind));
-                        stubInfo.initStringLength();
+                        stubInfo.initStringLength(locker);
                         return RetryCacheLater;
                     }
                 }
@@ -249,6 +258,8 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
 
             bool loadTargetFromProxy = false;
             if (baseCell->type() == PureForwardingProxyType) {
+                if (isPrivate)
+                    return GiveUpOnCache;
                 baseValue = jsCast<JSProxy*>(baseCell)->target();
                 baseCell = baseValue.asCell();
                 structure = baseCell->structure(vm);
@@ -272,7 +283,7 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
                     LOG_IC((ICEvent::GetBySelfPatch, structure->classInfo(), Identifier::fromUid(vm, propertyName.uid()), slot.slotBase() == baseValue));
                     structure->startWatchingPropertyForReplacements(vm, slot.cachedOffset());
                     ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation, appropriateOptimizingGetByFunction(kind));
-                    stubInfo.initGetByIdSelf(codeBlock, structure, slot.cachedOffset(), propertyName);
+                    stubInfo.initGetByIdSelf(locker, codeBlock, structure, slot.cachedOffset(), propertyName);
                     return RetryCacheLater;
                 }
             }
@@ -304,9 +315,9 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
                 if (slot.isUnset() && structure->typeInfo().getOwnPropertySlotIsImpureForPropertyAbsence())
                     return GiveUpOnCache;
 
-                // If a kind is GetByKind::Direct, we do not need to investigate prototype chains further.
+                // If a kind is GetByKind::Direct or GetByKind::PrivateName, we do not need to investigate prototype chains further.
                 // Cacheability just depends on the head structure.
-                if (kind != GetByKind::Direct) {
+                if (kind != GetByKind::Direct && !isPrivate) {
                     auto cacheStatus = prepareChainForCaching(globalObject, baseCell, slot);
                     if (!cacheStatus)
                         return GiveUpOnCache;
@@ -370,7 +381,14 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
             } else if (!loadTargetFromProxy && getter && IntrinsicGetterAccessCase::canEmitIntrinsicGetter(getter, structure))
                 newCase = IntrinsicGetterAccessCase::create(vm, codeBlock, propertyName, slot.cachedOffset(), structure, conditionSet, getter, WTFMove(prototypeAccessChain));
             else {
-                if (slot.isCacheableValue() || slot.isUnset()) {
+                if (isPrivate) {
+                    RELEASE_ASSERT(!slot.isUnset());
+                    constexpr bool isProxy = false;
+                    if (!slot.isCacheable())
+                        return GiveUpOnCache;
+                    newCase = ProxyableAccessCase::create(vm, codeBlock, AccessCase::Load, propertyName, offset, structure,
+                        conditionSet, isProxy, slot.watchpointSet(), WTFMove(prototypeAccessChain));
+                } else if (slot.isCacheableValue() || slot.isUnset()) {
                     newCase = ProxyableAccessCase::create(vm, codeBlock, slot.isUnset() ? AccessCase::Miss : AccessCase::Load,
                         propertyName, offset, structure, conditionSet, loadTargetFromProxy, slot.watchpointSet(), WTFMove(prototypeAccessChain));
                 } else {
@@ -596,7 +614,7 @@ static InlineCacheAction tryCachePutByID(JSGlobalObject* globalObject, CodeBlock
                     if (generatedCodeInline) {
                         LOG_IC((ICEvent::PutByIdSelfPatch, oldStructure->classInfo(), ident, slot.base() == baseValue));
                         ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation, appropriateOptimizingPutByIdFunction(slot, putKind));
-                        stubInfo.initPutByIdReplace(codeBlock, oldStructure, slot.cachedOffset(), propertyName);
+                        stubInfo.initPutByIdReplace(locker, codeBlock, oldStructure, slot.cachedOffset(), propertyName);
                         return RetryCacheLater;
                     }
                 }
@@ -874,7 +892,7 @@ static InlineCacheAction tryCacheInByID(
                     LOG_IC((ICEvent::InByIdSelfPatch, structure->classInfo(), ident, slot.slotBase() == base));
                     structure->startWatchingPropertyForReplacements(vm, slot.cachedOffset());
                     ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation, operationInByIdOptimize);
-                    stubInfo.initInByIdSelf(codeBlock, structure, slot.cachedOffset(), propertyName);
+                    stubInfo.initInByIdSelf(locker, codeBlock, structure, slot.cachedOffset(), propertyName);
                     return RetryCacheLater;
                 }
             }

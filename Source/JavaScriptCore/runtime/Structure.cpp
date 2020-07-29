@@ -723,6 +723,12 @@ Structure* Structure::attributeChangeTransition(VM& vm, Structure* structure, Pr
     ASSERT(entry);
     entry->attributes = attributes;
 
+    if (attributes & PropertyAttribute::ReadOnly)
+        structure->setContainsReadOnlyProperties();
+
+    if (attributes & PropertyAttribute::DontEnum)
+        structure->setIsQuickPropertyAccessAllowedForEnumeration(false);
+
     structure->checkOffsetConsistency();
     return structure;
 }
@@ -1384,6 +1390,8 @@ bool Structure::canAccessPropertiesQuicklyForEnumeration() const
     if (!isQuickPropertyAccessAllowedForEnumeration())
         return false;
     if (hasGetterSetterProperties())
+        return false;
+    if (hasCustomGetterSetterProperties())
         return false;
     if (isUncacheableDictionary())
         return false;

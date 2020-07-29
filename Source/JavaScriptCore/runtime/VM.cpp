@@ -45,6 +45,7 @@
 #include "DOMAttributeGetterSetter.h"
 #include "DateInstance.h"
 #include "DebuggerScope.h"
+#include "DeferredWorkTimer.h"
 #include "Disassembler.h"
 #include "DoublePredictionFuzzerAgent.h"
 #include "ErrorInstance.h"
@@ -65,6 +66,7 @@
 #include "Interpreter.h"
 #include "IntlCollator.h"
 #include "IntlDateTimeFormat.h"
+#include "IntlDisplayNames.h"
 #include "IntlLocale.h"
 #include "IntlNumberFormat.h"
 #include "IntlPluralRules.h"
@@ -88,6 +90,7 @@
 #include "JSCallee.h"
 #include "JSCustomGetterSetterFunction.h"
 #include "JSDestructibleObjectHeapCellType.h"
+#include "JSFinalizationRegistry.h"
 #include "JSFunction.h"
 #include "JSGlobalLexicalEnvironment.h"
 #include "JSGlobalObject.h"
@@ -133,7 +136,6 @@
 #include "ProfilerDatabase.h"
 #include "ProgramCodeBlock.h"
 #include "ProgramExecutable.h"
-#include "PromiseTimer.h"
 #include "PropertyMapHashTable.h"
 #include "ProxyRevoke.h"
 #include "RandomizingFuzzerAgent.h"
@@ -262,12 +264,10 @@ inline unsigned VM::nextID()
 
 static bool vmCreationShouldCrash = false;
 
-VM::VM(VMType vmType, HeapType heapType)
+VM::VM(VMType vmType, HeapType heapType, WTF::RunLoop* runLoop, bool* success)
     : m_id(nextID())
     , m_apiLock(adoptRef(new JSLock(this)))
-#if USE(CF)
-    , m_runLoop(CFRunLoopGetCurrent())
-#endif // USE(CF)
+    , m_runLoop(runLoop ? *runLoop : WTF::RunLoop::current())
     , m_random(Options::seedOfVMRandomForFuzzer() ? Options::seedOfVMRandomForFuzzer() : cryptographicallyRandomNumber())
     , m_integrityRandom(*this)
     , heap(*this, heapType)
@@ -284,6 +284,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , callbackObjectHeapCellType(IsoHeapCellType::create<JSCallbackObject<JSNonFinalObject>>())
     , dateInstanceHeapCellType(IsoHeapCellType::create<DateInstance>())
     , errorInstanceHeapCellType(IsoHeapCellType::create<ErrorInstance>())
+    , finalizationRegistryCellType(IsoHeapCellType::create<JSFinalizationRegistry>())
     , globalLexicalEnvironmentHeapCellType(IsoHeapCellType::create<JSGlobalLexicalEnvironment>())
     , globalObjectHeapCellType(IsoHeapCellType::create<JSGlobalObject>())
     , injectedScriptHostSpaceHeapCellType(IsoHeapCellType::create<Inspector::JSInjectedScriptHost>())
@@ -306,6 +307,7 @@ VM::VM(VMType vmType, HeapType heapType)
 #endif
     , intlCollatorHeapCellType(IsoHeapCellType::create<IntlCollator>())
     , intlDateTimeFormatHeapCellType(IsoHeapCellType::create<IntlDateTimeFormat>())
+    , intlDisplayNamesHeapCellType(IsoHeapCellType::create<IntlDisplayNames>())
     , intlLocaleHeapCellType(IsoHeapCellType::create<IntlLocale>())
     , intlNumberFormatHeapCellType(IsoHeapCellType::create<IntlNumberFormat>())
     , intlPluralRulesHeapCellType(IsoHeapCellType::create<IntlPluralRules>())
@@ -367,7 +369,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , clientData(nullptr)
     , topEntryFrame(nullptr)
     , topCallFrame(CallFrame::noCaller())
-    , promiseTimer(PromiseTimer::create(*this))
+    , deferredWorkTimer(DeferredWorkTimer::create(*this))
     , m_atomStringTable(vmType == Default ? Thread::current().atomStringTable() : new AtomStringTable)
     , propertyNames(nullptr)
     , emptyList(new ArgList)
@@ -466,8 +468,14 @@ VM::VM(VMType vmType, HeapType heapType)
     }
     {
         auto* bigInt = JSBigInt::tryCreateFrom(*this, 1);
-        RELEASE_ASSERT(bigInt);
-        heapBigIntConstantOne.set(*this, bigInt);
+        if (bigInt)
+            heapBigIntConstantOne.set(*this, bigInt);
+        else {
+            if (success)
+                *success = false;
+            else
+                RELEASE_ASSERT(bigInt);
+        }
     }
 
     Thread::current().setCurrentAtomStringTable(existingEntryAtomStringTable);
@@ -571,7 +579,7 @@ VM::~VM()
     auto destructionLocker = holdLock(s_destructionLock.read());
     
     Gigacage::removePrimitiveDisableCallback(primitiveGigacageDisabledCallback, this);
-    promiseTimer->stopRunningTasks();
+    deferredWorkTimer->stopRunningTasks();
 #if ENABLE(WEBASSEMBLY)
     if (Wasm::Worklist* worklist = Wasm::existingWorklistOrNull())
         worklist->stopAllPlansForContext(wasmContext);
@@ -671,9 +679,31 @@ Ref<VM> VM::createContextGroup(HeapType heapType)
     return adoptRef(*new VM(APIContextGroup, heapType));
 }
 
-Ref<VM> VM::create(HeapType heapType)
+Ref<VM> VM::create(HeapType heapType, WTF::RunLoop* runLoop)
 {
-    return adoptRef(*new VM(Default, heapType));
+    return adoptRef(*new VM(Default, heapType, runLoop));
+}
+
+RefPtr<VM> VM::tryCreate(HeapType heapType, WTF::RunLoop* runLoop)
+{
+    bool success = true;
+    RefPtr<VM> vm = adoptRef(new VM(Default, heapType, runLoop, &success));
+    if (!success) {
+        // Here, we're destructing a partially constructed VM and we know that
+        // no one else can be using it at the same time. So, acquiring the lock
+        // is superflous. However, we don't want to change how VMs are destructed.
+        // Just going through the motion of acquiring the lock here allows us to
+        // use the standard destruction process.
+
+        // VM expects us to be holding the VM lock when destructing it. Acquiring
+        // the lock also puts the VM in a state (e.g. acquiring heap access) that
+        // is needed for destruction. The lock will hold the last reference to
+        // the VM after we nullify the refPtr below. The VM will actually be
+        // destructed in JSLockHolder's destructor.
+        JSLockHolder lock(vm.get());
+        vm = nullptr;
+    }
+    return vm;
 }
 
 bool VM::sharedInstanceExists()
@@ -1355,15 +1385,6 @@ void VM::verifyExceptionCheckNeedIsSatisfied(unsigned recursionDepth, ExceptionE
 }
 #endif
 
-#if USE(CF)
-void VM::setRunLoop(CFRunLoopRef runLoop)
-{
-    ASSERT(runLoop);
-    m_runLoop = runLoop;
-    JSRunLoopTimer::Manager::shared().didChangeRunLoop(*this, runLoop);
-}
-#endif // USE(CF)
-
 ScratchBuffer* VM::scratchBufferForSize(size_t size)
 {
     if (!size)
@@ -1470,6 +1491,7 @@ DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(weakMapSpace, weakMapHeapCellType.get(),
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(weakSetSpace, weakSetHeapCellType.get(), JSWeakSet) // Hash:0x4c781b30
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(weakObjectRefSpace, cellHeapCellType.get(), JSWeakObjectRef) // Hash:0x8ec68f1f
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(withScopeSpace, cellHeapCellType.get(), JSWithScope)
+DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(finalizationRegistrySpace, finalizationRegistryCellType.get(), JSFinalizationRegistry)
 #if JSC_OBJC_API_ENABLED
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(apiWrapperObjectSpace, apiWrapperObjectHeapCellType.get(), JSCallbackObject<JSAPIWrapperObject>)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(objCCallbackFunctionSpace, objCCallbackFunctionHeapCellType.get(), ObjCCallbackFunction) // Hash:0x10f610b8
@@ -1481,6 +1503,7 @@ DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(callbackAPIWrapperGlobalObjectSpace, cal
 #endif
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(intlCollatorSpace, intlCollatorHeapCellType.get(), IntlCollator)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(intlDateTimeFormatSpace, intlDateTimeFormatHeapCellType.get(), IntlDateTimeFormat)
+DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(intlDisplayNamesSpace, intlDisplayNamesHeapCellType.get(), IntlDisplayNames)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(intlLocaleSpace, intlLocaleHeapCellType.get(), IntlLocale)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(intlNumberFormatSpace, intlNumberFormatHeapCellType.get(), IntlNumberFormat)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(intlPluralRulesSpace, intlPluralRulesHeapCellType.get(), IntlPluralRules)
@@ -1550,6 +1573,35 @@ JSGlobalObject* VM::deprecatedVMEntryGlobalObject(JSGlobalObject* globalObject) 
 void VM::setCrashOnVMCreation(bool shouldCrash)
 {
     vmCreationShouldCrash = shouldCrash;
+}
+
+void VM::addLoopHintExecutionCounter(const Instruction* instruction)
+{
+    auto locker = holdLock(m_loopHintExecutionCountLock);
+    auto addResult = m_loopHintExecutionCounts.add(instruction, std::pair<unsigned, std::unique_ptr<uint64_t>>(0, nullptr));
+    if (addResult.isNewEntry) {
+        auto ptr = WTF::makeUniqueWithoutFastMallocCheck<uint64_t>();
+        *ptr = 0;
+        addResult.iterator->value.second = WTFMove(ptr);
+    }
+    ++addResult.iterator->value.first;
+}
+
+uint64_t* VM::getLoopHintExecutionCounter(const Instruction* instruction)
+{
+    auto locker = holdLock(m_loopHintExecutionCountLock);
+    auto iter = m_loopHintExecutionCounts.find(instruction);
+    return iter->value.second.get();
+}
+
+void VM::removeLoopHintExecutionCounter(const Instruction* instruction)
+{
+    auto locker = holdLock(m_loopHintExecutionCountLock);
+    auto iter = m_loopHintExecutionCounts.find(instruction);
+    RELEASE_ASSERT(!!iter->value.first);
+    --iter->value.first;
+    if (!iter->value.first)
+        m_loopHintExecutionCounts.remove(iter);
 }
 
 } // namespace JSC

@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
  *  Copyright (C) 2001 Peter Kelly (pmk@post.com)
- *  Copyright (C) 2003-2019 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2020 Apple Inc. All rights reserved.
  *  Copyright (C) 2007 Eric Seidel (eric@webkit.org)
  *
  *  This library is free software; you can redistribute it and/or
@@ -133,6 +133,8 @@ ALWAYS_INLINE bool JSObject::getPropertySlot(JSGlobalObject* globalObject, unsig
         RETURN_IF_EXCEPTION(scope, false);
         if (hasSlot)
             return true;
+        if (UNLIKELY(slot.isVMInquiry() && slot.isTaintedByOpaqueObject()))
+            return false;
         if (object->type() == ProxyObjectType && slot.internalMethodType() == PropertySlot::InternalMethodType::HasProperty)
             return false;
         JSValue prototype;
@@ -174,6 +176,8 @@ ALWAYS_INLINE bool JSObject::getNonIndexPropertySlot(JSGlobalObject* globalObjec
             RETURN_IF_EXCEPTION(scope, false);
             if (hasSlot)
                 return true;
+            if (UNLIKELY(slot.isVMInquiry() && slot.isTaintedByOpaqueObject()))
+                return false;
             if (object->type() == ProxyObjectType && slot.internalMethodType() == PropertySlot::InternalMethodType::HasProperty)
                 return false;
         }
@@ -314,10 +318,11 @@ ALWAYS_INLINE bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName
             putDirect(vm, offset, value);
             structure->didReplaceProperty(offset);
 
-            if ((attributes & PropertyAttribute::Accessor) != (currentAttributes & PropertyAttribute::Accessor) || (attributes & PropertyAttribute::CustomAccessorOrValue) != (currentAttributes & PropertyAttribute::CustomAccessorOrValue)) {
-                ASSERT(!(attributes & PropertyAttribute::ReadOnly));
+            // FIXME: Check attributes against PropertyAttribute::CustomAccessorOrValue. Changing GetterSetter should work w/o transition.
+            // https://bugs.webkit.org/show_bug.cgi?id=214342
+            if (mode == PutModeDefineOwnProperty && (attributes != currentAttributes || (attributes & PropertyAttribute::AccessorOrCustomAccessorOrValue)))
                 setStructure(vm, Structure::attributeChangeTransition(vm, structure, propertyName, attributes));
-            } else
+            else
                 slot.setExistingProperty(this, offset);
 
             return true;
@@ -368,10 +373,11 @@ ALWAYS_INLINE bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName
         structure->didReplaceProperty(offset);
         putDirect(vm, offset, value);
 
-        if ((attributes & PropertyAttribute::Accessor) != (currentAttributes & PropertyAttribute::Accessor) || (attributes & PropertyAttribute::CustomAccessorOrValue) != (currentAttributes & PropertyAttribute::CustomAccessorOrValue)) {
-            ASSERT(!(attributes & PropertyAttribute::ReadOnly));
+        // FIXME: Check attributes against PropertyAttribute::CustomAccessorOrValue. Changing GetterSetter should work w/o transition.
+        // https://bugs.webkit.org/show_bug.cgi?id=214342
+        if (mode == PutModeDefineOwnProperty && (attributes != currentAttributes || (attributes & PropertyAttribute::AccessorOrCustomAccessorOrValue)))
             setStructure(vm, Structure::attributeChangeTransition(vm, structure, propertyName, attributes));
-        } else
+        else
             slot.setExistingProperty(this, offset);
 
         return true;
@@ -582,6 +588,7 @@ ALWAYS_INLINE bool JSObject::getPrivateFieldSlot(JSObject* object, JSGlobalObjec
         return false;
 
     JSValue value = object->getDirect(offset);
+#if ASSERT_ENABLED
     ASSERT(value);
     if (value.isCell()) {
         JSCell* cell = value.asCell();
@@ -592,6 +599,7 @@ ALWAYS_INLINE bool JSObject::getPrivateFieldSlot(JSObject* object, JSGlobalObjec
         // as in JSObject::getOwnNonIndexPropertySlot()
         // https://bugs.webkit.org/show_bug.cgi?id=194435
     }
+#endif
 
     slot.setValue(object, attributes, value, offset);
     return true;
@@ -601,6 +609,7 @@ inline bool JSObject::getPrivateField(JSGlobalObject* globalObject, PropertyName
 {
     VM& vm = getVM(globalObject);
     auto scope = DECLARE_THROW_SCOPE(vm);
+    ASSERT(!slot.isVMInquiry());
     if (!JSObject::getPrivateFieldSlot(this, globalObject, propertyName, slot)) {
         throwException(globalObject, scope, createInvalidPrivateNameError(globalObject));
         RELEASE_AND_RETURN(scope, false);

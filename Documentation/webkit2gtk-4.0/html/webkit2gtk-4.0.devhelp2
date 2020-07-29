@@ -995,7 +995,20 @@
     <keyword type="function" name="webkit_website_data_manager_remove_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-remove-finish" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_clear ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-clear" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_clear_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-clear-finish" since="2.16"/>
+    <keyword type="function" name="webkit_itp_first_party_ref ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-ref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_unref ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-unref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_get_domain ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-get-domain" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_get_website_data_access_allowed ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-get-website-data-access-allowed" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_get_last_update_time ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-get-last-update-time" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_ref ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-ref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_unref ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-unref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_get_domain ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-get-domain" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_get_first_parties ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-get-first-parties" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_itp_summary ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-summary" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_itp_summary_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-summary-finish" since="2.30"/>
     <keyword type="struct" name="struct WebKitWebsiteDataManager" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager-struct"/>
+    <keyword type="struct" name="WebKitITPFirstParty" link="WebKitWebsiteDataManager.html#WebKitITPFirstParty-struct"/>
+    <keyword type="struct" name="WebKitITPThirdParty" link="WebKitWebsiteDataManager.html#WebKitITPThirdParty-struct"/>
     <keyword type="property" name="The “base-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--base-cache-directory"/>
     <keyword type="property" name="The “base-data-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--base-data-directory"/>
     <keyword type="property" name="The “disk-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--disk-cache-directory"/>

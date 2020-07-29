@@ -224,9 +224,7 @@ public:
 
     WEBCORE_EXPORT static void forEachPage(const WTF::Function<void(Page&)>&);
 
-    void incrementSubframeCount() { ++m_subframeCount; }
-    void decrementSubframeCount() { ASSERT(m_subframeCount); --m_subframeCount; }
-    int subframeCount() const { checkSubframeCountConsistency(); return m_subframeCount; }
+    unsigned subframeCount() const;
 
     void incrementNestedRunLoopCount();
     void decrementNestedRunLoopCount();
@@ -364,6 +362,7 @@ public:
     float initialScaleIgnoringContentSize() const { return m_initialScaleIgnoringContentSize; }
     WEBCORE_EXPORT void setInitialScaleIgnoringContentSize(float);
 
+    WEBCORE_EXPORT void screenPropertiesDidChange();
     void windowScreenDidChange(PlatformDisplayID, Optional<unsigned> nominalFramesPerSecond);
     PlatformDisplayID displayID() const { return m_displayID; }
     Optional<unsigned> displayNominalFramesPerSecond() const { return m_displayNominalFramesPerSecond; }
@@ -494,6 +493,9 @@ public:
     
     WEBCORE_EXPORT void scheduleRenderingUpdate();
     void scheduleTimedRenderingUpdate();
+    
+    WEBCORE_EXPORT void startTrackingRenderingUpdates();
+    WEBCORE_EXPORT unsigned renderingUpdateCount() const;
 
     WEBCORE_EXPORT void suspendScriptedAnimations();
     WEBCORE_EXPORT void resumeScriptedAnimations();
@@ -782,8 +784,6 @@ private:
     void setIsVisibleInternal(bool);
     void setIsVisuallyIdleInternal(bool);
 
-    void checkSubframeCountConsistency() const;
-
     enum ShouldHighlightMatches { DoNotHighlightMatches, HighlightMatches };
     enum ShouldMarkMatches { DoNotMarkMatches, MarkMatches };
 
@@ -860,7 +860,6 @@ private:
     int m_nestedRunLoopCount { 0 };
     WTF::Function<void()> m_unnestCallback;
 
-    int m_subframeCount { 0 };
     String m_groupName;
     bool m_openedByDOM { false };
     bool m_openedByDOMWithOpener { false };
@@ -987,6 +986,9 @@ private:
 
     PAL::SessionID m_sessionID;
 
+    unsigned m_renderingUpdateCount { 0 };
+    bool m_isTrackingRenderingUpdates { false };
+
     bool m_isClosing { false };
     bool m_isRestoringCachedPage { false };
 
@@ -1071,13 +1073,5 @@ inline PageGroup& Page::group()
         initGroup();
     return *m_group;
 }
-
-#if !ASSERT_ENABLED
-
-inline void Page::checkSubframeCountConsistency() const
-{
-}
-
-#endif // !ASSERT_ENABLED
 
 } // namespace WebCore

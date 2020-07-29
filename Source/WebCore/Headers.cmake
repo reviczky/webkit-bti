@@ -1071,6 +1071,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/encryptedmedia/CDMRequirement.h
     platform/encryptedmedia/CDMRestrictions.h
     platform/encryptedmedia/CDMSessionType.h
+    platform/encryptedmedia/CDMUtilities.h
 
     platform/gamepad/GamepadProvider.h
     platform/gamepad/GamepadProviderClient.h
@@ -1192,7 +1193,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/RemoteVideoSample.h
     platform/graphics/RenderingMode.h
     platform/graphics/RoundedRect.h
-    platform/graphics/SimpleColor.h
     platform/graphics/StringTruncator.h
     platform/graphics/TabSize.h
     platform/graphics/TextRun.h
@@ -1283,7 +1283,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/BlobRegistryImpl.h
     platform/network/BlobResourceHandle.h
     platform/network/CacheValidation.h
-    platform/network/CertificateInfoBase.h
+    platform/network/CertificateSummary.h
     platform/network/CookieRequestHeaderFieldProxy.h
     platform/network/CookieStorage.h
     platform/network/Credential.h
@@ -1606,3 +1606,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     ${WebCore_DERIVED_SOURCES_DIR}/WebKitFontFamilyNames.h
     ${WebCore_DERIVED_SOURCES_DIR}/WritableStreamInternalsBuiltins.h
 )
+
+if (ENABLE_OPENCDM)
+    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS platform/encryptedmedia/CDMOpenCDMTypes.h)
+endif ()

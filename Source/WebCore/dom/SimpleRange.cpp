@@ -55,6 +55,24 @@ bool operator==(const SimpleRange& a, const SimpleRange& b)
     return a.start == b.start && a.end == b.end;
 }
 
+// FIXME: Create BoundaryPoint.cpp and move this there.
+Optional<BoundaryPoint> makeBoundaryPointBeforeNode(Node& node)
+{
+    auto parent = node.parentNode();
+    if (!parent)
+        return WTF::nullopt;
+    return BoundaryPoint { *parent, node.computeNodeIndex() };
+}
+
+// FIXME: Create BoundaryPoint.cpp and move this there.
+Optional<BoundaryPoint> makeBoundaryPointAfterNode(Node& node)
+{
+    auto parent = node.parentNode();
+    if (!parent)
+        return WTF::nullopt;
+    return BoundaryPoint { *parent, node.computeNodeIndex() + 1 };
+}
+
 Optional<SimpleRange> makeRangeSelectingNode(Node& node)
 {
     auto parent = node.parentNode();
@@ -62,6 +80,20 @@ Optional<SimpleRange> makeRangeSelectingNode(Node& node)
         return WTF::nullopt;
     unsigned offset = node.computeNodeIndex();
     return SimpleRange { { *parent, offset }, { *parent, offset + 1 } };
+}
+
+Optional<SimpleRange> makeSimpleRange(const Optional<BoundaryPoint>& start, const Optional<BoundaryPoint>& end)
+{
+    if (!start || !end)
+        return WTF::nullopt;
+    return { { *start, *end } };
+}
+
+Optional<SimpleRange> makeSimpleRange(Optional<BoundaryPoint>&& start, Optional<BoundaryPoint>&& end)
+{
+    if (!start || !end)
+        return WTF::nullopt;
+    return { { WTFMove(*start), WTFMove(*end) } };
 }
 
 SimpleRange makeRangeSelectingNodeContents(Node& node)
