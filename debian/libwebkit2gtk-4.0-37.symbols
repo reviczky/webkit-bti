@@ -1562,6 +1562,17 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)webkit_inspector_window_get_type@Base 2.19.6
  webkit_install_missing_media_plugins_permission_request_get_description@Base 2.10.0
  webkit_install_missing_media_plugins_permission_request_get_type@Base 2.10.0
+ webkit_itp_first_party_get_domain@Base 2.29.4
+ webkit_itp_first_party_get_last_update_time@Base 2.29.4
+ webkit_itp_first_party_get_type@Base 2.29.4
+ webkit_itp_first_party_get_website_data_access_allowed@Base 2.29.4
+ webkit_itp_first_party_ref@Base 2.29.4
+ webkit_itp_first_party_unref@Base 2.29.4
+ webkit_itp_third_party_get_domain@Base 2.29.4
+ webkit_itp_third_party_get_first_parties@Base 2.29.4
+ webkit_itp_third_party_get_type@Base 2.29.4
+ webkit_itp_third_party_ref@Base 2.29.4
+ webkit_itp_third_party_unref@Base 2.29.4
  webkit_javascript_error_get_type@Base 2.5.3
  webkit_javascript_error_quark@Base 2.5.3
  webkit_javascript_result_get_global_context@Base 2.5.3
@@ -2103,6 +2114,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  webkit_website_data_manager_get_itp_directory@Base 2.29.2
  webkit_website_data_manager_get_itp_enabled@Base 2.29.2
+ webkit_website_data_manager_get_itp_summary@Base 2.29.4
+ webkit_website_data_manager_get_itp_summary_finish@Base 2.29.4
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
  webkit_website_data_manager_get_persistent_credential_storage_enabled@Base 2.29.2

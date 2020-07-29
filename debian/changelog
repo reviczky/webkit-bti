@@ -11,6 +11,8 @@ webkit2gtk (2.29.4-1) UNRELEASED; urgency=medium
       - Add Build-Profiles: <!nodoc> to libwebkit2gtk-4.0-doc
     + debian/rules:
       - Use dh_listpackages to decide whether to build the documentation.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 29 Jul 2020 23:17:24 +0200
 
