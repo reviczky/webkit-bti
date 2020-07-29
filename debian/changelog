@@ -1,6 +1,9 @@
 webkit2gtk (2.29.4-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/control:
+    + Install libgl1-mesa-dev unconditionally. The decision of which gl
+      library to use is now taken directly by cmake.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 29 Jul 2020 23:17:24 +0200
 

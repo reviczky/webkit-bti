@@ -59,7 +59,7 @@ Build-Depends: gawk,
                mesa-common-dev,
                ninja-build,
                libegl1-mesa-dev,
-               libgl1-mesa-dev [!armel !armhf !arm64],
+               libgl1-mesa-dev,
                libgles2-mesa-dev
 Build-Conflicts: gir-repository-dev
 Standards-Version: 4.5.0
