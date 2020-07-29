@@ -51,8 +51,8 @@ public:
     virtual float dopplerRate() = 0;
 
 protected:
-    
-    // FIXME: Remove once dependencies on old constructor are removed
+
+    // FIXME: Remove once dependency from prefixed version is removed
     PannerNodeBase(BaseAudioContext&, float sampleRate);
     PannerNodeBase(BaseAudioContext&);
 };
@@ -67,14 +67,8 @@ protected:
 class PannerNode final : public PannerNodeBase {
     WTF_MAKE_ISO_ALLOCATED(PannerNode);
 public:
-    // FIXME: Remove once dependencies on old constructor are removed
-    static Ref<PannerNode> create(BaseAudioContext& context, float sampleRate)
-    {
-        return adoptRef(*new PannerNode(context, sampleRate));
-    }
-    
     static ExceptionOr<Ref<PannerNode>> create(BaseAudioContext&, const PannerOptions& = { });
-    
+
     virtual ~PannerNode();
 
     // AudioNode
@@ -127,6 +121,9 @@ public:
 
     double coneOuterGain() const { return m_coneEffect.outerGain(); }
     ExceptionOr<void> setConeOuterGain(double);
+    
+    ExceptionOr<void> setChannelCount(unsigned) final;
+    ExceptionOr<void> setChannelCountMode(ChannelCountMode) final;
 
     void getAzimuthElevation(double* outAzimuth, double* outElevation);
     float dopplerRate() final;
@@ -139,8 +136,6 @@ public:
     double latencyTime() const override { return m_panner ? m_panner->latencyTime() : 0; }
 
 private:
-    // FIXME: Remove once dependencies on old constructor are removed
-    PannerNode(BaseAudioContext&, float sampleRate);
     PannerNode(BaseAudioContext&, const PannerOptions&);
 
     // Returns the combined distance and cone gain attenuation.

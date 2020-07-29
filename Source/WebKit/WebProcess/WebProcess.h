@@ -307,6 +307,7 @@ public:
     void notifyPreferencesChanged(const String& domain, const String& key, const Optional<String>& encodedValue);
     void unblockPreferenceService(SandboxExtension::HandleArray&&);
 #endif
+    void powerSourceDidChange(bool);
 #endif
 
     bool areAllPagesThrottleable() const;
@@ -514,6 +515,10 @@ private:
 #endif
 
     bool isAlwaysOnLoggingAllowed() { return m_sessionID ? m_sessionID->isAlwaysOnLoggingAllowed() : true; }
+
+#if PLATFORM(COCOA)
+    void handleXPCEndpointMessages() const;
+#endif
 
     RefPtr<WebConnectionToUIProcess> m_webConnection;
 

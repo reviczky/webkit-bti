@@ -49,6 +49,11 @@ struct ScreenData {
     bool screenIsMonochrome { false };
     uint32_t displayMask { 0 };
     IORegistryGPUID gpuID { 0 };
+    DynamicRangeMode preferredDynamicRangeMode { DynamicRangeMode::Standard };
+#endif
+
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
+    float scaleFactor { 1 };
 #endif
 
     enum class ColorSpaceType : uint8_t { None, Name, Data };
@@ -95,7 +100,11 @@ void ScreenData::encode(Encoder& encoder) const
     encoder << screenAvailableRect << screenRect << screenDepth << screenDepthPerComponent << screenSupportsExtendedColor << screenHasInvertedColors << screenSupportsHighDynamicRange;
 
 #if PLATFORM(MAC)
-    encoder << screenIsMonochrome << displayMask << gpuID;
+    encoder << screenIsMonochrome << displayMask << gpuID << preferredDynamicRangeMode;
+#endif
+
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
+    encoder << scaleFactor;
 #endif
 
     if (colorSpace) {
@@ -174,6 +183,18 @@ Optional<ScreenData> ScreenData::decode(Decoder& decoder)
     decoder >> gpuID;
     if (!gpuID)
         return WTF::nullopt;
+
+    Optional<DynamicRangeMode> preferredDynamicRangeMode;
+    decoder >> preferredDynamicRangeMode;
+    if (!preferredDynamicRangeMode)
+        return WTF::nullopt;
+#endif
+
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
+    Optional<float> scaleFactor;
+    decoder >> scaleFactor;
+    if (!scaleFactor)
+        return WTF::nullopt;
 #endif
 
     ColorSpaceType dataType;
@@ -219,7 +240,11 @@ Optional<ScreenData> ScreenData::decode(Decoder& decoder)
 #if PLATFORM(MAC)
         WTFMove(*screenIsMonochrome),
         WTFMove(*displayMask),
-        WTFMove(*gpuID)
+        WTFMove(*gpuID),
+        WTFMove(*preferredDynamicRangeMode),
+#endif
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
+        WTFMove(*scaleFactor),
 #endif
     } };
 }

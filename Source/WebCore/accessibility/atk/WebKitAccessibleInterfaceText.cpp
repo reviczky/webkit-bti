@@ -43,6 +43,7 @@
 #include "HostWindow.h"
 #include "InlineTextBox.h"
 #include "NotImplemented.h"
+#include "Range.h"
 #include "RenderListItem.h"
 #include "RenderListMarker.h"
 #include "RenderText.h"
@@ -447,9 +448,8 @@ static gchar* webkitAccessibleTextGetText(AtkText* text, gint startOffset, gint 
 
 #if ENABLE(INPUT_TYPE_COLOR)
     if (coreObject->roleValue() == AccessibilityRole::ColorWell) {
-        int r, g, b;
-        coreObject->colorValue(r, g, b);
-        return g_strdup_printf("rgb %7.5f %7.5f %7.5f 1", r / 255., g / 255., b / 255.);
+        auto color = convertToComponentFloats(coreObject->colorValue());
+        return g_strdup_printf("rgb %7.5f %7.5f %7.5f 1", color.red, color.green, color.blue);
     }
 #endif
 

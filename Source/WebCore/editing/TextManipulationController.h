@@ -116,6 +116,7 @@ public:
     WEBCORE_EXPORT void startObservingParagraphs(ManipulationItemCallback&&, Vector<ExclusionRule>&& = { });
 
     void didCreateRendererForElement(Element&);
+    void didUpdateContentForText(Text&);
     void removeNode(Node*);
 
     enum class ManipulationFailureType : uint8_t {
@@ -175,10 +176,11 @@ private:
     using NodeEntry = std::pair<Ref<Node>, Ref<Node>>;
     Vector<Ref<Node>> getPath(Node*, Node*);
     void updateInsertions(Vector<NodeEntry>&, const Vector<Ref<Node>>&, Node*, HashSet<Ref<Node>>&, Vector<NodeInsertion>&);
-    Optional<ManipulationFailureType> replace(const ManipulationItemData&, const Vector<ManipulationToken>&);
+    Optional<ManipulationFailureType> replace(const ManipulationItemData&, const Vector<ManipulationToken>&, HashSet<Ref<Node>>& containersWithoutVisualOverflowBeforeReplacement);
 
     WeakPtr<Document> m_document;
     WeakHashSet<Element> m_elementsWithNewRenderer;
+    HashSet<Text*> m_manipulatedTextsWithNewContent;
     HashSet<Node*> m_manipulatedNodes;
 
     HashMap<String, bool> m_cachedFontFamilyExclusionResults;

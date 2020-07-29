@@ -26,18 +26,15 @@
 #include "config.h"
 #include "Color.h"
 
-#include "AnimationUtilities.h"
 #include "ColorSerialization.h"
 #include "ColorUtilities.h"
 #include <wtf/Assertions.h>
-#include <wtf/MathExtras.h>
-#include <wtf/text/StringBuilder.h>
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-static constexpr auto lightenedBlack = makeSimpleColor(84, 84, 84);
-static constexpr auto darkenedWhite = makeSimpleColor(171, 171, 171);
+static constexpr auto lightenedBlack = SRGBA<uint8_t> { 84, 84, 84 };
+static constexpr auto darkenedWhite = SRGBA<uint8_t> { 171, 171, 171 };
 
 Color::Color(const Color& other)
     : m_colorData(other.m_colorData)
@@ -75,7 +72,7 @@ Color& Color::operator=(Color&& other)
         m_colorData.extendedColor->deref();
 
     m_colorData = other.m_colorData;
-    other.m_colorData.simpleColorAndFlags = invalidSimpleColor;
+    other.m_colorData.inlineColorAndFlags = invalidInlineColor;
 
     return *this;
 }
@@ -83,24 +80,24 @@ Color& Color::operator=(Color&& other)
 Color Color::lightened() const
 {
     // Hardcode this common case for speed.
-    if (isSimple() && asSimple() == black)
+    if (isInline() && asInline() == black)
         return lightenedBlack;
 
     auto [r, g, b, a] = toSRGBALossy<float>();
     float v = std::max({ r, g, b });
 
     if (v == 0.0f)
-        return lightenedBlack.colorWithAlpha(alpha());
+        return lightenedBlack.colorWithAlphaByte(alphaByte());
 
     float multiplier = std::min(1.0f, v + 0.33f) / v;
 
-    return makeSimpleColor(SRGBA { multiplier * r, multiplier * g, multiplier * b, a });
+    return convertToComponentBytes(SRGBA { multiplier * r, multiplier * g, multiplier * b, a });
 }
 
 Color Color::darkened() const
 {
     // Hardcode this common case for speed.
-    if (isSimple() && asSimple() == white)
+    if (isInline() && asInline() == white)
         return darkenedWhite;
     
     auto [r, g, b, a] = toSRGBALossy<float>();
@@ -108,7 +105,7 @@ Color Color::darkened() const
     float v = std::max({ r, g, b });
     float multiplier = std::max(0.0f, (v - 0.33f) / v);
 
-    return makeSimpleColor(SRGBA { multiplier * r, multiplier * g, multiplier * b, a });
+    return convertToComponentBytes(SRGBA { multiplier * r, multiplier * g, multiplier * b, a });
 }
 
 float Color::lightness() const
@@ -126,22 +123,26 @@ float Color::luminance() const
 
 Color Color::colorWithAlpha(float alpha) const
 {
-    if (isExtended())
-        return asExtended().colorWithAlpha(alpha);
+    return callOnUnderlyingType(WTF::makeVisitor(
+        [&] (const SRGBA<uint8_t>& underlyingColor) -> Color {
+            Color result = colorWithOverridenAlpha(underlyingColor, alpha);
 
-    Color result = asSimple().colorWithAlpha(convertToComponentByte(alpha));
-
-    // FIXME: Why is preserving the semantic bit desired and/or correct here?
-    if (isSemantic())
-        result.tagAsSemantic();
-    return result;
+            // FIXME: Why is preserving the semantic bit desired and/or correct here?
+            if (isSemantic())
+                result.tagAsSemantic();
+            return result;
+        },
+        [&] (const auto& underlyingColor) -> Color {
+            return colorWithOverridenAlpha(underlyingColor, alpha);
+        }
+    ));
 }
 
 Color Color::invertedColorWithAlpha(float alpha) const
 {
-    if (isExtended())
-        return asExtended().invertedColorWithAlpha(alpha);
-    return asSimple().invertedColorWithAlpha(convertToComponentByte(alpha));
+    return callOnUnderlyingType([&] (const auto& underlyingColor) -> Color {
+        return invertedColorWithOverridenAlpha(underlyingColor, alpha);
+    });
 }
 
 Color Color::semanticColor() const
@@ -149,14 +150,14 @@ Color Color::semanticColor() const
     if (isSemantic())
         return *this;
 
-    return { makeSimpleColor(toSRGBALossy<uint8_t>()), Semantic };
+    return { toSRGBALossy<uint8_t>(), Semantic };
 }
 
 std::pair<ColorSpace, ColorComponents<float>> Color::colorSpaceAndComponents() const
 {
     if (isExtended())
         return { asExtended().colorSpace(), asExtended().components() };
-    return { ColorSpace::SRGB, asColorComponents(asSimple().asSRGBA<float>()) };
+    return { ColorSpace::SRGB, asColorComponents(convertToComponentFloats(asInline())) };
 }
 
 TextStream& operator<<(TextStream& ts, const Color& color)

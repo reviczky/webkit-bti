@@ -37,6 +37,7 @@
 #include "RealtimeMediaSource.h"
 #include "SleepDisabler.h"
 #include "TextIndicator.h"
+#include "VP9Utilities.h"
 #include <JavaScriptCore/Float32Array.h>
 #include <wtf/Optional.h>
 
@@ -540,6 +541,9 @@ public:
     ExceptionOr<void> startTrackingCompositingUpdates();
     ExceptionOr<unsigned> compositingUpdateCount();
 
+    ExceptionOr<void> startTrackingRenderingUpdates();
+    ExceptionOr<unsigned> renderingUpdateCount();
+
     enum CompositingPolicy { Normal, Conservative };
     ExceptionOr<void> setCompositingPolicyOverride(Optional<CompositingPolicy>);
     ExceptionOr<Optional<CompositingPolicy>> compositingPolicyOverride() const;
@@ -835,6 +839,7 @@ public:
     void markContextAsInsecure();
 
     bool usingAppleInternalSDK() const;
+    bool usingGStreamer() const;
 
     struct NowPlayingState {
         String title;
@@ -915,6 +920,9 @@ public:
     using DoViParameterSet = WebCore::DoViParameterSet;
     Optional<DoViParameterSet> parseDoViCodecParameters(const String& codecString);
 
+    using VPCodecConfigurationRecord = WebCore::VPCodecConfigurationRecord;
+    Optional<VPCodecConfigurationRecord> parseVPCodecParameters(const String& codecString);
+
     struct CookieData {
         String name;
         String value;
@@ -957,7 +965,7 @@ public:
 
     void testDictionaryLogging();
 
-    void setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest&, double);
+    void setMaximumIntervalForUserGestureForwardingForFetch(double);
     void setTransientActivationDuration(double seconds);
 
     void setIsPlayingToAutomotiveHeadUnit(bool);
@@ -1013,6 +1021,12 @@ public:
     String systemColorForCSSValue(const String& cssValue, bool useDarkModeAppearance, bool useElevatedUserInterfaceLevel);
 
     bool systemHasBattery() const;
+
+    void setSystemHasBatteryForTesting(bool);
+    void setSystemHasACForTesting(bool);
+
+    void setHardwareVP9DecoderDisabledForTesting(bool);
+    void setVP9ScreenSizeAndScaleForTesting(double, double, double);
 
     int readPreferenceInteger(const String& domain, const String& key);
     String encodedPreferenceValue(const String& domain, const String& key);

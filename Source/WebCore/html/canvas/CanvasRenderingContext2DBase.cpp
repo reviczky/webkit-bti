@@ -48,6 +48,7 @@
 #include "DisplayListRecorder.h"
 #include "DisplayListReplayer.h"
 #include "FloatQuad.h"
+#include "Gradient.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLVideoElement.h"
@@ -171,7 +172,7 @@ CanvasRenderingContext2DBase::State::State()
     , lineJoin(MiterJoin)
     , miterLimit(10)
     , shadowBlur(0)
-    , shadowColor(Color::transparent)
+    , shadowColor(Color::transparentBlack)
     , globalAlpha(1)
     , globalComposite(CompositeOperator::SourceOver)
     , globalBlend(BlendMode::Normal)
@@ -1206,7 +1207,7 @@ void CanvasRenderingContext2DBase::clearRect(float x, float y, float width, floa
     if (shouldDrawShadows()) {
         context->save();
         saved = true;
-        context->setLegacyShadow(FloatSize(), 0, Color::transparent);
+        context->setLegacyShadow(FloatSize(), 0, Color::transparentBlack);
     }
     if (state().globalAlpha != 1) {
         if (!saved) {
@@ -1304,7 +1305,7 @@ void CanvasRenderingContext2DBase::strokeRect(float x, float y, float width, flo
 
 void CanvasRenderingContext2DBase::setShadow(float width, float height, float blur, const String& colorString, Optional<float> alpha)
 {
-    Color color = Color::transparent;
+    Color color = Color::transparentBlack;
     if (!colorString.isNull()) {
         color = parseColorOrCurrentColor(colorString, canvasBase());
         if (!color.isValid())
@@ -1315,22 +1316,22 @@ void CanvasRenderingContext2DBase::setShadow(float width, float height, float bl
 
 void CanvasRenderingContext2DBase::setShadow(float width, float height, float blur, float grayLevel, float alpha)
 {
-    setShadow(FloatSize(width, height), blur, makeSimpleColor(SRGBA { grayLevel, grayLevel, grayLevel, alpha }));
+    setShadow(FloatSize(width, height), blur, convertToComponentBytes(SRGBA { grayLevel, grayLevel, grayLevel, alpha }));
 }
 
 void CanvasRenderingContext2DBase::setShadow(float width, float height, float blur, float r, float g, float b, float a)
 {
-    setShadow(FloatSize(width, height), blur, makeSimpleColor(SRGBA { r, g, b, a }));
+    setShadow(FloatSize(width, height), blur, convertToComponentBytes(SRGBA { r, g, b, a }));
 }
 
 void CanvasRenderingContext2DBase::setShadow(float width, float height, float blur, float c, float m, float y, float k, float a)
 {
-    setShadow(FloatSize(width, height), blur, makeSimpleColor(toSRGBA(CMYKA { c, m, y, k, a })));
+    setShadow(FloatSize(width, height), blur, convertToComponentBytes(toSRGBA(CMYKA { c, m, y, k, a })));
 }
 
 void CanvasRenderingContext2DBase::clearShadow()
 {
-    setShadow(FloatSize(), 0, Color::transparent);
+    setShadow(FloatSize(), 0, Color::transparentBlack);
 }
 
 void CanvasRenderingContext2DBase::setShadow(const FloatSize& offset, float blur, const Color& color)
@@ -1358,7 +1359,7 @@ void CanvasRenderingContext2DBase::applyShadow()
         float height = state().shadowOffset.height();
         c->setLegacyShadow(FloatSize(width, -height), state().shadowBlur, state().shadowColor);
     } else
-        c->setLegacyShadow(FloatSize(), 0, Color::transparent);
+        c->setLegacyShadow(FloatSize(), 0, Color::transparentBlack);
 }
 
 bool CanvasRenderingContext2DBase::shouldDrawShadows() const

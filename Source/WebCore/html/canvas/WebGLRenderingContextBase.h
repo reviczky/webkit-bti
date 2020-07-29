@@ -141,7 +141,7 @@ public:
     void bufferSubData(GCGLenum target, long long offset, Optional<BufferDataSource>&&);
 
     GCGLenum checkFramebufferStatus(GCGLenum target);
-    virtual void clear(GCGLbitfield mask) = 0;
+    void clear(GCGLbitfield mask);
     void clearColor(GCGLfloat red, GCGLfloat green, GCGLfloat blue, GCGLfloat alpha);
     void clearDepth(GCGLfloat);
     void clearStencil(GCGLint);
@@ -215,12 +215,15 @@ public:
     bool extensionIsEnabled(const String&);
 
     bool isPreservingDrawingBuffer() const { return m_attributes.preserveDrawingBuffer; }
-    void setPreserveDrawingBuffer(bool value) { m_attributes.preserveDrawingBuffer = value; }
+    // Concession to canvas capture API, which must dynamically enable
+    // preserveDrawingBuffer. This can only be called once, when
+    // isPreservingDrawingBuffer() returns false.
+    void enablePreserveDrawingBuffer();
 
     bool preventBufferClearForInspector() const { return m_preventBufferClearForInspector; }
     void setPreventBufferClearForInspector(bool value) { m_preventBufferClearForInspector = value; }
 
-    virtual void hint(GCGLenum target, GCGLenum mode) = 0;
+    void hint(GCGLenum target, GCGLenum mode);
     GCGLboolean isBuffer(WebGLBuffer*);
     bool isContextLost() const;
     GCGLboolean isEnabled(GCGLenum cap);
@@ -240,9 +243,11 @@ public:
     bool isXRCompatible() const { return m_isXRCompatible; }
 #endif
     void polygonOffset(GCGLfloat factor, GCGLfloat units);
-    void readPixels(GCGLint x, GCGLint y, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, ArrayBufferView& pixels);
+    // This must be virtual so more validation can be added in WebGL 2.0.
+    virtual void readPixels(GCGLint x, GCGLint y, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, ArrayBufferView& pixels);
+    void renderbufferStorage(GCGLenum target, GCGLenum internalformat, GCGLsizei width, GCGLsizei height);
     void releaseShaderCompiler();
-    virtual void renderbufferStorage(GCGLenum target, GCGLenum internalformat, GCGLsizei width, GCGLsizei height) = 0;
+    virtual void renderbufferStorageImpl(GCGLenum target, GCGLsizei samples, GCGLenum internalformat, GCGLsizei width, GCGLsizei height, const char* functionName);
     void sampleCoverage(GCGLfloat value, GCGLboolean invert);
     void scissor(GCGLint x, GCGLint y, GCGLsizei width, GCGLsizei height);
     void shaderSource(WebGLShader*, const String&);
@@ -253,7 +258,8 @@ public:
     void stencilOp(GCGLenum fail, GCGLenum zfail, GCGLenum zpass);
     void stencilOpSeparate(GCGLenum face, GCGLenum fail, GCGLenum zfail, GCGLenum zpass);
 
-    void texImage2D(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLenum format, GCGLenum type, RefPtr<ArrayBufferView>&&);
+    // These must be virtual so more validation can be added in WebGL 2.0.
+    virtual void texImage2D(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLenum format, GCGLenum type, RefPtr<ArrayBufferView>&&);
 
 #if ENABLE(VIDEO)
     using TexImageSource = WTF::Variant<RefPtr<ImageBitmap>, RefPtr<ImageData>, RefPtr<HTMLImageElement>, RefPtr<HTMLCanvasElement>, RefPtr<HTMLVideoElement>>;
@@ -261,13 +267,14 @@ public:
     using TexImageSource = WTF::Variant<RefPtr<ImageBitmap>, RefPtr<ImageData>, RefPtr<HTMLImageElement>, RefPtr<HTMLCanvasElement>>;
 #endif
 
-    ExceptionOr<void> texImage2D(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLenum format, GCGLenum type, Optional<TexImageSource>);
+    virtual ExceptionOr<void> texImage2D(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLenum format, GCGLenum type, Optional<TexImageSource>);
 
     void texParameterf(GCGLenum target, GCGLenum pname, GCGLfloat param);
     void texParameteri(GCGLenum target, GCGLenum pname, GCGLint param);
 
-    void texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, RefPtr<ArrayBufferView>&&);
-    ExceptionOr<void> texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLenum format, GCGLenum type, Optional<TexImageSource>&&);
+    // These must be virtual so more validation can be added in WebGL 2.0.
+    virtual void texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, RefPtr<ArrayBufferView>&&);
+    virtual ExceptionOr<void> texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLenum format, GCGLenum type, Optional<TexImageSource>&&);
 
     template <class TypedArray, class DataType>
     class TypedList {
@@ -301,6 +308,7 @@ public:
 
     using Float32List = TypedList<Float32Array, float>;
     using Int32List = TypedList<Int32Array, int>;
+    using Uint32List = TypedList<Uint32Array, uint32_t>;
 
     void uniform1f(const WebGLUniformLocation*, GCGLfloat x);
     void uniform2f(const WebGLUniformLocation*, GCGLfloat x, GCGLfloat y);
@@ -409,6 +417,7 @@ protected:
     friend class WebGLVertexArrayObjectOES;
     friend class WebGLVertexArrayObject;
     friend class WebGLVertexArrayObjectBase;
+    friend class WebGLSync;
 
     // Implementation helpers.
     friend class ScopedUnpackParametersResetRestore;
@@ -456,6 +465,7 @@ protected:
     bool validateVertexAttributes(unsigned elementCount, unsigned primitiveCount = 0);
 
     bool validateWebGLObject(const char*, WebGLObject*);
+    bool validateWebGLProgramOrShader(const char*, WebGLObject*);
 
 #if !USE(ANGLE)
     bool validateDrawArrays(const char* functionName, GCGLenum mode, GCGLint first, GCGLsizei count, GCGLsizei primcount);
@@ -513,13 +523,19 @@ protected:
         
         void initValue()
         {
-            value[0] = 0.0f;
-            value[1] = 0.0f;
-            value[2] = 0.0f;
-            value[3] = 1.0f;
+            type = GraphicsContextGL::FLOAT;
+            fValue[0] = 0.0f;
+            fValue[1] = 0.0f;
+            fValue[2] = 0.0f;
+            fValue[3] = 1.0f;
         }
         
-        GCGLfloat value[4];
+        GCGLenum type;
+        union {
+            GCGLfloat fValue[4];
+            GCGLint iValue[4];
+            GCGLuint uiValue[4];
+        };
     };
     Vector<VertexAttribValue> m_vertexAttribValue;
     unsigned m_maxVertexAttribs;
@@ -542,7 +558,7 @@ protected:
     };
     Vector<TextureUnitState> m_textureUnits;
 #if !USE(ANGLE)
-    HashSet<unsigned, DefaultHash<unsigned>::Hash, WTF::UnsignedWithZeroKeyHashTraits<unsigned>> m_unrenderableTextureUnits;
+    HashSet<unsigned, DefaultHash<unsigned>, WTF::UnsignedWithZeroKeyHashTraits<unsigned>> m_unrenderableTextureUnits;
 #endif
     unsigned long m_activeTextureUnit;
 
@@ -860,6 +876,7 @@ protected:
     // Helper function to check input level for functions {copy}Tex{Sub}Image.
     // Generates GL error and returns false if level is invalid.
     bool validateTexFuncLevel(const char* functionName, GCGLenum target, GCGLint level);
+    virtual GCGLint maxTextureLevelForTarget(GCGLenum target);
 
     // Helper function for tex{Sub}Image{2|3}D to check if the input format/type/level/target/width/height/depth/border/xoffset/yoffset/zoffset are valid.
     // Otherwise, it would return quickly without doing other work.
@@ -946,14 +963,16 @@ protected:
     bool validateBlendFuncFactors(const char* functionName, GCGLenum src, GCGLenum dst);
 
     // Helper function to validate a GL capability.
-    virtual bool validateCapability(const char* functionName, GCGLenum) = 0;
+    virtual bool validateCapability(const char* functionName, GCGLenum);
 
     // Helper function to validate input parameters for uniform functions.
-    bool validateUniformParameters(const char* functionName, const WebGLUniformLocation*, const Float32List&, GCGLsizei mod);
-    bool validateUniformParameters(const char* functionName, const WebGLUniformLocation*, const Int32List&, GCGLsizei mod);
-    bool validateUniformParameters(const char* functionName, const WebGLUniformLocation*, void*, GCGLsizei, GCGLsizei mod);
-    bool validateUniformMatrixParameters(const char* functionName, const WebGLUniformLocation*, GCGLboolean transpose, const Float32List&, GCGLsizei mod);
-    bool validateUniformMatrixParameters(const char* functionName, const WebGLUniformLocation*, GCGLboolean transpose, const void*, GCGLsizei, GCGLsizei mod);
+    bool validateUniformLocation(const char* functionName, const WebGLUniformLocation*);
+    bool validateUniformParameters(const char* functionName, const WebGLUniformLocation*, const Float32List&, GCGLsizei requiredMinSize, GCGLuint srcOffset, GCGLuint srcLength);
+    bool validateUniformParameters(const char* functionName, const WebGLUniformLocation*, const Int32List&, GCGLsizei requiredMinSize, GCGLuint srcOffset, GCGLuint srcLength);
+    bool validateUniformParameters(const char* functionName, const WebGLUniformLocation*, const Uint32List&, GCGLsizei requiredMinSize, GCGLuint srcOffset, GCGLuint srcLength);
+    bool validateUniformParameters(const char* functionName, const WebGLUniformLocation*, void*, GCGLsizei, GCGLsizei requiredMinSize, GCGLuint srcOffset, GCGLuint srcLength);
+    bool validateUniformMatrixParameters(const char* functionName, const WebGLUniformLocation*, GCGLboolean transpose, const Float32List&, GCGLsizei requiredMinSize, GCGLuint srcOffset, GCGLuint srcLength);
+    bool validateUniformMatrixParameters(const char* functionName, const WebGLUniformLocation*, GCGLboolean transpose, const void*, GCGLsizei, GCGLsizei requiredMinSize, GCGLuint srcOffset, GCGLuint srcLength);
 
     // Helper function to validate parameters for bufferData.
     // Return the current bound buffer to target, or 0 if parameters are invalid.
@@ -1031,12 +1050,13 @@ protected:
     template <typename T> inline Optional<T> checkedAddAndMultiply(T value, T add, T multiply);
     template <typename T> unsigned getMaxIndex(const RefPtr<JSC::ArrayBuffer> elementArrayBuffer, GCGLintptr uoffset, GCGLsizei n);
 
+    bool validateArrayBufferType(const char* functionName, GCGLenum type, Optional<JSC::TypedArrayType>);
+
 private:
     void scheduleTaskToDispatchContextLostEvent();
     // Helper for restoration after context lost.
     void maybeRestoreContext();
 
-    bool validateArrayBufferType(const char* functionName, GCGLenum type, Optional<JSC::TypedArrayType>);
     void registerWithWebGLStateTracker();
     void checkForContextLossHandling();
 

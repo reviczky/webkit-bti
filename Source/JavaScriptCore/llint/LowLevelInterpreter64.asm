@@ -166,6 +166,9 @@ macro doVMEntry(makeCall)
 
     checkStackPointerAlignment(t4, 0xbad0dc01)
 
+    loadi VM::disallowVMEntryCount[vm], t4
+    btinz t4, .checkVMEntryPermission
+
     storep vm, VMEntryRecord::m_vm[sp]
     loadp VM::topCallFrame[vm], t4
     storep t4, VMEntryRecord::m_prevTopCallFrame[sp]
@@ -281,6 +284,17 @@ macro doVMEntry(makeCall)
 
     subp cfr, CalleeRegisterSaveSize, sp
 
+    popCalleeSaves()
+    functionEpilogue()
+    ret
+
+.checkVMEntryPermission:
+    move vm, a0
+    move protoCallFrame, a1
+    cCall2(_llint_check_vm_entry_permission)
+    move ValueUndefined, r0
+
+    subp cfr, CalleeRegisterSaveSize, sp
     popCalleeSaves()
     functionEpilogue()
     ret
@@ -1301,7 +1315,7 @@ llintOpWithReturn(op_is_empty, OpIsEmpty, macro (size, get, dispatch, return)
 end)
 
 
-llintOpWithReturn(op_is_undefined, OpIsUndefined, macro (size, get, dispatch, return)
+llintOpWithReturn(op_typeof_is_undefined, OpTypeofIsUndefined, macro (size, get, dispatch, return)
     get(m_operand, t1)
     loadConstantOrVariable(size, t1, t0)
     btqz t0, notCellMask, .opIsUndefinedCell
@@ -1699,7 +1713,8 @@ llintOpWithMetadata(op_get_private_name, OpGetPrivateName, macro (size, get, dis
     metadata(t2, t0)
 
     # Slow path if the private field is stale
-    get(m_property, t0)
+    get(m_property, t1)
+    loadConstantOrVariable(size, t1, t0)
     loadp OpGetPrivateName::Metadata::m_property[t2], t1
     bpneq t1, t0, .opGetPrivateNameSlow
 
@@ -2944,3 +2959,9 @@ end)
 llintOpWithReturn(op_in_structure_property, OpInStructureProperty, macro (size, get, dispatch, return)
     hasStructurePropertyImpl(size, get, dispatch,  return, _slow_path_in_structure_property)
 end)
+
+op(fuzzer_return_early_from_loop_hint, macro ()
+    move ValueUndefined, r0
+    doReturn()
+end)
+

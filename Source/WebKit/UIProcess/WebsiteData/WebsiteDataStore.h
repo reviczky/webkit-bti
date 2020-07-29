@@ -185,7 +185,6 @@ public:
     void setTopFrameUniqueRedirectFrom(const URL& topFrameHostName, const URL& hostNameRedirectedFrom, CompletionHandler<void()>&&);
     void setMaxStatisticsEntries(size_t, CompletionHandler<void()>&&);
     void setMinimumTimeBetweenDataRecordsRemoval(Seconds, CompletionHandler<void()>&&);
-    void setNotifyPagesWhenTelemetryWasCaptured(bool, CompletionHandler<void()>&&);
     void setPrevalentResource(const URL&, CompletionHandler<void()>&&);
     void setPrevalentResourceForDebugMode(const URL&, CompletionHandler<void()>&&);
     void setShouldClassifyResourcesBeforeDataRecordsRemoval(bool, CompletionHandler<void()>&&);
@@ -236,6 +235,8 @@ public:
     void addPendingCookie(const WebCore::Cookie&);
     void removePendingCookie(const WebCore::Cookie&);
     void clearPendingCookies();
+
+    void dispatchOnQueue(Function<void()>&&);
 
 #if USE(CURL)
     void setNetworkProxySettings(WebCore::CurlProxySettings&&);
@@ -311,6 +312,7 @@ public:
 private:
     enum class ForceReinitialization : bool { No, Yes };
     void initializeAppBoundDomains(ForceReinitialization = ForceReinitialization::No);
+    void addTestDomains() const;
 
     void fetchDataAndApply(OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, RefPtr<WorkQueue>&&, Function<void(Vector<WebsiteDataRecord>)>&& apply);
 

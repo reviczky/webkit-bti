@@ -95,8 +95,12 @@ public:
     void setMainFrameIsRubberBanding(bool);
     bool isRubberBandInProgress();
 
-    void setNodeScrollSnapInProgress(ScrollingNodeID, bool);
+    bool isUserScrollInProgressForNode(ScrollingNodeID);
+    void setUserScrollInProgressForNode(ScrollingNodeID, bool);
+    void clearNodesWithUserScrollInProgress();
+
     bool isScrollSnapInProgressForNode(ScrollingNodeID);
+    void setNodeScrollSnapInProgress(ScrollingNodeID, bool);
 
     virtual void invalidate() { }
     WEBCORE_EXPORT virtual void commitTreeState(std::unique_ptr<ScrollingStateTree>&&);
@@ -129,9 +133,9 @@ public:
     virtual void reportExposedUnfilledArea(MonotonicTime, unsigned /* unfilledArea */) { }
 
 #if PLATFORM(IOS_FAMILY)
-    virtual void scrollingTreeNodeWillStartPanGesture() { }
-    virtual void scrollingTreeNodeWillStartScroll() { }
-    virtual void scrollingTreeNodeDidEndScroll() { }
+    virtual void scrollingTreeNodeWillStartPanGesture(ScrollingNodeID) { }
+    virtual void scrollingTreeNodeWillStartScroll(ScrollingNodeID) { }
+    virtual void scrollingTreeNodeDidEndScroll(ScrollingNodeID) { }
 #endif
 
     WEBCORE_EXPORT TrackingType eventTrackingTypeForPoint(const AtomString& eventName, IntPoint);
@@ -246,6 +250,7 @@ private:
         PlatformDisplayID displayID { 0 };
         Optional<unsigned> nominalFramesPerSecond;
         HashSet<ScrollingNodeID> nodesWithActiveScrollSnap;
+        HashSet<ScrollingNodeID> nodesWithActiveUserScrolls;
         bool mainFrameIsRubberBanding { false };
     };
     

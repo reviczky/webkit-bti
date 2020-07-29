@@ -319,10 +319,6 @@
 #include "WebXRTest.h"
 #endif
 
-#if PLATFORM(MAC) && USE(LIBWEBRTC)
-#include <webrtc/sdk/WebKit/VideoProcessingSoftLink.h>
-#endif
-
 #if PLATFORM(MAC)
 #include "GraphicsContextGLOpenGLManager.h"
 #include "NSScrollerImpDetails.h"
@@ -331,8 +327,13 @@
 
 #if PLATFORM(COCOA)
 #include "SystemBattery.h"
+#include "VP9UtilitiesCocoa.h"
 #include <pal/spi/cocoa/CoreTextSPI.h>
 #include <wtf/spi/darwin/SandboxSPI.h>
+#endif
+
+#if PLATFORM(MAC) && USE(LIBWEBRTC)
+#include <webrtc/sdk/WebKit/VideoProcessingSoftLink.h>
 #endif
 
 using JSC::CallData;
@@ -629,6 +630,13 @@ Internals::Internals(Document& document)
 
 #if PLATFORM(COCOA) &&  ENABLE(WEB_AUDIO)
     AudioDestinationCocoa::createOverride = nullptr;
+#endif
+
+#if PLATFORM(COCOA)
+    setOverrideSystemHasBatteryForTesting(WTF::nullopt);
+    setOverrideSystemHasACForTesting(WTF::nullopt);
+    setOverrideVP9HardwareDecoderDisabledForTesting(false);
+    resetOverrideVP9ScreenSizeAndScaleForTesting();
 #endif
 }
 
@@ -1952,7 +1960,7 @@ ExceptionOr<void> Internals::setViewIsTransparent(bool transparent)
         return Exception { InvalidAccessError };
     Optional<Color> backgroundColor;
     if (transparent)
-        backgroundColor = Color(Color::transparent);
+        backgroundColor = Color(Color::transparentBlack);
     document->view()->updateBackgroundRecursively(backgroundColor);
     return { };
 }
@@ -1972,7 +1980,7 @@ ExceptionOr<void> Internals::setViewBaseBackgroundColor(const String& colorValue
         return Exception { InvalidAccessError };
 
     if (colorValue == "transparent") {
-        document->view()->setBaseBackgroundColor(Color::transparent);
+        document->view()->setBaseBackgroundColor(Color::transparentBlack);
         return { };
     }
     if (colorValue == "white") {
@@ -2609,7 +2617,7 @@ ExceptionOr<RefPtr<Range>> Internals::rangeOfString(const String& text, RefPtr<R
     if (parsedOptions.hasException())
         return parsedOptions.releaseException();
 
-    return document->editor().rangeOfString(text, referenceRange.get(), parsedOptions.releaseReturnValue());
+    return createLiveRange(document->editor().rangeOfString(text, makeSimpleRange(referenceRange), parsedOptions.releaseReturnValue()));
 }
 
 ExceptionOr<unsigned> Internals::countMatchesForText(const String& text, const Vector<String>& findOptions, const String& markMatches)
@@ -2623,7 +2631,7 @@ ExceptionOr<unsigned> Internals::countMatchesForText(const String& text, const V
         return parsedOptions.releaseException();
 
     bool mark = markMatches == "mark";
-    return document->editor().countMatchesForText(text, nullptr, parsedOptions.releaseReturnValue(), 1000, mark, nullptr);
+    return document->editor().countMatchesForText(text, WTF::nullopt, parsedOptions.releaseReturnValue(), 1000, mark, nullptr);
 }
 
 ExceptionOr<unsigned> Internals::countFindMatches(const String& text, const Vector<String>& findOptions)
@@ -3532,6 +3540,25 @@ ExceptionOr<unsigned> Internals::compositingUpdateCount()
         return Exception { InvalidAccessError };
 
     return document->renderView()->compositor().compositingUpdateCount();
+}
+
+ExceptionOr<void> Internals::startTrackingRenderingUpdates()
+{
+    Document* document = contextDocument();
+    if (!document)
+        return Exception { InvalidAccessError };
+
+    document->page()->startTrackingRenderingUpdates();
+    return { };
+}
+
+ExceptionOr<unsigned> Internals::renderingUpdateCount()
+{
+    Document* document = contextDocument();
+    if (!document)
+        return Exception { InvalidAccessError };
+
+    return document->page()->renderingUpdateCount();
 }
 
 ExceptionOr<void> Internals::setCompositingPolicyOverride(Optional<CompositingPolicy> policyOverride)
@@ -5514,6 +5541,15 @@ bool Internals::usingAppleInternalSDK() const
 #endif
 }
 
+bool Internals::usingGStreamer() const
+{
+#if USE(GSTREAMER)
+    return true;
+#else
+    return false;
+#endif
+}
+
 void Internals::setCaptureExtraNetworkLoadMetricsEnabled(bool value)
 {
     platformStrategies()->loaderStrategy()->setCaptureExtraNetworkLoadMetricsEnabled(value);
@@ -5600,6 +5636,11 @@ Optional<DoViParameterSet> Internals::parseDoViCodecParameters(const String& cod
     return WebCore::parseDoViCodecParameters(codecString);
 }
 
+Optional<VPCodecConfigurationRecord> Internals::parseVPCodecParameters(const String& codecString)
+{
+    return WebCore::parseVPCodecParameters(codecString);
+}
+
 auto Internals::getCookies() const -> Vector<CookieData>
 {
     auto* document = contextDocument();
@@ -5659,9 +5700,9 @@ void Internals::testDictionaryLogging()
     page->diagnosticLoggingClient().logDiagnosticMessageWithValueDictionary("testMessage"_s, "testDescription"_s, dictionary, ShouldSample::No);
 }
 
-void Internals::setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest& request, double interval)
+void Internals::setMaximumIntervalForUserGestureForwardingForFetch(double interval)
 {
-    request.setMaximumIntervalForUserGestureForwarding(interval);
+    UserGestureToken::setMaximumIntervalForUserGestureForwardingForFetchForTesting(Seconds(interval));
 }
 
 void Internals::setTransientActivationDuration(double seconds)
@@ -5810,6 +5851,44 @@ bool Internals::systemHasBattery() const
     return WebCore::systemHasBattery();
 #else
     return false;
+#endif
+}
+
+void Internals::setSystemHasBatteryForTesting(bool hasBattery)
+{
+#if PLATFORM(COCOA)
+    WebCore::setOverrideSystemHasBatteryForTesting(hasBattery);
+#else
+    UNUSED_PARAM(hasBattery);
+#endif
+}
+
+void Internals::setSystemHasACForTesting(bool hasAC)
+{
+#if PLATFORM(COCOA)
+    WebCore::setOverrideSystemHasACForTesting(hasAC);
+#else
+    UNUSED_PARAM(hasAC);
+#endif
+}
+
+void Internals::setHardwareVP9DecoderDisabledForTesting(bool disabled)
+{
+#if PLATFORM(COCOA)
+    WebCore::setOverrideVP9HardwareDecoderDisabledForTesting(disabled);
+#else
+    UNUSED_PARAM(disabled);
+#endif
+}
+
+void Internals::setVP9ScreenSizeAndScaleForTesting(double width, double height, double scale)
+{
+#if PLATFORM(COCOA)
+    WebCore::setOverrideVP9ScreenSizeAndScaleForTesting(width, height, scale);
+#else
+    UNUSED_PARAM(width);
+    UNUSED_PARAM(height);
+    UNUSED_PARAM(scale);
 #endif
 }
 

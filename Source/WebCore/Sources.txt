@@ -520,6 +520,7 @@ bindings/js/JSIDBIndexCustom.cpp
 bindings/js/JSIDBObjectStoreCustom.cpp
 bindings/js/JSIDBRequestCustom.cpp
 bindings/js/JSIDBTransactionCustom.cpp
+bindings/js/JSIDBSerializationGlobalObject.cpp
 bindings/js/JSImageDataCustom.cpp
 bindings/js/JSIntersectionObserverEntryCustom.cpp
 bindings/js/JSLazyEventListener.cpp
@@ -1827,7 +1828,6 @@ platform/graphics/CustomPaintImage.cpp
 platform/graphics/DisplayRefreshMonitor.cpp
 platform/graphics/DisplayRefreshMonitorClient.cpp
 platform/graphics/DisplayRefreshMonitorManager.cpp
-platform/graphics/ExtendedColor.cpp
 platform/graphics/FloatPoint.cpp
 platform/graphics/FloatPoint3D.cpp
 platform/graphics/FloatPolygon.cpp
@@ -1891,6 +1891,7 @@ platform/graphics/SurrogatePairAwareTextIterator.cpp
 platform/graphics/TextRun.cpp
 platform/graphics/TextTrackRepresentation.cpp
 platform/graphics/TrackPrivateBase.cpp
+platform/graphics/VP9Utilities.cpp
 platform/graphics/VelocityData.cpp
 platform/graphics/WOFFFileFormat.cpp
 platform/graphics/WidthIterator.cpp
@@ -1919,6 +1920,7 @@ platform/graphics/filters/FESpecularLighting.cpp
 platform/graphics/filters/FETile.cpp
 platform/graphics/filters/FETurbulence.cpp
 platform/graphics/filters/FilterEffect.cpp
+platform/graphics/filters/FilterEffectRenderer.cpp
 platform/graphics/filters/FilterOperation.cpp
 platform/graphics/filters/FilterOperations.cpp
 platform/graphics/filters/PointLightSource.cpp
@@ -2628,6 +2630,8 @@ JSAudioBufferCallback.cpp
 JSAudioBufferSourceNode.cpp
 JSAudioConfiguration.cpp
 JSAudioContext.cpp
+JSAudioContextLatencyCategory.cpp
+JSAudioContextOptions.cpp
 JSAudioContextState.cpp
 JSAudioDestinationNode.cpp
 JSAudioListener.cpp
@@ -2635,6 +2639,7 @@ JSAudioNode.cpp
 JSAudioNodeOptions.cpp
 JSAudioParam.cpp
 JSAudioProcessingEvent.cpp
+JSAudioScheduledSourceNode.cpp
 JSAudioTrack.cpp
 JSAudioTrackList.cpp
 JSAudioTrackMediaSource.cpp
@@ -2701,8 +2706,12 @@ JSCanvasTextBaseline.cpp
 JSCanvasTextDrawingStyles.cpp
 JSCanvasTransform.cpp
 JSCanvasUserInterface.cpp
+JSChannelCountMode.cpp
+JSChannelInterpretation.cpp
 JSChannelMergerNode.cpp
+JSChannelMergerOptions.cpp
 JSChannelSplitterNode.cpp
+JSChannelSplitterOptions.cpp
 JSCharacterData.cpp
 JSChildNode.cpp
 JSClipboard.cpp
@@ -3116,10 +3125,13 @@ JSOESTextureHalfFloatLinear.cpp
 JSOESVertexArrayObject.cpp
 JSOfflineAudioCompletionEvent.cpp
 JSOfflineAudioContext.cpp
+JSOfflineAudioContextOptions.cpp
 JSOffscreenCanvas.cpp
 JSOffscreenCanvasRenderingContext2D.cpp
 JSOptionalEffectTiming.cpp
 JSOscillatorNode.cpp
+JSOscillatorOptions.cpp
+JSOscillatorType.cpp
 JSOverconstrainedError.cpp
 JSOverconstrainedErrorEvent.cpp
 JSOverflowEvent.cpp
@@ -3164,6 +3176,8 @@ JSPerformanceResourceTiming.cpp
 JSPerformanceServerTiming.cpp
 JSPerformanceTiming.cpp
 JSPeriodicWave.cpp
+JSPeriodicWaveConstraints.cpp
+JSPeriodicWaveOptions.cpp
 JSPictureInPictureWindow.cpp
 JSPlaybackDirection.cpp
 JSPointerEvent.cpp
@@ -3555,6 +3569,7 @@ JSWebKitMediaKeySession.cpp
 JSWebKitMediaKeys.cpp
 JSWebKitNamespace.cpp
 JSWebKitOfflineAudioContext.cpp
+JSWebKitOscillatorNode.cpp
 JSWebKitPlaybackTargetAvailabilityEvent.cpp
 JSWebKitPoint.cpp
 JSWebKitTransitionEvent.cpp

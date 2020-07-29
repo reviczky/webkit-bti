@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "IntPoint.h"
 #include <cstdint>
 #include <wtf/Assertions.h>
 #include <wtf/EnumTraits.h>
@@ -35,6 +36,11 @@ class TextStream;
 
 namespace WebCore {
 
+// scrollPosition is in content coordinates (0,0 is at scrollOrigin), so may have negative components.
+using ScrollPosition = IntPoint;
+// scrollOffset() is the value used by scrollbars (min is 0,0), and should never have negative components.
+using ScrollOffset = IntPoint;
+    
 enum class ScrollType : bool {
     User,
     Programmatic
@@ -148,9 +154,9 @@ enum ScrollbarMode : uint8_t {
     ScrollbarAlwaysOn
 };
 
-enum ScrollbarControlSize : uint8_t {
-    RegularScrollbar,
-    SmallScrollbar
+enum class ScrollbarControlSize : uint8_t {
+    Regular,
+    Small
 };
 
 enum class ScrollbarExpansionState : uint8_t {

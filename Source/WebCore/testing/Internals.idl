@@ -192,6 +192,21 @@ enum ContentSizeCategory {
 [
     ExportMacro=WEBCORE_TESTSUPPORT_EXPORT,
     JSGenerateToJSObject,
+] dictionary VPCodecConfigurationRecord {
+    DOMString codecName;
+    octet profile;
+    octet level;
+    octet bitDepth;
+    octet chromaSubsampling;
+    octet videoFullRangeFlag;
+    octet colorPrimaries;
+    octet transferCharacteristics;
+    octet matrixCoefficients;
+};
+
+[
+    ExportMacro=WEBCORE_TESTSUPPORT_EXPORT,
+    JSGenerateToJSObject,
 ] dictionary AcceleratedAnimation {
     DOMString property;
     double speed;
@@ -589,6 +604,9 @@ enum ContentSizeCategory {
     [MayThrowException] void startTrackingCompositingUpdates();
     [MayThrowException] unsigned long compositingUpdateCount();
 
+    [MayThrowException] void startTrackingRenderingUpdates();
+    [MayThrowException] unsigned long renderingUpdateCount();
+
     attribute CompositingPolicy? compositingPolicyOverride;
 
     void updateLayoutAndStyleForAllFrames();
@@ -842,6 +860,7 @@ enum ContentSizeCategory {
     boolean isSystemPreviewImage(Element element);
 
     boolean usingAppleInternalSDK();
+    boolean usingGStreamer();
 
     void postTask(VoidCallback callback);
     [CallWith=ScriptExecutionContext, MayThrowException] void queueTask(DOMString source, VoidCallback callback);
@@ -881,6 +900,7 @@ enum ContentSizeCategory {
 
     HEVCParameterSet? parseHEVCCodecParameters(DOMString codecParameters);
     DoViParameterSet? parseDoViCodecParameters(DOMString codecParameters);
+    VPCodecConfigurationRecord? parseVPCodecParameters(DOMString codecParameters);
 
     sequence<CookieData> getCookies();
 
@@ -891,7 +911,7 @@ enum ContentSizeCategory {
 
     void testDictionaryLogging();
 
-    void setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest xhr, double interval);
+    void setMaximumIntervalForUserGestureForwardingForFetch(double interval);
     void setTransientActivationDuration(double seconds);
 
     void setIsPlayingToAutomotiveHeadUnit(boolean value);
@@ -915,6 +935,12 @@ enum ContentSizeCategory {
     DOMString focusRingColor();
 
     boolean systemHasBattery();
+
+    void setSystemHasBatteryForTesting(boolean hasBattery);
+    void setSystemHasACForTesting(boolean hasAC);
+
+    void setHardwareVP9DecoderDisabledForTesting(boolean disabled);
+    void setVP9ScreenSizeAndScaleForTesting(double width, double height, double scale);
 
     long readPreferenceInteger(DOMString domain, DOMString key);
     DOMString encodedPreferenceValue(DOMString domain, DOMString key);

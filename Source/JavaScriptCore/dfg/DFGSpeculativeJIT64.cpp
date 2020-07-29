@@ -2695,7 +2695,7 @@ void SpeculativeJIT::compile(Node* node)
                 slowCases.append(m_jit.branchIfNotCell(baseGPR));
 
             JITGetByValGenerator gen(
-                m_jit.codeBlock(), codeOrigin, callSite, usedRegisters,
+                m_jit.codeBlock(), codeOrigin, callSite, AccessType::GetByVal, usedRegisters,
                 JSValueRegs(baseGPR), JSValueRegs(propertyGPR), JSValueRegs(resultGPR));
 
             if (m_state.forNode(m_graph.varArgChild(node, 1)).isType(SpecString))
@@ -4242,7 +4242,7 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
         
-    case IsUndefined: {
+    case TypeOfIsUndefined: {
         JSValueOperand value(this, node->child1());
         GPRTemporary result(this);
         GPRTemporary localGlobalObject(this);
@@ -4963,7 +4963,35 @@ void SpeculativeJIT::compile(Node* node)
         break;
         
     case PhantomLocal:
+        // This is a no-op.
+        noResult(node);
+        break;
+
     case LoopHint:
+        if (Options::returnEarlyFromInfiniteLoopsForFuzzing()) {
+            CodeBlock* baselineCodeBlock = m_jit.graph().baselineCodeBlockFor(node->origin.semantic);
+            if (baselineCodeBlock->loopHintsAreEligibleForFuzzingEarlyReturn()) {
+                BytecodeIndex bytecodeIndex = node->origin.semantic.bytecodeIndex();
+                const Instruction* instruction = baselineCodeBlock->instructions().at(bytecodeIndex.offset()).ptr();
+
+                uint64_t* ptr = vm().getLoopHintExecutionCounter(instruction);
+                m_jit.pushToSave(GPRInfo::regT0);
+                m_jit.load64(ptr, GPRInfo::regT0);
+                auto skipEarlyReturn = m_jit.branch64(CCallHelpers::Below, GPRInfo::regT0, CCallHelpers::TrustedImm64(Options::earlyReturnFromInfiniteLoopsLimit()));
+
+                m_jit.popToRestore(GPRInfo::regT0);
+                m_jit.move(CCallHelpers::TrustedImm64(JSValue::encode(jsUndefined())), GPRInfo::returnValueGPR);
+                m_jit.emitRestoreCalleeSaves();
+                m_jit.emitFunctionEpilogue();
+                m_jit.ret();
+
+                skipEarlyReturn.link(&m_jit);
+                m_jit.add64(CCallHelpers::TrustedImm32(1), GPRInfo::regT0);
+                m_jit.store64(GPRInfo::regT0, ptr);
+                m_jit.popToRestore(GPRInfo::regT0);
+            }
+        }
+
         // This is a no-op.
         noResult(node);
         break;

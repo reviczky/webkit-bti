@@ -1,4 +1,4 @@
-# Copyright (C) 2011-2019 Apple Inc. All rights reserved.
+# Copyright (C) 2011-2020 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -170,6 +170,9 @@ macro doVMEntry(makeCall)
     # Since we have the guarantee that tX != aY when X != Y, we are safe from
     # aliasing problems with our arguments.
 
+    loadi VM::disallowVMEntryCount[vm], t4
+    btinz t4, .checkVMEntryPermission
+
     if ARMv7
         vmEntryRecord(cfr, t3)
         move t3, sp
@@ -316,6 +319,20 @@ macro doVMEntry(makeCall)
         subp cfr, CalleeRegisterSaveSize, sp
     end
 
+    popCalleeSaves()
+    functionEpilogue()
+    ret
+
+.checkVMEntryPermission:
+    move vm, a0
+    move protoCallFrame, a1
+    cCall2(_llint_check_vm_entry_permission)
+
+    # Tag is stored in r1 and payload is stored in r0 in little-endian architectures.
+    move UndefinedTag, r1
+    move 0, r0
+
+    subp cfr, CalleeRegisterSaveSize, sp
     popCalleeSaves()
     functionEpilogue()
     ret
@@ -1272,7 +1289,7 @@ llintOpWithReturn(op_is_empty, OpIsEmpty, macro (size, get, dispatch, return)
 end)
 
 
-llintOpWithReturn(op_is_undefined, OpIsUndefined, macro (size, get, dispatch, return)
+llintOpWithReturn(op_typeof_is_undefined, OpTypeofIsUndefined, macro (size, get, dispatch, return)
     get(m_operand, t1)
     loadConstantOrVariable(size, t1, t2, t3)
     bieq t2, CellTag, .opIsUndefinedCell
@@ -1601,7 +1618,8 @@ llintOpWithMetadata(op_get_private_name, OpGetPrivateName, macro (size, get, dis
     metadata(t5, t0)
 
     # Slow path if the private field is stale
-    get(m_property, t0)
+    get(m_property, t1)
+    loadConstantOrVariablePayloadUnchecked(size, t1, t0)
     loadp OpGetPrivateName::Metadata::m_property[t5], t1
     bpneq t1, t0, .opGetPrivateNameSlow
 
@@ -2701,4 +2719,9 @@ llintOp(op_log_shadow_chicken_tail, OpLogShadowChickenTail, macro (size, get, di
 .opLogShadowChickenTailSlow:
     callSlowPath(_llint_slow_path_log_shadow_chicken_tail)
     dispatch()
+end)
+
+
+op(fuzzer_return_early_from_loop_hint, macro ()
+    notSupported()
 end)

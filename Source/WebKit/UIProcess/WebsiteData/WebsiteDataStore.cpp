@@ -311,7 +311,8 @@ void WebsiteDataStore::fetchDataAndApply(OptionSet<WebsiteDataType> dataTypes, O
                     if (!allowsWebsiteDataRecordsForAllOrigins)
                         continue;
 
-                    displayName = makeString(entry.origin.protocol, " ", entry.origin.host);
+                    String hostString = entry.origin.host.isEmpty() ? "" : makeString(" ", entry.origin.host);
+                    displayName = makeString(entry.origin.protocol, hostString);
                 }
 
                 auto& record = m_websiteDataRecords.add(displayName, WebsiteDataRecord { }).iterator->value;
@@ -1687,14 +1688,6 @@ void WebsiteDataStore::setIsRunningResourceLoadStatisticsTest(bool value, Comple
         processPool->ensureNetworkProcess().setIsRunningResourceLoadStatisticsTest(m_sessionID, value, [processPool, callbackAggregator] { });
 }
 
-void WebsiteDataStore::setNotifyPagesWhenTelemetryWasCaptured(bool value, CompletionHandler<void()>&& completionHandler)
-{
-    auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
-    
-    for (auto& processPool : processPools())
-        processPool->ensureNetworkProcess().setNotifyPagesWhenTelemetryWasCaptured(m_sessionID, value, [processPool, callbackAggregator] { });
-}
-
 void WebsiteDataStore::getAllStorageAccessEntries(WebPageProxyIdentifier pageID, CompletionHandler<void(Vector<String>&& domains)>&& completionHandler)
 {
     auto* webPage = WebProcessProxy::webPage(pageID);
@@ -2227,6 +2220,11 @@ void WebsiteDataStore::removePendingCookie(const WebCore::Cookie& cookie)
 void WebsiteDataStore::clearPendingCookies()
 {
     m_pendingCookies.clear();
+}
+
+void WebsiteDataStore::dispatchOnQueue(Function<void()>&& function)
+{
+    m_queue->dispatch(WTFMove(function));
 }
 
 uint64_t WebsiteDataStore::perThirdPartyOriginStorageQuota() const

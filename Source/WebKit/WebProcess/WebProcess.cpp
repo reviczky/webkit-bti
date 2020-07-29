@@ -189,6 +189,10 @@
 #include "AudioSessionRoutingArbitrator.h"
 #endif
 
+#if PLATFORM(COCOA)
+#include <WebCore/VP9UtilitiesCocoa.h>
+#endif
+
 #define RELEASE_LOG_SESSION_ID (m_sessionID ? m_sessionID->toUInt64() : 0)
 #define RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [sessionID=%" PRIu64 "] WebProcess::" fmt, this, RELEASE_LOG_SESSION_ID, ##__VA_ARGS__)
 #define RELEASE_LOG_ERROR_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [sessionID=%" PRIu64 "] WebProcess::" fmt, this, RELEASE_LOG_SESSION_ID, ##__VA_ARGS__)
@@ -289,6 +293,10 @@ void WebProcess::initializeProcess(const AuxiliaryProcessInitializationParameter
 void WebProcess::initializeConnection(IPC::Connection* connection)
 {
     AuxiliaryProcess::initializeConnection(connection);
+
+#if PLATFORM(COCOA)
+    handleXPCEndpointMessages();
+#endif
 
     // We call _exit() directly from the background queue in case the main thread is unresponsive
     // and AuxiliaryProcess::didClose() does not get called.
@@ -917,7 +925,7 @@ bool WebProcess::shouldPlugInAutoStartFromOrigin(WebPage& webPage, const String&
         return true;
 
 #if ENABLE(PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC)
-    // The plugin wasn't in the general whitelist, so check if it similar to the primary plugin for the page (if we've found one).
+    // The plugin wasn't in the general list, so check if it similar to the primary plugin for the page (if we've found one).
     if (webPage.matchesPrimaryPlugIn(pageOrigin, pluginOrigin, mimeType))
         return true;
 #else
@@ -1096,23 +1104,28 @@ void WebProcess::setInjectedBundleParameters(const IPC::DataReference& value)
 static NetworkProcessConnectionInfo getNetworkProcessConnection(IPC::Connection& connection)
 {
     NetworkProcessConnectionInfo connectionInfo;
-    if (!connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), Messages::WebProcessProxy::GetNetworkProcessConnection::Reply(connectionInfo), 0)) {
-        // If we failed the first time, retry once. The attachment may have become invalid
-        // before it was received by the web process if the network process crashed.
-        if (!connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), Messages::WebProcessProxy::GetNetworkProcessConnection::Reply(connectionInfo), 0)) {
-#if PLATFORM(GTK) || PLATFORM(WPE)
-            // GTK+ and WPE ports don't exit on send sync message failure.
-            // In this particular case, the network process can be terminated by the UI process while the
-            // Web process is still initializing, so we always want to exit instead of crashing. This can
-            // happen when the WebView is created and then destroyed quickly.
-            // See https://bugs.webkit.org/show_bug.cgi?id=183348.
+    auto requestConnection = [&] {
+        if (!connection.isValid()) {
+            // Connection to UIProcess has been severed, exit cleanly.
             exit(0);
-#else
-            CRASH();
-#endif
         }
-    }
+        if (!connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), Messages::WebProcessProxy::GetNetworkProcessConnection::Reply(connectionInfo), 0))
+            return false;
+        return IPC::Connection::identifierIsValid(connectionInfo.identifier());
+    };
 
+    static constexpr unsigned maxFailedAttempts = 10;
+    unsigned failedAttempts = 0;
+    while (!requestConnection()) {
+        if (++failedAttempts >= maxFailedAttempts)
+            CRASH();
+
+        RELEASE_LOG_ERROR(Process, "getNetworkProcessConnection: Failed to get connection to network process, will retry...");
+
+        // If we failed, retry after a delay. The attachment may have become invalid
+        // before it was received by the web process if the network process crashed.
+        sleep(100_ms);
+    }
     return connectionInfo;
 }
 
@@ -1125,14 +1138,6 @@ NetworkProcessConnection& WebProcess::ensureNetworkProcessConnection()
     if (!m_networkProcessConnection) {
         auto connectionInfo = getNetworkProcessConnection(*parentProcessConnection());
 
-        // Retry once if the IPC to get the connectionIdentifier succeeded but the connectionIdentifier we received
-        // is invalid. This may indicate that the network process has crashed.
-        if (!IPC::Connection::identifierIsValid(connectionInfo.identifier()))
-            connectionInfo = getNetworkProcessConnection(*parentProcessConnection());
-
-        if (!IPC::Connection::identifierIsValid(connectionInfo.identifier()))
-            CRASH();
-
         m_networkProcessConnection = NetworkProcessConnection::create(connectionInfo.releaseIdentifier(), connectionInfo.cookieAcceptPolicy);
 #if HAVE(AUDIT_TOKEN)
         m_networkProcessConnection->setNetworkProcessAuditToken(WTFMove(connectionInfo.auditToken));
@@ -1143,6 +1148,8 @@ NetworkProcessConnection& WebProcess::ensureNetworkProcessConnection()
         if (!Document::allDocuments().isEmpty())
             m_networkProcessConnection->serviceWorkerConnection().registerServiceWorkerClients();
 #endif
+        for (auto& webPage : m_pageMap.values())
+            webPage->synchronizeCORSDisablingPatternsWithNetworkProcess();
     }
     
     return *m_networkProcessConnection;
@@ -1954,6 +1961,10 @@ void WebProcess::enableVP9Decoder()
 
     m_vp9DecoderEnabled = true;
     LibWebRTCProvider::registerWebKitVP9Decoder();
+
+#if PLATFORM(COCOA)
+    WebCore::registerSupplementalVP9Decoder();
+#endif
 }
 
 } // namespace WebKit

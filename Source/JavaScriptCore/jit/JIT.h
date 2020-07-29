@@ -527,6 +527,7 @@ namespace JSC {
         void emit_op_get_by_id_with_this(const Instruction*);
         void emit_op_get_by_id_direct(const Instruction*);
         void emit_op_get_by_val(const Instruction*);
+        void emit_op_get_private_name(const Instruction*);
         void emit_op_get_argument_by_val(const Instruction*);
         void emit_op_get_prototype_of(const Instruction*);
         void emit_op_in_by_id(const Instruction*);
@@ -535,7 +536,7 @@ namespace JSC {
         void emit_op_instanceof(const Instruction*);
         void emit_op_instanceof_custom(const Instruction*);
         void emit_op_is_empty(const Instruction*);
-        void emit_op_is_undefined(const Instruction*);
+        void emit_op_typeof_is_undefined(const Instruction*);
         void emit_op_is_undefined_or_null(const Instruction*);
         void emit_op_is_boolean(const Instruction*);
         void emit_op_is_number(const Instruction*);
@@ -657,6 +658,7 @@ namespace JSC {
         void emitSlow_op_get_by_id_with_this(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_get_by_id_direct(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_get_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
+        void emitSlow_op_get_private_name(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_get_argument_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_in_by_id(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_instanceof(const Instruction*, Vector<SlowCaseEntry>::iterator&);

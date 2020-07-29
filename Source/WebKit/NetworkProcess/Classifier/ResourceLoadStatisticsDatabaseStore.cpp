@@ -57,13 +57,8 @@
 namespace WebKit {
 using namespace WebCore;
 
-#if PLATFORM(COCOA)
 #define RELEASE_LOG_IF_ALLOWED(sessionID, fmt, ...) RELEASE_LOG_IF(sessionID.isAlwaysOnLoggingAllowed(), Network, "%p - ResourceLoadStatisticsDatabaseStore::" fmt, this, ##__VA_ARGS__)
 #define RELEASE_LOG_ERROR_IF_ALLOWED(sessionID, fmt, ...) RELEASE_LOG_ERROR_IF(sessionID.isAlwaysOnLoggingAllowed(), Network, "%p - ResourceLoadStatisticsDatabaseStore::" fmt, this, ##__VA_ARGS__)
-#else
-#define RELEASE_LOG_IF_ALLOWED(sessionID, fmt, ...)  ((void)0)
-#define RELEASE_LOG_ERROR_IF_ALLOWED(sessionID, fmt, ...)  ((void)0)
-#endif
 
 // COUNT Queries
 constexpr auto observedDomainCountQuery = "SELECT COUNT(*) FROM ObservedDomains"_s;
@@ -287,7 +282,7 @@ HashSet<ResourceLoadStatisticsDatabaseStore*>& ResourceLoadStatisticsDatabaseSto
 
 ResourceLoadStatisticsDatabaseStore::ResourceLoadStatisticsDatabaseStore(WebResourceLoadStatisticsStore& store, WorkQueue& workQueue, ShouldIncludeLocalhost shouldIncludeLocalhost, const String& storageDirectoryPath, PAL::SessionID sessionID)
     : ResourceLoadStatisticsStore(store, workQueue, shouldIncludeLocalhost)
-    , m_storageDirectoryPath(storageDirectoryPath + "/observations.db")
+    , m_storageDirectoryPath(FileSystem::pathByAppendingComponent(storageDirectoryPath, "observations.db"_s))
     , m_sessionID(sessionID)
 {
     ASSERT(!RunLoop::isMain());
@@ -325,9 +320,13 @@ void ResourceLoadStatisticsDatabaseStore::close()
 
 void ResourceLoadStatisticsDatabaseStore::openITPDatabase()
 {
-    if (!FileSystem::fileExists(m_storageDirectoryPath))
+    if (!FileSystem::fileExists(m_storageDirectoryPath)) {
+        if (!FileSystem::makeAllDirectories(FileSystem::directoryName(m_storageDirectoryPath))) {
+            RELEASE_LOG_ERROR(Network, "%p - ResourceLoadStatisticsDatabaseStore::open failed, error message: Failed to create directory database path: %" PUBLIC_LOG_STRING, this, m_storageDirectoryPath.utf8().data());
+            return;
+        }
         m_isNewResourceLoadStatisticsDatabaseFile = true;
-    else
+    } else
         m_isNewResourceLoadStatisticsDatabaseFile = false;
 
     if (!m_database.open(m_storageDirectoryPath)) {
@@ -1044,10 +1043,8 @@ static unsigned getMedianOfPrevalentResourcesWithUserInteraction(SQLiteDatabase&
     }
 
     // Step
-    if (medianDaysSinceUIStatement.step() != SQLITE_ROW) {
-        RELEASE_LOG_ERROR(Network, "ResourceLoadStatisticsDatabaseStore::getMedianOfPrevalentResourcesWithUserInteraction, error message: %" PUBLIC_LOG_STRING, database.lastErrorMsg());
+    if (medianDaysSinceUIStatement.step() != SQLITE_ROW)
         return 0;
-    }
 
     double rawSeconds = medianDaysSinceUIStatement.getColumnDouble(0);
     WallTime wallTime = WallTime::fromRawSeconds(rawSeconds);
@@ -1073,14 +1070,12 @@ static unsigned getMedianOfPrevalentResourcesWithUserInteraction(SQLiteDatabase&
     }
 
     // Step
-    if (lowerMedianDaysSinceUIStatement.step() != SQLITE_ROW) {
-        RELEASE_LOG_ERROR(Network, "ResourceLoadStatisticsDatabaseStore::getMedianOfPrevalentResourcesWithUserInteraction, error message: %" PUBLIC_LOG_STRING, database.lastErrorMsg());
-        return 0;
+    if (lowerMedianDaysSinceUIStatement.step() == SQLITE_ROW) {
+        double rawSecondsLower = lowerMedianDaysSinceUIStatement.getColumnDouble(0);
+        WallTime wallTimeLower = WallTime::fromRawSeconds(rawSecondsLower);
+        return ((wallTimeLower <= WallTime() ? 0 : std::floor((WallTime::now() - wallTimeLower) / 24_h)) + median) / 2;
     }
-
-    double rawSecondsLower = lowerMedianDaysSinceUIStatement.getColumnDouble(0);
-    WallTime wallTimeLower = WallTime::fromRawSeconds(rawSecondsLower);
-    return ((wallTimeLower <= WallTime() ? 0 : std::floor((WallTime::now() - wallTimeLower) / 24_h)) + median) / 2;
+    return 0;
 }
 
 unsigned ResourceLoadStatisticsDatabaseStore::getNumberOfPrevalentResources() const
@@ -1133,15 +1128,12 @@ unsigned ResourceLoadStatisticsDatabaseStore::getTopPrevelentResourceDaysSinceUI
     }
     
     // Step
-    if (topPrevalentResourceWithUserInteractionDaysSinceUserInteractionStatement.step() != SQLITE_ROW) {
-        RELEASE_LOG_ERROR(Network, "ResourceLoadStatisticsDatabaseStore::topPrevalentResourceWithUserInteractionDaysSinceUserInteractionStatement query failed to step, error message: %" PUBLIC_LOG_STRING, m_database.lastErrorMsg());
-        return 0;
+    if (topPrevalentResourceWithUserInteractionDaysSinceUserInteractionStatement.step() == SQLITE_ROW) {
+        double rawSeconds = topPrevalentResourceWithUserInteractionDaysSinceUserInteractionStatement.getColumnDouble(0);
+        WallTime wallTime = WallTime::fromRawSeconds(rawSeconds);
+        return wallTime <= WallTime() ? 0 : std::floor((WallTime::now() - wallTime) / 24_h);
     }
-    
-    double rawSeconds = topPrevalentResourceWithUserInteractionDaysSinceUserInteractionStatement.getColumnDouble(0);
-    WallTime wallTime = WallTime::fromRawSeconds(rawSeconds);
-    
-    return wallTime <= WallTime() ? 0 : std::floor((WallTime::now() - wallTime) / 24_h);
+    return 0;
 }
 
 static unsigned getMedianOfPrevalentResourceWithoutUserInteraction(SQLiteDatabase& database, unsigned bucketSize, PrevalentResourceDatabaseTelemetry::Statistic statistic, unsigned numberOfPrevalentResourcesWithoutUI)
@@ -1252,14 +1244,14 @@ void ResourceLoadStatisticsDatabaseStore::calculateTelemetryData(PrevalentResour
     }
 }
 
-void ResourceLoadStatisticsDatabaseStore::calculateAndSubmitTelemetry() const
+void ResourceLoadStatisticsDatabaseStore::calculateAndSubmitTelemetry(NotifyPagesForTesting shouldNotifyPagesForTesting) const
 {
     ASSERT(!RunLoop::isMain());
 
     if (parameters().shouldSubmitTelemetry) {
         PrevalentResourceDatabaseTelemetry prevalentResourceDatabaseTelemetry;
         calculateTelemetryData(prevalentResourceDatabaseTelemetry);
-        WebResourceLoadStatisticsTelemetry::submitTelemetry(*this, prevalentResourceDatabaseTelemetry);
+        WebResourceLoadStatisticsTelemetry::submitTelemetry(*this, prevalentResourceDatabaseTelemetry, shouldNotifyPagesForTesting);
     }
 }
 

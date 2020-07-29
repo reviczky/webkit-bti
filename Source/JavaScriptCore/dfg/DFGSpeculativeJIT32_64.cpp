@@ -2326,7 +2326,7 @@ void SpeculativeJIT::compile(Node* node)
                 slowCases.append(m_jit.branchIfNotCell(baseRegs.tagGPR()));
 
             JITGetByValGenerator gen(
-                m_jit.codeBlock(), codeOrigin, callSite, usedRegisters,
+                m_jit.codeBlock(), codeOrigin, callSite, AccessType::GetByVal, usedRegisters,
                 baseRegs, propertyRegs, resultRegs);
 
             if (m_state.forNode(m_graph.varArgChild(node, 1)).isType(SpecString))
@@ -3625,7 +3625,7 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
-    case IsUndefined: {
+    case TypeOfIsUndefined: {
         JSValueOperand value(this, node->child1());
         GPRTemporary result(this);
         GPRTemporary localGlobalObject(this);

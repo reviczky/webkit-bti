@@ -29,6 +29,8 @@
 #include <wtf/Function.h>
 #endif
 
+#include <wtf/EnumTraits.h>
+
 #if PLATFORM(MAC)
 OBJC_CLASS NSScreen;
 OBJC_CLASS NSWindow;
@@ -79,6 +81,19 @@ FloatRect screenAvailableRect(Widget*);
 
 WEBCORE_EXPORT bool screenSupportsExtendedColor(Widget* = nullptr);
 
+enum class DynamicRangeMode : uint8_t {
+    None,
+    Standard,
+    HLG,
+    HDR10,
+    DolbyVisionPQ,
+};
+#if HAVE(AVPLAYER_VIDEORANGEOVERRIDE)
+WEBCORE_EXPORT DynamicRangeMode preferredDynamicRangeMode(Widget* = nullptr);
+#else
+constexpr DynamicRangeMode preferredDynamicRangeMode(Widget* = nullptr) { return DynamicRangeMode::Standard; }
+#endif
+
 #if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
 WEBCORE_EXPORT bool screenSupportsHighDynamicRange(Widget* = nullptr);
 #else
@@ -94,6 +109,7 @@ struct ScreenData;
     
 WEBCORE_EXPORT ScreenProperties collectScreenProperties();
 WEBCORE_EXPORT void setScreenProperties(const ScreenProperties&);
+const ScreenProperties& getScreenProperties();
 const ScreenData* screenData(PlatformDisplayID screendisplayID);
 WEBCORE_EXPORT PlatformDisplayID primaryScreenDisplayID();
     
@@ -145,3 +161,18 @@ constexpr bool screenIsTouchPrimaryInputDevice() { return true; }
 #endif
 
 } // namespace WebCore
+
+namespace WTF {
+
+template<> struct EnumTraits<WebCore::DynamicRangeMode> {
+    using values = EnumValues<
+        WebCore::DynamicRangeMode,
+        WebCore::DynamicRangeMode::None,
+        WebCore::DynamicRangeMode::Standard,
+        WebCore::DynamicRangeMode::HLG,
+        WebCore::DynamicRangeMode::HDR10,
+        WebCore::DynamicRangeMode::DolbyVisionPQ
+    >;
+};
+
+} // namespace WTF

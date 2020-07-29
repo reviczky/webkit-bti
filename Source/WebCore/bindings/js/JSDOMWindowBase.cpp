@@ -48,10 +48,10 @@
 #include "Settings.h"
 #include "WebCoreJSClientData.h"
 #include <JavaScriptCore/CodeBlock.h>
+#include <JavaScriptCore/DeferredWorkTimer.h>
 #include <JavaScriptCore/JSInternalPromise.h>
 #include <JavaScriptCore/JSWebAssembly.h>
 #include <JavaScriptCore/Microtask.h>
-#include <JavaScriptCore/PromiseTimer.h>
 #include <JavaScriptCore/StrongInlines.h>
 #include <wtf/Language.h>
 #include <wtf/MainThread.h>
@@ -78,6 +78,7 @@ const GlobalObjectMethodTable JSDOMWindowBase::s_globalObjectMethodTable = {
     &moduleLoaderCreateImportMetaProperties,
     &moduleLoaderEvaluate,
     &promiseRejectionTracker,
+    &reportUncaughtExceptionAtEventLoop,
     &defaultLanguage,
 #if ENABLE(WEBASSEMBLY)
     &compileStreaming,
@@ -214,7 +215,17 @@ void JSDOMWindowBase::queueMicrotaskToEventLoop(JSGlobalObject& object, Ref<JSC:
 
     auto callback = JSMicrotaskCallback::create(thisObject, WTFMove(task));
     auto& eventLoop = thisObject.scriptExecutionContext()->eventLoop();
-    eventLoop.queueMicrotask([callback = WTFMove(callback)]() mutable {
+    // Propagating media only user gesture for Fetch API's promise chain.
+    auto userGestureToken = UserGestureIndicator::currentUserGesture();
+    if (userGestureToken && !userGestureToken->isPropagatedFromFetch())
+        userGestureToken = nullptr;
+    eventLoop.queueMicrotask([callback = WTFMove(callback), userGestureToken = WTFMove(userGestureToken)]() mutable {
+        if (!userGestureToken) {
+            callback->call();
+            return;
+        }
+
+        UserGestureIndicator gestureIndicator(userGestureToken, UserGestureToken::GestureScope::MediaOnly, UserGestureToken::IsPropagatedFromFetch::Yes);
         callback->call();
     });
 }
@@ -443,8 +454,8 @@ void JSDOMWindowBase::compileStreaming(JSC::JSGlobalObject* globalObject, JSC::J
 
     VM& vm = globalObject->vm();
 
-    ASSERT(vm.promiseTimer->hasPendingPromise(promise));
-    ASSERT(vm.promiseTimer->hasDependancyInPendingPromise(promise, globalObject));
+    ASSERT(vm.deferredWorkTimer->hasPendingWork(promise));
+    ASSERT(vm.deferredWorkTimer->hasDependancyInPendingWork(promise, globalObject));
 
     if (auto inputResponse = JSFetchResponse::toWrapped(vm, source)) {
         handleResponseOnStreamingAction(globalObject, inputResponse, promise, [promise] (JSC::JSGlobalObject* lexicalGlobalObject, const char* data, size_t byteSize) mutable {
@@ -461,9 +472,9 @@ void JSDOMWindowBase::instantiateStreaming(JSC::JSGlobalObject* globalObject, JS
 
     VM& vm = globalObject->vm();
 
-    ASSERT(vm.promiseTimer->hasPendingPromise(promise));
-    ASSERT(vm.promiseTimer->hasDependancyInPendingPromise(promise, globalObject));
-    ASSERT(vm.promiseTimer->hasDependancyInPendingPromise(promise, importedObject));
+    ASSERT(vm.deferredWorkTimer->hasPendingWork(promise));
+    ASSERT(vm.deferredWorkTimer->hasDependancyInPendingWork(promise, globalObject));
+    ASSERT(vm.deferredWorkTimer->hasDependancyInPendingWork(promise, importedObject));
 
     if (auto inputResponse = JSFetchResponse::toWrapped(vm, source)) {
         handleResponseOnStreamingAction(globalObject, inputResponse, promise, [promise, importedObject] (JSC::JSGlobalObject* lexicalGlobalObject, const char* data, size_t byteSize) mutable {

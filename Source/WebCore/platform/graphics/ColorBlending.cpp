@@ -36,7 +36,7 @@ Color blendSourceOver(const Color& backdrop, const Color& source)
     if (!backdrop.isVisible() || source.isOpaque())
         return source;
 
-    if (!source.alpha())
+    if (!source.isVisible())
         return backdrop;
 
     auto [backdropR, backdropG, backdropB, backdropA] = backdrop.toSRGBALossy<uint8_t>();
@@ -48,7 +48,7 @@ Color blendSourceOver(const Color& backdrop, const Color& source)
     int g = (backdropG * backdropA * (0xFF - sourceA) + 0xFF * sourceA * sourceG) / d;
     int b = (backdropB * backdropA * (0xFF - sourceA) + 0xFF * sourceA * sourceB) / d;
 
-    return makeSimpleColor(r, g, b, a);
+    return clampToComponentBytes<SRGBA>(r, g, b, a);
 }
 
 Color blendWithWhite(const Color& color)
@@ -70,7 +70,7 @@ Color blendWithWhite(const Color& color)
 
     auto [existingR, existingG, existingB, existingAlpha] = color.toSRGBALossy<uint8_t>();
 
-    SimpleColor result;
+    SRGBA<uint8_t> result;
     for (int alpha = startAlpha; alpha <= endAlpha; alpha += alphaIncrement) {
         // We have a solid color.  Convert to an equivalent color that looks the same when blended with white
         // at the current alpha.  Try using less transparency if the numbers end up being negative.
@@ -78,7 +78,7 @@ Color blendWithWhite(const Color& color)
         int g = blendComponent(existingG, alpha);
         int b = blendComponent(existingB, alpha);
 
-        result = makeSimpleColor(r, g, b, alpha);
+        result = clampToComponentBytes<SRGBA>(r, g, b, alpha);
 
         if (r >= 0 && g >= 0 && b >= 0)
             break;
@@ -107,7 +107,7 @@ Color blend(const Color& from, const Color& to, double progress)
         WebCore::blend(premultipliedFrom.alpha, premultipliedTo.alpha, progress)
     );
 
-    return makeSimpleColor(unpremultiplied(premultipliedBlended));
+    return unpremultiplied(premultipliedBlended);
 }
 
 Color blendWithoutPremultiply(const Color& from, const Color& to, double progress)
@@ -118,9 +118,9 @@ Color blendWithoutPremultiply(const Color& from, const Color& to, double progres
         return { };
 
     auto fromSRGB = from.toSRGBALossy<uint8_t>();
-    auto toSRGB = from.toSRGBALossy<uint8_t>();
+    auto toSRGB = to.toSRGBALossy<uint8_t>();
 
-    return makeSimpleColor(
+    return clampToComponentBytes<SRGBA>(
         WebCore::blend(fromSRGB.red, toSRGB.red, progress),
         WebCore::blend(fromSRGB.green, toSRGB.green, progress),
         WebCore::blend(fromSRGB.blue, toSRGB.blue, progress),
