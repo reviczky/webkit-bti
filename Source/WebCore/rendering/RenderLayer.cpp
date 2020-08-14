@@ -111,6 +111,7 @@
 #include "RenderText.h"
 #include "RenderTheme.h"
 #include "RenderTreeAsText.h"
+#include "RenderTreeMutationDisallowedScope.h"
 #include "RenderView.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGNames.h"
@@ -1865,6 +1866,8 @@ static RenderLayer* enclosingContainingBlockLayer(const RenderLayer& layer, Cros
 
 RenderLayer* RenderLayer::enclosingScrollableLayer(IncludeSelfOrNot includeSelf, CrossFrameBoundaries crossFrameBoundaries) const
 {
+    RenderTreeMutationDisallowedScope renderTreeMutationDisallowedScope;
+
     auto isConsideredScrollable = [](const RenderLayer& layer) {
         return is<RenderBox>(layer.renderer()) && downcast<RenderBox>(layer.renderer()).canBeScrolledAndHasScrollableArea();
     };
@@ -7016,6 +7019,19 @@ bool RenderLayer::isTransparentRespectingParentFrames() const
     return false;
 }
 
+#if !LOG_DISABLED
+static TextStream& operator<<(TextStream& ts, RenderLayer::EventRegionInvalidationReason reason)
+{
+    switch (reason) {
+    case RenderLayer::EventRegionInvalidationReason::Paint: ts << "Paint"; break;
+    case RenderLayer::EventRegionInvalidationReason::SettingDidChange: ts << "SettingDidChange"; break;
+    case RenderLayer::EventRegionInvalidationReason::Style: ts << "Style"; break;
+    case RenderLayer::EventRegionInvalidationReason::NonCompositedFrame: ts << "NonCompositedFrame"; break;
+    }
+    return ts;
+}
+#endif // !LOG_DISABLED
+
 bool RenderLayer::invalidateEventRegion(EventRegionInvalidationReason reason)
 {
 #if ENABLE(ASYNC_SCROLLING)
@@ -7034,10 +7050,13 @@ bool RenderLayer::invalidateEventRegion(EventRegionInvalidationReason reason)
     if (!shouldInvalidate())
         return false;
 
-    compositingLayer->setNeedsCompositingConfigurationUpdate();
+    LOG_WITH_STREAM(EventRegions, stream << this << " invalidateEventRegion for reason " << reason << " invalidating in compositing layer " << compositingLayer);
+
+    compositingLayer->backing()->setNeedsEventRegionUpdate();
 
     if (reason == EventRegionInvalidationReason::NonCompositedFrame) {
         auto& view = renderer().view();
+        LOG_WITH_STREAM(EventRegions, stream << " calling setNeedsEventRegionUpdateForNonCompositedFrame on " << view);
         view.setNeedsEventRegionUpdateForNonCompositedFrame();
         if (renderer().settings().visibleDebugOverlayRegions() & (TouchActionRegion | EditableElementRegion | WheelEventHandlerRegion))
             view.setNeedsRepaintHackAfterCompositingLayerUpdateForDebugOverlaysOnly();

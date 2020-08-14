@@ -772,7 +772,8 @@ public:
 
     void setPageVisibility(bool isVisible);
     void setPageIsFocusedAndActive(bool);
-
+    void setPageIsInWindow(bool);
+    bool isPageActive() const;
 
 #if ENABLE(WEB_RTC)
     void setH264HardwareEncoderAllowed(bool allowed);

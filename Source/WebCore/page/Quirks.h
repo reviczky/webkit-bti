@@ -35,6 +35,7 @@ class Element;
 class EventListener;
 class EventTarget;
 class HTMLElement;
+class HTMLVideoElement;
 class LayoutUnit;
 
 class Quirks {
@@ -59,6 +60,9 @@ public:
     bool shouldMakeTouchEventNonCancelableForTarget(EventTarget*) const;
     bool shouldPreventPointerMediaQueryFromEvaluatingToCoarse() const;
     bool shouldPreventDispatchOfTouchEvent(const AtomString&, EventTarget*) const;
+#endif
+#if ENABLE(IOS_TOUCH_EVENTS)
+    WEBCORE_EXPORT bool shouldSynthesizeTouchEvents() const;
 #endif
     bool shouldDisablePointerEventsQuirk() const;
     bool needsInputModeNoneImplicitly(const HTMLElement&) const;
@@ -108,6 +112,11 @@ public:
     enum StorageAccessResult : bool { ShouldNotCancelEvent, ShouldCancelEvent };
     StorageAccessResult triggerOptionalStorageAccessQuirk(const Element&, const AtomString& eventType) const;
 
+    bool needsVP9FullRangeFlagQuirk() const;
+    bool needsHDRPixelDepthQuirk() const;
+    
+    bool needsAkamaiMediaPlayerQuirk(const HTMLVideoElement&) const;
+
 private:
     bool needsQuirks() const;
 
@@ -131,8 +140,13 @@ private:
 #if ENABLE(TOUCH_EVENTS)
     mutable Optional<bool> m_shouldDispatchSimulatedMouseEventsQuirk;
 #endif
+#if ENABLE(IOS_TOUCH_EVENTS)
+    mutable Optional<bool> m_shouldSynthesizeTouchEventsQuirk;
+#endif
     mutable Optional<bool> m_needsCanPlayAfterSeekedQuirk;
     mutable Optional<bool> m_shouldBypassAsyncScriptDeferring;
+    mutable Optional<bool> m_needsVP9FullRangeFlagQuirk;
+    mutable Optional<bool> m_needsHDRPixelDepthQuirk;
 };
 
 }

@@ -35,9 +35,11 @@
 #include "Frame.h"
 #include "Page.h"
 #include "PositionIterator.h"
+#include "Range.h"
 #include "RenderObject.h"
 #include "Settings.h"
 #include "TextCheckerClient.h"
+#include "TextIterator.h"
 
 namespace WebCore {
 
@@ -141,8 +143,14 @@ bool SpellChecker::canCheckAsynchronously(const SimpleRange& range) const
 
 bool SpellChecker::isCheckable(const SimpleRange& range) const
 {
-    auto firstNode = createLiveRange(range)->firstNode();
-    if (!firstNode || !firstNode->renderer())
+    bool foundRenderer = false;
+    for (auto& node : intersectingNodes(range)) {
+        if (node.renderer()) {
+            foundRenderer = true;
+            break;
+        }
+    }
+    if (!foundRenderer)
         return false;
     auto& node = range.start.container.get();
     return !is<Element>(node) || downcast<Element>(node).isSpellCheckingEnabled();

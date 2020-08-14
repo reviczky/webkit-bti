@@ -33,6 +33,7 @@
 #include "AsyncAudioDecoder.h"
 #include "AudioBuffer.h"
 #include "AudioBufferCallback.h"
+#include "AudioBufferOptions.h"
 #include "AudioBufferSourceNode.h"
 #include "AudioListener.h"
 #include "AudioNodeInput.h"
@@ -46,6 +47,7 @@
 #include "ConvolverNode.h"
 #include "DefaultAudioDestinationNode.h"
 #include "DelayNode.h"
+#include "DelayOptions.h"
 #include "Document.h"
 #include "DynamicsCompressorNode.h"
 #include "EventNames.h"
@@ -56,6 +58,7 @@
 #include "GenericEventQueue.h"
 #include "HRTFDatabaseLoader.h"
 #include "HRTFPanner.h"
+#include "JSAudioBuffer.h"
 #include "JSDOMPromiseDeferred.h"
 #include "Logging.h"
 #include "NetworkingContext.h"
@@ -70,7 +73,9 @@
 #include "ScriptController.h"
 #include "ScriptProcessorNode.h"
 #include "WaveShaperNode.h"
+#include "WebKitAudioListener.h"
 #include <JavaScriptCore/ScriptCallStack.h>
+#include <wtf/Scope.h>
 
 #if DEBUG_AUDIONODE_REFERENCES
 #include <stdio.h>
@@ -100,11 +105,9 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(BaseAudioContext);
 
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(document() && document()->page() && document()->page()->isAlwaysOnLoggingAllowed(), Media, "%p - BaseAudioContext::" fmt, this, ##__VA_ARGS__)
     
-bool BaseAudioContext::isSampleRateRangeGood(float sampleRate)
+bool BaseAudioContext::isSupportedSampleRate(float sampleRate)
 {
-    // FIXME: It would be nice if the minimum sample-rate could be less than 44.1KHz,
-    // but that will require some fixes in HRTFPanner::fftSizeForSampleRate(), and some testing there.
-    return sampleRate >= 44100 && sampleRate <= 96000;
+    return sampleRate >= 3000 && sampleRate <= 384000;
 }
 
 unsigned BaseAudioContext::s_hardwareContextCount = 0;
@@ -155,8 +158,6 @@ BaseAudioContext::BaseAudioContext(Document& document, AudioBuffer* renderTarget
 void BaseAudioContext::constructCommon()
 {
     FFTFrame::initialize();
-    
-    m_listener = AudioListener::create();
 
     ASSERT(document());
     if (document()->audioPlaybackRequiresUserGesture())
@@ -384,27 +385,48 @@ bool BaseAudioContext::wouldTaintOrigin(const URL& url) const
     return false;
 }
 
-ExceptionOr<Ref<AudioBuffer>> BaseAudioContext::createBuffer(unsigned numberOfChannels, size_t numberOfFrames, float sampleRate)
+ExceptionOr<Ref<AudioBuffer>> BaseAudioContext::createBuffer(unsigned numberOfChannels, unsigned length, float sampleRate)
 {
-    auto audioBuffer = AudioBuffer::create(numberOfChannels, numberOfFrames, sampleRate);
-    if (!audioBuffer)
-        return Exception { NotSupportedError };
-    return audioBuffer.releaseNonNull();
+    return AudioBuffer::create(AudioBufferOptions {numberOfChannels, length, sampleRate});
 }
 
-ExceptionOr<Ref<AudioBuffer>> BaseAudioContext::createBuffer(ArrayBuffer& arrayBuffer, bool mixToMono)
+void BaseAudioContext::decodeAudioData(Ref<ArrayBuffer>&& audioData, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback, Optional<Ref<DeferredPromise>>&& promise)
 {
-    auto audioBuffer = AudioBuffer::createFromAudioFileData(arrayBuffer.data(), arrayBuffer.byteLength(), mixToMono, sampleRate());
-    if (!audioBuffer)
-        return Exception { SyntaxError };
-    return audioBuffer.releaseNonNull();
-}
+    if (promise && (!document() || !document()->isFullyActive())) {
+        promise.value()->reject(Exception { NotAllowedError, "Document is not fully active"_s });
+        return;
+    }
 
-void BaseAudioContext::decodeAudioData(Ref<ArrayBuffer>&& audioData, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback)
-{
     if (!m_audioDecoder)
         m_audioDecoder = makeUnique<AsyncAudioDecoder>();
-    m_audioDecoder->decodeAsync(WTFMove(audioData), sampleRate(), WTFMove(successCallback), WTFMove(errorCallback));
+
+    m_audioDecoder->decodeAsync(WTFMove(audioData), sampleRate(), [this, activity = ActiveDOMObject::makePendingActivity(*this), successCallback = WTFMove(successCallback), errorCallback = WTFMove(errorCallback), promise = WTFMove(promise)](ExceptionOr<Ref<AudioBuffer>>&& result) mutable {
+        queueTaskKeepingObjectAlive(*this, TaskSource::InternalAsyncTask, [successCallback = WTFMove(successCallback), errorCallback = WTFMove(errorCallback), promise = WTFMove(promise), result = WTFMove(result)]() mutable {
+            if (result.hasException()) {
+                if (promise)
+                    promise.value()->reject(result.releaseException());
+                if (errorCallback)
+                    errorCallback->handleEvent(nullptr);
+                return;
+            }
+            auto audioBuffer = result.releaseReturnValue();
+            if (promise)
+                promise.value()->resolve<IDLInterface<AudioBuffer>>(audioBuffer.get());
+            if (successCallback)
+                successCallback->handleEvent(audioBuffer.ptr());
+        });
+    });
+}
+
+AudioListener& WebCore::BaseAudioContext::listener()
+{
+    if (!m_listener) {
+        if (isWebKitAudioContext())
+            m_listener = WebKitAudioListener::create(*this);
+        else
+            m_listener = AudioListener::create(*this);
+    }
+    return *m_listener;
 }
 
 ExceptionOr<Ref<AudioBufferSourceNode>> BaseAudioContext::createBufferSource()
@@ -412,18 +434,7 @@ ExceptionOr<Ref<AudioBufferSourceNode>> BaseAudioContext::createBufferSource()
     ALWAYS_LOG(LOGIDENTIFIER);
 
     ASSERT(isMainThread());
-
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-    Ref<AudioBufferSourceNode> node = AudioBufferSourceNode::create(*this, sampleRate());
-
-    // Because this is an AudioScheduledSourceNode, the context keeps a reference until it has finished playing.
-    // When this happens, AudioScheduledSourceNode::finish() calls BaseAudioContext::notifyNodeFinishedProcessing().
-    refNode(node);
-
-    return node;
+    return AudioBufferSourceNode::create(*this);
 }
 
 ExceptionOr<Ref<ScriptProcessorNode>> BaseAudioContext::createScriptProcessor(size_t bufferSize, size_t numberOfInputChannels, size_t numberOfOutputChannels)
@@ -484,7 +495,7 @@ ExceptionOr<Ref<ScriptProcessorNode>> BaseAudioContext::createScriptProcessor(si
     if (numberOfOutputChannels > maxNumberOfChannels())
         return Exception { NotSupportedError };
 
-    auto node = ScriptProcessorNode::create(*this, sampleRate(), bufferSize, numberOfInputChannels, numberOfOutputChannels);
+    auto node = ScriptProcessorNode::create(*this, bufferSize, numberOfInputChannels, numberOfOutputChannels);
 
     refNode(node); // context keeps reference until we stop making javascript rendering callbacks
     return node;
@@ -495,12 +506,7 @@ ExceptionOr<Ref<BiquadFilterNode>> BaseAudioContext::createBiquadFilter()
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-
-    return BiquadFilterNode::create(*this, sampleRate());
+    return BiquadFilterNode::create(*this);
 }
 
 ExceptionOr<Ref<WaveShaperNode>> BaseAudioContext::createWaveShaper()
@@ -508,10 +514,6 @@ ExceptionOr<Ref<WaveShaperNode>> BaseAudioContext::createWaveShaper()
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
     return WaveShaperNode::create(*this);
 }
 
@@ -520,10 +522,6 @@ ExceptionOr<Ref<PannerNode>> BaseAudioContext::createPanner()
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
     return PannerNode::create(*this);
 }
 
@@ -532,11 +530,7 @@ ExceptionOr<Ref<ConvolverNode>> BaseAudioContext::createConvolver()
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-    return ConvolverNode::create(*this, sampleRate());
+    return ConvolverNode::create(*this);
 }
 
 ExceptionOr<Ref<DynamicsCompressorNode>> BaseAudioContext::createDynamicsCompressor()
@@ -544,11 +538,7 @@ ExceptionOr<Ref<DynamicsCompressorNode>> BaseAudioContext::createDynamicsCompres
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-    return DynamicsCompressorNode::create(*this, sampleRate());
+    return DynamicsCompressorNode::create(*this);
 }
 
 ExceptionOr<Ref<AnalyserNode>> BaseAudioContext::createAnalyser()
@@ -556,11 +546,7 @@ ExceptionOr<Ref<AnalyserNode>> BaseAudioContext::createAnalyser()
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-    return AnalyserNode::create(*this, sampleRate());
+    return AnalyserNode::create(*this);
 }
 
 ExceptionOr<Ref<GainNode>> BaseAudioContext::createGain()
@@ -568,11 +554,7 @@ ExceptionOr<Ref<GainNode>> BaseAudioContext::createGain()
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-    return GainNode::create(*this, sampleRate());
+    return GainNode::create(*this);
 }
 
 ExceptionOr<Ref<DelayNode>> BaseAudioContext::createDelay(double maxDelayTime)
@@ -580,11 +562,9 @@ ExceptionOr<Ref<DelayNode>> BaseAudioContext::createDelay(double maxDelayTime)
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-    return DelayNode::create(*this, sampleRate(), maxDelayTime);
+    DelayOptions options;
+    options.maxDelayTime = maxDelayTime;
+    return DelayNode::create(*this, options);
 }
 
 ExceptionOr<Ref<ChannelSplitterNode>> BaseAudioContext::createChannelSplitter(size_t numberOfOutputs)
@@ -592,10 +572,7 @@ ExceptionOr<Ref<ChannelSplitterNode>> BaseAudioContext::createChannelSplitter(si
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
 
-    lazyInitialize();
     ChannelSplitterOptions options;
     options.numberOfOutputs = numberOfOutputs;
     return ChannelSplitterNode::create(*this, options);
@@ -606,10 +583,7 @@ ExceptionOr<Ref<ChannelMergerNode>> BaseAudioContext::createChannelMerger(size_t
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
 
-    lazyInitialize();
     ChannelMergerOptions options;
     options.numberOfInputs = numberOfInputs;
     return ChannelMergerNode::create(*this, options);
@@ -620,20 +594,7 @@ ExceptionOr<Ref<OscillatorNode>> BaseAudioContext::createOscillator()
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-
-    lazyInitialize();
-
-    auto node = OscillatorNode::create(*this);
-    if (node.hasException())
-        return node.releaseException();
-
-    // Because this is an AudioScheduledSourceNode, the context keeps a reference until it has finished playing.
-    // When this happens, AudioScheduledSourceNode::finish() calls BaseAudioContext::notifyNodeFinishedProcessing().
-    auto nodeValue = node.releaseReturnValue();
-    refNode(nodeValue);
-    return nodeValue;
+    return OscillatorNode::create(*this);
 }
 
 ExceptionOr<Ref<PeriodicWave>> BaseAudioContext::createPeriodicWave(Vector<float>&& real, Vector<float>&& imaginary, const PeriodicWaveConstraints& constraints)
@@ -641,17 +602,11 @@ ExceptionOr<Ref<PeriodicWave>> BaseAudioContext::createPeriodicWave(Vector<float
     ALWAYS_LOG(LOGIDENTIFIER);
     
     ASSERT(isMainThread());
-    if (m_isStopScheduled)
-        return Exception { InvalidStateError };
-    
-    if (real.size() != imaginary.size())
-        return Exception { IndexSizeError, "real and imaginary must have the same length"_s };
     
     PeriodicWaveOptions options;
     options.real = WTFMove(real);
     options.imag = WTFMove(imaginary);
     options.disableNormalization = constraints.disableNormalization;
-    lazyInitialize();
     return PeriodicWave::create(*this, WTFMove(options));
 }
 
@@ -1107,6 +1062,10 @@ void BaseAudioContext::finishedRendering(bool didRendering)
 {
     ASSERT(isOfflineContext());
     ASSERT(isMainThread());
+    auto finishedRenderingScope = WTF::makeScopeExit([this] {
+        didFinishOfflineRendering(Exception { InvalidStateError });
+    });
+
     if (!isMainThread())
         return;
 
@@ -1120,7 +1079,7 @@ void BaseAudioContext::finishedRendering(bool didRendering)
     if (!didRendering)
         return;
 
-    AudioBuffer* renderedBuffer = m_renderTarget.get();
+    RefPtr<AudioBuffer> renderedBuffer = m_renderTarget.get();
     setState(State::Closed);
 
     ASSERT(renderedBuffer);
@@ -1132,7 +1091,10 @@ void BaseAudioContext::finishedRendering(bool didRendering)
         return;
 
     clearPendingActivityIfExitEarly.release();
-    m_eventQueue->enqueueEvent(OfflineAudioCompletionEvent::create(renderedBuffer));
+    m_eventQueue->enqueueEvent(OfflineAudioCompletionEvent::create(*renderedBuffer));
+
+    finishedRenderingScope.release();
+    didFinishOfflineRendering(renderedBuffer.releaseNonNull());
 }
 
 void BaseAudioContext::dispatchEvent(Event& event)

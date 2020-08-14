@@ -47,20 +47,17 @@ PeriodicWave* OscillatorNode::s_periodicWaveTriangle = nullptr;
 
 ExceptionOr<Ref<OscillatorNode>> OscillatorNode::create(BaseAudioContext& context, const OscillatorOptions& options)
 {
+    if (context.isStopped())
+        return Exception { InvalidStateError };
+
+    context.lazyInitialize();
+
     if (options.type == OscillatorType::Custom && !options.periodicWave)
         return Exception { InvalidStateError, "Must provide periodicWave when using custom type."_s };
     
     auto oscillator = adoptRef(*new OscillatorNode(context, options));
     
-    auto result = oscillator->setChannelCount(options.channelCount.valueOr(2));
-    if (result.hasException())
-        return result.releaseException();
-    
-    result = oscillator->setChannelCountMode(options.channelCountMode.valueOr(ChannelCountMode::Max));
-    if (result.hasException())
-        return result.releaseException();
-    
-    result = oscillator->setChannelInterpretation(options.channelInterpretation.valueOr(ChannelInterpretation::Speakers));
+    auto result = oscillator->handleAudioNodeOptions(options, { 2, ChannelCountMode::Max, ChannelInterpretation::Speakers });
     if (result.hasException())
         return result.releaseException();
     
@@ -71,12 +68,16 @@ ExceptionOr<Ref<OscillatorNode>> OscillatorNode::create(BaseAudioContext& contex
         if (result.hasException())
             return result.releaseException();
     }
-    
+
+    // Because this is an AudioScheduledSourceNode, the context keeps a reference until it has finished playing.
+    // When this happens, AudioScheduledSourceNode::finish() calls BaseAudioContext::notifyNodeFinishedProcessing().
+    context.refNode(oscillator);
+
     return oscillator;
 }
 
 OscillatorNode::OscillatorNode(BaseAudioContext& context, const OscillatorOptions& options)
-    : AudioScheduledSourceNode(context, context.sampleRate())
+    : AudioScheduledSourceNode(context)
     , m_frequency(AudioParam::create(context, "frequency"_s, options.frequency, -context.sampleRate() / 2, context.sampleRate() / 2))
     , m_detune(AudioParam::create(context, "detune"_s, options.detune, -153600, 153600))
 {

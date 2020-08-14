@@ -45,28 +45,25 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(ChannelMergerNode);
 
 ExceptionOr<Ref<ChannelMergerNode>> ChannelMergerNode::create(BaseAudioContext& context, const ChannelMergerOptions& options)
 {
+    if (context.isStopped())
+        return Exception { InvalidStateError };
+
+    context.lazyInitialize();
+    
     if (options.numberOfInputs > AudioContext::maxNumberOfChannels() || !options.numberOfInputs)
         return Exception { IndexSizeError, "Number of inputs is not in the allowed range."_s };
     
-    auto merger = adoptRef(*new ChannelMergerNode(context, context.sampleRate(), options.numberOfInputs));
+    auto merger = adoptRef(*new ChannelMergerNode(context, options.numberOfInputs));
     
-    auto result = merger->setChannelCount(options.channelCount.valueOr(1));
-    if (result.hasException())
-        return result.releaseException();
-    
-    result = merger->setChannelCountMode(options.channelCountMode.valueOr(ChannelCountMode::Explicit));
-    if (result.hasException())
-        return result.releaseException();
-    
-    result = merger->setChannelInterpretation(options.channelInterpretation.valueOr(ChannelInterpretation::Speakers));
+    auto result = merger->handleAudioNodeOptions(options, { 1, ChannelCountMode::Explicit, ChannelInterpretation::Speakers });
     if (result.hasException())
         return result.releaseException();
     
     return merger;
 }
 
-ChannelMergerNode::ChannelMergerNode(BaseAudioContext& context, float sampleRate, unsigned numberOfInputs)
-    : AudioNode(context, sampleRate)
+ChannelMergerNode::ChannelMergerNode(BaseAudioContext& context, unsigned numberOfInputs)
+    : AudioNode(context)
     , m_desiredNumberOfOutputChannels(DefaultNumberOfOutputChannels)
 {
     setNodeType(NodeTypeChannelMerger);

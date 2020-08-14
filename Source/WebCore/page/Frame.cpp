@@ -648,7 +648,7 @@ void Frame::injectUserScripts(UserScriptInjectionTime injectionTime)
     m_page->userContentProvider().forEachUserScript([this, protectedThis = makeRef(*this), injectionTime, pageWasNotified] (DOMWrapperWorld& world, const UserScript& script) {
         if (script.injectionTime() == injectionTime) {
             if (script.waitForNotificationBeforeInjecting() == WaitForNotificationBeforeInjecting::Yes && !pageWasNotified)
-                m_page->addUserScriptAwaitingNotification(world, script);
+                addUserScriptAwaitingNotification(world, script);
             else
                 injectUserScriptImmediately(world, script);
         }
@@ -678,6 +678,17 @@ void Frame::injectUserScriptImmediately(DOMWrapperWorld& world, const UserScript
     document->setAsRunningUserScripts();
     loader().client().willInjectUserScript(world);
     m_script->evaluateInWorldIgnoringException(ScriptSourceCode(script.source(), URL(script.url())), world);
+}
+
+void Frame::addUserScriptAwaitingNotification(DOMWrapperWorld& world, const UserScript& script)
+{
+    m_userScriptsAwaitingNotification.append({ makeRef(world), makeUniqueRef<UserScript>(script) });
+}
+
+void Frame::injectUserScriptsAwaitingNotification()
+{
+    for (const auto& [world, script] : std::exchange(m_userScriptsAwaitingNotification, { }))
+        injectUserScriptImmediately(world, script.get());
 }
 
 Optional<PageIdentifier> Frame::pageID() const
@@ -816,30 +827,25 @@ Document* Frame::documentAtPoint(const IntPoint& point)
     return result.innerNode() ? &result.innerNode()->document() : 0;
 }
 
-RefPtr<Range> Frame::rangeForPoint(const IntPoint& framePoint)
+Optional<SimpleRange> Frame::rangeForPoint(const IntPoint& framePoint)
 {
     auto position = visiblePositionForPoint(framePoint);
-    auto positionBoundary = makeBoundaryPoint(position);
-    if (!positionBoundary)
-        return nullptr;
 
     auto containerText = position.deepEquivalent().containerText();
     if (!containerText || !containerText->renderer() || containerText->renderer()->style().userSelect() == UserSelect::None)
-        return nullptr;
+        return WTF::nullopt;
 
-    if (auto previous = makeBoundaryPoint(position.previous())) {
-        auto previousCharacterRange = SimpleRange { *previous, *positionBoundary };
-        if (editor().firstRectForRange(previousCharacterRange).contains(framePoint))
-            return createLiveRange(previousCharacterRange);
+    if (auto previousCharacterRange = makeSimpleRange(position.previous(), position)) {
+        if (editor().firstRectForRange(*previousCharacterRange).contains(framePoint))
+            return *previousCharacterRange;
     }
 
-    if (auto next = makeBoundaryPoint(position.next())) {
-        auto nextCharacterRange = SimpleRange { *positionBoundary, *next };
-        if (editor().firstRectForRange(nextCharacterRange).contains(framePoint))
-            return createLiveRange(nextCharacterRange);
+    if (auto nextCharacterRange = makeSimpleRange(position, position.next())) {
+        if (editor().firstRectForRange(*nextCharacterRange).contains(framePoint))
+            return *nextCharacterRange;
     }
 
-    return nullptr;
+    return WTF::nullopt;
 }
 
 void Frame::createView(const IntSize& viewportSize, const Optional<Color>& backgroundColor,
@@ -903,6 +909,13 @@ String Frame::layerTreeAsText(LayerTreeFlags flags) const
     m_view->updateLayoutAndStyleIfNeededRecursive();
     if (!contentRenderer())
         return { };
+
+    contentRenderer()->compositor().updateEventRegions();
+
+    for (auto* child = mainFrame().tree().firstRenderedChild(); child; child = child->tree().traverseNextRendered()) {
+        if (auto* renderer = child->contentRenderer())
+            renderer->compositor().updateEventRegions();
+    }
 
     return contentRenderer()->compositor().layerTreeAsText(flags);
 }

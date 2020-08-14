@@ -37,6 +37,7 @@
 #include "Frame.h"
 #include "FrameView.h"
 #include "Page.h"
+#include "Range.h"
 #include "RenderedDocumentMarker.h"
 #include "SpellingCorrectionCommand.h"
 #include "TextCheckerClient.h"
@@ -264,7 +265,7 @@ void AlternativeTextController::timerFired()
     case AlternativeTextTypeSpellingSuggestions: {
         if (!m_rangeWithAlternative || plainText(*m_rangeWithAlternative) != m_originalText)
             break;
-        String paragraphText = plainText(TextCheckingParagraph(createLiveRange(*m_rangeWithAlternative)).paragraphRange());
+        String paragraphText = plainText(TextCheckingParagraph(*m_rangeWithAlternative).paragraphRange());
         Vector<String> suggestions;
         textChecker()->getGuessesForWord(m_originalText, paragraphText, m_document.selection().selection(), suggestions);
         if (suggestions.isEmpty()) {
@@ -336,7 +337,23 @@ void AlternativeTextController::handleAlternativeTextUIResult(const String& resu
 
 bool AlternativeTextController::isAutomaticSpellingCorrectionEnabled()
 {
-    return editorClient() && editorClient()->isAutomaticSpellingCorrectionEnabled();
+    if (!editorClient() || !editorClient()->isAutomaticSpellingCorrectionEnabled())
+        return false;
+
+#if ENABLE(AUTOCORRECT)
+    auto position = m_document.selection().selection().start();
+    if (auto editableRoot = position.rootEditableElement()) {
+        if (is<HTMLElement>(editableRoot) && !downcast<HTMLElement>(*editableRoot).shouldAutocorrect())
+            return false;
+    }
+
+    if (auto control = enclosingTextFormControl(position)) {
+        if (!control->shouldAutocorrect())
+            return false;
+    }
+#endif
+
+    return true;
 }
 
 FloatRect AlternativeTextController::rootViewRectForRange(const SimpleRange& range) const
@@ -472,15 +489,17 @@ void AlternativeTextController::markPrecedingWhitespaceForDeletedAutocorrectionA
     if (endOfSelection == precedingCharacterPosition)
         return;
 
-    auto precedingCharacterRange = SimpleRange { *makeBoundaryPoint(precedingCharacterPosition), *makeBoundaryPoint(endOfSelection) };
-    String string = plainText(precedingCharacterRange);
+    auto precedingCharacterRange = makeSimpleRange(precedingCharacterPosition, endOfSelection);
+    if (!precedingCharacterRange)
+        return;
+    String string = plainText(*precedingCharacterRange);
     if (string.isEmpty() || !deprecatedIsEditingWhitespace(string[string.length() - 1]))
         return;
 
     // Mark this whitespace to indicate we have deleted an autocorrection following this
     // whitespace. So if the user types the same original word again at this position, we
     // won't autocorrect it again.
-    addMarker(precedingCharacterRange, DocumentMarker::DeletedAutocorrection, m_originalStringForLastDeletedAutocorrection);
+    addMarker(*precedingCharacterRange, DocumentMarker::DeletedAutocorrection, m_originalStringForLastDeletedAutocorrection);
 }
 
 bool AlternativeTextController::processMarkersOnTextToBeReplacedByResult(const TextCheckingResult& result, const SimpleRange& rangeWithAlternative, const String& stringToBeReplaced)
@@ -498,10 +517,11 @@ bool AlternativeTextController::processMarkersOnTextToBeReplacedByResult(const T
     if (markers.hasMarkers(rangeWithAlternative, DocumentMarker::AcceptedCandidate))
         return false;
 
-    auto beforePrecedingCharacter = createLegacyEditingPosition(rangeWithAlternative.start).previous();
-    auto precedingCharacterRange = SimpleRange { *makeBoundaryPoint(beforePrecedingCharacter), rangeWithAlternative.start };
+    auto precedingCharacterRange = makeSimpleRange(createLegacyEditingPosition(rangeWithAlternative.start).previous(), rangeWithAlternative.start);
+    if (!precedingCharacterRange)
+        return false;
 
-    for (auto& marker : markers.markersInRange(precedingCharacterRange, DocumentMarker::DeletedAutocorrection)) {
+    for (auto& marker : markers.markersInRange(*precedingCharacterRange, DocumentMarker::DeletedAutocorrection)) {
         if (marker->description() == stringToBeReplaced)
             return false;
     }
@@ -519,7 +539,7 @@ bool AlternativeTextController::respondToMarkerAtEndOfWord(const DocumentMarker&
     if (!shouldStartTimerFor(marker, endOfWordPosition.offsetInContainerNode()))
         return false;
     Node* node = endOfWordPosition.containerNode();
-    auto wordRange = SimpleRange { { *node, marker.startOffset() }, { *node, marker.endOffset() } };
+    auto wordRange = makeSimpleRange(*node, marker);
     String currentWord = plainText(wordRange);
     if (!currentWord.length())
         return false;
@@ -587,7 +607,7 @@ void AlternativeTextController::applyAlternativeTextToRange(const SimpleRange& r
     auto correctionOffsetInParagraph = characterCount({ *paragraphStart, range.start });
     auto paragraphOffsetInTreeScope = characterCount({ treeScopeStart, *paragraphStart });
 
-    SpellingCorrectionCommand::create(createLiveRange(range), alternative)->apply();
+    SpellingCorrectionCommand::create(range, alternative)->apply();
 
     // Recalculate pragraphRangeContainingCorrection, since SpellingCorrectionCommand modified the DOM, such that the original paragraphRangeContainingCorrection is no longer valid. Radar: 10305315 Bugzilla: 89526
     auto updatedParagraphStartContainingCorrection = resolveCharacterLocation(makeRangeSelectingNodeContents(treeScopeRoot), paragraphOffsetInTreeScope);

@@ -77,7 +77,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << shouldEnableMemoryPressureReliefLogging;
     encoder << shouldSuppressMemoryPressureHandler;
     encoder << shouldUseFontSmoothing;
-    encoder << fontWhitelist;
+    encoder << fontAllowList;
     encoder << terminationTimeout;
     encoder << overrideLanguages;
 #if USE(GSTREAMER)
@@ -160,7 +160,8 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
 
     encoder << containerManagerExtensionHandle;
-    
+    encoder << mobileGestaltExtensionHandle;
+
 #if PLATFORM(IOS_FAMILY)
     encoder << diagnosticsExtensionHandles;
     encoder << dynamicMachExtensionHandles;
@@ -168,7 +169,6 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
 
 #if PLATFORM(COCOA)
-    encoder << mapDBExtensionHandle;
     encoder << systemHasBattery;
     encoder << systemHasAC;
 #endif
@@ -279,7 +279,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     if (!decoder.decode(parameters.shouldUseFontSmoothing))
         return false;
-    if (!decoder.decode(parameters.fontWhitelist))
+    if (!decoder.decode(parameters.fontAllowList))
         return false;
     if (!decoder.decode(parameters.terminationTimeout))
         return false;
@@ -428,6 +428,12 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     parameters.containerManagerExtensionHandle = WTFMove(*containerManagerExtensionHandle);
 
+    Optional<Optional<SandboxExtension::Handle>> mobileGestaltExtensionHandle;
+    decoder >> mobileGestaltExtensionHandle;
+    if (!mobileGestaltExtensionHandle)
+        return false;
+    parameters.mobileGestaltExtensionHandle = WTFMove(*mobileGestaltExtensionHandle);
+
 #if PLATFORM(IOS_FAMILY)
     Optional<SandboxExtension::HandleArray> diagnosticsExtensionHandles;
     decoder >> diagnosticsExtensionHandles;
@@ -449,12 +455,6 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
 #endif
 
 #if PLATFORM(COCOA)
-    Optional<Optional<SandboxExtension::Handle>> mapDBExtensionHandle;
-    decoder >> mapDBExtensionHandle;
-    if (!mapDBExtensionHandle)
-        return false;
-    parameters.mapDBExtensionHandle = WTFMove(*mapDBExtensionHandle);
-
     Optional<bool> systemHasBattery;
     decoder >> systemHasBattery;
     if (!systemHasBattery)

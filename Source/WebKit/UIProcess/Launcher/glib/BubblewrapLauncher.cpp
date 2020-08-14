@@ -581,8 +581,8 @@ static int setupSeccomp()
     // can do, and we should support code portability between different
     // container tools.
     //
-    // This syscall blacklist is copied from linux-user-chroot, which was in turn
-    // clearly influenced by the Sandstorm.io blacklist.
+    // This syscall block list is copied from linux-user-chroot, which was in turn
+    // clearly influenced by the Sandstorm.io block list.
     //
     // If you make any changes here, I suggest sending the changes along
     // to other sandbox maintainers. Using the libseccomp list is also
@@ -590,7 +590,7 @@ static int setupSeccomp()
     // https://groups.google.com/forum/#!topic/libseccomp
     //
     // A non-exhaustive list of links to container tooling that might
-    // want to share this blacklist:
+    // want to share this block list:
     //
     //  https://github.com/sandstorm-io/sandstorm
     //    in src/sandstorm/supervisor.c++
@@ -598,12 +598,21 @@ static int setupSeccomp()
     //    in common/flatpak-run.c
     //  https://git.gnome.org/browse/linux-user-chroot
     //    in src/setup-seccomp.c
+
+#if defined(__s390__) || defined(__s390x__) || defined(__CRIS__)
+    // Architectures with CONFIG_CLONE_BACKWARDS2: the child stack
+    // and flags arguments are reversed so the flags come second.
+    struct scmp_arg_cmp cloneArg = SCMP_A1(SCMP_CMP_MASKED_EQ, CLONE_NEWUSER, CLONE_NEWUSER);
+#else
+    // Normally the flags come first.
     struct scmp_arg_cmp cloneArg = SCMP_A0(SCMP_CMP_MASKED_EQ, CLONE_NEWUSER, CLONE_NEWUSER);
+#endif
+
     struct scmp_arg_cmp ttyArg = SCMP_A1(SCMP_CMP_MASKED_EQ, 0xFFFFFFFFu, TIOCSTI);
     struct {
         int scall;
         struct scmp_arg_cmp* arg;
-    } syscallBlacklist[] = {
+    } syscallBlockList[] = {
         // Block dmesg
         { SCMP_SYS(syslog), nullptr },
         // Useless old syscall.
@@ -649,7 +658,7 @@ static int setupSeccomp()
     if (!seccomp)
         g_error("Failed to init seccomp");
 
-    for (auto& rule : syscallBlacklist) {
+    for (auto& rule : syscallBlockList) {
         int scall = rule.scall;
         int r;
         if (rule.arg)
