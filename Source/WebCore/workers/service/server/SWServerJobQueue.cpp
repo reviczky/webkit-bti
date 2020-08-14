@@ -57,6 +57,18 @@ bool SWServerJobQueue::isCurrentlyProcessingJob(const ServiceWorkerJobDataIdenti
     return !m_jobQueue.isEmpty() && firstJob().identifier() == jobDataIdentifier;
 }
 
+static bool doCertificatesMatch(const CertificateInfo& first, const CertificateInfo& second)
+{
+#if PLATFORM(COCOA) && HAVE(SEC_TRUST_SERIALIZATION)
+    return first.trust() == second.trust() || certificatesMatch(first.trust(), second.trust());
+#else
+    // FIXME: Add support for certificate matching in CertificateInfo.
+    UNUSED_PARAM(first);
+    UNUSED_PARAM(second);
+    return true;
+#endif
+}
+
 void SWServerJobQueue::scriptFetchFinished(const ServiceWorkerFetchResult& result)
 {
     if (!isCurrentlyProcessingJob(result.jobDataIdentifier))
@@ -88,7 +100,8 @@ void SWServerJobQueue::scriptFetchFinished(const ServiceWorkerFetchResult& resul
     // If newestWorker is not null, newestWorker's script url equals job's script url with the exclude fragments
     // flag set, and script's source text is a byte-for-byte match with newestWorker's script resource's source
     // text, then:
-    if (newestWorker && equalIgnoringFragmentIdentifier(newestWorker->scriptURL(), job.scriptURL) && result.script == newestWorker->script()) {
+    if (newestWorker && equalIgnoringFragmentIdentifier(newestWorker->scriptURL(), job.scriptURL) && result.script == newestWorker->script() && doCertificatesMatch(result.certificateInfo, newestWorker->certificateInfo())) {
+        RELEASE_LOG(ServiceWorker, "%p - SWServerJobQueue::scriptFetchFinished, script and certificate are matching for registration ID: %llu", this, registration->identifier().toUInt64());
         // FIXME: for non classic scripts, check the script’s module record's [[ECMAScriptCode]].
 
         // Invoke Resolve Job Promise with job and registration.
@@ -156,6 +169,8 @@ void SWServerJobQueue::install(SWServerRegistration& registration, ServiceWorker
 
     // Invoke Resolve Job Promise with job and registration.
     m_server.resolveRegistrationJob(firstJob(), registration.data(), ShouldNotifyWhenResolved::Yes);
+
+    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=215122. We do not need to wait for the registration promise to resolve to continue the install steps.
 }
 
 // https://w3c.github.io/ServiceWorker/#install (after resolving promise).
@@ -164,6 +179,11 @@ void SWServerJobQueue::didResolveRegistrationPromise()
     auto* registration = m_server.getRegistration(m_registrationKey);
     ASSERT(registration);
     ASSERT(registration->installingWorker());
+
+    if (!registration || !registration->installingWorker()) {
+        RELEASE_LOG_ERROR(ServiceWorker, "%p - SWServerJobQueue::didResolveRegistrationPromise with null registration (%d) or null worker", this, !!registration);
+        return;
+    }
 
     RELEASE_LOG(ServiceWorker, "%p - SWServerJobQueue::didResolveRegistrationPromise: Registration ID: %llu. Now proceeding with install", this, registration->identifier().toUInt64());
 

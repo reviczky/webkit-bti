@@ -25,6 +25,7 @@
 #pragma once
 
 #include "BaseAudioContext.h"
+#include "JSDOMPromiseDeferred.h"
 #include "OfflineAudioContextOptions.h"
 
 namespace WebCore {
@@ -36,8 +37,16 @@ public:
     
     static ExceptionOr<Ref<OfflineAudioContext>> create(ScriptExecutionContext&, const OfflineAudioContextOptions&);
 
+    void startOfflineRendering(Ref<DeferredPromise>&&);
+
+    unsigned length() const;
+
 private:
     OfflineAudioContext(Document&, AudioBuffer* renderTarget);
+
+    void didFinishOfflineRendering(ExceptionOr<Ref<AudioBuffer>>&&) final;
+
+    RefPtr<DeferredPromise> m_pendingOfflineRenderingPromise;
 };
 
 } // namespace WebCore

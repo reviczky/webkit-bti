@@ -78,11 +78,15 @@
 #include "HTMLMediaElement.h"
 #include "HTMLMeterElement.h"
 #include "HTMLNames.h"
+#include "HTMLOptGroupElement.h"
+#include "HTMLOptionElement.h"
 #include "HTMLParserIdioms.h"
+#include "HTMLSelectElement.h"
 #include "HTMLTextFormControlElement.h"
 #include "InlineElementBox.h"
 #include "MathMLElement.h"
 #include "Page.h"
+#include "Range.h"
 #include "RenderAttachment.h"
 #include "RenderLineBreak.h"
 #include "RenderListBox.h"
@@ -166,10 +170,10 @@ void AXComputedObjectAttributeCache::setIgnored(AXID id, AccessibilityObjectIncl
 AccessibilityReplacedText::AccessibilityReplacedText(const VisibleSelection& selection)
 {
     if (AXObjectCache::accessibilityEnabled()) {
-        m_replacedRange.startIndex.value = indexForVisiblePosition(selection.start(), m_replacedRange.startIndex.scope);
+        m_replacedRange.startIndex.value = indexForVisiblePosition(selection.visibleStart(), m_replacedRange.startIndex.scope);
         if (selection.isRange()) {
             m_replacedText = AccessibilityObject::stringForVisiblePositionRange(selection);
-            m_replacedRange.endIndex.value = indexForVisiblePosition(selection.end(), m_replacedRange.endIndex.scope);
+            m_replacedRange.endIndex.value = indexForVisiblePosition(selection.visibleEnd(), m_replacedRange.endIndex.scope);
         } else
             m_replacedRange.endIndex = m_replacedRange.startIndex;
     }
@@ -639,6 +643,24 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node* node)
     if (!node->parentElement())
         return nullptr;
     
+    bool isOptionElement = is<HTMLOptionElement>(*node);
+    if (isOptionElement || is<HTMLOptGroupElement>(*node)) {
+        auto select = isOptionElement
+            ? downcast<HTMLOptionElement>(*node).ownerSelectElement()
+            : downcast<HTMLOptGroupElement>(*node).ownerSelectElement();
+        if (!select)
+            return nullptr;
+        RefPtr<AccessibilityObject> object;
+        if (select->usesMenuList()) {
+            if (!isOptionElement)
+                return nullptr;
+            object = AccessibilityMenuListOption::create(downcast<HTMLOptionElement>(*node));
+        } else
+            object = AccessibilityListBoxOption::create(downcast<HTMLElement>(*node));
+        cacheAndInitializeWrapper(object.get(), node);
+        return object.get();
+    }
+
     // It's only allowed to create an AccessibilityObject from a Node if it's in a canvas subtree.
     // Or if it's a hidden element, but we still want to expose it because of other ARIA attributes.
     bool inCanvasSubtree = lineageOfType<HTMLCanvasElement>(*node->parentElement()).first();
@@ -800,15 +822,12 @@ AccessibilityObject* AXObjectCache::rootObjectForFrame(Frame* frame)
     return getOrCreate(frame->view());
 }    
     
-AccessibilityObject* AXObjectCache::getOrCreate(AccessibilityRole role)
+AccessibilityObject* AXObjectCache::create(AccessibilityRole role)
 {
     RefPtr<AccessibilityObject> obj;
 
     // will be filled in...
     switch (role) {
-    case AccessibilityRole::ListBoxOption:
-        obj = AccessibilityListBoxOption::create();
-        break;
     case AccessibilityRole::ImageMapLink:
         obj = AccessibilityImageMapLink::create();
         break;
@@ -823,9 +842,6 @@ AccessibilityObject* AXObjectCache::getOrCreate(AccessibilityRole role)
         break;
     case AccessibilityRole::MenuListPopup:
         obj = AccessibilityMenuListPopup::create();
-        break;
-    case AccessibilityRole::MenuListOption:
-        obj = AccessibilityMenuListOption::create();
         break;
     case AccessibilityRole::SpinButton:
         obj = AccessibilitySpinButton::create();
@@ -1684,7 +1700,7 @@ void AXObjectCache::handleAttributeChange(const QualifiedName& attrName, Element
 {
     if (!shouldProcessAttributeChange(attrName, element))
         return;
-    
+
     if (attrName == roleAttr)
         handleAriaRoleChanged(element);
     else if (attrName == altAttr || attrName == titleAttr)
@@ -1693,6 +1709,8 @@ void AXObjectCache::handleAttributeChange(const QualifiedName& attrName, Element
         labelChanged(element);
     else if (attrName == tabindexAttr)
         childrenChanged(element->parentNode(), element);
+    else if (attrName == langAttr)
+        postNotification(element, AXObjectCache::AXLanguageChanged);
 
     if (!attrName.localName().string().startsWith("aria-"))
         return;
@@ -1985,12 +2003,12 @@ Optional<SimpleRange> AXObjectCache::rangeMatchesTextNearRange(const SimpleRange
     if (endPosition.isNull())
         endPosition = lastPositionInOrAfterNode(originalRange.end.container.ptr());
 
-    auto searchRange = SimpleRange { *makeBoundaryPoint(startPosition), *makeBoundaryPoint(endPosition) };
-    if (searchRange.collapsed())
+    auto searchRange = makeSimpleRange(startPosition, endPosition);
+    if (!searchRange || searchRange->collapsed())
         return WTF::nullopt;
 
-    auto targetOffset = characterCount({ searchRange.start, originalRange.start }, TextIteratorEmitsCharactersBetweenAllVisiblePositions);
-    return findClosestPlainText(searchRange, matchText, { }, targetOffset);
+    auto targetOffset = characterCount({ searchRange->start, originalRange.start }, TextIteratorEmitsCharactersBetweenAllVisiblePositions);
+    return findClosestPlainText(*searchRange, matchText, { }, targetOffset);
 }
 
 static bool isReplacedNodeOrBR(Node* node)
@@ -2621,7 +2639,7 @@ CharacterOffset AXObjectCache::nextBoundary(const CharacterOffset& characterOffs
         auto backwardsScanRange = makeRangeSelectingNodeContents(boundary->document());
         if (!setRangeStartOrEndWithCharacterOffset(backwardsScanRange, characterOffset, false))
             return { };
-        prefixLength = prefixLengthForRange(createLiveRange(backwardsScanRange), string);
+        prefixLength = prefixLengthForRange(backwardsScanRange, string);
     }
     
     if (!setRangeStartOrEndWithCharacterOffset(searchRange, characterOffset, true))
@@ -2680,7 +2698,7 @@ CharacterOffset AXObjectCache::previousBoundary(const CharacterOffset& character
         forwardsScanRange.start = *afterBoundary;
         if (!setRangeStartOrEndWithCharacterOffset(forwardsScanRange, characterOffset, true))
             return { };
-        suffixLength = suffixLengthForRange(createLiveRange(forwardsScanRange), string);
+        suffixLength = suffixLengthForRange(forwardsScanRange, string);
     }
     
     if (!setRangeStartOrEndWithCharacterOffset(searchRange, characterOffset, false))
@@ -2880,18 +2898,18 @@ CharacterOffset AXObjectCache::characterOffsetForPoint(const IntPoint& point, AX
 {
     if (!object)
         return { };
-    auto boundary = makeBoundaryPoint(object->visiblePositionForPoint(point));
-    if (!boundary)
+    auto range = makeSimpleRange(object->visiblePositionForPoint(point));
+    if (!range)
         return { };
-    return startOrEndCharacterOffsetForRange({ *boundary, *boundary }, true);
+    return startOrEndCharacterOffsetForRange(*range, true);
 }
 
 CharacterOffset AXObjectCache::characterOffsetForPoint(const IntPoint& point)
 {
-    auto boundary = m_document.caretPositionFromPoint(point);
-    if (!boundary)
+    auto range = makeSimpleRange(m_document.caretPositionFromPoint(point));
+    if (!range)
         return { };
-    return startOrEndCharacterOffsetForRange({ *boundary, *boundary }, true);
+    return startOrEndCharacterOffsetForRange(*range, true);
 }
 
 CharacterOffset AXObjectCache::characterOffsetForBounds(const IntRect& rect, bool first)
@@ -3169,6 +3187,7 @@ void AXObjectCache::updateIsolatedTree(AXCoreObject& object, AXNotification noti
         tree->updateNode(object);
         break;
     case AXChildrenChanged:
+    case AXLanguageChanged:
         tree->updateChildren(object);
         break;
     default:
@@ -3229,7 +3248,8 @@ void AXObjectCache::updateIsolatedTree(const Vector<std::pair<RefPtr<AXCoreObjec
                 tree->updateNode(*notification.first);
             break;
         }
-        case AXChildrenChanged: {
+        case AXChildrenChanged:
+        case AXLanguageChanged: {
             bool needsUpdate = appendIfNotContainsMatching(filteredNotifications, notification, [&notification] (const std::pair<RefPtr<AXCoreObject>, AXNotification>& note) {
                 return note.second == notification.second && note.first.get() == notification.first.get();
             });

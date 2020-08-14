@@ -2565,6 +2565,7 @@ void webkitWebViewMouseTargetChanged(WebKitWebView* webView, const WebHitTestRes
 {
 #if PLATFORM(GTK)
     webkitWebViewBaseSetTooltipArea(WEBKIT_WEB_VIEW_BASE(webView), hitTestResult.elementBoundingBox);
+    webkitWebViewBaseSetMouseIsOverScrollbar(WEBKIT_WEB_VIEW_BASE(webView), hitTestResult.isScrollbar);
 #endif
 
     WebKitWebViewPrivate* priv = webView->priv;
@@ -2742,7 +2743,7 @@ void webkitWebViewSelectionDidChange(WebKitWebView* webView)
 
 void webkitWebViewRequestInstallMissingMediaPlugins(WebKitWebView* webView, InstallMissingMediaPluginsPermissionRequest& request)
 {
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO) && !USE(GSTREAMER_FULL)
     GRefPtr<WebKitInstallMissingMediaPluginsPermissionRequest> installMediaPluginsPermissionRequest = adoptGRef(webkitInstallMissingMediaPluginsPermissionRequestCreate(request));
     webkitWebViewMakePermissionRequest(webView, WEBKIT_PERMISSION_REQUEST(installMediaPluginsPermissionRequest.get()));
 #else

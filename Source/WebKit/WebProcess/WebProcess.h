@@ -333,6 +333,13 @@ public:
 #endif
 
     void enableVP9Decoder();
+    void enableVP9SWDecoder();
+
+#if PLATFORM(COCOA)
+    void willWriteToPasteboardAsynchronously(const String& pasteboardName);
+    void waitForPendingPasteboardWritesToFinish(const String& pasteboardName);
+    void didWriteToPasteboardAsynchronously(const String& pasteboardName);
+#endif
 
 private:
     WebProcess();
@@ -648,8 +655,13 @@ private:
     RefPtr<SandboxExtension> m_assetServiceV2Extension;
 #endif
 
+#if PLATFORM(COCOA)
+    HashCountedSet<String> m_pendingPasteboardWriteCounts;
+#endif
+
     bool m_useGPUProcessForMedia { false };
     bool m_vp9DecoderEnabled { false };
+    bool m_vp9SWDecoderEnabled { false };
 };
 
 } // namespace WebKit

@@ -72,6 +72,7 @@
 #include "NodeList.h"
 #include "Page.h"
 #include "ProgressTracker.h"
+#include "Range.h"
 #include "RenderButton.h"
 #include "RenderFileUploadControl.h"
 #include "RenderHTMLCanvas.h"
@@ -649,12 +650,9 @@ String AccessibilityRenderObject::textUnderElement(AccessibilityTextUnderElement
             if (firstChildRenderer && firstChildRenderer->node() && lastChildRenderer && lastChildRenderer->node()) {
                 // We define the start and end positions for the range as the ones right before and after
                 // the first and the last nodes in the DOM tree that is wrapped inside the anonymous block.
-                Node* firstNodeInBlock = firstChildRenderer->node();
-                Position startPosition = positionInParentBeforeNode(firstNodeInBlock);
-                Position endPosition = positionInParentAfterNode(lastChildRenderer->node());
-
-                nodeDocument = &firstNodeInBlock->document();
-                textRange = { { *makeBoundaryPoint(startPosition), *makeBoundaryPoint(endPosition) } };
+                auto& firstNodeInBlock = *firstChildRenderer->node();
+                nodeDocument = &firstNodeInBlock.document();
+                textRange = makeSimpleRange(positionInParentBeforeNode(&firstNodeInBlock), positionInParentAfterNode(lastChildRenderer->node()));
             }
         }
 
@@ -917,7 +915,7 @@ IntPoint AccessibilityRenderObject::linkClickPoint()
         auto start = VisiblePosition { createLegacyEditingPosition(range->start) };
         auto end = nextVisiblePosition(start);
         if (!end.isNull() && createLiveRange(range)->contains(end))
-            return { boundsForRange({ *makeBoundaryPoint(start), *makeBoundaryPoint(end) }).center() };
+            return { boundsForRange(*makeSimpleRange(start, end)).center() };
     }
     return AccessibilityObject::clickPoint();
 }
@@ -935,9 +933,7 @@ IntPoint AccessibilityRenderObject::clickPoint()
     if (!isWebArea() || !canSetValueAttribute())
         return AccessibilityObject::clickPoint();
     
-    VisibleSelection visSelection = selection();
-    VisiblePositionRange range = VisiblePositionRange(visSelection.visibleStart(), visSelection.visibleEnd());
-    return boundsForVisiblePositionRange(range).center();
+    return boundsForVisiblePositionRange(selection()).center();
 }
     
 AccessibilityObject* AccessibilityRenderObject::internalLinkElement() const
@@ -1953,7 +1949,7 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityRenderObject::documentLin
         } else {
             auto* parent = current->parentNode();
             if (is<HTMLAreaElement>(*current) && is<HTMLMapElement>(parent)) {
-                auto& areaObject = downcast<AccessibilityImageMapLink>(*axObjectCache()->getOrCreate(AccessibilityRole::ImageMapLink));
+                auto& areaObject = downcast<AccessibilityImageMapLink>(*axObjectCache()->create(AccessibilityRole::ImageMapLink));
                 HTMLMapElement& map = downcast<HTMLMapElement>(*parent);
                 areaObject.setHTMLAreaElement(downcast<HTMLAreaElement>(current));
                 areaObject.setHTMLMapElement(&map);
@@ -1990,7 +1986,6 @@ VisiblePositionRange AccessibilityRenderObject::visiblePositionRange() const
     if (!m_renderer)
         return VisiblePositionRange();
     
-    // construct VisiblePositions for start and end
     Node* node = m_renderer->node();
     if (!node)
         return VisiblePositionRange();
@@ -2008,7 +2003,7 @@ VisiblePositionRange AccessibilityRenderObject::visiblePositionRange() const
             endPos = startPos;
     }
 
-    return VisiblePositionRange(startPos, endPos);
+    return { WTFMove(startPos), WTFMove(endPos) };
 }
 
 VisiblePositionRange AccessibilityRenderObject::visiblePositionRangeForLine(unsigned lineCount) const
@@ -2038,7 +2033,7 @@ VisiblePositionRange AccessibilityRenderObject::visiblePositionRangeForLine(unsi
     selection.setSelection(VisibleSelection(visiblePos));
     selection.modify(FrameSelection::AlterationExtend, SelectionDirection::Right, TextGranularity::LineBoundary);
     
-    return VisiblePositionRange(selection.selection().visibleStart(), selection.selection().visibleEnd());
+    return selection.selection();
 }
     
 VisiblePosition AccessibilityRenderObject::visiblePositionForIndex(int index) const
@@ -2157,7 +2152,7 @@ IntRect AccessibilityRenderObject::boundsForVisiblePositionRange(const VisiblePo
         }
     }
     
-    return boundsForRects(rect1, rect2, *makeRange(range.start, range.end));
+    return boundsForRects(rect1, rect2, *makeSimpleRange(range));
 }
 
 IntRect AccessibilityRenderObject::boundsForRange(const SimpleRange& range) const
@@ -3178,7 +3173,7 @@ void AccessibilityRenderObject::addImageMapChildren()
         // add an <area> element for this child if it has a link
         if (!area.isLink())
             continue;
-        auto& areaObject = downcast<AccessibilityImageMapLink>(*axObjectCache()->getOrCreate(AccessibilityRole::ImageMapLink));
+        auto& areaObject = downcast<AccessibilityImageMapLink>(*axObjectCache()->create(AccessibilityRole::ImageMapLink));
         areaObject.setHTMLAreaElement(&area);
         areaObject.setHTMLMapElement(map);
         areaObject.setParent(this);
@@ -3213,7 +3208,7 @@ void AccessibilityRenderObject::addTextFieldChildren()
     if (!is<SpinButtonElement>(spinButtonElement))
         return;
 
-    auto& axSpinButton = downcast<AccessibilitySpinButton>(*axObjectCache()->getOrCreate(AccessibilityRole::SpinButton));
+    auto& axSpinButton = downcast<AccessibilitySpinButton>(*axObjectCache()->create(AccessibilityRole::SpinButton));
     axSpinButton.setSpinButtonElement(downcast<SpinButtonElement>(spinButtonElement));
     axSpinButton.setParent(this);
     m_children.append(&axSpinButton);

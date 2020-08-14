@@ -129,7 +129,6 @@ class PluginViewBase;
 class PointerCaptureController;
 class PointerLockController;
 class ProgressTracker;
-class Range;
 class RenderObject;
 class ResourceUsageOverlay;
 class ScrollLatchingState;
@@ -151,6 +150,8 @@ class VisitedLinkStore;
 class WebGLStateTracker;
 class WheelEventDeltaFilter;
 class WheelEventTestMonitor;
+
+struct SimpleRange;
 
 using PlatformDisplayID = uint32_t;
 using SharedStringHash = uint32_t;
@@ -289,12 +290,12 @@ public:
     bool tabKeyCyclesThroughElements() const { return m_tabKeyCyclesThroughElements; }
 
     WEBCORE_EXPORT bool findString(const String&, FindOptions, DidWrap* = nullptr);
-    WEBCORE_EXPORT uint32_t replaceRangesWithText(const Vector<Ref<Range>>& rangesToReplace, const String& replacementText, bool selectionOnly);
+    WEBCORE_EXPORT uint32_t replaceRangesWithText(const Vector<SimpleRange>& rangesToReplace, const String& replacementText, bool selectionOnly);
     WEBCORE_EXPORT uint32_t replaceSelectionWithText(const String& replacementText);
 
     WEBCORE_EXPORT void revealCurrentSelection();
 
-    WEBCORE_EXPORT RefPtr<Range> rangeOfString(const String&, Range*, FindOptions);
+    WEBCORE_EXPORT Optional<SimpleRange> rangeOfString(const String&, const Optional<SimpleRange>& searchRange, FindOptions);
 
     WEBCORE_EXPORT unsigned countFindMatches(const String&, FindOptions, unsigned maxMatchCount);
     WEBCORE_EXPORT unsigned markAllMatchesForText(const String&, FindOptions, bool shouldHighlight, unsigned maxMatchCount);
@@ -304,13 +305,17 @@ public:
     WEBCORE_EXPORT void dispatchBeforePrintEvent();
     WEBCORE_EXPORT void dispatchAfterPrintEvent();
 
-    // Find all the Ranges for the matching text.
+    // Find all the ranges for the matching text.
     // Upon return, indexForSelection will be one of the following:
     // 0 if there is no user selection
     // the index of the first range after the user selection
     // NoMatchAfterUserSelection if there is no matching text after the user selection.
-    enum { NoMatchAfterUserSelection = -1 };
-    WEBCORE_EXPORT void findStringMatchingRanges(const String&, FindOptions, int maxCount, Vector<RefPtr<Range>>&, int& indexForSelection);
+    struct MatchingRanges {
+        Vector<SimpleRange> ranges;
+        int indexForSelection { 0 }; // FIXME: Consider Optional<unsigned> or unsigned for this instead.
+    };
+    static constexpr int NoMatchAfterUserSelection = -1;
+    WEBCORE_EXPORT MatchingRanges findTextMatches(const String&, FindOptions, unsigned maxCount);
 
 #if PLATFORM(COCOA)
     void platformInitialize();
@@ -343,7 +348,8 @@ public:
     WEBCORE_EXPORT void updateMediaElementRateChangeRestrictions();
 
     void didStartProvisionalLoad();
-    void didFinishLoad(); // Called when the load has been committed in the main frame.
+    void didCommitLoad();
+    void didFinishLoad();
 
     bool delegatesScaling() const { return m_delegatesScaling; }
     WEBCORE_EXPORT void setDelegatesScaling(bool);
@@ -651,6 +657,9 @@ public:
     void setHasResourceLoadClient(bool has) { m_hasResourceLoadClient = has; }
     bool hasResourceLoadClient() const { return m_hasResourceLoadClient; }
 
+    void setCanUseCredentialStorage(bool canUse) { m_canUseCredentialStorage = canUse; }
+    bool canUseCredentialStorage() const { return m_canUseCredentialStorage; }
+
 #if ENABLE(MEDIA_SESSION)
     WEBCORE_EXPORT void handleMediaEvent(MediaEventType);
     WEBCORE_EXPORT void setVolumeOfMediaElement(double, uint64_t);
@@ -769,7 +778,6 @@ public:
 
     bool hasBeenNotifiedToInjectUserScripts() const { return m_hasBeenNotifiedToInjectUserScripts; }
     WEBCORE_EXPORT void notifyToInjectUserScripts();
-    void addUserScriptAwaitingNotification(DOMWrapperWorld&, const UserScript&);
 
 private:
     struct Navigation {
@@ -1062,9 +1070,9 @@ private:
     bool m_shouldFireEvents { true };
     bool m_loadsSubresources { true };
     bool m_loadsFromNetwork { true };
+    bool m_canUseCredentialStorage { true };
     ShouldRelaxThirdPartyCookieBlocking m_shouldRelaxThirdPartyCookieBlocking { ShouldRelaxThirdPartyCookieBlocking::No };
     bool m_hasBeenNotifiedToInjectUserScripts { false };
-    Vector<std::pair<Ref<DOMWrapperWorld>, UniqueRef<UserScript>>> m_userScriptsAwaitingNotification;
 };
 
 inline PageGroup& Page::group()

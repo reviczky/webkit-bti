@@ -507,7 +507,7 @@ RefPtr<ArrayBufferView> WebGL2RenderingContext::sliceArrayBufferView(const char*
     }
     Checked<GCGLuint, RecordOverflow> checkedByteLength = checkedLength * checkedElementSize;
 
-    if (checkedByteSrcOffset.hasOverflowed()
+    if (checkedLength.hasOverflowed() || checkedByteSrcOffset.hasOverflowed()
         || checkedByteLength.hasOverflowed()
         || checkedByteSrcOffset.unsafeGet() > data.byteLength()
         || checkedByteLength.unsafeGet() > data.byteLength() - checkedByteSrcOffset.unsafeGet()) {
@@ -515,7 +515,7 @@ RefPtr<ArrayBufferView> WebGL2RenderingContext::sliceArrayBufferView(const char*
         return nullptr;
     }
 
-    return arrayBufferViewSliceFactory(functionName, data, data.byteOffset() + checkedByteSrcOffset.unsafeGet(), length);
+    return arrayBufferViewSliceFactory(functionName, data, data.byteOffset() + checkedByteSrcOffset.unsafeGet(), checkedLength.unsafeGet());
 }
 
 void WebGL2RenderingContext::pixelStorei(GCGLenum pname, GCGLint param)
@@ -620,7 +620,7 @@ void WebGL2RenderingContext::getBufferSubData(GCGLenum target, long long srcByte
 {
     if (isContextLostOrPending())
         return;
-    RefPtr<WebGLBuffer> buffer = validateBufferDataParameters("bufferSubData", target, GraphicsContextGL::STATIC_DRAW);
+    RefPtr<WebGLBuffer> buffer = validateBufferDataParameters("getBufferSubData", target, GraphicsContextGL::STATIC_DRAW);
     if (!buffer) {
         synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "getBufferSubData", "No WebGLBuffer is bound to target");
         return;
@@ -642,7 +642,7 @@ void WebGL2RenderingContext::getBufferSubData(GCGLenum target, long long srcByte
     auto dstDataLength = dstData->byteLength() / elementSize;
 
     if (dstOffset > dstDataLength) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "getBufferSubData", "dstOffset is larger than the length of the destination buffer.");
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, "getBufferSubData", "dstOffset is larger than the length of the destination buffer.");
         return;
     }
 
@@ -652,17 +652,17 @@ void WebGL2RenderingContext::getBufferSubData(GCGLenum target, long long srcByte
     Checked<GCGLuint, RecordOverflow> checkedCopyLength(copyLength);
     auto checkedDestinationEnd = checkedDstOffset + checkedCopyLength;
     if (checkedDestinationEnd.hasOverflowed()) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "getBufferSubData", "dstOffset + copyLength is too high");
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, "getBufferSubData", "dstOffset + copyLength is too high");
         return;
     }
 
     if (checkedDestinationEnd.unsafeGet() > dstDataLength) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "getBufferSubData", "end of written destination is past the end of the buffer");
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, "getBufferSubData", "end of written destination is past the end of the buffer");
         return;
     }
 
     if (srcByteOffset < 0) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "getBufferSubData", "srcByteOffset is less than 0");
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, "getBufferSubData", "srcByteOffset is less than 0");
         return;
     }
 
@@ -671,9 +671,12 @@ void WebGL2RenderingContext::getBufferSubData(GCGLenum target, long long srcByte
     Checked<GCGLintptr, RecordOverflow> checkedElementSize(elementSize);
     auto checkedSourceEnd = checkedSrcByteOffset + checkedCopyLengthPtr * checkedElementSize;
     if (checkedSourceEnd.hasOverflowed() || checkedSourceEnd.unsafeGet() > buffer->byteLength()) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "getBufferSubData", "Parameters would read outside the bounds of the source buffer");
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, "getBufferSubData", "Parameters would read outside the bounds of the source buffer");
         return;
     }
+    
+    if (!copyLength)
+        return;
 
     m_context->moveErrorsToSyntheticErrorList();
 #if PLATFORM(COCOA)
@@ -1984,14 +1987,21 @@ GCGLboolean WebGL2RenderingContext::isSampler(WebGLSampler* sampler)
 
 void WebGL2RenderingContext::bindSampler(GCGLuint unit, WebGLSampler* sampler)
 {
-    if (isContextLostOrPending() || m_boundSamplers[unit] == sampler)
+    if (isContextLostOrPending())
         return;
+    
+    if (unit >= m_boundSamplers.size()) {
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, "bindSampler", "invalid texture unit");
+        return;
+    }
 
     if (sampler && sampler->isDeleted()) {
         synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "bindSampler", "cannot bind a deleted Sampler object");
         return;
     }
 
+    if (m_boundSamplers[unit] == sampler)
+        return;
     m_context->bindSampler(unit, objectOrZero(sampler));
     m_boundSamplers[unit] = sampler;
 }
@@ -2337,7 +2347,7 @@ bool WebGL2RenderingContext::setIndexedBufferBinding(const char *functionName, G
 
     switch (target) {
     case GraphicsContextGL::TRANSFORM_FEEDBACK_BUFFER:
-        if (index > m_maxTransformFeedbackSeparateAttribs) {
+        if (index >= m_maxTransformFeedbackSeparateAttribs) {
             synthesizeGLError(GraphicsContextGL::INVALID_VALUE, functionName, "index out of range");
             return false;
         }

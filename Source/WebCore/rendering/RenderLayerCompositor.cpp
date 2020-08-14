@@ -699,6 +699,24 @@ void RenderLayerCompositor::cancelCompositingLayerUpdate()
     m_updateCompositingLayersTimer.stop();
 }
 
+template<typename ApplyFunctionType>
+void RenderLayerCompositor::applyToCompositedLayerIncludingDescendants(RenderLayer& layer, const ApplyFunctionType& function)
+{
+    if (layer.isComposited())
+        function(layer);
+    for (auto* childLayer = layer.firstChild(); childLayer; childLayer = childLayer->nextSibling())
+        applyToCompositedLayerIncludingDescendants(*childLayer, function);
+}
+
+void RenderLayerCompositor::updateEventRegions()
+{
+#if ENABLE(ASYNC_SCROLLING)
+    applyToCompositedLayerIncludingDescendants(*m_renderView.layer(), [](auto& layer) {
+        layer.backing()->updateEventRegion();
+    });
+#endif
+}
+
 static Optional<ScrollingNodeID> frameHostingNodeForFrame(Frame& frame)
 {
     if (!frame.document() || !frame.view())
@@ -1276,13 +1294,6 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
         } else if (layer.needsScrollingTreeUpdate())
             scrollingNodeChanges.add(ScrollingNodeChangeFlags::LayerGeometry);
 
-#if ENABLE(ASYNC_SCROLLING)
-        // This needs to happen after any geometry update.
-        // FIXME: Use separate bit for event region invalidation.
-        if (layerNeedsUpdate || layer.needsCompositingConfigurationUpdate())
-            layerBacking->updateEventRegion();
-#endif
-
         if (auto* reflection = layer.reflectionLayer()) {
             if (auto* reflectionBacking = reflection->backing()) {
                 reflectionBacking->updateCompositedBounds();
@@ -1345,6 +1356,9 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
 
         // Pass needSynchronousScrollingReasonsUpdate back up.
         scrollingTreeState.needSynchronousScrollingReasonsUpdate |= scrollingStateForDescendants.needSynchronousScrollingReasonsUpdate;
+        if (scrollingTreeState.parentNodeID == scrollingStateForDescendants.parentNodeID)
+            scrollingTreeState.nextChildIndex = scrollingStateForDescendants.nextChildIndex;
+
     } else if (requiresChildRebuild)
         appendForegroundLayerIfNecessary();
 
@@ -1354,14 +1368,15 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
             if (is<RenderWidget>(layer.renderer()))
                 parented = parentFrameContentLayers(downcast<RenderWidget>(layer.renderer()));
 
-            if (!parented)
-                layerBacking->parentForSublayers()->setChildren(WTFMove(layerChildren));
+            if (!parented) {
+                // If the layer has a clipping layer the overflow controls layers will be siblings of the clipping layer.
+                // Otherwise, the overflow control layers are normal children.
+                if (!layerBacking->hasClippingLayer() && !layerBacking->hasScrollingLayer()) {
+                    if (auto* overflowControlLayer = layerBacking->overflowControlsContainer())
+                        layerChildren.append(*overflowControlLayer);
+                }
 
-            // If the layer has a clipping layer the overflow controls layers will be siblings of the clipping layer.
-            // Otherwise, the overflow control layers are normal children.
-            if (!layerBacking->hasClippingLayer() && !layerBacking->hasScrollingLayer()) {
-                if (auto* overflowControlLayer = layerBacking->overflowControlsContainer())
-                    layerBacking->parentForSublayers()->addChild(*overflowControlLayer);
+                layerBacking->parentForSublayers()->setChildren(WTFMove(layerChildren));
             }
         }
 
@@ -2355,15 +2370,6 @@ void RenderLayerCompositor::setIsInWindow(bool isInWindow)
         }
 #endif
     }
-}
-
-template<typename ApplyFunctionType>
-void RenderLayerCompositor::applyToCompositedLayerIncludingDescendants(RenderLayer& layer, const ApplyFunctionType& function)
-{
-    if (layer.isComposited())
-        function(layer);
-    for (auto* childLayer = layer.firstChild(); childLayer; childLayer = childLayer->nextSibling())
-        applyToCompositedLayerIncludingDescendants(*childLayer, function);
 }
 
 void RenderLayerCompositor::invalidateEventRegionForAllLayers()

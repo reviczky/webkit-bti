@@ -42,6 +42,8 @@
 #include "OperandsInlines.h"
 #include "ProbeContext.h"
 
+#include <wtf/Scope.h>
+
 namespace JSC { namespace DFG {
 
 OSRExit::OSRExit(ExitKind kind, JSValueSource jsValueSource, MethodOfGettingAValueProfile valueProfile, SpeculativeJIT* jit, unsigned streamIndex, unsigned recoveryIndex)
@@ -591,14 +593,23 @@ void OSRExit::compileExit(CCallHelpers& jit, VM& vm, const OSRExit& exit, const 
         VM* vmPtr = &vm;
         auto* tmpScratch = scratch + operands.tmpIndex(0);
         jit.probe([=, values = WTFMove(values)] (Probe::Context& context) {
+            Vector<std::unique_ptr<CheckpointOSRExitSideState>, VM::expectedMaxActiveSideStateCount> sideStates;
+            sideStates.reserveInitialCapacity(exit.m_codeOrigin.inlineDepth());
+            auto sideStateCommitter = makeScopeExit([&] {
+                for (size_t i = sideStates.size(); i--;)
+                    vmPtr->pushCheckpointOSRSideState(WTFMove(sideStates[i]));
+            });
+
+
             auto addSideState = [&] (CallFrame* frame, BytecodeIndex index, size_t tmpOffset) {
-                std::unique_ptr<CheckpointOSRExitSideState> sideState = WTF::makeUnique<CheckpointOSRExitSideState>();
+                std::unique_ptr<CheckpointOSRExitSideState> sideState = WTF::makeUnique<CheckpointOSRExitSideState>(frame);
 
                 sideState->bytecodeIndex = index;
                 for (size_t i = 0; i < maxNumCheckpointTmps; ++i) {
                     auto& recovery = values[i + tmpOffset];
                     // FIXME: We should do what the FTL does and materialize all the JSValues into the scratch buffer.
                     switch (recovery.technique()) {
+
                     case Constant:
                         sideState->tmps[i] = recovery.constant();
                         break;
@@ -609,39 +620,47 @@ void OSRExit::compileExit(CCallHelpers& jit, VM& vm, const OSRExit& exit, const 
                         break;
                     }
 
-#if USE(JSVALUE32_64)
-                    case InPair:
-#endif
-                    case InGPR:
-                    case BooleanDisplacedInJSStack:
-                    case CellDisplacedInJSStack:
-                    case DisplacedInJSStack: {
-                        sideState->tmps[i] = reinterpret_cast<JSValue*>(tmpScratch)[i + tmpOffset];
-                        break;
-                    }
-
-                    case UnboxedCellInGPR: {
-#if USE(JSVALUE64)
-                        sideState->tmps[i] = reinterpret_cast<JSValue*>(tmpScratch)[i + tmpOffset];
-#else
-                        EncodedValueDescriptor* valueDescriptor = bitwise_cast<EncodedValueDescriptor*>(tmpScratch + i + tmpOffset);
-                        sideState->tmps[i] = JSValue(JSValue::CellTag, valueDescriptor->asBits.payload);
-#endif
-                        break;
-                    }
-
                     case UnboxedBooleanInGPR: {
                         sideState->tmps[i] = jsBoolean(static_cast<bool>(tmpScratch[i + tmpOffset]));
                         break;
                     }
 
-                    default: 
+#if USE(JSVALUE64)
+                    case BooleanDisplacedInJSStack:
+                    case CellDisplacedInJSStack:
+                    case UnboxedCellInGPR:
+                    case InGPR:
+                    case DisplacedInJSStack: {
+                        sideState->tmps[i] = reinterpret_cast<JSValue*>(tmpScratch)[i + tmpOffset];
+                        break;
+                    }
+#else // USE(JSVALUE32_64)
+                    case InPair:
+                    case DisplacedInJSStack: {
+                        sideState->tmps[i] = reinterpret_cast<JSValue*>(tmpScratch)[i + tmpOffset];
+                        break;
+                    }
+
+                    case CellDisplacedInJSStack:
+                    case UnboxedCellInGPR: {
+                        EncodedValueDescriptor* valueDescriptor = bitwise_cast<EncodedValueDescriptor*>(tmpScratch + i + tmpOffset);
+                        sideState->tmps[i] = JSValue(JSValue::CellTag, valueDescriptor->asBits.payload);
+                        break;
+                    }
+
+                    case BooleanDisplacedInJSStack: {
+                        sideState->tmps[i] = jsBoolean(static_cast<bool>(tmpScratch[i + tmpOffset]));
+                        break;
+                    }
+#endif // USE(JSVALUE64)
+
+                    default:
                         RELEASE_ASSERT_NOT_REACHED();
                         break;
                     }
                 }
 
-                vmPtr->addCheckpointOSRSideState(frame, WTFMove(sideState));
+                sideStates.append(WTFMove(sideState));
             };
 
             const CodeOrigin* codeOrigin;

@@ -39,6 +39,9 @@ public:
     }
     
     virtual ~DefaultAudioDestinationNode();
+
+    unsigned framesPerBuffer() const;
+    float sampleRate() const final { return m_sampleRate; }
     
 private:
     explicit DefaultAudioDestinationNode(BaseAudioContext&, Optional<float>);
@@ -49,7 +52,7 @@ private:
     ExceptionOr<void> setChannelCount(unsigned) final;
 
     void enableInput(const String& inputDeviceId) final;
-    void startRendering() final;
+    ExceptionOr<void> startRendering() final;
     void resume(Function<void ()>&&) final;
     void suspend(Function<void ()>&&) final;
     void close(Function<void ()>&&) final;
@@ -59,6 +62,7 @@ private:
     std::unique_ptr<AudioDestination> m_destination;
     String m_inputDeviceId;
     unsigned m_numberOfInputChannels { 0 };
+    float m_sampleRate { 0 };
 };
 
 } // namespace WebCore

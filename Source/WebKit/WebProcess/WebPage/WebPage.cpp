@@ -780,6 +780,11 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     if (parameters.shouldEnableVP9Decoder)
         WebProcess::singleton().enableVP9Decoder();
 
+    if (parameters.shouldEnableVP9SWDecoder)
+        WebProcess::singleton().enableVP9SWDecoder();
+
+    m_page->setCanUseCredentialStorage(parameters.canUseCredentialStorage);
+
     updateThrottleState();
 }
 
@@ -1227,6 +1232,12 @@ void WebPage::setHasResourceLoadClient(bool has)
 {
     if (m_page)
         m_page->setHasResourceLoadClient(has);
+}
+
+void WebPage::setCanUseCredentialStorage(bool has)
+{
+    if (m_page)
+        m_page->setCanUseCredentialStorage(has);
 }
 
 void WebPage::setTracksRepaints(bool trackRepaints)
@@ -2985,7 +2996,7 @@ void WebPage::touchEventSync(const WebTouchEvent& touchEvent, CompletionHandler<
     m_pendingSynchronousTouchEventReply = WTFMove(reply);
 
     EventDispatcher::TouchEventQueue queuedEvents;
-    WebProcess::singleton().eventDispatcher().getQueuedTouchEventsForPage(*this, queuedEvents);
+    WebProcess::singleton().eventDispatcher().takeQueuedTouchEventsForPage(*this, queuedEvents);
     dispatchAsynchronousTouchEvents(queuedEvents);
 
     bool handled = true;
@@ -3981,14 +3992,14 @@ NotificationPermissionRequestManager* WebPage::notificationPermissionRequestMana
 #if ENABLE(DRAG_SUPPORT)
 
 #if PLATFORM(GTK)
-void WebPage::performDragControllerAction(DragControllerAction action, const IntPoint& clientPosition, const IntPoint& globalPosition, OptionSet<DragOperation> draggingSourceOperationMask, SelectionData&& selectionData, uint32_t flags)
+void WebPage::performDragControllerAction(DragControllerAction action, const IntPoint& clientPosition, const IntPoint& globalPosition, OptionSet<DragOperation> draggingSourceOperationMask, SelectionData&& selectionData, OptionSet<DragApplicationFlags> flags)
 {
     if (!m_page) {
         send(Messages::WebPageProxy::DidPerformDragControllerAction(WTF::nullopt, DragHandlingMethod::None, false, 0, { }, { }));
         return;
     }
 
-    DragData dragData(&selectionData, clientPosition, globalPosition, draggingSourceOperationMask, static_cast<DragApplicationFlags>(flags));
+    DragData dragData(&selectionData, clientPosition, globalPosition, draggingSourceOperationMask, flags);
     switch (action) {
     case DragControllerAction::Entered: {
         auto resolvedDragOperation = m_page->dragController().dragEntered(dragData);
@@ -5437,13 +5448,13 @@ void WebPage::hasMarkedText(CompletionHandler<void(bool)>&& completionHandler)
 void WebPage::getMarkedRangeAsync(CompletionHandler<void(const EditingRange&)>&& completionHandler)
 {
     Frame& frame = m_page->focusController().focusedOrMainFrame();
-    completionHandler(EditingRange::fromRange(frame, createLiveRange(frame.editor().compositionRange()).get()));
+    completionHandler(EditingRange::fromRange(frame, frame.editor().compositionRange()));
 }
 
 void WebPage::getSelectedRangeAsync(CompletionHandler<void(const EditingRange&)>&& completionHandler)
 {
     Frame& frame = m_page->focusController().focusedOrMainFrame();
-    completionHandler(EditingRange::fromRange(frame, createLiveRange(frame.selection().selection().toNormalizedRange()).get()));
+    completionHandler(EditingRange::fromRange(frame, frame.selection().selection().toNormalizedRange()));
 }
 
 void WebPage::characterIndexForPointAsync(const WebCore::IntPoint& point, CallbackID callbackID)
@@ -5452,8 +5463,8 @@ void WebPage::characterIndexForPointAsync(const WebCore::IntPoint& point, Callba
     auto result = m_page->mainFrame().eventHandler().hitTestResultAtPoint(point, hitType);
     auto& frame = result.innerNonSharedNode() ? *result.innerNodeFrame() : m_page->focusController().focusedOrMainFrame();
     auto range = frame.rangeForPoint(result.roundedPointInInnerNodeFrame());
-    auto editingRange = EditingRange::fromRange(frame, range.get());
-    send(Messages::WebPageProxy::UnsignedCallback(static_cast<uint64_t>(editingRange.location), callbackID));
+    auto editingRange = EditingRange::fromRange(frame, range);
+    send(Messages::WebPageProxy::UnsignedCallback(editingRange.location, callbackID));
 }
 
 void WebPage::firstRectForCharacterRangeAsync(const EditingRange& editingRange, CallbackID callbackID)
@@ -5533,11 +5544,11 @@ void WebPage::deleteSurrounding(int64_t offset, unsigned characterCount)
         return;
 
     auto selectionStart = selection.visibleStart();
-    auto surroundingRange = makeRange(startOfEditableContent(selectionStart), selectionStart);
+    auto surroundingRange = makeSimpleRange(startOfEditableContent(selectionStart), selectionStart);
     if (!surroundingRange)
         return;
 
-    auto& rootNode = surroundingRange->startContainer().treeScope().rootNode();
+    auto& rootNode = surroundingRange->start.container->treeScope().rootNode();
     auto characterRange = WebCore::CharacterRange(WebCore::characterCount(*surroundingRange) + offset, characterCount);
     auto selectionRange = resolveCharacterRange(makeRangeSelectingNodeContents(rootNode), characterRange);
 
@@ -5987,7 +5998,9 @@ void WebPage::didCommitLoad(WebFrame* frame)
     m_lastLayerTreeTransactionIdAndPageScaleBeforeScalingPage = WTF::nullopt;
 
 #if ENABLE(IOS_TOUCH_EVENTS)
-    WebProcess::singleton().eventDispatcher().clearQueuedTouchEventsForPage(*this);
+    EventDispatcher::TouchEventQueue queuedEvents;
+    WebProcess::singleton().eventDispatcher().takeQueuedTouchEventsForPage(*this, queuedEvents);
+    cancelAsynchronousTouchEvents(queuedEvents);
 #endif
 #endif // PLATFORM(IOS_FAMILY)
 

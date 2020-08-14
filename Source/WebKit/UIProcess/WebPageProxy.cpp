@@ -166,6 +166,7 @@
 #include <WebCore/PublicSuffix.h>
 #include <WebCore/RenderEmbeddedObject.h>
 #include <WebCore/ResourceLoadStatistics.h>
+#include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
 #include <WebCore/SSLKeyGenerator.h>
 #include <WebCore/SerializedCryptoKeyWrap.h>
@@ -210,13 +211,14 @@
 #include "VideoFullscreenManagerProxyMessages.h"
 #include <WebCore/AttributedString.h>
 #include <WebCore/RunLoopObserver.h>
+#include <WebCore/SystemBattery.h>
 #include <WebCore/TextIndicatorWindow.h>
 #include <wtf/MachSendRight.h>
 #include <wtf/cocoa/Entitlements.h>
 #endif
 
 #if PLATFORM(MAC)
-#include "ImageUtilities.h"
+#include <WebCore/ImageUtilities.h>
 #include <WebCore/UTIUtilities.h>
 #endif
 
@@ -491,9 +493,6 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, Ref
     , m_ignoresAppBoundDomains(m_configuration->ignoresAppBoundDomains())
     , m_limitsNavigationsToAppBoundDomains(m_configuration->limitsNavigationsToAppBoundDomains())
 #endif
-#if PLATFORM(MAC)
-    , m_transcodingQueue(WorkQueue::create("com.apple.WebKit.ImageTranscoding"))
-#endif
 {
     RELEASE_LOG_IF_ALLOWED(Loading, "constructor:");
 
@@ -531,8 +530,6 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, Ref
     
     if (m_configuration->preferences()->serviceWorkerEntitlementDisabledForTesting())
         disableServiceWorkerEntitlementInNetworkProcess();
-
-    EndowmentStateTracker::singleton().addClient(*this);
 #endif
 
 #if PLATFORM(COCOA)
@@ -575,7 +572,7 @@ WebPageProxy::~WebPageProxy()
     webPageProxyCounter.decrement();
 #endif
 
-#if PLATFORM(IOS_FAMILY)
+#if PLATFORM(MACCATALYST)
     EndowmentStateTracker::singleton().removeClient(*this);
 #endif
 }
@@ -2487,7 +2484,7 @@ void WebPageProxy::resetCurrentDragInformation()
     setDragCaretRect({ });
 }
 
-#if !ENABLE(DATA_INTERACTION)
+#if !PLATFORM(IOS_FAMILY) || !ENABLE(DRAG_SUPPORT)
 
 void WebPageProxy::setDragCaretRect(const IntRect& dragCaretRect)
 {
@@ -3139,6 +3136,7 @@ bool WebPageProxy::setIsNavigatingToAppBoundDomainAndCheckIfPermitted(bool isMai
             m_isNavigatingToAppBoundDomain = NavigatingToAppBoundDomain::No;
         return true;
     }
+
     if (!isNavigatingToAppBoundDomain) {
         m_isNavigatingToAppBoundDomain = WTF::nullopt;
         return true;
@@ -4405,7 +4403,14 @@ void WebPageProxy::preconnectTo(const URL& url)
     if (!m_websiteDataStore->configuration().allowsServerPreconnect())
         return;
 
-    m_process->processPool().ensureNetworkProcess().preconnectTo(sessionID(), identifier(), webPageID(), url, userAgent(), WebCore::StoredCredentialsPolicy::Use, m_isNavigatingToAppBoundDomain);
+    auto storedCredentialsPolicy = m_canUseCredentialStorage ? WebCore::StoredCredentialsPolicy::Use : WebCore::StoredCredentialsPolicy::DoNotUse;
+    m_process->processPool().ensureNetworkProcess().preconnectTo(sessionID(), identifier(), webPageID(), url, userAgent(), storedCredentialsPolicy, m_isNavigatingToAppBoundDomain);
+}
+
+void WebPageProxy::setCanUseCredentialStorage(bool canUseCredentialStorage)
+{
+    m_canUseCredentialStorage = canUseCredentialStorage;
+    send(Messages::WebPage::SetCanUseCredentialStorage(canUseCredentialStorage));
 }
 
 void WebPageProxy::didDestroyNavigation(uint64_t navigationID)
@@ -6683,7 +6688,7 @@ bool WebPageProxy::didChooseFilesForOpenPanelWithImageTranscoding(const Vector<S
     auto transcodingUTI = WebCore::UTIFromMIMEType(transcodingMIMEType);
     auto transcodingExtension = WebCore::MIMETypeRegistry::preferredExtensionForMIMEType(transcodingMIMEType);
 
-    m_transcodingQueue->dispatch([this, protectedThis = makeRef(*this), fileURLs = fileURLs.isolatedCopy(), transcodingURLs = transcodingURLs.isolatedCopy(), transcodingUTI = transcodingUTI.isolatedCopy(), transcodingExtension = transcodingExtension.isolatedCopy()]() mutable {
+    sharedImageTranscodingQueue().dispatch([this, protectedThis = makeRef(*this), fileURLs = fileURLs.isolatedCopy(), transcodingURLs = transcodingURLs.isolatedCopy(), transcodingUTI = transcodingUTI.isolatedCopy(), transcodingExtension = transcodingExtension.isolatedCopy()]() mutable {
         ASSERT(!RunLoop::isMain());
 
         auto transcodedURLs = transcodeImages(transcodingURLs, transcodingUTI, transcodingExtension);
@@ -6752,6 +6757,7 @@ void WebPageProxy::changeSpellingToWord(const String& word)
 
 void WebPageProxy::registerEditCommand(Ref<WebEditCommandProxy>&& commandProxy, UndoOrRedo undoOrRedo)
 {
+    MESSAGE_CHECK(m_process, commandProxy->commandID());
     pageClient().registerEditCommand(WTFMove(commandProxy), undoOrRedo);
 }
 
@@ -7865,9 +7871,13 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     parameters.shouldCaptureVideoInGPUProcess = preferences().captureVideoInGPUProcessEnabled();
     parameters.shouldRenderCanvasInGPUProcess = preferences().renderCanvasInGPUProcessEnabled();
     parameters.shouldEnableVP9Decoder = preferences().vp9DecoderEnabled();
+#if PLATFORM(COCOA)
+    parameters.shouldEnableVP9SWDecoder = preferences().vp9DecoderEnabled() && (!WebCore::systemHasBattery() || preferences().vp9SWDecoderEnabledOnBattery());
+#endif
     parameters.shouldCaptureDisplayInUIProcess = m_process->processPool().configuration().shouldCaptureDisplayInUIProcess();
     parameters.limitsNavigationsToAppBoundDomains = m_limitsNavigationsToAppBoundDomains;
     parameters.shouldRelaxThirdPartyCookieBlocking = m_configuration->shouldRelaxThirdPartyCookieBlocking();
+    parameters.canUseCredentialStorage = m_canUseCredentialStorage;
 
 #if PLATFORM(GTK)
     parameters.themeName = pageClient().themeName();
@@ -8935,6 +8945,16 @@ void WebPageProxy::updatePlayingMediaDidChange(MediaProducer::MediaStateFlags ne
 {
     if (newState == m_mediaState)
         return;
+
+#if PLATFORM(MACCATALYST)
+    // When the page starts playing media for the first time, make sure we register with
+    // the EndowmentStateTracker to get notifications when the application is no longer
+    // user-facing, so that we can appropriately suspend all media playback.
+    if (!m_isListeningForUserFacingStateChangeNotification) {
+        EndowmentStateTracker::singleton().addClient(*this);
+        m_isListeningForUserFacingStateChangeNotification = true;
+    }
+#endif
 
 #if ENABLE(MEDIA_STREAM)
     WebCore::MediaProducer::MediaStateFlags oldMediaCaptureState = m_mediaState & WebCore::MediaProducer::MediaCaptureMask;

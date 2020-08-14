@@ -106,7 +106,7 @@ struct WebProcessCreationParameters {
     Vector<String> urlSchemesRegisteredAsCachePartitioned;
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
 
-    Vector<String> fontWhitelist;
+    Vector<String> fontAllowList;
     Vector<String> overrideLanguages;
 #if USE(GSTREAMER)
     Vector<String> gstreamerOptions;
@@ -204,6 +204,7 @@ struct WebProcessCreationParameters {
 #endif
 
     Optional<SandboxExtension::Handle> containerManagerExtensionHandle;
+    Optional<SandboxExtension::Handle> mobileGestaltExtensionHandle;
 
 #if PLATFORM(IOS_FAMILY)
     SandboxExtension::HandleArray diagnosticsExtensionHandles;
@@ -212,7 +213,6 @@ struct WebProcessCreationParameters {
 #endif
 
 #if PLATFORM(COCOA)
-    Optional<SandboxExtension::Handle> mapDBExtensionHandle;
     bool systemHasBattery { false };
     bool systemHasAC { false };
 #endif

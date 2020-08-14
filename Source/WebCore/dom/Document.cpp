@@ -163,6 +163,7 @@
 #include "ProcessingInstruction.h"
 #include "PublicSuffix.h"
 #include "Quirks.h"
+#include "Range.h"
 #include "RealtimeMediaSourceCenter.h"
 #include "RenderChildIterator.h"
 #include "RenderInline.h"
@@ -4286,6 +4287,15 @@ void Document::elementInActiveChainDidDetach(Element& element)
         m_activeElement = m_activeElement->parentElement();
 }
 
+void Document::updateEventRegions()
+{
+    // FIXME: Move updateTouchEventRegions() here, but it should only happen for the top document.
+    if (auto* view = renderView()) {
+        if (view->usesCompositing())
+            view->compositor().updateEventRegions();
+    }
+}
+
 void Document::invalidateEventRegionsForFrame(HTMLFrameOwnerElement& element)
 {
     auto* renderer = element.renderer();
@@ -5439,6 +5449,8 @@ void Document::resume(ReasonForSuspension reason)
     if (renderView())
         renderView()->setIsInWindow(true);
 
+    fontSelector().restartFontLoadingTimer();
+
     ASSERT(page());
     page()->lockAllOverlayScrollbarsToHidden(false);
 
@@ -6464,6 +6476,11 @@ void Document::windowScreenDidChange(PlatformDisplayID displayID)
         if (view->usesCompositing())
             view->compositor().windowScreenDidChange(displayID);
     }
+
+    for (auto& observer : copyToVector(m_displayChangedObservers)) {
+        if (observer)
+            (*observer)(displayID);
+    }
 }
 
 String Document::displayStringModifiedByEncoding(const String& string) const
@@ -6516,6 +6533,12 @@ MediaCanStartListener* Document::takeAnyMediaCanStartListener()
     m_mediaCanStartListeners.remove(*listener);
 
     return listener;
+}
+
+void Document::addDisplayChangedObserver(const DisplayChangedObserver& observer)
+{
+    ASSERT(!m_displayChangedObservers.contains(observer));
+    m_displayChangedObservers.add(observer);
 }
 
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
