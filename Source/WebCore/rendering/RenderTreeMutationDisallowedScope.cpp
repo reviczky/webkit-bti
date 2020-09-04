@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Sony Interactive Entertainment Inc.
+ * Copyright (C) 2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,49 +24,10 @@
  */
 
 #include "config.h"
-#include "WebPageProxy.h"
+#include "RenderTreeMutationDisallowedScope.h"
 
-#include "EditorState.h"
-#include "WebsiteDataStore.h"
-#include <WebCore/NotImplemented.h>
-#include <WebCore/UserAgent.h>
+namespace WebCore {
 
-namespace WebKit {
+RenderTreeMutationDisallowedScope* RenderTreeMutationDisallowedScope::s_currentMutationAssertion = nullptr;
 
-void WebPageProxy::platformInitialize()
-{
-    notImplemented();
 }
-
-struct wpe_view_backend* WebPageProxy::viewBackend()
-{
-    return nullptr;
-}
-
-String WebPageProxy::userAgentForURL(const URL&)
-{
-    return userAgent();
-}
-
-String WebPageProxy::standardUserAgent(const String& applicationNameForUserAgent)
-{
-    return WebCore::standardUserAgent(applicationNameForUserAgent);
-}
-
-void WebPageProxy::saveRecentSearches(const String&, const Vector<WebCore::RecentSearch>&)
-{
-    notImplemented();
-}
-
-void WebPageProxy::loadRecentSearches(const String&, CompletionHandler<void(Vector<WebCore::RecentSearch>&&)>&& completionHandler)
-{
-    notImplemented();
-    completionHandler({ });
-}
-
-void WebPageProxy::updateEditorState(const EditorState& editorState)
-{
-    m_editorState = editorState;
-}
-
-} // namespace WebKit
