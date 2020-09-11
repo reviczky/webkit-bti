@@ -1,10 +1,10 @@
-webkit2gtk (2.30.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.30.0-1) experimental; urgency=medium
 
   * New upstream release.
   * debian/watch:
     + Scan stable releases only.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 11 Sep 2020 12:34:46 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 11 Sep 2020 15:54:31 +0200
 
 webkit2gtk (2.29.92-1) experimental; urgency=medium
 
