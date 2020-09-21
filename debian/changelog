@@ -5,6 +5,8 @@ webkit2gtk (2.30.1-1) UNRELEASED; urgency=medium
     + Update copyright information of all files.
   * debian/gbp.conf:
     + Update upstream branch name.
+  * debian/source/lintian-overrides:
+    + Remove mailing-list-obsolete-in-debian-infrastructure.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Sep 2020 13:22:28 +0200
 
