@@ -389,6 +389,22 @@
 <span class="returnvalue">void</span>
 </td>
 <td class="function_name">
+<a class="link" href="WebKitWebContext.html#webkit-web-context-set-use-system-appearance-for-scrollbars" title="webkit_web_context_set_use_system_appearance_for_scrollbars ()">webkit_web_context_set_use_system_appearance_for_scrollbars</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebContext.html#webkit-web-context-get-use-system-appearance-for-scrollbars" title="webkit_web_context_get_use_system_appearance_for_scrollbars ()">webkit_web_context_get_use_system_appearance_for_scrollbars</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
 <span class="c_punctuation">(</span><a class="link" href="WebKitWebContext.html#WebKitURISchemeRequestCallback" title="WebKitURISchemeRequestCallback ()">*WebKitURISchemeRequestCallback</a><span class="c_punctuation">)</span> <span class="c_punctuation">()</span>
 </td>
 </tr>
@@ -422,6 +438,11 @@
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitWebContext.html#WebKitWebContext--process-swap-on-cross-site-navigation-enabled" title="The “process-swap-on-cross-site-navigation-enabled” property">process-swap-on-cross-site-navigation-enabled</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebContext.html#WebKitWebContext--use-system-appearance-for-scrollbars" title="The “use-system-appearance-for-scrollbars” property">use-system-appearance-for-scrollbars</a></td>
+<td class="property_flags">Read / Write / Construct</td>
 </tr>
 <tr>
 <td class="property_type">
@@ -1981,6 +2002,66 @@ If <em class="parameter"><code>message</code></em>
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-web-context-set-use-system-appearance-for-scrollbars"></a><h3>webkit_web_context_set_use_system_appearance_for_scrollbars ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_context_set_use_system_appearance_for_scrollbars
+                               (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> enabled</code></em>);</pre>
+<p>Set the <a class="link" href="WebKitWebContext.html#WebKitWebContext--use-system-appearance-for-scrollbars" title="The “use-system-appearance-for-scrollbars” property"><span class="type">“use-system-appearance-for-scrollbars”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-web-context-set-use-system-appearance-for-scrollbars.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>context</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>enabled</p></td>
+<td class="parameter_description"><p>value to set</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-context-get-use-system-appearance-for-scrollbars"></a><h3>webkit_web_context_get_use_system_appearance_for_scrollbars ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_web_context_get_use_system_appearance_for_scrollbars
+                               (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitWebContext.html#WebKitWebContext--use-system-appearance-for-scrollbars" title="The “use-system-appearance-for-scrollbars” property"><span class="type">“use-system-appearance-for-scrollbars”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-web-context-get-use-system-appearance-for-scrollbars.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>context</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-context-get-use-system-appearance-for-scrollbars.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if scrollbars are rendering using the system appearance, or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="WebKitURISchemeRequestCallback"></a><h3>WebKitURISchemeRequestCallback ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 <span class="c_punctuation">(</span>*WebKitURISchemeRequestCallback<span class="c_punctuation">)</span> (<em class="parameter"><code><a class="link" href="WebKitURISchemeRequest.html" title="WebKitURISchemeRequest"><span class="type">WebKitURISchemeRequest</span></a> *request</code></em>,
@@ -2336,6 +2417,19 @@ websites stealing data from other visited pages.</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebContext--use-system-appearance-for-scrollbars"></a><h3>The <code class="literal">“use-system-appearance-for-scrollbars”</code> property</h3>
+<pre class="programlisting">  “use-system-appearance-for-scrollbars” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Whether to use system appearance for rendering scrollbars.</p>
+<p>This is enabled by default for backwards compatibility, but it's only
+recommened to use when the application includes other widgets to ensure
+consistency, or when consistency with other applications is required too.</p>
+<p>Owner: WebKitWebContext</p>
+<p>Flags: Read / Write / Construct</p>
+<p>Default value: TRUE</p>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
 </div>
 <hr>
 <div class="refsect2">

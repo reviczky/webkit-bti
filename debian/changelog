@@ -1,43 +1,100 @@
-webkit2gtk (2.28.4-1) unstable; urgency=high
+webkit2gtk (2.30.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
-  * Enable OpenGL ES in arm:
-    + debian/patches/use-gles-on-arm.patch:
-      - Set ENABLE_GLES2_DEFAULT to ON on arm.
-    + debian/control:
-      - Always depend on libgl1-mesa-dev.
+  * debian/copyright:
+    + Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 28 Jul 2020 17:12:20 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 14 Sep 2020 13:22:28 +0200
 
-webkit2gtk (2.28.3-2) unstable; urgency=high
+webkit2gtk (2.30.0-1) experimental; urgency=medium
 
-  * The WebKitGTK security advisory WSA-2020-0006 lists the following
-    security fixes in the latest versions of WebKitGTK:
-    + CVE-2020-9802, CVE-2020-9803, CVE-2020-9805, CVE-2020-9806,
-      CVE-2020-9807, CVE-2020-9843, CVE-2020-9850, CVE-2020-13753 (fixed
-      in 2.28.3).
+  * New upstream release.
+  * debian/watch:
+    + Scan stable releases only.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 11 Sep 2020 15:54:31 +0200
+
+webkit2gtk (2.29.92-1) experimental; urgency=medium
+
+  * New upstream development release.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 04 Sep 2020 17:10:45 +0200
+
+webkit2gtk (2.29.91-1) experimental; urgency=medium
+
+  * New upstream development release (Closes: #967992).
+  * debian/copyright:
+    + Update copyright information of all files.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 14 Aug 2020 14:31:36 +0200
+
+webkit2gtk (2.29.4-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * debian/control:
+    + Install libgl1-mesa-dev unconditionally. The decision of which gl
+      library to use is now taken directly by cmake.
   * Don't build the documentation in binary-arch builds and with the nodoc
-    build profile (Closes: #962616).
+    build profile.
     + debian/control:
       - Move gtk-doc-tools and *-doc to Build-Depends-Indep.
       - Add Build-Profiles: <!nodoc> to libwebkit2gtk-4.0-doc
     + debian/rules:
       - Use dh_listpackages to decide whether to build the documentation.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 10 Jul 2020 13:26:49 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 29 Jul 2020 23:17:24 +0200
 
-webkit2gtk (2.28.3-1) unstable; urgency=high
+webkit2gtk (2.29.3-1) experimental; urgency=medium
 
-  * New upstream release.
+  * New upstream development release.
   * debian/rules:
     + Remove disabling of openjpeg on Ubuntu, it's in main now (thanks,
       Sebastien Bacher)
-  * debian/patches/dont-fallback-to-libwpe.patch:
-    + Drop this patch.
   * debian/copyright:
     + Update copyright information of all files.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 09 Jul 2020 12:20:00 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 08 Jul 2020 10:42:33 +0200
+
+webkit2gtk (2.29.2-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Refresh.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 25 Jun 2020 14:16:50 +0200
+
+webkit2gtk (2.29.1-1) experimental; urgency=medium
+
+  * New upstream development release (Closes: #945237).
+  * debian/watch, debian/gbp.conf:
+    + Update for 2.29.x packages in experimental.
+  * Refresh all patches.
+  * debian/patches/dont-fallback-to-libwpe.patch,
+    debian/patches/user-agent-branding.patch:
+    + Drop these patches, they are now included upstream.
+  * debian/rules:
+    + Replace USER_AGENT_GTK_DISTRIBUTOR_NAME with the new
+      USER_AGENT_BRANDING build option in Ubuntu.
+  * debian/patches/detect-gstreamer-gl.patch,
+    debian/patches/detect-woff.patch:
+    + Drop these patches. We won't be making backports of WebKitGTK 2.29.x
+      for stretch.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+  * debian/control:
+    + Add build dependency on libsystemd-dev.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 18 May 2020 16:43:00 +0200
 
 webkit2gtk (2.28.2-2) unstable; urgency=high
 

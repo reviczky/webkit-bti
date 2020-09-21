@@ -66,6 +66,14 @@
 </td>
 </tr>
 <tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitAuthenticationRequest.html#webkit-authentication-request-set-can-save-credentials" title="webkit_authentication_request_set_can_save_credentials ()">webkit_authentication_request_set_can_save_credentials</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
 <td class="function_type">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 </td>
 <td class="function_name">
@@ -82,6 +90,14 @@
 </tr>
 <tr>
 <td class="function_type">
+<a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="returnvalue">WebKitSecurityOrigin</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitAuthenticationRequest.html#webkit-authentication-request-get-security-origin" title="webkit_authentication_request_get_security_origin ()">webkit_authentication_request_get_security_origin</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
@@ -94,6 +110,14 @@
 </td>
 <td class="function_name">
 <a class="link" href="WebKitAuthenticationRequest.html#webkit-authentication-request-get-proposed-credential" title="webkit_authentication_request_get_proposed_credential ()">webkit_authentication_request_get_proposed_credential</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitAuthenticationRequest.html#webkit-authentication-request-set-proposed-credential" title="webkit_authentication_request_set_proposed_credential ()">webkit_authentication_request_set_proposed_credential</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -184,11 +208,18 @@
 <col width="300px" class="signal_proto_name">
 <col width="200px" class="signal_proto_flags">
 </colgroup>
-<tbody><tr>
+<tbody>
+<tr>
+<td class="signal_type"><span class="returnvalue">void</span></td>
+<td class="signal_name"><a class="link" href="WebKitAuthenticationRequest.html#WebKitAuthenticationRequest-authenticated" title="The “authenticated” signal">authenticated</a></td>
+<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+</tr>
+<tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitAuthenticationRequest.html#WebKitAuthenticationRequest-cancelled" title="The “cancelled” signal">cancelled</a></td>
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
-</tr></tbody>
+</tr>
+</tbody>
 </table></div>
 </div>
 <a name="WebKitCredential"></a><div class="refsect1">
@@ -307,8 +338,10 @@ webkit_authentication_request_can_save_credentials
                                (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
 <p>Determine whether the authentication method associated with this
 <a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> should allow the storage of credentials.
-This will return <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if WebKit doesn't support credential storing
-or if private browsing is enabled.</p>
+This will return <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if WebKit doesn't support credential storing,
+if private browsing is enabled, or if persistent credential storage has been
+disabled in <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>, unless credentials saving has been
+explicitly enabled with <a class="link" href="WebKitAuthenticationRequest.html#webkit-authentication-request-set-can-save-credentials" title="webkit_authentication_request_set_can_save_credentials ()"><code class="function">webkit_authentication_request_set_can_save_credentials()</code></a>.</p>
 <div class="refsect3">
 <a name="webkit-authentication-request-can-save-credentials.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -329,6 +362,45 @@ or if private browsing is enabled.</p>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if WebKit can store credentials or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-authentication-request-set-can-save-credentials"></a><h3>webkit_authentication_request_set_can_save_credentials ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_authentication_request_set_can_save_credentials
+                               (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> enabled</code></em>);</pre>
+<p>Set whether the authentication method associated with <em class="parameter"><code>request</code></em>
+
+should allow the storage of credentials.
+This should be used by applications handling their own credentials
+storage to indicate that it should be supported even when internal
+credential storage is disabled or unsupported.
+Note that storing of credentials will not be allowed on ephemeral
+sessions in any case.</p>
+<div class="refsect3">
+<a name="webkit-authentication-request-set-can-save-credentials.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>request</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>enabled</p></td>
+<td class="parameter_description"><p>value to set</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -390,6 +462,35 @@ webkit_authentication_request_get_port
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-authentication-request-get-security-origin"></a><h3>webkit_authentication_request_get_security_origin ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="returnvalue">WebKitSecurityOrigin</span></a> *
+webkit_authentication_request_get_security_origin
+                               (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> that this authentication challenge is applicable to.</p>
+<div class="refsect3">
+<a name="webkit-authentication-request-get-security-origin.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>request</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-authentication-request-get-security-origin.returns"></a><h4>Returns</h4>
+<p>a newly created <a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a>. </p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-authentication-request-is-retry"></a><h3>webkit_authentication_request_is_retry ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_authentication_request_is_retry
@@ -447,6 +548,44 @@ or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">N
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-authentication-request-set-proposed-credential"></a><h3>webkit_authentication_request_set_proposed_credential ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_authentication_request_set_proposed_credential
+                               (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> *credential</code></em>);</pre>
+<p>Set the <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> of the proposed authentication challenge that was
+stored from a previous session. This should only be used by applications handling
+their own credential storage. (When using the default WebKit credential storage,
+<a class="link" href="WebKitAuthenticationRequest.html#webkit-authentication-request-get-proposed-credential" title="webkit_authentication_request_get_proposed_credential ()"><code class="function">webkit_authentication_request_get_proposed_credential()</code></a> already contains previously-stored
+credentials.)
+Passing a <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> <em class="parameter"><code>credential</code></em>
+ will clear the proposed credential.</p>
+<div class="refsect3">
+<a name="webkit-authentication-request-set-proposed-credential.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>request</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>credential</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -870,6 +1009,46 @@ webkit_credential_has_password (<em class="parameter"><code><a class="link" href
 </div>
 <div class="refsect1">
 <a name="WebKitAuthenticationRequest.signal-details"></a><h2>Signal Details</h2>
+<div class="refsect2">
+<a name="WebKitAuthenticationRequest-authenticated"></a><h3>The <code class="literal">“authenticated”</code> signal</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+user_function (<a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request,
+               <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>            *credential,
+               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                     user_data)</pre>
+<p>This signal is emitted when the user authentication request succeeded.
+Applications handling their own credential storage should connect to
+this signal to save the credentials.</p>
+<div class="refsect3">
+<a name="WebKitAuthenticationRequest-authenticated.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>request</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>credential</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> accepted</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>user_data</p></td>
+<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
 <div class="refsect2">
 <a name="WebKitAuthenticationRequest-cancelled"></a><h3>The <code class="literal">“cancelled”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>

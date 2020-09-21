@@ -2,10 +2,6 @@ fix-ftbfs-sparc64.patch
 fix-ftbfs-x86.patch
 fix-ftbfs-m68k.patch
 fix-ftbfs-x32.patch
-detect-gstreamer-gl.patch
-detect-woff.patch
-user-agent-branding.patch
 prefer-pthread.patch
 dont-detect-sse2.patch
 reduce-memory-overheads.patch
-use-gles-on-arm.patch

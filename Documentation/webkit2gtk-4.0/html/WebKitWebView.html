@@ -278,6 +278,22 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-set-is-muted" title="webkit_web_view_set_is_muted ()">webkit_web_view_set_is_muted</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-is-muted" title="webkit_web_view_get_is_muted ()">webkit_web_view_get_is_muted</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a href="../glib/glib-Basic-Types.html#gdouble"><span class="returnvalue">gdouble</span></a>
 </td>
 <td class="function_name">
@@ -644,6 +660,14 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
+<span class="returnvalue">WebKitWebsitePolicies</span> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-website-policies" title="webkit_web_view_get_website_policies ()">webkit_web_view_get_website_policies</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="returnvalue">WebKitJavascriptResult</span></a> *
 </td>
 <td class="function_name">
@@ -825,6 +849,11 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-muted" title="The “is-muted” property">is-muted</a></td>
+<td class="property_flags">Read / Write</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-playing-audio" title="The “is-playing-audio” property">is-playing-audio</a></td>
 <td class="property_flags">Read</td>
 </tr>
@@ -867,6 +896,12 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <td class="property_type">
 <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--web-context" title="The “web-context” property">web-context</a></td>
+<td class="property_flags">Read / Write / Construct Only</td>
+</tr>
+<tr>
+<td class="property_type">
+<span class="type">WebKitWebsitePolicies</span> *</td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--website-policies" title="The “website-policies” property">website-policies</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
@@ -1066,6 +1101,10 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <td class="function_name"><a class="link" href="WebKitWebView.html#WebKitWebProcessTerminationReason" title="enum WebKitWebProcessTerminationReason">WebKitWebProcessTerminationReason</a></td>
 </tr>
 <tr>
+<td class="datatype_keyword">enum</td>
+<td class="function_name"><a class="link" href="WebKitWebView.html#WebKitAutoplayPolicy" title="enum WebKitAutoplayPolicy">WebKitAutoplayPolicy</a></td>
+</tr>
+<tr>
 <td class="define_keyword">#define</td>
 <td class="function_name"><a class="link" href="WebKitWebView.html#WEBKIT-EDITING-COMMAND-CUT:CAPS" title="WEBKIT_EDITING_COMMAND_CUT">WEBKIT_EDITING_COMMAND_CUT</a></td>
 </tr>
@@ -1076,6 +1115,10 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <tr>
 <td class="define_keyword">#define</td>
 <td class="function_name"><a class="link" href="WebKitWebView.html#WEBKIT-EDITING-COMMAND-PASTE:CAPS" title="WEBKIT_EDITING_COMMAND_PASTE">WEBKIT_EDITING_COMMAND_PASTE</a></td>
+</tr>
+<tr>
+<td class="define_keyword">#define</td>
+<td class="function_name"><a class="link" href="WebKitWebView.html#WEBKIT-EDITING-COMMAND-PASTE-AS-PLAIN-TEXT:CAPS" title="WEBKIT_EDITING_COMMAND_PASTE_AS_PLAIN_TEXT">WEBKIT_EDITING_COMMAND_PASTE_AS_PLAIN_TEXT</a></td>
 </tr>
 <tr>
 <td class="define_keyword">#define</td>
@@ -1123,6 +1166,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
     <span class="lineart">├──</span> WebKitScriptDialog
     <span class="lineart">╰──</span> WebKitWebViewSessionState
     <a href="../gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
+    <span class="lineart">├──</span> WebKitAutoplayPolicy
     <span class="lineart">├──</span> WebKitInsecureContentEvent
     <span class="lineart">├──</span> WebKitLoadEvent
     <span class="lineart">├──</span> WebKitPolicyDecisionType
@@ -1209,8 +1253,8 @@ same <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span
 this method should always be used when creating the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> in the <a class="link" href="WebKitWebView.html#WebKitWebView-create" title="The “create” signal"><span class="type">“create”</span></a> signal.
 You can also use this method to implement other process models based on <a class="link" href="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-MULTIPLE-SECONDARY-PROCESSES:CAPS"><code class="literal">WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code></a>,
 like for example, sharing the same web process for all the views in the same security domain.</p>
-<p>The newly created <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> will also have the same <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a>
-and <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> as <em class="parameter"><code>web_view</code></em>
+<p>The newly created <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> will also have the same <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a>,
+<a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a>, and <span class="type">WebKitWebsitePolicies</span> as <em class="parameter"><code>web_view</code></em>
 .</p>
 <p><span class="annotation">[<acronym title="This symbol is a constructor, not a static method."><span class="acronym">constructor</span></acronym>]</span></p>
 <div class="refsect3">
@@ -2068,6 +2112,67 @@ page is producing sound.</p>
 is playing audio or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-set-is-muted"></a><h3>webkit_web_view_set_is_muted ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_set_is_muted (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
+                              <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> muted</code></em>);</pre>
+<p>Sets the mute state of <em class="parameter"><code>web_view</code></em>
+.</p>
+<div class="refsect3">
+<a name="webkit-web-view-set-is-muted.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>muted</p></td>
+<td class="parameter_description"><p>mute flag</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-get-is-muted"></a><h3>webkit_web_view_get_is_muted ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_web_view_get_is_muted (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Gets the mute state of <em class="parameter"><code>web_view</code></em>
+.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-is-muted.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-is-muted.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>web_view</code></em>
+audio is muted or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> is audio is not muted.</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -4062,6 +4167,39 @@ webkit_web_view_get_input_method_context
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-web-view-get-website-policies"></a><h3>webkit_web_view_get_website_policies ()</h3>
+<pre class="programlisting"><span class="returnvalue">WebKitWebsitePolicies</span> *
+webkit_web_view_get_website_policies (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Gets the default website policies set on construction in the
+<em class="parameter"><code>web_view</code></em>
+. These can be overridden on a per-origin basis via the
+<a class="link" href="WebKitWebView.html#WebKitWebView-decide-policy" title="The “decide-policy” signal"><span class="type">“decide-policy”</span></a> signal handler.</p>
+<p>See also <a class="link" href="WebKitPolicyDecision.html#webkit-policy-decision-use-with-policies" title="webkit_policy_decision_use_with_policies ()"><code class="function">webkit_policy_decision_use_with_policies()</code></a>.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-website-policies.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-website-policies.returns"></a><h4>Returns</h4>
+<p>the default <span class="type">WebKitWebsitePolicies</span>
+associated with the view. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-javascript-result-ref"></a><h3>webkit_javascript_result_ref ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="returnvalue">WebKitJavascriptResult</span></a> *
 webkit_javascript_result_ref (<em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="type">WebKitJavascriptResult</span></a> *js_result</code></em>);</pre>
@@ -4848,6 +4986,46 @@ visible in the webview</p>
 </div>
 <hr>
 <div class="refsect2">
+<a name="WebKitAutoplayPolicy"></a><h3>enum WebKitAutoplayPolicy</h3>
+<p>Enum values used to specify autoplay policies.</p>
+<div class="refsect3">
+<a name="WebKitAutoplayPolicy.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="300px" class="enum_members_name">
+<col class="enum_members_description">
+<col width="200px" class="enum_members_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-AUTOPLAY-ALLOW:CAPS"></a>WEBKIT_AUTOPLAY_ALLOW</p></td>
+<td class="enum_member_description">
+<p>Do not restrict autoplay.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-AUTOPLAY-ALLOW-WITHOUT-SOUND:CAPS"></a>WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND</p></td>
+<td class="enum_member_description">
+<p>Allow videos to autoplay if
+they have no audio track, or if their audio track is muted.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-AUTOPLAY-DENY:CAPS"></a>WEBKIT_AUTOPLAY_DENY</p></td>
+<td class="enum_member_description">
+<p>Never allow autoplay.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="WEBKIT-EDITING-COMMAND-CUT:CAPS"></a><h3>WEBKIT_EDITING_COMMAND_CUT</h3>
 <pre class="programlisting">#define WEBKIT_EDITING_COMMAND_CUT "Cut"
 </pre>
@@ -4881,6 +5059,19 @@ You can check whether it's possible to execute the command with
 <a class="link" href="WebKitWebView.html#webkit-web-view-can-execute-editing-command" title="webkit_web_view_can_execute_editing_command ()"><code class="function">webkit_web_view_can_execute_editing_command()</code></a>. In general it's possible
 to paste from the clipboard when the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> content is editable
 and clipboard is not empty.</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WEBKIT-EDITING-COMMAND-PASTE-AS-PLAIN-TEXT:CAPS"></a><h3>WEBKIT_EDITING_COMMAND_PASTE_AS_PLAIN_TEXT</h3>
+<pre class="programlisting">#define WEBKIT_EDITING_COMMAND_PASTE_AS_PLAIN_TEXT "PasteAsPlainText"
+</pre>
+<p>The paste as plaintext clipboard command. Pastes the contents of the
+clipboard to a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>, with formatting removed.
+You can check whether it's possible to execute the command with
+<a class="link" href="WebKitWebView.html#webkit-web-view-can-execute-editing-command" title="webkit_web_view_can_execute_editing_command ()"><code class="function">webkit_web_view_can_execute_editing_command()</code></a>. In general it's possible
+to paste from the clipboard when the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> content is editable
+and clipboard is not empty.</p>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -5096,6 +5287,17 @@ When the load operation finishes the property is set to <a href="../glib/glib-St
 </div>
 <hr>
 <div class="refsect2">
+<a name="WebKitWebView--is-muted"></a><h3>The <code class="literal">“is-muted”</code> property</h3>
+<pre class="programlisting">  “is-muted”                 <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Whether the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> audio is muted. When <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a>, audio is silenced.
+It may still be playing, i.e. <a class="link" href="WebKitWebView.html#WebKitWebView--is-playing-audio" title="The “is-playing-audio” property"><span class="type">“is-playing-audio”</span></a> may be <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a>.</p>
+<p>Owner: WebKitWebView</p>
+<p>Flags: Read / Write</p>
+<p>Default value: FALSE</p>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="WebKitWebView--is-playing-audio"></a><h3>The <code class="literal">“is-playing-audio”</code> property</h3>
 <pre class="programlisting">  “is-playing-audio”         <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> is currently playing audio from a page.
@@ -5173,6 +5375,15 @@ See <a class="link" href="WebKitWebView.html#webkit-web-view-get-uri" title="web
 <p>The <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> of the view.</p>
 <p>Owner: WebKitWebView</p>
 <p>Flags: Read / Write / Construct Only</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebView--website-policies"></a><h3>The <code class="literal">“website-policies”</code> property</h3>
+<pre class="programlisting">  “website-policies”         <span class="type">WebKitWebsitePolicies</span> *</pre>
+<p>The <span class="type">WebKitWebsitePolicies</span> for the view.</p>
+<p>Owner: WebKitWebView</p>
+<p>Flags: Read / Write / Construct Only</p>
+<p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
 </div>
 <hr>
 <div class="refsect2">

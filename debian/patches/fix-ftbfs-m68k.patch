@@ -69,7 +69,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -58,7 +58,11 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -59,7 +59,11 @@ struct SameSizeAsShadowRoot : public Doc
      Optional<HashMap<AtomString, AtomString>> partMappings;
  };
  
@@ -129,7 +129,7 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-@@ -51,7 +51,11 @@ struct SameSizeAsFontCascadeDescription
+@@ -52,7 +52,11 @@ struct SameSizeAsFontCascadeDescription
      unsigned bitfields3 : 10;
  };
  
@@ -145,7 +145,7 @@ Index: webkitgtk/Source/WebCore/style/RuleData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/style/RuleData.cpp
 +++ webkitgtk/Source/WebCore/style/RuleData.cpp
-@@ -60,7 +60,11 @@ struct SameSizeAsRuleData {
+@@ -59,7 +59,11 @@ struct SameSizeAsRuleData {
      unsigned d[4];
  };
  

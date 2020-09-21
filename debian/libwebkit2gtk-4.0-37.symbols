@@ -27,15 +27,19 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_authentication_request_get_proposed_credential@Base 2.5.3
  webkit_authentication_request_get_realm@Base 2.5.3
  webkit_authentication_request_get_scheme@Base 2.5.3
+ webkit_authentication_request_get_security_origin@Base 2.29.3
  webkit_authentication_request_get_type@Base 2.5.3
  webkit_authentication_request_is_for_proxy@Base 2.5.3
  webkit_authentication_request_is_retry@Base 2.5.3
+ webkit_authentication_request_set_can_save_credentials@Base 2.29.2
+ webkit_authentication_request_set_proposed_credential@Base 2.29.2
  webkit_authentication_scheme_get_type@Base 2.5.3
  webkit_automation_browsing_context_presentation_get_type@Base 2.27.3
  webkit_automation_session_get_application_info@Base 2.17.90
  webkit_automation_session_get_id@Base 2.17.3
  webkit_automation_session_get_type@Base 2.17.3
  webkit_automation_session_set_application_info@Base 2.17.90
+ webkit_autoplay_policy_get_type@Base 2.29.2
  webkit_back_forward_list_get_back_item@Base 2.5.3
  webkit_back_forward_list_get_back_list@Base 2.5.3
  webkit_back_forward_list_get_back_list_with_limit@Base 2.5.3
@@ -1558,6 +1562,17 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)webkit_inspector_window_get_type@Base 2.19.6
  webkit_install_missing_media_plugins_permission_request_get_description@Base 2.10.0
  webkit_install_missing_media_plugins_permission_request_get_type@Base 2.10.0
+ webkit_itp_first_party_get_domain@Base 2.29.4
+ webkit_itp_first_party_get_last_update_time@Base 2.29.4
+ webkit_itp_first_party_get_type@Base 2.29.4
+ webkit_itp_first_party_get_website_data_access_allowed@Base 2.29.4
+ webkit_itp_first_party_ref@Base 2.29.4
+ webkit_itp_first_party_unref@Base 2.29.4
+ webkit_itp_third_party_get_domain@Base 2.29.4
+ webkit_itp_third_party_get_first_parties@Base 2.29.4
+ webkit_itp_third_party_get_type@Base 2.29.4
+ webkit_itp_third_party_ref@Base 2.29.4
+ webkit_itp_third_party_unref@Base 2.29.4
  webkit_javascript_error_get_type@Base 2.5.3
  webkit_javascript_error_quark@Base 2.5.3
  webkit_javascript_result_get_global_context@Base 2.5.3
@@ -1640,6 +1655,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_policy_decision_ignore@Base 2.5.3
  webkit_policy_decision_type_get_type@Base 2.5.3
  webkit_policy_decision_use@Base 2.5.3
+ webkit_policy_decision_use_with_policies@Base 2.29.2
  webkit_policy_error_get_type@Base 2.5.3
  webkit_policy_error_quark@Base 2.5.3
  webkit_print_custom_widget_get_title@Base 2.15.90
@@ -1752,6 +1768,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_javascript_can_access_clipboard@Base 2.5.3
  webkit_settings_get_javascript_can_open_windows_automatically@Base 2.5.3
  webkit_settings_get_load_icons_ignoring_image_load_setting@Base 2.5.3
+ webkit_settings_get_media_content_types_requiring_hardware_support@Base 2.29.2
  webkit_settings_get_media_playback_allows_inline@Base 2.5.3
  webkit_settings_get_media_playback_requires_user_gesture@Base 2.5.3
  webkit_settings_get_minimum_font_size@Base 2.5.3
@@ -1813,6 +1830,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_javascript_can_access_clipboard@Base 2.5.3
  webkit_settings_set_javascript_can_open_windows_automatically@Base 2.5.3
  webkit_settings_set_load_icons_ignoring_image_load_setting@Base 2.5.3
+ webkit_settings_set_media_content_types_requiring_hardware_support@Base 2.29.2
  webkit_settings_set_media_playback_allows_inline@Base 2.5.3
  webkit_settings_set_media_playback_requires_user_gesture@Base 2.5.3
  webkit_settings_set_minimum_font_size@Base 2.5.3
@@ -1927,6 +1945,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_spell_checking_languages@Base 2.5.3
  webkit_web_context_get_tls_errors_policy@Base 2.5.3
  webkit_web_context_get_type@Base 2.5.3
+ webkit_web_context_get_use_system_appearance_for_scrollbars@Base 2.29.1
  webkit_web_context_get_web_process_count_limit@Base 2.10.0
  webkit_web_context_get_website_data_manager@Base 2.10.0
  webkit_web_context_initialize_notification_permissions@Base 2.15.3
@@ -1950,6 +1969,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  webkit_web_context_set_tls_errors_policy@Base 2.5.3
+ webkit_web_context_set_use_system_appearance_for_scrollbars@Base 2.29.1
  webkit_web_context_set_web_extensions_directory@Base 2.5.3
  webkit_web_context_set_web_extensions_initialization_user_data@Base 2.5.3
  webkit_web_context_set_web_process_count_limit@Base 2.10.0
@@ -2009,6 +2029,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_get_find_controller@Base 2.5.3
  webkit_web_view_get_input_method_context@Base 2.27.4
  webkit_web_view_get_inspector@Base 2.5.3
+ webkit_web_view_get_is_muted@Base 2.29.2
  webkit_web_view_get_javascript_global_context@Base 2.5.3
  webkit_web_view_get_main_resource@Base 2.5.3
  webkit_web_view_get_page_id@Base 2.5.3
@@ -2022,6 +2043,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_get_uri@Base 2.5.3
  webkit_web_view_get_user_content_manager@Base 2.5.3
  webkit_web_view_get_website_data_manager@Base 2.15.90
+ webkit_web_view_get_website_policies@Base 2.29.2
  webkit_web_view_get_window_properties@Base 2.5.3
  webkit_web_view_get_zoom_level@Base 2.5.3
  webkit_web_view_go_back@Base 2.5.3
@@ -2067,10 +2089,14 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_set_custom_charset@Base 2.5.3
  webkit_web_view_set_editable@Base 2.8.1
  webkit_web_view_set_input_method_context@Base 2.27.4
+ webkit_web_view_set_is_muted@Base 2.29.2
  webkit_web_view_set_settings@Base 2.5.3
  webkit_web_view_set_zoom_level@Base 2.5.3
  webkit_web_view_stop_loading@Base 2.5.3
  webkit_web_view_try_close@Base 2.12.0
+ webkit_website_data_access_permission_request_get_current_domain@Base 2.29.2
+ webkit_website_data_access_permission_request_get_requesting_domain@Base 2.29.2
+ webkit_website_data_access_permission_request_get_type@Base 2.29.2
  webkit_website_data_get_name@Base 2.15.4
  webkit_website_data_get_size@Base 2.15.4
  webkit_website_data_get_type@Base 2.15.4
@@ -2083,10 +2109,17 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_base_data_directory@Base 2.10.0
  webkit_website_data_manager_get_cookie_manager@Base 2.15.90
  webkit_website_data_manager_get_disk_cache_directory@Base 2.10.0
+ webkit_website_data_manager_get_dom_cache_directory@Base 2.29.2
  webkit_website_data_manager_get_hsts_cache_directory@Base 2.25.92
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
+ webkit_website_data_manager_get_itp_directory@Base 2.29.2
+ webkit_website_data_manager_get_itp_enabled@Base 2.29.2
+ webkit_website_data_manager_get_itp_summary@Base 2.29.4
+ webkit_website_data_manager_get_itp_summary_finish@Base 2.29.4
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
+ webkit_website_data_manager_get_persistent_credential_storage_enabled@Base 2.29.2
+ webkit_website_data_manager_get_service_worker_registrations_directory@Base 2.29.2
  webkit_website_data_manager_get_type@Base 2.10.0
  webkit_website_data_manager_get_websql_directory@Base 2.10.0
  webkit_website_data_manager_is_ephemeral@Base 2.15.4
@@ -2094,9 +2127,15 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_new_ephemeral@Base 2.15.4
  webkit_website_data_manager_remove@Base 2.15.4
  webkit_website_data_manager_remove_finish@Base 2.15.4
+ webkit_website_data_manager_set_itp_enabled@Base 2.29.2
+ webkit_website_data_manager_set_persistent_credential_storage_enabled@Base 2.29.2
  webkit_website_data_ref@Base 2.15.4
  webkit_website_data_types_get_type@Base 2.15.4
  webkit_website_data_unref@Base 2.15.4
+ webkit_website_policies_get_autoplay_policy@Base 2.29.2
+ webkit_website_policies_get_type@Base 2.29.2
+ webkit_website_policies_new@Base 2.29.2
+ webkit_website_policies_new_with_policies@Base 2.29.2
  webkit_window_properties_get_fullscreen@Base 2.5.3
  webkit_window_properties_get_geometry@Base 2.5.3
  webkit_window_properties_get_locationbar_visible@Base 2.5.3

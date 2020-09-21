@@ -57,6 +57,7 @@
       <sub name="WebKitUserMessage" link="WebKitUserMessage.html"/>
       <sub name="WebKitPointerLockPermissionRequest" link="WebKitPointerLockPermissionRequest.html"/>
       <sub name="WebKitInputMethodContext" link="WebKitInputMethodContext.html"/>
+      <sub name="WebKitWebsiteDataAccessPermissionRequest" link="WebKitWebsiteDataAccessPermissionRequest.html"/>
     </sub>
     <sub name="Web Extensions" link="ch02.html">
       <sub name="WebKitWebExtension" link="WebKitWebExtension.html"/>
@@ -86,6 +87,7 @@
     <sub name="Index of new symbols in 2.24" link="api-index-2-24.html"/>
     <sub name="Index of new symbols in 2.26" link="api-index-2-26.html"/>
     <sub name="Index of new symbols in 2.28" link="api-index-2-28.html"/>
+    <sub name="Index of new symbols in 2.30" link="api-index-2-30.html"/>
     <sub name="Annotation Glossary" link="annotation-glossary.html"/>
   </chapters>
   <functions>
@@ -132,6 +134,8 @@
     <keyword type="function" name="webkit_web_context_set_process_model ()" link="WebKitWebContext.html#webkit-web-context-set-process-model" since="2.4"/>
     <keyword type="function" name="webkit_web_context_initialize_notification_permissions ()" link="WebKitWebContext.html#webkit-web-context-initialize-notification-permissions" since="2.16"/>
     <keyword type="function" name="webkit_web_context_send_message_to_all_extensions ()" link="WebKitWebContext.html#webkit-web-context-send-message-to-all-extensions" since="2.28"/>
+    <keyword type="function" name="webkit_web_context_set_use_system_appearance_for_scrollbars ()" link="WebKitWebContext.html#webkit-web-context-set-use-system-appearance-for-scrollbars" since="2.30"/>
+    <keyword type="function" name="webkit_web_context_get_use_system_appearance_for_scrollbars ()" link="WebKitWebContext.html#webkit-web-context-get-use-system-appearance-for-scrollbars" since="2.30"/>
     <keyword type="function" name="WebKitURISchemeRequestCallback ()" link="WebKitWebContext.html#WebKitURISchemeRequestCallback"/>
     <keyword type="function" name="webkit_web_context_register_uri_scheme ()" link="WebKitWebContext.html#webkit-web-context-register-uri-scheme"/>
     <keyword type="struct" name="struct WebKitWebContext" link="WebKitWebContext.html#WebKitWebContext-struct"/>
@@ -141,6 +145,7 @@
     <keyword type="enum" name="enum WebKitNetworkProxyMode" link="WebKitWebContext.html#WebKitNetworkProxyMode" since="2.16"/>
     <keyword type="property" name="The “local-storage-directory” property" link="WebKitWebContext.html#WebKitWebContext--local-storage-directory"/>
     <keyword type="property" name="The “process-swap-on-cross-site-navigation-enabled” property" link="WebKitWebContext.html#WebKitWebContext--process-swap-on-cross-site-navigation-enabled"/>
+    <keyword type="property" name="The “use-system-appearance-for-scrollbars” property" link="WebKitWebContext.html#WebKitWebContext--use-system-appearance-for-scrollbars"/>
     <keyword type="property" name="The “website-data-manager” property" link="WebKitWebContext.html#WebKitWebContext--website-data-manager"/>
     <keyword type="signal" name="The “automation-started” signal" link="WebKitWebContext.html#WebKitWebContext-automation-started"/>
     <keyword type="signal" name="The “download-started” signal" link="WebKitWebContext.html#WebKitWebContext-download-started"/>
@@ -176,6 +181,8 @@
     <keyword type="function" name="webkit_web_view_stop_loading ()" link="WebKitWebView.html#webkit-web-view-stop-loading"/>
     <keyword type="function" name="webkit_web_view_is_loading ()" link="WebKitWebView.html#webkit-web-view-is-loading"/>
     <keyword type="function" name="webkit_web_view_is_playing_audio ()" link="WebKitWebView.html#webkit-web-view-is-playing-audio" since="2.8"/>
+    <keyword type="function" name="webkit_web_view_set_is_muted ()" link="WebKitWebView.html#webkit-web-view-set-is-muted" since="2.30"/>
+    <keyword type="function" name="webkit_web_view_get_is_muted ()" link="WebKitWebView.html#webkit-web-view-get-is-muted" since="2.30"/>
     <keyword type="function" name="webkit_web_view_get_estimated_load_progress ()" link="WebKitWebView.html#webkit-web-view-get-estimated-load-progress"/>
     <keyword type="function" name="webkit_web_view_get_custom_charset ()" link="WebKitWebView.html#webkit-web-view-get-custom-charset"/>
     <keyword type="function" name="webkit_web_view_set_custom_charset ()" link="WebKitWebView.html#webkit-web-view-set-custom-charset"/>
@@ -222,6 +229,7 @@
     <keyword type="function" name="webkit_web_view_send_message_to_page_finish ()" link="WebKitWebView.html#webkit-web-view-send-message-to-page-finish" since="2.28"/>
     <keyword type="function" name="webkit_web_view_set_input_method_context ()" link="WebKitWebView.html#webkit-web-view-set-input-method-context" since="2.28"/>
     <keyword type="function" name="webkit_web_view_get_input_method_context ()" link="WebKitWebView.html#webkit-web-view-get-input-method-context" since="2.28"/>
+    <keyword type="function" name="webkit_web_view_get_website_policies ()" link="WebKitWebView.html#webkit-web-view-get-website-policies" since="2.30"/>
     <keyword type="function" name="webkit_javascript_result_ref ()" link="WebKitWebView.html#webkit-javascript-result-ref"/>
     <keyword type="function" name="webkit_javascript_result_unref ()" link="WebKitWebView.html#webkit-javascript-result-unref"/>
     <keyword type="function" name="webkit_javascript_result_get_global_context ()" link="WebKitWebView.html#webkit-javascript-result-get-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>
@@ -247,9 +255,11 @@
     <keyword type="enum" name="enum WebKitSnapshotOptions" link="WebKitWebView.html#WebKitSnapshotOptions"/>
     <keyword type="enum" name="enum WebKitSnapshotRegion" link="WebKitWebView.html#WebKitSnapshotRegion"/>
     <keyword type="enum" name="enum WebKitWebProcessTerminationReason" link="WebKitWebView.html#WebKitWebProcessTerminationReason" since="2.20"/>
+    <keyword type="enum" name="enum WebKitAutoplayPolicy" link="WebKitWebView.html#WebKitAutoplayPolicy" since="2.30"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_CUT" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-CUT:CAPS"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_COPY" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-COPY:CAPS"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_PASTE" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-PASTE:CAPS"/>
+    <keyword type="macro" name="WEBKIT_EDITING_COMMAND_PASTE_AS_PLAIN_TEXT" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-PASTE-AS-PLAIN-TEXT:CAPS" since="2.30"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_SELECT_ALL" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-SELECT-ALL:CAPS"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_UNDO" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-UNDO:CAPS"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_REDO" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-REDO:CAPS"/>
@@ -266,6 +276,7 @@
     <keyword type="property" name="The “is-controlled-by-automation” property" link="WebKitWebView.html#WebKitWebView--is-controlled-by-automation"/>
     <keyword type="property" name="The “is-ephemeral” property" link="WebKitWebView.html#WebKitWebView--is-ephemeral"/>
     <keyword type="property" name="The “is-loading” property" link="WebKitWebView.html#WebKitWebView--is-loading"/>
+    <keyword type="property" name="The “is-muted” property" link="WebKitWebView.html#WebKitWebView--is-muted"/>
     <keyword type="property" name="The “is-playing-audio” property" link="WebKitWebView.html#WebKitWebView--is-playing-audio"/>
     <keyword type="property" name="The “page-id” property" link="WebKitWebView.html#WebKitWebView--page-id"/>
     <keyword type="property" name="The “related-view” property" link="WebKitWebView.html#WebKitWebView--related-view"/>
@@ -274,6 +285,7 @@
     <keyword type="property" name="The “uri” property" link="WebKitWebView.html#WebKitWebView--uri"/>
     <keyword type="property" name="The “user-content-manager” property" link="WebKitWebView.html#WebKitWebView--user-content-manager"/>
     <keyword type="property" name="The “web-context” property" link="WebKitWebView.html#WebKitWebView--web-context"/>
+    <keyword type="property" name="The “website-policies” property" link="WebKitWebView.html#WebKitWebView--website-policies"/>
     <keyword type="property" name="The “zoom-level” property" link="WebKitWebView.html#WebKitWebView--zoom-level"/>
     <keyword type="signal" name="The “authenticate” signal" link="WebKitWebView.html#WebKitWebView-authenticate"/>
     <keyword type="signal" name="The “close” signal" link="WebKitWebView.html#WebKitWebView-close"/>
@@ -305,10 +317,13 @@
     <keyword type="function" name="webkit_authentication_request_authenticate ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-authenticate" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_cancel ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-cancel" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_can_save_credentials ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-can-save-credentials" since="2.2"/>
+    <keyword type="function" name="webkit_authentication_request_set_can_save_credentials ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-set-can-save-credentials" since="2.30"/>
     <keyword type="function" name="webkit_authentication_request_get_host ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-host" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_get_port ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-port" since="2.2"/>
+    <keyword type="function" name="webkit_authentication_request_get_security_origin ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-security-origin" since="2.30"/>
     <keyword type="function" name="webkit_authentication_request_is_retry ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-is-retry" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_get_proposed_credential ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-proposed-credential" since="2.2"/>
+    <keyword type="function" name="webkit_authentication_request_set_proposed_credential ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-set-proposed-credential" since="2.30"/>
     <keyword type="function" name="webkit_authentication_request_get_realm ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-realm" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_get_scheme ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-scheme" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_is_for_proxy ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-is-for-proxy" since="2.2"/>
@@ -323,6 +338,7 @@
     <keyword type="enum" name="enum WebKitAuthenticationScheme" link="WebKitAuthenticationRequest.html#WebKitAuthenticationScheme" since="2.2"/>
     <keyword type="struct" name="WebKitCredential" link="WebKitAuthenticationRequest.html#WebKitCredential-struct"/>
     <keyword type="enum" name="enum WebKitCredentialPersistence" link="WebKitAuthenticationRequest.html#WebKitCredentialPersistence" since="2.2"/>
+    <keyword type="signal" name="The “authenticated” signal" link="WebKitAuthenticationRequest.html#WebKitAuthenticationRequest-authenticated"/>
     <keyword type="signal" name="The “cancelled” signal" link="WebKitAuthenticationRequest.html#WebKitAuthenticationRequest-cancelled"/>
     <keyword type="function" name="webkit_back_forward_list_get_length ()" link="WebKitBackForwardList.html#webkit-back-forward-list-get-length"/>
     <keyword type="function" name="webkit_back_forward_list_get_current_item ()" link="WebKitBackForwardList.html#webkit-back-forward-list-get-current-item"/>
@@ -460,6 +476,8 @@
     <keyword type="function" name="webkit_settings_font_size_to_pixels ()" link="WebKitSettings.html#webkit-settings-font-size-to-pixels" since="2.20"/>
     <keyword type="function" name="webkit_settings_get_enable_media ()" link="WebKitSettings.html#webkit-settings-get-enable-media" since="2.26"/>
     <keyword type="function" name="webkit_settings_set_enable_media ()" link="WebKitSettings.html#webkit-settings-set-enable-media" since="2.26"/>
+    <keyword type="function" name="webkit_settings_get_media_content_types_requiring_hardware_support ()" link="WebKitSettings.html#webkit-settings-get-media-content-types-requiring-hardware-support" since="2.30"/>
+    <keyword type="function" name="webkit_settings_set_media_content_types_requiring_hardware_support ()" link="WebKitSettings.html#webkit-settings-set-media-content-types-requiring-hardware-support" since="2.30"/>
     <keyword type="struct" name="struct WebKitSettings" link="WebKitSettings.html#WebKitSettings-struct"/>
     <keyword type="enum" name="enum WebKitHardwareAccelerationPolicy" link="WebKitSettings.html#WebKitHardwareAccelerationPolicy" since="2.16"/>
     <keyword type="property" name="The “allow-file-access-from-file-urls” property" link="WebKitSettings.html#WebKitSettings--allow-file-access-from-file-urls"/>
@@ -510,6 +528,7 @@
     <keyword type="property" name="The “javascript-can-access-clipboard” property" link="WebKitSettings.html#WebKitSettings--javascript-can-access-clipboard"/>
     <keyword type="property" name="The “javascript-can-open-windows-automatically” property" link="WebKitSettings.html#WebKitSettings--javascript-can-open-windows-automatically"/>
     <keyword type="property" name="The “load-icons-ignoring-image-load-setting” property" link="WebKitSettings.html#WebKitSettings--load-icons-ignoring-image-load-setting"/>
+    <keyword type="property" name="The “media-content-types-requiring-hardware-support” property" link="WebKitSettings.html#WebKitSettings--media-content-types-requiring-hardware-support"/>
     <keyword type="property" name="The “media-playback-allows-inline” property" link="WebKitSettings.html#WebKitSettings--media-playback-allows-inline"/>
     <keyword type="property" name="The “media-playback-requires-user-gesture” property" link="WebKitSettings.html#WebKitSettings--media-playback-requires-user-gesture"/>
     <keyword type="property" name="The “minimum-font-size” property" link="WebKitSettings.html#WebKitSettings--minimum-font-size"/>
@@ -602,6 +621,7 @@
     <keyword type="function" name="webkit_policy_decision_download ()" link="WebKitPolicyDecision.html#webkit-policy-decision-download"/>
     <keyword type="function" name="webkit_policy_decision_ignore ()" link="WebKitPolicyDecision.html#webkit-policy-decision-ignore"/>
     <keyword type="function" name="webkit_policy_decision_use ()" link="WebKitPolicyDecision.html#webkit-policy-decision-use"/>
+    <keyword type="function" name="webkit_policy_decision_use_with_policies ()" link="WebKitPolicyDecision.html#webkit-policy-decision-use-with-policies" since="2.30"/>
     <keyword type="struct" name="struct WebKitPolicyDecision" link="WebKitPolicyDecision.html#WebKitPolicyDecision-struct"/>
     <keyword type="function" name="webkit_navigation_policy_decision_get_navigation_action ()" link="WebKitNavigationPolicyDecision.html#webkit-navigation-policy-decision-get-navigation-action" since="2.6"/>
     <keyword type="function" name="webkit_navigation_policy_decision_get_frame_name ()" link="WebKitNavigationPolicyDecision.html#webkit-navigation-policy-decision-get-frame-name"/>
@@ -961,22 +981,45 @@
     <keyword type="function" name="webkit_website_data_manager_get_indexeddb_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-indexeddb-directory" since="2.10"/>
     <keyword type="function" name="webkit_website_data_manager_get_websql_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-websql-directory" deprecated="2.24. WebSQL is no longer supported. Use IndexedDB instead." since="2.10"/>
     <keyword type="function" name="webkit_website_data_manager_get_hsts_cache_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-hsts-cache-directory" since="2.26"/>
+    <keyword type="function" name="webkit_website_data_manager_get_itp_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-directory" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_service_worker_registrations_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-service-worker-registrations-directory" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_dom_cache_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-dom-cache-directory" since="2.30"/>
     <keyword type="function" name="webkit_website_data_manager_get_cookie_manager ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-cookie-manager" since="2.16"/>
+    <keyword type="function" name="webkit_website_data_manager_set_itp_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-itp-enabled" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_itp_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-enabled" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_set_persistent_credential_storage_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-persistent-credential-storage-enabled" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_persistent_credential_storage_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-persistent-credential-storage-enabled" since="2.30"/>
     <keyword type="function" name="webkit_website_data_manager_fetch ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-fetch" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_fetch_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-fetch-finish" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_remove ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-remove" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_remove_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-remove-finish" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_clear ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-clear" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_clear_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-clear-finish" since="2.16"/>
+    <keyword type="function" name="webkit_itp_first_party_ref ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-ref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_unref ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-unref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_get_domain ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-get-domain" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_get_website_data_access_allowed ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-get-website-data-access-allowed" since="2.30"/>
+    <keyword type="function" name="webkit_itp_first_party_get_last_update_time ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-get-last-update-time" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_ref ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-ref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_unref ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-unref" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_get_domain ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-get-domain" since="2.30"/>
+    <keyword type="function" name="webkit_itp_third_party_get_first_parties ()" link="WebKitWebsiteDataManager.html#webkit-itp-third-party-get-first-parties" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_itp_summary ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-summary" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_get_itp_summary_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-summary-finish" since="2.30"/>
     <keyword type="struct" name="struct WebKitWebsiteDataManager" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager-struct"/>
+    <keyword type="struct" name="WebKitITPFirstParty" link="WebKitWebsiteDataManager.html#WebKitITPFirstParty-struct"/>
+    <keyword type="struct" name="WebKitITPThirdParty" link="WebKitWebsiteDataManager.html#WebKitITPThirdParty-struct"/>
     <keyword type="property" name="The “base-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--base-cache-directory"/>
     <keyword type="property" name="The “base-data-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--base-data-directory"/>
     <keyword type="property" name="The “disk-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--disk-cache-directory"/>
+    <keyword type="property" name="The “dom-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--dom-cache-directory"/>
     <keyword type="property" name="The “hsts-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--hsts-cache-directory"/>
     <keyword type="property" name="The “indexeddb-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--indexeddb-directory"/>
     <keyword type="property" name="The “is-ephemeral” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--is-ephemeral"/>
+    <keyword type="property" name="The “itp-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--itp-directory"/>
     <keyword type="property" name="The “local-storage-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--local-storage-directory"/>
     <keyword type="property" name="The “offline-application-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--offline-application-cache-directory"/>
+    <keyword type="property" name="The “service-worker-registrations-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--service-worker-registrations-directory"/>
     <keyword type="property" name="The “websql-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--websql-directory"/>
     <keyword type="function" name="webkit_website_data_ref ()" link="WebKitWebsiteData.html#webkit-website-data-ref" since="2.16"/>
     <keyword type="function" name="webkit_website_data_unref ()" link="WebKitWebsiteData.html#webkit-website-data-unref" since="2.16"/>
@@ -1062,6 +1105,9 @@
     <keyword type="signal" name="The “preedit-changed” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-changed"/>
     <keyword type="signal" name="The “preedit-finished” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-finished"/>
     <keyword type="signal" name="The “preedit-started” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-started"/>
+    <keyword type="function" name="webkit_website_data_access_permission_request_get_requesting_domain ()" link="WebKitWebsiteDataAccessPermissionRequest.html#webkit-website-data-access-permission-request-get-requesting-domain" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_access_permission_request_get_current_domain ()" link="WebKitWebsiteDataAccessPermissionRequest.html#webkit-website-data-access-permission-request-get-current-domain" since="2.30"/>
+    <keyword type="struct" name="struct WebKitWebsiteDataAccessPermissionRequest" link="WebKitWebsiteDataAccessPermissionRequest.html#WebKitWebsiteDataAccessPermissionRequest-struct"/>
     <keyword type="function" name="WebKitWebExtensionInitializeFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeFunction"/>
     <keyword type="function" name="WebKitWebExtensionInitializeWithUserDataFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeWithUserDataFunction" since="2.4"/>
     <keyword type="function" name="webkit_web_extension_get_page ()" link="WebKitWebExtension.html#webkit-web-extension-get-page"/>
@@ -1148,6 +1194,9 @@
     <keyword type="constant" name="WEBKIT_SNAPSHOT_REGION_FULL_DOCUMENT" link="WebKitWebView.html#WEBKIT-SNAPSHOT-REGION-FULL-DOCUMENT:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEB_PROCESS_CRASHED" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-CRASHED:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEB_PROCESS_EXCEEDED_MEMORY_LIMIT" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-EXCEEDED-MEMORY-LIMIT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTOPLAY_ALLOW" link="WebKitWebView.html#WEBKIT-AUTOPLAY-ALLOW:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND" link="WebKitWebView.html#WEBKIT-AUTOPLAY-ALLOW-WITHOUT-SOUND:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTOPLAY_DENY" link="WebKitWebView.html#WEBKIT-AUTOPLAY-DENY:CAPS"/>
     <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_ALERT" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-ALERT:CAPS"/>
     <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_CONFIRM" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-CONFIRM:CAPS"/>
     <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_PROMPT" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-PROMPT:CAPS"/>
@@ -1272,6 +1321,7 @@
     <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_VIDEO_TO_DISK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-DOWNLOAD-VIDEO-TO-DISK:CAPS"/>
     <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_AUDIO_TO_DISK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-DOWNLOAD-AUDIO-TO-DISK:CAPS"/>
     <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_INSERT_EMOJI" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-INSERT-EMOJI:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_PASTE_AS_PLAIN_TEXT" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-PASTE-AS-PLAIN-TEXT:CAPS"/>
     <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_CUSTOM" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-CUSTOM:CAPS"/>
     <keyword type="constant" name="WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES" link="webkit2gtk-4.0-WebKitUserContent.html#WEBKIT-USER-CONTENT-INJECT-ALL-FRAMES:CAPS"/>
     <keyword type="constant" name="WEBKIT_USER_CONTENT_INJECT_TOP_FRAME" link="webkit2gtk-4.0-WebKitUserContent.html#WEBKIT-USER-CONTENT-INJECT-TOP-FRAME:CAPS"/>
@@ -1290,6 +1340,9 @@
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_COOKIES" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-COOKIES:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_DEVICE_ID_HASH_SALT" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-DEVICE-ID-HASH-SALT:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_HSTS_CACHE" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-HSTS-CACHE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_WEBSITE_DATA_ITP" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-ITP:CAPS"/>
+    <keyword type="constant" name="WEBKIT_WEBSITE_DATA_SERVICE_WORKER_REGISTRATIONS" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-SERVICE-WORKER-REGISTRATIONS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_WEBSITE_DATA_DOM_CACHE" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-DOM-CACHE:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_ALL" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-ALL:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOMATION_BROWSING_CONTEXT_PRESENTATION_WINDOW" link="WebKitAutomationSession.html#WEBKIT-AUTOMATION-BROWSING-CONTEXT-PRESENTATION-WINDOW:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOMATION_BROWSING_CONTEXT_PRESENTATION_TAB" link="WebKitAutomationSession.html#WEBKIT-AUTOMATION-BROWSING-CONTEXT-PRESENTATION-TAB:CAPS"/>
