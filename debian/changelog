@@ -1,4 +1,4 @@
-webkit2gtk (2.30.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.30.1-1) unstable; urgency=medium
 
   * New upstream release.
   * debian/copyright:
@@ -8,7 +8,7 @@ webkit2gtk (2.30.1-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     + Remove mailing-list-obsolete-in-debian-infrastructure.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 14 Sep 2020 13:22:28 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 21 Sep 2020 15:34:07 +0200
 
 webkit2gtk (2.30.0-1) experimental; urgency=medium
 
