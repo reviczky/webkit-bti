@@ -80,13 +80,18 @@ WebSocketTask::WebSocketTask(NetworkSocketChannel& channel, SoupSession* session
                 task->didFail(String::fromUTF8(error->message));
         }, this);
 
-    WebCore::ResourceRequest request;
-    request.updateFromSoupMessage(msg);
-    m_channel.didSendHandshakeRequest(WTFMove(request));
+    g_signal_connect(msg, "starting", G_CALLBACK(+[](SoupMessage* msg, WebSocketTask* task) {
+        WebCore::ResourceRequest request;
+        request.updateFromSoupMessage(msg);
+        task->m_channel.didSendHandshakeRequest(WTFMove(request));
+    }), this);
 }
 
 WebSocketTask::~WebSocketTask()
 {
+    if (m_handshakeMessage)
+        g_signal_handlers_disconnect_by_data(m_handshakeMessage.get(), this);
+
     cancel();
 }
 
@@ -131,6 +136,7 @@ void WebSocketTask::didConnect(GRefPtr<SoupWebsocketConnection>&& connection)
     WebCore::ResourceResponse response;
     response.updateFromSoupMessage(m_handshakeMessage.get());
     m_channel.didReceiveHandshakeResponse(WTFMove(response));
+    g_signal_handlers_disconnect_by_data(m_handshakeMessage.get(), this);
     m_handshakeMessage = nullptr;
 }
 
@@ -170,6 +176,7 @@ void WebSocketTask::didFail(const String& errorMessage)
         WebCore::ResourceResponse response;
         response.updateFromSoupMessage(m_handshakeMessage.get());
         m_channel.didReceiveHandshakeResponse(WTFMove(response));
+        g_signal_handlers_disconnect_by_data(m_handshakeMessage.get(), this);
         m_handshakeMessage = nullptr;
     }
     m_channel.didReceiveMessageError(errorMessage);
