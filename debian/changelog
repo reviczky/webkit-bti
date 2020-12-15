@@ -1,3 +1,14 @@
+webkit2gtk (2.30.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+  * The WebKitGTK security advisory WSA-2020-0008 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    + CVE-2020-9952 (fixed in 2.28.3).
+    + CVE-2020-9948, CVE-2020-9951 (fixed in 2.30.0).
+    + CVE-2020-9983, CVE-2020-13584 (fixed in 2.30.3).
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 15 Dec 2020 15:23:01 +0100
+
 webkit2gtk (2.30.3-1) unstable; urgency=high
 
   * New upstream release
