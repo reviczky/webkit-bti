@@ -8,7 +8,7 @@
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitWebContext.html" title="WebKitWebContext">
 <link rel="next" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest">
-<meta name="generator" content="GTK-Doc V1.32.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -823,7 +823,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
+<td class="property_type"><span class="type">double</span></td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--estimated-load-progress" title="The “estimated-load-progress” property">estimated-load-progress</a></td>
 <td class="property_flags">Read</td>
 </tr>
@@ -876,13 +876,13 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--title" title="The “title” property">title</a></td>
 <td class="property_flags">Read</td>
 </tr>
 <tr>
 <td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">char</span> *</td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--uri" title="The “uri” property">uri</a></td>
 <td class="property_flags">Read</td>
 </tr>
@@ -905,7 +905,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
+<td class="property_type"><span class="type">double</span></td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--zoom-level" title="The “zoom-level” property">zoom-level</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
@@ -2996,7 +2996,7 @@ a string:</p>
 43
 44</pre></td>
         <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span>
-<span class="nf">web_view_javascript_finished</span> <span class="p">(</span><span class="n">GObject</span>      <span class="o">*</span><span class="n">object</span><span class="p">,</span>
+<span class="n">web_view_javascript_finished</span> <span class="p">(</span><span class="n">GObject</span>      <span class="o">*</span><span class="n">object</span><span class="p">,</span>
                               <span class="n">GAsyncResult</span> <span class="o">*</span><span class="n">result</span><span class="p">,</span>
                               <span class="n">gpointer</span>      <span class="n">user_data</span><span class="p">)</span>
 <span class="p">{</span>
@@ -3021,7 +3021,7 @@ a string:</p>
         <span class="k">if</span> <span class="p">(</span><span class="n">exception</span><span class="p">)</span>
             <span class="n">g_warning</span> <span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span> <span class="n">jsc_exception_get_message</span> <span class="p">(</span><span class="n">exception</span><span class="p">));</span>
         <span class="k">else</span>
-            <span class="n">g_print</span> <span class="p">(</span><span class="s">&quot;Script result: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">str_value</span><span class="p">);</span>
+            <span class="nf">g_print</span> <span class="p">(</span><span class="s">&quot;Script result: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">str_value</span><span class="p">);</span>
         <span class="n">g_free</span> <span class="p">(</span><span class="n">str_value</span><span class="p">);</span>
     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
         <span class="n">g_warning</span> <span class="p">(</span><span class="s">&quot;Error running javascript: unexpected return value&quot;</span><span class="p">);</span>
@@ -3030,7 +3030,7 @@ a string:</p>
 <span class="p">}</span>
 
 <span class="k">static</span> <span class="kt">void</span>
-<span class="nf">web_view_get_link_url</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
+<span class="n">web_view_get_link_url</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
                        <span class="k">const</span> <span class="n">gchar</span>   <span class="o">*</span><span class="n">link_id</span><span class="p">)</span>
 <span class="p">{</span>
     <span class="n">gchar</span> <span class="o">*</span><span class="n">script</span><span class="p">;</span>
@@ -3754,7 +3754,7 @@ Note that the parent window must have a RGBA visual and
 14
 15
 16</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span> <span class="nf">browser_window_set_background_color</span> <span class="p">(</span><span class="n">BrowserWindow</span> <span class="o">*</span><span class="n">window</span><span class="p">,</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span> <span class="n">browser_window_set_background_color</span> <span class="p">(</span><span class="n">BrowserWindow</span> <span class="o">*</span><span class="n">window</span><span class="p">,</span>
                                                  <span class="k">const</span> <span class="n">GdkRGBA</span> <span class="o">*</span><span class="n">rgba</span><span class="p">)</span>
 <span class="p">{</span>
     <span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">;</span>
@@ -5221,7 +5221,7 @@ information see <a class="link" href="WebKitWebView.html#webkit-web-view-set-edi
 <hr>
 <div class="refsect2">
 <a name="WebKitWebView--estimated-load-progress"></a><h3>The <code class="literal">“estimated-load-progress”</code> property</h3>
-<pre class="programlisting">  “estimated-load-progress”  <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
+<pre class="programlisting">  “estimated-load-progress”  <span class="type">double</span></pre>
 <p>An estimate of the percent completion for the current loading operation.
 This value will range from 0.0 to 1.0 and, once a load completes,
 will remain at 1.0 until a new load starts, at which point it
@@ -5342,7 +5342,7 @@ web view is only valid during the object construction.</p>
 <hr>
 <div class="refsect2">
 <a name="WebKitWebView--title"></a><h3>The <code class="literal">“title”</code> property</h3>
-<pre class="programlisting">  “title”                    <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “title”                    <span class="type">char</span> *</pre>
 <p>The main frame document title of this <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>. If
 the title has not been received yet, it will be <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>.</p>
 <p>Owner: WebKitWebView</p>
@@ -5352,7 +5352,7 @@ the title has not been received yet, it will be <a href="../glib/glib-Standard-M
 <hr>
 <div class="refsect2">
 <a name="WebKitWebView--uri"></a><h3>The <code class="literal">“uri”</code> property</h3>
-<pre class="programlisting">  “uri”                      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “uri”                      <span class="type">char</span> *</pre>
 <p>The current active URI of the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.
 See <a class="link" href="WebKitWebView.html#webkit-web-view-get-uri" title="webkit_web_view_get_uri ()"><code class="function">webkit_web_view_get_uri()</code></a> for more details.</p>
 <p>Owner: WebKitWebView</p>
@@ -5388,7 +5388,7 @@ See <a class="link" href="WebKitWebView.html#webkit-web-view-get-uri" title="web
 <hr>
 <div class="refsect2">
 <a name="WebKitWebView--zoom-level"></a><h3>The <code class="literal">“zoom-level”</code> property</h3>
-<pre class="programlisting">  “zoom-level”               <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
+<pre class="programlisting">  “zoom-level”               <span class="type">double</span></pre>
 <p>The zoom level of the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> content.
 See <a class="link" href="WebKitWebView.html#webkit-web-view-set-zoom-level" title="webkit_web_view_set_zoom_level ()"><code class="function">webkit_web_view_set_zoom_level()</code></a> for more details.</p>
 <p>Owner: WebKitWebView</p>
@@ -5719,7 +5719,7 @@ specific type when making the decision. For example:</p>
 25
 26</pre></td>
         <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="n">gboolean</span>
-<span class="nf">decide_policy_cb</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
+<span class="n">decide_policy_cb</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
                   <span class="n">WebKitPolicyDecision</span> <span class="o">*</span><span class="n">decision</span><span class="p">,</span>
                   <span class="n">WebKitPolicyDecisionType</span> <span class="n">type</span><span class="p">)</span>
 <span class="p">{</span>
@@ -5974,7 +5974,7 @@ load operation.</p>
 24
 25
 26</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span> <span class="nf">web_view_load_changed</span> <span class="p">(</span><span class="n">WebKitWebView</span>  <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span> <span class="n">web_view_load_changed</span> <span class="p">(</span><span class="n">WebKitWebView</span>  <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
                                    <span class="n">WebKitLoadEvent</span> <span class="n">load_event</span><span class="p">,</span>
                                    <span class="n">gpointer</span>        <span class="n">user_data</span><span class="p">)</span>
 <span class="p">{</span>
@@ -6040,7 +6040,7 @@ load operation.</p>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 user_function (<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>  *web_view,
                <a class="link" href="WebKitWebView.html#WebKitLoadEvent" title="enum WebKitLoadEvent"><span class="type">WebKitLoadEvent</span></a> load_event,
-               <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>          *failing_uri,
+               <span class="type">char</span>           *failing_uri,
                <a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a>         *error,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)</pre>
 <p>Emitted when an error occurs during a load operation.
@@ -6103,7 +6103,7 @@ You need to handle the signal if you want to provide your own error page.</p>
 <a name="WebKitWebView-load-failed-with-tls-errors"></a><h3>The <code class="literal">“load-failed-with-tls-errors”</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 user_function (<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>       *web_view,
-               <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>               *failing_uri,
+               <span class="type">char</span>                *failing_uri,
                <a href="../gio/GTlsCertificate.html#GTlsCertificate-struct"><span class="type">GTlsCertificate</span></a>     *certificate,
                <a href="../gio/gio-TLS-Overview.html#GTlsCertificateFlags"><span class="type">GTlsCertificateFlags</span></a> errors,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>             user_data)</pre>
@@ -6257,7 +6257,7 @@ allowing the user decide what to do with the request:</p>
 22
 23
 24</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="n">gboolean</span> <span class="nf">permission_request_cb</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="n">gboolean</span> <span class="n">permission_request_cb</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
                                        <span class="n">WebKitPermissionRequest</span> <span class="o">*</span><span class="n">request</span><span class="p">,</span>
                                        <span class="n">GtkWindow</span> <span class="o">*</span><span class="n">parent_window</span><span class="p">)</span>
 <span class="p">{</span>
@@ -6968,6 +6968,6 @@ to <em class="parameter"><code>reason</code></em>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.32.1</div>
+<hr>Generated by GTK-Doc V1.33.0</div>
 </body>
 </html>
