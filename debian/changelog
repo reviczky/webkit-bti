@@ -1,3 +1,23 @@
+webkit2gtk (2.30.4-2) UNRELEASED; urgency=medium
+
+  * Remove some obsolete build dependencies (Closes: #979170):
+    + gawk is not needed since WebKitGTK switched from autotools to CMake.
+    + libgeoclue-2-dev and geoclue-2.0 are not required since WebKitGTK
+      2.25.1 (upstream bug 195994).
+    + libupower-glib-dev is not required since WebKitGTK 2.19.92 (upstream
+      bug 181825).
+    + libfile-copy-recursive-perl is not required since WebKitGTK 2.19.3
+      (upstream bug 180479).
+    + mesa-common-dev used to provide GL/gl.h but this header is now in
+      libgl-dev.
+    + libgles2-mesa-dev used to provide GLES3/gl3.h but this header is now
+      in libgles-dev.
+    + libgl1-mesa-dev and libgles2-mesa-dev are now dummy packages.
+    + libpango1.0-dev is not checked for any specific version at build
+      time so there's no need to list it.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
+
 webkit2gtk (2.30.4-1) unstable; urgency=high
 
   * New upstream release.
