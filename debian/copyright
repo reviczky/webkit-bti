@@ -2783,7 +2783,7 @@ License: MPL-2.0
 Files: debian/*
 Copyright: 2007-2009 Mike Hommey <glandium@debian.org>
            2009 Gustavo Noronha Silva <kov@debian.org>
-           2014-2020 Alberto Garcia <berto@igalia.com>
+           2014-2021 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+
 
 License: AFL-2.0
