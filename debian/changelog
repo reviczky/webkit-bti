@@ -26,6 +26,8 @@ webkit2gtk (2.31.1-1) UNRELEASED; urgency=medium
     + Update copyright years.
   * debian/watch, debian/gbp.conf:
     + Update for 2.31.x packages in experimental.
+  * Use -DFORCE_32BIT on 32-bit builds.
+    + This replaces debian/patches/fix-ftbfs-x86.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
 

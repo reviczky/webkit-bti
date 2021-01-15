@@ -11,6 +11,7 @@ DH_GENCONTROL_ARGS =
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_BUILD_ARCH_BITS),32)
+	EXTRA_CMAKE_ARGUMENTS += -DFORCE_32BIT=ON
 	LDFLAGS += -Wl,--no-keep-memory
 endif
 
