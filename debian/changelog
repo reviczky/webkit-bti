@@ -31,6 +31,8 @@ webkit2gtk (2.31.1-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/control:
     + Add build dependency on libmanette-0.2-dev.
+  * debian/NEWS:
+    - Add item explaining the removal of support for NPAPI plugins.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
 

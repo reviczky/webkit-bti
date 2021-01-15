@@ -1,3 +1,14 @@
+webkit2gtk (2.31.1-1) experimental; urgency=medium
+
+  Starting from the 2.31.x development versions, support for NPAPI
+  plugins has been completely removed from WebKitGTK. This technology is
+  deprecated and has already been removed from all major web browsers.
+
+  The last important user of this API was the Adobe Flash Player, which
+  reached end of life in December 2020.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 15 Jan 2021 17:31:53 +0100
+
 webkit2gtk (2.20.0-2) unstable; urgency=medium
 
   webkit2gtk 2.20.0 contains a security feature named Gigacage that
