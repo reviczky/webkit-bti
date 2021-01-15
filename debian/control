@@ -21,6 +21,7 @@ Build-Depends: bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64]
                libicu-dev,
                libgcrypt20-dev (>= 1.7.0),
                libhyphen-dev,
+               libmanette-0.2-dev (>= 0.2.4),
                libnotify-dev,
                libxslt1-dev (>= 1.1.7),
                libxml2-dev (>= 2.8),
