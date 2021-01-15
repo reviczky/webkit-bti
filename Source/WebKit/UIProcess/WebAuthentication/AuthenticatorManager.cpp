@@ -31,6 +31,7 @@
 #include "APIUIClient.h"
 #include "APIWebAuthenticationPanel.h"
 #include "APIWebAuthenticationPanelClient.h"
+#include "AuthenticatorPresenterCoordinator.h"
 #include "LocalService.h"
 #include "NfcService.h"
 #include "WebPageProxy.h"
@@ -133,13 +134,6 @@ static void processGoogleLegacyAppIdSupportExtension(const Optional<Authenticati
     transports.remove(AuthenticatorTransport::Internal);
 }
 
-static bool isFeatureEnabled(WebPageProxy* page, const String& featureKey)
-{
-    if (!page)
-        return false;
-    return page->preferences().store().getBoolValueForKey(featureKey);
-}
-
 static String getRpId(const Variant<PublicKeyCredentialCreationOptions, PublicKeyCredentialRequestOptions>& options)
 {
     if (WTF::holds_alternative<PublicKeyCredentialCreationOptions>(options))
@@ -170,7 +164,15 @@ void AuthenticatorManager::handleRequest(WebAuthenticationRequestData&& data, Ca
 
     // 2. Ask clients to show appropriate UI if any and then start the request.
     initTimeOutTimer();
-    runPanel();
+
+    // FIXME<rdar://problem/70822834>: The m_webAuthenticationModernEnabled is used to determine
+    // whether or not we are in the UIProcess.
+    // If so, continue to the old route. Otherwise, use the modern WebAuthn process way.
+    if (!m_webAuthenticationModernEnabled) {
+        runPanel();
+        return;
+    }
+    runPresenter();
 }
 
 void AuthenticatorManager::cancelRequest(const PageIdentifier& pageID, const Optional<FrameIdentifier>& frameID)
@@ -197,6 +199,19 @@ void AuthenticatorManager::cancelRequest(const API::WebAuthenticationPanel& pane
     cancelRequest();
 }
 
+void AuthenticatorManager::cancel()
+{
+    RELEASE_ASSERT(RunLoop::isMain());
+    if (!m_pendingCompletionHandler)
+        return;
+    cancelRequest();
+}
+
+void AuthenticatorManager::enableModernWebAuthentication()
+{
+    m_webAuthenticationModernEnabled = true;
+}
+
 void AuthenticatorManager::clearStateAsync()
 {
     RunLoop::main().dispatch([weakThis = makeWeakPtr(*this)] {
@@ -213,6 +228,7 @@ void AuthenticatorManager::clearState()
     m_authenticators.clear();
     m_services.clear();
     m_pendingRequestData = { };
+    m_presenter = nullptr;
 }
 
 void AuthenticatorManager::authenticatorAdded(Ref<Authenticator>&& authenticator)
@@ -220,12 +236,19 @@ void AuthenticatorManager::authenticatorAdded(Ref<Authenticator>&& authenticator
     ASSERT(RunLoop::isMain());
     authenticator->setObserver(*this);
     authenticator->handleRequest(m_pendingRequestData);
+    authenticator->setWebAuthenticationModernEnabled(m_webAuthenticationModernEnabled);
     auto addResult = m_authenticators.add(WTFMove(authenticator));
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
 }
 
 void AuthenticatorManager::serviceStatusUpdated(WebAuthenticationStatus status)
 {
+    // This is for the new UI.
+    if (m_presenter) {
+        m_presenter->updatePresenter(status);
+        return;
+    }
+
     dispatchPanelClientCall([status] (const API::WebAuthenticationPanel& panel) {
         panel.client().updatePanel(status);
     });
@@ -268,6 +291,12 @@ void AuthenticatorManager::authenticatorStatusUpdated(WebAuthenticationStatus st
     // an error. We don't really care what kind of error it really is.
     m_pendingRequestData.cachedPin = String();
 
+    // This is for the new UI.
+    if (m_presenter) {
+        m_presenter->updatePresenter(status);
+        return;
+    }
+
     dispatchPanelClientCall([status] (const API::WebAuthenticationPanel& panel) {
         panel.client().updatePanel(status);
     });
@@ -292,6 +321,12 @@ void AuthenticatorManager::requestPin(uint64_t retries, CompletionHandler<void(c
         completionHandler(pin);
     };
 
+    // This is for the new UI.
+    if (m_presenter) {
+        m_presenter->requestPin(retries, WTFMove(callback));
+        return;
+    }
+
     dispatchPanelClientCall([retries, callback = WTFMove(callback)] (const API::WebAuthenticationPanel& panel) mutable {
         panel.client().requestPin(retries, WTFMove(callback));
     });
@@ -299,6 +334,12 @@ void AuthenticatorManager::requestPin(uint64_t retries, CompletionHandler<void(c
 
 void AuthenticatorManager::selectAssertionResponse(Vector<Ref<WebCore::AuthenticatorAssertionResponse>>&& responses, WebAuthenticationSource source, CompletionHandler<void(AuthenticatorAssertionResponse*)>&& completionHandler)
 {
+    // This is for the new UI.
+    if (m_presenter) {
+        m_presenter->selectAssertionResponse(WTFMove(responses), source, WTFMove(completionHandler));
+        return;
+    }
+
     dispatchPanelClientCall([responses = WTFMove(responses), source, completionHandler = WTFMove(completionHandler)] (const API::WebAuthenticationPanel& panel) mutable {
         panel.client().selectAssertionResponse(WTFMove(responses), source, WTFMove(completionHandler));
     });
@@ -309,6 +350,16 @@ void AuthenticatorManager::decidePolicyForLocalAuthenticator(CompletionHandler<v
     dispatchPanelClientCall([completionHandler = WTFMove(completionHandler)] (const API::WebAuthenticationPanel& panel) mutable {
         panel.client().decidePolicyForLocalAuthenticator(WTFMove(completionHandler));
     });
+}
+
+void AuthenticatorManager::requestLAContextForUserVerification(CompletionHandler<void(LAContext *)>&& completionHandler)
+{
+    if (!m_presenter) {
+        completionHandler(nullptr);
+        return;
+    }
+
+    m_presenter->requestLAContextForUserVerification(WTFMove(completionHandler));
 }
 
 void AuthenticatorManager::cancelRequest()
@@ -330,8 +381,6 @@ void AuthenticatorManager::filterTransports(TransportSet& transports) const
     if (!LocalService::isAvailable())
         transports.remove(AuthenticatorTransport::Internal);
 
-    if (!isFeatureEnabled(m_pendingRequestData.page.get(), WebPreferencesKey::webAuthenticationLocalAuthenticatorEnabledKey()))
-        transports.remove(AuthenticatorTransport::Internal);
     // Local authenticator might invoke system UI which should definitely not be able to trigger by scripts automatically.
     if (!m_pendingRequestData.processingUserGesture)
         transports.remove(AuthenticatorTransport::Internal);
@@ -342,9 +391,6 @@ void AuthenticatorManager::startDiscovery(const TransportSet& transports)
     ASSERT(RunLoop::isMain());
     ASSERT(m_services.isEmpty() && transports.size() <= maxTransportNumber);
     for (auto& transport : transports) {
-        // Only allow USB authenticators when clients don't have dedicated UI.
-        if (transport != AuthenticatorTransport::Usb && (m_pendingRequestData.panelResult == WebAuthenticationPanelResult::Unavailable))
-            continue;
         auto service = createService(transport, *this);
         service->startDiscovery();
         m_services.append(WTFMove(service));
@@ -391,16 +437,33 @@ void AuthenticatorManager::runPanel()
             || (result == WebAuthenticationPanelResult::DidNotPresent)
             || (weakPanel.get() != m_pendingRequestData.panel.get()))
             return;
-        m_pendingRequestData.panelResult = result;
         startDiscovery(transports);
     });
 }
 
+void AuthenticatorManager::runPresenter()
+{
+    // Get available transports and start discovering authenticators on them.
+    auto& options = m_pendingRequestData.options;
+    auto transports = getTransports();
+    startDiscovery(transports);
+
+    m_presenter = makeUnique<AuthenticatorPresenterCoordinator>(*this, getRpId(options), transports, getClientDataType(options));
+}
+
 void AuthenticatorManager::invokePendingCompletionHandler(Respond&& respond)
 {
-    dispatchPanelClientCall([result = WTF::holds_alternative<Ref<AuthenticatorResponse>>(respond) ? WebAuthenticationResult::Succeeded : WebAuthenticationResult::Failed] (const API::WebAuthenticationPanel& panel) {
-        panel.client().dismissPanel(result);
-    });
+    auto result = WTF::holds_alternative<Ref<AuthenticatorResponse>>(respond) ? WebAuthenticationResult::Succeeded : WebAuthenticationResult::Failed;
+
+    // This is for the new UI.
+    if (m_presenter)
+        m_presenter->dimissPresenter(result);
+    else {
+        dispatchPanelClientCall([result] (const API::WebAuthenticationPanel& panel) {
+            panel.client().dismissPanel(result);
+        });
+    }
+
     m_pendingCompletionHandler(WTFMove(respond));
 }
 

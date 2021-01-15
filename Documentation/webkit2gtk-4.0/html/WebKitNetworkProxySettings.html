@@ -82,10 +82,16 @@
 <col width="150px" class="other_proto_type">
 <col class="other_proto_name">
 </colgroup>
-<tbody><tr>
+<tbody>
+<tr>
 <td class="datatype_keyword"> </td>
 <td class="function_name"><a class="link" href="WebKitNetworkProxySettings.html#WebKitNetworkProxySettings-struct" title="WebKitNetworkProxySettings">WebKitNetworkProxySettings</a></td>
-</tr></tbody>
+</tr>
+<tr>
+<td class="datatype_keyword">enum</td>
+<td class="function_name"><a class="link" href="WebKitNetworkProxySettings.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode">WebKitNetworkProxyMode</a></td>
+</tr>
+</tbody>
 </table></div>
 </div>
 <div class="refsect1">
@@ -98,7 +104,7 @@
 <a name="WebKitNetworkProxySettings.description"></a><h2>Description</h2>
 <p>WebKitNetworkProxySettings can be used to provide a custom proxy configuration
 to a <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. You need to call <a class="link" href="WebKitWebContext.html#webkit-web-context-set-network-proxy-settings" title="webkit_web_context_set_network_proxy_settings ()"><code class="function">webkit_web_context_set_network_proxy_settings()</code></a>
-with <a class="link" href="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> and a WebKitNetworkProxySettings.</p>
+with <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> and a WebKitNetworkProxySettings.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitNetworkProxySettings.functions_details"></a><h2>Functions</h2>
@@ -271,6 +277,45 @@ all three of the socks5, socks4a, and socks4 proxy types.</p>
 <div class="refsect2">
 <a name="WebKitNetworkProxySettings-struct"></a><h3>WebKitNetworkProxySettings</h3>
 <pre class="programlisting">typedef struct _WebKitNetworkProxySettings WebKitNetworkProxySettings;</pre>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitNetworkProxyMode"></a><h3>enum WebKitNetworkProxyMode</h3>
+<p>Enum values used to set the network proxy mode.</p>
+<div class="refsect3">
+<a name="WebKitNetworkProxyMode.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="300px" class="enum_members_name">
+<col class="enum_members_description">
+<col width="200px" class="enum_members_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-NETWORK-PROXY-MODE-DEFAULT:CAPS"></a>WEBKIT_NETWORK_PROXY_MODE_DEFAULT</p></td>
+<td class="enum_member_description">
+<p>Use the default proxy of the system.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-NETWORK-PROXY-MODE-NO-PROXY:CAPS"></a>WEBKIT_NETWORK_PROXY_MODE_NO_PROXY</p></td>
+<td class="enum_member_description">
+<p>Do not use any proxy.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"></a>WEBKIT_NETWORK_PROXY_MODE_CUSTOM</p></td>
+<td class="enum_member_description">
+<p>Use custom proxy settings.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
 </div>
 <div class="refsect1">

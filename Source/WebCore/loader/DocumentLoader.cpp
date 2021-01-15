@@ -67,7 +67,10 @@
 #include "LoaderStrategy.h"
 #include "Logging.h"
 #include "MemoryCache.h"
+#include "MixedContentChecker.h"
+#include "NavigationScheduler.h"
 #include "NetworkLoadMetrics.h"
+#include "NetworkStorageSession.h"
 #include "Page.h"
 #include "PingLoader.h"
 #include "PlatformStrategies.h"
@@ -114,10 +117,18 @@
 #include "QuickLook.h"
 #endif
 
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#include "NetworkStorageSession.h"
+#endif
+
 #define PAGE_ID ((m_frame ? m_frame->pageID().valueOr(PageIdentifier()) : PageIdentifier()).toUInt64())
 #define FRAME_ID ((m_frame ? m_frame->frameID().valueOr(FrameIdentifier()) : FrameIdentifier()).toUInt64())
 #define IS_MAIN_FRAME (m_frame ? m_frame->isMainFrame() : false)
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] DocumentLoader::" fmt, this, PAGE_ID, FRAME_ID, IS_MAIN_FRAME, ##__VA_ARGS__)
+
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/DocumentLoaderAdditions.cpp>
+#endif
 
 namespace WebCore {
 
@@ -277,13 +288,25 @@ void DocumentLoader::mainReceivedError(const ResourceError& error)
     frameLoader()->receivedMainResourceError(error);
 }
 
+void DocumentLoader::frameDestroyed()
+{
+    RELEASE_LOG_IF_ALLOWED("DocumentLoader::frameDestroyed: m_frame=%p", m_frame.get());
+    FrameDestructionObserver::frameDestroyed();
+}
+
 // Cancels the data source's pending loads.  Conceptually, a data source only loads
 // one document at a time, but one document may have many related resources. 
 // stopLoading will stop all loads initiated by the data source, 
 // but not loads initiated by child frames' data sources -- that's the WebFrame's job.
 void DocumentLoader::stopLoading()
 {
-    RefPtr<Frame> protectedFrame(m_frame);
+    RELEASE_LOG_IF_ALLOWED("DocumentLoader::stopLoading: m_frame=%p", m_frame.get());
+
+    ASSERT(m_frame);
+    if (!m_frame)
+        return;
+
+    RefPtr<Frame> protectedFrame(m_frame.get());
     Ref<DocumentLoader> protectedThis(*this);
 
     // In some rare cases, calling FrameLoader::stopLoading could cause isLoading() to return false.
@@ -297,11 +320,11 @@ void DocumentLoader::stopLoading()
         Document* doc = m_frame->document();
         
         if (loading || doc->parsing())
-            m_frame->loader().stopLoading(UnloadEventPolicyNone);
+            m_frame->loader().stopLoading(UnloadEventPolicy::None);
     }
 
-    for (auto callbackIdentifier : m_iconLoaders.values())
-        notifyFinishedLoadingIcon(callbackIdentifier, nullptr);
+    for (auto& callback : m_iconLoaders.values())
+        callback(nullptr);
     m_iconLoaders.clear();
     m_iconsPendingLoadDecision.clear();
     
@@ -418,7 +441,7 @@ void DocumentLoader::finishedLoading()
     // There is a bug in CFNetwork where callbacks can be dispatched even when loads are deferred.
     // See <rdar://problem/6304600> for more details.
 #if !USE(CF)
-    ASSERT(!m_frame->page()->defersLoading() || frameLoader()->stateMachine().creatingInitialEmptyDocument() || InspectorInstrumentation::isDebuggerPaused(m_frame));
+    ASSERT(!m_frame->page()->defersLoading() || frameLoader()->stateMachine().creatingInitialEmptyDocument() || InspectorInstrumentation::isDebuggerPaused(m_frame.get()));
 #endif
 
     Ref<DocumentLoader> protectedThis(*this);
@@ -599,7 +622,7 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
         Ref<SecurityOrigin> redirectingOrigin(SecurityOrigin::create(redirectResponse.url()));
         if (!redirectingOrigin.get().canDisplay(newRequest.url())) {
             RELEASE_LOG_IF_ALLOWED("willSendRequest: canceling - redirecting URL not allowed to display content from target");
-            FrameLoader::reportLocalLoadFailed(m_frame, newRequest.url().string());
+            FrameLoader::reportLocalLoadFailed(m_frame.get(), newRequest.url().string());
             cancelMainResourceLoad(frameLoader()->cancelledError(newRequest));
             return completionHandler(WTFMove(newRequest));
         }
@@ -638,11 +661,11 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
         newRequest.setCachePolicy(ResourceRequestCachePolicy::ReloadIgnoringCacheData);
 
     if (&topFrame != m_frame) {
-        if (!m_frame->loader().mixedContentChecker().canDisplayInsecureContent(m_frame->document()->securityOrigin(), MixedContentChecker::ContentType::Active, newRequest.url(), MixedContentChecker::AlwaysDisplayInNonStrictMode::Yes)) {
+        if (!MixedContentChecker::canDisplayInsecureContent(*m_frame, m_frame->document()->securityOrigin(), MixedContentChecker::ContentType::Active, newRequest.url(), MixedContentChecker::AlwaysDisplayInNonStrictMode::Yes)) {
             cancelMainResourceLoad(frameLoader()->cancelledError(newRequest));
             return completionHandler(WTFMove(newRequest));
         }
-        if (!frameLoader()->mixedContentChecker().canDisplayInsecureContent(topFrame.document()->securityOrigin(), MixedContentChecker::ContentType::Active, newRequest.url())) {
+        if (!MixedContentChecker::canDisplayInsecureContent(*m_frame, topFrame.document()->securityOrigin(), MixedContentChecker::ContentType::Active, newRequest.url())) {
             cancelMainResourceLoad(frameLoader()->cancelledError(newRequest));
             return completionHandler(WTFMove(newRequest));
         }
@@ -765,9 +788,33 @@ void DocumentLoader::stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(
         cancelMainResourceLoad(frameLoader->cancelledError(m_request));
 }
 
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+static URL microsoftTeamsRedirectURL()
+{
+    return URL(URL(), "https://www.microsoft.com/en-us/microsoft-365/microsoft-teams/");
+}
+#endif
+
 void DocumentLoader::responseReceived(CachedResource& resource, const ResourceResponse& response, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT_UNUSED(resource, m_mainResource == &resource);
+
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    // FIXME(218779): Remove this quirk once microsoft.com completes their login flow redesign.
+    if (m_frame && m_frame->document()) {
+        auto& document = *m_frame->document();
+        if (Quirks::isMicrosoftTeamsRedirectURL(response.url())) {
+            auto firstPartyDomain = RegistrableDomain(response.url());
+            if (auto loginDomains = NetworkStorageSession::subResourceDomainsInNeedOfStorageAccessForFirstParty(firstPartyDomain)) {
+                if (!Quirks::hasStorageAccessForAllLoginDomains(*loginDomains, firstPartyDomain)) {
+                    m_frame->navigationScheduler().scheduleRedirect(document, 0, microsoftTeamsRedirectURL());
+                    return;
+                }
+            }
+        }
+    }
+#endif
+
 #if ENABLE(SERVICE_WORKER)
     if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && response.source() == ResourceResponse::Source::MemoryCache) {
         matchRegistration(response.url(), [this, protectedThis = makeRef(*this), response, completionHandler = WTFMove(completionHandler)](auto&& registrationData) mutable {
@@ -1048,7 +1095,7 @@ void DocumentLoader::commitLoad(const char* data, int length)
 {
     // Both unloading the old page and parsing the new page may execute JavaScript which destroys the datasource
     // by starting a new load, so retain temporarily.
-    RefPtr<Frame> protectedFrame(m_frame);
+    RefPtr<Frame> protectedFrame(m_frame.get());
     Ref<DocumentLoader> protectedThis(*this);
 
     commitIfReady();
@@ -1257,6 +1304,9 @@ void DocumentLoader::applyPoliciesToSettings()
 #if ENABLE(TEXT_AUTOSIZING)
     m_frame->settings().setIdempotentModeAutosizingOnlyHonorsPercentages(m_idempotentModeAutosizingOnlyHonorsPercentages);
 #endif
+#if USE(APPLE_INTERNAL_SDK)
+    updateAdditionalSettingsIfNeeded();
+#endif
 }
 
 MouseEventPolicy DocumentLoader::mouseEventPolicy() const
@@ -1292,17 +1342,20 @@ void DocumentLoader::attachToFrame(Frame& frame)
 void DocumentLoader::attachToFrame()
 {
     ASSERT(m_frame);
+    RELEASE_LOG_IF_ALLOWED("DocumentLoader::attachToFrame: m_frame=%p", m_frame.get());
 }
 
 void DocumentLoader::detachFromFrame()
 {
+    RELEASE_LOG_IF_ALLOWED("DocumentLoader::detachFromFrame: m_frame=%p", m_frame.get());
+
 #if ASSERT_ENABLED
     if (m_hasEverBeenAttached)
         ASSERT_WITH_MESSAGE(m_frame, "detachFromFrame() is being called on a DocumentLoader twice without an attachToFrame() inbetween");
     else
         ASSERT_WITH_MESSAGE(m_frame, "detachFromFrame() is being called on a DocumentLoader that has never attached to any Frame");
 #endif
-    RefPtr<Frame> protectedFrame(m_frame);
+    RefPtr<Frame> protectedFrame(m_frame.get());
     Ref<DocumentLoader> protectedThis(*this);
 
     // It never makes sense to have a document loader that is detached from its
@@ -1411,7 +1464,7 @@ bool DocumentLoader::isLoadingInAPISense() const
 {
     // Once a frame has loaded, we no longer need to consider subresources,
     // but we still need to consider subframes.
-    if (frameLoader()->state() != FrameStateComplete) {
+    if (frameLoader()->state() != FrameState::Complete) {
         if (m_frame->settings().needsIsLoadingInAPISenseQuirk() && !m_subresourceLoaders.isEmpty())
             return true;
 
@@ -1787,8 +1840,8 @@ void DocumentLoader::removeSubresourceLoader(LoadCompletionType type, ResourceLo
     if (!m_subresourceLoaders.remove(loader->identifier()))
         return;
     checkLoadComplete();
-    if (Frame* frame = m_frame)
-        frame->loader().subresourceLoadDone(type);
+    if (m_frame)
+        m_frame->loader().subresourceLoadDone(type);
 }
 
 void DocumentLoader::addPlugInStreamLoader(ResourceLoader& loader)
@@ -1826,7 +1879,7 @@ bool DocumentLoader::maybeLoadEmpty()
     }
 
     String mimeType = shouldLoadEmpty ? "text/html" : frameLoader()->client().generatedMIMETypeForURLScheme(m_request.url().protocol().toStringWithoutCopying());
-    m_response = ResourceResponse(m_request.url(), mimeType, 0, String());
+    m_response = ResourceResponse(m_request.url(), mimeType, 0, "UTF-8"_s);
     finishedLoading();
     return true;
 }
@@ -2073,8 +2126,8 @@ void DocumentLoader::subresourceLoaderFinishedLoadingOnePart(ResourceLoader* loa
     }
 
     checkLoadComplete();
-    if (Frame* frame = m_frame)
-        frame->loader().checkLoadComplete();    
+    if (m_frame)
+        m_frame->loader().checkLoadComplete();
 }
 
 void DocumentLoader::maybeFinishLoadingMultipartContent()
@@ -2121,25 +2174,23 @@ void DocumentLoader::startIconLoading()
     m_frame->loader().client().getLoadDecisionForIcons(iconDecisions);
 }
 
-void DocumentLoader::didGetLoadDecisionForIcon(bool decision, uint64_t loadIdentifier, uint64_t newCallbackID)
+void DocumentLoader::didGetLoadDecisionForIcon(bool decision, uint64_t loadIdentifier, CompletionHandler<void(SharedBuffer*)>&& completionHandler)
 {
     auto icon = m_iconsPendingLoadDecision.take(loadIdentifier);
 
     // If the decision was not to load or this DocumentLoader is already detached, there is no load to perform.
     if (!decision || !m_frame)
-        return;
+        return completionHandler(nullptr);
 
     // If the LinkIcon we just took is empty, then the DocumentLoader had all of its loaders stopped
     // while this icon load decision was pending.
     // In this case we need to notify the client that the icon finished loading with empty data.
-    if (icon.url.isEmpty()) {
-        notifyFinishedLoadingIcon(newCallbackID, nullptr);
-        return;
-    }
+    if (icon.url.isEmpty())
+        return completionHandler(nullptr);
 
     auto iconLoader = makeUnique<IconLoader>(*this, icon.url);
     auto* rawIconLoader = iconLoader.get();
-    m_iconLoaders.set(WTFMove(iconLoader), newCallbackID);
+    m_iconLoaders.add(WTFMove(iconLoader), WTFMove(completionHandler));
 
     rawIconLoader->startLoading();
 }
@@ -2149,15 +2200,8 @@ void DocumentLoader::finishedLoadingIcon(IconLoader& loader, SharedBuffer* buffe
     // If the DocumentLoader has detached from its frame, all icon loads should have already been cancelled.
     ASSERT(m_frame);
 
-    auto callbackIdentifier = m_iconLoaders.take(&loader);
-    notifyFinishedLoadingIcon(callbackIdentifier, buffer);
-}
-
-void DocumentLoader::notifyFinishedLoadingIcon(uint64_t callbackIdentifier, SharedBuffer* buffer)
-{
-    RELEASE_ASSERT(callbackIdentifier);
-    RELEASE_ASSERT(m_frame);
-    m_frame->loader().client().finishedLoadingIcon(callbackIdentifier, buffer);
+    if (auto callback = m_iconLoaders.take(&loader))
+        callback(buffer);
 }
 
 void DocumentLoader::dispatchOnloadEvents()

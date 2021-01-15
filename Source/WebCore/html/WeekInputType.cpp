@@ -32,6 +32,7 @@
 #if ENABLE(INPUT_TYPE_WEEK)
 #include "WeekInputType.h"
 
+#include "DateComponents.h"
 #include "Decimal.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
@@ -52,9 +53,9 @@ const AtomString& WeekInputType::formControlType() const
     return InputTypeNames::week();
 }
 
-DateComponents::Type WeekInputType::dateType() const
+DateComponentsType WeekInputType::dateType() const
 {
-    return DateComponents::Week;
+    return DateComponentsType::Week;
 }
 
 StepRange WeekInputType::createStepRange(AnyStepHandling anyStepHandling) const
@@ -80,6 +81,24 @@ Optional<DateComponents> WeekInputType::setMillisecondToDateComponents(double va
 bool WeekInputType::isWeekField() const
 {
     return true;
+}
+
+void WeekInputType::handleDOMActivateEvent(Event&)
+{
+}
+
+bool WeekInputType::isValidFormat(OptionSet<DateTimeFormatValidationResults> results) const
+{
+    return results.containsAll({ DateTimeFormatValidationResults::HasYear, DateTimeFormatValidationResults::HasWeek });
+}
+
+String WeekInputType::formatDateTimeFieldsState(const DateTimeFieldsState&) const
+{
+    return emptyString();
+}
+
+void WeekInputType::setupLayoutParameters(DateTimeEditElement::LayoutParameters&, const DateComponents&) const
+{
 }
 
 } // namespace WebCore

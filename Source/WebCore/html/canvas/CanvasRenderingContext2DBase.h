@@ -219,7 +219,16 @@ public:
     bool usesDisplayListDrawing() const { return m_usesDisplayListDrawing; };
     void setUsesDisplayListDrawing(bool flag) { m_usesDisplayListDrawing = flag; };
 
+    String font() const;
+
+    CanvasTextAlign textAlign() const;
+    void setTextAlign(CanvasTextAlign);
+
+    CanvasTextBaseline textBaseline() const;
+    void setTextBaseline(CanvasTextBaseline);
+
     using Direction = CanvasDirection;
+    void setDirection(Direction);
 
     class FontProxy : public FontSelectorClient {
     public:
@@ -307,6 +316,8 @@ protected:
     void didDrawEntireCanvas();
 
     void paintRenderingResultsToCanvas() override;
+    bool needsPreparationForDisplay() const final;
+    void prepareForDisplay() final;
 
     GraphicsContext* drawingContext() const;
 
@@ -358,7 +369,7 @@ protected:
     bool rectContainsCanvas(const FloatRect&) const;
 
     template<class T> IntRect calculateCompositingBufferRect(const T&, IntSize*);
-    std::unique_ptr<ImageBuffer> createCompositingBuffer(const IntRect&);
+    RefPtr<ImageBuffer> createCompositingBuffer(const IntRect&);
     void compositeBuffer(ImageBuffer&, const IntRect&, CompositeOperator);
 
     void inflateStrokeRect(FloatRect&) const;
@@ -369,9 +380,18 @@ protected:
 
     bool hasInvertibleTransform() const override { return state().hasInvertibleTransform; }
 
-#if ENABLE(ACCELERATED_2D_CANVAS)
-    PlatformLayer* platformLayer() const override;
-#endif
+    // The relationship between FontCascade and CanvasRenderingContext2D::FontProxy must hold certain invariants.
+    // Therefore, all font operations must pass through the proxy.
+    virtual const FontProxy* fontProxy() { return nullptr; }
+
+    static void normalizeSpaces(String&);
+    bool canDrawTextWithParams(float x, float y, bool fill, Optional<float> maxWidth = WTF::nullopt);
+    void drawText(const String& text, float x, float y, bool fill, Optional<float> maxWidth = WTF::nullopt);
+    void drawTextUnchecked(const TextRun&, float x, float y, bool fill, Optional<float> maxWidth = WTF::nullopt);
+    Ref<TextMetrics> measureTextInternal(const String& text);
+    Ref<TextMetrics> measureTextInternal(const TextRun&);
+
+    FloatPoint textOffset(float width, TextDirection);
 
     static const unsigned MaxSaveCount = 1024 * 16;
     Vector<State, 1> m_stateStack;

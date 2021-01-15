@@ -62,6 +62,14 @@
 <span class="returnvalue">void</span>
 </td>
 <td class="function_name">
+<a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-remove-style-sheet" title="webkit_user_content_manager_remove_style_sheet ()">webkit_user_content_manager_remove_style_sheet</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
 <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-style-sheets" title="webkit_user_content_manager_remove_all_style_sheets ()">webkit_user_content_manager_remove_all_style_sheets</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
@@ -71,6 +79,14 @@
 </td>
 <td class="function_name">
 <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-add-script" title="webkit_user_content_manager_add_script ()">webkit_user_content_manager_add_script</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-remove-script" title="webkit_user_content_manager_remove_script ()">webkit_user_content_manager_remove_script</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -243,6 +259,39 @@ The same <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserS
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-user-content-manager-remove-style-sheet"></a><h3>webkit_user_content_manager_remove_style_sheet ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_user_content_manager_remove_style_sheet
+                               (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager</code></em>,
+                                <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleSheet"><span class="type">WebKitUserStyleSheet</span></a> *stylesheet</code></em>);</pre>
+<p>Removes a <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleSheet"><span class="type">WebKitUserStyleSheet</span></a> from the given <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a>.</p>
+<p>See also <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-style-sheets" title="webkit_user_content_manager_remove_all_style_sheets ()"><code class="function">webkit_user_content_manager_remove_all_style_sheets()</code></a>.</p>
+<div class="refsect3">
+<a name="webkit-user-content-manager-remove-style-sheet.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>manager</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>stylesheet</p></td>
+<td class="parameter_description"><p>A <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleSheet"><span class="type">WebKitUserStyleSheet</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.32</p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-user-content-manager-remove-all-style-sheets"></a><h3>webkit_user_content_manager_remove_all_style_sheets ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_user_content_manager_remove_all_style_sheets
@@ -301,11 +350,45 @@ The same <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserS
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-user-content-manager-remove-script"></a><h3>webkit_user_content_manager_remove_script ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_user_content_manager_remove_script
+                               (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager</code></em>,
+                                <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScript"><span class="type">WebKitUserScript</span></a> *script</code></em>);</pre>
+<p>Removes a <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScript"><span class="type">WebKitUserScript</span></a> from the given <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a>.</p>
+<p>See also <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-scripts" title="webkit_user_content_manager_remove_all_scripts ()"><code class="function">webkit_user_content_manager_remove_all_scripts()</code></a>.</p>
+<div class="refsect3">
+<a name="webkit-user-content-manager-remove-script.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>manager</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>script</p></td>
+<td class="parameter_description"><p>A <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScript"><span class="type">WebKitUserScript</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.32</p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-user-content-manager-remove-all-scripts"></a><h3>webkit_user_content_manager_remove_all_scripts ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_user_content_manager_remove_all_scripts
                                (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager</code></em>);</pre>
 <p>Removes all user scripts from the given <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a></p>
+<p>See also <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-remove-script" title="webkit_user_content_manager_remove_script ()"><code class="function">webkit_user_content_manager_remove_script()</code></a>.</p>
 <div class="refsect3">
 <a name="webkit-user-content-manager-remove-all-scripts.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">

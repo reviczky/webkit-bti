@@ -1957,6 +1957,7 @@ webkit_settings_set_enable_offline_web_application_cache
 <a name="webkit-settings-get-enable-plugins"></a><h3>webkit_settings_get_enable_plugins ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_settings_get_enable_plugins (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_settings_get_enable_plugins</code> has been deprecated since version 2.32 and should not be used in newly-written code.</p></div>
 <p>Get the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-plugins" title="The “enable-plugins” property"><span class="type">“enable-plugins”</span></a> property.</p>
 <div class="refsect3">
 <a name="webkit-settings-get-enable-plugins.parameters"></a><h4>Parameters</h4>
@@ -1984,6 +1985,7 @@ webkit_settings_get_enable_plugins (<em class="parameter"><code><a class="link" 
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_settings_set_enable_plugins (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>,
                                     <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> enabled</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_settings_set_enable_plugins</code> has been deprecated since version 2.32 and should not be used in newly-written code.</p></div>
 <p>Set the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-plugins" title="The “enable-plugins” property"><span class="type">“enable-plugins”</span></a> property.</p>
 <div class="refsect3">
 <a name="webkit-settings-set-enable-plugins.parameters"></a><h4>Parameters</h4>
@@ -3994,6 +3996,7 @@ webkit_settings_set_enable_smooth_scrolling
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_settings_get_enable_accelerated_2d_canvas
                                (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_settings_get_enable_accelerated_2d_canvas</code> has been deprecated since version 2.32. and should not be used in newly-written code.</p></div>
 <p>Get the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-accelerated-2d-canvas" title="The “enable-accelerated-2d-canvas” property"><span class="type">“enable-accelerated-2d-canvas”</span></a> property.</p>
 <div class="refsect3">
 <a name="webkit-settings-get-enable-accelerated-2d-canvas.parameters"></a><h4>Parameters</h4>
@@ -4023,6 +4026,7 @@ webkit_settings_get_enable_accelerated_2d_canvas
 webkit_settings_set_enable_accelerated_2d_canvas
                                (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> enabled</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_settings_set_enable_accelerated_2d_canvas</code> has been deprecated since version 2.32. and should not be used in newly-written code.</p></div>
 <p>Set the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-accelerated-2d-canvas" title="The “enable-accelerated-2d-canvas” property"><span class="type">“enable-accelerated-2d-canvas”</span></a> property.</p>
 <div class="refsect3">
 <a name="webkit-settings-set-enable-accelerated-2d-canvas.parameters"></a><h4>Parameters</h4>
@@ -5128,6 +5132,7 @@ to web content that is composited with the GPU.</p>
 if WebKit was compiled with a version of Cairo including the unstable CairoGL API.
 When accelerated 2D canvas is enabled, WebKit may render some 2D canvas content
 using hardware accelerated drawing operations.</p>
+<div class="warning"><p><code class="literal">WebKitSettings:enable-accelerated-2d-canvas</code> has been deprecated since version 2.32. and should not be used in newly-written code.</p></div>
 <p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
@@ -5371,9 +5376,10 @@ http://webkit.org/blog/427/webkit-page-cache-i-the-basics/</p>
 <a name="WebKitSettings--enable-plugins"></a><h3>The <code class="literal">“enable-plugins”</code> property</h3>
 <pre class="programlisting">  “enable-plugins”           <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether or not plugins on the page are enabled.</p>
+<div class="warning"><p><code class="literal">WebKitSettings:enable-plugins</code> has been deprecated since version 2.32 and should not be used in newly-written code.</p></div>
 <p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
-<p>Default value: TRUE</p>
+<p>Default value: FALSE</p>
 </div>
 <hr>
 <div class="refsect2">

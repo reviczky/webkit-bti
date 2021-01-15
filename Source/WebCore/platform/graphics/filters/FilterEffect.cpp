@@ -79,7 +79,6 @@ FloatPoint FilterEffect::mapPointFromUserSpaceToBuffer(FloatPoint userSpacePoint
 
 IntRect FilterEffect::requestedRegionOfInputImageData(const IntRect& effectRect) const
 {
-    ASSERT(hasResult());
     IntPoint location = m_absolutePaintRect.location();
     location.moveBy(-effectRect.location());
     return IntRect(location, m_absolutePaintRect.size());
@@ -247,9 +246,7 @@ void FilterEffect::forceValidPreMultipliedPixels()
 
 void FilterEffect::clearResult()
 {
-    if (m_imageBufferResult)
-        m_imageBufferResult.reset();
-
+    m_imageBufferResult = nullptr;
     m_unmultipliedImageResult = nullptr;
     m_premultipliedImageResult = nullptr;
 }

@@ -36,7 +36,9 @@
 #include "CSSValuePool.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "DateComponents.h"
 #include "DateTimeChooser.h"
+#include "DateTimeChooserParameters.h"
 #include "Document.h"
 #include "Editor.h"
 #include "EventNames.h"
@@ -474,15 +476,15 @@ bool HTMLInputElement::isTextFormControlMouseFocusable() const
 void HTMLInputElement::updateFocusAppearance(SelectionRestorationMode restorationMode, SelectionRevealMode revealMode)
 {
     if (isTextField()) {
-        if (restorationMode == SelectionRestorationMode::SetDefault || !hasCachedSelection())
-            setDefaultSelectionAfterFocus(revealMode);
-        else
+        if (restorationMode == SelectionRestorationMode::RestoreOrSelectAll && hasCachedSelection())
             restoreCachedSelection(revealMode);
+        else
+            setDefaultSelectionAfterFocus(restorationMode, revealMode);
     } else
         HTMLTextFormControlElement::updateFocusAppearance(restorationMode, revealMode);
 }
 
-void HTMLInputElement::setDefaultSelectionAfterFocus(SelectionRevealMode revealMode)
+void HTMLInputElement::setDefaultSelectionAfterFocus(SelectionRestorationMode restorationMode, SelectionRevealMode revealMode)
 {
     ASSERT(isTextField());
     int start = 0;
@@ -492,7 +494,8 @@ void HTMLInputElement::setDefaultSelectionAfterFocus(SelectionRevealMode revealM
         start = std::numeric_limits<int>::max();
         direction = SelectionHasForwardDirection;
     }
-    setSelectionRange(start, std::numeric_limits<int>::max(), direction, revealMode, Element::defaultFocusTextStateChangeIntent());
+    int end = restorationMode == SelectionRestorationMode::PlaceCaretAtStart ? start : std::numeric_limits<int>::max();
+    setSelectionRange(start, end, direction, revealMode, Element::defaultFocusTextStateChangeIntent());
 }
 
 void HTMLInputElement::endEditing()
@@ -616,7 +619,7 @@ inline void HTMLInputElement::runPostTypeUpdateTasks()
         invalidateStyleAndRenderersForSubtree();
 
     if (document().focusedElement() == this)
-        updateFocusAppearance(SelectionRestorationMode::Restore, SelectionRevealMode::Reveal);
+        updateFocusAppearance(SelectionRestorationMode::RestoreOrSelectAll, SelectionRevealMode::Reveal);
 
     setChangedSinceLastFormControlChangeEvent(false);
 
@@ -762,8 +765,8 @@ void HTMLInputElement::parseAttribute(const QualifiedName& name, const AtomStrin
         if (!hasDirtyValue()) {
             updatePlaceholderVisibility();
             invalidateStyleForSubtree();
+            setFormControlValueMatchesRenderer(false);
         }
-        setFormControlValueMatchesRenderer(false);
         updateValidity();
         m_valueAttributeWasUpdatedAfterParsing = !m_parsingInProgress;
     } else if (name == checkedAttr) {
@@ -864,7 +867,7 @@ void HTMLInputElement::didAttachRenderers()
 
     if (document().focusedElement() == this) {
         document().view()->queuePostLayoutCallback([protectedThis = makeRef(*this)] {
-            protectedThis->updateFocusAppearance(SelectionRestorationMode::Restore, SelectionRevealMode::Reveal);
+            protectedThis->updateFocusAppearance(SelectionRestorationMode::RestoreOrSelectAll, SelectionRevealMode::Reveal);
         });
     }
 }
@@ -1675,7 +1678,7 @@ bool HTMLInputElement::isSteppable() const
     return m_inputType->isSteppable();
 }
 
-DateComponents::Type HTMLInputElement::dateType() const
+DateComponentsType HTMLInputElement::dateType() const
 {
     return m_inputType->dateType();
 }
@@ -2134,7 +2137,10 @@ bool HTMLInputElement::setupDateTimeChooserParameters(DateTimeChooserParameters&
     else
         parameters.anchorRectInRootView = IntRect();
     parameters.currentValue = value();
-    parameters.isAnchorElementRTL = computedStyle()->direction() == TextDirection::RTL;
+
+    auto* computedStyle = this->computedStyle();
+    parameters.isAnchorElementRTL = computedStyle->direction() == TextDirection::RTL;
+    parameters.useDarkAppearance = document().useDarkAppearance(computedStyle);
 
 #if ENABLE(DATALIST_ELEMENT)
     if (auto dataList = this->dataList()) {

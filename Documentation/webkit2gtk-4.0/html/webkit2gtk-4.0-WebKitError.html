@@ -340,7 +340,7 @@ webkit_user_content_filter_error_quark
 <hr>
 <div class="refsect2">
 <a name="WebKitPluginError"></a><h3>enum WebKitPluginError</h3>
-<p>Enum values used to denote the various plugin errors.</p>
+<p>Enum values used to denote the various plugin and multimedia errors.</p>
 <div class="refsect3">
 <a name="WebKitPluginError.members"></a><h4>Members</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -353,42 +353,42 @@ webkit_user_content_filter_error_quark
 <tr>
 <td class="enum_member_name"><p><a name="WEBKIT-PLUGIN-ERROR-FAILED:CAPS"></a>WEBKIT_PLUGIN_ERROR_FAILED</p></td>
 <td class="enum_member_description">
-<p>Generic plugin load failure</p>
+<p>Generic plugin load failure. Deprecated 2.32</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
 <tr>
 <td class="enum_member_name"><p><a name="WEBKIT-PLUGIN-ERROR-CANNOT-FIND-PLUGIN:CAPS"></a>WEBKIT_PLUGIN_ERROR_CANNOT_FIND_PLUGIN</p></td>
 <td class="enum_member_description">
-<p>Load failure due to missing plugin</p>
+<p>Load failure due to missing plugin. Deprecated 2.32</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
 <tr>
 <td class="enum_member_name"><p><a name="WEBKIT-PLUGIN-ERROR-CANNOT-LOAD-PLUGIN:CAPS"></a>WEBKIT_PLUGIN_ERROR_CANNOT_LOAD_PLUGIN</p></td>
 <td class="enum_member_description">
-<p>Load failure due to inability to load plugin</p>
+<p>Load failure due to inability to load plugin. Deprecated 2.32</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
 <tr>
 <td class="enum_member_name"><p><a name="WEBKIT-PLUGIN-ERROR-JAVA-UNAVAILABLE:CAPS"></a>WEBKIT_PLUGIN_ERROR_JAVA_UNAVAILABLE</p></td>
 <td class="enum_member_description">
-<p>Load failure due to missing Java support that is required to load plugin</p>
+<p>Load failure due to missing Java support that is required to load plugin. Deprecated 2.32</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
 <tr>
 <td class="enum_member_name"><p><a name="WEBKIT-PLUGIN-ERROR-CONNECTION-CANCELLED:CAPS"></a>WEBKIT_PLUGIN_ERROR_CONNECTION_CANCELLED</p></td>
 <td class="enum_member_description">
-<p>Load failure due to connection cancellation</p>
+<p>Load failure due to connection cancellation. Deprecated 2.32</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
 <tr>
 <td class="enum_member_name"><p><a name="WEBKIT-PLUGIN-ERROR-WILL-HANDLE-LOAD:CAPS"></a>WEBKIT_PLUGIN_ERROR_WILL_HANDLE_LOAD</p></td>
 <td class="enum_member_description">
-<p>Load failure since plugin handles the load</p>
+<p>Preliminary load failure for media content types. A new load will be started to perform the media load.</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>

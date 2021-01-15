@@ -25,11 +25,12 @@
 
 #pragma once
 
+#include "ColorComponents.h"
 #include "ColorSpace.h"
+#include <functional>
 
 namespace WebCore {
 
-template<typename> struct ColorComponents;
 template<typename> struct ComponentTraits;
 
 template<> struct ComponentTraits<uint8_t> {
@@ -41,6 +42,22 @@ template<> struct ComponentTraits<float> {
     static constexpr float minValue = 0.0f;
     static constexpr float maxValue = 1.0f;
 };
+
+template<typename, typename = void> inline constexpr bool HasColorSpaceMember = false;
+template<typename T> inline constexpr bool HasColorSpaceMember<T, std::void_t<decltype(std::declval<T>().colorSpace)>> = true;
+
+template<typename, typename = void> inline constexpr bool IsConvertibleToColorComponents = false;
+template<typename T> inline constexpr bool IsConvertibleToColorComponents<T, std::void_t<decltype(asColorComponents(std::declval<T>()))>> = true;
+
+template<typename, typename = void> inline constexpr bool HasComponentTypeMember = false;
+template<typename T> inline constexpr bool HasComponentTypeMember<T, std::void_t<typename T::ComponentType>> = true;
+
+template<typename T, typename U, bool enabled> inline constexpr bool HasComponentTypeValue = false;
+template<typename T, typename U> inline constexpr bool HasComponentTypeValue<T, U, true> = std::is_same_v<typename T::ComponentType, U>;
+template<typename T, typename U> inline constexpr bool HasComponentType = HasComponentTypeValue<T, U, HasComponentTypeMember<T>>;
+
+template<typename T> inline constexpr bool IsColorType = HasColorSpaceMember<T> && IsConvertibleToColorComponents<T> && HasComponentTypeMember<T>;
+template<typename T, typename U> inline constexpr bool IsColorTypeWithComponentType = HasColorSpaceMember<T> && IsConvertibleToColorComponents<T> && HasComponentType<T, U>;
 
 template<typename Parent> struct ColorWithAlphaHelper {
     // Helper to allow convenient syntax for working with color types.
@@ -230,6 +247,93 @@ template<typename T> constexpr bool operator!=(const LinearDisplayP3<T>& a, cons
 }
 
 
+template<typename T> struct Lab : ColorWithAlphaHelper<Lab<T>> {
+    using ComponentType = T;
+    static constexpr auto colorSpace = ColorSpace::Lab;
+
+    constexpr Lab(T lightness, T a, T b, T alpha = ComponentTraits<T>::maxValue)
+        : lightness { lightness }
+        , a { a }
+        , b { b }
+        , alpha { alpha }
+    {
+    }
+
+    constexpr Lab()
+        : Lab { ComponentTraits<T>::minValue, ComponentTraits<T>::minValue, ComponentTraits<T>::minValue, ComponentTraits<T>::minValue }
+    {
+    }
+
+    T lightness;
+    T a;
+    T b;
+    T alpha;
+};
+
+template<typename T> constexpr ColorComponents<T> asColorComponents(const Lab<T>& c)
+{
+    return { c.lightness, c.a, c.b, c.alpha };
+}
+
+template<typename T> constexpr Lab<T> asLab(const ColorComponents<T>& c)
+{
+    return { c[0], c[1], c[2], c[3] };
+}
+
+template<typename T> constexpr bool operator==(const Lab<T>& a, const Lab<T>& b)
+{
+    return asColorComponents(a) == asColorComponents(b);
+}
+
+template<typename T> constexpr bool operator!=(const Lab<T>& a, const Lab<T>& b)
+{
+    return !(a == b);
+}
+
+
+template<typename T> struct LCHA : ColorWithAlphaHelper<LCHA<T>> {
+    using ComponentType = T;
+
+    constexpr LCHA(T lightness, T chroma, T hue, T alpha = ComponentTraits<T>::maxValue)
+        : lightness { lightness }
+        , chroma { chroma }
+        , hue { hue }
+        , alpha { alpha }
+    {
+    }
+
+    constexpr LCHA()
+        : LCHA { ComponentTraits<T>::minValue, ComponentTraits<T>::minValue, ComponentTraits<T>::minValue, ComponentTraits<T>::minValue }
+    {
+    }
+
+    T lightness;
+    T chroma;
+    T hue;
+    T alpha;
+};
+
+template<typename T> constexpr ColorComponents<T> asColorComponents(const LCHA<T>& c)
+{
+    return { c.lightness, c.chroma, c.hue, c.alpha };
+}
+
+template<typename T> constexpr LCHA<T> asLCHA(const ColorComponents<T>& c)
+{
+    return { c[0], c[1], c[2], c[3] };
+}
+
+template<typename T> constexpr bool operator==(const LCHA<T>& a, const LCHA<T>& b)
+{
+    return asColorComponents(a) == asColorComponents(b);
+}
+
+template<typename T> constexpr bool operator!=(const LCHA<T>& a, const LCHA<T>& b)
+{
+    return !(a == b);
+}
+
+
 template<typename T> struct HSLA : ColorWithAlphaHelper<HSLA<T>> {
     using ComponentType = T;
 
@@ -353,10 +457,26 @@ template<typename T> constexpr bool operator!=(const XYZA<T>& a, const XYZA<T>& 
     return !(a == b);
 }
 
+template<typename T, typename Functor> constexpr decltype(auto) callWithColorType(const ColorComponents<T>& components, ColorSpace colorSpace, Functor&& functor)
+{
+    switch (colorSpace) {
+    case ColorSpace::SRGB:
+        return std::invoke(std::forward<Functor>(functor), asSRGBA(components));
+    case ColorSpace::LinearRGB:
+        return std::invoke(std::forward<Functor>(functor), asLinearSRGBA(components));
+    case ColorSpace::DisplayP3:
+        return std::invoke(std::forward<Functor>(functor), asDisplayP3(components));
+    case ColorSpace::Lab:
+        return std::invoke(std::forward<Functor>(functor), asLab(components));
+    }
+
+    ASSERT_NOT_REACHED();
+    return std::invoke(std::forward<Functor>(functor), asSRGBA(components));
+}
 
 // Packed Color Formats
 
-namespace Packed {
+namespace PackedColor {
 
 struct RGBA {
     constexpr explicit RGBA(uint32_t rgba)
@@ -388,12 +508,12 @@ struct ARGB {
 
 }
 
-constexpr SRGBA<uint8_t> asSRGBA(Packed::RGBA color)
+constexpr SRGBA<uint8_t> asSRGBA(PackedColor::RGBA color)
 {
     return { static_cast<uint8_t>(color.value >> 24), static_cast<uint8_t>(color.value >> 16), static_cast<uint8_t>(color.value >> 8), static_cast<uint8_t>(color.value) };
 }
 
-constexpr SRGBA<uint8_t> asSRGBA(Packed::ARGB color)
+constexpr SRGBA<uint8_t> asSRGBA(PackedColor::ARGB color)
 {
     return { static_cast<uint8_t>(color.value >> 16), static_cast<uint8_t>(color.value >> 8), static_cast<uint8_t>(color.value), static_cast<uint8_t>(color.value >> 24) };
 }

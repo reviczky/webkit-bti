@@ -3573,11 +3573,11 @@ This function should be called after a response has been received from the
 server, so you can connect to <a class="link" href="WebKitWebView.html#WebKitWebView-load-changed" title="The “load-changed” signal"><span class="type">“load-changed”</span></a> and call this function
 when it's emitted with <a class="link" href="WebKitWebView.html#WEBKIT-LOAD-COMMITTED:CAPS"><code class="literal">WEBKIT_LOAD_COMMITTED</code></a> event.</p>
 <p>Note that this function provides no information about the security of the web
-page if the current <a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <em class="parameter"><code>WEBKIT_TLS_ERRORS_POLICY_IGNORE</code></em>
+page if the current <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <em class="parameter"><code>WEBKIT_TLS_ERRORS_POLICY_IGNORE</code></em>
 ,
 as subresources of the page may be controlled by an attacker. This function
 may safely be used to determine the security status of the current page only
-if the current <a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <em class="parameter"><code>WEBKIT_TLS_ERRORS_POLICY_FAIL</code></em>
+if the current <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <em class="parameter"><code>WEBKIT_TLS_ERRORS_POLICY_FAIL</code></em>
 , in
 which case subresources that fail certificate verification will be blocked.</p>
 <div class="refsect3">
@@ -5262,9 +5262,14 @@ signal request.</p>
 <p>Whether the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> is ephemeral. An ephemeral web view never writes
 website data to the client storage, no matter what <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>
 its context is using. This is normally used to implement private browsing mode.
-This is a <a href="../gobject/gobject-GParamSpec.html#G-PARAM-CONSTRUCT-ONLY:CAPS"><code class="literal">G_PARAM_CONSTRUCT_ONLY</code></a> property, so you have to create a ephemeral
-<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> and it can't be changed. Note that all <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>s
-created with an ephemeral <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> will be ephemeral automatically.
+This is a <a href="../gobject/gobject-GParamSpec.html#G-PARAM-CONSTRUCT-ONLY:CAPS"><code class="literal">G_PARAM_CONSTRUCT_ONLY</code></a> property, so you have to create an ephemeral
+<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> and it can't be changed. The ephemeral <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>
+created for the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> will inherit the network settings from the
+<a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>'s <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>. To use different settings
+you can get the <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> with <a class="link" href="WebKitWebView.html#webkit-web-view-get-website-data-manager" title="webkit_web_view_get_website_data_manager ()"><code class="function">webkit_web_view_get_website_data_manager()</code></a>
+and set the new ones.
+Note that all <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>s created with an ephemeral <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>
+will be ephemeral automatically.
 See also <a class="link" href="WebKitWebContext.html#webkit-web-context-new-ephemeral" title="webkit_web_context_new_ephemeral ()"><code class="function">webkit_web_context_new_ephemeral()</code></a>.</p>
 <p>Owner: WebKitWebView</p>
 <p>Flags: Read / Write / Construct Only</p>

@@ -74,6 +74,16 @@ Decoder::Decoder(const uint8_t* buffer, size_t bufferSize, void (*bufferDealloca
         return;
 }
 
+Decoder::Decoder(const uint8_t* buffer, size_t bufferSize, ConstructWithoutHeaderTag)
+    : m_buffer { buffer }
+    , m_bufferPos { m_buffer }
+    , m_bufferEnd { m_buffer + bufferSize }
+    , m_bufferDeallocator([] (const uint8_t*, size_t) { })
+{
+    if (reinterpret_cast<uintptr_t>(m_buffer) % alignof(uint64_t))
+        markInvalid();
+}
+
 Decoder::~Decoder()
 {
     ASSERT(m_buffer);
@@ -84,16 +94,6 @@ Decoder::~Decoder()
         fastFree(const_cast<uint8_t*>(m_buffer));
 
     // FIXME: We need to dispose of the mach ports in cases of failure.
-
-#if HAVE(QOS_CLASSES)
-    if (m_qosClassOverride)
-        pthread_override_qos_class_end_np(m_qosClassOverride);
-#endif
-}
-
-bool Decoder::isSyncMessage() const
-{
-    return m_messageFlags.contains(MessageFlags::SyncMessage);
 }
 
 ShouldDispatchWhenWaitingForSyncReply Decoder::shouldDispatchMessageWhenWaitingForSyncReply() const
@@ -160,7 +160,7 @@ bool Decoder::alignBufferPosition(size_t alignment, size_t size)
         markInvalid();
         return false;
     }
-    
+
     m_bufferPos = alignedPosition;
     return true;
 }
@@ -181,20 +181,15 @@ bool Decoder::decodeFixedLengthData(uint8_t* data, size_t size, size_t alignment
     return true;
 }
 
-bool Decoder::decodeVariableLengthByteArray(DataReference& dataReference)
+const uint8_t* Decoder::decodeFixedLengthReference(size_t size, size_t alignment)
 {
-    uint64_t size;
-    if (!decode(size))
-        return false;
-    
-    if (!alignBufferPosition(1, size))
-        return false;
+    if (!alignBufferPosition(alignment, size))
+        return nullptr;
 
     const uint8_t* data = m_bufferPos;
     m_bufferPos += size;
 
-    dataReference = DataReference(data, size);
-    return true;
+    return data;
 }
 
 bool Decoder::removeAttachment(Attachment& attachment)

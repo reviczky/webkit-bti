@@ -691,6 +691,7 @@ bool AccessibilityNodeObject::isChecked() const
     case AccessibilityRole::MenuItemCheckbox:
     case AccessibilityRole::MenuItemRadio:
     case AccessibilityRole::Switch:
+    case AccessibilityRole::TreeItem:
         validRole = true;
         break;
     default:
@@ -1635,8 +1636,12 @@ String AccessibilityNodeObject::accessibilityDescription() const
     // If this point is reached (i.e. there's no accessibilityDescription) and there's no title(), we should fallback to using the title attribute.
     // The title attribute is normally used as help text (because it is a tooltip), but if there is nothing else available, this should be used (according to ARIA).
     // https://bugs.webkit.org/show_bug.cgi?id=170475: An exception is when the element is semantically unimportant. In those cases, title text should remain as help text.
-    if (title().isEmpty() && !roleIgnoresTitle())
-        return getAttribute(titleAttr);
+    if (!roleIgnoresTitle()) {
+        // title() can be an expensive operation because it can invoke textUnderElement for all descendants. Thus call it last.
+        auto titleAttribute = getAttribute(titleAttr);
+        if (!titleAttribute.isEmpty() && title().isEmpty())
+            return titleAttribute;
+    }
 
     return String();
 }
@@ -1940,17 +1945,15 @@ String AccessibilityNodeObject::text() const
     if (!isTextControl())
         return String();
 
-    Node* node = this->node();
-    if (!node)
+    auto node = this->node();
+    if (!is<Element>(node))
         return String();
 
-    if (isNativeTextControl() && is<HTMLTextFormControlElement>(*node))
-        return downcast<HTMLTextFormControlElement>(*node).value();
+    auto& element = downcast<Element>(*node);
+    if (isNativeTextControl() && is<HTMLTextFormControlElement>(element))
+        return downcast<HTMLTextFormControlElement>(element).value();
 
-    if (!node->isElementNode())
-        return String();
-
-    return downcast<Element>(node)->innerText();
+    return element.innerText();
 }
 
 String AccessibilityNodeObject::stringValue() const

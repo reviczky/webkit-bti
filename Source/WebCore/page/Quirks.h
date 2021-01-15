@@ -37,6 +37,8 @@ class EventTarget;
 class HTMLElement;
 class HTMLVideoElement;
 class LayoutUnit;
+class PlatformMouseEvent;
+enum class StorageAccessWasGranted : bool;
 
 class Quirks {
     WTF_MAKE_NONCOPYABLE(Quirks); WTF_MAKE_FAST_ALLOCATED;
@@ -44,6 +46,8 @@ public:
     Quirks(Document&);
     ~Quirks();
 
+    bool shouldSilenceWindowResizeEvents() const;
+    bool shouldSilenceMediaQueryListChangeEvents() const;
     bool shouldIgnoreInvalidSignal() const;
     bool needsFormControlToBeMouseFocusable() const;
     bool needsAutoplayPlayPauseEvents() const;
@@ -100,7 +104,7 @@ public:
     static bool shouldMakeEventListenerPassive(const EventTarget&, const AtomString& eventType, const EventListener&);
 
 #if ENABLE(MEDIA_STREAM)
-    bool shouldEnableLegacyGetUserMedia() const;
+    bool shouldEnableLegacyGetUserMediaQuirk() const;
 #endif
 
     bool shouldDisableElementFullscreenQuirk() const;
@@ -110,12 +114,23 @@ public:
     bool shouldAvoidPastingImagesAsWebContent() const;
 
     enum StorageAccessResult : bool { ShouldNotCancelEvent, ShouldCancelEvent };
-    StorageAccessResult triggerOptionalStorageAccessQuirk(const Element&, const AtomString& eventType) const;
+    StorageAccessResult triggerOptionalStorageAccessQuirk(Element&, const PlatformMouseEvent&, const AtomString& eventType, int, Element*) const;
 
     bool needsVP9FullRangeFlagQuirk() const;
     bool needsHDRPixelDepthQuirk() const;
     
     bool needsAkamaiMediaPlayerQuirk(const HTMLVideoElement&) const;
+
+    bool needsBlackFullscreenBackgroundQuirk() const;
+
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    static bool isMicrosoftTeamsRedirectURL(const URL&);
+    static bool hasStorageAccessForAllLoginDomains(const HashSet<RegistrableDomain>&, const RegistrableDomain&);
+    static const String& BBCRadioPlayerURLString();
+    WEBCORE_EXPORT static const String& staticRadioPlayerURLString();
+    StorageAccessResult requestStorageAccessAndHandleClick(CompletionHandler<void(StorageAccessWasGranted)>&&) const;
+    static RegistrableDomain mapToTopDomain(const URL&);
+#endif
 
 private:
     bool needsQuirks() const;
@@ -147,6 +162,7 @@ private:
     mutable Optional<bool> m_shouldBypassAsyncScriptDeferring;
     mutable Optional<bool> m_needsVP9FullRangeFlagQuirk;
     mutable Optional<bool> m_needsHDRPixelDepthQuirk;
+    mutable Optional<bool> m_needsBlackFullscreenBackgroundQuirk;
 };
 
-}
+} // namespace WebCore

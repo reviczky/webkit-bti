@@ -51,10 +51,9 @@ public:
 
     void scrollingStateTreePropertiesChanged();
 
-    WEBCORE_EXPORT void scheduleUpdateScrollPositionAfterAsyncScroll(ScrollingNodeID, const FloatPoint&, const Optional<FloatPoint>& layoutViewportOrigin, ScrollingLayerPositionAction);
+    void applyPendingScrollUpdates();
 
-    enum class InformWheelEventMonitor { Yes, No };
-    void updateScrollPositionAfterAsyncScroll(ScrollingNodeID, const FloatPoint&, Optional<FloatPoint> layoutViewportOrigin, ScrollType, ScrollingLayerPositionAction, InformWheelEventMonitor = InformWheelEventMonitor::Yes);
+    WEBCORE_EXPORT void applyScrollUpdate(ScrollingNodeID, const FloatPoint&, Optional<FloatPoint> layoutViewportOrigin, ScrollType, ScrollingLayerPositionAction);
 
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT void handleWheelEventPhase(ScrollingNodeID, PlatformWheelEventPhase) final;
@@ -95,8 +94,6 @@ private:
     bool isAsyncScrollingCoordinator() const override { return true; }
 
     bool hasVisibleSlowRepaintViewportConstrainedObjects(const FrameView&) const override { return false; }
-    
-    bool asyncFrameOrOverflowScrollingEnabled() const;
 
     WEBCORE_EXPORT ScrollingNodeID scrollableContainerNodeID(const RenderObject&) const override;
 
@@ -133,7 +130,7 @@ private:
     WEBCORE_EXPORT void scrollBySimulatingWheelEventForTesting(ScrollingNodeID, FloatSize) final;
 
     WEBCORE_EXPORT bool isUserScrollInProgress(ScrollingNodeID) const override;
-    bool isRubberBandInProgress() const override;
+    bool isRubberBandInProgress(ScrollingNodeID) const override;
 
 #if ENABLE(CSS_SCROLL_SNAP)
     WEBCORE_EXPORT bool isScrollSnapInProgress(ScrollingNodeID) const override;
@@ -149,41 +146,18 @@ private:
 
     WEBCORE_EXPORT void windowScreenDidChange(PlatformDisplayID, Optional<unsigned> nominalFramesPerSecond) final;
 
+    WEBCORE_EXPORT bool hasSubscrollers() const final;
+
     virtual void scheduleTreeStateCommit() = 0;
 
     void ensureRootStateNodeForFrameView(FrameView&);
 
-    void updateScrollPositionAfterAsyncScrollTimerFired();
     void setEventTrackingRegionsDirty();
     void updateEventTrackingRegions();
     
-    void noteScrollingThreadSyncCompleteForNode(ScrollingNodeID);
+    void updateScrollPositionAfterAsyncScroll(ScrollingNodeID, const FloatPoint&, Optional<FloatPoint> layoutViewportOrigin, ScrollType, ScrollingLayerPositionAction);
     
     FrameView* frameViewForScrollingNode(ScrollingNodeID) const;
-
-    Timer m_updateNodeScrollPositionTimer;
-
-    struct ScheduledScrollUpdate {
-        ScheduledScrollUpdate() = default;
-        ScheduledScrollUpdate(ScrollingNodeID scrollingNodeID, FloatPoint point, Optional<FloatPoint> viewportOrigin, ScrollingLayerPositionAction udpateAction)
-            : nodeID(scrollingNodeID)
-            , scrollPosition(point)
-            , layoutViewportOrigin(viewportOrigin)
-            , updateLayerPositionAction(udpateAction)
-        { }
-
-        ScrollingNodeID nodeID { 0 };
-        FloatPoint scrollPosition;
-        Optional<FloatPoint> layoutViewportOrigin;
-        ScrollingLayerPositionAction updateLayerPositionAction { ScrollingLayerPositionAction::Sync };
-        
-        bool matchesUpdateType(const ScheduledScrollUpdate& other) const
-        {
-            return nodeID == other.nodeID && updateLayerPositionAction == other.updateLayerPositionAction;
-        }
-    };
-
-    ScheduledScrollUpdate m_scheduledScrollUpdate;
 
     std::unique_ptr<ScrollingStateTree> m_scrollingStateTree;
     RefPtr<ScrollingTree> m_scrollingTree;
