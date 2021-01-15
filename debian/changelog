@@ -23,6 +23,8 @@ webkit2gtk (2.30.4-2) UNRELEASED; urgency=medium
     + libsoup2.4-dev from 2.42.0 to 2.54.0.
   * debian/copyright:
     + Update copyright years.
+  * debian/watch, debian/gbp.conf:
+    + Update for 2.31.x packages in experimental.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
 
