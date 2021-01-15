@@ -58,6 +58,7 @@ namespace WebCore {
 //    - 4x float (0-1) sRGBA, stored in a reference counted sub-object
 //    - 4x float (0-1) Linear sRGBA, stored in a reference counted sub-object
 //    - 4x float (0-1) DisplayP3, stored in a reference counted sub-object
+//    - 4x float (0-1) Lab, stored in a reference counted sub-object
 //
 // Additionally, the inline 8-bit sRGBA can have an optional "semantic" bit set on it,
 // which indicates the color originated from a CSS semantic color name.
@@ -77,9 +78,9 @@ public:
     Color(Optional<SRGBA<uint8_t>>, SemanticTag);
 
     Color(ColorComponents<float>, ColorSpace);
-    Color(const SRGBA<float>&);
-    Color(const LinearSRGBA<float>&);
-    Color(const DisplayP3<float>&);
+
+    template<typename ColorType, typename std::enable_if_t<IsColorTypeWithComponentType<ColorType, float>>* = nullptr>
+    Color(const ColorType&);
 
     explicit Color(WTF::HashTableEmptyValueType);
     explicit Color(WTF::HashTableDeletedValueType);
@@ -181,9 +182,6 @@ private:
     Color(Ref<ExtendedColor>&&);
 
     void setColor(SRGBA<uint8_t>);
-    void setColor(const SRGBA<float>&);
-    void setColor(const LinearSRGBA<float>&);
-    void setColor(const DisplayP3<float>&);
     void setExtendedColor(Ref<ExtendedColor>&&);
 
     void tagAsSemantic() { m_colorData.inlineColorAndFlags |= isSemanticInlineColorBit; }
@@ -218,7 +216,6 @@ WEBCORE_EXPORT CGColorRef cachedCGColor(const Color&);
 #endif
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const Color&);
-WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, ColorSpace);
 
 inline bool operator==(const Color& a, const Color& b)
 {
@@ -276,32 +273,13 @@ inline Color::Color(Optional<SRGBA<uint8_t>> color, SemanticTag)
 
 inline Color::Color(ColorComponents<float> components, ColorSpace colorSpace)
 {
-    switch (colorSpace) {
-    case ColorSpace::SRGB:
-        setColor(asSRGBA(components));
-        return;
-    case ColorSpace::LinearRGB:
-        setColor(asLinearSRGBA(components));
-        return;
-    case ColorSpace::DisplayP3:
-        setColor(asDisplayP3(components));
-        return;
-    }
+    setExtendedColor(ExtendedColor::create(components, colorSpace));
 }
 
-inline Color::Color(const SRGBA<float>& color)
+template<typename ColorType, typename std::enable_if_t<IsColorTypeWithComponentType<ColorType, float>>*>
+inline Color::Color(const ColorType& color)
 {
-    setColor(color);
-}
-
-inline Color::Color(const LinearSRGBA<float>& color)
-{
-    setColor(color);
-}
-
-inline Color::Color(const DisplayP3<float>& color)
-{
-    setColor(color);
+    setExtendedColor(ExtendedColor::create(color));
 }
 
 inline Color::Color(Ref<ExtendedColor>&& extendedColor)
@@ -393,28 +371,13 @@ inline const ExtendedColor& Color::asExtended() const
 inline SRGBA<uint8_t> Color::asInline() const
 {
     ASSERT(isInline());
-    return asSRGBA(Packed::RGBA { static_cast<uint32_t>(m_colorData.inlineColorAndFlags >> 32) });
+    return asSRGBA(PackedColor::RGBA { static_cast<uint32_t>(m_colorData.inlineColorAndFlags >> 32) });
 }
 
 inline void Color::setColor(SRGBA<uint8_t> color)
 {
-    m_colorData.inlineColorAndFlags = static_cast<uint64_t>(Packed::RGBA { color }.value) << 32;
+    m_colorData.inlineColorAndFlags = static_cast<uint64_t>(PackedColor::RGBA { color }.value) << 32;
     tagAsValid();
-}
-
-inline void Color::setColor(const SRGBA<float>& color)
-{
-    setExtendedColor(ExtendedColor::create(color));
-}
-
-inline void Color::setColor(const LinearSRGBA<float>& color)
-{
-    setExtendedColor(ExtendedColor::create(color));
-}
-
-inline void Color::setColor(const DisplayP3<float>& color)
-{
-    setExtendedColor(ExtendedColor::create(color));
 }
 
 inline void Color::setExtendedColor(Ref<ExtendedColor>&& extendedColor)
@@ -465,7 +428,7 @@ template<class Encoder> void Color::encode(Encoder& encoder) const
     // FIXME: This should encode whether the color is semantic.
 
     encoder << true;
-    encoder << Packed::RGBA { asInline() }.value;
+    encoder << PackedColor::RGBA { asInline() }.value;
 }
 
 template<class Decoder> Optional<Color> Color::decode(Decoder& decoder)
@@ -504,7 +467,7 @@ template<class Decoder> Optional<Color> Color::decode(Decoder& decoder)
     if (!decoder.decode(value))
         return WTF::nullopt;
 
-    return Color { asSRGBA(Packed::RGBA { value }) };
+    return Color { asSRGBA(PackedColor::RGBA { value }) };
 }
 
 } // namespace WebCore

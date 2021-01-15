@@ -306,7 +306,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="returnvalue">WebKitTLSErrorsPolicy</span></a>
+<a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="returnvalue">WebKitTLSErrorsPolicy</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebContext.html#webkit-web-context-get-tls-errors-policy" title="webkit_web_context_get_tls_errors_policy ()">webkit_web_context_get_tls_errors_policy</a> <span class="c_punctuation">()</span>
@@ -510,14 +510,6 @@
 <td class="datatype_keyword">enum</td>
 <td class="function_name"><a class="link" href="WebKitWebContext.html#WebKitProcessModel" title="enum WebKitProcessModel">WebKitProcessModel</a></td>
 </tr>
-<tr>
-<td class="datatype_keyword">enum</td>
-<td class="function_name"><a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy">WebKitTLSErrorsPolicy</a></td>
-</tr>
-<tr>
-<td class="datatype_keyword">enum</td>
-<td class="function_name"><a class="link" href="WebKitWebContext.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode">WebKitNetworkProxyMode</a></td>
-</tr>
 </tbody>
 </table></div>
 </div>
@@ -547,7 +539,7 @@ custom URI schemes, and manage several other settings.</p>
 error by default. To handle TLS failures differently, you can
 connect to <a class="link" href="WebKitWebView.html#WebKitWebView-load-failed-with-tls-errors" title="The “load-failed-with-tls-errors” signal"><span class="type">“load-failed-with-tls-errors”</span></a>.
 Alternatively, you can use <a class="link" href="WebKitWebContext.html#webkit-web-context-set-tls-errors-policy" title="webkit_web_context_set_tls_errors_policy ()"><code class="function">webkit_web_context_set_tls_errors_policy()</code></a>
-to set the policy <a class="link" href="WebKitWebContext.html#WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"><code class="literal">WEBKIT_TLS_ERRORS_POLICY_IGNORE</code></a>; however, this is
+to set the policy <a class="link" href="WebKitWebsiteDataManager.html#WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"><code class="literal">WEBKIT_TLS_ERRORS_POLICY_IGNORE</code></a>; however, this is
 not appropriate for Internet applications.</p>
 </div>
 <div class="refsect1">
@@ -919,17 +911,21 @@ See also <a class="link" href="WebKitWebContext.html#webkit-web-context-set-cach
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_web_context_set_network_proxy_settings
                                (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
-                                <em class="parameter"><code><a class="link" href="WebKitWebContext.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode"><span class="type">WebKitNetworkProxyMode</span></a> proxy_mode</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitNetworkProxySettings.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode"><span class="type">WebKitNetworkProxyMode</span></a> proxy_mode</code></em>,
                                 <em class="parameter"><code><a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a> *proxy_settings</code></em>);</pre>
+<div class="warning">
+<p><code class="literal">webkit_web_context_set_network_proxy_settings</code> has been deprecated since version 2.32. and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-network-proxy-settings" title="webkit_website_data_manager_set_network_proxy_settings ()"><code class="function">webkit_website_data_manager_set_network_proxy_settings()</code></a> instead.</p>
+</div>
 <p>Set the network proxy settings to be used by connections started in <em class="parameter"><code>context</code></em>
 .
-By default <a class="link" href="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-DEFAULT:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_DEFAULT</code></a> is used, which means that the
+By default <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-DEFAULT:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_DEFAULT</code></a> is used, which means that the
 system settings will be used (<a href="../gio/GProxyResolver.html#g-proxy-resolver-get-default"><code class="function">g_proxy_resolver_get_default()</code></a>).
 If you want to override the system default settings, you can either use
-<a class="link" href="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-NO-PROXY:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_NO_PROXY</code></a> to make sure no proxies are used at all,
-or <a class="link" href="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> to provide your own proxy settings.
+<a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-NO-PROXY:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_NO_PROXY</code></a> to make sure no proxies are used at all,
+or <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> to provide your own proxy settings.
 When <em class="parameter"><code>proxy_mode</code></em>
- is <a class="link" href="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> <em class="parameter"><code>proxy_settings</code></em>
+ is <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> <em class="parameter"><code>proxy_settings</code></em>
  must be
 a valid <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a>; otherwise, <em class="parameter"><code>proxy_settings</code></em>
  must be <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>.</p>
@@ -949,7 +945,7 @@ a valid <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetw
 </tr>
 <tr>
 <td class="parameter_name"><p>proxy_mode</p></td>
-<td class="parameter_description"><p>a <a class="link" href="WebKitWebContext.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode"><span class="type">WebKitNetworkProxyMode</span></a></p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitNetworkProxySettings.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode"><span class="type">WebKitNetworkProxyMode</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -1207,6 +1203,7 @@ webkit_web_context_get_security_manager
 webkit_web_context_set_additional_plugins_directory
                                (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
                                 <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *directory</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_web_context_set_additional_plugins_directory</code> has been deprecated since version 2.32 and should not be used in newly-written code.</p></div>
 <p>Set an additional directory where WebKit will look for plugins.</p>
 <div class="refsect3">
 <a name="webkit-web-context-set-additional-plugins-directory.parameters"></a><h4>Parameters</h4>
@@ -1239,6 +1236,7 @@ webkit_web_context_get_plugins (<em class="parameter"><code><a class="link" href
                                 <em class="parameter"><code><a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> *cancellable</code></em>,
                                 <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncReadyCallback"><span class="type">GAsyncReadyCallback</span></a> callback</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_web_context_get_plugins</code> has been deprecated since version 2.32 and should not be used in newly-written code.</p></div>
 <p>Asynchronously get the list of installed plugins.</p>
 <p>When the operation is finished, <em class="parameter"><code>callback</code></em>
  will be called. You can then call
@@ -1283,6 +1281,7 @@ webkit_web_context_get_plugins (<em class="parameter"><code><a class="link" href
 webkit_web_context_get_plugins_finish (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
                                        <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncResult-struct"><span class="type">GAsyncResult</span></a> *result</code></em>,
                                        <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_web_context_get_plugins_finish</code> has been deprecated since version 2.32 and should not be used in newly-written code.</p></div>
 <p>Finish an asynchronous operation started with webkit_web_context_get_plugins.</p>
 <div class="refsect3">
 <a name="webkit-web-context-get-plugins-finish.parameters"></a><h4>Parameters</h4>
@@ -1595,7 +1594,11 @@ the <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span 
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_web_context_set_tls_errors_policy
                                (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
-                                <em class="parameter"><code><a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> policy</code></em>);</pre>
+                                <em class="parameter"><code><a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> policy</code></em>);</pre>
+<div class="warning">
+<p><code class="literal">webkit_web_context_set_tls_errors_policy</code> has been deprecated since version 2.32. and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-tls-errors-policy" title="webkit_website_data_manager_set_tls_errors_policy ()"><code class="function">webkit_website_data_manager_set_tls_errors_policy()</code></a> instead.</p>
+</div>
 <p>Set the TLS errors policy of <em class="parameter"><code>context</code></em>
  as <em class="parameter"><code>policy</code></em>
 </p>
@@ -1615,7 +1618,7 @@ webkit_web_context_set_tls_errors_policy
 </tr>
 <tr>
 <td class="parameter_name"><p>policy</p></td>
-<td class="parameter_description"><p>a <a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a></p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -1625,9 +1628,13 @@ webkit_web_context_set_tls_errors_policy
 <hr>
 <div class="refsect2">
 <a name="webkit-web-context-get-tls-errors-policy"></a><h3>webkit_web_context_get_tls_errors_policy ()</h3>
-<pre class="programlisting"><a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="returnvalue">WebKitTLSErrorsPolicy</span></a>
+<pre class="programlisting"><a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="returnvalue">WebKitTLSErrorsPolicy</span></a>
 webkit_web_context_get_tls_errors_policy
                                (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>);</pre>
+<div class="warning">
+<p><code class="literal">webkit_web_context_get_tls_errors_policy</code> has been deprecated since version 2.32. and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-tls-errors-policy" title="webkit_website_data_manager_get_tls_errors_policy ()"><code class="function">webkit_website_data_manager_get_tls_errors_policy()</code></a> instead.</p>
+</div>
 <p>Get the TLS errors policy of <em class="parameter"><code>context</code></em>
 </p>
 <div class="refsect3">
@@ -1647,7 +1654,7 @@ webkit_web_context_get_tls_errors_policy
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-tls-errors-policy.returns"></a><h4>Returns</h4>
-<p> a <a class="link" href="WebKitWebContext.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a></p>
+<p> a <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a></p>
 </div>
 </div>
 <hr>
@@ -2144,9 +2151,7 @@ when the data of the request is available or
 27
 28
 29
-30
-31
-32</pre></td>
+30</pre></td>
         <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span>
 <span class="n">about_uri_scheme_request_cb</span> <span class="p">(</span><span class="n">WebKitURISchemeRequest</span> <span class="o">*</span><span class="n">request</span><span class="p">,</span>
                              <span class="n">gpointer</span>                <span class="n">user_data</span><span class="p">)</span>
@@ -2156,9 +2161,7 @@ when the data of the request is available or
     <span class="k">const</span> <span class="n">gchar</span>  <span class="o">*</span><span class="n">path</span><span class="p">;</span>
 
     <span class="n">path</span> <span class="o">=</span> <span class="n">webkit_uri_scheme_request_get_path</span> <span class="p">(</span><span class="n">request</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&quot;plugins&quot;</span><span class="p">))</span> <span class="p">{</span>
-        <span class="cm">/* Create a GInputStream with the contents of plugins about page, and set its length to stream_length */</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&quot;memory&quot;</span><span class="p">))</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&quot;memory&quot;</span><span class="p">))</span> <span class="p">{</span>
         <span class="cm">/* Create a GInputStream with the contents of memory about page, and set its length to stream_length */</span>
     <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&quot;applications&quot;</span><span class="p">))</span> <span class="p">{</span>
         <span class="cm">/* Create a GInputStream with the contents of applications about page, and set its length to stream_length */</span>
@@ -2313,79 +2316,6 @@ multiple tabs.</p>
 </table></div>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-4.html#api-index-2.4">2.4</a></p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitTLSErrorsPolicy"></a><h3>enum WebKitTLSErrorsPolicy</h3>
-<p>Enum values used to denote the TLS errors policy.</p>
-<div class="refsect3">
-<a name="WebKitTLSErrorsPolicy.members"></a><h4>Members</h4>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
-<colgroup>
-<col width="300px" class="enum_members_name">
-<col class="enum_members_description">
-<col width="200px" class="enum_members_annotations">
-</colgroup>
-<tbody>
-<tr>
-<td class="enum_member_name"><p><a name="WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"></a>WEBKIT_TLS_ERRORS_POLICY_IGNORE</p></td>
-<td class="enum_member_description">
-<p>Ignore TLS errors.</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-<tr>
-<td class="enum_member_name"><p><a name="WEBKIT-TLS-ERRORS-POLICY-FAIL:CAPS"></a>WEBKIT_TLS_ERRORS_POLICY_FAIL</p></td>
-<td class="enum_member_description">
-<p>TLS errors will emit
-<a class="link" href="WebKitWebView.html#WebKitWebView-load-failed-with-tls-errors" title="The “load-failed-with-tls-errors” signal"><span class="type">“load-failed-with-tls-errors”</span></a> and, if the signal is handled,
-finish the load. In case the signal is not handled,
-<a class="link" href="WebKitWebView.html#WebKitWebView-load-failed" title="The “load-failed” signal"><span class="type">“load-failed”</span></a> is emitted before the load finishes.</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-</tbody>
-</table></div>
-</div>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitNetworkProxyMode"></a><h3>enum WebKitNetworkProxyMode</h3>
-<p>Enum values used to set the network proxy mode.</p>
-<div class="refsect3">
-<a name="WebKitNetworkProxyMode.members"></a><h4>Members</h4>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
-<colgroup>
-<col width="300px" class="enum_members_name">
-<col class="enum_members_description">
-<col width="200px" class="enum_members_annotations">
-</colgroup>
-<tbody>
-<tr>
-<td class="enum_member_name"><p><a name="WEBKIT-NETWORK-PROXY-MODE-DEFAULT:CAPS"></a>WEBKIT_NETWORK_PROXY_MODE_DEFAULT</p></td>
-<td class="enum_member_description">
-<p>Use the default proxy of the system.</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-<tr>
-<td class="enum_member_name"><p><a name="WEBKIT-NETWORK-PROXY-MODE-NO-PROXY:CAPS"></a>WEBKIT_NETWORK_PROXY_MODE_NO_PROXY</p></td>
-<td class="enum_member_description">
-<p>Do not use any proxy.</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-<tr>
-<td class="enum_member_name"><p><a name="WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"></a>WEBKIT_NETWORK_PROXY_MODE_CUSTOM</p></td>
-<td class="enum_member_description">
-<p>Use custom proxy settings.</p>
-</td>
-<td class="enum_member_annotations"> </td>
-</tr>
-</tbody>
-</table></div>
-</div>
-<p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
 </div>
 <div class="refsect1">

@@ -35,6 +35,14 @@ namespace WebCore {
 
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
 
+#if ENABLE(WEBM_FORMAT_READER)
+bool PlatformMediaSessionManager::m_webMFormatReaderEnabled;
+#endif
+
+#if ENABLE(VORBIS) && PLATFORM(MAC)
+bool PlatformMediaSessionManager::m_vorbisDecoderEnabled;
+#endif
+
 static std::unique_ptr<PlatformMediaSessionManager>& sharedPlatformMediaSessionManager()
 {
     static NeverDestroyed<std::unique_ptr<PlatformMediaSessionManager>> platformMediaSessionManager;
@@ -139,7 +147,7 @@ void PlatformMediaSessionManager::beginInterruption(PlatformMediaSession::Interr
     forEachSession([type] (auto& session) {
         session.beginInterruption(type);
     });
-    updateSessionState();
+    scheduleUpdateSessionState();
 }
 
 void PlatformMediaSessionManager::endInterruption(PlatformMediaSession::EndInterruptionFlags flags)
@@ -163,7 +171,7 @@ void PlatformMediaSessionManager::addSession(PlatformMediaSession& session)
     m_logger->addLogger(session.logger());
 #endif
 
-    updateSessionState();
+    scheduleUpdateSessionState();
 }
 
 bool PlatformMediaSessionManager::hasNoSession() const
@@ -190,7 +198,7 @@ void PlatformMediaSessionManager::removeSession(PlatformMediaSession& session)
     m_logger->removeLogger(session.logger());
 #endif
 
-    updateSessionState();
+    scheduleUpdateSessionState();
 }
 
 void PlatformMediaSessionManager::addRestriction(PlatformMediaSession::MediaType type, SessionRestrictions restriction)
@@ -281,7 +289,7 @@ void PlatformMediaSessionManager::sessionWillEndPlayback(PlatformMediaSession& s
 
 void PlatformMediaSessionManager::sessionStateChanged(PlatformMediaSession&)
 {
-    updateSessionState();
+    scheduleUpdateSessionState();
 }
 
 void PlatformMediaSessionManager::setCurrentSession(PlatformMediaSession& session)
@@ -459,11 +467,22 @@ void PlatformMediaSessionManager::processSystemDidWake()
     });
 }
 
-void PlatformMediaSessionManager::stopAllMediaPlaybackForDocument(DocumentIdentifier documentIdentifier)
+void PlatformMediaSessionManager::pauseAllMediaPlaybackForDocument(DocumentIdentifier documentIdentifier)
 {
     forEachDocumentSession(documentIdentifier, [](auto& session) {
         session.pauseSession();
     });
+}
+
+
+bool PlatformMediaSessionManager::mediaPlaybackIsPaused(DocumentIdentifier documentIdentifier)
+{
+    bool mediaPlaybackIsPaused = false;
+    forEachDocumentSession(documentIdentifier, [&mediaPlaybackIsPaused](auto& session) {
+        if (session.state() == PlatformMediaSession::Paused)
+            mediaPlaybackIsPaused = true;
+    });
+    return mediaPlaybackIsPaused;
 }
 
 void PlatformMediaSessionManager::stopAllMediaPlaybackForProcess()
@@ -550,7 +569,7 @@ void PlatformMediaSessionManager::addAudioCaptureSource(PlatformMediaSession::Au
 {
     ASSERT(!m_audioCaptureSources.contains(source));
     m_audioCaptureSources.add(source);
-    updateSessionState();
+    scheduleUpdateSessionState();
 }
 
 
@@ -558,7 +577,17 @@ void PlatformMediaSessionManager::removeAudioCaptureSource(PlatformMediaSession:
 {
     ASSERT(m_audioCaptureSources.contains(source));
     m_audioCaptureSources.remove(source);
-    updateSessionState();
+    scheduleUpdateSessionState();
+}
+
+void PlatformMediaSessionManager::scheduleUpdateSessionState()
+{
+    if (updateSessionStateQueue.hasPendingTasks())
+        return;
+
+    updateSessionStateQueue.enqueueTask([this] {
+        updateSessionState();
+    });
 }
 
 #if USE(AUDIO_SESSION)
@@ -587,6 +616,42 @@ bool PlatformMediaSessionManager::shouldDeactivateAudioSession()
 void PlatformMediaSessionManager::setShouldDeactivateAudioSession(bool deactivate)
 {
     deactivateAudioSession() = deactivate;
+}
+
+bool PlatformMediaSessionManager::webMFormatReaderEnabled()
+{
+#if ENABLE(WEBM_FORMAT_READER)
+    return m_webMFormatReaderEnabled;
+#else
+    return false;
+#endif
+}
+
+void PlatformMediaSessionManager::setWebMFormatReaderEnabled(bool enabled)
+{
+#if ENABLE(WEBM_FORMAT_READER)
+    m_webMFormatReaderEnabled = enabled;
+#else
+    UNUSED_PARAM(enabled);
+#endif
+}
+
+bool PlatformMediaSessionManager::vorbisDecoderEnabled()
+{
+#if ENABLE(VORBIS) && PLATFORM(MAC)
+    return m_vorbisDecoderEnabled;
+#else
+    return false;
+#endif
+}
+
+void PlatformMediaSessionManager::setVorbisDecoderEnabled(bool enabled)
+{
+#if ENABLE(VORBIS) && PLATFORM(MAC)
+    m_vorbisDecoderEnabled = enabled;
+#else
+    UNUSED_PARAM(enabled);
+#endif
 }
 
 #else // ENABLE(VIDEO) || ENABLE(WEB_AUDIO)

@@ -307,9 +307,15 @@ void HTMLTextFormControlElement::setSelectionRange(int start, int end, TextField
 
         // FIXME: Removing this synchronous layout requires fixing setSelectionWithoutUpdatingAppearance not needing up-to-date style.
         document().updateLayoutIgnorePendingStylesheets();
-        
+
         if (!isTextField())
             return;
+
+        // Double-check our connected state after the layout update.
+        if (!isConnected()) {
+            cacheSelection(start, end, direction);
+            return;
+        }
 
         // Double-check the state of innerTextElement after the layout.
         innerText = innerTextElement();
@@ -584,7 +590,7 @@ void HTMLTextFormControlElement::setInnerTextValue(const String& value)
 #if ENABLE(ACCESSIBILITY) && !PLATFORM(COCOA)
         if (textIsChanged && renderer()) {
             if (AXObjectCache* cache = document().existingAXObjectCache())
-                cache->postNotification(this, AXObjectCache::AXValueChanged, TargetObservableParent);
+                cache->postNotification(this, AXObjectCache::AXValueChanged, PostTarget::ObservableParent);
         }
 #endif
 

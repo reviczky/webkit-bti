@@ -87,9 +87,9 @@ bool UserInputBridge::handleAccessKeyEvent(const PlatformKeyboardEvent& keyEvent
     return m_page.focusController().focusedOrMainFrame().eventHandler().handleAccessKey(keyEvent);
 }
 
-bool UserInputBridge::handleWheelEvent(const PlatformWheelEvent& wheelEvent, InputSource)
+bool UserInputBridge::handleWheelEvent(const PlatformWheelEvent& wheelEvent, OptionSet<WheelEventProcessingSteps> processingSteps, InputSource)
 {
-    return m_page.mainFrame().eventHandler().handleWheelEvent(wheelEvent);
+    return m_page.mainFrame().eventHandler().handleWheelEvent(wheelEvent, processingSteps);
 }
 
 void UserInputBridge::focusSetActive(bool active, InputSource)
@@ -117,14 +117,14 @@ void UserInputBridge::loadRequest(FrameLoadRequest&& request, InputSource)
     m_page.mainFrame().loader().load(WTFMove(request));
 }
 
-void UserInputBridge::reloadFrame(Frame* frame, OptionSet<ReloadOption> options, InputSource)
+void UserInputBridge::reloadFrame(Frame& frame, OptionSet<ReloadOption> options, InputSource)
 {
-    frame->loader().reload(options);
+    frame.loader().reload(options);
 }
 
-void UserInputBridge::stopLoadingFrame(Frame* frame, InputSource)
+void UserInputBridge::stopLoadingFrame(Frame& frame, InputSource)
 {
-    frame->loader().stopForUserCancel();
+    frame.loader().stopForUserCancel();
 }
 
 bool UserInputBridge::tryClosePage(InputSource)

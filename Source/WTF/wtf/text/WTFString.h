@@ -202,6 +202,7 @@ public:
     size_t reverseFind(const String& string, unsigned start = MaxLength) const { return m_impl ? m_impl->reverseFind(string.impl(), start) : notFound; }
 
     WTF_EXPORT_PRIVATE Vector<UChar> charactersWithNullTermination() const;
+    WTF_EXPORT_PRIVATE Vector<UChar> charactersWithoutNullTermination() const;
 
     WTF_EXPORT_PRIVATE UChar32 characterStartingAt(unsigned) const;
 
@@ -349,6 +350,7 @@ public:
     static String fromUTF8(const char* string) { return fromUTF8(reinterpret_cast<const LChar*>(string)); };
     WTF_EXPORT_PRIVATE static String fromUTF8(const CString&);
     static String fromUTF8(const Vector<LChar>& characters);
+    static String fromUTF8ReplacingInvalidSequences(const LChar*, size_t);
 
     // Tries to convert the passed in string to UTF-8, but will fall back to Latin-1 if the string is not valid UTF-8.
     WTF_EXPORT_PRIVATE static String fromUTF8WithLatin1Fallback(const LChar*, size_t);

@@ -187,6 +187,30 @@
 <span class="returnvalue">void</span>
 </td>
 <td class="function_name">
+<a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-tls-errors-policy" title="webkit_website_data_manager_set_tls_errors_policy ()">webkit_website_data_manager_set_tls_errors_policy</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="returnvalue">WebKitTLSErrorsPolicy</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-tls-errors-policy" title="webkit_website_data_manager_get_tls_errors_policy ()">webkit_website_data_manager_get_tls_errors_policy</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-network-proxy-settings" title="webkit_website_data_manager_set_network_proxy_settings ()">webkit_website_data_manager_set_network_proxy_settings</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
 <a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data-manager-fetch" title="webkit_website_data_manager_fetch ()">webkit_website_data_manager_fetch</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
@@ -413,6 +437,10 @@
 <tr>
 <td class="datatype_keyword">struct</td>
 <td class="function_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager-struct" title="struct WebKitWebsiteDataManager">WebKitWebsiteDataManager</a></td>
+</tr>
+<tr>
+<td class="datatype_keyword">enum</td>
+<td class="function_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy">WebKitTLSErrorsPolicy</a></td>
 </tr>
 <tr>
 <td class="datatype_keyword"> </td>
@@ -1036,6 +1064,118 @@ See also <a class="link" href="WebKitWebsiteDataManager.html#webkit-website-data
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if persistent credential storage is enabled, or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-website-data-manager-set-tls-errors-policy"></a><h3>webkit_website_data_manager_set_tls_errors_policy ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_website_data_manager_set_tls_errors_policy
+                               (<em class="parameter"><code><a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> *manager</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> policy</code></em>);</pre>
+<p>Set the TLS errors policy of <em class="parameter"><code>manager</code></em>
+ as <em class="parameter"><code>policy</code></em>
+</p>
+<div class="refsect3">
+<a name="webkit-website-data-manager-set-tls-errors-policy.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>manager</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>policy</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.32</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-website-data-manager-get-tls-errors-policy"></a><h3>webkit_website_data_manager_get_tls_errors_policy ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="returnvalue">WebKitTLSErrorsPolicy</span></a>
+webkit_website_data_manager_get_tls_errors_policy
+                               (<em class="parameter"><code><a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> *manager</code></em>);</pre>
+<p>Get the TLS errors policy of <em class="parameter"><code>manager</code></em>
+</p>
+<div class="refsect3">
+<a name="webkit-website-data-manager-get-tls-errors-policy.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>manager</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-website-data-manager-get-tls-errors-policy.returns"></a><h4>Returns</h4>
+<p> a <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a></p>
+</div>
+<p class="since">Since: 2.32</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-website-data-manager-set-network-proxy-settings"></a><h3>webkit_website_data_manager_set_network_proxy_settings ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_website_data_manager_set_network_proxy_settings
+                               (<em class="parameter"><code><a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> *manager</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitNetworkProxySettings.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode"><span class="type">WebKitNetworkProxyMode</span></a> proxy_mode</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a> *proxy_settings</code></em>);</pre>
+<p>Set the network proxy settings to be used by connections started in <em class="parameter"><code>manager</code></em>
+ session.
+By default <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-DEFAULT:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_DEFAULT</code></a> is used, which means that the
+system settings will be used (<a href="../gio/GProxyResolver.html#g-proxy-resolver-get-default"><code class="function">g_proxy_resolver_get_default()</code></a>).
+If you want to override the system default settings, you can either use
+<a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-NO-PROXY:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_NO_PROXY</code></a> to make sure no proxies are used at all,
+or <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> to provide your own proxy settings.
+When <em class="parameter"><code>proxy_mode</code></em>
+ is <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"><code class="literal">WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code></a> <em class="parameter"><code>proxy_settings</code></em>
+ must be
+a valid <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a>; otherwise, <em class="parameter"><code>proxy_settings</code></em>
+ must be <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>.</p>
+<div class="refsect3">
+<a name="webkit-website-data-manager-set-network-proxy-settings.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>manager</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>proxy_mode</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitNetworkProxySettings.html#WebKitNetworkProxyMode" title="enum WebKitNetworkProxyMode"><span class="type">WebKitNetworkProxyMode</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>proxy_settings</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.32</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1708,6 +1848,40 @@ You must free the <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span cl
 <div class="refsect2">
 <a name="WebKitWebsiteDataManager-struct"></a><h3>struct WebKitWebsiteDataManager</h3>
 <pre class="programlisting">struct WebKitWebsiteDataManager;</pre>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitTLSErrorsPolicy"></a><h3>enum WebKitTLSErrorsPolicy</h3>
+<p>Enum values used to denote the TLS errors policy.</p>
+<div class="refsect3">
+<a name="WebKitTLSErrorsPolicy.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="300px" class="enum_members_name">
+<col class="enum_members_description">
+<col width="200px" class="enum_members_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"></a>WEBKIT_TLS_ERRORS_POLICY_IGNORE</p></td>
+<td class="enum_member_description">
+<p>Ignore TLS errors.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-TLS-ERRORS-POLICY-FAIL:CAPS"></a>WEBKIT_TLS_ERRORS_POLICY_FAIL</p></td>
+<td class="enum_member_description">
+<p>TLS errors will emit
+<a class="link" href="WebKitWebView.html#WebKitWebView-load-failed-with-tls-errors" title="The “load-failed-with-tls-errors” signal"><span class="type">“load-failed-with-tls-errors”</span></a> and, if the signal is handled,
+finish the load. In case the signal is not handled,
+<a class="link" href="WebKitWebView.html#WebKitWebView-load-failed" title="The “load-failed” signal"><span class="type">“load-failed”</span></a> is emitted before the load finishes.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
 </div>
 <hr>
 <div class="refsect2">

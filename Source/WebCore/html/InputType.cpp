@@ -523,9 +523,9 @@ String InputType::serialize(const Decimal&) const
     return String();
 }
 
-DateComponents::Type InputType::dateType() const
+DateComponentsType InputType::dateType() const
 {
-    return DateComponents::Invalid;
+    return DateComponentsType::Invalid;
 }
 
 void InputType::dispatchSimulatedClickIfActive(KeyboardEvent& event) const
@@ -582,7 +582,7 @@ void InputType::handleBlurEvent()
 bool InputType::accessKeyAction(bool)
 {
     ASSERT(element());
-    element()->focus(false);
+    element()->focus(SelectionRestorationMode::SelectAll);
     return false;
 }
 

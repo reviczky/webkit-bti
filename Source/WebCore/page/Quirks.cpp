@@ -29,6 +29,7 @@
 #include "Attr.h"
 #include "DOMTokenList.h"
 #include "DOMWindow.h"
+#include "DeprecatedGlobalSettings.h"
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "DocumentStorageAccess.h"
@@ -42,6 +43,8 @@
 #include "JSEventListener.h"
 #include "LayoutUnit.h"
 #include "NamedNodeMap.h"
+#include "NetworkStorageSession.h"
+#include "PlatformMouseEvent.h"
 #include "ResourceLoadObserver.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGPathElement.h"
@@ -375,8 +378,6 @@ bool Quirks::shouldDispatchSimulatedMouseEvents() const
             return true;
         if (host == "naver.com")
             return true;
-        if (host == "nhl.com" || (host.endsWith(".nhl.com") && !host.startsWith("account.")))
-            return true;
         if (host == "nba.com" || host.endsWith(".nba.com"))
             return true;
         if (host.endsWith(".naver.com")) {
@@ -513,11 +514,16 @@ bool Quirks::shouldAvoidResizingWhenInputViewBoundsChange() const
     if (!needsQuirks())
         return false;
 
-    auto host = m_document->topDocument().url().host();
+    auto& url = m_document->topDocument().url();
+    auto host = url.host();
+
     if (equalLettersIgnoringASCIICase(host, "live.com") || host.endsWithIgnoringASCIICase(".live.com"))
         return true;
 
     if (equalLettersIgnoringASCIICase(host, "twitter.com") || host.endsWithIgnoringASCIICase(".twitter.com"))
+        return true;
+
+    if ((equalLettersIgnoringASCIICase(host, "google.com") || host.endsWithIgnoringASCIICase(".google.com")) && url.path().startsWithIgnoringASCIICase("/maps/"))
         return true;
 
     if (host.endsWithIgnoringASCIICase(".sharepoint.com"))
@@ -633,6 +639,46 @@ bool Quirks::needsFullscreenDisplayNoneQuirk() const
     }
 
     return *m_needsFullscreenDisplayNoneQuirk;
+#else
+    return false;
+#endif
+}
+
+bool Quirks::shouldSilenceWindowResizeEvents() const
+{
+#if PLATFORM(IOS)
+    if (!needsQuirks())
+        return false;
+
+    // We silence window resize events during the 'homing out' snapshot sequence when on nytimes.com
+    // to address <rdar://problem/59763843>, and on twitter.com to address <rdar://problem/58804852> &
+    // <rdar://problem/61731801>.
+    auto* page = m_document->page();
+    if (!page || !page->isTakingSnapshotsForApplicationSuspension())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    return equalLettersIgnoringASCIICase(host, "nytimes.com") || host.endsWithIgnoringASCIICase(".nytimes.com")
+        || equalLettersIgnoringASCIICase(host, "twitter.com") || host.endsWithIgnoringASCIICase(".twitter.com");
+#else
+    return false;
+#endif
+}
+
+bool Quirks::shouldSilenceMediaQueryListChangeEvents() const
+{
+#if PLATFORM(IOS)
+    if (!needsQuirks())
+        return false;
+
+    // We silence MediaQueryList's change events during the 'homing out' snapshot sequence when on twitter.com
+    // to address <rdar://problem/58804852> & <rdar://problem/61731801>.
+    auto* page = m_document->page();
+    if (!page || !page->isTakingSnapshotsForApplicationSuspension())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    return equalLettersIgnoringASCIICase(host, "twitter.com") || host.endsWithIgnoringASCIICase(".twitter.com");
 #else
     return false;
 #endif
@@ -758,15 +804,33 @@ bool Quirks::shouldBypassAsyncScriptDeferring() const
 
 bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, const AtomString& eventType, const EventListener& eventListener)
 {
-    if (eventNames().isTouchScrollBlockingEventType(eventType)) {
-        if (is<DOMWindow>(eventTarget)) {
-            auto& window = downcast<DOMWindow>(eventTarget);
-            if (auto* document = window.document())
-                return document->settings().passiveTouchListenersAsDefaultOnDocument();
-        } else if (is<Node>(eventTarget)) {
+    auto eventTargetIsRoot = [](const EventTarget& eventTarget) {
+        if (is<DOMWindow>(eventTarget))
+            return true;
+
+        if (is<Node>(eventTarget)) {
             auto& node = downcast<Node>(eventTarget);
-            if (is<Document>(node) || node.document().documentElement() == &node || node.document().body() == &node)
-                return node.document().settings().passiveTouchListenersAsDefaultOnDocument();
+            return is<Document>(node) || node.document().documentElement() == &node || node.document().body() == &node;
+        }
+        return false;
+    };
+
+    auto documentFromEventTarget = [](const EventTarget& eventTarget) -> Document* {
+        return downcast<Document>(eventTarget.scriptExecutionContext());
+    };
+
+    if (eventNames().isTouchScrollBlockingEventType(eventType)) {
+        if (eventTargetIsRoot(eventTarget)) {
+            if (auto* document = documentFromEventTarget(eventTarget))
+                return document->settings().passiveTouchListenersAsDefaultOnDocument();
+        }
+        return false;
+    }
+
+    if (eventNames().isWheelEventType(eventType)) {
+        if (eventTargetIsRoot(eventTarget)) {
+            if (auto* document = documentFromEventTarget(eventTarget))
+                return document->settings().passiveWheelListenersAsDefaultOnDocument();
         }
         return false;
     }
@@ -794,7 +858,7 @@ bool Quirks::shouldMakeEventListenerPassive(const EventTarget& eventTarget, cons
 }
 
 #if ENABLE(MEDIA_STREAM)
-bool Quirks::shouldEnableLegacyGetUserMedia() const
+bool Quirks::shouldEnableLegacyGetUserMediaQuirk() const
 {
     if (!needsQuirks())
         return false;
@@ -898,10 +962,120 @@ static bool isKinjaLoginAvatarElement(const Element& element)
 
     return false;
 }
+
+bool Quirks::isMicrosoftTeamsRedirectURL(const URL& url)
+{
+    return url.host() == "teams.microsoft.com"_s && url.query().toString().contains("Retried+3+times+without+success");
+}
+
+static bool isStorageAccessQuirkDomainAndElement(const URL& url, const Element& element)
+{
+    // Microsoft Teams login case.
+    // FIXME(218779): Remove this quirk once microsoft.com completes their login flow redesign.
+    if (url.host() == "www.microsoft.com"_s || url.host() == "login.live.com"_s) {
+        return element.hasClass()
+        && (element.classNames().contains("glyph_signIn_circle")
+        || element.classNames().contains("mectrl_headertext")
+        || element.classNames().contains("mectrl_header")
+        || element.classNames().contains("ext-button primary")
+        || element.classNames().contains("ext-primary"));
+    }
+    // Skype case.
+    // FIXME(220105): Remove this quirk once Skype under outlook.live.com completes their login flow redesign.
+    if (url.host() == "outlook.live.com"_s) {
+        return element.hasClass()
+        && (element.classNames().contains("_3ioEp2RGR5vb0gqRDsaFPa")
+        || element.classNames().contains("_2Am2jvTaBz17UJ8XnfxFOy"));
+    }
+    // Sony Network Entertainment login case.
+    // FIXME(218760): Remove this quirk once playstation.com completes their login flow redesign.
+    if (url.host() == "www.playstation.com"_s || url.host() == "my.playstation.com"_s) {
+        return element.hasClass()
+        && (element.classNames().contains("web-toolbar__signin-button")
+        || element.classNames().contains("sb-signin-button"));
+    }
+
+    return false;
+}
+
+bool Quirks::hasStorageAccessForAllLoginDomains(const HashSet<RegistrableDomain>& loginDomains, const RegistrableDomain& topFrameDomain)
+{
+    for (auto& loginDomain : loginDomains) {
+        if (!ResourceLoadObserver::shared().hasCrossPageStorageAccess(loginDomain, topFrameDomain))
+            return false;
+    }
+    return true;
+}
+
+const String& Quirks::BBCRadioPlayerURLString()
+{
+    static NeverDestroyed<String> BBCRadioPlayerURLString = "https://www.bbc.co.uk/sounds/player/bbc_world_service"_s;
+    return BBCRadioPlayerURLString;
+}
+
+const String& Quirks::staticRadioPlayerURLString()
+{
+    static NeverDestroyed<String> staticRadioPlayerURLString = "https://static.radioplayer.co.uk/"_s;
+    return staticRadioPlayerURLString;
+}
+
+static bool isBBCDomain(const RegistrableDomain& domain)
+{
+    static NeverDestroyed<RegistrableDomain> BBCDomain = RegistrableDomain(URL(URL(), Quirks::BBCRadioPlayerURLString()));
+    return domain == BBCDomain;
+}
+
+static bool isBBCPopUpPlayerElement(const Element& element)
+{
+    auto* parentElement = element.parentElement();
+    if (!element.parentElement() || !element.parentElement()->hasClass() || !parentElement->parentElement() || !parentElement->parentElement()->hasClass())
+        return false;
+
+    return element.parentElement()->classNames().contains("p_audioButton_buttonInner") && parentElement->parentElement()->classNames().contains("hidden");
+}
+
+Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(CompletionHandler<void(StorageAccessWasGranted)>&& completionHandler) const
+{
+    auto firstPartyDomain = mapToTopDomain(m_document->topDocument().url());
+    auto domainsInNeedOfStorageAccess = NetworkStorageSession::subResourceDomainsInNeedOfStorageAccessForFirstParty(firstPartyDomain);
+    if (!domainsInNeedOfStorageAccess || domainsInNeedOfStorageAccess.value().isEmpty()) {
+        completionHandler(StorageAccessWasGranted::No);
+        return Quirks::StorageAccessResult::ShouldNotCancelEvent;
+    }
+    if (hasStorageAccessForAllLoginDomains(*domainsInNeedOfStorageAccess, firstPartyDomain)) {
+        completionHandler(StorageAccessWasGranted::No);
+        return Quirks::StorageAccessResult::ShouldNotCancelEvent;
+    }
+
+    auto domainInNeedOfStorageAccess = RegistrableDomain(*domainsInNeedOfStorageAccess.value().begin().get());
+
+    if (!m_document) {
+        completionHandler(StorageAccessWasGranted::No);
+        return Quirks::StorageAccessResult::ShouldNotCancelEvent;
+    }
+
+    DocumentStorageAccess::requestStorageAccessForNonDocumentQuirk(*m_document, WTFMove(domainInNeedOfStorageAccess), [firstPartyDomain, domainInNeedOfStorageAccess, completionHandler = WTFMove(completionHandler)](StorageAccessWasGranted storageAccessGranted) mutable {
+        ResourceLoadObserver::shared().setDomainsWithCrossPageStorageAccess({{ firstPartyDomain, domainInNeedOfStorageAccess }}, [storageAccessGranted, completionHandler = WTFMove(completionHandler)] () mutable {
+            completionHandler(storageAccessGranted);
+        });
+    });
+    return Quirks::StorageAccessResult::ShouldCancelEvent;
+}
+
+RegistrableDomain Quirks::mapToTopDomain(const URL& urlToMap)
+{
+    if (urlToMap.host() == "login.live.com"_s)
+        return RegistrableDomain::uncheckedCreateFromRegistrableDomainString("microsoft.com"_s);
+
+    return RegistrableDomain(urlToMap);
+}
 #endif
 
-Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(const Element& element, const AtomString& eventType) const
+Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& element, const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget) const
 {
+    if (!DeprecatedGlobalSettings::resourceLoadStatisticsEnabled())
+        return Quirks::StorageAccessResult::ShouldNotCancelEvent;
+
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (!needsQuirks())
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
@@ -933,6 +1107,8 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(const Elem
     static NeverDestroyed<UserScript> kinjaLoginUserScript { "function triggerLoginForm() { let elements = document.getElementsByClassName('js_header-userbutton'); if (elements && elements[0]) { elements[0].click(); clearInterval(interval); } } let interval = setInterval(triggerLoginForm, 200);", URL(aboutBlankURL()), Vector<String>(), Vector<String>(), UserScriptInjectionTime::DocumentEnd, UserContentInjectedFrames::InjectInTopFrameOnly, WaitForNotificationBeforeInjecting::Yes };
 
     if (eventType == "click") {
+        if (!m_document)
+            return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
         // Embedded YouTube case.
         if (element.hasClass() && domain == youTubeDomain && !m_document->isTopDocument() && ResourceLoadObserver::shared().hasHadUserInteraction(youTubeDomain)) {
@@ -970,10 +1146,49 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(const Elem
                 return Quirks::StorageAccessResult::ShouldCancelEvent;
             }
         }
+
+        if (isStorageAccessQuirkDomainAndElement(m_document->url(), element)) {
+            return requestStorageAccessAndHandleClick([element = makeWeakPtr(element), platformEvent, eventType, detail, relatedTarget] (StorageAccessWasGranted storageAccessWasGranted) mutable {
+                if (!element)
+                    return;
+
+                if (storageAccessWasGranted == StorageAccessWasGranted::Yes)
+                    element->dispatchMouseEvent(platformEvent, eventType, detail, relatedTarget);
+            });
+        }
+
+        static NeverDestroyed<String> BBCRadioPlayerPopUpWindowFeatureString = "featurestring width=400,height=730"_s;
+        static NeverDestroyed<UserScript> BBCUserScript { "function triggerRedirect() { document.location.href = \"https://www.bbc.co.uk/sounds/player/bbc_world_service\"; } window.addEventListener('load', function () { triggerRedirect(); })", URL(aboutBlankURL()), Vector<String>(), Vector<String>(), UserScriptInjectionTime::DocumentEnd, UserContentInjectedFrames::InjectInTopFrameOnly, WaitForNotificationBeforeInjecting::Yes };
+
+        // BBC RadioPlayer case.
+        if (isBBCDomain(domain) && isBBCPopUpPlayerElement(element)) {
+            return requestStorageAccessAndHandleClick([document = m_document] (StorageAccessWasGranted storageAccessWasGranted) mutable {
+                if (!document || storageAccessWasGranted == StorageAccessWasGranted::No)
+                    return;
+
+                auto domWindow = document->domWindow();
+                if (domWindow) {
+                    ExceptionOr<RefPtr<WindowProxy>> proxyOrException = domWindow->open(*domWindow, *domWindow, staticRadioPlayerURLString(), emptyString(), BBCRadioPlayerPopUpWindowFeatureString);
+                    if (proxyOrException.hasException())
+                        return;
+                    auto proxy = proxyOrException.releaseReturnValue();
+                    auto* abstractFrame = proxy->frame();
+                    if (is<Frame>(abstractFrame)) {
+                        auto* frame = downcast<Frame>(abstractFrame);
+                        auto world = ScriptController::createWorld("bbcRadioPlayerWorld", ScriptController::WorldType::User);
+                        frame->addUserScriptAwaitingNotification(world.get(), BBCUserScript);
+                        return;
+                    }
+                }
+            });
+        }
     }
 #else
     UNUSED_PARAM(element);
+    UNUSED_PARAM(platformEvent);
     UNUSED_PARAM(eventType);
+    UNUSED_PARAM(detail);
+    UNUSED_PARAM(relatedTarget);
 #endif
     return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 }
@@ -1011,6 +1226,8 @@ bool Quirks::needsAkamaiMediaPlayerQuirk(const HTMLVideoElement& element) const
 
     static NeverDestroyed<const AtomString> akamaiHTML5(MAKE_STATIC_STRING_IMPL("akamai-html5"));
     static NeverDestroyed<const AtomString> akamaiMediaElement(MAKE_STATIC_STRING_IMPL("akamai-media-element"));
+    static NeverDestroyed<const AtomString> ampHTML5(MAKE_STATIC_STRING_IMPL("amp-html5"));
+    static NeverDestroyed<const AtomString> ampMediaElement(MAKE_STATIC_STRING_IMPL("amp-media-element"));
 
     if (!needsQuirks())
         return false;
@@ -1019,11 +1236,26 @@ bool Quirks::needsAkamaiMediaPlayerQuirk(const HTMLVideoElement& element) const
         return false;
 
     auto& classNames = element.classNames();
-    return classNames.contains(akamaiHTML5) && classNames.contains(akamaiMediaElement);
+    return (classNames.contains(akamaiHTML5) && classNames.contains(akamaiMediaElement)) || (classNames.contains(ampHTML5) && classNames.contains(ampMediaElement));
 #else
     UNUSED_PARAM(element);
     return false;
 #endif
+}
+
+bool Quirks::needsBlackFullscreenBackgroundQuirk() const
+{
+    // MLB.com sets a black background-color on the :backdrop pseudo element, which WebKit does not yet support. This
+    // quirk can be removed once support for :backdrop psedue element is added.
+    if (!needsQuirks())
+        return false;
+
+    if (!m_needsBlackFullscreenBackgroundQuirk) {
+        auto host = m_document->topDocument().url().host();
+        m_needsBlackFullscreenBackgroundQuirk = equalLettersIgnoringASCIICase(host, "mlb.com") || host.endsWithIgnoringASCIICase(".mlb.com");
+    }
+
+    return *m_needsBlackFullscreenBackgroundQuirk;
 }
 
 }
