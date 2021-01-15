@@ -23,7 +23,7 @@ webkit2gtk (2.31.1-1) UNRELEASED; urgency=medium
     + libcairo2-dev from 1.10.2 to 1.14.0
     + libsoup2.4-dev from 2.42.0 to 2.54.0.
   * debian/copyright:
-    + Update copyright years.
+    + Update copyright information of all files.
   * debian/watch, debian/gbp.conf:
     + Update for 2.31.x packages in experimental.
   * Use -DFORCE_32BIT on 32-bit builds.
