@@ -31,6 +31,8 @@ webkit2gtk (2.31.1-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/control:
     + Add build dependency on libmanette-0.2-dev.
+    + Stop suggesting browser-plugin-freshplayer-pepperflash for
+      libwebkit2gtk-4.0-37-gtk2.
   * debian/NEWS:
     - Add item explaining the removal of support for NPAPI plugins.
 
