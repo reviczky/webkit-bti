@@ -1,4 +1,4 @@
-webkit2gtk (2.31.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.31.1-1) experimental; urgency=medium
 
   * New upstream development release.
   * Remove some obsolete build dependencies (see #979170):
@@ -47,7 +47,7 @@ webkit2gtk (2.31.1-1) UNRELEASED; urgency=medium
       - Set the architecture of all binary packages to 'any' and require
         bubblewrap, systemd and libwpebackend-fdo on Linux only.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
+ -- Alberto Garcia <berto@igalia.com>  Sat, 16 Jan 2021 16:38:36 +0100
 
 webkit2gtk (2.30.4-1) unstable; urgency=high
 
