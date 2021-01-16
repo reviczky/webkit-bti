@@ -37,6 +37,15 @@ webkit2gtk (2.31.1-1) UNRELEASED; urgency=medium
     - Add item explaining the removal of support for NPAPI plugins.
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
+  * Enable the build on non-Linux architectures (Closes: #978098):
+    + debian/rules:
+      - Build with -DUSE_SYSTEMD=OFF if the OS is not Linux.
+    + debian/patches/fix-ftbfs-hurd.patch:
+      - Add alternative implementation of scanDirectoryForDictionaries()
+        that does not use PATH_MAX (for the Hurd).
+    + debian/control:
+      - Set the architecture of all binary packages to 'any' and require
+        bubblewrap, systemd and libwpebackend-fdo on Linux only.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
 
