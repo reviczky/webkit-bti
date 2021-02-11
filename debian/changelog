@@ -29,6 +29,8 @@ webkit2gtk (2.30.5-1) UNRELEASED; urgency=medium
     + Update copyright years.
   * debian/watch:
     + Set version to 4 (fixes older-debian-watch-file-standard).
+  * debian/control:
+    + Update Standards-Version to 4.5.1 (no changes).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
 
