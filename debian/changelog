@@ -1,5 +1,6 @@
-webkit2gtk (2.30.4-2) UNRELEASED; urgency=medium
+webkit2gtk (2.30.5-1) UNRELEASED; urgency=medium
 
+  * New upstream release (Closes: #978042).
   * Remove some obsolete build dependencies (Closes: #979170):
     + gawk is not needed since WebKitGTK switched from autotools to CMake.
     + libgeoclue-2-dev and geoclue-2.0 are not required since WebKitGTK
