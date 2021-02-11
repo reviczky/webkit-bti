@@ -27,6 +27,8 @@ webkit2gtk (2.30.5-1) UNRELEASED; urgency=medium
       with Loongson CPUs that don't support 4KB pages (Closes: #977779).
   * debian/copyright:
     + Update copyright years.
+  * debian/watch:
+    + Set version to 4 (fixes older-debian-watch-file-standard).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 07 Jan 2021 14:23:52 +0100
 
