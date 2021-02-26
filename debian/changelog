@@ -8,6 +8,8 @@ webkit2gtk (2.31.90-1) UNRELEASED; urgency=medium
       + Depend on libmanette-0.2-dev only on Linux.
   * debian/patches/fix-ftbfs-x32.patch:
     + Refresh patch.
+  * debian/control:
+    + Depend on GStreamer >= 1.14.0.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 16 Jan 2021 18:37:15 +0100
 
