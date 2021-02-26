@@ -1583,6 +1583,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_result_ref@Base 2.5.3
  webkit_javascript_result_unref@Base 2.5.3
  webkit_load_event_get_type@Base 2.5.3
+ webkit_media_key_system_permission_get_name@Base 2.31.90
+ webkit_media_key_system_permission_request_get_type@Base 2.31.90
  (optional)webkit_media_player_debug@Base 2.19.6
  (optional)webkit_media_src_get_type@Base 2.19.6
  webkit_mime_info_get_description@Base 2.5.3
@@ -1847,6 +1849,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_error_quark@Base 2.5.3
  webkit_snapshot_options_get_type@Base 2.5.3
  webkit_snapshot_region_get_type@Base 2.5.3
+ (optional)webkit_text_sink_get_type@Base 2.31.90
  webkit_tls_errors_policy_get_type@Base 2.5.3
  webkit_uri_for_display@Base 2.23.90
  webkit_uri_request_get_http_headers@Base 2.5.3

@@ -10,6 +10,8 @@ webkit2gtk (2.31.90-1) UNRELEASED; urgency=medium
     + Refresh patch.
   * debian/control:
     + Depend on GStreamer >= 1.14.0.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 16 Jan 2021 18:37:15 +0100
 
