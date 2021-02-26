@@ -53,6 +53,7 @@
 #include "MouseEvent.h"
 #include "Node.h"
 #include "Page.h"
+#include "PagePasteboardContext.h"
 #include "Pasteboard.h"
 #include "ScriptState.h"
 #include "Settings.h"
@@ -157,7 +158,7 @@ void InspectorFrontendHost::disconnectClient()
 
 void InspectorFrontendHost::addSelfToGlobalObjectInWorld(DOMWrapperWorld& world)
 {
-    auto& lexicalGlobalObject = *globalObject(world, m_frontendPage);
+    auto& lexicalGlobalObject = *globalObject(world, m_frontendPage ? &m_frontendPage->mainFrame() : nullptr);
     auto& vm = lexicalGlobalObject.vm();
     JSC::JSLockHolder lock(vm);
     auto scope = DECLARE_CATCH_SCOPE(vm);
@@ -414,7 +415,8 @@ String InspectorFrontendHost::port() const
 
 void InspectorFrontendHost::copyText(const String& text)
 {
-    Pasteboard::createForCopyAndPaste()->writePlainText(text, Pasteboard::CannotSmartReplace);
+    auto pageID = m_frontendPage ? m_frontendPage->mainFrame().pageID() : WTF::nullopt;
+    Pasteboard::createForCopyAndPaste(PagePasteboardContext::create(WTFMove(pageID)))->writePlainText(text, Pasteboard::CannotSmartReplace);
 }
 
 void InspectorFrontendHost::killText(const String& text, bool shouldPrependToKillRing, bool shouldStartNewSequence)
@@ -501,7 +503,7 @@ void InspectorFrontendHost::showContextMenu(Event& event, Vector<ContextMenuItem
 #if ENABLE(CONTEXT_MENUS)
     ASSERT(m_frontendPage);
 
-    auto& lexicalGlobalObject = *globalObject(debuggerWorld(), m_frontendPage);
+    auto& lexicalGlobalObject = *globalObject(debuggerWorld(), &m_frontendPage->mainFrame());
     auto& vm = lexicalGlobalObject.vm();
     auto value = lexicalGlobalObject.get(&lexicalGlobalObject, JSC::Identifier::fromString(vm, "InspectorFrontendAPI"));
     ASSERT(value);
@@ -670,5 +672,33 @@ void InspectorFrontendHost::logDiagnosticEvent(const String& eventName, const St
     m_client->logDiagnosticEvent(makeString("WebInspector."_s, eventName), dictionary);
 }
 #endif // ENABLE(INSPECTOR_TELEMETRY)
+
+bool InspectorFrontendHost::supportsWebExtensions()
+{
+#if ENABLE(INSPECTOR_EXTENSIONS)
+    return m_client && m_client->supportsWebExtensions();
+#else
+    return false;
+#endif
+}
+
+#if ENABLE(INSPECTOR_EXTENSIONS)
+void InspectorFrontendHost::didShowExtensionTab(const String& extensionID, const String& extensionTabID)
+{
+    if (!m_client)
+        return;
+    
+    m_client->didShowExtensionTab(extensionID, extensionTabID);
+}
+
+void InspectorFrontendHost::didHideExtensionTab(const String& extensionID, const String& extensionTabID)
+{
+    if (!m_client)
+        return;
+    
+    m_client->didHideExtensionTab(extensionID, extensionTabID);
+}
+#endif // ENABLE(INSPECTOR_EXTENSIONS)
+
 
 } // namespace WebCore

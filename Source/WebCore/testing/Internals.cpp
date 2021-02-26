@@ -29,6 +29,7 @@
 
 #include "AXObjectCache.h"
 #include "ActivityState.h"
+#include "AddEventListenerOptions.h"
 #include "AnimationTimeline.h"
 #include "ApplicationCacheStorage.h"
 #include "AudioSession.h"
@@ -158,6 +159,7 @@
 #include "RenderEmbeddedObject.h"
 #include "RenderLayerBacking.h"
 #include "RenderLayerCompositor.h"
+#include "RenderLayerScrollableArea.h"
 #include "RenderListBox.h"
 #include "RenderMenuList.h"
 #include "RenderTheme.h"
@@ -319,7 +321,7 @@
 #endif
 
 #if PLATFORM(MAC)
-#include "GraphicsContextGLOpenGLManager.h"
+#include "GraphicsChecksMac.h"
 #include "NSScrollerImpDetails.h"
 #include "ScrollbarThemeMac.h"
 #endif
@@ -327,7 +329,7 @@
 #if PLATFORM(COCOA)
 #include "SystemBattery.h"
 #include "VP9UtilitiesCocoa.h"
-#include <pal/spi/cocoa/CoreTextSPI.h>
+#include <pal/spi/cf/CoreTextSPI.h>
 #include <wtf/spi/darwin/SandboxSPI.h>
 #endif
 
@@ -625,13 +627,13 @@ Internals::Internals(Document& document)
 #endif
 
 #if PLATFORM(COCOA)
-    setOverrideSystemHasBatteryForTesting(WTF::nullopt);
-    setOverrideSystemHasACForTesting(WTF::nullopt);
+    SystemBatteryStatusTestingOverrides::singleton().setHasAC(WTF::nullopt);
+    SystemBatteryStatusTestingOverrides::singleton().setHasBattery(WTF::nullopt);
 #endif
 
 #if ENABLE(VP9) && PLATFORM(COCOA)
-    setOverrideVP9HardwareDecoderDisabledForTesting(false);
-    resetOverrideVP9ScreenSizeAndScaleForTesting();
+    VP9TestingOverrides::singleton().setHardwareDecoderDisabled(WTF::nullopt);
+    VP9TestingOverrides::singleton().setVP9ScreenSizeAndScale(WTF::nullopt);
 #endif
 }
 
@@ -1604,16 +1606,6 @@ void Internals::setUseDTLS10(bool useDTLS10)
 #endif
 }
 
-void Internals::setUseGPUProcessForWebRTC(bool useGPUProcess)
-{
-#if USE(LIBWEBRTC)
-    auto* document = contextDocument();
-    if (!document || !document->page())
-        return;
-
-    document->page()->mediaRecorderProvider().setUseGPUProcess(useGPUProcess);
-#endif
-}
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -1660,6 +1652,15 @@ Ref<DOMRect> Internals::boundingBox(Element& element)
     if (!renderer)
         return DOMRect::create();
     return DOMRect::create(renderer->absoluteBoundingBoxRectIgnoringTransforms());
+}
+
+ExceptionOr<unsigned> Internals::inspectorGridOverlayCount()
+{
+    Document* document = contextDocument();
+    if (!document || !document->page())
+        return Exception { InvalidAccessError };
+
+    return document->page()->inspectorController().gridOverlayCount();
 }
 
 ExceptionOr<Ref<DOMRectList>> Internals::inspectorHighlightRects()
@@ -1838,7 +1839,8 @@ ExceptionOr<void> Internals::scrollBySimulatingWheelEvent(Element& element, doub
         if (!box.canBeScrolledAndHasScrollableArea())
             return Exception { InvalidAccessError };
 
-        scrollableArea = box.layer();
+        ASSERT(box.layer());
+        scrollableArea = box.layer()->scrollableArea();
     }
     
     if (!scrollableArea)
@@ -2489,6 +2491,11 @@ void Internals::setAutomaticSpellingCorrectionEnabled(bool enabled)
 #endif
 }
 
+bool Internals::isSpellcheckDisabledExceptTextReplacement(const HTMLInputElement& element) const
+{
+    return element.isSpellcheckDisabledExceptTextReplacement();
+}
+
 void Internals::handleAcceptedCandidate(const String& candidate, unsigned location, unsigned length)
 {
     if (!contextDocument() || !contextDocument()->frame())
@@ -2859,8 +2866,10 @@ ExceptionOr<ScrollableArea*> Internals::scrollableAreaForNode(Node* node) const
 
         if (is<RenderListBox>(renderBox))
             scrollableArea = &downcast<RenderListBox>(renderBox);
-        else
-            scrollableArea = renderBox.layer();
+        else {
+            ASSERT(renderBox.layer());
+            scrollableArea = renderBox.layer()->scrollableArea();
+        }
     } else
         return Exception { InvalidNodeTypeError };
 
@@ -4273,7 +4282,7 @@ void Internals::setMediaElementRestrictions(HTMLMediaElement& element, StringVie
 ExceptionOr<void> Internals::postRemoteControlCommand(const String& commandString, float argument)
 {
     PlatformMediaSession::RemoteControlCommandType command;
-    PlatformMediaSession::RemoteCommandArgument parameter { argument };
+    PlatformMediaSession::RemoteCommandArgument parameter { argument, { } };
 
     if (equalLettersIgnoringASCIICase(commandString, "play"))
         command = PlatformMediaSession::PlayCommand;
@@ -4296,7 +4305,7 @@ ExceptionOr<void> Internals::postRemoteControlCommand(const String& commandStrin
     else
         return Exception { InvalidAccessError };
 
-    PlatformMediaSessionManager::sharedManager().processDidReceiveRemoteControlCommand(command, &parameter);
+    PlatformMediaSessionManager::sharedManager().processDidReceiveRemoteControlCommand(command, parameter);
     return { };
 }
 
@@ -4628,7 +4637,7 @@ MockContentFilterSettings& Internals::mockContentFilterSettings()
 
 #if ENABLE(CSS_SCROLL_SNAP)
 
-static void appendOffsets(StringBuilder& builder, const Vector<LayoutUnit>& snapOffsets)
+static void appendOffsets(StringBuilder& builder, const Vector<SnapOffset<LayoutUnit>>& snapOffsets)
 {
     bool justStarting = true;
 
@@ -4639,7 +4648,10 @@ static void appendOffsets(StringBuilder& builder, const Vector<LayoutUnit>& snap
         else
             justStarting = false;
 
-        builder.appendNumber(coordinate.toUnsigned());
+        builder.appendNumber(coordinate.offset.toUnsigned());
+        if (coordinate.stop == ScrollSnapStop::Always)
+            builder.appendLiteral(" (always)");
+
     }
     builder.appendLiteral(" }");
 }
@@ -4659,22 +4671,19 @@ ExceptionOr<String> Internals::scrollSnapOffsets(Element& element)
     if (!scrollableArea)
         return Exception { InvalidAccessError };
 
+    auto* offsetInfo = scrollableArea->snapOffsetInfo();
     StringBuilder result;
-    if (auto* offsets = scrollableArea->horizontalSnapOffsets()) {
-        if (offsets->size()) {
-            result.appendLiteral("horizontal = ");
-            appendOffsets(result, *offsets);
-        }
+    if (offsetInfo && !offsetInfo->horizontalSnapOffsets.isEmpty()) {
+        result.appendLiteral("horizontal = ");
+        appendOffsets(result, offsetInfo->horizontalSnapOffsets);
     }
 
-    if (auto* offsets = scrollableArea->verticalSnapOffsets()) {
-        if (offsets->size()) {
-            if (result.length())
-                result.appendLiteral(", ");
+    if (offsetInfo && !offsetInfo->verticalSnapOffsets.isEmpty()) {
+        if (result.length())
+            result.appendLiteral(", ");
 
-            result.appendLiteral("vertical = ");
-            appendOffsets(result, *offsets);
-        }
+        result.appendLiteral("vertical = ");
+        appendOffsets(result, offsetInfo->verticalSnapOffsets);
     }
 
     return result.toString();
@@ -4879,6 +4888,11 @@ bool Internals::userPrefersContrast() const
 double Internals::privatePlayerVolume(const HTMLMediaElement&)
 {
     return 0;
+}
+
+bool Internals::privatePlayerMuted(const HTMLMediaElement&)
+{
+    return false;
 }
 #endif
 
@@ -5828,7 +5842,7 @@ bool Internals::systemHasBattery() const
 void Internals::setSystemHasBatteryForTesting(bool hasBattery)
 {
 #if PLATFORM(COCOA)
-    WebCore::setOverrideSystemHasBatteryForTesting(hasBattery);
+    SystemBatteryStatusTestingOverrides::singleton().setHasBattery(hasBattery);
 #else
     UNUSED_PARAM(hasBattery);
 #endif
@@ -5837,7 +5851,7 @@ void Internals::setSystemHasBatteryForTesting(bool hasBattery)
 void Internals::setSystemHasACForTesting(bool hasAC)
 {
 #if PLATFORM(COCOA)
-    WebCore::setOverrideSystemHasACForTesting(hasAC);
+    SystemBatteryStatusTestingOverrides::singleton().setHasAC(hasAC);
 #else
     UNUSED_PARAM(hasAC);
 #endif
@@ -5846,7 +5860,7 @@ void Internals::setSystemHasACForTesting(bool hasAC)
 void Internals::setHardwareVP9DecoderDisabledForTesting(bool disabled)
 {
 #if ENABLE(VP9) && PLATFORM(COCOA)
-    WebCore::setOverrideVP9HardwareDecoderDisabledForTesting(disabled);
+    VP9TestingOverrides::singleton().setHardwareDecoderDisabled(disabled);
 #else
     UNUSED_PARAM(disabled);
 #endif
@@ -5855,7 +5869,7 @@ void Internals::setHardwareVP9DecoderDisabledForTesting(bool disabled)
 void Internals::setVP9ScreenSizeAndScaleForTesting(double width, double height, double scale)
 {
 #if ENABLE(VP9) && PLATFORM(COCOA)
-    WebCore::setOverrideVP9ScreenSizeAndScaleForTesting(width, height, scale);
+    VP9TestingOverrides::singleton().setVP9ScreenSizeAndScale(makeOptional<ScreenDataOverrides>({ width, height, scale }));
 #else
     UNUSED_PARAM(width);
     UNUSED_PARAM(height);

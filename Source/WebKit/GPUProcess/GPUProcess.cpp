@@ -33,6 +33,7 @@
 #include "AuxiliaryProcessMessages.h"
 #include "DataReference.h"
 #include "GPUConnectionToWebProcess.h"
+#include "GPUProcessConnectionParameters.h"
 #include "GPUProcessCreationParameters.h"
 #include "GPUProcessSessionParameters.h"
 #include "Logging.h"
@@ -41,6 +42,7 @@
 #include "WebProcessPoolMessages.h"
 #include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/LogInitialization.h>
+#include <WebCore/MemoryRelease.h>
 #include <WebCore/NowPlayingManager.h>
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <wtf/Algorithms.h>
@@ -64,6 +66,10 @@
 #include <WebCore/VP9UtilitiesCocoa.h>
 #endif
 
+#if HAVE(CGIMAGESOURCE_WITH_SET_ALLOWABLE_TYPES)
+#include <pal/spi/cg/ImageIOSPI.h>
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -77,7 +83,7 @@ GPUProcess::~GPUProcess()
 {
 }
 
-void GPUProcess::createGPUConnectionToWebProcess(ProcessIdentifier identifier, PAL::SessionID sessionID, CompletionHandler<void(Optional<IPC::Attachment>&&)>&& completionHandler)
+void GPUProcess::createGPUConnectionToWebProcess(ProcessIdentifier identifier, PAL::SessionID sessionID, GPUProcessConnectionParameters&& parameters, CompletionHandler<void(Optional<IPC::Attachment>&&)>&& completionHandler)
 {
     auto ipcConnection = createIPCConnectionPair();
     if (!ipcConnection) {
@@ -85,7 +91,7 @@ void GPUProcess::createGPUConnectionToWebProcess(ProcessIdentifier identifier, P
         return;
     }
 
-    auto newConnection = GPUConnectionToWebProcess::create(*this, identifier, ipcConnection->first, sessionID);
+    auto newConnection = GPUConnectionToWebProcess::create(*this, identifier, ipcConnection->first, sessionID, WTFMove(parameters));
 
 #if ENABLE(MEDIA_STREAM)
     // FIXME: We should refactor code to go from WebProcess -> GPUProcess -> UIProcess when getUserMedia is called instead of going from WebProcess -> UIProcess directly.
@@ -114,9 +120,9 @@ bool GPUProcess::shouldTerminate()
     return m_webProcessConnections.isEmpty();
 }
 
-void GPUProcess::lowMemoryHandler(Critical critical)
+void GPUProcess::lowMemoryHandler(Critical critical, Synchronous synchronous)
 {
-    WTF::releaseFastMallocFreeMemory();
+    WebCore::releaseGraphicsMemory(critical, synchronous);
 }
 
 void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
@@ -125,8 +131,8 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
     AtomString::init();
 
     auto& memoryPressureHandler = MemoryPressureHandler::singleton();
-    memoryPressureHandler.setLowMemoryHandler([this] (Critical critical, Synchronous) {
-        lowMemoryHandler(critical);
+    memoryPressureHandler.setLowMemoryHandler([this] (Critical critical, Synchronous synchronous) {
+        lowMemoryHandler(critical, synchronous);
     });
     memoryPressureHandler.install();
 
@@ -143,11 +149,21 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters)
 #endif
 #endif
 
+#if USE(SANDBOX_EXTENSIONS_FOR_CACHE_AND_TEMP_DIRECTORY_ACCESS)
+    SandboxExtension::consumePermanently(parameters.containerCachesDirectoryExtensionHandle);
+    SandboxExtension::consumePermanently(parameters.containerTemporaryDirectoryExtensionHandle);
+#endif
+    
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     m_contextForVisibilityPropagation = LayerHostingContext::createForExternalHostingProcess({
         m_canShowWhileLocked
     });
     send(Messages::GPUProcessProxy::DidCreateContextForVisibilityPropagation(m_contextForVisibilityPropagation->contextID()));
+#endif
+
+#if HAVE(CGIMAGESOURCE_WITH_SET_ALLOWABLE_TYPES)
+    auto emptyArray = adoptCF(CFArrayCreate(kCFAllocatorDefault, nullptr, 0, &kCFTypeArrayCallBacks));
+    CGImageSourceSetAllowableTypes(emptyArray.get());
 #endif
 
     // Match the QoS of the UIProcess since the GPU process is doing rendering on its behalf.
@@ -160,7 +176,7 @@ void GPUProcess::prepareToSuspend(bool isSuspensionImminent, CompletionHandler<v
 {
     RELEASE_LOG(ProcessSuspension, "%p - GPUProcess::prepareToSuspend(), isSuspensionImminent: %d", this, isSuspensionImminent);
 
-    lowMemoryHandler(Critical::Yes);
+    lowMemoryHandler(Critical::Yes, Synchronous::Yes);
     completionHandler();
 }
 
@@ -212,6 +228,26 @@ void GPUProcess::updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapt
     access.allowDisplayCapture |= allowDisplayCapture;
 
     completionHandler();
+}
+
+void GPUProcess::addMockMediaDevice(const WebCore::MockMediaDevice& device)
+{
+    MockRealtimeMediaSourceCenter::addDevice(device);
+}
+
+void GPUProcess::clearMockMediaDevices()
+{
+    MockRealtimeMediaSourceCenter::setDevices({ });
+}
+
+void GPUProcess::removeMockMediaDevice(const String& persistentId)
+{
+    MockRealtimeMediaSourceCenter::removeDevice(persistentId);
+}
+
+void GPUProcess::resetMockMediaDevices()
+{
+    MockRealtimeMediaSourceCenter::resetDevices();
 }
 #endif
 

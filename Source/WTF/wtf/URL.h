@@ -29,6 +29,10 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/text/WTFString.h>
 
+#if USE(GLIB) && HAVE(GURI)
+#include <wtf/glib/GRefPtr.h>
+#endif
+
 #if USE(CF)
 typedef const struct __CFURL* CFURLRef;
 #endif
@@ -181,6 +185,11 @@ public:
     WTF_EXPORT_PRIVATE operator NSURL *() const;
 #endif
 
+#if USE(GLIB) && HAVE(GURI)
+    URL(GUri*);
+    GRefPtr<GUri> createGUri() const;
+#endif
+
 #ifndef NDEBUG
     void print() const;
 #endif
@@ -190,6 +199,8 @@ public:
     template<typename Decoder> static WARN_UNUSED_RETURN bool decode(Decoder&, URL&);
     template<typename Decoder> static Optional<URL> decode(Decoder&);
 
+    WTF_EXPORT_PRIVATE bool hasSpecialScheme() const;
+
 private:
     friend class URLParser;
 
@@ -198,7 +209,6 @@ private:
     unsigned credentialsEnd() const;
     void remove(unsigned start, unsigned length);
     void parse(const String&);
-    bool hasSpecialScheme() const;
 
     friend WTF_EXPORT_PRIVATE bool protocolHostAndPortAreEqual(const URL&, const URL&);
 

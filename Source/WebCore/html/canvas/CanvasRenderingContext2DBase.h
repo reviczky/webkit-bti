@@ -144,12 +144,10 @@ public:
     void setStrokeColor(const String& color, Optional<float> alpha = WTF::nullopt);
     void setStrokeColor(float grayLevel, float alpha = 1.0);
     void setStrokeColor(float r, float g, float b, float a);
-    void setStrokeColor(float c, float m, float y, float k, float a);
 
     void setFillColor(const String& color, Optional<float> alpha = WTF::nullopt);
     void setFillColor(float grayLevel, float alpha = 1.0f);
     void setFillColor(float r, float g, float b, float a);
-    void setFillColor(float c, float m, float y, float k, float a);
 
     void beginPath();
 
@@ -174,7 +172,6 @@ public:
     void setShadow(float width, float height, float blur, const String& color = String(), Optional<float> alpha = WTF::nullopt);
     void setShadow(float width, float height, float blur, float grayLevel, float alpha = 1.0);
     void setShadow(float width, float height, float blur, float r, float g, float b, float a);
-    void setShadow(float width, float height, float blur, float c, float m, float y, float k, float a);
 
     void clearShadow();
 
@@ -243,6 +240,10 @@ public:
         const FontCascadeDescription& fontDescription() const;
         float width(const TextRun&, GlyphOverflow* = 0) const;
         void drawBidiText(GraphicsContext&, const TextRun&, const FloatPoint&, FontCascade::CustomFontNotReadyAction) const;
+
+#if ASSERT_ENABLED
+        bool isPopulated() const { return m_font.fonts(); }
+#endif
 
     private:
         void update(FontSelector&);

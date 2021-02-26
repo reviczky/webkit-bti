@@ -36,7 +36,7 @@ class RenderStyle;
 namespace Layout {
 
 class InlineItem;
-struct TrailingTextContent;
+struct OverflowingTextContent;
 
 class InlineContentBreaker {
 public:
@@ -110,27 +110,28 @@ public:
         InlineLayoutUnit collapsibleWidth { 0 };
         Optional<InlineLayoutUnit> trailingSoftHyphenWidth;
         bool hasFullyCollapsibleTrailingRun { false };
-        bool isEmpty { true };
+        bool hasContent { false };
+        bool hasWrapOpportunityAtPreviousPosition { false };
     };
     Result processInlineContent(const ContinuousContent&, const LineStatus&);
-
     void setHyphenationDisabled() { n_hyphenationIsDisabled = true; }
+
+    static bool isWrappingAllowed(const InlineItem&);
 
 private:
     Result processOverflowingContent(const ContinuousContent&, const LineStatus&) const;
-    Optional<TrailingTextContent> processOverflowingTextContent(const ContinuousContent&, const LineStatus&) const;
-    Optional<PartialRun> tryBreakingTextRun(const ContinuousContent::Run& overflowRun, InlineLayoutUnit logicalLeft, InlineLayoutUnit availableWidth) const;
+    OverflowingTextContent processOverflowingContentWithText(const ContinuousContent&, const LineStatus&) const;
+    Optional<PartialRun> tryBreakingTextRun(const ContinuousContent::Run& overflowRun, InlineLayoutUnit logicalLeft, Optional<InlineLayoutUnit> availableWidth, bool hasWrapOpportunityAtPreviousPosition) const;
 
     enum class WordBreakRule {
         NoBreak,
         AtArbitraryPosition,
         OnlyHyphenationAllowed
     };
-    WordBreakRule wordBreakBehavior(const RenderStyle&) const;
+    WordBreakRule wordBreakBehavior(const RenderStyle&, bool hasWrapOpportunityAtPreviousPosition) const;
     bool shouldKeepEndOfLineWhitespace(const ContinuousContent&) const;
 
     bool n_hyphenationIsDisabled { false };
-    bool m_hasWrapOpportunityAtPreviousPosition { false };
 };
 
 inline InlineContentBreaker::ContinuousContent::Run::Run(const InlineItem& inlineItem, InlineLayoutUnit logicalWidth)

@@ -390,6 +390,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/mediastream/RTCPeerConnectionIceEvent.idl
     Modules/mediastream/RTCPeerConnectionState.idl
     Modules/mediastream/RTCPriorityType.idl
+    Modules/mediastream/RTCRtcpParameters.idl
     Modules/mediastream/RTCRtpCapabilities.idl
     Modules/mediastream/RTCRtpCodecCapability.idl
     Modules/mediastream/RTCRtpCodecParameters.idl
@@ -785,6 +786,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/AbortController.idl
     dom/AbortSignal.idl
     dom/AbstractRange.idl
+    dom/AddEventListenerOptions.idl
     dom/AnimationEvent.idl
     dom/Attr.idl
     dom/BeforeLoadEvent.idl
@@ -843,6 +845,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/ErrorEvent.idl
     dom/Event.idl
     dom/EventInit.idl
+    dom/EventListenerOptions.idl
     dom/EventModifierInit.idl
     dom/EventTarget.idl
     dom/FocusEvent.idl
@@ -1432,6 +1435,7 @@ set(WebCore_USER_AGENT_STYLE_SHEETS
     ${WEBCORE_DIR}/css/plugIns.css
     ${WEBCORE_DIR}/css/quirks.css
     ${WEBCORE_DIR}/css/svg.css
+    ${WEBCORE_DIR}/html/shadow/imageOverlay.css
     ${WEBCORE_DIR}/html/shadow/meterElementShadow.css
 )
 
@@ -1494,10 +1498,16 @@ if (ENABLE_ENCRYPTED_MEDIA)
         Modules/encryptedmedia/MediaKeySession.cpp
         Modules/encryptedmedia/MediaKeyStatusMap.cpp
         Modules/encryptedmedia/MediaKeySystemAccess.cpp
+        Modules/encryptedmedia/MediaKeySystemController.cpp
+        Modules/encryptedmedia/MediaKeySystemRequest.cpp
         Modules/encryptedmedia/MediaKeys.cpp
         Modules/encryptedmedia/NavigatorEME.cpp
 
         html/MediaEncryptedEvent.cpp
+    )
+
+    list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
+        "${WEBCORE_DIR}/platform/encryptedmedia/clearkey"
     )
 endif ()
 
@@ -1546,6 +1556,7 @@ if (ENABLE_WEBGL)
         html/canvas/WebGLExtension.cpp
         html/canvas/WebGLFramebuffer.cpp
         html/canvas/WebGLLoseContext.cpp
+        html/canvas/WebGLMultiDraw.cpp
         html/canvas/WebGLObject.cpp
         html/canvas/WebGLProgram.cpp
         html/canvas/WebGLQuery.cpp
@@ -1605,6 +1616,7 @@ list(APPEND WebCore_IDL_FILES
     html/canvas/WebGLDrawBuffers.idl
     html/canvas/WebGLFramebuffer.idl
     html/canvas/WebGLLoseContext.idl
+    html/canvas/WebGLMultiDraw.idl
     html/canvas/WebGLProgram.idl
     html/canvas/WebGLQuery.idl
     html/canvas/WebGLRenderbuffer.idl
@@ -1780,13 +1792,6 @@ set(WebCoreTestSupport_IDL_FILES
 )
 
 list(APPEND WebCoreTestSupport_SOURCES
-    platform/mock/PlatformSpeechSynthesizerMock.cpp
-
-    platform/mock/mediasource/MockBox.cpp
-    platform/mock/mediasource/MockMediaPlayerMediaSource.cpp
-    platform/mock/mediasource/MockMediaSourcePrivate.cpp
-    platform/mock/mediasource/MockSourceBufferPrivate.cpp
-
     testing/GCObservation.cpp
     testing/InternalSettings.cpp
     testing/Internals.cpp
@@ -1801,7 +1806,6 @@ list(APPEND WebCoreTestSupport_SOURCES
     testing/ServiceWorkerInternals.cpp
     testing/js/WebCoreTestSupport.cpp
 )
-
 
 if (ENABLE_WEBXR)
     list(APPEND WebCoreTestSupport_IDL_FILES

@@ -32,7 +32,6 @@
 #include "Connection.h"
 #include "GPUConnectionToWebProcess.h"
 #include "MediaPlayerPrivateRemoteMessages.h"
-#include "RemoteAudioTrackProxyMessages.h"
 #include "RemoteMediaPlayerProxy.h"
 #include "TrackPrivateRemoteConfiguration.h"
 
@@ -41,19 +40,17 @@ namespace WebKit {
 using namespace WebCore;
 
 RemoteAudioTrackProxy::RemoteAudioTrackProxy(GPUConnectionToWebProcess& connectionToWebProcess, TrackPrivateRemoteIdentifier identifier, AudioTrackPrivate& trackPrivate, MediaPlayerIdentifier mediaPlayerIdentifier)
-    : m_connectionToWebProcess(connectionToWebProcess)
+    : m_connectionToWebProcess(makeWeakPtr(connectionToWebProcess))
     , m_identifier(identifier)
     , m_trackPrivate(trackPrivate)
     , m_mediaPlayerIdentifier(mediaPlayerIdentifier)
 {
     m_trackPrivate->setClient(this);
-    m_connectionToWebProcess.messageReceiverMap().addMessageReceiver(Messages::RemoteAudioTrackProxy::messageReceiverName(), m_identifier.toUInt64(), *this);
-    m_connectionToWebProcess.connection().send(Messages::MediaPlayerPrivateRemote::AddRemoteAudioTrack(m_identifier, configuration()), m_mediaPlayerIdentifier);
+    m_connectionToWebProcess->connection().send(Messages::MediaPlayerPrivateRemote::AddRemoteAudioTrack(m_identifier, configuration()), m_mediaPlayerIdentifier);
 }
 
 RemoteAudioTrackProxy::~RemoteAudioTrackProxy()
 {
-    m_connectionToWebProcess.messageReceiverMap().removeMessageReceiver(Messages::RemoteAudioTrackProxy::messageReceiverName(), m_identifier.toUInt64());
 }
 
 TrackPrivateRemoteConfiguration& RemoteAudioTrackProxy::configuration()
@@ -73,7 +70,10 @@ TrackPrivateRemoteConfiguration& RemoteAudioTrackProxy::configuration()
 
 void RemoteAudioTrackProxy::configurationChanged()
 {
-    m_connectionToWebProcess.connection().send(Messages::MediaPlayerPrivateRemote::RemoteAudioTrackConfigurationChanged(m_identifier, configuration()), m_mediaPlayerIdentifier);
+    if (!m_connectionToWebProcess)
+        return;
+
+    m_connectionToWebProcess->connection().send(Messages::MediaPlayerPrivateRemote::RemoteAudioTrackConfigurationChanged(m_identifier, configuration()), m_mediaPlayerIdentifier);
 }
 
 void RemoteAudioTrackProxy::willRemove()

@@ -45,6 +45,7 @@
 
 #if !USE(ANGLE)
 #include "ANGLEWebKitBridge.h"
+#include "ExtensionsGLOpenGLCommon.h"
 #endif
 
 // FIXME: Find a better way to avoid the name confliction for NO_ERROR.
@@ -69,6 +70,10 @@ class GCGLLayer;
 }
 #endif
 
+#if PLATFORM(MAC)
+#include "ScopedHighPerformanceGPURequest.h"
+#endif
+
 namespace WebCore {
 class ExtensionsGL;
 #if USE(ANGLE)
@@ -81,6 +86,7 @@ class ExtensionsGLOpenGL;
 class HostWindow;
 class ImageBuffer;
 class ImageData;
+class MediaPlayer;
 #if USE(TEXTURE_MAPPER)
 class TextureMapperGCGLPlatformLayer;
 #endif
@@ -92,7 +98,7 @@ class GraphicsContextGLOpenGLPrivate;
 class WEBCORE_EXPORT GraphicsContextGLOpenGL final : public GraphicsContextGL
 {
 public:
-    static RefPtr<GraphicsContextGLOpenGL> create(GraphicsContextGLAttributes, HostWindow*, Destination = Destination::Offscreen);
+    static RefPtr<GraphicsContextGLOpenGL> create(GraphicsContextGLAttributes, HostWindow*);
     virtual ~GraphicsContextGLOpenGL();
 
 #if PLATFORM(COCOA)
@@ -256,7 +262,7 @@ public:
     void texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, GCGLSpan<const GCGLvoid> pixels) final;
     void texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, GCGLintptr offset) final;
     void compressedTexImage2D(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLsizei imageSize, GCGLSpan<const GCGLvoid> data) final;
-    void compressedTexImage2D(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLsizei imageSize, GCGLintptr offset) final; 
+    void compressedTexImage2D(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLsizei imageSize, GCGLintptr offset) final;
     void compressedTexSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLsizei imageSize, GCGLSpan<const GCGLvoid> data) final;
     void compressedTexSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLsizei imageSize, GCGLintptr offset) final;
 
@@ -429,6 +435,12 @@ public:
 
     void getActiveUniformBlockiv(GCGLuint program, GCGLuint uniformBlockIndex, GCGLenum pname, GCGLSpan<GCGLint> params) final;
 
+    // GL_ANGLE_multi_draw
+    void multiDrawArraysANGLE(GCGLenum mode, GCGLSpan<const GCGLint> firsts, GCGLSpan<const GCGLsizei> counts, GCGLsizei drawcount) override;
+    void multiDrawArraysInstancedANGLE(GCGLenum mode, GCGLSpan<const GCGLint> firsts, GCGLSpan<const GCGLsizei> counts, GCGLSpan<const GCGLsizei> instanceCounts, GCGLsizei drawcount) override;
+    void multiDrawElementsANGLE(GCGLenum mode, GCGLSpan<const GCGLsizei> counts, GCGLenum type, GCGLSpan<const GCGLint> offsets, GCGLsizei drawcount) override;
+    void multiDrawElementsInstancedANGLE(GCGLenum mode, GCGLSpan<const GCGLsizei> counts, GCGLenum type, GCGLSpan<const GCGLint> offsets, GCGLSpan<const GCGLsizei> instanceCounts, GCGLsizei drawcount) override;
+
     // Helper methods.
     void markContextChanged() final;
     void markLayerComposited() final;
@@ -447,21 +459,24 @@ public:
     void dispatchContextChangedNotification();
     void simulateContextChanged() final;
 
-    void paintRenderingResultsToCanvas(ImageBuffer*) final;
+    void paintRenderingResultsToCanvas(ImageBuffer&) final;
     RefPtr<ImageData> paintRenderingResultsToImageData() final;
-    void paintCompositedResultsToCanvas(ImageBuffer*) final;
+    void paintCompositedResultsToCanvas(ImageBuffer&) final;
+
+    RefPtr<ImageData> readRenderingResultsForPainting();
+    RefPtr<ImageData> readCompositedResultsForPainting();
+
+    bool copyTextureFromMedia(MediaPlayer&, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY) final;
 
 #if USE(OPENGL) && ENABLE(WEBGL2)
     void primitiveRestartIndex(GCGLuint);
 #endif
 
-#if PLATFORM(COCOA) && PLATFORM(MAC)
-    void updateCGLContext();
+#if PLATFORM(COCOA)
+    void displayWasReconfigured();
 #endif
 
     void setContextVisibility(bool) final;
-
-    GraphicsContextGLPowerPreference powerPreferenceUsedForCreation() const final { return m_powerPreferenceUsedForCreation; }
 
     // Support for buffer creation and deletion
     PlatformGLObject createBuffer() final;
@@ -485,16 +500,16 @@ public:
     // all methods it contains may necessarily be supported on the
     // current hardware. Must call ExtensionsGL::supports() to
     // determine this.
+#if !USE(ANGLE)
+    // Use covariant return type for OPENGL/OPENGL_ES
+    ExtensionsGLOpenGLCommon& getExtensions() final;
+#else
     ExtensionsGL& getExtensions() final;
+#endif
 
     void setFailNextGPUStatusCheck() final { m_failNextStatusCheck = true; }
 
     unsigned textureSeed(GCGLuint texture) { return m_state.textureSeedCount.count(texture); }
-
-#if PLATFORM(MAC)
-    using PlatformDisplayID = uint32_t;
-    void screenDidChange(PlatformDisplayID);
-#endif
 
     void prepareForDisplay() final;
 
@@ -506,11 +521,13 @@ public:
     static bool possibleFormatAndTypeForInternalFormat(GCGLenum internalFormat, GCGLenum& format, GCGLenum& type);
 #endif // !USE(ANGLE)
 
+    static void paintToCanvas(const GraphicsContextGLAttributes&, Ref<ImageData>&&, const IntSize& canvasSize, GraphicsContext&);
+
 private:
 #if PLATFORM(COCOA)
     GraphicsContextGLOpenGL(GraphicsContextGLAttributes, HostWindow*, GraphicsContextGLOpenGL* sharedContext = nullptr, GraphicsContextGLIOSurfaceSwapChain* = nullptr);
 #else
-    GraphicsContextGLOpenGL(GraphicsContextGLAttributes, HostWindow*, Destination = Destination::Offscreen, GraphicsContextGLOpenGL* sharedContext = nullptr);
+    GraphicsContextGLOpenGL(GraphicsContextGLAttributes, HostWindow*, GraphicsContextGLOpenGL* sharedContext = nullptr);
 #endif
 
     // Called once by all the public entry points that eventually call OpenGL.
@@ -523,7 +540,7 @@ private:
     // implementation.
     void validateDepthStencil(const char* packedDepthStencilExtension);
     void validateAttributes();
-    
+
     void readnPixelsImpl(GCGLint x, GCGLint y, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, GCGLsizei bufSize, GCGLsizei* length, GCGLsizei* columns, GCGLsizei* rows, GCGLvoid* data, bool readingToPixelBufferObject);
 
     // Did the most recent drawing operation leave the GPU in an acceptable state?
@@ -533,7 +550,6 @@ private:
     RefPtr<ImageData> readRenderingResults();
     RefPtr<ImageData> readCompositedResults();
     RefPtr<ImageData> readPixelsForPaintResults();
-    void paintToCanvas(Ref<ImageData>&&, const IntSize& canvasSize, GraphicsContext&);
 
     bool reshapeFBOs(const IntSize&);
     void prepareTextureImpl();
@@ -541,7 +557,6 @@ private:
     void attachDepthAndStencilBufferIfNeeded(GCGLuint internalDepthStencilFormat, int width, int height);
 
 #if PLATFORM(COCOA)
-    bool allowOfflineRenderers() const;
     bool reshapeDisplayBufferBacking();
     bool allocateAndBindDisplayBufferBacking();
     bool bindDisplayBufferBacking(std::unique_ptr<IOSurface> backing, void* pbuffer);
@@ -577,7 +592,7 @@ private:
             , isValid(false)
         {
         }
-        
+
         ShaderSymbolMap& symbolMap(enum ANGLEShaderSymbolType symbolType)
         {
             ASSERT(symbolType == SHADER_SYMBOL_TYPE_ATTRIBUTE || symbolType == SHADER_SYMBOL_TYPE_UNIFORM || symbolType == SHADER_SYMBOL_TYPE_VARYING);
@@ -642,7 +657,6 @@ private:
     std::unique_ptr<ExtensionsGLOpenGL> m_extensions;
 #endif
 
-    GraphicsContextGLPowerPreference m_powerPreferenceUsedForCreation { GraphicsContextGLPowerPreference::Default };
     Vector<Vector<float>> m_vertexArray;
 
 #if !USE(ANGLE)
@@ -664,7 +678,9 @@ private:
 
     bool m_layerComposited { false };
     GCGLuint m_internalColorFormat { 0 };
-
+#if USE(ANGLE)
+    GCGLuint m_internalDepthStencilFormat { 0 };
+#endif
     struct GraphicsContextGLState {
         GCGLuint boundReadFBO { 0 };
         GCGLuint boundDrawFBO { 0 };
@@ -672,7 +688,7 @@ private:
 
         using BoundTextureMap = HashMap<GCGLenum,
             std::pair<GCGLuint, GCGLenum>,
-            WTF::IntHash<GCGLenum>, 
+            WTF::IntHash<GCGLenum>,
             WTF::UnsignedWithZeroKeyHashTraits<GCGLuint>,
             WTF::PairHashTraits<WTF::UnsignedWithZeroKeyHashTraits<GCGLuint>, WTF::UnsignedWithZeroKeyHashTraits<GCGLuint>>
         >;
@@ -753,8 +769,10 @@ private:
     // When preserveDrawingBuffer == true, this is blitted to during display prepare.
     std::unique_ptr<IOSurface> m_displayBufferBacking;
     void* m_displayBufferPbuffer { nullptr };
-
-    bool m_hasSwitchedToHighPerformanceGPU { false };
+#endif
+#if PLATFORM(MAC)
+    bool m_supportsPowerPreference { false };
+    ScopedHighPerformanceGPURequest m_highPerformanceGPURequest;
 #endif
 #if ENABLE(VIDEO) && USE(AVFOUNDATION)
     std::unique_ptr<GraphicsContextGLCV> m_cv;

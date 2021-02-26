@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -53,6 +53,7 @@
 #if ENABLE(JIT_CAGE)
 #include <WebKitAdditions/JITCageAdditions.h>
 #include <machine/cpu_capabilities.h>
+#include <wtf/cocoa/Entitlements.h>
 #endif
 
 namespace JSC {
@@ -538,6 +539,9 @@ void Options::recomputeDependentOptions()
         Options::randomIntegrityAuditRate() = 0;
     else if (Options::randomIntegrityAuditRate() > 1.0)
         Options::randomIntegrityAuditRate() = 1.0;
+    
+    if (Options::usePrivateMethods())
+        Options::usePrivateClassFields() = true;
 
     if (!Options::allowUnsupportedTiers()) {
 #define DISABLE_TIERS(option, flags, ...) do { \
@@ -554,6 +558,9 @@ void Options::recomputeDependentOptions()
 
     if (Options::usePrivateStaticClassFields())
         Options::usePrivateClassFields() = true;
+
+    if (Options::verboseVerifyGC())
+        Options::verifyGC() = true;
 }
 
 inline void* Options::addressOfOption(Options::ID id)
@@ -1126,7 +1133,10 @@ bool OptionReader::Option::operator==(const Option& other) const
 }
 
 #if ENABLE(JIT_CAGE)
-bool canUseJITCage() { return JSC_JIT_CAGE_VERSION(); }
+bool canUseJITCage()
+{
+    return JSC_JIT_CAGE_VERSION() && WTF::processHasEntitlement("com.apple.private.verified-jit");
+}
 #else
 bool canUseJITCage() { return false; }
 #endif

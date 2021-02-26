@@ -50,6 +50,7 @@
 #include "RuntimeEnabledFeatures.h"
 #include "ScriptExecutionContext.h"
 #include "Settings.h"
+#include "WebAudioSourceProvider.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
@@ -538,6 +539,9 @@ void MediaStreamTrack::trackStarted(MediaStreamTrackPrivate&)
 
 void MediaStreamTrack::trackEnded(MediaStreamTrackPrivate&)
 {
+    if (m_isCaptureTrack && m_private->type() == RealtimeMediaSource::Type::Audio)
+        PlatformMediaSessionManager::sharedManager().removeAudioCaptureSource(*this);
+
     // http://w3c.github.io/mediacapture-main/#life-cycle
     // When a MediaStreamTrack track ends for any reason other than the stop() method being invoked, the User Agent must queue a task that runs the following steps:
     // 1. If the track's readyState attribute has the value ended already, then abort these steps.
@@ -620,9 +624,9 @@ bool MediaStreamTrack::virtualHasPendingActivity() const
     return !m_ended;
 }
 
-AudioSourceProvider* MediaStreamTrack::audioSourceProvider()
+RefPtr<WebAudioSourceProvider> MediaStreamTrack::createAudioSourceProvider()
 {
-    return m_private->audioSourceProvider();
+    return m_private->createAudioSourceProvider();
 }
 
 Document* MediaStreamTrack::document() const

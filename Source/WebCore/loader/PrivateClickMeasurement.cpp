@@ -36,7 +36,10 @@
 
 namespace WebCore {
 
-static const char privateClickMeasurementPathPrefix[] = "/.well-known/private-click-measurement/";
+static const char privateClickMeasurementTriggerAttributionPath[] = "/.well-known/private-click-measurement/trigger-attribution/";
+static const char privateClickMeasurementTokenSignaturePath[] = "/.well-known/private-click-measurement/sign-secret-token/";
+static const char privateClickMeasurementTokenPublicKeyPath[] = "/.well-known/private-click-measurement/get-unlinkable-token-public-key/";
+static const char privateClickMeasurementReportAttributionPath[] = "/.well-known/private-click-measurement/report-attribution/";
 const size_t privateClickMeasurementAttributionTriggerDataPathSegmentSize = 2;
 const size_t privateClickMeasurementPriorityPathSegmentSize = 2;
 
@@ -58,59 +61,35 @@ bool PrivateClickMeasurement::isValid() const
 Expected<PrivateClickMeasurement::AttributionTriggerData, String> PrivateClickMeasurement::parseAttributionRequest(const URL& redirectURL)
 {
     auto path = StringView(redirectURL.string()).substring(redirectURL.pathStart(), redirectURL.pathEnd() - redirectURL.pathStart());
-    if (path.isEmpty() || !path.startsWith(privateClickMeasurementPathPrefix))
+    if (path.isEmpty() || !path.startsWith(privateClickMeasurementTriggerAttributionPath))
         return makeUnexpected(nullString());
 
-    if (!redirectURL.protocolIs("https") || redirectURL.hasCredentials() || redirectURL.hasQuery() || redirectURL.hasFragmentIdentifier()) {
-        if (UNLIKELY(debugModeEnabled())) {
-            RELEASE_LOG_INFO(PrivateClickMeasurement, "Conversion was not accepted because the URL's protocol is not HTTPS or the URL contains one or more of username, password, query string, and fragment.");
-            return makeUnexpected("[Private Click Measurement] Conversion was not accepted because the URL's protocol is not HTTPS or the URL contains one or more of username, password, query string, and fragment."_s);
-        }
-        return makeUnexpected(nullString());
-    }
+    if (!redirectURL.protocolIs("https") || redirectURL.hasCredentials() || redirectURL.hasQuery() || redirectURL.hasFragmentIdentifier())
+        return makeUnexpected("[Private Click Measurement] Conversion was not accepted because the URL's protocol is not HTTPS or the URL contains one or more of username, password, query string, and fragment."_s);
 
 
-    auto prefixLength = sizeof(privateClickMeasurementPathPrefix) - 1;
+    auto prefixLength = sizeof(privateClickMeasurementTriggerAttributionPath) - 1;
     if (path.length() == prefixLength + privateClickMeasurementAttributionTriggerDataPathSegmentSize) {
         auto attributionTriggerDataUInt64 = path.substring(prefixLength, privateClickMeasurementAttributionTriggerDataPathSegmentSize).toUInt64Strict();
-        if (!attributionTriggerDataUInt64 || *attributionTriggerDataUInt64 > AttributionTriggerData::MaxEntropy) {
-            if (UNLIKELY(debugModeEnabled())) {
-                RELEASE_LOG_INFO(PrivateClickMeasurement, "Conversion was not accepted because the conversion data could not be parsed or was higher than the allowed maximum of %{public}u.", AttributionTriggerData::MaxEntropy);
-                return makeUnexpected(makeString("[Private Click Measurement] Conversion was not accepted because the conversion data could not be parsed or was higher than the allowed maximum of "_s, AttributionTriggerData::MaxEntropy, "."_s));
-            }
-            return makeUnexpected(nullString());
-        }
+        if (!attributionTriggerDataUInt64 || *attributionTriggerDataUInt64 > AttributionTriggerData::MaxEntropy)
+            return makeUnexpected(makeString("[Private Click Measurement] Conversion was not accepted because the conversion data could not be parsed or was higher than the allowed maximum of "_s, AttributionTriggerData::MaxEntropy, "."_s));
 
         return AttributionTriggerData { static_cast<uint32_t>(*attributionTriggerDataUInt64), Priority { 0 } };
     }
     
     if (path.length() == prefixLength + privateClickMeasurementAttributionTriggerDataPathSegmentSize + 1 + privateClickMeasurementPriorityPathSegmentSize) {
         auto attributionTriggerDataUInt64 = path.substring(prefixLength, privateClickMeasurementAttributionTriggerDataPathSegmentSize).toUInt64Strict();
-        if (!attributionTriggerDataUInt64 || *attributionTriggerDataUInt64 > AttributionTriggerData::MaxEntropy) {
-            if (UNLIKELY(debugModeEnabled())) {
-                RELEASE_LOG_INFO(PrivateClickMeasurement, "Conversion was not accepted because the conversion data could not be parsed or was higher than the allowed maximum of %{public}u.", AttributionTriggerData::MaxEntropy);
-                return makeUnexpected(makeString("[Private Click Measurement] Conversion was not accepted because the conversion data could not be parsed or was higher than the allowed maximum of "_s, AttributionTriggerData::MaxEntropy, "."_s));
-            }
-            return makeUnexpected(nullString());
-        }
+        if (!attributionTriggerDataUInt64 || *attributionTriggerDataUInt64 > AttributionTriggerData::MaxEntropy)
+            return makeUnexpected(makeString("[Private Click Measurement] Conversion was not accepted because the conversion data could not be parsed or was higher than the allowed maximum of "_s, AttributionTriggerData::MaxEntropy, "."_s));
 
         auto attributionPriorityUInt64 = path.substring(prefixLength + privateClickMeasurementAttributionTriggerDataPathSegmentSize + 1, privateClickMeasurementPriorityPathSegmentSize).toUInt64Strict();
-        if (!attributionPriorityUInt64 || *attributionPriorityUInt64 > Priority::MaxEntropy) {
-            if (UNLIKELY(debugModeEnabled())) {
-                RELEASE_LOG_INFO(PrivateClickMeasurement, "Conversion was not accepted because the priority could not be parsed or was higher than the allowed maximum of %{public}u.", Priority::MaxEntropy);
-                return makeUnexpected(makeString("[Private Click Measurement] Conversion was not accepted because the priority could not be parsed or was higher than the allowed maximum of "_s, Priority::MaxEntropy, "."_s));
-            }
-            return makeUnexpected(nullString());
-        }
+        if (!attributionPriorityUInt64 || *attributionPriorityUInt64 > Priority::MaxEntropy)
+            return makeUnexpected(makeString("[Private Click Measurement] Conversion was not accepted because the priority could not be parsed or was higher than the allowed maximum of "_s, Priority::MaxEntropy, "."_s));
 
         return AttributionTriggerData { static_cast<uint32_t>(*attributionTriggerDataUInt64), Priority { static_cast<uint32_t>(*attributionPriorityUInt64) } };
     }
 
-    if (UNLIKELY(debugModeEnabled())) {
-        RELEASE_LOG_INFO(PrivateClickMeasurement, "Conversion was not accepted because the URL path contained unrecognized parts.");
-        return makeUnexpected("[Private Click Measurement] Conversion was not accepted because the URL path contained unrecognized parts."_s);
-    }
-    return makeUnexpected(nullString());
+    return makeUnexpected("[Private Click Measurement] Conversion was not accepted because the URL path contained unrecognized parts."_s);
 }
 
 Optional<Seconds> PrivateClickMeasurement::attributeAndGetEarliestTimeToSend(AttributionTriggerData&& attributionTriggerData)
@@ -137,7 +116,7 @@ bool PrivateClickMeasurement::hasHigherPriorityThan(const PrivateClickMeasuremen
     return m_attributionTriggerData->priority > other.m_attributionTriggerData->priority;
 }
 
-URL PrivateClickMeasurement::reportURL() const
+URL PrivateClickMeasurement::attributionReportURL() const
 {
     if (!isValid())
         return URL();
@@ -145,7 +124,7 @@ URL PrivateClickMeasurement::reportURL() const
     StringBuilder builder;
     builder.appendLiteral("https://");
     builder.append(m_sourceSite.registrableDomain.string());
-    builder.appendLiteral(privateClickMeasurementPathPrefix);
+    builder.appendLiteral(privateClickMeasurementReportAttributionPath);
 
     URL url { URL(), builder.toString() };
     if (url.isValid())
@@ -154,7 +133,7 @@ URL PrivateClickMeasurement::reportURL() const
     return URL();
 }
 
-Ref<JSON::Object> PrivateClickMeasurement::json() const
+Ref<JSON::Object> PrivateClickMeasurement::attributionReportJSON() const
 {
     auto reportDetails = JSON::Object::create();
     if (!m_attributionTriggerData || !isValid())
@@ -165,13 +144,94 @@ Ref<JSON::Object> PrivateClickMeasurement::json() const
     reportDetails->setInteger("source_id"_s, m_sourceID.id);
     reportDetails->setString("attributed_on_site"_s, m_attributeOnSite.registrableDomain.string());
     reportDetails->setInteger("trigger_data"_s, m_attributionTriggerData->data);
-    reportDetails->setInteger("version"_s, 1);
+    reportDetails->setInteger("version"_s, 2);
+
+    if (m_sourceUnlinkableToken) {
+        reportDetails->setString("source_unlinkable_token"_s, m_sourceUnlinkableToken->tokenBase64URL);
+        reportDetails->setString("source_unlinkable_token_signature"_s, m_sourceUnlinkableToken->signatureBase64URL);
+    }
+
     return reportDetails;
 }
 
-bool PrivateClickMeasurement::debugModeEnabled()
+// MARK: - Fraud Prevention
+
+static constexpr uint32_t EphemeralSourceNonceRequiredNumberOfBytes = 16;
+
+bool PrivateClickMeasurement::EphemeralSourceNonce::isValid() const
 {
-    return RuntimeEnabledFeatures::sharedFeatures().privateClickMeasurementDebugModeEnabled();
+    // FIXME: Investigate if we can do with a simple length check instead of decoding.
+    // https://bugs.webkit.org/show_bug.cgi?id=221945
+    Vector<uint8_t> digest;
+    if (!base64URLDecode(nonce, digest))
+        return false;
+    return digest.size() == EphemeralSourceNonceRequiredNumberOfBytes;
 }
 
+void PrivateClickMeasurement::setEphemeralSourceNonce(EphemeralSourceNonce&& nonce)
+{
+    if (!nonce.isValid())
+        return;
+    m_ephemeralSourceNonce = WTFMove(nonce);
 }
+
+URL PrivateClickMeasurement::tokenSignatureURL() const
+{
+    if (!m_ephemeralSourceNonce || !m_ephemeralSourceNonce->isValid())
+        return URL();
+
+    StringBuilder builder;
+    builder.appendLiteral("https://");
+    builder.append(m_sourceSite.registrableDomain.string());
+    builder.appendLiteral(privateClickMeasurementTokenSignaturePath);
+
+    URL url { URL(), builder.toString() };
+    if (url.isValid())
+        return url;
+
+    return URL();
+}
+
+URL PrivateClickMeasurement::tokenPublicKeyURL() const
+{
+    StringBuilder builder;
+    builder.appendLiteral("https://");
+    builder.append(m_sourceSite.registrableDomain.string());
+    builder.appendLiteral(privateClickMeasurementTokenPublicKeyPath);
+
+    URL url { URL(), builder.toString() };
+    if (url.isValid())
+        return url;
+
+    return URL();
+}
+
+Ref<JSON::Object> PrivateClickMeasurement::tokenSignatureJSON() const
+{
+    auto reportDetails = JSON::Object::create();
+    if (!m_ephemeralSourceNonce || !m_ephemeralSourceNonce->isValid())
+        return reportDetails;
+
+    if (m_sourceSecretToken.valueBase64URL.isEmpty())
+        return reportDetails;
+
+    reportDetails->setString("source_engagement_type"_s, "click"_s);
+    reportDetails->setString("source_nonce"_s, m_ephemeralSourceNonce->nonce);
+    reportDetails->setString("source_secret_token"_s, m_sourceSecretToken.valueBase64URL);
+    reportDetails->setInteger("version"_s, 2);
+    return reportDetails;
+}
+
+void PrivateClickMeasurement::setSourceUnlinkableToken(SourceUnlinkableToken&& token)
+{
+    if (!token.isValid())
+        return;
+    m_sourceUnlinkableToken = WTFMove(token);
+}
+
+bool PrivateClickMeasurement::SourceUnlinkableToken::isValid() const
+{
+    return !(tokenBase64URL.isEmpty() || signatureBase64URL.isEmpty() || keyIDBase64URL.isEmpty());
+}
+
+} // namespace WebCore

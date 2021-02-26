@@ -181,11 +181,15 @@ public:
     void notifyTrackModeChanged();
     void tracksChanged();
 
+    void audioTrackSetEnabled(const TrackPrivateRemoteIdentifier&, bool);
+    void videoTrackSetSelected(const TrackPrivateRemoteIdentifier&, bool);
+    void textTrackSetMode(const TrackPrivateRemoteIdentifier&, WebCore::InbandTextTrackPrivate::Mode);
+
     void performTaskAtMediaTime(const MediaTime&, WallTime, CompletionHandler<void(Optional<MediaTime>)>&&);
     void wouldTaintOrigin(struct WebCore::SecurityOriginData, CompletionHandler<void(Optional<bool>)>&&);
     void setShouldUpdatePlaybackMetrics(bool);
 
-    Ref<WebCore::PlatformMediaResource> requestResource(WebCore::ResourceRequest&&, WebCore::PlatformMediaResourceLoader::LoadOptions);
+    RefPtr<WebCore::PlatformMediaResource> requestResource(WebCore::ResourceRequest&&, WebCore::PlatformMediaResourceLoader::LoadOptions);
     void sendH2Ping(const URL&, CompletionHandler<void(Expected<WTF::Seconds, WebCore::ResourceError>&&)>&&);
     void removeResource(RemoteMediaResourceIdentifier);
 
@@ -239,8 +243,6 @@ private:
 
     String mediaPlayerReferrer() const final;
     String mediaPlayerUserAgent() const final;
-    void mediaPlayerEnterFullscreen() final;
-    void mediaPlayerExitFullscreen() final;
     bool mediaPlayerIsFullscreen() const final;
     bool mediaPlayerIsFullscreenPermitted() const final;
     bool mediaPlayerIsVideo() const final;
@@ -301,7 +303,7 @@ private:
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     std::unique_ptr<LayerHostingContext> m_fullscreenLayerHostingContext;
 #endif
-    RemoteMediaPlayerManagerProxy& m_manager;
+    WeakPtr<RemoteMediaPlayerManagerProxy> m_manager;
     WebCore::MediaPlayerEnums::MediaEngineIdentifier m_engineIdentifier;
     Vector<WebCore::ContentType> m_typesRequiringHardwareSupport;
     RunLoop::Timer<RemoteMediaPlayerProxy> m_updateCachedStateMessageTimer;
@@ -312,7 +314,7 @@ private:
     RefPtr<RemoteMediaSourceProxy> m_mediaSourceProxy;
 #endif
 
-    WebCore::LayoutRect m_videoContentBoxRect;
+    WebCore::IntSize m_videoInlineSize;
     float m_videoContentScale { 1.0 };
 
     bool m_bufferedChanged { true };

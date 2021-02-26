@@ -270,6 +270,10 @@ private:
     LayoutRect elementRect() const override { return rectAttributeValue<LayoutRect>(AXPropertyName::ElementRect); }
     IntPoint clickPoint() override { return intPointAttributeValue(AXPropertyName::ClickPoint); }
     void accessibilityText(Vector<AccessibilityText>& texts) const override;
+    String brailleLabel() const override { return stringAttributeValue(AXPropertyName::BrailleLabel); }
+    String brailleRoleDescription() const override { return stringAttributeValue(AXPropertyName::BrailleRoleDescription); }
+    String embeddedImageDescription() const override { return stringAttributeValue(AXPropertyName::EmbeddedImageDescription); }
+
     String computedRoleString() const override { return stringAttributeValue(AXPropertyName::ComputedRoleString); }
     bool isValueAutofilled() const override { return boolAttributeValue(AXPropertyName::IsValueAutofilled); }
     bool isValueAutofillAvailable() const override { return boolAttributeValue(AXPropertyName::IsValueAutofillAvailable); }
@@ -399,6 +403,9 @@ private:
     VisiblePositionRange visiblePositionRangeForRange(const PlainTextRange&) const override;
     VisiblePositionRange lineRangeForPosition(const VisiblePosition&) const override;
     Optional<SimpleRange> rangeForPlainTextRange(const PlainTextRange&) const override;
+#if PLATFORM(MAC)
+    AXTextMarkerRangeRef textMarkerRangeForNSRange(const NSRange&) const override;
+#endif
     String stringForRange(const SimpleRange&) const override;
     IntRect boundsForVisiblePositionRange(const VisiblePositionRange&) const override;
     IntRect boundsForRange(const SimpleRange&) const override;

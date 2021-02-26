@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,33 +31,51 @@
 #include "MessageReceiver.h"
 #include <wtf/Expected.h>
 #include <wtf/Forward.h>
+#include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
+
+namespace API {
+class InspectorExtension;
+}
 
 namespace WebKit {
 
 class WebPageProxy;
 
 class WebInspectorUIExtensionControllerProxy final
-    : public IPC::MessageReceiver
+    : public RefCounted<WebInspectorUIExtensionControllerProxy>
+    , public IPC::MessageReceiver
     , public CanMakeWeakPtr<WebInspectorUIExtensionControllerProxy> {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(WebInspectorUIExtensionControllerProxy);
 public:
-    explicit WebInspectorUIExtensionControllerProxy(WebPageProxy& inspectorPage);
+    static Ref<WebInspectorUIExtensionControllerProxy> create(WebPageProxy& inspectorPage);
     virtual ~WebInspectorUIExtensionControllerProxy();
 
+    // Implemented in generated WebInspectorUIExtensionControllerProxyMessageReceiver.cpp
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+
     // API.
-    void registerExtension(const InspectorExtensionID&, const String& displayName, WTF::CompletionHandler<void(Expected<bool, InspectorExtensionError>)>&&);
-    void unregisterExtension(const InspectorExtensionID&, WTF::CompletionHandler<void(Expected<bool, InspectorExtensionError>)>&&);
-    void createTabForExtension(const InspectorExtensionID&, const String& tabName, const URL& tabIconURL, const URL& sourceURL, WTF::CompletionHandler<void(Expected<InspectorExtensionTabID, InspectorExtensionError>)>&&);
+    void registerExtension(const Inspector::ExtensionID&, const String& displayName, WTF::CompletionHandler<void(Expected<RefPtr<API::InspectorExtension>, Inspector::ExtensionError>)>&&);
+    void unregisterExtension(const Inspector::ExtensionID&, WTF::CompletionHandler<void(Expected<bool, Inspector::ExtensionError>)>&&);
+    void createTabForExtension(const Inspector::ExtensionID&, const String& tabName, const URL& tabIconURL, const URL& sourceURL, WTF::CompletionHandler<void(Expected<Inspector::ExtensionTabID, Inspector::ExtensionError>)>&&);
+    void evaluateScriptForExtension(const Inspector::ExtensionID&, const String& scriptSource, const Optional<URL>& frameURL, const Optional<URL>& contextSecurityOrigin, const Optional<bool>& useContentScriptContext, WTF::CompletionHandler<void(Inspector::ExtensionEvaluationResult)>&&);
+    void reloadForExtension(const Inspector::ExtensionID&, const Optional<bool>& ignoreCache, const Optional<String>& userAgent, const Optional<String>& injectedScript, WTF::CompletionHandler<void(Inspector::ExtensionEvaluationResult)>&&);
+
+    // WebInspectorUIExtensionControllerProxy IPC messages.
+    void didShowExtensionTab(const Inspector::ExtensionID&, const Inspector::ExtensionTabID&);
+    void didHideExtensionTab(const Inspector::ExtensionID&, const Inspector::ExtensionTabID&);
 
     // Notifications.
     void inspectorFrontendLoaded();
 
 private:
+    explicit WebInspectorUIExtensionControllerProxy(WebPageProxy& inspectorPage);
+
     void whenFrontendHasLoaded(Function<void()>&&);
 
     WeakPtr<WebPageProxy> m_inspectorPage;
+    HashMap<Inspector::ExtensionID, RefPtr<API::InspectorExtension>> m_extensionAPIObjectMap;
 
     // Used to queue actions such as registering extensions that happen early on.
     // There's no point sending these before the frontend is fully loaded.

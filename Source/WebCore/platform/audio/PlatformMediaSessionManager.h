@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,7 +26,6 @@
 #ifndef PlatformMediaSessionManager_h
 #define PlatformMediaSessionManager_h
 
-#include "DocumentIdentifier.h"
 #include "GenericTaskQueue.h"
 #include "MediaSessionIdentifier.h"
 #include "PlatformMediaSession.h"
@@ -62,6 +61,8 @@ public:
     WEBCORE_EXPORT static bool webMFormatReaderEnabled();
     WEBCORE_EXPORT static void setVorbisDecoderEnabled(bool);
     WEBCORE_EXPORT static bool vorbisDecoderEnabled();
+    WEBCORE_EXPORT static void setOpusDecoderEnabled(bool);
+    WEBCORE_EXPORT static bool opusDecoderEnabled();
 
     virtual ~PlatformMediaSessionManager() = default;
 
@@ -94,14 +95,14 @@ public:
     WEBCORE_EXPORT void processWillSuspend();
     WEBCORE_EXPORT void processDidResume();
 
-    bool mediaPlaybackIsPaused(DocumentIdentifier);
-    void pauseAllMediaPlaybackForDocument(DocumentIdentifier);
+    bool mediaPlaybackIsPaused(MediaSessionGroupIdentifier);
+    void pauseAllMediaPlaybackForGroup(MediaSessionGroupIdentifier);
     WEBCORE_EXPORT void stopAllMediaPlaybackForProcess();
 
-    void suspendAllMediaPlaybackForDocument(DocumentIdentifier);
-    void resumeAllMediaPlaybackForDocument(DocumentIdentifier);
-    void suspendAllMediaBufferingForDocument(DocumentIdentifier);
-    void resumeAllMediaBufferingForDocument(DocumentIdentifier);
+    void suspendAllMediaPlaybackForGroup(MediaSessionGroupIdentifier);
+    void resumeAllMediaPlaybackForGroup(MediaSessionGroupIdentifier);
+    void suspendAllMediaBufferingForGroup(MediaSessionGroupIdentifier);
+    void resumeAllMediaBufferingForGroup(MediaSessionGroupIdentifier);
 
     enum SessionRestrictionFlags {
         NoRestrictions = 0,
@@ -146,11 +147,18 @@ public:
 
     WEBCORE_EXPORT void addAudioCaptureSource(PlatformMediaSession::AudioCaptureSource&);
     WEBCORE_EXPORT void removeAudioCaptureSource(PlatformMediaSession::AudioCaptureSource&);
+    bool hasAudioCaptureSource(PlatformMediaSession::AudioCaptureSource& source) const { return m_audioCaptureSources.contains(source); }
 
-    WEBCORE_EXPORT void processDidReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument*);
+    WEBCORE_EXPORT void processDidReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument&);
 
     bool isInterrupted() const { return m_interrupted; }
     bool hasNoSession() const;
+
+    virtual void addSupportedCommand(PlatformMediaSession::RemoteControlCommandType) { };
+    virtual void removeSupportedCommand(PlatformMediaSession::RemoteControlCommandType) { };
+
+    WEBCORE_EXPORT void processSystemWillSleep();
+    WEBCORE_EXPORT void processSystemDidWake();
 
 protected:
     friend class PlatformMediaSession;
@@ -160,7 +168,7 @@ protected:
     virtual void removeSession(PlatformMediaSession&);
 
     void forEachSession(const Function<void(PlatformMediaSession&)>&);
-    void forEachDocumentSession(DocumentIdentifier, const Function<void(PlatformMediaSession&)>&);
+    void forEachSessionInGroup(MediaSessionGroupIdentifier, const Function<void(PlatformMediaSession&)>&);
     bool anyOfSessions(const Function<bool(const PlatformMediaSession&)>&) const;
 
     bool isApplicationInBackground() const { return m_isApplicationInBackground; }
@@ -178,9 +186,6 @@ protected:
     int countActiveAudioCaptureSources();
 
     bool computeSupportsSeeking() const;
-
-    WEBCORE_EXPORT void processSystemWillSleep();
-    WEBCORE_EXPORT void processSystemDidWake();
 
 private:
     friend class Internals;
@@ -211,6 +216,9 @@ private:
 #endif
 #if ENABLE(VORBIS) && PLATFORM(MAC)
     static bool m_vorbisDecoderEnabled;
+#endif
+#if ENABLE(OPUS) && PLATFORM(MAC)
+    static bool m_opusDecoderEnabled;
 #endif
 
 #if !RELEASE_LOG_DISABLED

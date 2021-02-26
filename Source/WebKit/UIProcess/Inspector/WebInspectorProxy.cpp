@@ -426,7 +426,7 @@ void WebInspectorProxy::createFrontendPage()
     m_inspectorPage->process().assumeReadAccessToBaseURL(*m_inspectorPage, WebInspectorProxy::inspectorBaseURL());
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
-    m_extensionController = makeUnique<WebInspectorUIExtensionControllerProxy>(*m_inspectorPage);
+    m_extensionController = WebInspectorUIExtensionControllerProxy::create(*m_inspectorPage);
 #endif
 }
 
@@ -698,18 +698,6 @@ void WebInspectorProxy::setDiagnosticLoggingAvailable(bool available)
 #else
     UNUSED_PARAM(available);
 #endif
-}
-
-void WebInspectorProxy::browserExtensionsEnabled(HashMap<String, String>&& extensionIDToName)
-{
-    if (auto* browserAgent = m_inspectedPage->inspectorController().enabledBrowserAgent())
-        browserAgent->extensionsEnabled(WTFMove(extensionIDToName));
-}
-
-void WebInspectorProxy::browserExtensionsDisabled(HashSet<String>&& extensionIDs)
-{
-    if (auto* browserAgent = m_inspectedPage->inspectorController().enabledBrowserAgent())
-        browserAgent->extensionsDisabled(WTFMove(extensionIDs));
 }
 
 void WebInspectorProxy::save(const String& filename, const String& content, bool base64Encoded, bool forceSaveAs)

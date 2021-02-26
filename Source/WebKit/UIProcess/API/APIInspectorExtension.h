@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +27,7 @@
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
 
+#include "APIInspectorExtensionClient.h"
 #include "APIObject.h"
 #include "InspectorExtensionTypes.h"
 #include <wtf/CompletionHandler.h>
@@ -46,13 +47,19 @@ public:
 
     const WTF::String& identifier() const { return m_identifier; }
 
-    void createTab(const WTF::String& tabName, const WTF::URL& tabIconURL, const WTF::URL& sourceURL, WTF::CompletionHandler<void(Expected<WebKit::InspectorExtensionTabID, WebKit::InspectorExtensionError>)>&&);
+    void createTab(const WTF::String& tabName, const WTF::URL& tabIconURL, const WTF::URL& sourceURL, WTF::CompletionHandler<void(Expected<Inspector::ExtensionTabID, Inspector::ExtensionError>)>&&);
+    void evaluateScript(const WTF::String& scriptSource, const Optional<WTF::URL>& frameURL, const Optional<WTF::URL>& contextSecurityOrigin, const Optional<bool>& useContentScriptContext, WTF::CompletionHandler<void(Inspector::ExtensionEvaluationResult)>&&);
+    void reloadIgnoringCache(const Optional<bool>& ignoreCache, const Optional<WTF::String>& userAgent, const Optional<WTF::String>& injectedScript,  WTF::CompletionHandler<void(Inspector::ExtensionEvaluationResult)>&&);
+
+    InspectorExtensionClient* client() const { return m_client.get(); }
+    void setClient(UniqueRef<InspectorExtensionClient>&&);
 
 private:
     InspectorExtension(const WTF::String& identifier, WebKit::WebInspectorUIExtensionControllerProxy&);
 
     WTF::String m_identifier;
     WeakPtr<WebKit::WebInspectorUIExtensionControllerProxy> m_extensionControllerProxy;
+    std::unique_ptr<API::InspectorExtensionClient> m_client;
 };
 
 } // namespace API

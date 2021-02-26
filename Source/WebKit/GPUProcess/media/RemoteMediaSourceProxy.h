@@ -65,7 +65,9 @@ public:
     MediaTime duration() const final;
     std::unique_ptr<WebCore::PlatformTimeRanges> buffered() const final;
     void seekToTime(const MediaTime&) final;
+#if USE(GSTREAMER)
     void monitorSourceBuffers() final;
+#endif
 
 #if !RELEASE_LOG_DISABLED
     void setLogIdentifier(const void*) final;
@@ -87,7 +89,7 @@ private:
     void seekCompleted();
     void setTimeFudgeFactor(const MediaTime&);
 
-    GPUConnectionToWebProcess& m_connectionToWebProcess;
+    WeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
     RemoteMediaSourceIdentifier m_identifier;
     bool m_webMParserEnabled { false };
     RefPtr<WebCore::MediaSourcePrivate> m_private;

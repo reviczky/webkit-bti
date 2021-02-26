@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,7 +58,7 @@
 #endif
 
 namespace JSC {
-class SlotVisitor;
+class AbstractSlotVisitor;
 }
 
 namespace WTF {
@@ -109,6 +109,7 @@ class WebGLDepthTexture;
 class WebGLDrawBuffers;
 class WebGLExtension;
 class WebGLLoseContext;
+class WebGLMultiDraw;
 class WebGLObject;
 class WebGLShader;
 class WebGLSharedObject;
@@ -410,7 +411,7 @@ public:
     void recycleContext() override;
     void dispatchContextChangedNotification() override;
 
-    virtual void addMembersToOpaqueRoots(JSC::SlotVisitor&);
+    virtual void addMembersToOpaqueRoots(JSC::AbstractSlotVisitor&);
     // This lock must be held across all mutations of containers like
     // Vectors, HashSets, etc. which contain RefPtr<WebGLObject>, and
     // which are traversed by addMembersToOpaqueRoots() or any of the
@@ -444,6 +445,7 @@ protected:
     friend class WebGLCompressedTexturePVRTC;
     friend class WebGLCompressedTextureS3TC;
     friend class WebGLCompressedTextureS3TCsRGB;
+    friend class WebGLMultiDraw;
     friend class WebGLRenderingContextErrorMessageCallback;
     friend class WebGLVertexArrayObjectOES;
     friend class WebGLVertexArrayObject;
@@ -495,7 +497,14 @@ protected:
     bool validateIndexArrayPrecise(GCGLsizei count, GCGLenum type, GCGLintptr offset, unsigned& numElementsRequired);
     bool validateVertexAttributes(unsigned elementCount, unsigned primitiveCount = 0);
 
+    // Validates the incoming WebGL object, which is assumed to be non-null.
+    // Checks that the object belongs to this context and that it's not marked for
+    // deletion. Performs a context lost check internally.
     bool validateWebGLObject(const char*, WebGLObject*);
+
+    // Validates the incoming WebGL program or shader, which is assumed to be
+    // non-null. OpenGL ES's validation rules differ for these types of objects
+    // compared to others. Performs a context lost check internally.
     bool validateWebGLProgramOrShader(const char*, WebGLObject*);
 
 #if !USE(ANGLE)
@@ -705,6 +714,7 @@ protected:
     RefPtr<EXTFloatBlend> m_extFloatBlend;
     RefPtr<WebGLColorBufferFloat> m_webglColorBufferFloat;
     RefPtr<EXTColorBufferFloat> m_extColorBufferFloat;
+    RefPtr<WebGLMultiDraw> m_webglMultiDraw;
 
     bool m_areWebGL2TexImageSourceFormatsAndTypesAdded { false };
     bool m_areOESTextureFloatFormatsAndTypesAdded { false };
@@ -1046,9 +1056,13 @@ protected:
     // Return false if caller should return without further processing.
     bool deleteObject(const WTF::AbstractLocker&, WebGLObject*);
 
-    // Helper function for bind* (bindBuffer, bindTexture, etc) and useProgram.
-    // Return false if caller should return without further processing.
-    bool checkObjectToBeBound(const char* functionName, WebGLObject*);
+    // Helper function for APIs which can legally receive null objects, including
+    // the bind* calls (bindBuffer, bindTexture, etc.) and useProgram. Checks that
+    // the object belongs to this context and that it's not marked for deletion.
+    // Returns false if the caller should return without further processing.
+    // Performs a context lost check internally.
+    // This returns true for null WebGLObject arguments!
+    bool validateNullableWebGLObject(const char* functionName, WebGLObject*);
 
     // Helper function to validate the target for bufferData and
     // getBufferParameter.

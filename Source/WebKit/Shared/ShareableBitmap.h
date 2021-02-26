@@ -28,8 +28,8 @@
 #include "SharedMemory.h"
 #include <WebCore/IntRect.h>
 #include <WebCore/PlatformImage.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/ThreadSafeRefCounted.h>
 
 #if USE(CG)
 #include "ColorSpaceData.h"
@@ -52,7 +52,7 @@ class GraphicsContext;
 
 namespace WebKit {
     
-class ShareableBitmap : public RefCounted<ShareableBitmap> {
+class ShareableBitmap : public ThreadSafeRefCounted<ShareableBitmap> {
 public:
     struct Configuration {
         bool isOpaque { false };
@@ -153,7 +153,7 @@ private:
 
     static Checked<unsigned, RecordOverflow> numBytesForSize(WebCore::IntSize, const ShareableBitmap::Configuration&);
     static Checked<unsigned, RecordOverflow> calculateBytesPerRow(WebCore::IntSize, const Configuration&);
-    static unsigned calculateBytesPerPixel(const Configuration&);
+    static Checked<unsigned, RecordOverflow> calculateBytesPerPixel(const Configuration&);
 
 #if USE(CG)
     RetainPtr<CGImageRef> createCGImage(CGDataProviderRef) const;
@@ -167,6 +167,8 @@ private:
 
 public:
     void* data() const;
+    size_t bytesPerRow() const { return calculateBytesPerRow(m_size, m_configuration).unsafeGet(); }
+    
 private:
     size_t sizeInBytes() const { return numBytesForSize(m_size, m_configuration).unsafeGet(); }
 

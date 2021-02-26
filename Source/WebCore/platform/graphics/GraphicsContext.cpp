@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003, 2004, 2005, 2006, 2009, 2013 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -143,16 +143,20 @@ GraphicsContextState::StateChangeFlags GraphicsContextStateChange::changesFromSt
 void GraphicsContextStateChange::accumulate(const GraphicsContextState& state, GraphicsContextState::StateChangeFlags flags)
 {
     // FIXME: This code should move to GraphicsContextState.
-    if (flags.containsAny({ GraphicsContextState::StrokeColorChange, GraphicsContextState::StrokeGradientChange, GraphicsContextState::StrokePatternChange })) {
+    auto strokeFlags = { GraphicsContextState::StrokeColorChange, GraphicsContextState::StrokeGradientChange, GraphicsContextState::StrokePatternChange };
+    if (flags.containsAny(strokeFlags)) {
         m_state.strokeColor = state.strokeColor;
         m_state.strokeGradient = state.strokeGradient;
         m_state.strokePattern = state.strokePattern;
+        m_changeFlags.remove(strokeFlags);
     }
 
-    if (flags.containsAny({ GraphicsContextState::FillColorChange, GraphicsContextState::FillGradientChange, GraphicsContextState::FillPatternChange })) {
+    auto fillFlags = { GraphicsContextState::FillColorChange, GraphicsContextState::FillGradientChange, GraphicsContextState::FillPatternChange };
+    if (flags.containsAny(fillFlags)) {
         m_state.fillColor = state.fillColor;
         m_state.fillGradient = state.fillGradient;
         m_state.fillPattern = state.fillPattern;
+        m_changeFlags.remove(fillFlags);
     }
 
     if (flags.contains(GraphicsContextState::ShadowChange)) {
@@ -211,13 +215,13 @@ void GraphicsContextStateChange::accumulate(const GraphicsContextState& state, G
 void GraphicsContextStateChange::apply(GraphicsContext& context) const
 {
     if (m_changeFlags.contains(GraphicsContextState::StrokeGradientChange))
-        context.setStrokeGradient(*m_state.strokeGradient);
+        context.setStrokeGradient(*m_state.strokeGradient, m_state.strokeGradientSpaceTransform);
 
     if (m_changeFlags.contains(GraphicsContextState::StrokePatternChange))
         context.setStrokePattern(*m_state.strokePattern);
 
     if (m_changeFlags.contains(GraphicsContextState::FillGradientChange))
-        context.setFillGradient(*m_state.fillGradient);
+        context.setFillGradient(*m_state.fillGradient, m_state.fillGradientSpaceTransform);
 
     if (m_changeFlags.contains(GraphicsContextState::FillPatternChange))
         context.setFillPattern(*m_state.fillPattern);
@@ -620,10 +624,11 @@ void GraphicsContext::setFillPattern(Ref<Pattern>&& pattern)
         m_impl->updateState(m_state, GraphicsContextState::FillPatternChange);
 }
 
-void GraphicsContext::setStrokeGradient(Ref<Gradient>&& gradient)
+void GraphicsContext::setStrokeGradient(Ref<Gradient>&& gradient, const AffineTransform& strokeGradientSpaceTransform)
 {
     m_state.strokeColor = { };
     m_state.strokeGradient = WTFMove(gradient);
+    m_state.strokeGradientSpaceTransform = strokeGradientSpaceTransform;
     m_state.strokePattern = nullptr;
     if (m_impl)
         m_impl->updateState(m_state, GraphicsContextState::StrokeGradientChange);
@@ -636,10 +641,11 @@ void GraphicsContext::setFillRule(WindRule fillRule)
         m_impl->updateState(m_state, GraphicsContextState::FillRuleChange);
 }
 
-void GraphicsContext::setFillGradient(Ref<Gradient>&& gradient)
+void GraphicsContext::setFillGradient(Ref<Gradient>&& gradient, const AffineTransform& fillGradientSpaceTransform)
 {
     m_state.fillColor = { };
     m_state.fillGradient = WTFMove(gradient);
+    m_state.fillGradientSpaceTransform = fillGradientSpaceTransform;
     m_state.fillPattern = nullptr;
     if (m_impl)
         m_impl->updateState(m_state, GraphicsContextState::FillGradientChange); // FIXME: also fill pattern?
@@ -675,18 +681,17 @@ FloatSize GraphicsContext::drawText(const FontCascade& font, const TextRun& run,
     return font.drawText(*this, run, point, from, to);
 }
 
-void GraphicsContext::drawGlyphs(const Font& font, const GlyphBuffer& buffer, unsigned from, unsigned numGlyphs, const FloatPoint& point, FontSmoothingMode fontSmoothingMode)
+void GraphicsContext::drawGlyphs(const Font& font, const GlyphBufferGlyph* glyphs, const GlyphBufferAdvance* advances, unsigned numGlyphs, const FloatPoint& point, FontSmoothingMode fontSmoothingMode)
 {
-    ASSERT(buffer.isFlattened());
     if (paintingDisabled())
         return;
 
     if (m_impl) {
-        m_impl->drawGlyphs(font, buffer, from, numGlyphs, point, fontSmoothingMode);
+        m_impl->drawGlyphs(font, glyphs, advances, numGlyphs, point, fontSmoothingMode);
         return;
     }
 
-    FontCascade::drawGlyphs(*this, font, buffer, from, numGlyphs, point, fontSmoothingMode);
+    FontCascade::drawGlyphs(*this, font, glyphs, advances, numGlyphs, point, fontSmoothingMode);
 }
 
 void GraphicsContext::drawEmphasisMarks(const FontCascade& font, const TextRun& run, const AtomString& mark, const FloatPoint& point, unsigned from, Optional<unsigned> to)
@@ -880,7 +885,7 @@ void GraphicsContext::clipOutRoundedRect(const FloatRoundedRect& rect)
     clipOut(path);
 }
 
-GraphicsContext::ClipToDrawingCommandsResult GraphicsContext::clipToDrawingCommands(const FloatRect& destination, ColorSpace colorSpace, Function<void(GraphicsContext&)>&& drawingFunction)
+GraphicsContext::ClipToDrawingCommandsResult GraphicsContext::clipToDrawingCommands(const FloatRect& destination, DestinationColorSpace colorSpace, Function<void(GraphicsContext&)>&& drawingFunction)
 {
     if (paintingDisabled())
         return ClipToDrawingCommandsResult::Success;

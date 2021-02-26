@@ -37,9 +37,11 @@
 #include "CSSStyleRule.h"
 #include "CSSStyleSheet.h"
 #include "CSSValueKeywords.h"
+#include "ContainerNode.h"
 #include "ContentSecurityPolicy.h"
 #include "DOMWindow.h"
 #include "ElementAncestorIterator.h"
+#include "ElementChildIterator.h"
 #include "Font.h"
 #include "FontCache.h"
 #include "FontCascade.h"
@@ -54,6 +56,7 @@
 #include "Node.h"
 #include "NodeList.h"
 #include "PseudoElement.h"
+#include "RenderGrid.h"
 #include "RenderStyleConstants.h"
 #include "SVGStyleElement.h"
 #include "SelectorChecker.h"
@@ -323,6 +326,7 @@ void InspectorCSSAgent::reset()
     m_nodeToInspectorStyleSheet.clear();
     m_documentToInspectorStyleSheet.clear();
     m_documentToKnownCSSStyleSheets.clear();
+    m_layoutContextTypeChangedMode = Protocol::CSS::LayoutContextTypeChangedMode::Observed;
     resetPseudoStates();
 }
 
@@ -922,6 +926,62 @@ Protocol::ErrorStringOr<void> InspectorCSSAgent::forcePseudoState(Protocol::DOM:
     element->document().styleScope().didChangeStyleSheetEnvironment();
 
     return { };
+}
+
+Optional<Protocol::CSS::LayoutContextType> InspectorCSSAgent::layoutContextTypeForRenderer(RenderObject* renderer)
+{
+    if (is<RenderGrid>(renderer))
+        return Protocol::CSS::LayoutContextType::Grid;
+    return WTF::nullopt;
+}
+
+static void pushChildrenNodesToFrontendIfLayoutContextTypePresent(InspectorDOMAgent& domAgent, ContainerNode& node)
+{
+    for (auto& child : childrenOfType<Element>(node))
+        pushChildrenNodesToFrontendIfLayoutContextTypePresent(domAgent, child);
+    
+    if (InspectorCSSAgent::layoutContextTypeForRenderer(node.renderer()))
+        domAgent.pushNodeToFrontend(&node);
+}
+
+Protocol::ErrorStringOr<void> InspectorCSSAgent::setLayoutContextTypeChangedMode(Protocol::CSS::LayoutContextTypeChangedMode mode)
+{
+    if (m_layoutContextTypeChangedMode == mode)
+        return { };
+    
+    m_layoutContextTypeChangedMode = mode;
+    
+    if (mode == Protocol::CSS::LayoutContextTypeChangedMode::All) {
+        auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+        if (!domAgent)
+            return makeUnexpected("DOM domain must be enabled"_s);
+
+        for (auto* document : domAgent->documents())
+            pushChildrenNodesToFrontendIfLayoutContextTypePresent(*domAgent, *document);
+    }
+    
+    return { };
+}
+
+void InspectorCSSAgent::nodeLayoutContextTypeChanged(Node& node, RenderObject* oldRenderer)
+{
+    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    if (!domAgent)
+        return;
+    
+    auto newLayoutContextType = layoutContextTypeForRenderer(node.renderer());
+    if (newLayoutContextType == layoutContextTypeForRenderer(oldRenderer))
+        return;
+    
+    auto nodeId = domAgent->boundNodeId(&node);
+    if (!nodeId && m_layoutContextTypeChangedMode == Protocol::CSS::LayoutContextTypeChangedMode::All) {
+        // FIXME: <https://webkit.org/b/189687> Preserve DOM.NodeId if a node is removed and re-added
+        nodeId = domAgent->identifierForNode(node);
+    }
+    if (!nodeId)
+        return;
+    
+    m_frontendDispatcher->nodeLayoutContextTypeChanged(nodeId, WTFMove(newLayoutContextType));
 }
 
 InspectorStyleSheetForInlineStyle& InspectorCSSAgent::asInspectorStyleSheet(StyledElement& element)

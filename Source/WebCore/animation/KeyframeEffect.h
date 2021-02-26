@@ -123,7 +123,7 @@ public:
     void setComposite(CompositeOperation compositeOperation) { m_compositeOperation = compositeOperation; }
 
     void getAnimatedStyle(std::unique_ptr<RenderStyle>& animatedStyle);
-    void apply(RenderStyle&, Optional<Seconds> = WTF::nullopt) override;
+    void apply(RenderStyle& targetStyle, const RenderStyle* parentElementStyle, Optional<Seconds> = WTF::nullopt) override;
     void invalidate() override;
     void animationDidTick() final;
     void animationDidPlay() final;
@@ -133,7 +133,7 @@ public:
     void animationTimelineDidChange(AnimationTimeline*) final;
     void animationTimingDidChange();
     void transformRelatedPropertyDidChange();
-    void applyPendingAcceleratedActions();
+    OptionSet<AcceleratedActionApplicationResult> applyPendingAcceleratedActions();
 
     void willChangeRenderer();
 
@@ -154,7 +154,7 @@ public:
 #endif
     bool colorFilterFunctionListsMatch() const override { return m_colorFilterFunctionListsMatch; }
 
-    void computeDeclarativeAnimationBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle);
+    void computeDeclarativeAnimationBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle, const RenderStyle* parentElementStyle);
     const KeyframeList& blendingKeyframes() const { return m_blendingKeyframes; }
     const HashSet<CSSPropertyID>& animatedProperties() const { return m_blendingKeyframes.properties(); }
     bool animatesProperty(CSSPropertyID) const;
@@ -171,6 +171,8 @@ public:
 
     bool requiresPseudoElement() const;
     bool hasImplicitKeyframes() const;
+
+    void stopAcceleratingTransformRelatedProperties(UseAcceleratedAction);
 
 private:
     KeyframeEffect(Element*, PseudoId);
@@ -196,13 +198,14 @@ private:
     void computeStackingContextImpact();
     void computeSomeKeyframesUseStepsTimingFunction();
     void clearBlendingKeyframes();
-    void updateBlendingKeyframes(RenderStyle&);
-    void computeCSSAnimationBlendingKeyframes(const RenderStyle&);
+    void updateBlendingKeyframes(RenderStyle& elementStyle, const RenderStyle* parentElementStyle);
+    void computeCSSAnimationBlendingKeyframes(const RenderStyle& unanimatedStyle, const RenderStyle* parentElementStyle);
     void computeCSSTransitionBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle);
     void computeAcceleratedPropertiesState();
     void setBlendingKeyframes(KeyframeList&);
     Seconds timeToNextTick() const final;
     Optional<double> progressUntilNextStep(double) const final;
+    bool isTargetingTransformRelatedProperty() const;
     void checkForMatchingTransformFunctionLists();
     void checkForMatchingFilterFunctionLists();
     void checkForMatchingColorFilterFunctionLists();

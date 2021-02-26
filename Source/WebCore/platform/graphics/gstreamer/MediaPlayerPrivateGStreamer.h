@@ -51,16 +51,6 @@ typedef struct _GstMpegtsSection GstMpegtsSection;
 #if USE(LIBEPOXY)
 // Include the <epoxy/gl.h> header before <gst/gl/gl.h>.
 #include <epoxy/gl.h>
-
-// Workaround build issue with RPi userland GLESv2 headers and libepoxy <https://webkit.org/b/185639>
-#if !GST_CHECK_VERSION(1, 14, 0)
-#include <gst/gl/gstglconfig.h>
-#if defined(GST_GL_HAVE_WINDOW_DISPMANX) && GST_GL_HAVE_WINDOW_DISPMANX
-#define __gl2_h_
-#undef GST_GL_HAVE_GLSYNC
-#define GST_GL_HAVE_GLSYNC 1
-#endif
-#endif // !GST_CHECK_VERSION(1, 14, 0)
 #endif // USE(LIBEPOXY)
 
 #define GST_USE_UNSTABLE_API
@@ -233,6 +223,8 @@ public:
     void flushCurrentBuffer();
 #endif
 
+    void handleTextSample(GstSample*, const char* streamId);
+
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger; }
     const char* logClassName() const override { return "MediaPlayerPrivateGStreamer"; }
@@ -306,7 +298,6 @@ protected:
     void notifyPlayerOfVideo();
     void notifyPlayerOfAudio();
     void notifyPlayerOfText();
-    void newTextSample();
 
     void ensureAudioSourceProvider();
     void setAudioStreamProperties(GObject*);
@@ -317,7 +308,6 @@ protected:
     static void videoChangedCallback(MediaPlayerPrivateGStreamer*);
     static void audioChangedCallback(MediaPlayerPrivateGStreamer*);
     static void textChangedCallback(MediaPlayerPrivateGStreamer*);
-    static GstFlowReturn newTextSampleCallback(MediaPlayerPrivateGStreamer*);
 
     void timeChanged();
     void loadingFailed(MediaPlayer::NetworkState, MediaPlayer::ReadyState = MediaPlayer::ReadyState::HaveNothing, bool forceNotifications = false);
@@ -466,8 +456,7 @@ private:
 #endif
 
     Atomic<bool> m_isPlayerShuttingDown;
-    GRefPtr<GstElement> m_textAppSink;
-    GRefPtr<GstPad> m_textAppSinkPad;
+    GRefPtr<GstElement> m_textSink;
     GstStructure* m_mediaLocations { nullptr };
     int m_mediaLocationCurrentIndex { 0 };
     bool m_isPlaybackRatePaused { false };

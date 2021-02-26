@@ -3,7 +3,7 @@
 # Copyright (C) 2006 Anders Carlsson <andersca@mac.com>
 # Copyright (C) 2006, 2007 Samuel Weinig <sam@webkit.org>
 # Copyright (C) 2006 Alexey Proskuryakov <ap@webkit.org>
-# Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+# Copyright (C) 2006-2021 Apple Inc. All rights reserved.
 # Copyright (C) 2009 Cameron McCormack <cam@mcc.id.au>
 # Copyright (C) Research In Motion Limited 2010. All rights reserved.
 # Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
@@ -1152,7 +1152,6 @@ sub GenerateInvokeIndexedPropertySetter
     my $argument = @{$indexedSetterOperation->arguments}[1];
     my $nativeValue = JSValueToNative($interface, $argument, $value, $indexedSetterOperation->extendedAttributes->{Conditional}, "lexicalGlobalObject", "*lexicalGlobalObject", "thisObject", "", "");
     
-    push(@$outputArray, $indent . "auto throwScope = DECLARE_THROW_SCOPE(JSC::getVM(lexicalGlobalObject));\n");
     push(@$outputArray, $indent . "auto nativeValue = ${nativeValue};\n");
     push(@$outputArray, $indent . "RETURN_IF_EXCEPTION(throwScope, true);\n");
     
@@ -1170,7 +1169,6 @@ sub GenerateInvokeNamedPropertySetter
     my $argument = @{$namedSetterOperation->arguments}[1];
     my $nativeValue = JSValueToNative($interface, $argument, $value, $namedSetterOperation->extendedAttributes->{Conditional}, "lexicalGlobalObject", "*lexicalGlobalObject", "thisObject", "", "");
     
-    push(@$outputArray, $indent . "auto throwScope = DECLARE_THROW_SCOPE(JSC::getVM(lexicalGlobalObject));\n");
     push(@$outputArray, $indent . "auto nativeValue = ${nativeValue};\n");
     push(@$outputArray, $indent . "RETURN_IF_EXCEPTION(throwScope, true);\n");
 
@@ -1202,6 +1200,8 @@ sub GeneratePut
     push(@$outputArray, "    auto* thisObject = jsCast<${className}*>(cell);\n");
     push(@$outputArray, "    ASSERT_GC_OBJECT_INHERITS(thisObject, info());\n\n");
 
+    push(@$outputArray, "    auto throwScope = DECLARE_THROW_SCOPE(lexicalGlobalObject->vm());\n\n");
+
     assert("CEReactions is not supported on having both named setters and indexed setters") if $namedSetterOperation && $namedSetterOperation->extendedAttributes->{CEReactions}
         && $indexedSetterOperation && $indexedSetterOperation->extendedAttributes->{CEReactions};
     if ($namedSetterOperation) {
@@ -1232,6 +1232,7 @@ sub GeneratePut
             push(@$outputArray, "        JSValue prototype = thisObject->getPrototypeDirect(JSC::getVM(lexicalGlobalObject));\n");
             push(@$outputArray, "        bool found = prototype.isObject() && asObject(prototype)->getPropertySlot(lexicalGlobalObject, propertyName, slot);\n");
             push(@$outputArray, "        slot.disallowVMEntry.reset();\n");
+            push(@$outputArray, "        throwScope.assertNoException();\n");
             push(@$outputArray, "        if (!found) {\n");
             $additionalIndent .= "    ";
         }
@@ -1239,7 +1240,7 @@ sub GeneratePut
         GenerateInvokeNamedPropertySetter($outputArray, $additionalIndent . "        ", $interface, $namedSetterOperation, "value");
         if ($namedSetterOperation->extendedAttributes->{CallNamedSetterOnlyForSupportedProperties}) {
             push(@$outputArray, $additionalIndent . "        if (!isPropertySupported)\n");
-            push(@$outputArray, $additionalIndent . "            return JSObject::put(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot);\n");
+            push(@$outputArray, $additionalIndent . "            RELEASE_AND_RETURN(throwScope, JSObject::put(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot));\n");
         }
         push(@$outputArray, $additionalIndent . "        return true;\n");
 
@@ -1255,11 +1256,14 @@ sub GeneratePut
         AddToImplIncludes("JSPluginElementFunctions.h");
 
         push(@$outputArray, "    bool putResult = false;\n");
-        push(@$outputArray, "    if (pluginElementCustomPut(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot, putResult))\n");
+        push(@$outputArray, "    bool success = pluginElementCustomPut(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot, putResult);\n");
+        push(@$outputArray, "    RETURN_IF_EXCEPTION(throwScope, false);\n");
+        push(@$outputArray, "    if (success)\n");
         push(@$outputArray, "        return putResult;\n\n");
     }
 
-    push(@$outputArray, "    return JSObject::put(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot);\n");
+    push(@$outputArray, "    throwScope.assertNoException();\n");
+    push(@$outputArray, "    RELEASE_AND_RETURN(throwScope, JSObject::put(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot));\n");
     push(@$outputArray, "}\n\n");
 }
 
@@ -1277,11 +1281,11 @@ sub GeneratePutByIndex
     
     push(@$outputArray, "bool ${className}::putByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, unsigned index, JSValue value, bool" . (!$ellidesCallsToBase ? " shouldThrow" : "") . ")\n");
     push(@$outputArray, "{\n");
-    if ($namedSetterOperation || $interface->extendedAttributes->{Plugin}) {
-        push(@$outputArray, "    VM& vm = JSC::getVM(lexicalGlobalObject);\n");
-    }
     push(@$outputArray, "    auto* thisObject = jsCast<${className}*>(cell);\n");
     push(@$outputArray, "    ASSERT_GC_OBJECT_INHERITS(thisObject, info());\n\n");
+
+    push(@$outputArray, "    VM& vm = JSC::getVM(lexicalGlobalObject);\n");
+    push(@$outputArray, "    auto throwScope = DECLARE_THROW_SCOPE(vm);\n\n");
 
     assert("CEReactions is not supported on having both named setters and indexed setters") if $namedSetterOperation && $namedSetterOperation->extendedAttributes->{CEReactions}
         && $indexedSetterOperation && $indexedSetterOperation->extendedAttributes->{CEReactions};
@@ -1310,6 +1314,7 @@ sub GeneratePutByIndex
             push(@$outputArray, "    JSValue prototype = thisObject->getPrototypeDirect(vm);\n");
             push(@$outputArray, "    bool found = prototype.isObject() && asObject(prototype)->getPropertySlot(lexicalGlobalObject, propertyName, slot);\n");
             push(@$outputArray, "    slot.disallowVMEntry.reset();\n");
+            push(@$outputArray, "    throwScope.assertNoException();\n");
             push(@$outputArray, "    if (!found) {\n");
             $additionalIndent .= "    ";
         }
@@ -1317,7 +1322,7 @@ sub GeneratePutByIndex
         GenerateInvokeNamedPropertySetter($outputArray, $additionalIndent . "    ", $interface, $namedSetterOperation, "value");
         if ($namedSetterOperation->extendedAttributes->{CallNamedSetterOnlyForSupportedProperties}) {
             push(@$outputArray, $additionalIndent . "    if (!isPropertySupported)\n");
-            push(@$outputArray, $additionalIndent . "        return JSObject::putByIndex(cell, lexicalGlobalObject, index, value, shouldThrow);\n");
+            push(@$outputArray, $additionalIndent . "        RELEASE_AND_RETURN(throwScope, JSObject::putByIndex(cell, lexicalGlobalObject, index, value, shouldThrow));\n");
         }
         push(@$outputArray, $additionalIndent . "    return true;\n");
         
@@ -1332,12 +1337,15 @@ sub GeneratePutByIndex
         push(@$outputArray, "    auto propertyName = Identifier::from(vm, index);\n");
         push(@$outputArray, "    PutPropertySlot putPropertySlot(thisObject, shouldThrow);\n");
         push(@$outputArray, "    bool putResult = false;\n");
-        push(@$outputArray, "    if (pluginElementCustomPut(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot, putResult))\n");
+        push(@$outputArray, "    bool success = pluginElementCustomPut(thisObject, lexicalGlobalObject, propertyName, value, putPropertySlot, putResult);\n");
+        push(@$outputArray, "    RETURN_IF_EXCEPTION(throwScope, false);\n");
+        push(@$outputArray, "    if (success)\n");
         push(@$outputArray, "        return putResult;\n\n");
     }
 
     if (!$ellidesCallsToBase) {
-        push(@$outputArray, "    return JSObject::putByIndex(cell, lexicalGlobalObject, index, value, shouldThrow);\n");
+        push(@$outputArray, "    throwScope.assertNoException();\n");
+        push(@$outputArray, "    RELEASE_AND_RETURN(throwScope, JSObject::putByIndex(cell, lexicalGlobalObject, index, value, shouldThrow));\n");
     }
     
     push(@$outputArray, "}\n\n");
@@ -1384,6 +1392,8 @@ sub GenerateDefineOwnProperty
     push(@$outputArray, "{\n");
     push(@$outputArray, "    auto* thisObject = jsCast<${className}*>(object);\n");
     push(@$outputArray, "    ASSERT_GC_OBJECT_INHERITS(thisObject, info());\n\n");
+
+    push(@$outputArray, "    auto throwScope = DECLARE_THROW_SCOPE(lexicalGlobalObject->vm());\n\n");
 
     assert("CEReactions is not supported on having both named setters and indexed setters") if $namedSetterOperation && $namedSetterOperation->extendedAttributes->{CEReactions}
         && $indexedSetterOperation && $indexedSetterOperation->extendedAttributes->{CEReactions};
@@ -1446,6 +1456,7 @@ sub GenerateDefineOwnProperty
             push(@$outputArray, $additionalIndent. "        PropertySlot slot { thisObject, PropertySlot::InternalMethodType::VMInquiry, &lexicalGlobalObject->vm() };\n");
             push(@$outputArray, $additionalIndent. "        bool found = JSObject::getOwnPropertySlot(thisObject, lexicalGlobalObject, propertyName, slot);\n");
             push(@$outputArray, $additionalIndent. "        slot.disallowVMEntry.reset();\n");
+            push(@$outputArray, $additionalIndent. "        throwScope.assertNoException();\n");
             push(@$outputArray, $additionalIndent. "        if (!found) {\n");
             $additionalIndent .= "    ";
         }
@@ -1464,7 +1475,7 @@ sub GenerateDefineOwnProperty
             GenerateInvokeNamedPropertySetter($outputArray, $additionalIndent . "        ", $interface, $namedSetterOperation, "propertyDescriptor.value()");
             if ($namedSetterOperation->extendedAttributes->{CallNamedSetterOnlyForSupportedProperties}) {
                 push(@$outputArray, $additionalIndent . "    if (!isPropertySupported)\n");
-                push(@$outputArray, $additionalIndent . "        return JSObject::defineOwnProperty(object, lexicalGlobalObject, propertyName, propertyDescriptor, shouldThrow);\n");
+                push(@$outputArray, $additionalIndent . "        RELEASE_AND_RETURN(throwScope, JSObject::defineOwnProperty(object, lexicalGlobalObject, propertyName, propertyDescriptor, shouldThrow));\n");
             }
             # 2.2.3. Return true.
             push(@$outputArray, $additionalIndent . "        return true;\n");
@@ -1491,6 +1502,7 @@ sub GenerateDefineOwnProperty
     }
     
     # 4. Return OrdinaryDefineOwnProperty(O, P, Desc).
+    push(@$outputArray, "    throwScope.release();\n");
     push(@$outputArray, "    return JSObject::defineOwnProperty(object, lexicalGlobalObject, propertyName, newPropertyDescriptor, shouldThrow);\n");
     
     push(@$outputArray, "}\n\n");
@@ -2693,6 +2705,8 @@ sub GenerateDictionaryImplementationContent
         AddToImplIncludes("JSDOMGlobalObject.h");
         AddToImplIncludes("<JavaScriptCore/ObjectConstructor.h>");
 
+        my $hasUnconditionalMember = 0;
+
         $result .= "JSC::JSObject* convertDictionaryToJS(JSC::JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject& globalObject, const ${className}& dictionary)\n";
         $result .= "{\n";
         $result .= "    auto& vm = JSC::getVM(&lexicalGlobalObject);\n\n";
@@ -2717,6 +2731,8 @@ sub GenerateDictionaryImplementationContent
                 if ($conditional) {
                     my $conditionalString = $codeGenerator->GenerateConditionalStringFromAttributeValue($conditional);
                     $result .= "#if ${conditionalString}\n";
+                } else {
+                    $hasUnconditionalMember = 1;
                 }
 
                 # 1. Let key be the identifier of member.
@@ -2753,6 +2769,11 @@ sub GenerateDictionaryImplementationContent
 
                 $result .= "#endif\n" if $conditional;
             }
+        }
+
+        if (!$hasUnconditionalMember) {
+            $result .= "    UNUSED_PARAM(dictionary);\n";
+            $result .= "    UNUSED_PARAM(vm);\n\n";
         }
 
         $result .= "    return result;\n";
@@ -3078,8 +3099,8 @@ sub GenerateHeader
 
     # visit function
     if ($needsVisitChildren) {
-        push(@headerContent, "    static void visitChildren(JSCell*, JSC::SlotVisitor&);\n");
-        push(@headerContent, "    void visitAdditionalChildren(JSC::SlotVisitor&);\n") if $interface->extendedAttributes->{JSCustomMarkFunction};
+        push(@headerContent, "    DECLARE_VISIT_CHILDREN;\n");
+        push(@headerContent, "    template<typename Visitor> void visitAdditionalChildren(Visitor&);\n") if $interface->extendedAttributes->{JSCustomMarkFunction};
         push(@headerContent, "\n");
 
         if ($interface->extendedAttributes->{JSCustomMarkFunction}) {
@@ -3094,7 +3115,7 @@ sub GenerateHeader
             # that the GC calls to ask an object is it would like to mark anything else after the
             # program resumed since the last call to visitChildren or visitOutputConstraints. Since
             # this just calls visitAdditionalChildren, you usually don't have to worry about this.
-            push(@headerContent, "    static void visitOutputConstraints(JSCell*, JSC::SlotVisitor&);\n");
+            push(@headerContent, "    template<typename Visitor> static void visitOutputConstraints(JSCell*, Visitor&);\n");
         }
     }
 
@@ -3215,7 +3236,7 @@ sub GenerateHeader
         }
         $headerIncludes{"<wtf/NeverDestroyed.h>"} = 1;
         push(@headerContent, "public:\n");
-        push(@headerContent, "    bool isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown>, void* context, JSC::SlotVisitor&, const char**) ${overrideDecl};\n");
+        push(@headerContent, "    bool isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown>, void* context, JSC::AbstractSlotVisitor&, const char**) ${overrideDecl};\n");
         push(@headerContent, "    void finalize(JSC::Handle<JSC::Unknown>, void* context) ${overrideDecl};\n");
         push(@headerContent, "};\n");
         push(@headerContent, "\n");
@@ -3660,12 +3681,23 @@ sub GenerateOverloadDispatcher
     my %allSets = ComputeEffectiveOverloadSet($operation->{overloads});
 
     my $generateOverloadCallIfNecessary = sub {
-        my ($overload, $condition, $include) = @_;
+        my ($overload, $condition, $conditionCanThrow, $include) = @_;
         return unless $overload;
         my $conditionalString = $codeGenerator->GenerateConditionalString($overload);
         push(@implContent, "#if ${conditionalString}\n") if $conditionalString;
-        push(@implContent, "        if ($condition)\n    ") if $condition;
-        push(@implContent, "        RELEASE_AND_RETURN(throwScope, (" . $overloadFunctionPrefix . $overload->{overloadIndex} . $overloadFunctionSuffix . "(${parametersToForward})));\n");
+        if ($condition && $conditionCanThrow) {
+            push(@implContent, "        {\n");
+            push(@implContent, "            bool success = $condition;\n");
+            push(@implContent, "            RETURN_IF_EXCEPTION(throwScope, { });\n");
+            push(@implContent, "            if (success)\n");
+            push(@implContent, "                RELEASE_AND_RETURN(throwScope, (" . $overloadFunctionPrefix . $overload->{overloadIndex} . $overloadFunctionSuffix . "(${parametersToForward})));\n");
+            push(@implContent, "        }\n");
+        } elsif ($condition) {
+            push(@implContent, "        if ($condition)\n");
+            push(@implContent, "            RELEASE_AND_RETURN(throwScope, (" . $overloadFunctionPrefix . $overload->{overloadIndex} . $overloadFunctionSuffix . "(${parametersToForward})));\n");
+        } else {
+            push(@implContent, "        RELEASE_AND_RETURN(throwScope, (" . $overloadFunctionPrefix . $overload->{overloadIndex} . $overloadFunctionSuffix . "(${parametersToForward})));\n");
+        }
         push(@implContent, "#endif\n") if $conditionalString;
         AddToImplIncludes($include, $overload->extendedAttributes->{Conditional}) if $include;
     };
@@ -3779,7 +3811,7 @@ sub GenerateOverloadDispatcher
 
             # FIXME: Avoid invoking GetMethod(object, Symbol.iterator) again in convert<IDLSequence<T>>(...).
             $overload = GetOverloadThatMatches($S, $d, \&$isSequenceOrFrozenArrayParameter);
-            &$generateOverloadCallIfNecessary($overload, "hasIteratorMethod(lexicalGlobalObject, distinguishingArg)", "<JavaScriptCore/IteratorOperations.h>");
+            &$generateOverloadCallIfNecessary($overload, "hasIteratorMethod(lexicalGlobalObject, distinguishingArg)", 1, "<JavaScriptCore/IteratorOperations.h>");
 
             $overload = GetOverloadThatMatches($S, $d, \&$isDictionaryOrRecordOrObjectOrCallbackInterfaceParameter);
             &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isObject()");
@@ -4928,6 +4960,7 @@ sub GenerateImplementation
     AddToImplIncludes("DOMIsoSubspaces.h");
     AddToImplIncludes("WebCoreJSClientData.h");
     AddToImplIncludes("<JavaScriptCore/JSDestructibleObjectHeapCellType.h>");
+    AddToImplIncludes("<JavaScriptCore/SlotVisitorMacros.h>");
     AddToImplIncludes("<JavaScriptCore/SubspaceInlines.h>");
     push(@implContent, "JSC::IsoSubspace* ${className}::subspaceForImpl(JSC::VM& vm)\n");
     push(@implContent, "{\n");
@@ -4947,7 +4980,10 @@ sub GenerateImplementation
     push(@implContent, "    auto* space = spaces.m_subspaceFor${interfaceName}.get();\n");
     push(@implContent, "IGNORE_WARNINGS_BEGIN(\"unreachable-code\")\n");
     push(@implContent, "IGNORE_WARNINGS_BEGIN(\"tautological-compare\")\n");
-    push(@implContent, "    if (&${className}::visitOutputConstraints != &JSC::JSCell::visitOutputConstraints)\n");
+    push(@implContent, "    void (*myVisitOutputConstraint)(JSC::JSCell*, JSC::SlotVisitor&) = ${className}::visitOutputConstraints;\n");
+    push(@implContent, "    void (*jsCellVisitOutputConstraint)(JSC::JSCell*, JSC::SlotVisitor&) = JSC::JSCell::visitOutputConstraints;\n");
+    push(@implContent, "    if (myVisitOutputConstraint != jsCellVisitOutputConstraint)\n");
+#    push(@implContent, "    if (&${className}::visitOutputConstraints != &JSC::JSCell::visitOutputConstraints)\n");
     push(@implContent, "        clientData.outputConstraintSpaces().append(space);\n");
     push(@implContent, "IGNORE_WARNINGS_END\n");
     push(@implContent, "IGNORE_WARNINGS_END\n");
@@ -4955,7 +4991,8 @@ sub GenerateImplementation
     push(@implContent, "}\n\n");
 
     if ($needsVisitChildren) {
-        push(@implContent, "void ${className}::visitChildren(JSCell* cell, SlotVisitor& visitor)\n");
+        push(@implContent, "template<typename Visitor>\n");
+        push(@implContent, "void ${className}::visitChildrenImpl(JSCell* cell, Visitor& visitor)\n");
         push(@implContent, "{\n");
         push(@implContent, "    auto* thisObject = jsCast<${className}*>(cell);\n");
         push(@implContent, "    ASSERT_GC_OBJECT_INHERITS(thisObject, info());\n");
@@ -4980,14 +5017,19 @@ sub GenerateImplementation
             }
         }
         push(@implContent, "}\n\n");
+        push(@implContent, "DEFINE_VISIT_CHILDREN(${className});\n\n");
+
         if ($interface->extendedAttributes->{JSCustomMarkFunction}) {
-            push(@implContent, "void ${className}::visitOutputConstraints(JSCell* cell, SlotVisitor& visitor)\n");
+            push(@implContent, "template<typename Visitor>\n");
+            push(@implContent, "void ${className}::visitOutputConstraints(JSCell* cell, Visitor& visitor)\n");
             push(@implContent, "{\n");
             push(@implContent, "    auto* thisObject = jsCast<${className}*>(cell);\n");
             push(@implContent, "    ASSERT_GC_OBJECT_INHERITS(thisObject, info());\n");
             push(@implContent, "    Base::visitOutputConstraints(thisObject, visitor);\n");
             push(@implContent, "    thisObject->visitAdditionalChildren(visitor);\n");
             push(@implContent, "}\n\n");
+            push(@implContent, "template void ${className}::visitOutputConstraints(JSCell*, AbstractSlotVisitor&);\n");
+            push(@implContent, "template void ${className}::visitOutputConstraints(JSCell*, SlotVisitor&);\n");
         }
     }
 
@@ -5022,7 +5064,7 @@ sub GenerateImplementation
     }
 
     if (ShouldGenerateWrapperOwnerCode($hasParent, $interface) && !GetCustomIsReachable($interface)) {
-        push(@implContent, "bool JS${interfaceName}Owner::isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown> handle, void*, SlotVisitor& visitor, const char** reason)\n");
+        push(@implContent, "bool JS${interfaceName}Owner::isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown> handle, void*, AbstractSlotVisitor& visitor, const char** reason)\n");
         push(@implContent, "{\n");
         # All ActiveDOMObjects implement hasPendingActivity(), but not all of them
         # increment their C++ reference counts when hasPendingActivity() becomes
@@ -6421,6 +6463,7 @@ sub GenerateCallbackHeaderContent
         push(@$contentRef, "    bool hasCallback() const final { return m_data && m_data->callback(); }\n\n");
     }
 
+    push(@$contentRef, "    void visitJSFunction(JSC::AbstractSlotVisitor&) override;\n\n") if $interfaceOrCallback->extendedAttributes->{IsWeakCallback};
     push(@$contentRef, "    void visitJSFunction(JSC::SlotVisitor&) override;\n\n") if $interfaceOrCallback->extendedAttributes->{IsWeakCallback};
 
     push(@$contentRef, "    ${callbackDataType}* m_data;\n");
@@ -6612,6 +6655,10 @@ sub GenerateCallbackImplementationContent
     }
 
     if ($interfaceOrCallback->extendedAttributes->{IsWeakCallback}) {
+        push(@$contentRef, "void ${className}::visitJSFunction(JSC::AbstractSlotVisitor& visitor)\n");
+        push(@$contentRef, "{\n");
+        push(@$contentRef, "    m_data->visitJSFunction(visitor);\n");
+        push(@$contentRef, "}\n\n");
         push(@$contentRef, "void ${className}::visitJSFunction(JSC::SlotVisitor& visitor)\n");
         push(@$contentRef, "{\n");
         push(@$contentRef, "    m_data->visitJSFunction(visitor);\n");
@@ -6723,6 +6770,7 @@ sub GenerateIterableDefinition
     my $visibleInterfaceName = $codeGenerator->GetVisibleInterfaceName($interface);
 
     AddToImplIncludes("JSDOMIterator.h");
+    AddToImplIncludes("<JavaScriptCore/SlotVisitorMacros.h>");
 
     return unless IsKeyValueIterableInterface($interface);
 
@@ -6766,7 +6814,9 @@ public:
         auto* space = spaces.m_subspaceFor${iteratorName}.get();
 IGNORE_WARNINGS_BEGIN(\"unreachable-code\")
 IGNORE_WARNINGS_BEGIN(\"tautological-compare\")
-        if (&${iteratorName}::visitOutputConstraints != &JSC::JSCell::visitOutputConstraints)
+        void (*myVisitOutputConstraint)(JSC::JSCell*, JSC::SlotVisitor&) = ${iteratorName}::visitOutputConstraints;
+        void (*jsCellVisitOutputConstraint)(JSC::JSCell*, JSC::SlotVisitor&) = JSC::JSCell::visitOutputConstraints;
+        if (myVisitOutputConstraint != jsCellVisitOutputConstraint)
             clientData.outputConstraintSpaces().append(space);
 IGNORE_WARNINGS_END
 IGNORE_WARNINGS_END

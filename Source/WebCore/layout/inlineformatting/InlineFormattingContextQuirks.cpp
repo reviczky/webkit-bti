@@ -28,6 +28,8 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "LayoutBoxGeometry.h"
+
 namespace WebCore {
 namespace Layout {
 
@@ -35,31 +37,67 @@ InlineLayoutUnit InlineFormattingContext::Quirks::initialLineHeight() const
 {
     // Negative lineHeight value means the line-height is not set
     auto& root = formattingContext().root();
-    if (layoutState().inNoQuirksMode() || !root.style().lineHeight().isNegative())
+    if (layoutState().inStandardsMode() || !root.style().lineHeight().isNegative())
         return root.style().computedLineHeight();
     return root.style().fontMetrics().floatHeight();
 }
 
 bool InlineFormattingContext::Quirks::inlineLevelBoxAffectsLineBox(const LineBox::InlineLevelBox& inlineLevelBox, const LineBox& lineBox) const
 {
+    if (inlineLevelBox.isLineBreakBox()) {
+        if (layoutState().inStandardsMode())
+            return true;
+        // In quirks mode linebreak boxes (<br>) stop affecting the line box when (assume <br> is nested e.g. <span style="font-size: 100px"><br></span>)
+        // 1. the root inline box has content <div>content<br>/div>
+        // 2. there's at least one atomic inline level box on the line e.g <div><img><br></div> or <div><span><img></span><br></div>
+        // 3. there's at least one inline box with content e.g. <div><span>content</span><br></div>
+        if (lineBox.rootInlineBox().hasContent())
+            return false;
+        if (lineBox.hasAtomicInlineLevelBox())
+            return false;
+        // At this point we either have only the <br> on the line or inline boxes with or without content.
+        auto& inlineLevelBoxes = lineBox.nonRootInlineLevelBoxes();
+        ASSERT(!inlineLevelBoxes.isEmpty());
+        if (inlineLevelBoxes.size() == 1)
+            return true;
+        for (auto& inlineLevelBox : lineBox.nonRootInlineLevelBoxes()) {
+            // Filter out empty inline boxes e.g. <div><span></span><span></span><br></div>
+            if (inlineLevelBox->isInlineBox() && inlineLevelBox->hasContent())
+                return false;
+        }
+        return true;
+    }
     if (inlineLevelBox.isInlineBox()) {
         // Inline boxes (e.g. root inline box or <span>) affects line boxes either through the strut or actual content.
-        if (inlineLevelBox.hasContent())
+        auto inlineBoxHasImaginaryStrut = layoutState().inStandardsMode();
+        if (inlineLevelBox.hasContent() || inlineBoxHasImaginaryStrut)
             return true;
-        if (!inlineLevelBox.isRootInlineBox()) {
-            auto& boxGeometry = formattingContext().geometryForBox(inlineLevelBox.layoutBox());
-            if (boxGeometry.horizontalBorder() || boxGeometry.horizontalPadding().valueOr(0_lu)) {
-                // Horizontal border and padding make the inline box stretch the line (e.g. <span style="padding: 10px;"></span>).
-                return true;
-            }
+        if (inlineLevelBox.isRootInlineBox()) {
+            auto shouldRootInlineBoxWithNoContentStretchLineBox = [&] {
+                if (inlineLevelBox.layoutBox().style().lineHeight().isNegative())
+                    return false;
+                // The root inline box with non-initial line height value stretches the line box even when root has no content
+                // but there's at least one inline box with content.
+                // e.g. <div style="line-height: 100px;"><span>content</span></div>
+                if (!lineBox.hasInlineBox())
+                    return false;
+                for (auto& inlineLevelBox : lineBox.nonRootInlineLevelBoxes()) {
+                    if (!inlineLevelBox->isInlineBox())
+                        continue;
+                    if (inlineLevelBox->hasContent())
+                        return true;
+                }
+                return false;
+            };
+            return shouldRootInlineBoxWithNoContentStretchLineBox();
         }
-        auto inlineBoxHasImaginaryStrut = layoutState().inNoQuirksMode();
-        return inlineBoxHasImaginaryStrut && !lineBox.isConsideredEmpty();
-    }
-    if (inlineLevelBox.isLineBreakBox()) {
-        // <br> in non-standard mode stretches the line box only when the line is empty.
-        // e.g. <div><span><br></span></div> will stretch but <div>this will not stretch to 200px<span style="font-size: 200px;"><br></span></div>
-        return layoutState().inNoQuirksMode() ? true : lineBox.isConsideredEmpty();
+        // Non-root inline boxes (e.g. <span>).
+        auto& boxGeometry = formattingContext().geometryForBox(inlineLevelBox.layoutBox());
+        if (boxGeometry.horizontalBorder() || boxGeometry.horizontalPadding().valueOr(0_lu)) {
+            // Horizontal border and padding make the inline box stretch the line (e.g. <span style="padding: 10px;"></span>).
+            return true;
+        }
+        return false;
     }
     if (inlineLevelBox.isAtomicInlineLevelBox()) {
         if (inlineLevelBox.layoutBounds().height())

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2017 Caio Lima <ticaiolima@gmail.com>
- * Copyright (C) 2017-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -67,7 +67,8 @@ JSBigInt::JSBigInt(VM& vm, Structure* structure, Digit* data, unsigned length)
     , m_data(vm, this, data, length)
 { }
 
-void JSBigInt::visitChildren(JSCell* cell, SlotVisitor& visitor)
+template<typename Visitor>
+void JSBigInt::visitChildrenImpl(JSCell* cell, Visitor& visitor)
 {
     auto* thisObject = jsCast<JSBigInt*>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
@@ -75,6 +76,8 @@ void JSBigInt::visitChildren(JSCell* cell, SlotVisitor& visitor)
     if (auto* data = thisObject->m_data.getUnsafe())
         visitor.markAuxiliary(data);
 }
+
+DEFINE_VISIT_CHILDREN(JSBigInt);
 
 void JSBigInt::initialize(InitializationType initType)
 {
@@ -2524,7 +2527,7 @@ JSValue JSBigInt::parseInt(JSGlobalObject* nullOrGlobalObjectForOOM, VM& vm, Cha
 
         if (!heapResult) {
             if (p == length) {
-                ASSERT(digit.unsafeGet() <= std::numeric_limits<int64_t>::max());
+                ASSERT(digit.unsafeGet() <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
                 int64_t maybeResult = digit.unsafeGet();
                 ASSERT(maybeResult >= 0);
                 if (sign == ParseIntSign::Signed)

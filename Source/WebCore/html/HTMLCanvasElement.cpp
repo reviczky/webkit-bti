@@ -128,6 +128,7 @@ HTMLCanvasElement::HTMLCanvasElement(const QualifiedName& tagName, Document& doc
     , CanvasBase(IntSize(defaultWidth, defaultHeight))
     , ActiveDOMObject(document)
 {
+    addInclusiveAncestorState(AncestorState::Canvas);
     ASSERT(hasTagName(canvasTag));
 }
 
@@ -932,7 +933,7 @@ void HTMLCanvasElement::createImageBuffer() const
     auto renderingMode = shouldAccelerate(size()) ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
     // FIXME: Add a new setting for DisplayList drawing on canvas.
     auto useDisplayList = m_usesDisplayListDrawing.valueOr(document().settings().displayListDrawingEnabled()) ? ShouldUseDisplayList::Yes : ShouldUseDisplayList::No;
-    setImageBuffer(ImageBuffer::create(size(), renderingMode, useDisplayList, RenderingPurpose::Canvas, 1, ColorSpace::SRGB, PixelFormat::BGRA8, hostWindow));
+    setImageBuffer(ImageBuffer::create(size(), renderingMode, useDisplayList, RenderingPurpose::Canvas, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8, hostWindow));
 
     if (buffer() && buffer()->drawingContext())
         buffer()->drawingContext()->setTracksDisplayListReplay(m_tracksDisplayListReplay);
@@ -1049,7 +1050,10 @@ Node::InsertedIntoAncestorResult HTMLCanvasElement::insertedIntoAncestor(Inserti
             document.canvasChanged(*this, FloatRect { });
     }
 
-    return HTMLElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
+    HTMLElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
+    addInclusiveAncestorState(AncestorState::Canvas);
+
+    return InsertedIntoAncestorResult::Done;
 }
 
 void HTMLCanvasElement::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
@@ -1060,6 +1064,7 @@ void HTMLCanvasElement::removedFromAncestor(RemovalType removalType, ContainerNo
     }
 
     HTMLElement::removedFromAncestor(removalType, oldParentOfRemovedTree);
+    addInclusiveAncestorState(AncestorState::Canvas);
 }
 
 bool HTMLCanvasElement::needsPreparationForDisplay()

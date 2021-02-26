@@ -15,6 +15,7 @@
       <sub name="WebKitPermissionRequest" link="WebKitPermissionRequest.html"/>
       <sub name="WebKitGeolocationPermissionRequest" link="WebKitGeolocationPermissionRequest.html"/>
       <sub name="WebKitInstallMissingMediaPluginsPermissionRequest" link="WebKitInstallMissingMediaPluginsPermissionRequest.html"/>
+      <sub name="WebKitMediaKeySystemPermissionRequest" link="WebKitMediaKeySystemPermissionRequest.html"/>
       <sub name="WebKitNavigationAction" link="WebKitNavigationAction.html"/>
       <sub name="WebKitUserMediaPermissionRequest" link="WebKitUserMediaPermissionRequest.html"/>
       <sub name="WebKitDeviceInfoPermissionRequest" link="WebKitDeviceInfoPermissionRequest.html"/>
@@ -601,6 +602,8 @@
     <keyword type="struct" name="struct WebKitGeolocationPermissionRequest" link="WebKitGeolocationPermissionRequest.html#WebKitGeolocationPermissionRequest-struct"/>
     <keyword type="function" name="webkit_install_missing_media_plugins_permission_request_get_description ()" link="WebKitInstallMissingMediaPluginsPermissionRequest.html#webkit-install-missing-media-plugins-permission-request-get-description" since="2.10"/>
     <keyword type="struct" name="struct WebKitInstallMissingMediaPluginsPermissionRequest" link="WebKitInstallMissingMediaPluginsPermissionRequest.html#WebKitInstallMissingMediaPluginsPermissionRequest-struct"/>
+    <keyword type="function" name="webkit_media_key_system_permission_get_name ()" link="WebKitMediaKeySystemPermissionRequest.html#webkit-media-key-system-permission-get-name" since="2.32"/>
+    <keyword type="struct" name="struct WebKitMediaKeySystemPermissionRequest" link="WebKitMediaKeySystemPermissionRequest.html#WebKitMediaKeySystemPermissionRequest-struct"/>
     <keyword type="function" name="webkit_navigation_action_copy ()" link="WebKitNavigationAction.html#webkit-navigation-action-copy" since="2.6"/>
     <keyword type="function" name="webkit_navigation_action_free ()" link="WebKitNavigationAction.html#webkit-navigation-action-free" since="2.6"/>
     <keyword type="function" name="webkit_navigation_action_get_navigation_type ()" link="WebKitNavigationAction.html#webkit-navigation-action-get-navigation-type" since="2.6"/>

@@ -455,15 +455,21 @@ RenderBoxModelObject& RenderObject::enclosingBoxModelObject() const
 
 const RenderBox* RenderObject::enclosingScrollableContainerForSnapping() const
 {
-    auto& renderBox = enclosingBox();
-    if (auto* scrollableContainer = renderBox.findEnclosingScrollableContainerForSnapping()) {
-        // The scrollable container for snapping cannot be the node itself.
-        if (scrollableContainer != this)
-            return scrollableContainer;
-        if (renderBox.parentBox())
-            return renderBox.parentBox()->findEnclosingScrollableContainerForSnapping();
+    // Walk up the container chain to find the scrollable container that contains
+    // this RenderObject. The important thing here is that `container()` respects
+    // the containing block chain for positioned elements. This is important because
+    // scrollable overflow does not establish a new containing block for children.
+    for (auto* candidate = container(); candidate; candidate = candidate->container()) {
+        // Currently the RenderView can look like it has scrollable overflow, but we never
+        // want to return this as our container. Instead we should use the root element.
+        if (candidate->isRenderView())
+            break;
+        if (candidate->hasOverflowClip())
+            return downcast<RenderBox>(candidate);
     }
-    return nullptr;
+
+    // If we reach the root, then the root element is the scrolling container.
+    return document().documentElement() ? document().documentElement()->renderBox() : nullptr;
 }
 
 RenderBlock* RenderObject::firstLineBlock() const
@@ -1002,7 +1008,7 @@ Optional<FloatRect> RenderObject::computeFloatVisibleRectInContainer(const Float
 static void outputRenderTreeLegend(TextStream& stream)
 {
     stream.nextLine();
-    stream << "(B)lock/(I)nline/I(N)line-block, (A)bsolute/Fi(X)ed/(R)elative/Stic(K)y, (F)loating, (O)verflow clip, Anon(Y)mous, (G)enerated, has(L)ayer, (C)omposited, (+)Dirty style, (+)Dirty layout";
+    stream << "(B)lock/(I)nline/I(N)line-block, (A)bsolute/Fi(X)ed/(R)elative/Stic(K)y, (F)loating, (O)verflow clip, Anon(Y)mous, (G)enerated, has(L)ayer, hasLayer(S)crollableArea, (C)omposited, (+)Dirty style, (+)Dirty layout";
     stream.nextLine();
 }
 
@@ -1116,10 +1122,14 @@ void RenderObject::outputRenderObject(TextStream& stream, bool mark, int depth) 
     else
         stream << "-";
 
-    if (hasLayer())
+    if (hasLayer()) {
         stream << "L";
-    else
-        stream << "-";
+        if (downcast<RenderLayerModelObject>(*this).layer()->scrollableArea())
+            stream << "S";
+        else
+            stream << "-";
+    } else
+        stream << "--";
 
     if (isComposited())
         stream << "C";
@@ -1226,6 +1236,10 @@ void RenderObject::outputRenderObject(TextStream& stream, bool mark, int depth) 
 void RenderObject::outputRenderSubTreeAndMark(TextStream& stream, const RenderObject* markedObject, int depth) const
 {
     outputRenderObject(stream, markedObject == this, depth);
+
+    if (is<RenderBlockFlow>(*this))
+        downcast<RenderBlockFlow>(*this).outputFloatingObjects(stream, depth + 1);
+
     if (is<RenderBlockFlow>(*this))
         downcast<RenderBlockFlow>(*this).outputLineTreeAndMark(stream, nullptr, depth + 1);
 
