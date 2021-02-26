@@ -45,7 +45,9 @@
 #include "NamedNodeMap.h"
 #include "NetworkStorageSession.h"
 #include "PlatformMouseEvent.h"
+#include "RegistrableDomain.h"
 #include "ResourceLoadObserver.h"
+#include "RuntimeApplicationChecks.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGPathElement.h"
 #include "SVGSVGElement.h"
@@ -57,6 +59,10 @@
 #include "UserContentTypes.h"
 #include "UserScript.h"
 #include "UserScriptTypes.h"
+
+#if PLATFORM(COCOA)
+#include "VersionChecks.h"
+#endif
 
 namespace WebCore {
 
@@ -149,8 +155,8 @@ bool Quirks::shouldAutoplayForArbitraryUserGesture() const
     if (!needsQuirks())
         return false;
 
-    auto host = m_document->url().host();
-    return equalLettersIgnoringASCIICase(host, "twitter.com") || host.endsWithIgnoringASCIICase(".twitter.com");
+    auto domain = RegistrableDomain { m_document->topDocument().url() };
+    return domain == "twitter.com"_s || domain == "facebook.com"_s;
 #endif
 }
 
@@ -644,6 +650,26 @@ bool Quirks::needsFullscreenDisplayNoneQuirk() const
 #endif
 }
 
+// FIXME: Remove after the site is fixed, <rdar://problem/74377902>
+bool Quirks::needsWeChatScrollingQuirk() const
+{
+#if PLATFORM(IOS)
+    return needsQuirks() && !linkedOnOrAfter(SDKVersion::FirstWithoutWeChatScrollingQuirk) && IOSApplication::isWechat();
+#else
+    return false;
+#endif
+}
+
+bool Quirks::shouldOmitHTMLDocumentSupportedPropertyNames()
+{
+#if PLATFORM(COCOA)
+    static bool shouldOmitHTMLDocumentSupportedPropertyNames = !linkedOnOrAfter(SDKVersion::FirstWithHTMLDocumentSupportedPropertyNames);
+    return shouldOmitHTMLDocumentSupportedPropertyNames;
+#else
+    return false;
+#endif
+}
+
 bool Quirks::shouldSilenceWindowResizeEvents() const
 {
 #if PLATFORM(IOS)
@@ -863,7 +889,11 @@ bool Quirks::shouldEnableLegacyGetUserMediaQuirk() const
     if (!needsQuirks())
         return false;
 
-    return m_document->url().protocolIs("https") && equalLettersIgnoringASCIICase(m_document-> url().host(), "www.baidu.com");
+    if (!m_shouldEnableLegacyGetUserMediaQuirk) {
+        auto host = m_document->securityOrigin().host();
+        m_shouldEnableLegacyGetUserMediaQuirk = host == "www.baidu.com" || host == "www.warbyparker.com";
+    }
+    return m_shouldEnableLegacyGetUserMediaQuirk.value();
 }
 #endif
 
@@ -1055,6 +1085,11 @@ Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(Completio
     }
 
     DocumentStorageAccess::requestStorageAccessForNonDocumentQuirk(*m_document, WTFMove(domainInNeedOfStorageAccess), [firstPartyDomain, domainInNeedOfStorageAccess, completionHandler = WTFMove(completionHandler)](StorageAccessWasGranted storageAccessGranted) mutable {
+        if (storageAccessGranted == StorageAccessWasGranted::No) {
+            completionHandler(storageAccessGranted);
+            return;
+        }
+
         ResourceLoadObserver::shared().setDomainsWithCrossPageStorageAccess({{ firstPartyDomain, domainInNeedOfStorageAccess }}, [storageAccessGranted, completionHandler = WTFMove(completionHandler)] () mutable {
             completionHandler(storageAccessGranted);
         });
@@ -1257,5 +1292,112 @@ bool Quirks::needsBlackFullscreenBackgroundQuirk() const
 
     return *m_needsBlackFullscreenBackgroundQuirk;
 }
+
+bool Quirks::requiresUserGestureToPauseInPictureInPicture() const
+{
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+    // Facebook and Twitter will naively pause a <video> element that has scrolled out of the viewport,
+    // regardless of whether that element is currently in PiP mode.
+    // We should remove the quirk once <rdar://problem/67273166> and <rdar://problem/73369869> have been fixed.
+    if (!needsQuirks())
+        return false;
+
+    if (!m_requiresUserGestureToPauseInPictureInPicture) {
+        auto domain = RegistrableDomain(m_document->topDocument().url()).string();
+        m_requiresUserGestureToPauseInPictureInPicture = domain == "facebook.com"_s || domain == "twitter.com"_s;
+    }
+
+    return *m_requiresUserGestureToPauseInPictureInPicture;
+#else
+    return false;
+#endif
+}
+
+bool Quirks::requiresUserGestureToLoadInPictureInPicture() const
+{
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+    // Twitter will remove the "src" attribute of a <video> element that has scrolled out of the viewport and
+    // load the <video> element with an empty "src" regardless of whether that element is currently in PiP mode.
+    // We should remove the quirk once <rdar://problem/73369869> has been fixed.
+    if (!needsQuirks())
+        return false;
+
+    if (!m_requiresUserGestureToLoadInPictureInPicture) {
+        auto domain = RegistrableDomain(m_document->topDocument().url());
+        m_requiresUserGestureToLoadInPictureInPicture = domain.string() == "twitter.com"_s;
+    }
+
+    return *m_requiresUserGestureToLoadInPictureInPicture;
+#else
+    return false;
+#endif
+}
+
+bool Quirks::blocksReturnToFullscreenFromPictureInPictureQuirk() const
+{
+#if ENABLE(FULLSCREEN_API) && ENABLE(VIDEO_PRESENTATION_MODE)
+    // Some sites (e.g., wowhead.com and vimeo.com) do not set element's styles properly when a video
+    // returns to fullscreen from picture-in-picture. This quirk disables the "return to fullscreen
+    // from picture-in-picture" feature for those sites. We should remove the quirk once rdar://problem/73167861
+    // and rdar://problem/73167931 have been fixed.
+    if (!needsQuirks())
+        return false;
+
+    if (!m_blocksReturnToFullscreenFromPictureInPictureQuirk) {
+        auto domain = RegistrableDomain { m_document->topDocument().url() };
+        m_blocksReturnToFullscreenFromPictureInPictureQuirk = domain == "vimeo.com"_s || domain == "wowhead.com"_s;
+    }
+
+    return *m_blocksReturnToFullscreenFromPictureInPictureQuirk;
+#else
+    return false;
+#endif
+}
+
+bool Quirks::shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk() const
+{
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+    // This quirk disables the "webkitendfullscreen" event when a video enters picture-in-picture
+    // from fullscreen for the sites which cannot handle the event properly in that case.
+    // We should remove the quirk once rdar://problem/73261957 has been fixed.
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk) {
+        auto host = m_document->topDocument().url().host();
+        m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk = equalLettersIgnoringASCIICase(host, "trailers.apple.com");
+    }
+
+    return *m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk;
+#else
+    return false;
+#endif
+}
+
+#if ENABLE(WEB_AUTHN)
+bool Quirks::shouldBypassUserGestureRequirementForWebAuthn() const
+{
+    if (!needsQuirks())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    if (equalLettersIgnoringASCIICase(host, "dropbox.com") || host.endsWithIgnoringASCIICase(".dropbox.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "microsoft.com") || host.endsWithIgnoringASCIICase(".microsoft.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "google.com") || host.endsWithIgnoringASCIICase(".google.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "twitter.com") || host.endsWithIgnoringASCIICase(".twitter.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "facebook.com") || host.endsWithIgnoringASCIICase(".facebook.com"))
+        return true;
+
+    return false;
+}
+#endif
 
 }

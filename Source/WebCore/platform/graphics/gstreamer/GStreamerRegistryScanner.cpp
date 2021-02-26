@@ -183,8 +183,14 @@ GStreamerRegistryScanner::RegistryLookupResult GStreamerRegistryScanner::Element
 GStreamerRegistryScanner::GStreamerRegistryScanner(bool isMediaSource)
     : m_isMediaSource(isMediaSource)
 {
-    if (!isInWebProcess())
+    if (isInWebProcess())
+        ensureGStreamerInitialized();
+    else {
+        // This is still needed, mostly because of the webkit_web_view_can_show_mime_type() public API (so
+        // running from UIProcess).
         gst_init(nullptr, nullptr);
+    }
+
     GST_DEBUG_CATEGORY_INIT(webkit_media_gst_registry_scanner_debug, "webkitregistryscanner", 0, "WebKit GStreamer registry scanner");
 
     ElementFactories factories(OptionSet<ElementFactories::Type>::fromRaw(static_cast<unsigned>(ElementFactories::Type::All)));
@@ -330,6 +336,7 @@ void GStreamerRegistryScanner::initializeDecoders(const GStreamerRegistryScanner
         { ElementFactories::Type::Demuxer, "application/x-3gp", { }, { } },
         { ElementFactories::Type::Demuxer, "application/x-hls", { "application/vnd.apple.mpegurl", "application/x-mpegurl" }, { } },
         { ElementFactories::Type::Demuxer, "application/x-pn-realaudio", { }, { } },
+        { ElementFactories::Type::Demuxer, "application/dash+xml", { }, { } },
         { ElementFactories::Type::Demuxer, "audio/x-aiff", { }, { } },
         { ElementFactories::Type::Demuxer, "audio/x-wav", { "audio/x-wav", "audio/wav", "audio/vnd.wave" }, { "1" } },
         { ElementFactories::Type::Demuxer, "video/quicktime", { }, { } },

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -284,13 +284,20 @@ void StructureStubInfo::reset(const ConcurrentJSLockerBase& locker, CodeBlock* c
     case AccessType::DeleteByVal:
         resetDelBy(codeBlock, *this, DelByKind::NormalByVal);
         break;
+    case AccessType::CheckPrivateBrand:
+        resetCheckPrivateBrand(codeBlock, *this);
+        break;
+    case AccessType::SetPrivateBrand:
+        resetSetPrivateBrand(codeBlock, *this);
+        break;
     }
     
     deref();
     setCacheType(locker, CacheType::Unset);
 }
 
-void StructureStubInfo::visitAggregate(SlotVisitor& visitor)
+template<typename Visitor>
+void StructureStubInfo::visitAggregateImpl(Visitor& visitor)
 {
     {
         auto locker = holdLock(m_bufferedStructuresLock);
@@ -315,6 +322,8 @@ void StructureStubInfo::visitAggregate(SlotVisitor& visitor)
     RELEASE_ASSERT_NOT_REACHED();
     return;
 }
+
+DEFINE_VISIT_AGGREGATE(StructureStubInfo);
 
 void StructureStubInfo::visitWeakReferences(const ConcurrentJSLockerBase& locker, CodeBlock* codeBlock)
 {
@@ -346,7 +355,8 @@ void StructureStubInfo::visitWeakReferences(const ConcurrentJSLockerBase& locker
     resetByGC = true;
 }
 
-bool StructureStubInfo::propagateTransitions(SlotVisitor& visitor)
+template<typename Visitor>
+bool StructureStubInfo::propagateTransitions(Visitor& visitor)
 {
     switch (m_cacheType) {
     case CacheType::Unset:
@@ -364,6 +374,9 @@ bool StructureStubInfo::propagateTransitions(SlotVisitor& visitor)
     RELEASE_ASSERT_NOT_REACHED();
     return true;
 }
+
+template bool StructureStubInfo::propagateTransitions(AbstractSlotVisitor&);
+template bool StructureStubInfo::propagateTransitions(SlotVisitor&);
 
 StubInfoSummary StructureStubInfo::summary(VM& vm) const
 {

@@ -25,6 +25,7 @@
 #include "FrameView.h"
 #include "RenderBoxModelObject.h"
 #include "RenderOverflow.h"
+#include "ScrollSnapOffsetsInfo.h"
 #include "ScrollTypes.h"
 #include "ShapeOutsideInfo.h"
 
@@ -56,6 +57,7 @@ public:
             || !style().hasAutoUsedZIndex() || hasRunningAcceleratedAnimations();
     }
 
+    bool requiresLayerWithScrollableArea() const;
     bool backgroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect) const final;
     
     // Returns false for the body renderer if its background is propagated to the root.
@@ -249,9 +251,9 @@ public:
     virtual int scrollTop() const;
     virtual int scrollWidth() const;
     virtual int scrollHeight() const;
-    virtual void setScrollLeft(int, ScrollType, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
-    virtual void setScrollTop(int, ScrollType, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
-    void setScrollPosition(const ScrollPosition&, ScrollType, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
+    virtual void setScrollLeft(int, const ScrollPositionChangeOptions&);
+    virtual void setScrollTop(int, const ScrollPositionChangeOptions&);
+    void setScrollPosition(const ScrollPosition&, const ScrollPositionChangeOptions&);
 
     LayoutUnit marginTop() const override { return m_marginBox.top(); }
     LayoutUnit marginBottom() const override { return m_marginBox.bottom(); }
@@ -419,7 +421,7 @@ override;
 
     bool stretchesToViewport() const
     {
-        return document().inQuirksMode() && style().logicalHeight().isAuto() && !isFloatingOrOutOfFlowPositioned() && (isDocumentElementRenderer() || isBody()) && !isInline();
+        return document().inQuirksMode() && style().logicalHeight().isAuto() && !isFloatingOrOutOfFlowPositioned() && (isDocumentElementRenderer() || isBody()) && !shouldComputeLogicalHeightFromAspectRatio() && !isInline();
     }
 
     virtual LayoutSize intrinsicSize() const { return LayoutSize(); }
@@ -492,6 +494,8 @@ override;
 
     bool hasScrollableOverflowX() const { return scrollsOverflowX() && hasHorizontalOverflow(); }
     bool hasScrollableOverflowY() const { return scrollsOverflowY() && hasVerticalOverflow(); }
+
+    LayoutBoxExtent scrollPaddingForViewportRect(const LayoutRect& viewportRect);
 
     bool usesCompositedScrolling() const;
     
@@ -638,8 +642,6 @@ override;
     bool canHaveOutsideFragmentRange() const { return !isInFlowRenderFragmentedFlow(); }
     virtual bool needsLayoutAfterFragmentRangeChange() const { return false; }
 
-    const RenderBox* findEnclosingScrollableContainerForSnapping() const;
-    
     bool isGridItem() const { return parent() && parent()->isRenderGrid() && !isExcludedFromNormalLayout(); }
     bool isFlexItem() const { return parent() && parent()->isFlexibleBox() && !isExcludedFromNormalLayout(); }
 
@@ -700,6 +702,7 @@ protected:
     bool shouldComputeLogicalWidthFromAspectRatio() const;
     bool shouldComputeLogicalWidthFromAspectRatioAndInsets() const;
     LayoutUnit computeLogicalWidthFromAspectRatio(RenderFragmentContainer* = nullptr) const;
+    std::pair<LayoutUnit, LayoutUnit> computeMinMaxLogicalWidthFromAspectRatio() const;
 
     static LayoutUnit blockSizeFromAspectRatio(LayoutUnit borderPaddingInlineSum, LayoutUnit borderPaddingBlockSum, LayoutUnit aspectRatio, BoxSizing boxSizing, LayoutUnit inlineSize)
     {
@@ -707,6 +710,8 @@ protected:
             return inlineSize / aspectRatio;
         return ((inlineSize - borderPaddingInlineSum) / aspectRatio) + borderPaddingBlockSum;
     }
+
+    void computePreferredLogicalWidths(const Length& minWidth, const Length& maxWidth, LayoutUnit borderAndPadding);
 
 private:
     bool replacedMinMaxLogicalHeightComputesAsNone(SizeType) const;

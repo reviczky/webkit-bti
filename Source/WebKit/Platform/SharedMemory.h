@@ -28,7 +28,7 @@
 
 #include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
-#include <wtf/RefCounted.h>
+#include <wtf/ThreadSafeRefCounted.h>
 
 #if USE(UNIX_DOMAIN_SOCKETS)
 #include "Attachment.h"
@@ -56,7 +56,9 @@ class MachSendRight;
 
 namespace WebKit {
 
-class SharedMemory : public RefCounted<SharedMemory> {
+enum class MemoryLedger { None, Default, Network, Media, Graphics, Neural };
+
+class SharedMemory : public ThreadSafeRefCounted<SharedMemory> {
 public:
     enum class Protection {
         ReadOnly,
@@ -76,6 +78,9 @@ public:
 #if OS(DARWIN) || OS(WINDOWS)
         size_t size() const { return m_size; }
 #endif
+
+        // Take ownership of the memory for jetsam purposes.
+        void takeOwnershipOfMemory(MemoryLedger) const;
 
         void clear();
 

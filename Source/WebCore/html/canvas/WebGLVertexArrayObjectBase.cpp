@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,8 +29,7 @@
 #if ENABLE(WEBGL)
 
 #include "WebGLRenderingContextBase.h"
-#include <JavaScriptCore/SlotVisitor.h>
-#include <JavaScriptCore/SlotVisitorInlines.h>
+#include <JavaScriptCore/AbstractSlotVisitorInlines.h>
 #include <wtf/Locker.h>
 
 namespace WebCore {
@@ -52,7 +51,7 @@ void WebGLVertexArrayObjectBase::setElementArrayBuffer(const AbstractLocker& loc
     
 }
 
-void WebGLVertexArrayObjectBase::setVertexAttribState(const AbstractLocker& locker, GCGLuint index, GCGLsizei bytesPerElement, GCGLint size, GCGLenum type, GCGLboolean normalized, GCGLsizei stride, GCGLintptr offset, WebGLBuffer* buffer)
+void WebGLVertexArrayObjectBase::setVertexAttribState(const AbstractLocker& locker, GCGLuint index, GCGLsizei bytesPerElement, GCGLint size, GCGLenum type, GCGLboolean normalized, GCGLsizei stride, GCGLintptr offset, bool isInteger, WebGLBuffer* buffer)
 {
     GCGLsizei validatedStride = stride ? stride : bytesPerElement;
     
@@ -71,6 +70,7 @@ void WebGLVertexArrayObjectBase::setVertexAttribState(const AbstractLocker& lock
     state.stride = validatedStride;
     state.originalStride = stride;
     state.offset = offset;
+    state.isInteger = isInteger;
 }
 
 void WebGLVertexArrayObjectBase::unbindBuffer(const AbstractLocker& locker, WebGLBuffer& buffer)
@@ -108,7 +108,7 @@ void WebGLVertexArrayObjectBase::setVertexAttribDivisor(GCGLuint index, GCGLuint
     m_vertexAttribState[index].divisor = divisor;
 }
 
-void WebGLVertexArrayObjectBase::addMembersToOpaqueRoots(const AbstractLocker&, JSC::SlotVisitor& visitor)
+void WebGLVertexArrayObjectBase::addMembersToOpaqueRoots(const AbstractLocker&, JSC::AbstractSlotVisitor& visitor)
 {
     visitor.addOpaqueRoot(m_boundElementArrayBuffer.get());
     for (auto& state : m_vertexAttribState)

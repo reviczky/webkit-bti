@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -84,6 +84,7 @@ RefPtr<AudioBuffer> AudioBuffer::createFromAudioFileData(const void* data, size_
 AudioBuffer::AudioBuffer(unsigned numberOfChannels, size_t length, float sampleRate, LegacyPreventDetaching preventDetaching)
     : m_sampleRate(sampleRate)
     , m_originalLength(length)
+    , m_isDetachable(preventDetaching == LegacyPreventDetaching::No)
 {
     m_channels.reserveCapacity(numberOfChannels);
 
@@ -154,11 +155,15 @@ ExceptionOr<JSC::JSValue> AudioBuffer::getChannelData(JSDOMGlobalObject& globalO
     return constructJSArray();
 }
 
-void AudioBuffer::visitChannelWrappers(JSC::SlotVisitor& visitor)
+template<typename Visitor>
+void AudioBuffer::visitChannelWrappers(Visitor& visitor)
 {
     for (auto& channelWrapper : m_channelWrappers)
         channelWrapper.visit(visitor);
 }
+
+template void AudioBuffer::visitChannelWrappers(JSC::AbstractSlotVisitor&);
+template void AudioBuffer::visitChannelWrappers(JSC::SlotVisitor&);
 
 RefPtr<Float32Array> AudioBuffer::channelData(unsigned channelIndex)
 {
@@ -261,6 +266,34 @@ bool AudioBuffer::hasDetachedChannelBuffer() const
             return true;
     }
     return false;
+}
+
+bool AudioBuffer::topologyMatches(const AudioBuffer& other) const
+{
+    return numberOfChannels() == other.numberOfChannels() && length() == other.length() && sampleRate() == other.sampleRate();
+}
+
+bool AudioBuffer::copyTo(AudioBuffer& other) const
+{
+    if (!topologyMatches(other))
+        return false;
+
+    if (hasDetachedChannelBuffer() || other.hasDetachedChannelBuffer())
+        return false;
+
+    for (unsigned channelIndex = 0; channelIndex < numberOfChannels(); ++channelIndex)
+        memcpy(other.rawChannelData(channelIndex), m_channels[channelIndex]->data(), length() * sizeof(float));
+
+    return true;
+}
+
+Ref<AudioBuffer> AudioBuffer::clone(ShouldCopyChannelData shouldCopyChannelData) const
+{
+    auto clone = AudioBuffer::create(numberOfChannels(), length(), sampleRate(), m_isDetachable ? LegacyPreventDetaching::No : LegacyPreventDetaching::Yes);
+    ASSERT(clone);
+    if (shouldCopyChannelData == ShouldCopyChannelData::Yes)
+        copyTo(*clone);
+    return clone.releaseNonNull();
 }
 
 } // namespace WebCore

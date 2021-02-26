@@ -271,6 +271,7 @@ public:
     Ref<DOMRect> boundingBox(Element&);
 
     ExceptionOr<Ref<DOMRectList>> inspectorHighlightRects();
+    ExceptionOr<unsigned> inspectorGridOverlayCount();
 
     ExceptionOr<unsigned> markerCountForNode(Node&, const String&);
     ExceptionOr<RefPtr<Range>> markerRangeForNode(Node&, const String& markerType, unsigned index);
@@ -367,6 +368,8 @@ public:
     void setAutomaticDashSubstitutionEnabled(bool);
     void setAutomaticTextReplacementEnabled(bool);
     void setAutomaticSpellingCorrectionEnabled(bool);
+
+    bool isSpellcheckDisabledExceptTextReplacement(const HTMLInputElement&) const;
 
     void handleAcceptedCandidate(const String& candidate, unsigned location, unsigned length);
     void changeSelectionListType();
@@ -613,7 +616,6 @@ public:
     uint64_t sframeKeyId(const RTCRtpSFrameTransform&);
     void setEnableWebRTCEncryption(bool);
     void setUseDTLS10(bool);
-    void setUseGPUProcessForWebRTC(bool);
 #endif
 
     String getImageSourceURL(Element&);
@@ -629,6 +631,7 @@ public:
     bool elementShouldBufferData(HTMLMediaElement&);
     String elementBufferingPolicy(HTMLMediaElement&);
     double privatePlayerVolume(const HTMLMediaElement&);
+    bool privatePlayerMuted(const HTMLMediaElement&);
     ExceptionOr<void> setOverridePreferredDynamicRangeMode(HTMLMediaElement&, const String&);
 #endif
 

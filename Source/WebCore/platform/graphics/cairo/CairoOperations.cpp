@@ -567,14 +567,14 @@ FillSource::FillSource(const GraphicsContextState& state)
         pattern.object = adoptRef(state.fillPattern->createPlatformPattern(AffineTransform()));
 
         auto& patternImage = state.fillPattern->tileImage();
-        pattern.size = FloatSize(patternImage.width(), patternImage.height());
+        pattern.size = patternImage.size();
         pattern.transform = state.fillPattern->patternSpaceTransform();
         pattern.repeatX = state.fillPattern->repeatX();
         pattern.repeatY = state.fillPattern->repeatY();
     } else if (state.fillGradient) {
-        gradient.base = state.fillGradient->createPattern(1);
+        gradient.base = state.fillGradient->createPattern(1, state.fillGradientSpaceTransform);
         if (state.alpha != 1)
-            gradient.alphaAdjusted = state.fillGradient->createPattern(state.alpha);
+            gradient.alphaAdjusted = state.fillGradient->createPattern(state.alpha, state.fillGradientSpaceTransform);
     } else
         color = state.fillColor;
 }
@@ -585,9 +585,9 @@ StrokeSource::StrokeSource(const GraphicsContextState& state)
     if (state.strokePattern)
         pattern = adoptRef(state.strokePattern->createPlatformPattern(AffineTransform()));
     else if (state.strokeGradient) {
-        gradient.base = state.strokeGradient->createPattern(1);
+        gradient.base = state.strokeGradient->createPattern(1, state.strokeGradientSpaceTransform);
         if (state.alpha != 1)
-            gradient.alphaAdjusted = state.strokeGradient->createPattern(state.alpha);
+            gradient.alphaAdjusted = state.strokeGradient->createPattern(state.alpha, state.strokeGradientSpaceTransform);
     } else
         color = state.strokeColor;
 }

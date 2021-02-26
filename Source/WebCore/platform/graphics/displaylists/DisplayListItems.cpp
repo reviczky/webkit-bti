@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -115,9 +115,9 @@ static TextStream& operator<<(TextStream& ts, const ConcatenateCTM& item)
     return ts;
 }
 
-SetInlineFillGradient::SetInlineFillGradient(const Gradient& gradient)
+SetInlineFillGradient::SetInlineFillGradient(const Gradient& gradient, const AffineTransform& gradientSpaceTransform)
     : m_data(gradient.data())
-    , m_gradientSpaceTransformation(gradient.gradientSpaceTransform())
+    , m_gradientSpaceTransform(gradientSpaceTransform)
     , m_spreadMethod(gradient.spreadMethod())
     , m_colorStopCount(static_cast<uint8_t>(gradient.stops().size()))
 {
@@ -128,19 +128,9 @@ SetInlineFillGradient::SetInlineFillGradient(const Gradient& gradient)
     }
 }
 
-Ref<Gradient> SetInlineFillGradient::gradient() const
-{
-    auto gradient = Gradient::create(Gradient::Data(m_data));
-    for (uint8_t i = 0; i < m_colorStopCount; ++i)
-        gradient->addColorStop({ m_offsets[i], Color(m_colors[i]) });
-    gradient->setSpreadMethod(m_spreadMethod);
-    gradient->setGradientSpaceTransform(m_gradientSpaceTransformation);
-    return gradient;
-}
-
-SetInlineFillGradient::SetInlineFillGradient(float offsets[maxColorStopCount], SRGBA<uint8_t> colors[maxColorStopCount], const Gradient::Data& data, const AffineTransform& gradientSpaceTransformation, GradientSpreadMethod spreadMethod, uint8_t colorStopCount)
+SetInlineFillGradient::SetInlineFillGradient(float offsets[maxColorStopCount], SRGBA<uint8_t> colors[maxColorStopCount], const Gradient::Data& data, const AffineTransform& gradientSpaceTransform, GradientSpreadMethod spreadMethod, uint8_t colorStopCount)
     : m_data(data)
-    , m_gradientSpaceTransformation(gradientSpaceTransformation)
+    , m_gradientSpaceTransform(gradientSpaceTransform)
     , m_spreadMethod(spreadMethod)
     , m_colorStopCount(colorStopCount)
 {
@@ -151,10 +141,19 @@ SetInlineFillGradient::SetInlineFillGradient(float offsets[maxColorStopCount], S
     }
 }
 
+Ref<Gradient> SetInlineFillGradient::gradient() const
+{
+    auto gradient = Gradient::create(Gradient::Data(m_data));
+    for (uint8_t i = 0; i < m_colorStopCount; ++i)
+        gradient->addColorStop({ m_offsets[i], Color(m_colors[i]) });
+    gradient->setSpreadMethod(m_spreadMethod);
+    return gradient;
+}
+
 void SetInlineFillGradient::apply(GraphicsContext& context) const
 {
     if (m_colorStopCount <= maxColorStopCount)
-        context.setFillGradient(gradient());
+        context.setFillGradient(gradient(), m_gradientSpaceTransform);
 }
 
 bool SetInlineFillGradient::isInline(const Gradient& gradient)
@@ -210,23 +209,29 @@ static TextStream& operator<<(TextStream& ts, const SetStrokeThickness& state)
 }
 
 SetState::SetState(const GraphicsContextState& state, GraphicsContextState::StateChangeFlags flags)
-    : m_state(state, flags)
+    : m_stateChange(state, flags)
 {
 }
 
-SetState::SetState(const GraphicsContextStateChange& stateChange)
-    : m_state(stateChange)
+SetState::SetState(const GraphicsContextStateChange& stateChange, const PatternData& strokePattern, const PatternData& fillPattern)
+    : m_stateChange(stateChange)
+    , m_strokePattern(strokePattern)
+    , m_fillPattern(fillPattern)
 {
 }
 
-void SetState::apply(GraphicsContext& context) const
+void SetState::apply(GraphicsContext& context, NativeImage* strokePatternImage, NativeImage* fillPatternImage)
 {
-    m_state.apply(context);
+    if (m_stateChange.m_changeFlags.contains(GraphicsContextState::StrokePatternChange) && strokePatternImage)
+        m_stateChange.m_state.strokePattern = Pattern::create(makeRef(*strokePatternImage), m_strokePattern.parameters);
+    if (m_stateChange.m_changeFlags.contains(GraphicsContextState::FillPatternChange) && fillPatternImage)
+        m_stateChange.m_state.fillPattern = Pattern::create(makeRef(*fillPatternImage), m_fillPattern.parameters);
+    m_stateChange.apply(context);
 }
 
 static TextStream& operator<<(TextStream& ts, const SetState& state)
 {
-    ts << state.state();
+    ts << state.stateChange();
     return ts;
 }
 
@@ -342,18 +347,16 @@ static TextStream& operator<<(TextStream& ts, const ClipPath& item)
     return ts;
 }
 
-void ClipToDrawingCommands::apply(GraphicsContext& context) const
-{
-    context.clipToDrawingCommands(m_destination, m_colorSpace, [&] (GraphicsContext& clippingContext) {
-        Replayer replayer { clippingContext, m_drawingCommands };
-        replayer.replay();
-    });
-}
-
-static TextStream& operator<<(TextStream& ts, const ClipToDrawingCommands& item)
+static TextStream& operator<<(TextStream& ts, const BeginClipToDrawingCommands& item)
 {
     ts.dumpProperty("destination", item.destination());
     ts.dumpProperty("color-space", item.colorSpace());
+    return ts;
+}
+
+static TextStream& operator<<(TextStream& ts, const EndClipToDrawingCommands& item)
+{
+    ts.dumpProperty("destination", item.destination());
     return ts;
 }
 
@@ -381,17 +384,9 @@ DrawGlyphs::DrawGlyphs(const Font& font, const GlyphBufferGlyph* glyphs, const G
     computeBounds(font);
 }
 
-inline GlyphBuffer DrawGlyphs::generateGlyphBuffer(const Font& font) const
-{
-    GlyphBuffer result;
-    for (size_t i = 0; i < m_glyphs.size(); ++i)
-        result.add(m_glyphs[i], font, m_advances[i], GlyphBuffer::noOffset);
-    return result;
-}
-
 void DrawGlyphs::apply(GraphicsContext& context, const Font& font) const
 {
-    context.drawGlyphs(font, generateGlyphBuffer(font), 0, m_glyphs.size(), anchorPoint(), m_smoothingMode);
+    context.drawGlyphs(font, m_glyphs.data(), m_advances.data(), m_glyphs.size(), anchorPoint(), m_smoothingMode);
 }
 
 void DrawGlyphs::computeBounds(const Font& font)
@@ -1038,7 +1033,8 @@ static TextStream& operator<<(TextStream& ts, ItemType type)
     case ItemType::ClipToImageBuffer: ts << "clip-to-image-buffer"; break;
     case ItemType::ClipOutToPath: ts << "clip-out-to-path"; break;
     case ItemType::ClipPath: ts << "clip-path"; break;
-    case ItemType::ClipToDrawingCommands: ts << "clip-to-image-buffer"; break;
+    case ItemType::BeginClipToDrawingCommands: ts << "begin-clip-to-drawing-commands:"; break;
+    case ItemType::EndClipToDrawingCommands: ts << "end-clip-to-drawing-commands"; break;
     case ItemType::DrawGlyphs: ts << "draw-glyphs"; break;
     case ItemType::DrawImageBuffer: ts << "draw-image-buffer"; break;
     case ItemType::DrawNativeImage: ts << "draw-native-image"; break;
@@ -1149,8 +1145,11 @@ TextStream& operator<<(TextStream& ts, ItemHandle item)
     case ItemType::ClipPath:
         ts << item.get<ClipPath>();
         break;
-    case ItemType::ClipToDrawingCommands:
-        ts << item.get<ClipToDrawingCommands>();
+    case ItemType::BeginClipToDrawingCommands:
+        ts << item.get<BeginClipToDrawingCommands>();
+        break;
+    case ItemType::EndClipToDrawingCommands:
+        ts << item.get<EndClipToDrawingCommands>();
         break;
     case ItemType::DrawGlyphs:
         ts << item.get<DrawGlyphs>();

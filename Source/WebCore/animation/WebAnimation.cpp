@@ -1226,14 +1226,14 @@ void WebAnimation::tick()
         m_effect->animationDidTick();
 }
 
-void WebAnimation::resolve(RenderStyle& targetStyle, Optional<Seconds> startTime)
+void WebAnimation::resolve(RenderStyle& targetStyle, const RenderStyle* parentElementStyle, Optional<Seconds> startTime)
 {
     if (!m_shouldSkipUpdatingFinishedStateWhenResolving)
         updateFinishedState(DidSeek::No, SynchronouslyNotify::Yes);
     m_shouldSkipUpdatingFinishedStateWhenResolving = false;
 
     if (m_effect)
-        m_effect->apply(targetStyle, startTime);
+        m_effect->apply(targetStyle, parentElementStyle, startTime);
 }
 
 void WebAnimation::setSuspended(bool isSuspended)
@@ -1251,12 +1251,6 @@ void WebAnimation::acceleratedStateDidChange()
 {
     if (is<DocumentTimeline>(m_timeline))
         downcast<DocumentTimeline>(*m_timeline).animationAcceleratedRunningStateDidChange(*this);
-}
-
-void WebAnimation::applyPendingAcceleratedActions()
-{
-    if (is<KeyframeEffect>(m_effect))
-        downcast<KeyframeEffect>(*m_effect).applyPendingAcceleratedActions();
 }
 
 WebAnimation& WebAnimation::readyPromiseResolve()
@@ -1431,12 +1425,12 @@ ExceptionOr<void> WebAnimation::commitStyles()
             if (effectInStack->animation() != this && !compareAnimationsByCompositeOrder(*effectInStack->animation(), *this))
                 break;
             if (effectInStack->animatedProperties().contains(property))
-                effectInStack->animation()->resolve(*animatedStyle);
+                effectInStack->animation()->resolve(*animatedStyle, nullptr);
             if (effectInStack->animation() == this)
                 break;
         }
         if (m_replaceState == ReplaceState::Removed)
-            effect->animation()->resolve(*animatedStyle);
+            effect->animation()->resolve(*animatedStyle, nullptr);
         if (auto cssValue = computedStyleExtractor.valueForPropertyInStyle(*animatedStyle, property, renderer))
             inlineStyle->setPropertyInternal(property, cssValue->cssText(), false);
     }

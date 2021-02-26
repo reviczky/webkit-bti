@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -174,9 +174,8 @@ public:
     static constexpr bool isDrawingItem = false;
     static constexpr uint8_t maxColorStopCount = 4;
 
-    SetInlineFillGradient(const Gradient&);
-    WEBCORE_EXPORT SetInlineFillGradient(float offsets[maxColorStopCount], SRGBA<uint8_t> colors[maxColorStopCount], const Gradient::Data&,
-        const AffineTransform& gradientSpaceTransformation, GradientSpreadMethod, uint8_t colorStopCount);
+    SetInlineFillGradient(const Gradient&, const AffineTransform& gradientSpaceTransform);
+    WEBCORE_EXPORT SetInlineFillGradient(float offsets[maxColorStopCount], SRGBA<uint8_t> colors[maxColorStopCount], const Gradient::Data&, const AffineTransform& gradientSpaceTransform, GradientSpreadMethod, uint8_t colorStopCount);
 
     static bool isInline(const Gradient&);
     Ref<Gradient> gradient() const;
@@ -187,7 +186,7 @@ private:
     float m_offsets[maxColorStopCount];
     SRGBA<uint8_t> m_colors[maxColorStopCount];
     Gradient::Data m_data;
-    AffineTransform m_gradientSpaceTransformation;
+    AffineTransform m_gradientSpaceTransform;
     GradientSpreadMethod m_spreadMethod { GradientSpreadMethod::Pad };
     uint8_t m_colorStopCount { 0 };
 };
@@ -255,9 +254,12 @@ public:
     static constexpr bool isDrawingItem = false;
 
     WEBCORE_EXPORT SetState(const GraphicsContextState&, GraphicsContextState::StateChangeFlags);
-    WEBCORE_EXPORT SetState(const GraphicsContextStateChange&);
-    
-    const GraphicsContextStateChange& state() const { return m_state; }
+
+    const GraphicsContextStateChange& stateChange() const { return m_stateChange; }
+    const Pattern::Parameters& strokePatternParameters() const { return m_strokePattern.parameters; }
+    const Pattern::Parameters& fillPatternParameters() const { return m_fillPattern.parameters; }
+    RenderingResourceIdentifier strokePatternImageIdentifier() const { return m_strokePattern.tileImageIdentifier; }
+    RenderingResourceIdentifier fillPatternImageIdentifier() const { return m_fillPattern.tileImageIdentifier; }
 
     static void builderState(GraphicsContext&, const GraphicsContextState&, GraphicsContextState::StateChangeFlags);
 
@@ -266,42 +268,49 @@ public:
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static Optional<SetState> decode(Decoder&);
 
-    void apply(GraphicsContext&) const;
+    void apply(GraphicsContext&, NativeImage* strokePatternImage, NativeImage* fillPatternImage);
 
 private:
-    GraphicsContextStateChange m_state;
+    struct PatternData {
+        RenderingResourceIdentifier tileImageIdentifier;
+        Pattern::Parameters parameters;
+    };
+
+    WEBCORE_EXPORT SetState(const GraphicsContextStateChange&, const PatternData& strokePattern, const PatternData& fillPattern);
+
+    GraphicsContextStateChange m_stateChange;
+    PatternData m_strokePattern;
+    PatternData m_fillPattern;
 };
 
 template<class Encoder>
 void SetState::encode(Encoder& encoder) const
 {
-    auto changeFlags = m_state.m_changeFlags;
+    auto changeFlags = m_stateChange.m_changeFlags;
     encoder << changeFlags;
 
-    auto& state = m_state.m_state;
+    auto& state = m_stateChange.m_state;
 
     if (changeFlags.contains(GraphicsContextState::StrokeGradientChange)) {
-        encoder << !!state.strokeGradient;
-        if (state.strokeGradient)
-            encoder << *state.strokeGradient;
+        ASSERT(state.strokeGradient);
+        encoder << *state.strokeGradient;
     }
 
     if (changeFlags.contains(GraphicsContextState::StrokePatternChange)) {
-        encoder << !!state.strokePattern;
-        if (state.strokePattern)
-            encoder << *state.strokePattern;
+        ASSERT(state.strokePattern);
+        encoder << state.strokePattern->tileImage().renderingResourceIdentifier();
+        encoder << state.strokePattern->parameters();
     }
 
     if (changeFlags.contains(GraphicsContextState::FillGradientChange)) {
-        encoder << !!state.fillGradient;
-        if (state.fillGradient)
-            encoder << *state.fillGradient;
+        ASSERT(state.fillGradient);
+        encoder << *state.fillGradient;
     }
 
     if (changeFlags.contains(GraphicsContextState::FillPatternChange)) {
-        encoder << !!state.fillPattern;
-        if (state.fillPattern)
-            encoder << *state.fillPattern;
+        ASSERT(state.fillPattern);
+        encoder << state.fillPattern->tileImage().renderingResourceIdentifier();
+        encoder << state.fillPattern->parameters();
     }
 
     if (changeFlags.contains(GraphicsContextState::ShadowChange)) {
@@ -367,64 +376,51 @@ Optional<SetState> SetState::decode(Decoder& decoder)
     GraphicsContextStateChange stateChange;
     stateChange.m_changeFlags = *changeFlags;
 
+    PatternData strokePattern;
+    PatternData fillPattern;
+
     if (stateChange.m_changeFlags.contains(GraphicsContextState::StrokeGradientChange)) {
-        Optional<bool> hasStrokeGradient;
-        decoder >> hasStrokeGradient;
-        if (!hasStrokeGradient.hasValue())
+        auto strokeGradient = Gradient::decode(decoder);
+        if (!strokeGradient)
             return WTF::nullopt;
 
-        if (hasStrokeGradient.value()) {
-            auto strokeGradient = Gradient::decode(decoder);
-            if (!strokeGradient)
-                return WTF::nullopt;
-
-            stateChange.m_state.strokeGradient = WTFMove(*strokeGradient);
-        }
+        stateChange.m_state.strokeGradient = WTFMove(*strokeGradient);
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::StrokePatternChange)) {
-        Optional<bool> hasStrokePattern;
-        decoder >> hasStrokePattern;
-        if (!hasStrokePattern.hasValue())
+        Optional<RenderingResourceIdentifier> renderingResourceIdentifier;
+        decoder >> renderingResourceIdentifier;
+        if (!renderingResourceIdentifier)
             return WTF::nullopt;
 
-        if (hasStrokePattern.value()) {
-            auto strokePattern = Pattern::decode(decoder);
-            if (!strokePattern)
-                return WTF::nullopt;
+        Optional<Pattern::Parameters> parameters;
+        decoder >> parameters;
+        if (!parameters)
+            return WTF::nullopt;
 
-            stateChange.m_state.strokePattern = WTFMove(*strokePattern);
-        }
+        strokePattern = { *renderingResourceIdentifier, *parameters };
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::FillGradientChange)) {
-        Optional<bool> hasFillGradient;
-        decoder >> hasFillGradient;
-        if (!hasFillGradient.hasValue())
+        auto fillGradient = Gradient::decode(decoder);
+        if (!fillGradient)
             return WTF::nullopt;
 
-        if (hasFillGradient.value()) {
-            auto fillGradient = Gradient::decode(decoder);
-            if (!fillGradient)
-                return WTF::nullopt;
-
-            stateChange.m_state.fillGradient = WTFMove(*fillGradient);
-        }
+        stateChange.m_state.fillGradient = WTFMove(*fillGradient);
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::FillPatternChange)) {
-        Optional<bool> hasFillPattern;
-        decoder >> hasFillPattern;
-        if (!hasFillPattern.hasValue())
+        Optional<RenderingResourceIdentifier> renderingResourceIdentifier;
+        decoder >> renderingResourceIdentifier;
+        if (!renderingResourceIdentifier)
             return WTF::nullopt;
 
-        if (hasFillPattern.value()) {
-            auto fillPattern = Pattern::decode(decoder);
-            if (!fillPattern)
-                return WTF::nullopt;
+        Optional<Pattern::Parameters> parameters;
+        decoder >> parameters;
+        if (!parameters)
+            return WTF::nullopt;
 
-            stateChange.m_state.fillPattern = WTFMove(*fillPattern);
-        }
+        fillPattern = { *renderingResourceIdentifier, *parameters };
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::ShadowChange)) {
@@ -584,7 +580,7 @@ Optional<SetState> SetState::decode(Decoder& decoder)
         stateChange.m_state.shadowsIgnoreTransforms = *shadowsIgnoreTransforms;
     }
 
-    return { stateChange };
+    return {{ stateChange, strokePattern, fillPattern }};
 }
 
 class SetLineCap {
@@ -754,6 +750,7 @@ public:
     
     RenderingResourceIdentifier imageBufferIdentifier() const { return m_imageBufferIdentifier; }
     FloatRect destinationRect() const { return m_destinationRect; }
+    bool isValid() const { return !!m_imageBufferIdentifier; }
 
     void apply(GraphicsContext&, WebCore::ImageBuffer&) const;
 
@@ -862,74 +859,42 @@ Optional<ClipPath> ClipPath::decode(Decoder& decoder)
     return {{ WTFMove(*path), *windRule }};
 }
 
-class ClipToDrawingCommands {
+class BeginClipToDrawingCommands {
 public:
-    static constexpr ItemType itemType = ItemType::ClipToDrawingCommands;
-    static constexpr bool isInlineItem = false;
+    static constexpr ItemType itemType = ItemType::BeginClipToDrawingCommands;
+    static constexpr bool isInlineItem = true;
     static constexpr bool isDrawingItem = false;
 
-    ClipToDrawingCommands(const FloatRect& destination, ColorSpace colorSpace, DisplayList&& drawingCommands)
+    BeginClipToDrawingCommands(const FloatRect& destination, DestinationColorSpace colorSpace)
         : m_destination(destination)
         , m_colorSpace(colorSpace)
-        , m_drawingCommands(WTFMove(drawingCommands))
     {
-    }
-
-    ClipToDrawingCommands(const ClipToDrawingCommands& other)
-        : m_destination(other.m_destination)
-        , m_colorSpace(other.m_colorSpace)
-    {
-        // FIXME: Copy m_drawingCommands.
-    }
-
-    ClipToDrawingCommands& operator=(const ClipToDrawingCommands& other)
-    {
-        m_destination = other.m_destination;
-        m_colorSpace = other.m_colorSpace;
-        // FIXME: Copy m_drawingCommands.
-        return *this;
     }
 
     const FloatRect& destination() const { return m_destination; }
-    ColorSpace colorSpace() const { return m_colorSpace; }
-    const DisplayList& drawingCommands() const { return m_drawingCommands; }
-
-    template<class Encoder> void encode(Encoder&) const;
-    template<class Decoder> static Optional<ClipToDrawingCommands> decode(Decoder&);
-
-    void apply(GraphicsContext&) const;
+    DestinationColorSpace colorSpace() const { return m_colorSpace; }
 
 private:
     FloatRect m_destination;
-    ColorSpace m_colorSpace;
-    DisplayList m_drawingCommands;
+    DestinationColorSpace m_colorSpace;
 };
 
-template<class Encoder>
-void ClipToDrawingCommands::encode(Encoder& encoder) const
-{
-    encoder << m_destination;
-    encoder << m_colorSpace;
-    // FIXME: Implement a way to encode in-memory display lists.
-}
+class EndClipToDrawingCommands {
+public:
+    static constexpr ItemType itemType = ItemType::EndClipToDrawingCommands;
+    static constexpr bool isInlineItem = true;
+    static constexpr bool isDrawingItem = false;
 
-template<class Decoder>
-Optional<ClipToDrawingCommands> ClipToDrawingCommands::decode(Decoder& decoder)
-{
-    Optional<FloatRect> destination;
-    decoder >> destination;
-    if (!destination)
-        return WTF::nullopt;
+    EndClipToDrawingCommands(const FloatRect& destination)
+        : m_destination(destination)
+    {
+    }
 
-    Optional<ColorSpace> colorSpace;
-    decoder >> colorSpace;
-    if (!colorSpace)
-        return WTF::nullopt;
+    const FloatRect& destination() const { return m_destination; }
 
-    // FIXME: Implement a way to decode in-memory display lists.
-    DisplayList drawingCommands;
-    return {{ *destination, *colorSpace, WTFMove(drawingCommands) }};
-}
+private:
+    FloatRect m_destination;
+};
 
 class DrawGlyphs {
 public:
@@ -955,8 +920,6 @@ public:
 
 private:
     void computeBounds(const Font&);
-
-    GlyphBuffer generateGlyphBuffer(const Font&) const;
 
     RenderingResourceIdentifier m_fontIdentifier;
     Vector<GlyphBufferGlyph, 128> m_glyphs;
@@ -1034,6 +997,8 @@ public:
     FloatRect source() const { return m_srcRect; }
     FloatRect destinationRect() const { return m_destinationRect; }
     ImagePaintingOptions options() const { return m_options; }
+    // FIXME: We might want to validate ImagePaintingOptions.
+    bool isValid() const { return !!m_imageBufferIdentifier; }
 
     void apply(GraphicsContext&, WebCore::ImageBuffer&) const;
 
@@ -1067,6 +1032,8 @@ public:
     RenderingResourceIdentifier imageIdentifier() const { return m_imageIdentifier; }
     const FloatRect& source() const { return m_srcRect; }
     const FloatRect& destinationRect() const { return m_destinationRect; }
+    // FIXME: We might want to validate ImagePaintingOptions.
+    bool isValid() const { return !!m_imageIdentifier; }
 
     NO_RETURN_DUE_TO_ASSERT void apply(GraphicsContext&) const;
     void apply(GraphicsContext&, NativeImage&) const;
@@ -1097,6 +1064,8 @@ public:
     const AffineTransform& patternTransform() const { return m_patternTransform; }
     FloatPoint phase() const { return m_phase; }
     FloatSize spacing() const { return m_spacing; }
+    // FIXME: We might want to validate ImagePaintingOptions.
+    bool isValid() const { return !!m_imageIdentifier; }
 
     NO_RETURN_DUE_TO_ASSERT void apply(GraphicsContext&) const;
     void apply(GraphicsContext&, NativeImage&) const;
@@ -2000,6 +1969,8 @@ public:
     const FloatRect& destination() const { return m_destination; }
     MediaPlayerIdentifier identifier() const { return m_identifier; }
 
+    bool isValid() const { return !!m_identifier; }
+
     NO_RETURN_DUE_TO_ASSERT void apply(GraphicsContext&) const;
 
     Optional<FloatRect> localBounds(const GraphicsContext&) const { return WTF::nullopt; }
@@ -2224,12 +2195,13 @@ public:
     static constexpr bool isInlineItem = true;
     static constexpr bool isDrawingItem = false;
 
-    FlushContext(FlushIdentifier identifier)
+    explicit FlushContext(FlushIdentifier identifier)
         : m_identifier(identifier)
     {
     }
 
     FlushIdentifier identifier() const { return m_identifier; }
+    bool isValid() const { return !!m_identifier; }
 
     void apply(GraphicsContext&) const;
 
@@ -2245,12 +2217,13 @@ public:
     static constexpr bool isInlineItem = true;
     static constexpr bool isDrawingItem = false;
 
-    MetaCommandChangeItemBuffer(ItemBufferIdentifier identifier)
+    explicit MetaCommandChangeItemBuffer(ItemBufferIdentifier identifier)
         : m_identifier(identifier)
     {
     }
 
     ItemBufferIdentifier identifier() const { return m_identifier; }
+    bool isValid() const { return !!m_identifier; }
 
 private:
     ItemBufferIdentifier m_identifier;
@@ -2262,12 +2235,13 @@ public:
     static constexpr bool isInlineItem = true;
     static constexpr bool isDrawingItem = false;
 
-    MetaCommandChangeDestinationImageBuffer(RenderingResourceIdentifier identifier)
+    explicit MetaCommandChangeDestinationImageBuffer(RenderingResourceIdentifier identifier)
         : m_identifier(identifier)
     {
     }
 
     RenderingResourceIdentifier identifier() const { return m_identifier; }
+    bool isValid() const { return !!m_identifier; }
 
 private:
     RenderingResourceIdentifier m_identifier;
@@ -2305,7 +2279,8 @@ template<> struct EnumTraits<WebCore::DisplayList::ItemType> {
     WebCore::DisplayList::ItemType::ClipToImageBuffer,
     WebCore::DisplayList::ItemType::ClipOutToPath,
     WebCore::DisplayList::ItemType::ClipPath,
-    WebCore::DisplayList::ItemType::ClipToDrawingCommands,
+    WebCore::DisplayList::ItemType::BeginClipToDrawingCommands,
+    WebCore::DisplayList::ItemType::EndClipToDrawingCommands,
     WebCore::DisplayList::ItemType::DrawGlyphs,
     WebCore::DisplayList::ItemType::DrawImageBuffer,
     WebCore::DisplayList::ItemType::DrawNativeImage,

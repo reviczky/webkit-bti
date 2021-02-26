@@ -379,7 +379,7 @@ public:
     WEBCORE_EXPORT void setComposition(const String&, const Vector<CompositionUnderline>&, const Vector<CompositionHighlight>&, unsigned selectionStart, unsigned selectionEnd);
     WEBCORE_EXPORT void confirmComposition();
     WEBCORE_EXPORT void confirmComposition(const String&); // if no existing composition, replaces selection
-    void confirmCompositionAndNotifyClient();
+    void confirmOrCancelCompositionAndNotifyClient();
     WEBCORE_EXPORT void cancelComposition();
     bool cancelCompositionIfSelectionIsInvalid();
     WEBCORE_EXPORT Optional<SimpleRange> compositionRange() const;
@@ -511,6 +511,7 @@ public:
     WEBCORE_EXPORT void toggleAutomaticTextReplacement();
     WEBCORE_EXPORT bool isAutomaticSpellingCorrectionEnabled();
     WEBCORE_EXPORT void toggleAutomaticSpellingCorrection();
+    WEBCORE_EXPORT bool canEnableAutomaticSpellingCorrection() const;
 #endif
 
     RefPtr<DocumentFragment> webContentFromPasteboard(Pasteboard&, const SimpleRange& context, bool allowPlainText, bool& chosePlainText);

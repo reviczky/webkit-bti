@@ -83,6 +83,7 @@
 #include "RenderInline.h"
 #include "RenderIterator.h"
 #include "RenderLayer.h"
+#include "RenderLayerScrollableArea.h"
 #include "RenderLineBreak.h"
 #include "RenderListBox.h"
 #include "RenderListItem.h"
@@ -1847,6 +1848,9 @@ bool AccessibilityRenderObject::isFocused() const
 
 void AccessibilityRenderObject::setFocused(bool on)
 {
+    // Call the base class setFocused to ensure the view is focused and active.
+    AccessibilityObject::setFocused(on);
+
     if (!canSetFocusAttribute())
         return;
 
@@ -1857,9 +1861,6 @@ void AccessibilityRenderObject::setFocused(bool on)
         document->setFocusedElement(nullptr);
         return;
     }
-
-    // Call the base class setFocused to ensure the view is focused and active.
-    AccessibilityObject::setFocused(on);
 
     // When a node is told to set focus, that can cause it to be deallocated, which means that doing
     // anything else inside this object will crash. To fix this, we added a RefPtr to protect this object
@@ -2796,8 +2797,12 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
     if (cssBox && cssBox->isImage()) {
         if (is<HTMLInputElement>(node))
             return hasPopup() ? AccessibilityRole::PopUpButton : AccessibilityRole::Button;
-        if (isSVGImage())
-            return AccessibilityRole::SVGRoot;
+
+        if (auto* svgRoot = remoteSVGRootElement(Create)) {
+            if (svgRoot->hasAccessibleContent())
+                return AccessibilityRole::SVGRoot;
+        }
+
         return AccessibilityRole::Image;
     }
     
@@ -3249,8 +3254,6 @@ AccessibilitySVGRoot* AccessibilityRenderObject::remoteSVGRootElement(CreationCh
         return nullptr;
     AccessibilityObject* rootSVGObject = createIfNecessary == Create ? cache->getOrCreate(rendererRoot) : cache->get(rendererRoot);
 
-    // In order to connect the AX hierarchy from the SVG root element from the loaded resource
-    // the parent must be set, because there's no other way to get back to who created the image.
     ASSERT(!createIfNecessary || rootSVGObject);
     if (!is<AccessibilitySVGRoot>(rootSVGObject))
         return nullptr;
@@ -3264,6 +3267,8 @@ void AccessibilityRenderObject::addRemoteSVGChildren()
     if (!root)
         return;
     
+    // In order to connect the AX hierarchy from the SVG root element from the loaded resource
+    // the parent must be set, because there's no other way to get back to who created the image.
     root->setParent(this);
     
     if (root->accessibilityIsIgnored()) {
@@ -3906,7 +3911,7 @@ ScrollableArea* AccessibilityRenderObject::getScrollableAreaIfScrollable() const
     if (!box.canBeScrolledAndHasScrollableArea())
         return nullptr;
 
-    return box.layer();
+    return box.layer() ? box.layer()->scrollableArea() : nullptr;
 }
 
 void AccessibilityRenderObject::scrollTo(const IntPoint& point) const
@@ -3919,7 +3924,9 @@ void AccessibilityRenderObject::scrollTo(const IntPoint& point) const
         return;
 
     // FIXME: is point a ScrollOffset or ScrollPosition? Test in RTL overflow.
-    box.layer()->scrollToOffset(point);
+    ASSERT(box.layer());
+    ASSERT(box.layer()->scrollableArea());
+    box.layer()->scrollableArea()->scrollToOffset(point);
 }
 
 #if ENABLE(MATHML)

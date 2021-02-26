@@ -69,7 +69,7 @@ class TouchEvent;
 
 using NodeOrString = Variant<RefPtr<Node>, String>;
 
-class Node : public CanMakeWeakPtr<Node>, public EventTarget {
+class Node : public EventTarget {
     WTF_MAKE_ISO_ALLOCATED(Node);
 
     friend class Document;
@@ -206,10 +206,6 @@ public:
     bool isCharacterDataNode() const { return hasNodeFlag(NodeFlag::IsCharacterData); }
     virtual bool isFrameOwnerElement() const { return false; }
     virtual bool isPluginElement() const { return false; }
-#if ENABLE(SERVICE_CONTROLS)
-    virtual bool isImageControlsRootElement() const { return false; }
-    virtual bool isImageControlsButtonElement() const { return false; }
-#endif
 
     bool isDocumentNode() const { return hasNodeFlag(NodeFlag::IsDocumentNode); }
     bool isTreeScope() const { return hasNodeFlag(NodeFlag::IsDocumentNode) || hasNodeFlag(NodeFlag::IsShadowRoot); }
@@ -226,6 +222,7 @@ public:
     ShadowRoot* containingShadowRoot() const;
     ShadowRoot* shadowRoot() const;
     bool isClosedShadowHidden(const Node&) const;
+    bool delegatesFocusToShadowRoot() const { return hasNodeFlag(NodeFlag::DelegatesFocusToShadowRoot); }
 
     HTMLSlotElement* assignedSlot() const;
     HTMLSlotElement* assignedSlotForBindings() const;
@@ -298,6 +295,8 @@ public:
     bool styleResolutionShouldRecompositeLayer() const { return hasStyleFlag(NodeStyleFlag::StyleResolutionShouldRecompositeLayer); }
     bool childNeedsStyleRecalc() const { return hasStyleFlag(NodeStyleFlag::DescendantNeedsStyleResolution); }
     bool isEditingText() const { return hasNodeFlag(NodeFlag::IsEditingText); }
+
+    bool isDocumentFragmentForInnerOuterHTML() const { return hasNodeFlag(NodeFlag::IsDocumentFragmentForInnerOuterHTML); }
 
     void setChildNeedsStyleRecalc() { setStyleFlag(NodeStyleFlag::DescendantNeedsStyleResolution); }
     void clearChildNeedsStyleRecalc();
@@ -407,9 +406,14 @@ public:
         Done,
         NeedsPostInsertionCallback,
     };
+    enum class AncestorState : uint8_t {
+        Form = 1 << 0,
+        Canvas = 1 << 1,
+    };
     struct InsertionType {
         bool connectedToDocument { false };
         bool treeScopeChanged { false };
+        OptionSet<AncestorState> ancestorStates;
     };
     // Called *after* this node or its ancestor is inserted into a new parent (may or may not be a part of document) by scripts or parser.
     // insertedInto **MUST NOT** invoke scripts. Return NeedsPostInsertionCallback and implement didFinishInsertingNode instead to run scripts.
@@ -419,6 +423,7 @@ public:
     struct RemovalType {
         bool disconnectedFromDocument { false };
         bool treeScopeChanged { false };
+        OptionSet<AncestorState> ancestorStates;
     };
     virtual void removedFromAncestor(RemovalType, ContainerNode& oldParentOfRemovedTree);
 
@@ -447,14 +452,12 @@ public:
     ScriptExecutionContext* scriptExecutionContext() const final; // Implemented in Document.h
 
     WEBCORE_EXPORT bool addEventListener(const AtomString& eventType, Ref<EventListener>&&, const AddEventListenerOptions&) override;
-    bool removeEventListener(const AtomString& eventType, EventListener&, const ListenerOptions&) override;
+    bool removeEventListener(const AtomString& eventType, EventListener&, const EventListenerOptions&) override;
 
     using EventTarget::dispatchEvent;
     void dispatchEvent(Event&) override;
 
     void dispatchScopedEvent(Event&);
-
-    virtual void handleLocalEvents(Event&, EventInvokePhase);
 
     void dispatchSubtreeModifiedEvent();
     void dispatchDOMActivateEvent(Event& underlyingClickEvent);
@@ -498,6 +501,8 @@ public:
     void updateAncestorConnectedSubframeCountForRemoval() const;
     void updateAncestorConnectedSubframeCountForInsertion() const;
 
+    OptionSet<AncestorState> inclusiveAncestorStates() const;
+
 #if ENABLE(JIT)
     static ptrdiff_t nodeFlagsMemoryOffset() { return OBJECT_OFFSETOF(Node, m_nodeFlags); }
     static ptrdiff_t rareDataMemoryOffset() { return OBJECT_OFFSETOF(Node, m_rareDataWithBitfields); }
@@ -532,10 +537,10 @@ protected:
         IsInShadowTree = 1 << 11,
         HasEventTargetData = 1 << 12,
         // UnusedFlag = 1 << 13,
-        // UnusedFlag = 1 << 14,
 
         // These bits are used by derived classes, pulled up here so they can
         // be stored in the same memory word as the Node bits above.
+        IsDocumentFragmentForInnerOuterHTML = 1 << 14, // DocumentFragment
         IsEditingText = 1 << 15, // Text
         HasFocusWithin = 1 << 16, // Element
         IsLink = 1 << 17,
@@ -552,8 +557,11 @@ protected:
         ContainsFullScreenElement = 1 << 25,
 #endif
         IsComputedStyleInvalidFlag = 1 << 26,
+        DelegatesFocusToShadowRoot = 1 << 27,
 
-        // Bits 27-31 are free.
+        InclusiveAncestorStateForForm = 1 << 28,
+        InclusiveAncestorStateForCanvas = 1 << 29,
+        // Bits 30-31 are free.
     };
 
     enum class TabIndexState : uint8_t {
@@ -592,6 +600,11 @@ protected:
     bool isParsingChildrenFinished() const { return hasNodeFlag(NodeFlag::IsParsingChildrenFinished); }
     void setIsParsingChildrenFinished() { setNodeFlag(NodeFlag::IsParsingChildrenFinished); }
     void clearIsParsingChildrenFinished() { clearNodeFlag(NodeFlag::IsParsingChildrenFinished); }
+
+    void setDelegatesFocusToShadowRoot() { setNodeFlag(NodeFlag::DelegatesFocusToShadowRoot); }
+
+    void setInclusiveAncestorStates(OptionSet<AncestorState>);
+    void addInclusiveAncestorState(AncestorState);
 
     constexpr static auto DefaultNodeFlags = OptionSet<NodeFlag>(NodeFlag::IsParsingChildrenFinished);
     constexpr static auto CreateOther = DefaultNodeFlags;
@@ -710,6 +723,8 @@ private:
     static void moveShadowTreeToNewDocument(ShadowRoot&, Document& oldDocument, Document& newDocument);
     static void moveTreeToNewScope(Node&, TreeScope& oldScope, TreeScope& newScope);
     void moveNodeToNewDocument(Document& oldDocument, Document& newDocument);
+    
+    virtual void didChangeRenderer(RenderObject*) { };
 
     struct NodeRareDataDeleter {
         void operator()(NodeRareData*) const;
@@ -886,6 +901,44 @@ inline void Node::setTreeScopeRecursively(TreeScope& newTreeScope)
     ASSERT(!m_deletionHasBegun);
     if (m_treeScope != &newTreeScope)
         moveTreeToNewScope(*this, *m_treeScope, newTreeScope);
+}
+
+ALWAYS_INLINE OptionSet<Node::AncestorState> Node::inclusiveAncestorStates() const
+{
+    ASSERT(isElementNode() || isTreeScope() || isDocumentFragment()); // Only Element supports ancestor states for expediency.
+    OptionSet<Node::AncestorState> states;
+    if (hasNodeFlag(NodeFlag::InclusiveAncestorStateForForm))
+        states.add(AncestorState::Form);
+    if (hasNodeFlag(NodeFlag::InclusiveAncestorStateForCanvas))
+        states.add(AncestorState::Canvas);
+    return states;
+}
+
+ALWAYS_INLINE void Node::setInclusiveAncestorStates(OptionSet<AncestorState> states)
+{
+    ASSERT(isElementNode());
+    if (states.contains(AncestorState::Form))
+        setNodeFlag(NodeFlag::InclusiveAncestorStateForForm);
+    else
+        clearNodeFlag(NodeFlag::InclusiveAncestorStateForForm);
+
+    if (states.contains(AncestorState::Canvas))
+        setNodeFlag(NodeFlag::InclusiveAncestorStateForCanvas);
+    else
+        clearNodeFlag(NodeFlag::InclusiveAncestorStateForCanvas);
+}
+
+inline void Node::addInclusiveAncestorState(AncestorState state)
+{
+    ASSERT(isHTMLElement());
+    switch (state) {
+    case AncestorState::Form:
+        setNodeFlag(NodeFlag::InclusiveAncestorStateForForm);
+        break;
+    case AncestorState::Canvas:
+        setNodeFlag(NodeFlag::InclusiveAncestorStateForCanvas);
+        break;
+    }
 }
 
 inline constexpr PartialOrdering PartialOrdering::less(Type::Less);

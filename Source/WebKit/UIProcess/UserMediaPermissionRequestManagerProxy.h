@@ -22,6 +22,7 @@
 #include "UserMediaPermissionCheckProxy.h"
 #include "UserMediaPermissionRequestProxy.h"
 #include <WebCore/MediaProducer.h>
+#include <WebCore/RealtimeMediaSourceCenter.h>
 #include <WebCore/RealtimeMediaSourceFactory.h>
 #include <WebCore/SecurityOrigin.h>
 #include <wtf/CompletionHandler.h>
@@ -96,6 +97,8 @@ public:
     void setMockCaptureDevicesEnabledOverride(Optional<bool>);
     bool hasPendingCapture() const { return m_hasPendingCapture; }
 
+    void checkUserMediaPermissionForSpeechRecognition(WebCore::FrameIdentifier, const WebCore::SecurityOrigin&, const WebCore::SecurityOrigin&, const WebCore::CaptureDevice&, CompletionHandler<void(bool)>&&);
+
 private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final;
@@ -119,7 +122,8 @@ private:
 
     bool wasGrantedVideoOrAudioAccess(WebCore::FrameIdentifier, const WebCore::SecurityOrigin& userMediaDocumentOrigin, const WebCore::SecurityOrigin& topLevelDocumentOrigin);
 
-    Vector<WebCore::CaptureDevice> computeFilteredDeviceList(bool revealIdsAndLabels);
+    void computeFilteredDeviceList(bool revealIdsAndLabels, CompletionHandler<void(Vector<WebCore::CaptureDevice>&&)>&&);
+    void platformGetMediaStreamDevices(CompletionHandler<void(Vector<WebCore::CaptureDevice>&&)>&&);
 
     void processUserMediaPermissionRequest();
     void processUserMediaPermissionInvalidRequest(const String& invalidConstraint);
@@ -127,6 +131,10 @@ private:
     void startProcessingUserMediaPermissionRequest(Ref<UserMediaPermissionRequestProxy>&&);
 
     static void requestSystemValidation(const WebPageProxy&, UserMediaPermissionRequestProxy&, CompletionHandler<void(bool)>&&);
+#endif
+
+#if ENABLE(MEDIA_STREAM)
+    void platformValidateUserMediaRequestConstraints(WebCore::RealtimeMediaSourceCenter::ValidConstraintsHandler&& validHandler, WebCore::RealtimeMediaSourceCenter::InvalidConstraintsHandler&& invalidHandler, String&& deviceIDHashSalt);
 #endif
 
     void watchdogTimerFired();

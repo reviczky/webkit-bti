@@ -148,6 +148,7 @@ MESSAGE_RECEIVERS = \
 	UIProcess/UserContent/WebUserContentControllerProxy \
 	UIProcess/Inspector/WebInspectorProxy \
 	UIProcess/Inspector/RemoteWebInspectorProxy \
+	UIProcess/Inspector/WebInspectorUIExtensionControllerProxy \
 	UIProcess/Plugins/PluginProcessProxy \
 	UIProcess/DrawingAreaProxy \
 	UIProcess/Network/NetworkProcessProxy \
@@ -178,10 +179,14 @@ MESSAGE_RECEIVERS = \
 	WebProcess/GPU/webrtc/SampleBufferDisplayLayer \
 	WebProcess/GPU/media/MediaPlayerPrivateRemote \
 	WebProcess/GPU/media/MediaSourcePrivateRemote \
+	WebProcess/GPU/media/RemoteAudioHardwareListener \
 	WebProcess/GPU/media/RemoteAudioSession \
 	WebProcess/GPU/media/RemoteAudioSourceProviderManager \
+	WebProcess/GPU/media/RemoteCDMInstance \
 	WebProcess/GPU/media/RemoteCDMInstanceSession \
+	WebProcess/GPU/media/RemoteImageDecoderAVFManager \
 	WebProcess/GPU/media/RemoteLegacyCDMSession \
+	WebProcess/GPU/media/RemoteRemoteCommandListener \
 	WebProcess/GPU/media/SourceBufferPrivateRemote \
 	WebProcess/GPU/media/ios/RemoteMediaSessionHelper \
 	WebProcess/WebStorage/StorageAreaMap \
@@ -240,6 +245,7 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/webrtc/RemoteMediaRecorder \
 	GPUProcess/webrtc/RemoteAudioMediaStreamTrackRenderer \
 	GPUProcess/GPUProcess \
+	GPUProcess/media/RemoteImageDecoderAVFProxy \
 	GPUProcess/media/RemoteLegacyCDMSessionProxy \
 	GPUProcess/media/RemoteLegacyCDMFactoryProxy \
 	GPUProcess/media/RemoteAudioSessionProxy \
@@ -247,7 +253,6 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/media/RemoteCDMProxy \
 	GPUProcess/media/ios/RemoteMediaSessionHelperProxy \
 	GPUProcess/media/RemoteAudioDestinationManager \
-	GPUProcess/media/RemoteAudioTrackProxy \
 	GPUProcess/media/RemoteCDMFactoryProxy \
 	GPUProcess/media/RemoteCDMInstanceProxy \
 	GPUProcess/media/RemoteLegacyCDMProxy \
@@ -256,9 +261,8 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/media/RemoteMediaPlayerProxy \
 	GPUProcess/media/RemoteMediaResourceManager \
 	GPUProcess/media/RemoteMediaSourceProxy \
+	GPUProcess/media/RemoteRemoteCommandListenerProxy \
 	GPUProcess/media/RemoteSourceBufferProxy \
-	GPUProcess/media/RemoteTextTrackProxy \
-	GPUProcess/media/RemoteVideoTrackProxy \
 	WebAuthnProcess/WebAuthnConnectionToWebProcess \
 	WebAuthnProcess/WebAuthnProcess \
 #

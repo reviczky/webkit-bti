@@ -125,7 +125,7 @@ static GstCaps* transformCaps(GstBaseTransform* base, GstPadDirection direction,
             // GST_PROTECTION_UNSPECIFIED_SYSTEM_ID was added in the GStreamer
             // developement git master which will ship as version 1.16.0.
             gst_structure_set_name(outgoingStructure.get(),
-#if GST_CHECK_VERSION(1, 15, 0)
+#if GST_CHECK_VERSION(1, 16, 0)
                 !g_strcmp0(klass->protectionSystemId(self), GST_PROTECTION_UNSPECIFIED_SYSTEM_ID) ? "application/x-webm-enc" :
 #endif
                 "application/x-cenc");
@@ -237,6 +237,9 @@ static GstFlowReturn transformInPlace(GstBaseTransform* base, GstBuffer* buffer)
         GST_ERROR_OBJECT(self, "Failed to get IV for sample");
         return GST_FLOW_NOT_SUPPORTED;
     }
+
+    if (gst_structure_has_field(protectionMeta->info, "crypt_byte_block") || gst_structure_has_field(protectionMeta->info, "skip_byte_block"))
+        GST_FIXME_OBJECT(self, "cbcs crypt/skip pattern is still unsupported");
 
     GstBuffer* ivBuffer = gst_value_get_buffer(value);
     WebKitMediaCommonEncryptionDecryptClass* klass = WEBKIT_MEDIA_CENC_DECRYPT_GET_CLASS(self);

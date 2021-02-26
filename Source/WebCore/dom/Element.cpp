@@ -92,6 +92,7 @@
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
 #include "RenderLayerCompositor.h"
+#include "RenderLayerScrollableArea.h"
 #include "RenderListBox.h"
 #include "RenderTheme.h"
 #include "RenderTreeUpdater.h"
@@ -314,11 +315,8 @@ bool Element::isKeyboardFocusable(KeyboardEvent*) const
 {
     if (!(isFocusable() && !shouldBeIgnoredInSequentialFocusNavigation() && tabIndexSetExplicitly().valueOr(0) >= 0))
         return false;
-    if (auto* root = shadowRoot()) {
-        if (root->delegatesFocus())
-            return false;
-    }
-    return true;
+    ASSERT(delegatesFocusToShadowRoot() == (shadowRoot() && shadowRoot()->delegatesFocus()));
+    return !delegatesFocusToShadowRoot();
 }
 
 bool Element::isMouseFocusable() const
@@ -638,7 +636,10 @@ bool Element::isFocusable() const
     if (!isConnected() || !supportsFocus())
         return false;
 
-    if (!renderer()) {
+    bool hasCanvasAsInclusiveAncestor = inclusiveAncestorStates().contains(AncestorState::Canvas);
+    ASSERT(hasCanvasAsInclusiveAncestor == !!ancestorsOfType<HTMLCanvasElement>(*this).first()
+        || (hasCanvasAsInclusiveAncestor && is<HTMLCanvasElement>(*this)));
+    if (!renderer() && hasCanvasAsInclusiveAncestor) {
         // Elements in canvas fallback content are not rendered, but they are allowed to be
         // focusable as long as their canvas is displayed and visible.
         if (auto* canvas = ancestorsOfType<HTMLCanvasElement>(*this).first())
@@ -678,12 +679,12 @@ bool Element::isUserActionElementDragged() const
     return document().userActionElements().isBeingDragged(*this);
 }
 
-void Element::setActive(bool flag, bool pause)
+void Element::setActive(bool flag, bool pause, Style::InvalidationScope invalidationScope)
 {
     if (flag == active())
         return;
     {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassActive);
+        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassActive, invalidationScope);
         document().userActionElements().setActive(*this, flag);
     }
 
@@ -755,12 +756,12 @@ void Element::setHasFocusWithin(bool flag)
     }
 }
 
-void Element::setHovered(bool flag)
+void Element::setHovered(bool flag, Style::InvalidationScope invalidationScope)
 {
     if (flag == hovered())
         return;
     {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassHover);
+        Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassHover, invalidationScope);
         document().userActionElements().setHovered(*this, flag);
     }
 
@@ -948,7 +949,7 @@ void Element::scrollBy(const ScrollToOptions& options)
     ScrollToOptions scrollToOptions = normalizeNonFiniteCoordinatesOrFallBackTo(options, 0, 0);
     scrollToOptions.left.value() += scrollLeft();
     scrollToOptions.top.value() += scrollTop();
-    scrollTo(scrollToOptions);
+    scrollTo(scrollToOptions, ScrollClamping::Clamped, ScrollSnapPointSelectionMethod::Directional);
 }
 
 void Element::scrollBy(double x, double y)
@@ -956,7 +957,7 @@ void Element::scrollBy(double x, double y)
     scrollBy(ScrollToOptions(x, y));
 }
 
-void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping)
+void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, ScrollSnapPointSelectionMethod snapPointSelectionMethod)
 {
     if (!document().settings().CSSOMViewScrollingAPIEnabled()) {
         // If the element is the root element and document is in quirks mode, terminate these steps.
@@ -975,7 +976,7 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping)
         if (!window)
             return;
 
-        window->scrollTo(options, clamping);
+        window->scrollTo(options, clamping, snapPointSelectionMethod);
         return;
     }
 
@@ -985,7 +986,7 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping)
     if (!renderer || !renderer->hasOverflowClip())
         return;
 
-    ScrollToOptions scrollToOptions = normalizeNonFiniteCoordinatesOrFallBackTo(options,
+    auto scrollToOptions = normalizeNonFiniteCoordinatesOrFallBackTo(options,
         adjustForAbsoluteZoom(renderer->scrollLeft(), *renderer),
         adjustForAbsoluteZoom(renderer->scrollTop(), *renderer)
     );
@@ -993,8 +994,10 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping)
         clampToInteger(scrollToOptions.left.value() * renderer->style().effectiveZoom()),
         clampToInteger(scrollToOptions.top.value() * renderer->style().effectiveZoom())
     );
-    AnimatedScroll animated = useSmoothScrolling(scrollToOptions.behavior.valueOr(ScrollBehavior::Auto), this) ? AnimatedScroll::Yes : AnimatedScroll::No;
-    renderer->setScrollPosition(scrollPosition, ScrollType::Programmatic, clamping, animated);
+
+    auto animated = useSmoothScrolling(scrollToOptions.behavior.valueOr(ScrollBehavior::Auto), this) ? AnimatedScroll::Yes : AnimatedScroll::No;
+    auto scrollPositionChangeOptions = ScrollPositionChangeOptions::createProgrammaticWithOptions(clamping, animated, snapPointSelectionMethod);
+    renderer->setScrollPosition(scrollPosition, scrollPositionChangeOptions);
 }
 
 void Element::scrollTo(double x, double y)
@@ -1320,22 +1323,21 @@ void Element::setScrollLeft(int newLeft)
 {
     document().updateLayoutIgnorePendingStylesheets();
 
+    auto options = ScrollPositionChangeOptions::createProgrammatic();
+    options.animated = useSmoothScrolling(ScrollBehavior::Auto, this) ? AnimatedScroll::Yes : AnimatedScroll::No;
+
     if (document().scrollingElement() == this) {
         if (auto* frame = documentFrameWithNonNullView()) {
-            // FIXME: Should we use document()->scrollingElement()?
-            // See https://bugs.webkit.org/show_bug.cgi?id=205059
-            AnimatedScroll animated = useSmoothScrolling(ScrollBehavior::Auto, document().documentElement()) ? AnimatedScroll::Yes : AnimatedScroll::No;
             IntPoint position(static_cast<int>(newLeft * frame->pageZoomFactor() * frame->frameScaleFactor()), frame->view()->scrollY());
-            frame->view()->setScrollPosition(position, ScrollClamping::Clamped, animated);
+            frame->view()->setScrollPosition(position, options);
         }
         return;
     }
 
     if (auto* renderer = renderBox()) {
         int clampedLeft = clampToInteger(newLeft * renderer->style().effectiveZoom());
-        AnimatedScroll animated = useSmoothScrolling(ScrollBehavior::Auto, this) ? AnimatedScroll::Yes : AnimatedScroll::No;
-        renderer->setScrollLeft(clampedLeft, ScrollType::Programmatic, ScrollClamping::Clamped, animated);
-        if (auto* scrollableArea = renderer->layer())
+        renderer->setScrollLeft(clampedLeft, options);
+        if (auto* scrollableArea = renderer->layer() ? renderer->layer()->scrollableArea() : nullptr)
             scrollableArea->setScrollShouldClearLatchedState(true);
     }
 }
@@ -1344,22 +1346,21 @@ void Element::setScrollTop(int newTop)
 {
     document().updateLayoutIgnorePendingStylesheets();
 
+    auto options = ScrollPositionChangeOptions::createProgrammatic();
+    options.animated = useSmoothScrolling(ScrollBehavior::Auto, this) ? AnimatedScroll::Yes : AnimatedScroll::No;
+
     if (document().scrollingElement() == this) {
         if (auto* frame = documentFrameWithNonNullView()) {
-            // FIXME: Should we use document()->scrollingElement()?
-            // See https://bugs.webkit.org/show_bug.cgi?id=205059
-            AnimatedScroll animated = useSmoothScrolling(ScrollBehavior::Auto, document().documentElement()) ? AnimatedScroll::Yes : AnimatedScroll::No;
             IntPoint position(frame->view()->scrollX(), static_cast<int>(newTop * frame->pageZoomFactor() * frame->frameScaleFactor()));
-            frame->view()->setScrollPosition(position, ScrollClamping::Clamped, animated);
+            frame->view()->setScrollPosition(position, options);
         }
         return;
     }
 
     if (auto* renderer = renderBox()) {
         int clampedTop = clampToInteger(newTop * renderer->style().effectiveZoom());
-        AnimatedScroll animated = useSmoothScrolling(ScrollBehavior::Auto, this) ? AnimatedScroll::Yes : AnimatedScroll::No;
-        renderer->setScrollTop(clampedTop, ScrollType::Programmatic, ScrollClamping::Clamped, animated);
-        if (auto* scrollableArea = renderer->layer())
+        renderer->setScrollTop(clampedTop, options);
+        if (auto* scrollableArea = renderer->layer() ? renderer->layer()->scrollableArea() : nullptr)
             scrollableArea->setScrollShouldClearLatchedState(true);
     }
 }
@@ -1966,10 +1967,6 @@ void Element::invalidateStyle()
 {
     Node::invalidateStyle(Style::Validity::ElementInvalid);
     invalidateSiblingsIfNeeded(*this);
-
-    // FIXME: This flag should be set whenever styles are invalidated while computed styles are present,
-    // not just in this codepath.
-    setNodeFlag(NodeFlag::IsComputedStyleInvalidFlag);
 }
 
 void Element::invalidateStyleAndLayerComposition()
@@ -2157,6 +2154,8 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
 {
     ContainerNode::insertedIntoAncestor(insertionType, parentOfInsertedTree);
 
+    setInclusiveAncestorStates(insertionType.ancestorStates);
+
 #if ENABLE(FULLSCREEN_API)
     if (containsFullScreenElement() && parentElement() && !parentElement()->containsFullScreenElement())
         setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(true);
@@ -2214,16 +2213,19 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
 
 void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
+    setInclusiveAncestorStates(removalType.ancestorStates);
+
 #if ENABLE(FULLSCREEN_API)
     if (containsFullScreenElement())
         setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(false);
 #endif
+    
+    if (auto* page = document().page()) {
 #if ENABLE(POINTER_LOCK)
-    if (document().page())
-        document().page()->pointerLockController().elementRemoved(*this);
+        page->pointerLockController().elementWasRemoved(*this);
 #endif
-    if (document().page())
-        document().page()->pointerCaptureController().elementWasRemoved(*this);
+        page->pointerCaptureController().elementWasRemoved(*this);
+    }
 
     setSavedLayerScrollPosition(ScrollPosition());
 
@@ -2395,6 +2397,8 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
     if (init.mode == ShadowRootMode::UserAgent)
         return Exception { TypeError };
     auto shadow = ShadowRoot::create(document(), init.mode, init.delegatesFocus ? ShadowRoot::DelegatesFocus::Yes : ShadowRoot::DelegatesFocus::No);
+    if (init.delegatesFocus)
+        setDelegatesFocusToShadowRoot();
     auto& result = shadow.get();
     addShadowRoot(WTFMove(shadow));
     return result;
@@ -2978,7 +2982,8 @@ static bool isProgramaticallyFocusable(Element& element)
 {
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
-    if (shadowRootWithDelegatesFocus(element))
+    ASSERT(element.delegatesFocusToShadowRoot() == !!shadowRootWithDelegatesFocus(element));
+    if (element.delegatesFocusToShadowRoot())
         return false;
 
     // If the stylesheets have already been loaded we can reliably check isFocusable.
@@ -3025,7 +3030,9 @@ void Element::focus(SelectionRestorationMode restorationMode, FocusDirection dir
     if (&newTarget->document() != document.ptr())
         return;
 
-    if (auto root = shadowRootWithDelegatesFocus(*this)) {
+    ASSERT(delegatesFocusToShadowRoot() == !!shadowRootWithDelegatesFocus(*this));
+    if (delegatesFocusToShadowRoot()) {
+        auto root = shadowRootWithDelegatesFocus(*this);
         auto currentlyFocusedElement = makeRefPtr(document->focusedElement());
         if (root->containsIncludingShadowDOM(currentlyFocusedElement.get())) {
             if (document->page())
@@ -3041,7 +3048,7 @@ void Element::focus(SelectionRestorationMode restorationMode, FocusDirection dir
 
     if (Page* page = document->page()) {
         auto& frame = *document->frame();
-        if (!frame.hasHadUserInteraction() && !frame.isMainFrame() && !document->topDocument().securityOrigin().canAccess(document->securityOrigin()))
+        if (!frame.hasHadUserInteraction() && !frame.isMainFrame() && !document->topDocument().securityOrigin().isSameOriginDomain(document->securityOrigin()))
             return;
 
         // Focus and change event handlers can cause us to lose our last ref.
@@ -3223,7 +3230,6 @@ ExceptionOr<void> Element::setOuterHTML(const String& html)
     return { };
 }
 
-
 ExceptionOr<void> Element::setInnerHTML(const String& html)
 {
     auto fragment = createFragmentForInnerOuterHTML(*this, html, AllowScriptingContent);
@@ -3293,7 +3299,7 @@ void Element::willBecomeFullscreenElement()
         child.ancestorWillEnterFullscreen();
 }
 
-static PseudoElement* beforeOrAfterPseudoElement(Element& host, PseudoId pseudoElementSpecifier)
+static PseudoElement* beforeOrAfterPseudoElement(const Element& host, PseudoId pseudoElementSpecifier)
 {
     switch (pseudoElementSpecifier) {
     case PseudoId::Before:
@@ -3315,8 +3321,20 @@ const RenderStyle* Element::existingComputedStyle() const
     return renderStyle();
 }
 
-const RenderStyle* Element::renderOrDisplayContentsStyle() const
+const RenderStyle* Element::renderOrDisplayContentsStyle(PseudoId pseudoId) const
 {
+    if (pseudoId != PseudoId::None) {
+        if (auto* pseudoElement = beforeOrAfterPseudoElement(*this, pseudoId))
+            return pseudoElement->renderOrDisplayContentsStyle();
+
+        if (auto* computedStyle = existingComputedStyle()) {
+            if (auto* cachedPseudoStyle = computedStyle->getCachedPseudoStyle(pseudoId))
+                return cachedPseudoStyle;
+        }
+
+        return nullptr;
+    }
+
     if (auto* style = renderStyle())
         return style;
 
@@ -3345,6 +3363,9 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
         }
         elementsRequiringComputedStyle.prepend(&ancestor);
     }
+
+    // On iOS request delegates called during styleForElement may result in re-entering WebKit and killing the style resolver.
+    Style::PostResolutionCallbackDisabler disabler(document(), Style::PostResolutionCallbackDisabler::DrainCallbacks::No);
 
     // Resolve and cache styles starting from the most distant ancestor.
     for (auto& element : elementsRequiringComputedStyle) {
@@ -3378,6 +3399,8 @@ bool Element::hasValidStyle() const
 
 bool Element::isVisibleWithoutResolvingFullStyle() const
 {
+    document().styleScope().flushPendingUpdate();
+
     if (renderStyle() || hasValidStyle())
         return renderStyle() && renderStyle()->visibility() == Visibility::Visible;
 
@@ -3413,6 +3436,8 @@ const RenderStyle& Element::resolvePseudoElementStyle(PseudoId pseudoElementSpec
     auto* parentStyle = existingComputedStyle();
     ASSERT(parentStyle);
     ASSERT(!parentStyle->getCachedPseudoStyle(pseudoElementSpecifier));
+
+    Style::PostResolutionCallbackDisabler disabler(document(), Style::PostResolutionCallbackDisabler::DrainCallbacks::No);
 
     auto style = document().styleForElementIgnoringPendingStylesheets(*this, parentStyle, pseudoElementSpecifier);
     if (!style) {
@@ -4536,6 +4561,11 @@ ElementIdentifier Element::createElementIdentifier()
     ASSERT(!hasNodeFlag(NodeFlag::HasElementIdentifier));
     setNodeFlag(NodeFlag::HasElementIdentifier);
     return ElementIdentifier::generate();
+}
+
+void Element::didChangeRenderer(RenderObject* oldRenderer)
+{
+    InspectorInstrumentation::nodeLayoutContextChanged(*this, oldRenderer);
 }
 
 #if ENABLE(CSS_TYPED_OM)

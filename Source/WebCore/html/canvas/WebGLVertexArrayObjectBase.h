@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,7 +32,7 @@
 #include "WebGLContextObject.h"
 
 namespace JSC {
-class SlotVisitor;
+class AbstractSlotVisitor;
 }
 
 namespace WTF {
@@ -60,6 +60,7 @@ public:
         GCGLsizei originalStride { 0 };
         GCGLintptr offset { 0 };
         GCGLuint divisor { 0 };
+        bool isInteger { false };
     };
 
     bool isDefaultObject() const { return m_type == Type::Default; }
@@ -71,12 +72,12 @@ public:
     void setElementArrayBuffer(const WTF::AbstractLocker&, WebGLBuffer*);
 
     VertexAttribState& getVertexAttribState(int index) { return m_vertexAttribState[index]; }
-    void setVertexAttribState(const WTF::AbstractLocker&, GCGLuint, GCGLsizei, GCGLint, GCGLenum, GCGLboolean, GCGLsizei, GCGLintptr, WebGLBuffer*);
+    void setVertexAttribState(const WTF::AbstractLocker&, GCGLuint, GCGLsizei, GCGLint, GCGLenum, GCGLboolean, GCGLsizei, GCGLintptr, bool, WebGLBuffer*);
     void unbindBuffer(const WTF::AbstractLocker&, WebGLBuffer&);
 
     void setVertexAttribDivisor(GCGLuint index, GCGLuint divisor);
 
-    void addMembersToOpaqueRoots(const WTF::AbstractLocker&, JSC::SlotVisitor&);
+    void addMembersToOpaqueRoots(const WTF::AbstractLocker&, JSC::AbstractSlotVisitor&);
 
 protected:
     WebGLVertexArrayObjectBase(WebGLRenderingContextBase&, Type);

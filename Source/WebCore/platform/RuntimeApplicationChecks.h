@@ -32,14 +32,25 @@ namespace WebCore {
 WEBCORE_EXPORT void setPresentingApplicationPID(int);
 WEBCORE_EXPORT int presentingApplicationPID();
 
-#if PLATFORM(COCOA) || USE(GLIB)
-bool isInWebProcess();
-bool isInGPUProcess();
-bool isInNetworkProcess();
-#else
-inline bool isInWebProcess() { return false; }
-inline bool isInGPUProcess() { return false; }
-inline bool isInNetworkProcess() { return false; }
+enum class AuxiliaryProcessType : uint8_t {
+    WebContent,
+    Network,
+    Plugin,
+#if ENABLE(GPU_PROCESS)
+    GPU,
+#endif
+#if ENABLE(WEB_AUTHN)
+    WebAuthn,
+#endif
+};
+
+WEBCORE_EXPORT void setAuxiliaryProcessType(AuxiliaryProcessType);
+WEBCORE_EXPORT bool checkAuxiliaryProcessType(AuxiliaryProcessType);
+
+inline bool isInWebProcess() { return checkAuxiliaryProcessType(AuxiliaryProcessType::WebContent); }
+inline bool isInNetworkProcess() { return checkAuxiliaryProcessType(AuxiliaryProcessType::Network); }
+#if ENABLE(GPU_PROCESS)
+inline bool isInGPUProcess() { return checkAuxiliaryProcessType(AuxiliaryProcessType::GPU); }
 #endif
 
 #if PLATFORM(COCOA)
@@ -114,6 +125,7 @@ WEBCORE_EXPORT bool isOKCupid();
 WEBCORE_EXPORT bool isJWLibrary();
 WEBCORE_EXPORT bool isPaperIO();
 WEBCORE_EXPORT bool isCrunchyroll();
+bool isWechat();
 
 } // IOSApplication
 

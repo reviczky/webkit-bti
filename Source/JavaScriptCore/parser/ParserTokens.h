@@ -28,6 +28,10 @@
 #include <limits.h>
 #include <stdint.h>
 
+namespace WTF {
+class PrintStream;
+}
+
 namespace JSC {
 
 class Identifier;
@@ -98,8 +102,6 @@ enum JSTokenType {
 
     FirstContextualKeywordToken = LET,
     LastContextualKeywordToken = AWAIT,
-    FirstSafeContextualKeywordToken = AWAIT,
-    LastSafeContextualKeywordToken = LastContextualKeywordToken,
 
     OPENBRACE = 0,
     CLOSEBRACE,
@@ -285,6 +287,8 @@ struct JSToken {
     JSTokenLocation m_location;
     JSTextPosition m_startPosition;
     JSTextPosition m_endPosition;
+
+    void dump(WTF::PrintStream&) const;
 };
 
 ALWAYS_INLINE bool isUpdateOp(JSTokenType token)

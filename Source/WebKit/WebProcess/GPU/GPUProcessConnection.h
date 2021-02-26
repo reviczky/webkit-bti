@@ -28,6 +28,7 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "Connection.h"
+#include "MediaOverridesForTesting.h"
 #include "MessageReceiverMap.h"
 #include "SampleBufferDisplayLayerManager.h"
 #include <WebCore/PlatformMediaSession.h>
@@ -43,6 +44,7 @@ class RemoteCDMFactory;
 class RemoteMediaEngineConfigurationFactory;
 class RemoteMediaPlayerManager;
 class RemoteLegacyCDMFactory;
+struct OverrideScreenDataForTesting;
 struct WebPageCreationParameters;
 
 class GPUProcessConnection : public RefCounted<GPUProcessConnection>, public CanMakeWeakPtr<GPUProcessConnection>, IPC::Connection::Client {
@@ -81,6 +83,7 @@ public:
     RemoteMediaEngineConfigurationFactory& mediaEngineConfigurationFactory();
 
     void updateParameters(const WebPageCreationParameters&);
+    void updateMediaConfiguration();
 
 #if ENABLE(VP9)
     bool isVP8DecoderEnabled() const { return m_enableVP8Decoder; }
@@ -109,7 +112,7 @@ private:
     bool dispatchMessage(IPC::Connection&, IPC::Decoder&);
     bool dispatchSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
-    void didReceiveRemoteCommand(WebCore::PlatformMediaSession::RemoteControlCommandType, Optional<double>);
+    void didReceiveRemoteCommand(WebCore::PlatformMediaSession::RemoteControlCommandType, const WebCore::PlatformMediaSession::RemoteCommandArgument&);
 
     // The connection from the web process to the GPU process.
     Ref<IPC::Connection> m_connection;
@@ -129,6 +132,11 @@ private:
     bool m_enableVP9Decoder { false };
     bool m_enableVP9SWDecoder { false };
 #endif
+
+#if PLATFORM(COCOA)
+    MediaOverridesForTesting m_mediaOverridesForTesting;
+#endif
+
     WeakHashSet<Client> m_clients;
 };
 

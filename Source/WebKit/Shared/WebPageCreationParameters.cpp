@@ -118,6 +118,10 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << mediaExtensionHandles;
     encoder << mediaIOKitExtensionHandles;
     encoder << gpuIOKitExtensionHandles;
+    encoder << gpuMachExtensionHandles;
+#endif
+#if HAVE(STATIC_FONT_REGISTRY)
+    encoder << fontMachExtensionHandle;
 #endif
 #if HAVE(APP_ACCENT_COLORS)
     encoder << accentColor;
@@ -134,6 +138,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << overrideContentSecurityPolicy;
     encoder << cpuLimit;
     encoder << urlSchemeHandlers;
+    encoder << urlSchemesWithLegacyCustomProtocolHandlers;
 #if ENABLE(APPLICATION_MANIFEST)
     encoder << applicationManifest;
 #endif
@@ -169,6 +174,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << needsInAppBrowserPrivacyQuirks;
     encoder << limitsNavigationsToAppBoundDomains;
 #endif
+    encoder << lastNavigationWasAppBound;
     encoder << shouldRelaxThirdPartyCookieBlocking;
     encoder << canUseCredentialStorage;
 
@@ -177,6 +183,10 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
     
     encoder << textInteractionEnabled;
+    encoder << httpsUpgradeEnabled;
+#if PLATFORM(IOS)
+    encoder << allowsDeprecatedSynchronousXMLHttpRequestDuringUnload;
+#endif
 }
 
 Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decoder& decoder)
@@ -390,6 +400,20 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
     if (!gpuIOKitExtensionHandles)
         return WTF::nullopt;
     parameters.gpuIOKitExtensionHandles = WTFMove(*gpuIOKitExtensionHandles);
+
+    Optional<SandboxExtension::HandleArray> gpuMachExtensionHandles;
+    decoder >> gpuMachExtensionHandles;
+    if (!gpuMachExtensionHandles)
+        return WTF::nullopt;
+    parameters.gpuMachExtensionHandles = WTFMove(*gpuMachExtensionHandles);
+#endif
+
+#if HAVE(STATIC_FONT_REGISTRY)
+    Optional<Optional<SandboxExtension::Handle>> fontMachExtensionHandle;
+    decoder >> fontMachExtensionHandle;
+    if (!fontMachExtensionHandle)
+        return WTF::nullopt;
+    parameters.fontMachExtensionHandle = WTFMove(*fontMachExtensionHandle);
 #endif
 
 #if HAVE(APP_ACCENT_COLORS)
@@ -426,6 +450,12 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
 
     if (!decoder.decode(parameters.urlSchemeHandlers))
         return WTF::nullopt;
+    
+    Optional<Vector<String>> urlSchemesWithLegacyCustomProtocolHandlers;
+    decoder >> urlSchemesWithLegacyCustomProtocolHandlers;
+    if (!urlSchemesWithLegacyCustomProtocolHandlers)
+        return WTF::nullopt;
+    parameters.urlSchemesWithLegacyCustomProtocolHandlers = WTFMove(*urlSchemesWithLegacyCustomProtocolHandlers);
 
 #if ENABLE(APPLICATION_MANIFEST)
     Optional<Optional<WebCore::ApplicationManifest>> applicationManifest;
@@ -544,6 +574,8 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
     if (!decoder.decode(parameters.limitsNavigationsToAppBoundDomains))
         return WTF::nullopt;
 #endif
+    if (!decoder.decode(parameters.lastNavigationWasAppBound))
+        return WTF::nullopt;
 
     if (!decoder.decode(parameters.shouldRelaxThirdPartyCookieBlocking))
         return WTF::nullopt;
@@ -558,6 +590,14 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
     
     if (!decoder.decode(parameters.textInteractionEnabled))
         return WTF::nullopt;
+
+    if (!decoder.decode(parameters.httpsUpgradeEnabled))
+        return WTF::nullopt;
+
+#if PLATFORM(IOS)
+    if (!decoder.decode(parameters.allowsDeprecatedSynchronousXMLHttpRequestDuringUnload))
+        return WTF::nullopt;
+#endif
 
     return parameters;
 }

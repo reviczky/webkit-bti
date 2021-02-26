@@ -137,7 +137,9 @@ void InlineFlowBox::addToLine(InlineBox* child)
             if (child->renderer().isLineBreak()) {
                 // FIXME: This isn't ideal. We only turn off because current layout test results expect the <br> to be 0-height on the baseline.
                 // Other than making a zillion tests have to regenerate results, there's no reason to ditch the optimization here.
-                shouldClearDescendantsHaveSameLineHeightAndBaseline = child->renderer().isBR();
+                auto childIsHardLinebreak = child->renderer().isBR();
+                shouldClearDescendantsHaveSameLineHeightAndBaseline = childIsHardLinebreak;
+                m_hasHardLinebreak = m_hasHardLinebreak || childIsHardLinebreak;
             } else {
                 auto& childFlowBox = downcast<InlineFlowBox>(*child);
                 // Check the child's bit, and then also check for differences in font, line-height, vertical-align
@@ -569,7 +571,7 @@ void InlineFlowBox::computeLogicalBoxHeights(RootInlineBox& rootBox, LayoutUnit&
     if (!checkChildren)
         return;
 
-    InlineBox* maxAscentInlineBox = nullptr;
+    Vector<InlineBox*> maxAscentInlineBoxList;
     for (InlineBox* child = firstChild(); child; child = child->nextOnLine()) {
         if (child->renderer().isOutOfFlowPositioned())
             continue; // Positioned placeholders don't affect calculations.
@@ -595,8 +597,12 @@ void InlineFlowBox::computeLogicalBoxHeights(RootInlineBox& rootBox, LayoutUnit&
         } else if (child->verticalAlign() == VerticalAlign::Bottom && verticalAlignApplies(child->renderer())) {
             if (maxPositionBottom < boxHeight)
                 maxPositionBottom = boxHeight;
-        } else if (!inlineFlowBox || strictMode || inlineFlowBox->hasTextChildren() || (inlineFlowBox->descendantsHaveSameLineHeightAndBaseline() && inlineFlowBox->hasTextDescendants())
-                   || inlineFlowBox->renderer().hasInlineDirectionBordersOrPadding()) {
+        } else if (strictMode
+            || !inlineFlowBox
+            || inlineFlowBox->hasTextChildren()
+            || (inlineFlowBox->descendantsHaveSameLineHeightAndBaseline() && inlineFlowBox->hasTextDescendants())
+            || inlineFlowBox->renderer().hasInlineDirectionBordersOrPadding()
+            || inlineFlowBox->hasHardLinebreak()) {
             // Note that these values can be negative.  Even though we only affect the maxAscent and maxDescent values
             // if our box (excluding line-height) was above (for ascent) or below (for descent) the root baseline, once you factor in line-height
             // the final box can end up being fully above or fully below the root box's baseline!  This is ok, but what it
@@ -604,13 +610,23 @@ void InlineFlowBox::computeLogicalBoxHeights(RootInlineBox& rootBox, LayoutUnit&
             // setMaxDescent booleans are used to ensure that we're willing to initially set maxAscent/Descent to negative
             // values.
             ascent -= floorf(child->logicalTop());
-            descent += child->logicalTop();
-            if (affectsAscent && (maxAscent < ascent || !setMaxAscent)) {
-                maxAscent = ascent;
-                setMaxAscent = true;
-                maxAscentInlineBox = child;
-            }
+            auto isMaxAscent = false;
+            if (affectsAscent) {
+                if (maxAscent < ascent || !setMaxAscent) {
+                    maxAscent = ascent;
+                    setMaxAscent = true;
+                    maxAscentInlineBoxList.clear();
+                }
+                isMaxAscent = maxAscent == ascent;
+                if (isMaxAscent) {
+                    // A line can have multiple inline boxes with the same max ascent.
+                    maxAscentInlineBoxList.append(child);
 
+                }
+            }
+            // In order to make sure the inline level box is fully enclosed, we should always ceil the descent (containing block's height is max ascent + max descent).
+            // However when the box's logical top is floored (see below), the descent value should also be adjusted in the same direction. 
+            descent += isMaxAscent ? floorf(child->logicalTop()) : ceilf(child->logicalTop());
             if (affectsDescent && (maxDescent < descent || !setMaxDescent)) {
                 maxDescent = descent;
                 setMaxDescent = true;
@@ -622,12 +638,12 @@ void InlineFlowBox::computeLogicalBoxHeights(RootInlineBox& rootBox, LayoutUnit&
                 setMaxAscent, setMaxDescent, strictMode, textBoxDataMap, baselineType, verticalPositionCache);
         }
     }
-    if (maxAscentInlineBox) {
+    for (auto* inlineBox : maxAscentInlineBoxList) {
         // When the inline box stretches the ascent, we floor the logical top value to make sure the inline box does not
         // stick out of block container at the top (see above).
         // In such cases the logical top also needs to be adjusted to match this stretched ascent geometry.
         // (not doing so will result a subpixel logical top offset while it should be flushed with the top edge)
-        maxAscentInlineBox->setLogicalTop(floorf(maxAscentInlineBox->logicalTop()));
+        inlineBox->setLogicalTop(floorf(inlineBox->logicalTop()));
     }
 }
 

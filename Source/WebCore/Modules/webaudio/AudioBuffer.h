@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -75,8 +75,15 @@ public:
 
     size_t memoryCost() const;
 
-    void visitChannelWrappers(JSC::SlotVisitor&);
+    template<typename Visitor> void visitChannelWrappers(Visitor&);
+
+    bool copyTo(AudioBuffer&) const;
+
+    enum class ShouldCopyChannelData : bool { No, Yes };
+    Ref<AudioBuffer> clone(ShouldCopyChannelData = ShouldCopyChannelData::Yes) const;
     
+    bool topologyMatches(const AudioBuffer&) const;
+
 private:
     AudioBuffer(unsigned numberOfChannels, size_t length, float sampleRate, LegacyPreventDetaching = LegacyPreventDetaching::No);
     explicit AudioBuffer(AudioBus&);
@@ -90,6 +97,7 @@ private:
     size_t m_originalLength;
     Vector<RefPtr<Float32Array>> m_channels;
     Vector<JSValueInWrappedObject> m_channelWrappers;
+    bool m_isDetachable { true };
 };
 
 } // namespace WebCore

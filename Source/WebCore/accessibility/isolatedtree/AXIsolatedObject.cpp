@@ -29,6 +29,7 @@
 #include "AXIsolatedObject.h"
 
 #include "AXIsolatedTree.h"
+#include "AXLogger.h"
 
 #if PLATFORM(COCOA)
 #include <pal/spi/cocoa/AccessibilitySupportSoftLink.h>
@@ -235,6 +236,8 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& object, bool isRoot
     setObjectProperty(AXPropertyName::NextSibling, object.nextSibling());
     setObjectProperty(AXPropertyName::PreviousSibling, object.previousSibling());
     setProperty(AXPropertyName::SupportsCheckedState, object.supportsCheckedState());
+    setProperty(AXPropertyName::BrailleRoleDescription, object.brailleRoleDescription().isolatedCopy());
+    setProperty(AXPropertyName::BrailleLabel, object.brailleLabel().isolatedCopy());
 
     if (object.isTable()) {
         setProperty(AXPropertyName::IsTable, true);
@@ -293,6 +296,9 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& object, bool isRoot
         object.selectedChildren(selectedChildren);
         setObjectVectorProperty(AXPropertyName::SelectedChildren, selectedChildren);
     }
+    
+    if (object.isImage())
+        setProperty(AXPropertyName::EmbeddedImageDescription, object.embeddedImageDescription().isolatedCopy());
 
     AccessibilityChildrenVector visibleChildren;
     object.visibleChildren(visibleChildren);
@@ -413,8 +419,17 @@ AXCoreObject* AXIsolatedObject::associatedAXObject() const
 {
     ASSERT(isMainThread());
 
-    auto* axObjectCache = this->axObjectCache();
-    return axObjectCache && m_id != InvalidAXID ? axObjectCache->objectFromAXID(m_id) : nullptr;
+    if (m_id == InvalidAXID)
+        return nullptr;
+
+    if (auto* axObjectCache = this->axObjectCache()) {
+        if (auto* axObject = axObjectCache->objectFromAXID(m_id)) {
+            axObject->updateBackingStore();
+            return axObject;
+        }
+    }
+
+    return nullptr;
 }
 
 void AXIsolatedObject::setMathscripts(AXPropertyName propertyName, AXCoreObject& object)

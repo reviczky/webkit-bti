@@ -167,7 +167,7 @@ public:
 
     WEBCORE_EXPORT TiledBacking* tiledBacking() const;
 
-    ScrollingNodeID scrollingNodeID() const override;
+    WEBCORE_EXPORT ScrollingNodeID scrollingNodeID() const override;
     ScrollableArea* scrollableAreaForScrollingNodeID(ScrollingNodeID) const;
     bool usesAsyncScrolling() const final;
 
@@ -239,7 +239,7 @@ public:
 #if USE(COORDINATED_GRAPHICS)
     WEBCORE_EXPORT void setFixedVisibleContentRect(const IntRect&) final;
 #endif
-    WEBCORE_EXPORT void setScrollPosition(const ScrollPosition&, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No) final;
+    WEBCORE_EXPORT void setScrollPosition(const ScrollPosition&, const ScrollPositionChangeOptions& = ScrollPositionChangeOptions::createProgrammatic()) final;
     void restoreScrollbar();
     void scheduleScrollToFocusedElement(SelectionRevealMode);
     void scrollToFocusedElementImmediatelyIfNeeded();
@@ -413,6 +413,7 @@ public:
     void incrementVisuallyNonEmptyCharacterCount(const String&);
     void incrementVisuallyNonEmptyPixelCount(const IntSize&);
     bool isVisuallyNonEmpty() const { return m_contentQualifiesAsVisuallyNonEmpty; }
+    bool hasContenfulDescendants() const;
     void checkAndDispatchDidReachVisuallyNonEmptyState();
 
     WEBCORE_EXPORT void enableFixedWidthAutoSizeMode(bool enable, const IntSize& minSize);
@@ -674,11 +675,14 @@ public:
 
     void renderLayerDidScroll(const RenderLayer&);
 
-    WEBCORE_EXPORT void scrollToOffsetWithAnimation(const ScrollOffset&, ScrollType = ScrollType::Programmatic, ScrollClamping = ScrollClamping::Clamped);
+    WEBCORE_EXPORT void scrollToPositionWithAnimation(const ScrollPosition&, ScrollType = ScrollType::Programmatic, ScrollClamping = ScrollClamping::Clamped);
 
     bool inUpdateEmbeddedObjects() const { return m_inUpdateEmbeddedObjects; }
 
     String debugDescription() const final;
+
+    // ScrollView
+    void updateScrollbarSteps() override;
 
 private:
     explicit FrameView(Frame&);

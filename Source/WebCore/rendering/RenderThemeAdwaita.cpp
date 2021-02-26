@@ -192,6 +192,7 @@ bool RenderThemeAdwaita::paintTextField(const RenderObject& renderObject, const 
     Path path;
     path.addRoundedRect(fieldRect, corner);
     fieldRect.inflate(-borderSize);
+    corner.expand(-borderSize, -borderSize);
     path.addRoundedRect(fieldRect, corner);
     graphicsContext.setFillRule(WindRule::EvenOdd);
     if (!isEnabled(renderObject) || isReadOnlyControl(renderObject))
@@ -330,6 +331,7 @@ bool RenderThemeAdwaita::paintProgressBar(const RenderObject& renderObject, cons
     Path path;
     path.addRoundedRect(fieldRect, corner);
     fieldRect.inflate(-1);
+    corner.expand(-1, -1);
     path.addRoundedRect(fieldRect, corner);
     graphicsContext.setFillRule(WindRule::EvenOdd);
     graphicsContext.setFillColor(progressBarBorderColor);
@@ -395,6 +397,7 @@ bool RenderThemeAdwaita::paintSliderTrack(const RenderObject& renderObject, cons
     Path path;
     path.addRoundedRect(fieldRect, corner);
     fieldRect.inflate(-sliderTrackBorderSize);
+    corner.expand(-sliderTrackBorderSize, -sliderTrackBorderSize);
     path.addRoundedRect(fieldRect, corner);
     graphicsContext.setFillRule(WindRule::EvenOdd);
     graphicsContext.setFillColor(sliderTrackBorderColor);
@@ -454,8 +457,8 @@ void RenderThemeAdwaita::adjustSliderThumbSize(RenderStyle& style, const Element
     if (part != SliderThumbHorizontalPart && part != SliderThumbVerticalPart)
         return;
 
-    style.setWidth(Length(sliderThumbSize, Fixed));
-    style.setHeight(Length(sliderThumbSize, Fixed));
+    style.setWidth(Length(sliderThumbSize, LengthType::Fixed));
+    style.setHeight(Length(sliderThumbSize, LengthType::Fixed));
 }
 
 bool RenderThemeAdwaita::paintSliderThumb(const RenderObject& renderObject, const PaintInfo& paintInfo, const IntRect& rect)
@@ -598,9 +601,9 @@ void RenderThemeAdwaita::adjustListButtonStyle(RenderStyle& style, const Element
 {
     // Add a margin to place the button at end of the input field.
     if (style.isLeftToRightDirection())
-        style.setMarginRight(Length(-2, Fixed));
+        style.setMarginRight(Length(-2, LengthType::Fixed));
     else
-        style.setMarginLeft(Length(-2, Fixed));
+        style.setMarginLeft(Length(-2, LengthType::Fixed));
 }
 #endif // ENABLE(DATALIST_ELEMENT)
 
