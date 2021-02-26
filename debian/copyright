@@ -13,7 +13,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
            2005 Frerich Raabe <raabe@kde.org>
            2005 Maksim Orlovich <maksim@kde.org>
-           2005, 2007-2013, 2015, 2017-2020 Google Inc
+           2005, 2007-2013, 2015, 2017-2021 Google Inc
            2005, 2008-2013 Nokia
            2005-2006 Alexey Proskuryakov
            2005-2006 Kimmo Kinnunen <kimmo.t.kinnunen@nokia.com>
@@ -122,7 +122,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2016 Yusuke Suzuki <yusuke.suzuki@sslab.ics.keio.ac.jp>
            2016-2018 Akamai Technologies Inc
            2016-2019 Oleksandr Skachkov <gskachkov@gmail.com>
-           2016-2020 Metrological Group B.V
+           2016-2021 Metrological Group B.V
            2016-2021 Sony Interactive Entertainment
            2017 Caio Lima <ticaiolima@gmail.com>
            2017 Endless Mobile Inc
@@ -267,7 +267,7 @@ Files: Source/JavaScriptCore/API/*
        Source/WebInspectorUI/UserInterface/Views/*
        Source/WebKit/UIProcess/Launcher/playstation/ProcessLauncherPlayStation.cpp
        Tools/TestWebKitAPI/Tests/WTF/*
-Copyright: 2003, 2005-2020 Apple Inc
+Copyright: 2003, 2005-2021 Apple Inc
            2006 Alexey Proskuryakov
            2006 Alexey Proskuryakov <ap@webkit.org>
            2006 Michael Emmel mike.emmel@gmail.com
@@ -802,7 +802,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WebCore/*
        Tools/TestWebKitAPI/WTFStringUtilities.h
 Copyright: 2003, 2005-2013, 2015, 2018 Google Inc
-           2004-2020 Apple Inc
+           2004-2021 Apple Inc
            2006-2008, 2010, 2012 the V8 project authors
            2007-2009 Torch Mobile Inc
            2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
@@ -1751,13 +1751,11 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/network/NetworkingContext.h
        Source/WebCore/platform/network/glib/NetworkStateNotifierGLib.cpp
        Source/WebCore/platform/network/soup/CookieStorageSoup.cpp
-       Source/WebCore/platform/network/soup/GRefPtrSoup.cpp
-       Source/WebCore/platform/network/soup/GRefPtrSoup.h
        Source/WebCore/platform/network/soup/GUniquePtrSoup.h
        Source/WebCore/platform/network/soup/ResourceHandleSoup.cpp
        Source/WebCore/platform/network/soup/ResourceRequestSoup.cpp
        Source/WebCore/platform/network/soup/ResourceResponseSoup.cpp
-       Source/WebCore/platform/soup/SharedBufferSoup.cpp
+       Source/WebCore/platform/network/soup/SoupVersioning.h
        Source/WebCore/platform/text/BidiContext.cpp
        Source/WebCore/platform/text/BidiContext.h
        Source/WebCore/platform/text/BidiResolver.h
@@ -1778,6 +1776,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/plugins/DOMPluginArray.h
        Source/WebCore/plugins/PluginData.cpp
        Source/WebCore/plugins/PluginData.h
+       Source/WebCore/preprocess-localizable-strings.pl
        Source/WebCore/rendering/BidiRun.cpp
        Source/WebCore/rendering/BidiRun.h
        Source/WebCore/rendering/BreakLines.h
@@ -2401,6 +2400,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/WebKitInstallMissingMediaPluginsPermissionRequestPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitJavascriptResult.cpp
        Source/WebKit/UIProcess/API/glib/WebKitJavascriptResultPrivate.h
+       Source/WebKit/UIProcess/API/glib/WebKitMediaKeySystemPermissionRequest.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitMediaKeySystemPermissionRequestPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitMimeInfo.cpp
        Source/WebKit/UIProcess/API/glib/WebKitNavigationAction.cpp
        Source/WebKit/UIProcess/API/glib/WebKitNavigationActionPrivate.h
@@ -2492,6 +2493,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/gtk/WebKitInputMethodContextImplGtk.h
        Source/WebKit/UIProcess/API/gtk/WebKitInstallMissingMediaPluginsPermissionRequest.h
        Source/WebKit/UIProcess/API/gtk/WebKitJavascriptResult.h
+       Source/WebKit/UIProcess/API/gtk/WebKitMediaKeySystemPermissionRequest.h
        Source/WebKit/UIProcess/API/gtk/WebKitMimeInfo.h
        Source/WebKit/UIProcess/API/gtk/WebKitNavigationAction.h
        Source/WebKit/UIProcess/API/gtk/WebKitNavigationPolicyDecision.h
@@ -2549,6 +2551,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/UserMediaPermissionRequestProxy.h
        Source/WebKit/UIProcess/UserMediaProcessManager.cpp
        Source/WebKit/UIProcess/UserMediaProcessManager.h
+       Source/WebKit/UIProcess/glib/UserMediaPermissionRequestManagerProxyGLib.cpp
        Source/WebKit/UIProcess/gtk/*
        Source/WebKit/WebProcess/InjectedBundle/API/glib/DOM/*
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitConsoleMessage.cpp
@@ -2674,7 +2677,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2009-2010 Gustavo Noronha Silva
            2009-2010 Rob Buis <rwlbuis@gmail.com>
            2009-2011 Torch Mobile (Beijing) Co
-           2009-2020 Igalia S.L.
+           2009-2021 Igalia S.L.
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Daniel Bates <dbates@intudata.com>
            2010 Peter Varga <pvarga@inf.u-szeged.hu>, University of Szeged
