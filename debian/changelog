@@ -1,4 +1,4 @@
-webkit2gtk (2.31.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.31.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * Enable the gamepad support only on Linux (Closes: #980745):
@@ -20,7 +20,7 @@ webkit2gtk (2.31.90-1) UNRELEASED; urgency=medium
   * debian/patches/fix-ftbfs-i386.patch:
     + Fix build on i386 (upstream bug #222480).
 
- -- Alberto Garcia <berto@igalia.com>  Sat, 16 Jan 2021 18:37:15 +0100
+ -- Alberto Garcia <berto@igalia.com>  Sat, 27 Feb 2021 22:02:35 +0100
 
 webkit2gtk (2.31.1-1) experimental; urgency=medium
 
