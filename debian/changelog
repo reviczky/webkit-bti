@@ -17,6 +17,8 @@ webkit2gtk (2.31.90-1) UNRELEASED; urgency=medium
     + Update copyright information of all files.
   * debian/watch:
     + Set version to 4 (fixes older-debian-watch-file-standard).
+  * debian/patches/fix-ftbfs-i386.patch:
+    + Fix build on i386 (upstream bug #222480).
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 16 Jan 2021 18:37:15 +0100
 
