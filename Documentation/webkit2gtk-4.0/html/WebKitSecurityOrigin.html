@@ -135,12 +135,12 @@
 <div class="refsect1">
 <a name="WebKitSecurityOrigin.description"></a><h2>Description</h2>
 <p><a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> is a representation of a security domain
-defined by websites. A security origin normally consists of a
-protocol, a hostname, and a port number. It is also possible for a
-security origin to be opaque, as defined by the HTML standard, in
-which case it has no associated protocol, host, or port.</p>
-<p>Websites with the same security origin can access each other's
-resources for client-side scripting or database access.</p>
+defined by websites. A security origin consists of a protocol, a
+hostname, and an optional port number.</p>
+<p>Resources with the same security origin can generally access each
+other for client-side scripting or database access. When comparing
+origins, beware that if both protocol and host are <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>, the origins
+should not be treated as equal.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitSecurityOrigin.functions_details"></a><h2>Functions</h2>
@@ -281,8 +281,7 @@ called from any thread.</p>
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_security_origin_get_protocol (<em class="parameter"><code><a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> *origin</code></em>);</pre>
 <p>Gets the protocol of <em class="parameter"><code>origin</code></em>
-, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if <em class="parameter"><code>origin</code></em>
- is opaque.</p>
+.</p>
 <div class="refsect3">
 <a name="webkit-security-origin-get-protocol.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -311,9 +310,8 @@ webkit_security_origin_get_protocol (<em class="parameter"><code><a class="link"
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_security_origin_get_host (<em class="parameter"><code><a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> *origin</code></em>);</pre>
 <p>Gets the hostname of <em class="parameter"><code>origin</code></em>
-, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if <em class="parameter"><code>origin</code></em>
- is opaque or if its
-protocol does not require a host component.</p>
+. It is reasonable for this to be <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>
+if its protocol does not require a host component.</p>
 <div class="refsect3">
 <a name="webkit-security-origin-get-host.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -346,9 +344,7 @@ webkit_security_origin_get_port (<em class="parameter"><code><a class="link" hre
 port is the default port for the given protocol. For example,
 http://example.com has the same security origin as
 http://example.com:80, and this function will return 0 for a
-<a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> constructed from either URI. It will also
-return 0 if <em class="parameter"><code>origin</code></em>
- is opaque.</p>
+<a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> constructed from either URI.</p>
 <div class="refsect3">
 <a name="webkit-security-origin-get-port.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -375,9 +371,10 @@ return 0 if <em class="parameter"><code>origin</code></em>
 <a name="webkit-security-origin-is-opaque"></a><h3>webkit_security_origin_is_opaque ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_security_origin_is_opaque (<em class="parameter"><code><a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> *origin</code></em>);</pre>
-<p>Gets whether <em class="parameter"><code>origin</code></em>
- is an opaque security origin, which does not
-possess an associated protocol, host, or port.</p>
+<div class="warning"><p><code class="literal">webkit_security_origin_is_opaque</code> has been deprecated since version 2.32 and should not be used in newly-written code.</p></div>
+<p>This function returns <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>. <a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> is now a simple
+wrapper around a &lt;protocol, host, port&gt; triplet, and no longer
+represents an origin as defined by web standards that may be opaque.</p>
 <div class="refsect3">
 <a name="webkit-security-origin-is-opaque.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -395,8 +392,7 @@ possess an associated protocol, host, or port.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-security-origin-is-opaque.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>origin</code></em>
-is opaque.</p>
+<p> <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
@@ -407,9 +403,8 @@ is opaque.</p>
 webkit_security_origin_to_string (<em class="parameter"><code><a class="link" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin"><span class="type">WebKitSecurityOrigin</span></a> *origin</code></em>);</pre>
 <p>Gets a string representation of <em class="parameter"><code>origin</code></em>
 . The string representation
-is a valid URI with only protocol, host, and port components. It may
-be <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>, but usually only if <em class="parameter"><code>origin</code></em>
- is opaque.</p>
+is a valid URI with only protocol, host, and port components, or
+<a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>.</p>
 <div class="refsect3">
 <a name="webkit-security-origin-to-string.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
