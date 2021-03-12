@@ -4,6 +4,8 @@ webkit2gtk (2.31.91-1) UNRELEASED; urgency=medium
   * debian/patches/fix-mips-page-size.patch:
     + Increase the page size from 4KB to 16KB on MIPS, this fixes a crash
       with Loongson CPUs that don't support 4KB pages (see #977779).
+  * debian/patches/fix-ftbfs-i386.patch:
+    + Drop this patch.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 28 Feb 2021 14:04:31 +0100
 
