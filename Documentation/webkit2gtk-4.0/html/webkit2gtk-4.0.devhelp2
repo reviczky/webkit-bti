@@ -970,7 +970,7 @@
     <keyword type="function" name="webkit_security_origin_get_protocol ()" link="WebKitSecurityOrigin.html#webkit-security-origin-get-protocol" since="2.16"/>
     <keyword type="function" name="webkit_security_origin_get_host ()" link="WebKitSecurityOrigin.html#webkit-security-origin-get-host" since="2.16"/>
     <keyword type="function" name="webkit_security_origin_get_port ()" link="WebKitSecurityOrigin.html#webkit-security-origin-get-port" since="2.16"/>
-    <keyword type="function" name="webkit_security_origin_is_opaque ()" link="WebKitSecurityOrigin.html#webkit-security-origin-is-opaque" since="2.16"/>
+    <keyword type="function" name="webkit_security_origin_is_opaque ()" link="WebKitSecurityOrigin.html#webkit-security-origin-is-opaque" deprecated="2.32" since="2.16"/>
     <keyword type="function" name="webkit_security_origin_to_string ()" link="WebKitSecurityOrigin.html#webkit-security-origin-to-string" since="2.16"/>
     <keyword type="struct" name="WebKitSecurityOrigin" link="WebKitSecurityOrigin.html#WebKitSecurityOrigin-struct"/>
     <keyword type="function" name="webkit_website_data_manager_new ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-new" since="2.10"/>

@@ -65,7 +65,6 @@
 #include <wtf/FileSystem.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
-#include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -1463,7 +1462,7 @@ void webkit_web_context_set_preferred_languages(WebKitWebContext* context, const
         else
             languages.append(String::fromUTF8(languageList[i]).replace("_", "-"));
     }
-    overrideUserPreferredLanguages(languages);
+    context->priv->processPool->setOverrideLanguages(WTFMove(languages));
 }
 
 /**
@@ -1705,7 +1704,7 @@ guint webkit_web_context_get_web_process_count_limit(WebKitWebContext* context)
 
 static void addOriginToMap(WebKitSecurityOrigin* origin, HashMap<String, bool>* map, bool allowed)
 {
-    String string = webkitSecurityOriginGetSecurityOrigin(origin).toString();
+    String string = webkitSecurityOriginGetSecurityOriginData(origin).toString();
     if (string != "null")
         map->set(string, allowed);
 }

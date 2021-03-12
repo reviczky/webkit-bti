@@ -844,14 +844,14 @@ void WebProcessProxy::didReceiveSyncMessage(IPC::Connection& connection, IPC::De
 void WebProcessProxy::didClose(IPC::Connection&)
 {
     RELEASE_LOG_IF(isReleaseLoggingAllowed(), Process, "%p - WebProcessProxy didClose (web process crash)", this);
-    processDidTerminateOrFailedToLaunch();
+    processDidTerminateOrFailedToLaunch(ProcessTerminationReason::Crash);
 }
 
-void WebProcessProxy::processDidTerminateOrFailedToLaunch()
+void WebProcessProxy::processDidTerminateOrFailedToLaunch(ProcessTerminationReason reason)
 {
-    // Protect ourselves, as the call to disconnect() below may otherwise cause us
+    // Protect ourselves, as the call to shutDown() below may otherwise cause us
     // to be deleted before we can finish our work.
-    Ref<WebProcessProxy> protect(*this);
+    auto protectedThis = makeRef(*this);
 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     m_userMediaCaptureManagerProxy->clear();
@@ -863,7 +863,7 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch()
     auto pages = copyToVectorOf<RefPtr<WebPageProxy>>(m_pageMap.values());
     auto provisionalPages = WTF::map(m_provisionalPages, [](auto* provisionalPage) { return makeWeakPtr(provisionalPage); });
 
-    auto isResponsiveCallbacks = WTFMove(m_isResponsiveCallbacks);
+    auto isResponsiveCallbacks = std::exchange(m_isResponsiveCallbacks, { });
     for (auto& callback : isResponsiveCallbacks)
         callback(false);
 
@@ -878,7 +878,7 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch()
     shutDown();
 
 #if ENABLE(PUBLIC_SUFFIX_LIST)
-    if (pages.size() == 1) {
+    if (pages.size() == 1 && reason == ProcessTerminationReason::Crash) {
         auto& page = *pages[0];
         String domain = topPrivatelyControlledDomain(URL({ }, page.currentURL()).host().toString());
         if (!domain.isEmpty())
@@ -890,8 +890,12 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch()
     m_routingArbitrator->processDidTerminate();
 #endif
 
-    for (auto& page : pages)
-        page->resetStateAfterProcessTermination(ProcessTerminationReason::Crash);
+    // There is a nested transaction in WebPageProxy::resetStateAfterProcessExited() that we don't want to commit before the client call below (dispatchProcessDidTerminate).
+    Vector<PageLoadState::Transaction> pageLoadStateTransactions;
+    for (auto& page : pages) {
+        pageLoadStateTransactions.append(page->pageLoadState().transaction());
+        page->resetStateAfterProcessTermination(reason);
+    }
 
     for (auto& provisionalPage : provisionalPages) {
         if (provisionalPage)
@@ -899,7 +903,7 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch()
     }
 
     for (auto& page : pages)
-        page->dispatchProcessDidTerminate(ProcessTerminationReason::Crash);
+        page->dispatchProcessDidTerminate(reason);
 
     m_sleepDisablers.clear();
 }
@@ -1008,7 +1012,7 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
 
     if (!IPC::Connection::identifierIsValid(connectionIdentifier)) {
         RELEASE_LOG_IF(isReleaseLoggingAllowed(), Process, "%p - WebProcessProxy didFinishLaunching - invalid connection identifier (web process failed to launch)", this);
-        processDidTerminateOrFailedToLaunch();
+        processDidTerminateOrFailedToLaunch(ProcessTerminationReason::Crash);
         return;
     }
 
@@ -1254,24 +1258,7 @@ void WebProcessProxy::requestTermination(ProcessTerminationReason reason)
 
     AuxiliaryProcessProxy::terminate();
 
-    if (webConnection())
-        webConnection()->didClose();
-
-    auto provisionalPages = WTF::map(m_provisionalPages, [](auto* provisionalPage) { return makeWeakPtr(provisionalPage); });
-    auto pages = copyToVectorOf<RefPtr<WebPageProxy>>(m_pageMap.values());
-
-    shutDown();
-
-    for (auto& page : pages)
-        page->resetStateAfterProcessTermination(reason);
-        
-    for (auto& provisionalPage : provisionalPages) {
-        if (provisionalPage)
-            provisionalPage->processDidTerminate();
-    }
-
-    for (auto& page : pages)
-        page->dispatchProcessDidTerminate(reason);
+    processDidTerminateOrFailedToLaunch(reason);
 }
 
 bool WebProcessProxy::isReleaseLoggingAllowed() const
