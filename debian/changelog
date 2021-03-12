@@ -1,4 +1,4 @@
-webkit2gtk (2.31.91-1) UNRELEASED; urgency=medium
+webkit2gtk (2.31.91-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/patches/fix-mips-page-size.patch:
@@ -7,7 +7,7 @@ webkit2gtk (2.31.91-1) UNRELEASED; urgency=medium
   * debian/patches/fix-ftbfs-i386.patch:
     + Drop this patch.
 
- -- Alberto Garcia <berto@igalia.com>  Sun, 28 Feb 2021 14:04:31 +0100
+ -- Alberto Garcia <berto@igalia.com>  Fri, 12 Mar 2021 16:19:15 +0100
 
 webkit2gtk (2.31.90-1) experimental; urgency=medium
 
