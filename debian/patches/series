@@ -6,3 +6,4 @@ prefer-pthread.patch
 dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-mips-page-size.patch
+include-libwpe.patch

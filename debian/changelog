@@ -4,6 +4,8 @@ webkit2gtk (2.30.6-1) UNRELEASED; urgency=high
   * debian/control:
     + Remove references to browser-plugin-freshplayer-pepperflash, this
       package is no longer available, see #966474.
+  * debian/patches/include-libwpe.patch:
+    + Fix build with wpebackend-fdo 1.8.1.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 18 Mar 2021 13:58:13 +0100
 
