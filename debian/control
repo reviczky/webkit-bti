@@ -240,13 +240,10 @@ Section: oldlibs
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}
-Suggests: browser-plugin-freshplayer-pepperflash
 Description: Transitional dummy package
  This is a transitional dummy package, it can be safely removed.
  .
- WebKitGTK no longer supports plugins that depend on GTK 2. If you
- still need to use the Adobe Flash Player then you can install
- browser-plugin-freshplayer-pepperflash.
+ WebKitGTK no longer supports plugins that depend on GTK 2.
 
 Package: webkit2gtk-driver
 Architecture: linux-any
