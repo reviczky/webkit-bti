@@ -71,7 +71,8 @@ endif
 # Disable the bubblewrap sandbox if libseccomp-dev is not available
 ifeq ($(shell pkg-config --exists libseccomp && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=ON
-	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), xdg-dbus-proxy"
+	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), \
+					xdg-dbus-proxy, xdg-desktop-portal-gtk"
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
