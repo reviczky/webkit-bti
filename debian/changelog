@@ -4,6 +4,8 @@ webkit2gtk (2.32.0-1) UNRELEASED; urgency=medium
   * debian/control:
     + Make the gir packages require the exact binary versions of
       libwebkit2gtk-4.0-37 and libjavascriptcoregtk-4.0-18
+  * debian/watch:
+    + Scan stable releases only.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 20 Mar 2021 21:28:25 +0100
 
