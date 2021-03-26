@@ -1,4 +1,4 @@
-webkit2gtk (2.32.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.32.0-1) experimental; urgency=medium
 
   * New upstream release (Closes: #984522).
   * debian/control:
@@ -10,7 +10,7 @@ webkit2gtk (2.32.0-1) UNRELEASED; urgency=medium
     + Add dependency on xdg-desktop-portal-gtk when the bubblewrap sandbox
       is enabled (see webkit bug #213148) (thanks, Hannes Müller).
 
- -- Alberto Garcia <berto@igalia.com>  Sat, 20 Mar 2021 21:28:25 +0100
+ -- Alberto Garcia <berto@igalia.com>  Fri, 26 Mar 2021 15:15:20 +0100
 
 webkit2gtk (2.31.91-1) experimental; urgency=medium
 
