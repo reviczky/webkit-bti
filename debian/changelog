@@ -1,3 +1,11 @@
+webkit2gtk (2.32.0-2) UNRELEASED; urgency=medium
+
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Compile BytecodeGenerator.cpp without optimizations on m68k and sh4,
+      otherwise the build fails due to gcc bugs.
+
+ -- Alberto Garcia <berto@igalia.com>  Sun, 11 Apr 2021 14:35:04 +0200
+
 webkit2gtk (2.32.0-1) experimental; urgency=medium
 
   * New upstream release (Closes: #984522).

@@ -157,3 +157,26 @@ Index: webkitgtk/Source/WebCore/style/RuleData.cpp
  
  static inline MatchBasedOnRuleHash computeMatchBasedOnRuleHash(const CSSSelector& selector)
  {
+Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
++++ webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
+@@ -62,6 +62,11 @@
+ #include <wtf/StdLibExtras.h>
+ #include <wtf/text/WTFString.h>
+ 
++#if defined(__m68k__) || defined(__SH4__)
++#pragma GCC push_options
++#pragma GCC optimize ("-O0")
++#endif
++
+ namespace JSC {
+ 
+ template<typename CallOp, typename = std::true_type>
+@@ -5503,3 +5508,6 @@ void printInternal(PrintStream& out, JSC
+ 
+ } // namespace WTF
+ 
++#if defined(__m68k__) || defined(__SH4__)
++#pragma GCC pop_options
++#endif
