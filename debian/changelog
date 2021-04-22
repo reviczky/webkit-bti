@@ -1,5 +1,8 @@
-webkit2gtk (2.32.0-2) UNRELEASED; urgency=medium
+webkit2gtk (2.32.0-2) UNRELEASED; urgency=high
 
+  * The WebKitGTK security advisory WSA-2021-0003 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    + CVE-2021-1788, CVE-2021-1844, CVE-2021-1871 (fixed in 2.32.0).
   * debian/patches/fix-ftbfs-m68k.patch:
     + Compile BytecodeGenerator.cpp without optimizations on m68k and sh4,
       otherwise the build fails due to gcc bugs.
