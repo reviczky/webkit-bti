@@ -11,6 +11,7 @@ DH_GENCONTROL_ARGS =
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_BUILD_ARCH_BITS),32)
+	EXTRA_CMAKE_ARGUMENTS += -DFORCE_32BIT=ON
 	LDFLAGS += -Wl,--no-keep-memory
 endif
 
@@ -22,6 +23,11 @@ CFLAGS := $(CFLAGS:-g=-g1)
 # slow but it is the most compatible solution for old (non-SSE2) CPUs.
 ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON
+endif
+
+# Systemd and libmanette are Linux-only
+ifneq ($(DEB_HOST_ARCH_OS),linux)
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEMD=OFF -DENABLE_GAMEPAD=OFF
 endif
 
 # See https://bugs.webkit.org/show_bug.cgi?id=197192
@@ -65,7 +71,8 @@ endif
 # Disable the bubblewrap sandbox if libseccomp-dev is not available
 ifeq ($(shell pkg-config --exists libseccomp && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=ON
-	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), xdg-dbus-proxy"
+	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), \
+					xdg-dbus-proxy, xdg-desktop-portal-gtk"
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif

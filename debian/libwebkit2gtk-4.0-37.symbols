@@ -1,7 +1,6 @@
 libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
 * Build-Depends-Package: libwebkit2gtk-4.0-dev
  (c++)"WebKit::NetworkProcessMain(int, char**)@Base" 2.27.90
- (c++)"WebKit::PluginProcessMain(int, char**)@Base" 2.27.90
  (c++)"WebKit::WebProcessMain(int, char**)@Base" 2.27.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
@@ -18,6 +17,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_application_info_set_name@Base 2.17.90
  webkit_application_info_set_version@Base 2.17.90
  webkit_application_info_unref@Base 2.17.90
+ webkit_audio_sink_get_type@Base 2.31.1
  (optional)webkit_authentication_dialog_get_type@Base 2.19.6
  webkit_authentication_request_authenticate@Base 2.5.3
  webkit_authentication_request_can_save_credentials@Base 2.5.3
@@ -1522,6 +1522,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_get_micro_version@Base 2.5.3
  webkit_get_minor_version@Base 2.5.3
  (optional)webkit_gl_video_sink_get_type@Base 2.27.4
+ webkit_gst_common_debug@Base 2.31.1
  webkit_hardware_acceleration_policy_get_type@Base 2.15.4
  webkit_hit_test_result_context_get_type@Base 2.5.3
  webkit_hit_test_result_context_is_editable@Base 2.5.3
@@ -1582,6 +1583,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_result_ref@Base 2.5.3
  webkit_javascript_result_unref@Base 2.5.3
  webkit_load_event_get_type@Base 2.5.3
+ webkit_media_key_system_permission_get_name@Base 2.31.90
+ webkit_media_key_system_permission_request_get_type@Base 2.31.90
  (optional)webkit_media_player_debug@Base 2.19.6
  (optional)webkit_media_src_get_type@Base 2.19.6
  webkit_mime_info_get_description@Base 2.5.3
@@ -1846,6 +1849,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_error_quark@Base 2.5.3
  webkit_snapshot_options_get_type@Base 2.5.3
  webkit_snapshot_region_get_type@Base 2.5.3
+ (optional)webkit_text_sink_get_type@Base 2.31.90
  webkit_tls_errors_policy_get_type@Base 2.5.3
  webkit_uri_for_display@Base 2.23.90
  webkit_uri_request_get_http_headers@Base 2.5.3
@@ -1900,6 +1904,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_user_content_manager_remove_all_style_sheets@Base 2.5.3
  webkit_user_content_manager_remove_filter@Base 2.23.91
  webkit_user_content_manager_remove_filter_by_id@Base 2.25.92
+ webkit_user_content_manager_remove_script@Base 2.31.1
+ webkit_user_content_manager_remove_style_sheet@Base 2.31.1
  webkit_user_content_manager_unregister_script_message_handler@Base 2.8.1
  webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.21.92
  webkit_user_media_permission_is_for_audio_device@Base 2.8.1
@@ -2120,6 +2126,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
  webkit_website_data_manager_get_persistent_credential_storage_enabled@Base 2.29.2
  webkit_website_data_manager_get_service_worker_registrations_directory@Base 2.29.2
+ webkit_website_data_manager_get_tls_errors_policy@Base 2.31.1
  webkit_website_data_manager_get_type@Base 2.10.0
  webkit_website_data_manager_get_websql_directory@Base 2.10.0
  webkit_website_data_manager_is_ephemeral@Base 2.15.4
@@ -2128,7 +2135,9 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_remove@Base 2.15.4
  webkit_website_data_manager_remove_finish@Base 2.15.4
  webkit_website_data_manager_set_itp_enabled@Base 2.29.2
+ webkit_website_data_manager_set_network_proxy_settings@Base 2.31.1
  webkit_website_data_manager_set_persistent_credential_storage_enabled@Base 2.29.2
+ webkit_website_data_manager_set_tls_errors_policy@Base 2.31.1
  webkit_website_data_ref@Base 2.15.4
  webkit_website_data_types_get_type@Base 2.15.4
  webkit_website_data_unref@Base 2.15.4

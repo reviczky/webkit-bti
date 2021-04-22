@@ -8,14 +8,14 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            1999-2000 Lars Knoll <knoll@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
            2002-2013 Vivek Thampi
-           2003-2020 Apple Inc
+           2003-2021 Apple Inc
            2004-2006 Rob Buis <buis@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
-           2005 Alexey Proskuryakov
            2005 Frerich Raabe <raabe@kde.org>
            2005 Maksim Orlovich <maksim@kde.org>
-           2005, 2007-2013, 2015, 2017-2020 Google Inc
+           2005, 2007-2013, 2015, 2017-2021 Google Inc
            2005, 2008-2013 Nokia
+           2005-2006 Alexey Proskuryakov
            2005-2006 Kimmo Kinnunen <kimmo.t.kinnunen@nokia.com>
            2005-2008 Eric Seidel <eric@webkit.org>
            2006 Alexander Kellett <lypanov@kde.org>
@@ -48,7 +48,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2009-2010 Alex Milowski <alex@milowski.com>
            2009-2011 Brent Fulgham <bfulgham@webkit.org>
            2009-2015 University of Szeged
-           2009-2020 Igalia S.L.
+           2009-2021 Igalia S.L.
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Mozilla Corporation
            2010 Peter Varga <pvarga@inf.u-szeged.hu>, University of Szeged
@@ -72,7 +72,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2011 Peter Varga <pvarga@webkit.org>, University of Szeged
            2011 ProFUSION embedded systems
            2011 Renata Hodovan <reni@webkit.org>
-           2011, 2015-2017 The Chromium Authors
+           2011, 2014-2017 The Chromium Authors
            2011-2012, 2014-2015 Ericsson AB
            2011-2013 Intel Corporation
            2011-2013 Samsung Electronics
@@ -115,15 +115,15 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2015, 2018 Andy VanWagoner <andy@vanwagoner.family>
            2015-2016 Sukolsak Sakshuwong <sukolsak@gmail.com>
            2015-2017 Canon Inc
-           2015-2017 Devin Rousso <webkit@devinrousso.com>
+           2015-2020 Devin Rousso <webkit@devinrousso.com>
            2016 Caitlin Potter <caitp@igalia.com>
            2016 Konstantin Tokavev <annulen@yandex.ru>
            2016 Red Hat Inc
            2016 Yusuke Suzuki <yusuke.suzuki@sslab.ics.keio.ac.jp>
            2016-2018 Akamai Technologies Inc
            2016-2019 Oleksandr Skachkov <gskachkov@gmail.com>
-           2016-2020 Metrological Group B.V
-           2016-2020 Sony Interactive Entertainment
+           2016-2021 Metrological Group B.V
+           2016-2021 Sony Interactive Entertainment
            2017 Caio Lima <ticaiolima@gmail.com>
            2017 Endless Mobile Inc
            2017 Oleksandr Skachkov <gskackhov@gmail.com>
@@ -131,7 +131,8 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2018 Yusuke Suzuki <yusukesuzuki@slowstart.org>
            2018 mce sys Ltd
            2019 Carlos Eduardo Ramalho <cadubentzen@gmail.com>
-           2019-2020 Alexey Shvayka <shvaikalesh@gmail.com>
+           2019-2021 Alexey Shvayka <shvaikalesh@gmail.com>
+           2020 Cloudinary Inc
            2020 Darryl Pogue <darryl@dpogue.ca>
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 WikiMedia Foundation. All Rights Reserve
@@ -217,6 +218,7 @@ Files: Source/JavaScriptCore/API/*
        Source/WebCore/Modules/webdatabase/*
        Source/WebCore/Scripts/extract-localizable-strings.pl
        Source/WebCore/accessibility/*
+       Source/WebCore/animation/*
        Source/WebCore/bindings/js/*
        Source/WebCore/css/*
        Source/WebCore/dom/*
@@ -265,7 +267,7 @@ Files: Source/JavaScriptCore/API/*
        Source/WebInspectorUI/UserInterface/Views/*
        Source/WebKit/UIProcess/Launcher/playstation/ProcessLauncherPlayStation.cpp
        Tools/TestWebKitAPI/Tests/WTF/*
-Copyright: 2003, 2005-2020 Apple Inc
+Copyright: 2003, 2005-2021 Apple Inc
            2006 Alexey Proskuryakov
            2006 Alexey Proskuryakov <ap@webkit.org>
            2006 Michael Emmel mike.emmel@gmail.com
@@ -297,7 +299,6 @@ Copyright: 2003, 2005-2020 Apple Inc
            2012, 2018 Igalia S.L.
            2012-2014 Adobe Systems Inc
            2013 Samsung Electronics
-           2013 University of Washington
            2013 Xidorn Quan <quanxunzhen@gmail.com>
            2015 Canon Inc
            2016 Konstantin Tokavev <annulen@yandex.ru>
@@ -310,9 +311,7 @@ Files: Source/WebCore/plugins/npruntime.h
 Copyright: 2004 Apple Inc
 License: BSD-3-clause-apple-mozilla
 
-Files: Source/WebCore/Modules/fetch/DOMWindowFetch.cpp
-       Source/WebCore/Modules/fetch/DOMWindowFetch.h
-       Source/WebCore/Modules/fetch/FetchBody.cpp
+Files: Source/WebCore/Modules/fetch/FetchBody.cpp
        Source/WebCore/Modules/fetch/FetchBody.h
        Source/WebCore/Modules/fetch/FetchBodyOwner.cpp
        Source/WebCore/Modules/fetch/FetchBodyOwner.h
@@ -325,8 +324,6 @@ Files: Source/WebCore/Modules/fetch/DOMWindowFetch.cpp
        Source/WebCore/Modules/fetch/FetchRequest.h
        Source/WebCore/Modules/fetch/FetchResponse.cpp
        Source/WebCore/Modules/fetch/FetchResponse.h
-       Source/WebCore/Modules/fetch/WorkerGlobalScopeFetch.cpp
-       Source/WebCore/Modules/fetch/WorkerGlobalScopeFetch.h
        Source/WebCore/Modules/streams/ReadableStreamSource.h
        Source/WebCore/bindings/js/JSReadableStreamSourceCustom.cpp
        Source/WebCore/bindings/js/ReadableStreamDefaultController.cpp
@@ -351,8 +348,6 @@ Files: Source/WebCore/Modules/mediastream/MediaDevices.cpp
        Source/WebCore/Modules/mediastream/PeerConnectionBackend.cpp
        Source/WebCore/Modules/mediastream/PeerConnectionBackend.h
        Source/WebCore/Modules/mediastream/RTCIceTransport.h
-       Source/WebCore/Modules/mediastream/RTCPeerConnection.js
-       Source/WebCore/Modules/mediastream/RTCPeerConnectionInternals.js
        Source/WebCore/Modules/mediastream/RTCRtpReceiver.cpp
        Source/WebCore/Modules/mediastream/RTCRtpReceiver.h
        Source/WebCore/Modules/mediastream/RTCRtpSender.cpp
@@ -442,12 +437,13 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/Modules/mediastream/RTCConfiguration.h
        Source/WebCore/Modules/mediastream/RTCIceCandidate.cpp
        Source/WebCore/Modules/mediastream/RTCIceCandidate.h
+       Source/WebCore/Modules/mediastream/RTCIceCandidateInit.h
        Source/WebCore/Modules/mediastream/RTCPeerConnection.cpp
        Source/WebCore/Modules/mediastream/RTCPeerConnection.h
        Source/WebCore/Modules/mediastream/RTCSessionDescription.cpp
        Source/WebCore/Modules/mediastream/RTCSessionDescription.h
+       Source/WebCore/Modules/mediastream/RTCSessionDescriptionInit.h
        Source/WebCore/Modules/notifications/*
-       Source/WebCore/Modules/quota/*
        Source/WebCore/Modules/speech/DOMWindowSpeechSynthesis.cpp
        Source/WebCore/Modules/webauthn/apdu/*
        Source/WebCore/Modules/webauthn/cbor/*
@@ -635,8 +631,8 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/inspector/InstrumentingAgents.h
        Source/WebCore/inspector/TimelineRecordFactory.cpp
        Source/WebCore/inspector/TimelineRecordFactory.h
-       Source/WebCore/inspector/WorkerScriptDebugServer.cpp
-       Source/WebCore/inspector/WorkerScriptDebugServer.h
+       Source/WebCore/inspector/WorkerDebugger.cpp
+       Source/WebCore/inspector/WorkerDebugger.h
        Source/WebCore/inspector/agents/InspectorDOMDebuggerAgent.cpp
        Source/WebCore/inspector/agents/InspectorDOMDebuggerAgent.h
        Source/WebCore/inspector/agents/InspectorIndexedDBAgent.cpp
@@ -806,7 +802,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WebCore/*
        Tools/TestWebKitAPI/WTFStringUtilities.h
 Copyright: 2003, 2005-2013, 2015, 2018 Google Inc
-           2004-2020 Apple Inc
+           2004-2021 Apple Inc
            2006-2008, 2010, 2012 the V8 project authors
            2007-2009 Torch Mobile Inc
            2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
@@ -847,6 +843,7 @@ Files: Source/WebCore/css/CSSSupportsRule.cpp
        Source/WebKit/UIProcess/API/gtk/WebKitSettings.h
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitSettings.cpp
 Copyright: 2011-2012 Motorola Mobility
+           2020 Apple Inc
 License: BSD-3-clause-motorola
 
 Files: Source/WebCore/html/track/VTTScanner.cpp
@@ -1154,6 +1151,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WTF/wtf/text/unix/TextBreakIteratorInternalICUUnix.cpp
        Source/WTF/wtf/unix/LanguageUnix.cpp
        Source/WebCore/Modules/geolocation/*
+       Source/WebCore/Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp
        Source/WebCore/Modules/websockets/WebSocketFrame.cpp
        Source/WebCore/PAL/config.h
        Source/WebCore/PAL/pal/system/gtk/SoundGtk.cpp
@@ -1183,7 +1181,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/bindings/js/JSDOMConvertStrings.cpp
        Source/WebCore/bindings/js/JSDOMExceptionHandling.cpp
        Source/WebCore/bindings/js/JSDOMExceptionHandling.h
-       Source/WebCore/bindings/js/JSDOMNamedConstructor.h
+       Source/WebCore/bindings/js/JSDOMLegacyFactoryFunction.h
        Source/WebCore/bindings/js/JSDOMOperation.h
        Source/WebCore/bindings/js/JSDOMOperationReturningPromise.h
        Source/WebCore/bindings/js/JSDOMWindowBase.cpp
@@ -1429,7 +1427,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/dom/WheelEvent.cpp
        Source/WebCore/dom/WheelEvent.h
        Source/WebCore/editing/EditingBehavior.h
-       Source/WebCore/editing/EditingBehaviorTypes.h
+       Source/WebCore/editing/EditingBehaviorType.h
        Source/WebCore/editing/TextCheckingHelper.h
        Source/WebCore/editing/atk/FrameSelectionAtk.cpp
        Source/WebCore/html/BaseTextInputType.cpp
@@ -1444,8 +1442,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/html/FormNamedItem.h
        Source/WebCore/html/HTMLAnchorElement.cpp
        Source/WebCore/html/HTMLAnchorElement.h
-       Source/WebCore/html/HTMLAppletElement.cpp
-       Source/WebCore/html/HTMLAppletElement.h
        Source/WebCore/html/HTMLAreaElement.cpp
        Source/WebCore/html/HTMLAreaElement.h
        Source/WebCore/html/HTMLBDIElement.h
@@ -1672,6 +1668,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/WidthIterator.cpp
        Source/WebCore/platform/graphics/WidthIterator.h
        Source/WebCore/platform/graphics/cairo/*
+       Source/WebCore/platform/graphics/coretext/FontCascadeCoreText.cpp
+       Source/WebCore/platform/graphics/coretext/FontPlatformDataCoreText.cpp
        Source/WebCore/platform/graphics/egl/*
        Source/WebCore/platform/graphics/filters/*
        Source/WebCore/platform/graphics/freetype/FontCacheFreeType.cpp
@@ -1685,6 +1683,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/GRefPtrGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/GRefPtrGStreamer.h
+       Source/WebCore/platform/graphics/gstreamer/GStreamerAudioMixer.cpp
+       Source/WebCore/platform/graphics/gstreamer/GStreamerAudioMixer.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerCommon.cpp
        Source/WebCore/platform/graphics/gstreamer/GStreamerCommon.h
        Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
@@ -1709,6 +1709,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/VideoSinkGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/VideoTextureCopierGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/VideoTextureCopierGStreamer.h
+       Source/WebCore/platform/graphics/gstreamer/WebKitAudioSinkGStreamer.cpp
+       Source/WebCore/platform/graphics/gstreamer/WebKitAudioSinkGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/eme/*
@@ -1734,6 +1736,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/gtk/*
        Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp
        Source/WebCore/platform/mediastream/gstreamer/*
+       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoCommon.cpp
+       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoCommon.h
        Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
        Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.h
        Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
@@ -1747,13 +1751,11 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/network/NetworkingContext.h
        Source/WebCore/platform/network/glib/NetworkStateNotifierGLib.cpp
        Source/WebCore/platform/network/soup/CookieStorageSoup.cpp
-       Source/WebCore/platform/network/soup/GRefPtrSoup.cpp
-       Source/WebCore/platform/network/soup/GRefPtrSoup.h
        Source/WebCore/platform/network/soup/GUniquePtrSoup.h
        Source/WebCore/platform/network/soup/ResourceHandleSoup.cpp
        Source/WebCore/platform/network/soup/ResourceRequestSoup.cpp
        Source/WebCore/platform/network/soup/ResourceResponseSoup.cpp
-       Source/WebCore/platform/soup/SharedBufferSoup.cpp
+       Source/WebCore/platform/network/soup/SoupVersioning.h
        Source/WebCore/platform/text/BidiContext.cpp
        Source/WebCore/platform/text/BidiContext.h
        Source/WebCore/platform/text/BidiResolver.h
@@ -1774,6 +1776,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/plugins/DOMPluginArray.h
        Source/WebCore/plugins/PluginData.cpp
        Source/WebCore/plugins/PluginData.h
+       Source/WebCore/preprocess-localizable-strings.pl
        Source/WebCore/rendering/BidiRun.cpp
        Source/WebCore/rendering/BidiRun.h
        Source/WebCore/rendering/BreakLines.h
@@ -2397,8 +2400,9 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/WebKitInstallMissingMediaPluginsPermissionRequestPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitJavascriptResult.cpp
        Source/WebKit/UIProcess/API/glib/WebKitJavascriptResultPrivate.h
+       Source/WebKit/UIProcess/API/glib/WebKitMediaKeySystemPermissionRequest.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitMediaKeySystemPermissionRequestPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitMimeInfo.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitMimeInfoPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitNavigationAction.cpp
        Source/WebKit/UIProcess/API/glib/WebKitNavigationActionPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitNavigationClient.cpp
@@ -2418,7 +2422,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/WebKitOptionMenuPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitPermissionRequest.cpp
        Source/WebKit/UIProcess/API/glib/WebKitPlugin.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitPluginPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitPointerLockPermissionRequest.cpp
        Source/WebKit/UIProcess/API/glib/WebKitPointerLockPermissionRequestPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitPolicyDecision.cpp
@@ -2490,6 +2493,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/gtk/WebKitInputMethodContextImplGtk.h
        Source/WebKit/UIProcess/API/gtk/WebKitInstallMissingMediaPluginsPermissionRequest.h
        Source/WebKit/UIProcess/API/gtk/WebKitJavascriptResult.h
+       Source/WebKit/UIProcess/API/gtk/WebKitMediaKeySystemPermissionRequest.h
        Source/WebKit/UIProcess/API/gtk/WebKitMimeInfo.h
        Source/WebKit/UIProcess/API/gtk/WebKitNavigationAction.h
        Source/WebKit/UIProcess/API/gtk/WebKitNavigationPolicyDecision.h
@@ -2547,6 +2551,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/UserMediaPermissionRequestProxy.h
        Source/WebKit/UIProcess/UserMediaProcessManager.cpp
        Source/WebKit/UIProcess/UserMediaProcessManager.h
+       Source/WebKit/UIProcess/glib/UserMediaPermissionRequestManagerProxyGLib.cpp
        Source/WebKit/UIProcess/gtk/*
        Source/WebKit/WebProcess/InjectedBundle/API/glib/DOM/*
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitConsoleMessage.cpp
@@ -2608,7 +2613,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2000-2003 Dirk Mueller <mueller@kde.org>
            2001 Tobias Anton <anton@stud.fbi.fh-darmstadt.de>
            2002-2003 The Karbon Developers
-           2002-2020 Apple Inc
+           2002-2021 Apple Inc
            2003-2017 Inc
            2004 Zack Rusin <zack@kde.org>
            2004, 2015, 2017 Red Hat Inc
@@ -2672,7 +2677,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2009-2010 Gustavo Noronha Silva
            2009-2010 Rob Buis <rwlbuis@gmail.com>
            2009-2011 Torch Mobile (Beijing) Co
-           2009-2020 Igalia S.L.
+           2009-2021 Igalia S.L.
            2010 Andras Becsi <abecsi@inf.u-szeged.hu>, University of Szeged
            2010 Daniel Bates <dbates@intudata.com>
            2010 Peter Varga <pvarga@inf.u-szeged.hu>, University of Szeged
@@ -2718,7 +2723,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2015-2020 Metrological Group B.V
            2017 Aidan Holm <aidanholm@gmail.com>
            2017 Endless Mobile Inc
-           2017 Sony Interactive Entertainment
+           2017, 2020 Sony Interactive Entertainment
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 Noam Rosenthal <noam@webkit.org>
            2020 WikiMedia Inc
@@ -2752,6 +2757,8 @@ Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
        Source/WebCore/platform/image-decoders/png/PNGImageDecoder.cpp
        Source/WebCore/rendering/RenderLayer.cpp
        Source/WebCore/rendering/RenderLayer.h
+       Source/WebCore/rendering/RenderLayerScrollableArea.cpp
+       Source/WebCore/rendering/RenderLayerScrollableArea.h
        Source/WebCore/rendering/RenderMarquee.cpp
        Source/WebCore/rendering/RenderMarquee.h
        Source/WebCore/rendering/ScrollAlignment.cpp
@@ -2763,6 +2770,7 @@ Copyright: 1998 Netscape Communications Corporation
            2007-2009 Torch Mobile Inc
            2009 Google Inc
            2019 Adobe
+           2020 Igalia S.L.
 License: LGPL-2.1+ or MPL-1.1
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.h

@@ -15,6 +15,7 @@
       <sub name="WebKitPermissionRequest" link="WebKitPermissionRequest.html"/>
       <sub name="WebKitGeolocationPermissionRequest" link="WebKitGeolocationPermissionRequest.html"/>
       <sub name="WebKitInstallMissingMediaPluginsPermissionRequest" link="WebKitInstallMissingMediaPluginsPermissionRequest.html"/>
+      <sub name="WebKitMediaKeySystemPermissionRequest" link="WebKitMediaKeySystemPermissionRequest.html"/>
       <sub name="WebKitNavigationAction" link="WebKitNavigationAction.html"/>
       <sub name="WebKitUserMediaPermissionRequest" link="WebKitUserMediaPermissionRequest.html"/>
       <sub name="WebKitDeviceInfoPermissionRequest" link="WebKitDeviceInfoPermissionRequest.html"/>
@@ -104,7 +105,7 @@
     <keyword type="function" name="webkit_web_context_get_web_process_count_limit ()" link="WebKitWebContext.html#webkit-web-context-get-web-process-count-limit" deprecated="2.26" since="2.10"/>
     <keyword type="function" name="webkit_web_context_set_web_process_count_limit ()" link="WebKitWebContext.html#webkit-web-context-set-web-process-count-limit" deprecated="2.26" since="2.10"/>
     <keyword type="function" name="webkit_web_context_clear_cache ()" link="WebKitWebContext.html#webkit-web-context-clear-cache"/>
-    <keyword type="function" name="webkit_web_context_set_network_proxy_settings ()" link="WebKitWebContext.html#webkit-web-context-set-network-proxy-settings" since="2.16"/>
+    <keyword type="function" name="webkit_web_context_set_network_proxy_settings ()" link="WebKitWebContext.html#webkit-web-context-set-network-proxy-settings" deprecated="2.32. Use webkit_website_data_manager_set_network_proxy_settings() instead." since="2.16"/>
     <keyword type="function" name="webkit_web_context_download_uri ()" link="WebKitWebContext.html#webkit-web-context-download-uri"/>
     <keyword type="function" name="webkit_web_context_get_cookie_manager ()" link="WebKitWebContext.html#webkit-web-context-get-cookie-manager"/>
     <keyword type="function" name="webkit_web_context_get_geolocation_manager ()" link="WebKitWebContext.html#webkit-web-context-get-geolocation-manager" since="2.26"/>
@@ -112,9 +113,9 @@
     <keyword type="function" name="webkit_web_context_set_favicon_database_directory ()" link="WebKitWebContext.html#webkit-web-context-set-favicon-database-directory"/>
     <keyword type="function" name="webkit_web_context_get_favicon_database_directory ()" link="WebKitWebContext.html#webkit-web-context-get-favicon-database-directory"/>
     <keyword type="function" name="webkit_web_context_get_security_manager ()" link="WebKitWebContext.html#webkit-web-context-get-security-manager"/>
-    <keyword type="function" name="webkit_web_context_set_additional_plugins_directory ()" link="WebKitWebContext.html#webkit-web-context-set-additional-plugins-directory"/>
-    <keyword type="function" name="webkit_web_context_get_plugins ()" link="WebKitWebContext.html#webkit-web-context-get-plugins"/>
-    <keyword type="function" name="webkit_web_context_get_plugins_finish ()" link="WebKitWebContext.html#webkit-web-context-get-plugins-finish"/>
+    <keyword type="function" name="webkit_web_context_set_additional_plugins_directory ()" link="WebKitWebContext.html#webkit-web-context-set-additional-plugins-directory" deprecated="2.32"/>
+    <keyword type="function" name="webkit_web_context_get_plugins ()" link="WebKitWebContext.html#webkit-web-context-get-plugins" deprecated="2.32"/>
+    <keyword type="function" name="webkit_web_context_get_plugins_finish ()" link="WebKitWebContext.html#webkit-web-context-get-plugins-finish" deprecated="2.32"/>
     <keyword type="function" name="webkit_web_context_get_sandbox_enabled ()" link="WebKitWebContext.html#webkit-web-context-get-sandbox-enabled" since="2.26"/>
     <keyword type="function" name="webkit_web_context_set_sandbox_enabled ()" link="WebKitWebContext.html#webkit-web-context-set-sandbox-enabled" since="2.26"/>
     <keyword type="function" name="webkit_web_context_add_path_to_sandbox ()" link="WebKitWebContext.html#webkit-web-context-add-path-to-sandbox" since="2.26"/>
@@ -123,8 +124,8 @@
     <keyword type="function" name="webkit_web_context_get_spell_checking_languages ()" link="WebKitWebContext.html#webkit-web-context-get-spell-checking-languages"/>
     <keyword type="function" name="webkit_web_context_set_spell_checking_languages ()" link="WebKitWebContext.html#webkit-web-context-set-spell-checking-languages"/>
     <keyword type="function" name="webkit_web_context_set_preferred_languages ()" link="WebKitWebContext.html#webkit-web-context-set-preferred-languages"/>
-    <keyword type="function" name="webkit_web_context_set_tls_errors_policy ()" link="WebKitWebContext.html#webkit-web-context-set-tls-errors-policy"/>
-    <keyword type="function" name="webkit_web_context_get_tls_errors_policy ()" link="WebKitWebContext.html#webkit-web-context-get-tls-errors-policy"/>
+    <keyword type="function" name="webkit_web_context_set_tls_errors_policy ()" link="WebKitWebContext.html#webkit-web-context-set-tls-errors-policy" deprecated="2.32. Use webkit_website_data_manager_set_tls_errors_policy() instead."/>
+    <keyword type="function" name="webkit_web_context_get_tls_errors_policy ()" link="WebKitWebContext.html#webkit-web-context-get-tls-errors-policy" deprecated="2.32. Use webkit_website_data_manager_get_tls_errors_policy() instead."/>
     <keyword type="function" name="webkit_web_context_set_web_extensions_directory ()" link="WebKitWebContext.html#webkit-web-context-set-web-extensions-directory"/>
     <keyword type="function" name="webkit_web_context_set_web_extensions_initialization_user_data ()" link="WebKitWebContext.html#webkit-web-context-set-web-extensions-initialization-user-data" since="2.4"/>
     <keyword type="function" name="webkit_web_context_prefetch_dns ()" link="WebKitWebContext.html#webkit-web-context-prefetch-dns"/>
@@ -141,8 +142,6 @@
     <keyword type="struct" name="struct WebKitWebContext" link="WebKitWebContext.html#WebKitWebContext-struct"/>
     <keyword type="enum" name="enum WebKitCacheModel" link="WebKitWebContext.html#WebKitCacheModel"/>
     <keyword type="enum" name="enum WebKitProcessModel" link="WebKitWebContext.html#WebKitProcessModel" since="2.4"/>
-    <keyword type="enum" name="enum WebKitTLSErrorsPolicy" link="WebKitWebContext.html#WebKitTLSErrorsPolicy"/>
-    <keyword type="enum" name="enum WebKitNetworkProxyMode" link="WebKitWebContext.html#WebKitNetworkProxyMode" since="2.16"/>
     <keyword type="property" name="The “local-storage-directory” property" link="WebKitWebContext.html#WebKitWebContext--local-storage-directory"/>
     <keyword type="property" name="The “process-swap-on-cross-site-navigation-enabled” property" link="WebKitWebContext.html#WebKitWebContext--process-swap-on-cross-site-navigation-enabled"/>
     <keyword type="property" name="The “use-system-appearance-for-scrollbars” property" link="WebKitWebContext.html#WebKitWebContext--use-system-appearance-for-scrollbars"/>
@@ -375,8 +374,8 @@
     <keyword type="function" name="webkit_settings_set_enable_javascript_markup ()" link="WebKitSettings.html#webkit-settings-set-enable-javascript-markup" since="2.24"/>
     <keyword type="function" name="webkit_settings_get_enable_offline_web_application_cache ()" link="WebKitSettings.html#webkit-settings-get-enable-offline-web-application-cache"/>
     <keyword type="function" name="webkit_settings_set_enable_offline_web_application_cache ()" link="WebKitSettings.html#webkit-settings-set-enable-offline-web-application-cache"/>
-    <keyword type="function" name="webkit_settings_get_enable_plugins ()" link="WebKitSettings.html#webkit-settings-get-enable-plugins"/>
-    <keyword type="function" name="webkit_settings_set_enable_plugins ()" link="WebKitSettings.html#webkit-settings-set-enable-plugins"/>
+    <keyword type="function" name="webkit_settings_get_enable_plugins ()" link="WebKitSettings.html#webkit-settings-get-enable-plugins" deprecated="2.32"/>
+    <keyword type="function" name="webkit_settings_set_enable_plugins ()" link="WebKitSettings.html#webkit-settings-set-enable-plugins" deprecated="2.32"/>
     <keyword type="function" name="webkit_settings_get_enable_xss_auditor ()" link="WebKitSettings.html#webkit-settings-get-enable-xss-auditor"/>
     <keyword type="function" name="webkit_settings_set_enable_xss_auditor ()" link="WebKitSettings.html#webkit-settings-set-enable-xss-auditor"/>
     <keyword type="function" name="webkit_settings_get_javascript_can_open_windows_automatically ()" link="WebKitSettings.html#webkit-settings-get-javascript-can-open-windows-automatically"/>
@@ -446,8 +445,8 @@
     <keyword type="function" name="webkit_settings_set_user_agent_with_application_details ()" link="WebKitSettings.html#webkit-settings-set-user-agent-with-application-details"/>
     <keyword type="function" name="webkit_settings_get_enable_smooth_scrolling ()" link="WebKitSettings.html#webkit-settings-get-enable-smooth-scrolling"/>
     <keyword type="function" name="webkit_settings_set_enable_smooth_scrolling ()" link="WebKitSettings.html#webkit-settings-set-enable-smooth-scrolling"/>
-    <keyword type="function" name="webkit_settings_get_enable_accelerated_2d_canvas ()" link="WebKitSettings.html#webkit-settings-get-enable-accelerated-2d-canvas" since="2.2"/>
-    <keyword type="function" name="webkit_settings_set_enable_accelerated_2d_canvas ()" link="WebKitSettings.html#webkit-settings-set-enable-accelerated-2d-canvas" since="2.2"/>
+    <keyword type="function" name="webkit_settings_get_enable_accelerated_2d_canvas ()" link="WebKitSettings.html#webkit-settings-get-enable-accelerated-2d-canvas" deprecated="2.32." since="2.2"/>
+    <keyword type="function" name="webkit_settings_set_enable_accelerated_2d_canvas ()" link="WebKitSettings.html#webkit-settings-set-enable-accelerated-2d-canvas" deprecated="2.32." since="2.2"/>
     <keyword type="function" name="webkit_settings_get_enable_write_console_messages_to_stdout ()" link="WebKitSettings.html#webkit-settings-get-enable-write-console-messages-to-stdout" since="2.2"/>
     <keyword type="function" name="webkit_settings_set_enable_write_console_messages_to_stdout ()" link="WebKitSettings.html#webkit-settings-set-enable-write-console-messages-to-stdout" since="2.2"/>
     <keyword type="function" name="webkit_settings_get_enable_media_stream ()" link="WebKitSettings.html#webkit-settings-get-enable-media-stream" since="2.4"/>
@@ -603,6 +602,8 @@
     <keyword type="struct" name="struct WebKitGeolocationPermissionRequest" link="WebKitGeolocationPermissionRequest.html#WebKitGeolocationPermissionRequest-struct"/>
     <keyword type="function" name="webkit_install_missing_media_plugins_permission_request_get_description ()" link="WebKitInstallMissingMediaPluginsPermissionRequest.html#webkit-install-missing-media-plugins-permission-request-get-description" since="2.10"/>
     <keyword type="struct" name="struct WebKitInstallMissingMediaPluginsPermissionRequest" link="WebKitInstallMissingMediaPluginsPermissionRequest.html#WebKitInstallMissingMediaPluginsPermissionRequest-struct"/>
+    <keyword type="function" name="webkit_media_key_system_permission_get_name ()" link="WebKitMediaKeySystemPermissionRequest.html#webkit-media-key-system-permission-get-name" since="2.32"/>
+    <keyword type="struct" name="struct WebKitMediaKeySystemPermissionRequest" link="WebKitMediaKeySystemPermissionRequest.html#WebKitMediaKeySystemPermissionRequest-struct"/>
     <keyword type="function" name="webkit_navigation_action_copy ()" link="WebKitNavigationAction.html#webkit-navigation-action-copy" since="2.6"/>
     <keyword type="function" name="webkit_navigation_action_free ()" link="WebKitNavigationAction.html#webkit-navigation-action-free" since="2.6"/>
     <keyword type="function" name="webkit_navigation_action_get_navigation_type ()" link="WebKitNavigationAction.html#webkit-navigation-action-get-navigation-type" since="2.6"/>
@@ -794,15 +795,15 @@
     <keyword type="enum" name="enum WebKitCookiePersistentStorage" link="WebKitCookieManager.html#WebKitCookiePersistentStorage"/>
     <keyword type="enum" name="enum WebKitCookieAcceptPolicy" link="WebKitCookieManager.html#WebKitCookieAcceptPolicy"/>
     <keyword type="signal" name="The “changed” signal" link="WebKitCookieManager.html#WebKitCookieManager-changed"/>
-    <keyword type="function" name="webkit_plugin_get_name ()" link="WebKitPlugin.html#webkit-plugin-get-name"/>
-    <keyword type="function" name="webkit_plugin_get_description ()" link="WebKitPlugin.html#webkit-plugin-get-description"/>
-    <keyword type="function" name="webkit_plugin_get_path ()" link="WebKitPlugin.html#webkit-plugin-get-path"/>
-    <keyword type="function" name="webkit_plugin_get_mime_info_list ()" link="WebKitPlugin.html#webkit-plugin-get-mime-info-list"/>
-    <keyword type="function" name="webkit_mime_info_ref ()" link="WebKitPlugin.html#webkit-mime-info-ref"/>
-    <keyword type="function" name="webkit_mime_info_unref ()" link="WebKitPlugin.html#webkit-mime-info-unref"/>
-    <keyword type="function" name="webkit_mime_info_get_mime_type ()" link="WebKitPlugin.html#webkit-mime-info-get-mime-type"/>
-    <keyword type="function" name="webkit_mime_info_get_description ()" link="WebKitPlugin.html#webkit-mime-info-get-description"/>
-    <keyword type="function" name="webkit_mime_info_get_extensions ()" link="WebKitPlugin.html#webkit-mime-info-get-extensions"/>
+    <keyword type="function" name="webkit_plugin_get_name ()" link="WebKitPlugin.html#webkit-plugin-get-name" deprecated="2.32"/>
+    <keyword type="function" name="webkit_plugin_get_description ()" link="WebKitPlugin.html#webkit-plugin-get-description" deprecated="2.32"/>
+    <keyword type="function" name="webkit_plugin_get_path ()" link="WebKitPlugin.html#webkit-plugin-get-path" deprecated="2.32"/>
+    <keyword type="function" name="webkit_plugin_get_mime_info_list ()" link="WebKitPlugin.html#webkit-plugin-get-mime-info-list" deprecated="2.32"/>
+    <keyword type="function" name="webkit_mime_info_ref ()" link="WebKitPlugin.html#webkit-mime-info-ref" deprecated="2.32"/>
+    <keyword type="function" name="webkit_mime_info_unref ()" link="WebKitPlugin.html#webkit-mime-info-unref" deprecated="2.32"/>
+    <keyword type="function" name="webkit_mime_info_get_mime_type ()" link="WebKitPlugin.html#webkit-mime-info-get-mime-type" deprecated="2.32"/>
+    <keyword type="function" name="webkit_mime_info_get_description ()" link="WebKitPlugin.html#webkit-mime-info-get-description" deprecated="2.32"/>
+    <keyword type="function" name="webkit_mime_info_get_extensions ()" link="WebKitPlugin.html#webkit-mime-info-get-extensions" deprecated="2.32"/>
     <keyword type="struct" name="struct WebKitPlugin" link="WebKitPlugin.html#WebKitPlugin-struct"/>
     <keyword type="struct" name="WebKitMimeInfo" link="WebKitPlugin.html#WebKitMimeInfo-struct"/>
     <keyword type="function" name="webkit_web_inspector_get_web_view ()" link="WebKitWebInspector.html#webkit-web-inspector-get-web-view"/>
@@ -916,8 +917,10 @@
     <keyword type="property" name="The “path” property" link="WebKitUserContentFilterStore.html#WebKitUserContentFilterStore--path"/>
     <keyword type="function" name="webkit_user_content_manager_new ()" link="WebKitUserContentManager.html#webkit-user-content-manager-new" since="2.6"/>
     <keyword type="function" name="webkit_user_content_manager_add_style_sheet ()" link="WebKitUserContentManager.html#webkit-user-content-manager-add-style-sheet" since="2.6"/>
+    <keyword type="function" name="webkit_user_content_manager_remove_style_sheet ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-style-sheet" since="2.32"/>
     <keyword type="function" name="webkit_user_content_manager_remove_all_style_sheets ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-style-sheets" since="2.6"/>
     <keyword type="function" name="webkit_user_content_manager_add_script ()" link="WebKitUserContentManager.html#webkit-user-content-manager-add-script" since="2.6"/>
+    <keyword type="function" name="webkit_user_content_manager_remove_script ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-script" since="2.32"/>
     <keyword type="function" name="webkit_user_content_manager_remove_all_scripts ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-scripts" since="2.6"/>
     <keyword type="function" name="webkit_user_content_manager_register_script_message_handler ()" link="WebKitUserContentManager.html#webkit-user-content-manager-register-script-message-handler" since="2.8"/>
     <keyword type="function" name="webkit_user_content_manager_unregister_script_message_handler ()" link="WebKitUserContentManager.html#webkit-user-content-manager-unregister-script-message-handler" since="2.8"/>
@@ -967,7 +970,7 @@
     <keyword type="function" name="webkit_security_origin_get_protocol ()" link="WebKitSecurityOrigin.html#webkit-security-origin-get-protocol" since="2.16"/>
     <keyword type="function" name="webkit_security_origin_get_host ()" link="WebKitSecurityOrigin.html#webkit-security-origin-get-host" since="2.16"/>
     <keyword type="function" name="webkit_security_origin_get_port ()" link="WebKitSecurityOrigin.html#webkit-security-origin-get-port" since="2.16"/>
-    <keyword type="function" name="webkit_security_origin_is_opaque ()" link="WebKitSecurityOrigin.html#webkit-security-origin-is-opaque" since="2.16"/>
+    <keyword type="function" name="webkit_security_origin_is_opaque ()" link="WebKitSecurityOrigin.html#webkit-security-origin-is-opaque" deprecated="2.32" since="2.16"/>
     <keyword type="function" name="webkit_security_origin_to_string ()" link="WebKitSecurityOrigin.html#webkit-security-origin-to-string" since="2.16"/>
     <keyword type="struct" name="WebKitSecurityOrigin" link="WebKitSecurityOrigin.html#WebKitSecurityOrigin-struct"/>
     <keyword type="function" name="webkit_website_data_manager_new ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-new" since="2.10"/>
@@ -989,6 +992,9 @@
     <keyword type="function" name="webkit_website_data_manager_get_itp_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-enabled" since="2.30"/>
     <keyword type="function" name="webkit_website_data_manager_set_persistent_credential_storage_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-persistent-credential-storage-enabled" since="2.30"/>
     <keyword type="function" name="webkit_website_data_manager_get_persistent_credential_storage_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-persistent-credential-storage-enabled" since="2.30"/>
+    <keyword type="function" name="webkit_website_data_manager_set_tls_errors_policy ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-tls-errors-policy" since="2.32"/>
+    <keyword type="function" name="webkit_website_data_manager_get_tls_errors_policy ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-tls-errors-policy" since="2.32"/>
+    <keyword type="function" name="webkit_website_data_manager_set_network_proxy_settings ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-network-proxy-settings" since="2.32"/>
     <keyword type="function" name="webkit_website_data_manager_fetch ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-fetch" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_fetch_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-fetch-finish" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_remove ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-remove" since="2.16"/>
@@ -1007,6 +1013,7 @@
     <keyword type="function" name="webkit_website_data_manager_get_itp_summary ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-summary" since="2.30"/>
     <keyword type="function" name="webkit_website_data_manager_get_itp_summary_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-itp-summary-finish" since="2.30"/>
     <keyword type="struct" name="struct WebKitWebsiteDataManager" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager-struct"/>
+    <keyword type="enum" name="enum WebKitTLSErrorsPolicy" link="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy"/>
     <keyword type="struct" name="WebKitITPFirstParty" link="WebKitWebsiteDataManager.html#WebKitITPFirstParty-struct"/>
     <keyword type="struct" name="WebKitITPThirdParty" link="WebKitWebsiteDataManager.html#WebKitITPThirdParty-struct"/>
     <keyword type="property" name="The “base-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--base-cache-directory"/>
@@ -1033,6 +1040,7 @@
     <keyword type="function" name="webkit_network_proxy_settings_free ()" link="WebKitNetworkProxySettings.html#webkit-network-proxy-settings-free" since="2.16"/>
     <keyword type="function" name="webkit_network_proxy_settings_add_proxy_for_scheme ()" link="WebKitNetworkProxySettings.html#webkit-network-proxy-settings-add-proxy-for-scheme" since="2.16"/>
     <keyword type="struct" name="WebKitNetworkProxySettings" link="WebKitNetworkProxySettings.html#WebKitNetworkProxySettings-struct"/>
+    <keyword type="enum" name="enum WebKitNetworkProxyMode" link="WebKitNetworkProxySettings.html#WebKitNetworkProxyMode" since="2.16"/>
     <keyword type="function" name="webkit_automation_session_get_id ()" link="WebKitAutomationSession.html#webkit-automation-session-get-id" since="2.18"/>
     <keyword type="function" name="webkit_automation_session_set_application_info ()" link="WebKitAutomationSession.html#webkit-automation-session-set-application-info" since="2.18"/>
     <keyword type="function" name="webkit_automation_session_get_application_info ()" link="WebKitAutomationSession.html#webkit-automation-session-get-application-info" since="2.18"/>
@@ -1172,11 +1180,6 @@
     <keyword type="constant" name="WEBKIT_CACHE_MODEL_DOCUMENT_BROWSER" link="WebKitWebContext.html#WEBKIT-CACHE-MODEL-DOCUMENT-BROWSER:CAPS"/>
     <keyword type="constant" name="WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS" link="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-SHARED-SECONDARY-PROCESS:CAPS"/>
     <keyword type="constant" name="WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES" link="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-MULTIPLE-SECONDARY-PROCESSES:CAPS"/>
-    <keyword type="constant" name="WEBKIT_TLS_ERRORS_POLICY_IGNORE" link="WebKitWebContext.html#WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"/>
-    <keyword type="constant" name="WEBKIT_TLS_ERRORS_POLICY_FAIL" link="WebKitWebContext.html#WEBKIT-TLS-ERRORS-POLICY-FAIL:CAPS"/>
-    <keyword type="constant" name="WEBKIT_NETWORK_PROXY_MODE_DEFAULT" link="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-DEFAULT:CAPS"/>
-    <keyword type="constant" name="WEBKIT_NETWORK_PROXY_MODE_NO_PROXY" link="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-NO-PROXY:CAPS"/>
-    <keyword type="constant" name="WEBKIT_NETWORK_PROXY_MODE_CUSTOM" link="WebKitWebContext.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"/>
     <keyword type="constant" name="WEBKIT_LOAD_STARTED" link="WebKitWebView.html#WEBKIT-LOAD-STARTED:CAPS"/>
     <keyword type="constant" name="WEBKIT_LOAD_REDIRECTED" link="WebKitWebView.html#WEBKIT-LOAD-REDIRECTED:CAPS"/>
     <keyword type="constant" name="WEBKIT_LOAD_COMMITTED" link="WebKitWebView.html#WEBKIT-LOAD-COMMITTED:CAPS"/>
@@ -1329,6 +1332,8 @@
     <keyword type="constant" name="WEBKIT_USER_STYLE_LEVEL_AUTHOR" link="webkit2gtk-4.0-WebKitUserContent.html#WEBKIT-USER-STYLE-LEVEL-AUTHOR:CAPS"/>
     <keyword type="constant" name="WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START" link="webkit2gtk-4.0-WebKitUserContent.html#WEBKIT-USER-SCRIPT-INJECT-AT-DOCUMENT-START:CAPS"/>
     <keyword type="constant" name="WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END" link="webkit2gtk-4.0-WebKitUserContent.html#WEBKIT-USER-SCRIPT-INJECT-AT-DOCUMENT-END:CAPS"/>
+    <keyword type="constant" name="WEBKIT_TLS_ERRORS_POLICY_IGNORE" link="WebKitWebsiteDataManager.html#WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_TLS_ERRORS_POLICY_FAIL" link="WebKitWebsiteDataManager.html#WEBKIT-TLS-ERRORS-POLICY-FAIL:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_MEMORY_CACHE" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-MEMORY-CACHE:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_DISK_CACHE" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-DISK-CACHE:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_OFFLINE_APPLICATION_CACHE" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-OFFLINE-APPLICATION-CACHE:CAPS"/>
@@ -1344,6 +1349,9 @@
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_SERVICE_WORKER_REGISTRATIONS" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-SERVICE-WORKER-REGISTRATIONS:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_DOM_CACHE" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-DOM-CACHE:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_ALL" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-ALL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_PROXY_MODE_DEFAULT" link="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-DEFAULT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_PROXY_MODE_NO_PROXY" link="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-NO-PROXY:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_PROXY_MODE_CUSTOM" link="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-MODE-CUSTOM:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOMATION_BROWSING_CONTEXT_PRESENTATION_WINDOW" link="WebKitAutomationSession.html#WEBKIT-AUTOMATION-BROWSING-CONTEXT-PRESENTATION-WINDOW:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOMATION_BROWSING_CONTEXT_PRESENTATION_TAB" link="WebKitAutomationSession.html#WEBKIT-AUTOMATION-BROWSING-CONTEXT-PRESENTATION-TAB:CAPS"/>
     <keyword type="constant" name="WEBKIT_USER_MESSAGE_UNHANDLED_MESSAGE" link="WebKitUserMessage.html#WEBKIT-USER-MESSAGE-UNHANDLED-MESSAGE:CAPS"/>

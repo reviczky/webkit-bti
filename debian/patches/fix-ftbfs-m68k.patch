@@ -38,7 +38,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -56,6 +56,10 @@ struct SameSizeAsElementRareData : NodeR
+@@ -50,6 +50,10 @@ struct SameSizeAsElementRareData : NodeR
  
  };
  
@@ -53,7 +53,7 @@ Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/NodeRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/NodeRareData.cpp
-@@ -40,7 +40,11 @@ struct SameSizeAsNodeRareData {
+@@ -41,7 +41,11 @@ struct SameSizeAsNodeRareData {
      void* m_pointer[2];
  };
  
@@ -129,7 +129,7 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-@@ -52,7 +52,11 @@ struct SameSizeAsFontCascadeDescription
+@@ -48,7 +48,11 @@ struct SameSizeAsFontCascadeDescription
      unsigned bitfields3 : 10;
  };
  
@@ -157,3 +157,26 @@ Index: webkitgtk/Source/WebCore/style/RuleData.cpp
  
  static inline MatchBasedOnRuleHash computeMatchBasedOnRuleHash(const CSSSelector& selector)
  {
+Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
++++ webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
+@@ -62,6 +62,11 @@
+ #include <wtf/StdLibExtras.h>
+ #include <wtf/text/WTFString.h>
+ 
++#if defined(__m68k__) || defined(__SH4__)
++#pragma GCC push_options
++#pragma GCC optimize ("-O0")
++#endif
++
+ namespace JSC {
+ 
+ template<typename CallOp, typename = std::true_type>
+@@ -5503,3 +5508,6 @@ void printInternal(PrintStream& out, JSC
+ 
+ } // namespace WTF
+ 
++#if defined(__m68k__) || defined(__SH4__)
++#pragma GCC pop_options
++#endif

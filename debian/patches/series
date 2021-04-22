@@ -1,9 +1,8 @@
 fix-ftbfs-sparc64.patch
-fix-ftbfs-x86.patch
 fix-ftbfs-m68k.patch
 fix-ftbfs-x32.patch
 prefer-pthread.patch
 dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-mips-page-size.patch
-include-libwpe.patch
+fix-ftbfs-hurd.patch
