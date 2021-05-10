@@ -608,7 +608,7 @@ public:
     bool init(const char*);
     bool isInRange(unsigned);
     const char* rangeString() const { return (m_state > InitError) ? m_rangeString : s_nullRangeStr; }
-    
+
     void dump(PrintStream& out) const;
 
 private:
