@@ -3,6 +3,9 @@ webkit2gtk (2.32.1-1) UNRELEASED; urgency=medium
   * New upstream release.
   * debian/patches/fix-ftbfs-m68k.patch:
     + Update patch.
+  * Downgrade dependency on xdg-desktop-portal-gtk to a recommendation.
+    This works around an autopkgtest regression in balsa (see #987686).
+    (Closes: #987428).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 10 May 2021 12:20:44 +0200
 
