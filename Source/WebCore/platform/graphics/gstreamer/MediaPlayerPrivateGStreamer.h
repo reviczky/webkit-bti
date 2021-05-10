@@ -214,8 +214,10 @@ public:
     void playbin3SendSelectStreamsIfAppropriate();
 
     // Append pipeline interface
-    // FIXME: Use the client interface pattern, AppendPipeline does not need the full interface to this class just for these two functions.
-    bool handleSyncMessage(GstMessage*);
+    // FIXME: Use the client interface pattern, AppendPipeline does not need the full interface to this class just for this function.
+    bool handleNeedContextMessage(GstMessage*);
+
+    void handleStreamCollectionMessage(GstMessage*);
     void handleMessage(GstMessage*);
 
     void triggerRepaint(GstSample*);
@@ -443,9 +445,10 @@ private:
     void setPlaybinURL(const URL& urlString);
     void loadFull(const String& url, const String& pipelineName);
 
-    void updateTracks(GRefPtr<GstStreamCollection>&&);
+    void updateTracks(const GRefPtr<GstStreamCollection>&);
     void videoSinkCapsChanged(GstPad*);
     void updateVideoSizeAndOrientationFromCaps(const GstCaps*);
+    bool hasFirstVideoSampleReachedSink() const;
 
 #if ENABLE(ENCRYPTED_MEDIA)
     bool isCDMAttached() const { return m_cdmInstance; }
@@ -461,6 +464,7 @@ private:
     int m_mediaLocationCurrentIndex { 0 };
     bool m_isPlaybackRatePaused { false };
     MediaTime m_timeOfOverlappingSeek;
+    // Last playback rate sent through a GStreamer seek.
     float m_lastPlaybackRate { 1 };
     Timer m_fillTimer;
     MediaTime m_maxTimeLoaded;
@@ -527,6 +531,9 @@ private:
     GRefPtr<GstElement> m_fpsSink { nullptr };
     uint64_t m_totalVideoFrames { 0 };
     uint64_t m_droppedVideoFrames { 0 };
+
+    // This is set to true if no videoflip element has been added to the pipeline.
+    bool m_shouldHandleOrientationTags { false };
 
 private:
 #if USE(WPE_VIDEO_PLANE_DISPLAY_DMABUF)
