@@ -13,6 +13,8 @@ webkit2gtk (2.33.1-1) UNRELEASED; urgency=medium
     + Update symbols.
   * debian/copyright:
     + Update copyright information of all files.
+  * debian/control:
+    + Add build dependency on liblcms2-dev (Closes: #880697).
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 11 Apr 2021 14:35:04 +0200
 
