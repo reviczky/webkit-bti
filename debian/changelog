@@ -9,6 +9,8 @@ webkit2gtk (2.33.1-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/rules:
     + Build with -DUSE_SOUP2=ON.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 11 Apr 2021 14:35:04 +0200
 
