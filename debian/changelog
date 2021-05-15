@@ -1,4 +1,4 @@
-webkit2gtk (2.33.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.33.1-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/patches/fix-ftbfs-m68k.patch:
@@ -18,7 +18,7 @@ webkit2gtk (2.33.1-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     + Update source-is-missing override.
 
- -- Alberto Garcia <berto@igalia.com>  Sun, 11 Apr 2021 14:35:04 +0200
+ -- Alberto Garcia <berto@igalia.com>  Sat, 15 May 2021 23:43:36 +0200
 
 webkit2gtk (2.32.0-1) experimental; urgency=medium
 
