@@ -39,6 +39,7 @@
 #include "CachedResourceRequest.h"
 #include "ContainerNode.h"
 #include "CrossOriginAccessControl.h"
+#include "DefaultResourceLoadPriority.h"
 #include "Document.h"
 #include "Frame.h"
 #include "FrameLoader.h"
@@ -223,7 +224,7 @@ void LinkLoader::preconnectIfNeeded(const LinkLoadParameters& params, Document& 
         if (!error.isNull())
             weakDocument->addConsoleMessage(MessageSource::Network, MessageLevel::Error, makeString("Failed to preconnect to "_s, href.string(), ". Error: "_s, error.localizedDescription()));
         else
-            weakDocument->addConsoleMessage(MessageSource::Network, MessageLevel::Info, makeString("Successfuly preconnected to "_s, href.string()));
+            weakDocument->addConsoleMessage(MessageSource::Network, MessageLevel::Info, makeString("Successfully preconnected to "_s, href.string()));
     });
 }
 
@@ -261,7 +262,7 @@ std::unique_ptr<LinkPreloadResourceClient> LinkLoader::preloadIfNeeded(const Lin
     auto options = CachedResourceLoader::defaultCachedResourceOptions();
     options.referrerPolicy = params.referrerPolicy;
     auto linkRequest = createPotentialAccessControlRequest(url, WTFMove(options), document, params.crossOrigin);
-    linkRequest.setPriority(CachedResource::defaultPriorityForResourceType(type.value()));
+    linkRequest.setPriority(DefaultResourceLoadPriority::forResourceType(type.value()));
     linkRequest.setInitiator("link");
     linkRequest.setIgnoreForRequestCount(true);
     linkRequest.setIsLinkPreload();

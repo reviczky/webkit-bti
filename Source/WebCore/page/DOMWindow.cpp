@@ -1198,7 +1198,10 @@ String DOMWindow::prompt(const String& message, const String& defaultValue)
 
 bool DOMWindow::find(const String& string, bool caseSensitive, bool backwards, bool wrap, bool /*wholeWord*/, bool /*searchInFrames*/, bool /*showDialog*/) const
 {
-    if (!isCurrentlyDisplayedInFrame())
+    // SearchBuffer allocates memory much larger than the searched string, so it's necessary to limit its length.
+    // Most searches are for a phrase or a paragraph, so an upper limit of 64kB is more than enough in practice.
+    constexpr auto maximumStringLength = std::numeric_limits<uint16_t>::max();
+    if (!isCurrentlyDisplayedInFrame() || string.length() > maximumStringLength)
         return false;
 
     // FIXME (13016): Support wholeWord, searchInFrames and showDialog.    
@@ -1950,7 +1953,7 @@ bool DOMWindow::addEventListener(const AtomString& eventType, Ref<EventListener>
         document->addListenerTypeIfNeeded(eventType);
         if (eventNames().isWheelEventType(eventType))
             document->didAddWheelEventHandler(*document);
-        else if (eventNames().isTouchRelatedEventType(*document, eventType))
+        else if (eventNames().isTouchRelatedEventType(eventType, *document))
             document->didAddTouchEventHandler(*document);
         else if (eventType == eventNames().storageEvent)
             didAddStorageEventListener(*this);
@@ -1965,7 +1968,7 @@ bool DOMWindow::addEventListener(const AtomString& eventType, Ref<EventListener>
         incrementScrollEventListenersCount();
 #endif
 #if ENABLE(IOS_TOUCH_EVENTS)
-    else if (document && eventNames().isTouchRelatedEventType(*document, eventType))
+    else if (document && eventNames().isTouchRelatedEventType(eventType, *document))
         ++m_touchAndGestureEventListenerCount;
 #endif
 #if ENABLE(IOS_GESTURE_EVENTS)
@@ -2193,7 +2196,7 @@ bool DOMWindow::removeEventListener(const AtomString& eventType, EventListener& 
     if (document) {
         if (eventNames().isWheelEventType(eventType))
             document->didRemoveWheelEventHandler(*document);
-        else if (eventNames().isTouchRelatedEventType(*document, eventType))
+        else if (eventNames().isTouchRelatedEventType(eventType, *document))
             document->didRemoveTouchEventHandler(*document);
     }
 
@@ -2206,7 +2209,7 @@ bool DOMWindow::removeEventListener(const AtomString& eventType, EventListener& 
         decrementScrollEventListenersCount();
 #endif
 #if ENABLE(IOS_TOUCH_EVENTS)
-    else if (document && eventNames().isTouchRelatedEventType(*document, eventType)) {
+    else if (document && eventNames().isTouchRelatedEventType(eventType, *document)) {
         ASSERT(m_touchAndGestureEventListenerCount > 0);
         --m_touchAndGestureEventListenerCount;
     }

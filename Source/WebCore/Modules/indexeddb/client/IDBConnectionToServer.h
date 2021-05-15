@@ -25,13 +25,11 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBConnectionProxy.h"
 #include "IDBConnectionToServerDelegate.h"
 #include "IDBResourceIdentifier.h"
 #include <wtf/Function.h>
-#include <wtf/HashMap.h>
+#include <wtf/IsoMalloc.h>
 #include <wtf/Ref.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
@@ -54,6 +52,7 @@ struct IDBIterateCursorData;
 namespace IDBClient {
 
 class IDBConnectionToServer : public ThreadSafeRefCounted<IDBConnectionToServer> {
+    WTF_MAKE_ISO_ALLOCATED_EXPORT(IDBConnectionToServer, WEBCORE_EXPORT);
 public:
     WEBCORE_EXPORT static Ref<IDBConnectionToServer> create(IDBConnectionToServerDelegate&);
 
@@ -155,5 +154,3 @@ private:
 
 } // namespace IDBClient
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

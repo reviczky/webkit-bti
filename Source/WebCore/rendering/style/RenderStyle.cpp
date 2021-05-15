@@ -36,6 +36,7 @@
 #include "InlineTextBoxStyle.h"
 #include "Pagination.h"
 #include "QuotesData.h"
+#include "RenderBlock.h"
 #include "RenderObject.h"
 #include "RenderTheme.h"
 #include "ScaleTransformOperation.h"
@@ -449,10 +450,8 @@ bool RenderStyle::descendantAffectingNonInheritedPropertiesEqual(const RenderSty
 
 static inline unsigned computeFontHash(const FontCascade& font)
 {
-    IntegerHasher hasher;
-    hasher.add(ASCIICaseInsensitiveHash::hash(font.fontDescription().firstFamily()));
-    hasher.add(font.fontDescription().specifiedSize());
-    return hasher.hash();
+    // FIXME: Would be better to hash the family name rather than hashing a hash of the family name. Also, should this use FontCascadeDescription::familyNameHash?
+    return computeHash(ASCIICaseInsensitiveHash::hash(font.fontDescription().firstFamily()), font.fontDescription().specifiedSize());
 }
 
 unsigned RenderStyle::hashForTextAutosizing() const
@@ -738,6 +737,9 @@ static bool rareNonInheritedDataChangeRequiresLayout(const StyleRareNonInherited
         return true;
 #endif
 
+    if (first.aspectRatioType != second.aspectRatioType || first.aspectRatioWidth != second.aspectRatioWidth || first.aspectRatioWidth != second.aspectRatioHeight)
+        return true;
+
     return false;
 }
 
@@ -749,8 +751,8 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
 #if ENABLE(CSS3_TEXT)
         || first.textAlignLast != second.textAlignLast
         || first.textJustify != second.textJustify
-        || first.textIndentLine != second.textIndentLine
 #endif
+        || first.textIndentLine != second.textIndentLine
         || first.effectiveZoom != second.effectiveZoom
         || first.textZoom != second.textZoom
 #if ENABLE(TEXT_AUTOSIZING)
@@ -1212,11 +1214,14 @@ StyleDifference RenderStyle::diff(const RenderStyle& other, OptionSet<StyleDiffe
     if (changeRequiresRepaint(other, changedContextSensitiveProperties))
         return StyleDifference::Repaint;
 
-    if (changeRequiresRecompositeLayer(other, changedContextSensitiveProperties))
-        return StyleDifference::RecompositeLayer;
-
     if (changeRequiresRepaintIfTextOrBorderOrOutline(other, changedContextSensitiveProperties))
         return StyleDifference::RepaintIfTextOrBorderOrOutline;
+
+    // FIXME: RecompositeLayer should also behave as a priority bit (e.g when the style change requires layout, we know that
+    // the content also needs repaint and it will eventually get repainted,
+    // but a repaint type of change (e.g. color change) does not necessarily trigger recomposition). 
+    if (changeRequiresRecompositeLayer(other, changedContextSensitiveProperties))
+        return StyleDifference::RecompositeLayer;
 
     // Cursors are not checked, since they will be set appropriately in response to mouse events,
     // so they don't need to cause any repaint or layout.
@@ -1550,8 +1555,14 @@ RoundedRect RenderStyle::getRoundedInnerBorderFor(const LayoutRect& borderRect, 
 RoundedRect RenderStyle::getRoundedInnerBorderFor(const LayoutRect& borderRect, LayoutUnit topWidth, LayoutUnit bottomWidth,
     LayoutUnit leftWidth, LayoutUnit rightWidth, bool includeLogicalLeftEdge, bool includeLogicalRightEdge) const
 {
-    RoundedRect roundedRect { { borderRect.x() + leftWidth, borderRect.y() + topWidth,
-        borderRect.width() - leftWidth - rightWidth, borderRect.height() - topWidth - bottomWidth } };
+    auto width = std::max(0_lu, borderRect.width() - leftWidth - rightWidth);
+    auto height = std::max(0_lu, borderRect.height() - topWidth - bottomWidth);
+    auto roundedRect = RoundedRect {
+        borderRect.x() + leftWidth,
+        borderRect.y() + topWidth,
+        width,
+        height
+    };
     if (hasBorderRadius()) {
         auto radii = getRoundedBorderFor(borderRect).radii();
         radii.shrink(topWidth, bottomWidth, leftWidth, rightWidth);
@@ -2310,6 +2321,13 @@ void RenderStyle::setBorderImageSource(RefPtr<StyleImage>&& image)
     m_surroundData.access().border.m_image.setImage(WTFMove(image));
 }
 
+void RenderStyle::setBorderImageSliceFill(bool fill)
+{
+    if (m_surroundData->border.m_image.fill() == fill)
+        return;
+    m_surroundData.access().border.m_image.setFill(fill);
+}
+
 void RenderStyle::setBorderImageSlices(LengthBox&& slices)
 {
     if (m_surroundData->border.m_image.imageSlices() == slices)
@@ -2329,6 +2347,20 @@ void RenderStyle::setBorderImageOutset(LengthBox&& outset)
     if (m_surroundData->border.m_image.outset() == outset)
         return;
     m_surroundData.access().border.m_image.setOutset(WTFMove(outset));
+}
+
+void RenderStyle::setBorderImageHorizontalRule(NinePieceImageRule rule)
+{
+    if (m_surroundData->border.m_image.horizontalRule() == rule)
+        return;
+    m_surroundData.access().border.m_image.setHorizontalRule(rule);
+}
+
+void RenderStyle::setBorderImageVerticalRule(NinePieceImageRule rule)
+{
+    if (m_surroundData->border.m_image.verticalRule() == rule)
+        return;
+    m_surroundData.access().border.m_image.setVerticalRule(rule);
 }
 
 void RenderStyle::setColumnStylesFromPaginationMode(const Pagination::Mode& paginationMode)
@@ -2564,9 +2596,9 @@ float RenderStyle::outlineOffset() const
     return m_backgroundData->outline.offset();
 }
 
-bool RenderStyle::shouldPlaceBlockDirectionScrollbarOnLeft() const
+bool RenderStyle::shouldPlaceVerticalScrollbarOnLeft() const
 {
-    return !isLeftToRightDirection() && isHorizontalWritingMode();
+    return (!isLeftToRightDirection() && isHorizontalWritingMode()) || writingMode() == WritingMode::RightToLeft;
 }
 
 Vector<PaintType, 3> RenderStyle::paintTypesForPaintOrder(PaintOrder order)
@@ -2647,4 +2679,47 @@ Color RenderStyle::computedStrokeColor() const
     return visitedDependentColor(effectiveStrokeColorProperty());
 }
 
+UsedClear RenderStyle::usedClear(const RenderObject& renderer)
+{
+    auto computedValue = renderer.style().clear();
+    switch (computedValue) {
+    case Clear::None:
+        return UsedClear::None;
+    case Clear::Left:
+        return UsedClear::Left;
+    case Clear::Right:
+        return UsedClear::Right;
+    case Clear::Both:
+        return UsedClear::Both;
+    case Clear::InlineStart:
+    case Clear::InlineEnd:
+        auto containingBlockDirection = renderer.containingBlock()->style().direction();
+        if (containingBlockDirection == TextDirection::RTL)
+            return computedValue == Clear::InlineStart ? UsedClear::Right : UsedClear::Left;
+        return computedValue == Clear::InlineStart ? UsedClear::Left : UsedClear::Right;
+    }
+
+    RELEASE_ASSERT_NOT_REACHED();
+}
+
+UsedFloat RenderStyle::usedFloat(const RenderObject& renderer)
+{
+    auto computedValue = renderer.style().floating();
+    switch (computedValue) {
+    case Float::None:
+        return UsedFloat::None;
+    case Float::Left:
+        return UsedFloat::Left;
+    case Float::Right:
+        return UsedFloat::Right;
+    case Float::InlineStart:
+    case Float::InlineEnd:
+        auto containingBlockDirection = renderer.containingBlock()->style().direction();
+        if (containingBlockDirection == TextDirection::RTL)
+            return computedValue == Float::InlineStart ? UsedFloat::Right : UsedFloat::Left;
+        return computedValue == Float::InlineStart ? UsedFloat::Left : UsedFloat::Right;
+    }
+
+    RELEASE_ASSERT_NOT_REACHED();
+}
 } // namespace WebCore

@@ -653,21 +653,19 @@ void GraphicsContext::setFillGradient(Ref<Gradient>&& gradient, const AffineTran
 
 void GraphicsContext::beginTransparencyLayer(float opacity)
 {
-    if (m_impl) {
+    if (m_impl)
         m_impl->beginTransparencyLayer(opacity);
-        return;
-    }
-    beginPlatformTransparencyLayer(opacity);
+    else
+        beginPlatformTransparencyLayer(opacity);
     ++m_transparencyCount;
 }
 
 void GraphicsContext::endTransparencyLayer()
 {
-    if (m_impl) {
+    if (m_impl)
         m_impl->endTransparencyLayer();
-        return;
-    }
-    endPlatformTransparencyLayer();
+    else
+        endPlatformTransparencyLayer();
     ASSERT(m_transparencyCount > 0);
     --m_transparencyCount;
 }
@@ -1302,6 +1300,7 @@ void GraphicsContext::addDestinationAtPoint(const String&, const FloatPoint&)
 
 #endif
 
+#if ENABLE(VIDEO)
 void GraphicsContext::paintFrameForMedia(MediaPlayer& player, const FloatRect& destination)
 {
     if (paintingDisabled())
@@ -1314,5 +1313,6 @@ void GraphicsContext::paintFrameForMedia(MediaPlayer& player, const FloatRect& d
 
     player.playerPrivate()->paintCurrentFrameInContext(*this, destination);
 }
+#endif
 
 }

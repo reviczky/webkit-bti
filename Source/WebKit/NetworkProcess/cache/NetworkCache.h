@@ -59,11 +59,7 @@ struct GlobalFrameID {
 
 inline unsigned GlobalFrameID::hash() const
 {
-    unsigned hashes[2];
-    hashes[0] = WTF::intHash(webPageID.toUInt64());
-    hashes[1] = WTF::intHash(frameID.toUInt64());
-
-    return StringHasher::hashMemory(hashes, sizeof(hashes));
+    return computeHash(webPageID, frameID);
 }
 
 inline bool operator==(const GlobalFrameID& a, const GlobalFrameID& b)
@@ -73,8 +69,8 @@ inline bool operator==(const GlobalFrameID& a, const GlobalFrameID& b)
     return a.webPageID == b.webPageID &&  a.frameID == b.frameID;
 }
 
-};
-} // namespace NetworkCache
+}
+}
 
 namespace WTF {
 
@@ -87,9 +83,9 @@ struct GlobalFrameIDHash {
 template<> struct HashTraits<WebKit::NetworkCache::GlobalFrameID> : GenericHashTraits<WebKit::NetworkCache::GlobalFrameID> {
     static WebKit::NetworkCache::GlobalFrameID emptyValue() { return { }; }
 
-    static void constructDeletedValue(WebKit::NetworkCache::GlobalFrameID& slot) { slot.webPageID = makeObjectIdentifier<WebCore::PageIdentifierType>(std::numeric_limits<uint64_t>::max()); }
+    static void constructDeletedValue(WebKit::NetworkCache::GlobalFrameID& slot) { new (NotNull, &slot.webPageID) WebCore::PageIdentifier(WTF::HashTableDeletedValue); }
 
-    static bool isDeletedValue(const WebKit::NetworkCache::GlobalFrameID& slot) { return slot.webPageID.toUInt64() == std::numeric_limits<uint64_t>::max(); }
+    static bool isDeletedValue(const WebKit::NetworkCache::GlobalFrameID& slot) { return slot.webPageID.isHashTableDeletedValue(); }
 };
 
 template<> struct DefaultHash<WebKit::NetworkCache::GlobalFrameID> : GlobalFrameIDHash { };

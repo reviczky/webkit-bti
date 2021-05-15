@@ -37,7 +37,7 @@ public:
     }
 
     static Ref<MediaSampleGStreamer> createFakeSample(GstCaps*, MediaTime pts, MediaTime dts, MediaTime duration, const FloatSize& presentationSize, const AtomString& trackId);
-    static Ref<MediaSampleGStreamer> createImageSample(Vector<uint8_t>&&, unsigned width, unsigned height, double frameRate = 1);
+    static Ref<MediaSampleGStreamer> createImageSample(Vector<uint8_t>&&, const IntSize& originalSize, const IntSize& destinationSize = { }, double frameRate = 1);
 
     void extendToTheBeginning();
     MediaTime presentationTime() const override { return m_pts; }
@@ -50,7 +50,7 @@ public:
     void offsetTimestampsBy(const MediaTime&) override;
     void setTimestamps(const MediaTime&, const MediaTime&) override { }
     bool isDivisable() const override { return false; }
-    std::pair<RefPtr<MediaSample>, RefPtr<MediaSample>> divide(const MediaTime&) override  { return { nullptr, nullptr }; }
+    std::pair<RefPtr<MediaSample>, RefPtr<MediaSample>> divide(const MediaTime&, UseEndTime) override  { return { nullptr, nullptr }; }
     Ref<MediaSample> createNonDisplayingCopy() const override;
     SampleFlags flags() const override { return m_flags; }
     PlatformSample platformSample() override;

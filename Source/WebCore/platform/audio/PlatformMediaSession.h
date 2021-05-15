@@ -28,6 +28,7 @@
 #include "MediaSessionGroupIdentifier.h"
 #include "MediaSessionIdentifier.h"
 #include "Timer.h"
+#include <wtf/Logger.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/WeakPtr.h>
@@ -60,6 +61,8 @@ public:
     static std::unique_ptr<PlatformMediaSession> create(PlatformMediaSessionManager&, PlatformMediaSessionClient&);
 
     virtual ~PlatformMediaSession();
+
+    void setActive(bool);
 
     enum class MediaType : uint8_t {
         None = 0,
@@ -138,8 +141,8 @@ public:
         SkipBackwardCommand,
         NextTrackCommand,
         PreviousTrackCommand,
-        BeginScrubbing,
-        EndScrubbing,
+        BeginScrubbingCommand,
+        EndScrubbingCommand,
     };
     bool canReceiveRemoteControlCommands() const;
     virtual void didReceiveRemoteControlCommand(RemoteControlCommandType, const RemoteCommandArgument&);
@@ -219,6 +222,7 @@ private:
     State m_stateToRestore { Idle };
     InterruptionType m_interruptionType { NoInterruption };
     int m_interruptionCount { 0 };
+    bool m_active { false };
     bool m_notifyingClient { false };
     bool m_isPlayingToWirelessPlaybackTarget { false };
     bool m_hasPlayedSinceLastInterruption { false };
@@ -395,8 +399,8 @@ template <> struct EnumTraits<WebCore::PlatformMediaSession::RemoteControlComman
     WebCore::PlatformMediaSession::RemoteControlCommandType::SkipBackwardCommand,
     WebCore::PlatformMediaSession::RemoteControlCommandType::NextTrackCommand,
     WebCore::PlatformMediaSession::RemoteControlCommandType::PreviousTrackCommand,
-    WebCore::PlatformMediaSession::RemoteControlCommandType::BeginScrubbing,
-    WebCore::PlatformMediaSession::RemoteControlCommandType::EndScrubbing
+    WebCore::PlatformMediaSession::RemoteControlCommandType::BeginScrubbingCommand,
+    WebCore::PlatformMediaSession::RemoteControlCommandType::EndScrubbingCommand
     >;
 };
 

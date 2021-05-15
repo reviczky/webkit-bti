@@ -33,12 +33,14 @@
 #include "NetworkCacheIOChannel.h"
 #include <mutex>
 #include <wtf/Condition.h>
+#include <wtf/FileSystem.h>
 #include <wtf/Lock.h>
 #include <wtf/PageBlock.h>
 #include <wtf/RandomNumber.h>
 #include <wtf/RunLoop.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringConcatenateNumbers.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 namespace WebKit {
 namespace NetworkCache {
@@ -56,12 +58,20 @@ static inline size_t maximumInlineBodySize()
 
 static double computeRecordWorth(FileTimes);
 
+static uint64_t nextReadOperationOrdinal()
+{
+    static uint64_t ordinal;
+    return ++ordinal;
+}
+
 struct Storage::ReadOperation {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    ReadOperation(Storage& storage, const Key& key, RetrieveCompletionHandler&& completionHandler)
+    ReadOperation(Storage& storage, const Key& key, unsigned priority, RetrieveCompletionHandler&& completionHandler)
         : storage(storage)
         , key(key)
+        , ordinal(nextReadOperationOrdinal())
+        , priority(priority)
         , completionHandler(WTFMove(completionHandler))
     { }
 
@@ -71,6 +81,8 @@ public:
     Ref<Storage> storage;
 
     const Key key;
+    const uint64_t ordinal;
+    unsigned priority;
     RetrieveCompletionHandler completionHandler;
     
     std::unique_ptr<Record> resultRecord;
@@ -80,6 +92,13 @@ public:
     bool isCanceled { false };
     Timings timings;
 };
+
+bool Storage::isHigherPriority(const std::unique_ptr<ReadOperation>& a, const std::unique_ptr<ReadOperation>& b)
+{
+    if (a->priority == b->priority)
+        return a->ordinal < b->ordinal;
+    return a->priority > b->priority;
+}
 
 void Storage::ReadOperation::cancel()
 {
@@ -189,7 +208,7 @@ RefPtr<Storage> Storage::open(const String& baseCachePath, Mode mode, size_t cap
     if (!FileSystem::makeAllDirectories(makeVersionedDirectoryPath(cachePath)))
         return nullptr;
 
-    auto salt = readOrMakeSalt(makeSaltFilePath(cachePath));
+    auto salt = FileSystem::readOrMakeSalt(makeSaltFilePath(cachePath));
     if (!salt)
         return nullptr;
 
@@ -721,7 +740,7 @@ void Storage::dispatchReadOperation(std::unique_ptr<ReadOperation> readOperation
         readOperation.timings.recordIOStartTime = MonotonicTime::now();
 
         auto channel = IOChannel::open(recordPath, IOChannel::Type::Read);
-        channel->read(0, std::numeric_limits<size_t>::max(), &ioQueue(), [this, &readOperation](const Data& fileData, int error) {
+        channel->read(0, std::numeric_limits<size_t>::max(), ioQueue(), [this, &readOperation](const Data& fileData, int error) {
             readOperation.timings.recordIOEndTime = MonotonicTime::now();
             if (!error)
                 readRecord(readOperation, fileData);
@@ -777,14 +796,11 @@ void Storage::cancelAllReadOperations()
     for (auto& readOperation : m_activeReadOperations)
         readOperation->cancel();
 
-    size_t pendingCount = 0;
-    for (int priority = maximumRetrievePriority; priority >= 0; --priority) {
-        auto& pendingRetrieveQueue = m_pendingReadOperationsByPriority[priority];
-        pendingCount += pendingRetrieveQueue.size();
-        for (auto it = pendingRetrieveQueue.rbegin(), end = pendingRetrieveQueue.rend(); it != end; ++it)
-            (*it)->cancel();
-        pendingRetrieveQueue.clear();
-    }
+    size_t pendingCount = m_pendingReadOperations.size();
+    UNUSED_PARAM(pendingCount);
+
+    while (!m_pendingReadOperations.isEmpty())
+        m_pendingReadOperations.dequeue()->cancel();
 
     LOG(NetworkCacheStorage, "(NetworkProcess) retrieve timeout, canceled %u active and %zu pending", m_activeReadOperations.size(), pendingCount);
 }
@@ -795,15 +811,12 @@ void Storage::dispatchPendingReadOperations()
 
     const int maximumActiveReadOperationCount = 5;
 
-    for (int priority = maximumRetrievePriority; priority >= 0; --priority) {
+    while (!m_pendingReadOperations.isEmpty()) {
         if (m_activeReadOperations.size() > maximumActiveReadOperationCount) {
             LOG(NetworkCacheStorage, "(NetworkProcess) limiting parallel retrieves");
             return;
         }
-        auto& pendingRetrieveQueue = m_pendingReadOperationsByPriority[priority];
-        if (pendingRetrieveQueue.isEmpty())
-            continue;
-        dispatchReadOperation(pendingRetrieveQueue.takeLast());
+        dispatchReadOperation(m_pendingReadOperations.dequeue());
     }
 }
 
@@ -866,7 +879,7 @@ void Storage::dispatchWriteOperation(std::unique_ptr<WriteOperation> writeOperat
 
         auto channel = IOChannel::open(recordPath, IOChannel::Type::Create);
         size_t recordSize = recordData.size();
-        channel->write(0, recordData, nullptr, [this, &writeOperation, recordSize](int error) {
+        channel->write(0, recordData, WorkQueue::main(), [this, &writeOperation, recordSize](int error) {
             // On error the entry still stays in the contents filter until next synchronization.
             m_approximateRecordsSize += recordSize;
             finishWriteOperation(writeOperation, error);
@@ -899,7 +912,6 @@ void Storage::finishWriteOperation(WriteOperation& writeOperation, int error)
 void Storage::retrieve(const Key& key, unsigned priority, RetrieveCompletionHandler&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
-    ASSERT(priority <= maximumRetrievePriority);
     ASSERT(!key.isNull());
 
     if (!m_capacity) {
@@ -917,12 +929,12 @@ void Storage::retrieve(const Key& key, unsigned priority, RetrieveCompletionHand
     if (retrieveFromMemory(m_activeWriteOperations, key, completionHandler))
         return;
 
-    auto readOperation = makeUnique<ReadOperation>(*this, key, WTFMove(completionHandler));
+    auto readOperation = makeUnique<ReadOperation>(*this, key, priority, WTFMove(completionHandler));
 
     readOperation->timings.startTime = MonotonicTime::now();
     readOperation->timings.dispatchCountAtStart = m_readOperationDispatchCount;
 
-    m_pendingReadOperationsByPriority[priority].prepend(WTFMove(readOperation));
+    m_pendingReadOperations.enqueue(WTFMove(readOperation));
     dispatchPendingReadOperations();
 }
 
@@ -976,7 +988,7 @@ void Storage::traverse(const String& type, OptionSet<TraverseFlag> flags, Traver
             ++traverseOperation.activeCount;
 
             auto channel = IOChannel::open(recordPath, IOChannel::Type::Read);
-            channel->read(0, std::numeric_limits<size_t>::max(), nullptr, [this, &traverseOperation, worth, bodyShareCount](Data& fileData, int) {
+            channel->read(0, std::numeric_limits<size_t>::max(), WorkQueue::main(), [this, &traverseOperation, worth, bodyShareCount](Data& fileData, int) {
                 RecordMetaData metaData;
                 Data headerData;
                 if (decodeRecordHeader(fileData, metaData, headerData, m_salt)) {
@@ -1172,18 +1184,12 @@ void Storage::deleteOldVersions()
                 return;
             if (!subdirName.startsWith(versionDirectoryPrefix))
                 return;
-            auto versionString = subdirName.substring(strlen(versionDirectoryPrefix));
-            bool success;
-            unsigned directoryVersion = versionString.toUIntStrict(&success);
-            if (!success)
+            auto directoryVersion = parseInteger<unsigned>(StringView { subdirName }.substring(strlen(versionDirectoryPrefix)));
+            if (!directoryVersion || *directoryVersion >= version)
                 return;
-            if (directoryVersion >= version)
-                return;
-
             auto oldVersionPath = FileSystem::pathByAppendingComponent(cachePath, subdirName);
             LOG(NetworkCacheStorage, "(NetworkProcess) deleting old cache version, path %s", oldVersionPath.utf8().data());
-
-            deleteDirectoryRecursively(oldVersionPath);
+            FileSystem::deleteNonEmptyDirectory(oldVersionPath);
         });
     });
 }

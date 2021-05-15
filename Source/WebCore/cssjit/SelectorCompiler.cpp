@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  * Copyright (C) 2014 Yusuke Suzuki <utatane.tea@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,6 @@
 #include <JavaScriptCore/VM.h>
 #include <limits>
 #include <wtf/Deque.h>
-#include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/Vector.h>
 #include <wtf/text/CString.h>
@@ -86,6 +85,7 @@ static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsDefinedElement,
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationMatchesDirectFocusPseudoClass, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationMatchesFocusPseudoClass, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationMatchesFocusVisiblePseudoClass, bool, (const Element&));
+static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationMatchesFocusWithinPseudoClass, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsMediaDocument, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsInRange, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationMatchesIndeterminatePseudoClass, bool, (const Element&));
@@ -387,7 +387,6 @@ private:
     void generateElementIsRoot(Assembler::JumpList& failureCases);
     void generateElementIsScopeRoot(Assembler::JumpList& failureCases);
     void generateElementIsTarget(Assembler::JumpList& failureCases);
-    void generateElementHasFocusWithin(Assembler::JumpList& failureCases);
 
     // Helpers.
     void generateAddStyleRelationIfResolvingStyle(Assembler::RegisterID element, Style::Relation::Type, Optional<Assembler::RegisterID> value = { });
@@ -637,6 +636,11 @@ JSC_DEFINE_JIT_OPERATION(operationMatchesFocusVisiblePseudoClass, bool, (const E
     return matchesFocusVisiblePseudoClass(element);
 }
 
+JSC_DEFINE_JIT_OPERATION(operationMatchesFocusWithinPseudoClass, bool, (const Element& element))
+{
+    return matchesFocusWithinPseudoClass(element);
+}
+
 JSC_DEFINE_JIT_OPERATION(operationIsMediaDocument, bool, (const Element& element))
 {
     return isMediaDocument(element);
@@ -788,6 +792,9 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
     case CSSSelector::PseudoClassFocusVisible:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<JSC::OperationPtrTag>(operationMatchesFocusVisiblePseudoClass));
         return FunctionType::SimpleSelectorChecker;
+    case CSSSelector::PseudoClassFocusWithin:
+        fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<JSC::OperationPtrTag>(operationMatchesFocusWithinPseudoClass));
+        return FunctionType::SimpleSelectorChecker;
     case CSSSelector::PseudoClassFullPageMedia:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<JSC::OperationPtrTag>(operationIsMediaDocument));
         return FunctionType::SimpleSelectorChecker;
@@ -928,7 +935,6 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
     case CSSSelector::PseudoClassLastChild:
     case CSSSelector::PseudoClassOnlyChild:
     case CSSSelector::PseudoClassPlaceholderShown:
-    case CSSSelector::PseudoClassFocusWithin:
         fragment.pseudoClasses.add(type);
         if (selectorContext == SelectorContext::QuerySelector)
             return FunctionType::SimpleSelectorChecker;
@@ -1465,7 +1471,7 @@ inline SelectorCompilationStatus SelectorCodeGenerator::compile(JSC::MacroAssemb
         return SelectorCompilationStatus::CannotCompile;
     }
 
-    JSC::LinkBuffer linkBuffer(m_assembler, CSS_CODE_ID, JSC::JITCompilationCanFail);
+    JSC::LinkBuffer linkBuffer(m_assembler, CSS_CODE_ID, JSC::LinkBuffer::Profile::CSSJIT, JSC::JITCompilationCanFail);
     if (!linkBuffer.isValid()) {
         // This could be SelectorCompilationStatus::NotCompiled but that would cause us to re-enter
         // the CSS JIT every time we evaluate that selector.
@@ -2844,9 +2850,6 @@ void SelectorCodeGenerator::generateElementMatching(Assembler::JumpList& matchin
     if (fragment.pseudoClasses.contains(CSSSelector::PseudoClassTarget))
         generateElementIsTarget(matchingPostTagNameFailureCases);
 
-    if (fragment.pseudoClasses.contains(CSSSelector::PseudoClassFocusWithin))
-        generateElementHasFocusWithin(matchingPostTagNameFailureCases);
-
     for (unsigned i = 0; i < fragment.unoptimizedPseudoClasses.size(); ++i)
         generateElementFunctionCallTest(matchingPostTagNameFailureCases, fragment.unoptimizedPseudoClasses[i]);
 
@@ -4139,11 +4142,6 @@ void SelectorCodeGenerator::generateElementIsTarget(Assembler::JumpList& failure
     LocalRegister document(m_registerAllocator);
     DOMJIT::loadDocument(m_assembler, elementAddressRegister, document);
     failureCases.append(m_assembler.branchPtr(Assembler::NotEqual, Assembler::Address(document, Document::cssTargetMemoryOffset()), elementAddressRegister));
-}
-
-void SelectorCodeGenerator::generateElementHasFocusWithin(Assembler::JumpList& failureCases)
-{
-    failureCases.append(m_assembler.branchTest32(Assembler::Zero, Assembler::Address(elementAddressRegister, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagHasFocusWithin())));
 }
 
 void SelectorCodeGenerator::generateElementIsFirstLink(Assembler::JumpList& failureCases, Assembler::RegisterID element)

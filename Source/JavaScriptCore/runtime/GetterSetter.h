@@ -54,7 +54,7 @@ private:
 
 public:
 
-    static constexpr unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | StructureIsImmortal;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | OverridesPut | StructureIsImmortal;
 
     template<typename CellType, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM& vm)
@@ -89,7 +89,7 @@ public:
     JSObject* getterConcurrently() const
     {
         JSObject* result = getter();
-        WTF::loadLoadFence();
+        WTF::dependentLoadLoadFence();
         return result;
     }
 

@@ -28,10 +28,18 @@
 
 #if ENABLE(MEDIA_SESSION)
 
+#include "DOMWindow.h"
+#include "EventNames.h"
+#include "HTMLMediaElement.h"
+#include "JSMediaPositionState.h"
+#include "JSMediaSessionAction.h"
+#include "JSMediaSessionPlaybackState.h"
 #include "Logging.h"
 #include "MediaMetadata.h"
+#include "MediaSessionCoordinator.h"
 #include "Navigator.h"
 #include "PlatformMediaSessionManager.h"
+#include <wtf/JSONValues.h>
 
 namespace WebCore {
 
@@ -69,33 +77,140 @@ static PlatformMediaSession::RemoteControlCommandType platformCommandForMediaSes
     return PlatformMediaSession::NoCommand;
 }
 
+static Optional<std::pair<PlatformMediaSession::RemoteControlCommandType, PlatformMediaSession::RemoteCommandArgument>> platformCommandForMediaSessionAction(const MediaSessionActionDetails& actionDetails)
+{
+    PlatformMediaSession::RemoteControlCommandType command = PlatformMediaSession::NoCommand;
+    PlatformMediaSession::RemoteCommandArgument argument;
+
+    switch (actionDetails.action) {
+    case MediaSessionAction::Play:
+        command = PlatformMediaSession::PlayCommand;
+        break;
+    case MediaSessionAction::Pause:
+        command = PlatformMediaSession::PauseCommand;
+        break;
+    case MediaSessionAction::Seekbackward:
+        command = PlatformMediaSession::SkipBackwardCommand;
+        argument.time = actionDetails.seekOffset;
+        break;
+    case MediaSessionAction::Seekforward:
+        command = PlatformMediaSession::SkipForwardCommand;
+        argument.time = actionDetails.seekOffset;
+        break;
+    case MediaSessionAction::Previoustrack:
+        command = PlatformMediaSession::PreviousTrackCommand;
+        break;
+    case MediaSessionAction::Nexttrack:
+        command = PlatformMediaSession::NextTrackCommand;
+        break;
+    case MediaSessionAction::Skipad:
+        // Not supported at present.
+        break;
+    case MediaSessionAction::Stop:
+        command = PlatformMediaSession::StopCommand;
+        break;
+    case MediaSessionAction::Seekto:
+        command = PlatformMediaSession::SeekToPlaybackPositionCommand;
+        argument.time = actionDetails.seekTime;
+        argument.fastSeek = actionDetails.fastSeek;
+        break;
+    case MediaSessionAction::Settrack:
+        // Not supported at present.
+        break;
+    }
+    if (command == PlatformMediaSession::NoCommand)
+        return { };
+
+    return std::make_pair(command, argument);
+}
+
 Ref<MediaSession> MediaSession::create(Navigator& navigator)
 {
     return adoptRef(*new MediaSession(navigator));
 }
 
 MediaSession::MediaSession(Navigator& navigator)
-    : m_navigator(makeWeakPtr(navigator))
+    : ActiveDOMObject(navigator.scriptExecutionContext())
+    , m_navigator(makeWeakPtr(navigator))
+    , m_asyncEventQueue(MainThreadGenericEventQueue::create(*this))
 {
     m_logger = makeRefPtr(Document::sharedLogger());
     m_logIdentifier = nextLogIdentifier();
+    suspendIfNeeded();
 
     ALWAYS_LOG(LOGIDENTIFIER);
 }
 
 MediaSession::~MediaSession() = default;
 
+bool MediaSession::virtualHasPendingActivity() const
+{
+    return m_asyncEventQueue->hasPendingActivity();
+}
+
 void MediaSession::setMetadata(RefPtr<MediaMetadata>&& metadata)
 {
     ALWAYS_LOG(LOGIDENTIFIER);
-
     if (m_metadata)
         m_metadata->resetMediaSession();
     m_metadata = WTFMove(metadata);
     if (m_metadata)
         m_metadata->setMediaSession(*this);
-    metadataUpdated();
+    notifyMetadataObservers();
 }
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+void MediaSession::setReadyState(MediaSessionReadyState state)
+{
+    if (m_readyState == state)
+        return;
+
+    ALWAYS_LOG(LOGIDENTIFIER, state);
+
+    m_readyState = state;
+    notifyReadyStateObservers();
+}
+
+void MediaSession::setCoordinator(MediaSessionCoordinator* coordinator)
+{
+    if (m_coordinator == coordinator)
+        return;
+
+    ALWAYS_LOG(LOGIDENTIFIER);
+
+    if (m_coordinator)
+        m_coordinator->setMediaSession(nullptr);
+
+    m_coordinator = coordinator;
+
+    if (m_coordinator)
+        m_coordinator->setMediaSession(this);
+
+    m_asyncEventQueue->enqueueEvent(Event::create(eventNames().coordinatorchangeEvent, Event::CanBubble::No, Event::IsCancelable::No));
+}
+#endif
+
+#if ENABLE(MEDIA_SESSION_PLAYLIST)
+ExceptionOr<void> MediaSession::setPlaylist(ScriptExecutionContext& context, Vector<RefPtr<MediaMetadata>>&& playlist)
+{
+    ALWAYS_LOG(LOGIDENTIFIER);
+
+    Vector<Ref<MediaMetadata>> resolvedPlaylist;
+    resolvedPlaylist.reserveInitialCapacity(playlist.size());
+
+    for (auto& entry : playlist) {
+        auto resolvedEntry = MediaMetadata::create(context, { entry->metadata() });
+        if (resolvedEntry.hasException())
+            return resolvedEntry.releaseException();
+        
+        resolvedPlaylist.uncheckedAppend(resolvedEntry.releaseReturnValue());
+    }
+
+    m_playlist = WTFMove(resolvedPlaylist);
+
+    return { };
+}
+#endif
 
 void MediaSession::setPlaybackState(MediaSessionPlaybackState state)
 {
@@ -110,6 +225,7 @@ void MediaSession::setPlaybackState(MediaSessionPlaybackState state)
         m_timeAtLastPositionUpdate = MonotonicTime::now();
     }
     m_playbackState = state;
+    notifyPlaybackStateObservers();
 }
 
 void MediaSession::setActionHandler(MediaSessionAction action, RefPtr<MediaSessionActionHandler>&& handler)
@@ -127,26 +243,37 @@ void MediaSession::setActionHandler(MediaSessionAction action, RefPtr<MediaSessi
         }
         PlatformMediaSessionManager::sharedManager().removeSupportedCommand(platformCommandForMediaSessionAction(action));
     }
-    
-    actionHandlersUpdated();
+
+    notifyActionHandlerObservers();
 }
 
-bool MediaSession::hasActionHandler(MediaSessionAction action) const
+bool MediaSession::callActionHandler(const MediaSessionActionDetails& actionDetails)
 {
-    return m_actionHandlers.contains(action);
-}
+    if (auto handler = m_actionHandlers.get(actionDetails.action)) {
+        handler->handleEvent(actionDetails);
+        return true;
+    }
+    auto element = activeMediaElement();
+    if (!element)
+        return false;
 
-RefPtr<MediaSessionActionHandler> MediaSession::handlerForAction(MediaSessionAction action) const
-{
-    return m_actionHandlers.get(action);
+    auto platformCommand = platformCommandForMediaSessionAction(actionDetails);
+    if (!platformCommand)
+        return false;
+    element->didReceiveRemoteControlCommand(platformCommand->first, platformCommand->second);
+    return true;
 }
 
 ExceptionOr<void> MediaSession::setPositionState(Optional<MediaPositionState>&& state)
 {
-    ALWAYS_LOG(LOGIDENTIFIER);
+    if (state)
+        ALWAYS_LOG(LOGIDENTIFIER, state.value());
+    else
+        ALWAYS_LOG(LOGIDENTIFIER, "{ }");
 
     if (!state) {
         m_positionState = WTF::nullopt;
+        notifyPositionStateObservers();
         return { };
     }
 
@@ -160,6 +287,8 @@ ExceptionOr<void> MediaSession::setPositionState(Optional<MediaPositionState>&& 
     m_positionState = WTFMove(state);
     m_lastReportedPosition = m_positionState->position;
     m_timeAtLastPositionUpdate = MonotonicTime::now();
+    notifyPositionStateObservers();
+
     return { };
 }
 
@@ -175,12 +304,92 @@ Optional<double> MediaSession::currentPosition() const
     return std::max(0., std::min(*m_lastReportedPosition + elapsedTime.value(), m_positionState->duration));
 }
 
-void MediaSession::metadataUpdated()
+Document* MediaSession::document() const
 {
+    if (!m_navigator || !m_navigator->window())
+        return nullptr;
+    return m_navigator->window()->document();
 }
 
-void MediaSession::actionHandlersUpdated()
+void MediaSession::metadataUpdated()
 {
+    notifyMetadataObservers();
+}
+
+void MediaSession::addObserver(Observer& observer)
+{
+    ASSERT(isMainThread());
+    m_observers.add(observer);
+}
+
+void MediaSession::removeObserver(Observer& observer)
+{
+    ASSERT(isMainThread());
+    m_observers.remove(observer);
+}
+
+void MediaSession::forEachObserver(const Function<void(Observer&)>& apply)
+{
+    ASSERT(isMainThread());
+    auto protectedThis = makeRef(*this);
+    m_observers.forEach(apply);
+}
+
+void MediaSession::notifyMetadataObservers()
+{
+    forEachObserver([this](auto& observer) {
+        observer.metadataChanged(m_metadata);
+    });
+}
+
+void MediaSession::notifyPositionStateObservers()
+{
+    forEachObserver([this](auto& observer) {
+        observer.positionStateChanged(m_positionState);
+    });
+}
+
+void MediaSession::notifyPlaybackStateObservers()
+{
+    forEachObserver([this](auto& observer) {
+        observer.playbackStateChanged(m_playbackState);
+    });
+}
+
+void MediaSession::notifyActionHandlerObservers()
+{
+    forEachObserver([](auto& observer) {
+        observer.actionHandlersChanged();
+    });
+}
+
+RefPtr<HTMLMediaElement> MediaSession::activeMediaElement() const
+{
+    auto* doc = document();
+    if (!doc)
+        return nullptr;
+
+    return HTMLMediaElement::bestMediaElementForRemoteControls(MediaElementSession::PlaybackControlsPurpose::MediaSession, doc);
+}
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+void MediaSession::notifyReadyStateObservers()
+{
+    forEachObserver([this](auto& observer) {
+        observer.readyStateChanged(m_readyState);
+    });
+}
+#endif
+
+String MediaPositionState::toJSONString() const
+{
+    auto object = JSON::Object::create();
+
+    object->setDouble("duration"_s, duration);
+    object->setDouble("playbackRate"_s, playbackRate);
+    object->setDouble("position"_s, position);
+
+    return object->toJSONString();
 }
 
 }

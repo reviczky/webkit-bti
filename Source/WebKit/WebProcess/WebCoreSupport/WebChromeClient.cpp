@@ -88,6 +88,7 @@
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/Settings.h>
+#include <WebCore/TextIndicator.h>
 
 #if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
 #include "PlaybackSessionManager.h"
@@ -111,7 +112,7 @@
 #include <WebCore/MockWebAuthenticationConfiguration.h>
 #endif
 
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || PLATFORM(WIN)
 #include "RemoteGraphicsContextGLProxy.h"
 #endif
 
@@ -283,7 +284,7 @@ Page* WebChromeClient::createWindow(Frame& frame, const WindowFeatures& windowFe
 
     Optional<PageIdentifier> newPageID;
     Optional<WebPageCreationParameters> parameters;
-    if (!webProcess.parentProcessConnection()->sendSync(Messages::WebPageProxy::CreateNewPage(webFrame->info(), webFrame->page()->webPageProxyIdentifier(), navigationAction.resourceRequest(), windowFeatures, navigationActionData), Messages::WebPageProxy::CreateNewPage::Reply(newPageID, parameters), m_page.identifier()))
+    if (!webProcess.parentProcessConnection()->sendSync(Messages::WebPageProxy::CreateNewPage(webFrame->info(), webFrame->page()->webPageProxyIdentifier(), navigationAction.resourceRequest(), windowFeatures, navigationActionData), Messages::WebPageProxy::CreateNewPage::Reply(newPageID, parameters), m_page.identifier(), IPC::Timeout::infinity(), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages))
         return nullptr;
 
     if (!newPageID)
@@ -456,11 +457,12 @@ void WebChromeClient::runJavaScriptAlert(Frame& frame, const String& alertText)
 
     // Notify the bundle client.
     m_page.injectedBundleUIClient().willRunJavaScriptAlert(&m_page, alertText, webFrame);
+    m_page.prepareToRunModalJavaScriptDialog();
 
     HangDetectionDisabler hangDetectionDisabler;
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
 
-    m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptAlert(webFrame->frameID(), webFrame->info(), alertText), Messages::WebPageProxy::RunJavaScriptAlert::Reply());
+    m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptAlert(webFrame->frameID(), webFrame->info(), alertText), Messages::WebPageProxy::RunJavaScriptAlert::Reply(), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages);
 }
 
 bool WebChromeClient::runJavaScriptConfirm(Frame& frame, const String& message)
@@ -473,12 +475,13 @@ bool WebChromeClient::runJavaScriptConfirm(Frame& frame, const String& message)
 
     // Notify the bundle client.
     m_page.injectedBundleUIClient().willRunJavaScriptConfirm(&m_page, message, webFrame);
+    m_page.prepareToRunModalJavaScriptDialog();
 
     HangDetectionDisabler hangDetectionDisabler;
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
 
     bool result = false;
-    if (!m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptConfirm(webFrame->frameID(), webFrame->info(), message), Messages::WebPageProxy::RunJavaScriptConfirm::Reply(result)))
+    if (!m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptConfirm(webFrame->frameID(), webFrame->info(), message), Messages::WebPageProxy::RunJavaScriptConfirm::Reply(result), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages))
         return false;
 
     return result;
@@ -494,11 +497,12 @@ bool WebChromeClient::runJavaScriptPrompt(Frame& frame, const String& message, c
 
     // Notify the bundle client.
     m_page.injectedBundleUIClient().willRunJavaScriptPrompt(&m_page, message, defaultValue, webFrame);
+    m_page.prepareToRunModalJavaScriptDialog();
 
     HangDetectionDisabler hangDetectionDisabler;
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
 
-    if (!m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptPrompt(webFrame->frameID(), webFrame->info(), message, defaultValue), Messages::WebPageProxy::RunJavaScriptPrompt::Reply(result)))
+    if (!m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptPrompt(webFrame->frameID(), webFrame->info(), message, defaultValue), Messages::WebPageProxy::RunJavaScriptPrompt::Reply(result), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages))
         return false;
 
     return !result.isNull();
@@ -912,15 +916,16 @@ GraphicsLayerFactory* WebChromeClient::graphicsLayerFactory() const
     return nullptr;
 }
 
-RefPtr<DisplayRefreshMonitor> WebChromeClient::createDisplayRefreshMonitor(PlatformDisplayID displayID) const
+WebCore::DisplayRefreshMonitorFactory* WebChromeClient::displayRefreshMonitorFactory() const
 {
-    if (auto* drawingArea = m_page.drawingArea())
-        return drawingArea->createDisplayRefreshMonitor(displayID);
+#if PLATFORM(COCOA)
+    return m_page.drawingArea();
+#else
     return nullptr;
+#endif
 }
 
 #if ENABLE(GPU_PROCESS)
-
 
 RefPtr<ImageBuffer> WebChromeClient::createImageBuffer(const FloatSize& size, RenderingMode renderingMode, RenderingPurpose purpose, float resolutionScale, DestinationColorSpace colorSpace, PixelFormat pixelFormat) const
 {
@@ -937,8 +942,8 @@ RefPtr<GraphicsContextGL> WebChromeClient::createGraphicsContextGL(const Graphic
     if (!WebProcess::singleton().shouldUseRemoteRenderingForWebGL())
         return nullptr;
     UNUSED_VARIABLE(hostWindowDisplayID);
-#if PLATFORM(COCOA)
-    return RemoteGraphicsContextGLProxy::create(attributes, m_page.ensureRemoteRenderingBackendProxy().renderingBackendIdentifier());
+#if PLATFORM(COCOA) || PLATFORM(WIN)
+    return RemoteGraphicsContextGLProxy::create(attributes, m_page.ensureRemoteRenderingBackendProxy().ensureBackendCreated());
 #else
     return nullptr;
 #endif
@@ -1153,14 +1158,19 @@ Color WebChromeClient::underlayColor() const
     return m_page.underlayColor();
 }
 
-void WebChromeClient::themeColorChanged(Color /* themeColor */) const
+void WebChromeClient::themeColorChanged() const
 {
     m_page.themeColorChanged();
 }
 
-void WebChromeClient::pageExtendedBackgroundColorDidChange(Color /* backgroundColor */) const
+void WebChromeClient::pageExtendedBackgroundColorDidChange() const
 {
     m_page.pageExtendedBackgroundColorDidChange();
+}
+
+void WebChromeClient::sampledPageTopColorChanged() const
+{
+    m_page.sampledPageTopColorChanged();
 }
 
 void WebChromeClient::wheelEventHandlersChanged(bool hasHandlers)
@@ -1254,11 +1264,18 @@ bool WebChromeClient::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<
 #endif
 
 #if ENABLE(APP_HIGHLIGHTS)
-void WebChromeClient::storeAppHighlight(const WebCore::AppHighlight& highlight) const
+void WebChromeClient::storeAppHighlight(WebCore::AppHighlight&& highlight) const
 {
+    highlight.isNewGroup = m_page.highlightIsNewGroup();
+    highlight.requestOriginatedInApp = m_page.highlightRequestOriginatedInApp();
     m_page.send(Messages::WebPageProxy::StoreAppHighlight(highlight));
 }
 #endif
+
+void WebChromeClient::setTextIndicator(const WebCore::TextIndicatorData& indicatorData) const
+{
+    m_page.send(Messages::WebPageProxy::SetTextIndicator(indicatorData, static_cast<uint64_t>(WebCore::TextIndicatorLifetime::Temporary)));
+}
 
 String WebChromeClient::signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const URL& url) const
 {
@@ -1349,7 +1366,7 @@ void WebChromeClient::setMockMediaPlaybackTargetPickerEnabled(bool enabled)
     m_page.send(Messages::WebPageProxy::SetMockMediaPlaybackTargetPickerEnabled(enabled));
 }
 
-void WebChromeClient::setMockMediaPlaybackTargetPickerState(const String& name, MediaPlaybackTargetContext::State state)
+void WebChromeClient::setMockMediaPlaybackTargetPickerState(const String& name, MediaPlaybackTargetContext::MockState state)
 {
     m_page.send(Messages::WebPageProxy::SetMockMediaPlaybackTargetPickerState(name, state));
 }
@@ -1445,20 +1462,41 @@ void WebChromeClient::changeUniversalAccessZoomFocus(const WebCore::IntRect& vie
 
 #if ENABLE(IMAGE_EXTRACTION)
 
-void WebChromeClient::requestImageExtraction(Element& element)
+void WebChromeClient::requestImageExtraction(Element& element, CompletionHandler<void(RefPtr<Element>&&)>&& completion)
 {
-    m_page.requestImageExtraction(element);
+    m_page.requestImageExtraction(element, WTFMove(completion));
 }
 
 #endif
 
-#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#if ENABLE(TEXT_AUTOSIZING)
+
+void WebChromeClient::textAutosizingUsesIdempotentModeChanged()
+{
+    m_page.textAutosizingUsesIdempotentModeChanged();
+}
+
+#endif
+
+#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
 void WebChromeClient::showMediaControlsContextMenu(FloatRect&& targetFrame, Vector<MediaControlsContextMenuItem>&& items, CompletionHandler<void(MediaControlsContextMenuItem::ID)>&& completionHandler)
 {
     m_page.showMediaControlsContextMenu(WTFMove(targetFrame), WTFMove(items), WTFMove(completionHandler));
 }
 
-#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
+
+#if ENABLE(WEBXR) && PLATFORM(COCOA)
+void WebChromeClient::enumerateImmersiveXRDevices(CompletionHandler<void(const PlatformXR::Instance::DeviceList&)>&& completionHandler)
+{
+    m_page.xrSystemProxy().enumerateImmersiveXRDevices(WTFMove(completionHandler));
+}
+#endif
+
+void WebChromeClient::didHandleOrPreventMouseDownOrMouseUpEvent()
+{
+    m_page.didHandleOrPreventMouseDownOrMouseUpEvent();
+}
 
 } // namespace WebKit

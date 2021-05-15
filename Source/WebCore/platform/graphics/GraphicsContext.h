@@ -201,22 +201,21 @@ struct GraphicsContextState {
 
     FloatSize shadowOffset;
 
-    float strokeThickness { 0 };
-    float shadowBlur { 0 };
-
-    TextDrawingModeFlags textDrawingMode { TextDrawingMode::Fill };
-
     Color strokeColor { Color::black };
     Color fillColor { Color::black };
     Color shadowColor;
 
     AffineTransform strokeGradientSpaceTransform;
     AffineTransform fillGradientSpaceTransform;
-    
+
+    float strokeThickness { 0 };
+    float shadowBlur { 0 };
+    float alpha { 1 };
+
     StrokeStyle strokeStyle { SolidStroke };
     WindRule fillRule { WindRule::NonZero };
 
-    float alpha { 1 };
+    TextDrawingModeFlags textDrawingMode { TextDrawingMode::Fill };
     CompositeOperator compositeOperator { CompositeOperator::SourceOver };
     BlendMode blendMode { BlendMode::Normal };
     InterpolationQuality imageInterpolationQuality { InterpolationQuality::Default };
@@ -391,7 +390,7 @@ public:
 
     WEBCORE_EXPORT void drawImageBuffer(ImageBuffer&, const FloatPoint& destination, const ImagePaintingOptions& = { });
     void drawImageBuffer(ImageBuffer&, const FloatRect& destination, const ImagePaintingOptions& = { });
-    void drawImageBuffer(ImageBuffer&, const FloatRect& destination, const FloatRect& source, const ImagePaintingOptions& = { });
+    WEBCORE_EXPORT void drawImageBuffer(ImageBuffer&, const FloatRect& destination, const FloatRect& source, const ImagePaintingOptions& = { });
 
     WEBCORE_EXPORT void drawConsumingImageBuffer(RefPtr<ImageBuffer>, const FloatPoint& destination, const ImagePaintingOptions& = { });
     void drawConsumingImageBuffer(RefPtr<ImageBuffer>, const FloatRect& destination, const ImagePaintingOptions& = { });
@@ -516,7 +515,9 @@ public:
     void setContentfulPaintDetected() { m_contenfulPaintDetected = true; }
     bool contenfulPaintDetected() const { return m_contenfulPaintDetected; }
 
+#if ENABLE(VIDEO)
     WEBCORE_EXPORT void paintFrameForMedia(MediaPlayer&, const FloatRect& destination);
+#endif
 
 #if OS(WINDOWS)
     HDC getWindowsContext(const IntRect&, bool supportAlphaBlend); // The passed in rect is used to create a bitmap for compositing inside transparency layers.

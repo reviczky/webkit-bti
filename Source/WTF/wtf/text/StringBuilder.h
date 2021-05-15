@@ -219,15 +219,6 @@ public:
     template<unsigned characterCount>
     ALWAYS_INLINE void appendLiteral(const char (&characters)[characterCount]) { appendCharacters(characters, characterCount - 1); }
 
-    WTF_EXPORT_PRIVATE void appendNumber(int);
-    WTF_EXPORT_PRIVATE void appendNumber(unsigned);
-    WTF_EXPORT_PRIVATE void appendNumber(long);
-    WTF_EXPORT_PRIVATE void appendNumber(unsigned long);
-    WTF_EXPORT_PRIVATE void appendNumber(long long);
-    WTF_EXPORT_PRIVATE void appendNumber(unsigned long long);
-    WTF_EXPORT_PRIVATE void appendNumber(float);
-    WTF_EXPORT_PRIVATE void appendNumber(double);
-
     template<typename... StringTypes> void append(StringTypes...);
 
     String toString()
@@ -327,6 +318,8 @@ public:
     bool is8Bit() const { return m_is8Bit; }
     WTF_EXPORT_PRIVATE bool isAllASCII() const;
 
+    operator StringView() const;
+
     void clear()
     {
         m_length = 0;
@@ -376,6 +369,13 @@ private:
 #endif
 };
 
+inline StringBuilder::operator StringView() const
+{
+    if (m_is8Bit)
+        return { characters8(), length() };
+    return { characters16(), length() };
+}
+
 template<>
 ALWAYS_INLINE LChar* StringBuilder::getBufferCharacters<LChar>()
 {
@@ -417,6 +417,7 @@ void StringBuilder::append(StringTypes... strings)
     appendFromAdapters(StringTypeAdapter<StringTypes>(strings)...);
 }
 
+// FIXME: Move this to StringView and make it take a StringView instead of a StringBuilder?
 template<typename CharacterType>
 bool equal(const StringBuilder& s, const CharacterType* buffer, unsigned length)
 {
@@ -428,33 +429,6 @@ bool equal(const StringBuilder& s, const CharacterType* buffer, unsigned length)
 
     return equal(s.characters16(), buffer, length);
 }
-
-template<typename StringType>
-bool equal(const StringBuilder& a, const StringType& b)
-{
-    if (a.length() != b.length())
-        return false;
-
-    if (!a.length())
-        return true;
-
-    if (a.is8Bit()) {
-        if (b.is8Bit())
-            return equal(a.characters8(), b.characters8(), a.length());
-        return equal(a.characters8(), b.characters16(), a.length());
-    }
-
-    if (b.is8Bit())
-        return equal(a.characters16(), b.characters8(), a.length());
-    return equal(a.characters16(), b.characters16(), a.length());
-}
-
-inline bool operator==(const StringBuilder& a, const StringBuilder& b) { return equal(a, b); }
-inline bool operator!=(const StringBuilder& a, const StringBuilder& b) { return !equal(a, b); }
-inline bool operator==(const StringBuilder& a, const String& b) { return equal(a, b); }
-inline bool operator!=(const StringBuilder& a, const String& b) { return !equal(a, b); }
-inline bool operator==(const String& a, const StringBuilder& b) { return equal(b, a); }
-inline bool operator!=(const String& a, const StringBuilder& b) { return !equal(b, a); }
 
 template<> struct IntegerToStringConversionTrait<StringBuilder> {
     using ReturnType = void;

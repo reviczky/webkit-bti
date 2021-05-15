@@ -59,11 +59,8 @@
 #include <wtf/Logger.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/RobinHoodHashSet.h>
 #include <wtf/WeakHashSet.h>
-
-#if HAVE(VISIBILITY_PROPAGATION_VIEW)
-#include "LayerHostingContext.h"
-#endif
 
 namespace API {
 class Navigation;
@@ -77,6 +74,7 @@ struct PluginInfo;
 struct PrewarmInformation;
 struct SecurityOriginData;
 enum class ThirdPartyCookieBlockingMode : uint8_t;
+using FramesPerSecond = unsigned;
 using PlatformDisplayID = uint32_t;
 }
 
@@ -120,7 +118,7 @@ using WebProcessWithAudibleMediaCounter = RefCounter<WebProcessWithAudibleMediaC
 using WebProcessWithAudibleMediaToken = WebProcessWithAudibleMediaCounter::Token;
 enum class CheckBackForwardList : bool { No, Yes };
 
-class WebProcessProxy : public AuxiliaryProcessProxy, public ResponsivenessTimer::Client, public ThreadSafeRefCounted<WebProcessProxy>, public CanMakeWeakPtr<WebProcessProxy>, private ProcessThrottlerClient {
+class WebProcessProxy : public AuxiliaryProcessProxy, public ResponsivenessTimer::Client, private ProcessThrottlerClient {
 public:
     typedef HashMap<WebCore::FrameIdentifier, RefPtr<WebFrameProxy>> WebFrameProxyMap;
     typedef HashMap<WebPageProxyIdentifier, WebPageProxy*> WebPageProxyMap;
@@ -218,11 +216,13 @@ public:
 
     static bool fullKeyboardAccessEnabled();
 
-#if HAVE(UIKIT_WITH_MOUSE_SUPPORT) && PLATFORM(IOS)
-    static void notifyHasMouseDeviceChanged();
+#if HAVE(MOUSE_DEVICE_OBSERVATION)
+    static void notifyHasMouseDeviceChanged(bool hasMouseDevice);
 #endif
 
+#if HAVE(STYLUS_DEVICE_OBSERVATION)
     static void notifyHasStylusDeviceChanged(bool hasStylusDevice);
+#endif
 
     void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, CompletionHandler<void(WebsiteData)>&&);
     void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince, CompletionHandler<void()>&&);
@@ -297,9 +297,10 @@ public:
     void releaseHighPerformanceGPU();
 #endif
 
-#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
-    void startDisplayLink(DisplayLinkObserverID, WebCore::PlatformDisplayID);
+#if HAVE(CVDISPLAYLINK)
+    void startDisplayLink(DisplayLinkObserverID, WebCore::PlatformDisplayID, WebCore::FramesPerSecond);
     void stopDisplayLink(DisplayLinkObserverID, WebCore::PlatformDisplayID);
+    void setDisplayLinkPreferredFramesPerSecond(DisplayLinkObserverID, WebCore::PlatformDisplayID, WebCore::FramesPerSecond);
 #endif
 
     // Called when the web process has crashed or we know that it will terminate soon.
@@ -334,6 +335,8 @@ public:
     bool hasAudioCaptureExtension() const { return m_mediaCaptureSandboxExtensions & Audio; }
     void grantAudioCaptureExtension() { m_mediaCaptureSandboxExtensions |= Audio; }
     void revokeAudioCaptureExtension() { m_mediaCaptureSandboxExtensions &= ~Audio; }
+
+    void sendAudioComponentRegistrations();
 #endif
 
 #if ENABLE(REMOTE_INSPECTOR) && PLATFORM(COCOA)
@@ -374,12 +377,8 @@ public:
     void setHasIssuedAttachmentElementRelatedSandboxExtensions() { m_hasIssuedAttachmentElementRelatedSandboxExtensions = true; }
 #endif
 
-#if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    void didCreateContextInGPUProcessForVisibilityPropagation(LayerHostingContextID);
-#endif
-
 #if ENABLE(GPU_PROCESS)
-    void gpuProcessCrashed();
+    void gpuProcessExited(GPUProcessTerminationReason);
 #endif
 
     bool hasSleepDisabler() const;
@@ -398,6 +397,7 @@ public:
 #endif
 
 #if ENABLE(IPC_TESTING_API)
+    bool ignoreInvalidMessageForTesting() const { return m_ignoreInvalidMessageForTesting; }
     void setIgnoreInvalidMessageForTesting();
 #endif
 
@@ -474,7 +474,7 @@ private:
     bool platformIsBeingDebugged() const;
     bool shouldAllowNonValidInjectedCode() const;
 
-    static const HashSet<String>& platformPathsWithAssumedReadAccess();
+    static const MemoryCompactLookupOnlyRobinHoodHashSet<String>& platformPathsWithAssumedReadAccess();
 
     ResponsivenessTimer& responsivenessTimer() { return m_responsivenessTimer; }
     void updateBackgroundResponsivenessTimer();
@@ -486,7 +486,7 @@ private:
     // IPC::Connection::Client
     friend class WebConnectionToWebProcess;
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) override;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
 
@@ -499,7 +499,7 @@ private:
 
     // Implemented in generated WebProcessProxyMessageReceiver.cpp
     void didReceiveWebProcessProxyMessage(IPC::Connection&, IPC::Decoder&);
-    void didReceiveSyncWebProcessProxyMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
+    bool didReceiveSyncWebProcessProxyMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&);
 
     bool canTerminateAuxiliaryProcess();
 

@@ -57,7 +57,7 @@ static constexpr bool verbose = false;
 
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(AccessCase);
 
-AccessCase::AccessCase(VM& vm, JSCell* owner, AccessType type, CacheableIdentifier identifier, PropertyOffset offset, Structure* structure, const ObjectPropertyConditionSet& conditionSet, std::unique_ptr<PolyProtoAccessChain> prototypeAccessChain)
+AccessCase::AccessCase(VM& vm, JSCell* owner, AccessType type, CacheableIdentifier identifier, PropertyOffset offset, Structure* structure, const ObjectPropertyConditionSet& conditionSet, RefPtr<PolyProtoAccessChain>&& prototypeAccessChain)
     : m_type(type)
     , m_offset(offset)
     , m_polyProtoAccessChain(WTFMove(prototypeAccessChain))
@@ -68,7 +68,7 @@ AccessCase::AccessCase(VM& vm, JSCell* owner, AccessType type, CacheableIdentifi
     RELEASE_ASSERT(m_conditionSet.isValid());
 }
 
-std::unique_ptr<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType type, CacheableIdentifier identifier, PropertyOffset offset, Structure* structure, const ObjectPropertyConditionSet& conditionSet, std::unique_ptr<PolyProtoAccessChain> prototypeAccessChain)
+std::unique_ptr<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType type, CacheableIdentifier identifier, PropertyOffset offset, Structure* structure, const ObjectPropertyConditionSet& conditionSet, RefPtr<PolyProtoAccessChain>&& prototypeAccessChain)
 {
     switch (type) {
     case InHit:
@@ -110,7 +110,7 @@ std::unique_ptr<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType
 
 std::unique_ptr<AccessCase> AccessCase::createTransition(
     VM& vm, JSCell* owner, CacheableIdentifier identifier, PropertyOffset offset, Structure* oldStructure, Structure* newStructure,
-    const ObjectPropertyConditionSet& conditionSet, std::unique_ptr<PolyProtoAccessChain> prototypeAccessChain)
+    const ObjectPropertyConditionSet& conditionSet, RefPtr<PolyProtoAccessChain>&& prototypeAccessChain)
 {
     RELEASE_ASSERT(oldStructure == newStructure->previousID());
 
@@ -1068,7 +1068,7 @@ void AccessCase::generateWithGuard(
             jit, ScratchRegisterAllocator::ExtraStackSpace::NoExtraSpace);
 
         jit.loadPtr(CCallHelpers::Address(baseGPR, JSArrayBufferView::offsetOfVector()), scratch2GPR);
-        jit.cageConditionally(Gigacage::Primitive, scratch2GPR, scratchGPR, scratchGPR);
+        jit.cageConditionallyAndUntag(Gigacage::Primitive, scratch2GPR, scratchGPR, scratchGPR, false);
 
         jit.signExtend32ToPtr(propertyGPR, scratchGPR);
         if (isInt(type)) {
@@ -1758,7 +1758,7 @@ void AccessCase::generateImpl(AccessGenerationState& state)
             GPRReg receiverForCustomGetGPR = baseGPR != thisGPR ? thisGPR : receiverGPR;
 
             // getter: EncodedJSValue (*GetValueFunc)(JSGlobalObject*, EncodedJSValue thisValue, PropertyName);
-            // setter: bool (*PutValueFunc)(JSGlobalObject*, EncodedJSValue thisObject, EncodedJSValue value);
+            // setter: bool (*PutValueFunc)(JSGlobalObject*, EncodedJSValue thisObject, EncodedJSValue value, PropertyName);
             // Custom values are passed the slotBase (the property holder), custom accessors are passed the thisValue (receiver).
             GPRReg baseForCustom = takesPropertyOwnerAsCFunctionArgument ? propertyOwnerGPR : receiverForCustomGetGPR; 
             // We do not need to keep globalObject alive since the owner CodeBlock (even if JSGlobalObject* is one of CodeBlock that is inlined and held by DFG CodeBlock)
@@ -1783,12 +1783,14 @@ void AccessCase::generateImpl(AccessGenerationState& state)
                         CCallHelpers::TrustedImmPtr(globalObject),
                         CCallHelpers::CellValue(baseForCustom),
                         valueRegs,
+                        CCallHelpers::TrustedImmPtr(uid()),
                         CCallHelpers::TrustedImmPtr(this->as<GetterSetterAccessCase>().m_customAccessor.executableAddress()));
                 } else {
                     jit.setupArguments<PutPropertySlot::PutValueFunc>(
                         CCallHelpers::TrustedImmPtr(globalObject),
                         CCallHelpers::CellValue(baseForCustom),
-                        valueRegs);
+                        valueRegs,
+                        CCallHelpers::TrustedImmPtr(uid()));
                 }
             }
             jit.storePtr(GPRInfo::callFrameRegister, &vm.topCallFrame);
@@ -1798,9 +1800,12 @@ void AccessCase::generateImpl(AccessGenerationState& state)
             else
                 operationCall = jit.call(CustomAccessorPtrTag);
             jit.addLinkTask([=] (LinkBuffer& linkBuffer) {
-                if (Options::useJITCage())
-                    linkBuffer.link(operationCall, FunctionPtr<OperationPtrTag>(vmEntryCustomAccessor));
-                else
+                if (Options::useJITCage()) {
+                    if (m_type == CustomValueGetter || m_type == CustomAccessorGetter)
+                        linkBuffer.link(operationCall, FunctionPtr<OperationPtrTag>(vmEntryCustomGetter));
+                    else
+                        linkBuffer.link(operationCall, FunctionPtr<OperationPtrTag>(vmEntryCustomSetter));
+                } else
                     linkBuffer.link(operationCall, this->as<GetterSetterAccessCase>().m_customAccessor);
             });
 

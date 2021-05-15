@@ -54,7 +54,8 @@ enum ContentChangeType {
     CanvasChanged,
     CanvasPixelsChanged,
     VideoChanged,
-    FullScreenChanged
+    FullScreenChanged,
+    ModelChanged
 };
 
 class BorderEdge;
@@ -131,7 +132,7 @@ public:
 
     void updateFromStyle() override;
 
-    bool requiresLayer() const override { return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasClipPath() || hasTransformRelatedProperty() || hasHiddenBackface() || hasReflection(); }
+    bool requiresLayer() const override { return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasTransformRelatedProperty() || hasHiddenBackface() || hasReflection(); }
 
     // This will work on inlines to return the bounding box of all of the lines' border boxes.
     virtual LayoutRect borderBoundingBox() const = 0;
@@ -215,7 +216,7 @@ public:
 
     // Overridden by subclasses to determine line height and baseline position.
     virtual LayoutUnit lineHeight(bool firstLine, LineDirectionMode, LinePositionMode = PositionOnContainingLine) const = 0;
-    virtual int baselinePosition(FontBaseline, bool firstLine, LineDirectionMode, LinePositionMode = PositionOnContainingLine) const = 0;
+    virtual LayoutUnit baselinePosition(FontBaseline, bool firstLine, LineDirectionMode, LinePositionMode = PositionOnContainingLine) const = 0;
 
     void mapAbsoluteToLocalPoint(MapCoordinatesFlags, TransformState&) const override;
 

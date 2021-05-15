@@ -104,10 +104,12 @@ void RealtimeMediaSource::removeObserver(Observer& observer)
 
 void RealtimeMediaSource::setMuted(bool muted)
 {
-    ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER, muted);
-
     // Changed m_muted before calling start/stop so muted() will reflect the correct state.
     bool changed = m_muted != muted;
+
+    if (changed)
+        ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER, muted);
+
     m_muted = muted;
     if (muted)
         stop();
@@ -173,13 +175,14 @@ void RealtimeMediaSource::updateHasStartedProducingData()
     if (m_hasStartedProducingData)
         return;
 
-    callOnMainThread([this, weakThis = makeWeakPtr(this)] {
-        if (!weakThis)
+    // Heap allocations are forbidden on the audio thread for performance reasons so we need to
+    // explicitly allow the following allocation(s).
+    DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
+    callOnMainThread([protectedThis = makeRef(*this)] {
+        if (protectedThis->m_hasStartedProducingData)
             return;
-        if (m_hasStartedProducingData)
-            return;
-        m_hasStartedProducingData = true;
-        forEachObserver([&](auto& observer) {
+        protectedThis->m_hasStartedProducingData = true;
+        protectedThis->forEachObserver([&](auto& observer) {
             observer.hasStartedProducingData();
         });
     });
@@ -256,17 +259,18 @@ void RealtimeMediaSource::requestToEnd(Observer& callingObserver)
     if (hasObserverPreventingStopping)
         return;
 
+    ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER);
     end(&callingObserver);
 }
 
 void RealtimeMediaSource::end(Observer* callingObserver)
 {
-    ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER);
-
     ASSERT(isMainThread());
 
     if (m_isEnded)
         return;
+
+    ALWAYS_LOG_IF(m_logger, LOGIDENTIFIER);
 
     auto protectedThis = makeRef(*this);
 

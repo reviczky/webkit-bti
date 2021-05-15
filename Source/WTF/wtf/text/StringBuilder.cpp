@@ -112,8 +112,10 @@ void StringBuilder::allocateBuffer(const LChar* currentCharacters, unsigned requ
     auto buffer = StringImpl::tryCreateUninitialized(requiredLength, m_bufferCharacters8);
     if (UNLIKELY(!buffer))
         return didOverflow();
-    std::memcpy(m_bufferCharacters8, currentCharacters, m_length.unsafeGet());
-    
+
+    if (m_length)
+        std::memcpy(m_bufferCharacters8, currentCharacters, m_length.unsafeGet());
+
     // Update the builder state.
     m_buffer = WTFMove(buffer);
     m_string = String();
@@ -390,48 +392,6 @@ void StringBuilder::append(CFStringRef string)
 }
 
 #endif
-
-void StringBuilder::appendNumber(int number)
-{
-    numberToStringSigned<StringBuilder>(number, this);
-}
-
-void StringBuilder::appendNumber(unsigned number)
-{
-    numberToStringUnsigned<StringBuilder>(number, this);
-}
-
-void StringBuilder::appendNumber(long number)
-{
-    numberToStringSigned<StringBuilder>(number, this);
-}
-
-void StringBuilder::appendNumber(unsigned long number)
-{
-    numberToStringUnsigned<StringBuilder>(number, this);
-}
-
-void StringBuilder::appendNumber(long long number)
-{
-    numberToStringSigned<StringBuilder>(number, this);
-}
-
-void StringBuilder::appendNumber(unsigned long long number)
-{
-    numberToStringUnsigned<StringBuilder>(number, this);
-}
-
-void StringBuilder::appendNumber(float number)
-{
-    NumberToStringBuffer buffer;
-    append(numberToString(number, buffer));
-}
-
-void StringBuilder::appendNumber(double number)
-{
-    NumberToStringBuffer buffer;
-    append(numberToString(number, buffer));
-}
 
 bool StringBuilder::canShrink() const
 {

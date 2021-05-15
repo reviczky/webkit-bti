@@ -171,6 +171,7 @@ set(WebKit_MESSAGES_IN_FILES
     NetworkProcess/webrtc/NetworkMDNSRegister
     NetworkProcess/webrtc/NetworkRTCMonitor
     NetworkProcess/webrtc/NetworkRTCProvider
+    NetworkProcess/webrtc/RTCDataChannelRemoteManagerProxy
 
     PluginProcess/PluginControllerProxy
     PluginProcess/PluginProcess
@@ -184,6 +185,9 @@ set(WebKit_MESSAGES_IN_FILES
     Shared/Plugins/NPObjectMessageReceiver
 
     UIProcess/DrawingAreaProxy
+
+    UIProcess/Media/RemoteMediaSessionCoordinatorProxy
+
     UIProcess/SpeechRecognitionRemoteRealtimeMediaSourceManager
     UIProcess/SpeechRecognitionServer
     UIProcess/VisitedLinkStore
@@ -201,8 +205,8 @@ set(WebKit_MESSAGES_IN_FILES
 
     UIProcess/GPU/GPUProcessProxy
 
-    UIProcess/Inspector/RemoteWebInspectorProxy
-    UIProcess/Inspector/WebInspectorProxy
+    UIProcess/Inspector/RemoteWebInspectorUIProxy
+    UIProcess/Inspector/WebInspectorUIProxy
 
     UIProcess/Network/NetworkProcessProxy
 
@@ -244,7 +248,10 @@ set(WebKit_MESSAGES_IN_FILES
     WebProcess/Inspector/WebInspectorInterruptDispatcher
     WebProcess/Inspector/WebInspectorUI
 
+    WebProcess/MediaSession/RemoteMediaSessionCoordinator
+
     WebProcess/Network/webrtc/LibWebRTCNetwork
+    WebProcess/Network/webrtc/RTCDataChannelRemoteManager
     WebProcess/Network/webrtc/WebMDNSRegister
     WebProcess/Network/webrtc/WebRTCMonitor
     WebProcess/Network/webrtc/WebRTCResolver
@@ -319,13 +326,7 @@ else ()
         )
         add_definitions(${OPENGL_DEFINITIONS})
     elseif (USE_OPENGL_ES)
-        list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
-            ${OPENGLES2_INCLUDE_DIRS}
-        )
-        list(APPEND WebKit_PRIVATE_LIBRARIES
-            ${OPENGLES2_LIBRARIES}
-        )
-        add_definitions(${OPENGLES2_DEFINITIONS})
+        list(APPEND WebKit_PRIVATE_LIBRARIES OpenGL::GLES)
     endif ()
 
     if (USE_EGL)

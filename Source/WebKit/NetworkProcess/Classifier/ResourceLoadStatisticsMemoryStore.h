@@ -53,7 +53,7 @@ public:
     bool isEmpty() const override;
 
     Vector<WebResourceLoadStatisticsStore::ThirdPartyData> aggregatedThirdPartyData() const override;
-    const HashMap<RegistrableDomain, WebCore::ResourceLoadStatistics>& data() const { return m_resourceStatisticsMap; }
+    const HashMap<RegistrableDomain, UniqueRef<WebCore::ResourceLoadStatistics>>& data() const { return m_resourceStatisticsMap; }
 
     std::unique_ptr<WebCore::KeyedEncoder> createEncoderFromData() const;
     void mergeWithDataFromDecoder(WebCore::KeyedDecoder&);
@@ -106,17 +106,17 @@ public:
     void setLastSeen(const RegistrableDomain&, Seconds) override;
     void removeDataForDomain(const RegistrableDomain&) override;
     Vector<RegistrableDomain> allDomains() const final;
-    void insertExpiredStatisticForTesting(const RegistrableDomain&, bool hasUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent) override;
+    void insertExpiredStatisticForTesting(const RegistrableDomain&, unsigned numberOfOperatingDaysPassed, bool hasUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent) override;
 
     // Private Click Measurement is not implemented in the ITP memory store.
     void insertPrivateClickMeasurement(WebCore::PrivateClickMeasurement&&, PrivateClickMeasurementAttributionType) override { };
     void markAllUnattributedPrivateClickMeasurementAsExpiredForTesting() override { };
-    Optional<Seconds> attributePrivateClickMeasurement(const WebCore::PrivateClickMeasurement::SourceSite&, const WebCore::PrivateClickMeasurement::AttributeOnSite&, WebCore::PrivateClickMeasurement::AttributionTriggerData&&) override { return { }; };
+    Optional<WebCore::PrivateClickMeasurement::AttributionSecondsUntilSendData>attributePrivateClickMeasurement(const WebCore::PrivateClickMeasurement::SourceSite&, const WebCore::PrivateClickMeasurement::AttributionDestinationSite&, WebCore::PrivateClickMeasurement::AttributionTriggerData&&) override { return { }; };
     Vector<WebCore::PrivateClickMeasurement> allAttributedPrivateClickMeasurement() override { return { }; };
     void clearPrivateClickMeasurement(Optional<RegistrableDomain>) override { };
     void clearExpiredPrivateClickMeasurement() override { };
     String privateClickMeasurementToString() override { return String(); };
-    void clearSentAttribution(WebCore::PrivateClickMeasurement&&) override { };
+    void clearSentAttribution(WebCore::PrivateClickMeasurement&&, WebCore::PrivateClickMeasurement::AttributionReportEndpoint) override { };
     void markAttributedPrivateClickMeasurementsAsExpiredForTesting() override { };
 
 private:
@@ -149,7 +149,7 @@ private:
     bool isMemoryStore() const final { return true; }
     Optional<WallTime> mostRecentUserInteractionTime(const ResourceLoadStatistics&);
 
-    HashMap<RegistrableDomain, ResourceLoadStatistics> m_resourceStatisticsMap;
+    HashMap<RegistrableDomain, UniqueRef<ResourceLoadStatistics>> m_resourceStatisticsMap;
     Vector<OperatingDate> m_operatingDates;
 };
 

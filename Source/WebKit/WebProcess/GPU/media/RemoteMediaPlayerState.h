@@ -32,11 +32,11 @@
 #include <WebCore/PlatformTimeRanges.h>
 #include <WebCore/VideoPlaybackQualityMetrics.h>
 #include <wtf/MediaTime.h>
+#include <wtf/MonotonicTime.h>
 
 namespace WebKit {
 
 struct RemoteMediaPlayerState {
-    MediaTime currentTime;
     MediaTime duration;
     MediaTime minTimeSeekable;
     MediaTime maxTimeSeekable;
@@ -58,7 +58,6 @@ struct RemoteMediaPlayerState {
     Optional<WebCore::VideoPlaybackQualityMetrics> videoMetrics;
     Optional<bool> wouldTaintDocumentSecurityOrigin { true };
     bool paused { true };
-    bool loadingProgressed { false };
     bool canSaveMediaData { false };
     bool hasAudio { false };
     bool hasVideo { false };
@@ -71,7 +70,6 @@ struct RemoteMediaPlayerState {
     template<class Encoder>
     void encode(Encoder& encoder) const
     {
-        encoder << currentTime;
         encoder << duration;
         encoder << minTimeSeekable;
         encoder << maxTimeSeekable;
@@ -93,7 +91,6 @@ struct RemoteMediaPlayerState {
         encoder << videoMetrics;
         encoder << wouldTaintDocumentSecurityOrigin;
         encoder << paused;
-        encoder << loadingProgressed;
         encoder << canSaveMediaData;
         encoder << hasAudio;
         encoder << hasVideo;
@@ -107,11 +104,6 @@ struct RemoteMediaPlayerState {
     template <class Decoder>
     static Optional<RemoteMediaPlayerState> decode(Decoder& decoder)
     {
-        Optional<MediaTime> currentTime;
-        decoder >> currentTime;
-        if (!currentTime)
-            return WTF::nullopt;
-
         Optional<MediaTime> duration;
         decoder >> duration;
         if (!duration)
@@ -213,11 +205,6 @@ struct RemoteMediaPlayerState {
         if (!paused)
             return WTF::nullopt;
 
-        Optional<bool> loadingProgressed;
-        decoder >> loadingProgressed;
-        if (!loadingProgressed)
-            return WTF::nullopt;
-
         Optional<bool> canSaveMediaData;
         decoder >> canSaveMediaData;
         if (!canSaveMediaData)
@@ -259,7 +246,6 @@ struct RemoteMediaPlayerState {
             return WTF::nullopt;
 
         return {{
-            WTFMove(*currentTime),
             WTFMove(*duration),
             WTFMove(*minTimeSeekable),
             WTFMove(*maxTimeSeekable),
@@ -281,7 +267,6 @@ struct RemoteMediaPlayerState {
             WTFMove(*videoMetrics),
             WTFMove(*wouldTaintDocumentSecurityOrigin),
             *paused,
-            *loadingProgressed,
             *canSaveMediaData,
             *hasAudio,
             *hasVideo,

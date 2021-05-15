@@ -27,6 +27,7 @@
 #import "PlatformCALayerRemote.h"
 
 #import "PlatformCALayerRemoteCustom.h"
+#import "PlatformCALayerRemoteModelHosting.h"
 #import "PlatformCALayerRemoteTiledBacking.h"
 #import "RemoteLayerBackingStore.h"
 #import "RemoteLayerTreeContext.h"
@@ -62,6 +63,13 @@ Ref<PlatformCALayerRemote> PlatformCALayerRemote::create(PlatformLayer *platform
 {
     return PlatformCALayerRemoteCustom::create(platformLayer, owner, context);
 }
+
+#if ENABLE(MODEL_ELEMENT)
+Ref<PlatformCALayerRemote> PlatformCALayerRemote::create(Ref<WebCore::Model> model, WebCore::PlatformCALayerClient* owner, RemoteLayerTreeContext& context)
+{
+    return PlatformCALayerRemoteModelHosting::create(model, owner, context);
+}
+#endif
 
 Ref<PlatformCALayerRemote> PlatformCALayerRemote::create(const PlatformCALayerRemote& other, WebCore::PlatformCALayerClient* owner, RemoteLayerTreeContext& context)
 {
@@ -118,6 +126,12 @@ void PlatformCALayerRemote::moveToContext(RemoteLayerTreeContext& context)
     context.layerDidEnterContext(*this, layerType());
 
     m_properties.notePropertiesChanged(m_properties.everChangedProperties);
+}
+
+void PlatformCALayerRemote::populateCreationProperties(RemoteLayerTreeTransaction::LayerCreationProperties& properties, const RemoteLayerTreeContext& context, PlatformCALayer::LayerType type)
+{
+    properties.layerID = layerID();
+    properties.type = type;
 }
 
 void PlatformCALayerRemote::updateClonedLayerProperties(PlatformCALayerRemote& clone, bool copyContents) const
@@ -219,7 +233,12 @@ void PlatformCALayerRemote::updateBackingStore()
 
     ASSERT(m_properties.backingStoreAttached);
 
-    m_properties.backingStore->ensureBackingStore(m_properties.bounds.size(), m_properties.contentsScale, m_acceleratesDrawing, m_wantsDeepColorBackingStore, m_properties.opaque);
+    auto type = m_acceleratesDrawing ? RemoteLayerBackingStore::Type::IOSurface : RemoteLayerBackingStore::Type::Bitmap;
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
+    if (m_context->useCGDisplayListsForDOMRendering())
+        type = RemoteLayerBackingStore::Type::CGDisplayList;
+#endif
+    m_properties.backingStore->ensureBackingStore(type, m_properties.bounds.size(), m_properties.contentsScale, m_wantsDeepColorBackingStore, m_properties.opaque);
 }
 
 void PlatformCALayerRemote::setNeedsDisplayInRect(const FloatRect& rect)

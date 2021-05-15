@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "Timeout.h"
 #include <wtf/Noncopyable.h>
 #include <wtf/Optional.h>
 #include <wtf/Seconds.h>
@@ -32,6 +33,8 @@
 #if OS(DARWIN)
 #include <mach/semaphore.h>
 #include <wtf/MachSendRight.h>
+#elif OS(WINDOWS)
+#include <windows.h>
 #endif
 
 namespace IPC {
@@ -51,23 +54,28 @@ public:
     void encode(Encoder&) const;
     static Optional<Semaphore> decode(Decoder&);
 
+    void signal();
+    bool wait();
+    bool waitFor(Timeout);
+
 #if OS(DARWIN)
     explicit Semaphore(MachSendRight&&);
 
-    void signal();
-    void wait();
-    void waitFor(Seconds);
     MachSendRight createSendRight() const;
     explicit operator bool() const { return m_sendRight || m_semaphore != SEMAPHORE_NULL; }
+#elif OS(WINDOWS)
+    explicit Semaphore(HANDLE);
 #else
     explicit operator bool() const { return true; }
 #endif
 
 private:
-#if OS(DARWIN)
     void destroy();
+#if OS(DARWIN)
     MachSendRight m_sendRight;
     semaphore_t m_semaphore { SEMAPHORE_NULL };
+#elif OS(WINDOWS)
+    HANDLE m_semaphoreHandle { nullptr };
 #endif
 };
 

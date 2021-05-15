@@ -197,6 +197,16 @@ Text* Position::containerText() const
     return nullptr;
 }
 
+Element* Position::containerOrParentElement() const
+{
+    auto* container = containerNode();
+    if (!container)
+        return nullptr;
+    if (is<Element>(container))
+        return downcast<Element>(container);
+    return container->parentElement();
+}
+
 int Position::computeOffsetInContainerNode() const
 {
     if (!m_anchorNode)
@@ -1594,9 +1604,10 @@ Position makeDeprecatedLegacyPosition(const BoundaryPoint& point)
 
 Optional<BoundaryPoint> makeBoundaryPoint(const Position& position)
 {
-    if (position.isNull())
+    auto container = makeRefPtr(position.containerNode());
+    if (!container)
         return WTF::nullopt;
-    return BoundaryPoint { *position.containerNode(), static_cast<unsigned>(position.computeOffsetInContainerNode()) };
+    return BoundaryPoint { container.releaseNonNull(), static_cast<unsigned>(position.computeOffsetInContainerNode()) };
 }
 
 PartialOrdering documentOrder(const Position& a, const Position& b)

@@ -38,6 +38,7 @@
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringHash.h>
+#include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/TextStream.h>
 
 namespace WTF {
@@ -133,7 +134,7 @@ StringView URL::host() const
 
 Optional<uint16_t> URL::port() const
 {
-    return m_portLength ? parseUInt16(StringView(m_string).substring(m_hostEnd + 1, m_portLength - 1)) : WTF::nullopt;
+    return m_portLength ? parseInteger<uint16_t>(StringView(m_string).substring(m_hostEnd + 1, m_portLength - 1)) : WTF::nullopt;
 }
 
 String URL::hostAndPort() const
@@ -503,7 +504,7 @@ void URL::setHostAndPort(StringView hostAndPort)
         // Multiple colons are acceptable only in case of IPv6.
         if (hostName.contains(':') && !hostName.startsWith('['))
             return;
-        if (!parseUInt16(portString))
+        if (!parseInteger<uint16_t>(portString))
             portString = { };
     }
     if (hostName.isEmpty()) {
@@ -854,24 +855,25 @@ bool protocolIsInHTTPFamily(StringView url)
         && (url[4] == ':' || (isASCIIAlphaCaselessEqual(url[4], 's') && length >= 6 && url[5] == ':'));
 }
 
+
+static StaticStringImpl aboutBlankString { "about:blank" };
 const URL& aboutBlankURL()
 {
     static LazyNeverDestroyed<URL> staticBlankURL;
     static std::once_flag onceFlag;
     std::call_once(onceFlag, [&] {
-        static constexpr const char* aboutBlank = "about:blank";
-        staticBlankURL.construct(URL(), StringImpl::createStaticStringImpl(aboutBlank, strlen(aboutBlank)));
+        staticBlankURL.construct(URL(), &aboutBlankString);
     });
     return staticBlankURL;
 }
 
+static StaticStringImpl aboutSrcDocString { "about:srcdoc" };
 const URL& aboutSrcDocURL()
 {
     static LazyNeverDestroyed<URL> staticSrcDocURL;
     static std::once_flag onceFlag;
     std::call_once(onceFlag, [&] {
-        static constexpr const char* aboutSrcDoc = "about:srcdoc";
-        staticSrcDocURL.construct(URL(), StringImpl::createStaticStringImpl(aboutSrcDoc, strlen(aboutSrcDoc)));
+        staticSrcDocURL.construct(URL(), &aboutSrcDocString);
     });
     return staticSrcDocURL;
 }
@@ -971,6 +973,7 @@ bool portAllowed(const URL& url)
         6669, // Alternate IRC [Apple addition]
         6679, // Alternate IRC SSL [Apple addition]
         6697, // IRC+SSL [Apple addition]
+        10080, // amanda
     };
 
     // If the port is not in the blocked port list, allow it.

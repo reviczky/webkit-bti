@@ -54,9 +54,14 @@
 #include "WorkletGlobalScope.h"
 #include <JavaScriptCore/BuiltinNames.h>
 #include <JavaScriptCore/CodeBlock.h>
+#include <JavaScriptCore/GetterSetter.h>
+#include <JavaScriptCore/JSCustomGetterFunction.h>
+#include <JavaScriptCore/JSCustomSetterFunction.h>
 #include <JavaScriptCore/JSInternalPromise.h>
 #include <JavaScriptCore/StructureInlines.h>
+#include <JavaScriptCore/VMTrapsInlines.h>
 #include <JavaScriptCore/WasmStreamingCompiler.h>
+#include <JavaScriptCore/WeakGCMapInlines.h>
 
 namespace WebCore {
 using namespace JSC;
@@ -75,6 +80,8 @@ JSDOMGlobalObject::JSDOMGlobalObject(VM& vm, Structure* structure, Ref<DOMWrappe
     , m_world(WTFMove(world))
     , m_worldIsNormal(m_world->isNormal())
     , m_builtinInternalFunctions(vm)
+    , m_crossOriginFunctionMap(vm)
+    , m_crossOriginGetterSetterMap(vm)
 {
 }
 
@@ -90,6 +97,7 @@ JSC_DEFINE_HOST_FUNCTION(makeThisTypeErrorForBuiltins, (JSGlobalObject* globalOb
     ASSERT(callFrame);
     ASSERT(callFrame->argumentCount() == 2);
     VM& vm = globalObject->vm();
+    DeferTermination deferScope(vm);
     auto scope = DECLARE_CATCH_SCOPE(vm);
 
     auto interfaceName = callFrame->uncheckedArgument(0).getString(globalObject);
@@ -104,6 +112,7 @@ JSC_DEFINE_HOST_FUNCTION(makeGetterTypeErrorForBuiltins, (JSGlobalObject* global
     ASSERT(callFrame);
     ASSERT(callFrame->argumentCount() == 2);
     VM& vm = globalObject->vm();
+    DeferTermination deferScope(vm);
     auto scope = DECLARE_CATCH_SCOPE(vm);
 
     auto interfaceName = callFrame->uncheckedArgument(0).getString(globalObject);
@@ -111,7 +120,7 @@ JSC_DEFINE_HOST_FUNCTION(makeGetterTypeErrorForBuiltins, (JSGlobalObject* global
     auto attributeName = callFrame->uncheckedArgument(1).getString(globalObject);
     scope.assertNoException();
 
-    auto error = static_cast<ErrorInstance*>(createTypeError(globalObject, makeGetterTypeErrorMessage(interfaceName.utf8().data(), attributeName.utf8().data())));
+    auto error = static_cast<ErrorInstance*>(createTypeError(globalObject, JSC::makeDOMAttributeGetterTypeErrorMessage(interfaceName.utf8().data(), attributeName)));
     error->setNativeGetterTypeError();
     return JSValue::encode(error);
 }
@@ -122,6 +131,7 @@ JSC_DEFINE_HOST_FUNCTION(makeDOMExceptionForBuiltins, (JSGlobalObject* globalObj
     ASSERT(callFrame->argumentCount() == 2);
 
     auto& vm = globalObject->vm();
+    DeferTermination deferScope(vm);
     auto scope = DECLARE_CATCH_SCOPE(vm);
 
     auto codeValue = callFrame->uncheckedArgument(0).getString(globalObject);
@@ -135,7 +145,7 @@ JSC_DEFINE_HOST_FUNCTION(makeDOMExceptionForBuiltins, (JSGlobalObject* globalObj
         code = AbortError;
     auto value = createDOMException(globalObject, code, message);
 
-    EXCEPTION_ASSERT(!scope.exception() || isTerminatedExecutionException(vm, scope.exception()));
+    EXCEPTION_ASSERT(!scope.exception() || vm.hasPendingTerminationException());
 
     return JSValue::encode(value);
 }
@@ -167,7 +177,7 @@ JSC_DEFINE_HOST_FUNCTION(whenSignalAborted, (JSGlobalObject* globalObject, CallF
     return JSValue::encode(result ? JSValue(JSC::JSValue::JSTrue) : JSValue(JSC::JSValue::JSFalse));
 }
 
-void JSDOMGlobalObject::addBuiltinGlobals(VM& vm)
+SUPPRESS_ASAN void JSDOMGlobalObject::addBuiltinGlobals(VM& vm)
 {
     m_builtinInternalFunctions.initialize(*this);
 
@@ -230,10 +240,9 @@ ScriptExecutionContext* JSDOMGlobalObject::scriptExecutionContext() const
         return jsCast<const JSWorkerGlobalScopeBase*>(this)->scriptExecutionContext();
     if (inherits<JSWorkletGlobalScopeBase>(vm()))
         return jsCast<const JSWorkletGlobalScopeBase*>(this)->scriptExecutionContext();
-#if ENABLE(INDEXED_DATABASE)
     if (inherits<JSIDBSerializationGlobalObject>(vm()))
         return jsCast<const JSIDBSerializationGlobalObject*>(this)->scriptExecutionContext();
-#endif
+
     dataLog("Unexpected global object: ", JSValue(this), "\n");
     RELEASE_ASSERT_NOT_REACHED();
     return nullptr;
@@ -296,6 +305,35 @@ void JSDOMGlobalObject::clearDOMGuardedObjects()
     auto guardedObjectsCopy = m_guardedObjects;
     for (auto& guarded : guardedObjectsCopy)
         guarded->clear();
+}
+
+JSFunction* JSDOMGlobalObject::createCrossOriginFunction(JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, NativeFunction nativeFunction, unsigned length)
+{
+    auto& vm = lexicalGlobalObject->vm();
+    CrossOriginMapKey key = std::make_pair(lexicalGlobalObject, nativeFunction.rawPointer());
+
+    // WeakGCMap::ensureValue's functor must not invoke GC since GC can modify WeakGCMap in the middle of HashMap::ensure.
+    // We use DeferGC here (1) not to invoke GC when executing WeakGCMap::ensureValue and (2) to avoid looking up HashMap twice.
+    DeferGC deferGC(vm.heap);
+    return m_crossOriginFunctionMap.ensureValue(key, [&] {
+        return JSFunction::create(vm, lexicalGlobalObject, length, propertyName.publicName(), nativeFunction);
+    });
+}
+
+GetterSetter* JSDOMGlobalObject::createCrossOriginGetterSetter(JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, GetValueFunc getter, PutValueFunc setter)
+{
+    ASSERT(getter || setter);
+    auto& vm = lexicalGlobalObject->vm();
+    CrossOriginMapKey key = std::make_pair(lexicalGlobalObject, getter ? reinterpret_cast<void*>(getter) : reinterpret_cast<void*>(setter));
+
+    // WeakGCMap::ensureValue's functor must not invoke GC since GC can modify WeakGCMap in the middle of HashMap::ensure.
+    // We use DeferGC here (1) not to invoke GC when executing WeakGCMap::ensureValue and (2) to avoid looking up HashMap twice.
+    DeferGC deferGC(vm.heap);
+    return m_crossOriginGetterSetterMap.ensureValue(key, [&] {
+        return GetterSetter::create(vm, lexicalGlobalObject,
+            getter ? JSCustomGetterFunction::create(vm, lexicalGlobalObject, propertyName, getter) : nullptr,
+            setter ? JSCustomSetterFunction::create(vm, lexicalGlobalObject, propertyName, setter) : nullptr);
+    });
 }
 
 #if ENABLE(WEBASSEMBLY)
@@ -376,7 +414,7 @@ static JSC::JSPromise* handleResponseOnStreamingAction(JSC::JSGlobalObject* glob
                 auto scope = DECLARE_THROW_SCOPE(vm);
                 auto error = createDOMException(*globalObject, WTFMove(exception));
                 if (UNLIKELY(scope.exception())) {
-                    ASSERT(isTerminatedExecutionException(vm, scope.exception()));
+                    ASSERT(vm.hasPendingTerminationException());
                     compiler->cancel();
                     return;
                 }
@@ -440,10 +478,9 @@ static ScriptModuleLoader* scriptModuleLoader(JSDOMGlobalObject* globalObject)
         return &jsCast<const JSWorkerGlobalScopeBase*>(globalObject)->wrapped().moduleLoader();
     if (globalObject->inherits<JSWorkletGlobalScopeBase>(vm))
         return &jsCast<const JSWorkletGlobalScopeBase*>(globalObject)->wrapped().moduleLoader();
-#if ENABLE(INDEXED_DATABASE)
     if (globalObject->inherits<JSIDBSerializationGlobalObject>(vm))
         return nullptr;
-#endif
+
     dataLog("Unexpected global object: ", JSValue(globalObject), "\n");
     RELEASE_ASSERT_NOT_REACHED();
     return nullptr;

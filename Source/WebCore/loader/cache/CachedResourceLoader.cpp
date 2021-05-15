@@ -897,6 +897,13 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::requ
         return makeUnexpected(ResourceError { errorDomainWebKitInternal, 0, url, "Not allowed to request resource"_s, ResourceError::Type::AccessControl });
     }
 
+    if (!portAllowed(url)) {
+        if (forPreload == ForPreload::No)
+            FrameLoader::reportBlockedLoadFailed(frame, url);
+        RELEASE_LOG_IF_ALLOWED_WITH_FRAME("CachedResourceLoader::requestResource URL has a blocked port", frame);
+        return makeUnexpected(frame.loader().blockedError(request.resourceRequest()));
+    }
+
     request.updateReferrerPolicy(document() ? document()->referrerPolicy() : ReferrerPolicy::NoReferrerWhenDowngrade);
 
     if (InspectorInstrumentation::willIntercept(&frame, request.resourceRequest()))
@@ -907,7 +914,7 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::requ
 #if ENABLE(CONTENT_EXTENSIONS)
     if (m_documentLoader) {
         const auto& resourceRequest = request.resourceRequest();
-        auto results = page.userContentProvider().processContentRuleListsForLoad(page, resourceRequest.url(), ContentExtensions::toResourceType(type), *m_documentLoader);
+        auto results = page.userContentProvider().processContentRuleListsForLoad(page, resourceRequest.url(), ContentExtensions::toResourceType(type, request.resourceRequest().requester()), *m_documentLoader);
         bool blockedLoad = results.summary.blockedLoad;
         bool madeHTTPS = results.summary.madeHTTPS;
         request.applyResults(WTFMove(results), &page);

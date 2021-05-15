@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +27,9 @@
 #include "DisplayListReplayer.h"
 
 #include "DisplayListItems.h"
+#include "DisplayListIterator.h"
 #include "GraphicsContext.h"
+#include "InMemoryDisplayList.h"
 #include "Logging.h"
 #include <wtf/text/TextStream.h>
 
@@ -153,7 +155,7 @@ std::pair<Optional<StopReplayReason>, Optional<RenderingResourceIdentifier>> Rep
 
     if (item.is<BeginClipToDrawingCommands>()) {
         if (m_maskImageBuffer)
-            return { StopReplayReason::InvalidItem, WTF::nullopt };
+            return { StopReplayReason::InvalidItemOrExtent, WTF::nullopt };
         auto& clipItem = item.get<BeginClipToDrawingCommands>();
         m_maskImageBuffer = ImageBuffer::createCompatibleBuffer(clipItem.destination().size(), clipItem.colorSpace(), m_context);
         if (!m_maskImageBuffer)
@@ -163,7 +165,7 @@ std::pair<Optional<StopReplayReason>, Optional<RenderingResourceIdentifier>> Rep
 
     if (item.is<EndClipToDrawingCommands>()) {
         if (!m_maskImageBuffer)
-            return { StopReplayReason::InvalidItem, WTF::nullopt };
+            return { StopReplayReason::InvalidItemOrExtent, WTF::nullopt };
         auto& clipItem = item.get<EndClipToDrawingCommands>();
         m_context.clipToImageBuffer(*m_maskImageBuffer, clipItem.destination());
         m_maskImageBuffer = nullptr;
@@ -179,36 +181,38 @@ ReplayResult Replayer::replay(const FloatRect& initialClip, bool trackReplayList
     LOG_WITH_STREAM(DisplayLists, stream << "\nReplaying with clip " << initialClip);
     UNUSED_PARAM(initialClip);
 
-    std::unique_ptr<DisplayList> replayList;
+    std::unique_ptr<InMemoryDisplayList> replayList;
     if (UNLIKELY(trackReplayList))
-        replayList = makeUnique<DisplayList>();
+        replayList = makeUnique<InMemoryDisplayList>();
 
 #if !LOG_DISABLED
     size_t i = 0;
 #endif
     ReplayResult result;
-    for (auto [item, extent, itemSizeInBuffer] : m_displayList) {
+    for (auto displayListItem : m_displayList) {
+        if (!displayListItem) {
+            result.reasonForStopping = StopReplayReason::InvalidItemOrExtent;
+            break;
+        }
+
+        auto [item, extent, itemSizeInBuffer] = displayListItem.value();
+
         if (!initialClip.isZero() && extent && !extent->intersects(initialClip)) {
             LOG_WITH_STREAM(DisplayLists, stream << "skipping " << i++ << " " << item);
             result.numberOfBytesRead += itemSizeInBuffer;
             continue;
         }
 
-        if (!item) {
-            result.reasonForStopping = StopReplayReason::InvalidItem;
-            break;
-        }
-
         LOG_WITH_STREAM(DisplayLists, stream << "applying " << i++ << " " << item);
 
-        if (item->is<MetaCommandChangeDestinationImageBuffer>()) {
+        if (item.is<MetaCommandChangeDestinationImageBuffer>()) {
             result.numberOfBytesRead += itemSizeInBuffer;
             result.reasonForStopping = StopReplayReason::ChangeDestinationImageBuffer;
-            result.nextDestinationImageBuffer = item->get<MetaCommandChangeDestinationImageBuffer>().identifier();
+            result.nextDestinationImageBuffer = item.get<MetaCommandChangeDestinationImageBuffer>().identifier();
             break;
         }
 
-        if (auto [reasonForStopping, missingCachedResourceIdentifier] = applyItem(*item); reasonForStopping) {
+        if (auto [reasonForStopping, missingCachedResourceIdentifier] = applyItem(item); reasonForStopping) {
             result.reasonForStopping = *reasonForStopping;
             result.missingCachedResourceIdentifier = WTFMove(missingCachedResourceIdentifier);
             break;
@@ -217,8 +221,8 @@ ReplayResult Replayer::replay(const FloatRect& initialClip, bool trackReplayList
         result.numberOfBytesRead += itemSizeInBuffer;
 
         if (UNLIKELY(trackReplayList)) {
-            replayList->append(*item);
-            if (item->isDrawingItem())
+            replayList->append(item);
+            if (item.isDrawingItem())
                 replayList->addDrawingItemExtent(WTFMove(extent));
         }
     }

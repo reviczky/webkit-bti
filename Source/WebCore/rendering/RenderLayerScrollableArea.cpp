@@ -119,9 +119,9 @@ void RenderLayerScrollableArea::restoreScrollPosition()
     element->setSavedLayerScrollPosition(IntPoint());
 }
 
-bool RenderLayerScrollableArea::shouldPlaceBlockDirectionScrollbarOnLeft() const
+bool RenderLayerScrollableArea::shouldPlaceVerticalScrollbarOnLeft() const
 {
-    return m_layer.renderer().shouldPlaceBlockDirectionScrollbarOnLeft();
+    return m_layer.renderer().shouldPlaceVerticalScrollbarOnLeft();
 }
 
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -359,7 +359,7 @@ void RenderLayerScrollableArea::scrollTo(const ScrollPosition& position)
     // The caret rect needs to be invalidated after scrolling
     frame.selection().setCaretRectNeedsUpdate();
 
-    LayoutRect rectForRepaint = renderer.hasRepaintLayoutRects() ? renderer.repaintLayoutRects().m_repaintRect : renderer.clippedOverflowRectForRepaint(repaintContainer);
+    LayoutRect rectForRepaint = layer().repaintRects() ? layer().repaintRects()->clippedOverflowRect : renderer.clippedOverflowRectForRepaint(repaintContainer);
 
     FloatQuad quadForFakeMouseMoveEvent = FloatQuad(rectForRepaint);
     if (repaintContainer)
@@ -654,7 +654,7 @@ RenderLayer::OverflowControlRects RenderLayerScrollableArea::overflowControlsRec
 
     bool haveNonOverlayHorizontalScrollbar = isNonOverlayScrollbar(m_hBar.get());
     bool haveNonOverlayVerticalScrollbar = isNonOverlayScrollbar(m_vBar.get());
-    bool placeVerticalScrollbarOnTheLeft = shouldPlaceBlockDirectionScrollbarOnLeft();
+    bool placeVerticalScrollbarOnTheLeft = shouldPlaceVerticalScrollbarOnLeft();
     bool haveResizer = renderer.style().resize() != Resize::None;
     bool scrollbarsAvoidCorner = (haveNonOverlayHorizontalScrollbar && haveNonOverlayVerticalScrollbar) || (haveResizer && (haveNonOverlayHorizontalScrollbar || haveNonOverlayVerticalScrollbar));
 
@@ -818,8 +818,9 @@ Ref<Scrollbar> RenderLayerScrollableArea::createScrollbar(ScrollbarOrientation o
     ASSERT(rendererForScrollbar(renderer));
     auto& actualRenderer = *rendererForScrollbar(renderer);
     bool hasCustomScrollbarStyle = is<RenderBox>(actualRenderer) && downcast<RenderBox>(actualRenderer).style().hasPseudoStyle(PseudoId::Scrollbar);
-    if (hasCustomScrollbarStyle)
-        widget = RenderScrollbar::createCustomScrollbar(*this, orientation, downcast<RenderBox>(actualRenderer).element());
+    auto element = downcast<RenderBox>(actualRenderer).element();
+    if (hasCustomScrollbarStyle && element)
+        widget = RenderScrollbar::createCustomScrollbar(*this, orientation, element);
     else {
         widget = Scrollbar::createNativeScrollbar(*this, orientation, ScrollbarControlSize::Regular);
         didAddScrollbar(widget.get(), orientation);
@@ -1006,21 +1007,30 @@ LayoutUnit RenderLayerScrollableArea::overflowRight() const
 
 void RenderLayerScrollableArea::computeScrollDimensions()
 {
-    RenderBox* box = m_layer.renderBox();
-    ASSERT(box);
-
     m_scrollDimensionsDirty = false;
 
     m_scrollWidth = roundToInt(overflowRight() - overflowLeft());
     m_scrollHeight = roundToInt(overflowBottom() - overflowTop());
 
+    computeScrollOrigin();
+    computeHasCompositedScrollableOverflow();
+}
+
+void RenderLayerScrollableArea::computeScrollOrigin()
+{
+    RenderBox* box = m_layer.renderBox();
+    ASSERT(box);
+
     int scrollableLeftOverflow = roundToInt(overflowLeft() - box->borderLeft());
-    if (shouldPlaceBlockDirectionScrollbarOnLeft())
+    if (shouldPlaceVerticalScrollbarOnLeft() /*|| box->style().writingMode() == WritingMode::RightToLeft*/)
         scrollableLeftOverflow -= verticalScrollbarWidth();
     int scrollableTopOverflow = roundToInt(overflowTop() - box->borderTop());
     setScrollOrigin(IntPoint(-scrollableLeftOverflow, -scrollableTopOverflow));
 
-    computeHasCompositedScrollableOverflow();
+    // Horizontal scrollbar offsets depend on the scroll origin when vertical
+    // scrollbars are on the left.
+    if (m_hBar)
+        m_hBar->offsetDidChange();
 }
 
 void RenderLayerScrollableArea::computeHasCompositedScrollableOverflow()
@@ -1094,6 +1104,9 @@ void RenderLayerScrollableArea::updateScrollbarsAfterLayout()
             setHasHorizontalScrollbar(hasHorizontalOverflow);
         if (box->hasVerticalScrollbarWithAutoBehavior())
             setHasVerticalScrollbar(hasVerticalOverflow);
+
+        if (autoVerticalScrollBarChanged && shouldPlaceVerticalScrollbarOnLeft())
+            computeScrollOrigin();
 
         m_layer.updateSelfPaintingLayer();
 
@@ -1336,7 +1349,7 @@ void RenderLayerScrollableArea::drawPlatformResizerImage(GraphicsContext& contex
         cornerResizerSize = resizeCornerImage->size();
     }
 
-    if (shouldPlaceBlockDirectionScrollbarOnLeft()) {
+    if (shouldPlaceVerticalScrollbarOnLeft()) {
         context.save();
         context.translate(resizerCornerRect.x() + cornerResizerSize.width(), resizerCornerRect.y() + resizerCornerRect.height() - cornerResizerSize.height());
         context.scale(FloatSize(-1.0, 1.0));
@@ -1497,7 +1510,7 @@ bool RenderLayerScrollableArea::hitTestResizerInFragments(const LayerFragments& 
     auto rects = overflowControlsRects();
 
     auto cornerRectInFragment = [&](const IntRect& fragmentBounds, const IntRect& resizerRect) {
-        if (shouldPlaceBlockDirectionScrollbarOnLeft()) {
+        if (shouldPlaceVerticalScrollbarOnLeft()) {
             IntSize offsetFromBottomLeft = borderBoxRect.minXMaxYCorner() - resizerRect.minXMaxYCorner();
             return IntRect { fragmentBounds.minXMaxYCorner() - offsetFromBottomLeft - IntSize { 0, resizerRect.height() }, resizerRect.size() };
         }
@@ -1552,10 +1565,14 @@ void RenderLayerScrollableArea::updateScrollbarsAfterStyleChange(const RenderSty
     Overflow overflowY = box->style().overflowY();
 
     // To avoid doing a relayout in updateScrollbarsAfterLayout, we try to keep any automatic scrollbar that was already present.
-    bool needsHorizontalScrollbar = box->hasOverflowClip() && ((horizontalScrollbar() && styleDefinesAutomaticScrollbar(box->style(), HorizontalScrollbar)) || styleRequiresScrollbar(box->style(), HorizontalScrollbar));
-    bool needsVerticalScrollbar = box->hasOverflowClip() && ((verticalScrollbar() && styleDefinesAutomaticScrollbar(box->style(), VerticalScrollbar)) || styleRequiresScrollbar(box->style(), VerticalScrollbar));
+    bool hadVerticalScrollbar = m_vBar;
+    bool needsHorizontalScrollbar = box->hasOverflowClip() && ((m_hBar && styleDefinesAutomaticScrollbar(box->style(), HorizontalScrollbar)) || styleRequiresScrollbar(box->style(), HorizontalScrollbar));
+    bool needsVerticalScrollbar = box->hasOverflowClip() && ((m_vBar && styleDefinesAutomaticScrollbar(box->style(), VerticalScrollbar)) || styleRequiresScrollbar(box->style(), VerticalScrollbar));
     setHasHorizontalScrollbar(needsHorizontalScrollbar);
     setHasVerticalScrollbar(needsVerticalScrollbar);
+
+    if (hadVerticalScrollbar != needsVerticalScrollbar || (needsVerticalScrollbar && oldStyle && box->style().shouldPlaceVerticalScrollbarOnLeft() != oldStyle->shouldPlaceVerticalScrollbarOnLeft()))
+        computeScrollOrigin();
 
     // With non-overlay overflow:scroll, scrollbars are always visible but may be disabled.
     // When switching to another value, we need to re-enable them (see bug 11985).

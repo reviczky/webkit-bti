@@ -94,7 +94,9 @@ void ThreadableBlobRegistry::registerBlobURL(const URL& url, Vector<BlobPart>&& 
 static inline bool isBlobURLContainsNullOrigin(const URL& url)
 {
     ASSERT(url.protocolIsBlob());
-    return BlobURL::getOrigin(url) == "null";
+    unsigned startIndex = url.pathStart();
+    unsigned endIndex = url.pathAfterLastSlash();
+    return url.string().substring(startIndex, endIndex - startIndex - 1) == "null";
 }
 
 void ThreadableBlobRegistry::registerBlobURL(SecurityOrigin* origin, const URL& url, const URL& srcURL)
@@ -124,15 +126,15 @@ void ThreadableBlobRegistry::registerBlobURLOptionallyFileBacked(const URL& url,
     });
 }
 
-void ThreadableBlobRegistry::registerBlobURLForSlice(const URL& newURL, const URL& srcURL, long long start, long long end)
+void ThreadableBlobRegistry::registerBlobURLForSlice(const URL& newURL, const URL& srcURL, long long start, long long end, const String& contentType)
 {
     if (isMainThread()) {
-        blobRegistry().registerBlobURLForSlice(newURL, srcURL, start, end);
+        blobRegistry().registerBlobURLForSlice(newURL, srcURL, start, end, contentType);
         return;
     }
 
-    callOnMainThread([newURL = newURL.isolatedCopy(), srcURL = srcURL.isolatedCopy(), start, end] {
-        blobRegistry().registerBlobURLForSlice(newURL, srcURL, start, end);
+    callOnMainThread([newURL = newURL.isolatedCopy(), srcURL = srcURL.isolatedCopy(), start, end, contentType = contentType.isolatedCopy()] {
+        blobRegistry().registerBlobURLForSlice(newURL, srcURL, start, end, contentType);
     });
 }
 
@@ -142,12 +144,9 @@ unsigned long long ThreadableBlobRegistry::blobSize(const URL& url)
         return blobRegistry().blobSize(url);
 
     unsigned long long resultSize;
-    BinarySemaphore semaphore;
-    callOnMainThread([url = url.isolatedCopy(), &semaphore, &resultSize] {
+    callOnMainThreadAndWait([url = url.isolatedCopy(), &resultSize] {
         resultSize = blobRegistry().blobSize(url);
-        semaphore.signal();
     });
-    semaphore.wait();
     return resultSize;
 }
 

@@ -127,6 +127,7 @@ public:
     
     URL url() const override;
     PlainTextRange selectedTextRange() const override;
+    int insertionPointLineNumber() const override;
     VisibleSelection selection() const override;
     String stringValue() const override;
     String helpText() const override;
@@ -150,7 +151,6 @@ public:
     void setSelectedRows(AccessibilityChildrenVector&) override;
     AccessibilityOrientation orientation() const override;
 
-    void textChanged() override;
     void addChildren() override;
     bool canHaveChildren() const override;
     bool canHaveSelectedChildren() const override;

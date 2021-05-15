@@ -55,7 +55,8 @@ public:
 
     void close(DOMPromiseDeferred<void>&&);
 
-    DefaultAudioDestinationNode* destination();
+    DefaultAudioDestinationNode& destination();
+    const DefaultAudioDestinationNode& destination() const;
     double baseLatency();
 
     AudioTimestamp getOutputTimestamp(DOMWindow&);
@@ -88,8 +89,8 @@ public:
     void removeBehaviorRestriction(BehaviorRestrictions restriction) { m_restrictions &= ~restriction; }
 
 protected:
-    explicit AudioContext(Document&, const AudioContextOptions& = { });
-    AudioContext(Document&, unsigned numberOfChannels, float sampleRate, RefPtr<AudioBuffer>&& renderTarget);
+    explicit AudioContext(Document&, IsLegacyWebKitAudioContext, const AudioContextOptions& = { });
+    AudioContext(Document&, IsLegacyWebKitAudioContext, unsigned numberOfChannels, float sampleRate, RefPtr<AudioBuffer>&& renderTarget);
 
     bool willBeginPlayback();
 

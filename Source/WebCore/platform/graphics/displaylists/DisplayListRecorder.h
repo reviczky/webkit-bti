@@ -36,13 +36,14 @@
 namespace WebCore {
 
 enum class AlphaPremultiplication : uint8_t;
+
+class FloatPoint;
 class FloatPoint;
 class FloatRect;
-class GlyphBuffer;
-class FloatPoint;
 class Font;
+class GlyphBuffer;
 class Image;
-class ImageData;
+class PixelBuffer;
 
 struct GraphicsContextState;
 struct ImagePaintingOptions;
@@ -57,17 +58,19 @@ public:
     WEBCORE_EXPORT Recorder(GraphicsContext&, DisplayList&, const GraphicsContextState&, const FloatRect& initialClip, const AffineTransform&, Delegate* = nullptr, DrawGlyphsRecorder::DrawGlyphsDeconstruction = DrawGlyphsRecorder::DrawGlyphsDeconstruction::Deconstruct);
     WEBCORE_EXPORT virtual ~Recorder();
 
-    WEBCORE_EXPORT void putImageData(AlphaPremultiplication inputFormat, const ImageData&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat);
+    WEBCORE_EXPORT void getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect& sourceRect);
+    WEBCORE_EXPORT void putPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat);
 
     bool isEmpty() const { return m_displayList.isEmpty(); }
 
     class Delegate {
     public:
         virtual ~Delegate() { }
-        virtual void willAppendItemOfType(ItemType) { }
+        virtual bool canAppendItemOfType(ItemType) { return false; }
         virtual void cacheNativeImage(NativeImage&) { }
         virtual bool isCachedImageBuffer(const ImageBuffer&) const { return false; }
         virtual void cacheFont(Font&) { }
+        virtual RenderingMode renderingMode() const { return RenderingMode::Unaccelerated; }
     };
 
     void flushContext(FlushIdentifier identifier) { append<FlushContext>(identifier); }
@@ -77,6 +80,7 @@ private:
     bool hasPlatformContext() const override { return false; }
     bool canDrawImageBuffer(const ImageBuffer&) const override;
     PlatformGraphicsContext* platformContext() const override { return nullptr; }
+    RenderingMode renderingMode() const override;
 
     void updateState(const GraphicsContextState&, GraphicsContextState::StateChangeFlags) override;
     void clearShadow() override;
@@ -106,7 +110,7 @@ private:
 
     void drawGlyphs(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned numGlyphs, const FloatPoint& anchorPoint, FontSmoothingMode) override;
 
-    void appendDrawGraphsItemWithCachedFont(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode);
+    void appendDrawGlyphsItemWithCachedFont(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode);
 
     void drawImageBuffer(WebCore::ImageBuffer&, const FloatRect& destination, const FloatRect& source, const ImagePaintingOptions&) override;
     void drawNativeImage(NativeImage&, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions&) override;
@@ -142,8 +146,10 @@ private:
     IntRect clipBounds() override;
     void clipToImageBuffer(WebCore::ImageBuffer&, const FloatRect&) override;
     void clipToDrawingCommands(const FloatRect& destination, DestinationColorSpace, Function<void(GraphicsContext&)>&&) override;
+#if ENABLE(VIDEO)
     void paintFrameForMedia(MediaPlayer&, const FloatRect& destination) override;
     bool canPaintFrameForMedia(const MediaPlayer&) const override;
+#endif
 
     void applyDeviceScaleFactor(float) override;
 
@@ -152,7 +158,12 @@ private:
     template<typename T, class... Args>
     void append(Args&&... args)
     {
-        willAppendItemOfType(T::itemType);
+        if (UNLIKELY(!canAppendItemOfType(T::itemType)))
+            return;
+
+        if constexpr (itemNeedsState<T>())
+            appendStateChangeItemIfNecessary();
+
         m_displayList.append<T>(std::forward<Args>(args)...);
 
         if constexpr (T::isDrawingItem) {
@@ -169,10 +180,14 @@ private:
         }
     }
 
-    WEBCORE_EXPORT void willAppendItemOfType(ItemType);
+    WEBCORE_EXPORT bool canAppendItemOfType(ItemType) const;
+
+    template<typename T>
+    static constexpr bool itemNeedsState();
 
     void cacheNativeImage(NativeImage&);
 
+    void appendStateChangeItemIfNecessary();
     void appendStateChangeItem(const GraphicsContextStateChange&, GraphicsContextState::StateChangeFlags);
 
     FloatRect extentFromLocalBounds(const FloatRect&) const;
@@ -185,7 +200,6 @@ private:
         FloatRect clipBounds;
         GraphicsContextStateChange stateChange;
         GraphicsContextState lastDrawingState;
-        bool wasUsedForDrawing { false };
         
         ContextState(const GraphicsContextState& state, const AffineTransform& transform, const FloatRect& clip)
             : ctm(transform)
@@ -198,6 +212,13 @@ private:
         {
             ContextState state(lastDrawingState, ctm, clipBounds);
             state.stateChange = stateChange;
+            return state;
+        }
+
+        ContextState cloneForTransparencyLayer() const
+        {
+            auto state = cloneForSave();
+            state.lastDrawingState.alpha = 1;
             return state;
         }
 
@@ -214,10 +235,24 @@ private:
     DisplayList& m_displayList;
     Delegate* m_delegate;
 
-    Vector<ContextState, 32> m_stateStack;
+    Vector<ContextState, 4> m_stateStack;
 
     DrawGlyphsRecorder m_drawGlyphsRecorder;
 };
+
+template<typename T>
+constexpr bool Recorder::itemNeedsState()
+{
+    if (T::isDrawingItem)
+        return true;
+
+#if USE(CG)
+    if (T::itemType == ItemType::ApplyFillPattern || T::itemType == ItemType::ApplyStrokePattern)
+        return true;
+#endif
+
+    return false;
+}
 
 }
 }

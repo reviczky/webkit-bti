@@ -26,9 +26,11 @@
 #include "config.h"
 #include "IDBGetResult.h"
 
-#if ENABLE(INDEXED_DATABASE)
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(IDBGetResult);
 
 void IDBGetResult::dataFromBuffer(SharedBuffer& buffer)
 {
@@ -64,5 +66,3 @@ void IDBGetResult::setValue(IDBValue&& value)
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

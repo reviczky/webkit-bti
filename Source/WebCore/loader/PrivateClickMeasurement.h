@@ -53,6 +53,7 @@ public:
     using PriorityValue = uint32_t;
 
     enum class PcmDataCarried : bool { NonPersonallyIdentifiable, PersonallyIdentifiable };
+    enum class AttributionReportEndpoint : bool { Source, Destination };
 
     struct SourceID {
         static constexpr uint32_t MaxEntropy = 255;
@@ -83,11 +84,6 @@ public:
         {
         }
 
-        explicit SourceSite(WTF::HashTableDeletedValueType)
-            : registrableDomain(WTF::HashTableDeletedValue)
-        {
-        }
-
         bool operator==(const SourceSite& other) const
         {
             return registrableDomain == other.registrableDomain;
@@ -96,32 +92,6 @@ public:
         bool matches(const URL& url) const
         {
             return registrableDomain.matches(url);
-        }
-
-        bool isHashTableDeletedValue() const
-        {
-            return registrableDomain.isHashTableDeletedValue();
-        }
-
-        static SourceSite deletedValue()
-        {
-            return SourceSite { WTF::HashTableDeletedValue };
-        }
-
-        static void constructDeletedValue(SourceSite& sourceSite)
-        {
-            new (&sourceSite) SourceSite;
-            sourceSite = SourceSite::deletedValue();
-        }
-
-        void deleteValue()
-        {
-            registrableDomain = RegistrableDomain { WTF::HashTableDeletedValue };
-        }
-
-        bool isDeletedValue() const
-        {
-            return isHashTableDeletedValue();
         }
 
         RegistrableDomain registrableDomain;
@@ -141,24 +111,19 @@ public:
         static const bool safeToCompareToEmptyOrDeleted = false;
     };
 
-    struct AttributeOnSite {
-        AttributeOnSite() = default;
-        explicit AttributeOnSite(const URL& url)
+    struct AttributionDestinationSite {
+        AttributionDestinationSite() = default;
+        explicit AttributionDestinationSite(const URL& url)
             : registrableDomain { RegistrableDomain { url } }
         {
         }
 
-        explicit AttributeOnSite(WTF::HashTableDeletedValueType)
-            : registrableDomain { WTF::HashTableDeletedValue }
-        {
-        }
-
-        explicit AttributeOnSite(RegistrableDomain&& domain)
+        explicit AttributionDestinationSite(RegistrableDomain&& domain)
             : registrableDomain { WTFMove(domain) }
         {
         }
         
-        bool operator==(const AttributeOnSite& other) const
+        bool operator==(const AttributionDestinationSite& other) const
         {
             return registrableDomain == other.registrableDomain;
         }
@@ -167,43 +132,17 @@ public:
         {
             return registrableDomain == RegistrableDomain { url };
         }
-        
-        bool isHashTableDeletedValue() const
-        {
-            return registrableDomain.isHashTableDeletedValue();
-        }
-
-        static AttributeOnSite deletedValue()
-        {
-            return AttributeOnSite { WTF::HashTableDeletedValue };
-        }
-
-        static void constructDeletedValue(AttributeOnSite& attributeOnSite)
-        {
-            new (&attributeOnSite) AttributeOnSite;
-            attributeOnSite = AttributeOnSite::deletedValue();
-        }
-
-        void deleteValue()
-        {
-            registrableDomain = RegistrableDomain { WTF::HashTableDeletedValue };
-        }
-
-        bool isDeletedValue() const
-        {
-            return isHashTableDeletedValue();
-        }
 
         RegistrableDomain registrableDomain;
     };
 
-    struct AttributeOnSiteHash {
-        static unsigned hash(const AttributeOnSite& attributeOnSite)
+    struct AttributionDestinationSiteHash {
+        static unsigned hash(const AttributionDestinationSite& destinationSite)
         {
-            return attributeOnSite.registrableDomain.hash();
+            return destinationSite.registrableDomain.hash();
         }
         
-        static bool equal(const AttributeOnSite& a, const AttributeOnSite& b)
+        static bool equal(const AttributionDestinationSite& a, const AttributionDestinationSite& b)
         {
             return a == b;
         }
@@ -247,11 +186,121 @@ public:
         template<class Decoder> static Optional<AttributionTriggerData> decode(Decoder&);
     };
 
+    struct AttributionSecondsUntilSendData {
+        Optional<Seconds> sourceSeconds;
+        Optional<Seconds> destinationSeconds;
+
+        bool hasValidSecondsUntilSendValues()
+        {
+            return sourceSeconds && destinationSeconds;
+        }
+
+        Optional<Seconds> minSecondsUntilSend()
+        {
+            if (!sourceSeconds && !destinationSeconds)
+                return WTF::nullopt;
+
+            if (sourceSeconds && destinationSeconds)
+                return std::min(sourceSeconds, destinationSeconds);
+
+            return sourceSeconds ? sourceSeconds : destinationSeconds;
+        }
+
+        template<class Encoder>
+        void encode(Encoder& encoder) const
+        {
+            encoder << sourceSeconds << destinationSeconds;
+        }
+
+        template<class Decoder>
+        static Optional<AttributionSecondsUntilSendData> decode(Decoder& decoder)
+        {
+            Optional<Optional<Seconds>> sourceSeconds;
+            decoder >> sourceSeconds;
+            if (!sourceSeconds)
+                return WTF::nullopt;
+
+            Optional<Optional<Seconds>> destinationSeconds;
+            decoder >> destinationSeconds;
+            if (!destinationSeconds)
+                return WTF::nullopt;
+
+            return AttributionSecondsUntilSendData { WTFMove(*sourceSeconds), WTFMove(*destinationSeconds) };
+        }
+    };
+
+    struct AttributionTimeToSendData {
+        Optional<WallTime> sourceEarliestTimeToSend;
+        Optional<WallTime> destinationEarliestTimeToSend;
+
+        Optional<WallTime> earliestTimeToSend()
+        {
+            if (!sourceEarliestTimeToSend && !destinationEarliestTimeToSend)
+                return WTF::nullopt;
+
+            if (sourceEarliestTimeToSend && destinationEarliestTimeToSend)
+                return std::min(sourceEarliestTimeToSend, destinationEarliestTimeToSend);
+
+            return sourceEarliestTimeToSend ? sourceEarliestTimeToSend : destinationEarliestTimeToSend;
+        }
+
+        Optional<WallTime> latestTimeToSend()
+        {
+            if (!sourceEarliestTimeToSend && !destinationEarliestTimeToSend)
+                return WTF::nullopt;
+
+            if (sourceEarliestTimeToSend && destinationEarliestTimeToSend)
+                return std::max(sourceEarliestTimeToSend, destinationEarliestTimeToSend);
+
+            return sourceEarliestTimeToSend ? sourceEarliestTimeToSend : destinationEarliestTimeToSend;
+        }
+
+        Optional<AttributionReportEndpoint> attributionReportEndpoint()
+        {
+            if (sourceEarliestTimeToSend && destinationEarliestTimeToSend) {
+                if (*sourceEarliestTimeToSend < *destinationEarliestTimeToSend)
+                    return AttributionReportEndpoint::Source;
+
+                return AttributionReportEndpoint::Destination;
+            }
+
+            if (sourceEarliestTimeToSend)
+                return AttributionReportEndpoint::Source;
+
+            if (destinationEarliestTimeToSend)
+                return AttributionReportEndpoint::Destination;
+
+            return WTF::nullopt;
+        }
+
+        template<class Encoder>
+        void encode(Encoder& encoder) const
+        {
+            encoder << sourceEarliestTimeToSend << destinationEarliestTimeToSend;
+        }
+
+        template<class Decoder>
+        static Optional<AttributionTimeToSendData> decode(Decoder& decoder)
+        {
+            Optional<Optional<WallTime>> sourceEarliestTimeToSend;
+            decoder >> sourceEarliestTimeToSend;
+            if (!sourceEarliestTimeToSend)
+                return WTF::nullopt;
+
+            Optional<Optional<WallTime>> destinationEarliestTimeToSend;
+            decoder >> destinationEarliestTimeToSend;
+            if (!destinationEarliestTimeToSend)
+                return WTF::nullopt;
+
+            return AttributionTimeToSendData { WTFMove(*sourceEarliestTimeToSend), WTFMove(*destinationEarliestTimeToSend) };
+        }
+    };
+
     PrivateClickMeasurement() = default;
-    PrivateClickMeasurement(SourceID sourceID, const SourceSite& sourceSite, const AttributeOnSite& attributeOnSite, String&& sourceDescription = { }, String&& purchaser = { }, WallTime timeOfAdClick = WallTime::now())
+    PrivateClickMeasurement(SourceID sourceID, const SourceSite& sourceSite, const AttributionDestinationSite& destinationSite, String&& sourceDescription = { }, String&& purchaser = { }, WallTime timeOfAdClick = WallTime::now())
         : m_sourceID { sourceID }
         , m_sourceSite { sourceSite }
-        , m_attributeOnSite { attributeOnSite }
+        , m_destinationSite { destinationSite }
         , m_sourceDescription { WTFMove(sourceDescription) }
         , m_purchaser { WTFMove(purchaser) }
         , m_timeOfAdClick { timeOfAdClick }
@@ -260,15 +309,17 @@ public:
 
     WEBCORE_EXPORT static const Seconds maxAge();
     WEBCORE_EXPORT static Expected<AttributionTriggerData, String> parseAttributionRequest(const URL& redirectURL);
-    WEBCORE_EXPORT Optional<Seconds> attributeAndGetEarliestTimeToSend(AttributionTriggerData&&);
+    WEBCORE_EXPORT AttributionSecondsUntilSendData attributeAndGetEarliestTimeToSend(AttributionTriggerData&&);
     WEBCORE_EXPORT bool hasHigherPriorityThan(const PrivateClickMeasurement&) const;
-    WEBCORE_EXPORT URL attributionReportURL() const;
+    WEBCORE_EXPORT URL attributionReportSourceURL() const;
+    WEBCORE_EXPORT URL attributionReportAttributeOnURL() const;
     WEBCORE_EXPORT Ref<JSON::Object> attributionReportJSON() const;
     const SourceSite& sourceSite() const { return m_sourceSite; };
-    const AttributeOnSite& attributeOnSite() const { return m_attributeOnSite; };
+    const AttributionDestinationSite& destinationSite() const { return m_destinationSite; };
     WallTime timeOfAdClick() const { return m_timeOfAdClick; }
-    Optional<WallTime> earliestTimeToSend() const { return m_earliestTimeToSend; };
-    void setEarliestTimeToSend(WallTime time) { m_earliestTimeToSend = time; }
+    WEBCORE_EXPORT bool hasPreviouslyBeenReported();
+    AttributionTimeToSendData timesToSend() const { return m_timesToSend; };
+    void setTimesToSend(AttributionTimeToSendData data) { m_timesToSend = data; }
     const SourceID& sourceID() const { return m_sourceID; }
     Optional<AttributionTriggerData> attributionTriggerData() { return m_attributionTriggerData; }
     void setAttribution(AttributionTriggerData&& attributionTriggerData) { m_attributionTriggerData = WTFMove(attributionTriggerData); }
@@ -295,7 +346,7 @@ public:
     Optional<EphemeralSourceNonce> ephemeralSourceNonce() const { return m_ephemeralSourceNonce; };
     void clearEphemeralSourceNonce() { m_ephemeralSourceNonce.reset(); };
 
-    struct SourceUnlinkableToken {
+    struct SourceSecretToken {
         String tokenBase64URL;
         String signatureBase64URL;
         String keyIDBase64URL;
@@ -304,13 +355,13 @@ public:
     };
 
 #if PLATFORM(COCOA)
-    WEBCORE_EXPORT bool calculateAndUpdateSourceSecretToken(const String& serverPublicKeyBase64URL);
-    WEBCORE_EXPORT bool calculateAndUpdateSourceUnlinkableToken(const String& serverResponseBase64URL);
+    WEBCORE_EXPORT bool calculateAndUpdateSourceUnlinkableToken(const String& serverPublicKeyBase64URL);
+    WEBCORE_EXPORT bool calculateAndUpdateSourceSecretToken(const String& serverResponseBase64URL);
 #endif
 
-    void setSourceSecretTokenValue(const String& value) { m_sourceSecretToken.valueBase64URL = value; }
-    const Optional<SourceUnlinkableToken>& sourceUnlinkableToken() const { return m_sourceUnlinkableToken; }
-    WEBCORE_EXPORT void setSourceUnlinkableToken(SourceUnlinkableToken&&);
+    void setSourceUnlinkableTokenValue(const String& value) { m_sourceUnlinkableToken.valueBase64URL = value; }
+    const Optional<SourceSecretToken>& sourceUnlinkableToken() const { return m_sourceSecretToken; }
+    WEBCORE_EXPORT void setSourceSecretToken(SourceSecretToken&&);
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static Optional<PrivateClickMeasurement> decode(Decoder&);
@@ -320,15 +371,15 @@ private:
 
     SourceID m_sourceID;
     SourceSite m_sourceSite;
-    AttributeOnSite m_attributeOnSite;
+    AttributionDestinationSite m_destinationSite;
     String m_sourceDescription;
     String m_purchaser;
     WallTime m_timeOfAdClick;
 
     Optional<AttributionTriggerData> m_attributionTriggerData;
-    Optional<WallTime> m_earliestTimeToSend;
+    AttributionTimeToSendData m_timesToSend;
 
-    struct SourceSecretToken {
+    struct SourceUnlinkableToken {
 #if PLATFORM(COCOA)
         RetainPtr<RSABSSATokenBlinder> blinder;
         RetainPtr<RSABSSATokenWaitingActivation> waitingToken;
@@ -338,8 +389,8 @@ private:
     };
 
     Optional<EphemeralSourceNonce> m_ephemeralSourceNonce;
-    SourceSecretToken m_sourceSecretToken;
-    Optional<SourceUnlinkableToken> m_sourceUnlinkableToken;
+    SourceUnlinkableToken m_sourceUnlinkableToken;
+    Optional<SourceSecretToken> m_sourceSecretToken;
 };
 
 template<class Encoder>
@@ -347,13 +398,13 @@ void PrivateClickMeasurement::encode(Encoder& encoder) const
 {
     encoder << m_sourceID.id
         << m_sourceSite.registrableDomain
-        << m_attributeOnSite.registrableDomain
+        << m_destinationSite.registrableDomain
         << m_sourceDescription
         << m_purchaser
         << m_timeOfAdClick
         << m_ephemeralSourceNonce
         << m_attributionTriggerData
-        << m_earliestTimeToSend;
+        << m_timesToSend;
 }
 
 template<class Decoder>
@@ -369,9 +420,9 @@ Optional<PrivateClickMeasurement> PrivateClickMeasurement::decode(Decoder& decod
     if (!sourceRegistrableDomain)
         return WTF::nullopt;
     
-    Optional<RegistrableDomain> attributeOnRegistrableDomain;
-    decoder >> attributeOnRegistrableDomain;
-    if (!attributeOnRegistrableDomain)
+    Optional<RegistrableDomain> destinationRegistrableDomain;
+    decoder >> destinationRegistrableDomain;
+    if (!destinationRegistrableDomain)
         return WTF::nullopt;
     
     Optional<String> sourceDescription;
@@ -399,22 +450,22 @@ Optional<PrivateClickMeasurement> PrivateClickMeasurement::decode(Decoder& decod
     if (!attributionTriggerData)
         return WTF::nullopt;
     
-    Optional<Optional<WallTime>> earliestTimeToSend;
-    decoder >> earliestTimeToSend;
-    if (!earliestTimeToSend)
+    Optional<AttributionTimeToSendData> timesToSend;
+    decoder >> timesToSend;
+    if (!timesToSend)
         return WTF::nullopt;
     
     PrivateClickMeasurement attribution {
         SourceID { WTFMove(*sourceID) },
         SourceSite { WTFMove(*sourceRegistrableDomain) },
-        AttributeOnSite { WTFMove(*attributeOnRegistrableDomain) },
+        AttributionDestinationSite { WTFMove(*destinationRegistrableDomain) },
         WTFMove(*sourceDescription),
         WTFMove(*purchaser),
         WTFMove(*timeOfAdClick)
     };
     attribution.m_ephemeralSourceNonce = WTFMove(*ephemeralSourceNonce);
     attribution.m_attributionTriggerData = WTFMove(*attributionTriggerData);
-    attribution.m_earliestTimeToSend = WTFMove(*earliestTimeToSend);
+    attribution.m_timesToSend = WTFMove(*timesToSend);
     
     return attribution;
 }
@@ -471,14 +522,14 @@ template<typename T> struct DefaultHash;
 template<> struct DefaultHash<WebCore::PrivateClickMeasurement::SourceSite> : WebCore::PrivateClickMeasurement::SourceSiteHash { };
 template<> struct HashTraits<WebCore::PrivateClickMeasurement::SourceSite> : GenericHashTraits<WebCore::PrivateClickMeasurement::SourceSite> {
     static WebCore::PrivateClickMeasurement::SourceSite emptyValue() { return { }; }
-    static void constructDeletedValue(WebCore::PrivateClickMeasurement::SourceSite& slot) { WebCore::PrivateClickMeasurement::SourceSite::constructDeletedValue(slot); }
-    static bool isDeletedValue(const WebCore::PrivateClickMeasurement::SourceSite& slot) { return slot.isDeletedValue(); }
+    static void constructDeletedValue(WebCore::PrivateClickMeasurement::SourceSite& slot) { new (NotNull, &slot.registrableDomain) WebCore::RegistrableDomain(WTF::HashTableDeletedValue); }
+    static bool isDeletedValue(const WebCore::PrivateClickMeasurement::SourceSite& slot) { return slot.registrableDomain.isHashTableDeletedValue(); }
 };
 
-template<> struct DefaultHash<WebCore::PrivateClickMeasurement::AttributeOnSite> : WebCore::PrivateClickMeasurement::AttributeOnSiteHash { };
-template<> struct HashTraits<WebCore::PrivateClickMeasurement::AttributeOnSite> : GenericHashTraits<WebCore::PrivateClickMeasurement::AttributeOnSite> {
-    static WebCore::PrivateClickMeasurement::AttributeOnSite emptyValue() { return { }; }
-    static void constructDeletedValue(WebCore::PrivateClickMeasurement::AttributeOnSite& slot) { WebCore::PrivateClickMeasurement::AttributeOnSite::constructDeletedValue(slot); }
-    static bool isDeletedValue(const WebCore::PrivateClickMeasurement::AttributeOnSite& slot) { return slot.isDeletedValue(); }
+template<> struct DefaultHash<WebCore::PrivateClickMeasurement::AttributionDestinationSite> : WebCore::PrivateClickMeasurement::AttributionDestinationSiteHash { };
+template<> struct HashTraits<WebCore::PrivateClickMeasurement::AttributionDestinationSite> : GenericHashTraits<WebCore::PrivateClickMeasurement::AttributionDestinationSite> {
+    static WebCore::PrivateClickMeasurement::AttributionDestinationSite emptyValue() { return { }; }
+    static void constructDeletedValue(WebCore::PrivateClickMeasurement::AttributionDestinationSite& slot) { new (NotNull, &slot.registrableDomain) WebCore::RegistrableDomain(WTF::HashTableDeletedValue); }
+    static bool isDeletedValue(const WebCore::PrivateClickMeasurement::AttributionDestinationSite& slot) { return slot.registrableDomain.isHashTableDeletedValue(); }
 };
 }

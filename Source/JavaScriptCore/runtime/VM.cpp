@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -291,6 +291,8 @@ VM::VM(VMType vmType, HeapType heapType, WTF::RunLoop* runLoop, bool* success)
     , callbackConstructorHeapCellType(IsoHeapCellType::create<JSCallbackConstructor>())
     , callbackGlobalObjectHeapCellType(IsoHeapCellType::create<JSCallbackObject<JSGlobalObject>>())
     , callbackObjectHeapCellType(IsoHeapCellType::create<JSCallbackObject<JSNonFinalObject>>())
+    , customGetterFunctionHeapCellType(IsoHeapCellType::create<JSCustomGetterFunction>())
+    , customSetterFunctionHeapCellType(IsoHeapCellType::create<JSCustomSetterFunction>())
     , dateInstanceHeapCellType(IsoHeapCellType::create<DateInstance>())
     , errorInstanceHeapCellType(IsoHeapCellType::create<ErrorInstance>())
     , finalizationRegistryCellType(IsoHeapCellType::create<JSFinalizationRegistry>())
@@ -430,7 +432,6 @@ VM::VM(VMType vmType, HeapType heapType, WTF::RunLoop* runLoop, bool* success)
     smallStrings.initializeCommonStrings(*this);
 
     propertyNames = new CommonIdentifiers(*this);
-    terminatedExecutionErrorStructure.set(*this, TerminatedExecutionError::createStructure(*this, nullptr, jsNull()));
     propertyNameEnumeratorStructure.set(*this, JSPropertyNameEnumerator::createStructure(*this, nullptr, jsNull()));
     getterSetterStructure.set(*this, GetterSetter::createStructure(*this, nullptr, jsNull()));
     customGetterSetterStructure.set(*this, CustomGetterSetter::createStructure(*this, nullptr, jsNull()));
@@ -566,8 +567,12 @@ VM::VM(VMType vmType, HeapType heapType, WTF::RunLoop* runLoop, bool* success)
 #endif // ENABLE(FTL_JIT)
         getCTIInternalFunctionTrampolineFor(CodeForCall);
         getCTIInternalFunctionTrampolineFor(CodeForConstruct);
-    }
+
+#if ENABLE(EXTRA_CTI_THUNKS)
+        jitStubs->preinitializeExtraCTIThunks(*this);
 #endif
+    }
+#endif // ENABLE(JIT)
 
     if (Options::forceDebuggerBytecodeGeneration() || Options::alwaysUseShadowChicken())
         ensureShadowChicken();
@@ -739,8 +744,10 @@ VM*& VM::sharedInstanceInternal()
 
 Watchdog& VM::ensureWatchdog()
 {
-    if (!m_watchdog)
+    if (!m_watchdog) {
         m_watchdog = adoptRef(new Watchdog(this));
+        ensureTerminationException();
+    }
     return *m_watchdog;
 }
 
@@ -759,6 +766,16 @@ SamplingProfiler& VM::ensureSamplingProfiler(Ref<Stopwatch>&& stopwatch)
     return *m_samplingProfiler;
 }
 #endif // ENABLE(SAMPLING_PROFILER)
+
+static StringImpl::StaticStringImpl terminationErrorString { "JavaScript execution terminated." };
+Exception* VM::ensureTerminationException()
+{
+    if (!m_terminationException) {
+        JSString* terminationError = jsNontrivialString(*this, terminationErrorString);
+        m_terminationException = Exception::create(*this, terminationError, Exception::DoNotCaptureStack);
+    }
+    return m_terminationException;
+}
 
 #if ENABLE(JIT)
 static ThunkGenerator thunkGeneratorForIntrinsic(Intrinsic intrinsic)
@@ -944,8 +961,56 @@ void VM::clearSourceProviderCaches()
     sourceProviderCacheMap.clear();
 }
 
-Exception* VM::throwException(JSGlobalObject* globalObject, Exception* exception)
+bool VM::hasExceptionsAfterHandlingTraps()
 {
+    if (UNLIKELY(traps().needHandling(VMTraps::NonDebuggerAsyncEvents)))
+        m_traps.handleTraps(VMTraps::NonDebuggerAsyncEvents);
+    return exception();
+}
+
+void VM::clearException()
+{
+#if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
+    m_needExceptionCheck = false;
+    m_nativeStackTraceOfLastThrow = nullptr;
+    m_throwingThread = nullptr;
+#endif
+    m_exception = nullptr;
+    traps().clearTrapBit(VMTraps::NeedExceptionHandling);
+}
+
+void VM::setException(Exception* exception)
+{
+    m_exception = exception;
+    m_lastException = exception;
+    if (exception)
+        traps().setTrapBit(VMTraps::NeedExceptionHandling);
+}
+
+void VM::throwTerminationException()
+{
+    ASSERT(!m_traps.isDeferringTermination());
+    setException(terminationException());
+}
+
+Exception* VM::throwException(JSGlobalObject* globalObject, Exception* exceptionToThrow)
+{
+    // The TerminationException should never be overridden.
+    if (hasPendingTerminationException())
+        return m_exception;
+
+    // The TerminationException is not like ordinary exceptions that should be
+    // reported to the debugger. The fact that the TerminationException uses the
+    // exception handling mechanism is just a VM internal implementation detail.
+    // It is not meaningful to report it to the debugger as an exception.
+    if (isTerminationException(exceptionToThrow)) {
+        // Note: we can only get here is we're just re-throwing the TerminationException
+        // from C++ functions to propagate it. If we're throwing it for the first
+        // time, we would have gone through VM::throwTerminationException().
+        setException(exceptionToThrow);
+        return exceptionToThrow;
+    }
+
     CallFrame* throwOriginFrame = topJSCallFrame();
     if (!throwOriginFrame)
         throwOriginFrame = globalObject->deprecatedCallFrameForDebugger();
@@ -956,15 +1021,15 @@ Exception* VM::throwException(JSGlobalObject* globalObject, Exception* exception
         CRASH();
     }
 
-    interpreter->notifyDebuggerOfExceptionToBeThrown(*this, globalObject, throwOriginFrame, exception);
+    interpreter->notifyDebuggerOfExceptionToBeThrown(*this, globalObject, throwOriginFrame, exceptionToThrow);
 
-    setException(exception);
+    setException(exceptionToThrow);
 
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
     m_nativeStackTraceOfLastThrow = StackTrace::captureStackTrace(Options::unexpectedExceptionStackTraceLimit());
     m_throwingThread = &Thread::current();
 #endif
-    return exception;
+    return exceptionToThrow;
 }
 
 Exception* VM::throwException(JSGlobalObject* globalObject, JSValue thrownValue)
@@ -1125,6 +1190,7 @@ void VM::popAllCheckpointOSRSideStateUntil(CallFrame* target)
     // We have to worry about migrating from another thread since there may be no checkpoints in our thread but one in the other threads.
     while (m_checkpointSideState.size() && bounds.contains(m_checkpointSideState.last()->associatedCallFrame))
         m_checkpointSideState.takeLast();
+    m_checkpointSideState.shrinkToFit();
 }
 
 void logSanitizeStack(VM& vm)
@@ -1323,14 +1389,18 @@ void VM::promiseRejected(JSPromise* promise)
 
 void VM::drainMicrotasks()
 {
-    do {
-        while (!m_microtaskQueue.isEmpty()) {
-            m_microtaskQueue.takeFirst()->run();
-            if (m_onEachMicrotaskTick)
-                m_onEachMicrotaskTick(*this);
-        }
-        didExhaustMicrotaskQueue();
-    } while (!m_microtaskQueue.isEmpty());
+    if (UNLIKELY(executionForbidden()))
+        m_microtaskQueue.clear();
+    else {
+        do {
+            while (!m_microtaskQueue.isEmpty()) {
+                m_microtaskQueue.takeFirst()->run();
+                if (m_onEachMicrotaskTick)
+                    m_onEachMicrotaskTick(*this);
+            }
+            didExhaustMicrotaskQueue();
+        } while (!m_microtaskQueue.isEmpty());
+    }
     finalizeSynchronousJSExecution();
 }
 
@@ -1482,8 +1552,8 @@ DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(callbackConstructorSpace, callbackConstr
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(callbackGlobalObjectSpace, callbackGlobalObjectHeapCellType.get(), JSCallbackObject<JSGlobalObject>)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(callbackFunctionSpace, cellHeapCellType.get(), JSCallbackFunction) // Hash:0xe7648ebc
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(callbackObjectSpace, callbackObjectHeapCellType.get(), JSCallbackObject<JSNonFinalObject>)
-DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(customGetterFunctionSpace, cellHeapCellType.get(), JSCustomGetterFunction)
-DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(customSetterFunctionSpace, cellHeapCellType.get(), JSCustomSetterFunction)
+DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(customGetterFunctionSpace, customGetterFunctionHeapCellType.get(), JSCustomGetterFunction)
+DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(customSetterFunctionSpace, customSetterFunctionHeapCellType.get(), JSCustomSetterFunction)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(dataViewSpace, cellHeapCellType.get(), JSDataView)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(debuggerScopeSpace, cellHeapCellType.get(), DebuggerScope)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(errorInstanceSpace, errorInstanceHeapCellType.get(), ErrorInstance) // Hash:0x3f40d4a

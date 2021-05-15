@@ -147,8 +147,8 @@ public:
     bool loadsSubresources() const { return m_loadsSubresources; }
     void setLoadsSubresources(bool loads) { m_loadsSubresources = loads; }
 
-    bool loadsFromNetwork() const { return m_loadsFromNetwork; }
-    void setLoadsFromNetwork(bool loads) { m_loadsFromNetwork = loads; }
+    const Optional<HashSet<WTF::String>>& allowedNetworkHosts() const { return m_allowedNetworkHosts; }
+    void setAllowedNetworkHosts(Optional<HashSet<WTF::String>>&& hosts) { m_allowedNetworkHosts = WTFMove(hosts); }
 
 #if ENABLE(APP_BOUND_DOMAINS)
     bool ignoresAppBoundDomains() const { return m_ignoresAppBoundDomains; }
@@ -206,7 +206,7 @@ private:
     bool m_crossOriginAccessControlCheckEnabled { true };
     WTF::String m_processDisplayName;
     bool m_loadsSubresources { true };
-    bool m_loadsFromNetwork { true };
+    Optional<HashSet<WTF::String>> m_allowedNetworkHosts;
     
 #if ENABLE(APP_BOUND_DOMAINS)
     bool m_ignoresAppBoundDomains { false };

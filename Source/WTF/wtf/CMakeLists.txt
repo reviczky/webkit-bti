@@ -28,6 +28,8 @@ set(WTF_PUBLIC_HEADERS
     CallbackAggregator.h
     CheckedArithmetic.h
     CheckedBoolean.h
+    CheckedCondition.h
+    CheckedLock.h
     ClockType.h
     CommaPrinter.h
     CompactPointerTuple.h
@@ -69,6 +71,7 @@ set(WTF_PUBLIC_HEADERS
     FileMetadata.h
     FilePrintStream.h
     FileSystem.h
+    FixedVector.h
     FlipBytes.h
     ForbidHeapAllocation.h
     Forward.h
@@ -214,6 +217,9 @@ set(WTF_PUBLIC_HEADERS
     RefPtr.h
     ResourceUsage.h
     RetainPtr.h
+    RobinHoodHashMap.h
+    RobinHoodHashSet.h
+    RobinHoodHashTable.h
     RunLoop.h
     SHA1.h
     SaturatedArithmetic.h
@@ -232,6 +238,7 @@ set(WTF_PUBLIC_HEADERS
     SixCharacterHash.h
     SmallPtrSet.h
     SoftLinking.h
+    SortedArrayMap.h
     SpanningTree.h
     Spectrum.h
     StackBounds.h
@@ -258,8 +265,10 @@ set(WTF_PUBLIC_HEADERS
     SystemFree.h
     SystemTracing.h
     TaggedArrayStoragePtr.h
+    ThreadAssertions.h
     ThreadGroup.h
     ThreadMessage.h
+    ThreadSafetyAnalysis.h
     ThreadSafeRefCounted.h
     ThreadSanitizerSupport.h
     ThreadSpecific.h
@@ -533,6 +542,12 @@ endif ()
 
 if (ATOMICS_REQUIRE_LIBATOMIC)
     list(APPEND WTF_LIBRARIES atomic)
+endif ()
+
+if (COMPILER_IS_GCC_OR_CLANG)
+    if (HAVE_STD_EXPERIMENTAL_FILESYSTEM)
+        list(APPEND WTF_LIBRARIES stdc++fs)
+    endif ()
 endif ()
 
 set(WTF_INTERFACE_LIBRARIES WTF)

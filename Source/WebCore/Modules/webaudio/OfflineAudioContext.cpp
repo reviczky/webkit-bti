@@ -33,13 +33,14 @@
 #include "Document.h"
 #include "JSAudioBuffer.h"
 #include <wtf/IsoMallocInlines.h>
+#include <wtf/Scope.h>
 
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(OfflineAudioContext);
 
 inline OfflineAudioContext::OfflineAudioContext(Document& document, unsigned numberOfChannels, unsigned length, float sampleRate, RefPtr<AudioBuffer>&& renderTarget)
-    : BaseAudioContext(document, numberOfChannels, sampleRate, WTFMove(renderTarget))
+    : BaseAudioContext(document, IsLegacyWebKitAudioContext::No, numberOfChannels, sampleRate, WTFMove(renderTarget))
     , m_length(length)
 {
 }
@@ -73,20 +74,7 @@ void OfflineAudioContext::uninitialize()
 {
     BaseAudioContext::uninitialize();
 
-    Vector<RefPtr<DeferredPromise>> promisesToReject;
-
-    {
-        AutoLocker locker(*this);
-        promisesToReject.reserveInitialCapacity(m_suspendRequests.size());
-        for (auto& promise : m_suspendRequests.values())
-            promisesToReject.uncheckedAppend(promise);
-        m_suspendRequests.clear();
-    }
-
-    if (m_pendingOfflineRenderingPromise)
-        promisesToReject.append(std::exchange(m_pendingOfflineRenderingPromise, nullptr));
-
-    for (auto& promise : promisesToReject)
+    if (auto promise = std::exchange(m_pendingOfflineRenderingPromise, nullptr))
         promise->reject(Exception { InvalidStateError, "Context is going away"_s });
 }
 
@@ -109,13 +97,13 @@ void OfflineAudioContext::startOfflineRendering(Ref<DeferredPromise>&& promise)
 
     lazyInitialize();
 
-    destination()->startRendering([this, promise = WTFMove(promise), pendingActivity = ActiveDOMObject::makePendingActivity(*this)](Optional<Exception>&& exception) mutable {
+    destination().startRendering([this, promise = WTFMove(promise), pendingActivity = makePendingActivity(*this)](Optional<Exception>&& exception) mutable {
         if (exception) {
             promise->reject(WTFMove(*exception));
             return;
         }
 
-        makePendingActivity();
+        setPendingActivity();
         m_pendingOfflineRenderingPromise = WTFMove(promise);
         m_didStartOfflineRendering = true;
         setState(State::Running);
@@ -171,13 +159,13 @@ void OfflineAudioContext::resumeOfflineRendering(Ref<DeferredPromise>&& promise)
     }
     ASSERT(state() == AudioContextState::Suspended);
 
-    destination()->startRendering([this, promise = WTFMove(promise), pendingActivity = ActiveDOMObject::makePendingActivity(*this)](Optional<Exception>&& exception) mutable {
+    destination().startRendering([this, promise = WTFMove(promise), pendingActivity = makePendingActivity(*this)](Optional<Exception>&& exception) mutable {
         if (exception) {
             promise->reject(WTFMove(*exception));
             return;
         }
 
-        makePendingActivity();
+        setPendingActivity();
         setState(State::Running);
         promise->resolve();
     });
@@ -196,6 +184,8 @@ void OfflineAudioContext::didSuspendRendering(size_t frame)
 {
     BaseAudioContext::didSuspendRendering(frame);
 
+    clearPendingActivity();
+
     RefPtr<DeferredPromise> promise;
     {
         AutoLocker locker(*this);
@@ -208,7 +198,10 @@ void OfflineAudioContext::didSuspendRendering(size_t frame)
 
 void OfflineAudioContext::didFinishOfflineRendering(ExceptionOr<Ref<AudioBuffer>>&& result)
 {
-    m_didStartOfflineRendering = false;
+    auto finishedRenderingScope = WTF::makeScopeExit([this] {
+        uninitialize();
+        clear();
+    });
 
     if (!m_pendingOfflineRenderingPromise)
         return;

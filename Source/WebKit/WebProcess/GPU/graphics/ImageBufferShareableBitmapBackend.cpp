@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +30,7 @@
 
 #include "ShareableBitmap.h"
 #include <WebCore/GraphicsContext.h>
-#include <WebCore/ImageData.h>
+#include <WebCore/PixelBuffer.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/StdLibExtras.h>
 
@@ -43,19 +43,54 @@ using namespace WebCore;
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(ImageBufferShareableBitmapBackend);
 
-std::unique_ptr<ImageBufferShareableBitmapBackend> ImageBufferShareableBitmapBackend::create(const Parameters& parameters, const HostWindow*)
+ShareableBitmap::Configuration ImageBufferShareableBitmapBackend::configuration(const Parameters& parameters)
 {
-    ASSERT(parameters.pixelFormat == PixelFormat::BGRA8);
-
-    IntSize backendSize = calculateBackendSize(parameters.logicalSize, parameters.resolutionScale);
-    if (backendSize.isEmpty())
-        return nullptr;
-
     ShareableBitmap::Configuration configuration;
 #if PLATFORM(COCOA)
     configuration.colorSpace = { cachedCGColorSpace(parameters.colorSpace) };
 #endif
-    auto bitmap = ShareableBitmap::createShareable(backendSize, configuration);
+    return configuration;
+}
+
+IntSize ImageBufferShareableBitmapBackend::calculateSafeBackendSize(const Parameters& parameters)
+{
+    IntSize backendSize = calculateBackendSize(parameters);
+    if (backendSize.isEmpty())
+        return { };
+
+    Checked<unsigned, RecordOverflow> bytesPerRow = ShareableBitmap::calculateBytesPerRow(backendSize, configuration(parameters));
+    if (bytesPerRow.hasOverflowed())
+        return { };
+
+    CheckedSize numBytes = Checked<unsigned, RecordOverflow>(backendSize.height()) * bytesPerRow;
+    if (numBytes.hasOverflowed())
+        return { };
+
+    return backendSize;
+}
+
+unsigned ImageBufferShareableBitmapBackend::calculateBytesPerRow(const Parameters& parameters, const IntSize& backendSize)
+{
+    ASSERT(!backendSize.isEmpty());
+    Checked<unsigned, RecordOverflow> bytesPerRow = ShareableBitmap::calculateBytesPerRow(backendSize, configuration(parameters));
+    return bytesPerRow.unsafeGet();
+}
+
+size_t ImageBufferShareableBitmapBackend::calculateMemoryCost(const Parameters& parameters)
+{
+    IntSize backendSize = calculateBackendSize(parameters);
+    return ImageBufferBackend::calculateMemoryCost(backendSize, calculateBytesPerRow(parameters, backendSize));
+}
+
+std::unique_ptr<ImageBufferShareableBitmapBackend> ImageBufferShareableBitmapBackend::create(const Parameters& parameters, const HostWindow*)
+{
+    ASSERT(parameters.pixelFormat == PixelFormat::BGRA8);
+
+    IntSize backendSize = calculateSafeBackendSize(parameters);
+    if (backendSize.isEmpty())
+        return nullptr;
+
+    auto bitmap = ShareableBitmap::createShareable(backendSize, configuration(parameters));
     if (!bitmap)
         return nullptr;
 
@@ -89,6 +124,11 @@ ImageBufferShareableBitmapBackend::ImageBufferShareableBitmapBackend(const Param
     , m_bitmap(WTFMove(bitmap))
     , m_context(WTFMove(context))
 {
+    // ShareableBitmap ensures that the coordinate space in the context that we're adopting
+    // has a top-left origin, so we don't ever need to flip here, so we don't call setupContext().
+    // However, ShareableBitmap does not have a notion of scale, so we must apply the device
+    // scale factor to the context ourselves.
+    m_context->applyDeviceScaleFactor(resolutionScale());
 }
 
 ImageBufferBackendHandle ImageBufferShareableBitmapBackend::createImageBufferBackendHandle() const
@@ -123,14 +163,14 @@ Vector<uint8_t> ImageBufferShareableBitmapBackend::toBGRAData() const
     return ImageBufferBackend::toBGRAData(m_bitmap->data());
 }
 
-RefPtr<ImageData> ImageBufferShareableBitmapBackend::getImageData(AlphaPremultiplication outputFormat, const IntRect& srcRect) const
+Optional<PixelBuffer> ImageBufferShareableBitmapBackend::getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect& srcRect) const
 {
-    return ImageBufferBackend::getImageData(outputFormat, srcRect, m_bitmap->data());
+    return ImageBufferBackend::getPixelBuffer(outputFormat, srcRect, m_bitmap->data());
 }
 
-void ImageBufferShareableBitmapBackend::putImageData(AlphaPremultiplication inputFormat, const ImageData& imageData, const IntRect& srcRect, const IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat)
+void ImageBufferShareableBitmapBackend::putPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat)
 {
-    ImageBufferBackend::putImageData(inputFormat, imageData, srcRect, destPoint, destFormat, m_bitmap->data());
+    ImageBufferBackend::putPixelBuffer(inputFormat, pixelBuffer, srcRect, destPoint, destFormat, m_bitmap->data());
 }
 
 } // namespace WebKit

@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "HitTestRequest.h"
 #include "LengthFunctions.h"
 #include "RenderObject.h"
 
@@ -69,6 +70,8 @@ public:
 
     RenderObject* firstChild() const { return m_firstChild; }
     RenderObject* lastChild() const { return m_lastChild; }
+    RenderObject* firstInFlowChild() const;
+    RenderObject* lastInFlowChild() const;
 
     bool canContainFixedPositionObjects() const;
     bool canContainAbsolutelyPositionedObjects() const;
@@ -142,7 +145,16 @@ public:
     bool isTransparent() const { return style().opacity() < 1.0f; }
     float opacity() const { return style().opacity(); }
 
-    bool visibleToHitTesting() const { return style().visibility() == Visibility::Visible && style().pointerEvents() != PointerEvents::None; }
+    bool visibleToHitTesting(Optional<HitTestRequest> hitTestRequest = WTF::nullopt) const
+    {
+        if (style().visibility() != Visibility::Visible)
+            return false;
+
+        if ((!hitTestRequest || !hitTestRequest->ignoreCSSPointerEventsProperty()) && style().pointerEvents() == PointerEvents::None)
+            return false;
+
+        return true;
+    }
 
     bool hasBackground() const { return style().hasBackground(); }
     bool hasMask() const { return style().hasMask(); }
@@ -268,8 +280,8 @@ protected:
     virtual void styleWillChange(StyleDifference, const RenderStyle& newStyle);
     virtual void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
 
-    void insertedIntoTree() override;
-    void willBeRemovedFromTree() override;
+    void insertedIntoTree(IsInternalMove) override;
+    void willBeRemovedFromTree(IsInternalMove) override;
     void willBeDestroyed() override;
     void notifyFinished(CachedResource&, const NetworkLoadMetrics&) override;
 
@@ -425,22 +437,27 @@ inline Element* RenderElement::generatingElement() const
 inline bool RenderElement::canContainFixedPositionObjects() const
 {
     return isRenderView()
-        || (hasTransform() && isRenderBlock())
+        || (isRenderBlock() && hasTransform())
+        // FIXME: will-change should create containing blocks on inline boxes (bug 225035)
+        || (isRenderBlock() && style().willChange() && style().willChange()->createsContainingBlockForOutOfFlowPositioned())
         || isSVGForeignObject()
-        || isOutOfFlowRenderFragmentedFlow();
+        || shouldApplyLayoutContainment(*this);
 }
 
 inline bool RenderElement::canContainAbsolutelyPositionedObjects() const
 {
     return style().position() != PositionType::Static
         || (isRenderBlock() && hasTransformRelatedProperty())
+        // FIXME: will-change should create containing blocks on inline boxes (bug 225035)
+        || (isRenderBlock() && style().willChange() && style().willChange()->createsContainingBlockForOutOfFlowPositioned())
         || isSVGForeignObject()
+        || shouldApplyLayoutContainment(*this)
         || isRenderView();
 }
 
 inline bool RenderElement::createsGroupForStyle(const RenderStyle& style)
 {
-    return style.opacity() < 1.0f || style.hasMask() || style.clipPath() || style.hasFilter() || style.hasBackdropFilter() || style.hasBlendMode();
+    return style.hasOpacity() || style.hasMask() || style.clipPath() || style.hasFilter() || style.hasBackdropFilter() || style.hasBlendMode();
 }
 
 inline bool RenderObject::isRenderLayerModelObject() const
@@ -500,6 +517,26 @@ inline int adjustForAbsoluteZoom(int value, const RenderElement& renderer)
 inline LayoutUnit adjustLayoutUnitForAbsoluteZoom(LayoutUnit value, const RenderElement& renderer)
 {
     return adjustLayoutUnitForAbsoluteZoom(value, renderer.style());
+}
+
+inline RenderObject* RenderElement::firstInFlowChild() const
+{
+    if (auto* firstChild = this->firstChild()) {
+        if (firstChild->isInFlow())
+            return firstChild;
+        return firstChild->nextInFlowSibling();
+    }
+    return nullptr;
+}
+
+inline RenderObject* RenderElement::lastInFlowChild() const
+{
+    if (auto* lastChild = this->lastChild()) {
+        if (lastChild->isInFlow())
+            return lastChild;
+        return lastChild->previousInFlowSibling();
+    }
+    return nullptr;
 }
 
 } // namespace WebCore

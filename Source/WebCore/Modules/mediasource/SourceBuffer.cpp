@@ -81,7 +81,6 @@ SourceBuffer::SourceBuffer(Ref<SourceBufferPrivate>&& sourceBufferPrivate, Media
     , m_appendWindowEnd(MediaTime::positiveInfiniteTime())
     , m_appendState(WaitingForSegment)
     , m_timeOfBufferingMonitor(MonotonicTime::now())
-    , m_buffered(TimeRanges::create())
     , m_pendingRemoveStart(MediaTime::invalidTime())
     , m_pendingRemoveEnd(MediaTime::invalidTime())
     , m_removeTimer(*this, &SourceBuffer::removeTimerFired)
@@ -116,7 +115,7 @@ ExceptionOr<Ref<TimeRanges>> SourceBuffer::buffered() const
         return Exception { InvalidStateError };
 
     // 2. Return a new static normalized TimeRanges object for the media segments buffered.
-    return m_buffered->copy();
+    return m_private->buffered()->copy();
 }
 
 double SourceBuffer::timestampOffset() const
@@ -491,14 +490,11 @@ ExceptionOr<void> SourceBuffer::appendBufferInternal(const unsigned char* data, 
     // 4. Run the coded frame eviction algorithm.
     m_private->evictCodedFrames(size, m_pendingAppendData.capacity(), maximumBufferSize(), m_source->currentTime(), m_source->duration(), m_source->isEnded());
 
-    // FIXME: enable this code when MSE libraries have been updated to support it.
-#if USE(GSTREAMER)
     // 5. If the buffer full flag equals true, then throw a QuotaExceededError exception and abort these step.
-    if (m_private->bufferFull()) {
+    if (m_private->bufferFull() || m_private->totalTrackBufferSizeInBytes() + m_pendingAppendData.capacity() + size >= maximumBufferSize()) {
         ERROR_LOG(LOGIDENTIFIER, "buffer full, failing with QuotaExceededError error");
         return Exception { QuotaExceededError };
     }
-#endif
 
     // NOTE: Return to 3.2 appendBuffer()
     // 3. Add data to the end of the input buffer.
@@ -1219,9 +1215,9 @@ void SourceBuffer::bufferedSamplesForTrackId(const AtomString& trackID, Completi
     m_private->bufferedSamplesForTrackId(trackID, WTFMove(completionHandler));
 }
 
-Vector<String> SourceBuffer::enqueuedSamplesForTrackID(const AtomString& trackID)
+void SourceBuffer::enqueuedSamplesForTrackID(const AtomString& trackID, CompletionHandler<void(Vector<String>&&)>&& completionHandler)
 {
-    return m_private->enqueuedSamplesForTrackID(trackID);
+    return m_private->enqueuedSamplesForTrackID(trackID, WTFMove(completionHandler));
 }
 
 MediaTime SourceBuffer::minimumUpcomingPresentationTimeForTrackID(const AtomString& trackID)
@@ -1292,11 +1288,8 @@ void SourceBuffer::setShouldGenerateTimestamps(bool flag)
 void SourceBuffer::sourceBufferPrivateBufferedDirtyChanged(bool flag)
 {
     m_bufferedDirty = flag;
-}
-
-void SourceBuffer::sourceBufferPrivateBufferedRangesChanged(const PlatformTimeRanges& timeRanges)
-{
-    m_buffered->ranges() = timeRanges;
+    if (!isRemoved())
+        m_source->sourceBufferDidChangeBufferedDirty(*this, flag);
 }
 
 bool SourceBuffer::isBufferedDirty() const

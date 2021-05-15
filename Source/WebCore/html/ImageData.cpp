@@ -43,6 +43,39 @@ Checked<unsigned, RecordOverflow> ImageData::dataSize(const IntSize& size)
     return checkedDataSize;
 }
 
+Ref<ImageData> ImageData::create(PixelBuffer&& pixelBuffer)
+{
+    return adoptRef(*new ImageData(WTFMove(pixelBuffer)));
+}
+
+RefPtr<ImageData> ImageData::create(Optional<PixelBuffer>&& pixelBuffer)
+{
+    if (!pixelBuffer)
+        return nullptr;
+    return ImageData::create(WTFMove(*pixelBuffer));
+}
+
+RefPtr<ImageData> ImageData::create(const IntSize& size)
+{
+    auto dataSize = ImageData::dataSize(size);
+    if (dataSize.hasOverflowed())
+        return nullptr;
+    auto byteArray = Uint8ClampedArray::tryCreateUninitialized(dataSize.unsafeGet());
+    if (!byteArray)
+        return nullptr;
+    
+    return adoptRef(*new ImageData({ { AlphaPremultiplication::Unpremultiplied, PixelFormat::RGBA8, DestinationColorSpace::SRGB }, size, byteArray.releaseNonNull() }));
+}
+
+RefPtr<ImageData> ImageData::create(const IntSize& size, Ref<Uint8ClampedArray>&& byteArray)
+{
+    auto dataSize = ImageData::dataSize(size);
+    if (dataSize.hasOverflowed() || dataSize.unsafeGet() > byteArray->length())
+        return nullptr;
+
+    return adoptRef(*new ImageData({ { AlphaPremultiplication::Unpremultiplied, PixelFormat::RGBA8, DestinationColorSpace::SRGB }, size, WTFMove(byteArray) }));
+}
+
 ExceptionOr<Ref<ImageData>> ImageData::create(unsigned sw, unsigned sh)
 {
     if (!sw || !sh)
@@ -57,26 +90,7 @@ ExceptionOr<Ref<ImageData>> ImageData::create(unsigned sw, unsigned sh)
         return Exception { RangeError, "Out of memory"_s };
     }
     byteArray->zeroFill();
-    return adoptRef(*new ImageData(size, byteArray.releaseNonNull()));
-}
-
-RefPtr<ImageData> ImageData::create(const IntSize& size)
-{
-    auto dataSize = ImageData::dataSize(size);
-    if (dataSize.hasOverflowed())
-        return nullptr;
-    auto byteArray = Uint8ClampedArray::tryCreateUninitialized(dataSize.unsafeGet());
-    if (!byteArray)
-        return nullptr;
-    return adoptRef(*new ImageData(size, byteArray.releaseNonNull()));
-}
-
-RefPtr<ImageData> ImageData::create(const IntSize& size, Ref<Uint8ClampedArray>&& byteArray)
-{
-    auto dataSize = ImageData::dataSize(size);
-    if (dataSize.hasOverflowed() || dataSize.unsafeGet() > byteArray->length())
-        return nullptr;
-    return adoptRef(*new ImageData(size, WTFMove(byteArray)));
+    return adoptRef(*new ImageData({ { AlphaPremultiplication::Unpremultiplied, PixelFormat::RGBA8, DestinationColorSpace::SRGB }, size, byteArray.releaseNonNull() }));
 }
 
 ExceptionOr<Ref<ImageData>> ImageData::create(Ref<Uint8ClampedArray>&& byteArray, unsigned sw, Optional<unsigned> sh)
@@ -99,22 +113,22 @@ ExceptionOr<Ref<ImageData>> ImageData::create(Ref<Uint8ClampedArray>&& byteArray
     return result.releaseNonNull();
 }
 
-ImageData::ImageData(const IntSize& size, Ref<Uint8ClampedArray>&& byteArray)
-    : m_size(size)
-    , m_data(WTFMove(byteArray))
+ImageData::ImageData(PixelBuffer&& pixelBuffer)
+    : m_pixelBuffer(WTFMove(pixelBuffer))
 {
-    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION((size.area() * 4).unsafeGet() <= m_data->length());
 }
+
+ImageData::~ImageData() = default;
 
 Ref<ImageData> ImageData::deepClone() const
 {
-    return adoptRef(*new ImageData(m_size, Uint8ClampedArray::create(m_data->data(), m_data->length())));
+    return adoptRef(*new ImageData(m_pixelBuffer.deepClone()));
 }
 
 TextStream& operator<<(TextStream& ts, const ImageData& imageData)
 {
     // Print out the address of the pixel data array
-    return ts << imageData.data();
+    return ts << &imageData.data();
 }
 
 }

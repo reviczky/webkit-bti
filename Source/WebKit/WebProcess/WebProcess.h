@@ -74,6 +74,10 @@ namespace API {
 class Object;
 }
 
+namespace IPC {
+class SharedBufferDataReference;
+}
+
 namespace PAL {
 class SessionID;
 }
@@ -90,6 +94,7 @@ class UserGestureToken;
 enum class EventMakesGamepadsVisible : bool;
 
 struct BackForwardItemIdentifier;
+struct DisplayUpdate;
 struct MessagePortIdentifier;
 struct MessageWithMessagePorts;
 struct MockMediaDevice;
@@ -113,6 +118,9 @@ class LibWebRTCNetwork;
 class NetworkProcessConnection;
 class ObjCObjectGraph;
 class ProcessAssertion;
+class RemoteCDMFactory;
+class RemoteLegacyCDMFactory;
+class RemoteMediaEngineConfigurationFactory;
 struct ServiceWorkerInitializationData;
 class StorageAreaMap;
 class UserData;
@@ -193,13 +201,15 @@ public:
 
     bool fullKeyboardAccessEnabled() const { return m_fullKeyboardAccessEnabled; }
 
-#if HAVE(UIKIT_WITH_MOUSE_SUPPORT) && PLATFORM(IOS)
+#if HAVE(MOUSE_DEVICE_OBSERVATION)
     bool hasMouseDevice() const { return m_hasMouseDevice; }
     void setHasMouseDevice(bool);
 #endif
 
+#if HAVE(STYLUS_DEVICE_OBSERVATION)
     bool hasStylusDevice() const { return m_hasStylusDevice; }
     void setHasStylusDevice(bool);
+#endif
 
     WebFrame* webFrame(WebCore::FrameIdentifier) const;
     Vector<WebFrame*> webFrames() const;
@@ -235,7 +245,13 @@ public:
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
     LibWebRTCCodecs& libWebRTCCodecs();
 #endif
-
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+    RemoteLegacyCDMFactory& legacyCDMFactory();
+#endif
+#if ENABLE(ENCRYPTED_MEDIA)
+    RemoteCDMFactory& cdmFactory();
+#endif
+    RemoteMediaEngineConfigurationFactory& mediaEngineConfigurationFactory();
 #endif // ENABLE(GPU_PROCESS)
 
 #if ENABLE(WEB_AUTHN)
@@ -251,7 +267,11 @@ public:
     void pageDidEnterWindow(WebCore::PageIdentifier);
     void pageWillLeaveWindow(WebCore::PageIdentifier);
 
-    void nonVisibleProcessCleanupTimerFired();
+    void nonVisibleProcessGraphicsCleanupTimerFired();
+
+#if ENABLE(NON_VISIBLE_WEBPROCESS_MEMORY_CLEANUP_TIMER)
+    void nonVisibleProcessMemoryCleanupTimerFired();
+#endif
 
     void registerStorageAreaMap(StorageAreaMap&);
     void unregisterStorageAreaMap(StorageAreaMap&);
@@ -339,10 +359,9 @@ public:
     bool removeServiceWorkerRegistration(WebCore::ServiceWorkerRegistrationIdentifier);
 #endif
 
-#if PLATFORM(IOS)
     void grantAccessToAssetServices(WebKit::SandboxExtension::Handle&& mobileAssetV2Handle);
     void revokeAccessToAssetServices();
-#endif
+    void switchFromStaticFontRegistryToUserFontRegistry(WebKit::SandboxExtension::Handle&& fontMachExtensionHandle);
 
 #if PLATFORM(MAC)
     void updatePageScreenProperties();
@@ -357,12 +376,6 @@ public:
     void setUseGPUProcessForWebGL(bool);
     bool shouldUseRemoteRenderingForWebGL() const;
 #endif
-#endif
-
-#if ENABLE(VP9)
-    void enableVP9Decoder();
-    void enableVP8SWDecoder();
-    void enableVP9SWDecoder();
 #endif
 
 #if PLATFORM(COCOA)
@@ -509,8 +522,8 @@ private:
     void sendResourceLoadStatisticsDataImmediately(CompletionHandler<void()>&&);
 #endif
 
-#if ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
-    void displayWasRefreshed(uint32_t displayID);
+#if HAVE(CVDISPLAYLINK)
+    void displayWasRefreshed(uint32_t displayID, const WebCore::DisplayUpdate&);
 #endif
 
 #if PLATFORM(MAC)
@@ -518,18 +531,22 @@ private:
     void systemWillSleep();
     void systemDidWake();
 #endif
+
+#if PLATFORM(COCOA)
+    void consumeAudioComponentRegistrations(const IPC::DataReference&);
+#endif
     
     void platformInitializeProcess(const AuxiliaryProcessInitializationParameters&);
 
     // IPC::Connection::Client
     friend class WebConnectionToUIProcess;
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
 
     // Implemented in generated WebProcessMessageReceiver.cpp
     void didReceiveWebProcessMessage(IPC::Connection&, IPC::Decoder&);
 
-#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
+#if PLATFORM(MAC)
     void scrollerStylePreferenceChanged(bool useOverlayScrollbars);
     void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
 #endif
@@ -599,11 +616,13 @@ private:
 
     bool m_fullKeyboardAccessEnabled { false };
 
-#if HAVE(UIKIT_WITH_MOUSE_SUPPORT) && PLATFORM(IOS)
+#if HAVE(MOUSE_DEVICE_OBSERVATION)
     bool m_hasMouseDevice { false };
 #endif
 
+#if HAVE(STYLUS_DEVICE_OBSERVATION)
     bool m_hasStylusDevice { false };
+#endif
 
     HashMap<WebCore::FrameIdentifier, WebFrame*> m_frameMap;
 
@@ -619,7 +638,7 @@ private:
 #if ENABLE(GPU_PROCESS)
     RefPtr<GPUProcessConnection> m_gpuProcessConnection;
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
-    std::unique_ptr<LibWebRTCCodecs> m_libWebRTCCodecs;
+    RefPtr<LibWebRTCCodecs> m_libWebRTCCodecs;
 #endif
 #endif
 
@@ -651,7 +670,11 @@ private:
     bool m_processIsSuspended { false };
 
     HashSet<WebCore::PageIdentifier> m_pagesInWindows;
-    WebCore::Timer m_nonVisibleProcessCleanupTimer;
+    WebCore::Timer m_nonVisibleProcessGraphicsCleanupTimer;
+
+#if ENABLE(NON_VISIBLE_WEBPROCESS_MEMORY_CLEANUP_TIMER)
+    WebCore::Timer m_nonVisibleProcessMemoryCleanupTimer;
+#endif
 
     RefPtr<WebCore::ApplicationCacheStorage> m_applicationCacheStorage;
 
@@ -708,9 +731,8 @@ private:
     WebCore::ThirdPartyCookieBlockingMode m_thirdPartyCookieBlockingMode { WebCore::ThirdPartyCookieBlockingMode::All };
 #endif
 
-#if PLATFORM(IOS)
     RefPtr<SandboxExtension> m_assetServiceV2Extension;
-#endif
+    RefPtr<SandboxExtension> m_fontMachExtension;
 
 #if PLATFORM(COCOA)
     HashCountedSet<String> m_pendingPasteboardWriteCounts;
@@ -723,12 +745,6 @@ private:
 #if ENABLE(WEBGL)
     bool m_useGPUProcessForWebGL { false };
 #endif
-#endif
-
-#if ENABLE(VP9)
-    bool m_vp9DecoderEnabled { false };
-    bool m_vp8SWDecoderEnabled { false };
-    bool m_vp9SWDecoderEnabled { false };
 #endif
 
 #if ENABLE(MEDIA_STREAM)

@@ -26,6 +26,7 @@
 #pragma once
 
 #include "ArgumentCoders.h"
+#include "TransactionID.h"
 #include <WebCore/Color.h>
 #include <WebCore/FontAttributes.h>
 #include <WebCore/IntRect.h>
@@ -33,7 +34,7 @@
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(IOS_FAMILY)
-#include <WebCore/SelectionRect.h>
+#include <WebCore/SelectionGeometry.h>
 #endif
 
 #if USE(DICTATION_ALTERNATIVES)
@@ -69,10 +70,12 @@ enum ListType {
 };
 
 struct EditorState {
+    TransactionID transactionID;
     String originIdentifierForPasteboard;
     bool shouldIgnoreSelectionChanges { false };
     bool selectionIsNone { true }; // This will be false when there is a caret selection.
     bool selectionIsRange { false };
+    bool selectionIsRangeInsideImageOverlay { false };
     bool isContentEditable { false };
     bool isContentRichlyEditable { false };
     bool isInPasswordField { false };
@@ -95,8 +98,8 @@ struct EditorState {
 #if PLATFORM(IOS_FAMILY)
         WebCore::IntRect selectionClipRect;
         WebCore::IntRect caretRectAtEnd;
-        Vector<WebCore::SelectionRect> selectionRects;
-        Vector<WebCore::SelectionRect> markedTextRects;
+        Vector<WebCore::SelectionGeometry> selectionGeometries;
+        Vector<WebCore::SelectionGeometry> markedTextRects;
         String markedText;
         WebCore::IntRect markedTextCaretRectAtStart;
         WebCore::IntRect markedTextCaretRectAtEnd;

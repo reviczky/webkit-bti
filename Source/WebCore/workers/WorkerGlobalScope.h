@@ -29,22 +29,29 @@
 #include "Base64Utilities.h"
 #include "CacheStorageConnection.h"
 #include "ImageBitmap.h"
+#include "ScriptBufferSourceProvider.h"
 #include "ScriptExecutionContext.h"
 #include "Supplementable.h"
 #include "WorkerOrWorkletGlobalScope.h"
 #include "WorkerOrWorkletScriptController.h"
-#include <wtf/URL.h>
 #include "WorkerCacheStorageConnection.h"
 #include "WorkerMessagePortChannelProvider.h"
 #include "WorkerThread.h"
 #include <JavaScriptCore/ConsoleMessage.h>
 #include <memory>
+#include <wtf/HashMap.h>
+#include <wtf/MemoryPressureHandler.h>
+#include <wtf/URL.h>
+#include <wtf/URLHash.h>
+#include <wtf/WeakHashSet.h>
 
 namespace WebCore {
 
+class CSSFontSelector;
 class CSSValuePool;
 class ContentSecurityPolicyResponseHeaders;
 class Crypto;
+class FontFaceSet;
 class Performance;
 class ScheduledAction;
 class WorkerLocation;
@@ -68,11 +75,9 @@ public:
     String origin() const;
     const String& identifier() const { return m_identifier; }
 
-#if ENABLE(INDEXED_DATABASE)
     IDBClient::IDBConnectionProxy* idbConnectionProxy() final;
     void suspend() final;
     void resume() final;
-#endif
 
     WorkerCacheStorageConnection& cacheStorageConnection();
     MessagePortChannelProvider& messagePortChannelProvider();
@@ -117,7 +122,12 @@ public:
     void createImageBitmap(ImageBitmap::Source&&, ImageBitmapOptions&&, ImageBitmap::Promise&&);
     void createImageBitmap(ImageBitmap::Source&&, int sx, int sy, int sw, int sh, ImageBitmapOptions&&, ImageBitmap::Promise&&);
 
-    CSSValuePool& cssValuePool();
+    CSSValuePool& cssValuePool() final;
+    CSSFontSelector* cssFontSelector() final;
+    FontCache& fontCache() final;
+    Ref<FontFaceSet> fonts();
+    std::unique_ptr<FontLoadRequest> fontLoadRequest(String& url, bool isSVG, bool isInitiatingElementInUserAgentShadowTree, LoadedFromOpaqueSource) final;
+    void beginLoadingFontSoon(FontLoadRequest&) final;
 
     ReferrerPolicy referrerPolicy() const final;
 
@@ -125,10 +135,17 @@ public:
 
     FetchOptions::Credentials credentials() const { return m_credentials; }
 
+    void releaseMemory(Synchronous);
+    static void releaseMemoryInWorkers(Synchronous);
+
+    void setMainScriptSourceProvider(ScriptBufferSourceProvider&);
+    void addImportedScriptSourceProvider(const URL&, ScriptBufferSourceProvider&);
+
 protected:
     WorkerGlobalScope(WorkerThreadType, const WorkerParameters&, Ref<SecurityOrigin>&&, WorkerThread&, Ref<SecurityOrigin>&& topOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
 
     void applyContentSecurityPolicyResponseHeaders(const ContentSecurityPolicyResponseHeaders&);
+    void updateSourceProviderBuffers(const ScriptBuffer& mainScript, const HashMap<URL, ScriptBuffer>& importedScripts);
 
 private:
     void logExceptionToConsole(const String& errorMessage, const String& sourceURL, int lineNumber, int columnNumber, RefPtr<Inspector::ScriptCallStack>&&) final;
@@ -140,12 +157,16 @@ private:
 
     bool isWorkerGlobalScope() const final { return true; }
 
+    void deleteJSCodeAndGC(Synchronous);
+    void clearDecodedScriptData();
+
     URL completeURL(const String&, ForceUTF8 = ForceUTF8::No) const final;
     String userAgent(const URL&) const final;
 
     EventTarget* errorEventTarget() final;
     String resourceRequestIdentifier() const final { return m_identifier; }
     SocketProvider* socketProvider() final;
+    RefPtr<RTCDataChannelRemoteHandlerConnection> createRTCDataChannelRemoteHandlerConnection() final;
 
     bool shouldBypassMainWorldContentSecurityPolicy() const final { return m_shouldBypassMainWorldContentSecurityPolicy; }
 
@@ -154,9 +175,7 @@ private:
     bool unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t>& key) final;
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
     void stopIndexedDatabase();
-#endif
 
     URL m_url;
     String m_identifier;
@@ -170,14 +189,15 @@ private:
 
     Ref<SecurityOrigin> m_topOrigin;
 
-#if ENABLE(INDEXED_DATABASE)
     RefPtr<IDBClient::IDBConnectionProxy> m_connectionProxy;
-#endif
 
     RefPtr<SocketProvider> m_socketProvider;
 
     RefPtr<Performance> m_performance;
     mutable RefPtr<Crypto> m_crypto;
+
+    WeakPtr<ScriptBufferSourceProvider> m_mainScriptSourceProvider;
+    HashMap<URL, WeakHashSet<ScriptBufferSourceProvider>> m_importedScriptsSourceProviders;
 
     RefPtr<WorkerCacheStorageConnection> m_cacheStorageConnection;
     std::unique_ptr<WorkerMessagePortChannelProvider> m_messagePortChannelProvider;
@@ -185,6 +205,8 @@ private:
     RefPtr<WorkerSWClientConnection> m_swClientConnection;
 #endif
     std::unique_ptr<CSSValuePool> m_cssValuePool;
+    RefPtr<CSSFontSelector> m_cssFontSelector;
+    RefPtr<FontCache> m_fontCache;
     ReferrerPolicy m_referrerPolicy;
     Settings::Values m_settingsValues;
     WorkerType m_workerType;

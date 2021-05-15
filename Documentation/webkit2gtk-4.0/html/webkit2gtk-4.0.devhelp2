@@ -229,6 +229,8 @@
     <keyword type="function" name="webkit_web_view_set_input_method_context ()" link="WebKitWebView.html#webkit-web-view-set-input-method-context" since="2.28"/>
     <keyword type="function" name="webkit_web_view_get_input_method_context ()" link="WebKitWebView.html#webkit-web-view-get-input-method-context" since="2.28"/>
     <keyword type="function" name="webkit_web_view_get_website_policies ()" link="WebKitWebView.html#webkit-web-view-get-website-policies" since="2.30"/>
+    <keyword type="function" name="webkit_web_view_get_is_web_process_responsive ()" link="WebKitWebView.html#webkit-web-view-get-is-web-process-responsive"/>
+    <keyword type="function" name="webkit_web_view_terminate_web_process ()" link="WebKitWebView.html#webkit-web-view-terminate-web-process" since="2.34"/>
     <keyword type="function" name="webkit_javascript_result_ref ()" link="WebKitWebView.html#webkit-javascript-result-ref"/>
     <keyword type="function" name="webkit_javascript_result_unref ()" link="WebKitWebView.html#webkit-javascript-result-unref"/>
     <keyword type="function" name="webkit_javascript_result_get_global_context ()" link="WebKitWebView.html#webkit-javascript-result-get-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>
@@ -277,6 +279,7 @@
     <keyword type="property" name="The “is-loading” property" link="WebKitWebView.html#WebKitWebView--is-loading"/>
     <keyword type="property" name="The “is-muted” property" link="WebKitWebView.html#WebKitWebView--is-muted"/>
     <keyword type="property" name="The “is-playing-audio” property" link="WebKitWebView.html#WebKitWebView--is-playing-audio"/>
+    <keyword type="property" name="The “is-web-process-responsive” property" link="WebKitWebView.html#WebKitWebView--is-web-process-responsive"/>
     <keyword type="property" name="The “page-id” property" link="WebKitWebView.html#WebKitWebView--page-id"/>
     <keyword type="property" name="The “related-view” property" link="WebKitWebView.html#WebKitWebView--related-view"/>
     <keyword type="property" name="The “settings” property" link="WebKitWebView.html#WebKitWebView--settings"/>
@@ -1197,6 +1200,7 @@
     <keyword type="constant" name="WEBKIT_SNAPSHOT_REGION_FULL_DOCUMENT" link="WebKitWebView.html#WEBKIT-SNAPSHOT-REGION-FULL-DOCUMENT:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEB_PROCESS_CRASHED" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-CRASHED:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEB_PROCESS_EXCEEDED_MEMORY_LIMIT" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-EXCEEDED-MEMORY-LIMIT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_WEB_PROCESS_TERMINATED_BY_API" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-TERMINATED-BY-API:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOPLAY_ALLOW" link="WebKitWebView.html#WEBKIT-AUTOPLAY-ALLOW:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND" link="WebKitWebView.html#WEBKIT-AUTOPLAY-ALLOW-WITHOUT-SOUND:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOPLAY_DENY" link="WebKitWebView.html#WEBKIT-AUTOPLAY-DENY:CAPS"/>

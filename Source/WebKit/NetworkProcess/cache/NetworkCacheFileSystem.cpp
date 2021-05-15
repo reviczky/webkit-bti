@@ -55,28 +55,12 @@ namespace NetworkCache {
 
 void traverseDirectory(const String& path, const Function<void (const String&, DirectoryEntryType)>& function)
 {
-    auto entries = FileSystem::listDirectory(path, "*"_s);
+    auto entries = FileSystem::listDirectory(path);
     for (auto& entry : entries) {
-        auto type = FileSystem::fileIsDirectory(entry, FileSystem::ShouldFollowSymbolicLinks::No) ? DirectoryEntryType::Directory : DirectoryEntryType::File;
-        function(FileSystem::pathGetFileName(entry), type);
+        auto entryPath = FileSystem::pathByAppendingComponent(path, entry);
+        auto type = FileSystem::isDirectory(entryPath) ? DirectoryEntryType::Directory : DirectoryEntryType::File;
+        function(entry, type);
     }
-}
-
-void deleteDirectoryRecursively(const String& path)
-{
-    traverseDirectory(path, [&path](const String& name, DirectoryEntryType type) {
-        String entryPath = FileSystem::pathByAppendingComponent(path, name);
-        switch (type) {
-        case DirectoryEntryType::File:
-            FileSystem::deleteFile(entryPath);
-            break;
-        case DirectoryEntryType::Directory:
-            deleteDirectoryRecursively(entryPath);
-            break;
-        // This doesn't follow symlinks.
-        }
-    });
-    FileSystem::deleteEmptyDirectory(path);
 }
 
 FileTimes fileTimes(const String& path)

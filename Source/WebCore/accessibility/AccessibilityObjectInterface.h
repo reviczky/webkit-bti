@@ -1174,9 +1174,7 @@ public:
 
     virtual TextIteratorBehavior textIteratorBehaviorForTextRange() const = 0;
     virtual PlainTextRange selectedTextRange() const = 0;
-    // FIXME: why do we need the following two methods if we already have selectedTextRange?
-    virtual unsigned selectionStart() const = 0;
-    virtual unsigned selectionEnd() const = 0;
+    virtual int insertionPointLineNumber() const = 0;
 
     virtual URL url() const = 0;
     virtual VisibleSelection selection() const = 0;
@@ -1224,7 +1222,6 @@ public:
     virtual void decrement() = 0;
 
     virtual void childrenChanged() = 0;
-    virtual void textChanged() = 0;
     virtual void updateAccessibilityRole() = 0;
 
     virtual const AccessibilityChildrenVector& children(bool updateChildrenIfNeeded = true) = 0;
@@ -1568,11 +1565,18 @@ T* findAncestor(const T& object, bool includeSelf, const F& matches)
 
 void findMatchingObjects(AccessibilitySearchCriteria const&, AXCoreObject::AccessibilityChildrenVector&);
 
+template<typename T, typename F>
+void enumerateDescendants(T& object, bool includeSelf, const F& lambda)
+{
+    if (includeSelf)
+        lambda(object);
+
+    for (const auto& child : object.children())
+        enumerateDescendants(*child, true, lambda);
+}
+
 template<typename U> inline void performFunctionOnMainThread(U&& lambda)
 {
-    if (isMainThread())
-        return lambda();
-
     callOnMainThreadAndWait([&lambda] {
         lambda();
     });
@@ -1580,9 +1584,6 @@ template<typename U> inline void performFunctionOnMainThread(U&& lambda)
 
 template<typename T, typename U> inline T retrieveValueFromMainThread(U&& lambda)
 {
-    if (isMainThread())
-        return lambda();
-
     T value;
     callOnMainThreadAndWait([&value, &lambda] {
         value = lambda();
@@ -1593,9 +1594,6 @@ template<typename T, typename U> inline T retrieveValueFromMainThread(U&& lambda
 #if PLATFORM(COCOA)
 template<typename T, typename U> inline T retrieveAutoreleasedValueFromMainThread(U&& lambda)
 {
-    if (isMainThread())
-        return lambda().autorelease();
-
     RetainPtr<T> value;
     callOnMainThreadAndWait([&value, &lambda] {
         value = lambda();

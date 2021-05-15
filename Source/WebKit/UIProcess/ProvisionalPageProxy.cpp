@@ -49,6 +49,8 @@
 #include "WebProcessProxy.h"
 #include <WebCore/ShouldTreatAsContinuingLoad.h>
 
+#define MESSAGE_CHECK(process, assertion) MESSAGE_CHECK_BASE(assertion, process->connection())
+
 namespace WebKit {
 
 using namespace WebCore;
@@ -68,7 +70,10 @@ ProvisionalPageProxy::ProvisionalPageProxy(WebPageProxy& page, Ref<WebProcessPro
     , m_provisionalLoadActivity(m_process->throttler().foregroundActivity("Provisional Load"_s))
 #endif
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    , m_contextIDForVisibilityPropagation(suspendedPage ? suspendedPage->contextIDForVisibilityPropagation() : 0)
+    , m_contextIDForVisibilityPropagationInWebProcess(suspendedPage ? suspendedPage->contextIDForVisibilityPropagationInWebProcess() : 0)
+#if ENABLE(GPU_PROCESS)
+    , m_contextIDForVisibilityPropagationInGPUProcess(suspendedPage ? suspendedPage->contextIDForVisibilityPropagationInGPUProcess() : 0)
+#endif
 #endif
 {
     RELEASE_LOG_IF_ALLOWED(ProcessSwapping, "ProvisionalPageProxy: suspendedPage=%p", suspendedPage.get());
@@ -371,6 +376,27 @@ void ProvisionalPageProxy::decidePolicyForNavigationActionSync(FrameIdentifier f
     m_page.decidePolicyForNavigationActionSyncShared(m_process.copyRef(), frameID, isMainFrame, WTFMove(frameInfoData), identifier, navigationID, WTFMove(navigationActionData), WTFMove(originatingFrameInfo), originatingPageID, originalRequest, WTFMove(request), WTFMove(requestBody), WTFMove(redirectResponse), userData, WTFMove(reply));
 }
 
+void ProvisionalPageProxy::logDiagnosticMessageFromWebProcess(const String& message, const String& description, WebCore::ShouldSample shouldSample)
+{
+    MESSAGE_CHECK(m_process, message.isAllASCII());
+
+    m_page.logDiagnosticMessage(message, description, shouldSample);
+}
+
+void ProvisionalPageProxy::logDiagnosticMessageWithEnhancedPrivacyFromWebProcess(const String& message, const String& description, WebCore::ShouldSample shouldSample)
+{
+    MESSAGE_CHECK(m_process, message.isAllASCII());
+
+    m_page.logDiagnosticMessageWithEnhancedPrivacy(message, description, shouldSample);
+}
+
+void ProvisionalPageProxy::logDiagnosticMessageWithValueDictionaryFromWebProcess(const String& message, const String& description, const WebCore::DiagnosticLoggingClient::ValueDictionary& valueDictionary, WebCore::ShouldSample shouldSample)
+{
+    MESSAGE_CHECK(m_process, message.isAllASCII());
+
+    m_page.logDiagnosticMessageWithValueDictionary(message, description, valueDictionary, shouldSample);
+}
+
 #if USE(QUICK_LOOK)
 void ProvisionalPageProxy::requestPasswordForQuickLookDocumentInMainFrame(const String& fileName, CompletionHandler<void(const String&)>&& completionHandler)
 {
@@ -393,12 +419,20 @@ void ProvisionalPageProxy::contentFilterDidBlockLoadForFrame(const WebCore::Cont
 #endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-void ProvisionalPageProxy::didCreateContextForVisibilityPropagation(LayerHostingContextID contextID)
+void ProvisionalPageProxy::didCreateContextInWebProcessForVisibilityPropagation(LayerHostingContextID contextID)
 {
-    RELEASE_LOG_IF_ALLOWED(ProcessSwapping, "didCreateContextForVisibilityPropagation: contextID=%u", contextID);
-    m_contextIDForVisibilityPropagation = contextID;
+    RELEASE_LOG_IF_ALLOWED(ProcessSwapping, "didCreateContextInWebProcessForVisibilityPropagation: contextID=%u", contextID);
+    m_contextIDForVisibilityPropagationInWebProcess = contextID;
 }
-#endif
+
+#if ENABLE(GPU_PROCESS)
+void ProvisionalPageProxy::didCreateContextInGPUProcessForVisibilityPropagation(LayerHostingContextID contextID)
+{
+    RELEASE_LOG_IF_ALLOWED(ProcessSwapping, "didCreateContextInGPUProcessForVisibilityPropagation: contextID=%u", contextID);
+    m_contextIDForVisibilityPropagationInGPUProcess = contextID;
+}
+#endif // ENABLE(GPU_PROCESS)
+#endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
 
 void ProvisionalPageProxy::unfreezeLayerTreeDueToSwipeAnimation()
 {
@@ -414,9 +448,6 @@ void ProvisionalPageProxy::didReceiveMessage(IPC::Connection& connection, IPC::D
         || decoder.messageName() == Messages::WebPageProxy::DidDestroyNavigation::name()
         || decoder.messageName() == Messages::WebPageProxy::DidFinishProgress::name()
         || decoder.messageName() == Messages::WebPageProxy::BackForwardAddItem::name()
-        || decoder.messageName() == Messages::WebPageProxy::LogDiagnosticMessage::name()
-        || decoder.messageName() == Messages::WebPageProxy::LogDiagnosticMessageWithEnhancedPrivacy::name()
-        || decoder.messageName() == Messages::WebPageProxy::LogDiagnosticMessageWithValueDictionary::name()
         || decoder.messageName() == Messages::WebPageProxy::SetNetworkRequestsInProgress::name()
         || decoder.messageName() == Messages::WebPageProxy::WillGoToBackForwardListItem::name()
 #if USE(QUICK_LOOK)
@@ -438,6 +469,21 @@ void ProvisionalPageProxy::didReceiveMessage(IPC::Connection& connection, IPC::D
         return;
     }
 #endif
+
+    if (decoder.messageName() == Messages::WebPageProxy::LogDiagnosticMessageFromWebProcess::name()) {
+        IPC::handleMessage<Messages::WebPageProxy::LogDiagnosticMessageFromWebProcess>(decoder, this, &ProvisionalPageProxy::logDiagnosticMessageFromWebProcess);
+        return;
+    }
+
+    if (decoder.messageName() == Messages::WebPageProxy::LogDiagnosticMessageWithEnhancedPrivacyFromWebProcess::name()) {
+        IPC::handleMessage<Messages::WebPageProxy::LogDiagnosticMessageWithEnhancedPrivacyFromWebProcess>(decoder, this, &ProvisionalPageProxy::logDiagnosticMessageWithEnhancedPrivacyFromWebProcess);
+        return;
+    }
+
+    if (decoder.messageName() == Messages::WebPageProxy::LogDiagnosticMessageWithValueDictionaryFromWebProcess::name()) {
+        IPC::handleMessage<Messages::WebPageProxy::LogDiagnosticMessageWithValueDictionaryFromWebProcess>(decoder, this, &ProvisionalPageProxy::logDiagnosticMessageWithValueDictionaryFromWebProcess);
+        return;
+    }
 
     if (decoder.messageName() == Messages::WebPageProxy::StartURLSchemeTask::name()) {
         IPC::handleMessage<Messages::WebPageProxy::StartURLSchemeTask>(decoder, this, &ProvisionalPageProxy::startURLSchemeTask);
@@ -514,8 +560,8 @@ void ProvisionalPageProxy::didReceiveMessage(IPC::Connection& connection, IPC::D
 #endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    if (decoder.messageName() == Messages::WebPageProxy::DidCreateContextForVisibilityPropagation::name()) {
-        IPC::handleMessage<Messages::WebPageProxy::DidCreateContextForVisibilityPropagation>(decoder, this, &ProvisionalPageProxy::didCreateContextForVisibilityPropagation);
+    if (decoder.messageName() == Messages::WebPageProxy::DidCreateContextInWebProcessForVisibilityPropagation::name()) {
+        IPC::handleMessage<Messages::WebPageProxy::DidCreateContextInWebProcessForVisibilityPropagation>(decoder, this, &ProvisionalPageProxy::didCreateContextInWebProcessForVisibilityPropagation);
         return;
     }
 #endif
@@ -523,19 +569,15 @@ void ProvisionalPageProxy::didReceiveMessage(IPC::Connection& connection, IPC::D
     LOG(ProcessSwapping, "Unhandled message %s from provisional process", description(decoder.messageName()));
 }
 
-void ProvisionalPageProxy::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, std::unique_ptr<IPC::Encoder>& replyEncoder)
+bool ProvisionalPageProxy::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& replyEncoder)
 {
-    if (decoder.messageName() == Messages::WebPageProxy::BackForwardGoToItem::name()) {
-        IPC::handleMessageSynchronous<Messages::WebPageProxy::BackForwardGoToItem>(connection, decoder, replyEncoder, this, &ProvisionalPageProxy::backForwardGoToItem);
-        return;
-    }
+    if (decoder.messageName() == Messages::WebPageProxy::BackForwardGoToItem::name())
+        return IPC::handleMessageSynchronous<Messages::WebPageProxy::BackForwardGoToItem>(connection, decoder, replyEncoder, this, &ProvisionalPageProxy::backForwardGoToItem);
 
-    if (decoder.messageName() == Messages::WebPageProxy::DecidePolicyForNavigationActionSync::name()) {
-        IPC::handleMessageSynchronous<Messages::WebPageProxy::DecidePolicyForNavigationActionSync>(connection, decoder, replyEncoder, this, &ProvisionalPageProxy::decidePolicyForNavigationActionSync);
-        return;
-    }
+    if (decoder.messageName() == Messages::WebPageProxy::DecidePolicyForNavigationActionSync::name())
+        return IPC::handleMessageSynchronous<Messages::WebPageProxy::DecidePolicyForNavigationActionSync>(connection, decoder, replyEncoder, this, &ProvisionalPageProxy::decidePolicyForNavigationActionSync);
 
-    m_page.didReceiveSyncMessage(connection, decoder, replyEncoder);
+    return m_page.didReceiveSyncMessage(connection, decoder, replyEncoder);
 }
 
 IPC::Connection* ProvisionalPageProxy::messageSenderConnection() const
@@ -548,7 +590,7 @@ uint64_t ProvisionalPageProxy::messageSenderDestinationID() const
     return m_webPageID.toUInt64();
 }
 
-bool ProvisionalPageProxy::sendMessage(std::unique_ptr<IPC::Encoder> encoder, OptionSet<IPC::SendOption> sendOptions, Optional<std::pair<CompletionHandler<void(IPC::Decoder*)>, uint64_t>>&& asyncReplyInfo)
+bool ProvisionalPageProxy::sendMessage(UniqueRef<IPC::Encoder>&& encoder, OptionSet<IPC::SendOption> sendOptions, Optional<std::pair<CompletionHandler<void(IPC::Decoder*)>, uint64_t>>&& asyncReplyInfo)
 {
     // Send messages via the WebProcessProxy instead of the IPC::Connection since AuxiliaryProcessProxy implements queueing of messages
     // while the process is still launching.

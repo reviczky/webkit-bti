@@ -26,8 +26,6 @@
 #include "config.h"
 #include "SQLiteIDBBackingStore.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBBindingUtilities.h"
 #include "IDBCursorInfo.h"
 #include "IDBGetAllRecordsData.h"
@@ -55,6 +53,7 @@
 #include <wtf/FileSystem.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringConcatenateNumbers.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 namespace WebCore {
 using namespace JSC;
@@ -248,7 +247,7 @@ SQLiteIDBBackingStore::SQLiteIDBBackingStore(PAL::SessionID sessionID, const IDB
     : m_sessionID(sessionID)
     , m_identifier(identifier)
     , m_databaseRootDirectory(databaseRootDirectory)
-    , m_serializationContext(IDBSerializationContext::getOrCreateIDBSerializationContext(sessionID))
+    , m_serializationContext(IDBSerializationContext::getOrCreateForCurrentThread())
 {
     m_databaseDirectory = fullDatabaseDirectoryWithUpgrade();
 }
@@ -1005,12 +1004,12 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::extractExistingDatabaseI
         if (sql.isColumnNull(0))
             return nullptr;
         String stringVersion = sql.getColumnText(0);
-        bool ok;
-        databaseVersion = stringVersion.toUInt64Strict(&ok);
-        if (!ok) {
+        auto parsedVersion = parseInteger<uint64_t>(stringVersion);
+        if (!parsedVersion) {
             LOG_ERROR("Database version on disk ('%s') does not cleanly convert to an unsigned 64-bit integer version", stringVersion.utf8().data());
             return nullptr;
         }
+        databaseVersion = *parsedVersion;
     }
 
     auto databaseInfo = makeUnique<IDBDatabaseInfo>(databaseName, databaseVersion, 0);
@@ -1168,14 +1167,13 @@ Optional<IDBDatabaseNameAndVersion> SQLiteIDBBackingStore::databaseNameAndVersio
 
     SQLiteStatement versql(database, "SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseVersion';"_s);
     String stringVersion = versql.getColumnText(0);
-    bool ok;
-    uint64_t databaseVersion = stringVersion.toUInt64Strict(&ok);
-    if (!ok) {
+    auto databaseVersion = parseInteger<uint64_t>(stringVersion);
+    if (!databaseVersion) {
         LOG_ERROR("Database version on disk ('%s') does not cleanly convert to an unsigned 64-bit integer version", stringVersion.utf8().data());
         return WTF::nullopt;
     }
 
-    return IDBDatabaseNameAndVersion { databaseName, databaseVersion };
+    return IDBDatabaseNameAndVersion { databaseName, *databaseVersion };
 }
 
 String SQLiteIDBBackingStore::fullDatabaseDirectoryWithUpgrade()
@@ -1184,7 +1182,6 @@ String SQLiteIDBBackingStore::fullDatabaseDirectoryWithUpgrade()
     String oldDatabaseDirectory = FileSystem::pathByAppendingComponent(oldOriginDirectory, filenameForDatabaseName());
     String newOriginDirectory = m_identifier.databaseDirectoryRelativeToRoot(m_databaseRootDirectory, "v1");
     String fileNameHash = SQLiteFileSystem::computeHashForFileName(m_identifier.databaseName());
-    Vector<String> directoriesWithSameHash = FileSystem::listDirectory(newOriginDirectory, fileNameHash + "*");
     String newDatabaseDirectory = FileSystem::pathByAppendingComponent(newOriginDirectory, fileNameHash);
     FileSystem::makeAllDirectories(newDatabaseDirectory);
 
@@ -1267,12 +1264,28 @@ IDBError SQLiteIDBBackingStore::getOrEstablishDatabaseInfo(IDBDatabaseInfo& info
     return IDBError { };
 }
 
+uint64_t SQLiteIDBBackingStore::databaseVersion()
+{
+    if (m_databaseInfo)
+        return m_databaseInfo->version();
+
+    String dbFilename = fullDatabasePath();
+    if (!FileSystem::fileExists(dbFilename))
+        return 0;
+
+    auto databaseNameAndVersion = databaseNameAndVersionFromFile(dbFilename);
+    return databaseNameAndVersion ? databaseNameAndVersion->version : 0;
+}
+
 uint64_t SQLiteIDBBackingStore::databasesSizeForDirectory(const String& directory)
 {
     uint64_t diskUsage = 0;
-    for (auto& dbDirectory : FileSystem::listDirectory(directory, "*")) {
-        for (auto& file : FileSystem::listDirectory(dbDirectory, "*.sqlite3"_s))
-            diskUsage += SQLiteFileSystem::getDatabaseFileSize(file);
+    for (auto& dbDirectoryName : FileSystem::listDirectory(directory)) {
+        auto dbDirectoryPath = FileSystem::pathByAppendingComponent(directory, dbDirectoryName);
+        for (auto& fileName : FileSystem::listDirectory(dbDirectoryPath)) {
+            if (fileName.endsWith(".sqlite3"))
+                diskUsage += SQLiteFileSystem::getDatabaseFileSize(FileSystem::pathByAppendingComponent(dbDirectoryPath, fileName));
+        }
     }
     return diskUsage;
 }
@@ -3085,5 +3098,3 @@ bool SQLiteIDBBackingStore::hasTransaction(const IDBResourceIdentifier& transact
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

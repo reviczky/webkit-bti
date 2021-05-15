@@ -90,6 +90,11 @@ void PingLoader::loadImage(Frame& frame, const URL& url)
         return;
     }
 
+    if (!portAllowed(url)) {
+        FrameLoader::reportBlockedLoadFailed(frame, url);
+        return;
+    }
+
     ResourceRequest request(url);
 #if ENABLE(CONTENT_EXTENSIONS)
     if (processContentRuleListsForLoad(frame, request, ContentExtensions::ResourceType::Image))
@@ -122,7 +127,7 @@ void PingLoader::sendPing(Frame& frame, const URL& pingURL, const URL& destinati
     request.setRequester(ResourceRequest::Requester::Ping);
 
 #if ENABLE(CONTENT_EXTENSIONS)
-    if (processContentRuleListsForLoad(frame, request, { ContentExtensions::ResourceType::Raw, ContentExtensions::ResourceType::Ping }))
+    if (processContentRuleListsForLoad(frame, request, ContentExtensions::ResourceType::Ping))
         return;
 #endif
 
@@ -153,7 +158,7 @@ void PingLoader::sendViolationReport(Frame& frame, const URL& reportURL, Ref<For
 
     ResourceRequest request(reportURL);
 #if ENABLE(CONTENT_EXTENSIONS)
-    if (processContentRuleListsForLoad(frame, request, ContentExtensions::ResourceType::Raw))
+    if (processContentRuleListsForLoad(frame, request, ContentExtensions::ResourceType::Other))
         return;
 #endif
 

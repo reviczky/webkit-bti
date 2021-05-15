@@ -80,7 +80,7 @@ String localizedString(const char* key)
 
 #if ENABLE(CONTEXT_MENUS)
 
-static String truncatedStringForLookupMenuItem(const String& original)
+static String truncatedStringForMenuItem(const String& original)
 {
     // Truncate the string if it's too long. This number is roughly the same as the one used by AppKit.
     unsigned maxNumberOfGraphemeClustersInLookupMenuItem = 24;
@@ -232,14 +232,24 @@ String contextMenuItemTagLearnSpelling()
 String contextMenuItemTagLookUpInDictionary(const String& selectedString)
 {
 #if USE(CF)
-    auto selectedCFString = truncatedStringForLookupMenuItem(selectedString).createCFString();
+    auto selectedCFString = truncatedStringForMenuItem(selectedString).createCFString();
     return formatLocalizedString(WEB_UI_CFSTRING("Look Up “%@”", "Look Up context menu item with selected word"), selectedCFString.get());
 #elif USE(GLIB)
-    return formatLocalizedString(WEB_UI_STRING("Look Up “%s”", "Look Up context menu item with selected word"), truncatedStringForLookupMenuItem(selectedString).utf8().data());
+    return formatLocalizedString(WEB_UI_STRING("Look Up “%s”", "Look Up context menu item with selected word"), truncatedStringForMenuItem(selectedString).utf8().data());
 #else
-    return WEB_UI_STRING("Look Up “<selection>”", "Look Up context menu item with selected word").replace("<selection>", truncatedStringForLookupMenuItem(selectedString));
+    return WEB_UI_STRING("Look Up “<selection>”", "Look Up context menu item with selected word").replace("<selection>", truncatedStringForMenuItem(selectedString));
 #endif
 }
+
+#if HAVE(TRANSLATION_UI_SERVICES)
+
+String contextMenuItemTagTranslate(const String& selectedString)
+{
+    auto selectedCFString = truncatedStringForMenuItem(selectedString).createCFString();
+    return formatLocalizedString(WEB_UI_CFSTRING("Translate “%@”", "Translate context menu item with selected word"), selectedCFString.get());
+}
+
+#endif
 
 String contextMenuItemTagOpenLink()
 {
@@ -1177,11 +1187,6 @@ String webCryptoMasterKeyKeychainComment()
 String numberPadOKButtonTitle()
 {
     return WEB_UI_STRING_KEY("OK", "OK (OK button title in extra zoomed number pad)", "Title of the OK button for the number pad in zoomed form controls.");
-}
-
-String formControlDoneButtonTitle()
-{
-    return WEB_UI_STRING("Done", "Title of the Done button for zoomed form controls.");
 }
 
 String formControlCancelButtonTitle()

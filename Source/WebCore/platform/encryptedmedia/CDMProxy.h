@@ -36,8 +36,6 @@
 #include "SharedBuffer.h"
 #include <wtf/BoxPtr.h>
 #include <wtf/Condition.h>
-#include <wtf/VectorHash.h>
-#include <wtf/WeakHashSet.h>
 
 #if ENABLE(THUNDER)
 #include "CDMOpenCDMTypes.h"
@@ -146,6 +144,7 @@ private:
 };
 
 class CDMInstanceProxy;
+class CDMProxyDecryptionClient;
 
 // Handle to a "real" CDM, not the JavaScript facade. This can be used
 // from background threads (i.e. decryptors).
@@ -157,20 +156,15 @@ public:
 
     void updateKeyStore(const KeyStore& newKeyStore);
     void setInstance(CDMInstanceProxy*);
-
-    virtual void releaseDecryptionResources()
-    {
-        ASSERT(isMainThread());
-        m_keyStore.removeAllKeys();
-    }
+    void abortWaitingForKey() const;
 
 protected:
     RefPtr<KeyHandle> keyHandle(const KeyIDType&) const;
     bool keyAvailable(const KeyIDType&) const;
     bool keyAvailableUnlocked(const KeyIDType&) const;
-    Optional<Ref<KeyHandle>> tryWaitForKeyHandle(const KeyIDType&) const;
-    Optional<Ref<KeyHandle>> getOrWaitForKeyHandle(const KeyIDType&) const;
-    Optional<KeyHandleValueVariant> getOrWaitForKeyValue(const KeyIDType&) const;
+    Optional<Ref<KeyHandle>> tryWaitForKeyHandle(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
+    Optional<Ref<KeyHandle>> getOrWaitForKeyHandle(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
+    Optional<KeyHandleValueVariant> getOrWaitForKeyValue(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
     void startedWaitingForKey() const;
     void stoppedWaitingForKey() const;
     const CDMInstanceProxy* instance() const { return m_instance; }
@@ -211,10 +205,6 @@ private:
 class CDMInstanceProxy;
 
 class CDMInstanceSessionProxy : public CDMInstanceSession, public CanMakeWeakPtr<CDMInstanceSessionProxy, WeakPtrFactoryInitialization::Eager> {
-public:
-    virtual void releaseDecryptionResources() { m_instance.clear(); }
-    void removeFromInstanceProxy();
-
 protected:
     CDMInstanceSessionProxy(CDMInstanceProxy&);
     const WeakPtr<CDMInstanceProxy>& cdmInstanceProxy() const { return m_instance; }
@@ -249,23 +239,6 @@ public:
     void startedWaitingForKey();
     void stoppedWaitingForKey();
 
-    void removeSession(const CDMInstanceSessionProxy& session) { m_sessions.remove(session); }
-    virtual void releaseDecryptionResources()
-    {
-        ASSERT(isMainThread());
-        m_keyStore.removeAllKeys();
-        for (auto& session : m_sessions)
-            session.releaseDecryptionResources();
-        m_sessions.clear();
-        if (m_cdmProxy) {
-            m_cdmProxy->releaseDecryptionResources();
-            m_cdmProxy = nullptr;
-        }
-    }
-
-protected:
-    void trackSession(const CDMInstanceSessionProxy&);
-
 private:
     RefPtr<CDMProxy> m_cdmProxy;
     // FIXME: WeakPtr for the m_player? This is accessed from background and main threads, it's
@@ -274,9 +247,14 @@ private:
     MediaPlayer* m_player { nullptr }; // FIXME: MainThread<T>?
 
     std::atomic<int> m_numDecryptorsWaitingForKey { 0 };
-    WeakHashSet<CDMInstanceSessionProxy> m_sessions;
 
     KeyStore m_keyStore;
+};
+
+class CDMProxyDecryptionClient : public CanMakeWeakPtr<CDMProxyDecryptionClient, WeakPtrFactoryInitialization::Eager> {
+public:
+    virtual bool isAborting() = 0;
+    virtual ~CDMProxyDecryptionClient() = default;
 };
 
 } // namespace WebCore

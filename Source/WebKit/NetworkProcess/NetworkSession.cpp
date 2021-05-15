@@ -121,12 +121,11 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     setResourceLoadStatisticsEnabled(parameters.resourceLoadStatisticsParameters.enabled);
-    m_privateClickMeasurement = makeUnique<PrivateClickMeasurementManager>(*this, networkProcess, parameters.sessionID);
-    m_privateClickMeasurement->setPingLoadFunction([this, weakThis = makeWeakPtr(this)](NetworkResourceLoadParameters&& loadParameters, CompletionHandler<void(const WebCore::ResourceError&, const WebCore::ResourceResponse&)>&& completionHandler) {
+    m_privateClickMeasurement = makeUnique<PrivateClickMeasurementManager>(*this, networkProcess, parameters.sessionID, [weakThis = makeWeakPtr(this)] (auto&& loadParameters, auto&& completionHandler) {
         if (!weakThis)
             return;
-        // PingLoad manages its own lifetime, deleting itself when its purpose has been fulfilled.
-        new PingLoad(m_networkProcess, m_sessionID, WTFMove(loadParameters), WTFMove(completionHandler));
+
+        PrivateClickMeasurementNetworkLoader::start(*weakThis, WTFMove(loadParameters), WTFMove(completionHandler));
     });
 #endif
 }
@@ -222,7 +221,7 @@ void NetworkSession::notifyResourceLoadStatisticsProcessed()
 
 void NetworkSession::logDiagnosticMessageWithValue(const String& message, const String& description, unsigned value, unsigned significantFigures, WebCore::ShouldSample shouldSample)
 {
-    m_networkProcess->parentProcessConnection()->send(Messages::WebPageProxy::LogDiagnosticMessageWithValue(message, description, value, significantFigures, shouldSample), 0);
+    m_networkProcess->parentProcessConnection()->send(Messages::WebPageProxy::LogDiagnosticMessageWithValueFromWebProcess(message, description, value, significantFigures, shouldSample), 0);
 }
 
 void NetworkSession::deleteAndRestrictWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType> dataTypes, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&& domains, bool shouldNotifyPage, CompletionHandler<void(const HashSet<RegistrableDomain>&)>&& completionHandler)
@@ -348,9 +347,9 @@ void NetworkSession::setPrivateClickMeasurementTokenSignatureURLForTesting(URL&&
     privateClickMeasurement().setTokenSignatureURLForTesting(WTFMove(url));
 }
 
-void NetworkSession::setPrivateClickMeasurementAttributionReportURLForTesting(URL&& url)
+void NetworkSession::setPrivateClickMeasurementAttributionReportURLsForTesting(URL&& sourceURL, URL&& destinationURL)
 {
-    privateClickMeasurement().setAttributionReportURLForTesting(WTFMove(url));
+    privateClickMeasurement().setAttributionReportURLsForTesting(WTFMove(sourceURL), WTFMove(destinationURL));
 }
 
 void NetworkSession::markPrivateClickMeasurementsAsExpiredForTesting()
@@ -359,9 +358,9 @@ void NetworkSession::markPrivateClickMeasurementsAsExpiredForTesting()
 }
 
 // FIXME: Switch to non-mocked test data once the right cryptography library is available in open source.
-void NetworkSession::setFraudPreventionValuesForTesting(String&& secretToken, String&& unlinkableToken, String&& signature, String&& keyID)
+void NetworkSession::setPCMFraudPreventionValuesForTesting(String&& unlinkableToken, String&& secretToken, String&& signature, String&& keyID)
 {
-    privateClickMeasurement().setFraudPreventionValuesForTesting(WTFMove(secretToken), WTFMove(unlinkableToken), WTFMove(signature), WTFMove(keyID));
+    privateClickMeasurement().setPCMFraudPreventionValuesForTesting(WTFMove(unlinkableToken), WTFMove(secretToken), WTFMove(signature), WTFMove(keyID));
 }
 
 void NetworkSession::firePrivateClickMeasurementTimerImmediately()
@@ -383,7 +382,7 @@ void NetworkSession::removeKeptAliveLoad(NetworkResourceLoader& loader)
     m_keptAliveLoads.remove(loader);
 }
 
-std::unique_ptr<WebSocketTask> NetworkSession::createWebSocketTask(NetworkSocketChannel&, const WebCore::ResourceRequest&, const String& protocol)
+std::unique_ptr<WebSocketTask> NetworkSession::createWebSocketTask(WebPageProxyIdentifier, NetworkSocketChannel&, const WebCore::ResourceRequest&, const String& protocol)
 {
     return nullptr;
 }

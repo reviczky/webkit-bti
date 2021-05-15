@@ -176,10 +176,10 @@ void InspectorInstrumentation::didRemoveDOMNodeImpl(InstrumentingAgents& instrum
         domAgent->didRemoveDOMNode(node);
 }
 
-void InspectorInstrumentation::nodeLayoutContextChangedImpl(InstrumentingAgents& instrumentingAgents, Node& node, RenderObject* oldRenderer)
+void InspectorInstrumentation::nodeLayoutContextChangedImpl(InstrumentingAgents& instrumentingAgents, Node& node, RenderObject* newRenderer)
 {
     if (auto* cssAgent = instrumentingAgents.enabledCSSAgent())
-        cssAgent->nodeLayoutContextTypeChanged(node, oldRenderer); 
+        cssAgent->nodeLayoutContextTypeChanged(node, newRenderer);
 }
 
 void InspectorInstrumentation::willModifyDOMAttrImpl(InstrumentingAgents& instrumentingAgents, Element& element, const AtomString& oldValue, const AtomString& newValue)
@@ -1072,12 +1072,6 @@ void InspectorInstrumentation::didChangeCanvasMemoryImpl(InstrumentingAgents& in
 {
     if (auto* canvasAgent = instrumentingAgents.enabledCanvasAgent())
         canvasAgent->didChangeCanvasMemory(context);
-}
-
-void InspectorInstrumentation::recordCanvasActionImpl(InstrumentingAgents& instrumentingAgents, CanvasRenderingContext& canvasRenderingContext, const String& name, std::initializer_list<RecordCanvasActionVariant>&& parameters)
-{
-    if (auto* canvasAgent = instrumentingAgents.enabledCanvasAgent())
-        canvasAgent->recordCanvasAction(canvasRenderingContext, name, WTFMove(parameters));
 }
 
 void InspectorInstrumentation::didFinishRecordingCanvasFrameImpl(InstrumentingAgents& instrumentingAgents, CanvasRenderingContext& context, bool forceDispatch)

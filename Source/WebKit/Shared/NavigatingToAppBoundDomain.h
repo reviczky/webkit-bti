@@ -26,32 +26,48 @@
 #pragma once
 
 #include "ArgumentCoder.h"
+#include "ArgumentCoders.h"
 #include "Decoder.h"
 #include "Encoder.h"
+#include <WebCore/RegistrableDomain.h>
+#include <WebCore/ResourceRequest.h>
 
 namespace WebKit {
 
 enum class NavigatingToAppBoundDomain : bool { No, Yes };
 enum class LastNavigationWasAppBound : bool { No, Yes };
 
+using ContextDomain = WebCore::RegistrableDomain;
+using RequestDomain = WebCore::RegistrableDomain;
+
 #if PLATFORM(COCOA)
 struct AppBoundNavigationTestingData {
 
+    void setDidPerformSoftUpdate()
+    {
+        didPerformSoftUpdate = true;
+    }
+    
     void clearAppBoundNavigationDataTesting()
     {
         hasLoadedAppBoundRequestTesting = false;
         hasLoadedNonAppBoundRequestTesting = false;
+        didPerformSoftUpdate = false;
+        contextData.clear();
     }
-    
-    void updateAppBoundNavigationTestingData(bool requestIsAppBound)
+
+    void updateAppBoundNavigationTestingData(const WebCore::ResourceRequest& request, WebCore::RegistrableDomain&& contextDomain)
     {
-        requestIsAppBound ? hasLoadedAppBoundRequestTesting = true : hasLoadedNonAppBoundRequestTesting = true;
+        request.isAppBound() ? hasLoadedAppBoundRequestTesting = true : hasLoadedNonAppBoundRequestTesting = true;
+        contextData.add(WebCore::RegistrableDomain(request.url()), contextDomain);
     }
 
     void encode(IPC::Encoder& encoder) const
     {
         encoder << hasLoadedAppBoundRequestTesting;
         encoder << hasLoadedNonAppBoundRequestTesting;
+        encoder << didPerformSoftUpdate;
+        encoder << contextData;
     }
 
     static Optional<AppBoundNavigationTestingData> decode(IPC::Decoder& decoder)
@@ -65,12 +81,24 @@ struct AppBoundNavigationTestingData {
         decoder >> hasLoadedNonAppBoundRequestTesting;
         if (!hasLoadedNonAppBoundRequestTesting)
             return WTF::nullopt;
+        
+        Optional<bool> didPerformSoftUpdate;
+        decoder >> didPerformSoftUpdate;
+        if (!didPerformSoftUpdate)
+            return WTF::nullopt;
 
-        return {{ *hasLoadedAppBoundRequestTesting, *hasLoadedNonAppBoundRequestTesting }};
+        Optional<HashMap<RequestDomain, ContextDomain>> contextData;
+        decoder >> contextData;
+        if (!contextData)
+            return WTF::nullopt;
+
+        return {{ *hasLoadedAppBoundRequestTesting, *hasLoadedNonAppBoundRequestTesting, *didPerformSoftUpdate, WTFMove(*contextData) }};
     }
 
     bool hasLoadedAppBoundRequestTesting { false };
     bool hasLoadedNonAppBoundRequestTesting { false };
+    bool didPerformSoftUpdate { false };
+    HashMap<RequestDomain, ContextDomain> contextData;
 };
 #endif
 

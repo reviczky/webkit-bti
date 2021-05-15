@@ -100,13 +100,12 @@ public:
     DesiredIdentifiers& identifiers() { return m_identifiers; }
     DesiredWeakReferences& weakReferences() { return m_weakReferences; }
     DesiredTransitions& transitions() { return m_transitions; }
-    DesiredGlobalProperties& globalProperties() { return m_globalProperties; }
     RecordedStatuses& recordedStatuses() { return m_recordedStatuses; }
 
     bool willTryToTierUp() const { return m_willTryToTierUp; }
     void setWillTryToTierUp(bool willTryToTierUp) { m_willTryToTierUp = willTryToTierUp; }
 
-    HashMap<BytecodeIndex, Vector<BytecodeIndex>>& tierUpInLoopHierarchy() { return m_tierUpInLoopHierarchy; }
+    HashMap<BytecodeIndex, FixedVector<BytecodeIndex>>& tierUpInLoopHierarchy() { return m_tierUpInLoopHierarchy; }
     Vector<BytecodeIndex>& tierUpAndOSREnterBytecodes() { return m_tierUpAndOSREnterBytecodes; }
 
     enum Stage { Preparing, Compiling, Ready, Cancelled };
@@ -156,10 +155,9 @@ private:
     DesiredIdentifiers m_identifiers;
     DesiredWeakReferences m_weakReferences;
     DesiredTransitions m_transitions;
-    DesiredGlobalProperties m_globalProperties;
     RecordedStatuses m_recordedStatuses;
 
-    HashMap<BytecodeIndex, Vector<BytecodeIndex>> m_tierUpInLoopHierarchy;
+    HashMap<BytecodeIndex, FixedVector<BytecodeIndex>> m_tierUpInLoopHierarchy;
     Vector<BytecodeIndex> m_tierUpAndOSREnterBytecodes;
 
     Stage m_stage;

@@ -29,7 +29,7 @@
 #include "config.h"
 #include "NicosiaGCGLLayer.h"
 
-#if USE(NICOSIA) && USE(TEXTURE_MAPPER)
+#if ENABLE(WEBGL) && USE(NICOSIA) && USE(TEXTURE_MAPPER)
 
 #if USE(COORDINATED_GRAPHICS)
 #include "TextureMapperGL.h"
@@ -81,7 +81,7 @@ void GCGLLayer::swapBuffersIfNeeded()
     IntSize textureSize(m_context.m_currentWidth, m_context.m_currentHeight);
     TextureMapperGL::Flags flags = m_context.contextAttributes().alpha ? TextureMapperGL::ShouldBlend : 0;
 #if USE(ANGLE)
-    auto imageBuffer = ImageBuffer::create(textureSize, RenderingMode::Unaccelerated);
+    auto imageBuffer = ImageBuffer::create(textureSize, RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
     if (!imageBuffer)
         return;
 
@@ -119,4 +119,4 @@ void GCGLLayer::swapBuffersIfNeeded()
 
 } // namespace Nicosia
 
-#endif // USE(NICOSIA) && USE(TEXTURE_MAPPER)
+#endif // ENABLE(WEBGL) && USE(NICOSIA) && USE(TEXTURE_MAPPER)

@@ -120,13 +120,15 @@ struct WebProcessCreationParameters {
     bool shouldSuppressMemoryPressureHandler { false };
     bool shouldUseFontSmoothing { true };
     bool fullKeyboardAccessEnabled { false };
-#if HAVE(UIKIT_WITH_MOUSE_SUPPORT) && PLATFORM(IOS)
+#if HAVE(MOUSE_DEVICE_OBSERVATION)
     bool hasMouseDevice { false };
 #endif
+#if HAVE(STYLUS_DEVICE_OBSERVATION)
     bool hasStylusDevice { false };
+#endif
     bool memoryCacheDisabled { false };
     bool attrStyleEnabled { false };
-    bool useGPUProcessForMediaEnabled { false };
+    bool shouldThrowExceptionForGlobalConstantRedeclaration { true };
 
 #if ENABLE(SERVICE_CONTROLS)
     bool hasImageServices { false };
@@ -140,7 +142,8 @@ struct WebProcessCreationParameters {
 
 #if PLATFORM(COCOA)
     String uiProcessBundleIdentifier;
-    uint32_t uiProcessSDKVersion { 0 };
+    int latencyQOS { 0 };
+    int throughputQOS { 0 };
 #endif
 
     ProcessID presentingApplicationPID { 0 };
@@ -220,6 +223,7 @@ struct WebProcessCreationParameters {
     WebCore::RenderThemeIOS::CSSValueToSystemColorMap cssValueToSystemColorMap;
     WebCore::Color focusRingColor;
     String localizedDeviceModel;
+    String contentSizeCategory;
 #endif
 
 #if PLATFORM(COCOA)

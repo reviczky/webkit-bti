@@ -39,7 +39,6 @@
 #include "GStreamerEMEUtilities.h"
 #include "Logging.h"
 #include "MediaKeyMessageType.h"
-#include "MediaKeyStatus.h"
 #include "NotImplemented.h"
 #include "SharedBuffer.h"
 #include "WebKitThunderDecryptorGStreamer.h"
@@ -48,6 +47,7 @@
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/Base64.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 GST_DEBUG_CATEGORY(webkitMediaThunderDebugCategory);
 #define GST_CAT_DEFAULT webkitMediaThunderDebugCategory
@@ -328,7 +328,6 @@ RefPtr<CDMInstanceSession> CDMInstanceThunder::createSession()
 {
     RefPtr<CDMInstanceSessionThunder> newSession = adoptRef(new CDMInstanceSessionThunder(*this));
     ASSERT(newSession);
-    trackSession(*newSession);
     return newSession;
 }
 
@@ -351,8 +350,10 @@ public:
         if (!requestType.isEmpty() && requestType.length() != payload.length())
             offset = typePosition + 6;
 
-        if (requestType.length() == 1)
-            m_type = makeOptional(static_cast<WebCore::MediaKeyMessageType>(requestType.toInt()));
+        if (requestType.length() == 1) {
+            // FIXME: There are simpler ways to convert a single digit to a number than calling parseInteger.
+            m_type = makeOptional(static_cast<WebCore::MediaKeyMessageType>(parseInteger<int>(requestType).valueOr(0)));
+        }
 
         m_payload = SharedBuffer::create(payload.characters8() + offset, payload.length() - offset);
 
@@ -533,7 +534,6 @@ void CDMInstanceSessionThunder::requestLicense(LicenseType licenseType, const At
         if (!isValid()) {
             GST_WARNING("created invalid session %s", m_sessionID.utf8().data());
             callback(initData.releaseNonNull(), m_sessionID, false, Failed);
-            removeFromInstanceProxy();
             return;
         }
 
@@ -635,8 +635,6 @@ void CDMInstanceSessionThunder::closeSession(const String& sessionID, CloseSessi
     if (m_session && !m_sessionID.isEmpty())
         opencdm_session_close(m_session.get());
 
-    removeFromInstanceProxy();
-
     callback();
 }
 
@@ -669,8 +667,6 @@ void CDMInstanceSessionThunder::removeSessionData(const String& sessionID, Licen
     });
     if (!m_session || m_sessionID.isEmpty() || opencdm_session_remove(m_session.get()))
         sessionFailure();
-
-    removeFromInstanceProxy();
 }
 
 void CDMInstanceSessionThunder::storeRecordOfKeyUsage(const String&)

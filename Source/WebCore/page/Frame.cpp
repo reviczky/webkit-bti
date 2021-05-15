@@ -821,7 +821,7 @@ String Frame::displayStringModifiedByEncoding(const String& str) const
 
 VisiblePosition Frame::visiblePositionForPoint(const IntPoint& framePoint) const
 {
-    constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::AllowVisibleChildFrameContentOnly };
+    constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::AllowVisibleChildFrameContentOnly };
     HitTestResult result = eventHandler().hitTestResultAtPoint(framePoint, hitType);
     Node* node = result.innerNonSharedNode();
     if (!node)
@@ -844,7 +844,7 @@ Document* Frame::documentAtPoint(const IntPoint& point)
     HitTestResult result = HitTestResult(pt);
 
     if (contentRenderer()) {
-        constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::AllowChildFrameContent };
+        constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::DisallowUserAgentShadowContent, HitTestRequest::Type::AllowChildFrameContent };
         result = eventHandler().hitTestResultAtPoint(pt, hitType);
     }
     return result.innerNode() ? &result.innerNode()->document() : 0;
@@ -922,25 +922,6 @@ DOMWindow* Frame::window() const
 AbstractDOMWindow* Frame::virtualWindow() const
 {
     return window();
-}
-
-String Frame::layerTreeAsText(LayerTreeFlags flags) const
-{
-    if (!m_view)
-        return { };
-
-    m_view->updateLayoutAndStyleIfNeededRecursive();
-    if (!contentRenderer())
-        return { };
-
-    contentRenderer()->compositor().updateEventRegions();
-
-    for (auto* child = mainFrame().tree().firstRenderedChild(); child; child = child->tree().traverseNextRendered()) {
-        if (auto* renderer = child->contentRenderer())
-            renderer->compositor().updateEventRegions();
-    }
-
-    return contentRenderer()->compositor().layerTreeAsText(flags);
 }
 
 String Frame::trackedRepaintRectsAsText() const

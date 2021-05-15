@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBKeyData.h"
 #include "IDBObjectStoreInfo.h"
 #include "IndexKey.h"
@@ -51,7 +49,7 @@ class IDBValue;
 struct IDBKeyRangeData;
 
 namespace IndexedDB {
-enum class GetAllType;
+enum class GetAllType : uint8_t;
 enum class IndexRecordType : bool;
 }
 
@@ -141,5 +139,3 @@ private:
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

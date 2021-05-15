@@ -34,10 +34,12 @@ using namespace WebCore;
 
 void EditorState::encode(IPC::Encoder& encoder) const
 {
+    encoder << transactionID;
     encoder << originIdentifierForPasteboard;
     encoder << shouldIgnoreSelectionChanges;
     encoder << selectionIsNone;
     encoder << selectionIsRange;
+    encoder << selectionIsRangeInsideImageOverlay;
     encoder << isContentEditable;
     encoder << isContentRichlyEditable;
     encoder << isInPasswordField;
@@ -50,6 +52,9 @@ void EditorState::encode(IPC::Encoder& encoder) const
 
 bool EditorState::decode(IPC::Decoder& decoder, EditorState& result)
 {
+    if (!decoder.decode(result.transactionID))
+        return false;
+
     if (!decoder.decode(result.originIdentifierForPasteboard))
         return false;
 
@@ -60,6 +65,9 @@ bool EditorState::decode(IPC::Decoder& decoder, EditorState& result)
         return false;
 
     if (!decoder.decode(result.selectionIsRange))
+        return false;
+
+    if (!decoder.decode(result.selectionIsRangeInsideImageOverlay))
         return false;
 
     if (!decoder.decode(result.isContentEditable))
@@ -104,7 +112,7 @@ void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
 #if PLATFORM(IOS_FAMILY)
     encoder << selectionClipRect;
     encoder << caretRectAtEnd;
-    encoder << selectionRects;
+    encoder << selectionGeometries;
     encoder << markedTextRects;
     encoder << markedText;
     encoder << markedTextCaretRectAtStart;
@@ -170,7 +178,7 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
         return false;
     if (!decoder.decode(result.caretRectAtEnd))
         return false;
-    if (!decoder.decode(result.selectionRects))
+    if (!decoder.decode(result.selectionGeometries))
         return false;
     if (!decoder.decode(result.markedTextRects))
         return false;
@@ -304,8 +312,8 @@ TextStream& operator<<(TextStream& ts, const EditorState& editorState)
         ts.dumpProperty("selectionClipRect", editorState.postLayoutData().selectionClipRect);
     if (editorState.postLayoutData().caretRectAtEnd != IntRect())
         ts.dumpProperty("caretRectAtEnd", editorState.postLayoutData().caretRectAtEnd);
-    if (!editorState.postLayoutData().selectionRects.isEmpty())
-        ts.dumpProperty("selectionRects", editorState.postLayoutData().selectionRects);
+    if (!editorState.postLayoutData().selectionGeometries.isEmpty())
+        ts.dumpProperty("selectionGeometries", editorState.postLayoutData().selectionGeometries);
     if (!editorState.postLayoutData().markedTextRects.isEmpty())
         ts.dumpProperty("markedTextRects", editorState.postLayoutData().markedTextRects);
     if (editorState.postLayoutData().markedText.length())

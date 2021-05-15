@@ -46,7 +46,7 @@ namespace WebKit {
 class StorageAreaImpl;
 class StorageNamespaceImpl;
 
-class StorageAreaMap final : private IPC::MessageReceiver, public CanMakeWeakPtr<StorageAreaMap> {
+class StorageAreaMap final : public IPC::MessageReceiver {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     StorageAreaMap(StorageNamespaceImpl&, Ref<WebCore::SecurityOrigin>&&);
@@ -94,7 +94,7 @@ private:
 
     StorageNamespaceImpl& m_namespace;
     Ref<WebCore::SecurityOrigin> m_securityOrigin;
-    RefPtr<WebCore::StorageMap> m_map;
+    std::unique_ptr<WebCore::StorageMap> m_map;
     Optional<StorageAreaIdentifier> m_mapID;
     HashCountedSet<String> m_pendingValueChanges;
     uint64_t m_currentSeed { 0 };

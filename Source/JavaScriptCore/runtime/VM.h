@@ -338,6 +338,30 @@ public:
     WeakRandom& random() { return m_random; }
     Integrity::Random& integrityRandom() { return m_integrityRandom; }
 
+    bool terminationInProgress() const { return m_terminationInProgress; }
+    void setTerminationInProgress(bool value) { m_terminationInProgress = value; }
+
+    bool executionForbidden() const { return m_executionForbidden; }
+    void setExecutionForbidden() { m_executionForbidden = true; }
+
+    JS_EXPORT_PRIVATE Exception* ensureTerminationException();
+    Exception* terminationException() const
+    {
+        ASSERT(m_terminationException);
+        return m_terminationException;
+    }
+    bool isTerminationException(Exception* exception) const
+    {
+        ASSERT(exception);
+        return exception == m_terminationException;
+    }
+    bool hasPendingTerminationException() const
+    {
+        return m_exception && isTerminationException(m_exception);
+    }
+
+    void throwTerminationException();
+
 private:
     unsigned nextID();
 
@@ -365,6 +389,8 @@ public:
     std::unique_ptr<IsoHeapCellType> callbackConstructorHeapCellType;
     std::unique_ptr<IsoHeapCellType> callbackGlobalObjectHeapCellType;
     std::unique_ptr<IsoHeapCellType> callbackObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> customGetterFunctionHeapCellType;
+    std::unique_ptr<IsoHeapCellType> customSetterFunctionHeapCellType;
     std::unique_ptr<IsoHeapCellType> dateInstanceHeapCellType;
     std::unique_ptr<IsoHeapCellType> errorInstanceHeapCellType;
     std::unique_ptr<IsoHeapCellType> finalizationRegistryCellType;
@@ -662,7 +688,6 @@ public:
 #endif
     Strong<Structure> structureStructure;
     Strong<Structure> structureRareDataStructure;
-    Strong<Structure> terminatedExecutionErrorStructure;
     Strong<Structure> stringStructure;
     Strong<Structure> propertyNameEnumeratorStructure;
     Strong<Structure> getterSetterStructure;
@@ -869,8 +894,8 @@ public:
     Exception* lastException() const { return m_lastException; }
     JSCell** addressOfLastException() { return reinterpret_cast<JSCell**>(&m_lastException); }
 
-    // This should only be used for test or assertion code that wants to inspect
-    // the pending exception without interfering with Throw/CatchScopes.
+    // This should only be used for code that wants to check for any pending
+    // exception without interfering with Throw/CatchScopes.
     Exception* exceptionForInspection() const { return m_exception; }
 
     void setFailNextNewCodeBlock() { m_failNextNewCodeBlock = true; }
@@ -1070,15 +1095,16 @@ public:
 
     VMTraps& traps() { return m_traps; }
 
-    void handleTraps(JSGlobalObject* globalObject, CallFrame* callFrame, VMTraps::Mask mask = VMTraps::Mask::allEventTypes()) { m_traps.handleTraps(globalObject, callFrame, mask); }
+    JS_EXPORT_PRIVATE bool hasExceptionsAfterHandlingTraps();
 
-    bool needTrapHandling() { return m_traps.needTrapHandling(); }
-    bool needTrapHandling(VMTraps::Mask mask) { return m_traps.needTrapHandling(mask); }
-    void* needTrapHandlingAddress() { return m_traps.needTrapHandlingAddress(); }
-
+    // These may be called concurrently from another thread.
     void notifyNeedDebuggerBreak() { m_traps.fireTrap(VMTraps::NeedDebuggerBreak); }
     void notifyNeedShellTimeoutCheck() { m_traps.fireTrap(VMTraps::NeedShellTimeoutCheck); }
-    void notifyNeedTermination() { m_traps.fireTrap(VMTraps::NeedTermination); }
+    void notifyNeedTermination()
+    {
+        setTerminationInProgress(true);
+        m_traps.fireTrap(VMTraps::NeedTermination);
+    }
     void notifyNeedWatchdogCheck() { m_traps.fireTrap(VMTraps::NeedWatchdogCheck); }
 
     void promiseRejected(JSPromise*);
@@ -1096,12 +1122,24 @@ public:
     class DeferExceptionScope {
     public:
         DeferExceptionScope(VM& vm)
-            : m_savedException(vm.m_exception, nullptr)
+            : m_vm(vm)
+            , m_exceptionWasSet(vm.m_exception)
+            , m_savedException(vm.m_exception, nullptr)
             , m_savedLastException(vm.m_lastException, nullptr)
         {
+            if (m_exceptionWasSet)
+                m_vm.traps().clearTrapBit(VMTraps::NeedExceptionHandling);
+        }
+
+        ~DeferExceptionScope()
+        {
+            if (m_exceptionWasSet)
+                m_vm.traps().setTrapBit(VMTraps::NeedExceptionHandling);
         }
 
     private:
+        VM& m_vm;
+        bool m_exceptionWasSet;
         SetForScope<Exception*> m_savedException;
         SetForScope<Exception*> m_savedLastException;
     };
@@ -1129,11 +1167,6 @@ private:
         return curr >= stackLimit;
     }
 
-    void setException(Exception* exception)
-    {
-        m_exception = exception;
-        m_lastException = exception;
-    }
     Exception* exception() const
     {
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
@@ -1141,15 +1174,9 @@ private:
 #endif
         return m_exception;
     }
-    void clearException()
-    {
-#if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
-        m_needExceptionCheck = false;
-        m_nativeStackTraceOfLastThrow = nullptr;
-        m_throwingThread = nullptr;
-#endif
-        m_exception = nullptr;
-    }
+
+    JS_EXPORT_PRIVATE void clearException();
+    JS_EXPORT_PRIVATE void setException(Exception*);
 
 #if ENABLE(C_LOOP)
     bool ensureStackCapacityForCLoop(Register* newTopOfStack);
@@ -1184,6 +1211,7 @@ private:
     void* m_lastStackTop { nullptr };
 
     Exception* m_exception { nullptr };
+    Exception* m_terminationException { nullptr };
     Exception* m_lastException { nullptr };
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
     ExceptionScope* m_topExceptionScope { nullptr };
@@ -1236,6 +1264,9 @@ private:
 
     WTF::Function<void(VM&)> m_onEachMicrotaskTick;
     uintptr_t m_currentWeakRefVersion { 0 };
+
+    bool m_terminationInProgress { false };
+    bool m_executionForbidden { false };
 
     Lock m_loopHintExecutionCountLock;
     HashMap<const Instruction*, std::pair<unsigned, std::unique_ptr<uint64_t>>> m_loopHintExecutionCounts;

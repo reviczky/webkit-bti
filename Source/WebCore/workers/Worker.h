@@ -77,9 +77,7 @@ public:
     void dispatchEvent(Event&) final;
 
 #if ENABLE(WEB_RTC)
-    void addRTCRtpScriptTransformer(String&&);
-    bool hasRTCRtpScriptTransformer(const String& name) { return m_transformers.contains(name); }
-    void createRTCRtpScriptTransformer(const String&, TransferredMessagePort, RTCRtpScriptTransform&);
+    void createRTCRtpScriptTransformer(RTCRtpScriptTransform&, MessageWithMessagePorts&&);
     void postTaskToWorkerGlobalScope(Function<void(ScriptExecutionContext&)>&&);
 #endif
 

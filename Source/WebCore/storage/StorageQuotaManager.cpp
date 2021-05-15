@@ -109,6 +109,7 @@ StorageQuotaManager::Decision StorageQuotaManager::requestSpaceOnBackgroundThrea
 bool StorageQuotaManager::tryGrantRequest(uint64_t spaceRequested)
 {
     ASSERT(m_quotaCountDownLock.isLocked());
+
     if (spaceRequested <= m_quotaCountDown) {
         m_quotaCountDown -= spaceRequested;
         return true;

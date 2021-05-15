@@ -26,8 +26,6 @@
 #include "config.h"
 #include "IDBObjectStore.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "DOMStringList.h"
 #include "Document.h"
 #include "IDBBindingUtilities.h"
@@ -49,10 +47,13 @@
 #include <JavaScriptCore/CatchScope.h>
 #include <JavaScriptCore/HeapInlines.h>
 #include <JavaScriptCore/JSCJSValueInlines.h>
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/Locker.h>
 
 namespace WebCore {
 using namespace JSC;
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(IDBObjectStore);
 
 IDBObjectStore::IDBObjectStore(ScriptExecutionContext& context, const IDBObjectStoreInfo& info, IDBTransaction& transaction)
     : ActiveDOMObject(&context)
@@ -767,5 +768,3 @@ void IDBObjectStore::deref()
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

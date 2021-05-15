@@ -33,11 +33,11 @@
 #include "ApplicationCacheHost.h"
 #include "Archive.h"
 #include "ArchiveResourceCollection.h"
-#include "CSSFontSelector.h"
 #include "CachedPage.h"
 #include "CachedRawResource.h"
 #include "CachedResourceLoader.h"
 #include "ContentExtensionError.h"
+#include "ContentRuleListResults.h"
 #include "ContentSecurityPolicy.h"
 #include "CustomHeaderFields.h"
 #include "DOMWindow.h"
@@ -89,6 +89,7 @@
 #include "Settings.h"
 #include "SubresourceLoader.h"
 #include "TextResourceDecoder.h"
+#include "UserContentProvider.h"
 #include <wtf/Assertions.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/NeverDestroyed.h>
@@ -338,7 +339,7 @@ void DocumentLoader::stopLoading()
     cancelAll(m_multipartSubresourceLoaders);
 
     if (auto* document = this->document())
-        document->fontSelector().suspendFontLoadingTimer();
+        document->suspendFontLoading();
 
     // Appcache uses ResourceHandle directly, DocumentLoader doesn't count these loads.
     m_applicationCacheHost->stopLoadingInFrame(*m_frame);
@@ -521,6 +522,14 @@ void DocumentLoader::handleSubstituteDataLoadNow()
     if (response.url().isEmpty())
         response = ResourceResponse(m_request.url(), m_substituteData.mimeType(), m_substituteData.content()->size(), m_substituteData.textEncoding());
 
+#if ENABLE(CONTENT_EXTENSIONS)
+    if (auto* page = m_frame ? m_frame->page() : nullptr) {
+        // We intentionally do nothing with the results of this call.
+        // We want the CSS to be loaded for us, but we ignore any attempt to block or upgrade the connection since there is no connection.
+        page->userContentProvider().processContentRuleListsForLoad(*page, response.url(), ContentExtensions::ResourceType::Document, *this);
+    }
+#endif
+
     responseReceived(response, nullptr);
 }
 
@@ -632,9 +641,9 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
             return completionHandler(WTFMove(newRequest));
         }
         if (!portAllowed(newRequest.url())) {
-            RELEASE_LOG_IF_ALLOWED("willSendRequest: canceling - port not allowed");
+            RELEASE_LOG_IF_ALLOWED("willSendRequest: canceling - redirecting to a URL with a blocked port");
             if (m_frame)
-                m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Not allowed to use restricted network port: " + newRequest.url().string());
+                FrameLoader::reportBlockedLoadFailed(*m_frame, newRequest.url());
             cancelMainResourceLoad(frameLoader()->blockedError(newRequest));
             return completionHandler(WTFMove(newRequest));
         }
@@ -1474,9 +1483,6 @@ bool DocumentLoader::isLoadingInAPISense() const
     // Once a frame has loaded, we no longer need to consider subresources,
     // but we still need to consider subframes.
     if (frameLoader()->state() != FrameState::Complete) {
-        if (m_frame->settings().needsIsLoadingInAPISenseQuirk() && !m_subresourceLoaders.isEmpty())
-            return true;
-
         ASSERT(m_frame->document());
         auto& document = *m_frame->document();
         if ((isLoadingMainResource() || !document.loadEventFinished()) && isLoading())

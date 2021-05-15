@@ -271,12 +271,12 @@ void RenderThemeWin::themeChanged()
 
 String RenderThemeWin::extraDefaultStyleSheet()
 {
-    return String(themeWinUserAgentStyleSheet, sizeof(themeWinUserAgentStyleSheet));
+    return StringImpl::createWithoutCopying(themeWinUserAgentStyleSheet, sizeof(themeWinUserAgentStyleSheet));
 }
 
 String RenderThemeWin::extraQuirksStyleSheet()
 {
-    return String(themeWinQuirksUserAgentStyleSheet, sizeof(themeWinQuirksUserAgentStyleSheet));
+    return StringImpl::createWithoutCopying(themeWinQuirksUserAgentStyleSheet, sizeof(themeWinQuirksUserAgentStyleSheet));
 }
 
 bool RenderThemeWin::supportsHover(const RenderStyle&) const
@@ -1079,7 +1079,7 @@ String RenderThemeWin::mediaControlsStyleSheet()
 #endif
 }
 
-String RenderThemeWin::mediaControlsScript()
+Vector<String, 3> RenderThemeWin::mediaControlsScripts()
 {
 #if ENABLE(MEDIA_CONTROLS_SCRIPT)
     if (m_mediaControlsScript.isEmpty()) {
@@ -1088,9 +1088,9 @@ String RenderThemeWin::mediaControlsScript()
         scriptBuilder.append(stringWithContentsOfFile("mediaControlsApple"_s, "js"_s));
         m_mediaControlsScript = scriptBuilder.toString();
     }
-    return m_mediaControlsScript;
+    return { m_mediaControlsScript };
 #else
-    return emptyString();
+    return { };
 #endif
 }
 #endif

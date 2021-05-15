@@ -481,6 +481,7 @@ public:
     WEBCORE_EXPORT IntRect convertFromContainingViewToRenderer(const RenderElement*, const IntRect&) const;
     WEBCORE_EXPORT FloatRect convertFromContainingViewToRenderer(const RenderElement*, const FloatRect&) const;
     WEBCORE_EXPORT IntPoint convertFromRendererToContainingView(const RenderElement*, const IntPoint&) const;
+    WEBCORE_EXPORT FloatPoint convertFromRendererToContainingView(const RenderElement*, const FloatPoint&) const;
     WEBCORE_EXPORT IntPoint convertFromContainingViewToRenderer(const RenderElement*, const IntPoint&) const;
 
     // Override ScrollView methods to do point conversion via renderers, in order to take transforms into account.
@@ -488,6 +489,7 @@ public:
     IntRect convertFromContainingView(const IntRect&) const final;
     FloatRect convertFromContainingView(const FloatRect&) const final;
     IntPoint convertToContainingView(const IntPoint&) const final;
+    FloatPoint convertToContainingView(const FloatPoint&) const final;
     IntPoint convertFromContainingView(const IntPoint&) const final;
 
     float documentToAbsoluteScaleFactor(Optional<float> effectiveZoom = WTF::nullopt) const;
@@ -653,7 +655,7 @@ public:
     void show() final;
     void hide() final;
 
-    bool shouldPlaceBlockDirectionScrollbarOnLeft() const final;
+    bool shouldPlaceVerticalScrollbarOnLeft() const final;
 
     void didRestoreFromBackForwardCache();
 
@@ -987,7 +989,12 @@ inline void FrameView::incrementVisuallyNonEmptyPixelCount(const IntSize& size)
 {
     if (m_visuallyNonEmptyPixelCount > visualPixelThreshold)
         return;
-    m_visuallyNonEmptyPixelCount += size.width() * size.height();
+
+    auto area = size.area<RecordOverflow>() + m_visuallyNonEmptyPixelCount;
+    if (UNLIKELY(area.hasOverflowed()))
+        m_visuallyNonEmptyPixelCount = std::numeric_limits<decltype(m_visuallyNonEmptyPixelCount)>::max();
+    else
+        m_visuallyNonEmptyPixelCount = area.unsafeGet();
 }
 
 WTF::TextStream& operator<<(WTF::TextStream&, const FrameView&);

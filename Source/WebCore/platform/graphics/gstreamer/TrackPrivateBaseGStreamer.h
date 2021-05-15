@@ -49,7 +49,7 @@ public:
     };
 
     GstPad* pad() const { return m_pad.get(); }
-    void setPad(GRefPtr<GstPad>&& pad) { m_pad = WTFMove(pad); }
+    void setPad(GRefPtr<GstPad>&&);
 
     virtual void disconnect();
 
@@ -61,6 +61,11 @@ public:
     {
         return m_stream.get();
     }
+
+    // Used for MSE, where the initial caps of the pad are relevant for initializing the matching pad in the
+    // playback pipeline.
+    void setInitialCaps(GRefPtr<GstCaps>&& caps) { m_initialCaps = WTFMove(caps); }
+    const GRefPtr<GstCaps>& initialCaps() { return m_initialCaps; }
 
 protected:
     TrackPrivateBaseGStreamer(TrackPrivateBase* owner, gint index, GRefPtr<GstPad>);
@@ -79,7 +84,10 @@ protected:
     AtomString m_label;
     AtomString m_language;
     GRefPtr<GstPad> m_pad;
+    GRefPtr<GstPad> m_bestUpstreamPad;
     GRefPtr<GstStream> m_stream;
+    gulong m_eventProbe;
+    GRefPtr<GstCaps> m_initialCaps;
 
 private:
     bool getLanguageCode(GstTagList* tags, AtomString& value);

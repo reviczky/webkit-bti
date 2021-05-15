@@ -26,8 +26,6 @@
 #include "config.h"
 #include "IDBConnectionToServer.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBConnectionProxy.h"
 #include "IDBDatabase.h"
 #include "IDBDatabaseNameAndVersion.h"
@@ -39,10 +37,13 @@
 #include "Logging.h"
 #include "SecurityOrigin.h"
 #include "TransactionOperation.h"
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/MainThread.h>
 
 namespace WebCore {
 namespace IDBClient {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(IDBConnectionToServer);
 
 Ref<IDBConnectionToServer> IDBConnectionToServer::create(IDBConnectionToServerDelegate& delegate)
 {
@@ -520,5 +521,3 @@ void IDBConnectionToServer::didGetAllDatabaseNamesAndVersions(const IDBResourceI
 
 } // namespace IDBClient
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

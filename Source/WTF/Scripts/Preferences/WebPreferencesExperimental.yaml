@@ -43,24 +43,23 @@ AspectRatioEnabled:
   humanReadableDescription: "Enable aspect-ratio CSS property"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
-# FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
 AspectRatioOfImgFromWidthAndHeightEnabled:
   type: bool
   humanReadableName: "Aspect ratio of <img> from width and height"
   humanReadableDescription: "Map HTML attributes width/height to the default aspect ratio of <img>"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
       default: true
     WebCore:
-      default: false
+      default: true
 
 # FIXME: This is on by default in WebKit2 PLATFORM(COCOA). Perhaps we should consider turning it on for WebKitLegacy as well.
 AsyncClipboardAPIEnabled:
@@ -73,20 +72,6 @@ AsyncClipboardAPIEnabled:
     WebKit:
       "PLATFORM(COCOA)" : true
       default: false
-    WebCore:
-      default: false
-
-AudioWorkletEnabled:
-  type: bool
-  humanReadableName: "WebAudio AudioWorklet API"
-  humanReadableDescription: "WebAudio AudioWorklet API"
-  condition: ENABLE(WEB_AUDIO)
-  defaultValue:
-    WebKitLegacy:
-      "PLATFORM(IOS_FAMILY)" : true
-      default: false
-    WebKit:
-      default: true
     WebCore:
       default: false
 
@@ -113,10 +98,70 @@ CFNetworkNetworkLoaderEnabled:
     WebKit:
       default: false
 
+CSSColor4:
+  type: bool
+  humanReadableName: "CSS Color 4 Color Types"
+  humanReadableDescription: "Enable support for CSS Color 4 Color Types"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
+CSSColorContrastEnabled:
+  type: bool
+  humanReadableName: "CSS color-contrast()"
+  humanReadableDescription: "Enable support for CSS color-contrast() defined in CSS Color 5"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CSSColorMixEnabled:
   type: bool
   humanReadableName: "CSS color-mix()"
   humanReadableDescription: "Enable support for CSS color-mix() defined in CSS Color 5"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+CSSContainmentEnabled:
+  type: bool
+  humanReadableName: "CSS Containment"
+  humanReadableDescription: "Enable contain CSS property"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+CSSCounterStyleAtRuleImageSymbolsEnabled:
+  type: bool
+  humanReadableName: "CSS @counter-style <image> symbols"
+  humanReadableDescription: "Enable support for <image> symbols in CSS @counter-style rules"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+CSSCounterStyleAtRulesEnabled:
+  type: bool
+  humanReadableName: "CSS @counter-style"
+  humanReadableDescription: "Enable support for CSS @counter-style rules"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -199,6 +244,29 @@ CSSTypedOMEnabled:
     WebKit:
       "ENABLE(EXPERIMENTAL_FEATURES) && (PLATFORM(GTK) || PLATFORM(WPE))": true
       default: false
+
+CanvasColorSpaceEnabled:
+  type: bool
+  humanReadableName: "Canvas Color Spaces"
+  humanReadableDescription: "Enable use of predefined canvas color spaces"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+CaptureVideoInGPUProcessEnabled:
+  type: bool
+  humanReadableName: "GPU Process: Video Capture"
+  humanReadableDescription: "Enable video capture in GPU Process"
+  webcoreBinding: none
+  condition: ENABLE(MEDIA_STREAM)
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: WebKit::defaultCaptureVideoInGPUProcessEnabled()
 
 ContactPickerAPIEnabled:
   type: bool
@@ -368,19 +436,6 @@ HTTP3Enabled:
     WebKit:
       default: false
 
-# FIXME: This is not implemented for WebKitLegacy, so should be excluded from WebKitLegacy entirely.
-HTTPSUpgradeEnabled:
-  type: bool
-  humanReadableName: "Automatic HTTPS upgrade"
-  humanReadableDescription: "Automatic HTTPS upgrade for known supported sites"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: false
-    WebCore:
-      default: false
-
 HighlightAPIEnabled:
   type: bool
   humanReadableName: "Highlight API"
@@ -482,7 +537,7 @@ IsNSURLSessionWebSocketEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
 
 # FIXME: The 'Is' prefix is inconsistent with most other preferences and should be removed.
 IsSameSiteStrictEnforcementEnabled:
@@ -562,12 +617,13 @@ MaskWebGLStringsEnabled:
   type: bool
   humanReadableName: "Mask WebGL Strings"
   humanReadableDescription: "Mask WebGL Vendor, Renderer, Shader Language Strings"
-  webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(WEBGL) || ENABLE(WEBGL2)
   defaultValue:
     WebKitLegacy:
       default: true
     WebKit:
+      default: true
+    WebCore:
       default: true
 
 # FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
@@ -598,11 +654,37 @@ MediaRecorderEnabled:
     WebCore:
       default: false
 
+MediaSessionCoordinatorEnabled:
+  type: bool
+  humanReadableName: "Experimental MediaSession coordinator API"
+  humanReadableDescription: "Enable experimental MediaSession coordinator API"
+  condition: ENABLE(MEDIA_SESSION_COORDINATOR)
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 MediaSessionEnabled:
   type: bool
   humanReadableName: "Media Session API"
   humanReadableDescription: "Media Session API"
   condition: ENABLE(MEDIA_SESSION)
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
+MediaSessionPlaylistEnabled:
+  type: bool
+  humanReadableName: "Experimental MediaSession playlist API"
+  humanReadableDescription: "Enable experimental MediaSession playlist API"
+  condition: ENABLE(MEDIA_SESSION_PLAYLIST)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -620,21 +702,8 @@ ModelElementEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "ENABLE(SEPARATED_MODEL)": true
       default: false
-    WebCore:
-      default: false
-
-ModernUnprefixedWebAudioEnabled:
-  type: bool
-  humanReadableName: "Modern WebAudio API"
-  humanReadableDescription: "Modern and unprefixed WebAudio API"
-  condition: ENABLE(WEB_AUDIO)
-  defaultValue:
-    WebKitLegacy:
-      "PLATFORM(IOS_FAMILY)" : true
-      default: false
-    WebKit:
-      default: true
     WebCore:
       default: false
 
@@ -795,6 +864,18 @@ RequestIdleCallbackEnabled:
     WebCore:
       default: false
 
+RequestSubmitEnabled:
+  type: bool
+  humanReadableName: "Form requestSubmit"
+  humanReadableDescription: "Form requestSubmit method"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 # FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
 ResizeObserverEnabled:
   type: bool
@@ -911,6 +992,17 @@ TransformStreamAPIEnabled:
     WebKit:
       default: true
 
+UseGPUProcessForCanvasRenderingEnabled:
+  type: bool
+  humanReadableName: "GPU Process: Canvas Rendering"
+  humanReadableDescription: "Enable canvas rendering in GPU Process"
+  webcoreBinding: none
+  condition: ENABLE(GPU_PROCESS) && !(PLATFORM(GTK) || PLATFORM(WPE))
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: defaultUseGPUProcessForCanvasRenderingEnabled()
+
 UseGPUProcessForMediaEnabled:
   type: bool
   humanReadableName: "GPU Process: Media"
@@ -921,6 +1013,17 @@ UseGPUProcessForMediaEnabled:
   defaultValue:
     WebKit:
       default: WebKit::defaultUseGPUProcessForMediaEnabled()
+
+UseGPUProcessForWebGLEnabled:
+  type: bool
+  humanReadableName: "GPU Process: WebGL"
+  humanReadableDescription: "Process all WebGL operations in GPU Process"
+  webcoreBinding: none
+  condition: ENABLE(GPU_PROCESS) && ENABLE(WEBGL) && !(PLATFORM(GTK) || PLATFORM(WPE))
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: defaultUseGPUProcessForWebGLEnabled()
 
 UserGesturePromisePropagationEnabled:
   type: bool
@@ -1057,25 +1160,40 @@ WebGL2Enabled:
   type: bool
   humanReadableName: "WebGL 2.0"
   humanReadableDescription: "WebGL 2 prototype"
-  webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(WEBGL2)
   defaultValue:
     WebKitLegacy:
       default: true
     WebKit:
       default: true
+    WebCore:
+      default: true
+
+WebGLUsingMetal:
+  type: bool
+  humanReadableName: "WebGL via Metal"
+  humanReadableDescription: "Use the Metal backend for ANGLE"
+  condition: ENABLE(WEBGL) && PLATFORM(COCOA)
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
 
 WebGPUEnabled:
   type: bool
   humanReadableName: "WebGPU"
   humanReadableDescription: "WebGPU Sketch prototype"
-  webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(WEBGPU)
   defaultValue:
     WebKitLegacy:
       default: WebKit::defaultWebGPUEnabled()
     WebKit:
       default: WebKit::defaultWebGPUEnabled()
+    WebCore:
+      default: false
 
 WebMFormatReaderEnabled:
   type: bool
@@ -1217,6 +1335,7 @@ WebShareFileAPIEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(COCOA) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)": true
       default: false
     WebCore:
       default: false
@@ -1225,13 +1344,14 @@ WebXREnabled:
   type: bool
   humanReadableName: "WebXR Device API"
   humanReadableDescription: "Adds support for accessing virtual reality (VR) and augmented reality (AR) devices, including sensors and head-mounted displays, on the Web"
-  webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(WEBXR)
   defaultValue:
     WebKitLegacy:
       default: WebKit::defaultWebXREnabled()
     WebKit:
       default: WebKit::defaultWebXREnabled()
+    WebCore:
+      default: false
 
 WheelEventGesturesBecomeNonBlocking:
   type: bool

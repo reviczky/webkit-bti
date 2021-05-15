@@ -41,6 +41,9 @@ class PlatformCALayerRemote : public WebCore::PlatformCALayer {
 public:
     static Ref<PlatformCALayerRemote> create(WebCore::PlatformCALayer::LayerType, WebCore::PlatformCALayerClient*, RemoteLayerTreeContext&);
     static Ref<PlatformCALayerRemote> create(PlatformLayer *, WebCore::PlatformCALayerClient*, RemoteLayerTreeContext&);
+#if ENABLE(MODEL_ELEMENT)
+    static Ref<PlatformCALayerRemote> create(Ref<WebCore::Model>, WebCore::PlatformCALayerClient*, RemoteLayerTreeContext&);
+#endif
     static Ref<PlatformCALayerRemote> create(const PlatformCALayerRemote&, WebCore::PlatformCALayerClient*, RemoteLayerTreeContext&);
 
     virtual ~PlatformCALayerRemote();
@@ -57,6 +60,7 @@ public:
     WebCore::PlatformCALayer* superlayer() const override;
     void removeFromSuperlayer() override;
     void setSublayers(const WebCore::PlatformCALayerList&) override;
+    WebCore::PlatformCALayerList sublayersForLogging() const override { return m_children; }
     void removeAllSublayers() override;
     void appendSublayer(WebCore::PlatformCALayer&) override;
     void insertSublayer(WebCore::PlatformCALayer&, size_t index) override;
@@ -202,6 +206,8 @@ public:
     void moveToContext(RemoteLayerTreeContext&);
     void clearContext() { m_context = nullptr; }
     RemoteLayerTreeContext* context() const { return m_context; }
+    
+    virtual void populateCreationProperties(RemoteLayerTreeTransaction::LayerCreationProperties&, const RemoteLayerTreeContext&, WebCore::PlatformCALayer::LayerType);
 
 protected:
     PlatformCALayerRemote(WebCore::PlatformCALayer::LayerType, WebCore::PlatformCALayerClient* owner, RemoteLayerTreeContext&);

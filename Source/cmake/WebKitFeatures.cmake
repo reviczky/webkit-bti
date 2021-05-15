@@ -68,7 +68,7 @@ endmacro()
 # using RHEL), so the best we can do is guess based on based on the target CPU architecture. In
 # practice, guessing works for all architectures except aarch64 (unless unusual page sizes are
 # used), but it fails for aarch64 because distros are split between using 4 KB and 64 KB pages
-# there. Most distros (including Fedora) use 4 KB, but RHEL uses 16 KB. SUSE actually supports both.
+# there. Most distros (including Fedora) use 4 KB, but RHEL uses 64 KB. SUSE actually supports both.
 # Since there is no way to guess correctly, the best we can do is provide an option for it. You
 # should probably only use this if building for aarch64. Otherwise, known CPUs except PowerPC
 # will use 4 KB, while PowerPC and unknown CPUs will use 64 KB (see wtf/PageBlock.h). aarch64 will
@@ -149,7 +149,7 @@ macro(WEBKIT_OPTION_BEGIN)
     WEBKIT_OPTION_DEFINE(ENABLE_CSS_DEVICE_ADAPTATION "Toggle CSS Device Adaptation support" PRIVATE OFF)
     WEBKIT_OPTION_DEFINE(ENABLE_CSS_IMAGE_RESOLUTION "Toggle CSS image-resolution support" PRIVATE OFF)
     WEBKIT_OPTION_DEFINE(ENABLE_CSS_PAINTING_API "Toggle CSS Painting API support" PRIVATE OFF)
-    WEBKIT_OPTION_DEFINE(ENABLE_CSS_SCROLL_SNAP "Toggle CSS snap scroll support" PRIVATE OFF)
+    WEBKIT_OPTION_DEFINE(ENABLE_CSS_SCROLL_SNAP "Toggle CSS snap scroll support" PRIVATE ON)
     WEBKIT_OPTION_DEFINE(ENABLE_CSS_SELECTORS_LEVEL4 "Toggle CSS Selectors Level 4 support" PRIVATE ON)
     WEBKIT_OPTION_DEFINE(ENABLE_CSS_TRAILING_WORD "Toggle css trailing word" PRIVATE OFF)
     WEBKIT_OPTION_DEFINE(ENABLE_CSS_TYPED_OM "Toggle CSS Typed OM support" PRIVATE OFF)
@@ -171,8 +171,6 @@ macro(WEBKIT_OPTION_BEGIN)
     WEBKIT_OPTION_DEFINE(ENABLE_GAMEPAD "Toggle Gamepad support" PRIVATE OFF)
     WEBKIT_OPTION_DEFINE(ENABLE_GEOLOCATION "Toggle Geolocation support" PRIVATE ON)
     WEBKIT_OPTION_DEFINE(ENABLE_GPU_PROCESS "Toggle GPU Process support" PRIVATE OFF)
-    WEBKIT_OPTION_DEFINE(ENABLE_INDEXED_DATABASE "Toggle Indexed Database support" PRIVATE ON)
-    WEBKIT_OPTION_DEFINE(ENABLE_INDEXED_DATABASE_IN_WORKERS "Toggle support for Indexed Database in workers" PRIVATE ON)
     WEBKIT_OPTION_DEFINE(ENABLE_INPUT_TYPE_COLOR "Toggle Input Type Color support" PRIVATE OFF)
     WEBKIT_OPTION_DEFINE(ENABLE_INPUT_TYPE_DATE "Toggle Input Type Date support" PRIVATE OFF)
     WEBKIT_OPTION_DEFINE(ENABLE_INPUT_TYPE_DATETIMELOCAL "Toggle Input Type Datetimelocal support" PRIVATE OFF)
@@ -274,7 +272,6 @@ macro(WEBKIT_OPTION_BEGIN)
     WEBKIT_OPTION_DEPEND(ENABLE_FTL_JIT ENABLE_DFG_JIT)
     WEBKIT_OPTION_DEPEND(ENABLE_WEBASSEMBLY ENABLE_JIT)
     WEBKIT_OPTION_DEPEND(ENABLE_WEBASSEMBLY_B3JIT ENABLE_FTL_JIT)
-    WEBKIT_OPTION_DEPEND(ENABLE_INDEXED_DATABASE_IN_WORKERS ENABLE_INDEXED_DATABASE)
     WEBKIT_OPTION_DEPEND(ENABLE_INSPECTOR_ALTERNATE_DISPATCHERS ENABLE_REMOTE_INSPECTOR)
     WEBKIT_OPTION_DEPEND(ENABLE_MEDIA_CONTROLS_SCRIPT ENABLE_VIDEO)
     WEBKIT_OPTION_DEPEND(ENABLE_MEDIA_SOURCE ENABLE_VIDEO)
@@ -454,3 +451,5 @@ endmacro()
 
 option(ENABLE_EXPERIMENTAL_FEATURES "Enable experimental features" OFF)
 SET_AND_EXPOSE_TO_BUILD(ENABLE_EXPERIMENTAL_FEATURES ${ENABLE_EXPERIMENTAL_FEATURES})
+
+SET_AND_EXPOSE_TO_BUILD(USE_64KB_PAGE_BLOCK ${USE_64KB_PAGE_BLOCK})

@@ -29,7 +29,6 @@
 #include "DisplayListReplayer.h"
 #include "FontCascade.h"
 #include "ImageBuffer.h"
-#include "ImageData.h"
 #include "MediaPlayer.h"
 #include "SharedBuffer.h"
 #include <wtf/text/TextStream.h>
@@ -124,7 +123,7 @@ SetInlineFillGradient::SetInlineFillGradient(const Gradient& gradient, const Aff
     RELEASE_ASSERT(m_colorStopCount <= maxColorStopCount);
     for (uint8_t i = 0; i < m_colorStopCount; ++i) {
         m_offsets[i] = gradient.stops()[i].offset;
-        m_colors[i] = gradient.stops()[i].color.asInline();
+        m_colors[i] = *gradient.stops()[i].color.tryGetAsSRGBABytes();
     }
 }
 
@@ -162,7 +161,7 @@ bool SetInlineFillGradient::isInline(const Gradient& gradient)
         return false;
 
     for (auto& colorStop : gradient.stops()) {
-        if (!colorStop.color.isInline())
+        if (!colorStop.color.tryGetAsSRGBABytes())
             return false;
     }
 
@@ -769,40 +768,67 @@ static TextStream& operator<<(TextStream& ts, const FillEllipse& item)
     return ts;
 }
 
-PutImageData::PutImageData(AlphaPremultiplication inputFormat, const ImageData& imageData, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
+static TextStream& operator<<(TextStream& ts, const GetPixelBuffer& item)
+{
+    ts.dumpProperty("outputFormat", item.outputFormat());
+    ts.dumpProperty("srcRect", item.srcRect());
+    return ts;
+}
+
+PutPixelBuffer::PutPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
     : m_srcRect(srcRect)
     , m_destPoint(destPoint)
-    , m_imageData(imageData.deepClone()) // This copy is actually required to preserve the semantics of putImageData().
+    , m_pixelBuffer(pixelBuffer.deepClone()) // This copy is actually required to preserve the semantics of putPixelBuffer().
     , m_inputFormat(inputFormat)
     , m_destFormat(destFormat)
 {
 }
 
-PutImageData::PutImageData(AlphaPremultiplication inputFormat, Ref<ImageData>&& imageData, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
+PutPixelBuffer::PutPixelBuffer(AlphaPremultiplication inputFormat, PixelBuffer&& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
     : m_srcRect(srcRect)
     , m_destPoint(destPoint)
-    , m_imageData(WTFMove(imageData))
+    , m_pixelBuffer(WTFMove(pixelBuffer))
     , m_inputFormat(inputFormat)
     , m_destFormat(destFormat)
 {
 }
 
-NO_RETURN_DUE_TO_ASSERT void PutImageData::apply(GraphicsContext&) const
+PutPixelBuffer::PutPixelBuffer(const PutPixelBuffer& other)
+    : m_srcRect(other.m_srcRect)
+    , m_destPoint(other.m_destPoint)
+    , m_pixelBuffer(other.m_pixelBuffer.deepClone())
+    , m_inputFormat(other.m_inputFormat)
+    , m_destFormat(other.m_destFormat)
 {
-    // Should be handled by the delegate.
-    ASSERT_NOT_REACHED();
 }
 
-static TextStream& operator<<(TextStream& ts, const PutImageData& item)
+PutPixelBuffer& PutPixelBuffer::operator=(const PutPixelBuffer& other)
+{
+    PutPixelBuffer copy { other };
+    swap(copy);
+    return *this;
+}
+
+void PutPixelBuffer::swap(PutPixelBuffer& other)
+{
+    std::swap(m_srcRect, other.m_srcRect);
+    std::swap(m_destPoint, other.m_destPoint);
+    std::swap(m_pixelBuffer, other.m_pixelBuffer);
+    std::swap(m_inputFormat, other.m_inputFormat);
+    std::swap(m_destFormat, other.m_destFormat);
+}
+
+static TextStream& operator<<(TextStream& ts, const PutPixelBuffer& item)
 {
     ts.dumpProperty("inputFormat", item.inputFormat());
-    ts.dumpProperty("imageDataSize", item.imageData().size());
+    ts.dumpProperty("pixelBufferSize", item.pixelBuffer().size());
     ts.dumpProperty("srcRect", item.srcRect());
     ts.dumpProperty("destPoint", item.destPoint());
     ts.dumpProperty("destFormat", item.destFormat());
     return ts;
 }
 
+#if ENABLE(VIDEO)
 PaintFrameForMedia::PaintFrameForMedia(MediaPlayer& player, const FloatRect& destination)
     : m_identifier(player.identifier())
     , m_destination(destination)
@@ -820,6 +846,7 @@ static TextStream& operator<<(TextStream& ts, const PaintFrameForMedia& item)
     ts.dumpProperty("destination", item.destination());
     return ts;
 }
+#endif
 
 Optional<FloatRect> StrokeRect::localBounds(const GraphicsContext&) const
 {
@@ -1061,8 +1088,11 @@ static TextStream& operator<<(TextStream& ts, ItemType type)
     case ItemType::FlushContext: ts << "flush-context"; break;
     case ItemType::MetaCommandChangeDestinationImageBuffer: ts << "meta-command-change-destination-image-buffer"; break;
     case ItemType::MetaCommandChangeItemBuffer: ts << "meta-command-change-item-buffer"; break;
-    case ItemType::PutImageData: ts << "put-image-data"; break;
+    case ItemType::GetPixelBuffer: ts << "get-pixel-buffer"; break;
+    case ItemType::PutPixelBuffer: ts << "put-pixel-buffer"; break;
+#if ENABLE(VIDEO)
     case ItemType::PaintFrameForMedia: ts << "paint-frame-for-media"; break;
+#endif
     case ItemType::StrokeRect: ts << "stroke-rect"; break;
     case ItemType::StrokeLine: ts << "stroke-line"; break;
 #if ENABLE(INLINE_PATH_DATA)
@@ -1225,12 +1255,17 @@ TextStream& operator<<(TextStream& ts, ItemHandle item)
     case ItemType::MetaCommandChangeItemBuffer:
         ts << item.get<MetaCommandChangeItemBuffer>();
         break;
-    case ItemType::PutImageData:
-        ts << item.get<PutImageData>();
+    case ItemType::GetPixelBuffer:
+        ts << item.get<GetPixelBuffer>();
         break;
+    case ItemType::PutPixelBuffer:
+        ts << item.get<PutPixelBuffer>();
+        break;
+#if ENABLE(VIDEO)
     case ItemType::PaintFrameForMedia:
         ts << item.get<PaintFrameForMedia>();
         break;
+#endif
     case ItemType::StrokeRect:
         ts << item.get<StrokeRect>();
         break;

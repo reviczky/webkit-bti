@@ -68,7 +68,7 @@ struct WebNavigationDataStore;
 using LayerHostingContextID = uint32_t;
 #endif
 
-class ProvisionalPageProxy : public IPC::MessageReceiver, public IPC::MessageSender, public CanMakeWeakPtr<ProvisionalPageProxy> {
+class ProvisionalPageProxy : public IPC::MessageReceiver, public IPC::MessageSender {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     ProvisionalPageProxy(WebPageProxy&, Ref<WebProcessProxy>&&, std::unique_ptr<SuspendedPageProxy>, uint64_t navigationID, bool isServerRedirect, const WebCore::ResourceRequest&, ProcessSwapRequestedByClient, API::WebsitePolicies*);
@@ -91,7 +91,11 @@ public:
     Vector<uint8_t> takeAccessibilityToken() { return WTFMove(m_accessibilityToken); }
 #endif
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    LayerHostingContextID contextIDForVisibilityPropagation() const { return m_contextIDForVisibilityPropagation; }
+    LayerHostingContextID contextIDForVisibilityPropagationInWebProcess() const { return m_contextIDForVisibilityPropagationInWebProcess; }
+#if ENABLE(GPU_PROCESS)
+    void didCreateContextInGPUProcessForVisibilityPropagation(LayerHostingContextID);
+    LayerHostingContextID contextIDForVisibilityPropagationInGPUProcess() const { return m_contextIDForVisibilityPropagationInGPUProcess; }
+#endif
 #endif
 
     void loadData(API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, Optional<NavigatingToAppBoundDomain>, Optional<WebsitePoliciesData>&& = WTF::nullopt);
@@ -106,12 +110,12 @@ public:
 private:
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) final;
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) final;
 
     // IPC::MessageSender
     IPC::Connection* messageSenderConnection() const final;
     uint64_t messageSenderDestinationID() const final;
-    bool sendMessage(std::unique_ptr<IPC::Encoder>, OptionSet<IPC::SendOption>, Optional<std::pair<CompletionHandler<void(IPC::Decoder*)>, uint64_t>>&&) final;
+    bool sendMessage(UniqueRef<IPC::Encoder>&&, OptionSet<IPC::SendOption>, Optional<std::pair<CompletionHandler<void(IPC::Decoder*)>, uint64_t>>&&) final;
 
     void decidePolicyForNavigationActionAsync(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&, FrameInfoData&& originatingFrameInfo,
         Optional<WebPageProxyIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
@@ -127,6 +131,9 @@ private:
     void didStartProvisionalLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, URL&&, URL&& unreachableURL, const UserData&);
     void didCommitLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType, const WebCore::CertificateInfo&, bool usedLegacyTLS, bool containsPluginDocument, Optional<WebCore::HasInsecureContent> forcedHasInsecureContent, WebCore::MouseEventPolicy, const UserData&);
     void didFailProvisionalLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& provisionalURL, const WebCore::ResourceError&, WebCore::WillContinueLoading, const UserData&);
+    void logDiagnosticMessageFromWebProcess(const String& message, const String& description, WebCore::ShouldSample);
+    void logDiagnosticMessageWithEnhancedPrivacyFromWebProcess(const String& message, const String& description, WebCore::ShouldSample);
+    void logDiagnosticMessageWithValueDictionaryFromWebProcess(const String& message, const String& description, const WebCore::DiagnosticLoggingClient::ValueDictionary&, WebCore::ShouldSample);
     void startURLSchemeTask(URLSchemeTaskParameters&&);
     void backForwardGoToItem(const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
     void decidePolicyForNavigationActionSync(WebCore::FrameIdentifier, bool isMainFrame, FrameInfoData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&, FrameInfoData&& originatingFrameInfo,
@@ -142,7 +149,7 @@ private:
     void contentFilterDidBlockLoadForFrame(const WebCore::ContentFilterUnblockHandler&, WebCore::FrameIdentifier);
 #endif
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    void didCreateContextForVisibilityPropagation(LayerHostingContextID);
+    void didCreateContextInWebProcessForVisibilityPropagation(LayerHostingContextID);
 #endif
 
     void initializeWebPage(RefPtr<API::WebsitePolicies>&&);
@@ -167,7 +174,10 @@ private:
     UniqueRef<ProcessThrottler::ForegroundActivity> m_provisionalLoadActivity;
 #endif
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    LayerHostingContextID m_contextIDForVisibilityPropagation { 0 };
+    LayerHostingContextID m_contextIDForVisibilityPropagationInWebProcess { 0 };
+#if ENABLE(GPU_PROCESS)
+    LayerHostingContextID m_contextIDForVisibilityPropagationInGPUProcess { 0 };
+#endif
 #endif
 };
 

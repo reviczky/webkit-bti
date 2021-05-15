@@ -55,9 +55,7 @@
 #include "WebSocketHandshake.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <wtf/FastMalloc.h>
-#include <wtf/HashMap.h>
 #include <wtf/text/CString.h>
-#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -699,7 +697,11 @@ bool WebSocketChannel::processFrame()
         break;
     }
 
-    return !m_buffer.isEmpty();
+    if (m_buffer.isEmpty()) {
+        m_buffer.clear();
+        return false;
+    }
+    return true;
 }
 
 void WebSocketChannel::enqueueTextFrame(const CString& string)

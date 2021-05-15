@@ -216,7 +216,7 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
     ts << o.renderName();
 
     if (behavior.contains(RenderAsTextFlag::ShowAddresses))
-        ts << " " << static_cast<const void*>(&o);
+        ts << " " << &o;
 
     if (o.style().usedZIndex()) // FIXME: This should use !hasAutoUsedZIndex().
         ts << " zI: " << o.style().usedZIndex();
@@ -646,9 +646,12 @@ static void writeLayer(TextStream& ts, const RenderLayer& layer, const LayoutRec
 
     ts << indent << "layer ";
     
-    if (behavior.contains(RenderAsTextFlag::ShowAddresses))
-        ts << static_cast<const void*>(&layer) << " ";
-      
+    if (behavior.contains(RenderAsTextFlag::ShowAddresses)) {
+        ts << &layer << " ";
+        if (auto* scrollableArea = layer.scrollableArea())
+            ts << "scrollableArea " << scrollableArea << " ";
+    }
+
     ts << adjustedLayoutBounds;
 
     if (!adjustedLayoutBounds.isEmpty()) {
@@ -686,7 +689,9 @@ static void writeLayer(TextStream& ts, const RenderLayer& layer, const LayoutRec
 
     if (behavior.contains(RenderAsTextFlag::ShowCompositedLayers)) {
         if (layer.isComposited()) {
-            ts << " (composited, bounds=" << layer.backing()->compositedBounds() << ", drawsContent=" << layer.backing()->graphicsLayer()->drawsContent()
+            ts << " (composited " << layer.compositor().reasonsForCompositing(layer)
+                << ", bounds=" << layer.backing()->compositedBounds()
+                << ", drawsContent=" << layer.backing()->graphicsLayer()->drawsContent()
                 << ", paints into ancestor=" << layer.backing()->paintsIntoCompositedAncestor() << ")";
         } else if (layer.paintsIntoProvidedBacking())
             ts << " (shared backing of " << layer.backingProviderLayer() << ")";
@@ -826,17 +831,10 @@ static String nodePosition(Node* node)
                 result.appendLiteral("body");
                 break;
             }
-            if (n->isShadowRoot()) {
-                result.append('{');
-                result.append(getTagName(n));
-                result.append('}');
-            } else {
-                result.appendLiteral("child ");
-                result.appendNumber(n->computeNodeIndex());
-                result.appendLiteral(" {");
-                result.append(getTagName(n));
-                result.append('}');
-            }
+            if (n->isShadowRoot())
+                result.append('{', getTagName(n), '}');
+            else
+                result.append("child ", n->computeNodeIndex(), " {", getTagName(n), '}');
         } else
             result.appendLiteral("document");
     }

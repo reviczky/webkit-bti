@@ -32,6 +32,7 @@
 #include "IntRect.h"
 #include "LayoutRect.h"
 #include "ScrollAlignment.h"
+#include "ScrollBehavior.h"
 #include "Timer.h"
 #include "VisibleSelection.h"
 #include <wtf/Noncopyable.h>
@@ -122,6 +123,8 @@ public:
         IsUserTriggered = 1 << 6,
         RevealSelection = 1 << 7,
         RevealSelectionUpToMainFrame = 1 << 8,
+        SmoothScroll = 1 << 9,
+        OverrideSmoothScrollFeatureEnablement = 1 << 10
     };
     static constexpr OptionSet<SetSelectionOption> defaultSetSelectionOptions(EUserTriggered = NotUserTriggered);
 
@@ -186,7 +189,7 @@ public:
     void nodeWillBeRemoved(Node&);
     void textWasReplaced(CharacterData*, unsigned offset, unsigned oldLength, unsigned newLength);
 
-    void setCaretVisible(bool caretIsVisible) { setCaretVisibility(caretIsVisible ? Visible : Hidden); }
+    void setCaretVisible(bool caretIsVisible) { setCaretVisibility(caretIsVisible ? Visible : Hidden, ShouldUpdateAppearance::Yes); }
     void paintCaret(GraphicsContext&, const LayoutPoint&, const LayoutRect& clipRect);
 
     // Used to suspend caret blinking while the mouse is down.
@@ -245,20 +248,22 @@ public:
 
     WEBCORE_EXPORT HTMLFormElement* currentForm() const;
 
-    WEBCORE_EXPORT void revealSelection(SelectionRevealMode = SelectionRevealMode::Reveal, const ScrollAlignment& = ScrollAlignment::alignCenterIfNeeded, RevealExtentOption = DoNotRevealExtent);
+    WEBCORE_EXPORT void revealSelection(SelectionRevealMode = SelectionRevealMode::Reveal, const ScrollAlignment& = ScrollAlignment::alignCenterIfNeeded, RevealExtentOption = DoNotRevealExtent, ScrollBehavior = ScrollBehavior::Instant, SmoothScrollFeatureEnablement = SmoothScrollFeatureEnablement::Default);
     WEBCORE_EXPORT void setSelectionFromNone();
 
     bool shouldShowBlockCursor() const { return m_shouldShowBlockCursor; }
     void setShouldShowBlockCursor(bool);
 
     bool isInDocumentTree() const;
+    bool isConnectedToDocument() const;
+
     RefPtr<Range> associatedLiveRange();
     void associateLiveRange(Range&);
     void disassociateLiveRange();
     void updateFromAssociatedLiveRange();
 
 private:
-    void updateAndRevealSelection(const AXTextStateChangeIntent&);
+    void updateAndRevealSelection(const AXTextStateChangeIntent&, ScrollBehavior = ScrollBehavior::Instant, SmoothScrollFeatureEnablement = SmoothScrollFeatureEnablement::Override);
     void updateDataDetectorsForSelection();
 
     bool setSelectionWithoutUpdatingAppearance(const VisibleSelection&, OptionSet<SetSelectionOption>, CursorAlignOnScroll, TextGranularity);
@@ -299,7 +304,9 @@ private:
     void updateAppearanceAfterLayoutOrStyleChange();
     void appearanceUpdateTimerFired();
 
-    WEBCORE_EXPORT void setCaretVisibility(CaretVisibility);
+    enum class ShouldUpdateAppearance : bool { No, Yes };
+    WEBCORE_EXPORT void setCaretVisibility(CaretVisibility, ShouldUpdateAppearance);
+
     bool recomputeCaretRect();
     void invalidateCaretRect();
 

@@ -26,8 +26,7 @@
 #pragma once
 
 #include "CanvasRenderingContext2DBase.h"
-#include "CanvasTextAlign.h"
-#include "CanvasTextBaseline.h"
+#include "CanvasRenderingContext2DSettings.h"
 #include "HTMLCanvasElement.h"
 #include <memory>
 
@@ -38,16 +37,16 @@ class TextMetrics;
 class CanvasRenderingContext2D final : public CanvasRenderingContext2DBase {
     WTF_MAKE_ISO_ALLOCATED(CanvasRenderingContext2D);
 public:
-    static std::unique_ptr<CanvasRenderingContext2D> create(CanvasBase&, bool usesCSSCompatibilityParseMode);
+    static std::unique_ptr<CanvasRenderingContext2D> create(CanvasBase&, CanvasRenderingContext2DSettings&&, bool usesCSSCompatibilityParseMode);
 
     virtual ~CanvasRenderingContext2D();
 
     HTMLCanvasElement& canvas() const { return downcast<HTMLCanvasElement>(canvasBase()); }
 
+    const CanvasRenderingContext2DSettings& getContextAttributes() const { return m_settings; }
+
     void drawFocusIfNeeded(Element&);
     void drawFocusIfNeeded(Path2D&, Element&);
-
-    float webkitBackingStorePixelRatio() const { return 1; }
 
     void setFont(const String&);
 
@@ -57,18 +56,23 @@ public:
     void strokeText(const String& text, float x, float y, Optional<float> maxWidth = WTF::nullopt);
     Ref<TextMetrics> measureText(const String& text);
 
-    bool is2d() const override { return true; }
-
 private:
-    CanvasRenderingContext2D(CanvasBase&, bool usesCSSCompatibilityParseMode);
+    CanvasRenderingContext2D(CanvasBase&, CanvasRenderingContext2DSettings&&, bool usesCSSCompatibilityParseMode);
 
+    bool is2d() const final { return true; }
     const FontProxy* fontProxy() final;
+    PixelFormat pixelFormat() const final;
+    DestinationColorSpace colorSpace() const final;
+
+    void setFontWithoutUpdatingStyle(const String&);
 
     void drawTextInternal(const String& text, float x, float y, bool fill, Optional<float> maxWidth = WTF::nullopt);
 
     void drawFocusIfNeededInternal(const Path&, Element&);
 
     TextDirection toTextDirection(CanvasRenderingContext2DBase::Direction, const RenderStyle** computedStyle = nullptr) const;
+
+    CanvasRenderingContext2DSettings m_settings;
 };
 
 } // namespace WebCore

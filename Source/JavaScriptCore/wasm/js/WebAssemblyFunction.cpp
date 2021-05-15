@@ -79,28 +79,29 @@ JSC_DEFINE_HOST_FUNCTION(callWebAssemblyFunction, (JSGlobalObject* globalObject,
 
     for (unsigned argIndex = 0; argIndex < signature.argumentCount(); ++argIndex) {
         JSValue arg = callFrame->argument(argIndex);
-        switch (signature.argument(argIndex)) {
-        case Wasm::I32:
+        switch (signature.argument(argIndex).kind) {
+        case Wasm::TypeKind::I32:
             arg = JSValue::decode(arg.toInt32(globalObject));
             break;
-        case Wasm::Funcref: {
+        case Wasm::TypeKind::TypeIdx:
+        case Wasm::TypeKind::Funcref: {
             if (!isWebAssemblyHostFunction(vm, arg) && !arg.isNull())
                 return JSValue::encode(throwException(globalObject, scope, createJSWebAssemblyRuntimeError(globalObject, vm, "Funcref must be an exported wasm function")));
             break;
         }
-        case Wasm::Externref:
+        case Wasm::TypeKind::Externref:
             break;
-        case Wasm::I64:
+        case Wasm::TypeKind::I64:
             arg = JSValue::decode(bitwise_cast<uint64_t>(arg.toBigInt64(globalObject)));
             break;
-        case Wasm::F32:
+        case Wasm::TypeKind::F32:
             arg = JSValue::decode(bitwise_cast<uint32_t>(arg.toFloat(globalObject)));
             break;
-        case Wasm::F64:
+        case Wasm::TypeKind::F64:
             arg = JSValue::decode(bitwise_cast<uint64_t>(arg.toNumber(globalObject)));
             break;
-        case Wasm::Void:
-        case Wasm::Func:
+        case Wasm::TypeKind::Void:
+        case Wasm::TypeKind::Func:
             RELEASE_ASSERT_NOT_REACHED();
         }
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
@@ -153,7 +154,7 @@ JSC_DEFINE_HOST_FUNCTION(callWebAssemblyFunction, (JSGlobalObject* globalObject,
     return rawResult;
 }
 
-bool WebAssemblyFunction::useTagRegisters() const
+bool WebAssemblyFunction::usesTagRegisters() const
 {
     const auto& signature = Wasm::SignatureInformation::get(signatureIndex());
     return signature.argumentCount() || !signature.returnsVoid();
@@ -162,7 +163,13 @@ bool WebAssemblyFunction::useTagRegisters() const
 RegisterSet WebAssemblyFunction::calleeSaves() const
 {
     // Pessimistically save callee saves in BoundsChecking mode since the LLInt always bounds checks
-    return Wasm::PinnedRegisterInfo::get().toSave(Wasm::MemoryMode::BoundsChecking);
+    RegisterSet result = Wasm::PinnedRegisterInfo::get().toSave(Wasm::MemoryMode::BoundsChecking);
+    if (usesTagRegisters()) {
+        RegisterSet tagCalleeSaves = RegisterSet::calleeSaveRegisters();
+        tagCalleeSaves.filter(RegisterSet::runtimeTagRegisters());
+        result.merge(tagCalleeSaves);
+    }
+    return result;
 }
 
 RegisterAtOffsetList WebAssemblyFunction::usedCalleeSaveRegisters() const
@@ -224,7 +231,7 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
 
     jit.emitFunctionPrologue();
     jit.subPtr(MacroAssembler::TrustedImm32(totalFrameSize), MacroAssembler::stackPointerRegister);
-    jit.store64(CCallHelpers::TrustedImm64(0), CCallHelpers::addressFor(CallFrameSlot::codeBlock));
+    jit.emitZeroToCallFrameHeader(CallFrameSlot::codeBlock);
 
     for (const RegisterAtOffset& regAtOffset : registersToSpill) {
         GPRReg reg = regAtOffset.reg().gpr();
@@ -249,7 +256,7 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
     slowPath.append(jit.branch32(CCallHelpers::Below,
         CCallHelpers::payloadFor(CallFrameSlot::argumentCountIncludingThis), CCallHelpers::TrustedImm32(signature.argumentCount() + 1)));
 
-    if (useTagRegisters())
+    if (usesTagRegisters())
         jit.emitMaterializeTagCheckRegisters();
 
     // Loop backwards so we can use the first floating point argument as a scratch.
@@ -260,8 +267,8 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
         bool isStack = wasmCallInfo.params[i].isStackArgument();
 
         auto type = signature.argument(i);
-        switch (type) {
-        case Wasm::I32: {
+        switch (type.kind) {
+        case Wasm::TypeKind::I32: {
             jit.load64(jsParam, scratchGPR);
             slowPath.append(jit.branchIfNotInt32(scratchGPR));
             if (isStack)
@@ -270,7 +277,7 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
                 jit.zeroExtend32ToWord(scratchGPR, wasmCallInfo.params[i].gpr());
             break;
         }
-        case Wasm::Funcref: {
+        case Wasm::TypeKind::Funcref: {
             // Ensure we have a WASM exported function.
             jit.load64(jsParam, scratchGPR);
             auto isNull = jit.branchIfNull(scratchGPR);
@@ -290,7 +297,7 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
             isNull.link(&jit);
             FALLTHROUGH;
         }
-        case Wasm::Externref: {
+        case Wasm::TypeKind::Externref: {
             if (isStack) {
                 jit.load64(jsParam, scratchGPR);
                 jit.store64(scratchGPR, calleeFrame.withOffset(wasmCallInfo.params[i].offsetFromSP()));
@@ -298,13 +305,13 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
                 jit.load64(jsParam, wasmCallInfo.params[i].gpr());
             break;
         }
-        case Wasm::F32:
-        case Wasm::F64: {
+        case Wasm::TypeKind::F32:
+        case Wasm::TypeKind::F64: {
             if (!isStack)
                 scratchFPR = wasmCallInfo.params[i].fpr();
             auto moveToDestination = [&] () {
                 if (isStack) {
-                    if (signature.argument(i) == Wasm::F32)
+                    if (signature.argument(i).isF32())
                         jit.storeFloat(scratchFPR, calleeFrame.withOffset(wasmCallInfo.params[i].offsetFromSP()));
                     else
                         jit.storeDouble(scratchFPR, calleeFrame.withOffset(wasmCallInfo.params[i].offsetFromSP()));
@@ -316,13 +323,13 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
             auto isInt32 = jit.branchIfInt32(scratchGPR);
 
             jit.unboxDouble(scratchGPR, scratchGPR, scratchFPR);
-            if (signature.argument(i) == Wasm::F32)
+            if (signature.argument(i).isF32())
                 jit.convertDoubleToFloat(scratchFPR, scratchFPR);
             moveToDestination();
             auto done = jit.jump();
 
             isInt32.link(&jit);
-            if (signature.argument(i) == Wasm::F32) {
+            if (signature.argument(i).isF32()) {
                 jit.convertInt32ToFloat(scratchGPR, scratchFPR);
                 moveToDestination();
             } else {
@@ -360,12 +367,14 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
 
     if (!!moduleInformation.memory) {
         GPRReg baseMemory = pinnedRegs.baseMemoryPointer;
-        GPRReg scratchOrBoundsCheckingSize = stackLimitGPR;
+        GPRReg scratchOrBoundsCheckingSize = InvalidGPRReg;
         auto mode = instance()->memoryMode();
 
         if (isARM64E()) {
             if (mode != Wasm::MemoryMode::Signaling)
                 scratchOrBoundsCheckingSize = pinnedRegs.boundsCheckingSizeRegister;
+            else
+                scratchOrBoundsCheckingSize = stackLimitGPR;
             jit.loadPtr(CCallHelpers::Address(scratchGPR, Wasm::Instance::offsetOfCachedBoundsCheckingSize()), scratchOrBoundsCheckingSize);
         } else {
             if (mode != Wasm::MemoryMode::Signaling)
@@ -373,7 +382,7 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
         }
 
         jit.loadPtr(CCallHelpers::Address(scratchGPR, Wasm::Instance::offsetOfCachedMemory()), baseMemory);
-        jit.cageConditionally(Gigacage::Primitive, baseMemory, scratchOrBoundsCheckingSize, scratchOrBoundsCheckingSize);
+        jit.cageConditionallyAndUntag(Gigacage::Primitive, baseMemory, scratchOrBoundsCheckingSize, scratchGPR);
     }
 
     // We use this callee to indicate how to unwind past these types of frames:
@@ -383,13 +392,11 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
         m_jsToWasmICCallee.set(vm, this, JSToWasmICCallee::create(vm, globalObject(), this));
     jit.storePtr(CCallHelpers::TrustedImmPtr(m_jsToWasmICCallee.get()), CCallHelpers::addressFor(CallFrameSlot::callee));
 
-    {
-        // FIXME: Currently we just do an indirect jump. But we should teach the Module
-        // how to repatch us:
-        // https://bugs.webkit.org/show_bug.cgi?id=196570
-        jit.loadPtr(entrypointLoadLocation(), scratchGPR);
-        jit.call(scratchGPR, WasmEntryPtrTag);
-    }
+    // FIXME: Currently we just do an indirect jump. But we should teach the Module
+    // how to repatch us:
+    // https://bugs.webkit.org/show_bug.cgi?id=196570
+    jit.loadPtr(entrypointLoadLocation(), scratchGPR);
+    jit.call(scratchGPR, WasmEntryPtrTag);
 
     marshallJSResult(jit, signature, wasmCallInfo, savedResultRegisters);
 
@@ -423,7 +430,7 @@ MacroAssemblerCodePtr<JSEntryPtrTag> WebAssemblyFunction::jsCallEntrypointSlow()
 #endif
     auto jumpToHostCallThunk = jit.jump();
 
-    LinkBuffer linkBuffer(jit, nullptr, JITCompilationCanFail);
+    LinkBuffer linkBuffer(jit, nullptr, LinkBuffer::Profile::Wasm, JITCompilationCanFail);
     if (UNLIKELY(linkBuffer.didFailToAllocate()))
         return nullptr;
 
@@ -447,9 +454,8 @@ Structure* WebAssemblyFunction::createStructure(VM& vm, JSGlobalObject* globalOb
 }
 
 WebAssemblyFunction::WebAssemblyFunction(VM& vm, NativeExecutable* executable, JSGlobalObject* globalObject, Structure* structure, Wasm::Callee& jsEntrypoint, Wasm::WasmToWasmImportableFunction::LoadLocation wasmToWasmEntrypointLoadLocation, Wasm::SignatureIndex signatureIndex)
-    : Base { vm, executable, globalObject, structure }
+    : Base { vm, executable, globalObject, structure, Wasm::WasmToWasmImportableFunction { signatureIndex, wasmToWasmEntrypointLoadLocation } }
     , m_jsEntrypoint { jsEntrypoint.entrypoint() }
-    , m_importableFunction { signatureIndex, wasmToWasmEntrypointLoadLocation }
 { }
 
 template<typename Visitor>

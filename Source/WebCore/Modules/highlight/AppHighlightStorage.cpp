@@ -30,8 +30,10 @@
 #include "AppHighlight.h"
 #include "AppHighlightRangeData.h"
 #include "Chrome.h"
+#include "ChromeClient.h"
 #include "Document.h"
 #include "DocumentMarkerController.h"
+#include "Editor.h"
 #include "HTMLBodyElement.h"
 #include "HighlightRegister.h"
 #include "Node.h"
@@ -39,13 +41,14 @@
 #include "RenderedDocumentMarker.h"
 #include "SimpleRange.h"
 #include "StaticRange.h"
+#include "TextIndicator.h"
 #include "TextIterator.h"
 
 namespace WebCore {
 
 #if ENABLE(APP_HIGHLIGHTS)
 
-static constexpr unsigned textPreviewLength = 100;
+static constexpr unsigned textPreviewLength = 500;
 
 static RefPtr<Node> findNodeByPathIndex(const Node& parent, unsigned pathIndex, const String& nodeName)
 {
@@ -214,7 +217,9 @@ AppHighlightStorage::AppHighlightStorage(Document& document)
 {
 }
 
-void AppHighlightStorage::storeAppHighlight(StaticRange& range, CreateNewGroupForHighlight isNewGroup)
+AppHighlightStorage::~AppHighlightStorage() = default;
+
+void AppHighlightStorage::storeAppHighlight(Ref<StaticRange>&& range)
 {
     auto data = createAppHighlightRangeData(range);
     Optional<String> text;
@@ -222,27 +227,67 @@ void AppHighlightStorage::storeAppHighlight(StaticRange& range, CreateNewGroupFo
     if (!data.text().isEmpty())
         text = data.text();
 
-    AppHighlight highlight = {data.toSharedBuffer(), text, isNewGroup};
+    AppHighlight highlight = {data.toSharedBuffer(), text, CreateNewGroupForHighlight::No, HighlightRequestOriginatedInApp::No};
 
-    m_document->page()->chrome().storeAppHighlight(highlight);
+    m_document->page()->chrome().storeAppHighlight(WTFMove(highlight));
 }
 
-bool AppHighlightStorage::restoreAppHighlight(Ref<SharedBuffer>&& buffer)
+void AppHighlightStorage::restoreAndScrollToAppHighlight(Ref<SharedBuffer>&& buffer, ScrollToHighlight scroll)
 {
-    auto strongDocument = makeRefPtr(m_document.get());
-
-    if (!m_document)
-        return false;
-
     auto appHighlightRangeData = AppHighlightRangeData::create(buffer);
     if (!appHighlightRangeData)
+        return;
+    
+    if (!attemptToRestoreHighlightAndScroll(appHighlightRangeData.value(), scroll)) {
+        if (scroll == ScrollToHighlight::Yes)
+            m_unrestoredScrollHighlight = appHighlightRangeData;
+        else
+            m_unrestoredHighlights.append(appHighlightRangeData.value());
+    }
+    
+    m_timeAtLastRangeSearch = MonotonicTime::now();
+}
+
+bool AppHighlightStorage::attemptToRestoreHighlightAndScroll(AppHighlightRangeData& highlight, ScrollToHighlight scroll)
+{
+    if (!m_document)
         return false;
-
-    auto range = findRange(*appHighlightRangeData, *strongDocument);
-
+    
+    auto strongDocument = makeRefPtr(m_document.get());
+    
+    auto range = findRange(highlight, *strongDocument);
+    
+    if (!range)
+        return false;
+    
     strongDocument->appHighlightRegister().addAppHighlight(StaticRange::create(*range));
+    
+    if (scroll == ScrollToHighlight::Yes) {
+        auto textIndicator = TextIndicator::createWithRange(range.value(), { TextIndicatorOption::DoNotClipToVisibleRect }, WebCore::TextIndicatorPresentationTransition::Bounce);
+        if (textIndicator)
+            m_document->page()->chrome().client().setTextIndicator(textIndicator->data());
+        
+        TemporarySelectionChange selectionChange(*strongDocument, { range.value() }, { TemporarySelectionOption::RevealSelection, TemporarySelectionOption::SmoothScroll, TemporarySelectionOption::OverrideSmoothScrollFeatureEnablment });
+    }
 
     return true;
+}
+
+void AppHighlightStorage::restoreUnrestoredAppHighlights()
+{
+    Vector<AppHighlightRangeData> remainingRanges;
+    
+    for (auto& highlight : m_unrestoredHighlights) {
+        if (!attemptToRestoreHighlightAndScroll(highlight, ScrollToHighlight::No))
+            remainingRanges.append(highlight);
+    }
+    if (m_unrestoredScrollHighlight) {
+        if (attemptToRestoreHighlightAndScroll(m_unrestoredScrollHighlight.value(), ScrollToHighlight::Yes))
+            m_unrestoredScrollHighlight.reset();
+    }
+        
+    m_timeAtLastRangeSearch = MonotonicTime::now();
+    m_unrestoredHighlights = WTFMove(remainingRanges);
 }
 
 #endif

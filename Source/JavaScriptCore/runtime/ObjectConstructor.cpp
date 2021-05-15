@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2008-2019 Apple Inc. All rights reserved.
+ *  Copyright (C) 2008-2021 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -114,7 +114,9 @@ static ALWAYS_INLINE JSObject* constructObjectWithNewTarget(JSGlobalObject* glob
     // 1. If NewTarget is neither undefined nor the active function, then
     if (newTarget && newTarget != objectConstructor) {
         // a. Return ? OrdinaryCreateFromConstructor(NewTarget, "%ObjectPrototype%").
-        Structure* baseStructure = getFunctionRealm(vm, asObject(newTarget))->objectStructureForObjectConstructor();
+        JSGlobalObject* functionGlobalObject = getFunctionRealm(globalObject, asObject(newTarget));
+        RETURN_IF_EXCEPTION(scope, nullptr);
+        Structure* baseStructure = functionGlobalObject->objectStructureForObjectConstructor();
         Structure* objectStructure = InternalFunction::createSubclassStructure(globalObject, asObject(newTarget), baseStructure);
         RETURN_IF_EXCEPTION(scope, nullptr);
         return constructEmptyObject(vm, objectStructure);
@@ -206,7 +208,8 @@ JSValue objectConstructorGetOwnPropertyDescriptors(JSGlobalObject* globalObject,
 
         PutPropertySlot slot(descriptors);
         descriptors->putOwnDataPropertyMayBeIndex(globalObject, propertyName, fromDescriptor, slot);
-        scope.assertNoException();
+        scope.assertNoExceptionExceptTermination();
+        RETURN_IF_EXCEPTION(scope, { });
     }
 
     return descriptors;

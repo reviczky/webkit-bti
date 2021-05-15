@@ -188,8 +188,8 @@
         "caret-color" : {
             "inherited": true,
             "codegen-properties": {
-                "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "custom": "All"
             },
             "specification": {
                 "category": "css-ui",
@@ -801,6 +801,16 @@
             "specification": {
                 "category": "css-ruby",
                 "url": "https://www.w3.org/TR/css-ruby-1/#rubypos"
+            }
+        },
+        "additive-symbols": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-symbols"
             }
         },
         "alignment-baseline": {
@@ -2436,6 +2446,16 @@
                 "category": "svg"
             }
         },
+        "fallback": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-fallback"
+            }
+        },
         "fill": {
             "inherited": true,
             "codegen-properties": {
@@ -3377,6 +3397,16 @@
                 "url": "https://drafts.csswg.org/css-overscroll-1/#propdef-overscroll-behavior-y"
             }
         },
+        "pad": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-pad"
+            }
+        },
         "padding": {
             "codegen-properties": {
                 "longhands": [
@@ -3848,6 +3878,16 @@
             "specification": {
                 "category": "css-speech",
                 "url": "https://www.w3.org/TR/css3-speech/#speak-as"
+            }
+        },
+        "symbols": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-symbols"
             }
         },
         "table-layout": {
@@ -4330,7 +4370,7 @@
         },
         "vertical-align": {
             "codegen-properties": {
-                "custom": "Value"
+                "custom": "Inherit|Value"
             },
             "specification": {
                 "category": "css-22",
@@ -4565,6 +4605,19 @@
             "specification": {
                 "category": "css-sizing",
                 "url": "https://drafts.csswg.org/css-sizing-4/#aspect-ratio"
+            }
+        },
+        "contain": {
+            "codegen-properties": {
+                "custom": "All",
+                "settings-flag": "cssContainment"
+            },
+            "status": {
+                "status": "experimental"
+            },
+            "specification": {
+                "category": "css-contain",
+                "url": "https://drafts.csswg.org/css-contain-1/"
             }
         },
         "-webkit-backface-visibility": {
@@ -6031,6 +6084,16 @@
             },
             "status": "non-standard"
         },
+        "negative": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-negative"
+            }
+        },
         "color-scheme": {
             "inherited": true,
             "values": [
@@ -6116,6 +6179,16 @@
                 "url": "https://www.w3.org/TR/css-transforms-1/#propdef-perspective-origin"
             }
         },
+        "prefix": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-prefix"
+            }
+        },
         "-webkit-print-color-adjust": {
             "inherited": true,
             "values": [
@@ -6123,6 +6196,16 @@
                 "economy"
             ],
             "status": "non-standard"
+        },
+        "range": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-range"
+            }
         },
         "-webkit-rtl-ordering": {
             "inherited": true,
@@ -6135,6 +6218,16 @@
                 "setter": "setRTLOrdering"
             },
             "status": "non-standard"
+        },
+        "suffix": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-suffix"
+            }
         },
         "-webkit-svg-shadow": {
             "codegen-properties": {
@@ -6912,92 +7005,6 @@
                 "url": "https://www.w3.org/TR/css-scroll-snap-1/#propdef-scroll-padding"
             }
         },
-        "scroll-snap-margin-block": {
-            "codegen-properties": {
-                "longhands": [
-                    "scroll-snap-margin-block-start",
-                    "scroll-snap-margin-block-end"
-                ],
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP",
-                "skip-codegen": true
-            },
-            "status": {
-                "status": "not implemented"
-            },
-            "specification": {
-                "category": "css-scroll-snap",
-                "url": "https://www.w3.org/TR/css-scroll-snap-1/#propdef-scroll-snap-margin-block"
-            }
-        },
-        "scroll-snap-margin-inline": {
-            "codegen-properties": {
-                "longhands": [
-                    "scroll-snap-margin-inline-start",
-                    "scroll-snap-margin-inline-end"
-                ],
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP",
-                "skip-codegen": true
-            },
-            "status": {
-                "status": "not implemented"
-            },
-            "specification": {
-                "category": "css-scroll-snap",
-                "url": "https://www.w3.org/TR/css-scroll-snap-1/#propdef-scroll-snap-margin-inline"
-            }
-        },
-        "scroll-snap-margin-block-start": {
-            "codegen-properties": {
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP",
-                "skip-codegen": true
-            },
-            "status": {
-                "status": "not implemented"
-            },
-            "specification": {
-                "category": "css-scroll-snap",
-                "url": "https://www.w3.org/TR/css-scroll-snap-1/#propdef-scroll-snap-margin-block-start"
-            }
-        },
-        "scroll-snap-margin-inline-start": {
-            "codegen-properties": {
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP",
-                "skip-codegen": true
-            },
-            "status": {
-                "status": "not implemented"
-            },
-            "specification": {
-                "category": "css-scroll-snap",
-                "url": "https://www.w3.org/TR/css-scroll-snap-1/#propdef-scroll-snap-margin-inline-start"
-            }
-        },
-        "scroll-snap-margin-block-end": {
-            "codegen-properties": {
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP",
-                "skip-codegen": true
-            },
-            "status": {
-                "status": "not implemented"
-            },
-            "specification": {
-                "category": "css-scroll-snap",
-                "url": "https://www.w3.org/TR/css-scroll-snap-1/#propdef-scroll-snap-margin-block-end"
-            }
-        },
-        "scroll-snap-margin-inline-end": {
-            "codegen-properties": {
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP",
-                "skip-codegen": true
-            },
-            "status": {
-                "status": "not implemented"
-            },
-            "specification": {
-                "category": "css-scroll-snap",
-                "url": "https://www.w3.org/TR/css-scroll-snap-1/#propdef-scroll-snap-margin-inline-end"
-            }
-        },
         "scroll-snap-stop": {
             "codegen-properties": {
                 "converter": "ScrollSnapStop",
@@ -7042,6 +7049,16 @@
             "specification": {
                 "category": "css-shapes",
                 "url": "https://www.w3.org/TR/css-shapes/#propdef-shape-image-threshold"
+            }
+        },
+        "system": {
+            "codegen-properties": {
+                "settings-flag": "cssCounterStyleAtRules",
+                "skip-builder": true
+            },
+            "specification": {
+                "category": "css-counter-styles",
+                "url": "https://www.w3.org/TR/css-counter-styles-3/#counter-style-system"
             }
         },
         "-webkit-tap-highlight-color": {
@@ -7209,10 +7226,20 @@
             "longname": "CSS Compositing and Blending",
             "url": "https://www.w3.org/TR/compositing-1/"
         },
+        "css-contain": {
+            "shortname": "CSS Containment",
+            "longname": "CSS Containment Module",
+            "url": "https://drafts.csswg.org/css-contain-2/"
+        },
         "css-content": {
             "shortname": "CSS Generated Content",
             "longname": "CSS Generated Content Module",
             "url": "https://www.w3.org/TR/css-content-3/"
+        },
+        "css-counter-styles": {
+            "shortname": "CSS Counter Styles",
+            "longname": "CSS Counter Styles Module",
+            "url": "https://www.w3.org/TR/css-counter-styles-3"
         },
         "css-device-adapt": {
             "shortname": "CSS Device Adaptation",

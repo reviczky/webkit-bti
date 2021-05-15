@@ -84,9 +84,7 @@ JSC_DEFINE_HOST_FUNCTION(constructIntlDisplayNames, (JSGlobalObject* globalObjec
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     JSObject* newTarget = asObject(callFrame->newTarget());
-    Structure* structure = newTarget == callFrame->jsCallee()
-        ? globalObject->displayNamesStructure()
-        : InternalFunction::createSubclassStructure(globalObject, newTarget, getFunctionRealm(vm, newTarget)->displayNamesStructure());
+    Structure* structure = JSC_GET_DERIVED_STRUCTURE(vm, displayNamesStructure, newTarget, callFrame->jsCallee());
     RETURN_IF_EXCEPTION(scope, { });
 
     IntlDisplayNames* displayNames = IntlDisplayNames::create(vm, structure);
@@ -114,7 +112,7 @@ JSC_DEFINE_HOST_FUNCTION(IntlDisplayNamesConstructorSupportedLocalesOf, (JSGloba
     // https://tc39.es/proposal-intl-displaynames/#sec-Intl.DisplayNames.supportedLocalesOf
 
     // 1. Let availableLocales be %DisplayNames%.[[availableLocales]].
-    const HashSet<String>& availableLocales = intlDisplayNamesAvailableLocales();
+    const auto& availableLocales = intlDisplayNamesAvailableLocales();
 
     // 2. Let requestedLocales be CanonicalizeLocaleList(locales).
     Vector<String> requestedLocales = canonicalizeLocaleList(globalObject, callFrame->argument(0));

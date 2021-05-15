@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,6 +43,7 @@
 #include <wtf/MallocPtr.h>
 #include <wtf/Optional.h>
 #include <wtf/Packed.h>
+#include <wtf/RobinHoodHashMap.h>
 #include <wtf/UUID.h>
 #include <wtf/text/AtomStringImpl.h>
 
@@ -602,7 +603,8 @@ ptrdiff_t CachedWriteBarrierOffsets::ptrOffset()
 template<typename T, size_t InlineCapacity = 0, typename OverflowHandler = CrashOnOverflow, typename Malloc = WTF::VectorMalloc>
 class CachedVector : public VariableLengthObject<Vector<SourceType<T>, InlineCapacity, OverflowHandler, 16, Malloc>> {
 public:
-    void encode(Encoder& encoder, const Vector<SourceType<T>, InlineCapacity, OverflowHandler, 16, Malloc>& vector)
+    template<typename VectorContainer>
+    void encode(Encoder& encoder, const VectorContainer& vector)
     {
         m_size = vector.size();
         if (!m_size)
@@ -612,38 +614,16 @@ public:
             ::JSC::encode(encoder, buffer[i], vector[i]);
     }
 
-    void encode(Encoder& encoder, const RefCountedArray<SourceType<T>>& vector)
-    {
-        m_size = vector.size();
-        if (!m_size)
-            return;
-        T* buffer = this->template allocate<T>(encoder, m_size);
-        for (unsigned i = 0; i < m_size; ++i)
-            ::JSC::encode(encoder, buffer[i], vector[i]);
-    }
-
-    template<typename... Args>
-    void decode(Decoder& decoder, Vector<SourceType<T>, InlineCapacity, OverflowHandler, 16, Malloc>& vector, Args... args) const
+    template<typename... Args, typename VectorContainer>
+    void decode(Decoder& decoder, VectorContainer& vector, Args... args) const
     {
         if (!m_size)
             return;
-        vector.resizeToFit(m_size);
+        vector = VectorContainer(m_size);
         const T* buffer = this->template buffer<T>();
         for (unsigned i = 0; i < m_size; ++i)
             ::JSC::decode(decoder, buffer[i], vector[i], args...);
     }
-
-    template<typename... Args>
-    void decode(Decoder& decoder, RefCountedArray<SourceType<T>>& vector, Args... args) const
-    {
-        if (!m_size)
-            return;
-        vector = RefCountedArray<SourceType<T>>(m_size);
-        const T* buffer = this->template buffer<T>();
-        for (unsigned i = 0; i < m_size; ++i)
-            ::JSC::decode(decoder, buffer[i], vector[i], args...);
-    }
-
 
 private:
     unsigned m_size;
@@ -669,10 +649,10 @@ private:
     Second m_second;
 };
 
-template<typename Key, typename Value, typename HashArg = DefaultHash<SourceType<Key>>, typename KeyTraitsArg = HashTraits<SourceType<Key>>, typename MappedTraitsArg = HashTraits<SourceType<Value>>>
-class CachedHashMap : public VariableLengthObject<HashMap<SourceType<Key>, SourceType<Value>, HashArg, KeyTraitsArg, MappedTraitsArg>> {
+template<typename Key, typename Value, typename HashArg = DefaultHash<SourceType<Key>>, typename KeyTraitsArg = HashTraits<SourceType<Key>>, typename MappedTraitsArg = HashTraits<SourceType<Value>>, typename TableTraits = WTF::HashTableTraits>
+class CachedHashMap : public VariableLengthObject<HashMap<SourceType<Key>, SourceType<Value>, HashArg, KeyTraitsArg, MappedTraitsArg, TableTraits>> {
     template<typename K, typename V>
-    using Map = HashMap<K, V, HashArg, KeyTraitsArg, MappedTraitsArg>;
+    using Map = HashMap<K, V, HashArg, KeyTraitsArg, MappedTraitsArg, TableTraits>;
 
 public:
     void encode(Encoder& encoder, const Map<SourceType<Key>, SourceType<Value>>& map)
@@ -695,6 +675,9 @@ public:
 private:
     CachedVector<CachedPair<Key, Value>> m_entries;
 };
+
+template<typename Key, typename Value, typename HashArg = DefaultHash<SourceType<Key>>, typename KeyTraitsArg = HashTraits<SourceType<Key>>, typename MappedTraitsArg = HashTraits<SourceType<Value>>>
+using CachedMemoryCompactLookupOnlyRobinHoodHashMap = CachedHashMap<Key, Value, HashArg, KeyTraitsArg, MappedTraitsArg, WTF::MemoryCompactLookupOnlyRobinHoodHashTableTraits>;
 
 template<typename T>
 class CachedUniquedStringImplBase : public VariableLengthObject<T> {
@@ -882,14 +865,14 @@ class CachedSimpleJumpTable : public CachedObject<UnlinkedSimpleJumpTable> {
 public:
     void encode(Encoder& encoder, const UnlinkedSimpleJumpTable& jumpTable)
     {
-        m_min = jumpTable.min;
-        m_branchOffsets.encode(encoder, jumpTable.branchOffsets);
+        m_min = jumpTable.m_min;
+        m_branchOffsets.encode(encoder, jumpTable.m_branchOffsets);
     }
 
     void decode(Decoder& decoder, UnlinkedSimpleJumpTable& jumpTable) const
     {
-        jumpTable.min = m_min;
-        m_branchOffsets.decode(decoder, jumpTable.branchOffsets);
+        jumpTable.m_min = m_min;
+        m_branchOffsets.decode(decoder, jumpTable.m_branchOffsets);
     }
 
 private:
@@ -901,16 +884,16 @@ class CachedStringJumpTable : public CachedObject<UnlinkedStringJumpTable> {
 public:
     void encode(Encoder& encoder, const UnlinkedStringJumpTable& jumpTable)
     {
-        m_offsetTable.encode(encoder, jumpTable.offsetTable);
+        m_offsetTable.encode(encoder, jumpTable.m_offsetTable);
     }
 
     void decode(Decoder& decoder, UnlinkedStringJumpTable& jumpTable) const
     {
-        m_offsetTable.decode(decoder, jumpTable.offsetTable);
+        m_offsetTable.decode(decoder, jumpTable.m_offsetTable);
     }
 
 private:
-    CachedHashMap<CachedRefPtr<CachedStringImpl>, UnlinkedStringJumpTable:: OffsetLocation> m_offsetTable;
+    CachedMemoryCompactLookupOnlyRobinHoodHashMap<CachedRefPtr<CachedStringImpl>, UnlinkedStringJumpTable::OffsetLocation> m_offsetTable;
 };
 
 class CachedBitVector : public VariableLengthObject<BitVector> {
@@ -967,8 +950,8 @@ public:
     void encode(Encoder& encoder, const UnlinkedCodeBlock::RareData& rareData)
     {
         m_exceptionHandlers.encode(encoder, rareData.m_exceptionHandlers);
-        m_switchJumpTables.encode(encoder, rareData.m_switchJumpTables);
-        m_stringSwitchJumpTables.encode(encoder, rareData.m_stringSwitchJumpTables);
+        m_unlinkedSwitchJumpTables.encode(encoder, rareData.m_unlinkedSwitchJumpTables);
+        m_unlinkedStringSwitchJumpTables.encode(encoder, rareData.m_unlinkedStringSwitchJumpTables);
         m_expressionInfoFatPositions.encode(encoder, rareData.m_expressionInfoFatPositions);
         m_typeProfilerInfoMap.encode(encoder, rareData.m_typeProfilerInfoMap);
         m_opProfileControlFlowBytecodeOffsets.encode(encoder, rareData.m_opProfileControlFlowBytecodeOffsets);
@@ -982,8 +965,8 @@ public:
     {
         UnlinkedCodeBlock::RareData* rareData = new UnlinkedCodeBlock::RareData { };
         m_exceptionHandlers.decode(decoder, rareData->m_exceptionHandlers);
-        m_switchJumpTables.decode(decoder, rareData->m_switchJumpTables);
-        m_stringSwitchJumpTables.decode(decoder, rareData->m_stringSwitchJumpTables);
+        m_unlinkedSwitchJumpTables.decode(decoder, rareData->m_unlinkedSwitchJumpTables);
+        m_unlinkedStringSwitchJumpTables.decode(decoder, rareData->m_unlinkedStringSwitchJumpTables);
         m_expressionInfoFatPositions.decode(decoder, rareData->m_expressionInfoFatPositions);
         m_typeProfilerInfoMap.decode(decoder, rareData->m_typeProfilerInfoMap);
         m_opProfileControlFlowBytecodeOffsets.decode(decoder, rareData->m_opProfileControlFlowBytecodeOffsets);
@@ -996,8 +979,8 @@ public:
 
 private:
     CachedVector<UnlinkedHandlerInfo> m_exceptionHandlers;
-    CachedVector<CachedSimpleJumpTable> m_switchJumpTables;
-    CachedVector<CachedStringJumpTable> m_stringSwitchJumpTables;
+    CachedVector<CachedSimpleJumpTable> m_unlinkedSwitchJumpTables;
+    CachedVector<CachedStringJumpTable> m_unlinkedStringSwitchJumpTables;
     CachedVector<ExpressionRangeInfo::FatPosition> m_expressionInfoFatPositions;
     CachedHashMap<unsigned, UnlinkedCodeBlock::RareData::TypeProfilerExpressionRange> m_typeProfilerInfoMap;
     CachedVector<InstructionStream::Offset> m_opProfileControlFlowBytecodeOffsets;
@@ -1776,6 +1759,7 @@ public:
     {
         m_classSource.encode(encoder, rareData.m_classSource);
         m_parentScopeTDZVariables.encode(encoder, rareData.m_parentScopeTDZVariables);
+        m_classFieldLocations.encode(encoder, rareData.m_classFieldLocations);
         m_parentPrivateNameEnvironment.encode(encoder, rareData.m_parentPrivateNameEnvironment);
     }
 
@@ -1784,6 +1768,7 @@ public:
         UnlinkedFunctionExecutable::RareData* rareData = new UnlinkedFunctionExecutable::RareData { };
         m_classSource.decode(decoder, rareData->m_classSource);
         m_parentScopeTDZVariables.decode(decoder, rareData->m_parentScopeTDZVariables);
+        m_classFieldLocations.decode(decoder, rareData->m_classFieldLocations);
         m_parentPrivateNameEnvironment.decode(decoder, rareData->m_parentPrivateNameEnvironment);
         return rareData;
     }
@@ -1791,6 +1776,7 @@ public:
 private:
     CachedSourceCodeWithoutProvider m_classSource;
     CachedRefPtr<CachedTDZEnvironmentLink> m_parentScopeTDZVariables;
+    CachedVector<JSTextPosition> m_classFieldLocations;
     CachedPrivateNameEnvironment m_parentPrivateNameEnvironment;
 };
 
@@ -1904,7 +1890,7 @@ public:
 
     Ref<UnlinkedMetadataTable> metadata(Decoder& decoder) const { return m_metadata.decode(decoder); }
 
-    unsigned usesEval() const { return m_usesEval; }
+    unsigned usesCallEval() const { return m_usesCallEval; }
     unsigned isConstructor() const { return m_isConstructor; }
     unsigned hasCapturedVariables() const { return m_hasCapturedVariables; }
     unsigned isBuiltinFunction() const { return m_isBuiltinFunction; }
@@ -1935,7 +1921,7 @@ private:
     VirtualRegister m_thisRegister;
     VirtualRegister m_scopeRegister;
 
-    unsigned m_usesEval : 1;
+    unsigned m_usesCallEval : 1;
     unsigned m_isConstructor : 1;
     unsigned m_hasCapturedVariables : 1;
     unsigned m_isBuiltinFunction : 1;
@@ -2130,7 +2116,7 @@ ALWAYS_INLINE UnlinkedCodeBlock::UnlinkedCodeBlock(Decoder& decoder, Structure* 
     , m_thisRegister(cachedCodeBlock.thisRegister())
     , m_scopeRegister(cachedCodeBlock.scopeRegister())
 
-    , m_usesEval(cachedCodeBlock.usesEval())
+    , m_usesCallEval(cachedCodeBlock.usesCallEval())
     , m_isConstructor(cachedCodeBlock.isConstructor())
     , m_hasCapturedVariables(cachedCodeBlock.hasCapturedVariables())
     , m_isBuiltinFunction(cachedCodeBlock.isBuiltinFunction())
@@ -2317,7 +2303,7 @@ ALWAYS_INLINE void CachedCodeBlock<CodeBlockType>::encode(Encoder& encoder, cons
 {
     m_thisRegister = codeBlock.m_thisRegister;
     m_scopeRegister = codeBlock.m_scopeRegister;
-    m_usesEval = codeBlock.m_usesEval;
+    m_usesCallEval = codeBlock.m_usesCallEval;
     m_isConstructor = codeBlock.m_isConstructor;
     m_hasCapturedVariables = codeBlock.m_hasCapturedVariables;
     m_isBuiltinFunction = codeBlock.m_isBuiltinFunction;

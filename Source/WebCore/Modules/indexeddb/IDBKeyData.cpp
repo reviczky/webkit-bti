@@ -26,8 +26,6 @@
 #include "config.h"
 #include "IDBKeyData.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "KeyedCoding.h"
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringConcatenateNumbers.h>
@@ -422,14 +420,6 @@ void IDBKeyData::setNumberValue(double value)
     m_isNull = false;
 }
 
-IDBKeyData IDBKeyData::deletedValue()
-{
-    IDBKeyData result;
-    result.m_isNull = false;
-    result.m_isDeletedValue = true;
-    return result;
-}
-
 bool IDBKeyData::isValid() const
 {
     if (m_type == IndexedDB::KeyType::Invalid)
@@ -504,5 +494,3 @@ size_t IDBKeyData::size() const
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

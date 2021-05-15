@@ -64,11 +64,26 @@ WebPageGroup* WebPageGroup::get(uint64_t pageGroupID)
     return webPageGroupMap().get(pageGroupID);
 }
 
+void WebPageGroup::forEach(Function<void(WebPageGroup&)>&& function)
+{
+    auto allGroups = copyToVectorOf<RefPtr<WebPageGroup>>(webPageGroupMap().values());
+    for (auto& group : allGroups) {
+        if (group)
+            function(*group);
+    }
+}
+
 static WebPageGroupData pageGroupData(const String& identifier)
 {
     WebPageGroupData data;
 
-    data.pageGroupID = generatePageGroupID();
+    static NeverDestroyed<HashMap<String, uint64_t>> map;
+    if (HashMap<String, uint64_t>::isValidKey(identifier)) {
+        data.pageGroupID = map.get().ensure(identifier, [] {
+            return generatePageGroupID();
+        }).iterator->value;
+    } else
+        data.pageGroupID = generatePageGroupID();
 
     if (!identifier.isEmpty())
         data.identifier = identifier;

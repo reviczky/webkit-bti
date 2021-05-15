@@ -102,12 +102,13 @@ private:
     bool isRenderMultiColumnFlow() const override { return true; }
     const char* renderName() const override;
     void addFragmentToThread(RenderFragmentContainer*) override;
-    void willBeRemovedFromTree() override;
+    void willBeRemovedFromTree(IsInternalMove) override;
     void fragmentedFlowDescendantBoxLaidOut(RenderBox*) override;
     LogicalExtentComputedValues computeLogicalHeight(LayoutUnit logicalHeight, LayoutUnit logicalTop) const override;
     LayoutUnit initialLogicalWidth() const override;
     void setPageBreak(const RenderBlock*, LayoutUnit offset, LayoutUnit spaceShortage) override;
     void updateMinimumPageHeight(const RenderBlock*, LayoutUnit offset, LayoutUnit minHeight) override;
+    void updateSpaceShortageForSizeContainment(const RenderBlock*, LayoutUnit offset, LayoutUnit shortage) override;
     RenderFragmentContainer* fragmentAtBlockOffset(const RenderBox*, LayoutUnit, bool extendLastFragment = false) const override;
     void setFragmentRangeForBox(const RenderBox&, RenderFragmentContainer*, RenderFragmentContainer*) override;
     bool addForcedFragmentBreak(const RenderBlock*, LayoutUnit, RenderBox* breakChild, bool isBefore, LayoutUnit* offsetBreakAdjustment = 0) override;

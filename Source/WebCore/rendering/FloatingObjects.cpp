@@ -34,7 +34,8 @@
 namespace WebCore {
 
 struct SameSizeAsFloatingObject {
-    void* pointers[2];
+    WeakPtr<RenderBox> renderer;
+    WeakPtr<RootInlineBox> originatingLine;
     LayoutRect rect;
     int paginationStrut;
     LayoutSize size;
@@ -42,6 +43,10 @@ struct SameSizeAsFloatingObject {
 };
 
 COMPILE_ASSERT(sizeof(FloatingObject) == sizeof(SameSizeAsFloatingObject), FloatingObject_should_stay_small);
+#if !ASSERT_ENABLED
+COMPILE_ASSERT(sizeof(WeakPtr<RenderBox>) == sizeof(void*), WeakPtr_should_be_same_size_as_raw_pointer);
+COMPILE_ASSERT(sizeof(WeakPtr<RootInlineBox>) == sizeof(void*), WeakPtr_should_be_same_size_as_raw_pointer);
+#endif
 
 FloatingObject::FloatingObject(RenderBox& renderer)
     : m_renderer(makeWeakPtr(renderer))
@@ -52,11 +57,11 @@ FloatingObject::FloatingObject(RenderBox& renderer)
     , m_isInPlacedTree(false)
 #endif
 {
-    Float type = renderer.style().floating();
-    ASSERT(type != Float::No);
-    if (type == Float::Left)
+    UsedFloat type = RenderStyle::usedFloat(renderer);
+    ASSERT(type != UsedFloat::None);
+    if (type == UsedFloat::Left)
         m_type = FloatLeft;
-    else if (type == Float::Right)
+    else if (type == UsedFloat::Right)
         m_type = FloatRight;
 }
 
@@ -111,7 +116,12 @@ LayoutSize FloatingObject::translationOffsetToAncestor() const
 
 TextStream& operator<<(TextStream& stream, const FloatingObject& object)
 {
-    return stream << &object << " renderer " << &object.renderer() << " " << object.frameRect() << " paintsFloat " << object.paintsFloat() << " shouldPaint " << object.shouldPaint();
+    stream << &object << " renderer " << &object.renderer();
+    if (object.isPlaced())
+        stream << " " << object.frameRect();
+    else
+        stream << " (not placed yet)";
+    return stream << " paintsFloat " << object.paintsFloat() << " shouldPaint " << object.shouldPaint();
 }
 
 #endif

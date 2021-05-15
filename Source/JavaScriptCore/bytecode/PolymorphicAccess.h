@@ -32,6 +32,7 @@
 #include "JSFunctionInlines.h"
 #include "MacroAssembler.h"
 #include "ScratchRegisterAllocator.h"
+#include <wtf/FixedVector.h>
 #include <wtf/Vector.h>
 
 namespace JSC {
@@ -156,6 +157,8 @@ public:
 
     // If this returns false then we are requesting a reset of the owning StructureStubInfo.
     bool visitWeak(VM&) const;
+
+    size_t extraMemoryInBytes() const;
     
     // This returns true if it has marked everything it will ever marked. This can be used as an
     // optimization to then avoid calling this method again during the fixpoint.
@@ -187,7 +190,7 @@ private:
     ListType m_list;
     RefPtr<JITStubRoutine> m_stubRoutine;
     std::unique_ptr<WatchpointsOnStructureStubInfo> m_watchpoints;
-    std::unique_ptr<Vector<WriteBarrier<JSCell>>> m_weakReferences;
+    FixedVector<WriteBarrier<JSCell>> m_weakReferences;
 };
 
 struct AccessGenerationState {

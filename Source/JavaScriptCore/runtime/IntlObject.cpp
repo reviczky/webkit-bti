@@ -246,7 +246,7 @@ static Vector<StringView> unicodeExtensionComponents(StringView extension)
     return subtags;
 }
 
-Vector<char, 32> localeIDBufferForLanguageTag(const CString& tag)
+Vector<char, 32> localeIDBufferForLanguageTagWithNullTerminator(const CString& tag)
 {
     if (!tag.length())
         return { };
@@ -352,7 +352,7 @@ String languageTagForLocaleID(const char* localeID, bool isImmortal)
 }
 
 // Ensure we have xx-ZZ whenever we have xx-Yyyy-ZZ.
-static void addScriptlessLocaleIfNeeded(HashSet<String>& availableLocales, StringView locale)
+static void addScriptlessLocaleIfNeeded(LocaleSet& availableLocales, StringView locale)
 {
     if (locale.length() < 10)
         return;
@@ -377,9 +377,9 @@ static void addScriptlessLocaleIfNeeded(HashSet<String>& availableLocales, Strin
     availableLocales.add(StringImpl::createStaticStringImpl(buffer.data(), buffer.size()));
 }
 
-const HashSet<String>& intlAvailableLocales()
+const LocaleSet& intlAvailableLocales()
 {
-    static LazyNeverDestroyed<HashSet<String>> availableLocales;
+    static LazyNeverDestroyed<LocaleSet> availableLocales;
     static std::once_flag initializeOnce;
     std::call_once(initializeOnce, [&] {
         availableLocales.construct();
@@ -432,11 +432,16 @@ const HashSet<String>& intlAvailableLocales()
 //     3. If an input is an ASCII string, no multiple character collation elements exist. So no special handling in UCA step-2 is required. For example, "L·" is not ASCII.
 //     4. UCA step-3 handles 0000 weighted characters specially. And ASCII contains these characters. But 0000 elements are used only for rare control characters.
 //        We can ignore this special handling if ASCII strings do not include control characters.
-//     5. Except 0000 cases, all characters' level-1 weights are different. And level-2 weights are always 0020, which is lower than any level-1 weights.
-//        This means that binary comparison in UCA step-4 do not need to check level 2~ weights.
+//     5. Level-1 weights are different except for 0000 cases and capital / lower ASCII characters. All non-0000 elements are larger than 0000.
+//     6. Level-2 weights are always 0020 except for 0000 cases. So if we include 0000 characters, we do not need to perform level-2 weight comparison.
+//     7. In all levels, characters have non-0000 weights if it does not have 0000 weight in level-1.
+//     8. In level-1, weights are the same only when characters are the same latin letters ('A' v.s. 'a'). If level-1 weight comparison says EQUAL, and if characters are not binary-equal,
+//        then, the only case is they are including the same latin letters with different capitalization at the same position. Level-3 weight comparison must distinguish them since level-3
+//        weight is set only for latin capital letters. Thus, we do not need to perform level-4 weight comparison.
 //
-//  Based on the above observation, our fast path handles ASCII strings excluding control characters. The following weight is recomputed weights from level-1 weights.
-const uint8_t ducetWeights[128] = {
+//  Based on the above observation, our fast path handles ASCII strings excluding control characters. We first compare strings with level-1 weights. And then,
+//  if we found they are the same and if we found they are not binary-equal strings, then we perform comparison with level-3 and level-4 weights.
+const uint8_t ducetLevel1Weights[128] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 1, 2, 3, 4, 5, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
@@ -445,19 +450,40 @@ const uint8_t ducetWeights[128] = {
     17, 18, 24, 32, 9, 8, 14, 25,
     39, 40, 41, 42, 43, 44, 45, 46,
     47, 48, 11, 10, 33, 34, 35, 13,
-    23, 50, 52, 54, 56, 58, 60, 62,
-    64, 66, 68, 70, 72, 74, 76, 78,
-    80, 82, 84, 86, 88, 90, 92, 94,
-    96, 98, 100, 19, 26, 20, 31, 7,
-    30, 49, 51, 53, 55, 57, 59, 61,
-    63, 65, 67, 69, 71, 73, 75, 77,
-    79, 81, 83, 85, 87, 89, 91, 93,
-    95, 97, 99, 21, 36, 22, 37, 0,
+    23, 49, 50, 51, 52, 53, 54, 55,
+    56, 57, 58, 59, 60, 61, 62, 63,
+    64, 65, 66, 67, 68, 69, 70, 71,
+    72, 73, 74, 19, 26, 20, 31, 7,
+    30, 49, 50, 51, 52, 53, 54, 55,
+    56, 57, 58, 59, 60, 61, 62, 63,
+    64, 65, 66, 67, 68, 69, 70, 71,
+    72, 73, 74, 21, 36, 22, 37, 0,
 };
 
-const HashSet<String>& intlCollatorAvailableLocales()
+// Level 2 are all zeros.
+
+const uint8_t ducetLevel3Weights[128] = {
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+const LocaleSet& intlCollatorAvailableLocales()
 {
-    static LazyNeverDestroyed<HashSet<String>> availableLocales;
+    static LazyNeverDestroyed<LocaleSet> availableLocales;
     static std::once_flag initializeOnce;
     std::call_once(initializeOnce, [&] {
         availableLocales.construct();
@@ -476,22 +502,21 @@ const HashSet<String>& intlCollatorAvailableLocales()
     return availableLocales;
 }
 
-const HashSet<String>& intlSegmenterAvailableLocales()
+const LocaleSet& intlSegmenterAvailableLocales()
 {
-    static NeverDestroyed<HashSet<String>> cachedAvailableLocales;
-    HashSet<String>& availableLocales = cachedAvailableLocales.get();
-
+    static LazyNeverDestroyed<LocaleSet> availableLocales;
     static std::once_flag initializeOnce;
     std::call_once(initializeOnce, [&] {
-        ASSERT(availableLocales.isEmpty());
+        availableLocales.construct();
+        ASSERT(availableLocales->isEmpty());
         constexpr bool isImmortal = true;
         int32_t count = ubrk_countAvailable();
         for (int32_t i = 0; i < count; ++i) {
             String locale = languageTagForLocaleID(ubrk_getAvailable(i), isImmortal);
             if (locale.isEmpty())
                 continue;
-            availableLocales.add(locale);
-            addScriptlessLocaleIfNeeded(availableLocales, locale);
+            availableLocales->add(locale);
+            addScriptlessLocaleIfNeeded(availableLocales.get(), locale);
         }
     });
     return availableLocales;
@@ -603,11 +628,15 @@ bool isUnicodeLocaleIdentifierType(StringView string)
 // https://tc39.es/ecma402/#sec-canonicalizeunicodelocaleid
 static String canonicalizeLanguageTag(const CString& tag)
 {
-    auto buffer = localeIDBufferForLanguageTag(tag);
+    auto buffer = localeIDBufferForLanguageTagWithNullTerminator(tag);
     if (buffer.isEmpty())
         return String();
-
-    return languageTagForLocaleID(buffer.data());
+    auto canonicalized = canonicalizeLocaleIDWithoutNullTerminator(buffer.data());
+    if (!canonicalized)
+        return String();
+    canonicalized->append('\0');
+    ASSERT(canonicalized->contains('\0'));
+    return languageTagForLocaleID(canonicalized->data());
 }
 
 Vector<String> canonicalizeLocaleList(JSGlobalObject* globalObject, JSValue locales)
@@ -694,7 +723,7 @@ Vector<String> canonicalizeLocaleList(JSGlobalObject* globalObject, JSValue loca
     return seen;
 }
 
-String bestAvailableLocale(const HashSet<String>& availableLocales, const String& locale)
+String bestAvailableLocale(const LocaleSet& availableLocales, const String& locale)
 {
     return bestAvailableLocale(locale, [&](const String& candidate) {
         return availableLocales.contains(candidate);
@@ -759,7 +788,7 @@ String removeUnicodeLocaleExtension(const String& locale)
     return builder.toString();
 }
 
-static MatcherResult lookupMatcher(JSGlobalObject* globalObject, const HashSet<String>& availableLocales, const Vector<String>& requestedLocales)
+static MatcherResult lookupMatcher(JSGlobalObject* globalObject, const LocaleSet& availableLocales, const Vector<String>& requestedLocales)
 {
     // LookupMatcher (availableLocales, requestedLocales)
     // https://tc39.github.io/ecma402/#sec-lookupmatcher
@@ -800,7 +829,7 @@ static MatcherResult lookupMatcher(JSGlobalObject* globalObject, const HashSet<S
     return result;
 }
 
-static MatcherResult bestFitMatcher(JSGlobalObject* globalObject, const HashSet<String>& availableLocales, const Vector<String>& requestedLocales)
+static MatcherResult bestFitMatcher(JSGlobalObject* globalObject, const LocaleSet& availableLocales, const Vector<String>& requestedLocales)
 {
     // BestFitMatcher (availableLocales, requestedLocales)
     // https://tc39.github.io/ecma402/#sec-bestfitmatcher
@@ -821,7 +850,7 @@ constexpr ASCIILiteral relevantExtensionKeyString(RelevantExtensionKey key)
     return ASCIILiteral::null();
 }
 
-ResolvedLocale resolveLocale(JSGlobalObject* globalObject, const HashSet<String>& availableLocales, const Vector<String>& requestedLocales, LocaleMatcher localeMatcher, const ResolveLocaleOptions& options, std::initializer_list<RelevantExtensionKey> relevantExtensionKeys, Vector<String> (*localeData)(const String&, RelevantExtensionKey))
+ResolvedLocale resolveLocale(JSGlobalObject* globalObject, const LocaleSet& availableLocales, const Vector<String>& requestedLocales, LocaleMatcher localeMatcher, const ResolveLocaleOptions& options, std::initializer_list<RelevantExtensionKey> relevantExtensionKeys, Vector<String> (*localeData)(const String&, RelevantExtensionKey))
 {
     // ResolveLocale (availableLocales, requestedLocales, options, relevantExtensionKeys, localeData)
     // https://tc39.github.io/ecma402/#sec-resolvelocale
@@ -886,7 +915,7 @@ ResolvedLocale resolveLocale(JSGlobalObject* globalObject, const HashSet<String>
     return resolved;
 }
 
-static JSArray* lookupSupportedLocales(JSGlobalObject* globalObject, const HashSet<String>& availableLocales, const Vector<String>& requestedLocales)
+static JSArray* lookupSupportedLocales(JSGlobalObject* globalObject, const LocaleSet& availableLocales, const Vector<String>& requestedLocales)
 {
     // LookupSupportedLocales (availableLocales, requestedLocales)
     // https://tc39.github.io/ecma402/#sec-lookupsupportedlocales
@@ -915,7 +944,7 @@ static JSArray* lookupSupportedLocales(JSGlobalObject* globalObject, const HashS
     return subset;
 }
 
-static JSArray* bestFitSupportedLocales(JSGlobalObject* globalObject, const HashSet<String>& availableLocales, const Vector<String>& requestedLocales)
+static JSArray* bestFitSupportedLocales(JSGlobalObject* globalObject, const LocaleSet& availableLocales, const Vector<String>& requestedLocales)
 {
     // BestFitSupportedLocales (availableLocales, requestedLocales)
     // https://tc39.github.io/ecma402/#sec-bestfitsupportedlocales
@@ -924,7 +953,7 @@ static JSArray* bestFitSupportedLocales(JSGlobalObject* globalObject, const Hash
     return lookupSupportedLocales(globalObject, availableLocales, requestedLocales);
 }
 
-JSValue supportedLocales(JSGlobalObject* globalObject, const HashSet<String>& availableLocales, const Vector<String>& requestedLocales, JSValue optionsValue)
+JSValue supportedLocales(JSGlobalObject* globalObject, const LocaleSet& availableLocales, const Vector<String>& requestedLocales, JSValue optionsValue)
 {
     // SupportedLocales (availableLocales, requestedLocales, options)
     // https://tc39.github.io/ecma402/#sec-supportedlocales
@@ -1407,6 +1436,26 @@ bool isUnicodeLanguageId(StringView string)
 bool isWellFormedCurrencyCode(StringView currency)
 {
     return currency.length() == 3 && currency.isAllSpecialCharacters<isASCIIAlpha>();
+}
+
+Optional<Vector<char, 32>> canonicalizeLocaleIDWithoutNullTerminator(const char* localeID)
+{
+    ASSERT(localeID);
+    Vector<char, 32> buffer;
+#if U_ICU_VERSION_MAJOR_NUM >= 68 && USE(APPLE_INTERNAL_SDK)
+    // Use ualoc_canonicalForm AppleICU SPI, which can perform mapping of aliases.
+    // ICU-21506 is a bug upstreaming this SPI to ICU.
+    // https://unicode-org.atlassian.net/browse/ICU-21506
+    auto status = callBufferProducingFunction(ualoc_canonicalForm, localeID, buffer);
+    if (U_FAILURE(status))
+        return WTF::nullopt;
+    return buffer;
+#else
+    auto status = callBufferProducingFunction(uloc_canonicalize, localeID, buffer);
+    if (U_FAILURE(status))
+        return WTF::nullopt;
+    return buffer;
+#endif
 }
 
 JSC_DEFINE_HOST_FUNCTION(intlObjectFuncGetCanonicalLocales, (JSGlobalObject* globalObject, CallFrame* callFrame))

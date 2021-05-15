@@ -58,16 +58,21 @@ void RemoteAudioSessionProxyManager::addProxy(RemoteAudioSessionProxy& proxy)
 {
     ASSERT(!m_proxies.contains(proxy));
     m_proxies.add(proxy);
+    updateCategory();
 }
 
 void RemoteAudioSessionProxyManager::removeProxy(RemoteAudioSessionProxy& proxy)
 {
     ASSERT(m_proxies.contains(proxy));
     m_proxies.remove(proxy);
+    updateCategory();
 }
 
-void RemoteAudioSessionProxyManager::setCategoryForProcess(RemoteAudioSessionProxy& proxy, AudioSession::CategoryType category, RouteSharingPolicy policy)
+void RemoteAudioSessionProxyManager::updateCategory()
 {
+    AudioSession::CategoryType category = AudioSession::None;
+    RouteSharingPolicy policy = RouteSharingPolicy::Default;
+
     HashCountedSet<AudioSession::CategoryType, WTF::IntHash<AudioSession::CategoryType>, WTF::StrongEnumHashTraits<AudioSession::CategoryType>> categoryCounts;
     HashCountedSet<RouteSharingPolicy, WTF::IntHash<RouteSharingPolicy>, WTF::StrongEnumHashTraits<RouteSharingPolicy>> policyCounts;
     for (auto& otherProxy : m_proxies) {
@@ -90,14 +95,13 @@ void RemoteAudioSessionProxyManager::setCategoryForProcess(RemoteAudioSessionPro
     else
         category = AudioSession::None;
 
+    policy = RouteSharingPolicy::Default;
     if (policyCounts.contains(RouteSharingPolicy::LongFormVideo))
         policy = RouteSharingPolicy::LongFormVideo;
     else if (policyCounts.contains(RouteSharingPolicy::LongFormAudio))
         policy = RouteSharingPolicy::LongFormAudio;
     else if (policyCounts.contains(RouteSharingPolicy::Independent))
-        policy = RouteSharingPolicy::Independent;
-    else
-        policy = RouteSharingPolicy::Default;
+        ASSERT_NOT_REACHED();
 
     m_session->setCategory(category, policy);
 }

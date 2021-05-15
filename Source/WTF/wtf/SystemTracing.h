@@ -94,6 +94,7 @@ enum TracePointCode {
     ScrollingThreadRenderUpdateSyncEnd,
     ScrollingThreadDisplayDidRefreshStart,
     ScrollingThreadDisplayDidRefreshEnd,
+    ScrollingTreeDisplayDidRefresh,
 
     WebKitRange = 10000,
     WebHTMLViewPaintStart,
@@ -116,6 +117,14 @@ enum TracePointCode {
     LayerTreeFreezeEnd,
     FlushRemoteImageBufferStart,
     FlushRemoteImageBufferEnd,
+    CreateInjectedBundleStart,
+    CreateInjectedBundleEnd,
+    PaintSnapshotStart,
+    PaintSnapshotEnd,
+    RenderServerSnapshotStart,
+    RenderServerSnapshotEnd,
+    TakeSnapshotStart,
+    TakeSnapshotEnd,
 
     UIProcessRange = 14000,
     CommitLayerTreeStart,

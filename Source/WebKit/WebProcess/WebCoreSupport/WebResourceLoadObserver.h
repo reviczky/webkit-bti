@@ -69,6 +69,8 @@ public:
     void setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, SubFrameDomain>&&, CompletionHandler<void()>&&) final;
     bool hasHadUserInteraction(const WebCore::RegistrableDomain&) const final;
     bool hasCrossPageStorageAccess(const SubFrameDomain&, const TopFrameDomain&) const final;
+    void setHasDeniedCrossPageStorageAccess(HashMap<TopFrameDomain, SubFrameDomain>&&, CompletionHandler<void()>&&) final;
+    bool hasDeniedCrossPageStorageAccess(const SubFrameDomain&, const TopFrameDomain&) const final;
 
 private:
     WebCore::ResourceLoadStatistics& ensureResourceStatisticsForRegistrableDomain(const WebCore::RegistrableDomain&);
@@ -81,13 +83,14 @@ private:
 
     WebCore::ResourceLoadStatistics::IsEphemeral m_isEphemeral { WebCore::ResourceLoadStatistics::IsEphemeral::No };
 
-    HashMap<WebCore::RegistrableDomain, WebCore::ResourceLoadStatistics> m_resourceStatisticsMap;
+    HashMap<WebCore::RegistrableDomain, std::unique_ptr<WebCore::ResourceLoadStatistics>> m_resourceStatisticsMap;
     HashMap<WebCore::RegistrableDomain, WTF::WallTime> m_lastReportedUserInteractionMap;
 
     WebCore::Timer m_notificationTimer;
 
     HashSet<WebCore::RegistrableDomain> m_domainsWithUserInteraction;
     HashMap<TopFrameDomain, HashSet<SubFrameDomain>> m_domainsWithCrossPageStorageAccess;
+    HashMap<TopFrameDomain, HashSet<SubFrameDomain>> m_domainsWithDeniedStorageAccess;
 #if !RELEASE_LOG_DISABLED
     uint64_t m_loggingCounter { 0 };
     static bool shouldLogUserInteraction;

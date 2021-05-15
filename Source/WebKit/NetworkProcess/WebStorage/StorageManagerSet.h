@@ -57,6 +57,7 @@ public:
     void addConnection(IPC::Connection&);
     void removeConnection(IPC::Connection&);
 
+    void handleLowMemoryWarning();
     void waitUntilTasksFinished();
     void waitUntilSyncingLocalStorageFinished();
     void suspend(CompletionHandler<void()>&&);
@@ -72,7 +73,7 @@ public:
     void renameOrigin(PAL::SessionID, const URL&, const URL&, CompletionHandler<void()>&&);
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
-    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>& replyEncoder);
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>& replyEncoder);
 
 private:
     StorageManagerSet();

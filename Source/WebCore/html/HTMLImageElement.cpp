@@ -94,7 +94,6 @@ HTMLImageElement::~HTMLImageElement()
 
     if (m_form)
         m_form->removeImgElement(this);
-    setPictureElement(nullptr);
 }
 
 Ref<HTMLImageElement> HTMLImageElement::createForLegacyFactoryFunction(Document& document, Optional<unsigned> width, Optional<unsigned> height)
@@ -368,10 +367,6 @@ Node::InsertedIntoAncestorResult HTMLImageElement::insertedIntoAncestor(Insertio
         m_form = nullptr;
     }
 
-    // Insert needs to complete first, before we start updating the loader. Loader dispatches events which could result
-    // in callbacks back to this node.
-    Node::InsertedIntoAncestorResult insertNotificationRequest = HTMLElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
-
     if (!m_form) {
         if (auto* newForm = HTMLFormElement::findClosestFormAncestor(*this)) {
             m_form = makeWeakPtr(newForm);
@@ -379,20 +374,19 @@ Node::InsertedIntoAncestorResult HTMLImageElement::insertedIntoAncestor(Insertio
         }
     }
 
+    // Insert needs to complete first, before we start updating the loader. Loader dispatches events which could result
+    // in callbacks back to this node.
+    Node::InsertedIntoAncestorResult insertNotificationRequest = HTMLElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
+
     if (insertionType.treeScopeChanged && !m_parsedUsemap.isNull())
         treeScope().addImageElementByUsemap(*m_parsedUsemap.impl(), *this);
 
-    if (is<HTMLPictureElement>(&parentOfInsertedTree)) {
+    if (is<HTMLPictureElement>(&parentOfInsertedTree) && &parentOfInsertedTree == parentElement()) {
+        // FIXME: When the hack in HTMLConstructionSite::createHTMLElementOrFindCustomElementInterface to eagerly call setPictureElement is removed, we can just assert !pictureElement().
+        ASSERT(!pictureElement() || pictureElement() == &parentOfInsertedTree);
         setPictureElement(&downcast<HTMLPictureElement>(parentOfInsertedTree));
-        if (insertionType.connectedToDocument) {
-            selectImageSource(RelevantMutation::Yes);
-            return insertNotificationRequest;
-        }
-        auto candidate = bestFitSourceFromPictureElement();
-        if (!candidate.isEmpty()) {
-            setBestFitURLAndDPRFromImageCandidate(candidate);
-            m_imageLoader->updateFromElementIgnoringPreviousError(RelevantMutation::Yes);
-        }
+        selectImageSource(RelevantMutation::Yes);
+        return insertNotificationRequest;
     }
 
     // If we have been inserted from a renderer-less document,
@@ -411,9 +405,10 @@ void HTMLImageElement::removedFromAncestor(RemovalType removalType, ContainerNod
     if (removalType.treeScopeChanged && !m_parsedUsemap.isNull())
         oldParentOfRemovedTree.treeScope().removeImageElementByUsemap(*m_parsedUsemap.impl(), *this);
 
-    if (is<HTMLPictureElement>(oldParentOfRemovedTree)) {
+    if (is<HTMLPictureElement>(oldParentOfRemovedTree) && !parentElement()) {
+        ASSERT(pictureElement() == &oldParentOfRemovedTree);
         setPictureElement(nullptr);
-        m_imageLoader->updateFromElementIgnoringPreviousError(RelevantMutation::Yes);
+        selectImageSource(RelevantMutation::Yes);
     }
 
     m_form = nullptr;
@@ -556,12 +551,6 @@ HTMLMapElement* HTMLImageElement::associatedMapElement() const
 const AtomString& HTMLImageElement::alt() const
 {
     return attributeWithoutSynchronization(altAttr);
-}
-
-bool HTMLImageElement::draggable() const
-{
-    // Image elements are draggable by default.
-    return !equalLettersIgnoringASCIICase(attributeWithoutSynchronization(draggableAttr), "false");
 }
 
 void HTMLImageElement::setHeight(unsigned value)

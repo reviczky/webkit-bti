@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBBackingStore.h"
 #include "IDBDatabaseIdentifier.h"
 #include "IDBDatabaseInfo.h"
@@ -59,6 +57,7 @@ public:
     ~SQLiteIDBBackingStore() final;
 
     IDBError getOrEstablishDatabaseInfo(IDBDatabaseInfo&) final;
+    uint64_t databaseVersion() final;
 
     IDBError beginTransaction(const IDBTransactionInfo&) final;
     IDBError abortTransaction(const IDBResourceIdentifier& transactionIdentifier) final;
@@ -228,5 +227,3 @@ private:
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

@@ -37,6 +37,7 @@
 namespace WebCore {
 
 class NotificationClient;
+class ScriptBuffer;
 class SecurityOrigin;
 class SocketProvider;
 class WorkerGlobalScope;
@@ -92,7 +93,7 @@ public:
     JSC::RuntimeFlags runtimeFlags() const { return m_runtimeFlags; }
 
 protected:
-    WorkerThread(const WorkerParameters&, const String& sourceCode, WorkerLoaderProxy&, WorkerDebuggerProxy&, WorkerReportingProxy&, WorkerThreadStartMode, const SecurityOrigin& topOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*, JSC::RuntimeFlags);
+    WorkerThread(const WorkerParameters&, const ScriptBuffer& sourceCode, WorkerLoaderProxy&, WorkerDebuggerProxy&, WorkerReportingProxy&, WorkerThreadStartMode, const SecurityOrigin& topOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*, JSC::RuntimeFlags);
 
     // Factory method for creating a new worker context for the thread.
     virtual Ref<WorkerGlobalScope> createWorkerGlobalScope(const WorkerParameters&, Ref<SecurityOrigin>&&, Ref<SecurityOrigin>&& topOrigin) = 0;
@@ -124,9 +125,7 @@ private:
     NotificationClient* m_notificationClient { nullptr };
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
     RefPtr<IDBClient::IDBConnectionProxy> m_idbConnectionProxy;
-#endif
     RefPtr<SocketProvider> m_socketProvider;
 };
 

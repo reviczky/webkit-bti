@@ -107,8 +107,6 @@ enum class MappedFileMode {
     Private,
 };
 
-enum class ShouldFollowSymbolicLinks { No, Yes };
-
 WTF_EXPORT_PRIVATE bool fileExists(const String&);
 WTF_EXPORT_PRIVATE bool deleteFile(const String&);
 WTF_EXPORT_PRIVATE bool deleteEmptyDirectory(const String&);
@@ -119,14 +117,15 @@ WTF_EXPORT_PRIVATE Optional<WallTime> getFileModificationTime(const String&);
 WTF_EXPORT_PRIVATE Optional<WallTime> getFileCreationTime(const String&); // Not all platforms store file creation time.
 WTF_EXPORT_PRIVATE Optional<FileMetadata> fileMetadata(const String& path);
 WTF_EXPORT_PRIVATE Optional<FileMetadata> fileMetadataFollowingSymlinks(const String& path);
-WTF_EXPORT_PRIVATE bool fileIsDirectory(const String&, ShouldFollowSymbolicLinks);
+WTF_EXPORT_PRIVATE bool isDirectory(const String&);
+WTF_EXPORT_PRIVATE bool isDirectoryFollowingSymlinks(const String&);
 WTF_EXPORT_PRIVATE String pathByAppendingComponent(const String& path, const String& component);
 WTF_EXPORT_PRIVATE String pathByAppendingComponents(StringView path, const Vector<StringView>& components);
 WTF_EXPORT_PRIVATE String lastComponentOfPathIgnoringTrailingSlash(const String& path);
 WTF_EXPORT_PRIVATE bool makeAllDirectories(const String& path);
 WTF_EXPORT_PRIVATE String homeDirectoryPath();
 WTF_EXPORT_PRIVATE String pathGetFileName(const String&);
-WTF_EXPORT_PRIVATE String directoryName(const String&);
+WTF_EXPORT_PRIVATE String parentPath(const String&);
 WTF_EXPORT_PRIVATE bool getVolumeFreeSpace(const String&, uint64_t&);
 WTF_EXPORT_PRIVATE Optional<int32_t> getFileDeviceId(const CString&);
 WTF_EXPORT_PRIVATE bool createSymbolicLink(const String& targetPath, const String& symbolicLinkPath);
@@ -137,12 +136,15 @@ WTF_EXPORT_PRIVATE void setMetadataURL(const String& path, const String& urlStri
 bool canExcludeFromBackup(); // Returns true if any file can ever be excluded from backup.
 bool excludeFromBackup(const String&); // Returns true if successful.
 
-WTF_EXPORT_PRIVATE Vector<String> listDirectory(const String& path, const String& filter);
+WTF_EXPORT_PRIVATE Vector<String> listDirectory(const String& path); // Returns file names, not full paths.
 
 WTF_EXPORT_PRIVATE CString fileSystemRepresentation(const String&);
 WTF_EXPORT_PRIVATE String stringFromFileSystemRepresentation(const char*);
 
 inline bool isHandleValid(const PlatformFileHandle& handle) { return handle != invalidPlatformFileHandle; }
+
+using Salt = std::array<uint8_t, 8>;
+WTF_EXPORT_PRIVATE Optional<Salt> readOrMakeSalt(const String& path);
 
 // Prefix is what the filename should be prefixed with, not the full path.
 WTF_EXPORT_PRIVATE String openTemporaryFile(const String& prefix, PlatformFileHandle&, const String& suffix = { });
@@ -163,9 +165,10 @@ WTF_EXPORT_PRIVATE void unlockAndCloseFile(PlatformFileHandle);
 // Returns true if the write was successful, false if it was not.
 WTF_EXPORT_PRIVATE bool appendFileContentsToFileHandle(const String& path, PlatformFileHandle&);
 
-WTF_EXPORT_PRIVATE bool hardLink(const String& source, const String& destination);
+WTF_EXPORT_PRIVATE bool hardLink(const String& targetPath, const String& linkPath);
 // Hard links a file if possible, copies it if not.
-WTF_EXPORT_PRIVATE bool hardLinkOrCopyFile(const String& source, const String& destination);
+WTF_EXPORT_PRIVATE bool hardLinkOrCopyFile(const String& targetPath, const String& linkPath);
+WTF_EXPORT_PRIVATE Optional<uint64_t> hardLinkCount(const String& path);
 
 #if USE(FILE_LOCK)
 WTF_EXPORT_PRIVATE bool lockFile(PlatformFileHandle, OptionSet<FileLockMode>);
@@ -183,20 +186,20 @@ WTF_EXPORT_PRIVATE RetainPtr<CFURLRef> pathAsURL(const String&);
 #endif
 
 #if USE(GLIB)
-String filenameForDisplay(const String&);
+WTF_EXPORT_PRIVATE String filenameForDisplay(const String&);
 #endif
 
 #if OS(WINDOWS)
 WTF_EXPORT_PRIVATE String localUserSpecificStorageDirectory();
 WTF_EXPORT_PRIVATE String roamingUserSpecificStorageDirectory();
 WTF_EXPORT_PRIVATE String createTemporaryDirectory();
-WTF_EXPORT_PRIVATE bool deleteNonEmptyDirectory(const String&);
 #endif
 
 #if PLATFORM(COCOA)
 WTF_EXPORT_PRIVATE NSString *createTemporaryDirectory(NSString *directoryPrefix);
-WTF_EXPORT_PRIVATE bool deleteNonEmptyDirectory(const String&);
 #endif
+
+WTF_EXPORT_PRIVATE bool deleteNonEmptyDirectory(const String&);
 
 WTF_EXPORT_PRIVATE String realPath(const String&);
 
@@ -251,6 +254,10 @@ inline MappedFileData& MappedFileData::operator=(MappedFileData&& other)
     m_fileSize = std::exchange(other.m_fileSize, 0);
     return *this;
 }
+
+// This creates the destination file, maps it, write the provided data to it and returns the mapped file.
+// This function fails if there is already a file at the destination path.
+WTF_EXPORT_PRIVATE MappedFileData mapToFile(const String& path, size_t bytesSize, Function<void(const Function<bool(const uint8_t*, size_t)>&)>&& apply, PlatformFileHandle* = nullptr);
 
 } // namespace FileSystemImpl
 } // namespace WTF

@@ -120,6 +120,13 @@ void SlotAssignment::addSlotElementByName(const AtomString& name, HTMLSlotElemen
         return makeUnique<Slot>();
     });
     auto& slot = *addResult.iterator->value;
+
+    if (!m_slotAssignmentsIsValid)
+        assignSlots(shadowRoot);
+
+    shadowRoot.host()->setHasShadowRootContainingSlots(true);
+    m_slotElementCount++;
+
     bool needsSlotchangeEvent = shadowRoot.shouldFireSlotchangeEvent() && hasAssignedNodes(shadowRoot, slot);
 
     slot.elementCount++;
@@ -147,8 +154,15 @@ void SlotAssignment::removeSlotElementByName(const AtomString& name, HTMLSlotEle
     m_slotElementsForConsistencyCheck.remove(&slotElement);
 #endif
 
-    if (auto* host = shadowRoot.host()) // FIXME: We should be able to do a targeted reconstruction.
+    ASSERT(m_slotElementCount > 0);
+    m_slotElementCount--;
+
+    if (auto host = makeRefPtr(shadowRoot.host())) {
+        // FIXME: We should be able to do a targeted reconstruction.
         host->invalidateStyleAndRenderersForSubtree();
+        if (!m_slotElementCount)
+            host->setHasShadowRootContainingSlots(false);
+    }
 
     auto* slot = m_slots.get(slotNameFromAttributeValue(name));
     RELEASE_ASSERT(slot && slot->hasSlotElements());
@@ -292,7 +306,9 @@ void SlotAssignment::didChangeSlot(const AtomString& slotAttrValue, ShadowRoot& 
     auto* slot = m_slots.get(slotName);
     if (!slot)
         return;
-    
+
+    RenderTreeUpdater::tearDownRenderers(*shadowRoot.host());
+
     slot->assignedNodes.clear();
     m_slotAssignmentsIsValid = false;
 
@@ -316,6 +332,10 @@ const Vector<WeakPtr<Node>>* SlotAssignment::assignedNodesForSlot(const HTMLSlot
     ASSERT(slotElement.containingShadowRoot() == &shadowRoot);
     const AtomString& slotName = slotNameFromAttributeValue(slotElement.attributeWithoutSynchronization(nameAttr));
     auto* slot = m_slots.get(slotName);
+
+    bool hasNotCalledInsertedIntoAncestorOnSlot = shadowRoot.isConnected() && !slotElement.isConnected();
+    if (hasNotCalledInsertedIntoAncestorOnSlot)
+        return nullptr;
     RELEASE_ASSERT(slot);
 
     if (!m_slotAssignmentsIsValid)
@@ -329,6 +349,23 @@ const Vector<WeakPtr<Node>>* SlotAssignment::assignedNodesForSlot(const HTMLSlot
         return nullptr;
 
     return &slot->assignedNodes;
+}
+
+void SlotAssignment::willRemoveAssignedNode(const Node& node)
+{
+    if (!m_slotAssignmentsIsValid)
+        return;
+
+    if (!is<Text>(node) && !is<Element>(node))
+        return;
+
+    auto* slot = m_slots.get(slotNameForHostChild(node));
+    if (!slot || slot->assignedNodes.isEmpty())
+        return;
+
+    slot->assignedNodes.removeFirstMatching([&node](const auto& item) {
+        return item.get() == &node;
+    });
 }
 
 const AtomString& SlotAssignment::slotNameForHostChild(const Node& child) const

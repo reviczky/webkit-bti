@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBResourceIdentifier.h"
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -48,7 +46,7 @@ struct IDBIterateCursorData;
 struct SecurityOriginData;
 
 namespace IndexedDB {
-enum class ObjectStoreOverwriteMode;
+enum class ObjectStoreOverwriteMode : uint8_t;
 enum class ConnectionClosedOnBehalfOfServer : bool;
 }
 
@@ -93,5 +91,3 @@ public:
 
 } // namespace IDBClient
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

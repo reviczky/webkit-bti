@@ -555,6 +555,7 @@ heap/MarkingConstraintSet.cpp
 heap/MarkingConstraintSolver.cpp
 heap/MutatorScheduler.cpp
 heap/MutatorState.cpp
+heap/RootMarkReason.cpp
 heap/SimpleMarkingConstraint.cpp
 heap/SlotVisitor.cpp
 heap/SpaceTimeMutatorScheduler.cpp
@@ -675,6 +676,7 @@ jit/RegisterSet.cpp
 jit/Repatch.cpp
 jit/ScratchRegisterAllocator.cpp
 jit/SetupVarargsFrame.cpp
+jit/SlowPathCall.cpp
 jit/TagRegistersMode.cpp
 jit/TempRegisterSet.cpp
 jit/ThunkGenerators.cpp
@@ -848,6 +850,7 @@ runtime/IntlSegmenterConstructor.cpp
 runtime/IntlSegmenterPrototype.cpp
 runtime/IntlSegments.cpp
 runtime/IntlSegmentsPrototype.cpp
+runtime/IntlWorkaround.cpp @no-unify // Confine U_HIDE_DRAFT_API's effect to this file.
 runtime/IteratorOperations.cpp
 runtime/IteratorPrototype.cpp
 runtime/JSArray.cpp
@@ -973,6 +976,7 @@ runtime/RegExpMatchesArray.cpp
 runtime/RegExpObject.cpp
 runtime/RegExpPrototype.cpp
 runtime/RegExpStringIteratorPrototype.cpp
+runtime/ResourceExhaustion.cpp
 runtime/RuntimeType.cpp
 runtime/SamplingCounter.cpp
 runtime/SamplingProfiler.cpp

@@ -210,7 +210,7 @@ void ThreadedScrollingTree::scrollingTreeNodeDidScroll(ScrollingTreeScrollingNod
         return;
     }
 
-    LOG_WITH_STREAM(Scrolling, stream << "ThreadedScrollingTree::scrollingTreeNodeDidScroll " << node.scrollingNodeID() << " to " << scrollPosition << " bouncing to main thread");
+    LOG_WITH_STREAM(Scrolling, stream << "ThreadedScrollingTree::scrollingTreeNodeDidScroll " << node.scrollingNodeID() << " to " << scrollPosition << " triggering main thread rendering update");
 
     auto scrollUpdate = ScrollUpdate { node.scrollingNodeID(), scrollPosition, layoutViewportOrigin, scrollingLayerPositionAction };
     addPendingScrollUpdate(WTFMove(scrollUpdate));
@@ -218,7 +218,7 @@ void ThreadedScrollingTree::scrollingTreeNodeDidScroll(ScrollingTreeScrollingNod
     auto deferrer = WheelEventTestMonitorCompletionDeferrer { wheelEventTestMonitor(), reinterpret_cast<WheelEventTestMonitor::ScrollableAreaIdentifier>(node.scrollingNodeID()), WheelEventTestMonitor::ScrollingThreadSyncNeeded };
     RunLoop::main().dispatch([strongThis = makeRef(*this), deferrer = WTFMove(deferrer)] {
         if (auto* scrollingCoordinator = strongThis->m_scrollingCoordinator.get())
-            scrollingCoordinator->applyPendingScrollUpdates();
+            scrollingCoordinator->scrollingThreadAddedPendingUpdate();
     });
 }
 
@@ -366,7 +366,7 @@ void ThreadedScrollingTree::delayedRenderingUpdateDetectionTimerFired()
 
 void ThreadedScrollingTree::displayDidRefreshOnScrollingThread()
 {
-    TraceScope tracingScope(ScrollingThreadDisplayDidRefreshStart, ScrollingThreadDisplayDidRefreshEnd);
+    TraceScope tracingScope(ScrollingThreadDisplayDidRefreshStart, ScrollingThreadDisplayDidRefreshEnd, displayID());
     ASSERT(ScrollingThread::isCurrentThread());
 
     LockHolder treeLocker(m_treeMutex);
@@ -390,13 +390,16 @@ void ThreadedScrollingTree::displayDidRefreshOnScrollingThread()
 
 void ThreadedScrollingTree::displayDidRefresh(PlatformDisplayID displayID)
 {
+    bool hasProcessedWheelEventsRecently = this->hasProcessedWheelEventsRecently();
+
     // We're on the EventDispatcher thread or in the ThreadedCompositor thread here.
+    tracePoint(ScrollingTreeDisplayDidRefresh, displayID, hasProcessedWheelEventsRecently);
 
     if (displayID != this->displayID())
         return;
 
 #if !PLATFORM(WPE) && !PLATFORM(GTK)
-    if (!hasProcessedWheelEventsRecently())
+    if (!hasProcessedWheelEventsRecently)
         return;
 #endif
 

@@ -431,9 +431,8 @@ public:
     bool supportsPath() const override { return false; }
 
     TextIteratorBehavior textIteratorBehaviorForTextRange() const override;
-    PlainTextRange selectedTextRange() const override { return PlainTextRange(); }
-    unsigned selectionStart() const override { return selectedTextRange().start; }
-    unsigned selectionEnd() const override { return selectedTextRange().length; }
+    PlainTextRange selectedTextRange() const override { return { }; }
+    int insertionPointLineNumber() const override { return -1; }
 
     URL url() const override { return URL(); }
     VisibleSelection selection() const override { return VisibleSelection(); }
@@ -483,7 +482,6 @@ public:
     void decrement() override { }
 
     void childrenChanged() override { }
-    void textChanged() override { }
     void updateAccessibilityRole() override { }
     const AccessibilityChildrenVector& children(bool updateChildrenIfNeeded = true) override;
     void addChildren() override { }
@@ -519,6 +517,7 @@ public:
     WEBCORE_EXPORT static AccessibilityRole ariaRoleToWebCoreRole(const String&);
     bool hasAttribute(const QualifiedName&) const override;
     const AtomString& getAttribute(const QualifiedName&) const override;
+    int getIntegralAttribute(const QualifiedName&) const;
     bool hasTagName(const QualifiedName&) const override;
     String tagName() const override;
 
@@ -792,7 +791,6 @@ protected:
 
     bool allowsTextRanges() const;
     unsigned getLengthForTextRange() const;
-
     String innerHTML() const override;
     String outerHTML() const override;
 

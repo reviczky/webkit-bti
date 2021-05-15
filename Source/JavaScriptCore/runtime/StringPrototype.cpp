@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
- *  Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004-2021 Apple Inc. All rights reserved.
  *  Copyright (C) 2009 Torch Mobile, Inc.
  *  Copyright (C) 2015 Jordan Harband (ljharb@gmail.com)
  *
@@ -121,9 +121,9 @@ StringPrototype::StringPrototype(VM& vm, Structure* structure)
 {
 }
 
-void StringPrototype::finishCreation(VM& vm, JSGlobalObject* globalObject, JSString* nameAndMessage)
+void StringPrototype::finishCreation(VM& vm, JSGlobalObject* globalObject)
 {
-    Base::finishCreation(vm, nameAndMessage);
+    Base::finishCreation(vm, jsEmptyString(vm));
     ASSERT(inherits(vm, info()));
 
     JSC_NATIVE_INTRINSIC_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->toString, stringProtoFuncToString, static_cast<unsigned>(PropertyAttribute::DontEnum), 0, StringPrototypeValueOfIntrinsic);
@@ -165,14 +165,12 @@ void StringPrototype::finishCreation(VM& vm, JSGlobalObject* globalObject, JSStr
     putDirectWithoutTransition(vm, vm.propertyNames->iteratorSymbol, iteratorFunction, static_cast<unsigned>(PropertyAttribute::DontEnum));
 
     // The constructor will be added later, after StringConstructor has been built
-    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(0), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
 }
 
 StringPrototype* StringPrototype::create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
 {
-    JSString* empty = jsEmptyString(vm);
     StringPrototype* prototype = new (NotNull, allocateCell<StringPrototype>(vm.heap)) StringPrototype(vm, structure);
-    prototype->finishCreation(vm, globalObject, empty);
+    prototype->finishCreation(vm, globalObject);
     return prototype;
 }
 
@@ -1539,8 +1537,8 @@ JSC_DEFINE_HOST_FUNCTION(stringProtoFuncLocaleCompare, (JSGlobalObject* globalOb
     else {
         collator = IntlCollator::create(vm, globalObject->collatorStructure());
         collator->initializeCollator(globalObject, locales, options);
-        RETURN_IF_EXCEPTION(scope, encodedJSValue());
     }
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     RELEASE_AND_RETURN(scope, JSValue::encode(collator->compareStrings(globalObject, string, that)));
 }
 

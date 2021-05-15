@@ -21,9 +21,24 @@
 
 #if ENABLE(WEBXR) && USE(OPENXR)
 
+#if USE(EGL)
+// EGL symbols required by openxr_platform.h
+#if USE(LIBEPOXY)
+#define __GBM__ 1
+#include "EpoxyEGL.h"
+#else
+#if PLATFORM(WAYLAND)
+#include <wayland-egl.h>
+#endif
+#include <EGL/egl.h>
+#endif
+
+#endif // USE(EGL)
+
 #include "Logging.h"
 #include "PlatformXR.h"
 #include <openxr/openxr.h>
+#include <openxr/openxr_platform.h>
 
 #include <wtf/text/StringConcatenateNumbers.h>
 #include <wtf/text/WTFString.h>
@@ -55,6 +70,11 @@ inline String resultToString(XrResult value, XrInstance instance)
         return __VA_ARGS__;                                                                     \
     }
 
+#define LOG_IF_FAILED(result, call, instance, ...)                                           \
+    if (XR_FAILED(result))                                                                   \
+        LOG(XR, "%s %s: %s\n", __func__, call, resultToString(result, instance).utf8().data());
+
+
 inline Device::FrameData::Pose XrPosefToPose(XrPosef pose)
 {
     Device::FrameData::Pose result;
@@ -66,7 +86,7 @@ inline Device::FrameData::Pose XrPosefToPose(XrPosef pose)
 inline Device::FrameData::View xrViewToPose(XrView view)
 {
     Device::FrameData::View pose;
-    pose.projection = Device::FrameData::Fov { view.fov.angleUp, -view.fov.angleDown, -view.fov.angleLeft, view.fov.angleRight };
+    pose.projection = Device::FrameData::Fov { fabs(view.fov.angleUp), fabs(view.fov.angleDown), fabs(view.fov.angleLeft), fabs(view.fov.angleRight) };
     pose.offset = XrPosefToPose(view.pose);
     return pose;
 }

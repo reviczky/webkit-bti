@@ -2269,7 +2269,7 @@ bool FrameView::scrollToFragmentInternal(const String& fragmentIdentifier)
     // If the anchor accepts keyboard focus, move focus there to aid users relying on keyboard navigation.
     if (anchorElement) {
         if (anchorElement->isFocusable())
-            document.setFocusedElement(anchorElement.get());
+            document.setFocusedElement(anchorElement.get(), { { }, { }, { }, { }, FocusVisibility::Visible });
         else {
             document.setFocusedElement(nullptr);
             document.setFocusNavigationStartingNode(anchorElement.get());
@@ -4784,6 +4784,11 @@ IntPoint FrameView::convertFromRendererToContainingView(const RenderElement* ren
     return contentsToView(point);
 }
 
+FloatPoint FrameView::convertFromRendererToContainingView(const RenderElement* renderer, const FloatPoint& rendererPoint) const
+{
+    return contentsToView(renderer->localToAbsolute(rendererPoint, UseTransforms));
+}
+
 IntPoint FrameView::convertFromContainingViewToRenderer(const RenderElement* renderer, const IntPoint& viewPoint) const
 {
     IntPoint point = viewPoint;
@@ -4879,6 +4884,28 @@ IntPoint FrameView::convertToContainingView(const IntPoint& localPoint) const
         return Widget::convertToContainingView(localPoint);
     }
     
+    return localPoint;
+}
+
+FloatPoint FrameView::convertToContainingView(const FloatPoint& localPoint) const
+{
+    if (const ScrollView* parentScrollView = parent()) {
+        if (is<FrameView>(*parentScrollView)) {
+            const FrameView& parentView = downcast<FrameView>(*parentScrollView);
+
+            // Get our renderer in the parent view
+            RenderWidget* renderer = frame().ownerRenderer();
+            if (!renderer)
+                return localPoint;
+
+            auto point = localPoint;
+            point.moveBy(renderer->contentBoxLocation());
+            return parentView.convertFromRendererToContainingView(renderer, point);
+        }
+
+        return Widget::convertToContainingView(localPoint);
+    }
+
     return localPoint;
 }
 
@@ -5525,9 +5552,9 @@ IntSize FrameView::viewportSizeForCSSViewportUnits() const
     return { *viewportSize.width, *viewportSize.height };
 }
 
-bool FrameView::shouldPlaceBlockDirectionScrollbarOnLeft() const
+bool FrameView::shouldPlaceVerticalScrollbarOnLeft() const
 {
-    return renderView() && renderView()->shouldPlaceBlockDirectionScrollbarOnLeft();
+    return renderView() && renderView()->shouldPlaceVerticalScrollbarOnLeft();
 }
 
 TextStream& operator<<(TextStream& ts, const FrameView& view)

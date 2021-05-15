@@ -26,18 +26,22 @@
 #pragma once
 
 #include "AlphaPremultiplication.h"
-#include "DisplayList.h"
+#include "DisplayListFlushIdentifier.h"
+#include "DisplayListItemBufferIdentifier.h"
+#include "DisplayListItemType.h"
 #include "FloatRoundedRect.h"
 #include "Font.h"
 #include "GlyphBuffer.h"
 #include "Gradient.h"
+#include "GraphicsContext.h"
 #include "Image.h"
-#include "ImageData.h"
 #include "MediaPlayerIdentifier.h"
 #include "Pattern.h"
+#include "PixelBuffer.h"
 #include "RenderingResourceIdentifier.h"
 #include "SharedBuffer.h"
 #include <wtf/TypeCasts.h>
+#include <wtf/Variant.h>
 
 namespace WTF {
 class TextStream;
@@ -45,11 +49,21 @@ class TextStream;
 
 namespace WebCore {
 
-class ImageData;
 class MediaPlayer;
 struct ImagePaintingOptions;
 
 namespace DisplayList {
+
+struct ItemHandle;
+
+/* isInlineItem indicates whether the object needs to be passed through IPC::Encoder in order to serialize,
+ * or whether we can just use placement new and be done.
+ * It needs to match (1) RemoteImageBufferProxy::encodeItem(), (2) RemoteRenderingBackend::decodeItem(),
+ * and (3) isInlineItem() in DisplayListItemType.cpp.
+ *
+ * isDrawingItem indicates if this command can affect dirty rects.
+ * We can do things like skip drawing items when replaying them if their extents don't intersect with the current clip.
+ * It needs to match isDrawingItem() in DisplayListItemType.cpp. */
 
 class Save {
 public:
@@ -905,7 +919,7 @@ public:
     RenderingResourceIdentifier fontIdentifier() { return m_fontIdentifier; }
     const FloatPoint& localAnchor() const { return m_localAnchor; }
     FloatPoint anchorPoint() const { return m_localAnchor; }
-    const Vector<GlyphBufferGlyph, 128>& glyphs() const { return m_glyphs; }
+    const Vector<GlyphBufferGlyph, 16>& glyphs() const { return m_glyphs; }
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static Optional<DrawGlyphs> decode(Decoder&);
@@ -922,8 +936,8 @@ private:
     void computeBounds(const Font&);
 
     RenderingResourceIdentifier m_fontIdentifier;
-    Vector<GlyphBufferGlyph, 128> m_glyphs;
-    Vector<GlyphBufferAdvance, 128> m_advances;
+    Vector<GlyphBufferGlyph, 16> m_glyphs;
+    Vector<GlyphBufferAdvance, 16> m_advances;
     FloatRect m_bounds;
     FloatPoint m_localAnchor;
     FontSmoothingMode m_smoothingMode;
@@ -1885,52 +1899,77 @@ private:
     FloatRect m_rect;
 };
 
-class PutImageData {
+class GetPixelBuffer {
 public:
-    static constexpr ItemType itemType = ItemType::PutImageData;
+    static constexpr ItemType itemType = ItemType::GetPixelBuffer;
+    static constexpr bool isInlineItem = true;
+    static constexpr bool isDrawingItem = false;
+
+    GetPixelBuffer(WebCore::AlphaPremultiplication outputFormat, const WebCore::IntRect& srcRect)
+        : m_srcRect(srcRect)
+        , m_outputFormat(outputFormat)
+    {
+    }
+
+    AlphaPremultiplication outputFormat() const { return m_outputFormat; }
+    IntRect srcRect() const { return m_srcRect; }
+
+private:
+    IntRect m_srcRect;
+    AlphaPremultiplication m_outputFormat;
+};
+
+class PutPixelBuffer {
+public:
+    static constexpr ItemType itemType = ItemType::PutPixelBuffer;
     static constexpr bool isInlineItem = false;
     static constexpr bool isDrawingItem = true;
 
-    WEBCORE_EXPORT PutImageData(AlphaPremultiplication inputFormat, const ImageData&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat);
-    WEBCORE_EXPORT PutImageData(AlphaPremultiplication inputFormat, Ref<ImageData>&&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat);
+    WEBCORE_EXPORT PutPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat);
+    WEBCORE_EXPORT PutPixelBuffer(AlphaPremultiplication inputFormat, PixelBuffer&&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat);
+
+    PutPixelBuffer(const PutPixelBuffer&);
+    PutPixelBuffer(PutPixelBuffer&&) = default;
+    PutPixelBuffer& operator=(const PutPixelBuffer&);
+    PutPixelBuffer& operator=(PutPixelBuffer&&) = default;
+
+    void swap(PutPixelBuffer&);
 
     AlphaPremultiplication inputFormat() const { return m_inputFormat; }
-    ImageData& imageData() const { return *m_imageData; }
+    const PixelBuffer& pixelBuffer() const { return m_pixelBuffer; }
     IntRect srcRect() const { return m_srcRect; }
     IntPoint destPoint() const { return m_destPoint; }
     AlphaPremultiplication destFormat() const { return m_destFormat; }
-
-    NO_RETURN_DUE_TO_ASSERT void apply(GraphicsContext&) const;
 
     Optional<FloatRect> localBounds(const GraphicsContext&) const { return WTF::nullopt; }
     Optional<FloatRect> globalBounds() const { return {{ m_destPoint, m_srcRect.size() }}; }
 
     template<class Encoder> void encode(Encoder&) const;
-    template<class Decoder> static Optional<PutImageData> decode(Decoder&);
+    template<class Decoder> static Optional<PutPixelBuffer> decode(Decoder&);
 
 private:
     IntRect m_srcRect;
     IntPoint m_destPoint;
-    RefPtr<ImageData> m_imageData;
+    PixelBuffer m_pixelBuffer;
     AlphaPremultiplication m_inputFormat;
     AlphaPremultiplication m_destFormat;
 };
 
 template<class Encoder>
-void PutImageData::encode(Encoder& encoder) const
+void PutPixelBuffer::encode(Encoder& encoder) const
 {
     encoder << m_inputFormat;
-    encoder << makeRef(*m_imageData);
+    encoder << m_pixelBuffer;
     encoder << m_srcRect;
     encoder << m_destPoint;
     encoder << m_destFormat;
 }
 
 template<class Decoder>
-Optional<PutImageData> PutImageData::decode(Decoder& decoder)
+Optional<PutPixelBuffer> PutPixelBuffer::decode(Decoder& decoder)
 {
     Optional<AlphaPremultiplication> inputFormat;
-    Optional<Ref<ImageData>> imageData;
+    Optional<PixelBuffer> pixelBuffer;
     Optional<IntRect> srcRect;
     Optional<IntPoint> destPoint;
     Optional<AlphaPremultiplication> destFormat;
@@ -1939,8 +1978,8 @@ Optional<PutImageData> PutImageData::decode(Decoder& decoder)
     if (!inputFormat)
         return WTF::nullopt;
 
-    decoder >> imageData;
-    if (!imageData)
+    decoder >> pixelBuffer;
+    if (!pixelBuffer)
         return WTF::nullopt;
 
     decoder >> srcRect;
@@ -1955,9 +1994,10 @@ Optional<PutImageData> PutImageData::decode(Decoder& decoder)
     if (!destFormat)
         return WTF::nullopt;
 
-    return {{ *inputFormat, WTFMove(*imageData), *srcRect, *destPoint, *destFormat }};
+    return {{ *inputFormat, WTFMove(*pixelBuffer), *srcRect, *destPoint, *destFormat }};
 }
 
+#if ENABLE(VIDEO)
 class PaintFrameForMedia {
 public:
     static constexpr ItemType itemType = ItemType::PaintFrameForMedia;
@@ -1980,6 +2020,7 @@ private:
     MediaPlayerIdentifier m_identifier;
     FloatRect m_destination;
 };
+#endif
 
 class StrokeRect {
 public:
@@ -2247,6 +2288,83 @@ private:
     RenderingResourceIdentifier m_identifier;
 };
 
+using DisplayListItem = Variant
+    < ApplyDeviceScaleFactor
+    , BeginClipToDrawingCommands
+    , BeginTransparencyLayer
+    , ClearRect
+    , ClearShadow
+    , Clip
+    , ClipOut
+    , ClipOutToPath
+    , ClipPath
+    , ClipToImageBuffer
+    , ConcatenateCTM
+    , DrawDotsForDocumentMarker
+    , DrawEllipse
+    , DrawFocusRingPath
+    , DrawFocusRingRects
+    , DrawGlyphs
+    , DrawImageBuffer
+    , DrawLine
+    , DrawLinesForText
+    , DrawNativeImage
+    , DrawPath
+    , DrawPattern
+    , DrawRect
+    , EndClipToDrawingCommands
+    , EndTransparencyLayer
+    , FillCompositedRect
+    , FillEllipse
+    , FillPath
+    , FillRect
+    , FillRectWithColor
+    , FillRectWithGradient
+    , FillRectWithRoundedHole
+    , FillRoundedRect
+    , FlushContext
+    , GetPixelBuffer
+    , MetaCommandChangeDestinationImageBuffer
+    , MetaCommandChangeItemBuffer
+    , PutPixelBuffer
+    , Restore
+    , Rotate
+    , Save
+    , Scale
+    , SetCTM
+    , SetInlineFillColor
+    , SetInlineFillGradient
+    , SetInlineStrokeColor
+    , SetLineCap
+    , SetLineDash
+    , SetLineJoin
+    , SetMiterLimit
+    , SetState
+    , SetStrokeThickness
+    , StrokeEllipse
+    , StrokeLine
+    , StrokePath
+    , StrokeRect
+    , Translate
+
+#if ENABLE(INLINE_PATH_DATA)
+    , FillInlinePath
+    , StrokeInlinePath
+#endif
+
+#if ENABLE(VIDEO)
+    , PaintFrameForMedia
+#endif
+
+#if USE(CG)
+    , ApplyFillPattern
+    , ApplyStrokePattern
+#endif
+>;
+
+size_t paddedSizeOfTypeAndItemInBytes(const DisplayListItem&);
+ItemType displayListItemType(const DisplayListItem&);
+
 TextStream& operator<<(TextStream&, ItemHandle);
 
 } // namespace DisplayList
@@ -2307,8 +2425,11 @@ template<> struct EnumTraits<WebCore::DisplayList::ItemType> {
     WebCore::DisplayList::ItemType::FlushContext,
     WebCore::DisplayList::ItemType::MetaCommandChangeDestinationImageBuffer,
     WebCore::DisplayList::ItemType::MetaCommandChangeItemBuffer,
-    WebCore::DisplayList::ItemType::PutImageData,
+    WebCore::DisplayList::ItemType::GetPixelBuffer,
+    WebCore::DisplayList::ItemType::PutPixelBuffer,
+#if ENABLE(VIDEO)
     WebCore::DisplayList::ItemType::PaintFrameForMedia,
+#endif
     WebCore::DisplayList::ItemType::StrokeRect,
     WebCore::DisplayList::ItemType::StrokeLine,
 #if ENABLE(INLINE_PATH_DATA)
@@ -2325,6 +2446,7 @@ template<> struct EnumTraits<WebCore::DisplayList::ItemType> {
 #endif
     WebCore::DisplayList::ItemType::ApplyDeviceScaleFactor
     >;
+
 };
 
 } // namespace WTF

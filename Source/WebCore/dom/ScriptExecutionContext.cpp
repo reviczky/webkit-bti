@@ -28,6 +28,7 @@
 #include "config.h"
 #include "ScriptExecutionContext.h"
 
+#include "CSSValuePool.h"
 #include "CachedScript.h"
 #include "CommonVM.h"
 #include "DOMTimer.h"
@@ -35,6 +36,8 @@
 #include "DatabaseContext.h"
 #include "Document.h"
 #include "ErrorEvent.h"
+#include "FontCache.h"
+#include "FontLoadRequest.h"
 #include "JSDOMExceptionHandling.h"
 #include "JSDOMWindow.h"
 #include "JSWorkerGlobalScope.h"
@@ -226,6 +229,21 @@ void ScriptExecutionContext::didLoadResourceSynchronously(const URL&)
 {
 }
 
+FontCache& ScriptExecutionContext::fontCache()
+{
+    return FontCache::singleton();
+}
+
+CSSValuePool& ScriptExecutionContext::cssValuePool()
+{
+    return CSSValuePool::singleton();
+}
+
+std::unique_ptr<FontLoadRequest> ScriptExecutionContext::fontLoadRequest(String&, bool, bool, LoadedFromOpaqueSource)
+{
+    return nullptr;
+}
+
 void ScriptExecutionContext::forEachActiveDOMObject(const Function<ShouldContinue(ActiveDOMObject&)>& apply) const
 {
     // It is not allowed to run arbitrary script or construct new ActiveDOMObjects while we are iterating over ActiveDOMObjects.
@@ -397,10 +415,26 @@ void ScriptExecutionContext::reportUnhandledPromiseRejection(JSC::JSGlobalObject
 
     JSC::VM& vm = state.vm();
     auto scope = DECLARE_CATCH_SCOPE(vm);
-
     JSC::JSValue result = promise.result(vm);
     String resultMessage = retrieveErrorMessage(state, vm, result, scope);
-    String errorMessage = makeString("Unhandled Promise Rejection: ", resultMessage);
+    String errorMessage;
+
+    auto tryMakeErrorString = [&] (unsigned length) -> String {
+        bool addEllipsis = length != resultMessage.length();
+        return tryMakeString("Unhandled Promise Rejection: ", StringView(resultMessage).left(length), addEllipsis ? "..." : "");
+    };
+
+    if (!!resultMessage && !scope.exception()) {
+        constexpr unsigned maxLength = 200;
+        constexpr unsigned shortLength = 10;
+        errorMessage = tryMakeErrorString(std::min(resultMessage.length(), maxLength));
+        if (!errorMessage && resultMessage.length() > shortLength)
+            errorMessage = tryMakeErrorString(shortLength);
+    }
+
+    if (!errorMessage)
+        errorMessage = "Unhandled Promise Rejection"_s;
+
     std::unique_ptr<Inspector::ConsoleMessage> message;
     if (callStack)
         message = makeUnique<Inspector::ConsoleMessage>(MessageSource::JS, MessageType::Log, MessageLevel::Error, errorMessage, callStack.releaseNonNull());

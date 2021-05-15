@@ -58,7 +58,6 @@ public:
     unsigned typeProfilingStartOffset(VM&) const;
     unsigned typeProfilingEndOffset(VM&) const;
 
-    bool usesEval() const { return m_features & EvalFeature; }
     bool usesArguments() const { return m_features & ArgumentsFeature; }
     bool isArrowFunctionContext() const { return m_isArrowFunctionContext; }
     DerivedContextType derivedContextType() const { return static_cast<DerivedContextType>(m_derivedContextType); }
@@ -130,16 +129,6 @@ private:
 
 protected:
     ScriptExecutable(Structure*, VM&, const SourceCode&, bool isInStrictContext, DerivedContextType, bool isInArrowFunctionContext, bool isInsideOrdinaryFunction, EvalContextType, Intrinsic);
-
-    void finishCreation(VM& vm)
-    {
-        Base::finishCreation(vm);
-
-#if ENABLE(CODEBLOCK_SAMPLING)
-        if (SamplingTool* sampler = vm.interpreter->sampler())
-            sampler->notifyOfScope(vm, this);
-#endif
-    }
 
     void recordParse(CodeFeatures features, bool hasCapturedVariables)
     {

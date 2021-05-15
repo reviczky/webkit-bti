@@ -108,12 +108,12 @@ messages -> WebPage LegacyReceiver {
     SetAllowsMediaDocumentInlinePlayback(bool allows)
     HandleTwoFingerTapAtPoint(WebCore::IntPoint point, OptionSet<WebKit::WebEvent::Modifier> modifiers, uint64_t requestID)
     SetForceAlwaysUserScalable(bool userScalable)
-    GetRectsForGranularityWithSelectionOffset(enum:uint8_t WebCore::TextGranularity granularity, int32_t offset) -> (Vector<WebCore::SelectionRect> rect) Async
-    GetRectsAtSelectionOffsetWithText(int32_t offset, String text) -> (Vector<WebCore::SelectionRect> rect) Async
+    GetRectsForGranularityWithSelectionOffset(enum:uint8_t WebCore::TextGranularity granularity, int32_t offset) -> (Vector<WebCore::SelectionGeometry> rect) Async
+    GetRectsAtSelectionOffsetWithText(int32_t offset, String text) -> (Vector<WebCore::SelectionGeometry> rect) Async
     StoreSelectionForAccessibility(bool shouldStore)
     StartAutoscrollAtPosition(WebCore::FloatPoint positionInWindow)
     CancelAutoscroll()
-    RequestFocusedElementInformation() -> (struct WebKit::FocusedElementInformation info) Async
+    RequestFocusedElementInformation() -> (Optional<WebKit::FocusedElementInformation> info) Async
     HardwareKeyboardAvailabilityChanged(bool keyboardIsAttached)
     SetIsShowingInputViewForFocusedElement(bool showingInputView)
     UpdateSelectionWithDelta(int64_t locationDelta, int64_t lengthDelta) -> () Async
@@ -249,6 +249,9 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
 
     SuspendActiveDOMObjectsAndAnimations()
     ResumeActiveDOMObjectsAndAnimations()
+
+    Suspend() -> (bool success) Async
+    Resume() -> (bool success) Async
 
     Close()
     TryClose() -> (bool shouldClose) Async
@@ -390,9 +393,6 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     SuspendAllMediaPlayback() -> () Async
     ResumeAllMediaPlayback() -> () Async
 
-    # Notification
-    DidReceiveNotificationPermissionDecision(uint64_t notificationID, bool allowed)
-
     FreezeLayerTreeDueToSwipeAnimation()
     UnfreezeLayerTreeDueToSwipeAnimation()
 
@@ -415,9 +415,9 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
 
     # Media
     SetMediaVolume(float volume)
-    SetMuted(WebCore::MediaProducer::MutedStateFlags muted)
+    SetMuted(WebCore::MediaProducer::MutedStateFlags muted) -> () Async
     SetMayStartMediaWhenInWindow(bool mayStartMedia)
-    StopMediaCapture()
+    StopMediaCapture(WebCore::MediaProducer::MediaCaptureKind kind) -> () Async
 
     SetCanRunBeforeUnloadConfirmPanel(bool canRunBeforeUnloadConfirmPanel)
     SetCanRunModal(bool canRunModal)
@@ -559,7 +559,8 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
 
     RegisterURLSchemeHandler(uint64_t identifier, String scheme)
 
-    URLSchemeTaskDidPerformRedirection(uint64_t handlerIdentifier, uint64_t taskIdentifier, WebCore::ResourceResponse response, WebCore::ResourceRequest request)
+    URLSchemeTaskWillPerformRedirection(uint64_t handlerIdentifier, uint64_t taskIdentifier, WebCore::ResourceResponse response, WebCore::ResourceRequest proposedRequest) -> (WebCore::ResourceRequest actualRequest) Async
+    URLSchemeTaskDidPerformRedirection(uint64_t handlerIdentifier, uint64_t taskIdentifier, WebCore::ResourceResponse response, WebCore::ResourceRequest proposedRequest)
     URLSchemeTaskDidReceiveResponse(uint64_t handlerIdentifier, uint64_t taskIdentifier, WebCore::ResourceResponse response)
     URLSchemeTaskDidReceiveData(uint64_t handlerIdentifier, uint64_t taskIdentifier, IPC::SharedBufferDataReference data)
     URLSchemeTaskDidComplete(uint64_t handlerIdentifier, uint64_t taskIdentifier, WebCore::ResourceError error)
@@ -626,11 +627,20 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     SetCanUseCredentialStorage(bool canUse)
 
 #if ENABLE(APP_HIGHLIGHTS)
-    CreateAppHighlightInSelectedRange(enum:bool WebCore::CreateNewGroupForHighlight createNewGroup)
-    RestoreAppHighlights(Vector<WebKit::SharedMemory::IPCHandle> memoryHandles)
+    CreateAppHighlightInSelectedRange(enum:bool WebCore::CreateNewGroupForHighlight createNewGroup, enum:bool WebCore::HighlightRequestOriginatedInApp requestOrigin)
+    RestoreAppHighlightsAndScrollToIndex(Vector<WebKit::SharedMemory::IPCHandle> memoryHandles, Optional<unsigned> index)
+    SetAppHighlightsVisibility(enum:bool WebCore::HighlightVisibility highlightVisibility)
 #endif
 
     DispatchWheelEventWithoutScrolling(WebKit::WebWheelEvent event) -> (bool handled) Async
 
     LastNavigationWasAppBound() -> (bool wasAppBound) Async
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+    CreateMediaSessionCoordinator(String identifier) -> (bool success) Async
+#endif
+
+#if ENABLE(IMAGE_EXTRACTION)
+    UpdateWithImageExtractionResult(struct WebCore::ImageExtractionResult result, struct WebCore::ElementContext element, WebCore::FloatPoint location) -> (bool textExistsAtLocation) Async
+#endif
 }

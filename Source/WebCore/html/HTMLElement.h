@@ -35,12 +35,17 @@ class FormAssociatedElement;
 class FormNamedItem;
 class HTMLFormElement;
 class VisibleSelection;
+struct SimpleRange;
 
 #if ENABLE(IMAGE_EXTRACTION)
 struct ImageExtractionResult;
 #endif
 
 enum class EnterKeyHint : uint8_t;
+
+#if PLATFORM(IOS_FAMILY)
+enum class SelectionRenderingBehavior : uint8_t;
+#endif
 
 class HTMLElement : public StyledElement {
     WTF_MAKE_ISO_ALLOCATED(HTMLElement);
@@ -62,6 +67,7 @@ public:
 
     virtual bool draggable() const;
     WEBCORE_EXPORT void setDraggable(bool);
+    virtual bool isDraggableIgnoringAttributes() const { return false; }
 
     WEBCORE_EXPORT bool spellcheck() const;
     WEBCORE_EXPORT void setSpellcheck(bool);
@@ -86,8 +92,8 @@ public:
     bool hasDirectionAuto() const;
     TextDirection directionalityIfhasDirAutoAttribute(bool& isAuto) const;
 
-    virtual bool isHTMLUnknownElement() const { return false; }
     virtual bool isTextControlInnerTextElement() const { return false; }
+    virtual bool isSearchFieldResultsButtonElement() const { return false; }
 
     bool willRespondToMouseMoveEvents() override;
     bool willRespondToMouseWheelEvents() override;
@@ -127,11 +133,19 @@ public:
     String enterKeyHint() const;
     void setEnterKeyHint(const String& value);
 
-    static bool shouldUpdateSelectionForMouseDrag(const Node& targetNode, const VisibleSelection& selectionBeforeUpdate);
-    bool hasImageOverlay() const;
+    WEBCORE_EXPORT static bool shouldExtendSelectionToTargetNode(const Node& targetNode, const VisibleSelection& selectionBeforeUpdate);
+    WEBCORE_EXPORT bool hasImageOverlay() const;
+    WEBCORE_EXPORT static bool isInsideImageOverlay(const SimpleRange&);
+    WEBCORE_EXPORT static bool isInsideImageOverlay(const Node&);
+    WEBCORE_EXPORT static bool isImageOverlayText(const Node&);
+    WEBCORE_EXPORT static bool isImageOverlayText(const Node*);
 
 #if ENABLE(IMAGE_EXTRACTION)
     WEBCORE_EXPORT void updateWithImageExtractionResult(ImageExtractionResult&&);
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    static SelectionRenderingBehavior selectionRenderingBehavior(const Node*);
 #endif
 
 protected:

@@ -26,8 +26,6 @@
 #include "config.h"
 #include "UniqueIDBDatabase.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBBindingUtilities.h"
 #include "IDBCursorInfo.h"
 #include "IDBGetAllRecordsData.h"
@@ -293,24 +291,10 @@ void UniqueIDBDatabase::deleteBackingStore()
 {
     ASSERT(!isMainThread());
     LOG(IndexedDB, "UniqueIDBDatabase::deleteBackingStore");
-
-    uint64_t deletedVersion = 0;
-
-    if (m_backingStore) {
-        m_backingStore->deleteBackingStore();
-        m_backingStore = nullptr;
-    } else {
-        auto backingStore = m_server.createBackingStore(m_identifier);
-
-        IDBDatabaseInfo databaseInfo;
-        auto error = backingStore->getOrEstablishDatabaseInfo(databaseInfo);
-        if (!error.isNull())
-            LOG_ERROR("Error getting database info from database %s that we are trying to delete", m_identifier.loggingString().utf8().data());
-
-        deletedVersion = databaseInfo.version();
-        backingStore->deleteBackingStore();
-    }
-
+    
+    auto backingStore = m_backingStore ? std::exchange(m_backingStore, nullptr) : m_server.createBackingStore(m_identifier);
+    uint64_t deletedVersion = backingStore->databaseVersion();
+    backingStore->deleteBackingStore();
     didDeleteBackingStore(deletedVersion);
 }
 
@@ -1205,7 +1189,6 @@ void UniqueIDBDatabase::immediateClose()
 void UniqueIDBDatabase::abortActiveTransactions()
 {
     ASSERT(isMainThread());
-    ASSERT(m_server.lock().isHeld());
 
     for (auto& identifier : copyToVector(m_inProgressTransactions.keys())) {
         auto transaction = m_inProgressTransactions.get(identifier);
@@ -1251,5 +1234,3 @@ RefPtr<ServerOpenDBRequest> UniqueIDBDatabase::takeNextRunnableRequest(RequestTy
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

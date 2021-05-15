@@ -176,6 +176,12 @@ void SWServer::addRegistrationFromStore(ServiceWorkerContextData&& data)
     });
 }
 
+void SWServer::didSaveWorkerScriptsToDisk(ServiceWorkerIdentifier serviceWorkerIdentifier, ScriptBuffer&& mainScript, HashMap<URL, ScriptBuffer>&& importedScripts)
+{
+    if (auto worker = workerByID(serviceWorkerIdentifier))
+        worker->didSaveScriptsToDisk(WTFMove(mainScript), WTFMove(importedScripts));
+}
+
 void SWServer::addRegistration(std::unique_ptr<SWServerRegistration>&& registration)
 {
     m_originStore->add(registration->key().topOrigin());
@@ -435,9 +441,17 @@ URL static inline originURL(const SecurityOrigin& origin)
     return url;
 }
 
-void SWServer::startScriptFetch(const ServiceWorkerJobData& jobData, bool shouldRefreshCache)
+void SWServer::startScriptFetch(const ServiceWorkerJobData& jobData, SWServerRegistration& registration)
 {
     LOG(ServiceWorker, "Server issuing startScriptFetch for current job %s in client", jobData.identifier().loggingString().utf8().data());
+
+    // Set request's cache mode to "no-cache" if any of the following are true:
+    // - registration's update via cache mode is not "all".
+    // - job's force bypass cache flag is set.
+    // - newestWorker is not null, and registration's last update check time is not null and the time difference in seconds calculated by the
+    //   current time minus registration's last update check time is greater than 86400.
+    bool shouldRefreshCache = registration.updateViaCache() != ServiceWorkerUpdateViaCache::All || (registration.getNewestWorker() && registration.isStale());
+
     auto* connection = m_connections.get(jobData.connectionIdentifier());
     if (connection) {
         connection->startScriptFetchInClient(jobData.identifier().jobIdentifier, jobData.registrationKey(), shouldRefreshCache ? FetchOptions::Cache::NoCache : FetchOptions::Cache::Default);
@@ -460,6 +474,7 @@ void SWServer::startScriptFetch(const ServiceWorkerJobData& jobData, bool should
         request.setHTTPReferrer(originURL(origin).string());
         request.setHTTPUserAgent(serviceWorkerClientUserAgent(ClientOrigin { jobData.topOrigin, SecurityOrigin::create(jobData.scriptURL)->data() }));
         request.setPriority(ResourceLoadPriority::Low);
+        request.setIsAppBound(registration.isAppBound());
 
         m_softUpdateCallback(ServiceWorkerJobData { jobData }, shouldRefreshCache, WTFMove(request), [this, weakThis = makeWeakPtr(this)](auto& result) {
             if (!weakThis)
@@ -631,7 +646,7 @@ void SWServer::removeClientServiceWorkerRegistration(Connection& connection, Ser
         registration->removeClientServiceWorkerRegistration(connection.identifier());
 }
 
-void SWServer::updateWorker(const ServiceWorkerJobDataIdentifier& jobDataIdentifier, SWServerRegistration& registration, const URL& url, const String& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, const String& referrerPolicy, WorkerType type, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
+void SWServer::updateWorker(const ServiceWorkerJobDataIdentifier& jobDataIdentifier, SWServerRegistration& registration, const URL& url, const ScriptBuffer& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, const String& referrerPolicy, WorkerType type, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
 {
     tryInstallContextData(ServiceWorkerContextData { jobDataIdentifier, registration.data(), ServiceWorkerIdentifier::generate(), script, certificateInfo, contentSecurityPolicy, referrerPolicy, url, type, false, WTFMove(scriptResourceMap) });
 }

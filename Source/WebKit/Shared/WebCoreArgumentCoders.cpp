@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +28,9 @@
 
 #include "DataReference.h"
 #include "ShareableBitmap.h"
+#include "ShareableResource.h"
 #include "SharedBufferDataReference.h"
+#include "StreamConnectionEncoder.h"
 #include <JavaScriptCore/GenericTypedArrayViewInlines.h>
 #include <JavaScriptCore/JSGenericTypedArrayViewInlines.h>
 #include <WebCore/AuthenticationChallenge.h>
@@ -51,6 +53,7 @@
 #include <WebCore/FileChooser.h>
 #include <WebCore/FilterOperation.h>
 #include <WebCore/FilterOperations.h>
+#include <WebCore/FloatQuad.h>
 #include <WebCore/Font.h>
 #include <WebCore/FontAttributes.h>
 #include <WebCore/GraphicsContext.h>
@@ -72,6 +75,7 @@
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
+#include <WebCore/ScriptBuffer.h>
 #include <WebCore/ScrollingConstraints.h>
 #include <WebCore/ScrollingCoordinator.h>
 #include <WebCore/SearchPopupMenu.h>
@@ -99,8 +103,7 @@
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-#include <WebCore/FloatQuad.h>
-#include <WebCore/SelectionRect.h>
+#include <WebCore/SelectionGeometry.h>
 #include <WebCore/SharedBuffer.h>
 #endif // PLATFORM(IOS_FAMILY)
 
@@ -113,6 +116,10 @@
 #include <WebCore/MediaConstraints.h>
 #endif
 
+#if ENABLE(IMAGE_EXTRACTION)
+#include <WebCore/ImageExtractionResult.h>
+#endif
+
 // FIXME: Seems like we could use std::tuple to cut down the code below a lot!
 
 namespace IPC {
@@ -121,7 +128,12 @@ using namespace WebKit;
 
 static void encodeSharedBuffer(Encoder& encoder, const SharedBuffer* buffer)
 {
-    uint64_t bufferSize = buffer ? buffer->size() : 0;
+    bool isNull = !buffer;
+    encoder << isNull;
+    if (isNull)
+        return;
+
+    uint64_t bufferSize = buffer->size();
     encoder << bufferSize;
     if (!bufferSize)
         return;
@@ -143,12 +155,24 @@ static void encodeSharedBuffer(Encoder& encoder, const SharedBuffer* buffer)
 
 static WARN_UNUSED_RETURN bool decodeSharedBuffer(Decoder& decoder, RefPtr<SharedBuffer>& buffer)
 {
+    Optional<bool> isNull;
+    decoder >> isNull;
+    if (!isNull)
+        return false;
+
+    if (*isNull) {
+        buffer = nullptr;
+        return true;
+    }
+
     uint64_t bufferSize = 0;
     if (!decoder.decode(bufferSize))
         return false;
 
-    if (!bufferSize)
+    if (!bufferSize) {
+        buffer = SharedBuffer::create();
         return true;
+    }
 
 #if USE(UNIX_DOMAIN_SOCKETS)
     if (!decoder.bufferIsLargeEnoughToContain<uint8_t>(bufferSize))
@@ -741,10 +765,16 @@ Optional<IntRect> ArgumentCoder<IntRect>::decode(Decoder& decoder)
     return rect;
 }
 
+template<typename Encoder>
 void ArgumentCoder<IntSize>::encode(Encoder& encoder, const IntSize& intSize)
 {
     SimpleArgumentCoder<IntSize>::encode(encoder, intSize);
 }
+
+template
+void ArgumentCoder<IntSize>::encode<Encoder>(Encoder&, const IntSize&);
+template
+void ArgumentCoder<IntSize>::encode<StreamConnectionEncoder>(StreamConnectionEncoder&, const IntSize&);
 
 bool ArgumentCoder<IntSize>::decode(Decoder& decoder, IntSize& intSize)
 {
@@ -1276,78 +1306,85 @@ bool ArgumentCoder<ResourceError>::decode(Decoder& decoder, ResourceError& resou
 
 #if PLATFORM(IOS_FAMILY)
 
-void ArgumentCoder<SelectionRect>::encode(Encoder& encoder, const SelectionRect& selectionRect)
+void ArgumentCoder<SelectionGeometry>::encode(Encoder& encoder, const SelectionGeometry& selectionGeometry)
 {
-    encoder << selectionRect.rect();
-    encoder << static_cast<uint32_t>(selectionRect.direction());
-    encoder << selectionRect.minX();
-    encoder << selectionRect.maxX();
-    encoder << selectionRect.maxY();
-    encoder << selectionRect.lineNumber();
-    encoder << selectionRect.isLineBreak();
-    encoder << selectionRect.isFirstOnLine();
-    encoder << selectionRect.isLastOnLine();
-    encoder << selectionRect.containsStart();
-    encoder << selectionRect.containsEnd();
-    encoder << selectionRect.isHorizontal();
+    encoder << selectionGeometry.quad();
+    encoder << selectionGeometry.behavior();
+    encoder << static_cast<uint32_t>(selectionGeometry.direction());
+    encoder << selectionGeometry.minX();
+    encoder << selectionGeometry.maxX();
+    encoder << selectionGeometry.maxY();
+    encoder << selectionGeometry.lineNumber();
+    encoder << selectionGeometry.isLineBreak();
+    encoder << selectionGeometry.isFirstOnLine();
+    encoder << selectionGeometry.isLastOnLine();
+    encoder << selectionGeometry.containsStart();
+    encoder << selectionGeometry.containsEnd();
+    encoder << selectionGeometry.isHorizontal();
 }
 
-Optional<SelectionRect> ArgumentCoder<SelectionRect>::decode(Decoder& decoder)
+Optional<SelectionGeometry> ArgumentCoder<SelectionGeometry>::decode(Decoder& decoder)
 {
-    SelectionRect selectionRect;
-    IntRect rect;
-    if (!decoder.decode(rect))
+    SelectionGeometry selectionGeometry;
+    FloatQuad quad;
+    if (!decoder.decode(quad))
         return WTF::nullopt;
-    selectionRect.setRect(rect);
+    selectionGeometry.setQuad(quad);
+
+    Optional<SelectionRenderingBehavior> behavior;
+    decoder >> behavior;
+    if (!behavior)
+        return WTF::nullopt;
+    selectionGeometry.setBehavior(*behavior);
 
     uint32_t direction;
     if (!decoder.decode(direction))
         return WTF::nullopt;
-    selectionRect.setDirection((TextDirection)direction);
+    selectionGeometry.setDirection((TextDirection)direction);
 
     int intValue;
     if (!decoder.decode(intValue))
         return WTF::nullopt;
-    selectionRect.setMinX(intValue);
+    selectionGeometry.setMinX(intValue);
 
     if (!decoder.decode(intValue))
         return WTF::nullopt;
-    selectionRect.setMaxX(intValue);
+    selectionGeometry.setMaxX(intValue);
 
     if (!decoder.decode(intValue))
         return WTF::nullopt;
-    selectionRect.setMaxY(intValue);
+    selectionGeometry.setMaxY(intValue);
 
     if (!decoder.decode(intValue))
         return WTF::nullopt;
-    selectionRect.setLineNumber(intValue);
+    selectionGeometry.setLineNumber(intValue);
 
     bool boolValue;
     if (!decoder.decode(boolValue))
         return WTF::nullopt;
-    selectionRect.setIsLineBreak(boolValue);
+    selectionGeometry.setIsLineBreak(boolValue);
 
     if (!decoder.decode(boolValue))
         return WTF::nullopt;
-    selectionRect.setIsFirstOnLine(boolValue);
+    selectionGeometry.setIsFirstOnLine(boolValue);
 
     if (!decoder.decode(boolValue))
         return WTF::nullopt;
-    selectionRect.setIsLastOnLine(boolValue);
+    selectionGeometry.setIsLastOnLine(boolValue);
 
     if (!decoder.decode(boolValue))
         return WTF::nullopt;
-    selectionRect.setContainsStart(boolValue);
+    selectionGeometry.setContainsStart(boolValue);
 
     if (!decoder.decode(boolValue))
         return WTF::nullopt;
-    selectionRect.setContainsEnd(boolValue);
+    selectionGeometry.setContainsEnd(boolValue);
 
     if (!decoder.decode(boolValue))
         return WTF::nullopt;
-    selectionRect.setIsHorizontal(boolValue);
+    selectionGeometry.setIsHorizontal(boolValue);
 
-    return selectionRect;
+    return selectionGeometry;
 }
 
 #endif
@@ -1571,7 +1608,7 @@ bool ArgumentCoder<PasteboardCustomData::Entry>::decode(Decoder& decoder, Pasteb
 
     if (hasBuffer) {
         RefPtr<SharedBuffer> value;
-        if (!decodeSharedBuffer(decoder, value))
+        if (!decodeSharedBuffer(decoder, value) || !value)
             return false;
         data.platformData = { value.releaseNonNull() };
     }
@@ -1643,6 +1680,7 @@ void ArgumentCoder<InspectorOverlay::Highlight>::encode(Encoder& encoder, const 
     encoder << highlight.borderColor;
     encoder << highlight.marginColor;
     encoder << highlight.quads;
+    encoder << highlight.gridHighlightOverlays;
 }
 
 bool ArgumentCoder<InspectorOverlay::Highlight>::decode(Decoder& decoder, InspectorOverlay::Highlight& highlight)
@@ -1665,6 +1703,8 @@ bool ArgumentCoder<InspectorOverlay::Highlight>::decode(Decoder& decoder, Inspec
     if (!decoder.decode(highlight.marginColor))
         return false;
     if (!decoder.decode(highlight.quads))
+        return false;
+    if (!decoder.decode(highlight.gridHighlightOverlays))
         return false;
     return true;
 }
@@ -2428,17 +2468,17 @@ void ArgumentCoder<MediaPlaybackTargetContext>::encode(Encoder& encoder, const M
     bool hasPlatformData = target.encodingRequiresPlatformData();
     encoder << hasPlatformData;
 
-    int32_t targetType = target.type();
-    encoder << targetType;
+    MediaPlaybackTargetContext::Type contextType = target.type();
+    encoder << contextType;
 
     if (target.encodingRequiresPlatformData()) {
         encodePlatformData(encoder, target);
         return;
     }
 
-    ASSERT(targetType == MediaPlaybackTargetContext::MockType);
-    encoder << target.mockDeviceName();
-    encoder << static_cast<int32_t>(target.mockState());
+    ASSERT(contextType == MediaPlaybackTargetContext::Type::Mock);
+    encoder << target.deviceName();
+    encoder << target.mockState();
 }
 
 bool ArgumentCoder<MediaPlaybackTargetContext>::decode(Decoder& decoder, MediaPlaybackTargetContext& target)
@@ -2447,24 +2487,24 @@ bool ArgumentCoder<MediaPlaybackTargetContext>::decode(Decoder& decoder, MediaPl
     if (!decoder.decode(hasPlatformData))
         return false;
 
-    int32_t targetType;
-    if (!decoder.decode(targetType))
+    MediaPlaybackTargetContext::Type contextType;
+    if (!decoder.decode(contextType))
         return false;
 
     if (hasPlatformData)
-        return decodePlatformData(decoder, target);
+        return decodePlatformData(decoder, contextType, target);
 
-    ASSERT(targetType == MediaPlaybackTargetContext::MockType);
-
-    String mockDeviceName;
-    if (!decoder.decode(mockDeviceName))
+    ASSERT(contextType == MediaPlaybackTargetContext::Type::Mock);
+    String deviceName;
+    if (!decoder.decode(deviceName))
         return false;
 
-    int32_t mockState;
+    MediaPlaybackTargetContext::MockState mockState;
     if (!decoder.decode(mockState))
         return false;
 
-    target = MediaPlaybackTargetContext(mockDeviceName, static_cast<MediaPlaybackTargetContext::State>(mockState));
+    target = MediaPlaybackTargetContext(deviceName, mockState);
+
     return true;
 }
 #endif
@@ -2706,7 +2746,6 @@ bool ArgumentCoder<MediaConstraints>::decode(Decoder& decoder, WebCore::MediaCon
 }
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
 void ArgumentCoder<IDBKeyPath>::encode(Encoder& encoder, const IDBKeyPath& keyPath)
 {
     bool isString = WTF::holds_alternative<String>(keyPath);
@@ -2735,7 +2774,6 @@ bool ArgumentCoder<IDBKeyPath>::decode(Decoder& decoder, IDBKeyPath& keyPath)
     }
     return true;
 }
-#endif
 
 #if ENABLE(SERVICE_WORKER)
 void ArgumentCoder<ServiceWorkerOrClientData>::encode(Encoder& encoder, const ServiceWorkerOrClientData& data)
@@ -2803,31 +2841,6 @@ bool ArgumentCoder<ServiceWorkerOrClientIdentifier>::decode(Decoder& decoder, Se
     }
     return true;
 }
-#endif
-
-#if ENABLE(CSS_SCROLL_SNAP)
-
-void ArgumentCoder<ScrollOffsetRange<float>>::encode(Encoder& encoder, const ScrollOffsetRange<float>& range)
-{
-    encoder << range.start;
-    encoder << range.end;
-}
-
-auto ArgumentCoder<ScrollOffsetRange<float>>::decode(Decoder& decoder) -> Optional<WebCore::ScrollOffsetRange<float>>
-{
-    WebCore::ScrollOffsetRange<float> range;
-    float start;
-    if (!decoder.decode(start))
-        return WTF::nullopt;
-
-    float end;
-    if (!decoder.decode(end))
-        return WTF::nullopt;
-
-    range.start = start;
-    range.end = end;
-    return range;
-}
 
 #endif
 
@@ -2854,9 +2867,6 @@ Optional<MediaSelectionOption> ArgumentCoder<MediaSelectionOption>::decode(Decod
 
 void ArgumentCoder<PromisedAttachmentInfo>::encode(Encoder& encoder, const PromisedAttachmentInfo& info)
 {
-    encoder << info.blobURL;
-    encoder << info.contentType;
-    encoder << info.fileName;
 #if ENABLE(ATTACHMENT_ELEMENT)
     encoder << info.attachmentIdentifier;
 #endif
@@ -2865,15 +2875,6 @@ void ArgumentCoder<PromisedAttachmentInfo>::encode(Encoder& encoder, const Promi
 
 bool ArgumentCoder<PromisedAttachmentInfo>::decode(Decoder& decoder, PromisedAttachmentInfo& info)
 {
-    if (!decoder.decode(info.blobURL))
-        return false;
-
-    if (!decoder.decode(info.contentType))
-        return false;
-
-    if (!decoder.decode(info.fileName))
-        return false;
-
 #if ENABLE(ATTACHMENT_ELEMENT)
     if (!decoder.decode(info.attachmentIdentifier))
         return false;
@@ -2885,28 +2886,17 @@ bool ArgumentCoder<PromisedAttachmentInfo>::decode(Decoder& decoder, PromisedAtt
     return true;
 }
 
-void ArgumentCoder<Vector<RefPtr<SecurityOrigin>>>::encode(Encoder& encoder, const Vector<RefPtr<SecurityOrigin>>& origins)
+void ArgumentCoder<RefPtr<SecurityOrigin>>::encode(Encoder& encoder, const RefPtr<SecurityOrigin>& origin)
 {
-    encoder << static_cast<uint64_t>(origins.size());
-    for (auto& origin : origins)
-        encoder << *origin;
+    encoder << *origin;
 }
     
-bool ArgumentCoder<Vector<RefPtr<SecurityOrigin>>>::decode(Decoder& decoder, Vector<RefPtr<SecurityOrigin>>& origins)
+Optional<RefPtr<SecurityOrigin>> ArgumentCoder<RefPtr<SecurityOrigin>>::decode(Decoder& decoder)
 {
-    uint64_t dataSize;
-    if (!decoder.decode(dataSize))
-        return false;
-
-    for (uint64_t i = 0; i < dataSize; ++i) {
-        auto decodedOriginRefPtr = SecurityOrigin::decode(decoder);
-        if (!decodedOriginRefPtr)
-            return false;
-        origins.append(decodedOriginRefPtr.releaseNonNull());
-    }
-    origins.shrinkToFit();
-
-    return true;
+    auto origin = SecurityOrigin::decode(decoder);
+    if (!origin)
+        return WTF::nullopt;
+    return origin;
 }
 
 void ArgumentCoder<FontAttributes>::encode(Encoder& encoder, const FontAttributes& attributes)
@@ -3041,6 +3031,70 @@ Optional<Ref<SharedBuffer>> ArgumentCoder<Ref<WebCore::SharedBuffer>>::decode(De
     return buffer.releaseNonNull();
 }
 
+#if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
+static ShareableResource::Handle tryConvertToShareableResourceHandle(const ScriptBuffer& script)
+{
+    if (!script.containsSingleFileMappedSegment())
+        return ShareableResource::Handle { };
+
+    auto& segment = script.buffer()->begin()->segment;
+    auto sharedMemory = SharedMemory::wrapMap(const_cast<char*>(segment->data()), segment->size(), SharedMemory::Protection::ReadOnly);
+    if (!sharedMemory)
+        return ShareableResource::Handle { };
+
+    auto shareableResource = ShareableResource::create(sharedMemory.releaseNonNull(), 0, segment->size());
+    if (!shareableResource)
+        return ShareableResource::Handle { };
+
+    ShareableResource::Handle shareableResourceHandle;
+    shareableResource->createHandle(shareableResourceHandle);
+    return shareableResourceHandle;
+}
+
+static Optional<WebCore::ScriptBuffer> decodeScriptBufferAsShareableResourceHandle(Decoder& decoder)
+{
+    ShareableResource::Handle handle;
+    if (!decoder.decode(handle) || handle.isNull())
+        return WTF::nullopt;
+    auto buffer = handle.tryWrapInSharedBuffer();
+    if (!buffer)
+        return WTF::nullopt;
+    return WebCore::ScriptBuffer { WTFMove(buffer) };
+}
+#endif
+
+void ArgumentCoder<WebCore::ScriptBuffer>::encode(Encoder& encoder, const WebCore::ScriptBuffer& script)
+{
+#if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
+    auto handle = tryConvertToShareableResourceHandle(script);
+    bool isShareableResourceHandle = !handle.isNull();
+    encoder << isShareableResourceHandle;
+    if (isShareableResourceHandle) {
+        encoder << handle;
+        return;
+    }
+#endif
+    encodeSharedBuffer(encoder, script.buffer());
+}
+
+Optional<WebCore::ScriptBuffer> ArgumentCoder<WebCore::ScriptBuffer>::decode(Decoder& decoder)
+{
+#if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
+    Optional<bool> isShareableResourceHandle;
+    decoder >> isShareableResourceHandle;
+    if (!isShareableResourceHandle)
+        return WTF::nullopt;
+    if (*isShareableResourceHandle)
+        return decodeScriptBufferAsShareableResourceHandle(decoder);
+#endif
+
+    RefPtr<SharedBuffer> buffer;
+    if (!decodeSharedBuffer(decoder, buffer))
+        return WTF::nullopt;
+
+    return WebCore::ScriptBuffer { WTFMove(buffer) };
+}
+
 #if ENABLE(ENCRYPTED_MEDIA)
 void ArgumentCoder<WebCore::CDMInstanceSession::Message>::encode(Encoder& encoder, const WebCore::CDMInstanceSession::Message& message)
 {
@@ -3062,97 +3116,7 @@ Optional<WebCore::CDMInstanceSession::Message>  ArgumentCoder<WebCore::CDMInstan
 
     return makeOptional<WebCore::CDMInstanceSession::Message>({ type, buffer.releaseNonNull() });
 }
-
-void ArgumentCoder<WebCore::CDMInstanceSession::KeyStatusVector>::encode(Encoder& encoder, const WebCore::CDMInstanceSession::KeyStatusVector& keyStatuses)
-{
-    encoder << static_cast<uint64_t>(keyStatuses.size());
-    for (auto& keyStatus : keyStatuses) {
-        RefPtr<SharedBuffer> key = keyStatus.first.copyRef();
-        encoder << key << keyStatus.second;
-    }
-}
-
-Optional<WebCore::CDMInstanceSession::KeyStatusVector> ArgumentCoder<WebCore::CDMInstanceSession::KeyStatusVector>::decode(Decoder& decoder)
-{
-    uint64_t dataSize;
-    if (!decoder.decode(dataSize))
-        return WTF::nullopt;
-
-    WebCore::CDMInstanceSession::KeyStatusVector keyStatuses;
-    keyStatuses.reserveInitialCapacity(dataSize);
-
-    for (uint64_t i = 0; i < dataSize; ++i) {
-        RefPtr<SharedBuffer> key;
-        if (!decoder.decode(key) || !key)
-            return WTF::nullopt;
-
-        WebCore::CDMInstanceSessionClient::KeyStatus status;
-        if (!decoder.decode(status))
-            return WTF::nullopt;
-
-        keyStatuses.uncheckedAppend({ key.releaseNonNull(), status });
-    }
-    return keyStatuses;
-}
 #endif // ENABLE(ENCRYPTED_MEDIA)
-
-void ArgumentCoder<Ref<WebCore::ImageData>>::encode(Encoder& encoder, const Ref<WebCore::ImageData>& imageData)
-{
-    encoder << imageData->size();
-
-    auto rawData = imageData->data();
-    encoder << static_cast<uint64_t>(rawData->byteLength());
-    encoder.encodeFixedLengthData(rawData->data(), rawData->byteLength(), 1);
-}
-
-Optional<Ref<WebCore::ImageData>> ArgumentCoder<Ref<WebCore::ImageData>>::decode(Decoder& decoder)
-{
-    Optional<IntSize> imageDataSize;
-    decoder >> imageDataSize;
-    if (!imageDataSize)
-        return WTF::nullopt;
-
-    Optional<uint64_t> dataLength;
-    decoder >> dataLength;
-    if (!dataLength)
-        return WTF::nullopt;
-
-    auto rawData = Uint8ClampedArray::createUninitialized(*dataLength);
-    if (!decoder.decodeFixedLengthData(rawData->data(), rawData->length(), 1))
-        return WTF::nullopt;
-
-    auto imageData = ImageData::create(*imageDataSize, WTFMove(rawData));
-    if (!imageData)
-        return WTF::nullopt;
-
-    return { imageData.releaseNonNull() };
-}
-
-void ArgumentCoder<RefPtr<WebCore::ImageData>>::encode(Encoder& encoder, const RefPtr<WebCore::ImageData>& imageData)
-{
-    if (!imageData) {
-        encoder << false;
-        return;
-    }
-
-    encoder << true;
-    ArgumentCoder<Ref<WebCore::ImageData>>::encode(encoder, imageData.copyRef().releaseNonNull());
-}
-
-Optional<RefPtr<WebCore::ImageData>> ArgumentCoder<RefPtr<WebCore::ImageData>>::decode(Decoder& decoder)
-{
-    bool isEngaged;
-    if (!decoder.decode(isEngaged))
-        return WTF::nullopt;
-
-    if (!isEngaged)
-        return RefPtr<WebCore::ImageData>();
-
-    auto result = ArgumentCoder<Ref<WebCore::ImageData>>::decode(decoder);
-    if (!result)
-        return WTF::nullopt;
-    return { WTFMove(*result) };
-}
 
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
 void ArgumentCoder<WebCore::GraphicsContextGLAttributes>::encode(Encoder& encoder, const WebCore::GraphicsContextGLAttributes& attributes)
@@ -3211,12 +3175,18 @@ Optional<WebCore::GraphicsContextGLAttributes> ArgumentCoder<WebCore::GraphicsCo
     return attributes;
 }
 
+template<typename Encoder>
 void ArgumentCoder<WebCore::GraphicsContextGL::ActiveInfo>::encode(Encoder& encoder, const WebCore::GraphicsContextGL::ActiveInfo& activeInfo)
 {
     encoder << activeInfo.name;
     encoder << activeInfo.type;
     encoder << activeInfo.size;
 }
+
+template
+void ArgumentCoder<WebCore::GraphicsContextGL::ActiveInfo>::encode<Encoder>(Encoder&, const WebCore::GraphicsContextGL::ActiveInfo&);
+template
+void ArgumentCoder<WebCore::GraphicsContextGL::ActiveInfo>::encode<StreamConnectionEncoder>(StreamConnectionEncoder&, const WebCore::GraphicsContextGL::ActiveInfo&);
 
 Optional<WebCore::GraphicsContextGL::ActiveInfo> ArgumentCoder<WebCore::GraphicsContextGL::ActiveInfo>::decode(Decoder& decoder)
 {
@@ -3231,5 +3201,30 @@ Optional<WebCore::GraphicsContextGL::ActiveInfo> ArgumentCoder<WebCore::Graphics
 }
 
 #endif
+
+#if ENABLE(IMAGE_EXTRACTION) && ENABLE(DATA_DETECTION)
+
+void ArgumentCoder<ImageExtractionDataDetectorInfo>::encode(Encoder& encoder, const ImageExtractionDataDetectorInfo& info)
+{
+    encodePlatformData(encoder, info);
+    encoder << info.normalizedQuads;
+}
+
+Optional<ImageExtractionDataDetectorInfo> ArgumentCoder<ImageExtractionDataDetectorInfo>::decode(Decoder& decoder)
+{
+    ImageExtractionDataDetectorInfo result;
+    if (!decodePlatformData(decoder, result))
+        return WTF::nullopt;
+
+    Optional<Vector<FloatQuad>> normalizedQuads;
+    decoder >> normalizedQuads;
+    if (!normalizedQuads)
+        return WTF::nullopt;
+
+    result.normalizedQuads = WTFMove(*normalizedQuads);
+    return WTFMove(result);
+}
+
+#endif // ENABLE(IMAGE_EXTRACTION) && ENABLE(DATA_DETECTION)
 
 } // namespace IPC

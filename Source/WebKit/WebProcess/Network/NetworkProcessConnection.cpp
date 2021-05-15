@@ -29,6 +29,7 @@
 #include "DataReference.h"
 #include "LibWebRTCNetwork.h"
 #include "NetworkConnectionToWebProcessMessages.h"
+#include "RTCDataChannelRemoteManager.h"
 #include "StorageAreaMap.h"
 #include "StorageAreaMapMessages.h"
 #include "WebCacheStorageProvider.h"
@@ -142,13 +143,11 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
     }
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
     if (decoder.messageReceiverName() == Messages::WebIDBConnectionToServer::messageReceiverName()) {
         if (m_webIDBConnection)
             m_webIDBConnection->didReceiveMessage(connection, decoder);
         return;
     }
-#endif
 
 #if ENABLE(SERVICE_WORKER)
     if (decoder.messageReceiverName() == Messages::WebSWClientConnection::messageReceiverName()) {
@@ -174,26 +173,27 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
     didReceiveNetworkProcessConnectionMessage(connection, decoder);
 }
 
-void NetworkProcessConnection::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, std::unique_ptr<IPC::Encoder>& replyEncoder)
+bool NetworkProcessConnection::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& replyEncoder)
 {
 #if ENABLE(SERVICE_WORKER)
     if (decoder.messageReceiverName() == Messages::WebSWContextManagerConnection::messageReceiverName()) {
         ASSERT(SWContextManager::singleton().connection());
         if (auto* contextManagerConnection = SWContextManager::singleton().connection())
-            static_cast<WebSWContextManagerConnection&>(*contextManagerConnection).didReceiveSyncMessage(connection, decoder, replyEncoder);
-        return;
+            return static_cast<WebSWContextManagerConnection&>(*contextManagerConnection).didReceiveSyncMessage(connection, decoder, replyEncoder);
+        return false;
     }
 #endif
 
 #if ENABLE(APPLE_PAY_REMOTE_UI)
     if (decoder.messageReceiverName() == Messages::WebPaymentCoordinator::messageReceiverName()) {
         if (auto webPage = WebProcess::singleton().webPage(makeObjectIdentifier<PageIdentifierType>(decoder.destinationID())))
-            webPage->paymentCoordinator()->didReceiveSyncMessage(connection, decoder, replyEncoder);
-        return;
+            return webPage->paymentCoordinator()->didReceiveSyncMessage(connection, decoder, replyEncoder);
+        return false;
     }
 #endif
 
     ASSERT_NOT_REACHED();
+    return false;
 }
 
 void NetworkProcessConnection::didClose(IPC::Connection&)
@@ -202,10 +202,8 @@ void NetworkProcessConnection::didClose(IPC::Connection&)
     Ref<NetworkProcessConnection> protector(*this);
     WebProcess::singleton().networkProcessConnectionClosed(this);
 
-#if ENABLE(INDEXED_DATABASE)
     if (auto idbConnection = std::exchange(m_webIDBConnection, nullptr))
         idbConnection->connectionToServerLost();
-#endif
 
 #if ENABLE(SERVICE_WORKER)
     if (auto swConnection = std::exchange(m_swConnection, nullptr))
@@ -281,14 +279,12 @@ void NetworkProcessConnection::didCacheResource(const ResourceRequest& request, 
 }
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
 WebIDBConnectionToServer& NetworkProcessConnection::idbConnectionToServer()
 {
     if (!m_webIDBConnection)
         m_webIDBConnection = WebIDBConnectionToServer::create();
     return *m_webIDBConnection;
 }
-#endif
 
 #if ENABLE(SERVICE_WORKER)
 WebSWClientConnection& NetworkProcessConnection::serviceWorkerConnection()
@@ -318,5 +314,12 @@ void NetworkProcessConnection::broadcastConsoleMessage(MessageSource source, Mes
             frame->addConsoleMessage(source, level, message);
     }
 }
+
+#if ENABLE(WEB_RTC)
+void NetworkProcessConnection::connectToRTCDataChannelRemoteSource(WebCore::RTCDataChannelIdentifier localIdentifier, WebCore::RTCDataChannelIdentifier remoteIdentifier, CompletionHandler<void(Optional<bool>)>&& callback)
+{
+    callback(RTCDataChannelRemoteManager::sharedManager().connectToRemoteSource(localIdentifier, remoteIdentifier));
+}
+#endif
 
 } // namespace WebKit

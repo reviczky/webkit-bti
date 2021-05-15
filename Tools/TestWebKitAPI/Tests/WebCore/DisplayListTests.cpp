@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +27,9 @@
 
 #include <WebCore/DisplayList.h>
 #include <WebCore/DisplayListItems.h>
+#include <WebCore/DisplayListIterator.h>
 #include <WebCore/Gradient.h>
+#include <WebCore/InMemoryDisplayList.h>
 
 namespace TestWebKitAPI {
 using namespace WebCore;
@@ -58,7 +60,7 @@ static Path createComplexPath()
 
 TEST(DisplayListTests, AppendItems)
 {
-    DisplayList list;
+    InMemoryDisplayList list;
 
     EXPECT_TRUE(list.isEmpty());
 
@@ -78,42 +80,43 @@ TEST(DisplayListTests, AppendItems)
     EXPECT_FALSE(list.isEmpty());
 
     bool observedUnexpectedItem = false;
-    for (auto [handle, extent, size] : list) {
-        switch (handle->type()) {
+    for (auto displayListItem : list) {
+        auto handle = displayListItem->item;
+        switch (handle.type()) {
         case ItemType::SetStrokeThickness: {
-            EXPECT_FALSE(handle->isDrawingItem());
-            EXPECT_TRUE(handle->is<SetStrokeThickness>());
-            auto& item = handle->get<SetStrokeThickness>();
+            EXPECT_FALSE(handle.isDrawingItem());
+            EXPECT_TRUE(handle.is<SetStrokeThickness>());
+            auto& item = handle.get<SetStrokeThickness>();
             EXPECT_EQ(item.thickness(), 1.5);
             break;
         }
         case ItemType::FillPath: {
-            EXPECT_TRUE(handle->isDrawingItem());
-            EXPECT_TRUE(handle->is<FillPath>());
-            auto& item = handle->get<FillPath>();
+            EXPECT_TRUE(handle.isDrawingItem());
+            EXPECT_TRUE(handle.is<FillPath>());
+            auto& item = handle.get<FillPath>();
             EXPECT_EQ(item.path().platformPath(), path.platformPath());
             break;
         }
         case ItemType::FillRectWithGradient: {
-            EXPECT_TRUE(handle->isDrawingItem());
-            EXPECT_TRUE(handle->is<FillRectWithGradient>());
-            auto& item = handle->get<FillRectWithGradient>();
+            EXPECT_TRUE(handle.isDrawingItem());
+            EXPECT_TRUE(handle.is<FillRectWithGradient>());
+            auto& item = handle.get<FillRectWithGradient>();
             EXPECT_EQ(item.rect(), FloatRect(1., 1., 10., 10.));
             EXPECT_EQ(&item.gradient(), gradient.ptr());
             break;
         }
         case ItemType::SetInlineFillColor: {
-            EXPECT_FALSE(handle->isDrawingItem());
-            EXPECT_TRUE(handle->is<SetInlineFillColor>());
-            auto& item = handle->get<SetInlineFillColor>();
+            EXPECT_FALSE(handle.isDrawingItem());
+            EXPECT_TRUE(handle.is<SetInlineFillColor>());
+            auto& item = handle.get<SetInlineFillColor>();
             EXPECT_EQ(item.color(), Color::red);
             break;
         }
 #if ENABLE(INLINE_PATH_DATA)
         case ItemType::StrokeInlinePath: {
-            EXPECT_TRUE(handle->isDrawingItem());
-            EXPECT_TRUE(handle->is<StrokeInlinePath>());
-            auto& item = handle->get<StrokeInlinePath>();
+            EXPECT_TRUE(handle.isDrawingItem());
+            EXPECT_TRUE(handle.is<StrokeInlinePath>());
+            auto& item = handle.get<StrokeInlinePath>();
             const auto path = item.path();
             auto& line = path.inlineData<LineData>();
             EXPECT_EQ(line.start, FloatPoint(0, 0));
@@ -147,12 +150,13 @@ TEST(DisplayListTests, AppendItems)
 
     list.append<FillRectWithColor>(FloatRect { 0, 0, 100, 100 }, Color::black);
 
-    for (auto [handle, extent, size] : list) {
-        EXPECT_EQ(handle->type(), ItemType::FillRectWithColor);
-        EXPECT_TRUE(handle->is<FillRectWithColor>());
+    for (auto displayListItem : list) {
+        auto handle = displayListItem->item;
+        EXPECT_EQ(handle.type(), ItemType::FillRectWithColor);
+        EXPECT_TRUE(handle.is<FillRectWithColor>());
 
-        auto& item = handle->get<FillRectWithColor>();
-        EXPECT_EQ(item.color().asInline(), Color::black);
+        auto& item = handle.get<FillRectWithColor>();
+        EXPECT_EQ(*item.color().tryGetAsSRGBABytes(), Color::black);
         EXPECT_EQ(item.rect(), FloatRect(0, 0, 100, 100));
     }
 
@@ -198,21 +202,19 @@ TEST(DisplayListTests, ItemBufferClient)
             return { globalBufferIdentifier, globalItemBuffer, globalItemBufferCapacity };
         }
 
-        RefPtr<SharedBuffer> encodeItem(ItemHandle handle) const final
+        RefPtr<SharedBuffer> encodeItemOutOfLine(const DisplayListItem& displayListItem) const final
         {
             auto index = m_items.size();
-            m_items.append(handle.get<StrokePath>());
+            m_items.append(WTF::get<StrokePath>(displayListItem));
             return SharedBuffer::create(reinterpret_cast<uint8_t*>(&index), sizeof(size_t));
         }
-
-        void didAppendData(const ItemBufferHandle&, size_t, DidChangeItemBuffer) final { }
 
         Vector<StrokePath>& m_items;
     };
 
     DisplayList list;
     StrokePathWriter writer { strokePathItems };
-    list.setItemBufferClient(&writer);
+    list.setItemBufferWritingClient(&writer);
 
     auto path = createComplexPath();
     list.append<SetInlineStrokeColor>(Color::blue);
@@ -222,11 +224,11 @@ TEST(DisplayListTests, ItemBufferClient)
 
     DisplayList shallowCopy {{ ItemBufferHandle { globalBufferIdentifier, globalItemBuffer, list.sizeInBytes() } }};
     StrokePathReader reader { strokePathItems };
-    shallowCopy.setItemBufferClient(&reader);
+    shallowCopy.setItemBufferReadingClient(&reader);
 
     Vector<ItemType> itemTypes;
-    for (auto [handle, extent, size] : shallowCopy)
-        itemTypes.append(handle->type());
+    for (auto displayListItem : shallowCopy)
+        itemTypes.append(displayListItem->item.type());
 
     EXPECT_FALSE(shallowCopy.isEmpty());
     EXPECT_EQ(itemTypes.size(), 4U);

@@ -50,6 +50,8 @@
 #include <wtf/Lock.h>
 
 #if ENABLE(WEBGL2)
+#include "WebGLSampler.h"
+#include "WebGLTransformFeedback.h"
 #include "WebGLVertexArrayObject.h"
 #endif
 
@@ -378,7 +380,8 @@ public:
     void forceLostContext(LostContextMode);
     void forceRestoreContext();
     void loseContextImpl(LostContextMode);
-    WEBCORE_EXPORT void simulateContextChanged();
+    using SimulatedEventForTesting = GraphicsContextGL::SimulatedEventForTesting;
+    WEBCORE_EXPORT void simulateEventForTesting(SimulatedEventForTesting);
 
     GraphicsContextGL* graphicsContextGL() const { return m_context.get(); }
     WebGLContextGroup* contextGroup() const { return m_contextGroup.get(); }
@@ -388,7 +391,7 @@ public:
 
     void prepareForDisplayWithPaint() final;
     void paintRenderingResultsToCanvas() final;
-    RefPtr<ImageData> paintRenderingResultsToImageData();
+    Optional<PixelBuffer> paintRenderingResultsToPixelBuffer();
 
     void removeSharedObject(WebGLSharedObject&);
     void removeContextObject(WebGLContextObject&);
@@ -401,9 +404,6 @@ public:
     void drawArraysInstanced(GCGLenum mode, GCGLint first, GCGLsizei count, GCGLsizei primcount);
     void drawElementsInstanced(GCGLenum mode, GCGLsizei count, GCGLenum type, long long offset, GCGLsizei primcount);
     void vertexAttribDivisor(GCGLuint index, GCGLuint divisor);
-
-    // Used for testing only, from Internals.
-    WEBCORE_EXPORT void setFailNextGPUStatusCheck();
 
     // GraphicsContextGL::Client
     void didComposite() override;

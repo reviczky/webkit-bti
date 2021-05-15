@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,6 +31,7 @@
 #include "ArithProfile.h"
 #include "ArrayConstructor.h"
 #include "ArrayPrototype.h"
+#include "BooleanConstructor.h"
 #include "BuiltinNames.h"
 #include "ByValInfo.h"
 #include "BytecodeGenerator.h"
@@ -574,7 +575,7 @@ private:
                 break;
             if (operand.offset() < static_cast<int>(inlineCallFrame->stackOffset + CallFrame::headerSizeInRegisters))
                 continue;
-            if (operand.offset() >= static_cast<int>(inlineCallFrame->stackOffset + CallFrame::thisArgumentOffset() + inlineCallFrame->argumentsWithFixup.size()))
+            if (operand.offset() >= static_cast<int>(inlineCallFrame->stackOffset + CallFrame::thisArgumentOffset() + inlineCallFrame->m_argumentsWithFixup.size()))
                 continue;
             int argument = VirtualRegister(operand.offset() - inlineCallFrame->stackOffset).toArgument();
             return stack->m_argumentPositions[argument];
@@ -597,7 +598,7 @@ private:
         int numArguments;
         if (inlineCallFrame) {
             ASSERT(!m_graph.hasDebuggerEnabled());
-            numArguments = inlineCallFrame->argumentsWithFixup.size();
+            numArguments = inlineCallFrame->m_argumentsWithFixup.size();
             if (inlineCallFrame->isClosureCall)
                 addFlushDirect(inlineCallFrame, remapOperand(inlineCallFrame, CallFrameSlot::callee));
             if (inlineCallFrame->isVarargs())
@@ -748,15 +749,8 @@ private:
 
     NodeOrigin currentNodeOrigin()
     {
-        CodeOrigin semantic;
-        CodeOrigin forExit;
-
-        if (m_currentSemanticOrigin.isSet())
-            semantic = m_currentSemanticOrigin;
-        else
-            semantic = currentCodeOrigin();
-
-        forExit = currentCodeOrigin();
+        CodeOrigin semantic = m_currentSemanticOrigin.isSet() ? m_currentSemanticOrigin : currentCodeOrigin();
+        CodeOrigin forExit = m_currentExitOrigin.isSet() ? m_currentExitOrigin : currentCodeOrigin();
 
         return NodeOrigin(semantic, forExit, m_exitOK);
     }
@@ -1146,6 +1140,8 @@ private:
     BytecodeIndex m_currentIndex;
     // The semantic origin of the current node if different from the current Index.
     CodeOrigin m_currentSemanticOrigin;
+    // The exit origin of the current node if different from the current Index.
+    CodeOrigin m_currentExitOrigin;
     // True if it's OK to OSR exit right now.
     bool m_exitOK { false };
 
@@ -1189,6 +1185,7 @@ private:
         // direct, caller).
         Vector<unsigned> m_identifierRemap;
         Vector<unsigned> m_switchRemap;
+        Vector<unsigned> m_stringSwitchRemap;
         
         // These are blocks whose terminal is a Jump, Branch or Switch, and whose target has not yet been linked.
         // Their terminal instead refers to a bytecode index, and the right BB can be found in m_blockLinkingTargets.
@@ -1497,7 +1494,7 @@ bool ByteCodeParser::handleRecursiveTailCall(Node* callTargetNode, CallVariant c
 
             // Some code may statically use the argument count from the InlineCallFrame, so it would be invalid to loop back if it does not match.
             // We "continue" instead of returning false in case another stack entry further on the stack has the right number of arguments.
-            if (argumentCountIncludingThis != static_cast<int>(callFrame->argumentCountIncludingThis))
+            if (argumentCountIncludingThis != callFrame->argumentCountIncludingThis)
                 continue;
             // If the target InlineCallFrame is Varargs, we do not know how many arguments are actually filled by LoadVarargs. Varargs InlineCallFrame's
             // argumentCountIncludingThis is maximum number of potentially filled arguments by xkLoadVarargs. We "continue" to the upper frame which may be
@@ -1507,7 +1504,7 @@ bool ByteCodeParser::handleRecursiveTailCall(Node* callTargetNode, CallVariant c
         } else {
             // We are in the machine code entry (i.e. the original caller).
             // If we have more arguments than the number of parameters to the function, it is not clear where we could put them on the stack.
-            if (argumentCountIncludingThis > m_codeBlock->numParameters())
+            if (static_cast<unsigned>(argumentCountIncludingThis) > m_codeBlock->numParameters())
                 return false;
         }
 
@@ -1533,8 +1530,8 @@ bool ByteCodeParser::handleRecursiveTailCall(Node* callTargetNode, CallVariant c
         // We must set the arguments to the right values
         if (!stackEntry->m_inlineCallFrame)
             addToGraph(SetArgumentCountIncludingThis, OpInfo(argumentCountIncludingThis));
-        int argIndex = 0;
-        for (; argIndex < argumentCountIncludingThis; ++argIndex) {
+        unsigned argIndex = 0;
+        for (; argIndex < static_cast<unsigned>(argumentCountIncludingThis); ++argIndex) {
             Node* value = get(virtualRegisterForArgumentIncludingThis(argIndex, registerOffset));
             setDirect(stackEntry->remapOperand(virtualRegisterForArgumentIncludingThis(argIndex)), value, NormalSet);
         }
@@ -1544,7 +1541,7 @@ bool ByteCodeParser::handleRecursiveTailCall(Node* callTargetNode, CallVariant c
 
         // We must repeat the work of op_enter here as we will jump right after it.
         // We jump right after it and not before it, because of some invariant saying that a CFG root cannot have predecessors in the IR.
-        for (int i = 0; i < stackEntry->m_codeBlock->numVars(); ++i)
+        for (unsigned i = 0; i < stackEntry->m_codeBlock->numVars(); ++i)
             setDirect(stackEntry->remapOperand(virtualRegisterForLocal(i)), undefined, NormalSet);
 
         // We want to emit the SetLocals with an exit origin that points to the place we are jumping to.
@@ -1600,7 +1597,7 @@ unsigned ByteCodeParser::inliningCost(CallVariant callee, int argumentCountInclu
     }
 
     if (!Options::useArityFixupInlining()) {
-        if (codeBlock->numParameters() > argumentCountIncludingThis) {
+        if (codeBlock->numParameters() > static_cast<unsigned>(argumentCountIncludingThis)) {
             VERBOSE_LOG("    Failing because of arity mismatch.\n");
             return UINT_MAX;
         }
@@ -1713,6 +1710,31 @@ void ByteCodeParser::inlineCall(Node* callTargetNode, Operand result, CallVarian
         calleeVariable->mergeShouldNeverUnbox(true);
     }
 
+    // We want to claim the exit origin for the arity fixup nodes to be in the caller rather than the callee because
+    // otherwise phantom insertion phase will think the virtual registers in the callee's header have been alive from the last
+    // time they were set. For example:
+
+    // --> foo: loc10 is a local in foo.
+    //    ...
+    //    1: MovHint(loc10)
+    //    2: SetLocal(loc10)
+    // <-- foo: loc10 ten is now out of scope for the InlineCallFrame of the caller.
+    // ...
+    // --> bar: loc10 is an argument to bar and needs arity fixup.
+    //    ... // All of these nodes are ExitInvalid
+    //    3: MovHint(loc10, ExitInvalid)
+    //    4: SetLocal(loc10, ExitInvalid)
+    //    ...
+
+    // In this example phantom insertion phase will think @3 is always alive because it's in the header of bar. So,
+    // it will think we are about to kill the old value, as loc10 is in the header of bar and therefore always live, and
+    // thus need a Phantom. That Phantom, however, may be inserted  into the caller's NodeOrigin (all the nodes in bar
+    // before @3 are ExitInvalid), which doesn't know about loc10. If we move all of the arity fixup nodes into the
+    // caller's exit origin, forAllKilledOperands, which is how phantom insertion phase decides where phantoms are needed,
+    // will no longer say loc10 is always alive.
+    CodeOrigin oldExitOrigin = m_currentExitOrigin;
+    m_currentExitOrigin = currentCodeOrigin();
+
     InlineStackEntry* callerStackTop = m_inlineStackTop;
     InlineStackEntry inlineStackEntry(this, codeBlock, codeBlock, callee.function(), result,
         inlineCallFrameStart.virtualRegister(), argumentCountIncludingThis, kind, continuationBlock);
@@ -1815,6 +1837,8 @@ void ByteCodeParser::inlineCall(Node* callTargetNode, Operand result, CallVarian
         // At this point, it's OK to OSR exit because we finished setting up
         // our callee's frame. We emit an ExitOK below.
     }
+
+    m_currentExitOrigin = oldExitOrigin;
 
     // At this point, it's again OK to OSR exit.
     m_exitOK = true;
@@ -4067,6 +4091,22 @@ bool ByteCodeParser::handleConstantInternalFunction(
 
         return true;
     }
+
+    if (function->classInfo(*m_vm) == BooleanConstructor::info()) {
+        if (kind == CodeForConstruct)
+            return false;
+
+        insertChecks();
+
+        Node* resultNode;
+        if (argumentCountIncludingThis <= 1)
+            resultNode = jsConstant(jsBoolean(false));
+        else
+            resultNode = addToGraph(ToBoolean, get(virtualRegisterForArgumentIncludingThis(1, registerOffset)));
+
+        set(result, resultNode);
+        return true;
+    }
     
     if (function->classInfo(*m_vm) == StringConstructor::info()) {
         insertChecks();
@@ -4198,8 +4238,15 @@ bool ByteCodeParser::needsDynamicLookup(ResolveType type, OpcodeID opcode)
         return true;
 
     switch (type) {
-    case GlobalProperty:
     case GlobalVar:
+    case GlobalVarWithVarInjectionChecks: {
+        if (opcode == op_put_to_scope && globalObject->varReadOnlyWatchpoint()->hasBeenInvalidated())
+            return true;
+
+        return false;
+    }
+
+    case GlobalProperty:    
     case GlobalLexicalVar:
     case ClosureVar:
     case LocalClosureVar:
@@ -4234,7 +4281,6 @@ bool ByteCodeParser::needsDynamicLookup(ResolveType type, OpcodeID opcode)
         return true;
 
     case GlobalPropertyWithVarInjectionChecks:
-    case GlobalVarWithVarInjectionChecks:
     case GlobalLexicalVarWithVarInjectionChecks:
     case ClosureVarWithVarInjectionChecks:
         return false;
@@ -5372,7 +5418,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
         case op_enter: {
             Node* undefined = addToGraph(JSConstant, OpInfo(m_constantUndefined));
             // Initialize all locals to undefined.
-            for (int i = 0; i < m_inlineStackTop->m_codeBlock->numVars(); ++i)
+            for (unsigned i = 0; i < m_inlineStackTop->m_codeBlock->numVars(); ++i)
                 set(virtualRegisterForLocal(i), undefined, ImmediateNakedSet);
 
             NEXT_OPCODE(op_enter);
@@ -5609,9 +5655,8 @@ void ByteCodeParser::parseBlock(unsigned limit)
             auto bytecode = currentInstruction->as<OpNewArrayBuffer>();
             // Unfortunately, we can't allocate a new JSImmutableButterfly if the profile tells us new information because we
             // cannot allocate from compilation threads.
-            WTF::loadLoadFence();
             FrozenValue* frozen = get(VirtualRegister(bytecode.m_immutableButterfly))->constant();
-            WTF::loadLoadFence();
+            WTF::dependentLoadLoadFence();
             JSImmutableButterfly* immutableButterfly = frozen->cast<JSImmutableButterfly*>();
             NewArrayBufferData data { };
             data.indexingMode = immutableButterfly->indexingMode();
@@ -5903,7 +5948,8 @@ void ByteCodeParser::parseBlock(unsigned limit)
             // instanceof ICs because the profit of this optimization is fairly low. So, in the
             // absence of any information, it's better to avoid making this be the cause of a
             // recompilation.
-            if (JSObject* commonPrototype = status.commonPrototype()) {
+            JSObject* commonPrototype = status.commonPrototype();
+            if (commonPrototype && Options::useAccessInlining()) {
                 addToGraph(CheckIsConstant, OpInfo(m_graph.freeze(commonPrototype)), prototype);
                 
                 bool allOK = true;
@@ -6827,14 +6873,14 @@ void ByteCodeParser::parseBlock(unsigned limit)
             data.kind = SwitchImm;
             data.switchTableIndex = m_inlineStackTop->m_switchRemap[bytecode.m_tableIndex];
             data.fallThrough.setBytecodeIndex(m_currentIndex.offset() + jumpTarget(bytecode.m_defaultOffset));
-            SimpleJumpTable& table = m_codeBlock->switchJumpTable(data.switchTableIndex);
-            for (unsigned i = 0; i < table.branchOffsets.size(); ++i) {
-                if (!table.branchOffsets[i])
+            const UnlinkedSimpleJumpTable& unlinkedTable = m_graph.unlinkedSwitchJumpTable(data.switchTableIndex);
+            for (unsigned i = 0; i < unlinkedTable.m_branchOffsets.size(); ++i) {
+                if (!unlinkedTable.m_branchOffsets[i])
                     continue;
-                unsigned target = m_currentIndex.offset() + table.branchOffsets[i];
+                unsigned target = m_currentIndex.offset() + unlinkedTable.m_branchOffsets[i];
                 if (target == data.fallThrough.bytecodeIndex())
                     continue;
-                data.cases.append(SwitchCase::withBytecodeIndex(m_graph.freeze(jsNumber(static_cast<int32_t>(table.min + i))), target));
+                data.cases.append(SwitchCase::withBytecodeIndex(m_graph.freeze(jsNumber(static_cast<int32_t>(unlinkedTable.m_min + i))), target));
             }
             addToGraph(Switch, OpInfo(&data), get(bytecode.m_scrutinee));
             flushIfTerminal(data);
@@ -6847,15 +6893,15 @@ void ByteCodeParser::parseBlock(unsigned limit)
             data.kind = SwitchChar;
             data.switchTableIndex = m_inlineStackTop->m_switchRemap[bytecode.m_tableIndex];
             data.fallThrough.setBytecodeIndex(m_currentIndex.offset() + jumpTarget(bytecode.m_defaultOffset));
-            SimpleJumpTable& table = m_codeBlock->switchJumpTable(data.switchTableIndex);
-            for (unsigned i = 0; i < table.branchOffsets.size(); ++i) {
-                if (!table.branchOffsets[i])
+            const UnlinkedSimpleJumpTable& unlinkedTable = m_graph.unlinkedSwitchJumpTable(data.switchTableIndex);
+            for (unsigned i = 0; i < unlinkedTable.m_branchOffsets.size(); ++i) {
+                if (!unlinkedTable.m_branchOffsets[i])
                     continue;
-                unsigned target = m_currentIndex.offset() + table.branchOffsets[i];
+                unsigned target = m_currentIndex.offset() + unlinkedTable.m_branchOffsets[i];
                 if (target == data.fallThrough.bytecodeIndex())
                     continue;
                 data.cases.append(
-                    SwitchCase::withBytecodeIndex(LazyJSValue::singleCharacterString(table.min + i), target));
+                    SwitchCase::withBytecodeIndex(LazyJSValue::singleCharacterString(unlinkedTable.m_min + i), target));
             }
             addToGraph(Switch, OpInfo(&data), get(bytecode.m_scrutinee));
             flushIfTerminal(data);
@@ -6866,17 +6912,15 @@ void ByteCodeParser::parseBlock(unsigned limit)
             auto bytecode = currentInstruction->as<OpSwitchString>();
             SwitchData& data = *m_graph.m_switchData.add();
             data.kind = SwitchString;
-            data.switchTableIndex = bytecode.m_tableIndex;
+            data.switchTableIndex = m_inlineStackTop->m_stringSwitchRemap[bytecode.m_tableIndex];
             data.fallThrough.setBytecodeIndex(m_currentIndex.offset() + jumpTarget(bytecode.m_defaultOffset));
-            StringJumpTable& table = m_codeBlock->stringSwitchJumpTable(data.switchTableIndex);
-            StringJumpTable::StringOffsetTable::iterator iter;
-            StringJumpTable::StringOffsetTable::iterator end = table.offsetTable.end();
-            for (iter = table.offsetTable.begin(); iter != end; ++iter) {
-                unsigned target = m_currentIndex.offset() + iter->value.branchOffset;
+            const UnlinkedStringJumpTable& unlinkedTable = m_graph.unlinkedStringSwitchJumpTable(data.switchTableIndex);
+            for (const auto& entry : unlinkedTable.m_offsetTable) {
+                unsigned target = m_currentIndex.offset() + entry.value.m_branchOffset;
                 if (target == data.fallThrough.bytecodeIndex())
                     continue;
                 data.cases.append(
-                    SwitchCase::withBytecodeIndex(LazyJSValue::knownStringImpl(iter->key.get()), target));
+                    SwitchCase::withBytecodeIndex(LazyJSValue::knownStringImpl(entry.key.get()), target));
             }
             addToGraph(Switch, OpInfo(&data), get(bytecode.m_scrutinee));
             flushIfTerminal(data);
@@ -6987,7 +7031,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
             }
 
             Vector<std::pair<VirtualRegister, Node*>> localsToSet;
-            localsToSet.reserveInitialCapacity(buffer->m_size); // Note: This will reserve more than the number of locals we see below because the buffer includes arguments.
+            localsToSet.reserveInitialCapacity(buffer->size()); // Note: This will reserve more than the number of locals we see below because the buffer includes arguments.
 
             // We're not allowed to exit here since we would not properly recover values.
             // We first need to bootstrap the catch entrypoint state.
@@ -7908,6 +7952,8 @@ void ByteCodeParser::parseBlock(unsigned limit)
                     Node* value = addToGraph(GetGlobalLexicalVariable, OpInfo(operand), OpInfo(prediction));
                     addToGraph(CheckNotEmpty, value);
                 }
+                if (resolveType == GlobalVar || resolveType == GlobalVarWithVarInjectionChecks)
+                    m_graph.watchpoints().addLazily(globalObject->varReadOnlyWatchpoint());
 
                 JSSegmentedVariableObject* scopeObject = jsCast<JSSegmentedVariableObject*>(JSScope::constantScopeForCodeBlock(resolveType, m_inlineStackTop->m_codeBlock));
                 if (watchpoints) {
@@ -8099,7 +8145,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
             Node* argument;
             int32_t argumentIndexIncludingThis = bytecode.m_index;
             if (inlineCallFrame && !inlineCallFrame->isVarargs()) {
-                int32_t argumentCountIncludingThisWithFixup = inlineCallFrame->argumentsWithFixup.size();
+                int32_t argumentCountIncludingThisWithFixup = inlineCallFrame->m_argumentsWithFixup.size();
                 if (argumentIndexIncludingThis < argumentCountIncludingThisWithFixup)
                     argument = get(virtualRegisterForArgumentIncludingThis(argumentIndexIncludingThis));
                 else
@@ -8199,7 +8245,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 m_inlineStackTop->m_baselineMap, m_icContextStack,
                 currentCodeOrigin(), uid);
 
-            if (status.isSimple()) {
+            if (status.isSimple() && Options::useAccessInlining()) {
                 bool allOK = true;
                 MatchStructureData* data = m_graph.m_matchStructureData.add();
                 for (const InByIdVariant& variant : status.variants()) {
@@ -8477,20 +8523,14 @@ ByteCodeParser::InlineStackEntry::InlineStackEntry(
         } else
             m_inlineCallFrame->isClosureCall = true;
         m_inlineCallFrame->directCaller = byteCodeParser->currentCodeOrigin();
-        m_inlineCallFrame->argumentsWithFixup.resizeToFit(argumentCountIncludingThisWithFixup); // Set the number of arguments including this, but don't configure the value recoveries, yet.
+        m_inlineCallFrame->m_argumentsWithFixup = FixedVector<ValueRecovery>(argumentCountIncludingThisWithFixup); // Set the number of arguments including this, but don't configure the value recoveries, yet.
         m_inlineCallFrame->kind = kind;
         
         m_identifierRemap.resize(codeBlock->numberOfIdentifiers());
-        m_switchRemap.resize(codeBlock->numberOfSwitchJumpTables());
-
         for (size_t i = 0; i < codeBlock->numberOfIdentifiers(); ++i) {
             UniquedStringImpl* rep = codeBlock->identifier(i).impl();
             unsigned index = byteCodeParser->m_graph.identifiers().ensure(rep);
             m_identifierRemap[i] = index;
-        }
-        for (unsigned i = 0; i < codeBlock->numberOfSwitchJumpTables(); ++i) {
-            m_switchRemap[i] = byteCodeParser->m_codeBlock->numberOfSwitchJumpTables();
-            byteCodeParser->m_codeBlock->addSwitchJumpTableFromProfiledCodeBlock(codeBlock->switchJumpTable(i));
         }
     } else {
         // Machine code block case.
@@ -8502,11 +8542,22 @@ ByteCodeParser::InlineStackEntry::InlineStackEntry(
         m_inlineCallFrame = nullptr;
 
         m_identifierRemap.resize(codeBlock->numberOfIdentifiers());
-        m_switchRemap.resize(codeBlock->numberOfSwitchJumpTables());
         for (size_t i = 0; i < codeBlock->numberOfIdentifiers(); ++i)
             m_identifierRemap[i] = i;
-        for (size_t i = 0; i < codeBlock->numberOfSwitchJumpTables(); ++i)
-            m_switchRemap[i] = i;
+    }
+
+    m_switchRemap.resize(codeBlock->numberOfUnlinkedSwitchJumpTables());
+    byteCodeParser->m_graph.m_switchJumpTables.resize(byteCodeParser->m_graph.m_switchJumpTables.size() + codeBlock->numberOfUnlinkedSwitchJumpTables());
+    for (unsigned i = 0; i < codeBlock->numberOfUnlinkedSwitchJumpTables(); ++i) {
+        m_switchRemap[i] = byteCodeParser->m_graph.m_unlinkedSwitchJumpTables.size();
+        byteCodeParser->m_graph.m_unlinkedSwitchJumpTables.append(&codeBlock->unlinkedSwitchJumpTable(i));
+    }
+
+    m_stringSwitchRemap.resize(codeBlock->numberOfUnlinkedStringSwitchJumpTables());
+    byteCodeParser->m_graph.m_stringSwitchJumpTables.resize(byteCodeParser->m_graph.m_stringSwitchJumpTables.size() + codeBlock->numberOfUnlinkedStringSwitchJumpTables());
+    for (unsigned i = 0; i < codeBlock->numberOfUnlinkedStringSwitchJumpTables(); ++i) {
+        m_stringSwitchRemap[i] = byteCodeParser->m_graph.m_unlinkedStringSwitchJumpTables.size();
+        byteCodeParser->m_graph.m_unlinkedStringSwitchJumpTables.append(&codeBlock->unlinkedStringSwitchJumpTable(i));
     }
     
     m_argumentPositions.resize(argumentCountIncludingThisWithFixup);

@@ -29,10 +29,7 @@
 #include "SandboxExtension.h"
 #include "SharedMemory.h"
 #include <WebCore/PageIdentifier.h>
-#include <WebCore/SharedBuffer.h>
-#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
-#include <wtf/HashSet.h>
 #include <wtf/Optional.h>
 #include <wtf/WeakHashSet.h>
 
@@ -80,11 +77,9 @@ public:
 
 private:
     WebPasteboardProxy();
-    
-    using WebProcessProxyList = HashSet<WebProcessProxy*>;
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
 
     WebProcessProxy* webProcessProxyForConnection(IPC::Connection&) const;
 
@@ -155,7 +150,7 @@ private:
     Optional<WebCore::DataOwnerType> determineDataOwner(IPC::Connection&, const String& pasteboardName, Optional<WebCore::PageIdentifier>, PasteboardAccessIntent) const;
 #endif
 
-    WebProcessProxyList m_webProcessProxyList;
+    WeakHashSet<WebProcessProxy> m_webProcessProxySet;
 
 #if PLATFORM(COCOA)
     struct PasteboardAccessInformation {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -227,7 +227,7 @@ void AssemblyHelpers::jitReleaseAssertNoException(VM& vm)
 #elif USE(JSVALUE32_64)
     noException = branch32(Equal, AbsoluteAddress(vm.addressOfException()), TrustedImm32(0));
 #endif
-    abortWithReason(JITUncoughtExceptionAfterCall);
+    abortWithReason(JITUncaughtExceptionAfterCall);
     noException.link(this);
 }
 
@@ -1022,6 +1022,85 @@ void AssemblyHelpers::sanitizeStackInline(VM& vm, GPRReg scratch)
     done.link(this);
     move(stackPointerRegister, scratch);
     storePtr(scratch, vm.addressOfLastStackTop());
+}
+
+void AssemblyHelpers::cageWithoutUntagging(Gigacage::Kind kind, GPRReg storage)
+{
+#if GIGACAGE_ENABLED
+    if (!Gigacage::isEnabled(kind))
+        return;
+
+#if CPU(ARM64E)
+    RegisterID tempReg = InvalidGPRReg;
+    Jump skip;
+    if (kind == Gigacage::Primitive) {
+        skip = branchPtr(Equal, storage, TrustedImmPtr(JSArrayBufferView::nullVectorPtr()));
+        tempReg = getCachedMemoryTempRegisterIDAndInvalidate();
+        move(storage, tempReg);
+        // Flip the registers since bitFieldInsert only inserts into the low bits.
+        std::swap(storage, tempReg);
+    }
+#endif
+    andPtr(TrustedImmPtr(Gigacage::mask(kind)), storage);
+    addPtr(TrustedImmPtr(Gigacage::basePtr(kind)), storage);
+#if CPU(ARM64E)
+    if (kind == Gigacage::Primitive)
+        bitFieldInsert64(storage, 0, 64 - numberOfPACBits, tempReg);
+    if (skip.isSet())
+        skip.link(this);
+#endif
+
+#else
+    UNUSED_PARAM(kind);
+    UNUSED_PARAM(storage);
+#endif
+}
+
+// length may be the same register as scratch.
+void AssemblyHelpers::cageConditionallyAndUntag(Gigacage::Kind kind, GPRReg storage, GPRReg length, GPRReg scratch, bool validateAuth)
+{
+#if GIGACAGE_ENABLED
+    if (Gigacage::isEnabled(kind)) {
+        if (kind != Gigacage::Primitive || Gigacage::disablingPrimitiveGigacageIsForbidden())
+            cageWithoutUntagging(kind, storage);
+        else {
+#if CPU(ARM64E)
+            if (length == scratch)
+                scratch = getCachedMemoryTempRegisterIDAndInvalidate();
+#endif
+            JumpList done;
+#if CPU(ARM64E)
+            done.append(branchPtr(Equal, storage, TrustedImmPtr(JSArrayBufferView::nullVectorPtr())));
+#endif
+            done.append(branchTest8(NonZero, AbsoluteAddress(&Gigacage::disablePrimitiveGigacageRequested)));
+
+            loadPtr(Gigacage::addressOfBasePtr(kind), scratch);
+            done.append(branchTest64(Zero, scratch));
+#if CPU(ARM64E)
+            GPRReg tempReg = getCachedDataTempRegisterIDAndInvalidate();
+            move(storage, tempReg);
+            ASSERT(LogicalImmediate::create64(Gigacage::mask(kind)).isValid());
+            andPtr(TrustedImmPtr(Gigacage::mask(kind)), tempReg);
+            addPtr(scratch, tempReg);
+            bitFieldInsert64(tempReg, 0, 64 - numberOfPACBits, storage);
+#else
+            andPtr(TrustedImmPtr(Gigacage::mask(kind)), storage);
+            addPtr(scratch, storage);
+#endif // CPU(ARM64E)
+            done.link(this);
+        }
+    }
+#endif
+
+#if CPU(ARM64E)
+    if (kind == Gigacage::Primitive)
+        untagArrayPtr(length, storage, validateAuth, scratch);
+#endif
+    UNUSED_PARAM(validateAuth);
+    UNUSED_PARAM(kind);
+    UNUSED_PARAM(storage);
+    UNUSED_PARAM(length);
+    UNUSED_PARAM(scratch);
 }
 
 } // namespace JSC

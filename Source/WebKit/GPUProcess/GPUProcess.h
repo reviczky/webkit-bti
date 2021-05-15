@@ -28,12 +28,19 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "AuxiliaryProcess.h"
+#include "SandboxExtension.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/LibWebRTCEnumTraits.h>
+#include <WebCore/Timer.h>
 #include <pal/SessionID.h>
 #include <wtf/Function.h>
 #include <wtf/MemoryPressureHandler.h>
+#include <wtf/MonotonicTime.h>
 #include <wtf/WeakPtr.h>
+
+#if PLATFORM(MAC)
+#include <CoreGraphics/CGDisplayConfiguration.h>
+#endif
 
 namespace WebCore {
 class NowPlayingManager;
@@ -46,10 +53,9 @@ class GPUConnectionToWebProcess;
 struct GPUProcessConnectionParameters;
 struct GPUProcessCreationParameters;
 struct GPUProcessSessionParameters;
-class LayerHostingContext;
 class RemoteAudioSessionProxyManager;
 
-class GPUProcess : public AuxiliaryProcess, public ThreadSafeRefCounted<GPUProcess>, public CanMakeWeakPtr<GPUProcess> {
+class GPUProcess : public AuxiliaryProcess, public ThreadSafeRefCounted<GPUProcess> {
     WTF_MAKE_NONCOPYABLE(GPUProcess);
 public:
     explicit GPUProcess(AuxiliaryProcessInitializationParameters&&);
@@ -89,6 +95,8 @@ public:
     void enableVP9Decoders(bool shouldEnableVP8Decoder, bool shouldEnableVP9Decoder, bool shouldEnableVP9SWDecoder);
 #endif
 
+    void tryExitIfUnusedAndUnderMemoryPressure();
+
 private:
     void lowMemoryHandler(Critical, Synchronous);
 
@@ -97,6 +105,9 @@ private:
     void initializeProcessName(const AuxiliaryProcessInitializationParameters&) override;
     void initializeSandbox(const AuxiliaryProcessInitializationParameters&, SandboxInitializationParameters&) override;
     bool shouldTerminate() override;
+
+    void tryExitIfUnused();
+    bool canExitUnderMemoryPressure() const;
 
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
@@ -113,14 +124,36 @@ private:
     void setMockCaptureDevicesEnabled(bool);
     void setOrientationForMediaCapture(uint64_t orientation);
     void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture, WebCore::ProcessIdentifier, CompletionHandler<void()>&&);
+    void updateSandboxAccess(const Vector<SandboxExtension::Handle>&);
     void addMockMediaDevice(const WebCore::MockMediaDevice&);
     void clearMockMediaDevices();
     void removeMockMediaDevice(const String& persistentId);
     void resetMockMediaDevices();
 #endif
+#if PLATFORM(MAC)
+    void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
+#endif
+
+
+#if ENABLE(MEDIA_SOURCE) && ENABLE(VP9)
+    void setWebMParserEnabled(bool);
+#endif
+
+#if ENABLE(WEBM_FORMAT_READER)
+    void setWebMFormatReaderEnabled(bool);
+#endif
+
+#if ENABLE(OPUS)
+    void setOpusDecoderEnabled(bool);
+#endif
+
+#if ENABLE(VORBIS)
+    void setVorbisDecoderEnabled(bool);
+#endif
 
     // Connections to WebProcesses.
     HashMap<WebCore::ProcessIdentifier, Ref<GPUConnectionToWebProcess>> m_webProcessConnections;
+    MonotonicTime m_creationTime { MonotonicTime::now() };
 
 #if ENABLE(MEDIA_STREAM)
     struct MediaCaptureAccess {
@@ -133,6 +166,7 @@ private:
     RefPtr<WorkQueue> m_audioMediaStreamTrackRendererQueue;
     RefPtr<WorkQueue> m_videoMediaStreamTrackRendererQueue;
 #endif
+    uint64_t m_orientation { 0 };
 #endif
 #if USE(LIBWEBRTC) && PLATFORM(COCOA)
     RefPtr<WorkQueue> m_libWebRTCCodecsQueue;
@@ -145,10 +179,7 @@ private:
 #endif
     };
     HashMap<PAL::SessionID, GPUSession> m_sessions;
-#if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    std::unique_ptr<LayerHostingContext> m_contextForVisibilityPropagation;
-    bool m_canShowWhileLocked { false };
-#endif
+    WebCore::Timer m_idleExitTimer;
     std::unique_ptr<WebCore::NowPlayingManager> m_nowPlayingManager;
 #if ENABLE(GPU_PROCESS) && USE(AUDIO_SESSION)
     mutable std::unique_ptr<RemoteAudioSessionProxyManager> m_audioSessionManager;
@@ -157,6 +188,18 @@ private:
     bool m_enableVP8Decoder { false };
     bool m_enableVP9Decoder { false };
     bool m_enableVP9SWDecoder { false };
+#endif
+#if ENABLE(MEDIA_SOURCE) && ENABLE(VP9)
+    bool m_webMParserEnabled { false };
+#endif
+#if ENABLE(WEBM_FORMAT_READER)
+    bool m_webMFormatReaderEnabled { false };
+#endif
+#if ENABLE(OPUS)
+    bool m_opusEnabled { false };
+#endif
+#if ENABLE(VORBIS)
+    bool m_vorbisEnabled { false };
 #endif
 };
 

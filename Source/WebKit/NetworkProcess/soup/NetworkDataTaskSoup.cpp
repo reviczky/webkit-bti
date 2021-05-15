@@ -53,18 +53,21 @@ using namespace WebCore;
 
 static const size_t gDefaultReadBufferSize = 8192;
 
-NetworkDataTaskSoup::NetworkDataTaskSoup(NetworkSession& session, NetworkDataTaskClient& client, const ResourceRequest& requestWithCredentials, FrameIdentifier frameID, PageIdentifier pageID, StoredCredentialsPolicy storedCredentialsPolicy, ContentSniffingPolicy shouldContentSniff, WebCore::ContentEncodingSniffingPolicy, bool shouldClearReferrerOnHTTPSToHTTPRedirect, bool dataTaskIsForMainFrameNavigation)
+NetworkDataTaskSoup::NetworkDataTaskSoup(NetworkSession& session, NetworkDataTaskClient& client, const ResourceRequest& requestWithCredentials, FrameIdentifier frameID, PageIdentifier pageID, StoredCredentialsPolicy storedCredentialsPolicy, ContentSniffingPolicy shouldContentSniff, WebCore::ContentEncodingSniffingPolicy, bool shouldClearReferrerOnHTTPSToHTTPRedirect, PreconnectOnly shouldPreconnectOnly, bool dataTaskIsForMainFrameNavigation)
     : NetworkDataTask(session, client, requestWithCredentials, storedCredentialsPolicy, shouldClearReferrerOnHTTPSToHTTPRedirect, dataTaskIsForMainFrameNavigation)
     , m_frameID(frameID)
     , m_pageID(pageID)
     , m_shouldContentSniff(shouldContentSniff)
+    , m_shouldPreconnectOnly(shouldPreconnectOnly)
     , m_timeoutSource(RunLoop::main(), this, &NetworkDataTaskSoup::timeoutFired)
 {
     m_session->registerNetworkDataTask(*this);
 
     auto request = requestWithCredentials;
     if (request.url().protocolIsInHTTPFamily()) {
-        m_startTime = MonotonicTime::now();
+#if USE(SOUP2)
+        m_networkLoadMetrics.fetchStart = MonotonicTime::now().secondsSinceEpoch();
+#endif
         auto url = request.url();
         if (m_storedCredentialsPolicy == StoredCredentialsPolicy::Use) {
             m_user = url.user();
@@ -130,7 +133,17 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
         return;
     }
 
+    if (m_shouldPreconnectOnly == PreconnectOnly::Yes) {
+#if !USE(SOUP2)
+        g_signal_connect(m_soupMessage.get(), "accept-certificate", G_CALLBACK(acceptCertificateCallback), this);
+#endif
+        return;
+    }
+
     unsigned messageFlags = SOUP_MESSAGE_NO_REDIRECT;
+#if !USE(SOUP2)
+    messageFlags |= SOUP_MESSAGE_COLLECT_METRICS;
+#endif
     if (m_shouldContentSniff == ContentSniffingPolicy::DoNotSniffContent)
         soup_message_disable_feature(m_soupMessage.get(), SOUP_TYPE_CONTENT_SNIFFER);
     if (m_user.isEmpty() && m_password.isEmpty() && m_storedCredentialsPolicy == StoredCredentialsPolicy::DoNotUse) {
@@ -184,11 +197,16 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
     g_signal_connect(m_soupMessage.get(), "wrote-body-data", G_CALLBACK(wroteBodyDataCallback), this);
 #if USE(SOUP2)
     g_signal_connect(static_cast<NetworkSessionSoup&>(*m_session).soupSession(), "authenticate",  G_CALLBACK(authenticateCallback), this);
+    g_signal_connect(m_soupMessage.get(), "network-event", G_CALLBACK(networkEventCallback), this);
 #else
     g_signal_connect(m_soupMessage.get(), "authenticate", G_CALLBACK(authenticateCallback), this);
     g_signal_connect(m_soupMessage.get(), "accept-certificate", G_CALLBACK(acceptCertificateCallback), this);
+    if (shouldCaptureExtraNetworkLoadMetrics()) {
+        g_signal_connect(m_soupMessage.get(), "wrote-headers", G_CALLBACK(wroteHeadersCallback), this);
+        g_signal_connect(m_soupMessage.get(), "wrote-body", G_CALLBACK(wroteBodyCallback), this);
+        g_signal_connect(m_soupMessage.get(), "got-body", G_CALLBACK(gotBodyCallback), this);
+    }
 #endif
-    g_signal_connect(m_soupMessage.get(), "network-event", G_CALLBACK(networkEventCallback), this);
     g_signal_connect(m_soupMessage.get(), "restarted", G_CALLBACK(restartedCallback), this);
     g_signal_connect(m_soupMessage.get(), "starting", G_CALLBACK(startingCallback), this);
     if (m_shouldContentSniff == ContentSniffingPolicy::SniffContent)
@@ -218,6 +236,13 @@ void NetworkDataTaskSoup::clearRequest()
 #if USE(SOUP2)
         if (m_session)
             soup_session_cancel_message(static_cast<NetworkSessionSoup&>(*m_session).soupSession(), m_soupMessage.get(), SOUP_STATUS_CANCELLED);
+#else
+        if (m_networkLoadMetrics.fetchStart && !m_networkLoadMetrics.responseEnd) {
+            auto* metrics = soup_message_get_metrics(m_soupMessage.get());
+            auto responseEnd = Seconds::fromMicroseconds(soup_message_metrics_get_response_end(metrics));
+            m_networkLoadMetrics.responseEnd = responseEnd ? responseEnd - m_networkLoadMetrics.fetchStart : Seconds(-1);
+            m_networkLoadMetrics.markComplete();
+        }
 #endif
         m_soupMessage = nullptr;
     }
@@ -244,11 +269,26 @@ void NetworkDataTaskSoup::resume()
     RefPtr<NetworkDataTaskSoup> protectedThis(this);
     if (m_soupMessage && !m_cancellable) {
         m_cancellable = adoptGRef(g_cancellable_new());
-        // We need to protect cancellable here, because soup_session_send_async uses it after emitting SoupSession::request-queued, and we
-        // might cancel the operation in a feature callback emitted on request-queued, for example hsts-enforced.
-        GRefPtr<GCancellable> protectCancellable(m_cancellable);
-        soup_session_send_async(static_cast<NetworkSessionSoup&>(*m_session).soupSession(), m_soupMessage.get(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
-            reinterpret_cast<GAsyncReadyCallback>(sendRequestCallback), new SendRequestData({ m_soupMessage, WTFMove(protectedThis) }));
+        if (m_shouldPreconnectOnly == PreconnectOnly::Yes) {
+#if !USE(SOUP2)
+            soup_session_preconnect_async(static_cast<NetworkSessionSoup&>(*m_session).soupSession(), m_soupMessage.get(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
+                reinterpret_cast<GAsyncReadyCallback>(preconnectCallback), protectedThis.leakRef());
+#else
+            RELEASE_ASSERT_NOT_REACHED();
+#endif
+        } else {
+            // We need to protect cancellable here, because soup_session_send_async uses it after emitting SoupSession::request-queued, and we
+            // might cancel the operation in a feature callback emitted on request-queued, for example hsts-enforced.
+            GRefPtr<GCancellable> protectCancellable(m_cancellable);
+            soup_session_send_async(static_cast<NetworkSessionSoup&>(*m_session).soupSession(), m_soupMessage.get(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
+                reinterpret_cast<GAsyncReadyCallback>(sendRequestCallback), new SendRequestData({ m_soupMessage, WTFMove(protectedThis) }));
+#if !USE(SOUP2)
+            if (!g_cancellable_is_cancelled(protectCancellable.get()) && !m_networkLoadMetrics.fetchStart) {
+                auto* metrics = soup_message_get_metrics(m_soupMessage.get());
+                m_networkLoadMetrics.fetchStart = Seconds::fromMicroseconds(soup_message_metrics_get_fetch_start(metrics));
+            }
+#endif
+        }
         return;
     }
 
@@ -403,25 +443,18 @@ void NetworkDataTaskSoup::didSendRequest(GRefPtr<GInputStream>&& inputStream)
     else
         m_inputStream = WTFMove(inputStream);
 
-    m_networkLoadMetrics.responseStart = MonotonicTime::now() - m_startTime;
+#if USE(SOUP2)
+    m_networkLoadMetrics.responseStart = MonotonicTime::now().secondsSinceEpoch() - m_networkLoadMetrics.fetchStart;
+#endif
+
+    // FIXME: This cannot be eliminated until other code no longer relies on ResourceResponse's NetworkLoadMetrics.
+    m_response.setDeprecatedNetworkLoadMetrics(Box<NetworkLoadMetrics>::create(m_networkLoadMetrics));
     dispatchDidReceiveResponse();
 }
 
 void NetworkDataTaskSoup::dispatchDidReceiveResponse()
 {
     ASSERT(!m_response.isNull());
-
-    Box<NetworkLoadMetrics> timing = Box<NetworkLoadMetrics>::create();
-    timing->responseStart = m_networkLoadMetrics.responseStart;
-    timing->domainLookupStart = m_networkLoadMetrics.domainLookupStart;
-    timing->domainLookupEnd = m_networkLoadMetrics.domainLookupEnd;
-    timing->connectStart = m_networkLoadMetrics.connectStart;
-    timing->secureConnectionStart = m_networkLoadMetrics.secureConnectionStart;
-    timing->connectEnd = m_networkLoadMetrics.connectEnd;
-    timing->requestStart = m_networkLoadMetrics.requestStart;
-    timing->responseStart = m_networkLoadMetrics.responseStart;
-    // FIXME: Remove this once nobody depends on deprecatedNetworkLoadMetrics.
-    m_response.setDeprecatedNetworkLoadMetrics(WTFMove(timing));
 
     didReceiveResponse(ResourceResponse(m_response), NegotiatedLegacyTLS::No, [this, protectedThis = makeRef(*this)](PolicyAction policyAction) {
         if (m_state == State::Canceling || m_state == State::Completed) {
@@ -452,10 +485,30 @@ void NetworkDataTaskSoup::dispatchDidReceiveResponse()
     });
 }
 
+#if !USE(SOUP2)
+void NetworkDataTaskSoup::preconnectCallback(SoupSession* session, GAsyncResult* result, NetworkDataTaskSoup* task)
+{
+    RefPtr<NetworkDataTaskSoup> protectedThis = adoptRef(task);
+    if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client) {
+        task->clearRequest();
+        return;
+    }
+
+    ResourceError resourceError;
+    GUniqueOutPtr<GError> error;
+    if (!soup_session_preconnect_finish(session, result, &error.outPtr()))
+        resourceError = ResourceError::genericGError(task->m_currentRequest.url(), error.get());
+    task->clearRequest();
+    task->dispatchDidCompleteWithError(resourceError);
+}
+#endif
+
 void NetworkDataTaskSoup::dispatchDidCompleteWithError(const ResourceError& error)
 {
-    m_networkLoadMetrics.responseEnd = MonotonicTime::now() - m_startTime;
+#if USE(SOUP2)
+    m_networkLoadMetrics.responseEnd = MonotonicTime::now().secondsSinceEpoch() - m_networkLoadMetrics.fetchStart;
     m_networkLoadMetrics.markComplete();
+#endif
 
     m_client->didCompleteWithError(error, m_networkLoadMetrics);
 }
@@ -480,7 +533,7 @@ gboolean NetworkDataTaskSoup::acceptCertificateCallback(SoupMessage* message, GT
     if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client)
         return FALSE;
 
-    ASSERT(task->m_soupMessage.get() == soupMessage);
+    ASSERT(task->m_soupMessage.get() == message);
 
     return task->acceptCertificate(certificate, errors);
 }
@@ -823,8 +876,15 @@ void NetworkDataTaskSoup::continueHTTPRedirection()
         auto request = newRequest;
         if (request.url().protocolIsInHTTPFamily()) {
             if (isCrossOrigin) {
-                m_startTime = MonotonicTime::now();
                 m_networkLoadMetrics = { };
+#if USE(SOUP2)
+                m_networkLoadMetrics.fetchStart = MonotonicTime::now().secondsSinceEpoch();
+#endif
+            } else {
+#if !USE(SOUP2)
+                m_networkLoadMetrics.responseEnd = { };
+                m_networkLoadMetrics.complete = false;
+#endif
             }
 
             applyAuthenticationToRequest(request);
@@ -977,6 +1037,38 @@ void NetworkDataTaskSoup::gotHeadersCallback(SoupMessage* soupMessage, NetworkDa
     task->didGetHeaders();
 }
 
+static WebCore::NetworkLoadPriority toNetworkLoadPriority(SoupMessagePriority priority)
+{
+    switch (priority) {
+    case SOUP_MESSAGE_PRIORITY_VERY_LOW:
+    case SOUP_MESSAGE_PRIORITY_LOW:
+        return WebCore::NetworkLoadPriority::Low;
+    case SOUP_MESSAGE_PRIORITY_NORMAL:
+        return WebCore::NetworkLoadPriority::Medium;
+    case SOUP_MESSAGE_PRIORITY_HIGH:
+    case SOUP_MESSAGE_PRIORITY_VERY_HIGH:
+        return WebCore::NetworkLoadPriority::High;
+    }
+
+    return WebCore::NetworkLoadPriority::Unknown;
+}
+
+static AtomString soupHTTPVersionToString(SoupHTTPVersion version)
+{
+    switch (version) {
+    case SOUP_HTTP_1_0:
+        return AtomString("http/1.0", AtomString::ConstructFromLiteral);
+    case SOUP_HTTP_1_1:
+        return AtomString("http/1.1", AtomString::ConstructFromLiteral);
+#if SOUP_CHECK_VERSION(2, 99, 3)
+    case SOUP_HTTP_2_0:
+        return AtomString("h2", AtomString::ConstructFromLiteral);
+#endif
+    }
+
+    return { };
+}
+
 void NetworkDataTaskSoup::didGetHeaders()
 {
     // We are a bit more conservative with the persistent credential storage than the session store,
@@ -990,6 +1082,12 @@ void NetworkDataTaskSoup::didGetHeaders()
         m_credentialForPersistentStorage = Credential();
     }
 
+#if !USE(SOUP2)
+    auto* metrics = soup_message_get_metrics(m_soupMessage.get());
+    auto responseStart = Seconds::fromMicroseconds(soup_message_metrics_get_response_start(metrics));
+    m_networkLoadMetrics.responseStart = responseStart - m_networkLoadMetrics.fetchStart;
+#endif
+
     // Soup adds more headers to the request after starting signal is emitted, and got-headers
     // is the first one we receive after starting, so we use it also to get information about the
     // request headers.
@@ -1002,8 +1100,57 @@ void NetworkDataTaskSoup::didGetHeaders()
         while (soup_message_headers_iter_next(&headersIter, &headerName, &headerValue))
             requestHeaders.set(String(headerName), String(headerValue));
         m_networkLoadMetrics.requestHeaders = WTFMove(requestHeaders);
+
+        m_networkLoadMetrics.priority = toNetworkLoadPriority(soup_message_get_priority(m_soupMessage.get()));
+#if !USE(SOUP2)
+        m_networkLoadMetrics.connectionIdentifier = String::number(soup_message_get_connection_id(m_soupMessage.get()));
+        auto* address = soup_message_get_remote_address(m_soupMessage.get());
+        if (G_IS_INET_SOCKET_ADDRESS(address)) {
+            GUniquePtr<char> ipAddress(g_inet_address_to_string(g_inet_socket_address_get_address(G_INET_SOCKET_ADDRESS(address))));
+            m_networkLoadMetrics.remoteAddress = makeString(ipAddress.get(), ':', g_inet_socket_address_get_port(G_INET_SOCKET_ADDRESS(address)));
+        }
+        m_networkLoadMetrics.responseHeaderBytesReceived = soup_message_metrics_get_response_header_bytes_received(metrics);
+#endif
     }
+
+    m_networkLoadMetrics.protocol = soupHTTPVersionToString(soup_message_get_http_version(m_soupMessage.get()));
 }
+
+#if !USE(SOUP2)
+void NetworkDataTaskSoup::wroteHeadersCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
+{
+    if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client) {
+        task->clearRequest();
+        return;
+    }
+    ASSERT(task->m_soupMessage.get() == soupMessage);
+    auto* metrics = soup_message_get_metrics(soupMessage);
+    task->m_networkLoadMetrics.requestHeaderBytesSent = soup_message_metrics_get_request_header_bytes_sent(metrics);
+}
+
+void NetworkDataTaskSoup::wroteBodyCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
+{
+    if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client) {
+        task->clearRequest();
+        return;
+    }
+    ASSERT(task->m_soupMessage.get() == soupMessage);
+    auto* metrics = soup_message_get_metrics(soupMessage);
+    task->m_networkLoadMetrics.requestBodyBytesSent = soup_message_metrics_get_request_body_bytes_sent(metrics);
+}
+
+void NetworkDataTaskSoup::gotBodyCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
+{
+    if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client) {
+        task->clearRequest();
+        return;
+    }
+    ASSERT(task->m_soupMessage.get() == soupMessage);
+    auto* metrics = soup_message_get_metrics(soupMessage);
+    task->m_networkLoadMetrics.responseBodyBytesReceived = soup_message_metrics_get_response_body_bytes_received(metrics);
+    task->m_networkLoadMetrics.responseBodyDecodedSize = soup_message_metrics_get_response_body_size(metrics);
+}
+#endif
 
 #if USE(SOUP2)
 void NetworkDataTaskSoup::wroteBodyDataCallback(SoupMessage* soupMessage, SoupBuffer* buffer, NetworkDataTaskSoup* task)
@@ -1175,6 +1322,7 @@ void NetworkDataTaskSoup::didFail(const ResourceError& error)
     dispatchDidCompleteWithError(error);
 }
 
+#if USE(SOUP2)
 void NetworkDataTaskSoup::networkEventCallback(SoupMessage* soupMessage, GSocketClientEvent event, GIOStream* stream, NetworkDataTaskSoup* task)
 {
     if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client)
@@ -1186,7 +1334,7 @@ void NetworkDataTaskSoup::networkEventCallback(SoupMessage* soupMessage, GSocket
 
 void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event, GIOStream* stream)
 {
-    Seconds deltaTime = MonotonicTime::now() - m_startTime;
+    Seconds deltaTime = MonotonicTime::now().secondsSinceEpoch() - m_networkLoadMetrics.fetchStart;
     switch (event) {
     case G_SOCKET_CLIENT_RESOLVING:
         m_networkLoadMetrics.domainLookupStart = deltaTime;
@@ -1198,8 +1346,15 @@ void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event, GIOStream* stre
         m_networkLoadMetrics.connectStart = deltaTime;
         break;
     case G_SOCKET_CLIENT_CONNECTED:
+        if (shouldCaptureExtraNetworkLoadMetrics() && G_IS_SOCKET_CONNECTION(stream)) {
+            GRefPtr<GSocketAddress> address = adoptGRef(g_socket_connection_get_remote_address(G_SOCKET_CONNECTION(stream), nullptr));
+            if (G_IS_INET_SOCKET_ADDRESS(address.get())) {
+                GUniquePtr<char> ipAddress(g_inet_address_to_string(g_inet_socket_address_get_address(G_INET_SOCKET_ADDRESS(address.get()))));
+                m_networkLoadMetrics.remoteAddress = makeString(ipAddress.get(), ':', g_inet_socket_address_get_port(G_INET_SOCKET_ADDRESS(address.get())));
+            }
+        }
         // Web Timing considers that connection time involves dns, proxy & TLS negotiation...
-        // so we better pick G_SOCKET_CLIENT_COMPLETE for connectEnd
+        // so we better pick G_SOCKET_CLIENT_COMPLETE for connectEnd.
         break;
     case G_SOCKET_CLIENT_PROXY_NEGOTIATING:
         break;
@@ -1207,11 +1362,9 @@ void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event, GIOStream* stre
         break;
     case G_SOCKET_CLIENT_TLS_HANDSHAKING:
         m_networkLoadMetrics.secureConnectionStart = deltaTime;
-#if USE(SOUP2)
         RELEASE_ASSERT(G_IS_TLS_CONNECTION(stream));
         g_object_set_data(G_OBJECT(stream), "wk-soup-message", m_soupMessage.get());
         g_signal_connect(stream, "accept-certificate", G_CALLBACK(tlsConnectionAcceptCertificateCallback), this);
-#endif
         break;
     case G_SOCKET_CLIENT_TLS_HANDSHAKED:
         break;
@@ -1223,6 +1376,7 @@ void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event, GIOStream* stre
         break;
     }
 }
+#endif
 
 void NetworkDataTaskSoup::startingCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
 {
@@ -1277,7 +1431,24 @@ void NetworkDataTaskSoup::hstsEnforced(SoupMessage* soupMessage, NetworkDataTask
 
 void NetworkDataTaskSoup::didStartRequest()
 {
-    m_networkLoadMetrics.requestStart = MonotonicTime::now() - m_startTime;
+#if USE(SOUP2)
+    m_networkLoadMetrics.requestStart = MonotonicTime::now().secondsSinceEpoch() - m_networkLoadMetrics.fetchStart;
+#else
+    auto* metrics = soup_message_get_metrics(m_soupMessage.get());
+    auto domainLookupStart = Seconds::fromMicroseconds(soup_message_metrics_get_dns_start(metrics));
+    auto domainLookupEnd = Seconds::fromMicroseconds(soup_message_metrics_get_dns_end(metrics));
+    auto connectStart = Seconds::fromMicroseconds(soup_message_metrics_get_connect_start(metrics));
+    auto connectEnd = Seconds::fromMicroseconds(soup_message_metrics_get_connect_end(metrics));
+    auto secureConnectionStart = Seconds::fromMicroseconds(soup_message_metrics_get_tls_start(metrics));
+    auto requestStart = Seconds::fromMicroseconds(soup_message_metrics_get_request_start(metrics));
+
+    m_networkLoadMetrics.domainLookupStart = domainLookupStart ? domainLookupStart - m_networkLoadMetrics.fetchStart : Seconds(-1);
+    m_networkLoadMetrics.domainLookupEnd = domainLookupEnd ? domainLookupEnd - m_networkLoadMetrics.fetchStart : Seconds(-1);
+    m_networkLoadMetrics.connectStart = connectStart ? connectStart - m_networkLoadMetrics.fetchStart : Seconds(-1);
+    m_networkLoadMetrics.connectEnd = connectEnd ? connectEnd - m_networkLoadMetrics.fetchStart : Seconds(-1);
+    m_networkLoadMetrics.secureConnectionStart = secureConnectionStart ? secureConnectionStart - m_networkLoadMetrics.fetchStart : Seconds(-1);
+    m_networkLoadMetrics.requestStart = requestStart - m_networkLoadMetrics.fetchStart;
+#endif
 }
 
 void NetworkDataTaskSoup::restartedCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
@@ -1293,9 +1464,12 @@ void NetworkDataTaskSoup::restartedCallback(SoupMessage* soupMessage, NetworkDat
 
 void NetworkDataTaskSoup::didRestart()
 {
-    m_startTime = MonotonicTime::now();
     m_networkLoadMetrics = { };
-#if !USE(SOUP2)
+#if USE(SOUP2)
+    m_networkLoadMetrics.fetchStart = MonotonicTime::now().secondsSinceEpoch();
+#else
+    auto* metrics = soup_message_get_metrics(m_soupMessage.get());
+    m_networkLoadMetrics.fetchStart = Seconds::fromMicroseconds(soup_message_metrics_get_fetch_start(metrics));
     m_currentRequest.updateSoupMessageBody(m_soupMessage.get(), m_session->blobRegistry());
 #endif
 }
@@ -1331,11 +1505,12 @@ void NetworkDataTaskSoup::didGetFileInfo(GFileInfo* info)
         m_response.setMimeType("text/html");
         m_response.setExpectedContentLength(-1);
     } else {
-        const gchar* contentType = g_file_info_get_content_type(info);
-        m_response.setMimeType(extractMIMETypeFromMediaType(contentType));
-        m_response.setTextEncodingName(extractCharsetFromMediaType(contentType));
-        if (m_response.mimeType().isEmpty())
-            m_response.setMimeType(MIMETypeRegistry::mimeTypeForPath(m_response.url().path().toString()));
+        // Guess mime-type from URL path and fall-back to mime-type detected by Gio/shared-mime-info otherwise.
+        auto mimeType = MIMETypeRegistry::mimeTypeForPath(m_response.url().path().toString());
+        if (mimeType == defaultMIMEType())
+            mimeType = extractMIMETypeFromMediaType(g_file_info_get_content_type(info));
+
+        m_response.setMimeType(mimeType);
         m_response.setExpectedContentLength(g_file_info_get_size(info));
     }
 }

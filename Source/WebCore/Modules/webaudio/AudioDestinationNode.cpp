@@ -63,6 +63,11 @@ void AudioDestinationNode::render(AudioBus*, AudioBus* destinationBus, size_t nu
     DenormalDisabler denormalDisabler;
     
     context().setAudioThread(Thread::current());
+
+    // For performance reasons, we forbid heap allocations while doing rendering on the audio thread.
+    // Heap allocations that cannot be avoided or have not been fixed yet can be allowed using
+    // DisableMallocRestrictionsForCurrentThreadScope scope variables.
+    ForbidMallocUseForCurrentThreadScope forbidMallocUse;
     
     if (!context().isInitialized()) {
         destinationBus->zero();
@@ -89,7 +94,7 @@ void AudioDestinationNode::render(AudioBus*, AudioBus* destinationBus, size_t nu
     // This will cause the node(s) connected to us to process, which in turn will pull on their input(s),
     // all the way backwards through the rendering graph.
     AudioBus* renderedBus = input(0)->pull(destinationBus, numberOfFrames);
-    
+
     if (!renderedBus)
         destinationBus->zero();
     else if (renderedBus != destinationBus) {
@@ -139,6 +144,16 @@ void AudioDestinationNode::updateIsEffectivelyPlayingAudio()
 
     m_isEffectivelyPlayingAudio = isEffectivelyPlayingAudio;
     context().isPlayingAudioDidChange();
+}
+
+void AudioDestinationNode::ref()
+{
+    context().ref();
+}
+
+void AudioDestinationNode::deref()
+{
+    context().deref();
 }
 
 } // namespace WebCore

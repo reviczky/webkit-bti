@@ -49,7 +49,7 @@ static ExceptionOr<LengthBox> parseRootMargin(String& rootMargin)
     while (!tokenRange.atEnd()) {
         if (margins.size() == 4)
             return Exception { SyntaxError, "Failed to construct 'IntersectionObserver': Extra text found at the end of rootMargin." };
-        RefPtr<CSSPrimitiveValue> parsedValue = CSSPropertyParserHelpers::consumeLengthOrPercent(tokenRange, HTMLStandardMode, ValueRangeAll);
+        RefPtr<CSSPrimitiveValue> parsedValue = CSSPropertyParserHelpers::consumeLengthOrPercent(tokenRange, HTMLStandardMode, ValueRange::All);
         if (!parsedValue || parsedValue->isCalculated())
             return Exception { SyntaxError, "Failed to construct 'IntersectionObserver': rootMargin must be specified in pixels or percent." };
         if (parsedValue->isPercentage())
@@ -152,13 +152,7 @@ String IntersectionObserver::rootMargin() const
     StringBuilder stringBuilder;
     for (auto side : allBoxSides) {
         auto& length = m_rootMargin.at(side);
-        stringBuilder.appendNumber(length.intValue());
-        if (length.isPercent())
-            stringBuilder.append('%');
-        else
-            stringBuilder.appendLiteral("px");
-        if (side != BoxSide::Left)
-            stringBuilder.append(' ');
+        stringBuilder.append(length.intValue(), length.isPercent() ? "%" : "px", side != BoxSide::Left ? " " : "");
     }
     return stringBuilder.toString();
 }

@@ -72,7 +72,7 @@ class TransformState;
 class VisiblePosition;
 
 #if PLATFORM(IOS_FAMILY)
-class SelectionRect;
+class SelectionGeometry;
 #endif
 
 struct InlineRunAndOffset;
@@ -84,8 +84,6 @@ const int caretWidth = 2; // This value should be kept in sync with UIKit. See <
 #else
 const int caretWidth = 1;
 #endif
-
-enum class ShouldAllowCrossOriginScrolling { No, Yes };
 
 struct ScrollRectToVisibleOptions;
 
@@ -116,6 +114,8 @@ public:
 
     RenderObject* previousSibling() const { return m_previous; }
     RenderObject* nextSibling() const { return m_next; }
+    RenderObject* previousInFlowSibling() const;
+    RenderObject* nextInFlowSibling() const;
 
     // Use RenderElement versions instead.
     virtual RenderObject* firstChildSlow() const { return nullptr; }
@@ -201,6 +201,8 @@ public:
     bool isRenderInline() const;
     bool isRenderLayerModelObject() const;
 
+    bool isAtomicInlineLevelBox() const;
+
     virtual bool isCounter() const { return false; }
     virtual bool isQuote() const { return false; }
 
@@ -257,8 +259,6 @@ public:
     virtual bool isRenderFullScreenPlaceholder() const { return false; }
 #endif
     virtual bool isRenderGrid() const { return false; }
-    bool isInFlowRenderFragmentedFlow() const { return isRenderFragmentedFlow() && !isOutOfFlowPositioned(); }
-    bool isOutOfFlowRenderFragmentedFlow() const { return isRenderFragmentedFlow() && isOutOfFlowPositioned(); }
 
     virtual bool isMultiColumnBlockFlow() const { return false; }
     virtual bool isRenderMultiColumnSet() const { return false; }
@@ -295,7 +295,7 @@ public:
         InsideInFragmentedFlow = 1,
     };
 
-    void setFragmentedFlowStateIncludingDescendants(FragmentedFlowState);
+    void setFragmentedFlowStateIncludingDescendants(FragmentedFlowState, const RenderElement* fragmentedFlowRoot);
 
     FragmentedFlowState fragmentedFlowState() const { return m_bitfields.fragmentedFlowState(); }
     void setFragmentedFlowState(FragmentedFlowState state) { m_bitfields.setFragmentedFlowState(state); }
@@ -376,7 +376,7 @@ public:
     // rest of the rendering tree will move to a similar model.
     virtual bool nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const FloatPoint& pointInParent, HitTestAction);
 
-    bool hasAspectRatio() const { return isReplaced() && (isImage() || isVideo() || isCanvas()); }
+    bool hasIntrinsicAspectRatio() const { return isReplaced() && (isImage() || isVideo() || isCanvas()); }
     bool isAnonymous() const { return m_bitfields.isAnonymous(); }
     bool isAnonymousBlock() const;
 
@@ -546,10 +546,10 @@ public:
     LayoutSize offsetFromAncestorContainer(RenderElement&) const;
 
 #if PLATFORM(IOS_FAMILY)
-    virtual void collectSelectionRects(Vector<SelectionRect>&, unsigned startOffset = 0, unsigned endOffset = std::numeric_limits<unsigned>::max());
+    virtual void collectSelectionGeometries(Vector<SelectionGeometry>&, unsigned startOffset = 0, unsigned endOffset = std::numeric_limits<unsigned>::max());
     virtual void absoluteQuadsForSelection(Vector<FloatQuad>& quads) const { absoluteQuads(quads); }
-    WEBCORE_EXPORT static Vector<SelectionRect> collectSelectionRects(const SimpleRange&);
-    WEBCORE_EXPORT static Vector<SelectionRect> collectSelectionRectsWithoutUnionInteriorLines(const SimpleRange&);
+    WEBCORE_EXPORT static Vector<SelectionGeometry> collectSelectionGeometries(const SimpleRange&);
+    WEBCORE_EXPORT static Vector<SelectionGeometry> collectSelectionGeometriesWithoutUnionInteriorLines(const SimpleRange&);
 #endif
 
     virtual void absoluteRects(Vector<IntRect>&, const LayoutPoint&) const { }
@@ -650,6 +650,7 @@ public:
     virtual unsigned length() const { return 1; }
 
     bool isFloatingOrOutOfFlowPositioned() const { return (isFloating() || isOutOfFlowPositioned()); }
+    bool isInFlow() const { return !isFloatingOrOutOfFlowPositioned(); }
 
     enum HighlightState {
         None, // The object is not selected.
@@ -717,10 +718,13 @@ public:
 
     LayoutRect absoluteOutlineBounds() const { return outlineBoundsForRepaint(nullptr); }
 
-    virtual void willBeRemovedFromTree();
+    // FIXME: Renderers should not need to be notified about internal reparenting (webkit.org/b/224143).
+    enum class IsInternalMove { No, Yes };
+    virtual void insertedIntoTree(IsInternalMove = IsInternalMove::No);
+    virtual void willBeRemovedFromTree(IsInternalMove = IsInternalMove::No);
+
     void resetFragmentedFlowStateOnRemoval();
     void initializeFragmentedFlowStateOnInsertion();
-    virtual void insertedIntoTree();
 
     virtual String debugDescription() const;
 
@@ -762,11 +766,11 @@ private:
     void setLayerNeedsFullRepaintForPositionedMovementLayout();
 
 #if PLATFORM(IOS_FAMILY)
-    struct SelectionRects {
-        Vector<SelectionRect> rects;
+    struct SelectionGeometries {
+        Vector<SelectionGeometry> geometries;
         int maxLineNumber;
     };
-    WEBCORE_EXPORT static SelectionRects collectSelectionRectsInternal(const SimpleRange&);
+    WEBCORE_EXPORT static SelectionGeometries collectSelectionGeometriesInternal(const SimpleRange&);
 #endif
 
     Node* generatingPseudoHostElement() const;
@@ -1150,9 +1154,28 @@ inline RenderObject::SetLayoutNeededForbiddenScope::SetLayoutNeededForbiddenScop
 
 inline void Node::setRenderer(RenderObject* renderer)
 {
-    auto oldRenderer = this->renderer();
     m_rendererWithStyleFlags.setPointer(renderer);
-    didChangeRenderer(oldRenderer);
+}
+
+inline RenderObject* RenderObject::previousInFlowSibling() const
+{
+    auto* previousSibling = this->previousSibling();
+    while (previousSibling && !previousSibling->isInFlow())
+        previousSibling = previousSibling->previousSibling();
+    return previousSibling;
+}
+
+inline RenderObject* RenderObject::nextInFlowSibling() const
+{
+    auto* nextSibling = this->nextSibling();
+    while (nextSibling && !nextSibling->isInFlow())
+        nextSibling = nextSibling->nextSibling();
+    return nextSibling;
+}
+
+inline bool RenderObject::isAtomicInlineLevelBox() const
+{
+    return style().isDisplayInlineType() && !(style().display() == DisplayType::Inline && !isReplaced());
 }
 
 WTF::TextStream& operator<<(WTF::TextStream&, const RenderObject&);
@@ -1162,6 +1185,9 @@ void printRenderTreeForLiveDocuments();
 void printLayerTreeForLiveDocuments();
 void printGraphicsLayerTreeForLiveDocuments();
 #endif
+
+bool shouldApplyLayoutContainment(const RenderObject&);
+bool shouldApplySizeContainment(const RenderObject&);
 
 } // namespace WebCore
 

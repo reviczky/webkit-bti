@@ -108,6 +108,7 @@ class FocusController;
 class Frame;
 class HTMLMediaElement;
 class HistoryItem;
+class ImageOverlayController;
 class InspectorClient;
 class InspectorController;
 class LibWebRTCProvider;
@@ -419,9 +420,15 @@ public:
     WEBCORE_EXPORT void setInitialScaleIgnoringContentSize(float);
 
     WEBCORE_EXPORT void screenPropertiesDidChange();
-    void windowScreenDidChange(PlatformDisplayID, Optional<unsigned> nominalFramesPerSecond);
+    void windowScreenDidChange(PlatformDisplayID, Optional<FramesPerSecond> nominalFramesPerSecond);
     PlatformDisplayID displayID() const { return m_displayID; }
-    Optional<unsigned> displayNominalFramesPerSecond() const { return m_displayNominalFramesPerSecond; }
+    Optional<FramesPerSecond> displayNominalFramesPerSecond() const { return m_displayNominalFramesPerSecond; }
+
+    // This can return nullopt if throttling reasons result in a frequency less than one, in which case
+    // preferredRenderingUpdateInterval provides the frequency.
+    // FIXME: Have a single function that returns a Variant<>.
+    Optional<FramesPerSecond> preferredRenderingUpdateFramesPerSecond() const;
+    Seconds preferredRenderingUpdateInterval() const;
 
     float topContentInset() const { return m_topContentInset; }
     WEBCORE_EXPORT void setTopContentInset(float);
@@ -496,6 +503,7 @@ public:
 #if PLATFORM(MAC) && (ENABLE(SERVICE_CONTROLS) || ENABLE(TELEPHONE_NUMBER_DETECTION))
     ServicesOverlayController& servicesOverlayController() { return *m_servicesOverlayController; }
 #endif
+    ImageOverlayController& imageOverlayController() { return *m_imageOverlayController; }
 
 #if ENABLE(WHEEL_EVENT_LATCHING)
     ScrollLatchingController& scrollLatchingController();
@@ -544,7 +552,7 @@ public:
     WEBCORE_EXPORT void isolatedUpdateRendering();
     WEBCORE_EXPORT void finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags>);
 
-    // Schedule a rerndering update that coordinates with display refresh.
+    // Schedule a rendering update that coordinates with display refresh.
     WEBCORE_EXPORT void scheduleRenderingUpdate(OptionSet<RenderingUpdateStep> requestedSteps);
     // Trigger a rendering update in the current runloop. Only used for testing.
     void triggerRenderingUpdateForTesting();
@@ -613,6 +621,7 @@ public:
 
     WEBCORE_EXPORT Color themeColor() const;
     WEBCORE_EXPORT Color pageExtendedBackgroundColor() const;
+    WEBCORE_EXPORT Color sampledPageTopColor() const;
 
     bool isCountingRelevantRepaintedObjects() const;
     void setIsCountingRelevantRepaintedObjects(bool isCounting) { m_isCountingRelevantRepaintedObjects = isCounting; }
@@ -690,12 +699,15 @@ public:
     MediaProducer::MediaStateFlags mediaState() const { return m_mediaState; }
     void updateIsPlayingMedia(uint64_t);
     MediaProducer::MutedStateFlags mutedState() const { return m_mutedState; }
-    bool isAudioMuted() const { return m_mutedState & MediaProducer::AudioIsMuted; }
-    bool isMediaCaptureMuted() const { return m_mutedState & MediaProducer::MediaStreamCaptureIsMuted; };
+    bool isAudioMuted() const { return m_mutedState.contains(MediaProducer::MutedState::AudioIsMuted); }
+    bool isMediaCaptureMuted() const { return m_mutedState.containsAny(MediaProducer::MediaStreamCaptureIsMuted); };
     void schedulePlaybackControlsManagerUpdate();
+#if ENABLE(VIDEO)
     void playbackControlsMediaEngineChanged();
+#endif
     WEBCORE_EXPORT void setMuted(MediaProducer::MutedStateFlags);
-    WEBCORE_EXPORT void stopMediaCapture();
+
+    WEBCORE_EXPORT void stopMediaCapture(MediaProducer::MediaCaptureKind);
 
     MediaSessionGroupIdentifier mediaSessionGroupIdentifier() const;
     WEBCORE_EXPORT bool mediaPlaybackExists();
@@ -720,7 +732,7 @@ public:
     void showPlaybackTargetPicker(PlaybackTargetClientContextIdentifier, const IntPoint&, bool, RouteSharingPolicy, const String&);
     void playbackTargetPickerClientStateDidChange(PlaybackTargetClientContextIdentifier, MediaProducer::MediaStateFlags);
     WEBCORE_EXPORT void setMockMediaPlaybackTargetPickerEnabled(bool);
-    WEBCORE_EXPORT void setMockMediaPlaybackTargetPickerState(const String&, MediaPlaybackTargetContext::State);
+    WEBCORE_EXPORT void setMockMediaPlaybackTargetPickerState(const String&, MediaPlaybackTargetContext::MockState);
     WEBCORE_EXPORT void mockMediaPlaybackTargetPickerDismissPopup();
 
     WEBCORE_EXPORT void setPlaybackTarget(PlaybackTargetClientContextIdentifier, Ref<MediaPlaybackTarget>&&);
@@ -742,11 +754,9 @@ public:
     bool allowsPlaybackControlsForAutoplayingAudio() const { return m_allowsPlaybackControlsForAutoplayingAudio; }
     void setAllowsPlaybackControlsForAutoplayingAudio(bool allowsPlaybackControlsForAutoplayingAudio) { m_allowsPlaybackControlsForAutoplayingAudio = allowsPlaybackControlsForAutoplayingAudio; }
 
-#if ENABLE(INDEXED_DATABASE)
     IDBClient::IDBConnectionToServer& idbConnection();
     WEBCORE_EXPORT IDBClient::IDBConnectionToServer* optionalIDBConnection();
     WEBCORE_EXPORT void clearIDBConnection();
-#endif
 
     void setShowAllPlugins(bool showAll) { m_showAllPlugins = showAll; }
     bool showAllPlugins() const;
@@ -784,7 +794,7 @@ public:
     bool isUtilityPage() const { return m_isUtilityPage; }
 
     bool loadsSubresources() const { return m_loadsSubresources; }
-    bool loadsFromNetwork() const { return m_loadsFromNetwork; }
+    bool allowsLoadFromURL(const URL&) const;
     ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking() const { return m_shouldRelaxThirdPartyCookieBlocking; }
 
     bool isLowPowerModeEnabled() const { return m_throttlingReasons.contains(ThrottlingReason::LowPowerMode); }
@@ -793,7 +803,6 @@ public:
     WEBCORE_EXPORT void setOutsideViewportThrottlingEnabledForTesting(bool);
 
     OptionSet<ThrottlingReason> throttlingReasons() const { return m_throttlingReasons; }
-    Seconds preferredRenderingUpdateInterval() const;
 
     WEBCORE_EXPORT void applicationWillResignActive();
     WEBCORE_EXPORT void applicationDidEnterBackground();
@@ -831,9 +840,6 @@ public:
     WEBCORE_EXPORT void notifyToInjectUserScripts();
 
     MonotonicTime lastRenderingUpdateTimestamp() const { return m_lastRenderingUpdateTimestamp; }
-
-    bool textInteractionEnabled() const { return m_textInteractionEnabled; }
-    void setTextInteractionEnabled(bool value) { m_textInteractionEnabled = value; }
 
     bool httpsUpgradeEnabled() const { return m_httpsUpgradeEnabled; }
 
@@ -931,7 +937,7 @@ private:
     RTCController m_rtcController;
 
     PlatformDisplayID m_displayID { 0 };
-    Optional<unsigned> m_displayNominalFramesPerSecond;
+    Optional<FramesPerSecond> m_displayNominalFramesPerSecond;
 
     int m_nestedRunLoopCount { 0 };
     WTF::Function<void()> m_unnestCallback;
@@ -947,7 +953,7 @@ private:
     bool m_inLowQualityInterpolationMode { false };
     bool m_areMemoryCacheClientCallsEnabled { true };
     float m_mediaVolume { 1 };
-    MediaProducer::MutedStateFlags m_mutedState { MediaProducer::NoneMuted };
+    MediaProducer::MutedStateFlags m_mutedState;
 
     float m_pageScaleFactor { 1 };
     float m_zoomedOutPageScaleFactor { 0 };
@@ -1033,9 +1039,7 @@ private:
     const std::unique_ptr<PageDebuggable> m_inspectorDebuggable;
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
     RefPtr<IDBClient::IDBConnectionToServer> m_idbConnectionToServer;
-#endif
 
     HashSet<String> m_seenPlugins;
     HashSet<String> m_seenMediaEngines;
@@ -1068,7 +1072,7 @@ private:
     bool m_isClosing { false };
     bool m_isRestoringCachedPage { false };
 
-    MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
+    MediaProducer::MediaStateFlags m_mediaState;
 
 #if ENABLE(VIDEO)
     Timer m_playbackControlsManagerUpdateTimer;
@@ -1113,6 +1117,7 @@ private:
 #if PLATFORM(MAC) && (ENABLE(SERVICE_CONTROLS) || ENABLE(TELEPHONE_NUMBER_DETECTION))
     std::unique_ptr<ServicesOverlayController> m_servicesOverlayController;
 #endif
+    std::unique_ptr<ImageOverlayController> m_imageOverlayController;
 
     std::unique_ptr<WheelEventDeltaFilter> m_recentWheelEventDeltaFilter;
     std::unique_ptr<PageOverlayController> m_pageOverlayController;
@@ -1137,17 +1142,16 @@ private:
 
     Vector<UserContentURLPattern> m_corsDisablingPatterns;
     Vector<UserStyleSheet> m_userStyleSheetsPendingInjection;
+    Optional<HashSet<String>> m_allowedNetworkHosts;
     bool m_isTakingSnapshotsForApplicationSuspension { false };
     bool m_loadsSubresources { true };
-    bool m_loadsFromNetwork { true };
     bool m_canUseCredentialStorage { true };
     ShouldRelaxThirdPartyCookieBlocking m_shouldRelaxThirdPartyCookieBlocking { ShouldRelaxThirdPartyCookieBlocking::No };
     LoadSchedulingMode m_loadSchedulingMode { LoadSchedulingMode::Direct };
     bool m_hasBeenNotifiedToInjectUserScripts { false };
 
     MonotonicTime m_lastRenderingUpdateTimestamp;
-    
-    bool m_textInteractionEnabled { true };
+
     const bool m_httpsUpgradeEnabled { true };
     mutable MediaSessionGroupIdentifier m_mediaSessionGroupIdentifier;
 };

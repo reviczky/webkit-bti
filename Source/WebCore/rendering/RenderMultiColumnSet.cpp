@@ -50,6 +50,7 @@ RenderMultiColumnSet::RenderMultiColumnSet(RenderFragmentedFlow& fragmentedFlow,
     , m_maxColumnHeight(RenderFragmentedFlow::maxLogicalHeight())
     , m_minSpaceShortage(RenderFragmentedFlow::maxLogicalHeight())
     , m_minimumColumnHeight(0)
+    , m_spaceShortageForSizeContainment(0)
 {
 }
 
@@ -148,7 +149,7 @@ LayoutUnit RenderMultiColumnSet::heightAdjustedForSetOffset(LayoutUnit height) c
     LayoutUnit contentLogicalTop = logicalTop() - multicolBlock.borderAndPaddingBefore();
 
     height -= contentLogicalTop;
-    return std::max(height, 0_lu);
+    return std::max(height, 1_lu); // Let's avoid zero height, as that would probably cause an infinite amount of columns to be created.
 }
 
 LayoutUnit RenderMultiColumnSet::pageLogicalTopForOffset(LayoutUnit offset) const
@@ -235,15 +236,16 @@ LayoutUnit RenderMultiColumnSet::calculateBalancedHeight(bool initial) const
         return std::max<LayoutUnit>(m_contentRuns[index].columnLogicalHeight(startOffset), m_minimumColumnHeight);
     }
 
+    LayoutUnit sizeContainmentShortage = std::max<LayoutUnit>(LayoutUnit(), m_spaceShortageForSizeContainment);
     if (columnCount() <= computedColumnCount()) {
         // With the current column height, the content fits without creating overflowing columns. We're done.
-        return m_computedColumnHeight;
+        return m_computedColumnHeight + sizeContainmentShortage;
     }
 
     if (forcedBreaksCount() >= computedColumnCount()) {
         // Too many forced breaks to allow any implicit breaks. Initial balancing should already
         // have set a good height. There's nothing more we should do.
-        return m_computedColumnHeight;
+        return m_computedColumnHeight + sizeContainmentShortage;
     }
 
     // If the initial guessed column height wasn't enough, stretch it now. Stretch by the lowest
@@ -252,9 +254,10 @@ LayoutUnit RenderMultiColumnSet::calculateBalancedHeight(bool initial) const
     ASSERT(m_minSpaceShortage > 0); // We should never _shrink_ the height!
     // ASSERT(m_minSpaceShortage != RenderFragmentedFlow::maxLogicalHeight()); // If this happens, we probably have a bug.
     if (m_minSpaceShortage == RenderFragmentedFlow::maxLogicalHeight())
-        return m_computedColumnHeight; // So bail out rather than looping infinitely.
+        return m_computedColumnHeight + sizeContainmentShortage; // So bail out rather than looping infinitely.
 
-    return m_computedColumnHeight + m_minSpaceShortage;
+    auto toAdd = std::max<LayoutUnit>(sizeContainmentShortage, m_minSpaceShortage);
+    return m_computedColumnHeight + toAdd;
 }
 
 void RenderMultiColumnSet::clearForcedBreaks()
@@ -365,6 +368,8 @@ void RenderMultiColumnSet::prepareForLayout(bool initial)
     // Nuke previously stored minimum column height. Contents may have changed for all we know.
     m_minimumColumnHeight = 0;
 
+    m_spaceShortageForSizeContainment = 0;
+
     // Start with "infinite" flow thread portion height until height is known.
     setLogicalBottomInFragmentedFlow(RenderFragmentedFlow::maxLogicalHeight());
 
@@ -438,15 +443,16 @@ unsigned RenderMultiColumnSet::columnCount() const
 {
     // We must always return a value of 1 or greater. Column count = 0 is a meaningless situation,
     // and will confuse and cause problems in other parts of the code.
-    if (!computedColumnHeight())
+    auto computedColumnHeight = this->computedColumnHeight();
+    if (computedColumnHeight <= 0)
         return 1;
 
     // Our portion rect determines our column count. We have as many columns as needed to fit all the content.
-    LayoutUnit logicalHeightInColumns = fragmentedFlow()->isHorizontalWritingMode() ? fragmentedFlowPortionRect().height() : fragmentedFlowPortionRect().width();
-    if (!logicalHeightInColumns)
+    auto logicalHeightInColumns = fragmentedFlow()->isHorizontalWritingMode() ? fragmentedFlowPortionRect().height() : fragmentedFlowPortionRect().width();
+    if (logicalHeightInColumns <= 0)
         return 1;
     
-    unsigned count = ceil(static_cast<float>(logicalHeightInColumns) / computedColumnHeight());
+    unsigned count = ceilf(static_cast<float>(logicalHeightInColumns) / computedColumnHeight);
     ASSERT(count >= 1);
     return count;
 }

@@ -122,6 +122,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     /* dumpDisassembly implies dumpDFGDisassembly. */ \
     v(Bool, dumpDisassembly, false, Normal, "dumps disassembly of all JIT compiled code upon compilation") \
     v(Bool, asyncDisassembly, false, Normal, nullptr) \
+    v(Bool, logJIT, false, Normal, nullptr) \
     v(Bool, dumpDFGDisassembly, false, Normal, "dumps disassembly of DFG function upon compilation") \
     v(Bool, dumpFTLDisassembly, false, Normal, "dumps disassembly of FTL function upon compilation") \
     v(Bool, dumpRegExpDisassembly, false, Normal, "dumps disassembly of RegExp upon compilation") \
@@ -192,6 +193,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Double, largeHeapGrowthFactor, 1.24, Normal, nullptr) \
     v(Double, miniVMHeapGrowthFactor, 1.27, Normal, nullptr) \
     v(Double, criticalGCMemoryThreshold, 0.80, Normal, "percent memory in use the GC considers critical.  The collector is much more aggressive above this threshold") \
+    v(Double, customFullGCCallbackBailThreshold, -1.0, Normal, "percent of memory paged out before we bail out of timer based Full GCs. -1.0 means use (maxHeapGrowthFactor - 1)") \
     v(Double, minimumMutatorUtilization, 0, Normal, nullptr) \
     v(Double, maximumMutatorUtilization, 0.7, Normal, nullptr) \
     v(Double, epsilonMutatorUtilization, 0.01, Normal, nullptr) \
@@ -360,7 +362,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     \
     v(Bool, useSamplingProfiler, false, Normal, nullptr) \
     v(Unsigned, sampleInterval, 1000, Normal, "Time between stack traces in microseconds.") \
-    v(Bool, collectSamplingProfilerDataForJSCShell, false, Normal, "This corresponds to the JSC shell's --sample option.") \
+    v(Bool, collectExtraSamplingProfilerData, false, Normal, "This corresponds to the JSC shell's --sample option, or if we're wanting to use the sampling profiler via the Debug menu in the browser.") \
     v(Unsigned, samplingProfilerTopFunctionsCount, 12, Normal, "Number of top functions to report when using the command line interface.") \
     v(Unsigned, samplingProfilerTopBytecodesCount, 40, Normal, "Number of top bytecodes to report when using the command line interface.") \
     v(OptionString, samplingProfilerPath, nullptr, Normal, "The path to the directory to write sampiling profiler output to. This probably will not work with WK2 unless the path is in the sandbox.") \
@@ -376,6 +378,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     \
     v(Unsigned, exceptionStackTraceLimit, 100, Normal, "Stack trace limit for internal Exception object") \
     v(Unsigned, defaultErrorStackTraceLimit, 100, Normal, "The default value for Error.stackTraceLimit") \
+    v(Bool, exitOnResourceExhaustion, false, Normal, nullptr) \
     v(Bool, useExceptionFuzz, false, Normal, nullptr) \
     v(Unsigned, fireExceptionFuzzAt, 0, Normal, nullptr) \
     v(Bool, validateDFGExceptionHandling, false, Normal, "Causes the DFG to emit code validating exception handling for each node that can exit") /* This is true by default on Debug builds */\
@@ -520,14 +523,17 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Bool, usePrivateMethods, true, Normal, "If true, the parser will understand private methods inside classes.") \
     v(Bool, useWebAssemblyStreaming, true, Normal, "Allow to run WebAssembly's Streaming API") \
     v(Bool, useWebAssemblyReferences, true, Normal, "Allow types from the wasm references spec.") \
+    v(Bool, useWebAssemblyTypedFunctionReferences, false, Normal, "Allow function types from the wasm typed function references spec.") \
     v(Bool, useWebAssemblyMultiValues, true, Normal, "Allow types from the wasm mulit-values spec.") \
     v(Bool, useWebAssemblyThreading, true, Normal, "Allow instructions from the wasm threading spec.") \
     v(Bool, useWeakRefs, true, Normal, "Expose the WeakRef constructor.") \
     v(Bool, useIntlDateTimeFormatDayPeriod, true, Normal, "Expose the Intl.DateTimeFormat dayPeriod feature.") \
     v(Bool, useIntlDateTimeFormatRangeToParts, true, Normal, "Expose the Intl.DateTimeFormat#formatRangeToParts feature.") \
     v(Bool, useAtMethod, false, Normal, "Expose the at() method on Array, %TypedArray%, and String.") \
+    v(Bool, useErrorCause, true, Normal, "Allow a cause to be provided when constructing an Error, _NativeError_, or AggregateError.") \
     v(Bool, useSharedArrayBuffer, false, Normal, nullptr) \
     v(Bool, useTopLevelAwait, true, Normal, "allow the await keyword at the top level of a module.") \
+    v(Bool, verboseExecutablePoolAllocation, false, Normal, nullptr) \
 
 
 enum OptionEquivalence {
@@ -608,7 +614,7 @@ public:
     bool init(const char*);
     bool isInRange(unsigned);
     const char* rangeString() const { return (m_state > InitError) ? m_rangeString : s_nullRangeStr; }
-    
+
     void dump(PrintStream& out) const;
 
 private:

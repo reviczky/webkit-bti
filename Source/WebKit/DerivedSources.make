@@ -62,6 +62,7 @@ VPATH = \
     $(WebKit2)/WebProcess/IconDatabase \
     $(WebKit2)/WebProcess/Inspector \
     $(WebKit2)/WebProcess/MediaCache \
+    $(WebKit2)/WebProcess/MediaSession \
     $(WebKit2)/WebProcess/MediaStream \
     $(WebKit2)/WebProcess/Network \
     $(WebKit2)/WebProcess/Network/webrtc \
@@ -132,6 +133,7 @@ MESSAGE_RECEIVERS = \
 	NetworkProcess/webrtc/NetworkMDNSRegister \
 	NetworkProcess/webrtc/NetworkRTCProvider \
 	NetworkProcess/webrtc/NetworkRTCMonitor \
+	NetworkProcess/webrtc/RTCDataChannelRemoteManagerProxy \
 	NetworkProcess/Cookies/WebCookieManager \
 	Shared/Plugins/NPObjectMessageReceiver \
 	Shared/AuxiliaryProcess \
@@ -146,8 +148,8 @@ MESSAGE_RECEIVERS = \
 	UIProcess/WebAuthentication/WebAuthnProcessProxy \
 	UIProcess/WebPasteboardProxy \
 	UIProcess/UserContent/WebUserContentControllerProxy \
-	UIProcess/Inspector/WebInspectorProxy \
-	UIProcess/Inspector/RemoteWebInspectorProxy \
+	UIProcess/Inspector/WebInspectorUIProxy \
+	UIProcess/Inspector/RemoteWebInspectorUIProxy \
 	UIProcess/Inspector/WebInspectorUIExtensionControllerProxy \
 	UIProcess/Plugins/PluginProcessProxy \
 	UIProcess/DrawingAreaProxy \
@@ -159,6 +161,7 @@ MESSAGE_RECEIVERS = \
 	UIProcess/ios/SmartMagnificationController \
 	UIProcess/mac/SecItemShimProxy \
 	UIProcess/WebGeolocationManagerProxy \
+	UIProcess/Cocoa/PlatformXRSystem \
 	UIProcess/Cocoa/PlaybackSessionManagerProxy \
 	UIProcess/Cocoa/UserMediaCaptureManagerProxy \
 	UIProcess/Cocoa/VideoFullscreenManagerProxy \
@@ -169,6 +172,7 @@ MESSAGE_RECEIVERS = \
 	UIProcess/WebProcessPool \
 	UIProcess/Downloads/DownloadProxy \
 	UIProcess/Media/AudioSessionRoutingArbitratorProxy \
+	UIProcess/Media/RemoteMediaSessionCoordinatorProxy \
 	UIProcess/SpeechRecognitionRemoteRealtimeMediaSourceManager \
 	UIProcess/SpeechRecognitionServer \
 	WebProcess/Databases/IndexedDB/WebIDBConnectionToServer \
@@ -196,6 +200,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Inspector/WebInspectorUIExtensionController \
 	WebProcess/Inspector/WebInspector \
 	WebProcess/Inspector/RemoteWebInspectorUI \
+	WebProcess/MediaSession/RemoteMediaSessionCoordinator \
 	WebProcess/Plugins/PluginProcessConnectionManager \
 	WebProcess/Plugins/PluginProxy \
 	WebProcess/Plugins/PluginProcessConnection \
@@ -203,8 +208,9 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Network/NetworkProcessConnection \
 	WebProcess/Network/WebSocketStream \
 	WebProcess/Network/WebResourceLoader \
-	WebProcess/Network/webrtc/WebRTCMonitor \
 	WebProcess/Network/webrtc/LibWebRTCNetwork \
+	WebProcess/Network/webrtc/RTCDataChannelRemoteManager \
+	WebProcess/Network/webrtc/WebRTCMonitor \
 	WebProcess/Network/webrtc/WebMDNSRegister \
 	WebProcess/Network/webrtc/WebRTCResolver \
 	WebProcess/WebCoreSupport/WebDeviceOrientationUpdateProvider \
@@ -213,6 +219,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Storage/WebSWContextManagerConnection \
 	WebProcess/Storage/WebSWClientConnection \
 	WebProcess/WebProcess \
+	WebProcess/cocoa/PlatformXRSystemProxy \
 	WebProcess/cocoa/PlaybackSessionManager \
 	WebProcess/cocoa/RemoteCaptureSampleManager \
 	WebProcess/cocoa/UserMediaCaptureManager \
@@ -396,12 +403,3 @@ $(WEB_PREFERENCES_COMBINED_INPUT_FILE) : $(WEB_PREFERENCES_INPUT_FILES)
 
 $(WEB_PREFERENCES_PATTERNS) : $(WTF_BUILD_SCRIPTS_DIR)/GeneratePreferences.rb $(WEB_PREFERENCES_TEMPLATES) $(WEB_PREFERENCES_COMBINED_INPUT_FILE) $(WEB_PREFERENCES_CATEGORY_INPUT_FILES)
 	$(RUBY) $< --frontend WebKit --base $(WEB_PREFERENCES_COMBINED_INPUT_FILE) --debug ${WTF_BUILD_SCRIPTS_DIR}/Preferences/WebPreferencesDebug.yaml --experimental ${WTF_BUILD_SCRIPTS_DIR}/Preferences/WebPreferencesExperimental.yaml	--internal ${WTF_BUILD_SCRIPTS_DIR}/Preferences/WebPreferencesInternal.yaml $(addprefix --template , $(WEB_PREFERENCES_TEMPLATES))
-
-
-# FIXME: We should switch to the internal HTTPSUpgradeList.txt once the feature is ready.
-# VPATH += $(WebKit2)/Shared/HTTPSUpgrade/
-VPATH := $(WebKit2)/Shared/HTTPSUpgrade/ $(VPATH)
-
-all : HTTPSUpgradeList.db
-HTTPSUpgradeList.db : HTTPSUpgradeList.txt $(WebKit2)/Scripts/generate-https-upgrade-database.sh
-	sh $(WebKit2)/Scripts/generate-https-upgrade-database.sh $< $@

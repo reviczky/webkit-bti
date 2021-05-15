@@ -200,7 +200,7 @@ private:
         RefPtr<StyleImage> image;
         LengthBox imageSlices { { 100, LengthType::Percent }, { 100, LengthType::Percent }, { 100, LengthType::Percent }, { 100, LengthType::Percent } };
         LengthBox borderSlices { { 1, LengthType::Relative }, { 1, LengthType::Relative }, { 1, LengthType::Relative }, { 1, LengthType::Relative } };
-        LengthBox outset { 0 };
+        LengthBox outset { LengthType::Relative };
 
     private:
         Data();
@@ -215,5 +215,6 @@ private:
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, const NinePieceImage&);
+WTF::TextStream& operator<<(WTF::TextStream&, NinePieceImageRule);
 
 } // namespace WebCore

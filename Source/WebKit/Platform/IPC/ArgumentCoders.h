@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -42,6 +42,7 @@ namespace IPC {
 
 // An argument coder works on POD types
 template<typename T> struct SimpleArgumentCoder {
+    template<typename Encoder>
     static void encode(Encoder& encoder, const T& t)
     {
         encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(&t), sizeof(T), alignof(T));
@@ -134,7 +135,8 @@ template<typename T> struct ArgumentCoder<OptionSet<T>> {
 };
 
 template<typename T> struct ArgumentCoder<Optional<T>> {
-    static void encode(Encoder& encoder, const Optional<T>& optional)
+    
+    template<typename Encoder> static void encode(Encoder& encoder, const Optional<T>& optional)
     {
         if (!optional) {
             encoder << false;
@@ -145,7 +147,7 @@ template<typename T> struct ArgumentCoder<Optional<T>> {
         encoder << optional.value();
     }
 
-    static WARN_UNUSED_RETURN bool decode(Decoder& decoder, Optional<T>& optional)
+    template<typename Decoder> static WARN_UNUSED_RETURN bool decode(Decoder& decoder, Optional<T>& optional)
     {
         bool isEngaged;
         if (!decoder.decode(isEngaged))
@@ -164,7 +166,7 @@ template<typename T> struct ArgumentCoder<Optional<T>> {
         return true;
     }
     
-    static Optional<Optional<T>> decode(Decoder& decoder)
+    template<typename Decoder> static Optional<Optional<T>> decode(Decoder& decoder)
     {
         Optional<bool> isEngaged;
         decoder >> isEngaged;
@@ -427,33 +429,25 @@ template<typename T, size_t inlineCapacity, typename OverflowHandler, size_t min
     static WARN_UNUSED_RETURN bool decode(Decoder& decoder, Vector<T, inlineCapacity, OverflowHandler, minCapacity>& vector)
     {
         uint64_t decodedSize;
-        if (!decoder.decode(decodedSize)) {
-            decoder.markInvalid();
+        if (!decoder.decode(decodedSize))
             return false;
-        }
 
-        if (!isInBounds<size_t>(decodedSize)) {
-            decoder.markInvalid();
+        if (!isInBounds<size_t>(decodedSize))
             return false;
-        }
 
         auto size = static_cast<size_t>(decodedSize);
 
         // Since we know the total size of the elements, we can allocate the vector in
         // one fell swoop. Before allocating we must however make sure that the decoder buffer
         // is big enough.
-        if (!decoder.bufferIsLargeEnoughToContain<T>(size)) {
-            decoder.markInvalid();
+        if (!decoder.bufferIsLargeEnoughToContain<T>(size))
             return false;
-        }
 
         Vector<T, inlineCapacity, OverflowHandler, minCapacity> temp;
         temp.grow(size);
 
-        if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(temp.data()), size * sizeof(T), alignof(T))) {
-            decoder.markInvalid();
+        if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(temp.data()), size * sizeof(T), alignof(T)))
             return false;
-        }
 
         vector.swap(temp);
         return true;
@@ -462,33 +456,25 @@ template<typename T, size_t inlineCapacity, typename OverflowHandler, size_t min
     static Optional<Vector<T, inlineCapacity, OverflowHandler, minCapacity>> decode(Decoder& decoder)
     {
         uint64_t decodedSize;
-        if (!decoder.decode(decodedSize)) {
-            decoder.markInvalid();
+        if (!decoder.decode(decodedSize))
             return WTF::nullopt;
-        }
 
-        if (!isInBounds<size_t>(decodedSize)) {
-            decoder.markInvalid();
+        if (!isInBounds<size_t>(decodedSize))
             return WTF::nullopt;
-        }
 
         auto size = static_cast<size_t>(decodedSize);
 
         // Since we know the total size of the elements, we can allocate the vector in
         // one fell swoop. Before allocating we must however make sure that the decoder buffer
         // is big enough.
-        if (!decoder.bufferIsLargeEnoughToContain<T>(size)) {
-            decoder.markInvalid();
+        if (!decoder.bufferIsLargeEnoughToContain<T>(size))
             return WTF::nullopt;
-        }
         
         Vector<T, inlineCapacity, OverflowHandler, minCapacity> vector;
         vector.grow(size);
 
-        if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(vector.data()), size * sizeof(T), alignof(T))) {
-            decoder.markInvalid();
+        if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(vector.data()), size * sizeof(T), alignof(T)))
             return WTF::nullopt;
-        }
 
         return vector;
     }
@@ -496,8 +482,8 @@ template<typename T, size_t inlineCapacity, typename OverflowHandler, size_t min
 
 template<typename T, size_t inlineCapacity, typename OverflowHandler, size_t minCapacity> struct ArgumentCoder<Vector<T, inlineCapacity, OverflowHandler, minCapacity>> : VectorArgumentCoder<std::is_arithmetic<T>::value, T, inlineCapacity, OverflowHandler, minCapacity> { };
 
-template<typename KeyArg, typename MappedArg, typename HashArg, typename KeyTraitsArg, typename MappedTraitsArg> struct ArgumentCoder<HashMap<KeyArg, MappedArg, HashArg, KeyTraitsArg, MappedTraitsArg>> {
-    typedef HashMap<KeyArg, MappedArg, HashArg, KeyTraitsArg, MappedTraitsArg> HashMapType;
+template<typename KeyArg, typename MappedArg, typename HashArg, typename KeyTraitsArg, typename MappedTraitsArg, typename HashTableTraits> struct ArgumentCoder<HashMap<KeyArg, MappedArg, HashArg, KeyTraitsArg, MappedTraitsArg, HashTableTraits>> {
+    typedef HashMap<KeyArg, MappedArg, HashArg, KeyTraitsArg, MappedTraitsArg, HashTableTraits> HashMapType;
 
     static void encode(Encoder& encoder, const HashMapType& hashMap)
     {
@@ -524,14 +510,11 @@ template<typename KeyArg, typename MappedArg, typename HashArg, typename KeyTrai
             if (UNLIKELY(!value))
                 return WTF::nullopt;
 
-            if (UNLIKELY(!HashMapType::isValidKey(*key))) {
-                decoder.markInvalid();
+            if (UNLIKELY(!HashMapType::isValidKey(*key)))
                 return WTF::nullopt;
-            }
 
             if (UNLIKELY(!hashMap.add(WTFMove(*key), WTFMove(*value)).isNewEntry)) {
                 // The hash map already has the specified key, bail.
-                decoder.markInvalid();
                 return WTF::nullopt;
             }
         }
@@ -550,8 +533,8 @@ template<typename KeyArg, typename MappedArg, typename HashArg, typename KeyTrai
     }
 };
 
-template<typename KeyArg, typename HashArg, typename KeyTraitsArg> struct ArgumentCoder<HashSet<KeyArg, HashArg, KeyTraitsArg>> {
-    typedef HashSet<KeyArg, HashArg, KeyTraitsArg> HashSetType;
+template<typename KeyArg, typename HashArg, typename KeyTraitsArg, typename HashTableTraits> struct ArgumentCoder<HashSet<KeyArg, HashArg, KeyTraitsArg, HashTableTraits>> {
+    typedef HashSet<KeyArg, HashArg, KeyTraitsArg, HashTableTraits> HashSetType;
 
     static void encode(Encoder& encoder, const HashSetType& hashSet)
     {
@@ -584,14 +567,11 @@ template<typename KeyArg, typename HashArg, typename KeyTraitsArg> struct Argume
             if (!key)
                 return WTF::nullopt;
 
-            if (UNLIKELY(!HashSetType::isValidValue(*key))) {
-                decoder.markInvalid();
+            if (UNLIKELY(!HashSetType::isValidValue(*key)))
                 return WTF::nullopt;
-            }
 
             if (UNLIKELY(!hashSet.add(WTFMove(*key)).isNewEntry)) {
                 // The hash set already has the specified key, bail.
-                decoder.markInvalid();
                 return WTF::nullopt;
             }
         }
@@ -629,14 +609,11 @@ template<typename KeyArg, typename HashArg, typename KeyTraitsArg> struct Argume
             if (!decoder.decode(count))
                 return false;
 
-            if (UNLIKELY(!HashCountedSetType::isValidValue(key))) {
-                decoder.markInvalid();
+            if (UNLIKELY(!HashCountedSetType::isValidValue(key)))
                 return false;
-            }
 
             if (UNLIKELY(!tempHashCountedSet.add(key, count).isNewEntry)) {
                 // The hash counted set already has the specified key, bail.
-                decoder.markInvalid();
                 return false;
             }
         }

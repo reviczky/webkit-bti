@@ -30,6 +30,7 @@
 #include "Logging.h"
 #include "PlatformWheelEvent.h"
 #include "WheelEventTestMonitor.h"
+#include <wtf/text/TextStream.h>
 
 #if ENABLE(CSS_SCROLL_SNAP)
 #include "ScrollSnapAnimatorState.h"
@@ -43,6 +44,48 @@ namespace WebCore {
 ScrollController::ScrollController(ScrollControllerClient& client)
     : m_client(client)
 {
+}
+
+void ScrollController::animationCallback(MonotonicTime currentTime)
+{
+    LOG_WITH_STREAM(Scrolling, stream << "ScrollController " << this << " animationCallback: isAnimatingRubberBand " << m_isAnimatingRubberBand << " isAnimatingScrollSnap " << m_isAnimatingScrollSnap);
+
+    updateScrollSnapAnimatingState(currentTime);
+    updateRubberBandAnimatingState(currentTime);
+}
+
+void ScrollController::startOrStopAnimationCallbacks()
+{
+    bool needsCallbacks = m_isAnimatingRubberBand || m_isAnimatingScrollSnap;
+    if (needsCallbacks == m_isRunningAnimatingCallback)
+        return;
+
+    if (needsCallbacks) {
+        m_client.startAnimationCallback(*this);
+        m_isRunningAnimatingCallback = true;
+        return;
+    }
+
+    m_client.stopAnimationCallback(*this);
+    m_isRunningAnimatingCallback = false;
+}
+
+void ScrollController::setIsAnimatingRubberBand(bool isAnimatingRubberBand)
+{
+    if (isAnimatingRubberBand == m_isAnimatingRubberBand)
+        return;
+        
+    m_isAnimatingRubberBand = isAnimatingRubberBand;
+    startOrStopAnimationCallbacks();
+}
+
+void ScrollController::setIsAnimatingScrollSnap(bool isAnimatingScrollSnap)
+{
+    if (isAnimatingScrollSnap == m_isAnimatingScrollSnap)
+        return;
+        
+    m_isAnimatingScrollSnap = isAnimatingScrollSnap;
+    startOrStopAnimationCallbacks();
 }
 
 bool ScrollController::usesScrollSnap() const
@@ -67,7 +110,7 @@ void ScrollController::updateScrollSnapState(const ScrollableArea& scrollableAre
     updateScrollSnapPoints(*snapOffsetInfo);
 }
 
-void ScrollController::updateScrollSnapPoints(const ScrollSnapOffsetsInfo<LayoutUnit>& snapOffsetInfo)
+void ScrollController::updateScrollSnapPoints(const LayoutScrollSnapOffsetsInfo& snapOffsetInfo)
 {
     if (snapOffsetInfo.isEmpty()) {
         m_scrollSnapState = nullptr;
@@ -116,7 +159,8 @@ void ScrollController::setNearestScrollSnapIndexForAxisAndOffset(ScrollEventAxis
 
     LayoutUnit clampedOffset = std::min(std::max(LayoutUnit(offset / scaleFactor), snapOffsets.first().offset), snapOffsets.last().offset);
 
-    unsigned activeIndex = snapState.snapOffsetInfo().closestSnapOffset(axis, clampedOffset, 0).second;
+    LayoutSize viewportSize(m_client.viewportSize().width(), m_client.viewportSize().height());
+    unsigned activeIndex = snapState.snapOffsetInfo().closestSnapOffset(axis, viewportSize, clampedOffset, 0).second;
     if (activeIndex == activeScrollSnapIndexForAxis(axis))
         return;
 
@@ -137,7 +181,8 @@ float ScrollController::adjustScrollDestination(ScrollEventAxis axis, float dest
     Optional<LayoutUnit> originalOffsetInLayoutUnits;
     if (originalOffset.hasValue())
         originalOffsetInLayoutUnits = LayoutUnit(*originalOffset / m_client.pageScaleFactor());
-    LayoutUnit offset = snapState.snapOffsetInfo().closestSnapOffset(axis, LayoutUnit(destinationOffset / m_client.pageScaleFactor()), velocity, originalOffsetInLayoutUnits).first;
+    LayoutSize viewportSize(m_client.viewportSize().width(), m_client.viewportSize().height());
+    LayoutUnit offset = snapState.snapOffsetInfo().closestSnapOffset(axis, viewportSize, LayoutUnit(destinationOffset / m_client.pageScaleFactor()), velocity, originalOffsetInLayoutUnits).first;
     return offset * m_client.pageScaleFactor();
 }
 
@@ -165,6 +210,16 @@ void ScrollController::stopAllTimers()
 
 void ScrollController::scrollPositionChanged()
 {
+}
+
+void ScrollController::updateScrollSnapAnimatingState(MonotonicTime)
+{
+
+}
+
+void ScrollController::updateRubberBandAnimatingState(MonotonicTime)
+{
+
 }
 
 #endif // PLATFORM(MAC)

@@ -325,7 +325,11 @@ const MediaPlayerFactory* MediaPlayer::mediaEngine(MediaPlayerEnums::MediaEngine
     });
 
     if (currentIndex == notFound) {
+#if PLATFORM(IOS_FAMILY_SIMULATOR)
+        ASSERT(identifier == MediaPlayerEnums::MediaEngineIdentifier::AVFoundationMSE);
+#else
         ASSERT_NOT_REACHED();
+#endif
         return nullptr;
     }
 
@@ -709,6 +713,11 @@ MediaTime MediaPlayer::currentTime() const
     return m_private->currentMediaTime();
 }
 
+bool MediaPlayer::setCurrentTimeDidChangeCallback(CurrentTimeDidChangeCallback&& callback)
+{
+    return m_private->setCurrentTimeDidChangeCallback(WTFMove(callback));
+}
+
 MediaTime MediaPlayer::getStartDate() const
 {
     return m_private->getStartDate();
@@ -1015,7 +1024,7 @@ bool MediaPlayer::copyVideoTextureToPlatformTexture(GraphicsContextGL* context, 
 
 #else
 
-CVPixelBufferRef MediaPlayer::pixelBufferForCurrentTime()
+RetainPtr<CVPixelBufferRef> MediaPlayer::pixelBufferForCurrentTime()
 {
     return m_private->pixelBufferForCurrentTime();
 }
@@ -1033,6 +1042,10 @@ MediaPlayer::SupportsType MediaPlayer::supportsType(const MediaEngineSupportPara
     // user agent knows it cannot render or is the type "application/octet-stream"
     AtomString containerType = parameters.type.containerType();
     if (containerType == applicationOctetStream())
+        return SupportsType::IsNotSupported;
+
+    auto lowercaseType = containerType.convertToASCIILowercase();
+    if (!lowercaseType.startsWith("video/") && !lowercaseType.startsWith("audio/") && !lowercaseType.startsWith("application/"))
         return SupportsType::IsNotSupported;
 
     const MediaPlayerFactory* engine = bestMediaEngineForSupportParameters(parameters);
@@ -1211,9 +1224,9 @@ static void addToHash(HashSet<T>& toHash, HashSet<T>&& fromHash)
         toHash.add(fromHash.begin(), fromHash.end());
 }
     
-HashSet<RefPtr<SecurityOrigin>> MediaPlayer::originsInMediaCache(const String& path)
+HashSet<SecurityOriginData> MediaPlayer::originsInMediaCache(const String& path)
 {
-    HashSet<RefPtr<SecurityOrigin>> origins;
+    HashSet<SecurityOriginData> origins;
     for (auto& engine : installedMediaEngines())
         addToHash(origins, engine->originsInMediaCache(path));
 
@@ -1226,7 +1239,7 @@ void MediaPlayer::clearMediaCache(const String& path, WallTime modifiedSince)
         engine->clearMediaCache(path, modifiedSince);
 }
 
-void MediaPlayer::clearMediaCacheForOrigins(const String& path, const HashSet<RefPtr<SecurityOrigin>>& origins)
+void MediaPlayer::clearMediaCacheForOrigins(const String& path, const HashSet<SecurityOriginData>& origins)
 {
     for (auto& engine : installedMediaEngines())
         engine->clearMediaCacheForOrigins(path, origins);
@@ -1659,6 +1672,11 @@ void MediaPlayer::audioOutputDeviceChanged()
 MediaPlayerIdentifier MediaPlayer::identifier() const
 {
     return m_private->identifier();
+}
+
+String MediaPlayer::elementId() const
+{
+    return client().mediaPlayerElementId();
 }
 
 #if !RELEASE_LOG_DISABLED

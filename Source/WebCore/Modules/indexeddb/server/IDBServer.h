@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBConnectionToClient.h"
 #include "IDBDatabaseIdentifier.h"
 #include "StorageQuotaManager.h"
@@ -38,7 +36,6 @@
 #include <wtf/HashMap.h>
 #include <wtf/Lock.h>
 #include <wtf/RefPtr.h>
-#include <wtf/WeakHashSet.h>
 
 namespace WebCore {
 
@@ -55,7 +52,7 @@ class IDBServer {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     using StorageQuotaManagerSpaceRequester = Function<StorageQuotaManager::Decision(const ClientOrigin&, uint64_t spaceRequested)>;
-    WEBCORE_EXPORT IDBServer(PAL::SessionID, const String& databaseDirectoryPath, StorageQuotaManagerSpaceRequester&&);
+    WEBCORE_EXPORT IDBServer(PAL::SessionID, const String& databaseDirectoryPath, StorageQuotaManagerSpaceRequester&&, Lock&);
     WEBCORE_EXPORT ~IDBServer();
 
     WEBCORE_EXPORT void registerConnection(IDBConnectionToClient&);
@@ -112,8 +109,6 @@ public:
 
     WEBCORE_EXPORT void stopDatabaseActivitiesOnMainThread();
 
-    Lock& lock() { return m_lock; };
-
 private:
     UniqueIDBDatabase& getOrCreateUniqueIDBDatabase(const IDBDatabaseIdentifier&);
 
@@ -134,10 +129,8 @@ private:
 
     StorageQuotaManagerSpaceRequester m_spaceRequester;
 
-    Lock m_lock;
+    Lock& m_lock;
 };
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

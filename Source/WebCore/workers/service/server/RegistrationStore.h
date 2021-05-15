@@ -34,6 +34,7 @@
 #include "Timer.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/HashMap.h>
+#include <wtf/URLHash.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
@@ -63,6 +64,7 @@ public:
     void addRegistrationFromDatabase(ServiceWorkerContextData&&);
     void databaseFailedToOpen();
     void databaseOpenedAndRecordsImported();
+    void didSaveWorkerScriptsToDisk(ServiceWorkerIdentifier, ScriptBuffer&& mainScript, HashMap<URL, ScriptBuffer>&& importedScripts);
 
     SWServer& server() { return m_server; };
 

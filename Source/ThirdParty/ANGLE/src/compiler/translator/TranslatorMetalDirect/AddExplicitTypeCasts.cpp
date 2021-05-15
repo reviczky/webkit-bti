@@ -16,10 +16,11 @@ namespace
 class Rewriter : public TIntermRebuild
 {
     SymbolEnv &mSymbolEnv;
+    bool mNeedsExplicitBoolCasts = false;
 
   public:
-    Rewriter(TCompiler &compiler, SymbolEnv &symbolEnv)
-        : TIntermRebuild(compiler, false, true), mSymbolEnv(symbolEnv)
+    Rewriter(TCompiler &compiler, SymbolEnv &symbolEnv, bool needsExplicitBoolCasts)
+        : TIntermRebuild(compiler, false, true), mSymbolEnv(symbolEnv), mNeedsExplicitBoolCasts(needsExplicitBoolCasts)
     {}
 
     PostResult visitAggregatePost(TIntermAggregate &callNode) override
@@ -37,7 +38,7 @@ class Rewriter : public TIntermRebuild
                     const TType argType = arg.getType();
                     if (argType.isVector())
                     {
-                        return CoerceSimple(retType, SubVector(arg, 0, 1));
+                        return CoerceSimple(retType, SubVector(arg, 0, 1), mNeedsExplicitBoolCasts);
                     }
                 }
             }
@@ -49,13 +50,13 @@ class Rewriter : public TIntermRebuild
                     const TType argType = arg.getType();
                     if (argType.isVector())
                     {
-                        return CoerceSimple(retType, SubVector(arg, 0, retType.getNominalSize()));
+                        return CoerceSimple(retType, SubVector(arg, 0, retType.getNominalSize()), mNeedsExplicitBoolCasts);
                     }
                 }
                 for (size_t i = 0; i < argCount; ++i)
                 {
                     TIntermTyped &arg = GetArg(callNode, i);
-                    SetArg(callNode, i, CoerceSimple(retType.getBasicType(), arg));
+                    SetArg(callNode, i, CoerceSimple(retType.getBasicType(), arg, mNeedsExplicitBoolCasts));
                 }
             }
             else if (retType.isMatrix())
@@ -84,9 +85,9 @@ class Rewriter : public TIntermRebuild
 
 }  // anonymous namespace
 
-bool sh::AddExplicitTypeCasts(TCompiler &compiler, TIntermBlock &root, SymbolEnv &symbolEnv)
+bool sh::AddExplicitTypeCasts(TCompiler &compiler, TIntermBlock &root, SymbolEnv &symbolEnv, bool needsExplicitBoolCasts)
 {
-    Rewriter rewriter(compiler, symbolEnv);
+    Rewriter rewriter(compiler, symbolEnv, needsExplicitBoolCasts);
     if (!rewriter.rebuildRoot(root))
     {
         return false;
