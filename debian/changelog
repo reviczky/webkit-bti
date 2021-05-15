@@ -7,6 +7,8 @@ webkit2gtk (2.33.1-1) UNRELEASED; urgency=medium
   * debian/watch, debian/gbp.conf:
     + Update for 2.33.x packages in experimental.
   * Refresh all patches.
+  * debian/rules:
+    + Build with -DUSE_SOUP2=ON.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 11 Apr 2021 14:35:04 +0200
 
