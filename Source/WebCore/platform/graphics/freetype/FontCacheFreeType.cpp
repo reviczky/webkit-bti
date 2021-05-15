@@ -195,6 +195,9 @@ private:
 };
 
 struct FallbackFontDescriptionKey {
+    FontDescriptionKey descriptionKey;
+    bool coloredFont { false };
+
     FallbackFontDescriptionKey() = default;
 
     FallbackFontDescriptionKey(const FontDescription& description, FontCache::PreferColoredFont preferColoredFont)
@@ -220,17 +223,10 @@ struct FallbackFontDescriptionKey {
 
     bool isHashTableDeletedValue() const { return descriptionKey.isHashTableDeletedValue(); }
 
-    unsigned computeHash() const
-    {
-        return WTF::pairIntHash(descriptionKey.computeHash(), WTF::DefaultHash<bool>::hash(coloredFont));
-    }
-
-    FontDescriptionKey descriptionKey;
-    bool coloredFont { false };
 };
 
 struct FallbackFontDescriptionKeyHash {
-    static unsigned hash(const FallbackFontDescriptionKey& key) { return key.computeHash(); }
+    static unsigned hash(const FallbackFontDescriptionKey& key) { return computeHash(key.descriptionKey, key.coloredFont); }
     static bool equal(const FallbackFontDescriptionKey& a, const FallbackFontDescriptionKey& b) { return a == b; }
     static const bool safeToCompareToEmptyOrDeleted = true;
 };
@@ -250,6 +246,8 @@ RefPtr<Font> FontCache::systemFallbackForCharacters(const FontDescription& descr
 #ifdef FC_COLOR
         if (preferColoredFont == PreferColoredFont::Yes)
             FcPatternAddBool(pattern.get(), FC_COLOR, FcTrue);
+#else
+        UNUSED_VARIABLE(preferColoredFont);
 #endif
         if (!configurePatternForFontDescription(pattern.get(), description))
             return nullptr;
@@ -319,9 +317,8 @@ Ref<Font> FontCache::lastResortFallbackFont(const FontDescription& fontDescripti
 {
     // We want to return a fallback font here, otherwise the logic preventing FontConfig
     // matches for non-fallback fonts might return 0. See isFallbackFontAllowed.
-    static AtomString timesStr("serif");
-    if (RefPtr<Font> font = fontForFamily(fontDescription, timesStr))
-        return *font;
+    if (RefPtr<Font> font = fontForFamily(fontDescription, "serif"_s))
+        return font.releaseNonNull();
 
     // This could be reached due to improperly-installed or misconfigured fontconfig.
     RELEASE_ASSERT_NOT_REACHED();
@@ -332,26 +329,26 @@ Vector<FontSelectionCapabilities> FontCache::getFontSelectionCapabilitiesInFamil
     return { };
 }
 
-static String getFamilyNameStringFromFamily(const AtomString& family)
+static String getFamilyNameStringFromFamily(const String& family)
 {
     // If we're creating a fallback font (e.g. "-webkit-monospace"), convert the name into
     // the fallback name (like "monospace") that fontconfig understands.
     if (family.length() && !family.startsWith("-webkit-"))
-        return family.string();
+        return family;
 
-    if (family == standardFamily || family == serifFamily)
+    if (family == familyNamesData->at(FamilyNamesIndex::StandardFamily) || family == familyNamesData->at(FamilyNamesIndex::SerifFamily))
         return "serif";
-    if (family == sansSerifFamily)
+    if (family == familyNamesData->at(FamilyNamesIndex::SansSerifFamily))
         return "sans-serif";
-    if (family == monospaceFamily)
+    if (family == familyNamesData->at(FamilyNamesIndex::MonospaceFamily))
         return "monospace";
-    if (family == cursiveFamily)
+    if (family == familyNamesData->at(FamilyNamesIndex::CursiveFamily))
         return "cursive";
-    if (family == fantasyFamily)
+    if (family == familyNamesData->at(FamilyNamesIndex::FantasyFamily))
         return "fantasy";
 
 #if PLATFORM(GTK)
-    if (family == systemUiFamily || family == "-webkit-system-font")
+    if (family == familyNamesData->at(FamilyNamesIndex::SystemUiFamily) || family == "-webkit-system-font")
         return defaultGtkSystemFont();
 #endif
 
@@ -599,9 +596,9 @@ std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDe
     return platformData;
 }
 
-const AtomString& FontCache::platformAlternateFamilyName(const AtomString&)
+Optional<ASCIILiteral> FontCache::platformAlternateFamilyName(const String&)
 {
-    return nullAtom();
+    return WTF::nullopt;
 }
 
 #if ENABLE(VARIATION_FONTS)

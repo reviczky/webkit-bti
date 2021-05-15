@@ -40,14 +40,12 @@
 namespace WebKit {
 
 class RemoteAudioSourceProviderManager;
-class RemoteCDMFactory;
-class RemoteMediaEngineConfigurationFactory;
 class RemoteMediaPlayerManager;
-class RemoteLegacyCDMFactory;
+class WebPage;
 struct OverrideScreenDataForTesting;
 struct WebPageCreationParameters;
 
-class GPUProcessConnection : public RefCounted<GPUProcessConnection>, public CanMakeWeakPtr<GPUProcessConnection>, IPC::Connection::Client {
+class GPUProcessConnection : public RefCounted<GPUProcessConnection>, public IPC::Connection::Client {
 public:
     static Ref<GPUProcessConnection> create(IPC::Connection::Identifier connectionIdentifier)
     {
@@ -72,23 +70,19 @@ public:
     RemoteAudioSourceProviderManager& audioSourceProviderManager();
 #endif
 
-#if ENABLE(ENCRYPTED_MEDIA)
-    RemoteCDMFactory& cdmFactory();
-#endif
-
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
-    RemoteLegacyCDMFactory& legacyCDMFactory();
-#endif
-
-    RemoteMediaEngineConfigurationFactory& mediaEngineConfigurationFactory();
-
-    void updateParameters(const WebPageCreationParameters&);
     void updateMediaConfiguration();
 
 #if ENABLE(VP9)
+    void enableVP9Decoders(bool enableVP8Decoder, bool enableVP9Decoder, bool enableVP9SWDecoder);
+
     bool isVP8DecoderEnabled() const { return m_enableVP8Decoder; }
     bool isVP9DecoderEnabled() const { return m_enableVP9Decoder; }
     bool isVPSWDecoderEnabled() const { return m_enableVP9SWDecoder; }
+#endif
+
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    void createVisibilityPropagationContextForPage(WebPage&);
+    void destroyVisibilityPropagationContextForPage(WebPage&);
 #endif
 
     class Client : public CanMakeWeakPtr<Client> {
@@ -106,11 +100,11 @@ private:
     // IPC::Connection::Client
     void didClose(IPC::Connection&) override;
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
-    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) final;
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) final;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
 
     bool dispatchMessage(IPC::Connection&, IPC::Decoder&);
-    bool dispatchSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
+    bool dispatchSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&);
 
     void didReceiveRemoteCommand(WebCore::PlatformMediaSession::RemoteControlCommandType, const WebCore::PlatformMediaSession::RemoteCommandArgument&);
 

@@ -106,8 +106,8 @@ class SelectionData;
 enum class MouseEventPolicy : uint8_t;
 enum class RouteSharingPolicy : uint8_t;
 enum class ScrollbarStyle : uint8_t;
-enum class TextIndicatorWindowLifetime : uint8_t;
-enum class TextIndicatorWindowDismissalAnimation : uint8_t;
+enum class TextIndicatorLifetime : uint8_t;
+enum class TextIndicatorDismissalAnimation : uint8_t;
 enum class DOMPasteAccessResponse : uint8_t;
 
 struct AppHighlight;
@@ -125,6 +125,10 @@ struct DragItem;
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 struct PromisedAttachmentInfo;
+#endif
+
+#if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
+struct TranslationContextMenuInfo;
 #endif
 }
 
@@ -331,16 +335,21 @@ public:
 #endif
 #if PLATFORM(IOS_FAMILY)
     virtual void didNotHandleTapAsClick(const WebCore::IntPoint&) = 0;
+    virtual void didNotHandleTapAsMeaningfulClickAtPoint(const WebCore::IntPoint&) = 0;
     virtual void didCompleteSyntheticClick() = 0;
 #endif
 
+    virtual void runModalJavaScriptDialog(CompletionHandler<void()>&& callback) { callback(); }
+
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    virtual void didCreateContextForVisibilityPropagation(LayerHostingContextID) { }
+    virtual void didCreateContextInWebProcessForVisibilityPropagation(LayerHostingContextID) { }
+#if ENABLE(GPU_PROCESS)
     virtual void didCreateContextInGPUProcessForVisibilityPropagation(LayerHostingContextID) { }
+#endif
 #endif
 
 #if ENABLE(GPU_PROCESS)
-    virtual void gpuProcessCrashed() { }
+    virtual void gpuProcessDidExit() { }
 #endif
 
     virtual void doneWithKeyEvent(const NativeWebKeyboardEvent&, bool wasEventHandled) = 0;
@@ -355,6 +364,8 @@ public:
     virtual RefPtr<WebPopupMenuProxy> createPopupMenuProxy(WebPageProxy&) = 0;
 #if ENABLE(CONTEXT_MENUS)
     virtual Ref<WebContextMenuProxy> createContextMenuProxy(WebPageProxy&, ContextMenuContextData&&, const UserData&) = 0;
+    virtual void didShowContextMenu() { }
+    virtual void didDismissContextMenu() { }
 #endif
 
 #if ENABLE(INPUT_TYPE_COLOR)
@@ -374,8 +385,8 @@ public:
 #endif
 
 #if PLATFORM(COCOA)
-    virtual void setTextIndicator(Ref<WebCore::TextIndicator>, WebCore::TextIndicatorWindowLifetime) = 0;
-    virtual void clearTextIndicator(WebCore::TextIndicatorWindowDismissalAnimation) = 0;
+    virtual void setTextIndicator(Ref<WebCore::TextIndicator>, WebCore::TextIndicatorLifetime) = 0;
+    virtual void clearTextIndicator(WebCore::TextIndicatorDismissalAnimation) = 0;
     virtual void setTextIndicatorAnimationProgress(float) = 0;
     
     virtual void didPerformDictionaryLookup(const WebCore::DictionaryPopupInfo&) = 0;
@@ -505,6 +516,8 @@ public:
     virtual void themeColorDidChange() { }
     virtual void pageExtendedBackgroundColorWillChange() { }
     virtual void pageExtendedBackgroundColorDidChange() { }
+    virtual void sampledPageTopColorWillChange() { }
+    virtual void sampledPageTopColorDidChange() { }
     virtual void didChangeBackgroundColor() = 0;
     virtual void isPlayingAudioWillChange() = 0;
     virtual void isPlayingAudioDidChange() = 0;
@@ -517,25 +530,31 @@ public:
 
     virtual void setMouseEventPolicy(WebCore::MouseEventPolicy) { }
 
-    virtual void setHasBlankOverlay(bool) { }
+    virtual void makeViewBlank(bool) { }
 
 #if HAVE(PASTEBOARD_DATA_OWNER)
     virtual WebCore::DataOwnerType dataOwnerForPasteboard(PasteboardAccessIntent) const { return WebCore::DataOwnerType::Undefined; }
 #endif
 
 #if ENABLE(IMAGE_EXTRACTION)
-    virtual void requestImageExtraction(const ShareableBitmap::Handle&, CompletionHandler<void(WebCore::ImageExtractionResult&&)>&& completion) { completion({ }); }
+    virtual void requestImageExtraction(const URL& imageURL, const ShareableBitmap::Handle& imageData, CompletionHandler<void(WebCore::ImageExtractionResult&&)>&& completion) { completion({ }); }
+    virtual void computeCanRevealImage(const URL&, ShareableBitmap&, CompletionHandler<void(bool)>&& completion) { completion(false); }
 #endif
 
-#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
     virtual void showMediaControlsContextMenu(WebCore::FloatRect&&, Vector<WebCore::MediaControlsContextMenuItem>&&, CompletionHandler<void(WebCore::MediaControlsContextMenuItem::ID)>&& completionHandler) { completionHandler(WebCore::MediaControlsContextMenuItem::invalidID); }
-#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
     
 #if PLATFORM(MAC)
     virtual void didPerformImmediateActionHitTest(const WebHitTestResultData&, bool contentPreventsDefault, API::Object*) = 0;
     virtual NSObject *immediateActionAnimationControllerForHitTestResult(RefPtr<API::HitTestResult>, uint64_t, RefPtr<API::Object>) = 0;
     virtual void didHandleAcceptedCandidate() = 0;
 #endif
+
+    virtual void microphoneCaptureWillChange() { }
+    virtual void cameraCaptureWillChange() { }
+    virtual void microphoneCaptureChanged() { }
+    virtual void cameraCaptureChanged() { }
 
     virtual void videoControlsManagerDidChange() { }
 
@@ -598,6 +617,11 @@ public:
 
 #if PLATFORM(GTK)
     virtual String themeName() const = 0;
+#endif
+
+#if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
+    virtual bool canHandleContextMenuTranslation() const = 0;
+    virtual void handleContextMenuTranslation(const WebCore::TranslationContextMenuInfo&) = 0;
 #endif
 };
 

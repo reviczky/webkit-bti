@@ -36,10 +36,10 @@
 #if ENABLE(OFFSCREEN_CANVAS)
 
 #include "CSSFontSelector.h"
-#include "CSSParser.h"
 #include "CSSPropertyParserHelpers.h"
-#include "Document.h"
+#include "CSSPropertyParserWorkerSafe.h"
 #include "RenderStyle.h"
+#include "ScriptExecutionContext.h"
 #include "StyleResolveForFontRaw.h"
 #include "TextMetrics.h"
 #include <wtf/IsoMallocInlines.h>
@@ -63,8 +63,6 @@ void OffscreenCanvasRenderingContext2D::commit()
 void OffscreenCanvasRenderingContext2D::setFont(const String& newFont)
 {
     auto& context = *canvasBase().scriptExecutionContext();
-    if (!is<Document>(context))
-        return;
 
     if (newFont.isEmpty())
         return;
@@ -73,8 +71,8 @@ void OffscreenCanvasRenderingContext2D::setFont(const String& newFont)
         return;
 
     // According to http://lists.w3.org/Archives/Public/public-html/2009Jul/0947.html,
-    // the "inherit" and "initial" values must be ignored. parseFontWorkerSafe() ignores these.
-    auto fontRaw = CSSParser::parseFontWorkerSafe(newFont, strictToCSSParserMode(!m_usesCSSCompatibilityParseMode));
+    // the "inherit" and "initial" values must be ignored. CSSPropertyParserWorkerSafe::parseFont() ignores these.
+    auto fontRaw = CSSPropertyParserWorkerSafe::parseFont(newFont, strictToCSSParserMode(!usesCSSCompatibilityParseMode()));
     if (!fontRaw)
         return;
 
@@ -90,11 +88,10 @@ void OffscreenCanvasRenderingContext2D::setFont(const String& newFont)
     fontDescription.setSpecifiedSize(DefaultFontSize);
     fontDescription.setComputedSize(DefaultFontSize);
 
-    auto& document = downcast<Document>(context);
-    auto fontStyle = Style::resolveForFontRaw(*fontRaw, WTFMove(fontDescription), document);
-
-    if (fontStyle)
-        modifiableState().font.initialize(document.fontSelector(), *fontStyle);
+    if (auto fontCascade = Style::resolveForFontRaw(*fontRaw, WTFMove(fontDescription), context)) {
+        ASSERT(context.cssFontSelector());
+        modifiableState().font.initialize(*context.cssFontSelector(), *fontCascade);
+    }
 }
 
 CanvasDirection OffscreenCanvasRenderingContext2D::direction() const

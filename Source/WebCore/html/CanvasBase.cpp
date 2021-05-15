@@ -30,6 +30,8 @@
 #include "CanvasRenderingContext.h"
 #include "Element.h"
 #include "FloatRect.h"
+#include "GraphicsContext.h"
+#include "ImageBuffer.h"
 #include "InspectorInstrumentation.h"
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSLock.h>
@@ -134,7 +136,7 @@ void CanvasBase::removeObserver(CanvasObserver& observer)
         InspectorInstrumentation::didChangeCSSCanvasClientNodes(*this);
 }
 
-void CanvasBase::notifyObserversCanvasChanged(const FloatRect& rect)
+void CanvasBase::notifyObserversCanvasChanged(const Optional<FloatRect>& rect)
 {
     for (auto& observer : m_observers)
         observer->canvasChanged(*this, rect);
@@ -176,10 +178,10 @@ HashSet<Element*> CanvasBase::cssCanvasClients() const
     return cssCanvasClients;
 }
 
-bool CanvasBase::callTracingActive() const
+bool CanvasBase::hasActiveInspectorCanvasCallTracer() const
 {
     auto* context = renderingContext();
-    return context && context->callTracingActive();
+    return context && context->hasActiveInspectorCanvasCallTracer();
 }
 
 RefPtr<ImageBuffer> CanvasBase::setImageBuffer(RefPtr<ImageBuffer>&& buffer) const

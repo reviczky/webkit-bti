@@ -50,7 +50,7 @@ public:
 private:
     // Implementations of WorkerGlobalScopeProxy.
     // (Only use these functions in the worker object thread.)
-    void startWorkerGlobalScope(const URL& scriptURL, const String& name, const String& userAgent, bool isOnline, const String& sourceCode, const ContentSecurityPolicyResponseHeaders&, bool shouldBypassMainWorldContentSecurityPolicy, MonotonicTime timeOrigin, ReferrerPolicy, WorkerType, FetchRequestCredentials, JSC::RuntimeFlags) final;
+    void startWorkerGlobalScope(const URL& scriptURL, const String& name, const String& userAgent, bool isOnline, const ScriptBuffer& sourceCode, const ContentSecurityPolicyResponseHeaders&, bool shouldBypassMainWorldContentSecurityPolicy, MonotonicTime timeOrigin, ReferrerPolicy, WorkerType, FetchRequestCredentials, JSC::RuntimeFlags) final;
     void terminateWorkerGlobalScope() final;
     void postMessageToWorkerGlobalScope(MessageWithMessagePorts&&) final;
     void postTaskToWorkerGlobalScope(Function<void(ScriptExecutionContext&)>&&) final;
@@ -81,6 +81,7 @@ private:
     bool isWorkerMessagingProxy() const final { return true; }
     void postTaskToLoader(ScriptExecutionContext::Task&&) final;
     RefPtr<CacheStorageConnection> createCacheStorageConnection() final;
+    RefPtr<RTCDataChannelRemoteHandlerConnection> createRTCDataChannelRemoteHandlerConnection() final;
 
     void workerThreadCreated(DedicatedWorkerThread&);
 

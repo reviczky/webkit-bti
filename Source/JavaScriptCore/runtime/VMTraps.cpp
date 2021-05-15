@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,18 +36,14 @@
 #include "LLIntPCRanges.h"
 #include "MachineContext.h"
 #include "MacroAssemblerCodeRef.h"
-#include "VM.h"
+#include "VMEntryScope.h"
+#include "VMTrapsInlines.h"
 #include "Watchdog.h"
 #include <wtf/ProcessID.h>
 #include <wtf/ThreadMessage.h>
 #include <wtf/threads/Signals.h>
 
 namespace JSC {
-
-ALWAYS_INLINE VM& VMTraps::vm() const
-{
-    return *bitwise_cast<VM*>(bitwise_cast<uintptr_t>(this) - OBJECT_OFFSETOF(VM, m_traps));
-}
 
 #if ENABLE(SIGNAL_BASED_VM_TRAPS)
 
@@ -145,7 +141,7 @@ void VMTraps::tryInstallTrapBreakpoints(SignalContext& context, StackBounds stac
         if (!locker)
             return; // Let the SignalSender try again later.
 
-        if (!needTrapHandling()) {
+        if (!needHandling(VMTraps::AsyncEvents)) {
             // Too late. Someone else already handled the trap.
             return;
         }
@@ -252,7 +248,7 @@ private:
         if (traps().m_isShuttingDown)
             return PollResult::Stop;
 
-        if (!traps().needTrapHandling())
+        if (!traps().needHandling(VMTraps::AsyncEvents))
             return PollResult::Wait;
 
         // We know that no trap could have been processed and re-added because we are holding the lock.
@@ -322,13 +318,14 @@ void VMTraps::willDestroyVM()
 #endif
 }
 
-void VMTraps::fireTrap(VMTraps::EventType eventType)
+void VMTraps::fireTrap(VMTraps::Event event)
 {
     ASSERT(!vm().currentThreadIsHoldingAPILock());
+    ASSERT(onlyContainsAsyncEvents(event));
     {
         auto locker = holdLock(*m_lock);
         ASSERT(!m_isShuttingDown);
-        setTrapForEvent(locker, eventType);
+        setTrapBit(event);
         m_needToInvalidatedCodeBlocks = true;
     }
     
@@ -345,10 +342,15 @@ void VMTraps::fireTrap(VMTraps::EventType eventType)
 #endif
 }
 
-void VMTraps::handleTraps(JSGlobalObject* globalObject, CallFrame* callFrame, VMTraps::Mask mask)
+void VMTraps::handleTraps(VMTraps::BitField mask)
 {
     VM& vm = this->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
+    ASSERT(onlyContainsAsyncEvents(mask));
+    ASSERT(needHandling(mask));
+
+    if (isDeferringTermination())
+        mask &= ~NeedTermination;
 
     {
         auto codeBlockSetLocker = holdLock(vm.heap.codeBlockSet().getLock());
@@ -359,13 +361,12 @@ void VMTraps::handleTraps(JSGlobalObject* globalObject, CallFrame* callFrame, VM
         });
     }
 
-    ASSERT(needTrapHandling(mask));
-    while (needTrapHandling(mask)) {
-        auto eventType = takeTopPriorityTrap(mask);
-        switch (eventType) {
+    while (needHandling(mask)) {
+        auto event = takeTopPriorityTrap(mask);
+        switch (event) {
         case NeedDebuggerBreak:
             dataLog("VM ", RawPointer(&vm), " on pid ", getCurrentProcessID(), " received NeedDebuggerBreak trap\n");
-            invalidateCodeBlocksOnStack(callFrame);
+            invalidateCodeBlocksOnStack(vm.topCallFrame);
             break;
 
         case NeedShellTimeoutCheck:
@@ -375,31 +376,64 @@ void VMTraps::handleTraps(JSGlobalObject* globalObject, CallFrame* callFrame, VM
 
         case NeedWatchdogCheck:
             ASSERT(vm.watchdog());
-            if (LIKELY(!vm.watchdog()->shouldTerminate(globalObject)))
+            if (LIKELY(!vm.watchdog()->isActive() || !vm.watchdog()->shouldTerminate(vm.entryScope->globalObject())))
                 continue;
+            vm.setTerminationInProgress(true);
             FALLTHROUGH;
 
         case NeedTermination:
-            throwException(globalObject, scope, createTerminatedExecutionException(&vm));
+            ASSERT(vm.terminationInProgress());
+            scope.release();
+            if (!isDeferringTermination())
+                vm.throwTerminationException();
             return;
 
+        case NeedExceptionHandling:
         default:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
 }
 
-auto VMTraps::takeTopPriorityTrap(VMTraps::Mask mask) -> EventType
+auto VMTraps::takeTopPriorityTrap(VMTraps::BitField mask) -> Event
 {
     auto locker = holdLock(*m_lock);
-    for (int i = 0; i < NumberOfEventTypes; ++i) {
-        EventType eventType = static_cast<EventType>(i);
-        if (hasTrapForEvent(locker, eventType, mask)) {
-            clearTrapForEvent(locker, eventType);
-            return eventType;
+
+    // Note: the EventBitShift is already sorted in highest to lowest priority
+    // i.e. a bit shift of 0 is highest priority, etc.
+    for (int i = 0; i < NumberOfEvents; ++i) {
+        Event event = static_cast<Event>(1 << i);
+        if (hasTrapBit(event, mask)) {
+            clearTrapBit(event);
+            return event;
         }
     }
-    return Invalid;
+    return NoEvent;
+}
+
+void VMTraps::deferTerminationSlow(DeferAction)
+{
+    ASSERT(m_deferTerminationCount == 1);
+
+    VM& vm = this->vm();
+    if (vm.hasPendingTerminationException()) {
+        ASSERT(vm.terminationInProgress());
+        vm.clearException();
+        m_suspendedTerminationException = true;
+    }
+}
+
+void VMTraps::undoDeferTerminationSlow(DeferAction deferAction)
+{
+    ASSERT(m_deferTerminationCount == 0);
+
+    VM& vm = this->vm();
+    ASSERT(vm.terminationInProgress());
+    if (m_suspendedTerminationException || (deferAction == DeferAction::DeferUntilEndOfScope)) {
+        vm.throwTerminationException();
+        m_suspendedTerminationException = false;
+    } else if (deferAction == DeferAction::DeferForAWhile)
+        setTrapBit(NeedTermination); // Let the next trap check handle it.
 }
 
 VMTraps::VMTraps()

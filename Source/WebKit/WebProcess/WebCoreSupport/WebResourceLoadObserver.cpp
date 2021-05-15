@@ -93,8 +93,8 @@ ResourceLoadStatistics& WebResourceLoadObserver::ensureResourceStatisticsForRegi
 {
     RELEASE_ASSERT(!isEphemeral());
 
-    return m_resourceStatisticsMap.ensure(domain, [&domain] {
-        return ResourceLoadStatistics(domain);
+    return *m_resourceStatisticsMap.ensure(domain, [&domain] {
+        return makeUnique<ResourceLoadStatistics>(domain);
     }).iterator->value;
 }
 
@@ -118,11 +118,11 @@ void WebResourceLoadObserver::updateCentralStatisticsStore(CompletionHandler<voi
 
 String WebResourceLoadObserver::statisticsForURL(const URL& url)
 {
-    auto iter = m_resourceStatisticsMap.find(RegistrableDomain { url });
-    if (iter == m_resourceStatisticsMap.end())
+    auto* statistics = m_resourceStatisticsMap.get(RegistrableDomain { url });
+    if (!statistics)
         return emptyString();
 
-    return makeString("Statistics for ", url.host().toString(), ":\n", iter->value.toString());
+    return makeString("Statistics for ", url.host().toString(), ":\n", statistics->toString());
 }
 
 Vector<ResourceLoadStatistics> WebResourceLoadObserver::takeStatistics()
@@ -130,7 +130,7 @@ Vector<ResourceLoadStatistics> WebResourceLoadObserver::takeStatistics()
     Vector<ResourceLoadStatistics> statistics;
     statistics.reserveInitialCapacity(m_resourceStatisticsMap.size());
     for (auto& statistic : m_resourceStatisticsMap.values())
-        statistics.uncheckedAppend(WTFMove(statistic));
+        statistics.uncheckedAppend(ResourceLoadStatistics(WTFMove(*statistic)));
     m_resourceStatisticsMap.clear();
     return statistics;
 }
@@ -439,6 +439,25 @@ void WebResourceLoadObserver::setDomainsWithCrossPageStorageAccess(HashMap<TopFr
             m_domainsWithCrossPageStorageAccess.ensure(topDomain, [] { return HashSet<RegistrableDomain> { };
                 }).iterator->value.add(*additionalLoginDomain);
         }
+    }
+    completionHandler();
+}
+
+bool WebResourceLoadObserver::hasDeniedCrossPageStorageAccess(const SubFrameDomain& subDomain, const TopFrameDomain& topDomain) const
+{
+    auto it = m_domainsWithDeniedStorageAccess.find(topDomain);
+
+    if (it != m_domainsWithDeniedStorageAccess.end())
+        return it->value.contains(subDomain);
+
+    return false;
+}
+
+void WebResourceLoadObserver::setHasDeniedCrossPageStorageAccess(HashMap<TopFrameDomain, SubFrameDomain>&& domains, CompletionHandler<void()>&& completionHandler)
+{
+    for (auto& topDomain : domains.keys()) {
+        m_domainsWithDeniedStorageAccess.ensure(topDomain, [] { return HashSet<RegistrableDomain> { };
+            }).iterator->value.add(domains.get(topDomain));
     }
     completionHandler();
 }

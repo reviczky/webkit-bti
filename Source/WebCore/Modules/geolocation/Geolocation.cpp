@@ -31,6 +31,7 @@
 #if ENABLE(GEOLOCATION)
 
 #include "Document.h"
+#include "FeaturePolicy.h"
 #include "Frame.h"
 #include "GeoNotifier.h"
 #include "GeolocationController.h"
@@ -343,24 +344,25 @@ static void logError(const String& target, const bool isSecure, const bool isMix
 // FIXME: remove this function when rdar://problem/32137821 is fixed.
 static bool isRequestFromIBooks()
 {
-#if PLATFORM(MAC)
-    return MacApplication::isIBooks();
-#elif PLATFORM(IOS_FAMILY)
-    return IOSApplication::isIBooks();
+#if PLATFORM(COCOA)
+    return CocoaApplication::isIBooks();
 #endif
     return false;
 }
     
 bool Geolocation::shouldBlockGeolocationRequests()
 {
-    bool isSecure = SecurityOrigin::isSecure(document()->url());
+    if (!isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::Geolocation, *document(), LogFeaturePolicyFailure::Yes))
+        return true;
+
+    bool isSecure = SecurityOrigin::isSecure(document()->url()) || document()->isSecureContext();
     bool hasMixedContent = !document()->foundMixedContent().isEmpty();
     bool isLocalOrigin = securityOrigin()->isLocal();
     if (securityOrigin()->canRequestGeolocation()) {
         if (isLocalOrigin || (isSecure && !hasMixedContent) || isRequestFromIBooks())
             return false;
     }
-    
+
     logError(securityOrigin()->toString(), isSecure, hasMixedContent, document());
     return true;
 }

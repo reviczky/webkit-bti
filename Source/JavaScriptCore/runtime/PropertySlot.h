@@ -47,6 +47,7 @@ enum class PropertyAttribute : unsigned {
     CustomValue       = 1 << 6,
     CustomAccessorOrValue = CustomAccessor | CustomValue,
     AccessorOrCustomAccessorOrValue = Accessor | CustomAccessor | CustomValue,
+    ReadOnlyOrAccessorOrCustomAccessor = ReadOnly | Accessor | CustomAccessor,
 
     // Things that are used by static hashtables are not in the attributes byte in PropertyMapEntry.
     Function          = 1 << 8,  // property is a function - only used by static hashtables
@@ -87,8 +88,8 @@ inline unsigned attributesForStructure(unsigned attributes)
 using GetValueFunc = EncodedJSValue(JIT_OPERATION_ATTRIBUTES*)(JSGlobalObject*, EncodedJSValue thisValue, PropertyName);
 using GetValueFuncWithPtr = EncodedJSValue(JIT_OPERATION_ATTRIBUTES*)(JSGlobalObject*, EncodedJSValue thisValue, PropertyName, void*);
 
-using PutValueFunc = bool (*)(JSGlobalObject*, EncodedJSValue baseObject, EncodedJSValue value);
-using PutValueFuncWithPtr = bool (*)(JSGlobalObject*, EncodedJSValue baseObject, EncodedJSValue value, void*);
+using PutValueFunc = bool (JIT_OPERATION_ATTRIBUTES*)(JSGlobalObject*, EncodedJSValue baseObject, EncodedJSValue value, PropertyName);
+using PutValueFuncWithPtr = bool (JIT_OPERATION_ATTRIBUTES*)(JSGlobalObject*, EncodedJSValue baseObject, EncodedJSValue value, PropertyName, void*);
 
 class PropertySlot {
 

@@ -315,8 +315,11 @@ bool Element::isKeyboardFocusable(KeyboardEvent*) const
 {
     if (!(isFocusable() && !shouldBeIgnoredInSequentialFocusNavigation() && tabIndexSetExplicitly().valueOr(0) >= 0))
         return false;
-    ASSERT(delegatesFocusToShadowRoot() == (shadowRoot() && shadowRoot()->delegatesFocus()));
-    return !delegatesFocusToShadowRoot();
+    if (auto* root = shadowRoot()) {
+        if (root->delegatesFocus())
+            return false;
+    }
+    return true;
 }
 
 bool Element::isMouseFocusable() const
@@ -387,8 +390,15 @@ bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const 
 
     if (dispatchPointerEventIfNeeded(*this, mouseEvent.get(), platformEvent, didNotSwallowEvent) == ShouldIgnoreMouseEvent::Yes)
         return false;
-
-    if (Quirks::StorageAccessResult::ShouldCancelEvent == document().quirks().triggerOptionalStorageAccessQuirk(*this, platformEvent, eventType, detail, relatedTarget))
+    
+    auto isParentProcessAFullWebBrowser = false;
+#if PLATFORM(IOS_FAMILY)
+    if (Frame* frame = document().frame())
+        isParentProcessAFullWebBrowser = frame->loader().client().isParentProcessAFullWebBrowser();
+#elif PLATFORM(MAC)
+    isParentProcessAFullWebBrowser = MacApplication::isSafari();
+#endif
+    if (Quirks::StorageAccessResult::ShouldCancelEvent == document().quirks().triggerOptionalStorageAccessQuirk(*this, platformEvent, eventType, detail, relatedTarget, isParentProcessAFullWebBrowser))
         return false;
 
     ASSERT(!mouseEvent->target() || mouseEvent->target() != relatedTarget);
@@ -636,10 +646,7 @@ bool Element::isFocusable() const
     if (!isConnected() || !supportsFocus())
         return false;
 
-    bool hasCanvasAsInclusiveAncestor = inclusiveAncestorStates().contains(AncestorState::Canvas);
-    ASSERT(hasCanvasAsInclusiveAncestor == !!ancestorsOfType<HTMLCanvasElement>(*this).first()
-        || (hasCanvasAsInclusiveAncestor && is<HTMLCanvasElement>(*this)));
-    if (!renderer() && hasCanvasAsInclusiveAncestor) {
+    if (!renderer()) {
         // Elements in canvas fallback content are not rendered, but they are allowed to be
         // focusable as long as their canvas is displayed and visible.
         if (auto* canvas = ancestorsOfType<HTMLCanvasElement>(*this).first())
@@ -679,6 +686,18 @@ bool Element::isUserActionElementDragged() const
     return document().userActionElements().isBeingDragged(*this);
 }
 
+bool Element::isUserActionElementHasFocusVisible() const
+{
+    ASSERT(isUserActionElement());
+    return document().userActionElements().hasFocusVisible(*this);
+}
+
+bool Element::isUserActionElementHasFocusWithin() const
+{
+    ASSERT(isUserActionElement());
+    return document().userActionElements().hasFocusWithin(*this);
+}
+
 void Element::setActive(bool flag, bool pause, Style::InvalidationScope invalidationScope)
 {
     if (flag == active())
@@ -692,7 +711,7 @@ void Element::setActive(bool flag, bool pause, Style::InvalidationScope invalida
         return;
 
     bool reactsToPress = false;
-    if (renderer()->style().hasAppearance() && renderer()->theme().stateChanged(*renderer(), ControlStates::PressedState))
+    if (renderer()->style().hasAppearance() && renderer()->theme().stateChanged(*renderer(), ControlStates::States::Pressed))
         reactsToPress = true;
 
     // The rest of this function implements a feature that only works if the
@@ -726,7 +745,12 @@ void Element::setActive(bool flag, bool pause, Style::InvalidationScope invalida
     }
 }
 
-void Element::setFocus(bool flag)
+static bool shouldAlwaysHaveFocusVisibleWhenFocused(const Element& element)
+{
+    return element.isTextField() || element.isContentEditable();
+}
+
+void Element::setFocus(bool flag, FocusVisibility visibility)
 {
     if (flag == focused())
         return;
@@ -744,6 +768,25 @@ void Element::setFocus(bool flag)
 
     for (auto* element = this; element; element = element->parentElementInComposedTree())
         element->setHasFocusWithin(flag);
+
+    setHasFocusVisible(flag && (visibility == FocusVisibility::Visible || shouldAlwaysHaveFocusVisibleWhenFocused(*this)));
+}
+
+void Element::setHasFocusVisible(bool flag)
+{
+    if (!document().settings().focusVisibleEnabled())
+        return;
+
+#if ASSERT_ENABLED
+    ASSERT(!flag || focused());
+    ASSERT(!focused() || !shouldAlwaysHaveFocusVisibleWhenFocused(*this) || flag);
+#endif
+
+    if (hasFocusVisible() == flag)
+        return;
+
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassFocusVisible);
+    document().userActionElements().setHasFocusVisible(*this, flag);
 }
 
 void Element::setHasFocusWithin(bool flag)
@@ -752,7 +795,7 @@ void Element::setHasFocusWithin(bool flag)
         return;
     {
         Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClassFocusWithin);
-        setNodeFlag(NodeFlag::HasFocusWithin, flag);
+        document().userActionElements().setHasFocusWithin(*this, flag);
     }
 }
 
@@ -766,7 +809,7 @@ void Element::setHovered(bool flag, Style::InvalidationScope invalidationScope)
     }
 
     if (auto* style = renderStyle(); style && style->hasAppearance())
-        renderer()->theme().stateChanged(*renderer(), ControlStates::HoverState);
+        renderer()->theme().stateChanged(*renderer(), ControlStates::States::Hovered);
 }
 
 void Element::setBeingDragged(bool flag)
@@ -893,7 +936,8 @@ void Element::scrollIntoView(Optional<Variant<bool, ScrollIntoViewOptions>>&& ar
         isHorizontal ? alignX : alignY,
         isHorizontal ? alignY : alignX,
         ShouldAllowCrossOriginScrolling::No,
-        options.behavior.valueOr(ScrollBehavior::Auto)
+        options.behavior.valueOr(ScrollBehavior::Auto),
+        SmoothScrollFeatureEnablement::Default
     };
     renderer()->scrollRectToVisible(absoluteBounds, insideFixed, visibleOptions);
 }
@@ -1412,9 +1456,8 @@ IntRect Element::boundsInRootViewSpace()
     if (isSVGElement() && renderer()) {
         // Get the bounding rectangle from the SVG model.
         SVGElement& svgElement = downcast<SVGElement>(*this);
-        FloatRect localRect;
-        if (svgElement.getBoundingBox(localRect))
-            quads.append(renderer()->localToAbsoluteQuad(localRect));
+        if (auto localRect = svgElement.getBoundingBox())
+            quads.append(renderer()->localToAbsoluteQuad(*localRect));
     } else {
         // Get the bounding rectangle from the box model.
         if (renderBoxModelObject())
@@ -1473,9 +1516,8 @@ LayoutRect Element::absoluteEventBounds(bool& boundsIncludeAllDescendantElements
     if (isSVGElement()) {
         // Get the bounding rectangle from the SVG model.
         SVGElement& svgElement = downcast<SVGElement>(*this);
-        FloatRect localRect;
-        if (svgElement.getBoundingBox(localRect, SVGLocatable::DisallowStyleUpdate))
-            result = LayoutRect(renderer()->localToAbsoluteQuad(localRect, UseTransforms, &includesFixedPositionElements).boundingBox());
+        if (auto localRect = svgElement.getBoundingBox())
+            result = LayoutRect(renderer()->localToAbsoluteQuad(*localRect, UseTransforms, &includesFixedPositionElements).boundingBox());
     } else {
         auto* renderer = this->renderer();
         if (is<RenderBox>(renderer)) {
@@ -1611,9 +1653,8 @@ Optional<std::pair<RenderObject*, FloatRect>> Element::boundingAbsoluteRectWitho
     if (isSVGElement() && renderer && !renderer->isSVGRoot()) {
         // Get the bounding rectangle from the SVG model.
         SVGElement& svgElement = downcast<SVGElement>(*this);
-        FloatRect localRect;
-        if (svgElement.getBoundingBox(localRect))
-            quads.append(renderer->localToAbsoluteQuad(localRect));
+        if (auto localRect = svgElement.getBoundingBox())
+            quads.append(renderer->localToAbsoluteQuad(*localRect));
     } else if (auto pair = listBoxElementBoundingBox(*this)) {
         renderer = pair.value().first;
         quads.append(renderer->localToAbsoluteQuad(FloatQuad { pair.value().second }));
@@ -2154,8 +2195,6 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
 {
     ContainerNode::insertedIntoAncestor(insertionType, parentOfInsertedTree);
 
-    setInclusiveAncestorStates(insertionType.ancestorStates);
-
 #if ENABLE(FULLSCREEN_API)
     if (containsFullScreenElement() && parentElement() && !parentElement()->containsFullScreenElement())
         setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(true);
@@ -2213,8 +2252,6 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
 
 void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
-    setInclusiveAncestorStates(removalType.ancestorStates);
-
 #if ENABLE(FULLSCREEN_API)
     if (containsFullScreenElement())
         setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(false);
@@ -2282,8 +2319,7 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
         document().accessSVGExtensions().removeElementFromPendingResources(*this);
 
     RefPtr<Frame> frame = document().frame();
-    if (auto* timeline = document().existingTimeline())
-        timeline->elementWasRemoved({ *this, pseudoId() });
+    Styleable::fromElement(*this).elementWasRemoved();
 
 #if ENABLE(WHEEL_EVENT_LATCHING)
     if (frame && frame->page()) {
@@ -2326,13 +2362,13 @@ void Element::addShadowRoot(Ref<ShadowRoot>&& newShadowRoot)
         notifyChildNodeInserted(*this, shadowRoot);
 #endif
 
+        InspectorInstrumentation::didPushShadowRoot(*this, shadowRoot);
+
         invalidateStyleAndRenderersForSubtree();
     }
 
     if (shadowRoot.mode() == ShadowRootMode::UserAgent)
         didAddUserAgentShadowRoot(shadowRoot);
-
-    InspectorInstrumentation::didPushShadowRoot(*this, shadowRoot);
 }
 
 void Element::removeShadowRoot()
@@ -2354,7 +2390,7 @@ void Element::removeShadowRoot()
 
 static bool canAttachAuthorShadowRoot(const Element& element)
 {
-    static NeverDestroyed<HashSet<AtomString>> tagNames = [] {
+    static NeverDestroyed<MemoryCompactLookupOnlyRobinHoodHashSet<AtomString>> tagNames = [] {
         static const HTMLQualifiedName* const tagList[] = {
             &articleTag.get(),
             &asideTag.get(),
@@ -2375,7 +2411,8 @@ static bool canAttachAuthorShadowRoot(const Element& element)
             &sectionTag.get(),
             &spanTag.get()
         };
-        HashSet<AtomString> set;
+        MemoryCompactLookupOnlyRobinHoodHashSet<AtomString> set;
+        set.reserveInitialCapacity(sizeof(tagList));
         for (auto& name : tagList)
             set.add(name->localName());
         return set;
@@ -2397,8 +2434,6 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
     if (init.mode == ShadowRootMode::UserAgent)
         return Exception { TypeError };
     auto shadow = ShadowRoot::create(document(), init.mode, init.delegatesFocus ? ShadowRoot::DelegatesFocus::Yes : ShadowRoot::DelegatesFocus::No);
-    if (init.delegatesFocus)
-        setDelegatesFocusToShadowRoot();
     auto& result = shadow.get();
     addShadowRoot(WTFMove(shadow));
     return result;
@@ -2982,8 +3017,7 @@ static bool isProgramaticallyFocusable(Element& element)
 {
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
-    ASSERT(element.delegatesFocusToShadowRoot() == !!shadowRootWithDelegatesFocus(element));
-    if (element.delegatesFocusToShadowRoot())
+    if (shadowRootWithDelegatesFocus(element))
         return false;
 
     // If the stylesheets have already been loaded we can reliably check isFocusable.
@@ -3008,7 +3042,7 @@ static RefPtr<Element> findFirstProgramaticallyFocusableElementInComposedTree(El
     return nullptr;
 }
 
-void Element::focus(SelectionRestorationMode restorationMode, FocusDirection direction)
+void Element::focus(const FocusOptions& options)
 {
     if (!isConnected())
         return;
@@ -3030,9 +3064,7 @@ void Element::focus(SelectionRestorationMode restorationMode, FocusDirection dir
     if (&newTarget->document() != document.ptr())
         return;
 
-    ASSERT(delegatesFocusToShadowRoot() == !!shadowRootWithDelegatesFocus(*this));
-    if (delegatesFocusToShadowRoot()) {
-        auto root = shadowRootWithDelegatesFocus(*this);
+    if (auto root = shadowRootWithDelegatesFocus(*this)) {
         auto currentlyFocusedElement = makeRefPtr(document->focusedElement());
         if (root->containsIncludingShadowDOM(currentlyFocusedElement.get())) {
             if (document->page())
@@ -3051,25 +3083,27 @@ void Element::focus(SelectionRestorationMode restorationMode, FocusDirection dir
         if (!frame.hasHadUserInteraction() && !frame.isMainFrame() && !document->topDocument().securityOrigin().isSameOriginDomain(document->securityOrigin()))
             return;
 
+        FocusOptions optionsWithVisibility = options;
+        if (!document->wasLastFocusByClick())
+            optionsWithVisibility.visibility = FocusVisibility::Visible;
+
         // Focus and change event handlers can cause us to lose our last ref.
         // If a focus event handler changes the focus to a different node it
         // does not make sense to continue and update appearence.
-        if (!page->focusController().setFocusedElement(newTarget.get(), *document->frame(), direction))
+        if (!page->focusController().setFocusedElement(newTarget.get(), *document->frame(), optionsWithVisibility))
             return;
     }
 
-    newTarget->revealFocusedElement(restorationMode);
+    newTarget->findTargetAndUpdateFocusAppearance(options.selectionRestorationMode, options.preventScroll ? SelectionRevealMode::DoNotReveal : SelectionRevealMode::Reveal);
 }
 
-void Element::revealFocusedElement(SelectionRestorationMode selectionMode)
+void Element::findTargetAndUpdateFocusAppearance(SelectionRestorationMode selectionMode, SelectionRevealMode revealMode)
 {
-    SelectionRevealMode revealMode = SelectionRevealMode::Reveal;
-
 #if PLATFORM(IOS_FAMILY)
     // Focusing a form element triggers animation in UIKit to scroll to the right position.
     // Calling updateFocusAppearance() would generate an unnecessary call to ScrollView::setScrollPosition(),
     // which would jump us around during this animation. See <rdar://problem/6699741>.
-    if (is<HTMLFormControlElement>(*this))
+    if (revealMode == SelectionRevealMode::Reveal && is<HTMLFormControlElement>(*this))
         revealMode = SelectionRevealMode::RevealUpToMainFrame;
 #endif
 
@@ -4216,26 +4250,45 @@ void Element::resetComputedStyle()
         return;
 
     auto reset = [](Element& element) {
-        if (!element.hasRareData() || !element.elementRareData()->computedStyle())
-            return;
         if (element.hasCustomStyleResolveCallbacks())
             element.willResetComputedStyle();
         element.elementRareData()->resetComputedStyle();
     };
     reset(*this);
-    for (auto& child : descendantsOfType<Element>(*this))
+    for (auto& child : descendantsOfType<Element>(*this)) {
+        if (!child.hasRareData() || !child.elementRareData()->computedStyle() || child.hasDisplayContents())
+            continue;
         reset(child);
+    }
 }
 
 void Element::resetStyleRelations()
 {
-    // FIXME: Make this code more consistent.
-    auto bitfields = styleBitfields();
-    bitfields.clearDynamicStyleRelations();
-    setStyleBitfields(bitfields);
+    clearStyleFlags(NodeStyleFlag::StyleAffectedByEmpty);
     if (!hasRareData())
         return;
-    elementRareData()->resetStyleRelations();
+    elementRareData()->setChildIndex(0);
+}
+
+void Element::resetChildStyleRelations()
+{
+    clearStyleFlags({
+        NodeStyleFlag::ChildrenAffectedByFirstChildRules,
+        NodeStyleFlag::ChildrenAffectedByLastChildRules,
+        NodeStyleFlag::ChildrenAffectedByForwardPositionalRules,
+        NodeStyleFlag::ChildrenAffectedByBackwardPositionalRules,
+        NodeStyleFlag::ChildrenAffectedByPropertyBasedBackwardPositionalRules
+    });
+}
+
+void Element::resetAllDescendantStyleRelations()
+{
+    resetChildStyleRelations();
+    
+    clearStyleFlags({
+        NodeStyleFlag::DescendantsAffectedByForwardPositionalRules,
+        NodeStyleFlag::DescendantsAffectedByBackwardPositionalRules
+    });
 }
 
 void Element::clearHoverAndActiveStatusBeforeDetachingRenderer()
@@ -4561,11 +4614,6 @@ ElementIdentifier Element::createElementIdentifier()
     ASSERT(!hasNodeFlag(NodeFlag::HasElementIdentifier));
     setNodeFlag(NodeFlag::HasElementIdentifier);
     return ElementIdentifier::generate();
-}
-
-void Element::didChangeRenderer(RenderObject* oldRenderer)
-{
-    InspectorInstrumentation::nodeLayoutContextChanged(*this, oldRenderer);
 }
 
 #if ENABLE(CSS_TYPED_OM)

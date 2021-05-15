@@ -56,6 +56,7 @@ public:
 
     LayoutUnit lineBoxTop() const { return m_lineBoxTop; }
     LayoutUnit lineBoxBottom() const { return m_lineBoxBottom; }
+    LayoutUnit lineBoxHeight() const { return lineBoxBottom() - lineBoxTop(); }
     
     LayoutUnit paginationStrut() const { return m_paginationStrut; }
     void setPaginationStrut(LayoutUnit strut) { m_paginationStrut = strut; }
@@ -116,7 +117,7 @@ public:
 
     bool isHyphenated() const;
 
-    int baselinePosition(FontBaseline baselineType) const final;
+    LayoutUnit baselinePosition(FontBaseline baselineType) const final;
     LayoutUnit lineHeight() const final;
 
     void paint(PaintInfo&, const LayoutPoint&, LayoutUnit lineTop, LayoutUnit lineBottom) override;
@@ -159,7 +160,7 @@ public:
 
     LayoutRect paddedLayoutOverflowRect(LayoutUnit endPadding) const;
 
-    void ascentAndDescentForBox(InlineBox&, GlyphOverflowAndFallbackFontsMap&, int& ascent, int& descent, bool& affectsAscent, bool& affectsDescent) const;
+    void ascentAndDescentForBox(InlineBox&, GlyphOverflowAndFallbackFontsMap&, LayoutUnit& ascent, LayoutUnit& descent, bool& affectsAscent, bool& affectsDescent) const;
     LayoutUnit verticalPositionForBox(InlineBox*, VerticalPositionCache&);
     bool fitsToGlyphs() const;
     bool includesRootLineBoxFontOrLeading() const;

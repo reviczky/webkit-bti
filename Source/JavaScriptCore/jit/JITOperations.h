@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -280,8 +280,8 @@ JSC_DECLARE_JIT_OPERATION(operationGetPrivateNameById, EncodedJSValue, (JSGlobal
 JSC_DECLARE_JIT_OPERATION(operationGetPrivateNameByIdOptimize, EncodedJSValue, (JSGlobalObject*, StructureStubInfo*, EncodedJSValue, uintptr_t));
 JSC_DECLARE_JIT_OPERATION(operationGetPrivateNameByIdGeneric, EncodedJSValue, (JSGlobalObject*, EncodedJSValue, uintptr_t));
 
-JSC_DECLARE_JIT_OPERATION(operationSwitchCharWithUnknownKeyType, char*, (JSGlobalObject*, EncodedJSValue key, size_t tableIndex));
-JSC_DECLARE_JIT_OPERATION(operationSwitchImmWithUnknownKeyType, char*, (VM*, EncodedJSValue key, size_t tableIndex));
+JSC_DECLARE_JIT_OPERATION(operationSwitchCharWithUnknownKeyType, char*, (JSGlobalObject*, EncodedJSValue key, size_t tableIndex, int32_t min));
+JSC_DECLARE_JIT_OPERATION(operationSwitchImmWithUnknownKeyType, char*, (VM*, EncodedJSValue key, size_t tableIndex, int32_t min));
 JSC_DECLARE_JIT_OPERATION(operationSwitchStringWithUnknownKeyType, char*, (JSGlobalObject*, EncodedJSValue key, size_t tableIndex));
 JSC_DECLARE_JIT_OPERATION(operationGetFromScope, EncodedJSValue, (JSGlobalObject*, const Instruction* bytecodePC));
 JSC_DECLARE_JIT_OPERATION(operationPutToScope, void, (JSGlobalObject*, const Instruction* bytecodePC));
@@ -295,7 +295,7 @@ JSC_DECLARE_JIT_OPERATION(operationOSRWriteBarrier, void, (VM*, JSCell*));
 JSC_DECLARE_JIT_OPERATION(operationExceptionFuzz, void, (JSGlobalObject*));
 JSC_DECLARE_JIT_OPERATION(operationExceptionFuzzWithCallFrame, void, (VM*));
 
-JSC_DECLARE_JIT_OPERATION(operationCheckIfExceptionIsUncatchableAndNotifyProfiler, int32_t, (VM*));
+JSC_DECLARE_JIT_OPERATION(operationRetrieveAndClearExceptionIfCatchable, JSCell*, (VM*));
 JSC_DECLARE_JIT_OPERATION(operationInstanceOfCustom, size_t, (JSGlobalObject*, EncodedJSValue encodedValue, JSObject* constructor, EncodedJSValue encodedHasInstance));
 
 JSC_DECLARE_JIT_OPERATION(operationValueAdd, EncodedJSValue, (JSGlobalObject*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2));

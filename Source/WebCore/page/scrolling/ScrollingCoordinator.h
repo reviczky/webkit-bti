@@ -33,14 +33,9 @@
 #include "ScrollingCoordinatorTypes.h"
 #include <wtf/Forward.h>
 #include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/Threading.h>
 #include <wtf/TypeCasts.h>
 #include <wtf/Variant.h>
-
-#if ENABLE(ASYNC_SCROLLING)
-#include <wtf/HashMap.h>
-#include <wtf/ThreadSafeRefCounted.h>
-#include <wtf/Threading.h>
-#endif
 
 namespace WTF {
 class TextStream;
@@ -60,10 +55,7 @@ class RenderLayer;
 class ScrollableArea;
 class ViewportConstraints;
 
-#if ENABLE(ASYNC_SCROLLING)
-class ScrollingTree;
-#endif
-
+using FramesPerSecond = unsigned;
 using PlatformDisplayID = uint32_t;
 
 class ScrollingCoordinator : public ThreadSafeRefCounted<ScrollingCoordinator> {
@@ -183,7 +175,7 @@ public:
     virtual void willDestroyScrollableArea(ScrollableArea&) { }
     virtual void scrollableAreaScrollbarLayerDidChange(ScrollableArea&, ScrollbarOrientation) { }
 
-    virtual void windowScreenDidChange(PlatformDisplayID, Optional<unsigned> /* nominalFramesPerSecond */) { }
+    virtual void windowScreenDidChange(PlatformDisplayID, Optional<FramesPerSecond> /* nominalFramesPerSecond */) { }
 
     static String synchronousScrollingReasonsAsText(OptionSet<SynchronousScrollingReason>);
     String synchronousScrollingReasonsAsText() const;

@@ -34,6 +34,7 @@
 #include "ResourceResponse.h"
 #include "ScriptExecutionContext.h"
 #include "ServiceWorker.h"
+#include "ServiceWorkerContextData.h"
 #include "ServiceWorkerGlobalScope.h"
 #include "TextResourceDecoder.h"
 #include "WorkerGlobalScope.h"
@@ -43,7 +44,10 @@
 
 namespace WebCore {
 
-WorkerScriptLoader::WorkerScriptLoader() = default;
+WorkerScriptLoader::WorkerScriptLoader()
+    : m_script(ScriptBuffer::empty())
+{
+}
 
 WorkerScriptLoader::~WorkerScriptLoader() = default;
 
@@ -60,7 +64,7 @@ Optional<Exception> WorkerScriptLoader::loadSynchronously(ScriptExecutionContext
 
     if (isServiceWorkerGlobalScope) {
         if (auto* scriptResource = downcast<ServiceWorkerGlobalScope>(workerGlobalScope).scriptResource(url)) {
-            m_script.append(scriptResource->script);
+            m_script = scriptResource->script;
             m_responseURL = scriptResource->responseURL;
             m_responseMIMEType = scriptResource->mimeType;
             return WTF::nullopt;
@@ -210,7 +214,7 @@ void WorkerScriptLoader::didReceiveData(const char* data, int len)
     
     if (len == -1)
         len = strlen(data);
-    
+
     m_script.append(m_decoder->decode(data, len));
 }
 
@@ -240,11 +244,6 @@ void WorkerScriptLoader::notifyError()
     if (m_error.isNull())
         m_error = ResourceError { errorDomainWebKitInternal, 0, url(), "Failed to load script", ResourceError::Type::General };
     notifyFinished();
-}
-
-String WorkerScriptLoader::script()
-{
-    return m_script.toString();
 }
 
 void WorkerScriptLoader::notifyFinished()

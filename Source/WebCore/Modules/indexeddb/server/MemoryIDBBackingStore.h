@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBBackingStore.h"
 #include "IDBDatabaseIdentifier.h"
 #include "IDBResourceIdentifier.h"
@@ -48,6 +46,7 @@ public:
     ~MemoryIDBBackingStore();
 
     IDBError getOrEstablishDatabaseInfo(IDBDatabaseInfo&) final;
+    uint64_t databaseVersion() final;
     void setDatabaseInfo(const IDBDatabaseInfo&);
 
     void removeObjectStoreForVersionChangeAbort(MemoryObjectStore&);
@@ -107,5 +106,3 @@ private:
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

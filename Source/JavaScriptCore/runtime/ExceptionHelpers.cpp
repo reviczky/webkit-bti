@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,30 +39,6 @@
 
 namespace JSC {
 
-STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(TerminatedExecutionError);
-
-const ClassInfo TerminatedExecutionError::s_info = { "TerminatedExecutionError", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(TerminatedExecutionError) };
-
-JSValue TerminatedExecutionError::defaultValue(const JSObject*, JSGlobalObject* globalObject, PreferredPrimitiveType hint)
-{
-    if (hint == PreferString)
-        return jsNontrivialString(globalObject->vm(), String("JavaScript execution terminated."_s));
-    return JSValue(PNaN);
-}
-
-JSObject* createTerminatedExecutionException(VM* vm)
-{
-    return TerminatedExecutionError::create(*vm);
-}
-
-bool isTerminatedExecutionException(VM& vm, Exception* exception)
-{
-    if (!exception->value().isObject())
-        return false;
-
-    return exception->value().inherits<TerminatedExecutionError>(vm);
-}
-
 JSObject* createStackOverflowError(JSGlobalObject* globalObject)
 {
     auto* error = createRangeError(globalObject, "Maximum call stack size exceeded."_s);
@@ -98,9 +74,16 @@ String errorDescriptionForValue(JSGlobalObject* globalObject, JSValue v)
     return v.toString(globalObject)->value(globalObject);
 }
     
+static StringView clampErrorMessage(const String& originalMessage)
+{
+    // Hopefully this is sufficiently long. Note, this is the length of the string not the number of bytes used.
+    constexpr unsigned maxLength = 2 * KB;
+    return StringView(originalMessage).substring(0, maxLength);
+}
+
 static String defaultApproximateSourceError(const String& originalMessage, const String& sourceText)
 {
-    return makeString(originalMessage, " (near '...", sourceText, "...')");
+    return makeString(clampErrorMessage(originalMessage), " (near '...", sourceText, "...')");
 }
 
 String defaultSourceAppender(const String& originalMessage, const String& sourceText, RuntimeType, ErrorInstance::SourceTextWhereErrorOccurred occurrence)
@@ -109,7 +92,7 @@ String defaultSourceAppender(const String& originalMessage, const String& source
         return defaultApproximateSourceError(originalMessage, sourceText);
 
     ASSERT(occurrence == ErrorInstance::FoundExactSource);
-    return makeString(originalMessage, " (evaluating '", sourceText, "')");
+    return makeString(clampErrorMessage(originalMessage), " (evaluating '", sourceText, "')");
 }
 
 static String functionCallBase(const String& sourceText)
@@ -255,6 +238,18 @@ static String invalidParameterInstanceofhasInstanceValueNotFunctionSourceAppende
     return invalidParameterInstanceofSourceAppender("[Symbol.hasInstance] is not a function, undefined, or null"_s, originalMessage, sourceText, runtimeType, occurrence);
 }
 
+static String invalidPrototypeSourceAppender(const String& originalMessage, const String& sourceText, RuntimeType, ErrorInstance::SourceTextWhereErrorOccurred occurrence)
+{
+    if (occurrence == ErrorInstance::FoundApproximateSource)
+        return defaultApproximateSourceError(originalMessage, sourceText);
+
+    auto extendsIndex = sourceText.reverseFind("extends");
+    if (extendsIndex == notFound || sourceText.find("extends") != extendsIndex)
+        return makeString(originalMessage, " (evaluating '", sourceText, "')");
+
+    return "The value of the superclass's prototype property is not an object or null."_s;
+}
+
 JSObject* createError(JSGlobalObject* globalObject, JSValue value, const String& message, ErrorInstance::SourceAppender appender)
 {
     VM& vm = globalObject->vm();
@@ -314,6 +309,11 @@ JSObject* createNotAnObjectError(JSGlobalObject* globalObject, JSValue value)
     return createError(globalObject, value, "is not an object"_s, defaultSourceAppender);
 }
 
+JSObject* createInvalidPrototypeError(JSGlobalObject* globalObject, JSValue value)
+{
+    return createError(globalObject, value, "is not an object or null"_s, invalidPrototypeSourceAppender);
+}
+
 JSObject* createErrorForInvalidGlobalAssignment(JSGlobalObject* globalObject, const String& propertyName)
 {
     return createReferenceError(globalObject, makeString("Strict mode forbids implicit creation of global property '", propertyName, '\''));
@@ -359,13 +359,6 @@ Exception* throwStackOverflowError(JSGlobalObject* globalObject, ThrowScope& sco
     VM& vm = globalObject->vm();
     ErrorHandlingScope errorScope(vm);
     return throwException(globalObject, scope, createStackOverflowError(globalObject));
-}
-
-Exception* throwTerminatedExecutionException(JSGlobalObject* globalObject, ThrowScope& scope)
-{
-    VM& vm = globalObject->vm();
-    ErrorHandlingScope errorScope(vm);
-    return throwException(globalObject, scope, createTerminatedExecutionException(&vm));
 }
 
 } // namespace JSC

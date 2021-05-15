@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "DetachedRTCDataChannel.h"
 #include "ExceptionOr.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <JavaScriptCore/JSCJSValue.h>
@@ -96,12 +97,9 @@ public:
     const Vector<uint8_t>& data() const { return m_data; }
     bool hasBlobURLs() const { return !m_blobURLs.isEmpty(); }
 
-#if ENABLE(INDEXED_DATABASE)
     Vector<String> blobURLsIsolatedCopy() const;
     void writeBlobsToDiskForIndexedDB(CompletionHandler<void(IDBValue&&)>&&);
     IDBValue writeBlobsToDiskForIndexedDBSynchronously();
-#endif // ENABLE(INDEXED_DATABASE)
-
     static Ref<SerializedScriptValue> createFromWireBytes(Vector<uint8_t>&& data)
     {
         return adoptRef(*new SerializedScriptValue(WTFMove(data)));
@@ -117,10 +115,18 @@ public:
 
 private:
     WEBCORE_EXPORT SerializedScriptValue(Vector<unsigned char>&&);
-    WEBCORE_EXPORT SerializedScriptValue(Vector<unsigned char>&&, std::unique_ptr<ArrayBufferContentsArray>);
+    WEBCORE_EXPORT SerializedScriptValue(Vector<unsigned char>&&, std::unique_ptr<ArrayBufferContentsArray>&&
+#if ENABLE(WEB_RTC)
+        , Vector<std::unique_ptr<DetachedRTCDataChannel>>&&
+#endif
+        );
+
     SerializedScriptValue(Vector<unsigned char>&&, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray>, std::unique_ptr<ArrayBufferContentsArray> sharedBuffers, Vector<Optional<ImageBitmapBacking>>&& backingStores
 #if ENABLE(OFFSCREEN_CANVAS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& = { }
+#endif
+#if ENABLE(WEB_RTC)
+        , Vector<std::unique_ptr<DetachedRTCDataChannel>>&& = { }
 #endif
 #if ENABLE(WEBASSEMBLY)
         , std::unique_ptr<WasmModuleArray> = nullptr
@@ -136,6 +142,9 @@ private:
     Vector<Optional<ImageBitmapBacking>> m_backingStores;
 #if ENABLE(OFFSCREEN_CANVAS)
     Vector<std::unique_ptr<DetachedOffscreenCanvas>> m_detachedOffscreenCanvases;
+#endif
+#if ENABLE(WEB_RTC)
+    Vector<std::unique_ptr<DetachedRTCDataChannel>> m_detachedRTCDataChannels;
 #endif
 #if ENABLE(WEBASSEMBLY)
     std::unique_ptr<WasmModuleArray> m_wasmModulesArray;
@@ -153,14 +162,19 @@ void SerializedScriptValue::encode(Encoder& encoder) const
     auto hasArray = m_arrayBufferContentsArray && m_arrayBufferContentsArray->size();
     encoder << hasArray;
 
-    if (!hasArray)
-        return;
-
-    encoder << static_cast<uint64_t>(m_arrayBufferContentsArray->size());
-    for (const auto &arrayBufferContents : *m_arrayBufferContentsArray) {
-        encoder << arrayBufferContents.sizeInBytes();
-        encoder.encodeFixedLengthData(static_cast<const uint8_t*>(arrayBufferContents.data()), arrayBufferContents.sizeInBytes(), 1);
+    if (hasArray) {
+        encoder << static_cast<uint64_t>(m_arrayBufferContentsArray->size());
+        for (const auto &arrayBufferContents : *m_arrayBufferContentsArray) {
+            encoder << arrayBufferContents.sizeInBytes();
+            encoder.encodeFixedLengthData(static_cast<const uint8_t*>(arrayBufferContents.data()), arrayBufferContents.sizeInBytes(), 1);
+        }
     }
+
+#if ENABLE(WEB_RTC)
+    encoder << static_cast<uint64_t>(m_detachedRTCDataChannels.size());
+    for (const auto &channel : m_detachedRTCDataChannels)
+        encoder << *channel;
+#endif
 }
 
 template<class Decoder>
@@ -174,33 +188,51 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::decode(Decoder& decoder)
     if (!decoder.decode(hasArray))
         return nullptr;
 
-    if (!hasArray)
-        return adoptRef(*new SerializedScriptValue(WTFMove(data)));
+    std::unique_ptr<ArrayBufferContentsArray> arrayBufferContentsArray;
+    if (hasArray) {
+        uint64_t arrayLength;
+        if (!decoder.decode(arrayLength))
+            return nullptr;
+        ASSERT(arrayLength);
 
-    uint64_t arrayLength;
-    if (!decoder.decode(arrayLength))
-        return nullptr;
-    ASSERT(arrayLength);
+        arrayBufferContentsArray = makeUnique<ArrayBufferContentsArray>();
+        while (arrayLength--) {
+            unsigned bufferSize;
+            if (!decoder.decode(bufferSize))
+                return nullptr;
+            if (!decoder.template bufferIsLargeEnoughToContain<uint8_t>(bufferSize))
+                return nullptr;
 
-    auto arrayBufferContentsArray = makeUnique<ArrayBufferContentsArray>();
-    while (arrayLength--) {
-        unsigned bufferSize;
-        if (!decoder.decode(bufferSize))
-            return nullptr;
-        if (!decoder.template bufferIsLargeEnoughToContain<uint8_t>(bufferSize))
-            return nullptr;
-
-        auto buffer = Gigacage::tryMalloc(Gigacage::Primitive, bufferSize);
-        if (!buffer)
-            return nullptr;
-        if (!decoder.decodeFixedLengthData(static_cast<uint8_t*>(buffer), bufferSize, 1)) {
-            Gigacage::free(Gigacage::Primitive, buffer);
-            return nullptr;
+            auto buffer = Gigacage::tryMalloc(Gigacage::Primitive, bufferSize);
+            if (!buffer)
+                return nullptr;
+            if (!decoder.decodeFixedLengthData(static_cast<uint8_t*>(buffer), bufferSize, 1)) {
+                Gigacage::free(Gigacage::Primitive, buffer);
+                return nullptr;
+            }
+            arrayBufferContentsArray->append({ buffer, bufferSize, ArrayBuffer::primitiveGigacageDestructor() });
         }
-        arrayBufferContentsArray->append({ buffer, bufferSize, ArrayBuffer::primitiveGigacageDestructor() });
     }
 
-    return adoptRef(*new SerializedScriptValue(WTFMove(data), WTFMove(arrayBufferContentsArray)));
+#if ENABLE(WEB_RTC)
+    uint64_t detachedRTCDataChannelsSize;
+    if (!decoder.decode(detachedRTCDataChannelsSize))
+        return nullptr;
+
+    Vector<std::unique_ptr<DetachedRTCDataChannel>> detachedRTCDataChannels;
+    while (detachedRTCDataChannelsSize--) {
+        auto detachedRTCDataChannel = DetachedRTCDataChannel::decode(decoder);
+        if (!detachedRTCDataChannel)
+            return nullptr;
+        detachedRTCDataChannels.append(WTFMove(detachedRTCDataChannel));
+    }
+#endif
+
+    return adoptRef(*new SerializedScriptValue(WTFMove(data), WTFMove(arrayBufferContentsArray)
+#if ENABLE(WEB_RTC)
+        , WTFMove(detachedRTCDataChannels)
+#endif
+        ));
 }
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -52,6 +52,7 @@
 #include "NetworkSocketStreamMessages.h"
 #include "PingLoad.h"
 #include "PreconnectTask.h"
+#include "RTCDataChannelRemoteManagerProxy.h"
 #include "ServiceWorkerFetchTaskMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
@@ -146,6 +147,9 @@ NetworkConnectionToWebProcess::~NetworkConnectionToWebProcess()
 #if USE(LIBWEBRTC)
     if (m_rtcProvider)
         m_rtcProvider->close();
+#endif
+#if ENABLE(WEB_RTC)
+    unregisterToRTCDataChannelProxy();
 #endif
 
 #if ENABLE(SERVICE_WORKER)
@@ -278,6 +282,34 @@ void NetworkConnectionToWebProcess::createRTCProvider(CompletionHandler<void()>&
     callback();
 }
 
+#if ENABLE(WEB_RTC)
+void NetworkConnectionToWebProcess::connectToRTCDataChannelRemoteSource(WebCore::RTCDataChannelIdentifier localIdentifier, WebCore::RTCDataChannelIdentifier remoteIdentifier, CompletionHandler<void(Optional<bool>)>&& callback)
+{
+    auto* connectionToWebProcess = m_networkProcess->webProcessConnection(remoteIdentifier.processIdentifier);
+    if (!connectionToWebProcess) {
+        callback(false);
+        return;
+    }
+    registerToRTCDataChannelProxy();
+    connectionToWebProcess->registerToRTCDataChannelProxy();
+    connectionToWebProcess->connection().sendWithAsyncReply(Messages::NetworkProcessConnection::ConnectToRTCDataChannelRemoteSource { remoteIdentifier, localIdentifier }, WTFMove(callback), 0);
+}
+
+void NetworkConnectionToWebProcess::registerToRTCDataChannelProxy()
+{
+    if (m_isRegisteredToRTCDataChannelProxy)
+        return;
+    m_isRegisteredToRTCDataChannelProxy = true;
+    m_networkProcess->rtcDataChannelProxy().registerConnectionToWebProcess(*this);
+}
+
+void NetworkConnectionToWebProcess::unregisterToRTCDataChannelProxy()
+{
+    if (m_isRegisteredToRTCDataChannelProxy)
+        m_networkProcess->rtcDataChannelProxy().unregisterConnectionToWebProcess(*this);
+}
+#endif
+
 CacheStorageEngineConnection& NetworkConnectionToWebProcess::cacheStorageConnection()
 {
     if (!m_cacheStorageConnection)
@@ -285,21 +317,19 @@ CacheStorageEngineConnection& NetworkConnectionToWebProcess::cacheStorageConnect
     return *m_cacheStorageConnection;
 }
 
-void NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, std::unique_ptr<IPC::Encoder>& reply)
+bool NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& reply)
 {
     // For security reasons, Messages::NetworkProcess IPC is only supposed to come from the UIProcess.
     ASSERT(decoder.messageReceiverName() != Messages::NetworkProcess::messageReceiverName());
 
-    if (decoder.messageReceiverName() == Messages::NetworkConnectionToWebProcess::messageReceiverName()) {
-        didReceiveSyncNetworkConnectionToWebProcessMessage(connection, decoder, reply);
-        return;
-    }
+    if (decoder.messageReceiverName() == Messages::NetworkConnectionToWebProcess::messageReceiverName())
+        return didReceiveSyncNetworkConnectionToWebProcessMessage(connection, decoder, reply);
 
 #if ENABLE(SERVICE_WORKER)
     if (decoder.messageReceiverName() == Messages::WebSWServerConnection::messageReceiverName()) {
         if (m_swConnection)
-            m_swConnection->didReceiveSyncMessage(connection, decoder, reply);
-        return;
+            return m_swConnection->didReceiveSyncMessage(connection, decoder, reply);
+        return false;
     }
 #endif
 
@@ -310,6 +340,7 @@ void NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& conne
 
     WTFLogAlways("Unhandled network process message '%s'", description(decoder.messageName()));
     ASSERT_NOT_REACHED();
+    return false;
 }
 
 void NetworkConnectionToWebProcess::updateQuotaBasedOnSpaceUsageForTesting(const ClientOrigin& origin)
@@ -328,6 +359,12 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
 
     // Protect ourself as we might be otherwise be deleted during this function.
     Ref<NetworkConnectionToWebProcess> protector(*this);
+
+#if OS(DARWIN)
+    RELEASE_LOG_IF_ALLOWED(Loading, "didClose: WebProcess (%d) closed its connection. Aborting related loaders.", connection.remoteProcessID());
+#else
+    RELEASE_LOG_IF_ALLOWED(Loading, "didClose: WebProcess closed its connection. Aborting related loaders.");
+#endif
 
     while (!m_networkResourceLoaders.isEmpty())
         m_networkResourceLoaders.begin()->value->abort();
@@ -373,10 +410,10 @@ void NetworkConnectionToWebProcess::createSocketStream(URL&& url, String cachePa
     m_networkSocketStreams.add(identifier, NetworkSocketStream::create(m_networkProcess.get(), WTFMove(url), m_sessionID, cachePartition, identifier, m_connection, WTFMove(token)));
 }
 
-void NetworkConnectionToWebProcess::createSocketChannel(const ResourceRequest& request, const String& protocol, WebSocketIdentifier identifier)
+void NetworkConnectionToWebProcess::createSocketChannel(const ResourceRequest& request, const String& protocol, WebSocketIdentifier identifier,  WebPageProxyIdentifier webPageProxyID)
 {
     ASSERT(!m_networkSocketChannels.contains(identifier));
-    if (auto channel = NetworkSocketChannel::create(*this, m_sessionID, request, protocol, identifier))
+    if (auto channel = NetworkSocketChannel::create(*this, m_sessionID, request, protocol, identifier, webPageProxyID))
         m_networkSocketChannels.add(identifier, WTFMove(channel));
 }
 
@@ -526,6 +563,7 @@ void NetworkConnectionToWebProcess::removeLoadIdentifier(ResourceLoadIdentifier 
 
     // Abort the load now, as the WebProcess won't be able to respond to messages any more which might lead
     // to leaked loader resources (connections, threads, etc).
+    RELEASE_LOG_IF_ALLOWED(Loading, "removeLoadIdentifier: Removing identifier %" PRIu64 " and aborting corresponding loader", identifier);
     loader->abort();
     ASSERT(!m_networkResourceLoaders.contains(identifier));
 }
@@ -800,13 +838,13 @@ void NetworkConnectionToWebProcess::registerBlobURLOptionallyFileBacked(const UR
     session->blobRegistry().registerBlobURLOptionallyFileBacked(url, srcURL, BlobDataFileReferenceWithSandboxExtension::create(fileBackedPath), contentType);
 }
 
-void NetworkConnectionToWebProcess::registerBlobURLForSlice(const URL& url, const URL& srcURL, int64_t start, int64_t end)
+void NetworkConnectionToWebProcess::registerBlobURLForSlice(const URL& url, const URL& srcURL, int64_t start, int64_t end, const String& contentType)
 {
     auto* session = networkSession();
     if (!session)
         return;
 
-    session->blobRegistry().registerBlobURLForSlice(url, srcURL, start, end);
+    session->blobRegistry().registerBlobURLForSlice(url, srcURL, start, end, contentType);
 }
 
 void NetworkConnectionToWebProcess::unregisterBlobURL(const URL& url)
@@ -1061,10 +1099,10 @@ void NetworkConnectionToWebProcess::establishSWServerConnection()
     server.addConnection(WTFMove(connection));
 }
 
-void NetworkConnectionToWebProcess::establishSWContextConnection(RegistrableDomain&& registrableDomain, CompletionHandler<void()>&& completionHandler)
+void NetworkConnectionToWebProcess::establishSWContextConnection(WebPageProxyIdentifier webPageProxyID, RegistrableDomain&& registrableDomain, CompletionHandler<void()>&& completionHandler)
 {
     if (auto* server = m_networkProcess->swServerForSessionIfExists(m_sessionID))
-        m_swContextConnection = makeUnique<WebSWServerToContextConnection>(*this, WTFMove(registrableDomain), *server);
+        m_swContextConnection = makeUnique<WebSWServerToContextConnection>(*this, webPageProxyID, WTFMove(registrableDomain), *server);
     completionHandler();
 }
 
@@ -1203,8 +1241,13 @@ void NetworkConnectionToWebProcess::prioritizeResourceLoads(Vector<ResourceLoadI
     session->networkLoadScheduler().prioritizeLoads(loads);
 }
 
+void NetworkConnectionToWebProcess::addIDBConnection()
+{
+    m_networkProcess->webIDBServer(m_sessionID).addConnection(m_connection.get(), m_webProcessIdentifier);
+}
 
 } // namespace WebKit
 
+#undef RELEASE_LOG_IF_ALLOWED
 #undef NETWORK_PROCESS_MESSAGE_CHECK_COMPLETION
 #undef NETWORK_PROCESS_MESSAGE_CHECK

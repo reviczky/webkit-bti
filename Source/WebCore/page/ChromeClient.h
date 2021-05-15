@@ -77,6 +77,10 @@ class WAKResponder;
 #include "MediaUsageInfo.h"
 #endif
 
+#if ENABLE(WEBXR)
+#include "PlatformXR.h"
+#endif
+
 OBJC_CLASS NSResponder;
 
 namespace WebCore {
@@ -121,6 +125,7 @@ struct DateTimeChooserParameters;
 struct GraphicsDeviceAdapter;
 struct MockWebAuthenticationConfiguration;
 struct ShareDataWithParsedURL;
+struct TextIndicatorData;
 struct ViewportArguments;
 struct WindowFeatures;
 
@@ -227,8 +232,9 @@ public:
 
     virtual Color underlayColor() const { return Color(); }
 
-    virtual void themeColorChanged(Color) const { }
-    virtual void pageExtendedBackgroundColorDidChange(Color) const { }
+    virtual void themeColorChanged() const { }
+    virtual void pageExtendedBackgroundColorDidChange() const { }
+    virtual void sampledPageTopColorChanged() const { }
 
     virtual void exceededDatabaseQuota(Frame&, const String& databaseName, DatabaseDetails) = 0;
 
@@ -252,6 +258,8 @@ public:
 #if ENABLE(IOS_TOUCH_EVENTS)
     virtual void didPreventDefaultForEvent() = 0;
 #endif
+
+    virtual void didHandleOrPreventMouseDownOrMouseUpEvent() { }
 
     virtual Seconds eventThrottlingDelay() { return 0_s; };
 
@@ -305,8 +313,10 @@ public:
 #endif
 
 #if ENABLE(APP_HIGHLIGHTS)
-    virtual void storeAppHighlight(const WebCore::AppHighlight&) const = 0;
+    virtual void storeAppHighlight(WebCore::AppHighlight&&) const = 0;
 #endif
+
+    virtual void setTextIndicator(const TextIndicatorData&) const = 0;
 
     virtual void runOpenPanel(Frame&, FileChooser&) = 0;
     virtual void showShareSheet(ShareDataWithParsedURL&, WTF::CompletionHandler<void(bool)>&& callback) { callback(false); }
@@ -326,8 +336,8 @@ public:
 
     // Allows ports to customize the type of graphics layers created by this page.
     virtual GraphicsLayerFactory* graphicsLayerFactory() const { return nullptr; }
-
-    virtual RefPtr<DisplayRefreshMonitor> createDisplayRefreshMonitor(PlatformDisplayID) const { return nullptr; }
+    
+    virtual DisplayRefreshMonitorFactory* displayRefreshMonitorFactory() const { return nullptr; }
 
     virtual RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingMode, RenderingPurpose, float, DestinationColorSpace, PixelFormat) const { return nullptr; }
 
@@ -509,7 +519,7 @@ public:
     virtual void showPlaybackTargetPicker(PlaybackTargetClientContextIdentifier, const IntPoint&, bool /*isVideo*/) { }
     virtual void playbackTargetPickerClientStateDidChange(PlaybackTargetClientContextIdentifier, MediaProducer::MediaStateFlags) { }
     virtual void setMockMediaPlaybackTargetPickerEnabled(bool)  { }
-    virtual void setMockMediaPlaybackTargetPickerState(const String&, MediaPlaybackTargetContext::State) { }
+    virtual void setMockMediaPlaybackTargetPickerState(const String&, MediaPlaybackTargetContext::MockState) { }
     virtual void mockMediaPlaybackTargetPickerDismissPopup() { }
 #endif
 
@@ -556,12 +566,25 @@ public:
 #endif
 
 #if ENABLE(IMAGE_EXTRACTION)
-    virtual void requestImageExtraction(Element&) { }
+    virtual void requestImageExtraction(Element&, CompletionHandler<void(RefPtr<Element>&&)>&& completion = { })
+    {
+        if (completion)
+            completion({ });
+    }
+#endif
+    virtual bool needsImageOverlayControllerForSelectionPainting() const { return false; }
+
+#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
+    virtual void showMediaControlsContextMenu(FloatRect&&, Vector<MediaControlsContextMenuItem>&&, CompletionHandler<void(MediaControlsContextMenuItem::ID)>&& completionHandler) { completionHandler(MediaControlsContextMenuItem::invalidID); }
+#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
+
+#if ENABLE(WEBXR)
+    virtual void enumerateImmersiveXRDevices(CompletionHandler<void(const PlatformXR::Instance::DeviceList&)>&& completionHandler) { PlatformXR::Instance::singleton().enumerateImmersiveXRDevices(WTFMove(completionHandler)); }
 #endif
 
-#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
-    virtual void showMediaControlsContextMenu(FloatRect&&, Vector<MediaControlsContextMenuItem>&&, CompletionHandler<void(MediaControlsContextMenuItem::ID)>&& completionHandler) { completionHandler(MediaControlsContextMenuItem::invalidID); }
-#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#if ENABLE(TEXT_AUTOSIZING)
+    virtual void textAutosizingUsesIdempotentModeChanged() { }
+#endif
 
 protected:
     virtual ~ChromeClient() = default;

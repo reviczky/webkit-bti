@@ -237,7 +237,7 @@ static bool shouldScaleColumnsForSelf(RenderTable* table)
     return scale;
 }
 
-void AutoTableLayout::computeIntrinsicLogicalWidths(LayoutUnit& minWidth, LayoutUnit& maxWidth)
+void AutoTableLayout::computeIntrinsicLogicalWidths(LayoutUnit& minWidth, LayoutUnit& maxWidth, TableIntrinsics intrinsics)
 {
     fullRecalc();
 
@@ -246,7 +246,7 @@ void AutoTableLayout::computeIntrinsicLogicalWidths(LayoutUnit& minWidth, Layout
     maxWidth = 0;
     float maxPercent = 0;
     float maxNonPercent = 0;
-    bool scaleColumnsForSelf = shouldScaleColumnsForSelf(m_table);
+    bool scaleColumnsForSelf = shouldScaleColumnsForSelf(m_table) && intrinsics == TableIntrinsics::ForLayout;
 
     // We substitute 0 percent by (epsilon / percentScaleFactor) percent in two places below to avoid division by zero.
     // FIXME: Handle the 0% cases properly.
@@ -280,8 +280,9 @@ void AutoTableLayout::computeIntrinsicLogicalWidths(LayoutUnit& minWidth, Layout
 
 void AutoTableLayout::applyPreferredLogicalWidthQuirks(LayoutUnit& minWidth, LayoutUnit& maxWidth) const
 {
-    Length tableLogicalWidth = m_table->style().logicalWidth();
-    if (tableLogicalWidth.isFixed() && tableLogicalWidth.isPositive())
+    if (m_table->hasOverridingLogicalWidth())
+        minWidth = maxWidth = std::max(minWidth, m_table->overridingLogicalWidth());
+    else if (auto tableLogicalWidth = m_table->style().logicalWidth(); tableLogicalWidth.isFixed() && tableLogicalWidth.isPositive())
         minWidth = maxWidth = std::max(minWidth, LayoutUnit(tableLogicalWidth.value()));
 }
 

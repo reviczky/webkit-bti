@@ -27,6 +27,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringConcatenateNumbers.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 namespace WebCore {
 
@@ -65,7 +66,7 @@ static inline Optional<FormControlState> deserializeFormControlState(const Vecto
 {
     if (index >= stateVector.size())
         return WTF::nullopt;
-    size_t size = stateVector[index++].toUInt();
+    auto size = parseIntegerAllowingTrailingJunk<size_t>(stateVector[index++]).valueOr(0);
     if (index + size > stateVector.size())
         return WTF::nullopt;
     Vector<String> subvector;
@@ -161,7 +162,7 @@ unsigned FormElementKeyHash::hash(const FormElementKey& key)
     return StringHasher::hashMemory<sizeof(FormElementKey)>(&key);
 }
 
-struct FormElementKeyHashTraits : WTF::GenericHashTraits<FormElementKey> {
+struct FormElementKeyHashTraits : HashTraits<FormElementKey> {
     static void constructDeletedValue(FormElementKey& slot) { new (NotNull, &slot) FormElementKey(WTF::HashTableDeletedValue); }
     static bool isDeletedValue(const FormElementKey& value) { return value.isHashTableDeletedValue(); }
 };
@@ -196,8 +197,7 @@ std::unique_ptr<SavedFormState> SavedFormState::deserialize(const Vector<String>
 {
     if (index >= stateVector.size())
         return nullptr;
-    // FIXME: We need String::toSizeT().
-    size_t itemCount = stateVector[index++].toUInt();
+    auto itemCount = parseIntegerAllowingTrailingJunk<size_t>(stateVector[index++]).valueOr(0);
     if (!itemCount)
         return nullptr;
     auto savedFormState = makeUnique<SavedFormState>();

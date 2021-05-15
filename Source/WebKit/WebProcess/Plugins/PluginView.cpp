@@ -145,12 +145,14 @@ private:
     RefPtr<NetscapePlugInStreamLoader> m_loader;
 };
 
+IGNORE_ERRONEOUS_GCC_NULL_CHECK_WARNINGS_BEGIN
 PluginView::Stream::~Stream()
 {
     if (m_loadCallback)
         m_loadCallback({ });
     ASSERT(!m_pluginView);
 }
+IGNORE_ERRONEOUS_GCC_NULL_CHECK_WARNINGS_END
     
 void PluginView::Stream::start()
 {
@@ -188,17 +190,9 @@ static String buildHTTPHeaders(const ResourceResponse& response, long long& expe
         return String();
 
     StringBuilder header;
-    header.appendLiteral("HTTP ");
-    header.appendNumber(response.httpStatusCode());
-    header.append(' ');
-    header.append(response.httpStatusText());
-    header.append('\n');
-    for (auto& field : response.httpHeaderFields()) {
-        header.append(field.key);
-        header.appendLiteral(": ");
-        header.append(field.value);
-        header.append('\n');
-    }
+    header.append("HTTP ", response.httpStatusCode(), ' ', response.httpStatusText(), '\n');
+    for (auto& field : response.httpHeaderFields())
+        header.append(field.key, ": ", field.value, '\n');
 
     // If the content is encoded (most likely compressed), then don't send its length to the plugin,
     // which is only interested in the decoded length, not yet known at the moment.

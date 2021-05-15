@@ -33,6 +33,7 @@
 #endif
 
 #include "LibWebRTCNetwork.h"
+#include "RTCDataChannelRemoteManager.h"
 #include "WebPage.h"
 #include "WebProcess.h"
 #include <WebCore/Page.h>
@@ -63,7 +64,9 @@ rtc::scoped_refptr<webrtc::PeerConnectionInterface> LibWebRTCProvider::createPee
     }
 #endif
 
-    return WebCore::LibWebRTCProvider::createPeerConnection(observer, WebProcess::singleton().libWebRTCNetwork().monitor(), *socketFactory, WTFMove(configuration), makeUnique<AsyncResolverFactory>());
+    auto& networkMonitor = WebProcess::singleton().libWebRTCNetwork().monitor();
+    networkMonitor.setEnumeratingAllNetworkInterfacesEnabled(isEnumeratingAllNetworkInterfacesEnabled());
+    return WebCore::LibWebRTCProvider::createPeerConnection(observer, networkMonitor, *socketFactory, WTFMove(configuration), makeUnique<AsyncResolverFactory>());
 }
 
 void LibWebRTCProvider::disableNonLocalhostConnections()
@@ -150,6 +153,19 @@ void LibWebRTCProvider::startedNetworkThread()
 std::unique_ptr<LibWebRTCProvider::SuspendableSocketFactory> LibWebRTCProvider::createSocketFactory(String&& userAgent)
 {
     return makeUnique<RTCSocketFactory>(WTFMove(userAgent));
+}
+
+RefPtr<RTCDataChannelRemoteHandlerConnection> LibWebRTCProvider::createRTCDataChannelRemoteHandlerConnection()
+{
+    return &RTCDataChannelRemoteManager::sharedManager().remoteHandlerConnection();
+}
+
+void LibWebRTCProvider::setLoggingLevel(WTFLogLevel level)
+{
+    WebCore::LibWebRTCProvider::setLoggingLevel(level);
+#if PLATFORM(COCOA)
+    WebProcess::singleton().libWebRTCCodecs().setLoggingLevel(level);
+#endif
 }
 
 } // namespace WebKit

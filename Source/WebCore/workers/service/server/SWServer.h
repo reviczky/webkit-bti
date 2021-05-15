@@ -45,6 +45,7 @@
 #include <wtf/RunLoop.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Threading.h>
+#include <wtf/URLHash.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakPtr.h>
 
@@ -149,9 +150,9 @@ public:
     void rejectJob(const ServiceWorkerJobData&, const ExceptionData&);
     void resolveRegistrationJob(const ServiceWorkerJobData&, const ServiceWorkerRegistrationData&, ShouldNotifyWhenResolved);
     void resolveUnregistrationJob(const ServiceWorkerJobData&, const ServiceWorkerRegistrationKey&, bool unregistrationResult);
-    void startScriptFetch(const ServiceWorkerJobData&, bool shouldRefreshCache);
+    void startScriptFetch(const ServiceWorkerJobData&, SWServerRegistration&);
 
-    void updateWorker(const ServiceWorkerJobDataIdentifier&, SWServerRegistration&, const URL&, const String& script, const CertificateInfo&, const ContentSecurityPolicyResponseHeaders&, const String& referrerPolicy, WorkerType, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
+    void updateWorker(const ServiceWorkerJobDataIdentifier&, SWServerRegistration&, const URL&, const ScriptBuffer&, const CertificateInfo&, const ContentSecurityPolicyResponseHeaders&, const String& referrerPolicy, WorkerType, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
     void fireInstallEvent(SWServerWorker&);
     void fireActivateEvent(SWServerWorker&);
 
@@ -190,6 +191,7 @@ public:
     void resolveRegistrationReadyRequests(SWServerRegistration&);
 
     void addRegistrationFromStore(ServiceWorkerContextData&&);
+    void didSaveWorkerScriptsToDisk(ServiceWorkerIdentifier, ScriptBuffer&& mainScript, HashMap<URL, ScriptBuffer>&& importedScripts);
     void registrationStoreImportComplete();
     void registrationStoreDatabaseFailedToOpen();
 

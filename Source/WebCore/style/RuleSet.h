@@ -76,6 +76,13 @@ public:
         Vector<RuleFeature> ruleFeatures;
         bool requiresFullReset { false };
         bool result { true };
+        
+        void shrinkToFit()
+        {
+            mediaQuerySets.shrinkToFit();
+            affectedRulePositions.shrinkToFit();
+            ruleFeatures.shrinkToFit();
+        }
     };
 
     struct MediaQueryCollector {
@@ -123,7 +130,7 @@ public:
     const RuleDataVector* shadowPseudoElementRules(const AtomString& key) const { return m_shadowPseudoElementRules.get(key); }
     const RuleDataVector* linkPseudoClassRules() const { return &m_linkPseudoClassRules; }
 #if ENABLE(VIDEO)
-    const RuleDataVector* cuePseudoRules() const { return &m_cuePseudoRules; }
+    const RuleDataVector& cuePseudoRules() const { return m_cuePseudoRules; }
 #endif
     const RuleDataVector& hostPseudoClassRules() const { return m_hostPseudoClassRules; }
     const RuleDataVector& slottedPseudoElementRules() const { return m_slottedPseudoElementRules; }
@@ -135,7 +142,7 @@ public:
 
     unsigned ruleCount() const { return m_ruleCount; }
 
-    bool hasShadowPseudoElementRules() const;
+    bool hasShadowPseudoElementRules() const { return !m_shadowPseudoElementRules.isEmpty(); }
     bool hasHostPseudoClassRulesMatchingInShadowTree() const { return m_hasHostPseudoClassRulesMatchingInShadowTree; }
 
 private:
@@ -153,7 +160,6 @@ private:
 
     template<typename Function> void traverseRuleDatas(Function&&);
 
-
     AtomRuleMap m_idRules;
     AtomRuleMap m_classRules;
     AtomRuleMap m_tagLocalNameRules;
@@ -169,13 +175,13 @@ private:
     RuleDataVector m_focusPseudoClassRules;
     RuleDataVector m_universalRules;
     Vector<StyleRulePage*> m_pageRules;
+    RuleFeatureSet m_features;
+    Vector<DynamicMediaQueryRules> m_dynamicMediaQueryRules;
+    HashMap<Vector<size_t>, Ref<const RuleSet>> m_mediaQueryInvalidationRuleSetCache;
     unsigned m_ruleCount { 0 };
     bool m_hasHostPseudoClassRulesMatchingInShadowTree { false };
     bool m_autoShrinkToFitEnabled { true };
-    RuleFeatureSet m_features;
     bool m_hasViewportDependentMediaQueries { false };
-    Vector<DynamicMediaQueryRules> m_dynamicMediaQueryRules;
-    HashMap<Vector<size_t>, Ref<const RuleSet>> m_mediaQueryInvalidationRuleSetCache;
 };
 
 inline const RuleSet::RuleDataVector* RuleSet::tagRules(const AtomString& key, bool isHTMLName) const

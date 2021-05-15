@@ -48,6 +48,7 @@
 #include "RenderBox.h"
 #include "RuntimeEnabledFeatures.h"
 #include "WebGLActiveInfo.h"
+#include "WebGLBuffer.h"
 #include "WebGLCompressedTextureASTC.h"
 #include "WebGLCompressedTextureATC.h"
 #include "WebGLCompressedTextureETC.h"
@@ -57,14 +58,19 @@
 #include "WebGLCompressedTextureS3TCsRGB.h"
 #include "WebGLDebugRendererInfo.h"
 #include "WebGLDebugShaders.h"
+#include "WebGLFramebuffer.h"
 #include "WebGLLoseContext.h"
 #include "WebGLMultiDraw.h"
+#include "WebGLProgram.h"
 #include "WebGLQuery.h"
+#include "WebGLRenderbuffer.h"
 #include "WebGLSampler.h"
 #include "WebGLSync.h"
 #include "WebGLTexture.h"
 #include "WebGLTransformFeedback.h"
+#include "WebGLUniformLocation.h"
 #include "WebGLVertexArrayObject.h"
+#include "WebGLVertexArrayObjectOES.h"
 #include <JavaScriptCore/GenericTypedArrayViewInlines.h>
 #include <JavaScriptCore/HeapInlines.h>
 #include <JavaScriptCore/JSGenericTypedArrayViewInlines.h>
@@ -2809,6 +2815,14 @@ WebGLAny WebGL2RenderingContext::getFramebufferAttachmentParameter(GCGLenum targ
             return m_context->getFramebufferAttachmentParameteri(target, attachment, pname);
         }
     }
+
+#if ENABLE(WEBXR)
+    if (targetFramebuffer->isOpaque()) {
+        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "getFramebufferAttachmentParameter", "An opaque framebuffer's attachments cannot be inspected or changed");
+        return nullptr;
+    }
+#endif
+
     if (!validateNonDefaultFramebufferAttachment(functionName, attachment))
         return nullptr;
 
@@ -3216,8 +3230,8 @@ WebGLAny WebGL2RenderingContext::getParameter(GCGLenum pname)
         return nullptr;
     switch (pname) {
     case GraphicsContextGL::SHADING_LANGUAGE_VERSION:
-        if (!RuntimeEnabledFeatures::sharedFeatures().maskWebGLStringsEnabled())
-            return "WebGL GLSL ES 3.00 (" + m_context->getString(GraphicsContextGL::SHADING_LANGUAGE_VERSION) + ")";
+        if (!scriptExecutionContext()->settingsValues().maskWebGLStringsEnabled)
+            return makeString("WebGL GLSL ES 3.00 (", m_context->getString(GraphicsContextGL::SHADING_LANGUAGE_VERSION), ')');
         return "WebGL GLSL ES 3.00"_str;
     case GraphicsContextGL::VERSION:
         return "WebGL 2.0"_str;

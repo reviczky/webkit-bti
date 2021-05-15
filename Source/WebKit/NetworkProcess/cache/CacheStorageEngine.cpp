@@ -39,6 +39,7 @@
 #include <wtf/Scope.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringHash.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 namespace WebKit {
 
@@ -199,21 +200,20 @@ void Engine::clearCachesForOrigin(NetworkProcess& networkProcess, PAL::SessionID
 
 static uint64_t getDirectorySize(const String& directoryPath)
 {
-    ASSERT(!isMainThread());
+    ASSERT(!isMainRunLoop());
 
     uint64_t directorySize = 0;
     Deque<String> paths;
     paths.append(directoryPath);
     while (!paths.isEmpty()) {
         auto path = paths.takeFirst();
-        if (FileSystem::fileIsDirectory(path, FileSystem::ShouldFollowSymbolicLinks::No)) {
-            auto newPaths = FileSystem::listDirectory(path, "*"_s);
-            for (auto& newPath : newPaths) {
+        if (FileSystem::isDirectory(path)) {
+            auto fileNames = FileSystem::listDirectory(path);
+            for (auto& fileName : fileNames) {
                 // Files in /Blobs directory are hard link.
-                auto fileName = FileSystem::lastComponentOfPathIgnoringTrailingSlash(newPath);
                 if (fileName == "Blobs")
                     continue;
-                paths.append(newPath);
+                paths.append(FileSystem::pathByAppendingComponent(path, fileName));
             }
             continue;
         }
@@ -227,13 +227,13 @@ static uint64_t getDirectorySize(const String& directoryPath)
 
 uint64_t Engine::diskUsage(const String& rootPath, const WebCore::ClientOrigin& origin)
 {
-    ASSERT(!isMainThread());
+    ASSERT(!isMainRunLoop());
 
     if (rootPath.isEmpty())
         return 0;
 
     String saltPath = FileSystem::pathByAppendingComponent(rootPath, "salt"_s);
-    auto salt = readOrMakeSalt(saltPath);
+    auto salt = FileSystem::readOrMakeSalt(saltPath);
     if (!salt)
         return 0;
 
@@ -374,7 +374,7 @@ void Engine::initialize(CompletionCallback&& callback)
     m_ioQueue->dispatch([this, weakThis = makeWeakPtr(this), rootPath = m_rootPath.isolatedCopy()] () mutable {
         FileSystem::makeAllDirectories(rootPath);
         String saltPath = FileSystem::pathByAppendingComponent(rootPath, "salt"_s);
-        RunLoop::main().dispatch([this, weakThis = WTFMove(weakThis), salt = readOrMakeSalt(saltPath)]() mutable {
+        RunLoop::main().dispatch([this, weakThis = WTFMove(weakThis), salt = FileSystem::readOrMakeSalt(saltPath)]() mutable {
             if (!weakThis)
                 return;
 
@@ -463,12 +463,12 @@ void Engine::writeFile(const String& filename, NetworkCache::Data&& data, WebCor
     m_pendingWriteCallbacks.add(++m_pendingCallbacksCounter, WTFMove(callback));
     m_ioQueue->dispatch([this, weakThis = makeWeakPtr(this), identifier = m_pendingCallbacksCounter, data = WTFMove(data), filename = filename.isolatedCopy()]() mutable {
 
-        String directoryPath = FileSystem::directoryName(filename);
+        String directoryPath = FileSystem::parentPath(filename);
         if (!FileSystem::fileExists(directoryPath))
             FileSystem::makeAllDirectories(directoryPath);
 
         auto channel = IOChannel::open(filename, IOChannel::Type::Create, WorkQueue::QOS::Default);
-        channel->write(0, data, nullptr, [this, weakThis = WTFMove(weakThis), identifier](int error) mutable {
+        channel->write(0, data, WorkQueue::main(), [this, weakThis = WTFMove(weakThis), identifier](int error) mutable {
             ASSERT(RunLoop::isMain());
             if (!weakThis)
                 return;
@@ -505,7 +505,7 @@ void Engine::readFile(const String& filename, CompletionHandler<void(const Netwo
             return;
         }
 
-        channel->read(0, std::numeric_limits<size_t>::max(), nullptr, [this, weakThis = WTFMove(weakThis), identifier](const Data& data, int error) mutable {
+        channel->read(0, std::numeric_limits<size_t>::max(), WorkQueue::main(), [this, weakThis = WTFMove(weakThis), identifier](const Data& data, int error) mutable {
             RELEASE_LOG_ERROR_IF(error, CacheStorage, "CacheStorage::Engine::readFile failed with error %d", error);
 
             // FIXME: We should do the decoding in the background thread.
@@ -570,16 +570,17 @@ Optional<uint64_t> Engine::readSizeFile(const String& path)
     if (!FileSystem::getFileSize(path, fileSize) || !fileSize)
         return WTF::nullopt;
 
-    size_t bytesToRead;
+    unsigned bytesToRead;
     if (!WTF::convertSafely(fileSize, bytesToRead))
         return WTF::nullopt;
 
-    Vector<unsigned char> buffer(bytesToRead);
-    size_t totalBytesRead = FileSystem::readFromFile(fileHandle, reinterpret_cast<char*>(buffer.data()), buffer.size());
+    // FIXME: No reason we need a heap buffer to read an arbitrary number of bytes when we only support small files that contain numerals.
+    Vector<char> buffer(bytesToRead);
+    unsigned totalBytesRead = FileSystem::readFromFile(fileHandle, buffer.data(), buffer.size());
     if (totalBytesRead != bytesToRead)
         return WTF::nullopt;
 
-    return charactersToUIntStrict(buffer.data(), totalBytesRead);
+    return parseInteger<uint64_t>({ buffer.data(), totalBytesRead });
 }
 
 class ReadOriginsTaskCounter : public RefCounted<ReadOriginsTaskCounter> {
@@ -613,9 +614,10 @@ void Engine::getDirectories(CompletionHandler<void(const Vector<String>&)>&& com
 {
     m_ioQueue->dispatch([path = m_rootPath.isolatedCopy(), completionHandler = WTFMove(completionHandler)]() mutable {
         Vector<String> folderPaths;
-        for (auto& filename : FileSystem::listDirectory(path, "*")) {
-            if (FileSystem::fileIsDirectory(filename, FileSystem::ShouldFollowSymbolicLinks::No))
-                folderPaths.append(filename.isolatedCopy());
+        for (auto& fileName : FileSystem::listDirectory(path)) {
+            auto filePath = FileSystem::pathByAppendingComponent(path, fileName);
+            if (FileSystem::isDirectory(filePath))
+                folderPaths.append(filePath.isolatedCopy());
         }
 
         RunLoop::main().dispatch([folderPaths = WTFMove(folderPaths), completionHandler = WTFMove(completionHandler)]() mutable {
@@ -700,9 +702,10 @@ void Engine::clearAllCachesFromDisk(CompletionHandler<void()>&& completionHandle
 
     m_ioQueue->dispatch([path = m_rootPath.isolatedCopy(), completionHandler = WTFMove(completionHandler)]() mutable {
         LockHolder locker(globalSizeFileLock);
-        for (auto& filename : FileSystem::listDirectory(path, "*")) {
-            if (FileSystem::fileIsDirectory(filename, FileSystem::ShouldFollowSymbolicLinks::No))
-                deleteDirectoryRecursively(filename);
+        for (auto& fileName : FileSystem::listDirectory(path)) {
+            auto filePath = FileSystem::pathByAppendingComponent(path, fileName);
+            if (FileSystem::isDirectory(filePath))
+                FileSystem::deleteNonEmptyDirectory(filePath);
         }
         RunLoop::main().dispatch(WTFMove(completionHandler));
     });
@@ -749,18 +752,18 @@ void Engine::clearCachesForOriginFromDirectories(const Vector<String>& folderPat
 
             // If cache salt is initialized and the paths do not match, some cache files have probably be removed or partially corrupted.
             ASSERT(!m_salt || folderPath == cachesRootPath(*folderOrigin));
-            deleteDirectoryRecursivelyOnBackgroundThread(folderPath, [callbackAggregator = WTFMove(callbackAggregator)] { });
+            deleteNonEmptyDirectoryOnBackgroundThread(folderPath, [callbackAggregator = WTFMove(callbackAggregator)] { });
         });
     }
 }
 
-void Engine::deleteDirectoryRecursivelyOnBackgroundThread(const String& path, CompletionHandler<void()>&& completionHandler)
+void Engine::deleteNonEmptyDirectoryOnBackgroundThread(const String& path, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
 
     m_ioQueue->dispatch([path = path.isolatedCopy(), completionHandler = WTFMove(completionHandler)]() mutable {
         LockHolder locker(globalSizeFileLock);
-        deleteDirectoryRecursively(path);
+        FileSystem::deleteNonEmptyDirectory(path);
 
         RunLoop::main().dispatch(WTFMove(completionHandler));
     });

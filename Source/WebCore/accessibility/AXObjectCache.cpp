@@ -979,16 +979,31 @@ void AXObjectCache::textChanged(Node* node)
     textChanged(getOrCreate(node));
 }
 
-void AXObjectCache::textChanged(AccessibilityObject* obj)
+void AXObjectCache::textChanged(AccessibilityObject* object)
 {
-    if (!obj)
+    AXTRACE("AXObjectCache::textChanged");
+    AXLOG(object);
+
+    if (!object)
         return;
 
-    bool parentAlreadyExists = obj->parentObjectIfExists();
-    obj->textChanged();
-    postNotification(obj, obj->document(), AXObjectCache::AXTextChanged);
-    if (parentAlreadyExists)
-        obj->notifyIfIgnoredValueChanged();
+    // If this element supports ARIA live regions, or is part of a region with an ARIA editable role,
+    // then notify the AT of changes.
+    bool notifiedNonNativeTextControl = false;
+    for (auto* parent = object; parent; parent = parent->parentObject()) {
+        if (parent->supportsLiveRegion())
+            postLiveRegionChangeNotification(parent);
+
+        if (!notifiedNonNativeTextControl && parent->isNonNativeTextControl()) {
+            postNotification(parent, parent->document(), AXValueChanged);
+            notifiedNonNativeTextControl = true;
+        }
+    }
+
+    postNotification(object, object->document(), AXTextChanged);
+
+    if (object->parentObjectIfExists())
+        object->notifyIfIgnoredValueChanged();
 }
 
 void AXObjectCache::updateCacheAfterNodeIsAttached(Node* node)
@@ -1213,6 +1228,13 @@ void AXObjectCache::deferFocusedUIElementChangeIfNeeded(Node* oldNode, Node* new
             m_performCacheUpdateTimer.startOneShot(0_s);
     } else
         handleFocusedUIElementChanged(oldNode, newNode);
+}
+
+void AXObjectCache::deferMenuListValueChange(Element* element)
+{
+    m_deferredMenuListChange.add(element);
+    if (!m_performCacheUpdateTimer.isActive())
+        m_performCacheUpdateTimer.startOneShot(0_s);
 }
 
 void AXObjectCache::deferModalChange(Element* element)
@@ -1848,23 +1870,24 @@ void AXObjectCache::stopCachingComputedObjectAttributes()
 
 VisiblePosition AXObjectCache::visiblePositionForTextMarkerData(TextMarkerData& textMarkerData)
 {
-    if (!isNodeInUse(textMarkerData.node))
-        return VisiblePosition();
-    
-    VisiblePosition visiblePos = VisiblePosition(makeContainerOffsetPosition(textMarkerData.node, textMarkerData.offset), textMarkerData.affinity);
-    Position deepPos = visiblePos.deepEquivalent();
-    if (deepPos.isNull())
-        return VisiblePosition();
-    
-    RenderObject* renderer = deepPos.deprecatedNode()->renderer();
-    if (!renderer)
-        return VisiblePosition();
-    
-    AXObjectCache* cache = renderer->document().axObjectCache();
-    if (cache && !cache->m_idsInUse.contains(textMarkerData.axID))
-        return VisiblePosition();
+    if (!isNodeInUse(textMarkerData.node)
+        || textMarkerData.node->isPseudoElement())
+        return { };
 
-    return visiblePos;
+    auto visiblePosition = VisiblePosition(makeContainerOffsetPosition(textMarkerData.node, textMarkerData.offset), textMarkerData.affinity);
+    auto deepPosition = visiblePosition.deepEquivalent();
+    if (deepPosition.isNull())
+        return { };
+
+    auto* renderer = deepPosition.deprecatedNode()->renderer();
+    if (!renderer)
+        return { };
+
+    auto* cache = renderer->document().axObjectCache();
+    if (cache && !cache->m_idsInUse.contains(textMarkerData.axID))
+        return { };
+
+    return visiblePosition;
 }
 
 CharacterOffset AXObjectCache::characterOffsetForTextMarkerData(TextMarkerData& textMarkerData)
@@ -2033,14 +2056,23 @@ SimpleRange AXObjectCache::rangeForNodeContents(Node& node)
     
 Optional<SimpleRange> AXObjectCache::rangeMatchesTextNearRange(const SimpleRange& originalRange, const String& matchText)
 {
-    // Create a large enough range for searching the text within.
+    // Create a large enough range to find the text within it that's being searched for.
     unsigned textLength = matchText.length();
-    auto startPosition = visiblePositionForPositionWithOffset(makeContainerOffsetPosition(originalRange.start), -textLength);
-    auto endPosition = visiblePositionForPositionWithOffset(makeContainerOffsetPosition(originalRange.start), 2 * textLength);
-    if (startPosition.isNull())
-        startPosition = firstPositionInOrBeforeNode(originalRange.start.container.ptr());
-    if (endPosition.isNull())
-        endPosition = lastPositionInOrAfterNode(originalRange.end.container.ptr());
+    auto startPosition = VisiblePosition(makeContainerOffsetPosition(originalRange.start));
+    for (unsigned k = 0; k < textLength; k++) {
+        auto testPosition = startPosition.previous();
+        if (testPosition.isNull())
+            break;
+        startPosition = testPosition;
+    }
+
+    auto endPosition = VisiblePosition(makeContainerOffsetPosition(originalRange.end));
+    for (unsigned k = 0; k < textLength; k++) {
+        auto testPosition = endPosition.next();
+        if (testPosition.isNull())
+            break;
+        endPosition = testPosition;
+    }
 
     auto searchRange = makeSimpleRange(startPosition, endPosition);
     if (!searchRange || searchRange->collapsed())
@@ -3055,14 +3087,14 @@ const Element* AXObjectCache::rootAXEditableElement(const Node* node)
     return result;
 }
 
-static void conditionallyAddNodeToFilterList(Node* node, const Document& document, HashSet<Node*>& nodesToRemove)
+static void conditionallyAddNodeToFilterList(Node* node, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
 {
     if (node && (!node->isConnected() || &node->document() == &document))
-        nodesToRemove.add(node);
+        nodesToRemove.add(*node);
 }
     
 template<typename T>
-static void filterVectorPairForRemoval(const Vector<std::pair<T, T>>& list, const Document& document, HashSet<Node*>& nodesToRemove)
+static void filterVectorPairForRemoval(const Vector<std::pair<T, T>>& list, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
 {
     for (auto& entry : list) {
         conditionallyAddNodeToFilterList(entry.first, document, nodesToRemove);
@@ -3071,14 +3103,14 @@ static void filterVectorPairForRemoval(const Vector<std::pair<T, T>>& list, cons
 }
     
 template<typename T, typename U>
-static void filterMapForRemoval(const HashMap<T, U>& list, const Document& document, HashSet<Node*>& nodesToRemove)
+static void filterMapForRemoval(const HashMap<T, U>& list, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
 {
     for (auto& entry : list)
         conditionallyAddNodeToFilterList(entry.key, document, nodesToRemove);
 }
 
 template<typename T>
-static void filterListForRemoval(const ListHashSet<T>& list, const Document& document, HashSet<Node*>& nodesToRemove)
+static void filterListForRemoval(const ListHashSet<T>& list, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
 {
     for (auto* node : list)
         conditionallyAddNodeToFilterList(node, document, nodesToRemove);
@@ -3086,7 +3118,7 @@ static void filterListForRemoval(const ListHashSet<T>& list, const Document& doc
 
 void AXObjectCache::prepareForDocumentDestruction(const Document& document)
 {
-    HashSet<Node*> nodesToRemove;
+    HashSet<Ref<Node>> nodesToRemove;
     filterListForRemoval(m_textMarkerNodes, document, nodesToRemove);
     filterListForRemoval(m_modalElementsSet, document, nodesToRemove);
     filterListForRemoval(m_deferredTextChangedList, document, nodesToRemove);
@@ -3095,8 +3127,8 @@ void AXObjectCache::prepareForDocumentDestruction(const Document& document)
     filterMapForRemoval(m_deferredAttributeChange, document, nodesToRemove);
     filterVectorPairForRemoval(m_deferredFocusedNodeChange, document, nodesToRemove);
     
-    for (auto* node : nodesToRemove)
-        remove(*node);
+    for (auto& node : nodesToRemove)
+        remove(node);
 }
     
 bool AXObjectCache::nodeIsTextControl(const Node* node)
@@ -3171,6 +3203,10 @@ void AXObjectCache::performDeferredCacheUpdate()
         handleModalChange(deferredModalChangedElement);
     m_deferredModalChangedList.clear();
 
+    for (auto& deferredMenuListChangeElement : m_deferredMenuListChange)
+        postNotification(&deferredMenuListChangeElement, AXObjectCache::AXMenuListValueChanged);
+    m_deferredMenuListChange.clear();
+    
     platformPerformDeferredCacheUpdate();
 }
     

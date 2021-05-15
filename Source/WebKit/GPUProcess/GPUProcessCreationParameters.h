@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,10 +41,8 @@ struct GPUProcessCreationParameters {
 
 #if ENABLE(MEDIA_STREAM)
     bool useMockCaptureDevices { false };
-    SandboxExtension::Handle cameraSandboxExtensionHandle;
+#if PLATFORM(MAC)
     SandboxExtension::Handle microphoneSandboxExtensionHandle;
-#if PLATFORM(IOS)
-    SandboxExtension::Handle tccSandboxExtensionHandle;
 #endif
 #endif
     ProcessID parentPID;
@@ -52,6 +50,11 @@ struct GPUProcessCreationParameters {
 #if USE(SANDBOX_EXTENSIONS_FOR_CACHE_AND_TEMP_DIRECTORY_ACCESS)
     SandboxExtension::Handle containerCachesDirectoryExtensionHandle;
     SandboxExtension::Handle containerTemporaryDirectoryExtensionHandle;
+#endif
+#if PLATFORM(IOS_FAMILY)
+    SandboxExtension::HandleArray compilerServiceExtensionHandles;
+    SandboxExtension::HandleArray dynamicIOKitExtensionHandles;
+    SandboxExtension::HandleArray dynamicMachExtensionHandles;
 #endif
 
     void encode(IPC::Encoder&) const;

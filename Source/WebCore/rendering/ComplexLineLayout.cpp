@@ -520,11 +520,8 @@ static inline void setLogicalWidthForTextRun(RootInlineBox* lineBox, BidiRun* ru
                 measuredWidth += wordMeasurement.width;
             atFirstWordMeasurement = false;
 
-            if (!wordMeasurement.fallbackFonts.isEmpty()) {
-                HashSet<const Font*>::const_iterator end = wordMeasurement.fallbackFonts.end();
-                for (HashSet<const Font*>::const_iterator it = wordMeasurement.fallbackFonts.begin(); it != end; ++it)
-                    fallbackFonts.add(*it);
-            }
+            for (auto& font : wordMeasurement.fallbackFonts)
+                fallbackFonts.add(font);
         }
         if (measuredWidth && lastEndOffset != run->m_stop) {
             // If we don't have enough cached data, we'll measure the run again.
@@ -1325,12 +1322,12 @@ void ComplexLineLayout::layoutRunsAndFloats(LineLayoutState& layoutState, bool h
     // determineStartPosition first will break fast/repaint/line-flow-with-floats-9.html.
     if (layoutState.isFullLayout() && hasInlineChild && !m_flow.selfNeedsLayout()) {
         m_flow.setNeedsLayout(MarkOnlyThis); // Mark as needing a full layout to force us to repaint.
-        if (!layoutContext().needsFullRepaint() && m_flow.hasSelfPaintingLayer() && m_flow.hasRepaintLayoutRects()) {
+        if (!layoutContext().needsFullRepaint() && m_flow.layerRepaintRects()) {
             // Because we waited until we were already inside layout to discover
             // that the block really needed a full layout, we missed our chance to repaint the layer
             // before layout started. Luckily the layer has cached the repaint rect for its original
             // position and size, and so we can use that to make a repaint happen now.
-            m_flow.repaintUsingContainer(m_flow.containerForRepaint(), m_flow.repaintLayoutRects().m_repaintRect);
+            m_flow.repaintUsingContainer(m_flow.containerForRepaint(), m_flow.layerRepaintRects()->clippedOverflowRect);
         }
     }
 
@@ -1359,8 +1356,8 @@ void ComplexLineLayout::layoutRunsAndFloats(LineLayoutState& layoutState, bool h
             if (!lastObject->isBR())
                 lastObject = &lastRootBox()->firstLeafDescendant()->renderer();
             if (lastObject->isBR()) {
-                Clear clear = lastObject->style().clear();
-                if (clear != Clear::None)
+                auto clear = RenderStyle::usedClear(*lastObject);
+                if (clear != UsedClear::None)
                     m_flow.clearFloats(clear);
             }
         }
@@ -1504,7 +1501,7 @@ void ComplexLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState,
 
         if (!layoutState.lineInfo().isEmpty()) {
             layoutState.lineInfo().setFirstLine(false);
-            m_flow.clearFloats(lineBreaker.clear());
+            m_flow.clearFloats(lineBreaker.usedClear());
         }
 
         if (m_flow.floatingObjects() && lastRootBox()) {
@@ -1552,8 +1549,17 @@ void ComplexLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState,
         }
 
         // If there were no breaks in the block, we didn't create any widows.
-        if (!lineBox || !lineBox->isFirstAfterPageBreak() || lineBox == firstLineInBlock)
+        if (!lineBox || !lineBox->isFirstAfterPageBreak() || lineBox == firstLineInBlock) {
+            if (m_flow.shouldBreakAtLineToAvoidWidow()) {
+                // This is the case when the previous line layout marks a line to break at to avoid widows
+                // but the current layout does not produce that line. It happens when layout constraints unexpectedly
+                // change in between layouts (note that these paginated line layouts run within the same layout frame
+                // as opposed to two subsequent full layouts).
+                ASSERT_NOT_REACHED();
+                m_flow.clearShouldBreakAtLineToAvoidWidow();
+            }
             return;
+        }
 
         if (numLinesHanging < style().widows()) {
             // We have detected a widow. Now we need to work out how many

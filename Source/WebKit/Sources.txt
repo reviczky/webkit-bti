@@ -28,6 +28,8 @@ GPUProcess/graphics/DisplayListReaderHandle.cpp
 GPUProcess/graphics/RemoteRenderingBackend.cpp
 GPUProcess/graphics/RemoteGraphicsContextGL.cpp
 GPUProcess/graphics/RemoteResourceCache.cpp
+GPUProcess/graphics/ScopedRenderingResourcesRequest.cpp
+GPUProcess/graphics/ScopedWebGLRenderingResourcesRequest.cpp
 GPUProcess/media/RemoteAudioHardwareListenerProxy.cpp
 GPUProcess/media/RemoteAudioSessionProxy.cpp
 GPUProcess/media/RemoteAudioSessionProxyManager.cpp
@@ -58,13 +60,13 @@ GPUProcess/webrtc/RemoteSampleBufferDisplayLayer.cpp
 GPUProcess/webrtc/RemoteSampleBufferDisplayLayerManager.cpp
 
 NetworkProcess/PrivateClickMeasurementManager.cpp
+NetworkProcess/PrivateClickMeasurementNetworkLoader.cpp
 NetworkProcess/NetworkActivityTracker.cpp
 NetworkProcess/NetworkCORSPreflightChecker.cpp
 NetworkProcess/NetworkConnectionToWebProcess.cpp
 NetworkProcess/NetworkContentRuleListManager.cpp
 NetworkProcess/NetworkDataTask.cpp
 NetworkProcess/NetworkDataTaskBlob.cpp
-NetworkProcess/NetworkHTTPSUpgradeChecker.cpp
 NetworkProcess/NetworkLoad.cpp
 NetworkProcess/NetworkLoadChecker.cpp
 NetworkProcess/NetworkLoadScheduler.cpp
@@ -131,6 +133,7 @@ NetworkProcess/cache/NetworkCacheSubresourcesEntry.cpp
 NetworkProcess/cache/PrefetchCache.cpp
 
 NetworkProcess/webrtc/NetworkMDNSRegister.cpp
+NetworkProcess/webrtc/RTCDataChannelRemoteManagerProxy.cpp
 
 // TODO: We should unify these files once GTK's PluginProcess2 is removed.
 Platform/Logging.cpp @no-unify
@@ -143,7 +146,6 @@ Platform/IPC/Attachment.cpp @no-unify
 Platform/IPC/Connection.cpp @no-unify
 Platform/IPC/Decoder.cpp @no-unify
 Platform/IPC/Encoder.cpp @no-unify
-Platform/IPC/IPCSemaphore.cpp @no-unify
 Platform/IPC/JSIPCBinding.cpp @no-unify
 Platform/IPC/MessageReceiveQueueMap.cpp @no-unify
 Platform/IPC/MessageReceiverMap.cpp @no-unify
@@ -370,7 +372,6 @@ UIProcess/API/APIPageConfiguration.cpp
 UIProcess/API/APIProcessPoolConfiguration.cpp
 UIProcess/API/APIOpenPanelParameters.cpp
 UIProcess/API/APISessionState.cpp
-UIProcess/API/APIURLSchemeTask.cpp
 UIProcess/API/APIUserScript.cpp
 UIProcess/API/APIUserStyleSheet.cpp
 UIProcess/API/APIWebAuthenticationAssertionResponse.cpp
@@ -455,8 +456,8 @@ UIProcess/Network/NetworkProcessProxy.cpp
 UIProcess/GPU/GPUProcessProxy.cpp
 
 UIProcess/Inspector/InspectorTargetProxy.cpp
-UIProcess/Inspector/RemoteWebInspectorProxy.cpp
-UIProcess/Inspector/WebInspectorProxy.cpp
+UIProcess/Inspector/RemoteWebInspectorUIProxy.cpp
+UIProcess/Inspector/WebInspectorUIProxy.cpp
 UIProcess/Inspector/WebInspectorUIExtensionControllerProxy.cpp
 UIProcess/Inspector/WebInspectorUtilities.cpp
 UIProcess/Inspector/WebPageDebuggable.cpp
@@ -466,8 +467,8 @@ UIProcess/Inspector/Agents/InspectorBrowserAgent.cpp
 
 UIProcess/Media/AudioSessionRoutingArbitratorProxy.cpp
 UIProcess/Media/MediaUsageManager.cpp
+UIProcess/Media/RemoteMediaSessionCoordinatorProxy.cpp
 
-UIProcess/Notifications/NotificationPermissionRequestManagerProxy.cpp
 UIProcess/Notifications/WebNotification.cpp
 UIProcess/Notifications/WebNotificationManagerProxy.cpp
 UIProcess/Notifications/WebNotificationProvider.cpp
@@ -559,7 +560,6 @@ WebProcess/InjectedBundle/API/c/WKBundleInspector.cpp
 WebProcess/InjectedBundle/API/c/WKBundleNavigationAction.cpp
 WebProcess/InjectedBundle/API/c/WKBundleNodeHandle.cpp
 WebProcess/InjectedBundle/API/c/WKBundlePage.cpp
-WebProcess/InjectedBundle/API/c/WKBundlePageGroup.cpp
 WebProcess/InjectedBundle/API/c/WKBundlePageOverlay.cpp
 WebProcess/InjectedBundle/API/c/WKBundleRangeHandle.cpp
 WebProcess/InjectedBundle/API/c/WKBundleScriptWorld.cpp
@@ -577,6 +577,8 @@ WebProcess/Inspector/WebInspectorUIExtensionController.cpp
 WebProcess/Inspector/WebPageInspectorTarget.cpp
 WebProcess/Inspector/WebPageInspectorTargetController.cpp
 WebProcess/Inspector/WebPageInspectorTargetFrontendChannel.cpp
+
+WebProcess/MediaSession/RemoteMediaSessionCoordinator.cpp
 
 WebProcess/MediaStream/MediaDeviceSandboxExtensions.cpp
 WebProcess/MediaStream/UserMediaPermissionRequestManager.cpp
@@ -631,6 +633,7 @@ WebProcess/Network/webrtc/LibWebRTCProvider.cpp
 WebProcess/Network/webrtc/LibWebRTCResolver.cpp
 WebProcess/Network/webrtc/LibWebRTCSocket.cpp
 WebProcess/Network/webrtc/LibWebRTCSocketFactory.cpp
+WebProcess/Network/webrtc/RTCDataChannelRemoteManager.cpp
 WebProcess/Network/webrtc/WebMDNSRegister.cpp
 WebProcess/Network/webrtc/WebRTCMonitor.cpp
 WebProcess/Network/webrtc/WebRTCResolver.cpp
@@ -719,5 +722,7 @@ WebProcess/WebStorage/StorageAreaMap.cpp
 WebProcess/WebStorage/StorageNamespaceImpl.cpp
 WebProcess/WebStorage/WebStorageNamespaceProvider.cpp
 
+RTCDataChannelRemoteManagerMessageReceiver.cpp
+RTCDataChannelRemoteManagerProxyMessageReceiver.cpp
 RemoteGraphicsContextGLMessageReceiver.cpp
 RemoteGraphicsContextGLProxyMessageReceiver.cpp

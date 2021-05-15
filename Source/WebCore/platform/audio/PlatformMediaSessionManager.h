@@ -27,7 +27,7 @@
 #define PlatformMediaSessionManager_h
 
 #include "GenericTaskQueue.h"
-#include "MediaSessionIdentifier.h"
+#include "MediaUniqueIdentifier.h"
 #include "PlatformMediaSession.h"
 #include "Timer.h"
 #include <wtf/AggregateLogger.h>
@@ -64,6 +64,15 @@ public:
     WEBCORE_EXPORT static void setOpusDecoderEnabled(bool);
     WEBCORE_EXPORT static bool opusDecoderEnabled();
 
+#if ENABLE(VP9)
+    WEBCORE_EXPORT static void setShouldEnableVP9Decoder(bool);
+    WEBCORE_EXPORT static bool shouldEnableVP9Decoder();
+    WEBCORE_EXPORT static void setShouldEnableVP8Decoder(bool);
+    WEBCORE_EXPORT static bool shouldEnableVP8Decoder();
+    WEBCORE_EXPORT static void setShouldEnableVP9SWDecoder(bool);
+    WEBCORE_EXPORT static bool shouldEnableVP9SWDecoder();
+#endif
+
     virtual ~PlatformMediaSessionManager() = default;
 
     virtual void scheduleSessionStatusUpdate() { }
@@ -77,7 +86,7 @@ public:
     virtual String lastUpdatedNowPlayingTitle() const { return emptyString(); }
     virtual double lastUpdatedNowPlayingDuration() const { return NAN; }
     virtual double lastUpdatedNowPlayingElapsedTime() const { return NAN; }
-    virtual MediaSessionIdentifier lastUpdatedNowPlayingInfoUniqueIdentifier() const { return { }; }
+    virtual MediaUniqueIdentifier lastUpdatedNowPlayingInfoUniqueIdentifier() const { return { }; }
     virtual bool registeredAsNowPlayingApplication() const { return false; }
     virtual bool haveEverRegisteredAsNowPlayingApplication() const { return false; }
     virtual void prepareToSendUserMediaPermissionRequest() { }
@@ -160,6 +169,8 @@ public:
     WEBCORE_EXPORT void processSystemWillSleep();
     WEBCORE_EXPORT void processSystemDidWake();
 
+    virtual void resetHaveEverRegisteredAsNowPlayingApplicationForTesting() { };
+
 protected:
     friend class PlatformMediaSession;
     PlatformMediaSessionManager();
@@ -219,6 +230,12 @@ private:
 #endif
 #if ENABLE(OPUS) && PLATFORM(MAC)
     static bool m_opusDecoderEnabled;
+#endif
+
+#if ENABLE(VP9)
+    static bool m_vp9DecoderEnabled;
+    static bool m_vp8DecoderEnabled;
+    static bool m_vp9SWDecoderEnabled;
 #endif
 
 #if !RELEASE_LOG_DISABLED

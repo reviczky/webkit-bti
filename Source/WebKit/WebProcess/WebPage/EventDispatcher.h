@@ -43,6 +43,7 @@
 #endif
 
 namespace WebCore {
+struct DisplayUpdate;
 class ThreadedScrollingTree;
 using PlatformDisplayID = uint32_t;
 }
@@ -106,8 +107,8 @@ private:
     static void sendDidReceiveEvent(WebCore::PageIdentifier, WebEvent::Type, bool didHandleEvent);
 #endif
 
-#if ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
-    void displayWasRefreshed(WebCore::PlatformDisplayID);
+#if PLATFORM(MAC)
+    void displayWasRefreshed(WebCore::PlatformDisplayID, const WebCore::DisplayUpdate&, bool sendToMainThread);
 #endif
 
 #if ENABLE(SCROLLING_THREAD)

@@ -260,6 +260,7 @@ windowtext
 -apple-system-red
 -apple-system-yellow
 -apple-system-app-highlight-background
+-webkit-control-background
 #endif
 #if defined(WTF_PLATFORM_MAC) && WTF_PLATFORM_MAC
 -apple-system-alternate-selected-text
@@ -275,9 +276,11 @@ windowtext
 #if defined(WTF_PLATFORM_IOS_FAMILY) && WTF_PLATFORM_IOS_FAMILY
 -apple-system-indigo
 -apple-system-teal
-#endif
-#if defined(HAVE_OS_DARK_MODE_SUPPORT) && HAVE_OS_DARK_MODE_SUPPORT
--webkit-control-background
+-apple-system-opaque-fill
+-apple-system-opaque-secondary-fill
+-apple-system-opaque-secondary-fill-disabled
+-apple-system-opaque-tertiary-fill
+-apple-system-opaque-separator
 #endif
 -webkit-focus-ring-color
 currentcolor
@@ -344,6 +347,14 @@ justify
 //none
 inter-word
 distribute
+//
+// CSS_PROP_CLEAR:
+// CSS_PROP_FLOAT:
+// none
+// left
+// right
+inline-start
+inline-end
 //
 // CSS_PROP_LIST_STYLE_POSITION:
 //
@@ -462,6 +473,7 @@ contents
 grid
 inline-grid
 flow-root
+flow
 //none
 //
 // CSS_PROP_CURSOR:
@@ -1164,7 +1176,6 @@ fine
 // (hover:) media feature.
 // none
 hover
-on-demand
 
 // blend modes
 // normal
@@ -1353,11 +1364,9 @@ minmax
 auto-flow
 dense
 
-#if defined(ENABLE_CSS3_TEXT) && ENABLE_CSS3_TEXT
 // text-indent
--webkit-each-line
--webkit-hanging
-#endif
+each-line
+// hanging
 
 // -webkit-column-fill
 balance
@@ -1434,17 +1443,15 @@ prophoto-rgb
 // sRGB
 xyz
 
+// color-contast()
+color-contrast
+vs
+AA
+AA-large
+
 // color-mix()
 color-mix
-shorter
-longer
-increasing
-decreasing
-specified
-lightness
-chroma
-whiteness
-blackness
+in
 
 // prefers-default-appearance
 prefers
@@ -1455,7 +1462,6 @@ reduce
 no-preference
 
 // prefers-contrast
-forced
 more
 less
 // no-preference
@@ -1464,7 +1470,6 @@ less
 // prefers-color-scheme
 light
 dark
-// no-preference
 
 // color-scheme
 only
@@ -1497,6 +1502,24 @@ from-font
 standard
 high
 
+// @counter-style `system` descriptor values
+// https://www.w3.org/TR/css-counter-styles-3/#counter-style-system
+cyclic
+numeric
+// alphabetic
+symbolic
+additive
+// fixed
+extends
+
+// @counter-style `speak-as` descriptor values
+// https://www.w3.org/TR/css-counter-styles-3/#counter-style-speak-as
+// auto
+bullets
+numbers
+words
+// spell-out
+
 // @supports selector()
 // https://drafts.csswg.org/css-conditional-4/#typedef-supports-selector-fn
 selector
@@ -1509,3 +1532,13 @@ compact
 x
 y
 z
+
+// contain
+// none
+// strict
+// content
+size
+layout
+#if !(defined(ENABLE_CSS_PAINTING_API) && ENABLE_CSS_PAINTING_API)
+paint
+#endif

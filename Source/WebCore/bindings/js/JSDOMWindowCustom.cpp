@@ -21,7 +21,6 @@
 #include "config.h"
 #include "JSDOMWindowCustom.h"
 
-#include "DOMWindowIndexedDatabase.h"
 #include "DOMWindowWebDatabase.h"
 #include "Frame.h"
 #include "HTMLDocument.h"
@@ -48,12 +47,9 @@
 #include "Settings.h"
 #include "WebCoreJSClientData.h"
 #include <JavaScriptCore/BuiltinNames.h>
-#include <JavaScriptCore/GetterSetter.h>
 #include <JavaScriptCore/HeapAnalyzer.h>
 #include <JavaScriptCore/InternalFunction.h>
 #include <JavaScriptCore/JSCInlines.h>
-#include <JavaScriptCore/JSCustomGetterFunction.h>
-#include <JavaScriptCore/JSCustomSetterFunction.h>
 #include <JavaScriptCore/JSFunction.h>
 #include <JavaScriptCore/JSMicrotask.h>
 #include <JavaScriptCore/Lookup.h>
@@ -67,64 +63,13 @@ namespace WebCore {
 using namespace JSC;
 
 static JSC_DECLARE_HOST_FUNCTION(jsDOMWindowInstanceFunction_openDatabase);
-static JSC_DECLARE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_blurNonCaching);
-static JSC_DECLARE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_blurNonCaching);
-static JSC_DECLARE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_closeNonCaching);
-static JSC_DECLARE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_closeNonCaching);
-static JSC_DECLARE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_focusNonCaching);
-static JSC_DECLARE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_focusNonCaching);
-static JSC_DECLARE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_postMessageNonCaching);
-static JSC_DECLARE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_postMessageNonCaching);
 #if ENABLE(USER_MESSAGE_HANDLERS)
 static JSC_DECLARE_CUSTOM_GETTER(jsDOMWindow_webkit);
 #endif
 
-JSC_DEFINE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_blurNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsRemoteDOMWindowInstanceFunction_blur, 0>(globalObject, propertyName);
-}
-
-JSC_DEFINE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_blurNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsDOMWindowInstanceFunction_blur, 0>(globalObject, propertyName);
-}
-
-JSC_DEFINE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_closeNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsRemoteDOMWindowInstanceFunction_close, 0>(globalObject, propertyName);
-}
-
-JSC_DEFINE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_closeNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsDOMWindowInstanceFunction_close, 0>(globalObject, propertyName);
-}
-
-JSC_DEFINE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_focusNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsRemoteDOMWindowInstanceFunction_focus, 0>(globalObject, propertyName);
-}
-
-JSC_DEFINE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_focusNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsDOMWindowInstanceFunction_focus, 0>(globalObject, propertyName);
-}
-
-JSC_DEFINE_CUSTOM_GETTER(jsRemoteDOMWindowInstanceFunction_postMessageNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsRemoteDOMWindowInstanceFunction_postMessage, 0>(globalObject, propertyName);
-}
-
-JSC_DEFINE_CUSTOM_GETTER(jsDOMWindowInstanceFunction_postMessageNonCaching, (JSGlobalObject* globalObject, EncodedJSValue, PropertyName propertyName))
-{
-    return nonCachingStaticFunctionGetterImpl<jsDOMWindowInstanceFunction_postMessage, 2>(globalObject, propertyName);
-}
-
 template<typename Visitor>
 void JSDOMWindow::visitAdditionalChildren(Visitor& visitor)
 {
-    if (Frame* frame = wrapped().frame())
-        visitor.addOpaqueRoot(frame);
-
     visitor.addOpaqueRoot(&wrapped());
     
     // Normally JSEventTargetCustom.cpp's JSEventTarget::visitAdditionalChildren() would call this. But
@@ -157,45 +102,34 @@ bool jsDOMWindowGetOwnPropertySlotRestrictedAccess(JSDOMGlobalObject* thisObject
     // https://html.spec.whatwg.org/#crossorigingetownpropertyhelper-(-o,-p-)
 
     // These are the functions we allow access to cross-origin (DoNotCheckSecurity in IDL).
-    // Always provide the original function, on a fresh uncached function object.
-    if (propertyName == builtinNames.blurPublicName()) {
-        slot.setCustom(thisObject, static_cast<unsigned>(JSC::PropertyAttribute::ReadOnly | JSC::PropertyAttribute::DontEnum), windowType == DOMWindowType::Remote ? jsRemoteDOMWindowInstanceFunction_blurNonCaching : jsDOMWindowInstanceFunction_blurNonCaching);
-        return true;
-    }
-    if (propertyName == builtinNames.closePublicName()) {
-        slot.setCustom(thisObject, static_cast<unsigned>(JSC::PropertyAttribute::ReadOnly | JSC::PropertyAttribute::DontEnum), windowType == DOMWindowType::Remote ? jsRemoteDOMWindowInstanceFunction_closeNonCaching : jsDOMWindowInstanceFunction_closeNonCaching);
-        return true;
-    }
-    if (propertyName == builtinNames.focusPublicName()) {
-        slot.setCustom(thisObject, static_cast<unsigned>(JSC::PropertyAttribute::ReadOnly | JSC::PropertyAttribute::DontEnum), windowType == DOMWindowType::Remote ? jsRemoteDOMWindowInstanceFunction_focusNonCaching : jsDOMWindowInstanceFunction_focusNonCaching);
-        return true;
-    }
-    if (propertyName == builtinNames.postMessagePublicName()) {
-        slot.setCustom(thisObject, static_cast<unsigned>(JSC::PropertyAttribute::ReadOnly | JSC::PropertyAttribute::DontEnum), windowType == DOMWindowType::Remote ? jsRemoteDOMWindowInstanceFunction_postMessageNonCaching : jsDOMWindowInstanceFunction_postMessageNonCaching);
+    auto* classInfo = windowType == DOMWindowType::Remote ? JSRemoteDOMWindow::info() : JSDOMWindow::info();
+    if (propertyName == builtinNames.closePublicName()
+        || propertyName == builtinNames.focusPublicName()
+        || propertyName == builtinNames.blurPublicName()
+        || propertyName == builtinNames.postMessagePublicName()) {
+        auto* entry = classInfo->staticPropHashTable->entry(propertyName);
+        auto* jsFunction = thisObject->createCrossOriginFunction(&lexicalGlobalObject, propertyName, entry->function(), entry->functionLength());
+        slot.setValue(thisObject, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum, jsFunction);
         return true;
     }
 
     // When accessing cross-origin known Window properties, we always use the original property getter,
     // even if the property was removed / redefined. As of early 2016, this matches Firefox and Chrome's
     // behavior.
-    auto* classInfo = windowType == DOMWindowType::Remote ? JSRemoteDOMWindow::info() : JSDOMWindow::info();
-    if (auto* entry = classInfo->staticPropHashTable->entry(propertyName)) {
-        // Only allow access to these specific properties.
-        if (propertyName == builtinNames.locationPublicName()
-            || propertyName == builtinNames.closedPublicName()
-            || propertyName == vm.propertyNames->length
-            || propertyName == builtinNames.selfPublicName()
-            || propertyName == builtinNames.windowPublicName()
-            || propertyName == builtinNames.framesPublicName()
-            || propertyName == builtinNames.openerPublicName()
-            || propertyName == builtinNames.parentPublicName()
-            || propertyName == builtinNames.topPublicName()) {
-            auto* getter = JSCustomGetterFunction::create(vm, &lexicalGlobalObject, propertyName, entry->propertyGetter());
-            auto* setter = propertyName == builtinNames.locationPublicName() ? JSCustomSetterFunction::create(vm, &lexicalGlobalObject, propertyName, entry->propertyPutter()) : nullptr;
-            auto* getterSetter = GetterSetter::create(vm, &lexicalGlobalObject, getter, setter);
-            slot.setGetterSlot(thisObject, PropertyAttribute::Accessor | PropertyAttribute::DontEnum, getterSetter);
-            return true;
-        }
+    if (propertyName == builtinNames.windowPublicName()
+        || propertyName == builtinNames.selfPublicName()
+        || propertyName == builtinNames.locationPublicName()
+        || propertyName == builtinNames.closedPublicName()
+        || propertyName == builtinNames.framesPublicName()
+        || propertyName == vm.propertyNames->length
+        || propertyName == builtinNames.topPublicName()
+        || propertyName == builtinNames.openerPublicName()
+        || propertyName == builtinNames.parentPublicName()) {
+        auto* entry = classInfo->staticPropHashTable->entry(propertyName);
+        auto* setter = propertyName == builtinNames.locationPublicName() ? entry->propertyPutter() : nullptr;
+        auto* getterSetter = thisObject->createCrossOriginGetterSetter(&lexicalGlobalObject, propertyName, entry->propertyGetter(), setter);
+        slot.setGetterSlot(thisObject, PropertyAttribute::Accessor | PropertyAttribute::DontEnum, getterSetter);
+        return true;
     }
 
     // Check for child frames by name before built-in properties to match Mozilla. This does
@@ -265,7 +199,7 @@ bool JSDOMWindow::getOwnPropertySlot(JSObject* object, JSGlobalObject* lexicalGl
         // Detect when we're getting the property 'showModalDialog', this is disabled, and has its original value.
         bool isShowModalDialogAndShouldHide = propertyName == static_cast<JSVMClientData*>(lexicalGlobalObject->vm().clientData)->builtinNames().showModalDialogPublicName()
             && (!frame || !DOMWindow::canShowModalDialog(*frame))
-            && slot.isValue() && isHostFunction(slot.getValue(lexicalGlobalObject, propertyName), jsDOMWindowInstanceFunction_showModalDialog);
+            && slot.isValue() && isHostFunction(slot.getValue(lexicalGlobalObject, propertyName), s_info.staticPropHashTable->entry(propertyName)->function());
         // Unless we're in the showModalDialog special case, we're done.
         if (!isShowModalDialogAndShouldHide)
             return true;
@@ -298,14 +232,6 @@ bool JSDOMWindow::getOwnPropertySlotByIndex(JSObject* object, JSGlobalObject* le
     // Indexed getters take precendence over regular properties, so caching would be invalid.
     slot.disableCaching();
 
-    String errorMessage;
-    Optional<bool> cachedIsCrossOriginAccess;
-    auto isCrossOriginAccess = [&] {
-        if (!cachedIsCrossOriginAccess)
-            cachedIsCrossOriginAccess = !BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, window, errorMessage);
-        return *cachedIsCrossOriginAccess;
-    };
-
     // (1) First, indexed properties.
     // These are also allowed cross-origin, so come before the access check.
     if (frame && index < frame->tree().scopedChildCount()) {
@@ -314,30 +240,12 @@ bool JSDOMWindow::getOwnPropertySlotByIndex(JSObject* object, JSGlobalObject* le
     }
 
     // Hand off all cross-domain/frameless access to jsDOMWindowGetOwnPropertySlotRestrictedAccess.
-    if (isCrossOriginAccess())
+    String errorMessage;
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, window, errorMessage))
         return jsDOMWindowGetOwnPropertySlotRestrictedAccess<DOMWindowType::Local>(thisObject, window, *lexicalGlobalObject, Identifier::from(vm, index), slot, errorMessage);
 
     // (2) Regular own properties.
     return Base::getOwnPropertySlotByIndex(thisObject, lexicalGlobalObject, index, slot);
-}
-
-void JSDOMWindow::doPutPropertySecurityCheck(JSObject* cell, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, PutPropertySlot&)
-{
-    VM& vm = lexicalGlobalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    auto* thisObject = jsCast<JSDOMWindow*>(cell);
-    if (!thisObject->wrapped().frame())
-        return;
-
-    String errorMessage;
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, thisObject->wrapped(), errorMessage)) {
-        // We only allow setting "location" attribute cross-origin.
-        if (propertyName == static_cast<JSVMClientData*>(vm.clientData)->builtinNames().locationPublicName())
-            return;
-        throwSecurityError(*lexicalGlobalObject, scope, errorMessage);
-        return;
-    }
 }
 
 bool JSDOMWindow::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
@@ -346,20 +254,11 @@ bool JSDOMWindow::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, Propert
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     auto* thisObject = jsCast<JSDOMWindow*>(cell);
-    if (!thisObject->wrapped().frame())
-        return false;
 
-    String errorMessage;
-    if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, thisObject->wrapped(), errorMessage)) {
+    if (propertyName != static_cast<JSVMClientData*>(vm.clientData)->builtinNames().locationPublicName()) {
         // We only allow setting "location" attribute cross-origin.
-        if (propertyName == static_cast<JSVMClientData*>(vm.clientData)->builtinNames().locationPublicName()) {
-            bool putResult = false;
-            if (lookupPut(lexicalGlobalObject, propertyName, thisObject, value, *s_info.staticPropHashTable, slot, putResult))
-                return putResult;
+        if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped(), ThrowSecurityError))
             return false;
-        }
-        throwSecurityError(*lexicalGlobalObject, scope, errorMessage);
-        return false;
     }
 
     RELEASE_AND_RETURN(scope, Base::put(thisObject, lexicalGlobalObject, propertyName, value, slot));
@@ -367,9 +266,15 @@ bool JSDOMWindow::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, Propert
 
 bool JSDOMWindow::putByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, unsigned index, JSValue value, bool shouldThrow)
 {
+    VM& vm = lexicalGlobalObject->vm();
     auto* thisObject = jsCast<JSDOMWindow*>(cell);
-    if (!thisObject->wrapped().frame() || !BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped()))
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    String errorMessage;
+    if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, thisObject->wrapped(), errorMessage)) {
+        throwSecurityError(*lexicalGlobalObject, scope, errorMessage);
         return false;
+    }
     
     return Base::putByIndex(thisObject, lexicalGlobalObject, index, value, shouldThrow);
 }
@@ -480,20 +385,16 @@ void JSDOMWindow::getOwnPropertyNames(JSObject* object, JSGlobalObject* lexicalG
 
 bool JSDOMWindow::defineOwnProperty(JSC::JSObject* object, JSC::JSGlobalObject* lexicalGlobalObject, JSC::PropertyName propertyName, const JSC::PropertyDescriptor& descriptor, bool shouldThrow)
 {
-    JSC::VM& vm = lexicalGlobalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     JSDOMWindow* thisObject = jsCast<JSDOMWindow*>(object);
     // Only allow defining properties in this way by frames in the same origin, as it allows setters to be introduced.
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped(), ThrowSecurityError))
-        RELEASE_AND_RETURN(scope, false);
-
-    EXCEPTION_ASSERT(!scope.exception());
-    // Don't allow shadowing location using accessor properties.
-    if (descriptor.isAccessorDescriptor() && propertyName == Identifier::fromString(vm, "location"))
         return false;
 
-    RELEASE_AND_RETURN(scope, Base::defineOwnProperty(thisObject, lexicalGlobalObject, propertyName, descriptor, shouldThrow));
+    auto& builtinNames = static_cast<JSVMClientData*>(lexicalGlobalObject->vm().clientData)->builtinNames();
+    if (propertyName == builtinNames.documentPublicName() || propertyName == builtinNames.windowPublicName())
+        return JSObject::defineOwnProperty(thisObject, lexicalGlobalObject, propertyName, descriptor, shouldThrow);
+
+    return Base::defineOwnProperty(thisObject, lexicalGlobalObject, propertyName, descriptor, shouldThrow);
 }
 
 JSValue JSDOMWindow::getPrototype(JSObject* object, JSGlobalObject* lexicalGlobalObject)

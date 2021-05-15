@@ -62,12 +62,7 @@ namespace WebKit {
 class LibWebRTCCodecs : public IPC::Connection::ThreadMessageReceiverRefCounted, public GPUProcessConnection::Client {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static std::unique_ptr<LibWebRTCCodecs> create()
-    {
-        auto instance = std::unique_ptr<LibWebRTCCodecs>(new LibWebRTCCodecs);
-        instance->startListeningForIPC();
-        return instance;
-    }
+    static Ref<LibWebRTCCodecs> create();
     ~LibWebRTCCodecs();
 
     static void setCallbacks(bool useGPUProcess);
@@ -122,10 +117,13 @@ public:
 
     void setVP9VTBSupport(bool supportVP9VTB) { m_supportVP9VTB = supportVP9VTB; }
     bool supportVP9VTB() const { return m_supportVP9VTB; }
+    void setLoggingLevel(WTFLogLevel);
 
 private:
     LibWebRTCCodecs();
-    void startListeningForIPC();
+    void ensureGPUProcessConnectionAndDispatchToThread(Function<void()>&&);
+    void ensureGPUProcessConnectionOnMainThread(Locker<Lock>&);
+    void gpuProcessConnectionMayNoLongerBeNeeded();
 
     void failedDecoding(RTCDecoderIdentifier);
     void completedDecoding(RTCDecoderIdentifier, uint32_t timeStamp, WebCore::RemoteVideoSample&&);
@@ -144,8 +142,12 @@ private:
 
     HashMap<RTCEncoderIdentifier, std::unique_ptr<Encoder>> m_encoders;
 
+    std::atomic<bool> m_needsGPUProcessConnection;
+
     Lock m_connectionLock;
     RefPtr<IPC::Connection> m_connection;
+    Vector<Function<void()>> m_tasksToDispatchAfterEstablishingConnection;
+
     Ref<WorkQueue> m_queue;
     std::unique_ptr<WebCore::ImageTransferSessionVT> m_imageTransferSession;
     std::unique_ptr<WebCore::PixelBufferConformerCV> m_pixelBufferConformer;
@@ -153,6 +155,7 @@ private:
     size_t m_pixelBufferPoolWidth { 0 };
     size_t m_pixelBufferPoolHeight { 0 };
     bool m_supportVP9VTB { false };
+    Optional<WTFLogLevel> m_loggingLevel;
 };
 
 } // namespace WebKit

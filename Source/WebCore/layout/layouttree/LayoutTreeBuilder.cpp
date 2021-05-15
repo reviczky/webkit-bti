@@ -30,6 +30,7 @@
 
 #include "CachedImage.h"
 #include "HTMLNames.h"
+#include "HTMLParserIdioms.h"
 #include "HTMLTableCellElement.h"
 #include "HTMLTableColElement.h"
 #include "HTMLTableElement.h"
@@ -199,7 +200,7 @@ Box* TreeBuilder::createLayoutBox(const ContainerBox& parentContainer, const Ren
 
         if (is<RenderLineBreak>(renderer)) {
             clonedStyle.setDisplay(DisplayType::Inline);
-            clonedStyle.setFloating(Float::No);
+            clonedStyle.setFloating(Float::None);
             clonedStyle.setPosition(PositionType::Static);
             childLayoutBox = &createLineBreakBox(downcast<RenderLineBreak>(childRenderer).isWBR(), WTFMove(clonedStyle));
         } else if (is<RenderTable>(renderer)) {
@@ -258,7 +259,7 @@ Box* TreeBuilder::createLayoutBox(const ContainerBox& parentContainer, const Ren
                 auto& tableColElement = static_cast<HTMLTableColElement&>(*renderer.element());
                 auto columnWidth = tableColElement.width();
                 if (!columnWidth.isEmpty())
-                    childLayoutBox->setColumnWidth(columnWidth.toInt());
+                    childLayoutBox->setColumnWidth(parseHTMLInteger(columnWidth).value_or(0));
                 if (tableColElement.span() > 1)
                     childLayoutBox->setColumnSpan(tableColElement.span());
             } else {
@@ -276,7 +277,6 @@ Box* TreeBuilder::createLayoutBox(const ContainerBox& parentContainer, const Ren
                 auto rowSpan = cellElement.rowSpan();
                 if (rowSpan > 1)
                     childLayoutBox->setRowSpan(rowSpan);
-
                 auto columnSpan = cellElement.colSpan();
                 if (columnSpan > 1)
                     childLayoutBox->setColumnSpan(columnSpan);
@@ -304,7 +304,7 @@ void TreeBuilder::buildTableStructure(const RenderTable& tableRenderer, Containe
 
     auto tableBoxStyle = RenderStyle::clone(tableRenderer.style());
     tableBoxStyle.setPosition(PositionType::Static);
-    tableBoxStyle.setFloating(Float::No);
+    tableBoxStyle.setFloating(Float::None);
     tableBoxStyle.resetMargin();
     // FIXME: Figure out where the spec says table width is like box-sizing: border-box;
     if (is<HTMLTableElement>(tableRenderer.element()))
@@ -432,7 +432,7 @@ void showInlineTreeAndRuns(TextStream& stream, const LayoutState& layoutState, c
         };
         outputInlineLevelBox(lineBox.rootInlineBox());
         for (auto& inlineLevelBox : lineBox.nonRootInlineLevelBoxes())
-            outputInlineLevelBox(*inlineLevelBox);
+            outputInlineLevelBox(inlineLevelBox);
 
         addSpacing();
         stream << "  Runs:";

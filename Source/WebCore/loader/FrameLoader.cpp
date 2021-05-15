@@ -1226,10 +1226,17 @@ void FrameLoader::loadFrameRequest(FrameLoadRequest&& request, Event* event, Ref
 
     ASSERT(m_frame.document());
     if (!request.requesterSecurityOrigin().canDisplay(url)) {
+        FRAMELOADER_RELEASE_LOG_IF_ALLOWED(ResourceLoading, "loadFrameRequest: canceling - Not allowed to load local resource");
         reportLocalLoadFailed(&m_frame, url.stringCenterEllipsizedToLength());
         return;
     }
 
+    if (!portAllowed(url)) {
+        FRAMELOADER_RELEASE_LOG_IF_ALLOWED(ResourceLoading, "loadFrameRequest: canceling - port not allowed");
+        reportBlockedLoadFailed(m_frame, url);
+        return;
+    }
+    
     String argsReferrer = request.resourceRequest().httpReferrer();
     if (argsReferrer.isEmpty())
         argsReferrer = outgoingReferrer();
@@ -1637,6 +1644,13 @@ void FrameLoader::reportLocalLoadFailed(Frame* frame, const String& url)
         return;
 
     frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Not allowed to load local resource: " + url);
+}
+
+void FrameLoader::reportBlockedLoadFailed(Frame& frame, const URL& url)
+{
+    ASSERT(!url.isEmpty());
+    auto message = makeString("Not allowed to use restricted network port ", url.port().value(), ": ", url.stringCenterEllipsizedToLength());
+    frame.document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message);
 }
 
 bool FrameLoader::willLoadMediaElementURL(URL& url, Node& initiatorNode)
@@ -3081,7 +3095,7 @@ unsigned long FrameLoader::loadResourceSynchronously(const ResourceRequest& requ
     if (error.isNull()) {
         if (auto* page = m_frame.page()) {
             if (m_documentLoader) {
-                auto results = page->userContentProvider().processContentRuleListsForLoad(*page, newRequest.url(), ContentExtensions::ResourceType::Raw, *m_documentLoader);
+                auto results = page->userContentProvider().processContentRuleListsForLoad(*page, newRequest.url(), ContentExtensions::ResourceType::Fetch, *m_documentLoader);
                 bool blockedLoad = results.summary.blockedLoad;
                 ContentExtensions::applyResultsToRequest(WTFMove(results), page, newRequest);
                 if (blockedLoad) {
@@ -3096,7 +3110,10 @@ unsigned long FrameLoader::loadResourceSynchronously(const ResourceRequest& requ
 #endif
 
     m_frame.document()->contentSecurityPolicy()->upgradeInsecureRequestIfNeeded(newRequest, ContentSecurityPolicy::InsecureRequestType::Load);
-    
+
+    if (m_documentLoader)
+        newRequest.setIsAppBound(m_documentLoader->lastNavigationWasAppBound());
+
     if (error.isNull()) {
         ASSERT(!newRequest.isNull());
 

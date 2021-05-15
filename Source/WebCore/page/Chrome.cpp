@@ -513,9 +513,9 @@ void Chrome::dispatchViewportPropertiesDidChange(const ViewportArguments& argume
 }
 
 #if ENABLE(APP_HIGHLIGHTS)
-void Chrome::storeAppHighlight(const AppHighlight& highlight) const
+void Chrome::storeAppHighlight(AppHighlight&& highlight) const
 {
-    m_client.storeAppHighlight(highlight);
+    m_client.storeAppHighlight(WTFMove(highlight));
 }
 #endif
 
@@ -546,11 +546,8 @@ PlatformDisplayID Chrome::displayID() const
     return m_page.displayID();
 }
 
-void Chrome::windowScreenDidChange(PlatformDisplayID displayID, Optional<unsigned> nominalFrameInterval)
+void Chrome::windowScreenDidChange(PlatformDisplayID displayID, Optional<FramesPerSecond> nominalFrameInterval)
 {
-    if (displayID == m_page.displayID() && nominalFrameInterval == m_page.displayNominalFramesPerSecond())
-        return;
-
     m_page.windowScreenDidChange(displayID, nominalFrameInterval);
 }
 

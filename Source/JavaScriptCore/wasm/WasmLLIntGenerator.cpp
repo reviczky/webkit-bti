@@ -169,7 +169,7 @@ public:
     ExpressionType push(NoConsistencyCheckTag)
     {
         m_maxStackSize = std::max(m_maxStackSize, ++m_stackSize);
-        return virtualRegisterForLocal(m_stackSize - 1);
+        return virtualRegisterForLocal((m_stackSize - 1).unsafeGet());
     }
 
     ExpressionType push()
@@ -253,6 +253,7 @@ public:
     // Calls
     PartialResult WARN_UNUSED_RETURN addCall(uint32_t calleeIndex, const Signature&, Vector<ExpressionType>& args, ResultList& results);
     PartialResult WARN_UNUSED_RETURN addCallIndirect(unsigned tableIndex, const Signature&, Vector<ExpressionType>& args, ResultList& results);
+    PartialResult WARN_UNUSED_RETURN addCallRef(const Signature&, Vector<ExpressionType>& args, ResultList& results);
     PartialResult WARN_UNUSED_RETURN addUnreachable();
 
     void didFinishParsingLocals();
@@ -295,7 +296,7 @@ private:
             m_jsNullConstant = VirtualRegister(FirstConstantRegisterIndex + m_codeBlock->m_constants.size());
             m_codeBlock->m_constants.append(JSValue::encode(jsNull()));
             if (UNLIKELY(Options::dumpGeneratedWasmBytecodes()))
-                m_codeBlock->m_constantTypes.append(Type::Externref);
+                m_codeBlock->m_constantTypes.append(Types::Externref);
         }
         return m_jsNullConstant;
     }
@@ -306,7 +307,7 @@ private:
             m_zeroConstant = VirtualRegister(FirstConstantRegisterIndex + m_codeBlock->m_constants.size());
             m_codeBlock->m_constants.append(0);
             if (UNLIKELY(Options::dumpGeneratedWasmBytecodes()))
-                m_codeBlock->m_constantTypes.append(Type::I32);
+                m_codeBlock->m_constantTypes.append(Types::I32);
         }
         return m_zeroConstant;
     }
@@ -315,7 +316,7 @@ private:
     {
         startOffset = target.stackSize() + 1;
         keep = target.branchTargetArity();
-        drop = m_stackSize - target.stackSize() - target.branchTargetArity();
+        drop = (m_stackSize - target.stackSize() - target.branchTargetArity()).unsafeGet();
     }
 
     void dropKeep(Stack& values, const ControlType& target, bool dropValues)
@@ -348,7 +349,7 @@ private:
     template<typename Functor>
     void walkExpressionStack(Stack& expressionStack, const Functor& functor)
     {
-        walkExpressionStack(expressionStack, m_stackSize, functor);
+        walkExpressionStack(expressionStack, m_stackSize.unsafeGet(), functor);
     }
 
     template<typename Functor>
@@ -373,7 +374,7 @@ private:
             });
         }
         walkExpressionStack(m_parser->expressionStack(), [&](VirtualRegister expression, VirtualRegister slot) {
-            ASSERT(expression == slot || expression.isConstant() || expression.isArgument() || expression.toLocal() < m_codeBlock->m_numVars);
+            ASSERT(expression == slot || expression.isConstant() || expression.isArgument() || static_cast<unsigned>(expression.toLocal()) < m_codeBlock->m_numVars);
         });
 #endif // ASSERT_ENABLED
     }
@@ -385,7 +386,7 @@ private:
 
         checkConsistency();
         walkExpressionStack(expressionStack, [&](TypedExpression& expression, VirtualRegister slot) {
-            ASSERT(expression.value() == slot || expression.value().isConstant() || expression.value().isArgument() || expression.value().toLocal() < m_codeBlock->m_numVars);
+            ASSERT(expression.value() == slot || expression.value().isConstant() || expression.value().isArgument() || static_cast<unsigned>(expression.value().toLocal()) < m_codeBlock->m_numVars);
             if (expression.value() == slot)
                 return;
             WasmMov::emit(this, slot, expression);
@@ -401,7 +402,7 @@ private:
         m_stackSize -= newStack.size();
         checkConsistency();
         walkExpressionStack(enclosingStack, [&](TypedExpression& expression, VirtualRegister slot) {
-            ASSERT(expression.value() == slot || expression.value().isConstant() || expression.value().isArgument() || expression.value().toLocal() < m_codeBlock->m_numVars);
+            ASSERT(expression.value() == slot || expression.value().isConstant() || expression.value().isArgument() || static_cast<unsigned>(expression.value().toLocal()) < m_codeBlock->m_numVars);
             if (expression.value() == slot || expression.value().isConstant())
                 return;
             WasmMov::emit(this, slot, expression);
@@ -416,7 +417,7 @@ private:
         int* jumpTarget;
     };
 
-    struct ConstantMapHashTraits : WTF::GenericHashTraits<EncodedJSValue> {
+    struct ConstantMapHashTraits : HashTraits<EncodedJSValue> {
         static constexpr bool emptyValueIsZero = true;
         static void constructDeletedValue(EncodedJSValue& slot) { slot = JSValue::encode(jsNull()); }
         static bool isDeletedValue(EncodedJSValue value) { return value == JSValue::encode(jsNull()); }
@@ -432,8 +433,8 @@ private:
     ResultList m_unitializedLocals;
     HashMap<EncodedJSValue, VirtualRegister, WTF::IntHash<EncodedJSValue>, ConstantMapHashTraits> m_constantMap;
     Vector<VirtualRegister, 2> m_results;
-    unsigned m_stackSize { 0 };
-    unsigned m_maxStackSize { 0 };
+    Checked<unsigned> m_stackSize { 0 };
+    Checked<unsigned> m_maxStackSize { 0 };
 };
 
 Expected<std::unique_ptr<FunctionCodeBlock>, String> parseAndCompileBytecode(const uint8_t* functionStart, size_t functionLength, const Signature& signature, const ModuleInformation& info, uint32_t functionIndex)
@@ -482,7 +483,9 @@ LLIntGenerator::LLIntGenerator(const ModuleInformation& info, unsigned functionI
 std::unique_ptr<FunctionCodeBlock> LLIntGenerator::finalize()
 {
     RELEASE_ASSERT(m_codeBlock);
-    m_codeBlock->m_numCalleeLocals = WTF::roundUpToMultipleOf(stackAlignmentRegisters(), m_maxStackSize);
+    size_t numCalleeLocals = WTF::roundUpToMultipleOf(stackAlignmentRegisters(), m_maxStackSize.unsafeGet());
+    m_codeBlock->m_numCalleeLocals = numCalleeLocals;
+    RELEASE_ASSERT(numCalleeLocals == m_codeBlock->m_numCalleeLocals);
 
     auto& threadSpecific = threadSpecificBuffer();
     Buffer usedBuffer;
@@ -534,25 +537,26 @@ auto LLIntGenerator::callInformationForCaller(const Signature& signature) -> LLI
     uint32_t stackIndex = 0;
 
     auto allocateStackRegister = [&](Type type) {
-        switch (type) {
-        case Type::I32:
-        case Type::I64:
-        case Type::Externref:
-        case Type::Funcref:
+        switch (type.kind) {
+        case TypeKind::I32:
+        case TypeKind::I64:
+        case TypeKind::Externref:
+        case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             if (gprIndex < gprCount)
                 ++gprIndex;
             else if (stackIndex++ >= stackCount)
                 ++stackCount;
             break;
-        case Type::F32:
-        case Type::F64:
+        case TypeKind::F32:
+        case TypeKind::F64:
             if (fprIndex < fprCount)
                 ++fprIndex;
             else if (stackIndex++ >= stackCount)
                 ++stackCount;
             break;
-        case Void:
-        case Func:
+        case TypeKind::Void:
+        case TypeKind::Func:
             RELEASE_ASSERT_NOT_REACHED();
         }
     };
@@ -570,7 +574,7 @@ auto LLIntGenerator::callInformationForCaller(const Signature& signature) -> LLI
     // FIXME: we are allocating the extra space for the argument/return count in order to avoid interference, but we could do better
     // NOTE: We increase arg count by 1 for the case of indirect calls
     m_stackSize += std::max(signature.argumentCount() + 1, signature.returnCount()) + gprCount + fprCount + stackCount + CallFrame::headerSizeInRegisters;
-    if (m_stackSize % stackAlignmentRegisters())
+    if (m_stackSize.unsafeGet() % stackAlignmentRegisters())
         ++m_stackSize;
     if (m_maxStackSize < m_stackSize)
         m_maxStackSize = m_stackSize;
@@ -579,7 +583,7 @@ auto LLIntGenerator::callInformationForCaller(const Signature& signature) -> LLI
     ResultList arguments(signature.argumentCount());
     ResultList temporaryResults(signature.returnCount());
 
-    const unsigned stackOffset = m_stackSize;
+    const unsigned stackOffset = m_stackSize.unsafeGet();
     const unsigned base = stackOffset - CallFrame::headerSizeInRegisters;
 
     const uint32_t gprLimit = base - stackCount - gprCount;
@@ -589,25 +593,26 @@ auto LLIntGenerator::callInformationForCaller(const Signature& signature) -> LLI
     gprIndex = base - stackCount;
     fprIndex = gprIndex - gprCount;
     for (uint32_t i = 0; i < signature.argumentCount(); i++) {
-        switch (signature.argument(i)) {
-        case Type::I32:
-        case Type::I64:
-        case Type::Externref:
-        case Type::Funcref:
+        switch (signature.argument(i).kind) {
+        case TypeKind::I32:
+        case TypeKind::I64:
+        case TypeKind::Externref:
+        case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             if (gprIndex > gprLimit)
                 arguments[i] = virtualRegisterForLocal(--gprIndex);
             else
                 arguments[i] = virtualRegisterForLocal(--stackIndex);
             break;
-        case Type::F32:
-        case Type::F64:
+        case TypeKind::F32:
+        case TypeKind::F64:
             if (fprIndex > fprLimit)
                 arguments[i] = virtualRegisterForLocal(--fprIndex);
             else
                 arguments[i] = virtualRegisterForLocal(--stackIndex);
             break;
-        case Void:
-        case Func:
+        case TypeKind::Void:
+        case TypeKind::Func:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -616,25 +621,26 @@ auto LLIntGenerator::callInformationForCaller(const Signature& signature) -> LLI
     gprIndex = base - stackCount;
     fprIndex = gprIndex - gprCount;
     for (uint32_t i = 0; i < signature.returnCount(); i++) {
-        switch (signature.returnType(i)) {
-        case Type::I32:
-        case Type::I64:
-        case Type::Externref:
-        case Type::Funcref:
+        switch (signature.returnType(i).kind) {
+        case TypeKind::I32:
+        case TypeKind::I64:
+        case TypeKind::Externref:
+        case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             if (gprIndex > gprLimit)
                 temporaryResults[i] = virtualRegisterForLocal(--gprIndex);
             else
                 temporaryResults[i] = virtualRegisterForLocal(--stackIndex);
             break;
-        case Type::F32:
-        case Type::F64:
+        case TypeKind::F32:
+        case TypeKind::F64:
             if (fprIndex > fprLimit)
                 temporaryResults[i] = virtualRegisterForLocal(--fprIndex);
             else
                 temporaryResults[i] = virtualRegisterForLocal(--stackIndex);
             break;
-        case Void:
-        case Func:
+        case TypeKind::Void:
+        case TypeKind::Func:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -671,25 +677,26 @@ auto LLIntGenerator::callInformationForCallee(const Signature& signature) -> Vec
     const uint32_t maxFPRIndex = maxGPRIndex + fprCount;
 
     for (uint32_t i = 0; i < signature.returnCount(); i++) {
-        switch (signature.returnType(i)) {
-        case Type::I32:
-        case Type::I64:
-        case Type::Externref:
-        case Type::Funcref:
+        switch (signature.returnType(i).kind) {
+        case TypeKind::I32:
+        case TypeKind::I64:
+        case TypeKind::Externref:
+        case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             if (gprIndex < maxGPRIndex)
                 m_results.append(virtualRegisterForLocal(numberOfLLIntCalleeSaveRegisters + gprIndex++));
             else
                 m_results.append(virtualRegisterForArgumentIncludingThis(stackIndex++));
             break;
-        case Type::F32:
-        case Type::F64:
+        case TypeKind::F32:
+        case TypeKind::F64:
             if (fprIndex < maxFPRIndex)
                 m_results.append(virtualRegisterForLocal(numberOfLLIntCalleeSaveRegisters + fprIndex++));
             else
                 m_results.append(virtualRegisterForArgumentIncludingThis(stackIndex++));
             break;
-        case Void:
-        case Func:
+        case TypeKind::Void:
+        case TypeKind::Func:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -725,19 +732,20 @@ auto LLIntGenerator::addArguments(const Signature& signature) -> PartialResult
     };
 
     for (uint32_t i = 0; i < signature.argumentCount(); i++) {
-        switch (signature.argument(i)) {
-        case Type::I32:
-        case Type::I64:
-        case Type::Externref:
-        case Type::Funcref:
+        switch (signature.argument(i).kind) {
+        case TypeKind::I32:
+        case TypeKind::I64:
+        case TypeKind::Externref:
+        case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             addArgument(i, gprIndex, maxGPRIndex);
             break;
-        case Type::F32:
-        case Type::F64:
+        case TypeKind::F32:
+        case TypeKind::F64:
             addArgument(i, fprIndex, maxFPRIndex);
             break;
-        case Void:
-        case Func:
+        case TypeKind::Void:
+        case TypeKind::Func:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -752,9 +760,9 @@ auto LLIntGenerator::addLocal(Type type, uint32_t count) -> PartialResult
     checkConsistency();
 
     m_codeBlock->m_numVars += count;
-    switch (type) {
-    case Type::Externref:
-    case Type::Funcref:
+    switch (type.kind) {
+    case TypeKind::Externref:
+    case TypeKind::Funcref:
         while (count--)
             m_unitializedLocals.append(push(NoConsistencyCheck));
         break;
@@ -868,7 +876,7 @@ auto LLIntGenerator::addLoop(BlockSignature signature, Stack& enclosingStack, Co
     Ref<Label> body = newEmittedLabel();
     Ref<Label> continuation = newLabel();
 
-    block = ControlType::loop(signature, m_stackSize, WTFMove(body), WTFMove(continuation));
+    block = ControlType::loop(signature, m_stackSize.unsafeGet(), WTFMove(body), WTFMove(continuation));
 
     Vector<VirtualRegister> osrEntryData;
     for (uint32_t i = 0; i < m_codeBlock->m_numArguments; i++)
@@ -877,7 +885,7 @@ auto LLIntGenerator::addLoop(BlockSignature signature, Stack& enclosingStack, Co
     const auto& callingConvention = wasmCallingConvention();
     const uint32_t gprCount = callingConvention.gprArgs.size();
     const uint32_t fprCount = callingConvention.fprArgs.size();
-    for (int32_t i = gprCount + fprCount + numberOfLLIntCalleeSaveRegisters; i < m_codeBlock->m_numVars; i++)
+    for (uint32_t i = gprCount + fprCount + numberOfLLIntCalleeSaveRegisters; i < m_codeBlock->m_numVars; i++)
         osrEntryData.append(virtualRegisterForLocal(i));
     for (unsigned controlIndex = 0; controlIndex < m_parser->controlStack().size(); ++controlIndex) {
         Stack& expressionStack = m_parser->controlStack()[controlIndex].enclosedExpressionStack;
@@ -896,13 +904,13 @@ auto LLIntGenerator::addLoop(BlockSignature signature, Stack& enclosingStack, Co
 
 auto LLIntGenerator::addTopLevel(BlockSignature signature) -> ControlType
 {
-    return ControlType::topLevel(signature, m_stackSize, newLabel());
+    return ControlType::topLevel(signature, m_stackSize.unsafeGet(), newLabel());
 }
 
 auto LLIntGenerator::addBlock(BlockSignature signature, Stack& enclosingStack, ControlType& newBlock, Stack& newStack) -> PartialResult
 {
     splitStack(signature, enclosingStack, newStack);
-    newBlock = ControlType::block(signature, m_stackSize, newLabel());
+    newBlock = ControlType::block(signature, m_stackSize.unsafeGet(), newLabel());
     return { };
 }
 
@@ -915,7 +923,7 @@ auto LLIntGenerator::addIf(ExpressionType condition, BlockSignature signature, S
 
     WasmJfalse::emit(this, condition, alternate->bind(this));
 
-    result = ControlType::if_(signature, m_stackSize, WTFMove(alternate), WTFMove(continuation));
+    result = ControlType::if_(signature, m_stackSize.unsafeGet(), WTFMove(alternate), WTFMove(continuation));
     return { };
 }
 
@@ -933,7 +941,7 @@ auto LLIntGenerator::addElseToUnreachable(ControlType& data) -> PartialResult
 
     ControlIf& control = WTF::get<ControlIf>(data);
     emitLabel(control.m_alternate.get());
-    data = ControlType::block(data.m_signature, m_stackSize, WTFMove(data.m_continuation));
+    data = ControlType::block(data.m_signature, m_stackSize.unsafeGet(), WTFMove(data.m_continuation));
     return { };
 }
 
@@ -1092,6 +1100,21 @@ auto LLIntGenerator::addCallIndirect(unsigned tableIndex, const Signature& signa
         WasmCallIndirect::emit(this, calleeIndex, m_codeBlock->addSignature(signature), info.stackOffset, info.numberOfStackArguments, tableIndex);
     else
         WasmCallIndirectNoTls::emit(this, calleeIndex, m_codeBlock->addSignature(signature), info.stackOffset, info.numberOfStackArguments, tableIndex);
+    info.commitResults(results);
+
+    return { };
+}
+
+auto LLIntGenerator::addCallRef(const Signature& signature, Vector<ExpressionType>& args, ResultList& results) -> PartialResult
+{
+    ExpressionType callee = args.takeLast();
+
+    LLIntCallInformation info = callInformationForCaller(signature);
+    unifyValuesWithBlock(info.arguments, args);
+    if (Context::useFastTLS())
+        WasmCallRef::emit(this, callee, m_codeBlock->addSignature(signature), info.stackOffset, info.numberOfStackArguments);
+    else
+        WasmCallRefNoTls::emit(this, callee, m_codeBlock->addSignature(signature), info.stackOffset, info.numberOfStackArguments);
     info.commitResults(results);
 
     return { };

@@ -20,9 +20,9 @@
 
 #include "config.h"
 #include "WebViewTest.h"
-#include "WebKitWebViewInternal.h"
 
 #include <JavaScriptCore/JSRetainPtr.h>
+#include <WebKit/WebKitWebViewInternal.h>
 
 bool WebViewTest::shouldInitializeWebViewInConstructor = true;
 bool WebViewTest::shouldCreateEphemeralWebView = false;
@@ -221,6 +221,18 @@ void WebViewTest::waitUntilTitleChangedTo(const char* expectedTitle)
 void WebViewTest::waitUntilTitleChanged()
 {
     waitUntilTitleChangedTo(0);
+}
+
+static void isWebProcessResponsiveChanged(WebKitWebView* webView, GParamSpec*, WebViewTest* test)
+{
+    g_signal_handlers_disconnect_by_func(webView, reinterpret_cast<void*>(isWebProcessResponsiveChanged), test);
+    g_main_loop_quit(test->m_mainLoop);
+}
+
+void WebViewTest::waitUntilIsWebProcessResponsiveChanged()
+{
+    g_signal_connect(m_webView, "notify::is-web-process-responsive", G_CALLBACK(isWebProcessResponsiveChanged), this);
+    g_main_loop_run(m_mainLoop);
 }
 
 void WebViewTest::selectAll()

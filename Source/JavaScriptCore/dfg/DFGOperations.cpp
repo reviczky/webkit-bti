@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -60,7 +60,7 @@
 #include "JSPropertyNameEnumerator.h"
 #include "JSSet.h"
 #include "JSSetIterator.h"
-#include "JSWeakMap.h"
+#include "JSWeakMapInlines.h"
 #include "JSWeakSet.h"
 #include "NumberConstructor.h"
 #include "ObjectConstructor.h"
@@ -311,6 +311,7 @@ JSC_DEFINE_JIT_OPERATION(operationCreateThis, JSCell*, (JSGlobalObject* globalOb
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto scope = DECLARE_THROW_SCOPE(vm);
     if (constructor->type() == JSFunctionType && jsCast<JSFunction*>(constructor)->canUseAllocationProfile()) {
+        DeferTermination deferScope(vm);
         auto rareData = jsCast<JSFunction*>(constructor)->ensureRareDataAndAllocationProfile(globalObject, inlineCapacity);
         scope.releaseAssertNoException();
         ObjectAllocationProfileWithPrototype* allocationProfile = rareData->objectAllocationProfile();
@@ -330,7 +331,9 @@ JSC_DEFINE_JIT_OPERATION(operationCreateThis, JSCell*, (JSGlobalObject* globalOb
     RETURN_IF_EXCEPTION(scope, nullptr);
     if (proto.isObject())
         return constructEmptyObject(globalObject, asObject(proto));
-    return constructEmptyObject(globalObject);
+    JSGlobalObject* functionGlobalObject = getFunctionRealm(globalObject, constructor);
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    return constructEmptyObject(functionGlobalObject);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationCreatePromise, JSCell*, (JSGlobalObject* globalObject, JSObject* constructor))
@@ -339,9 +342,7 @@ JSC_DEFINE_JIT_OPERATION(operationCreatePromise, JSCell*, (JSGlobalObject* globa
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto scope = DECLARE_THROW_SCOPE(vm);
-    Structure* structure = constructor == globalObject->promiseConstructor()
-        ? globalObject->promiseStructure()
-        : InternalFunction::createSubclassStructure(globalObject, constructor, getFunctionRealm(vm, constructor)->promiseStructure());
+    Structure* structure = JSC_GET_DERIVED_STRUCTURE(vm, promiseStructure, constructor, globalObject->promiseConstructor());
     RETURN_IF_EXCEPTION(scope, nullptr);
     RELEASE_AND_RETURN(scope, JSPromise::create(vm, structure));
 }
@@ -352,9 +353,7 @@ JSC_DEFINE_JIT_OPERATION(operationCreateInternalPromise, JSCell*, (JSGlobalObjec
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto scope = DECLARE_THROW_SCOPE(vm);
-    Structure* structure = constructor == globalObject->internalPromiseConstructor()
-        ? globalObject->internalPromiseStructure()
-        : InternalFunction::createSubclassStructure(globalObject, constructor, getFunctionRealm(vm, constructor)->internalPromiseStructure());
+    Structure* structure = JSC_GET_DERIVED_STRUCTURE(vm, internalPromiseStructure, constructor, globalObject->internalPromiseConstructor());
     RETURN_IF_EXCEPTION(scope, nullptr);
     RELEASE_AND_RETURN(scope, JSInternalPromise::create(vm, structure));
 }
@@ -2658,6 +2657,7 @@ JSC_DEFINE_JIT_OPERATION(operationMakeRope3, JSString*, (JSGlobalObject* globalO
 JSC_DEFINE_JIT_OPERATION(operationStrCat2, JSString*, (JSGlobalObject* globalObject, EncodedJSValue a, EncodedJSValue b))
 {
     VM& vm = globalObject->vm();
+    DeferTermination deferScope(vm);
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -2675,6 +2675,7 @@ JSC_DEFINE_JIT_OPERATION(operationStrCat2, JSString*, (JSGlobalObject* globalObj
 JSC_DEFINE_JIT_OPERATION(operationStrCat3, JSString*, (JSGlobalObject* globalObject, EncodedJSValue a, EncodedJSValue b, EncodedJSValue c))
 {
     VM& vm = globalObject->vm();
+    DeferTermination deferScope(vm);
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -2692,23 +2693,23 @@ JSC_DEFINE_JIT_OPERATION(operationStrCat3, JSString*, (JSGlobalObject* globalObj
     RELEASE_AND_RETURN(scope, jsString(globalObject, str1, str2, str3));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationFindSwitchImmTargetForDouble, char*, (VM* vmPointer, EncodedJSValue encodedValue, size_t tableIndex))
+JSC_DEFINE_JIT_OPERATION(operationFindSwitchImmTargetForDouble, char*, (VM* vmPointer, EncodedJSValue encodedValue, size_t tableIndex, int32_t min))
 {
     VM& vm = *vmPointer;
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     CodeBlock* codeBlock = callFrame->codeBlock();
-    SimpleJumpTable& table = codeBlock->switchJumpTable(tableIndex);
+    const SimpleJumpTable& linkedTable = codeBlock->switchJumpTable(tableIndex);
     JSValue value = JSValue::decode(encodedValue);
     ASSERT(value.isDouble());
     double asDouble = value.asDouble();
     int32_t asInt32 = static_cast<int32_t>(asDouble);
     if (asDouble == asInt32)
-        return table.ctiForValue(asInt32).executableAddress<char*>();
-    return table.ctiDefault.executableAddress<char*>();
+        return linkedTable.ctiForValue(min, asInt32).executableAddress<char*>();
+    return linkedTable.m_ctiDefault.executableAddress<char*>();
 }
 
-JSC_DEFINE_JIT_OPERATION(operationSwitchString, char*, (JSGlobalObject* globalObject, size_t tableIndex, JSString* string))
+JSC_DEFINE_JIT_OPERATION(operationSwitchString, char*, (JSGlobalObject* globalObject, size_t tableIndex, const UnlinkedStringJumpTable* unlinkedTable, JSString* string))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -2718,8 +2719,9 @@ JSC_DEFINE_JIT_OPERATION(operationSwitchString, char*, (JSGlobalObject* globalOb
     StringImpl* strImpl = string->value(globalObject).impl();
 
     RETURN_IF_EXCEPTION(throwScope, nullptr);
-
-    return callFrame->codeBlock()->stringSwitchJumpTable(tableIndex).ctiForValue(strImpl).executableAddress<char*>();
+    CodeBlock* codeBlock = callFrame->codeBlock();
+    const StringJumpTable& linkedTable = codeBlock->stringSwitchJumpTable(tableIndex);
+    return linkedTable.ctiForValue(*unlinkedTable, strImpl).executableAddress<char*>();
 }
 
 JSC_DEFINE_JIT_OPERATION(operationCompareStringImplLess, uintptr_t, (StringImpl* a, StringImpl* b))
@@ -2852,7 +2854,7 @@ JSC_DEFINE_JIT_OPERATION(operationArrayIndexOfString, UCPUStrictInt32, (JSGlobal
         if (string == searchElement)
             return toUCPUStrictInt32(index);
         if (string->equal(globalObject, searchElement)) {
-            scope.assertNoException();
+            scope.assertNoExceptionExceptTermination();
             return toUCPUStrictInt32(index);
         }
         RETURN_IF_EXCEPTION(scope, { });

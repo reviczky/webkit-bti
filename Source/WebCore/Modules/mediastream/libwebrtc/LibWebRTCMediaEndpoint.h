@@ -147,7 +147,7 @@ private:
     void addPendingTrackEvent(Ref<RTCRtpReceiver>&&, MediaStreamTrack&, const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>&, RefPtr<RTCRtpTransceiver>&&);
 
     template<typename T>
-    ExceptionOr<Backends> createTransceiverBackends(T&&, const RTCRtpTransceiverInit&, LibWebRTCRtpSenderBackend::Source&&);
+    ExceptionOr<Backends> createTransceiverBackends(T&&, webrtc::RtpTransceiverInit&&, LibWebRTCRtpSenderBackend::Source&&);
 
     void OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>&) final;
     void gatherStatsForLogging();
@@ -180,7 +180,7 @@ private:
 #endif
 
     LibWebRTCPeerConnectionBackend& m_peerConnectionBackend;
-    webrtc::PeerConnectionFactoryInterface& m_peerConnectionFactory;
+    rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> m_peerConnectionFactory;
     rtc::scoped_refptr<webrtc::PeerConnectionInterface> m_backend;
 
     friend CreateSessionDescriptionObserver<LibWebRTCMediaEndpoint>;

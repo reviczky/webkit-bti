@@ -39,6 +39,7 @@
 #include "DataListSuggestionPicker.h"
 #include "DatabaseProvider.h"
 #include "DiagnosticLoggingClient.h"
+#include "DisplayRefreshMonitorFactory.h"
 #include "DocumentFragment.h"
 #include "DocumentLoader.h"
 #include "DragClient.h"
@@ -85,6 +86,10 @@
 #include "LegacyPreviewLoaderClient.h"
 #endif
 
+#if ENABLE(DATE_AND_TIME_INPUT_TYPES)
+#include "DateTimeChooser.h"
+#endif
+
 namespace WebCore {
 
 class UserMessageHandlerDescriptor;
@@ -114,6 +119,10 @@ class EmptyContextMenuClient final : public ContextMenuClient {
     void searchWithSpotlight() final { }
 #endif
 
+#if HAVE(TRANSLATION_UI_SERVICES)
+    void handleTranslation(const TranslationContextMenuInfo&) final { }
+#endif
+
 #if PLATFORM(GTK)
     void insertEmoji(Frame&) final { }
 #endif
@@ -125,8 +134,43 @@ class EmptyContextMenuClient final : public ContextMenuClient {
 
 #endif // ENABLE(CONTEXT_MENUS)
 
+class EmptyDisplayRefreshMonitor final : public DisplayRefreshMonitor {
+public:
+    static Ref<EmptyDisplayRefreshMonitor> create(PlatformDisplayID displayID)
+    {
+        return adoptRef(*new EmptyDisplayRefreshMonitor(displayID));
+    }
+
+    void displayLinkFired(const DisplayUpdate&) final { }
+    bool requestRefreshCallback() final { return false; }
+    void stop() final { }
+
+    bool startNotificationMechanism() final { return true; }
+    void stopNotificationMechanism() final { }
+
+private:
+    explicit EmptyDisplayRefreshMonitor(PlatformDisplayID displayID)
+        : DisplayRefreshMonitor(displayID)
+    {
+    }
+};
+
+class EmptyDisplayRefreshMonitorFactory final : public DisplayRefreshMonitorFactory {
+public:
+    static DisplayRefreshMonitorFactory* sharedEmptyDisplayRefreshMonitorFactory()
+    {
+        static NeverDestroyed<EmptyDisplayRefreshMonitorFactory> emptyFactory;
+        return &emptyFactory.get();
+    }
+
+private:
+    RefPtr<DisplayRefreshMonitor> createDisplayRefreshMonitor(PlatformDisplayID displayID) final
+    {
+        return EmptyDisplayRefreshMonitor::create(displayID);
+    }
+};
+
 class EmptyDatabaseProvider final : public DatabaseProvider {
-#if ENABLE(INDEXED_DATABASE)
     struct EmptyIDBConnectionToServerDeletegate final : public IDBClient::IDBConnectionToServerDelegate {
         IDBConnectionIdentifier identifier() const final { return { }; }
         void deleteDatabase(const IDBRequestData&) final { }
@@ -164,7 +208,6 @@ class EmptyDatabaseProvider final : public DatabaseProvider {
         static auto& emptyConnection = IDBClient::IDBConnectionToServer::create(emptyDelegate.get()).leakRef();
         return emptyConnection;
     }
-#endif
 };
 
 class EmptyDiagnosticLoggingClient final : public DiagnosticLoggingClient {
@@ -173,6 +216,7 @@ class EmptyDiagnosticLoggingClient final : public DiagnosticLoggingClient {
     void logDiagnosticMessageWithValue(const String&, const String&, double, unsigned, ShouldSample) final { }
     void logDiagnosticMessageWithEnhancedPrivacy(const String&, const String&, ShouldSample) final { }
     void logDiagnosticMessageWithValueDictionary(const String&, const String&, const ValueDictionary&, ShouldSample) final { }
+    void logDiagnosticMessageWithDomain(const String&, DiagnosticLoggingDomain) final { };
 };
 
 #if ENABLE(DRAG_SUPPORT)
@@ -506,10 +550,19 @@ std::unique_ptr<DateTimeChooser> EmptyChromeClient::createDateTimeChooser(DateTi
 #endif
 
 #if ENABLE(APP_HIGHLIGHTS)
-void EmptyChromeClient::storeAppHighlight(const AppHighlight&) const
+void EmptyChromeClient::storeAppHighlight(AppHighlight&&) const
 {
 }
 #endif
+
+void EmptyChromeClient::setTextIndicator(const TextIndicatorData&) const
+{
+}
+
+DisplayRefreshMonitorFactory* EmptyChromeClient::displayRefreshMonitorFactory() const
+{
+    return EmptyDisplayRefreshMonitorFactory::sharedEmptyDisplayRefreshMonitorFactory();
+}
 
 void EmptyChromeClient::runOpenPanel(Frame&, FileChooser&)
 {

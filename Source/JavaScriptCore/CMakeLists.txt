@@ -1,6 +1,8 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.12)
+
 include(WebKitCommon)
 include(target/TargetWTF)
+
 set_property(DIRECTORY . PROPERTY FOLDER "JavaScriptCore")
 
 list(APPEND JavaScriptCore_UNIFIED_SOURCE_LIST_FILES
@@ -670,6 +672,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     heap/IsoSubspace.h
     heap/IsoSubspaceInlines.h
     heap/IsoSubspacePerVM.h
+    heap/JITStubRoutineSet.h
     heap/LocalAllocator.h
     heap/LocalAllocatorInlines.h
     heap/LockDuringMarking.h
@@ -874,6 +877,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/DataView.h
     runtime/DateInstance.h
     runtime/DateInstanceCache.h
+    runtime/DeferTermination.h
     runtime/DeferredWorkTimer.h
     runtime/DefinePropertyAttributes.h
     runtime/DeletePropertySlot.h
@@ -893,6 +897,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/EvalExecutable.h
     runtime/Exception.h
     runtime/ExceptionEventLocation.h
+    runtime/ExceptionExpectation.h
     runtime/ExceptionHelpers.h
     runtime/ExceptionScope.h
     runtime/ExecutableBase.h
@@ -914,6 +919,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/GetVM.h
     runtime/GlobalExecutable.h
     runtime/HashMapImpl.h
+    runtime/HashMapImplInlines.h
     runtime/Identifier.h
     runtime/IdentifierInlines.h
     runtime/IndexingHeader.h
@@ -931,6 +937,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/IteratorOperations.h
     runtime/IteratorPrototype.h
     runtime/JSArray.h
+    runtime/JSArrayInlines.h
     runtime/JSArrayBuffer.h
     runtime/JSArrayBufferPrototype.h
     runtime/JSArrayBufferView.h
@@ -970,6 +977,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSMicrotask.h
     runtime/JSLock.h
     runtime/JSMap.h
+    runtime/JSMapInlines.h
     runtime/JSMapIterator.h
     runtime/JSModuleLoader.h
     runtime/JSModuleRecord.h
@@ -987,6 +995,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSScriptFetcher.h
     runtime/JSSegmentedVariableObject.h
     runtime/JSSet.h
+    runtime/JSSetInlines.h
     runtime/JSSetIterator.h
     runtime/JSSourceCode.h
     runtime/JSString.h
@@ -995,6 +1004,8 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSType.h
     runtime/JSTypeInfo.h
     runtime/JSTypedArrays.h
+    runtime/JSWeakMap.h
+    runtime/JSWeakMapInlines.h
     runtime/JSWithScope.h
     runtime/JSWrapperObject.h
     runtime/LazyClassStructure.h
@@ -1042,6 +1053,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/RegExpKey.h
     runtime/RegExpObject.h
     runtime/RegExpStringIteratorPrototype.h
+    runtime/ResourceExhaustion.h
     runtime/RuntimeFlags.h
     runtime/RuntimeType.h
     runtime/SamplingProfiler.h
@@ -1051,6 +1063,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/ScriptExecutable.h
     runtime/ScriptFetchParameters.h
     runtime/ScriptFetcher.h
+    runtime/SlowPathFunction.h
     runtime/SlowPathReturnType.h
     runtime/SmallStrings.h
     runtime/SourceOrigin.h
@@ -1093,10 +1106,14 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/VMEntryScope.h
     runtime/VMInlines.h
     runtime/VMTraps.h
+    runtime/VMTrapsInlines.h
     runtime/VarOffset.h
     runtime/Watchdog.h
+    runtime/WeakGCHashTable.h
     runtime/WeakGCMap.h
     runtime/WeakGCMapInlines.h
+    runtime/WeakGCSet.h
+    runtime/WeakGCSetInlines.h
     runtime/WriteBarrier.h
     runtime/WriteBarrierInlines.h
 
@@ -1255,7 +1272,6 @@ add_custom_command(
     VERBATIM)
 
 # Inspector Backend Dispatchers, Frontend Dispatchers, Type Builders
-file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBINSPECTORUI_DIR}/UserInterface/Protocol)
 file(MAKE_DIRECTORY ${JavaScriptCore_DERIVED_SOURCES_DIR}/inspector)
 add_custom_command(
     OUTPUT ${JavaScriptCore_DERIVED_SOURCES_DIR}/inspector/InspectorBackendDispatchers.cpp

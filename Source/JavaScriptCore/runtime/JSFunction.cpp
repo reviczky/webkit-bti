@@ -42,6 +42,7 @@
 #include "PropertyNameArray.h"
 #include "StackVisitor.h"
 #include "TypeError.h"
+#include "VMTrapsInlines.h"
 
 namespace JSC {
 
@@ -155,7 +156,8 @@ JSObject* JSFunction::prototypeForConstruction(VM& vm, JSGlobalObject* globalObj
 {
     // This code assumes getting the prototype is not effectful. That's only
     // true when we can use the allocation profile.
-    ASSERT(canUseAllocationProfile()); 
+    ASSERT(canUseAllocationProfile());
+    DeferTermination deferScope(vm);
     auto scope = DECLARE_CATCH_SCOPE(vm);
     JSValue prototype = get(globalObject, vm.propertyNames->prototype);
     scope.releaseAssertNoException();
@@ -518,10 +520,6 @@ bool JSFunction::put(JSCell* cell, JSGlobalObject* globalObject, PropertyName pr
         else
             rareData->setHasModifiedNameForNonHostFunction();
     }
-
-    if (UNLIKELY(isThisValueAltered(slot, thisObject)))
-        RELEASE_AND_RETURN(scope, ordinarySetSlow(globalObject, thisObject, propertyName, value, slot.thisValue(), slot.isStrictMode()));
-
 
     if (thisObject->isHostOrBuiltinFunction()) {
         PropertyStatus propertyType = thisObject->reifyLazyPropertyForHostOrBuiltinIfNeeded(vm, globalObject, propertyName);

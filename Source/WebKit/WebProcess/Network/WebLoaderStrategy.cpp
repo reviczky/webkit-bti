@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012, 2015, 2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -80,6 +80,7 @@
 
 #define RELEASE_LOG_IS_ALLOWED (WebProcess::singleton().sessionID().isAlwaysOnLoggingAllowed())
 
+#undef RELEASE_LOG_IF_ALLOWED
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(RELEASE_LOG_IS_ALLOWED, Network, "%p - WebLoaderStrategy::" fmt, this, ##__VA_ARGS__)
 #define RELEASE_LOG_ERROR_IF_ALLOWED(fmt, ...) RELEASE_LOG_ERROR_IF(RELEASE_LOG_IS_ALLOWED, Network, "%p - WebLoaderStrategy::" fmt, this, ##__VA_ARGS__)
 
@@ -248,8 +249,6 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
         scheduleLoadFromNetworkProcess(resourceLoader, resourceLoader.request(), trackingParameters, shouldClearReferrerOnHTTPSToHTTPRedirect, maximumBufferingTime(resource));
         return;
     }
-
-    WEBLOADERSTRATEGY_RELEASE_LOG_IF_ALLOWED("scheduleLoad: URL not handled by any handlers");
 }
 
 bool WebLoaderStrategy::tryLoadingUsingURLSchemeHandler(ResourceLoader& resourceLoader, const WebResourceLoader::TrackingParameters& trackingParameters)
@@ -280,8 +279,6 @@ static void addParametersShared(const Frame* frame, NetworkResourceLoadParameter
 
     if (!frame)
         return;
-
-    parameters.isHTTPSUpgradeEnabled = frame->settings().HTTPSUpgradeEnabled();
 
     if (auto* page = frame->page()) {
         parameters.pageHasResourceLoadClient = page->hasResourceLoadClient();
@@ -343,9 +340,10 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
             loadParameters.cspResponseHeaders = contentSecurityPolicy->responseHeaders();
     }
     
+#if ENABLE(APP_BOUND_DOMAINS) || ENABLE(CONTENT_EXTENSIONS)
     auto* webFrameLoaderClient = frame ? toWebFrameLoaderClient(frame->loader().client()) : nullptr;
     auto* webFrame = webFrameLoaderClient ? &webFrameLoaderClient->webFrame() : nullptr;
-    auto* webPage = webFrame ? webFrame->page() : nullptr;
+#endif
 
 #if ENABLE(APP_BOUND_DOMAINS)
     if (webFrame)
@@ -356,7 +354,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     if (document) {
         loadParameters.mainDocumentURL = document->topDocument().url();
         // FIXME: Instead of passing userContentControllerIdentifier, the NetworkProcess should be able to get it using webPageId.
-        if (webPage)
+        if (auto* webPage = webFrame ? webFrame->page() : nullptr)
             loadParameters.userContentControllerIdentifier = webPage->userContentControllerIdentifier();
     }
 #endif
@@ -770,8 +768,9 @@ void WebLoaderStrategy::preconnectTo(FrameLoader& frameLoader, const URL& url, S
 void WebLoaderStrategy::preconnectTo(WebCore::ResourceRequest&& request, WebPage& webPage, WebFrame& webFrame, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, PreconnectCompletionHandler&& completionHandler)
 {
     if (auto* document = webPage.mainFrame()->document()) {
-        if (document && document->loader())
-            request.setIsAppBound(document->loader()->lastNavigationWasAppBound());
+        request.setFirstPartyForCookies(document->firstPartyForCookies());
+        if (auto* loader = document->loader())
+            request.setIsAppBound(loader->lastNavigationWasAppBound());
     }
 
     Optional<uint64_t> preconnectionIdentifier;
@@ -918,3 +917,4 @@ void WebLoaderStrategy::prioritizeResourceLoads(const Vector<WebCore::Subresourc
 
 #undef RELEASE_LOG_IF_ALLOWED
 #undef RELEASE_LOG_ERROR_IF_ALLOWED
+#undef RELEASE_LOG_IS_ALLOWED

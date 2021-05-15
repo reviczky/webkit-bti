@@ -181,7 +181,7 @@ FrameSelection::FrameSelection(Document* document)
     // Caret blinking (blinks | does not blink)
     setCaretVisible(activeAndFocused);
 #else
-    setCaretVisibility(activeAndFocused ? Visible : Hidden);
+    setCaretVisibility(activeAndFocused ? Visible : Hidden, ShouldUpdateAppearance::No);
 #endif
 }
 
@@ -363,9 +363,17 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
             return false;
         }
 
-        if (!m_document || !m_document->frame()) {
+        if (!m_document) {
             m_selection = newSelection;
             updateAssociatedLiveRange();
+            return false;
+        }
+
+        bool selectionEndpointsBelongToMultipleDocuments = newSelection.base().document() && !newSelection.document();
+        bool selectionIsInAnotherDocument = newSelection.document() && newSelection.document() != m_document.get();
+        bool selectionIsInDetachedDocument = newSelection.document() && !newSelection.document()->frame();
+        if (selectionEndpointsBelongToMultipleDocuments || selectionIsInAnotherDocument || selectionIsInDetachedDocument) {
+            clear();
             return false;
         }
 
@@ -437,7 +445,7 @@ void FrameSelection::setSelection(const VisibleSelection& selection, OptionSet<S
     if (frameView && frameView->layoutContext().isLayoutPending())
         return;
 
-    updateAndRevealSelection(intent);
+    updateAndRevealSelection(intent, options.contains(SmoothScroll) ? ScrollBehavior::Smooth : ScrollBehavior::Instant, options.contains(OverrideSmoothScrollFeatureEnablement) ? SmoothScrollFeatureEnablement::Override : SmoothScrollFeatureEnablement::Default);
 
     if (options & IsUserTriggered) {
         if (auto* client = protectedDocument->editor().client())
@@ -464,7 +472,7 @@ void FrameSelection::setNeedsSelectionUpdate(RevealSelectionAfterUpdate revealMo
         view->selection().clear();
 }
 
-void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& intent)
+void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& intent, ScrollBehavior scrollBehavior, SmoothScrollFeatureEnablement overideFeatureEnablement)
 {
     if (!m_pendingSelectionUpdate)
         return;
@@ -481,7 +489,7 @@ void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& int
         else
             alignment = m_alwaysAlignCursorOnScrollWhenRevealingSelection ? ScrollAlignment::alignTopAlways : ScrollAlignment::alignToEdgeIfNeeded;
 
-        revealSelection(m_selectionRevealMode, alignment, RevealExtent);
+        revealSelection(m_selectionRevealMode, alignment, RevealExtent, scrollBehavior, overideFeatureEnablement);
     }
 
     notifyAccessibilityForSelectionChange(intent);
@@ -2063,7 +2071,7 @@ void FrameSelection::focusedOrActiveStateChanged()
     // Caret appears in the active frame.
     if (activeAndFocused)
         setSelectionFromNone();
-    setCaretVisibility(activeAndFocused ? Visible : Hidden);
+    setCaretVisibility(activeAndFocused ? Visible : Hidden, ShouldUpdateAppearance::Yes);
 
     // Because Style::Resolver::checkOneSelector() and
     // RenderTheme::isFocused() check if the frame is active, we have to
@@ -2072,7 +2080,7 @@ void FrameSelection::focusedOrActiveStateChanged()
         element->invalidateStyleForSubtree();
         if (RenderObject* renderer = element->renderer())
             if (renderer && renderer->style().hasAppearance())
-                renderer->theme().stateChanged(*renderer, ControlStates::FocusState);
+                renderer->theme().stateChanged(*renderer, ControlStates::States::Focused);
     }
 #endif
 }
@@ -2182,13 +2190,13 @@ void FrameSelection::updateAppearance()
     }
 }
 
-void FrameSelection::setCaretVisibility(CaretVisibility visibility)
+void FrameSelection::setCaretVisibility(CaretVisibility visibility, ShouldUpdateAppearance doAppearanceUpdate)
 {
     if (caretVisibility() == visibility)
         return;
 
     // FIXME: We shouldn't trigger a synchronous layout here.
-    if (m_document)
+    if (doAppearanceUpdate == ShouldUpdateAppearance::Yes && m_document)
         updateSelectionByUpdatingLayoutOrStyle(*m_document);
 
 #if ENABLE(TEXT_CARET)
@@ -2199,7 +2207,8 @@ void FrameSelection::setCaretVisibility(CaretVisibility visibility)
     CaretBase::setCaretVisibility(visibility);
 #endif
 
-    updateAppearance();
+    if (doAppearanceUpdate == ShouldUpdateAppearance::Yes)
+        updateAppearance();
 }
 
 void FrameSelection::caretBlinkTimerFired()
@@ -2370,7 +2379,7 @@ HTMLFormElement* FrameSelection::currentForm() const
     return scanForForm(start);
 }
 
-void FrameSelection::revealSelection(SelectionRevealMode revealMode, const ScrollAlignment& alignment, RevealExtentOption revealExtentOption)
+void FrameSelection::revealSelection(SelectionRevealMode revealMode, const ScrollAlignment& alignment, RevealExtentOption revealExtentOption, ScrollBehavior scrollBehavior, SmoothScrollFeatureEnablement overrideFeatureEnablement)
 {
     if (revealMode == SelectionRevealMode::DoNotReveal)
         return;
@@ -2393,7 +2402,7 @@ void FrameSelection::revealSelection(SelectionRevealMode revealMode, const Scrol
             if (!m_scrollingSuppressCount) {
                 auto* scrollableArea = layer->ensureLayerScrollableArea();
                 scrollableArea->setAdjustForIOSCaretWhenScrolling(true);
-                layer->scrollRectToVisible(rect, insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes });
+                layer->scrollRectToVisible(rect, insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes, scrollBehavior, overrideFeatureEnablement});
                 scrollableArea->setAdjustForIOSCaretWhenScrolling(false);
                 updateAppearance();
                 if (m_document->page())
@@ -2404,7 +2413,7 @@ void FrameSelection::revealSelection(SelectionRevealMode revealMode, const Scrol
         // FIXME: This code only handles scrolling the startContainer's layer, but
         // the selection rect could intersect more than just that.
         // See <rdar://problem/4799899>.
-        if (start.deprecatedNode()->renderer()->scrollRectToVisible(rect, insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes }))
+        if (start.deprecatedNode()->renderer()->scrollRectToVisible(rect, insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes, scrollBehavior, overrideFeatureEnablement}))
             updateAppearance();
 #endif
     }
@@ -2791,6 +2800,11 @@ static bool containsEndpoints(const WeakPtr<Document>& document, const Range& li
 bool FrameSelection::isInDocumentTree() const
 {
     return containsEndpoints(m_document, m_selection.range());
+}
+
+bool FrameSelection::isConnectedToDocument() const
+{
+    return selection().document() == m_document.get();
 }
 
 RefPtr<Range> FrameSelection::associatedLiveRange()

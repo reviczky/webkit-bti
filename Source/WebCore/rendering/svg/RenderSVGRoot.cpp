@@ -70,6 +70,8 @@ SVGSVGElement& RenderSVGRoot::svgSVGElement() const
 
 void RenderSVGRoot::computeIntrinsicRatioInformation(FloatSize& intrinsicSize, double& intrinsicRatio) const
 {
+    ASSERT(!shouldApplySizeContainment(*this));
+
     // Spec: http://www.w3.org/TR/SVG/coords.html#IntrinsicSizing
     // SVG needs to specify how to calculate some intrinsic sizing properties to enable inclusion within other languages.
 
@@ -80,6 +82,8 @@ void RenderSVGRoot::computeIntrinsicRatioInformation(FloatSize& intrinsicSize, d
     // - If the ‘width’ and ‘height’ of the rootmost ‘svg’ element are both specified with unit identifiers (in, mm, cm, pt, pc,
     //   px, em, ex) or in user units, then the aspect ratio is calculated from the ‘width’ and ‘height’ attributes after
     //   resolving both values to user units.
+    intrinsicSize.hasIntrinsicWidth = svgSVGElement().hasIntrinsicWidth();
+    intrinsicSize.hasIntrinsicHeight = svgSVGElement().hasIntrinsicHeight();
     intrinsicSize.setWidth(floatValueForLength(svgSVGElement().intrinsicWidth(), 0));
     intrinsicSize.setHeight(floatValueForLength(svgSVGElement().intrinsicHeight(), 0));
 
@@ -300,16 +304,16 @@ void RenderSVGRoot::willBeDestroyed()
     RenderReplaced::willBeDestroyed();
 }
 
-void RenderSVGRoot::insertedIntoTree()
+void RenderSVGRoot::insertedIntoTree(IsInternalMove isInternalMove)
 {
-    RenderReplaced::insertedIntoTree();
+    RenderReplaced::insertedIntoTree(isInternalMove);
     SVGResourcesCache::clientWasAddedToTree(*this);
 }
 
-void RenderSVGRoot::willBeRemovedFromTree()
+void RenderSVGRoot::willBeRemovedFromTree(IsInternalMove isInternalMove)
 {
     SVGResourcesCache::clientWillBeRemovedFromTree(*this);
-    RenderReplaced::willBeRemovedFromTree();
+    RenderReplaced::willBeRemovedFromTree(isInternalMove);
 }
 
 void RenderSVGRoot::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
@@ -445,7 +449,7 @@ bool RenderSVGRoot::nodeAtPoint(const HitTestRequest& request, HitTestResult& re
     }
 
     // If we didn't early exit above, we've just hit the container <svg> element. Unlike SVG 1.1, 2nd Edition allows container elements to be hit.
-    if ((hitTestAction == HitTestBlockBackground || hitTestAction == HitTestChildBlockBackground) && visibleToHitTesting()) {
+    if ((hitTestAction == HitTestBlockBackground || hitTestAction == HitTestChildBlockBackground) && visibleToHitTesting(request)) {
         // Only return true here, if the last hit testing phase 'BlockBackground' is executed. If we'd return true in the 'Foreground' phase,
         // hit testing would stop immediately. For SVG only trees this doesn't matter. Though when we have a <foreignObject> subtree we need
         // to be able to detect hits on the background of a <div> element. If we'd return true here in the 'Foreground' phase, we are not able 

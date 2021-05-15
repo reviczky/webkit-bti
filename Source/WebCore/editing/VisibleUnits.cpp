@@ -610,6 +610,9 @@ static VisiblePosition nextBoundary(const VisiblePosition& c, BoundarySearchFunc
         // Use the character iterator to translate the next value into a DOM position.
         CharacterIterator charIt(*searchRange, TextIteratorEmitsCharactersBetweenAllVisiblePositions);
         charIt.advance(next - prefixLength - 1);
+        if (charIt.atEnd())
+            return { };
+
         auto characterRange = charIt.range();
         pos = makeDeprecatedLegacyPosition(characterRange.end);
         
@@ -742,26 +745,21 @@ static VisiblePosition startPositionForLine(const VisiblePosition& c, LineEndpoi
     }
 
     Node* startNode;
-    LayoutIntegration::RunIterator startRun;
-    if (mode == UseLogicalOrdering) {
-        startRun = line.logicalStartRunWithNode();
+    LayoutIntegration::RunIterator startRun = mode == UseLogicalOrdering ? line.logicalStartRunWithNode() : line.firstRun();
+    // Generated content (e.g. list markers and CSS :before and :after pseudoelements) have no corresponding DOM element,
+    // and so cannot be represented by a VisiblePosition. Use whatever follows instead.
+    while (true) {
         if (!startRun)
             return VisiblePosition();
-        startNode = startRun->renderer().node();
-    } else {
-        // Generated content (e.g. list markers and CSS :before and :after pseudoelements) have no corresponding DOM element,
-        // and so cannot be represented by a VisiblePosition. Use whatever follows instead.
-        startRun = line.firstRun();
-        while (true) {
-            if (!startRun)
-                return VisiblePosition();
 
-            startNode = startRun->renderer().nonPseudoNode();
-            if (startNode)
-                break;
+        startNode = startRun->renderer().nonPseudoNode();
+        if (startNode)
+            break;
 
+        if (mode == UseLogicalOrdering)
+            startRun.traverseNextOnLineInLogicalOrder();
+        else
             startRun.traverseNextOnLine();
-        }
     }
 
     return is<Text>(*startNode) ? Position(downcast<Text>(startNode), downcast<LayoutIntegration::PathTextRun>(*startRun).start())
@@ -817,26 +815,21 @@ static VisiblePosition endPositionForLine(const VisiblePosition& c, LineEndpoint
     }
 
     Node* endNode;
-    LayoutIntegration::RunIterator endRun;
-    if (mode == UseLogicalOrdering) {
-        endRun = line.logicalEndRunWithNode();
+    LayoutIntegration::RunIterator endRun = mode == UseLogicalOrdering ? line.logicalEndRunWithNode() : line.lastRun();
+    // Generated content (e.g. list markers and CSS :before and :after pseudoelements) have no corresponding DOM element,
+    // and so cannot be represented by a VisiblePosition. Use whatever precedes instead.
+    while (true) {
         if (!endRun)
             return VisiblePosition();
-        endNode = endRun->renderer().node();
-    } else {
-        // Generated content (e.g. list markers and CSS :before and :after pseudoelements) have no corresponding DOM element,
-        // and so cannot be represented by a VisiblePosition. Use whatever precedes instead.
-        endRun = line.lastRun();
-        while (true) {
-            if (!endRun)
-                return VisiblePosition();
 
-            endNode = endRun->renderer().nonPseudoNode();
-            if (endNode)
-                break;
-            
+        endNode = endRun->renderer().nonPseudoNode();
+        if (endNode)
+            break;
+
+        if (mode == UseLogicalOrdering)
+            endRun.traversePreviousOnLineInLogicalOrder();
+        else
             endRun.traversePreviousOnLine();
-        }
     }
 
     Position pos;

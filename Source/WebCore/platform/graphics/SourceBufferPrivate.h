@@ -99,6 +99,8 @@ public:
     void setClient(SourceBufferPrivateClient* client) { m_client = client; }
     void setIsAttached(bool flag) { m_isAttached = flag; }
 
+    const TimeRanges* buffered() const { return m_buffered.get(); }
+
     bool bufferFull() const { return m_bufferFull; }
 
     // Methods used by MediaSourcePrivate
@@ -106,8 +108,10 @@ public:
     bool hasVideo() const { return m_hasVideo; }
 
     MediaTime timestampOffset() const { return m_timestampOffset; }
+    uint64_t totalTrackBufferSizeInBytes() const;
 
     struct TrackBuffer {
+        WTF_MAKE_STRUCT_FAST_ALLOCATED;
         MediaTime lastDecodeTimestamp;
         MediaTime greatestDecodeDuration;
         MediaTime lastFrameDuration;
@@ -132,7 +136,7 @@ public:
 
     // Internals Utility methods
     WEBCORE_EXPORT virtual void bufferedSamplesForTrackId(const AtomString&, CompletionHandler<void(Vector<String>&&)>&&);
-    virtual Vector<String> enqueuedSamplesForTrackID(const AtomString&) { return { }; }
+    WEBCORE_EXPORT virtual void enqueuedSamplesForTrackID(const AtomString&, CompletionHandler<void(Vector<String>&&)>&&);
     virtual MediaTime minimumUpcomingPresentationTimeForTrackID(const AtomString&) { return MediaTime::invalidTime(); }
     virtual void setMaximumQueueDepthForTrackID(const AtomString&, uint64_t) { }
     WEBCORE_EXPORT MediaTime fastSeekTimeForMediaTime(const MediaTime& targetTime, const MediaTime& negativeThreshold, const MediaTime& positiveThreshold);
@@ -162,8 +166,9 @@ protected:
     void reenqueSamples(const AtomString& trackID);
     WEBCORE_EXPORT void didReceiveInitializationSegment(SourceBufferPrivateClient::InitializationSegment&&, CompletionHandler<void()>&&);
     WEBCORE_EXPORT void didReceiveSample(Ref<MediaSample>&&);
+    WEBCORE_EXPORT void setBufferedRanges(const PlatformTimeRanges&);
+    void setBufferFull(bool bufferFull) { m_bufferFull = bufferFull; }
     void provideMediaData(const AtomString& trackID);
-    uint64_t totalTrackBufferSizeInBytes() const;
 
     SourceBufferPrivateClient* m_client { nullptr };
 
@@ -173,7 +178,6 @@ private:
     void reenqueueMediaForTime(TrackBuffer&, const AtomString& trackID, const MediaTime&);
     bool validateInitializationSegment(const SourceBufferPrivateClient::InitializationSegment&);
     void provideMediaData(TrackBuffer&, const AtomString& trackID);
-    void setBufferedRanges(const PlatformTimeRanges&);
     void setBufferedDirty(bool);
     void trySignalAllSamplesInTrackEnqueued(TrackBuffer&, const AtomString& trackID);
 
@@ -181,7 +185,7 @@ private:
     bool m_hasAudio { false };
     bool m_hasVideo { false };
 
-    HashMap<AtomString, TrackBuffer> m_trackBufferMap;
+    HashMap<AtomString, UniqueRef<TrackBuffer>> m_trackBufferMap;
 
     SourceBufferAppendMode m_appendMode { SourceBufferAppendMode::Segments };
 

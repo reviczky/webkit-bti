@@ -66,6 +66,7 @@ RemoteAudioSessionConfiguration RemoteAudioSessionProxy::configuration()
         session.sampleRate(),
         session.bufferSize(),
         session.numberOfOutputChannels(),
+        session.maximumNumberOfOutputChannels(),
         session.preferredBufferSize(),
         session.isMuted(),
         m_active
@@ -79,7 +80,7 @@ void RemoteAudioSessionProxy::setCategory(AudioSession::CategoryType category, R
 
     m_category = category;
     m_routeSharingPolicy = policy;
-    audioSessionManager().setCategoryForProcess(*this, category, policy);
+    audioSessionManager().updateCategory();
 }
 
 void RemoteAudioSessionProxy::setPreferredBufferSize(uint64_t size)

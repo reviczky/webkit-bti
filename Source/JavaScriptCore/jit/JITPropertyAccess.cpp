@@ -1227,6 +1227,7 @@ void JIT::emit_op_put_to_scope(const Instruction* currentInstruction)
             JSScope* constantScope = JSScope::constantScopeForCodeBlock(resolveType, m_codeBlock);
             RELEASE_ASSERT(constantScope);
             emitVarInjectionCheck(needsVarInjectionChecks(resolveType));
+            emitVarReadOnlyCheck(resolveType);
             if (!isInitialization(getPutInfo.initializationMode()) && (resolveType == GlobalLexicalVar || resolveType == GlobalLexicalVarWithVarInjectionChecks)) {
                 // We need to do a TDZ check here because we can't always prove we need to emit TDZ checks statically.
                 if (indirectLoadForOperand)
@@ -1578,7 +1579,7 @@ void JIT::privateCompilePutByVal(const ConcurrentJSLocker&, ByValInfo* byValInfo
     
     Jump done = jump();
 
-    LinkBuffer patchBuffer(*this, m_codeBlock);
+    LinkBuffer patchBuffer(*this, m_codeBlock, LinkBuffer::Profile::InlineCache);
     patchBuffer.link(badType, byValInfo->slowPathTarget);
     patchBuffer.link(slowCases, byValInfo->slowPathTarget);
     patchBuffer.link(done, byValInfo->doneTarget);
@@ -1617,7 +1618,7 @@ void JIT::privateCompilePutPrivateNameWithCachedId(ByValInfo* byValInfo, ReturnA
     JITPutByIdGenerator gen = emitPutPrivateNameWithCachedId(bytecode, propertyName, doneCases, slowCases);
 
     ConcurrentJSLocker locker(m_codeBlock->m_lock);
-    LinkBuffer patchBuffer(*this, m_codeBlock);
+    LinkBuffer patchBuffer(*this, m_codeBlock, LinkBuffer::Profile::InlineCache);
     patchBuffer.link(slowCases, byValInfo->slowPathTarget);
     patchBuffer.link(doneCases, byValInfo->doneTarget);
     if (!m_exceptionChecks.empty())
@@ -1655,7 +1656,7 @@ void JIT::privateCompilePutByValWithCachedId(ByValInfo* byValInfo, ReturnAddress
     JITPutByIdGenerator gen = emitPutByValWithCachedId(bytecode, putKind, propertyName, doneCases, slowCases);
 
     ConcurrentJSLocker locker(m_codeBlock->m_lock);
-    LinkBuffer patchBuffer(*this, m_codeBlock);
+    LinkBuffer patchBuffer(*this, m_codeBlock, LinkBuffer::Profile::InlineCache);
     patchBuffer.link(slowCases, byValInfo->slowPathTarget);
     patchBuffer.link(doneCases, byValInfo->doneTarget);
     if (!m_exceptionChecks.empty())
@@ -1810,7 +1811,7 @@ JIT::JumpList JIT::emitIntTypedArrayPutByVal(Op bytecode, PatchableJump& badType
     // We would be loading this into base as in get_by_val, except that the slow
     // path expects the base to be unclobbered.
     loadPtr(Address(base, JSArrayBufferView::offsetOfVector()), lateScratch);
-    cageConditionally(Gigacage::Primitive, lateScratch, lateScratch2, lateScratch2);
+    cageConditionallyAndUntag(Gigacage::Primitive, lateScratch, lateScratch2, lateScratch2, false);
     
     if (isClamped(type)) {
         ASSERT(elementSize(type) == 1);
@@ -1899,7 +1900,7 @@ JIT::JumpList JIT::emitFloatTypedArrayPutByVal(Op bytecode, PatchableJump& badTy
     // We would be loading this into base as in get_by_val, except that the slow
     // path expects the base to be unclobbered.
     loadPtr(Address(base, JSArrayBufferView::offsetOfVector()), lateScratch);
-    cageConditionally(Gigacage::Primitive, lateScratch, lateScratch2, lateScratch2);
+    cageConditionallyAndUntag(Gigacage::Primitive, lateScratch, lateScratch2, lateScratch2, false);
     
     switch (elementSize(type)) {
     case 4:

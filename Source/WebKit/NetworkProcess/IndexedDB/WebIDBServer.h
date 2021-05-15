@@ -25,14 +25,13 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "Connection.h"
 
 #include "WebIDBConnectionToClient.h"
 #include <WebCore/IDBServer.h>
 #include <WebCore/StorageQuotaManager.h>
 #include <wtf/CrossThreadTaskHandler.h>
+#include <wtf/RefCounter.h>
 
 namespace WebCore {
 class StorageQuotaManager;
@@ -45,7 +44,7 @@ namespace WebKit {
 
 class WebIDBServer final : public CrossThreadTaskHandler, public IPC::Connection::ThreadMessageReceiverRefCounted {
 public:
-    static Ref<WebIDBServer> create(PAL::SessionID, const String& directory, WebCore::IDBServer::IDBServer::StorageQuotaManagerSpaceRequester&&);
+    static Ref<WebIDBServer> create(PAL::SessionID, const String& directory, WebCore::IDBServer::IDBServer::StorageQuotaManagerSpaceRequester&&, CompletionHandler<void()>&&);
 
     void getOrigins(CompletionHandler<void(HashSet<WebCore::SecurityOriginData>&&)>&&);
     void closeAndDeleteDatabasesModifiedSince(WallTime, CompletionHandler<void()>&& callback);
@@ -90,20 +89,26 @@ public:
     void dispatchToThread(WTF::Function<void()>&&);
     void close();
 
-    bool hasConnection() const { return !m_connections.isEmpty(); }
 private:
-    WebIDBServer(PAL::SessionID, const String& directory, WebCore::IDBServer::IDBServer::StorageQuotaManagerSpaceRequester&&);
+    WebIDBServer(PAL::SessionID, const String& directory, WebCore::IDBServer::IDBServer::StorageQuotaManagerSpaceRequester&&, CompletionHandler<void()>&&);
     ~WebIDBServer();
 
     void postTask(WTF::Function<void()>&&);
 
+    void tryClose();
+
+    Lock m_serverLock;
     std::unique_ptr<WebCore::IDBServer::IDBServer> m_server;
     bool m_isSuspended { false };
 
     HashMap<IPC::Connection::UniqueID, std::unique_ptr<WebIDBConnectionToClient>> m_connectionMap;
     HashSet<IPC::Connection*> m_connections;
+
+    enum DataTaskCounterType { };
+    using DataTaskCounter = RefCounter<DataTaskCounterType>;
+    using DataTaskCounterToken = DataTaskCounter::Token;
+    DataTaskCounter m_dataTaskCounter;
+    CompletionHandler<void()> m_closeCallback;
 };
 
 } // namespace WebKit
-
-#endif

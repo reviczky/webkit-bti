@@ -55,9 +55,14 @@ Recorder::~Recorder()
     LOG(DisplayLists, "Recorded display list:\n%s", m_displayList.description().data());
 }
 
-void Recorder::putImageData(WebCore::AlphaPremultiplication inputFormat, const WebCore::ImageData& imageData, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat)
+void Recorder::getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect& sourceRect)
 {
-    append<PutImageData>(inputFormat, imageData, srcRect, destPoint, destFormat);
+    append<GetPixelBuffer>(outputFormat, sourceRect);
+}
+
+void Recorder::putPixelBuffer(WebCore::AlphaPremultiplication inputFormat, const WebCore::PixelBuffer& pixelBuffer, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat)
+{
+    append<PutPixelBuffer>(inputFormat, pixelBuffer, srcRect, destPoint, destFormat);
 }
 
 static bool containsOnlyInlineStateChanges(const GraphicsContextStateChange& changes, GraphicsContextState::StateChangeFlags changeFlags)
@@ -72,10 +77,10 @@ static bool containsOnlyInlineStateChanges(const GraphicsContextStateChange& cha
     if (changeFlags != (changeFlags & inlineStateChangeFlags))
         return false;
 
-    if (changeFlags.contains(GraphicsContextState::StrokeColorChange) && !changes.m_state.strokeColor.isInline())
+    if (changeFlags.contains(GraphicsContextState::StrokeColorChange) && !changes.m_state.strokeColor.tryGetAsSRGBABytes())
         return false;
 
-    if (changeFlags.contains(GraphicsContextState::FillColorChange) && !changes.m_state.fillColor.isInline())
+    if (changeFlags.contains(GraphicsContextState::FillColorChange) && !changes.m_state.fillColor.tryGetAsSRGBABytes())
         return false;
 
     if (changeFlags.contains(GraphicsContextState::FillGradientChange)
@@ -104,38 +109,34 @@ void Recorder::appendStateChangeItem(const GraphicsContextStateChange& changes, 
     }
 
     if (changeFlags.contains(GraphicsContextState::StrokeColorChange))
-        append<SetInlineStrokeColor>(changes.m_state.strokeColor.asInline());
+        append<SetInlineStrokeColor>(*changes.m_state.strokeColor.tryGetAsSRGBABytes());
 
     if (changeFlags.contains(GraphicsContextState::StrokeThicknessChange))
         append<SetStrokeThickness>(changes.m_state.strokeThickness);
 
     if (changeFlags.contains(GraphicsContextState::FillColorChange))
-        append<SetInlineFillColor>(changes.m_state.fillColor.asInline());
+        append<SetInlineFillColor>(*changes.m_state.fillColor.tryGetAsSRGBABytes());
 
     if (changeFlags.contains(GraphicsContextState::FillGradientChange))
         append<SetInlineFillGradient>(*changes.m_state.fillGradient, changes.m_state.fillGradientSpaceTransform);
 }
 
-void Recorder::willAppendItemOfType(ItemType type)
+bool Recorder::canAppendItemOfType(ItemType type) const
 {
-    if (m_delegate)
-        m_delegate->willAppendItemOfType(type);
+    return !m_delegate || m_delegate->canAppendItemOfType(type);
+}
 
-    if (isDrawingItem(type)
-#if USE(CG)
-        || type == ItemType::ApplyStrokePattern || type == ItemType::ApplyStrokePattern
-#endif
-    ) {
-        GraphicsContextStateChange& stateChanges = currentState().stateChange;
-        GraphicsContextState::StateChangeFlags changesFromLastState = stateChanges.changesFromState(currentState().lastDrawingState);
-        if (changesFromLastState) {
-            LOG_WITH_STREAM(DisplayLists, stream << "pre-drawing, saving state " << GraphicsContextStateChange(stateChanges.m_state, changesFromLastState));
-            appendStateChangeItem(stateChanges, changesFromLastState);
-            stateChanges.m_changeFlags = { };
-            currentState().lastDrawingState = stateChanges.m_state;
-        }
-        currentState().wasUsedForDrawing = true;
-    }
+void Recorder::appendStateChangeItemIfNecessary()
+{
+    auto& stateChanges = currentState().stateChange;
+    auto changesFromLastState = stateChanges.changesFromState(currentState().lastDrawingState);
+    if (!changesFromLastState)
+        return;
+
+    LOG_WITH_STREAM(DisplayLists, stream << "pre-drawing, saving state " << GraphicsContextStateChange(stateChanges.m_state, changesFromLastState));
+    appendStateChangeItem(stateChanges, changesFromLastState);
+    stateChanges.m_changeFlags = { };
+    currentState().lastDrawingState = stateChanges.m_state;
 }
 
 void Recorder::updateState(const GraphicsContextState& state, GraphicsContextState::StateChangeFlags flags)
@@ -146,6 +147,11 @@ void Recorder::updateState(const GraphicsContextState& state, GraphicsContextSta
 bool Recorder::canDrawImageBuffer(const ImageBuffer& imageBuffer) const
 {
     return !m_delegate || m_delegate->isCachedImageBuffer(imageBuffer);
+}
+
+RenderingMode Recorder::renderingMode() const
+{
+    return m_delegate ? m_delegate->renderingMode() : RenderingMode::Unaccelerated;
 }
 
 void Recorder::clearShadow()
@@ -178,7 +184,7 @@ void Recorder::drawGlyphs(const Font& font, const GlyphBufferGlyph* glyphs, cons
     m_drawGlyphsRecorder.drawGlyphs(font, glyphs, advances, numGlyphs, startPoint, smoothingMode);
 }
 
-void Recorder::appendDrawGraphsItemWithCachedFont(const Font& font, const GlyphBufferGlyph* glyphs, const GlyphBufferAdvance* advances, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode smoothingMode)
+void Recorder::appendDrawGlyphsItemWithCachedFont(const Font& font, const GlyphBufferGlyph* glyphs, const GlyphBufferAdvance* advances, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode smoothingMode)
 {
     if (m_delegate)
         m_delegate->cacheFont(const_cast<Font&>(font));
@@ -215,12 +221,7 @@ void Recorder::restore()
     if (!m_stateStack.size())
         return;
 
-    bool stateUsedForDrawing = currentState().wasUsedForDrawing;
-
     m_stateStack.removeLast();
-    // Have to avoid eliding nested Save/Restore when a descendant state contains drawing items.
-    currentState().wasUsedForDrawing |= stateUsedForDrawing;
-
     append<Restore>();
 }
 
@@ -266,11 +267,13 @@ AffineTransform Recorder::getCTM(GraphicsContext::IncludeDeviceScale)
 void Recorder::beginTransparencyLayer(float opacity)
 {
     append<BeginTransparencyLayer>(opacity);
+    m_stateStack.append(m_stateStack.last().cloneForTransparencyLayer());
 }
 
 void Recorder::endTransparencyLayer()
 {
     append<EndTransparencyLayer>();
+    m_stateStack.removeLast();
 }
 
 void Recorder::drawRect(const FloatRect& rect, float borderThickness)

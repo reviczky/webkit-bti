@@ -106,6 +106,8 @@ public:
     virtual double currentTimeDouble() const { return currentTime(); }
     virtual MediaTime currentMediaTime() const { return MediaTime::createWithDouble(currentTimeDouble()); }
 
+    virtual bool setCurrentTimeDidChangeCallback(MediaPlayer::CurrentTimeDidChangeCallback&&) { return false; }
+
     virtual MediaTime getStartDate() const { return MediaTime::createWithDouble(std::numeric_limits<double>::quiet_NaN()); }
 
     virtual void seek(float) { }
@@ -164,7 +166,7 @@ public:
 #if !USE(AVFOUNDATION)
     virtual bool copyVideoTextureToPlatformTexture(GraphicsContextGL*, PlatformGLObject, GCGLenum, GCGLint, GCGLenum, GCGLenum, GCGLenum, bool, bool) { return false; }
 #else
-    virtual CVPixelBufferRef pixelBufferForCurrentTime() { return nullptr; }
+    virtual RetainPtr<CVPixelBufferRef> pixelBufferForCurrentTime() { return nullptr; }
 #endif
     virtual RefPtr<NativeImage> nativeImageForCurrentTime() { return nullptr; }
 
@@ -216,9 +218,9 @@ public:
     virtual unsigned audioDecodedByteCount() const { return 0; }
     virtual unsigned videoDecodedByteCount() const { return 0; }
 
-    HashSet<RefPtr<SecurityOrigin>> originsInMediaCache(const String&) { return { }; }
+    HashSet<SecurityOriginData> originsInMediaCache(const String&) { return { }; }
     void clearMediaCache(const String&, WallTime) { }
-    void clearMediaCacheForOrigins(const String&, const HashSet<RefPtr<SecurityOrigin>>&) { }
+    void clearMediaCacheForOrigins(const String&, const HashSet<SecurityOriginData>&) { }
 
     virtual void setPrivateBrowsingMode(bool) { }
 

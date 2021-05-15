@@ -119,6 +119,7 @@ function installDependenciesWithApt {
         libgudev-1.0-dev \
         libhyphen-dev \
         libjpeg-dev \
+        libkate-dev \
         libmount-dev \
         libmpg123-dev \
         libnotify-dev \
@@ -147,6 +148,7 @@ function installDependenciesWithApt {
         libxtst-dev \
         libxslt1-dev \
         libwayland-dev \
+        nasm \
         ninja-build \
         patch \
         ruby \
@@ -258,13 +260,13 @@ function installDependenciesWithApt {
         gstreamer1.0-plugins-ugly \
         gstreamer1.0-pulseaudio"
 
-    apt-get install $packages
+    apt-get install -y --no-install-recommends $packages
 
     # Ubuntu Bionic doesn't ship pipenv. So fallback to the pip3 install path.
     if apt-cache show pipenv &>/dev/null; then
-        apt-get install pipenv
+        apt-get install -y --no-install-recommends pipenv
     else
-        apt-get install -y python3-pip
+        apt-get install -y --no-install-recommends python3-pip
         pip3 install pipenv
     fi
 }
@@ -321,6 +323,7 @@ function installDependenciesWithPacman {
         pango \
         perl-file-copy-recursive \
         libgcrypt \
+        libkate \
         libnotify \
         libpng \
         libpulse \
@@ -497,6 +500,7 @@ function installDependenciesWithDnf {
         libgcrypt-devel \
         libgudev1-devel \
         libjpeg-turbo-devel \
+        libkate-devel \
         libmount-devel \
         libnotify-devel \
         libpng-devel \
@@ -513,6 +517,7 @@ function installDependenciesWithDnf {
         libwayland-client-devel \
         libwayland-server-devel \
         mesa-libGL-devel \
+        nasm \
         ninja-build \
         openjpeg2-devel \
         openssl-devel \

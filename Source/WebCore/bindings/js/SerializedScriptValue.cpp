@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2009-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,6 +40,7 @@
 #include "JSCryptoKey.h"
 #include "JSDOMBinding.h"
 #include "JSDOMConvertBufferSource.h"
+#include "JSDOMException.h"
 #include "JSDOMGlobalObject.h"
 #include "JSDOMMatrix.h"
 #include "JSDOMPoint.h"
@@ -53,6 +54,7 @@
 #include "JSMessagePort.h"
 #include "JSNavigator.h"
 #include "JSRTCCertificate.h"
+#include "JSRTCDataChannel.h"
 #include "ScriptExecutionContext.h"
 #include "ScriptState.h"
 #include "SharedBuffer.h"
@@ -70,9 +72,9 @@
 #include <JavaScriptCore/JSArrayBufferView.h>
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSDataView.h>
-#include <JavaScriptCore/JSMap.h>
+#include <JavaScriptCore/JSMapInlines.h>
 #include <JavaScriptCore/JSMapIterator.h>
-#include <JavaScriptCore/JSSet.h>
+#include <JavaScriptCore/JSSetInlines.h>
 #include <JavaScriptCore/JSSetIterator.h>
 #include <JavaScriptCore/JSTypedArrays.h>
 #include <JavaScriptCore/JSWebAssemblyMemory.h>
@@ -90,6 +92,7 @@
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
 #include <wtf/Vector.h>
+#include <wtf/threads/BinarySemaphore.h>
 
 #if ENABLE(OFFSCREEN_CANVAS)
 #include "JSOffscreenCanvas.h"
@@ -186,6 +189,10 @@ enum SerializationTag {
 #if ENABLE(WEBASSEMBLY)
     WasmMemoryTag = 49,
 #endif
+#if ENABLE(WEB_RTC)
+    RTCDataChannelTransferTag = 50,
+#endif
+    DOMExceptionTag = 51,
     ErrorTag = 255
 };
 
@@ -375,6 +382,8 @@ static const unsigned StringDataIs8BitFlag = 0x80000000;
  *    | ImageBitmapTag <originClean:uint8_t> <logicalWidth:int32_t> <logicalHeight:int32_t> <resolutionScale:double> <byteLength:uint32_t>(<imageByteData:uint8_t>)
  *    | OffscreenCanvasTransferTag <value:uint32_t>
  *    | WasmMemoryTag <value:uint32_t>
+ *    | RTCDataChannelTransferTag <processIdentifier:uint64_t><rtcDataChannelIdentifier:uint64_t><label:String>
+ *    | DOMExceptionTag <message:String> <name:String>
  *
  * Inside certificate, data is serialized in this format as per spec:
  *
@@ -498,13 +507,6 @@ protected:
     {
     }
 
-    bool shouldTerminate()
-    {
-        VM& vm = m_lexicalGlobalObject->vm();
-        auto scope = DECLARE_THROW_SCOPE(vm);
-        return scope.exception();
-    }
-
     void fail()
     {
         m_failed = true;
@@ -584,6 +586,9 @@ public:
 #if ENABLE(OFFSCREEN_CANVAS)
             const Vector<RefPtr<OffscreenCanvas>>& offscreenCanvases,
 #endif
+#if ENABLE(WEB_RTC)
+            const Vector<Ref<RTCDataChannel>>& rtcDataChannels,
+#endif
 #if ENABLE(WEBASSEMBLY)
             WasmModuleArray& wasmModules,
             WasmMemoryHandleArray& wasmMemoryHandles,
@@ -593,6 +598,9 @@ public:
         CloneSerializer serializer(lexicalGlobalObject, messagePorts, arrayBuffers, imageBitmaps,
 #if ENABLE(OFFSCREEN_CANVAS)
             offscreenCanvases,
+#endif
+#if ENABLE(WEB_RTC)
+            rtcDataChannels,
 #endif
 #if ENABLE(WEBASSEMBLY)
             wasmModules,
@@ -625,6 +633,9 @@ private:
 #if ENABLE(OFFSCREEN_CANVAS)
             const Vector<RefPtr<OffscreenCanvas>>& offscreenCanvases,
 #endif
+#if ENABLE(WEB_RTC)
+            const Vector<Ref<RTCDataChannel>>& rtcDataChannels,
+#endif
 #if ENABLE(WEBASSEMBLY)
             WasmModuleArray& wasmModules,
             WasmMemoryHandleArray& wasmMemoryHandles,
@@ -648,10 +659,26 @@ private:
 #if ENABLE(OFFSCREEN_CANVAS)
         fillTransferMap(offscreenCanvases, m_transferredOffscreenCanvases);
 #endif
+#if ENABLE(WEB_RTC)
+        fillTransferMap(rtcDataChannels, m_transferredRTCDataChannels);
+#endif
     }
 
     template <class T>
     void fillTransferMap(const Vector<RefPtr<T>>& input, ObjectPool& result)
+    {
+        if (input.isEmpty())
+            return;
+        JSDOMGlobalObject* globalObject = jsCast<JSDOMGlobalObject*>(m_lexicalGlobalObject);
+        for (size_t i = 0; i < input.size(); i++) {
+            JSC::JSValue value = toJS(m_lexicalGlobalObject, globalObject, input[i].get());
+            JSC::JSObject* obj = value.getObject();
+            if (obj && !result.contains(obj))
+                result.add(obj, i);
+        }
+    }
+    template <class T>
+    void fillTransferMap(const Vector<Ref<T>>& input, ObjectPool& result)
     {
         if (input.isEmpty())
             return;
@@ -1049,13 +1076,13 @@ private:
         }
 
         const IntSize& logicalSize = buffer->logicalSize();
-        auto imageData = buffer->getImageData(AlphaPremultiplication::Premultiplied, { IntPoint::zero(), logicalSize });
-        if (!imageData) {
+        auto pixelBuffer = buffer->getPixelBuffer(AlphaPremultiplication::Premultiplied, { IntPoint::zero(), logicalSize });
+        if (!pixelBuffer) {
             code = SerializationReturnCode::ValidationError;
             return;
         }
 
-        RefPtr<ArrayBuffer> arrayBuffer = imageData->data()->possiblySharedBuffer();
+        auto arrayBuffer = pixelBuffer->data().possiblySharedBuffer();
         if (!arrayBuffer) {
             code = SerializationReturnCode::ValidationError;
             return;
@@ -1084,6 +1111,32 @@ private:
         code = SerializationReturnCode::DataCloneError;
     }
 #endif
+
+#if ENABLE(WEB_RTC)
+    void dumpRTCDataChannel(JSObject* obj, SerializationReturnCode& code)
+    {
+        auto index = m_transferredRTCDataChannels.find(obj);
+        if (index != m_transferredRTCDataChannels.end()) {
+            write(RTCDataChannelTransferTag);
+            write(index->value);
+            return;
+        }
+
+        code = SerializationReturnCode::DataCloneError;
+    }
+#endif
+
+    void dumpDOMException(JSObject* obj, SerializationReturnCode& code)
+    {
+        if (auto* exception = JSDOMException::toWrapped(m_lexicalGlobalObject->vm(), obj)) {
+            write(DOMExceptionTag);
+            write(exception->message());
+            write(exception->name());
+            return;
+        }
+
+        code = SerializationReturnCode::DataCloneError;
+    }
 
     bool dumpIfTerminal(JSValue value, SerializationReturnCode& code)
     {
@@ -1173,8 +1226,8 @@ private:
                 write(ImageDataTag);
                 write(data->width());
                 write(data->height());
-                write(data->data()->length());
-                write(data->data()->data(), data->data()->length());
+                write(data->data().length());
+                write(data->data().data(), data->data().length());
                 return true;
             }
             if (auto* regExp = jsDynamicCast<RegExpObject*>(vm, obj)) {
@@ -1253,6 +1306,9 @@ private:
                 ArrayBufferContentsArray dummySharedBuffers;
                 CloneSerializer rawKeySerializer(m_lexicalGlobalObject, dummyMessagePorts, dummyArrayBuffers, { },
 #if ENABLE(OFFSCREEN_CANVAS)
+                    { },
+#endif
+#if ENABLE(WEB_RTC)
                     { },
 #endif
 #if ENABLE(WEBASSEMBLY)
@@ -1336,6 +1392,17 @@ private:
                 return true;
             }
 #endif
+#if ENABLE(WEB_RTC)
+            if (obj->inherits(vm, JSRTCDataChannel::info())) {
+                dumpRTCDataChannel(obj, code);
+                return true;
+            }
+#endif
+            if (obj->inherits(vm, JSDOMException::info())) {
+                dumpDOMException(obj, code);
+                return true;
+            }
+
             return false;
         }
         // Any other types are expected to serialize as null.
@@ -1686,6 +1753,9 @@ private:
 #if ENABLE(OFFSCREEN_CANVAS)
     ObjectPool m_transferredOffscreenCanvases;
 #endif
+#if ENABLE(WEB_RTC)
+    ObjectPool m_transferredRTCDataChannels;
+#endif
     typedef HashMap<RefPtr<UniquedStringImpl>, uint32_t, IdentifierRepHash> StringConstantPool;
     StringConstantPool m_constantPool;
     Identifier m_emptyIdentifier;
@@ -1710,6 +1780,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
     Vector<WalkerState, 16> stateStack;
     WalkerState lexicalGlobalObject = StateUnknown;
     JSValue inValue = in;
+    auto scope = DECLARE_THROW_SCOPE(vm);
     while (1) {
         switch (lexicalGlobalObject) {
             arrayStartState:
@@ -1737,6 +1808,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
 
                     propertyStack.append(PropertyNameArray(vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
                     array->getOwnNonIndexPropertyNames(m_lexicalGlobalObject, propertyStack.last(), DontEnumPropertiesMode::Exclude);
+                    if (UNLIKELY(scope.exception()))
+                        return SerializationReturnCode::ExistingExceptionError;
                     if (propertyStack.last().size()) {
                         write(NonIndexPropertiesTag);
                         indexStack.append(0);
@@ -1749,6 +1822,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     break;
                 }
                 inValue = array->getDirectIndex(m_lexicalGlobalObject, index);
+                if (UNLIKELY(scope.exception()))
+                    return SerializationReturnCode::ExistingExceptionError;
                 if (!inValue) {
                     indexStack.last()++;
                     goto arrayStartVisitMember;
@@ -1787,6 +1862,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 indexStack.append(0);
                 propertyStack.append(PropertyNameArray(vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
                 inObject->methodTable(vm)->getOwnPropertyNames(inObject, m_lexicalGlobalObject, propertyStack.last(), DontEnumPropertiesMode::Exclude);
+                if (UNLIKELY(scope.exception()))
+                    return SerializationReturnCode::ExistingExceptionError;
             }
             objectStartVisitMember:
             FALLTHROUGH;
@@ -1802,7 +1879,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     break;
                 }
                 inValue = getProperty(vm, object, properties[index]);
-                if (shouldTerminate())
+                if (UNLIKELY(scope.exception()))
                     return SerializationReturnCode::ExistingExceptionError;
 
                 if (!inValue) {
@@ -1812,7 +1889,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 }
                 write(properties[index]);
 
-                if (shouldTerminate())
+                if (UNLIKELY(scope.exception()))
                     return SerializationReturnCode::ExistingExceptionError;
 
                 auto terminalCode = SerializationReturnCode::SuccessfullyCompleted;
@@ -1825,7 +1902,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 FALLTHROUGH;
             }
             case ObjectEndVisitMember: {
-                if (shouldTerminate())
+                if (UNLIKELY(scope.exception()))
                     return SerializationReturnCode::ExistingExceptionError;
 
                 indexStack.last()++;
@@ -1855,6 +1932,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     ASSERT(jsDynamicCast<JSMap*>(vm, object));
                     propertyStack.append(PropertyNameArray(vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
                     object->methodTable(vm)->getOwnPropertyNames(object, m_lexicalGlobalObject, propertyStack.last(), DontEnumPropertiesMode::Exclude);
+                    if (UNLIKELY(scope.exception()))
+                        return SerializationReturnCode::ExistingExceptionError;
                     write(NonMapPropertiesTag);
                     indexStack.append(0);
                     goto objectStartVisitMember;
@@ -1899,6 +1978,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     ASSERT(jsDynamicCast<JSSet*>(vm, object));
                     propertyStack.append(PropertyNameArray(vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
                     object->methodTable(vm)->getOwnPropertyNames(object, m_lexicalGlobalObject, propertyStack.last(), DontEnumPropertiesMode::Exclude);
+                    if (UNLIKELY(scope.exception()))
+                        return SerializationReturnCode::ExistingExceptionError;
                     write(NonSetPropertiesTag);
                     indexStack.append(0);
                     goto objectStartVisitMember;
@@ -1970,6 +2051,9 @@ public:
 #if ENABLE(OFFSCREEN_CANVAS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases
 #endif
+#if ENABLE(WEB_RTC)
+        , Vector<std::unique_ptr<DetachedRTCDataChannel>>&& detachedRTCDataChannels
+#endif
         , ArrayBufferContentsArray* arrayBufferContentsArray, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers
 #if ENABLE(WEBASSEMBLY)
         , WasmModuleArray* wasmModules
@@ -1982,6 +2066,9 @@ public:
         CloneDeserializer deserializer(lexicalGlobalObject, globalObject, messagePorts, arrayBufferContentsArray, buffer, blobURLs, blobFilePaths, sharedBuffers, WTFMove(backingStores)
 #if ENABLE(OFFSCREEN_CANVAS)
             , WTFMove(detachedOffscreenCanvases)
+#endif
+#if ENABLE(WEB_RTC)
+            , WTFMove(detachedRTCDataChannels)
 #endif
 #if ENABLE(WEBASSEMBLY)
             , wasmModules
@@ -2037,6 +2124,9 @@ private:
 #if ENABLE(OFFSCREEN_CANVAS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases = { }
 #endif
+#if ENABLE(WEB_RTC)
+        , Vector<std::unique_ptr<DetachedRTCDataChannel>>&& detachedRTCDataChannels = { }
+#endif
 #if ENABLE(WEBASSEMBLY)
         , WasmModuleArray* wasmModules = nullptr
         , WasmMemoryHandleArray* wasmMemoryHandles = nullptr
@@ -2058,6 +2148,10 @@ private:
         , m_detachedOffscreenCanvases(WTFMove(detachedOffscreenCanvases))
         , m_offscreenCanvases(m_detachedOffscreenCanvases.size())
 #endif
+#if ENABLE(WEB_RTC)
+        , m_detachedRTCDataChannels(WTFMove(detachedRTCDataChannels))
+        , m_rtcDataChannels(m_detachedRTCDataChannels.size())
+#endif
 #if ENABLE(WEBASSEMBLY)
         , m_wasmModules(wasmModules)
         , m_wasmMemoryHandles(wasmMemoryHandles)
@@ -2070,6 +2164,9 @@ private:
     CloneDeserializer(JSGlobalObject* lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers, Vector<Optional<ImageBitmapBacking>>&& backingStores
 #if ENABLE(OFFSCREEN_CANVAS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases
+#endif
+#if ENABLE(WEB_RTC)
+        , Vector<std::unique_ptr<DetachedRTCDataChannel>>&& detachedRTCDataChannels
 #endif
 #if ENABLE(WEBASSEMBLY)
         , WasmModuleArray* wasmModules
@@ -2094,6 +2191,10 @@ private:
 #if ENABLE(OFFSCREEN_CANVAS)
         , m_detachedOffscreenCanvases(WTFMove(detachedOffscreenCanvases))
         , m_offscreenCanvases(m_detachedOffscreenCanvases.size())
+#endif
+#if ENABLE(WEB_RTC)
+        , m_detachedRTCDataChannels(WTFMove(detachedRTCDataChannels))
+        , m_rtcDataChannels(m_detachedRTCDataChannels.size())
 #endif
 #if ENABLE(WEBASSEMBLY)
         , m_wasmModules(wasmModules)
@@ -2350,7 +2451,9 @@ private:
             return false;
         if (m_ptr + length > m_end)
             return false;
-        arrayBuffer = ArrayBuffer::create(m_ptr, length);
+        arrayBuffer = ArrayBuffer::tryCreate(m_ptr, length);
+        if (!arrayBuffer)
+            return false;
         m_ptr += length;
         return true;
     }
@@ -3005,6 +3108,23 @@ private:
         auto rtcCertificate = RTCCertificate::create(SecurityOrigin::createFromString(origin->string()), expires, WTFMove(fingerprints), certificate->takeString(), keyedMaterial->takeString());
         return toJSNewlyCreated(m_lexicalGlobalObject, jsCast<JSDOMGlobalObject*>(m_globalObject), WTFMove(rtcCertificate));
     }
+
+    JSValue readRTCDataChannel()
+    {
+        uint32_t index;
+        bool indexSuccessfullyRead = read(index);
+        if (!indexSuccessfullyRead || index >= m_detachedRTCDataChannels.size()) {
+            fail();
+            return JSValue();
+        }
+
+        if (!m_rtcDataChannels[index]) {
+            auto detachedChannel = WTFMove(m_detachedRTCDataChannels.at(index));
+            m_rtcDataChannels[index] = RTCDataChannel::create(*scriptExecutionContextFromExecState(m_lexicalGlobalObject), detachedChannel->identifier, WTFMove(detachedChannel->label), WTFMove(detachedChannel->options), detachedChannel->state);
+        }
+
+        return getJSValue(m_rtcDataChannels[index].get());
+    }
 #endif
 
     JSValue readImageBitmap()
@@ -3030,6 +3150,7 @@ private:
         IntSize imageDataSize = logicalSize;
         imageDataSize.scale(resolutionScale);
 
+        // FIXME: Creating this ImageData is not necessary. We should skip right to creating a PixelBuffer directly.
         auto imageData = ImageData::create(imageDataSize, array.releaseNonNull());
         if (!imageData) {
             fail();
@@ -3042,10 +3163,22 @@ private:
             return JSValue();
         }
 
-        buffer->putImageData(AlphaPremultiplication::Premultiplied, *imageData, { IntPoint::zero(), logicalSize });
+        buffer->putPixelBuffer(AlphaPremultiplication::Premultiplied, imageData->pixelBuffer(), { IntPoint::zero(), logicalSize });
 
         auto bitmap = ImageBitmap::create(ImageBitmapBacking(WTFMove(buffer), OptionSet<SerializationState>::fromRaw(serializationState)));
         return getJSValue(bitmap);
+    }
+
+    JSValue readDOMException()
+    {
+        CachedStringRef message;
+        if (!readStringData(message))
+            return JSValue();
+        CachedStringRef name;
+        if (!readStringData(name))
+            return JSValue();
+        auto exception = DOMException::create(message->string(), name->string());
+        return getJSValue(exception);
     }
 
     JSValue readBigInt()
@@ -3258,9 +3391,9 @@ private:
                 return JSValue();
             }
             if (length)
-                memcpy(result->data()->data(), m_ptr, length);
+                memcpy(result->data().data(), m_ptr, length);
             else
-                result->data()->zeroFill();
+                result->data().zeroFill();
             m_ptr += length;
             return getJSValue(result.get());
         }
@@ -3342,7 +3475,7 @@ private:
             JSValue result = JSC::JSWebAssemblyModule::createStub(m_lexicalGlobalObject->vm(), m_lexicalGlobalObject, m_globalObject->webAssemblyModuleStructure(), m_wasmModules->at(index));
             // Since we are cloning a JSWebAssemblyModule, it's impossible for that
             // module to not have been a valid module. Therefore, createStub should
-            // not trow.
+            // not throw.
             scope.releaseAssertNoException();
             m_gcBuffer.appendWithCrashOnOverflow(result);
             return result;
@@ -3364,7 +3497,7 @@ private:
             JSWebAssemblyMemory* result = JSC::JSWebAssemblyMemory::tryCreate(m_lexicalGlobalObject, vm, m_globalObject->webAssemblyMemoryStructure());
             // Since we are cloning a JSWebAssemblyMemory, it's impossible for that
             // module to not have been a valid module. Therefore, createStub should
-            // not trow.
+            // not throw.
             scope.releaseAssertNoException();
             Ref<Wasm::Memory> memory = Wasm::Memory::create(handle.releaseNonNull(),
                 [&vm] (Wasm::Memory::NotifyPressure) { vm.heap.collectAsync(CollectionScope::Full); },
@@ -3478,6 +3611,13 @@ private:
         case OffscreenCanvasTransferTag:
             return readOffscreenCanvas();
 #endif
+#if ENABLE(WEB_RTC)
+        case RTCDataChannelTransferTag:
+            return readRTCDataChannel();
+#endif
+        case DOMExceptionTag:
+            return readDOMException();
+
         default:
             m_ptr--; // Push the tag back
             return JSValue();
@@ -3511,6 +3651,10 @@ private:
 #if ENABLE(OFFSCREEN_CANVAS)
     Vector<std::unique_ptr<DetachedOffscreenCanvas>> m_detachedOffscreenCanvases;
     Vector<RefPtr<OffscreenCanvas>> m_offscreenCanvases;
+#endif
+#if ENABLE(WEB_RTC)
+    Vector<std::unique_ptr<DetachedRTCDataChannel>> m_detachedRTCDataChannels;
+    Vector<RefPtr<RTCDataChannel>> m_rtcDataChannels;
 #endif
 #if ENABLE(WEBASSEMBLY)
     WasmModuleArray* m_wasmModules;
@@ -3724,9 +3868,16 @@ SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer)
     m_memoryCost = computeMemoryCost();
 }
 
-SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, std::unique_ptr<ArrayBufferContentsArray> arrayBufferContentsArray)
+SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, std::unique_ptr<ArrayBufferContentsArray>&& arrayBufferContentsArray
+#if ENABLE(WEB_RTC)
+        , Vector<std::unique_ptr<DetachedRTCDataChannel>>&& detachedRTCDataChannels
+#endif
+        )
     : m_data(WTFMove(buffer))
     , m_arrayBufferContentsArray(WTFMove(arrayBufferContentsArray))
+#if ENABLE(WEB_RTC)
+    , m_detachedRTCDataChannels(WTFMove(detachedRTCDataChannels))
+#endif
 {
     m_memoryCost = computeMemoryCost();
 }
@@ -3734,6 +3885,9 @@ SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, std::uniq
 SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray> arrayBufferContentsArray, std::unique_ptr<ArrayBufferContentsArray> sharedBufferContentsArray, Vector<Optional<ImageBitmapBacking>>&& backingStores
 #if ENABLE(OFFSCREEN_CANVAS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases
+#endif
+#if ENABLE(WEB_RTC)
+        , Vector<std::unique_ptr<DetachedRTCDataChannel>>&& detachedRTCDataChannels
 #endif
 #if ENABLE(WEBASSEMBLY)
         , std::unique_ptr<WasmModuleArray> wasmModulesArray
@@ -3746,6 +3900,9 @@ SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, const Vec
     , m_backingStores(WTFMove(backingStores))
 #if ENABLE(OFFSCREEN_CANVAS)
     , m_detachedOffscreenCanvases(WTFMove(detachedOffscreenCanvases))
+#endif
+#if ENABLE(WEB_RTC)
+    , m_detachedRTCDataChannels(WTFMove(detachedRTCDataChannels))
 #endif
 #if ENABLE(WEBASSEMBLY)
     , m_wasmModulesArray(WTFMove(wasmModulesArray))
@@ -3783,6 +3940,12 @@ size_t SerializedScriptValue::computeMemoryCost() const
     for (auto& canvas : m_detachedOffscreenCanvases) {
         if (canvas)
             cost += canvas->memoryCost();
+    }
+#endif
+#if ENABLE(WEB_RTC)
+    for (auto& channel : m_detachedRTCDataChannels) {
+        if (channel)
+            cost += channel->memoryCost();
     }
 #endif
 
@@ -3879,6 +4042,9 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::create(JSGlobalObject& lexi
 #if ENABLE(OFFSCREEN_CANVAS)
     Vector<RefPtr<OffscreenCanvas>> dummyOffscreenCanvases;
 #endif
+#if ENABLE(WEB_RTC)
+    Vector<Ref<RTCDataChannel>> dummyRTCDataChannels;
+#endif
     Vector<RefPtr<JSC::ArrayBuffer>> dummyArrayBuffers;
 #if ENABLE(WEBASSEMBLY)
     WasmModuleArray dummyModules;
@@ -3888,6 +4054,9 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::create(JSGlobalObject& lexi
     auto code = CloneSerializer::serialize(&lexicalGlobalObject, value, dummyMessagePorts, dummyArrayBuffers, dummyImageBitmaps,
 #if ENABLE(OFFSCREEN_CANVAS)
         dummyOffscreenCanvases,
+#endif
+#if ENABLE(WEB_RTC)
+        dummyRTCDataChannels,
 #endif
 #if ENABLE(WEBASSEMBLY)
         dummyModules,
@@ -3934,6 +4103,21 @@ static bool canOffscreenCanvasesDetach(const Vector<RefPtr<OffscreenCanvas>>& of
 }
 #endif
 
+#if ENABLE(WEB_RTC)
+static bool canDetachRTCDataChannels(const Vector<Ref<RTCDataChannel>>& channels)
+{
+    HashSet<RTCDataChannel*> visited;
+    for (auto& channel : channels) {
+        if (!channel->canDetach())
+            return false;
+        // Check the return value of add, we should not encounter duplicates.
+        if (!visited.add(channel.ptr()))
+            return false;
+    }
+    return true;
+}
+#endif
+
 ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalObject& lexicalGlobalObject, JSValue value, Vector<JSC::Strong<JSC::JSObject>>&& transferList, Vector<RefPtr<MessagePort>>& messagePorts, SerializationContext context)
 {
     VM& vm = lexicalGlobalObject.vm();
@@ -3941,6 +4125,9 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
     Vector<RefPtr<ImageBitmap>> imageBitmaps;
 #if ENABLE(OFFSCREEN_CANVAS)
     Vector<RefPtr<OffscreenCanvas>> offscreenCanvases;
+#endif
+#if ENABLE(WEB_RTC)
+    Vector<Ref<RTCDataChannel>> dataChannels;
 #endif
     for (auto& transferable : transferList) {
         if (auto arrayBuffer = toPossiblySharedArrayBuffer(vm, transferable.get())) {
@@ -3975,6 +4162,13 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
         }
 #endif
 
+#if ENABLE(WEB_RTC)
+        if (auto channel = JSRTCDataChannel::toWrapped(vm, transferable.get())) {
+            dataChannels.append(*channel);
+            continue;
+        }
+#endif
+
         return Exception { DataCloneError };
     }
 
@@ -3983,6 +4177,10 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
 #if ENABLE(OFFSCREEN_CANVAS)
     if (!canOffscreenCanvasesDetach(offscreenCanvases))
         return Exception { InvalidStateError };
+#endif
+#if ENABLE(WEB_RTC)
+    if (!canDetachRTCDataChannels(dataChannels))
+        return Exception { DataCloneError };
 #endif
 
     Vector<uint8_t> buffer;
@@ -3995,6 +4193,9 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
     auto code = CloneSerializer::serialize(&lexicalGlobalObject, value, messagePorts, arrayBuffers, imageBitmaps,
 #if ENABLE(OFFSCREEN_CANVAS)
         offscreenCanvases,
+#endif
+#if ENABLE(WEB_RTC)
+        dataChannels,
 #endif
 #if ENABLE(WEBASSEMBLY)
         wasmModules,
@@ -4016,10 +4217,18 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
     for (auto offscreenCanvas : offscreenCanvases)
         detachedCanvases.append(offscreenCanvas->detach());
 #endif
+#if ENABLE(WEB_RTC)
+    Vector<std::unique_ptr<DetachedRTCDataChannel>> detachedRTCDataChannels;
+    for (auto& channel : dataChannels)
+        detachedRTCDataChannels.append(channel->detach());
+#endif
 
     return adoptRef(*new SerializedScriptValue(WTFMove(buffer), blobURLs, arrayBufferContentsArray.releaseReturnValue(), context == SerializationContext::WorkerPostMessage ? WTFMove(sharedBuffers) : nullptr, WTFMove(backingStores)
 #if ENABLE(OFFSCREEN_CANVAS)
                 , WTFMove(detachedCanvases)
+#endif
+#if ENABLE(WEB_RTC)
+                , WTFMove(detachedRTCDataChannels)
 #endif
 #if ENABLE(WEBASSEMBLY)
                 , makeUnique<WasmModuleArray>(wasmModules)
@@ -4078,6 +4287,9 @@ JSValue SerializedScriptValue::deserialize(JSGlobalObject& lexicalGlobalObject, 
 #if ENABLE(OFFSCREEN_CANVAS)
         , WTFMove(m_detachedOffscreenCanvases)
 #endif
+#if ENABLE(WEB_RTC)
+        , WTFMove(m_detachedRTCDataChannels)
+#endif
         , m_arrayBufferContentsArray.get(), m_data, blobURLs, blobFilePaths, m_sharedBufferContentsArray.get()
 #if ENABLE(WEBASSEMBLY)
         , m_wasmModulesArray.get()
@@ -4117,7 +4329,6 @@ uint32_t SerializedScriptValue::wireFormatVersion()
     return CurrentVersion;
 }
 
-#if ENABLE(INDEXED_DATABASE)
 Vector<String> SerializedScriptValue::blobURLsIsolatedCopy() const
 {
     Vector<String> result;
@@ -4153,25 +4364,19 @@ IDBValue SerializedScriptValue::writeBlobsToDiskForIndexedDBSynchronously()
 {
     ASSERT(!isMainThread());
 
+    BinarySemaphore semaphore;
     IDBValue value;
-    Lock lock;
-    Condition condition;
-    lock.lock();
-
-    RunLoop::main().dispatch([this, conditionPtr = &condition, valuePtr = &value] {
-        writeBlobsToDiskForIndexedDB([conditionPtr, valuePtr](IDBValue&& result) {
+    callOnMainThread([this, &semaphore, &value] {
+        writeBlobsToDiskForIndexedDB([&semaphore, &value](IDBValue&& result) {
             ASSERT(isMainThread());
-            valuePtr->setAsIsolatedCopy(result);
+            value.setAsIsolatedCopy(result);
 
-            conditionPtr->notifyAll();
+            semaphore.signal();
         });
     });
-
-    condition.wait(lock);
+    semaphore.wait();
 
     return value;
 }
-
-#endif // ENABLE(INDEXED_DATABASE)
 
 } // namespace WebCore

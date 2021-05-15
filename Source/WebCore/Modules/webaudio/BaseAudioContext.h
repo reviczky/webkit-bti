@@ -107,15 +107,21 @@ public:
     using ThreadSafeRefCounted::ref;
     using ThreadSafeRefCounted::deref;
 
+    // This is used for lifetime testing.
+    WEBCORE_EXPORT static bool isContextAlive(uint64_t contextID);
+    uint64_t contextID() const { return m_contextID; }
+
     Document* document() const;
     bool isInitialized() const;
     
     bool isOfflineContext() const { return m_isOfflineContext; }
     virtual bool isWebKitAudioContext() const { return false; }
 
-    AudioDestinationNode* destination() { return m_destinationNode.get(); }
-    size_t currentSampleFrame() const { return m_destinationNode ? m_destinationNode->currentSampleFrame() : 0; }
-    double currentTime() const { return m_destinationNode ? m_destinationNode->currentTime() : 0.; }
+    AudioDestinationNode& destination() { return m_destinationNode.get(); }
+    const AudioDestinationNode& destination() const { return m_destinationNode.get(); }
+
+    size_t currentSampleFrame() const { return m_destinationNode->currentSampleFrame(); }
+    double currentTime() const { return m_destinationNode->currentTime(); }
     float sampleRate() const;
     unsigned long activeSourceCount() const { return static_cast<unsigned long>(m_activeSourceCount); }
 
@@ -291,15 +297,14 @@ public:
     const HashMap<String, Vector<AudioParamDescriptor>>& parameterDescriptorMap() const { return m_parameterDescriptorMap; }
 
 protected:
-    explicit BaseAudioContext(Document&, const AudioContextOptions& = { });
-    BaseAudioContext(Document&, unsigned numberOfChannels, float sampleRate, RefPtr<AudioBuffer>&& renderTarget);
+    enum class IsLegacyWebKitAudioContext : bool { No, Yes };
+    explicit BaseAudioContext(Document&, IsLegacyWebKitAudioContext, const AudioContextOptions& = { });
+    BaseAudioContext(Document&, IsLegacyWebKitAudioContext, unsigned numberOfChannels, float sampleRate, RefPtr<AudioBuffer>&& renderTarget);
     
     void clearPendingActivity();
-    void makePendingActivity();
+    void setPendingActivity();
 
     void lockInternal(bool& mustReleaseLock);
-
-    AudioDestinationNode* destinationNode() const { return m_destinationNode.get(); }
 
     virtual void uninitialize();
 
@@ -311,17 +316,16 @@ protected:
     void setState(State);
 
     virtual void didFinishOfflineRendering(ExceptionOr<Ref<AudioBuffer>>&&) { }
-
-private:
     void clear();
 
+private:
     void scheduleNodeDeletion();
     void workletIsReady();
 
     // When source nodes begin playing, the BaseAudioContext keeps them alive inside m_referencedSourceNodes.
-    // When the nodes stop playing, they get added to m_finishedSourceNodes. After each rendering quantum,
-    // we call derefSourceNode() on every node in m_finishedSourceNodes since we no longer need to keep them
-    // alive.
+    // When the nodes stop playing, a flag gets set on the AudioNode accordingly. After each rendering quantum,
+    // we call derefFinishedSourceNodes() to remove those nodes from m_referencedSourceNodes since we no longer
+    // need to keep them alive.
     void refSourceNode(AudioNode&);
     void derefSourceNode(AudioNode&);
 
@@ -348,10 +352,9 @@ private:
     uint64_t m_nextAudioParameterIdentifier { 0 };
 #endif
 
-    Ref<AudioWorklet> m_worklet;
+    uint64_t m_contextID;
 
-    // Only accessed in the audio thread.
-    Vector<AudioNode*> m_finishedSourceNodes;
+    Ref<AudioWorklet> m_worklet;
 
     // Either accessed when the graph lock is held, or on the main thread when the audio thread has finished.
     Vector<AudioConnectionRefPtr<AudioNode>> m_referencedSourceNodes;
@@ -385,8 +388,8 @@ private:
     Vector<Vector<DOMPromiseDeferred<void>>> m_stateReactions;
 
     RefPtr<AudioBuffer> m_renderTarget;
-    RefPtr<AudioDestinationNode> m_destinationNode;
-    RefPtr<AudioListener> m_listener;
+    UniqueRef<AudioDestinationNode> m_destinationNode;
+    Ref<AudioListener> m_listener;
 
     unsigned m_connectionCount { 0 };
 
@@ -412,6 +415,7 @@ private:
     AudioIOPosition m_outputPosition;
 
     HashMap<String, Vector<AudioParamDescriptor>> m_parameterDescriptorMap;
+    bool m_hasFinishedAudioSourceNodes { false };
 
     // These are cached per audio context for performance reasons. They cannot be
     // static because they rely on the sample rate.

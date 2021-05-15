@@ -31,6 +31,7 @@
 #include "CompilerTimingScope.h"
 #include "Completion.h"
 #include "ConfigFile.h"
+#include "DeferTermination.h"
 #include "DeferredWorkTimer.h"
 #include "Disassembler.h"
 #include "Exception.h"
@@ -68,6 +69,7 @@
 #include "TestRunnerUtils.h"
 #include "TypedArrayInlines.h"
 #include "VMInspector.h"
+#include "VMTrapsInlines.h"
 #include "WasmCapabilities.h"
 #include "WasmFaultSignalHandler.h"
 #include "WasmMemory.h"
@@ -99,6 +101,7 @@
 
 #if PLATFORM(COCOA)
 #include <crt_externs.h>
+#include <wtf/OSObjectPtr.h>
 #endif
 
 #if PLATFORM(GTK)
@@ -351,6 +354,8 @@ static JSC_DECLARE_HOST_FUNCTION(functionIsRope);
 static JSC_DECLARE_HOST_FUNCTION(functionCallerSourceOrigin);
 static JSC_DECLARE_HOST_FUNCTION(functionDollarCreateRealm);
 static JSC_DECLARE_HOST_FUNCTION(functionDollarEvalScript);
+static JSC_DECLARE_HOST_FUNCTION(functionDollarGC);
+static JSC_DECLARE_HOST_FUNCTION(functionDollarClearKeptObjects);
 static JSC_DECLARE_HOST_FUNCTION(functionDollarAgentStart);
 static JSC_DECLARE_HOST_FUNCTION(functionDollarAgentReceiveBroadcast);
 static JSC_DECLARE_HOST_FUNCTION(functionDollarAgentReport);
@@ -411,9 +416,7 @@ public:
     }
 
     enum CommandLineForWorkersTag { CommandLineForWorkers };
-    CommandLine(CommandLineForWorkersTag)
-    {
-    }
+    explicit CommandLine(CommandLineForWorkersTag);
 
     Vector<Script> m_scripts;
     Vector<String> m_arguments;
@@ -428,12 +431,14 @@ public:
     bool m_treatWatchdogExceptionAsSuccess { false };
     bool m_alwaysDumpUncaughtException { false };
     bool m_dumpMemoryFootprint { false };
+    bool m_dumpLinkBufferStats { false };
     bool m_dumpSamplingProfilerData { false };
     bool m_enableRemoteDebugging { false };
     bool m_canBlockIsFalse { false };
 
     void parseArguments(int, char**);
 };
+static LazyNeverDestroyed<CommandLine> mainCommandLine;
 
 static const char interactivePrompt[] = ">>> ";
 
@@ -628,8 +633,10 @@ private:
         addFunction(vm, dollar, "createRealm", functionDollarCreateRealm, 0);
         addFunction(vm, dollar, "detachArrayBuffer", functionTransferArrayBuffer, 1);
         addFunction(vm, dollar, "evalScript", functionDollarEvalScript, 1);
+        addFunction(vm, dollar, "gc", functionDollarGC, 0);
+        addFunction(vm, dollar, "clearKeptObjects", functionDollarClearKeptObjects, 0);
         
-        dollar->putDirect(vm, Identifier::fromString(vm, "global"), this, DontEnum);
+        dollar->putDirect(vm, Identifier::fromString(vm, "global"), globalThis(), DontEnum);
         dollar->putDirectCustomAccessor(vm, Identifier::fromString(vm, "IsHTMLDDA"),
             CustomGetterSetter::create(vm, accessorMakeMasquerader, nullptr),
             static_cast<unsigned>(PropertyAttribute::CustomValue)
@@ -743,7 +750,7 @@ GlobalObject::GlobalObject(VM& vm, Structure* structure)
 {
 }
 
-JSC_DEFINE_CUSTOM_SETTER(testCustomAccessorSetter, (JSGlobalObject* lexicalGlobalObject, EncodedJSValue thisValue, EncodedJSValue encodedValue))
+JSC_DEFINE_CUSTOM_SETTER(testCustomAccessorSetter, (JSGlobalObject* lexicalGlobalObject, EncodedJSValue thisValue, EncodedJSValue encodedValue, PropertyName))
 {
     VM& vm = lexicalGlobalObject->vm();
     RELEASE_ASSERT(JSValue::decode(thisValue).isCell());
@@ -754,7 +761,7 @@ JSC_DEFINE_CUSTOM_SETTER(testCustomAccessorSetter, (JSGlobalObject* lexicalGloba
     return GlobalObject::testCustomSetterImpl(lexicalGlobalObject, thisObject, encodedValue, "_testCustomAccessorSetter");
 }
 
-JSC_DEFINE_CUSTOM_SETTER(testCustomValueSetter, (JSGlobalObject* lexicalGlobalObject, EncodedJSValue thisValue, EncodedJSValue encodedValue))
+JSC_DEFINE_CUSTOM_SETTER(testCustomValueSetter, (JSGlobalObject* lexicalGlobalObject, EncodedJSValue thisValue, EncodedJSValue encodedValue, PropertyName))
 {
     VM& vm = lexicalGlobalObject->vm();
     RELEASE_ASSERT(JSValue::decode(thisValue).isCell());
@@ -1908,16 +1915,31 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarEvalScript, (JSGlobalObject* globalObject
     
     JSValue global = callFrame->thisValue().get(globalObject, Identifier::fromString(vm, "global"));
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    while (global.inherits<JSProxy>(vm))
+        global = jsCast<JSProxy*>(global)->target();
     GlobalObject* realm = jsDynamicCast<GlobalObject*>(vm, global);
-    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     if (!realm)
         return JSValue::encode(throwException(globalObject, scope, createError(globalObject, "Expected global to point to a global object"_s)));
-    
+
     NakedPtr<Exception> evaluationException;
     JSValue result = evaluate(realm, jscSource(sourceCode, callFrame->callerSourceOrigin(vm)), JSValue(), evaluationException);
     if (evaluationException)
         throwException(globalObject, scope, evaluationException);
     return JSValue::encode(result);
+}
+
+JSC_DEFINE_HOST_FUNCTION(functionDollarGC, (JSGlobalObject* globalObject, CallFrame*))
+{
+    VM& vm = globalObject->vm();
+    vm.heap.collectNow(Sync, CollectionScope::Full);
+    return JSValue::encode(jsUndefined());
+}
+
+JSC_DEFINE_HOST_FUNCTION(functionDollarClearKeptObjects, (JSGlobalObject* globalObject, CallFrame*))
+{
+    VM& vm = globalObject->vm();
+    vm.finalizeSynchronousJSExecution();
+    return JSValue::encode(jsUndefined());
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionDollarAgentStart, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -2503,6 +2525,7 @@ JSC_DEFINE_HOST_FUNCTION(functionGenerateHeapSnapshot, (JSGlobalObject* globalOb
 {
     VM& vm = globalObject->vm();
     JSLockHolder lock(vm);
+    DeferTermination deferScope(vm);
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     HeapSnapshotBuilder snapshotBuilder(vm.ensureHeapProfiler());
@@ -2518,6 +2541,7 @@ JSC_DEFINE_HOST_FUNCTION(functionGenerateHeapSnapshotForGCDebugging, (JSGlobalOb
 {
     VM& vm = globalObject->vm();
     JSLockHolder lock(vm);
+    DeferTermination deferScope(vm);
     auto scope = DECLARE_THROW_SCOPE(vm);
     String jsonString;
     {
@@ -2561,6 +2585,7 @@ JSC_DEFINE_HOST_FUNCTION(functionStartSamplingProfiler, (JSGlobalObject* globalO
 JSC_DEFINE_HOST_FUNCTION(functionSamplingProfilerStackTraces, (JSGlobalObject* globalObject, CallFrame*))
 {
     VM& vm = globalObject->vm();
+    DeferTermination deferScope(vm);
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (!vm.samplingProfiler())
@@ -2805,6 +2830,9 @@ int main(int argc, char** argv)
     // yet, since that would do somethings that we'd like to defer until after we
     // have a chance to parse options.
     WTF::initialize();
+#if PLATFORM(COCOA)
+    WTF::disableForwardingVPrintfStdErrToOSLog();
+#endif
 
     // We can't use destructors in the following code because it uses Windows
     // Structured Exception Handling
@@ -2918,7 +2946,21 @@ static void checkException(GlobalObject* globalObject, bool isLastFile, bool has
 {
     VM& vm = globalObject->vm();
 
-    if (options.m_treatWatchdogExceptionAsSuccess && value.inherits<TerminatedExecutionError>(vm)) {
+    auto isTerminationException = [&] (JSValue value) {
+        if (!value.isCell())
+            return false;
+
+        JSCell* valueCell = value.asCell();
+        vm.ensureTerminationException();
+        Exception* terminationException = vm.terminationException();
+        Exception* exception = jsDynamicCast<Exception*>(vm, valueCell);
+        if (exception)
+            return vm.isTerminationException(exception);
+        JSCell* terminationError = terminationException->value().asCell();
+        return valueCell == terminationError;
+    };
+
+    if (options.m_treatWatchdogExceptionAsSuccess && isTerminationException(value)) {
         ASSERT(hasException);
         return;
     }
@@ -2967,7 +3009,7 @@ static void runWithOptions(GlobalObject* globalObject, CommandLine& options, boo
                 // If the passed file isn't an absolute path append "./" so the module loader doesn't think this is a bare-name specifier.
                 fileName = fileName.startsWith('/') ? fileName : makeString("./", fileName);
                 promise = loadAndEvaluateModule(globalObject, fileName, jsUndefined(), jsUndefined());
-                scope.releaseAssertNoException();
+                RETURN_IF_EXCEPTION(scope, void());
             } else {
                 if (!fetchScriptFromLocalFileSystem(fileName, scriptBuffer)) {
                     success = false; // fail early so we can catch missing files
@@ -3001,14 +3043,17 @@ static void runWithOptions(GlobalObject* globalObject, CommandLine& options, boo
             });
 
             promise->then(globalObject, fulfillHandler, rejectHandler);
-            scope.releaseAssertNoException();
+            scope.releaseAssertNoExceptionExceptTermination();
             vm.drainMicrotasks();
         } else {
             NakedPtr<Exception> evaluationException;
             JSValue returnValue = evaluate(globalObject, jscSource(scriptBuffer, sourceOrigin , fileName), JSValue(), evaluationException);
             scope.assertNoException();
-            if (evaluationException)
+            if (evaluationException) {
+                if (vm.isTerminationException(evaluationException.get()))
+                    vm.setExecutionForbidden();
                 returnValue = evaluationException->value();
+            }
             checkException(globalObject, isLastFile, evaluationException, returnValue, options, success);
         }
 
@@ -3258,7 +3303,7 @@ void CommandLine::parseArguments(int argc, char** argv)
         }
         if (!strcmp(arg, "--sample")) {
             JSC::Options::useSamplingProfiler() = true;
-            JSC::Options::collectSamplingProfilerDataForJSCShell() = true;
+            JSC::Options::collectExtraSamplingProfilerData() = true;
             m_dumpSamplingProfilerData = true;
             continue;
         }
@@ -3316,6 +3361,11 @@ void CommandLine::parseArguments(int argc, char** argv)
             continue;
         }
 
+        if (!strcmp(arg, "--dumpLinkBufferStats")) {
+            m_dumpLinkBufferStats = true;
+            continue;
+        }
+
         static const unsigned exceptionStrLength = strlen("--exception=");
         if (!strncmp(arg, "--exception=", exceptionStrLength)) {
             m_uncaughtExceptionName = String(arg + exceptionStrLength);
@@ -3360,6 +3410,11 @@ void CommandLine::parseArguments(int argc, char** argv)
     JSC::Options::ensureOptionsAreCoherent();
     if (needToExit)
         jscExit(EXIT_SUCCESS);
+}
+
+CommandLine::CommandLine(CommandLineForWorkersTag)
+    : m_treatWatchdogExceptionAsSuccess(mainCommandLine->m_treatWatchdogExceptionAsSuccess)
+{
 }
 
 template<typename Func>
@@ -3483,12 +3538,12 @@ int jscmain(int argc, char** argv)
 
     // Note that the options parsing can affect VM creation, and thus
     // comes first.
-    CommandLine options(argc, argv);
+    mainCommandLine.construct(argc, argv);
 
     {
         Options::AllowUnfinalizedAccessScope scope;
         processConfigFile(Options::configFile(), "jsc");
-        if (options.m_dump)
+        if (mainCommandLine->m_dump)
             Options::dumpGeneratedBytecodes() = true;
     }
 
@@ -3518,9 +3573,8 @@ int jscmain(int argc, char** argv)
 #if PLATFORM(COCOA)
     auto& memoryPressureHandler = MemoryPressureHandler::singleton();
     {
-        dispatch_queue_t queue = dispatch_queue_create("jsc shell memory pressure handler", DISPATCH_QUEUE_SERIAL);
-        memoryPressureHandler.setDispatchQueue(queue);
-        dispatch_release(queue);
+        auto queue = adoptOSObject(dispatch_queue_create("jsc shell memory pressure handler", DISPATCH_QUEUE_SERIAL));
+        memoryPressureHandler.setDispatchQueue(WTFMove(queue));
     }
     Box<Critical> memoryPressureCriticalState = Box<Critical>::create(Critical::No);
     Box<Synchronous> memoryPressureSynchronousState = Box<Synchronous>::create(Synchronous::No);
@@ -3555,22 +3609,27 @@ int jscmain(int argc, char** argv)
 #endif
 
     int result = runJSC(
-        options, false,
+        mainCommandLine.get(), false,
         [&] (VM& vm, GlobalObject* globalObject, bool& success) {
             UNUSED_PARAM(vm);
 #if PLATFORM(COCOA)
             vm.setOnEachMicrotaskTick(WTFMove(onEachMicrotaskTick));
 #endif
-            runWithOptions(globalObject, options, success);
+            runWithOptions(globalObject, mainCommandLine.get(), success);
         });
 
     printSuperSamplerState();
 
-    if (options.m_dumpMemoryFootprint) {
+    if (mainCommandLine->m_dumpMemoryFootprint) {
         MemoryFootprint footprint = MemoryFootprint::now();
 
         printf("Memory Footprint:\n    Current Footprint: %" PRIu64 "\n    Peak Footprint: %" PRIu64 "\n", footprint.current, footprint.peak);
     }
+
+#if ENABLE(ASSEMBLER)
+    if (mainCommandLine->m_dumpLinkBufferStats)
+        LinkBuffer::dumpProfileStatistics();
+#endif
 
     return result;
 }

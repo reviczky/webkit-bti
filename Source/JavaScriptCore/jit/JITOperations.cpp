@@ -67,6 +67,7 @@
 #include "ThunkGenerators.h"
 #include "TypeProfilerLog.h"
 #include "VMInlines.h"
+#include "VMTrapsInlines.h"
 
 IGNORE_WARNINGS_BEGIN("frame-address")
 
@@ -89,12 +90,6 @@ extern "C" void * _ReturnAddress(void);
 // FIXME (see rdar://72897291): Work around a Clang bug where __builtin_return_address()
 // sometimes gives us a signed pointer, and sometimes does not.
 #define OUR_RETURN_ADDRESS removeCodePtrTag(__builtin_return_address(0))
-#endif
-
-#if ENABLE(OPCODE_SAMPLING)
-#define CTI_SAMPLER vm.interpreter->sampler()
-#else
-#define CTI_SAMPLER 0
 #endif
 
 
@@ -1765,8 +1760,8 @@ JSC_DEFINE_JIT_OPERATION(operationHandleTraps, UnusedPtr, (JSGlobalObject* globa
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    ASSERT(vm.needTrapHandling());
-    vm.handleTraps(globalObject, callFrame);
+    ASSERT(vm.traps().needHandling(VMTraps::AsyncEvents));
+    vm.traps().handleTraps(VMTraps::AsyncEvents);
     return nullptr;
 }
 
@@ -1841,6 +1836,15 @@ JSC_DEFINE_JIT_OPERATION(operationOptimize, SlowPathReturnType, (VM* vmPointer, 
         return encodeResult(nullptr, nullptr);
     }
     
+    if (UNLIKELY(vm.terminationInProgress())) {
+        // If termination of the current stack of execution is in progress,
+        // then we need to hold off on optimized compiles so that termination
+        // checks will be called, and we can unwind out of the current stack.
+        CODEBLOCK_LOG_EVENT(codeBlock, "delayOptimizeToDFG", ("Terminating current execution"));
+        updateAllPredictionsAndOptimizeAfterWarmUp(codeBlock);
+        return encodeResult(nullptr, nullptr);
+    }
+
     Debugger* debugger = codeBlock->globalObject()->debugger();
     if (UNLIKELY(debugger && (debugger->isStepping() || codeBlock->baselineAlternative()->hasDebuggerRequests()))) {
         CODEBLOCK_LOG_EVENT(codeBlock, "delayOptimizeToDFG", ("debugger is stepping or has requests"));
@@ -2395,7 +2399,8 @@ JSC_DEFINE_JIT_OPERATION(operationGetPrivateNameOptimize, EncodedJSValue, (JSGlo
 
     if (baseValue.isObject()) {
         const Identifier fieldName = fieldNameValue.toPropertyKey(globalObject);
-        EXCEPTION_ASSERT(!scope.exception());
+        EXCEPTION_ASSERT(!scope.exception() || vm.hasPendingTerminationException());
+        RETURN_IF_EXCEPTION(scope, encodedJSValue());
         ASSERT(fieldName.isSymbol());
 
         JSObject* base = jsCast<JSObject*>(baseValue.asCell());
@@ -2780,7 +2785,7 @@ JSC_DEFINE_JIT_OPERATION(operationSetupVarargsFrame, CallFrame*, (JSGlobalObject
     return newCallFrame;
 }
 
-JSC_DEFINE_JIT_OPERATION(operationSwitchCharWithUnknownKeyType, char*, (JSGlobalObject* globalObject, EncodedJSValue encodedKey, size_t tableIndex))
+JSC_DEFINE_JIT_OPERATION(operationSwitchCharWithUnknownKeyType, char*, (JSGlobalObject* globalObject, EncodedJSValue encodedKey, size_t tableIndex, int32_t min))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -2790,15 +2795,16 @@ JSC_DEFINE_JIT_OPERATION(operationSwitchCharWithUnknownKeyType, char*, (JSGlobal
     JSValue key = JSValue::decode(encodedKey);
     CodeBlock* codeBlock = callFrame->codeBlock();
 
-    SimpleJumpTable& jumpTable = codeBlock->switchJumpTable(tableIndex);
-    void* result = jumpTable.ctiDefault.executableAddress();
+    const SimpleJumpTable& linkedTable = codeBlock->switchJumpTable(tableIndex);
+    ASSERT(codeBlock->unlinkedSwitchJumpTable(tableIndex).m_min == min);
+    void* result = linkedTable.m_ctiDefault.executableAddress();
 
     if (key.isString()) {
         JSString* string = asString(key);
         if (string->length() == 1) {
             String value = string->value(globalObject);
             RETURN_IF_EXCEPTION(throwScope, nullptr);
-            result = jumpTable.ctiForValue(value[0]).executableAddress();
+            result = linkedTable.ctiForValue(min, value[0]).executableAddress();
         }
     }
 
@@ -2806,7 +2812,7 @@ JSC_DEFINE_JIT_OPERATION(operationSwitchCharWithUnknownKeyType, char*, (JSGlobal
     return reinterpret_cast<char*>(result);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationSwitchImmWithUnknownKeyType, char*, (VM* vmPointer, EncodedJSValue encodedKey, size_t tableIndex))
+JSC_DEFINE_JIT_OPERATION(operationSwitchImmWithUnknownKeyType, char*, (VM* vmPointer, EncodedJSValue encodedKey, size_t tableIndex, int32_t min))
 {
     VM& vm = *vmPointer;
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -2814,14 +2820,15 @@ JSC_DEFINE_JIT_OPERATION(operationSwitchImmWithUnknownKeyType, char*, (VM* vmPoi
     JSValue key = JSValue::decode(encodedKey);
     CodeBlock* codeBlock = callFrame->codeBlock();
 
-    SimpleJumpTable& jumpTable = codeBlock->switchJumpTable(tableIndex);
+    const SimpleJumpTable& linkedTable = codeBlock->switchJumpTable(tableIndex);
+    ASSERT(codeBlock->unlinkedSwitchJumpTable(tableIndex).m_min == min);
     void* result;
     if (key.isInt32())
-        result = jumpTable.ctiForValue(key.asInt32()).executableAddress();
+        result = linkedTable.ctiForValue(min, key.asInt32()).executableAddress();
     else if (key.isDouble() && key.asDouble() == static_cast<int32_t>(key.asDouble()))
-        result = jumpTable.ctiForValue(static_cast<int32_t>(key.asDouble())).executableAddress();
+        result = linkedTable.ctiForValue(min, static_cast<int32_t>(key.asDouble())).executableAddress();
     else
-        result = jumpTable.ctiDefault.executableAddress();
+        result = linkedTable.m_ctiDefault.executableAddress();
     assertIsTaggedWith<JSSwitchPtrTag>(result);
     return reinterpret_cast<char*>(result);
 }
@@ -2836,16 +2843,17 @@ JSC_DEFINE_JIT_OPERATION(operationSwitchStringWithUnknownKeyType, char*, (JSGlob
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
     void* result;
-    StringJumpTable& jumpTable = codeBlock->stringSwitchJumpTable(tableIndex);
+    const StringJumpTable& linkedTable = codeBlock->stringSwitchJumpTable(tableIndex);
 
     if (key.isString()) {
         StringImpl* value = asString(key)->value(globalObject).impl();
 
         RETURN_IF_EXCEPTION(throwScope, nullptr);
 
-        result = jumpTable.ctiForValue(value).executableAddress();
+        const UnlinkedStringJumpTable& unlinkedTable = codeBlock->unlinkedStringSwitchJumpTable(tableIndex);
+        result = linkedTable.ctiForValue(unlinkedTable, value).executableAddress();
     } else
-        result = jumpTable.ctiDefault.executableAddress();
+        result = linkedTable.ctiDefault().executableAddress();
 
     assertIsTaggedWith<JSSwitchPtrTag>(result);
     return reinterpret_cast<char*>(result);
@@ -3511,7 +3519,7 @@ JSC_DEFINE_JIT_OPERATION(operationProcessShadowChickenLog, void, (VM* vmPointer)
     vm.shadowChicken()->update(vm, callFrame);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationCheckIfExceptionIsUncatchableAndNotifyProfiler, int32_t, (VM* vmPointer))
+JSC_DEFINE_JIT_OPERATION(operationRetrieveAndClearExceptionIfCatchable, JSCell*, (VM* vmPointer))
 {
     VM& vm = *vmPointer;
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
@@ -3519,11 +3527,17 @@ JSC_DEFINE_JIT_OPERATION(operationCheckIfExceptionIsUncatchableAndNotifyProfiler
     auto scope = DECLARE_THROW_SCOPE(vm);
     RELEASE_ASSERT(!!scope.exception());
 
-    if (isTerminatedExecutionException(vm, scope.exception())) {
+    Exception* exception = scope.exception();
+    if (UNLIKELY(vm.isTerminationException(exception))) {
         genericUnwind(vm, callFrame);
-        return 1;
+        return nullptr;
     }
-    return 0;
+
+    // We want to clear the exception here rather than in the catch prologue
+    // JIT code because clearing it also entails clearing a bit in an Atomic
+    // bit field in VMTraps.
+    scope.clearException();
+    return exception;
 }
 
 } // namespace JSC

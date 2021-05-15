@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include <pal/LogMacros.h>
 #include <wtf/Assertions.h>
 #include <wtf/Forward.h>
 
@@ -50,6 +49,7 @@ namespace WebCore {
     M(ContentFiltering) \
     M(ContentObservation) \
     M(DatabaseTracker) \
+    M(DisplayLink) \
     M(DisplayLists) \
     M(DOMTimers) \
     M(Editing) \

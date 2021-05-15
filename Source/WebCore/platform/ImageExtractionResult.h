@@ -27,13 +27,24 @@
 
 #if ENABLE(IMAGE_EXTRACTION)
 
+#if ENABLE(DATA_DETECTION)
+OBJC_CLASS DDScannerResult;
+#endif
+
 #include "FloatQuad.h"
 #include <wtf/Optional.h>
+#include <wtf/RetainPtr.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
 struct ImageExtractionTextData {
+    ImageExtractionTextData(const String& theText, FloatQuad&& quad)
+        : text(theText)
+        , normalizedQuad(WTFMove(quad))
+    {
+    }
+
     String text;
     FloatQuad normalizedQuad;
 
@@ -62,10 +73,76 @@ template<class Decoder> Optional<ImageExtractionTextData> ImageExtractionTextDat
     return {{ WTFMove(*text), WTFMove(*normalizedQuad) }};
 }
 
-struct ImageExtractionResult {
-    Vector<ImageExtractionTextData> textData;
+struct ImageExtractionLineData {
+    ImageExtractionLineData(FloatQuad&& quad, Vector<ImageExtractionTextData>&& theChildren)
+        : normalizedQuad(WTFMove(quad))
+        , children(WTFMove(theChildren))
+    {
+    }
 
-    bool isEmpty() const { return textData.isEmpty(); }
+    FloatQuad normalizedQuad;
+    Vector<ImageExtractionTextData> children;
+
+    template<class Encoder> void encode(Encoder&) const;
+    template<class Decoder> static Optional<ImageExtractionLineData> decode(Decoder&);
+};
+
+#if ENABLE(DATA_DETECTION)
+
+struct ImageExtractionDataDetectorInfo {
+    ImageExtractionDataDetectorInfo() = default;
+    ImageExtractionDataDetectorInfo(DDScannerResult *scannerResult, Vector<FloatQuad>&& quads)
+        : result(scannerResult)
+        , normalizedQuads(WTFMove(quads))
+    {
+    }
+
+    RetainPtr<DDScannerResult> result;
+    Vector<FloatQuad> normalizedQuads;
+};
+
+#endif // ENABLE(DATA_DETECTION)
+
+template<class Encoder> void ImageExtractionLineData::encode(Encoder& encoder) const
+{
+    encoder << normalizedQuad;
+    encoder << children;
+}
+
+template<class Decoder> Optional<ImageExtractionLineData> ImageExtractionLineData::decode(Decoder& decoder)
+{
+    Optional<FloatQuad> normalizedQuad;
+    decoder >> normalizedQuad;
+    if (!normalizedQuad)
+        return WTF::nullopt;
+
+    Optional<Vector<ImageExtractionTextData>> children;
+    decoder >> children;
+    if (!children)
+        return WTF::nullopt;
+
+    return {{ WTFMove(*normalizedQuad), WTFMove(*children) }};
+}
+
+struct ImageExtractionResult {
+    Vector<ImageExtractionLineData> lines;
+
+#if ENABLE(DATA_DETECTION)
+    Vector<ImageExtractionDataDetectorInfo> dataDetectors;
+#endif
+
+    bool isEmpty() const
+    {
+        if (!lines.isEmpty())
+            return false;
+
+#if ENABLE(DATA_DETECTION)
+        if (!dataDetectors.isEmpty())
+            return false;
+#endif
+
+        return true;
+    }
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static Optional<ImageExtractionResult> decode(Decoder&);
@@ -73,17 +150,32 @@ struct ImageExtractionResult {
 
 template<class Encoder> void ImageExtractionResult::encode(Encoder& encoder) const
 {
-    encoder << textData;
+    encoder << lines;
+#if ENABLE(DATA_DETECTION)
+    encoder << dataDetectors;
+#endif
 }
 
 template<class Decoder> Optional<ImageExtractionResult> ImageExtractionResult::decode(Decoder& decoder)
 {
-    Optional<Vector<ImageExtractionTextData>> textData;
-    decoder >> textData;
-    if (!textData)
+    Optional<Vector<ImageExtractionLineData>> lines;
+    decoder >> lines;
+    if (!lines)
         return WTF::nullopt;
 
-    return {{ WTFMove(*textData) }};
+#if ENABLE(DATA_DETECTION)
+    Optional<Vector<ImageExtractionDataDetectorInfo>> dataDetectors;
+    decoder >> dataDetectors;
+    if (!dataDetectors)
+        return WTF::nullopt;
+#endif
+
+    return {{
+        WTFMove(*lines),
+#if ENABLE(DATA_DETECTION)
+        WTFMove(*dataDetectors),
+#endif
+    }};
 }
 
 } // namespace WebCore

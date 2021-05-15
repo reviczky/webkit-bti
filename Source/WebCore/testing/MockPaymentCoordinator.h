@@ -36,7 +36,12 @@
 #include "MockPaymentError.h"
 #include "PaymentCoordinatorClient.h"
 #include <wtf/HashSet.h>
+#include <wtf/Optional.h>
 #include <wtf/text/StringHash.h>
+
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/MockPaymentCoordinatorAdditions.h>
+#endif
 
 namespace WebCore {
 
@@ -100,6 +105,8 @@ private:
     void getSetupFeatures(const ApplePaySetupConfiguration&, const URL&, CompletionHandler<void(Vector<Ref<ApplePaySetupFeature>>&&)>&&) final;
     void beginApplePaySetup(const ApplePaySetupConfiguration&, const URL&, Vector<RefPtr<ApplePaySetupFeature>>&&, CompletionHandler<void(bool)>&&) final;
 
+    void dispatchIfShowing(Function<void()>&&);
+
     Page& m_page;
     bool m_canMakePayments { true };
     bool m_canMakePaymentsWithActiveCard { true };
@@ -117,6 +124,10 @@ private:
 #endif
     ApplePaySetupConfiguration m_setupConfiguration;
     Vector<Ref<ApplePaySetupFeature>> m_setupFeatures;
+
+#if defined(MockPaymentCoordinatorAdditions_members)
+    MockPaymentCoordinatorAdditions_members
+#endif
 };
 
 } // namespace WebCore

@@ -474,7 +474,18 @@ ALWAYS_INLINE bool matchesFocusPseudoClass(const Element& element)
 
 ALWAYS_INLINE bool matchesFocusVisiblePseudoClass(const Element& element)
 {
-    return InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClassFocusVisible);
+    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClassFocusVisible))
+        return true;
+
+    return element.hasFocusVisible() && isFrameFocused(element);
+}
+
+ALWAYS_INLINE bool matchesFocusWithinPseudoClass(const Element& element)
+{
+    if (InspectorInstrumentation::forcePseudoState(element, CSSSelector::PseudoClassFocusWithin))
+        return true;
+
+    return element.hasFocusWithin() && isFrameFocused(element);
 }
 
 } // namespace WebCore

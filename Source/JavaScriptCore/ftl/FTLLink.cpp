@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,15 +45,20 @@ void link(State& state)
     CodeBlock* codeBlock = graph.m_codeBlock;
     VM& vm = graph.m_vm;
     
-    // B3 will create its own jump tables as needed.
-    codeBlock->clearSwitchJumpTables();
-
     state.jitCode->common.requiredRegisterCountForExit = graph.requiredRegisterCountForExit();
     
     if (!graph.m_plan.inlineCallFrames()->isEmpty())
         state.jitCode->common.inlineCallFrames = graph.m_plan.inlineCallFrames();
 
     graph.registerFrozenValues();
+
+#if ASSERT_ENABLED
+    {
+        ConcurrentJSLocker locker(codeBlock->m_lock);
+        ASSERT(codeBlock->ensureJITData(locker).m_stringSwitchJumpTables.isEmpty());
+        ASSERT(codeBlock->ensureJITData(locker).m_switchJumpTables.isEmpty());
+    }
+#endif
 
     // Create the entrypoint. Note that we use this entrypoint totally differently
     // depending on whether we're doing OSR entry or not.
@@ -140,6 +145,9 @@ void link(State& state)
             jit.storePtr(GPRInfo::callFrameRegister, &vm.topCallFrame);
             CCallHelpers::Call callArityCheck = jit.call(OperationPtrTag);
 
+#if ENABLE(EXTRA_CTI_THUNKS)
+            auto jumpToExceptionHandler = jit.branch32(CCallHelpers::LessThan, GPRInfo::returnValueGPR, CCallHelpers::TrustedImm32(0));
+#else
             auto noException = jit.branch32(CCallHelpers::GreaterThanOrEqual, GPRInfo::returnValueGPR, CCallHelpers::TrustedImm32(0));
             jit.copyCalleeSavesToEntryFrameCalleeSavesBuffer(vm.topEntryFrame);
             jit.move(CCallHelpers::TrustedImmPtr(&vm), GPRInfo::argumentGPR0);
@@ -147,6 +155,7 @@ void link(State& state)
             CCallHelpers::Call callLookupExceptionHandlerFromCallerFrame = jit.call(OperationPtrTag);
             jit.jumpToExceptionHandler(vm);
             noException.link(&jit);
+#endif // ENABLE(EXTRA_CTI_THUNKS)
 
             if (ASSERT_ENABLED) {
                 jit.load64(vm.addressOfException(), GPRInfo::regT1);
@@ -163,13 +172,17 @@ void link(State& state)
             jit.untagReturnAddress();
             mainPathJumps.append(jit.jump());
 
-            linkBuffer = makeUnique<LinkBuffer>(jit, codeBlock, JITCompilationCanFail);
+            linkBuffer = makeUnique<LinkBuffer>(jit, codeBlock, LinkBuffer::Profile::FTL, JITCompilationCanFail);
             if (linkBuffer->didFailToAllocate()) {
                 state.allocationFailed = true;
                 return;
             }
             linkBuffer->link(callArityCheck, FunctionPtr<OperationPtrTag>(codeBlock->isConstructor() ? operationConstructArityCheck : operationCallArityCheck));
+#if ENABLE(EXTRA_CTI_THUNKS)
+            linkBuffer->link(jumpToExceptionHandler, CodeLocationLabel(vm.getCTIStub(handleExceptionWithCallFrameRollbackGenerator).retaggedCode<NoPtrTag>()));
+#else
             linkBuffer->link(callLookupExceptionHandlerFromCallerFrame, FunctionPtr<OperationPtrTag>(operationLookupExceptionHandlerFromCallerFrame));
+#endif
             linkBuffer->link(callArityFixup, FunctionPtr<JITThunkPtrTag>(vm.getCTIStub(arityFixupGenerator).code()));
             linkBuffer->link(mainPathJumps, state.generatedFunction);
         }
@@ -188,7 +201,7 @@ void link(State& state)
         jit.untagReturnAddress();
         CCallHelpers::Jump mainPathJump = jit.jump();
         
-        linkBuffer = makeUnique<LinkBuffer>(jit, codeBlock, JITCompilationCanFail);
+        linkBuffer = makeUnique<LinkBuffer>(jit, codeBlock, LinkBuffer::Profile::FTL, JITCompilationCanFail);
         if (linkBuffer->didFailToAllocate()) {
             state.allocationFailed = true;
             return;

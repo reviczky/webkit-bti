@@ -39,6 +39,12 @@
 
 namespace WebCore {
 
+LibWebRTCRtpSenderBackend::LibWebRTCRtpSenderBackend(LibWebRTCPeerConnectionBackend& backend, rtc::scoped_refptr<webrtc::RtpSenderInterface>&& rtcSender)
+    : m_peerConnectionBackend(makeWeakPtr(&backend))
+    , m_rtcSender(WTFMove(rtcSender))
+{
+}
+
 LibWebRTCRtpSenderBackend::LibWebRTCRtpSenderBackend(LibWebRTCPeerConnectionBackend& backend, rtc::scoped_refptr<webrtc::RtpSenderInterface>&& rtcSender, Source&& source)
     : m_peerConnectionBackend(makeWeakPtr(&backend))
     , m_rtcSender(WTFMove(rtcSender))
@@ -52,13 +58,29 @@ LibWebRTCRtpSenderBackend::~LibWebRTCRtpSenderBackend()
     stopSource();
 }
 
+static bool operator==(const LibWebRTCRtpSenderBackend::Source& a, const LibWebRTCRtpSenderBackend::Source& b)
+{
+    return switchOn(a, [&b](const Ref<RealtimeOutgoingAudioSource>& source) {
+        return WTF::holds_alternative<Ref<RealtimeOutgoingAudioSource>>(b) && source.ptr() == WTF::get<Ref<RealtimeOutgoingAudioSource>>(b).ptr();
+    }, [&b](const Ref<RealtimeOutgoingVideoSource>& source) {
+        return WTF::holds_alternative<Ref<RealtimeOutgoingVideoSource>>(b) && source.ptr() == WTF::get<Ref<RealtimeOutgoingVideoSource>>(b).ptr();
+    }, [&b](std::nullptr_t) {
+        return WTF::holds_alternative<std::nullptr_t>(b);
+    });
+}
+
 void LibWebRTCRtpSenderBackend::startSource()
 {
-    switchOn(m_source, [](Ref<RealtimeOutgoingAudioSource>& source) {
-        source->start();
-    }, [](Ref<RealtimeOutgoingVideoSource>& source) {
-        source->start();
-    }, [](std::nullptr_t&) {
+    // We asynchronously start the sources to guarantee media goes through the transform if a transform is set when creating the track.
+    callOnMainThread([weakThis = makeWeakPtr(this), source = m_source]() mutable {
+        if (!weakThis || weakThis->m_source != source)
+            return;
+        switchOn(source, [](Ref<RealtimeOutgoingAudioSource>& source) {
+            source->start();
+        }, [](Ref<RealtimeOutgoingVideoSource>& source) {
+            source->start();
+        }, [](std::nullptr_t&) {
+        });
     });
 }
 
@@ -138,9 +160,11 @@ std::unique_ptr<RTCDTMFSenderBackend> LibWebRTCRtpSenderBackend::createDTMFBacke
     return makeUnique<LibWebRTCDTMFSenderBackend>(m_rtcSender->GetDtmfSender());
 }
 
-Ref<RTCRtpTransformBackend> LibWebRTCRtpSenderBackend::createRTCRtpTransformBackend()
+Ref<RTCRtpTransformBackend> LibWebRTCRtpSenderBackend::rtcRtpTransformBackend()
 {
-    return LibWebRTCRtpSenderTransformBackend::create(m_rtcSender);
+    if (!m_transformBackend)
+        m_transformBackend = LibWebRTCRtpSenderTransformBackend::create(m_rtcSender);
+    return *m_transformBackend;
 }
 
 void LibWebRTCRtpSenderBackend::setMediaStreamIds(const Vector<String>& streamIds)

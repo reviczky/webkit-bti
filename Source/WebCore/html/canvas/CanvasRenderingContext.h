@@ -42,6 +42,8 @@ class HTMLVideoElement;
 class ImageBitmap;
 class TypedOMCSSImageValue;
 class WebGLObject;
+enum class DestinationColorSpace : uint8_t;
+enum class PixelFormat : uint8_t;
 
 class CanvasRenderingContext : public ScriptWrappable {
     WTF_MAKE_NONCOPYABLE(CanvasRenderingContext);
@@ -71,18 +73,23 @@ public:
     virtual bool isOffscreen2d() const { return false; }
     virtual bool isPaint() const { return false; }
 
+    virtual void clearAccumulatedDirtyRect() { }
+
     // Called before paintRenderingResultsToCanvas if paintRenderingResultsToCanvas is
     // used for compositing purposes.
     virtual void prepareForDisplayWithPaint() { }
-    virtual void paintRenderingResultsToCanvas() {}
+    virtual void paintRenderingResultsToCanvas() { }
     virtual PlatformLayer* platformLayer() const { return 0; }
 
-    bool callTracingActive() const { return m_callTracingActive; }
-    void setCallTracingActive(bool callTracingActive) { m_callTracingActive = callTracingActive; }
+    bool hasActiveInspectorCanvasCallTracer() const { return m_hasActiveInspectorCanvasCallTracer; }
+    void setHasActiveInspectorCanvasCallTracer(bool hasActiveInspectorCanvasCallTracer) { m_hasActiveInspectorCanvasCallTracer = hasActiveInspectorCanvasCallTracer; }
 
     virtual bool compositingResultsNeedUpdating() const { return false; }
     virtual bool needsPreparationForDisplay() const { return false; }
     virtual void prepareForDisplay() { }
+
+    virtual PixelFormat pixelFormat() const;
+    virtual DestinationColorSpace colorSpace() const;
 
 protected:
     explicit CanvasRenderingContext(CanvasBase&);
@@ -101,7 +108,7 @@ protected:
     void checkOrigin(const URL&);
     void checkOrigin(const TypedOMCSSImageValue&);
 
-    bool m_callTracingActive { false };
+    bool m_hasActiveInspectorCanvasCallTracer { false };
 
 private:
     CanvasBase& m_canvas;

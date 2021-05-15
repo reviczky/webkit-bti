@@ -58,16 +58,26 @@ const float emphasisMarkFontSizeMultiplier = 0.5f;
 
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(Font);
 
-Ref<Font> Font::create(Ref<SharedBuffer>&& fontFaceData, Font::Origin origin, float fontSize, bool syntheticBold, bool syntheticItalic)
+Ref<Font> Font::create(const FontPlatformData& platformData, Origin origin, Interstitial interstitial, Visibility visibility, OrientationFallback orientationFallback, Optional<RenderingResourceIdentifier> identifier)
+{
+    return adoptRef(*new Font(platformData, origin, interstitial, visibility, orientationFallback, identifier, nullptr));
+}
+
+Ref<Font> Font::create(const FontPlatformData& platformData, Origin origin, FontCache* fontCacheForVerticalData, Interstitial interstitial, Visibility visibility, OrientationFallback orientationFallback, Optional<RenderingResourceIdentifier> identifier)
+{
+    return adoptRef(*new Font(platformData, origin, interstitial, visibility, orientationFallback, identifier, fontCacheForVerticalData));
+}
+
+Ref<Font> Font::create(Ref<SharedBuffer>&& fontFaceData, Font::Origin origin, float fontSize, bool syntheticBold, bool syntheticItalic, FontCache* fontCacheForVerticalData)
 {
     bool wrapping;
     auto customFontData = CachedFont::createCustomFontData(fontFaceData.get(), { }, wrapping);
     FontDescription description;
     description.setComputedSize(fontSize);
-    return Font::create(CachedFont::platformDataFromCustomData(*customFontData, description, syntheticBold, syntheticItalic, { }, { }), origin);
+    return Font::create(CachedFont::platformDataFromCustomData(*customFontData, description, syntheticBold, syntheticItalic, { }, { }), origin, fontCacheForVerticalData);
 }
 
-Font::Font(const FontPlatformData& platformData, Origin origin, Interstitial interstitial, Visibility visibility, OrientationFallback orientationFallback, Optional<RenderingResourceIdentifier> renderingResourceIdentifier)
+Font::Font(const FontPlatformData& platformData, Origin origin, Interstitial interstitial, Visibility visibility, OrientationFallback orientationFallback, Optional<RenderingResourceIdentifier> renderingResourceIdentifier, FontCache* fontCacheForVerticalData)
     : m_platformData(platformData)
     , m_renderingResourceIdentifier(renderingResourceIdentifier)
     , m_origin(origin)
@@ -88,9 +98,11 @@ Font::Font(const FontPlatformData& platformData, Origin origin, Interstitial int
     platformCharWidthInit();
 #if ENABLE(OPENTYPE_VERTICAL)
     if (platformData.orientation() == FontOrientation::Vertical && orientationFallback == OrientationFallback::No) {
-        m_verticalData = FontCache::singleton().verticalData(platformData);
+        m_verticalData = fontCacheForVerticalData ? fontCacheForVerticalData->verticalData(platformData) : FontCache::singleton().verticalData(platformData);
         m_hasVerticalGlyphs = m_verticalData.get() && m_verticalData->hasVerticalMetrics();
     }
+#else
+    UNUSED_PARAM(fontCacheForVerticalData);
 #endif
 }
 
@@ -535,63 +547,32 @@ void Font::applyTransforms(GlyphBuffer&, unsigned, unsigned, bool, bool, const A
 }
 #endif
 
-class CharacterFallbackMapKey {
-public:
-    CharacterFallbackMapKey()
-    {
-    }
-
-    CharacterFallbackMapKey(const AtomString& locale, UChar32 character, IsForPlatformFont isForPlatformFont)
-        : locale(locale)
-        , character(character)
-        , isForPlatformFont(isForPlatformFont == IsForPlatformFont::Yes)
-    {
-    }
-
-    CharacterFallbackMapKey(WTF::HashTableDeletedValueType)
-        : character(-1)
-    {
-    }
-
-    bool isHashTableDeletedValue() const { return character == -1; }
-
-    bool operator==(const CharacterFallbackMapKey& other) const
-    {
-        return locale == other.locale && character == other.character && isForPlatformFont == other.isForPlatformFont;
-    }
-
-    static const bool emptyValueIsZero = true;
-
-private:
-    friend struct CharacterFallbackMapKeyHash;
-
+struct CharacterFallbackMapKey {
     AtomString locale;
     UChar32 character { 0 };
     bool isForPlatformFont { false };
 };
 
+inline bool operator==(const CharacterFallbackMapKey& a, const CharacterFallbackMapKey& b)
+{
+    return a.locale == b.locale && a.character == b.character && a.isForPlatformFont == b.isForPlatformFont;
+}
+
 struct CharacterFallbackMapKeyHash {
-    static unsigned hash(const CharacterFallbackMapKey& key)
-    {
-        IntegerHasher hasher;
-        hasher.add(key.character);
-        hasher.add(key.isForPlatformFont);
-        hasher.add(key.locale.existingHash());
-        return hasher.hash();
-    }
-
-    static bool equal(const CharacterFallbackMapKey& a, const CharacterFallbackMapKey& b)
-    {
-        return a == b;
-    }
-
+    static unsigned hash(const CharacterFallbackMapKey& key) { return computeHash(key.locale, key.character, key.isForPlatformFont); }
+    static bool equal(const CharacterFallbackMapKey& a, const CharacterFallbackMapKey& b) { return a == b; }
     static const bool safeToCompareToEmptyOrDeleted = true;
 };
 
+struct CharacterFallbackMapKeyHashTraits : SimpleClassHashTraits<CharacterFallbackMapKey> {
+    static void constructDeletedValue(CharacterFallbackMapKey& slot) { new (NotNull, &slot) CharacterFallbackMapKey { { }, U_SENTINEL, { } }; }
+    static bool isDeletedValue(const CharacterFallbackMapKey& key) { return key.character == U_SENTINEL; }
+};
+
 // Fonts are not ref'd to avoid cycles.
-// FIXME: Shouldn't these be WeakPtrs?
-typedef HashMap<CharacterFallbackMapKey, Font*, CharacterFallbackMapKeyHash, WTF::SimpleClassHashTraits<CharacterFallbackMapKey>> CharacterFallbackMap;
-typedef HashMap<const Font*, CharacterFallbackMap> SystemFallbackCache;
+// FIXME: Consider changing these maps to use WeakPtr instead of raw pointers.
+using CharacterFallbackMap = HashMap<CharacterFallbackMapKey, Font*, CharacterFallbackMapKeyHash, CharacterFallbackMapKeyHashTraits>;
+using SystemFallbackCache = HashMap<const Font*, CharacterFallbackMap>;
 
 static SystemFallbackCache& systemFallbackCache()
 {
@@ -599,21 +580,17 @@ static SystemFallbackCache& systemFallbackCache()
     return map.get();
 }
 
-RefPtr<Font> Font::systemFallbackFontForCharacter(UChar32 character, const FontDescription& description, IsForPlatformFont isForPlatformFont) const
+RefPtr<Font> Font::systemFallbackFontForCharacter(UChar32 character, const FontDescription& description, IsForPlatformFont isForPlatformFont, FontCache& fontCache) const
 {
     auto fontAddResult = systemFallbackCache().add(this, CharacterFallbackMap());
 
     if (!character) {
         UChar codeUnit = 0;
-        return FontCache::singleton().systemFallbackForCharacters(description, this, isForPlatformFont, FontCache::PreferColoredFont::No, &codeUnit, 1);
+        return fontCache.systemFallbackForCharacters(description, this, isForPlatformFont, FontCache::PreferColoredFont::No, &codeUnit, 1);
     }
 
-    auto key = CharacterFallbackMapKey(description.computedLocale(), character, isForPlatformFont);
-    auto characterAddResult = fontAddResult.iterator->value.add(WTFMove(key), nullptr);
-
-    Font*& fallbackFont = characterAddResult.iterator->value;
-
-    if (!fallbackFont) {
+    auto key = CharacterFallbackMapKey { description.computedLocale(), character, isForPlatformFont != IsForPlatformFont::No };
+    return fontAddResult.iterator->value.ensure(WTFMove(key), [&] {
         UChar codeUnits[2];
         unsigned codeUnitsLength;
         if (U_IS_BMP(character)) {
@@ -624,13 +601,11 @@ RefPtr<Font> Font::systemFallbackFontForCharacter(UChar32 character, const FontD
             codeUnits[1] = U16_TRAIL(character);
             codeUnitsLength = 2;
         }
-
-        fallbackFont = FontCache::singleton().systemFallbackForCharacters(description, this, isForPlatformFont, FontCache::PreferColoredFont::No, codeUnits, codeUnitsLength).get();
-        if (fallbackFont)
-            fallbackFont->m_isUsedInSystemFallbackCache = true;
-    }
-
-    return fallbackFont;
+        auto font = fontCache.systemFallbackForCharacters(description, this, isForPlatformFont, FontCache::PreferColoredFont::No, codeUnits, codeUnitsLength).get();
+        if (font)
+            font->m_isUsedInSystemFallbackCache = true;
+        return font;
+    }).iterator->value;
 }
 
 void Font::removeFromSystemFallbackCache()

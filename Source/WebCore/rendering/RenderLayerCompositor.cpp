@@ -676,6 +676,11 @@ void RenderLayerCompositor::flushLayersSoon(GraphicsLayerUpdater&)
     scheduleRenderingUpdate();
 }
 
+DisplayRefreshMonitorFactory* RenderLayerCompositor::displayRefreshMonitorFactory()
+{
+    return page().chrome().client().displayRefreshMonitorFactory();
+}
+
 void RenderLayerCompositor::layerTiledBackingUsageChanged(const GraphicsLayer* graphicsLayer, bool usingTiledBacking)
 {
     if (usingTiledBacking) {
@@ -1532,7 +1537,7 @@ void RenderLayerCompositor::logLayerInfo(const RenderLayer& layer, const char* p
     if (!layer.renderer().style().hasAutoUsedZIndex())
         logString.append(" z-index: ", layer.renderer().style().usedZIndex());
 
-    logString.append(" (", logReasonsForCompositing(layer), ") ");
+    logString.append(" (", logOneReasonForCompositing(layer), ") ");
 
     if (backing->graphicsLayer()->contentsOpaque() || backing->paintsIntoCompositedAncestor() || backing->foregroundLayer() || backing->backgroundLayer()) {
         logString.append('[');
@@ -1682,19 +1687,18 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
         }
     }
 
-    if (diff == StyleDifference::RecompositeLayer && layer.isComposited()) {
-        if (oldStyle && oldStyle->pointerEvents() != newStyle.pointerEvents())
-            layer.setNeedsCompositingConfigurationUpdate();
-        else if (is<RenderWidget>(layer.renderer())) {
-            // This is necessary to get iframe layers hooked up in response to scheduleInvalidateStyleAndLayerComposition().
-            layer.setNeedsCompositingConfigurationUpdate();
+    if (diff >= StyleDifference::RecompositeLayer) {
+        if (layer.isComposited()) {
+            if (is<RenderWidget>(layer.renderer()) || (oldStyle && oldStyle->pointerEvents() != newStyle.pointerEvents())) {
+                // For RenderWidgets this is necessary to get iframe layers hooked up in response to scheduleInvalidateStyleAndLayerComposition().
+                layer.setNeedsCompositingConfigurationUpdate();
+            }
         }
-    }
-
-    if (diff >= StyleDifference::RecompositeLayer && oldStyle && recompositeChangeRequiresGeometryUpdate(*oldStyle, newStyle)) {
-        // FIXME: transform changes really need to trigger layout. See RenderElement::adjustStyleDifference().
-        layer.setNeedsPostLayoutCompositingUpdate();
-        layer.setNeedsCompositingGeometryUpdate();
+        if (oldStyle && recompositeChangeRequiresGeometryUpdate(*oldStyle, newStyle)) {
+            // FIXME: transform changes really need to trigger layout. See RenderElement::adjustStyleDifference().
+            layer.setNeedsPostLayoutCompositingUpdate();
+            layer.setNeedsCompositingGeometryUpdate();
+        }
     }
 }
 
@@ -2226,7 +2230,7 @@ FloatPoint RenderLayerCompositor::positionForClipLayer() const
     auto& frameView = m_renderView.frameView();
 
     return FloatPoint(
-        frameView.shouldPlaceBlockDirectionScrollbarOnLeft() ? frameView.horizontalScrollbarIntrusion() : 0,
+        frameView.shouldPlaceVerticalScrollbarOnLeft() ? frameView.horizontalScrollbarIntrusion() : 0,
         FrameView::yPositionForInsetClipLayer(frameView.scrollPosition(), frameView.topContentInset()));
 }
 
@@ -2266,18 +2270,37 @@ void RenderLayerCompositor::rootLayerConfigurationChanged()
     }
 }
 
-String RenderLayerCompositor::layerTreeAsText(LayerTreeFlags flags)
+void RenderLayerCompositor::updateCompositingForLayerTreeAsTextDump()
 {
-    LOG_WITH_STREAM(Compositing, stream << "RenderLayerCompositor " << this << " layerTreeAsText");
+    auto& frameView = m_renderView.frameView();
+    frameView.updateLayoutAndStyleIfNeededRecursive();
+    
+    updateEventRegions();
+
+    for (auto* child = frameView.frame().tree().firstRenderedChild(); child; child = child->tree().traverseNextRendered()) {
+        if (auto* renderer = child->contentRenderer())
+            renderer->compositor().updateEventRegions();
+    }
+
     updateCompositingLayers(CompositingUpdateType::AfterLayout);
 
     if (!m_rootContentsLayer)
-        return String();
+        return;
 
     flushPendingLayerChanges(true);
     // We need to trigger an update because the flushPendingLayerChanges() will have pushed changes to platform layers,
     // which may cause painting to happen in the current runloop.
     page().triggerRenderingUpdateForTesting();
+}
+
+String RenderLayerCompositor::layerTreeAsText(LayerTreeFlags flags)
+{
+    LOG_WITH_STREAM(Compositing, stream << "RenderLayerCompositor " << this << " layerTreeAsText");
+
+    updateCompositingForLayerTreeAsTextDump();
+
+    if (!m_rootContentsLayer)
+        return String();
 
     LayerTreeAsTextBehavior layerTreeBehavior = LayerTreeAsTextBehaviorNormal;
     if (flags & LayerTreeFlagsIncludeDebugInfo)
@@ -2320,6 +2343,22 @@ String RenderLayerCompositor::layerTreeAsText(LayerTreeFlags flags)
         return m_renderView.frameView().trackedRepaintRectsAsText() + layerTreeText;
 
     return layerTreeText;
+}
+
+Optional<String> RenderLayerCompositor::platformLayerTreeAsText(Element& element, OptionSet<PlatformLayerTreeAsTextFlags> flags)
+{
+    LOG_WITH_STREAM(Compositing, stream << "RenderLayerCompositor " << this << " platformLayerTreeAsText");
+
+    updateCompositingForLayerTreeAsTextDump();
+    if (!element.renderer() || !element.renderer()->hasLayer())
+        return WTF::nullopt;
+
+    auto& layerModelObject = downcast<RenderLayerModelObject>(*element.renderer());
+    if (!layerModelObject.layer()->isComposited())
+        return WTF::nullopt;
+
+    auto* backing = layerModelObject.layer()->backing();
+    return backing->graphicsLayer()->platformLayerTreeAsText(flags);
 }
 
 static RenderView* frameContentsRenderView(RenderWidget& renderer)
@@ -2539,6 +2578,7 @@ bool RenderLayerCompositor::requiresCompositingLayer(const RenderLayer& layer, R
         || requiresCompositingForWillChange(renderer)
         || requiresCompositingForBackfaceVisibility(renderer)
         || requiresCompositingForVideo(renderer)
+        || requiresCompositingForModel(renderer)
         || requiresCompositingForFrame(renderer, queryData)
         || requiresCompositingForPlugin(renderer, queryData)
         || requiresCompositingForOverflowScrolling(*renderer.layer(), queryData);
@@ -2599,6 +2639,7 @@ bool RenderLayerCompositor::requiresOwnBackingStore(const RenderLayer& layer, co
         || requiresCompositingForWillChange(renderer)
         || requiresCompositingForBackfaceVisibility(renderer)
         || requiresCompositingForVideo(renderer)
+        || requiresCompositingForModel(renderer)
         || requiresCompositingForFrame(renderer, queryData)
         || requiresCompositingForPlugin(renderer, queryData)
         || requiresCompositingForOverflowScrolling(layer, queryData)
@@ -2648,6 +2689,8 @@ OptionSet<CompositingReason> RenderLayerCompositor::reasonsForCompositing(const 
         reasons.add(CompositingReason::Video);
     else if (requiresCompositingForCanvas(renderer))
         reasons.add(CompositingReason::Canvas);
+    else if (requiresCompositingForModel(renderer))
+        reasons.add(CompositingReason::Model);
     else if (requiresCompositingForPlugin(renderer, queryData))
         reasons.add(CompositingReason::Plugin);
     else if (requiresCompositingForFrame(renderer, queryData))
@@ -2727,88 +2770,46 @@ OptionSet<CompositingReason> RenderLayerCompositor::reasonsForCompositing(const 
     return reasons;
 }
 
-#if !LOG_DISABLED
-const char* RenderLayerCompositor::logReasonsForCompositing(const RenderLayer& layer)
+static const char* compositingReasonToString(CompositingReason reason)
 {
-    OptionSet<CompositingReason> reasons = reasonsForCompositing(layer);
+    switch (reason) {
+    case CompositingReason::Transform3D: return "3D transform";
+    case CompositingReason::Video: return "video";
+    case CompositingReason::Canvas: return "canvas";
+    case CompositingReason::Plugin: return "plugin";
+    case CompositingReason::IFrame: return "iframe";
+    case CompositingReason::BackfaceVisibilityHidden: return "backface-visibility: hidden";
+    case CompositingReason::ClipsCompositingDescendants: return "clips compositing descendants";
+    case CompositingReason::Animation: return "animation";
+    case CompositingReason::Filters: return "filters";
+    case CompositingReason::PositionFixed: return "position: fixed";
+    case CompositingReason::PositionSticky: return "position: sticky";
+    case CompositingReason::OverflowScrolling: return "async overflow scrolling";
+    case CompositingReason::Stacking: return "stacking";
+    case CompositingReason::Overlap: return "overlap";
+    case CompositingReason::OverflowScrollPositioning: return "overflow scroll positioning";
+    case CompositingReason::NegativeZIndexChildren: return "negative z-index children";
+    case CompositingReason::TransformWithCompositedDescendants: return "transform with composited descendants";
+    case CompositingReason::OpacityWithCompositedDescendants: return "opacity with composited descendants";
+    case CompositingReason::MaskWithCompositedDescendants: return "mask with composited descendants";
+    case CompositingReason::ReflectionWithCompositedDescendants: return "reflection with composited descendants";
+    case CompositingReason::FilterWithCompositedDescendants: return "filter with composited descendants";
+    case CompositingReason::BlendingWithCompositedDescendants: return "blending with composited descendants";
+    case CompositingReason::IsolatesCompositedBlendingDescendants: return "isolates composited blending descendants";
+    case CompositingReason::Perspective: return "perspective";
+    case CompositingReason::Preserve3D: return "preserve-3d";
+    case CompositingReason::WillChange: return "will-change";
+    case CompositingReason::Root: return "root";
+    case CompositingReason::Model: return "model";
+    }
+    return "";
+}
 
-    if (reasons & CompositingReason::Transform3D)
-        return "3D transform";
-
-    if (reasons & CompositingReason::Video)
-        return "video";
-
-    if (reasons & CompositingReason::Canvas)
-        return "canvas";
-
-    if (reasons & CompositingReason::Plugin)
-        return "plugin";
-
-    if (reasons & CompositingReason::IFrame)
-        return "iframe";
-
-    if (reasons & CompositingReason::BackfaceVisibilityHidden)
-        return "backface-visibility: hidden";
-
-    if (reasons & CompositingReason::ClipsCompositingDescendants)
-        return "clips compositing descendants";
-
-    if (reasons & CompositingReason::Animation)
-        return "animation";
-
-    if (reasons & CompositingReason::Filters)
-        return "filters";
-
-    if (reasons & CompositingReason::PositionFixed)
-        return "position: fixed";
-
-    if (reasons & CompositingReason::PositionSticky)
-        return "position: sticky";
-
-    if (reasons & CompositingReason::OverflowScrolling)
-        return "async overflow scrolling";
-
-    if (reasons & CompositingReason::Stacking)
-        return "stacking";
-
-    if (reasons & CompositingReason::Overlap)
-        return "overlap";
-
-    if (reasons & CompositingReason::NegativeZIndexChildren)
-        return "negative z-index children";
-
-    if (reasons & CompositingReason::TransformWithCompositedDescendants)
-        return "transform with composited descendants";
-
-    if (reasons & CompositingReason::OpacityWithCompositedDescendants)
-        return "opacity with composited descendants";
-
-    if (reasons & CompositingReason::MaskWithCompositedDescendants)
-        return "mask with composited descendants";
-
-    if (reasons & CompositingReason::ReflectionWithCompositedDescendants)
-        return "reflection with composited descendants";
-
-    if (reasons & CompositingReason::FilterWithCompositedDescendants)
-        return "filter with composited descendants";
-
-#if ENABLE(CSS_COMPOSITING)
-    if (reasons & CompositingReason::BlendingWithCompositedDescendants)
-        return "blending with composited descendants";
-
-    if (reasons & CompositingReason::IsolatesCompositedBlendingDescendants)
-        return "isolates composited blending descendants";
-#endif
-
-    if (reasons & CompositingReason::Perspective)
-        return "perspective";
-
-    if (reasons & CompositingReason::Preserve3D)
-        return "preserve-3d";
-
-    if (reasons & CompositingReason::Root)
-        return "root";
-
+#if !LOG_DISABLED
+const char* RenderLayerCompositor::logOneReasonForCompositing(const RenderLayer& layer)
+{
+    for (auto reason : reasonsForCompositing(layer))
+        return compositingReasonToString(reason);
     return "";
 }
 #endif
@@ -3122,6 +3123,18 @@ bool RenderLayerCompositor::requiresCompositingForWillChange(RenderLayerModelObj
         return true;
 
     return renderer.style().willChange()->canTriggerCompositingOnInline();
+}
+
+bool RenderLayerCompositor::requiresCompositingForModel(RenderLayerModelObject& renderer) const
+{
+#if ENABLE(MODEL_ELEMENT)
+    if (is<RenderModel>(renderer))
+        return true;
+#else
+    UNUSED_PARAM(renderer);
+#endif
+
+    return false;
 }
 
 bool RenderLayerCompositor::requiresCompositingForPlugin(RenderLayerModelObject& renderer, RequiresCompositingData& queryData) const
@@ -3866,12 +3879,23 @@ void RenderLayerCompositor::updateLayerForOverhangAreasBackgroundColor()
         return;
 
     Color backgroundColor;
-    if (page().settings().useThemeColorForScrollAreaBackgroundColor())
-        backgroundColor = page().themeColor();
-    if (!backgroundColor.isValid())
-        backgroundColor = m_rootExtendedBackgroundColor;
 
-    m_layerForOverhangAreas->setBackgroundColor(backgroundColor);
+    if (m_renderView.settings().backgroundShouldExtendBeyondPage()) {
+        backgroundColor = ([&] {
+            if (page().settings().useThemeColorForScrollAreaBackgroundColor()) {
+                if (auto themeColor = page().themeColor(); themeColor.isValid())
+                    return themeColor;
+            }
+
+            if (page().settings().useSampledPageTopColorForScrollAreaBackgroundColor()) {
+                if (auto sampledPageTopColor = page().sampledPageTopColor(); sampledPageTopColor.isValid())
+                    return sampledPageTopColor;
+            }
+
+            return m_rootExtendedBackgroundColor;
+        })();
+        m_layerForOverhangAreas->setBackgroundColor(backgroundColor);
+    }
 
     if (!backgroundColor.isValid())
         m_layerForOverhangAreas->setCustomAppearance(GraphicsLayer::CustomAppearance::ScrollingOverhang);
@@ -3950,7 +3974,7 @@ void RenderLayerCompositor::rootBackgroundColorOrTransparencyChanged()
     m_rootExtendedBackgroundColor = extendedBackgroundColor;
     
     if (extendedBackgroundColorChanged) {
-        page().chrome().client().pageExtendedBackgroundColorDidChange(m_rootExtendedBackgroundColor);
+        page().chrome().client().pageExtendedBackgroundColorDidChange();
         
 #if ENABLE(RUBBER_BANDING)
         updateLayerForOverhangAreasBackgroundColor();
@@ -3975,11 +3999,7 @@ void RenderLayerCompositor::updateOverflowControlsLayers()
             m_layerForOverhangAreas->setSize(overhangAreaSize);
             m_layerForOverhangAreas->setPosition(FloatPoint(0, topContentInset));
             m_layerForOverhangAreas->setAnchorPoint(FloatPoint3D());
-
-            if (m_renderView.settings().backgroundShouldExtendBeyondPage())
-                m_layerForOverhangAreas->setBackgroundColor(m_renderView.frameView().documentBackgroundColor());
-            else
-                m_layerForOverhangAreas->setCustomAppearance(GraphicsLayer::CustomAppearance::ScrollingOverhang);
+            updateLayerForOverhangAreasBackgroundColor();
 
             // We want the overhang areas layer to be positioned below the frame contents,
             // so insert it below the clip layer.
@@ -4962,14 +4982,6 @@ GraphicsLayerFactory* RenderLayerCompositor::graphicsLayerFactory() const
     return page().chrome().client().graphicsLayerFactory();
 }
 
-RefPtr<DisplayRefreshMonitor> RenderLayerCompositor::createDisplayRefreshMonitor(PlatformDisplayID displayID) const
-{
-    if (auto monitor = page().chrome().client().createDisplayRefreshMonitor(displayID))
-        return monitor;
-
-    return DisplayRefreshMonitor::createDefaultDisplayRefreshMonitor(displayID);
-}
-
 #if ENABLE(CSS_SCROLL_SNAP)
 void RenderLayerCompositor::updateScrollSnapPropertiesWithFrameView(const FrameView& frameView) const
 {
@@ -5001,6 +5013,11 @@ TextStream& operator<<(TextStream& ts, CompositingPolicy compositingPolicy)
     case CompositingPolicy::Conservative: ts << "conservative"; break;
     }
     return ts;
+}
+
+TextStream& operator<<(TextStream& ts, CompositingReason compositingReason)
+{
+    return ts << compositingReasonToString(compositingReason);
 }
 
 #if PLATFORM(IOS_FAMILY)

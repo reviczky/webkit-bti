@@ -61,9 +61,8 @@ RenderListItem::~RenderListItem()
 RenderStyle RenderListItem::computeMarkerStyle() const
 {
     if (!is<PseudoElement>(element())) {
-        auto markerStyle = getCachedPseudoStyle(PseudoId::Marker, &style());
-        ASSERT(markerStyle);
-        return RenderStyle::clone(*markerStyle);
+        if (auto markerStyle = getCachedPseudoStyle(PseudoId::Marker, &style()))
+            return RenderStyle::clone(*markerStyle);
     }
 
     // The marker always inherits from the list item, regardless of where it might end
@@ -84,18 +83,20 @@ RenderStyle RenderListItem::computeMarkerStyle() const
     return markerStyle;
 }
 
-void RenderListItem::insertedIntoTree()
+void RenderListItem::insertedIntoTree(IsInternalMove isInternalMove)
 {
-    RenderBlockFlow::insertedIntoTree();
+    RenderBlockFlow::insertedIntoTree(isInternalMove);
 
-    updateListMarkerNumbers();
+    if (isInternalMove == IsInternalMove::No)
+        updateListMarkerNumbers();
 }
 
-void RenderListItem::willBeRemovedFromTree()
+void RenderListItem::willBeRemovedFromTree(IsInternalMove isInternalMove)
 {
-    RenderBlockFlow::willBeRemovedFromTree();
+    RenderBlockFlow::willBeRemovedFromTree(isInternalMove);
 
-    updateListMarkerNumbers();
+    if (isInternalMove == IsInternalMove::No)
+        updateListMarkerNumbers();
 }
 
 bool isHTMLListElement(const Node& node)

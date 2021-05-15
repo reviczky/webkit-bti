@@ -43,15 +43,19 @@
 
 #if ENABLE(VIDEO)
 #include "MediaElementSession.h"
+#include "MediaUniqueIdentifier.h"
 #endif
 
 namespace WebCore {
 
 class AbstractRange;
 class AnimationTimeline;
+class ArtworkImageLoader;
 class AudioContext;
 class AudioTrack;
+class BaseAudioContext;
 class CacheStorageConnection;
+class DOMPointReadOnly;
 class DOMRect;
 class DOMRectList;
 class DOMRectReadOnly;
@@ -134,6 +138,10 @@ class WebXRTest;
 #if ENABLE(MEDIA_SESSION)
 class MediaSession;
 struct MediaSessionActionDetails;
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+class MediaSessionCoordinator;
+class MockMediaSessionCoordinator;
+#endif
 #endif
 
 template<typename IDLType> class DOMPromiseDeferred;
@@ -413,6 +421,14 @@ public:
     ExceptionOr<uint64_t> layerIDForElement(Element&);
     ExceptionOr<String> repaintRectsAsText() const;
 
+    enum {
+        // Values need to be kept in sync with Internals.idl.
+        PLATFORM_LAYER_TREE_DEBUG = 1,
+        PLATFORM_LAYER_TREE_IGNORES_CHILDREN = 2,
+        PLATFORM_LAYER_TREE_INCLUDE_MODELS = 4,
+    };
+    ExceptionOr<String> platformLayerTreeAsText(Element&, unsigned short flags) const;
+
     ExceptionOr<String> scrollbarOverlayStyle(Node*) const;
     ExceptionOr<bool> scrollbarUsingDarkAppearance(Node*) const;
 
@@ -443,13 +459,17 @@ public:
     ExceptionOr<void> insertAuthorCSS(const String&) const;
     ExceptionOr<void> insertUserCSS(const String&) const;
 
-#if ENABLE(INDEXED_DATABASE)
     unsigned numberOfIDBTransactions() const;
-#endif
 
     unsigned numberOfLiveNodes() const;
     unsigned numberOfLiveDocuments() const;
     unsigned referencingNodeCount(const Document&) const;
+
+#if ENABLE(WEB_AUDIO)
+    // BaseAudioContext lifetime testing.
+    static uint64_t baseAudioContextIdentifier(const BaseAudioContext&);
+    static bool isBaseAudioContextAlive(uint64_t contextID);
+#endif
 
 #if ENABLE(INTERSECTION_OBSERVER)
     unsigned numberOfIntersectionObservers(const Document&) const;
@@ -519,8 +539,11 @@ public:
     void setFullscreenAutoHideDuration(double);
     void setFullscreenControlsHidden(bool);
 
-#if ENABLE(VIDEO_PRESENTATION_MODE)
+#if ENABLE(VIDEO)
     bool isChangingPresentationMode(HTMLVideoElement&) const;
+#endif
+
+#if ENABLE(VIDEO_PRESENTATION_MODE)
     void setMockVideoPresentationModeEnabled(bool);
 #endif
 
@@ -612,6 +635,7 @@ public:
     void setWebRTCH265Support(bool);
     void setWebRTCVP9Support(bool supportVP9Profile0, bool supportVP9Profile2);
     void setWebRTCVP9VTBSupport(bool);
+    void setSFrameCounter(RTCRtpSFrameTransform&, const String&);
     uint64_t sframeCounter(const RTCRtpSFrameTransform&);
     uint64_t sframeKeyId(const RTCRtpSFrameTransform&);
     void setEnableWebRTCEncryption(bool);
@@ -662,7 +686,7 @@ public:
     WEBCORE_TESTSUPPORT_EXPORT void initializeMockMediaSource();
     using BufferedSamplesPromise = DOMPromiseDeferred<IDLSequence<IDLDOMString>>;
     void bufferedSamplesForTrackId(SourceBuffer&, const AtomString&, BufferedSamplesPromise&&);
-    Vector<String> enqueuedSamplesForTrackID(SourceBuffer&, const AtomString&);
+    void enqueuedSamplesForTrackID(SourceBuffer&, const AtomString&, BufferedSamplesPromise&&);
     double minimumUpcomingPresentationTimeForTrackID(SourceBuffer&, const AtomString&);
     void setShouldGenerateTimestamps(SourceBuffer&, bool);
     void setMaximumQueueDepthForTrackID(SourceBuffer&, const AtomString&, size_t);
@@ -679,6 +703,7 @@ public:
     ExceptionOr<String> mediaSessionRestrictions(const String& mediaType) const;
     void setMediaElementRestrictions(HTMLMediaElement&, StringView restrictionsString);
     ExceptionOr<void> postRemoteControlCommand(const String&, float argument);
+    void activeAudioRouteDidChange(bool shouldPause);
     bool elementIsBlockingDisplaySleep(HTMLMediaElement&) const;
 #endif
 
@@ -724,7 +749,10 @@ public:
 
     ExceptionOr<String> pathStringWithShrinkWrappedRects(const Vector<double>& rectComponents, double radius);
 
+#if ENABLE(VIDEO)
     String getCurrentMediaControlsStatusForElement(HTMLMediaElement&);
+    void setMediaControlsMaximumRightContainerButtonCountOverride(HTMLMediaElement&, size_t);
+#endif // ENABLE(VIDEO)
 
     String userVisibleString(const DOMURL&);
     void setShowAllPlugins(bool);
@@ -741,6 +769,7 @@ public:
     double lastHandledUserGestureTimestamp();
 
     void withUserGesture(RefPtr<VoidCallback>&&);
+    void withoutUserGesture(RefPtr<VoidCallback>&&);
 
     bool userIsInteracting();
 
@@ -772,8 +801,12 @@ public:
 #endif
 
 #if ENABLE(WEBGL)
-    void simulateWebGLContextChanged(WebGLRenderingContext&);
-    void failNextGPUStatusCheck(WebGLRenderingContext&);
+    enum class SimulatedWebGLContextEvent {
+        ContextChange,
+        GPUStatusFailure,
+        Timeout
+    };
+    void simulateEventForWebGLContext(SimulatedWebGLContextEvent, WebGLRenderingContext&);
     bool hasLowAndHighPowerGPUs();
 #endif
 
@@ -835,6 +868,27 @@ public:
 #if ENABLE(APPLE_PAY)
     MockPaymentCoordinator& mockPaymentCoordinator(Document&);
 #endif
+
+    struct ImageOverlayText {
+        String text;
+        RefPtr<DOMPointReadOnly> topLeft;
+        RefPtr<DOMPointReadOnly> topRight;
+        RefPtr<DOMPointReadOnly> bottomRight;
+        RefPtr<DOMPointReadOnly> bottomLeft;
+
+        ~ImageOverlayText();
+    };
+
+    struct ImageOverlayLine {
+        RefPtr<DOMPointReadOnly> topLeft;
+        RefPtr<DOMPointReadOnly> topRight;
+        RefPtr<DOMPointReadOnly> bottomRight;
+        RefPtr<DOMPointReadOnly> bottomLeft;
+        Vector<ImageOverlayText> children;
+
+        ~ImageOverlayLine();
+    };
+    void installImageOverlay(Element&, Vector<ImageOverlayLine>&&);
 
     bool isSystemPreviewLink(Element&) const;
     bool isSystemPreviewImage(Element&) const;
@@ -899,7 +953,7 @@ public:
 
 #if ENABLE(VIDEO)
     using PlaybackControlsPurpose = MediaElementSession::PlaybackControlsPurpose;
-    RefPtr<HTMLMediaElement> bestMediaElementForShowingPlaybackControlsManager(PlaybackControlsPurpose);
+    RefPtr<HTMLMediaElement> bestMediaElementForRemoteControls(PlaybackControlsPurpose);
 
     using MediaSessionState = PlatformMediaSession::State;
     MediaSessionState mediaSessionState(HTMLMediaElement&);
@@ -920,14 +974,18 @@ public:
 
     bool capsLockIsOn();
         
-    using HEVCParameterSet = WebCore::HEVCParameterSet;
-    Optional<HEVCParameterSet> parseHEVCCodecParameters(const String& codecString);
+    using HEVCParameterSet = WebCore::HEVCParameters;
+    Optional<HEVCParameterSet> parseHEVCCodecParameters(StringView);
 
-    using DoViParameterSet = WebCore::DoViParameterSet;
-    Optional<DoViParameterSet> parseDoViCodecParameters(const String& codecString);
+    struct DoViParameterSet {
+        String codecName;
+        uint16_t bitstreamProfileID;
+        uint16_t bitstreamLevelID;
+    };
+    Optional<DoViParameterSet> parseDoViCodecParameters(StringView);
 
     using VPCodecConfigurationRecord = WebCore::VPCodecConfigurationRecord;
-    Optional<VPCodecConfigurationRecord> parseVPCodecParameters(const String& codecString);
+    Optional<VPCodecConfigurationRecord> parseVPCodecParameters(StringView);
 
     struct CookieData {
         String name;
@@ -1047,6 +1105,11 @@ public:
 
     unsigned createSleepDisabler(const String& reason, bool display);
     bool destroySleepDisabler(unsigned identifier);
+        
+#if ENABLE(APP_HIGHLIGHTS)
+    Vector<String> appHighlightContextMenuItemTitles() const;
+    unsigned numberOfAppHighlights();
+#endif
 
 #if ENABLE(WEBXR)
     ExceptionOr<RefPtr<WebXRTest>> xrTest();
@@ -1072,7 +1135,16 @@ public:
 #if ENABLE(MEDIA_SESSION)
     ExceptionOr<double> currentMediaSessionPosition(const MediaSession&);
     ExceptionOr<void> sendMediaSessionAction(MediaSession&, const MediaSessionActionDetails&);
+
+        using ArtworkImagePromise = DOMPromiseDeferred<IDLInterface<ImageData>>;
+    void loadArtworkImage(String&&, ArtworkImagePromise&&);
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+    ExceptionOr<void> registerMockMediaSessionCoordinator(ScriptExecutionContext&, RefPtr<StringCallback>&&);
+    ExceptionOr<void> setMockMediaSessionCoordinatorCommandsShouldFail(bool);
 #endif
+
+#endif // ENABLE(MEDIA_SESSION)
 
     enum TreeType : uint8_t { Tree, ShadowIncludingTree, ComposedTree };
     String treeOrder(Node&, Node&, TreeType);
@@ -1084,6 +1156,8 @@ public:
     bool rangeIntersectsRange(const AbstractRange&, const AbstractRange&, TreeType);
 
     void systemBeep();
+
+    String dumpStyleResolvers();
 
 private:
     explicit Internals(Document&);
@@ -1105,7 +1179,10 @@ private:
     RefPtr<RealtimeMediaSource> m_trackSource;
     std::unique_ptr<TrackFramePromise> m_nextTrackFramePromise;
 #endif
-
+#if ENABLE(MEDIA_SESSION)
+    std::unique_ptr<ArtworkImageLoader> m_artworkLoader;
+    std::unique_ptr<ArtworkImagePromise> m_artworkImagePromise;
+#endif
     std::unique_ptr<InspectorStubFrontend> m_inspectorFrontend;
     RefPtr<CacheStorageConnection> m_cacheStorageConnection;
 
@@ -1113,6 +1190,11 @@ private:
 
 #if ENABLE(WEBXR)
     RefPtr<WebXRTest> m_xrTest;
+#endif
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+    RefPtr<MediaSessionCoordinator> m_mediaSessionCoordinator;
+    RefPtr<MockMediaSessionCoordinator> m_mockMediaSessionCoordinator;
 #endif
 };
 

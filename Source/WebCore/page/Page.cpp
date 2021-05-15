@@ -23,6 +23,7 @@
 #include "ActivityStateChangeObserver.h"
 #include "AlternativeTextClient.h"
 #include "AnimationFrameRate.h"
+#include "AppHighlightStorage.h"
 #include "ApplicationCacheStorage.h"
 #include "AuthenticatorCoordinator.h"
 #include "BackForwardCache.h"
@@ -44,6 +45,7 @@
 #include "DebugPageOverlays.h"
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
+#include "DisplayRefreshMonitorManager.h"
 #include "DocumentLoader.h"
 #include "DocumentMarkerController.h"
 #include "DocumentTimeline.h"
@@ -65,11 +67,14 @@
 #include "FrameView.h"
 #include "FullscreenManager.h"
 #include "HTMLElement.h"
+#include "HTMLImageElement.h"
 #include "HTMLMediaElement.h"
 #include "HTMLTextAreaElement.h"
 #include "HTMLTextFormControlElement.h"
 #include "HistoryController.h"
 #include "HistoryItem.h"
+#include "IDBConnectionToServer.h"
+#include "ImageOverlayController.h"
 #include "InspectorClient.h"
 #include "InspectorController.h"
 #include "InspectorInstrumentation.h"
@@ -114,6 +119,7 @@
 #include "SVGImage.h"
 #include "ScriptController.h"
 #include "ScriptDisallowedScope.h"
+#include "ScriptRunner.h"
 #include "ScriptedAnimationController.h"
 #include "ScrollLatchingController.h"
 #include "ScrollingCoordinator.h"
@@ -157,10 +163,6 @@
 
 #if PLATFORM(MAC)
 #include "ServicesOverlayController.h"
-#endif
-
-#if ENABLE(INDEXED_DATABASE)
-#include "IDBConnectionToServer.h"
 #endif
 
 #if ENABLE(WEBGL)
@@ -287,6 +289,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
 #if PLATFORM(MAC) && (ENABLE(SERVICE_CONTROLS) || ENABLE(TELEPHONE_NUMBER_DETECTION))
     , m_servicesOverlayController(makeUnique<ServicesOverlayController>(*this))
 #endif
+    , m_imageOverlayController(makeUnique<ImageOverlayController>(*this))
     , m_recentWheelEventDeltaFilter(WheelEventDeltaFilter::create())
     , m_pageOverlayController(makeUnique<PageOverlayController>(*this))
 #if ENABLE(APPLE_PAY)
@@ -302,10 +305,9 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_deviceOrientationUpdateProvider(WTFMove(pageConfiguration.deviceOrientationUpdateProvider))
 #endif
     , m_corsDisablingPatterns(WTFMove(pageConfiguration.corsDisablingPatterns))
+    , m_allowedNetworkHosts(WTFMove(pageConfiguration.allowedNetworkHosts))
     , m_loadsSubresources(pageConfiguration.loadsSubresources)
-    , m_loadsFromNetwork(pageConfiguration.loadsFromNetwork)
     , m_shouldRelaxThirdPartyCookieBlocking(pageConfiguration.shouldRelaxThirdPartyCookieBlocking)
-    , m_textInteractionEnabled(pageConfiguration.textInteractionEnabled)
     , m_httpsUpgradeEnabled(pageConfiguration.httpsUpgradeEnabled)
 {
     updateTimerThrottlingState();
@@ -964,7 +966,7 @@ Vector<Ref<Element>> Page::editableElementsInRect(const FloatRect& searchRectInR
     if (!document)
         return { };
 
-    constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::CollectMultipleElements, HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::AllowVisibleChildFrameContentOnly };
+    constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::CollectMultipleElements, HitTestRequest::Type::DisallowUserAgentShadowContent, HitTestRequest::Type::AllowVisibleChildFrameContentOnly };
     LayoutRect searchRectInMainFrameCoordinates = frameView->rootViewToContents(roundedIntRect(searchRectInRootViewCoordinates));
     HitTestResult hitTestResult { searchRectInMainFrameCoordinates };
     if (!document->hitTest(hitType, hitTestResult))
@@ -1173,13 +1175,18 @@ void Page::screenPropertiesDidChange()
     setNeedsRecalcStyleInAllFrames();
 }
 
-void Page::windowScreenDidChange(PlatformDisplayID displayID, Optional<unsigned> nominalFramesPerSecond)
+void Page::windowScreenDidChange(PlatformDisplayID displayID, Optional<FramesPerSecond> nominalFramesPerSecond)
 {
     if (displayID == m_displayID && nominalFramesPerSecond == m_displayNominalFramesPerSecond)
         return;
 
     m_displayID = displayID;
     m_displayNominalFramesPerSecond = nominalFramesPerSecond;
+    if (!m_displayNominalFramesPerSecond) {
+        // If the caller didn't give us a refresh rate, maybe the relevant DisplayRefreshMonitor can? This happens in WebKitLegacy
+        // because WebView doesn't have a convenient way to access the display refresh rate.
+        m_displayNominalFramesPerSecond = DisplayRefreshMonitorManager::sharedManager().nominalFramesPerSecondForDisplay(m_displayID, chrome().client().displayRefreshMonitorFactory());
+    }
 
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (frame->document())
@@ -1194,7 +1201,7 @@ void Page::windowScreenDidChange(PlatformDisplayID displayID, Optional<unsigned>
 #endif
 
     if (m_scrollingCoordinator)
-        m_scrollingCoordinator->windowScreenDidChange(displayID, nominalFramesPerSecond);
+        m_scrollingCoordinator->windowScreenDidChange(displayID, m_displayNominalFramesPerSecond);
 
     renderingUpdateScheduler().windowScreenDidChange(displayID);
 
@@ -1245,6 +1252,11 @@ void Page::didCommitLoad()
 #if ENABLE(EDITABLE_REGION)
     m_isEditableRegionEnabled = false;
 #endif
+
+#if HAVE(OS_DARK_MODE_SUPPORT)
+    setUseDarkAppearanceOverride(WTF::nullopt);
+#endif
+
     resetSeenPlugins();
     resetSeenMediaEngines();
 }
@@ -1608,6 +1620,25 @@ void Page::doAfterUpdateRendering()
     forEachDocument([] (Document& document) {
         document.updateHighlightPositions();
     });
+#if ENABLE(APP_HIGHLIGHTS)
+    forEachDocument([] (Document& document) {
+        auto appHighlightStorage = document.appHighlightStorageIfExists();
+        if (!appHighlightStorage)
+            return;
+        
+        if (appHighlightStorage->hasUnrestoredHighlights() && MonotonicTime::now() - appHighlightStorage->lastRangeSearchTime() > 1_s) {
+            appHighlightStorage->resetLastRangeSearchTime();
+            document.eventLoop().queueTask(TaskSource::InternalAsyncTask, [weakDocument = makeWeakPtr(document)] {
+                auto document = makeRefPtr(weakDocument.get());
+                if (!document)
+                    return;
+
+                if (auto* appHighlightStorage = document->appHighlightStorageIfExists())
+                    appHighlightStorage->restoreUnrestoredAppHighlights();
+            });
+        }
+    });
+#endif
 
 #if ENABLE(VIDEO)
     forEachDocument([] (Document& document) {
@@ -1698,14 +1729,28 @@ void Page::prioritizeVisibleResources()
     forEachDocument([&] (Document& document) {
         toPrioritize.appendVector(document.cachedResourceLoader().visibleResourcesToPrioritize());
     });
+    
+    auto computeSchedulingMode = [&] {
+        auto& document = *mainFrame().document();
+        // Parsing generates resource loads.
+        if (document.parsing())
+            return LoadSchedulingMode::Prioritized;
+        
+        // Async script execution may generate more resource loads that benefit from prioritization.
+        if (document.scriptRunner().hasPendingScripts())
+            return LoadSchedulingMode::Prioritized;
+        
+        // We still haven't finished loading the visible resources.
+        if (!toPrioritize.isEmpty())
+            return LoadSchedulingMode::Prioritized;
+        
+        return LoadSchedulingMode::Direct;
+    };
+    
+    setLoadSchedulingMode(computeSchedulingMode());
 
-    if (toPrioritize.isEmpty()) {
-        if (!mainFrame().document()->parsing()) {
-            // All visible resources have been loaded and we are done with parsing. Stop scheduling.
-            setLoadSchedulingMode(LoadSchedulingMode::Direct);
-        }
+    if (toPrioritize.isEmpty())
         return;
-    }
 
     auto resourceLoaders = toPrioritize.map([](auto* resource) {
         return resource->loader();
@@ -1742,11 +1787,14 @@ void Page::resumeScriptedAnimations()
     });
 }
 
+Optional<FramesPerSecond> Page::preferredRenderingUpdateFramesPerSecond() const
+{
+    return preferredFramesPerSecond(m_throttlingReasons, m_displayNominalFramesPerSecond, settings().preferPageRenderingUpdatesNear60FPSEnabled());
+}
+
 Seconds Page::preferredRenderingUpdateInterval() const
 {
-    if (settings().forcePageRenderingUpdatesAt60FPSEnabled())
-        return preferredFrameInterval(m_throttlingReasons, WTF::nullopt);
-    return preferredFrameInterval(m_throttlingReasons, m_displayNominalFramesPerSecond);
+    return preferredFrameInterval(m_throttlingReasons, m_displayNominalFramesPerSecond, settings().preferPageRenderingUpdatesNear60FPSEnabled());
 }
 
 void Page::setIsVisuallyIdleInternal(bool isVisuallyIdle)
@@ -1754,7 +1802,7 @@ void Page::setIsVisuallyIdleInternal(bool isVisuallyIdle)
     if (isVisuallyIdle == m_throttlingReasons.contains(ThrottlingReason::VisuallyIdle))
         return;
 
-    m_throttlingReasons = m_throttlingReasons ^ ThrottlingReason::VisuallyIdle;
+    m_throttlingReasons.set(ThrottlingReason::VisuallyIdle, isVisuallyIdle);
     renderingUpdateScheduler().adjustRenderingUpdateFrequency();
 }
 
@@ -1766,7 +1814,7 @@ void Page::handleLowModePowerChange(bool isLowPowerModeEnabled)
     if (isLowPowerModeEnabled == m_throttlingReasons.contains(ThrottlingReason::LowPowerMode))
         return;
 
-    m_throttlingReasons = m_throttlingReasons ^ ThrottlingReason::LowPowerMode;
+    m_throttlingReasons.set(ThrottlingReason::LowPowerMode, isLowPowerModeEnabled);
     renderingUpdateScheduler().adjustRenderingUpdateFrequency();
 
     updateDOMTimerAlignmentInterval();
@@ -2068,9 +2116,9 @@ void Page::storageBlockingStateChanged()
 
 void Page::updateIsPlayingMedia(uint64_t sourceElementID)
 {
-    MediaProducer::MediaStateFlags state = MediaProducer::IsNotPlaying;
-    forEachDocument([&] (Document& document) {
-        state |= document.mediaState();
+    MediaProducer::MediaStateFlags state;
+    forEachDocument([&](auto& document) {
+        state.add(document.mediaState());
     });
 
     if (state == m_mediaState)
@@ -2093,7 +2141,7 @@ void Page::schedulePlaybackControlsManagerUpdate()
 
 void Page::playbackControlsManagerUpdateTimerFired()
 {
-    if (auto bestMediaElement = HTMLMediaElement::bestMediaElementForShowingPlaybackControlsManager(MediaElementSession::PlaybackControlsPurpose::ControlsManager))
+    if (auto bestMediaElement = HTMLMediaElement::bestMediaElementForRemoteControls(MediaElementSession::PlaybackControlsPurpose::ControlsManager))
         chrome().client().setUpPlaybackControlsManager(*bestMediaElement);
     else
         chrome().client().clearPlaybackControlsManager();
@@ -2118,11 +2166,12 @@ void Page::setMuted(MediaProducer::MutedStateFlags muted)
     });
 }
 
-void Page::stopMediaCapture()
+void Page::stopMediaCapture(MediaProducer::MediaCaptureKind kind)
 {
+    UNUSED_PARAM(kind);
 #if ENABLE(MEDIA_STREAM)
-    forEachDocument([] (Document& document) {
-        document.stopMediaCapture();
+    forEachDocument([kind] (Document& document) {
+        document.stopMediaCapture(kind);
     });
 #endif
 }
@@ -2505,6 +2554,15 @@ Color Page::pageExtendedBackgroundColor() const
     return renderView->compositor().rootExtendedBackgroundColor();
 }
 
+Color Page::sampledPageTopColor() const
+{
+    auto* document = mainFrame().document();
+    if (!document)
+        return { };
+
+    return document->sampledPageTopColor();
+}
+
 // These are magical constants that might be tweaked over time.
 static const double gMinimumPaintedAreaRatio = 0.1;
 static const double gMaximumUnpaintedAreaRatio = 0.04;
@@ -2845,10 +2903,8 @@ void Page::setSessionID(PAL::SessionID sessionID)
     ASSERT(m_sessionID == PAL::SessionID::legacyPrivateSessionID() || m_sessionID == PAL::SessionID::defaultSessionID());
     ASSERT(sessionID == PAL::SessionID::legacyPrivateSessionID() || sessionID == PAL::SessionID::defaultSessionID());
 
-#if ENABLE(INDEXED_DATABASE)
     if (sessionID != m_sessionID)
         m_idbConnectionToServer = nullptr;
-#endif
 
     if (sessionID != m_sessionID && m_sessionStorage)
         m_sessionStorage->setSessionIDForTesting(sessionID);
@@ -2906,7 +2962,7 @@ void Page::setMockMediaPlaybackTargetPickerEnabled(bool enabled)
     chrome().client().setMockMediaPlaybackTargetPickerEnabled(enabled);
 }
 
-void Page::setMockMediaPlaybackTargetPickerState(const String& name, MediaPlaybackTargetContext::State state)
+void Page::setMockMediaPlaybackTargetPickerState(const String& name, MediaPlaybackTargetContext::MockState state)
 {
     chrome().client().setMockMediaPlaybackTargetPickerState(name, state);
 }
@@ -3004,7 +3060,6 @@ void Page::setAllowsMediaDocumentInlinePlayback(bool flag)
 
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
 IDBClient::IDBConnectionToServer& Page::idbConnection()
 {
     if (!m_idbConnectionToServer)
@@ -3022,7 +3077,6 @@ void Page::clearIDBConnection()
 {
     m_idbConnectionToServer = nullptr;
 }
-#endif
 
 #if ENABLE(RESOURCE_USAGE)
 void Page::setResourceUsageOverlayVisible(bool visible)
@@ -3245,6 +3299,15 @@ void Page::forEachMediaElement(const Function<void(HTMLMediaElement&)>& functor)
 #endif
 }
 
+bool Page::allowsLoadFromURL(const URL& url) const
+{
+    if (!m_allowedNetworkHosts)
+        return true;
+    if (!url.protocolIsInHTTPFamily() && !url.protocolIs("ws") && !url.protocolIs("wss"))
+        return true;
+    return m_allowedNetworkHosts->contains(url.host().toStringWithoutCopying());
+}
+
 void Page::applicationWillResignActive()
 {
 #if ENABLE(VIDEO)
@@ -3325,8 +3388,8 @@ void Page::configureLoggingChannel(const String& channelName, WTFLogChannelState
         channel->level = level;
 
 #if USE(LIBWEBRTC)
-        if (channel == &LogWebRTC && m_mainFrame->document())
-            libWebRTCProvider().setEnableLogging(!sessionID().isEphemeral());
+        if (channel == &LogWebRTC && m_mainFrame->document() && !sessionID().isEphemeral())
+            libWebRTCProvider().setLoggingLevel(LogWebRTC.level);
 #endif
     }
 

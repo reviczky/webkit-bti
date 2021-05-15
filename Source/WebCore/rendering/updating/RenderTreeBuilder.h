@@ -48,7 +48,7 @@ public:
     enum class CanCollapseAnonymousBlock { No, Yes };
     RenderPtr<RenderObject> detach(RenderElement&, RenderObject&, CanCollapseAnonymousBlock = CanCollapseAnonymousBlock::Yes) WARN_UNUSED_RETURN;
 
-    void destroy(RenderObject& renderer);
+    void destroy(RenderObject& renderer, CanCollapseAnonymousBlock = CanCollapseAnonymousBlock::Yes);
 
     // NormalizeAfterInsertion::Yes ensures that the destination subtree is consistent after the insertion (anonymous wrappers etc).
     enum class NormalizeAfterInsertion { No, Yes };
@@ -62,6 +62,8 @@ public:
     void createPlaceholderForFullScreen(RenderFullScreen&, std::unique_ptr<RenderStyle>, const LayoutRect&);
 #endif
 
+    bool hasBrokenContinuation() const { return m_hasBrokenContinuation; }
+
 private:
     void attachInternal(RenderElement& parent, RenderPtr<RenderObject>, RenderObject* beforeChild);
 
@@ -70,10 +72,10 @@ private:
     void attachIgnoringContinuation(RenderElement& parent, RenderPtr<RenderObject>, RenderObject* beforeChild = nullptr);
     void attachToRenderGrid(RenderGrid& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild = nullptr);
     void attachToRenderElement(RenderElement& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild = nullptr);
-    void attachToRenderElementInternal(RenderElement& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild = nullptr);
+    void attachToRenderElementInternal(RenderElement& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild = nullptr, RenderObject::IsInternalMove = RenderObject::IsInternalMove::No);
 
     enum class WillBeDestroyed { No, Yes };
-    RenderPtr<RenderObject> detachFromRenderElement(RenderElement& parent, RenderObject& child, WillBeDestroyed = WillBeDestroyed::Yes) WARN_UNUSED_RETURN;
+    RenderPtr<RenderObject> detachFromRenderElement(RenderElement& parent, RenderObject& child, WillBeDestroyed = WillBeDestroyed::Yes, RenderObject::IsInternalMove = RenderObject::IsInternalMove::No) WARN_UNUSED_RETURN;
     RenderPtr<RenderObject> detachFromRenderGrid(RenderGrid& parent, RenderObject& child) WARN_UNUSED_RETURN;
 
     void move(RenderBoxModelObject& from, RenderBoxModelObject& to, RenderObject& child, RenderObject* beforeChild, NormalizeAfterInsertion);
@@ -90,6 +92,8 @@ private:
     void removeAnonymousWrappersForInlineChildrenIfNeeded(RenderElement& parent);
 
     void reportVisuallyNonEmptyContent(const RenderElement& parent, const RenderObject& child);
+
+    void setHasBrokenContinuation() { m_hasBrokenContinuation = true; }
 
     class FirstLetter;
     class List;
@@ -149,6 +153,7 @@ private:
 #if ENABLE(FULLSCREEN_API)
     std::unique_ptr<FullScreen> m_fullScreenBuilder;
 #endif
+    bool m_hasBrokenContinuation { false };
 };
 
 }

@@ -39,11 +39,14 @@ class CSSCalcValue;
 class CSSToLengthConversionData;
 class Counter;
 class DeprecatedCSSOMPrimitiveValue;
+class FontCascadeDescription;
+class FontMetrics;
 class Pair;
 class Quad;
 class RGBColor;
 class Rect;
 class RenderStyle;
+class RenderView;
 
 struct CSSFontFamily;
 struct Length;
@@ -156,6 +159,7 @@ public:
     Optional<bool> isZero() const;
     Optional<bool> isPositive() const;
     Optional<bool> isNegative() const;
+    bool isCenterPosition() const;
 
     template<typename T> inline T value(CSSUnitType type) const { return clampTo<T>(doubleValue(type)); }
     template<typename T> inline T value() const { return clampTo<T>(doubleValue()); }
@@ -188,6 +192,7 @@ public:
     static double conversionToCanonicalUnitsScaleFactor(CSSUnitType);
     static String unitTypeString(CSSUnitType);
 
+    static double computeUnzoomedNonCalcLengthDouble(CSSUnitType, double value, CSSPropertyID, const FontMetrics* = nullptr, const FontCascadeDescription* = nullptr, const FontCascadeDescription* rootFontDescription = nullptr, const RenderView* = nullptr);
     static double computeNonCalcLengthDouble(const CSSToLengthConversionData&, CSSUnitType, double value);
     // True if computeNonCalcLengthDouble would produce identical results when resolved against both these styles.
     static bool equalForLengthResolution(const RenderStyle&, const RenderStyle&);

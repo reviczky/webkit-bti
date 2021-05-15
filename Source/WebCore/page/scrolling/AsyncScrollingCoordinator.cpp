@@ -97,15 +97,15 @@ void AsyncScrollingCoordinator::handleWheelEventPhase(ScrollingNodeID nodeID, Pl
 #endif
 
 #if ENABLE(CSS_SCROLL_SNAP)
-static inline void setStateScrollingNodeSnapOffsetsAsFloat(ScrollingStateScrollingNode& node, const ScrollSnapOffsetsInfo<LayoutUnit>* offsetInfo, float deviceScaleFactor)
+static inline void setStateScrollingNodeSnapOffsetsAsFloat(ScrollingStateScrollingNode& node, const LayoutScrollSnapOffsetsInfo* offsetInfo, float deviceScaleFactor)
 {
     if (!offsetInfo) {
-        node.setSnapOffsetsInfo(ScrollSnapOffsetsInfo<float>());
+        node.setSnapOffsetsInfo(FloatScrollSnapOffsetsInfo());
         return;
     }
 
     // FIXME: Incorporate current page scale factor in snapping to device pixel. Perhaps we should just convert to float here and let UI process do the pixel snapping?
-    node.setSnapOffsetsInfo(offsetInfo->convertUnits<float>(deviceScaleFactor));
+    node.setSnapOffsetsInfo(offsetInfo->convertUnits<FloatScrollSnapOffsetsInfo>(deviceScaleFactor));
 }
 #endif
 
@@ -797,7 +797,7 @@ bool AsyncScrollingCoordinator::hasSynchronousScrollingReasons(ScrollingNodeID n
 #endif
 }
 
-void AsyncScrollingCoordinator::windowScreenDidChange(PlatformDisplayID displayID, Optional<unsigned> nominalFramesPerSecond)
+void AsyncScrollingCoordinator::windowScreenDidChange(PlatformDisplayID displayID, Optional<FramesPerSecond> nominalFramesPerSecond)
 {
     if (m_scrollingTree)
         m_scrollingTree->windowScreenDidChange(displayID, nominalFramesPerSecond);

@@ -43,6 +43,7 @@
 #include "TinyBloomFilter.h"
 #include "Watchpoint.h"
 #include "WriteBarrierInlines.h"
+#include <wtf/Atomics.h>
 #include <wtf/PrintStream.h>
 
 namespace WTF {
@@ -183,7 +184,7 @@ public:
     bool isProxy() const
     {
         JSType type = m_blob.type();
-        return type == ImpureProxyType || type == PureForwardingProxyType || type == ProxyObjectType;
+        return type == PureForwardingProxyType || type == ProxyObjectType;
     }
 
     static void dumpStatistics();
@@ -267,6 +268,11 @@ public:
     {
         return typeInfo().getOwnPropertySlotIsImpure();
     }
+
+    bool hasNonReifiedStaticProperties() const
+    {
+        return typeInfo().hasStaticPropertyTable() && !staticPropertiesReified();
+    }
     
     // Type accessors.
     TypeInfo typeInfo() const { return m_blob.typeInfo(m_outOfLineTypeFlags); }
@@ -331,6 +337,15 @@ public:
     {
         ASSERT(hasRareData());
         return static_cast<StructureRareData*>(m_previousOrRareData.get());
+    }
+
+    StructureRareData* tryRareData()
+    {
+        JSCell* value = m_previousOrRareData.get();
+        WTF::dependentLoadLoadFence();
+        if (isRareData(value))
+            return static_cast<StructureRareData*>(value);
+        return nullptr;
     }
 
     const StructureRareData* rareData() const

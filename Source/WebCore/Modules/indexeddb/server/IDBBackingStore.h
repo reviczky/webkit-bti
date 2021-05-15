@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBDatabaseInfo.h"
 #include "IDBError.h"
 #include "IndexKey.h"
@@ -64,6 +62,7 @@ public:
     virtual ~IDBBackingStore() { RELEASE_ASSERT(!isMainThread()); }
 
     virtual IDBError getOrEstablishDatabaseInfo(IDBDatabaseInfo&) = 0;
+    virtual uint64_t databaseVersion() = 0;
 
     virtual IDBError beginTransaction(const IDBTransactionInfo&) = 0;
     virtual IDBError abortTransaction(const IDBResourceIdentifier& transactionIdentifier) = 0;
@@ -106,5 +105,3 @@ protected:
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

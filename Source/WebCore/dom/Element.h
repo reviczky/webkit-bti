@@ -27,6 +27,7 @@
 #include "AXTextStateChangeIntent.h"
 #include "Document.h"
 #include "ElementData.h"
+#include "FocusOptions.h"
 #include "HTMLNames.h"
 #include "ScrollTypes.h"
 #include "ShadowRootInit.h"
@@ -62,12 +63,14 @@ class RenderTreePosition;
 class StylePropertyMap;
 class WebAnimation;
 
+enum class AnimationImpact;
+enum class EventProcessing : uint8_t;
+enum class SelectionRestorationMode : uint8_t;
+
 struct GetAnimationsOptions;
 struct KeyframeAnimationOptions;
 struct ScrollIntoViewOptions;
 struct ScrollToOptions;
-
-enum class EventProcessing : uint8_t;
 
 #if ENABLE(INTERSECTION_OBSERVER)
 struct IntersectionObserverData;
@@ -80,8 +83,6 @@ struct ResizeObserverData;
 namespace Style {
 struct ElementStyle;
 }
-
-enum class AnimationImpact;
 
 class Element : public ContainerNode {
     WTF_MAKE_ISO_ALLOCATED(Element);
@@ -209,6 +210,8 @@ public:
 
     WEBCORE_EXPORT bool removeAttribute(const AtomString& qualifiedName);
     WEBCORE_EXPORT bool removeAttributeNS(const AtomString& namespaceURI, const AtomString& localName);
+    void removeAttributeForBindings(const AtomString& qualifiedName) { removeAttribute(qualifiedName); }
+    void removeAttributeNSForBindings(const AtomString& namespaceURI, const AtomString& localName) { removeAttributeNS(namespaceURI, localName); }
 
     Ref<Attr> detachAttribute(unsigned index);
 
@@ -319,12 +322,14 @@ public:
     bool hovered() const { return isUserActionElement() && isUserActionElementHovered(); }
     bool focused() const { return isUserActionElement() && isUserActionElementFocused(); }
     bool isBeingDragged() const { return isUserActionElement() && isUserActionElementDragged(); }
-    bool hasFocusWithin() const { return hasNodeFlag(NodeFlag::HasFocusWithin); };
+    bool hasFocusVisible() const { return isUserActionElement() && isUserActionElementHasFocusVisible(); }
+    bool hasFocusWithin() const { return isUserActionElement() && isUserActionElementHasFocusWithin(); };
 
     virtual void setActive(bool = true, bool pause = false, Style::InvalidationScope = Style::InvalidationScope::All);
     virtual void setHovered(bool = true, Style::InvalidationScope = Style::InvalidationScope::All);
-    virtual void setFocus(bool);
+    virtual void setFocus(bool, FocusVisibility = FocusVisibility::Invisible);
     void setBeingDragged(bool);
+    void setHasFocusVisible(bool);
     void setHasFocusWithin(bool);
 
     Optional<int> tabIndexSetExplicitly() const;
@@ -354,30 +359,30 @@ public:
     bool isVisibleWithoutResolvingFullStyle() const;
 
     // Methods for indicating the style is affected by dynamic updates (e.g., children changing, our position changing in our sibling list, etc.)
-    bool styleAffectedByEmpty() const { return hasDynamicStyleRelationFlag(DynamicStyleRelationFlag::StyleAffectedByEmpty); }
+    bool styleAffectedByEmpty() const { return hasStyleFlag(NodeStyleFlag::StyleAffectedByEmpty); }
     bool descendantsAffectedByPreviousSibling() const { return hasStyleFlag(NodeStyleFlag::DescendantsAffectedByPreviousSibling); }
     bool childrenAffectedByFirstChildRules() const { return hasStyleFlag(NodeStyleFlag::ChildrenAffectedByFirstChildRules); }
     bool childrenAffectedByLastChildRules() const { return hasStyleFlag(NodeStyleFlag::ChildrenAffectedByLastChildRules); }
-    bool childrenAffectedByForwardPositionalRules() const { return hasDynamicStyleRelationFlag(DynamicStyleRelationFlag::ChildrenAffectedByForwardPositionalRules); }
-    bool descendantsAffectedByForwardPositionalRules() const { return hasDynamicStyleRelationFlag(DynamicStyleRelationFlag::DescendantsAffectedByForwardPositionalRules); }
-    bool childrenAffectedByBackwardPositionalRules() const { return hasDynamicStyleRelationFlag(DynamicStyleRelationFlag::ChildrenAffectedByBackwardPositionalRules); }
-    bool descendantsAffectedByBackwardPositionalRules() const { return hasDynamicStyleRelationFlag(DynamicStyleRelationFlag::DescendantsAffectedByBackwardPositionalRules); }
-    bool childrenAffectedByPropertyBasedBackwardPositionalRules() const { return hasDynamicStyleRelationFlag(DynamicStyleRelationFlag::ChildrenAffectedByPropertyBasedBackwardPositionalRules); }
+    bool childrenAffectedByForwardPositionalRules() const { return hasStyleFlag(NodeStyleFlag::ChildrenAffectedByForwardPositionalRules); }
+    bool descendantsAffectedByForwardPositionalRules() const { return hasStyleFlag(NodeStyleFlag::DescendantsAffectedByForwardPositionalRules); }
+    bool childrenAffectedByBackwardPositionalRules() const { return hasStyleFlag(NodeStyleFlag::ChildrenAffectedByBackwardPositionalRules); }
+    bool descendantsAffectedByBackwardPositionalRules() const { return hasStyleFlag(NodeStyleFlag::DescendantsAffectedByBackwardPositionalRules); }
+    bool childrenAffectedByPropertyBasedBackwardPositionalRules() const { return hasStyleFlag(NodeStyleFlag::ChildrenAffectedByPropertyBasedBackwardPositionalRules); }
     bool affectsNextSiblingElementStyle() const { return hasStyleFlag(NodeStyleFlag::AffectsNextSiblingElementStyle); }
     bool styleIsAffectedByPreviousSibling() const { return hasStyleFlag(NodeStyleFlag::StyleIsAffectedByPreviousSibling); }
     unsigned childIndex() const { return hasRareData() ? rareDataChildIndex() : 0; }
 
     bool hasFlagsSetDuringStylingOfChildren() const;
 
-    void setStyleAffectedByEmpty() { setDynamicStyleRelationFlag(DynamicStyleRelationFlag::StyleAffectedByEmpty); }
+    void setStyleAffectedByEmpty() { setStyleFlag(NodeStyleFlag::StyleAffectedByEmpty); }
     void setDescendantsAffectedByPreviousSibling() { setStyleFlag(NodeStyleFlag::DescendantsAffectedByPreviousSibling); }
     void setChildrenAffectedByFirstChildRules() { setStyleFlag(NodeStyleFlag::ChildrenAffectedByFirstChildRules); }
     void setChildrenAffectedByLastChildRules() { setStyleFlag(NodeStyleFlag::ChildrenAffectedByLastChildRules); }
-    void setChildrenAffectedByForwardPositionalRules() { setDynamicStyleRelationFlag(DynamicStyleRelationFlag::ChildrenAffectedByForwardPositionalRules); }
-    void setDescendantsAffectedByForwardPositionalRules() { setDynamicStyleRelationFlag(DynamicStyleRelationFlag::DescendantsAffectedByForwardPositionalRules); }
-    void setChildrenAffectedByBackwardPositionalRules() { setDynamicStyleRelationFlag(DynamicStyleRelationFlag::ChildrenAffectedByBackwardPositionalRules); }
-    void setDescendantsAffectedByBackwardPositionalRules() { setDynamicStyleRelationFlag(DynamicStyleRelationFlag::DescendantsAffectedByBackwardPositionalRules); }
-    void setChildrenAffectedByPropertyBasedBackwardPositionalRules() { setDynamicStyleRelationFlag(DynamicStyleRelationFlag::ChildrenAffectedByPropertyBasedBackwardPositionalRules); }
+    void setChildrenAffectedByForwardPositionalRules() { setStyleFlag(NodeStyleFlag::ChildrenAffectedByForwardPositionalRules); }
+    void setDescendantsAffectedByForwardPositionalRules() { setStyleFlag(NodeStyleFlag::DescendantsAffectedByForwardPositionalRules); }
+    void setChildrenAffectedByBackwardPositionalRules() { setStyleFlag(NodeStyleFlag::ChildrenAffectedByBackwardPositionalRules); }
+    void setDescendantsAffectedByBackwardPositionalRules() { setStyleFlag(NodeStyleFlag::DescendantsAffectedByBackwardPositionalRules); }
+    void setChildrenAffectedByPropertyBasedBackwardPositionalRules() { setStyleFlag(NodeStyleFlag::ChildrenAffectedByPropertyBasedBackwardPositionalRules); }
     void setAffectsNextSiblingElementStyle() { setStyleFlag(NodeStyleFlag::AffectsNextSiblingElementStyle); }
     void setStyleIsAffectedByPreviousSibling() { setStyleFlag(NodeStyleFlag::StyleIsAffectedByPreviousSibling); }
     void setChildIndex(unsigned);
@@ -399,8 +404,8 @@ public:
     virtual String target() const { return String(); }
 
     static AXTextStateChangeIntent defaultFocusTextStateChangeIntent() { return AXTextStateChangeIntent(AXTextStateChangeTypeSelectionMove, AXTextSelection { AXTextSelectionDirectionDiscontiguous, AXTextSelectionGranularityUnknown, true }); }
-    virtual void focus(SelectionRestorationMode = SelectionRestorationMode::RestoreOrSelectAll, FocusDirection = FocusDirection::None);
-    void revealFocusedElement(SelectionRestorationMode);
+    virtual void focus(const FocusOptions& = { });
+    void findTargetAndUpdateFocusAppearance(SelectionRestorationMode, SelectionRevealMode = SelectionRevealMode::Reveal);
     virtual RefPtr<Element> focusAppearanceUpdateTarget();
     virtual void updateFocusAppearance(SelectionRestorationMode, SelectionRevealMode = SelectionRevealMode::Reveal);
     virtual void blur();
@@ -558,6 +563,8 @@ public:
     void clearAfterPseudoElement();
     void resetComputedStyle();
     void resetStyleRelations();
+    void resetChildStyleRelations();
+    void resetAllDescendantStyleRelations();
     void clearHoverAndActiveStatusBeforeDetachingRenderer();
 
     WEBCORE_EXPORT URL absoluteLinkURL() const;
@@ -652,6 +659,8 @@ private:
     bool isUserActionElementFocused() const;
     bool isUserActionElementHovered() const;
     bool isUserActionElementDragged() const;
+    bool isUserActionElementHasFocusVisible() const;
+    bool isUserActionElementHasFocusWithin() const;
 
     virtual void didAddUserAgentShadowRoot(ShadowRoot&) { }
 
@@ -728,8 +737,6 @@ private:
     
     void attachAttributeNodeIfNeeded(Attr&);
     
-    void didChangeRenderer(RenderObject*) final;
-
 #if ASSERT_ENABLED
     WEBCORE_EXPORT bool fastAttributeLookupAllowed(const QualifiedName&) const;
 #endif

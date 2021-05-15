@@ -64,6 +64,7 @@ static inline GstAudioInfo libwebrtcAudioFormat(int sampleRate, size_t channelCo
 
 void RealtimeOutgoingAudioSourceLibWebRTC::audioSamplesAvailable(const MediaTime&, const PlatformAudioData& audioData, const AudioStreamDescription& streamDescription, size_t /* sampleCount */)
 {
+    DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
     auto data = static_cast<const GStreamerAudioData&>(audioData);
     auto desc = static_cast<const GStreamerAudioStreamDescription&>(streamDescription);
 
@@ -108,7 +109,7 @@ void RealtimeOutgoingAudioSourceLibWebRTC::pullAudioData()
         auto inBuffer = adoptGRef(gst_adapter_take_buffer(m_adapter.get(), inBufferSize));
         m_audioBuffer.grow(outBufferSize);
         if (isSilenced())
-            gst_audio_format_fill_silence(m_outputStreamDescription.finfo, m_audioBuffer.data(), outBufferSize);
+            webkitGstAudioFormatFillSilence(m_outputStreamDescription.finfo, m_audioBuffer.data(), outBufferSize);
         else {
             GstMappedBuffer inMap(inBuffer.get(), GST_MAP_READ);
 

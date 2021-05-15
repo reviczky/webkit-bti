@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,6 +47,7 @@
 #include "JSInterfaceJIT.h"
 #include "PCToCodeOriginMap.h"
 #include "UnusedPointer.h"
+#include <wtf/UniqueRef.h>
 
 namespace JSC {
 
@@ -77,16 +78,14 @@ namespace JSC {
     template<PtrTag tag>
     struct CallRecord {
         MacroAssembler::Call from;
-        BytecodeIndex bytecodeIndex;
         FunctionPtr<tag> callee;
 
         CallRecord()
         {
         }
 
-        CallRecord(MacroAssembler::Call from, BytecodeIndex bytecodeIndex, FunctionPtr<tag> callee)
+        CallRecord(MacroAssembler::Call from, FunctionPtr<tag> callee)
             : from(from)
-            , bytecodeIndex(bytecodeIndex)
             , callee(callee)
         {
         }
@@ -126,28 +125,16 @@ namespace JSC {
 
         Type type;
 
-        union {
-            SimpleJumpTable* simpleJumpTable;
-            StringJumpTable* stringJumpTable;
-        } jumpTable;
-
         BytecodeIndex bytecodeIndex;
         unsigned defaultOffset;
+        unsigned tableIndex;
 
-        SwitchRecord(SimpleJumpTable* jumpTable, BytecodeIndex bytecodeIndex, unsigned defaultOffset, Type type)
+        SwitchRecord(unsigned tableIndex, BytecodeIndex bytecodeIndex, unsigned defaultOffset, Type type)
             : type(type)
             , bytecodeIndex(bytecodeIndex)
             , defaultOffset(defaultOffset)
+            , tableIndex(tableIndex)
         {
-            this->jumpTable.simpleJumpTable = jumpTable;
-        }
-
-        SwitchRecord(StringJumpTable* jumpTable, BytecodeIndex bytecodeIndex, unsigned defaultOffset)
-            : type(String)
-            , bytecodeIndex(bytecodeIndex)
-            , defaultOffset(defaultOffset)
-        {
-            this->jumpTable.stringJumpTable = jumpTable;
         }
     };
 
@@ -290,7 +277,7 @@ namespace JSC {
         Call appendCall(const FunctionPtr<CFunctionPtrTag> function)
         {
             Call functionCall = call(OperationPtrTag);
-            m_farCalls.append(FarCallRecord(functionCall, m_bytecodeIndex, function.retagged<OperationPtrTag>()));
+            m_farCalls.append(FarCallRecord(functionCall, function.retagged<OperationPtrTag>()));
             return functionCall;
         }
 
@@ -298,7 +285,7 @@ namespace JSC {
         Call appendCallWithSlowPathReturnType(const FunctionPtr<CFunctionPtrTag> function)
         {
             Call functionCall = callWithSlowPathReturnType(OperationPtrTag);
-            m_farCalls.append(FarCallRecord(functionCall, m_bytecodeIndex, function.retagged<OperationPtrTag>()));
+            m_farCalls.append(FarCallRecord(functionCall, function.retagged<OperationPtrTag>()));
             return functionCall;
         }
 #endif
@@ -752,6 +739,7 @@ namespace JSC {
         template<typename Op>
         void emitNewFuncExprCommon(const Instruction*);
         void emitVarInjectionCheck(bool needsVarInjectionChecks);
+        void emitVarReadOnlyCheck(ResolveType);
         void emitResolveClosure(VirtualRegister dst, VirtualRegister scope, bool needsVarInjectionChecks, unsigned depth);
         void emitLoadWithStructureCheck(VirtualRegister scope, Structure** structureSlot);
 #if USE(JSVALUE64)
@@ -834,14 +822,6 @@ namespace JSC {
         }
 
 #if OS(WINDOWS) && CPU(X86_64)
-        template<typename OperationType, typename... Args>
-        std::enable_if_t<std::is_same<typename FunctionTraits<OperationType>::ResultType, SlowPathReturnType>::value, MacroAssembler::Call>
-        callOperation(OperationType operation, Args... args)
-        {
-            setupArguments<OperationType>(args...);
-            return appendCallWithExceptionCheckAndSlowPathReturnType(operation);
-        }
-
         template<typename Type>
         struct is64BitType {
             static constexpr bool value = sizeof(Type) <= 8;
@@ -853,12 +833,13 @@ namespace JSC {
         };
 
         template<typename OperationType, typename... Args>
-        std::enable_if_t<!std::is_same<typename FunctionTraits<OperationType>::ResultType, SlowPathReturnType>::value, MacroAssembler::Call>
-        callOperation(OperationType operation, Args... args)
+        MacroAssembler::Call callOperation(OperationType operation, Args... args)
         {
-            static_assert(is64BitType<typename FunctionTraits<OperationType>::ResultType>::value, "Win64 cannot use standard call when return type is larger than 64 bits.");
             setupArguments<OperationType>(args...);
-            return appendCallWithExceptionCheck(operation);
+            // x64 Windows cannot use standard call when the return type is larger than 64 bits.
+            if constexpr (is64BitType<typename FunctionTraits<OperationType>::ResultType>::value)
+                return appendCallWithExceptionCheck(operation);
+            return appendCallWithExceptionCheckAndSlowPathReturnType(operation);
         }
 #else // OS(WINDOWS) && CPU(X86_64)
         template<typename OperationType, typename... Args>
@@ -886,6 +867,18 @@ namespace JSC {
             return result;
         }
 
+#if OS(WINDOWS) && CPU(X86_64)
+        template<typename OperationType, typename... Args>
+        MacroAssembler::Call callOperationNoExceptionCheck(OperationType operation, Args... args)
+        {
+            setupArguments<OperationType>(args...);
+            updateTopCallFrame();
+            // x64 Windows cannot use standard call when the return type is larger than 64 bits.
+            if constexpr (is64BitType<typename FunctionTraits<OperationType>::ResultType>::value)
+                return appendCall(operation);
+            return appendCallWithSlowPathReturnType(operation);
+        }
+#else // OS(WINDOWS) && CPU(X86_64)
         template<typename OperationType, typename... Args>
         MacroAssembler::Call callOperationNoExceptionCheck(OperationType operation, Args... args)
         {
@@ -893,6 +886,7 @@ namespace JSC {
             updateTopCallFrame();
             return appendCall(operation);
         }
+#endif // OS(WINDOWS) && CPU(X86_64)
 
         template<typename OperationType, typename... Args>
         MacroAssembler::Call callOperationWithCallFrameRollbackOnException(OperationType operation, Args... args)
@@ -941,16 +935,6 @@ namespace JSC {
 
 #if ENABLE(SAMPLING_COUNTERS)
         void emitCount(AbstractSamplingCounter&, int32_t = 1);
-#endif
-
-#if ENABLE(OPCODE_SAMPLING)
-        void sampleInstruction(const Instruction*, bool = false);
-#endif
-
-#if ENABLE(CODEBLOCK_SAMPLING)
-        void sampleCodeBlock(CodeBlock*);
-#else
-        void sampleCodeBlock(CodeBlock*) {}
 #endif
 
 #if ENABLE(DFG_JIT)
@@ -1003,7 +987,9 @@ namespace JSC {
 
         JumpList m_exceptionChecks;
         JumpList m_exceptionChecksWithCallFrameRollback;
+#if !ENABLE(EXTRA_CTI_THUNKS)
         Label m_exceptionHandler;
+#endif
 
         unsigned m_getByIdIndex { UINT_MAX };
         unsigned m_getByValIndex { UINT_MAX };
@@ -1027,7 +1013,7 @@ namespace JSC {
         PCToCodeOriginMapBuilder m_pcToCodeOriginMapBuilder;
 
         HashMap<const Instruction*, void*> m_instructionToMathIC;
-        HashMap<const Instruction*, MathICGenerationState> m_instructionToMathICGenerationState;
+        HashMap<const Instruction*, UniqueRef<MathICGenerationState>> m_instructionToMathICGenerationState;
 
         bool m_canBeOptimized;
         bool m_canBeOptimizedOrInlined;

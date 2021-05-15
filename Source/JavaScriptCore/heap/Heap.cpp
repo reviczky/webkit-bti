@@ -355,9 +355,9 @@ Heap::~Heap()
         WeakBlock::destroy(*this, block);
 }
 
-bool Heap::isPagedOut(MonotonicTime deadline)
+bool Heap::isPagedOut()
 {
-    return m_objectSpace.isPagedOut(deadline);
+    return m_objectSpace.isPagedOut();
 }
 
 void Heap::dumpHeapStatisticsAtVMDestruction()
@@ -973,7 +973,8 @@ void Heap::deleteUnmarkedCompiledCode()
     // Sweeping must occur before deleting stubs, otherwise the stubs might still think they're alive as they get deleted.
     // And CodeBlock destructor is assuming that CodeBlock gets destroyed before UnlinkedCodeBlock gets destroyed.
     vm().forEachCodeBlockSpace([] (auto& space) { space.space.sweep(); });
-    m_jitStubRoutines->deleteUnmarkedJettisonedStubRoutines();
+    if (mayHaveJITStubRoutinesToDelete())
+        deleteDeadJITStubRoutines(5_ms);
 }
 
 void Heap::addToRememberedSet(const JSCell* constCell)
@@ -1040,6 +1041,14 @@ void Heap::sweepSynchronously()
     }
     m_objectSpace.sweepBlocks();
     m_objectSpace.shrink();
+
+    unsigned passes = 0;
+    while (mayHaveJITStubRoutinesToDelete()) {
+        constexpr Seconds unlimitedTime = 600_s;
+        deleteDeadJITStubRoutines(unlimitedTime);
+        RELEASE_ASSERT(passes++ < 100);
+    }
+
     if (UNLIKELY(Options::logGC())) {
         MonotonicTime after = MonotonicTime::now();
         dataLog("=> ", capacity() / 1024, "kb, ", (after - before).milliseconds(), "ms");
@@ -1510,7 +1519,7 @@ NEVER_INLINE bool Heap::runEndPhase(GCConductor conn)
         m_structureIDTable.flushOldTables();
 
         reapWeakHandles();
-        pruneStaleEntriesFromWeakGCMaps();
+        pruneStaleEntriesFromWeakGCHashTables();
         sweepArrayBuffers();
         snapshotUnswept();
         finalizeUnconditionalFinalizers(); // We rely on these unconditional finalizers running before clearCurrentlyExecuting since CodeBlock's finalizer relies on querying currently executing.
@@ -2217,12 +2226,12 @@ void Heap::reapWeakHandles()
     m_objectSpace.reapWeakSets();
 }
 
-void Heap::pruneStaleEntriesFromWeakGCMaps()
+void Heap::pruneStaleEntriesFromWeakGCHashTables()
 {
     if (!m_collectionScope || m_collectionScope.value() != CollectionScope::Full)
         return;
-    for (WeakGCMapBase* weakGCMap : m_weakGCMaps)
-        weakGCMap->pruneStaleEntries();
+    for (auto* weakGCHashTable : m_weakGCHashTables)
+        weakGCHashTable->pruneStaleEntries();
 }
 
 void Heap::sweepArrayBuffers()
@@ -2674,14 +2683,14 @@ void Heap::decrementDeferralDepthAndGCIfNeededSlow()
     collectIfNecessaryOrDefer();
 }
 
-void Heap::registerWeakGCMap(WeakGCMapBase* weakGCMap)
+void Heap::registerWeakGCHashTable(WeakGCHashTable* weakGCHashTable)
 {
-    m_weakGCMaps.add(weakGCMap);
+    m_weakGCHashTables.add(weakGCHashTable);
 }
 
-void Heap::unregisterWeakGCMap(WeakGCMapBase* weakGCMap)
+void Heap::unregisterWeakGCHashTable(WeakGCHashTable* weakGCHashTable)
 {
-    m_weakGCMaps.remove(weakGCMap);
+    m_weakGCHashTables.remove(weakGCHashTable);
 }
 
 void Heap::didAllocateBlock(size_t capacity)
@@ -2761,8 +2770,10 @@ void Heap::addCoreConstraints()
 
                 SetRootMarkReasonScope rootScope(visitor, RootMarkReason::ConservativeScan);
                 visitor.append(conservativeRoots);
-                if (UNLIKELY(m_verifierSlotVisitor))
+                if (UNLIKELY(m_verifierSlotVisitor)) {
+                    SetRootMarkReasonScope rootScope(*m_verifierSlotVisitor, RootMarkReason::ConservativeScan);
                     m_verifierSlotVisitor->append(conservativeRoots);
+                }
             }
             if (Options::useJIT()) {
                 // JITStubRoutines must be visited after scanning ConservativeRoots since JITStubRoutines depend on the hook executed during gathering ConservativeRoots.
@@ -2783,8 +2794,10 @@ void Heap::addCoreConstraints()
     m_constraintSet->add(
         "Msr", "Misc Small Roots",
         MAKE_MARKING_CONSTRAINT_EXECUTOR_PAIR(([this] (auto& visitor) {
-            if constexpr (objcAPIEnabled)
+            if constexpr (objcAPIEnabled) {
+                SetRootMarkReasonScope rootScope(visitor, RootMarkReason::ExternalRememberedSet);
                 scanExternalRememberedSet(m_vm, visitor);
+            }
 
             if (m_vm.smallStrings.needsToBeVisited(*m_collectionScope)) {
                 SetRootMarkReasonScope rootScope(visitor, RootMarkReason::StrongReferences);
@@ -2802,14 +2815,23 @@ void Heap::addCoreConstraints()
                 MarkedArgumentBuffer::markLists(visitor, *m_markListSet);
             }
 
-            m_markedJSValueRefArrays.forEach([&] (MarkedJSValueRefArray* array) {
-                array->visitAggregate(visitor);
-            });
+            {
+                SetRootMarkReasonScope rootScope(visitor, RootMarkReason::MarkedJSValueRefArray);
+                m_markedJSValueRefArrays.forEach([&] (MarkedJSValueRefArray* array) {
+                    array->visitAggregate(visitor);
+                });
+            }
 
             {
                 SetRootMarkReasonScope rootScope(visitor, RootMarkReason::VMExceptions);
                 visitor.appendUnbarriered(m_vm.exception());
                 visitor.appendUnbarriered(m_vm.lastException());
+
+                // We're going to m_terminationException directly instead of going through
+                // the exception() getter because we want to assert in the getter that the
+                // TerminationException has been reified. Here, we don't care if it is
+                // reified or not.
+                visitor.appendUnbarriered(m_vm.m_terminationException);
             }
         })),
         ConstraintVolatility::GreyedByExecution);
@@ -2866,10 +2888,15 @@ void Heap::addCoreConstraints()
                 RefPtr<SharedTask<void(Visitor&)>> task = set.template forEachMarkedCellInParallel<Visitor>(callOutputConstraint);
                 visitor.addParallelConstraintTask(task);
             };
-            
-            add(vm.executableToCodeBlockEdgesWithConstraints);
-            if (vm.m_weakMapSpace)
+
+            {
+                SetRootMarkReasonScope rootScope(visitor, RootMarkReason::ExecutableToCodeBlockEdges);
+                add(vm.executableToCodeBlockEdgesWithConstraints);
+            }
+            if (vm.m_weakMapSpace) {
+                SetRootMarkReasonScope rootScope(visitor, RootMarkReason::WeakMapSpace);
                 add(*vm.m_weakMapSpace);
+            }
         })),
         ConstraintVolatility::GreyedByMarking,
         ConstraintParallelism::Parallel);

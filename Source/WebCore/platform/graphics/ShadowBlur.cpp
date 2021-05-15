@@ -34,7 +34,7 @@
 #include "FloatQuad.h"
 #include "GraphicsContext.h"
 #include "ImageBuffer.h"
-#include "ImageData.h"
+#include "PixelBuffer.h"
 #include "Timer.h"
 #include <wtf/Lock.h>
 #include <wtf/MathExtras.h>
@@ -85,7 +85,7 @@ public:
         clearScratchBuffer();
 
         // ShadowBlur is not used with accelerated drawing, so it's OK to make an unconditionally unaccelerated buffer.
-        m_imageBuffer = ImageBuffer::create(roundedSize, RenderingMode::Unaccelerated, 1);
+        m_imageBuffer = ImageBuffer::create(roundedSize, RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
         return m_imageBuffer;
     }
 
@@ -604,7 +604,7 @@ void ShadowBlur::drawInsetShadow(const AffineTransform& transform, const IntRect
 
 void ShadowBlur::drawRectShadowWithoutTiling(const AffineTransform&, const FloatRoundedRect& shadowedRect, const LayerImageProperties& layerImageProperties, const DrawBufferCallback& drawBuffer)
 {
-    auto layerImage = ImageBuffer::create(expandedIntSize(layerImageProperties.layerSize), RenderingMode::Unaccelerated, 1);
+    auto layerImage = ImageBuffer::create(expandedIntSize(layerImageProperties.layerSize), RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
     if (!layerImage)
         return;
 
@@ -632,7 +632,7 @@ void ShadowBlur::drawRectShadowWithoutTiling(const AffineTransform&, const Float
 
 void ShadowBlur::drawInsetShadowWithoutTiling(const AffineTransform&, const FloatRect& fullRect, const FloatRoundedRect& holeRect, const LayerImageProperties& layerImageProperties, const DrawBufferCallback& drawBuffer)
 {
-    auto layerImage = ImageBuffer::create(expandedIntSize(layerImageProperties.layerSize), RenderingMode::Unaccelerated, 1);
+    auto layerImage = ImageBuffer::create(expandedIntSize(layerImageProperties.layerSize), RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
     if (!layerImage)
         return;
 
@@ -705,7 +705,7 @@ void ShadowBlur::drawRectShadowWithTiling(const AffineTransform& transform, cons
 #endif
 
     if (!layerImageBuffer) {
-        layerImageBuffer = ImageBuffer::create(templateSize, RenderingMode::Unaccelerated, 1);
+        layerImageBuffer = ImageBuffer::create(templateSize, RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
         if (!layerImageBuffer)
             return;
     }
@@ -763,7 +763,7 @@ void ShadowBlur::drawInsetShadowWithTiling(const AffineTransform& transform, con
 #endif
 
     if (!layerImageBuffer) {
-        layerImageBuffer = ImageBuffer::create(templateSize, RenderingMode::Unaccelerated, 1);
+        layerImageBuffer = ImageBuffer::create(templateSize, RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
         if (!layerImageBuffer)
             return;
     }
@@ -904,13 +904,12 @@ void ShadowBlur::blurShadowBuffer(ImageBuffer& layerImage, const IntSize& templa
         return;
 
     IntRect blurRect(IntPoint(), templateSize);
-    auto layerData = layerImage.getImageData(AlphaPremultiplication::Unpremultiplied, blurRect);
+    auto layerData = layerImage.getPixelBuffer(AlphaPremultiplication::Unpremultiplied, blurRect);
     if (!layerData)
         return;
 
-    auto* blurPixelArray = layerData->data();
-    blurLayerImage(blurPixelArray->data(), blurRect.size(), blurRect.width() * 4);
-    layerImage.putImageData(AlphaPremultiplication::Unpremultiplied, *layerData, blurRect);
+    blurLayerImage(layerData->data().data(), blurRect.size(), blurRect.width() * 4);
+    layerImage.putPixelBuffer(AlphaPremultiplication::Unpremultiplied, *layerData, blurRect);
 }
 
 void ShadowBlur::blurAndColorShadowBuffer(ImageBuffer& layerImage, const IntSize& templateSize)
@@ -933,7 +932,7 @@ void ShadowBlur::drawShadowLayer(const AffineTransform& transform, const IntRect
 
     adjustBlurRadius(transform);
 
-    auto layerImage = ImageBuffer::create(expandedIntSize(layerImageProperties->layerSize), RenderingMode::Unaccelerated, 1);
+    auto layerImage = ImageBuffer::create(expandedIntSize(layerImageProperties->layerSize), RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
     if (!layerImage)
         return;
 

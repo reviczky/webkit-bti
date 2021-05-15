@@ -25,13 +25,12 @@
 
 #pragma once
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "ActiveDOMObject.h"
 #include "ExceptionOr.h"
 #include "IDBCursorDirection.h"
 #include "IDBKeyPath.h"
 #include "IDBObjectStoreInfo.h"
+#include <wtf/IsoMalloc.h>
 
 namespace JSC {
 class CallFrame;
@@ -52,12 +51,11 @@ class IDBTransaction;
 struct IDBKeyRangeData;
 
 namespace IndexedDB {
-enum class ObjectStoreOverwriteMode;
+enum class ObjectStoreOverwriteMode : uint8_t;
 }
 
 class IDBObjectStore final : public ActiveDOMObject {
-    WTF_MAKE_NONCOPYABLE(IDBObjectStore);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_ISO_ALLOCATED(IDBObjectStore);
 public:
     IDBObjectStore(ScriptExecutionContext&, const IDBObjectStoreInfo&, IDBTransaction&);
     ~IDBObjectStore();
@@ -141,5 +139,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

@@ -41,7 +41,6 @@
 #include <WebCore/ScrollingStatePositionedNode.h>
 #include <WebCore/ScrollingStateStickyNode.h>
 #include <WebCore/ScrollingStateTree.h>
-#include <wtf/HashMap.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/TextStream.h>
 
@@ -98,9 +97,9 @@ template<> struct ArgumentCoder<RequestedScrollData> {
     static WARN_UNUSED_RETURN bool decode(Decoder&, RequestedScrollData&);
 };
 
-template<> struct ArgumentCoder<ScrollSnapOffsetsInfo<float>> {
-    static void encode(Encoder&, const ScrollSnapOffsetsInfo<float>&);
-    static WARN_UNUSED_RETURN bool decode(Decoder&, ScrollSnapOffsetsInfo<float>&);
+template<> struct ArgumentCoder<FloatScrollSnapOffsetsInfo> {
+    static void encode(Encoder&, const FloatScrollSnapOffsetsInfo&);
+    static WARN_UNUSED_RETURN bool decode(Decoder&, FloatScrollSnapOffsetsInfo&);
 };
 
 template<> struct ArgumentCoder<SnapOffset<float>> {
@@ -311,7 +310,7 @@ bool ArgumentCoder<ScrollingStateScrollingNode>::decode(Decoder& decoder, Scroll
     SCROLLING_NODE_DECODE(ScrollingStateNode::Property::ScrollPosition, FloatPoint, setScrollPosition);
     SCROLLING_NODE_DECODE(ScrollingStateNode::Property::ScrollOrigin, IntPoint, setScrollOrigin);
 #if ENABLE(CSS_SCROLL_SNAP)
-    SCROLLING_NODE_DECODE(ScrollingStateNode::Property::SnapOffsetsInfo, ScrollSnapOffsetsInfo<float>, setSnapOffsetsInfo);
+    SCROLLING_NODE_DECODE(ScrollingStateNode::Property::SnapOffsetsInfo, FloatScrollSnapOffsetsInfo, setSnapOffsetsInfo);
     SCROLLING_NODE_DECODE(ScrollingStateNode::Property::CurrentHorizontalSnapOffsetIndex, unsigned, setCurrentHorizontalSnapPointIndex);
     SCROLLING_NODE_DECODE(ScrollingStateNode::Property::CurrentVerticalSnapOffsetIndex, unsigned, setCurrentVerticalSnapPointIndex);
 #endif
@@ -532,6 +531,7 @@ void ArgumentCoder<SnapOffset<float>>::encode(Encoder& encoder, const SnapOffset
 {
     encoder << offset.offset;
     encoder << offset.stop;
+    encoder << offset.snapAreaIndex;
 }
 
 bool ArgumentCoder<SnapOffset<float>>::decode(Decoder& decoder, SnapOffset<float>& offset)
@@ -540,27 +540,29 @@ bool ArgumentCoder<SnapOffset<float>>::decode(Decoder& decoder, SnapOffset<float
         return false;
     if (!decoder.decode(offset.stop))
         return false;
+    if (!decoder.decode(offset.snapAreaIndex))
+        return false;
     return true;
 }
 
 
-void ArgumentCoder<ScrollSnapOffsetsInfo<float>>::encode(Encoder& encoder, const ScrollSnapOffsetsInfo<float>& info)
+void ArgumentCoder<FloatScrollSnapOffsetsInfo>::encode(Encoder& encoder, const FloatScrollSnapOffsetsInfo& info)
 {
     encoder << info.horizontalSnapOffsets;
     encoder << info.verticalSnapOffsets;
-    encoder << info.horizontalSnapOffsetRanges;
-    encoder << info.verticalSnapOffsetRanges;
+    encoder << info.strictness;
+    encoder << info.snapAreas;
 }
 
-bool ArgumentCoder<ScrollSnapOffsetsInfo<float>>::decode(Decoder& decoder, ScrollSnapOffsetsInfo<float>& info)
+bool ArgumentCoder<FloatScrollSnapOffsetsInfo>::decode(Decoder& decoder, FloatScrollSnapOffsetsInfo& info)
 {
     if (!decoder.decode(info.horizontalSnapOffsets))
         return false;
     if (!decoder.decode(info.verticalSnapOffsets))
         return false;
-    if (!decoder.decode(info.horizontalSnapOffsetRanges))
+    if (!decoder.decode(info.strictness))
         return false;
-    if (!decoder.decode(info.verticalSnapOffsetRanges))
+    if (!decoder.decode(info.snapAreas))
         return false;
     return true;
 }

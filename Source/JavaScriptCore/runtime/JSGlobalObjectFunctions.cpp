@@ -695,7 +695,7 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncThrowTypeErrorArgumentsCalleeAndCaller, (JSGl
 JSC_DEFINE_HOST_FUNCTION(globalFuncMakeTypeError, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     Structure* errorStructure = globalObject->errorStructure(ErrorType::TypeError);
-    return JSValue::encode(ErrorInstance::create(globalObject, errorStructure, callFrame->argument(0), nullptr, TypeNothing, ErrorType::TypeError, false));
+    return JSValue::encode(ErrorInstance::create(globalObject, errorStructure, callFrame->argument(0), jsUndefined(), nullptr, TypeNothing, ErrorType::TypeError, false));
 }
 
 JSC_DEFINE_HOST_FUNCTION(globalFuncProtoGetter, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -734,7 +734,6 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncProtoSetter, (JSGlobalObject* globalObject, C
 JSC_DEFINE_HOST_FUNCTION(globalFuncSetPrototypeDirect, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     VM& vm = globalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
 
     JSValue value = callFrame->uncheckedArgument(0);
     if (value.isObject() || value.isNull()) {
@@ -742,8 +741,22 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncSetPrototypeDirect, (JSGlobalObject* globalOb
         object->setPrototypeDirect(vm, value);
     }
 
-    scope.assertNoException();
-    return { };
+    return JSValue::encode(jsUndefined());
+}
+
+JSC_DEFINE_HOST_FUNCTION(globalFuncSetPrototypeDirectOrThrow, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSValue value = callFrame->uncheckedArgument(0);
+    if (!value.isObject() && !value.isNull())
+        return throwVMError(globalObject, scope, createInvalidPrototypeError(globalObject, value));
+
+    JSObject* object = asObject(callFrame->thisValue());
+    object->setPrototypeDirect(vm, value);
+
+    return JSValue::encode(jsUndefined());
 }
 
 JSC_DEFINE_HOST_FUNCTION(globalFuncHostPromiseRejectionTracker, (JSGlobalObject* globalObject, CallFrame* callFrame))

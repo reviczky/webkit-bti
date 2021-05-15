@@ -74,7 +74,9 @@
 #include <WebCore/JSRange.h>
 #include <WebCore/Page.h>
 #include <WebCore/PluginDocument.h>
+#include <WebCore/RenderLayerCompositor.h>
 #include <WebCore/RenderTreeAsText.h>
+#include <WebCore/RenderView.h>
 #include <WebCore/ScriptController.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SubresourceLoader.h>
@@ -501,7 +503,7 @@ String WebFrame::layerTreeAsText() const
     if (!m_coreFrame)
         return "";
 
-    return m_coreFrame->layerTreeAsText(0);
+    return m_coreFrame->contentRenderer()->compositor().layerTreeAsText();
 }
 
 unsigned WebFrame::pendingUnloadCount() const
@@ -641,13 +643,12 @@ bool WebFrame::hasVerticalScrollbar() const
     return view->verticalScrollbar();
 }
 
-RefPtr<InjectedBundleHitTestResult> WebFrame::hitTest(const IntPoint point) const
+RefPtr<InjectedBundleHitTestResult> WebFrame::hitTest(const IntPoint point, OptionSet<HitTestRequest::Type> types) const
 {
     if (!m_coreFrame)
         return nullptr;
 
-    constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::IgnoreClipping,  HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::AllowChildFrameContent };
-    return InjectedBundleHitTestResult::create(m_coreFrame->eventHandler().hitTestResultAtPoint(point, hitType));
+    return InjectedBundleHitTestResult::create(m_coreFrame->eventHandler().hitTestResultAtPoint(point, types));
 }
 
 bool WebFrame::getDocumentBackgroundColor(double* red, double* green, double* blue, double* alpha)

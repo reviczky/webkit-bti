@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "APIObject.h"
 #include "WebProcessProxy.h"
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
@@ -52,7 +53,7 @@ class WebPageProxy;
 
 using SyncLoadCompletionHandler = CompletionHandler<void(const WebCore::ResourceResponse&, const WebCore::ResourceError&, const Vector<char>&)>;
 
-class WebURLSchemeTask : public ThreadSafeRefCounted<WebURLSchemeTask>, public InstanceCounted<WebURLSchemeTask> {
+class WebURLSchemeTask : public API::ObjectImpl<API::Object::Type::URLSchemeTask>, public InstanceCounted<WebURLSchemeTask> {
     WTF_MAKE_NONCOPYABLE(WebURLSchemeTask);
 public:
     static Ref<WebURLSchemeTask> create(WebURLSchemeHandler&, WebPageProxy&, WebProcessProxy&, WebCore::PageIdentifier, URLSchemeTaskParameters&&, SyncLoadCompletionHandler&&);
@@ -76,8 +77,10 @@ public:
         RedirectAfterResponse,
         TaskAlreadyStopped,
         NoResponseSent,
+        WaitingForRedirectCompletionHandler,
         None,
     };
+    ExceptionType willPerformRedirection(WebCore::ResourceResponse&&, WebCore::ResourceRequest&&,  Function<void(WebCore::ResourceRequest&&)>&&);
     ExceptionType didPerformRedirection(WebCore::ResourceResponse&&, WebCore::ResourceRequest&&);
     ExceptionType didReceiveResponse(const WebCore::ResourceResponse&);
     ExceptionType didReceiveData(Ref<WebCore::SharedBuffer>&&);
@@ -85,6 +88,10 @@ public:
 
     void stop();
     void pageDestroyed();
+
+    void suppressTaskStoppedExceptions() { m_shouldSuppressTaskStoppedExceptions = true; }
+
+    bool waitingForRedirectCompletionHandlerCallback() const { return m_waitingForRedirectCompletionHandlerCallback; }
 
 private:
     WebURLSchemeTask(WebURLSchemeHandler&, WebPageProxy&, WebProcessProxy&, WebCore::PageIdentifier, URLSchemeTaskParameters&&, SyncLoadCompletionHandler&&);
@@ -103,10 +110,13 @@ private:
     bool m_responseSent { false };
     bool m_dataSent { false };
     bool m_completed { false };
-    
+    bool m_shouldSuppressTaskStoppedExceptions { false };
+
     SyncLoadCompletionHandler m_syncCompletionHandler;
     WebCore::ResourceResponse m_syncResponse;
     RefPtr<WebCore::SharedBuffer> m_syncData;
+
+    bool m_waitingForRedirectCompletionHandlerCallback { false };
 };
 
 } // namespace WebKit

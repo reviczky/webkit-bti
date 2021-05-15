@@ -32,6 +32,7 @@ class CString;
 class CrashOnOverflow;
 class FunctionDispatcher;
 class Hasher;
+class Logger;
 class MonotonicTime;
 class OrdinalNumber;
 class PrintStream;
@@ -61,6 +62,7 @@ using VectorMalloc = FastMalloc;
 template<typename> struct DefaultRefDerefTraits;
 
 template<typename> class CompletionHandler;
+template<typename> class FixedVector;
 template<typename> class Function;
 template<typename, typename = AnyThreadsAccessTraits> class LazyNeverDestroyed;
 template<typename, typename = AnyThreadsAccessTraits> class NeverDestroyed;
@@ -93,9 +95,15 @@ template<typename> struct EnumTraits;
 template<typename E, E...> struct EnumValues;
 template<typename> struct HashTraits;
 
+struct HashTableTraits;
+struct IdentityExtractor;
+template<typename T> struct KeyValuePairKeyExtractor;
+template<typename KeyTraits, typename MappedTraits> struct KeyValuePairTraits;
+template<typename KeyTypeArg, typename ValueTypeArg> struct KeyValuePair;
+template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits> class HashTable;
 template<typename Value, typename = DefaultHash<Value>, typename = HashTraits<Value>> class HashCountedSet;
-template<typename KeyArg, typename MappedArg, typename = DefaultHash<KeyArg>, typename = HashTraits<KeyArg>, typename = HashTraits<MappedArg>> class HashMap;
-template<typename ValueArg, typename = DefaultHash<ValueArg>, typename = HashTraits<ValueArg>> class HashSet;
+template<typename KeyArg, typename MappedArg, typename = DefaultHash<KeyArg>, typename = HashTraits<KeyArg>, typename = HashTraits<MappedArg>, typename = HashTableTraits> class HashMap;
+template<typename ValueArg, typename = DefaultHash<ValueArg>, typename = HashTraits<ValueArg>, typename = HashTableTraits> class HashSet;
 
 }
 
@@ -111,6 +119,7 @@ using WTF::AtomStringImpl;
 using WTF::BinarySemaphore;
 using WTF::CString;
 using WTF::CompletionHandler;
+using WTF::FixedVector;
 using WTF::Function;
 using WTF::FunctionDispatcher;
 using WTF::HashCountedSet;
@@ -118,6 +127,7 @@ using WTF::HashMap;
 using WTF::HashSet;
 using WTF::Hasher;
 using WTF::LazyNeverDestroyed;
+using WTF::Logger;
 using WTF::NeverDestroyed;
 using WTF::OptionSet;
 using WTF::Optional;

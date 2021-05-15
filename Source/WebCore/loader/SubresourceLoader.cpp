@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -71,8 +71,13 @@
 #undef RELEASE_LOG_ERROR_IF_ALLOWED
 #define PAGE_ID ((frame() ? frame()->pageID().valueOr(PageIdentifier()) : PageIdentifier()).toUInt64())
 #define FRAME_ID ((frame() ? frame()->frameID().valueOr(FrameIdentifier()) : FrameIdentifier()).toUInt64())
+#if RELEASE_LOG_DISABLED
+#define RELEASE_LOG_IF_ALLOWED(fmt, ...) UNUSED_VARIABLE(this)
+#define RELEASE_LOG_ERROR_IF_ALLOWED(fmt, ...) UNUSED_VARIABLE(this)
+#else
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), ResourceLoading, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", frameLoader=%p, resourceID=%lu] SubresourceLoader::" fmt, this, PAGE_ID, FRAME_ID, frameLoader(), identifier(), ##__VA_ARGS__)
 #define RELEASE_LOG_ERROR_IF_ALLOWED(fmt, ...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), ResourceLoading, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", frameLoader=%p, resourceID=%lu] SubresourceLoader::" fmt, this, PAGE_ID, FRAME_ID, frameLoader(), identifier(), ##__VA_ARGS__)
+#endif
 
 namespace WebCore {
 
@@ -100,7 +105,7 @@ SubresourceLoader::SubresourceLoader(Frame& frame, CachedResource& resource, con
     subresourceLoaderCounter.increment();
 #endif
 #if ENABLE(CONTENT_EXTENSIONS)
-    m_resourceType = ContentExtensions::toResourceType(resource.type());
+    m_resourceType = ContentExtensions::toResourceType(resource.type(), resource.resourceRequest().requester());
 #endif
     m_canCrossOriginRequestsAskUserForCredentials = resource.type() == CachedResource::Type::MainResource || frame.settings().allowCrossOriginSubresourcesToAskForCredentials();
 }
@@ -211,8 +216,10 @@ void SubresourceLoader::willSendRequestInternal(ResourceRequest&& newRequest, co
         }
 
         ResourceLoader::willSendRequestInternal(WTFMove(newRequest), redirectResponse, [this, protectedThis = WTFMove(protectedThis), completionHandler = WTFMove(completionHandler), redirectResponse] (ResourceRequest&& request) mutable {
-            if (reachedTerminalState())
+            if (reachedTerminalState()) {
+                RELEASE_LOG_IF_ALLOWED("willSendRequestInternal: reached terminal state; calling completion handler");
                 return completionHandler(WTFMove(request));
+            }
 
             if (request.isNull()) {
                 RELEASE_LOG_IF_ALLOWED("willSendRequestInternal: resource load canceled because request is NULL (2)");
@@ -280,6 +287,14 @@ void SubresourceLoader::willSendRequestInternal(ResourceRequest&& newRequest, co
             return completionHandler(WTFMove(newRequest));
         }
 
+        if (!portAllowed(newRequest.url())) {
+            RELEASE_LOG_IF_ALLOWED("willSendRequestInternal: resource load (redirect) canceled because it attempted to use a blocked port");
+            if (m_frame)
+                FrameLoader::reportBlockedLoadFailed(*m_frame, newRequest.url());
+            cancel(frameLoader()->blockedError(newRequest));
+            return completionHandler(WTFMove(newRequest));
+        }
+
         auto accessControlCheckResult = checkRedirectionCrossOriginAccessControl(request(), redirectResponse, newRequest);
         if (!accessControlCheckResult) {
             auto errorMessage = makeString("Cross-origin redirection to ", newRequest.url().string(), " denied by Cross-Origin Resource Sharing policy: ", accessControlCheckResult.error());
@@ -303,7 +318,6 @@ void SubresourceLoader::willSendRequestInternal(ResourceRequest&& newRequest, co
         return;
     }
 
-    RELEASE_LOG_IF_ALLOWED("willSendRequestInternal: redirect response is NULL");
     continueWillSendRequest(WTFMove(completionHandler), WTFMove(newRequest));
 }
 
@@ -749,6 +763,7 @@ void SubresourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLoadMe
         RELEASE_LOG_IF_ALLOWED("didFinishLoading: reached terminal state");
         return;
     }
+    RELEASE_LOG_IF_ALLOWED("didFinishLoading: Did not reach terminal state");
     releaseResources();
 }
 
@@ -845,10 +860,17 @@ void SubresourceLoader::notifyDone(LoadCompletionType type)
     if (m_state == CancelledWhileInitializing)
         shouldPerformPostLoadActions = false;
 #endif
-    m_documentLoader->cachedResourceLoader().loadDone(type, shouldPerformPostLoadActions);
+    if (m_documentLoader)
+        m_documentLoader->cachedResourceLoader().loadDone(type, shouldPerformPostLoadActions);
+    else
+        RELEASE_LOG_ERROR_IF_ALLOWED("notifyDone: document loader is null. Could not call loadDone()");
+
     if (reachedTerminalState())
         return;
-    m_documentLoader->removeSubresourceLoader(type, this);
+    if (m_documentLoader)
+        m_documentLoader->removeSubresourceLoader(type, this);
+    else
+        RELEASE_LOG_ERROR_IF_ALLOWED("notifyDone: document loader is null. Could not call removeSubresourceLoader()");
 }
 
 void SubresourceLoader::releaseResources()

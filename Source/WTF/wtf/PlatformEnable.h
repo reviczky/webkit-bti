@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2021 Apple Inc. All rights reserved.
  * Copyright (C) 2007-2009 Torch Mobile, Inc.
  * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2013 Samsung Electronics. All rights reserved.
@@ -106,10 +106,6 @@
 
 #if !defined(ENABLE_WEBPROCESS_NSRUNLOOP)
 #define ENABLE_WEBPROCESS_NSRUNLOOP 0
-#endif
-
-#if !defined(ENABLE_WEBPROCESS_WINDOWSERVER_BLOCKING)
-#define ENABLE_WEBPROCESS_WINDOWSERVER_BLOCKING 0
 #endif
 
 #if !defined(ENABLE_MAC_GESTURE_EVENTS)
@@ -225,6 +221,10 @@
 #define ENABLE_CSS_CONIC_GRADIENTS 0
 #endif
 
+#if !defined(ENABLE_CSS_SCROLL_SNAP)
+#define ENABLE_CSS_SCROLL_SNAP 1
+#endif
+
 #if !defined(ENABLE_CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
 #define ENABLE_CSS_TRANSFORM_STYLE_OPTIMIZED_3D 0
 #endif
@@ -243,6 +243,14 @@
 
 #if !defined(ENABLE_DEVICE_ORIENTATION)
 #define ENABLE_DEVICE_ORIENTATION 0
+#endif
+
+#if !defined(ENABLE_DESTINATION_COLOR_SPACE_DISPLAY_P3)
+#define ENABLE_DESTINATION_COLOR_SPACE_DISPLAY_P3 0
+#endif
+
+#if !defined(ENABLE_DESTINATION_COLOR_SPACE_LINEAR_SRGB)
+#define ENABLE_DESTINATION_COLOR_SPACE_LINEAR_SRGB 1
 #endif
 
 #if !defined(ENABLE_DOWNLOAD_ATTRIBUTE)
@@ -281,14 +289,6 @@
 
 #if !defined(ENABLE_GEOLOCATION)
 #define ENABLE_GEOLOCATION 0
-#endif
-
-#if !defined(ENABLE_INDEXED_DATABASE)
-#define ENABLE_INDEXED_DATABASE 0
-#endif
-
-#if !defined(ENABLE_INDEXED_DATABASE_IN_WORKERS)
-#define ENABLE_INDEXED_DATABASE_IN_WORKERS 0
 #endif
 
 #if !defined(ENABLE_INPUT_TYPE_COLOR)
@@ -378,6 +378,10 @@
 
 #if !defined(ENABLE_MHTML)
 #define ENABLE_MHTML 0
+#endif
+
+#if !defined(ENABLE_MODERN_MEDIA_CONTROLS)
+#define ENABLE_MODERN_MEDIA_CONTROLS 0
 #endif
 
 #if !defined(ENABLE_MOUSE_CURSOR_SCALE)
@@ -820,6 +824,22 @@
 #define ENABLE_GC_VALIDATION 1
 #endif
 
+#if OS(DARWIN) && ENABLE(JIT) && USE(APPLE_INTERNAL_SDK) && CPU(ARM64E) && HAVE(JIT_CAGE)
+#define ENABLE_JIT_CAGE 1
+#endif
+
+#if OS(DARWIN) && CPU(ADDRESS64) && ENABLE(JIT) && (ENABLE(JIT_CAGE) || ASSERT_ENABLED)
+#define ENABLE_JIT_OPERATION_VALIDATION 1
+#endif
+
+#if CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS))
+/* The implementation of these thunks can use up to 6 argument registers, and
+   make use of ARM64 like features. For now, we'll only support them on platforms
+   that have 6 or more argument registers to use.
+*/
+#define ENABLE_EXTRA_CTI_THUNKS 1
+#endif
+
 #if !defined(ENABLE_BINDING_INTEGRITY) && !OS(WINDOWS)
 #define ENABLE_BINDING_INTEGRITY 1
 #endif
@@ -891,10 +911,14 @@
 #error "ENABLE(WHLSL_COMPILER) requires ENABLE(WEBGPU)"
 #endif
 
-#if OS(DARWIN) && ENABLE(JIT) && USE(APPLE_INTERNAL_SDK) && CPU(ARM64E) && ((defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 150000) || (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 120000))
-#define ENABLE_JIT_CAGE 1
+#if USE(CG)
+
+#if ENABLE(DESTINATION_COLOR_SPACE_DISPLAY_P3) && !HAVE(CORE_GRAPHICS_DISPLAY_P3_COLOR_SPACE)
+#error "ENABLE(DESTINATION_COLOR_SPACE_DISPLAY_P3) requires HAVE(CORE_GRAPHICS_DISPLAY_P3_COLOR_SPACE) on platforms using CoreGraphics"
 #endif
 
-#if OS(DARWIN) && CPU(ADDRESS64) && ENABLE(JIT) && (ENABLE(JIT_CAGE) || ASSERT_ENABLED)
-#define ENABLE_JIT_OPERATION_VALIDATION 1
+#if ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB) && !HAVE(CORE_GRAPHICS_LINEAR_SRGB_COLOR_SPACE)
+#error "ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB) requires HAVE(CORE_GRAPHICS_LINEAR_SRGB_COLOR_SPACE) on platforms using CoreGraphics"
+#endif
+
 #endif

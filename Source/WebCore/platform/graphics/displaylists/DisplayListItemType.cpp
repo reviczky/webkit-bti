@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -132,8 +132,10 @@ static size_t sizeOfItemInBytes(ItemType type)
         return sizeof(MetaCommandChangeDestinationImageBuffer);
     case ItemType::MetaCommandChangeItemBuffer:
         return sizeof(MetaCommandChangeItemBuffer);
-    case ItemType::PutImageData:
-        return sizeof(PutImageData);
+    case ItemType::GetPixelBuffer:
+        return sizeof(GetPixelBuffer);
+    case ItemType::PutPixelBuffer:
+        return sizeof(PutPixelBuffer);
 #if ENABLE(VIDEO)
     case ItemType::PaintFrameForMedia:
         return sizeof(PaintFrameForMedia);
@@ -171,6 +173,9 @@ static size_t sizeOfItemInBytes(ItemType type)
 
 bool isDrawingItem(ItemType type)
 {
+    /* See the comment at the top of DisplayListItems.h for what this means.
+     * This needs to match all the "static constexpr bool isDrawingItem"s inside the individual item classes. */
+
     switch (type) {
     case ItemType::ApplyDeviceScaleFactor:
 #if USE(CG)
@@ -204,6 +209,7 @@ bool isDrawingItem(ItemType type)
     case ItemType::SetState:
     case ItemType::SetStrokeThickness:
     case ItemType::Translate:
+    case ItemType::GetPixelBuffer:
         return false;
     case ItemType::BeginTransparencyLayer:
     case ItemType::ClearRect:
@@ -234,7 +240,7 @@ bool isDrawingItem(ItemType type)
 #if ENABLE(VIDEO)
     case ItemType::PaintFrameForMedia:
 #endif
-    case ItemType::PutImageData:
+    case ItemType::PutPixelBuffer:
     case ItemType::StrokeEllipse:
 #if ENABLE(INLINE_PATH_DATA)
     case ItemType::StrokeInlinePath:
@@ -253,8 +259,27 @@ size_t paddedSizeOfTypeAndItemInBytes(ItemType type)
     return sizeof(uint64_t) + roundUpToMultipleOf(alignof(uint64_t), sizeOfItemInBytes(type));
 }
 
+size_t paddedSizeOfTypeAndItemInBytes(const DisplayListItem& displayListItem)
+{
+    auto itemSize = WTF::visit([](const auto& item) {
+        return sizeof(item);
+    }, displayListItem);
+    return sizeof(uint64_t) + roundUpToMultipleOf(alignof(uint64_t), itemSize);
+}
+
+ItemType displayListItemType(const DisplayListItem& displayListItem)
+{
+    return WTF::visit([](const auto& item) {
+        return item.itemType;
+    }, displayListItem);
+}
+
 bool isInlineItem(ItemType type)
 {
+    /* See the comment at the top of DisplayListItems.h for what this means.
+     * This needs to match (1) RemoteImageBufferProxy::encodeItem(), (2) RemoteRenderingBackend::decodeItem(),
+     * and (3) all the "static constexpr bool isInlineItem"s inside the individual item classes. */
+
     switch (type) {
     case ItemType::ClipOutToPath:
     case ItemType::ClipPath:
@@ -269,7 +294,7 @@ bool isInlineItem(ItemType type)
     case ItemType::FillRectWithGradient:
     case ItemType::FillRectWithRoundedHole:
     case ItemType::FillRoundedRect:
-    case ItemType::PutImageData:
+    case ItemType::PutPixelBuffer:
     case ItemType::SetLineDash:
     case ItemType::SetState:
     case ItemType::StrokePath:
@@ -326,6 +351,7 @@ bool isInlineItem(ItemType type)
     case ItemType::StrokeRect:
     case ItemType::StrokeLine:
     case ItemType::Translate:
+    case ItemType::GetPixelBuffer:
         return true;
     }
     ASSERT_NOT_REACHED();

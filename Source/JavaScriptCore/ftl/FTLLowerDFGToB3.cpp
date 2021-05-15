@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -119,8 +119,8 @@ namespace {
 std::atomic<int> compileCounter;
 
 #if ASSERT_ENABLED
-NO_RETURN_DUE_TO_CRASH static void ftlUnreachable(
-    CodeBlock* codeBlock, BlockIndex blockIndex, unsigned nodeIndex)
+static NO_RETURN_DUE_TO_CRASH JSC_DECLARE_JIT_OPERATION(ftlUnreachable, void, (CodeBlock* codeBlock, BlockIndex blockIndex, unsigned nodeIndex));
+JSC_DEFINE_JIT_OPERATION_WITH_ATTRIBUTES(ftlUnreachable, NO_RETURN_DUE_TO_CRASH, void, (CodeBlock* codeBlock, BlockIndex blockIndex, unsigned nodeIndex))
 {
     dataLog("Crashing in thought-to-be-unreachable FTL-generated code for ", pointerDump(codeBlock), " at basic block #", blockIndex);
     if (nodeIndex != UINT_MAX)
@@ -361,9 +361,10 @@ public:
 
             if (m_graph.m_plan.mode() == FTLForOSREntryMode) {
                 auto* jitCode = m_ftlState.jitCode->ftlForOSREntry();
-                jitCode->argumentFlushFormats().reserveInitialCapacity(codeBlock()->numParameters());
-                for (int i = 0; i < codeBlock()->numParameters(); ++i)
-                    jitCode->argumentFlushFormats().uncheckedAppend(m_graph.m_argumentFormats[0][i]);
+                FixedVector<DFG::FlushFormat> argumentFlushFormats(codeBlock()->numParameters());
+                for (unsigned i = 0; i < codeBlock()->numParameters(); ++i)
+                    argumentFlushFormats[i] = m_graph.m_argumentFormats[0][i];
+                jitCode->setArgumentFlushFormats(WTFMove(argumentFlushFormats));
             } else {
                 for (unsigned i = codeBlock()->numParameters(); i--;) {
                     MethodOfGettingAValueProfile profile(&m_graph.m_profiledBlock->valueProfileForArgument(i));
@@ -590,8 +591,7 @@ private:
         NodeSet& live = m_liveInToNode.find(node)->value;
         unsigned highParentIndex = node->index();
         {
-            uint64_t hash = WTF::intHash(highParentIndex);
-            if (hash >= static_cast<uint64_t>((static_cast<double>(std::numeric_limits<unsigned>::max()) + 1) * Options::validateAbstractInterpreterStateProbability()))
+            if (intHash(highParentIndex) >= (static_cast<double>(std::numeric_limits<unsigned>::max()) + 1) * Options::validateAbstractInterpreterStateProbability())
                 return;
         }
 
@@ -637,6 +637,7 @@ private:
 
             PatchpointValue* patchpoint = m_out.patchpoint(Void);
             patchpoint->effects = Effects::none();
+            patchpoint->effects.reads = HeapRange::top();
             patchpoint->effects.writesLocalState = true;
             patchpoint->appendSomeRegister(input);
             patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
@@ -646,7 +647,7 @@ private:
                     fpReg = params[0].fpr();
                 else
                     reg = params[0].gpr();
-                jit.probe([=] (Probe::Context& context) {
+                jit.probeDebug([=] (Probe::Context& context) {
                     JSValue input;
                     double doubleInput;
 
@@ -1319,6 +1320,9 @@ private:
             break;
         case SameValue:
             compileSameValue();
+            break;
+        case ToBoolean:
+            compileToBoolean();
             break;
         case LogicalNot:
             compileLogicalNot();
@@ -3845,10 +3849,10 @@ private:
     
     void compilePutStructure()
     {
-        m_ftlState.jitCode->common.notifyCompilingStructureTransition(m_graph.m_plan, codeBlock(), m_node);
-        
         RegisteredStructure oldStructure = m_node->transition()->previous;
         RegisteredStructure newStructure = m_node->transition()->next;
+        m_graph.m_plan.transitions().addLazily(m_node->origin.semantic.codeOriginOwner(), oldStructure.get(), newStructure.get());
+
         ASSERT_UNUSED(oldStructure, oldStructure->indexingMode() == newStructure->indexingMode());
         ASSERT(oldStructure->typeInfo().inlineTypeFlags() == newStructure->typeInfo().inlineTypeFlags());
         ASSERT(oldStructure->typeInfo().type() == newStructure->typeInfo().type());
@@ -5442,7 +5446,7 @@ private:
         TypedPointer base;
         if (inlineCallFrame) {
             if (inlineCallFrame->argumentCountIncludingThis > 1)
-                base = addressFor(inlineCallFrame->argumentsWithFixup[0].virtualRegister());
+                base = addressFor(inlineCallFrame->m_argumentsWithFixup[0].virtualRegister());
         } else
             base = addressFor(virtualRegisterForArgumentIncludingThis(0));
         
@@ -8489,7 +8493,7 @@ private:
             JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
             Structure* stringPrototypeStructure = globalObject->stringPrototype()->structure(vm());
             Structure* objectPrototypeStructure = globalObject->objectPrototype()->structure(vm());
-            WTF::loadLoadFence();
+            WTF::dependentLoadLoadFence();
 
             if (globalObject->stringPrototypeChainIsSane()) {
                 // FIXME: This could be captured using a Speculation mode that means
@@ -8820,7 +8824,7 @@ private:
             } else {
                 DFG_ASSERT(m_graph, m_node, variant.kind() == PutByIdVariant::Transition, variant.kind());
                 m_graph.m_plan.transitions().addLazily(
-                    codeBlock(), m_origin.semantic.codeOriginOwner(),
+                    m_origin.semantic.codeOriginOwner(),
                     variant.oldStructureForTransition(), variant.newStructure());
                 
                 storage = storageForTransition(
@@ -9637,6 +9641,11 @@ private:
         setBoolean(vmCall(Int32, operationSameValue, weakPointer(globalObject), lowJSValue(m_node->child1()), lowJSValue(m_node->child2())));
     }
     
+    void compileToBoolean()
+    {
+        setBoolean(boolify(m_node->child1()));
+    }
+
     void compileLogicalNot()
     {
         setBoolean(m_out.logicalNot(boolify(m_node->child1())));
@@ -11344,7 +11353,7 @@ private:
                         JumpReplacement jumpReplacement(
                             linkBuffer.locationOf<JSInternalPtrTag>(label),
                             linkBuffer.locationOf<OSRExitPtrTag>(handle->label));
-                        jitCode->common.jumpReplacements.append(jumpReplacement);
+                        jitCode->common.m_jumpReplacements.append(jumpReplacement);
                     });
             });
 
@@ -13391,8 +13400,8 @@ private:
         LBasicBlock needTrapHandling = m_out.newBlock();
         LBasicBlock continuation = m_out.newBlock();
         
-        LValue state = m_out.load8ZeroExt32(m_out.absolute(vm().needTrapHandlingAddress()));
-        m_out.branch(m_out.isZero32(state),
+        LValue trapBits = m_out.load32(m_out.absolute(vm().traps().trapBitsAddress()));
+        m_out.branch(m_out.testIsZero32(trapBits, m_out.constInt32(VMTraps::AsyncEvents)),
             usually(continuation), rarely(needTrapHandling));
 
         LBasicBlock lastNext = m_out.appendTo(needTrapHandling, continuation);
@@ -14626,7 +14635,7 @@ private:
             m_out.storePtr(m_callFrame, m_out.absolute(&vm().topCallFrame));
             if (Options::useJITCage()) {
                 setJSValue(
-                    vmCall(Int64, vmEntryCustomAccessor, weakPointer(globalObject), lowCell(m_node->child1()), m_out.constIntPtr(m_graph.identifiers()[m_node->callDOMGetterData()->identifierNumber]), m_out.constIntPtr(m_node->callDOMGetterData()->customAccessorGetter.executableAddress())));
+                    vmCall(Int64, vmEntryCustomGetter, weakPointer(globalObject), lowCell(m_node->child1()), m_out.constIntPtr(m_graph.identifiers()[m_node->callDOMGetterData()->identifierNumber]), m_out.constIntPtr(m_node->callDOMGetterData()->customAccessorGetter.executableAddress())));
             } else {
                 FunctionPtr<CustomAccessorPtrTag> getter = m_node->callDOMGetterData()->customAccessorGetter;
                 FunctionPtr<OperationPtrTag> bypassedFunction = FunctionPtr<OperationPtrTag>(MacroAssemblerCodePtr<OperationPtrTag>(WTF::tagNativeCodePtrImpl<OperationPtrTag>(WTF::untagNativeCodePtrImpl<CustomAccessorPtrTag>(getter.executableAddress()))));
@@ -16378,9 +16387,10 @@ private:
         PatchpointValue* authenticate = m_out.patchpoint(pointerType());
         authenticate->appendSomeRegister(ptr);
         authenticate->append(size, B3::ValueRep(B3::ValueRep::SomeLateRegister));
+        authenticate->numGPScratchRegisters = 1;
         authenticate->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
             jit.move(params[1].gpr(), params[0].gpr());
-            jit.untagArrayPtr(params[2].gpr(), params[0].gpr());
+            jit.untagArrayPtr(params[2].gpr(), params[0].gpr(), true, params.gpScratch(0));
         });
         return authenticate;
 #else
@@ -16434,6 +16444,11 @@ private:
         
         LValue masked = m_out.bitAnd(ptr, mask);
         LValue result = m_out.add(masked, basePtr);
+#if CPU(ARM64E)
+        result = m_out.select(
+            m_out.equal(ptr, m_out.constIntPtr(JSArrayBufferView::nullVectorPtr())),
+            ptr, result);
+#endif
 
 #if CPU(ARM64E)
         if (kind == Gigacage::Primitive) {
@@ -16727,12 +16742,12 @@ private:
         // https://bugs.webkit.org/show_bug.cgi?id=144369
 
         JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
+
+        const UnlinkedStringJumpTable& unlinkedTable = m_graph.unlinkedStringSwitchJumpTable(data->switchTableIndex);
         
-        LValue branchOffset = vmCall(
-            Int32, operationSwitchStringAndGetBranchOffset,
-            weakPointer(globalObject), m_out.constIntPtr(data->switchTableIndex), string);
-        
-        StringJumpTable& table = codeBlock()->stringSwitchJumpTable(data->switchTableIndex);
+        LValue branchIndex = vmCall(
+            Int32, operationSwitchStringAndGetIndex,
+            weakPointer(globalObject), m_out.constIntPtr(&unlinkedTable), string);
         
         Vector<SwitchCase> cases;
         // These may be negative, or zero, or probably other stuff, too. We don't want to mess with HashSet's corner cases and we don't really care about throughput here.
@@ -16770,20 +16785,20 @@ private:
             // https://bugs.webkit.org/show_bug.cgi?id=144635
             
             DFG::SwitchCase myCase = data->cases[i];
-            StringJumpTable::StringOffsetTable::iterator iter =
-                table.offsetTable.find(myCase.value.stringImpl());
-            DFG_ASSERT(m_graph, m_node, iter != table.offsetTable.end());
+            auto iter = unlinkedTable.m_offsetTable.find(myCase.value.stringImpl());
+            DFG_ASSERT(m_graph, m_node, iter != unlinkedTable.m_offsetTable.end());
             
-            if (!alreadyHandled.insert(iter->value.branchOffset).second)
+            // Use m_indexInTable instead of m_branchOffset to make Switch table dense.
+            if (!alreadyHandled.insert(iter->value.m_indexInTable).second)
                 continue;
 
             cases.append(SwitchCase(
-                m_out.constInt32(iter->value.branchOffset),
+                m_out.constInt32(iter->value.m_indexInTable),
                 lowBlock(myCase.target.block), Weight(myCase.target.count)));
         }
         
         m_out.switchInstruction(
-            branchOffset, cases, lowBlock(data->fallThrough.block),
+            branchIndex, cases, lowBlock(data->fallThrough.block),
             Weight(data->fallThrough.count));
     }
     
@@ -19892,7 +19907,7 @@ private:
 #else // ASSERT_ENABLED
         m_out.call(
             Void,
-            m_out.constIntPtr(ftlUnreachable),
+            m_out.operation(ftlUnreachable),
             // We don't want the CodeBlock to have a weak pointer to itself because
             // that would cause it to always get collected.
             m_out.constIntPtr(bitwise_cast<intptr_t>(codeBlock())), m_out.constInt32(blockIndex),

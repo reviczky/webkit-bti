@@ -28,7 +28,6 @@
 #pragma once
 
 #include "APIPageConfiguration.h"
-#include "GestureController.h"
 #include "InputMethodState.h"
 #include "SameDocumentNavigationType.h"
 #include "ShareableBitmap.h"
@@ -36,7 +35,7 @@
 #include "ViewSnapshotStore.h"
 #include "WebContextMenuProxyGtk.h"
 #include "WebHitTestResultData.h"
-#include "WebInspectorProxy.h"
+#include "WebInspectorUIProxy.h"
 #include "WebKitInputMethodContext.h"
 #include "WebKitWebViewBase.h"
 #include "WebPageProxy.h"
@@ -88,15 +87,9 @@ void webkitWebViewBaseStartDrag(WebKitWebViewBase*, WebCore::SelectionData&&, Op
 void webkitWebViewBaseDidPerformDragControllerAction(WebKitWebViewBase*);
 #endif
 
-#if !USE(GTK4)
-WebKit::GestureController& webkitWebViewBaseGestureController(WebKitWebViewBase*);
-#endif
-
 RefPtr<WebKit::ViewSnapshot> webkitWebViewBaseTakeViewSnapshot(WebKitWebViewBase*, Optional<WebCore::IntRect>&&);
 void webkitWebViewBaseSetEnableBackForwardNavigationGesture(WebKitWebViewBase*, bool enabled);
-#if !USE(GTK4)
 WebKit::ViewGestureController* webkitWebViewBaseViewGestureController(WebKitWebViewBase*);
-#endif
 
 bool webkitWebViewBaseBeginBackSwipeForTesting(WebKitWebViewBase*);
 bool webkitWebViewBaseCompleteBackSwipeForTesting(WebKitWebViewBase*);
@@ -120,3 +113,7 @@ void webkitWebViewBaseDidLosePointerLock(WebKitWebViewBase*);
 void webkitWebViewBaseSetInputMethodContext(WebKitWebViewBase*, WebKitInputMethodContext*);
 WebKitInputMethodContext* webkitWebViewBaseGetInputMethodContext(WebKitWebViewBase*);
 void webkitWebViewBaseSynthesizeCompositionKeyPress(WebKitWebViewBase*, const String& text, Optional<Vector<WebCore::CompositionUnderline>>&&, Optional<WebKit::EditingRange>&&);
+
+void webkitWebViewBaseMakeBlank(WebKitWebViewBase*, bool);
+void webkitWebViewBasePageGrabbedTouch(WebKitWebViewBase*);
+void webkitWebViewBaseSetShouldNotifyFocusEvents(WebKitWebViewBase*, bool);

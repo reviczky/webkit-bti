@@ -35,10 +35,13 @@ namespace WebCore {
 
 enum class CreateNewGroupForHighlight : bool { No, Yes };
 
+enum class HighlightRequestOriginatedInApp : bool { No, Yes };
+
 struct AppHighlight {
     Ref<WebCore::SharedBuffer> highlight;
     Optional<String> text;
     CreateNewGroupForHighlight isNewGroup;
+    HighlightRequestOriginatedInApp requestOriginatedInApp;
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static Optional<AppHighlight> decode(Decoder&);
@@ -54,6 +57,8 @@ void AppHighlight::encode(Encoder& encoder) const
     encoder << text;
 
     encoder << isNewGroup;
+
+    encoder << requestOriginatedInApp;
 }
 
 template<class Decoder>
@@ -65,10 +70,8 @@ Optional<AppHighlight> AppHighlight::decode(Decoder& decoder)
     if (!length)
         return WTF::nullopt;
 
-    if (!decoder.template bufferIsLargeEnoughToContain<uint8_t>(length.value())) {
-        decoder.markInvalid();
+    if (!decoder.template bufferIsLargeEnoughToContain<uint8_t>(length.value()))
         return WTF::nullopt;
-    }
 
     Vector<uint8_t> highlight;
     highlight.grow(*length);
@@ -84,7 +87,11 @@ Optional<AppHighlight> AppHighlight::decode(Decoder& decoder)
     if (!decoder.decode(isNewGroup))
         return WTF::nullopt;
 
-    return {{ SharedBuffer::create(WTFMove(highlight)), WTFMove(*text), isNewGroup }};
+    HighlightRequestOriginatedInApp requestOriginatedInApp;
+    if (!decoder.decode(requestOriginatedInApp))
+        return WTF::nullopt;
+
+    return {{ SharedBuffer::create(WTFMove(highlight)), WTFMove(*text), isNewGroup, requestOriginatedInApp }};
 }
 
 }

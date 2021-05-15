@@ -1,4 +1,4 @@
-# Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+# Copyright (C) 2011-2021 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -265,6 +265,8 @@ const YarrEntryPtrTag = constexpr YarrEntryPtrTag
 const CSSSelectorPtrTag = constexpr CSSSelectorPtrTag
 const NoPtrTag = constexpr NoPtrTag
  
+# VMTraps data
+const VMTrapsAsyncEvents = constexpr VMTraps::AsyncEvents
 
 # Some register conventions.
 # - We use a pair of registers to represent the PC: one register for the
@@ -612,6 +614,8 @@ const BlackThreshold = constexpr blackThreshold
 
 const VectorBufferOffset = Vector::m_buffer
 const VectorSizeOffset = Vector::m_size
+
+const RefCountedArrayStorageNonNullSizeOffset = -(constexpr (RefCountedArray::Header::size())) + RefCountedArray::Header::length
 
 # Some common utilities.
 macro crash()
@@ -1341,6 +1345,13 @@ macro notifyWrite(set, slow)
     bbneq WatchpointSet::m_state[set], IsInvalidated, slow
 end
 
+macro varReadOnlyCheck(slowPath, scratch)
+    loadp CodeBlock[cfr], scratch
+    loadp CodeBlock::m_globalObject[scratch], scratch
+    loadp JSGlobalObject::m_varReadOnlyWatchpoint[scratch], scratch
+    bbeq WatchpointSet::m_state[scratch], IsInvalidated, slowPath
+end
+
 macro checkSwitchToJIT(increment, action)
     loadp CodeBlock[cfr], t0
     baddis increment, CodeBlock::m_llintExecuteCounter + BaselineExecutionCounter::m_counter[t0], .continue
@@ -1543,7 +1554,7 @@ macro functionInitialization(profileArgSkip)
     addp -profileArgSkip, t0 # Use addi because that's what has the peephole
     assert(macro (ok) bpgteq t0, 0, ok end)
     btpz t0, .argumentProfileDone
-    loadp CodeBlock::m_argumentValueProfiles + RefCountedArray::m_data[t1], t3
+    loadp CodeBlock::m_argumentValueProfiles + FixedVector::m_storage + RefCountedArray::m_data[t1], t3
     btpz t3, .argumentProfileDone # When we can't JIT, we don't allocate any argument value profiles.
     mulp sizeof ValueProfile, t0, t2 # Aaaaahhhh! Need strength reduction!
     lshiftp 3, t0 # offset of last JSValue arguments on the stack.
@@ -1617,9 +1628,24 @@ end
     ret
 
 # a0, a1, a2 are used. a3 contains function address.
-global _vmEntryCustomAccessor
-_vmEntryCustomAccessor:
+# EncodedJSValue(JIT_OPERATION_ATTRIBUTES*)(JSGlobalObject*, EncodedJSValue, PropertyName, void*);
+global _vmEntryCustomGetter
+_vmEntryCustomGetter:
+if ARM64E
     jmp a3, CustomAccessorPtrTag
+else
+    crash()
+end
+
+# a0, a1, a2, a3 are used. a4 contains function address.
+# bool (JIT_OPERATION_ATTRIBUTES*)(JSGlobalObject*, EncodedJSValue, EncodedJSValue, PropertyName, void*);
+global _vmEntryCustomSetter
+_vmEntryCustomSetter:
+if ARM64E
+    jmp a4, CustomAccessorPtrTag
+else
+    crash()
+end
 
 # a0 and a1 are used. a2 contains function address.
 global _vmEntryHostFunction
@@ -2169,7 +2195,8 @@ end)
 llintOp(op_check_traps, OpCheckTraps, macro (unused, unused, dispatch)
     loadp CodeBlock[cfr], t1
     loadp CodeBlock::m_vm[t1], t1
-    loadb VM::m_traps+VMTraps::m_needTrapHandling[t1], t0
+    loadi VM::m_traps+VMTraps::m_trapBits[t1], t0
+    andi VMTrapsAsyncEvents, t0
     btpnz t0, .handleTraps
 .afterHandlingTraps:
     dispatch()
@@ -2503,14 +2530,20 @@ _wasm_trampoline_wasm_call:
 _wasm_trampoline_wasm_call_no_tls:
 _wasm_trampoline_wasm_call_indirect:
 _wasm_trampoline_wasm_call_indirect_no_tls:
+_wasm_trampoline_wasm_call_ref:
+_wasm_trampoline_wasm_call_ref_no_tls:
 _wasm_trampoline_wasm_call_wide16:
 _wasm_trampoline_wasm_call_no_tls_wide16:
 _wasm_trampoline_wasm_call_indirect_wide16:
 _wasm_trampoline_wasm_call_indirect_no_tls_wide16:
+_wasm_trampoline_wasm_call_ref_wide16:
+_wasm_trampoline_wasm_call_ref_no_tls_wide16:
 _wasm_trampoline_wasm_call_wide32:
 _wasm_trampoline_wasm_call_no_tls_wide32:
 _wasm_trampoline_wasm_call_indirect_wide32:
 _wasm_trampoline_wasm_call_indirect_no_tls_wide32:
+_wasm_trampoline_wasm_call_ref_wide32:
+_wasm_trampoline_wasm_call_ref_no_tls_wide32:
     crash()
 
 end

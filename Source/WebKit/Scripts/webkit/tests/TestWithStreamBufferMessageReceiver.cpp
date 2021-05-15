@@ -35,13 +35,11 @@ namespace WebKit {
 void TestWithStreamBuffer::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     auto protectedThis = makeRef(*this);
-    if (decoder.messageName() == Messages::TestWithStreamBuffer::SendStreamBuffer::name()) {
-        IPC::handleMessage<Messages::TestWithStreamBuffer::SendStreamBuffer>(decoder, this, &TestWithStreamBuffer::sendStreamBuffer);
-        return;
-    }
+    if (decoder.messageName() == Messages::TestWithStreamBuffer::SendStreamBuffer::name())
+        return IPC::handleMessage<Messages::TestWithStreamBuffer::SendStreamBuffer>(decoder, this, &TestWithStreamBuffer::sendStreamBuffer);
     UNUSED_PARAM(connection);
     UNUSED_PARAM(decoder);
-    ASSERT_NOT_REACHED();
+    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, description(decoder.messageName()), decoder.destinationID());
 }
 
 } // namespace WebKit

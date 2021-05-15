@@ -80,7 +80,7 @@ void IntlSegmenter::initializeSegmenter(JSGlobalObject* globalObject, JSValue lo
         return { };
     };
 
-    auto& availableLocales = intlSegmenterAvailableLocales();
+    const auto& availableLocales = intlSegmenterAvailableLocales();
     auto resolved = resolveLocale(globalObject, availableLocales, requestedLocales, localeMatcher, localeOptions, { }, localeData);
 
     m_locale = resolved.locale;

@@ -187,6 +187,7 @@ public:
 
     void deferFocusedUIElementChangeIfNeeded(Node* oldFocusedNode, Node* newFocusedNode);
     void deferModalChange(Element*);
+    void deferMenuListValueChange(Element*);
     void handleScrolledToAnchor(const Node* anchorNode);
     void handleScrollbarUpdate(ScrollView*);
     
@@ -287,6 +288,7 @@ public:
         AXLayoutComplete,
         AXLoadComplete,
         AXNewDocumentLoadComplete,
+        AXPageScrolled,
         AXSelectedChildrenChanged,
         AXSelectedTextChanged,
         AXValueChanged,
@@ -367,6 +369,8 @@ public:
 
     Optional<SimpleRange> rangeMatchesTextNearRange(const SimpleRange&, const String&);
 
+    static String notificationPlatformName(AXNotification);
+
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     WEBCORE_EXPORT static bool isIsolatedTreeEnabled();
     WEBCORE_EXPORT static bool usedOnAXThread();
@@ -383,7 +387,6 @@ private:
 #endif
 
 protected:
-    static String notificationPlatformName(AXNotification);
     void postPlatformNotification(AXCoreObject*, AXNotification);
     void platformHandleFocusedUIElementChanged(Node* oldFocusedNode, Node* newFocusedNode);
 
@@ -511,6 +514,7 @@ private:
     ListHashSet<RefPtr<AXCoreObject>> m_deferredChildrenChangedList;
     ListHashSet<Node*> m_deferredChildrenChangedNodeList;
     WeakHashSet<Element> m_deferredModalChangedList;
+    WeakHashSet<Element> m_deferredMenuListChange;
     HashMap<Element*, String> m_deferredTextFormControlValue;
     HashMap<Element*, QualifiedName> m_deferredAttributeChange;
     Vector<std::pair<Node*, Node*>> m_deferredFocusedNodeChange;

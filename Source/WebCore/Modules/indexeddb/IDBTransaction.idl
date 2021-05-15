@@ -26,7 +26,6 @@
 
 [
     ActiveDOMObject,
-    Conditional=INDEXED_DATABASE,
     JSCustomMarkFunction,
     SkipVTableValidation,
     Exposed=(Window,Worker)
@@ -38,10 +37,10 @@
     [SameObject] readonly attribute IDBDatabase db;
     readonly attribute DOMException? error;
 
-    [MayThrowException] IDBObjectStore objectStore(DOMString name);
+    IDBObjectStore objectStore(DOMString name);
     // FIXME: Implement 'commit'.
     // undefined commit();
-    [MayThrowException] undefined abort();
+    undefined abort();
 
     // Event handlers:
     attribute EventHandler onabort;

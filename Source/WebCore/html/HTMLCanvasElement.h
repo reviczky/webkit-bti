@@ -31,7 +31,6 @@
 #include "CanvasBase.h"
 #include "FloatRect.h"
 #include "HTMLElement.h"
-#include "ImageBitmapRenderingContextSettings.h"
 #include <memory>
 #include <wtf/Forward.h>
 
@@ -53,6 +52,8 @@ class MediaStream;
 class OffscreenCanvas;
 class WebGLRenderingContextBase;
 class GPUCanvasContext;
+struct CanvasRenderingContext2DSettings;
+struct ImageBitmapRenderingContextSettings;
 struct UncachedString;
 
 namespace DisplayList {
@@ -77,8 +78,8 @@ public:
     CanvasRenderingContext* getContext(const String&);
 
     static bool is2dType(const String&);
-    CanvasRenderingContext2D* createContext2d(const String& type);
-    CanvasRenderingContext2D* getContext2d(const String&);
+    CanvasRenderingContext2D* createContext2d(const String&, CanvasRenderingContext2DSettings&&);
+    CanvasRenderingContext2D* getContext2d(const String&, CanvasRenderingContext2DSettings&&);
 
 #if ENABLE(WEBGL)
     using WebGLVersion = GraphicsContextGLWebGLVersion;
@@ -95,8 +96,8 @@ public:
 #endif
 
     static bool isBitmapRendererType(const String&);
-    ImageBitmapRenderingContext* createContextBitmapRenderer(const String&, ImageBitmapRenderingContextSettings&& = { });
-    ImageBitmapRenderingContext* getContextBitmapRenderer(const String&, ImageBitmapRenderingContextSettings&& = { });
+    ImageBitmapRenderingContext* createContextBitmapRenderer(const String&, ImageBitmapRenderingContextSettings&&);
+    ImageBitmapRenderingContext* getContextBitmapRenderer(const String&, ImageBitmapRenderingContextSettings&&);
 
     WEBCORE_EXPORT ExceptionOr<UncachedString> toDataURL(const String& mimeType, JSC::JSValue quality);
     WEBCORE_EXPORT ExceptionOr<UncachedString> toDataURL(const String& mimeType);
@@ -106,7 +107,7 @@ public:
 #endif
 
     // Used for rendering
-    void didDraw(const FloatRect&) final;
+    void didDraw(const Optional<FloatRect>&) final;
 
     void paint(GraphicsContext&, const LayoutRect&);
 
@@ -182,25 +183,20 @@ private:
     Node::InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) final;
     void removedFromAncestor(RemovalType, ContainerNode& oldParentOfRemovedTree) final;
 
-    FloatRect m_dirtyRect;
-
-    bool m_ignoreReset { false };
+    std::unique_ptr<CanvasRenderingContext> m_context;
+    mutable RefPtr<Image> m_copiedImage; // FIXME: This is temporary for platforms that have to copy the image buffer to render (and for CSSCanvasValue).
 
     Optional<bool> m_usesDisplayListDrawing;
     bool m_tracksDisplayListReplay { false };
 
-    std::unique_ptr<CanvasRenderingContext> m_context;
-
+    bool m_ignoreReset { false };
     // m_hasCreatedImageBuffer means we tried to malloc the buffer. We didn't necessarily get it.
     mutable bool m_hasCreatedImageBuffer { false };
     mutable bool m_didClearImageBuffer { false };
 #if ENABLE(WEBGL)
     bool m_hasRelevantWebGLEventListener { false };
 #endif
-
     bool m_isSnapshotting { false };
-
-    mutable RefPtr<Image> m_copiedImage; // FIXME: This is temporary for platforms that have to copy the image buffer to render (and for CSSCanvasValue).
 };
 
 } // namespace WebCore

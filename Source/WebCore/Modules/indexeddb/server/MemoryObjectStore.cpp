@@ -26,8 +26,6 @@
 #include "config.h"
 #include "MemoryObjectStore.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBBindingUtilities.h"
 #include "IDBError.h"
 #include "IDBGetAllResult.h"
@@ -51,9 +49,9 @@ Ref<MemoryObjectStore> MemoryObjectStore::create(PAL::SessionID sessionID, const
     return adoptRef(*new MemoryObjectStore(sessionID, info));
 }
 
-MemoryObjectStore::MemoryObjectStore(PAL::SessionID sessionID, const IDBObjectStoreInfo& info)
+MemoryObjectStore::MemoryObjectStore(PAL::SessionID, const IDBObjectStoreInfo& info)
     : m_info(info)
-    , m_serializationContext(IDBSerializationContext::getOrCreateIDBSerializationContext(sessionID))
+    , m_serializationContext(IDBSerializationContext::getOrCreateForCurrentThread())
 {
 }
 
@@ -517,5 +515,3 @@ void MemoryObjectStore::renameIndex(MemoryIndex& index, const String& newName)
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

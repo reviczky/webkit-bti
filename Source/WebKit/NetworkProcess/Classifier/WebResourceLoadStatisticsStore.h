@@ -256,6 +256,7 @@ struct ThirdPartyData {
     void scheduleCookieBlockingUpdateForDomains(const Vector<RegistrableDomain>&, CompletionHandler<void()>&&);
     void scheduleStatisticsAndDataRecordsProcessing(CompletionHandler<void()>&&);
     void statisticsDatabaseHasAllTables(CompletionHandler<void(bool)>&&);
+    void statisticsDatabaseColumnsForTable(const String&, CompletionHandler<void(Vector<String>&&)>&&);
     void scheduleClearInMemoryAndPersistent(ShouldGrandfatherStatistics, CompletionHandler<void()>&&);
     void scheduleClearInMemoryAndPersistent(WallTime modifiedSince, ShouldGrandfatherStatistics, CompletionHandler<void()>&&);
     void clearInMemoryEphemeral(CompletionHandler<void()>&&);
@@ -304,18 +305,18 @@ struct ThirdPartyData {
     static void resume();
     
     bool isEphemeral() const { return m_isEphemeral == WebCore::ResourceLoadStatistics::IsEphemeral::Yes; };
-    void insertExpiredStatisticForTesting(const RegistrableDomain&, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&&);
+    void insertExpiredStatisticForTesting(const RegistrableDomain&, unsigned numberOfOperatingDaysPassed, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&&);
 
     // Private Click Measurement.
     void insertPrivateClickMeasurement(WebCore::PrivateClickMeasurement&&, PrivateClickMeasurementAttributionType);
     void markAllUnattributedPrivateClickMeasurementAsExpiredForTesting();
-    void attributePrivateClickMeasurement(const WebCore::PrivateClickMeasurement::SourceSite&, const WebCore::PrivateClickMeasurement::AttributeOnSite&, WebCore::PrivateClickMeasurement::AttributionTriggerData&&, CompletionHandler<void(Optional<Seconds>)>&&);
+    void attributePrivateClickMeasurement(const WebCore::PrivateClickMeasurement::SourceSite&, const WebCore::PrivateClickMeasurement::AttributionDestinationSite&, WebCore::PrivateClickMeasurement::AttributionTriggerData&&, CompletionHandler<void(Optional<WebCore::PrivateClickMeasurement::AttributionSecondsUntilSendData>)>&&);
     void allAttributedPrivateClickMeasurement(CompletionHandler<void(Vector<WebCore::PrivateClickMeasurement>&&)>&&);
     void clearPrivateClickMeasurement();
     void clearPrivateClickMeasurementForRegistrableDomain(const WebCore::RegistrableDomain&);
     void clearExpiredPrivateClickMeasurement();
     void privateClickMeasurementToString(CompletionHandler<void(String)>&&);
-    void clearSentAttribution(WebCore::PrivateClickMeasurement&&);
+    void clearSentAttribution(WebCore::PrivateClickMeasurement&&, WebCore::PrivateClickMeasurement::AttributionReportEndpoint);
     void markAttributedPrivateClickMeasurementsAsExpiredForTesting(CompletionHandler<void()>&&);
 
 private:

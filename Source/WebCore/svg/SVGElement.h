@@ -56,7 +56,7 @@ public:
 
     String title() const override;
     virtual bool supportsMarkers() const { return false; }
-    bool hasRelativeLengths() const { return !m_elementsWithRelativeLengths.isEmpty(); }
+    bool hasRelativeLengths() const { return !m_elementsWithRelativeLengths.computesEmpty(); }
     virtual bool needsPendingResourceHandling() const { return true; }
     bool instanceUpdatesBlocked() const;
     void setInstanceUpdatesBlocked(bool);
@@ -89,9 +89,14 @@ public:
     }
 
     // The instances of an element are clones made in shadow trees to implement <use>.
-    const HashSet<SVGElement*>& instances() const;
+    const WeakHashSet<SVGElement>& instances() const;
 
-    bool getBoundingBox(FloatRect&, SVGLocatable::StyleUpdateStrategy = SVGLocatable::AllowStyleUpdate);
+    Optional<FloatRect> getBoundingBox() const;
+
+    Vector<Ref<SVGElement>> referencingElements() const;
+    void addReferencingElement(SVGElement&);
+    void removeReferencingElement(SVGElement&);
+    void removeElementReference();
 
     SVGElement* correspondingElement() const;
     RefPtr<SVGUseElement> correspondingUseElement() const;
@@ -147,7 +152,7 @@ public:
     SVGAnimatedString& classNameAnimated() { return m_className; }
 
 protected:
-    SVGElement(const QualifiedName&, Document&);
+    SVGElement(const QualifiedName&, Document&, ConstructionType = CreateSVGElement);
     virtual ~SVGElement();
 
     bool rendererIsNeeded(const RenderStyle&) override;
@@ -169,8 +174,8 @@ protected:
     void removedFromAncestor(RemovalType, ContainerNode&) override;
     void childrenChanged(const ChildChange&) override;
     virtual bool selfHasRelativeLengths() const { return false; }
-    void updateRelativeLengthsInformation() { updateRelativeLengthsInformation(selfHasRelativeLengths(), this); }
-    void updateRelativeLengthsInformation(bool hasRelativeLengths, SVGElement*);
+    void updateRelativeLengthsInformation() { updateRelativeLengthsInformation(selfHasRelativeLengths(), *this); }
+    void updateRelativeLengthsInformation(bool hasRelativeLengths, SVGElement&);
 
     void willRecalcStyle(Style::Change) override;
 
@@ -188,7 +193,7 @@ private:
 
     std::unique_ptr<SVGElementRareData> m_svgRareData;
 
-    HashSet<SVGElement*> m_elementsWithRelativeLengths;
+    WeakHashSet<SVGElement> m_elementsWithRelativeLengths;
 
     std::unique_ptr<SVGPropertyAnimatorFactory> m_propertyAnimatorFactory;
 

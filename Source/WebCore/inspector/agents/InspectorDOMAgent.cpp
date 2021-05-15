@@ -120,6 +120,7 @@
 #include <wtf/Optional.h>
 #include <wtf/text/Base64.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -1335,7 +1336,7 @@ Protocol::ErrorStringOr<void> InspectorDOMAgent::highlightSelector(Ref<JSON::Obj
     SelectorChecker selectorChecker(*document);
 
     Vector<Ref<Node>> nodeList;
-    HashSet<Node*> seenNodes;
+    HashSet<Ref<Node>> seenNodes;
 
     for (auto& descendant : composedTreeDescendants(*document)) {
         if (!is<Element>(descendant))
@@ -1355,7 +1356,7 @@ Protocol::ErrorStringOr<void> InspectorDOMAgent::highlightSelector(Ref<JSON::Obj
             context.pseudoId = pseudoId;
 
             if (selectorChecker.match(*selector, descendantElement, context)) {
-                if (seenNodes.add(&descendantElement))
+                if (seenNodes.add(descendantElement))
                     nodeList.append(descendantElement);
             }
 
@@ -1365,7 +1366,7 @@ Protocol::ErrorStringOr<void> InspectorDOMAgent::highlightSelector(Ref<JSON::Obj
                 if (pseudoIDs.has(PseudoId::Before)) {
                     pseudoIDs.remove(PseudoId::Before);
                     if (auto* beforePseudoElement = descendantElement.beforePseudoElement()) {
-                        if (seenNodes.add(beforePseudoElement))
+                        if (seenNodes.add(*beforePseudoElement))
                             nodeList.append(*beforePseudoElement);
                     }
                 }
@@ -1373,13 +1374,13 @@ Protocol::ErrorStringOr<void> InspectorDOMAgent::highlightSelector(Ref<JSON::Obj
                 if (pseudoIDs.has(PseudoId::After)) {
                     pseudoIDs.remove(PseudoId::After);
                     if (auto* afterPseudoElement = descendantElement.afterPseudoElement()) {
-                        if (seenNodes.add(afterPseudoElement))
+                        if (seenNodes.add(*afterPseudoElement))
                             nodeList.append(*afterPseudoElement);
                     }
                 }
 
                 if (pseudoIDs) {
-                    if (seenNodes.add(&descendantElement))
+                    if (seenNodes.add(descendantElement))
                         nodeList.append(descendantElement);
                 }
             }
@@ -2758,22 +2759,20 @@ Node* InspectorDOMAgent::nodeForPath(const String& path)
         return nullptr;
 
     for (size_t i = 0; i < pathTokens.size() - 1; i += 2) {
-        bool success = true;
-        unsigned childNumber = pathTokens[i].toUInt(&success);
-        if (!success)
+        auto childNumber = parseIntegerAllowingTrailingJunk<unsigned>(pathTokens[i]);
+        if (!childNumber)
             return nullptr;
 
         Node* child;
         if (is<HTMLFrameOwnerElement>(*node)) {
-            ASSERT(!childNumber);
+            ASSERT(!*childNumber);
             auto& frameOwner = downcast<HTMLFrameOwnerElement>(*node);
             child = frameOwner.contentDocument();
         } else {
-            if (childNumber >= innerChildNodeCount(node))
+            if (*childNumber >= innerChildNodeCount(node))
                 return nullptr;
-
             child = innerFirstChild(node);
-            for (size_t j = 0; child && j < childNumber; ++j)
+            for (size_t j = 0; child && j < *childNumber; ++j)
                 child = innerNextSibling(child);
         }
 

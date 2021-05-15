@@ -42,6 +42,7 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameView.h"
+#include "GeometryUtilities.h"
 #include "HTMLBDIElement.h"
 #include "HTMLBRElement.h"
 #include "HTMLButtonElement.h"
@@ -73,12 +74,17 @@
 #include "markup.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/Range.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 
 #if ENABLE(IMAGE_EXTRACTION)
 #include "ImageExtractionResult.h"
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+#include "SelectionGeometry.h"
 #endif
 
 namespace WebCore {
@@ -209,7 +215,8 @@ void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name
     } else if (name == draggableAttr) {
         if (equalLettersIgnoringASCIICase(value, "true")) {
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserDrag, CSSValueElement);
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserSelect, CSSValueNone);
+            if (!isDraggableIgnoringAttributes())
+                addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserSelect, CSSValueNone);
         } else if (equalLettersIgnoringASCIICase(value, "false"))
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserDrag, CSSValueNone);
     } else if (name == dirAttr) {
@@ -708,7 +715,11 @@ ExceptionOr<void> HTMLElement::setContentEditable(const String& enabled)
 
 bool HTMLElement::draggable() const
 {
-    return equalLettersIgnoringASCIICase(attributeWithoutSynchronization(draggableAttr), "true");
+    auto& value = attributeWithoutSynchronization(draggableAttr);
+    if (isDraggableIgnoringAttributes())
+        return !equalLettersIgnoringASCIICase(value, "false");
+
+    return equalLettersIgnoringASCIICase(value, "true");
 }
 
 void HTMLElement::setDraggable(bool value)
@@ -1200,7 +1211,7 @@ static const AtomString& imageOverlayElementIdentifier()
     return identifier;
 }
 
-bool HTMLElement::shouldUpdateSelectionForMouseDrag(const Node& targetNode, const VisibleSelection& selectionBeforeUpdate)
+bool HTMLElement::shouldExtendSelectionToTargetNode(const Node& targetNode, const VisibleSelection& selectionBeforeUpdate)
 {
     if (!is<HTMLDivElement>(targetNode))
         return true;
@@ -1226,17 +1237,78 @@ bool HTMLElement::shouldUpdateSelectionForMouseDrag(const Node& targetNode, cons
 
 bool HTMLElement::hasImageOverlay() const
 {
-    auto shadowRoot = userAgentShadowRoot();
-    if (LIKELY(!shadowRoot))
+    auto shadowRoot = this->shadowRoot();
+    if (LIKELY(!shadowRoot || shadowRoot->mode() != ShadowRootMode::UserAgent))
         return false;
 
     return shadowRoot->hasElementWithId(*imageOverlayElementIdentifier().impl());
+}
+
+static RefPtr<HTMLElement> imageOverlayHost(const Node& node)
+{
+    auto host = node.shadowHost();
+    if (!is<HTMLElement>(host))
+        return nullptr;
+
+    auto element = makeRefPtr(downcast<HTMLElement>(*host));
+    return element->hasImageOverlay() ? element : nullptr;
+}
+
+bool HTMLElement::isInsideImageOverlay(const SimpleRange& range)
+{
+    auto commonAncestor = makeRefPtr(commonInclusiveAncestor<ComposedTree>(range));
+    if (!commonAncestor)
+        return false;
+
+    return isInsideImageOverlay(*commonAncestor);
+}
+
+bool HTMLElement::isInsideImageOverlay(const Node& node)
+{
+    auto host = imageOverlayHost(node);
+    if (!host)
+        return false;
+
+    return host->userAgentShadowRoot()->contains(node);
+}
+
+bool HTMLElement::isImageOverlayText(const Node* node)
+{
+    return node && isImageOverlayText(*node);
+}
+
+bool HTMLElement::isImageOverlayText(const Node& node)
+{
+    auto host = imageOverlayHost(node);
+    if (!host)
+        return false;
+
+    for (auto& child : childrenOfType<HTMLDivElement>(*host->userAgentShadowRoot())) {
+        if (child.getIdAttribute() == imageOverlayElementIdentifier())
+            return node.isDescendantOf(child);
+    }
+
+    return false;
 }
 
 #if ENABLE(IMAGE_EXTRACTION)
 
 void HTMLElement::updateWithImageExtractionResult(ImageExtractionResult&& result)
 {
+    RefPtr<HTMLDivElement> previousContainer;
+    if (auto shadowRoot = userAgentShadowRoot(); shadowRoot && hasImageOverlay()) {
+        for (auto& child : childrenOfType<HTMLDivElement>(*shadowRoot)) {
+            if (child.getIdAttribute() == imageOverlayElementIdentifier()) {
+                previousContainer = &child;
+                break;
+            }
+        }
+        if (previousContainer)
+            previousContainer->remove();
+        else
+            ASSERT_NOT_REACHED();
+    }
+
     if (result.isEmpty())
         return;
 
@@ -1247,44 +1319,129 @@ void HTMLElement::updateWithImageExtractionResult(ImageExtractionResult&& result
         downcast<RenderImage>(*renderer).setHasImageOverlay();
     }
 
-    static NeverDestroyed<const String> shadowStyle(imageOverlayUserAgentStyleSheet, String::ConstructFromLiteral);
-    auto style = HTMLStyleElement::create(HTMLNames::styleTag, document(), false);
-    style->setTextContent(shadowStyle);
-
     auto shadowRoot = makeRef(ensureUserAgentShadowRoot());
-    shadowRoot->appendChild(WTFMove(style));
+    if (!previousContainer) {
+        static MainThreadNeverDestroyed<const String> shadowStyle(StringImpl::createWithoutCopying(imageOverlayUserAgentStyleSheet, sizeof(imageOverlayUserAgentStyleSheet)));
+        auto style = HTMLStyleElement::create(HTMLNames::styleTag, document(), false);
+        style->setTextContent(shadowStyle);
+        shadowRoot->appendChild(WTFMove(style));
+    }
 
     auto container = HTMLDivElement::create(document());
     container->setIdAttribute(imageOverlayElementIdentifier());
+    if (document().isImageDocument())
+        container->setInlineStyleProperty(CSSPropertyWebkitUserSelect, CSSValueText);
     shadowRoot->appendChild(container);
 
+    if (document().quirks().needsToForceUserSelectWhenInstallingImageOverlay())
+        setInlineStyleProperty(CSSPropertyWebkitUserSelect, CSSValueText);
+
+    static MainThreadNeverDestroyed<const AtomString> imageOverlayLineClass("image-overlay-line", AtomString::ConstructFromLiteral);
     static MainThreadNeverDestroyed<const AtomString> imageOverlayTextClass("image-overlay-text", AtomString::ConstructFromLiteral);
 
+    bool hasUserSelectNone = renderer() && renderer()->style().userSelect() == UserSelect::None;
     IntSize containerSize { offsetWidth(), offsetHeight() };
-    for (auto& data : result.textData) {
-        auto child = HTMLDivElement::create(document());
-        child->classList().add(imageOverlayTextClass);
-
-        container->appendChild(child);
-        child->appendChild(Text::create(document(), data.text));
-        child->appendChild(HTMLBRElement::create(document()));
-
-        IntSize originalSize { child->offsetWidth(), child->offsetHeight() };
-        if (originalSize.isEmpty())
+    for (auto& line : result.lines) {
+        auto lineQuad = line.normalizedQuad;
+        if (lineQuad.isEmpty())
             continue;
 
-        auto targetRect = data.normalizedQuad.boundingBox();
-        targetRect.scale(containerSize);
+        lineQuad.scale(containerSize.width(), containerSize.height());
 
-        IntPoint translationOffset {
-            static_cast<int>(targetRect.x() + (targetRect.width() - originalSize.width()) / 2),
-            static_cast<int>(targetRect.y() + (targetRect.height() - originalSize.height()) / 2)
+        auto lineContainer = HTMLDivElement::create(document());
+        lineContainer->classList().add(imageOverlayLineClass);
+        container->appendChild(lineContainer);
+
+        auto lineBounds = rotatedBoundingRectWithMinimumAngleOfRotation(lineQuad, 0.01);
+        lineContainer->setInlineStyleProperty(CSSPropertyWidth, lineBounds.size.width(), CSSUnitType::CSS_PX);
+        lineContainer->setInlineStyleProperty(CSSPropertyHeight, lineBounds.size.height(), CSSUnitType::CSS_PX);
+        lineContainer->setInlineStyleProperty(CSSPropertyTransform, makeString(
+            "translate("_s,
+            std::round(lineBounds.center.x() - (lineBounds.size.width() / 2)), "px, "_s,
+            std::round(lineBounds.center.y() - (lineBounds.size.height() / 2)), "px) "_s,
+            lineBounds.angleInRadians ? makeString("rotate("_s, lineBounds.angleInRadians, "rad) "_s) : emptyString()
+        ));
+
+        auto offsetAlongHorizontalAxis = [&](const FloatPoint& quadPoint1, const FloatPoint& quadPoint2) {
+            auto intervalLength = lineBounds.size.width();
+            auto mid = midPoint(quadPoint1, quadPoint2);
+            mid.moveBy(-lineBounds.center);
+            mid.rotate(-lineBounds.angleInRadians);
+            return intervalLength * clampTo<float>(0.5 + mid.x() / intervalLength, 0, 1);
         };
 
-        child->setInlineStyleProperty(CSSPropertyTransform, makeString(
-            "translate("_s, translationOffset.x(), "px, "_s, translationOffset.y(), "px) "_s
-            "scale("_s, targetRect.width() / originalSize.width(), ", "_s, targetRect.height() / originalSize.height(), ")"_s
-        ));
+        auto offsetsAlongHorizontalAxis = line.children.map([&](auto& child) -> WTF::Range<float> {
+            auto textQuad = child.normalizedQuad;
+            textQuad.scale(containerSize.width(), containerSize.height());
+            return {
+                offsetAlongHorizontalAxis(textQuad.p1(), textQuad.p4()),
+                offsetAlongHorizontalAxis(textQuad.p2(), textQuad.p3())
+            };
+        });
+
+        for (size_t childIndex = 0; childIndex < line.children.size(); ++childIndex) {
+            auto& child = line.children[childIndex];
+            if (child.normalizedQuad.isEmpty())
+                continue;
+
+            bool lineHasOneChild = line.children.size() == 1;
+            float horizontalMarginToMinimizeSelectionGaps = lineHasOneChild ? 0 : 0.125;
+            float horizontalOffset = lineHasOneChild ? 0 : -horizontalMarginToMinimizeSelectionGaps;
+            float horizontalExtent = lineHasOneChild ? 0 : horizontalMarginToMinimizeSelectionGaps;
+
+            if (lineHasOneChild) {
+                horizontalOffset += offsetsAlongHorizontalAxis[childIndex].begin();
+                horizontalExtent += offsetsAlongHorizontalAxis[childIndex].end();
+            } else if (!childIndex) {
+                horizontalOffset += offsetsAlongHorizontalAxis[childIndex].begin();
+                horizontalExtent += (offsetsAlongHorizontalAxis[childIndex].end() + offsetsAlongHorizontalAxis[childIndex + 1].begin()) / 2;
+            } else if (childIndex == line.children.size() - 1) {
+                horizontalOffset += (offsetsAlongHorizontalAxis[childIndex - 1].end() + offsetsAlongHorizontalAxis[childIndex].begin()) / 2;
+                horizontalExtent += offsetsAlongHorizontalAxis[childIndex].end();
+            } else {
+                horizontalOffset += (offsetsAlongHorizontalAxis[childIndex - 1].end() + offsetsAlongHorizontalAxis[childIndex].begin()) / 2;
+                horizontalExtent += (offsetsAlongHorizontalAxis[childIndex].end() + offsetsAlongHorizontalAxis[childIndex + 1].begin()) / 2;
+            }
+
+            FloatSize targetSize { horizontalExtent - horizontalOffset, lineBounds.size.height() };
+            if (targetSize.isEmpty())
+                continue;
+
+            auto textContainer = HTMLDivElement::create(document());
+            textContainer->classList().add(imageOverlayTextClass);
+            lineContainer->appendChild(textContainer);
+            textContainer->appendChild(Text::create(document(), makeString('\n', child.text)));
+
+            document().updateLayoutIfDimensionsOutOfDate(textContainer);
+
+            FloatSize sizeBeforeTransform;
+            if (auto* renderer = textContainer->renderBoxModelObject()) {
+                sizeBeforeTransform = {
+                    adjustLayoutUnitForAbsoluteZoom(renderer->offsetWidth(), *renderer).toFloat(),
+                    adjustLayoutUnitForAbsoluteZoom(renderer->offsetHeight(), *renderer).toFloat(),
+                };
+            }
+
+            if (sizeBeforeTransform.isEmpty()) {
+                textContainer->remove();
+                continue;
+            }
+
+            textContainer->setInlineStyleProperty(CSSPropertyTransform, makeString(
+                "translate("_s,
+                horizontalOffset + (targetSize.width() - sizeBeforeTransform.width()) / 2, "px, "_s,
+                (targetSize.height() - sizeBeforeTransform.height()) / 2, "px) "_s,
+                "scale("_s, targetSize.width() / sizeBeforeTransform.width(), ", "_s, targetSize.height() / sizeBeforeTransform.height(), ") "_s
+            ));
+
+            if (!hasUserSelectNone || document().isImageDocument())
+                textContainer->setInlineStyleProperty(CSSPropertyWebkitUserSelect, CSSValueAll);
+        }
+
+        lineContainer->appendChild(HTMLBRElement::create(document()));
+
+        if (document().isImageDocument())
+            lineContainer->setInlineStyleProperty(CSSPropertyCursor, CSSValueText);
     }
 
     if (auto frame = makeRefPtr(document().frame()))
@@ -1292,6 +1449,15 @@ void HTMLElement::updateWithImageExtractionResult(ImageExtractionResult&& result
 }
 
 #endif // ENABLE(IMAGE_EXTRACTION)
+
+#if PLATFORM(IOS_FAMILY)
+
+SelectionRenderingBehavior HTMLElement::selectionRenderingBehavior(const Node* node)
+{
+    return isImageOverlayText(node) ? SelectionRenderingBehavior::UseIndividualQuads : SelectionRenderingBehavior::CoalesceBoundingRects;
+}
+
+#endif // PLATFORM(IOS_FAMILY)
 
 } // namespace WebCore
 

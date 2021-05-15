@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,33 +29,36 @@
 #pragma once
 
 #include "ExceptionOr.h"
-#include "IntSize.h"
-#include <JavaScriptCore/TypedArrayInlines.h>
-#include <JavaScriptCore/Uint8ClampedArray.h>
+#include "PixelBuffer.h"
 
 namespace WebCore {
 
 class ImageData : public RefCounted<ImageData> {
 public:
-    WEBCORE_EXPORT static ExceptionOr<Ref<ImageData>> create(unsigned sw, unsigned sh);
+    WEBCORE_EXPORT static Ref<ImageData> create(PixelBuffer&&);
+    WEBCORE_EXPORT static RefPtr<ImageData> create(Optional<PixelBuffer>&&);
     WEBCORE_EXPORT static RefPtr<ImageData> create(const IntSize&);
     WEBCORE_EXPORT static RefPtr<ImageData> create(const IntSize&, Ref<Uint8ClampedArray>&&);
+    WEBCORE_EXPORT static ExceptionOr<Ref<ImageData>> create(unsigned sw, unsigned sh);
     WEBCORE_EXPORT static ExceptionOr<Ref<ImageData>> create(Ref<Uint8ClampedArray>&&, unsigned sw, Optional<unsigned> sh);
+    WEBCORE_EXPORT ~ImageData();
 
-    IntSize size() const { return m_size; }
-    int width() const { return m_size.width(); }
-    int height() const { return m_size.height(); }
+    const IntSize& size() const { return m_pixelBuffer.size(); }
+    int width() const { return m_pixelBuffer.size().width(); }
+    int height() const { return m_pixelBuffer.size().height(); }
 
-    Uint8ClampedArray* data() const { return m_data.ptr(); }
+    Uint8ClampedArray& data() const { return m_pixelBuffer.data(); }
 
     Ref<ImageData> deepClone() const;
 
+    const PixelBuffer& pixelBuffer() const { return m_pixelBuffer; }
+
 private:
-    ImageData(const IntSize&, Ref<Uint8ClampedArray>&&);
+    explicit ImageData(PixelBuffer&&);
+
     static Checked<unsigned, RecordOverflow> dataSize(const IntSize&);
 
-    IntSize m_size;
-    Ref<Uint8ClampedArray> m_data;
+    PixelBuffer m_pixelBuffer;
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const ImageData&);

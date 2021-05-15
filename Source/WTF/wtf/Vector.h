@@ -891,7 +891,7 @@ private:
 
 template<typename T, size_t inlineCapacity, typename OverflowHandler, size_t minCapacity, typename Malloc>
 Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::Vector(const Vector& other)
-    : Base(other.capacity(), other.size())
+    : Base(other.size(), other.size())
 {
     asanSetInitialBufferSizeTo(other.size());
 
@@ -902,7 +902,7 @@ Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::Vector(const Ve
 template<typename T, size_t inlineCapacity, typename OverflowHandler, size_t minCapacity, typename Malloc>
 template<size_t otherCapacity, typename otherOverflowBehaviour, size_t otherMinimumCapacity, typename OtherMalloc>
 Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::Vector(const Vector<T, otherCapacity, otherOverflowBehaviour, otherMinimumCapacity, OtherMalloc>& other)
-    : Base(other.capacity(), other.size())
+    : Base(other.size(), other.size())
 {
     asanSetInitialBufferSizeTo(other.size());
 
@@ -1256,6 +1256,9 @@ template<FailureAction action, typename U>
 ALWAYS_INLINE bool Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::append(const U* data, size_t dataSize)
 {
     static_assert(action == FailureAction::Crash || action == FailureAction::Report);
+    if (!dataSize)
+        return true;
+
     size_t newSize = m_size + dataSize;
     if (newSize > capacity()) {
         data = expandCapacity<action>(newSize, data);
@@ -1759,7 +1762,9 @@ inline auto copyToVectorSpecialization(const Collection& collection) -> Destinat
 template<typename DestinationItemType, typename Collection>
 inline auto copyToVectorOf(const Collection& collection) -> Vector<DestinationItemType>
 {
-    return WTF::map(collection, [] (const auto& v) -> DestinationItemType { return v; });
+    return WTF::map(collection, [] (auto&& v) -> DestinationItemType {
+        return v;
+    });
 }
 
 template<typename Collection>

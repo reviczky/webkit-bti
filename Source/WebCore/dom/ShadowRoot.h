@@ -62,7 +62,7 @@ public:
 
     using TreeScope::rootNode;
 
-    Style::Scope& styleScope();
+    WEBCORE_EXPORT Style::Scope& styleScope();
     StyleSheetList& styleSheets();
 
     bool resetStyleInheritance() const { return m_resetStyleInheritance; }
@@ -93,6 +93,7 @@ public:
     void slotFallbackDidChange(HTMLSlotElement&);
     void resolveSlotsBeforeNodeInsertionOrRemoval();
     void willRemoveAllChildren(ContainerNode&);
+    void willRemoveAssignedNode(const Node&);
 
     void didRemoveAllChildrenOfShadowHost();
     void didChangeDefaultSlot();
@@ -151,6 +152,11 @@ inline ShadowRoot* Node::shadowRoot() const
     if (!is<Element>(*this))
         return nullptr;
     return downcast<Element>(*this).shadowRoot();
+}
+
+inline bool Node::isUserAgentShadowRoot() const
+{
+    return isShadowRoot() && downcast<ShadowRoot>(*this).mode() == ShadowRootMode::UserAgent;
 }
 
 inline ContainerNode* Node::parentOrShadowHostNode() const

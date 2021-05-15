@@ -48,11 +48,8 @@ WebInspectorUIExtensionControllerProxy::~WebInspectorUIExtensionControllerProxy(
     for (auto& callback : callbacks)
         callback();
 
-    if (!m_inspectorPage)
-        return;
-
-    m_inspectorPage->process().removeMessageReceiver(Messages::WebInspectorUIExtensionControllerProxy::messageReceiverName(), m_inspectorPage->webPageID());
-    m_inspectorPage = nullptr;
+    // At this point, we should have already been notified that the frontend has closed.
+    ASSERT(!m_inspectorPage);
 }
 
 Ref<WebInspectorUIExtensionControllerProxy> WebInspectorUIExtensionControllerProxy::create(WebPageProxy& inspectorPage)
@@ -79,6 +76,15 @@ void WebInspectorUIExtensionControllerProxy::inspectorFrontendLoaded()
     auto callbacks = std::exchange(m_frontendLoadedCallbackQueue, { });
     for (auto& callback : callbacks)
         callback();
+}
+
+void WebInspectorUIExtensionControllerProxy::inspectorFrontendWillClose()
+{
+    if (!m_inspectorPage)
+        return;
+
+    m_inspectorPage->process().removeMessageReceiver(Messages::WebInspectorUIExtensionControllerProxy::messageReceiverName(), m_inspectorPage->webPageID());
+    m_inspectorPage = nullptr;
 }
 
 // API
@@ -115,7 +121,7 @@ void WebInspectorUIExtensionControllerProxy::unregisterExtension(const Inspector
 
         weakThis->m_inspectorPage->sendWithAsyncReply(Messages::WebInspectorUIExtensionController::UnregisterExtension { extensionID }, [strongThis = makeRef(*weakThis.get()), extensionID, completionHandler = WTFMove(completionHandler)](Expected<bool, Inspector::ExtensionError> result) mutable {
             if (!result) {
-                completionHandler(makeUnexpected(Inspector::ExtensionError::RegistrationFailed));
+                completionHandler(makeUnexpected(Inspector::ExtensionError::InvalidRequest));
                 return;
             }
 

@@ -75,9 +75,26 @@ static Ref<WebCore::RTCRtpSFrameTransformer> createVideoTransformer(bool isEncry
 {
     auto transformer = WebCore::RTCRtpSFrameTransformer::create();
     transformer->setIsEncrypting(isEncrypting);
-    transformer->setAuthenticationSize(10);
+    transformer->setMediaType(WebCore::RTCRtpTransformBackend::MediaType::Video);
 
     auto keyId = Vector<uint8_t>::from(198, 31, 251, 197, 48, 139, 91, 51);
+    uint64_t keyIdValue = 0;
+    for (auto value : keyId)
+        keyIdValue = value + (keyIdValue << 8);
+
+    auto keyResult = transformer->setEncryptionKey(getRawKey(), keyIdValue);
+    EXPECT_FALSE(keyResult.hasException());
+
+    return transformer;
+}
+
+static Ref<WebCore::RTCRtpSFrameTransformer> createAudioTransformer(bool isEncrypting, WebCore::RTCRtpSFrameTransformer::CompatibilityMode mode)
+{
+    auto transformer = WebCore::RTCRtpSFrameTransformer::create(mode);
+    transformer->setIsEncrypting(isEncrypting);
+    transformer->setMediaType(WebCore::RTCRtpTransformBackend::MediaType::Audio);
+
+    auto keyId = Vector<uint8_t>::from(31, 251, 197, 48, 139, 91, 51);
     uint64_t keyIdValue = 0;
     for (auto value : keyId)
         keyIdValue = value + (keyIdValue << 8);
@@ -99,38 +116,38 @@ TEST(RTCRtpSFrameTransformer, AuthenticationKey)
 {
     auto transformer = createVideoTransformer();
     checkVectorsAreEqual(transformer->authenticationKey(), Vector<uint8_t>::from(
-        92,
-        228,
-        139,
-        195,
-        98,
-        16,
         4,
+        98,
+        231,
+        89,
+        19,
+        177,
+        253,
+        241,
+        246,
+        85,
         193,
-        221,
-        248,
-        232,
-        178,
-        135,
-        22,
-        141,
-        150,
-        165,
-        242,
-        73,
+        64,
+        19,
         72,
-        10,
-        197,
-        15,
-        87,
-        181,
-        34,
-        120,
-        71,
-        42,
-        174,
-        131,
-        72
+        211,
+        48,
+        57,
+        235,
+        63,
+        57,
+        165,
+        252,
+        130,
+        58,
+        142,
+        14,
+        142,
+        223,
+        134,
+        92,
+        167,
+        253
     ));
 }
 
@@ -138,22 +155,22 @@ TEST(RTCRtpSFrameTransformer, EncryptionKey)
 {
     auto transformer = createVideoTransformer();
     checkVectorsAreEqual(transformer->encryptionKey(), Vector<uint8_t>::from(
-        207,
-        251,
-        52,
-        21,
+        180,
+        189,
+        66,
+        149,
+        6,
         101,
-        50,
-        232,
-        48,
-        211,
-        115,
+        148,
+        179,
+        158,
+        210,
+        132,
+        83,
+        75,
         11,
-        155,
-        101,
-        116,
-        153,
-        71
+        43,
+        50
     ));
 }
 
@@ -161,22 +178,18 @@ TEST(RTCRtpSFrameTransformer, SaltKey)
 {
     auto transformer = createVideoTransformer();
     checkVectorsAreEqual(transformer->saltKey(), Vector<uint8_t>::from(
-        229,
-        19,
-        42,
+        184,
+        43,
+        180,
+        28,
         93,
-        164,
-        103,
-        120,
-        53,
-        25,
-        26,
-        237,
-        204,
-        79,
-        138,
-        138,
-        231
+        139,
+        8,
+        109,
+        65,
+        142,
+        81,
+        22
     ));
 }
 
@@ -216,6 +229,28 @@ TEST(RTCRtpSFrameTransformer, EncryptDecryptKeyID0)
     checkVectorsAreEqual(decryptedResult.returnValue(), frame);
 }
 
+TEST(RTCRtpSFrameTransformer, EncryptDecryptAudio)
+{
+    // We ignore compatiblity mode for audio.
+    uint64_t keyId = 1255995222;
+    auto encryptor = createAudioTransformer(true, WebCore::RTCRtpSFrameTransformer::CompatibilityMode::H264);
+    encryptor->setEncryptionKey(getRawKey(), keyId);
+
+    auto decryptor = createAudioTransformer(false, WebCore::RTCRtpSFrameTransformer::CompatibilityMode::None);
+    decryptor->setEncryptionKey(getRawKey(), keyId);
+
+    auto frame = Vector<uint8_t>::from(135, 89, 51, 166, 248, 129, 157, 111, 190, 134, 220, 56);
+
+    auto encryptedResult = encryptor->transform(frame.data(), frame.size());
+    EXPECT_FALSE(encryptedResult.hasException());
+
+    auto encrypted = encryptedResult.releaseReturnValue();
+    auto decryptedResult = decryptor->transform(encrypted.data(), encrypted.size());
+    EXPECT_FALSE(decryptedResult.hasException());
+
+    checkVectorsAreEqual(decryptedResult.returnValue(), frame);
+}
+
 TEST(RTCRtpSFrameTransformer, TransformCounter0)
 {
     auto transformer = createVideoTransformer();
@@ -235,27 +270,27 @@ TEST(RTCRtpSFrameTransformer, TransformCounter0)
         91,
         51,
         0,
-        254,
-        171,
-        168,
-        127,
-        158,
-        97,
-        70,
-        4,
-        233,
-        156,
-        134,
-        220,
-        44,
-        50,
-        90,
-        3,
-        68,
-        200,
-        127,
-        223,
-        6
+        176,
+        194,
+        94,
+        42,
+        248,
+        190,
+        103,
+        74,
+        123,
+        208,
+        120,
+        249,
+        75,
+        63,
+        244,
+        81,
+        244,
+        71,
+        64,
+        46,
+        28
     ));
 }
 
@@ -270,6 +305,7 @@ TEST(RTCRtpSFrameTransformer, TransformCounter256)
         result = transformer->transform(frame1, sizeof(frame1));
         EXPECT_FALSE(result.hasException());
     }
+
     checkVectorsAreEqual(result.releaseReturnValue(), Vector<uint8_t>::from(
         31,
         198,
@@ -282,27 +318,27 @@ TEST(RTCRtpSFrameTransformer, TransformCounter256)
         51,
         1,
         0,
-        124,
-        218,
-        61,
-        23,
-        78,
-        15,
-        190,
-        35,
-        255,
-        253,
-        120,
-        64,
-        28,
-        183,
-        172,
-        154,
-        144,
-        16,
-        229,
-        87,
-        52
+        37,
+        39,
+        205,
+        106,
+        44,
+        155,
+        25,
+        174,
+        2,
+        206,
+        198,
+        89,
+        82,
+        57,
+        224,
+        232,
+        26,
+        29,
+        98,
+        176,
+        57
     ));
 }
 
@@ -328,27 +364,27 @@ TEST(RTCRtpSFrameTransformer, TransformCounter65536)
         1,
         0,
         0,
-        98,
-        212,
-        137,
-        244,
-        209,
-        16,
-        89,
-        234,
-        21,
-        171,
-        15,
-        107,
-        50,
-        145,
-        73,
-        107,
-        165,
-        45,
-        190,
-        25,
-        82
+        117,
+        5,
+        112,
+        126,
+        205,
+        197,
+        116,
+        213,
+        249,
+        178,
+        47,
+        154,
+        151,
+        123,
+        40,
+        58,
+        121,
+        201,
+        159,
+        90,
+        170
     ));
 }
 

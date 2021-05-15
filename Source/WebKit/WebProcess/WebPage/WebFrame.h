@@ -36,6 +36,7 @@
 #include <JavaScriptCore/JSBase.h>
 #include <WebCore/FrameLoaderClient.h>
 #include <WebCore/FrameLoaderTypes.h>
+#include <WebCore/HitTestRequest.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
@@ -119,7 +120,20 @@ public:
     WebCore::IntSize scrollOffset() const;
     bool hasHorizontalScrollbar() const;
     bool hasVerticalScrollbar() const;
-    RefPtr<InjectedBundleHitTestResult> hitTest(const WebCore::IntPoint) const;
+
+    static constexpr OptionSet<WebCore::HitTestRequest::Type> defaultHitTestRequestTypes()
+    {
+        return {{
+            WebCore::HitTestRequest::Type::ReadOnly,
+            WebCore::HitTestRequest::Type::Active,
+            WebCore::HitTestRequest::Type::IgnoreClipping,
+            WebCore::HitTestRequest::Type::AllowChildFrameContent,
+            WebCore::HitTestRequest::Type::DisallowUserAgentShadowContent,
+        }};
+    }
+
+    RefPtr<InjectedBundleHitTestResult> hitTest(const WebCore::IntPoint, OptionSet<WebCore::HitTestRequest::Type> = defaultHitTestRequestTypes()) const;
+
     bool getDocumentBackgroundColor(double* red, double* green, double* blue, double* alpha);
     bool containsAnyFormElements() const;
     bool containsAnyFormControls() const;

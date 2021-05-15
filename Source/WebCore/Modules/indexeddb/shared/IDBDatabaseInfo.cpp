@@ -26,11 +26,12 @@
 #include "config.h"
 #include "IDBDatabaseInfo.h"
 
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/text/StringBuilder.h>
 
-#if ENABLE(INDEXED_DATABASE)
-
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(IDBDatabaseInfo);
 
 IDBDatabaseInfo::IDBDatabaseInfo()
 {
@@ -177,5 +178,3 @@ void IDBDatabaseInfo::setMaxIndexID(uint64_t maxIndexID)
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

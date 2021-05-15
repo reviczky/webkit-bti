@@ -147,10 +147,12 @@
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/ProfilerDatabase.h>
 #include <JavaScriptCore/SamplingProfiler.h>
+#include <WebCore/AppHighlight.h>
 #include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/ArchiveResource.h>
 #include <WebCore/BackForwardCache.h>
 #include <WebCore/BackForwardController.h>
+#include <WebCore/CachedPage.h>
 #include <WebCore/Chrome.h>
 #include <WebCore/CommonVM.h>
 #include <WebCore/ContactsRequestData.h>
@@ -233,6 +235,7 @@
 #include <WebCore/SWClientConnection.h>
 #include <WebCore/ScriptController.h>
 #include <WebCore/SecurityPolicy.h>
+#include <WebCore/SelectionRestorationMode.h>
 #include <WebCore/SerializedScriptValue.h>
 #include <WebCore/Settings.h>
 #include <WebCore/ShadowRoot.h>
@@ -242,6 +245,7 @@
 #include <WebCore/SubframeLoader.h>
 #include <WebCore/SubstituteData.h>
 #include <WebCore/TextIterator.h>
+#include <WebCore/TranslationContextMenuInfo.h>
 #include <WebCore/UserContentURLPattern.h>
 #include <WebCore/UserGestureIndicator.h>
 #include <WebCore/UserInputBridge.h>
@@ -257,6 +261,7 @@
 #include <wtf/ProcessID.h>
 #include <wtf/RunLoop.h>
 #include <wtf/SetForScope.h>
+#include <wtf/SystemTracing.h>
 #include <wtf/text/TextStream.h>
 
 #if ENABLE(APP_HIGHLIGHTS)
@@ -357,6 +362,12 @@
 #include <WebCore/ImageExtractionResult.h>
 #endif
 
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+#include "RemoteMediaSessionCoordinator.h"
+#include <WebCore/MediaSessionCoordinator.h>
+#include <WebCore/NavigatorMediaSession.h>
+#endif
+
 #if PLATFORM(IOS)
 #include "WebPreferencesDefaultValuesIOS.h"
 #endif
@@ -369,6 +380,7 @@ static const Seconds pageScrollHysteresisDuration { 300_ms };
 static const Seconds initialLayerVolatilityTimerInterval { 20_ms };
 static const Seconds maximumLayerVolatilityTimerInterval { 2_s };
 
+#undef RELEASE_LOG_IF_ALLOWED
 #define RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
 #define RELEASE_LOG_ERROR_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
 
@@ -451,9 +463,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #if ENABLE(WEBGL)
     , m_shouldRenderWebGLInGPUProcess { parameters.shouldRenderWebGLInGPUProcess}
 #endif
-#if ENABLE(APP_BOUND_DOMAINS)
-    , m_needsInAppBrowserPrivacyQuirks { parameters.needsInAppBrowserPrivacyQuirks }
-#endif
     , m_layerHostingMode(parameters.layerHostingMode)
 #if ENABLE(PLATFORM_DRIVEN_TEXT_CHECKING)
     , m_textCheckingControllerProxy(makeUniqueRef<TextCheckingControllerProxy>(*this))
@@ -528,7 +537,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     PageConfiguration pageConfiguration(
         WebProcess::singleton().sessionID(),
         makeUniqueRef<WebEditorClient>(this),
-        WebSocketProvider::create(),
+        WebSocketProvider::create(parameters.webPageProxyIdentifier),
         createLibWebRTCProvider(*this),
         WebProcess::singleton().cacheStorageProvider(),
         m_userContentController,
@@ -597,12 +606,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
     pageConfiguration.userScriptsShouldWaitUntilNotification = parameters.userScriptsShouldWaitUntilNotification;
     pageConfiguration.loadsSubresources = parameters.loadsSubresources;
-    pageConfiguration.loadsFromNetwork = parameters.loadsFromNetwork;
+    pageConfiguration.allowedNetworkHosts = parameters.allowedNetworkHosts;
     pageConfiguration.shouldRelaxThirdPartyCookieBlocking = parameters.shouldRelaxThirdPartyCookieBlocking;
     pageConfiguration.httpsUpgradeEnabled = parameters.httpsUpgradeEnabled;
 
-    pageConfiguration.textInteractionEnabled = parameters.textInteractionEnabled;
-    
     if (!parameters.crossOriginAccessControlCheckEnabled)
         CrossOriginAccessControlCheckDisabler::singleton().setCrossOriginAccessControlCheckEnabled(false);
 
@@ -627,12 +634,8 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #endif
 
 #if HAVE(STATIC_FONT_REGISTRY)
-    if (parameters.fontMachExtensionHandle) {
-        if ((m_fontExtension = SandboxExtension::create(WTFMove(*parameters.fontMachExtensionHandle)))) {
-            bool ok = m_fontExtension->consume();
-            ASSERT_UNUSED(ok, ok);
-        }
-    }
+    if (parameters.fontMachExtensionHandle)
+        WebProcess::singleton().switchFromStaticFontRegistryToUserFontRegistry(WTFMove(*parameters.fontMachExtensionHandle));
 #endif
 
     m_page = makeUnique<Page>(WTFMove(pageConfiguration));
@@ -759,7 +762,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     
     setMediaVolume(parameters.mediaVolume);
 
-    setMuted(parameters.muted);
+    setMuted(parameters.muted, [] { });
 
     // We use the DidFirstVisuallyNonEmptyLayout milestone to determine when to unfreeze the layer tree.
     m_page->addLayoutMilestones({ DidFirstLayout, DidFirstVisuallyNonEmptyLayout });
@@ -847,34 +850,37 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     m_contextForVisibilityPropagation = LayerHostingContext::createForExternalHostingProcess({
         m_canShowWhileLocked
     });
-    RELEASE_LOG_IF_ALLOWED(Process, "WebPage: Created context with ID %d for visibility propagation from UIProcess", m_contextForVisibilityPropagation->contextID());
-    send(Messages::WebPageProxy::DidCreateContextForVisibilityPropagation(m_contextForVisibilityPropagation->contextID()));
-#endif
-
-#if ENABLE(GPU_PROCESS)
-    if (m_shouldPlayMediaInGPUProcess)
-        WebProcess::singleton().ensureGPUProcessConnection().updateParameters(parameters);
-#endif
+    RELEASE_LOG_IF_ALLOWED(Process, "WebPage: Created context with ID %u for visibility propagation from UIProcess", m_contextForVisibilityPropagation->contextID());
+    send(Messages::WebPageProxy::DidCreateContextInWebProcessForVisibilityPropagation(m_contextForVisibilityPropagation->contextID()));
+#endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
 
 #if ENABLE(IPC_TESTING_API)
     m_visitedLinkTableID = parameters.visitedLinkTableID;
 #endif
 
 #if ENABLE(VP9)
-    if (parameters.shouldEnableVP9Decoder)
-        WebProcess::singleton().enableVP9Decoder();
-
-    if (parameters.shouldEnableVP8Decoder)
-        WebProcess::singleton().enableVP8SWDecoder();
-
-    if (parameters.shouldEnableVP9SWDecoder)
-        WebProcess::singleton().enableVP9SWDecoder();
+    PlatformMediaSessionManager::setShouldEnableVP8Decoder(parameters.shouldEnableVP8Decoder);
+    PlatformMediaSessionManager::setShouldEnableVP9Decoder(parameters.shouldEnableVP9Decoder);
+    PlatformMediaSessionManager::setShouldEnableVP9SWDecoder(parameters.shouldEnableVP9SWDecoder);
+    if (m_shouldPlayMediaInGPUProcess && WebProcess::singleton().existingGPUProcessConnection())
+        WebProcess::singleton().existingGPUProcessConnection()->enableVP9Decoders(parameters.shouldEnableVP8Decoder, parameters.shouldEnableVP9Decoder, parameters.shouldEnableVP9SWDecoder);
 #endif
 
     m_page->setCanUseCredentialStorage(parameters.canUseCredentialStorage);
 
     updateThrottleState();
 }
+
+#if ENABLE(GPU_PROCESS)
+void WebPage::gpuProcessConnectionDidBecomeAvailable(GPUProcessConnection& gpuProcessConnection)
+{
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    gpuProcessConnection.createVisibilityPropagationContextForPage(*this);
+#else
+    UNUSED_PARAM(gpuProcessConnection);
+#endif
+}
+#endif
 
 void WebPage::requestMediaPlaybackState(CompletionHandler<void(WebKit::MediaPlaybackState)>&& completionHandler)
 {
@@ -1004,6 +1010,11 @@ WebPage::~WebPage()
 #ifndef NDEBUG
     webPageCounter.decrement();
 #endif
+
+#if ENABLE(GPU_PROCESS) && HAVE(VISIBILITY_PROPAGATION_VIEW)
+    if (auto* gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection())
+        gpuProcessConnection->destroyVisibilityPropagationContextForPage(*this);
+#endif // ENABLE(GPU_PROCESS)
     
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     if (m_playbackSessionManager)
@@ -1021,11 +1032,6 @@ WebPage::~WebPage()
         if (completionHandler)
             completionHandler(WTF::nullopt);
     }
-#endif
-    
-#if HAVE(STATIC_FONT_REGISTRY)
-    if (m_fontExtension)
-        m_fontExtension->revoke();
 #endif
 }
 
@@ -1190,8 +1196,9 @@ EditorState WebPage::editorState(ShouldPerformLayout shouldPerformLayout) const
     }
 
     const VisibleSelection& selection = frame->selection().selection();
-    const Editor& editor = frame->editor();
+    auto& editor = frame->editor();
 
+    result.transactionID = m_lastEditorStateTransactionID.increment();
     result.selectionIsNone = selection.isNone();
     result.selectionIsRange = selection.isRange();
     result.isContentEditable = selection.isContentEditable();
@@ -1202,6 +1209,11 @@ EditorState WebPage::editorState(ShouldPerformLayout shouldPerformLayout) const
 
     Ref<Document> document = *frame->document();
     result.originIdentifierForPasteboard = document->originIdentifierForPasteboard();
+
+    if (result.selectionIsRange) {
+        auto selectionRange = selection.range();
+        result.selectionIsRangeInsideImageOverlay = selectionRange && HTMLElement::isInsideImageOverlay(*selectionRange);
+    }
 
     if (shouldPerformLayout == ShouldPerformLayout::Yes || platformNeedsLayoutForEditorState(frame))
         document->updateLayout(); // May cause document destruction
@@ -2534,6 +2546,8 @@ RefPtr<WebImage> WebPage::scaledSnapshotWithOptions(const IntRect& rect, double 
 
 void WebPage::paintSnapshotAtSize(const IntRect& rect, const IntSize& bitmapSize, SnapshotOptions options, Frame& frame, FrameView& frameView, GraphicsContext& graphicsContext)
 {
+    TraceScope snapshotScope(PaintSnapshotStart, PaintSnapshotEnd, options);
+
     IntRect snapshotRect = rect;
     float horizontalScaleFactor = static_cast<float>(bitmapSize.width()) / rect.width();
     float verticalScaleFactor = static_cast<float>(bitmapSize.height()) / rect.height();
@@ -2844,7 +2858,7 @@ static bool isContextClick(const PlatformMouseEvent& event)
 static bool handleContextMenuEvent(const PlatformMouseEvent& platformMouseEvent, WebPage* page)
 {
     IntPoint point = page->corePage()->mainFrame().view()->windowToContents(platformMouseEvent.position());
-    constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::DisallowUserAgentShadowContent,  HitTestRequest::AllowChildFrameContent };
+    constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::DisallowUserAgentShadowContent,  HitTestRequest::Type::AllowChildFrameContent };
     HitTestResult result = page->corePage()->mainFrame().eventHandler().hitTestResultAtPoint(point, hitType);
 
     Frame* frame = &page->corePage()->mainFrame();
@@ -2899,6 +2913,8 @@ static bool handleMouseEvent(const WebMouseEvent& mouseEvent, WebPage* page)
             return handled;
         }
         case PlatformEvent::MouseReleased:
+            if (mouseEvent.gestureWasCancelled() == GestureWasCancelled::Yes)
+                frame.eventHandler().invalidateClick();
             return page->corePage()->userInputBridge().handleMouseReleaseEvent(platformMouseEvent);
 
         case PlatformEvent::MouseMoved:
@@ -3580,6 +3596,37 @@ void WebPage::resumeActiveDOMObjectsAndAnimations()
     m_page->resumeActiveDOMObjectsAndAnimations();
 }
 
+void WebPage::suspend(CompletionHandler<void(bool)>&& completionHandler)
+{
+    RELEASE_LOG_IF_ALLOWED(Loading, "suspend: m_page=%p", m_page.get());
+    if (!m_page)
+        return completionHandler(false);
+
+    freezeLayerTree(LayerTreeFreezeReason::PageSuspended);
+
+    m_cachedPage = BackForwardCache::singleton().suspendPage(*m_page);
+    ASSERT(m_cachedPage);
+    if (auto mainFrame = m_mainFrame->coreFrame())
+        mainFrame->loader().detachFromAllOpenedFrames();
+    completionHandler(true);
+}
+
+void WebPage::resume(CompletionHandler<void(bool)>&& completionHandler)
+{
+    RELEASE_LOG_IF_ALLOWED(Loading, "resume: m_page=%p", m_page.get());
+    if (!m_page)
+        return completionHandler(false);
+
+    auto cachedPage = std::exchange(m_cachedPage, nullptr);
+    ASSERT(cachedPage);
+    if (!cachedPage)
+        return completionHandler(false);
+
+    cachedPage->restore(*m_page);
+    unfreezeLayerTree(LayerTreeFreezeReason::PageSuspended);
+    completionHandler(true);
+}
+
 IntPoint WebPage::screenToRootView(const IntPoint& point)
 {
     IntPoint windowPoint;
@@ -3663,7 +3710,7 @@ void WebPage::runJavaScript(WebFrame* frame, RunJavaScriptParameters&& parameter
 
 void WebPage::runJavaScriptInFrameInScriptWorld(RunJavaScriptParameters&& parameters, Optional<WebCore::FrameIdentifier> frameID, const std::pair<ContentWorldIdentifier, String>& worldData, CompletionHandler<void(const IPC::DataReference&, const Optional<WebCore::ExceptionDetails>&)>&& completionHandler)
 {
-    auto* webFrame = frameID ? WebProcess::singleton().webFrame(*frameID) : &mainWebFrame();
+    auto webFrame = makeRefPtr(frameID ? WebProcess::singleton().webFrame(*frameID) : &mainWebFrame());
 
     if (auto* newWorld = m_userContentController->addContentWorld(worldData)) {
         auto& coreWorld = newWorld->coreWorld();
@@ -3671,7 +3718,7 @@ void WebPage::runJavaScriptInFrameInScriptWorld(RunJavaScriptParameters&& parame
             frame->loader().client().dispatchGlobalObjectAvailable(coreWorld);
     }
 
-    runJavaScript(webFrame, WTFMove(parameters), worldData.first, WTFMove(completionHandler));
+    runJavaScript(webFrame.get(), WTFMove(parameters), worldData.first, WTFMove(completionHandler));
 }
 
 void WebPage::getContentsAsString(ContentAsStringIncludesChildFrames includeChildFrames, CompletionHandler<void(const String&)>&& callback)
@@ -3834,6 +3881,14 @@ void WebPage::preferencesDidChange(const WebPreferencesStore& store)
     updatePreferences(store);
 }
 
+bool WebPage::isParentProcessAWebBrowser() const
+{
+#if HAVE(AUDIT_TOKEN)
+    return isParentProcessAFullWebBrowser(WebProcess::singleton());
+#endif
+    return false;
+}
+
 void WebPage::updatePreferences(const WebPreferencesStore& store)
 {
     updatePreferencesGenerated(store);
@@ -3884,9 +3939,6 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
 
 #if PLATFORM(IOS_FAMILY)
     setForceAlwaysUserScalable(m_forceAlwaysUserScalable || store.getBoolValueForKey(WebPreferencesKey::forceAlwaysUserScalableKey()));
-#if HAVE(AVKIT)
-    DeprecatedGlobalSettings::setAVKitEnabled(true);
-#endif
 #endif
 
 #if ENABLE(SERVICE_WORKER)
@@ -3928,24 +3980,21 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     WebProcess::singleton().supplement<RemoteImageDecoderAVFManager>()->setUseGPUProcess(m_shouldPlayMediaInGPUProcess);
 #endif
     WebProcess::singleton().setUseGPUProcessForCanvasRendering(m_shouldRenderCanvasInGPUProcess);
-    WebProcess::singleton().setUseGPUProcessForDOMRendering(m_shouldRenderDOMInGPUProcess && DrawingArea::supportsGPUProcessRendering(m_drawingAreaType));
+    bool usingGPUProcessForDOMRendering = m_shouldRenderDOMInGPUProcess && DrawingArea::supportsGPUProcessRendering(m_drawingAreaType);
+    WebProcess::singleton().setUseGPUProcessForDOMRendering(usingGPUProcessForDOMRendering);
     WebProcess::singleton().setUseGPUProcessForMedia(m_shouldPlayMediaInGPUProcess);
 #if ENABLE(WEBGL)
     WebProcess::singleton().setUseGPUProcessForWebGL(m_shouldRenderWebGLInGPUProcess);
 #endif
-#endif
+#endif // ENABLE(GPU_PROCESS)
 
 #if ENABLE(IPC_TESTING_API)
     m_ipcTestingAPIEnabled = store.getBoolValueForKey(WebPreferencesKey::ipcTestingAPIEnabledKey());
 #endif
 
-    m_page->setTextInteractionEnabled(store.getBoolValueForKey(WebPreferencesKey::textInteractionEnabledKey()));
-
 #if ENABLE(WEB_AUTHN) && PLATFORM(IOS)
-    if (auto* connection = WebProcess::singleton().parentProcessConnection()) {
-        if (isParentProcessAFullWebBrowser(connection->getAuditToken()))
-            settings.setWebAuthenticationEnabled(true);
-    }
+    if (isParentProcessAWebBrowser())
+        settings.setWebAuthenticationEnabled(true);
 #endif
 
 #if ENABLE(WEBM_FORMAT_READER)
@@ -4010,6 +4059,7 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction)
     layerTransaction.setRenderTreeSize(corePage()->renderTreeSize());
     layerTransaction.setThemeColor(corePage()->themeColor());
     layerTransaction.setPageExtendedBackgroundColor(corePage()->pageExtendedBackgroundColor());
+    layerTransaction.setSampledPageTopColor(corePage()->sampledPageTopColor());
 
     layerTransaction.setBaseLayoutViewportSize(frameView->baseLayoutViewportSize());
     layerTransaction.setMinStableLayoutViewportOrigin(frameView->minStableLayoutViewportOrigin());
@@ -4040,6 +4090,7 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction)
 
     m_pendingThemeColorChange = false;
     m_pendingPageExtendedBackgroundColorChange = false;
+    m_pendingSampledPageTopColorChange = false;
 
     if (m_hasPendingEditorStateUpdate) {
         layerTransaction.setEditorState(editorState());
@@ -4070,6 +4121,15 @@ void WebPage::layoutIfNeeded()
 void WebPage::updateRendering()
 {
     m_page->updateRendering();
+}
+
+void WebPage::didUpdateRendering()
+{
+    if (m_didUpdateRenderingAfterCommittingLoad)
+        return;
+
+    m_didUpdateRenderingAfterCommittingLoad = true;
+    send(Messages::WebPageProxy::DidUpdateRenderingAfterCommittingLoad());
 }
 
 void WebPage::finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags> flags)
@@ -4593,11 +4653,6 @@ void WebPage::didReceiveGeolocationPermissionDecision(GeolocationIdentifier geol
 }
 #endif
 
-void WebPage::didReceiveNotificationPermissionDecision(uint64_t notificationID, bool allowed)
-{
-    notificationPermissionRequestManager()->didReceiveNotificationPermissionDecision(notificationID, allowed);
-}
-
 #if ENABLE(MEDIA_STREAM)
 
 void WebPage::userMediaAccessWasGranted(uint64_t userMediaID, WebCore::CaptureDevice&& audioDevice, WebCore::CaptureDevice&& videoDevice, String&& mediaDeviceIdentifierHashSalt, SandboxExtension::Handle&& handle, CompletionHandler<void()>&& completionHandler)
@@ -4890,9 +4945,9 @@ void WebPage::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decod
     didReceiveWebPageMessage(connection, decoder);
 }
 
-void WebPage::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, std::unique_ptr<IPC::Encoder>& replyEncoder)
+bool WebPage::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& replyEncoder)
 {   
-    didReceiveSyncWebPageMessage(connection, decoder, replyEncoder);
+    return didReceiveSyncWebPageMessage(connection, decoder, replyEncoder);
 }
 
 #if ENABLE(ASYNC_SCROLLING)
@@ -5100,6 +5155,8 @@ void WebPage::unfreezeLayerTreeDueToSwipeAnimation()
 
 void WebPage::beginPrinting(FrameIdentifier frameID, const PrintInfo& printInfo)
 {
+    PrintContextAccessScope scope { *this };
+
     WebFrame* frame = WebProcess::singleton().webFrame(frameID);
     if (!frame)
         return;
@@ -5121,6 +5178,7 @@ void WebPage::beginPrinting(FrameIdentifier frameID, const PrintInfo& printInfo)
     freezeLayerTree(LayerTreeFreezeReason::Printing);
 
     auto computedPageSize = m_printContext->computedPageSize(FloatSize(printInfo.availablePaperWidth, printInfo.availablePaperHeight), printInfo.margin);
+
     m_printContext->begin(computedPageSize.width(), computedPageSize.height());
 
     // PrintContext::begin() performed a synchronous layout which might have executed a
@@ -5142,6 +5200,18 @@ void WebPage::beginPrinting(FrameIdentifier frameID, const PrintInfo& printInfo)
 
 void WebPage::endPrinting()
 {
+    if (m_inActivePrintContextAccessScope) {
+        m_shouldEndPrintingImmediately = true;
+        return;
+    }
+    endPrintingImmediately();
+}
+
+void WebPage::endPrintingImmediately()
+{
+    RELEASE_ASSERT(!m_inActivePrintContextAccessScope);
+    m_shouldEndPrintingImmediately = false;
+
     unfreezeLayerTree(LayerTreeFreezeReason::Printing);
 
     if (m_printContext) {
@@ -5152,6 +5222,7 @@ void WebPage::endPrinting()
 
 void WebPage::computePagesForPrinting(FrameIdentifier frameID, const PrintInfo& printInfo, CompletionHandler<void(const Vector<WebCore::IntRect>&, double, const WebCore::FloatBoxExtent&)>&& completionHandler)
 {
+    PrintContextAccessScope scope { *this };
     Vector<IntRect> resultPageRects;
     double resultTotalScaleFactorForPrinting = 1;
     auto computedPageMargin = printInfo.margin;
@@ -5166,6 +5237,7 @@ void WebPage::computePagesForPrintingImpl(FrameIdentifier frameID, const PrintIn
     beginPrinting(frameID, printInfo);
 
     if (m_printContext) {
+        PrintContextAccessScope scope { *this };
         resultPageRects = m_printContext->pageRects();
         computedPageMargin = m_printContext->computedPageMargin(printInfo.margin);
         auto computedPageSize = m_printContext->computedPageSize(FloatSize(printInfo.availablePaperWidth, printInfo.availablePaperHeight), printInfo.margin);
@@ -5212,6 +5284,7 @@ void WebPage::drawToPDF(FrameIdentifier frameID, const Optional<FloatRect>& rect
 
 void WebPage::drawRectToImage(FrameIdentifier frameID, const PrintInfo& printInfo, const IntRect& rect, const WebCore::IntSize& imageSize, CompletionHandler<void(const WebKit::ShareableBitmap::Handle&)>&& completionHandler)
 {
+    PrintContextAccessScope scope { *this };
     WebFrame* frame = WebProcess::singleton().webFrame(frameID);
     Frame* coreFrame = frame ? frame->coreFrame() : 0;
 
@@ -5262,6 +5335,7 @@ void WebPage::drawRectToImage(FrameIdentifier frameID, const PrintInfo& printInf
 
 void WebPage::drawPagesToPDF(FrameIdentifier frameID, const PrintInfo& printInfo, uint32_t first, uint32_t count, CompletionHandler<void(const IPC::DataReference&)>&& callback)
 {
+    PrintContextAccessScope scope { *this };
     RetainPtr<CFMutableDataRef> pdfPageData;
     drawPagesToPDFImpl(frameID, printInfo, first, count, pdfPageData);
     callback({ CFDataGetBytePtr(pdfPageData.get()), static_cast<size_t>(CFDataGetLength(pdfPageData.get())) });
@@ -5373,16 +5447,18 @@ void WebPage::setMediaVolume(float volume)
     m_page->setMediaVolume(volume);
 }
 
-void WebPage::setMuted(MediaProducer::MutedStateFlags state)
+void WebPage::setMuted(MediaProducer::MutedStateFlags state, CompletionHandler<void()>&& completionHandler)
 {
     m_page->setMuted(state);
+    completionHandler();
 }
 
-void WebPage::stopMediaCapture()
+void WebPage::stopMediaCapture(MediaProducer::MediaCaptureKind kind, CompletionHandler<void()>&& completionHandler)
 {
 #if ENABLE(MEDIA_STREAM)
-    m_page->stopMediaCapture();
+    m_page->stopMediaCapture(kind);
 #endif
+    completionHandler();
 }
 
 void WebPage::setMayStartMediaWhenInWindow(bool mayStartMedia)
@@ -5667,7 +5743,7 @@ void WebPage::getSelectedRangeAsync(CompletionHandler<void(const EditingRange&)>
 
 void WebPage::characterIndexForPointAsync(const WebCore::IntPoint& point, CompletionHandler<void(uint64_t)>&& completionHandler)
 {
-    constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::DisallowUserAgentShadowContent,  HitTestRequest::AllowChildFrameContent };
+    constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::DisallowUserAgentShadowContent,  HitTestRequest::Type::AllowChildFrameContent };
     auto result = m_page->mainFrame().eventHandler().hitTestResultAtPoint(point, hitType);
     auto& frame = result.innerNonSharedNode() ? *result.innerNodeFrame() : m_page->focusController().focusedOrMainFrame();
     auto range = frame.rangeForPoint(result.roundedPointInInnerNodeFrame());
@@ -5897,13 +5973,15 @@ void WebPage::elementDidFocus(WebCore::Element& element)
 #endif
 
         ++m_currentFocusedElementIdentifier;
-        FocusedElementInformation information;
-        getFocusedElementInformation(information);
+        auto information = focusedElementInformation();
+        if (!information)
+            return;
+
         RefPtr<API::Object> userData;
 
         m_formClient->willBeginInputSession(this, &element, WebFrame::fromCoreFrame(*element.document().frame()), m_userIsInteracting, userData);
 
-        send(Messages::WebPageProxy::ElementDidFocus(information, m_userIsInteracting, m_recentlyBlurredElement, m_lastActivityStateChanges, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
+        send(Messages::WebPageProxy::ElementDidFocus(information.value(), m_userIsInteracting, m_recentlyBlurredElement, m_lastActivityStateChanges, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
 #elif PLATFORM(MAC)
         // FIXME: This can be unified with the iOS code above by bringing ElementDidFocus to macOS.
         // This also doesn't take other noneditable controls into account, such as input type color.
@@ -5917,7 +5995,7 @@ void WebPage::elementDidBlur(WebCore::Element& element)
 {
     if (m_focusedElement == &element) {
         m_recentlyBlurredElement = WTFMove(m_focusedElement);
-        callOnMainThread([protectedThis = makeRefPtr(this)] {
+        callOnMainRunLoop([protectedThis = makeRefPtr(this)] {
             if (protectedThis->m_recentlyBlurredElement) {
 #if PLATFORM(IOS_FAMILY)
                 protectedThis->send(Messages::WebPageProxy::ElementDidBlur());
@@ -6167,6 +6245,11 @@ void WebPage::didCommitLoad(WebFrame* frame)
     unfreezeLayerTree(LayerTreeFreezeReason::ProcessSwap);
 
 #if ENABLE(IMAGE_EXTRACTION)
+    for (auto& [element, completionHandlers] : m_elementsPendingImageExtraction) {
+        for (auto& completionHandler : completionHandlers)
+            completionHandler({ });
+    }
+    m_elementsPendingImageExtraction.clear();
     m_elementsWithExtractedImages.clear();
 #endif
 
@@ -6198,9 +6281,8 @@ void WebPage::didCommitLoad(WebFrame* frame)
             scalePage(1, IntPoint());
     }
 
-#if PLATFORM(MAC)
     m_didUpdateRenderingAfterCommittingLoad = false;
-#endif
+
 #if PLATFORM(IOS_FAMILY)
     m_hasReceivedVisibleContentRectsAfterDidCommitLoad = false;
     m_hasRestoredExposedContentRectAfterDidCommitLoad = false;
@@ -6405,6 +6487,16 @@ void WebPage::flushPendingPageExtendedBackgroundColorChange()
     send(Messages::WebPageProxy::PageExtendedBackgroundColorDidChange(m_page->pageExtendedBackgroundColor()));
 }
 
+void WebPage::flushPendingSampledPageTopColorChange()
+{
+    if (!m_pendingSampledPageTopColorChange)
+        return;
+
+    m_pendingSampledPageTopColorChange = false;
+
+    send(Messages::WebPageProxy::SampledPageTopColorChanged(m_page->sampledPageTopColor()));
+}
+
 void WebPage::flushPendingEditorStateUpdate()
 {
     if (!m_hasPendingEditorStateUpdate)
@@ -6483,7 +6575,7 @@ Ref<DocumentLoader> WebPage::createDocumentLoader(Frame& frame, const ResourceRe
 {
     Ref<WebDocumentLoader> documentLoader = WebDocumentLoader::create(request, substituteData);
 
-    documentLoader->setlastNavigationWasAppBound(m_lastNavigationWasAppBound);
+    documentLoader->setLastNavigationWasAppBound(m_lastNavigationWasAppBound);
 
     if (frame.isMainFrame()) {
         if (m_pendingNavigationID) {
@@ -6732,18 +6824,28 @@ void WebPage::stopAllURLSchemeTasks()
 
 void WebPage::registerURLSchemeHandler(uint64_t handlerIdentifier, const String& scheme)
 {
+    RELEASE_LOG_IF_ALLOWED(Process, "registerURLSchemeHandler: Registered handler %" PRIu64 " for the '%s' scheme", handlerIdentifier, scheme.utf8().data());
     WebCore::LegacySchemeRegistry::registerURLSchemeAsHandledBySchemeHandler(scheme);
     WebCore::LegacySchemeRegistry::registerURLSchemeAsCORSEnabled(scheme);
     auto schemeResult = m_schemeToURLSchemeHandlerProxyMap.add(scheme, WebURLSchemeHandlerProxy::create(*this, handlerIdentifier));
     m_identifierToURLSchemeHandlerProxyMap.add(handlerIdentifier, schemeResult.iterator->value.get());
 }
 
+void WebPage::urlSchemeTaskWillPerformRedirection(uint64_t handlerIdentifier, uint64_t taskIdentifier, ResourceResponse&& response, ResourceRequest&& request, CompletionHandler<void(WebCore::ResourceRequest&&)>&& completionHandler)
+{
+    auto* handler = m_identifierToURLSchemeHandlerProxyMap.get(handlerIdentifier);
+    ASSERT(handler);
+
+    auto actualNewRequest = request;
+    handler->taskDidPerformRedirection(taskIdentifier, WTFMove(response), WTFMove(request), WTFMove(completionHandler));
+}
+
 void WebPage::urlSchemeTaskDidPerformRedirection(uint64_t handlerIdentifier, uint64_t taskIdentifier, ResourceResponse&& response, ResourceRequest&& request)
 {
     auto* handler = m_identifierToURLSchemeHandlerProxyMap.get(handlerIdentifier);
     ASSERT(handler);
-    
-    handler->taskDidPerformRedirection(taskIdentifier, WTFMove(response), WTFMove(request));
+
+    handler->taskDidPerformRedirection(taskIdentifier, WTFMove(response), WTFMove(request), [] (ResourceRequest&&) {});
 }
     
 void WebPage::urlSchemeTaskDidReceiveResponse(uint64_t handlerIdentifier, uint64_t taskIdentifier, const ResourceResponse& response)
@@ -7183,7 +7285,13 @@ void WebPage::textAutoSizingAdjustmentTimerFired()
 {
     m_page->recomputeTextAutoSizingInAllFrames();
 }
-#endif
+
+void WebPage::textAutosizingUsesIdempotentModeChanged()
+{
+    if (!m_page->settings().textAutosizingUsesIdempotentMode())
+        m_textAutoSizingAdjustmentTimer.stop();
+}
+#endif // ENABLE(TEXT_AUTOSIZING)
 
 void WebPage::setOverriddenMediaType(const String& mediaType)
 {
@@ -7230,43 +7338,134 @@ void WebPage::removeMediaUsageManagerSession(MediaSessionIdentifier identifier)
 
 #if ENABLE(IMAGE_EXTRACTION)
 
-void WebPage::requestImageExtraction(WebCore::Element& element)
+void WebPage::requestImageExtraction(WebCore::Element& element, CompletionHandler<void(RefPtr<WebCore::Element>&&)>&& completion)
 {
-    if (!is<HTMLElement>(element))
+    if (!is<HTMLElement>(element)) {
+        if (completion)
+            completion({ });
         return;
+    }
 
-    if (m_elementsWithExtractedImages.contains(element))
+    if (m_elementsWithExtractedImages.contains(element)) {
+        if (completion) {
+            ASSERT(is<HTMLElement>(element));
+            RefPtr<Element> imageOverlayHost;
+            if (is<HTMLElement>(element) && downcast<HTMLElement>(element).hasImageOverlay())
+                imageOverlayHost = makeRefPtr(element);
+            completion(WTFMove(imageOverlayHost));
+        }
         return;
+    }
 
-    auto* renderImage = element.renderer();
-    if (!is<RenderImage>(renderImage))
+    auto matchIndex = m_elementsPendingImageExtraction.findMatching([&] (auto& elementAndCompletionHandlers) {
+        return elementAndCompletionHandlers.first == &element;
+    });
+
+    if (matchIndex != notFound) {
+        if (completion)
+            m_elementsPendingImageExtraction[matchIndex].second.append(WTFMove(completion));
         return;
+    }
 
-    m_elementsWithExtractedImages.add(element);
-
-    auto bitmap = createShareableBitmap(downcast<RenderImage>(*renderImage));
-    if (!bitmap)
+    auto* renderer = element.renderer();
+    if (!is<RenderImage>(renderer)) {
+        if (completion)
+            completion({ });
         return;
+    }
+
+    auto& renderImage = downcast<RenderImage>(*renderer);
+    auto bitmap = createShareableBitmap(renderImage, WTF::nullopt, AllowAnimatedImages::No);
+    if (!bitmap) {
+        if (completion)
+            completion({ });
+        return;
+    }
 
     ShareableBitmap::Handle bitmapHandle;
     bitmap->createHandle(bitmapHandle);
-    if (bitmapHandle.isNull())
+    if (bitmapHandle.isNull()) {
+        if (completion)
+            completion({ });
         return;
+    }
 
-    sendWithAsyncReply(Messages::WebPageProxy::RequestImageExtraction(WTFMove(bitmapHandle)), [weakElement = makeWeakPtr(element)] (ImageExtractionResult&& result) {
-        if (auto element = weakElement.get(); is<HTMLElement>(element))
-            downcast<HTMLElement>(*element).updateWithImageExtractionResult(WTFMove(result));
+    Vector<CompletionHandler<void(RefPtr<Element>&&)>> completionHandlers;
+    if (completion)
+        completionHandlers.append(WTFMove(completion));
+    m_elementsPendingImageExtraction.append({ makeWeakPtr(element), WTFMove(completionHandlers) });
+
+    auto imageURL = element.document().completeURL(renderImage.cachedImage()->url().string());
+    sendWithAsyncReply(Messages::WebPageProxy::RequestImageExtraction(WTFMove(imageURL), WTFMove(bitmapHandle)), [webPage = makeWeakPtr(*this), weakElement = makeWeakPtr(element)] (auto&& result) {
+        auto protectedPage = makeRefPtr(webPage.get());
+        if (!protectedPage)
+            return;
+
+        protectedPage->m_elementsPendingImageExtraction.removeAllMatching([&] (auto& elementAndCompletionHandlers) {
+            auto& [element, completionHandlers] = elementAndCompletionHandlers;
+            if (element)
+                return false;
+
+            for (auto& completionHandler : completionHandlers)
+                completionHandler({ });
+            return true;
+        });
+
+        auto protectedElement = makeRefPtr(weakElement.get());
+        if (!protectedElement)
+            return;
+
+        auto& htmlElement = downcast<HTMLElement>(*protectedElement);
+        htmlElement.updateWithImageExtractionResult(WTFMove(result));
+        protectedPage->m_elementsWithExtractedImages.add(htmlElement);
+
+        auto matchIndex = protectedPage->m_elementsPendingImageExtraction.findMatching([&] (auto& elementAndCompletionHandlers) {
+            return elementAndCompletionHandlers.first == &htmlElement;
+        });
+
+        if (matchIndex == notFound)
+            return;
+
+        auto imageOverlayHost = htmlElement.hasImageOverlay() ? makeRefPtr(htmlElement) : nullptr;
+        for (auto& completionHandler : protectedPage->m_elementsPendingImageExtraction[matchIndex].second)
+            completionHandler(imageOverlayHost.copyRef());
+
+        protectedPage->m_elementsPendingImageExtraction.remove(matchIndex);
     });
+}
+
+void WebPage::updateWithImageExtractionResult(ImageExtractionResult&& result, const ElementContext& context, const FloatPoint& location, CompletionHandler<void(bool)>&& completionHandler)
+{
+    auto elementToUpdate = elementForContext(context);
+    if (!is<HTMLElement>(elementToUpdate)) {
+        completionHandler(false);
+        return;
+    }
+
+    downcast<HTMLElement>(*elementToUpdate).updateWithImageExtractionResult(WTFMove(result));
+    auto hitTestResult = corePage()->mainFrame().eventHandler().hitTestResultAtPoint(roundedIntPoint(location), {
+        HitTestRequest::Type::ReadOnly,
+        HitTestRequest::Type::Active,
+        HitTestRequest::Type::AllowVisibleChildFrameContentOnly,
+    });
+
+    auto nodeAtLocation = makeRefPtr(hitTestResult.innerNonSharedNode());
+    if (!nodeAtLocation || nodeAtLocation->shadowHost() != elementToUpdate) {
+        completionHandler(false);
+        return;
+    }
+
+    completionHandler(HTMLElement::isImageOverlayText(*nodeAtLocation));
 }
 
 #endif // ENABLE(IMAGE_EXTRACTION)
 
-#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 void WebPage::showMediaControlsContextMenu(FloatRect&& targetFrame, Vector<MediaControlsContextMenuItem>&& items, CompletionHandler<void(MediaControlsContextMenuItem::ID)>&& completionHandler)
 {
     sendWithAsyncReply(Messages::WebPageProxy::ShowMediaControlsContextMenu(WTFMove(targetFrame), WTFMove(items)), completionHandler);
 }
-#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
 #if !PLATFORM(IOS_FAMILY)
 
@@ -7295,7 +7494,7 @@ void WebPage::notifyPageOfAppBoundBehavior()
 RemoteRenderingBackendProxy& WebPage::ensureRemoteRenderingBackendProxy()
 {
     if (!m_remoteRenderingBackendProxy)
-        m_remoteRenderingBackendProxy = RemoteRenderingBackendProxy::create();
+        m_remoteRenderingBackendProxy = RemoteRenderingBackendProxy::create(*this);
     return *m_remoteRenderingBackendProxy;
 }
 #endif
@@ -7322,8 +7521,11 @@ void WebPage::revokeSandboxExtensions(Vector<RefPtr<SandboxExtension>>& sandboxE
 }
 
 #if ENABLE(APP_HIGHLIGHTS)
-bool WebPage::createAppHighlightInSelectedRange(WebCore::CreateNewGroupForHighlight createNewGroup)
+bool WebPage::createAppHighlightInSelectedRange(WebCore::CreateNewGroupForHighlight createNewGroup, WebCore::HighlightRequestOriginatedInApp requestOriginatedInApp)
 {
+    SetForScope<WebCore::CreateNewGroupForHighlight> highlightIsNewGroupScope { m_highlightIsNewGroup, createNewGroup };
+    SetForScope<WebCore::HighlightRequestOriginatedInApp> highlightRequestOriginScope { m_highlightRequestOriginatedInApp, requestOriginatedInApp };
+
     auto document = makeRefPtr(m_page->focusController().focusedOrMainFrame().document());
 
     auto frame = makeRefPtr(document->frame());
@@ -7335,21 +7537,52 @@ bool WebPage::createAppHighlightInSelectedRange(WebCore::CreateNewGroupForHighli
         return false;
 
     document->appHighlightRegister().addAppHighlight(StaticRange::create(selectionRange.value()));
-    document->appHighlightStorage().storeAppHighlight(StaticRange::create(selectionRange.value()), createNewGroup);
+    document->appHighlightStorage().storeAppHighlight(StaticRange::create(selectionRange.value()));
 
     return true;
 }
 
-void WebPage::restoreAppHighlights(const Vector<SharedMemory::IPCHandle>&& memoryHandles)
+void WebPage::restoreAppHighlightsAndScrollToIndex(const Vector<SharedMemory::IPCHandle>&& memoryHandles, const Optional<unsigned> index)
 {
     auto document = makeRefPtr(m_page->focusController().focusedOrMainFrame().document());
 
+    unsigned i = 0;
     for (const auto& ipcHandle : memoryHandles) {
         auto sharedMemory = SharedMemory::map(ipcHandle.handle, SharedMemory::Protection::ReadOnly);
         if (!sharedMemory)
             continue;
-        document->appHighlightStorage().restoreAppHighlight(SharedBuffer::create(static_cast<const char*>(sharedMemory->data()), sharedMemory->size()));
+
+        document->appHighlightStorage().restoreAndScrollToAppHighlight(SharedBuffer::create(static_cast<const char*>(sharedMemory->data()), sharedMemory->size()), i == index ? ScrollToHighlight::Yes : ScrollToHighlight::No);
+        i++;
     }
+}
+
+void WebPage::setAppHighlightsVisibility(WebCore::HighlightVisibility appHighlightVisibility)
+{
+    for (RefPtr<Frame> frame = m_mainFrame->coreFrame(); frame; frame = frame->tree().traverseNextRendered()) {
+        if (auto document = makeRefPtr(frame->document()))
+            document->appHighlightRegister().setHighlightVisibility(appHighlightVisibility);
+    }
+}
+
+#endif
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+void WebPage::createMediaSessionCoordinator(const String& identifier, CompletionHandler<void(bool)>&& completionHandler)
+{
+    auto* document = m_mainFrame->coreFrame()->document();
+    if (!document || !document->domWindow()) {
+        completionHandler(false);
+        return;
+    }
+
+    auto& session = NavigatorMediaSession::mediaSession(document->domWindow()->navigator());
+    auto coordinator = RemoteMediaSessionCoordinator::create(*this, identifier);
+    m_remoteMediaSessionCoordinator = coordinator.ptr();
+    m_mediaSessionCoordinator = MediaSessionCoordinator::create(coordinator.get());
+    session.setCoordinator(m_mediaSessionCoordinator.get());
+
+    completionHandler(true);
 }
 #endif
 
@@ -7363,6 +7596,15 @@ void WebPage::lastNavigationWasAppBound(CompletionHandler<void(bool)>&& completi
 {
     completionHandler(mainFrame()->document()->loader()->lastNavigationWasAppBound());
 }
+
+#if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
+
+void WebPage::handleContextMenuTranslation(const TranslationContextMenuInfo& info)
+{
+    send(Messages::WebPageProxy::HandleContextMenuTranslation(info));
+}
+
+#endif
 
 } // namespace WebKit
 

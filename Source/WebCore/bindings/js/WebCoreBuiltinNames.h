@@ -75,6 +75,7 @@ namespace WebCore {
     macro(Credential) \
     macro(CredentialsContainer) \
     macro(CSSAnimation) \
+    macro(CSSCounterStyleRule) \
     macro(CSSImageValue) \
     macro(CSSNumericValue) \
     macro(CSSPaintSize) \
@@ -171,12 +172,12 @@ namespace WebCore {
     macro(MediaQueryListEvent) \
     macro(MediaRecorder) \
     macro(MediaRecorderErrorEvent) \
+    macro(MediaSessionCoordinator) \
     macro(MediaSource) \
     macro(MediaStream) \
     macro(MediaStreamTrack) \
     macro(MerchantValidationEvent) \
     macro(MockRTCRtpTransform) \
-    macro(ModernMediaControls) \
     macro(NavigatorCredentials) \
     macro(NavigatorMediaDevices) \
     macro(NavigatorUserMedia) \
@@ -232,6 +233,7 @@ namespace WebCore {
     macro(RTCSessionDescription) \
     macro(RTCStatsReport) \
     macro(RTCTrackEvent) \
+    macro(RTCTransformEvent) \
     macro(ReadableByteStreamController) \
     macro(ReadableStream) \
     macro(ReadableStreamBYOBReader) \
@@ -254,6 +256,8 @@ namespace WebCore {
     macro(SpeechRecognitionEvent) \
     macro(SpeechRecognitionResult) \
     macro(SpeechRecognitionResultList) \
+    macro(SourceBuffer) \
+    macro(SourceBufferList) \
     macro(StaticRange) \
     macro(StereoPannerNode) \
     macro(StylePropertyMapReadOnly) \
@@ -369,6 +373,8 @@ namespace WebCore {
     macro(isDisturbed) \
     macro(isLoading) \
     macro(isSecureContext) \
+    macro(kind) \
+    macro(language) \
     macro(localStreams) \
     macro(location) \
     macro(makeDOMException) \
@@ -377,6 +383,7 @@ namespace WebCore {
     macro(matchingElementInFlatTree) \
     macro(mediaStreamTrackConstraints) \
     macro(openDatabase) \
+    macro(onrtctransform) \
     macro(ontouchcancel) \
     macro(ontouchend) \
     macro(ontouchmove) \
@@ -415,7 +422,6 @@ namespace WebCore {
     macro(reader) \
     macro(readyPromise) \
     macro(readyPromiseCapability) \
-    macro(registerRTCRtpScriptTransformer) \
     macro(requestAnimationFrame) \
     macro(requestIdleCallback) \
     macro(response) \

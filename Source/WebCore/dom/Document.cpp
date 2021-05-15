@@ -29,6 +29,7 @@
 #include "Document.h"
 
 #include "AXObjectCache.h"
+#include "ApplicationManifest.h"
 #include "Attr.h"
 #include "BeforeUnloadEvent.h"
 #include "CDATASection.h"
@@ -37,6 +38,7 @@
 #include "CSSStyleDeclaration.h"
 #include "CSSStyleSheet.h"
 #include "CachedCSSStyleSheet.h"
+#include "CachedFontLoadRequest.h"
 #include "CachedFrame.h"
 #include "CachedResourceLoader.h"
 #include "CanvasRenderingContext2D.h"
@@ -59,6 +61,7 @@
 #include "DateComponents.h"
 #include "DebugPageOverlays.h"
 #include "DeprecatedGlobalSettings.h"
+#include "DocumentFontLoader.h"
 #include "DocumentLoader.h"
 #include "DocumentMarkerController.h"
 #include "DocumentSharedObjectPool.h"
@@ -73,11 +76,13 @@
 #include "ExtensionStyleSheets.h"
 #include "FocusController.h"
 #include "FocusEvent.h"
+#include "FocusOptions.h"
 #include "FontFaceSet.h"
 #include "FormController.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
+#include "FrameSnapshotting.h"
 #include "FrameView.h"
 #include "FullscreenManager.h"
 #include "GCReachableRef.h"
@@ -101,6 +106,7 @@
 #include "HTMLInputElement.h"
 #include "HTMLLinkElement.h"
 #include "HTMLMediaElement.h"
+#include "HTMLMetaElement.h"
 #include "HTMLNameCollection.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLPictureElement.h"
@@ -115,9 +121,13 @@
 #include "HighlightRegister.h"
 #include "History.h"
 #include "HitTestResult.h"
+#include "IDBConnectionProxy.h"
+#include "IDBOpenDBRequest.h"
 #include "IdleCallbackController.h"
 #include "ImageBitmapRenderingContext.h"
+#include "ImageBuffer.h"
 #include "ImageLoader.h"
+#include "ImageOverlayController.h"
 #include "InspectorInstrumentation.h"
 #include "IntersectionObserver.h"
 #include "JSCustomElementInterface.h"
@@ -168,9 +178,11 @@
 #include "Range.h"
 #include "RealtimeMediaSourceCenter.h"
 #include "RenderChildIterator.h"
+#include "RenderImage.h"
 #include "RenderInline.h"
 #include "RenderLayerCompositor.h"
 #include "RenderLineBreak.h"
+#include "RenderStyle.h"
 #include "RenderTreeUpdater.h"
 #include "RenderView.h"
 #include "RenderWidget.h"
@@ -277,11 +289,6 @@
 
 #if ENABLE(FULLSCREEN_API)
 #include "RenderFullScreen.h"
-#endif
-
-#if ENABLE(INDEXED_DATABASE)
-#include "IDBConnectionProxy.h"
-#include "IDBOpenDBRequest.h"
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -641,6 +648,7 @@ Document::Document(Frame* frame, const Settings& settings, const URL& url, Docum
     , m_visualUpdatesSuppressionTimer(*this, &Document::visualUpdatesSuppressionTimerFired)
     , m_sharedObjectPoolClearTimer(*this, &Document::clearSharedObjectPool)
     , m_fontSelector(CSSFontSelector::create(*this))
+    , m_fontLoader(makeUniqueRef<DocumentFontLoader>(*this))
     , m_didAssociateFormControlsTimer(*this, &Document::didAssociateFormControlsTimerFired)
     , m_cookieCacheExpiryTimer(*this, &Document::invalidateDOMCookieCache)
     , m_socketProvider(page() ? &page()->socketProvider() : nullptr)
@@ -760,7 +768,7 @@ Document::~Document()
     extensionStyleSheets().detachFromDocument();
 
     styleScope().clearResolver(); // We need to destroy CSSFontSelector before destroying m_cachedResourceLoader.
-    m_fontSelector->stopLoadingAndClearFonts();
+    m_fontLoader->stopLoadingAndClearFonts();
 
     // It's possible for multiple Documents to end up referencing the same CachedResourceLoader (e.g., SVGImages
     // load the initial empty document and the SVGDocument with the same DocumentLoader).
@@ -774,7 +782,6 @@ Document::~Document()
 
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(m_listsInvalidatedAtDocument.isEmpty());
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(m_collectionsInvalidatedAtDocument.isEmpty());
-    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(m_svgUseElements.isEmpty());
 
     for (unsigned count : m_nodeListAndCollectionCounts)
         ASSERT_UNUSED(count, !count);
@@ -807,8 +814,9 @@ void Document::removedLastRef()
         m_fullscreenManager->clear();
 #endif
         m_associatedFormControls.clear();
+        m_pendingRenderTreeTextUpdate = { };
 
-        m_fontSelector->stopLoadingAndClearFonts();
+        m_fontLoader->stopLoadingAndClearFonts();
 
         detachParser();
 
@@ -953,6 +961,20 @@ void Document::setCompatibilityMode(DocumentCompatibilityMode mode)
 String Document::compatMode() const
 {
     return inQuirksMode() ? "BackCompat" : "CSS1Compat";
+}
+
+const Color& Document::themeColor()
+{
+    if (!m_cachedThemeColor.isValid()) {
+        if (!m_activeThemeColorMetaElement)
+            m_activeThemeColorMetaElement = determineActiveThemeColorMetaElement();
+        if (m_activeThemeColorMetaElement)
+            m_cachedThemeColor = m_activeThemeColorMetaElement->contentColor();
+
+        if (!m_cachedThemeColor.isValid())
+            m_cachedThemeColor = m_applicationManifestThemeColor;
+    }
+    return m_cachedThemeColor;
 }
 
 void Document::resetLinkColor()
@@ -1854,21 +1876,20 @@ bool Document::hidden() const
 
 void Document::registerMediaElement(HTMLMediaElement& element)
 {
-    m_mediaElements.add(&element);
+    m_mediaElements.add(element);
 }
 
 void Document::unregisterMediaElement(HTMLMediaElement& element)
 {
-    m_mediaElements.remove(&element);
+    m_mediaElements.remove(element);
 }
 
 void Document::forEachMediaElement(const Function<void(HTMLMediaElement&)>& function)
 {
-    Vector<Ref<HTMLMediaElement>> elements;
-    for (auto* element : m_mediaElements)
-        elements.append(*element);
-    for (auto& element : elements)
-        function(element);
+    ASSERT(!m_mediaElements.hasNullReferences());
+    m_mediaElements.forEach([&](auto& element) {
+        function(makeRef(element));
+    });
 }
 
 #endif
@@ -2002,8 +2023,8 @@ void Document::resolveStyle(ResolveStyleType type)
     RenderView::RepaintRegionAccumulator repaintRegionAccumulator(renderView());
 
     // FIXME: Do this update per tree scope.
-    {
-        auto elements = copyToVectorOf<RefPtr<SVGUseElement>>(m_svgUseElements);
+    if (auto* extensions = m_svgExtensions.get()) {
+        auto elements = copyToVectorOf<Ref<SVGUseElement>>(extensions->useElementsWithPendingShadowTreeUpdate());
         // We can't clear m_svgUseElements here because updateShadowTree may end up executing arbitrary scripts
         // which may insert new SVG use elements or remove existing ones inside sync IPC via ImageLoader::updateFromElement.
         for (auto& element : elements)
@@ -2052,7 +2073,7 @@ void Document::resolveStyle(ResolveStyleType type)
                 documentElement->invalidateStyleForSubtree();
         }
 
-        Style::TreeResolver resolver(*this);
+        Style::TreeResolver resolver(*this, WTFMove(m_pendingRenderTreeTextUpdate));
         auto styleUpdate = resolver.resolve();
 
         m_lastStyleUpdateSizeForTesting = styleUpdate ? styleUpdate->size() : 0;
@@ -2063,7 +2084,7 @@ void Document::resolveStyle(ResolveStyleType type)
 
         m_inStyleRecalc = false;
 
-        fontSelector().loadPendingFonts();
+        m_fontLoader->loadPendingFonts();
 
         if (styleUpdate) {
             updateRenderTree(WTFMove(styleUpdate));
@@ -2100,10 +2121,12 @@ void Document::resolveStyle(ResolveStyleType type)
 
 void Document::updateTextRenderer(Text& text, unsigned offsetOfReplacedText, unsigned lengthOfReplacedText)
 {
-    auto textUpdate = makeUnique<Style::Update>(*this);
-    textUpdate->addText(text, { offsetOfReplacedText, lengthOfReplacedText, WTF::nullopt });
+    if (!m_pendingRenderTreeTextUpdate)
+        m_pendingRenderTreeTextUpdate = makeUnique<Style::Update>(*this);
 
-    updateRenderTree(WTFMove(textUpdate));
+    m_pendingRenderTreeTextUpdate->addText(text, { offsetOfReplacedText, lengthOfReplacedText, WTF::nullopt });
+
+    scheduleRenderingUpdate({ });
 }
 
 bool Document::needsStyleRecalc() const
@@ -2115,6 +2138,9 @@ bool Document::needsStyleRecalc() const
         return true;
 
     if (childNeedsStyleRecalc())
+        return true;
+
+    if (m_pendingRenderTreeTextUpdate)
         return true;
 
     if (styleScope().hasPendingUpdate())
@@ -2372,13 +2398,6 @@ void Document::pageSizeAndMarginsInPixels(int pageIndex, IntSize& pageSize, int&
     marginLeft = style->marginLeft().isAuto() ? marginLeft : intValueForLength(style->marginLeft(), width);
 }
 
-Style::Resolver& Document::userAgentShadowTreeStyleResolver()
-{
-    if (!m_userAgentShadowTreeStyleResolver)
-        m_userAgentShadowTreeStyleResolver = makeUnique<Style::Resolver>(*this);
-    return *m_userAgentShadowTreeStyleResolver;
-}
-
 void Document::fontsNeedUpdate(FontSelector&)
 {
     invalidateMatchedPropertiesCacheAndForceStyleRecalc();
@@ -2391,11 +2410,6 @@ void Document::invalidateMatchedPropertiesCacheAndForceStyleRecalc()
     if (backForwardCacheState() != NotInBackForwardCache || !renderView())
         return;
     scheduleFullStyleRebuild();
-}
-
-void Document::didClearStyleResolver()
-{
-    m_userAgentShadowTreeStyleResolver = nullptr;
 }
 
 void Document::setIsResolvingTreeStyle(bool value)
@@ -2607,12 +2621,11 @@ void Document::willBeRemovedFromFrame()
     if (is<PluginDocument>(*this))
         downcast<PluginDocument>(*this).detachFromPluginElement();
 
-#if ENABLE(POINTER_LOCK)
-    if (page())
-        page()->pointerLockController().documentDetached(*this);
-#endif
-
     if (auto* page = this->page()) {
+#if ENABLE(POINTER_LOCK)
+        page->pointerLockController().documentDetached(*this);
+#endif
+        page->imageOverlayController().documentDetached(*this);
         if (auto* validationMessageClient = page->validationMessageClient())
             validationMessageClient->documentDetached(*this);
     }
@@ -2641,7 +2654,7 @@ void Document::willBeRemovedFromFrame()
 
     m_cachedResourceLoader->stopUnusedPreloadsTimer();
 
-    if (page() && m_mediaState != MediaProducer::IsNotPlaying) {
+    if (page() && !m_mediaState.isEmpty()) {
         m_mediaState = MediaProducer::IsNotPlaying;
         page()->updateIsPlayingMedia(HTMLMediaElementInvalidID);
     }
@@ -2709,12 +2722,17 @@ void Document::resumeDeviceMotionAndOrientationUpdates()
 #endif
 }
 
+void Document::suspendFontLoading()
+{
+    m_fontLoader->suspendFontLoading();
+}
+
 bool Document::shouldBypassMainWorldContentSecurityPolicy() const
 {
     // Bypass this policy when the world is known, and it not the normal world.
     JSC::VM& vm = commonVM();
-    auto& callFrame = *vm.topCallFrame;
-    return &callFrame != JSC::CallFrame::noCaller() && !currentWorld(*callFrame.lexicalGlobalObject(vm)).isNormal();
+    auto* callFrame = vm.topCallFrame;
+    return callFrame && callFrame != JSC::CallFrame::noCaller() && !currentWorld(*callFrame->lexicalGlobalObject(vm)).isNormal();
 }
 
 void Document::platformSuspendOrStopActiveDOMObjects()
@@ -2994,6 +3012,19 @@ void Document::implicitOpen()
     setReadyState(Loading);
 }
 
+std::unique_ptr<FontLoadRequest> Document::fontLoadRequest(String& url, bool isSVG, bool isInitiatingElementInUserAgentShadowTree, LoadedFromOpaqueSource loadedFromOpaqueSource)
+{
+    auto* cachedFont = m_fontLoader->cachedFont(completeURL(url), isSVG, isInitiatingElementInUserAgentShadowTree, loadedFromOpaqueSource);
+    return cachedFont ? makeUnique<CachedFontLoadRequest>(*cachedFont) : nullptr;
+}
+
+void Document::beginLoadingFontSoon(FontLoadRequest& request)
+{
+    ASSERT(is<CachedFontLoadRequest>(request));
+    auto& font = downcast<CachedFontLoadRequest>(request).cachedFont();
+    m_fontLoader->beginLoadingFontSoon(font);
+}
+
 HTMLBodyElement* Document::body() const
 {
     auto* element = documentElement();
@@ -3250,6 +3281,8 @@ void Document::enqueuePaintTimingEntryIfNeeded()
 
     domWindow()->performance().reportFirstContentfulPaint();
     m_didEnqueueFirstContentfulPaint = true;
+
+    determineSampledPageTopColor();
 }
 
 ExceptionOr<void> Document::write(Document* responsibleDocument, SegmentedString&& text)
@@ -3468,7 +3501,6 @@ void Document::disableWebAssembly(const String& errorMessage)
     frame()->script().disableWebAssembly(errorMessage);
 }
 
-#if ENABLE(INDEXED_DATABASE)
 IDBClient::IDBConnectionProxy* Document::idbConnectionProxy()
 {
     if (!m_idbConnectionProxy) {
@@ -3479,13 +3511,21 @@ IDBClient::IDBConnectionProxy* Document::idbConnectionProxy()
     }
     return m_idbConnectionProxy.get();
 }
-#endif
 
 SocketProvider* Document::socketProvider()
 {
     return m_socketProvider.get();
 }
-    
+
+RefPtr<RTCDataChannelRemoteHandlerConnection> Document::createRTCDataChannelRemoteHandlerConnection()
+{
+    ASSERT(isMainThread());
+    auto* page = this->page();
+    if (!page)
+        return nullptr;
+    return page->libWebRTCProvider().createRTCDataChannelRemoteHandlerConnection();
+}
+
 bool Document::canNavigate(Frame* targetFrame, const URL& destinationURL)
 {
     if (!m_frame)
@@ -3821,18 +3861,46 @@ void Document::updateViewportArguments()
     }
 }
 
-void Document::processThemeColor(const String& themeColorString)
+void Document::metaElementThemeColorChanged(HTMLMetaElement& metaElement)
 {
-    auto themeColor = CSSParser::parseColor(themeColorString);
-    if (themeColor == m_themeColor)
+    // If the current content color isn't valid and it wasn't previously in the list of elements
+    // with a valid content color, don't bother recalculating `m_metaThemeColorElements`.
+    if (!metaElement.contentColor().isValid() && m_metaThemeColorElements && !m_metaThemeColorElements->contains(&metaElement))
         return;
 
-    m_themeColor = WTFMove(themeColor);
+    auto oldThemeColor = std::exchange(m_cachedThemeColor, Color());
+    m_metaThemeColorElements = WTF::nullopt;
+    m_activeThemeColorMetaElement = nullptr;
+    if (themeColor() == oldThemeColor)
+        return;
 
+    themeColorChanged();
+}
+
+WeakPtr<HTMLMetaElement> Document::determineActiveThemeColorMetaElement()
+{
+    if (!m_metaThemeColorElements) {
+        Vector<WeakPtr<HTMLMetaElement>> metaThemeColorElements;
+        for (auto& metaElement : descendantsOfType<HTMLMetaElement>(*this)) {
+            if (equalLettersIgnoringASCIICase(metaElement.name(), "theme-color") && metaElement.contentColor().isValid())
+                metaThemeColorElements.append(makeWeakPtr(metaElement));
+        }
+        m_metaThemeColorElements = WTFMove(metaThemeColorElements);
+    }
+
+    for (auto& metaElement : *m_metaThemeColorElements) {
+        if (metaElement && metaElement->contentColor().isValid() && metaElement->mediaAttributeMatches())
+            return metaElement;
+    }
+    return nullptr;
+}
+
+void Document::themeColorChanged()
+{
     scheduleRenderingUpdate({ });
 
     if (auto* page = this->page())
-        page->chrome().client().themeColorChanged(m_themeColor);
+        page->chrome().client().themeColorChanged();
 
 #if ENABLE(RUBBER_BANDING)
     if (auto* view = renderView()) {
@@ -3840,6 +3908,197 @@ void Document::processThemeColor(const String& themeColorString)
             view->compositor().updateLayerForOverhangAreasBackgroundColor();
     }
 #endif // ENABLE(RUBBER_BANDING)
+}
+
+static bool isValidPageSampleLocation(Document& document, const IntPoint& location)
+{
+    // FIXME: <https://webkit.org/b/225167> (Sampled Page Top Color: hook into painting logic instead of taking snapshots)
+
+    constexpr OptionSet<HitTestRequest::Type> hitTestRequestTypes { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::IgnoreCSSPointerEventsProperty, HitTestRequest::Type::DisallowUserAgentShadowContent, HitTestRequest::Type::CollectMultipleElements, HitTestRequest::Type::IncludeAllElementsUnderPoint };
+    HitTestResult hitTestResult(location);
+    document.hitTest(hitTestRequestTypes, hitTestResult);
+
+    for (auto& hitTestNode : hitTestResult.listBasedTestResult()) {
+        auto& node = hitTestNode.get();
+
+        auto* renderer = node.renderer();
+        if (!renderer)
+            return false;
+
+        // Skip images (both `<img>` and CSS `background-image`) as they're likely not a solid color.
+        if (is<RenderImage>(renderer) || renderer->style().hasBackgroundImage())
+            return false;
+
+        // Skip nodes with animations as the sample may get an odd color if the animation is in-progress.
+        if (renderer->style().hasTransitions() || renderer->style().hasAnimations())
+            return false;
+
+        // Skip `<canvas>` but only if they've been drawn into. Guess this by seeing if there's already
+        // a `CanvasRenderingContext`, which is only created by JavaScript.
+        if (is<HTMLCanvasElement>(node) && downcast<HTMLCanvasElement>(node).renderingContext())
+            return false;
+
+        // Skip 3rd-party `<iframe>` as the content likely won't match the rest of the page.
+        if (is<HTMLIFrameElement>(node) && !areRegistrableDomainsEqual(downcast<HTMLIFrameElement>(node).location(), document.url()))
+            return false;
+    }
+
+    return true;
+}
+
+static Optional<Lab<float>> samplePageColor(Document& document, IntPoint&& location)
+{
+    // FIXME: <https://webkit.org/b/225167> (Sampled Page Top Color: hook into painting logic instead of taking snapshots)
+
+    if (!isValidPageSampleLocation(document, location))
+        return WTF::nullopt;
+
+    ASSERT(document.view());
+    auto snapshot = snapshotFrameRect(document.view()->frame(), IntRect(location, IntSize(1, 1)), SnapshotOptionsExcludeSelectionHighlighting | SnapshotOptionsPaintEverythingExcludingSelection);
+    if (!snapshot)
+        return WTF::nullopt;
+
+    auto snapshotData = snapshot->toBGRAData();
+    return convertColor<Lab<float>>(SRGBA<uint8_t> { snapshotData[2], snapshotData[1], snapshotData[0], snapshotData[3] });
+}
+
+static double colorDifference(Lab<float>& lhs, Lab<float>& rhs)
+{
+    return sqrt(pow(rhs.lightness - lhs.lightness, 2) + pow(rhs.a - lhs.a, 2) + pow(rhs.b - lhs.b, 2));
+}
+
+static Lab<float> averageColor(Lab<float> colors[], size_t count)
+{
+    float totalLightness = 0;
+    float totalA = 0;
+    float totalB = 0;
+    for (size_t i = 0; i < count; ++i) {
+        totalLightness += colors[i].lightness;
+        totalA += colors[i].a;
+        totalB += colors[i].b;
+    }
+    return {
+        totalLightness / count,
+        totalA / count,
+        totalB / count,
+        1,
+    };
+}
+
+void Document::determineSampledPageTopColor()
+{
+    if (m_sampledPageTopColor.isValid())
+        return;
+
+    auto maxDifference = settings().sampledPageTopColorMaxDifference();
+    if (maxDifference <= 0)
+        return;
+
+    if (!isTopDocument())
+        return;
+
+    auto* frameView = view();
+    if (!frameView)
+        return;
+
+    auto notifyDidSamplePageTopColorOnScopeExit = makeScopeExit([&] {
+        if (auto* page = this->page())
+            page->chrome().client().sampledPageTopColorChanged();
+    });
+
+    // Decrease the width by one pixel so that the last snapshot is within bounds and not off-by-one.
+    auto frameWidth = frameView->contentsWidth() - 1;
+
+    constexpr auto numSnapshots = 5;
+    size_t nonMatchingColorIndex = numSnapshots;
+
+    Lab<float> snapshots[numSnapshots];
+    double differences[numSnapshots - 1];
+
+    auto shouldStopAfterFindingNonMatchingColor = [&] (size_t i) -> bool {
+        // Bail if the non-matching color is not the first or last snapshot, or there already is an non-matching color.
+        if ((i && i < numSnapshots - 1) || nonMatchingColorIndex != numSnapshots)
+            return true;
+
+        nonMatchingColorIndex = i;
+        return false;
+    };
+
+    for (size_t i = 0; i < numSnapshots; ++i) {
+        auto snapshot = samplePageColor(*this, IntPoint(frameWidth * i / (numSnapshots - 1), 0));
+        if (!snapshot) {
+            if (shouldStopAfterFindingNonMatchingColor(i))
+                return;
+            continue;
+        }
+
+        snapshots[i] = *snapshot;
+
+        if (i) {
+            // Each `difference` item compares `i` with `i - 1` so if the first comparison (`i == 1`)
+            // is too large of a difference, we should treat `i - 1` (i.e. `0`) as the problem since
+            // we only allow for non-matching colors being the first or last sampled color.
+            auto effectiveNonMatchingColorIndex = i == 1 ? 0 : i;
+
+            differences[i - 1] = colorDifference(snapshots[i - 1], snapshots[i]);
+            if (differences[i - 1] > maxDifference) {
+                if (shouldStopAfterFindingNonMatchingColor(effectiveNonMatchingColorIndex))
+                    return;
+                continue;
+            }
+
+            double cumuluativeDifference = 0;
+            for (size_t j = 0; j < i; ++j) {
+                if (j == nonMatchingColorIndex)
+                    continue;
+                cumuluativeDifference += differences[j];
+            }
+            if (cumuluativeDifference > maxDifference) {
+                if (shouldStopAfterFindingNonMatchingColor(effectiveNonMatchingColorIndex)) {
+                    // If we haven't already identified a non-matching snapshot and the difference between the first
+                    // and second snapshots or the second-to-last and last snapshots is less than the maximum, mark
+                    // the first/last snapshot as non-matching to give a chance for the rest of the snapshots to match.
+                    if (nonMatchingColorIndex == numSnapshots && (!i || i == numSnapshots - 1) && cumuluativeDifference - differences[i - 1] <= maxDifference) {
+                        nonMatchingColorIndex = effectiveNonMatchingColorIndex;
+                        continue;
+                    }
+                    return;
+                }
+                continue;
+            }
+        }
+    }
+
+    // Decrease the height by one pixel so that the last snapshot is within bounds and not off-by-one.
+    auto minHeight = settings().sampledPageTopColorMinHeight() - 1;
+    if (minHeight > 0) {
+        if (nonMatchingColorIndex) {
+            if (auto leftMiddleSnapshot = samplePageColor(*this, IntPoint(0, minHeight))) {
+                if (colorDifference(*leftMiddleSnapshot, snapshots[0]) > maxDifference)
+                    return;
+            }
+        }
+
+        if (nonMatchingColorIndex != numSnapshots - 1) {
+            if (auto rightMiddleSnapshot = samplePageColor(*this, IntPoint(frameWidth, minHeight))) {
+                if (colorDifference(*rightMiddleSnapshot, snapshots[numSnapshots - 1]) > maxDifference)
+                    return;
+            }
+        }
+    }
+
+    auto snapshotsToAverage = snapshots;
+    auto validSnapshotCount = numSnapshots;
+    if (!nonMatchingColorIndex) {
+        // Skip the first snapshot by moving the pointer that indicates where the snapshot array
+        // starts and decreasing the count of snapshots to average.
+        ++snapshotsToAverage;
+        --validSnapshotCount;
+    } else if (nonMatchingColorIndex == numSnapshots - 1) {
+        // Skip the last snapshot by decreasing the count of snapshots to average.
+        --validSnapshotCount;
+    }
+    m_sampledPageTopColor = averageColor(snapshotsToAverage, validSnapshotCount);
 }
 
 #if ENABLE(DARK_MODE_CSS)
@@ -3945,6 +4204,20 @@ void Document::processReferrerPolicy(const String& policy, ReferrerPolicySource 
     }
     setReferrerPolicy(referrerPolicy.value());
 }
+
+#if ENABLE(APPLICATION_MANIFEST)
+
+void Document::processApplicationManifest(const ApplicationManifest& applicationManifest)
+{
+    auto oldThemeColor = std::exchange(m_cachedThemeColor, Color());
+    m_applicationManifestThemeColor = applicationManifest.themeColor;
+    if (themeColor() == oldThemeColor)
+        return;
+
+    themeColorChanged();
+}
+
+#endif // ENABLE(APPLICATION_MANIFEST)
 
 MouseEventWithHitTestResults Document::prepareMouseEvent(const HitTestRequest& request, const LayoutPoint& documentPoint, const PlatformMouseEvent& event)
 {
@@ -4122,6 +4395,13 @@ void Document::updateElementsAffectedByMediaQueries()
 {
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
+    if (auto activeThemeColorElement = determineActiveThemeColorMetaElement(); m_activeThemeColorMetaElement != activeThemeColorElement) {
+        auto oldThemeColor = std::exchange(m_cachedThemeColor, Color());
+        m_activeThemeColorMetaElement = WTFMove(activeThemeColorElement);
+        if (themeColor() != oldThemeColor)
+            themeColorChanged();
+    }
+
     // FIXME: copyToVector doesn't work with WeakHashSet
     Vector<Ref<HTMLImageElement>> images;
     images.reserveInitialCapacity(m_dynamicMediaQueryDependentImages.computeSize());
@@ -4269,18 +4549,18 @@ void Document::noteUserInteractionWithMediaElement()
 void Document::updateIsPlayingMedia(uint64_t sourceElementID)
 {
     ASSERT(!m_audioProducers.hasNullReferences());
-    MediaProducer::MediaStateFlags state = MediaProducer::IsNotPlaying;
+    MediaProducer::MediaStateFlags state;
     for (auto& audioProducer : m_audioProducers)
-        state |= audioProducer.mediaState();
+        state.add(audioProducer.mediaState());
 
 #if ENABLE(MEDIA_STREAM)
-    state |= MediaStreamTrack::captureState(*this);
+    state.add(MediaStreamTrack::captureState(*this));
     if (m_activeSpeechRecognition)
-        state |= MediaProducer::HasActiveAudioCaptureDevice;
+        state.add(MediaProducer::MediaState::HasActiveAudioCaptureDevice);
 #endif
 
     if (m_userHasInteractedWithMediaElement)
-        state |= MediaProducer::HasUserInteractedWithMediaElement;
+        state.add(MediaProducer::MediaState::HasUserInteractedWithMediaElement);
 
     if (state == m_mediaState)
         return;
@@ -4331,7 +4611,7 @@ void Document::adjustFocusedNodeOnNodeRemoval(Node& node, NodeRemoval nodeRemova
         // FIXME: We should avoid synchronously updating the style inside setFocusedElement.
         // FIXME: Object elements should avoid loading a frame synchronously in a post style recalc callback.
         SubframeLoadingDisabler disabler(is<ContainerNode>(node) ? &downcast<ContainerNode>(node) : nullptr);
-        setFocusedElement(nullptr, FocusDirection::None, FocusRemovalEventsMode::DoNotDispatch);
+        setFocusedElement(nullptr, { { }, { }, FocusRemovalEventsMode::DoNotDispatch, { }, { } });
         // Set the focus navigation starting node to the previous focused element so that
         // we can fallback to the siblings or parent node for the next search.
         // Also we need to call removeFocusNavigationNodeOfSubtree after this function because
@@ -4413,7 +4693,7 @@ void Document::invalidateRenderingDependentRegions()
 #endif
 }
 
-bool Document::setFocusedElement(Element* element, FocusDirection direction, FocusRemovalEventsMode eventsMode)
+bool Document::setFocusedElement(Element* element, const FocusOptions& options)
 {
     RefPtr<Element> newFocusedElement = element;
     // Make sure newFocusedElement is actually in this document
@@ -4435,7 +4715,7 @@ bool Document::setFocusedElement(Element* element, FocusDirection direction, Foc
         oldFocusedElement->setFocus(false);
         setFocusNavigationStartingNode(nullptr);
 
-        if (eventsMode == FocusRemovalEventsMode::Dispatch) {
+        if (options.removalEventsMode == FocusRemovalEventsMode::Dispatch) {
             // Dispatch a change event for form control elements that have been edited.
             if (is<HTMLFormControlElement>(*oldFocusedElement)) {
                 HTMLFormControlElement& formControlElement = downcast<HTMLFormControlElement>(*oldFocusedElement);
@@ -4503,7 +4783,8 @@ bool Document::setFocusedElement(Element* element, FocusDirection direction, Foc
         // Set focus on the new node
         m_focusedElement = newFocusedElement;
         setFocusNavigationStartingNode(m_focusedElement.get());
-        m_focusedElement->setFocus(true);
+        m_focusedElement->setFocus(true, options.visibility);
+        m_latestFocusTrigger = options.trigger;
 
         // The setFocus call triggers a blur and a focus event. Event handlers could cause the focused element to be cleared.
         if (m_focusedElement != newFocusedElement) {
@@ -4512,7 +4793,7 @@ bool Document::setFocusedElement(Element* element, FocusDirection direction, Foc
         }
 
         // Dispatch the focus event and let the node do any other focus related activities (important for text fields)
-        m_focusedElement->dispatchFocusEvent(oldFocusedElement.copyRef(), direction);
+        m_focusedElement->dispatchFocusEvent(oldFocusedElement.copyRef(), options.direction);
 
         if (m_focusedElement != newFocusedElement) {
             // handler shifted focus
@@ -4972,7 +5253,7 @@ ExceptionOr<Ref<Event>> Document::createEvent(const String& type)
     // Please do *not* add new event classes to this function unless they are required
     // for compatibility with the DOM specification or some actual legacy web content.
 
-    // This mechanism is superceded by use of event constructors.
+    // This mechanism is superseded by use of event constructors.
     // That is what we should use for any new event classes.
 
     // The following strings are the ones from the DOM specification
@@ -5440,18 +5721,14 @@ void Document::setBackForwardCacheState(BackForwardCacheState state)
 
         clearSharedObjectPool();
 
-#if ENABLE(INDEXED_DATABASE)
         if (m_idbConnectionProxy)
             m_idbConnectionProxy->setContextSuspended(*scriptExecutionContext(), true);
-#endif
         break;
     case NotInBackForwardCache:
         if (childNeedsStyleRecalc())
             scheduleStyleRecalc();
-#if ENABLE(INDEXED_DATABASE)
         if (m_idbConnectionProxy)
             m_idbConnectionProxy->setContextSuspended(*scriptExecutionContext(), false);
-#endif
         break;
     case AboutToEnterBackForwardCache:
         break;
@@ -5472,8 +5749,8 @@ void Document::suspend(ReasonForSuspension reason)
 
     documentWillBecomeInactive();
 
-    for (auto* element : m_documentSuspensionCallbackElements)
-        element->prepareForDocumentSuspension();
+    for (auto& element : m_documentSuspensionCallbackElements)
+        element.prepareForDocumentSuspension();
 
 #if ASSERT_ENABLED
     // Clear the update flag to be able to check if the viewport arguments update
@@ -5510,6 +5787,8 @@ void Document::suspend(ReasonForSuspension reason)
     m_visualUpdatesAllowed = false;
     m_visualUpdatesSuppressionTimer.stop();
 
+    m_fontLoader->suspendFontLoading();
+
     m_isSuspended = true;
 }
 
@@ -5518,7 +5797,7 @@ void Document::resume(ReasonForSuspension reason)
     if (!m_isSuspended)
         return;
 
-    for (auto* element : copyToVector(m_documentSuspensionCallbackElements))
+    for (auto element : copyToVectorOf<Ref<Element>>(m_documentSuspensionCallbackElements))
         element->resumeFromDocumentSuspension();
 
     if (renderView())
@@ -5536,6 +5815,8 @@ void Document::resume(ReasonForSuspension reason)
 
     m_visualUpdatesAllowed = true;
 
+    m_fontLoader->resumeFontLoading();
+
     m_isSuspended = false;
 
 #if ENABLE(SERVICE_WORKER)
@@ -5546,12 +5827,12 @@ void Document::resume(ReasonForSuspension reason)
 
 void Document::registerForDocumentSuspensionCallbacks(Element& element)
 {
-    m_documentSuspensionCallbackElements.add(&element);
+    m_documentSuspensionCallbackElements.add(element);
 }
 
 void Document::unregisterForDocumentSuspensionCallbacks(Element& element)
 {
-    m_documentSuspensionCallbackElements.remove(&element);
+    m_documentSuspensionCallbackElements.remove(element);
 }
 
 bool Document::audioPlaybackRequiresUserGesture() const
@@ -5874,18 +6155,6 @@ SVGDocumentExtensions& Document::accessSVGExtensions()
     return *m_svgExtensions;
 }
 
-void Document::addSVGUseElement(SVGUseElement& element)
-{
-    auto result = m_svgUseElements.add(&element);
-    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(result.isNewEntry);
-}
-
-void Document::removeSVGUseElement(SVGUseElement& element)
-{
-    m_svgUseElements.remove(&element);
-    // FIXME: Assert that element was in m_svgUseElements once re-entrancy to update style and layout have been removed.
-}
-
 bool Document::hasSVGRootNode() const
 {
     return documentElement() && documentElement()->hasTagName(SVGNames::svgTag);
@@ -6012,6 +6281,11 @@ void Document::finishedParsing()
         if (auto* serviceWorkerContainer = this->serviceWorkerContainer())
             serviceWorkerContainer->startMessages();
     }
+#endif
+    
+#if ENABLE(APP_HIGHLIGHTS)
+    if (auto* appHighlightStorage = appHighlightStorageIfExists())
+        appHighlightStorage->restoreUnrestoredAppHighlights();
 #endif
 }
 
@@ -7429,7 +7703,7 @@ void Document::ensurePlugInsInjectedScript(DOMWrapperWorld& world)
     // Use the JS file provided by the Chrome client, or fallback to the default one.
     String jsString = page()->chrome().client().plugInExtraScript();
     if (!jsString || !scriptController.shouldAllowUserAgentScripts(*this))
-        jsString = String(plugInsJavaScript, sizeof(plugInsJavaScript));
+        jsString = StringImpl::createWithoutCopying(plugInsJavaScript, sizeof(plugInsJavaScript));
 
     setHasEvaluatedUserAgentScripts();
     scriptController.evaluateInWorldIgnoringException(ScriptSourceCode(jsString), world);
@@ -8046,9 +8320,9 @@ void Document::orientationChanged(int orientation)
 
 #if ENABLE(MEDIA_STREAM)
 
-void Document::stopMediaCapture()
+void Document::stopMediaCapture(MediaProducer::MediaCaptureKind kind)
 {
-    MediaStreamTrack::endCapture(*this);
+    MediaStreamTrack::endCapture(*this, kind);
 }
 
 void Document::mediaStreamCaptureStateChanged()
@@ -8157,12 +8431,12 @@ Optional<FrameIdentifier> Document::frameID() const
 
 void Document::registerArticleElement(Element& article)
 {
-    m_articleElements.add(&article);
+    m_articleElements.add(article);
 }
 
 void Document::unregisterArticleElement(Element& article)
 {
-    m_articleElements.remove(&article);
+    m_articleElements.remove(article);
     if (m_mainArticleElement == &article)
         m_mainArticleElement = nullptr;
 }
@@ -8182,29 +8456,29 @@ void Document::updateMainArticleElementAfterLayout()
 
     m_mainArticleElement = nullptr;
 
-    auto numberOfArticles = m_articleElements.size();
+    auto numberOfArticles = m_articleElements.computeSize();
     if (!numberOfArticles || numberOfArticles > maxNumberOfArticlesBeforeIgnoringMainContentArticle)
         return;
 
-    Element* tallestArticle = nullptr;
+    RefPtr<Element> tallestArticle;
     float tallestArticleHeight = 0;
     float tallestArticleWidth = 0;
     float secondTallestArticleHeight = 0;
 
-    for (auto* article : m_articleElements) {
-        auto* box = article->renderBox();
+    for (auto& article : m_articleElements) {
+        auto* box = article.renderBox();
         float height = box ? box->height().toFloat() : 0;
         if (height >= tallestArticleHeight) {
             secondTallestArticleHeight = tallestArticleHeight;
             tallestArticleHeight = height;
             tallestArticleWidth = box ? box->width().toFloat() : 0;
-            tallestArticle = article;
+            tallestArticle = &article;
         } else if (height >= secondTallestArticleHeight)
             secondTallestArticleHeight = height;
     }
 
     if (numberOfArticles == 1) {
-        m_mainArticleElement = tallestArticle;
+        m_mainArticleElement = makeWeakPtr(tallestArticle.get());
         return;
     }
 
@@ -8218,10 +8492,11 @@ void Document::updateMainArticleElementAfterLayout()
     if (tallestArticleWidth * tallestArticleHeight < minimumViewportAreaFactor * (viewportSize.width() * viewportSize.height()).toFloat())
         return;
 
-    m_mainArticleElement = tallestArticle;
+    m_mainArticleElement = makeWeakPtr(tallestArticle.get());
 }
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
+
 bool Document::hasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain& domain)
 {
     return m_registrableDomainRequestedPageSpecificStorageAccessWithUserInteraction == domain;
@@ -8239,29 +8514,20 @@ void Document::wasLoadedWithDataTransferFromPrevalentResource()
 
 void Document::downgradeReferrerToRegistrableDomain()
 {
-    auto referrerStr = referrer();
-    if (referrerStr.isEmpty())
+    URL referrerURL { { }, referrer() };
+    if (referrerURL.isEmpty())
         return;
 
-    URL referrerURL { URL(), referrerStr };
-    auto referrerPort = referrerURL.port();
-    RegistrableDomain referrerRegistrableDomain { referrerURL };
-    auto referrerRegistrableDomainStr = referrerRegistrableDomain.string();
-    if (referrerRegistrableDomainStr.isEmpty())
+    auto domainString = RegistrableDomain { referrerURL }.string();
+    if (domainString.isEmpty())
         return;
 
-    StringBuilder builder;
-    builder.append(referrerURL.protocol());
-    builder.appendLiteral("://");
-    builder.append(referrerRegistrableDomainStr);
-    if (referrerPort) {
-        builder.append(':');
-        builder.appendNumber(*referrerPort);
-    }
-    builder.append('/');
-
-    m_referrerOverride = builder.toString();
+    if (auto port = referrerURL.port())
+        m_referrerOverride = makeString(referrerURL.protocol(), "://", domainString, ':', *port, '/');
+    else
+        m_referrerOverride = makeString(referrerURL.protocol(), "://", domainString, '/');
 }
+
 #endif
 
 void Document::setConsoleMessageListener(RefPtr<StringCallback>&& listener)
@@ -8756,40 +9022,39 @@ void Document::prepareCanvasesForDisplayIfNeeded()
     // that would mutate our m_canvasesNeedingDisplayPreparation list. It
     // would be nice if this could be enforced to remove the copyToVector.
 
-    for (auto* canvas : copyToVector(m_canvasesNeedingDisplayPreparation)) {
+    auto canvases = copyToVectorOf<Ref<HTMLCanvasElement>>(m_canvasesNeedingDisplayPreparation);
+    m_canvasesNeedingDisplayPreparation.clear();
+    for (auto& canvas : canvases) {
         // However, if they are not in the document body, then they won't
         // be composited and thus don't need preparation. Unfortunately they
         // can't tell at the time they were added to the list, since they
         // could be inserted or removed from the document body afterwards.
         if (!canvas->isInTreeScope())
             continue;
-
-        auto protectedCanvas = makeRef(*canvas);
-        protectedCanvas->prepareForDisplay();
+        canvas->prepareForDisplay();
     }
-    m_canvasesNeedingDisplayPreparation.clear();
 }
 
-void Document::clearCanvasPreparation(HTMLCanvasElement* canvas)
+void Document::clearCanvasPreparation(HTMLCanvasElement& canvas)
 {
     m_canvasesNeedingDisplayPreparation.remove(canvas);
 }
 
-void Document::canvasChanged(CanvasBase& canvasBase, const FloatRect&)
+void Document::canvasChanged(CanvasBase& canvasBase, const Optional<FloatRect>&)
 {
-    if (is<HTMLCanvasElement>(canvasBase)) {
-        auto* canvas = downcast<HTMLCanvasElement>(&canvasBase);
-        if (canvas->needsPreparationForDisplay())
-            m_canvasesNeedingDisplayPreparation.add(canvas);
-    }
+    if (!is<HTMLCanvasElement>(canvasBase))
+        return;
+    auto& canvas = downcast<HTMLCanvasElement>(canvasBase);
+    if (canvas.needsPreparationForDisplay())
+        m_canvasesNeedingDisplayPreparation.add(canvas);
 }
 
 void Document::canvasDestroyed(CanvasBase& canvasBase)
 {
-    if (is<HTMLCanvasElement>(canvasBase)) {
-        auto* canvas = downcast<HTMLCanvasElement>(&canvasBase);
-        m_canvasesNeedingDisplayPreparation.remove(canvas);
-    }
+    if (!is<HTMLCanvasElement>(canvasBase))
+        return;
+    auto& canvas = downcast<HTMLCanvasElement>(canvasBase);
+    m_canvasesNeedingDisplayPreparation.remove(canvas);
 }
 
 JSC::VM& Document::vm()

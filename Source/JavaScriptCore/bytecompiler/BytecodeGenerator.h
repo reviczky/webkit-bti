@@ -41,6 +41,7 @@
 #include "JSTemplateObjectDescriptor.h"
 #include "Label.h"
 #include "LabelScope.h"
+#include "LinkTimeConstant.h"
 #include "Nodes.h"
 #include "ParserError.h"
 #include "ProfileTypeBytecodeFlag.h"
@@ -74,6 +75,7 @@ namespace JSC {
 
     enum class DebuggableCall { Yes, No };
     enum class ThisResolutionType { Local, Scoped };
+    enum class InvalidPrototypeMode : uint8_t { Throw, Ignore };
     enum class LinkTimeConstant : int32_t;
     
     class CallArguments {
@@ -723,7 +725,7 @@ namespace JSC {
             && BinaryOp::opcodeID != op_sub
             && BinaryOp::opcodeID != op_div,
             RegisterID*>
-        emitBinaryOp(RegisterID* dst, RegisterID* src1, RegisterID* src2, OperandTypes)
+        emitBinaryOp(RegisterID* dst, RegisterID* src1, RegisterID* src2, OperandTypes = OperandTypes())
         {
             BinaryOp::emit(this, dst, src1, src2);
             return dst;
@@ -747,6 +749,7 @@ namespace JSC {
         template<typename EqOp>
         RegisterID* emitEqualityOp(RegisterID* dst, RegisterID* src1, RegisterID* src2)
         {
+            static_assert(EqOp::opcodeID == op_eq || EqOp::opcodeID == op_stricteq);
             if (!emitEqualityOpImpl(dst, src1, src2))
                 EqOp::emit(this, dst, src1, src2);
             return dst;
@@ -813,7 +816,20 @@ namespace JSC {
         RegisterID* emitGetByVal(RegisterID* dst, RegisterID* base, RegisterID* property);
         RegisterID* emitGetByVal(RegisterID* dst, RegisterID* base, RegisterID* thisValue, RegisterID* property);
         RegisterID* emitGetPrototypeOf(RegisterID* dst, RegisterID* value);
-        RegisterID* emitDirectSetPrototypeOf(RegisterID* base, RegisterID* prototype);
+
+        template<InvalidPrototypeMode mode>
+        RegisterID* emitDirectSetPrototypeOf(RegisterID* base, RegisterID* prototype, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd)
+        {
+            RefPtr<RegisterID> setPrototypeDirect = moveLinkTimeConstant(nullptr, mode == InvalidPrototypeMode::Throw ? LinkTimeConstant::setPrototypeDirectOrThrow : LinkTimeConstant::setPrototypeDirect);
+
+            CallArguments args(*this, nullptr, 1);
+            move(args.thisRegister(), base);
+            move(args.argumentRegister(0), prototype);
+
+            emitCall(newTemporary(), setPrototypeDirect.get(), NoExpectedFunction, args, divot, divotStart, divotEnd, DebuggableCall::No);
+            return base;
+        }
+
         RegisterID* emitPutByVal(RegisterID* base, RegisterID* property, RegisterID* value);
         RegisterID* emitPutByVal(RegisterID* base, RegisterID* thisValue, RegisterID* property, RegisterID* value);
         RegisterID* emitDirectPutByVal(RegisterID* base, RegisterID* property, RegisterID* value);
@@ -1020,13 +1036,8 @@ namespace JSC {
         void emitDebugHook(ExpressionNode*);
         void emitWillLeaveCallFrameDebugHook();
 
-        void emitLoad(RegisterID* completionTypeRegister, CompletionType type)
-        {
-            emitLoad(completionTypeRegister, JSValue(static_cast<int>(type)));
-        }
-
-        template<typename CompareOp>
-        void emitJumpIf(RegisterID* completionTypeRegister, CompletionType, Label& jumpTarget);
+        RegisterID* emitLoad(RegisterID* dst, CompletionType type) { return emitLoad(dst, jsNumber(static_cast<int32_t>(type))); }
+        RegisterID* emitLoad(RegisterID* dst, JSGenerator::ResumeMode mode) { return emitLoad(dst, jsNumber(static_cast<int32_t>(mode))); }
 
         bool emitJumpViaFinallyIfNeeded(int targetLabelScopeDepth, Label& jumpTarget);
         bool emitReturnViaFinallyIfNeeded(RegisterID* returnRegister);

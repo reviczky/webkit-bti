@@ -398,8 +398,6 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
             let stylesGroup = experimentalSettingsView.addGroup(WI.UIString("Styles:"));
             stylesGroup.addSetting(WI.settings.experimentalEnableStylesJumpToEffective, WI.UIString("Show jump to effective property button"));
             stylesGroup.addSetting(WI.settings.experimentalEnableStylesJumpToVariableDeclaration, WI.UIString("Show jump to variable declaration button"));
-            stylesGroup.addSetting(WI.settings.experimentalEnableLayoutPanel, WI.UIString("Show Layout panel"));
-            stylesGroup.addSetting(WI.settings.experimentalEnableGridBadges, WI.unlocalizedString("Show \"grid\" badges"));
 
             experimentalSettingsView.addSeparator();
         }
@@ -409,6 +407,10 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
             experimentalSettingsView.addSetting(WI.UIString("Debugging:", "Debugging: @ Experimental Settings", "Category label for experimental settings related to debugging."), WI.settings.experimentalCollapseBlackboxedCallFrames, WI.UIString("Collapse blackboxed call frames", "Collapse blackboxed call frames @ Experimental Settings", "Setting to collapse blackboxed call frames in the debugger."));
             experimentalSettingsView.addSeparator();
         }
+
+        let diagnosticsGroup = experimentalSettingsView.addGroup(WI.UIString("Diagnostics:", "Diagnostics: @ Experimental Settings", "Category label for experimental settings related to Web Inspector diagnostics."));
+        diagnosticsGroup.addSetting(WI.settings.experimentalAllowInspectingInspector, WI.UIString("Allow Inspecting Web Inspector", "Allow Inspecting Web Inspector @ Experimental Settings", "Label for setting that allows the user to inspect the Web Inspector user interface."));
+        experimentalSettingsView.addSeparator();
 
         let reloadInspectorButton = document.createElement("button");
         reloadInspectorButton.textContent = WI.UIString("Reload Web Inspector");
@@ -429,8 +431,6 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         listenForChange(WI.settings.experimentalEnablePreviewFeatures);
 
         if (hasCSSDomain) {
-            listenForChange(WI.settings.experimentalEnableLayoutPanel);
-            listenForChange(WI.settings.experimentalEnableGridBadges);
             listenForChange(WI.settings.experimentalEnableStylesJumpToEffective);
             listenForChange(WI.settings.experimentalEnableStylesJumpToVariableDeclaration);
         }

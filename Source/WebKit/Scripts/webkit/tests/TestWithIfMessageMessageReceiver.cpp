@@ -41,20 +41,16 @@ void TestWithIfMessage::didReceiveMessage(IPC::Connection& connection, IPC::Deco
 {
     auto protectedThis = makeRef(*this);
 #if PLATFORM(COCOA)
-    if (decoder.messageName() == Messages::TestWithIfMessage::LoadURL::name()) {
-        IPC::handleMessage<Messages::TestWithIfMessage::LoadURL>(decoder, this, &TestWithIfMessage::loadURL);
-        return;
-    }
+    if (decoder.messageName() == Messages::TestWithIfMessage::LoadURL::name())
+        return IPC::handleMessage<Messages::TestWithIfMessage::LoadURL>(decoder, this, &TestWithIfMessage::loadURL);
 #endif
 #if PLATFORM(GTK)
-    if (decoder.messageName() == Messages::TestWithIfMessage::LoadURL::name()) {
-        IPC::handleMessage<Messages::TestWithIfMessage::LoadURL>(decoder, this, &TestWithIfMessage::loadURL);
-        return;
-    }
+    if (decoder.messageName() == Messages::TestWithIfMessage::LoadURL::name())
+        return IPC::handleMessage<Messages::TestWithIfMessage::LoadURL>(decoder, this, &TestWithIfMessage::loadURL);
 #endif
     UNUSED_PARAM(connection);
     UNUSED_PARAM(decoder);
-    ASSERT_NOT_REACHED();
+    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, description(decoder.messageName()), decoder.destinationID());
 }
 
 } // namespace WebKit

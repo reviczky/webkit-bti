@@ -252,6 +252,7 @@ public:
 
     WTF_EXPORT_PRIVATE static Ref<StringImpl> createWithoutCopying(const UChar*, unsigned length);
     WTF_EXPORT_PRIVATE static Ref<StringImpl> createWithoutCopying(const LChar*, unsigned length);
+    static Ref<StringImpl> createWithoutCopying(const char* characters, unsigned length) { return createWithoutCopying(reinterpret_cast<const LChar*>(characters), length); }
     WTF_EXPORT_PRIVATE static Ref<StringImpl> createUninitialized(unsigned length, LChar*&);
     WTF_EXPORT_PRIVATE static Ref<StringImpl> createUninitialized(unsigned length, UChar*&);
     template<typename CharacterType> static RefPtr<StringImpl> tryCreateUninitialized(unsigned length, CharacterType*&);
@@ -390,18 +391,6 @@ public:
     UChar at(unsigned) const;
     UChar operator[](unsigned i) const { return at(i); }
     WTF_EXPORT_PRIVATE UChar32 characterStartingAt(unsigned);
-
-    int toIntStrict(bool* ok = nullptr, int base = 10);
-    unsigned toUIntStrict(bool* ok = nullptr, int base = 10);
-    int64_t toInt64Strict(bool* ok = nullptr, int base = 10);
-    uint64_t toUInt64Strict(bool* ok = nullptr, int base = 10);
-    intptr_t toIntPtrStrict(bool* ok = nullptr, int base = 10);
-
-    WTF_EXPORT_PRIVATE int toInt(bool* ok = nullptr); // ignores trailing garbage
-    unsigned toUInt(bool* ok = nullptr); // ignores trailing garbage
-    int64_t toInt64(bool* ok = nullptr); // ignores trailing garbage
-    uint64_t toUInt64(bool* ok = nullptr); // ignores trailing garbage
-    intptr_t toIntPtr(bool* ok = nullptr); // ignores trailing garbage
 
     // FIXME: Like the strict functions above, these give false for "ok" when there is trailing garbage.
     // Like the non-strict functions above, these return the value when there is trailing garbage.

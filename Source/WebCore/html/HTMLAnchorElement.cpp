@@ -148,8 +148,7 @@ bool HTMLAnchorElement::isKeyboardFocusable(KeyboardEvent* event) const
     if (!document().frame()->eventHandler().tabsToLinks(event))
         return false;
 
-    ASSERT(inclusiveAncestorStates().contains(AncestorState::Canvas) == !!ancestorsOfType<HTMLCanvasElement>(*this).first());
-    if (!renderer() && inclusiveAncestorStates().contains(AncestorState::Canvas))
+    if (!renderer() && ancestorsOfType<HTMLCanvasElement>(*this).first())
         return true;
 
     return hasNonEmptyBox(renderBoxModelObject());
@@ -174,10 +173,7 @@ static void appendServerMapMousePosition(StringBuilder& url, Event& event)
 
     // FIXME: This should probably pass UseTransforms in the MapCoordinatesFlags.
     auto absolutePosition = downcast<RenderImage>(*renderer).absoluteToLocal(FloatPoint(mouseEvent.pageX(), mouseEvent.pageY()));
-    url.append('?');
-    url.appendNumber(std::lround(absolutePosition.x()));
-    url.append(',');
-    url.appendNumber(std::lround(absolutePosition.y()));
+    url.append('?', std::lround(absolutePosition.x()), ',', std::lround(absolutePosition.y()));
 }
 
 void HTMLAnchorElement::defaultEventHandler(Event& event)
@@ -403,7 +399,7 @@ Optional<PrivateClickMeasurement> HTMLAnchorElement::parsePrivateClickMeasuremen
 {
     using SourceID = PrivateClickMeasurement::SourceID;
     using SourceSite = PrivateClickMeasurement::SourceSite;
-    using AttributeOnSite = PrivateClickMeasurement::AttributeOnSite;
+    using AttributionDestinationSite = PrivateClickMeasurement::AttributionDestinationSite;
 
     auto* page = document().page();
     if (!page || page->sessionID().isEphemeral()
@@ -411,14 +407,16 @@ Optional<PrivateClickMeasurement> HTMLAnchorElement::parsePrivateClickMeasuremen
         || !UserGestureIndicator::processingUserGesture())
         return WTF::nullopt;
 
-    if (!hasAttributeWithoutSynchronization(attributionsourceidAttr) && !hasAttributeWithoutSynchronization(attributeonAttr))
+    auto hasAttributionSourceIDAttr = hasAttributeWithoutSynchronization(attributionsourceidAttr);
+    auto hasAttributionDestinationAttr = hasAttributeWithoutSynchronization(attributiondestinationAttr);
+    if (!hasAttributionSourceIDAttr && !hasAttributionDestinationAttr)
         return WTF::nullopt;
-    
+
     auto attributionSourceIDAttr = attributeWithoutSynchronization(attributionsourceidAttr);
-    auto attributeOnAttr = attributeWithoutSynchronization(attributeonAttr);
-    
-    if (attributionSourceIDAttr.isEmpty() || attributeOnAttr.isEmpty()) {
-        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "Both attributionsourceid and attributeon need to be set for Private Click Measurement to work."_s);
+    auto attributionDestinationAttr = attributeWithoutSynchronization(attributiondestinationAttr);
+
+    if (!hasAttributionSourceIDAttr || !hasAttributionDestinationAttr || attributionSourceIDAttr.isEmpty() || attributionDestinationAttr.isEmpty()) {
+        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "Both attributionsourceid and attributiondestination need to be set for Private Click Measurement to work."_s);
         return WTF::nullopt;
     }
 
@@ -430,7 +428,7 @@ Optional<PrivateClickMeasurement> HTMLAnchorElement::parsePrivateClickMeasuremen
     
     auto attributionSourceID = parseHTMLNonNegativeInteger(attributionSourceIDAttr);
     if (!attributionSourceID) {
-        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "attributionsourceid can not be converted to a non-negative integer which is required for Private Click Measurement."_s);
+        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "attributionsourceid is not a non-negative integer which is required for Private Click Measurement."_s);
         return WTF::nullopt;
     }
     
@@ -439,19 +437,19 @@ Optional<PrivateClickMeasurement> HTMLAnchorElement::parsePrivateClickMeasuremen
         return WTF::nullopt;
     }
 
-    URL attributeOnURL { URL(), attributeOnAttr };
-    if (!attributeOnURL.isValid() || !attributeOnURL.protocolIsInHTTPFamily()) {
-        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "attributeon could not be converted to a valid HTTP-family URL."_s);
+    URL destinationURL { URL(), attributionDestinationAttr };
+    if (!destinationURL.isValid() || !destinationURL.protocolIsInHTTPFamily()) {
+        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "attributiondestination could not be converted to a valid HTTP-family URL."_s);
         return WTF::nullopt;
     }
 
     RegistrableDomain documentRegistrableDomain { document().url() };
-    if (documentRegistrableDomain.matches(attributeOnURL)) {
-        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "attributeon can not be the same site as the current website."_s);
+    if (documentRegistrableDomain.matches(destinationURL)) {
+        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "attributiondestination can not be the same site as the current website."_s);
         return WTF::nullopt;
     }
 
-    auto privateClickMeasurement = PrivateClickMeasurement { SourceID(attributionSourceID.value()), SourceSite(documentRegistrableDomain), AttributeOnSite(attributeOnURL) };
+    auto privateClickMeasurement = PrivateClickMeasurement { SourceID(attributionSourceID.value()), SourceSite(documentRegistrableDomain), AttributionDestinationSite(destinationURL) };
 
     auto attributionSourceNonceAttr = attributeWithoutSynchronization(attributionsourcenonceAttr);
     if (!attributionSourceNonceAttr.isEmpty()) {
@@ -526,9 +524,9 @@ void HTMLAnchorElement::handleClick(Event& event)
         newFrameOpenerPolicy = NewFrameOpenerPolicy::Suppress;
 
     auto privateClickMeasurement = parsePrivateClickMeasurement();
-    // A matching conversion event needs to happen before the complete private click measurement
-    // URL can be created. Thus, it should be empty for now.
-    ASSERT(!privateClickMeasurement || privateClickMeasurement->attributionReportURL().isNull());
+    // A matching triggering event needs to happen before an attribution report can be sent.
+    // Thus, URLs should be empty for now.
+    ASSERT(!privateClickMeasurement || (privateClickMeasurement->attributionReportSourceURL().isNull() && privateClickMeasurement->attributionReportAttributeOnURL().isNull()));
     
     frame->loader().changeLocation(completedURL, effectiveTarget, &event, referrerPolicy, document().shouldOpenExternalURLsPolicyToPropagate(), newFrameOpenerPolicy, downloadAttribute, systemPreviewInfo, WTFMove(privateClickMeasurement));
 

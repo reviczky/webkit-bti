@@ -79,6 +79,7 @@ messages -> WebPageProxy {
     DidChangePageCount(unsigned pageCount)
     ThemeColorChanged(WebCore::Color themeColor)
     PageExtendedBackgroundColorDidChange(WebCore::Color backgroundColor)
+    SampledPageTopColorChanged(WebCore::Color sampledPageTopColor)
 #if ENABLE(NETSCAPE_PLUGIN_API)
     DidFailToInitializePlugin(String mimeType, String frameURLString, String pageURLString)
     DidBlockInsecurePluginVersion(String mimeType, String pluginURLString, String frameURLString, String pageURLString, bool replacementObscured)
@@ -169,6 +170,7 @@ messages -> WebPageProxy {
     ShowPlaybackTargetPicker(bool hasVideo, WebCore::IntRect elementRect, enum:uint8_t WebCore::RouteSharingPolicy policy, String routingContextUID)
     CommitPotentialTapFailed()
     DidNotHandleTapAsClick(WebCore::IntPoint point)
+    DidNotHandleTapAsMeaningfulClickAtPoint(WebCore::IntPoint point)
     DidCompleteSyntheticClick()
     DisableDoubleTapGesturesDuringTapIfNecessary(uint64_t requestID)
     HandleSmartMagnificationInformationForPotentialTap(uint64_t requestID, WebCore::FloatRect renderRect, bool fitEntireRect, double viewportMinimumScale, double viewportMaximumScale, bool nodeIsRootLevel)
@@ -206,11 +208,12 @@ messages -> WebPageProxy {
     ExecuteUndoRedo(enum:bool WebKit::UndoOrRedo undoOrRedo) -> () Synchronous
 
     # Diagnostic messages logging
-    LogDiagnosticMessage(String message, String description, enum:bool WebCore::ShouldSample shouldSample)
-    LogDiagnosticMessageWithResult(String message, String description, uint32_t result, enum:bool WebCore::ShouldSample shouldSample)
-    LogDiagnosticMessageWithValue(String message, String description, double value, unsigned significantFigures, enum:bool WebCore::ShouldSample shouldSample)
-    LogDiagnosticMessageWithEnhancedPrivacy(String message, String description, enum:bool WebCore::ShouldSample shouldSample)
-    LogDiagnosticMessageWithValueDictionary(String message, String description, WebCore::DiagnosticLoggingClient::ValueDictionary value, enum:bool WebCore::ShouldSample shouldSample)
+    LogDiagnosticMessageFromWebProcess(String message, String description, enum:bool WebCore::ShouldSample shouldSample)
+    LogDiagnosticMessageWithResultFromWebProcess(String message, String description, uint32_t result, enum:bool WebCore::ShouldSample shouldSample)
+    LogDiagnosticMessageWithValueFromWebProcess(String message, String description, double value, unsigned significantFigures, enum:bool WebCore::ShouldSample shouldSample)
+    LogDiagnosticMessageWithEnhancedPrivacyFromWebProcess(String message, String description, enum:bool WebCore::ShouldSample shouldSample)
+    LogDiagnosticMessageWithValueDictionaryFromWebProcess(String message, String description, WebCore::DiagnosticLoggingClient::ValueDictionary value, enum:bool WebCore::ShouldSample shouldSample)
+    LogDiagnosticMessageWithDomainFromWebProcess(String message, WebCore::DiagnosticLoggingDomain domain)
 
     # Performance logging
     LogScrollingEvent(uint32_t eventType, MonotonicTime timestamp, uint64_t data)
@@ -221,12 +224,16 @@ messages -> WebPageProxy {
     SetHasHadSelectionChangesFromUserInteraction(bool hasHadUserSelectionChanges)
 
 #if ENABLE(IMAGE_EXTRACTION)
-    RequestImageExtraction(WebKit::ShareableBitmap::Handle imageData) -> (struct WebCore::ImageExtractionResult result) Async
+    RequestImageExtraction(URL imageURL, WebKit::ShareableBitmap::Handle imageData) -> (struct WebCore::ImageExtractionResult result) Async
 #endif
 
-#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
+    HandleContextMenuTranslation(struct WebCore::TranslationContextMenuInfo info)
+#endif
+
+#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
     ShowMediaControlsContextMenu(WebCore::FloatRect targetFrame, Vector<WebCore::MediaControlsContextMenuItem> items) -> (WebCore::MediaControlsContextMenuItem::ID selectedItemID) Async
-#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+#endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
 #if HAVE(TOUCH_BAR)
     SetIsTouchBarUpdateSupressedForHiddenContentEditable(bool isTouchBarUpdateSupressed)
@@ -274,7 +281,7 @@ messages -> WebPageProxy {
 #endif
 
     # Notification messages
-    RequestNotificationPermission(uint64_t requestID, String originIdentifier)
+    RequestNotificationPermission(String originIdentifier) -> (bool allowed) Async
     ShowNotification(String title, String body, String iconURL, String tag, String lang, enum:uint8_t WebCore::NotificationDirection dir, String originIdentifier, uint64_t notificationID)
     CancelNotification(uint64_t notificationID)
     ClearNotifications(Vector<uint64_t> notificationIDs)
@@ -370,8 +377,9 @@ messages -> WebPageProxy {
     RecordAutocorrectionResponse(int32_t response, String replacedString, String replacementString);
 
     SetEditableElementIsFocused(bool editableElementIsFocused)
-    DidUpdateRenderingAfterCommittingLoad()
 #endif
+
+    DidUpdateRenderingAfterCommittingLoad()
 
 #if USE(DICTATION_ALTERNATIVES)
     ShowDictationAlternativeUI(WebCore::FloatRect boundingBoxOfDictatedText, WebCore::DictationContext dictationContext)
@@ -454,7 +462,7 @@ messages -> WebPageProxy {
     ContentFilterDidBlockLoadForFrame(WebCore::ContentFilterUnblockHandler unblockHandler, WebCore::FrameIdentifier frameID)
 #endif
 
-    IsPlayingMediaDidChange(unsigned state, uint64_t sourceElementID)
+    IsPlayingMediaDidChange(WebCore::MediaProducer::MediaStateFlags state, uint64_t sourceElementID)
     HandleAutoplayEvent(enum:uint8_t WebCore::AutoplayEvent event, OptionSet<WebCore::AutoplayEventFlags> flags)
 
 #if PLATFORM(MAC)
@@ -473,9 +481,9 @@ messages -> WebPageProxy {
     AddPlaybackTargetPickerClient(WebCore::PlaybackTargetClientContextIdentifier contextId)
     RemovePlaybackTargetPickerClient(WebCore::PlaybackTargetClientContextIdentifier contextId)
     ShowPlaybackTargetPicker(WebCore::PlaybackTargetClientContextIdentifier contextId, WebCore::FloatRect pickerLocation, bool hasVideo)
-    PlaybackTargetPickerClientStateDidChange(WebCore::PlaybackTargetClientContextIdentifier contextId, unsigned mediaState)
+    PlaybackTargetPickerClientStateDidChange(WebCore::PlaybackTargetClientContextIdentifier contextId, WebCore::MediaProducer::MediaStateFlags mediaState)
     SetMockMediaPlaybackTargetPickerEnabled(bool enabled)
-    SetMockMediaPlaybackTargetPickerState(String name, unsigned pickerState)
+    SetMockMediaPlaybackTargetPickerState(String name, enum:uint8_t WebCore::MediaPlaybackTargetContext::MockState pickerState)
     MockMediaPlaybackTargetPickerDismissPopup()
 #endif
 
@@ -558,7 +566,7 @@ messages -> WebPageProxy {
 #endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    DidCreateContextForVisibilityPropagation(WebKit::LayerHostingContextID contextID);
+    DidCreateContextInWebProcessForVisibilityPropagation(WebKit::LayerHostingContextID contextID);
 #endif
 
 #if ENABLE(WEB_AUTHN)

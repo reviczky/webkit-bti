@@ -42,7 +42,7 @@ const ClassInfo UnlinkedCodeBlock::s_info = { "UnlinkedCodeBlock", nullptr, null
 
 UnlinkedCodeBlock::UnlinkedCodeBlock(VM& vm, Structure* structure, CodeType codeType, const ExecutableInfo& info, OptionSet<CodeGenerationMode> codeGenerationMode)
     : Base(vm, structure)
-    , m_usesEval(info.usesEval())
+    , m_usesCallEval(false)
     , m_isConstructor(info.isConstructor())
     , m_hasCapturedVariables(false)
     , m_isBuiltinFunction(info.isBuiltinFunction())
@@ -66,11 +66,13 @@ UnlinkedCodeBlock::UnlinkedCodeBlock(VM& vm, Structure* structure, CodeType code
     ASSERT(m_codeType == static_cast<unsigned>(codeType));
     ASSERT(m_didOptimize == static_cast<unsigned>(TriState::Indeterminate));
     if (info.needsClassFieldInitializer() == NeedsClassFieldInitializer::Yes) {
-        createRareDataIfNecessary(holdLock(cellLock()));
+        auto locker = holdLock(cellLock());
+        createRareDataIfNecessary(locker);
         m_rareData->m_needsClassFieldInitializer = static_cast<unsigned>(NeedsClassFieldInitializer::Yes);
     }
     if (info.privateBrandRequirement() == PrivateBrandRequirement::Needed) {
-        createRareDataIfNecessary(holdLock(cellLock()));
+        auto locker = holdLock(cellLock());
+        createRareDataIfNecessary(locker);
         m_rareData->m_privateBrandRequirement = static_cast<unsigned>(PrivateBrandRequirement::Needed);
     }
 }
@@ -92,6 +94,16 @@ void UnlinkedCodeBlock::visitChildrenImpl(JSCell* cell, Visitor& visitor)
     size_t extraMemory = thisObject->m_metadata->sizeInBytes();
     if (thisObject->m_instructions)
         extraMemory += thisObject->m_instructions->sizeInBytes();
+    if (thisObject->hasRareData())
+        extraMemory += thisObject->m_rareData->sizeInBytes(locker);
+
+    extraMemory += thisObject->m_jumpTargets.byteSize();
+    extraMemory += thisObject->m_identifiers.byteSize();
+    extraMemory += thisObject->m_constantRegisters.byteSize();
+    extraMemory += thisObject->m_constantsSourceCodeRepresentation.byteSize();
+    extraMemory += thisObject->m_functionDecls.byteSize();
+    extraMemory += thisObject->m_functionExprs.byteSize();
+
     visitor.reportExtraMemoryVisited(extraMemory);
 }
 
@@ -104,6 +116,23 @@ size_t UnlinkedCodeBlock::estimatedSize(JSCell* cell, VM& vm)
     if (thisObject->m_instructions)
         extraSize += thisObject->m_instructions->sizeInBytes();
     return Base::estimatedSize(cell, vm) + extraSize;
+}
+
+size_t UnlinkedCodeBlock::RareData::sizeInBytes(const AbstractLocker&) const
+{
+    size_t size = sizeof(RareData);
+    size += m_exceptionHandlers.byteSize();
+    size += m_unlinkedSwitchJumpTables.byteSize();
+    size += m_unlinkedStringSwitchJumpTables.byteSize();
+    size += m_expressionInfoFatPositions.byteSize();
+    size += m_typeProfilerInfoMap.capacity() * sizeof(decltype(m_typeProfilerInfoMap)::KeyValuePairType);
+    size += m_opProfileControlFlowBytecodeOffsets.byteSize();
+    size += m_bitVectors.byteSize();
+    // FIXME: account for each bit vector.
+    size += m_constantIdentifierSets.byteSize();
+    for (const auto& identifierSet : m_constantIdentifierSets)
+        size += identifierSet.capacity() * sizeof(std::remove_reference_t<decltype(identifierSet)>::ValueType);
+    return size;
 }
 
 int UnlinkedCodeBlock::lineNumberForBytecodeIndex(BytecodeIndex bytecodeIndex)
@@ -159,7 +188,7 @@ static void dumpLineColumnEntry(size_t index, const InstructionStream& instructi
 
 void UnlinkedCodeBlock::dumpExpressionRangeInfo()
 {
-    RefCountedArray<ExpressionRangeInfo>& expressionInfo = m_expressionInfo;
+    FixedVector<ExpressionRangeInfo>& expressionInfo = m_expressionInfo;
 
     size_t size = m_expressionInfo.size();
     dataLogF("UnlinkedCodeBlock %p expressionRangeInfo[%zu] {\n", this, size);
@@ -188,7 +217,7 @@ void UnlinkedCodeBlock::expressionRangeForBytecodeIndex(BytecodeIndex bytecodeIn
         return;
     }
 
-    const RefCountedArray<ExpressionRangeInfo>& expressionInfo = m_expressionInfo;
+    const FixedVector<ExpressionRangeInfo>& expressionInfo = m_expressionInfo;
 
     int low = 0;
     int high = expressionInfo.size();

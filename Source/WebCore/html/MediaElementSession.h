@@ -33,7 +33,12 @@
 #include "PlatformMediaSession.h"
 #include "SuccessOr.h"
 #include "Timer.h"
+#include <wtf/Optional.h>
 #include <wtf/TypeCasts.h>
+
+#if ENABLE(MEDIA_SESSION)
+#include <memory>
+#endif
 
 namespace WebCore {
 
@@ -42,9 +47,9 @@ enum class MediaSessionMainContentPurpose {
     Autoplay
 };
 
-enum class MediaPlaybackOperation {
-    All,
-    Pause
+enum class MediaPlaybackState {
+    Playing,
+    Paused
 };
 
 enum class MediaPlaybackDenialReason {
@@ -56,7 +61,12 @@ enum class MediaPlaybackDenialReason {
 
 class Document;
 class HTMLMediaElement;
+class MediaMetadata;
+struct MediaPositionState;
+class MediaSession;
+class MediaSessionObserver;
 class SourceBuffer;
+enum class MediaSessionPlaybackState : uint8_t;
 
 class MediaElementSession final : public PlatformMediaSession
 {
@@ -76,8 +86,7 @@ public:
     void isVisibleInViewportChanged();
     void inActiveDocumentChanged();
 
-    // FIXME: <http://webkit.org/b/220939>
-    SuccessOr<MediaPlaybackDenialReason> playbackPermitted(MediaPlaybackOperation = MediaPlaybackOperation::All) const;
+    SuccessOr<MediaPlaybackDenialReason> playbackStateChangePermitted(MediaPlaybackState) const;
     bool autoplayPermitted() const;
     bool dataLoadingPermitted() const;
     MediaPlayer::BufferingPolicy preferredBufferingPolicy() const;
@@ -149,7 +158,7 @@ public:
     bool wantsToObserveViewportVisibilityForMediaControls() const;
     bool wantsToObserveViewportVisibilityForAutoplay() const;
 
-    enum class PlaybackControlsPurpose { ControlsManager, NowPlaying };
+    enum class PlaybackControlsPurpose { ControlsManager, NowPlaying, MediaSession };
     bool canShowControlsManager(PlaybackControlsPurpose) const;
     bool isLargeEnoughForMainContent(MediaSessionMainContentPurpose) const;
     bool isMainContentForPurposesOfAutoplayEvents() const;
@@ -177,6 +186,10 @@ public:
 #if ENABLE(MEDIA_SESSION)
     void didReceiveRemoteControlCommand(RemoteControlCommandType, const RemoteCommandArgument&) final;
 #endif
+    void metadataChanged(const RefPtr<MediaMetadata>&);
+    void positionStateChanged(const Optional<MediaPositionState>&);
+    void playbackStateChanged(MediaSessionPlaybackState);
+    void actionHandlersChanged();
 
 private:
 
@@ -192,6 +205,9 @@ private:
 #if PLATFORM(IOS_FAMILY)
     bool requiresPlaybackTargetRouteMonitoring() const override;
 #endif
+    void ensureIsObservingMediaSession();
+    MediaSession* mediaSession() const;
+
     bool updateIsMainContent() const;
     void mainContentCheckTimerFired();
 
@@ -235,6 +251,7 @@ private:
     
 #if ENABLE(MEDIA_SESSION)
     bool m_isScrubbing { false };
+    std::unique_ptr<MediaSessionObserver> m_observer;
 #endif
 };
 

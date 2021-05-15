@@ -26,8 +26,6 @@
 #include "config.h"
 #include "IDBFactory.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "Document.h"
 #include "IDBBindingUtilities.h"
 #include "IDBConnectionProxy.h"
@@ -38,10 +36,12 @@
 #include "Logging.h"
 #include "Page.h"
 #include "ScriptExecutionContext.h"
-
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
 using namespace JSC;
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(IDBFactory);
 
 static bool shouldThrowSecurityException(ScriptExecutionContext& context)
 {
@@ -173,5 +173,3 @@ void IDBFactory::getAllDatabaseNames(ScriptExecutionContext& context, Function<v
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

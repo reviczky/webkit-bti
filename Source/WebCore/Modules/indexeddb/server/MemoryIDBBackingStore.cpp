@@ -26,8 +26,6 @@
 #include "config.h"
 #include "MemoryIDBBackingStore.h"
 
-#if ENABLE(INDEXED_DATABASE)
-
 #include "IDBCursorInfo.h"
 #include "IDBGetAllRecordsData.h"
 #include "IDBGetRecordData.h"
@@ -50,7 +48,7 @@ constexpr uint64_t maxGeneratedKeyValue = 0x20000000000000;
 MemoryIDBBackingStore::MemoryIDBBackingStore(PAL::SessionID sessionID, const IDBDatabaseIdentifier& identifier)
     : m_identifier(identifier)
     , m_sessionID(sessionID)
-    , m_serializationContext(IDBSerializationContext::getOrCreateIDBSerializationContext(sessionID))
+    , m_serializationContext(IDBSerializationContext::getOrCreateForCurrentThread())
 {
 }
 
@@ -63,6 +61,11 @@ IDBError MemoryIDBBackingStore::getOrEstablishDatabaseInfo(IDBDatabaseInfo& info
 
     info = *m_databaseInfo;
     return IDBError { };
+}
+
+uint64_t MemoryIDBBackingStore::databaseVersion()
+{
+    return m_databaseInfo ? m_databaseInfo->version() : 0;
 }
 
 void MemoryIDBBackingStore::setDatabaseInfo(const IDBDatabaseInfo& info)
@@ -635,5 +638,3 @@ void MemoryIDBBackingStore::close()
 
 } // namespace IDBServer
 } // namespace WebCore
-
-#endif // ENABLE(INDEXED_DATABASE)

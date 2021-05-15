@@ -87,9 +87,7 @@ JSC_DEFINE_HOST_FUNCTION(constructIntlPluralRules, (JSGlobalObject* globalObject
     // 13.2.1 Intl.PluralRules ([ locales [ , options ] ])
     // https://tc39.github.io/ecma402/#sec-intl.pluralrules
     JSObject* newTarget = asObject(callFrame->newTarget());
-    Structure* structure = newTarget == callFrame->jsCallee()
-        ? globalObject->pluralRulesStructure()
-        : InternalFunction::createSubclassStructure(globalObject, newTarget, getFunctionRealm(vm, newTarget)->pluralRulesStructure());
+    Structure* structure = JSC_GET_DERIVED_STRUCTURE(vm, pluralRulesStructure, newTarget, callFrame->jsCallee());
     RETURN_IF_EXCEPTION(scope, { });
 
     IntlPluralRules* pluralRules = IntlPluralRules::create(vm, structure);
@@ -117,7 +115,7 @@ JSC_DEFINE_HOST_FUNCTION(IntlPluralRulesConstructorFuncSupportedLocalesOf, (JSGl
 
     // 13.3.2 Intl.PluralRules.supportedLocalesOf (locales [, options ])
     // https://tc39.github.io/ecma402/#sec-intl.pluralrules.supportedlocalesof
-    const HashSet<String>& availableLocales = intlPluralRulesAvailableLocales();
+    const auto& availableLocales = intlPluralRulesAvailableLocales();
 
     Vector<String> requestedLocales = canonicalizeLocaleList(globalObject, callFrame->argument(0));
     RETURN_IF_EXCEPTION(scope, encodedJSValue());

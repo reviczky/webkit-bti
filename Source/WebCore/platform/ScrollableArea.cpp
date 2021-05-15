@@ -479,19 +479,19 @@ String ScrollableArea::verticalScrollbarStateForTesting() const
 }
 
 #if ENABLE(CSS_SCROLL_SNAP)
-ScrollSnapOffsetsInfo<LayoutUnit>& ScrollableArea::ensureSnapOffsetsInfo()
+LayoutScrollSnapOffsetsInfo& ScrollableArea::ensureSnapOffsetsInfo()
 {
     if (!m_snapOffsetsInfo)
-        m_snapOffsetsInfo = makeUnique<ScrollSnapOffsetsInfo<LayoutUnit>>();
+        m_snapOffsetsInfo = makeUnique<LayoutScrollSnapOffsetsInfo>();
     return *m_snapOffsetsInfo;
 }
 
-const ScrollSnapOffsetsInfo<LayoutUnit>* ScrollableArea::snapOffsetInfo() const
+const LayoutScrollSnapOffsetsInfo* ScrollableArea::snapOffsetInfo() const
 {
     return m_snapOffsetsInfo.get();
 }
 
-void ScrollableArea::setScrollSnapOffsetInfo(const ScrollSnapOffsetsInfo<LayoutUnit>& info)
+void ScrollableArea::setScrollSnapOffsetInfo(const LayoutScrollSnapOffsetsInfo& info)
 {
     if (info.isEmpty()) {
         clearSnapOffsets();
@@ -557,8 +557,29 @@ void ScrollableArea::updateScrollSnapState()
         scrollToPositionWithoutAnimation(correctedPosition);
     }
 }
+
+void ScrollableArea::doPostThumbMoveSnapping(ScrollbarOrientation orientation)
+{
+    if (!usesScrollSnap())
+        return;
+
+    auto currentOffset = scrollOffset();
+    auto newOffset = currentOffset;
+    if (orientation == HorizontalScrollbar)
+        newOffset.setX(m_scrollAnimator->adjustScrollOffsetForSnappingIfNeeded(ScrollEventAxis::Horizontal, currentOffset.x(), ScrollSnapPointSelectionMethod::Closest));
+    else
+        newOffset.setY(m_scrollAnimator->adjustScrollOffsetForSnappingIfNeeded(ScrollEventAxis::Vertical, currentOffset.y(), ScrollSnapPointSelectionMethod::Closest));
+    if (newOffset == currentOffset)
+        return;
+
+    scrollAnimator().scrollToOffsetWithAnimation(newOffset);
+}
 #else
 void ScrollableArea::updateScrollSnapState()
+{
+}
+
+void ScrollableArea::doPostThumbMoveSnapping(ScrollbarOrientation)
 {
 }
 #endif

@@ -41,8 +41,8 @@ namespace WebCore {
     String resetButtonDefaultLabel();
     String searchableIndexIntroduction();
     String submitButtonDefaultLabel();
-    String fileButtonChooseFileLabel();
-    String fileButtonChooseMultipleFilesLabel();
+    WEBCORE_EXPORT String fileButtonChooseFileLabel();
+    WEBCORE_EXPORT String fileButtonChooseMultipleFilesLabel();
     String fileButtonNoFileSelectedLabel();
     String fileButtonNoFilesSelectedLabel();
     String defaultDetailsSummaryText();
@@ -265,6 +265,8 @@ namespace WebCore {
     String fileButtonChooseMultipleMediaFilesLabel();
     String fileButtonNoMediaFileSelectedLabel();
     String fileButtonNoMediaFilesSelectedLabel();
+
+    WEBCORE_EXPORT String formControlDoneButtonTitle();
 #endif
 
     String imageTitle(const String& filename, const IntSize& size);
@@ -334,7 +336,6 @@ namespace WebCore {
 #if PLATFORM(WATCHOS)
     WEBCORE_EXPORT String numberPadOKButtonTitle();
     WEBCORE_EXPORT String formControlCancelButtonTitle();
-    WEBCORE_EXPORT String formControlDoneButtonTitle();
     WEBCORE_EXPORT String formControlHideButtonTitle();
     WEBCORE_EXPORT String formControlGoButtonTitle();
     WEBCORE_EXPORT String formControlSearchButtonTitle();
@@ -352,6 +353,10 @@ namespace WebCore {
 
 #if ENABLE(IMAGE_EXTRACTION)
     WEBCORE_EXPORT String contextMenuItemTagRevealImage();
+#endif
+
+#if HAVE(TRANSLATION_UI_SERVICES)
+    String contextMenuItemTagTranslate(const String& selectedString);
 #endif
 
 #if USE(GLIB) && defined(GETTEXT_PACKAGE)

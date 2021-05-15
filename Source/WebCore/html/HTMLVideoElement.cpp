@@ -79,7 +79,6 @@ Ref<HTMLVideoElement> HTMLVideoElement::create(const QualifiedName& tagName, Doc
     HTMLVideoElementPictureInPicture::providePictureInPictureTo(videoElement);
 #endif
 
-    videoElement->finishInitialization();
     videoElement->suspendIfNeeded();
     return videoElement;
 }
@@ -203,7 +202,6 @@ bool HTMLVideoElement::supportsFullscreen(HTMLMediaElementEnums::VideoFullscreen
 #endif // PLATFORM(IOS_FAMILY)
 }
 
-
 #if ENABLE(FULLSCREEN_API) && PLATFORM(IOS_FAMILY)
 void HTMLVideoElement::webkitRequestFullscreen()
 {
@@ -283,11 +281,11 @@ void HTMLVideoElement::mediaPlayerFirstVideoFrameAvailable()
         renderer->updateFromElement();
 }
 
-RefPtr<ImageBuffer> HTMLVideoElement::createBufferForPainting(const FloatSize& size, RenderingMode renderingMode) const
+RefPtr<ImageBuffer> HTMLVideoElement::createBufferForPainting(const FloatSize& size, RenderingMode renderingMode, DestinationColorSpace colorSpace, PixelFormat pixelFormat) const
 {
     auto* hostWindow = document().view() && document().view()->root() ? document().view()->root()->hostWindow() : nullptr;
     auto shouldUseDisplayList = document().settings().displayListDrawingEnabled() ? ShouldUseDisplayList::Yes : ShouldUseDisplayList::No;
-    return ImageBuffer::create(size, renderingMode, shouldUseDisplayList, RenderingPurpose::MediaPainting, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8, hostWindow);
+    return ImageBuffer::create(size, renderingMode, shouldUseDisplayList, RenderingPurpose::MediaPainting, 1, colorSpace, pixelFormat, hostWindow);
 }
 
 void HTMLVideoElement::paintCurrentFrameInContext(GraphicsContext& context, const FloatRect& destRect)

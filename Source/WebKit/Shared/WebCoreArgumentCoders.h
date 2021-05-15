@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +30,6 @@
 #include <WebCore/ColorSpace.h>
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/FrameLoaderTypes.h>
-#include <WebCore/ImageData.h>
 #include <WebCore/IndexedDB.h>
 #include <WebCore/InputMode.h>
 #include <WebCore/MediaSelectionOption.h>
@@ -54,6 +53,10 @@
 #include <WebCore/CurlProxySettings.h>
 #endif
 
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+#include <WebCore/MediaPlaybackTargetContext.h>
+#endif
+
 #if ENABLE(ENCRYPTED_MEDIA)
 #include <WebCore/CDMInstance.h>
 #include <WebCore/CDMInstanceSession.h>
@@ -72,6 +75,10 @@
 #include <WebCore/GraphicsContextGL.h>
 #include <WebCore/GraphicsContextGLAttributes.h>
 #include <WebCore/GraphicsTypesGL.h>
+#endif
+
+#if ENABLE(WEBXR)
+#include <WebCore/PlatformXR.h>
 #endif
 
 #if PLATFORM(COCOA)
@@ -120,6 +127,7 @@ class Region;
 class ResourceError;
 class ResourceRequest;
 class ResourceResponse;
+class ScriptBuffer;
 class SecurityOrigin;
 class SharedBuffer;
 class SpringTimingFunction;
@@ -139,6 +147,7 @@ struct EventTrackingRegions;
 struct ExceptionDetails;
 struct FontAttributes;
 struct FileChooserSettings;
+struct ImageExtractionDataDetectorInfo;
 struct RawFile;
 struct ShareData;
 struct ShareDataWithParsedURL;
@@ -161,6 +170,7 @@ struct WindowFeatures;
     
 template<typename> class RectEdges;
 using FloatBoxExtent = RectEdges<float>;
+using IDBKeyPath = Variant<String, Vector<String>>;
 
 #if PLATFORM(COCOA)
 struct KeypressCommand;
@@ -168,7 +178,7 @@ struct KeypressCommand;
 
 #if PLATFORM(IOS_FAMILY)
 class FloatQuad;
-class SelectionRect;
+class SelectionGeometry;
 struct PasteboardImage;
 struct PasteboardWebContent;
 #endif
@@ -189,20 +199,12 @@ struct PasteboardWebContent;
 class ContentFilterUnblockHandler;
 #endif
 
-#if ENABLE(WIRELESS_PLAYBACK_TARGET)
-class MediaPlaybackTargetContext;
-#endif
-
 #if ENABLE(MEDIA_STREAM)
 struct MediaConstraints;
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 struct SerializedAttachmentData;
-#endif
-
-#if ENABLE(INDEXED_DATABASE)
-using IDBKeyPath = Variant<String, Vector<String>>;
 #endif
 
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
@@ -347,6 +349,7 @@ template<> struct ArgumentCoder<WebCore::IntRect> {
 };
 
 template<> struct ArgumentCoder<WebCore::IntSize> {
+    template<typename Encoder>
     static void encode(Encoder&, const WebCore::IntSize&);
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::IntSize&);
     static Optional<WebCore::IntSize> decode(Decoder&);
@@ -473,9 +476,9 @@ template<> struct ArgumentCoder<CGAffineTransform> {
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-template<> struct ArgumentCoder<WebCore::SelectionRect> {
-    static void encode(Encoder&, const WebCore::SelectionRect&);
-    static Optional<WebCore::SelectionRect> decode(Decoder&);
+template<> struct ArgumentCoder<WebCore::SelectionGeometry> {
+    static void encode(Encoder&, const WebCore::SelectionGeometry&);
+    static Optional<WebCore::SelectionGeometry> decode(Decoder&);
 };
 
 template<> struct ArgumentCoder<WebCore::InspectorOverlay::Highlight> {
@@ -641,7 +644,7 @@ template<> struct ArgumentCoder<WebCore::MediaPlaybackTargetContext> {
     static void encode(Encoder&, const WebCore::MediaPlaybackTargetContext&);
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::MediaPlaybackTargetContext&);
     static void encodePlatformData(Encoder&, const WebCore::MediaPlaybackTargetContext&);
-    static WARN_UNUSED_RETURN bool decodePlatformData(Decoder&, WebCore::MediaPlaybackTargetContext&);
+    static WARN_UNUSED_RETURN bool decodePlatformData(Decoder&, WebCore::MediaPlaybackTargetContext::Type, WebCore::MediaPlaybackTargetContext&);
 };
 #endif
 
@@ -701,9 +704,9 @@ template<> struct ArgumentCoder<WebCore::ApplePaySessionPaymentRequest::Merchant
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::ApplePaySessionPaymentRequest::MerchantCapabilities&);
 };
 
-template<> struct ArgumentCoder<Vector<RefPtr<WebCore::ApplePayError>>> {
-    static void encode(Encoder&, const Vector<RefPtr<WebCore::ApplePayError>>&);
-    static Optional<Vector<RefPtr<WebCore::ApplePayError>>> decode(Decoder&);
+template<> struct ArgumentCoder<RefPtr<WebCore::ApplePayError>> {
+    static void encode(Encoder&, const RefPtr<WebCore::ApplePayError>&);
+    static Optional<RefPtr<WebCore::ApplePayError>> decode(Decoder&);
 };
 
 template<> struct ArgumentCoder<WebCore::PaymentSessionError> {
@@ -720,14 +723,10 @@ template<> struct ArgumentCoder<WebCore::MediaConstraints> {
 };
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
-
 template<> struct ArgumentCoder<WebCore::IDBKeyPath> {
     static void encode(Encoder&, const WebCore::IDBKeyPath&);
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::IDBKeyPath&);
 };
-
-#endif
 
 #if ENABLE(SERVICE_WORKER)
 
@@ -743,15 +742,6 @@ template<> struct ArgumentCoder<WebCore::ServiceWorkerOrClientIdentifier> {
 
 #endif
 
-#if ENABLE(CSS_SCROLL_SNAP)
-
-template<> struct ArgumentCoder<WebCore::ScrollOffsetRange<float>> {
-    static void encode(Encoder&, const WebCore::ScrollOffsetRange<float>&);
-    static Optional<WebCore::ScrollOffsetRange<float>> decode(Decoder&);
-};
-
-#endif
-
 template<> struct ArgumentCoder<WebCore::MediaSelectionOption> {
     static void encode(Encoder&, const WebCore::MediaSelectionOption&);
     static Optional<WebCore::MediaSelectionOption> decode(Decoder&);
@@ -762,9 +752,9 @@ template<> struct ArgumentCoder<WebCore::PromisedAttachmentInfo> {
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::PromisedAttachmentInfo&);
 };
 
-template<> struct ArgumentCoder<Vector<RefPtr<WebCore::SecurityOrigin>>> {
-    static void encode(Encoder&, const Vector<RefPtr<WebCore::SecurityOrigin>>&);
-    static WARN_UNUSED_RETURN bool decode(Decoder&, Vector<RefPtr<WebCore::SecurityOrigin>>&);
+template<> struct ArgumentCoder<RefPtr<WebCore::SecurityOrigin>> {
+    static void encode(Encoder&, const RefPtr<WebCore::SecurityOrigin>&);
+    static Optional<RefPtr<WebCore::SecurityOrigin>> decode(Decoder&);
 };
 
 template<> struct ArgumentCoder<WebCore::FontAttributes> {
@@ -802,27 +792,17 @@ template<> struct ArgumentCoder<Ref<WebCore::SharedBuffer>> {
     static Optional<Ref<WebCore::SharedBuffer>> decode(Decoder&);
 };
 
+template<> struct ArgumentCoder<WebCore::ScriptBuffer> {
+    static void encode(Encoder&, const WebCore::ScriptBuffer&);
+    static Optional<WebCore::ScriptBuffer> decode(Decoder&);
+};
+
 #if ENABLE(ENCRYPTED_MEDIA)
 template<> struct ArgumentCoder<WebCore::CDMInstanceSession::Message> {
     static void encode(Encoder&, const WebCore::CDMInstanceSession::Message&);
     static Optional<WebCore::CDMInstanceSession::Message> decode(Decoder&);
 };
-
-template<> struct ArgumentCoder<WebCore::CDMInstanceSession::KeyStatusVector> {
-    static void encode(Encoder&, const WebCore::CDMInstanceSession::KeyStatusVector&);
-    static Optional<WebCore::CDMInstanceSession::KeyStatusVector> decode(Decoder&);
-};
 #endif
-
-template<> struct ArgumentCoder<RefPtr<WebCore::ImageData>> {
-    static void encode(Encoder&, const RefPtr<WebCore::ImageData>&);
-    static Optional<RefPtr<WebCore::ImageData>> decode(Decoder&);
-};
-
-template<> struct ArgumentCoder<Ref<WebCore::ImageData>> {
-    static void encode(Encoder&, const Ref<WebCore::ImageData>&);
-    static Optional<Ref<WebCore::ImageData>> decode(Decoder&);
-};
 
 #if HAVE(PASSKIT_INSTALLMENTS)
 template<> struct ArgumentCoder<WebCore::PaymentInstallmentConfiguration> {
@@ -839,10 +819,22 @@ template<> struct ArgumentCoder<WebCore::GraphicsContextGLAttributes> {
 };
 
 template<> struct ArgumentCoder<WebCore::GraphicsContextGL::ActiveInfo> {
+    template<typename Encoder>
     static void encode(Encoder&, const WebCore::GraphicsContextGL::ActiveInfo&);
     static Optional<WebCore::GraphicsContextGL::ActiveInfo> decode(Decoder&);
 };
 #endif
+
+#if ENABLE(IMAGE_EXTRACTION) && ENABLE(DATA_DETECTION)
+
+template<> struct ArgumentCoder<WebCore::ImageExtractionDataDetectorInfo> {
+    static void encode(Encoder&, const WebCore::ImageExtractionDataDetectorInfo&);
+    static WARN_UNUSED_RETURN Optional<WebCore::ImageExtractionDataDetectorInfo> decode(Decoder&);
+    static void encodePlatformData(Encoder&, const WebCore::ImageExtractionDataDetectorInfo&);
+    static WARN_UNUSED_RETURN bool decodePlatformData(Decoder&, WebCore::ImageExtractionDataDetectorInfo&);
+};
+
+#endif // ENABLE(IMAGE_EXTRACTION) && ENABLE(DATA_DETECTION)
 
 } // namespace IPC
 
@@ -900,7 +892,6 @@ template<> struct EnumTraits<WebCore::NotificationDirection> {
     >;
 };
 
-#if ENABLE(INDEXED_DATABASE)
 template<> struct EnumTraits<WebCore::IndexedDB::GetAllType> {
     using values = EnumValues<
         WebCore::IndexedDB::GetAllType,
@@ -908,7 +899,6 @@ template<> struct EnumTraits<WebCore::IndexedDB::GetAllType> {
         WebCore::IndexedDB::GetAllType::Values
     >;
 };
-#endif
 
 #if ENABLE(MEDIA_STREAM)
 template<> struct EnumTraits<WebCore::RealtimeMediaSource::Type> {
@@ -1023,6 +1013,24 @@ template <> struct EnumTraits<WebCore::GraphicsContextGLWebGLVersion> {
 #endif
     >;
 };
+
+template <> struct EnumTraits<WebCore::GraphicsContextGL::SimulatedEventForTesting> {
+    using values = EnumValues<
+    WebCore::GraphicsContextGL::SimulatedEventForTesting,
+    WebCore::GraphicsContextGL::SimulatedEventForTesting::ContextChange,
+    WebCore::GraphicsContextGL::SimulatedEventForTesting::GPUStatusFailure,
+    WebCore::GraphicsContextGL::SimulatedEventForTesting::Timeout
+    >;
+};
 #endif
+
+template<> struct EnumTraits<WebCore::ScrollSnapStrictness> {
+    using values = EnumValues<
+        WebCore::ScrollSnapStrictness,
+        WebCore::ScrollSnapStrictness::None,
+        WebCore::ScrollSnapStrictness::Proximity,
+        WebCore::ScrollSnapStrictness::Mandatory
+    >;
+};
 
 } // namespace WTF

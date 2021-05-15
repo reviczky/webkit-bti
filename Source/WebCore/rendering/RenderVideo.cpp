@@ -123,6 +123,9 @@ bool RenderVideo::updateIntrinsicSize()
 
 LayoutSize RenderVideo::calculateIntrinsicSize()
 {
+    if (shouldApplySizeContainment(*this))
+        return LayoutSize();
+
     // Spec text from 4.8.6
     //
     // The intrinsic width of a video element's playback area is the intrinsic width 
@@ -229,7 +232,7 @@ void RenderVideo::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
 
     if (displayingPoster)
         paintIntoRect(paintInfo, rect);
-    else if (!videoElement().isFullscreen() || !mediaPlayer->supportsAcceleratedRendering()) {
+    else if (!videoElement().isFullscreen() || !videoElement().supportsAcceleratedRendering()) {
         if (paintInfo.paintBehavior.contains(PaintBehavior::FlattenCompositingLayers))
             context.paintFrameForMedia(*mediaPlayer, rect);
         else
@@ -294,9 +297,7 @@ LayoutUnit RenderVideo::minimumReplacedHeight() const
 
 bool RenderVideo::supportsAcceleratedRendering() const
 {
-    if (auto player = videoElement().player())
-        return player->supportsAcceleratedRendering();
-    return false;
+    return videoElement().supportsAcceleratedRendering();
 }
 
 void RenderVideo::acceleratedRenderingStateChanged()

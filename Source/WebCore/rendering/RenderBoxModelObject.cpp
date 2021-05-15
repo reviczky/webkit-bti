@@ -275,14 +275,11 @@ bool RenderBoxModelObject::hasAutoHeightOrContainingBlockWithAutoHeight() const
     if (logicalHeightLength.isPercentOrCalculated() && cb && isBox())
         cb->addPercentHeightDescendant(*const_cast<RenderBox*>(downcast<RenderBox>(this)));
 
-    if (thisBox && thisBox->isFlexItem()) {
-        auto& flexBox = downcast<RenderFlexibleBox>(*parent());
-        if (flexBox.childLogicalHeightForPercentageResolution(*thisBox))
-            return false;
-    }
+    if (thisBox && thisBox->isFlexItem() && downcast<RenderFlexibleBox>(*parent()).useChildOverridingLogicalHeightForPercentageResolution(*thisBox))
+        return false;
     
     if (thisBox && thisBox->isGridItem() && thisBox->hasOverridingContainingBlockContentLogicalHeight())
-        return false;
+        return thisBox->overridingContainingBlockContentLogicalHeight() == WTF::nullopt;
     
     if (logicalHeightLength.isAuto() && !isOutOfFlowPositionedWithImplicitHeight(*this))
         return true;
@@ -291,7 +288,8 @@ bool RenderBoxModelObject::hasAutoHeightOrContainingBlockWithAutoHeight() const
     // except when in quirks mode. Flexboxes follow strict behavior even in quirks mode, though.
     if (!cb || (document().inQuirksMode() && !cb->isFlexibleBoxIncludingDeprecated()))
         return false;
-
+    if (thisBox && thisBox->hasOverridingContainingBlockContentLogicalHeight())
+        return thisBox->overridingContainingBlockContentLogicalHeight() == WTF::nullopt;
     return !cb->hasDefiniteLogicalHeight();
 }
 
@@ -558,7 +556,7 @@ FloatRect RenderBoxModelObject::constrainingRectForStickyPosition() const
             scrollOffset = FloatPoint() + scrollableArea->scrollOffset();
 
         float scrollbarOffset = 0;
-        if (enclosingClippingBox.hasLayer() && enclosingClippingBox.shouldPlaceBlockDirectionScrollbarOnLeft() && scrollableArea)
+        if (enclosingClippingBox.hasLayer() && enclosingClippingBox.shouldPlaceVerticalScrollbarOnLeft() && scrollableArea)
             scrollbarOffset = scrollableArea->verticalScrollbarWidth(IgnoreOverlayScrollbarSize);
 
         constrainingRect.setLocation(FloatPoint(scrollOffset.x() + scrollbarOffset, scrollOffset.y()));
@@ -2647,18 +2645,6 @@ void RenderBoxModelObject::mapAbsoluteToLocalPoint(MapCoordinatesFlags mode, Tra
     if (!container)
         return;
     
-    // FIXME: This code is wrong for named flow threads since it only works for content in the first region.
-    // We also don't want to run it for multicolumn flow threads, since we can use our knowledge of column
-    // geometry to actually get a better result.
-    // The point inside a box that's inside a region has its coordinates relative to the region,
-    // not the FragmentedFlow that is its container in the RenderObject tree.
-    if (is<RenderBox>(*this) && container->isOutOfFlowRenderFragmentedFlow()) {
-        RenderFragmentContainer* startFragment = nullptr;
-        RenderFragmentContainer* endFragment = nullptr;
-        if (downcast<RenderFragmentedFlow>(*container).getFragmentRangeForBox(downcast<RenderBox>(this), startFragment, endFragment))
-            container = startFragment;
-    }
-
     container->mapAbsoluteToLocalPoint(mode, transformState);
 
     LayoutSize containerOffset = offsetFromContainer(*container, LayoutPoint());

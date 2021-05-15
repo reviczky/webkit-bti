@@ -43,6 +43,7 @@
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/Base64.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 namespace WebCore {
 
@@ -415,9 +416,7 @@ RefPtr<SharedBuffer> CDMPrivateClearKey::sanitizeResponse(const SharedBuffer& re
 Optional<String> CDMPrivateClearKey::sanitizeSessionId(const String& sessionId) const
 {
     // Validate the session ID string as an 32-bit integer.
-    bool ok;
-    sessionId.toUIntStrict(&ok);
-    if (!ok)
+    if (!parseInteger<uint32_t>(sessionId))
         return WTF::nullopt;
     return sessionId;
 }
@@ -450,9 +449,7 @@ const String& CDMInstanceClearKey::keySystem() const
 
 RefPtr<CDMInstanceSession> CDMInstanceClearKey::createSession()
 {
-    auto newSession = adoptRef(new CDMInstanceSessionClearKey(*this));
-    trackSession(*newSession);
-    return newSession;
+    return adoptRef(new CDMInstanceSessionClearKey(*this));
 }
 
 void CDMInstanceSessionClearKey::requestLicense(LicenseType, const AtomString& initDataType, Ref<SharedBuffer>&& initData, LicenseCallback&& callback)

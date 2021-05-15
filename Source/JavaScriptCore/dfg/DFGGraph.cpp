@@ -1104,7 +1104,7 @@ bool Graph::watchGlobalProperty(JSGlobalObject* globalObject, unsigned identifie
         if (!watchpoint->isStillValid())
             return false;
     }
-    globalProperties().addLazily(DesiredGlobalProperty(globalObject, identifierNumber));
+    watchpoints().addLazily(DesiredGlobalProperty(globalObject, identifierNumber));
     return true;
 }
 
@@ -1114,8 +1114,7 @@ FullBytecodeLiveness& Graph::livenessFor(CodeBlock* codeBlock)
     if (iter != m_bytecodeLiveness.end())
         return *iter->value;
     
-    std::unique_ptr<FullBytecodeLiveness> liveness = makeUnique<FullBytecodeLiveness>();
-    codeBlock->livenessAnalysis().computeFullLiveness(codeBlock, *liveness);
+    std::unique_ptr<FullBytecodeLiveness> liveness = codeBlock->livenessAnalysis().computeFullLiveness(codeBlock);
     FullBytecodeLiveness& result = *liveness;
     m_bytecodeLiveness.add(codeBlock, WTFMove(liveness));
     return result;
@@ -1195,7 +1194,7 @@ bool Graph::isLiveInBytecode(Operand operand, CodeOrigin codeOrigin)
         // Arguments are always live. This would be redundant if it wasn't for our
         // op_call_varargs inlining.
         if (inlineCallFrame && reg.isArgument()
-            && static_cast<size_t>(reg.toArgument()) < inlineCallFrame->argumentsWithFixup.size()) {
+            && static_cast<size_t>(reg.toArgument()) < inlineCallFrame->m_argumentsWithFixup.size()) {
             if (verbose)
                 dataLog("Argument is live.\n");
             return true;
@@ -1425,7 +1424,6 @@ void Graph::registerFrozenValues()
 {
     ConcurrentJSLocker locker(m_codeBlock->m_lock);
     m_codeBlock->constants().shrink(0);
-    m_codeBlock->constantsSourceCodeRepresentation().resize(0);
     for (FrozenValue* value : m_frozenValues) {
         if (!value->pointsToHeap())
             continue;
@@ -1446,7 +1444,6 @@ void Graph::registerFrozenValues()
         } }
     }
     m_codeBlock->constants().shrinkToFit();
-    m_codeBlock->constantsSourceCodeRepresentation().shrinkToFit();
 }
 
 template<typename Visitor>

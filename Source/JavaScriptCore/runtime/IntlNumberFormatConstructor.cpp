@@ -87,9 +87,7 @@ JSC_DEFINE_HOST_FUNCTION(constructIntlNumberFormat, (JSGlobalObject* globalObjec
     // 2. Let numberFormat be OrdinaryCreateFromConstructor(newTarget, %NumberFormatPrototype%).
     // 3. ReturnIfAbrupt(numberFormat).
     JSObject* newTarget = asObject(callFrame->newTarget());
-    Structure* structure = newTarget == callFrame->jsCallee()
-        ? globalObject->numberFormatStructure()
-        : InternalFunction::createSubclassStructure(globalObject, newTarget, getFunctionRealm(vm, newTarget)->numberFormatStructure());
+    Structure* structure = JSC_GET_DERIVED_STRUCTURE(vm, numberFormatStructure, newTarget, callFrame->jsCallee());
     RETURN_IF_EXCEPTION(scope, { });
 
     IntlNumberFormat* numberFormat = IntlNumberFormat::create(vm, structure);
@@ -128,7 +126,7 @@ JSC_DEFINE_HOST_FUNCTION(IntlNumberFormatConstructorFuncSupportedLocalesOf, (JSG
     // 11.2.2 Intl.NumberFormat.supportedLocalesOf(locales [, options]) (ECMA-402 2.0)
 
     // 1. Let availableLocales be %NumberFormat%.[[availableLocales]].
-    const HashSet<String>& availableLocales = intlNumberFormatAvailableLocales();
+    const auto& availableLocales = intlNumberFormatAvailableLocales();
 
     // 2. Let requestedLocales be CanonicalizeLocaleList(locales).
     Vector<String> requestedLocales = canonicalizeLocaleList(globalObject, callFrame->argument(0));

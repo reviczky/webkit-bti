@@ -26,6 +26,7 @@
 #pragma once
 
 #include "NetworkDataTask.h"
+#include "NetworkLoadParameters.h"
 #include <WebCore/DataURLDecoder.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/NetworkLoadMetrics.h>
@@ -40,15 +41,15 @@ namespace WebKit {
 
 class NetworkDataTaskSoup final : public NetworkDataTask {
 public:
-    static Ref<NetworkDataTask> create(NetworkSession& session, NetworkDataTaskClient& client, const WebCore::ResourceRequest& request, WebCore::FrameIdentifier frameID, WebCore::PageIdentifier pageID, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, WebCore::ContentSniffingPolicy shouldContentSniff, WebCore::ContentEncodingSniffingPolicy shouldContentEncodingSniff, bool shouldClearReferrerOnHTTPSToHTTPRedirect, bool dataTaskIsForMainFrameNavigation)
+    static Ref<NetworkDataTask> create(NetworkSession& session, NetworkDataTaskClient& client, const WebCore::ResourceRequest& request, WebCore::FrameIdentifier frameID, WebCore::PageIdentifier pageID, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, WebCore::ContentSniffingPolicy shouldContentSniff, WebCore::ContentEncodingSniffingPolicy shouldContentEncodingSniff, bool shouldClearReferrerOnHTTPSToHTTPRedirect, PreconnectOnly shouldPreconnectOnly, bool dataTaskIsForMainFrameNavigation)
     {
-        return adoptRef(*new NetworkDataTaskSoup(session, client, request, frameID, pageID, storedCredentialsPolicy, shouldContentSniff, shouldContentEncodingSniff, shouldClearReferrerOnHTTPSToHTTPRedirect, dataTaskIsForMainFrameNavigation));
+        return adoptRef(*new NetworkDataTaskSoup(session, client, request, frameID, pageID, storedCredentialsPolicy, shouldContentSniff, shouldContentEncodingSniff, shouldClearReferrerOnHTTPSToHTTPRedirect, shouldPreconnectOnly, dataTaskIsForMainFrameNavigation));
     }
 
     ~NetworkDataTaskSoup();
 
 private:
-    NetworkDataTaskSoup(NetworkSession&, NetworkDataTaskClient&, const WebCore::ResourceRequest&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::StoredCredentialsPolicy, WebCore::ContentSniffingPolicy, WebCore::ContentEncodingSniffingPolicy, bool shouldClearReferrerOnHTTPSToHTTPRedirect, bool dataTaskIsForMainFrameNavigation);
+    NetworkDataTaskSoup(NetworkSession&, NetworkDataTaskClient&, const WebCore::ResourceRequest&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::StoredCredentialsPolicy, WebCore::ContentSniffingPolicy, WebCore::ContentEncodingSniffingPolicy, bool shouldClearReferrerOnHTTPSToHTTPRedirect, PreconnectOnly shouldPreconnectOnly, bool dataTaskIsForMainFrameNavigation);
 
     void cancel() override;
     void resume() override;
@@ -75,6 +76,10 @@ private:
     void didSendRequest(GRefPtr<GInputStream>&&);
     void dispatchDidReceiveResponse();
     void dispatchDidCompleteWithError(const WebCore::ResourceError&);
+
+#if !USE(SOUP2)
+    static void preconnectCallback(SoupSession*, GAsyncResult*, NetworkDataTaskSoup*);
+#endif
 
 #if USE(SOUP2)
     static gboolean tlsConnectionAcceptCertificateCallback(GTlsConnection*, GTlsCertificate*, GTlsCertificateFlags, NetworkDataTaskSoup*);
@@ -122,6 +127,12 @@ private:
 #endif
     void didWriteBodyData(uint64_t bytesSent);
 
+#if !USE(SOUP2)
+    static void wroteHeadersCallback(SoupMessage*, NetworkDataTaskSoup*);
+    static void wroteBodyCallback(SoupMessage*, NetworkDataTaskSoup*);
+    static void gotBodyCallback(SoupMessage*, NetworkDataTaskSoup*);
+#endif
+
     void download();
     static void writeDownloadCallback(GOutputStream*, GAsyncResult*, NetworkDataTaskSoup*);
     void writeDownload();
@@ -132,8 +143,11 @@ private:
 
     void didFail(const WebCore::ResourceError&);
 
+#if USE(SOUP2)
     static void networkEventCallback(SoupMessage*, GSocketClientEvent, GIOStream*, NetworkDataTaskSoup*);
     void networkEvent(GSocketClientEvent, GIOStream*);
+#endif
+
 #if SOUP_CHECK_VERSION(2, 49, 91)
     static void startingCallback(SoupMessage*, NetworkDataTaskSoup*);
 #else
@@ -165,6 +179,7 @@ private:
     WebCore::PageIdentifier m_pageID;
     State m_state { State::Suspended };
     WebCore::ContentSniffingPolicy m_shouldContentSniff;
+    PreconnectOnly m_shouldPreconnectOnly { PreconnectOnly::No };
     GRefPtr<SoupMessage> m_soupMessage;
     GRefPtr<GFile> m_file;
     GRefPtr<GInputStream> m_inputStream;
@@ -185,7 +200,6 @@ private:
     GRefPtr<GOutputStream> m_downloadOutputStream;
     bool m_allowOverwriteDownload { false };
     WebCore::NetworkLoadMetrics m_networkLoadMetrics;
-    MonotonicTime m_startTime;
     bool m_isBlockingCookies { false };
     RunLoop::Timer<NetworkDataTaskSoup> m_timeoutSource;
 };

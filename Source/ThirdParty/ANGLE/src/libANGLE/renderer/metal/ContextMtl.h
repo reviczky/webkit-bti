@@ -157,13 +157,6 @@ class ContextMtl : public ContextImpl, public mtl::Context
                                                                    const GLint *baseVertices,
                                                                    const GLuint *baseInstances,
                                                                    GLsizei drawcount) override;
-    angle::Result drawElementsSimpleTypesPrimitiveRestart(const gl::Context *context,
-                                                          gl::PrimitiveMode mode,
-                                                          GLsizei count,
-                                                          gl::DrawElementsType type,
-                                                          const void *indices,
-                                                          GLsizei instances);
-
     // Device loss
     gl::GraphicsResetStatus getResetStatus() override;
 
@@ -524,7 +517,7 @@ class ContextMtl : public ContextImpl, public mtl::Context
         // NOTE: Explicit padding. Fill in with useful data when needed in the future.
         int32_t padding_0[3];
 
-        int32_t xfbBufferOffsets[4];
+        std::array<int32_t, 4> xfbBufferOffsets;
         uint32_t acbBufferOffsets[4];
 
         // We'll use x, y, z, w for near / far / diff / zscale respectively.

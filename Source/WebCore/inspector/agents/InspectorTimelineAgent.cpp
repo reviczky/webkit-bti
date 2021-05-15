@@ -80,7 +80,7 @@ static CFRunLoopRef currentRunLoop()
     // we still allow this, see <rdar://problem/7403328>. Since the race condition and subsequent
     // crash are especially troublesome for iBooks, we never allow the observer to be added to the
     // main run loop in iBooks.
-    if (IOSApplication::isIBooks())
+    if (CocoaApplication::isIBooks())
         return WebThreadRunLoop();
 #endif
     return CFRunLoopGetCurrent();
@@ -432,9 +432,8 @@ void InspectorTimelineAgent::didPaint(RenderObject& renderer, const LayoutRect& 
 
     TimelineRecordEntry& entry = m_recordStack.last();
     ASSERT(entry.type == TimelineRecordType::Paint);
-    FloatQuad quad;
-    localToPageQuad(renderer, clipRect, &quad);
-    entry.data = TimelineRecordFactory::createPaintData(quad);
+    auto clipQuadInRootView = renderer.view().frameView().contentsToRootView(renderer.localToAbsoluteQuad({ clipRect }));
+    entry.data = TimelineRecordFactory::createPaintData(clipQuadInRootView);
     didCompleteCurrentRecord(TimelineRecordType::Paint);
 }
 
@@ -819,16 +818,6 @@ InspectorTimelineAgent::TimelineRecordEntry InspectorTimelineAgent::createRecord
 void InspectorTimelineAgent::pushCurrentRecord(Ref<JSON::Object>&& data, TimelineRecordType type, bool captureCallStack, Frame* frame)
 {
     pushCurrentRecord(createRecordEntry(WTFMove(data), type, captureCallStack, frame));
-}
-
-void InspectorTimelineAgent::localToPageQuad(const RenderObject& renderer, const LayoutRect& rect, FloatQuad* quad)
-{
-    const FrameView& frameView = renderer.view().frameView();
-    FloatQuad absolute = renderer.localToAbsoluteQuad(FloatQuad(rect));
-    quad->setP1(frameView.contentsToRootView(roundedIntPoint(absolute.p1())));
-    quad->setP2(frameView.contentsToRootView(roundedIntPoint(absolute.p2())));
-    quad->setP3(frameView.contentsToRootView(roundedIntPoint(absolute.p3())));
-    quad->setP4(frameView.contentsToRootView(roundedIntPoint(absolute.p4())));
 }
 
 } // namespace WebCore

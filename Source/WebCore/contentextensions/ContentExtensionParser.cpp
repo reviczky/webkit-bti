@@ -94,7 +94,8 @@ static Expected<Vector<String>, std::error_code> getDomainList(JSGlobalObject& l
     return strings;
 }
 
-static std::error_code getTypeFlags(JSGlobalObject& lexicalGlobalObject, const JSValue& typeValue, ResourceFlags& flags, uint16_t (*stringToType)(const String&))
+template<typename T>
+static std::error_code getTypeFlags(JSGlobalObject& lexicalGlobalObject, const JSValue& typeValue, ResourceFlags& flags, Optional<OptionSet<T>> (*stringToType)(StringView))
 {
     VM& vm = lexicalGlobalObject.vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -116,11 +117,11 @@ static std::error_code getTypeFlags(JSGlobalObject& lexicalGlobalObject, const J
             return ContentExtensionError::JSONInvalidObjectInTriggerFlagsArray;
         
         String name = value.toWTFString(&lexicalGlobalObject);
-        uint16_t type = stringToType(name);
+        auto type = stringToType(StringView(name));
         if (!type)
             return ContentExtensionError::JSONInvalidStringInTriggerFlagsArray;
 
-        flags |= type;
+        flags |= static_cast<ResourceFlags>(type->toRaw());
     }
 
     return { };
@@ -168,6 +169,14 @@ static Expected<Trigger, std::error_code> loadTrigger(JSGlobalObject& lexicalGlo
         if (typeFlagsError)
             return makeUnexpected(typeFlagsError);
     } else if (!loadTypeValue.isUndefined())
+        return makeUnexpected(ContentExtensionError::JSONInvalidTriggerFlagsArray);
+
+    const JSValue loadContextValue = triggerObject.get(&lexicalGlobalObject, Identifier::fromString(vm, "load-context"));
+    if (!scope.exception() && loadContextValue.isObject()) {
+        auto typeFlagsError = getTypeFlags(lexicalGlobalObject, loadContextValue, trigger.flags, readLoadContext);
+        if (typeFlagsError)
+            return makeUnexpected(typeFlagsError);
+    } else if (!loadContextValue.isUndefined())
         return makeUnexpected(ContentExtensionError::JSONInvalidTriggerFlagsArray);
 
     const JSValue ifDomainValue = triggerObject.get(&lexicalGlobalObject, Identifier::fromString(vm, "if-domain"));

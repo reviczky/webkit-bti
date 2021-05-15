@@ -75,6 +75,11 @@ void RTCRtpSFrameTransform::setEncryptionKey(CryptoKey& key, Optional<uint64_t> 
     promise.settle(m_transformer->setEncryptionKey(rawKey.key(), keyId));
 }
 
+void RTCRtpSFrameTransform::setCounterForTesting(uint64_t counter)
+{
+    m_transformer->setCounter(counter);
+}
+
 uint64_t RTCRtpSFrameTransform::counterForTesting() const
 {
     return m_transformer->counter();
@@ -101,7 +106,7 @@ void RTCRtpSFrameTransform::initializeTransformer(RTCRtpTransformBackend& backen
         m_writable->lock();
 
     m_transformer->setIsEncrypting(side == Side::Sender);
-    m_transformer->setAuthenticationSize(backend.mediaType() == RTCRtpTransformBackend::MediaType::Audio ? 4 : 10);
+    m_transformer->setMediaType(backend.mediaType());
 
     backend.setTransformableFrameCallback([transformer = m_transformer, backend = makeRef(backend)](auto&& frame) {
         auto chunk = frame->data();
@@ -149,10 +154,9 @@ void transformFrame(Frame& frame, JSDOMGlobalObject& globalObject, RTCRtpSFrameT
     source.enqueue(toJS(&globalObject, &globalObject, frame));
 }
 
-template<>
-void transformFrame(JSC::ArrayBuffer& value, JSDOMGlobalObject& globalObject, RTCRtpSFrameTransformer& transformer, SimpleReadableStreamSource& source)
+static void transformFrame(const uint8_t* data, size_t size, JSDOMGlobalObject& globalObject, RTCRtpSFrameTransformer& transformer, SimpleReadableStreamSource& source)
 {
-    auto result = transformer.transform(static_cast<const uint8_t*>(value.data()), value.byteLength());
+    auto result = transformer.transform(data, size);
     RELEASE_LOG_ERROR_IF(result.hasException(), WebRTC, "RTCRtpSFrameTransform failed transforming a frame");
 
     auto buffer = result.hasException() ? SharedBuffer::create() : SharedBuffer::create(result.returnValue().data(), result.returnValue().size());
@@ -167,10 +171,12 @@ void RTCRtpSFrameTransform::createStreams(JSC::JSGlobalObject& globalObject)
         return;
 
     auto writable = WritableStream::create(globalObject, SimpleWritableStreamSink::create([transformer = m_transformer, readableStreamSource = m_readableStreamSource](auto& context, auto value) -> ExceptionOr<void> {
+        if (!context.globalObject())
+            return Exception { InvalidStateError };
         auto& globalObject = *JSC::jsCast<JSDOMGlobalObject*>(context.globalObject());
         auto scope = DECLARE_THROW_SCOPE(globalObject.vm());
 
-        auto frame = convert<IDLUnion<IDLArrayBuffer, IDLInterface<RTCEncodedAudioFrame>, IDLInterface<RTCEncodedVideoFrame>>>(globalObject, value);
+        auto frame = convert<IDLUnion<IDLArrayBuffer, IDLArrayBufferView, IDLInterface<RTCEncodedAudioFrame>, IDLInterface<RTCEncodedVideoFrame>>>(globalObject, value);
         if (scope.exception())
             return Exception { ExistingExceptionError };
 
@@ -180,7 +186,9 @@ void RTCRtpSFrameTransform::createStreams(JSC::JSGlobalObject& globalObject)
         }, [&](RefPtr<RTCEncodedVideoFrame>& value) {
             transformFrame(*value, globalObject, transformer.get(), *readableStreamSource);
         }, [&](RefPtr<ArrayBuffer>& value) {
-            transformFrame(*value, globalObject, transformer.get(), *readableStreamSource);
+            transformFrame(static_cast<const uint8_t*>(value->data()), value->byteLength(), globalObject, transformer.get(), *readableStreamSource);
+        }, [&](RefPtr<ArrayBufferView>& value) {
+            transformFrame(static_cast<const uint8_t*>(value->data()), value->byteLength(), globalObject, transformer.get(), *readableStreamSource);
         });
         return { };
     }));

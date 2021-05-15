@@ -95,17 +95,15 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(Node);
 using namespace HTMLNames;
 
 #if DUMP_NODE_STATISTICS
-static HashSet<Node*>& liveNodeSet()
+static WeakHashSet<Node>& liveNodeSet()
 {
-    static NeverDestroyed<HashSet<Node*>> liveNodes;
+    static NeverDestroyed<WeakHashSet<Node>> liveNodes;
     return liveNodes;
 }
 
 static const char* stringForRareDataUseType(NodeRareData::UseType useType)
 {
     switch (useType) {
-    case NodeRareData::UseType::ConnectedFrameCount:
-        return "ConnectedFrameCount";
     case NodeRareData::UseType::NodeList:
         return "NodeList";
     case NodeRareData::UseType::MutationObserver:
@@ -175,15 +173,15 @@ void Node::dumpStatistics()
     HashMap<uint16_t, size_t> rareDataSingleUseTypeCounts;
     size_t mixedRareDataUseCount = 0;
 
-    for (auto* node : liveNodeSet()) {
-        if (node->hasRareData()) {
+    for (auto& node : liveNodeSet()) {
+        if (node.hasRareData()) {
             ++nodesWithRareData;
-            if (is<Element>(*node)) {
+            if (is<Element>(node)) {
                 ++elementsWithRareData;
-                if (downcast<Element>(*node).hasNamedNodeMap())
+                if (downcast<Element>(node).hasNamedNodeMap())
                     ++elementsWithNamedNodeMap;
             }
-            auto* rareData = node->rareData();
+            auto* rareData = node.rareData();
             auto useTypes = is<Element>(node) ? static_cast<ElementRareData*>(rareData)->useTypes() : rareData->useTypes();
             unsigned useTypeCount = 0;
             for (auto type : useTypes) {
@@ -197,12 +195,12 @@ void Node::dumpStatistics()
                 mixedRareDataUseCount++;
         }
 
-        switch (node->nodeType()) {
+        switch (node.nodeType()) {
             case ELEMENT_NODE: {
                 ++elementNodes;
 
                 // Tag stats
-                Element& element = downcast<Element>(*node);
+                Element& element = downcast<Element>(node);
                 HashMap<String, size_t>::AddResult result = perTagCount.add(element.tagName(), 1);
                 if (!result.isNewEntry)
                     result.iterator->value++;
@@ -248,7 +246,7 @@ void Node::dumpStatistics()
                 break;
             }
             case DOCUMENT_FRAGMENT_NODE: {
-                if (node->isShadowRoot())
+                if (node.isShadowRoot())
                     ++shadowRootNodes;
                 else
                     ++fragmentNodes;
@@ -257,7 +255,7 @@ void Node::dumpStatistics()
         }
     }
 
-    printf("Number of Nodes: %d\n\n", liveNodeSet().size());
+    printf("Number of Nodes: %d\n\n", liveNodeSet().computeSize());
     printf("Number of Nodes with RareData: %zu\n", nodesWithRareData);
     printf("  Mixed use: %zu\n", mixedRareDataUseCount);
     for (auto it : rareDataSingleUseTypeCounts)
@@ -295,10 +293,9 @@ DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, nodeCounter, ("WebCoreNode"
 #ifndef NDEBUG
 static bool shouldIgnoreLeaks = false;
 
-static HashSet<Node*>& ignoreSet()
+static WeakHashSet<Node>& ignoreSet()
 {
-    static NeverDestroyed<HashSet<Node*>> ignore;
-
+    static NeverDestroyed<WeakHashSet<Node>> ignore;
     return ignore;
 }
 
@@ -322,13 +319,13 @@ void Node::trackForDebugging()
 {
 #ifndef NDEBUG
     if (shouldIgnoreLeaks)
-        ignoreSet().add(this);
+        ignoreSet().add(*this);
     else
         nodeCounter.increment();
 #endif
 
 #if DUMP_NODE_STATISTICS
-    liveNodeSet().add(this);
+    liveNodeSet().add(*this);
 #endif
 }
 
@@ -353,12 +350,12 @@ Node::~Node()
     ASSERT(!m_adoptionIsRequired);
 
 #ifndef NDEBUG
-    if (!ignoreSet().remove(this))
+    if (!ignoreSet().remove(*this))
         nodeCounter.decrement();
 #endif
 
 #if DUMP_NODE_STATISTICS
-    liveNodeSet().remove(this);
+    liveNodeSet().remove(*this);
 #endif
 
     RELEASE_ASSERT(!renderer());
@@ -371,7 +368,7 @@ Node::~Node()
 
     auto* textManipulationController = document().textManipulationControllerIfExists();
     if (UNLIKELY(textManipulationController))
-        textManipulationController->removeNode(this);
+        textManipulationController->removeNode(*this);
 
     if (!isContainerNode())
         willBeDeletedFrom(document());
@@ -732,12 +729,12 @@ const AtomString& Node::namespaceURI() const
     return nullAtom();
 }
 
-bool Node::isContentEditable()
+bool Node::isContentEditable() const
 {
     return computeEditability(UserSelectAllDoesNotAffectEditability, ShouldUpdateStyle::Update) != Editability::ReadOnly;
 }
 
-bool Node::isContentRichlyEditable()
+bool Node::isContentRichlyEditable() const
 {
     return computeEditability(UserSelectAllIsAlwaysNonEditable, ShouldUpdateStyle::Update) == Editability::CanEditRichly;
 }
@@ -909,15 +906,13 @@ unsigned Node::computeNodeIndex() const
 template<unsigned type>
 bool shouldInvalidateNodeListCachesForAttr(const unsigned nodeListCounts[], const QualifiedName& attrName)
 {
-    if (nodeListCounts[type] && shouldInvalidateTypeOnAttributeChange(static_cast<NodeListInvalidationType>(type), attrName))
-        return true;
-    return shouldInvalidateNodeListCachesForAttr<type + 1>(nodeListCounts, attrName);
-}
-
-template<>
-bool shouldInvalidateNodeListCachesForAttr<numNodeListInvalidationTypes>(const unsigned[], const QualifiedName&)
-{
-    return false;
+    if constexpr (type >= numNodeListInvalidationTypes)
+        return false;
+    else {
+        if (nodeListCounts[type] && shouldInvalidateTypeOnAttributeChange(static_cast<NodeListInvalidationType>(type), attrName))
+            return true;
+        return shouldInvalidateNodeListCachesForAttr<type + 1>(nodeListCounts, attrName);
+    }
 }
 
 inline bool Document::shouldInvalidateNodeListAndCollectionCaches() const
@@ -2066,7 +2061,7 @@ void Node::moveNodeToNewDocument(Document& oldDocument, Document& newDocument)
 
     auto* textManipulationController = oldDocument.textManipulationControllerIfExists();
     if (UNLIKELY(textManipulationController))
-        textManipulationController->removeNode(this);
+        textManipulationController->removeNode(*this);
 
     if (auto* eventTargetData = this->eventTargetData()) {
         if (!eventTargetData->eventListenerMap.isEmpty()) {
@@ -2082,7 +2077,7 @@ void Node::moveNodeToNewDocument(Document& oldDocument, Document& newDocument)
 
         unsigned numTouchEventListeners = 0;
 #if ENABLE(TOUCH_EVENTS)
-        if (newDocument.quirks().shouldDispatchSimulatedMouseEvents()) {
+        if (newDocument.quirks().shouldDispatchSimulatedMouseEvents(this)) {
             for (auto& name : eventNames().extendedTouchRelatedEventNames())
                 numTouchEventListeners += eventListeners(name).size();
         } else {
@@ -2136,7 +2131,7 @@ static inline bool tryAddEventListener(Node* targetNode, const AtomString& event
     targetNode->document().addListenerTypeIfNeeded(eventType);
     if (eventNames().isWheelEventType(eventType))
         targetNode->document().didAddWheelEventHandler(*targetNode);
-    else if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
+    else if (eventNames().isTouchRelatedEventType(eventType, *targetNode))
         targetNode->document().didAddTouchEventHandler(*targetNode);
 
 #if PLATFORM(IOS_FAMILY)
@@ -2146,7 +2141,7 @@ static inline bool tryAddEventListener(Node* targetNode, const AtomString& event
     }
 
 #if ENABLE(TOUCH_EVENTS)
-    if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
+    if (eventNames().isTouchRelatedEventType(eventType, *targetNode))
         targetNode->document().addTouchEventListener(*targetNode);
 #endif
 #endif // PLATFORM(IOS_FAMILY)
@@ -2173,7 +2168,7 @@ static inline bool tryRemoveEventListener(Node* targetNode, const AtomString& ev
     // listeners for each type, not just a bool - see https://bugs.webkit.org/show_bug.cgi?id=33861
     if (eventNames().isWheelEventType(eventType))
         targetNode->document().didRemoveWheelEventHandler(*targetNode);
-    else if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
+    else if (eventNames().isTouchRelatedEventType(eventType, *targetNode))
         targetNode->document().didRemoveTouchEventHandler(*targetNode);
 
 #if PLATFORM(IOS_FAMILY)
@@ -2183,7 +2178,7 @@ static inline bool tryRemoveEventListener(Node* targetNode, const AtomString& ev
     }
 
 #if ENABLE(TOUCH_EVENTS)
-    if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
+    if (eventNames().isTouchRelatedEventType(eventType, *targetNode))
         targetNode->document().removeTouchEventListener(*targetNode);
 #endif
 #endif // PLATFORM(IOS_FAMILY)
@@ -2466,11 +2461,12 @@ void Node::defaultEventHandler(Event& event)
         while (startNode && !startNode->renderer())
             startNode = startNode->parentOrShadowHostNode();
         
-        if (startNode && startNode->renderer())
+        if (startNode && startNode->renderer()) {
             if (Frame* frame = document().frame())
                 frame->eventHandler().defaultWheelEventHandler(startNode, downcast<WheelEvent>(event));
+        }
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
-    } else if (is<TouchEvent>(event) && eventNames().isTouchRelatedEventType(document(), eventType)) {
+    } else if (is<TouchEvent>(event) && eventNames().isTouchRelatedEventType(eventType, *this)) {
         // Capture the target node's visibility state before dispatching touchStart.
         if (is<Element>(*this) && eventType == eventNames().touchstartEvent) {
             auto& contentChangeObserver = document().contentChangeObserver(); 

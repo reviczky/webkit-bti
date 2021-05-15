@@ -53,10 +53,9 @@
 #include "ScriptableDocumentParser.h"
 #include "Settings.h"
 #include "TextNodeTraversal.h"
+#include <wtf/SortedArrayMap.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/SystemTracing.h>
-#include <wtf/text/StringBuilder.h>
-#include <wtf/text/StringHash.h>
 
 namespace WebCore {
 
@@ -110,7 +109,8 @@ void ScriptElement::handleAsyncAttribute()
 
 static bool isLegacySupportedJavaScriptLanguage(const String& language)
 {
-    static const auto languages = makeNeverDestroyed(HashSet<String, ASCIICaseInsensitiveHash> {
+    static constexpr ComparableLettersLiteral languageArray[] = {
+        "ecmascript",
         "javascript",
         "javascript1.0",
         "javascript1.1",
@@ -120,11 +120,11 @@ static bool isLegacySupportedJavaScriptLanguage(const String& language)
         "javascript1.5",
         "javascript1.6",
         "javascript1.7",
-        "livescript",
-        "ecmascript",
         "jscript",
-    });
-    return languages.get().contains(language);
+        "livescript",
+    };
+    static constexpr SortedArraySet languageSet { languageArray };
+    return languageSet.contains(language);
 }
 
 void ScriptElement::dispatchErrorEvent()
@@ -398,7 +398,7 @@ void ScriptElement::executeClassicScript(const ScriptSourceCode& sourceCode)
     if (!frame)
         return;
 
-    IgnoreDestructiveWriteCountIncrementer ignoreDesctructiveWriteCountIncrementer(m_isExternalScript ? &document : nullptr);
+    IgnoreDestructiveWriteCountIncrementer ignoreDestructiveWriteCountIncrementer(m_isExternalScript ? &document : nullptr);
     CurrentScriptIncrementer currentScriptIncrementer(document, *this);
 
     WTFBeginSignpost(this, "Execute Script Element", "executing classic script from URL: %{public}s async: %d defer: %d", m_isExternalScript ? sourceCode.url().string().utf8().data() : "inline", hasAsyncAttribute(), hasDeferAttribute());
@@ -417,7 +417,7 @@ void ScriptElement::executeModuleScript(LoadableModuleScript& loadableModuleScri
     if (!frame)
         return;
 
-    IgnoreDestructiveWriteCountIncrementer ignoreDesctructiveWriteCountIncrementer(&document);
+    IgnoreDestructiveWriteCountIncrementer ignoreDestructiveWriteCountIncrementer(&document);
     CurrentScriptIncrementer currentScriptIncrementer(document, *this);
 
     WTFBeginSignpost(this, "Execute Script Element", "executing module script");

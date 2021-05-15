@@ -27,6 +27,7 @@
 
 #include "DocumentIdentifier.h"
 #include "LibWebRTCMacros.h"
+#include "RTCDataChannelRemoteHandlerConnection.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/Expected.h>
 #include <wtf/UniqueRef.h>
@@ -77,6 +78,7 @@ public:
     static void registerWebKitVP9Decoder();
     static void registerWebKitVP8Decoder();
     static void setH264HardwareEncoderAllowed(bool);
+    static void setRTCLogging(WTFLogLevel);
 
     virtual void setActive(bool);
 
@@ -90,6 +92,8 @@ public:
         UNUSED_PARAM(ipAddress);
         callback(makeUnexpected(MDNSRegisterError::NotImplemented));
     }
+
+    virtual RefPtr<RTCDataChannelRemoteHandlerConnection> createRTCDataChannelRemoteHandlerConnection() { return nullptr; }
 
 #if USE(LIBWEBRTC)
     virtual rtc::scoped_refptr<webrtc::PeerConnectionInterface> createPeerConnection(webrtc::PeerConnectionObserver&, rtc::PacketSocketFactory*, webrtc::PeerConnectionInterface::RTCConfiguration&&);
@@ -106,6 +110,7 @@ public:
 
     void disableEnumeratingAllNetworkInterfaces();
     void enableEnumeratingAllNetworkInterfaces();
+    bool isEnumeratingAllNetworkInterfacesEnabled() const { return m_enableEnumeratingAllNetworkInterfaces; }
 
     void setH265Support(bool value) { m_supportsH265 = value; }
     void setVP9Support(bool supportsVP9Profile0, bool supportsVP9Profile2);
@@ -124,7 +129,7 @@ public:
 
     void clearFactory() { m_factory = nullptr; }
 
-    void setEnableLogging(bool);
+    virtual void setLoggingLevel(WTFLogLevel);
     void setEnableWebRTCEncryption(bool);
     void setUseDTLS10(bool);
 
@@ -159,7 +164,6 @@ protected:
     bool m_supportsVP9Profile0 { false };
     bool m_supportsVP9Profile2 { false };
     bool m_supportsVP9VTB { false };
-    bool m_enableLogging { true };
     bool m_useDTLS10 { false };
 #endif
 };

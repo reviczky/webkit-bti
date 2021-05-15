@@ -145,11 +145,14 @@ void LineLayout::updateLayoutBoxDimensions(const RenderBox& replacedOrInlineBloc
 
     // Always use the physical size here for inline level boxes (this is where the logical vs. physical coords flip happens).
     auto& replacedBoxGeometry = m_layoutState.ensureGeometryForBox(replacedBox);
-    // Scrollbars are placed "between" the border and the padding box and they never stretch the border box. They may shrink the padding box though.
-    auto horizontalSpaceReservedForScrollbar = std::min(replacedOrInlineBlock.width() - replacedOrInlineBlock.paddingBoxWidth(), LayoutUnit(replacedOrInlineBlock.verticalScrollbarWidth()));
+
+    // Scrollbars eat into the padding box area. They never stretch the border box but they may shrink the padding box.
+    // In legacy render tree, RenderBox::contentWidth/contentHeight values are adjusted to accomodate the scrollbar width/height.
+    // e.g. <div style="width: 10px; overflow: scroll;">content</div>, RenderBox::contentWidth() won't be returning the value of 10px but instead 0px (10px - 15px).
+    auto horizontalSpaceReservedForScrollbar = replacedOrInlineBlock.paddingBoxRectIncludingScrollbar().width() - replacedOrInlineBlock.paddingBoxWidth();
     replacedBoxGeometry.setHorizontalSpaceForScrollbar(horizontalSpaceReservedForScrollbar);
 
-    auto verticalSpaceReservedForScrollbar = std::min(replacedOrInlineBlock.height() - replacedOrInlineBlock.paddingBoxHeight(), LayoutUnit(replacedOrInlineBlock.horizontalScrollbarHeight()));
+    auto verticalSpaceReservedForScrollbar = replacedOrInlineBlock.paddingBoxRectIncludingScrollbar().height() - replacedOrInlineBlock.paddingBoxHeight();
     replacedBoxGeometry.setVerticalSpaceForScrollbar(verticalSpaceReservedForScrollbar);
 
     replacedBoxGeometry.setContentBoxWidth(replacedOrInlineBlock.contentWidth());
@@ -493,7 +496,7 @@ void LineLayout::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         // TextRun expects the xPos to be adjusted with the aligment offset (e.g. when the line is center aligned
         // and the run starts at 100px, due to the horizontal aligment, the xpos is supposed to be at 0px).
         auto& fontCascade = style.fontCascade();
-        auto xPos = rect.x() - (line.lineBoxLeft() + line.contentLeftOffset());
+        auto xPos = rect.x() - (line.lineBoxLeft() + line.contentLeft());
         WebCore::TextRun textRun { textContent.renderedContent(), xPos, expansion.horizontalExpansion, expansion.behavior };
         textRun.setTabSize(!style.collapseWhiteSpace(), style.tabSize());
 
@@ -526,15 +529,15 @@ bool LineLayout::hitTest(const HitTestRequest& request, HitTestResult& result, c
 
     // FIXME: This should do something efficient to find the run range.
     for (auto& run : WTF::makeReversedRange(inlineContent.runs)) {
-        auto runRect = Layout::toLayoutRect(run.rect());
-        runRect.moveBy(accumulatedOffset);
-
-        if (!locationInContainer.intersects(runRect))
-            continue;
-
         auto& renderer = m_boxTree.rendererForLayoutBox(run.layoutBox());
 
         if (is<RenderText>(renderer)) {
+            auto runRect = Layout::toLayoutRect(run.rect());
+            runRect.moveBy(accumulatedOffset);
+
+            if (!locationInContainer.intersects(runRect))
+                continue;
+            
             auto& style = run.style();
             if (style.visibility() != Visibility::Visible || style.pointerEvents() == PointerEvents::None)
                 continue;

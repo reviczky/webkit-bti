@@ -304,6 +304,7 @@ InspectorCSSAgent::InspectorCSSAgent(WebAgentContext& context)
     : InspectorAgentBase("CSS"_s, context)
     , m_frontendDispatcher(makeUnique<CSSFrontendDispatcher>(context.frontendRouter))
     , m_backendDispatcher(CSSBackendDispatcher::create(context.backendDispatcher, this))
+    , m_layoutContextTypeChangedTimer(*this, &InspectorCSSAgent::layoutContextTypeChangedTimerFired)
 {
 }
 
@@ -326,6 +327,9 @@ void InspectorCSSAgent::reset()
     m_nodeToInspectorStyleSheet.clear();
     m_documentToInspectorStyleSheet.clear();
     m_documentToKnownCSSStyleSheets.clear();
+    m_nodesWithPendingLayoutContextTypeChanges.clear();
+    if (m_layoutContextTypeChangedTimer.isActive())
+        m_layoutContextTypeChangedTimer.stop();
     m_layoutContextTypeChangedMode = Protocol::CSS::LayoutContextTypeChangedMode::Observed;
     resetPseudoStates();
 }
@@ -502,6 +506,9 @@ Protocol::ErrorStringOr<std::tuple<RefPtr<JSON::ArrayOf<Protocol::CSS::RuleMatch
         if (!includePseudo || *includePseudo) {
             pseudoElements = JSON::ArrayOf<Protocol::CSS::PseudoIdMatches>::create();
             for (PseudoId pseudoId = PseudoId::FirstPublicPseudoId; pseudoId < PseudoId::AfterLastInternalPseudoId; pseudoId = static_cast<PseudoId>(static_cast<unsigned>(pseudoId) + 1)) {
+                // `*::marker` selectors are only applicable to elements with `display: list-item`.
+                if (pseudoId == PseudoId::Marker && element->computedStyle()->display() != DisplayType::ListItem)
+                    continue;
                 if (auto protocolPseudoId = protocolValueForPseudoId(pseudoId)) {
                     auto matchedRules = styleResolver.pseudoStyleRulesForElement(element, pseudoId, Style::Resolver::AllCSSRules);
                     if (!matchedRules.isEmpty()) {
@@ -963,16 +970,12 @@ Protocol::ErrorStringOr<void> InspectorCSSAgent::setLayoutContextTypeChangedMode
     return { };
 }
 
-void InspectorCSSAgent::nodeLayoutContextTypeChanged(Node& node, RenderObject* oldRenderer)
+void InspectorCSSAgent::nodeLayoutContextTypeChanged(Node& node, RenderObject* newRenderer)
 {
     auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
     if (!domAgent)
         return;
-    
-    auto newLayoutContextType = layoutContextTypeForRenderer(node.renderer());
-    if (newLayoutContextType == layoutContextTypeForRenderer(oldRenderer))
-        return;
-    
+
     auto nodeId = domAgent->boundNodeId(&node);
     if (!nodeId && m_layoutContextTypeChangedMode == Protocol::CSS::LayoutContextTypeChangedMode::All) {
         // FIXME: <https://webkit.org/b/189687> Preserve DOM.NodeId if a node is removed and re-added
@@ -980,8 +983,16 @@ void InspectorCSSAgent::nodeLayoutContextTypeChanged(Node& node, RenderObject* o
     }
     if (!nodeId)
         return;
-    
-    m_frontendDispatcher->nodeLayoutContextTypeChanged(nodeId, WTFMove(newLayoutContextType));
+
+    m_nodesWithPendingLayoutContextTypeChanges.set(nodeId, layoutContextTypeForRenderer(newRenderer));
+    if (!m_layoutContextTypeChangedTimer.isActive())
+        m_layoutContextTypeChangedTimer.startOneShot(0_s);
+}
+
+void InspectorCSSAgent::layoutContextTypeChangedTimerFired()
+{
+    for (auto&& [nodeId, layoutContextType] : std::exchange(m_nodesWithPendingLayoutContextTypeChanges, { }))
+        m_frontendDispatcher->nodeLayoutContextTypeChanged(nodeId, WTFMove(layoutContextType));
 }
 
 InspectorStyleSheetForInlineStyle& InspectorCSSAgent::asInspectorStyleSheet(StyledElement& element)
@@ -1089,11 +1100,7 @@ RefPtr<Protocol::CSS::CSSRule> InspectorCSSAgent::buildObjectForRule(const Style
         styleResolver.inspectorCSSOMWrappers().collectScopeWrappers(shadowRoot->styleScope());
 
     CSSStyleRule* cssomWrapper = styleResolver.inspectorCSSOMWrappers().getWrapperForRuleInSheets(styleRule);
-    if (!cssomWrapper)
-        return nullptr;
-
-    InspectorStyleSheet* inspectorStyleSheet = bindStyleSheet(cssomWrapper->parentStyleSheet());
-    return inspectorStyleSheet ? inspectorStyleSheet->buildObjectForRule(cssomWrapper) : nullptr;
+    return buildObjectForRule(cssomWrapper);
 }
 
 RefPtr<Protocol::CSS::CSSRule> InspectorCSSAgent::buildObjectForRule(CSSStyleRule* rule)

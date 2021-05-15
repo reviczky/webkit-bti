@@ -167,6 +167,14 @@ FloatPoint ScrollingTreeScrollingNode::maximumScrollPosition() const
 
 bool ScrollingTreeScrollingNode::eventCanScrollContents(const PlatformWheelEvent& wheelEvent) const
 {
+#if PLATFORM(GTK)
+    // In case of GTK platform the end of momentum scroll events
+    // always have a delta of 0. More information in the documentation
+    // of the API gdk_event_is_scroll_stop_event.
+    if (wheelEvent.isEndOfNonMomentumScroll())
+        return true;
+#endif
+
     if (wheelEvent.delta().isZero())
         return false;
 
@@ -327,7 +335,7 @@ void ScrollingTreeScrollingNode::dumpProperties(TextStream& ts, ScrollingStateTr
 }
 
 #if ENABLE(CSS_SCROLL_SNAP)
-const ScrollSnapOffsetsInfo<float>& ScrollingTreeScrollingNode::snapOffsetsInfo() const
+const FloatScrollSnapOffsetsInfo& ScrollingTreeScrollingNode::snapOffsetsInfo() const
 {
     return m_snapOffsetsInfo;
 }

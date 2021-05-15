@@ -87,7 +87,7 @@ class StopIfNecessaryTimer;
 class SweepingScope;
 class VM;
 class VerifierSlotVisitor;
-class WeakGCMapBase;
+class WeakGCHashTable;
 struct CurrentThreadState;
 
 #ifdef JSC_GLIB_API_ENABLED
@@ -270,7 +270,7 @@ public:
     void deleteAllUnlinkedCodeBlocks(DeleteAllCodeEffort);
 
     void didAllocate(size_t);
-    bool isPagedOut(MonotonicTime deadline);
+    bool isPagedOut();
     
     const JITStubRoutineSet& jitStubRoutines() { return *m_jitStubRoutines; }
     
@@ -289,8 +289,8 @@ public:
     void releaseSoon(std::unique_ptr<JSCGLibWrapperObject>&&);
 #endif
 
-    JS_EXPORT_PRIVATE void registerWeakGCMap(WeakGCMapBase* weakGCMap);
-    JS_EXPORT_PRIVATE void unregisterWeakGCMap(WeakGCMapBase* weakGCMap);
+    JS_EXPORT_PRIVATE void registerWeakGCHashTable(WeakGCHashTable*);
+    JS_EXPORT_PRIVATE void unregisterWeakGCHashTable(WeakGCHashTable*);
 
     void addLogicallyEmptyWeakBlock(WeakBlock*);
 
@@ -406,6 +406,9 @@ public:
 
     bool isMarkingForGCVerifier() const { return m_isMarkingForGCVerifier; }
 
+    static bool mayHaveJITStubRoutinesToDelete();
+    void deleteDeadJITStubRoutines(Seconds timeSlice);
+
 private:
     friend class AllocatingScope;
     friend class CodeBlock;
@@ -431,6 +434,7 @@ private:
     friend class SweepingScope;
     friend class IncrementalSweeper;
     friend class VM;
+    friend class VerifierSlotVisitor;
     friend class WeakSet;
 
     class HeapThread;
@@ -525,7 +529,7 @@ private:
     void endMarking();
 
     void reapWeakHandles();
-    void pruneStaleEntriesFromWeakGCMaps();
+    void pruneStaleEntriesFromWeakGCHashTables();
     void sweepArrayBuffers();
     void snapshotUnswept();
     void deleteSourceProviderCaches();
@@ -688,7 +692,7 @@ private:
 #endif
     unsigned m_deferralDepth { 0 };
 
-    HashSet<WeakGCMapBase*> m_weakGCMaps;
+    HashSet<WeakGCHashTable*> m_weakGCHashTables;
     
     std::unique_ptr<MarkStackArray> m_sharedCollectorMarkStack;
     std::unique_ptr<MarkStackArray> m_sharedMutatorMarkStack;
