@@ -15,6 +15,8 @@ webkit2gtk (2.33.1-1) UNRELEASED; urgency=medium
     + Update copyright information of all files.
   * debian/control:
     + Add build dependency on liblcms2-dev (Closes: #880697).
+  * debian/source/lintian-overrides:
+    + Update source-is-missing override.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 11 Apr 2021 14:35:04 +0200
 
