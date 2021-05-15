@@ -136,6 +136,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2020 Darryl Pogue <darryl@dpogue.ca>
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 WikiMedia Foundation. All Rights Reserve
+           2021 Tyler Wilcock <twilco.o@protonmail.com>
 License: BSD-2-clause
 Comment:
  The default license of WebKit is BSD 2-clause. The exceptions are
@@ -154,12 +155,11 @@ Files: Source/ThirdParty/ANGLE/include/GLES/*
        Source/ThirdParty/ANGLE/src/tests/deqp_support/*
        Source/ThirdParty/ANGLE/src/tests/test_utils/third_party/*
        Source/ThirdParty/ANGLE/util/android/third_party/*
-       Source/ThirdParty/gtest/scripts/upload.py
-Copyright: 2007, 2015-2018 Google Inc
-           2008-2017 The Khronos Group Inc
+Copyright: 2008-2017 The Khronos Group Inc
            2010, 2014, 2018-2019 The Android Open Source Project
            2015-2016 LunarG Inc
            2015-2016 Valve Corporation
+           2015-2018 Google Inc
            2019-2020 The SwiftShader Authors
 License: Apache-2.0
 
@@ -167,6 +167,10 @@ Files: Source/WTF/wtf/Markable.h
 Copyright: 2016-2017 Apple Inc
            2018 Yusuke Suzuki <yusukesuzuki@slowstart.org>
 License: BSD-2-clause or BSL-1.0
+
+Files: Source/WTF/wtf/RobinHoodHashTable.h
+Copyright: 2021 Apple Inc
+License: BSD-2-clause or Expat
 
 Files: Source/WebCore/loader/DocumentWriter.h
 Copyright: 2010 Adam Barth
@@ -212,7 +216,6 @@ Files: Source/JavaScriptCore/API/*
        Source/WTF/wtf/text/*
        Source/WTF/wtf/unicode/*
        Source/WebCore/Modules/fetch/*
-       Source/WebCore/Modules/indexeddb/IDBRecordIdentifier.h
        Source/WebCore/Modules/mediastream/*
        Source/WebCore/Modules/webaudio/*
        Source/WebCore/Modules/webdatabase/*
@@ -333,7 +336,7 @@ Files: Source/WebCore/Modules/fetch/FetchBody.cpp
        Source/WebCore/loader/CrossOriginPreflightChecker.h
        Source/WebCore/loader/FetchOptions.h
 Copyright: 2015-2016 Canon Inc
-           2016-2020 Apple Inc
+           2016-2021 Apple Inc
 License: BSD-3-clause-canon
 
 Files: Source/WebCore/html/HTMLUnknownElement.h
@@ -403,19 +406,13 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/JavaScriptCore/inspector/ScriptCallStackFactory.h
        Source/JavaScriptCore/inspector/agents/InspectorRuntimeAgent.cpp
        Source/JavaScriptCore/inspector/agents/InspectorRuntimeAgent.h
-       Source/ThirdParty/gtest/codegear/*
        Source/ThirdParty/gtest/include/gtest/*
        Source/ThirdParty/gtest/samples/*
-       Source/ThirdParty/gtest/scripts/common.py
-       Source/ThirdParty/gtest/scripts/fuse_gtest_files.py
-       Source/ThirdParty/gtest/scripts/gen_gtest_pred_impl.py
-       Source/ThirdParty/gtest/scripts/pump.py
-       Source/ThirdParty/gtest/scripts/release_docs.py
-       Source/ThirdParty/gtest/scripts/upload_gtest.py
+       Source/ThirdParty/gtest/scripts/*
        Source/ThirdParty/gtest/src/*
        Source/ThirdParty/gtest/test/*
        Source/ThirdParty/gtest/xcode/Samples/FrameworkSample/*
-       Source/ThirdParty/gtest/xcode/Scripts/*
+       Source/ThirdParty/gtest/xcode/Scripts/runtests.sh
        Source/WTF/wtf/ByteOrder.h
        Source/WTF/wtf/CrossThreadCopier.cpp
        Source/WTF/wtf/CrossThreadCopier.h
@@ -721,7 +718,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/platform/graphics/MediaSourcePrivate.h
        Source/WebCore/platform/graphics/SourceBufferPrivate.h
        Source/WebCore/platform/graphics/TabSize.h
-       Source/WebCore/platform/graphics/gpu/*
        Source/WebCore/platform/graphics/gstreamer/mse/*
        Source/WebCore/platform/image-decoders/bmp/*
        Source/WebCore/platform/image-decoders/ico/*
@@ -801,8 +797,8 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WTF/StringBuilder.cpp
        Tools/TestWebKitAPI/Tests/WebCore/*
        Tools/TestWebKitAPI/WTFStringUtilities.h
-Copyright: 2003, 2005-2013, 2015, 2018 Google Inc
-           2004-2021 Apple Inc
+Copyright: 2004-2021 Apple Inc
+           2005-2013, 2015, 2018-2021 Google Inc
            2006-2008, 2010, 2012 the V8 project authors
            2007-2009 Torch Mobile Inc
            2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
@@ -818,12 +814,13 @@ Copyright: 2003, 2005-2013, 2015, 2018 Google Inc
            2013 Cable Television Labs Inc
            2013 Nokia
            2013 Opera Software ASA
-           2013-2019 Igalia S.L.
+           2013-2021 Igalia S.L.
            2014 University of Washington
            2014-2019 The Chromium Authors
            2015 Roopesh Chander <roop@roopc.net>
-           2018 Google LLC
+           2018-2019 Google LLC
            2019 Microsoft Corporation
+           2020-2021 Metrological Group B.V
 License: BSD-3-clause-google
 
 Files: Source/ThirdParty/ANGLE/util/windows/third_party/StackWalker/src/StackWalker.h
@@ -1661,7 +1658,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/IntSizeHash.h
        Source/WebCore/platform/graphics/Latin1TextIterator.h
        Source/WebCore/platform/graphics/PathTraversalState.cpp
-       Source/WebCore/platform/graphics/StrokeStyleApplier.h
        Source/WebCore/platform/graphics/SurrogatePairAwareTextIterator.cpp
        Source/WebCore/platform/graphics/SurrogatePairAwareTextIterator.h
        Source/WebCore/platform/graphics/TextRun.h
@@ -1722,15 +1718,11 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/mse/GStreamerRegistryScannerMSE.h
        Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.cpp
        Source/WebCore/platform/graphics/gstreamer/mse/MediaPlayerPrivateGStreamerMSE.h
-       Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.cpp
-       Source/WebCore/platform/graphics/gstreamer/mse/PlaybackPipeline.h
        Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.h
-       Source/WebCore/platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamerPrivate.h
        Source/WebCore/platform/graphics/gtk/ColorGtk.cpp
        Source/WebCore/platform/graphics/holepunch/*
        Source/WebCore/platform/graphics/nicosia/*
-       Source/WebCore/platform/graphics/opengl/*
        Source/WebCore/platform/graphics/texmap/*
        Source/WebCore/platform/graphics/transforms/*
        Source/WebCore/platform/gtk/*
@@ -2766,7 +2758,7 @@ Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
 Copyright: 1998 Netscape Communications Corporation
            1999-2000 Harri Porten <porten@kde.org>
            2001-2006 mozilla.org
-           2003, 2006-2020 Apple Inc
+           2003, 2006-2021 Apple Inc
            2007-2009 Torch Mobile Inc
            2009 Google Inc
            2019 Adobe
