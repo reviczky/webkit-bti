@@ -1,3 +1,20 @@
+webkit2gtk (2.32.1-1~deb10u1) buster-security; urgency=medium
+
+  * Rebuild for buster-security.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/control:
+    + Remove Breaks for Evolution < 3.34.1.
+    + Remove build dependency on libwpebackend-fdo-1.0-dev and
+      libmanette-0.2-dev.
+    + Switch build dependency from libenchant-2-dev to libenchant-dev.
+    + Switch build dependencies on libgl-dev and libgles-dev with
+      libgl1-mesa-dev and libgles2-mesa-dev.
+  * debian/rules:
+    + Build with -DENABLE_GAMEPAD=OFF (as libmanette is missing).
+
+ -- Alberto Garcia <berto@igalia.com>  Sun, 30 May 2021 12:41:38 +0200
+
 webkit2gtk (2.32.1-1) unstable; urgency=medium
 
   * New upstream release.
