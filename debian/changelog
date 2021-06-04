@@ -1,3 +1,14 @@
+webkit2gtk (2.32.1-2) UNRELEASED; urgency=high
+
+  * debian/control:
+    + Update the dependencies on GStreamer plugins (Closes: #989332):
+      - WebKitGTK really expects at least the -base and -good sets.
+      - For video playback (e.g YouTube) -bad is also recommended.
+      - The pulseaudio plugin was merged into the -good package so it will
+        be always be available now. Move -alsa to Suggests.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 04 Jun 2021 21:10:02 +0200
+
 webkit2gtk (2.32.1-1) unstable; urgency=medium
 
   * New upstream release.

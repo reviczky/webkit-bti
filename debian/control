@@ -138,16 +138,18 @@ Architecture: any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
+         gstreamer1.0-plugins-base,
+         gstreamer1.0-plugins-good,
          ${bwrap:Depends},
          ${shlibs:Depends},
          ${misc:Depends}
-Recommends: gstreamer1.0-plugins-good,
-            gstreamer1.0-pulseaudio | gstreamer1.0-alsa,
+Recommends: gstreamer1.0-plugins-bad,
             gstreamer1.0-gl,
             libgl1-mesa-dri,
             ${bwrap:Recommends},
             ${gst:Recommends}
-Suggests: ${gst:Suggests}
+Suggests: ${gst:Suggests},
+         gstreamer1.0-alsa
 Breaks: evolution (<< 3.34.1)
 Description: Web content engine library for GTK
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
