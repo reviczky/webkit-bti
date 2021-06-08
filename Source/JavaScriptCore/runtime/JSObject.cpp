@@ -384,7 +384,7 @@ ALWAYS_INLINE Structure* JSObject::visitButterflyImpl(Visitor& visitor)
         // butterfly with contiguous shape for new array storage butterfly. When converting the butterfly
         // with contiguous shape to array storage, we always allocate a new one. Holding this lock for contiguous
         // butterflies is unnecessary since contiguous shaped butterfly never becomes broken state.
-        locker = holdLock(cellLock());
+        locker = Locker { cellLock() };
         break;
     default:
         break;
@@ -811,8 +811,7 @@ bool JSObject::putInlineSlow(JSGlobalObject* globalObject, PropertyName property
                 // We need to make sure that we decide to cache this property before we potentially execute aribitrary JS.
                 if (!this->structure(vm)->isUncacheableDictionary())
                     slot.setCacheableSetter(obj, offset);
-                JSValue gs = obj->getDirect(offset);
-                RELEASE_AND_RETURN(scope, callSetter(globalObject, slot.thisValue(), gs, value, slot.isStrictMode() ? ECMAMode::strict() : ECMAMode::sloppy()));
+                RELEASE_AND_RETURN(scope, jsCast<GetterSetter*>(obj->getDirect(offset))->callSetter(globalObject, slot.thisValue(), value, slot.isStrictMode()));
             }
             if (attributes & PropertyAttribute::CustomAccessor) {
                 // FIXME: Remove this after WebIDL generator is fixed to set ReadOnly for [RuntimeConditionallyReadWrite] attributes.
@@ -899,6 +898,8 @@ bool JSObject::definePropertyOnReceiver(JSGlobalObject* globalObject, PropertyNa
     if (!receiver)
         return typeError(globalObject, scope, slot.isStrictMode(), ReadonlyPropertyWriteError);
     scope.release();
+    if (receiver->type() == PureForwardingProxyType)
+        receiver = jsCast<JSProxy*>(receiver)->target();
 
     if (slot.isTaintedByOpaqueObject() || slot.context() == PutPropertySlot::ReflectSet) {
         if (receiver->methodTable(vm)->defineOwnProperty != JSObject::defineOwnProperty)
@@ -1974,7 +1975,7 @@ bool JSObject::putDirectAccessor(JSGlobalObject* globalObject, PropertyName prop
 {
     ASSERT(attributes & PropertyAttribute::Accessor);
 
-    if (Optional<uint32_t> index = parseIndex(propertyName))
+    if (std::optional<uint32_t> index = parseIndex(propertyName))
         return putDirectIndex(globalObject, index.value(), accessor, attributes, PutDirectIndexLikePutDirect);
 
     return putDirectNonIndexAccessor(globalObject->vm(), propertyName, accessor, attributes);
@@ -2080,7 +2081,7 @@ bool JSObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, Proper
     JSObject* thisObject = jsCast<JSObject*>(cell);
     VM& vm = globalObject->vm();
     
-    if (Optional<uint32_t> index = parseIndex(propertyName))
+    if (std::optional<uint32_t> index = parseIndex(propertyName))
         return thisObject->methodTable(vm)->deletePropertyByIndex(thisObject, globalObject, index.value());
 
     unsigned attributes;
@@ -2334,7 +2335,7 @@ bool JSObject::getOwnStaticPropertySlot(VM& vm, PropertyName propertyName, Prope
     return false;
 }
 
-Optional<Structure::PropertyHashEntry> JSObject::findPropertyHashEntry(VM& vm, PropertyName propertyName) const
+std::optional<Structure::PropertyHashEntry> JSObject::findPropertyHashEntry(VM& vm, PropertyName propertyName) const
 {
     return structure(vm)->findPropertyHashEntry(propertyName);
 }
@@ -3599,7 +3600,7 @@ struct WeakCustomGetterOrSetterHashTranslator {
     }
 };
 
-static JSCustomGetterFunction* createCustomGetterFunction(JSGlobalObject* globalObject, VM& vm, PropertyName propertyName, GetValueFunc getValueFunc, Optional<DOMAttributeAnnotation> domAttribute)
+static JSCustomGetterFunction* createCustomGetterFunction(JSGlobalObject* globalObject, VM& vm, PropertyName propertyName, GetValueFunc getValueFunc, std::optional<DOMAttributeAnnotation> domAttribute)
 {
     using Translator = WeakCustomGetterOrSetterHashTranslator<JSCustomGetterFunction>;
 
@@ -3655,7 +3656,7 @@ bool JSObject::getOwnPropertyDescriptor(JSGlobalObject* globalObject, PropertyNa
 
 bool JSObject::putDirectMayBeIndex(JSGlobalObject* globalObject, PropertyName propertyName, JSValue value)
 {
-    if (Optional<uint32_t> index = parseIndex(propertyName))
+    if (std::optional<uint32_t> index = parseIndex(propertyName))
         return putDirectIndex(globalObject, index.value(), value);
     return putDirect(globalObject->vm(), propertyName, value);
 }
@@ -3777,7 +3778,7 @@ bool JSObject::defineOwnNonIndexProperty(JSGlobalObject* globalObject, PropertyN
 bool JSObject::defineOwnProperty(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, const PropertyDescriptor& descriptor, bool throwException)
 {
     // If it's an array index, then use the indexed property storage.
-    if (Optional<uint32_t> index = parseIndex(propertyName)) {
+    if (std::optional<uint32_t> index = parseIndex(propertyName)) {
         // c. Let succeeded be the result of calling the default [[DefineOwnProperty]] internal method (8.12.9) on A passing P, Desc, and false as arguments.
         // d. Reject if succeeded is false.
         // e. If index >= oldLen

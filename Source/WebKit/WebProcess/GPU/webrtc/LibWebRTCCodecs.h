@@ -73,7 +73,7 @@ public:
     public:
         RTCDecoderIdentifier identifier;
         Type type;
-        void* decodedImageCallback { nullptr };
+        void* decodedImageCallback WTF_GUARDED_BY_LOCK(decodedImageCallbackLock) { nullptr };
         Lock decodedImageCallbackLock;
         bool hasError { false };
         RefPtr<IPC::Connection> connection;
@@ -98,8 +98,8 @@ public:
         RTCEncoderIdentifier identifier;
         webrtc::VideoCodecType codecType { webrtc::kVideoCodecGeneric };
         Vector<std::pair<String, String>> parameters;
-        Optional<EncoderInitializationData> initializationData;
-        void* encodedImageCallback { nullptr };
+        std::optional<EncoderInitializationData> initializationData;
+        void* encodedImageCallback WTF_GUARDED_BY_LOCK(encodedImageCallbackLock) { nullptr };
         Lock encodedImageCallbackLock;
         RefPtr<IPC::Connection> connection;
     };
@@ -122,7 +122,7 @@ public:
 private:
     LibWebRTCCodecs();
     void ensureGPUProcessConnectionAndDispatchToThread(Function<void()>&&);
-    void ensureGPUProcessConnectionOnMainThread(Locker<Lock>&);
+    void ensureGPUProcessConnectionOnMainThreadWithLock() WTF_REQUIRES_LOCK(m_connectionLock);
     void gpuProcessConnectionMayNoLongerBeNeeded();
 
     void failedDecoding(RTCDecoderIdentifier);
@@ -145,7 +145,7 @@ private:
     std::atomic<bool> m_needsGPUProcessConnection;
 
     Lock m_connectionLock;
-    RefPtr<IPC::Connection> m_connection;
+    RefPtr<IPC::Connection> m_connection WTF_GUARDED_BY_LOCK(m_connectionLock);
     Vector<Function<void()>> m_tasksToDispatchAfterEstablishingConnection;
 
     Ref<WorkQueue> m_queue;
@@ -155,7 +155,7 @@ private:
     size_t m_pixelBufferPoolWidth { 0 };
     size_t m_pixelBufferPoolHeight { 0 };
     bool m_supportVP9VTB { false };
-    Optional<WTFLogLevel> m_loggingLevel;
+    std::optional<WTFLogLevel> m_loggingLevel;
 };
 
 } // namespace WebKit

@@ -84,7 +84,6 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/Lock.h>
-#include <wtf/Optional.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Variant.h>
 #include <wtf/Vector.h>
@@ -140,8 +139,8 @@ Protocol::ErrorStringOr<void> InspectorCanvasAgent::enable()
     };
 
     {
-        LockHolder lock(CanvasRenderingContext::instancesMutex());
-        for (auto* context : CanvasRenderingContext::instances(lock)) {
+        Locker locker { CanvasRenderingContext::instancesLock() };
+        for (auto* context : CanvasRenderingContext::instances()) {
 #if ENABLE(WEBGPU)
             // The actual "context" for WebGPU is the `WebGPUDevice`, not the <canvas>.
             if (is<GPUCanvasContext>(context))
@@ -155,8 +154,8 @@ Protocol::ErrorStringOr<void> InspectorCanvasAgent::enable()
 
 #if ENABLE(WEBGPU)
     {
-        LockHolder lock(WebGPUDevice::instancesMutex());
-        for (auto* device : WebGPUDevice::instances(lock)) {
+        Locker locker { WebGPUDevice::instancesLock() };
+        for (auto* device : WebGPUDevice::instances()) {
             if (existsInCurrentPage(device->scriptExecutionContext()))
                 bindCanvas(*device, false);
         }
@@ -165,8 +164,8 @@ Protocol::ErrorStringOr<void> InspectorCanvasAgent::enable()
 
 #if ENABLE(WEBGL)
     {
-        LockHolder lock(WebGLProgram::instancesMutex());
-        for (auto& [program, contextWebGLBase] : WebGLProgram::instances(lock)) {
+        Locker locker { WebGLProgram::instancesLock() };
+        for (auto& [program, contextWebGLBase] : WebGLProgram::instances()) {
             if (contextWebGLBase && existsInCurrentPage(contextWebGLBase->canvasBase().scriptExecutionContext()))
                 didCreateWebGLProgram(*contextWebGLBase, *program);
         }
@@ -175,8 +174,8 @@ Protocol::ErrorStringOr<void> InspectorCanvasAgent::enable()
 
 #if ENABLE(WEBGPU)
     {
-        LockHolder lock(WebGPUPipeline::instancesMutex());
-        for (auto& [pipeline, device] : WebGPUPipeline::instances(lock)) {
+        Locker locker { WebGPUPipeline::instancesLock() };
+        for (auto& [pipeline, device] : WebGPUPipeline::instances()) {
             if (device && existsInCurrentPage(device->scriptExecutionContext()) && pipeline->isValid())
                 didCreateWebGPUPipeline(*device, *pipeline);
         }
@@ -192,7 +191,7 @@ Protocol::ErrorStringOr<void> InspectorCanvasAgent::disable()
 
     reset();
 
-    m_recordingAutoCaptureFrameCount = WTF::nullopt;
+    m_recordingAutoCaptureFrameCount = std::nullopt;
 
     return { };
 }
@@ -284,11 +283,11 @@ Protocol::ErrorStringOr<void> InspectorCanvasAgent::setRecordingAutoCaptureFrame
     if (count > 0)
         m_recordingAutoCaptureFrameCount = count;
     else
-        m_recordingAutoCaptureFrameCount = WTF::nullopt;
+        m_recordingAutoCaptureFrameCount = std::nullopt;
     return { };
 }
 
-Protocol::ErrorStringOr<void> InspectorCanvasAgent::startRecording(const Protocol::Canvas::CanvasId& canvasId, Optional<int>&& frameCount, Optional<int>&& memoryLimit)
+Protocol::ErrorStringOr<void> InspectorCanvasAgent::startRecording(const Protocol::Canvas::CanvasId& canvasId, std::optional<int>&& frameCount, std::optional<int>&& memoryLimit)
 {
     Protocol::ErrorString errorString;
 
@@ -475,7 +474,7 @@ void InspectorCanvasAgent::didChangeCanvasMemory(CanvasRenderingContext& context
         m_frontendDispatcher->canvasMemoryChanged(inspectorCanvas->identifier(), node->memoryCost());
 }
 
-void InspectorCanvasAgent::canvasChanged(CanvasBase& canvasBase, const Optional<FloatRect>&)
+void InspectorCanvasAgent::canvasChanged(CanvasBase& canvasBase, const std::optional<FloatRect>&)
 {
     auto* context = canvasBase.renderingContext();
     if (!context)
@@ -682,7 +681,7 @@ void InspectorCanvasAgent::willDestroyWebGPUPipeline(WebGPUPipeline& pipeline)
 #endif // ENABLE(WEBGPU)
 
 #define PROCESS_ARGUMENT_DEFINITION(ArgumentType) \
-Optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvasAgent::processArgument(CanvasRenderingContext& canvasRenderingContext, ArgumentType argument) \
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvasAgent::processArgument(CanvasRenderingContext& canvasRenderingContext, ArgumentType argument) \
 { \
     auto inspectorCanvas = findInspectorCanvas(canvasRenderingContext); \
     ASSERT(inspectorCanvas); \
@@ -825,7 +824,7 @@ InspectorCanvas& InspectorCanvasAgent::bindCanvas(CanvasRenderingContext& contex
 #if ENABLE(WEBGL)
     if (is<WebGLRenderingContextBase>(context)) {
         auto& contextWebGL = downcast<WebGLRenderingContextBase>(context);
-        if (Optional<Vector<String>> extensions = contextWebGL.getSupportedExtensions()) {
+        if (std::optional<Vector<String>> extensions = contextWebGL.getSupportedExtensions()) {
             for (const String& extension : *extensions) {
                 if (contextWebGL.extensionIsEnabled(extension))
                     m_frontendDispatcher->extensionEnabled(inspectorCanvas->identifier(), extension);

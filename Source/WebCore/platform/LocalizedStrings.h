@@ -300,19 +300,34 @@ namespace WebCore {
 
     String clickToExitFullScreenText();
 
+#if ENABLE(VIDEO)
+    String trackNoLabelText();
     String textTrackOffMenuItemText();
     String textTrackAutomaticMenuItemText();
-    String textTrackNoLabelText();
-    String audioTrackNoLabelText();
-#if PLATFORM(COCOA) || PLATFORM(WIN)
-    String textTrackCountryAndLanguageMenuItemText(const String& title, const String& country, const String& language);
-    String textTrackLanguageMenuItemText(const String& title, const String& language);
-    String closedCaptionTrackMenuItemText(const String&);
-    String sdhTrackMenuItemText(const String&);
-    String easyReaderTrackMenuItemText(const String&);
-    String forcedTrackMenuItemText(const String&);
-    String audioDescriptionTrackSuffixText(const String&);
-#endif
+#if USE(CF)
+    String addTrackLabelAsSuffix(const String&, const String&);
+    String textTrackKindClosedCaptionsDisplayName();
+    String addTextTrackKindClosedCaptionsSuffix(const String&);
+    String textTrackKindCaptionsDisplayName();
+    String addTextTrackKindCaptionsSuffix(const String&);
+    String textTrackKindDescriptionsDisplayName();
+    String addTextTrackKindDescriptionsSuffix(const String&);
+    String textTrackKindChaptersDisplayName();
+    String addTextTrackKindChaptersSuffix(const String&);
+    String textTrackKindMetadataDisplayName();
+    String addTextTrackKindMetadataSuffix(const String&);
+    String textTrackKindSDHDisplayName();
+    String addTextTrackKindSDHSuffix(const String&);
+    String textTrackKindEasyReaderDisplayName();
+    String addTextTrackKindEasyReaderSuffix(const String&);
+    String textTrackKindForcedDisplayName();
+    String addTextTrackKindForcedSuffix(const String&);
+    String audioTrackKindDescriptionsDisplayName();
+    String addAudioTrackKindDescriptionsSuffix(const String&);
+    String audioTrackKindCommentaryDisplayName();
+    String addAudioTrackKindCommentarySuffix(const String&);
+#endif // USE(CF)
+#endif // ENABLE(VIDEO)
 
     String snapshottedPlugInLabelTitle();
     String snapshottedPlugInLabelSubtitle();
@@ -351,8 +366,8 @@ namespace WebCore {
     WEBCORE_EXPORT String genericTouchIDPromptTitle();
 #endif
 
-#if ENABLE(IMAGE_EXTRACTION)
-    WEBCORE_EXPORT String contextMenuItemTagRevealImage();
+#if ENABLE(IMAGE_ANALYSIS)
+    WEBCORE_EXPORT String contextMenuItemTagLookUpImage();
 #endif
 
 #if HAVE(TRANSLATION_UI_SERVICES)
@@ -372,6 +387,7 @@ namespace WebCore {
 #if USE(CF)
 // This is exactly as WEB_UI_STRING, but renamed to ensure the string is not scanned by non-CF ports.
 #define WEB_UI_CFSTRING(string, description) WebCore::localizedString(string)
+#define WEB_UI_CFSTRING_KEY(string, key, description) WebCore::localizedString(key)
 #endif
 
     WEBCORE_EXPORT String localizedString(const char* key);

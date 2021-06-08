@@ -64,8 +64,8 @@
 #endif
 
 #undef RELEASE_LOG_IF_ALLOWED
-#define PAGE_ID ((frame() ? frame()->pageID().valueOr(PageIdentifier()) : PageIdentifier()).toUInt64())
-#define FRAME_ID ((frame() ? frame()->frameID().valueOr(FrameIdentifier()) : FrameIdentifier()).toUInt64())
+#define PAGE_ID ((frame() ? frame()->pageID().value_or(PageIdentifier()) : PageIdentifier()).toUInt64())
+#define FRAME_ID ((frame() ? frame()->frameID().value_or(FrameIdentifier()) : FrameIdentifier()).toUInt64())
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", frameLoader=%p, resourceID=%lu] ResourceLoader::" fmt, this, PAGE_ID, FRAME_ID, frameLoader(), identifier(), ##__VA_ARGS__)
 
 namespace WebCore {
@@ -137,8 +137,8 @@ void ResourceLoader::init(ResourceRequest&& clientRequest, CompletionHandler<voi
     ASSERT(m_deferredRequest.isNull());
     ASSERT(!m_documentLoader->isSubstituteLoadPending(this));
     
-    m_loadTiming.markStartTimeAndFetchStart();
-    
+    m_loadTiming.markStartTime();
+
     m_defersLoading = m_options.defersLoadingPolicy == DefersLoadingPolicy::AllowDefersLoading && m_frame->page()->defersLoading();
 
     if (m_options.securityCheck == SecurityCheckPolicy::DoSecurityCheck && !m_frame->document()->securityOrigin().canDisplay(clientRequest.url())) {
@@ -156,7 +156,7 @@ void ResourceLoader::init(ResourceRequest&& clientRequest, CompletionHandler<voi
     }
 
     // The various plug-in implementations call directly to ResourceLoader::load() instead of piping requests
-    // through FrameLoader. As a result, they miss the FrameLoader::addExtraFieldsToRequest() step which sets
+    // through FrameLoader. As a result, they miss the FrameLoader::updateRequestAndAddExtraFields() step which sets
     // up the 1st party for cookies URL and Same-Site info. Until plug-in implementations can be reigned in
     // to pipe through that method, we need to make sure there is always both a 1st party for cookies set and
     // Same-Site info. See <https://bugs.webkit.org/show_bug.cgi?id=26391>.
@@ -320,7 +320,7 @@ void ResourceLoader::willSwitchToSubstituteResource()
         m_handle->cancel();
 }
 
-void ResourceLoader::addDataOrBuffer(const char* data, unsigned length, SharedBuffer* buffer, DataPayloadType dataPayloadType)
+void ResourceLoader::addDataOrBuffer(const uint8_t* data, unsigned length, SharedBuffer* buffer, DataPayloadType dataPayloadType)
 {
     if (m_options.dataBufferingPolicy == DataBufferingPolicy::DoNotBufferData)
         return;
@@ -533,7 +533,7 @@ void ResourceLoader::didReceiveResponse(const ResourceResponse& r, CompletionHan
         frameLoader()->notifier().didReceiveResponse(this, m_response);
 }
 
-void ResourceLoader::didReceiveData(const char* data, unsigned length, long long encodedDataLength, DataPayloadType dataPayloadType)
+void ResourceLoader::didReceiveData(const uint8_t* data, unsigned length, long long encodedDataLength, DataPayloadType dataPayloadType)
 {
     // The following assertions are not quite valid here, since a subclass
     // might override didReceiveData in a way that invalidates them. This
@@ -549,7 +549,7 @@ void ResourceLoader::didReceiveBuffer(Ref<SharedBuffer>&& buffer, long long enco
     didReceiveDataOrBuffer(nullptr, 0, WTFMove(buffer), encodedDataLength, dataPayloadType);
 }
 
-void ResourceLoader::didReceiveDataOrBuffer(const char* data, unsigned length, RefPtr<SharedBuffer>&& buffer, long long encodedDataLength, DataPayloadType dataPayloadType)
+void ResourceLoader::didReceiveDataOrBuffer(const uint8_t* data, unsigned length, RefPtr<SharedBuffer>&& buffer, long long encodedDataLength, DataPayloadType dataPayloadType)
 {
     // This method should only get data+length *OR* a SharedBuffer.
     ASSERT(!buffer || (!data && !length));
@@ -723,7 +723,7 @@ void ResourceLoader::didReceiveResponseAsync(ResourceHandle*, ResourceResponse&&
     didReceiveResponse(response, WTFMove(completionHandler));
 }
 
-void ResourceLoader::didReceiveData(ResourceHandle*, const char* data, unsigned length, int encodedDataLength)
+void ResourceLoader::didReceiveData(ResourceHandle*, const uint8_t* data, unsigned length, int encodedDataLength)
 {
     didReceiveData(data, length, encodedDataLength, DataPayloadBytes);
 }
@@ -733,10 +733,9 @@ void ResourceLoader::didReceiveBuffer(ResourceHandle*, Ref<SharedBuffer>&& buffe
     didReceiveBuffer(WTFMove(buffer), encodedDataLength, DataPayloadBytes);
 }
 
-void ResourceLoader::didFinishLoading(ResourceHandle*)
+void ResourceLoader::didFinishLoading(ResourceHandle*, const NetworkLoadMetrics& metrics)
 {
-    NetworkLoadMetrics emptyMetrics;
-    didFinishLoading(emptyMetrics);
+    didFinishLoading(metrics);
 }
 
 void ResourceLoader::didFail(ResourceHandle*, const ResourceError& error)

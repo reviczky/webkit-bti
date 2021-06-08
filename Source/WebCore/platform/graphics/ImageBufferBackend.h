@@ -25,13 +25,12 @@
 
 #pragma once
 
-#include "AlphaPremultiplication.h"
-#include "ColorSpace.h"
+#include "DestinationColorSpace.h"
 #include "FloatRect.h"
 #include "GraphicsTypesGL.h"
 #include "ImagePaintingOptions.h"
 #include "IntRect.h"
-#include "PixelFormat.h"
+#include "PixelBufferFormat.h"
 #include "PlatformLayer.h"
 #include "RenderingMode.h"
 #include <wtf/RefPtr.h>
@@ -79,7 +78,7 @@ public:
         PixelFormat pixelFormat;
     };
 
-    WEBCORE_EXPORT virtual ~ImageBufferBackend() = default;
+    WEBCORE_EXPORT virtual ~ImageBufferBackend();
 
     WEBCORE_EXPORT static IntSize calculateBackendSize(const Parameters&);
     WEBCORE_EXPORT static size_t calculateMemoryCost(const IntSize& backendSize, unsigned bytesPerRow);
@@ -103,14 +102,13 @@ public:
     virtual void clipToMask(GraphicsContext&, const FloatRect&) { }
 
     WEBCORE_EXPORT void convertToLuminanceMask();
-    virtual void transformColorSpace(DestinationColorSpace, DestinationColorSpace) { }
+    virtual void transformToColorSpace(const DestinationColorSpace&) { }
 
-    virtual String toDataURL(const String& mimeType, Optional<double> quality, PreserveResolution) const = 0;
-    virtual Vector<uint8_t> toData(const String& mimeType, Optional<double> quality) const = 0;
-    virtual Vector<uint8_t> toBGRAData() const = 0;
+    virtual String toDataURL(const String& mimeType, std::optional<double> quality, PreserveResolution) const = 0;
+    virtual Vector<uint8_t> toData(const String& mimeType, std::optional<double> quality) const = 0;
 
-    virtual Optional<PixelBuffer> getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect&) const = 0;
-    virtual void putPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat) = 0;
+    virtual std::optional<PixelBuffer> getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect&) const = 0;
+    virtual void putPixelBuffer(const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat) = 0;
 
     virtual PlatformLayer* platformLayer() const { return nullptr; }
     virtual bool copyToPlatformTexture(GraphicsContextGL&, GCGLenum, PlatformGLObject, GCGLenum, bool, bool) const { return false; }
@@ -142,16 +140,14 @@ protected:
 
     IntSize logicalSize() const { return IntSize(m_parameters.logicalSize); }
     float resolutionScale() const { return m_parameters.resolutionScale; }
-    DestinationColorSpace colorSpace() const { return m_parameters.colorSpace; }
+    const DestinationColorSpace& colorSpace() const { return m_parameters.colorSpace; }
     PixelFormat pixelFormat() const { return m_parameters.pixelFormat; }
 
     IntRect logicalRect() const { return IntRect(IntPoint::zero(), logicalSize()); };
     IntRect backendRect() const { return IntRect(IntPoint::zero(), backendSize()); };
 
-    WEBCORE_EXPORT Vector<uint8_t> toBGRAData(void* data) const;
-
-    WEBCORE_EXPORT Optional<PixelBuffer> getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect& srcRect, void* data) const;
-    WEBCORE_EXPORT void putPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat, void* data);
+    WEBCORE_EXPORT std::optional<PixelBuffer> getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& srcRect, void* data) const;
+    WEBCORE_EXPORT void putPixelBuffer(const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat, void* data);
 
     Parameters m_parameters;
 };

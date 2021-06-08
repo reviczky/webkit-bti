@@ -78,7 +78,7 @@ void ProcessThrottler::removeActivity(BackgroundActivity& activity)
 
 void ProcessThrottler::invalidateAllActivities()
 {
-    PROCESSTHROTTLER_RELEASE_LOG("invalidateAllActivities: BEGIN");
+    PROCESSTHROTTLER_RELEASE_LOG("invalidateAllActivities: BEGIN (foregroundActivityCount: %u, backgroundActivityCount: %u)", m_foregroundActivities.size(), m_backgroundActivities.size());
     while (!m_foregroundActivities.isEmpty())
         (*m_foregroundActivities.begin())->invalidate();
     while (!m_backgroundActivities.isEmpty())
@@ -205,7 +205,7 @@ void ProcessThrottler::processReadyToSuspend()
 void ProcessThrottler::clearPendingRequestToSuspend()
 {
     m_prepareToSuspendTimeoutTimer.stop();
-    m_pendingRequestToSuspendID = WTF::nullopt;
+    m_pendingRequestToSuspendID = std::nullopt;
 }
 
 void ProcessThrottler::sendPrepareToSuspendIPC(IsSuspensionImminent isSuspensionImminent)

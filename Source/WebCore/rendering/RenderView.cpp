@@ -178,7 +178,7 @@ void RenderView::layout()
     if (!needsLayout())
         return;
 
-    LayoutStateMaintainer statePusher(*this, { }, false, m_pageLogicalSize.valueOr(LayoutSize()).height(), m_pageLogicalHeightChanged);
+    LayoutStateMaintainer statePusher(*this, { }, false, m_pageLogicalSize.value_or(LayoutSize()).height(), m_pageLogicalHeightChanged);
 
     m_pageLogicalHeightChanged = false;
 
@@ -513,7 +513,7 @@ void RenderView::repaintViewAndCompositedLayers()
         compositor.repaintCompositedLayers();
 }
 
-Optional<LayoutRect> RenderView::computeVisibleRectInContainer(const LayoutRect& rect, const RenderLayerModelObject* container, VisibleRectContext context) const
+std::optional<LayoutRect> RenderView::computeVisibleRectInContainer(const LayoutRect& rect, const RenderLayerModelObject* container, VisibleRectContext context) const
 {
     // If a container was specified, and was not nullptr or the RenderView,
     // then we should have found it by now.
@@ -754,7 +754,7 @@ void RenderView::updateVisibleViewportRect(const IntRect& visibleRect)
     resumePausedImageAnimationsIfNeeded(visibleRect);
 
     for (auto* renderer : m_visibleInViewportRenderers) {
-        auto state = visibleRect.intersects(enclosingIntRect(renderer->absoluteClippedOverflowRect())) ? VisibleInViewportState::Yes : VisibleInViewportState::No;
+        auto state = visibleRect.intersects(enclosingIntRect(renderer->absoluteClippedOverflowRectForRepaint())) ? VisibleInViewportState::Yes : VisibleInViewportState::No;
         renderer->setVisibleInViewportState(state);
     }
 }

@@ -28,10 +28,8 @@
 #include <wtf/FileSystem.h>
 
 #include <wtf/CryptographicallyRandomNumber.h>
-#include <wtf/FileMetadata.h>
 #include <wtf/HexNumber.h>
 #include <wtf/Scope.h>
-#include <wtf/StdFilesystem.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 
@@ -46,9 +44,15 @@
 #include <gio/gio.h>
 #endif
 
+#if HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
+#include <wtf/StdFilesystem.h>
+#endif
+
 namespace WTF {
 
 namespace FileSystemImpl {
+
+#if HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
 
 static std::filesystem::path toStdFileSystemPath(StringView path)
 {
@@ -59,6 +63,8 @@ static String fromStdFileSystemPath(const std::filesystem::path& path)
 {
     return String::fromUTF8(path.u8string().c_str());
 }
+
+#endif // HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
 
 // The following lower-ASCII characters need escaping to be used in a filename
 // across all systems, including Windows:
@@ -116,6 +122,8 @@ static inline bool shouldEscapeUChar(UChar character, UChar previousCharacter, U
     return false;
 }
 
+#if HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
+
 template<typename ClockType, typename = void> struct has_to_time_t : std::false_type { };
 template<typename ClockType> struct has_to_time_t<ClockType, std::void_t<
     std::enable_if_t<std::is_same_v<std::time_t, decltype(ClockType::to_time_t(std::filesystem::file_time_type()))>>
@@ -139,19 +147,7 @@ static WallTime toWallTime(std::filesystem::file_time_type fileTime)
     return WallTime::fromRawSeconds(toTimeT(fileTime));
 }
 
-static std::filesystem::path resolveSymlinks(std::filesystem::path path, std::error_code& ec)
-{
-#ifdef MAXSYMLINKS
-    static constexpr unsigned maxSymlinkDepth = MAXSYMLINKS;
-#else
-    static constexpr unsigned maxSymlinkDepth = 40;
-#endif
-
-    unsigned currentDepth = 0;
-    while (++currentDepth <= maxSymlinkDepth && !ec && std::filesystem::is_symlink(path, ec))
-        path = std::filesystem::read_symlink(path, ec);
-    return path;
-}
+#endif // HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
 
 String encodeForFileName(const String& inputString)
 {
@@ -162,25 +158,18 @@ String encodeForFileName(const String& inputString)
     StringBuilder result;
     result.reserveCapacity(length);
 
-    UChar previousCharacter;
-    UChar character = 0;
+    UChar previousCharacter = 0;
     UChar nextCharacter = inputString[0];
     for (unsigned i = 0; i < length; ++i) {
-        previousCharacter = character;
-        character = nextCharacter;
-        nextCharacter = i + 1 < length ? inputString[i + 1] : 0;
-
+        auto character = std::exchange(nextCharacter, i + 1 < length ? inputString[i + 1] : 0);
         if (shouldEscapeUChar(character, previousCharacter, nextCharacter)) {
-            if (character <= 255) {
-                result.append('%');
-                result.append(hex(static_cast<unsigned char>(character), 2));
-            } else {
-                result.appendLiteral("%+");
-                result.append(hex(static_cast<unsigned char>(character >> 8), 2));
-                result.append(hex(static_cast<unsigned char>(character), 2));
-            }
+            if (character <= 0xFF)
+                result.append('%', hex(character, 2));
+            else
+                result.append("%+", hex(static_cast<uint8_t>(character >> 8), 2), hex(static_cast<uint8_t>(character), 2));
         } else
             result.append(character);
+        previousCharacter = character;
     }
 
     return result.toString();
@@ -267,7 +256,7 @@ bool appendFileContentsToFileHandle(const String& path, PlatformFileHandle& targ
         return false;
 
     static int bufferSize = 1 << 19;
-    Vector<char> buffer(bufferSize);
+    Vector<uint8_t> buffer(bufferSize);
 
     auto fileCloser = WTF::makeScopeExit([source]() {
         PlatformFileHandle handle = source;
@@ -504,12 +493,12 @@ static Salt makeSalt()
     return salt;
 }
 
-Optional<Salt> readOrMakeSalt(const String& path)
+std::optional<Salt> readOrMakeSalt(const String& path)
 {
     if (FileSystem::fileExists(path)) {
         auto file = FileSystem::openFile(path, FileSystem::FileOpenMode::Read);
         Salt salt;
-        auto bytesRead = static_cast<std::size_t>(FileSystem::readFromFile(file, reinterpret_cast<char*>(salt.data()), salt.size()));
+        auto bytesRead = static_cast<std::size_t>(FileSystem::readFromFile(file, salt.data(), salt.size()));
         FileSystem::closeFile(file);
         if (bytesRead == salt.size())
             return salt;
@@ -523,13 +512,15 @@ Optional<Salt> readOrMakeSalt(const String& path)
     if (!FileSystem::isHandleValid(file))
         return { };
 
-    bool success = static_cast<std::size_t>(FileSystem::writeToFile(file, reinterpret_cast<char*>(salt.data()), salt.size())) == salt.size();
+    bool success = static_cast<std::size_t>(FileSystem::writeToFile(file, salt.data(), salt.size())) == salt.size();
     FileSystem::closeFile(file);
     if (!success)
         return { };
 
     return salt;
 }
+
+#if HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
 
 bool fileExists(const String& path)
 {
@@ -597,26 +588,13 @@ bool moveFile(const String& oldPath, const String& newPath)
     return std::filesystem::remove_all(fsOldPath, ec);
 }
 
-bool getFileSize(const String& path, long long& result)
+std::optional<uint64_t> fileSize(const String& path)
 {
     std::error_code ec;
     auto size = std::filesystem::file_size(toStdFileSystemPath(path), ec);
     if (ec)
-        return false;
-    result = size;
-    return true;
-}
-
-bool isDirectory(const String& path)
-{
-    std::error_code ec;
-    return std::filesystem::symlink_status(toStdFileSystemPath(path), ec).type() == std::filesystem::file_type::directory;
-}
-
-bool isDirectoryFollowingSymlinks(const String& path)
-{
-    std::error_code ec;
-    return std::filesystem::status(toStdFileSystemPath(path), ec).type() == std::filesystem::file_type::directory;
+        return std::nullopt;
+    return size;
 }
 
 bool makeAllDirectories(const String& path)
@@ -626,14 +604,13 @@ bool makeAllDirectories(const String& path)
     return !ec;
 }
 
-bool getVolumeFreeSpace(const String& path, uint64_t& freeSpace)
+std::optional<uint64_t> volumeFreeSpace(const String& path)
 {
     std::error_code ec;
     auto spaceInfo = std::filesystem::space(toStdFileSystemPath(path), ec);
     if (ec)
-        return false;
-    freeSpace = spaceInfo.available;
-    return true;
+        return std::nullopt;
+    return spaceInfo.available;
 }
 
 bool createSymbolicLink(const String& targetPath, const String& symbolicLinkPath)
@@ -664,11 +641,11 @@ bool hardLinkOrCopyFile(const String& targetPath, const String& linkPath)
     return !ec;
 }
 
-Optional<uint64_t> hardLinkCount(const String& path)
+std::optional<uint64_t> hardLinkCount(const String& path)
 {
     std::error_code ec;
     uint64_t linkCount = std::filesystem::hard_link_count(toStdFileSystemPath(path), ec);
-    return ec ? WTF::nullopt : makeOptional(linkCount);
+    return ec ? std::nullopt : std::make_optional(linkCount);
 }
 
 bool deleteNonEmptyDirectory(const String& path)
@@ -678,68 +655,63 @@ bool deleteNonEmptyDirectory(const String& path)
     return !ec;
 }
 
-Optional<WallTime> getFileModificationTime(const String& path)
+std::optional<WallTime> fileModificationTime(const String& path)
 {
     std::error_code ec;
     auto modificationTime = std::filesystem::last_write_time(toStdFileSystemPath(path), ec);
     if (ec)
-        return WTF::nullopt;
+        return std::nullopt;
     return toWallTime(modificationTime);
 }
 
-enum class ShouldFollowSymbolicLinks { No, Yes };
-static Optional<FileMetadata> fileMetadataPotentiallyFollowingSymlinks(const String& path, ShouldFollowSymbolicLinks shouldFollowSymbolicLinks)
+bool updateFileModificationTime(const String& path)
 {
-    if (path.isEmpty())
-        return WTF::nullopt;
-
-    auto fsPath = toStdFileSystemPath(path);
-
     std::error_code ec;
-    if (shouldFollowSymbolicLinks == ShouldFollowSymbolicLinks::Yes && std::filesystem::is_symlink(fsPath, ec)) {
-        fsPath = resolveSymlinks(fsPath, ec);
-        if (ec)
-            return WTF::nullopt;
-    }
+    std::filesystem::last_write_time(toStdFileSystemPath(path), std::filesystem::file_time_type::clock::now(), ec);
+    return !ec;
+}
 
-    ec = { };
-    std::filesystem::directory_entry entry(fsPath, ec);
-    if (ec)
-        return WTF::nullopt;
-
-    auto modificationTime = toWallTime(entry.last_write_time(ec));
-
-    // Note that the result of attempting to determine the size of a directory is implementation-defined.
-    auto fileSize = entry.file_size(ec);
-    if (ec)
-        fileSize = 0;
-
+bool isHiddenFile(const String& path)
+{
 #if OS(UNIX)
+    auto fsPath = toStdFileSystemPath(path);
     std::filesystem::path::string_type filename = fsPath.filename();
-    bool isHidden = !filename.empty() && filename[0] == '.';
+    return !filename.empty() && filename[0] == '.';
 #else
-    bool isHidden = false;
+    UNUSED_PARAM(path);
+    return false;
 #endif
-    FileMetadata::Type type = FileMetadata::Type::File;
-    if (entry.is_symlink(ec))
-        type = FileMetadata::Type::SymbolicLink;
-    else if (entry.is_directory(ec))
-        type = FileMetadata::Type::Directory;
-
-    return FileMetadata { modificationTime, static_cast<long long>(fileSize), isHidden, type };
 }
 
-Optional<FileMetadata> fileMetadata(const String& path)
+enum class ShouldFollowSymbolicLinks { No, Yes };
+static std::optional<FileType> fileTypePotentiallyFollowingSymLinks(const String& path, ShouldFollowSymbolicLinks shouldFollowSymbolicLinks)
 {
-    return fileMetadataPotentiallyFollowingSymlinks(path, ShouldFollowSymbolicLinks::No);
+    std::error_code ec;
+    auto status = shouldFollowSymbolicLinks == ShouldFollowSymbolicLinks::Yes ? std::filesystem::status(toStdFileSystemPath(path), ec) : std::filesystem::symlink_status(toStdFileSystemPath(path), ec);
+    if (ec)
+        return std::nullopt;
+    switch (status.type()) {
+    case std::filesystem::file_type::directory:
+        return FileType::Directory;
+    case std::filesystem::file_type::symlink:
+        return FileType::SymbolicLink;
+    default:
+        break;
+    }
+    return FileType::Regular;
 }
 
-Optional<FileMetadata> fileMetadataFollowingSymlinks(const String& path)
+std::optional<FileType> fileType(const String& path)
 {
-    return fileMetadataPotentiallyFollowingSymlinks(path, ShouldFollowSymbolicLinks::Yes);
+    return fileTypePotentiallyFollowingSymLinks(path, ShouldFollowSymbolicLinks::No);
 }
 
-String pathGetFileName(const String& path)
+std::optional<FileType> fileTypeFollowingSymlinks(const String& path)
+{
+    return fileTypePotentiallyFollowingSymLinks(path, ShouldFollowSymbolicLinks::Yes);
+}
+
+String pathFileName(const String& path)
 {
     return fromStdFileSystemPath(toStdFileSystemPath(path).filename());
 }
@@ -747,6 +719,13 @@ String pathGetFileName(const String& path)
 String parentPath(const String& path)
 {
     return fromStdFileSystemPath(toStdFileSystemPath(path).parent_path());
+}
+
+String realPath(const String& path)
+{
+    std::error_code ec;
+    auto canonicalPath = std::filesystem::canonical(toStdFileSystemPath(path), ec);
+    return ec ? path : fromStdFileSystemPath(canonicalPath);
 }
 
 String pathByAppendingComponent(const String& path, const String& component)
@@ -774,6 +753,8 @@ Vector<String> listDirectory(const String& path)
     }
     return fileNames;
 }
+
+#endif // HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
 
 } // namespace FileSystemImpl
 } // namespace WTF

@@ -77,6 +77,7 @@
 #include "JSAsyncFunction.h"
 #include "JSAsyncGenerator.h"
 #include "JSAsyncGeneratorFunction.h"
+#include "JSBoundFunction.h"
 #include "JSCInlines.h"
 #include "JSGenerator.h"
 #include "JSGeneratorFunction.h"
@@ -359,7 +360,7 @@ public:
                     Availability(FlushedAt(FlushedJSValue, virtualRegisterForArgumentIncludingThis(i)));
             }
 
-            if (m_graph.m_plan.mode() == FTLForOSREntryMode) {
+            if (m_graph.m_plan.mode() == JITCompilationMode::FTLForOSREntry) {
                 auto* jitCode = m_ftlState.jitCode->ftlForOSREntry();
                 FixedVector<DFG::FlushFormat> argumentFlushFormats(codeBlock()->numParameters());
                 for (unsigned i = 0; i < codeBlock()->numParameters(); ++i)
@@ -962,6 +963,12 @@ private:
         case InByVal:
             compileInByVal();
             break;
+        case HasPrivateName:
+            compileHasPrivateName();
+            break;
+        case HasPrivateBrand:
+            compileHasPrivateBrand();
+            break;
         case CheckPrivateBrand:
             compileCheckPrivateBrand();
             break;
@@ -1189,6 +1196,9 @@ private:
         case CallStringConstructor:
         case StringValueOf:
             compileToStringOrCallStringConstructorOrStringValueOf();
+            break;
+        case FunctionToString:
+            compileFunctionToString();
             break;
         case ToPrimitive:
             compileToPrimitive();
@@ -1646,7 +1656,7 @@ private:
         case FilterCallLinkStatus:
         case FilterGetByStatus:
         case FilterPutByIdStatus:
-        case FilterInByIdStatus:
+        case FilterInByStatus:
         case FilterDeleteByStatus:
         case FilterCheckPrivateBrandStatus:
         case FilterSetPrivateBrandStatus:
@@ -3768,14 +3778,12 @@ private:
         speculate(BadIdent, noValue(), nullptr, m_out.notEqual(stringImpl, m_out.constIntPtr(uid)));
     }
 
-    void compileGetExecutable()
+    LValue getExecutable(LValue function)
     {
         LBasicBlock continuation = m_out.newBlock();
         LBasicBlock hasRareData = m_out.newBlock();
-        LValue cell = lowCell(m_node->child1());
-        speculateFunction(m_node->child1(), cell);
 
-        LValue rareDataTags = m_out.loadPtr(cell, m_heaps.JSFunction_executableOrRareData);
+        LValue rareDataTags = m_out.loadPtr(function, m_heaps.JSFunction_executableOrRareData);
         ValueFromBlock fastExecutable = m_out.anchor(rareDataTags);
         m_out.branch(m_out.testIsZeroPtr(rareDataTags, m_out.constIntPtr(JSFunction::rareDataTag)), unsure(continuation), unsure(hasRareData));
 
@@ -3785,7 +3793,15 @@ private:
         m_out.jump(continuation);
 
         m_out.appendTo(continuation, lastNext);
-        setJSValue(m_out.phi(pointerType(), fastExecutable, slowExecutable));
+        return m_out.phi(pointerType(), fastExecutable, slowExecutable);
+    }
+
+    void compileGetExecutable()
+    {
+        LValue cell = lowCell(m_node->child1());
+        speculateFunction(m_node->child1(), cell);
+        LValue executable = getExecutable(cell);
+        setJSValue(executable);
     }
     
     void compileArrayify()
@@ -7278,7 +7294,7 @@ private:
                 return;
             }
 
-            LValue length = m_out.constInt32(startLength.unsafeGet());
+            LValue length = m_out.constInt32(startLength);
 
             for (unsigned i = 0; i < m_node->numChildren(); ++i) {
                 if (bitVector->get(i)) {
@@ -7325,7 +7341,7 @@ private:
                                 // Because resulted array from NewArrayWithSpread is always contiguous, we should not generate value
                                 // in Double form even if PhantomNewArrayBuffer's indexingType is ArrayWithDouble.
                                 int64_t value = JSValue::encode(array->get(i));
-                                m_out.store64(m_out.constInt64(value), m_out.baseIndex(heap, storage, index, JSValue(), (Checked<int32_t>(sizeof(JSValue)) * i).unsafeGet()));
+                                m_out.store64(m_out.constInt64(value), m_out.baseIndex(heap, storage, index, JSValue(), Checked<int32_t>(sizeof(JSValue)) * i));
                             }
                             index = m_out.add(index, m_out.constIntPtr(array->length()));
                         } else {
@@ -7619,7 +7635,7 @@ private:
             ASSERT(immutableButterfly->length() <= MAX_STORAGE_VECTOR_LENGTH);
 
             LValue fastImmutableButterflyValue = allocateVariableSizedCell<JSImmutableButterfly>(
-                m_out.constIntPtr(JSImmutableButterfly::allocationSize(immutableButterfly->length()).unsafeGet()),
+                m_out.constIntPtr(JSImmutableButterfly::allocationSize(immutableButterfly->length())),
                 m_graph.m_vm.immutableButterflyStructures[arrayIndexFromIndexingType(CopyOnWriteArrayWithContiguous) - NumberOfIndexingShapes].get(), slowAllocation);
             LValue fastImmutableButterflyStorage = toButterfly(fastImmutableButterflyValue);
             m_out.store32(m_out.constInt32(immutableButterfly->length()), fastImmutableButterflyStorage, m_heaps.Butterfly_publicLength);
@@ -8213,6 +8229,55 @@ private:
             DFG_CRASH(m_graph, m_node, "Bad use kind");
             break;
         }
+    }
+
+    void compileFunctionToString()
+    {
+        JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
+
+        LBasicBlock notBoundFunctionCase = m_out.newBlock();
+        LBasicBlock functionExecutableCase = m_out.newBlock();
+        LBasicBlock nativeExecutableCase = m_out.newBlock();
+        LBasicBlock testPtr = m_out.newBlock();
+        LBasicBlock hasRareData = m_out.newBlock();
+        LBasicBlock slowCase = m_out.newBlock();
+        LBasicBlock continuation = m_out.newBlock();
+
+        LValue function = lowCell(m_node->child1());
+        speculateFunction(m_node->child1(), function);
+
+        LValue structure = loadStructure(function);
+        LValue classInfo = m_out.loadPtr(structure, m_heaps.Structure_classInfo);
+        static_assert(std::is_final_v<JSBoundFunction>, "We don't handle subclasses when comparing classInfo below");
+        m_out.branch(m_out.equal(classInfo, m_out.constIntPtr(JSBoundFunction::info())), unsure(slowCase), unsure(notBoundFunctionCase));
+
+        LBasicBlock lastNext = m_out.appendTo(notBoundFunctionCase, nativeExecutableCase);
+        LValue executable = getExecutable(function);
+        m_out.branch(isType(executable, NativeExecutableType), unsure(nativeExecutableCase), unsure(functionExecutableCase));
+
+        m_out.appendTo(nativeExecutableCase, functionExecutableCase);
+        ValueFromBlock nativeResult = m_out.anchor(m_out.loadPtr(executable, m_heaps.NativeExecutable_asString));
+        m_out.jump(testPtr);
+
+        m_out.appendTo(functionExecutableCase, testPtr);
+        LValue rareData = m_out.loadPtr(executable, m_heaps.FunctionExecutable_rareData);
+        m_out.branch(m_out.notNull(rareData), usually(hasRareData), rarely(slowCase));
+
+        m_out.appendTo(hasRareData, slowCase);
+        ValueFromBlock functionResult = m_out.anchor(m_out.loadPtr(rareData, m_heaps.FunctionExecutableRareData_asString));
+        m_out.jump(testPtr);
+
+        m_out.appendTo(testPtr, continuation);
+        LValue asString = m_out.phi(pointerType(), nativeResult, functionResult);
+        ValueFromBlock fastResult = m_out.anchor(asString);
+        m_out.branch(m_out.notNull(asString), usually(continuation), rarely(slowCase));
+
+        m_out.appendTo(slowCase, continuation);
+        ValueFromBlock slowResult = m_out.anchor(vmCall(pointerType(), operationFunctionToString, weakPointer(globalObject), function));
+        m_out.jump(continuation);
+
+        m_out.appendTo(continuation, lastNext);
+        setJSValue(m_out.phi(pointerType(), fastResult, slowResult));
     }
     
     void compileToPrimitive()
@@ -9427,7 +9492,13 @@ private:
         }
         
         if (m_node->isBinaryUseKind(MiscUse, UntypedUse)
-            || m_node->isBinaryUseKind(UntypedUse, MiscUse)) {
+            || m_node->isBinaryUseKind(UntypedUse, MiscUse)
+#if !USE(BIGINT32)
+            || m_node->isBinaryUseKind(NotDoubleUse, NeitherDoubleNorHeapBigIntNorStringUse)
+            || m_node->isBinaryUseKind(NeitherDoubleNorHeapBigIntNorStringUse, NotDoubleUse)) {
+#else
+            ) {
+#endif
             speculate(m_node->child1());
             speculate(m_node->child2());
             LValue left = lowJSValue(m_node->child1(), ManualOperandSpeculation);
@@ -9717,24 +9788,20 @@ private:
                     CCallHelpers::tagFor(VirtualRegister(CallFrameSlot::argumentCountIncludingThis)));
 
                 CallLinkInfo* callLinkInfo = jit.codeBlock()->addCallLinkInfo(node->origin.semantic);
+                callLinkInfo->setUpCall(
+                    node->op() == Construct ? CallLinkInfo::Construct : CallLinkInfo::Call, GPRInfo::regT0);
 
-                CCallHelpers::DataLabelPtr targetToCheck;
-                CCallHelpers::Jump slowPath = jit.branchPtrWithPatch(
-                    CCallHelpers::NotEqual, GPRInfo::regT0, targetToCheck,
-                    CCallHelpers::TrustedImmPtr(nullptr));
-
-                CCallHelpers::Call fastCall = jit.nearCall();
+                auto slowPath = callLinkInfo->emitFastPath(jit, GPRInfo::regT0, InvalidGPRReg, CallLinkInfo::UseDataIC::No);
                 CCallHelpers::Jump done = jit.jump();
 
                 slowPath.link(&jit);
-
-                jit.move(CCallHelpers::TrustedImmPtr(callLinkInfo), GPRInfo::regT2);
+                auto slowPathStart = jit.label();
                 jit.move(CCallHelpers::TrustedImmPtr(jit.codeBlock()->globalObjectFor(node->origin.semantic)), GPRInfo::regT3);
-                CCallHelpers::Call slowCall = jit.nearCall();
+                callLinkInfo->emitSlowPath(*vm, jit);
+
                 done.link(&jit);
 
-                callLinkInfo->setUpCall(
-                    node->op() == Construct ? CallLinkInfo::Construct : CallLinkInfo::Call, GPRInfo::regT0);
+                auto doneLocation = jit.label();
 
                 jit.addPtr(
                     CCallHelpers::TrustedImm32(-params.proc().frameSize()),
@@ -9742,13 +9809,9 @@ private:
 
                 jit.addLinkTask(
                     [=] (LinkBuffer& linkBuffer) {
-                        MacroAssemblerCodePtr<JITThunkPtrTag> linkCall = vm->getCTIStub(linkCallThunkGenerator).code();
-                        linkBuffer.link(slowCall, FunctionPtr<JITThunkPtrTag>(linkCall));
-
-                        callLinkInfo->setCallLocations(
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOfNearCall<JSInternalPtrTag>(slowCall)),
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOf<JSInternalPtrTag>(targetToCheck)),
-                            linkBuffer.locationOfNearCall<JSInternalPtrTag>(fastCall));
+                        callLinkInfo->setCodeLocations(
+                            linkBuffer.locationOf<JSInternalPtrTag>(slowPathStart),
+                            linkBuffer.locationOf<JSInternalPtrTag>(doneLocation));
                     });
             });
 
@@ -9857,63 +9920,50 @@ private:
                     shuffleData.setupCalleeSaveRegisters(jit.codeBlock());
                     
                     CallLinkInfo* callLinkInfo = jit.codeBlock()->addCallLinkInfo(node->origin.semantic);
+                    callLinkInfo->setUpCall(CallLinkInfo::DirectTailCall, InvalidGPRReg);
                     
-                    CCallHelpers::PatchableJump patchableJump = jit.patchableJump();
                     CCallHelpers::Label mainPath = jit.label();
-                    
                     jit.store32(
                         CCallHelpers::TrustedImm32(callSiteIndex.bits()),
                         CCallHelpers::tagFor(VirtualRegister(CallFrameSlot::argumentCountIncludingThis)));
-                
-                    callLinkInfo->setFrameShuffleData(shuffleData);
-                    CallFrameShuffler(jit, shuffleData).prepareForTailCall();
-                    
-                    CCallHelpers::Call call = jit.nearTailCall();
+                    callLinkInfo->emitDirectTailCallFastPath(jit, [&] {
+                        callLinkInfo->setFrameShuffleData(shuffleData);
+                        CallFrameShuffler(jit, shuffleData).prepareForTailCall();
+                    });
                     
                     jit.abortWithReason(JITDidReturnFromTailCall);
                     
                     CCallHelpers::Label slowPath = jit.label();
-                    patchableJump.m_jump.linkTo(slowPath, &jit);
                     callOperation(
                         *state, toSave, jit,
                         node->origin.semantic, exceptions.get(), operationLinkDirectCall,
                         InvalidGPRReg, CCallHelpers::TrustedImmPtr(callLinkInfo), calleeGPR).call();
                     jit.jump().linkTo(mainPath, &jit);
-                    
-                    callLinkInfo->setUpCall(CallLinkInfo::DirectTailCall, InvalidGPRReg);
                     callLinkInfo->setExecutableDuringCompilation(executable);
                     if (numAllocatedArgs > numPassedArgs)
                         callLinkInfo->setMaxArgumentCountIncludingThis(numAllocatedArgs);
                     
-                    jit.addLinkTask(
-                        [=] (LinkBuffer& linkBuffer) {
-                            CodeLocationLabel<JSInternalPtrTag> patchableJumpLocation = linkBuffer.locationOf<JSInternalPtrTag>(patchableJump);
-                            CodeLocationNearCall<JSInternalPtrTag> callLocation = linkBuffer.locationOfNearCall<JSInternalPtrTag>(call);
-                            CodeLocationLabel<JSInternalPtrTag> slowPathLocation = linkBuffer.locationOf<JSInternalPtrTag>(slowPath);
-
-                            callLinkInfo->setCallLocations(
-                                patchableJumpLocation,
-                                slowPathLocation,
-                                callLocation);
-                        });
+                    jit.addLinkTask([=] (LinkBuffer& linkBuffer) {
+                        callLinkInfo->setCodeLocations(
+                            linkBuffer.locationOf<JSInternalPtrTag>(slowPath),
+                            CodeLocationLabel<JSInternalPtrTag>());
+                    });
                     return;
                 }
                 
                 CallLinkInfo* callLinkInfo = jit.codeBlock()->addCallLinkInfo(node->origin.semantic);
-                
-                CCallHelpers::Label mainPath = jit.label();
+                callLinkInfo->setUpCall(
+                    isConstruct ? CallLinkInfo::DirectConstruct : CallLinkInfo::DirectCall, InvalidGPRReg);
 
+                CCallHelpers::Label mainPath = jit.label();
                 jit.store32(
                     CCallHelpers::TrustedImm32(callSiteIndex.bits()),
                     CCallHelpers::tagFor(VirtualRegister(CallFrameSlot::argumentCountIncludingThis)));
-                
-                CCallHelpers::Call call = jit.nearCall();
+                callLinkInfo->emitDirectFastPath(jit);
                 jit.addPtr(
                     CCallHelpers::TrustedImm32(-params.proc().frameSize()),
                     GPRInfo::callFrameRegister, CCallHelpers::stackPointerRegister);
                 
-                callLinkInfo->setUpCall(
-                    isConstruct ? CallLinkInfo::DirectConstruct : CallLinkInfo::DirectCall, InvalidGPRReg);
                 callLinkInfo->setExecutableDuringCompilation(executable);
                 if (numAllocatedArgs > numPassedArgs)
                     callLinkInfo->setMaxArgumentCountIncludingThis(numAllocatedArgs);
@@ -9935,15 +9985,9 @@ private:
                         
                         jit.addLinkTask(
                             [=] (LinkBuffer& linkBuffer) {
-                                CodeLocationNearCall<JSInternalPtrTag> callLocation = linkBuffer.locationOfNearCall<JSInternalPtrTag>(call);
-                                CodeLocationLabel<JSInternalPtrTag> slowPathLocation = linkBuffer.locationOf<JSInternalPtrTag>(slowPath);
-
-                                linkBuffer.link(call, slowPathLocation);
-
-                                callLinkInfo->setCallLocations(
-                                    CodeLocationLabel<JSInternalPtrTag>(),
-                                    slowPathLocation,
-                                    callLocation);
+                                callLinkInfo->setCodeLocations(
+                                    linkBuffer.locationOf<JSInternalPtrTag>(slowPath), 
+                                    CodeLocationLabel<JSInternalPtrTag>());
                             });
                     });
             });
@@ -10034,40 +10078,30 @@ private:
                 shuffleData.setupCalleeSaveRegisters(jit.codeBlock());
 
                 CallLinkInfo* callLinkInfo = jit.codeBlock()->addCallLinkInfo(codeOrigin);
+                callLinkInfo->setUpCall(CallLinkInfo::TailCall, GPRInfo::regT0);
 
-                CCallHelpers::DataLabelPtr targetToCheck;
-                CCallHelpers::Jump slowPath = jit.branchPtrWithPatch(
-                    CCallHelpers::NotEqual, GPRInfo::regT0, targetToCheck,
-                    CCallHelpers::TrustedImmPtr(nullptr));
-
-                callLinkInfo->setFrameShuffleData(shuffleData);
-                CallFrameShuffler(jit, shuffleData).prepareForTailCall();
-
-                CCallHelpers::Call fastCall = jit.nearTailCall();
+                auto slowPath = callLinkInfo->emitTailCallFastPath(jit, GPRInfo::regT0, InvalidGPRReg, CallLinkInfo::UseDataIC::No, [&] {
+                    callLinkInfo->setFrameShuffleData(shuffleData);
+                    CallFrameShuffler(jit, shuffleData).prepareForTailCall();
+                });
 
                 slowPath.link(&jit);
-
+                auto slowPathStart = jit.label();
                 CallFrameShuffler slowPathShuffler(jit, shuffleData);
                 slowPathShuffler.setCalleeJSValueRegs(JSValueRegs(GPRInfo::regT0));
                 slowPathShuffler.prepareForSlowPath();
 
-                jit.move(CCallHelpers::TrustedImmPtr(callLinkInfo), GPRInfo::regT2);
                 jit.move(CCallHelpers::TrustedImmPtr(jit.codeBlock()->globalObjectFor(node->origin.semantic)), GPRInfo::regT3);
-                CCallHelpers::Call slowCall = jit.nearCall();
+                callLinkInfo->emitSlowPath(*vm, jit);
 
+                auto doneLocation = jit.label();
                 jit.abortWithReason(JITDidReturnFromTailCall);
-
-                callLinkInfo->setUpCall(CallLinkInfo::TailCall, GPRInfo::regT0);
 
                 jit.addLinkTask(
                     [=] (LinkBuffer& linkBuffer) {
-                        MacroAssemblerCodePtr<JITThunkPtrTag> linkCall = vm->getCTIStub(linkCallThunkGenerator).code();
-                        linkBuffer.link(slowCall, FunctionPtr<JITThunkPtrTag>(linkCall));
-
-                        callLinkInfo->setCallLocations(
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOfNearCall<JSInternalPtrTag>(slowCall)),
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOf<JSInternalPtrTag>(targetToCheck)),
-                            linkBuffer.locationOfNearCall<JSInternalPtrTag>(fastCall));
+                        callLinkInfo->setCodeLocations(
+                            linkBuffer.locationOf<JSInternalPtrTag>(slowPathStart),
+                            linkBuffer.locationOf<JSInternalPtrTag>(doneLocation));
                     });
             });
     }
@@ -10268,7 +10302,7 @@ private:
                                 Checked<int32_t> currentStoreOffset { storeOffset };
                                 currentStoreOffset -= (offsetCount * static_cast<int32_t>(sizeof(Register)));
                                 jit.store64(scratchGPR3,
-                                    CCallHelpers::BaseIndex(scratchGPR1, scratchGPR2, CCallHelpers::TimesEight, currentStoreOffset.unsafeGet()));
+                                    CCallHelpers::BaseIndex(scratchGPR1, scratchGPR2, CCallHelpers::TimesEight, currentStoreOffset));
                             }
                             jit.subPtr(CCallHelpers::TrustedImmPtr(static_cast<size_t>(array->length())), scratchGPR2);
                             return;
@@ -10320,40 +10354,38 @@ private:
                 else
                     callType = CallLinkInfo::CallVarargs;
                 
+                callLinkInfo->setUpCall(callType, GPRInfo::regT0);
+
                 bool isTailCall = CallLinkInfo::callModeFor(callType) == CallMode::Tail;
-                
-                CCallHelpers::DataLabelPtr targetToCheck;
-                CCallHelpers::Jump slowPath = jit.branchPtrWithPatch(
-                    CCallHelpers::NotEqual, GPRInfo::regT0, targetToCheck,
-                    CCallHelpers::TrustedImmPtr(nullptr));
-                
-                CCallHelpers::Call fastCall;
+
+                ASSERT(!usedRegisters.get(GPRInfo::regT2)); // Used on the slow path.
+
+                CCallHelpers::JumpList slowPath;
                 CCallHelpers::Jump done;
-                
                 if (isTailCall) {
-                    jit.emitRestoreCalleeSaves();
-                    jit.prepareForTailCallSlow();
-                    fastCall = jit.nearTailCall();
+                    slowPath = callLinkInfo->emitTailCallFastPath(jit, GPRInfo::regT0, InvalidGPRReg, CallLinkInfo::UseDataIC::No, [&] {
+                        jit.emitRestoreCalleeSaves();
+                        jit.prepareForTailCallSlow();
+                    });
                 } else {
-                    fastCall = jit.nearCall();
+                    slowPath = callLinkInfo->emitFastPath(jit, GPRInfo::regT0, InvalidGPRReg, CallLinkInfo::UseDataIC::No);
                     done = jit.jump();
                 }
                 
                 slowPath.link(&jit);
+                auto slowPathStart = jit.label();
 
                 if (isTailCall)
                     jit.emitRestoreCalleeSaves();
-                ASSERT(!usedRegisters.get(GPRInfo::regT2));
-                jit.move(CCallHelpers::TrustedImmPtr(callLinkInfo), GPRInfo::regT2);
                 jit.move(CCallHelpers::TrustedImmPtr(jit.codeBlock()->globalObjectFor(node->origin.semantic)), GPRInfo::regT3);
-                CCallHelpers::Call slowCall = jit.nearCall();
+                callLinkInfo->emitSlowPath(*vm, jit);
                 
                 if (isTailCall)
                     jit.abortWithReason(JITDidReturnFromTailCall);
                 else
                     done.link(&jit);
-                
-                callLinkInfo->setUpCall(callType, GPRInfo::regT0);
+
+                auto doneLocation = jit.label();
 
                 jit.addPtr(
                     CCallHelpers::TrustedImm32(-originalStackHeight),
@@ -10361,13 +10393,9 @@ private:
                 
                 jit.addLinkTask(
                     [=] (LinkBuffer& linkBuffer) {
-                        MacroAssemblerCodePtr<JITThunkPtrTag> linkCall = vm->getCTIStub(linkCallThunkGenerator).code();
-                        linkBuffer.link(slowCall, FunctionPtr<JITThunkPtrTag>(linkCall));
-                        
-                        callLinkInfo->setCallLocations(
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOfNearCall<JSInternalPtrTag>(slowCall)),
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOf<JSInternalPtrTag>(targetToCheck)),
-                            linkBuffer.locationOfNearCall<JSInternalPtrTag>(fastCall));
+                        callLinkInfo->setCodeLocations(
+                            linkBuffer.locationOf<JSInternalPtrTag>(slowPathStart),
+                            linkBuffer.locationOf<JSInternalPtrTag>(doneLocation));
                     });
             });
 
@@ -10607,39 +10635,36 @@ private:
                 else
                     callType = CallLinkInfo::CallVarargs;
                 
+                callLinkInfo->setUpCall(callType, GPRInfo::regT0);
+                
                 bool isTailCall = CallLinkInfo::callModeFor(callType) == CallMode::Tail;
                 
-                CCallHelpers::DataLabelPtr targetToCheck;
-                CCallHelpers::Jump slowPath = jit.branchPtrWithPatch(
-                    CCallHelpers::NotEqual, GPRInfo::regT0, targetToCheck,
-                    CCallHelpers::TrustedImmPtr(nullptr));
-                
-                CCallHelpers::Call fastCall;
+                CCallHelpers::JumpList slowPath;
                 CCallHelpers::Jump done;
-                
                 if (isTailCall) {
-                    jit.emitRestoreCalleeSaves();
-                    jit.prepareForTailCallSlow();
-                    fastCall = jit.nearTailCall();
+                    slowPath = callLinkInfo->emitTailCallFastPath(jit, GPRInfo::regT0, InvalidGPRReg, CallLinkInfo::UseDataIC::No, [&] {
+                        jit.emitRestoreCalleeSaves();
+                        jit.prepareForTailCallSlow();
+                    });
                 } else {
-                    fastCall = jit.nearCall();
+                    slowPath = callLinkInfo->emitFastPath(jit, GPRInfo::regT0, InvalidGPRReg, CallLinkInfo::UseDataIC::No);
                     done = jit.jump();
                 }
                 
                 slowPath.link(&jit);
+                auto slowPathStart = jit.label();
 
                 if (isTailCall)
                     jit.emitRestoreCalleeSaves();
-                jit.move(CCallHelpers::TrustedImmPtr(callLinkInfo), GPRInfo::regT2);
                 jit.move(CCallHelpers::TrustedImmPtr(jit.codeBlock()->globalObjectFor(node->origin.semantic)), GPRInfo::regT3);
-                CCallHelpers::Call slowCall = jit.nearCall();
+                callLinkInfo->emitSlowPath(*vm, jit);
                 
                 if (isTailCall)
                     jit.abortWithReason(JITDidReturnFromTailCall);
                 else
                     done.link(&jit);
-                
-                callLinkInfo->setUpCall(callType, GPRInfo::regT0);
+
+                auto doneLocation = jit.label();
                 
                 jit.addPtr(
                     CCallHelpers::TrustedImm32(-originalStackHeight),
@@ -10647,13 +10672,9 @@ private:
                 
                 jit.addLinkTask(
                     [=] (LinkBuffer& linkBuffer) {
-                        MacroAssemblerCodePtr<JITThunkPtrTag> linkCall = vm->getCTIStub(linkCallThunkGenerator).code();
-                        linkBuffer.link(slowCall, FunctionPtr<JITThunkPtrTag>(linkCall));
-                        
-                        callLinkInfo->setCallLocations(
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOfNearCall<JSInternalPtrTag>(slowCall)),
-                            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOf<JSInternalPtrTag>(targetToCheck)),
-                            linkBuffer.locationOfNearCall<JSInternalPtrTag>(fastCall));
+                        callLinkInfo->setCodeLocations(
+                            linkBuffer.locationOf<JSInternalPtrTag>(slowPathStart),
+                            linkBuffer.locationOf<JSInternalPtrTag>(doneLocation));
                     });
             });
 
@@ -10929,7 +10950,7 @@ private:
                     // Because forwarded values are drained as JSValue, we should not generate value
                     // in Double form even if PhantomNewArrayBuffer's indexingType is ArrayWithDouble.
                     int64_t value = JSValue::encode(array->get(i));
-                    m_out.store64(m_out.constInt64(value), m_out.baseIndex(m_heaps.variables, targetStart, storeIndex, JSValue(), (Checked<int32_t>(sizeof(Register)) * i).unsafeGet()));
+                    m_out.store64(m_out.constInt64(value), m_out.baseIndex(m_heaps.variables, targetStart, storeIndex, JSValue(), Checked<int32_t>(sizeof(Register)) * i));
                 }
                 return m_out.add(m_out.constIntPtr(array->length()), storeIndex);
             }
@@ -12257,45 +12278,66 @@ private:
         m_out.appendTo(continuation, lastNext);
         setJSValue(m_out.phi(Int64, results));
     }
-    
-    void compileInByVal()
+
+    void compileHasPrivateName()
     {
         JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
-        setJSValue(vmCall(Int64, operationInByVal, weakPointer(globalObject), lowCell(m_node->child1()), lowJSValue(m_node->child2())));
+        setJSValue(vmCall(Int64, operationHasPrivateName, weakPointer(globalObject), lowCell(m_node->child1()), lowSymbol(m_node->child2())));
     }
 
-    void compileInById()
+    void compileHasPrivateBrand()
     {
-        Node* node = m_node;
-        CacheableIdentifier identifier = node->cacheableIdentifier();
-        LValue base = lowCell(m_node->child1());
+        JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
+        setJSValue(vmCall(Int64, operationHasPrivateBrand, weakPointer(globalObject), lowCell(m_node->child1()), lowSymbol(m_node->child2())));
+    }
 
+    template<InByKind kind, typename SubscriptKind>
+    void compileInBy(LValue base, SubscriptKind subscriptValue)
+    {
         PatchpointValue* patchpoint = m_out.patchpoint(Int64);
         patchpoint->appendSomeRegister(base);
+        if constexpr (kind != InByKind::Normal)
+            patchpoint->appendSomeRegister(subscriptValue);
         patchpoint->append(m_notCellMask, ValueRep::lateReg(GPRInfo::notCellMaskRegister));
         patchpoint->append(m_numberTag, ValueRep::lateReg(GPRInfo::numberTagRegister));
-
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
 
-        RefPtr<PatchpointExceptionHandle> exceptionHandle =
-            preparePatchpointForExceptions(patchpoint);
+        RefPtr<PatchpointExceptionHandle> exceptionHandle = preparePatchpointForExceptions(patchpoint);
 
         State* state = &m_ftlState;
+        Node* node = m_node;
         patchpoint->setGenerator(
             [=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
                 AllowMacroScratchRegisterUsage allowScratch(jit);
 
-                CallSiteIndex callSiteIndex =
-                    state->jitCode->common.codeOrigins->addUniqueCallSiteIndex(node->origin.semantic);
+                CallSiteIndex callSiteIndex = state->jitCode->common.codeOrigins->addUniqueCallSiteIndex(node->origin.semantic);
 
                 // This is the direct exit target for operation calls.
-                Box<CCallHelpers::JumpList> exceptions =
-                    exceptionHandle->scheduleExitCreation(params)->jumps(jit);
+                Box<CCallHelpers::JumpList> exceptions = exceptionHandle->scheduleExitCreation(params)->jumps(jit);
 
-                auto generator = Box<JITInByIdGenerator>::create(
-                    jit.codeBlock(), node->origin.semantic, callSiteIndex,
-                    params.unavailableRegisters(), identifier, JSValueRegs(params[1].gpr()),
-                    JSValueRegs(params[0].gpr()));
+                auto returnGPR = params[0].gpr();
+                auto base = JSValueRegs(params[1].gpr());
+
+                const auto subscript = [&] {
+                    if constexpr (kind == InByKind::Normal)
+                        return CCallHelpers::TrustedImmPtr(subscriptValue.rawBits());
+                    else
+                        return JSValueRegs(params[2].gpr());
+                }();
+
+                const auto generator = [&] {
+                    if constexpr (kind == InByKind::Normal) {
+                        return Box<JITInByIdGenerator>::create(
+                            jit.codeBlock(), node->origin.semantic, callSiteIndex,
+                            params.unavailableRegisters(), subscriptValue, base,
+                            JSValueRegs(returnGPR));
+                    } else {
+                        return Box<JITInByValGenerator>::create(
+                            jit.codeBlock(), node->origin.semantic, callSiteIndex,
+                            params.unavailableRegisters(), base, subscript,
+                            JSValueRegs(returnGPR));
+                    }
+                }();
 
                 generator->generateFastPath(jit);
                 CCallHelpers::Label done = jit.label();
@@ -12306,12 +12348,22 @@ private:
 
                         generator->slowPathJump().link(&jit);
                         CCallHelpers::Label slowPathBegin = jit.label();
-                        CCallHelpers::Call slowPathCall = callOperation(
-                            *state, params.unavailableRegisters(), jit, node->origin.semantic,
-                            exceptions.get(), operationInByIdOptimize, params[0].gpr(),
-                            jit.codeBlock()->globalObjectFor(node->origin.semantic),
-                            CCallHelpers::TrustedImmPtr(generator->stubInfo()), params[1].gpr(),
-                            identifier.rawBits()).call();
+                        CCallHelpers::Call slowPathCall;
+                        if constexpr (kind == InByKind::Normal) {
+                            slowPathCall = callOperation(
+                                *state, params.unavailableRegisters(), jit, node->origin.semantic,
+                                exceptions.get(), operationInByIdOptimize, returnGPR,
+                                jit.codeBlock()->globalObjectFor(node->origin.semantic),
+                                CCallHelpers::TrustedImmPtr(generator->stubInfo()),
+                                base, subscript).call();
+                        } else {
+                            slowPathCall = callOperation(
+                                *state, params.unavailableRegisters(), jit, node->origin.semantic,
+                                exceptions.get(), operationInByValOptimize, returnGPR,
+                                jit.codeBlock()->globalObjectFor(node->origin.semantic),
+                                CCallHelpers::TrustedImmPtr(generator->stubInfo()),
+                                CCallHelpers::TrustedImmPtr(nullptr), base, subscript).call();
+                        }
                         jit.jump().linkTo(done, &jit);
 
                         generator->reportSlowPathCall(slowPathBegin, slowPathCall);
@@ -12324,6 +12376,16 @@ private:
             });
 
         setJSValue(patchpoint);
+    }
+
+    void compileInById()
+    {
+        compileInBy<InByKind::Normal>(lowCell(m_node->child1()), m_node->cacheableIdentifier());
+    }
+
+    void compileInByVal()
+    {
+        compileInBy<InByKind::NormalByVal>(lowCell(m_node->child1()), lowJSValue(m_node->child2()));
     }
 
     void compileHasOwnProperty()
@@ -15904,8 +15966,8 @@ private:
         
         LBasicBlock lastNext = m_out.insertNewBlocksBefore(fastCase);
 
-        Optional<unsigned> staticVectorLength;
-        Optional<unsigned> staticVectorLengthFromPublicLength;
+        std::optional<unsigned> staticVectorLength;
+        std::optional<unsigned> staticVectorLengthFromPublicLength;
         if (structure->hasIntPtr()) {
             if (publicLength->hasInt32()) {
                 unsigned publicLengthConst = static_cast<unsigned>(publicLength->asInt32());
@@ -18261,6 +18323,12 @@ private:
         case NotCellNorBigIntUse:
             speculateNotCellNorBigInt(edge);
             break;
+        case NotDoubleUse:
+            speculateNotDouble(edge);
+            break;
+        case NeitherDoubleNorHeapBigIntNorStringUse:
+            speculateNeitherDoubleNorHeapBigIntNorString(edge);
+            break;
         case OtherUse:
             speculateOther(edge);
             break;
@@ -18305,6 +18373,50 @@ private:
         speculateNotCell(edge);
 #endif
     }
+
+    void speculateNotDouble(Edge edge)
+    {
+        if (!m_interpreter.needsTypeCheck(edge))
+            return;
+    
+        LValue value = lowJSValue(edge, ManualOperandSpeculation);
+        
+        LBasicBlock isNotInt32 = m_out.newBlock();
+        LBasicBlock continuation = m_out.newBlock();
+
+        m_out.branch(isInt32(value, provenType(edge)), unsure(continuation), unsure(isNotInt32));
+
+        LBasicBlock lastNext = m_out.appendTo(isNotInt32, continuation);
+        FTL_TYPE_CHECK(jsValueValue(value), edge, ~SpecFullDouble, isNumber(value));
+        m_out.jump(continuation);
+
+        m_out.appendTo(continuation, lastNext);
+    }
+
+    void speculateNeitherDoubleNorHeapBigIntNorString(Edge edge)
+    {
+        if (!m_interpreter.needsTypeCheck(edge))
+            return;
+
+        LValue value = lowJSValue(edge, ManualOperandSpeculation);
+
+        LBasicBlock isNotInt32 = m_out.newBlock();
+        LBasicBlock isCellBlock = m_out.newBlock();
+        LBasicBlock continuation = m_out.newBlock();
+
+        m_out.branch(isInt32(value, provenType(edge)), unsure(continuation), unsure(isNotInt32));
+
+        LBasicBlock lastNext = m_out.appendTo(isNotInt32, isCellBlock);
+        FTL_TYPE_CHECK(jsValueValue(value), edge, ~SpecFullDouble, isNumber(value));
+        m_out.branch(isCell(value, provenType(edge)), unsure(isCellBlock), unsure(continuation));
+
+        m_out.appendTo(isCellBlock, continuation);
+        FTL_TYPE_CHECK(jsValueValue(value), edge, ~SpecString, isString(value));
+        FTL_TYPE_CHECK(jsValueValue(value), edge, ~SpecHeapBigInt, isHeapBigInt(value));
+        m_out.jump(continuation);
+
+        m_out.appendTo(continuation, lastNext);
+    }
     
     void speculateCellOrOther(Edge edge)
     {
@@ -18333,7 +18445,7 @@ private:
         jsValueToStrictInt52(edge, lowJSValue(edge, ManualOperandSpeculation));
     }
 
-    LValue isCellWithType(LValue cell, JSTypeRange queriedTypeRange, Optional<SpeculatedType> speculatedTypeForQuery, SpeculatedType type = SpecFullTop)
+    LValue isCellWithType(LValue cell, JSTypeRange queriedTypeRange, std::optional<SpeculatedType> speculatedTypeForQuery, SpeculatedType type = SpecFullTop)
     {
         if (speculatedTypeForQuery) {
             if (LValue proven = isProvenValue(type & SpecCell, speculatedTypeForQuery.value()))
@@ -18352,7 +18464,7 @@ private:
         return m_out.belowOrEqual(first, m_out.constInt32(queriedTypeRange.last - queriedTypeRange.first));
     }
 
-    LValue isCellWithType(LValue cell, JSType queriedType, Optional<SpeculatedType> speculatedTypeForQuery, SpeculatedType type = SpecFullTop)
+    LValue isCellWithType(LValue cell, JSType queriedType, std::optional<SpeculatedType> speculatedTypeForQuery, SpeculatedType type = SpecFullTop)
     {
         return isCellWithType(cell, JSTypeRange { queriedType, queriedType }, speculatedTypeForQuery, type);
     }
@@ -19499,7 +19611,7 @@ private:
             
             // FIXME: It seems like we should be able to do at least some validation when OSR entering. https://bugs.webkit.org/show_bug.cgi?id=215511
             if (Options::validateFTLOSRExitLiveness()
-                && m_graph.m_plan.mode() != FTLForOSREntryMode) {
+                && m_graph.m_plan.mode() != JITCompilationMode::FTLForOSREntry) {
 
                 if (availability.isDead() && m_graph.isLiveInBytecode(operand, exitOrigin))
                     DFG_CRASH(m_graph, m_node, toCString("Live bytecode local not available: operand = ", operand, ", availability = ", availability, ", origin = ", exitOrigin).data());

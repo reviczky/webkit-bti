@@ -26,7 +26,6 @@
 #pragma once
 
 #include "CanvasRenderingContext2DBase.h"
-#include "CanvasRenderingContext2DSettings.h"
 #include "HTMLCanvasElement.h"
 #include <memory>
 
@@ -43,8 +42,6 @@ public:
 
     HTMLCanvasElement& canvas() const { return downcast<HTMLCanvasElement>(canvasBase()); }
 
-    const CanvasRenderingContext2DSettings& getContextAttributes() const { return m_settings; }
-
     void drawFocusIfNeeded(Element&);
     void drawFocusIfNeeded(Path2D&, Element&);
 
@@ -52,8 +49,8 @@ public:
 
     CanvasDirection direction() const;
 
-    void fillText(const String& text, float x, float y, Optional<float> maxWidth = WTF::nullopt);
-    void strokeText(const String& text, float x, float y, Optional<float> maxWidth = WTF::nullopt);
+    void fillText(const String& text, float x, float y, std::optional<float> maxWidth = std::nullopt);
+    void strokeText(const String& text, float x, float y, std::optional<float> maxWidth = std::nullopt);
     Ref<TextMetrics> measureText(const String& text);
 
 private:
@@ -61,18 +58,14 @@ private:
 
     bool is2d() const final { return true; }
     const FontProxy* fontProxy() final;
-    PixelFormat pixelFormat() const final;
-    DestinationColorSpace colorSpace() const final;
 
     void setFontWithoutUpdatingStyle(const String&);
 
-    void drawTextInternal(const String& text, float x, float y, bool fill, Optional<float> maxWidth = WTF::nullopt);
+    void drawTextInternal(const String& text, float x, float y, bool fill, std::optional<float> maxWidth = std::nullopt);
 
     void drawFocusIfNeededInternal(const Path&, Element&);
 
     TextDirection toTextDirection(CanvasRenderingContext2DBase::Direction, const RenderStyle** computedStyle = nullptr) const;
-
-    CanvasRenderingContext2DSettings m_settings;
 };
 
 } // namespace WebCore

@@ -160,7 +160,7 @@ public:
 
     static size_t allocationSize(Checked<size_t> capacity)
     {
-        return (capacity * sizeof(BucketType)).unsafeGet();
+        return capacity * sizeof(BucketType);
     }
 
     ALWAYS_INLINE BucketType* buffer() const
@@ -210,7 +210,7 @@ public:
 
         Base::finishCreation(vm);
 
-        auto locker = holdLock(cellLock());
+        Locker locker { cellLock() };
         makeAndSetNewBuffer(locker, initialCapacity);
     }
 

@@ -82,7 +82,6 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
-#include "FrameSnapshotting.h"
 #include "FrameView.h"
 #include "FullscreenManager.h"
 #include "GCReachableRef.h"
@@ -125,7 +124,6 @@
 #include "IDBOpenDBRequest.h"
 #include "IdleCallbackController.h"
 #include "ImageBitmapRenderingContext.h"
-#include "ImageBuffer.h"
 #include "ImageLoader.h"
 #include "ImageOverlayController.h"
 #include "InspectorInstrumentation.h"
@@ -178,11 +176,9 @@
 #include "Range.h"
 #include "RealtimeMediaSourceCenter.h"
 #include "RenderChildIterator.h"
-#include "RenderImage.h"
 #include "RenderInline.h"
 #include "RenderLayerCompositor.h"
 #include "RenderLineBreak.h"
-#include "RenderStyle.h"
 #include "RenderTreeUpdater.h"
 #include "RenderView.h"
 #include "RenderWidget.h"
@@ -348,8 +344,8 @@
 #include "HTMLVideoElement.h"
 #endif
 
-#define RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, pageID().valueOr(PageIdentifier { }).toUInt64(), frameID().valueOr(FrameIdentifier { }).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
-#define RELEASE_LOG_ERROR_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, pageID().valueOr(PageIdentifier { }).toUInt64(), frameID().valueOr(FrameIdentifier { }).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
+#define RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, pageID().value_or(PageIdentifier { }).toUInt64(), frameID().value_or(FrameIdentifier { }).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
+#define RELEASE_LOG_ERROR_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_ERROR_IF(isAlwaysOnLoggingAllowed(), channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, pageID().value_or(PageIdentifier { }).toUInt64(), frameID().value_or(FrameIdentifier { }).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
 
 namespace WebCore {
 
@@ -1387,16 +1383,16 @@ void Document::setReadyState(ReadyState readyState)
 
     switch (readyState) {
     case Loading:
-        if (!m_documentTiming.domLoading)
-            m_documentTiming.domLoading = MonotonicTime::now();
-        break;
-    case Interactive:
-        if (!m_documentTiming.domInteractive)
-            m_documentTiming.domInteractive = MonotonicTime::now();
+        if (!m_eventTiming.domLoading)
+            m_eventTiming.domLoading = MonotonicTime::now();
         break;
     case Complete:
-        if (!m_documentTiming.domComplete)
-            m_documentTiming.domComplete = MonotonicTime::now();
+        if (!m_eventTiming.domComplete)
+            m_eventTiming.domComplete = MonotonicTime::now();
+        FALLTHROUGH;
+    case Interactive:
+        if (!m_eventTiming.domInteractive)
+            m_eventTiming.domInteractive = MonotonicTime::now();
         break;
     }
 
@@ -1599,22 +1595,22 @@ RefPtr<Range> Document::caretRangeFromPoint(int x, int y)
     return createLiveRange({ *boundary, *boundary });
 }
 
-Optional<BoundaryPoint> Document::caretPositionFromPoint(const LayoutPoint& clientPoint)
+std::optional<BoundaryPoint> Document::caretPositionFromPoint(const LayoutPoint& clientPoint)
 {
     if (!hasLivingRenderTree())
-        return WTF::nullopt;
+        return std::nullopt;
 
     LayoutPoint localPoint;
     auto node = nodeFromPoint(clientPoint, &localPoint);
     if (!node)
-        return WTF::nullopt;
+        return std::nullopt;
 
     auto* renderer = node->renderer();
     if (!renderer)
-        return WTF::nullopt;
+        return std::nullopt;
     auto rangeCompliantPosition = renderer->positionForPoint(localPoint).parentAnchoredEquivalent();
     if (rangeCompliantPosition.isNull())
-        return WTF::nullopt;
+        return std::nullopt;
 
     unsigned offset = rangeCompliantPosition.offsetInContainerNode();
     node = retargetToScope(*rangeCompliantPosition.containerNode());
@@ -2124,7 +2120,7 @@ void Document::updateTextRenderer(Text& text, unsigned offsetOfReplacedText, uns
     if (!m_pendingRenderTreeTextUpdate)
         m_pendingRenderTreeTextUpdate = makeUnique<Style::Update>(*this);
 
-    m_pendingRenderTreeTextUpdate->addText(text, { offsetOfReplacedText, lengthOfReplacedText, WTF::nullopt });
+    m_pendingRenderTreeTextUpdate->addText(text, { offsetOfReplacedText, lengthOfReplacedText, std::nullopt });
 
     scheduleRenderingUpdate({ });
 }
@@ -2625,7 +2621,8 @@ void Document::willBeRemovedFromFrame()
 #if ENABLE(POINTER_LOCK)
         page->pointerLockController().documentDetached(*this);
 #endif
-        page->imageOverlayController().documentDetached(*this);
+        if (auto* imageOverlayController = page->imageOverlayControllerIfExists())
+            imageOverlayController->documentDetached(*this);
         if (auto* validationMessageClient = page->validationMessageClient())
             validationMessageClient->documentDetached(*this);
     }
@@ -2656,7 +2653,7 @@ void Document::willBeRemovedFromFrame()
 
     if (page() && !m_mediaState.isEmpty()) {
         m_mediaState = MediaProducer::IsNotPlaying;
-        page()->updateIsPlayingMedia(HTMLMediaElementInvalidID);
+        page()->updateIsPlayingMedia();
     }
 
     selection().willBeRemovedFromFrame();
@@ -2867,9 +2864,9 @@ void Document::updateHighlightPositions()
             VisibleSelection visibleSelection(rangeData->range);
             Position startPosition;
             Position endPosition;
-            if (!rangeData->startPosition.hasValue())
+            if (!rangeData->startPosition.has_value())
                 startPosition = visibleSelection.visibleStart().deepEquivalent();
-            if (!rangeData->endPosition.hasValue())
+            if (!rangeData->endPosition.has_value())
                 endPosition = visibleSelection.visibleEnd().deepEquivalent();
             if (!weakRangeData.get())
                 continue;
@@ -3273,7 +3270,7 @@ void Document::enqueuePaintTimingEntryIfNeeded()
     if (!view()->isVisuallyNonEmpty() || view()->needsLayout())
         return;
 
-    if (!view()->hasContenfulDescendants())
+    if (!view()->hasContentfulDescendants())
         return;
 
     if (!ContentfulPaintChecker::qualifiesForContentfulPaint(*view()))
@@ -3281,8 +3278,6 @@ void Document::enqueuePaintTimingEntryIfNeeded()
 
     domWindow()->performance().reportFirstContentfulPaint();
     m_didEnqueueFirstContentfulPaint = true;
-
-    determineSampledPageTopColor();
 }
 
 ExceptionOr<void> Document::write(Document* responsibleDocument, SegmentedString&& text)
@@ -3847,7 +3842,7 @@ ViewportArguments Document::viewportArguments() const
     auto* page = this->page();
     if (!page)
         return m_viewportArguments;
-    return page->overrideViewportArguments().valueOr(m_viewportArguments);
+    return page->overrideViewportArguments().value_or(m_viewportArguments);
 }
 
 void Document::updateViewportArguments()
@@ -3869,7 +3864,7 @@ void Document::metaElementThemeColorChanged(HTMLMetaElement& metaElement)
         return;
 
     auto oldThemeColor = std::exchange(m_cachedThemeColor, Color());
-    m_metaThemeColorElements = WTF::nullopt;
+    m_metaThemeColorElements = std::nullopt;
     m_activeThemeColorMetaElement = nullptr;
     if (themeColor() == oldThemeColor)
         return;
@@ -3901,204 +3896,6 @@ void Document::themeColorChanged()
 
     if (auto* page = this->page())
         page->chrome().client().themeColorChanged();
-
-#if ENABLE(RUBBER_BANDING)
-    if (auto* view = renderView()) {
-        if (view->usesCompositing())
-            view->compositor().updateLayerForOverhangAreasBackgroundColor();
-    }
-#endif // ENABLE(RUBBER_BANDING)
-}
-
-static bool isValidPageSampleLocation(Document& document, const IntPoint& location)
-{
-    // FIXME: <https://webkit.org/b/225167> (Sampled Page Top Color: hook into painting logic instead of taking snapshots)
-
-    constexpr OptionSet<HitTestRequest::Type> hitTestRequestTypes { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::IgnoreCSSPointerEventsProperty, HitTestRequest::Type::DisallowUserAgentShadowContent, HitTestRequest::Type::CollectMultipleElements, HitTestRequest::Type::IncludeAllElementsUnderPoint };
-    HitTestResult hitTestResult(location);
-    document.hitTest(hitTestRequestTypes, hitTestResult);
-
-    for (auto& hitTestNode : hitTestResult.listBasedTestResult()) {
-        auto& node = hitTestNode.get();
-
-        auto* renderer = node.renderer();
-        if (!renderer)
-            return false;
-
-        // Skip images (both `<img>` and CSS `background-image`) as they're likely not a solid color.
-        if (is<RenderImage>(renderer) || renderer->style().hasBackgroundImage())
-            return false;
-
-        // Skip nodes with animations as the sample may get an odd color if the animation is in-progress.
-        if (renderer->style().hasTransitions() || renderer->style().hasAnimations())
-            return false;
-
-        // Skip `<canvas>` but only if they've been drawn into. Guess this by seeing if there's already
-        // a `CanvasRenderingContext`, which is only created by JavaScript.
-        if (is<HTMLCanvasElement>(node) && downcast<HTMLCanvasElement>(node).renderingContext())
-            return false;
-
-        // Skip 3rd-party `<iframe>` as the content likely won't match the rest of the page.
-        if (is<HTMLIFrameElement>(node) && !areRegistrableDomainsEqual(downcast<HTMLIFrameElement>(node).location(), document.url()))
-            return false;
-    }
-
-    return true;
-}
-
-static Optional<Lab<float>> samplePageColor(Document& document, IntPoint&& location)
-{
-    // FIXME: <https://webkit.org/b/225167> (Sampled Page Top Color: hook into painting logic instead of taking snapshots)
-
-    if (!isValidPageSampleLocation(document, location))
-        return WTF::nullopt;
-
-    ASSERT(document.view());
-    auto snapshot = snapshotFrameRect(document.view()->frame(), IntRect(location, IntSize(1, 1)), SnapshotOptionsExcludeSelectionHighlighting | SnapshotOptionsPaintEverythingExcludingSelection);
-    if (!snapshot)
-        return WTF::nullopt;
-
-    auto snapshotData = snapshot->toBGRAData();
-    return convertColor<Lab<float>>(SRGBA<uint8_t> { snapshotData[2], snapshotData[1], snapshotData[0], snapshotData[3] });
-}
-
-static double colorDifference(Lab<float>& lhs, Lab<float>& rhs)
-{
-    return sqrt(pow(rhs.lightness - lhs.lightness, 2) + pow(rhs.a - lhs.a, 2) + pow(rhs.b - lhs.b, 2));
-}
-
-static Lab<float> averageColor(Lab<float> colors[], size_t count)
-{
-    float totalLightness = 0;
-    float totalA = 0;
-    float totalB = 0;
-    for (size_t i = 0; i < count; ++i) {
-        totalLightness += colors[i].lightness;
-        totalA += colors[i].a;
-        totalB += colors[i].b;
-    }
-    return {
-        totalLightness / count,
-        totalA / count,
-        totalB / count,
-        1,
-    };
-}
-
-void Document::determineSampledPageTopColor()
-{
-    if (m_sampledPageTopColor.isValid())
-        return;
-
-    auto maxDifference = settings().sampledPageTopColorMaxDifference();
-    if (maxDifference <= 0)
-        return;
-
-    if (!isTopDocument())
-        return;
-
-    auto* frameView = view();
-    if (!frameView)
-        return;
-
-    auto notifyDidSamplePageTopColorOnScopeExit = makeScopeExit([&] {
-        if (auto* page = this->page())
-            page->chrome().client().sampledPageTopColorChanged();
-    });
-
-    // Decrease the width by one pixel so that the last snapshot is within bounds and not off-by-one.
-    auto frameWidth = frameView->contentsWidth() - 1;
-
-    constexpr auto numSnapshots = 5;
-    size_t nonMatchingColorIndex = numSnapshots;
-
-    Lab<float> snapshots[numSnapshots];
-    double differences[numSnapshots - 1];
-
-    auto shouldStopAfterFindingNonMatchingColor = [&] (size_t i) -> bool {
-        // Bail if the non-matching color is not the first or last snapshot, or there already is an non-matching color.
-        if ((i && i < numSnapshots - 1) || nonMatchingColorIndex != numSnapshots)
-            return true;
-
-        nonMatchingColorIndex = i;
-        return false;
-    };
-
-    for (size_t i = 0; i < numSnapshots; ++i) {
-        auto snapshot = samplePageColor(*this, IntPoint(frameWidth * i / (numSnapshots - 1), 0));
-        if (!snapshot) {
-            if (shouldStopAfterFindingNonMatchingColor(i))
-                return;
-            continue;
-        }
-
-        snapshots[i] = *snapshot;
-
-        if (i) {
-            // Each `difference` item compares `i` with `i - 1` so if the first comparison (`i == 1`)
-            // is too large of a difference, we should treat `i - 1` (i.e. `0`) as the problem since
-            // we only allow for non-matching colors being the first or last sampled color.
-            auto effectiveNonMatchingColorIndex = i == 1 ? 0 : i;
-
-            differences[i - 1] = colorDifference(snapshots[i - 1], snapshots[i]);
-            if (differences[i - 1] > maxDifference) {
-                if (shouldStopAfterFindingNonMatchingColor(effectiveNonMatchingColorIndex))
-                    return;
-                continue;
-            }
-
-            double cumuluativeDifference = 0;
-            for (size_t j = 0; j < i; ++j) {
-                if (j == nonMatchingColorIndex)
-                    continue;
-                cumuluativeDifference += differences[j];
-            }
-            if (cumuluativeDifference > maxDifference) {
-                if (shouldStopAfterFindingNonMatchingColor(effectiveNonMatchingColorIndex)) {
-                    // If we haven't already identified a non-matching snapshot and the difference between the first
-                    // and second snapshots or the second-to-last and last snapshots is less than the maximum, mark
-                    // the first/last snapshot as non-matching to give a chance for the rest of the snapshots to match.
-                    if (nonMatchingColorIndex == numSnapshots && (!i || i == numSnapshots - 1) && cumuluativeDifference - differences[i - 1] <= maxDifference) {
-                        nonMatchingColorIndex = effectiveNonMatchingColorIndex;
-                        continue;
-                    }
-                    return;
-                }
-                continue;
-            }
-        }
-    }
-
-    // Decrease the height by one pixel so that the last snapshot is within bounds and not off-by-one.
-    auto minHeight = settings().sampledPageTopColorMinHeight() - 1;
-    if (minHeight > 0) {
-        if (nonMatchingColorIndex) {
-            if (auto leftMiddleSnapshot = samplePageColor(*this, IntPoint(0, minHeight))) {
-                if (colorDifference(*leftMiddleSnapshot, snapshots[0]) > maxDifference)
-                    return;
-            }
-        }
-
-        if (nonMatchingColorIndex != numSnapshots - 1) {
-            if (auto rightMiddleSnapshot = samplePageColor(*this, IntPoint(frameWidth, minHeight))) {
-                if (colorDifference(*rightMiddleSnapshot, snapshots[numSnapshots - 1]) > maxDifference)
-                    return;
-            }
-        }
-    }
-
-    auto snapshotsToAverage = snapshots;
-    auto validSnapshotCount = numSnapshots;
-    if (!nonMatchingColorIndex) {
-        // Skip the first snapshot by moving the pointer that indicates where the snapshot array
-        // starts and decreasing the count of snapshots to average.
-        ++snapshotsToAverage;
-        --validSnapshotCount;
-    } else if (nonMatchingColorIndex == numSnapshots - 1) {
-        // Skip the last snapshot by decreasing the count of snapshots to average.
-        --validSnapshotCount;
-    }
-    m_sampledPageTopColor = averageColor(snapshotsToAverage, validSnapshotCount);
 }
 
 #if ENABLE(DARK_MODE_CSS)
@@ -4546,7 +4343,7 @@ void Document::noteUserInteractionWithMediaElement()
     updateIsPlayingMedia();
 }
 
-void Document::updateIsPlayingMedia(uint64_t sourceElementID)
+void Document::updateIsPlayingMedia()
 {
     ASSERT(!m_audioProducers.hasNullReferences());
     MediaProducer::MediaStateFlags state;
@@ -4571,8 +4368,8 @@ void Document::updateIsPlayingMedia(uint64_t sourceElementID)
     
     m_mediaState = state;
 
-    if (page())
-        page()->updateIsPlayingMedia(sourceElementID);
+    if (auto* page = this->page())
+        page->updateIsPlayingMedia();
 
 #if ENABLE(MEDIA_STREAM)
     if (captureStateChanged)
@@ -5505,7 +5302,7 @@ ExceptionOr<void> Document::setDomain(const String& newDomain)
     return { };
 }
 
-void Document::overrideLastModified(const Optional<WallTime>& lastModified)
+void Document::overrideLastModified(const std::optional<WallTime>& lastModified)
 {
     m_overrideLastModified = lastModified;
 }
@@ -5513,7 +5310,7 @@ void Document::overrideLastModified(const Optional<WallTime>& lastModified)
 // http://www.whatwg.org/specs/web-apps/current-work/#dom-document-lastmodified
 String Document::lastModified() const
 {
-    Optional<WallTime> dateTime;
+    std::optional<WallTime> dateTime;
     if (m_overrideLastModified)
         dateTime = m_overrideLastModified;
     else if (loader())
@@ -6237,15 +6034,15 @@ void Document::finishedParsing()
 
     scriptRunner().documentFinishedParsing();
 
-    if (!m_documentTiming.domContentLoadedEventStart)
-        m_documentTiming.domContentLoadedEventStart = MonotonicTime::now();
+    if (!m_eventTiming.domContentLoadedEventStart)
+        m_eventTiming.domContentLoadedEventStart = MonotonicTime::now();
 
     // FIXME: Schedule a task to fire DOMContentLoaded event instead. See webkit.org/b/82931
     eventLoop().performMicrotaskCheckpoint();
     dispatchEvent(Event::create(eventNames().DOMContentLoadedEvent, Event::CanBubble::Yes, Event::IsCancelable::No));
 
-    if (!m_documentTiming.domContentLoadedEventEnd)
-        m_documentTiming.domContentLoadedEventEnd = MonotonicTime::now();
+    if (!m_eventTiming.domContentLoadedEventEnd)
+        m_eventTiming.domContentLoadedEventEnd = MonotonicTime::now();
 
     if (RefPtr<Frame> frame = this->frame()) {
 #if ENABLE(XSLT)
@@ -6385,7 +6182,7 @@ void Document::initSecurityContext()
 #endif
 
     if (shouldEnforceHTTP09Sandbox()) {
-        String message = makeString("Sandboxing '", m_url.stringCenterEllipsizedToLength(), "' because it is using HTTP/0.9.");
+        auto message = makeString("Sandboxing '", m_url.stringCenterEllipsizedToLength(), "' because it is using HTTP/0.9.");
         addConsoleMessage(MessageSource::Security, MessageLevel::Error, message);
         enforceSandboxFlags(SandboxScripts | SandboxPlugins);
     }
@@ -6561,15 +6358,15 @@ void Document::detachRange(Range& range)
     m_ranges.remove(&range);
 }
 
-Optional<RenderingContext> Document::getCSSCanvasContext(const String& type, const String& name, int width, int height)
+std::optional<RenderingContext> Document::getCSSCanvasContext(const String& type, const String& name, int width, int height)
 {
     HTMLCanvasElement* element = getCSSCanvasElement(name);
     if (!element)
-        return WTF::nullopt;
+        return std::nullopt;
     element->setSize({ width, height });
     auto context = element->getContext(type);
     if (!context)
-        return WTF::nullopt;
+        return std::nullopt;
 
 #if ENABLE(WEBGL)
     if (is<WebGLRenderingContext>(*context))
@@ -6895,7 +6692,7 @@ DeviceOrientationController& Document::deviceOrientationController() const
 
 void Document::simulateDeviceOrientationChange(double alpha, double beta, double gamma)
 {
-    auto orientation = DeviceOrientationData::create(alpha, beta, gamma, WTF::nullopt, WTF::nullopt);
+    auto orientation = DeviceOrientationData::create(alpha, beta, gamma, std::nullopt, std::nullopt);
     deviceOrientationController().didChangeDeviceOrientation(orientation.ptr());
 }
 
@@ -6948,9 +6745,8 @@ double Document::monotonicTimestamp() const
 {
     auto* loader = this->loader();
     if (!loader)
-        return 0;
-
-    return loader->timing().secondsSinceStartTime(MonotonicTime::now()).seconds();
+        return 0.0;
+    return (MonotonicTime::now() - loader->timing().startTime()).seconds();
 }
 
 int Document::requestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callback)
@@ -7276,7 +7072,7 @@ bool Document::allowsContentJavaScript() const
     if (!m_frame || m_frame->document() != this) {
         // If this Document is frameless or in the wrong frame, its context document
         // must allow for it to run content JavaScript.
-        return m_contextDocument && m_contextDocument->allowsContentJavaScript();
+        return !m_contextDocument || m_contextDocument->allowsContentJavaScript();
     }
 
     return m_frame->loader().client().allowsContentJavaScriptFromMostRecentNavigation() == AllowsContentJavaScript::Yes;
@@ -7492,26 +7288,26 @@ void Document::updateHoverActiveState(const HitTestRequest& request, Element* in
             elementsToSetHover.append(element);
     }
 
-    if (!elementsToClearActive.isEmpty()) {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*elementsToClearActive.last(), CSSSelector::PseudoClassActive, Style::InvalidationScope::Descendants);
-        for (auto& element : elementsToClearActive)
-            element->setActive(false, false, Style::InvalidationScope::SelfChildrenAndSiblings);
-    }
-    if (!elementsToSetActive.isEmpty()) {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*elementsToSetActive.last(), CSSSelector::PseudoClassActive, Style::InvalidationScope::Descendants);
-        for (auto& element : elementsToSetActive)
-            element->setActive(true, false, Style::InvalidationScope::SelfChildrenAndSiblings);
-    }
-    if (!elementsToClearHover.isEmpty()) {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*elementsToClearHover.last(), CSSSelector::PseudoClassHover, Style::InvalidationScope::Descendants);
-        for (auto& element : elementsToClearHover)
-            element->setHovered(false, Style::InvalidationScope::SelfChildrenAndSiblings);
-    }
-    if (!elementsToSetHover.isEmpty()) {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*elementsToSetHover.last(), CSSSelector::PseudoClassHover, Style::InvalidationScope::Descendants);
-        for (auto& element : elementsToSetHover)
-            element->setHovered(true, Style::InvalidationScope::SelfChildrenAndSiblings);
-    }
+    auto changeState = [](auto& elements, auto pseudoClassType, auto&& setter) {
+        if (elements.isEmpty())
+            return;
+        Style::PseudoClassChangeInvalidation styleInvalidation { *elements.last(), pseudoClassType, Style::InvalidationScope::Descendants };
+        for (auto& element : elements)
+            setter(*element);
+    };
+
+    changeState(elementsToClearActive, CSSSelector::PseudoClassActive, [](auto& element) {
+        element.setActive(false, false, Style::InvalidationScope::SelfChildrenAndSiblings);
+    });
+    changeState(elementsToSetActive, CSSSelector::PseudoClassActive, [](auto& element) {
+        element.setActive(true, false, Style::InvalidationScope::SelfChildrenAndSiblings);
+    });
+    changeState(elementsToClearHover, CSSSelector::PseudoClassHover, [](auto& element) {
+        element.setHovered(false, Style::InvalidationScope::SelfChildrenAndSiblings);
+    });
+    changeState(elementsToSetHover, CSSSelector::PseudoClassHover, [](auto& element) {
+        element.setHovered(true, Style::InvalidationScope::SelfChildrenAndSiblings);
+    });
 }
 
 bool Document::haveStylesheetsLoaded() const
@@ -7981,21 +7777,21 @@ static void expandRootBoundsWithRootMargin(FloatRect& localRootBounds, const Len
     localRootBounds.expand(rootMarginFloatBox);
 }
 
-static Optional<LayoutRect> computeClippedRectInRootContentsSpace(const LayoutRect& rect, const RenderElement* renderer)
+static std::optional<LayoutRect> computeClippedRectInRootContentsSpace(const LayoutRect& rect, const RenderElement* renderer)
 {
     OptionSet<RenderObject::VisibleRectContextOption> visibleRectOptions = { RenderObject::VisibleRectContextOption::UseEdgeInclusiveIntersection, RenderObject::VisibleRectContextOption::ApplyCompositedClips, RenderObject::VisibleRectContextOption::ApplyCompositedContainerScrolls };
-    Optional<LayoutRect> rectInFrameAbsoluteSpace = renderer->computeVisibleRectInContainer(rect, &renderer->view(),  {false /* hasPositionFixedDescendant */, false /* dirtyRectIsFlipped */, visibleRectOptions });
+    std::optional<LayoutRect> rectInFrameAbsoluteSpace = renderer->computeVisibleRectInContainer(rect, &renderer->view(),  {false /* hasPositionFixedDescendant */, false /* dirtyRectIsFlipped */, visibleRectOptions });
     if (!rectInFrameAbsoluteSpace || renderer->frame().isMainFrame())
         return rectInFrameAbsoluteSpace;
 
     bool intersects = rectInFrameAbsoluteSpace->edgeInclusiveIntersect(renderer->view().frameView().layoutViewportRect());
     if (!intersects)
-        return WTF::nullopt;
+        return std::nullopt;
 
     LayoutRect rectInFrameViewSpace(renderer->view().frameView().contentsToView(snappedIntRect(*rectInFrameAbsoluteSpace)));
     auto* ownerRenderer = renderer->frame().ownerRenderer();
     if (!ownerRenderer)
-        return WTF::nullopt;
+        return std::nullopt;
 
     rectInFrameViewSpace.moveBy(ownerRenderer->contentBoxLocation());
     return computeClippedRectInRootContentsSpace(rectInFrameViewSpace, ownerRenderer);
@@ -8008,24 +7804,24 @@ struct IntersectionObservationState {
     bool isIntersecting { false };
 };
 
-static Optional<IntersectionObservationState> computeIntersectionState(FrameView& frameView, const IntersectionObserver& observer, Element& target, bool applyRootMargin)
+static std::optional<IntersectionObservationState> computeIntersectionState(FrameView& frameView, const IntersectionObserver& observer, Element& target, bool applyRootMargin)
 {
     auto* targetRenderer = target.renderer();
     if (!targetRenderer)
-        return WTF::nullopt;
+        return std::nullopt;
 
     FloatRect localRootBounds;
     RenderBlock* rootRenderer;
     if (observer.root()) {
         if (observer.trackingDocument() != &target.document())
-            return WTF::nullopt;
+            return std::nullopt;
 
         if (!observer.root()->renderer() || !is<RenderBlock>(observer.root()->renderer()))
-            return WTF::nullopt;
+            return std::nullopt;
 
         rootRenderer = downcast<RenderBlock>(observer.root()->renderer());
         if (!rootRenderer->isContainingBlockAncestorFor(*targetRenderer))
-            return WTF::nullopt;
+            return std::nullopt;
 
         if (observer.root() == &target.document())
             localRootBounds = frameView.layoutViewportRect();
@@ -8037,7 +7833,7 @@ static Optional<IntersectionObservationState> computeIntersectionState(FrameView
         ASSERT(frameView.frame().isMainFrame());
         // FIXME: Handle the case of an implicit-root observer that has a target in a different frame tree.
         if (&targetRenderer->frame().mainFrame() != &frameView.frame())
-            return WTF::nullopt;
+            return std::nullopt;
         rootRenderer = frameView.renderView();
         localRootBounds = frameView.layoutViewportRect();
     }
@@ -8057,7 +7853,7 @@ static Optional<IntersectionObservationState> computeIntersectionState(FrameView
     } else if (is<RenderLineBreak>(targetRenderer))
         localTargetBounds = downcast<RenderLineBreak>(targetRenderer)->linesBoundingBox();
 
-    Optional<LayoutRect> rootLocalTargetRect;
+    std::optional<LayoutRect> rootLocalTargetRect;
     if (observer.root()) {
         OptionSet<RenderObject::VisibleRectContextOption> visibleRectOptions = { RenderObject::VisibleRectContextOption::UseEdgeInclusiveIntersection, RenderObject::VisibleRectContextOption::ApplyCompositedClips, RenderObject::VisibleRectContextOption::ApplyCompositedContainerScrolls };
         rootLocalTargetRect = targetRenderer->computeVisibleRectInContainer(localTargetBounds, rootRenderer, { false /* hasPositionFixedDescendant */, false /* dirtyRectIsFlipped */, visibleRectOptions });
@@ -8143,7 +7939,7 @@ void Document::updateIntersectionObservations()
                         clientIntersectionRect = targetFrameView->absoluteToClientRect(intersectionState->absoluteIntersectionRect, target->renderer()->style().effectiveZoom());
                 }
 
-                Optional<DOMRectInit> reportedRootBounds;
+                std::optional<DOMRectInit> reportedRootBounds;
                 if (isSameOriginObservation) {
                     reportedRootBounds = DOMRectInit({
                         clientRootBounds.x(),
@@ -8419,12 +8215,12 @@ Logger& Document::logger()
     return *m_logger;
 }
     
-Optional<PageIdentifier> Document::pageID() const
+std::optional<PageIdentifier> Document::pageID() const
 {
     return m_frame->loader().pageID();
 }
 
-Optional<FrameIdentifier> Document::frameID() const
+std::optional<FrameIdentifier> Document::frameID() const
 {
     return m_frame->loader().frameID();
 }
@@ -8718,11 +8514,10 @@ void Document::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, Ve
             JSC::ConsoleClient::printConsoleMessage(message->source(), message->type(), message->level(), message->toString(), message->url(), message->line(), message->column());
     }
 
-    m_logMessageTaskQueue.enqueueTask([this, message = WTFMove(message)]() mutable {
-        if (!this->page())
+    eventLoop().queueTask(TaskSource::InternalAsyncTask, [weakThis = makeWeakPtr(*this), message = WTFMove(message)]() mutable {
+        if (!weakThis || !weakThis->page())
             return;
-
-        addConsoleMessage(WTFMove(message));
+        weakThis->addConsoleMessage(WTFMove(message));
     });
 }
 
@@ -8740,7 +8535,7 @@ void Document::setServiceWorkerConnection(SWClientConnection* serviceWorkerConne
     if (!m_serviceWorkerConnection)
         return;
 
-    auto controllingServiceWorkerRegistrationIdentifier = activeServiceWorker() ? makeOptional<ServiceWorkerRegistrationIdentifier>(activeServiceWorker()->registrationIdentifier()) : WTF::nullopt;
+    auto controllingServiceWorkerRegistrationIdentifier = activeServiceWorker() ? std::make_optional<ServiceWorkerRegistrationIdentifier>(activeServiceWorker()->registrationIdentifier()) : std::nullopt;
     m_serviceWorkerConnection->registerServiceWorkerClient(topOrigin(), ServiceWorkerClientData::from(*this, *serviceWorkerConnection), controllingServiceWorkerRegistrationIdentifier, userAgent(url()));
 }
 #endif
@@ -9040,7 +8835,7 @@ void Document::clearCanvasPreparation(HTMLCanvasElement& canvas)
     m_canvasesNeedingDisplayPreparation.remove(canvas);
 }
 
-void Document::canvasChanged(CanvasBase& canvasBase, const Optional<FloatRect>&)
+void Document::canvasChanged(CanvasBase& canvasBase, const std::optional<FloatRect>&)
 {
     if (!is<HTMLCanvasElement>(canvasBase))
         return;

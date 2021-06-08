@@ -32,6 +32,7 @@
 #include <WebCore/SharedBuffer.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/InstanceCounted.h>
+#include <wtf/Lock.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
@@ -51,7 +52,7 @@ struct URLSchemeTaskParameters;
 class WebURLSchemeHandler;
 class WebPageProxy;
 
-using SyncLoadCompletionHandler = CompletionHandler<void(const WebCore::ResourceResponse&, const WebCore::ResourceError&, const Vector<char>&)>;
+using SyncLoadCompletionHandler = CompletionHandler<void(const WebCore::ResourceResponse&, const WebCore::ResourceError&, const Vector<uint8_t>&)>;
 
 class WebURLSchemeTask : public API::ObjectImpl<API::Object::Type::URLSchemeTask>, public InstanceCounted<WebURLSchemeTask> {
     WTF_MAKE_NONCOPYABLE(WebURLSchemeTask);
@@ -64,7 +65,7 @@ public:
     WebPageProxyIdentifier pageProxyID() const { ASSERT(RunLoop::isMain()); return m_pageProxyID; }
     WebCore::PageIdentifier webPageID() const { ASSERT(RunLoop::isMain()); return m_webPageID; }
     WebProcessProxy* process() { ASSERT(RunLoop::isMain()); return m_process.get(); }
-    const WebCore::ResourceRequest& request() const { ASSERT(RunLoop::isMain()); return m_request; }
+    WebCore::ResourceRequest request() const;
     API::FrameInfo& frameInfo() const { return m_frameInfo.get(); }
 
 #if PLATFORM(COCOA)
@@ -103,7 +104,7 @@ private:
     uint64_t m_identifier;
     WebPageProxyIdentifier m_pageProxyID;
     WebCore::PageIdentifier m_webPageID;
-    WebCore::ResourceRequest m_request;
+    WebCore::ResourceRequest m_request WTF_GUARDED_BY_LOCK(m_requestLock);
     Ref<API::FrameInfo> m_frameInfo;
     mutable Lock m_requestLock;
     bool m_stopped { false };

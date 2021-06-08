@@ -1447,7 +1447,7 @@ public:
         return op() == IsCellWithType;
     }
 
-    Optional<SpeculatedType> speculatedTypeForQuery()
+    std::optional<SpeculatedType> speculatedTypeForQuery()
     {
         return speculationFromJSType(queriedType());
     }
@@ -2797,6 +2797,16 @@ public:
     {
         return isNotCellNorBigIntSpeculation(prediction());
     }
+
+    bool shouldSpeculateNotDouble()
+    {
+        return isNotDoubleSpeculation(prediction());
+    }
+
+    bool shouldSpeculateNeitherDoubleNorHeapBigIntNorString()
+    {
+        return isNeitherDoubleNorHeapBigIntNorStringSpeculation(prediction());
+    }
     
     bool shouldSpeculateUntypedForArithmetic()
     {
@@ -3109,15 +3119,15 @@ public:
         return m_opInfo.as<GetByStatus*>();
     }
     
-    bool hasInByIdStatus()
+    bool hasInByStatus()
     {
-        return op() == FilterInByIdStatus;
+        return op() == FilterInByStatus;
     }
     
-    InByIdStatus* inByIdStatus()
+    InByStatus* inByStatus()
     {
-        ASSERT(hasInByIdStatus());
-        return m_opInfo.as<InByIdStatus*>();
+        ASSERT(hasInByStatus());
+        return m_opInfo.as<InByStatus*>();
     }
     
     bool hasPutByIdStatus()

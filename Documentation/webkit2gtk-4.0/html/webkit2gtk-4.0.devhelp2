@@ -231,6 +231,7 @@
     <keyword type="function" name="webkit_web_view_get_website_policies ()" link="WebKitWebView.html#webkit-web-view-get-website-policies" since="2.30"/>
     <keyword type="function" name="webkit_web_view_get_is_web_process_responsive ()" link="WebKitWebView.html#webkit-web-view-get-is-web-process-responsive"/>
     <keyword type="function" name="webkit_web_view_terminate_web_process ()" link="WebKitWebView.html#webkit-web-view-terminate-web-process" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_set_cors_allowlist ()" link="WebKitWebView.html#webkit-web-view-set-cors-allowlist" since="2.34"/>
     <keyword type="function" name="webkit_javascript_result_ref ()" link="WebKitWebView.html#webkit-javascript-result-ref"/>
     <keyword type="function" name="webkit_javascript_result_unref ()" link="WebKitWebView.html#webkit-javascript-result-unref"/>
     <keyword type="function" name="webkit_javascript_result_get_global_context ()" link="WebKitWebView.html#webkit-javascript-result-get-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>

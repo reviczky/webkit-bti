@@ -74,7 +74,7 @@ private:
     void initializeConfigurationIfNecessary();
 
     CategoryType category() const final;
-    WebCore::RouteSharingPolicy routeSharingPolicy() const final { return configuration().routeSharingPolicy; }
+    WebCore::RouteSharingPolicy routeSharingPolicy() const final { return m_routeSharingPolicy; }
     String routingContextUID() const final { return configuration().routingContextUID; }
     float sampleRate() const final { return configuration().sampleRate; }
     size_t bufferSize() const final { return configuration().bufferSize; }
@@ -85,7 +85,10 @@ private:
     bool isActive() const final { return configuration().isActive; }
 
     WebProcess& m_process;
-    Optional<RemoteAudioSessionConfiguration> m_configuration;
+
+    CategoryType m_category { CategoryType::None };
+    WebCore::RouteSharingPolicy m_routeSharingPolicy { WebCore::RouteSharingPolicy::Default };
+    std::optional<RemoteAudioSessionConfiguration> m_configuration;
     WeakPtr<GPUProcessConnection> m_gpuProcessConnection;
 };
 

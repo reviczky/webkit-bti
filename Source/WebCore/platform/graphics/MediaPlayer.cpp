@@ -37,6 +37,7 @@
 #include "MIMETypeRegistry.h"
 #include "MediaPlayerPrivate.h"
 #include "PlatformTimeRanges.h"
+#include <wtf/Lock.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
 #include "InbandTextTrackPrivate.h"
@@ -205,7 +206,7 @@ static void addMediaEngine(std::unique_ptr<MediaPlayerFactory>&&);
 
 static Lock mediaEngineVectorLock;
 
-static bool& haveMediaEnginesVector()
+static bool& haveMediaEnginesVector() WTF_REQUIRES_LOCK(mediaEngineVectorLock)
 {
     static bool haveVector;
     return haveVector;
@@ -228,7 +229,7 @@ void RemoteMediaPlayerSupport::setRegisterRemotePlayerCallback(RegisterRemotePla
     registerRemotePlayerCallback() = WTFMove(callback);
 }
 
-static void buildMediaEnginesVector()
+static void buildMediaEnginesVector() WTF_REQUIRES_LOCK(mediaEngineVectorLock)
 {
     ASSERT(mediaEngineVectorLock.isLocked());
 
@@ -282,7 +283,7 @@ static void buildMediaEnginesVector()
 static const Vector<std::unique_ptr<MediaPlayerFactory>>& installedMediaEngines()
 {
     {
-        auto locker = holdLock(mediaEngineVectorLock);
+        Locker locker { mediaEngineVectorLock };
         if (!haveMediaEnginesVector())
             buildMediaEnginesVector();
     }
@@ -1164,9 +1165,8 @@ bool MediaPlayer::didPassCORSAccessCheck() const
 
 bool MediaPlayer::wouldTaintOrigin(const SecurityOrigin& origin) const
 {
-    auto wouldTaint = m_private->wouldTaintOrigin(origin);
-    if (wouldTaint.hasValue())
-        return wouldTaint.value();
+    if (auto wouldTaint = m_private->wouldTaintOrigin(origin))
+        return *wouldTaint;
 
     if (m_url.protocolIsData())
         return false;
@@ -1280,7 +1280,7 @@ void MediaPlayer::readyStateChanged()
 {
     client().mediaPlayerReadyStateChanged();
     if (m_pendingSeekRequest && m_private->readyState() == MediaPlayer::ReadyState::HaveMetadata)
-        seek(*std::exchange(m_pendingSeekRequest, WTF::nullopt));
+        seek(*std::exchange(m_pendingSeekRequest, std::nullopt));
 }
 
 void MediaPlayer::volumeChanged(double newVolume)
@@ -1501,7 +1501,7 @@ Vector<RefPtr<PlatformTextTrack>> MediaPlayer::outOfBandTrackSources()
 
 void MediaPlayer::resetMediaEngines()
 {
-    auto locker = holdLock(mediaEngineVectorLock);
+    Locker locker { mediaEngineVectorLock };
 
     mutableInstalledMediaEnginesVector().clear();
     haveMediaEnginesVector() = false;
@@ -1558,10 +1558,10 @@ bool MediaPlayer::ended() const
     return m_private->ended();
 }
 
-Optional<VideoPlaybackQualityMetrics> MediaPlayer::videoPlaybackQualityMetrics()
+std::optional<VideoPlaybackQualityMetrics> MediaPlayer::videoPlaybackQualityMetrics()
 {
     if (!m_private)
-        return WTF::nullopt;
+        return std::nullopt;
 
     return m_private->videoPlaybackQualityMetrics();
 }

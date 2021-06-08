@@ -28,7 +28,7 @@
 
 #include "CachedImage.h"
 #include "CanvasPattern.h"
-#include "ColorSpace.h"
+#include "DestinationColorSpace.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLVideoElement.h"
@@ -46,30 +46,31 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(CanvasRenderingContext);
 
-HashSet<CanvasRenderingContext*>& CanvasRenderingContext::instances(const LockHolder&)
+Lock CanvasRenderingContext::s_instancesLock;
+
+HashSet<CanvasRenderingContext*>& CanvasRenderingContext::instances()
 {
     static NeverDestroyed<HashSet<CanvasRenderingContext*>> instances;
     return instances;
 }
 
-Lock& CanvasRenderingContext::instancesMutex()
+Lock& CanvasRenderingContext::instancesLock()
 {
-    static Lock mutex;
-    return mutex;
+    return s_instancesLock;
 }
 
 CanvasRenderingContext::CanvasRenderingContext(CanvasBase& canvas)
     : m_canvas(canvas)
 {
-    LockHolder lock(instancesMutex());
-    instances(lock).add(this);
+    Locker locker { instancesLock() };
+    instances().add(this);
 }
 
 CanvasRenderingContext::~CanvasRenderingContext()
 {
-    LockHolder lock(instancesMutex());
-    ASSERT(instances(lock).contains(this));
-    instances(lock).remove(this);
+    Locker locker { instancesLock() };
+    ASSERT(instances().contains(this));
+    instances().remove(this);
 }
 
 void CanvasRenderingContext::ref()
@@ -89,7 +90,7 @@ PixelFormat CanvasRenderingContext::pixelFormat() const
 
 DestinationColorSpace CanvasRenderingContext::colorSpace() const
 {
-    return DestinationColorSpace::SRGB;
+    return DestinationColorSpace::SRGB();
 }
 
 bool CanvasRenderingContext::wouldTaintOrigin(const CanvasPattern* pattern)

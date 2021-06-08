@@ -33,6 +33,7 @@
 #include "LibWebRTCMacros.h"
 #include "MediaStreamTrackPrivate.h"
 #include <Timer.h>
+#include <wtf/Lock.h>
 
 ALLOW_UNUSED_PARAMETERS_BEGIN
 
@@ -41,7 +42,6 @@ ALLOW_UNUSED_PARAMETERS_BEGIN
 ALLOW_UNUSED_PARAMETERS_END
 
 #include <wtf/LoggerHelper.h>
-#include <wtf/Optional.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
@@ -142,7 +142,7 @@ private:
     rtc::scoped_refptr<webrtc::VideoFrameBuffer> m_blackFrame;
 
     mutable Lock m_sinksLock;
-    HashSet<rtc::VideoSinkInterface<webrtc::VideoFrame>*> m_sinks;
+    HashSet<rtc::VideoSinkInterface<webrtc::VideoFrame>*> m_sinks WTF_GUARDED_BY_LOCK(m_sinksLock);
     bool m_areSinksAskingToApplyRotation { false };
 
     bool m_enabled { true };

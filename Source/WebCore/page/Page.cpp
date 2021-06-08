@@ -87,6 +87,7 @@
 #include "MediaCanStartListener.h"
 #include "MediaRecorderProvider.h"
 #include "Navigator.h"
+#include "PageColorSampler.h"
 #include "PageConfiguration.h"
 #include "PageConsoleClient.h"
 #include "PageDebuggable.h"
@@ -171,6 +172,11 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 #include "DisplayView.h"
+#endif
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+#include "MediaSessionCoordinator.h"
+#include "NavigatorMediaSession.h"
 #endif
 
 namespace WebCore {
@@ -430,7 +436,7 @@ ViewportArguments Page::viewportArguments() const
     return mainFrame().document() ? mainFrame().document()->viewportArguments() : ViewportArguments();
 }
 
-void Page::setOverrideViewportArguments(const Optional<ViewportArguments>& viewportArguments)
+void Page::setOverrideViewportArguments(const std::optional<ViewportArguments>& viewportArguments)
 {
     if (viewportArguments == m_overrideViewportArguments)
         return;
@@ -657,7 +663,7 @@ bool Page::showAllPlugins() const
     return false;
 }
 
-inline Optional<std::pair<MediaCanStartListener&, Document&>>  Page::takeAnyMediaCanStartListener()
+inline std::optional<std::pair<MediaCanStartListener&, Document&>>  Page::takeAnyMediaCanStartListener()
 {
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (!frame->document())
@@ -665,7 +671,7 @@ inline Optional<std::pair<MediaCanStartListener&, Document&>>  Page::takeAnyMedi
         if (MediaCanStartListener* listener = frame->document()->takeAnyMediaCanStartListener())
             return { { *listener, *frame->document() } };
     }
-    return WTF::nullopt;
+    return std::nullopt;
 }
 
 void Page::setCanStartMedia(bool canStartMedia)
@@ -767,19 +773,19 @@ auto Page::findTextMatches(const String& target, FindOptions options, unsigned l
     return result;
 }
 
-Optional<SimpleRange> Page::rangeOfString(const String& target, const Optional<SimpleRange>& referenceRange, FindOptions options)
+std::optional<SimpleRange> Page::rangeOfString(const String& target, const std::optional<SimpleRange>& referenceRange, FindOptions options)
 {
     if (target.isEmpty())
-        return WTF::nullopt;
+        return std::nullopt;
 
     if (referenceRange && referenceRange->start.document().page() != this)
-        return WTF::nullopt;
+        return std::nullopt;
 
     CanWrap canWrap = options.contains(WrapAround) ? CanWrap::Yes : CanWrap::No;
     Frame* frame = referenceRange ? referenceRange->start.document().frame() : &mainFrame();
     Frame* startFrame = frame;
     do {
-        if (auto resultRange = frame->editor().rangeOfString(target, frame == startFrame ? referenceRange : WTF::nullopt, options - WrapAround))
+        if (auto resultRange = frame->editor().rangeOfString(target, frame == startFrame ? referenceRange : std::nullopt, options - WrapAround))
             return resultRange;
         frame = incrementFrame(frame, !options.contains(Backwards), canWrap);
     } while (frame && frame != startFrame);
@@ -791,7 +797,7 @@ Optional<SimpleRange> Page::rangeOfString(const String& target, const Optional<S
             return resultRange;
     }
 
-    return WTF::nullopt;
+    return std::nullopt;
 }
 
 unsigned Page::findMatchesForText(const String& target, FindOptions options, unsigned maxMatchCount, ShouldHighlightMatches shouldHighlightMatches, ShouldMarkMatches shouldMarkMatches)
@@ -805,7 +811,7 @@ unsigned Page::findMatchesForText(const String& target, FindOptions options, uns
     do {
         if (shouldMarkMatches == MarkMatches)
             frame->editor().setMarkedTextMatchesAreHighlighted(shouldHighlightMatches == HighlightMatches);
-        matchCount += frame->editor().countMatchesForText(target, WTF::nullopt, options, maxMatchCount ? (maxMatchCount - matchCount) : 0, shouldMarkMatches == MarkMatches, nullptr);
+        matchCount += frame->editor().countMatchesForText(target, std::nullopt, options, maxMatchCount ? (maxMatchCount - matchCount) : 0, shouldMarkMatches == MarkMatches, nullptr);
         frame = incrementFrame(frame, true, CanWrap::No);
     } while (frame);
 
@@ -1053,6 +1059,15 @@ DiagnosticLoggingClient& Page::diagnosticLoggingClient() const
     return *m_diagnosticLoggingClient;
 }
 
+void Page::logMediaDiagnosticMessage(const FormData* formData) const
+{
+    unsigned imageOrMediaFilesCount = formData ? formData->imageOrMediaFilesCount() : 0;
+    if (!imageOrMediaFilesCount)
+        return;
+    auto message = makeString(imageOrMediaFilesCount, imageOrMediaFilesCount == 1 ? " media file has been submitted" : " media files have been submitted");
+    diagnosticLoggingClient().logDiagnosticMessageWithDomain(message, DiagnosticLoggingDomain::Media);
+}
+
 void Page::setMediaVolume(float volume)
 {
     if (!(volume >= 0 && volume <= 1))
@@ -1175,7 +1190,7 @@ void Page::screenPropertiesDidChange()
     setNeedsRecalcStyleInAllFrames();
 }
 
-void Page::windowScreenDidChange(PlatformDisplayID displayID, Optional<FramesPerSecond> nominalFramesPerSecond)
+void Page::windowScreenDidChange(PlatformDisplayID displayID, std::optional<FramesPerSecond> nominalFramesPerSecond)
 {
     if (displayID == m_displayID && nominalFramesPerSecond == m_displayNominalFramesPerSecond)
         return;
@@ -1254,7 +1269,7 @@ void Page::didCommitLoad()
 #endif
 
 #if HAVE(OS_DARK_MODE_SUPPORT)
-    setUseDarkAppearanceOverride(WTF::nullopt);
+    setUseDarkAppearanceOverride(std::nullopt);
 #endif
 
     resetSeenPlugins();
@@ -1276,7 +1291,7 @@ bool Page::isOnlyNonUtilityPage() const
     return !isUtilityPage() && nonUtilityPageCount == 1;
 }
 
-void Page::setLowPowerModeEnabledOverrideForTesting(Optional<bool> isEnabled)
+void Page::setLowPowerModeEnabledOverrideForTesting(std::optional<bool> isEnabled)
 {
     // Remove ThrottlingReason::LowPowerMode so handleLowModePowerChange() can do its work.
     m_throttlingReasonsOverridenForTesting.remove(ThrottlingReason::LowPowerMode);
@@ -1672,6 +1687,12 @@ void Page::doAfterUpdateRendering()
         ASSERT(!frameView || !frameView->needsLayout());
     }
 #endif
+
+    if (!m_sampledPageTopColor) {
+        m_sampledPageTopColor = PageColorSampler::sampleTop(*this);
+        if (m_sampledPageTopColor)
+            chrome().client().sampledPageTopColorChanged();
+    }
 }
 
 void Page::finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags> flags)
@@ -1787,7 +1808,7 @@ void Page::resumeScriptedAnimations()
     });
 }
 
-Optional<FramesPerSecond> Page::preferredRenderingUpdateFramesPerSecond() const
+std::optional<FramesPerSecond> Page::preferredRenderingUpdateFramesPerSecond() const
 {
     return preferredFramesPerSecond(m_throttlingReasons, m_displayNominalFramesPerSecond, settings().preferPageRenderingUpdatesNear60FPSEnabled());
 }
@@ -1834,16 +1855,15 @@ void Page::userStyleSheetLocationChanged()
 
     m_didLoadUserStyleSheet = false;
     m_userStyleSheet = String();
-    m_userStyleSheetModificationTime = WTF::nullopt;
+    m_userStyleSheetModificationTime = std::nullopt;
 
     // Data URLs with base64-encoded UTF-8 style sheets are common. We can process them
     // synchronously and avoid using a loader. 
     if (url.protocolIsData() && url.string().startsWith("data:text/css;charset=utf-8;base64,")) {
         m_didLoadUserStyleSheet = true;
 
-        Vector<char> styleSheetAsUTF8;
-        if (base64Decode(decodeURLEscapeSequences(url.string().substring(35)), styleSheetAsUTF8, Base64IgnoreSpacesAndNewLines))
-            m_userStyleSheet = String::fromUTF8(styleSheetAsUTF8.data(), styleSheetAsUTF8.size());
+        if (auto styleSheetAsUTF8 = base64Decode(decodeURLEscapeSequences(url.string().substring(35)), Base64DecodeOptions::IgnoreSpacesAndNewLines))
+            m_userStyleSheet = String::fromUTF8(styleSheetAsUTF8->data(), styleSheetAsUTF8->size());
     }
 
     forEachDocument([] (Document& document) {
@@ -1856,7 +1876,7 @@ const String& Page::userStyleSheet() const
     if (m_userStyleSheetPath.isEmpty())
         return m_userStyleSheet;
 
-    auto modificationTime = FileSystem::getFileModificationTime(m_userStyleSheetPath);
+    auto modificationTime = FileSystem::fileModificationTime(m_userStyleSheetPath);
     if (!modificationTime) {
         // The stylesheet either doesn't exist, was just deleted, or is
         // otherwise unreadable. If we've read the stylesheet before, we should
@@ -1935,8 +1955,10 @@ void Page::setDebugger(JSC::Debugger* debugger)
 
 StorageNamespace* Page::sessionStorage(bool optionalCreate)
 {
-    if (!m_sessionStorage && optionalCreate)
+    if (!m_sessionStorage && optionalCreate) {
+        ASSERT(m_settings->sessionStorageQuota() != StorageMap::noQuota);
         m_sessionStorage = m_storageNamespaceProvider->createSessionStorageNamespace(*this, m_settings->sessionStorageQuota());
+    }
 
     return m_sessionStorage.get();
 }
@@ -2114,7 +2136,7 @@ void Page::storageBlockingStateChanged()
         view->storageBlockingStateChanged();
 }
 
-void Page::updateIsPlayingMedia(uint64_t sourceElementID)
+void Page::updateIsPlayingMedia()
 {
     MediaProducer::MediaStateFlags state;
     forEachDocument([&](auto& document) {
@@ -2126,7 +2148,7 @@ void Page::updateIsPlayingMedia(uint64_t sourceElementID)
 
     m_mediaState = state;
 
-    chrome().client().isPlayingMediaDidChange(state, sourceElementID);
+    chrome().client().isPlayingMediaDidChange(state);
 }
 
 void Page::schedulePlaybackControlsManagerUpdate()
@@ -2373,7 +2395,7 @@ void Page::setIsVisibleInternal(bool isVisible)
 
         if (m_navigationToLogWhenVisible) {
             logNavigation(m_navigationToLogWhenVisible.value());
-            m_navigationToLogWhenVisible = WTF::nullopt;
+            m_navigationToLogWhenVisible = std::nullopt;
         }
     }
 
@@ -2556,11 +2578,26 @@ Color Page::pageExtendedBackgroundColor() const
 
 Color Page::sampledPageTopColor() const
 {
-    auto* document = mainFrame().document();
-    if (!document)
-        return { };
+    return m_sampledPageTopColor.value_or(Color());
+}
 
-    return document->sampledPageTopColor();
+void Page::setUnderPageBackgroundColorOverride(Color&& underPageBackgroundColorOverride)
+{
+    if (underPageBackgroundColorOverride == m_underPageBackgroundColorOverride)
+        return;
+
+    m_underPageBackgroundColorOverride = WTFMove(underPageBackgroundColorOverride);
+
+    scheduleRenderingUpdate({ });
+
+#if ENABLE(RUBBER_BANDING)
+    if (auto frameView = makeRefPtr(mainFrame().view())) {
+        if (auto* renderView = frameView->renderView()) {
+            if (renderView->usesCompositing())
+                renderView->compositor().updateLayerForOverhangAreasBackgroundColor();
+        }
+    }
+#endif // ENABLE(RUBBER_BANDING)
 }
 
 // These are magical constants that might be tweaked over time.
@@ -2846,7 +2883,7 @@ void Page::mainFrameLoadStarted(const URL& destinationURL, FrameLoadType type)
         return;
     }
 
-    m_navigationToLogWhenVisible = WTF::nullopt;
+    m_navigationToLogWhenVisible = std::nullopt;
     logNavigation(navigation);
 }
 
@@ -3195,7 +3232,7 @@ bool Page::useDarkAppearance() const
 #endif
 }
 
-void Page::setUseDarkAppearanceOverride(Optional<bool> valueOverride)
+void Page::setUseDarkAppearanceOverride(std::optional<bool> valueOverride)
 {
 #if HAVE(OS_DARK_MODE_SUPPORT)
     if (valueOverride == m_useDarkAppearanceOverride)
@@ -3266,6 +3303,11 @@ void Page::didChangeMainDocument()
     m_rtcController.reset(m_shouldEnableICECandidateFilteringByDefault);
 #endif
     m_pointerCaptureController->reset();
+
+    if (m_sampledPageTopColor) {
+        m_sampledPageTopColor = std::nullopt;
+        chrome().client().sampledPageTopColorChanged();
+    }
 }
 
 RenderingUpdateScheduler& Page::renderingUpdateScheduler()
@@ -3377,6 +3419,31 @@ void Page::dispatchAfterPrintEvent()
 void Page::setPaymentCoordinator(std::unique_ptr<PaymentCoordinator>&& paymentCoordinator)
 {
     m_paymentCoordinator = WTFMove(paymentCoordinator);
+}
+#endif
+
+#if ENABLE(MEDIA_SESSION_COORDINATOR)
+void Page::setMediaSessionCoordinator(Ref<MediaSessionCoordinatorPrivate>&& mediaSessionCoordinator)
+{
+    m_mediaSessionCoordinator = WTFMove(mediaSessionCoordinator);
+
+    auto* window = mainFrame().window();
+    if (auto* navigator = window ? window->optionalNavigator() : nullptr)
+        NavigatorMediaSession::mediaSession(*navigator).coordinator().setMediaSessionCoordinatorPrivate(*m_mediaSessionCoordinator);
+}
+
+void Page::invalidateMediaSessionCoordinator()
+{
+    m_mediaSessionCoordinator = nullptr;
+    auto* window = mainFrame().window();
+    if (!window)
+        return;
+
+    auto* navigator = window->optionalNavigator();
+    if (!navigator)
+        return;
+
+    NavigatorMediaSession::mediaSession(*navigator).coordinator().close();
 }
 #endif
 

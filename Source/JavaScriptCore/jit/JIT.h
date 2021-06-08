@@ -94,6 +94,17 @@ namespace JSC {
     using FarCallRecord = CallRecord<OperationPtrTag>;
     using NearCallRecord = CallRecord<JSInternalPtrTag>;
 
+    struct NearJumpRecord {
+        MacroAssembler::Jump from;
+        CodeLocationLabel<JITThunkPtrTag> target;
+
+        NearJumpRecord() = default;
+        NearJumpRecord(MacroAssembler::Jump from, CodeLocationLabel<JITThunkPtrTag> target)
+            : from(from)
+            , target(target)
+        { }
+    };
+
     struct JumpTable {
         MacroAssembler::Jump from;
         unsigned toBytecodeOffset;
@@ -175,9 +186,8 @@ namespace JSC {
     };
 
     struct CallCompilationInfo {
-        MacroAssembler::DataLabelPtr hotPathBegin;
-        MacroAssembler::Call hotPathOther;
-        MacroAssembler::Call callReturnLocation;
+        MacroAssembler::Label slowPathStart;
+        MacroAssembler::Label doneLocation;
         CallLinkInfo* callLinkInfo;
     };
 
@@ -186,6 +196,7 @@ namespace JSC {
     class JIT_CLASS_ALIGNMENT JIT : private JSInterfaceJIT {
         friend class JITSlowPathCall;
         friend class JITStubCall;
+        friend class JITThunks;
 
         using MacroAssembler::Jump;
         using MacroAssembler::JumpList;
@@ -203,8 +214,9 @@ namespace JSC {
 
         VM& vm() { return *JSInterfaceJIT::vm(); }
 
-        void compileWithoutLinking(JITCompilationEffort);
-        CompilationResult link();
+        void compileAndLinkWithoutFinalizing(JITCompilationEffort);
+        CompilationResult finalizeOnMainThread();
+        size_t codeSize() const;
 
         void doMainThreadPreparationBeforeCompile();
         
@@ -259,6 +271,7 @@ namespace JSC {
         void privateCompileMainPass();
         void privateCompileLinkPass();
         void privateCompileSlowCases();
+        void link();
         CompilationResult privateCompile(JITCompilationEffort);
         
         void privateCompileGetByVal(const ConcurrentJSLocker&, ByValInfo*, ReturnAddressPtr, JITArrayMode);
@@ -305,7 +318,9 @@ namespace JSC {
             m_exceptionChecksWithCallFrameRollback.append(emitExceptionCheck(vm()));
         }
 
+#if !ENABLE(EXTRA_CTI_THUNKS)
         void privateCompileExceptionHandlers();
+#endif
 
         void advanceToNextCheckpoint();
         void emitJumpSlowToHotForCheckpoint(Jump);
@@ -341,11 +356,8 @@ namespace JSC {
         template<typename Op>
         void emitPutCallResult(const Op&);
 
-        enum class CompileOpStrictEqType { StrictEq, NStrictEq };
-        template<typename Op>
-        void compileOpStrictEq(const Instruction*, CompileOpStrictEqType);
-        template<typename Op>
-        void compileOpStrictEqJump(const Instruction*, CompileOpStrictEqType);
+        template<typename Op> void compileOpStrictEq(const Instruction*);
+        template<typename Op> void compileOpStrictEqJump(const Instruction*);
         enum class CompileOpEqType { Eq, NEq };
         void compileOpEqJumpSlow(Vector<SlowCaseEntry>::iterator&, CompileOpEqType, int jumpTarget);
         bool isOperandConstantDouble(VirtualRegister);
@@ -555,6 +567,7 @@ namespace JSC {
         void emit_op_get_argument_by_val(const Instruction*);
         void emit_op_get_prototype_of(const Instruction*);
         void emit_op_in_by_id(const Instruction*);
+        void emit_op_in_by_val(const Instruction*);
         void emit_op_init_lazy_reg(const Instruction*);
         void emit_op_overrides_has_instance(const Instruction*);
         void emit_op_instanceof(const Instruction*);
@@ -688,6 +701,7 @@ namespace JSC {
         void emitSlow_op_check_private_brand(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_get_argument_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_in_by_id(const Instruction*, Vector<SlowCaseEntry>::iterator&);
+        void emitSlow_op_in_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_instanceof(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_instanceof_custom(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_jless(const Instruction*, Vector<SlowCaseEntry>::iterator&);
@@ -721,7 +735,9 @@ namespace JSC {
         void emit_op_put_to_scope(const Instruction*);
         void emit_op_get_from_arguments(const Instruction*);
         void emit_op_put_to_arguments(const Instruction*);
+#if !ENABLE(EXTRA_CTI_THUNKS)
         void emitSlow_op_get_from_scope(const Instruction*, Vector<SlowCaseEntry>::iterator&);
+#endif
         void emitSlow_op_put_to_scope(const Instruction*, Vector<SlowCaseEntry>::iterator&);
 
         void emitSlowCaseCall(const Instruction*, Vector<SlowCaseEntry>::iterator&, SlowPathFunction);
@@ -773,6 +789,86 @@ namespace JSC {
         void emitMathICSlow(JITBinaryMathIC<Generator>*, const Instruction*, ProfiledRepatchFunction, ProfiledFunction, RepatchFunction);
         template <typename Op, typename Generator, typename ProfiledRepatchFunction, typename ProfiledFunction, typename RepatchFunction>
         void emitMathICSlow(JITUnaryMathIC<Generator>*, const Instruction*, ProfiledRepatchFunction, ProfiledFunction, RepatchFunction);
+
+#if ENABLE(EXTRA_CTI_THUNKS)
+        // Thunk generators.
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator0(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator1(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator2(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator3(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator4(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator5(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator6(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator7(VM&);
+        MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator(VM&, bool doesProfiling, bool isConstructor, bool hasHugeFrame, const char* name);
+
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator0(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator1(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator2(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator3(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator4(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator5(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator6(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator7(VM&);
+        MacroAssemblerCodeRef<JITThunkPtrTag> arityFixupPrologueGenerator(VM&, bool isConstructor, ThunkGenerator normalPrologueGenerator, const char* name);
+
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_del_by_id_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_del_by_val_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_id_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_id_with_this_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_val_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_from_scopeGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_private_name_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_by_id_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_by_val_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_private_name_prepareCallGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_to_scopeGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_resolve_scopeGenerator(VM&);
+
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_check_traps_handlerGenerator(VM&);
+
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_enter_canBeOptimized_Generator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_enter_cannotBeOptimized_Generator(VM&);
+        MacroAssemblerCodeRef<JITThunkPtrTag> op_enter_Generator(VM&, bool canBeOptimized, const char* thunkName);
+
+#if ENABLE(DFG_JIT)
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_loop_hint_Generator(VM&);
+#endif
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_ret_handlerGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_throw_handlerGenerator(VM&);
+
+        static constexpr bool thunkIsUsedForOpGetFromScope(ResolveType resolveType)
+        {
+            // GlobalVar because it is more efficient to emit inline than use a thunk.
+            // ResolvedClosureVar and ModuleVar because we don't use these types with op_get_from_scope.
+            return !(resolveType == GlobalVar || resolveType == ResolvedClosureVar || resolveType == ModuleVar);
+        }
+
+#define DECLARE_GET_FROM_SCOPE_GENERATOR(resolveType) \
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_get_from_scope_##resolveType##Generator(VM&);
+        FOR_EACH_RESOLVE_TYPE(DECLARE_GET_FROM_SCOPE_GENERATOR)
+#undef DECLARE_GET_FROM_SCOPE_GENERATOR
+
+        MacroAssemblerCodeRef<JITThunkPtrTag> generateOpGetFromScopeThunk(ResolveType, const char* thunkName);
+
+        static constexpr bool thunkIsUsedForOpResolveScope(ResolveType resolveType)
+        {
+            // ModuleVar because it is more efficient to emit inline than use a thunk.
+            // ResolvedClosureVar because we don't use these types with op_resolve_scope.
+            return !(resolveType == ResolvedClosureVar || resolveType == ModuleVar);
+        }
+
+#define DECLARE_RESOLVE_SCOPE_GENERATOR(resolveType) \
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_resolve_scope_##resolveType##Generator(VM&);
+        FOR_EACH_RESOLVE_TYPE(DECLARE_RESOLVE_SCOPE_GENERATOR)
+#undef DECLARE_RESOLVE_SCOPE_GENERATOR
+
+        MacroAssemblerCodeRef<JITThunkPtrTag> generateOpResolveScopeThunk(ResolveType, const char* thunkName);
+
+        static MacroAssemblerCodeRef<JITThunkPtrTag> valueIsFalseyGenerator(VM&);
+        static MacroAssemblerCodeRef<JITThunkPtrTag> valueIsTruthyGenerator(VM&);
+
+#endif // ENABLE(EXTRA_CTI_THUNKS)
 
         Jump getSlowCase(Vector<SlowCaseEntry>::iterator& iter)
         {
@@ -910,8 +1006,9 @@ namespace JSC {
 
         void updateTopCallFrame();
 
-        Call emitNakedNearCall(CodePtr<NoPtrTag> function = CodePtr<NoPtrTag>());
-        Call emitNakedNearTailCall(CodePtr<NoPtrTag> function = CodePtr<NoPtrTag>());
+        Call emitNakedNearCall(CodePtr<NoPtrTag> function = { });
+        Call emitNakedNearTailCall(CodePtr<NoPtrTag> function = { });
+        Jump emitNakedNearJump(CodePtr<JITThunkPtrTag> function = { });
 
         // Loads the character value of a single character string into dst.
         void emitLoadCharacterString(RegisterID src, RegisterID dst, JumpList& failures);
@@ -963,6 +1060,7 @@ namespace JSC {
 
         Vector<FarCallRecord> m_farCalls;
         Vector<NearCallRecord> m_nearCalls;
+        Vector<NearJumpRecord> m_nearJumps;
         Vector<Label> m_labels;
         HashMap<BytecodeIndex, Label> m_checkpointLabels;
         Vector<JITGetByIdGenerator> m_getByIds;
@@ -970,6 +1068,7 @@ namespace JSC {
         Vector<JITGetByIdWithThisGenerator> m_getByIdsWithThis;
         Vector<JITPutByIdGenerator> m_putByIds;
         Vector<JITInByIdGenerator> m_inByIds;
+        Vector<JITInByValGenerator> m_inByVals;
         Vector<JITDelByIdGenerator> m_delByIds;
         Vector<JITDelByValGenerator> m_delByVals;
         Vector<JITInstanceOfGenerator> m_instanceOfs;
@@ -996,6 +1095,7 @@ namespace JSC {
         unsigned m_getByIdWithThisIndex { UINT_MAX };
         unsigned m_putByIdIndex { UINT_MAX };
         unsigned m_inByIdIndex { UINT_MAX };
+        unsigned m_inByValIndex { UINT_MAX };
         unsigned m_delByValIndex { UINT_MAX };
         unsigned m_delByIdIndex { UINT_MAX };
         unsigned m_instanceOfIndex { UINT_MAX };
@@ -1011,6 +1111,7 @@ namespace JSC {
         RefPtr<Profiler::Compilation> m_compilation;
 
         PCToCodeOriginMapBuilder m_pcToCodeOriginMapBuilder;
+        std::unique_ptr<PCToCodeOriginMap> m_pcToCodeOriginMap;
 
         HashMap<const Instruction*, void*> m_instructionToMathIC;
         HashMap<const Instruction*, UniqueRef<MathICGenerationState>> m_instructionToMathICGenerationState;
@@ -1019,6 +1120,8 @@ namespace JSC {
         bool m_canBeOptimizedOrInlined;
         bool m_shouldEmitProfiling;
         BytecodeIndex m_loopOSREntryBytecodeIndex;
+
+        RefPtr<DirectJITCode> m_jitCode;
     };
 
 } // namespace JSC

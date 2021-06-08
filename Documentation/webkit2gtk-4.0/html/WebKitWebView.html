@@ -684,6 +684,14 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-set-cors-allowlist" title="webkit_web_view_set_cors_allowlist ()">webkit_web_view_set_cors_allowlist</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="returnvalue">WebKitJavascriptResult</span></a> *
 </td>
 <td class="function_name">
@@ -4248,6 +4256,50 @@ using this method, the <a class="link" href="WebKitWebView.html#WebKitWebView-we
 <td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr></tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-set-cors-allowlist"></a><h3>webkit_web_view_set_cors_allowlist ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_set_cors_allowlist (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
+                                    <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *allowlist</code></em>);</pre>
+<p>Sets the <em class="parameter"><code>allowlist</code></em>
+ for which
+<a class="ulink" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS" target="_top">Cross-Origin Resource Sharing</a>
+checks are disabled in <em class="parameter"><code>web_view</code></em>
+. URI patterns must be of the form
+<code class="literal">[protocol]://[host]/[path]</code>, each component may contain the wildcard
+character (<code class="literal">*</code>) to represent zero or more other characters. All three
+components are required and must not be omitted from the URI
+patterns.</p>
+<p>Disabling CORS checks permits resources from other origins to load
+allowlisted resources. It does not permit the allowlisted resources
+to load resources from other origins.</p>
+<p>If this function is called multiple times, only the allowlist set by
+the most recent call will be effective.</p>
+<div class="refsect3">
+<a name="webkit-web-view-set-cors-allowlist.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>allowlist</p></td>
+<td class="parameter_description"><p>an allowlist of URI patterns, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
+</tr>
+</tbody>
 </table></div>
 </div>
 <p class="since">Since: 2.34</p>

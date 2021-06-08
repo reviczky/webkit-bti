@@ -22,6 +22,7 @@
 
 #include <initializer_list>
 #include <limits>
+#include <optional>
 #include <string.h>
 #include <type_traits>
 #include <utility>
@@ -641,6 +642,15 @@ public:
             TypeOperations::uninitializedFill(begin(), end(), val);
     }
 
+    Vector(const T* data, size_t dataSize)
+        : Base(dataSize, dataSize)
+    {
+        asanSetInitialBufferSizeTo(dataSize);
+
+        if (begin())
+            TypeOperations::uninitializedCopy(data, data + dataSize, begin());
+    }
+
     Vector(std::initializer_list<T> initializerList)
     {
         reserveInitialCapacity(initializerList.size());
@@ -707,21 +717,9 @@ public:
             OverflowHandler::overflowed();
         return Base::buffer()[i];
     }
-    T& at(Checked<size_t> i)
-    {
-        RELEASE_ASSERT(i < size());
-        return Base::buffer()[i];
-    }
-    const T& at(Checked<size_t> i) const
-    {
-        RELEASE_ASSERT(i < size());
-        return Base::buffer()[i];
-    }
 
     T& operator[](size_t i) { return at(i); }
     const T& operator[](size_t i) const { return at(i); }
-    T& operator[](Checked<size_t> i) { return at(i); }
-    const T& operator[](Checked<size_t> i) const { return at(i); }
 
     T* data() { return Base::buffer(); }
     const T* data() const { return Base::buffer(); }
@@ -1067,6 +1065,7 @@ NEVER_INLINE T* Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>:
             if (UNLIKELY(!success))
                 return nullptr;
         }
+        UNUSED_PARAM(success);
         return ptr;
     }
     size_t index = ptr - begin();
@@ -1075,6 +1074,7 @@ NEVER_INLINE T* Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>:
         if (UNLIKELY(!success))
             return nullptr;
     }
+    UNUSED_PARAM(success);
     return begin() + index;
 }
 
@@ -1088,6 +1088,7 @@ inline U* Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::expan
         if (UNLIKELY(!success))
             return nullptr;
     }
+    UNUSED_PARAM(success);
     return ptr;
 }
 
@@ -1199,6 +1200,7 @@ bool Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::reserveCap
             return false;
         }
     }
+    UNUSED_PARAM(success);
     ASSERT(begin());
 
     asanSetInitialBufferSizeTo(size());
@@ -1342,6 +1344,7 @@ bool Vector<T, inlineCapacity, OverflowHandler, minCapacity, Malloc>::constructA
         if (UNLIKELY(!success))
             return false;
     }
+    UNUSED_PARAM(success);
     ASSERT(begin());
 
     asanBufferSizeWillChangeTo(m_size + 1);
@@ -1691,10 +1694,10 @@ struct CompactMapTraits {
 };
 
 template<typename T>
-struct CompactMapTraits<Optional<T>> {
+struct CompactMapTraits<std::optional<T>> {
     using ItemType = T;
-    static bool hasValue(const Optional<T>& returnValue) { return !!returnValue; }
-    static ItemType extractValue(Optional<T>&& returnValue) { return WTFMove(*returnValue); }
+    static bool hasValue(const std::optional<T>& returnValue) { return !!returnValue; }
+    static ItemType extractValue(std::optional<T>&& returnValue) { return WTFMove(*returnValue); }
 };
 
 template<typename T>

@@ -36,6 +36,7 @@
 #include "FrameTracers.h"
 #include "FunctionCodeBlock.h"
 #include "GetterSetter.h"
+#include "JITSizeStatistics.h"
 #include "JSArray.h"
 #include "JSCInlines.h"
 #include "JSONObject.h"
@@ -608,7 +609,7 @@ IGNORE_WARNINGS_END
             return true;
         }
 
-        Optional<uint32_t> index = parseIndex(propertyName);
+        std::optional<uint32_t> index = parseIndex(propertyName);
         if (index && index.value() < thisObject->getLength()) {
             slot.setValue(thisObject, PropertyAttribute::DontDelete | PropertyAttribute::DontEnum, jsNumber(thisObject->m_vector[index.value()]));
             return true;
@@ -696,9 +697,11 @@ JSC_DEFINE_CUSTOM_GETTER(testStaticAccessorGetter, (JSGlobalObject* globalObject
 {
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
     
     JSObject* thisObject = jsDynamicCast<JSObject*>(vm, JSValue::decode(thisValue));
-    RELEASE_ASSERT(thisObject);
+    if (!thisObject)
+        return throwVMTypeError(globalObject, scope);
 
     if (JSValue result = thisObject->getDirect(vm, PropertyName(Identifier::fromString(vm, "testField"))))
         return JSValue::encode(result);
@@ -709,11 +712,11 @@ JSC_DEFINE_CUSTOM_SETTER(testStaticAccessorPutter, (JSGlobalObject* globalObject
 {
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
-    auto throwScope = DECLARE_THROW_SCOPE(vm);
+    auto scope = DECLARE_THROW_SCOPE(vm);
     
     JSValue receiver = JSValue::decode(thisValue);
     JSObject* thisObject = receiver.isObject() ? asObject(receiver) : receiver.synthesizePrototype(globalObject);
-    RETURN_IF_EXCEPTION(throwScope, false);
+    RETURN_IF_EXCEPTION(scope, false);
     RELEASE_ASSERT(thisObject);
 
     return thisObject->putDirect(vm, PropertyName(Identifier::fromString(vm, "testField")), JSValue::decode(value));
@@ -796,9 +799,11 @@ JSC_DEFINE_CUSTOM_SETTER(testStaticValuePutter, (JSGlobalObject* globalObject, E
 {
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
     
     JSObject* thisObject = jsDynamicCast<JSObject*>(vm, JSValue::decode(thisValue));
-    RELEASE_ASSERT(thisObject);
+    if (!thisObject)
+        return throwVMTypeError(globalObject, scope);
 
     return thisObject->putDirect(vm, PropertyName(Identifier::fromString(vm, "testStaticValue")), JSValue::decode(value));
 }
@@ -1047,8 +1052,10 @@ JSC_DEFINE_CUSTOM_GETTER(domJITGetterCustomGetter, (JSGlobalObject* globalObject
 {
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
     DOMJITNode* thisObject = jsDynamicCast<DOMJITNode*>(vm, JSValue::decode(thisValue));
-    ASSERT(thisObject);
+    if (!thisObject)
+        return throwVMTypeError(globalObject, scope);
     return JSValue::encode(jsNumber(thisObject->value()));
 }
 
@@ -1145,8 +1152,10 @@ JSC_DEFINE_CUSTOM_GETTER(domJITGetterNoEffectCustomGetter, (JSGlobalObject* glob
 {
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
     DOMJITNode* thisObject = jsDynamicCast<DOMJITNode*>(vm, JSValue::decode(thisValue));
-    ASSERT(thisObject);
+    if (!thisObject)
+        return throwVMTypeError(globalObject, scope);
     return JSValue::encode(jsNumber(thisObject->value()));
 }
 
@@ -1250,7 +1259,8 @@ JSC_DEFINE_CUSTOM_GETTER(domJITGetterComplexCustomGetter, (JSGlobalObject* globa
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     auto* thisObject = jsDynamicCast<DOMJITGetterComplex*>(vm, JSValue::decode(thisValue));
-    ASSERT(thisObject);
+    if (!thisObject)
+        return throwVMTypeError(globalObject, scope);
     if (thisObject->m_enableException)
         return JSValue::encode(throwException(globalObject, scope, createError(globalObject, "DOMJITGetterComplex slow call exception"_s)));
     return JSValue::encode(jsNumber(thisObject->value()));
@@ -1509,8 +1519,10 @@ JSC_DEFINE_CUSTOM_GETTER(domJITGetterBaseJSObjectCustomGetter, (JSGlobalObject* 
 {
     DollarVMAssertScope assertScope;
     VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
     JSObject* thisObject = jsDynamicCast<JSObject*>(vm, JSValue::decode(thisValue));
-    RELEASE_ASSERT(thisObject);
+    if (!thisObject)
+        return throwVMTypeError(globalObject, scope);
     return JSValue::encode(thisObject->getPrototypeDirect(vm));
 }
 
@@ -1938,6 +1950,7 @@ static JSC_DECLARE_HOST_FUNCTION(functionDumpRegisters);
 static JSC_DECLARE_HOST_FUNCTION(functionDumpCell);
 static JSC_DECLARE_HOST_FUNCTION(functionIndexingMode);
 static JSC_DECLARE_HOST_FUNCTION(functionInlineCapacity);
+static JSC_DECLARE_HOST_FUNCTION(functionClearLinkBufferStats);
 static JSC_DECLARE_HOST_FUNCTION(functionLinkBufferStats);
 static JSC_DECLARE_HOST_FUNCTION(functionValue);
 static JSC_DECLARE_HOST_FUNCTION(functionGetPID);
@@ -2005,11 +2018,18 @@ static JSC_DECLARE_HOST_FUNCTION(functionSetUserPreferredLanguages);
 static JSC_DECLARE_HOST_FUNCTION(functionICUVersion);
 static JSC_DECLARE_HOST_FUNCTION(functionICUHeaderVersion);
 static JSC_DECLARE_HOST_FUNCTION(functionAssertEnabled);
+static JSC_DECLARE_HOST_FUNCTION(functionSecurityAssertEnabled);
+static JSC_DECLARE_HOST_FUNCTION(functionAsanEnabled);
 static JSC_DECLARE_HOST_FUNCTION(functionIsMemoryLimited);
 static JSC_DECLARE_HOST_FUNCTION(functionUseJIT);
 static JSC_DECLARE_HOST_FUNCTION(functionIsGigacageEnabled);
 static JSC_DECLARE_HOST_FUNCTION(functionToUncacheableDictionary);
 static JSC_DECLARE_HOST_FUNCTION(functionIsPrivateSymbol);
+#if ENABLE(JIT)
+static JSC_DECLARE_HOST_FUNCTION(functionJITSizeStatistics);
+static JSC_DECLARE_HOST_FUNCTION(functionDumpJITSizeStatistics);
+static JSC_DECLARE_HOST_FUNCTION(functionResetJITSizeStatistics);
+#endif
 
 const ClassInfo JSDollarVM::s_info = { "DollarVM", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSDollarVM) };
 
@@ -2538,6 +2558,17 @@ JSC_DEFINE_HOST_FUNCTION(functionInlineCapacity, (JSGlobalObject* globalObject, 
     return encodedJSUndefined();
 }
 
+// Clears the LinkBuffer profile statistics.
+// Usage: $vm.clearLinkBufferStats()
+JSC_DEFINE_HOST_FUNCTION(functionClearLinkBufferStats, (JSGlobalObject*, CallFrame*))
+{
+    DollarVMAssertScope assertScope;
+#if ENABLE(ASSEMBLER)
+    LinkBuffer::clearProfileStatistics();
+#endif
+    return JSValue::encode(jsUndefined());
+}
+
 // Dumps the LinkBuffer profile statistics as a string.
 // Usage: $vm.print($vm.linkBufferStats())
 JSC_DEFINE_HOST_FUNCTION(functionLinkBufferStats, (JSGlobalObject* globalObject, CallFrame*))
@@ -2621,7 +2652,7 @@ JSC_DEFINE_HOST_FUNCTION(functionIsHavingABadTime, (JSGlobalObject* globalObject
 // options are not frozen. For the jsc shell, the --disableOptionsFreezingForTesting
 // argument needs to be passed in on the command line.
 
-#if ENABLE(MASM_PROBE)
+#if ENABLE(ASSEMBLER)
 static void callWithStackSizeProbeFunction(Probe::State* state)
 {
     JSGlobalObject* globalObject = bitwise_cast<JSGlobalObject*>(state->arg);
@@ -2639,7 +2670,7 @@ static void callWithStackSizeProbeFunction(Probe::State* state)
     MarkedArgumentBuffer args;
     call(globalObject, function, callData, jsUndefined(), args);
 }
-#endif // ENABLE(MASM_PROBE)
+#endif // ENABLE(ASSEMBLER)
 
 JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASAN, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
@@ -2657,7 +2688,7 @@ JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASA
     if (!isSupportedByPlatform)
         return throwVMError(globalObject, throwScope, "Not supported for this platform");
 
-#if ENABLE(MASM_PROBE)
+#if ENABLE(ASSEMBLER)
     if (g_jscConfig.isPermanentlyFrozen() || !g_jscConfig.disabledFreezingForTesting)
         return throwVMError(globalObject, throwScope, "Options are frozen");
 
@@ -2729,10 +2760,10 @@ JSC_DEFINE_HOST_FUNCTION_WITH_ATTRIBUTES(functionCallWithStackSize, SUPPRESS_ASA
     throwScope.release();
     return encodedJSUndefined();
 
-#else // not ENABLE(MASM_PROBE)
+#else // not ENABLE(ASSEMBLER)
     UNUSED_PARAM(callFrame);
     return throwVMError(globalObject, throwScope, "Not supported for this platform");
-#endif // ENABLE(MASM_PROBE)
+#endif // ENABLE(ASSEMBLER)
 }
 
 // Creates a new global object.
@@ -3548,6 +3579,22 @@ JSC_DEFINE_HOST_FUNCTION(functionAssertEnabled, (JSGlobalObject*, CallFrame*))
     return JSValue::encode(jsBoolean(ASSERT_ENABLED));
 }
 
+JSC_DEFINE_HOST_FUNCTION(functionSecurityAssertEnabled, (JSGlobalObject*, CallFrame*))
+{
+    DollarVMAssertScope assertScope;
+#if ENABLE(SECURITY_ASSERTIONS)
+    return JSValue::encode(jsBoolean(true));
+#else
+    return JSValue::encode(jsBoolean(false));
+#endif
+}
+
+JSC_DEFINE_HOST_FUNCTION(functionAsanEnabled, (JSGlobalObject*, CallFrame*))
+{
+    DollarVMAssertScope assertScope;
+    return JSValue::encode(jsBoolean(ASAN_ENABLED));
+}
+
 JSC_DEFINE_HOST_FUNCTION(functionIsMemoryLimited, (JSGlobalObject*, CallFrame*))
 {
     DollarVMAssertScope assertScope;
@@ -3592,6 +3639,48 @@ JSC_DEFINE_HOST_FUNCTION(functionIsPrivateSymbol, (JSGlobalObject*, CallFrame* c
 
     return JSValue::encode(jsBoolean(asSymbol(callFrame->argument(0))->uid().isPrivate()));
 }
+
+#if ENABLE(JIT)
+JSC_DEFINE_HOST_FUNCTION(functionJITSizeStatistics, (JSGlobalObject* globalObject, CallFrame*))
+{
+    DollarVMAssertScope assertScope;
+
+    VM& vm = globalObject->vm();
+
+    if (!vm.jitSizeStatistics)
+        return JSValue::encode(jsUndefined());
+
+    WTF::StringPrintStream stream;
+    stream.print(*vm.jitSizeStatistics);
+    return JSValue::encode(jsString(vm, stream.toString()));
+}
+
+JSC_DEFINE_HOST_FUNCTION(functionDumpJITSizeStatistics, (JSGlobalObject* globalObject, CallFrame*))
+{
+    DollarVMAssertScope assertScope;
+
+    VM& vm = globalObject->vm();
+
+    if (!vm.jitSizeStatistics)
+        return JSValue::encode(jsUndefined());
+
+    dataLogLn(*vm.jitSizeStatistics);
+    return JSValue::encode(jsUndefined());
+}
+
+JSC_DEFINE_HOST_FUNCTION(functionResetJITSizeStatistics, (JSGlobalObject* globalObject, CallFrame*))
+{
+    DollarVMAssertScope assertScope;
+
+    VM& vm = globalObject->vm();
+
+    if (!vm.jitSizeStatistics)
+        return JSValue::encode(jsUndefined());
+
+    vm.jitSizeStatistics->reset();
+    return JSValue::encode(jsUndefined());
+}
+#endif
 
 constexpr unsigned jsDollarVMPropertyAttributes = PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum | PropertyAttribute::DontDelete;
 
@@ -3650,6 +3739,7 @@ void JSDollarVM::finishCreation(VM& vm)
 
     addFunction(vm, "indexingMode", functionIndexingMode, 1);
     addFunction(vm, "inlineCapacity", functionInlineCapacity, 1);
+    addFunction(vm, "clearLinkBufferStats", functionClearLinkBufferStats, 0);
     addFunction(vm, "linkBufferStats", functionLinkBufferStats, 0);
     addFunction(vm, "value", functionValue, 1);
     addFunction(vm, "getpid", functionGetPID, 0);
@@ -3739,6 +3829,8 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "icuHeaderVersion", functionICUHeaderVersion, 0);
 
     addFunction(vm, "assertEnabled", functionAssertEnabled, 0);
+    addFunction(vm, "securityAssertEnabled", functionSecurityAssertEnabled, 0);
+    addFunction(vm, "asanEnabled", functionAsanEnabled, 0);
 
     addFunction(vm, "isMemoryLimited", functionIsMemoryLimited, 0);
     addFunction(vm, "useJIT", functionUseJIT, 0);
@@ -3747,6 +3839,12 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "toUncacheableDictionary", functionToUncacheableDictionary, 1);
 
     addFunction(vm, "isPrivateSymbol", functionIsPrivateSymbol, 1);
+
+#if ENABLE(JIT)
+    addFunction(vm, "jitSizeStatistics", functionJITSizeStatistics, 0);
+    addFunction(vm, "dumpJITSizeStatistics", functionDumpJITSizeStatistics, 0);
+    addFunction(vm, "resetJITSizeStatistics", functionResetJITSizeStatistics, 0);
+#endif
 
     m_objectDoingSideEffectPutWithoutCorrectSlotStatusStructure.set(vm, this, ObjectDoingSideEffectPutWithoutCorrectSlotStatus::createStructure(vm, globalObject, jsNull()));
 }

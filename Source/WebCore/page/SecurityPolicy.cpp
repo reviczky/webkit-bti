@@ -34,6 +34,7 @@
 #include "UserContentURLPattern.h"
 #include <memory>
 #include <wtf/HashMap.h>
+#include <wtf/Lock.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/URL.h>
@@ -47,7 +48,7 @@ typedef Vector<OriginAccessEntry> OriginAccessAllowlist;
 typedef HashMap<String, std::unique_ptr<OriginAccessAllowlist>> OriginAccessMap;
 
 static Lock originAccessMapLock;
-static OriginAccessMap& originAccessMap()
+static OriginAccessMap& originAccessMap() WTF_REQUIRES_LOCK(originAccessMapLock)
 {
     ASSERT(originAccessMapLock.isHeld());
     static NeverDestroyed<OriginAccessMap> originAccessMap;
@@ -55,7 +56,7 @@ static OriginAccessMap& originAccessMap()
 }
 
 static Lock originAccessPatternLock;
-static Vector<UserContentURLPattern>& originAccessPatterns()
+static Vector<UserContentURLPattern>& originAccessPatterns() WTF_REQUIRES_LOCK(originAccessPatternLock)
 {
     ASSERT(originAccessPatternLock.isHeld());
     static NeverDestroyed<Vector<UserContentURLPattern>> originAccessPatterns;
@@ -205,7 +206,7 @@ bool SecurityPolicy::isAccessAllowed(const SecurityOrigin& activeOrigin, const S
 {
     ASSERT(targetOrigin.equal(SecurityOrigin::create(targetURL).ptr()));
     {
-        Locker<Lock> locker(originAccessMapLock);
+        Locker locker { originAccessMapLock };
         if (OriginAccessAllowlist* list = originAccessMap().get(activeOrigin.toString())) {
             for (auto& entry : *list) {
                 if (entry.matchesOrigin(targetOrigin))
@@ -213,7 +214,7 @@ bool SecurityPolicy::isAccessAllowed(const SecurityOrigin& activeOrigin, const S
             }
         }
     }
-    Locker<Lock> locker(originAccessPatternLock);
+    Locker locker { originAccessPatternLock };
     for (const auto& pattern : originAccessPatterns()) {
         if (pattern.matches(targetURL))
             return true;
@@ -234,7 +235,7 @@ void SecurityPolicy::addOriginAccessAllowlistEntry(const SecurityOrigin& sourceO
 
     String sourceString = sourceOrigin.toString();
 
-    Locker<Lock> locker(originAccessMapLock);
+    Locker locker { originAccessMapLock };
     OriginAccessMap::AddResult result = originAccessMap().add(sourceString, nullptr);
     if (result.isNewEntry)
         result.iterator->value = makeUnique<OriginAccessAllowlist>();
@@ -251,7 +252,7 @@ void SecurityPolicy::removeOriginAccessAllowlistEntry(const SecurityOrigin& sour
 
     String sourceString = sourceOrigin.toString();
 
-    Locker<Lock> locker(originAccessMapLock);
+    Locker locker { originAccessMapLock };
     OriginAccessMap& map = originAccessMap();
     OriginAccessMap::iterator it = map.find(sourceString);
     if (it == map.end())
@@ -268,13 +269,13 @@ void SecurityPolicy::removeOriginAccessAllowlistEntry(const SecurityOrigin& sour
 
 void SecurityPolicy::resetOriginAccessAllowlists()
 {
-    Locker<Lock> locker(originAccessMapLock);
+    Locker locker { originAccessMapLock };
     originAccessMap().clear();
 }
 
 void SecurityPolicy::allowAccessTo(const UserContentURLPattern& pattern)
 {
-    Locker<Lock> locker(originAccessPatternLock);
+    Locker locker { originAccessPatternLock };
     originAccessPatterns().append(pattern);
 }
 

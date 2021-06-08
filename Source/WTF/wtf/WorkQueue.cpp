@@ -105,8 +105,7 @@ void WorkQueue::concurrentApply(size_t iterations, WTF::Function<void (size_t in
 
         void dispatch(const WTF::Function<void ()>* function)
         {
-            LockHolder holder(m_lock);
-
+            Locker locker { m_lock };
             m_queue.append(function);
             m_condition.notifyOne();
         }
@@ -118,9 +117,9 @@ void WorkQueue::concurrentApply(size_t iterations, WTF::Function<void (size_t in
                 const WTF::Function<void ()>* function;
 
                 {
-                    LockHolder holder(m_lock);
-
+                    Locker locker { m_lock };
                     m_condition.wait(m_lock, [this] {
+                        assertIsHeld(m_lock);
                         return !m_queue.isEmpty();
                     });
 
@@ -133,7 +132,7 @@ void WorkQueue::concurrentApply(size_t iterations, WTF::Function<void (size_t in
 
         Lock m_lock;
         Condition m_condition;
-        Deque<const WTF::Function<void ()>*> m_queue;
+        Deque<const Function<void()>*> m_queue WTF_GUARDED_BY_LOCK(m_lock);
 
         Vector<Ref<Thread>> m_workers;
     };
@@ -153,7 +152,7 @@ void WorkQueue::concurrentApply(size_t iterations, WTF::Function<void (size_t in
     Condition condition;
     Lock lock;
 
-    WTF::Function<void ()> applier = [&, function = WTFMove(function)] {
+    Function<void ()> applier = [&, function = WTFMove(function)] {
         size_t index;
 
         // Call the function for as long as there are iterations left.
@@ -162,7 +161,7 @@ void WorkQueue::concurrentApply(size_t iterations, WTF::Function<void (size_t in
 
         // If there are no active threads left, signal the caller.
         if (!--activeThreads) {
-            LockHolder holder(lock);
+            Locker locker { lock };
             condition.notifyOne();
         }
     };
@@ -171,7 +170,7 @@ void WorkQueue::concurrentApply(size_t iterations, WTF::Function<void (size_t in
         threadPool->dispatch(&applier);
     applier();
 
-    LockHolder holder(lock);
+    Locker locker { lock };
     condition.wait(lock, [&] { return !activeThreads; });
 }
 #endif

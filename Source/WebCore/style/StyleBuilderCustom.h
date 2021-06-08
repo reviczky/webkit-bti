@@ -727,7 +727,7 @@ static inline float computeLineHeightMultiplierDueToFontSize(const Document& doc
 
 inline void BuilderCustom::applyValueLineHeight(BuilderState& builderState, CSSValue& value)
 {
-    Optional<Length> lineHeight = BuilderConverter::convertLineHeight(builderState, value, 1);
+    std::optional<Length> lineHeight = BuilderConverter::convertLineHeight(builderState, value, 1);
     if (!lineHeight)
         return;
 
@@ -1344,9 +1344,9 @@ inline void BuilderCustom::applyValueCounter(BuilderState& builderState, CSSValu
     CounterDirectiveMap& map = builderState.style().accessCounterDirectives();
     for (auto& keyValue : map) {
         if (counterBehavior == Reset)
-            keyValue.value.resetValue = WTF::nullopt;
+            keyValue.value.resetValue = std::nullopt;
         else
-            keyValue.value.incrementValue = WTF::nullopt;
+            keyValue.value.incrementValue = std::nullopt;
     }
 
     if (setCounterIncrementToNone)
@@ -1360,7 +1360,7 @@ inline void BuilderCustom::applyValueCounter(BuilderState& builderState, CSSValu
         if (counterBehavior == Reset)
             directives.resetValue = value;
         else
-            directives.incrementValue = saturatedAddition(directives.incrementValue.valueOr(0), value);
+            directives.incrementValue = saturatedSum<int>(directives.incrementValue.value_or(0), value);
     }
 }
 
@@ -2003,8 +2003,11 @@ inline void BuilderCustom::applyValueWillChange(BuilderState& builderState, CSSV
             willChange->addFeature(WillChangeData::Feature::Contents);
             break;
         default:
-            if (primitiveValue.isPropertyID())
+            if (primitiveValue.isPropertyID()) {
+                if (primitiveValue.propertyID() == CSSPropertyContain && !builderState.document().settings().cssContainmentEnabled())
+                    break;
                 willChange->addFeature(WillChangeData::Feature::Property, primitiveValue.propertyID());
+            }
             break;
         }
     }

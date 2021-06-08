@@ -89,13 +89,13 @@ void ViewSnapshotStore::recordSnapshot(WebPageProxy& webPageProxy, WebBackForwar
 
     webPageProxy.willRecordNavigationSnapshot(item);
 
-    auto snapshot = webPageProxy.takeViewSnapshot(WTF::nullopt);
+    auto snapshot = webPageProxy.takeViewSnapshot(std::nullopt);
     if (!snapshot)
         return;
 
     snapshot->setRenderTreeSize(webPageProxy.renderTreeSize());
     snapshot->setDeviceScaleFactor(webPageProxy.deviceScaleFactor());
-    snapshot->setBackgroundColor(webPageProxy.scrollAreaBackgroundColor());
+    snapshot->setBackgroundColor(webPageProxy.pageExtendedBackgroundColor());
     snapshot->setViewScrollPosition(WebCore::roundedIntPoint(webPageProxy.viewScrollPosition()));
 
     item.setSnapshot(WTFMove(snapshot));

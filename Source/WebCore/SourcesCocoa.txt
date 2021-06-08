@@ -41,6 +41,7 @@ JSApplePayPaymentAuthorizationResult.cpp
 JSApplePayPaymentAuthorizedEvent.cpp
 JSApplePayPaymentContact.cpp
 JSApplePayPaymentMethod.cpp
+JSApplePayPaymentMethodModeDetails.cpp
 JSApplePayPaymentMethodModeUpdate.cpp
 JSApplePayPaymentMethodSelectedEvent.cpp
 JSApplePayPaymentMethodType.cpp
@@ -191,6 +192,7 @@ page/ios/WebEventRegion.mm
 page/mac/ChromeMac.mm
 page/mac/DragControllerMac.mm
 page/mac/EventHandlerMac.mm
+page/mac/ImageOverlayControllerMac.mm
 page/mac/PageMac.mm
 page/mac/ServicesOverlayController.mm
 page/mac/TextIndicatorWindow.mm
@@ -480,6 +482,7 @@ platform/ios/wak/WebCoreThreadRun.cpp
 platform/ios/wak/WebCoreThreadSystemInterface.cpp
 platform/mac/BlocklistUpdater.mm
 platform/mac/CursorMac.mm @no-unify
+platform/mac/DataDetectorHighlight.mm
 platform/mac/HIDDevice.cpp
 platform/mac/HIDElement.cpp
 platform/mac/KeyEventMac.mm @no-unify

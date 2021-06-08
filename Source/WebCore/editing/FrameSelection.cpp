@@ -53,7 +53,7 @@
 #include "HitTestRequest.h"
 #include "HitTestResult.h"
 #include "InlineRunAndOffset.h"
-#include "InlineTextBox.h"
+#include "LegacyInlineTextBox.h"
 #include "Logging.h"
 #include "Page.h"
 #include "Range.h"
@@ -363,7 +363,7 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
             return false;
         }
 
-        if (!m_document) {
+        if (!m_document || (!m_document->frame() && !newSelection.document())) {
             m_selection = newSelection;
             updateAssociatedLiveRange();
             return false;
@@ -376,6 +376,7 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
             clear();
             return false;
         }
+        ASSERT(m_document->frame());
 
         if (closeTyping)
             TypingCommand::closeTyping(*m_document);
@@ -409,7 +410,7 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
 
     // Always clear the x position used for vertical arrow navigation.
     // It will be restored by the vertical arrow navigation code if necessary.
-    m_xPosForVerticalArrowNavigation = WTF::nullopt;
+    m_xPosForVerticalArrowNavigation = std::nullopt;
     selectFrameElementInParentIfFullySelected();
     m_document->editor().respondToChangedSelection(oldSelection, options);
     // https://www.w3.org/TR/selection-api/#selectionchange-event
@@ -1849,7 +1850,7 @@ void FrameSelection::debugRenderer(RenderObject* renderer, bool selected) const
                 offset = m_selection.end().computeOffsetInContainerNode();
 
             int pos;
-            InlineTextBox* box = textRenderer.findNextInlineTextBox(offset, pos);
+            LegacyInlineTextBox* box = textRenderer.findNextInlineTextBox(offset, pos);
             text = text.substring(box->start(), box->len());
             
             String show;
@@ -1921,7 +1922,13 @@ bool FrameSelection::contains(const LayoutPoint& point) const
 void FrameSelection::selectFrameElementInParentIfFullySelected()
 {
     // Find the parent frame; if there is none, then we have nothing to do.
-    Frame* parent = m_document->frame()->tree().parent();
+    auto document = makeRefPtr(m_document.get());
+    if (!document)
+        return;
+    auto frame = makeRefPtr(document->frame());
+    if (!frame)
+        return;
+    auto parent = makeRefPtr(frame->tree().parent());
     if (!parent)
         return;
     Page* page = m_document->page();
@@ -1937,10 +1944,10 @@ void FrameSelection::selectFrameElementInParentIfFullySelected()
         return;
 
     // Get to the <iframe> or <frame> (or even <object>) element in the parent frame.
-    Element* ownerElement = m_document->ownerElement();
+    auto ownerElement = makeRefPtr(m_document->ownerElement());
     if (!ownerElement)
         return;
-    ContainerNode* ownerElementParent = ownerElement->parentNode();
+    auto ownerElementParent = makeRefPtr(ownerElement->parentNode());
     if (!ownerElementParent)
         return;
         
@@ -1950,14 +1957,18 @@ void FrameSelection::selectFrameElementInParentIfFullySelected()
 
     // Create compute positions before and after the element.
     unsigned ownerElementNodeIndex = ownerElement->computeNodeIndex();
-    VisiblePosition beforeOwnerElement(VisiblePosition(Position(ownerElementParent, ownerElementNodeIndex, Position::PositionIsOffsetInAnchor)));
-    VisiblePosition afterOwnerElement(VisiblePosition(Position(ownerElementParent, ownerElementNodeIndex + 1, Position::PositionIsOffsetInAnchor), Affinity::Upstream));
+    VisiblePosition beforeOwnerElement(VisiblePosition(Position(ownerElementParent.get(), ownerElementNodeIndex, Position::PositionIsOffsetInAnchor)));
+    VisiblePosition afterOwnerElement(VisiblePosition(Position(ownerElementParent.get(), ownerElementNodeIndex + 1, Position::PositionIsOffsetInAnchor), Affinity::Upstream));
 
     // Focus on the parent frame, and then select from before this element to after.
     VisibleSelection newSelection(beforeOwnerElement, afterOwnerElement);
     if (parent->selection().shouldChangeSelection(newSelection)) {
-        page->focusController().setFocusedFrame(parent);
-        parent->selection().setSelection(newSelection);
+        page->focusController().setFocusedFrame(parent.get());
+        // Previous focus can trigger DOM events, ensure the selection did not become orphan.
+        if (newSelection.isOrphan())
+            parent->selection().clear();
+        else
+            parent->selection().setSelection(newSelection);
     }
 }
 
@@ -2015,7 +2026,7 @@ void FrameSelection::selectAll()
     }
 }
 
-bool FrameSelection::setSelectedRange(const Optional<SimpleRange>& range, Affinity affinity, ShouldCloseTyping closeTyping, EUserTriggered userTriggered)
+bool FrameSelection::setSelectedRange(const std::optional<SimpleRange>& range, Affinity affinity, ShouldCloseTyping closeTyping, EUserTriggered userTriggered)
 {
     if (!range)
         return false;
@@ -2512,16 +2523,16 @@ void FrameSelection::expandSelectionToElementContainingCaretSelection()
     setSelection(VisibleSelection(*range));
 }
 
-Optional<SimpleRange> FrameSelection::elementRangeContainingCaretSelection() const
+std::optional<SimpleRange> FrameSelection::elementRangeContainingCaretSelection() const
 {
     auto element = deprecatedEnclosingBlockFlowElement(m_selection.visibleStart().deepEquivalent().deprecatedNode());
     if (!element)
-        return WTF::nullopt;
+        return std::nullopt;
 
     auto start = VisiblePosition(makeContainerOffsetPosition(element, 0));
     auto end = VisiblePosition(makeContainerOffsetPosition(element, element->countChildNodes()));
     if (start.isNull() || end.isNull())
-        return WTF::nullopt;
+        return std::nullopt;
 
     auto selection = m_selection;
     selection.setBase(start);
@@ -2536,7 +2547,7 @@ void FrameSelection::expandSelectionToWordContainingCaretSelection()
         setSelection(selection);
 }
 
-Optional<SimpleRange> FrameSelection::wordRangeContainingCaretSelection()
+std::optional<SimpleRange> FrameSelection::wordRangeContainingCaretSelection()
 {
     return wordSelectionContainingCaretSelection(m_selection).toNormalizedRange();
 }
@@ -2590,12 +2601,12 @@ bool FrameSelection::selectionAtWordStart() const
     return true;
 }
 
-Optional<SimpleRange> FrameSelection::rangeByMovingCurrentSelection(int amount) const
+std::optional<SimpleRange> FrameSelection::rangeByMovingCurrentSelection(int amount) const
 {
     return rangeByAlteringCurrentSelection(AlterationMove, amount);
 }
 
-Optional<SimpleRange> FrameSelection::rangeByExtendingCurrentSelection(int amount) const
+std::optional<SimpleRange> FrameSelection::rangeByExtendingCurrentSelection(int amount) const
 {
     return rangeByAlteringCurrentSelection(AlterationExtend, amount);
 }
@@ -2737,10 +2748,10 @@ bool FrameSelection::selectionAtSentenceStart() const
     return true;
 }
 
-Optional<SimpleRange> FrameSelection::rangeByAlteringCurrentSelection(EAlteration alteration, int amount) const
+std::optional<SimpleRange> FrameSelection::rangeByAlteringCurrentSelection(EAlteration alteration, int amount) const
 {
     if (m_selection.isNone())
-        return WTF::nullopt;
+        return std::nullopt;
 
     if (!amount)
         return m_selection.toNormalizedRange();
@@ -2786,7 +2797,7 @@ void FrameSelection::setCaretColor(const Color& caretColor)
 
 #endif // PLATFORM(IOS_FAMILY)
 
-static bool containsEndpoints(const WeakPtr<Document>& document, const Optional<SimpleRange>& range)
+static bool containsEndpoints(const WeakPtr<Document>& document, const std::optional<SimpleRange>& range)
 {
     return document && range && document->contains(range->start.container) && document->contains(range->end.container);
 }

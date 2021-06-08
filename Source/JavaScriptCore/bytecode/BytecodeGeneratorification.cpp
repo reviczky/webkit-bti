@@ -38,7 +38,6 @@
 #include "StrongInlines.h"
 #include "UnlinkedCodeBlockGenerator.h"
 #include "UnlinkedMetadataTableInlines.h"
-#include <wtf/Optional.h>
 
 namespace JSC {
 
@@ -129,7 +128,7 @@ public:
         return m_instructions.at(m_enterPoint);
     }
 
-    Optional<GeneratorFrameData> generatorFrameData() const
+    std::optional<GeneratorFrameData> generatorFrameData() const
     {
         return m_generatorFrameData;
     }
@@ -149,7 +148,7 @@ private:
 
         if (m_storages.size() <= index)
             m_storages.resize(index + 1);
-        if (Optional<Storage> storage = m_storages[index])
+        if (std::optional<Storage> storage = m_storages[index])
             return *storage;
 
         Identifier identifier = Identifier::from(vm, index);
@@ -169,11 +168,11 @@ private:
 
     BytecodeGenerator& m_bytecodeGenerator;
     InstructionStream::Offset m_enterPoint;
-    Optional<GeneratorFrameData> m_generatorFrameData;
+    std::optional<GeneratorFrameData> m_generatorFrameData;
     UnlinkedCodeBlockGenerator* m_codeBlock;
     InstructionStreamWriter& m_instructions;
     BytecodeGraph m_graph;
-    Vector<Optional<Storage>> m_storages;
+    Vector<std::optional<Storage>> m_storages;
     Yields m_yields;
     Strong<SymbolTable> m_generatorFrameSymbolTable;
     int m_generatorFrameSymbolTableIndex;
@@ -245,7 +244,7 @@ void BytecodeGeneratorification::run()
                     scope, // scope
                     storage.identifierIndex, // identifier
                     operand, // value
-                    GetPutInfo(DoNotThrowIfNotFound, LocalClosureVar, InitializationMode::NotInitialization, m_bytecodeGenerator.ecmaMode()), // info
+                    GetPutInfo(DoNotThrowIfNotFound, ResolvedClosureVar, InitializationMode::NotInitialization, m_bytecodeGenerator.ecmaMode()), // info
                     SymbolTableOrScopeDepth::symbolTable(VirtualRegister { m_generatorFrameSymbolTableIndex }), // symbol table constant index
                     storage.scopeOffset.offset() // scope offset
                 );
@@ -265,7 +264,7 @@ void BytecodeGeneratorification::run()
                     operand, // dst
                     scope, // scope
                     storage.identifierIndex, // identifier
-                    GetPutInfo(DoNotThrowIfNotFound, LocalClosureVar, InitializationMode::NotInitialization, m_bytecodeGenerator.ecmaMode()), // info
+                    GetPutInfo(DoNotThrowIfNotFound, ResolvedClosureVar, InitializationMode::NotInitialization, m_bytecodeGenerator.ecmaMode()), // info
                     0, // local scope depth
                     storage.scopeOffset.offset() // scope offset
                 );

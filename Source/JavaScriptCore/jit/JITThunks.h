@@ -37,6 +37,8 @@
 #include <tuple>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/PackedRefPtr.h>
+#include <wtf/RecursiveLockAdapter.h>
 #include <wtf/text/StringHash.h>
 
 namespace JSC {
@@ -53,10 +55,6 @@ public:
     JITThunks();
     ~JITThunks() final;
 
-#if ENABLE(EXTRA_CTI_THUNKS)
-    void preinitializeExtraCTIThunks(VM&);
-#endif
-
     MacroAssemblerCodePtr<JITThunkPtrTag> ctiNativeCall(VM&);
     MacroAssemblerCodePtr<JITThunkPtrTag> ctiNativeConstruct(VM&);
     MacroAssemblerCodePtr<JITThunkPtrTag> ctiNativeTailCall(VM&);
@@ -65,8 +63,6 @@ public:
     MacroAssemblerCodePtr<JITThunkPtrTag> ctiInternalFunctionConstruct(VM&);
 
     MacroAssemblerCodeRef<JITThunkPtrTag> ctiStub(VM&, ThunkGenerator);
-    MacroAssemblerCodeRef<JITThunkPtrTag> existingCTIStub(ThunkGenerator);
-    MacroAssemblerCodeRef<JITThunkPtrTag> existingCTIStub(ThunkGenerator, NoLockingNecessaryTag);
 #if ENABLE(EXTRA_CTI_THUNKS)
     MacroAssemblerCodeRef<JITThunkPtrTag> ctiSlowPathFunctionStub(VM&, SlowPathFunction);
 #endif
@@ -76,9 +72,16 @@ public:
     NativeExecutable* hostFunctionStub(VM&, TaggedNativeFunction, ThunkGenerator, Intrinsic, const String& name);
 
 private:
+    template <typename GenerateThunk>
+    MacroAssemblerCodeRef<JITThunkPtrTag> ctiStubImpl(ThunkGenerator key, GenerateThunk);
+
     void finalize(Handle<Unknown>, void* context) final;
     
-    typedef HashMap<ThunkGenerator, MacroAssemblerCodeRef<JITThunkPtrTag>> CTIStubMap;
+    struct Entry {
+        PackedRefPtr<ExecutableMemoryHandle> handle;
+        bool needsCrossModifyingCodeFence;
+    };
+    using CTIStubMap = HashMap<ThunkGenerator, Entry>;
     CTIStubMap m_ctiStubMap;
 
     using HostFunctionKey = std::tuple<TaggedNativeFunction, TaggedNativeFunction, String>;
@@ -118,7 +121,8 @@ private:
 
     using WeakNativeExecutableSet = HashSet<Weak<NativeExecutable>, WeakNativeExecutableHash>;
     WeakNativeExecutableSet m_nativeExecutableSet;
-    Lock m_lock;
+
+    WTF::RecursiveLock m_lock;
 };
 
 } // namespace JSC

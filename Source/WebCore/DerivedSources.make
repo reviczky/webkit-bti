@@ -70,6 +70,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/applepay/ApplePayPaymentAuthorizedEvent.idl \
     $(WebCore)/Modules/applepay/ApplePayPaymentContact.idl \
     $(WebCore)/Modules/applepay/ApplePayPaymentMethod.idl \
+    $(WebCore)/Modules/applepay/ApplePayPaymentMethodModeDetails.idl \
     $(WebCore)/Modules/applepay/ApplePayPaymentMethodModeUpdate.idl \
     $(WebCore)/Modules/applepay/ApplePayPaymentMethodSelectedEvent.idl \
     $(WebCore)/Modules/applepay/ApplePayPaymentMethodType.idl \
@@ -100,8 +101,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/cache/CacheQueryOptions.idl \
     $(WebCore)/Modules/cache/DOMCache.idl \
     $(WebCore)/Modules/cache/DOMCacheStorage.idl \
-    $(WebCore)/Modules/cache/DOMWindow+Caches.idl \
-    $(WebCore)/Modules/cache/WorkerGlobalScope+Caches.idl \
+    $(WebCore)/Modules/cache/WindowOrWorkerGlobalScope+Caches.idl \
     $(WebCore)/Modules/contact-picker/ContactInfo.idl \
     $(WebCore)/Modules/contact-picker/ContactProperty.idl \
     $(WebCore)/Modules/contact-picker/ContactsManager.idl \
@@ -429,13 +429,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/webaudio/StereoPannerOptions.idl \
     $(WebCore)/Modules/webaudio/WaveShaperNode.idl \
     $(WebCore)/Modules/webaudio/WaveShaperOptions.idl \
-    $(WebCore)/Modules/webaudio/WebKitAudioBufferSourceNode.idl \
-    $(WebCore)/Modules/webaudio/WebKitAudioContext.idl \
-    $(WebCore)/Modules/webaudio/WebKitAudioListener.idl \
-    $(WebCore)/Modules/webaudio/WebKitAudioPannerNode.idl \
-    $(WebCore)/Modules/webaudio/WebKitDynamicsCompressorNode.idl \
-    $(WebCore)/Modules/webaudio/WebKitOfflineAudioContext.idl \
-    $(WebCore)/Modules/webaudio/WebKitOscillatorNode.idl \
     $(WebCore)/Modules/webauthn/AttestationConveyancePreference.idl \
     $(WebCore)/Modules/webauthn/AuthenticationExtensionsClientInputs.idl \
     $(WebCore)/Modules/webauthn/AuthenticationExtensionsClientOutputs.idl \
@@ -897,6 +890,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/ImageBitmap.idl \
     $(WebCore)/html/ImageBitmapOptions.idl \
     $(WebCore)/html/ImageData.idl \
+    $(WebCore)/html/ImageDataSettings.idl \
     $(WebCore)/html/MediaController.idl \
     $(WebCore)/html/MediaEncryptedEvent.idl \
     $(WebCore)/html/MediaError.idl \
@@ -1054,6 +1048,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/page/PerformanceMeasure.idl \
     $(WebCore)/page/PerformanceMeasureOptions.idl \
     $(WebCore)/page/PerformanceNavigation.idl \
+    $(WebCore)/page/PerformanceNavigationTiming.idl \
     $(WebCore)/page/PerformanceObserver.idl \
     $(WebCore)/page/PerformanceObserverCallback.idl \
     $(WebCore)/page/PerformanceObserverEntryList.idl \

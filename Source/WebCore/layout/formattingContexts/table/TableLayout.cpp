@@ -30,6 +30,7 @@
 
 #include "LayoutBox.h"
 #include "LayoutBoxGeometry.h"
+#include "TableFormattingGeometry.h"
 
 namespace WebCore {
 namespace Layout {
@@ -120,7 +121,7 @@ static Vector<LayoutUnit> distributeAvailableSpace(const TableGrid& grid, Layout
     auto& columns = grid.columns();
     auto& rows = grid.rows();
     // 1. Collect the non-spanning spaces first. They are used for the final distribution as well as for distributing the spanning space.
-    Vector<Optional<ResolvedItem>> resolvedItems(SpanType::size(grid));
+    Vector<std::optional<ResolvedItem>> resolvedItems(SpanType::size(grid));
     for (size_t columnIndex = 0; columnIndex < columns.size(); ++columnIndex) {
         for (size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex) {
             auto& slot = *grid.slot({ columnIndex, rowIndex });
@@ -219,7 +220,10 @@ static Vector<LayoutUnit> distributeAvailableSpace(const TableGrid& grid, Layout
     }
 
     Vector<LayoutUnit> distributedSpaces(resolvedItems.size());
-    float spaceToDistribute = availableSpace - adjustabledSpace.value - ((resolvedItems.size() + 1) * SpanType::spacing(grid));
+    float spaceToDistribute = availableSpace;
+    // Top and bottom spacing are fixed.
+    spaceToDistribute -= 2 * SpanType::spacing(grid);
+    spaceToDistribute -= adjustabledSpace.value + ((resolvedItems.size() - 1) * SpanType::spacing(grid));
     // Essentially the remaining space to distribute should never be negative. LayoutUnit::epsilon() is required to compensate for LayoutUnit's low precision.
     ASSERT(spaceToDistribute >= -LayoutUnit::epsilon() * resolvedItems.size());
     // Distribute the extra space based on the resolved spaces.
@@ -240,23 +244,21 @@ TableFormattingContext::TableLayout::DistributedSpaces TableFormattingContext::T
     enum class ColumnWidthBalancingBase { MinimumWidth, MaximumWidth };
     auto columnWidthBalancingBase = availableHorizontalSpace >= m_grid.widthConstraints()->maximum ? ColumnWidthBalancingBase::MaximumWidth : ColumnWidthBalancingBase::MinimumWidth;
     return distributeAvailableSpace<ColumnSpan>(m_grid, availableHorizontalSpace, [&] (const TableGrid::Slot& slot, size_t columnIndex) {
-        auto& column = m_grid.columns().list()[columnIndex];
-        auto columnBoxFixedWidth = column.box() ? column.box()->columnWidth().valueOr(0_lu) : 0_lu;
-        auto minimumWidth = std::max<float>(slot.widthConstraints().minimum, columnBoxFixedWidth);
-        auto maximumWidth = std::max<float>(slot.widthConstraints().maximum, columnBoxFixedWidth);
+        float minimumWidth = slot.widthConstraints().minimum;
+        float maximumWidth = slot.widthConstraints().maximum;
+
+        if (auto fixedWidth = m_grid.columns().list()[columnIndex].fixedWidth())
+            maximumWidth = std::max<float>(minimumWidth, *fixedWidth);
 
         if (columnWidthBalancingBase == ColumnWidthBalancingBase::MinimumWidth) {
             ASSERT(maximumWidth >= minimumWidth);
             return GridSpace { minimumWidth, maximumWidth - minimumWidth };
         }
-        // When the column has a fixed width cell, the maximum width balancing is based on the minimum width.
-        if (column.isFixedWidth())
-            return GridSpace { minimumWidth, maximumWidth };
         return GridSpace { maximumWidth, maximumWidth };
     });
 }
 
-TableFormattingContext::TableLayout::DistributedSpaces TableFormattingContext::TableLayout::distributedVerticalSpace(Optional<LayoutUnit> availableVerticalSpace)
+TableFormattingContext::TableLayout::DistributedSpaces TableFormattingContext::TableLayout::distributedVerticalSpace(std::optional<LayoutUnit> availableVerticalSpace)
 {
     auto& rows = m_grid.rows();
     auto& columns = m_grid.columns();
@@ -268,7 +270,7 @@ TableFormattingContext::TableLayout::DistributedSpaces TableFormattingContext::T
         auto maximumColumnAscent = InlineLayoutUnit { };
         auto maximumColumnDescent = InlineLayoutUnit { };
         // Initial minimum height is the computed height if available <tr style="height: 100px"><td></td></tr>
-        rowHeight[rowIndex] = formattingContext().geometry().computedHeight(rows.list()[rowIndex].box(), availableVerticalSpace).valueOr(0_lu);
+        rowHeight[rowIndex] = formattingContext().formattingGeometry().computedHeight(rows.list()[rowIndex].box(), availableVerticalSpace).value_or(0_lu);
         for (size_t columnIndex = 0; columnIndex < columns.size(); ++columnIndex) {
             auto& slot = *m_grid.slot({ columnIndex, rowIndex });
             if (slot.isRowSpanned())
@@ -292,14 +294,14 @@ TableFormattingContext::TableLayout::DistributedSpaces TableFormattingContext::T
     // FIXME: Collect spanning row maximum heights.
 
     tableUsedHeight += (rows.size() + 1) * m_grid.verticalSpacing();
-    auto availableSpace = std::max(availableVerticalSpace.valueOr(0_lu), tableUsedHeight);
+    auto availableSpace = std::max(availableVerticalSpace.value_or(0_lu), tableUsedHeight);
     // Distribute extra space if the table is supposed to be taller than the sum of the row heights.
     return distributeAvailableSpace<RowSpan>(m_grid, availableSpace, [&] (const TableGrid::Slot& slot, size_t rowIndex) {
         if (slot.hasRowSpan())
             return GridSpace { formattingContext().geometryForBox(slot.cell().box()).borderBoxHeight(), formattingContext().geometryForBox(slot.cell().box()).borderBoxHeight() };
         auto& rows = m_grid.rows();
-        auto computedRowHeight = formattingContext().geometry().computedHeight(rows.list()[rowIndex].box(), { });
-        auto height = std::max<float>(rowHeight[rowIndex], computedRowHeight.valueOr(0_lu));
+        auto computedRowHeight = formattingContext().formattingGeometry().computedHeight(rows.list()[rowIndex].box(), { });
+        auto height = std::max<float>(rowHeight[rowIndex], computedRowHeight.value_or(0_lu));
         return GridSpace { height, height };
     });
 }

@@ -36,8 +36,8 @@
 #include "DFGNode.h"
 #include "DFGPlan.h"
 #include "DFGPropertyTypeKey.h"
-#include "DFGScannable.h"
 #include "FullBytecodeLiveness.h"
+#include "JITScannable.h"
 #include "MethodOfGettingAValueProfile.h"
 #include <wtf/BitVector.h>
 #include <wtf/HashMap.h>
@@ -1191,7 +1191,7 @@ public:
     bool m_hasExceptionHandlers { false };
     bool m_isInSSAConversion { false };
     bool m_isValidating { false };
-    Optional<uint32_t> m_maxLocalsForCatchOSREntry;
+    std::optional<uint32_t> m_maxLocalsForCatchOSREntry;
     std::unique_ptr<FlowIndexing> m_indexingCache;
     std::unique_ptr<FlowMap<AbstractValue>> m_abstractValuesCache;
     Bag<EntrySwitchData> m_entrySwitchData;

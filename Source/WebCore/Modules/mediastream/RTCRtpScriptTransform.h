@@ -84,8 +84,8 @@ private:
     RefPtr<RTCRtpTransformBackend> m_backend;
 
     Lock m_transformerLock;
-    bool m_isTransformerInitialized { false };
-    WeakPtr<RTCRtpScriptTransformer> m_transformer;
+    bool m_isTransformerInitialized WTF_GUARDED_BY_LOCK(m_transformerLock) { false };
+    WeakPtr<RTCRtpScriptTransformer> m_transformer WTF_GUARDED_BY_LOCK(m_transformerLock);
 };
 
 } // namespace WebCore

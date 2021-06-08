@@ -315,14 +315,15 @@ void PrivateClickMeasurementManager::fireConversionRequest(const PrivateClickMea
         if (!weakThis)
             return;
 
-        Vector<uint8_t> publicKeyData;
-        WTF::base64URLDecode(publicKeyBase64URL, publicKeyData);
+        auto publicKeyData = base64URLDecode(publicKeyBase64URL);
+        if (!publicKeyData)
+            return;
 
         auto crypto = PAL::CryptoDigest::create(PAL::CryptoDigest::Algorithm::SHA_256);
-        crypto->addBytes(publicKeyData.data(), publicKeyData.size());
+        crypto->addBytes(publicKeyData->data(), publicKeyData->size());
         auto publicKeyDataHash = crypto->computeHash();
 
-        auto keyID = WTF::base64URLEncode(publicKeyDataHash.data(), publicKeyDataHash.size());
+        auto keyID = base64URLEncodeToString(publicKeyDataHash.data(), publicKeyDataHash.size());
         if (keyID != attribution.sourceUnlinkableToken()->keyIDBase64URL)
             return;
 
@@ -387,8 +388,8 @@ void PrivateClickMeasurementManager::firePendingAttributionRequests()
         bool hasSentAttribution = false;
 
         for (auto& attribution : attributions) {
-            Optional<WallTime> earliestTimeToSend = attribution.timesToSend().earliestTimeToSend();
-            Optional<WebCore::PrivateClickMeasurement::AttributionReportEndpoint> attributionReportEndpoint = attribution.timesToSend().attributionReportEndpoint();
+            std::optional<WallTime> earliestTimeToSend = attribution.timesToSend().earliestTimeToSend();
+            std::optional<WebCore::PrivateClickMeasurement::AttributionReportEndpoint> attributionReportEndpoint = attribution.timesToSend().attributionReportEndpoint();
 
             if (!earliestTimeToSend || !attributionReportEndpoint) {
                 ASSERT_NOT_REACHED();
@@ -502,7 +503,7 @@ void PrivateClickMeasurementManager::setTokenSignatureURLForTesting(URL&& testUR
 void PrivateClickMeasurementManager::setAttributionReportURLsForTesting(URL&& sourceURL, URL&& destinationURL)
 {
     if (sourceURL.isEmpty() || destinationURL.isEmpty())
-        m_attributionReportTestConfig = WTF::nullopt;
+        m_attributionReportTestConfig = std::nullopt;
     else
         m_attributionReportTestConfig = AttributionReportTestConfig { WTFMove(sourceURL), WTFMove(destinationURL) };
 }

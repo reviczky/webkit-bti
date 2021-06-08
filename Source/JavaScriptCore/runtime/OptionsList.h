@@ -247,6 +247,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Unsigned, maxDFGNodesInBasicBlockForPreciseAnalysis, 20000, Normal, "Disable precise but costly analysis and give conservative results if the number of DFG nodes in a block exceeds this threshold") \
     \
     v(Bool, useConcurrentJIT, true, Normal, "allows the DFG / FTL compilation in threads other than the executing JS thread") \
+    v(Unsigned, numberOfWorklistThreads, computeNumberOfWorkerThreads(3, 2), Normal, nullptr) \
     v(Unsigned, numberOfDFGCompilerThreads, computeNumberOfWorkerThreads(3, 2) - 1, Normal, nullptr) \
     v(Unsigned, numberOfFTLCompilerThreads, computeNumberOfWorkerThreads(MAXIMUM_NUMBER_OF_FTL_COMPILER_THREADS, 2) - 1, Normal, nullptr) \
     v(Int32, priorityDeltaOfDFGCompilerThreads, computePriorityDeltaOfWorkerThreads(-1, 0), Normal, nullptr) \
@@ -514,6 +515,8 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Double, allowHoistingLICMProbability, 0.5, Normal, nullptr) \
     v(Bool, exposeCustomSettersOnGlobalObjectForTesting, false, Normal, nullptr) \
     v(Bool, useJITCage, canUseJITCage(), Normal, nullptr) \
+    v(Bool, dumpBaselineJITSizeStatistics, false, Normal, nullptr) \
+    v(Bool, dumpDFGJITSizeStatistics, false, Normal, nullptr) \
     \
     /* Feature Flags */\
     \
@@ -521,6 +524,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Bool, usePrivateStaticClassFields, true, Normal, "If true, the parser will understand private static data fields inside classes.") \
     v(Bool, usePrivateClassFields, true, Normal, "If true, the parser will understand private data fields inside classes.") \
     v(Bool, usePrivateMethods, true, Normal, "If true, the parser will understand private methods inside classes.") \
+    v(Bool, usePrivateIn, false, Normal, "If true, the parser will understand private member existence checks with the `in` operator.") \
     v(Bool, useWebAssemblyStreaming, true, Normal, "Allow to run WebAssembly's Streaming API") \
     v(Bool, useWebAssemblyReferences, true, Normal, "Allow types from the wasm references spec.") \
     v(Bool, useWebAssemblyTypedFunctionReferences, false, Normal, "Allow function types from the wasm typed function references spec.") \

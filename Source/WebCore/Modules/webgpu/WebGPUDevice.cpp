@@ -83,7 +83,6 @@
 #include <wtf/Lock.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/Optional.h>
 #include <wtf/Ref.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Variant.h>
@@ -93,6 +92,8 @@
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(WebGPUDevice);
+
+Lock WebGPUDevice::s_instancesLock;
 
 RefPtr<WebGPUDevice> WebGPUDevice::tryCreate(ScriptExecutionContext& context, Ref<const WebGPUAdapter>&& adapter)
 {
@@ -104,16 +105,15 @@ RefPtr<WebGPUDevice> WebGPUDevice::tryCreate(ScriptExecutionContext& context, Re
     return nullptr;
 }
 
-HashSet<WebGPUDevice*>& WebGPUDevice::instances(const LockHolder&)
+HashSet<WebGPUDevice*>& WebGPUDevice::instances()
 {
     static NeverDestroyed<HashSet<WebGPUDevice*>> instances;
     return instances;
 }
 
-Lock& WebGPUDevice::instancesMutex()
+Lock& WebGPUDevice::instancesLock()
 {
-    static Lock mutex;
-    return mutex;
+    return s_instancesLock;
 }
 
 WebGPUDevice::WebGPUDevice(ScriptExecutionContext& context, Ref<const WebGPUAdapter>&& adapter, Ref<GPUDevice>&& device)
@@ -128,8 +128,8 @@ WebGPUDevice::WebGPUDevice(ScriptExecutionContext& context, Ref<const WebGPUAdap
     ASSERT(m_scriptExecutionContext.isDocument());
 
     {
-        LockHolder lock(instancesMutex());
-        instances(lock).add(this);
+        Locker locker { instancesLock() };
+        instances().add(this);
     }
 }
 
@@ -138,8 +138,8 @@ WebGPUDevice::~WebGPUDevice()
     InspectorInstrumentation::willDestroyWebGPUDevice(*this);
 
     {
-        LockHolder lock(WebGPUPipeline::instancesMutex());
-        for (auto& entry : WebGPUPipeline::instances(lock)) {
+        Locker locker { WebGPUPipeline::instancesLock() };
+        for (auto& entry : WebGPUPipeline::instances()) {
             if (entry.value == this) {
                 // Don't remove any WebGPUPipeline from the instances list, as they may still exist.
                 // Only remove the association with a WebGPU device.
@@ -149,9 +149,9 @@ WebGPUDevice::~WebGPUDevice()
     }
 
     {
-        LockHolder lock(instancesMutex());
-        ASSERT(instances(lock).contains(this));
-        instances(lock).remove(this);
+        Locker locker { instancesLock() };
+        ASSERT(instances().contains(this));
+        instances().remove(this);
     }
 }
 
@@ -285,7 +285,7 @@ Ref<WebGPUQueue> WebGPUDevice::getQueue() const
 void WebGPUDevice::popErrorScope(ErrorPromise&& promise)
 {
     String failMessage;
-    Optional<GPUError> error = m_errorScopes->popErrorScope(failMessage);
+    std::optional<GPUError> error = m_errorScopes->popErrorScope(failMessage);
     if (failMessage.isEmpty())
         promise.resolve(error);
     else

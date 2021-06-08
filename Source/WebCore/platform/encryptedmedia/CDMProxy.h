@@ -36,6 +36,7 @@
 #include "SharedBuffer.h"
 #include <wtf/BoxPtr.h>
 #include <wtf/Condition.h>
+#include <wtf/Lock.h>
 
 #if ENABLE(THUNDER)
 #include "CDMOpenCDMTypes.h"
@@ -161,23 +162,23 @@ public:
 protected:
     RefPtr<KeyHandle> keyHandle(const KeyIDType&) const;
     bool keyAvailable(const KeyIDType&) const;
-    bool keyAvailableUnlocked(const KeyIDType&) const;
-    Optional<Ref<KeyHandle>> tryWaitForKeyHandle(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
-    Optional<Ref<KeyHandle>> getOrWaitForKeyHandle(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
-    Optional<KeyHandleValueVariant> getOrWaitForKeyValue(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
+    bool keyAvailableUnlocked(const KeyIDType&) const WTF_REQUIRES_LOCK(m_keysLock);
+    std::optional<Ref<KeyHandle>> tryWaitForKeyHandle(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
+    std::optional<Ref<KeyHandle>> getOrWaitForKeyHandle(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
+    std::optional<KeyHandleValueVariant> getOrWaitForKeyValue(const KeyIDType&, WeakPtr<CDMProxyDecryptionClient>&&) const;
     void startedWaitingForKey() const;
     void stoppedWaitingForKey() const;
-    const CDMInstanceProxy* instance() const { return m_instance; }
+    const CDMInstanceProxy* instance() const;
 
 private:
-    mutable Lock m_instanceMutex;
-    CDMInstanceProxy* m_instance;
+    mutable Lock m_instanceLock;
+    CDMInstanceProxy* m_instance WTF_GUARDED_BY_LOCK(m_instanceLock);
 
-    mutable Lock m_keysMutex;
+    mutable Lock m_keysLock;
     mutable Condition m_keysCondition;
     // FIXME: Duplicated key stores in the instance and the proxy are probably not needed, but simplified
     // the initial implementation in terms of threading invariants.
-    KeyStore m_keyStore;
+    KeyStore m_keyStore WTF_GUARDED_BY_LOCK(m_keysLock);
 };
 
 class CDMProxyFactory {

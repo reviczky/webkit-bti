@@ -738,6 +738,8 @@ public:
     void compileGetByIdFlush(Node*, AccessType);
     void compileInById(Node*);
     void compileInByVal(Node*);
+    void compileHasPrivateName(Node*);
+    void compileHasPrivateBrand(Node*);
     
     void nonSpeculativeNonPeepholeCompareNullOrUndefined(Edge operand);
     void nonSpeculativePeepholeBranchNullOrUndefined(Edge operand, Node* branchNode);
@@ -1187,6 +1189,8 @@ public:
     void compileSymbolEquality(Node*);
     void compileHeapBigIntEquality(Node*);
     void compilePeepHoleSymbolEquality(Node*, Node* branchNode);
+    void compileNotDoubleNeitherDoubleNorHeapBigIntNorStringStrictEquality(Node*, Edge notDoubleEdge, Edge neitherDoubleNorHeapBigIntNorStringEdge);
+    void compilePeepHoleNotDoubleNeitherDoubleNorHeapBigIntNorStringStrictEquality(Node*, Node* branchNode, Edge notDoubleEdge, Edge neitherDoubleNorHeapBigIntNorStringEdge);
     void compileSymbolUntypedEquality(Node*, Edge symbolEdge, Edge untypedEdge);
 
     void emitObjectOrOtherBranch(Edge value, BasicBlock* taken, BasicBlock* notTaken);
@@ -1225,6 +1229,7 @@ public:
     void emitSwitch(Node*);
     
     void compileToStringOrCallStringConstructorOrStringValueOf(Node*);
+    void compileFunctionToString(Node*);
     void compileNumberToStringWithRadix(Node*);
     void compileNumberToStringWithValidRadixConstant(Node*);
     void compileNumberToStringWithValidRadixConstant(Node*, int32_t radix);
@@ -1568,7 +1573,7 @@ public:
     void emitGetLength(CodeOrigin, GPRReg lengthGPR, bool includeThis = false);
     void emitGetCallee(CodeOrigin, GPRReg calleeGPR);
     void emitGetArgumentStart(CodeOrigin, GPRReg startGPR);
-    void emitPopulateSliceIndex(Edge&, Optional<GPRReg> indexGPR, GPRReg lengthGPR, GPRReg resultGPR);
+    void emitPopulateSliceIndex(Edge&, std::optional<GPRReg> indexGPR, GPRReg lengthGPR, GPRReg resultGPR);
     
     // Generate an OSR exit fuzz check. Returns Jump() if OSR exit fuzz is not enabled, or if
     // it's in training mode.
@@ -1668,6 +1673,10 @@ public:
     void speculateNotCell(Edge, JSValueRegs);
     void speculateNotCell(Edge);
     void speculateNotCellNorBigInt(Edge);
+    void speculateNotDouble(Edge, JSValueRegs, GPRReg temp);
+    void speculateNotDouble(Edge);
+    void speculateNeitherDoubleNorHeapBigIntNorString(Edge, JSValueRegs, GPRReg temp);
+    void speculateNeitherDoubleNorHeapBigIntNorString(Edge);
     void speculateOther(Edge, JSValueRegs, GPRReg temp);
     void speculateOther(Edge, JSValueRegs);
     void speculateOther(Edge);
@@ -1764,7 +1773,7 @@ public:
     };
     Vector<SlowPathLambda> m_slowPathLambdas;
     Vector<SilentRegisterSavePlan> m_plans;
-    Optional<unsigned> m_outOfLineStreamIndex;
+    std::optional<unsigned> m_outOfLineStreamIndex;
 };
 
 
@@ -2023,7 +2032,7 @@ public:
     }
     GPRTemporary(SpeculativeJIT*, ReuseTag, JSValueOperand&, WhichValueWord);
 
-    GPRTemporary(GPRTemporary& other) = delete;
+    GPRTemporary(const GPRTemporary&) = delete;
 
     GPRTemporary(GPRTemporary&& other)
     {

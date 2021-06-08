@@ -50,13 +50,24 @@ void ServiceWorkerInternals::setOnline(bool isOnline)
     });
 }
 
+void ServiceWorkerInternals::terminate()
+{
+    callOnMainThread([identifier = m_identifier] () {
+        SWContextManager::singleton().terminateWorker(identifier, Seconds::infinity(), [] { });
+    });
+}
+
 void ServiceWorkerInternals::waitForFetchEventToFinish(FetchEvent& event, DOMPromiseDeferred<IDLInterface<FetchResponse>>&& promise)
 {
     event.onResponse([promise = WTFMove(promise), event = makeRef(event)] (auto&& result) mutable {
-        if (result.has_value())
-            promise.resolve(WTFMove(result.value()));
-        else
-            promise.reject(TypeError, result.error().localizedDescription());
+        if (!result.has_value()) {
+            String description;
+            if (auto& error = result.error())
+                description = error->localizedDescription();
+            promise.reject(TypeError, description);
+            return;
+        }
+        promise.resolve(WTFMove(result.value()));
     });
 }
 
@@ -106,6 +117,23 @@ bool ServiceWorkerInternals::isThrottleable() const
 int ServiceWorkerInternals::processIdentifier() const
 {
     return getCurrentProcessID();
+}
+
+void ServiceWorkerInternals::lastNavigationWasAppBound(Ref<DeferredPromise>&& promise)
+{
+    ASSERT(!m_lastNavigationWasAppBoundPromise);
+    m_lastNavigationWasAppBoundPromise = WTFMove(promise);
+    callOnMainThread([identifier = m_identifier, weakThis = makeWeakPtr(this)]() mutable {
+        if (auto* proxy = SWContextManager::singleton().workerByID(identifier)) {
+            proxy->thread().runLoop().postTaskForMode([weakThis = WTFMove(weakThis), appBound = proxy->lastNavigationWasAppBound()](auto&) {
+                if (!weakThis || !weakThis->m_lastNavigationWasAppBoundPromise)
+                    return;
+
+                weakThis->m_lastNavigationWasAppBoundPromise->resolve<IDLBoolean>(appBound);
+                weakThis->m_lastNavigationWasAppBoundPromise = nullptr;
+            }, WorkerRunLoop::defaultMode());
+        }
+    });
 }
 
 } // namespace WebCore

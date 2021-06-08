@@ -83,7 +83,7 @@ void InbandTextTrackPrivateGStreamer::disconnect()
 void InbandTextTrackPrivateGStreamer::handleSample(GRefPtr<GstSample> sample)
 {
     {
-        LockHolder lock(m_sampleMutex);
+        Locker locker { m_sampleMutex };
         m_pendingSamples.append(sample);
     }
 
@@ -105,7 +105,7 @@ void InbandTextTrackPrivateGStreamer::notifyTrackOfSample()
 {
     Vector<GRefPtr<GstSample> > samples;
     {
-        LockHolder lock(m_sampleMutex);
+        Locker locker { m_sampleMutex };
         m_pendingSamples.swap(samples);
     }
 
@@ -125,7 +125,7 @@ void InbandTextTrackPrivateGStreamer::notifyTrackOfSample()
 
         GST_INFO("Track %d parsing sample: %.*s", m_index, static_cast<int>(mappedBuffer.size()),
             reinterpret_cast<char*>(mappedBuffer.data()));
-        client()->parseWebVTTCueData(reinterpret_cast<char*>(mappedBuffer.data()), mappedBuffer.size());
+        client()->parseWebVTTCueData(mappedBuffer.data(), mappedBuffer.size());
     }
 }
 

@@ -101,6 +101,9 @@ struct VariableEnvironmentEntryHashTraits : HashTraits<VariableEnvironmentEntry>
 struct PrivateNameEntry {
     friend class CachedPrivateNameEntry;
 
+    static constexpr unsigned privateClassBrandOffset = 0;
+    static constexpr unsigned privateBrandOffset = 1;
+
 public:
     PrivateNameEntry(uint16_t traits = 0) { m_bits = traits; }
 
@@ -109,10 +112,10 @@ public:
     ALWAYS_INLINE bool isMethod() const { return m_bits & IsMethod; }
     ALWAYS_INLINE bool isSetter() const { return m_bits & IsSetter; }
     ALWAYS_INLINE bool isGetter() const { return m_bits & IsGetter; }
-    ALWAYS_INLINE bool isField() const { return !isPrivateMethodOrAcessor(); }
+    ALWAYS_INLINE bool isField() const { return !isPrivateMethodOrAccessor(); }
     ALWAYS_INLINE bool isStatic() const { return m_bits & IsStatic; }
 
-    bool isPrivateMethodOrAcessor() const { return isMethod() || isSetter() || isGetter(); }
+    bool isPrivateMethodOrAccessor() const { return isMethod() || isSetter() || isGetter(); }
 
     ALWAYS_INLINE void setIsUsed() { m_bits |= IsUsed; }
     ALWAYS_INLINE void setIsDeclared() { m_bits |= IsDeclared; }
@@ -274,7 +277,7 @@ public:
             return false;
 
         for (auto entry : privateNames()) {
-            if (entry.value.isPrivateMethodOrAcessor() && entry.value.isStatic())
+            if (entry.value.isPrivateMethodOrAccessor() && entry.value.isStatic())
                 return true;
         }
         
@@ -287,7 +290,7 @@ public:
             return false;
         
         for (auto entry : privateNames()) {
-            if (entry.value.isPrivateMethodOrAcessor() && !entry.value.isStatic())
+            if (entry.value.isPrivateMethodOrAccessor() && !entry.value.isStatic())
                 return true;
         }
         

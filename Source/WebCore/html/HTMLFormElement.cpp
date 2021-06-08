@@ -46,7 +46,6 @@
 #include "HTMLParserIdioms.h"
 #include "HTMLTableElement.h"
 #include "InputTypeNames.h"
-#include "MIMETypeRegistry.h"
 #include "MixedContentChecker.h"
 #include "NodeRareData.h"
 #include "Page.h"
@@ -171,12 +170,12 @@ HTMLElement* HTMLFormElement::item(unsigned index)
     return elements()->item(index);
 }
 
-Optional<Variant<RefPtr<RadioNodeList>, RefPtr<Element>>> HTMLFormElement::namedItem(const AtomString& name)
+std::optional<Variant<RefPtr<RadioNodeList>, RefPtr<Element>>> HTMLFormElement::namedItem(const AtomString& name)
 {
     auto namedItems = namedElements(name);
 
     if (namedItems.isEmpty())
-        return WTF::nullopt;
+        return std::nullopt;
     if (namedItems.size() == 1)
         return Variant<RefPtr<RadioNodeList>, RefPtr<Element>> { RefPtr<Element> { WTFMove(namedItems[0]) } };
 
@@ -246,7 +245,7 @@ bool HTMLFormElement::validateInteractively()
         for (auto& control : unhandledInvalidControls) {
             if (control->isConnected() && control->isFocusable())
                 continue;
-            String message = makeString("An invalid form control with name='", control->name(), "' is not focusable.");
+            auto message = makeString("An invalid form control with name='", control->name(), "' is not focusable.");
             document().addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, message);
         }
     }
@@ -399,28 +398,11 @@ void HTMLFormElement::submit(Event* event, bool activateSubmitButton, bool proce
     if (m_plannedFormSubmission)
         m_plannedFormSubmission->cancel();
 
-    unsigned imageOrMediaFiles = 0;
-    for (auto& dataElement : formSubmission->data().elements()) {
-        auto* encodedFileData = WTF::get_if<FormDataElement::EncodedFileData>(dataElement.data);
-        if (!encodedFileData)
-            continue;
-
-        auto mimeType = MIMETypeRegistry::mimeTypeForPath(encodedFileData->filename);
-        if (MIMETypeRegistry::isSupportedImageMIMEType(mimeType) || MIMETypeRegistry::isSupportedMediaMIMEType(mimeType))
-            ++imageOrMediaFiles;
-    }
-
     m_plannedFormSubmission = makeWeakPtr(formSubmission.get());
     frame->loader().submitForm(WTFMove(formSubmission));
 
     if (firstSuccessfulSubmitButton)
         firstSuccessfulSubmitButton->setActivatedSubmit(false);
-
-    if (imageOrMediaFiles) {
-        auto& diagnosticLoggingClient = document().page()->diagnosticLoggingClient();
-        auto message = makeString(imageOrMediaFiles, imageOrMediaFiles == 1 ? " media file has been submitted" : " media files have been submitted");
-        diagnosticLoggingClient.logDiagnosticMessageWithDomain(message, DiagnosticLoggingDomain::Media);
-    }
 
     m_shouldSubmit = false;
     m_isSubmittingOrPreparingForSubmission = false;

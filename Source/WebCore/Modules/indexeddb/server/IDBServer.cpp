@@ -632,7 +632,7 @@ static void removeAllDatabasesForFullOriginPath(const String& originPath, WallTi
         auto databasePath = FileSystem::pathByAppendingComponent(originPath, databaseName);
         String databaseFile = FileSystem::pathByAppendingComponent(databasePath, "IndexedDB.sqlite3");
         if (modifiedSince > -WallTime::infinity() && FileSystem::fileExists(databaseFile)) {
-            auto modificationTime = FileSystem::getFileModificationTime(databaseFile);
+            auto modificationTime = FileSystem::fileModificationTime(databaseFile);
             if (!modificationTime)
                 continue;
 
@@ -733,7 +733,7 @@ void IDBServer::renameOrigin(const WebCore::SecurityOriginData& oldOrigin, const
         FileSystem::moveFile(oldOriginPath, newOriginPath);
 }
 
-StorageQuotaManager::Decision IDBServer::requestSpace(const ClientOrigin& origin, uint64_t taskSize)
+StorageQuotaManager::Decision IDBServer::requestSpace(const ClientOrigin& origin, uint64_t taskSize) WTF_IGNORES_THREAD_SAFETY_ANALYSIS
 {
     ASSERT(!isMainThread());
     ASSERT(m_lock.isHeld());

@@ -592,7 +592,7 @@ const GlobalProperty = constexpr GlobalProperty
 const GlobalVar = constexpr GlobalVar
 const GlobalLexicalVar = constexpr GlobalLexicalVar
 const ClosureVar = constexpr ClosureVar
-const LocalClosureVar = constexpr LocalClosureVar
+const ResolvedClosureVar = constexpr ResolvedClosureVar
 const ModuleVar = constexpr ModuleVar
 const GlobalPropertyWithVarInjectionChecks = constexpr GlobalPropertyWithVarInjectionChecks
 const GlobalVarWithVarInjectionChecks = constexpr GlobalVarWithVarInjectionChecks
@@ -1994,7 +1994,6 @@ slowPathOp(define_accessor_property)
 slowPathOp(define_data_property)
 slowPathOp(enumerator_generic_pname)
 slowPathOp(enumerator_structure_pname)
-slowPathOp(get_by_id_with_this)
 slowPathOp(get_by_val_with_this)
 slowPathOp(get_direct_pname)
 slowPathOp(get_enumerable_length)
@@ -2011,8 +2010,8 @@ if not JSVALUE64
     slowPathOp(get_prototype_of)
 end
 
-slowPathOp(in_by_id)
-slowPathOp(in_by_val)
+slowPathOp(has_private_name)
+slowPathOp(has_private_brand)
 slowPathOp(is_callable)
 slowPathOp(is_constructor)
 slowPathOp(less)
@@ -2043,6 +2042,8 @@ macro llintSlowPathOp(opcodeName)
     end)
 end
 
+llintSlowPathOp(in_by_id)
+llintSlowPathOp(in_by_val)
 llintSlowPathOp(del_by_id)
 llintSlowPathOp(del_by_val)
 llintSlowPathOp(instanceof)
@@ -2069,6 +2070,7 @@ llintSlowPathOp(super_sampler_begin)
 llintSlowPathOp(super_sampler_end)
 llintSlowPathOp(throw)
 llintSlowPathOp(try_get_by_id)
+llintSlowPathOp(get_by_id_with_this)
 
 llintOp(op_switch_string, unused, macro (unused, unused, unused)
     callSlowPath(_llint_slow_path_switch_string)

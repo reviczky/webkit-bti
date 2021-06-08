@@ -92,6 +92,11 @@ void WebSWServerToContextConnection::installServiceWorkerContext(const ServiceWo
     send(Messages::WebSWContextManagerConnection::InstallServiceWorker { data, userAgent });
 }
 
+void WebSWServerToContextConnection::updateAppBoundValue(ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::LastNavigationWasAppBound lastNavigationWasAppBound)
+{
+    send(Messages::WebSWContextManagerConnection::UpdateAppBoundValue(serviceWorkerIdentifier, lastNavigationWasAppBound));
+}
+
 void WebSWServerToContextConnection::fireInstallEvent(ServiceWorkerIdentifier serviceWorkerIdentifier)
 {
     send(Messages::WebSWContextManagerConnection::FireInstallEvent(serviceWorkerIdentifier));
@@ -130,7 +135,7 @@ void WebSWServerToContextConnection::terminateDueToUnresponsiveness()
     m_connection.networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::TerminateUnresponsiveServiceWorkerProcesses { webProcessIdentifier() }, 0);
 }
 
-void WebSWServerToContextConnection::findClientByIdentifierCompleted(uint64_t requestIdentifier, const Optional<ServiceWorkerClientData>& data, bool hasSecurityError)
+void WebSWServerToContextConnection::findClientByIdentifierCompleted(uint64_t requestIdentifier, const std::optional<ServiceWorkerClientData>& data, bool hasSecurityError)
 {
     send(Messages::WebSWContextManagerConnection::FindClientByIdentifierCompleted { requestIdentifier, data, hasSecurityError });
 }

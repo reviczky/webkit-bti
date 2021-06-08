@@ -56,7 +56,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> handleExceptionGenerator(VM& vm)
 
     jit.jumpToExceptionHandler(vm);
 
-    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::Thunk);
+    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::ExtraCTIThunk);
     patchBuffer.link(operation, FunctionPtr<OperationPtrTag>(operationLookupExceptionHandler));
     return FINALIZE_CODE(patchBuffer, JITThunkPtrTag, "handleException");
 }
@@ -72,7 +72,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> handleExceptionWithCallFrameRollbackGenera
     CCallHelpers::Call operation = jit.call(OperationPtrTag);
     jit.jumpToExceptionHandler(vm);
 
-    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::Thunk);
+    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::ExtraCTIThunk);
     patchBuffer.link(operation, FunctionPtr<OperationPtrTag>(operationLookupExceptionHandlerFromCallerFrame));
     return FINALIZE_CODE(patchBuffer, JITThunkPtrTag, "handleExceptionWithCallFrameRollback");
 }
@@ -81,19 +81,54 @@ MacroAssemblerCodeRef<JITThunkPtrTag> popThunkStackPreservesAndHandleExceptionGe
 {
     CCallHelpers jit;
 
-#if CPU(X86_64)
-    jit.addPtr(CCallHelpers::TrustedImm32(2 * sizeof(CPURegister)), X86Registers::esp);
-#elif CPU(ARM64)
-    jit.popPair(CCallHelpers::framePointerRegister, CCallHelpers::linkRegister);
-#endif
+    jit.addPtr(CCallHelpers::TrustedImm32(2 * sizeof(CPURegister)), CCallHelpers::stackPointerRegister);
 
     CCallHelpers::Jump continuation = jit.jump();
 
-    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::Thunk);
-    auto handler = vm.jitStubs->existingCTIStub(handleExceptionGenerator, NoLockingNecessary);
-    RELEASE_ASSERT(handler);
+    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::ExtraCTIThunk);
+    auto handler = vm.getCTIStub(handleExceptionGenerator);
     patchBuffer.link(continuation, CodeLocationLabel(handler.retaggedCode<NoPtrTag>()));
     return FINALIZE_CODE(patchBuffer, JITThunkPtrTag, "popThunkStackPreservesAndHandleException");
+}
+
+MacroAssemblerCodeRef<JITThunkPtrTag> checkExceptionGenerator(VM& vm)
+{
+    CCallHelpers jit;
+
+    jit.tagReturnAddress();
+
+    if (UNLIKELY(Options::useExceptionFuzz())) {
+        // Exception fuzzing can call a runtime function. So, we need to preserve the return address here.
+#if CPU(X86_64)
+        jit.push(X86Registers::ebp);
+#elif CPU(ARM64)
+        jit.pushPair(CCallHelpers::framePointerRegister, CCallHelpers::linkRegister);
+#endif
+    }
+
+    CCallHelpers::Jump handleException = jit.emitNonPatchableExceptionCheck(vm);
+
+    if (UNLIKELY(Options::useExceptionFuzz())) {
+#if CPU(X86_64)
+        jit.pop(X86Registers::ebp);
+#elif CPU(ARM64)
+        jit.popPair(CCallHelpers::framePointerRegister, CCallHelpers::linkRegister);
+#endif
+    }
+    jit.ret();
+
+    auto handlerGenerator = Options::useExceptionFuzz() ? popThunkStackPreservesAndHandleExceptionGenerator : handleExceptionGenerator;
+#if CPU(X86_64)
+    if (!Options::useExceptionFuzz()) {
+        handleException.link(&jit);
+        jit.addPtr(CCallHelpers::TrustedImm32(sizeof(CPURegister)), X86Registers::esp); // pop return address.
+        handleException = jit.jump();
+    }
+#endif
+
+    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::ExtraCTIThunk);
+    patchBuffer.link(handleException, CodeLocationLabel(vm.getCTIStub(handlerGenerator).retaggedCode<NoPtrTag>()));
+    return FINALIZE_CODE(patchBuffer, JITThunkPtrTag, "CheckException");
 }
 
 #endif // ENABLE(EXTRA_CTI_THUNKS)
@@ -223,7 +258,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> linkPolymorphicCallThunkGenerator(VM& vm)
 // path virtual call so that we can enable fast tail calls for megamorphic
 // virtual calls by using the shuffler.
 // https://bugs.webkit.org/show_bug.cgi?id=148831
-MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo& callLinkInfo)
+static MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkFor(VM& vm, CallMode mode, CodeSpecializationKind kind)
 {
     // The callee is in regT0 (for JSVALUE32_64, the tag is in regT1).
     // The return address is on the stack, or in the link register. We will hence
@@ -231,7 +266,9 @@ MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo
     // make a C++ function call to the appropriate JIT operation.
 
     CCallHelpers jit;
-    
+
+    bool isTailCall = mode == CallMode::Tail;
+
     CCallHelpers::JumpList slowCase;
     
     // This is a slow path execution, and regT2 contains the CallLinkInfo. Count the
@@ -244,7 +281,7 @@ MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo
     // the DFG knows that the value is definitely a cell, or definitely a function.
     
 #if USE(JSVALUE64)
-    if (callLinkInfo.isTailCall()) {
+    if (isTailCall) {
         // Tail calls could have clobbered the GPRInfo::notCellMaskRegister because they
         // restore callee saved registers before getthing here. So, let's materialize
         // the NotCellMask in a temp register and use the temp instead.
@@ -263,9 +300,7 @@ MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo
     jit.loadPtr(CCallHelpers::Address(GPRInfo::regT4, FunctionRareData::offsetOfExecutable() - JSFunction::rareDataTag), GPRInfo::regT4);
     hasExecutable.link(&jit);
     jit.loadPtr(
-        CCallHelpers::Address(
-            GPRInfo::regT4, ExecutableBase::offsetOfJITCodeWithArityCheckFor(
-                callLinkInfo.specializationKind())),
+        CCallHelpers::Address(GPRInfo::regT4, ExecutableBase::offsetOfJITCodeWithArityCheckFor(kind)),
         GPRInfo::regT4);
     slowCase.append(jit.branchTestPtr(CCallHelpers::Zero, GPRInfo::regT4));
     
@@ -275,7 +310,7 @@ MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo
     // Make a tail call. This will return back to JIT code.
     JSInterfaceJIT::Label callCode(jit.label());
     emitPointerValidation(jit, GPRInfo::regT4, JSEntryPtrTag);
-    if (callLinkInfo.isTailCall()) {
+    if (isTailCall) {
         jit.preserveReturnAddressAfterCall(GPRInfo::regT0);
         jit.prepareForTailCallSlow(GPRInfo::regT4);
     }
@@ -284,7 +319,7 @@ MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo
     // NullSetterFunctionType does not get the fast path support. But it is OK since using NullSetterFunctionType is extremely rare.
     notJSFunction.link(&jit);
     slowCase.append(jit.branchIfNotType(GPRInfo::regT0, InternalFunctionType));
-    void* executableAddress = vm.getCTIInternalFunctionTrampolineFor(callLinkInfo.specializationKind()).executableAddress();
+    void* executableAddress = vm.getCTIInternalFunctionTrampolineFor(kind).executableAddress();
     jit.move(CCallHelpers::TrustedImmPtr(executableAddress), GPRInfo::regT4);
     jit.jump().linkTo(callCode, &jit);
 
@@ -293,11 +328,65 @@ MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo
     // Here we don't know anything, so revert to the full slow path.
     slowPathFor(jit, vm, operationVirtualCall);
 
-    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::Thunk);
+    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::VirtualThunk);
     return FINALIZE_CODE(
-        patchBuffer, JITStubRoutinePtrTag,
+        patchBuffer, JITThunkPtrTag,
         "Virtual %s slow path thunk",
-        callLinkInfo.callMode() == CallMode::Regular ? "call" : callLinkInfo.callMode() == CallMode::Tail ? "tail call" : "construct");
+        mode == CallMode::Regular ? "call" : mode == CallMode::Tail ? "tail call" : "construct");
+}
+
+static MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkForRegularCall(VM& vm)
+{
+    return virtualThunkFor(vm, CallMode::Regular, CodeForCall);
+}
+
+static MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkForRegularConstruct(VM& vm)
+{
+    return virtualThunkFor(vm, CallMode::Regular, CodeForConstruct);
+}
+
+static MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkForTailCall(VM& vm)
+{
+    return virtualThunkFor(vm, CallMode::Tail, CodeForCall);
+}
+
+static MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkForTailConstruct(VM& vm)
+{
+    return virtualThunkFor(vm, CallMode::Tail, CodeForConstruct);
+}
+
+static MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkForConstructCall(VM& vm)
+{
+    return virtualThunkFor(vm, CallMode::Construct, CodeForCall);
+}
+
+static MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkForConstructConstruct(VM& vm)
+{
+    return virtualThunkFor(vm, CallMode::Construct, CodeForConstruct);
+}
+
+MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM& vm, CallLinkInfo& callLinkInfo)
+{
+    auto mode = callLinkInfo.callMode();
+    auto kind = callLinkInfo.specializationKind();
+    auto generator = [&] () -> ThunkGenerator {
+        switch (mode) {
+        case CallMode::Regular:
+            if (kind == CodeForCall)
+                return virtualThunkForRegularCall;
+            return virtualThunkForRegularConstruct;
+        case CallMode::Tail:
+            if (kind == CodeForCall)
+                return virtualThunkForTailCall;
+            return virtualThunkForTailConstruct;
+        case CallMode::Construct:
+            if (kind == CodeForCall)
+                return virtualThunkForConstructCall;
+            return virtualThunkForConstructConstruct;
+        }
+        RELEASE_ASSERT_NOT_REACHED();
+    };
+    return vm.getCTIStub(generator()).retagged<JITStubRoutinePtrTag>();
 }
 
 enum ThunkEntryType { EnterViaCall, EnterViaJumpWithSavedTags, EnterViaJumpWithoutSavedTags };
@@ -1332,7 +1421,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> boundFunctionCallGenerator(VM& vm)
     jit.emitFunctionEpilogue();
     jit.ret();
     
-    LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::Thunk);
+    LinkBuffer linkBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::BoundFunctionThunk);
     linkBuffer.link(noCode, CodeLocationLabel<JITThunkPtrTag>(vm.jitStubs->ctiNativeTailCallWithoutSavedTags(vm)));
     return FINALIZE_CODE(
         linkBuffer, JITThunkPtrTag, "Specialized thunk for bound function calls with no arguments");

@@ -34,7 +34,7 @@
 #include "CairoOperations.h"
 #include "Color.h"
 #include "GraphicsContext.h"
-#include "GraphicsContextImplCairo.h"
+#include "GraphicsContextCairo.h"
 #include "ImageBufferUtilitiesCairo.h"
 #include "PixelBuffer.h"
 #include <cairo.h>
@@ -51,7 +51,7 @@ ImageBufferCairoSurfaceBackend::ImageBufferCairoSurfaceBackend(const Parameters&
 
     RefPtr<cairo_t> cr = adoptRef(cairo_create(m_surface.get()));
     m_platformContext.setCr(cr.get());
-    m_context = makeUnique<GraphicsContext>(GraphicsContextImplCairo::createFactory(m_platformContext));
+    m_context = makeUnique<GraphicsContextCairo>(m_platformContext);
 }
 
 GraphicsContext& ImageBufferCairoSurfaceBackend::context() const
@@ -103,31 +103,14 @@ RefPtr<NativeImage> ImageBufferCairoSurfaceBackend::cairoSurfaceCoerceToImage() 
     return copyNativeImage(copyBehavior);
 }
 
-Vector<uint8_t> ImageBufferCairoSurfaceBackend::toBGRAData() const
-{
-    auto nativeImage = cairoSurfaceCoerceToImage();
-    auto surface = nativeImage ? nativeImage->platformImage() : nullptr;
-    cairo_surface_flush(surface.get());
-
-    Vector<uint8_t> imageData;
-    if (cairo_surface_status(surface.get()))
-        return imageData;
-
-    auto pixels = cairo_image_surface_get_data(surface.get());
-    imageData.append(pixels, cairo_image_surface_get_stride(surface.get()) *
-        cairo_image_surface_get_height(surface.get()));
-
-    return imageData;
-}
-
-Optional<PixelBuffer> ImageBufferCairoSurfaceBackend::getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect& srcRect) const
+std::optional<PixelBuffer> ImageBufferCairoSurfaceBackend::getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& srcRect) const
 {
     return ImageBufferBackend::getPixelBuffer(outputFormat, srcRect, cairo_image_surface_get_data(m_surface.get()));
 }
 
-void ImageBufferCairoSurfaceBackend::putPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
+void ImageBufferCairoSurfaceBackend::putPixelBuffer(const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
 {
-    ImageBufferBackend::putPixelBuffer(inputFormat, pixelBuffer, srcRect, destPoint, destFormat, cairo_image_surface_get_data(m_surface.get()));
+    ImageBufferBackend::putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat, cairo_image_surface_get_data(m_surface.get()));
 
     IntRect srcRectScaled = toBackendCoordinates(srcRect);
     IntPoint destPointScaled = toBackendCoordinates(destPoint);

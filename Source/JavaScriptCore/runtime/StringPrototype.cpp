@@ -310,7 +310,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstrings(JSGlobalObject* globalObject, 
     Checked<int, AssertNoOverflow> totalLength = 0;
     for (int i = 0; i < rangeCount; i++)
         totalLength += substringRanges[i].length;
-    ASSERT(totalLength <= String::MaxLength);
+    ASSERT(totalLength <= static_cast<int>(String::MaxLength));
 
     if (!totalLength)
         return jsEmptyString(vm);
@@ -318,7 +318,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstrings(JSGlobalObject* globalObject, 
     if (source.is8Bit()) {
         LChar* buffer;
         const LChar* sourceData = source.characters8();
-        auto impl = StringImpl::tryCreateUninitialized(totalLength.unsafeGet(), buffer);
+        auto impl = StringImpl::tryCreateUninitialized(totalLength, buffer);
         if (!impl) {
             throwOutOfMemoryError(globalObject, scope);
             return nullptr;
@@ -327,7 +327,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstrings(JSGlobalObject* globalObject, 
         Checked<int, AssertNoOverflow> bufferPos = 0;
         for (int i = 0; i < rangeCount; i++) {
             if (int srcLen = substringRanges[i].length) {
-                StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), sourceData + substringRanges[i].position, srcLen);
+                StringImpl::copyCharacters(buffer + bufferPos.value(), sourceData + substringRanges[i].position, srcLen);
                 bufferPos += srcLen;
             }
         }
@@ -338,7 +338,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstrings(JSGlobalObject* globalObject, 
     UChar* buffer;
     const UChar* sourceData = source.characters16();
 
-    auto impl = StringImpl::tryCreateUninitialized(totalLength.unsafeGet(), buffer);
+    auto impl = StringImpl::tryCreateUninitialized(totalLength, buffer);
     if (!impl) {
         throwOutOfMemoryError(globalObject, scope);
         return nullptr;
@@ -347,7 +347,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstrings(JSGlobalObject* globalObject, 
     Checked<int, AssertNoOverflow> bufferPos = 0;
     for (int i = 0; i < rangeCount; i++) {
         if (int srcLen = substringRanges[i].length) {
-            StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), sourceData + substringRanges[i].position, srcLen);
+            StringImpl::copyCharacters(buffer + bufferPos.value(), sourceData + substringRanges[i].position, srcLen);
             bufferPos += srcLen;
         }
     }
@@ -376,7 +376,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstringsWithSeparators(JSGlobalObject* 
         RELEASE_AND_RETURN(scope, jsString(globalObject, leftPart, separators[0], rightPart));
     }
 
-    Checked<int, RecordOverflow> totalLength = 0;
+    CheckedInt32 totalLength = 0;
     bool allSeparators8Bit = true;
     for (int i = 0; i < rangeCount; i++)
         totalLength += substringRanges[i].length;
@@ -397,7 +397,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstringsWithSeparators(JSGlobalObject* 
         LChar* buffer;
         const LChar* sourceData = source.characters8();
 
-        auto impl = StringImpl::tryCreateUninitialized(totalLength.unsafeGet(), buffer);
+        auto impl = StringImpl::tryCreateUninitialized(totalLength, buffer);
         if (!impl) {
             throwOutOfMemoryError(globalObject, scope);
             return nullptr;
@@ -408,13 +408,13 @@ static ALWAYS_INLINE JSString* jsSpliceSubstringsWithSeparators(JSGlobalObject* 
         for (int i = 0; i < maxCount; i++) {
             if (i < rangeCount) {
                 if (int srcLen = substringRanges[i].length) {
-                    StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), sourceData + substringRanges[i].position, srcLen);
+                    StringImpl::copyCharacters(buffer + bufferPos.value(), sourceData + substringRanges[i].position, srcLen);
                     bufferPos += srcLen;
                 }
             }
             if (i < separatorCount) {
                 if (int sepLen = separators[i].length()) {
-                    StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), separators[i].characters8(), sepLen);
+                    StringImpl::copyCharacters(buffer + bufferPos.value(), separators[i].characters8(), sepLen);
                     bufferPos += sepLen;
                 }
             }
@@ -424,7 +424,7 @@ static ALWAYS_INLINE JSString* jsSpliceSubstringsWithSeparators(JSGlobalObject* 
     }
 
     UChar* buffer;
-    auto impl = StringImpl::tryCreateUninitialized(totalLength.unsafeGet(), buffer);
+    auto impl = StringImpl::tryCreateUninitialized(totalLength, buffer);
     if (!impl) {
         throwOutOfMemoryError(globalObject, scope);
         return nullptr;
@@ -436,18 +436,18 @@ static ALWAYS_INLINE JSString* jsSpliceSubstringsWithSeparators(JSGlobalObject* 
         if (i < rangeCount) {
             if (int srcLen = substringRanges[i].length) {
                 if (source.is8Bit())
-                    StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), source.characters8() + substringRanges[i].position, srcLen);
+                    StringImpl::copyCharacters(buffer + bufferPos.value(), source.characters8() + substringRanges[i].position, srcLen);
                 else
-                    StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), source.characters16() + substringRanges[i].position, srcLen);
+                    StringImpl::copyCharacters(buffer + bufferPos.value(), source.characters16() + substringRanges[i].position, srcLen);
                 bufferPos += srcLen;
             }
         }
         if (i < separatorCount) {
             if (int sepLen = separators[i].length()) {
                 if (separators[i].is8Bit())
-                    StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), separators[i].characters8(), sepLen);
+                    StringImpl::copyCharacters(buffer + bufferPos.value(), separators[i].characters8(), sepLen);
                 else
-                    StringImpl::copyCharacters(buffer + bufferPos.unsafeGet(), separators[i].characters16(), sepLen);
+                    StringImpl::copyCharacters(buffer + bufferPos.value(), separators[i].characters16(), sepLen);
                 bufferPos += sepLen;
             }
         }
@@ -759,7 +759,7 @@ static ALWAYS_INLINE JSString* replaceUsingStringSearch(VM& vm, JSGlobalObject* 
     RETURN_IF_EXCEPTION(scope, nullptr);
 
     auto callData = getCallData(vm, replaceValue);
-    Optional<CachedCall> cachedCall;
+    std::optional<CachedCall> cachedCall;
     String replaceString;
     if (callData.type == CallData::Type::None) {
         replaceString = replaceValue.toWTFString(globalObject);

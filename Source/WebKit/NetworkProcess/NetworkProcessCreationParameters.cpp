@@ -57,7 +57,7 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << urlSchemesRegisteredForCustomProtocols;
 #if PLATFORM(COCOA)
     encoder << uiProcessBundleIdentifier;
-    IPC::encode(encoder, networkATSContext.get());
+    encoder << networkATSContext;
 #endif
 #if USE(SOUP)
     encoder << cookieAcceptPolicy;
@@ -84,25 +84,25 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
         return false;
 #endif
 #if PLATFORM(IOS_FAMILY)
-    Optional<SandboxExtension::Handle> cookieStorageDirectoryExtensionHandle;
+    std::optional<SandboxExtension::Handle> cookieStorageDirectoryExtensionHandle;
     decoder >> cookieStorageDirectoryExtensionHandle;
     if (!cookieStorageDirectoryExtensionHandle)
         return false;
     result.cookieStorageDirectoryExtensionHandle = WTFMove(*cookieStorageDirectoryExtensionHandle);
 
-    Optional<SandboxExtension::Handle> containerCachesDirectoryExtensionHandle;
+    std::optional<SandboxExtension::Handle> containerCachesDirectoryExtensionHandle;
     decoder >> containerCachesDirectoryExtensionHandle;
     if (!containerCachesDirectoryExtensionHandle)
         return false;
     result.containerCachesDirectoryExtensionHandle = WTFMove(*containerCachesDirectoryExtensionHandle);
 
-    Optional<SandboxExtension::Handle> parentBundleDirectoryExtensionHandle;
+    std::optional<SandboxExtension::Handle> parentBundleDirectoryExtensionHandle;
     decoder >> parentBundleDirectoryExtensionHandle;
     if (!parentBundleDirectoryExtensionHandle)
         return false;
     result.parentBundleDirectoryExtensionHandle = WTFMove(*parentBundleDirectoryExtensionHandle);
 
-    Optional<SandboxExtension::Handle> tempDirectoryExtensionHandle;
+    std::optional<SandboxExtension::Handle> tempDirectoryExtensionHandle;
     decoder >> tempDirectoryExtensionHandle;
     if (!tempDirectoryExtensionHandle)
         return false;
@@ -115,7 +115,7 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
 #if PLATFORM(COCOA)
     if (!decoder.decode(result.uiProcessBundleIdentifier))
         return false;
-    if (!IPC::decode(decoder, result.networkATSContext))
+    if (!decoder.decode(result.networkATSContext))
         return false;
 #endif
 
@@ -140,7 +140,7 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!decoder.decode(result.enablePrivateClickMeasurementDebugMode))
         return false;
 
-    Optional<Vector<WebsiteDataStoreParameters>> websiteDataStoreParameters;
+    std::optional<Vector<WebsiteDataStoreParameters>> websiteDataStoreParameters;
     decoder >> websiteDataStoreParameters;
     if (!websiteDataStoreParameters)
         return false;

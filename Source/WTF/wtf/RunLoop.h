@@ -33,6 +33,7 @@
 #include <wtf/Forward.h>
 #include <wtf/FunctionDispatcher.h>
 #include <wtf/HashMap.h>
+#include <wtf/Lock.h>
 #include <wtf/Observer.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Seconds.h>
@@ -144,7 +145,7 @@ public:
         Ref<RunLoop> m_runLoop;
 
 #if USE(WINDOWS_EVENT_LOOP)
-        bool isActive(const AbstractLocker&) const;
+        bool isActiveWithLock() const WTF_REQUIRES_LOCK(m_runLoop->m_loopLock);
         void timerFired();
         MonotonicTime m_nextFireDate;
         Seconds m_interval;
@@ -158,8 +159,8 @@ public:
         bool m_isRepeating { false };
         Seconds m_interval { 0 };
 #elif USE(GENERIC_EVENT_LOOP)
-        bool isActive(const AbstractLocker&) const;
-        void stop(const AbstractLocker&);
+        bool isActiveWithLock() const WTF_REQUIRES_LOCK(m_runLoop->m_loopLock);
+        void stopWithLock() WTF_REQUIRES_LOCK(m_runLoop->m_loopLock);
 
         class ScheduledTask;
         RefPtr<ScheduledTask> m_scheduledTask;
@@ -217,7 +218,7 @@ private:
     Deque<Function<void()>> m_currentIteration;
 
     Lock m_nextIterationLock;
-    Deque<Function<void()>> m_nextIteration;
+    Deque<Function<void()>> m_nextIteration WTF_GUARDED_BY_LOCK(m_nextIterationLock);
 
     bool m_isFunctionDispatchSuspended { false };
     bool m_hasSuspendedFunctions { false };
@@ -242,9 +243,9 @@ private:
     WeakHashSet<Observer> m_observers;
 #elif USE(GENERIC_EVENT_LOOP)
     void schedule(Ref<TimerBase::ScheduledTask>&&);
-    void schedule(const AbstractLocker&, Ref<TimerBase::ScheduledTask>&&);
-    void wakeUp(const AbstractLocker&);
-    void scheduleAndWakeUp(const AbstractLocker&, Ref<TimerBase::ScheduledTask>&&);
+    void scheduleWithLock(Ref<TimerBase::ScheduledTask>&&) WTF_REQUIRES_LOCK(m_loopLock);
+    void wakeUpWithLock() WTF_REQUIRES_LOCK(m_loopLock);
+    void scheduleAndWakeUpWithLock(Ref<TimerBase::ScheduledTask>&&) WTF_REQUIRES_LOCK(m_loopLock);
 
     enum class RunMode {
         Iterate,

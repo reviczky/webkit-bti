@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,12 +34,28 @@
 
 #if OS(LINUX)
 #include <asm/hwcap.h>
+#if __has_include(<sys/auxv.h>)
 #include <sys/auxv.h>
+#else
+#include <linux/auxvec.h>
+// Provide an implementation for C libraries which do not ship one.
+static unsigned long getauxval(unsigned long type)
+{
+    char** env = environ;
+    while (*env++) { /* no-op */ }
+
+    for (auto* auxv = reinterpret_cast<unsigned long*>(env); *auxv != AT_NULL; auxv += 2) {
+        if (*auxv == type)
+            return auxv[1];
+    }
+
+    errno = ENOENT;
+    return 0;
+}
+#endif
 #endif
 
 namespace JSC {
-
-#if ENABLE(MASM_PROBE)
 
 extern "C" JSC_DECLARE_JIT_OPERATION(ctiMasmProbeTrampoline, void, ());
 JSC_ANNOTATE_JIT_OPERATION(ctiMasmProbeTrampolineId, ctiMasmProbeTrampoline);
@@ -586,8 +602,6 @@ void MacroAssembler::probe(Probe::Function function, void* arg)
     load64(Address(sp, offsetof(LRRestorationRecord, lr)), lr);
     add64(TrustedImm32(sizeof(LRRestorationRecord)), sp);
 }
-
-#endif // ENABLE(MASM_PROBE)
 
 void MacroAssemblerARM64::collectCPUFeatures()
 {

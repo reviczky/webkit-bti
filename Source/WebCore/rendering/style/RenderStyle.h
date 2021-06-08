@@ -365,7 +365,7 @@ public:
     FontVariationSettings fontVariationSettings() const { return fontDescription().variationSettings(); }
     FontSelectionValue fontWeight() const { return fontDescription().weight(); }
     FontSelectionValue fontStretch() const { return fontDescription().stretch(); }
-    Optional<FontSelectionValue> fontItalic() const { return fontDescription().italic(); }
+    std::optional<FontSelectionValue> fontItalic() const { return fontDescription().italic(); }
 
     const Length& textIndent() const { return m_rareInheritedData->indent; }
     TextAlignMode textAlign() const { return static_cast<TextAlignMode>(m_inheritedFlags.textAlign); }
@@ -779,7 +779,7 @@ public:
 #if ENABLE(TEXT_AUTOSIZING)
     TextSizeAdjustment textSizeAdjust() const { return m_rareInheritedData->textSizeAdjust; }
     AutosizeStatus autosizeStatus() const;
-    bool isIdempotentTextAutosizingCandidate(Optional<AutosizeStatus> overrideStatus = WTF::nullopt) const;
+    bool isIdempotentTextAutosizingCandidate(std::optional<AutosizeStatus> overrideStatus = std::nullopt) const;
 #endif
 
     TextSecurity textSecurity() const { return static_cast<TextSecurity>(m_rareInheritedData->textSecurity); }
@@ -821,8 +821,9 @@ public:
 
 #if ENABLE(CSS_COMPOSITING)
     BlendMode blendMode() const { return static_cast<BlendMode>(m_rareNonInheritedData->effectiveBlendMode); }
-    void setBlendMode(BlendMode mode) { SET_VAR(m_rareNonInheritedData, effectiveBlendMode, static_cast<unsigned>(mode)); }
+    void setBlendMode(BlendMode);
     bool hasBlendMode() const { return static_cast<BlendMode>(m_rareNonInheritedData->effectiveBlendMode) != BlendMode::Normal; }
+    bool isInSubtreeWithBlendMode() const { return m_rareInheritedData->isInSubtreeWithBlendMode; }
 
     Isolation isolation() const { return static_cast<Isolation>(m_rareNonInheritedData->isolation); }
     void setIsolation(Isolation isolation) { SET_VAR(m_rareNonInheritedData, isolation, static_cast<unsigned>(isolation)); }
@@ -970,7 +971,7 @@ public:
     void setFontVariationSettings(FontVariationSettings);
     void setFontWeight(FontSelectionValue);
     void setFontStretch(FontSelectionValue);
-    void setFontItalic(Optional<FontSelectionValue>);
+    void setFontItalic(std::optional<FontSelectionValue>);
 
     void setColor(const Color&);
     void setTextIndent(Length&& length) { SET_VAR(m_rareInheritedData, indent, WTFMove(length)); }
@@ -2204,6 +2205,14 @@ inline ImageOrientation RenderStyle::imageOrientation() const
 {
     return static_cast<ImageOrientation::Orientation>(m_rareInheritedData->imageOrientation);
 }
+
+#if ENABLE(CSS_COMPOSITING)
+inline void RenderStyle::setBlendMode(BlendMode mode)
+{
+    SET_VAR(m_rareNonInheritedData, effectiveBlendMode, static_cast<unsigned>(mode));
+    SET_VAR(m_rareInheritedData, isInSubtreeWithBlendMode, mode != BlendMode::Normal);
+}
+#endif
 
 inline void RenderStyle::setLogicalWidth(Length&& logicalWidth)
 {

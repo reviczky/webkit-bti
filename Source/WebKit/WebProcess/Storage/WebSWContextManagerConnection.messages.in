@@ -24,6 +24,7 @@
 
 messages -> WebSWContextManagerConnection NotRefCounted {
     InstallServiceWorker(struct WebCore::ServiceWorkerContextData contextData, String userAgent)
+    UpdateAppBoundValue(WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, enum:bool WebCore::LastNavigationWasAppBound lastNavigationWasAppBound)
     StartFetch(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::FetchIdentifier fetchIdentifier, WebCore::ResourceRequest request, struct WebCore::FetchOptions options, IPC::FormDataReference requestBody, String referrer)
     CancelFetch(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::FetchIdentifier fetchIdentifier)
     ContinueDidReceiveFetchResponse(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::FetchIdentifier fetchIdentifier)
@@ -34,7 +35,7 @@ messages -> WebSWContextManagerConnection NotRefCounted {
 #if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
     DidSaveScriptsToDisk(WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::ScriptBuffer script, HashMap<URL, WebCore::ScriptBuffer> importedScripts);
 #endif
-    FindClientByIdentifierCompleted(uint64_t clientIdRequestIdentifier, Optional<WebCore::ServiceWorkerClientData> data, bool hasSecurityError)
+    FindClientByIdentifierCompleted(uint64_t clientIdRequestIdentifier, std::optional<WebCore::ServiceWorkerClientData> data, bool hasSecurityError)
     MatchAllCompleted(uint64_t matchAllRequestIdentifier, Vector<WebCore::ServiceWorkerClientData> clientsData)
     SetUserAgent(String userAgent)
     UpdatePreferencesStore(struct WebKit::WebPreferencesStore store)

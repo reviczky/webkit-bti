@@ -347,14 +347,14 @@ LayoutSize RenderTableCell::offsetFromContainer(RenderElement& container, const 
     return offset;
 }
 
-LayoutRect RenderTableCell::clippedOverflowRectForRepaint(const RenderLayerModelObject* repaintContainer) const
+LayoutRect RenderTableCell::clippedOverflowRect(const RenderLayerModelObject* repaintContainer, VisibleRectContext context) const
 {
     // If the table grid is dirty, we cannot get reliable information about adjoining cells,
     // so we ignore outside borders. This should not be a problem because it means that
     // the table is going to recalculate the grid, relayout and repaint its current rect, which
     // includes any outside borders of this cell.
     if (!table()->collapseBorders() || table()->needsSectionRecalc())
-        return RenderBlockFlow::clippedOverflowRectForRepaint(repaintContainer);
+        return RenderBlockFlow::clippedOverflowRect(repaintContainer, context);
 
     bool rtl = !styleForCellFlow().isLeftToRightDirection();
     LayoutUnit outlineSize { style().outlineSize() };
@@ -392,10 +392,10 @@ LayoutRect RenderTableCell::clippedOverflowRectForRepaint(const RenderLayerModel
     // FIXME: layoutDelta needs to be applied in parts before/after transforms and
     // repaint containers. https://bugs.webkit.org/show_bug.cgi?id=23308
     r.move(view().frameView().layoutContext().layoutDelta());
-    return computeRectForRepaint(r, repaintContainer);
+    return computeRect(r, repaintContainer, context);
 }
 
-Optional<LayoutRect> RenderTableCell::computeVisibleRectInContainer(const LayoutRect& rect, const RenderLayerModelObject* container, VisibleRectContext context) const
+std::optional<LayoutRect> RenderTableCell::computeVisibleRectInContainer(const LayoutRect& rect, const RenderLayerModelObject* container, VisibleRectContext context) const
 {
     if (container == this)
         return rect;
@@ -410,7 +410,7 @@ LayoutUnit RenderTableCell::cellBaselinePosition() const
     // <http://www.w3.org/TR/2007/CR-CSS21-20070719/tables.html#height-layout>: The baseline of a cell is the baseline of
     // the first in-flow line box in the cell, or the first in-flow table-row in the cell, whichever comes first. If there
     // is no such line box or table-row, the baseline is the bottom of content edge of the cell box.
-    return firstLineBaseline().valueOr(borderAndPaddingBefore() + contentLogicalHeight());
+    return firstLineBaseline().value_or(borderAndPaddingBefore() + contentLogicalHeight());
 }
 
 static inline void markCellDirtyWhenCollapsedBorderChanges(RenderTableCell* cell)
@@ -1346,7 +1346,7 @@ void RenderTableCell::paintMask(PaintInfo& paintInfo, const LayoutPoint& paintOf
     paintMaskImages(paintInfo, paintRect);
 }
 
-bool RenderTableCell::boxShadowShouldBeAppliedToBackground(const LayoutPoint&, BackgroundBleedAvoidance, InlineFlowBox*) const
+bool RenderTableCell::boxShadowShouldBeAppliedToBackground(const LayoutPoint&, BackgroundBleedAvoidance, LegacyInlineFlowBox*) const
 {
     return false;
 }

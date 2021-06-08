@@ -112,7 +112,7 @@ ExceptionOr<void> IDBObjectStore::setName(const String& name)
     return { };
 }
 
-const Optional<IDBKeyPath>& IDBObjectStore::keyPath() const
+const std::optional<IDBKeyPath>& IDBObjectStore::keyPath() const
 {
     ASSERT(canCurrentThreadAccessThreadLocalData(m_transaction.database().originThread()));
     return m_info.keyPath();
@@ -484,7 +484,7 @@ ExceptionOr<Ref<IDBIndex>> IDBObjectStore::createIndex(JSGlobalObject&, const St
 
     Ref<IDBIndex> referencedIndex { *index };
 
-    Locker<Lock> locker(m_referencedIndexLock);
+    Locker locker { m_referencedIndexLock };
     m_referencedIndexes.set(name, WTFMove(index));
 
     return referencedIndex;
@@ -504,7 +504,7 @@ ExceptionOr<Ref<IDBIndex>> IDBObjectStore::index(const String& indexName)
     if (m_transaction.isFinishedOrFinishing())
         return Exception { InvalidStateError, "Failed to execute 'index' on 'IDBObjectStore': The transaction is finished."_s };
 
-    Locker<Lock> locker(m_referencedIndexLock);
+    Locker locker { m_referencedIndexLock };
     auto iterator = m_referencedIndexes.find(indexName);
     if (iterator != m_referencedIndexes.end())
         return Ref<IDBIndex> { *iterator->value };
@@ -546,7 +546,7 @@ ExceptionOr<void> IDBObjectStore::deleteIndex(const String& name)
     m_info.deleteIndex(name);
 
     {
-        Locker<Lock> locker(m_referencedIndexLock);
+        Locker locker { m_referencedIndexLock };
         if (auto index = m_referencedIndexes.take(name)) {
             index->markAsDeleted();
             auto identifier = index->info().identifier();
@@ -596,7 +596,7 @@ ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doCount(JSGlobalObject& execState, 
     return m_transaction.requestCount(execState, *this, range);
 }
 
-ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doGetAll(JSGlobalObject& execState, Optional<uint32_t> count, WTF::Function<ExceptionOr<RefPtr<IDBKeyRange>>()>&& function)
+ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doGetAll(JSGlobalObject& execState, std::optional<uint32_t> count, WTF::Function<ExceptionOr<RefPtr<IDBKeyRange>>()>&& function)
 {
     LOG(IndexedDB, "IDBObjectStore::getAll");
     ASSERT(canCurrentThreadAccessThreadLocalData(m_transaction.database().originThread()));
@@ -615,14 +615,14 @@ ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doGetAll(JSGlobalObject& execState,
     return m_transaction.requestGetAllObjectStoreRecords(execState, *this, keyRangePointer, IndexedDB::GetAllType::Values, count);
 }
 
-ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAll(JSGlobalObject& execState, RefPtr<IDBKeyRange>&& range, Optional<uint32_t> count)
+ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAll(JSGlobalObject& execState, RefPtr<IDBKeyRange>&& range, std::optional<uint32_t> count)
 {
     return doGetAll(execState, count, [range = WTFMove(range)]() {
         return range;
     });
 }
 
-ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAll(JSGlobalObject& execState, JSValue key, Optional<uint32_t> count)
+ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAll(JSGlobalObject& execState, JSValue key, std::optional<uint32_t> count)
 {
     return doGetAll(execState, count, [state=&execState, key]() {
         auto onlyResult = IDBKeyRange::only(*state, key);
@@ -633,7 +633,7 @@ ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAll(JSGlobalObject& execState, J
     });
 }
 
-ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doGetAllKeys(JSGlobalObject& execState, Optional<uint32_t> count, WTF::Function<ExceptionOr<RefPtr<IDBKeyRange>>()>&& function)
+ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doGetAllKeys(JSGlobalObject& execState, std::optional<uint32_t> count, WTF::Function<ExceptionOr<RefPtr<IDBKeyRange>>()>&& function)
 {
     LOG(IndexedDB, "IDBObjectStore::getAllKeys");
     ASSERT(canCurrentThreadAccessThreadLocalData(m_transaction.database().originThread()));
@@ -652,14 +652,14 @@ ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doGetAllKeys(JSGlobalObject& execSt
     return m_transaction.requestGetAllObjectStoreRecords(execState, *this, keyRangePointer, IndexedDB::GetAllType::Keys, count);
 }
 
-ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAllKeys(JSGlobalObject& execState, RefPtr<IDBKeyRange>&& range, Optional<uint32_t> count)
+ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAllKeys(JSGlobalObject& execState, RefPtr<IDBKeyRange>&& range, std::optional<uint32_t> count)
 {
     return doGetAllKeys(execState, count, [range = WTFMove(range)]() {
         return range;
     });
 }
 
-ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAllKeys(JSGlobalObject& execState, JSValue key, Optional<uint32_t> count)
+ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAllKeys(JSGlobalObject& execState, JSValue key, std::optional<uint32_t> count)
 {
     return doGetAllKeys(execState, count, [state=&execState, key]() {
         auto onlyResult = IDBKeyRange::only(*state, key);
@@ -701,7 +701,7 @@ void IDBObjectStore::rollbackForVersionChangeAbort()
             m_info.deleteIndex(indexIdentifier);
     }
 
-    Locker<Lock> locker(m_referencedIndexLock);
+    Locker locker { m_referencedIndexLock };
 
     Vector<uint64_t> identifiersToRemove;
     Vector<std::unique_ptr<IDBIndex>> indexesToDelete;
@@ -732,7 +732,7 @@ void IDBObjectStore::rollbackForVersionChangeAbort()
 template<typename Visitor>
 void IDBObjectStore::visitReferencedIndexes(Visitor& visitor) const
 {
-    Locker<Lock> locker(m_referencedIndexLock);
+    Locker locker { m_referencedIndexLock };
     for (auto& index : m_referencedIndexes.values())
         visitor.addOpaqueRoot(index.get());
     for (auto& index : m_deletedIndexes.values())
@@ -744,6 +744,7 @@ template void IDBObjectStore::visitReferencedIndexes(SlotVisitor&) const;
 
 void IDBObjectStore::renameReferencedIndex(IDBIndex& index, const String& newName)
 {
+    Locker locker { m_referencedIndexLock };
     LOG(IndexedDB, "IDBObjectStore::renameReferencedIndex");
 
     auto* indexInfo = m_info.infoForExistingIndex(index.info().identifier());

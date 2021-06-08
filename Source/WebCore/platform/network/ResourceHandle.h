@@ -95,7 +95,7 @@ class CurlResourceHandleDelegate;
 class ResourceHandle : public RefCounted<ResourceHandle>, public AuthenticationClient {
 public:
     WEBCORE_EXPORT static RefPtr<ResourceHandle> create(NetworkingContext*, const ResourceRequest&, ResourceHandleClient*, bool defersLoading, bool shouldContentSniff, bool shouldContentEncodingSniff);
-    WEBCORE_EXPORT static void loadResourceSynchronously(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<char>& data);
+    WEBCORE_EXPORT static void loadResourceSynchronously(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<uint8_t>& data);
     WEBCORE_EXPORT virtual ~ResourceHandle();
 
 #if PLATFORM(COCOA) || USE(CFURLCONNECTION)
@@ -125,14 +125,6 @@ public:
     id makeDelegate(bool, RefPtr<SynchronousLoaderMessageQueue>&&);
     id delegate();
     void releaseDelegate();
-#endif
-
-#if PLATFORM(COCOA)
-#if USE(CFURLCONNECTION)
-    static Box<NetworkLoadMetrics> getConnectionTimingData(CFURLConnectionRef);
-#else
-    static Box<NetworkLoadMetrics> getConnectionTimingData(NSURLConnection *);
-#endif
 #endif
 
 #if PLATFORM(COCOA)
@@ -178,6 +170,15 @@ public:
     void clearAuthentication();
     WEBCORE_EXPORT virtual void cancel();
 
+    NetworkLoadMetrics* networkLoadMetrics();
+    void setNetworkLoadMetrics(Box<NetworkLoadMetrics>&&);
+
+    MonotonicTime startTimeBeforeRedirects() const;
+    bool hasCrossOriginRedirect() const;
+    void setHasCrossOriginRedirect(bool);
+    uint16_t redirectCount() const;
+    void incrementRedirectCount();
+
     // The client may be 0, in which case no callbacks will be made.
     WEBCORE_EXPORT ResourceHandleClient* client() const;
     WEBCORE_EXPORT void clearClient();
@@ -201,7 +202,7 @@ public:
     typedef Ref<ResourceHandle> (*BuiltinConstructor)(const ResourceRequest& request, ResourceHandleClient* client);
     static void registerBuiltinConstructor(const AtomString& protocol, BuiltinConstructor);
 
-    typedef void (*BuiltinSynchronousLoader)(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<char>& data);
+    typedef void (*BuiltinSynchronousLoader)(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<uint8_t>& data);
     static void registerBuiltinSynchronousLoader(const AtomString& protocol, BuiltinSynchronousLoader);
 
 protected:
@@ -221,7 +222,7 @@ private:
     void scheduleFailure(FailureType);
 
     bool start();
-    static void platformLoadResourceSynchronously(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<char>& data);
+    static void platformLoadResourceSynchronously(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<uint8_t>& data);
 
     void refAuthenticationClient() override { ref(); }
     void derefAuthenticationClient() override { deref(); }
@@ -257,7 +258,7 @@ private:
 
     bool shouldRedirectAsGET(const ResourceRequest&, bool crossOrigin);
 
-    Optional<Credential> getCredential(const ResourceRequest&, bool);
+    std::optional<Credential> getCredential(const ResourceRequest&, bool);
     void restartRequestWithCredential(const ProtectionSpace&, const Credential&);
 
     void handleDataURL();

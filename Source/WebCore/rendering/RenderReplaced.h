@@ -31,7 +31,7 @@ public:
     virtual ~RenderReplaced();
 
     LayoutUnit computeReplacedLogicalWidth(ShouldComputePreferred = ComputeActual) const override;
-    LayoutUnit computeReplacedLogicalHeight(Optional<LayoutUnit> estimatedUsedWidth = WTF::nullopt) const override;
+    LayoutUnit computeReplacedLogicalHeight(std::optional<LayoutUnit> estimatedUsedWidth = std::nullopt) const override;
 
     LayoutRect replacedContentRect(const LayoutSize& intrinsicSize) const;
     LayoutRect replacedContentRect() const { return replacedContentRect(intrinsicSize()); }
@@ -63,10 +63,6 @@ protected:
 
     void computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const final;
 
-    // This function determines if the object is allowed to compute aspect ratio from attributes width and height.
-    virtual bool canMapWidthHeightToAspectRatio() const { return false; }
-    Optional<double> intrinsicAspectRatioFromWidthHeight() const;
-
     virtual LayoutUnit minimumReplacedHeight() const { return 0_lu; }
 
     bool isSelected() const;
@@ -94,7 +90,7 @@ private:
     void computePreferredLogicalWidths() final;
     virtual void paintReplaced(PaintInfo&, const LayoutPoint&) { }
 
-    LayoutRect clippedOverflowRectForRepaint(const RenderLayerModelObject* repaintContainer) const override;
+    LayoutRect clippedOverflowRect(const RenderLayerModelObject* repaintContainer, VisibleRectContext) const override;
 
     VisiblePosition positionForPoint(const LayoutPoint&, const RenderFragmentContainer*) final;
     

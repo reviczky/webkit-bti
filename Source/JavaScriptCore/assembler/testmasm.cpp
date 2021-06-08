@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -130,7 +130,6 @@ static Vector<int64_t> int64Operands()
 }
 #endif
 
-#if ENABLE(MASM_PROBE)
 namespace WTF {
 
 static void printInternal(PrintStream& out, void* value)
@@ -139,7 +138,6 @@ static void printInternal(PrintStream& out, void* value)
 }
 
 } // namespace WTF
-#endif // ENABLE(MASM_PROBE)
 
 namespace JSC {
 namespace Probe {
@@ -153,9 +151,7 @@ using namespace JSC;
 
 namespace {
 
-#if ENABLE(MASM_PROBE)
 using CPUState = Probe::CPUState;
-#endif
 
 Lock crashLock;
 
@@ -194,7 +190,6 @@ template<typename T> T nextID(T id) { return static_cast<T>(id + 1); }
         CRASH();                                                        \
     } while (false)
 
-#if ENABLE(MASM_PROBE)
 bool isPC(MacroAssembler::RegisterID id)
 {
 #if CPU(ARM_THUMB2)
@@ -228,7 +223,6 @@ bool isSpecialGPR(MacroAssembler::RegisterID id)
 #endif
     return false;
 }
-#endif // ENABLE(MASM_PROBE)
 
 MacroAssemblerCodeRef<JSEntryPtrTag> compile(Generator&& generate)
 {
@@ -517,7 +511,6 @@ void testClearBits64WithMask()
         CHECK_EQ(invoke<uint64_t>(test, word, value), 0);
     }
 
-#if ENABLE(MASM_PROBE)
     uint64_t savedMask = 0;
     auto test2 = compile([&] (CCallHelpers& jit) {
         emitFunctionPrologue(jit);
@@ -546,7 +539,6 @@ void testClearBits64WithMask()
         uint64_t word = 0;
         CHECK_EQ(invoke<uint64_t>(test2, word, value), 0);
     }
-#endif
 }
 
 void testClearBits64WithMaskTernary()
@@ -572,7 +564,6 @@ void testClearBits64WithMaskTernary()
         CHECK_EQ(invoke<uint64_t>(test, word, value), 0);
     }
 
-#if ENABLE(MASM_PROBE)
     uint64_t savedMask = 0;
     auto test2 = compile([&] (CCallHelpers& jit) {
         emitFunctionPrologue(jit);
@@ -603,7 +594,6 @@ void testClearBits64WithMaskTernary()
         uint64_t word = 0;
         CHECK_EQ(invoke<uint64_t>(test2, word, value), 0);
     }
-#endif
 }
 
 static void testCountTrailingZeros64Impl(bool wordCanBeZero)
@@ -696,14 +686,12 @@ void testShiftAndAdd()
             jit.move(CCallHelpers::TrustedImmPtr(bitwise_cast<void*>(index)), indexGPR);
             jit.shiftAndAdd(baseGPR, indexGPR, shift, destGPR);
 
-#if ENABLE(MASM_PROBE)
             jit.probeDebug([=] (Probe::Context& context) {
                 if (baseReg != destReg)
                     CHECK_EQ(context.gpr<intptr_t>(baseGPR), basePointer);
                 if (indexReg != destReg)
                     CHECK_EQ(context.gpr<intptr_t>(indexGPR), index);
             });
-#endif
             jit.move(destGPR, GPRInfo::returnValueGPR);
 
             jit.popPair(scratchGPR, GPRInfo::argumentGPR3);
@@ -1740,7 +1728,6 @@ void testMoveDoubleConditionallyFloatSameArg(MacroAssembler::DoubleCondition con
 
 #endif // CPU(X86_64) || CPU(ARM64)
 
-#if ENABLE(MASM_PROBE)
 void testProbeReadsArgumentRegisters()
 {
     bool probeWasCalled = false;
@@ -2254,7 +2241,6 @@ void testProbeModifiesStackValues()
 
     CHECK_EQ(probeCallCount, 3);
 }
-#endif // ENABLE(MASM_PROBE)
 
 void testOrImmMem()
 {
@@ -2460,7 +2446,10 @@ static void testCagePreservesPACFailureBit()
     RELEASE_ASSERT(!Gigacage::disablingPrimitiveGigacageIsForbidden());
     auto cage = compile([] (CCallHelpers& jit) {
         emitFunctionPrologue(jit);
-        jit.cageConditionallyAndUntag(Gigacage::Primitive, GPRInfo::argumentGPR0, GPRInfo::argumentGPR1, GPRInfo::argumentGPR2);
+        constexpr GPRReg storageGPR = GPRInfo::argumentGPR0;
+        constexpr GPRReg lengthGPR = GPRInfo::argumentGPR1;
+        constexpr GPRReg scratchGPR = GPRInfo::argumentGPR2;
+        jit.cageConditionallyAndUntag(Gigacage::Primitive, storageGPR, lengthGPR, scratchGPR);
         jit.move(GPRInfo::argumentGPR0, GPRInfo::returnValueGPR);
         emitFunctionEpilogue(jit);
         jit.ret();
@@ -2473,12 +2462,7 @@ static void testCagePreservesPACFailureBit()
     CHECK_NOT_EQ(Gigacage::caged(Gigacage::Primitive, notCagedPtr), notCagedPtr);
     void* taggedNotCagedPtr = tagArrayPtr(notCagedPtr, 1);
 
-    if (isARM64E()) {
-        CHECK_NOT_EQ(invoke<void*>(cage, taggedPtr, 2), ptr);
-        CHECK_NOT_EQ(invoke<void*>(cage, taggedNotCagedPtr, 1), ptr);
-        void* cagedTaggedNotCagedPtr = invoke<void*>(cage, taggedNotCagedPtr, 1);
-        CHECK_NOT_EQ(cagedTaggedNotCagedPtr, removeArrayPtrTag(cagedTaggedNotCagedPtr));
-    } else
+    if (!isARM64E())
         CHECK_EQ(invoke<void*>(cage, taggedPtr, 2), ptr);
 
     CHECK_EQ(invoke<void*>(cage, taggedPtr, 1), ptr);
@@ -2584,7 +2568,8 @@ static void testBranchIfNotType()
                 }));                            \
     } while (false);
 
-void run(const char* filter)
+// Using WTF_IGNORES_THREAD_SAFETY_ANALYSIS because the function is still holding crashLock when exiting.
+void run(const char* filter) WTF_IGNORES_THREAD_SAFETY_ANALYSIS
 {
     JSC::initialize();
     unsigned numberOfTests = 0;
@@ -2687,7 +2672,6 @@ void run(const char* filter)
     FOR_EACH_DOUBLE_CONDITION_RUN(testMoveDoubleConditionallyFloatSameArg);
 #endif
 
-#if ENABLE(MASM_PROBE)
     RUN(testProbeReadsArgumentRegisters());
     RUN(testProbeWritesArgumentRegisters());
     RUN(testProbePreservesGPRS());
@@ -2695,7 +2679,6 @@ void run(const char* filter)
     RUN(testProbeModifiesStackPointerToNBytesBelowSP());
     RUN(testProbeModifiesProgramCounter());
     RUN(testProbeModifiesStackValues());
-#endif // ENABLE(MASM_PROBE)
 
     RUN(testByteSwap());
     RUN(testMoveDoubleConditionally32());
@@ -2724,7 +2707,7 @@ void run(const char* filter)
                     for (;;) {
                         RefPtr<SharedTask<void()>> task;
                         {
-                            LockHolder locker(lock);
+                            Locker locker { lock };
                             if (tasks.isEmpty())
                                 return;
                             task = tasks.takeFirst();

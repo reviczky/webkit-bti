@@ -355,9 +355,9 @@ LayoutUnit RenderTable::convertStyleLogicalHeightToComputedHeight(const Length& 
         }
         return LayoutUnit(styleLogicalHeight.value() - borders);
     } else if (styleLogicalHeight.isPercentOrCalculated())
-        return computePercentageLogicalHeight(styleLogicalHeight).valueOr(0);
+        return computePercentageLogicalHeight(styleLogicalHeight).value_or(0);
     else if (styleLogicalHeight.isIntrinsic())
-        return computeIntrinsicLogicalContentHeightUsing(styleLogicalHeight, logicalHeight() - borderAndPadding, borderAndPadding).valueOr(0);
+        return computeIntrinsicLogicalContentHeightUsing(styleLogicalHeight, logicalHeight() - borderAndPadding, borderAndPadding).value_or(0);
     else
         ASSERT_NOT_REACHED();
     return 0_lu;
@@ -433,6 +433,7 @@ void RenderTable::layout()
     bool sectionMoved = false;
     LayoutUnit movedSectionLogicalTop;
     unsigned sectionCount = 0;
+    bool shouldCacheIntrinsicContentLogicalHeightForFlexItem = true;
 
     LayoutRepainter repainter(*this, checkForRepaintDuringLayout());
     {
@@ -528,9 +529,10 @@ void RenderTable::layout()
             section->layoutRows();
 
         if (!topSection() && computedLogicalHeight > totalSectionLogicalHeight && !document().inQuirksMode()) {
-            // Completely empty tables (with no sections or anything) should at least honor specified height
-            // in strict mode.
-            setLogicalHeight(logicalHeight() + computedLogicalHeight);
+            // Completely empty tables (with no sections or anything) should at least honor their
+            // overriding or specified height in strict mode, but this value will not be cached.
+            shouldCacheIntrinsicContentLogicalHeightForFlexItem = false;
+            setLogicalHeight(hasOverridingLogicalHeight() ? overridingLogicalHeight() : logicalHeight() + computedLogicalHeight);
         }
 
         LayoutUnit sectionLogicalLeft = style().isLeftToRightDirection() ? borderStart() : borderEnd();
@@ -599,8 +601,9 @@ void RenderTable::layout()
     
     // FIXME: This value isn't the intrinsic content logical height, but we need
     // to update the value as its used by flexbox layout. crbug.com/367324
-    cacheIntrinsicContentLogicalHeightForFlexItem(contentLogicalHeight());
-    
+    if (shouldCacheIntrinsicContentLogicalHeightForFlexItem)
+        cacheIntrinsicContentLogicalHeightForFlexItem(contentLogicalHeight());
+
     m_columnLogicalWidthChanged = false;
     clearNeedsLayout();
 }
@@ -1495,32 +1498,32 @@ LayoutUnit RenderTable::baselinePosition(FontBaseline baselineType, bool firstLi
     });
 }
 
-Optional<LayoutUnit> RenderTable::inlineBlockBaseline(LineDirectionMode) const
+std::optional<LayoutUnit> RenderTable::inlineBlockBaseline(LineDirectionMode) const
 {
     // Tables are skipped when computing an inline-block's baseline.
-    return Optional<LayoutUnit>();
+    return std::optional<LayoutUnit>();
 }
 
-Optional<LayoutUnit> RenderTable::firstLineBaseline() const
+std::optional<LayoutUnit> RenderTable::firstLineBaseline() const
 {
     // The baseline of a 'table' is the same as the 'inline-table' baseline per CSS 3 Flexbox (CSS 2.1
     // doesn't define the baseline of a 'table' only an 'inline-table').
     // This is also needed to properly determine the baseline of a cell if it has a table child.
 
     if (isWritingModeRoot() || shouldApplyLayoutContainment(*this))
-        return Optional<LayoutUnit>();
+        return std::optional<LayoutUnit>();
 
     recalcSectionsIfNeeded();
 
     const RenderTableSection* topNonEmptySection = this->topNonEmptySection();
     if (!topNonEmptySection)
-        return Optional<LayoutUnit>();
+        return std::optional<LayoutUnit>();
 
     if (auto baseline = topNonEmptySection->firstLineBaseline())
-        return Optional<LayoutUnit>(topNonEmptySection->logicalTop() + baseline.value());
+        return std::optional<LayoutUnit>(topNonEmptySection->logicalTop() + baseline.value());
 
     // FIXME: A table row always has a baseline per CSS 2.1. Will this return the right value?
-    return Optional<LayoutUnit>();
+    return std::optional<LayoutUnit>();
 }
 
 LayoutRect RenderTable::overflowClipRect(const LayoutPoint& location, RenderFragmentContainer* fragment, OverlayScrollbarSizeRelevancy relevancy, PaintPhase phase) const

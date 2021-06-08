@@ -27,6 +27,7 @@
 #include "LLIntSlowPaths.h"
 
 #include "ArrayConstructor.h"
+#include "BaselineJITPlan.h"
 #include "BytecodeGenerator.h"
 #include "BytecodeOperandsForCheckpoint.h"
 #include "CallFrame.h"
@@ -375,23 +376,21 @@ inline bool jitCompileAndSetHeuristics(VM& vm, CodeBlock* codeBlock, BytecodeInd
         return false;
     }
     
-    JITWorklist::ensureGlobalWorklist().poll(vm);
-    
-    switch (codeBlock->jitType()) {
-    case JITType::BaselineJIT: {
+    JITWorklist::State worklistState = JITWorklist::ensureGlobalWorklist().completeAllReadyPlansForVM(vm, JITCompilationKey(codeBlock, JITCompilationMode::Baseline));
+
+    if (codeBlock->jitType() == JITType::BaselineJIT || worklistState == JITWorklist::Compiled) {
         dataLogLnIf(Options::verboseOSR(), "    Code was already compiled.");
         codeBlock->jitSoon();
         return true;
     }
-    case JITType::InterpreterThunk: {
-        JITWorklist::ensureGlobalWorklist().compileLater(codeBlock, loopOSREntryBytecodeIndex);
+
+    if (worklistState == JITWorklist::NotKnown) {
+        Ref<BaselineJITPlan> plan = adoptRef(*new BaselineJITPlan(codeBlock, loopOSREntryBytecodeIndex));
+        JITWorklist::ensureGlobalWorklist().enqueue(WTFMove(plan));
         return codeBlock->jitType() == JITType::BaselineJIT;
     }
-    default:
-        dataLog("Unexpected code block in LLInt: ", *codeBlock, "\n");
-        RELEASE_ASSERT_NOT_REACHED();
-        return false;
-    }
+
+    return false;
 }
 
 static SlowPathReturnType entryOSR(CodeBlock* codeBlock, const char *name, EntryKind kind)
@@ -692,6 +691,17 @@ LLINT_SLOW_PATH_DECL(slow_path_get_by_id_direct)
     LLINT_RETURN_PROFILED(result);
 }
 
+LLINT_SLOW_PATH_DECL(slow_path_get_by_id_with_this)
+{
+    LLINT_BEGIN();
+    auto bytecode = pc->as<OpGetByIdWithThis>();
+    const Identifier& ident = codeBlock->identifier(bytecode.m_property);
+    JSValue baseValue = getOperand(callFrame, bytecode.m_base);
+    JSValue thisVal = getOperand(callFrame, bytecode.m_thisValue);
+    PropertySlot slot(thisVal, PropertySlot::PropertySlot::InternalMethodType::Get);
+    JSValue result = baseValue.get(globalObject, ident, slot);
+    LLINT_RETURN_PROFILED(result);
+}
 
 static void setupGetByIdPrototypeCache(JSGlobalObject* globalObject, VM& vm, CodeBlock* codeBlock, const Instruction* pc, GetByIdModeMetadata& metadata, JSCell* baseCell, PropertySlot& slot, const Identifier& ident)
 {
@@ -1011,7 +1021,7 @@ static ALWAYS_INLINE JSValue getByVal(VM& vm, JSGlobalObject* globalObject, Code
         }
     }
     
-    if (Optional<uint32_t> index = subscript.tryGetAsUint32Index()) {
+    if (std::optional<uint32_t> index = subscript.tryGetAsUint32Index()) {
         uint32_t i = *index;
         auto& metadata = bytecode.metadata(codeBlock);
         ArrayProfile* arrayProfile = &metadata.m_arrayProfile;
@@ -1148,7 +1158,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_val)
     JSValue value = getOperand(callFrame, bytecode.m_value);
     bool isStrictMode = bytecode.m_ecmaMode.isStrict();
     
-    if (Optional<uint32_t> index = subscript.tryGetAsUint32Index()) {
+    if (std::optional<uint32_t> index = subscript.tryGetAsUint32Index()) {
         uint32_t i = *index;
         if (baseValue.isObject()) {
             JSObject* object = asObject(baseValue);
@@ -1180,7 +1190,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_val_direct)
     RELEASE_ASSERT(baseValue.isObject());
     JSObject* baseObject = asObject(baseValue);
     bool isStrictMode = bytecode.m_ecmaMode.isStrict();
-    if (Optional<uint32_t> index = subscript.tryGetAsUint32Index()) {
+    if (std::optional<uint32_t> index = subscript.tryGetAsUint32Index()) {
         baseObject->putDirectIndex(globalObject, *index, value, 0, isStrictMode ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
         LLINT_END();
     }
@@ -1190,7 +1200,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_val_direct)
     if (UNLIKELY(throwScope.exception()))
         LLINT_END();
 
-    if (Optional<uint32_t> index = parseIndex(property))
+    if (std::optional<uint32_t> index = parseIndex(property))
         baseObject->putDirectIndex(globalObject, index.value(), value, 0, isStrictMode ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
     else {
         PutPropertySlot slot(baseObject, isStrictMode);
@@ -1400,6 +1410,26 @@ LLINT_SLOW_PATH_DECL(slow_path_del_by_val)
         LLINT_THROW(createTypeError(globalObject, UnableToDeletePropertyError));
     
     LLINT_RETURN(jsBoolean(couldDelete));
+}
+
+LLINT_SLOW_PATH_DECL(slow_path_in_by_id)
+{
+    LLINT_BEGIN();
+
+    auto bytecode = pc->as<OpInById>();
+    JSValue baseValue = getOperand(callFrame, bytecode.m_base);
+    if (!baseValue.isObject())
+        LLINT_THROW(createInvalidInParameterError(globalObject, baseValue));
+
+    LLINT_RETURN(jsBoolean(asObject(baseValue)->hasProperty(globalObject, codeBlock->identifier(bytecode.m_property))));
+}
+
+LLINT_SLOW_PATH_DECL(slow_path_in_by_val)
+{
+    LLINT_BEGIN();
+    auto bytecode = pc->as<OpInByVal>();
+    auto& metadata = bytecode.metadata(codeBlock);
+    LLINT_RETURN(jsBoolean(CommonSlowPaths::opInByVal(globalObject, getOperand(callFrame, bytecode.m_base), getOperand(callFrame, bytecode.m_property), &metadata.m_arrayProfile)));
 }
 
 LLINT_SLOW_PATH_DECL(slow_path_put_getter_by_id)
@@ -2148,7 +2178,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_to_scope)
     const Identifier& ident = codeBlock->identifier(bytecode.m_var);
     JSObject* scope = jsCast<JSObject*>(getNonConstantOperand(callFrame, bytecode.m_scope));
     JSValue value = getOperand(callFrame, bytecode.m_value);
-    if (metadata.m_getPutInfo.resolveType() == LocalClosureVar) {
+    if (metadata.m_getPutInfo.resolveType() == ResolvedClosureVar) {
         JSLexicalEnvironment* environment = jsCast<JSLexicalEnvironment*>(scope);
         environment->variableAt(ScopeOffset(metadata.m_operand)).set(vm, environment, value);
         
@@ -2156,7 +2186,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_to_scope)
         // to have already changed the value of the variable. Otherwise we might watch and constant-fold
         // to the Undefined value from before the assignment.
         if (metadata.m_watchpointSet)
-            metadata.m_watchpointSet->touch(vm, "Executed op_put_scope<LocalClosureVar>");
+            metadata.m_watchpointSet->touch(vm, "Executed op_put_scope<ResolvedClosureVar>");
         LLINT_END();
     }
 

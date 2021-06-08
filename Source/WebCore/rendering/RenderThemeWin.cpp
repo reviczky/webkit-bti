@@ -1013,7 +1013,7 @@ Color RenderThemeWin::systemColor(CSSValueID cssValueId, OptionSet<StyleColor::O
 }
 
 #if ENABLE(VIDEO)
-static void fillBufferWithContentsOfFile(FileSystem::PlatformFileHandle file, long long filesize, Vector<char>& buffer)
+static void fillBufferWithContentsOfFile(FileSystem::PlatformFileHandle file, long long filesize, Vector<uint8_t>& buffer)
 {
     // Load the file content into buffer
     buffer.resize(filesize + 1);
@@ -1052,17 +1052,17 @@ String RenderThemeWin::stringWithContentsOfFile(const String& name, const String
     if (!FileSystem::isHandleValid(requestedFileHandle))
         return String();
 
-    long long filesize = -1;
-    if (!FileSystem::getFileSize(requestedFileHandle, filesize)) {
+    auto filesize = FileSystem::fileSize(requestedFileHandle);
+    if (!filesize) {
         FileSystem::closeFile(requestedFileHandle);
         return String();
     }
 
-    Vector<char> fileContents;
-    fillBufferWithContentsOfFile(requestedFileHandle, filesize, fileContents);
+    Vector<uint8_t> fileContents;
+    fillBufferWithContentsOfFile(requestedFileHandle, *filesize, fileContents);
     FileSystem::closeFile(requestedFileHandle);
 
-    return String(fileContents.data(), static_cast<size_t>(filesize));
+    return String(fileContents.data(), *filesize);
 #else
     return emptyString();
 #endif

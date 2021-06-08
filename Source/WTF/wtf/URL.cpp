@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <unicode/uidna.h>
 #include <wtf/HashMap.h>
+#include <wtf/Lock.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/PrintStream.h>
 #include <wtf/StdLibExtras.h>
@@ -132,9 +133,9 @@ StringView URL::host() const
     return StringView(m_string).substring(start, m_hostEnd - start);
 }
 
-Optional<uint16_t> URL::port() const
+std::optional<uint16_t> URL::port() const
 {
-    return m_portLength ? parseInteger<uint16_t>(StringView(m_string).substring(m_hostEnd + 1, m_portLength - 1)) : WTF::nullopt;
+    return m_portLength ? parseInteger<uint16_t>(StringView(m_string).substring(m_hostEnd + 1, m_portLength - 1)) : std::nullopt;
 }
 
 String URL::hostAndPort() const
@@ -155,14 +156,14 @@ String URL::protocolHostAndPort() const
     );
 }
 
-static Optional<LChar> decodeEscapeSequence(StringView input, unsigned index, unsigned length)
+static std::optional<LChar> decodeEscapeSequence(StringView input, unsigned index, unsigned length)
 {
     if (index + 3 > length || input[index] != '%')
-        return WTF::nullopt;
+        return std::nullopt;
     auto digit1 = input[index + 1];
     auto digit2 = input[index + 2];
     if (!isASCIIHexDigit(digit1) || !isASCIIHexDigit(digit2))
-        return WTF::nullopt;
+        return std::nullopt;
     return toASCIIHexValue(digit1, digit2);
 }
 
@@ -270,13 +271,13 @@ static void assertProtocolIsGood(StringView protocol)
 static Lock defaultPortForProtocolMapForTestingLock;
 
 using DefaultPortForProtocolMapForTesting = HashMap<String, uint16_t>;
-static DefaultPortForProtocolMapForTesting*& defaultPortForProtocolMapForTesting()
+static DefaultPortForProtocolMapForTesting*& defaultPortForProtocolMapForTesting() WTF_REQUIRES_LOCK(defaultPortForProtocolMapForTestingLock)
 {
     static DefaultPortForProtocolMapForTesting* defaultPortForProtocolMap;
     return defaultPortForProtocolMap;
 }
 
-static DefaultPortForProtocolMapForTesting& ensureDefaultPortForProtocolMapForTesting()
+static DefaultPortForProtocolMapForTesting& ensureDefaultPortForProtocolMapForTesting() WTF_REQUIRES_LOCK(defaultPortForProtocolMapForTestingLock)
 {
     DefaultPortForProtocolMapForTesting*& defaultPortForProtocolMap = defaultPortForProtocolMapForTesting();
     if (!defaultPortForProtocolMap)
@@ -286,25 +287,26 @@ static DefaultPortForProtocolMapForTesting& ensureDefaultPortForProtocolMapForTe
 
 void registerDefaultPortForProtocolForTesting(uint16_t port, const String& protocol)
 {
-    auto locker = holdLock(defaultPortForProtocolMapForTestingLock);
+    Locker locker { defaultPortForProtocolMapForTestingLock };
     ensureDefaultPortForProtocolMapForTesting().add(protocol, port);
 }
 
 void clearDefaultPortForProtocolMapForTesting()
 {
-    auto locker = holdLock(defaultPortForProtocolMapForTestingLock);
+    Locker locker { defaultPortForProtocolMapForTestingLock };
     if (auto* map = defaultPortForProtocolMapForTesting())
         map->clear();
 }
 
-Optional<uint16_t> defaultPortForProtocol(StringView protocol)
+std::optional<uint16_t> defaultPortForProtocol(StringView protocol)
 {
-    if (auto* overrideMap = defaultPortForProtocolMapForTesting()) {
-        auto locker = holdLock(defaultPortForProtocolMapForTestingLock);
-        ASSERT(overrideMap); // No need to null check again here since overrideMap cannot become null after being non-null.
-        auto iterator = overrideMap->find(protocol.toStringWithoutCopying());
-        if (iterator != overrideMap->end())
-            return iterator->value;
+    {
+        Locker locker { defaultPortForProtocolMapForTestingLock };
+        if (auto* overrideMap = defaultPortForProtocolMapForTesting()) {
+            auto iterator = overrideMap->find(protocol.toStringWithoutCopying());
+            if (iterator != overrideMap->end())
+                return iterator->value;
+        }
     }
     return URLParser::defaultPortForProtocol(protocol);
 }
@@ -472,7 +474,7 @@ void URL::setHost(StringView newHost)
     ));
 }
 
-void URL::setPort(Optional<uint16_t> port)
+void URL::setPort(std::optional<uint16_t> port)
 {
     if (!m_isValid)
         return;
@@ -665,10 +667,10 @@ void URL::setQuery(StringView newQuery)
 
 static String escapePathWithoutCopying(StringView path)
 {
-    auto questionMarkOrNumberSign = [] (UChar character) {
-        return character == '?' || character == '#';
+    auto questionMarkOrNumberSignOrNonASCII = [] (UChar character) {
+        return character == '?' || character == '#' || !isASCII(character);
     };
-    return percentEncodeCharacters(path.toStringWithoutCopying(), questionMarkOrNumberSign);
+    return percentEncodeCharacters(path.toStringWithoutCopying(), questionMarkOrNumberSignOrNonASCII);
 }
 
 void URL::setPath(StringView path)
@@ -885,7 +887,7 @@ bool URL::protocolIsAbout() const
 
 bool portAllowed(const URL& url)
 {
-    Optional<uint16_t> port = url.port();
+    std::optional<uint16_t> port = url.port();
 
     // Since most URLs don't have a port, return early for the "no port" case.
     if (!port)

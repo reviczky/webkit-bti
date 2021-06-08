@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,7 +36,6 @@
 #include "IDBKeyData.h"
 #include "IDBObjectStoreInfo.h"
 #include "IDBSerialization.h"
-#include "IDBSerializationContext.h"
 #include "IDBTransactionInfo.h"
 #include "IDBValue.h"
 #include "IndexKey.h"
@@ -70,6 +69,13 @@ static const int currentMetadataVersion = 1;
 
 // The IndexedDatabase spec defines the max key generator value as 2^53.
 static const uint64_t maxGeneratorValue = 0x20000000000000;
+
+#define TABLE_SCHEMA_PREFIX "CREATE TABLE "
+#define V3_RECORDS_TABLE_SCHEMA_SUFFIX " (objectStoreID INTEGER NOT NULL ON CONFLICT FAIL, key TEXT COLLATE IDBKEY NOT NULL ON CONFLICT FAIL, value NOT NULL ON CONFLICT FAIL, recordID INTEGER PRIMARY KEY)"_s
+#define V3_INDEX_RECORDS_TABLE_SCHEMA_SUFFIX " (indexID INTEGER NOT NULL ON CONFLICT FAIL, objectStoreID INTEGER NOT NULL ON CONFLICT FAIL, key TEXT COLLATE IDBKEY NOT NULL ON CONFLICT FAIL, value TEXT COLLATE IDBKEY NOT NULL ON CONFLICT FAIL, objectStoreRecordID INTEGER NOT NULL ON CONFLICT FAIL)"_s;
+#define INDEX_INFO_TABLE_SCHEMA_SUFFIX " (id INTEGER NOT NULL ON CONFLICT FAIL, name TEXT NOT NULL ON CONFLICT FAIL, objectStoreID INTEGER NOT NULL ON CONFLICT FAIL, keyPath BLOB NOT NULL ON CONFLICT FAIL, isUnique INTEGER NOT NULL ON CONFLICT FAIL, multiEntry INTEGER NOT NULL ON CONFLICT FAIL)"_s;
+#define BLOB_RECORDS_TABLE_SCHEMA_SUFFIX " (objectStoreRow INTEGER NOT NULL ON CONFLICT FAIL, blobURL TEXT NOT NULL ON CONFLICT FAIL)"_s;
+#define BLOB_FILES_TABLE_SCHEMA_SUFFIX " (blobURL TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL, fileName TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL)"_s;
 
 static int idbKeyCollate(int aLength, const void* aBuffer, int bLength, const void* bBuffer)
 {
@@ -126,21 +132,19 @@ static const String& v2RecordsTableSchemaAlternate()
     return v2RecordsTableSchemaString;
 }
 
-static const String v3RecordsTableSchema(const String& tableName)
+static ASCIILiteral v3RecordsTableSchema()
 {
-    return makeString("CREATE TABLE ", tableName, " (objectStoreID INTEGER NOT NULL ON CONFLICT FAIL, key TEXT COLLATE IDBKEY NOT NULL ON CONFLICT FAIL, value NOT NULL ON CONFLICT FAIL, recordID INTEGER PRIMARY KEY)");
+    return TABLE_SCHEMA_PREFIX "Records" V3_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String& v3RecordsTableSchema()
+static ASCIILiteral v3RecordsTableSchemaAlternate()
 {
-    static NeverDestroyed<WTF::String> v3RecordsTableSchemaString(v3RecordsTableSchema("Records"));
-    return v3RecordsTableSchemaString;
+    return TABLE_SCHEMA_PREFIX "\"Records\"" V3_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String& v3RecordsTableSchemaAlternate()
+static ASCIILiteral v3RecordsTableSchemaTemp()
 {
-    static NeverDestroyed<WTF::String> v3RecordsTableSchemaString(v3RecordsTableSchema("\"Records\""));
-    return v3RecordsTableSchemaString;
+    return TABLE_SCHEMA_PREFIX "_Temp_Records" V3_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
 static const String v1IndexRecordsTableSchema(const String& tableName)
@@ -177,55 +181,39 @@ static const String& v2IndexRecordsTableSchemaAlternate()
     return v2IndexRecordsTableSchemaString;
 }
 
-static const String v3IndexRecordsTableSchema(const String& tableName)
+static ASCIILiteral v3IndexRecordsTableSchema()
 {
-    return makeString("CREATE TABLE ", tableName, " (indexID INTEGER NOT NULL ON CONFLICT FAIL, objectStoreID INTEGER NOT NULL ON CONFLICT FAIL, key TEXT COLLATE IDBKEY NOT NULL ON CONFLICT FAIL, value TEXT COLLATE IDBKEY NOT NULL ON CONFLICT FAIL, objectStoreRecordID INTEGER NOT NULL ON CONFLICT FAIL)");
+    return TABLE_SCHEMA_PREFIX "IndexRecords" V3_INDEX_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String v3IndexRecordsTableSchema()
+static ASCIILiteral v3IndexRecordsTableSchemaAlternate()
 {
-    static NeverDestroyed<WTF::String> indexRecordsTableSchemaString = v3IndexRecordsTableSchema("IndexRecords");
-    return indexRecordsTableSchemaString;
+    return TABLE_SCHEMA_PREFIX "\"IndexRecords\"" V3_INDEX_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String v3IndexRecordsTableSchemaAlternate()
+static ASCIILiteral v3IndexRecordsTableSchemaTemp()
 {
-    static NeverDestroyed<WTF::String> indexRecordsTableSchemaString = v3IndexRecordsTableSchema("\"IndexRecords\"");
-    return indexRecordsTableSchemaString;
+    return TABLE_SCHEMA_PREFIX "_Temp_IndexRecords" V3_INDEX_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String blobRecordsTableSchema(const String& tableName)
+static ASCIILiteral blobRecordsTableSchema()
 {
-    return makeString("CREATE TABLE ", tableName, " (objectStoreRow INTEGER NOT NULL ON CONFLICT FAIL, blobURL TEXT NOT NULL ON CONFLICT FAIL)");
+    return TABLE_SCHEMA_PREFIX "BlobRecords" BLOB_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String& blobRecordsTableSchema()
+static ASCIILiteral blobRecordsTableSchemaAlternate()
 {
-    static NeverDestroyed<String> blobRecordsTableSchemaString(blobRecordsTableSchema("BlobRecords"));
-    return blobRecordsTableSchemaString;
+    return TABLE_SCHEMA_PREFIX "\"BlobRecords\"" BLOB_RECORDS_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String& blobRecordsTableSchemaAlternate()
+static ASCIILiteral blobFilesTableSchema()
 {
-    static NeverDestroyed<String> blobRecordsTableSchemaString(blobRecordsTableSchema("\"BlobRecords\""));
-    return blobRecordsTableSchemaString;
+    return TABLE_SCHEMA_PREFIX "BlobFiles" BLOB_FILES_TABLE_SCHEMA_SUFFIX;
 }
 
-static const String blobFilesTableSchema(const String& tableName)
+static ASCIILiteral blobFilesTableSchemaAlternate()
 {
-    return makeString("CREATE TABLE ", tableName, " (blobURL TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL, fileName TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL)");
-}
-
-static const String& blobFilesTableSchema()
-{
-    static NeverDestroyed<String> blobFilesTableSchemaString(blobFilesTableSchema("BlobFiles"));
-    return blobFilesTableSchemaString;
-}
-
-static const String& blobFilesTableSchemaAlternate()
-{
-    static NeverDestroyed<String> blobFilesTableSchemaString(blobFilesTableSchema("\"BlobFiles\""));
-    return blobFilesTableSchemaString;
+    return TABLE_SCHEMA_PREFIX "\"BlobFiles\"" BLOB_FILES_TABLE_SCHEMA_SUFFIX;
 }
 
 static String createV1ObjectStoreInfoSchema(ASCIILiteral tableName)
@@ -238,16 +226,20 @@ static String createV2ObjectStoreInfoSchema(ASCIILiteral tableName)
     return makeString("CREATE TABLE ", tableName, " (id INTEGER PRIMARY KEY NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL, name TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL, keyPath BLOB NOT NULL ON CONFLICT FAIL, autoInc INTEGER NOT NULL ON CONFLICT FAIL)");
 }
 
-static String indexInfoTableSchema(ASCIILiteral tableName)
+static ASCIILiteral indexInfoTableSchema()
 {
-    return makeString("CREATE TABLE ", tableName, " (id INTEGER NOT NULL ON CONFLICT FAIL, name TEXT NOT NULL ON CONFLICT FAIL, objectStoreID INTEGER NOT NULL ON CONFLICT FAIL, keyPath BLOB NOT NULL ON CONFLICT FAIL, isUnique INTEGER NOT NULL ON CONFLICT FAIL, multiEntry INTEGER NOT NULL ON CONFLICT FAIL)");
+    return TABLE_SCHEMA_PREFIX "IndexInfo" INDEX_INFO_TABLE_SCHEMA_SUFFIX;
+}
+
+static ASCIILiteral indexInfoTableSchemaTemp()
+{
+    return TABLE_SCHEMA_PREFIX "_Temp_IndexInfo" INDEX_INFO_TABLE_SCHEMA_SUFFIX;
 }
 
 SQLiteIDBBackingStore::SQLiteIDBBackingStore(PAL::SessionID sessionID, const IDBDatabaseIdentifier& identifier, const String& databaseRootDirectory)
     : m_sessionID(sessionID)
     , m_identifier(identifier)
     , m_databaseRootDirectory(databaseRootDirectory)
-    , m_serializationContext(IDBSerializationContext::getOrCreateForCurrentThread())
 {
     m_databaseDirectory = fullDatabaseDirectoryWithUpgrade();
 }
@@ -258,340 +250,165 @@ SQLiteIDBBackingStore::~SQLiteIDBBackingStore()
         closeSQLiteDB();
 }
 
-static bool createOrMigrateRecordsTableIfNecessary(SQLiteDatabase& database)
+static IDBError createOrMigrateRecordsTableIfNecessary(SQLiteDatabase& database)
 {
-    String currentSchema;
-    {
-        // Fetch the schema for an existing records table.
-        SQLiteStatement statement(database, "SELECT type, sql FROM sqlite_master WHERE tbl_name='Records'");
-        if (statement.prepare() != SQLITE_OK) {
-            LOG_ERROR("Unable to prepare statement to fetch schema for the Records table.");
-            return false;
-        }
+    String tableStatement = database.tableSQL("Records"_s);
+    if (tableStatement.isEmpty()) {
+        if (!database.executeCommand(v3RecordsTableSchema()))
+            return IDBError { UnknownError, makeString("Error creating Records table (", database.lastError(), ") - ", database.lastErrorMsg()) };
 
-        int sqliteResult = statement.step();
-
-        // If there is no Records table at all, create it and then bail.
-        if (sqliteResult == SQLITE_DONE) {
-            if (!database.executeCommand(v3RecordsTableSchema())) {
-                LOG_ERROR("Could not create Records table in database (%i) - %s", database.lastError(), database.lastErrorMsg());
-                return false;
-            }
-
-            return true;
-        }
-
-        if (sqliteResult != SQLITE_ROW) {
-            LOG_ERROR("Error executing statement to fetch schema for the Records table.");
-            return false;
-        }
-
-        currentSchema = statement.getColumnText(1);
+        return IDBError { };
     }
 
-    ASSERT(!currentSchema.isEmpty());
-
     // If the schema in the backing store is the current schema, we're done.
-    if (currentSchema == v3RecordsTableSchema() || currentSchema == v3RecordsTableSchemaAlternate())
-        return true;
+    if (tableStatement == v3RecordsTableSchema() || tableStatement == v3RecordsTableSchemaAlternate())
+        return IDBError { };
 
     // If the record table is not the current schema then it must be one of the previous schemas.
     // If it is not then the database is in an unrecoverable state and this should be considered a fatal error.
-    if (currentSchema != v1RecordsTableSchema() && currentSchema != v1RecordsTableSchemaAlternate()
-        && currentSchema != v2RecordsTableSchema() && currentSchema != v2RecordsTableSchemaAlternate())
+    if (tableStatement != v1RecordsTableSchema() && tableStatement != v1RecordsTableSchemaAlternate()
+        && tableStatement != v2RecordsTableSchema() && tableStatement != v2RecordsTableSchemaAlternate())
         RELEASE_ASSERT_NOT_REACHED();
 
     SQLiteTransaction transaction(database);
     transaction.begin();
 
     // Create a temporary table with the correct schema and migrate all existing content over.
-    if (!database.executeCommand(v3RecordsTableSchema("_Temp_Records"))) {
-        LOG_ERROR("Could not create temporary records table in database (%i) - %s", database.lastError(), database.lastErrorMsg());
-        return false;
-    }
+    if (!database.executeCommand(v3RecordsTableSchemaTemp()))
+        return IDBError { UnknownError, makeString("Error creating temporary Records table (", database.lastError(), ") - ", database.lastErrorMsg()) };
 
-    if (!database.executeCommand("INSERT INTO _Temp_Records (objectStoreID, key, value) SELECT objectStoreID, CAST(key AS TEXT), value FROM Records")) {
-        LOG_ERROR("Could not migrate existing Records content (%i) - %s", database.lastError(), database.lastErrorMsg());
-        return false;
-    }
+    if (!database.executeCommand("INSERT INTO _Temp_Records (objectStoreID, key, value) SELECT objectStoreID, CAST(key AS TEXT), value FROM Records"_s))
+        return IDBError { UnknownError, makeString("Error migrating Records table (", database.lastError(), ") - ", database.lastErrorMsg()) };
 
-    if (!database.executeCommand("DROP TABLE Records")) {
-        LOG_ERROR("Could not drop existing Records table (%i) - %s", database.lastError(), database.lastErrorMsg());
-        return false;
-    }
+    if (!database.executeCommand("DROP TABLE Records"_s))
+        return IDBError { UnknownError, makeString("Error dropping Records table (", database.lastError(), ") - ", database.lastErrorMsg()) };
 
-    if (!database.executeCommand("ALTER TABLE _Temp_Records RENAME TO Records")) {
-        LOG_ERROR("Could not rename temporary Records table (%i) - %s", database.lastError(), database.lastErrorMsg());
-        return false;
-    }
+    if (!database.executeCommand("ALTER TABLE _Temp_Records RENAME TO Records"_s))
+        return IDBError { UnknownError, makeString("Error renaming temporary Records table (", database.lastError(), ") - ", database.lastErrorMsg()) };
 
     transaction.commit();
 
-    return true;
+    return IDBError { };
 }
 
-bool SQLiteIDBBackingStore::ensureValidBlobTables()
+IDBError SQLiteIDBBackingStore::ensureValidBlobTables()
 {
     ASSERT(m_sqliteDB);
     ASSERT(m_sqliteDB->isOpen());
 
-    String currentSchema;
-    {
-        // Fetch the schema for an existing blob record table.
-        SQLiteStatement statement(*m_sqliteDB, "SELECT type, sql FROM sqlite_master WHERE tbl_name='BlobRecords'");
-        if (statement.prepare() != SQLITE_OK) {
-            LOG_ERROR("Unable to prepare statement to fetch schema for the BlobRecords table.");
-            return false;
-        }
+    String recordsTableStatement = m_sqliteDB->tableSQL("BlobRecords"_s);
+    if (recordsTableStatement.isEmpty()) {
+        if (!m_sqliteDB->executeCommand(blobRecordsTableSchema()))
+            return IDBError { UnknownError, makeString("Error creating BlobRecords table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-        int sqliteResult = statement.step();
-
-        // If there is no BlobRecords table at all, create it..
-        if (sqliteResult == SQLITE_DONE) {
-            if (!m_sqliteDB->executeCommand(blobRecordsTableSchema())) {
-                LOG_ERROR("Could not create BlobRecords table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-                return false;
-            }
-
-            currentSchema = blobRecordsTableSchema();
-        } else if (sqliteResult != SQLITE_ROW) {
-            LOG_ERROR("Error executing statement to fetch schema for the BlobRecords table.");
-            return false;
-        } else
-            currentSchema = statement.getColumnText(1);
+        recordsTableStatement = blobRecordsTableSchema();
     }
 
-    if (currentSchema != blobRecordsTableSchema() && currentSchema != blobRecordsTableSchemaAlternate()) {
-        LOG_ERROR("Invalid BlobRecords table schema found");
-        return false;
+    RELEASE_ASSERT(recordsTableStatement == blobRecordsTableSchema() || recordsTableStatement == blobRecordsTableSchemaAlternate());
+
+    String filesTableStatement = m_sqliteDB->tableSQL("BlobFiles"_s);
+    if (filesTableStatement.isEmpty()) {
+        if (!m_sqliteDB->executeCommand(blobFilesTableSchema()))
+            return IDBError { UnknownError, makeString("Error creating BlobFiles table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
+
+        filesTableStatement = blobFilesTableSchema();
     }
 
-    {
-        // Fetch the schema for an existing blob file table.
-        SQLiteStatement statement(*m_sqliteDB, "SELECT type, sql FROM sqlite_master WHERE tbl_name='BlobFiles'");
-        if (statement.prepare() != SQLITE_OK) {
-            LOG_ERROR("Unable to prepare statement to fetch schema for the BlobFiles table.");
-            return false;
-        }
-
-        int sqliteResult = statement.step();
-
-        // If there is no BlobFiles table at all, create it and then bail.
-        if (sqliteResult == SQLITE_DONE) {
-            if (!m_sqliteDB->executeCommand(blobFilesTableSchema())) {
-                LOG_ERROR("Could not create BlobFiles table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-                return false;
-            }
-
-            return true;
-        }
-
-        if (sqliteResult != SQLITE_ROW) {
-            LOG_ERROR("Error executing statement to fetch schema for the BlobFiles table.");
-            return false;
-        }
-
-        currentSchema = statement.getColumnText(1);
-    }
-
-    if (currentSchema != blobFilesTableSchema() && currentSchema != blobFilesTableSchemaAlternate()) {
-        LOG_ERROR("Invalid BlobFiles table schema found");
-        return false;
-    }
-
-    return true;
+    RELEASE_ASSERT(filesTableStatement == blobFilesTableSchema() || filesTableStatement == blobFilesTableSchemaAlternate());
+    return IDBError { };
 }
 
-bool SQLiteIDBBackingStore::ensureValidRecordsTable()
+IDBError SQLiteIDBBackingStore::ensureValidRecordsTable()
 {
     ASSERT(m_sqliteDB);
     ASSERT(m_sqliteDB->isOpen());
 
-    if (!createOrMigrateRecordsTableIfNecessary(*m_sqliteDB))
-        return false;
+    IDBError error = createOrMigrateRecordsTableIfNecessary(*m_sqliteDB);
+    if (!error.isNull())
+        return error;
 
     // Whether the updated records table already existed or if it was just created and the data migrated over,
     // make sure the uniqueness index exists.
-    if (!m_sqliteDB->executeCommand("CREATE UNIQUE INDEX IF NOT EXISTS RecordsIndex ON Records (objectStoreID, key);")) {
-        LOG_ERROR("Could not create RecordsIndex on Records table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return false;
-    }
+    if (!m_sqliteDB->executeCommand("CREATE UNIQUE INDEX IF NOT EXISTS RecordsIndex ON Records (objectStoreID, key);"_s))
+        error = IDBError { UnknownError, makeString("Error creating RecordsIndex on Records table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-    return true;
+    return error;
 }
 
-bool SQLiteIDBBackingStore::ensureValidIndexRecordsTable()
+IDBError SQLiteIDBBackingStore::ensureValidIndexRecordsTable()
 {
     ASSERT(m_sqliteDB);
     ASSERT(m_sqliteDB->isOpen());
 
-    String currentSchema;
-    {
-        // Fetch the schema for an existing index record table.
-        SQLiteStatement statement(*m_sqliteDB, "SELECT type, sql FROM sqlite_master WHERE tbl_name='IndexRecords'");
-        if (statement.prepare() != SQLITE_OK) {
-            LOG_ERROR("Unable to prepare statement to fetch schema for the IndexRecords table.");
-            return false;
-        }
+    String tableStatement = m_sqliteDB->tableSQL("IndexRecords"_s);
+    if (tableStatement.isEmpty()) {
+        if (!m_sqliteDB->executeCommand(v3IndexRecordsTableSchema()))
+            return IDBError { UnknownError, makeString("Error creating IndexRecords table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-        int sqliteResult = statement.step();
-
-        // If there is no IndexRecords table at all, create it and then bail.
-        if (sqliteResult == SQLITE_DONE) {
-            if (!m_sqliteDB->executeCommand(v3IndexRecordsTableSchema())) {
-                LOG_ERROR("Could not create IndexRecords table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-                return false;
-            }
-
-            return true;
-        }
-
-        if (sqliteResult != SQLITE_ROW) {
-            LOG_ERROR("Error executing statement to fetch schema for the IndexRecords table.");
-            return false;
-        }
-
-        currentSchema = statement.getColumnText(1);
+        return IDBError { };
     }
 
-    ASSERT(!currentSchema.isEmpty());
-
     // If the schema in the backing store is the current schema, we're done.
-    if (currentSchema == v3IndexRecordsTableSchema() || currentSchema == v3IndexRecordsTableSchemaAlternate())
-        return true;
+    if (tableStatement == v3IndexRecordsTableSchema() || tableStatement == v3IndexRecordsTableSchemaAlternate())
+        return IDBError { };
 
-    // If the record table is not the current schema then it must be one of the previous schemas.
-    // If it is not then the database is in an unrecoverable state and this should be considered a fatal error.
-    if (currentSchema != v1IndexRecordsTableSchema() && currentSchema != v1IndexRecordsTableSchemaAlternate()
-        && currentSchema != v2IndexRecordsTableSchema() && currentSchema != v2IndexRecordsTableSchemaAlternate())
-        RELEASE_ASSERT_NOT_REACHED();
+    RELEASE_ASSERT(tableStatement == v1IndexRecordsTableSchema() || tableStatement == v1IndexRecordsTableSchemaAlternate() || tableStatement == v2IndexRecordsTableSchema() || tableStatement == v2IndexRecordsTableSchemaAlternate());
 
     SQLiteTransaction transaction(*m_sqliteDB);
     transaction.begin();
 
     // Create a temporary table with the correct schema and migrate all existing content over.
-    if (!m_sqliteDB->executeCommand(v3IndexRecordsTableSchema("_Temp_IndexRecords"))) {
-        LOG_ERROR("Could not create temporary index records table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return false;
-    }
+    if (!m_sqliteDB->executeCommand(v3IndexRecordsTableSchemaTemp()))
+        return IDBError { UnknownError, makeString("Error creating temporary IndexRecords table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-    if (!m_sqliteDB->executeCommand("INSERT INTO _Temp_IndexRecords SELECT IndexRecords.indexID, IndexRecords.objectStoreID, IndexRecords.key, IndexRecords.value, Records.rowid FROM IndexRecords INNER JOIN Records ON Records.key = IndexRecords.value AND Records.objectStoreID = IndexRecords.objectStoreID")) {
-        LOG_ERROR("Could not migrate existing IndexRecords content (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return false;
-    }
+    if (!m_sqliteDB->executeCommand("INSERT INTO _Temp_IndexRecords SELECT IndexRecords.indexID, IndexRecords.objectStoreID, IndexRecords.key, IndexRecords.value, Records.rowid FROM IndexRecords INNER JOIN Records ON Records.key = IndexRecords.value AND Records.objectStoreID = IndexRecords.objectStoreID"_s))
+        return IDBError { UnknownError, makeString("Error migrating IndexRecords table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-    if (!m_sqliteDB->executeCommand("DROP TABLE IndexRecords")) {
-        LOG_ERROR("Could not drop existing IndexRecords table (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return false;
-    }
+    if (!m_sqliteDB->executeCommand("DROP TABLE IndexRecords"_s))
+        return IDBError { UnknownError, makeString("Error dropping IndexRecords table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-    if (!m_sqliteDB->executeCommand("ALTER TABLE _Temp_IndexRecords RENAME TO IndexRecords")) {
-        LOG_ERROR("Could not rename temporary IndexRecords table (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return false;
-    }
+    if (!m_sqliteDB->executeCommand("ALTER TABLE _Temp_IndexRecords RENAME TO IndexRecords"_s))
+        return IDBError { UnknownError, makeString("Error renaming temporary IndexRecords table (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
     transaction.commit();
 
-    return true;
+    return IDBError { };
 }
 
-bool SQLiteIDBBackingStore::ensureValidIndexRecordsIndex()
+IDBError SQLiteIDBBackingStore::ensureValidIndexRecordsIndex()
 {
     ASSERT(m_sqliteDB);
     ASSERT(m_sqliteDB->isOpen());
 
-    String currentSchema;
-    {
-        // Fetch the schema for an existing index record index.
-        SQLiteStatement statement(*m_sqliteDB, "SELECT sql FROM sqlite_master WHERE name='IndexRecordsIndex'");
-        if (statement.prepare() != SQLITE_OK) {
-            LOG_ERROR("Unable to prepare statement to fetch schema for the IndexRecordsIndex index.");
-            return false;
-        }
+    String indexStatement = m_sqliteDB->indexSQL("IndexRecordsIndex"_s);
+    if (indexStatement == IndexRecordsIndexSchema)
+        return IDBError { };
+    
+    if (!m_sqliteDB->executeCommand("DROP INDEX IF EXISTS IndexRecordsIndex"_s))
+        return IDBError { UnknownError, makeString("Error dropping IndexRecordsIndex index (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-        int sqliteResult = statement.step();
+    if (!m_sqliteDB->executeCommand(IndexRecordsIndexSchema))
+        return IDBError { UnknownError, makeString("Error creating IndexRecordsIndex index (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-        // If there is no IndexRecordsIndex index at all, create it and then bail.
-        if (sqliteResult == SQLITE_DONE) {
-            if (!m_sqliteDB->executeCommand(IndexRecordsIndexSchema)) {
-                LOG_ERROR("Could not create IndexRecordsIndex index in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-                return false;
-            }
-
-            return true;
-        }
-
-        if (sqliteResult != SQLITE_ROW) {
-            LOG_ERROR("Error executing statement to fetch schema for the IndexRecordsIndex index.");
-            return false;
-        }
-
-        currentSchema = statement.getColumnText(0);
-    }
-
-    ASSERT(!currentSchema.isEmpty());
-
-    // If the schema in the backing store is the current schema, we're done.
-    if (currentSchema == IndexRecordsIndexSchema)
-        return true;
-
-    // Otherwise, update the schema.
-    SQLiteTransaction transaction(*m_sqliteDB);
-    transaction.begin();
-
-    if (!m_sqliteDB->executeCommand("DROP INDEX IndexRecordsIndex")) {
-        LOG_ERROR("Could not drop index IndexRecordsIndex in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return false;
-    }
-
-    if (!m_sqliteDB->executeCommand(IndexRecordsIndexSchema)) {
-        LOG_ERROR("Could not create IndexRecordsIndex index in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return false;
-    }
-
-    transaction.commit();
-
-    return true;
+    return IDBError { };
 }
 
-bool SQLiteIDBBackingStore::ensureValidIndexRecordsRecordIndex()
+IDBError SQLiteIDBBackingStore::ensureValidIndexRecordsRecordIndex()
 {
     ASSERT(m_sqliteDB);
     ASSERT(m_sqliteDB->isOpen());
 
-    String currentSchema;
-    {
-        SQLiteStatement statement(*m_sqliteDB, "SELECT sql FROM sqlite_master WHERE name='IndexRecordsRecordIndex'");
-        if (statement.prepare() != SQLITE_OK) {
-            LOG_ERROR("Unable to prepare statement to fetch schema for the IndexRecordsRecordIndex index.");
-            return false;
-        }
+    String indexStatement = m_sqliteDB->indexSQL("IndexRecordsRecordIndex"_s);
+    if (indexStatement == v1IndexRecordsRecordIndexSchema)
+        return IDBError { };
+    
+    if (!m_sqliteDB->executeCommand("DROP INDEX IF EXISTS IndexRecordsRecordIndex"_s))
+        return IDBError { UnknownError, makeString("Error dropping IndexRecordsRecordIndex index (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-        int sqliteResult = statement.step();
+    if (!m_sqliteDB->executeCommand(v1IndexRecordsRecordIndexSchema))
+        return IDBError { UnknownError, makeString("Error creating IndexRecordsRecordIndex index (", m_sqliteDB->lastError(), ") - ", m_sqliteDB->lastErrorMsg()) };
 
-        if (sqliteResult == SQLITE_DONE) {
-            if (!m_sqliteDB->executeCommand(v1IndexRecordsRecordIndexSchema)) {
-                LOG_ERROR("Could not create IndexRecordsRecordIndex index in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-                return false;
-            }
-
-            return true;
-        }
-
-        if (sqliteResult != SQLITE_ROW) {
-            LOG_ERROR("Error executing statement to fetch schema for the IndexRecordsRecordIndex index.");
-            return false;
-        }
-
-        currentSchema = statement.getColumnText(0);
-    }
-
-    ASSERT(!currentSchema.isEmpty());
-
-    if (currentSchema == v1IndexRecordsRecordIndexSchema)
-        return true;
-
-    return false;
+    return IDBError { };
 }
 
 std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::createAndPopulateInitialDatabaseInfo()
@@ -599,7 +416,7 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::createAndPopulateInitial
     ASSERT(m_sqliteDB);
     ASSERT(m_sqliteDB->isOpen());
 
-    if (!m_sqliteDB->executeCommand("CREATE TABLE IDBDatabaseInfo (key TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT REPLACE, value TEXT NOT NULL ON CONFLICT FAIL);")) {
+    if (!m_sqliteDB->executeCommand("CREATE TABLE IDBDatabaseInfo (key TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT REPLACE, value TEXT NOT NULL ON CONFLICT FAIL);"_s)) {
         LOG_ERROR("Could not create IDBDatabaseInfo table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
         closeSQLiteDB();
         return nullptr;
@@ -611,33 +428,33 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::createAndPopulateInitial
         return nullptr;
     }
 
-    if (!m_sqliteDB->executeCommand(indexInfoTableSchema("IndexInfo"_s))) {
+    if (!m_sqliteDB->executeCommand(indexInfoTableSchema())) {
         LOG_ERROR("Could not create IndexInfo table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
         closeSQLiteDB();
         return nullptr;
     }
 
-    if (!m_sqliteDB->executeCommand("CREATE TABLE KeyGenerators (objectStoreID INTEGER NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT REPLACE, currentKey INTEGER NOT NULL ON CONFLICT FAIL);")) {
+    if (!m_sqliteDB->executeCommand("CREATE TABLE KeyGenerators (objectStoreID INTEGER NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT REPLACE, currentKey INTEGER NOT NULL ON CONFLICT FAIL);"_s)) {
         LOG_ERROR("Could not create KeyGenerators table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
         closeSQLiteDB();
         return nullptr;
     }
 
     {
-        SQLiteStatement sql(*m_sqliteDB, "INSERT INTO IDBDatabaseInfo VALUES ('MetadataVersion', ?);"_s);
-        if (sql.prepare() != SQLITE_OK
-            || sql.bindInt(1, currentMetadataVersion) != SQLITE_OK
-            || sql.step() != SQLITE_DONE) {
+        auto sql = m_sqliteDB->prepareStatement("INSERT INTO IDBDatabaseInfo VALUES ('MetadataVersion', ?);"_s);
+        if (!sql
+            || sql->bindInt(1, currentMetadataVersion) != SQLITE_OK
+            || sql->step() != SQLITE_DONE) {
             LOG_ERROR("Could not insert database metadata version into IDBDatabaseInfo table (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
             closeSQLiteDB();
             return nullptr;
         }
     }
     {
-        SQLiteStatement sql(*m_sqliteDB, "INSERT INTO IDBDatabaseInfo VALUES ('DatabaseName', ?);"_s);
-        if (sql.prepare() != SQLITE_OK
-            || sql.bindText(1, m_identifier.databaseName()) != SQLITE_OK
-            || sql.step() != SQLITE_DONE) {
+        auto sql = m_sqliteDB->prepareStatement("INSERT INTO IDBDatabaseInfo VALUES ('DatabaseName', ?);"_s);
+        if (!sql
+            || sql->bindText(1, m_identifier.databaseName()) != SQLITE_OK
+            || sql->step() != SQLITE_DONE) {
             LOG_ERROR("Could not insert database name into IDBDatabaseInfo table (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
             closeSQLiteDB();
             return nullptr;
@@ -646,10 +463,10 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::createAndPopulateInitial
     {
         // Database versions are defined to be a uin64_t in the spec but sqlite3 doesn't support native binding of unsigned integers.
         // Therefore we'll store the version as a String.
-        SQLiteStatement sql(*m_sqliteDB, "INSERT INTO IDBDatabaseInfo VALUES ('DatabaseVersion', ?);"_s);
-        if (sql.prepare() != SQLITE_OK
-            || sql.bindText(1, String::number(0)) != SQLITE_OK
-            || sql.step() != SQLITE_DONE) {
+        auto sql = m_sqliteDB->prepareStatement("INSERT INTO IDBDatabaseInfo VALUES ('DatabaseVersion', ?);"_s);
+        if (!sql
+            || sql->bindText(1, String::number(0)) != SQLITE_OK
+            || sql->step() != SQLITE_DONE) {
             LOG_ERROR("Could not insert default version into IDBDatabaseInfo table (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
             closeSQLiteDB();
             return nullptr;
@@ -666,60 +483,42 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::createAndPopulateInitial
     return makeUnique<IDBDatabaseInfo>(m_identifier.databaseName(), 0, 0);
 }
 
-Optional<IsSchemaUpgraded> SQLiteIDBBackingStore::ensureValidObjectStoreInfoTable()
+std::optional<IsSchemaUpgraded> SQLiteIDBBackingStore::ensureValidObjectStoreInfoTable()
 {
     ASSERT(m_sqliteDB);
     ASSERT(m_sqliteDB->isOpen());
 
-    String currentSchema;
-    {
-        // Fetch the schema for ObjectStoreInfo table.
-        SQLiteStatement statement(*m_sqliteDB, "SELECT sql FROM sqlite_master WHERE tbl_name='ObjectStoreInfo'");
-        if (statement.prepare() != SQLITE_OK) {
-            LOG_ERROR("Unable to prepare statement to fetch schema for the ObjectStoreInfo table.");
-            return WTF::nullopt;
-        }
-
-        int sqliteResult = statement.step();
-        if (sqliteResult != SQLITE_ROW) {
-            LOG_ERROR("Error executing statement to fetch schema for the ObjectStoreInfo table.");
-            return WTF::nullopt;
-        }
-
-        currentSchema = statement.getColumnText(0);
-    }
-
-    ASSERT(!currentSchema.isEmpty());
-    if (currentSchema == v2ObjectStoreInfoSchema || currentSchema == createV2ObjectStoreInfoSchema(objectStoreInfoTableNameAlternate))
+    String tableStatement = m_sqliteDB->tableSQL("ObjectStoreInfo"_s);
+    if (tableStatement.isEmpty())
+        return std::nullopt;
+    
+    if (tableStatement == v2ObjectStoreInfoSchema || tableStatement == createV2ObjectStoreInfoSchema(objectStoreInfoTableNameAlternate))
         return { IsSchemaUpgraded::No };
-
-    if (currentSchema != createV1ObjectStoreInfoSchema(objectStoreInfoTableName) && currentSchema != createV1ObjectStoreInfoSchema(objectStoreInfoTableNameAlternate)) {
-        RELEASE_LOG_ERROR(IndexedDB, "%p - SQLiteIDBBackingStore::ensureValidObjectStoreInfoTable: schema is invalid - %s", this, currentSchema.utf8().data());
-        return WTF::nullopt;
-    }
+    
+    RELEASE_ASSERT(tableStatement == createV1ObjectStoreInfoSchema(objectStoreInfoTableName) || tableStatement == createV1ObjectStoreInfoSchema(objectStoreInfoTableNameAlternate));
 
     // Drop column maxIndexID from table.
     SQLiteTransaction transaction(*m_sqliteDB);
     transaction.begin();
 
-    if (!m_sqliteDB->executeCommand(createV2ObjectStoreInfoSchema("_Temp_ObjectStoreInfo"_s))) {
+    if (!m_sqliteDB->executeCommandSlow(createV2ObjectStoreInfoSchema("_Temp_ObjectStoreInfo"_s))) {
         LOG_ERROR("Could not create temporary ObjectStoreInfo table in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return WTF::nullopt;
+        return std::nullopt;
     }
 
-    if (!m_sqliteDB->executeCommand("INSERT INTO _Temp_ObjectStoreInfo (id, name, keyPath, autoInc) SELECT id, name, keyPath, autoInc FROM ObjectStoreInfo")) {
+    if (!m_sqliteDB->executeCommand("INSERT INTO _Temp_ObjectStoreInfo (id, name, keyPath, autoInc) SELECT id, name, keyPath, autoInc FROM ObjectStoreInfo"_s)) {
         LOG_ERROR("Could not migrate existing ObjectStoreInfo content (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return WTF::nullopt;
+        return std::nullopt;
     }
 
-    if (!m_sqliteDB->executeCommand("DROP TABLE ObjectStoreInfo")) {
+    if (!m_sqliteDB->executeCommand("DROP TABLE ObjectStoreInfo"_s)) {
         LOG_ERROR("Could not drop existing ObjectStoreInfo table (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return WTF::nullopt;
+        return std::nullopt;
     }
 
-    if (!m_sqliteDB->executeCommand("ALTER TABLE _Temp_ObjectStoreInfo RENAME TO ObjectStoreInfo")) {
+    if (!m_sqliteDB->executeCommand("ALTER TABLE _Temp_ObjectStoreInfo RENAME TO ObjectStoreInfo"_s)) {
         LOG_ERROR("Could not rename temporary ObjectStoreInfo table (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
-        return WTF::nullopt;
+        return std::nullopt;
     }
 
     transaction.commit();
@@ -733,35 +532,34 @@ bool SQLiteIDBBackingStore::migrateIndexInfoTableForIDUpdate(const HashMap<std::
     SQLiteTransaction transaction(database);
     transaction.begin();
 
-    if (!database.executeCommand(indexInfoTableSchema("_Temp_IndexInfo"_s))) {
+    if (!database.executeCommand(indexInfoTableSchemaTemp())) {
         LOG_ERROR("Error creating _Temp_IndexInfo table in database (%i) - %s", database.lastError(), database.lastErrorMsg());
         return false;
     }
 
     {
-        SQLiteStatement statement(database, "SELECT id, name, objectStoreID, keyPath, isUnique, multiEntry FROM IndexInfo;"_s);
-        if (statement.prepare() != SQLITE_OK) {
+        auto statement = database.prepareStatement("SELECT id, name, objectStoreID, keyPath, isUnique, multiEntry FROM IndexInfo;"_s);
+        if (!statement) {
             LOG_ERROR("Error preparing statement to fetch records from IndexInfo table (%i) - %s", database.lastError(), database.lastErrorMsg());
             return false;
         }
 
-        int result = statement.step();
+        int result = statement->step();
         while (result == SQLITE_ROW) {
-            uint64_t id = statement.getColumnInt64(0);
-            String name = statement.getColumnText(1);
-            uint64_t objectStoreID = statement.getColumnInt64(2);
+            uint64_t id = statement->columnInt64(0);
+            String name = statement->columnText(1);
+            uint64_t objectStoreID = statement->columnInt64(2);
             uint64_t newID = indexIDMap.get({ objectStoreID, id });
-            Vector<uint8_t> keyPathBuffer;
-            statement.getColumnBlobAsVector(3, keyPathBuffer);
-            bool unique = statement.getColumnInt(4);
-            bool multiEntry = statement.getColumnInt(5);
+            auto keyPathBufferView = statement->columnBlobView(3);
+            bool unique = statement->columnInt(4);
+            bool multiEntry = statement->columnInt(5);
 
             auto sql = cachedStatement(SQL::CreateTempIndexInfo, "INSERT INTO _Temp_IndexInfo VALUES (?, ?, ?, ?, ?, ?);"_s);
             if (!sql
                 || sql->bindInt64(1, newID) != SQLITE_OK
                 || sql->bindText(2, name) != SQLITE_OK
                 || sql->bindInt64(3, objectStoreID) != SQLITE_OK
-                || sql->bindBlob(4, keyPathBuffer.data(), keyPathBuffer.size()) != SQLITE_OK
+                || sql->bindBlob(4, keyPathBufferView.data(), keyPathBufferView.size()) != SQLITE_OK
                 || sql->bindInt(5, unique) != SQLITE_OK
                 || sql->bindInt(6, multiEntry) != SQLITE_OK
                 || sql->step() != SQLITE_DONE) {
@@ -769,7 +567,7 @@ bool SQLiteIDBBackingStore::migrateIndexInfoTableForIDUpdate(const HashMap<std::
                 return false;
             }
 
-            result = statement.step();
+            result = statement->step();
         }
 
         if (result != SQLITE_DONE) {
@@ -778,12 +576,12 @@ bool SQLiteIDBBackingStore::migrateIndexInfoTableForIDUpdate(const HashMap<std::
         }
     }
 
-    if (!database.executeCommand("DROP TABLE IndexInfo")) {
+    if (!database.executeCommand("DROP TABLE IndexInfo"_s)) {
         LOG_ERROR("Error dropping existing IndexInfo table (%i) - %s", database.lastError(), database.lastErrorMsg());
         return false;
     }
 
-    if (!database.executeCommand("ALTER TABLE _Temp_IndexInfo RENAME TO IndexInfo")) {
+    if (!database.executeCommand("ALTER TABLE _Temp_IndexInfo RENAME TO IndexInfo"_s)) {
         LOG_ERROR("Error renaming _Temp_IndexInfo table (%i) - %s", database.lastError(), database.lastErrorMsg());
         return false;
     }
@@ -798,42 +596,40 @@ bool SQLiteIDBBackingStore::migrateIndexRecordsTableForIDUpdate(const HashMap<st
     SQLiteTransaction transaction(database);
     transaction.begin();
 
-    if (!database.executeCommand(v3IndexRecordsTableSchema("_Temp_IndexRecords"))) {
+    if (!database.executeCommand(v3IndexRecordsTableSchemaTemp())) {
         LOG_ERROR("Error creating _Temp_IndexRecords table in database (%i) - %s", database.lastError(), database.lastErrorMsg());
         return false;
     }
 
     {
-        SQLiteStatement statement(database, "SELECT indexID, objectStoreID, key, value, objectStoreRecordID FROM IndexRecords;"_s);
-        if (statement.prepare() != SQLITE_OK) {
+        auto statement = database.prepareStatement("SELECT indexID, objectStoreID, key, value, objectStoreRecordID FROM IndexRecords;"_s);
+        if (!statement) {
             LOG_ERROR("Error preparing statement to fetch records from the IndexRecords table (%i) - %s", database.lastError(), database.lastErrorMsg());
             return false;
         }
 
-        int result = statement.step();
+        int result = statement->step();
         while (result == SQLITE_ROW) {
-            uint64_t id = statement.getColumnInt64(0);
-            uint64_t objectStoreID = statement.getColumnInt64(1);
+            uint64_t id = statement->columnInt64(0);
+            uint64_t objectStoreID = statement->columnInt64(1);
             uint64_t newID = indexIDMap.get({ objectStoreID, id });
-            Vector<uint8_t> keyBuffer;
-            statement.getColumnBlobAsVector(2, keyBuffer);
-            Vector<uint8_t> valueBuffer;
-            statement.getColumnBlobAsVector(3, valueBuffer);
-            uint64_t recordID = statement.getColumnInt64(4);
+            auto keyBufferView = statement->columnBlobView(2);
+            auto valueBufferView = statement->columnBlobView(3);
+            uint64_t recordID = statement->columnInt64(4);
 
             auto sql = cachedStatement(SQL::PutTempIndexRecord, "INSERT INTO _Temp_IndexRecords VALUES (?, ?, CAST(? AS TEXT), CAST(? AS TEXT), ?);"_s);
             if (!sql
                 || sql->bindInt64(1, newID) != SQLITE_OK
                 || sql->bindInt64(2, objectStoreID) != SQLITE_OK
-                || sql->bindBlob(3, keyBuffer.data(), keyBuffer.size()) != SQLITE_OK
-                || sql->bindBlob(4, valueBuffer.data(), valueBuffer.size()) != SQLITE_OK
+                || sql->bindBlob(3, keyBufferView.data(), keyBufferView.size()) != SQLITE_OK
+                || sql->bindBlob(4, valueBufferView.data(), valueBufferView.size()) != SQLITE_OK
                 || sql->bindInt64(5, recordID) != SQLITE_OK
                 || sql->step() != SQLITE_DONE) {
                 LOG_ERROR("Error adding index record to _Temp_IndexRecords table (%i) - %s", database.lastError(), database.lastErrorMsg());
                 return false;
             }
 
-            result = statement.step();
+            result = statement->step();
         }
 
         if (result != SQLITE_DONE) {
@@ -842,12 +638,12 @@ bool SQLiteIDBBackingStore::migrateIndexRecordsTableForIDUpdate(const HashMap<st
         }
     }
 
-    if (!database.executeCommand("DROP TABLE IndexRecords")) {
+    if (!database.executeCommand("DROP TABLE IndexRecords"_s)) {
         LOG_ERROR("Error dropping existing IndexRecords table (%i) - %s", database.lastError(), database.lastErrorMsg());
         return false;
     }
 
-    if (!database.executeCommand("ALTER TABLE _Temp_IndexRecords RENAME TO IndexRecords")) {
+    if (!database.executeCommand("ALTER TABLE _Temp_IndexRecords RENAME TO IndexRecords"_s)) {
         LOG_ERROR("Error renaming temporary IndexRecords table (%i) - %s", database.lastError(), database.lastErrorMsg());
         return false;
     }
@@ -921,19 +717,16 @@ bool SQLiteIDBBackingStore::addExistingIndex(IDBObjectStoreInfo& objectStoreInfo
 
         int result = sql->step();
         while (result == SQLITE_ROW) {
-            Vector<uint8_t> keyBuffer;
+            auto keyBufferView = sql->columnBlobView(0);
             IDBKeyData keyData;
-            sql->getColumnBlobAsVector(0, keyBuffer);
-            if (!deserializeIDBKeyData(keyBuffer.data(), keyBuffer.size(), keyData)) {
+            if (!deserializeIDBKeyData(keyBufferView.data(), keyBufferView.size(), keyData)) {
                 LOG_ERROR("Unable to deserialize key data from database while getting all records");
                 return false;
             }
 
-            Vector<uint8_t> valueBuffer;
-            sql->getColumnBlobAsVector(1, valueBuffer);
-            auto value = ThreadSafeDataBuffer::create(WTFMove(valueBuffer));
+            auto value = ThreadSafeDataBuffer::create(sql->columnBlob(1));
 
-            uint64_t recordID = sql->getColumnInt64(2);
+            uint64_t recordID = sql->columnInt64(2);
             IDBError error = updateOneIndexForAddRecord(objectStoreInfo, info, keyData, value, recordID);
             if (!error.isNull())
                 return false;
@@ -989,10 +782,8 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::extractExistingDatabaseI
 
     String databaseName;
     {
-        SQLiteStatement sql(*m_sqliteDB, "SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseName';");
-        if (sql.isColumnNull(0))
-            return nullptr;
-        databaseName = sql.getColumnText(0);
+        auto sql = m_sqliteDB->prepareStatement("SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseName';"_s);
+        databaseName = sql->columnText(0);
         if (databaseName != m_identifier.databaseName()) {
             LOG_ERROR("Database name in the info database ('%s') does not match the expected name ('%s')", databaseName.utf8().data(), m_identifier.databaseName().utf8().data());
             return nullptr;
@@ -1000,10 +791,8 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::extractExistingDatabaseI
     }
     uint64_t databaseVersion;
     {
-        SQLiteStatement sql(*m_sqliteDB, "SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseVersion';"_s);
-        if (sql.isColumnNull(0))
-            return nullptr;
-        String stringVersion = sql.getColumnText(0);
+        auto sql = m_sqliteDB->prepareStatement("SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseVersion';"_s);
+        String stringVersion = sql->columnText(0);
         auto parsedVersion = parseInteger<uint64_t>(stringVersion);
         if (!parsedVersion) {
             LOG_ERROR("Database version on disk ('%s') does not cleanly convert to an unsigned 64-bit integer version", stringVersion.utf8().data());
@@ -1021,29 +810,27 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::extractExistingDatabaseI
     bool shouldUpdateIndexID = (result.value() == IsSchemaUpgraded::Yes);
 
     {
-        SQLiteStatement sql(*m_sqliteDB, "SELECT id, name, keyPath, autoInc FROM ObjectStoreInfo;"_s);
-        if (sql.prepare() != SQLITE_OK)
+        auto sql = m_sqliteDB->prepareStatement("SELECT id, name, keyPath, autoInc FROM ObjectStoreInfo;"_s);
+        if (!sql)
             return nullptr;
 
-        int result = sql.step();
+        int result = sql->step();
         while (result == SQLITE_ROW) {
-            uint64_t objectStoreID = sql.getColumnInt64(0);
-            String objectStoreName = sql.getColumnText(1);
+            uint64_t objectStoreID = sql->columnInt64(0);
+            String objectStoreName = sql->columnText(1);
+            auto keyPathBufferView = sql->columnBlobView(2);
 
-            Vector<char> keyPathBuffer;
-            sql.getColumnBlobAsVector(2, keyPathBuffer);
-
-            Optional<IDBKeyPath> objectStoreKeyPath;
-            if (!deserializeIDBKeyPath(reinterpret_cast<const uint8_t*>(keyPathBuffer.data()), keyPathBuffer.size(), objectStoreKeyPath)) {
+            std::optional<IDBKeyPath> objectStoreKeyPath;
+            if (!deserializeIDBKeyPath(keyPathBufferView.data(), keyPathBufferView.size(), objectStoreKeyPath)) {
                 LOG_ERROR("Unable to extract key path from database");
                 return nullptr;
             }
 
-            bool autoIncrement = sql.getColumnInt(3);
+            bool autoIncrement = sql->columnInt(3);
 
             databaseInfo->addExistingObjectStore({ objectStoreID, objectStoreName, WTFMove(objectStoreKeyPath), autoIncrement });
 
-            result = sql.step();
+            result = sql->step();
         }
 
         if (result != SQLITE_DONE) {
@@ -1056,23 +843,21 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::extractExistingDatabaseI
     HashMap<std::pair<uint64_t, uint64_t>, uint64_t> indexIDMap;
     HashMap<uint64_t, Vector<IDBIndexInfo>> indexInfoMap;
     {
-        SQLiteStatement sql(*m_sqliteDB, "SELECT id, name, objectStoreID, keyPath, isUnique, multiEntry FROM IndexInfo;"_s);
-        if (sql.prepare() != SQLITE_OK) {
+        auto sql = m_sqliteDB->prepareStatement("SELECT id, name, objectStoreID, keyPath, isUnique, multiEntry FROM IndexInfo;"_s);
+        if (!sql) {
             LOG_ERROR("Unable to prepare statement to fetch records from the IndexInfo table.");
             return nullptr;
         }
 
-        int result = sql.step();
+        int result = sql->step();
         while (result == SQLITE_ROW) {
-            uint64_t indexID = sql.getColumnInt64(0);
-            String indexName = sql.getColumnText(1);
-            uint64_t objectStoreID = sql.getColumnInt64(2);
+            uint64_t indexID = sql->columnInt64(0);
+            String indexName = sql->columnText(1);
+            uint64_t objectStoreID = sql->columnInt64(2);
+            auto keyPathBufferView = sql->columnBlobView(3);
 
-            Vector<char> keyPathBuffer;
-            sql.getColumnBlobAsVector(3, keyPathBuffer);
-
-            Optional<IDBKeyPath> indexKeyPath;
-            if (!deserializeIDBKeyPath(reinterpret_cast<const uint8_t*>(keyPathBuffer.data()), keyPathBuffer.size(), indexKeyPath)) {
+            std::optional<IDBKeyPath> indexKeyPath;
+            if (!deserializeIDBKeyPath(keyPathBufferView.data(), keyPathBufferView.size(), indexKeyPath)) {
                 LOG_ERROR("Unable to extract key path from database");
                 return nullptr;
             }
@@ -1081,8 +866,8 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::extractExistingDatabaseI
                 return nullptr;
             }
 
-            bool unique = sql.getColumnInt(4);
-            bool multiEntry = sql.getColumnInt(5);
+            bool unique = sql->columnInt(4);
+            bool multiEntry = sql->columnInt(5);
 
             auto objectStore = databaseInfo->infoForExistingObjectStore(objectStoreID);
             if (!objectStore) {
@@ -1106,7 +891,7 @@ std::unique_ptr<IDBDatabaseInfo> SQLiteIDBBackingStore::extractExistingDatabaseI
             objectStore->addExistingIndex(indexInfo);
             maxIndexID = maxIndexID < indexID ? indexID : maxIndexID;
 
-            result = sql.step();
+            result = sql->step();
         }
 
         if (result != SQLITE_DONE) {
@@ -1150,27 +935,31 @@ String SQLiteIDBBackingStore::fullDatabasePath() const
     return fullDatabasePathForDirectory(m_databaseDirectory);
 }
 
-Optional<IDBDatabaseNameAndVersion> SQLiteIDBBackingStore::databaseNameAndVersionFromFile(const String& databasePath)
+std::optional<IDBDatabaseNameAndVersion> SQLiteIDBBackingStore::databaseNameAndVersionFromFile(const String& databasePath)
 {
     SQLiteDatabase database;
     if (!database.open(databasePath)) {
         LOG_ERROR("Failed to open SQLite database at path '%s' when getting database name", databasePath.utf8().data());
-        return WTF::nullopt;
+        return std::nullopt;
     }
     if (!database.tableExists("IDBDatabaseInfo"_s)) {
         LOG_ERROR("Could not find IDBDatabaseInfo table and get database name(%i) - %s", database.lastError(), database.lastErrorMsg());
-        return WTF::nullopt;
+        return std::nullopt;
     }
 
-    SQLiteStatement namesql(database, "SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseName';");
-    auto databaseName = namesql.getColumnText(0);
+    auto namesql = database.prepareStatement("SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseName';"_s);
+    if (!namesql) {
+        LOG_ERROR("Could not prepare statement to get database name(%i) - %s", database.lastError(), database.lastErrorMsg());
+        return std::nullopt;
+    }
+    auto databaseName = namesql->columnText(0);
 
-    SQLiteStatement versql(database, "SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseVersion';"_s);
-    String stringVersion = versql.getColumnText(0);
+    auto versql = database.prepareStatement("SELECT value FROM IDBDatabaseInfo WHERE key = 'DatabaseVersion';"_s);
+    String stringVersion = versql ? versql->columnText(0) : String();
     auto databaseVersion = parseInteger<uint64_t>(stringVersion);
     if (!databaseVersion) {
         LOG_ERROR("Database version on disk ('%s') does not cleanly convert to an unsigned 64-bit integer version", stringVersion.utf8().data());
-        return WTF::nullopt;
+        return std::nullopt;
     }
 
     return IDBDatabaseNameAndVersion { databaseName, *databaseVersion };
@@ -1213,40 +1002,41 @@ IDBError SQLiteIDBBackingStore::getOrEstablishDatabaseInfo(IDBDatabaseInfo& info
     if (!m_sqliteDB)
         return IDBError { UnknownError, "Unable to open database file on disk"_s };
 
+    m_sqliteDB->disableThreadingChecks();
     m_sqliteDB->enableAutomaticWALTruncation();
 
     m_sqliteDB->setCollationFunction("IDBKEY", [](int aLength, const void* a, int bLength, const void* b) {
         return idbKeyCollate(aLength, a, bLength, b);
     });
 
-    if (!ensureValidRecordsTable()) {
-        LOG_ERROR("Error creating or migrating Records table in database");
+    IDBError error = ensureValidRecordsTable();
+    if (!error.isNull()) {
         closeSQLiteDB();
-        return IDBError { UnknownError, "Error creating or migrating Records table in database"_s };
+        return error;
     }
 
-    if (!ensureValidIndexRecordsTable()) {
-        LOG_ERROR("Error creating or migrating Index Records table in database");
+    error = ensureValidIndexRecordsTable();
+    if (!error.isNull()) {
         closeSQLiteDB();
-        return IDBError { UnknownError, "Error creating or migrating Index Records table in database"_s };
+        return error;
     }
 
-    if (!ensureValidIndexRecordsIndex()) {
-        LOG_ERROR("Error creating or migrating Index Records index in database");
+    error = ensureValidIndexRecordsIndex();
+    if (!error.isNull()) {
         closeSQLiteDB();
-        return IDBError { UnknownError, "Error creating or migrating Index Records index in database"_s };
+        return error;
     }
-
-    if (!ensureValidIndexRecordsRecordIndex()) {
-        LOG_ERROR("Error creating or migrating Index Records second index for in database");
+    
+    error = ensureValidIndexRecordsRecordIndex();
+    if (!error.isNull()) {
         closeSQLiteDB();
-        return IDBError { UnknownError, "Error creating or migrating Index Records second index in database"_s };
+        return error;
     }
-
-    if (!ensureValidBlobTables()) {
-        LOG_ERROR("Error creating or confirming Blob Records tables in database");
+    
+    error = ensureValidBlobTables();
+    if (!error.isNull()) {
         closeSQLiteDB();
-        return IDBError { UnknownError, "Error creating or confirming Blob Records tables in database"_s };
+        return error;
     }
 
     auto databaseInfo = extractExistingDatabaseInfo();
@@ -1284,7 +1074,7 @@ uint64_t SQLiteIDBBackingStore::databasesSizeForDirectory(const String& director
         auto dbDirectoryPath = FileSystem::pathByAppendingComponent(directory, dbDirectoryName);
         for (auto& fileName : FileSystem::listDirectory(dbDirectoryPath)) {
             if (fileName.endsWith(".sqlite3"))
-                diskUsage += SQLiteFileSystem::getDatabaseFileSize(FileSystem::pathByAppendingComponent(dbDirectoryPath, fileName));
+                diskUsage += SQLiteFileSystem::databaseFileSize(FileSystem::pathByAppendingComponent(dbDirectoryPath, fileName));
         }
     }
     return diskUsage;
@@ -1310,10 +1100,10 @@ IDBError SQLiteIDBBackingStore::beginTransaction(const IDBTransactionInfo& info)
     if (error.isNull() && info.mode() == IDBTransactionMode::Versionchange) {
         m_originalDatabaseInfoBeforeVersionChange = makeUnique<IDBDatabaseInfo>(*m_databaseInfo);
 
-        SQLiteStatement sql(*m_sqliteDB, "UPDATE IDBDatabaseInfo SET value = ? where key = 'DatabaseVersion';"_s);
-        if (sql.prepare() != SQLITE_OK
-            || sql.bindText(1, String::number(info.newVersion())) != SQLITE_OK
-            || sql.step() != SQLITE_DONE) {
+        auto sql = m_sqliteDB->prepareStatement("UPDATE IDBDatabaseInfo SET value = ? where key = 'DatabaseVersion';"_s);
+        if (!sql
+            || sql->bindText(1, String::number(info.newVersion())) != SQLITE_OK
+            || sql->step() != SQLITE_DONE) {
             error = IDBError { UnknownError, "Failed to store new database version in database"_s };
         }
     }
@@ -1911,7 +1701,7 @@ IDBError SQLiteIDBBackingStore::deleteUnusedBlobFileRecords(SQLiteIDBTransaction
 
         int result = sql->step();
         while (result == SQLITE_ROW) {
-            removedBlobFilenames.add(sql->getColumnText(0));
+            removedBlobFilenames.add(sql->columnText(0));
             result = sql->step();
         }
 
@@ -1978,11 +1768,8 @@ IDBError SQLiteIDBBackingStore::deleteRecord(SQLiteIDBTransaction& transaction, 
             return IDBError { UnknownError, "Failed to delete record from object store"_s };
         }
 
-        recordID = sql->getColumnInt64(0);
-
-        Vector<uint8_t> valueBuffer;
-        sql->getColumnBlobAsVector(1, valueBuffer);
-        value = ThreadSafeDataBuffer::create(WTFMove(valueBuffer));
+        recordID = sql->columnInt64(0);
+        value = ThreadSafeDataBuffer::create(sql->columnBlob(1));
     }
 
     if (recordID < 1) {
@@ -2097,19 +1884,24 @@ IDBError SQLiteIDBBackingStore::deleteRange(const IDBResourceIdentifier& transac
 
 IDBError SQLiteIDBBackingStore::updateOneIndexForAddRecord(IDBObjectStoreInfo& objectStoreInfo, const IDBIndexInfo& info, const IDBKeyData& key, const ThreadSafeDataBuffer& value, int64_t recordID)
 {
-    JSLockHolder locker(m_serializationContext->vm());
+    std::optional<IndexKey> resultIndexKey;
+    callOnIDBSerializationThreadAndWait([objectStoreInfo = objectStoreInfo.isolatedCopy(), info = info.isolatedCopy(), key = key.isolatedCopy(), value, &resultIndexKey](auto& globalObject) {
+        auto jsValue = deserializeIDBValueToJSValue(globalObject, value);
+        if (jsValue.isUndefinedOrNull())
+            return;
 
-    auto jsValue = deserializeIDBValueToJSValue(m_serializationContext->globalObject(), value);
-    if (jsValue.isUndefinedOrNull())
+        IndexKey indexKey;
+        generateIndexKeyForValue(globalObject, info, jsValue, indexKey, objectStoreInfo.keyPath(), key);
+        resultIndexKey = indexKey.isolatedCopy();
+    });
+
+    if (!resultIndexKey)
         return IDBError { };
 
-    IndexKey indexKey;
-    generateIndexKeyForValue(m_serializationContext->globalObject(), info, jsValue, indexKey, objectStoreInfo.keyPath(), key);
-
-    if (indexKey.isNull())
+    if (resultIndexKey->isNull())
         return IDBError { };
 
-    return uncheckedPutIndexKey(info, key, indexKey, recordID);
+    return uncheckedPutIndexKey(info, key, *resultIndexKey, recordID);
 }
 
 IDBError SQLiteIDBBackingStore::updateAllIndexesForAddRecord(const IDBObjectStoreInfo& info, const IDBKeyData& key, const IndexIDToIndexKeyMap& indexKeys, int64_t recordID)
@@ -2239,7 +2031,7 @@ IDBError SQLiteIDBBackingStore::addRecord(const IDBResourceIdentifier& transacti
         }
 
         // We don't already have a file for this blobURL, so commit our file as a unique filename
-        String storedFilename = makeString(potentialFileNameInteger, ".blob");
+        auto storedFilename = makeString(potentialFileNameInteger, ".blob");
         {
             auto sql = cachedStatement(SQL::AddBlobFilename, "INSERT INTO BlobFiles VALUES (?, ?);"_s);
             if (!sql
@@ -2279,7 +2071,7 @@ IDBError SQLiteIDBBackingStore::getBlobRecordsForObjectStoreRecord(int64_t objec
         }
 
         while (sqlResult == SQLITE_ROW) {
-            blobURLSet.add(sql->getColumnText(0));
+            blobURLSet.add(sql->columnText(0));
             sqlResult = sql->step();
         }
 
@@ -2305,7 +2097,7 @@ IDBError SQLiteIDBBackingStore::getBlobRecordsForObjectStoreRecord(int64_t objec
 
         blobURLs.append(blobURL);
 
-        String fileName = sql->getColumnText(0);
+        String fileName = sql->columnText(0);
         blobFilePaths.append(FileSystem::pathByAppendingComponent(m_databaseDirectory, fileName));
     }
     return IDBError { };
@@ -2347,43 +2139,33 @@ IDBError SQLiteIDBBackingStore::getRecord(const IDBResourceIdentifier& transacti
     int64_t recordID = 0;
     ThreadSafeDataBuffer keyResultBuffer, valueResultBuffer;
     {
-        static const char* const lowerOpenUpperOpen = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-        static const char* const lowerOpenUpperClosed = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-        static const char* const lowerClosedUpperOpen = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-        static const char* const lowerClosedUpperClosed = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-
-        static const char* const lowerOpenUpperOpenKeyOnly = "SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-        static const char* const lowerOpenUpperClosedKeyOnly = "SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-        static const char* const lowerClosedUpperOpenKeyOnly = "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-        static const char* const lowerClosedUpperClosedKeyOnly = "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-
         SQLiteStatementAutoResetScope sql;
 
         switch (type) {
         case IDBGetRecordDataType::KeyAndValue:
             if (keyRange.lowerOpen) {
                 if (keyRange.upperOpen)
-                    sql = cachedStatement(SQL::GetValueRecordsLowerOpenUpperOpen, lowerOpenUpperOpen);
+                    sql = cachedStatement(SQL::GetValueRecordsLowerOpenUpperOpen, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
                 else
-                    sql = cachedStatement(SQL::GetValueRecordsLowerOpenUpperClosed, lowerOpenUpperClosed);
+                    sql = cachedStatement(SQL::GetValueRecordsLowerOpenUpperClosed, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
             } else {
                 if (keyRange.upperOpen)
-                    sql = cachedStatement(SQL::GetValueRecordsLowerClosedUpperOpen, lowerClosedUpperOpen);
+                    sql = cachedStatement(SQL::GetValueRecordsLowerClosedUpperOpen, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
                 else
-                    sql = cachedStatement(SQL::GetValueRecordsLowerClosedUpperClosed, lowerClosedUpperClosed);
+                    sql = cachedStatement(SQL::GetValueRecordsLowerClosedUpperClosed, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
             }
             break;
         case IDBGetRecordDataType::KeyOnly:
             if (keyRange.lowerOpen) {
                 if (keyRange.upperOpen)
-                    sql = cachedStatement(SQL::GetKeyRecordsLowerOpenUpperOpen, lowerOpenUpperOpenKeyOnly);
+                    sql = cachedStatement(SQL::GetKeyRecordsLowerOpenUpperOpen, "SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
                 else
-                    sql = cachedStatement(SQL::GetKeyRecordsLowerOpenUpperClosed, lowerOpenUpperClosedKeyOnly);
+                    sql = cachedStatement(SQL::GetKeyRecordsLowerOpenUpperClosed, "SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
             } else {
                 if (keyRange.upperOpen)
-                    sql = cachedStatement(SQL::GetKeyRecordsLowerClosedUpperOpen, lowerClosedUpperOpenKeyOnly);
+                    sql = cachedStatement(SQL::GetKeyRecordsLowerClosedUpperOpen, "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
                 else
-                    sql = cachedStatement(SQL::GetKeyRecordsLowerClosedUpperClosed, lowerClosedUpperClosedKeyOnly);
+                    sql = cachedStatement(SQL::GetKeyRecordsLowerClosedUpperClosed, "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
             }
         }
 
@@ -2407,15 +2189,11 @@ IDBError SQLiteIDBBackingStore::getRecord(const IDBResourceIdentifier& transacti
             return IDBError { UnknownError, "Error looking up record in object store by key range"_s };
         }
 
-        Vector<uint8_t> keyBuffer;
-        sql->getColumnBlobAsVector(0, keyBuffer);
-        keyResultBuffer = ThreadSafeDataBuffer::create(WTFMove(keyBuffer));
+        keyResultBuffer = ThreadSafeDataBuffer::create(sql->columnBlob(0));
 
         if (type == IDBGetRecordDataType::KeyAndValue) {
-            Vector<uint8_t> valueBuffer;
-            sql->getColumnBlobAsVector(1, valueBuffer);
-            valueResultBuffer = ThreadSafeDataBuffer::create(WTFMove(valueBuffer));
-            recordID = sql->getColumnInt64(2);
+            valueResultBuffer = ThreadSafeDataBuffer::create(sql->columnBlob(1));
+            recordID = sql->columnInt64(2);
         }
     }
 
@@ -2455,36 +2233,27 @@ IDBError SQLiteIDBBackingStore::getAllRecords(const IDBResourceIdentifier& trans
 
 SQLiteStatementAutoResetScope SQLiteIDBBackingStore::cachedStatementForGetAllObjectStoreRecords(const IDBGetAllRecordsData& getAllRecordsData)
 {
-    static const char* const lowerOpenUpperOpenKey ="SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-    static const char* const lowerOpenUpperClosedKey = "SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-    static const char* const lowerClosedUpperOpenKey = "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-    static const char* const lowerClosedUpperClosedKey = "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-    static const char* const lowerOpenUpperOpenValue = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-    static const char* const lowerOpenUpperClosedValue = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-    static const char* const lowerClosedUpperOpenValue = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;";
-    static const char* const lowerClosedUpperClosedValue = "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;";
-
     if (getAllRecordsData.getAllType == IndexedDB::GetAllType::Keys) {
         if (getAllRecordsData.keyRangeData.lowerOpen) {
             if (getAllRecordsData.keyRangeData.upperOpen)
-                return cachedStatement(SQL::GetAllKeyRecordsLowerOpenUpperOpen, lowerOpenUpperOpenKey);
-            return cachedStatement(SQL::GetAllKeyRecordsLowerOpenUpperClosed, lowerOpenUpperClosedKey);
+                return cachedStatement(SQL::GetAllKeyRecordsLowerOpenUpperOpen, "SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
+            return cachedStatement(SQL::GetAllKeyRecordsLowerOpenUpperClosed, "SELECT key FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
         }
 
         if (getAllRecordsData.keyRangeData.upperOpen)
-            return cachedStatement(SQL::GetAllKeyRecordsLowerClosedUpperOpen, lowerClosedUpperOpenKey);
-        return cachedStatement(SQL::GetAllKeyRecordsLowerClosedUpperClosed, lowerClosedUpperClosedKey);
+            return cachedStatement(SQL::GetAllKeyRecordsLowerClosedUpperOpen, "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
+        return cachedStatement(SQL::GetAllKeyRecordsLowerClosedUpperClosed, "SELECT key FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
     }
 
     if (getAllRecordsData.keyRangeData.lowerOpen) {
         if (getAllRecordsData.keyRangeData.upperOpen)
-            return cachedStatement(SQL::GetValueRecordsLowerOpenUpperOpen, lowerOpenUpperOpenValue);
-        return cachedStatement(SQL::GetValueRecordsLowerOpenUpperClosed, lowerOpenUpperClosedValue);
+            return cachedStatement(SQL::GetValueRecordsLowerOpenUpperOpen, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
+        return cachedStatement(SQL::GetValueRecordsLowerOpenUpperClosed, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
     }
 
     if (getAllRecordsData.keyRangeData.upperOpen)
-        return cachedStatement(SQL::GetValueRecordsLowerClosedUpperOpen, lowerClosedUpperOpenValue);
-    return cachedStatement(SQL::GetValueRecordsLowerClosedUpperClosed, lowerClosedUpperClosedValue);
+        return cachedStatement(SQL::GetValueRecordsLowerClosedUpperOpen, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT) ORDER BY key;"_s);
+    return cachedStatement(SQL::GetValueRecordsLowerClosedUpperClosed, "SELECT key, value, ROWID FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT) ORDER BY key;"_s);
 }
 
 IDBError SQLiteIDBBackingStore::getAllObjectStoreRecords(const IDBResourceIdentifier& transactionIdentifier, const IDBGetAllRecordsData& getAllRecordsData, IDBGetAllResult& result)
@@ -2539,21 +2308,18 @@ IDBError SQLiteIDBBackingStore::getAllObjectStoreRecords(const IDBResourceIdenti
     uint32_t returnedResults = 0;
 
     while (sqlResult == SQLITE_ROW && returnedResults < targetResults) {
-        Vector<uint8_t> keyBuffer;
+        auto keyBufferView = sql->columnBlobView(0);
         IDBKeyData keyData;
-        sql->getColumnBlobAsVector(0, keyBuffer);
-        if (!deserializeIDBKeyData(keyBuffer.data(), keyBuffer.size(), keyData)) {
+        if (!deserializeIDBKeyData(keyBufferView.data(), keyBufferView.size(), keyData)) {
             LOG_ERROR("Unable to deserialize key data from database while getting all records");
             return IDBError { UnknownError, "Unable to deserialize key data while getting all records"_s };
         }
         result.addKey(WTFMove(keyData));
 
         if (getAllRecordsData.getAllType == IndexedDB::GetAllType::Values) {
-            Vector<uint8_t> valueBuffer;
-            sql->getColumnBlobAsVector(1, valueBuffer);
-            ThreadSafeDataBuffer valueResultBuffer = ThreadSafeDataBuffer::create(WTFMove(valueBuffer));
+            ThreadSafeDataBuffer valueResultBuffer = ThreadSafeDataBuffer::create(sql->columnBlob(1));
 
-            auto recordID = sql->getColumnInt64(2);
+            auto recordID = sql->columnInt64(2);
 
             ASSERT(recordID);
             Vector<String> blobURLs, blobFilePaths;
@@ -2699,10 +2465,9 @@ IDBError SQLiteIDBBackingStore::uncheckedGetIndexRecordForOneKey(int64_t indexID
         return IDBError { };
 
     IDBKeyData objectStoreKey;
-    Vector<uint8_t> keyVector;
-    sql->getColumnBlobAsVector(0, keyVector);
+    auto keyView = sql->columnBlobView(0);
 
-    if (!deserializeIDBKeyData(keyVector.data(), keyVector.size(), objectStoreKey)) {
+    if (!deserializeIDBKeyData(keyView.data(), keyView.size(), objectStoreKey)) {
         LOG_ERROR("Unable to deserialize key looking up index record in database");
         return IDBError { UnknownError, "Unable to deserialize key looking up index record in database"_s };
     }
@@ -2712,10 +2477,8 @@ IDBError SQLiteIDBBackingStore::uncheckedGetIndexRecordForOneKey(int64_t indexID
         return IDBError { };
     }
 
-    Vector<uint8_t> valueVector;
-    sql->getColumnBlobAsVector(1, valueVector);
-
-    int64_t recordID = sql->getColumnInt64(2);
+    auto valueVector = sql->columnBlob(1);
+    int64_t recordID = sql->columnInt64(2);
     Vector<String> blobURLs, blobFilePaths;
     auto error = getBlobRecordsForObjectStoreRecord(recordID, blobURLs, blobFilePaths);
     ASSERT(blobURLs.size() == blobFilePaths.size());
@@ -2758,19 +2521,14 @@ IDBError SQLiteIDBBackingStore::getCount(const IDBResourceIdentifier& transactio
     SQLiteStatementAutoResetScope statement;
 
     if (!indexIdentifier) {
-        static const char* const countLowerOpenUpperOpenRecords = "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT);";
-        static const char* const countLowerOpenUpperClosedRecords = "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT);";
-        static const char* const countLowerClosedUpperOpenRecords = "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT);";
-        static const char* const countLowerClosedUpperClosedRecords = "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT);";
-
         if (range.lowerOpen && range.upperOpen)
-            statement = cachedStatement(SQL::CountRecordsLowerOpenUpperOpen, countLowerOpenUpperOpenRecords);
+            statement = cachedStatement(SQL::CountRecordsLowerOpenUpperOpen, "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT);"_s);
         else if (range.lowerOpen && !range.upperOpen)
-            statement = cachedStatement(SQL::CountRecordsLowerOpenUpperClosed, countLowerOpenUpperClosedRecords);
+            statement = cachedStatement(SQL::CountRecordsLowerOpenUpperClosed, "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT);"_s);
         else if (!range.lowerOpen && range.upperOpen)
-            statement = cachedStatement(SQL::CountRecordsLowerClosedUpperOpen, countLowerClosedUpperOpenRecords);
+            statement = cachedStatement(SQL::CountRecordsLowerClosedUpperOpen, "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT);"_s);
         else
-            statement = cachedStatement(SQL::CountRecordsLowerClosedUpperClosed, countLowerClosedUpperClosedRecords);
+            statement = cachedStatement(SQL::CountRecordsLowerClosedUpperClosed, "SELECT COUNT(*) FROM Records WHERE objectStoreID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT);"_s);
         
         if (!statement
             || statement->bindInt64(1, objectStoreIdentifier) != SQLITE_OK
@@ -2780,19 +2538,14 @@ IDBError SQLiteIDBBackingStore::getCount(const IDBResourceIdentifier& transactio
             return IDBError { UnknownError, "Unable to count records in object store due to binding failure"_s };
         }
     } else {
-        static const char* const countLowerOpenUpperOpenIndexRecords = "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT);";
-        static const char* const countLowerOpenUpperClosedIndexRecords = "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT);";
-        static const char* const countLowerClosedUpperOpenIndexRecords = "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT);";
-        static const char* const countLowerClosedUpperClosedIndexRecords = "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT);";
-        
         if (range.lowerOpen && range.upperOpen)
-            statement = cachedStatement(SQL::CountIndexRecordsLowerOpenUpperOpen, countLowerOpenUpperOpenIndexRecords);
+            statement = cachedStatement(SQL::CountIndexRecordsLowerOpenUpperOpen, "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key > CAST(? AS TEXT) AND key < CAST(? AS TEXT);"_s);
         else if (range.lowerOpen && !range.upperOpen)
-            statement = cachedStatement(SQL::CountIndexRecordsLowerOpenUpperClosed, countLowerOpenUpperClosedIndexRecords);
+            statement = cachedStatement(SQL::CountIndexRecordsLowerOpenUpperClosed, "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key > CAST(? AS TEXT) AND key <= CAST(? AS TEXT);"_s);
         else if (!range.lowerOpen && range.upperOpen)
-            statement = cachedStatement(SQL::CountIndexRecordsLowerClosedUpperOpen, countLowerClosedUpperOpenIndexRecords);
+            statement = cachedStatement(SQL::CountIndexRecordsLowerClosedUpperOpen, "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key >= CAST(? AS TEXT) AND key < CAST(? AS TEXT);"_s);
         else
-            statement = cachedStatement(SQL::CountIndexRecordsLowerClosedUpperClosed, countLowerClosedUpperClosedIndexRecords);
+            statement = cachedStatement(SQL::CountIndexRecordsLowerClosedUpperClosed, "SELECT COUNT(*) FROM IndexRecords WHERE indexID = ? AND key >= CAST(? AS TEXT) AND key <= CAST(? AS TEXT);"_s);
 
         if (!statement
             || statement->bindInt64(1, indexIdentifier) != SQLITE_OK
@@ -2806,7 +2559,7 @@ IDBError SQLiteIDBBackingStore::getCount(const IDBResourceIdentifier& transactio
     if (statement->step() != SQLITE_ROW)
         return IDBError { UnknownError, "Unable to count records"_s };
 
-    outCount = statement->getColumnInt(0);
+    outCount = statement->columnInt(0);
     return IDBError { };
 }
 
@@ -2824,7 +2577,7 @@ IDBError SQLiteIDBBackingStore::uncheckedGetKeyGeneratorValue(int64_t objectStor
         return IDBError { UnknownError, "Error finding current key generator value in database"_s };
     }
 
-    int64_t value = sql->getColumnInt64(0);
+    int64_t value = sql->columnInt64(0);
     if (value < 0)
         return IDBError { ConstraintError, "Current key generator value from database is invalid" };
 
@@ -2995,11 +2748,6 @@ IDBError SQLiteIDBBackingStore::iterateCursor(const IDBResourceIdentifier& trans
     return IDBError { };
 }
 
-IDBSerializationContext& SQLiteIDBBackingStore::serializationContext()
-{
-    return m_serializationContext.get();
-}
-
 IDBObjectStoreInfo* SQLiteIDBBackingStore::infoForObjectStore(uint64_t objectStoreIdentifier)
 {
     ASSERT(m_databaseInfo);
@@ -3017,12 +2765,12 @@ void SQLiteIDBBackingStore::deleteBackingStore()
         bool errored = true;
 
         if (m_sqliteDB) {
-            SQLiteStatement sql(*m_sqliteDB, "SELECT fileName FROM BlobFiles;"_s);
-            if (sql.prepare() == SQLITE_OK) {
-                int result = sql.step();
+            auto sql = m_sqliteDB->prepareStatement("SELECT fileName FROM BlobFiles;"_s);
+            if (sql) {
+                int result = sql->step();
                 while (result == SQLITE_ROW) {
-                    blobFiles.append(sql.getColumnText(0));
-                    result = sql.step();
+                    blobFiles.append(sql->columnText(0));
+                    result = sql->step();
                 }
 
                 if (result == SQLITE_DONE)
@@ -3054,21 +2802,20 @@ void SQLiteIDBBackingStore::unregisterCursor(SQLiteIDBCursor& cursor)
     m_cursors.remove(cursor.identifier());
 }
 
-SQLiteStatementAutoResetScope SQLiteIDBBackingStore::cachedStatement(SQLiteIDBBackingStore::SQL sql, const char* statement)
+SQLiteStatementAutoResetScope SQLiteIDBBackingStore::cachedStatement(SQLiteIDBBackingStore::SQL sql, ASCIILiteral query)
 {
     if (sql >= SQL::Invalid) {
         LOG_ERROR("Invalid SQL statement ID passed to cachedStatement()");
         return SQLiteStatementAutoResetScope { };
     }
 
-    if (m_cachedStatements[static_cast<size_t>(sql)]) {
+    if (m_cachedStatements[static_cast<size_t>(sql)])
         return SQLiteStatementAutoResetScope { m_cachedStatements[static_cast<size_t>(sql)].get() };
-    }
 
     if (m_sqliteDB) {
-        m_cachedStatements[static_cast<size_t>(sql)] = makeUnique<SQLiteStatement>(*m_sqliteDB, statement);
-        if (m_cachedStatements[static_cast<size_t>(sql)]->prepare() != SQLITE_OK)
-            m_cachedStatements[static_cast<size_t>(sql)] = nullptr;
+        auto statement = m_sqliteDB->prepareHeapStatement(query);
+        if (statement)
+            m_cachedStatements[static_cast<size_t>(sql)] = statement.value().moveToUniquePtr();
     }
 
     return SQLiteStatementAutoResetScope { m_cachedStatements[static_cast<size_t>(sql)].get() };
@@ -3095,6 +2842,13 @@ bool SQLiteIDBBackingStore::hasTransaction(const IDBResourceIdentifier& transact
     ASSERT(isMainThread());
     return m_transactions.contains(transactionIdentifier);
 }
+
+#undef TABLE_SCHEMA_PREFIX
+#undef V3_RECORDS_TABLE_SCHEMA_SUFFIX
+#undef V3_INDEX_RECORDS_TABLE_SCHEMA_SUFFIX
+#undef INDEX_INFO_TABLE_SCHEMA_SUFFIX
+#undef BLOB_RECORDS_TABLE_SCHEMA_SUFFIX
+#undef BLOB_FILES_TABLE_SCHEMA_SUFFIX
 
 } // namespace IDBServer
 } // namespace WebCore
