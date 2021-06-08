@@ -6,6 +6,7 @@ Source: https://webkitgtk.org/releases/
 Files: *
 Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            1999-2000 Lars Knoll <knoll@kde.org>
+           1999-2001 Harri Porten <porten@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
            2002-2013 Vivek Thampi
            2003-2021 Apple Inc
@@ -28,6 +29,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2007 Henry Mason <hmason@mac.com>
            2007 Holger Hans Peter Freyther <zecke@selfish.org>
            2007 Justin Haygood <jhaygood@reaktix.com>
+           2007 Samuel Weinig <sam@webkit.org>
            2007, 2009-2010 Holger Hans Peter Freyther
            2007-2008 Alp Toker <alp@atoker.com>
            2007-2009 Torch Mobile Inc
@@ -83,7 +85,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2012 Intel Inc
            2012 Koji Ishii <kojiishi@gmail.com>
            2012 Mathias Bynens <mathias@qiwi.be>
-           2012 Michael Pruett <michael@68k.org>
            2012 Rik Cabanier <cabanier@adobe.com>
            2012 Sony Network Entertainment
            2012 Victor Carbune <victor@rosedu.org>
@@ -91,6 +92,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2012, 2016 SoftAtHome
            2012-2013 ChangSeok Oh <shivamidow@gmail.com>
            2012-2013 Digia Plc
+           2012-2013 Michael Pruett <michael@68k.org>
            2012-2015 University of Washington
            2012-2016 Yann Collet
            2013 Adenilson Cavalcanti <cavalcantii@gmail.com>
@@ -212,6 +214,7 @@ Files: Source/JavaScriptCore/API/*
        Source/WTF/wtf/URLHelpers.cpp
        Source/WTF/wtf/URLHelpers.h
        Source/WTF/wtf/generic/MainThreadGeneric.cpp
+       Source/WTF/wtf/playstation/FileSystemPlayStation.cpp
        Source/WTF/wtf/posix/*
        Source/WTF/wtf/text/*
        Source/WTF/wtf/unicode/*
@@ -307,7 +310,7 @@ Copyright: 2003, 2005-2021 Apple Inc
            2016 Konstantin Tokavev <annulen@yandex.ru>
            2016-2017 Yusuke Suzuki <utatane.tea@gmail.com>
            2019 Oracle
-           2019-2020 Sony Interactive Entertainment
+           2019-2021 Sony Interactive Entertainment
 License: BSD-3-clause-apple
 
 Files: Source/WebCore/plugins/npruntime.h
@@ -417,7 +420,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WTF/wtf/CrossThreadCopier.cpp
        Source/WTF/wtf/CrossThreadCopier.h
        Source/WTF/wtf/CurrentTime.cpp
-       Source/WTF/wtf/FileMetadata.h
        Source/WTF/wtf/JSONValues.cpp
        Source/WTF/wtf/JSONValues.h
        Source/WTF/wtf/SHA1.cpp
@@ -464,10 +466,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/bindings/js/ScriptState.h
        Source/WebCore/bindings/js/ScriptWrappable.h
        Source/WebCore/bindings/js/ScriptWrappableInlines.h
-       Source/WebCore/css/CSSCalculationValue.cpp
-       Source/WebCore/css/CSSCalculationValue.h
-       Source/WebCore/css/CSSCustomIdentValue.cpp
-       Source/WebCore/css/CSSCustomIdentValue.h
        Source/WebCore/css/CSSGridAutoRepeatValue.cpp
        Source/WebCore/css/CSSGridAutoRepeatValue.h
        Source/WebCore/css/CSSGridIntegerRepeatValue.cpp
@@ -487,6 +485,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/css/CSSVariableReferenceValue.h
        Source/WebCore/css/StyleColor.cpp
        Source/WebCore/css/StyleColor.h
+       Source/WebCore/css/calc/*
        Source/WebCore/css/parser/*
        Source/WebCore/css/themeWin.css
        Source/WebCore/css/themeWinQuirks.css
@@ -685,8 +684,6 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/page/RuntimeEnabledFeatures.h
        Source/WebCore/page/SecurityPolicy.cpp
        Source/WebCore/page/SecurityPolicy.h
-       Source/WebCore/platform/CalculationValue.cpp
-       Source/WebCore/platform/CalculationValue.h
        Source/WebCore/platform/DateComponents.cpp
        Source/WebCore/platform/DateComponents.h
        Source/WebCore/platform/DateTimeChooser.h
@@ -709,6 +706,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/platform/audio/AudioDSPKernelProcessor.cpp
        Source/WebCore/platform/audio/AudioDSPKernelProcessor.h
        Source/WebCore/platform/audio/AudioProcessor.h
+       Source/WebCore/platform/calc/*
        Source/WebCore/platform/generic/*
        Source/WebCore/platform/graphics/GeneratedImage.cpp
        Source/WebCore/platform/graphics/LayoutPoint.h
@@ -855,9 +853,7 @@ Copyright: 2015 Just Software Solutions Ltd
 License: BSD-3-clause-copyright-holder
 
 Files: Source/WTF/wtf/Brigand.h
-       Source/WTF/wtf/Optional.h
-Copyright: 2011-2012 Andrzej Krzemienski
-           2015 Edouard Alligand and Joel Falcou
+Copyright: 2015 Edouard Alligand and Joel Falcou
 License: BSL-1.0
 
 Files: Source/JavaScriptCore/Scripts/jsmin.py
@@ -946,7 +942,7 @@ Files: Source/WTF/wtf/text/Base64.cpp
 Copyright: 2000-2001 Dawit Alemayehu <adawit@kde.org>
            2002 Dirk Mueller <mueller@kde.org>
            2002 Lars Knoll <knoll@kde.org>
-           2003-2010, 2013, 2016 Apple Inc
+           2003-2021 Apple Inc
            2006 Alexey Proskuryakov <ap@webkit.org>
            2010 Patrick Gansterer <paroga@paroga.com>
            2011-2015, 2017-2020 Igalia S.L.
@@ -1113,6 +1109,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WTF/wtf/MainThreadData.h
        Source/WTF/wtf/Noncopyable.h
        Source/WTF/wtf/NumberOfCores.h
+       Source/WTF/wtf/Optional.h
        Source/WTF/wtf/RefCounted.cpp
        Source/WTF/wtf/RefCounted.h
        Source/WTF/wtf/RefCountedLeakCounter.cpp
@@ -1166,7 +1163,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/bindings/js/JSDOMBuiltinConstructor.h
        Source/WebCore/bindings/js/JSDOMBuiltinConstructorBase.cpp
        Source/WebCore/bindings/js/JSDOMBuiltinConstructorBase.h
-       Source/WebCore/bindings/js/JSDOMCastedThisErrorBehavior.h
        Source/WebCore/bindings/js/JSDOMConstructor.h
        Source/WebCore/bindings/js/JSDOMConstructorBase.cpp
        Source/WebCore/bindings/js/JSDOMConstructorBase.h
@@ -1772,13 +1768,10 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/BidiRun.cpp
        Source/WebCore/rendering/BidiRun.h
        Source/WebCore/rendering/BreakLines.h
-       Source/WebCore/rendering/ComplexLineLayout.cpp
        Source/WebCore/rendering/ContentfulPaintChecker.cpp
        Source/WebCore/rendering/ContentfulPaintChecker.h
        Source/WebCore/rendering/CounterNode.cpp
        Source/WebCore/rendering/CounterNode.h
-       Source/WebCore/rendering/EllipsisBox.cpp
-       Source/WebCore/rendering/EllipsisBox.h
        Source/WebCore/rendering/FloatingObjects.cpp
        Source/WebCore/rendering/FloatingObjects.h
        Source/WebCore/rendering/GapRects.h
@@ -1787,15 +1780,20 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/HitTestRequest.h
        Source/WebCore/rendering/HitTestResult.cpp
        Source/WebCore/rendering/HitTestResult.h
-       Source/WebCore/rendering/InlineBox.cpp
-       Source/WebCore/rendering/InlineBox.h
-       Source/WebCore/rendering/InlineFlowBox.cpp
-       Source/WebCore/rendering/InlineFlowBox.h
        Source/WebCore/rendering/InlineIterator.h
-       Source/WebCore/rendering/InlineTextBox.cpp
-       Source/WebCore/rendering/InlineTextBox.h
        Source/WebCore/rendering/LayoutRepainter.cpp
        Source/WebCore/rendering/LayoutRepainter.h
+       Source/WebCore/rendering/LegacyEllipsisBox.cpp
+       Source/WebCore/rendering/LegacyEllipsisBox.h
+       Source/WebCore/rendering/LegacyInlineBox.cpp
+       Source/WebCore/rendering/LegacyInlineBox.h
+       Source/WebCore/rendering/LegacyInlineFlowBox.cpp
+       Source/WebCore/rendering/LegacyInlineFlowBox.h
+       Source/WebCore/rendering/LegacyInlineTextBox.cpp
+       Source/WebCore/rendering/LegacyInlineTextBox.h
+       Source/WebCore/rendering/LegacyLineLayout.cpp
+       Source/WebCore/rendering/LegacyRootInlineBox.cpp
+       Source/WebCore/rendering/LegacyRootInlineBox.h
        Source/WebCore/rendering/LogicalSelectionOffsetCaches.h
        Source/WebCore/rendering/PaintInfo.h
        Source/WebCore/rendering/PaintPhase.h
@@ -1897,8 +1895,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/RenderView.h
        Source/WebCore/rendering/RenderWidget.cpp
        Source/WebCore/rendering/RenderWidget.h
-       Source/WebCore/rendering/RootInlineBox.cpp
-       Source/WebCore/rendering/RootInlineBox.h
        Source/WebCore/rendering/TextDecorationPainter.cpp
        Source/WebCore/rendering/TextDecorationPainter.h
        Source/WebCore/rendering/TextPainter.cpp
