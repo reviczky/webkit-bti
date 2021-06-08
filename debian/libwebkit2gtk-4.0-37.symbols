@@ -2071,6 +2071,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_session_state_serialize@Base 2.12.0
  webkit_web_view_session_state_unref@Base 2.12.0
  webkit_web_view_set_background_color@Base 2.8.1
+ webkit_web_view_set_cors_allowlist@Base 2.33.2
  webkit_web_view_set_custom_charset@Base 2.5.3
  webkit_web_view_set_editable@Base 2.8.1
  webkit_web_view_set_input_method_context@Base 2.27.4
