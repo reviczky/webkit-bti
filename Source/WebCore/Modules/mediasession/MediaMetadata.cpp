@@ -72,7 +72,7 @@ void ArtworkImageLoader::requestImageResource()
 void ArtworkImageLoader::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
 {
     ASSERT_UNUSED(resource, &resource == m_cachedImage);
-    if (m_cachedImage->loadFailedOrCanceled() || !m_cachedImage->image() || !m_cachedImage->image()->data() || m_cachedImage->image()->data()->isEmpty()) {
+    if (m_cachedImage->loadFailedOrCanceled() || m_cachedImage->errorOccurred() || !m_cachedImage->image() || !m_cachedImage->image()->data() || m_cachedImage->image()->data()->isEmpty()) {
         m_callback(nullptr);
         return;
     }
@@ -80,7 +80,7 @@ void ArtworkImageLoader::notifyFinished(CachedResource& resource, const NetworkL
     RefPtr<SharedBuffer> bufferToSanitize = m_cachedImage->image()->data();
     auto bitmapImage = BitmapImage::create();
     bitmapImage->setData(WTFMove(bufferToSanitize), true);
-    auto imageBuffer = ImageBuffer::create(bitmapImage->size(), RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8);
+    auto imageBuffer = ImageBuffer::create(bitmapImage->size(), RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB(), PixelFormat::BGRA8);
     if (!imageBuffer) {
         m_callback(nullptr);
         return;
@@ -89,7 +89,7 @@ void ArtworkImageLoader::notifyFinished(CachedResource& resource, const NetworkL
     m_callback(bitmapImage.ptr());
 }
 
-ExceptionOr<Ref<MediaMetadata>> MediaMetadata::create(ScriptExecutionContext& context, Optional<MediaMetadataInit>&& init)
+ExceptionOr<Ref<MediaMetadata>> MediaMetadata::create(ScriptExecutionContext& context, std::optional<MediaMetadataInit>&& init)
 {
     auto metadata = adoptRef(*new MediaMetadata);
     if (init) {

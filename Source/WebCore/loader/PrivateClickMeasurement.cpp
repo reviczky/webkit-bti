@@ -31,7 +31,7 @@
 #include <wtf/Expected.h>
 #include <wtf/RandomNumber.h>
 #include <wtf/URL.h>
-#include <wtf/text/StringBuilder.h>
+#include <wtf/text/StringConcatenateNumbers.h>
 #include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/text/StringView.h>
 
@@ -129,18 +129,15 @@ bool PrivateClickMeasurement::hasHigherPriorityThan(const PrivateClickMeasuremen
     return m_attributionTriggerData->priority > other.m_attributionTriggerData->priority;
 }
 
-static URL attributionReportURL(const RegistrableDomain& registrableDomain)
+static URL makeValidURL(const RegistrableDomain& domain, const char* path)
 {
-    StringBuilder builder;
-    builder.appendLiteral("https://");
-    builder.append(registrableDomain.string());
-    builder.appendLiteral(privateClickMeasurementReportAttributionPath);
+    URL validURL { { }, makeString("https://", domain.string(), path) };
+    return validURL.isValid() ? validURL : URL { };
+}
 
-    URL url { URL(), builder.toString() };
-    if (url.isValid())
-        return url;
-
-    return URL();
+static URL attributionReportURL(const RegistrableDomain& domain)
+{
+    return makeValidURL(domain, privateClickMeasurementReportAttributionPath);
 }
 
 URL PrivateClickMeasurement::attributionReportSourceURL() const
@@ -189,10 +186,10 @@ bool PrivateClickMeasurement::EphemeralSourceNonce::isValid() const
 {
     // FIXME: Investigate if we can do with a simple length check instead of decoding.
     // https://bugs.webkit.org/show_bug.cgi?id=221945
-    Vector<uint8_t> digest;
-    if (!base64URLDecode(nonce, digest))
+    auto digest = base64URLDecode(nonce);
+    if (!digest)
         return false;
-    return digest.size() == EphemeralSourceNonceRequiredNumberOfBytes;
+    return digest->size() == EphemeralSourceNonceRequiredNumberOfBytes;
 }
 
 void PrivateClickMeasurement::setEphemeralSourceNonce(EphemeralSourceNonce&& nonce)
@@ -207,30 +204,12 @@ URL PrivateClickMeasurement::tokenSignatureURL() const
     if (!m_ephemeralSourceNonce || !m_ephemeralSourceNonce->isValid())
         return URL();
 
-    StringBuilder builder;
-    builder.appendLiteral("https://");
-    builder.append(m_sourceSite.registrableDomain.string());
-    builder.appendLiteral(privateClickMeasurementTokenSignaturePath);
-
-    URL url { URL(), builder.toString() };
-    if (url.isValid())
-        return url;
-
-    return URL();
+    return makeValidURL(m_sourceSite.registrableDomain, privateClickMeasurementTokenSignaturePath);
 }
 
 URL PrivateClickMeasurement::tokenPublicKeyURL() const
 {
-    StringBuilder builder;
-    builder.appendLiteral("https://");
-    builder.append(m_sourceSite.registrableDomain.string());
-    builder.appendLiteral(privateClickMeasurementTokenPublicKeyPath);
-
-    URL url { URL(), builder.toString() };
-    if (url.isValid())
-        return url;
-
-    return URL();
+    return makeValidURL(m_sourceSite.registrableDomain, privateClickMeasurementTokenPublicKeyPath);
 }
 
 Ref<JSON::Object> PrivateClickMeasurement::tokenSignatureJSON() const

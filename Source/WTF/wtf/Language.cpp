@@ -27,6 +27,7 @@
 #include <wtf/Language.h>
 
 #include <wtf/HashMap.h>
+#include <wtf/Lock.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/WTFString.h>
 
@@ -36,7 +37,24 @@
 
 namespace WTF {
 
-static Lock userPreferredLanguagesMutex;
+static Lock cachedPlatformPreferredLanguagesLock;
+static Vector<String>& cachedFullPlatformPreferredLanguages() WTF_REQUIRES_LOCK(cachedPlatformPreferredLanguagesLock)
+{
+    static NeverDestroyed<Vector<String>> languages;
+    return languages;
+}
+static Vector<String>& cachedMinimizedPlatformPreferredLanguages() WTF_REQUIRES_LOCK(cachedPlatformPreferredLanguagesLock)
+{
+    static NeverDestroyed<Vector<String>> languages;
+    return languages;
+}
+
+static Lock preferredLanguagesOverrideLock;
+static Vector<String>& preferredLanguagesOverride() WTF_REQUIRES_LOCK(preferredLanguagesOverrideLock)
+{
+    static NeverDestroyed<Vector<String>> override;
+    return override;
+}
 
 typedef HashMap<void*, LanguageChangeObserverFunction> ObserverMap;
 static ObserverMap& observerMap()
@@ -62,40 +80,39 @@ void removeLanguageChangeObserver(void* context)
 
 void languageDidChange()
 {
-    platformLanguageDidChange();
+    {
+        Locker locker { cachedPlatformPreferredLanguagesLock };
+        cachedFullPlatformPreferredLanguages().clear();
+        cachedMinimizedPlatformPreferredLanguages().clear();
+    }
+
     for (auto& observer : copyToVector(observerMap())) {
         if (observerMap().contains(observer.key))
             observer.value(observer.key);
     }
 }
 
-String defaultLanguage()
+String defaultLanguage(ShouldMinimizeLanguages shouldMinimizeLanguages)
 {
-    Vector<String> languages = userPreferredLanguages();
+    auto languages = userPreferredLanguages(shouldMinimizeLanguages);
     if (languages.size())
         return languages[0];
 
     return emptyString();
 }
 
-static Vector<String>& preferredLanguagesOverride()
-{
-    static LazyNeverDestroyed<Vector<String>> override;
-    static std::once_flag onceKey;
-    std::call_once(onceKey, [&] {
-        override.construct();
-    });
-    return override;
-}
-
 Vector<String> userPreferredLanguagesOverride()
 {
+    Locker locker { preferredLanguagesOverrideLock };
     return preferredLanguagesOverride();
 }
 
 void overrideUserPreferredLanguages(const Vector<String>& override)
 {
-    preferredLanguagesOverride() = override;
+    {
+        Locker locker { preferredLanguagesOverrideLock };
+        preferredLanguagesOverride() = override;
+    }
     languageDidChange();
 }
 
@@ -108,17 +125,23 @@ static Vector<String> isolatedCopy(const Vector<String>& strings)
     return copy;
 }
 
-Vector<String> userPreferredLanguages()
+Vector<String> userPreferredLanguages(ShouldMinimizeLanguages shouldMinimizeLanguages)
 {
     {
-        auto locker = holdLock(userPreferredLanguagesMutex);
+        Locker locker { preferredLanguagesOverrideLock };
         Vector<String>& override = preferredLanguagesOverride();
         if (!override.isEmpty())
             return isolatedCopy(override);
     }
 
-    return platformUserPreferredLanguages();
+    Locker locker { cachedPlatformPreferredLanguagesLock };
+    auto& languages = shouldMinimizeLanguages == ShouldMinimizeLanguages::Yes ? cachedMinimizedPlatformPreferredLanguages() : cachedFullPlatformPreferredLanguages();
+    if (languages.isEmpty())
+        languages = platformUserPreferredLanguages(shouldMinimizeLanguages);
+    return isolatedCopy(languages);
 }
+
+#if !PLATFORM(COCOA)
 
 static String canonicalLanguageIdentifier(const String& languageCode)
 {
@@ -175,6 +198,8 @@ size_t indexOfBestMatchingLanguageInList(const String& language, const Vector<St
     return languageList.size();
 }
 
+#endif // !PLATFORM(COCOA)
+
 String displayNameForLanguageLocale(const String& localeName)
 {
 #if USE(CF) && !PLATFORM(WIN)
@@ -183,11 +208,5 @@ String displayNameForLanguageLocale(const String& localeName)
 #endif
     return localeName;
 }
-
-#if !PLATFORM(COCOA)
-void platformLanguageDidChange()
-{
-}
-#endif
 
 }

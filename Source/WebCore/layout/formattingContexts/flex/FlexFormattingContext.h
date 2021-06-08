@@ -27,8 +27,9 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "FlexFormattingGeometry.h"
 #include "FlexFormattingState.h"
-#include "FormattingContext.h"
+#include "FormattingQuirks.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
@@ -46,30 +47,19 @@ public:
 
     IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
 
+    const FlexFormattingGeometry& formattingGeometry() const final { return m_flexFormattingGeometry; }
+    const FormattingQuirks& formattingQuirks() const final { return m_flexFormattingQuirks; }
+
 private:
-    // This class implements positioning and sizing for flex items.
-    class Geometry : public FormattingContext::Geometry {
-    public:
-        Geometry(const FlexFormattingContext&);
-
-        IntrinsicWidthConstraints intrinsicWidthConstraints(const ContainerBox&);
-
-    private:
-        const FlexFormattingContext& formattingContext() const { return downcast<FlexFormattingContext>(FormattingContext::Geometry::formattingContext()); }
-    };
-    FlexFormattingContext::Geometry geometry() const { return Geometry(*this); }
-
     void sizeAndPlaceFlexItems(const ConstraintsForInFlowContent&);
     void computeIntrinsicWidthConstraintsForFlexItems();
 
     const FlexFormattingState& formattingState() const { return downcast<FlexFormattingState>(FormattingContext::formattingState()); }
     FlexFormattingState& formattingState() { return downcast<FlexFormattingState>(FormattingContext::formattingState()); }
-};
 
-inline FlexFormattingContext::Geometry::Geometry(const FlexFormattingContext& flexFormattingContext)
-    : FormattingContext::Geometry(flexFormattingContext)
-{
-}
+    const FlexFormattingGeometry m_flexFormattingGeometry;
+    const FormattingQuirks m_flexFormattingQuirks;
+};
 
 }
 }

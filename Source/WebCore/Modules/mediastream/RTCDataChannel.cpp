@@ -38,6 +38,7 @@
 #include "SharedBuffer.h"
 #include <JavaScriptCore/ArrayBufferView.h>
 #include <wtf/IsoMallocInlines.h>
+#include <wtf/Lock.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
@@ -61,7 +62,6 @@ Ref<RTCDataChannel> RTCDataChannel::create(ScriptExecutionContext& context, std:
     ASSERT(handler);
     auto channel = adoptRef(*new RTCDataChannel(context, WTFMove(handler), WTFMove(label), WTFMove(options)));
     channel->suspendIfNeeded();
-    channel->setPendingActivity(channel.get());
     queueTaskKeepingObjectAlive(channel.get(), TaskSource::Networking, [channel = channel.ptr()] {
         if (!channel->m_isDetachable)
             return;
@@ -183,7 +183,11 @@ void RTCDataChannel::close()
     if (m_handler)
         m_handler->close();
     m_handler = nullptr;
-    unsetPendingActivity(*this);
+}
+
+bool RTCDataChannel::virtualHasPendingActivity() const
+{
+    return !m_stopped;
 }
 
 void RTCDataChannel::didChangeReadyState(RTCDataChannelState newState)
@@ -210,7 +214,7 @@ void RTCDataChannel::didReceiveStringData(const String& text)
     scheduleDispatchEvent(MessageEvent::create(text));
 }
 
-void RTCDataChannel::didReceiveRawData(const char* data, size_t dataLength)
+void RTCDataChannel::didReceiveRawData(const uint8_t* data, size_t dataLength)
 {
     switch (m_binaryType) {
     case BinaryType::Blob:
@@ -253,7 +257,7 @@ void RTCDataChannel::scheduleDispatchEvent(Ref<Event>&& event)
 }
 
 static Lock s_rtcDataChannelLocalMapLock;
-static HashMap<RTCDataChannelLocalIdentifier, std::unique_ptr<RTCDataChannelHandler>>& rtcDataChannelLocalMap()
+static HashMap<RTCDataChannelLocalIdentifier, std::unique_ptr<RTCDataChannelHandler>>& rtcDataChannelLocalMap() WTF_REQUIRES_LOCK(s_rtcDataChannelLocalMapLock)
 {
     ASSERT(s_rtcDataChannelLocalMapLock.isHeld());
     static LazyNeverDestroyed<HashMap<RTCDataChannelLocalIdentifier, std::unique_ptr<RTCDataChannelHandler>>> map;
@@ -279,7 +283,7 @@ std::unique_ptr<DetachedRTCDataChannel> RTCDataChannel::detach()
     m_isDetached = true;
     m_readyState = RTCDataChannelState::Closed;
 
-    auto locker = holdLock(s_rtcDataChannelLocalMapLock);
+    Locker locker { s_rtcDataChannelLocalMapLock };
     rtcDataChannelLocalMap().add(identifier().channelIdentifier, WTFMove(m_handler));
 
     return makeUnique<DetachedRTCDataChannel>(identifier(), label().isolatedCopy(), options(), state);
@@ -290,13 +294,13 @@ void RTCDataChannel::removeFromDataChannelLocalMapIfNeeded()
     if (!m_isDetached)
         return;
 
-    auto locker = holdLock(s_rtcDataChannelLocalMapLock);
+    Locker locker { s_rtcDataChannelLocalMapLock };
     rtcDataChannelLocalMap().remove(identifier().channelIdentifier);
 }
 
 std::unique_ptr<RTCDataChannelHandler> RTCDataChannel::handlerFromIdentifier(RTCDataChannelLocalIdentifier channelIdentifier)
 {
-    auto locker = holdLock(s_rtcDataChannelLocalMapLock);
+    Locker locker { s_rtcDataChannelLocalMapLock };
     return rtcDataChannelLocalMap().take(channelIdentifier);
 }
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
- * Copyright (C) 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 #if ENABLE(WEB_AUDIO)
 
 #include "AudioContext.h"
+#include "AudioContextOptions.h"
 #include "AudioTimestamp.h"
 #include "DOMWindow.h"
 #include "JSDOMPromiseDeferred.h"
@@ -63,9 +64,13 @@ constexpr unsigned maxHardwareContexts = 4;
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(AudioContext);
 
-static Optional<float>& defaultSampleRateForTesting()
+#if OS(WINDOWS)
+static unsigned hardwareContextCount;
+#endif
+
+static std::optional<float>& defaultSampleRateForTesting()
 {
-    static Optional<float> sampleRate;
+    static std::optional<float> sampleRate;
     return sampleRate;
 }
 
@@ -76,7 +81,7 @@ static bool shouldDocumentAllowWebAudioToAutoPlay(const Document& document)
     return document.quirks().shouldAutoplayWebAudioForArbitraryUserGesture() && document.topDocument().hasHadUserInteraction();
 }
 
-void AudioContext::setDefaultSampleRateForTesting(Optional<float> sampleRate)
+void AudioContext::setDefaultSampleRateForTesting(std::optional<float> sampleRate)
 {
     defaultSampleRateForTesting() = sampleRate;
 }
@@ -85,7 +90,7 @@ ExceptionOr<Ref<AudioContext>> AudioContext::create(Document& document, AudioCon
 {
     ASSERT(isMainThread());
 #if OS(WINDOWS)
-    if (s_hardwareContextCount >= maxHardwareContexts)
+    if (hardwareContextCount >= maxHardwareContexts)
         return Exception { QuotaExceededError, "Reached maximum number of hardware contexts on this platform"_s };
 #endif
     
@@ -97,17 +102,17 @@ ExceptionOr<Ref<AudioContext>> AudioContext::create(Document& document, AudioCon
     if (!contextOptions.sampleRate && defaultSampleRateForTesting())
         contextOptions.sampleRate = *defaultSampleRateForTesting();
 
-    if (contextOptions.sampleRate.hasValue() && !isSupportedSampleRate(contextOptions.sampleRate.value()))
+    if (contextOptions.sampleRate && !isSupportedSampleRate(*contextOptions.sampleRate))
         return Exception { SyntaxError, "sampleRate is not in range"_s };
     
-    auto audioContext = adoptRef(*new AudioContext(document, IsLegacyWebKitAudioContext::No, contextOptions));
+    auto audioContext = adoptRef(*new AudioContext(document, contextOptions));
     audioContext->suspendIfNeeded();
     return audioContext;
 }
 
-// Constructor for rendering to the audio hardware.
-AudioContext::AudioContext(Document& document, IsLegacyWebKitAudioContext isLegacyWebKitAudioContext, const AudioContextOptions& contextOptions)
-    : BaseAudioContext(document, isLegacyWebKitAudioContext, contextOptions)
+AudioContext::AudioContext(Document& document, const AudioContextOptions& contextOptions)
+    : BaseAudioContext(document)
+    , m_destinationNode(makeUniqueRef<DefaultAudioDestinationNode>(*this, contextOptions.sampleRate))
     , m_mediaSession(PlatformMediaSession::create(PlatformMediaSessionManager::sharedManager(), *this))
 {
     constructCommon();
@@ -117,14 +122,14 @@ AudioContext::AudioContext(Document& document, IsLegacyWebKitAudioContext isLega
 
     document.addAudioProducer(*this);
     document.registerForVisibilityStateChangedCallbacks(*this);
-}
 
-// Only needed for WebKitOfflineAudioContext.
-AudioContext::AudioContext(Document& document, IsLegacyWebKitAudioContext isLegacyWebKitAudioContext, unsigned numberOfChannels, float sampleRate, RefPtr<AudioBuffer>&& renderTarget)
-    : BaseAudioContext(document, isLegacyWebKitAudioContext, numberOfChannels, sampleRate, WTFMove(renderTarget))
-    , m_mediaSession(PlatformMediaSession::create(PlatformMediaSessionManager::sharedManager(), *this))
-{
-    constructCommon();
+    // Unlike OfflineAudioContext, AudioContext does not require calling resume() to start rendering.
+    // Lazy initialization starts rendering so we schedule a task here to make sure lazy initialization
+    // ends up happening, even if no audio node gets constructed.
+    postTask([this, pendingActivity = makePendingActivity(*this)] {
+        if (!isStopped())
+            lazyInitialize();
+    });
 }
 
 void AudioContext::constructCommon()
@@ -146,6 +151,21 @@ AudioContext::~AudioContext()
         document()->removeAudioProducer(*this);
         document()->unregisterForVisibilityStateChangedCallbacks(*this);
     }
+}
+
+void AudioContext::uninitialize()
+{
+    if (!isInitialized())
+        return;
+
+    BaseAudioContext::uninitialize();
+
+#if OS(WINDOWS)
+    ASSERT(hardwareContextCount);
+    --hardwareContextCount;
+#endif
+
+    setState(State::Closed);
 }
 
 double AudioContext::baseLatency()
@@ -194,16 +214,6 @@ void AudioContext::close(DOMPromiseDeferred<void>&& promise)
     });
 }
 
-DefaultAudioDestinationNode& AudioContext::destination()
-{
-    return static_cast<DefaultAudioDestinationNode&>(BaseAudioContext::destination());
-}
-
-const DefaultAudioDestinationNode& AudioContext::destination() const
-{
-    return static_cast<const DefaultAudioDestinationNode&>(BaseAudioContext::destination());
-}
-
 void AudioContext::suspendRendering(DOMPromiseDeferred<void>&& promise)
 {
     if (isOfflineContext()) {
@@ -225,7 +235,7 @@ void AudioContext::suspendRendering(DOMPromiseDeferred<void>&& promise)
 
     lazyInitialize();
 
-    destination().suspend([this, activity = makePendingActivity(*this), promise = WTFMove(promise)](Optional<Exception>&& exception) mutable {
+    destination().suspend([this, activity = makePendingActivity(*this), promise = WTFMove(promise)](std::optional<Exception>&& exception) mutable {
         if (exception) {
             promise.reject(WTFMove(*exception));
             return;
@@ -256,7 +266,7 @@ void AudioContext::resumeRendering(DOMPromiseDeferred<void>&& promise)
 
     lazyInitialize();
 
-    destination().resume([this, activity = makePendingActivity(*this), promise = WTFMove(promise)](Optional<Exception>&& exception) mutable {
+    destination().resume([this, activity = makePendingActivity(*this), promise = WTFMove(promise)](std::optional<Exception>&& exception) mutable {
         if (exception) {
             promise.reject(WTFMove(*exception));
             return;
@@ -295,10 +305,8 @@ void AudioContext::startRendering()
     if (isStopped() || !willBeginPlayback() || m_wasSuspendedByScript)
         return;
 
-    setPendingActivity();
-
     lazyInitialize();
-    destination().startRendering([this, protectedThis = makeRef(*this)](Optional<Exception>&& exception) {
+    destination().startRendering([this, protectedThis = makeRef(*this), pendingActivity = makePendingActivity(*this)](std::optional<Exception>&& exception) {
         if (!exception)
             setState(State::Running);
     });
@@ -317,7 +325,9 @@ void AudioContext::lazyInitialize()
             // NOTE: for now default AudioContext does not need an explicit startRendering() call from JavaScript.
             // We may want to consider requiring it for symmetry with OfflineAudioContext.
             startRendering();
-            ++s_hardwareContextCount;
+#if OS(WINDOWS)
+            ++hardwareContextCount;
+#endif
         }
     }
 }
@@ -369,7 +379,7 @@ void AudioContext::mayResumePlayback(bool shouldResume)
 
     lazyInitialize();
 
-    destination().resume([this, protectedThis = makeRef(*this)](Optional<Exception>&& exception) {
+    destination().resume([this, protectedThis = makeRef(*this), pendingActivity = makePendingActivity(*this)](std::optional<Exception>&& exception) {
         setState(exception ? State::Suspended : State::Running);
     });
 }
@@ -443,6 +453,11 @@ void AudioContext::resume()
     document()->updateIsPlayingMedia();
 }
 
+const char* AudioContext::activeDOMObjectName() const
+{
+    return "AudioContext";
+}
+
 void AudioContext::suspendPlayback()
 {
     if (state() == State::Closed || !isInitialized())
@@ -450,7 +465,7 @@ void AudioContext::suspendPlayback()
 
     lazyInitialize();
 
-    destination().suspend([this, protectedThis = makeRef(*this)](Optional<Exception>&& exception) {
+    destination().suspend([this, protectedThis = makeRef(*this), pendingActivity = makePendingActivity(*this)](std::optional<Exception>&& exception) {
         if (exception)
             return;
 
@@ -481,6 +496,20 @@ void AudioContext::mediaCanStart(Document& document)
     ASSERT_UNUSED(document, &document == this->document());
     removeBehaviorRestriction(RequirePageConsentForAudioStartRestriction);
     mayResumePlayback(true);
+}
+
+void AudioContext::isPlayingAudioDidChange()
+{
+    // Heap allocations are forbidden on the audio thread for performance reasons so we need to
+    // explicitly allow the following allocation(s).
+    DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
+
+    // Make sure to call Document::updateIsPlayingMedia() on the main thread, since
+    // we could be on the audio I/O thread here and the call into WebCore could block.
+    callOnMainThread([protectedThis = makeRef(*this)] {
+        if (auto* document = protectedThis->document())
+            document->updateIsPlayingMedia();
+    });
 }
 
 #if !RELEASE_LOG_DISABLED
@@ -519,6 +548,11 @@ ExceptionOr<Ref<MediaStreamAudioDestinationNode>> AudioContext::createMediaStrea
 }
 
 #endif
+
+bool AudioContext::virtualHasPendingActivity() const
+{
+    return !isClosed();
+}
 
 } // namespace WebCore
 

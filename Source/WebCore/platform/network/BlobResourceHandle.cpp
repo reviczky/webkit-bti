@@ -73,7 +73,7 @@ namespace {
 
 class BlobResourceSynchronousLoader : public ResourceHandleClient {
 public:
-    BlobResourceSynchronousLoader(ResourceError&, ResourceResponse&, Vector<char>&);
+    BlobResourceSynchronousLoader(ResourceError&, ResourceResponse&, Vector<uint8_t>&);
 
     void didReceiveResponseAsync(ResourceHandle*, ResourceResponse&&, CompletionHandler<void()>&&) final;
     void didFail(ResourceHandle*, const ResourceError&) final;
@@ -85,10 +85,10 @@ public:
 private:
     ResourceError& m_error;
     ResourceResponse& m_response;
-    Vector<char>& m_data;
+    Vector<uint8_t>& m_data;
 };
 
-BlobResourceSynchronousLoader::BlobResourceSynchronousLoader(ResourceError& error, ResourceResponse& response, Vector<char>& data)
+BlobResourceSynchronousLoader::BlobResourceSynchronousLoader(ResourceError& error, ResourceResponse& response, Vector<uint8_t>& data)
     : m_error(error)
     , m_response(response)
     , m_data(data)
@@ -141,7 +141,7 @@ Ref<BlobResourceHandle> BlobResourceHandle::createAsync(BlobData* blobData, cons
     return adoptRef(*new BlobResourceHandle(blobData, request, client, true));
 }
 
-void BlobResourceHandle::loadResourceSynchronously(BlobData* blobData, const ResourceRequest& request, ResourceError& error, ResourceResponse& response, Vector<char>& data)
+void BlobResourceHandle::loadResourceSynchronously(BlobData* blobData, const ResourceRequest& request, ResourceError& error, ResourceResponse& response, Vector<uint8_t>& data)
 {
     if (!equalLettersIgnoringASCIICase(request.httpMethod(), "get")) {
         error = ResourceError(webKitBlobResourceDomain, static_cast<int>(Error::MethodNotAllowed), response.url(), "Request method must be GET");
@@ -320,7 +320,7 @@ void BlobResourceHandle::seek()
         m_totalRemainingSize -= m_rangeOffset;
 }
 
-int BlobResourceHandle::readSync(char* buf, int length)
+int BlobResourceHandle::readSync(uint8_t* buf, int length)
 {
     ASSERT(isMainThread());
 
@@ -368,7 +368,7 @@ int BlobResourceHandle::readSync(char* buf, int length)
     return result;
 }
 
-int BlobResourceHandle::readDataSync(const BlobDataItem& item, char* buf, int length)
+int BlobResourceHandle::readDataSync(const BlobDataItem& item, void* buf, int length)
 {
     ASSERT(isMainThread());
 
@@ -390,7 +390,7 @@ int BlobResourceHandle::readDataSync(const BlobDataItem& item, char* buf, int le
     return bytesToRead;
 }
 
-int BlobResourceHandle::readFileSync(const BlobDataItem& item, char* buf, int length)
+int BlobResourceHandle::readFileSync(const BlobDataItem& item, void* buf, int length)
 {
     ASSERT(isMainThread());
 
@@ -460,7 +460,7 @@ void BlobResourceHandle::readDataAsync(const BlobDataItem& item)
     if (bytesToRead > m_totalRemainingSize)
         bytesToRead = m_totalRemainingSize;
 
-    auto* data = reinterpret_cast<const char*>(item.data().data()->data()) + item.offset() + m_currentItemReadSize;
+    auto* data = item.data().data()->data() + item.offset() + m_currentItemReadSize;
     m_currentItemReadSize = 0;
 
     consumeData(data, static_cast<int>(bytesToRead));
@@ -506,7 +506,7 @@ void BlobResourceHandle::didRead(int bytesRead)
     consumeData(m_buffer.data(), bytesRead);
 }
 
-void BlobResourceHandle::consumeData(const char* data, int bytesRead)
+void BlobResourceHandle::consumeData(const uint8_t* data, int bytesRead)
 {
     ASSERT(m_async);
     Ref<BlobResourceHandle> protectedThis(*this);
@@ -614,10 +614,10 @@ void BlobResourceHandle::notifyResponseOnError()
     });
 }
 
-void BlobResourceHandle::notifyReceiveData(const char* data, int bytesRead)
+void BlobResourceHandle::notifyReceiveData(const uint8_t* data, int bytesRead)
 {
     if (client())
-        client()->didReceiveBuffer(this, SharedBuffer::create(reinterpret_cast<const uint8_t*>(data), bytesRead), bytesRead);
+        client()->didReceiveBuffer(this, SharedBuffer::create(data, bytesRead), bytesRead);
 }
 
 void BlobResourceHandle::notifyFail(Error errorCode)
@@ -634,7 +634,7 @@ static void doNotifyFinish(BlobResourceHandle& handle)
     if (!handle.client())
         return;
 
-    handle.client()->didFinishLoading(&handle);
+    handle.client()->didFinishLoading(&handle, { });
 }
 
 void BlobResourceHandle::notifyFinish()

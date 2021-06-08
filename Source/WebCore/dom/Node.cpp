@@ -1589,7 +1589,7 @@ ExceptionOr<void> Node::setTextContent(const String& text)
         return setNodeValue(text);
     case ELEMENT_NODE:
     case DOCUMENT_FRAGMENT_NODE:
-        downcast<ContainerNode>(*this).replaceAllChildrenWithNewText(text);
+        downcast<ContainerNode>(*this).stringReplaceAll(text);
         return { };
     case DOCUMENT_NODE:
     case DOCUMENT_TYPE_NODE:
@@ -1752,6 +1752,12 @@ FloatPoint Node::convertFromPage(const FloatPoint& p) const
 
     // No parent - no conversion needed
     return p;
+}
+
+String Node::description() const
+{
+    auto name = nodeName();
+    return makeString(name.isEmpty() ? "<none>" : "", name);
 }
 
 String Node::debugDescription() const
@@ -2221,7 +2227,10 @@ EventTargetData* Node::eventTargetDataConcurrently()
     // world is stopped. We don't have to hold the lock when the world is stopped, because a stopped world
     // means that we will never mutate the event target data map.
     JSC::VM* vm = commonVMOrNull();
-    auto locker = holdLockIf(s_eventTargetDataMapLock, vm && vm->heap.worldIsRunning());
+    if (vm && vm->heap.worldIsRunning()) {
+        Locker locker { s_eventTargetDataMapLock };
+        return hasEventTargetData() ? eventTargetDataMap().get(this) : nullptr;
+    }
     return hasEventTargetData() ? eventTargetDataMap().get(this) : nullptr;
 }
 
@@ -2233,7 +2242,7 @@ EventTargetData& Node::ensureEventTargetData()
     JSC::VM* vm = commonVMOrNull();
     RELEASE_ASSERT(!vm || vm->heap.worldIsRunning());
 
-    auto locker = holdLock(s_eventTargetDataMapLock);
+    Locker locker { s_eventTargetDataMapLock };
     setHasEventTargetData(true);
     return *eventTargetDataMap().add(this, makeUnique<EventTargetData>()).iterator->value;
 }
@@ -2242,7 +2251,7 @@ void Node::clearEventTargetData()
 {
     JSC::VM* vm = commonVMOrNull();
     RELEASE_ASSERT(!vm || vm->heap.worldIsRunning());
-    auto locker = holdLock(s_eventTargetDataMapLock);
+    Locker locker { s_eventTargetDataMapLock };
     eventTargetDataMap().remove(this);
 }
 

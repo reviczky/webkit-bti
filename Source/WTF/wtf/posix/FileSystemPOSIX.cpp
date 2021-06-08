@@ -40,7 +40,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <wtf/EnumTraits.h>
-#include <wtf/FileMetadata.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/WTFString.h>
@@ -119,7 +118,7 @@ bool truncateFile(PlatformFileHandle handle, long long offset)
     return !ftruncate(handle, offset);
 }
 
-int writeToFile(PlatformFileHandle handle, const char* data, int length)
+int writeToFile(PlatformFileHandle handle, const void* data, int length)
 {
     do {
         int bytesWritten = write(handle, data, static_cast<size_t>(length));
@@ -129,7 +128,7 @@ int writeToFile(PlatformFileHandle handle, const char* data, int length)
     return -1;
 }
 
-int readFromFile(PlatformFileHandle handle, char* data, int length)
+int readFromFile(PlatformFileHandle handle, void* data, int length)
 {
     do {
         int bytesRead = read(handle, data, static_cast<size_t>(length));
@@ -156,33 +155,32 @@ bool unlockFile(PlatformFileHandle handle)
 }
 #endif
 
-bool getFileSize(PlatformFileHandle handle, long long& result)
+std::optional<uint64_t> fileSize(PlatformFileHandle handle)
 {
     struct stat fileInfo;
     if (fstat(handle, &fileInfo))
-        return false;
+        return std::nullopt;
 
-    result = fileInfo.st_size;
-    return true;
+    return fileInfo.st_size;
 }
 
-Optional<WallTime> getFileCreationTime(const String& path)
+std::optional<WallTime> fileCreationTime(const String& path)
 {
 #if OS(DARWIN) || OS(OPENBSD) || OS(NETBSD) || OS(FREEBSD)
     CString fsRep = fileSystemRepresentation(path);
 
     if (!fsRep.data() || fsRep.data()[0] == '\0')
-        return WTF::nullopt;
+        return std::nullopt;
 
     struct stat fileInfo;
 
     if (stat(fsRep.data(), &fileInfo))
-        return WTF::nullopt;
+        return std::nullopt;
 
     return WallTime::fromRawSeconds(fileInfo.st_birthtime);
 #else
     UNUSED_PARAM(path);
-    return WTF::nullopt;
+    return std::nullopt;
 #endif
 }
 
@@ -228,21 +226,13 @@ end:
 }
 #endif // !PLATFORM(COCOA)
 
-Optional<int32_t> getFileDeviceId(const CString& fsFile)
+std::optional<int32_t> getFileDeviceId(const CString& fsFile)
 {
     struct stat fileStat;
     if (stat(fsFile.data(), &fileStat) == -1)
-        return WTF::nullopt;
+        return std::nullopt;
 
     return fileStat.st_dev;
-}
-
-String realPath(const String& filePath)
-{
-    CString fsRep = fileSystemRepresentation(filePath);
-    char resolvedName[PATH_MAX];
-    const char* result = realpath(fsRep.data(), resolvedName);
-    return result ? String::fromUTF8(result) : filePath;
 }
 
 } // namespace FileSystemImpl

@@ -34,7 +34,7 @@ template<typename BackendType>
 class ConcreteImageBuffer : public ImageBuffer {
 public:
     template<typename ImageBufferType = ConcreteImageBuffer, typename... Arguments>
-    static RefPtr<ImageBufferType> create(const FloatSize& size, float resolutionScale, DestinationColorSpace colorSpace, PixelFormat pixelFormat, const HostWindow* hostWindow, Arguments&&... arguments)
+    static RefPtr<ImageBufferType> create(const FloatSize& size, float resolutionScale, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat, const HostWindow* hostWindow, Arguments&&... arguments)
     {
         auto parameters = ImageBufferBackend::Parameters { size, resolutionScale, colorSpace, pixelFormat };
         auto backend = BackendType::create(parameters, hostWindow);
@@ -46,7 +46,7 @@ public:
     template<typename ImageBufferType = ConcreteImageBuffer, typename... Arguments>
     static RefPtr<ImageBufferType> create(const FloatSize& size, const GraphicsContext& context, Arguments&&... arguments)
     {
-        auto parameters = ImageBufferBackend::Parameters { size, 1, DestinationColorSpace::SRGB, PixelFormat::BGRA8 };
+        auto parameters = ImageBufferBackend::Parameters { size, 1, DestinationColorSpace::SRGB(), PixelFormat::BGRA8 };
         auto backend = BackendType::create(parameters, context);
         if (!backend)
             return nullptr;
@@ -195,15 +195,16 @@ protected:
         }
     }
 
-    void transformColorSpace(DestinationColorSpace srcColorSpace, DestinationColorSpace destColorSpace) override
+    void transformToColorSpace(const DestinationColorSpace& newColorSpace) override
     {
         if (auto* backend = ensureBackendCreated()) {
             flushDrawingContext();
-            backend->transformColorSpace(srcColorSpace, destColorSpace);
+            backend->transformToColorSpace(newColorSpace);
+            m_parameters.colorSpace = newColorSpace;
         }
     }
 
-    String toDataURL(const String& mimeType, Optional<double> quality, PreserveResolution preserveResolution) const override
+    String toDataURL(const String& mimeType, std::optional<double> quality, PreserveResolution preserveResolution) const override
     {
         if (auto* backend = ensureBackendCreated()) {
             const_cast<ConcreteImageBuffer&>(*this).flushContext();
@@ -212,7 +213,7 @@ protected:
         return String();
     }
 
-    Vector<uint8_t> toData(const String& mimeType, Optional<double> quality = WTF::nullopt) const override
+    Vector<uint8_t> toData(const String& mimeType, std::optional<double> quality = std::nullopt) const override
     {
         if (auto* backend = ensureBackendCreated()) {
             const_cast<ConcreteImageBuffer&>(*this).flushContext();
@@ -221,29 +222,20 @@ protected:
         return { };
     }
 
-    Vector<uint8_t> toBGRAData() const override
-    {
-        if (auto* backend = ensureBackendCreated()) {
-            const_cast<ConcreteImageBuffer&>(*this).flushContext();
-            return backend->toBGRAData();
-        }
-        return { };
-    }
-
-    Optional<PixelBuffer> getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect& srcRect) const override
+    std::optional<PixelBuffer> getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& srcRect) const override
     {
         if (auto* backend = ensureBackendCreated()) {
             const_cast<ConcreteImageBuffer&>(*this).flushContext();
             return backend->getPixelBuffer(outputFormat, srcRect);
         }
-        return WTF::nullopt;
+        return std::nullopt;
     }
 
-    void putPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint = { }, AlphaPremultiplication destFormat = AlphaPremultiplication::Premultiplied) override
+    void putPixelBuffer(const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint = { }, AlphaPremultiplication destFormat = AlphaPremultiplication::Premultiplied) override
     {
         if (auto* backend = ensureBackendCreated()) {
             flushContext();
-            backend->putPixelBuffer(inputFormat, pixelBuffer, srcRect, destPoint, destFormat);
+            backend->putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
         }
     }
 

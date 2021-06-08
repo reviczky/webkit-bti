@@ -93,16 +93,16 @@ DeviceIdHashSaltStorage::~DeviceIdHashSaltStorage()
         completionHandler();
 }
 
-static WTF::Optional<SecurityOriginData> getSecurityOriginData(const char* name, KeyedDecoder* decoder)
+static std::optional<SecurityOriginData> getSecurityOriginData(const char* name, KeyedDecoder* decoder)
 {
     String origin;
 
     if (!decoder->decodeString(name, origin))
-        return WTF::nullopt;
+        return std::nullopt;
 
     auto securityOriginData = SecurityOriginData::fromDatabaseIdentifier(origin);
     if (!securityOriginData)
-        return WTF::nullopt;
+        return std::nullopt;
 
     return securityOriginData;
 }
@@ -124,8 +124,7 @@ void DeviceIdHashSaltStorage::loadStorageFromDisk(CompletionHandler<void(HashMap
                 continue;
             }
 
-            long long fileSize = 0;
-            if (!FileSystem::getFileSize(originPath, fileSize)) {
+            if (!FileSystem::fileSize(originPath)) {
                 RELEASE_LOG_ERROR(DiskPersistency, "DeviceIdHashSaltStorage: Impossible to get the file size of: '%s'", originPath.utf8().data());
                 continue;
             }

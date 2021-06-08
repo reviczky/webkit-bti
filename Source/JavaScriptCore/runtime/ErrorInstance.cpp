@@ -28,7 +28,6 @@
 #include "JSCInlines.h"
 #include "ParseInt.h"
 #include "StackFrame.h"
-#include <wtf/text/StringBuilder.h>
 
 namespace JSC {
 
@@ -124,7 +123,7 @@ void ErrorInstance::finishCreation(VM& vm, JSGlobalObject* globalObject, const S
 
     std::unique_ptr<Vector<StackFrame>> stackTrace = getStackTrace(globalObject, vm, this, useCurrentFrame);
     {
-        auto locker = holdLock(cellLock());
+        Locker locker { cellLock() };
         m_stackTrace = WTFMove(stackTrace);
     }
     vm.heap.writeBarrier(this);
@@ -209,17 +208,7 @@ String ErrorInstance::sanitizedToString(JSGlobalObject* globalObject)
     String messageString = sanitizedMessageString(globalObject);
     RETURN_IF_EXCEPTION(scope, String());
 
-    if (!nameString.length())
-        return messageString;
-
-    if (!messageString.length())
-        return nameString;
-
-    StringBuilder builder;
-    builder.append(nameString);
-    builder.appendLiteral(": ");
-    builder.append(messageString);
-    return builder.toString();
+    return makeString(nameString, nameString.isEmpty() || messageString.isEmpty() ? "" : ": ", messageString);
 }
 
 void ErrorInstance::finalizeUnconditionally(VM& vm)

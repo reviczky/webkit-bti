@@ -28,6 +28,7 @@
 #include "CSSMarkup.h"
 #include "CSSPropertyNames.h"
 #include "CSSValueKeywords.h"
+#include "CSSValueList.h"
 #include "CSSValuePool.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
@@ -79,12 +80,16 @@
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 
-#if ENABLE(IMAGE_EXTRACTION)
-#include "ImageExtractionResult.h"
+#if ENABLE(IMAGE_ANALYSIS)
+#include "TextRecognitionResult.h"
 #endif
 
 #if PLATFORM(IOS_FAMILY)
 #include "SelectionGeometry.h"
+#endif
+
+#if ENABLE(DATA_DETECTION)
+#include "DataDetection.h"
 #endif
 
 namespace WebCore {
@@ -129,26 +134,26 @@ unsigned HTMLElement::parseBorderWidthAttribute(const AtomString& value) const
 
 void HTMLElement::applyBorderAttributeToStyle(const AtomString& value, MutableStyleProperties& style)
 {
-    addPropertyToPresentationAttributeStyle(style, CSSPropertyBorderWidth, parseBorderWidthAttribute(value), CSSUnitType::CSS_PX);
-    addPropertyToPresentationAttributeStyle(style, CSSPropertyBorderStyle, CSSValueSolid);
+    addPropertyToPresentationalHintStyle(style, CSSPropertyBorderWidth, parseBorderWidthAttribute(value), CSSUnitType::CSS_PX);
+    addPropertyToPresentationalHintStyle(style, CSSPropertyBorderStyle, CSSValueSolid);
 }
 
 void HTMLElement::mapLanguageAttributeToLocale(const AtomString& value, MutableStyleProperties& style)
 {
     if (!value.isEmpty()) {
         // Have to quote so the locale id is treated as a string instead of as a CSS keyword.
-        addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitLocale, serializeString(value));
+        addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitLocale, serializeString(value));
     } else {
         // The empty string means the language is explicitly unknown.
-        addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitLocale, CSSValueAuto);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitLocale, CSSValueAuto);
     }
 }
 
-bool HTMLElement::isPresentationAttribute(const QualifiedName& name) const
+bool HTMLElement::hasPresentationalHintsForAttribute(const QualifiedName& name) const
 {
     if (name == alignAttr || name == contenteditableAttr || name == hiddenAttr || name == langAttr || name.matches(XMLNames::langAttr) || name == draggableAttr || name == dirAttr)
         return true;
-    return StyledElement::isPresentationAttribute(name);
+    return StyledElement::hasPresentationalHintsForAttribute(name);
 }
 
 static bool isLTROrRTLIgnoringCase(const AtomString& dirAttributeValue)
@@ -182,13 +187,13 @@ static ContentEditableType contentEditableType(const HTMLElement& element)
     return contentEditableType(element.attributeWithoutSynchronization(contenteditableAttr));
 }
 
-void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name, const AtomString& value, MutableStyleProperties& style)
+void HTMLElement::collectPresentationalHintsForAttribute(const QualifiedName& name, const AtomString& value, MutableStyleProperties& style)
 {
     if (name == alignAttr) {
         if (equalLettersIgnoringASCIICase(value, "middle"))
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyTextAlign, CSSValueCenter);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyTextAlign, CSSValueCenter);
         else
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyTextAlign, value);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyTextAlign, value);
     } else if (name == contenteditableAttr) {
         CSSValueID userModifyValue = CSSValueReadWrite;
         switch (contentEditableType(value)) {
@@ -201,37 +206,37 @@ void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name
             userModifyValue = CSSValueReadWritePlaintextOnly;
             FALLTHROUGH;
         case ContentEditableType::True:
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyWordWrap, CSSValueBreakWord);
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitNbspMode, CSSValueSpace);
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyLineBreak, CSSValueAfterWhiteSpace);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyWordWrap, CSSValueBreakWord);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitNbspMode, CSSValueSpace);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyLineBreak, CSSValueAfterWhiteSpace);
 #if PLATFORM(IOS_FAMILY)
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitTextSizeAdjust, CSSValueNone);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitTextSizeAdjust, CSSValueNone);
 #endif
             break;
         }
-        addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserModify, userModifyValue);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitUserModify, userModifyValue);
     } else if (name == hiddenAttr) {
-        addPropertyToPresentationAttributeStyle(style, CSSPropertyDisplay, CSSValueNone);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyDisplay, CSSValueNone);
     } else if (name == draggableAttr) {
         if (equalLettersIgnoringASCIICase(value, "true")) {
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserDrag, CSSValueElement);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitUserDrag, CSSValueElement);
             if (!isDraggableIgnoringAttributes())
-                addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserSelect, CSSValueNone);
+                addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitUserSelect, CSSValueNone);
         } else if (equalLettersIgnoringASCIICase(value, "false"))
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitUserDrag, CSSValueNone);
+            addPropertyToPresentationalHintStyle(style, CSSPropertyWebkitUserDrag, CSSValueNone);
     } else if (name == dirAttr) {
         if (equalLettersIgnoringASCIICase(value, "auto"))
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyUnicodeBidi, unicodeBidiAttributeForDirAuto(*this));
+            addPropertyToPresentationalHintStyle(style, CSSPropertyUnicodeBidi, unicodeBidiAttributeForDirAuto(*this));
         else {
             auto unicodeBidiValue = CSSValueEmbed;
 
             if (isLTROrRTLIgnoringCase(value)) {
-                addPropertyToPresentationAttributeStyle(style, CSSPropertyDirection, value);
+                addPropertyToPresentationalHintStyle(style, CSSPropertyDirection, value);
                 unicodeBidiValue = CSSValueIsolate;
             } 
 
             if (!hasTagName(bdiTag) && !hasTagName(bdoTag) && !hasTagName(outputTag))
-                addPropertyToPresentationAttributeStyle(style, CSSPropertyUnicodeBidi, unicodeBidiValue);
+                addPropertyToPresentationalHintStyle(style, CSSPropertyUnicodeBidi, unicodeBidiValue);
         }
     } else if (name.matches(XMLNames::langAttr))
         mapLanguageAttributeToLocale(value, style);
@@ -240,7 +245,7 @@ void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name
         if (!hasAttributeWithoutSynchronization(XMLNames::langAttr))
             mapLanguageAttributeToLocale(value, style);
     } else
-        StyledElement::collectStyleForPresentationAttribute(name, value, style);
+        StyledElement::collectPresentationalHintsForAttribute(name, value, style);
 }
 
 HTMLElement::EventHandlerNameMap HTMLElement::createEventHandlerNameMap()
@@ -470,7 +475,7 @@ void HTMLElement::parseAttribute(const QualifiedName& name, const AtomString& va
         if (auto optionalTabIndex = parseHTMLInteger(value))
             setTabIndexExplicitly(optionalTabIndex.value());
         else
-            setTabIndexExplicitly(WTF::nullopt);
+            setTabIndexExplicitly(std::nullopt);
         return;
     }
     
@@ -555,7 +560,7 @@ ExceptionOr<void> HTMLElement::setInnerText(const String& text)
     // FIXME: This doesn't take whitespace collapsing into account at all.
 
     if (!text.contains('\n') && !text.contains('\r')) {
-        replaceAllChildrenWithNewText(text);
+        stringReplaceAll(text);
         return { };
     }
 
@@ -565,19 +570,19 @@ ExceptionOr<void> HTMLElement::setInnerText(const String& text)
     auto* r = renderer();
     if ((r && r->style().preserveNewline()) || (isConnected() && isTextControlInnerTextElement())) {
         if (!text.contains('\r')) {
-            replaceAllChildrenWithNewText(text);
+            stringReplaceAll(text);
             return { };
         }
         String textWithConsistentLineBreaks = text;
         textWithConsistentLineBreaks.replace("\r\n", "\n");
         textWithConsistentLineBreaks.replace('\r', '\n');
-        replaceAllChildrenWithNewText(textWithConsistentLineBreaks);
+        stringReplaceAll(textWithConsistentLineBreaks);
         return { };
     }
 
+    // FIXME: This should use replaceAll(), after we fix that to work properly for DocumentFragment.
     // Add text nodes and <br> elements.
     auto fragment = textToFragment(document(), text);
-    // FIXME: This should use a variant of replaceAllChildrenWithNewText() which accepts DocumentFragments as input.
     // It's safe to dispatch events on the new fragment since author scripts have no access to it yet.
     ScriptDisallowedScope::EventAllowedScope allowedScope(fragment.get());
     return replaceChildrenWithFragment(*this, WTFMove(fragment));
@@ -620,6 +625,28 @@ ExceptionOr<void> HTMLElement::setOuterText(const String& text)
     return { };
 }
 
+void HTMLElement::applyAspectRatioFromWidthAndHeightAttributesToStyle(MutableStyleProperties& style)
+{
+    if (!document().settings().aspectRatioOfImgFromWidthAndHeightEnabled())
+        return;
+
+    double width = parseValidHTMLFloatingPointNumber(attributeWithoutSynchronization(widthAttr)).value_or(-1);
+    if (width < 0)
+        return;
+    double height = parseValidHTMLFloatingPointNumber(attributeWithoutSynchronization(heightAttr)).value_or(-1);
+    if (height < 0)
+        return;
+
+    auto ratioList = CSSValueList::createSlashSeparated();
+    ratioList->append(CSSValuePool::singleton().createValue(width, CSSUnitType::CSS_NUMBER));
+    ratioList->append(CSSValuePool::singleton().createValue(height, CSSUnitType::CSS_NUMBER));
+    auto list = CSSValueList::createSpaceSeparated();
+    list->append(CSSValuePool::singleton().createIdentifierValue(CSSValueAuto));
+    list->append(ratioList);
+
+    style.setProperty(CSSPropertyAspectRatio, RefPtr<CSSValue>(WTFMove(list)));
+}
+
 void HTMLElement::applyAlignmentAttributeToStyle(const AtomString& alignment, MutableStyleProperties& style)
 {
     // Vertical alignment with respect to the current baseline of the text
@@ -649,10 +676,10 @@ void HTMLElement::applyAlignmentAttributeToStyle(const AtomString& alignment, Mu
         verticalAlignValue = CSSValueTextTop;
 
     if (floatValue != CSSValueInvalid)
-        addPropertyToPresentationAttributeStyle(style, CSSPropertyFloat, floatValue);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyFloat, floatValue);
 
     if (verticalAlignValue != CSSValueInvalid)
-        addPropertyToPresentationAttributeStyle(style, CSSPropertyVerticalAlign, verticalAlignValue);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyVerticalAlign, verticalAlignValue);
 }
 
 bool HTMLElement::hasCustomFocusLogic() const
@@ -1013,21 +1040,21 @@ void HTMLElement::addHTMLLengthToStyle(MutableStyleProperties& style, CSSPropert
         }
 
         if (parsedLength != string->length()) {
-            addPropertyToPresentationAttributeStyle(style, propertyID, string->substring(0, parsedLength));
+            addPropertyToPresentationalHintStyle(style, propertyID, string->substring(0, parsedLength));
             return;
         }
     }
 
-    addPropertyToPresentationAttributeStyle(style, propertyID, value);
+    addPropertyToPresentationalHintStyle(style, propertyID, value);
 }
 
 // Color parsing that matches HTML's "rules for parsing a legacy color value"
 // https://html.spec.whatwg.org/#rules-for-parsing-a-legacy-colour-value
-static Optional<SRGBA<uint8_t>> parseLegacyColorValue(StringView string)
+static std::optional<SRGBA<uint8_t>> parseLegacyColorValue(StringView string)
 {
     // An empty string doesn't apply a color.
     if (string.isEmpty())
-        return WTF::nullopt;
+        return std::nullopt;
 
     string = string.stripLeadingAndTrailingMatchedCharacters(isHTMLSpace<UChar>);
     if (string.isEmpty())
@@ -1035,7 +1062,7 @@ static Optional<SRGBA<uint8_t>> parseLegacyColorValue(StringView string)
 
     // "transparent" doesn't apply a color either.
     if (equalLettersIgnoringASCIICase(string, "transparent"))
-        return WTF::nullopt;
+        return std::nullopt;
 
     if (auto namedColor = CSSParser::parseNamedColor(string))
         return namedColor;
@@ -1211,6 +1238,12 @@ static const AtomString& imageOverlayElementIdentifier()
     return identifier;
 }
 
+static const AtomString& imageOverlayDataDetectorClassName()
+{
+    static MainThreadNeverDestroyed<const AtomString> className("image-overlay-data-detector-result", AtomString::ConstructFromLiteral);
+    return className;
+}
+
 bool HTMLElement::shouldExtendSelectionToTargetNode(const Node& targetNode, const VisibleSelection& selectionBeforeUpdate)
 {
     if (!is<HTMLDivElement>(targetNode))
@@ -1254,6 +1287,11 @@ static RefPtr<HTMLElement> imageOverlayHost(const Node& node)
     return element->hasImageOverlay() ? element : nullptr;
 }
 
+bool HTMLElement::isImageOverlayDataDetectorResult() const
+{
+    return imageOverlayHost(*this) && hasClass() && classNames().contains(imageOverlayDataDetectorClassName());
+}
+
 bool HTMLElement::isInsideImageOverlay(const SimpleRange& range)
 {
     auto commonAncestor = makeRefPtr(commonInclusiveAncestor<ComposedTree>(range));
@@ -1291,9 +1329,9 @@ bool HTMLElement::isImageOverlayText(const Node& node)
     return false;
 }
 
-#if ENABLE(IMAGE_EXTRACTION)
+#if ENABLE(IMAGE_ANALYSIS)
 
-void HTMLElement::updateWithImageExtractionResult(ImageExtractionResult&& result)
+void HTMLElement::updateWithTextRecognitionResult(TextRecognitionResult&& result)
 {
     RefPtr<HTMLDivElement> previousContainer;
     if (auto shadowRoot = userAgentShadowRoot(); shadowRoot && hasImageOverlay()) {
@@ -1444,11 +1482,36 @@ void HTMLElement::updateWithImageExtractionResult(ImageExtractionResult&& result
             lineContainer->setInlineStyleProperty(CSSPropertyCursor, CSSValueText);
     }
 
+#if ENABLE(DATA_DETECTION)
+    for (auto& dataDetector : result.dataDetectors) {
+        if (dataDetector.normalizedQuads.isEmpty())
+            continue;
+
+        auto dataDetectorContainer = DataDetection::createElementForImageOverlay(document(), dataDetector);
+        dataDetectorContainer->classList().add(imageOverlayDataDetectorClassName());
+        container->appendChild(dataDetectorContainer);
+
+        // FIXME: We should come up with a way to coalesce the bounding quads into one or more rotated rects with the same angle of rotation.
+        auto targetQuad = dataDetector.normalizedQuads.first();
+        targetQuad.scale(containerSize.width(), containerSize.height());
+
+        auto targetBounds = rotatedBoundingRectWithMinimumAngleOfRotation(targetQuad, 0.01);
+        dataDetectorContainer->setInlineStyleProperty(CSSPropertyWidth, targetBounds.size.width(), CSSUnitType::CSS_PX);
+        dataDetectorContainer->setInlineStyleProperty(CSSPropertyHeight, targetBounds.size.height(), CSSUnitType::CSS_PX);
+        dataDetectorContainer->setInlineStyleProperty(CSSPropertyTransform, makeString(
+            "translate("_s,
+            std::round(targetBounds.center.x() - (targetBounds.size.width() / 2)), "px, "_s,
+            std::round(targetBounds.center.y() - (targetBounds.size.height() / 2)), "px) "_s,
+            targetBounds.angleInRadians ? makeString("rotate("_s, targetBounds.angleInRadians, "rad) "_s) : emptyString()
+        ));
+    }
+#endif // ENABLE(DATA_DETECTION)
+
     if (auto frame = makeRefPtr(document().frame()))
         frame->eventHandler().scheduleCursorUpdate();
 }
 
-#endif // ENABLE(IMAGE_EXTRACTION)
+#endif // ENABLE(IMAGE_ANALYSIS)
 
 #if PLATFORM(IOS_FAMILY)
 

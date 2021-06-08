@@ -207,7 +207,7 @@ static uint64_t getDirectorySize(const String& directoryPath)
     paths.append(directoryPath);
     while (!paths.isEmpty()) {
         auto path = paths.takeFirst();
-        if (FileSystem::isDirectory(path)) {
+        if (FileSystem::fileType(path) == FileSystem::FileType::Directory) {
             auto fileNames = FileSystem::listDirectory(path);
             for (auto& fileName : fileNames) {
                 // Files in /Blobs directory are hard link.
@@ -217,10 +217,7 @@ static uint64_t getDirectorySize(const String& directoryPath)
             }
             continue;
         }
-
-        long long fileSize = 0;
-        FileSystem::getFileSize(path, fileSize);
-        directorySize += fileSize;
+        directorySize += FileSystem::fileSize(path).value_or(0);
     }
     return directorySize;
 }
@@ -355,13 +352,13 @@ void Engine::initialize(CompletionCallback&& callback)
     }
 
     if (m_salt) {
-        callback(WTF::nullopt);
+        callback(std::nullopt);
         return;
     }
 
     if (!shouldPersist()) {
         m_salt = NetworkCache::Salt { };
-        callback(WTF::nullopt);
+        callback(std::nullopt);
         return;
     }
 
@@ -382,14 +379,14 @@ void Engine::initialize(CompletionCallback&& callback)
 
             auto callbacks = WTFMove(m_initializationCallbacks);
             for (auto& callback : callbacks)
-                callback(m_salt ? WTF::nullopt : makeOptional(Error::WriteDisk));
+                callback(m_salt ? std::nullopt : std::make_optional(Error::WriteDisk));
         });
     });
 }
 
 void Engine::readCachesFromDisk(const WebCore::ClientOrigin& origin, CachesCallback&& callback)
 {
-    initialize([this, origin, callback = WTFMove(callback)](Optional<Error>&& error) mutable {
+    initialize([this, origin, callback = WTFMove(callback)](std::optional<Error>&& error) mutable {
         if (error) {
             callback(makeUnexpected(error.value()));
             return;
@@ -405,7 +402,7 @@ void Engine::readCachesFromDisk(const WebCore::ClientOrigin& origin, CachesCallb
             return;
         }
 
-        caches->initialize([callback = WTFMove(callback), caches](Optional<Error>&& error) mutable {
+        caches->initialize([callback = WTFMove(callback), caches](std::optional<Error>&& error) mutable {
             if (error) {
                 callback(makeUnexpected(error.value()));
                 return;
@@ -424,7 +421,7 @@ void Engine::readCache(uint64_t cacheIdentifier, CacheCallback&& callback)
         return;
     }
     if (!cache->isOpened()) {
-        cache->open([this, protectedThis = makeRef(*this), cacheIdentifier, callback = WTFMove(callback)](Optional<Error>&& error) mutable {
+        cache->open([this, protectedThis = makeRef(*this), cacheIdentifier, callback = WTFMove(callback)](std::optional<Error>&& error) mutable {
             if (error) {
                 callback(makeUnexpected(error.value()));
                 return;
@@ -456,7 +453,7 @@ Cache* Engine::cache(uint64_t cacheIdentifier)
 void Engine::writeFile(const String& filename, NetworkCache::Data&& data, WebCore::DOMCacheEngine::CompletionCallback&& callback)
 {
     if (!shouldPersist()) {
-        callback(WTF::nullopt);
+        callback(std::nullopt);
         return;
     }
 
@@ -480,7 +477,7 @@ void Engine::writeFile(const String& filename, NetworkCache::Data&& data, WebCor
                 callback(Error::WriteDisk);
                 return;
             }
-            callback(WTF::nullopt);
+            callback(std::nullopt);
         });
     });
 }
@@ -537,7 +534,7 @@ void Engine::writeSizeFile(const String& path, uint64_t size, CompletionHandler<
         return completionHandler();
 
     m_ioQueue->dispatch([path = path.isolatedCopy(), size, completionHandler = WTFMove(completionHandler)]() mutable {
-        LockHolder locker(globalSizeFileLock);
+        Locker locker { globalSizeFileLock };
         auto fileHandle = FileSystem::openFile(path, FileSystem::FileOpenMode::Write);
 
         if (FileSystem::isHandleValid(fileHandle)) {
@@ -553,32 +550,32 @@ void Engine::writeSizeFile(const String& path, uint64_t size, CompletionHandler<
     });
 }
 
-Optional<uint64_t> Engine::readSizeFile(const String& path)
+std::optional<uint64_t> Engine::readSizeFile(const String& path)
 {
     ASSERT(!RunLoop::isMain());
 
-    LockHolder locker(globalSizeFileLock);
+    Locker locker { globalSizeFileLock };
     auto fileHandle = FileSystem::openFile(path, FileSystem::FileOpenMode::Read);
     auto closeFileHandle = makeScopeExit([&] {
         FileSystem::closeFile(fileHandle);
     });
 
     if (!FileSystem::isHandleValid(fileHandle))
-        return WTF::nullopt;
+        return std::nullopt;
 
-    long long fileSize = 0;
-    if (!FileSystem::getFileSize(path, fileSize) || !fileSize)
-        return WTF::nullopt;
+    auto fileSize = FileSystem::fileSize(path).value_or(0);
+    if (!fileSize)
+        return std::nullopt;
 
     unsigned bytesToRead;
     if (!WTF::convertSafely(fileSize, bytesToRead))
-        return WTF::nullopt;
+        return std::nullopt;
 
     // FIXME: No reason we need a heap buffer to read an arbitrary number of bytes when we only support small files that contain numerals.
     Vector<char> buffer(bytesToRead);
     unsigned totalBytesRead = FileSystem::readFromFile(fileHandle, buffer.data(), buffer.size());
     if (totalBytesRead != bytesToRead)
-        return WTF::nullopt;
+        return std::nullopt;
 
     return parseInteger<uint64_t>({ buffer.data(), totalBytesRead });
 }
@@ -616,7 +613,7 @@ void Engine::getDirectories(CompletionHandler<void(const Vector<String>&)>&& com
         Vector<String> folderPaths;
         for (auto& fileName : FileSystem::listDirectory(path)) {
             auto filePath = FileSystem::pathByAppendingComponent(path, fileName);
-            if (FileSystem::isDirectory(filePath))
+            if (FileSystem::fileType(filePath) == FileSystem::FileType::Directory)
                 folderPaths.append(filePath.isolatedCopy());
         }
 
@@ -701,10 +698,10 @@ void Engine::clearAllCachesFromDisk(CompletionHandler<void()>&& completionHandle
     ASSERT(RunLoop::isMain());
 
     m_ioQueue->dispatch([path = m_rootPath.isolatedCopy(), completionHandler = WTFMove(completionHandler)]() mutable {
-        LockHolder locker(globalSizeFileLock);
+        Locker locker { globalSizeFileLock };
         for (auto& fileName : FileSystem::listDirectory(path)) {
             auto filePath = FileSystem::pathByAppendingComponent(path, fileName);
-            if (FileSystem::isDirectory(filePath))
+            if (FileSystem::fileType(filePath) == FileSystem::FileType::Directory)
                 FileSystem::deleteNonEmptyDirectory(filePath);
         }
         RunLoop::main().dispatch(WTFMove(completionHandler));
@@ -744,7 +741,7 @@ void Engine::clearCachesForOriginFromDirectories(const Vector<String>& folderPat
 {
     auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
     for (auto& folderPath : folderPaths) {
-        Caches::retrieveOriginFromDirectory(folderPath, *m_ioQueue, [this, protectedThis = makeRef(*this), origin, callbackAggregator, folderPath] (Optional<WebCore::ClientOrigin>&& folderOrigin) mutable {
+        Caches::retrieveOriginFromDirectory(folderPath, *m_ioQueue, [this, protectedThis = makeRef(*this), origin, callbackAggregator, folderPath] (std::optional<WebCore::ClientOrigin>&& folderOrigin) mutable {
             if (!folderOrigin)
                 return;
             if (folderOrigin->topOrigin != origin && folderOrigin->clientOrigin != origin)
@@ -762,7 +759,7 @@ void Engine::deleteNonEmptyDirectoryOnBackgroundThread(const String& path, Compl
     ASSERT(RunLoop::isMain());
 
     m_ioQueue->dispatch([path = path.isolatedCopy(), completionHandler = WTFMove(completionHandler)]() mutable {
-        LockHolder locker(globalSizeFileLock);
+        Locker locker { globalSizeFileLock };
         FileSystem::deleteNonEmptyDirectory(path);
 
         RunLoop::main().dispatch(WTFMove(completionHandler));
@@ -777,7 +774,7 @@ void Engine::clearMemoryRepresentation(const WebCore::ClientOrigin& origin, WebC
             return;
         }
         result.value().get().clearMemoryRepresentation();
-        callback(WTF::nullopt);
+        callback(std::nullopt);
     });
 }
 

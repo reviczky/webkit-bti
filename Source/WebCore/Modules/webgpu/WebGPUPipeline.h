@@ -43,8 +43,8 @@ class WebGPUPipeline : public GPUObjectBase, public ContextDestructionObserver {
 public:
     virtual ~WebGPUPipeline();
 
-    static HashMap<WebGPUPipeline*, WebGPUDevice*>& instances(const LockHolder&);
-    static Lock& instancesMutex();
+    static HashMap<WebGPUPipeline*, WebGPUDevice*>& instances() WTF_REQUIRES_LOCK(instancesLock());
+    static Lock& instancesLock() WTF_RETURNS_LOCK(s_instancesLock);
 
     virtual bool isRenderPipeline() const { return false; }
     virtual bool isComputePipeline() const { return false; }
@@ -63,6 +63,9 @@ public:
 
 protected:
     WebGPUPipeline(WebGPUDevice&, GPUErrorScopes&);
+
+private:
+    static Lock s_instancesLock;
 };
 
 } // namespace WebCore

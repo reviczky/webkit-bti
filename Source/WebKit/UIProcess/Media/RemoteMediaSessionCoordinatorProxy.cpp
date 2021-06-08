@@ -73,7 +73,7 @@ void RemoteMediaSessionCoordinatorProxy::join(MediaSessionCommandCompletionHandl
     auto identifier = LOGIDENTIFIER;
     ALWAYS_LOG(identifier);
 
-    m_privateCoordinator->join([this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (Optional<ExceptionData>&& exception) mutable {
+    m_privateCoordinator->join([this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (std::optional<ExceptionData>&& exception) mutable {
         ALWAYS_LOG(identifier, "completion");
         completionHandler(WTFMove(exception));
     });
@@ -91,7 +91,7 @@ void RemoteMediaSessionCoordinatorProxy::coordinateSeekTo(double time, MediaSess
     auto identifier = LOGIDENTIFIER;
     ALWAYS_LOG(identifier, time);
 
-    m_privateCoordinator->seekTo(time, [this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (Optional<ExceptionData>&& exception) mutable {
+    m_privateCoordinator->seekTo(time, [this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (std::optional<ExceptionData>&& exception) mutable {
         ALWAYS_LOG(identifier, "completion");
         completionHandler(WTFMove(exception));
     });
@@ -102,7 +102,7 @@ void RemoteMediaSessionCoordinatorProxy::coordinatePlay(MediaSessionCommandCompl
     auto identifier = LOGIDENTIFIER;
     ALWAYS_LOG(identifier);
 
-    m_privateCoordinator->play([this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (Optional<ExceptionData>&& exception) mutable {
+    m_privateCoordinator->play([this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (std::optional<ExceptionData>&& exception) mutable {
         ALWAYS_LOG(identifier, "completion");
         completionHandler(WTFMove(exception));
     });
@@ -113,7 +113,7 @@ void RemoteMediaSessionCoordinatorProxy::coordinatePause(MediaSessionCommandComp
     auto identifier = LOGIDENTIFIER;
     ALWAYS_LOG(identifier);
 
-    m_privateCoordinator->pause([this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (Optional<ExceptionData>&& exception) mutable {
+    m_privateCoordinator->pause([this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (std::optional<ExceptionData>&& exception) mutable {
         ALWAYS_LOG(identifier, "completion");
         completionHandler(WTFMove(exception));
     });
@@ -124,13 +124,13 @@ void RemoteMediaSessionCoordinatorProxy::coordinateSetTrack(const String& track,
     auto identifier = LOGIDENTIFIER;
     ALWAYS_LOG(identifier);
 
-    m_privateCoordinator->setTrack(track, [this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (Optional<ExceptionData>&& exception) mutable {
+    m_privateCoordinator->setTrack(track, [this, protectedThis = makeRef(*this), identifier, completionHandler = WTFMove(completionHandler)] (std::optional<ExceptionData>&& exception) mutable {
         ALWAYS_LOG(identifier, "completion");
         completionHandler(WTFMove(exception));
     });
 }
 
-void RemoteMediaSessionCoordinatorProxy::positionStateChanged(const Optional<WebCore::MediaPositionState>& state)
+void RemoteMediaSessionCoordinatorProxy::positionStateChanged(const std::optional<WebCore::MediaPositionState>& state)
 {
     ALWAYS_LOG(LOGIDENTIFIER);
     m_privateCoordinator->positionStateChanged(state);
@@ -148,10 +148,10 @@ void RemoteMediaSessionCoordinatorProxy::readyStateChanged(MediaSessionReadyStat
     m_privateCoordinator->readyStateChanged(state);
 }
 
-void RemoteMediaSessionCoordinatorProxy::coordinatorStateChanged(WebCore::MediaSessionCoordinatorState state)
+void RemoteMediaSessionCoordinatorProxy::trackIdentifierChanged(const String& identifier)
 {
     ALWAYS_LOG(LOGIDENTIFIER);
-    m_privateCoordinator->coordinatorStateChanged(state);
+    m_privateCoordinator->trackIdentifierChanged(identifier);
 }
 
 void RemoteMediaSessionCoordinatorProxy::seekSessionToTime(double time, CompletionHandler<void(bool)>&& callback)
@@ -159,7 +159,7 @@ void RemoteMediaSessionCoordinatorProxy::seekSessionToTime(double time, Completi
     m_webPageProxy.sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::SeekSessionToTime { time }, callback);
 }
 
-void RemoteMediaSessionCoordinatorProxy::playSession(Optional<double> atTime, Optional<double> hostTime, CompletionHandler<void(bool)>&& callback)
+void RemoteMediaSessionCoordinatorProxy::playSession(std::optional<double> atTime, std::optional<double> hostTime, CompletionHandler<void(bool)>&& callback)
 {
     m_webPageProxy.sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::PlaySession { WTFMove(atTime), WTFMove(hostTime) }, callback);
 }
@@ -172,6 +172,11 @@ void RemoteMediaSessionCoordinatorProxy::pauseSession(CompletionHandler<void(boo
 void RemoteMediaSessionCoordinatorProxy::setSessionTrack(const String& trackId, CompletionHandler<void(bool)>&& callback)
 {
     m_webPageProxy.sendWithAsyncReply(Messages::RemoteMediaSessionCoordinator::SetSessionTrack { trackId }, callback);
+}
+
+void RemoteMediaSessionCoordinatorProxy::coordinatorStateChanged(WebCore::MediaSessionCoordinatorState state)
+{
+    m_webPageProxy.send(Messages::RemoteMediaSessionCoordinator::CoordinatorStateChanged { state });
 }
 
 #if !RELEASE_LOG_DISABLED

@@ -29,6 +29,7 @@
 #if ENABLE(JIT)
 
 #include "CommonSlowPaths.h"
+#include "JIT.h"
 #include "JITCode.h"
 #include "JSCJSValueInlines.h"
 #include "SlowPathCall.h"
@@ -128,45 +129,56 @@ MacroAssemblerCodePtr<JITThunkPtrTag> JITThunks::ctiInternalFunctionConstruct(VM
     return ctiStub(vm, internalFunctionConstructGenerator).code();
 }
 
+template <typename GenerateThunk>
+MacroAssemblerCodeRef<JITThunkPtrTag> JITThunks::ctiStubImpl(ThunkGenerator key, GenerateThunk generateThunk)
+{
+    Locker locker { m_lock };
+
+    auto handleEntry = [&] (Entry& entry) {
+        if (entry.needsCrossModifyingCodeFence && !isCompilationThread()) {
+            // The main thread will issue a crossModifyingCodeFence before running
+            // any code the compiler thread generates, including any thunks that they
+            // generate. However, the main thread may grab the thunk a compiler thread
+            // generated before we've issued that crossModifyingCodeFence. Hence, we
+            // conservatively say that when the main thread grabs a thunk generated
+            // from a compiler thread for the first time, it issues a crossModifyingCodeFence.
+            WTF::crossModifyingCodeFence();
+            entry.needsCrossModifyingCodeFence = false;
+        }
+
+        return MacroAssemblerCodeRef<JITThunkPtrTag>(*entry.handle);
+    };
+
+    {
+        auto iter = m_ctiStubMap.find(key);
+        if (iter != m_ctiStubMap.end())
+            return handleEntry(iter->value);
+    }
+
+    // We do two lookups on first addition to the hash table because generateThunk may add to it.
+    MacroAssemblerCodeRef<JITThunkPtrTag> codeRef = generateThunk();
+
+    bool needsCrossModifyingCodeFence = isCompilationThread();
+    auto addResult = m_ctiStubMap.add(key, Entry { PackedRefPtr<ExecutableMemoryHandle>(codeRef.executableMemory()), needsCrossModifyingCodeFence });
+    RELEASE_ASSERT(addResult.isNewEntry); // Thunks aren't recursive, so anything we generated transitively shouldn't have generated 'key'.
+    return handleEntry(addResult.iterator->value);
+}
+
 MacroAssemblerCodeRef<JITThunkPtrTag> JITThunks::ctiStub(VM& vm, ThunkGenerator generator)
 {
-    LockHolder locker(m_lock);
-    CTIStubMap::AddResult entry = m_ctiStubMap.add(generator, MacroAssemblerCodeRef<JITThunkPtrTag>());
-    if (entry.isNewEntry) {
-        // Compilation thread can only retrieve existing entries.
-        ASSERT(!isCompilationThread());
-        entry.iterator->value = generator(vm);
-    }
-    return entry.iterator->value;
-}
-
-MacroAssemblerCodeRef<JITThunkPtrTag> JITThunks::existingCTIStub(ThunkGenerator generator)
-{
-    LockHolder locker(m_lock);
-    return existingCTIStub(generator, NoLockingNecessary);
-}
-
-MacroAssemblerCodeRef<JITThunkPtrTag> JITThunks::existingCTIStub(ThunkGenerator generator, NoLockingNecessaryTag)
-{
-    CTIStubMap::iterator entry = m_ctiStubMap.find(generator);
-    if (entry == m_ctiStubMap.end())
-        return MacroAssemblerCodeRef<JITThunkPtrTag>();
-    return entry->value;
+    return ctiStubImpl(generator, [&] {
+        return generator(vm);
+    });
 }
 
 #if ENABLE(EXTRA_CTI_THUNKS)
 
 MacroAssemblerCodeRef<JITThunkPtrTag> JITThunks::ctiSlowPathFunctionStub(VM& vm, SlowPathFunction slowPathFunction)
 {
-    LockHolder locker(m_lock);
     auto key = bitwise_cast<ThunkGenerator>(slowPathFunction);
-    CTIStubMap::AddResult entry = m_ctiStubMap.add(key, MacroAssemblerCodeRef<JITThunkPtrTag>());
-    if (entry.isNewEntry) {
-        // Compilation thread can only retrieve existing entries.
-        ASSERT(!isCompilationThread());
-        entry.iterator->value = JITSlowPathCall::generateThunk(vm, slowPathFunction);
-    }
-    return entry.iterator->value;
+    return ctiStubImpl(key, [&] {
+        return JITSlowPathCall::generateThunk(vm, slowPathFunction);
+    });
 }
 
 #endif // ENABLE(EXTRA_CTI_THUNKS)
@@ -256,100 +268,6 @@ NativeExecutable* JITThunks::hostFunctionStub(VM& vm, TaggedNativeFunction funct
 {
     return hostFunctionStub(vm, function, callHostFunctionAsConstructor, generator, intrinsic, nullptr, name);
 }
-
-#if ENABLE(EXTRA_CTI_THUNKS)
-
-void JITThunks::preinitializeExtraCTIThunks(VM& vm)
-{
-    if (!Options::useJIT())
-        return;
-
-    // These 3 should always be initialized first in the following order because
-    // the other thunk generators rely on these already being initialized.
-    ctiStub(vm, handleExceptionGenerator);
-    ctiStub(vm, handleExceptionWithCallFrameRollbackGenerator);
-    ctiStub(vm, popThunkStackPreservesAndHandleExceptionGenerator);
-
-#define INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(name) ctiSlowPathFunctionStub(vm, slow_path_##name)
-
-    // From the BaselineJIT DEFINE_SLOW_OP list:
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(in_by_val);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(less);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(lesseq);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(greater);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(greatereq);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(is_callable);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(is_constructor);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(typeof);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(typeof_is_object);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(typeof_is_function);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(strcat);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(push_with_scope);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_lexical_environment);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(get_by_val_with_this);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(put_by_id_with_this);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(put_by_val_with_this);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(resolve_scope_for_hoisting_func_decl_in_eval);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(define_data_property);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(define_accessor_property);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(unreachable);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(throw_static_error);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(new_array_with_spread);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(new_array_buffer);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(spread);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(get_enumerable_length);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(has_enumerable_property);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(get_property_enumerator);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_index_string);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_direct_arguments);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_scoped_arguments);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_cloned_arguments);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_arguments_butterfly);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_rest);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_promise);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(new_promise);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_generator);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_async_generator);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(new_generator);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(pow);
-
-    // From the BaselineJIT DEFINE_SLOWCASE_SLOW_OP list:
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(unsigned);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(inc);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(dec);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(bitnot);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(bitand);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(bitor);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(bitxor);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(lshift);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(rshift);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(urshift);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(div);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_this);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_promise);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_generator);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(create_async_generator);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_this);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_primitive);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_number);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_numeric);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_string);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_object);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(not);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(stricteq);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(nstricteq);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(get_direct_pname);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(get_prototype_of);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(has_enumerable_structure_property);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(has_own_structure_property);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(in_structure_property);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(resolve_scope);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(check_tdz);
-    INIT_BASELINE_SLOW_PATH_CALL_ROUTINE(to_property_key);
-#undef INIT_BASELINE_ROUTINE
-}
-
-#endif // ENABLE(EXTRA_CTI_THUNKS)
 
 } // namespace JSC
 

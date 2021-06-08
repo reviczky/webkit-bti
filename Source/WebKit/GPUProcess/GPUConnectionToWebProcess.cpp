@@ -41,6 +41,8 @@
 #include "Logging.h"
 #include "MediaOverridesForTesting.h"
 #include "RemoteAudioHardwareListenerProxy.h"
+#include "RemoteAudioMediaStreamTrackRendererInternalUnitManager.h"
+#include "RemoteAudioMediaStreamTrackRendererInternalUnitManagerMessages.h"
 #include "RemoteAudioMediaStreamTrackRendererManager.h"
 #include "RemoteGraphicsContextGLMessages.h"
 #include "RemoteMediaPlayerManagerProxy.h"
@@ -63,6 +65,7 @@
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
 #include "WebProcessMessages.h"
+#include <WebCore/Logging.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
 #include <WebCore/NowPlayingManager.h>
 #include <wtf/Language.h>
@@ -203,10 +206,14 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
     , m_sampleBufferDisplayLayerManager(RemoteSampleBufferDisplayLayerManager::create(*this))
 #endif
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
-    , m_routingArbitrator(LocalAudioSessionRoutingArbitrator::create())
+    , m_routingArbitrator(LocalAudioSessionRoutingArbitrator::create(*this))
 #endif
 {
     RELEASE_ASSERT(RunLoop::isMain());
+
+#if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
+    gpuProcess.audioSessionManager().session().setRoutingArbitrationClient(makeWeakPtr(m_routingArbitrator.get()));
+#endif
 
     if (!parameters.overrideLanguages.isEmpty())
         overrideUserPreferredLanguages(parameters.overrideLanguages);
@@ -277,6 +284,27 @@ void GPUConnectionToWebProcess::destroyVisibilityPropagationContextForPage(WebPa
     m_visibilityPropagationContexts.remove(key);
 }
 #endif
+
+void GPUConnectionToWebProcess::configureLoggingChannel(const String& channelName, WTFLogChannelState state, WTFLogLevel level)
+{
+#if !RELEASE_LOG_DISABLED
+    if  (auto* channel = WebCore::getLogChannel(channelName)) {
+        channel->state = state;
+        channel->level = level;
+    }
+
+    auto* channel = getLogChannel(channelName);
+    if  (!channel)
+        return;
+
+    channel->state = state;
+    channel->level = level;
+#else
+    UNUSED_PARAM(channelName);
+    UNUSED_PARAM(state);
+    UNUSED_PARAM(level);
+#endif
+}
 
 bool GPUConnectionToWebProcess::allowsExitUnderMemoryPressure() const
 {
@@ -380,6 +408,14 @@ UserMediaCaptureManagerProxy& GPUConnectionToWebProcess::userMediaCaptureManager
         m_userMediaCaptureManagerProxy = makeUnique<UserMediaCaptureManagerProxy>(makeUniqueRef<GPUProxyForCapture>(*this));
 
     return *m_userMediaCaptureManagerProxy;
+}
+
+RemoteAudioMediaStreamTrackRendererInternalUnitManager& GPUConnectionToWebProcess::audioMediaStreamTrackRendererInternalUnitManager()
+{
+    if (!m_audioMediaStreamTrackRendererInternalUnitManager)
+        m_audioMediaStreamTrackRendererInternalUnitManager = makeUnique<RemoteAudioMediaStreamTrackRendererInternalUnitManager>(*this);
+
+    return *m_audioMediaStreamTrackRendererInternalUnitManager;
 }
 #endif
 
@@ -602,6 +638,10 @@ bool GPUConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC
         userMediaCaptureManagerProxy().didReceiveMessageFromGPUProcess(connection, decoder);
         return true;
     }
+    if (decoder.messageReceiverName() == Messages::RemoteAudioMediaStreamTrackRendererInternalUnitManager::messageReceiverName()) {
+        audioMediaStreamTrackRendererInternalUnitManager().didReceiveMessage(connection, decoder);
+        return true;
+    }
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM) && HAVE(AVASSETWRITERDELEGATE)
     if (decoder.messageReceiverName() == Messages::RemoteMediaRecorderManager::messageReceiverName()) {
@@ -649,6 +689,16 @@ bool GPUConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     if (decoder.messageReceiverName() == Messages::RemoteLegacyCDMFactoryProxy::messageReceiverName()) {
         legacyCdmFactoryProxy().didReceiveMessageFromWebProcess(connection, decoder);
+        return true;
+    }
+
+    if (decoder.messageReceiverName() == Messages::RemoteLegacyCDMProxy::messageReceiverName()) {
+        legacyCdmFactoryProxy().didReceiveCDMMessage(connection, decoder);
+        return true;
+    }
+
+    if (decoder.messageReceiverName() == Messages::RemoteLegacyCDMSessionProxy::messageReceiverName()) {
+        legacyCdmFactoryProxy().didReceiveCDMSessionMessage(connection, decoder);
         return true;
     }
 #endif
@@ -724,6 +774,16 @@ bool GPUConnectionToWebProcess::dispatchSyncMessage(IPC::Connection& connection,
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     if (decoder.messageReceiverName() == Messages::RemoteLegacyCDMFactoryProxy::messageReceiverName()) {
         legacyCdmFactoryProxy().didReceiveSyncMessageFromWebProcess(connection, decoder, replyEncoder);
+        return true;
+    }
+
+    if (decoder.messageReceiverName() == Messages::RemoteLegacyCDMProxy::messageReceiverName()) {
+        legacyCdmFactoryProxy().didReceiveSyncCDMMessage(connection, decoder, replyEncoder);
+        return true;
+    }
+
+    if (decoder.messageReceiverName() == Messages::RemoteLegacyCDMSessionProxy::messageReceiverName()) {
+        legacyCdmFactoryProxy().didReceiveSyncCDMSessionMessage(connection, decoder, replyEncoder);
         return true;
     }
 #endif

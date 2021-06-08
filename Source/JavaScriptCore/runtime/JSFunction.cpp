@@ -247,6 +247,22 @@ const String JSFunction::calculatedDisplayName(VM& vm)
     return jsExecutable()->ecmaName().string();
 }
 
+JSString* JSFunction::toString(JSGlobalObject* globalObject)
+{
+    VM& vm = getVM(globalObject);
+    if (inherits<JSBoundFunction>(vm)) {
+        JSBoundFunction* function = jsCast<JSBoundFunction*>(this);
+        auto scope = DECLARE_THROW_SCOPE(vm);
+        JSValue string = jsMakeNontrivialString(globalObject, "function ", function->nameString(), "() {\n    [native code]\n}");
+        RETURN_IF_EXCEPTION(scope, nullptr);
+        return asString(string);
+    }
+
+    if (isHostFunction())
+        return static_cast<NativeExecutable*>(executable())->toString(globalObject);
+    return jsExecutable()->toString(globalObject);
+}
+
 const SourceCode* JSFunction::sourceCode() const
 {
     if (isHostOrBuiltinFunction())
@@ -403,7 +419,15 @@ JSC_DEFINE_CUSTOM_GETTER(callerGetter, (JSGlobalObject* globalObject, EncodedJSV
     if (function->isHostOrBuiltinFunction())
         return JSValue::encode(jsNull());
 
-    if (!function->jsExecutable()->hasCallerAndArgumentsProperties())
+    if (function->jsExecutable()->isInStrictContext())
+        return JSValue::encode(jsNull());
+
+    // Prevent bodies (private implementations) of generator / async functions from being exposed.
+    // They are called by @generatorResume() & friends, expecting certain arguments, and crash otherwise.
+    // Also, hide generator / async function wrappers for consistency and because it's on standards track:
+    // https://github.com/claudepache/es-legacy-function-reflection/blob/master/spec.md#get-functionprototypecaller (step 14)
+    SourceParseMode parseMode = function->jsExecutable()->parseMode();
+    if (isGeneratorParseMode(parseMode) || isAsyncFunctionParseMode(parseMode))
         return JSValue::encode(jsNull());
 
     return JSValue::encode(caller);

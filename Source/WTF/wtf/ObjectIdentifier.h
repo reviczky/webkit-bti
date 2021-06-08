@@ -63,6 +63,7 @@ public:
 
     ObjectIdentifier(HashTableDeletedValueType) : m_identifier(hashTableDeletedValue()) { }
     bool isHashTableDeletedValue() const { return m_identifier == hashTableDeletedValue(); }
+    bool isValid() const { return isValidIdentifier(m_identifier); }
 
     template<typename Encoder> void encode(Encoder& encoder) const
     {
@@ -70,12 +71,12 @@ public:
         encoder << m_identifier;
     }
 
-    template<typename Decoder> static Optional<ObjectIdentifier> decode(Decoder& decoder)
+    template<typename Decoder> static std::optional<ObjectIdentifier> decode(Decoder& decoder)
     {
-        Optional<uint64_t> identifier;
+        std::optional<uint64_t> identifier;
         decoder >> identifier;
         if (!identifier || !isValidIdentifier(*identifier))
-            return WTF::nullopt;
+            return std::nullopt;
         return ObjectIdentifier { *identifier };
     }
 

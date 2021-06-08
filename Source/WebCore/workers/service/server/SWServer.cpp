@@ -91,14 +91,14 @@ SWServerWorker* SWServer::workerByID(ServiceWorkerIdentifier identifier) const
     return worker;
 }
 
-Optional<ServiceWorkerClientData> SWServer::serviceWorkerClientWithOriginByID(const ClientOrigin& clientOrigin, const ServiceWorkerClientIdentifier& clientIdentifier) const
+std::optional<ServiceWorkerClientData> SWServer::serviceWorkerClientWithOriginByID(const ClientOrigin& clientOrigin, const ServiceWorkerClientIdentifier& clientIdentifier) const
 {
     auto iterator = m_clientIdentifiersPerOrigin.find(clientOrigin);
     if (iterator == m_clientIdentifiersPerOrigin.end())
-        return WTF::nullopt;
+        return std::nullopt;
 
     if (!iterator->value.identifiers.contains(clientIdentifier))
-        return WTF::nullopt;
+        return std::nullopt;
 
     auto clientIterator = m_clientsById.find(clientIdentifier);
     ASSERT(clientIterator != m_clientsById.end());
@@ -499,7 +499,7 @@ void SWServer::scriptFetchFinished(const ServiceWorkerFetchResult& result)
     jobQueue->scriptFetchFinished(result);
 }
 
-void SWServer::scriptContextFailedToStart(const Optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, SWServerWorker& worker, const String& message)
+void SWServer::scriptContextFailedToStart(const std::optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, SWServerWorker& worker, const String& message)
 {
     if (!jobDataIdentifier)
         return;
@@ -515,7 +515,7 @@ void SWServer::scriptContextFailedToStart(const Optional<ServiceWorkerJobDataIde
     jobQueue->scriptContextFailedToStart(*jobDataIdentifier, worker.identifier(), message);
 }
 
-void SWServer::scriptContextStarted(const Optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, SWServerWorker& worker)
+void SWServer::scriptContextStarted(const std::optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, SWServerWorker& worker)
 {
     if (!jobDataIdentifier)
         return;
@@ -537,7 +537,7 @@ void SWServer::terminatePreinstallationWorker(SWServerWorker& worker)
         registration->setPreInstallationWorker(nullptr);
 }
 
-void SWServer::didFinishInstall(const Optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, SWServerWorker& worker, bool wasSuccessful)
+void SWServer::didFinishInstall(const std::optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, SWServerWorker& worker, bool wasSuccessful)
 {
     RELEASE_LOG(ServiceWorker, "%p - SWServer::didFinishInstall: Finished install for service worker %llu, success is %d", this, worker.identifier().toUInt64(), wasSuccessful);
 
@@ -596,7 +596,7 @@ void SWServer::forEachClientForOrigin(const ClientOrigin& origin, const WTF::Fun
     }
 }
 
-Optional<ExceptionData> SWServer::claim(SWServerWorker& worker)
+std::optional<ExceptionData> SWServer::claim(SWServerWorker& worker)
 {
     auto* registration = worker.registration();
     if (!registration || &worker != registration->activeWorker())
@@ -648,7 +648,24 @@ void SWServer::removeClientServiceWorkerRegistration(Connection& connection, Ser
 
 void SWServer::updateWorker(const ServiceWorkerJobDataIdentifier& jobDataIdentifier, SWServerRegistration& registration, const URL& url, const ScriptBuffer& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, const String& referrerPolicy, WorkerType type, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
 {
-    tryInstallContextData(ServiceWorkerContextData { jobDataIdentifier, registration.data(), ServiceWorkerIdentifier::generate(), script, certificateInfo, contentSecurityPolicy, referrerPolicy, url, type, false, WTFMove(scriptResourceMap) });
+    tryInstallContextData(ServiceWorkerContextData { jobDataIdentifier, registration.data(), ServiceWorkerIdentifier::generate(), script, certificateInfo, contentSecurityPolicy, referrerPolicy, url, type, false, clientIsAppBoundForRegistrableDomain(RegistrableDomain(url)), WTFMove(scriptResourceMap) });
+}
+
+LastNavigationWasAppBound SWServer::clientIsAppBoundForRegistrableDomain(const RegistrableDomain& domain)
+{
+    auto clientsByRegistrableDomainIterator = m_clientsByRegistrableDomain.find(domain);
+    if (clientsByRegistrableDomainIterator == m_clientsByRegistrableDomain.end())
+        return LastNavigationWasAppBound::No;
+
+    auto& clientsForRegistrableDomain = clientsByRegistrableDomainIterator->value;
+    for (auto& client : clientsForRegistrableDomain) {
+        auto data = m_clientsById.find(client);
+        ASSERT(data != m_clientsById.end());
+        if (data->value.lastNavigationWasAppBound == LastNavigationWasAppBound::Yes)
+            return LastNavigationWasAppBound::Yes;
+    }
+
+    return LastNavigationWasAppBound::No;
 }
 
 void SWServer::tryInstallContextData(ServiceWorkerContextData&& data)
@@ -869,9 +886,23 @@ SWServerRegistration* SWServer::registrationFromServiceWorkerIdentifier(ServiceW
     return iterator->value->registration();
 }
 
-void SWServer::registerServiceWorkerClient(ClientOrigin&& clientOrigin, ServiceWorkerClientData&& data, const Optional<ServiceWorkerRegistrationIdentifier>& controllingServiceWorkerRegistrationIdentifier, String&& userAgent)
+void SWServer::updateAppBoundValueForWorkers(const ClientOrigin& clientOrigin, LastNavigationWasAppBound lastNavigationWasAppBound)
+{
+    for (auto& worker : m_runningOrTerminatingWorkers.values()) {
+        if (worker->origin().clientRegistrableDomain() == clientOrigin.clientRegistrableDomain())
+            worker->updateAppBoundValue(lastNavigationWasAppBound);
+    }
+}
+
+void SWServer::registerServiceWorkerClient(ClientOrigin&& clientOrigin, ServiceWorkerClientData&& data, const std::optional<ServiceWorkerRegistrationIdentifier>& controllingServiceWorkerRegistrationIdentifier, String&& userAgent)
 {
     auto clientIdentifier = data.identifier;
+
+    // Update the app-bound value if the new client is app-bound and the current clients for the origin are not marked app-bound.
+    if (data.lastNavigationWasAppBound == LastNavigationWasAppBound::Yes) {
+        if (clientIsAppBoundForRegistrableDomain(clientOrigin.clientRegistrableDomain()) == LastNavigationWasAppBound::No)
+            updateAppBoundValueForWorkers(clientOrigin, data.lastNavigationWasAppBound);
+    }
 
     ASSERT(!m_clientsById.contains(clientIdentifier));
     m_clientsById.add(clientIdentifier, WTFMove(data));
@@ -908,6 +939,7 @@ void SWServer::registerServiceWorkerClient(ClientOrigin&& clientOrigin, ServiceW
 void SWServer::unregisterServiceWorkerClient(const ClientOrigin& clientOrigin, ServiceWorkerClientIdentifier clientIdentifier)
 {
     auto clientRegistrableDomain = clientOrigin.clientRegistrableDomain();
+    auto appBoundValueBefore = clientIsAppBoundForRegistrableDomain(clientOrigin.clientRegistrableDomain());
 
     bool wasRemoved = m_clientsById.remove(clientIdentifier);
     ASSERT_UNUSED(wasRemoved, wasRemoved);
@@ -949,6 +981,12 @@ void SWServer::unregisterServiceWorkerClient(const ClientOrigin& clientOrigin, S
     clientsForRegistrableDomain.remove(clientIdentifier);
     if (clientsForRegistrableDomain.isEmpty())
         m_clientsByRegistrableDomain.remove(clientsByRegistrableDomainIterator);
+
+    // If the app-bound value changed after this client was removed, we know it was the only app-bound
+    // client for its origin, and we should update all workers to reflect this.
+    auto appBoundValueAfter = clientIsAppBoundForRegistrableDomain(clientOrigin.clientRegistrableDomain());
+    if (appBoundValueBefore != appBoundValueAfter)
+        updateAppBoundValueForWorkers(clientOrigin, appBoundValueAfter);
 
     auto registrationIterator = m_clientToControllingRegistration.find(clientIdentifier);
     if (registrationIterator == m_clientToControllingRegistration.end())

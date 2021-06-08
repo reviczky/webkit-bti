@@ -33,7 +33,6 @@
 #include "MarginTypes.h"
 #include <wtf/HashFunctions.h>
 #include <wtf/HashTraits.h>
-#include <wtf/Optional.h>
 
 namespace WebCore {
 
@@ -157,26 +156,14 @@ struct VerticalGeometry {
     ContentHeightAndMargin contentHeightAndMargin;
 };
 
-struct HorizontalConstraints {
-    LayoutUnit logicalRight() const { return logicalLeft + logicalWidth; }
-
-    LayoutUnit logicalLeft;
-    LayoutUnit logicalWidth;
-};
-
-struct VerticalConstraints {
-    LayoutUnit logicalTop;
-    Optional<LayoutUnit> logicalHeight;
-};
-
 struct OverriddenHorizontalValues {
-    Optional<LayoutUnit> width;
-    Optional<UsedHorizontalMargin> margin;
+    std::optional<LayoutUnit> width;
+    std::optional<UsedHorizontalMargin> margin;
 };
 
 struct OverriddenVerticalValues {
     // Consider collapsing it.
-    Optional<LayoutUnit> height;
+    std::optional<LayoutUnit> height;
 };
 
 inline LayoutUnit toLayoutUnit(InlineLayoutUnit value)

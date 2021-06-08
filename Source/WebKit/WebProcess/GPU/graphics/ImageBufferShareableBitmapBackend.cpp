@@ -45,11 +45,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(ImageBufferShareableBitmapBackend);
 
 ShareableBitmap::Configuration ImageBufferShareableBitmapBackend::configuration(const Parameters& parameters)
 {
-    ShareableBitmap::Configuration configuration;
-#if PLATFORM(COCOA)
-    configuration.colorSpace = { cachedCGColorSpace(parameters.colorSpace) };
-#endif
-    return configuration;
+    return { parameters.colorSpace };
 }
 
 IntSize ImageBufferShareableBitmapBackend::calculateSafeBackendSize(const Parameters& parameters)
@@ -58,11 +54,11 @@ IntSize ImageBufferShareableBitmapBackend::calculateSafeBackendSize(const Parame
     if (backendSize.isEmpty())
         return { };
 
-    Checked<unsigned, RecordOverflow> bytesPerRow = ShareableBitmap::calculateBytesPerRow(backendSize, configuration(parameters));
+    CheckedUint32 bytesPerRow = ShareableBitmap::calculateBytesPerRow(backendSize, configuration(parameters));
     if (bytesPerRow.hasOverflowed())
         return { };
 
-    CheckedSize numBytes = Checked<unsigned, RecordOverflow>(backendSize.height()) * bytesPerRow;
+    CheckedSize numBytes = CheckedUint32(backendSize.height()) * bytesPerRow;
     if (numBytes.hasOverflowed())
         return { };
 
@@ -72,8 +68,7 @@ IntSize ImageBufferShareableBitmapBackend::calculateSafeBackendSize(const Parame
 unsigned ImageBufferShareableBitmapBackend::calculateBytesPerRow(const Parameters& parameters, const IntSize& backendSize)
 {
     ASSERT(!backendSize.isEmpty());
-    Checked<unsigned, RecordOverflow> bytesPerRow = ShareableBitmap::calculateBytesPerRow(backendSize, configuration(parameters));
-    return bytesPerRow.unsafeGet();
+    return ShareableBitmap::calculateBytesPerRow(backendSize, configuration(parameters));
 }
 
 size_t ImageBufferShareableBitmapBackend::calculateMemoryCost(const Parameters& parameters)
@@ -158,19 +153,14 @@ RefPtr<Image> ImageBufferShareableBitmapBackend::copyImage(BackingStoreCopy, Pre
     return m_bitmap->createImage();
 }
 
-Vector<uint8_t> ImageBufferShareableBitmapBackend::toBGRAData() const
-{
-    return ImageBufferBackend::toBGRAData(m_bitmap->data());
-}
-
-Optional<PixelBuffer> ImageBufferShareableBitmapBackend::getPixelBuffer(AlphaPremultiplication outputFormat, const IntRect& srcRect) const
+std::optional<PixelBuffer> ImageBufferShareableBitmapBackend::getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& srcRect) const
 {
     return ImageBufferBackend::getPixelBuffer(outputFormat, srcRect, m_bitmap->data());
 }
 
-void ImageBufferShareableBitmapBackend::putPixelBuffer(AlphaPremultiplication inputFormat, const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat)
+void ImageBufferShareableBitmapBackend::putPixelBuffer(const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat)
 {
-    ImageBufferBackend::putPixelBuffer(inputFormat, pixelBuffer, srcRect, destPoint, destFormat, m_bitmap->data());
+    ImageBufferBackend::putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat, m_bitmap->data());
 }
 
 } // namespace WebKit

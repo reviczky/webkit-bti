@@ -26,14 +26,11 @@
 #pragma once
 
 #include "SharedMemory.h"
+#include <WebCore/DestinationColorSpace.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/PlatformImage.h>
 #include <wtf/RefPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
-
-#if USE(CG)
-#include "ColorSpaceData.h"
-#endif
 
 #if USE(DIRECT2D)
 interface ID2D1Bitmap;
@@ -55,10 +52,8 @@ namespace WebKit {
 class ShareableBitmap : public ThreadSafeRefCounted<ShareableBitmap> {
 public:
     struct Configuration {
+        std::optional<WebCore::DestinationColorSpace> colorSpace;
         bool isOpaque { false };
-#if PLATFORM(COCOA)
-        ColorSpaceData colorSpace;
-#endif
 #if USE(DIRECT2D)
         mutable HANDLE sharedResourceHandle { nullptr };
 #endif
@@ -89,9 +84,9 @@ public:
         Configuration m_configuration;
     };
 
-    static Checked<unsigned, RecordOverflow> numBytesForSize(WebCore::IntSize, const ShareableBitmap::Configuration&);
-    static Checked<unsigned, RecordOverflow> calculateBytesPerRow(WebCore::IntSize, const Configuration&);
-    static Checked<unsigned, RecordOverflow> calculateBytesPerPixel(const Configuration&);
+    static CheckedUint32 numBytesForSize(WebCore::IntSize, const ShareableBitmap::Configuration&);
+    static CheckedUint32 calculateBytesPerRow(WebCore::IntSize, const Configuration&);
+    static CheckedUint32 calculateBytesPerPixel(const Configuration&);
 
     // Create a shareable bitmap that uses malloced memory.
     static RefPtr<ShareableBitmap> create(const WebCore::IntSize&, Configuration);
@@ -167,10 +162,10 @@ private:
 
 public:
     void* data() const;
-    size_t bytesPerRow() const { return calculateBytesPerRow(m_size, m_configuration).unsafeGet(); }
+    size_t bytesPerRow() const { return calculateBytesPerRow(m_size, m_configuration); }
     
 private:
-    size_t sizeInBytes() const { return numBytesForSize(m_size, m_configuration).unsafeGet(); }
+    size_t sizeInBytes() const { return numBytesForSize(m_size, m_configuration); }
 
     WebCore::IntSize m_size;
     Configuration m_configuration;

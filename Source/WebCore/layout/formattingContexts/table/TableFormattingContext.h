@@ -28,6 +28,8 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "FormattingContext.h"
+#include "TableFormattingGeometry.h"
+#include "TableFormattingQuirks.h"
 #include "TableFormattingState.h"
 #include "TableGrid.h"
 #include <wtf/IsoMalloc.h>
@@ -37,6 +39,7 @@ namespace WebCore {
 namespace Layout {
 
 class InvalidationState;
+
 // This class implements the layout logic for table formatting contexts.
 // https://www.w3.org/TR/CSS22/tables.html
 class TableFormattingContext final : public FormattingContext {
@@ -46,7 +49,9 @@ public:
     void layoutInFlowContent(InvalidationState&, const ConstraintsForInFlowContent&) override;
     LayoutUnit usedContentHeight() const override;
 
-    static UniqueRef<TableGrid> ensureTableGrid(const ContainerBox& tableBox);
+    const TableFormattingGeometry& formattingGeometry() const final { return m_tableFormattingGeometry; }
+    const TableFormattingQuirks& formattingQuirks() const final { return m_tableFormattingQuirks; }
+    const TableFormattingState& formattingState() const { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
 
 private:
     class TableLayout {
@@ -55,7 +60,7 @@ private:
 
         using DistributedSpaces = Vector<LayoutUnit>;
         DistributedSpaces distributedHorizontalSpace(LayoutUnit availableHorizontalSpace);
-        DistributedSpaces distributedVerticalSpace(Optional<LayoutUnit> availableVerticalSpace);
+        DistributedSpaces distributedVerticalSpace(std::optional<LayoutUnit> availableVerticalSpace);
 
     private:
         const TableFormattingContext& formattingContext() const { return m_formattingContext; }
@@ -64,59 +69,21 @@ private:
         const TableGrid& m_grid;
     };
 
-    class Geometry : public FormattingContext::Geometry {
-    public:
-        LayoutUnit cellHeigh(const ContainerBox&) const;
-        Edges computedCellBorder(const TableGrid::Cell&) const;
-        Optional<LayoutUnit> computedColumnWidth(const ContainerBox& columnBox);
-        FormattingContext::IntrinsicWidthConstraints intrinsicWidthConstraintsForCell(const TableGrid::Cell&);
-        InlineLayoutUnit usedBaselineForCell(const ContainerBox& cellBox);
-
-    private:
-        friend class TableFormattingContext;
-        Geometry(const TableFormattingContext&, const TableGrid&);
-
-        const TableFormattingContext& formattingContext() const { return downcast<TableFormattingContext>(FormattingContext::Geometry::formattingContext()); }
-        const TableGrid& m_grid;
-    };
-    TableFormattingContext::Geometry geometry() const { return Geometry(*this, formattingState().tableGrid()); }
-
-    class Quirks : public FormattingContext::Quirks {
-    public:
-        Quirks(const TableFormattingContext&);
-
-        bool shouldIgnoreChildContentVerticalMargin(const ContainerBox&) const;
-
-        const TableFormattingContext& formattingContext() const { return downcast<TableFormattingContext>(FormattingContext::Quirks::formattingContext()); }
-        TableFormattingContext::Geometry geometry() const { return formattingContext().geometry(); }
-    };
-    TableFormattingContext::Quirks quirks() const { return Quirks(*this); }
-
     TableFormattingContext::TableLayout tableLayout() const { return TableLayout(*this, formattingState().tableGrid()); }
 
     IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
-    void layoutCell(const TableGrid::Cell&, LayoutUnit availableHorizontalSpace, Optional<LayoutUnit> usedCellHeight = WTF::nullopt);
-    void setUsedGeometryForCells(LayoutUnit availableHorizontalSpace);
+    void setUsedGeometryForCells(LayoutUnit availableHorizontalSpace, std::optional<LayoutUnit> availableVerticalSpace);
     void setUsedGeometryForRows(LayoutUnit availableHorizontalSpace);
     void setUsedGeometryForSections(const ConstraintsForInFlowContent&);
 
     IntrinsicWidthConstraints computedPreferredWidthForColumns();
-    void computeAndDistributeExtraSpace(LayoutUnit availableHorizontalSpace, Optional<LayoutUnit> availableVerticalSpace);
+    void computeAndDistributeExtraSpace(LayoutUnit availableHorizontalSpace, std::optional<LayoutUnit> availableVerticalSpace);
 
-    const TableFormattingState& formattingState() const { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
     TableFormattingState& formattingState() { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
+
+    const TableFormattingGeometry m_tableFormattingGeometry;
+    const TableFormattingQuirks m_tableFormattingQuirks;
 };
-
-inline TableFormattingContext::Geometry::Geometry(const TableFormattingContext& tableFormattingContext, const TableGrid& grid)
-    : FormattingContext::Geometry(tableFormattingContext)
-    , m_grid(grid)
-{
-}
-
-inline TableFormattingContext::Quirks::Quirks(const TableFormattingContext& tableFormattingContext)
-    : FormattingContext::Quirks(tableFormattingContext)
-{
-}
 
 }
 }

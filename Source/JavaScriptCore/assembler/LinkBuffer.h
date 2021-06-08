@@ -40,7 +40,6 @@
 #include <wtf/DataLog.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/Noncopyable.h>
-#include <wtf/Optional.h>
 
 namespace JSC {
 
@@ -89,12 +88,25 @@ public:
     v(BaselineJIT) \
     v(DFG) \
     v(FTL) \
+    v(DFGOSREntry) \
+    v(DFGOSRExit) \
+    v(FTLOSRExit) \
     v(InlineCache) \
+    v(JumpIsland) \
     v(Thunk) \
+    v(LLIntThunk) \
+    v(DFGThunk) \
+    v(FTLThunk) \
+    v(BoundFunctionThunk) \
+    v(SpecializedThunk) \
+    v(VirtualThunk) \
+    v(WasmThunk) \
+    v(ExtraCTIThunk) \
     v(Wasm) \
     v(YarrJIT) \
     v(CSSJIT) \
-    v(Uncategorized)
+    v(Uncategorized) \
+    v(Total) \
 
 #define DECLARE_LINKBUFFER_PROFILE(name) name,
     enum class Profile {
@@ -105,6 +117,7 @@ public:
 #define COUNT_LINKBUFFER_PROFILE(name) + 1
     static constexpr unsigned numberOfProfiles = FOR_EACH_LINKBUFFER_PROFILE(COUNT_LINKBUFFER_PROFILE);
 #undef COUNT_LINKBUFFER_PROFILE
+    static constexpr unsigned numberOfProfilesExcludingTotal = numberOfProfiles - 1;
 
     LinkBuffer(MacroAssembler& macroAssembler, void* ownerUID, Profile profile = Profile::Uncategorized, JITCompilationEffort effort = JITCompilationMustSucceed)
         : m_size(0)
@@ -139,6 +152,8 @@ public:
     ~LinkBuffer()
     {
     }
+
+    void runMainThreadFinalizationTasks();
     
     bool didFailToAllocate() const
     {
@@ -323,7 +338,14 @@ public:
     bool wasAlreadyDisassembled() const { return m_alreadyDisassembled; }
     void didAlreadyDisassemble() { m_alreadyDisassembled = true; }
 
-    JS_EXPORT_PRIVATE static void dumpProfileStatistics(Optional<PrintStream*> = WTF::nullopt);
+    JS_EXPORT_PRIVATE static void clearProfileStatistics();
+    JS_EXPORT_PRIVATE static void dumpProfileStatistics(std::optional<PrintStream*> = std::nullopt);
+
+    template<typename Functor>
+    void addMainThreadFinalizationTask(const Functor& functor)
+    {
+        m_mainThreadFinalizationTasks.append(createSharedTask<void()>(functor));
+    }
 
 private:
     JS_EXPORT_PRIVATE CodeRef<LinkBufferPtrTag> finalizeCodeWithoutDisassemblyImpl();
@@ -403,8 +425,11 @@ private:
     Profile m_profile { Profile::Uncategorized };
     MacroAssemblerCodePtr<LinkBufferPtrTag> m_code;
     Vector<RefPtr<SharedTask<void(LinkBuffer&)>>> m_linkTasks;
+    Vector<RefPtr<SharedTask<void(LinkBuffer&)>>> m_lateLinkTasks;
+    Vector<RefPtr<SharedTask<void()>>> m_mainThreadFinalizationTasks;
 
     static size_t s_profileCummulativeLinkedSizes[numberOfProfiles];
+    static size_t s_profileCummulativeLinkedCounts[numberOfProfiles];
 };
 
 #if OS(LINUX)

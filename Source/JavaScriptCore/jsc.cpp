@@ -41,6 +41,7 @@
 #include "Interpreter.h"
 #include "JIT.h"
 #include "JITOperationList.h"
+#include "JITSizeStatistics.h"
 #include "JSArray.h"
 #include "JSArrayBuffer.h"
 #include "JSBigInt.h"
@@ -57,6 +58,7 @@
 #include "JSWebAssemblyInstance.h"
 #include "JSWebAssemblyMemory.h"
 #include "LLIntThunks.h"
+#include "LinkBuffer.h"
 #include "ObjectConstructor.h"
 #include "ParserError.h"
 #include "ProfilerDatabase.h"
@@ -1049,12 +1051,12 @@ public:
             FileSystem::unlockAndCloseFile(fd);
         });
 
-        long long fileSize;
-        if (!FileSystem::getFileSize(fd, fileSize))
+        auto fileSize = FileSystem::fileSize(fd);
+        if (!fileSize)
             return;
 
         size_t cacheFileSize;
-        if (!WTF::convertSafely(fileSize, cacheFileSize) || cacheFileSize != m_cachedBytecode->size()) {
+        if (!WTF::convertSafely(*fileSize, cacheFileSize) || cacheFileSize != m_cachedBytecode->size()) {
             // The bytecode cache has already been updated
             return;
         }
@@ -1065,7 +1067,7 @@ public:
         m_cachedBytecode->commitUpdates([&] (off_t offset, const void* data, size_t size) {
             long long result = FileSystem::seekFile(fd, offset, FileSystem::FileSeekOrigin::Beginning);
             ASSERT_UNUSED(result, result != -1);
-            size_t bytesWritten = static_cast<size_t>(FileSystem::writeToFile(fd, static_cast<const char*>(data), size));
+            size_t bytesWritten = static_cast<size_t>(FileSystem::writeToFile(fd, data, size));
             ASSERT_UNUSED(bytesWritten, bytesWritten == size);
         });
     }
@@ -1365,7 +1367,7 @@ JSC_DEFINE_HOST_FUNCTION(functionJSCStack, (JSGlobalObject* globalObject, CallFr
 {
     VM& vm = globalObject->vm();
     StringBuilder trace;
-    trace.appendLiteral("--> Stack trace:\n");
+    trace.append("--> Stack trace:\n");
 
     FunctionJSCStackFunctor functor(trace);
     callFrame->iterate(vm, functor);
@@ -1518,6 +1520,8 @@ JSC_DEFINE_HOST_FUNCTION(functionRun, (JSGlobalObject* globalObject, CallFrame* 
     stopWatch.stop();
 
     if (exception) {
+        if (vm.isTerminationException(exception.get()))
+            vm.setExecutionForbidden();
         throwException(realm, scope, exception);
         return JSValue::encode(jsUndefined());
     }
@@ -1547,6 +1551,8 @@ JSC_DEFINE_HOST_FUNCTION(functionRunString, (JSGlobalObject* globalObject, CallF
     evaluate(realm, jscSource(source, callFrame->callerSourceOrigin(vm)), JSValue(), exception);
 
     if (exception) {
+        if (vm.isTerminationException(exception.get()))
+            vm.setExecutionForbidden();
         scope.throwException(realm, exception);
         return JSValue::encode(jsUndefined());
     }
@@ -1578,8 +1584,11 @@ JSC_DEFINE_HOST_FUNCTION(functionLoad, (JSGlobalObject* globalObject, CallFrame*
 
     NakedPtr<Exception> evaluationException;
     JSValue result = evaluate(globalObject, jscSource(script, SourceOrigin { path }, fileName), JSValue(), evaluationException);
-    if (evaluationException)
+    if (evaluationException) {
+        if (vm.isTerminationException(evaluationException.get()))
+            vm.setExecutionForbidden();
         throwException(globalObject, scope, evaluationException);
+    }
     return JSValue::encode(result);
 }
 
@@ -1593,8 +1602,11 @@ JSC_DEFINE_HOST_FUNCTION(functionLoadString, (JSGlobalObject* globalObject, Call
 
     NakedPtr<Exception> evaluationException;
     JSValue result = evaluate(globalObject, jscSource(sourceCode, callFrame->callerSourceOrigin(vm)), JSValue(), evaluationException);
-    if (evaluationException)
+    if (evaluationException) {
+        if (vm.isTerminationException(evaluationException.get()))
+            vm.setExecutionForbidden();
         throwException(globalObject, scope, evaluationException);
+    }
     return JSValue::encode(result);
 }
 
@@ -1800,7 +1812,7 @@ Message::~Message()
 Worker::Worker(Workers& workers)
     : m_workers(workers)
 {
-    auto locker = holdLock(m_workers.m_lock);
+    Locker locker { m_workers.m_lock };
     m_workers.m_workers.append(this);
     
     *currentWorker() = this;
@@ -1808,7 +1820,7 @@ Worker::Worker(Workers& workers)
 
 Worker::~Worker()
 {
-    auto locker = holdLock(m_workers.m_lock);
+    Locker locker { m_workers.m_lock };
     RELEASE_ASSERT(isOnList());
     remove();
 }
@@ -1820,7 +1832,7 @@ void Worker::enqueue(const AbstractLocker&, RefPtr<Message> message)
 
 RefPtr<Message> Worker::dequeue()
 {
-    auto locker = holdLock(m_workers.m_lock);
+    Locker locker { m_workers.m_lock };
     while (m_messages.isEmpty())
         m_workers.m_condition.wait(m_workers.m_lock);
     return m_messages.takeFirst();
@@ -1855,7 +1867,7 @@ Workers::~Workers()
 template<typename Func>
 void Workers::broadcast(const Func& func)
 {
-    auto locker = holdLock(m_lock);
+    Locker locker { m_lock };
     for (Worker* worker = m_workers.begin(); worker != m_workers.end(); worker = worker->next()) {
         if (worker != &Worker::current())
             func(locker, *worker);
@@ -1865,14 +1877,14 @@ void Workers::broadcast(const Func& func)
 
 void Workers::report(const String& string)
 {
-    auto locker = holdLock(m_lock);
+    Locker locker { m_lock };
     m_reports.append(string.isolatedCopy());
     m_condition.notifyAll();
 }
 
 String Workers::tryGetReport()
 {
-    auto locker = holdLock(m_lock);
+    Locker locker { m_lock };
     if (m_reports.isEmpty())
         return String();
     return m_reports.takeFirst();
@@ -1880,7 +1892,7 @@ String Workers::tryGetReport()
 
 String Workers::getReport()
 {
-    auto locker = holdLock(m_lock);
+    Locker locker { m_lock };
     while (m_reports.isEmpty())
         m_condition.wait(m_lock);
     return m_reports.takeFirst();
@@ -1923,8 +1935,11 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarEvalScript, (JSGlobalObject* globalObject
 
     NakedPtr<Exception> evaluationException;
     JSValue result = evaluate(realm, jscSource(sourceCode, callFrame->callerSourceOrigin(vm)), JSValue(), evaluationException);
-    if (evaluationException)
+    if (evaluationException) {
+        if (vm.isTerminationException(evaluationException.get()))
+            vm.setExecutionForbidden();
         throwException(globalObject, scope, evaluationException);
+    }
     return JSValue::encode(result);
 }
 
@@ -1981,7 +1996,7 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarAgentStart, (JSGlobalObject* globalObject
                 [&] (VM&, GlobalObject* globalObject, bool& success) {
                     // Notify the thread that started us that we have registered a worker.
                     {
-                        auto locker = holdLock(didStartLock);
+                        Locker locker { didStartLock };
                         didStart = true;
                         didStartCondition.notifyOne();
                     }
@@ -1998,7 +2013,7 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarAgentStart, (JSGlobalObject* globalObject
         })->detach();
     
     {
-        auto locker = holdLock(didStartLock);
+        Locker locker { didStartLock };
         while (!didStart)
             didStartCondition.wait(didStartLock);
     }
@@ -2388,7 +2403,7 @@ JSC_DEFINE_HOST_FUNCTION(functionFinalizationRegistryLiveCount, (JSGlobalObject*
     if (!finalizationRegistry)
         return throwVMTypeError(globalObject, scope, "first argument is not a finalizationRegistry"_s);
 
-    auto locker = holdLock(finalizationRegistry->cellLock());
+    Locker locker { finalizationRegistry->cellLock() };
     return JSValue::encode(jsNumber(finalizationRegistry->liveCount(locker)));
 }
 
@@ -2401,7 +2416,7 @@ JSC_DEFINE_HOST_FUNCTION(functionFinalizationRegistryDeadCount, (JSGlobalObject*
     if (!finalizationRegistry)
         return throwVMTypeError(globalObject, scope, "first argument is not a finalizationRegistry"_s);
 
-    auto locker = holdLock(finalizationRegistry->cellLock());
+    Locker locker { finalizationRegistry->cellLock() };
     return JSValue::encode(jsNumber(finalizationRegistry->deadCount(locker)));
 }
 
@@ -2960,9 +2975,12 @@ static void checkException(GlobalObject* globalObject, bool isLastFile, bool has
         return valueCell == terminationError;
     };
 
-    if (options.m_treatWatchdogExceptionAsSuccess && isTerminationException(value)) {
-        ASSERT(hasException);
-        return;
+    if (isTerminationException(value)) {
+        vm.setExecutionForbidden();
+        if (options.m_treatWatchdogExceptionAsSuccess) {
+            ASSERT(hasException);
+            return;
+        }
     }
 
     if (!options.m_uncaughtExceptionName || !isLastFile) {
@@ -3049,11 +3067,8 @@ static void runWithOptions(GlobalObject* globalObject, CommandLine& options, boo
             NakedPtr<Exception> evaluationException;
             JSValue returnValue = evaluate(globalObject, jscSource(scriptBuffer, sourceOrigin , fileName), JSValue(), evaluationException);
             scope.assertNoException();
-            if (evaluationException) {
-                if (vm.isTerminationException(evaluationException.get()))
-                    vm.setExecutionForbidden();
+            if (evaluationException)
                 returnValue = evaluationException->value();
-            }
             checkException(globalObject, isLastFile, evaluationException, returnValue, options, success);
         }
 
@@ -3124,6 +3139,9 @@ static void runInteractive(GlobalObject* globalObject)
         NakedPtr<Exception> evaluationException;
         JSValue returnValue = evaluate(globalObject, jscSource(line, sourceOrigin, sourceOrigin.string()), JSValue(), evaluationException);
 #endif
+        if (evaluationException && vm.isTerminationException(evaluationException.get()))
+            vm.setExecutionForbidden();
+
         Expected<CString, UTF8ConversionError> utf8;
         if (evaluationException) {
             fputs("Exception: ", stdout);
@@ -3511,6 +3529,11 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
         dataLog("Sampling profiler is not enabled on this platform\n");
 #endif
     }
+
+#if ENABLE(JIT)
+    if (vm.jitSizeStatistics)
+        dataLogLn(*vm.jitSizeStatistics);
+#endif
 
     vm.codeCache()->write(vm);
 

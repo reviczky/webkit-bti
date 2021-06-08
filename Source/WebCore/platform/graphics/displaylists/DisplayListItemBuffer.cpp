@@ -172,8 +172,17 @@ void ItemHandle::apply(GraphicsContext& context)
         get<FillRectWithRoundedHole>().apply(context);
         return;
 #if ENABLE(INLINE_PATH_DATA)
-    case ItemType::FillInlinePath:
-        get<FillInlinePath>().apply(context);
+    case ItemType::FillLine:
+        get<FillLine>().apply(context);
+        return;
+    case ItemType::FillArc:
+        get<FillArc>().apply(context);
+        return;
+    case ItemType::FillQuadCurve:
+        get<FillQuadCurve>().apply(context);
+        return;
+    case ItemType::FillBezierCurve:
+        get<FillBezierCurve>().apply(context);
         return;
 #endif
     case ItemType::FillPath:
@@ -205,8 +214,14 @@ void ItemHandle::apply(GraphicsContext& context)
         get<StrokeLine>().apply(context);
         return;
 #if ENABLE(INLINE_PATH_DATA)
-    case ItemType::StrokeInlinePath:
-        get<StrokeInlinePath>().apply(context);
+    case ItemType::StrokeArc:
+        get<StrokeArc>().apply(context);
+        return;
+    case ItemType::StrokeQuadCurve:
+        get<StrokeQuadCurve>().apply(context);
+        return;
+    case ItemType::StrokeBezierCurve:
+        get<StrokeBezierCurve>().apply(context);
         return;
 #endif
     case ItemType::StrokePath:
@@ -281,7 +296,7 @@ void ItemHandle::destroy()
         get<FillRoundedRect>().~FillRoundedRect();
         return;
     case ItemType::GetPixelBuffer:
-        static_assert(std::is_trivially_destructible<GetPixelBuffer>::value);
+        get<GetPixelBuffer>().~GetPixelBuffer();
         return;
     case ItemType::PutPixelBuffer:
         get<PutPixelBuffer>().~PutPixelBuffer();
@@ -307,7 +322,7 @@ void ItemHandle::destroy()
         return;
 #endif
     case ItemType::BeginClipToDrawingCommands:
-        static_assert(std::is_trivially_destructible<BeginClipToDrawingCommands>::value);
+        get<BeginClipToDrawingCommands>().~BeginClipToDrawingCommands();
         return;
     case ItemType::BeginTransparencyLayer:
         static_assert(std::is_trivially_destructible<BeginTransparencyLayer>::value);
@@ -361,8 +376,17 @@ void ItemHandle::destroy()
         static_assert(std::is_trivially_destructible<FillEllipse>::value);
         return;
 #if ENABLE(INLINE_PATH_DATA)
-    case ItemType::FillInlinePath:
-        static_assert(std::is_trivially_destructible<FillInlinePath>::value);
+    case ItemType::FillLine:
+        static_assert(std::is_trivially_destructible<FillLine>::value);
+        return;
+    case ItemType::FillArc:
+        static_assert(std::is_trivially_destructible<FillArc>::value);
+        return;
+    case ItemType::FillQuadCurve:
+        static_assert(std::is_trivially_destructible<FillQuadCurve>::value);
+        return;
+    case ItemType::FillBezierCurve:
+        static_assert(std::is_trivially_destructible<FillBezierCurve>::value);
         return;
 #endif
     case ItemType::FillRect:
@@ -422,8 +446,14 @@ void ItemHandle::destroy()
         static_assert(std::is_trivially_destructible<StrokeEllipse>::value);
         return;
 #if ENABLE(INLINE_PATH_DATA)
-    case ItemType::StrokeInlinePath:
-        static_assert(std::is_trivially_destructible<StrokeInlinePath>::value);
+    case ItemType::StrokeArc:
+        static_assert(std::is_trivially_destructible<StrokeArc>::value);
+        return;
+    case ItemType::StrokeQuadCurve:
+        static_assert(std::is_trivially_destructible<StrokeQuadCurve>::value);
+        return;
+    case ItemType::StrokeBezierCurve:
+        static_assert(std::is_trivially_destructible<StrokeBezierCurve>::value);
         return;
 #endif
     case ItemType::StrokeRect:
@@ -466,9 +496,9 @@ static inline bool copyInto(uint8_t* destinationWithOffset, const ItemHandle& it
     return copyInto(destinationWithOffset, itemHandle.get<Item>());
 }
 
-bool ItemHandle::safeCopy(ItemHandle destination) const
+bool ItemHandle::safeCopy(ItemType itemType, ItemHandle destination) const
 {
-    auto itemType = type();
+    ASSERT(itemType == type());
     destination.data[0] = static_cast<uint8_t>(itemType);
     auto itemOffset = destination.data + sizeof(uint64_t);
     switch (itemType) {
@@ -553,8 +583,14 @@ bool ItemHandle::safeCopy(ItemHandle destination) const
     case ItemType::FillEllipse:
         return copyInto<FillEllipse>(itemOffset, *this);
 #if ENABLE(INLINE_PATH_DATA)
-    case ItemType::FillInlinePath:
-        return copyInto<FillInlinePath>(itemOffset, *this);
+    case ItemType::FillLine:
+        return copyInto<FillLine>(itemOffset, *this);
+    case ItemType::FillArc:
+        return copyInto<FillArc>(itemOffset, *this);
+    case ItemType::FillQuadCurve:
+        return copyInto<FillQuadCurve>(itemOffset, *this);
+    case ItemType::FillBezierCurve:
+        return copyInto<FillBezierCurve>(itemOffset, *this);
 #endif
     case ItemType::FillRect:
         return copyInto<FillRect>(itemOffset, *this);
@@ -595,8 +631,12 @@ bool ItemHandle::safeCopy(ItemHandle destination) const
     case ItemType::StrokeEllipse:
         return copyInto<StrokeEllipse>(itemOffset, *this);
 #if ENABLE(INLINE_PATH_DATA)
-    case ItemType::StrokeInlinePath:
-        return copyInto<StrokeInlinePath>(itemOffset, *this);
+    case ItemType::StrokeArc:
+        return copyInto<StrokeArc>(itemOffset, *this);
+    case ItemType::StrokeQuadCurve:
+        return copyInto<StrokeQuadCurve>(itemOffset, *this);
+    case ItemType::StrokeBezierCurve:
+        return copyInto<StrokeBezierCurve>(itemOffset, *this);
 #endif
     case ItemType::StrokeRect:
         return copyInto<StrokeRect>(itemOffset, *this);
@@ -734,7 +774,7 @@ void ItemBuffer::append(const DisplayListItem& temporaryItem)
     if (requiredSizeForItem)
         m_writingClient->encodeItemInline(temporaryItem, location);
     else
-        memcpy(location, outOfLineItem->dataAsUInt8Ptr(), dataLength);
+        memcpy(location, outOfLineItem->data(), dataLength);
 
     didAppendData(additionalCapacityForEncodedItem, bufferChanged);
 }

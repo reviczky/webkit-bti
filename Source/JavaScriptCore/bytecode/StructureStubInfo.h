@@ -38,6 +38,7 @@
 #include "StructureStubClearingWatchpoint.h"
 #include "StubInfoSummary.h"
 #include <wtf/Box.h>
+#include <wtf/Lock.h>
 
 namespace JSC {
 
@@ -54,7 +55,8 @@ enum class AccessType : int8_t {
     TryGetById,
     GetByVal,
     Put,
-    In,
+    InById,
+    InByVal,
     InstanceOf,
     DeleteByID,
     DeleteByVal,
@@ -98,9 +100,6 @@ public:
     // Check if the stub has weak references that are dead. If it does, then it resets itself,
     // either entirely or just enough to ensure that those dead pointers don't get used anymore.
     void visitWeakReferences(const ConcurrentJSLockerBase&, CodeBlock*);
-
-    // Computes the non-GC memory owned by this object in bytes, recursively requesting the non-GC memory size of owned objects.
-    size_t extraMemoryInBytes();
     
     // This returns true if it has marked everything that it will ever mark.
     template<typename Visitor> bool propagateTransitions(Visitor&);
@@ -252,7 +251,7 @@ private:
             // the prototype is fixed.
             bool isNewlyAdded = false;
             {
-                auto locker = holdLock(m_bufferedStructuresLock);
+                Locker locker { m_bufferedStructuresLock };
                 isNewlyAdded = m_bufferedStructures.add({ structure, impl }).isNewEntry;
             }
             if (isNewlyAdded)
@@ -267,7 +266,7 @@ private:
 
     void clearBufferedStructures()
     {
-        auto locker = holdLock(m_bufferedStructuresLock);
+        Locker locker { m_bufferedStructuresLock };
         m_bufferedStructures.clear();
     }
 
@@ -342,7 +341,7 @@ private:
     // Note that it's always safe to clear this. If we clear it prematurely, then if we see the same
     // structure again during this buffering countdown, we will create an AccessCase object for it.
     // That's not so bad - we'll get rid of the redundant ones once we regenerate.
-    HashSet<BufferedStructure, BufferedStructure::Hash, BufferedStructure::KeyTraits> m_bufferedStructures;
+    HashSet<BufferedStructure, BufferedStructure::Hash, BufferedStructure::KeyTraits> m_bufferedStructures WTF_GUARDED_BY_LOCK(m_bufferedStructuresLock);
 public:
     CodeLocationLabel<JITStubRoutinePtrTag> start; // This is either the start of the inline IC for *byId caches. or the location of patchable jump for 'instanceof' caches.
     CodeLocationLabel<JSInternalPtrTag> doneLocation;

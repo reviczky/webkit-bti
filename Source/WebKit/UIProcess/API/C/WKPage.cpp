@@ -605,6 +605,8 @@ double WKPageGetPageZoomFactor(WKPageRef pageRef)
 void WKPageSetPageZoomFactor(WKPageRef pageRef, double zoomFactor)
 {
     CRASH_IF_SUSPENDED;
+    if (zoomFactor <= 0)
+        return;
     toImpl(pageRef)->setPageZoomFactor(zoomFactor);
 }
 
@@ -2338,13 +2340,14 @@ void WKPageSetPageNavigationClient(WKPageRef pageRef, const WKPageNavigationClie
             if (m_client.copyWebCryptoMasterKey)
                 return adoptRef(toImpl(m_client.copyWebCryptoMasterKey(toAPI(&page), m_client.base.clientInfo)));
 
-            Vector<uint8_t> masterKey;
 #if ENABLE(WEB_CRYPTO)
-            if (!getDefaultWebCryptoMasterKey(masterKey))
+            auto masterKey = defaultWebCryptoMasterKey();
+            if (!masterKey)
                 return nullptr;
+            return API::Data::create(WTFMove(*masterKey));
+#else
+            return API::Data::create(nullptr, 0);
 #endif
-
-            return API::Data::create(masterKey.data(), masterKey.size());
         }
 
         RefPtr<API::String> signedPublicKeyAndChallengeString(WebPageProxy& page, unsigned keySizeIndex, const RefPtr<API::String>& challengeString, const URL& url) override
@@ -2597,7 +2600,7 @@ void WKPageSetPageStateClient(WKPageRef pageRef, WKPageStateClientBase* client)
 void WKPageRunJavaScriptInMainFrame(WKPageRef pageRef, WKStringRef scriptRef, void* context, WKPageRunJavaScriptFunction callback)
 {
     CRASH_IF_SUSPENDED;
-    toImpl(pageRef)->runJavaScriptInMainFrame({ toImpl(scriptRef)->string(), URL { }, false, WTF::nullopt, true }, [context, callback] (auto&& result) {
+    toImpl(pageRef)->runJavaScriptInMainFrame({ toImpl(scriptRef)->string(), URL { }, false, std::nullopt, true }, [context, callback] (auto&& result) {
         if (result.has_value())
             callback(toAPI(result.value().get()), nullptr, context);
         else
@@ -3025,7 +3028,7 @@ void WKPageGetApplicationManifest_b(WKPageRef pageRef, WKPageGetApplicationManif
 {
     CRASH_IF_SUSPENDED;
 #if ENABLE(APPLICATION_MANIFEST)
-    toImpl(pageRef)->getApplicationManifest([block](const Optional<WebCore::ApplicationManifest>& manifest) {
+    toImpl(pageRef)->getApplicationManifest([block](const std::optional<WebCore::ApplicationManifest>& manifest) {
         block();
     });
 #else // ENABLE(APPLICATION_MANIFEST)

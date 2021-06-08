@@ -29,7 +29,9 @@
 #if ENABLE(JIT)
 
 #include "CCallHelpers.h"
+#include "JITInlines.h"
 #include "JITThunks.h"
+#include "ThunkGenerators.h"
 #include "VM.h"
 
 namespace JSC {
@@ -40,7 +42,7 @@ void JITSlowPathCall::call()
 {
     VM& vm = m_jit->vm();
     uint32_t bytecodeOffset = m_jit->m_bytecodeIndex.offset();
-    ASSERT((bytecodeOffset << BytecodeIndex::checkpointShift) == m_jit->m_bytecodeIndex.asBits());
+    ASSERT(BytecodeIndex(bytecodeOffset) == m_jit->m_bytecodeIndex);
 
     UNUSED_VARIABLE(m_pc);
     constexpr GPRReg bytecodeOffsetReg = GPRInfo::argumentGPR1;
@@ -73,8 +75,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> JITSlowPathCall::generateThunk(VM& vm, Slo
     jit.move(GPRInfo::callFrameRegister, GPRInfo::argumentGPR0);
 
     CCallHelpers::Call call = jit.call(OperationPtrTag);
-
-    CCallHelpers::Jump exceptionCheck = jit.emitExceptionCheck(vm);
+    CCallHelpers::Jump exceptionCheck = jit.emitNonPatchableExceptionCheck(vm);
 
 #if CPU(X86_64)
     jit.pop(X86Registers::ebp);
@@ -83,9 +84,9 @@ MacroAssemblerCodeRef<JITThunkPtrTag> JITSlowPathCall::generateThunk(VM& vm, Slo
 #endif
     jit.ret();
 
-    auto handler = vm.jitStubs->existingCTIStub(popThunkStackPreservesAndHandleExceptionGenerator, NoLockingNecessary);
+    auto handler = vm.getCTIStub(popThunkStackPreservesAndHandleExceptionGenerator);
 
-    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::Thunk);
+    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::ExtraCTIThunk);
     patchBuffer.link(call, FunctionPtr<OperationPtrTag>(slowPathFunction));
     patchBuffer.link(exceptionCheck, CodeLocationLabel(handler.retaggedCode<NoPtrTag>()));
     return FINALIZE_CODE(patchBuffer, JITThunkPtrTag, "SlowPathCall");

@@ -43,7 +43,6 @@
 #include "DFGCapabilities.h"
 #include "DFGCommon.h"
 #include "DFGJITCode.h"
-#include "DFGWorklist.h"
 #include "EvalCodeBlock.h"
 #include "FullCodeOrigin.h"
 #include "FunctionCodeBlock.h"
@@ -55,6 +54,7 @@
 #include "IsoCellSetInlines.h"
 #include "JIT.h"
 #include "JITMathIC.h"
+#include "JITWorklist.h"
 #include "JSCInlines.h"
 #include "JSCJSValue.h"
 #include "JSLexicalEnvironment.h"
@@ -404,7 +404,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
         UnlinkedFunctionExecutable* unlinkedExecutable = unlinkedCodeBlock->functionDecl(i);
         if (shouldUpdateFunctionHasExecutedCache)
             vm.functionHasExecutedCache()->insertUnexecutedRange(ownerExecutable->sourceID(), unlinkedExecutable->typeProfilingStartOffset(), unlinkedExecutable->typeProfilingEndOffset());
-        m_functionDecls[i].set(vm, this, unlinkedExecutable->link(vm, topLevelExecutable, ownerExecutable->source(), WTF::nullopt, NoIntrinsic, ownerExecutable->isInsideOrdinaryFunction()));
+        m_functionDecls[i].set(vm, this, unlinkedExecutable->link(vm, topLevelExecutable, ownerExecutable->source(), std::nullopt, NoIntrinsic, ownerExecutable->isInsideOrdinaryFunction()));
     }
 
     m_functionExprs = FixedVector<WriteBarrier<FunctionExecutable>>(unlinkedCodeBlock->numberOfFunctionExprs());
@@ -412,7 +412,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
         UnlinkedFunctionExecutable* unlinkedExecutable = unlinkedCodeBlock->functionExpr(i);
         if (shouldUpdateFunctionHasExecutedCache)
             vm.functionHasExecutedCache()->insertUnexecutedRange(ownerExecutable->sourceID(), unlinkedExecutable->typeProfilingStartOffset(), unlinkedExecutable->typeProfilingEndOffset());
-        m_functionExprs[i].set(vm, this, unlinkedExecutable->link(vm, topLevelExecutable, ownerExecutable->source(), WTF::nullopt, NoIntrinsic, ownerExecutable->isInsideOrdinaryFunction()));
+        m_functionExprs[i].set(vm, this, unlinkedExecutable->link(vm, topLevelExecutable, ownerExecutable->source(), std::nullopt, NoIntrinsic, ownerExecutable->isInsideOrdinaryFunction()));
     }
 
     if (unlinkedCodeBlock->numberOfExceptionHandlers()) {
@@ -559,7 +559,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             INITIALIZE_METADATA(OpResolveScope)
 
             const Identifier& ident = identifier(bytecode.m_var);
-            RELEASE_ASSERT(bytecode.m_resolveType != LocalClosureVar);
+            RELEASE_ASSERT(bytecode.m_resolveType != ResolvedClosureVar);
 
             ResolveOp op = JSScope::abstractResolve(m_globalObject.get(), bytecode.m_localScopeDepth, scope, ident, Get, bytecode.m_resolveType, InitializationMode::NotInitialization);
             RETURN_IF_EXCEPTION(throwScope, false);
@@ -590,7 +590,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             metadata.m_watchpointSet = nullptr;
 
             ASSERT(!isInitialization(bytecode.m_getPutInfo.initializationMode()));
-            if (bytecode.m_getPutInfo.resolveType() == LocalClosureVar) {
+            if (bytecode.m_getPutInfo.resolveType() == ResolvedClosureVar) {
                 metadata.m_getPutInfo = GetPutInfo(bytecode.m_getPutInfo.resolveMode(), ClosureVar, bytecode.m_getPutInfo.initializationMode(), bytecode.m_getPutInfo.ecmaMode());
                 break;
             }
@@ -613,7 +613,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
         case op_put_to_scope: {
             INITIALIZE_METADATA(OpPutToScope)
 
-            if (bytecode.m_getPutInfo.resolveType() == LocalClosureVar) {
+            if (bytecode.m_getPutInfo.resolveType() == ResolvedClosureVar) {
                 // Only do watching if the property we're putting to is not anonymous.
                 if (bytecode.m_var != UINT_MAX) {
                     SymbolTable* symbolTable = jsCast<SymbolTable*>(getConstant(bytecode.m_symbolTableOrScopeDepth.symbolTable()));
@@ -984,14 +984,6 @@ void CodeBlock::visitChildren(Visitor& visitor)
         extraMemory += m_metadata->sizeInBytes();
     if (m_jitCode && !m_jitCode->isShared())
         extraMemory += m_jitCode->size();
-#if ENABLE(JIT)
-    if (m_jitData)
-        extraMemory += m_jitData->size(locker);
-#endif
-    extraMemory += m_argumentValueProfiles.size() * sizeof(ValueProfile);
-    extraMemory += m_functionDecls.size() * sizeof(decltype(*m_functionDecls.data()));
-    extraMemory += m_functionExprs.size() * sizeof(decltype(*m_functionExprs.data()));
-
     visitor.reportExtraMemoryVisited(extraMemory);
 
     stronglyVisitStrongReferences(locker, visitor);
@@ -1028,31 +1020,6 @@ bool CodeBlock::shouldVisitStrongly(const ConcurrentJSLocker& locker, Visitor& v
 
 template bool CodeBlock::shouldVisitStrongly(const ConcurrentJSLocker&, AbstractSlotVisitor&);
 template bool CodeBlock::shouldVisitStrongly(const ConcurrentJSLocker&, SlotVisitor&);
-
-#if ENABLE(JIT)
-size_t CodeBlock::JITData::size(const ConcurrentJSLocker&) const
-{
-    size_t size = sizeof(JITData);
-    size += m_stubInfos.estimatedAllocationSizeInBytes();
-    for (StructureStubInfo* stub : m_stubInfos)
-        size += stub->extraMemoryInBytes();
-    size += m_addICs.estimatedAllocationSizeInBytes();
-    size += m_mulICs.estimatedAllocationSizeInBytes();
-    size += m_negICs.estimatedAllocationSizeInBytes();
-    size += m_subICs.estimatedAllocationSizeInBytes();
-    size += m_byValInfos.estimatedAllocationSizeInBytes();
-    size += m_callLinkInfos.estimatedAllocationSizeInBytes();
-    size += m_rareCaseProfiles.size() * sizeof(decltype(*m_rareCaseProfiles.data()));
-    size += m_switchJumpTables.size() * sizeof(decltype(*m_switchJumpTables.data()));
-    size += m_stringSwitchJumpTables.size() * sizeof(decltype(*m_stringSwitchJumpTables.data()));
-    // FIXME: account for m_calleeSaveRegisters but it's not a big deal since it's a fixed size and small.
-    if (m_pcToCodeOriginMap)
-        size += m_pcToCodeOriginMap->memorySize();
-    if (m_jitCodeMap)
-        size += m_jitCodeMap.memorySize();
-    return size;
-}
-#endif
 
 bool CodeBlock::shouldJettisonDueToWeakReference(VM& vm)
 {
@@ -1453,7 +1420,7 @@ void CodeBlock::finalizeLLIntInlineCaches()
         auto handleGetPutFromScope = [&] (auto& metadata) {
             GetPutInfo getPutInfo = metadata.m_getPutInfo;
             if (getPutInfo.resolveType() == GlobalVar || getPutInfo.resolveType() == GlobalVarWithVarInjectionChecks
-                || getPutInfo.resolveType() == LocalClosureVar || getPutInfo.resolveType() == GlobalLexicalVar || getPutInfo.resolveType() == GlobalLexicalVarWithVarInjectionChecks)
+                || getPutInfo.resolveType() == ResolvedClosureVar || getPutInfo.resolveType() == GlobalLexicalVar || getPutInfo.resolveType() == GlobalLexicalVarWithVarInjectionChecks)
                 return;
             WriteBarrierBase<Structure>& structure = metadata.m_structure;
             if (!structure || vm.heap.isMarked(structure.get()))
@@ -1764,30 +1731,6 @@ CallLinkInfo* CodeBlock::getCallLinkInfoForBytecodeIndex(BytecodeIndex index)
         }
     }
     return nullptr;
-}
-
-void CodeBlock::setRareCaseProfiles(FixedVector<RareCaseProfile>&& rareCaseProfiles)
-{
-    ConcurrentJSLocker locker(m_lock);
-    ensureJITData(locker).m_rareCaseProfiles = WTFMove(rareCaseProfiles);
-}
-
-RareCaseProfile* CodeBlock::rareCaseProfileForBytecodeIndex(const ConcurrentJSLocker&, BytecodeIndex bytecodeIndex)
-{
-    if (auto* jitData = m_jitData.get()) {
-        return tryBinarySearch<RareCaseProfile, BytecodeIndex>(
-            jitData->m_rareCaseProfiles, jitData->m_rareCaseProfiles.size(), bytecodeIndex,
-            getRareCaseProfileBytecodeIndex);
-    }
-    return nullptr;
-}
-
-unsigned CodeBlock::rareCaseProfileCountForBytecodeIndex(const ConcurrentJSLocker& locker, BytecodeIndex bytecodeIndex)
-{
-    RareCaseProfile* profile = rareCaseProfileForBytecodeIndex(locker, bytecodeIndex);
-    if (profile)
-        return profile->m_counter;
-    return 0;
 }
 
 void CodeBlock::setCalleeSaveRegisters(RegisterSet registerSet)
@@ -2115,7 +2058,7 @@ void CodeBlock::expressionRangeForBytecodeIndex(BytecodeIndex bytecodeIndex, int
     line += ownerExecutable()->firstLine();
 }
 
-bool CodeBlock::hasOpDebugForLineAndColumn(unsigned line, Optional<unsigned> column)
+bool CodeBlock::hasOpDebugForLineAndColumn(unsigned line, std::optional<unsigned> column)
 {
     const InstructionStream& instructionStream = instructions();
     for (const auto& it : instructionStream) {
@@ -2655,9 +2598,8 @@ int32_t CodeBlock::adjustedCounterValue(int32_t desiredThreshold)
 bool CodeBlock::checkIfOptimizationThresholdReached()
 {
 #if ENABLE(DFG_JIT)
-    if (DFG::Worklist* worklist = DFG::existingGlobalDFGWorklistOrNull()) {
-        if (worklist->compilationState(DFG::CompilationKey(this, DFG::DFGMode))
-            == DFG::Worklist::Compiled) {
+    if (JITWorklist* worklist = JITWorklist::existingGlobalWorklistOrNull()) {
+        if (worklist->compilationState(JITCompilationKey(this, JITCompilationMode::DFG)) == JITWorklist::Compiled) {
             optimizeNextInvocation();
             return true;
         }
@@ -2900,13 +2842,70 @@ size_t CodeBlock::numberOfDFGIdentifiers() const
 
 const Identifier& CodeBlock::identifier(int index) const
 {
-    size_t unlinkedIdentifiers = m_unlinkedCode->numberOfIdentifiers();
+    UnlinkedCodeBlock* unlinkedCode = m_unlinkedCode.get();
+    size_t unlinkedIdentifiers = unlinkedCode->numberOfIdentifiers();
     if (static_cast<unsigned>(index) < unlinkedIdentifiers)
-        return m_unlinkedCode->identifier(index);
+        return unlinkedCode->identifier(index);
     ASSERT(JITCode::isOptimizingJIT(jitType()));
     return m_jitCode->dfgCommon()->m_dfgIdentifiers[index - unlinkedIdentifiers];
 }
 #endif // ENABLE(DFG_JIT)
+
+#if ASSERT_ENABLED
+bool CodeBlock::hasIdentifier(UniquedStringImpl* uid)
+{
+    UnlinkedCodeBlock* unlinkedCode = m_unlinkedCode.get();
+    size_t unlinkedIdentifiers = unlinkedCode->numberOfIdentifiers();
+#if ENABLE(DFG_JIT)
+    size_t numberOfDFGIdentifiers = this->numberOfDFGIdentifiers();
+    size_t numberOfIdentifiers = unlinkedIdentifiers + numberOfDFGIdentifiers;
+#else
+    size_t numberOfIdentifiers = unlinkedIdentifiers;
+#endif
+
+    if (numberOfIdentifiers > 100) {
+        if (m_cachedIdentifierUids.size() != numberOfIdentifiers) {
+            Locker locker(m_cachedIdentifierUidsLock);
+            createRareDataIfNecessary();
+            HashSet<UniquedStringImpl*> cachedIdentifierUids;
+            cachedIdentifierUids.reserveInitialCapacity(numberOfIdentifiers);
+            for (unsigned index = 0; index < unlinkedIdentifiers; ++index) {
+                const Identifier& identifier = unlinkedCode->identifier(index);
+                cachedIdentifierUids.add(identifier.impl());
+            }
+#if ENABLE(DFG_JIT)
+            if (numberOfDFGIdentifiers) {
+                ASSERT(JITCode::isOptimizingJIT(jitType()));
+                auto& dfgIdentifiers = m_jitCode->dfgCommon()->m_dfgIdentifiers;
+                for (unsigned index = 0; index < numberOfDFGIdentifiers; ++index) {
+                    const Identifier& identifier = dfgIdentifiers[index];
+                    cachedIdentifierUids.add(identifier.impl());
+                }
+            }
+#endif
+            WTF::storeStoreFence();
+            m_cachedIdentifierUids = WTFMove(cachedIdentifierUids);
+        }
+        return m_cachedIdentifierUids.contains(uid);
+    }
+
+    for (unsigned index = 0; index < unlinkedIdentifiers; ++index) {
+        const Identifier& identifier = unlinkedCode->identifier(index);
+        if (identifier.impl() == uid)
+            return true;
+    }
+#if ENABLE(DFG_JIT)
+    ASSERT(JITCode::isOptimizingJIT(jitType()));
+    auto& dfgIdentifiers = m_jitCode->dfgCommon()->m_dfgIdentifiers;
+    for (unsigned index = 0; index < numberOfDFGIdentifiers; ++index) {
+        const Identifier& identifier = dfgIdentifiers[index];
+        if (identifier.impl() == uid)
+            return true;
+    }
+#endif
+    return false;
+}
+#endif
 
 void CodeBlock::updateAllValueProfilePredictionsAndCountLiveness(unsigned& numberOfLiveNonArgumentValueProfiles, unsigned& numberOfSamplesInProfiles)
 {
@@ -3090,11 +3089,6 @@ void CodeBlock::dumpValueProfiles()
         profile.dump(WTF::dataFile());
         dataLogF("\n");
     });
-    dataLog("RareCaseProfile for ", *this, ":\n");
-    if (auto* jitData = m_jitData.get()) {
-        for (RareCaseProfile* profile : jitData->m_rareCaseProfiles)
-            dataLogF("   bc = %d: %u\n", profile->m_bytecodeOffset, profile->m_counter);
-    }
 }
 #endif // ENABLE(VERBOSE_VALUE_PROFILE)
 
@@ -3451,33 +3445,33 @@ void CodeBlock::setPCToCodeOriginMap(std::unique_ptr<PCToCodeOriginMap>&& map)
     ensureJITData(locker).m_pcToCodeOriginMap = WTFMove(map);
 }
 
-Optional<CodeOrigin> CodeBlock::findPC(void* pc)
+std::optional<CodeOrigin> CodeBlock::findPC(void* pc)
 {
     {
         ConcurrentJSLocker locker(m_lock);
         if (auto* jitData = m_jitData.get()) {
             if (jitData->m_pcToCodeOriginMap) {
-                if (Optional<CodeOrigin> codeOrigin = jitData->m_pcToCodeOriginMap->findPC(pc))
+                if (std::optional<CodeOrigin> codeOrigin = jitData->m_pcToCodeOriginMap->findPC(pc))
                     return codeOrigin;
             }
 
             for (StructureStubInfo* stubInfo : jitData->m_stubInfos) {
                 if (stubInfo->containsPC(pc))
-                    return Optional<CodeOrigin>(stubInfo->codeOrigin);
+                    return std::optional<CodeOrigin>(stubInfo->codeOrigin);
             }
         }
     }
 
-    if (Optional<CodeOrigin> codeOrigin = m_jitCode->findPC(this, pc))
+    if (std::optional<CodeOrigin> codeOrigin = m_jitCode->findPC(this, pc))
         return codeOrigin;
 
-    return WTF::nullopt;
+    return std::nullopt;
 }
 #endif // ENABLE(JIT)
 
-Optional<BytecodeIndex> CodeBlock::bytecodeIndexFromCallSiteIndex(CallSiteIndex callSiteIndex)
+std::optional<BytecodeIndex> CodeBlock::bytecodeIndexFromCallSiteIndex(CallSiteIndex callSiteIndex)
 {
-    Optional<BytecodeIndex> bytecodeIndex;
+    std::optional<BytecodeIndex> bytecodeIndex;
     JITType jitType = this->jitType();
     if (jitType == JITType::InterpreterThunk || jitType == JITType::BaselineJIT)
         bytecodeIndex = callSiteIndex.bytecodeIndex();

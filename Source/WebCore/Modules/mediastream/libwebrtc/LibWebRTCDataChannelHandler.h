@@ -63,7 +63,7 @@ private:
     // RTCDataChannelHandler API
     void setClient(RTCDataChannelHandlerClient&, ScriptExecutionContextIdentifier) final;
     bool sendStringData(const CString&) final;
-    bool sendRawData(const char*, size_t) final;
+    bool sendRawData(const uint8_t*, size_t) final;
     void close() final;
 
     // webrtc::DataChannelObserver API
@@ -83,7 +83,7 @@ private:
 
     rtc::scoped_refptr<webrtc::DataChannelInterface> m_channel;
     Lock m_clientLock;
-    RTCDataChannelHandlerClient* m_client { nullptr };
+    RTCDataChannelHandlerClient* m_client WTF_GUARDED_BY_LOCK(m_clientLock) { nullptr };
     ScriptExecutionContextIdentifier m_contextIdentifier;
     PendingMessages m_bufferedMessages;
 };

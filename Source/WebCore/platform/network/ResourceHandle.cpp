@@ -133,7 +133,7 @@ void ResourceHandle::failureTimerFired()
     ASSERT_NOT_REACHED();
 }
 
-void ResourceHandle::loadResourceSynchronously(NetworkingContext* context, const ResourceRequest& request, StoredCredentialsPolicy storedCredentialsPolicy, ResourceError& error, ResourceResponse& response, Vector<char>& data)
+void ResourceHandle::loadResourceSynchronously(NetworkingContext* context, const ResourceRequest& request, StoredCredentialsPolicy storedCredentialsPolicy, ResourceError& error, ResourceResponse& response, Vector<uint8_t>& data)
 {
     if (auto constructor = builtinResourceHandleSynchronousLoaderMap().get(request.url().protocol().toStringWithoutCopying())) {
         constructor(context, request, storedCredentialsPolicy, error, response, data);
@@ -157,7 +157,7 @@ void ResourceHandle::didReceiveResponse(ResourceResponse&& response, CompletionH
 {
     if (response.isHTTP09()) {
         auto url = response.url();
-        Optional<uint16_t> port = url.port();
+        std::optional<uint16_t> port = url.port();
         if (port && !WTF::isDefaultPortForProtocol(port.value(), url.protocol())) {
             cancel();
             String message = "Cancelled load from '" + url.stringCenterEllipsizedToLength() + "' because it is using HTTP/0.9.";
@@ -203,7 +203,42 @@ void ResourceHandle::clearAuthentication()
 #endif
     d->m_currentWebChallenge.nullify();
 }
-  
+
+bool ResourceHandle::hasCrossOriginRedirect() const
+{
+    return d->m_hasCrossOriginRedirect;
+}
+
+void ResourceHandle::setHasCrossOriginRedirect(bool value)
+{
+    d->m_hasCrossOriginRedirect = value;
+}
+
+void ResourceHandle::incrementRedirectCount()
+{
+    d->m_redirectCount++;
+}
+
+uint16_t ResourceHandle::redirectCount() const
+{
+    return d->m_redirectCount;
+}
+
+MonotonicTime ResourceHandle::startTimeBeforeRedirects() const
+{
+    return d->m_startTime;
+}
+
+NetworkLoadMetrics* ResourceHandle::networkLoadMetrics()
+{
+    return d->m_networkLoadMetrics.get();
+}
+
+void ResourceHandle::setNetworkLoadMetrics(Box<NetworkLoadMetrics>&& metrics)
+{
+    d->m_networkLoadMetrics = WTFMove(metrics);
+}
+
 bool ResourceHandle::shouldContentSniff() const
 {
     return d->m_shouldContentSniff;

@@ -31,9 +31,9 @@
 
 #pragma once
 
+#include <optional>
 #include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
-#include <wtf/Optional.h>
 
 namespace WebCore {
 
@@ -62,6 +62,11 @@ public:
 #if ENABLE(OFFSCREEN_CANVAS)
     void setOffscreenCanvasEnabled(bool isEnabled) { m_isOffscreenCanvasEnabled = isEnabled; }
     bool offscreenCanvasEnabled() const { return m_isOffscreenCanvasEnabled; }
+#endif
+
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+    void setOffscreenCanvasInWorkersEnabled(bool isEnabled) { m_isOffscreenCanvasInWorkersEnabled = isEnabled; }
+    bool offscreenCanvasInWorkersEnabled() const { return m_isOffscreenCanvasInWorkersEnabled; }
 #endif
 
     void setCacheAPIEnabled(bool isEnabled) { m_isCacheAPIEnabled = isEnabled; }
@@ -123,7 +128,7 @@ public:
     bool cssTypedOMEnabled() const { return m_CSSTypedOMEnabled; }
 #endif
 
-    void setWebSQLDisabled(bool isDisabled) { m_webSQLEnabled = !isDisabled; }
+    void setWebSQLEnabled(bool isEnabled) { m_webSQLEnabled = isEnabled; }
     bool webSQLEnabled() const { return m_webSQLEnabled; }
 
     void setDialogElementEnabled(bool isEnabled) { m_dialogElementEnabled = isEnabled; }
@@ -262,6 +267,9 @@ private:
 #if ENABLE(OFFSCREEN_CANVAS)
     bool m_isOffscreenCanvasEnabled { false };
 #endif
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
+    bool m_isOffscreenCanvasInWorkersEnabled { false };
+#endif
     bool m_isCacheAPIEnabled { false };
     bool m_isWebSocketEnabled { true };
     bool m_fetchAPIKeepAliveEnabled { false };
@@ -337,7 +345,7 @@ private:
 
 #if ENABLE(TOUCH_EVENTS)
     bool m_mouseEventsSimulationEnabled { false };
-    Optional<bool> m_touchEventsEnabled;
+    std::optional<bool> m_touchEventsEnabled;
 #endif
 
 #if HAVE(NSURLSESSION_WEBSOCKET)

@@ -26,8 +26,11 @@
 #include "Attribute.h"
 #include "Color.h"
 #include "Document.h"
+#include "Frame.h"
+#include "FrameView.h"
 #include "HTMLHeadElement.h"
 #include "HTMLNames.h"
+#include "HTMLParserIdioms.h"
 #include "MediaList.h"
 #include "MediaQueryEvaluator.h"
 #include "MediaQueryParser.h"
@@ -35,7 +38,6 @@
 #include "Settings.h"
 #include "StyleResolveForDocument.h"
 #include <wtf/IsoMallocInlines.h>
-#include <wtf/Optional.h>
 
 namespace WebCore {
 
@@ -66,7 +68,7 @@ bool HTMLMetaElement::mediaAttributeMatches()
     if (!m_media)
         m_media = MediaQuerySet::create(attributeWithoutSynchronization(mediaAttr).convertToASCIILowercase(), MediaQueryParserContext(document));
 
-    Optional<RenderStyle> documentStyle;
+    std::optional<RenderStyle> documentStyle;
     if (document.hasLivingRenderTree())
         documentStyle = Style::resolveForDocument(document);
 
@@ -108,7 +110,7 @@ void HTMLMetaElement::parseAttribute(const QualifiedName& name, const AtomString
     }
 
     if (name == contentAttr) {
-        m_contentColor = WTF::nullopt;
+        m_contentColor = std::nullopt;
         process();
         return;
     }

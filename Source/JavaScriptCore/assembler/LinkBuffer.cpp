@@ -41,6 +41,7 @@
 namespace JSC {
 
 size_t LinkBuffer::s_profileCummulativeLinkedSizes[LinkBuffer::numberOfProfiles];
+size_t LinkBuffer::s_profileCummulativeLinkedCounts[LinkBuffer::numberOfProfiles];
 
 bool shouldDumpDisassemblyFor(CodeBlock* codeBlock)
 {
@@ -439,6 +440,7 @@ void LinkBuffer::linkCode(MacroAssembler& macroAssembler, JITCompilationEffort e
 #endif // !ENABLE(BRANCH_COMPACTION)
 
     m_linkTasks = WTFMove(macroAssembler.m_linkTasks);
+    m_lateLinkTasks = WTFMove(macroAssembler.m_lateLinkTasks);
 }
 
 void LinkBuffer::allocate(MacroAssembler& macroAssembler, JITCompilationEffort effort)
@@ -471,16 +473,25 @@ void LinkBuffer::performFinalization()
 {
     for (auto& task : m_linkTasks)
         task->run(*this);
+    for (auto& task : m_lateLinkTasks)
+        task->run(*this);
 
 #ifndef NDEBUG
-    ASSERT(m_isJumpIsland || !isCompilationThread());
     ASSERT(!m_completed);
     ASSERT(isValid());
     m_completed = true;
 #endif
     
     s_profileCummulativeLinkedSizes[static_cast<unsigned>(m_profile)] += m_size;
+    s_profileCummulativeLinkedCounts[static_cast<unsigned>(m_profile)]++;
     MacroAssembler::cacheFlush(code(), m_size);
+}
+
+void LinkBuffer::runMainThreadFinalizationTasks()
+{
+    for (auto& task : m_mainThreadFinalizationTasks)
+        task->run();
+    m_mainThreadFinalizationTasks.clear();
 }
 
 #if DUMP_LINK_STATISTICS
@@ -530,11 +541,20 @@ void LinkBuffer::dumpCode(void* code, size_t size)
 }
 #endif
 
-void LinkBuffer::dumpProfileStatistics(Optional<PrintStream*> outStream)
+void LinkBuffer::clearProfileStatistics()
+{
+    for (unsigned i = 0; i < numberOfProfiles; ++i) {
+        s_profileCummulativeLinkedSizes[i] = 0;
+        s_profileCummulativeLinkedCounts[i] = 0;
+    }
+}
+
+void LinkBuffer::dumpProfileStatistics(std::optional<PrintStream*> outStream)
 {
     struct Stat {
         Profile profile;
         size_t size;
+        size_t count;
     };
 
     Stat sortedStats[numberOfProfiles];
@@ -549,6 +569,7 @@ void LinkBuffer::dumpProfileStatistics(Optional<PrintStream*> outStream)
     };
 #undef RETURN_LINKBUFFER_PROFILE_NAME
 
+    size_t totalOfAllProfilesSize = 0;
     auto dumpStat = [&] (const Stat& stat) {
         char formattedName[21];
         snprintf(formattedName, 21, "%20s", name(stat.profile));
@@ -564,16 +585,24 @@ void LinkBuffer::dumpProfileStatistics(Optional<PrintStream*> outStream)
         }
 
         if (largerUnit)
-            out.println("  ", formattedName, ": ", stat.size, " (", sizeInLargerUnit, " ", largerUnit, ")");
+            out.print("  ", formattedName, ": ", stat.size, " (", sizeInLargerUnit, " ", largerUnit, ")");
         else
-            out.println("  ", formattedName, ": ", stat.size);
+            out.print("  ", formattedName, ": ", stat.size);
+
+        if (!stat.count)
+            out.println();
+        else
+            out.println(" count ", stat.count, " avg size ", (stat.size / stat.count));
     };
 
     for (unsigned i = 0; i < numberOfProfiles; ++i) {
         sortedStats[i].profile = static_cast<Profile>(i);
         sortedStats[i].size = s_profileCummulativeLinkedSizes[i];
+        sortedStats[i].count = s_profileCummulativeLinkedCounts[i];
+        totalOfAllProfilesSize += s_profileCummulativeLinkedSizes[i];
     }
-    std::sort(&sortedStats[0], &sortedStats[numberOfProfiles],
+    sortedStats[static_cast<unsigned>(Profile::Total)].size = totalOfAllProfilesSize;
+    std::sort(&sortedStats[0], &sortedStats[numberOfProfilesExcludingTotal],
         [] (Stat& a, Stat& b) -> bool {
             return a.size > b.size;
         });

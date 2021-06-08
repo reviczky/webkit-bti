@@ -408,6 +408,10 @@
 #define ENABLE_OFFSCREEN_CANVAS 0
 #endif
 
+#if !defined(ENABLE_OFFSCREEN_CANVAS_IN_WORKERS)
+#define ENABLE_OFFSCREEN_CANVAS_IN_WORKERS 0
+#endif
+
 #if !defined(ENABLE_THUNDER)
 #define ENABLE_THUNDER 0
 #endif
@@ -661,14 +665,9 @@
 #define ENABLE_FAST_TLS_JIT 1
 #endif
 
-#if ENABLE(JIT) && (CPU(X86) || CPU(X86_64) || CPU(ARM_THUMB2) || CPU(ARM64) || CPU(MIPS))
-#define ENABLE_MASM_PROBE 1
-#endif
-
 /* FIXME: This should be turned into an #error invariant */
-/* If the baseline jit is not available, then disable upper tiers as well.
-   The MacroAssembler::probe() is also required for supporting the upper tiers. */
-#if !ENABLE(JIT) || !ENABLE(MASM_PROBE)
+/* If the baseline jit is not available, then disable upper tiers as well. */
+#if !ENABLE(JIT)
 #undef ENABLE_DFG_JIT
 #undef ENABLE_FTL_JIT
 #define ENABLE_DFG_JIT 0
@@ -909,6 +908,10 @@
 
 #if ENABLE(WHLSL_COMPILER) && !ENABLE(WEBGPU)
 #error "ENABLE(WHLSL_COMPILER) requires ENABLE(WEBGPU)"
+#endif
+
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS) && !ENABLE(OFFSCREEN_CANVAS)
+#error "ENABLE(OFFSCREEN_CANVAS_IN_WORKERS) requires ENABLE(OFFSCREEN_CANVAS)"
 #endif
 
 #if USE(CG)

@@ -172,7 +172,7 @@ void Structure::forEachPropertyConcurrently(const Functor& functor)
     Structure* tableStructure;
     PropertyTable* table;
     
-    findStructuresAndMapForMaterialization(structures, tableStructure, table);
+    bool didFindStructure = findStructuresAndMapForMaterialization(structures, tableStructure, table);
 
     HashSet<UniquedStringImpl*> seenProperties;
 
@@ -195,13 +195,16 @@ void Structure::forEachPropertyConcurrently(const Functor& functor)
         }
 
         if (!functor(PropertyMapEntry(structure->m_transitionPropertyName.get(), structure->transitionOffset(), structure->transitionPropertyAttributes()))) {
-            if (table)
+            if (didFindStructure) {
+                assertIsHeld(tableStructure->m_lock); // Sadly Clang needs some help here.
                 tableStructure->m_lock.unlock();
+            }
             return;
         }
     }
     
-    if (table) {
+    if (didFindStructure) {
+        assertIsHeld(tableStructure->m_lock); // Sadly Clang needs some help here.
         for (auto& entry : *table) {
             if (seenProperties.contains(entry.key))
                 continue;
@@ -355,10 +358,7 @@ inline void Structure::didReplaceProperty(PropertyOffset offset)
 {
     if (LIKELY(!hasRareData()))
         return;
-    StructureRareData::PropertyWatchpointMap* map = rareData()->m_replacementWatchpointSets.get();
-    if (LIKELY(!map))
-        return;
-    WatchpointSet* set = map->get(offset);
+    WatchpointSet* set = rareData()->m_replacementWatchpointSets.get(offset);
     if (LIKELY(!set))
         return;
     set->fireAll(vm(), "Property did get replaced");
@@ -370,10 +370,7 @@ inline WatchpointSet* Structure::propertyReplacementWatchpointSet(PropertyOffset
     StructureRareData* rareData = tryRareData();
     if (!rareData)
         return nullptr;
-    StructureRareData::PropertyWatchpointMap* map = rareData->m_replacementWatchpointSets.get();
-    if (!map)
-        return nullptr;
-    return map->get(offset);
+    return rareData->m_replacementWatchpointSets.get(offset);
 }
 
 template<typename DetailsFunc>

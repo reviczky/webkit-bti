@@ -111,11 +111,11 @@ bool DisplayRefreshMonitor::removeClient(DisplayRefreshMonitorClient& client)
     return removed;
 }
 
-Optional<FramesPerSecond> DisplayRefreshMonitor::maximumClientPreferredFramesPerSecond() const
+std::optional<FramesPerSecond> DisplayRefreshMonitor::maximumClientPreferredFramesPerSecond() const
 {
-    Optional<FramesPerSecond> maxFramesPerSecond;
+    std::optional<FramesPerSecond> maxFramesPerSecond;
     for (auto* client : m_clients)
-        maxFramesPerSecond = std::max<FramesPerSecond>(maxFramesPerSecond.valueOr(0), client->preferredFramesPerSecond());
+        maxFramesPerSecond = std::max<FramesPerSecond>(maxFramesPerSecond.value_or(0), client->preferredFramesPerSecond());
 
     return maxFramesPerSecond;
 }
@@ -138,7 +138,7 @@ void DisplayRefreshMonitor::clientPreferredFramesPerSecondChanged(DisplayRefresh
 
 bool DisplayRefreshMonitor::requestRefreshCallback()
 {
-    auto locker = holdLock(m_lock);
+    Locker locker { m_lock };
     
     if (isScheduled())
         return true;
@@ -166,7 +166,7 @@ bool DisplayRefreshMonitor::firedAndReachedMaxUnscheduledFireCount()
 void DisplayRefreshMonitor::displayLinkFired(const DisplayUpdate& displayUpdate)
 {
     {
-        auto locker = holdLock(m_lock);
+        Locker locker { m_lock };
 
         // This may be off the main thread.
         if (!isPreviousFrameDone())
@@ -219,7 +219,7 @@ void DisplayRefreshMonitor::displayDidRefresh(const DisplayUpdate& displayUpdate
         m_clientsToBeNotified = nullptr;
 
     {
-        auto locker = holdLock(m_lock);
+        Locker locker { m_lock };
         setIsPreviousFrameDone(true);
     }
 

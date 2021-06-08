@@ -73,13 +73,13 @@ static bool hasSetTargetConverged(float value, float target, Seconds currentTime
 
 ExceptionOr<void> AudioParamTimeline::setValueAtTime(float value, Seconds time)
 {
-    auto locker = holdLock(m_eventsLock);
+    Locker locker { m_eventsLock };
     return insertEvent(ParamEvent::createSetValueEvent(value, time));
 }
 
 ExceptionOr<void> AudioParamTimeline::linearRampToValueAtTime(float targetValue, Seconds endTime, float currentValue, Seconds currentTime)
 {
-    auto locker = holdLock(m_eventsLock);
+    Locker locker { m_eventsLock };
 
     // Linear ramp events need a preceding event so that they have an initial value.
     if (m_events.isEmpty())
@@ -90,7 +90,7 @@ ExceptionOr<void> AudioParamTimeline::linearRampToValueAtTime(float targetValue,
 
 ExceptionOr<void> AudioParamTimeline::exponentialRampToValueAtTime(float targetValue, Seconds endTime, float currentValue, Seconds currentTime)
 {
-    auto locker = holdLock(m_eventsLock);
+    Locker locker { m_eventsLock };
 
     // Exponential ramp events need a preceding event so that they have an initial value.
     if (m_events.isEmpty())
@@ -101,7 +101,7 @@ ExceptionOr<void> AudioParamTimeline::exponentialRampToValueAtTime(float targetV
 
 ExceptionOr<void> AudioParamTimeline::setTargetAtTime(float target, Seconds time, float timeConstant)
 {
-    auto locker = holdLock(m_eventsLock);
+    Locker locker { m_eventsLock };
     // If timeConstant is 0, we instantly jump to the target value, so insert a SetValueEvent instead of SetTargetEvent.
     if (!timeConstant)
         return insertEvent(ParamEvent::createSetValueEvent(target, time));
@@ -110,7 +110,7 @@ ExceptionOr<void> AudioParamTimeline::setTargetAtTime(float target, Seconds time
 
 ExceptionOr<void> AudioParamTimeline::setValueCurveAtTime(Vector<float>&& curve, Seconds time, Seconds duration)
 {
-    auto locker = holdLock(m_eventsLock);
+    Locker locker { m_eventsLock };
 
     float curveEndValue = curve.last();
     auto result = insertEvent(ParamEvent::createSetValueCurveEvent(WTFMove(curve), time, duration));
@@ -186,7 +186,7 @@ ExceptionOr<void> AudioParamTimeline::insertEvent(ParamEvent&& event)
 
 void AudioParamTimeline::cancelScheduledValues(Seconds cancelTime)
 {
-    auto locker = holdLock(m_eventsLock);
+    Locker locker { m_eventsLock };
 
     // Remove all events whose start time is greater than or equal to the cancel time.
     // Also handle the special case where the cancel time lies in the middle of a
@@ -215,7 +215,7 @@ void AudioParamTimeline::cancelScheduledValues(Seconds cancelTime)
 
 ExceptionOr<void> AudioParamTimeline::cancelAndHoldAtTime(Seconds cancelTime)
 {
-    auto locker = holdLock(m_eventsLock);
+    Locker locker { m_eventsLock };
 
     // Find the first event at or just past cancelTime.
     size_t i = m_events.findMatching([&](auto& event) {
@@ -241,8 +241,8 @@ ExceptionOr<void> AudioParamTimeline::cancelAndHoldAtTime(Seconds cancelTime)
     auto eventType = cancelledEvent.type();
 
     // New event to be inserted, if any, and a SetValueEvent if needed.
-    Optional<ParamEvent> newEvent;
-    Optional<ParamEvent> newSetValueEvent;
+    std::optional<ParamEvent> newEvent;
+    std::optional<ParamEvent> newSetValueEvent;
 
     switch (eventType) {
     case ParamEvent::LinearRampToValue:
@@ -262,7 +262,7 @@ ExceptionOr<void> AudioParamTimeline::cancelAndHoldAtTime(Seconds cancelTime)
             // we get there.
             ++cancelledEventIndex;
 
-            newEvent = ParamEvent::createCancelValuesEvent(cancelTime, WTF::nullopt);
+            newEvent = ParamEvent::createCancelValuesEvent(cancelTime, std::nullopt);
         }
         break;
     }
@@ -285,7 +285,7 @@ ExceptionOr<void> AudioParamTimeline::cancelAndHoldAtTime(Seconds cancelTime)
                 float endValue = valueCurveAtTime(cancelTime, cancelledEvent.time(), cancelledEvent.duration(), cancelledEvent.curve().data(), cancelledEvent.curve().size());
 
                 // Replace the existing SetValueCurve with this new one that is identical except for the duration.
-                newEvent = ParamEvent { eventType, cancelledEvent.value(), cancelledEvent.time(), cancelledEvent.timeConstant(), newDuration, Vector<float> { cancelledEvent.curve() }, cancelledEvent.curvePointsPerSecond(), endValue, WTF::nullopt };
+                newEvent = ParamEvent { eventType, cancelledEvent.value(), cancelledEvent.time(), cancelledEvent.timeConstant(), newDuration, Vector<float> { cancelledEvent.curve() }, cancelledEvent.curvePointsPerSecond(), endValue, std::nullopt };
                 newSetValueEvent = ParamEvent::createSetValueEvent(endValue, cancelledEvent.time() + newDuration);
             }
         }
@@ -324,12 +324,14 @@ void AudioParamTimeline::removeCancelledEvents(size_t firstEventToRemove)
     m_events.remove(firstEventToRemove, m_events.size() - firstEventToRemove);
 }
 
-Optional<float> AudioParamTimeline::valueForContextTime(BaseAudioContext& context, float defaultValue, float minValue, float maxValue)
+std::optional<float> AudioParamTimeline::valueForContextTime(BaseAudioContext& context, float defaultValue, float minValue, float maxValue)
 {
     {
-        auto locker = tryHoldLock(m_eventsLock);
-        if (!locker || !m_events.size() || Seconds { context.currentTime() } < m_events[0].time())
-            return WTF::nullopt;
+        if (!m_eventsLock.tryLock())
+            return std::nullopt;
+        Locker locker { AdoptLock, m_eventsLock };
+        if (!m_events.size() || Seconds { context.currentTime() } < m_events[0].time())
+            return std::nullopt;
     }
 
     // Ask for just a single value.
@@ -345,11 +347,11 @@ Optional<float> AudioParamTimeline::valueForContextTime(BaseAudioContext& contex
 float AudioParamTimeline::valuesForFrameRange(size_t startFrame, size_t endFrame, float defaultValue, float minValue, float maxValue, float* values, unsigned numberOfValues, double sampleRate, double controlRate)
 {
     // We can't contend the lock in the realtime audio thread.
-    auto locker = tryHoldLock(m_eventsLock);
-    if (!locker) {
+    if (!m_eventsLock.tryLock()) {
         std::fill_n(values, numberOfValues, defaultValue);
         return defaultValue;
     }
+    Locker locker { AdoptLock, m_eventsLock };
 
     float value = valuesForFrameRangeImpl(startFrame, endFrame, defaultValue, values, numberOfValues, sampleRate, controlRate);
 
@@ -902,17 +904,17 @@ void AudioParamTimeline::handleCancelValues(ParamEvent& event, ParamEvent* nextE
 
 auto AudioParamTimeline::ParamEvent::createSetValueEvent(float value, Seconds time) -> ParamEvent
 {
-    return ParamEvent { ParamEvent::SetValue, value, time, 0, Seconds { }, Vector<float> { }, 0, 0, WTF::nullopt };
+    return ParamEvent { ParamEvent::SetValue, value, time, 0, Seconds { }, Vector<float> { }, 0, 0, std::nullopt };
 }
 
 auto AudioParamTimeline::ParamEvent::createLinearRampEvent(float value, Seconds time) -> ParamEvent
 {
-    return { ParamEvent::LinearRampToValue, value, time, 0, Seconds { }, Vector<float> { }, 0, 0, WTF::nullopt };
+    return { ParamEvent::LinearRampToValue, value, time, 0, Seconds { }, Vector<float> { }, 0, 0, std::nullopt };
 }
 
 auto AudioParamTimeline::ParamEvent::createExponentialRampEvent(float value, Seconds time) -> ParamEvent
 {
-    return { ParamEvent::ExponentialRampToValue, value, time, 0, Seconds { }, Vector<float> { }, 0, 0, WTF::nullopt };
+    return { ParamEvent::ExponentialRampToValue, value, time, 0, Seconds { }, Vector<float> { }, 0, 0, std::nullopt };
 }
 
 auto AudioParamTimeline::ParamEvent::createSetTargetEvent(float target, Seconds time, float timeConstant) -> ParamEvent
@@ -920,17 +922,17 @@ auto AudioParamTimeline::ParamEvent::createSetTargetEvent(float target, Seconds 
     // The time line code does not expect a timeConstant of 0. (It returns NaN or Infinity due to division by zero. The caller
     // should have converted this to a SetValueEvent.
     ASSERT(!!timeConstant);
-    return { ParamEvent::SetTarget, target, time, timeConstant, Seconds { }, Vector<float> { }, 0, 0, WTF::nullopt };
+    return { ParamEvent::SetTarget, target, time, timeConstant, Seconds { }, Vector<float> { }, 0, 0, std::nullopt };
 }
 
 auto AudioParamTimeline::ParamEvent::createSetValueCurveEvent(Vector<float>&& curve, Seconds time, Seconds duration) -> ParamEvent
 {
     double curvePointsPerSecond = (curve.size() - 1) / duration.value();
     float curveEndValue = curve.last();
-    return { ParamEvent::SetValueCurve, 0, time, 0, duration, WTFMove(curve), curvePointsPerSecond, curveEndValue, WTF::nullopt };
+    return { ParamEvent::SetValueCurve, 0, time, 0, duration, WTFMove(curve), curvePointsPerSecond, curveEndValue, std::nullopt };
 }
 
-auto AudioParamTimeline::ParamEvent::createCancelValuesEvent(Seconds cancelTime, Optional<SavedEvent>&& savedEvent) -> ParamEvent
+auto AudioParamTimeline::ParamEvent::createCancelValuesEvent(Seconds cancelTime, std::optional<SavedEvent>&& savedEvent) -> ParamEvent
 {
 #if ASSERT_ENABLED
     if (savedEvent) {
@@ -984,9 +986,9 @@ bool AudioParamTimeline::isEventCurrent(const ParamEvent& event, const ParamEven
 
 bool AudioParamTimeline::hasValues(size_t startFrame, double sampleRate) const
 {
-    auto locker = tryHoldLock(m_eventsLock);
-    if (!locker)
+    if (!m_eventsLock.tryLock())
         return true;
+    Locker locker { AdoptLock, m_eventsLock };
 
     // Return false if there are no events in the time range.
     auto endFrame = startFrame + AudioUtilities::renderQuantumSize;

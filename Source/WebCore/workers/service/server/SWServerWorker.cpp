@@ -62,6 +62,7 @@ SWServerWorker::SWServerWorker(SWServer& server, SWServerRegistration& registrat
     , m_registrableDomain(m_data.scriptURL)
     , m_scriptResourceMap(WTFMove(scriptResourceMap))
     , m_terminationTimer(*this, &SWServerWorker::terminationTimerFired)
+    , m_lastNavigationWasAppBound(m_server->clientIsAppBoundForRegistrableDomain(m_registrableDomain))
 {
     m_data.scriptURL.removeFragmentIdentifier();
 
@@ -86,7 +87,18 @@ ServiceWorkerContextData SWServerWorker::contextData() const
 {
     ASSERT(m_registration);
 
-    return { WTF::nullopt, m_registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_scriptResourceMap };
+    return { std::nullopt, m_registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppBound, m_scriptResourceMap };
+}
+
+void SWServerWorker::updateAppBoundValue(LastNavigationWasAppBound lastNavigationWasAppBound)
+{
+    m_lastNavigationWasAppBound = lastNavigationWasAppBound;
+
+    if (!isRunning())
+        return;
+
+    if (auto* connection = contextConnection())
+        connection->updateAppBoundValue(identifier(), lastNavigationWasAppBound);
 }
 
 void SWServerWorker::terminate(CompletionHandler<void()>&& callback)
@@ -164,14 +176,14 @@ SWServerToContextConnection* SWServerWorker::contextConnection()
     return m_server ? m_server->contextConnectionForRegistrableDomain(registrableDomain()) : nullptr;
 }
 
-void SWServerWorker::scriptContextFailedToStart(const Optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, const String& message)
+void SWServerWorker::scriptContextFailedToStart(const std::optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, const String& message)
 {
     ASSERT(m_server);
     if (m_server)
         m_server->scriptContextFailedToStart(jobDataIdentifier, *this, message);
 }
 
-void SWServerWorker::scriptContextStarted(const Optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, bool doesHandleFetch)
+void SWServerWorker::scriptContextStarted(const std::optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, bool doesHandleFetch)
 {
     m_shouldSkipHandleFetch = !doesHandleFetch;
     ASSERT(m_server);
@@ -179,7 +191,7 @@ void SWServerWorker::scriptContextStarted(const Optional<ServiceWorkerJobDataIde
         m_server->scriptContextStarted(jobDataIdentifier, *this);
 }
 
-void SWServerWorker::didFinishInstall(const Optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, bool wasSuccessful)
+void SWServerWorker::didFinishInstall(const std::optional<ServiceWorkerJobDataIdentifier>& jobDataIdentifier, bool wasSuccessful)
 {
     auto state = this->state();
     if (state == ServiceWorkerState::Redundant)
@@ -210,7 +222,7 @@ void SWServerWorker::contextTerminated()
         m_server->workerContextTerminated(*this);
 }
 
-Optional<ServiceWorkerClientData> SWServerWorker::findClientByIdentifier(const ServiceWorkerClientIdentifier& clientId) const
+std::optional<ServiceWorkerClientData> SWServerWorker::findClientByIdentifier(const ServiceWorkerClientIdentifier& clientId) const
 {
     ASSERT(m_server);
     if (!m_server)

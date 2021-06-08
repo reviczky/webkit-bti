@@ -39,7 +39,6 @@
 #include "TextIndicator.h"
 #include "VP9Utilities.h"
 #include <JavaScriptCore/Float32Array.h>
-#include <wtf/Optional.h>
 
 #if ENABLE(VIDEO)
 #include "MediaElementSession.h"
@@ -110,7 +109,6 @@ class UnsuspendableActiveDOMObject;
 class VoidCallback;
 class WebAnimation;
 class WebGLRenderingContext;
-class WebKitAudioContext;
 class WindowProxy;
 class XMLHttpRequest;
 
@@ -234,8 +232,8 @@ public:
     bool areTimersThrottled() const;
 
     enum EventThrottlingBehavior { Responsive, Unresponsive };
-    void setEventThrottlingBehaviorOverride(Optional<EventThrottlingBehavior>);
-    Optional<EventThrottlingBehavior> eventThrottlingBehaviorOverride() const;
+    void setEventThrottlingBehaviorOverride(std::optional<EventThrottlingBehavior>);
+    std::optional<EventThrottlingBehavior> eventThrottlingBehaviorOverride() const;
 
     // Spatial Navigation testing.
     ExceptionOr<unsigned> lastSpatialNavigationCandidateCount() const;
@@ -437,7 +435,7 @@ public:
 
     ExceptionOr<String> scrollingStateTreeAsText() const;
     ExceptionOr<String> scrollingTreeAsText() const;
-    ExceptionOr<String> mainThreadScrollingReasons() const;
+    ExceptionOr<String> synchronousScrollingReasons() const;
     ExceptionOr<Ref<DOMRectList>> nonFastScrollableRects() const;
 
     ExceptionOr<void> setElementUsesDisplayListDrawing(Element&, bool usesDisplayListDrawing);
@@ -577,8 +575,8 @@ public:
     ExceptionOr<unsigned> renderingUpdateCount();
 
     enum CompositingPolicy { Normal, Conservative };
-    ExceptionOr<void> setCompositingPolicyOverride(Optional<CompositingPolicy>);
-    ExceptionOr<Optional<CompositingPolicy>> compositingPolicyOverride() const;
+    ExceptionOr<void> setCompositingPolicyOverride(std::optional<CompositingPolicy>);
+    ExceptionOr<std::optional<CompositingPolicy>> compositingPolicyOverride() const;
 
     void updateLayoutAndStyleForAllFrames();
     ExceptionOr<void> updateLayoutIgnorePendingStylesheetsAndRunPostLayoutTasks(Node*);
@@ -656,10 +654,12 @@ public:
     String elementBufferingPolicy(HTMLMediaElement&);
     double privatePlayerVolume(const HTMLMediaElement&);
     bool privatePlayerMuted(const HTMLMediaElement&);
+    bool isMediaElementHidden(const HTMLMediaElement&);
+
     ExceptionOr<void> setOverridePreferredDynamicRangeMode(HTMLMediaElement&, const String&);
 #endif
 
-    ExceptionOr<void> setIsPlayingToBluetoothOverride(Optional<bool>);
+    ExceptionOr<void> setIsPlayingToBluetoothOverride(std::optional<bool>);
 
     bool isSelectPopupVisible(HTMLSelectElement&);
 
@@ -714,7 +714,7 @@ public:
 #endif
 
 #if ENABLE(WEB_AUDIO)
-    void setAudioContextRestrictions(const Variant<RefPtr<AudioContext>, RefPtr<WebKitAudioContext>>&, StringView restrictionsString);
+    void setAudioContextRestrictions(AudioContext&, StringView restrictionsString);
     void useMockAudioDestinationCocoa();
 #endif
 
@@ -844,6 +844,7 @@ public:
     bool supportsAudioSession() const;
     String audioSessionCategory() const;
     double preferredAudioBufferSize() const;
+    double currentAudioBufferSize() const;
     bool audioSessionActive() const;
 
     void storeRegistrationsOnDisk(DOMPromiseDeferred<void>&&);
@@ -957,6 +958,8 @@ public:
 
     using MediaSessionState = PlatformMediaSession::State;
     MediaSessionState mediaSessionState(HTMLMediaElement&);
+
+    size_t mediaElementCount() const;
 #endif
 
     void setCaptureExtraNetworkLoadMetricsEnabled(bool);
@@ -975,17 +978,17 @@ public:
     bool capsLockIsOn();
         
     using HEVCParameterSet = WebCore::HEVCParameters;
-    Optional<HEVCParameterSet> parseHEVCCodecParameters(StringView);
+    std::optional<HEVCParameterSet> parseHEVCCodecParameters(StringView);
 
     struct DoViParameterSet {
         String codecName;
         uint16_t bitstreamProfileID;
         uint16_t bitstreamLevelID;
     };
-    Optional<DoViParameterSet> parseDoViCodecParameters(StringView);
+    std::optional<DoViParameterSet> parseDoViCodecParameters(StringView);
 
     using VPCodecConfigurationRecord = WebCore::VPCodecConfigurationRecord;
-    Optional<VPCodecConfigurationRecord> parseVPCodecParameters(StringView);
+    std::optional<VPCodecConfigurationRecord> parseVPCodecParameters(StringView);
 
     struct CookieData {
         String name;
@@ -1006,7 +1009,7 @@ public:
             , value(cookie.value)
             , domain(cookie.domain)
             , path(cookie.path)
-            , expires(cookie.expires.valueOr(0))
+            , expires(cookie.expires.value_or(0))
             , isHttpOnly(cookie.httpOnly)
             , isSecure(cookie.secure)
             , isSession(cookie.session)
@@ -1193,7 +1196,6 @@ private:
 #endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
-    RefPtr<MediaSessionCoordinator> m_mediaSessionCoordinator;
     RefPtr<MockMediaSessionCoordinator> m_mockMediaSessionCoordinator;
 #endif
 };

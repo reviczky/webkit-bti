@@ -103,7 +103,7 @@ struct SFrameHeaderInfo {
     uint64_t keyId;
     uint64_t counter;
 };
-static inline Optional<SFrameHeaderInfo> parseSFrameHeader(const uint8_t* data, size_t size)
+static inline std::optional<SFrameHeaderInfo> parseSFrameHeader(const uint8_t* data, size_t size)
 {
     auto* start = data;
 
@@ -154,13 +154,13 @@ RTCRtpSFrameTransformer::~RTCRtpSFrameTransformer()
 {
 }
 
-ExceptionOr<void> RTCRtpSFrameTransformer::setEncryptionKey(const Vector<uint8_t>& rawKey, Optional<uint64_t> keyId)
+ExceptionOr<void> RTCRtpSFrameTransformer::setEncryptionKey(const Vector<uint8_t>& rawKey, std::optional<uint64_t> keyId)
 {
-    auto locker = holdLock(m_keyLock);
+    Locker locker { m_keyLock };
     return updateEncryptionKey(rawKey, keyId, ShouldUpdateKeys::Yes);
 }
 
-ExceptionOr<void> RTCRtpSFrameTransformer::updateEncryptionKey(const Vector<uint8_t>& rawKey, Optional<uint64_t> keyId, ShouldUpdateKeys shouldUpdateKeys)
+ExceptionOr<void> RTCRtpSFrameTransformer::updateEncryptionKey(const Vector<uint8_t>& rawKey, std::optional<uint64_t> keyId, ShouldUpdateKeys shouldUpdateKeys)
 {
     ASSERT(m_keyLock.isLocked());
 
@@ -224,7 +224,7 @@ ExceptionOr<Vector<uint8_t>> RTCRtpSFrameTransformer::decryptFrame(const uint8_t
         break;
     }
 
-    auto locker = holdLock(m_keyLock);
+    Locker locker { m_keyLock };
 
     auto header = parseSFrameHeader(frameData, frameSize);
 
@@ -286,7 +286,7 @@ ExceptionOr<Vector<uint8_t>> RTCRtpSFrameTransformer::encryptFrame(const uint8_t
         break;
     }
 
-    auto locker = holdLock(m_keyLock);
+    Locker locker { m_keyLock };
 
     auto iv = computeIV(m_counter, m_saltKey);
 

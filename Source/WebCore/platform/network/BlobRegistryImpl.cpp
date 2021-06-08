@@ -40,7 +40,6 @@
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
 #include <wtf/CompletionHandler.h>
-#include <wtf/FileMetadata.h>
 #include <wtf/FileSystem.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
@@ -57,7 +56,7 @@ static Ref<ResourceHandle> createBlobResourceHandle(const ResourceRequest& reque
     return blobRegistry().blobRegistryImpl()->createResourceHandle(request, client);
 }
 
-static void loadBlobResourceSynchronously(NetworkingContext*, const ResourceRequest& request, StoredCredentialsPolicy, ResourceError& error, ResourceResponse& response, Vector<char>& data)
+static void loadBlobResourceSynchronously(NetworkingContext*, const ResourceRequest& request, StoredCredentialsPolicy, ResourceError& error, ResourceResponse& response, Vector<uint8_t>& data)
 {
     auto* blobData = blobRegistry().blobRegistryImpl()->getBlobDataFromURL(request.url());
     BlobResourceHandle::loadResourceSynchronously(blobData, request, error, response, data);
@@ -288,7 +287,7 @@ static bool writeFilePathsOrDataBuffersToFile(const Vector<std::pair<String, Thr
     for (auto& part : filePathsOrDataBuffers) {
         if (part.second.data()) {
             int length = part.second.data()->size();
-            if (FileSystem::writeToFile(file, reinterpret_cast<const char*>(part.second.data()->data()), length) != length) {
+            if (FileSystem::writeToFile(file, part.second.data()->data(), length) != length) {
                 LOG_ERROR("Failed writing a Blob to temporary file");
                 return false;
             }

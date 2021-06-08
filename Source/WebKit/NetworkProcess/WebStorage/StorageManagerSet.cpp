@@ -163,13 +163,13 @@ void StorageManagerSet::suspend(CompletionHandler<void()>&& completionHandler)
     ASSERT(RunLoop::isMain());
 
     CompletionHandlerCallingScope completionHandlerCaller(WTFMove(completionHandler));
-    Locker<Lock> stateLocker(m_stateLock);
+    Locker stateLocker { m_stateLock };
     if (m_state != State::Running)
         return;
     m_state = State::WillSuspend;
 
     m_queue->dispatch([this, protectedThis = makeRef(*this), completionHandler = completionHandlerCaller.release()] () mutable {
-        Locker<Lock> stateLocker(m_stateLock);
+        Locker stateLocker { m_stateLock };
         ASSERT(m_state != State::Suspended);
 
         if (m_state != State::WillSuspend) {
@@ -190,7 +190,7 @@ void StorageManagerSet::resume()
 {
     ASSERT(RunLoop::isMain());
 
-    Locker<Lock> stateLocker(m_stateLock);
+    Locker stateLocker { m_stateLock };
     auto previousState = m_state;
     m_state = State::Running;
     if (previousState == State::Suspended)
@@ -312,13 +312,13 @@ void StorageManagerSet::connectToLocalStorageArea(IPC::Connection& connection, P
 
     auto* storageManager = m_storageManagers.get(sessionID);
     if (!storageManager) {
-        completionHandler(WTF::nullopt);
+        completionHandler(std::nullopt);
         return;
     }
 
     auto* storageArea = storageManager->createLocalStorageArea(storageNamespaceID, WTFMove(originData), m_queue.copyRef());
     if (!storageArea) {
-        completionHandler(WTF::nullopt);
+        completionHandler(std::nullopt);
         return;
     }
 
@@ -337,13 +337,13 @@ void StorageManagerSet::connectToTransientLocalStorageArea(IPC::Connection& conn
 
     auto* storageManager = m_storageManagers.get(sessionID);
     if (!storageManager) {
-        completionHandler(WTF::nullopt);
+        completionHandler(std::nullopt);
         return;
     }
 
     auto* storageArea = storageManager->createTransientLocalStorageArea(storageNamespaceID, WTFMove(topLevelOriginData), WTFMove(originData), m_queue.copyRef());
     if (!storageArea) {
-        completionHandler(WTF::nullopt);
+        completionHandler(std::nullopt);
         return;
     }
 
@@ -362,13 +362,13 @@ void StorageManagerSet::connectToSessionStorageArea(IPC::Connection& connection,
 
     auto* storageManager = m_storageManagers.get(sessionID);
     if (!storageManager) {
-        completionHandler(WTF::nullopt);
+        completionHandler(std::nullopt);
         return;
     }
 
     auto* storageArea = storageManager->createSessionStorageArea(storageNamespaceID, WTFMove(originData), m_queue.copyRef());
     if (!storageArea) {
-        completionHandler(WTF::nullopt);
+        completionHandler(std::nullopt);
         return;
     }
 

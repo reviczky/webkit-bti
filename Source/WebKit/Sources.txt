@@ -217,6 +217,7 @@ Shared/WebMemorySampler.cpp
 Shared/WebMouseEvent.cpp @no-unify
 Shared/WebPageCreationParameters.cpp
 Shared/WebPageGroupData.cpp
+Shared/WebPageNetworkParameters.cpp
 Shared/WebPlatformTouchPoint.cpp @no-unify
 Shared/WebPopupItem.cpp
 Shared/WebPreferencesDefaultValues.cpp
@@ -724,5 +725,6 @@ WebProcess/WebStorage/WebStorageNamespaceProvider.cpp
 
 RTCDataChannelRemoteManagerMessageReceiver.cpp
 RTCDataChannelRemoteManagerProxyMessageReceiver.cpp
+RemoteAudioMediaStreamTrackRendererInternalUnitManagerMessageReceiver.cpp
 RemoteGraphicsContextGLMessageReceiver.cpp
 RemoteGraphicsContextGLProxyMessageReceiver.cpp

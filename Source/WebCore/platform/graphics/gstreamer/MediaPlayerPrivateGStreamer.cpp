@@ -146,7 +146,6 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     : m_notifier(MainThreadNotifier<MainThreadNotification>::create())
     , m_player(player)
     , m_referrer(player->referrer())
-    , m_cachedPosition(MediaTime::invalidTime())
     , m_cachedDuration(MediaTime::invalidTime())
     , m_seekTime(MediaTime::invalidTime())
     , m_timeOfOverlappingSeek(MediaTime::invalidTime())
@@ -252,7 +251,7 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
 
 #if ENABLE(ENCRYPTED_MEDIA)
     {
-        LockHolder lock(m_cdmAttachmentMutex);
+        Locker cdmAttachmentLocker { m_cdmAttachmentLock };
         m_cdmAttachmentCondition.notifyAll();
     }
 #endif
@@ -340,7 +339,7 @@ void MediaPlayerPrivateGStreamer::load(const String& urlString)
     m_readyState = MediaPlayer::ReadyState::HaveNothing;
     m_player->readyStateChanged();
     m_areVolumeAndMuteInitialized = false;
-    m_hasTaintedOrigin = WTF::nullopt;
+    m_hasTaintedOrigin = std::nullopt;
 
     if (!m_isDelayingLoad)
         commitLoad();
@@ -805,7 +804,7 @@ bool MediaPlayerPrivateGStreamer::hasSingleSecurityOrigin() const
     return resolvedOrigin->isSameSchemeHostPort(requestedOrigin.get());
 }
 
-Optional<bool> MediaPlayerPrivateGStreamer::wouldTaintOrigin(const SecurityOrigin& origin) const
+std::optional<bool> MediaPlayerPrivateGStreamer::wouldTaintOrigin(const SecurityOrigin& origin) const
 {
     GST_TRACE_OBJECT(pipeline(), "Checking %u origins", m_origins.size());
     for (auto& responseOrigin : m_origins) {
@@ -1029,7 +1028,7 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfVideo()
 }
 bool MediaPlayerPrivateGStreamer::hasFirstVideoSampleReachedSink() const
 {
-    auto sampleLocker = holdLock(m_sampleMutex);
+    Locker sampleLocker { m_sampleMutex };
     return !!m_sample;
 }
 
@@ -1344,22 +1343,31 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
     if (m_isEndReached)
         return m_playbackRate > 0 ? durationMediaTime() : MediaTime::zeroTime();
 
-    // This constant should remain lower than HTMLMediaElement's maxTimeupdateEventFrequency.
-    static const Seconds positionCacheThreshold = 200_ms;
-    Seconds now = WTF::WallTime::now().secondsSinceEpoch();
-    if (m_lastQueryTime && (now - m_lastQueryTime.value()) < positionCacheThreshold && m_cachedPosition.isValid()) {
-        GST_TRACE_OBJECT(pipeline(), "Returning cached position: %s", m_cachedPosition.toString().utf8().data());
-        return m_cachedPosition;
+    if (m_cachedPosition) {
+        GST_TRACE_OBJECT(pipeline(), "Returning cached position: %s", m_cachedPosition.value().toString().utf8().data());
+        return m_cachedPosition.value();
     }
-
-    m_lastQueryTime = now;
 
     // Position is only available if no async state change is going on and the state is either paused or playing.
     gint64 position = GST_CLOCK_TIME_NONE;
-    GstQuery* query = gst_query_new_position(GST_FORMAT_TIME);
-    if (gst_element_query(m_pipeline.get(), query))
-        gst_query_parse_position(query, 0, &position);
-    gst_query_unref(query);
+
+    // Asking directly to the sinks and choosing the highest value is faster than asking to the pipeline.
+    GRefPtr<GstQuery> query = adoptGRef(gst_query_new_position(GST_FORMAT_TIME));
+    if (m_audioSink && gst_element_query(m_audioSink.get(), query.get())) {
+        gint64 audioPosition = GST_CLOCK_TIME_NONE;
+        gst_query_parse_position(query.get(), 0, &audioPosition);
+        if (GST_CLOCK_TIME_IS_VALID(audioPosition))
+            position = audioPosition;
+        query = adoptGRef(gst_query_new_position(GST_FORMAT_TIME));
+    }
+    if (m_videoSink && gst_element_query(m_videoSink.get(), query.get())) {
+        gint64 videoPosition = GST_CLOCK_TIME_NONE;
+        gst_query_parse_position(query.get(), 0, &videoPosition);
+        if (GST_CLOCK_TIME_IS_VALID(videoPosition) && (!GST_CLOCK_TIME_IS_VALID(position)
+            || (m_playbackRate >= 0 && videoPosition > position)
+            || (m_playbackRate < 0 && videoPosition < position)))
+            position = videoPosition;
+    }
 
     GstClockTime gstreamerPosition = static_cast<GstClockTime>(position);
     GST_TRACE_OBJECT(pipeline(), "Position %" GST_TIME_FORMAT ", canFallBackToLastFinishedSeekPosition: %s", GST_TIME_ARGS(gstreamerPosition), boolForPrinting(m_canFallBackToLastFinishedSeekPosition));
@@ -1372,6 +1380,7 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
         playbackPosition = m_seekTime;
 
     m_cachedPosition = playbackPosition;
+    invalidateCachedPositionOnNextIteration();
     return playbackPosition;
 }
 
@@ -2209,7 +2218,7 @@ void MediaPlayerPrivateGStreamer::purgeOldDownloadFiles(const String& downloadFi
         return;
 
     auto templateDirectory = FileSystem::parentPath(downloadFilePrefixPath);
-    auto templatePrefix = FileSystem::pathGetFileName(downloadFilePrefixPath);
+    auto templatePrefix = FileSystem::pathFileName(downloadFilePrefixPath);
     for (auto& fileName : FileSystem::listDirectory(templateDirectory)) {
         if (!fileName.startsWith(templatePrefix))
             continue;
@@ -2235,7 +2244,7 @@ void MediaPlayerPrivateGStreamer::asyncStateChangeDone()
         else {
             GST_DEBUG_OBJECT(pipeline(), "[Seek] seeked to %s", toString(m_seekTime).utf8().data());
             m_isSeeking = false;
-            m_cachedPosition = MediaTime::invalidTime();
+            invalidateCachedPosition();
             if (m_timeOfOverlappingSeek != m_seekTime && m_timeOfOverlappingSeek.isValid()) {
                 seek(m_timeOfOverlappingSeek);
                 m_timeOfOverlappingSeek = MediaTime::invalidTime();
@@ -2421,7 +2430,7 @@ void MediaPlayerPrivateGStreamer::updateStates()
             m_isSeekPending = false;
             m_isSeeking = doSeek(m_seekTime, m_player->rate(), static_cast<GstSeekFlags>(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE));
             if (!m_isSeeking) {
-                m_cachedPosition = MediaTime::invalidTime();
+                invalidateCachedPosition();
                 GST_DEBUG_OBJECT(pipeline(), "[Seek] seeking to %s failed", toString(m_seekTime).utf8().data());
             }
         }
@@ -2533,7 +2542,7 @@ bool MediaPlayerPrivateGStreamer::loadNextLocation()
 
 void MediaPlayerPrivateGStreamer::didEnd()
 {
-    m_cachedPosition = MediaTime::invalidTime();
+    invalidateCachedPosition();
     MediaTime now = currentMediaTime();
     GST_INFO_OBJECT(pipeline(), "Playback ended, currentMediaTime = %s, duration = %s", now.toString().utf8().data(), durationMediaTime().toString().utf8().data());
     m_isEndReached = true;
@@ -2708,7 +2717,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
 
     static Atomic<uint32_t> pipelineId;
 
-    m_pipeline = gst_element_factory_make(playbinName, makeString(type, elementId, '-', pipelineId.exchangeAdd(1)).ascii().data());
+    m_pipeline = makeGStreamerElement(playbinName, makeString(type, elementId, '-', pipelineId.exchangeAdd(1)).ascii().data());
     if (!m_pipeline) {
         GST_WARNING("%s not found, make sure to install gst-plugins-base", playbinName);
         loadingFailed(MediaPlayer::NetworkState::FormatError, MediaPlayer::ReadyState::HaveNothing, true);
@@ -2793,17 +2802,6 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
     if (!m_player->isVideoPlayer())
         return;
 
-    if (!m_canRenderingBeAccelerated) {
-        // If not using accelerated compositing, let GStreamer handle
-        // the image-orientation tag.
-        GstElement* videoFlip = gst_element_factory_make("videoflip", nullptr);
-        if (videoFlip) {
-            gst_util_set_object_arg(G_OBJECT(videoFlip), "method", "automatic");
-            g_object_set(m_pipeline.get(), "video-filter", videoFlip, nullptr);
-        } else
-            m_shouldHandleOrientationTags = true;
-    }
-
     GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
     if (videoSinkPad)
         g_signal_connect(videoSinkPad.get(), "notify::caps", G_CALLBACK(+[](GstPad* videoSinkPad, GParamSpec*, MediaPlayerPrivateGStreamer* player) {
@@ -2841,6 +2839,31 @@ void MediaPlayerPrivateGStreamer::readyTimerFired()
 void MediaPlayerPrivateGStreamer::acceleratedRenderingStateChanged()
 {
     m_canRenderingBeAccelerated = m_player && m_player->acceleratedCompositingEnabled();
+}
+
+bool MediaPlayerPrivateGStreamer::performTaskAtMediaTime(Function<void()>&& task, const MediaTime& time)
+{
+    ASSERT(isMainThread());
+
+    // Ignore the cases when the time isn't marching on or the position is unknown.
+    MediaTime currentTime = playbackPosition();
+    if (!m_pipeline || m_didErrorOccur || m_isSeeking || m_isPaused || !m_playbackRate || !currentTime.isValid())
+        return false;
+
+    std::optional<Function<void()>> taskToSchedule;
+    {
+        DataMutexLocker taskAtMediaTimeScheduler { m_TaskAtMediaTimeSchedulerDataMutex };
+        taskAtMediaTimeScheduler->setTask(WTFMove(task), time,
+            m_playbackRate >= 0 ? TaskAtMediaTimeScheduler::Forward : TaskAtMediaTimeScheduler::Backward);
+        taskToSchedule = taskAtMediaTimeScheduler->checkTaskForScheduling(currentTime);
+    }
+
+    // Dispatch the task if the time is already reached. Dispatching instead of directly running the
+    // task prevents infinite recursion in case the task calls performTaskAtMediaTime() internally.
+    if (taskToSchedule)
+        RunLoop::main().dispatch(WTFMove(taskToSchedule.value()));
+
+    return true;
 }
 
 #if USE(TEXTURE_MAPPER_GL)
@@ -2893,7 +2916,7 @@ private:
 
 void MediaPlayerPrivateGStreamer::pushTextureToCompositor()
 {
-    auto sampleLocker = holdLock(m_sampleMutex);
+    Locker sampleLocker { m_sampleMutex };
     if (!GST_IS_SAMPLE(m_sample.get()))
         return;
 
@@ -2912,7 +2935,7 @@ void MediaPlayerPrivateGStreamer::pushTextureToCompositor()
                 layerBuffer = makeUnique<TextureMapperPlatformLayerBuffer>(WTFMove(texture));
             }
             frameHolder->updateTexture(layerBuffer->textureGL());
-            layerBuffer->setExtraFlags(m_textureMapperFlags | (frameHolder->hasAlphaChannel() ? TextureMapperGL::ShouldBlend : 0));
+            layerBuffer->setExtraFlags(m_textureMapperFlags | (frameHolder->hasAlphaChannel() ? TextureMapperGL::ShouldBlend | TextureMapperGL::ShouldPremultiply : 0));
         }
         proxy.pushNextBuffer(WTFMove(layerBuffer));
     };
@@ -2921,7 +2944,7 @@ void MediaPlayerPrivateGStreamer::pushTextureToCompositor()
     auto proxyOperation =
         [this, internalCompositingOperation](TextureMapperPlatformLayerProxy& proxy)
         {
-            LockHolder holder(proxy.lock());
+            Locker locker { proxy.lock() };
 
             if (!proxy.isActive())
                 return;
@@ -2939,7 +2962,7 @@ void MediaPlayerPrivateGStreamer::pushTextureToCompositor()
     auto proxyOperation =
         [this, internalCompositingOperation](TextureMapperPlatformLayerProxy& proxy)
         {
-            LockHolder holder(proxy.lock());
+            Locker locker { proxy.lock() };
 
             if (!proxy.isActive())
                 return;
@@ -2964,7 +2987,7 @@ void MediaPlayerPrivateGStreamer::repaint()
 
     m_player->repaint();
 
-    LockHolder lock(m_drawMutex);
+    Locker locker { m_drawLock };
     m_drawCondition.notifyOne();
 }
 
@@ -3024,16 +3047,10 @@ void MediaPlayerPrivateGStreamer::updateVideoSizeAndOrientationFromCaps(const Gs
         return;
     }
 
-    if (m_shouldHandleOrientationTags)
-        setVideoSourceOrientation(getVideoOrientation(m_videoSink.get()));
-
-#if USE(TEXTURE_MAPPER_GL)
-    // When using accelerated compositing, if the video is tagged as rotated 90 or 270 degrees, swap width and height.
-    if (m_canRenderingBeAccelerated) {
-        if (m_videoSourceOrientation.usesWidthAsHeight())
-            originalSize = originalSize.transposedSize();
-    }
-#endif
+    setVideoSourceOrientation(getVideoOrientation(m_videoSink.get()));
+    // If the video is tagged as rotated 90 or 270 degrees, swap width and height.
+    if (m_videoSourceOrientation.usesWidthAsHeight())
+        originalSize = originalSize.transposedSize();
 
     GST_DEBUG_OBJECT(pipeline(), "Original video size: %dx%d", originalSize.width(), originalSize.height());
     GST_DEBUG_OBJECT(pipeline(), "Pixel aspect ratio: %d/%d", pixelAspectRatioNumerator, pixelAspectRatioDenominator);
@@ -3068,13 +3085,36 @@ void MediaPlayerPrivateGStreamer::updateVideoSizeAndOrientationFromCaps(const Gs
     m_player->sizeChanged();
 }
 
+void MediaPlayerPrivateGStreamer::invalidateCachedPosition() const
+{
+    m_cachedPosition.reset();
+}
+
+void MediaPlayerPrivateGStreamer::invalidateCachedPositionOnNextIteration() const
+{
+    RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), this] {
+        if (!weakThis)
+            return;
+        invalidateCachedPosition();
+    });
+}
+
 void MediaPlayerPrivateGStreamer::triggerRepaint(GstSample* sample)
 {
     ASSERT(!isMainThread());
 
+    GstBuffer* buffer = gst_sample_get_buffer(sample);
+    if (buffer && GST_BUFFER_PTS_IS_VALID(buffer)) {
+        // Heuristic to avoid asking for playbackPosition() from a non-main thread.
+        MediaTime currentTime = MediaTime(gst_segment_to_stream_time(gst_sample_get_segment(sample), GST_FORMAT_TIME, GST_BUFFER_PTS(buffer)), GST_SECOND);
+        DataMutexLocker taskAtMediaTimeScheduler { m_TaskAtMediaTimeSchedulerDataMutex };
+        if (auto task = taskAtMediaTimeScheduler->checkTaskForScheduling(currentTime))
+            RunLoop::main().dispatch(WTFMove(task.value()));
+    }
+
     bool shouldTriggerResize;
     {
-        auto sampleLocker = holdLock(m_sampleMutex);
+        Locker sampleLocker { m_sampleMutex };
         shouldTriggerResize = !m_sample;
         m_sample = sample;
     }
@@ -3103,17 +3143,17 @@ void MediaPlayerPrivateGStreamer::triggerRepaint(GstSample* sample)
     }
 
     if (!m_canRenderingBeAccelerated) {
-        LockHolder locker(m_drawMutex);
+        Locker locker { m_drawLock };
         if (m_isBeingDestroyed)
             return;
         m_drawTimer.startOneShot(0_s);
-        m_drawCondition.wait(m_drawMutex);
+        m_drawCondition.wait(m_drawLock);
         return;
     }
 
 #if USE(TEXTURE_MAPPER_GL)
     if (m_isUsingFallbackVideoSink) {
-        LockHolder lock(m_drawMutex);
+        Locker locker { m_drawLock };
         auto proxyOperation =
             [this](TextureMapperPlatformLayerProxy& proxy)
             {
@@ -3127,7 +3167,7 @@ void MediaPlayerPrivateGStreamer::triggerRepaint(GstSample* sample)
             return;
 #endif
         m_drawTimer.startOneShot(0_s);
-        m_drawCondition.wait(m_drawMutex);
+        m_drawCondition.wait(m_drawLock);
     } else
         pushTextureToCompositor();
 #endif // USE(TEXTURE_MAPPER_GL)
@@ -3149,7 +3189,7 @@ void MediaPlayerPrivateGStreamer::cancelRepaint(bool destroying)
     // This function is also used when destroying the player (destroying parameter is true), to release the gstreamer thread from
     // m_drawCondition and to ensure that new triggerRepaint calls won't wait on m_drawCondition.
     if (!m_canRenderingBeAccelerated) {
-        LockHolder locker(m_drawMutex);
+        Locker locker { m_drawLock };
         m_drawTimer.stop();
         m_isBeingDestroyed = destroying;
         m_drawCondition.notifyOne();
@@ -3164,7 +3204,7 @@ void MediaPlayerPrivateGStreamer::repaintCancelledCallback(MediaPlayerPrivateGSt
 #if USE(GSTREAMER_GL)
 void MediaPlayerPrivateGStreamer::flushCurrentBuffer()
 {
-    auto sampleLocker = holdLock(m_sampleMutex);
+    Locker sampleLocker { m_sampleMutex };
 
     if (m_sample) {
         // Allocate a new copy of the sample which has to be released. The copy is necessary so that
@@ -3180,10 +3220,14 @@ void MediaPlayerPrivateGStreamer::flushCurrentBuffer()
     bool shouldWait = m_videoDecoderPlatform == GstVideoDecoderPlatform::Video4Linux;
     auto proxyOperation = [shouldWait, pipeline = pipeline()](TextureMapperPlatformLayerProxy& proxy) {
         GST_DEBUG_OBJECT(pipeline, "Flushing video sample %s", shouldWait ? "synchronously" : "");
-        LockHolder locker(!shouldWait ? &proxy.lock() : nullptr);
-
-        if (proxy.isActive())
-            proxy.dropCurrentBufferWhilePreservingTexture(shouldWait);
+        if (shouldWait) {
+            if (proxy.isActive())
+                proxy.dropCurrentBufferWhilePreservingTexture(shouldWait);
+        } else {
+            Locker locker { proxy.lock() };
+            if (proxy.isActive())
+                proxy.dropCurrentBufferWhilePreservingTexture(shouldWait);
+        }
     };
 
 #if USE(NICOSIA)
@@ -3207,7 +3251,7 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
     if (!m_visible)
         return;
 
-    auto sampleLocker = holdLock(m_sampleMutex);
+    Locker sampleLocker { m_sampleMutex };
     if (!GST_IS_SAMPLE(m_sample.get()))
         return;
 
@@ -3237,10 +3281,13 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
         if (!m_colorConvertInputCaps || !gst_caps_is_equal(m_colorConvertInputCaps.get(), caps)) {
             m_colorConvertInputCaps = caps;
             m_colorConvertOutputCaps = adoptGRef(gst_caps_copy(caps));
+
+            // These caps must match the internal format of a cairo surface with CAIRO_FORMAT_ARGB32,
+            // so we don't need to perform color conversions when painting the video frame.
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
-            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "RGBA" : "BGRx";
+            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "BGRA" : "BGRx";
 #else
-            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "RGBA" : "RGBx";
+            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "ARGB" : "xRGB";
 #endif
             gst_caps_set_simple(m_colorConvertOutputCaps.get(), "format", G_TYPE_STRING, formatString,
                 "texture-target", G_TYPE_STRING, GST_GL_TEXTURE_TARGET_2D_STR, nullptr);
@@ -3262,7 +3309,9 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
     if (!gstImage)
         return;
 
-    context.drawImage(gstImage->image(), rect, gstImage->rect(), { CompositeOperator::Copy, m_shouldHandleOrientationTags ? m_videoSourceOrientation : ImageOrientation() });
+    FloatRect imageRect = m_videoSourceOrientation.usesWidthAsHeight() ? FloatRect(gstImage->rect().location(), gstImage->rect().size().transposedSize()) : gstImage->rect();
+
+    context.drawImage(gstImage->image(), rect, imageRect, { gstImage->hasAlpha() ? CompositeOperator::SourceOver : CompositeOperator::Copy, m_videoSourceOrientation });
 }
 
 #if USE(GSTREAMER_GL)
@@ -3273,10 +3322,7 @@ bool MediaPlayerPrivateGStreamer::copyVideoTextureToPlatformTexture(GraphicsCont
     if (m_isUsingFallbackVideoSink)
         return false;
 
-    if (premultiplyAlpha)
-        return false;
-
-    auto sampleLocker = holdLock(m_sampleMutex);
+    Locker sampleLocker { m_sampleMutex };
 
     if (!GST_IS_SAMPLE(m_sample.get()))
         return false;
@@ -3296,7 +3342,7 @@ bool MediaPlayerPrivateGStreamer::copyVideoTextureToPlatformTexture(GraphicsCont
 
     frameHolder->waitForCPUSync();
 
-    return m_videoTextureCopier->copyVideoTextureToPlatformTexture(*layerBuffer.get(), size, outputTexture, outputTarget, level, internalFormat, format, type, flipY, m_videoSourceOrientation);
+    return m_videoTextureCopier->copyVideoTextureToPlatformTexture(*layerBuffer.get(), size, outputTexture, outputTarget, level, internalFormat, format, type, flipY, m_videoSourceOrientation, premultiplyAlpha);
 }
 
 RefPtr<NativeImage> MediaPlayerPrivateGStreamer::nativeImageForCurrentTime()
@@ -3368,10 +3414,6 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSinkGL()
     ASSERT(sink);
     webKitGLVideoSinkSetMediaPlayerPrivate(WEBKIT_GL_VIDEO_SINK(sink), this);
 
-    gboolean handlesRotationTags;
-    g_object_get(sink, "handles-rotation-tags", &handlesRotationTags, nullptr);
-    m_shouldHandleOrientationTags = !handlesRotationTags;
-
     return sink;
 }
 #endif // USE(GSTREAMER_GL)
@@ -3397,7 +3439,7 @@ GstElement* MediaPlayerPrivateGStreamer::createHolePunchVideoSink()
 {
     // Here goes the platform-dependant code to create the videoSink. As a default
     // we use a fakeVideoSink so nothing is drawn to the page.
-    GstElement* videoSink =  gst_element_factory_make("fakevideosink", nullptr);
+    GstElement* videoSink =  makeGStreamerElement("fakevideosink", nullptr);
 
     return videoSink;
 }
@@ -3407,7 +3449,7 @@ void MediaPlayerPrivateGStreamer::pushNextHolePunchBuffer()
     auto proxyOperation =
         [this](TextureMapperPlatformLayerProxy& proxy)
         {
-            LockHolder holder(proxy.lock());
+            Locker locker { proxy.lock() };
             std::unique_ptr<TextureMapperPlatformLayerBuffer> layerBuffer = makeUnique<TextureMapperPlatformLayerBuffer>(0, m_size, TextureMapperGL::ShouldNotBlend, GL_DONT_CARE);
             std::unique_ptr<GStreamerHolePunchClient> holePunchClient = makeUnique<GStreamerHolePunchClient>(m_videoSink.get());
             layerBuffer->setHolePunchClient(WTFMove(holePunchClient));
@@ -3427,7 +3469,7 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSink()
     acceleratedRenderingStateChanged();
 
     if (!m_player->isVideoPlayer()) {
-        m_videoSink = gst_element_factory_make("fakevideosink", nullptr);
+        m_videoSink = makeGStreamerElement("fakevideosink", nullptr);
         return m_videoSink.get();
     }
 
@@ -3494,10 +3536,10 @@ void MediaPlayerPrivateGStreamer::setStreamVolumeElement(GstStreamVolume* volume
     g_signal_connect_swapped(m_volumeElement.get(), "notify::mute", G_CALLBACK(muteChangedCallback), this);
 }
 
-Optional<VideoPlaybackQualityMetrics> MediaPlayerPrivateGStreamer::videoPlaybackQualityMetrics()
+std::optional<VideoPlaybackQualityMetrics> MediaPlayerPrivateGStreamer::videoPlaybackQualityMetrics()
 {
     if (!webkitGstCheckVersion(1, 18, 0) && !m_fpsSink)
-        return WTF::nullopt;
+        return std::nullopt;
 
     uint64_t totalVideoFrames = 0;
     uint64_t droppedVideoFrames = 0;
@@ -3506,10 +3548,10 @@ Optional<VideoPlaybackQualityMetrics> MediaPlayerPrivateGStreamer::videoPlayback
         g_object_get(m_videoSink.get(), "stats", &stats.outPtr(), nullptr);
 
         if (!gst_structure_get_uint64(stats.get(), "rendered", &totalVideoFrames))
-            return WTF::nullopt;
+            return std::nullopt;
 
         if (!gst_structure_get_uint64(stats.get(), "dropped", &droppedVideoFrames))
-            return WTF::nullopt;
+            return std::nullopt;
     } else if (m_fpsSink) {
         unsigned renderedFrames, droppedFrames;
         g_object_get(m_fpsSink.get(), "frames-rendered", &renderedFrames, "frames-dropped", &droppedFrames, nullptr);
@@ -3547,7 +3589,7 @@ InitData MediaPlayerPrivateGStreamer::parseInitDataFromProtectionMessage(GstMess
 
     InitData initData;
     {
-        LockHolder lock(m_protectionMutex);
+        Locker locker { m_protectionMutex };
         ProtectionSystemEvents protectionSystemEvents(message);
         GST_TRACE_OBJECT(pipeline(), "found %zu protection events, %zu decryptors available", protectionSystemEvents.events().size(), protectionSystemEvents.availableSystems().size());
 
@@ -3576,8 +3618,9 @@ bool MediaPlayerPrivateGStreamer::waitForCDMAttachment()
 
     bool didCDMAttach = false;
     {
-        auto cdmAttachmentLocker = holdLock(m_cdmAttachmentMutex);
-        didCDMAttach = m_cdmAttachmentCondition.waitFor(m_cdmAttachmentMutex, 4_s, [this]() {
+        Locker cdmAttachmentLocker { m_cdmAttachmentLock };
+        didCDMAttach = m_cdmAttachmentCondition.waitFor(m_cdmAttachmentLock, 4_s, [this]() {
+            assertIsHeld(m_cdmAttachmentLock);
             return isCDMAttached();
         });
     }
@@ -3624,7 +3667,7 @@ void MediaPlayerPrivateGStreamer::cdmInstanceAttached(CDMInstance& instance)
 
     GST_DEBUG_OBJECT(m_pipeline.get(), "CDM proxy instance %p dispatched as context", m_cdmInstance->proxy().get());
 
-    LockHolder lock(m_cdmAttachmentMutex);
+    Locker cdmAttachmentLocker { m_cdmAttachmentLock };
     // We must notify all waiters, since several demuxers can be simultaneously waiting for a CDM.
     m_cdmAttachmentCondition.notifyAll();
 }
@@ -3661,7 +3704,7 @@ void MediaPlayerPrivateGStreamer::attemptToDecryptWithLocalInstance()
 void MediaPlayerPrivateGStreamer::handleProtectionEvent(GstEvent* event)
 {
     {
-        LockHolder lock(m_protectionMutex);
+        Locker locker { m_protectionMutex };
         if (m_handledProtectionEvents.contains(GST_EVENT_SEQNUM(event))) {
             GST_DEBUG_OBJECT(pipeline(), "event %u already handled", GST_EVENT_SEQNUM(event));
             return;

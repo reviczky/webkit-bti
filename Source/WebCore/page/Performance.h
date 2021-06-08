@@ -48,12 +48,17 @@ class JSGlobalObject;
 
 namespace WebCore {
 
-class LoadTiming;
+class CachedResource;
+class Document;
+class DocumentLoadTiming;
+class DocumentLoader;
+class NetworkLoadMetrics;
 class PerformanceUserTiming;
 class PerformanceEntry;
 class PerformanceMark;
 class PerformanceMeasure;
 class PerformanceNavigation;
+class PerformanceNavigationTiming;
 class PerformanceObserver;
 class PerformancePaintTiming;
 class PerformanceTiming;
@@ -83,13 +88,14 @@ public:
     void clearResourceTimings();
     void setResourceTimingBufferSize(unsigned);
 
-    ExceptionOr<Ref<PerformanceMark>> mark(JSC::JSGlobalObject&, const String& markName, Optional<PerformanceMarkOptions>&&);
+    ExceptionOr<Ref<PerformanceMark>> mark(JSC::JSGlobalObject&, const String& markName, std::optional<PerformanceMarkOptions>&&);
     void clearMarks(const String& markName);
 
     using StartOrMeasureOptions = Variant<String, PerformanceMeasureOptions>;
-    ExceptionOr<Ref<PerformanceMeasure>> measure(JSC::JSGlobalObject&, const String& measureName, Optional<StartOrMeasureOptions>&&, const String& endMark);
+    ExceptionOr<Ref<PerformanceMeasure>> measure(JSC::JSGlobalObject&, const String& measureName, std::optional<StartOrMeasureOptions>&&, const String& endMark);
     void clearMeasures(const String& measureName);
 
+    void addNavigationTiming(DocumentLoader&, Document&, CachedResource&, const DocumentLoadTiming&, const NetworkLoadMetrics&);
     void addResourceTiming(ResourceTiming&&);
 
     void reportFirstContentfulPaint();
@@ -121,6 +127,7 @@ private:
     void resourceTimingBufferFullTimerFired();
 
     void queueEntry(PerformanceEntry&);
+    void scheduleTaskIfNeeded();
 
     mutable RefPtr<PerformanceNavigation> m_navigation;
     mutable RefPtr<PerformanceTiming> m_timing;
@@ -139,6 +146,7 @@ private:
 
     MonotonicTime m_timeOrigin;
 
+    RefPtr<PerformanceNavigationTiming> m_navigationTiming;
     RefPtr<PerformancePaintTiming> m_firstContentfulPaint;
     std::unique_ptr<PerformanceUserTiming> m_userTiming;
 

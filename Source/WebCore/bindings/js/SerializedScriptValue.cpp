@@ -94,7 +94,7 @@
 #include <wtf/Vector.h>
 #include <wtf/threads/BinarySemaphore.h>
 
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
 #include "JSOffscreenCanvas.h"
 #include "OffscreenCanvas.h"
 #endif
@@ -181,7 +181,7 @@ enum SerializationTag {
     RTCCertificateTag = 44,
 #endif
     ImageBitmapTag = 45,
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     OffscreenCanvasTransferTag = 46,
 #endif
     BigIntTag = 47,
@@ -233,8 +233,14 @@ static unsigned typedArrayElementSize(ArrayBufferViewSubtag tag)
     default:
         return 0;
     }
-
 }
+
+enum class PredefinedColorSpaceTag : uint8_t {
+    SRGB = 0
+#if ENABLE(DESTINATION_COLOR_SPACE_DISPLAY_P3)
+    , DisplayP3 = 1
+#endif
+};
 
 #if ENABLE(WEB_CRYPTO)
 
@@ -314,8 +320,9 @@ static unsigned countUsages(CryptoKeyUsageBitmap usages)
  * Version 5. added support for Map and Set types.
  * Version 6. added support for 8-bit strings.
  * Version 7. added support for File's lastModified attribute.
+ * Version 8. added support for ImageData's colorSpace attribute.
  */
-static const unsigned CurrentVersion = 7;
+static const unsigned CurrentVersion = 8;
 static const unsigned TerminatorTag = 0xFFFFFFFF;
 static const unsigned StringPoolTag = 0xFFFFFFFE;
 static const unsigned NonIndexPropertiesTag = 0xFFFFFFFD;
@@ -423,7 +430,7 @@ static const unsigned StringDataIs8BitFlag = 0x80000000;
  *    FileListTag <length:uint32_t>(<file:FileData>){length}
  *
  * ImageData :-
- *    ImageDataTag <width:int32_t><height:int32_t><length:uint32_t><data:uint8_t{length}>
+ *    ImageDataTag <width:int32_t> <height:int32_t> <length:uint32_t> <data:uint8_t{length}> <colorSpace:PredefinedColorSpaceTag>
  *
  * Blob :-
  *    BlobTag <url:StringData><type:StringData><size:long long>
@@ -583,7 +590,7 @@ template <> bool writeLittleEndian<uint8_t>(Vector<uint8_t>& buffer, const uint8
 class CloneSerializer : CloneBase {
 public:
     static SerializationReturnCode serialize(JSGlobalObject* lexicalGlobalObject, JSValue value, Vector<RefPtr<MessagePort>>& messagePorts, Vector<RefPtr<JSC::ArrayBuffer>>& arrayBuffers, const Vector<RefPtr<ImageBitmap>>& imageBitmaps,
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
             const Vector<RefPtr<OffscreenCanvas>>& offscreenCanvases,
 #endif
 #if ENABLE(WEB_RTC)
@@ -596,7 +603,7 @@ public:
         Vector<String>& blobURLs, Vector<uint8_t>& out, SerializationContext context, ArrayBufferContentsArray& sharedBuffers)
     {
         CloneSerializer serializer(lexicalGlobalObject, messagePorts, arrayBuffers, imageBitmaps,
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
             offscreenCanvases,
 #endif
 #if ENABLE(WEB_RTC)
@@ -630,7 +637,7 @@ private:
     typedef HashMap<JSObject*, uint32_t> ObjectPool;
 
     CloneSerializer(JSGlobalObject* lexicalGlobalObject, Vector<RefPtr<MessagePort>>& messagePorts, Vector<RefPtr<JSC::ArrayBuffer>>& arrayBuffers, const Vector<RefPtr<ImageBitmap>>& imageBitmaps,
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
             const Vector<RefPtr<OffscreenCanvas>>& offscreenCanvases,
 #endif
 #if ENABLE(WEB_RTC)
@@ -656,7 +663,7 @@ private:
         fillTransferMap(messagePorts, m_transferredMessagePorts);
         fillTransferMap(arrayBuffers, m_transferredArrayBuffers);
         fillTransferMap(imageBitmaps, m_transferredImageBitmaps);
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         fillTransferMap(offscreenCanvases, m_transferredOffscreenCanvases);
 #endif
 #if ENABLE(WEB_RTC)
@@ -1075,8 +1082,9 @@ private:
             return;
         }
 
+        PixelBufferFormat format { AlphaPremultiplication::Premultiplied, PixelFormat::RGBA8, DestinationColorSpace::SRGB() };
         const IntSize& logicalSize = buffer->logicalSize();
-        auto pixelBuffer = buffer->getPixelBuffer(AlphaPremultiplication::Premultiplied, { IntPoint::zero(), logicalSize });
+        auto pixelBuffer = buffer->getPixelBuffer(format, { IntPoint::zero(), logicalSize });
         if (!pixelBuffer) {
             code = SerializationReturnCode::ValidationError;
             return;
@@ -1098,7 +1106,7 @@ private:
         write(static_cast<const uint8_t*>(arrayBuffer->data()), arrayBuffer->byteLength());
     }
 
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     void dumpOffscreenCanvas(JSObject* obj, SerializationReturnCode& code)
     {
         auto index = m_transferredOffscreenCanvases.find(obj);
@@ -1228,6 +1236,7 @@ private:
                 write(data->height());
                 write(data->data().length());
                 write(data->data().data(), data->data().length());
+                write(data->colorSpace());
                 return true;
             }
             if (auto* regExp = jsDynamicCast<RegExpObject*>(vm, obj)) {
@@ -1305,7 +1314,7 @@ private:
 #endif
                 ArrayBufferContentsArray dummySharedBuffers;
                 CloneSerializer rawKeySerializer(m_lexicalGlobalObject, dummyMessagePorts, dummyArrayBuffers, { },
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
                     { },
 #endif
 #if ENABLE(WEB_RTC)
@@ -1386,7 +1395,7 @@ private:
                 dumpImageBitmap(obj, code);
                 return true;
             }
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
             if (obj->inherits(vm, JSOffscreenCanvas::info())) {
                 dumpOffscreenCanvas(obj, code);
                 return true;
@@ -1554,7 +1563,21 @@ private:
         write(file.url().string());
         write(file.type());
         write(file.name());
-        write(static_cast<double>(file.lastModifiedOverride().valueOr(-1)));
+        write(static_cast<double>(file.lastModifiedOverride().value_or(-1)));
+    }
+
+    void write(PredefinedColorSpace colorSpace)
+    {
+        switch (colorSpace) {
+        case PredefinedColorSpace::SRGB:
+            writeLittleEndian<uint8_t>(m_buffer, static_cast<uint8_t>(PredefinedColorSpaceTag::SRGB));
+            break;
+#if ENABLE(DESTINATION_COLOR_SPACE_DISPLAY_P3)
+        case PredefinedColorSpace::DisplayP3:
+            writeLittleEndian<uint8_t>(m_buffer, static_cast<uint8_t>(PredefinedColorSpaceTag::DisplayP3));
+            break;
+#endif
+        }
     }
 
 #if ENABLE(WEB_CRYPTO)
@@ -1750,7 +1773,7 @@ private:
     ObjectPool m_transferredMessagePorts;
     ObjectPool m_transferredArrayBuffers;
     ObjectPool m_transferredImageBitmaps;
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     ObjectPool m_transferredOffscreenCanvases;
 #endif
 #if ENABLE(WEB_RTC)
@@ -2047,8 +2070,8 @@ public:
         return str;
     }
 
-    static DeserializationResult deserialize(JSGlobalObject* lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, Vector<Optional<ImageBitmapBacking>>&& backingStores
-#if ENABLE(OFFSCREEN_CANVAS)
+    static DeserializationResult deserialize(JSGlobalObject* lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, Vector<std::optional<ImageBitmapBacking>>&& backingStores
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases
 #endif
 #if ENABLE(WEB_RTC)
@@ -2064,7 +2087,7 @@ public:
         if (!buffer.size())
             return std::make_pair(jsNull(), SerializationReturnCode::UnspecifiedError);
         CloneDeserializer deserializer(lexicalGlobalObject, globalObject, messagePorts, arrayBufferContentsArray, buffer, blobURLs, blobFilePaths, sharedBuffers, WTFMove(backingStores)
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
             , WTFMove(detachedOffscreenCanvases)
 #endif
 #if ENABLE(WEB_RTC)
@@ -2120,8 +2143,8 @@ private:
         size_t m_index;
     };
 
-    CloneDeserializer(JSGlobalObject* lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, Vector<Optional<ImageBitmapBacking>>&& backingStores, const Vector<uint8_t>& buffer
-#if ENABLE(OFFSCREEN_CANVAS)
+    CloneDeserializer(JSGlobalObject* lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, Vector<std::optional<ImageBitmapBacking>>&& backingStores, const Vector<uint8_t>& buffer
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases = { }
 #endif
 #if ENABLE(WEB_RTC)
@@ -2144,7 +2167,7 @@ private:
         , m_arrayBuffers(arrayBufferContents ? arrayBufferContents->size() : 0)
         , m_backingStores(WTFMove(backingStores))
         , m_imageBitmaps(m_backingStores.size())
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         , m_detachedOffscreenCanvases(WTFMove(detachedOffscreenCanvases))
         , m_offscreenCanvases(m_detachedOffscreenCanvases.size())
 #endif
@@ -2161,8 +2184,8 @@ private:
             m_version = 0xFFFFFFFF;
     }
 
-    CloneDeserializer(JSGlobalObject* lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers, Vector<Optional<ImageBitmapBacking>>&& backingStores
-#if ENABLE(OFFSCREEN_CANVAS)
+    CloneDeserializer(JSGlobalObject* lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers, Vector<std::optional<ImageBitmapBacking>>&& backingStores
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases
 #endif
 #if ENABLE(WEB_RTC)
@@ -2188,7 +2211,7 @@ private:
         , m_sharedBuffers(sharedBuffers)
         , m_backingStores(WTFMove(backingStores))
         , m_imageBitmaps(m_backingStores.size())
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         , m_detachedOffscreenCanvases(WTFMove(detachedOffscreenCanvases))
         , m_offscreenCanvases(m_detachedOffscreenCanvases.size())
 #endif
@@ -2423,7 +2446,7 @@ private:
         CachedStringRef name;
         if (!readStringData(name))
             return false;
-        Optional<int64_t> optionalLastModified;
+        std::optional<int64_t> optionalLastModified;
         if (m_version > 6) {
             double lastModified;
             if (!read(lastModified))
@@ -2534,6 +2557,26 @@ private:
         result.append(m_ptr, size);
         m_ptr += size;
         return true;
+    }
+
+    bool read(PredefinedColorSpace& result)
+    {
+        uint8_t tag;
+        if (!read(tag))
+            return false;
+
+        switch (static_cast<PredefinedColorSpaceTag>(tag)) {
+        case PredefinedColorSpaceTag::SRGB:
+            result = PredefinedColorSpace::SRGB;
+            return true;
+#if ENABLE(DESTINATION_COLOR_SPACE_DISPLAY_P3)
+        case PredefinedColorSpaceTag::DisplayP3:
+            result = PredefinedColorSpace::DisplayP3;
+            return true;
+#endif
+        default:
+            return false;
+        }
     }
 
 #if ENABLE(WEB_CRYPTO)
@@ -2863,15 +2906,9 @@ private:
 #endif
 
     template<class T>
-    JSValue getJSValue(T* nativeObj)
+    JSValue getJSValue(T&& nativeObj)
     {
-        return toJS(m_lexicalGlobalObject, jsCast<JSDOMGlobalObject*>(m_globalObject), nativeObj);
-    }
-
-    template<class T>
-    JSValue getJSValue(T& nativeObj)
-    {
-        return toJS(m_lexicalGlobalObject, jsCast<JSDOMGlobalObject*>(m_globalObject), nativeObj);
+        return toJS(m_lexicalGlobalObject, jsCast<JSDOMGlobalObject*>(m_globalObject), std::forward<T>(nativeObj));
     }
 
     template<class T>
@@ -2996,17 +3033,17 @@ private:
         return toJSNewlyCreated(m_lexicalGlobalObject, jsCast<JSDOMGlobalObject*>(m_globalObject), T::create(x, y, width, height));
     }
 
-    Optional<DOMPointInit> readDOMPointInit()
+    std::optional<DOMPointInit> readDOMPointInit()
     {
         DOMPointInit point;
         if (!read(point.x))
-            return WTF::nullopt;
+            return std::nullopt;
         if (!read(point.y))
-            return WTF::nullopt;
+            return std::nullopt;
         if (!read(point.z))
-            return WTF::nullopt;
+            return std::nullopt;
         if (!read(point.w))
-            return WTF::nullopt;
+            return std::nullopt;
 
         return point;
     }
@@ -3045,7 +3082,7 @@ private:
         return getJSValue(bitmap);
     }
 
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     JSValue readOffscreenCanvas()
     {
         uint32_t index;
@@ -3140,22 +3177,9 @@ private:
             return JSValue();
         }
 
-        auto array = Uint8ClampedArray::tryCreate(WTFMove(arrayBuffer), 0, arrayBuffer->byteLength());
-        if (!array) {
-            fail();
-            return JSValue();
-        }
-
-        IntSize logicalSize = IntSize(logicalWidth, logicalHeight);
-        IntSize imageDataSize = logicalSize;
+        auto logicalSize = IntSize(logicalWidth, logicalHeight);
+        auto imageDataSize = logicalSize;
         imageDataSize.scale(resolutionScale);
-
-        // FIXME: Creating this ImageData is not necessary. We should skip right to creating a PixelBuffer directly.
-        auto imageData = ImageData::create(imageDataSize, array.releaseNonNull());
-        if (!imageData) {
-            fail();
-            return JSValue();
-        }
 
         auto buffer = ImageBitmap::createImageBuffer(*scriptExecutionContextFromExecState(m_lexicalGlobalObject), logicalSize, RenderingMode::Unaccelerated, resolutionScale);
         if (!buffer) {
@@ -3163,7 +3187,14 @@ private:
             return JSValue();
         }
 
-        buffer->putPixelBuffer(AlphaPremultiplication::Premultiplied, imageData->pixelBuffer(), { IntPoint::zero(), logicalSize });
+        PixelBufferFormat format { AlphaPremultiplication::Premultiplied, PixelFormat::RGBA8, DestinationColorSpace::SRGB() };
+        auto pixelBuffer = PixelBuffer::tryCreate(format, imageDataSize, arrayBuffer.releaseNonNull());
+        if (!pixelBuffer) {
+            fail();
+            return JSValue();
+        }
+
+        buffer->putPixelBuffer(WTFMove(*pixelBuffer), { IntPoint::zero(), logicalSize });
 
         auto bitmap = ImageBitmap::create(ImageBitmapBacking(WTFMove(buffer), OptionSet<SerializationState>::fromRaw(serializationState)));
         return getJSValue(bitmap);
@@ -3379,23 +3410,33 @@ private:
                 fail();
                 return JSValue();
             }
-            if (!m_isDOMGlobalObject) {
-                m_ptr += length;
-                return jsNull();
+            auto bufferStart = m_ptr;
+            m_ptr += length;
+
+            auto resultColorSpace = PredefinedColorSpace::SRGB;
+            if (m_version > 7) {
+                if (!read(resultColorSpace))
+                    return JSValue();
             }
-            IntSize imageSize(width, height);
-            RELEASE_ASSERT(!length || (imageSize.area() * 4).unsafeGet() <= length);
-            auto result = ImageData::create(imageSize);
-            if (!result) {
+
+            if (length && (IntSize(width, height).area() * 4) != length) {
+                fail();
+                return JSValue();
+            }
+
+            if (!m_isDOMGlobalObject)
+                return jsNull();
+
+            auto result = ImageData::createUninitialized(width, height, resultColorSpace);
+            if (result.hasException()) {
                 fail();
                 return JSValue();
             }
             if (length)
-                memcpy(result->data().data(), m_ptr, length);
+                memcpy(result.returnValue()->data().data(), bufferStart, length);
             else
-                result->data().zeroFill();
-            m_ptr += length;
-            return getJSValue(result.get());
+                result.returnValue()->data().zeroFill();
+            return getJSValue(result.releaseReturnValue());
         }
         case BlobTag: {
             CachedStringRef url;
@@ -3441,7 +3482,7 @@ private:
             if (!readStringData(flags))
                 return JSValue();
             auto reFlags = Yarr::parseFlags(flags->string());
-            ASSERT(reFlags.hasValue());
+            ASSERT(reFlags.has_value());
             VM& vm = m_lexicalGlobalObject->vm();
             RegExp* regExp = RegExp::create(vm, pattern->string(), reFlags.value());
             return RegExpObject::create(vm, m_globalObject->regExpStructure(), regExp);
@@ -3607,7 +3648,7 @@ private:
 #endif
         case ImageBitmapTag:
             return readImageBitmap();
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         case OffscreenCanvasTransferTag:
             return readOffscreenCanvas();
 #endif
@@ -3646,9 +3687,9 @@ private:
     Vector<String> m_blobURLs;
     Vector<String> m_blobFilePaths;
     ArrayBufferContentsArray* m_sharedBuffers;
-    Vector<Optional<ImageBitmapBacking>> m_backingStores;
+    Vector<std::optional<ImageBitmapBacking>> m_backingStores;
     Vector<RefPtr<ImageBitmap>> m_imageBitmaps;
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     Vector<std::unique_ptr<DetachedOffscreenCanvas>> m_detachedOffscreenCanvases;
     Vector<RefPtr<OffscreenCanvas>> m_offscreenCanvases;
 #endif
@@ -3882,8 +3923,8 @@ SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, std::uniq
     m_memoryCost = computeMemoryCost();
 }
 
-SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray> arrayBufferContentsArray, std::unique_ptr<ArrayBufferContentsArray> sharedBufferContentsArray, Vector<Optional<ImageBitmapBacking>>&& backingStores
-#if ENABLE(OFFSCREEN_CANVAS)
+SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray> arrayBufferContentsArray, std::unique_ptr<ArrayBufferContentsArray> sharedBufferContentsArray, Vector<std::optional<ImageBitmapBacking>>&& backingStores
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& detachedOffscreenCanvases
 #endif
 #if ENABLE(WEB_RTC)
@@ -3898,7 +3939,7 @@ SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, const Vec
     , m_arrayBufferContentsArray(WTFMove(arrayBufferContentsArray))
     , m_sharedBufferContentsArray(WTFMove(sharedBufferContentsArray))
     , m_backingStores(WTFMove(backingStores))
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     , m_detachedOffscreenCanvases(WTFMove(detachedOffscreenCanvases))
 #endif
 #if ENABLE(WEB_RTC)
@@ -3936,7 +3977,7 @@ size_t SerializedScriptValue::computeMemoryCost() const
             cost += buffer->memoryCost();
     }
 
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     for (auto& canvas : m_detachedOffscreenCanvases) {
         if (canvas)
             cost += canvas->memoryCost();
@@ -4039,7 +4080,7 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::create(JSGlobalObject& lexi
     Vector<String> blobURLs;
     Vector<RefPtr<MessagePort>> dummyMessagePorts;
     Vector<RefPtr<ImageBitmap>> dummyImageBitmaps;
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     Vector<RefPtr<OffscreenCanvas>> dummyOffscreenCanvases;
 #endif
 #if ENABLE(WEB_RTC)
@@ -4052,7 +4093,7 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::create(JSGlobalObject& lexi
 #endif
     ArrayBufferContentsArray dummySharedBuffers;
     auto code = CloneSerializer::serialize(&lexicalGlobalObject, value, dummyMessagePorts, dummyArrayBuffers, dummyImageBitmaps,
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         dummyOffscreenCanvases,
 #endif
 #if ENABLE(WEB_RTC)
@@ -4088,7 +4129,7 @@ static bool containsDuplicates(const Vector<RefPtr<ImageBitmap>>& imageBitmaps)
     return false;
 }
 
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
 static bool canOffscreenCanvasesDetach(const Vector<RefPtr<OffscreenCanvas>>& offscreenCanvases)
 {
     HashSet<OffscreenCanvas*> visited;
@@ -4123,7 +4164,7 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
     VM& vm = lexicalGlobalObject.vm();
     Vector<RefPtr<JSC::ArrayBuffer>> arrayBuffers;
     Vector<RefPtr<ImageBitmap>> imageBitmaps;
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     Vector<RefPtr<OffscreenCanvas>> offscreenCanvases;
 #endif
 #if ENABLE(WEB_RTC)
@@ -4155,7 +4196,7 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
             continue;
         }
 
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         if (auto offscreenCanvas = JSOffscreenCanvas::toWrapped(vm, transferable.get())) {
             offscreenCanvases.append(WTFMove(offscreenCanvas));
             continue;
@@ -4174,7 +4215,7 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
 
     if (containsDuplicates(imageBitmaps))
         return Exception { DataCloneError };
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     if (!canOffscreenCanvasesDetach(offscreenCanvases))
         return Exception { InvalidStateError };
 #endif
@@ -4191,7 +4232,7 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
 #endif
     std::unique_ptr<ArrayBufferContentsArray> sharedBuffers = makeUnique<ArrayBufferContentsArray>();
     auto code = CloneSerializer::serialize(&lexicalGlobalObject, value, messagePorts, arrayBuffers, imageBitmaps,
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         offscreenCanvases,
 #endif
 #if ENABLE(WEB_RTC)
@@ -4212,7 +4253,7 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
 
     auto backingStores = ImageBitmap::detachBitmaps(WTFMove(imageBitmaps));
 
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     Vector<std::unique_ptr<DetachedOffscreenCanvas>> detachedCanvases;
     for (auto offscreenCanvas : offscreenCanvases)
         detachedCanvases.append(offscreenCanvas->detach());
@@ -4224,7 +4265,7 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(JSGlobalOb
 #endif
 
     return adoptRef(*new SerializedScriptValue(WTFMove(buffer), blobURLs, arrayBufferContentsArray.releaseReturnValue(), context == SerializationContext::WorkerPostMessage ? WTFMove(sharedBuffers) : nullptr, WTFMove(backingStores)
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
                 , WTFMove(detachedCanvases)
 #endif
 #if ENABLE(WEB_RTC)
@@ -4284,7 +4325,7 @@ JSValue SerializedScriptValue::deserialize(JSGlobalObject& lexicalGlobalObject, 
 JSValue SerializedScriptValue::deserialize(JSGlobalObject& lexicalGlobalObject, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, const Vector<String>& blobURLs, const Vector<String>& blobFilePaths, SerializationErrorMode throwExceptions)
 {
     DeserializationResult result = CloneDeserializer::deserialize(&lexicalGlobalObject, globalObject, messagePorts, WTFMove(m_backingStores)
-#if ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
         , WTFMove(m_detachedOffscreenCanvases)
 #endif
 #if ENABLE(WEB_RTC)

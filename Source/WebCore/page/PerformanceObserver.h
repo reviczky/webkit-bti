@@ -41,8 +41,8 @@ class ScriptExecutionContext;
 class PerformanceObserver : public RefCounted<PerformanceObserver> {
 public:
     struct Init {
-        Optional<Vector<String>> entryTypes;
-        Optional<String> type;
+        std::optional<Vector<String>> entryTypes;
+        std::optional<String> type;
         bool buffered;
     };
 
@@ -57,6 +57,7 @@ public:
 
     ExceptionOr<void> observe(Init&&);
     void disconnect();
+    Vector<RefPtr<PerformanceEntry>> takeRecords();
 
     OptionSet<PerformanceEntry::Type> typeFilter() const { return m_typeFilter; }
 

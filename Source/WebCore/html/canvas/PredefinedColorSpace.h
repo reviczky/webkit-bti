@@ -25,11 +25,12 @@
 
 #pragma once
 
+#include <optional>
 #include <wtf/EnumTraits.h>
 
 namespace WebCore {
 
-enum class DestinationColorSpace : uint8_t;
+class DestinationColorSpace;
 
 enum class PredefinedColorSpace {
     SRGB
@@ -39,6 +40,7 @@ enum class PredefinedColorSpace {
 };
 
 DestinationColorSpace toDestinationColorSpace(PredefinedColorSpace);
+std::optional<PredefinedColorSpace> toPredefinedColorSpace(const DestinationColorSpace&);
 
 }
 

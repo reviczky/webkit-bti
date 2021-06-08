@@ -233,8 +233,7 @@ void AssemblyHelpers::jitReleaseAssertNoException(VM& vm)
 
 void AssemblyHelpers::callExceptionFuzz(VM& vm)
 {
-    if (!Options::useExceptionFuzz())
-        return;
+    RELEASE_ASSERT(Options::useExceptionFuzz());
 
     EncodedJSValue* buffer = vm.exceptionFuzzingBuffer(sizeof(EncodedJSValue) * (GPRInfo::numberOfRegisters + FPRInfo::numberOfRegisters));
 
@@ -276,7 +275,8 @@ AssemblyHelpers::Jump AssemblyHelpers::emitJumpIfException(VM& vm)
 
 AssemblyHelpers::Jump AssemblyHelpers::emitExceptionCheck(VM& vm, ExceptionCheckKind kind, ExceptionJumpWidth width)
 {
-    callExceptionFuzz(vm);
+    if (UNLIKELY(Options::useExceptionFuzz()))
+        callExceptionFuzz(vm);
 
     if (width == FarJumpWidth)
         kind = (kind == NormalExceptionCheck ? InvertedExceptionCheck : NormalExceptionCheck);
@@ -299,7 +299,8 @@ AssemblyHelpers::Jump AssemblyHelpers::emitExceptionCheck(VM& vm, ExceptionCheck
 
 AssemblyHelpers::Jump AssemblyHelpers::emitNonPatchableExceptionCheck(VM& vm)
 {
-    callExceptionFuzz(vm);
+    if (UNLIKELY(Options::useExceptionFuzz()))
+        callExceptionFuzz(vm);
 
     Jump result;
 #if USE(JSVALUE64)
@@ -647,12 +648,14 @@ void AssemblyHelpers::emitVirtualCall(VM& vm, JSGlobalObject* globalObject, Call
     move(TrustedImmPtr(info), GPRInfo::regT2);
     move(TrustedImmPtr(globalObject), GPRInfo::regT3);
     Call call = nearCall();
-    addLinkTask(
-        [=, &vm] (LinkBuffer& linkBuffer) {
+    addLinkTask([=, &vm] (LinkBuffer& linkBuffer) {
+        auto callLocation = linkBuffer.locationOfNearCall<JITCompilationPtrTag>(call);
+        linkBuffer.addMainThreadFinalizationTask([=, &vm] () {
             MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunk = virtualThunkFor(vm, *info);
             info->setSlowStub(GCAwareJITStubRoutine::create(virtualThunk, vm));
-            linkBuffer.link(call, CodeLocationLabel<JITStubRoutinePtrTag>(virtualThunk.code()));
+            MacroAssembler::repatchNearCall(callLocation, CodeLocationLabel<JITStubRoutinePtrTag>(virtualThunk.code()));
         });
+    });
 }
 
 #if USE(JSVALUE64)
@@ -791,7 +794,7 @@ void AssemblyHelpers::emitConvertValueToBoolean(VM& vm, JSValueRegs value, GPRRe
     done.link(this);
 }
 
-AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs value, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg valueAsFPR, FPRReg tempFPR, bool shouldCheckMasqueradesAsUndefined, JSGlobalObject* globalObject, bool invert)
+AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs value, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg valueAsFPR, FPRReg tempFPR, bool shouldCheckMasqueradesAsUndefined, Variant<JSGlobalObject*, GPRReg> globalObject, bool invert)
 {
     // Implements the following control flow structure:
     // if (value is cell) {
@@ -823,7 +826,10 @@ AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs val
         JumpList isNotMasqueradesAsUndefined;
         isNotMasqueradesAsUndefined.append(branchTest8(Zero, Address(value.payloadGPR(), JSCell::typeInfoFlagsOffset()), TrustedImm32(MasqueradesAsUndefined)));
         emitLoadStructure(vm, value.payloadGPR(), scratch, scratchIfShouldCheckMasqueradesAsUndefined);
-        move(TrustedImmPtr(globalObject), scratchIfShouldCheckMasqueradesAsUndefined);
+        if (WTF::holds_alternative<JSGlobalObject*>(globalObject))
+            move(TrustedImmPtr(WTF::get<JSGlobalObject*>(globalObject)), scratchIfShouldCheckMasqueradesAsUndefined);
+        else
+            move(WTF::get<GPRReg>(globalObject), scratchIfShouldCheckMasqueradesAsUndefined);
         isNotMasqueradesAsUndefined.append(branchPtr(NotEqual, Address(scratch, Structure::globalObjectOffset()), scratchIfShouldCheckMasqueradesAsUndefined));
 
         // We act like we are "undefined" here.

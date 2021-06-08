@@ -85,6 +85,10 @@
 #include <WebCore/VP9UtilitiesCocoa.h>
 #endif
 
+#if ENABLE(ROUTING_ARBITRATION)
+#include "AudioSessionRoutingArbitrator.h"
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -233,6 +237,29 @@ void GPUProcessConnection::didReceiveRemoteCommand(PlatformMediaSession::RemoteC
     PlatformMediaSessionManager::sharedManager().processDidReceiveRemoteControlCommand(type, argument);
 }
 
+#if ENABLE(ROUTING_ARBITRATION)
+void GPUProcessConnection::beginRoutingArbitrationWithCategory(AudioSession::CategoryType category, AudioSessionRoutingArbitrationClient::ArbitrationCallback&& callback)
+{
+    if (auto* arbitrator = WebProcess::singleton().supplement<AudioSessionRoutingArbitrator>()) {
+        arbitrator->beginRoutingArbitrationWithCategory(category, WTFMove(callback));
+        return;
+    }
+
+    ASSERT_NOT_REACHED();
+    callback(AudioSessionRoutingArbitrationClient::RoutingArbitrationError::Failed, AudioSessionRoutingArbitrationClient::DefaultRouteChanged::No);
+}
+
+void GPUProcessConnection::endRoutingArbitration()
+{
+    if (auto* arbitrator = WebProcess::singleton().supplement<AudioSessionRoutingArbitrator>()) {
+        arbitrator->leaveRoutingAbritration();
+        return;
+    }
+
+    ASSERT_NOT_REACHED();
+}
+#endif
+
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
 void GPUProcessConnection::createVisibilityPropagationContextForPage(WebPage& page)
 {
@@ -244,6 +271,11 @@ void GPUProcessConnection::destroyVisibilityPropagationContextForPage(WebPage& p
     connection().send(Messages::GPUConnectionToWebProcess::DestroyVisibilityPropagationContextForPage(page.webPageProxyIdentifier(), page.identifier()), { });
 }
 #endif
+
+void GPUProcessConnection::configureLoggingChannel(const String& channelName, WTFLogChannelState state, WTFLogLevel level)
+{
+    connection().send(Messages::GPUConnectionToWebProcess::ConfigureLoggingChannel(channelName, state, level), { });
+}
 
 #if ENABLE(VP9)
 void GPUProcessConnection::enableVP9Decoders(bool enableVP8Decoder, bool enableVP9Decoder, bool enableVP9SWDecoder)

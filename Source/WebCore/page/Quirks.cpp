@@ -476,7 +476,7 @@ bool Quirks::shouldDispatchedSimulatedMouseEventsAssumeDefaultPrevented(EventTar
     return false;
 }
 
-Optional<Event::IsCancelable> Quirks::simulatedMouseEventTypeForTarget(EventTarget* target) const
+std::optional<Event::IsCancelable> Quirks::simulatedMouseEventTypeForTarget(EventTarget* target) const
 {
     if (!shouldDispatchSimulatedMouseEvents(target))
         return { };
@@ -1425,10 +1425,9 @@ bool Quirks::shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFull
 
     if (!m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk) {
         auto host = m_document->topDocument().url().host();
-        m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk = equalLettersIgnoringASCIICase(host, "trailers.apple.com");
-
         auto domain = RegistrableDomain(m_document->topDocument().url());
-        m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk = m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk || domain == "espn.com"_s;
+
+        m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk = equalLettersIgnoringASCIICase(host, "trailers.apple.com") || domain == "espn.com"_s;
     }
 
     return *m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk;
@@ -1463,7 +1462,7 @@ bool Quirks::shouldBypassUserGestureRequirementForWebAuthn() const
 }
 #endif
 
-#if ENABLE(IMAGE_EXTRACTION)
+#if ENABLE(IMAGE_ANALYSIS)
 
 bool Quirks::needsToForceUserSelectWhenInstallingImageOverlay() const
 {
@@ -1477,6 +1476,6 @@ bool Quirks::needsToForceUserSelectWhenInstallingImageOverlay() const
     return false;
 }
 
-#endif // ENABLE(IMAGE_EXTRACTION)
+#endif // ENABLE(IMAGE_ANALYSIS)
 
 }

@@ -41,6 +41,7 @@ ALLOW_UNUSED_PARAMETERS_BEGIN
 
 ALLOW_UNUSED_PARAMETERS_END
 
+#include <wtf/Lock.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
@@ -128,7 +129,7 @@ private:
     bool m_enabled { true };
 
     mutable Lock m_sinksLock;
-    HashSet<webrtc::AudioTrackSinkInterface*> m_sinks;
+    HashSet<webrtc::AudioTrackSinkInterface*> m_sinks WTF_GUARDED_BY_LOCK(m_sinksLock);
 
 #if !RELEASE_LOG_DISABLED
     size_t m_chunksSent { 0 };

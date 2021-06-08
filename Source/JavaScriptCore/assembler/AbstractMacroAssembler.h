@@ -971,6 +971,12 @@ public:
         m_linkTasks.append(createSharedTask<void(LinkBuffer&)>(functor));
     }
 
+    template<typename Functor>
+    void addLateLinkTask(const Functor& functor) // Run after all link tasks
+    {
+        m_lateLinkTasks.append(createSharedTask<void(LinkBuffer&)>(functor));
+    }
+
 #if COMPILER(GCC)
     // Workaround for GCC demanding that memcpy "must be the name of a function with external linkage".
     static void* memcpy(void* dst, const void* src, size_t size)
@@ -997,6 +1003,7 @@ public:
 
     ALWAYS_INLINE void tagReturnAddress() { }
     ALWAYS_INLINE void untagReturnAddress(RegisterID = RegisterID::InvalidGPRReg) { }
+    ALWAYS_INLINE void untagReturnAddressWithoutExtraValidation() { }
 
     ALWAYS_INLINE void tagPtr(PtrTag, RegisterID) { }
     ALWAYS_INLINE void tagPtr(RegisterID, RegisterID) { }
@@ -1114,6 +1121,7 @@ protected:
     bool m_allowScratchRegister { true };
 
     Vector<RefPtr<SharedTask<void(LinkBuffer&)>>> m_linkTasks;
+    Vector<RefPtr<SharedTask<void(LinkBuffer&)>>> m_lateLinkTasks;
 
     friend class LinkBuffer;
 }; // class AbstractMacroAssembler

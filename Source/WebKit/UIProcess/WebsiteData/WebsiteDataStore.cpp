@@ -269,7 +269,7 @@ void WebsiteDataStore::resolveDirectoriesIfNecessary()
     // Resolve directories for file paths.
     if (!m_configuration->cookieStorageFile().isEmpty()) {
         m_resolvedConfiguration->setCookieStorageFile(resolveAndCreateReadWriteDirectoryForSandboxExtension(FileSystem::parentPath(m_configuration->cookieStorageFile())));
-        m_resolvedConfiguration->setCookieStorageFile(FileSystem::pathByAppendingComponent(m_resolvedConfiguration->cookieStorageFile(), FileSystem::pathGetFileName(m_configuration->cookieStorageFile())));
+        m_resolvedConfiguration->setCookieStorageFile(FileSystem::pathByAppendingComponent(m_resolvedConfiguration->cookieStorageFile(), FileSystem::pathFileName(m_configuration->cookieStorageFile())));
     }
 }
 
@@ -1693,7 +1693,7 @@ void WebsiteDataStore::removeMediaKeys(const String& mediaKeysStorageDirectory, 
         auto mediaKeyDirectory = FileSystem::pathByAppendingComponent(mediaKeysStorageDirectory, directoryName);
         auto mediaKeyFile = computeMediaKeyFile(mediaKeyDirectory);
 
-        auto modificationTime = FileSystem::getFileModificationTime(mediaKeyFile);
+        auto modificationTime = FileSystem::fileModificationTime(mediaKeyFile);
         if (!modificationTime)
             continue;
 
@@ -1948,7 +1948,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     HashSet<WebCore::RegistrableDomain> appBoundDomains;
 #if ENABLE(APP_BOUND_DOMAINS)
     if (isAppBoundITPRelaxationEnabled)
-        appBoundDomains = appBoundDomainsIfInitialized().valueOr(HashSet<WebCore::RegistrableDomain> { });
+        appBoundDomains = appBoundDomainsIfInitialized().value_or(HashSet<WebCore::RegistrableDomain> { });
 #endif
     WebCore::RegistrableDomain resourceLoadStatisticsManualPrevalentResource;
     ResourceLoadStatisticsParameters resourceLoadStatisticsParameters = {
@@ -2177,6 +2177,11 @@ void WebsiteDataStore::clearBundleIdentifierInNetworkProcess(CompletionHandler<v
     auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
 
     networkProcess().clearBundleIdentifier([callbackAggregator] { });
+}
+
+void WebsiteDataStore::countNonDefaultSessionSets(CompletionHandler<void(size_t)>&& completionHandler)
+{
+    networkProcess().sendWithAsyncReply(Messages::NetworkProcess::CountNonDefaultSessionSets(m_sessionID), WTFMove(completionHandler));
 }
 
 static bool nextNetworkProcessLaunchShouldFailForTesting { false };

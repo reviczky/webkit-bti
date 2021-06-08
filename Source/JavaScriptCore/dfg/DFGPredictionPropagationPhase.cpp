@@ -1158,6 +1158,7 @@ private:
         case StringCharAt:
         case CallStringConstructor:
         case ToString:
+        case FunctionToString:
         case NumberToStringWithRadix:
         case NumberToStringWithValidRadixConstant:
         case MakeRope:
@@ -1204,19 +1205,15 @@ private:
             setPrediction(SpecObjectOther);
             break;
 
-        case InByVal:
-        case InById:
-            setPrediction(SpecBoolean);
-            break;
-
-        case HasOwnProperty:
-            setPrediction(SpecBoolean);
-            break;
-
         case GetEnumerableLength: {
             setPrediction(SpecInt32Only);
             break;
         }
+        case InByVal:
+        case InById:
+        case HasPrivateName:
+        case HasPrivateBrand:
+        case HasOwnProperty:
         case HasOwnStructureProperty:
         case InStructureProperty:
         case HasIndexedProperty:
@@ -1455,7 +1452,7 @@ private:
         case FilterCallLinkStatus:
         case FilterGetByStatus:
         case FilterPutByIdStatus:
-        case FilterInByIdStatus:
+        case FilterInByStatus:
         case FilterDeleteByStatus:
         case FilterCheckPrivateBrandStatus:
         case FilterSetPrivateBrandStatus:
