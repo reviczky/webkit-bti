@@ -1,4 +1,4 @@
-webkit2gtk (2.32.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.32.2-1) unstable; urgency=medium
 
   * New upstream release.
   * debian/patches/fix-ftbfs-m68k.patch:
