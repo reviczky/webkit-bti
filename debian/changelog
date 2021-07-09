@@ -1,3 +1,9 @@
+webkit2gtk (2.32.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 09 Jul 2021 13:41:26 +0200
+
 webkit2gtk (2.32.1-2) unstable; urgency=high
 
   * debian/control:
