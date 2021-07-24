@@ -1,4 +1,4 @@
-webkit2gtk (2.32.3-1) UNRELEASED; urgency=high
+webkit2gtk (2.32.3-1) unstable; urgency=high
 
   * New upstream release.
   * The WebKitGTK security advisory WSA-2021-0004 lists the following
@@ -15,7 +15,7 @@ webkit2gtk (2.32.3-1) UNRELEASED; urgency=high
       CVE-2021-30749, CVE-2021-30795, CVE-2021-30797, CVE-2021-30799
       (fixed in 2.32.3).
 
- -- Alberto Garcia <berto@igalia.com>  Sat, 24 Jul 2021 11:43:08 +0200
+ -- Alberto Garcia <berto@igalia.com>  Sun, 25 Jul 2021 00:25:47 +0200
 
 webkit2gtk (2.32.2-1) unstable; urgency=medium
 
