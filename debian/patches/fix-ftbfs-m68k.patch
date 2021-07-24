@@ -205,7 +205,7 @@ Index: webkitgtk/Source/WebCore/rendering/InlineFlowBox.cpp
  };
  
 +#if defined(__m68k__)
-+COMPILE_ASSERT(sizeof(InlineFlowBox) <= sizeof(SameSizeAsInlineFlowBox), InlineFlowBox_should_stay_small);
++COMPILE_ASSERT(sizeof(InlineFlowBox) >= sizeof(SameSizeAsInlineFlowBox), InlineFlowBox_should_stay_small);
 +#else
  COMPILE_ASSERT(sizeof(InlineFlowBox) == sizeof(SameSizeAsInlineFlowBox), InlineFlowBox_should_stay_small);
 +#endif
