@@ -1,3 +1,22 @@
+webkit2gtk (2.32.3-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+  * The WebKitGTK security advisory WSA-2021-0004 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    + CVE-2021-30666, CVE-2021-30761 (fixed in 2.26.0).
+    + CVE-2021-30762 (fixed in 2.28.0).
+    + CVE-2021-1817, CVE-2021-1820, CVE-2021-1825, CVE-2021-1826,
+      CVE-2021-30661 (fixed in 2.30.0).
+    + CVE-2021-21806 (fixed in 2.30.6).
+    + CVE-2021-30682 (fixed in 2.32.0).
+    + CVE-2021-30758 (fixed in 2.32.2).
+    + CVE-2021-21775, CVE-2021-21779, CVE-2021-30663, CVE-2021-30665,
+      CVE-2021-30689, CVE-2021-30720, CVE-2021-30734, CVE-2021-30744,
+      CVE-2021-30749, CVE-2021-30795, CVE-2021-30797, CVE-2021-30799
+      (fixed in 2.32.3).
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 24 Jul 2021 11:43:08 +0200
+
 webkit2gtk (2.32.2-1) unstable; urgency=medium
 
   * New upstream release.
