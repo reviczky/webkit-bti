@@ -22,7 +22,7 @@ Index: webkitgtk/Source/WebCore/css/CSSProperty.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSProperty.cpp
 +++ webkitgtk/Source/WebCore/css/CSSProperty.cpp
-@@ -33,7 +33,11 @@ struct SameSizeAsCSSProperty {
+@@ -32,7 +32,11 @@ struct SameSizeAsCSSProperty {
      void* value;
  };
  
@@ -176,7 +176,7 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5535,3 +5540,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5462,3 +5467,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  
@@ -192,7 +192,7 @@ Index: webkitgtk/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
  };
  
 +#if defined(__m68k__)
-+COMPILE_ASSERT(sizeof(LegacyInlineFlowBox) <= sizeof(SameSizeAsLegacyInlineFlowBox), LegacyInlineFlowBox_should_stay_small);
++COMPILE_ASSERT(sizeof(LegacyInlineFlowBox) >= sizeof(SameSizeAsLegacyInlineFlowBox), LegacyInlineFlowBox_should_stay_small);
 +#else
  COMPILE_ASSERT(sizeof(LegacyInlineFlowBox) == sizeof(SameSizeAsLegacyInlineFlowBox), LegacyInlineFlowBox_should_stay_small);
 +#endif

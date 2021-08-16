@@ -6,8 +6,8 @@ Index: webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/WebKitCompilerFlags.cmake
 +++ webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
-@@ -141,15 +141,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
-     if (CMAKE_COMPILER_IS_GNUCXX)
+@@ -148,15 +148,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
+     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
          WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wno-expansion-to-defined)
      endif ()
 -
