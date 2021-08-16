@@ -2,6 +2,8 @@ webkit2gtk (2.33.3-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/control:
+    + Remove the dummy libwebkit2gtk-4.0-37-gtk2 package.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 16 Aug 2021 15:37:24 +0200
 

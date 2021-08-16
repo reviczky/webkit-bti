@@ -239,16 +239,6 @@ Description: Web content engine library for GTK - GObject introspection data
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
 
-Package: libwebkit2gtk-4.0-37-gtk2
-Section: oldlibs
-Architecture: all
-Multi-Arch: foreign
-Depends: ${misc:Depends}
-Description: Transitional dummy package
- This is a transitional dummy package, it can be safely removed.
- .
- Support for NPAPI plugins has been completely removed from WebKitGTK.
-
 Package: webkit2gtk-driver
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
