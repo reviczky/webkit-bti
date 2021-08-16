@@ -275,7 +275,7 @@ public:
         , m_hadHorizontalLayoutOverflow(false)
         , m_hadVerticalLayoutOverflow(false)
     {
-        m_shouldDispatchEvent = !m_block->isAnonymous() && m_block->hasOverflowClip() && m_block->document().hasListenerType(Document::OVERFLOWCHANGED_LISTENER);
+        m_shouldDispatchEvent = !m_block->isAnonymous() && m_block->hasNonVisibleOverflow() && m_block->document().hasListenerType(Document::OVERFLOWCHANGED_LISTENER);
         if (m_shouldDispatchEvent) {
             m_hadHorizontalLayoutOverflow = m_block->hasHorizontalLayoutOverflow();
             m_hadVerticalLayoutOverflow = m_block->hasVerticalLayoutOverflow();
@@ -551,7 +551,7 @@ void RenderBlock::endAndCommitUpdateScrollInfoAfterLayoutTransaction()
         updateScrollInfoAfterLayoutTransactionStack() = nullptr;
 
     for (auto* block : blocksToUpdate) {
-        ASSERT(block->hasOverflowClip());
+        ASSERT(block->hasNonVisibleOverflow());
         block->layer()->updateScrollInfoAfterLayout();
     }
 }
@@ -568,7 +568,7 @@ void RenderBlock::removeFromUpdateScrollInfoAfterLayoutTransaction()
 
 void RenderBlock::updateScrollInfoAfterLayout()
 {
-    if (!hasOverflowClip())
+    if (!hasNonVisibleOverflow())
         return;
     
     // FIXME: https://bugs.webkit.org/show_bug.cgi?id=97937
@@ -691,7 +691,7 @@ void RenderBlock::computeOverflow(LayoutUnit oldClientAfterEdge, bool)
 
     addOverflowFromPositionedObjects();
 
-    if (hasOverflowClip()) {
+    if (hasNonVisibleOverflow()) {
         // When we have overflow clip, propagate the original spillout since it will include collapsed bottom margins
         // and bottom padding.  Set the axis we don't care about to be 1, since we want this overflow to always
         // be considered reachable.
@@ -1134,7 +1134,7 @@ void RenderBlock::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     // Our scrollbar widgets paint exactly when we tell them to, so that they work properly with
     // z-index. We paint after we painted the background/border, so that the scrollbars will
     // sit above the background/border.
-    if ((phase == PaintPhase::BlockBackground || phase == PaintPhase::ChildBlockBackground) && hasOverflowClip() && layer()
+    if ((phase == PaintPhase::BlockBackground || phase == PaintPhase::ChildBlockBackground) && hasNonVisibleOverflow() && layer()
         && layer()->scrollableArea() && style().visibility() == Visibility::Visible && paintInfo.shouldPaintWithinRoot(*this) && !paintInfo.paintRootBackgroundOnly())
         layer()->scrollableArea()->paintOverflowControls(paintInfo.context(), roundedIntPoint(adjustedPaintOffset), snappedIntRect(paintInfo.rect));
 }
@@ -1451,7 +1451,7 @@ bool RenderBlock::isSelectionRoot() const
     if (isTable())
         return false;
         
-    if (isBody() || isDocumentElementRenderer() || hasOverflowClip()
+    if (isBody() || isDocumentElementRenderer() || hasNonVisibleOverflow()
         || isPositioned() || isFloating()
         || isTableCell() || isInlineBlockOrInlineTable()
         || hasTransform() || hasReflection() || hasMask() || isWritingModeRoot()
@@ -2076,7 +2076,7 @@ bool RenderBlock::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
         return false;
 
     // If we have clipping, then we can't have any spillout.
-    bool useClip = (hasControlClip() || hasOverflowClip());
+    bool useClip = (hasControlClip() || hasNonVisibleOverflow());
     bool checkChildren = !useClip || (hasControlClip() ? locationInContainer.intersects(controlClipRect(adjustedLocation)) : locationInContainer.intersects(overflowClipRect(adjustedLocation, nullptr, IncludeOverlayScrollbarSize)));
     if (checkChildren && hitTestChildren(request, result, locationInContainer, adjustedLocation, hitTestAction))
         return true;
@@ -2383,6 +2383,12 @@ void RenderBlock::computeBlockPreferredLogicalWidths(LayoutUnit& minLogicalWidth
     maxLogicalWidth = std::max(floatLeftWidth + floatRightWidth, maxLogicalWidth);
 }
 
+void RenderBlock::computeChildIntrinsicLogicalWidths(RenderObject& child, LayoutUnit& minPreferredLogicalWidth, LayoutUnit& maxPreferredLogicalWidth) const
+{
+    minPreferredLogicalWidth = child.minPreferredLogicalWidth();
+    maxPreferredLogicalWidth = child.maxPreferredLogicalWidth();
+}
+
 void RenderBlock::computeChildPreferredLogicalWidths(RenderObject& child, LayoutUnit& minPreferredLogicalWidth, LayoutUnit& maxPreferredLogicalWidth) const
 {
     if (child.isBox() && child.isHorizontalWritingMode() != isHorizontalWritingMode()) {
@@ -2403,32 +2409,7 @@ void RenderBlock::computeChildPreferredLogicalWidths(RenderObject& child, Layout
         return;
     }
     
-    // The preferred widths of flexbox children should never depend on overriding sizes. They should
-    // always be computed without regard for any overrides that are present.
-    std::optional<LayoutUnit> overridingHeight;
-    std::optional<LayoutUnit> overridingWidth;
-    
-    if (child.isBox()) {
-        auto& box = downcast<RenderBox>(child);
-        if (box.isFlexItem()) {
-            if (box.hasOverridingLogicalHeight())
-                overridingHeight = std::optional<LayoutUnit>(box.overridingLogicalHeight());
-            if (box.hasOverridingLogicalWidth())
-                overridingWidth = std::optional<LayoutUnit>(box.overridingLogicalWidth());
-            box.clearOverridingContentSize();
-        }
-    }
-    
-    minPreferredLogicalWidth = child.minPreferredLogicalWidth();
-    maxPreferredLogicalWidth = child.maxPreferredLogicalWidth();
-    
-    if (child.isBox()) {
-        auto& box = downcast<RenderBox>(child);
-        if (overridingHeight)
-            box.setOverridingLogicalHeight(overridingHeight.value());
-        if (overridingWidth)
-            box.setOverridingLogicalWidth(overridingWidth.value());
-    }
+    computeChildIntrinsicLogicalWidths(child, minPreferredLogicalWidth, maxPreferredLogicalWidth);
 
     // For non-replaced blocks if the inline size is min|max-content or a definite
     // size the min|max-content contribution is that size plus border, padding and
@@ -2815,7 +2796,7 @@ void RenderBlock::absoluteQuadsIgnoringContinuation(const FloatRect& logicalRect
     // FIXME: This is wrong for block-flows that are horizontal.
     // https://bugs.webkit.org/show_bug.cgi?id=46781
     auto* fragmentedFlow = enclosingFragmentedFlow();
-    if (!fragmentedFlow || !fragmentedFlow->absoluteQuadsForBox(quads, wasFixed, this, logicalRect.y(), logicalRect.maxY()))
+    if (!fragmentedFlow || !fragmentedFlow->absoluteQuadsForBox(quads, wasFixed, this))
         quads.append(localToAbsoluteQuad(logicalRect, UseTransforms, wasFixed));
 }
 
@@ -2872,7 +2853,7 @@ void RenderBlock::addFocusRingRects(Vector<LayoutRect>& rects, const LayoutPoint
     } else if (width() && height())
         rects.append(LayoutRect(additionalOffset, size()));
 
-    if (!hasOverflowClip() && !hasControlClip()) {
+    if (!hasNonVisibleOverflow() && !hasControlClip()) {
         if (childrenInline())
             addFocusRingRectsForInlineChildren(rects, additionalOffset, paintContainer);
     

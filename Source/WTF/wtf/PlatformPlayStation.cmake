@@ -8,13 +8,14 @@ list(APPEND WTF_SOURCES
     playstation/LanguagePlayStation.cpp
     playstation/UniStdExtrasPlayStation.cpp
 
+    posix/CPUTimePOSIX.cpp
     posix/FileSystemPOSIX.cpp
     posix/OSAllocatorPOSIX.cpp
     posix/ThreadingPOSIX.cpp
 
     text/unix/TextBreakIteratorInternalICUUnix.cpp
 
-    unix/CPUTimeUnix.cpp
+    unix/LoggingUnix.cpp
     unix/MemoryPressureHandlerUnix.cpp
 )
 

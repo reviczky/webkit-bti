@@ -59,12 +59,10 @@ public:
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT void handleWheelEventPhase(ScrollingNodeID, PlatformWheelEventPhase) final;
 
-    WEBCORE_EXPORT void setActiveScrollSnapIndices(ScrollingNodeID, unsigned horizontalIndex, unsigned verticalIndex);
+    WEBCORE_EXPORT void setActiveScrollSnapIndices(ScrollingNodeID, std::optional<unsigned> horizontalIndex, std::optional<unsigned> verticalIndex);
 #endif
 
-#if ENABLE(CSS_SCROLL_SNAP)
     WEBCORE_EXPORT void updateScrollSnapPropertiesWithFrameView(const FrameView&) override;
-#endif
 
     WEBCORE_EXPORT void updateIsMonitoringWheelEventsForFrameView(const FrameView&) override;
 
@@ -134,9 +132,7 @@ private:
     WEBCORE_EXPORT bool isUserScrollInProgress(ScrollingNodeID) const override;
     bool isRubberBandInProgress(ScrollingNodeID) const override;
 
-#if ENABLE(CSS_SCROLL_SNAP)
     WEBCORE_EXPORT bool isScrollSnapInProgress(ScrollingNodeID) const override;
-#endif
 
     void setScrollPinningBehavior(ScrollPinningBehavior) override;
 

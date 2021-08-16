@@ -88,16 +88,14 @@ public:
 
     WEBCORE_EXPORT virtual bool handleWheelEventForScrolling(const PlatformWheelEvent&, std::optional<WheelScrollGestureState>);
 
-#if ENABLE(CSS_SCROLL_SNAP)
     virtual void updateSnapOffsets() { };
     WEBCORE_EXPORT const LayoutScrollSnapOffsetsInfo* snapOffsetsInfo() const;
     void setScrollSnapOffsetInfo(const LayoutScrollSnapOffsetsInfo&);
     void clearSnapOffsets();
-    WEBCORE_EXPORT unsigned currentHorizontalSnapPointIndex() const;
-    WEBCORE_EXPORT unsigned currentVerticalSnapPointIndex() const;
-    WEBCORE_EXPORT void setCurrentHorizontalSnapPointIndex(unsigned);
-    WEBCORE_EXPORT void setCurrentVerticalSnapPointIndex(unsigned);
-#endif
+    WEBCORE_EXPORT std::optional<unsigned> currentHorizontalSnapPointIndex() const;
+    WEBCORE_EXPORT std::optional<unsigned> currentVerticalSnapPointIndex() const;
+    WEBCORE_EXPORT void setCurrentHorizontalSnapPointIndex(std::optional<unsigned>);
+    WEBCORE_EXPORT void setCurrentVerticalSnapPointIndex(std::optional<unsigned>);
 
     void resnapAfterLayout();
     void doPostThumbMoveSnapping(ScrollbarOrientation);

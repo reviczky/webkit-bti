@@ -38,6 +38,7 @@
 #include <wtf/ASCIICType.h>
 #include <wtf/Compiler.h>
 #include <wtf/DataLog.h>
+#include <wtf/Gigacage.h>
 #include <wtf/NumberOfCores.h>
 #include <wtf/OSLogPrintStream.h>
 #include <wtf/StdLibExtras.h>
@@ -433,6 +434,11 @@ void Options::recomputeDependentOptions()
     Options::useConcurrentGC() = false;
 #endif
 
+    if (!isARM64())
+        Options::useDataIC() = false;
+    if (!Options::useDataIC())
+        Options::useDataICInOptimizingJIT() = false;
+
     // At initialization time, we may decide that useJIT should be false for any
     // number of reasons (including failing to allocate JIT memory), and therefore,
     // will / should not be able to enable any JIT related services.
@@ -501,6 +507,9 @@ void Options::recomputeDependentOptions()
         Options::maximumEvalCacheableSourceLength() = 150000;
         Options::useConcurrentJIT() = false;
     }
+
+    if (Options::useProfiler())
+        Options::useConcurrentJIT() = false;
 
     if (Options::alwaysUseShadowChicken())
         Options::maximumInliningDepth() = 1;
@@ -1031,6 +1040,10 @@ void Options::ensureOptionsAreCoherent()
         coherent = false;
         dataLog("INCOHERENT OPTIONS: at least one of useWasmLLInt or useBBQJIT must be true\n");
     }
+    if (useProfiler() && useConcurrentJIT()) {
+        coherent = false;
+        dataLogLn("Bytecode profiler is not concurrent JIT safe.");
+    }
     if (!coherent)
         CRASH();
 }
@@ -1139,5 +1152,13 @@ bool canUseJITCage()
 #else
 bool canUseJITCage() { return false; }
 #endif
+
+bool canUseWebAssemblyFastMemory()
+{
+    // Gigacage::hasCapacityToUseLargeGigacage is determined based on EFFECTIVE_ADDRESS_WIDTH.
+    // If we have enough address range to potentially use a large gigacage,
+    // then we have enough address range to useWebAssemblyFastMemory.
+    return Gigacage::hasCapacityToUseLargeGigacage;
+}
 
 } // namespace JSC

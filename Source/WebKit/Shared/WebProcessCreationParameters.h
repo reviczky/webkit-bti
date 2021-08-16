@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "AccessibilityPreferences.h"
 #include "CacheModel.h"
 #include "SandboxExtension.h"
 #include "TextCheckerState.h"
@@ -49,6 +50,10 @@
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
 #include <WebCore/PluginData.h>
+#endif
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include <wtf/MemoryPressureHandler.h>
 #endif
 
 namespace API {
@@ -89,6 +94,7 @@ struct WebProcessCreationParameters {
     SandboxExtension::Handle audioCaptureExtensionHandle;
 #endif
 
+    String wtfLoggingChannels;
     String webCoreLoggingChannels;
     String webKitLoggingChannels;
 
@@ -205,6 +211,9 @@ struct WebProcessCreationParameters {
     std::optional<SandboxExtension::Handle> containerManagerExtensionHandle;
     std::optional<SandboxExtension::Handle> mobileGestaltExtensionHandle;
     std::optional<SandboxExtension::Handle> launchServicesExtensionHandle;
+#if HAVE(VIDEO_RESTRICTED_DECODING)
+    SandboxExtension::HandleArray videoDecoderExtensionHandles;
+#endif
 
     SandboxExtension::HandleArray diagnosticsExtensionHandles;
 #if PLATFORM(IOS_FAMILY)
@@ -218,7 +227,7 @@ struct WebProcessCreationParameters {
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    bool currentUserInterfaceIdiomIsPad { false };
+    bool currentUserInterfaceIdiomIsPhoneOrWatch { false };
     bool supportsPictureInPicture { false };
     WebCore::RenderThemeIOS::CSSValueToSystemColorMap cssValueToSystemColorMap;
     WebCore::Color focusRingColor;
@@ -242,6 +251,12 @@ struct WebProcessCreationParameters {
 
 #if HAVE(IOSURFACE)
     WebCore::IntSize maximumIOSurfaceSize;
+#endif
+    
+    AccessibilityPreferences accessibilityPreferences;
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    std::optional<MemoryPressureHandler::Configuration> memoryPressureHandlerConfiguration;
 #endif
 };
 

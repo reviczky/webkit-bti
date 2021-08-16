@@ -30,6 +30,7 @@
 #include "MediaPlayer.h"
 #include "MediaPlayerIdentifier.h"
 #include "PlatformTimeRanges.h"
+#include <wtf/CompletionHandler.h>
 
 namespace WebCore {
 
@@ -97,6 +98,7 @@ public:
 
     virtual void setVisible(bool) = 0;
     virtual void setVisibleForCanvas(bool visible) { setVisible(visible); }
+    virtual void setVisibleInViewport(bool) { }
 
     virtual float duration() const { return 0; }
     virtual double durationDouble() const { return duration(); }
@@ -123,6 +125,7 @@ public:
     virtual void setRate(float) { }
     virtual void setRateDouble(double rate) { setRate(rate); }
     virtual double rate() const { return 0; }
+    virtual double effectiveRate() const { return rate(); }
 
     virtual void setPreservesPitch(bool) { }
     virtual void setPitchCorrectionAlgorithm(MediaPlayer::PitchCorrectionAlgorithm) { }
@@ -157,6 +160,10 @@ public:
 
     virtual unsigned long long totalBytes() const { return 0; }
     virtual bool didLoadingProgress() const = 0;
+    // The default implementation of didLoadingProgressAsync is implemented in terms of
+    // synchronous didLoadingProgress() calls. Implementations may also
+    // override didLoadingProgressAsync to create a more proper async implementation.
+    virtual void didLoadingProgressAsync(MediaPlayer::DidLoadingProgressCompletionHandler&& callback) const { callback(didLoadingProgress()); }
 
     virtual void setSize(const IntSize&) { }
 
@@ -302,6 +309,11 @@ public:
     virtual void audioOutputDeviceChanged() { }
 
     virtual MediaPlayerIdentifier identifier() const { return { }; }
+
+    virtual bool supportsPlayAtHostTime() const { return false; }
+    virtual bool supportsPauseAtHostTime() const { return false; }
+    virtual bool playAtHostTime(const MonotonicTime&) { return false; }
+    virtual bool pauseAtHostTime(const MonotonicTime&) { return false; }
 };
 
 }

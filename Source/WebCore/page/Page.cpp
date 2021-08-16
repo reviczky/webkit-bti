@@ -29,6 +29,7 @@
 #include "BackForwardCache.h"
 #include "BackForwardClient.h"
 #include "BackForwardController.h"
+#include "BroadcastChannelRegistry.h"
 #include "CacheStorageProvider.h"
 #include "CachedImage.h"
 #include "CachedResourceLoader.h"
@@ -82,6 +83,7 @@
 #include "LegacySchemeRegistry.h"
 #include "LibWebRTCProvider.h"
 #include "LoaderStrategy.h"
+#include "LogInitialization.h"
 #include "Logging.h"
 #include "LowPowerModeNotifier.h"
 #include "MediaCanStartListener.h"
@@ -108,6 +110,7 @@
 #include "ProgressTracker.h"
 #include "Range.h"
 #include "RenderDescendantIterator.h"
+#include "RenderImage.h"
 #include "RenderLayerCompositor.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
@@ -136,6 +139,7 @@
 #include "StyleScope.h"
 #include "SubframeLoader.h"
 #include "TextIterator.h"
+#include "TextRecognitionResult.h"
 #include "TextResourceDecoder.h"
 #include "UserContentProvider.h"
 #include "UserContentURLPattern.h"
@@ -187,11 +191,16 @@ static HashSet<Page*>& allPages()
     return set;
 }
 
-static unsigned nonUtilityPageCount { 0 };
+static unsigned gNonUtilityPageCount { 0 };
 
 static inline bool isUtilityPageChromeClient(ChromeClient& chromeClient)
 {
     return chromeClient.isEmptyChromeClient() || chromeClient.isSVGImageChromeClient();
+}
+
+unsigned Page::nonUtilityPageCount()
+{
+    return gNonUtilityPageCount;
 }
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, pageCounter, ("Page"));
@@ -284,6 +293,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_storageNamespaceProvider(*WTFMove(pageConfiguration.storageNamespaceProvider))
     , m_userContentProvider(WTFMove(pageConfiguration.userContentProvider))
     , m_visitedLinkStore(*WTFMove(pageConfiguration.visitedLinkStore))
+    , m_broadcastChannelRegistry(WTFMove(pageConfiguration.broadcastChannelRegistry))
     , m_sessionID(pageConfiguration.sessionID)
 #if ENABLE(VIDEO)
     , m_playbackControlsManagerUpdateTimer(*this, &Page::playbackControlsManagerUpdateTimerFired)
@@ -332,8 +342,8 @@ Page::Page(PageConfiguration&& pageConfiguration)
     allPages().add(this);
 
     if (!isUtilityPage()) {
-        ++nonUtilityPageCount;
-        MemoryPressureHandler::setPageCount(nonUtilityPageCount);
+        ++gNonUtilityPageCount;
+        MemoryPressureHandler::setPageCount(gNonUtilityPageCount);
     }
 
 #ifndef NDEBUG
@@ -373,8 +383,8 @@ Page::~Page()
     setGroupName(String());
     allPages().remove(this);
     if (!isUtilityPage()) {
-        --nonUtilityPageCount;
-        MemoryPressureHandler::setPageCount(nonUtilityPageCount);
+        --gNonUtilityPageCount;
+        MemoryPressureHandler::setPageCount(gNonUtilityPageCount);
     }
     
     m_settings->pageDestroyed();
@@ -594,6 +604,11 @@ void Page::setGroupName(const String& name)
 const String& Page::groupName() const
 {
     return m_group ? m_group->name() : nullAtom().string();
+}
+
+void Page::setBroadcastChannelRegistry(Ref<BroadcastChannelRegistry>&& broadcastChannelRegistry)
+{
+    m_broadcastChannelRegistry = WTFMove(broadcastChannelRegistry);
 }
 
 void Page::initGroup()
@@ -1274,6 +1289,10 @@ void Page::didCommitLoad()
 
     resetSeenPlugins();
     resetSeenMediaEngines();
+
+#if ENABLE(IMAGE_ANALYSIS)
+    resetTextRecognitionResults();
+#endif
 }
 
 void Page::didFinishLoad()
@@ -1288,7 +1307,7 @@ void Page::didFinishLoad()
 
 bool Page::isOnlyNonUtilityPage() const
 {
-    return !isUtilityPage() && nonUtilityPageCount == 1;
+    return !isUtilityPage() && gNonUtilityPageCount == 1;
 }
 
 void Page::setLowPowerModeEnabledOverrideForTesting(std::optional<bool> isEnabled)
@@ -1431,12 +1450,12 @@ void Page::setIsInWindowInternal(bool isInWindow)
 
 void Page::addActivityStateChangeObserver(ActivityStateChangeObserver& observer)
 {
-    m_activityStateChangeObservers.add(&observer);
+    m_activityStateChangeObservers.add(observer);
 }
 
 void Page::removeActivityStateChangeObserver(ActivityStateChangeObserver& observer)
 {
-    m_activityStateChangeObservers.remove(&observer);
+    m_activityStateChangeObservers.remove(observer);
 }
 
 void Page::layoutIfNeeded()
@@ -1659,6 +1678,10 @@ void Page::doAfterUpdateRendering()
     forEachDocument([] (Document& document) {
         document.updateTextTrackRepresentationImageIfNeeded();
     });
+#endif
+
+#if ENABLE(IMAGE_ANALYSIS)
+    updateElementsWithTextRecognitionResults();
 #endif
 
     prioritizeVisibleResources();
@@ -2326,8 +2349,8 @@ void Page::setActivityState(OptionSet<ActivityState::Flag> activityState)
     if (changed.containsAny({ActivityState::IsVisible, ActivityState::IsVisuallyIdle, ActivityState::IsAudible, ActivityState::IsLoading, ActivityState::IsCapturingMedia }))
         updateTimerThrottlingState();
 
-    for (auto* observer : m_activityStateChangeObservers)
-        observer->activityStateDidChange(oldActivityState, m_activityState);
+    for (auto& observer : m_activityStateChangeObservers)
+        observer.activityStateDidChange(oldActivityState, m_activityState);
 
     if (wasVisibleAndActive != isVisibleAndActive())
         PlatformMediaSessionManager::updateNowPlayingInfoIfNecessary();
@@ -3128,11 +3151,6 @@ void Page::setResourceUsageOverlayVisible(bool visible)
 }
 #endif
 
-bool Page::isAlwaysOnLoggingAllowed() const
-{
-    return m_sessionID.isAlwaysOnLoggingAllowed();
-}
-
 String Page::captionUserPreferencesStyleSheet()
 {
     return m_captionUserPreferencesStyleSheet;
@@ -3602,5 +3620,77 @@ WTF::TextStream& operator<<(WTF::TextStream& ts, RenderingUpdateStep step)
     }
     return ts;
 }
+
+#if ENABLE(IMAGE_ANALYSIS)
+
+void Page::updateElementsWithTextRecognitionResults()
+{
+    if (m_textRecognitionResultsByElement.isEmpty())
+        return;
+
+    m_textRecognitionResultsByElement.removeAllMatching([](auto& elementAndResult) {
+        return !elementAndResult.first;
+    });
+
+    Vector<std::pair<Ref<HTMLElement>, TextRecognitionResult>> elementsToUpdate;
+    for (auto& [element, resultAndRect] : m_textRecognitionResultsByElement) {
+        if (!element->isConnected())
+            continue;
+
+        auto& [result, containerRect] = resultAndRect;
+        auto protectedElement = makeRef(*element);
+        auto renderer = protectedElement->renderer();
+        if (!is<RenderImage>(renderer))
+            continue;
+
+        auto newContainerRect = protectedElement->containerRectForTextRecognition();
+        if (containerRect == newContainerRect)
+            continue;
+
+        containerRect = newContainerRect;
+        elementsToUpdate.append({ WTFMove(protectedElement), result });
+    }
+
+    for (auto& [element, result] : elementsToUpdate) {
+        element->document().eventLoop().queueTask(TaskSource::InternalAsyncTask, [result = TextRecognitionResult { result }, weakElement = makeWeakPtr(element.get())] {
+            auto element = makeRefPtr(weakElement.get());
+            if (!element)
+                return;
+
+            element->updateWithTextRecognitionResult(result, HTMLElement::CacheTextRecognitionResults::No);
+        });
+    }
+}
+
+bool Page::hasCachedTextRecognitionResult(const HTMLElement& element) const
+{
+    return m_elementsWithTextRecognitionResults.contains(element);
+}
+
+void Page::cacheTextRecognitionResult(const HTMLElement& element, const IntRect& containerRect, const TextRecognitionResult& result)
+{
+    m_elementsWithTextRecognitionResults.add(element);
+
+    auto index = m_textRecognitionResultsByElement.findMatching([&](auto& elementAndResult) {
+        return elementAndResult.first == &element;
+    });
+
+    if (index == notFound)
+        m_textRecognitionResultsByElement.append({ makeWeakPtr(element), { result, containerRect } });
+    else
+        m_textRecognitionResultsByElement[index].second = { result, containerRect };
+
+    m_textRecognitionResultsByElement.removeAllMatching([](auto& elementAndResult) {
+        return !elementAndResult.first;
+    });
+}
+
+void Page::resetTextRecognitionResults()
+{
+    m_textRecognitionResultsByElement.clear();
+    m_elementsWithTextRecognitionResults.clear();
+}
+
+#endif // ENABLE(IMAGE_ANALYSIS)
 
 } // namespace WebCore

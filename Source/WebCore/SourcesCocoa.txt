@@ -23,6 +23,11 @@
 
 JSApplePayCancelEvent.cpp
 JSApplePayContactField.cpp
+JSApplePayCouponCodeChangedEvent.cpp
+JSApplePayCouponCodeDetails.cpp
+JSApplePayCouponCodeUpdate.cpp
+JSApplePayDateComponents.cpp
+JSApplePayDateComponentsRange.cpp
 JSApplePayDetailsUpdateBase.cpp
 JSApplePayDetailsUpdateData.cpp
 JSApplePayError.cpp
@@ -33,7 +38,6 @@ JSApplePayInstallmentItem.cpp
 JSApplePayInstallmentItemType.cpp
 JSApplePayInstallmentRetailChannel.cpp
 JSApplePayLineItem.cpp
-JSApplePayLineItemData.cpp
 JSApplePayMerchantCapability.cpp
 JSApplePayModifier.cpp
 JSApplePayPayment.cpp
@@ -41,13 +45,13 @@ JSApplePayPaymentAuthorizationResult.cpp
 JSApplePayPaymentAuthorizedEvent.cpp
 JSApplePayPaymentContact.cpp
 JSApplePayPaymentMethod.cpp
-JSApplePayPaymentMethodModeDetails.cpp
-JSApplePayPaymentMethodModeUpdate.cpp
 JSApplePayPaymentMethodSelectedEvent.cpp
 JSApplePayPaymentMethodType.cpp
 JSApplePayPaymentMethodUpdate.cpp
 JSApplePayPaymentPass.cpp
 JSApplePayPaymentRequest.cpp
+JSApplePayPaymentTiming.cpp
+JSApplePayRecurringPaymentDateUnit.cpp
 JSApplePayRequest.cpp
 JSApplePayRequestBase.cpp
 JSApplePaySession.cpp
@@ -57,14 +61,15 @@ JSApplePaySetupConfiguration.cpp
 JSApplePaySetupFeature.cpp
 JSApplePaySetupFeatureState.cpp
 JSApplePaySetupFeatureType.cpp
+JSApplePayShippingContactEditingMode.cpp
 JSApplePayShippingContactSelectedEvent.cpp
 JSApplePayShippingContactUpdate.cpp
 JSApplePayShippingMethod.cpp
-JSApplePayShippingMethodData.cpp
 JSApplePayShippingMethodSelectedEvent.cpp
 JSApplePayShippingMethodUpdate.cpp
 JSApplePayValidateMerchantEvent.cpp
 Modules/airplay/WebMediaSessionManager.cpp
+Modules/applepay/ApplePayCouponCodeChangedEvent.cpp
 Modules/applepay/ApplePayCancelEvent.cpp
 Modules/applepay/ApplePayContactField.cpp
 Modules/applepay/ApplePayMerchantCapability.cpp
@@ -94,6 +99,7 @@ Modules/applepay/paymentrequest/ApplePayPaymentHandler.cpp
 Modules/async-clipboard/ios/ClipboardImageReaderIOS.mm
 Modules/async-clipboard/mac/ClipboardImageReaderMac.mm
 Modules/mediastream/RTCRtpSFrameTransformerCocoa.cpp
+Modules/model-element/HTMLModelElementCocoa.mm
 Modules/plugins/QuickTimePluginReplacement.mm
 Modules/plugins/YouTubePluginReplacement.cpp
 Modules/speech/cocoa/SpeechRecognizerCocoa.mm
@@ -220,13 +226,11 @@ platform/audio/cocoa/CARingBuffer.cpp
 platform/audio/cocoa/MediaSessionManagerCocoa.mm
 platform/audio/cocoa/WebAudioBufferList.cpp
 platform/audio/ios/AudioOutputUnitAdaptorIOS.cpp @no-unify
-platform/audio/ios/AudioFileReaderIOS.cpp @no-unify
 platform/audio/ios/AudioSessionIOS.mm @no-unify
 platform/audio/ios/MediaSessionHelperIOS.mm @no-unify
 platform/audio/ios/MediaSessionManagerIOS.mm @no-unify
 platform/audio/mac/AudioBusMac.mm
 platform/audio/mac/AudioOutputUnitAdaptorMac.cpp
-platform/audio/mac/AudioFileReaderMac.cpp
 platform/audio/mac/AudioHardwareListenerMac.cpp
 platform/audio/mac/AudioSessionMac.mm
 platform/audio/mac/FFTFrameMac.cpp
@@ -383,7 +387,6 @@ platform/graphics/cocoa/WebActionDisablingCALayerDelegate.mm
 platform/graphics/cocoa/WebCoreCALayerExtras.mm
 platform/graphics/cocoa/WebCoreDecompressionSession.mm
 platform/graphics/cocoa/WebGLLayer.mm
-platform/graphics/cocoa/WebGPULayer.mm
 platform/graphics/cocoa/VideoTrackPrivateWebM.cpp
 platform/graphics/coretext/FontCascadeCoreText.cpp
 platform/graphics/coretext/FontCoreText.cpp
@@ -394,24 +397,7 @@ platform/graphics/cv/PixelBufferConformerCV.cpp
 platform/graphics/cv/GraphicsContextGLCVANGLE.cpp
 platform/graphics/coreimage/FilterEffectRendererCoreImage.mm
 platform/graphics/displaylists/DisplayListDrawGlyphsRecorderCoreText.cpp
-platform/graphics/gpu/cocoa/GPUBindGroupAllocatorMetal.mm
-platform/graphics/gpu/cocoa/GPUBindGroupLayoutMetal.mm
-platform/graphics/gpu/cocoa/GPUBindGroupMetal.mm
-platform/graphics/gpu/cocoa/GPUBufferMetal.mm
-platform/graphics/gpu/cocoa/GPUCommandBufferMetal.mm
-platform/graphics/gpu/cocoa/GPUComputePassEncoderMetal.mm
-platform/graphics/gpu/cocoa/GPUComputePipelineMetal.mm
 platform/graphics/gpu/cocoa/GPUDeviceMetal.mm
-platform/graphics/gpu/cocoa/GPUPipelineMetalConvertLayout.cpp
-platform/graphics/gpu/cocoa/GPUProgrammablePassEncoderMetal.mm
-platform/graphics/gpu/cocoa/GPUQueueMetal.mm
-platform/graphics/gpu/cocoa/GPURenderPassEncoderMetal.mm
-platform/graphics/gpu/cocoa/GPURenderPipelineMetal.mm
-platform/graphics/gpu/cocoa/GPUSamplerMetal.mm
-platform/graphics/gpu/cocoa/GPUShaderModuleMetal.mm
-platform/graphics/gpu/cocoa/GPUSwapChainMetal.mm
-platform/graphics/gpu/cocoa/GPUTextureMetal.mm
-platform/graphics/gpu/cocoa/GPUUtilsMetal.mm
 platform/graphics/ios/DisplayRefreshMonitorIOS.mm
 platform/graphics/ios/IconIOS.mm
 platform/graphics/mac/ColorMac.mm
@@ -612,7 +598,3 @@ platform/graphics/angle/ExtensionsGLANGLE.cpp @no-unify
 platform/graphics/angle/GraphicsContextGLANGLE.cpp @no-unify
 platform/graphics/angle/GraphicsContextGLANGLEEGLUtilities.cpp @no-unify
 platform/graphics/angle/TemporaryANGLESetting.cpp @no-unify
-
-// Derived Sources
-
-WHLSLStandardLibraryFunctionMap.cpp

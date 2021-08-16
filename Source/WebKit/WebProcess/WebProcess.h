@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "AccessibilityPreferences.h"
 #include "AuxiliaryProcess.h"
 #include "CacheModel.h"
 #include "PluginProcessConnectionManager.h"
@@ -68,6 +69,10 @@
 
 #if PLATFORM(WAYLAND) && USE(WPE_RENDERER)
 #include <WebCore/PlatformDisplayLibWPE.h>
+#endif
+
+#if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
+#include <WebCore/CaptionUserPreferences.h>
 #endif
 
 namespace API {
@@ -128,6 +133,7 @@ class UserData;
 class WaylandCompositorDisplay;
 class WebAuthnProcessConnection;
 class WebAutomationSessionProxy;
+class WebBroadcastChannelRegistry;
 class WebCacheStorageProvider;
 class WebCookieJar;
 class WebCompiledContentRuleListData;
@@ -330,12 +336,9 @@ public:
     WebAutomationSessionProxy* automationSessionProxy() { return m_automationSessionProxy.get(); }
 
     WebCacheStorageProvider& cacheStorageProvider() { return m_cacheStorageProvider.get(); }
+    WebBroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry.get(); }
     WebCookieJar& cookieJar() { return m_cookieJar.get(); }
     WebSocketChannelManager& webSocketChannelManager() { return m_webSocketChannelManager; }
-
-#if PLATFORM(IOS_FAMILY)
-    void accessibilityProcessSuspendedNotification(bool);
-#endif
 
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
     float backlightLevel() const { return m_backlightLevel; }
@@ -405,7 +408,7 @@ private:
     void prewarmWithDomainInformation(const WebCore::PrewarmInformation&);
 
 #if USE(OS_STATE)
-    void registerWithStateDumper();
+    RetainPtr<NSDictionary> additionalStateForDiagnosticReport() const final;
 #endif
 
     void markAllLayersVolatile(CompletionHandler<void()>&&);
@@ -454,7 +457,6 @@ private:
     void garbageCollectJavaScriptObjects();
     void setJavaScriptGarbageCollectorTimerEnabled(bool flag);
 
-    void mainThreadPing();
     void backgroundResponsivenessPing();
 
 #if ENABLE(GAMEPAD)
@@ -566,6 +568,11 @@ private:
     void backlightLevelDidChange(float backlightLevel);
 #endif
 
+    void accessibilityPreferencesDidChange(const AccessibilityPreferences&);
+#if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
+    void setMediaAccessibilityPreferences(WebCore::CaptionUserPreferences::CaptionDisplayMode, const Vector<String>&);
+#endif
+
 #if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     void colorPreferencesDidChange();
 #endif
@@ -596,8 +603,6 @@ private:
 #if PLATFORM(GTK) && !USE(GTK4)
     void setUseSystemAppearanceForScrollbars(bool);
 #endif
-
-    bool isAlwaysOnLoggingAllowed() { return m_sessionID ? m_sessionID->isAlwaysOnLoggingAllowed() : true; }
 
     RefPtr<WebConnectionToUIProcess> m_webConnection;
 
@@ -654,6 +659,7 @@ private:
 #endif
 
     Ref<WebCacheStorageProvider> m_cacheStorageProvider;
+    Ref<WebBroadcastChannelRegistry> m_broadcastChannelRegistry;
     Ref<WebCookieJar> m_cookieJar;
     WebSocketChannelManager m_webSocketChannelManager;
 
@@ -739,7 +745,6 @@ private:
 #endif
 
     RefPtr<SandboxExtension> m_assetServiceV2Extension;
-    RefPtr<SandboxExtension> m_fontMachExtension;
 
 #if PLATFORM(COCOA)
     HashCountedSet<String> m_pendingPasteboardWriteCounts;

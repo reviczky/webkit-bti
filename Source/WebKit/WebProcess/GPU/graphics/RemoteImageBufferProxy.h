@@ -65,14 +65,13 @@ public:
 
     ~RemoteImageBufferProxy()
     {
-        if (!m_remoteRenderingBackendProxy) {
+        if (!m_remoteRenderingBackendProxy || m_remoteRenderingBackendProxy->isGPUProcessConnectionClosed()) {
             clearDisplayList();
             return;
         }
 
         flushDrawingContext();
         m_remoteRenderingBackendProxy->remoteResourceCacheProxy().releaseImageBuffer(m_renderingResourceIdentifier);
-        m_remoteRenderingBackendProxy->releaseRemoteResource(m_renderingResourceIdentifier);
     }
 
     ImageBufferBackendHandle createImageBufferBackendHandle()
@@ -110,7 +109,7 @@ protected:
         m_drawingContext.displayList().setTracksDrawingItemExtents(false);
     }
 
-    WebCore::RenderingMode renderingMode() const override { return BaseDisplayListImageBuffer::renderingMode(); }
+    WebCore::RenderingMode renderingMode() const final { return BaseDisplayListImageBuffer::renderingMode(); }
 
     // It is safe to access m_receivedFlushIdentifier from the main thread without locking since it
     // only gets modified on the main thread.
@@ -120,7 +119,7 @@ protected:
         return m_sentFlushIdentifier != m_receivedFlushIdentifier;
     }
 
-    void didFlush(WebCore::DisplayList::FlushIdentifier flushIdentifier) override
+    void didFlush(WebCore::DisplayList::FlushIdentifier flushIdentifier) final
     {
         ASSERT(isMainRunLoop());
         Locker locker { m_receivedFlushIdentifierLock };
@@ -145,9 +144,12 @@ protected:
                 ++numberOfTimeouts;
         }
         LOG_WITH_STREAM(SharedDisplayLists, stream << "Done waiting: " << MonotonicTime::now() - startTime << "; " << numberOfTimeouts << " timeout(s)");
+
+        if (UNLIKELY(numberOfTimeouts >= maximumNumberOfTimeouts))
+            RELEASE_LOG_FAULT(SharedDisplayLists, "Exceeded timeout while waiting for flush in remote rendering backend: %" PRIu64 ".", m_remoteRenderingBackendProxy->renderingBackendIdentifier().toUInt64());
     }
 
-    WebCore::ImageBufferBackend* ensureBackendCreated() const override
+    WebCore::ImageBufferBackend* ensureBackendCreated() const final
     {
         if (!m_remoteRenderingBackendProxy)
             return m_backend.get();
@@ -161,7 +163,7 @@ protected:
         return m_backend.get();
     }
 
-    String toDataURL(const String& mimeType, std::optional<double> quality, WebCore::PreserveResolution preserveResolution) const override
+    String toDataURL(const String& mimeType, std::optional<double> quality, WebCore::PreserveResolution preserveResolution) const final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return { };
@@ -170,7 +172,7 @@ protected:
         return m_remoteRenderingBackendProxy->getDataURLForImageBuffer(mimeType, quality, preserveResolution, m_renderingResourceIdentifier);
     }
 
-    Vector<uint8_t> toData(const String& mimeType, std::optional<double> quality = std::nullopt) const override
+    Vector<uint8_t> toData(const String& mimeType, std::optional<double> quality = std::nullopt) const final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return { };
@@ -179,7 +181,7 @@ protected:
         return m_remoteRenderingBackendProxy->getDataForImageBuffer(mimeType, quality, m_renderingResourceIdentifier);
     }
 
-    RefPtr<WebCore::NativeImage> copyNativeImage(WebCore::BackingStoreCopy = WebCore::BackingStoreCopy::CopyBackingStore) const override
+    RefPtr<WebCore::NativeImage> copyNativeImage(WebCore::BackingStoreCopy = WebCore::BackingStoreCopy::CopyBackingStore) const final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return { };
@@ -190,7 +192,7 @@ protected:
         return WebCore::NativeImage::create(bitmap->createPlatformImage());
     }
 
-    RefPtr<WebCore::Image> copyImage(WebCore::BackingStoreCopy = WebCore::BackingStoreCopy::CopyBackingStore, WebCore::PreserveResolution preserveResolution = WebCore::PreserveResolution::No) const override
+    RefPtr<WebCore::Image> copyImage(WebCore::BackingStoreCopy = WebCore::BackingStoreCopy::CopyBackingStore, WebCore::PreserveResolution preserveResolution = WebCore::PreserveResolution::No) const final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return { };
@@ -201,7 +203,7 @@ protected:
         return bitmap->createImage();
     }
 
-    std::optional<WebCore::PixelBuffer> getPixelBuffer(const WebCore::PixelBufferFormat& destinationFormat, const WebCore::IntRect& srcRect) const override
+    std::optional<WebCore::PixelBuffer> getPixelBuffer(const WebCore::PixelBufferFormat& destinationFormat, const WebCore::IntRect& srcRect) const final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return std::nullopt;
@@ -227,7 +229,7 @@ protected:
         return pixelBuffer;
     }
 
-    void putPixelBuffer(const WebCore::PixelBuffer& pixelBuffer, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint = { }, WebCore::AlphaPremultiplication destFormat = WebCore::AlphaPremultiplication::Premultiplied) override
+    void putPixelBuffer(const WebCore::PixelBuffer& pixelBuffer, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint = { }, WebCore::AlphaPremultiplication destFormat = WebCore::AlphaPremultiplication::Premultiplied) final
     {
         // The math inside PixelBuffer::create() doesn't agree with the math inside ImageBufferBackend::putPixelBuffer() about how m_resolutionScale interacts with the data in the ImageBuffer.
         // This means that putPixelBuffer() is only called when resolutionScale() == 1.
@@ -235,15 +237,15 @@ protected:
         m_drawingContext.recorder().putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
     }
 
-    bool prefersPreparationForDisplay() override { return true; }
+    bool prefersPreparationForDisplay() final { return true; }
 
-    void flushContext() override
+    void flushContext() final
     {
         flushDrawingContext();
         m_backend->flushContext();
     }
 
-    void flushDrawingContext() override
+    void flushDrawingContext() final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return;
@@ -253,12 +255,12 @@ protected:
         waitForDidFlushWithTimeout();
     }
 
-    void flushDrawingContextAsync() override
+    void flushDrawingContextAsync() final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return;
 
-        if (!m_drawingContext.displayList().isEmpty()) {
+        if (!m_drawingContext.displayList().isEmpty() || !hasPendingFlush()) {
             m_sentFlushIdentifier = WebCore::DisplayList::FlushIdentifier::generate();
             m_drawingContext.recorder().flushContext(m_sentFlushIdentifier);
         }
@@ -267,13 +269,13 @@ protected:
         clearDisplayList();
     }
 
-    void cacheNativeImage(WebCore::NativeImage& image) override
+    void recordNativeImageUse(WebCore::NativeImage& image) final
     {
         if (m_remoteRenderingBackendProxy)
-            m_remoteRenderingBackendProxy->remoteResourceCacheProxy().cacheNativeImage(image);
+            m_remoteRenderingBackendProxy->remoteResourceCacheProxy().recordNativeImageUse(image);
     }
 
-    bool isCachedImageBuffer(const WebCore::ImageBuffer& imageBuffer) const override
+    bool isCachedImageBuffer(const WebCore::ImageBuffer& imageBuffer) const final
     {
         if (!m_remoteRenderingBackendProxy)
             return false;
@@ -300,7 +302,7 @@ protected:
         m_drawingContext.displayList().clear();
     }
 
-    bool canAppendItemOfType(WebCore::DisplayList::ItemType) override
+    bool canAppendItemOfType(WebCore::DisplayList::ItemType) final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return false;
@@ -308,16 +310,22 @@ protected:
         return true;
     }
 
-    void didAppendData(const WebCore::DisplayList::ItemBufferHandle& handle, size_t numberOfBytes, WebCore::DisplayList::DidChangeItemBuffer didChangeItemBuffer) override
+    void didAppendData(const WebCore::DisplayList::ItemBufferHandle& handle, size_t numberOfBytes, WebCore::DisplayList::DidChangeItemBuffer didChangeItemBuffer) final
     {
         if (LIKELY(m_remoteRenderingBackendProxy))
             m_remoteRenderingBackendProxy->didAppendData(handle, numberOfBytes, didChangeItemBuffer, m_renderingResourceIdentifier);
     }
 
-    void cacheFont(WebCore::Font& font) override
+    void recordFontUse(WebCore::Font& font) final
     {
         if (m_remoteRenderingBackendProxy)
-            m_remoteRenderingBackendProxy->remoteResourceCacheProxy().cacheFont(font);
+            m_remoteRenderingBackendProxy->remoteResourceCacheProxy().recordFontUse(font);
+    }
+
+    void recordImageBufferUse(WebCore::ImageBuffer& imageBuffer) final
+    {
+        if (m_remoteRenderingBackendProxy)
+            m_remoteRenderingBackendProxy->remoteResourceCacheProxy().recordImageBufferUse(imageBuffer);
     }
 
     WebCore::DisplayList::ItemBufferHandle createItemBuffer(size_t capacity) final
@@ -340,7 +348,7 @@ protected:
         }, item);
     }
 
-    std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher> createFlusher() override
+    std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher> createFlusher() final
     {
         return WTF::makeUnique<ThreadSafeRemoteImageBufferFlusher<BackendType>>(*this);
     }

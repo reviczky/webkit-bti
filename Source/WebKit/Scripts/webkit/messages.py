@@ -28,7 +28,7 @@ from webkit import parser
 from webkit.model import BUILTIN_ATTRIBUTE, ASYNC_ATTRIBUTE, SYNCHRONOUS_ATTRIBUTE, MAINTHREADCALLBACK_ATTRIBUTE, STREAM_ATTRIBUTE, WANTS_CONNECTION_ATTRIBUTE, MessageReceiver, Message
 
 _license_header = """/*
- * Copyright (C) 2010-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -264,12 +264,14 @@ def forward_declarations_for_namespace(namespace, kind_and_types):
 
 def types_that_cannot_be_forward_declared():
     return frozenset([
+        'CVPixelBufferRef',
         'IPC::DataReference',
         'IPC::FontReference',
         'IPC::Semaphore',
         'MachSendRight',
         'MediaTime',
         'String',
+        'WebCore::BroadcastChannelIdentifier',
         'WebCore::DestinationColorSpace',
         'WebCore::DiagnosticLoggingDomain',
         'WebCore::DictationContext',
@@ -306,7 +308,6 @@ def types_that_cannot_be_forward_declared():
         'WebCore::SWServerConnectionIdentifier',
         'WebCore::WebSocketIdentifier',
         'WebKit::ActivityStateChangeID',
-        'WebKit::AudioMediaStreamTrackRendererIdentifier',
         'WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier',
         'WebKit::ContentWorldIdentifier',
         'WebKit::DisplayLinkObserverID',
@@ -333,6 +334,7 @@ def types_that_cannot_be_forward_declared():
         'WebKit::RemoteMediaSourceIdentifier',
         'WebKit::RemoteRemoteCommandListenerIdentifier',
         'WebKit::RemoteSourceBufferIdentifier',
+        'WebKit::RenderingUpdateID',
         'WebKit::RenderingBackendIdentifier',
         'WebKit::RTCDecoderIdentifier',
         'WebKit::RTCEncoderIdentifier',
@@ -607,6 +609,7 @@ def class_template_headers(template_string):
         'std::pair': {'headers': ['<utility>'], 'argument_coder_headers': ['"ArgumentCoders.h"']},
         'IPC::ArrayReference': {'headers': ['"ArrayReference.h"'], 'argument_coder_headers': ['"ArgumentCoders.h"']},
         'RefPtr': {'headers': ['<wtf/RefCounted.h>'], 'argument_coder_headers': ['"ArgumentCoders.h"']},
+        'RetainPtr': {'headers': ['<wtf/RetainPtr.h>'], 'argument_coder_headers': ['"ArgumentCodersCF.h"']},
     }
 
     match = re.match('(?P<template_name>.+?)<(?P<parameter_string>.+)>', template_string)
@@ -702,7 +705,7 @@ def headers_for_type(type):
         'WebCore::InspectorOverlay::Highlight': ['<WebCore/InspectorOverlay.h>'],
         'WebCore::KeyframeValueList': ['<WebCore/GraphicsLayer.h>'],
         'WebCore::KeypressCommand': ['<WebCore/KeyboardEvent.h>'],
-        'WebCore::LastNavigationWasAppBound': ['<WebCore/ServiceWorkerClientData.h>'],
+        'WebCore::LastNavigationWasAppInitiated': ['<WebCore/ServiceWorkerClientData.h>'],
         'WebCore::LegacyCDMSessionClient::MediaKeyErrorCode': ['<WebCore/LegacyCDMSession.h>'],
         'WebCore::LockBackForwardList': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::MessagePortChannelProvider::HasActivity': ['<WebCore/MessagePortChannelProvider.h>'],
@@ -715,6 +718,7 @@ def headers_for_type(type):
         'WebCore::PaymentAuthorizationResult': ['<WebCore/ApplePaySessionPaymentRequest.h>'],
         'WebCore::PixelFormat': ['<WebCore/ImageBufferBackend.h>'],
         'WebCore::PlatformTextTrackData': ['<WebCore/PlatformTextTrack.h>'],
+        'WebCore::PlaybackSessionModel::PlaybackState': ['<WebCore/PlaybackSessionModel.h>'],
         'WebCore::PluginInfo': ['<WebCore/PluginData.h>'],
         'WebCore::PluginLoadClientPolicy': ['<WebCore/PluginData.h>'],
         'WebCore::PolicyAction': ['<WebCore/FrameLoaderTypes.h>'],
@@ -756,8 +760,8 @@ def headers_for_type(type):
         'WebCore::WillContinueLoading': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::SelectionGeometry': ['"EditorState.h"'],
         'WebKit::ActivityStateChangeID': ['"DrawingAreaInfo.h"'],
-        'WebKit::AppBoundNavigationTestingData': ['"NavigatingToAppBoundDomain.h"'],
         'WebKit::AllowOverwrite': ['"DownloadID.h"'],
+        'WebKit::AppPrivacyReportTestingData': ['"AppPrivacyReport.h"'],
         'WebKit::BackForwardListItemState': ['"SessionState.h"'],
         'WebKit::CallDownloadDidStart': ['"DownloadManager.h"'],
         'WebKit::ContentWorldIdentifier': ['"ContentWorldShared.h"'],
@@ -765,7 +769,7 @@ def headers_for_type(type):
         'WebKit::FindOptions': ['"WebFindOptions.h"'],
         'WebKit::GestureRecognizerState': ['"GestureTypes.h"'],
         'WebKit::GestureType': ['"GestureTypes.h"'],
-        'WebKit::LastNavigationWasAppBound': ['"NavigatingToAppBoundDomain.h"'],
+        'WebKit::LastNavigationWasAppInitiated': ['"AppPrivacyReport.h"'],
         'WebKit::LayerHostingContextID': ['"LayerHostingContext.h"'],
         'WebKit::LayerHostingMode': ['"LayerTreeContext.h"'],
         'WebKit::PageState': ['"SessionState.h"'],

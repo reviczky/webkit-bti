@@ -29,6 +29,7 @@
 
 #include "ClientOrigin.h"
 #include "ContentSecurityPolicyResponseHeaders.h"
+#include "CrossOriginEmbedderPolicy.h"
 #include "RegistrableDomain.h"
 #include "ServiceWorkerClientData.h"
 #include "ServiceWorkerContextData.h"
@@ -127,10 +128,10 @@ public:
     void setHasTimedOutAnyFetchTasks() { m_hasTimedOutAnyFetchTasks = true; }
     bool hasTimedOutAnyFetchTasks() const { return m_hasTimedOutAnyFetchTasks; }
     void didFailHeartBeatCheck();
-    void updateAppBoundValue(LastNavigationWasAppBound);
+    void updateAppInitiatedValue(LastNavigationWasAppInitiated);
 
 private:
-    SWServerWorker(SWServer&, SWServerRegistration&, const URL&, const ScriptBuffer&, const CertificateInfo&, const ContentSecurityPolicyResponseHeaders&, String&& referrerPolicy, WorkerType, ServiceWorkerIdentifier, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
+    SWServerWorker(SWServer&, SWServerRegistration&, const URL&, const ScriptBuffer&, const CertificateInfo&, const ContentSecurityPolicyResponseHeaders&, const CrossOriginEmbedderPolicy&, String&& referrerPolicy, WorkerType, ServiceWorkerIdentifier, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
 
     void callWhenActivatedHandler(bool success);
 
@@ -146,6 +147,7 @@ private:
     ScriptBuffer m_script;
     CertificateInfo m_certificateInfo;
     ContentSecurityPolicyResponseHeaders m_contentSecurityPolicy;
+    CrossOriginEmbedderPolicy m_crossOriginEmbedderPolicy;
     String m_referrerPolicy;
     bool m_hasPendingEvents { false };
     State m_state { State::NotRunning };
@@ -158,7 +160,7 @@ private:
     bool m_hasTimedOutAnyFetchTasks { false };
     Vector<CompletionHandler<void()>> m_terminationCallbacks;
     Timer m_terminationTimer;
-    LastNavigationWasAppBound m_lastNavigationWasAppBound;
+    LastNavigationWasAppInitiated m_lastNavigationWasAppInitiated;
 };
 
 } // namespace WebCore

@@ -62,6 +62,10 @@
 #include "SharedRingBufferStorage.h"
 #endif
 
+#if USE(AVFOUNDATION)
+#include <wtf/RetainPtr.h>
+#endif
+
 namespace WTF {
 class MachSendRight;
 }
@@ -70,6 +74,10 @@ namespace WebCore {
 class AudioTrackPrivate;
 class VideoTrackPrivate;
 }
+
+#if USE(AVFOUNDATION)
+typedef struct __CVBuffer* CVPixelBufferRef;
+#endif
 
 namespace WebKit {
 
@@ -293,11 +301,17 @@ private:
     void createAudioSourceProvider();
     void setShouldEnableAudioSourceProvider(bool);
 
+    void playAtHostTime(MonotonicTime);
+    void pauseAtHostTime(MonotonicTime);
+
+    bool mediaPlayerPausedOrStalled() const;
     void currentTimeChanged(const MediaTime&);
 
 #if PLATFORM(COCOA)
     void nativeImageForCurrentTime(CompletionHandler<void(std::optional<WTF::MachSendRight>&&)>&&);
-    void pixelBufferForCurrentTime(CompletionHandler<void(std::optional<WTF::MachSendRight>&&)>&&);
+#endif
+#if USE(AVFOUNDATION)
+    void pixelBufferForCurrentTime(CompletionHandler<void(RetainPtr<CVPixelBufferRef>&&)>&&);
 #endif
 
 #if !RELEASE_LOG_DISABLED
@@ -339,7 +353,7 @@ private:
     float m_videoContentScale { 1.0 };
 
     bool m_bufferedChanged { true };
-    bool m_renderingCanBeAccelerated { true };
+    bool m_renderingCanBeAccelerated { false };
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA) && ENABLE(ENCRYPTED_MEDIA)
     bool m_shouldContinueAfterKeyNeeded { false };

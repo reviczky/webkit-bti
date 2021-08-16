@@ -27,6 +27,7 @@
 #include "InspectorCanvas.h"
 
 #include "AffineTransform.h"
+#include "CSSStyleImageValue.h"
 #include "CachedImage.h"
 #include "CanvasBase.h"
 #include "CanvasGradient.h"
@@ -37,7 +38,6 @@
 #include "Document.h"
 #include "Element.h"
 #include "FloatPoint.h"
-#include "GPUCanvasContext.h"
 #include "Gradient.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLImageElement.h"
@@ -62,14 +62,12 @@
 #include "JSImageSmoothingQuality.h"
 #include "JSWebGL2RenderingContext.h"
 #include "JSWebGLRenderingContext.h"
-#include "JSWebGPUDevice.h"
 #include "OffscreenCanvas.h"
 #include "Path2D.h"
 #include "Pattern.h"
 #include "RecordingSwizzleType.h"
 #include "SVGPathUtilities.h"
 #include "StringAdaptors.h"
-#include "TypedOMCSSImageValue.h"
 #include "WebGL2RenderingContext.h"
 #include "WebGLBuffer.h"
 #include "WebGLFramebuffer.h"
@@ -85,7 +83,6 @@
 #include "WebGLTransformFeedback.h"
 #include "WebGLUniformLocation.h"
 #include "WebGLVertexArrayObject.h"
-#include "WebGPUDevice.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <JavaScriptCore/ArrayBufferView.h>
 #include <JavaScriptCore/IdentifiersFactory.h>
@@ -101,53 +98,16 @@ namespace WebCore {
 
 using namespace Inspector;
 
-#if ENABLE(WEBGPU)
-static HTMLCanvasElement* canvasIfContextMatchesDevice(CanvasRenderingContext& context, WebGPUDevice& device)
-{
-    if (is<GPUCanvasContext>(context)) {
-        auto& contextGPU = downcast<GPUCanvasContext>(context);
-        if (auto* webGPUSwapChain = contextGPU.swapChain()) {
-            if (auto* gpuSwapChain = webGPUSwapChain->swapChain()) {
-                if (gpuSwapChain == device.device().swapChain()) {
-                    if (is<HTMLCanvasElement>(contextGPU.canvasBase()))
-                        return &downcast<HTMLCanvasElement>(contextGPU.canvasBase());
-                }
-            }
-        }
-    }
-    return nullptr;
-}
-#endif
-
 Ref<InspectorCanvas> InspectorCanvas::create(CanvasRenderingContext& context)
 {
     return adoptRef(*new InspectorCanvas(context));
 }
 
-#if ENABLE(WEBGPU)
-Ref<InspectorCanvas> InspectorCanvas::create(WebGPUDevice& device)
-{
-    return adoptRef(*new InspectorCanvas(device));
-}
-#endif
-
 InspectorCanvas::InspectorCanvas(CanvasRenderingContext& context)
     : m_identifier("canvas:" + IdentifiersFactory::createIdentifier())
     , m_context(context)
 {
-#if ENABLE(WEBGPU)
-    // The actual "context" for WebGPU is the `WebGPUDevice`, not the <canvas>.
-    ASSERT(!is<GPUCanvasContext>(context));
-#endif
 }
-
-#if ENABLE(WEBGPU)
-InspectorCanvas::InspectorCanvas(WebGPUDevice& device)
-    : m_identifier("canvas:" + IdentifiersFactory::createIdentifier())
-    , m_context(device)
-{
-}
-#endif
 
 CanvasRenderingContext* InspectorCanvas::canvasContext() const
 {
@@ -165,19 +125,6 @@ HTMLCanvasElement* InspectorCanvas::canvasElement() const
                 return &downcast<HTMLCanvasElement>(context.canvasBase());
             return nullptr;
         },
-#if ENABLE(WEBGPU)
-        [&] (std::reference_wrapper<WebGPUDevice> deviceWrapper) -> HTMLCanvasElement* {
-            auto& device = deviceWrapper.get();
-            {
-                Locker locker { CanvasRenderingContext::instancesLock() };
-                for (auto* canvasRenderingContext : CanvasRenderingContext::instances()) {
-                    if (auto* canvasElement = canvasIfContextMatchesDevice(*canvasRenderingContext, device))
-                        return canvasElement;
-                }
-            }
-            return nullptr;
-        },
-#endif
         [] (Monostate) {
             ASSERT_NOT_REACHED();
             return nullptr;
@@ -186,22 +133,6 @@ HTMLCanvasElement* InspectorCanvas::canvasElement() const
     return nullptr;
 }
 
-#if ENABLE(WEBGPU)
-WebGPUDevice* InspectorCanvas::deviceContext() const
-{
-    if (auto* deviceWrapper = WTF::get_if<std::reference_wrapper<WebGPUDevice>>(m_context))
-        return &deviceWrapper->get();
-    return nullptr;
-}
-
-bool InspectorCanvas::isDeviceForCanvasContext(CanvasRenderingContext& context) const
-{
-    if (auto* device = deviceContext())
-        return canvasIfContextMatchesDevice(context, *device);
-    return false;
-}
-#endif
-
 ScriptExecutionContext* InspectorCanvas::scriptExecutionContext() const
 {
     return WTF::switchOn(m_context,
@@ -209,12 +140,6 @@ ScriptExecutionContext* InspectorCanvas::scriptExecutionContext() const
             auto& context = contextWrapper.get();
             return context.canvasBase().scriptExecutionContext();
         },
-#if ENABLE(WEBGPU)
-        [] (std::reference_wrapper<WebGPUDevice> deviceWrapper) {
-            auto& device = deviceWrapper.get();
-            return device.scriptExecutionContext();
-        },
-#endif
         [] (Monostate) {
             ASSERT_NOT_REACHED();
             return nullptr;
@@ -245,11 +170,6 @@ JSC::JSValue InspectorCanvas::resolveContext(JSC::JSGlobalObject* exec) const
 #endif
             return JSC::JSValue();
         },
-#if ENABLE(WEBGPU)
-        [&] (std::reference_wrapper<WebGPUDevice> deviceWrapper) {
-            return toJS(exec, globalObject, deviceWrapper.get());
-        },
-#endif
         [] (Monostate) {
             ASSERT_NOT_REACHED();
             return JSC::JSValue();
@@ -264,21 +184,6 @@ HashSet<Element*> InspectorCanvas::clientNodes() const
             auto& context = contextWrapper.get();
             return context.canvasBase().cssCanvasClients();
         },
-#if ENABLE(WEBGPU)
-        [&] (std::reference_wrapper<WebGPUDevice> deviceWrapper) {
-            auto& device = deviceWrapper.get();
-
-            HashSet<Element*> canvasElementClients;
-            {
-                Locker locker { CanvasRenderingContext::instancesLock() };
-                for (auto* canvasRenderingContext : CanvasRenderingContext::instances()) {
-                    if (auto* canvasElement = canvasIfContextMatchesDevice(*canvasRenderingContext, device))
-                        canvasElementClients.add(canvasElement);
-                }
-            }
-            return canvasElementClients;
-        },
-#endif
         [] (Monostate) {
             ASSERT_NOT_REACHED();
             return HashSet<Element*>();
@@ -438,6 +343,13 @@ std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::pro
     return {{ valueIndexForData(convertEnumerationToString(argument)), RecordingSwizzleType::String }};
 }
 
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(std::optional<double>& argument)
+{
+    if (!argument)
+        return std::nullopt;
+    return {{ JSON::Value::create(*argument), RecordingSwizzleType::Number }};
+}
+
 std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(std::optional<float>& argument)
 {
     if (!argument)
@@ -536,6 +448,11 @@ std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::pro
     return {{ buildArrayForVector(WTFMove(deduplicated)), RecordingSwizzleType::String }};
 }
 
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(Vector<double>& argument)
+{
+    return {{ buildArrayForVector(argument), RecordingSwizzleType::Array }};
+}
+
 std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(Vector<float>& argument)
 {
     return {{ buildArrayForVector(argument), RecordingSwizzleType::Array }};
@@ -599,7 +516,7 @@ std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::pro
 
 #if ENABLE(CSS_TYPED_OM)
 
-std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(RefPtr<TypedOMCSSImageValue>& argument)
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(RefPtr<CSSStyleImageValue>& argument)
 {
     if (!argument)
         return std::nullopt;
@@ -916,11 +833,6 @@ Ref<Protocol::Canvas::Canvas> InspectorCanvas::buildObjectForCanvas(bool capture
 #endif
             return std::nullopt;
         },
-#if ENABLE(WEBGPU)
-        [] (std::reference_wrapper<WebGPUDevice>) {
-            return Protocol::Canvas::ContextType::WebGPU;
-        },
-#endif
         [] (Monostate) {
             ASSERT_NOT_REACHED();
             return std::nullopt;
@@ -984,28 +896,6 @@ Ref<Protocol::Canvas::Canvas> InspectorCanvas::buildObjectForCanvas(bool capture
 #endif
             return nullptr;
         },
-#if ENABLE(WEBGPU)
-        [] (std::reference_wrapper<WebGPUDevice> deviceWrapper) -> ContextAttributesType {
-            auto& device = deviceWrapper.get();
-            if (const auto& options = device.adapter().options()) {
-                auto contextAttributesPayload = Protocol::Canvas::ContextAttributes::create()
-                    .release();
-                if (const auto& powerPreference = options->powerPreference) {
-                    switch (powerPreference.value()) {
-                    case GPUPowerPreference::LowPower:
-                        contextAttributesPayload->setPowerPreference("low-power");
-                        break;
-
-                    case GPUPowerPreference::HighPerformance:
-                        contextAttributesPayload->setPowerPreference("high-performance");
-                        break;
-                    }
-                }
-                return WTFMove(contextAttributesPayload);
-            }
-            return nullptr;
-        },
-#endif
         [] (Monostate) {
             ASSERT_NOT_REACHED();
             return nullptr;
@@ -1193,7 +1083,7 @@ int InspectorCanvas::indexForData(DuplicateDataVariant data)
             item = WTFMove(array);
         },
 #if ENABLE(CSS_TYPED_OM)
-        [&] (const RefPtr<TypedOMCSSImageValue>& cssImageValue) {
+        [&] (const RefPtr<CSSStyleImageValue>& cssImageValue) {
             String dataURL = "data:,"_s;
 
             if (auto* cachedImage = cssImageValue->image()) {

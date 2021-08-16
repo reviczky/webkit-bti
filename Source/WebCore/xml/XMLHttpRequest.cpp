@@ -52,6 +52,7 @@
 #include "StringAdaptors.h"
 #include "TextResourceDecoder.h"
 #include "ThreadableLoader.h"
+#include "URLSearchParams.h"
 #include "XMLDocument.h"
 #include "XMLHttpRequestProgressEvent.h"
 #include "XMLHttpRequestUpload.h"
@@ -207,8 +208,7 @@ Ref<Blob> XMLHttpRequest::createResponseBlob()
     // FIXME: We just received the data from NetworkProcess, and are sending it back. This is inefficient.
     Vector<uint8_t> data;
     if (m_binaryResponseBuilder)
-        data.append(m_binaryResponseBuilder->data(), m_binaryResponseBuilder->size());
-    m_binaryResponseBuilder = nullptr;
+        data = std::exchange(m_binaryResponseBuilder, nullptr)->extractData();
     String normalizedContentType = Blob::normalizedContentType(responseMIMEType(FinalMIMEType::Yes)); // responseMIMEType defaults to text/xml which may be incorrect.
     return Blob::create(scriptExecutionContext(), WTFMove(data), normalizedContentType);
 }
@@ -384,6 +384,8 @@ ExceptionOr<void> XMLHttpRequest::open(const String& method, const URL& url, boo
 
     m_url = url;
     context->contentSecurityPolicy()->upgradeInsecureRequestIfNeeded(m_url, ContentSecurityPolicy::InsecureRequestType::Load);
+    if (m_url.protocolIsBlob())
+        m_blobURLLifetimeExtension = m_url;
 
     m_async = async;
 
@@ -454,6 +456,7 @@ ExceptionOr<void> XMLHttpRequest::send(std::optional<SendTypes>&& sendType)
             [this] (const RefPtr<JSC::ArrayBufferView>& arrayBufferView) -> ExceptionOr<void> { return send(*arrayBufferView); },
             [this] (const RefPtr<JSC::ArrayBuffer>& arrayBuffer) -> ExceptionOr<void> { return send(*arrayBuffer); },
             [this] (const RefPtr<DOMFormData>& formData) -> ExceptionOr<void> { return send(*formData); },
+            [this] (const RefPtr<URLSearchParams>& searchParams) -> ExceptionOr<void> { return send(*searchParams); },
             [this] (const String& string) -> ExceptionOr<void> { return send(string); }
         );
     }
@@ -478,7 +481,12 @@ ExceptionOr<void> XMLHttpRequest::send(Document& document)
 
         // FIXME: According to XMLHttpRequest Level 2, this should use the Document.innerHTML algorithm
         // from the HTML5 specification to serialize the document.
-        m_requestEntityBody = FormData::create(UTF8Encoding().encode(serializeFragment(document, SerializedNodes::SubtreeIncludingNode), UnencodableHandling::Entities));
+
+        // https://xhr.spec.whatwg.org/#dom-xmlhttprequest-send Step 4.2.
+        auto serialized = serializeFragment(document, SerializedNodes::SubtreeIncludingNode);
+        auto converted = replaceUnpairedSurrogatesWithReplacementCharacter(WTFMove(serialized));
+        auto encoded = UTF8Encoding().encode(WTFMove(converted), UnencodableHandling::Entities);
+        m_requestEntityBody = FormData::create(WTFMove(encoded));
         if (m_upload)
             m_requestEntityBody->setAlwaysStream(true);
     }
@@ -537,6 +545,13 @@ ExceptionOr<void> XMLHttpRequest::send(Blob& body)
     return createRequest();
 }
 
+ExceptionOr<void> XMLHttpRequest::send(const URLSearchParams& params)
+{
+    if (!m_requestHeaders.contains(HTTPHeaderName::ContentType))
+        m_requestHeaders.set(HTTPHeaderName::ContentType, "application/x-www-form-urlencoded;charset=UTF-8"_s);
+    return send(params.toString());
+}
+
 ExceptionOr<void> XMLHttpRequest::send(DOMFormData& body)
 {
     if (auto result = prepareToSend())
@@ -580,8 +595,10 @@ ExceptionOr<void> XMLHttpRequest::sendBytesData(const void* data, size_t length)
 ExceptionOr<void> XMLHttpRequest::createRequest()
 {
     // Only GET request is supported for blob URL.
-    if (!m_async && m_url.protocolIsBlob() && m_method != "GET")
+    if (!m_async && m_url.protocolIsBlob() && m_method != "GET") {
+        m_blobURLLifetimeExtension.clear();
         return Exception { NetworkError };
+    }
 
     if (m_async && m_upload && m_upload->hasEventListeners())
         m_uploadListenerFlag = true;
@@ -732,6 +749,8 @@ void XMLHttpRequest::clearRequest()
 {
     m_requestHeaders.clear();
     m_requestEntityBody = nullptr;
+    m_url = URL { };
+    m_blobURLLifetimeExtension.clear();
 }
 
 void XMLHttpRequest::genericError()
@@ -923,6 +942,8 @@ void XMLHttpRequest::didFinishLoading(unsigned long)
     m_responseBuilder.shrinkToFit();
 
     m_loadingActivity = std::nullopt;
+    m_url = URL { };
+    m_blobURLLifetimeExtension.clear();
 
     m_sendFlag = false;
     changeState(DONE);
@@ -1059,12 +1080,10 @@ void XMLHttpRequest::didReceiveData(const uint8_t* data, int len)
             callReadyStateChangeListener();
         }
 
-        if (m_async) {
-            long long expectedLength = m_response.expectedContentLength();
-            bool lengthComputable = expectedLength > 0 && m_receivedLength <= expectedLength;
-            unsigned long long total = lengthComputable ? expectedLength : 0;
-            m_progressEventThrottle.dispatchThrottledProgressEvent(lengthComputable, m_receivedLength, total);
-        }
+        long long expectedLength = m_response.expectedContentLength();
+        bool lengthComputable = expectedLength > 0 && m_receivedLength <= expectedLength;
+        unsigned long long total = lengthComputable ? expectedLength : 0;
+        m_progressEventThrottle.updateProgress(m_async, lengthComputable, m_receivedLength, total);
     }
 }
 

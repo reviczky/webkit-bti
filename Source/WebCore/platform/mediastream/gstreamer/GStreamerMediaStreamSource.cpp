@@ -127,13 +127,18 @@ public:
         , m_track(track)
         , m_padName(padName)
     {
-        if (track.type() == RealtimeMediaSource::Type::Audio)
+        const char* elementName = nullptr;
+        if (track.type() == RealtimeMediaSource::Type::Audio) {
             m_audioTrack = AudioTrackPrivateMediaStream::create(track);
-        else if (track.type() == RealtimeMediaSource::Type::Video)
+            elementName = "audiosrc";
+        } else if (track.type() == RealtimeMediaSource::Type::Video) {
             m_videoTrack = VideoTrackPrivateMediaStream::create(track);
+            elementName = "videosrc";
+        } else
+            ASSERT_NOT_REACHED();
 
         bool isCaptureTrack = track.isCaptureTrack();
-        m_src = makeGStreamerElement("appsrc", nullptr);
+        m_src = makeGStreamerElement("appsrc", elementName);
 
         g_object_set(m_src.get(), "is-live", TRUE, "format", GST_FORMAT_TIME, "emit-signals", TRUE, "min-percent", 100,
             "do-timestamp", isCaptureTrack, nullptr);
@@ -162,6 +167,7 @@ public:
         if (m_isObserving)
             return;
 
+        GST_DEBUG_OBJECT(m_src.get(), "Starting track/source observation");
         m_track.addObserver(*this);
         switch (m_track.type()) {
         case RealtimeMediaSource::Type::Audio:
@@ -181,6 +187,7 @@ public:
         if (!m_isObserving)
             return;
 
+        GST_DEBUG_OBJECT(m_src.get(), "Stopping track/source observation");
         m_isObserving = false;
         switch (m_track.type()) {
         case RealtimeMediaSource::Type::Audio:
@@ -352,15 +359,30 @@ enum {
     PROP_LAST
 };
 
+static void webkitMediaStreamSrcTrackEnded(WebKitMediaStreamSrc*, InternalSource&);
+
 void WebKitMediaStreamObserver::didRemoveTrack(MediaStreamTrackPrivate& track)
 {
     if (!m_src)
         return;
 
     auto* element = WEBKIT_MEDIA_STREAM_SRC_CAST(m_src);
-    element->priv->sources.removeFirstMatching([&](auto& item) {
+    auto* priv = element->priv;
+
+    // Lookup the corresponding InternalSource and take it from the storage.
+    auto index = priv->sources.findMatching([&](auto& item) {
         return item->track().id() == track.id();
     });
+    std::unique_ptr<InternalSource> source = WTFMove(priv->sources[index]);
+    priv->sources.remove(index);
+
+    // Remove track from internal storage, so that the new stream collection will not reference it.
+    priv->tracks.removeFirstMatching([&](auto& item) {
+        return item->id() == track.id();
+    });
+
+    // Remove corresponding source pad, emit new stream collection.
+    webkitMediaStreamSrcTrackEnded(element, *source);
 }
 
 static GstURIType webkitMediaStreamSrcUriGetType(GType)

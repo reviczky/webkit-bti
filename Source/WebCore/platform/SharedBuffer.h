@@ -30,6 +30,7 @@
 #include <wtf/FileSystem.h>
 #include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
+#include <wtf/Span.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Variant.h>
 #include <wtf/Vector.h>
@@ -100,6 +101,10 @@ public:
     // FIXME: Audit the call sites of this function and replace them with iteration if possible.
     const uint8_t* data() const;
     const char* dataAsCharPtr() const { return reinterpret_cast<const char*>(data()); }
+    Vector<uint8_t> copyData() const;
+
+    // Similar to copyData() but avoids copying and will take the data instead when it is safe (The SharedBuffer is not shared).
+    Vector<uint8_t> extractData();
 
     // Creates an ArrayBuffer and copies this SharedBuffer's contents to that
     // ArrayBuffer without merging segmented buffers into a flat buffer.
@@ -117,6 +122,7 @@ public:
     void clear();
 
     Ref<SharedBuffer> copy() const;
+    void copyTo(void* destination, size_t length) const;
 
     // Data wrapped by a DataSegment should be immutable because it can be referenced by other objects.
     // To modify or combine the data, allocate a new DataSegment.
@@ -180,6 +186,9 @@ public:
         friend class SharedBuffer;
     };
 
+    void forEachSegment(const Function<void(const Span<const uint8_t>&)>&) const;
+    bool startsWith(const Span<const uint8_t>& prefix) const;
+
     struct DataSegmentVectorEntry {
         size_t beginPosition;
         Ref<DataSegment> segment;
@@ -218,6 +227,9 @@ private:
 #endif
 
     void combineIntoOneSegment() const;
+
+    // Combines all the segments into a Vector and returns that vector after clearing the SharedBuffer.
+    Vector<uint8_t> takeData();
     
     static RefPtr<SharedBuffer> createFromReadingFile(const String& filePath);
 
@@ -229,6 +241,13 @@ private:
     bool internallyConsistent() const;
 #endif
 };
+
+inline Vector<uint8_t> SharedBuffer::extractData()
+{
+    if (hasOneRef())
+        return takeData();
+    return copyData();
+}
 
 class WEBCORE_EXPORT SharedBufferDataView {
 public:

@@ -192,7 +192,7 @@ void IDBTransaction::abortDueToFailedRequest(DOMException& error)
         return;
 
     m_domError = &error;
-    internalAbort();
+    abortInternal();
 }
 
 void IDBTransaction::transitionedToFinishing(IndexedDB::TransactionState state)
@@ -212,14 +212,14 @@ ExceptionOr<void> IDBTransaction::abort()
     if (isFinishedOrFinishing())
         return Exception { InvalidStateError, "Failed to execute 'abort' on 'IDBTransaction': The transaction is inactive or finished."_s };
 
-    internalAbort();
+    abortInternal();
 
     return { };
 }
 
-void IDBTransaction::internalAbort()
+void IDBTransaction::abortInternal()
 {
-    LOG(IndexedDB, "IDBTransaction::internalAbort");
+    LOG(IndexedDB, "IDBTransaction::abortInternal");
     ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
     ASSERT(!isFinishedOrFinishing());
 
@@ -349,7 +349,7 @@ void IDBTransaction::stop()
     if (isFinishedOrFinishing())
         return;
 
-    internalAbort();
+    abortInternal();
 }
 
 bool IDBTransaction::isActive() const
@@ -456,9 +456,25 @@ void IDBTransaction::finishedDispatchEventForRequest(IDBRequest& request)
     handleOperationsCompletedOnServer();
 }
 
-void IDBTransaction::commit()
+ExceptionOr<void> IDBTransaction::commit()
 {
     LOG(IndexedDB, "IDBTransaction::commit");
+    ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
+
+    if (!isActive())
+        return Exception { InvalidStateError, "Failed to execute 'commit' on 'IDBTransaction': The transaction is inactive."_s };
+
+    if (m_currentlyCompletingRequest && m_currentlyCompletingRequest->willAbortTransactionAfterDispatchingEvent())
+        return { };
+
+    commitInternal();
+
+    return { };
+}
+
+void IDBTransaction::commitInternal()
+{
+    LOG(IndexedDB, "IDBTransaction::commitInternal");
     ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
     ASSERT(!isFinishedOrFinishing());
 
@@ -466,21 +482,28 @@ void IDBTransaction::commit()
     m_database->willCommitTransaction(*this);
 
     LOG(IndexedDBOperations, "IDB commit operation: Transaction %s", info().identifier().loggingString().utf8().data());
-    scheduleOperation(IDBClient::TransactionOperationImpl::create(*this, nullptr, [protectedThis = makeRef(*this)] (auto& operation) {
-        protectedThis->commitOnServer(operation);
+
+    auto pendingRequestCount = std::count_if(m_openRequests.begin(), m_openRequests.end(), [](auto& request) {
+        return !request->isDone();
+    });
+
+    scheduleOperation(IDBClient::TransactionOperationImpl::create(*this, nullptr, [protectedThis = Ref { *this }, pendingRequestCount] (auto& operation) {
+        protectedThis->commitOnServer(operation, pendingRequestCount);
     }));
 }
 
-void IDBTransaction::commitOnServer(IDBClient::TransactionOperation& operation)
+void IDBTransaction::commitOnServer(IDBClient::TransactionOperation& operation, uint64_t pendingRequestCount)
 {
     LOG(IndexedDB, "IDBTransaction::commitOnServer");
     ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
 
-    m_database->connectionProxy().commitTransaction(*this);
+    m_database->connectionProxy().commitTransaction(*this, pendingRequestCount);
 
     ASSERT(!m_transactionOperationsInProgressQueue.isEmpty());
     ASSERT(m_transactionOperationsInProgressQueue.last() == &operation);
     m_transactionOperationsInProgressQueue.removeLast();
+    if (!m_transactionOperationsInProgressQueue.isEmpty())
+        m_lastTransactionOperationBeforeCommit = m_transactionOperationsInProgressQueue.last()->identifier();
 
     ASSERT(m_transactionOperationMap.contains(operation.identifier()));
     m_transactionOperationMap.remove(operation.identifier());
@@ -551,6 +574,12 @@ void IDBTransaction::didCommit(const IDBError& error)
     ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
     ASSERT(m_state == IndexedDB::TransactionState::Committing);
 
+    // Delay commit until last request is completed.
+    if (m_lastTransactionOperationBeforeCommit && m_transactionOperationMap.contains(*m_lastTransactionOperationBeforeCommit)) {
+        m_commitResult = error;
+        return;
+    }
+
     if (error.isNull()) {
         m_database->didCommitTransaction(*this);
         fireOnComplete();
@@ -584,6 +613,7 @@ void IDBTransaction::enqueueEvent(Ref<Event>&& event)
     if (!scriptExecutionContext() || isContextStopped())
         return;
 
+    m_abortOrCommitEvent = event.ptr();
     queueTaskToDispatchEvent(*this, TaskSource::DatabaseAccess, WTFMove(event));
 }
 
@@ -594,15 +624,19 @@ void IDBTransaction::dispatchEvent(Event& event)
     ASSERT(canCurrentThreadAccessThreadLocalData(m_database->originThread()));
     ASSERT(scriptExecutionContext());
     ASSERT(!isContextStopped());
-    ASSERT(event.type() == eventNames().completeEvent || event.type() == eventNames().abortEvent);
+    
 
     auto protectedThis = makeRef(*this);
 
     EventDispatcher::dispatchEvent({ this, m_database.ptr() }, event);
+    
+    if (m_abortOrCommitEvent != &event)
+        return;
+    
+    ASSERT(event.type() == eventNames().completeEvent || event.type() == eventNames().abortEvent);
     m_didDispatchAbortOrCommit = true;
 
     if (isVersionChange()) {
-        ASSERT(m_openDBRequest);
         m_openDBRequest->versionChangeTransactionDidFinish();
 
         if (event.type() == eventNames().completeEvent) {
@@ -1382,6 +1416,11 @@ void IDBTransaction::operationCompletedOnClient(IDBClient::TransactionOperation&
     m_transactionOperationMap.remove(operation.identifier());
     m_transactionOperationsInProgressQueue.removeFirst();
 
+    if (m_commitResult && operation.identifier() == *m_lastTransactionOperationBeforeCommit) {
+        didCommit(*m_commitResult);
+        return;
+    }
+
     if (m_transactionOperationsInProgressQueue.isEmpty())
         handlePendingOperations();
 
@@ -1503,7 +1542,7 @@ void IDBTransaction::autoCommit()
         return;
     ASSERT(!m_currentlyCompletingRequest);
 
-    commit();
+    commitInternal();
 }
 
 uint64_t IDBTransaction::generateOperationID()

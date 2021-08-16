@@ -429,7 +429,6 @@ public:
     bool m_module { false };
     bool m_exitCode { false };
     bool m_destroyVM { false };
-    bool m_profile { false };
     bool m_treatWatchdogExceptionAsSuccess { false };
     bool m_alwaysDumpUncaughtException { false };
     bool m_dumpMemoryFootprint { false };
@@ -632,20 +631,20 @@ private:
         putDirect(vm, Identifier::fromString(vm, "$"), dollar, DontEnum);
         putDirect(vm, Identifier::fromString(vm, "$262"), dollar, DontEnum);
         
-        addFunction(vm, dollar, "createRealm", functionDollarCreateRealm, 0);
-        addFunction(vm, dollar, "detachArrayBuffer", functionTransferArrayBuffer, 1);
-        addFunction(vm, dollar, "evalScript", functionDollarEvalScript, 1);
-        addFunction(vm, dollar, "gc", functionDollarGC, 0);
-        addFunction(vm, dollar, "clearKeptObjects", functionDollarClearKeptObjects, 0);
+        addFunction(vm, dollar, "createRealm", functionDollarCreateRealm, 0, static_cast<unsigned>(PropertyAttribute::None));
+        addFunction(vm, dollar, "detachArrayBuffer", functionTransferArrayBuffer, 1, static_cast<unsigned>(PropertyAttribute::None));
+        addFunction(vm, dollar, "evalScript", functionDollarEvalScript, 1, static_cast<unsigned>(PropertyAttribute::None));
+        addFunction(vm, dollar, "gc", functionDollarGC, 0, static_cast<unsigned>(PropertyAttribute::None));
+        addFunction(vm, dollar, "clearKeptObjects", functionDollarClearKeptObjects, 0, static_cast<unsigned>(PropertyAttribute::None));
         
-        dollar->putDirect(vm, Identifier::fromString(vm, "global"), globalThis(), DontEnum);
+        dollar->putDirect(vm, Identifier::fromString(vm, "global"), globalThis());
         dollar->putDirectCustomAccessor(vm, Identifier::fromString(vm, "IsHTMLDDA"),
             CustomGetterSetter::create(vm, accessorMakeMasquerader, nullptr),
             static_cast<unsigned>(PropertyAttribute::CustomValue)
         );
 
         JSObject* agent = JSFinalObject::create(vm, plainObjectStructure);
-        dollar->putDirect(vm, Identifier::fromString(vm, "agent"), agent, DontEnum);
+        dollar->putDirect(vm, Identifier::fromString(vm, "agent"), agent);
         
         // The test262 INTERPRETING.md document says that some of these functions are just in the main
         // thread and some are in the other threads. We just put them in all threads.
@@ -700,15 +699,15 @@ public:
     }
 
 private:
-    void addFunction(VM& vm, JSObject* object, const char* name, NativeFunction function, unsigned arguments)
+    void addFunction(VM& vm, JSObject* object, const char* name, NativeFunction function, unsigned arguments, unsigned attributes = static_cast<unsigned>(PropertyAttribute::DontEnum))
     {
         Identifier identifier = Identifier::fromString(vm, name);
-        object->putDirect(vm, identifier, JSFunction::create(vm, this, arguments, identifier.string(), function), DontEnum);
+        object->putDirect(vm, identifier, JSFunction::create(vm, this, arguments, identifier.string(), function), attributes);
     }
 
-    void addFunction(VM& vm, const char* name, NativeFunction function, unsigned arguments)
+    void addFunction(VM& vm, const char* name, NativeFunction function, unsigned arguments, unsigned attributes = static_cast<unsigned>(PropertyAttribute::DontEnum))
     {
-        addFunction(vm, this, name, function, arguments);
+        addFunction(vm, this, name, function, arguments, attributes);
     }
     
     static JSInternalPromise* moduleLoaderImportModule(JSGlobalObject*, JSModuleLoader*, JSString*, JSValue, const SourceOrigin&);
@@ -1480,7 +1479,7 @@ JSC_DEFINE_HOST_FUNCTION(functionAddressOf, (JSGlobalObject*, CallFrame* callFra
     if (!value.isCell())
         return JSValue::encode(jsUndefined());
     // Need to cast to uint64_t so bitwise_cast will play along.
-    uint64_t asNumber = reinterpret_cast<uint64_t>(value.asCell());
+    uint64_t asNumber = bitwise_cast<uintptr_t>(value.asCell());
     EncodedJSValue returnValue = JSValue::encode(jsNumber(bitwise_cast<double>(asNumber)));
     return returnValue;
 }
@@ -3265,7 +3264,7 @@ void CommandLine::parseArguments(int argc, char** argv)
         if (!strcmp(arg, "-p")) {
             if (++i == argc)
                 printUsageStatement();
-            m_profile = true;
+            Options::setOption("useProfiler=1");
             m_profilerOutput = argv[i];
             continue;
         }
@@ -3454,9 +3453,6 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
         JSLockHolder locker(vm);
 
         startTimeoutThreadIfNeeded(vm);
-        if (options.m_profile && !vm.m_perBytecodeProfiler)
-            vm.m_perBytecodeProfiler = makeUnique<Profiler::Database>(vm);
-
         globalObject = GlobalObject::create(vm, GlobalObject::createStructure(vm, jsNull()), options.m_arguments);
         globalObject->setRemoteDebuggingEnabled(options.m_enableRemoteDebugging);
         func(vm, globalObject, success);
@@ -3478,7 +3474,7 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
         printf("\n");
     }
 
-    if (options.m_profile) {
+    if (Options::useProfiler()) {
         JSLockHolder locker(vm);
         if (!vm.m_perBytecodeProfiler->save(options.m_profilerOutput.utf8().data()))
             fprintf(stderr, "could not save profiler output.\n");
@@ -3489,9 +3485,8 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
         JSLockHolder locker(vm);
         if (Options::useExceptionFuzz())
             printf("JSC EXCEPTION FUZZ: encountered %u checks.\n", numberOfExceptionFuzzChecks());
-        bool fireAtEnabled =
-        Options::fireExecutableAllocationFuzzAt() || Options::fireExecutableAllocationFuzzAtOrAfter();
-        if (Options::useExecutableAllocationFuzz() && (!fireAtEnabled || Options::verboseExecutableAllocationFuzz()))
+        bool fireAtEnabled = Options::fireExecutableAllocationFuzzAt() || Options::fireExecutableAllocationFuzzAtOrAfter();
+        if (Options::verboseExecutableAllocationFuzz() && Options::useExecutableAllocationFuzz() && !fireAtEnabled)
             printf("JSC EXECUTABLE ALLOCATION FUZZ: encountered %u checks.\n", numberOfExecutableAllocationFuzzChecks());
         if (Options::useOSRExitFuzz() && Options::verboseOSRExitFuzz()) {
             printf("JSC OSR EXIT FUZZ: encountered %u static checks.\n", numberOfStaticOSRExitFuzzChecks());

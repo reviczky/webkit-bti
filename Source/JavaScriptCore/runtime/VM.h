@@ -175,6 +175,7 @@ class RegisterAtOffsetList;
 class SamplingProfiler;
 #endif
 class ShadowChicken;
+class SharedJITStubSet;
 class ScriptExecutable;
 class SourceProvider;
 class SourceProviderCache;
@@ -215,6 +216,9 @@ class Database;
 }
 namespace DOMJIT {
 class Signature;
+}
+namespace Yarr {
+class MatchingContextHolder;
 }
 
 struct EntryFrame;
@@ -259,6 +263,11 @@ struct ScratchBuffer {
         return result;
     }
 
+    static ScratchBuffer* fromData(void* buffer)
+    {
+        return bitwise_cast<ScratchBuffer*>(static_cast<char*>(buffer) - OBJECT_OFFSETOF(ScratchBuffer, m_buffer));
+    }
+
     static size_t allocationSize(Checked<size_t> bufferSize) { return sizeof(ScratchBuffer) + bufferSize; }
     void setActiveLength(size_t activeLength) { u.m_activeLength = activeLength; }
     size_t activeLength() const { return u.m_activeLength; };
@@ -278,6 +287,15 @@ struct ScratchBuffer {
 #if COMPILER(MSVC)
 #pragma warning(pop)
 #endif
+
+class ActiveScratchBufferScope {
+public:
+    ActiveScratchBufferScope(ScratchBuffer*, size_t activeScratchBufferSizeInJSValues);
+    ~ActiveScratchBufferScope();
+
+private:
+    ScratchBuffer* m_scratchBuffer;
+};
 
 class VM : public ThreadSafeRefCounted<VM>, public DoublyLinkedListNode<VM> {
 public:
@@ -846,11 +864,13 @@ public:
 #if ENABLE(JIT)
     std::unique_ptr<JITThunks> jitStubs;
     MacroAssemblerCodeRef<JITThunkPtrTag> getCTIStub(ThunkGenerator);
+    std::unique_ptr<SharedJITStubSet> m_sharedJITStubs;
 
 #endif // ENABLE(JIT)
 #if ENABLE(FTL_JIT)
     std::unique_ptr<FTL::Thunks> ftlThunks;
 #endif
+
     NativeExecutable* getHostFunction(NativeFunction, NativeFunction constructor, const String& name);
     NativeExecutable* getHostFunction(NativeFunction, Intrinsic, NativeFunction constructor, const DOMJIT::Signature*, const String& name);
 
@@ -966,7 +986,7 @@ public:
     const Instruction* targetInterpreterPCForThrow;
     uint32_t osrExitIndex;
     void* osrExitJumpDestination;
-    bool isExecutingInRegExpJIT { false };
+    RegExp* m_executingRegExp { nullptr };
 
     // The threading protocol here is as follows:
     // - You can call scratchBufferForSize from any thread.
@@ -1150,7 +1170,7 @@ public:
     };
 
     void addLoopHintExecutionCounter(const Instruction*);
-    uint64_t* getLoopHintExecutionCounter(const Instruction*);
+    uintptr_t* getLoopHintExecutionCounter(const Instruction*);
     void removeLoopHintExecutionCounter(const Instruction*);
 
 private:
@@ -1274,7 +1294,7 @@ private:
     bool m_executionForbidden { false };
 
     Lock m_loopHintExecutionCountLock;
-    HashMap<const Instruction*, std::pair<unsigned, std::unique_ptr<uint64_t>>> m_loopHintExecutionCounts;
+    HashMap<const Instruction*, std::pair<unsigned, std::unique_ptr<uintptr_t>>> m_loopHintExecutionCounts;
 
     VM* m_prev; // Required by DoublyLinkedListNode.
     VM* m_next; // Required by DoublyLinkedListNode.

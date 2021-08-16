@@ -1050,13 +1050,11 @@ static bool isStorageAccessQuirkDomainAndElement(const URL& url, const Element& 
 {
     // Microsoft Teams login case.
     // FIXME(218779): Remove this quirk once microsoft.com completes their login flow redesign.
-    if (url.host() == "www.microsoft.com"_s || url.host() == "login.live.com"_s) {
+    if (url.host() == "www.microsoft.com"_s) {
         return element.hasClass()
         && (element.classNames().contains("glyph_signIn_circle")
         || element.classNames().contains("mectrl_headertext")
-        || element.classNames().contains("mectrl_header")
-        || element.classNames().contains("ext-button primary")
-        || element.classNames().contains("ext-primary"));
+        || element.classNames().contains("mectrl_header"));
     }
     // Skype case.
     // FIXME(220105): Remove this quirk once Skype under outlook.live.com completes their login flow redesign.
@@ -1070,6 +1068,7 @@ static bool isStorageAccessQuirkDomainAndElement(const URL& url, const Element& 
     if (url.host() == "www.playstation.com"_s || url.host() == "my.playstation.com"_s) {
         return element.hasClass()
         && (element.classNames().contains("web-toolbar__signin-button")
+        || element.classNames().contains("web-toolbar__signin-button-label")
         || element.classNames().contains("sb-signin-button"));
     }
 
@@ -1083,15 +1082,6 @@ bool Quirks::hasStorageAccessForAllLoginDomains(const HashSet<RegistrableDomain>
             return false;
     }
     return true;
-}
-
-static bool hasDeniedCrossPageStorageAccess(const HashSet<RegistrableDomain>& loginDomains, const RegistrableDomain& topFrameDomain)
-{
-    for (auto& loginDomain : loginDomains) {
-        if (ResourceLoadObserver::shared().hasDeniedCrossPageStorageAccess(loginDomain, topFrameDomain))
-            return true;
-    }
-    return false;
 }
 
 const String& Quirks::BBCRadioPlayerURLString()
@@ -1123,14 +1113,14 @@ static bool isBBCPopUpPlayerElement(const Element& element)
 
 Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(CompletionHandler<void(ShouldDispatchClick)>&& completionHandler) const
 {
-    auto firstPartyDomain = mapToTopDomain(m_document->topDocument().url());
+    auto firstPartyDomain = RegistrableDomain(m_document->topDocument().url());
     auto domainsInNeedOfStorageAccess = NetworkStorageSession::subResourceDomainsInNeedOfStorageAccessForFirstParty(firstPartyDomain);
     if (!domainsInNeedOfStorageAccess || domainsInNeedOfStorageAccess.value().isEmpty()) {
         completionHandler(ShouldDispatchClick::No);
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
     }
-    if (hasStorageAccessForAllLoginDomains(*domainsInNeedOfStorageAccess, firstPartyDomain)
-        || hasDeniedCrossPageStorageAccess(*domainsInNeedOfStorageAccess, firstPartyDomain)) {
+
+    if (hasStorageAccessForAllLoginDomains(*domainsInNeedOfStorageAccess, firstPartyDomain)) {
         completionHandler(ShouldDispatchClick::No);
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
     }
@@ -1144,9 +1134,7 @@ Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(Completio
 
     DocumentStorageAccess::requestStorageAccessForNonDocumentQuirk(*m_document, WTFMove(domainInNeedOfStorageAccess), [firstPartyDomain, domainInNeedOfStorageAccess, completionHandler = WTFMove(completionHandler)](StorageAccessWasGranted storageAccessGranted) mutable {
         if (storageAccessGranted == StorageAccessWasGranted::No) {
-            ResourceLoadObserver::shared().setHasDeniedCrossPageStorageAccess({{ firstPartyDomain, domainInNeedOfStorageAccess }}, [completionHandler = WTFMove(completionHandler)] () mutable {
-                completionHandler(ShouldDispatchClick::Yes);
-            });
+            completionHandler(ShouldDispatchClick::Yes);
             return;
         }
 
@@ -1156,17 +1144,9 @@ Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(Completio
     });
     return Quirks::StorageAccessResult::ShouldCancelEvent;
 }
-
-RegistrableDomain Quirks::mapToTopDomain(const URL& urlToMap)
-{
-    if (urlToMap.host() == "login.live.com"_s)
-        return RegistrableDomain::uncheckedCreateFromRegistrableDomainString("microsoft.com"_s);
-
-    return RegistrableDomain(urlToMap);
-}
 #endif
 
-Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& element, const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget, bool isParentProcessAFullWebBrowser) const
+Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& element, const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget, bool isParentProcessAFullWebBrowser, IsSyntheticClick isSyntheticClick) const
 {
     if (!DeprecatedGlobalSettings::resourceLoadStatisticsEnabled() || !isParentProcessAFullWebBrowser)
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
@@ -1242,13 +1222,15 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
             }
         }
 
-        if (isStorageAccessQuirkDomainAndElement(m_document->url(), element)) {
+        // If the click is synthetic, the user has already gone through the storage access flow and we should not request again.
+        if (isStorageAccessQuirkDomainAndElement(m_document->url(), element) && isSyntheticClick == IsSyntheticClick::No) {
             return requestStorageAccessAndHandleClick([element = makeWeakPtr(element), platformEvent, eventType, detail, relatedTarget] (ShouldDispatchClick shouldDispatchClick) mutable {
-                if (!element)
+                RefPtr protectedElement { element.get() };
+                if (!protectedElement)
                     return;
 
                 if (shouldDispatchClick == ShouldDispatchClick::Yes)
-                    element->dispatchMouseEvent(platformEvent, eventType, detail, relatedTarget);
+                    protectedElement->dispatchMouseEvent(platformEvent, eventType, detail, relatedTarget, IsSyntheticClick::Yes);
             });
         }
 
@@ -1356,15 +1338,15 @@ bool Quirks::needsBlackFullscreenBackgroundQuirk() const
 bool Quirks::requiresUserGestureToPauseInPictureInPicture() const
 {
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-    // Facebook and Twitter will naively pause a <video> element that has scrolled out of the viewport,
+    // Facebook, Twitter, and Reddit will naively pause a <video> element that has scrolled out of the viewport,
     // regardless of whether that element is currently in PiP mode.
-    // We should remove the quirk once <rdar://problem/67273166> and <rdar://problem/73369869> have been fixed.
+    // We should remove the quirk once <rdar://problem/67273166>, <rdar://problem/73369869>, and <rdar://problem/80645747> have been fixed.
     if (!needsQuirks())
         return false;
 
     if (!m_requiresUserGestureToPauseInPictureInPicture) {
         auto domain = RegistrableDomain(m_document->topDocument().url()).string();
-        m_requiresUserGestureToPauseInPictureInPicture = domain == "facebook.com"_s || domain == "twitter.com"_s;
+        m_requiresUserGestureToPauseInPictureInPicture = domain == "facebook.com"_s || domain == "twitter.com"_s || domain == "reddit.com"_s;
     }
 
     return *m_requiresUserGestureToPauseInPictureInPicture;

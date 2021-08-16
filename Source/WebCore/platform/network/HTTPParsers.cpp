@@ -38,6 +38,7 @@
 #include "ParsedContentType.h"
 #include <wtf/DateMath.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/unicode/CharacterNames.h>
 
@@ -578,6 +579,94 @@ XFrameOptionsDisposition parseXFrameOptionsHeader(const String& header)
     return result;
 }
 
+// https://fetch.spec.whatwg.org/#concept-header-list-get-structured-header
+// FIXME: For now, this assumes the type is "item".
+std::optional<std::pair<StringView, HashMap<String, String>>> parseStructuredFieldValue(StringView header)
+{
+    header = stripLeadingAndTrailingHTTPSpaces(header);
+    if (header.isEmpty())
+        return std::nullopt;
+
+    // Parse a token (https://datatracker.ietf.org/doc/html/rfc8941#section-4.2.6).
+    if (!isASCIIAlpha(header[0]) && header[0] != '*')
+        return std::nullopt;
+    size_t index = 1;
+    while (index < header.length()) {
+        UChar c = header[index];
+        if (!RFC7230::isTokenCharacter(c) && c != ':' && c != '/')
+            break;
+        ++index;
+    }
+    StringView bareItem = header.substring(0, index);
+
+    // Parse parameters (https://datatracker.ietf.org/doc/html/rfc8941#section-4.2.3.2).
+    HashMap<String, String> parameters;
+    while (index < header.length()) {
+        if (header[index] != ';')
+            break;
+        ++index; // Consume ';'.
+        while (index < header.length() && header[index] == ' ')
+            ++index;
+        if (index == header.length())
+            return std::nullopt;
+        // Parse a key (https://datatracker.ietf.org/doc/html/rfc8941#section-4.2.3.3)
+        if (!isASCIILower(header[index]))
+            return std::nullopt;
+        size_t keyStart = index++;
+        while (index < header.length()) {
+            UChar c = header[index];
+            if (!isASCIILower(c) && !isASCIIDigit(c) && c != '_' && c != '-' && c != '.' && c != '*')
+                break;
+            ++index;
+        }
+        String key = header.substring(keyStart, index - keyStart).toString();
+        String value = "true";
+        if (index < header.length() && header[index] == '=') {
+            ++index; // Consume '='.
+            if (isASCIIAlpha(header[index]) || header[index] == '*') {
+                // https://datatracker.ietf.org/doc/html/rfc8941#section-4.2.6
+                size_t valueStart = index++;
+                while (index < header.length()) {
+                    UChar c = header[index];
+                    if (!RFC7230::isTokenCharacter(c) && c != ':' && c != '/')
+                        break;
+                    ++index;
+                }
+                value = header.substring(valueStart, index - valueStart).toString();
+            } else if (header[index] == '"') {
+                // https://datatracker.ietf.org/doc/html/rfc8941#section-4.2.5
+                StringBuilder valueBuilder;
+                ++index; // Skip DQUOTE.
+                while (index < header.length()) {
+                    if (header[index] == '\\') {
+                        ++index;
+                        if (index == header.length())
+                            return std::nullopt;
+                        if (header[index] != '\\' && header[index] != '"')
+                            return std::nullopt;
+                        valueBuilder.append(header[index]);
+                    } else if (header[index] == '\"') {
+                        value = valueBuilder.toString();
+                        break;
+                    } else if (header[index] <= 0x1F || (header[index] >= 0x7F && header[index] <= 0xFF)) // Not in VCHAR or SP.
+                        return std::nullopt;
+                    else
+                        valueBuilder.append(header[index]);
+                    ++index;
+                }
+                if (index == header.length())
+                    return std::nullopt;
+                ++index; // Skip DQUOTE.
+            } else
+                return std::nullopt;
+        }
+        parameters.set(WTFMove(key), WTFMove(value));
+    }
+    if (index != header.length())
+        return std::nullopt;
+    return std::make_pair(bareItem, parameters);
+}
+
 bool parseRange(const String& range, long long& rangeOffset, long long& rangeEnd, long long& rangeSuffixLength)
 {
     // The format of "Range" header is defined in RFC 2616 Section 14.35.1.
@@ -935,6 +1024,9 @@ CrossOriginResourcePolicy parseCrossOriginResourcePolicyHeader(StringView header
 
     if (strippedHeader == "same-site")
         return CrossOriginResourcePolicy::SameSite;
+
+    if (strippedHeader == "cross-origin")
+        return CrossOriginResourcePolicy::CrossOrigin;
 
     return CrossOriginResourcePolicy::Invalid;
 }

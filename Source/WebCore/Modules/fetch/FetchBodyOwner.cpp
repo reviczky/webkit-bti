@@ -34,6 +34,7 @@
 #include "FetchLoader.h"
 #include "HTTPParsers.h"
 #include "JSBlob.h"
+#include "JSDOMFormData.h"
 #include "ResourceError.h"
 #include "ResourceResponse.h"
 #include "WindowEventLoop.h"
@@ -185,14 +186,24 @@ void FetchBodyOwner::formData(Ref<DeferredPromise>&& promise)
         return;
     }
 
-    if (isBodyNullOrOpaque()) {
-        promise->reject();
-        return;
-    }
     if (isDisturbedOrLocked()) {
         promise->reject(Exception { TypeError, "Body is disturbed or locked"_s });
         return;
     }
+
+    if (isBodyNullOrOpaque()) {
+        if (isBodyNull()) {
+            // If the content-type is 'application/x-www-form-urlencoded', a body is not required and we should package an empty byte sequence as per the specification.
+            if (auto formData = FetchBodyConsumer::packageFormData(promise->scriptExecutionContext(), m_contentType, nullptr, 0)) {
+                promise->resolve<IDLInterface<DOMFormData>>(*formData);
+                return;
+            }
+        }
+
+        promise->reject(TypeError);
+        return;
+    }
+
     m_isDisturbed = true;
     m_body->formData(*this, WTFMove(promise));
 }
@@ -378,7 +389,7 @@ ResourceError FetchBodyOwner::loadingError() const
 std::optional<Exception> FetchBodyOwner::loadingException() const
 {
     return WTF::switchOn(m_loadingError, [](const ResourceError& error) {
-        return Exception { TypeError, error.localizedDescription().isEmpty() ? "Loading failed"_s : error.localizedDescription() };
+        return Exception { TypeError, error.sanitizedDescription() };
     }, [](const Exception& exception) {
         return Exception { exception };
     }, [](auto&&) -> std::optional<Exception> {

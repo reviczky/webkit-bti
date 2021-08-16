@@ -1082,8 +1082,6 @@ static Ref<CSSValueList> transitionPropertyValue(const AnimationList* animationL
     return list;
 }
 
-#if ENABLE(CSS_SCROLL_SNAP)
-
 static Ref<CSSValueList> valueForScrollSnapType(const ScrollSnapType& type)
 {
     auto value = CSSValueList::createSpaceSeparated();
@@ -1105,8 +1103,6 @@ static Ref<CSSValueList> valueForScrollSnapAlignment(const ScrollSnapAlign& alig
         value->append(CSSPrimitiveValue::create(alignment.inlineAlign));
     return value;
 }
-
-#endif
 
 static Ref<CSSValue> willChangePropertyValue(const WillChangeData* willChangeData)
 {
@@ -2467,25 +2463,15 @@ RefPtr<CSSValue> ComputedStyleExtractor::customPropertyValue(const String& prope
     if (!style)
         return nullptr;
 
-    auto* registered = styledElement->document().getCSSRegisteredCustomPropertySet().get(propertyName);
     auto* value = style->getCustomProperty(propertyName);
+    if (!value) {
+        auto registered = styledElement->document().getCSSRegisteredCustomPropertySet().get(propertyName);
+        return registered ? registered->initialValueCopy() : nullptr;
+    }
 
-    if (registered && !value)
-        return registered->initialValueCopy();
-
-    if (!value)
-        return nullptr;
-
-    return WTF::switchOn(value->value(), [&](const Ref<CSSVariableReferenceValue>&) {
-        ASSERT_NOT_REACHED();
-        return RefPtr<CSSValue>();
-    }, [&](const CSSValueID&) {
-        return CSSCustomPropertyValue::create(*value);
-    }, [&](const Ref<CSSVariableData>&) {
-        return CSSCustomPropertyValue::create(*value);
-    }, [&](const Length& value) {
+    return WTF::switchOn(value->value(), [&](const Length& value) -> Ref<CSSValue> {
         return zoomAdjustedPixelValueForLength(value, *style);
-    }, [&](const Ref<StyleImage>&) {
+    }, [&](auto&) -> Ref<CSSValue> {
         return CSSCustomPropertyValue::create(*value);
     });
 }
@@ -3869,14 +3855,12 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
             return getCSSPropertyValuesFor2SidesShorthand(scrollPaddingBlockShorthand());
         case CSSPropertyScrollPaddingInline:
             return getCSSPropertyValuesFor2SidesShorthand(scrollPaddingInlineShorthand());
-#if ENABLE(CSS_SCROLL_SNAP)
         case CSSPropertyScrollSnapAlign:
             return valueForScrollSnapAlignment(style.scrollSnapAlign());
         case CSSPropertyScrollSnapStop:
             return CSSPrimitiveValue::create(style.scrollSnapStop());
         case CSSPropertyScrollSnapType:
             return valueForScrollSnapType(style.scrollSnapType());
-#endif
 
 #if ENABLE(CSS_TRAILING_WORD)
         case CSSPropertyAppleTrailingWord:
@@ -4276,7 +4260,7 @@ String CSSComputedStyleDeclaration::getPropertyValue(const String &propertyName)
 String CSSComputedStyleDeclaration::getPropertyPriority(const String&)
 {
     // All computed styles have a priority of not "important".
-    return emptyString(); // FIXME: Should this sometimes be null instead of empty, to match a normal style declaration?
+    return emptyString();
 }
 
 String CSSComputedStyleDeclaration::getPropertyShorthand(const String&)

@@ -440,7 +440,7 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
     }
 
     if (is<RenderListMarker>(o)) {
-        String text = downcast<RenderListMarker>(o).text();
+        String text = downcast<RenderListMarker>(o).textWithoutSuffix().toString();
         if (!text.isEmpty()) {
             if (text.length() != 1)
                 text = quoteAndEscapeNonPrintables(text);
@@ -471,7 +471,7 @@ void writeDebugInfo(TextStream& ts, const RenderObject& object, OptionSet<Render
     if (behavior.contains(RenderAsTextFlag::ShowIDAndClass)) {
         if (Element* element = is<Element>(object.node()) ? downcast<Element>(object.node()) : nullptr) {
             if (element->hasID())
-                ts << " id=\"" + element->getIdAttribute() + "\"";
+                ts << " id=\"" << element->getIdAttribute() << "\"";
 
             if (element->hasClass()) {
                 ts << " class=\"";
@@ -658,7 +658,7 @@ static void writeLayer(TextStream& ts, const RenderLayer& layer, const LayoutRec
             ts << " clip " << adjustedClipRect;
     }
 
-    if (layer.renderer().hasOverflowClip()) {
+    if (layer.renderer().hasNonVisibleOverflow()) {
         if (auto* scrollableArea = layer.scrollableArea()) {
             if (scrollableArea->scrollOffset().x())
                 ts << " scrollX " << scrollableArea->scrollOffset().x();
@@ -957,7 +957,7 @@ String markerTextForListItem(Element* element)
     if (!is<RenderListItem>(renderer))
         return String();
 
-    return downcast<RenderListItem>(*renderer).markerText();
+    return downcast<RenderListItem>(*renderer).markerTextWithoutSuffix().toString();
 }
 
 } // namespace WebCore

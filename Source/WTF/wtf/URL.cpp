@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <unicode/uidna.h>
 #include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
 #include <wtf/Lock.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/PrintStream.h>
@@ -378,7 +379,7 @@ bool URL::setProtocol(StringView newProtocol)
 {
     // Firefox and IE remove everything after the first ':'.
     auto newProtocolPrefix = newProtocol.substring(0, newProtocol.find(':'));
-    auto newProtocolCanonicalized = URLParser::maybeCanonicalizeScheme(newProtocolPrefix.toStringWithoutCopying());
+    auto newProtocolCanonicalized = URLParser::maybeCanonicalizeScheme(newProtocolPrefix);
     if (!newProtocolCanonicalized)
         return false;
 
@@ -402,22 +403,20 @@ bool URL::setProtocol(StringView newProtocol)
 // Return value of false means error in encoding.
 static bool appendEncodedHostname(Vector<UChar, 512>& buffer, StringView string)
 {
-    // Needs to be big enough to hold an IDN-encoded name.
+    // hostnameBuffer needs to be big enough to hold an IDN-encoded name.
     // For host names bigger than this, we won't do IDN encoding, which is almost certainly OK.
-    const unsigned hostnameBufferLength = 2048;
-
-    if (string.length() > hostnameBufferLength || string.isAllASCII()) {
+    if (string.length() > URLParser::hostnameBufferLength || string.isAllASCII()) {
         append(buffer, string);
         return true;
     }
 
-    UChar hostnameBuffer[hostnameBufferLength];
+    UChar hostnameBuffer[URLParser::hostnameBufferLength];
     UErrorCode error = U_ZERO_ERROR;
     UIDNAInfo processingDetails = UIDNA_INFO_INITIALIZER;
     int32_t numCharactersConverted = uidna_nameToASCII(&URLParser::internationalDomainNameTranscoder(),
-        string.upconvertedCharacters(), string.length(), hostnameBuffer, hostnameBufferLength, &processingDetails, &error);
+        string.upconvertedCharacters(), string.length(), hostnameBuffer, URLParser::hostnameBufferLength, &processingDetails, &error);
 
-    if (U_SUCCESS(error) && !processingDetails.errors) {
+    if (U_SUCCESS(error) && !(processingDetails.errors & ~URLParser::allowedNameToASCIIErrors) && numCharactersConverted) {
         buffer.append(hostnameBuffer, numCharactersConverted);
         return true;
     }
@@ -462,14 +461,14 @@ void URL::setHost(StringView newHost)
         newHost = newHost.substring(0, index);
 
     Vector<UChar, 512> encodedHostName;
-    if (!appendEncodedHostname(encodedHostName, newHost))
+    if (hasSpecialScheme() && !appendEncodedHostname(encodedHostName, newHost))
         return;
 
     bool slashSlashNeeded = m_userStart == m_schemeEnd + 1U;
     parse(makeString(
         StringView(m_string).left(hostStart()),
         slashSlashNeeded ? "//" : "",
-        StringView(encodedHostName.data(), encodedHostName.size()),
+        hasSpecialScheme() ? StringView(encodedHostName.data(), encodedHostName.size()) : newHost,
         StringView(m_string).substring(m_hostEnd)
     ));
 }
@@ -515,23 +514,24 @@ void URL::setHostAndPort(StringView hostAndPort)
     }
 
     Vector<UChar, 512> encodedHostName;
-    if (!appendEncodedHostname(encodedHostName, hostName))
+    if (hasSpecialScheme() && !appendEncodedHostname(encodedHostName, hostName))
         return;
 
     bool slashSlashNeeded = m_userStart == m_schemeEnd + 1U;
     parse(makeString(
         StringView(m_string).left(hostStart()),
         slashSlashNeeded ? "//" : "",
-        StringView(encodedHostName.data(), encodedHostName.size()),
+        hasSpecialScheme() ? StringView(encodedHostName.data(), encodedHostName.size()) : hostName,
         portString.isEmpty() ? "" : ":",
         portString,
         StringView(m_string).substring(pathStart())
     ));
 }
 
-static String percentEncodeCharacters(const String& input, bool(*shouldEncode)(UChar))
+template<typename StringType>
+static String percentEncodeCharacters(const StringType& input, bool(*shouldEncode)(UChar))
 {
-    auto encode = [shouldEncode] (const String& input) {
+    auto encode = [shouldEncode] (const StringType& input) {
         CString utf8 = input.utf8();
         auto* data = utf8.data();
         StringBuilder builder;
@@ -552,7 +552,10 @@ static String percentEncodeCharacters(const String& input, bool(*shouldEncode)(U
         if (UNLIKELY(shouldEncode(input[i])))
             return encode(input);
     }
-    return input;
+    if constexpr (std::is_same_v<StringType, StringView>)
+        return input.toString();
+    else
+        return input;
 }
 
 void URL::parse(const String& string)
@@ -584,7 +587,7 @@ void URL::setUser(StringView newUser)
         parse(makeString(
             StringView(m_string).left(m_userStart),
             slashSlashNeeded ? "//" : "",
-            percentEncodeCharacters(newUser.toStringWithoutCopying(), URLParser::isInUserInfoEncodeSet),
+            percentEncodeCharacters(newUser, URLParser::isInUserInfoEncodeSet),
             needSeparator ? "@" : "",
             StringView(m_string).substring(end)
         ));
@@ -606,7 +609,7 @@ void URL::setPassword(StringView newPassword)
         parse(makeString(
             StringView(m_string).left(m_userEnd),
             needLeadingSlashes ? "//:" : ":",
-            percentEncodeCharacters(newPassword.toStringWithoutCopying(), URLParser::isInUserInfoEncodeSet),
+            percentEncodeCharacters(newPassword, URLParser::isInUserInfoEncodeSet),
             '@',
             StringView(m_string).substring(credentialsEnd())
         ));
@@ -629,7 +632,7 @@ void URL::setFragmentIdentifier(StringView identifier)
     if (!m_isValid)
         return;
 
-    parse(makeString(StringView(m_string).left(m_queryEnd), '#', identifier));
+    *this = URLParser(makeString(StringView(m_string).left(m_queryEnd), '#', identifier), { }, URLTextEncodingSentinelAllowingC0AtEndOfHash).result();
 }
 
 void URL::removeFragmentIdentifier()
@@ -670,7 +673,7 @@ static String escapePathWithoutCopying(StringView path)
     auto questionMarkOrNumberSignOrNonASCII = [] (UChar character) {
         return character == '?' || character == '#' || !isASCII(character);
     };
-    return percentEncodeCharacters(path.toStringWithoutCopying(), questionMarkOrNumberSignOrNonASCII);
+    return percentEncodeCharacters(path, questionMarkOrNumberSignOrNonASCII);
 }
 
 void URL::setPath(StringView path)
@@ -680,7 +683,8 @@ void URL::setPath(StringView path)
 
     parse(makeString(
         StringView(m_string).left(pathStart()),
-        path.startsWith('/') || (path.startsWith('\\') && (hasSpecialScheme() || protocolIs("file"))) ? "" : "/",
+        path.startsWith('/') || (path.startsWith('\\') && (hasSpecialScheme() || protocolIs("file"))) || (!hasSpecialScheme() && path.isEmpty() && m_schemeEnd + 1U < pathStart()) ? "" : "/",
+        !hasSpecialScheme() && host().isEmpty() && path.startsWith("//") && path.length() > 2 ? "/." : "",
         escapePathWithoutCopying(path),
         StringView(m_string).substring(m_pathEnd)
     ));
@@ -955,6 +959,8 @@ bool portAllowed(const URL& url)
         587,  // ESMTP
         601,  // syslog-conn
         636,  // LDAP+SSL
+        989,  // ftps-data
+        990,  // ftps
         993,  // IMAP+SSL
         995,  // POP3+SSL
         1719, // H323 (RAS)
@@ -1160,5 +1166,87 @@ bool URL::hostIsIPAddress(StringView host)
 }
 
 #endif
+
+Vector<KeyValuePair<String, String>> differingQueryParameters(const URL& firstURL, const URL& secondURL)
+{
+    auto firstQueryParameters = URLParser::parseURLEncodedForm(firstURL.query());
+    auto secondQueryParameters = URLParser::parseURLEncodedForm(secondURL.query());
+    
+    if (firstQueryParameters.isEmpty())
+        return secondQueryParameters;
+
+    if (secondQueryParameters.isEmpty())
+        return firstQueryParameters;
+    
+    auto compare = [] (const KeyValuePair<String, String>& a, const KeyValuePair<String, String>& b) {
+        if (int result = codePointCompare(a.key, b.key))
+            return result;
+        return codePointCompare(a.value, b.value);
+        
+    };
+    auto comparesLessThan = [compare] (const KeyValuePair<String, String>& a, const KeyValuePair<String, String>& b) {
+        return compare(a, b) < 0;
+    };
+    
+    std::sort(firstQueryParameters.begin(), firstQueryParameters.end(), comparesLessThan);
+    std::sort(secondQueryParameters.begin(), secondQueryParameters.end(), comparesLessThan);
+    size_t totalFirstQueryParameters = firstQueryParameters.size();
+    size_t totalSecondQueryParameters = secondQueryParameters.size();
+    size_t indexInFirstQueryParameters = 0;
+    size_t indexInSecondQueryParameters = 0;
+    Vector<KeyValuePair<String, String>> differingQueryParameters;
+    while (indexInFirstQueryParameters < totalFirstQueryParameters && indexInSecondQueryParameters < totalSecondQueryParameters) {
+        int comparison = compare(firstQueryParameters[indexInFirstQueryParameters], secondQueryParameters[indexInSecondQueryParameters]);
+        if (comparison < 0) {
+            differingQueryParameters.append(firstQueryParameters[indexInFirstQueryParameters]);
+            indexInFirstQueryParameters++;
+        } else if (comparison > 0) {
+            differingQueryParameters.append(secondQueryParameters[indexInSecondQueryParameters]);
+            indexInSecondQueryParameters++;
+        } else {
+            indexInFirstQueryParameters++;
+            indexInSecondQueryParameters++;
+        }
+    }
+    
+    while (indexInFirstQueryParameters < totalFirstQueryParameters) {
+        differingQueryParameters.append(firstQueryParameters[indexInFirstQueryParameters]);
+        indexInFirstQueryParameters++;
+    }
+    
+    while (indexInSecondQueryParameters < totalSecondQueryParameters) {
+        differingQueryParameters.append(secondQueryParameters[indexInSecondQueryParameters]);
+        indexInSecondQueryParameters++;
+    }
+    
+    return differingQueryParameters;
+}
+
+static StringView substringIgnoringQueryAndFragments(const URL& url)
+{
+    if (!url.isValid())
+        return StringView(url.string());
+    
+    return StringView(url.string()).left(url.pathEnd());
+}
+
+bool isEqualIgnoringQueryAndFragments(const URL& a, const URL& b)
+{
+    return substringIgnoringQueryAndFragments(a) == substringIgnoringQueryAndFragments(b);
+}
+
+void removeQueryParameters(URL& url, const HashSet<String>& keysToRemove)
+{
+    if (keysToRemove.isEmpty())
+        return;
+    
+    StringBuilder queryWithoutRemovalKeys;
+    for (auto& parameter : URLParser::parseURLEncodedForm(url.query())) {
+        if (!keysToRemove.contains(parameter.key))
+            queryWithoutRemovalKeys.append(queryWithoutRemovalKeys.isEmpty() ? "" : "&", parameter.key, '=', parameter.value);
+    }
+    
+    url.setQuery(queryWithoutRemovalKeys);
+}
 
 } // namespace WTF

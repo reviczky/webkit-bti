@@ -74,6 +74,11 @@ public:
     const String& localStorageDirectory() const { return m_localStorageDirectory; }
     void setLocalStorageDirectory(String&& directory) { m_localStorageDirectory = WTFMove(directory); }
 
+#if HAVE(ARKIT_INLINE_PREVIEW)
+    const String& modelElementCacheDirectory() const { return m_modelElementCacheDirectory; }
+    void setModelElementCacheDirectory(String&& directory) { m_modelElementCacheDirectory = WTFMove(directory); }
+#endif
+
     const String& boundInterfaceIdentifier() const { return m_boundInterfaceIdentifier; }
     void setBoundInterfaceIdentifier(String&& identifier) { m_boundInterfaceIdentifier = WTFMove(identifier); }
 
@@ -166,6 +171,9 @@ public:
     bool enableInAppBrowserPrivacyForTesting() const { return m_enableInAppBrowserPrivacyForTesting; }
     void setEnableInAppBrowserPrivacyForTesting(bool value) { m_enableInAppBrowserPrivacyForTesting = value; }
     
+    bool allowsHSTSWithUntrustedRootCertificate() const { return m_allowsHSTSWithUntrustedRootCertificate; }
+    void setAllowsHSTSWithUntrustedRootCertificate(bool allows) { m_allowsHSTSWithUntrustedRootCertificate = allows; }
+    
 private:
     IsPersistent m_isPersistent { IsPersistent::No };
 
@@ -179,6 +187,9 @@ private:
     String m_serviceWorkerRegistrationDirectory;
     String m_webSQLDatabaseDirectory;
     String m_hstsStorageDirectory;
+#if HAVE(ARKIT_INLINE_PREVIEW)
+    String m_modelElementCacheDirectory;
+#endif
 #if USE(GLIB)
     bool m_networkCacheSpeculativeValidationEnabled { true };
 #else
@@ -212,6 +223,7 @@ private:
     unsigned m_testSpeedMultiplier { 1 };
     URL m_standaloneApplicationURL;
     bool m_enableInAppBrowserPrivacyForTesting { false };
+    bool m_allowsHSTSWithUntrustedRootCertificate { false };
 #if PLATFORM(COCOA)
     RetainPtr<CFDictionaryRef> m_proxyConfiguration;
 #endif

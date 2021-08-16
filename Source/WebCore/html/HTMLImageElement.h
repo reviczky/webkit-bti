@@ -91,6 +91,9 @@ public:
 
     WEBCORE_EXPORT bool complete() const;
 
+    void setDecoding(String&&);
+    String decoding() const;
+
     DecodingMode decodingMode() const;
     
     WEBCORE_EXPORT void decode(Ref<DeferredPromise>&&);
@@ -150,6 +153,8 @@ private:
     void parseAttribute(const QualifiedName&, const AtomString&) override;
     bool hasPresentationalHintsForAttribute(const QualifiedName&) const override;
     void collectPresentationalHintsForAttribute(const QualifiedName&, const AtomString&, MutableStyleProperties&) override;
+    void collectExtraStyleForPresentationalHints(MutableStyleProperties&) override;
+    void invalidateAttributeMapping();
 
     void didAttachRenderers() override;
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) override;
@@ -183,6 +188,9 @@ private:
 
     float effectiveImageDevicePixelRatio() const;
 
+    HTMLSourceElement* sourceElement() const;
+    void setSourceElement(HTMLSourceElement*);
+
     std::unique_ptr<HTMLImageLoader> m_imageLoader;
     WeakPtr<HTMLFormElement> m_form;
     WeakPtr<HTMLFormElement> m_formSetByParser;
@@ -196,6 +204,8 @@ private:
     bool m_isDroppedImagePlaceholder { false };
 
     WeakPtr<HTMLPictureElement> m_pictureElement;
+    // The source element that was selected to provide the source URL.
+    WeakPtr<HTMLSourceElement> m_sourceElement;
     MediaQueryDynamicResults m_mediaQueryDynamicResults;
 
 #if ENABLE(ATTACHMENT_ELEMENT)

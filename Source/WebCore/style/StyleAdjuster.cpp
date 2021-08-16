@@ -55,6 +55,7 @@
 #include "SVGNames.h"
 #include "SVGURIReference.h"
 #include "Settings.h"
+#include "ShadowRoot.h"
 #include "Text.h"
 #include "WebAnimationTypes.h"
 #include <wtf/RobinHoodHashSet.h>
@@ -141,20 +142,33 @@ static DisplayType equivalentBlockDisplay(const RenderStyle& style, const Docume
     return DisplayType::Block;
 }
 
-static inline bool isAtShadowBoundary(const Element& element)
+static bool shouldInheritTextDecorationsInEffect(const RenderStyle& style, const Element* element)
 {
-    auto* parentNode = element.parentNode();
-    return parentNode && parentNode->isShadowRoot();
-}
+    if (style.isFloating() || style.hasOutOfFlowPosition())
+        return false;
 
-// CSS requires text-decoration to be reset at each DOM element for tables,
-// inline blocks, inline tables, shadow DOM crossings, floating elements,
-// and absolute or relatively positioned elements.
-static bool doesNotInheritTextDecoration(const RenderStyle& style, const Element* element)
-{
-    return style.display() == DisplayType::Table || style.display() == DisplayType::InlineTable
-        || style.display() == DisplayType::InlineBlock || style.display() == DisplayType::InlineBox || (element && isAtShadowBoundary(*element))
-        || style.isFloating() || style.hasOutOfFlowPosition();
+    auto isAtUserAgentShadowBoundary = [&] {
+        if (!element)
+            return false;
+        auto* parentNode = element->parentNode();
+        return parentNode && parentNode->isUserAgentShadowRoot();
+    }();
+
+    // There is no other good way to prevent decorations from affecting user agent shadow trees.
+    if (isAtUserAgentShadowBoundary)
+        return false;
+
+    switch (style.display()) {
+    case DisplayType::Table:
+    case DisplayType::InlineTable:
+    case DisplayType::InlineBlock:
+    case DisplayType::InlineBox:
+        return false;
+    default:
+        break;
+    };
+
+    return true;
 }
 
 static bool isScrollableOverflow(Overflow overflow)
@@ -393,19 +407,30 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
         }
     }
 
-    if (doesNotInheritTextDecoration(style, m_element))
-        style.setTextDecorationsInEffect(style.textDecoration());
-    else
+    if (shouldInheritTextDecorationsInEffect(style, m_element))
         style.addToTextDecorationsInEffect(style.textDecoration());
+    else
+        style.setTextDecorationsInEffect(style.textDecoration());
 
-    // If either overflow value is not visible, change to auto.
-    if (style.overflowX() == Overflow::Visible && style.overflowY() != Overflow::Visible) {
-        // FIXME: Once we implement pagination controls, overflow-x should default to hidden
-        // if overflow-y is set to -webkit-paged-x or -webkit-page-y. For now, we'll let it
-        // default to auto so we can at least scroll through the pages.
-        style.setOverflowX(Overflow::Auto);
-    } else if (style.overflowY() == Overflow::Visible && style.overflowX() != Overflow::Visible)
-        style.setOverflowY(Overflow::Auto);
+    auto overflowReplacement = [] (Overflow overflow, Overflow overflowInOtherDimension) -> std::optional<Overflow> {
+        if (overflow != Overflow::Visible && overflow != Overflow::Clip) {
+            if (overflowInOtherDimension == Overflow::Visible)
+                return Overflow::Auto;
+            if (overflowInOtherDimension == Overflow::Clip)
+                return Overflow::Hidden;
+        }
+        return std::nullopt;
+    };
+
+    // If either overflow value is not visible, change to auto. Similarly if either overflow
+    // value is not clip, change to hidden.
+    // FIXME: Once we implement pagination controls, overflow-x should default to hidden
+    // if overflow-y is set to -webkit-paged-x or -webkit-page-y. For now, we'll let it
+    // default to auto so we can at least scroll through the pages.
+    if (auto replacement = overflowReplacement(style.overflowY(), style.overflowX()))
+        style.setOverflowX(*replacement);
+    else if (auto replacement = overflowReplacement(style.overflowX(), style.overflowY()))
+        style.setOverflowY(*replacement);
 
     // Call setStylesForPaginationMode() if a pagination mode is set for any non-root elements. If these
     // styles are specified on a root element, then they will be incorporated in

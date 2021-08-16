@@ -245,7 +245,7 @@ void ContentSecurityPolicy::applyPolicyToScriptExecutionContext()
     if (!m_lastPolicyWebAssemblyDisabledErrorMessage.isNull())
         m_scriptExecutionContext->disableWebAssembly(m_lastPolicyWebAssemblyDisabledErrorMessage);
     if (m_sandboxFlags != SandboxNone && is<Document>(m_scriptExecutionContext))
-        m_scriptExecutionContext->enforceSandboxFlags(m_sandboxFlags);
+        m_scriptExecutionContext->enforceSandboxFlags(m_sandboxFlags, SecurityContext::SandboxFlagsSource::CSP);
     if (enableStrictMixedContentMode)
         m_scriptExecutionContext->setStrictMixedContentMode(true);
 }
@@ -322,7 +322,7 @@ bool ContentSecurityPolicy::allPoliciesAllow(ViolatedDirectiveCallback&& callbac
 }
 
 template<typename Predicate>
-ContentSecurityPolicy::HashInEnforcedAndReportOnlyPoliciesPair ContentSecurityPolicy::findHashOfContentInPolicies(Predicate&& predicate, const String& content, OptionSet<ContentSecurityPolicyHashAlgorithm> algorithms) const
+ContentSecurityPolicy::HashInEnforcedAndReportOnlyPoliciesPair ContentSecurityPolicy::findHashOfContentInPolicies(Predicate&& predicate, StringView content, OptionSet<ContentSecurityPolicyHashAlgorithm> algorithms) const
 {
     if (algorithms.isEmpty() || content.isEmpty())
         return { false, false };
@@ -404,7 +404,7 @@ bool ContentSecurityPolicy::allowStyleWithNonce(const String& nonce, bool overri
     return allPoliciesWithDispositionAllow(ContentSecurityPolicy::Disposition::Enforce, &ContentSecurityPolicyDirectiveList::violatedDirectiveForStyleNonce, strippedNonce);
 }
 
-bool ContentSecurityPolicy::allowInlineScript(const String& contextURL, const WTF::OrdinalNumber& contextLine, const String& scriptContent, bool overrideContentSecurityPolicy) const
+bool ContentSecurityPolicy::allowInlineScript(const String& contextURL, const WTF::OrdinalNumber& contextLine, StringView scriptContent, bool overrideContentSecurityPolicy) const
 {
     if (overrideContentSecurityPolicy)
         return true;
@@ -427,7 +427,7 @@ bool ContentSecurityPolicy::allowInlineScript(const String& contextURL, const WT
     return foundHashInEnforcedPolicies || allPoliciesWithDispositionAllow(ContentSecurityPolicy::Disposition::Enforce, handleViolatedDirective, &ContentSecurityPolicyDirectiveList::violatedDirectiveForUnsafeInlineScript);
 }
 
-bool ContentSecurityPolicy::allowInlineStyle(const String& contextURL, const WTF::OrdinalNumber& contextLine, const String& styleContent, bool overrideContentSecurityPolicy) const
+bool ContentSecurityPolicy::allowInlineStyle(const String& contextURL, const WTF::OrdinalNumber& contextLine, StringView styleContent, bool overrideContentSecurityPolicy) const
 {
     if (overrideContentSecurityPolicy)
         return true;

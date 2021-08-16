@@ -92,7 +92,6 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
     PrepareToSuspend(bool isSuspensionImminent) -> () Async
     ProcessDidResume()
 
-    MainThreadPing()
     BackgroundResponsivenessPing()
 
 #if ENABLE(GAMEPAD)
@@ -119,7 +118,7 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    UserInterfaceIdiomDidChange(bool isPadOrMac)
+    UserInterfaceIdiomDidChange(bool isPhoneOrWatch)
 #endif
 
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
@@ -201,5 +200,10 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
 
 #if PLATFORM(COCOA)
     ConsumeAudioComponentRegistrations(IPC::SharedBufferDataReference registrationData)
+    AccessibilityPreferencesDidChange(struct WebKit::AccessibilityPreferences accessibilityPreferences)
+#endif
+
+#if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
+    SetMediaAccessibilityPreferences(WebCore::CaptionUserPreferences::CaptionDisplayMode displayMode, Vector<String> languages)
 #endif
 }

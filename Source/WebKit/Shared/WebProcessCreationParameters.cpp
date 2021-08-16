@@ -59,6 +59,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #if PLATFORM(COCOA) && ENABLE(REMOTE_INSPECTOR)
     encoder << enableRemoteWebInspectorExtensionHandle;
 #endif
+    encoder << wtfLoggingChannels;
     encoder << webCoreLoggingChannels;
     encoder << webKitLoggingChannels;
 #if ENABLE(MEDIA_STREAM)
@@ -165,6 +166,10 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << mobileGestaltExtensionHandle;
     encoder << launchServicesExtensionHandle;
 
+#if HAVE(VIDEO_RESTRICTED_DECODING)
+    encoder << videoDecoderExtensionHandles;
+#endif
+
     encoder << diagnosticsExtensionHandles;
 #if PLATFORM(IOS_FAMILY)
     encoder << dynamicMachExtensionHandles;
@@ -177,7 +182,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    encoder << currentUserInterfaceIdiomIsPad;
+    encoder << currentUserInterfaceIdiomIsPhoneOrWatch;
     encoder << supportsPictureInPicture;
     encoder << cssValueToSystemColorMap;
     encoder << focusRingColor;
@@ -201,6 +206,12 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 
 #if HAVE(IOSURFACE)
     encoder << maximumIOSurfaceSize;
+#endif
+
+    encoder << accessibilityPreferences;
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    encoder << memoryPressureHandlerConfiguration;
 #endif
 }
 
@@ -252,6 +263,8 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     parameters.enableRemoteWebInspectorExtensionHandle = WTFMove(*enableRemoteWebInspectorExtensionHandle);
 #endif
 
+    if (!decoder.decode(parameters.wtfLoggingChannels))
+        return false;
     if (!decoder.decode(parameters.webCoreLoggingChannels))
         return false;
     if (!decoder.decode(parameters.webKitLoggingChannels))
@@ -458,6 +471,14 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     parameters.launchServicesExtensionHandle = WTFMove(*launchServicesExtensionHandle);
 
+#if HAVE(VIDEO_RESTRICTED_DECODING)
+    std::optional<SandboxExtension::HandleArray> videoDecoderExtensionHandles;
+    decoder >> videoDecoderExtensionHandles;
+    if (!videoDecoderExtensionHandles)
+        return false;
+    parameters.videoDecoderExtensionHandles = WTFMove(*videoDecoderExtensionHandles);
+#endif
+
     std::optional<SandboxExtension::HandleArray> diagnosticsExtensionHandles;
     decoder >> diagnosticsExtensionHandles;
     if (!diagnosticsExtensionHandles)
@@ -493,7 +514,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    if (!decoder.decode(parameters.currentUserInterfaceIdiomIsPad))
+    if (!decoder.decode(parameters.currentUserInterfaceIdiomIsPhoneOrWatch))
         return false;
 
     if (!decoder.decode(parameters.supportsPictureInPicture))
@@ -547,6 +568,20 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
 #if HAVE(IOSURFACE)
     if (!decoder.decode(parameters.maximumIOSurfaceSize))
         return false;
+#endif
+
+    std::optional<AccessibilityPreferences> accessibilityPreferences;
+    decoder >> accessibilityPreferences;
+    if (!accessibilityPreferences)
+        return false;
+    parameters.accessibilityPreferences = WTFMove(*accessibilityPreferences);
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    std::optional<std::optional<MemoryPressureHandler::Configuration>> memoryPressureHandlerConfiguration;
+    decoder >> memoryPressureHandlerConfiguration;
+    if (!memoryPressureHandlerConfiguration)
+        return false;
+    parameters.memoryPressureHandlerConfiguration = WTFMove(*memoryPressureHandlerConfiguration);
 #endif
 
     return true;

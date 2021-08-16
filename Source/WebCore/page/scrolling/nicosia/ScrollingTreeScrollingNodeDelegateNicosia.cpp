@@ -166,20 +166,18 @@ WheelEventHandlingResult ScrollingTreeScrollingNodeDelegateNicosia::handleWheelE
     deltaX = -deltaX;
     deltaY = -deltaY;
 
-#if ENABLE(CSS_SCROLL_SNAP)
     if (!scrollingNode().snapOffsetsInfo().isEmpty()) {
         float scale = pageScaleFactor();
         FloatPoint originalOffset = LayoutPoint(scrollingNode().currentScrollOffset().x() / scale, scrollingNode().currentScrollOffset().y() / scale);
-        FloatPoint newFloatOffset = scrollingNode().currentScrollOffset() + FloatSize(deltaX, deltaY);
-        auto newOffset = LayoutPoint(newFloatOffset.x() / scale, newFloatOffset.y() / scale);
+        auto newOffset = (scrollingNode().currentScrollOffset() + FloatSize(deltaX, deltaY));
+        newOffset.scale(1.0 / scale);
 
-        auto offsetX = scrollingNode().snapOffsetsInfo().closestSnapOffset(ScrollEventAxis::Horizontal, scrollableAreaSize(), newOffset.x(), deltaX, originalOffset.x()).first;
-        auto offsetY = scrollingNode().snapOffsetsInfo().closestSnapOffset(ScrollEventAxis::Vertical, scrollableAreaSize(), newOffset.y(), deltaY, originalOffset.y()).first;
+        auto offsetX = scrollingNode().snapOffsetsInfo().closestSnapOffset(ScrollEventAxis::Horizontal, scrollableAreaSize(), newOffset, deltaX, originalOffset.x()).first;
+        auto offsetY = scrollingNode().snapOffsetsInfo().closestSnapOffset(ScrollEventAxis::Vertical, scrollableAreaSize(), newOffset, deltaY, originalOffset.y()).first;
 
         deltaX = (offsetX - originalOffset.x()) * scale;
         deltaY = (offsetY - originalOffset.y()) * scale;
     }
-#endif
 
 #if ENABLE(SMOOTH_SCROLLING)
     if (m_scrollAnimatorEnabled && !wheelEvent.hasPreciseScrollingDeltas()) {

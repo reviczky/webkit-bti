@@ -93,9 +93,6 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
             style.setAppearance(MenulistButtonPart);
             part = MenulistButtonPart;
             break;
-        case TextFieldPart:
-            adjustTextFieldStyle(style, element);
-            FALLTHROUGH;
         default:
             style.setAppearance(NoControlPart);
             break;
@@ -1399,6 +1396,19 @@ Color RenderTheme::platformAppHighlightColor(OptionSet<StyleColor::Options>) con
     return Color::yellow;
 }
 #endif
+
+Color RenderTheme::defaultButtonTextColor(OptionSet<StyleColor::Options> options) const
+{
+    auto& cache = colorCache(options);
+    if (!cache.defaultButtonTextColor.isValid())
+        cache.defaultButtonTextColor = platformDefaultButtonTextColor(options);
+    return cache.defaultButtonTextColor;
+}
+
+Color RenderTheme::platformDefaultButtonTextColor(OptionSet<StyleColor::Options> options) const
+{
+    return systemColor(CSSValueActivebuttontext, options);
+}
 
 #if ENABLE(TOUCH_EVENTS)
 

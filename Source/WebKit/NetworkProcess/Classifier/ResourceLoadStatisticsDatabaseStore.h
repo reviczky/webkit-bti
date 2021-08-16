@@ -32,11 +32,12 @@
 #include <WebCore/SQLiteDatabase.h>
 #include <WebCore/SQLiteStatement.h>
 #include <WebCore/SQLiteStatementAutoResetScope.h>
+#include <WebCore/SQLiteTransaction.h>
 #include <pal/SessionID.h>
 #include <wtf/CompletionHandler.h>
+#include <wtf/Scope.h>
 #include <wtf/StdSet.h>
 #include <wtf/Vector.h>
-#include <wtf/WorkQueue.h>
 
 namespace WebCore {
 class SQLiteDatabase;
@@ -74,7 +75,7 @@ typedef std::pair<String, std::optional<String>> TableAndIndexPair;
 // This is always constructed / used / destroyed on the WebResourceLoadStatisticsStore's statistics queue.
 class ResourceLoadStatisticsDatabaseStore final : public ResourceLoadStatisticsStore {
 public:
-    ResourceLoadStatisticsDatabaseStore(WebResourceLoadStatisticsStore&, WorkQueue&, ShouldIncludeLocalhost, const String& storageDirectoryPath, PAL::SessionID);
+    ResourceLoadStatisticsDatabaseStore(WebResourceLoadStatisticsStore&, SuspendableWorkQueue&, ShouldIncludeLocalhost, const String& storageDirectoryPath, PAL::SessionID);
     ~ResourceLoadStatisticsDatabaseStore();
 
     static HashSet<ResourceLoadStatisticsDatabaseStore*>& allStores();
@@ -261,8 +262,11 @@ private:
     String attributionToString(WebCore::SQLiteStatement*, PrivateClickMeasurementAttributionType);
     std::pair<std::optional<UnattributedPrivateClickMeasurement>, std::optional<AttributedPrivateClickMeasurement>> findPrivateClickMeasurement(const WebCore::PrivateClickMeasurement::SourceSite&, const WebCore::PrivateClickMeasurement::AttributionDestinationSite&);
 
+    ScopeExit<Function<void()>> WARN_UNUSED_RETURN beginTransactionIfNecessary();
+
     const String m_storageDirectoryPath;
     mutable WebCore::SQLiteDatabase m_database;
+    mutable WebCore::SQLiteTransaction m_transaction;
     mutable std::unique_ptr<WebCore::SQLiteStatement> m_observedDomainCountStatement;
     std::unique_ptr<WebCore::SQLiteStatement> m_insertObservedDomainStatement;
     std::unique_ptr<WebCore::SQLiteStatement> m_insertTopLevelDomainStatement;

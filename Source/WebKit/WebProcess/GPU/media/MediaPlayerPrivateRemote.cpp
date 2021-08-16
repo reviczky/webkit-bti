@@ -114,6 +114,8 @@ MediaPlayerPrivateRemote::MediaPlayerPrivateRemote(MediaPlayer* player, MediaPla
     , m_documentSecurityOrigin(player->documentSecurityOrigin())
 {
     INFO_LOG(LOGIDENTIFIER);
+
+    acceleratedRenderingStateChanged();
 }
 #endif
 
@@ -151,7 +153,7 @@ void MediaPlayerPrivateRemote::prepareForPlayback(bool privateMode, MediaPlayer:
         if (!player)
             return;
 
-        m_videoLayer = createVideoLayerRemote(this, inlineLayerHostingContextId.value());
+        m_videoLayer = createVideoLayerRemote(this, inlineLayerHostingContextId.value(), m_videoFullscreenGravity);
 #if PLATFORM(COCOA)
         m_videoLayerManager->setVideoLayer(m_videoLayer.get(), snappedIntRect(player->playerContentBoxRect()).size());
 #endif
@@ -167,11 +169,19 @@ void MediaPlayerPrivateRemote::load(const URL& url, const ContentType& contentTy
 
         auto createExtension = [&] {
 #if HAVE(AUDIT_TOKEN)
-            if (auto auditToken = m_manager.gpuProcessConnection().auditToken())
-                return SandboxExtension::createHandleForReadByAuditToken(fileSystemPath, auditToken.value(), handle);
+            if (auto auditToken = m_manager.gpuProcessConnection().auditToken()) {
+                if (auto createdHandle = SandboxExtension::createHandleForReadByAuditToken(fileSystemPath, auditToken.value())) {
+                    handle = WTFMove(*createdHandle);
+                    return true;
+                }
+                return false;
+            }
 #endif
-
-            return SandboxExtension::createHandle(fileSystemPath, SandboxExtension::Type::ReadOnly, handle);
+            if (auto createdHandle = SandboxExtension::createHandle(fileSystemPath, SandboxExtension::Type::ReadOnly)) {
+                handle = WTFMove(*createdHandle);
+                return true;
+            }
+            return false;
         };
 
         if (!createExtension()) {
@@ -265,7 +275,7 @@ MediaTime MediaPlayerPrivateRemote::durationMediaTime() const
 
 MediaTime MediaPlayerPrivateRemote::currentMediaTime() const
 {
-    if (m_cachedState.paused || !m_cachedMediaTime)
+    if (!m_timeIsProgressing)
         return m_cachedMediaTime;
 
     return m_cachedMediaTime + MediaTime::createWithDouble(m_rate * (MonotonicTime::now() - m_cachedMediaTimeQueryTime).seconds());
@@ -274,20 +284,26 @@ MediaTime MediaPlayerPrivateRemote::currentMediaTime() const
 void MediaPlayerPrivateRemote::seek(const MediaTime& time)
 {
     m_seeking = true;
+    m_cachedMediaTime = time;
     connection().send(Messages::RemoteMediaPlayerProxy::Seek(time), m_id);
 }
 
 void MediaPlayerPrivateRemote::seekWithTolerance(const MediaTime& time, const MediaTime& negativeTolerance, const MediaTime& positiveTolerance)
 {
     m_seeking = true;
+    m_cachedMediaTime = time;
     connection().send(Messages::RemoteMediaPlayerProxy::SeekWithTolerance(time, negativeTolerance, positiveTolerance), m_id);
 }
 
 bool MediaPlayerPrivateRemote::didLoadingProgress() const
 {
-    bool flag = false;
-    connection().sendSync(Messages::RemoteMediaPlayerProxy::DidLoadingProgress(), Messages::RemoteMediaPlayerProxy::DidLoadingProgress::Reply(flag), m_id);
-    return flag;
+    ASSERT_NOT_REACHED_WITH_MESSAGE("Should always be using didLoadingProgressAsync");
+    return false;
+}
+
+void MediaPlayerPrivateRemote::didLoadingProgressAsync(MediaPlayer::DidLoadingProgressCompletionHandler&& callback) const
+{
+    connection().sendWithAsyncReply(Messages::RemoteMediaPlayerProxy::DidLoadingProgress(), WTFMove(callback), m_id);
 }
 
 bool MediaPlayerPrivateRemote::hasVideo() const
@@ -400,8 +416,9 @@ void MediaPlayerPrivateRemote::sizeChanged(WebCore::FloatSize naturalSize)
         player->sizeChanged();
 }
 
-void MediaPlayerPrivateRemote::currentTimeChanged(const MediaTime& mediaTime, const MonotonicTime& queryTime)
+void MediaPlayerPrivateRemote::currentTimeChanged(const MediaTime& mediaTime, const MonotonicTime& queryTime, bool timeIsProgressing)
 {
+    m_timeIsProgressing = timeIsProgressing;
     m_cachedMediaTime = mediaTime;
     m_cachedMediaTimeQueryTime = queryTime;
 }
@@ -448,7 +465,7 @@ bool MediaPlayerPrivateRemote::supportsAcceleratedRendering() const
 void MediaPlayerPrivateRemote::acceleratedRenderingStateChanged()
 {
     if (auto player = makeRefPtr(m_player.get()))
-        connection().send(Messages::RemoteMediaPlayerProxy::AcceleratedRenderingStateChanged(player->supportsAcceleratedRendering()), m_id);
+        connection().send(Messages::RemoteMediaPlayerProxy::AcceleratedRenderingStateChanged(player->renderingCanBeAccelerated()), m_id);
 }
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -811,6 +828,7 @@ void MediaPlayerPrivateRemote::setVideoFullscreenFrame(WebCore::FloatRect rect)
 
 void MediaPlayerPrivateRemote::setVideoFullscreenGravity(WebCore::MediaPlayerEnums::VideoGravity gravity)
 {
+    m_videoFullscreenGravity = gravity;
     connection().send(Messages::RemoteMediaPlayerProxy::SetVideoFullscreenGravity(gravity), m_id);
 }
 
@@ -1302,6 +1320,22 @@ bool MediaPlayerPrivateRemote::performTaskAtMediaTime(WTF::Function<void()>&& co
 
     connection().sendWithAsyncReply(Messages::RemoteMediaPlayerProxy::PerformTaskAtMediaTime(mediaTime, MonotonicTime::now()), WTFMove(asyncReplyHandler), m_id);
 
+    return true;
+}
+
+bool MediaPlayerPrivateRemote::playAtHostTime(const MonotonicTime& time)
+{
+    if (!m_configuration.supportsPlayAtHostTime)
+        return false;
+    connection().send(Messages::RemoteMediaPlayerProxy::PlayAtHostTime(time), m_id);
+    return true;
+}
+
+bool MediaPlayerPrivateRemote::pauseAtHostTime(const MonotonicTime& time)
+{
+    if (!m_configuration.supportsPauseAtHostTime)
+        return false;
+    connection().send(Messages::RemoteMediaPlayerProxy::PauseAtHostTime(time), m_id);
     return true;
 }
 

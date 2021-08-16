@@ -64,6 +64,7 @@ namespace WebCore {
     macro(BaseAudioContext) \
     macro(BeforeLoadEvent) \
     macro(BlobEvent) \
+    macro(BroadcastChannel) \
     macro(Cache) \
     macro(CacheStorage) \
     macro(Client) \
@@ -74,6 +75,7 @@ namespace WebCore {
     macro(ContactsManager) \
     macro(Credential) \
     macro(CredentialsContainer) \
+    macro(CryptoKey) \
     macro(CSSAnimation) \
     macro(CSSCounterStyleRule) \
     macro(CSSImageValue) \
@@ -102,34 +104,6 @@ namespace WebCore {
     macro(Gamepad) \
     macro(GamepadButton) \
     macro(GamepadEvent) \
-    macro(GPU) \
-    macro(GPUAdapter) \
-    macro(GPUBindGroup) \
-    macro(GPUBindGroupLayout) \
-    macro(GPUBuffer) \
-    macro(GPUBufferUsage) \
-    macro(GPUCanvasContext) \
-    macro(GPUColorWrite) \
-    macro(GPUCommandBuffer) \
-    macro(GPUCommandEncoder) \
-    macro(GPUComputePassEncoder) \
-    macro(GPUComputePipeline) \
-    macro(GPUDevice) \
-    macro(GPUOutOfMemoryError) \
-    macro(GPUPipelineLayout) \
-    macro(GPUProgrammablePassEncoder) \
-    macro(GPUQueue) \
-    macro(GPURenderPassEncoder) \
-    macro(GPURenderPipeline) \
-    macro(GPUSampler) \
-    macro(GPUShaderModule) \
-    macro(GPUShaderStage) \
-    macro(GPUSwapChain) \
-    macro(GPUTexture) \
-    macro(GPUTextureUsage) \
-    macro(GPUTextureView) \
-    macro(GPUUncapturedErrorEvent) \
-    macro(GPUValidationError) \
     macro(HighlightRegister) \
     macro(Highlight) \
     macro(HTMLAttachmentElement) \
@@ -245,6 +219,7 @@ namespace WebCore {
     macro(Request) \
     macro(Response) \
     macro(SFrameTransform) \
+    macro(SFrameTransformErrorEvent) \
     macro(ScreenLuminance) \
     macro(ServiceWorker) \
     macro(ServiceWorkerContainer) \
@@ -263,6 +238,7 @@ namespace WebCore {
     macro(StereoPannerNode) \
     macro(StylePropertyMapReadOnly) \
     macro(StylePropertyMap) \
+    macro(SubtleCrypto) \
     macro(TextDecoderStream) \
     macro(TextDecoderStreamDecoder) \
     macro(TextEncoderStream) \
@@ -343,6 +319,7 @@ namespace WebCore {
     macro(controller) \
     macro(createImageBitmap) \
     macro(createReadableStream) \
+    macro(crossOriginIsolated) \
     macro(customElements) \
     macro(decode) \
     macro(disturbed) \
@@ -371,6 +348,7 @@ namespace WebCore {
     macro(inFlightWriteRequest) \
     macro(indexedDB) \
     macro(initializeWith) \
+    macro(isAbortSignal) \
     macro(isDisturbed) \
     macro(isLoading) \
     macro(isSecureContext) \
@@ -450,8 +428,7 @@ namespace WebCore {
     macro(streamReadable) \
     macro(streamWaiting) \
     macro(streamWritable) \
-    macro(structuredCloneArrayBuffer) \
-    macro(structuredCloneArrayBufferView) \
+    macro(structuredCloneForStream) \
     macro(timeline) \
     macro(top) \
     macro(textDecoderStreamDecoder) \

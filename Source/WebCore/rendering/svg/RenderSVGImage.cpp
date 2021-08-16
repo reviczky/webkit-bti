@@ -144,11 +144,8 @@ void RenderSVGImage::layout()
     }
 
     if (m_needsBoundariesUpdate) {
-        m_repaintBoundingBoxExcludingShadow = m_objectBoundingBox;
-        SVGRenderSupport::intersectRepaintRectWithResources(*this, m_repaintBoundingBoxExcludingShadow);
-
-        m_repaintBoundingBox = m_repaintBoundingBoxExcludingShadow;
-
+        m_repaintBoundingBox = m_objectBoundingBox;
+        SVGRenderSupport::intersectRepaintRectWithResources(*this, m_repaintBoundingBox);
         m_needsBoundariesUpdate = false;
     }
 
@@ -231,7 +228,7 @@ bool RenderSVGImage::nodeAtFloatPoint(const HitTestRequest& request, HitTestResu
         if (hitRules.canHitFill) {
             if (m_objectBoundingBox.contains(localPoint)) {
                 updateHitTestResult(result, LayoutPoint(localPoint));
-                if (result.addNodeToListBasedTestResult(nodeForHitTest(), request, localPoint) == HitTestProgress::Stop)
+                if (result.addNodeToListBasedTestResult(nodeForHitTest(), request, flooredLayoutPoint(localPoint)) == HitTestProgress::Stop)
                     return true;
             }
         }

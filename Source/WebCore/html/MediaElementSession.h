@@ -129,6 +129,7 @@ public:
         RequireUserGestureToControlControlsManager = 1 << 13,
         RequirePlaybackToControlControlsManager = 1 << 14,
         RequireUserGestureForVideoDueToLowPowerMode = 1 << 15,
+        RequirePageVisibilityToPlayAudio = 1 << 16,
         AllRestrictions = ~NoRestrictions,
     };
     typedef unsigned BehaviorRestrictions;
@@ -180,6 +181,8 @@ public:
     void playbackStateChanged(MediaSessionPlaybackState);
     void actionHandlersChanged();
 
+    MediaSession* mediaSession() const;
+
 private:
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -195,7 +198,6 @@ private:
     bool requiresPlaybackTargetRouteMonitoring() const override;
 #endif
     void ensureIsObservingMediaSession();
-    MediaSession* mediaSession() const;
 
     bool updateIsMainContent() const;
     void mainContentCheckTimerFired();

@@ -317,13 +317,6 @@ bool excludeFromBackup(const String&)
 
 #endif
 
-MappedFileData::~MappedFileData()
-{
-    if (!m_fileData)
-        return;
-    unmapViewOfFile(m_fileData, m_fileSize);
-}
-
 MappedFileData::MappedFileData(const String& filePath, MappedFileMode mapMode, bool& success)
 {
     auto fd = openFile(filePath, FileSystem::FileOpenMode::Read);
@@ -333,6 +326,13 @@ MappedFileData::MappedFileData(const String& filePath, MappedFileMode mapMode, b
 }
 
 #if HAVE(MMAP)
+
+MappedFileData::~MappedFileData()
+{
+    if (!m_fileData)
+        return;
+    munmap(m_fileData, m_fileSize);
+}
 
 bool MappedFileData::mapFileHandle(PlatformFileHandle handle, FileOpenMode openMode, MappedFileMode mapMode)
 {
@@ -387,12 +387,6 @@ bool MappedFileData::mapFileHandle(PlatformFileHandle handle, FileOpenMode openM
     m_fileSize = size;
     return true;
 }
-
-bool unmapViewOfFile(void* buffer, size_t size)
-{
-    return !munmap(buffer, size);
-}
-
 #endif
 
 PlatformFileHandle openAndLockFile(const String& path, FileOpenMode openMode, OptionSet<FileLockMode> lockMode)
@@ -438,7 +432,7 @@ String createTemporaryZipArchive(const String&)
 }
 #endif
 
-MappedFileData mapToFile(const String& path, size_t bytesSize, Function<void(const Function<bool(const uint8_t*, size_t)>&)>&& apply, PlatformFileHandle* outputHandle)
+MappedFileData mapToFile(const String& path, size_t bytesSize, Function<void(const Function<bool(Span<const uint8_t>)>&)>&& apply, PlatformFileHandle* outputHandle)
 {
     constexpr bool failIfFileExists = true;
     auto handle = FileSystem::openFile(path, FileSystem::FileOpenMode::ReadWrite, FileSystem::FileAccessPermission::User, failIfFileExists);
@@ -458,9 +452,9 @@ MappedFileData mapToFile(const String& path, size_t bytesSize, Function<void(con
     void* map = const_cast<void*>(mappedFile.data());
     uint8_t* mapData = static_cast<uint8_t*>(map);
 
-    apply([&mapData](const uint8_t* chunk, size_t chunkSize) {
-        memcpy(mapData, chunk, chunkSize);
-        mapData += chunkSize;
+    apply([&mapData](Span<const uint8_t> chunk) {
+        memcpy(mapData, chunk.data(), chunk.size());
+        mapData += chunk.size();
         return true;
     });
 
@@ -522,26 +516,6 @@ std::optional<Salt> readOrMakeSalt(const String& path)
 
 #if HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
 
-bool fileExists(const String& path)
-{
-    std::error_code ec;
-    // exists() returns false on error so no need to check ec.
-    return std::filesystem::exists(toStdFileSystemPath(path), ec);
-}
-
-bool deleteFile(const String& path)
-{
-    std::error_code ec;
-    auto fsPath = toStdFileSystemPath(path);
-
-    auto fileStatus = std::filesystem::symlink_status(fsPath, ec);
-    if (ec || fileStatus.type() == std::filesystem::file_type::directory)
-        return false;
-
-    // remove() returns false on error so no need to check ec.
-    return std::filesystem::remove(fsPath, ec);
-}
-
 bool deleteEmptyDirectory(const String& path)
 {
     std::error_code ec;
@@ -595,13 +569,6 @@ std::optional<uint64_t> fileSize(const String& path)
     if (ec)
         return std::nullopt;
     return size;
-}
-
-bool makeAllDirectories(const String& path)
-{
-    std::error_code ec;
-    std::filesystem::create_directories(toStdFileSystemPath(path), ec);
-    return !ec;
 }
 
 std::optional<uint64_t> volumeFreeSpace(const String& path)
@@ -728,6 +695,48 @@ String realPath(const String& path)
     return ec ? path : fromStdFileSystemPath(canonicalPath);
 }
 
+Vector<String> listDirectory(const String& path)
+{
+    Vector<String> fileNames;
+    std::error_code ec;
+    auto entries = std::filesystem::directory_iterator(toStdFileSystemPath(path), ec);
+    for (auto it = std::filesystem::begin(entries), end = std::filesystem::end(entries); !ec && it != end; it.increment(ec)) {
+        auto fileName = fromStdFileSystemPath(it->path().filename());
+        if (!fileName.isNull())
+            fileNames.append(WTFMove(fileName));
+    }
+    return fileNames;
+}
+
+#if !ENABLE(FILESYSTEM_POSIX_FAST_PATH)
+
+bool fileExists(const String& path)
+{
+    std::error_code ec;
+    // exists() returns false on error so no need to check ec.
+    return std::filesystem::exists(toStdFileSystemPath(path), ec);
+}
+
+bool deleteFile(const String& path)
+{
+    std::error_code ec;
+    auto fsPath = toStdFileSystemPath(path);
+
+    auto fileStatus = std::filesystem::symlink_status(fsPath, ec);
+    if (ec || fileStatus.type() == std::filesystem::file_type::directory)
+        return false;
+
+    // remove() returns false on error so no need to check ec.
+    return std::filesystem::remove(fsPath, ec);
+}
+
+bool makeAllDirectories(const String& path)
+{
+    std::error_code ec;
+    std::filesystem::create_directories(toStdFileSystemPath(path), ec);
+    return !ec;
+}
+
 String pathByAppendingComponent(const String& path, const String& component)
 {
     return fromStdFileSystemPath(toStdFileSystemPath(path) / toStdFileSystemPath(component));
@@ -741,18 +750,7 @@ String pathByAppendingComponents(StringView path, const Vector<StringView>& comp
     return fromStdFileSystemPath(fsPath);
 }
 
-Vector<String> listDirectory(const String& path)
-{
-    Vector<String> fileNames;
-    std::error_code ec;
-    auto entries = std::filesystem::directory_iterator(toStdFileSystemPath(path), ec);
-    for (auto it = std::filesystem::begin(entries), end = std::filesystem::end(entries); !ec && it != end; it.increment(ec)) {
-        auto fileName = fromStdFileSystemPath(it->path().filename());
-        if (!fileName.isNull())
-            fileNames.append(WTFMove(fileName));
-    }
-    return fileNames;
-}
+#endif
 
 #endif // HAVE(STD_FILESYSTEM) || HAVE(STD_EXPERIMENTAL_FILESYSTEM)
 

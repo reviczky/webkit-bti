@@ -40,7 +40,7 @@ class Page;
 struct MediaQueryParserContext;
 
 template<typename T> class EventSender;
-typedef EventSender<HTMLLinkElement> LinkEventSender;
+using LinkEventSender = EventSender<HTMLLinkElement>;
 
 class HTMLLinkElement final : public HTMLElement, public CachedStyleSheetClient, public LinkLoaderClient {
     WTF_MAKE_ISO_ALLOCATED(HTMLLinkElement);
@@ -114,14 +114,13 @@ private:
 
     bool isURLAttribute(const Attribute&) const final;
 
-    void defaultEventHandler(Event&) final;
-    void handleClick(Event&);
-
     HTMLLinkElement(const QualifiedName&, Document&, bool createdByParser);
 
     void addSubresourceAttributeURLs(ListHashSet<URL>&) const final;
 
     void finishParsingChildren() final;
+
+    String debugDescription() const final;
 
     enum PendingSheetType : uint8_t { Unknown, ActiveSheet, InactiveSheet };
     void addPendingSheet(PendingSheetType);

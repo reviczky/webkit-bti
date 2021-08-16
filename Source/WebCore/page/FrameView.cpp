@@ -137,7 +137,7 @@
 
 #define PAGE_ID frame().pageID().value_or(PageIdentifier()).toUInt64()
 #define FRAME_ID frame().frameID().value_or(FrameIdentifier()).toUInt64()
-#define FRAMEVIEW_RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(frame().page() && frame().page()->isAlwaysOnLoggingAllowed(), channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] FrameView::" fmt, this, PAGE_ID, FRAME_ID, frame().isMainFrame(), ##__VA_ARGS__)
+#define FRAMEVIEW_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] FrameView::" fmt, this, PAGE_ID, FRAME_ID, frame().isMainFrame(), ##__VA_ARGS__)
 
 namespace WebCore {
 
@@ -377,11 +377,11 @@ void FrameView::recalculateScrollbarOverlayStyle()
 
 void FrameView::recalculateBaseBackgroundColor()
 {
-    bool usingDarkAppearance = useDarkAppearance();
-    if (m_usesDarkAppearance == usingDarkAppearance)
+    auto styleColorOptions = this->styleColorOptions();
+    if (m_styleColorOptions == styleColorOptions)
         return;
 
-    m_usesDarkAppearance = usingDarkAppearance;
+    m_styleColorOptions = styleColorOptions;
     std::optional<Color> backgroundColor;
     if (m_isTransparent)
         backgroundColor = Color(Color::transparentBlack);
@@ -649,6 +649,7 @@ void FrameView::applyOverflowToViewport(const RenderElement& renderer, Scrollbar
 
     switch (overflowX) {
     case Overflow::Hidden:
+    case Overflow::Clip:
         if (overrideHidden)
             hMode = ScrollbarAuto;
         else
@@ -667,6 +668,7 @@ void FrameView::applyOverflowToViewport(const RenderElement& renderer, Scrollbar
 
     switch (overflowY) {
     case Overflow::Hidden:
+    case Overflow::Clip:
         if (overrideHidden)
             vMode = ScrollbarAuto;
         else
@@ -914,7 +916,6 @@ GraphicsLayer* FrameView::setWantsLayerForBottomOverHangArea(bool wantsLayer) co
 
 #endif // ENABLE(RUBBER_BANDING)
 
-#if ENABLE(CSS_SCROLL_SNAP)
 void FrameView::updateSnapOffsets()
 {
     if (!frame().document())
@@ -976,7 +977,6 @@ void FrameView::updateScrollingCoordinatorScrollSnapProperties() const
 {
     renderView()->compositor().updateScrollSnapPropertiesWithFrameView(*this);
 }
-#endif
 
 bool FrameView::flushCompositingStateForThisFrame(const Frame& rootFrameForFlush)
 {
@@ -2209,7 +2209,7 @@ void FrameView::restoreScrollbar()
 bool FrameView::scrollToFragment(const URL& url)
 {
     auto fragmentIdentifier = url.fragmentIdentifier();
-    if (scrollToFragmentInternal(fragmentIdentifier.toString()))
+    if (scrollToFragmentInternal(fragmentIdentifier))
         return true;
 
     if (scrollToFragmentInternal(decodeURLEscapeSequences(fragmentIdentifier)))
@@ -2219,7 +2219,7 @@ bool FrameView::scrollToFragment(const URL& url)
     return false;
 }
 
-bool FrameView::scrollToFragmentInternal(const String& fragmentIdentifier)
+bool FrameView::scrollToFragmentInternal(StringView fragmentIdentifier)
 {
     // If our URL has no ref, then we have no place we need to jump to.
     if (fragmentIdentifier.isNull())
@@ -3029,7 +3029,12 @@ void FrameView::setBaseBackgroundColor(const Color& backgroundColor)
 void FrameView::updateBackgroundRecursively(const std::optional<Color>& backgroundColor)
 {
 #if HAVE(OS_DARK_MODE_SUPPORT)
-    Color baseBackgroundColor = backgroundColor.value_or(RenderTheme::singleton().systemColor(CSSValueAppleSystemControlBackground, styleColorOptions()));
+#if PLATFORM(COCOA)
+    static const auto cssValueControlBackground = CSSValueAppleSystemControlBackground;
+#else
+    static const auto cssValueControlBackground = CSSValueWindow;
+#endif
+    Color baseBackgroundColor = backgroundColor.value_or(RenderTheme::singleton().systemColor(cssValueControlBackground, styleColorOptions()));
 #else
     Color baseBackgroundColor = backgroundColor.value_or(Color::white);
 #endif
@@ -3333,9 +3338,8 @@ void FrameView::performPostLayoutTasks()
 
     updateWidgetPositions();
 
-#if ENABLE(CSS_SCROLL_SNAP)
     updateSnapOffsets();
-#endif
+
     m_updateEmbeddedObjectsTimer.startOneShot(0_s);
 
     if (auto scrollingCoordinator = this->scrollingCoordinator())
@@ -3407,7 +3411,7 @@ void FrameView::scheduleResizeEventIfNeeded()
 
     auto* document = frame().document();
     if (document->quirks().shouldSilenceWindowResizeEvents()) {
-        FRAMEVIEW_RELEASE_LOG_IF_ALLOWED(Events, "scheduleResizeEventIfNeeded: Not firing resize events because they are temporarily disabled for this page");
+        FRAMEVIEW_RELEASE_LOG(Events, "scheduleResizeEventIfNeeded: Not firing resize events because they are temporarily disabled for this page");
         return;
     }
 
@@ -4305,7 +4309,7 @@ void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect
 
     ASSERT(!needsLayout());
     if (needsLayout()) {
-        FRAMEVIEW_RELEASE_LOG_IF_ALLOWED(Layout, "paintContents: Not painting because render tree needs layout");
+        FRAMEVIEW_RELEASE_LOG(Layout, "paintContents: Not painting because render tree needs layout");
         return;
     }
 
@@ -5319,7 +5323,7 @@ void FrameView::fireLayoutRelatedMilestonesIfNeeded()
 
     if (milestonesAchieved && frame().isMainFrame()) {
         if (milestonesAchieved.contains(DidFirstVisuallyNonEmptyLayout))
-            FRAMEVIEW_RELEASE_LOG_IF_ALLOWED(Layout, "fireLayoutRelatedMilestonesIfNeeded: Firing first visually non-empty layout milestone on the main frame");
+            FRAMEVIEW_RELEASE_LOG(Layout, "fireLayoutRelatedMilestonesIfNeeded: Firing first visually non-empty layout milestone on the main frame");
         frame().loader().didReachLayoutMilestone(milestonesAchieved);
     }
 }

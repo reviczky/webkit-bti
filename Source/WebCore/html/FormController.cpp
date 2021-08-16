@@ -24,7 +24,9 @@
 #include "HTMLFormElement.h"
 #include "HTMLInputElement.h"
 #include "ScriptDisallowedScope.h"
+#include "TypedElementDescendantIterator.h"
 #include <wtf/NeverDestroyed.h>
+#include <wtf/WeakHashMap.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringConcatenateNumbers.h>
 #include <wtf/text/StringToIntegerConversion.h>
@@ -272,10 +274,8 @@ public:
     void willDeleteForm(HTMLFormElement*);
 
 private:
-    typedef HashMap<HTMLFormElement*, AtomString> FormToKeyMap;
-    typedef HashMap<String, unsigned> FormSignatureToNextIndexMap;
-    FormToKeyMap m_formToKeyMap;
-    FormSignatureToNextIndexMap m_formSignatureToNextIndexMap;
+    WeakHashMap<HTMLFormElement, AtomString> m_formToKeyMap;
+    HashMap<String, unsigned> m_formSignatureToNextIndexMap;
 };
 
 static inline void recordFormStructure(const HTMLFormElement& form, StringBuilder& builder)
@@ -323,7 +323,7 @@ AtomString FormKeyGenerator::formKey(const HTMLFormControlElementWithState& cont
         return formKeyForNoOwner;
     }
 
-    return m_formToKeyMap.ensure(form.get(), [this, &form] {
+    return m_formToKeyMap.ensure(*form, [this, &form] {
         auto signature = formSignature(*form);
         auto nextIndex = m_formSignatureToNextIndexMap.add(signature, 0).iterator->value++;
         // FIXME: Would be nice to have makeAtomString to use to optimize the case where the string already exists.
@@ -333,8 +333,8 @@ AtomString FormKeyGenerator::formKey(const HTMLFormControlElementWithState& cont
 
 void FormKeyGenerator::willDeleteForm(HTMLFormElement* form)
 {
-    ASSERT(form);
-    m_formToKeyMap.remove(form);
+    RELEASE_ASSERT(form);
+    m_formToKeyMap.remove(*form);
 }
 
 // ----------------------------------------------------------------------------
@@ -342,16 +342,6 @@ void FormKeyGenerator::willDeleteForm(HTMLFormElement* form)
 FormController::FormController() = default;
 
 FormController::~FormController() = default;
-
-unsigned FormController::formElementsCharacterCount() const
-{
-    unsigned count = 0;
-    for (auto& element : m_formElementsWithState) {
-        if (element->isTextField())
-            count += element->saveFormControlState()[0].length();
-    }
-    return count;
-}
 
 static String formStateSignature()
 {
@@ -362,26 +352,37 @@ static String formStateSignature()
     return signature;
 }
 
-std::unique_ptr<FormController::SavedFormStateMap> FormController::createSavedFormStateMap(const FormElementListHashSet& controlList)
+std::unique_ptr<FormController::SavedFormStateMap> FormController::createSavedFormStateMap(const FormControlVector& controlList)
 {
     FormKeyGenerator keyGenerator;
     auto stateMap = makeUnique<SavedFormStateMap>();
-    for (auto& control : controlList) {
-        if (!control->shouldSaveAndRestoreFormControlState())
+    for (const HTMLFormControlElementWithState& control : controlList) {
+        if (!control.shouldSaveAndRestoreFormControlState())
             continue;
-        auto& formState = stateMap->add(keyGenerator.formKey(*control).impl(), nullptr).iterator->value;
+        auto& formState = stateMap->add(keyGenerator.formKey(control).impl(), nullptr).iterator->value;
         if (!formState)
             formState = makeUnique<SavedFormState>();
-        formState->appendControlState(control->name(), control->type(), control->saveFormControlState());
+        formState->appendControlState(control.name(), control.type(), control.saveFormControlState());
     }
     return stateMap;
 }
 
-Vector<String> FormController::formElementsState() const
+Vector<String> FormController::formElementsState(const Document& document) const
 {
-    std::unique_ptr<SavedFormStateMap> stateMap = createSavedFormStateMap(m_formElementsWithState);
+    // FIXME: We should be saving the state of form controls in shadow trees, too.
+    FormControlVector controls;
+    for (auto& control : descendantsOfType<HTMLFormControlElementWithState>(document)) {
+        ASSERT(control.insertionIndex());
+        controls.append(control);
+    }
+
+    std::sort(controls.begin(), controls.end(), [](auto a, auto b) {
+        return a.get().insertionIndex() < b.get().insertionIndex();
+    });
+
+    auto stateMap = createSavedFormStateMap(controls);
     Vector<String> stateVector;
-    stateVector.reserveInitialCapacity(m_formElementsWithState.size() * 4);
+    stateVector.reserveInitialCapacity(controls.size() * 4);
     stateVector.append(formStateSignature());
     for (auto& state : *stateMap) {
         stateVector.append(state.key.get());
@@ -483,18 +484,6 @@ Vector<String> FormController::referencedFilePaths(const Vector<String>& stateVe
     for (auto& state : map.values())
         paths.appendVector(state->referencedFilePaths());
     return paths;
-}
-
-void FormController::registerFormElementWithState(HTMLFormControlElementWithState& control)
-{
-    ASSERT(!m_formElementsWithState.contains(&control));
-    m_formElementsWithState.add(&control);
-}
-
-void FormController::unregisterFormElementWithState(HTMLFormControlElementWithState& control)
-{
-    ASSERT(m_formElementsWithState.contains(&control));
-    m_formElementsWithState.remove(&control);
 }
 
 } // namespace WebCore

@@ -122,6 +122,12 @@ void NetworkProcessProxy::terminate()
     networkProcessDidTerminate(TerminationReason::RequestedByClient);
 }
 
+void NetworkProcessProxy::didBecomeUnresponsive()
+{
+    RELEASE_LOG_ERROR(Process, "NetworkProcessProxy::didBecomeUnresponsive: NetworkProcess with PID %d became unresponsive, terminating it", processIdentifier());
+    terminate();
+}
+
 void NetworkProcessProxy::sendCreationParametersToNewProcess()
 {
     ASSERT(RunLoop::isMain());
@@ -144,13 +150,20 @@ void NetworkProcessProxy::sendCreationParametersToNewProcess()
     for (auto& scheme : WebProcessPool::urlSchemesWithCustomProtocolHandlers())
         parameters.urlSchemesRegisteredForCustomProtocols.append(scheme);
 #if PLATFORM(IOS_FAMILY)
-    if (String cookieStorageDirectory = WebProcessPool::cookieStorageDirectory(); !cookieStorageDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(cookieStorageDirectory, parameters.cookieStorageDirectoryExtensionHandle);
-    if (String containerCachesDirectory = WebProcessPool::networkingCachesDirectory(); !containerCachesDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(containerCachesDirectory, parameters.containerCachesDirectoryExtensionHandle);
-    if (String parentBundleDirectory = WebProcessPool::parentBundleDirectory(); !parentBundleDirectory.isEmpty())
-        SandboxExtension::createHandle(parentBundleDirectory, SandboxExtension::Type::ReadOnly, parameters.parentBundleDirectoryExtensionHandle);
-    SandboxExtension::createHandleForTemporaryFile(emptyString(), SandboxExtension::Type::ReadWrite, parameters.tempDirectoryExtensionHandle);
+    if (String cookieStorageDirectory = WebProcessPool::cookieStorageDirectory(); !cookieStorageDirectory.isEmpty()) {
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(cookieStorageDirectory))
+            parameters.cookieStorageDirectoryExtensionHandle = WTFMove(*handle);
+    }
+    if (String containerCachesDirectory = WebProcessPool::networkingCachesDirectory(); !containerCachesDirectory.isEmpty()) {
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(containerCachesDirectory))
+            parameters.containerCachesDirectoryExtensionHandle = WTFMove(*handle);
+    }
+    if (String parentBundleDirectory = WebProcessPool::parentBundleDirectory(); !parentBundleDirectory.isEmpty()) {
+        if (auto handle = SandboxExtension::createHandle(parentBundleDirectory, SandboxExtension::Type::ReadOnly))
+            parameters.parentBundleDirectoryExtensionHandle = WTFMove(*handle);
+    }
+    if (auto handleAndFilePath = SandboxExtension::createHandleForTemporaryFile(emptyString(), SandboxExtension::Type::ReadWrite))
+        parameters.tempDirectoryExtensionHandle = WTFMove(handleAndFilePath->first);
 #endif
 
 #if !PLATFORM(GTK) && !PLATFORM(WPE) // GTK and WPE don't use defaultNetworkProcess
@@ -166,7 +179,7 @@ void NetworkProcessProxy::sendCreationParametersToNewProcess()
 
 static bool anyProcessPoolAlwaysRunsAtBackgroundPriority()
 {
-    for (auto* processPool : WebProcessPool::allProcessPools()) {
+    for (auto& processPool : WebProcessPool::allProcessPools()) {
         if (processPool->alwaysRunsAtBackgroundPriority())
             return true;
     }
@@ -175,7 +188,7 @@ static bool anyProcessPoolAlwaysRunsAtBackgroundPriority()
 
 static bool anyProcessPoolShouldTakeUIBackgroundAssertion()
 {
-    for (auto* processPool : WebProcessPool::allProcessPools()) {
+    for (auto& processPool : WebProcessPool::allProcessPools()) {
         if (processPool->shouldTakeUIBackgroundAssertion())
             return true;
     }
@@ -191,7 +204,7 @@ NetworkProcessProxy::NetworkProcessProxy()
     , m_customProtocolManagerClient(makeUniqueRef<API::CustomProtocolManagerClient>())
 #endif
     , m_throttler(*this, anyProcessPoolShouldTakeUIBackgroundAssertion())
-    , m_cookieManager(WebCookieManagerProxy::create(*this))
+    , m_cookieManager(makeUniqueRef<WebCookieManagerProxy>(*this))
 {
     connect();
     sendCreationParametersToNewProcess();
@@ -237,14 +250,16 @@ void NetworkProcessProxy::processWillShutDown(IPC::Connection& connection)
 void NetworkProcessProxy::getNetworkProcessConnection(WebProcessProxy& webProcessProxy, Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&& reply)
 {
     RELEASE_LOG(ProcessSuspension, "%p - NetworkProcessProxy is taking a background assertion because a web process is requesting a connection", this);
+    startResponsivenessTimer(UseLazyStop::No);
     sendWithAsyncReply(Messages::NetworkProcess::CreateNetworkConnectionToWebProcess { webProcessProxy.coreProcessIdentifier(), webProcessProxy.sessionID() }, [this, weakThis = makeWeakPtr(*this), reply = WTFMove(reply)](auto&& identifier, auto cookieAcceptPolicy) mutable {
         if (!weakThis) {
-            RELEASE_LOG_ERROR(Process, "NetworkProcessProxy::getNetworkProcessConnection: NetworkProcessProxy deallocated during connection establishment");
+            RELEASE_LOG_FAULT(Process, "NetworkProcessProxy::getNetworkProcessConnection: NetworkProcessProxy deallocated during connection establishment");
             return reply({ });
         }
 
+        stopResponsivenessTimer();
         if (!identifier) {
-            RELEASE_LOG_ERROR(Process, "NetworkProcessProxy::getNetworkProcessConnection: connection identifier is empty");
+            RELEASE_LOG_FAULT(Process, "NetworkProcessProxy::getNetworkProcessConnection: connection identifier is empty");
             return reply({ });
         }
 
@@ -308,14 +323,12 @@ void NetworkProcessProxy::networkProcessDidTerminate(TerminationReason reason)
     m_customProtocolManagerProxy.invalidate();
 #endif
 
-    m_activityForHoldingLockedFiles = nullptr;
-
     m_uploadActivity = std::nullopt;
 
     if (defaultNetworkProcess() == this)
         defaultNetworkProcess() = nullptr;
 
-    for (auto* processPool : WebProcessPool::allProcessPools())
+    for (auto& processPool : WebProcessPool::allProcessPools())
         processPool->networkProcessDidTerminate(*this, reason);
     for (auto& websiteDataStore : copyToVectorOf<Ref<WebsiteDataStore>>(m_websiteDataStores))
         websiteDataStore->networkProcessDidTerminate(*this);
@@ -1210,7 +1223,7 @@ void NetworkProcessProxy::setThirdPartyCNAMEDomainForTesting(PAL::SessionID sess
 
 void NetworkProcessProxy::setDomainsWithUserInteraction(HashSet<WebCore::RegistrableDomain>&& domains)
 {
-    for (auto* processPool : WebProcessPool::allProcessPools())
+    for (auto& processPool : WebProcessPool::allProcessPools())
         processPool->setDomainsWithUserInteraction(HashSet<WebCore::RegistrableDomain> { domains });
 }
 
@@ -1218,7 +1231,7 @@ void NetworkProcessProxy::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameD
 {    
     auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
     
-    for (auto* processPool : WebProcessPool::allProcessPools())
+    for (auto& processPool : WebProcessPool::allProcessPools())
         processPool->setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, SubResourceDomain> { domains }, [callbackAggregator] { });
 }
 
@@ -1248,21 +1261,8 @@ void NetworkProcessProxy::sendProcessDidResume()
     if (canSendMessage())
         send(Messages::NetworkProcess::ProcessDidResume(), 0);
 }
-    
-void NetworkProcessProxy::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
-{
-    if (!isHoldingLockedFiles) {
-        RELEASE_LOG(ProcessSuspension, "UIProcess is releasing a background assertion because the Network process is no longer holding locked files");
-        m_activityForHoldingLockedFiles = nullptr;
-        return;
-    }
-    if (!m_activityForHoldingLockedFiles) {
-        RELEASE_LOG(ProcessSuspension, "UIProcess is taking a background assertion because the Network process is holding locked files");
-        m_activityForHoldingLockedFiles = m_throttler.backgroundActivity("Holding locked files"_s).moveToUniquePtr();
-    }
-}
 
-void NetworkProcessProxy::flushCookies(const PAL::SessionID& sessionID, CompletionHandler<void()>&& completionHandler)
+void NetworkProcessProxy::flushCookies(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
 {
     sendWithAsyncReply(Messages::NetworkProcess::FlushCookies(sessionID), WTFMove(completionHandler));
 }
@@ -1308,8 +1308,10 @@ void NetworkProcessProxy::retrieveCacheStorageParameters(PAL::SessionID sessionI
 
     auto& cacheStorageDirectory = store->configuration().cacheStorageDirectory();
     SandboxExtension::Handle cacheStorageDirectoryExtensionHandle;
-    if (!cacheStorageDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(cacheStorageDirectory, cacheStorageDirectoryExtensionHandle);
+    if (!cacheStorageDirectory.isEmpty()) {
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(cacheStorageDirectory))
+            cacheStorageDirectoryExtensionHandle = WTFMove(*handle);
+    }
 
     send(Messages::NetworkProcess::SetCacheStorageParameters { sessionID, cacheStorageDirectory, cacheStorageDirectoryExtensionHandle }, 0);
 }
@@ -1449,15 +1451,15 @@ void NetworkProcessProxy::setWebProcessHasUploads(WebCore::ProcessIdentifier pro
     if (!m_uploadActivity) {
         RELEASE_LOG(ProcessSuspension, "NetworkProcessProxy::setWebProcessHasUploads: The number of uploads in progress is now greater than 0. Taking Networking and UI process assertions.");
         m_uploadActivity = UploadActivity {
-            makeUnique<ProcessAssertion>(getCurrentProcessID(), "WebKit uploads"_s, ProcessAssertionType::UnboundedNetworking),
-            makeUnique<ProcessAssertion>(processIdentifier(), "WebKit uploads"_s, ProcessAssertionType::UnboundedNetworking),
-            HashMap<WebCore::ProcessIdentifier, std::unique_ptr<ProcessAssertion>>()
+            ProcessAssertion::create(getCurrentProcessID(), "WebKit uploads"_s, ProcessAssertionType::UnboundedNetworking),
+            ProcessAssertion::create(processIdentifier(), "WebKit uploads"_s, ProcessAssertionType::UnboundedNetworking),
+            HashMap<WebCore::ProcessIdentifier, RefPtr<ProcessAssertion>>()
         };
     }
 
     m_uploadActivity->webProcessAssertions.ensure(processID, [&] {
         RELEASE_LOG(ProcessSuspension, "NetworkProcessProxy::setWebProcessHasUploads: Taking upload assertion on behalf of WebProcess with PID %d", process->processIdentifier());
-        return makeUnique<ProcessAssertion>(process->processIdentifier(), "WebKit uploads"_s, ProcessAssertionType::UnboundedNetworking);
+        return ProcessAssertion::create(process->processIdentifier(), "WebKit uploads"_s, ProcessAssertionType::UnboundedNetworking);
     });
 }
 
@@ -1494,16 +1496,16 @@ void NetworkProcessProxy::getLocalStorageDetails(PAL::SessionID sessionID, Compl
     sendWithAsyncReply(Messages::NetworkProcess::GetLocalStorageOriginDetails(sessionID), WTFMove(completionHandler));
 }
 
-void NetworkProcessProxy::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier webPageID, const URL& url, const String& userAgent, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, LastNavigationWasAppBound lastNavigationWasAppBound)
+void NetworkProcessProxy::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier webPageID, const URL& url, const String& userAgent, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
 {
     if (!url.isValid() || !url.protocolIsInHTTPFamily())
         return;
-    send(Messages::NetworkProcess::PreconnectTo(sessionID, webPageProxyID, webPageID, url, userAgent, storedCredentialsPolicy, isNavigatingToAppBoundDomain, lastNavigationWasAppBound), 0);
+    send(Messages::NetworkProcess::PreconnectTo(sessionID, webPageProxyID, webPageID, url, userAgent, storedCredentialsPolicy, isNavigatingToAppBoundDomain, lastNavigationWasAppInitiated), 0);
 }
 
 static bool anyProcessPoolHasForegroundWebProcesses()
 {
-    for (auto* processPool : WebProcessPool::allProcessPools()) {
+    for (auto& processPool : WebProcessPool::allProcessPools()) {
         if (processPool->hasForegroundWebProcesses())
             return true;
     }
@@ -1512,7 +1514,7 @@ static bool anyProcessPoolHasForegroundWebProcesses()
 
 static bool anyProcessPoolHasBackgroundWebProcesses()
 {
-    for (auto* processPool : WebProcessPool::allProcessPools()) {
+    for (auto& processPool : WebProcessPool::allProcessPools()) {
         if (processPool->hasBackgroundWebProcesses())
             return true;
     }
@@ -1524,14 +1526,12 @@ void NetworkProcessProxy::updateProcessAssertion()
     if (anyProcessPoolHasForegroundWebProcesses()) {
         if (!ProcessThrottler::isValidForegroundActivity(m_activityFromWebProcesses)) {
             m_activityFromWebProcesses = throttler().foregroundActivity("Networking for foreground view(s)"_s);
-            send(Messages::NetworkProcess::ProcessDidTransitionToForeground(), 0);
         }
         return;
     }
     if (anyProcessPoolHasBackgroundWebProcesses()) {
         if (!ProcessThrottler::isValidBackgroundActivity(m_activityFromWebProcesses)) {
             m_activityFromWebProcesses = throttler().backgroundActivity("Networking for background view(s)"_s);
-            send(Messages::NetworkProcess::ProcessDidTransitionToBackground(), 0);
         }
         return;
     }
@@ -1589,6 +1589,16 @@ void NetworkProcessProxy::clearBundleIdentifier(CompletionHandler<void()>&& comp
 {
     sendWithAsyncReply(Messages::NetworkProcess::ClearBundleIdentifier(), WTFMove(completionHandler));
 }
+
+#if USE(SOUP)
+void NetworkProcessProxy::didExceedMemoryLimit()
+{
+    AuxiliaryProcessProxy::terminate();
+    if (auto* connection = this->connection())
+        connection->invalidate();
+    networkProcessDidTerminate(TerminationReason::ExceededMemoryLimit);
+}
+#endif
 
 } // namespace WebKit
 

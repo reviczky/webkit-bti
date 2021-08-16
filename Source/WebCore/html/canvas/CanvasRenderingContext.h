@@ -42,7 +42,7 @@ class HTMLCanvasElement;
 class HTMLImageElement;
 class HTMLVideoElement;
 class ImageBitmap;
-class TypedOMCSSImageValue;
+class CSSStyleImageValue;
 class WebGLObject;
 enum class PixelFormat : uint8_t;
 
@@ -64,9 +64,6 @@ public:
     virtual bool isWebGL1() const { return false; }
     virtual bool isWebGL2() const { return false; }
     bool isWebGL() const { return isWebGL1() || isWebGL2(); }
-#if ENABLE(WEBGPU)
-    virtual bool isWebGPU() const { return false; }
-#endif
     virtual bool isGPUBased() const { return false; }
     virtual bool isAccelerated() const { return false; }
     virtual bool isBitmapRenderer() const { return false; }
@@ -107,7 +104,7 @@ protected:
             m_canvas.setOriginTainted();
     }
     void checkOrigin(const URL&);
-    void checkOrigin(const TypedOMCSSImageValue&);
+    void checkOrigin(const CSSStyleImageValue&);
 
     bool m_hasActiveInspectorCanvasCallTracer { false };
 

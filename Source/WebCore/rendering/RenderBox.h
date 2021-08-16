@@ -43,6 +43,8 @@ enum OverlayScrollbarSizeRelevancy { IgnoreOverlayScrollbarSize, IncludeOverlayS
 
 enum ShouldComputePreferred { ComputeActual, ComputePreferred };
 
+enum class StretchingMode { Any, Explicit };
+
 class RenderBox : public RenderBoxModelObject {
     WTF_MAKE_ISO_ALLOCATED(RenderBox);
 public:
@@ -52,7 +54,7 @@ public:
     // position:static elements that are not flex-items get their z-index coerced to auto.
     bool requiresLayer() const override
     {
-        return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasOverflowClip()
+        return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasNonVisibleOverflow()
             || hasTransformRelatedProperty() || hasHiddenBackface() || hasReflection() || style().specifiesColumns()
             || style().containsLayout() || !style().hasAutoUsedZIndex() || hasRunningAcceleratedAnimations();
     }
@@ -265,9 +267,9 @@ public:
     void setMarginLeft(LayoutUnit margin) { m_marginBox.setLeft(margin); }
     void setMarginRight(LayoutUnit margin) { m_marginBox.setRight(margin); }
 
-    LayoutUnit marginLogicalLeft() const { return m_marginBox.start(style().writingMode()); }
-    LayoutUnit marginLogicalRight() const { return m_marginBox.end(style().writingMode()); }
-    
+    LayoutUnit marginLogicalLeft(const RenderStyle* overrideStyle = nullptr) const { return m_marginBox.start((overrideStyle ? overrideStyle : &style())->writingMode()); }
+    LayoutUnit marginLogicalRight(const RenderStyle* overrideStyle = nullptr) const { return m_marginBox.end((overrideStyle ? overrideStyle : &style())->writingMode()); }
+
     LayoutUnit marginBefore(const RenderStyle* overrideStyle = nullptr) const final { return m_marginBox.before((overrideStyle ? overrideStyle : &style())->writingMode()); }
     LayoutUnit marginAfter(const RenderStyle* overrideStyle = nullptr) const final { return m_marginBox.after((overrideStyle ? overrideStyle : &style())->writingMode()); }
     LayoutUnit marginStart(const RenderStyle* overrideStyle = nullptr) const final
@@ -305,10 +307,10 @@ public:
     LayoutRect reflectedRect(const LayoutRect&) const;
 
     void layout() override;
-    bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction) override;
-    bool hitTestVisualOverflow(const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset) const;
-    bool hitTestClipPath(const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset) const;
-    bool hitTestBorderRadius(const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset) const;
+    bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation&, const LayoutPoint& accumulatedOffset, HitTestAction) override;
+    bool hitTestVisualOverflow(const HitTestLocation&, const LayoutPoint& accumulatedOffset) const;
+    bool hitTestClipPath(const HitTestLocation&, const LayoutPoint& accumulatedOffset) const;
+    bool hitTestBorderRadius(const HitTestLocation&, const LayoutPoint& accumulatedOffset) const;
 
     LayoutUnit minPreferredLogicalWidth() const override;
     LayoutUnit maxPreferredLogicalWidth() const override;
@@ -436,7 +438,8 @@ override;
     // of a containing block).  HTML4 buttons, <select>s, <input>s, legends, and floating/compact elements do this.
     bool sizesLogicalWidthToFitContent(SizeType) const;
 
-    bool hasStretchedLogicalWidth() const;
+    bool hasStretchedLogicalHeight() const;
+    bool hasStretchedLogicalWidth(StretchingMode = StretchingMode::Any) const;
     bool isStretchingColumnFlexItem() const;
     bool columnFlexItemHasStretchAlignment() const;
     
@@ -490,8 +493,8 @@ override;
     bool hasAlwaysPresentScrollbar(ScrollbarOrientation) const;
 
     bool scrollsOverflow() const { return scrollsOverflowX() || scrollsOverflowY(); }
-    bool scrollsOverflowX() const { return hasOverflowClip() && (style().overflowX() == Overflow::Scroll || style().overflowX() == Overflow::Auto); }
-    bool scrollsOverflowY() const { return hasOverflowClip() && (style().overflowY() == Overflow::Scroll || style().overflowY() == Overflow::Auto); }
+    bool scrollsOverflowX() const { return hasNonVisibleOverflow() && (style().overflowX() == Overflow::Scroll || style().overflowX() == Overflow::Auto); }
+    bool scrollsOverflowY() const { return hasNonVisibleOverflow() && (style().overflowY() == Overflow::Scroll || style().overflowY() == Overflow::Auto); }
 
     bool hasHorizontalOverflow() const { return scrollWidth() != roundToInt(paddingBoxWidth()); }
     bool hasVerticalOverflow() const { return scrollHeight() != roundToInt(paddingBoxHeight()); }
@@ -706,6 +709,7 @@ protected:
 
     bool shouldIgnoreAspectRatio() const;
     bool shouldComputeLogicalWidthFromAspectRatio() const;
+    LayoutUnit computeLogicalWidthFromAspectRatioInternal() const;
     LayoutUnit computeLogicalWidthFromAspectRatio(RenderFragmentContainer* = nullptr) const;
     std::pair<LayoutUnit, LayoutUnit> computeMinMaxLogicalWidthFromAspectRatio() const;
 
@@ -791,7 +795,7 @@ protected:
 
 private:
     // Used to store state between styleWillChange and styleDidChange
-    static bool s_hadOverflowClip;
+    static bool s_hadNonVisibleOverflow;
 };
 
 inline RenderBox* RenderBox::parentBox() const

@@ -33,6 +33,7 @@
 #include "CachedResourceHandle.h"
 #include "ContentFilterClient.h"
 #include "ContentSecurityPolicyClient.h"
+#include "CrossOriginOpenerPolicy.h"
 #include "DeviceOrientationOrMotionPermissionState.h"
 #include "DocumentIdentifier.h"
 #include "DocumentLoadTiming.h"
@@ -385,8 +386,6 @@ public:
     void deref() const final { RefCounted<DocumentLoader>::deref(); }
 #endif
 
-    bool isAlwaysOnLoggingAllowed() const;
-
     void startIconLoading();
     WEBCORE_EXPORT void didGetLoadDecisionForIcon(bool decision, uint64_t loadIdentifier, CompletionHandler<void(SharedBuffer*)>&&);
     void finishedLoadingIcon(IconLoader&, SharedBuffer*);
@@ -421,8 +420,10 @@ public:
     WEBCORE_EXPORT bool setControllingServiceWorkerRegistration(ServiceWorkerRegistrationData&&);
 #endif
 
-    bool lastNavigationWasAppBound() const { return m_lastNavigationWasAppBound; }
-    void setLastNavigationWasAppBound(bool lastNavigationWasAppBound) { m_lastNavigationWasAppBound = lastNavigationWasAppBound; }
+    bool lastNavigationWasAppInitiated() const { return m_lastNavigationWasAppInitiated; }
+    void setLastNavigationWasAppInitiated(bool lastNavigationWasAppInitiated) { m_lastNavigationWasAppInitiated = lastNavigationWasAppInitiated; }
+
+    CrossOriginOpenerPolicy crossOriginOpenerPolicy() const { return m_currentCoopEnforcementResult ? m_currentCoopEnforcementResult->crossOriginOpenerPolicy : CrossOriginOpenerPolicy { }; }
 
 protected:
     WEBCORE_EXPORT DocumentLoader(const ResourceRequest&, const SubstituteData&);
@@ -443,6 +444,9 @@ private:
     void matchRegistration(const URL&, CompletionHandler<void(std::optional<ServiceWorkerRegistrationData>&&)>&&);
 #endif
     void unregisterTemporaryServiceWorkerClient();
+
+    bool doCrossOriginOpenerHandlingOfResponse(const ResourceResponse&);
+    CrossOriginOpenerPolicyEnforcementResult enforceResponseCrossOriginOpenerPolicy(const URL& responseURL, SecurityOrigin& responseOrigin, const CrossOriginOpenerPolicy& responseCOOP);
 
     void loadMainResource(ResourceRequest&&);
 
@@ -579,6 +583,8 @@ private:
     // back/forward cache.
     Vector<ResourceResponse> m_responses;
     bool m_stopRecordingResponses { false };
+
+    std::optional<CrossOriginOpenerPolicyEnforcementResult> m_currentCoopEnforcementResult;
     
     typedef HashMap<RefPtr<ResourceLoader>, RefPtr<SubstituteResource>> SubstituteResourceMap;
     SubstituteResourceMap m_pendingSubstituteResources;
@@ -661,7 +667,7 @@ private:
     bool m_allowsWebArchiveForMainFrame { false };
     bool m_allowsDataURLsForMainFrame { false };
 
-    bool m_lastNavigationWasAppBound { false };
+    bool m_lastNavigationWasAppInitiated { true };
 };
 
 inline void DocumentLoader::recordMemoryCacheLoadForFutureClientNotification(const ResourceRequest& request)

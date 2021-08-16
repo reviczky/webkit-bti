@@ -36,6 +36,7 @@
 #include "WebPageCreationParameters.h"
 #include "WebPreferencesKeys.h"
 #include <WebCore/Frame.h>
+#include <WebCore/FrameView.h>
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/Page.h>
 #include <WebCore/PageOverlayController.h>
@@ -482,6 +483,44 @@ void DrawingAreaCoordinatedGraphics::didUpdate()
     // Display if needed. We call displayTimerFired here since it will throttle updates to 60fps.
     displayTimerFired();
 }
+
+#if PLATFORM(GTK)
+void DrawingAreaCoordinatedGraphics::adjustTransientZoom(double scale, FloatPoint origin)
+{
+    if (!m_transientZoom) {
+        FrameView& frameView = *m_webPage.mainFrameView();
+        FloatRect unobscuredContentRect = frameView.unobscuredContentRectIncludingScrollbars();
+
+        m_transientZoom = true;
+        m_transientZoomInitialOrigin = unobscuredContentRect.location();
+    }
+
+    if (m_layerTreeHost) {
+        m_layerTreeHost->adjustTransientZoom(scale, origin);
+        return;
+    }
+
+    // We can't do transient zoom for non-AC mode, so just zoom in place instead.
+
+    FloatPoint unscrolledOrigin(origin);
+    unscrolledOrigin.moveBy(-m_transientZoomInitialOrigin);
+
+    m_webPage.scalePage(scale / m_webPage.viewScaleFactor(), roundedIntPoint(-unscrolledOrigin));
+}
+
+void DrawingAreaCoordinatedGraphics::commitTransientZoom(double scale, FloatPoint origin)
+{
+    if (m_layerTreeHost)
+        m_layerTreeHost->commitTransientZoom(scale, origin);
+
+    FloatPoint unscrolledOrigin(origin);
+    unscrolledOrigin.moveBy(-m_transientZoomInitialOrigin);
+
+    m_webPage.scalePage(scale / m_webPage.viewScaleFactor(), roundedIntPoint(-unscrolledOrigin));
+
+    m_transientZoom = false;
+}
+#endif
 
 void DrawingAreaCoordinatedGraphics::sendDidUpdateBackingStoreState()
 {

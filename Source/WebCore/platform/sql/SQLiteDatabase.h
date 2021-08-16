@@ -97,13 +97,15 @@ public:
     // SQLITE_CHECKPOINT_TRUNCATE will invoke the busy handler if it can't acquire the necessary
     // locks, which can lead to unintended delays.
     void enableAutomaticWALTruncation();
+    enum class CheckpointMode : uint8_t { Full, Truncate };
+    void checkpoint(CheckpointMode);
 
     // Gets/sets the maximum size in bytes
     // Depending on per-database attributes, the size will only be settable in units that are the page size of the database, which is established at creation
     // These chunks will never be anything other than 512, 1024, 2048, 4096, 8192, 16384, or 32768 bytes in size.
     // setMaximumSize() will round the size down to the next smallest chunk if the passed size doesn't align.
     int64_t maximumSize();
-    void setMaximumSize(int64_t);
+    WEBCORE_EXPORT void setMaximumSize(int64_t);
     
     // Gets the number of unused bytes in the database file.
     int64_t freeSpaceSize();

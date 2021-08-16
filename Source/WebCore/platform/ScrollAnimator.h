@@ -33,34 +33,25 @@
 
 #include "FloatPoint.h"
 #include "PlatformWheelEvent.h"
-#include "ScrollTypes.h"
+#include "ScrollController.h"
 #include "Timer.h"
 #include "WheelEventTestMonitor.h"
 #include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
 
-#if ENABLE(RUBBER_BANDING) || ENABLE(CSS_SCROLL_SNAP)
-#include "ScrollController.h"
-#endif
-
 namespace WebCore {
 
 class FloatPoint;
+class KeyboardScrollingAnimator;
 class PlatformTouchEvent;
 class ScrollAnimation;
 class ScrollableArea;
 class Scrollbar;
 class WheelEventTestMonitor;
 
-#if ENABLE(CSS_SCROLL_SNAP) || ENABLE(RUBBER_BANDING)
 class ScrollControllerTimer;
-#endif
 
-#if ENABLE(CSS_SCROLL_SNAP) || ENABLE(RUBBER_BANDING)
 class ScrollAnimator : private ScrollControllerClient {
-#else
-class ScrollAnimator {
-#endif
     WTF_MAKE_FAST_ALLOCATED;
 public:
     static std::unique_ptr<ScrollAnimator> create(ScrollableArea&);
@@ -81,6 +72,7 @@ public:
 
     bool scrollToOffsetWithoutAnimation(const FloatPoint&, ScrollClamping = ScrollClamping::Clamped);
     virtual bool scrollToPositionWithoutAnimation(const FloatPoint& position, ScrollClamping = ScrollClamping::Clamped);
+    virtual void retargetRunningAnimation(const FloatPoint&);
 
     bool scrollToOffsetWithAnimation(const FloatPoint&);
     virtual bool scrollToPositionWithAnimation(const FloatPoint&);
@@ -88,6 +80,8 @@ public:
     ScrollableArea& scrollableArea() const { return m_scrollableArea; }
 
     virtual bool handleWheelEvent(const PlatformWheelEvent&);
+
+    KeyboardScrollingAnimator *keyboardScrollingAnimator() const override { return m_keyboardScrollingAnimator.get(); }
 
 #if ENABLE(TOUCH_EVENTS)
     virtual bool handleTouchEvent(const PlatformTouchEvent&);
@@ -142,36 +136,31 @@ public:
     void setWheelEventTestMonitor(RefPtr<WheelEventTestMonitor>&& testMonitor) { m_wheelEventTestMonitor = testMonitor; }
 
     FloatPoint adjustScrollOffsetForSnappingIfNeeded(const FloatPoint& offset, ScrollSnapPointSelectionMethod);
-    float adjustScrollOffsetForSnappingIfNeeded(ScrollEventAxis, float newOffset, ScrollSnapPointSelectionMethod);
+    float adjustScrollOffsetForSnappingIfNeeded(ScrollEventAxis, const FloatPoint& newOffset, ScrollSnapPointSelectionMethod);
 
-#if ENABLE(CSS_SCROLL_SNAP) || ENABLE(RUBBER_BANDING)
     std::unique_ptr<ScrollControllerTimer> createTimer(Function<void()>&&) final;
 
     void startAnimationCallback(ScrollController&) final;
     void stopAnimationCallback(ScrollController&) final;
 
     void scrollControllerAnimationTimerFired();
-#endif
 
-#if ENABLE(CSS_SCROLL_SNAP)
     virtual bool processWheelEventForScrollSnap(const PlatformWheelEvent&) { return false; }
     void updateScrollSnapState();
     bool activeScrollSnapIndexDidChange() const;
-    unsigned activeScrollSnapIndexForAxis(ScrollEventAxis) const;
-    void setActiveScrollSnapIndexForAxis(ScrollEventAxis, unsigned index);
+    std::optional<unsigned> activeScrollSnapIndexForAxis(ScrollEventAxis) const;
+    void setActiveScrollSnapIndexForAxis(ScrollEventAxis, std::optional<unsigned> index);
     void setSnapOffsetsInfo(const LayoutScrollSnapOffsetsInfo&);
     const LayoutScrollSnapOffsetsInfo* snapOffsetsInfo() const;
-#endif
+    void resnapAfterLayout();
 
     // ScrollControllerClient.
-#if ENABLE(CSS_SCROLL_SNAP)
     FloatPoint scrollOffset() const override;
     void immediateScrollOnAxis(ScrollEventAxis, float delta) override;
     float pageScaleFactor() const override;
     LayoutSize scrollExtent() const override;
     FloatSize viewportSize() const override;
-#endif
-#if (ENABLE(CSS_SCROLL_SNAP) || ENABLE(RUBBER_BANDING)) && PLATFORM(MAC)
+#if PLATFORM(MAC)
     void deferWheelEventTestCompletionForReason(WheelEventTestMonitor::ScrollableAreaIdentifier, WheelEventTestMonitor::DeferReason) const override;
     void removeWheelEventTestCompletionDeferralForReason(WheelEventTestMonitor::ScrollableAreaIdentifier, WheelEventTestMonitor::DeferReason) const override;
 #endif
@@ -186,13 +175,12 @@ protected:
 
     ScrollableArea& m_scrollableArea;
     RefPtr<WheelEventTestMonitor> m_wheelEventTestMonitor;
-#if ENABLE(CSS_SCROLL_SNAP) || ENABLE(RUBBER_BANDING)
     ScrollController m_scrollController;
     Timer m_scrollControllerAnimationTimer;
-#endif
     FloatPoint m_currentPosition;
 
     std::unique_ptr<ScrollAnimation> m_scrollAnimation;
+    std::unique_ptr<KeyboardScrollingAnimator> m_keyboardScrollingAnimator;
 };
 
 } // namespace WebCore

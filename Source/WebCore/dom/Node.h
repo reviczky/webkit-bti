@@ -368,6 +368,9 @@ public:
     bool isInShadowTree() const { return hasNodeFlag(NodeFlag::IsInShadowTree); }
     bool isInTreeScope() const { return hasNodeFlag(NodeFlag::IsConnected) || hasNodeFlag(NodeFlag::IsInShadowTree); }
 
+    // https://dom.spec.whatwg.org/#in-a-document-tree
+    bool isInDocumentTree() const { return isConnected() && !isInShadowTree(); }
+
     bool isDocumentTypeNode() const { return nodeType() == DOCUMENT_TYPE_NODE; }
     virtual bool childTypeAllowed(NodeType) const { return false; }
     unsigned countChildNodes() const;
@@ -795,9 +798,7 @@ ALWAYS_INLINE void Node::deref() const
 #if ASSERT_ENABLED
         m_inRemovedLastRefFunction = true;
 #endif
-IGNORE_ERRONEOUS_GCC_NULL_CHECK_WARNINGS_BEGIN
         const_cast<Node&>(*this).removedLastRef();
-IGNORE_ERRONEOUS_GCC_NULL_CHECK_WARNINGS_END
         return;
     }
     m_refCountAndParentBit = updatedRefCount;
@@ -923,7 +924,7 @@ constexpr bool is_gteq(PartialOrdering ordering)
     return is_gt(ordering) || is_eq(ordering);
 }
 
-WTF::TextStream& operator<<(WTF::TextStream&, const Node&);
+WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const Node&);
 
 } // namespace WebCore
 

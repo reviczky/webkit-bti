@@ -1218,7 +1218,13 @@ void WebGLRenderingContextBase::paintRenderingResultsToCanvas()
             auto& base = canvasBase();
             base.clearCopiedImage();
             m_markedCanvasDirty = false;
-            m_context->paintCompositedResultsToCanvas(*base.buffer());
+            if (auto buffer = base.buffer()) {
+                // FIXME: Remote ImageBuffers do not flush the buffers that are drawn to a buffer.
+                // Avoid leaking the WebGL content in the cases where a WebGL canvas element is drawn to a Context2D
+                // canvas element repeatedly.
+                buffer->flushDrawingContext();
+                m_context->paintCompositedResultsToCanvas(*buffer);
+            }
         }
         return;
     }
@@ -1232,8 +1238,13 @@ void WebGLRenderingContextBase::paintRenderingResultsToCanvas()
     base.clearCopiedImage();
 
     m_markedCanvasDirty = false;
-
-    m_context->paintRenderingResultsToCanvas(*base.buffer());
+    if (auto buffer = base.buffer()) {
+        // FIXME: Remote ImageBuffers do not flush the buffers that are drawn to a buffer.
+        // Avoid leaking the WebGL content in the cases where a WebGL canvas element is drawn to a Context2D
+        // canvas element repeatedly.
+        buffer->flushDrawingContext();
+        m_context->paintRenderingResultsToCanvas(*buffer);
+    }
 }
 
 std::optional<PixelBuffer> WebGLRenderingContextBase::paintRenderingResultsToPixelBuffer()
@@ -4830,7 +4841,7 @@ ExceptionOr<void> WebGLRenderingContextBase::texImageSourceHelper(TexImageFuncti
         if (!imageForRender)
             return { };
 
-        if (imageForRender->isSVGImage() || imageForRender->orientation() != ImageOrientation::None || imageForRender->hasDensityCorrectedSize())
+        if (imageForRender->drawsSVGImage() || imageForRender->orientation() != ImageOrientation::None || imageForRender->hasDensityCorrectedSize())
             imageForRender = drawImageIntoBuffer(*imageForRender, image->width(), image->height(), 1, functionName);
 
         if (!imageForRender || !validateTexFunc(functionName, functionType, SourceHTMLImageElement, target, level, internalformat, imageForRender->width(), imageForRender->height(), depth, border, format, type, xoffset, yoffset, zoffset))
@@ -4923,7 +4934,7 @@ ExceptionOr<void> WebGLRenderingContextBase::texImageSourceHelper(TexImageFuncti
         }
 
         // Fallback pure SW path.
-        RefPtr<Image> image = videoFrameToImage(video.get(), DontCopyBackingStore);
+        RefPtr<Image> image = videoFrameToImage(video.get(), DontCopyBackingStore, functionName);
         if (!image)
             return { };
         texImageImpl(functionID, target, level, internalformat, xoffset, yoffset, zoffset, format, type, image.get(), GraphicsContextGL::DOMSource::Video, m_unpackFlipY, m_unpackPremultiplyAlpha, false, inputSourceImageRect, depth, unpackImageHeight);
@@ -4962,7 +4973,7 @@ void WebGLRenderingContextBase::texImageArrayBufferViewHelper(TexImageFunctionID
         sourceType = TexImageDimension::Tex3D;
     if (!validateTexFuncData(functionName, sourceType, width, height, depth, format, type, pixels.get(), nullDisposition, srcOffset))
         return;
-    uint8_t* data = reinterpret_cast<uint8_t*>(pixels ? pixels->baseAddress() : nullptr);
+    auto data = static_cast<uint8_t*>(pixels ? pixels->baseAddress() : nullptr);
     if (srcOffset) {
         ASSERT(pixels);
         // No need to check overflow because validateTexFuncData() already did.
@@ -4982,8 +4993,10 @@ void WebGLRenderingContextBase::texImageArrayBufferViewHelper(TexImageFunctionID
             synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, functionName, "Invalid unpack params combination.");
             return;
         }
-        if (!m_context->extractTextureData(width, height, format, type, unpackParams, m_unpackFlipY, m_unpackPremultiplyAlpha, data, tempData))
+        if (!m_context->extractTextureData(width, height, format, type, unpackParams, m_unpackFlipY, m_unpackPremultiplyAlpha, data, tempData)) {
+            synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, functionName, "Invalid format/type combination.");
             return;
+        }
         data = tempData.data();
         byteLength = tempData.size();
         changeUnpackParams = true;
@@ -5755,18 +5768,44 @@ RefPtr<Image> WebGLRenderingContextBase::drawImageIntoBuffer(Image& image, int w
 
 #if ENABLE(VIDEO)
 
-RefPtr<Image> WebGLRenderingContextBase::videoFrameToImage(HTMLVideoElement* video, BackingStoreCopy backingStoreCopy)
+RefPtr<Image> WebGLRenderingContextBase::videoFrameToImage(HTMLVideoElement* video, BackingStoreCopy backingStoreCopy, const char* functionName)
 {
-    IntSize size(video->videoWidth(), video->videoHeight());
-    ImageBuffer* buf = m_generatedImageCache.imageBuffer(size);
-    if (!buf) {
-        synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, "texImage2D", "out of memory");
+#if USE(AVFOUNDATION)
+    auto nativeImage = video->nativeImageForCurrentTime();
+    // Currently we might be missing an image due to MSE not being able to provide the first requested frame.
+    // https://bugs.webkit.org/show_bug.cgi?id=228997
+    if (!nativeImage)
+        return nullptr;
+    IntSize imageSize = nativeImage->size();
+    if (imageSize.isEmpty()) {
+        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, functionName, "video visible size is empty");
         return nullptr;
     }
-    FloatRect destRect(0, 0, size.width(), size.height());
-    // FIXME: Turn this into a GPU-GPU texture copy instead of CPU readback.
-    video->paintCurrentFrameInContext(buf->context(), destRect);
-    return buf->copyImage(backingStoreCopy);
+    FloatRect imageRect { { }, imageSize };
+    ImageBuffer* imageBuffer = m_generatedImageCache.imageBuffer(imageSize, CompositeOperator::Copy);
+    if (!imageBuffer) {
+        synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
+        return nullptr;
+    }
+    imageBuffer->context().drawNativeImage(*nativeImage, imageRect.size(), imageRect, imageRect, CompositeOperator::Copy);
+#else
+    // This is a legacy code path that produces incompatible texture size when the
+    // video visible size is different to the natural size. This should be removed
+    // once all platforms implement nativeImageForCurrentTime().
+    IntSize videoSize { static_cast<int>(video->videoWidth()), static_cast<int>(video->videoHeight()) };
+    ImageBuffer* imageBuffer = m_generatedImageCache.imageBuffer(videoSize);
+    if (!imageBuffer) {
+        synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
+        return nullptr;
+    }
+    video->paintCurrentFrameInContext(imageBuffer->context(), { { }, videoSize });
+#endif
+    RefPtr<Image> image = imageBuffer->copyImage(backingStoreCopy);
+    if (!image) {
+        synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
+        return nullptr;
+    }
+    return image;
 }
 
 #endif
@@ -7608,7 +7647,7 @@ WebGLRenderingContextBase::LRUImageBufferCache::LRUImageBufferCache(int capacity
 {
 }
 
-ImageBuffer* WebGLRenderingContextBase::LRUImageBufferCache::imageBuffer(const IntSize& size)
+ImageBuffer* WebGLRenderingContextBase::LRUImageBufferCache::imageBuffer(const IntSize& size, CompositeOperator fillOperator)
 {
     size_t i;
     for (i = 0; i < m_buffers.size(); ++i) {
@@ -7618,7 +7657,8 @@ ImageBuffer* WebGLRenderingContextBase::LRUImageBufferCache::imageBuffer(const I
         if (buf->logicalSize() != size)
             continue;
         bubbleToFront(i);
-        buf->context().clearRect(FloatRect({ }, FloatSize(size)));
+        if (fillOperator != CompositeOperator::Copy && fillOperator != CompositeOperator::Clear)
+            buf->context().clearRect({ { }, size });
         return buf;
     }
 

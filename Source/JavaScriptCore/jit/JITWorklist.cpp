@@ -173,7 +173,10 @@ void JITWorklist::waitUntilAllPlansForVMAreReady(VM& vm)
     // the compiler and then it will be waiting for us to stop. That's a deadlock. We avoid that
     // deadlock by relinquishing our heap access, so that the collector pretends that we are stopped
     // even if we aren't.
-    ReleaseHeapAccessScope releaseHeapAccessScope(vm.heap);
+    // There can be the case where we already released heap access, for example when the VM is being
+    // destroyed as a result of JSLock::unlock unlocking the last reference to the VM.
+    // So we use a Release access scope that checks if we currently have access before releasing and later restoring.
+    ReleaseHeapAccessIfNeededScope releaseHeapAccessScope(vm.heap);
 
     // Wait for all of the plans for the given VM to complete. The idea here
     // is that we want all of the caller VM's plans to be done. We don't care
@@ -201,7 +204,7 @@ void JITWorklist::waitUntilAllPlansForVMAreReady(VM& vm)
         if (allAreCompiled)
             break;
 
-        m_planCompiled.wait(*m_lock);
+        m_planCompiledOrCancelled.wait(*m_lock);
     }
 }
 
@@ -330,6 +333,7 @@ void JITWorklist::removeMatchingPlansForVM(VM& vm, const MatchFunction& matches)
         RELEASE_ASSERT(plan->stage() != JITPlanStage::Canceled);
         deadPlanKeys.add(plan->key());
     }
+    bool didCancelPlans = !deadPlanKeys.isEmpty();
     for (JITCompilationKey key : deadPlanKeys)
         m_plans.take(key)->cancel();
     for (auto& queue : m_queues) {
@@ -347,6 +351,8 @@ void JITWorklist::removeMatchingPlansForVM(VM& vm, const MatchFunction& matches)
         m_readyPlans[i--] = m_readyPlans.last();
         m_readyPlans.removeLast();
     }
+    if (didCancelPlans)
+        m_planCompiledOrCancelled.notifyAll();
 }
 
 } // namespace JSC

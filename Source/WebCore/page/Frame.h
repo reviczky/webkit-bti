@@ -177,6 +177,7 @@ public:
     FrameTree& tree() const;
     ScriptController& script() { return m_script; }
     const ScriptController& script() const { return m_script; }
+    void resetScript();
 
     WEBCORE_EXPORT std::optional<PageIdentifier> pageID() const;
     WEBCORE_EXPORT std::optional<FrameIdentifier> frameID() const;
@@ -281,7 +282,6 @@ public:
     WEBCORE_EXPORT void updateLayout() const;
     WEBCORE_EXPORT NSRect caretRect();
     WEBCORE_EXPORT NSRect rectForScrollToVisible();
-    WEBCORE_EXPORT unsigned formElementsCharacterCount() const;
 
     // This function is used by Legacy WebKit.
     WEBCORE_EXPORT void setTimersPaused(bool);
@@ -302,8 +302,6 @@ public:
     void suspendActiveDOMObjectsAndAnimations();
     void resumeActiveDOMObjectsAndAnimations();
     bool activeDOMObjectsAndAnimationsSuspended() const { return m_activeDOMObjectsAndAnimationsSuspendedCount > 0; }
-
-    WEBCORE_EXPORT bool isAlwaysOnLoggingAllowed() const;
 
     void didPrewarmLocalStorage();
     bool mayPrewarmLocalStorage() const;

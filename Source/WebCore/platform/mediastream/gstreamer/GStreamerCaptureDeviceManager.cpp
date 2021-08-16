@@ -63,12 +63,6 @@ GStreamerVideoCaptureDeviceManager& GStreamerVideoCaptureDeviceManager::singleto
     return manager;
 }
 
-GStreamerDisplayCaptureDeviceManager& GStreamerDisplayCaptureDeviceManager::singleton()
-{
-    static NeverDestroyed<GStreamerDisplayCaptureDeviceManager> manager;
-    return manager;
-}
-
 GStreamerCaptureDeviceManager::~GStreamerCaptureDeviceManager()
 {
     if (m_deviceMonitor)

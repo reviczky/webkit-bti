@@ -133,7 +133,9 @@ private:
     PlatformPageClient platformPageClient() const final;
     void contentsSizeChanged(WebCore::Frame&, const WebCore::IntSize&) const final;
     void intrinsicContentsSizeChanged(const WebCore::IntSize&) const final;
-    void scrollRectIntoView(const WebCore::IntRect&) const final; // Currently only Mac has a non empty implementation.
+
+    void scrollContainingScrollViewsToRevealRect(const WebCore::IntRect&) const final; // Currently only Mac has a non empty implementation.
+    void scrollMainFrameToRevealRect(const WebCore::IntRect&) const final;
 
     bool shouldUnavailablePluginMessageBeButton(WebCore::RenderEmbeddedObject::PluginUnavailabilityReason) const final;
     void unavailablePluginButtonClicked(WebCore::Element&, WebCore::RenderEmbeddedObject::PluginUnavailabilityReason) const final;
@@ -227,6 +229,7 @@ private:
     void attachRootGraphicsLayer(WebCore::Frame&, WebCore::GraphicsLayer*) final;
     void attachViewOverlayGraphicsLayer(WebCore::GraphicsLayer*) final;
     void setNeedsOneShotDrawingSynchronization() final;
+    bool shouldTriggerRenderingUpdate(unsigned rescheduledRenderingUpdateCount) const final;
     void triggerRenderingUpdate() final;
 
     void contentRuleListNotification(const URL&, const WebCore::ContentRuleListResults&) final;
@@ -333,6 +336,10 @@ private:
     void themeColorChanged() const final;
     void pageExtendedBackgroundColorDidChange() const final;
     void sampledPageTopColorChanged() const final;
+    
+#if ENABLE(APP_HIGHLIGHTS)
+    WebCore::HighlightVisibility appHighlightsVisiblility() const final;
+#endif
     
     void wheelEventHandlersChanged(bool) final;
 
@@ -444,8 +451,15 @@ private:
     void showMediaControlsContextMenu(WebCore::FloatRect&&, Vector<WebCore::MediaControlsContextMenuItem>&&, CompletionHandler<void(WebCore::MediaControlsContextMenuItem::ID)>&&) final;
 #endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
-#if ENABLE(WEBXR) && PLATFORM(COCOA)
+#if ENABLE(WEBXR) && !USE(OPENXR)
     void enumerateImmersiveXRDevices(CompletionHandler<void(const PlatformXR::Instance::DeviceList&)>&&) final;
+#endif
+
+#if HAVE(ARKIT_INLINE_PREVIEW_IOS)
+    void takeModelElementFullscreen(WebCore::GraphicsLayer::PlatformLayerID contentLayerId) const final;
+#endif
+#if HAVE(ARKIT_INLINE_PREVIEW_MAC)
+    void modelElementDidCreatePreview(WebCore::HTMLModelElement&, const URL&, const String&, const WebCore::FloatSize&) const final;
 #endif
 
     mutable bool m_cachedMainFrameHasHorizontalScrollbar { false };

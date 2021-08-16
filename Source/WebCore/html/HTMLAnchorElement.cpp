@@ -55,6 +55,7 @@
 #include "Settings.h"
 #include "UserGestureIndicator.h"
 #include <wtf/IsoMallocInlines.h>
+#include <wtf/WeakHashMap.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringConcatenateNumbers.h>
 
@@ -296,7 +297,7 @@ bool HTMLAnchorElement::draggable() const
 
 URL HTMLAnchorElement::href() const
 {
-    return document().completeURL(stripLeadingAndTrailingHTMLSpaces(attributeWithoutSynchronization(hrefAttr)));
+    return document().completeURL(attributeWithoutSynchronization(hrefAttr));
 }
 
 void HTMLAnchorElement::setHref(const AtomString& value)
@@ -448,7 +449,7 @@ std::optional<PrivateClickMeasurement> HTMLAnchorElement::parsePrivateClickMeasu
         return std::nullopt;
     }
 
-    auto privateClickMeasurement = PrivateClickMeasurement { SourceID(attributionSourceID.value()), SourceSite(documentRegistrableDomain), AttributionDestinationSite(destinationURL) };
+    auto privateClickMeasurement = PrivateClickMeasurement { SourceID(attributionSourceID.value()), SourceSite(WTFMove(documentRegistrableDomain)), AttributionDestinationSite(destinationURL) };
 
     auto attributionSourceNonceAttr = attributeWithoutSynchronization(attributionsourcenonceAttr);
     if (!attributionSourceNonceAttr.isEmpty()) {
@@ -516,10 +517,8 @@ void HTMLAnchorElement::handleClick(Event& event)
     auto referrerPolicy = hasRel(Relation::NoReferrer) ? ReferrerPolicy::NoReferrer : this->referrerPolicy();
 
     auto effectiveTarget = this->effectiveTarget();
-    std::optional<NewFrameOpenerPolicy> newFrameOpenerPolicy;
-    if (hasRel(Relation::Opener))
-        newFrameOpenerPolicy = NewFrameOpenerPolicy::Allow;
-    else if (hasRel(Relation::NoOpener) || (document().settings().blankAnchorTargetImpliesNoOpenerEnabled() && equalIgnoringASCIICase(effectiveTarget, "_blank")))
+    NewFrameOpenerPolicy newFrameOpenerPolicy = NewFrameOpenerPolicy::Allow;
+    if (hasRel(Relation::NoOpener) || hasRel(Relation::NoReferrer) || (!hasRel(Relation::Opener) && document().settings().blankAnchorTargetImpliesNoOpenerEnabled() && equalIgnoringASCIICase(effectiveTarget, "_blank")))
         newFrameOpenerPolicy = NewFrameOpenerPolicy::Suppress;
 
     auto privateClickMeasurement = parsePrivateClickMeasurement();
@@ -589,26 +588,24 @@ bool HTMLAnchorElement::willRespondToMouseClickEvents()
     return isLink() || HTMLElement::willRespondToMouseClickEvents();
 }
 
-typedef HashMap<const HTMLAnchorElement*, RefPtr<Element>> RootEditableElementMap;
-
-static RootEditableElementMap& rootEditableElementMap()
+static auto& rootEditableElementMap()
 {
-    static NeverDestroyed<RootEditableElementMap> map;
-    return map;
+    static NeverDestroyed<WeakHashMap<HTMLAnchorElement, WeakPtr<Element>>> map;
+    return map.get();
 }
 
 Element* HTMLAnchorElement::rootEditableElementForSelectionOnMouseDown() const
 {
     if (!m_hasRootEditableElementForSelectionOnMouseDown)
         return 0;
-    return rootEditableElementMap().get(this);
+    return rootEditableElementMap().get(*this).get();
 }
 
 void HTMLAnchorElement::clearRootEditableElementForSelectionOnMouseDown()
 {
     if (!m_hasRootEditableElementForSelectionOnMouseDown)
         return;
-    rootEditableElementMap().remove(this);
+    rootEditableElementMap().remove(*this);
     m_hasRootEditableElementForSelectionOnMouseDown = false;
 }
 
@@ -619,7 +616,7 @@ void HTMLAnchorElement::setRootEditableElementForSelectionOnMouseDown(Element* e
         return;
     }
 
-    rootEditableElementMap().set(this, element);
+    rootEditableElementMap().set(*this, makeWeakPtr(element));
     m_hasRootEditableElementForSelectionOnMouseDown = true;
 }
 

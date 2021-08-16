@@ -28,7 +28,6 @@
 
 #include <array>
 #include <mutex>
-#include <unicode/uidna.h>
 #include <wtf/text/CodePointIterator.h>
 
 namespace WTF {
@@ -698,7 +697,7 @@ ALWAYS_INLINE static Scheme scheme(StringView scheme)
     }
 }
 
-std::optional<String> URLParser::maybeCanonicalizeScheme(const String& scheme)
+std::optional<String> URLParser::maybeCanonicalizeScheme(StringView scheme)
 {
     if (scheme.isEmpty())
         return std::nullopt;
@@ -715,7 +714,7 @@ std::optional<String> URLParser::maybeCanonicalizeScheme(const String& scheme)
     return scheme.convertToASCIILowercase();
 }
 
-bool URLParser::isSpecialScheme(const String& schemeArg)
+bool URLParser::isSpecialScheme(StringView schemeArg)
 {
     return scheme(schemeArg) != Scheme::NonSpecial;
 }
@@ -1107,9 +1106,13 @@ void URLParser::parse(const CharacterType* input, const unsigned length, const U
     Vector<UChar> queryBuffer;
 
     unsigned endIndex = length;
-    while (UNLIKELY(endIndex && isC0ControlOrSpace(input[endIndex - 1]))) {
-        syntaxViolation(CodePointIterator<CharacterType>(input, input));
-        endIndex--;
+    if (UNLIKELY(nonUTF8QueryEncoding == URLTextEncodingSentinelAllowingC0AtEndOfHash))
+        nonUTF8QueryEncoding = nullptr;
+    else {
+        while (UNLIKELY(endIndex && isC0ControlOrSpace(input[endIndex - 1]))) {
+            syntaxViolation(CodePointIterator<CharacterType>(input, input));
+            endIndex--;
+        }
     }
     CodePointIterator<CharacterType> c(input, input + endIndex);
     CodePointIterator<CharacterType> authorityOrHostBegin;
@@ -2517,7 +2520,7 @@ void URLParser::addNonSpecialDotSlash()
 template<typename CharacterType> std::optional<URLParser::LCharBuffer> URLParser::domainToASCII(StringImpl& domain, const CodePointIterator<CharacterType>& iteratorForSyntaxViolationPosition)
 {
     LCharBuffer ascii;
-    if (domain.isAllASCII() && !startsWithLettersIgnoringASCIICase(domain, "xn--")) {
+    if (domain.isAllASCII() && !subdomainStartsWithXNDashDash(domain)) {
         size_t length = domain.length();
         if (domain.is8Bit()) {
             const LChar* characters = domain.characters8();
@@ -2538,14 +2541,13 @@ template<typename CharacterType> std::optional<URLParser::LCharBuffer> URLParser
         }
         return ascii;
     }
-    
-    const size_t maxDomainLength = 64;
-    UChar hostnameBuffer[maxDomainLength];
+
+    UChar hostnameBuffer[hostnameBufferLength];
     UErrorCode error = U_ZERO_ERROR;
     UIDNAInfo processingDetails = UIDNA_INFO_INITIALIZER;
-    int32_t numCharactersConverted = uidna_nameToASCII(&internationalDomainNameTranscoder(), StringView(domain).upconvertedCharacters(), domain.length(), hostnameBuffer, maxDomainLength, &processingDetails, &error);
+    int32_t numCharactersConverted = uidna_nameToASCII(&internationalDomainNameTranscoder(), StringView(domain).upconvertedCharacters(), domain.length(), hostnameBuffer, hostnameBufferLength, &processingDetails, &error);
 
-    if (U_SUCCESS(error) && !processingDetails.errors) {
+    if (U_SUCCESS(error) && !(processingDetails.errors & ~allowedNameToASCIIErrors) && numCharactersConverted) {
 #if ASSERT_ENABLED
         for (int32_t i = 0; i < numCharactersConverted; ++i) {
             ASSERT(isASCII(hostnameBuffer[i]));
@@ -2628,20 +2630,66 @@ bool URLParser::parsePort(CodePointIterator<CharacterType>& iterator)
 }
 
 template<typename CharacterType>
-bool URLParser::startsWithXNDashDash(CodePointIterator<CharacterType> iterator)
+bool URLParser::subdomainStartsWithXNDashDash(CodePointIterator<CharacterType> iterator)
 {
-    if (iterator.atEnd() || (*iterator != 'x' && *iterator != 'X'))
-        return false;
-    advance<CharacterType, ReportSyntaxViolation::No>(iterator);
-    if (iterator.atEnd() || (*iterator != 'n' && *iterator != 'N'))
-        return false;
-    advance<CharacterType, ReportSyntaxViolation::No>(iterator);
-    if (iterator.atEnd() || *iterator != '-')
-        return false;
-    advance<CharacterType, ReportSyntaxViolation::No>(iterator);
-    if (iterator.atEnd() || *iterator != '-')
-        return false;
-    return true;
+    enum class State : uint8_t {
+        NotAtSubdomainBeginOrInXNDashDash,
+        AtSubdomainBegin,
+        AfterX,
+        AfterN,
+        AfterFirstDash,
+    } state { State::AtSubdomainBegin };
+
+    for (; !iterator.atEnd(); advance<CharacterType, ReportSyntaxViolation::No>(iterator)) {
+        CharacterType c = *iterator;
+
+        // These characters indicate the end of the host.
+        if (c == ':' || c == '/' || c == '?' || c == '#')
+            return false;
+
+        switch (state) {
+        case State::NotAtSubdomainBeginOrInXNDashDash:
+            break;
+        case State::AtSubdomainBegin:
+            if (c == 'x' || c == 'X') {
+                state = State::AfterX;
+                continue;
+            }
+            break;
+        case State::AfterX:
+            if (c == 'n' || c == 'N') {
+                state = State::AfterN;
+                continue;
+            }
+            break;
+        case State::AfterN:
+            if (c == '-') {
+                state = State::AfterFirstDash;
+                continue;
+            }
+            break;
+        case State::AfterFirstDash:
+            if (c == '-')
+                return true;
+            break;
+        }
+
+        if (c == '.')
+            state = State::AtSubdomainBegin;
+        else
+            state = State::NotAtSubdomainBeginOrInXNDashDash;
+    }
+    return false;
+}
+
+bool URLParser::subdomainStartsWithXNDashDash(StringImpl& host)
+{
+    if (host.is8Bit()) {
+        const LChar* begin = host.characters8();
+        return subdomainStartsWithXNDashDash(CodePointIterator<LChar>(begin, begin + host.length()));
+    }
+    const UChar* begin = host.characters16();
+    return subdomainStartsWithXNDashDash(CodePointIterator<UChar>(begin, begin + host.length()));
 }
 
 template<typename CharacterType>
@@ -2693,7 +2741,7 @@ bool URLParser::parseHostAndPort(CodePointIterator<CharacterType> iterator)
         return parsePort(iterator);
     }
     
-    if (LIKELY(!m_hostHasPercentOrNonASCII && !startsWithXNDashDash(iterator))) {
+    if (LIKELY(!m_hostHasPercentOrNonASCII && !subdomainStartsWithXNDashDash(iterator))) {
         auto hostIterator = iterator;
         for (; !iterator.atEnd(); ++iterator) {
             if (isTabOrNewline(*iterator))
@@ -2792,7 +2840,7 @@ std::optional<String> URLParser::formURLDecode(StringView input)
     auto utf8 = input.utf8(StrictConversion);
     if (utf8.isNull())
         return std::nullopt;
-    auto percentDecoded = percentDecode(reinterpret_cast<const LChar*>(utf8.data()), utf8.length());
+    auto percentDecoded = percentDecode(utf8.dataAsUInt8Ptr(), utf8.length());
     return String::fromUTF8ReplacingInvalidSequences(percentDecoded.data(), percentDecoded.size());
 }
 

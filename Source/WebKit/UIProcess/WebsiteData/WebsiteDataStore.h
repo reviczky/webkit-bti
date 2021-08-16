@@ -62,6 +62,8 @@
 #endif
 
 #if USE(SOUP)
+#include "SoupCookiePersistentStorageType.h"
+#include <WebCore/HTTPCookieAcceptPolicy.h>
 #include <WebCore/SoupNetworkProxySettings.h>
 #endif
 
@@ -253,6 +255,9 @@ public:
     const String& resolvedServiceWorkerRegistrationDirectory() const { return m_resolvedConfiguration->serviceWorkerRegistrationDirectory(); }
     const String& resolvedResourceLoadStatisticsDirectory() const { return m_resolvedConfiguration->resourceLoadStatisticsDirectory(); }
     const String& resolvedHSTSStorageDirectory() const { return m_resolvedConfiguration->hstsStorageDirectory(); }
+#if HAVE(ARKIT_INLINE_PREVIEW)
+    const String& resolvedModelElementCacheDirectory() const { return m_resolvedConfiguration->modelElementCacheDirectory(); }
+#endif
 
     void allowSpecificHTTPSCertificateForHost(const WebCertificateInfo*, const String& host);
 
@@ -287,6 +292,8 @@ public:
     bool ignoreTLSErrors() const { return m_ignoreTLSErrors; }
     void setNetworkProxySettings(WebCore::SoupNetworkProxySettings&&);
     const WebCore::SoupNetworkProxySettings& networkProxySettings() const { return m_networkProxySettings; }
+    void setCookiePersistentStorage(const String&, SoupCookiePersistentStorageType);
+    void setHTTPCookieAcceptPolicy(WebCore::HTTPCookieAcceptPolicy);
 #endif
 
     static void allowWebsiteDataRecordsForAllOrigins();
@@ -328,6 +335,9 @@ public:
     static WTF::String defaultWebSQLDatabaseDirectory();
 #if USE(GLIB)
     static WTF::String defaultHSTSDirectory();
+#endif
+#if HAVE(ARKIT_INLINE_PREVIEW)
+    static WTF::String defaultModelElementCacheDirectory();
 #endif
     static WTF::String defaultIndexedDBDatabaseDirectory();
     static WTF::String defaultCacheStorageDirectory();
@@ -427,6 +437,9 @@ private:
     bool m_persistentCredentialStorageEnabled { true };
     bool m_ignoreTLSErrors { true };
     WebCore::SoupNetworkProxySettings m_networkProxySettings;
+    String m_cookiePersistentStoragePath;
+    SoupCookiePersistentStorageType m_cookiePersistentStorageType { SoupCookiePersistentStorageType::SQLite };
+    WebCore::HTTPCookieAcceptPolicy m_cookieAcceptPolicy { WebCore::HTTPCookieAcceptPolicy::ExclusivelyFromMainDocumentDomain };
 #endif
 
     WeakHashSet<WebProcessProxy> m_processes;

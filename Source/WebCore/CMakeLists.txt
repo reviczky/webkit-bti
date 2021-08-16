@@ -303,6 +303,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/indexeddb/IDBOpenDBRequest.idl
     Modules/indexeddb/IDBRequest.idl
     Modules/indexeddb/IDBTransaction.idl
+    Modules/indexeddb/IDBTransactionDurability.idl
     Modules/indexeddb/IDBTransactionMode.idl
     Modules/indexeddb/IDBVersionChangeEvent.idl
     Modules/indexeddb/WindowOrWorkerGlobalScope+IndexedDatabase.idl
@@ -411,6 +412,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/mediastream/RTCRtpReceiver.idl
     Modules/mediastream/RTCRtpRtxParameters.idl
     Modules/mediastream/RTCRtpSFrameTransform.idl
+    Modules/mediastream/RTCRtpSFrameTransformErrorEvent.idl
     Modules/mediastream/RTCRtpScriptTransform.idl
     Modules/mediastream/RTCRtpScriptTransformProvider.idl
     Modules/mediastream/RTCRtpScriptTransformer.idl
@@ -602,69 +604,6 @@ set(WebCore_NON_SVG_IDL_FILES
 
     Modules/webdriver/Navigator+WebDriver.idl
 
-    Modules/webgpu/GPUBindGroupLayoutBinding.idl
-    Modules/webgpu/GPUBindGroupLayoutDescriptor.idl
-    Modules/webgpu/GPUBlendDescriptor.idl
-    Modules/webgpu/GPUBufferDescriptor.idl
-    Modules/webgpu/GPUBufferUsage.idl
-    Modules/webgpu/GPUCanvasContext.idl
-    Modules/webgpu/GPUColor.idl
-    Modules/webgpu/GPUColorStateDescriptor.idl
-    Modules/webgpu/GPUColorWrite.idl
-    Modules/webgpu/GPUCompareFunction.idl
-    Modules/webgpu/GPUDepthStencilStateDescriptor.idl
-    Modules/webgpu/GPUErrorFilter.idl
-    Modules/webgpu/GPUExtent3D.idl
-    Modules/webgpu/GPULoadOp.idl
-    Modules/webgpu/GPUOrigin3D.idl
-    Modules/webgpu/GPUOutOfMemoryError.idl
-    Modules/webgpu/GPURequestAdapterOptions.idl
-    Modules/webgpu/GPUSamplerDescriptor.idl
-    Modules/webgpu/GPUShaderStage.idl
-    Modules/webgpu/GPUStoreOp.idl
-    Modules/webgpu/GPUTextureDescriptor.idl
-    Modules/webgpu/GPUTextureFormat.idl
-    Modules/webgpu/GPUTextureUsage.idl
-    Modules/webgpu/GPUUncapturedErrorEvent.idl
-    Modules/webgpu/GPUValidationError.idl
-    Modules/webgpu/GPUVertexAttributeDescriptor.idl
-    Modules/webgpu/GPUVertexBufferDescriptor.idl
-    Modules/webgpu/GPUVertexInputDescriptor.idl
-    Modules/webgpu/Navigator+GPU.idl
-    Modules/webgpu/WebGPU.idl
-    Modules/webgpu/WebGPUAdapter.idl
-    Modules/webgpu/WebGPUBindGroup.idl
-    Modules/webgpu/WebGPUBindGroupBinding.idl
-    Modules/webgpu/WebGPUBindGroupDescriptor.idl
-    Modules/webgpu/WebGPUBindGroupLayout.idl
-    Modules/webgpu/WebGPUBuffer.idl
-    Modules/webgpu/WebGPUBufferBinding.idl
-    Modules/webgpu/WebGPUCommandBuffer.idl
-    Modules/webgpu/WebGPUCommandEncoder.idl
-    Modules/webgpu/WebGPUComputePassEncoder.idl
-    Modules/webgpu/WebGPUComputePipeline.idl
-    Modules/webgpu/WebGPUComputePipelineDescriptor.idl
-    Modules/webgpu/WebGPUDevice.idl
-    Modules/webgpu/WebGPUDeviceErrorScopes.idl
-    Modules/webgpu/WebGPUDeviceEventHandler.idl
-    Modules/webgpu/WebGPUPipelineDescriptorBase.idl
-    Modules/webgpu/WebGPUPipelineLayout.idl
-    Modules/webgpu/WebGPUPipelineLayoutDescriptor.idl
-    Modules/webgpu/WebGPUProgrammableStageDescriptor.idl
-    Modules/webgpu/WebGPUProgrammablePassEncoder.idl
-    Modules/webgpu/WebGPUQueue.idl
-    Modules/webgpu/WebGPURenderPassDescriptor.idl
-    Modules/webgpu/WebGPURenderPassEncoder.idl
-    Modules/webgpu/WebGPURenderPipeline.idl
-    Modules/webgpu/WebGPURenderPipelineDescriptor.idl
-    Modules/webgpu/WebGPUSampler.idl
-    Modules/webgpu/WebGPUShaderModule.idl
-    Modules/webgpu/WebGPUShaderModuleDescriptor.idl
-    Modules/webgpu/WebGPUSwapChain.idl
-    Modules/webgpu/WebGPUTexture.idl
-    Modules/webgpu/WebGPUTextureView.idl
-    Modules/webgpu/WorkerNavigator+GPU.idl
-
     Modules/websockets/CloseEvent.idl
     Modules/websockets/WebSocket.idl
 
@@ -775,13 +714,13 @@ set(WebCore_NON_SVG_IDL_FILES
     css/StyleSheet.idl
     css/StyleSheetList.idl
 
+    css/typedom/CSSNumericValue.idl
+    css/typedom/CSSStyleImageValue.idl
+    css/typedom/CSSStyleValue.idl
+    css/typedom/CSSUnitValue.idl
+    css/typedom/CSSUnparsedValue.idl
     css/typedom/StylePropertyMap.idl
     css/typedom/StylePropertyMapReadOnly.idl
-    css/typedom/TypedOMCSSImageValue.idl
-    css/typedom/TypedOMCSSNumericValue.idl
-    css/typedom/TypedOMCSSStyleValue.idl
-    css/typedom/TypedOMCSSUnitValue.idl
-    css/typedom/TypedOMCSSUnparsedValue.idl
 
     dom/AbortAlgorithm.idl
     dom/AbortController.idl
@@ -792,6 +731,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/Attr.idl
     dom/BeforeLoadEvent.idl
     dom/BeforeUnloadEvent.idl
+    dom/BroadcastChannel.idl
     dom/CDATASection.idl
     dom/CharacterData.idl
     dom/ChildNode.idl
@@ -851,6 +791,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/EventTarget.idl
     dom/FocusEvent.idl
     dom/FocusOptions.idl
+    dom/FormDataEvent.idl
     dom/GlobalEventHandlers+PointerEvents.idl
     dom/GlobalEventHandlers+Selection.idl
     dom/GlobalEventHandlers.idl
@@ -1024,6 +965,7 @@ set(WebCore_NON_SVG_IDL_FILES
     html/MediaError.idl
     html/OffscreenCanvas.idl
     html/RadioNodeList.idl
+    html/SubmitEvent.idl
     html/TextMetrics.idl
     html/TimeRanges.idl
     html/URLSearchParams.idl
@@ -1759,6 +1701,7 @@ endif ()
 if (USE_LIBWEBRTC)
     list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES "${THIRDPARTY_DIR}/libwebrtc/Source/"
         "${THIRDPARTY_DIR}/libwebrtc/Source/webrtc"
+        "${THIRDPARTY_DIR}/libwebrtc/Source/third_party/libvpx/source/libvpx"
         "${THIRDPARTY_DIR}/libwebrtc/Source/third_party/abseil-cpp")
     list(APPEND WebCore_LIBRARIES webrtc)
     list(APPEND WebCore_SOURCES
@@ -1856,6 +1799,7 @@ set(MAKE_NAMES_DEPENDENCIES
 )
 set(SUPPLEMENTAL_DEPENDENCY_FILE ${WebCore_DERIVED_SOURCES_DIR}/supplemental_dependency.tmp)
 set(ISO_SUBSPACES_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMIsoSubspaces.h)
+set(CONSTRUCTORS_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMConstructors.h)
 set(WINDOW_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMWindowConstructors.idl)
 set(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/WorkerGlobalScopeConstructors.idl)
 set(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DedicatedWorkerGlobalScopeConstructors.idl)
@@ -2041,9 +1985,10 @@ GENERATE_BINDINGS(WebCoreBindings
     GENERATOR JS
     SUPPLEMENTAL_DEPFILE ${SUPPLEMENTAL_DEPENDENCY_FILE}
     PP_EXTRA_OUTPUT
-        ${ISO_SUBSPACES_HEADER_FILE} ${WINDOW_CONSTRUCTORS_FILE} ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE} ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
+        ${ISO_SUBSPACES_HEADER_FILE} ${CONSTRUCTORS_HEADER_FILE} ${WINDOW_CONSTRUCTORS_FILE} ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE} ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
     PP_EXTRA_ARGS
         --isoSubspacesHeaderFile ${ISO_SUBSPACES_HEADER_FILE}
+        --constructorsHeaderFile ${CONSTRUCTORS_HEADER_FILE}
         --windowConstructorsFile ${WINDOW_CONSTRUCTORS_FILE}
         --workerGlobalScopeConstructorsFile ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
         --dedicatedWorkerGlobalScopeConstructorsFile ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
@@ -2254,4 +2199,11 @@ if (MSVC)
     set_target_properties(WebCore PROPERTIES
         COMPILE_PDB_NAME ${WebCore_OUTPUT_NAME}
     )
+endif ()
+
+# Special compiler flags may be used for individual files only if the file is excluded from unified
+# build.
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # This warning cannot be suppressed with a pragma.
+    set_source_files_properties(Modules/websockets/WebSocket.cpp PROPERTIES COMPILE_FLAGS -Wno-stringop-overread)
 endif ()

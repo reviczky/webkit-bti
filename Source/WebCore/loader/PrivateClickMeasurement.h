@@ -78,10 +78,12 @@ public:
         {
         }
 
-        explicit SourceSite(const RegistrableDomain& domain)
-            : registrableDomain { domain }
+        explicit SourceSite(RegistrableDomain&& domain)
+            : registrableDomain { WTFMove(domain) }
         {
         }
+
+        SourceSite isolatedCopy() const { return SourceSite { registrableDomain.isolatedCopy() }; }
 
         bool operator==(const SourceSite& other) const
         {
@@ -121,7 +123,9 @@ public:
             : registrableDomain { WTFMove(domain) }
         {
         }
-        
+
+        AttributionDestinationSite isolatedCopy() const { return AttributionDestinationSite { registrableDomain.isolatedCopy() }; }
+
         bool operator==(const AttributionDestinationSite& other) const
         {
             return registrableDomain == other.registrableDomain;
@@ -354,8 +358,8 @@ public:
     };
 
 #if PLATFORM(COCOA)
-    WEBCORE_EXPORT bool calculateAndUpdateSourceUnlinkableToken(const String& serverPublicKeyBase64URL);
-    WEBCORE_EXPORT bool calculateAndUpdateSourceSecretToken(const String& serverResponseBase64URL);
+    WEBCORE_EXPORT std::optional<String> calculateAndUpdateSourceUnlinkableToken(const String& serverPublicKeyBase64URL);
+    WEBCORE_EXPORT std::optional<String> calculateAndUpdateSourceSecretToken(const String& serverResponseBase64URL);
 #endif
 
     void setSourceUnlinkableTokenValue(const String& value) { m_sourceUnlinkableToken.valueBase64URL = value; }

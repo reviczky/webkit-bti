@@ -173,17 +173,21 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 #if ENABLE(APP_BOUND_DOMAINS)
     encoder << limitsNavigationsToAppBoundDomains;
 #endif
-    encoder << lastNavigationWasAppBound;
+    encoder << lastNavigationWasAppInitiated;
     encoder << shouldRelaxThirdPartyCookieBlocking;
     encoder << canUseCredentialStorage;
 
 #if PLATFORM(GTK)
-    encoder << themeName;
+    encoder << gtkSettings;
 #endif
     
     encoder << httpsUpgradeEnabled;
 #if PLATFORM(IOS)
     encoder << allowsDeprecatedSynchronousXMLHttpRequestDuringUnload;
+#endif
+
+#if ENABLE(APP_HIGHLIGHTS)
+    encoder << appHighlightsVisible;
 #endif
 }
 
@@ -577,7 +581,7 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
     if (!decoder.decode(parameters.limitsNavigationsToAppBoundDomains))
         return std::nullopt;
 #endif
-    if (!decoder.decode(parameters.lastNavigationWasAppBound))
+    if (!decoder.decode(parameters.lastNavigationWasAppInitiated))
         return std::nullopt;
 
     if (!decoder.decode(parameters.shouldRelaxThirdPartyCookieBlocking))
@@ -587,7 +591,7 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
         return std::nullopt;
 
 #if PLATFORM(GTK)
-    if (!decoder.decode(parameters.themeName))
+    if (!decoder.decode(parameters.gtkSettings))
         return std::nullopt;
 #endif
 
@@ -596,6 +600,11 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
 
 #if PLATFORM(IOS)
     if (!decoder.decode(parameters.allowsDeprecatedSynchronousXMLHttpRequestDuringUnload))
+        return std::nullopt;
+#endif
+    
+#if ENABLE(APP_HIGHLIGHTS)
+    if (!decoder.decode(parameters.appHighlightsVisible))
         return std::nullopt;
 #endif
 

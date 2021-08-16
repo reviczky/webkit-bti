@@ -37,9 +37,9 @@
 #include "HTMLDocument.h"
 #include "HTMLFormElement.h"
 #include "HTMLImageLoader.h"
+#include "HTMLMapElement.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLPictureElement.h"
-#include "HTMLMapElement.h"
 #include "HTMLSourceElement.h"
 #include "HTMLSrcsetParser.h"
 #include "LazyLoadImageObserver.h"
@@ -116,11 +116,11 @@ bool HTMLImageElement::hasPresentationalHintsForAttribute(const QualifiedName& n
 void HTMLImageElement::collectPresentationalHintsForAttribute(const QualifiedName& name, const AtomString& value, MutableStyleProperties& style)
 {
     if (name == widthAttr) {
-        addHTMLLengthToStyle(style, CSSPropertyWidth, value);
-        applyAspectRatioFromWidthAndHeightAttributesToStyle(style);
+        addHTMLMultiLengthToStyle(style, CSSPropertyWidth, value);
+        applyAspectRatioFromWidthAndHeightAttributesToStyle(value, attributeWithoutSynchronization(heightAttr), style);
     } else if (name == heightAttr) {
-        addHTMLLengthToStyle(style, CSSPropertyHeight, value);
-        applyAspectRatioFromWidthAndHeightAttributesToStyle(style);
+        addHTMLMultiLengthToStyle(style, CSSPropertyHeight, value);
+        applyAspectRatioFromWidthAndHeightAttributesToStyle(attributeWithoutSynchronization(widthAttr), value, style);
     } else if (name == borderAttr)
         applyBorderAttributeToStyle(value, style);
     else if (name == vspaceAttr) {
@@ -135,6 +135,34 @@ void HTMLImageElement::collectPresentationalHintsForAttribute(const QualifiedNam
         addPropertyToPresentationalHintStyle(style, CSSPropertyVerticalAlign, value);
     else
         HTMLElement::collectPresentationalHintsForAttribute(name, value, style);
+}
+
+void HTMLImageElement::collectExtraStyleForPresentationalHints(MutableStyleProperties& style)
+{
+    if (!sourceElement())
+        return;
+    auto& widthAttrFromSource = sourceElement()->attributeWithoutSynchronization(widthAttr);
+    auto& heightAttrFromSource = sourceElement()->attributeWithoutSynchronization(heightAttr);
+    // If both width and height attributes of <source> is undefined, the style's value should not
+    // be overwritten. Otherwise, <souce> will overwrite it. I.e., if <source> only has one attribute
+    // defined, the other one and aspect-ratio shouldn't be set to auto.
+    if (widthAttrFromSource.isNull() && heightAttrFromSource.isNull())
+        return;
+
+    if (!widthAttrFromSource.isNull())
+        addHTMLLengthToStyle(style, CSSPropertyWidth, widthAttrFromSource);
+    else
+        addPropertyToPresentationalHintStyle(style, CSSPropertyWidth, CSSValueAuto);
+
+    if (!heightAttrFromSource.isNull())
+        addHTMLLengthToStyle(style, CSSPropertyHeight, heightAttrFromSource);
+    else
+        addPropertyToPresentationalHintStyle(style, CSSPropertyHeight, CSSValueAuto);
+
+    if (!widthAttrFromSource.isNull() && !heightAttrFromSource.isNull())
+        applyAspectRatioFromWidthAndHeightAttributesToStyle(widthAttrFromSource, heightAttrFromSource, style);
+    else
+        addPropertyToPresentationalHintStyle(style, CSSPropertyAspectRatio, CSSValueAuto);
 }
 
 const AtomString& HTMLImageElement::imageSourceURL() const
@@ -191,8 +219,10 @@ ImageCandidate HTMLImageElement::bestFitSourceFromPictureElement()
         auto sourceSize = sizesParser.length();
 
         candidate = bestFitSourceForImageAttributes(document().deviceScaleFactor(), nullAtom(), srcset, sourceSize);
-        if (!candidate.isEmpty())
+        if (!candidate.isEmpty()) {
+            setSourceElement(&source);
             break;
+        }
     }
 
     return candidate;
@@ -217,6 +247,7 @@ void HTMLImageElement::selectImageSource(RelevantMutation relevantMutation)
     // First look for the best fit source from our <picture> parent if we have one.
     ImageCandidate candidate = bestFitSourceFromPictureElement();
     if (candidate.isEmpty()) {
+        setSourceElement(nullptr);
         // If we don't have a <picture> or didn't find a source, then we use our own attributes.
         SizesAttributeParser sizesParser(attributeWithoutSynchronization(sizesAttr).string(), document(), &m_mediaQueryDynamicResults);
         auto sourceSize = sizesParser.length();
@@ -484,7 +515,7 @@ float HTMLImageElement::effectiveImageDevicePixelRatio() const
 
     auto* image = m_imageLoader->image()->image();
 
-    if (image && image->isSVGImage())
+    if (image && image->drawsSVGImage())
         return 1.0f;
 
     return m_imageDevicePixelRatio;
@@ -600,6 +631,24 @@ int HTMLImageElement::y() const
 bool HTMLImageElement::complete() const
 {
     return m_imageLoader->imageComplete();
+}
+
+void HTMLImageElement::setDecoding(String&& decodingMode)
+{
+    setAttributeWithoutSynchronization(decodingAttr, WTFMove(decodingMode));
+}
+
+String HTMLImageElement::decoding() const
+{
+    switch (decodingMode()) {
+    case DecodingMode::Synchronous:
+        return "sync"_s;
+    case DecodingMode::Asynchronous:
+        return "async"_s;
+    case DecodingMode::Auto:
+        break;
+    }
+    return "auto"_s;
 }
 
 DecodingMode HTMLImageElement::decodingMode() const
@@ -797,6 +846,25 @@ ReferrerPolicy HTMLImageElement::referrerPolicy() const
     if (document().settings().referrerPolicyAttributeEnabled())
         return parseReferrerPolicy(attributeWithoutSynchronization(referrerpolicyAttr), ReferrerPolicySource::ReferrerPolicyAttribute).value_or(ReferrerPolicy::EmptyString);
     return ReferrerPolicy::EmptyString;
+}
+
+HTMLSourceElement* HTMLImageElement::sourceElement() const
+{
+    return m_sourceElement.get();
+}
+
+void HTMLImageElement::setSourceElement(HTMLSourceElement* sourceElement)
+{
+    if (m_sourceElement == sourceElement)
+        return;
+    m_sourceElement = makeWeakPtr(sourceElement);
+    invalidateAttributeMapping();
+}
+
+void HTMLImageElement::invalidateAttributeMapping()
+{
+    ensureUniqueElementData().setPresentationalHintStyleIsDirty(true);
+    invalidateStyle();
 }
 
 }

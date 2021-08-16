@@ -284,12 +284,14 @@ public:
         AXFocusedUIElementChanged,
         AXFrameLoadComplete,
         AXIdAttributeChanged,
+        AXImageOverlayChanged,
         AXLanguageChanged,
         AXLayoutComplete,
         AXLoadComplete,
         AXNewDocumentLoadComplete,
         AXPageScrolled,
         AXSelectedChildrenChanged,
+        AXSelectedStateChanged,
         AXSelectedTextChanged,
         AXValueChanged,
         AXScrolledToAnchor,
@@ -462,6 +464,7 @@ private:
     bool shouldProcessAttributeChange(const QualifiedName&, Element*);
     void selectedChildrenChanged(Node*);
     void selectedChildrenChanged(RenderObject*);
+    void selectedStateChanged(Node*);
     // Called by a node when text or a text equivalent (e.g. alt) attribute is changed.
     void textChanged(Node*);
     void handleActiveDescendantChanged(Node*);

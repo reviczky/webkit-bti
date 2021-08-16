@@ -161,7 +161,9 @@ void TextTrackCueGenericBoxElement::applyCSSProperties(const IntSize& videoSize)
 
 Ref<TextTrackCueGeneric> TextTrackCueGeneric::create(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, const String& content)
 {
-    return adoptRef(*new TextTrackCueGeneric(downcast<Document>(context), start, end, content));
+    auto cue = adoptRef(*new TextTrackCueGeneric(downcast<Document>(context), start, end, content));
+    cue->suspendIfNeeded();
+    return cue;
 }
 
 TextTrackCueGeneric::TextTrackCueGeneric(Document& document, const MediaTime& start, const MediaTime& end, const String& content)
@@ -192,10 +194,10 @@ ExceptionOr<void> TextTrackCueGeneric::setPosition(const LineAndPositionSetting&
 
 void TextTrackCueGeneric::setFontSize(int fontSize, const IntSize& videoSize, bool important)
 {
-    if (!hasDisplayTree() || !fontSize)
+    if (!fontSize)
         return;
     
-    if (important || !baseFontSizeRelativeToVideoHeight()) {
+    if (important || !hasDisplayTree() || !baseFontSizeRelativeToVideoHeight()) {
         VTTCue::setFontSize(fontSize, videoSize, important);
         return;
     }

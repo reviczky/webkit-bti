@@ -1,5 +1,5 @@
 // Copyright 2015 The Chromium Authors. All rights reserved.
-// Copyright (C) 2016 Apple Inc. All rights reserved.
+// Copyright (C) 2016-2021 Apple Inc. All rights reserved.
 // Copyright (C) 2021 Metrological Group B.V.
 // Copyright (C) 2021 Igalia S.L.
 //
@@ -35,6 +35,7 @@
 #include "CSSFontFaceSrcValue.h"
 #include "CSSFontFeatureValue.h"
 #include "CSSFontStyleValue.h"
+#include "CSSImageValue.h"
 #include "CSSParserFastPaths.h"
 #include "CSSParserImpl.h"
 #include "CSSParserTokenRange.h"
@@ -42,6 +43,7 @@
 #include "CSSTokenizer.h"
 #include "CSSUnicodeRangeValue.h"
 #include "Document.h"
+#include "ParsingUtilities.h"
 #include "ScriptExecutionContext.h"
 #include "StyleSheetContents.h"
 
@@ -198,28 +200,28 @@ RefPtr<CSSValue> CSSPropertyParserWorkerSafe::parseFontFaceDisplay(const String&
 
 namespace CSSPropertyParserHelpersWorkerSafe {
 
-static RefPtr<CSSValue> consumeFontFaceSrcURI(CSSParserTokenRange& range, const CSSParserContext& context)
+static RefPtr<CSSFontFaceSrcValue> consumeFontFaceSrcURI(CSSParserTokenRange& range, const CSSParserContext& context)
 {
-    String url = CSSPropertyParserHelpers::consumeUrlAsStringView(range).toString();
-    if (url.isNull())
+    auto location = context.completeURL(CSSPropertyParserHelpers::consumeUrlAsStringView(range).toString()).resolvedURL.string();
+    if (location.isNull())
         return nullptr;
 
-    RefPtr<CSSFontFaceSrcValue> uriValue = CSSFontFaceSrcValue::create(context.completeURL(url).string(), context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No);
+    String format;
+    if (range.peek().functionId() == CSSValueFormat) {
+        // https://drafts.csswg.org/css-fonts/#descdef-font-face-src
+        // FIXME: The format should be a comma-separated list; at this time we support only one.
+        // FIXME: We allow any identifier here and convert all to strings; specification calls for only certain identifiers.
+        auto args = CSSPropertyParserHelpers::consumeFunction(range);
+        auto& arg = args.consumeIncludingWhitespace();
+        if ((arg.type() != StringToken && arg.type() != IdentToken) || !args.atEnd())
+            return nullptr;
+        format = arg.value().toString();
+    }
 
-    if (range.peek().functionId() != CSSValueFormat)
-        return uriValue;
-
-    // FIXME: https://drafts.csswg.org/css-fonts says that format() contains a comma-separated list of strings,
-    // but CSSFontFaceSrcValue stores only one format. Allowing one format for now.
-    // FIXME: We're allowing the format to be an identifier as well as a string, because the old
-    // parser did. It's not clear if we need to continue to support this behavior, but we have lots of
-    // layout tests that rely on it.
-    CSSParserTokenRange args = CSSPropertyParserHelpers::consumeFunction(range);
-    const CSSParserToken& arg = args.consumeIncludingWhitespace();
-    if ((arg.type() != StringToken && arg.type() != IdentToken) || !args.atEnd())
-        return nullptr;
-    uriValue->setFormat(arg.value().toString());
-    return uriValue;
+    // FIXME: Change CSSFontFaceSrcValue::create to take format so we don't need a separate setFormat call.
+    auto srcValue = CSSFontFaceSrcValue::create(location, context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No);
+    srcValue->setFormat(format);
+    return srcValue;
 }
 
 static RefPtr<CSSValue> consumeFontFaceSrcLocal(CSSParserTokenRange& range)
@@ -392,22 +394,125 @@ RefPtr<CSSValue> consumeFontStretchRange(CSSParserTokenRange& range, CSSValuePoo
 }
 #endif
 
+static bool consumeOptionalDelimiter(CSSParserTokenRange& range, UChar value)
+{
+    if (!(range.peek().type() == DelimiterToken && range.peek().delimiter() == value))
+        return false;
+    range.consume();
+    return true;
+}
+
+static StringView consumeIdentifier(CSSParserTokenRange& range)
+{
+    if (range.peek().type() != IdentToken)
+        return { };
+    return range.consume().value();
+}
+
+static bool consumeAndAppendOptionalNumber(StringBuilder& builder, CSSParserTokenRange& range, CSSParserTokenType type = NumberToken)
+{
+    if (range.peek().type() != type)
+        return false;
+    auto originalText = range.consume().originalText();
+    if (originalText.isNull())
+        return false;
+    builder.append(originalText);
+    return true;
+}
+
+static bool consumeAndAppendOptionalDelimiter(StringBuilder& builder, CSSParserTokenRange& range, UChar value)
+{
+    if (!consumeOptionalDelimiter(range, value))
+        return false;
+    builder.append(value);
+    return true;
+}
+
+static void consumeAndAppendOptionalQuestionMarks(StringBuilder& builder, CSSParserTokenRange& range)
+{
+    while (consumeAndAppendOptionalDelimiter(builder, range, '?')) { }
+}
+
+static String consumeUnicodeRangeString(CSSParserTokenRange& range)
+{
+    if (!equalLettersIgnoringASCIICase(consumeIdentifier(range), "u"))
+        return { };
+    StringBuilder builder;
+    if (consumeAndAppendOptionalNumber(builder, range, DimensionToken))
+        consumeAndAppendOptionalQuestionMarks(builder, range);
+    else if (consumeAndAppendOptionalNumber(builder, range)) {
+        if (!(consumeAndAppendOptionalNumber(builder, range, DimensionToken) || consumeAndAppendOptionalNumber(builder, range)))
+            consumeAndAppendOptionalQuestionMarks(builder, range);
+    } else if (consumeOptionalDelimiter(range, '+')) {
+        builder.append('+');
+        if (auto identifier = consumeIdentifier(range); !identifier.isNull())
+            builder.append(identifier);
+        else if (!consumeAndAppendOptionalDelimiter(builder, range, '?'))
+            return { };
+        consumeAndAppendOptionalQuestionMarks(builder, range);
+    } else
+        return { };
+    return builder.toString();
+}
+
+struct UnicodeRange {
+    UChar32 start;
+    UChar32 end;
+};
+
+static std::optional<UnicodeRange> consumeUnicodeRange(CSSParserTokenRange& range)
+{
+    return readCharactersForParsing(consumeUnicodeRangeString(range), [&](auto buffer) -> std::optional<UnicodeRange> {
+        if (!skipExactly(buffer, '+'))
+            return std::nullopt;
+        UChar32 start = 0;
+        unsigned hexDigitCount = 0;
+        while (buffer.hasCharactersRemaining() && isASCIIHexDigit(*buffer)) {
+            if (++hexDigitCount > 6)
+                return std::nullopt;
+            start <<= 4;
+            start |= toASCIIHexValue(*buffer++);
+        }
+        auto end = start;
+        while (skipExactly(buffer, '?')) {
+            if (++hexDigitCount > 6)
+                return std::nullopt;
+            start <<= 4;
+            end <<= 4;
+            end |= 0xF;
+        }
+        if (!hexDigitCount)
+            return std::nullopt;
+        if (start == end && buffer.hasCharactersRemaining()) {
+            if (!skipExactly(buffer, '-'))
+                return std::nullopt;
+            end = 0;
+            hexDigitCount = 0;
+            while (buffer.hasCharactersRemaining() && isASCIIHexDigit(*buffer)) {
+                if (++hexDigitCount > 6)
+                    return std::nullopt;
+                end <<= 4;
+                end |= toASCIIHexValue(*buffer++);
+            }
+            if (!hexDigitCount)
+                return std::nullopt;
+        }
+        if (buffer.hasCharactersRemaining())
+            return std::nullopt;
+        return { { start, end } };
+    });
+}
+
 RefPtr<CSSValueList> consumeFontFaceUnicodeRange(CSSParserTokenRange& range)
 {
-    RefPtr<CSSValueList> values = CSSValueList::createCommaSeparated();
-
+    auto values = CSSValueList::createCommaSeparated();
     do {
-        const CSSParserToken& token = range.consumeIncludingWhitespace();
-        if (token.type() != UnicodeRangeToken)
+        auto unicodeRange = consumeUnicodeRange(range);
+        range.consumeWhitespace();
+        if (!unicodeRange || unicodeRange->end > UCHAR_MAX_VALUE || unicodeRange->start > unicodeRange->end)
             return nullptr;
-
-        UChar32 start = token.unicodeRangeStart();
-        UChar32 end = token.unicodeRangeEnd();
-        if (start > end)
-            return nullptr;
-        values->append(CSSUnicodeRangeValue::create(start, end));
+        values->append(CSSUnicodeRangeValue::create(unicodeRange->start, unicodeRange->end));
     } while (CSSPropertyParserHelpers::consumeCommaIncludingWhitespace(range));
-
     return values;
 }
 

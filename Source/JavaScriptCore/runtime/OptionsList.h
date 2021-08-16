@@ -26,6 +26,11 @@
 #pragma once
 
 #include "GCLogging.h"
+#include <wtf/MathExtras.h>
+
+#if OS(DARWIN)
+#include <mach/vm_param.h>
+#endif
 
 using WTF::PrintStream;
 
@@ -38,6 +43,7 @@ namespace JSC {
 #endif
 
 JS_EXPORT_PRIVATE bool canUseJITCage();
+bool canUseWebAssemblyFastMemory();
 
 // How do JSC VM options work?
 // ===========================
@@ -366,6 +372,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Bool, collectExtraSamplingProfilerData, false, Normal, "This corresponds to the JSC shell's --sample option, or if we're wanting to use the sampling profiler via the Debug menu in the browser.") \
     v(Unsigned, samplingProfilerTopFunctionsCount, 12, Normal, "Number of top functions to report when using the command line interface.") \
     v(Unsigned, samplingProfilerTopBytecodesCount, 40, Normal, "Number of top bytecodes to report when using the command line interface.") \
+    v(Bool, samplingProfilerIgnoreExternalSourceID, false, Normal, "Ignore external source ID when aggregating results from sampling profiler") \
     v(OptionString, samplingProfilerPath, nullptr, Normal, "The path to the directory to write sampiling profiler output to. This probably will not work with WK2 unless the path is in the sandbox.") \
     v(Bool, sampleCCode, false, Normal, "Causes the sampling profiler to record profiling data for C frames.") \
     \
@@ -393,6 +400,8 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Bool, useExecutableAllocationFuzz, false, Normal, nullptr) \
     v(Unsigned, fireExecutableAllocationFuzzAt, 0, Normal, nullptr) \
     v(Unsigned, fireExecutableAllocationFuzzAtOrAfter, 0, Normal, nullptr) \
+    v(Bool, fireExecutableAllocationFuzzRandomly, false, Normal, nullptr) \
+    v(Double, fireExecutableAllocationFuzzRandomlyProbability, 0.1, Normal, nullptr) \
     v(Bool, verboseExecutableAllocationFuzz, false, Normal, nullptr) \
     \
     v(Bool, useOSRExitFuzz, false, Normal, nullptr) \
@@ -443,6 +452,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Unsigned, prototypeHitCountForLLIntCaching, 2, Normal, "Number of prototype property hits before caching a prototype in the LLInt. A count of 0 means never cache.") \
     \
     v(Bool, dumpCompiledRegExpPatterns, false, Normal, nullptr) \
+    v(Bool, verboseRegExpCompilation, false, Normal, nullptr) \
     \
     v(Bool, dumpModuleRecord, false, Normal, nullptr) \
     v(Bool, dumpModuleLoadingState, false, Normal, nullptr) \
@@ -470,7 +480,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Int32, omgTierUpCounterIncrementForLoop, 1, Normal, "The amount the tier up counter is incremented on each loop backedge.") \
     v(Int32, omgTierUpCounterIncrementForEntry, 15, Normal, "The amount the tier up counter is incremented on each function entry.") \
     /* FIXME: enable fast memories on iOS and pre-allocate them. https://bugs.webkit.org/show_bug.cgi?id=170774 */ \
-    v(Bool, useWebAssemblyFastMemory, OS_CONSTANT(EFFECTIVE_ADDRESS_WIDTH) >= 48, Normal, "If true, we will try to use a 32-bit address space with a signal handler to bounds check wasm memory.") \
+    v(Bool, useWebAssemblyFastMemory, canUseWebAssemblyFastMemory(), Normal, "If true, we will try to use a 32-bit address space with a signal handler to bounds check wasm memory.") \
     v(Bool, logWebAssemblyMemory, false, Normal, nullptr) \
     v(Unsigned, webAssemblyFastMemoryRedzonePages, 128, Normal, "WebAssembly fast memories use 4GiB virtual allocations, plus a redzone (counted as multiple of 64KiB WebAssembly pages) at the end to catch reg+imm accesses which exceed 32-bit, anything beyond the redzone is explicitly bounds-checked") \
     v(Bool, crashIfWebAssemblyCantFastMemory, false, Normal, "If true, we will crash if we can't obtain fast memory for wasm.") \
@@ -524,7 +534,7 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Bool, usePrivateStaticClassFields, true, Normal, "If true, the parser will understand private static data fields inside classes.") \
     v(Bool, usePrivateClassFields, true, Normal, "If true, the parser will understand private data fields inside classes.") \
     v(Bool, usePrivateMethods, true, Normal, "If true, the parser will understand private methods inside classes.") \
-    v(Bool, usePrivateIn, false, Normal, "If true, the parser will understand private member existence checks with the `in` operator.") \
+    v(Bool, usePrivateIn, true, Normal, "If true, the parser will understand private member existence checks with the `in` operator.") \
     v(Bool, useWebAssemblyStreaming, true, Normal, "Allow to run WebAssembly's Streaming API") \
     v(Bool, useWebAssemblyReferences, true, Normal, "Allow types from the wasm references spec.") \
     v(Bool, useWebAssemblyTypedFunctionReferences, false, Normal, "Allow function types from the wasm typed function references spec.") \
@@ -538,6 +548,11 @@ JS_EXPORT_PRIVATE bool canUseJITCage();
     v(Bool, useSharedArrayBuffer, false, Normal, nullptr) \
     v(Bool, useTopLevelAwait, true, Normal, "allow the await keyword at the top level of a module.") \
     v(Bool, verboseExecutablePoolAllocation, false, Normal, nullptr) \
+    v(Bool, useDataIC, false, Normal, nullptr) \
+    v(Bool, useDataICInOptimizingJIT, false, Normal, nullptr) \
+    v(Bool, useDataICSharing, false, Normal, nullptr) \
+    v(Bool, useTemporal, false, Normal, "Expose the Temporal object.") \
+    v(Bool, useArrayFindLastMethod, false, Normal, "Expose the findLast() and findLastIndex() methods on Array and %TypedArray%.") \
 
 
 enum OptionEquivalence {
@@ -551,6 +566,10 @@ enum OptionEquivalence {
     v(showDisassembly, dumpDisassembly, SameOption) \
     v(showDFGDisassembly, dumpDFGDisassembly, SameOption) \
     v(showFTLDisassembly, dumpFTLDisassembly, SameOption) \
+    v(dumpGraphAtEachDFGFTLPhase, dumpDFGFTLGraphAtEachPhase, SameOption) \
+    v(dumpGraphAtEachDFGPhase, dumpDFGGraphAtEachPhase, SameOption) \
+    v(dumpGraphAtEachB3Phase, dumpB3GraphAtEachPhase, SameOption) \
+    v(dumpGraphAtEachAirPhase, dumpAirGraphAtEachPhase, SameOption) \
     v(alwaysDoFullCollection, useGenerationalGC, InvertedOption) \
     v(enableOSREntryToDFG, useOSREntryToDFG, SameOption) \
     v(enableOSREntryToFTL, useOSREntryToFTL, SameOption) \

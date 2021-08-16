@@ -94,13 +94,11 @@ public:
     bool canHaveVerticalScrollbar() const { return m_scrollableAreaParameters.verticalScrollbarMode != ScrollbarAlwaysOff; }
     bool canHaveScrollbars() const { return m_scrollableAreaParameters.horizontalScrollbarMode != ScrollbarAlwaysOff || m_scrollableAreaParameters.verticalScrollbarMode != ScrollbarAlwaysOff; }
 
-#if ENABLE(CSS_SCROLL_SNAP)
     const FloatScrollSnapOffsetsInfo& snapOffsetsInfo() const;
-    unsigned currentHorizontalSnapPointIndex() const { return m_currentHorizontalSnapPointIndex; }
-    unsigned currentVerticalSnapPointIndex() const { return m_currentVerticalSnapPointIndex; }
-    void setCurrentHorizontalSnapPointIndex(unsigned index) { m_currentHorizontalSnapPointIndex = index; }
-    void setCurrentVerticalSnapPointIndex(unsigned index) { m_currentVerticalSnapPointIndex = index; }
-#endif
+    std::optional<unsigned> currentHorizontalSnapPointIndex() const;
+    std::optional<unsigned> currentVerticalSnapPointIndex() const;
+    void setCurrentHorizontalSnapPointIndex(std::optional<unsigned>);
+    void setCurrentVerticalSnapPointIndex(std::optional<unsigned>);
 
     bool useDarkAppearanceForScrollbars() const { return m_scrollableAreaParameters.useDarkAppearanceForScrollbars; }
 
@@ -158,11 +156,9 @@ private:
     FloatPoint m_lastCommittedScrollPosition;
     FloatPoint m_currentScrollPosition;
     IntPoint m_scrollOrigin;
-#if ENABLE(CSS_SCROLL_SNAP)
     FloatScrollSnapOffsetsInfo m_snapOffsetsInfo;
-    unsigned m_currentHorizontalSnapPointIndex { 0 };
-    unsigned m_currentVerticalSnapPointIndex { 0 };
-#endif
+    std::optional<unsigned> m_currentHorizontalSnapPointIndex;
+    std::optional<unsigned> m_currentVerticalSnapPointIndex;
     ScrollableAreaParameters m_scrollableAreaParameters;
 #if ENABLE(SCROLLING_THREAD)
     OptionSet<SynchronousScrollingReason> m_synchronousScrollingReasons;

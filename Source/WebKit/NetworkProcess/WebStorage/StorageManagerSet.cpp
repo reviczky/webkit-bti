@@ -41,7 +41,7 @@ Ref<StorageManagerSet> StorageManagerSet::create()
 }
 
 StorageManagerSet::StorageManagerSet()
-    : m_queue(WorkQueue::create("com.apple.WebKit.WebStorage"))
+    : m_queue(SuspendableWorkQueue::create("com.apple.WebKit.WebStorage"))
 {
     ASSERT(RunLoop::isMain());
 
@@ -155,46 +155,38 @@ void StorageManagerSet::waitUntilSyncingLocalStorageFinished()
 {
     ASSERT(RunLoop::isMain());
 
-    m_queue->dispatchSync([] { });
+    BinarySemaphore semaphore;
+    m_queue->dispatch([this, &semaphore] {
+        flushLocalStorage();
+        semaphore.signal();
+    });
+    semaphore.wait();
+}
+
+void StorageManagerSet::flushLocalStorage()
+{
+    ASSERT(!RunLoop::isMain());
+    for (const auto& storageArea : m_storageAreas.values()) {
+        ASSERT(storageArea);
+        if (storageArea)
+            storageArea->syncToDatabase();
+    }
 }
 
 void StorageManagerSet::suspend(CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
 
-    CompletionHandlerCallingScope completionHandlerCaller(WTFMove(completionHandler));
-    Locker stateLocker { m_stateLock };
-    if (m_state != State::Running)
-        return;
-    m_state = State::WillSuspend;
-
-    m_queue->dispatch([this, protectedThis = makeRef(*this), completionHandler = completionHandlerCaller.release()] () mutable {
-        Locker stateLocker { m_stateLock };
-        ASSERT(m_state != State::Suspended);
-
-        if (m_state != State::WillSuspend) {
-            RunLoop::main().dispatch(WTFMove(completionHandler));
-            return;
-        }
-
-        m_state = State::Suspended;
-        RunLoop::main().dispatch(WTFMove(completionHandler));
-
-        while (m_state == State::Suspended)
-            m_stateChangeCondition.wait(m_stateLock);
-        ASSERT(m_state == State::Running);
-    });
+    m_queue->suspend([protectedThis = makeRef(*this)] {
+        protectedThis->flushLocalStorage();
+    }, WTFMove(completionHandler));
 }
 
 void StorageManagerSet::resume()
 {
     ASSERT(RunLoop::isMain());
 
-    Locker stateLocker { m_stateLock };
-    auto previousState = m_state;
-    m_state = State::Running;
-    if (previousState == State::Suspended)
-        m_stateChangeCondition.notifyOne();
+    m_queue->resume();
 }
 
 void StorageManagerSet::getSessionStorageOrigins(PAL::SessionID sessionID, GetOriginsCallback&& completionHandler)

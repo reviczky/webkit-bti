@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -65,6 +65,7 @@ public:
     void setMockWebAuthenticationConfiguration(WebCore::MockWebAuthenticationConfiguration&&);
 
 private:
+    void platformInitializeWebAuthnProcess(const WebAuthnProcessCreationParameters&);
     void lowMemoryHandler(Critical);
 
     // AuxiliaryProcess
@@ -80,9 +81,6 @@ private:
     // Message Handlers
     void initializeWebAuthnProcess(WebAuthnProcessCreationParameters&&);
     void createWebAuthnConnectionToWebProcess(WebCore::ProcessIdentifier, CompletionHandler<void(std::optional<IPC::Attachment>&&)>&&);
-
-    void processDidTransitionToForeground();
-    void processDidTransitionToBackground();
 
     // Connections to WebProcesses.
     HashMap<WebCore::ProcessIdentifier, Ref<WebAuthnConnectionToWebProcess>> m_webProcessConnections;

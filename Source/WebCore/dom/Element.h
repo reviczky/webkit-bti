@@ -65,6 +65,7 @@ class WebAnimation;
 
 enum class AnimationImpact;
 enum class EventProcessing : uint8_t;
+enum class IsSyntheticClick : bool { No, Yes };
 enum class SelectionRestorationMode : uint8_t;
 
 struct GetAnimationsOptions;
@@ -305,6 +306,7 @@ public:
 
     RefPtr<ShadowRoot> userAgentShadowRoot() const;
     WEBCORE_EXPORT ShadowRoot& ensureUserAgentShadowRoot();
+    WEBCORE_EXPORT ShadowRoot& createUserAgentShadowRoot();
 
     void setIsDefinedCustomElement(JSCustomElementInterface&);
     void setIsFailedCustomElement();
@@ -466,6 +468,7 @@ public:
 #endif
 
     virtual bool isFormControlElement() const { return false; }
+    virtual bool isFormControlElementWithState() const { return false; }
     virtual bool isSpinButtonElement() const { return false; }
     virtual bool isTextFormControlElement() const { return false; }
     virtual bool isTextField() const { return false; }
@@ -508,6 +511,8 @@ public:
     const RenderStyle* lastStyleChangeEventStyle(PseudoId) const;
     void setLastStyleChangeEventStyle(PseudoId, std::unique_ptr<const RenderStyle>&&);
 
+    bool isInTopLayer() const { return document().topLayerElements().contains(makeRef(*const_cast<Element*>(this))); }
+
 #if ENABLE(FULLSCREEN_API)
     bool containsFullScreenElement() const { return hasNodeFlag(NodeFlag::ContainsFullScreenElement); }
     void setContainsFullScreenElement(bool);
@@ -533,7 +538,7 @@ public:
     IntPoint savedLayerScrollPosition() const;
     void setSavedLayerScrollPosition(const IntPoint&);
 
-    bool dispatchMouseEvent(const PlatformMouseEvent&, const AtomString& eventType, int clickCount = 0, Element* relatedTarget = nullptr);
+    bool dispatchMouseEvent(const PlatformMouseEvent&, const AtomString& eventType, int clickCount = 0, Element* relatedTarget = nullptr, IsSyntheticClick isSyntethicClick = IsSyntheticClick::No);
     bool dispatchWheelEvent(const PlatformWheelEvent&, OptionSet<EventHandling>&, Event::IsCancelable = Event::IsCancelable::Yes);
     bool dispatchKeyEvent(const PlatformKeyboardEvent&);
     bool dispatchSimulatedClick(Event* underlyingEvent, SimulatedClickMouseEventOptions = SendNoEvents, SimulatedClickVisualOptions = ShowPressedLook);

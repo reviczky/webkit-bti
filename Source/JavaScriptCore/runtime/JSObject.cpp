@@ -373,8 +373,8 @@ ALWAYS_INLINE Structure* JSObject::visitButterflyImpl(Visitor& visitor)
         return nullptr;
     structure = vm.getStructure(structureID);
     maxOffset = structure->maxOffset();
-    IndexingType indexingMode = structure->indexingMode();
-    Dependency indexingModeDependency = Dependency::fence(indexingMode);
+    IndexingType indexingMode;
+    Dependency indexingModeDependency = structure->fencedIndexingMode(indexingMode);
     Locker<JSCellLock> locker(NoLockingNecessary);
     switch (indexingMode) {
     case ALL_ARRAY_STORAGE_INDEXING_TYPES:
@@ -389,8 +389,7 @@ ALWAYS_INLINE Structure* JSObject::visitButterflyImpl(Visitor& visitor)
     default:
         break;
     }
-    butterfly = indexingModeDependency.consume(this)->butterfly();
-    Dependency butterflyDependency = Dependency::fence(butterfly);
+    Dependency butterflyDependency = indexingModeDependency.consume(this)->fencedButterfly(butterfly);
     if (!butterfly)
         return structure;
     if (butterflyDependency.consume(this)->structureID() != structureID)
@@ -791,9 +790,6 @@ bool JSObject::putInlineSlow(JSGlobalObject* globalObject, PropertyName property
                 hasProperty = true;
                 attributes = entry->value->attributes();
 
-                // FIXME: Remove this after writable accessors are introduced to static hash tables.
-                if (attributes & PropertyAttribute::Accessor)
-                    attributes |= PropertyAttribute::ReadOnly;
                 // FIXME: Remove this after we stop defaulting to CustomValue in static hash tables.
                 if (!(attributes & (PropertyAttribute::CustomAccessor | PropertyAttribute::BuiltinOrFunctionOrAccessorOrLazyPropertyOrConstant)))
                     attributes |= PropertyAttribute::CustomValue;
@@ -822,7 +818,7 @@ bool JSObject::putInlineSlow(JSGlobalObject* globalObject, PropertyName property
                 // https://bugs.webkit.org/show_bug.cgi?id=215347
                 slot.setCustomAccessor(obj, customSetter);
                 scope.release();
-                customSetter(globalObject, JSValue::encode(slot.thisValue()), JSValue::encode(value), propertyName);
+                customSetter(obj->globalObject(vm), JSValue::encode(slot.thisValue()), JSValue::encode(value), propertyName);
                 return true;
             }
             if (attributes & PropertyAttribute::CustomValue) {
@@ -831,7 +827,7 @@ bool JSObject::putInlineSlow(JSGlobalObject* globalObject, PropertyName property
                     // FIXME: We should only be caching these if we're not an uncacheable dictionary:
                     // https://bugs.webkit.org/show_bug.cgi?id=215347
                     slot.setCustomValue(obj, customSetter);
-                    RELEASE_AND_RETURN(scope, customSetter(globalObject, JSValue::encode(obj), JSValue::encode(value), propertyName));
+                    RELEASE_AND_RETURN(scope, customSetter(obj->globalObject(vm), JSValue::encode(obj), JSValue::encode(value), propertyName));
                 }
                 if (!isThisValueAltered(slot, obj)) {
                     // Avoid PutModePut because it fails for non-extensible structures.
@@ -873,16 +869,23 @@ static NEVER_INLINE bool definePropertyOnReceiverSlow(JSGlobalObject* globalObje
     bool hasProperty = receiver->methodTable(vm)->getOwnPropertySlot(receiver, globalObject, propertyName, slot);
     RETURN_IF_EXCEPTION(scope, false);
 
-    PropertyDescriptor descriptor;
     if (hasProperty) {
         // FIXME: For an accessor with setter, the error message is misleading.
         if (slot.attributes() & PropertyAttribute::ReadOnlyOrAccessorOrCustomAccessor)
             return typeError(globalObject, scope, shouldThrow, ReadonlyPropertyWriteError);
-        descriptor.setValue(value);
-    } else
-        descriptor.setDescriptor(value, static_cast<unsigned>(PropertyAttribute::None));
 
-    RELEASE_AND_RETURN(scope, receiver->methodTable(vm)->defineOwnProperty(receiver, globalObject, propertyName, descriptor, shouldThrow));
+        if (slot.attributes() & PropertyAttribute::CustomValue) {
+            PutPropertySlot::PutValueFunc customSetter = slot.customSetter();
+            if (customSetter)
+                RELEASE_AND_RETURN(scope, customSetter(receiver->globalObject(vm), JSValue::encode(receiver), JSValue::encode(value), propertyName));
+        }
+
+        PropertyDescriptor descriptor;
+        descriptor.setValue(value);
+        RELEASE_AND_RETURN(scope, receiver->methodTable(vm)->defineOwnProperty(receiver, globalObject, propertyName, descriptor, shouldThrow));
+    }
+
+    RELEASE_AND_RETURN(scope, receiver->createDataProperty(globalObject, propertyName, value, shouldThrow));
 }
 
 // https://tc39.es/ecma262/#sec-ordinaryset (step 3)
@@ -906,6 +909,12 @@ bool JSObject::definePropertyOnReceiver(JSGlobalObject* globalObject, PropertyNa
             return definePropertyOnReceiverSlow(globalObject, propertyName, value, receiver, slot.isStrictMode());
     }
 
+    if (receiver->structure(vm)->hasCustomGetterSetterProperties()) {
+        unsigned attributes;
+        if (receiver->getDirectOffset(vm, propertyName, attributes) != invalidOffset && (attributes & PropertyAttribute::CustomValue))
+            return definePropertyOnReceiverSlow(globalObject, propertyName, value, receiver, slot.isStrictMode());
+    }
+
     if (UNLIKELY(receiver->hasNonReifiedStaticProperties(vm)))
         return receiver->putInlineFastReplacingStaticPropertyIfNeeded(globalObject, propertyName, value, slot);
     return receiver->putInlineFast(globalObject, propertyName, value, slot);
@@ -926,6 +935,11 @@ bool JSObject::putInlineFastReplacingStaticPropertyIfNeeded(JSGlobalObject* glob
                 ASSERT(slot.context() == PutPropertySlot::ReflectSet);
                 // FIXME: For an accessor with setter, the error message is misleading.
                 return typeError(globalObject, scope, slot.isStrictMode(), ReadonlyPropertyWriteError);
+            }
+            if (entry->value->attributes() & PropertyAttribute::CustomValue) {
+                PutValueFunc customSetter = entry->value->propertyPutter();
+                if (customSetter)
+                    RELEASE_AND_RETURN(scope, customSetter(structure->globalObject(), JSValue::encode(this), JSValue::encode(value), propertyName));
             }
             // Avoid PutModePut because it fails for non-extensible structures.
             putDirect(vm, propertyName, value, attributesForStructure(entry->value->attributes()) & ~PropertyAttribute::CustomValue, slot);
@@ -2003,6 +2017,22 @@ bool JSObject::putDirectCustomAccessor(VM& vm, PropertyName propertyName, JSValu
     return result;
 }
 
+void JSObject::putDirectCustomGetterSetterWithoutTransition(VM& vm, PropertyName propertyName, JSValue value, unsigned attributes)
+{
+    ASSERT(!parseIndex(propertyName));
+    ASSERT(value.isCustomGetterSetter());
+    ASSERT(attributes & PropertyAttribute::CustomAccessorOrValue);
+
+    StructureID structureID = this->structureID();
+    Structure* structure = vm.heap.structureIDTable().get(structureID);
+    PropertyOffset offset = prepareToPutDirectWithoutTransition(vm, propertyName, attributes, structureID, structure);
+    putDirect(vm, offset, value);
+
+    if (attributes & PropertyAttribute::ReadOnly)
+        structure->setContainsReadOnlyProperties();
+    structure->setHasCustomGetterSetterPropertiesWithProtoCheck(propertyName == vm.propertyNames->underscoreProto);
+}
+
 bool JSObject::putDirectNonIndexAccessor(VM& vm, PropertyName propertyName, GetterSetter* accessor, unsigned attributes)
 {
     ASSERT(attributes & PropertyAttribute::Accessor);
@@ -2107,22 +2137,23 @@ bool JSObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, Proper
             slot.setNonconfigurable();
             return false;
         }
-        DeferredStructureTransitionWatchpointFire deferredWatchpointFire(vm, structure);
 
         PropertyOffset offset = invalidOffset;
-        if (structure->isUncacheableDictionary())
+        if (structure->isUncacheableDictionary()) {
             offset = structure->removePropertyWithoutTransition(vm, propertyName, [] (const GCSafeConcurrentJSLocker&, PropertyOffset, PropertyOffset) { });
-        else {
+            ASSERT(!isValidOffset(structure->get(vm, propertyName, attributes)));
+            if (offset != invalidOffset)
+                thisObject->locationForOffset(offset)->clear();
+        } else {
+            DeferredStructureTransitionWatchpointFire deferredWatchpointFire(vm, structure);
             structure = Structure::removePropertyTransition(vm, structure, propertyName, offset, &deferredWatchpointFire);
             slot.setHit(offset);
             ASSERT(structure->outOfLineCapacity() || !thisObject->structure(vm)->outOfLineCapacity());
             thisObject->setStructure(vm, structure);
+            ASSERT(!isValidOffset(structure->get(vm, propertyName, attributes)));
+            if (offset != invalidOffset)
+                thisObject->locationForOffset(offset)->clear();
         }
-
-        ASSERT(!isValidOffset(structure->get(vm, propertyName, attributes)));
-
-        if (offset != invalidOffset)
-            thisObject->locationForOffset(offset)->clear();
     } else
         slot.setConfigurableMiss();
 
@@ -2232,6 +2263,11 @@ static ALWAYS_INLINE JSValue callToPrimitiveFunction(JSGlobalObject* globalObjec
             if (auto result = object->structure(vm)->cachedSpecialProperty(CachedSpecialPropertyKey::ToStringTag))
                 return result;
         }
+    }
+
+    if constexpr (key == CachedSpecialPropertyKey::ValueOf) {
+        if (function == globalObject->objectProtoValueOfFunction())
+            return JSValue();
     }
 
     auto callData = getCallData(vm, function);

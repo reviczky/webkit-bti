@@ -53,8 +53,6 @@ messages -> WebProcessProxy LegacyReceiver {
     DidExceedCPULimit()
 
     StopResponsivenessTimer()
-
-    DidReceiveMainThreadPing()
     DidReceiveBackgroundResponsivenessPing()
 
     MemoryPressureStatusChanged(bool isUnderMemoryPressure)
@@ -92,5 +90,10 @@ messages -> WebProcessProxy LegacyReceiver {
     
 #if PLATFORM(MAC)
     IsAXAuthenticated(audit_token_t auditToken) -> (bool authenticated) Synchronous
+#endif
+
+#if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
+    SetCaptionDisplayMode(WebCore::CaptionUserPreferences::CaptionDisplayMode mode)
+    SetCaptionLanguage(String language)
 #endif
 }

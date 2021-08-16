@@ -250,7 +250,7 @@ void LineLayout::prepareLayoutState()
 
     auto& rootGeometry = m_layoutState.ensureGeometryForBox(rootLayoutBox());
     rootGeometry.setContentBoxWidth(flow().contentSize().width());
-    rootGeometry.setPadding({ { } });
+    rootGeometry.setPadding({ });
     rootGeometry.setBorder({ });
     rootGeometry.setHorizontalMargin({ });
     rootGeometry.setVerticalMargin({ });
@@ -346,7 +346,7 @@ void LineLayout::collectOverflow()
 {
     for (auto& line : inlineContent()->lines) {
         flow().addLayoutOverflow(Layout::toLayoutRect(line.scrollableOverflow()));
-        if (!flow().hasOverflowClip())
+        if (!flow().hasNonVisibleOverflow())
             flow().addVisualOverflow(Layout::toLayoutRect(line.inkOverflow()));
     }
 }

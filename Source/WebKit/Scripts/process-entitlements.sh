@@ -27,10 +27,6 @@ function mac_process_webcontent_entitlements()
             plistbuddy Add :com.apple.avfoundation.allow-system-wide-context bool YES
             plistbuddy add :com.apple.QuartzCore.webkit-limited-types bool YES
         fi
-        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 120000 ))
-        then
-            plistbuddy Add :com.apple.private.verified-jit bool YES
-        fi
     fi
 
     mac_process_webcontent_or_plugin_entitlements
@@ -46,11 +42,17 @@ function mac_process_gpu_entitlements()
             plistbuddy Add :com.apple.tcc.delegated-services:1 string kTCCServiceMicrophone
             plistbuddy Add :com.apple.tcc.delegated-services:0 string kTCCServiceCamera
         fi
+
         if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
         then
             plistbuddy Add :com.apple.developer.videotoolbox.client-sandboxed-decoder bool YES
             plistbuddy Add :com.apple.avfoundation.allow-system-wide-context bool YES
             plistbuddy add :com.apple.QuartzCore.webkit-limited-types bool YES
+        fi
+
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
         fi
 
         plistbuddy Add :com.apple.private.memory.ownership_transfer bool YES
@@ -77,6 +79,11 @@ function mac_process_webauthn_entitlements()
         plistbuddy Add :com.apple.mobileactivationd.spi bool YES
         plistbuddy Add :com.apple.mobileactivationd.bridge bool YES
         plistbuddy Add :com.apple.private.security.bootpolicy bool YES
+
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
+        fi
     fi
 }
 
@@ -93,6 +100,11 @@ function mac_process_network_entitlements()
         then
             plistbuddy Add :com.apple.private.tcc.manager.check-by-audit-token array
             plistbuddy Add :com.apple.private.tcc.manager.check-by-audit-token:0 string kTCCServiceWebKitIntelligentTrackingPrevention
+        fi
+
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
         fi
 
         plistbuddy Add :com.apple.private.launchservices.allowedtochangethesekeysinotherapplications array
@@ -112,14 +124,6 @@ function mac_process_plugin_entitlements()
     plistbuddy Add :com.apple.security.files.user-selected.read-write      bool YES
     plistbuddy Add :com.apple.security.print                               bool YES
 
-    if [[ "${WK_USE_RESTRICTED_ENTITLEMENTS}" == YES ]]
-    then
-        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 120000 ))
-        then
-            plistbuddy Add :com.apple.private.verified-jit bool YES
-        fi
-    fi
-
     mac_process_webcontent_or_plugin_entitlements
 }
 
@@ -132,6 +136,17 @@ function mac_process_webcontent_or_plugin_entitlements()
             plistbuddy Add :com.apple.tcc.delegated-services array
             plistbuddy Add :com.apple.tcc.delegated-services:1 string kTCCServiceMicrophone
             plistbuddy Add :com.apple.tcc.delegated-services:0 string kTCCServiceCamera
+        fi
+
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
+        fi
+
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 120000 ))
+        then
+            plistbuddy Add :com.apple.private.verified-jit bool YES
+            plistbuddy Add :com.apple.security.cs.single-jit bool YES
         fi
 
         if [[ "${WK_WEBCONTENT_SERVICE_NEEDS_XPC_DOMAIN_EXTENSION_ENTITLEMENT}" == YES ]]
@@ -156,6 +171,7 @@ function maccatalyst_process_webcontent_entitlements()
     plistbuddy Add :com.apple.runningboard.assertions.webkit bool YES
     plistbuddy Add :com.apple.private.webkit.use-xpc-endpoint bool YES
     plistbuddy Add :com.apple.QuartzCore.webkit-end-points bool YES
+
     if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
     then
         plistbuddy Add :com.apple.pac.shared_region_id string WebContent
@@ -164,9 +180,19 @@ function maccatalyst_process_webcontent_entitlements()
         plistbuddy Add :com.apple.UIKit.view-service-wants-custom-idiom-and-scale bool YES
         plistbuddy add :com.apple.QuartzCore.webkit-limited-types bool YES
     fi
+
+    if [[ "${WK_USE_RESTRICTED_ENTITLEMENTS}" == YES ]]
+    then
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
+        fi
+    fi
+
     if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 120000 ))
     then
         plistbuddy Add :com.apple.private.verified-jit bool YES
+        plistbuddy Add :com.apple.security.cs.single-jit bool YES
     fi
 }
 
@@ -177,6 +203,14 @@ function maccatalyst_process_gpu_entitlements()
     plistbuddy Add :com.apple.QuartzCore.webkit-end-points bool YES
     plistbuddy Add :com.apple.private.memory.ownership_transfer bool YES
     plistbuddy add :com.apple.QuartzCore.webkit-limited-types bool YES
+
+    if [[ "${WK_USE_RESTRICTED_ENTITLEMENTS}" == YES ]]
+    then
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
+        fi
+    fi
 }
 
 function maccatalyst_process_network_entitlements()
@@ -188,6 +222,14 @@ function maccatalyst_process_network_entitlements()
 
     plistbuddy Add :com.apple.private.tcc.manager.check-by-audit-token array
     plistbuddy Add :com.apple.private.tcc.manager.check-by-audit-token:0 string kTCCServiceWebKitIntelligentTrackingPrevention
+
+    if [[ "${WK_USE_RESTRICTED_ENTITLEMENTS}" == YES ]]
+    then
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
+        fi
+    fi
 }
 
 function maccatalyst_process_plugin_entitlements()
@@ -197,9 +239,19 @@ function maccatalyst_process_plugin_entitlements()
     plistbuddy Add :com.apple.security.cs.disable-library-validation       bool YES
     plistbuddy Add :com.apple.security.files.user-selected.read-write      bool YES
     plistbuddy Add :com.apple.security.print                               bool YES
+
+    if [[ "${WK_USE_RESTRICTED_ENTITLEMENTS}" == YES ]]
+    then
+        if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 110000 ))
+        then
+            plistbuddy Add :com.apple.security.cs.jit-write-allowlist bool YES
+        fi
+    fi
+
     if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 120000 ))
     then
         plistbuddy Add :com.apple.private.verified-jit bool YES
+        plistbuddy Add :com.apple.security.cs.single-jit bool YES
     fi
 }
 
@@ -260,6 +312,10 @@ function ios_family_process_gpu_entitlements()
 
     plistbuddy Add :seatbelt-profiles array
     plistbuddy Add :seatbelt-profiles:0 string com.apple.WebKit.GPU
+
+    plistbuddy Add :com.apple.systemstatus.activityattribution bool YES
+    plistbuddy Add :com.apple.security.exception.mach-lookup.global-name array
+    plistbuddy Add :com.apple.security.exception.mach-lookup.global-name:0 string com.apple.systemstatus.activityattribution
 }
 
 function ios_family_process_webauthn_entitlements()

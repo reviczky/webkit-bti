@@ -81,10 +81,6 @@
 #include "WebGL2RenderingContext.h"
 #endif
 
-#if ENABLE(WEBGPU)
-#include "GPUCanvasContext.h"
-#endif
-
 #if ENABLE(WEBXR)
 #include "DOMWindow.h"
 #include "Navigator.h"
@@ -109,23 +105,14 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLCanvasElement);
 
-using namespace PAL;
 using namespace HTMLNames;
 
 // These values come from the WhatWG/W3C HTML spec.
 const int defaultWidth = 300;
 const int defaultHeight = 150;
 
-// Firefox limits width/height to 32767 pixels, but slows down dramatically before it
-// reaches that limit. We limit by area instead, giving us larger maximum dimensions,
-// in exchange for a smaller maximum canvas size. The maximum canvas size is in device pixels.
-#if PLATFORM(IOS_FAMILY)
-const unsigned maxCanvasArea = 4096 * 4096;
-#else
-const unsigned maxCanvasArea = 16384 * 16384;
-#endif
-
-static size_t maxActivePixelMemoryForTesting = 0;
+static std::optional<size_t> maxCanvasAreaForTesting;
+static std::optional<size_t> maxActivePixelMemoryForTesting;
 
 HTMLCanvasElement::HTMLCanvasElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document)
@@ -217,7 +204,7 @@ void HTMLCanvasElement::setSize(const IntSize& newSize)
 static inline size_t maxActivePixelMemory()
 {
     if (maxActivePixelMemoryForTesting)
-        return maxActivePixelMemoryForTesting;
+        return *maxActivePixelMemoryForTesting;
 
     static size_t maxPixelMemory;
     static std::once_flag onceFlag;
@@ -232,9 +219,29 @@ static inline size_t maxActivePixelMemory()
     return maxPixelMemory;
 }
 
-void HTMLCanvasElement::setMaxPixelMemoryForTesting(size_t size)
+void HTMLCanvasElement::setMaxPixelMemoryForTesting(std::optional<size_t> size)
 {
     maxActivePixelMemoryForTesting = size;
+}
+
+static inline size_t maxCanvasArea()
+{
+    if (maxCanvasAreaForTesting)
+        return *maxCanvasAreaForTesting;
+
+    // Firefox limits width/height to 32767 pixels, but slows down dramatically before it
+    // reaches that limit. We limit by area instead, giving us larger maximum dimensions,
+    // in exchange for a smaller maximum canvas size. The maximum canvas size is in device pixels.
+#if PLATFORM(IOS_FAMILY)
+    return 4096 * 4096;
+#else
+    return 16384 * 16384;
+#endif
+}
+
+void HTMLCanvasElement::setMaxCanvasAreaForTesting(std::optional<size_t> size)
+{
+    maxCanvasAreaForTesting = size;
 }
 
 ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::JSGlobalObject& state, const String& contextId, Vector<JSC::Strong<JSC::Unknown>>&& arguments)
@@ -271,21 +278,13 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
         }
 #endif
 
-#if ENABLE(WEBGPU)
-        if (m_context->isWebGPU()) {
-            if (!isWebGPUType(contextId))
-                return std::optional<RenderingContext> { std::nullopt };
-            return std::optional<RenderingContext> { RefPtr<GPUCanvasContext> { &downcast<GPUCanvasContext>(*m_context) } };
-        }
-#endif
-
         ASSERT_NOT_REACHED();
         return std::optional<RenderingContext> { std::nullopt };
     }
 
     if (is2dType(contextId)) {
         auto scope = DECLARE_THROW_SCOPE(state.vm());
-        auto settings = convert<IDLDictionary<CanvasRenderingContext2DSettings>>(state, !arguments.isEmpty() ? arguments[0].get() : JSC::jsUndefined());
+        auto settings = convert<IDLDictionary<CanvasRenderingContext2DSettings>>(state, arguments.isEmpty() ? JSC::jsUndefined() : (arguments[0].isObject() ? arguments[0].get() : JSC::jsNull()));
         RETURN_IF_EXCEPTION(scope, Exception { ExistingExceptionError });
 
         auto context = createContext2d(contextId, WTFMove(settings));
@@ -296,7 +295,7 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
 
     if (isBitmapRendererType(contextId)) {
         auto scope = DECLARE_THROW_SCOPE(state.vm());
-        auto settings = convert<IDLDictionary<ImageBitmapRenderingContextSettings>>(state, !arguments.isEmpty() ? arguments[0].get() : JSC::jsUndefined());
+        auto settings = convert<IDLDictionary<ImageBitmapRenderingContextSettings>>(state, arguments.isEmpty() ? JSC::jsUndefined() : (arguments[0].isObject() ? arguments[0].get() : JSC::jsNull()));
         RETURN_IF_EXCEPTION(scope, Exception { ExistingExceptionError });
 
         auto context = createContextBitmapRenderer(contextId, WTFMove(settings));
@@ -308,7 +307,7 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
 #if ENABLE(WEBGL)
     if (isWebGLType(contextId)) {
         auto scope = DECLARE_THROW_SCOPE(state.vm());
-        auto attributes = convert<IDLDictionary<WebGLContextAttributes>>(state, !arguments.isEmpty() ? arguments[0].get() : JSC::jsUndefined());
+        auto attributes = convert<IDLDictionary<WebGLContextAttributes>>(state, arguments.isEmpty() ? JSC::jsUndefined() : (arguments[0].isObject() ? arguments[0].get() : JSC::jsNull()));
         RETURN_IF_EXCEPTION(scope, Exception { ExistingExceptionError });
 
         auto context = createContextWebGL(toWebGLVersion(contextId), WTFMove(attributes));
@@ -321,15 +320,6 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
         ASSERT(is<WebGL2RenderingContext>(*context));
         return std::optional<RenderingContext> { RefPtr<WebGL2RenderingContext> { &downcast<WebGL2RenderingContext>(*context) } };
 #endif
-    }
-#endif
-
-#if ENABLE(WEBGPU)
-    if (isWebGPUType(contextId)) {
-        auto context = createContextWebGPU(contextId);
-        if (!context)
-            return std::optional<RenderingContext> { std::nullopt };
-        return std::optional<RenderingContext> { RefPtr<GPUCanvasContext> { context } };
     }
 #endif
 
@@ -347,11 +337,6 @@ CanvasRenderingContext* HTMLCanvasElement::getContext(const String& type)
 #if ENABLE(WEBGL)
     if (HTMLCanvasElement::isWebGLType(type))
         return getContextWebGL(HTMLCanvasElement::toWebGLVersion(type));
-#endif
-
-#if ENABLE(WEBGPU)
-    if (HTMLCanvasElement::isWebGPUType(type))
-        return getContextWebGPU(type);
 #endif
 
     return nullptr;
@@ -495,47 +480,6 @@ WebGLRenderingContextBase* HTMLCanvasElement::getContextWebGL(WebGLVersion type,
 }
 
 #endif // ENABLE(WEBGL)
-
-#if ENABLE(WEBGPU)
-
-bool HTMLCanvasElement::isWebGPUType(const String& type)
-{
-    return type == "gpu";
-}
-
-GPUCanvasContext* HTMLCanvasElement::createContextWebGPU(const String& type)
-{
-    ASSERT_UNUSED(type, HTMLCanvasElement::isWebGPUType(type));
-    ASSERT(!m_context);
-
-    if (!document().settings().webGPUEnabled())
-        return nullptr;
-
-    m_context = GPUCanvasContext::create(*this);
-    if (m_context) {
-        // Need to make sure a RenderLayer and compositing layer get created for the Canvas.
-        invalidateStyleAndLayerComposition();
-    }
-
-    return static_cast<GPUCanvasContext*>(m_context.get());
-}
-
-GPUCanvasContext* HTMLCanvasElement::getContextWebGPU(const String& type)
-{
-    ASSERT_UNUSED(type, HTMLCanvasElement::isWebGPUType(type));
-
-    if (!document().settings().webGPUEnabled())
-        return nullptr;
-
-    if (m_context && !m_context->isWebGPU())
-        return nullptr;
-
-    if (!m_context)
-        return createContextWebGPU(type);
-    return static_cast<GPUCanvasContext*>(m_context.get());
-}
-
-#endif // ENABLE(WEBGPU)
 
 bool HTMLCanvasElement::isBitmapRendererType(const String& type)
 {
@@ -863,11 +807,16 @@ SecurityOrigin* HTMLCanvasElement::securityOrigin() const
 
 bool HTMLCanvasElement::shouldAccelerate(const IntSize& size) const
 {
-    auto& settings = document().settings();
-
-    auto area = size.area<RecordOverflow>();
-    if (area.hasOverflowed())
+    auto checkedArea = size.area<RecordOverflow>();
+    if (checkedArea.hasOverflowed())
         return false;
+
+    return shouldAccelerate(checkedArea.value());
+}
+
+bool HTMLCanvasElement::shouldAccelerate(unsigned area) const
+{
+    auto& settings = document().settings();
 
     if (area > settings.maximumAccelerated2dCanvasSize())
         return false;
@@ -875,7 +824,6 @@ bool HTMLCanvasElement::shouldAccelerate(const IntSize& size) const
 #if USE(IOSURFACE_CANVAS_BACKING_STORE)
     return settings.canvasUsesAcceleratedDrawing();
 #else
-    UNUSED_PARAM(size);
     return false;
 #endif
 }
@@ -928,27 +876,29 @@ void HTMLCanvasElement::createImageBuffer() const
     m_hasCreatedImageBuffer = true;
     m_didClearImageBuffer = true;
 
-    // Perform multiplication as floating point to avoid overflow
-    if (float(width()) * height() > maxCanvasArea) {
-        auto message = makeString("Canvas area exceeds the maximum limit (width * height > ", maxCanvasArea, ").");
+    auto checkedArea = size().area<RecordOverflow>();
+
+    if (checkedArea.hasOverflowed() || checkedArea > maxCanvasArea()) {
+        auto message = makeString("Canvas area exceeds the maximum limit (width * height > ", maxCanvasArea(), ").");
         document().addConsoleMessage(MessageSource::JS, MessageLevel::Warning, message);
         return;
     }
-    
+
     // Make sure we don't use more pixel memory than the system can support.
-    size_t requestedPixelMemory = 4 * width() * height();
-    if (activePixelMemory() + requestedPixelMemory > maxActivePixelMemory()) {
+    auto checkedRequestedPixelMemory = (4 * checkedArea) + activePixelMemory();
+    if (checkedRequestedPixelMemory.hasOverflowed() || checkedRequestedPixelMemory > maxActivePixelMemory()) {
         auto message = makeString("Total canvas memory use exceeds the maximum limit (", maxActivePixelMemory() / 1024 / 1024, " MB).");
         document().addConsoleMessage(MessageSource::JS, MessageLevel::Warning, message);
         return;
     }
 
-    if (!width() || !height())
+    unsigned area = checkedArea.value();
+    if (!area)
         return;
 
     auto hostWindow = (document().view() && document().view()->root()) ? document().view()->root()->hostWindow() : nullptr;
 
-    auto renderingMode = shouldAccelerate(size()) ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
+    auto renderingMode = shouldAccelerate(area) ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
     // FIXME: Add a new setting for DisplayList drawing on canvas.
     auto useDisplayList = m_usesDisplayListDrawing.value_or(document().settings().displayListDrawingEnabled()) ? ShouldUseDisplayList::Yes : ShouldUseDisplayList::No;
 

@@ -111,8 +111,11 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
     case FilterDeleteByStatus:
     case FilterCheckPrivateBrandStatus:
     case FilterSetPrivateBrandStatus:
+    case EnumeratorNextExtractMode:
+    case EnumeratorNextExtractIndex:
         break;
 
+    case EnumeratorNextUpdatePropertyName:
     case StrCat:
     case Call:
     case Construct:
@@ -135,6 +138,7 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
     case NewRegexp:
     case ToNumber:
     case ToNumeric:
+    case ToObject:
     case RegExpExecNonGlobalOrSticky:
     case RegExpMatchFastGlobal:
         result = ExitsForExceptions;

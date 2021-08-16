@@ -137,6 +137,7 @@ struct TranslationContextMenuInfo;
 namespace WebKit {
 
 enum class UndoOrRedo : bool;
+enum class TapHandlingResult : uint8_t;
 
 class ContextMenuContextData;
 class DownloadProxy;
@@ -159,6 +160,10 @@ class WebPopupMenuProxy;
 class WebProcessProxy;
 
 enum class ContinueUnsafeLoad : bool { No, Yes };
+
+#if ENABLE(IMAGE_ANALYSIS)
+enum class ImageAnalysisType : uint8_t { Text, VisualSearch };
+#endif
 
 struct FocusedElementInformation;
 struct FrameInfoData;
@@ -333,7 +338,7 @@ public:
 #endif
 #if PLATFORM(IOS_FAMILY)
     virtual void didNotHandleTapAsClick(const WebCore::IntPoint&) = 0;
-    virtual void didNotHandleTapAsMeaningfulClickAtPoint(const WebCore::IntPoint&) = 0;
+    virtual void didTapAtPoint(const WebCore::IntPoint&, TapHandlingResult) = 0;
     virtual void didCompleteSyntheticClick() = 0;
 #endif
 
@@ -540,7 +545,7 @@ public:
 
 #if ENABLE(IMAGE_ANALYSIS)
     virtual void requestTextRecognition(const URL& imageURL, const ShareableBitmap::Handle& imageData, CompletionHandler<void(WebCore::TextRecognitionResult&&)>&& completion) { completion({ }); }
-    virtual void computeHasVisualSearchResults(const URL&, ShareableBitmap&, CompletionHandler<void(bool)>&& completion) { completion(false); }
+    virtual void computeHasImageAnalysisResults(const URL&, ShareableBitmap&, ImageAnalysisType, CompletionHandler<void(bool)>&& completion) { completion(false); }
 #endif
 
 #if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
@@ -607,6 +612,7 @@ public:
 #if ENABLE(APP_HIGHLIGHTS)
     virtual void storeAppHighlight(const WebCore::AppHighlight&) = 0;
 #endif
+    virtual void requestScrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin) { }
 
 #if PLATFORM(COCOA)
     virtual void cancelPointersForGestureRecognizer(UIGestureRecognizer*) { }
@@ -618,10 +624,6 @@ public:
 #endif
 
     virtual void didChangeWebPageID() const { }
-
-#if PLATFORM(GTK)
-    virtual String themeName() const = 0;
-#endif
 
 #if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
     virtual bool canHandleContextMenuTranslation() const = 0;

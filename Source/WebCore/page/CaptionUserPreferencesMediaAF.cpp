@@ -100,6 +100,24 @@ namespace WebCore {
 
 #if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
 
+static std::unique_ptr<CaptionPreferencesDelegate>& captionPreferencesDelegate()
+{
+    static NeverDestroyed<std::unique_ptr<CaptionPreferencesDelegate>> delegate;
+    return delegate.get();
+}
+
+static std::optional<CaptionUserPreferencesMediaAF::CaptionDisplayMode>& cachedCaptionDisplayMode()
+{
+    static NeverDestroyed<std::optional<CaptionUserPreferencesMediaAF::CaptionDisplayMode>> captionDisplayMode;
+    return captionDisplayMode;
+}
+
+static std::optional<Vector<String>>& cachedPreferredLanguages()
+{
+    static NeverDestroyed<std::optional<Vector<String>>> preferredLanguages;
+    return preferredLanguages;
+}
+
 static void userCaptionPreferencesChangedNotificationCallback(CFNotificationCenterRef, void* observer, CFStringRef, const void *, CFDictionaryRef)
 {
 #if !PLATFORM(IOS_FAMILY)
@@ -160,32 +178,14 @@ CaptionUserPreferences::CaptionDisplayMode CaptionUserPreferencesMediaAF::captio
     if (internalMode == Manual || testingMode() || !MediaAccessibilityLibrary())
         return internalMode;
 
-    MACaptionAppearanceDisplayType displayType = MACaptionAppearanceGetDisplayType(kMACaptionAppearanceDomainUser);
-    switch (displayType) {
-    case kMACaptionAppearanceDisplayTypeForcedOnly:
-        return ForcedOnly;
+    if (cachedCaptionDisplayMode().has_value())
+        return cachedCaptionDisplayMode().value();
 
-    case kMACaptionAppearanceDisplayTypeAutomatic:
-        return Automatic;
-
-    case kMACaptionAppearanceDisplayTypeAlwaysOn:
-        return AlwaysOn;
-    }
-
-    ASSERT_NOT_REACHED();
-    return ForcedOnly;
+    return platformCaptionDisplayMode();
 }
-    
-void CaptionUserPreferencesMediaAF::setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode mode)
+
+void CaptionUserPreferencesMediaAF::platformSetCaptionDisplayMode(CaptionDisplayMode mode)
 {
-    if (testingMode() || !MediaAccessibilityLibrary()) {
-        CaptionUserPreferences::setCaptionDisplayMode(mode);
-        return;
-    }
-
-    if (captionDisplayMode() == Manual)
-        return;
-
     MACaptionAppearanceDisplayType displayType = kMACaptionAppearanceDisplayTypeForcedOnly;
     switch (mode) {
     case Automatic:
@@ -203,6 +203,47 @@ void CaptionUserPreferencesMediaAF::setCaptionDisplayMode(CaptionUserPreferences
     }
 
     MACaptionAppearanceSetDisplayType(kMACaptionAppearanceDomainUser, displayType);
+}
+
+void CaptionUserPreferencesMediaAF::setCaptionDisplayMode(CaptionUserPreferences::CaptionDisplayMode mode)
+{
+    if (testingMode() || !MediaAccessibilityLibrary()) {
+        CaptionUserPreferences::setCaptionDisplayMode(mode);
+        return;
+    }
+
+    if (captionDisplayMode() == Manual)
+        return;
+
+    if (captionPreferencesDelegate()) {
+        captionPreferencesDelegate()->setDisplayMode(mode);
+        return;
+    }
+    
+    platformSetCaptionDisplayMode(mode);
+}
+
+CaptionUserPreferences::CaptionDisplayMode CaptionUserPreferencesMediaAF::platformCaptionDisplayMode()
+{
+    MACaptionAppearanceDisplayType displayType = MACaptionAppearanceGetDisplayType(kMACaptionAppearanceDomainUser);
+    switch (displayType) {
+    case kMACaptionAppearanceDisplayTypeForcedOnly:
+        return ForcedOnly;
+
+    case kMACaptionAppearanceDisplayTypeAutomatic:
+        return Automatic;
+
+    case kMACaptionAppearanceDisplayTypeAlwaysOn:
+        return AlwaysOn;
+    }
+
+    ASSERT_NOT_REACHED();
+    return ForcedOnly;
+}
+
+void CaptionUserPreferencesMediaAF::setCachedCaptionDisplayMode(CaptionDisplayMode captionDisplayMode)
+{
+    cachedCaptionDisplayMode() = captionDisplayMode;
 }
 
 bool CaptionUserPreferencesMediaAF::userPrefersCaptions() const
@@ -264,6 +305,11 @@ void CaptionUserPreferencesMediaAF::captionPreferencesChanged()
         updateCaptionStyleSheetOverride();
 
     CaptionUserPreferences::captionPreferencesChanged();
+}
+
+void CaptionUserPreferencesMediaAF::setCaptionPreferencesDelegate(std::unique_ptr<CaptionPreferencesDelegate>&& delegate)
+{
+    captionPreferencesDelegate() = WTFMove(delegate);
 }
 
 String CaptionUserPreferencesMediaAF::captionsWindowCSS() const
@@ -456,6 +502,11 @@ float CaptionUserPreferencesMediaAF::captionFontSizeScaleAndImportance(bool& imp
 #endif
 }
 
+void CaptionUserPreferencesMediaAF::platformSetPreferredLanguage(const String& language)
+{
+    MACaptionAppearanceAddSelectedLanguage(kMACaptionAppearanceDomainUser, language.createCFString().get());
+}
+
 void CaptionUserPreferencesMediaAF::setPreferredLanguage(const String& language)
 {
     if (CaptionUserPreferences::captionDisplayMode() == Manual)
@@ -466,7 +517,12 @@ void CaptionUserPreferencesMediaAF::setPreferredLanguage(const String& language)
         return;
     }
 
-    MACaptionAppearanceAddSelectedLanguage(kMACaptionAppearanceDomainUser, language.createCFString().get());
+    if (captionPreferencesDelegate()) {
+        captionPreferencesDelegate()->setPreferredLanguage(language);
+        return;
+    }
+
+    platformSetPreferredLanguage(language);
 }
 
 Vector<String> CaptionUserPreferencesMediaAF::preferredLanguages() const
@@ -475,17 +531,36 @@ Vector<String> CaptionUserPreferencesMediaAF::preferredLanguages() const
     if (testingMode() || !MediaAccessibilityLibrary())
         return preferredLanguages;
 
-    auto captionLanguages = adoptCF(MACaptionAppearanceCopySelectedLanguages(kMACaptionAppearanceDomainUser));
-    CFIndex captionLanguagesCount = captionLanguages ? CFArrayGetCount(captionLanguages.get()) : 0;
-    if (!captionLanguagesCount)
+    if (cachedPreferredLanguages().has_value())
+        return cachedPreferredLanguages().value();
+
+    auto captionLanguages = platformPreferredLanguages();
+    if (!captionLanguages.size())
         return preferredLanguages;
 
     Vector<String> captionAndPreferredLanguages;
-    captionAndPreferredLanguages.reserveInitialCapacity(captionLanguagesCount + preferredLanguages.size());
-    for (CFIndex i = 0; i < captionLanguagesCount; i++)
-        captionAndPreferredLanguages.uncheckedAppend(static_cast<CFStringRef>(CFArrayGetValueAtIndex(captionLanguages.get(), i)));
+    captionAndPreferredLanguages.reserveInitialCapacity(captionLanguages.size() + preferredLanguages.size());
+    captionAndPreferredLanguages.appendVector(WTFMove(captionLanguages));
     captionAndPreferredLanguages.appendVector(WTFMove(preferredLanguages));
     return captionAndPreferredLanguages;
+}
+
+Vector<String> CaptionUserPreferencesMediaAF::platformPreferredLanguages()
+{
+    auto captionLanguages = adoptCF(MACaptionAppearanceCopySelectedLanguages(kMACaptionAppearanceDomainUser));
+    CFIndex captionLanguagesCount = captionLanguages ? CFArrayGetCount(captionLanguages.get()) : 0;
+
+    Vector<String> preferredLanguages;
+    preferredLanguages.reserveInitialCapacity(captionLanguagesCount);
+    for (CFIndex i = 0; i < captionLanguagesCount; i++)
+        preferredLanguages.uncheckedAppend(static_cast<CFStringRef>(CFArrayGetValueAtIndex(captionLanguages.get(), i)));
+
+    return preferredLanguages;
+}
+
+void CaptionUserPreferencesMediaAF::setCachedPreferredLanguages(const Vector<String>& preferredLanguages)
+{
+    cachedPreferredLanguages() = preferredLanguages;
 }
 
 void CaptionUserPreferencesMediaAF::setPreferredAudioCharacteristic(const String& characteristic)

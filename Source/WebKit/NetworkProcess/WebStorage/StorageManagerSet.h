@@ -33,6 +33,7 @@
 #include <pal/SessionID.h>
 #include <wtf/Condition.h>
 #include <wtf/Lock.h>
+#include <wtf/SuspendableWorkQueue.h>
 #include <wtf/WeakPtr.h>
 
 using WebCore::SecurityOriginData;
@@ -80,6 +81,8 @@ public:
 private:
     StorageManagerSet();
 
+    void flushLocalStorage();
+
     // Message Handlers
     void connectToLocalStorageArea(IPC::Connection&, PAL::SessionID , StorageNamespaceIdentifier, SecurityOriginData&&, ConnectToStorageAreaCallback&&);
     void connectToTransientLocalStorageArea(IPC::Connection&, PAL::SessionID , StorageNamespaceIdentifier, SecurityOriginData&&, SecurityOriginData&&, ConnectToStorageAreaCallback&&);
@@ -96,16 +99,7 @@ private:
     HashMap<StorageAreaIdentifier, WeakPtr<StorageArea>> m_storageAreas;
 
     HashSet<IPC::Connection::UniqueID> m_connections;
-    Ref<WorkQueue> m_queue;
-
-    enum class State {
-        Running,
-        WillSuspend,
-        Suspended
-    };
-    State m_state { State::Running };
-    Lock m_stateLock;
-    Condition m_stateChangeCondition;
+    Ref<SuspendableWorkQueue> m_queue;
 };
 
 } // namespace WebKit

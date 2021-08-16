@@ -72,11 +72,6 @@ void WebPageProxy::setInputMethodState(std::optional<InputMethodState>&& state)
     webkitWebViewBaseSetInputMethodState(WEBKIT_WEB_VIEW_BASE(viewWidget()), WTFMove(state));
 }
 
-void WebPageProxy::getCenterForZoomGesture(const WebCore::IntPoint& centerInViewCoordinates, WebCore::IntPoint& center)
-{
-    sendSync(Messages::WebPage::GetCenterForZoomGesture(centerInViewCoordinates), Messages::WebPage::GetCenterForZoomGesture::Reply(center));
-}
-
 bool WebPageProxy::makeGLContextCurrent()
 {
     return webkitWebViewBaseMakeGLContextCurrent(WEBKIT_WEB_VIEW_BASE(viewWidget()));
@@ -100,15 +95,6 @@ void WebPageProxy::sendMessageToWebViewWithReply(UserMessage&& message, Completi
 void WebPageProxy::sendMessageToWebView(UserMessage&& message)
 {
     sendMessageToWebViewWithReply(WTFMove(message), [](UserMessage&&) { });
-}
-
-void WebPageProxy::themeDidChange()
-{
-    if (!hasRunningProcess())
-        return;
-
-    send(Messages::WebPage::ThemeDidChange(pageClient().themeName()));
-    effectiveAppearanceDidChange();
 }
 
 } // namespace WebKit

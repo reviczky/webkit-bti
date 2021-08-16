@@ -113,6 +113,7 @@ b3/B3BasicBlock.cpp
 b3/B3BlockInsertionSet.cpp
 b3/B3BottomTupleValue.cpp
 b3/B3BreakCriticalEdges.cpp
+b3/B3CanonicalizePrePostIncrements.cpp
 b3/B3CCallValue.cpp
 b3/B3CaseCollection.cpp
 b3/B3CheckSpecial.cpp
@@ -223,7 +224,7 @@ bytecode/DataFormat.cpp
 bytecode/DeferredCompilationCallback.cpp
 bytecode/DeferredSourceDump.cpp
 bytecode/DeleteByStatus.cpp
-bytecode/DeleteByIdVariant.cpp
+bytecode/DeleteByVariant.cpp
 bytecode/DirectEvalCodeCache.cpp
 bytecode/EvalCodeBlock.cpp
 bytecode/ExecutableToCodeBlockEdge.cpp
@@ -235,12 +236,12 @@ bytecode/ExitingJITType.cpp
 bytecode/FullCodeOrigin.cpp
 bytecode/FunctionCodeBlock.cpp
 bytecode/GetByStatus.cpp
-bytecode/GetByIdVariant.cpp
+bytecode/GetByVariant.cpp
 bytecode/GetterSetterAccessCase.cpp
 bytecode/ICStatusMap.cpp
 bytecode/ICStatusUtils.cpp
 bytecode/InByStatus.cpp
-bytecode/InByIdVariant.cpp
+bytecode/InByVariant.cpp
 bytecode/InlineAccess.cpp
 bytecode/InlineCallFrame.cpp
 bytecode/InlineCallFrameSet.cpp
@@ -1009,6 +1010,8 @@ runtime/SymbolObject.cpp
 runtime/SymbolPrototype.cpp
 runtime/SymbolTable.cpp
 runtime/TemplateObjectDescriptor.cpp
+runtime/TemporalNow.cpp
+runtime/TemporalObject.cpp
 runtime/TestRunnerUtils.cpp
 runtime/ThrowScope.cpp
 runtime/TypeLocationCache.cpp

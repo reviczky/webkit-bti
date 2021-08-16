@@ -29,6 +29,7 @@
 #include "DragActions.h"
 #include "FocusDirection.h"
 #include "HitTestRequest.h"
+#include "KeyboardScroll.h"
 #include "LayoutPoint.h"
 #include "PlatformMouseEvent.h"
 #include "RenderObject.h"
@@ -155,7 +156,7 @@ public:
     WEBCORE_EXPORT void dispatchFakeMouseMoveEventSoon();
     void dispatchFakeMouseMoveEventSoonInQuad(const FloatQuad&);
 
-    WEBCORE_EXPORT HitTestResult hitTestResultAtPoint(const LayoutPoint&, OptionSet<HitTestRequest::Type>, const LayoutSize& padding = LayoutSize()) const;
+    WEBCORE_EXPORT HitTestResult hitTestResultAtPoint(const LayoutPoint&, OptionSet<HitTestRequest::Type>) const;
 
     bool mousePressed() const { return m_mousePressed; }
     Node* mousePressNode() const { return m_mousePressNode.get(); }
@@ -354,6 +355,8 @@ public:
 
     WEBCORE_EXPORT void invalidateClick();
 
+    static bool scrollableAreaCanHandleEvent(const PlatformWheelEvent&, ScrollableArea&);
+
 private:
 #if ENABLE(DRAG_SUPPORT)
     static DragState& dragState();
@@ -375,6 +378,10 @@ private:
     bool handleMousePressEventDoubleClick(const MouseEventWithHitTestResults&);
     bool handleMousePressEventTripleClick(const MouseEventWithHitTestResults&);
 
+    float scrollDistance(ScrollDirection, ScrollGranularity);
+    bool startKeyboardScrolling(KeyboardEvent&);
+    void stopKeyboardScrolling();
+
 #if ENABLE(DRAG_SUPPORT)
     bool handleMouseDraggedEvent(const MouseEventWithHitTestResults&, CheckDragHysteresis = ShouldCheckDragHysteresis);
     bool shouldAllowMouseDownToStartDrag() const;
@@ -389,7 +396,7 @@ private:
     void hoverTimerFired();
 
 #if ENABLE(IMAGE_ANALYSIS)
-    void m_textRecognitionHoverTimerFired();
+    void textRecognitionHoverTimerFired();
 #endif
 
     bool logicalScrollOverflow(ScrollLogicalDirection, ScrollGranularity, Node* startingNode = nullptr);

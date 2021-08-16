@@ -31,6 +31,7 @@
 #include "AppHighlight.h"
 #include "ApplicationCacheStorage.h"
 #include "BackForwardClient.h"
+#include "BroadcastChannelRegistry.h"
 #include "CacheStorageProvider.h"
 #include "ColorChooser.h"
 #include "ContextMenuClient.h"
@@ -130,6 +131,10 @@ class EmptyContextMenuClient final : public ContextMenuClient {
 #if USE(ACCESSIBILITY_CONTEXT_MENUS)
     void showContextMenu() final { }
 #endif
+
+#if ENABLE(IMAGE_ANALYSIS)
+    bool supportsLookUpInImages() final { return false; }
+#endif
 };
 
 #endif // ENABLE(CONTEXT_MENUS)
@@ -176,7 +181,7 @@ class EmptyDatabaseProvider final : public DatabaseProvider {
         void deleteDatabase(const IDBRequestData&) final { }
         void openDatabase(const IDBRequestData&) final { }
         void abortTransaction(const IDBResourceIdentifier&) final { }
-        void commitTransaction(const IDBResourceIdentifier&) final { }
+        void commitTransaction(const IDBResourceIdentifier&, uint64_t) final { }
         void didFinishHandlingVersionChangeTransaction(uint64_t, const IDBResourceIdentifier&) final { }
         void createObjectStore(const IDBRequestData&, const IDBObjectStoreInfo&) final { }
         void deleteObjectStore(const IDBRequestData&, const String&) final { }
@@ -202,7 +207,7 @@ class EmptyDatabaseProvider final : public DatabaseProvider {
         ~EmptyIDBConnectionToServerDeletegate() { }
     };
 
-    IDBClient::IDBConnectionToServer& idbConnectionToServerForSession(const PAL::SessionID&) final
+    IDBClient::IDBConnectionToServer& idbConnectionToServerForSession(PAL::SessionID) final
     {
         static NeverDestroyed<EmptyIDBConnectionToServerDeletegate> emptyDelegate;
         static auto& emptyConnection = IDBClient::IDBConnectionToServer::create(emptyDelegate.get()).leakRef();
@@ -411,8 +416,8 @@ class EmptyPaymentCoordinatorClient final : public PaymentCoordinatorClient {
     void completeShippingMethodSelection(std::optional<ApplePayShippingMethodUpdate>&&) final { }
     void completeShippingContactSelection(std::optional<ApplePayShippingContactUpdate>&&) final { }
     void completePaymentMethodSelection(std::optional<ApplePayPaymentMethodUpdate>&&) final { }
-#if ENABLE(APPLE_PAY_PAYMENT_METHOD_MODE)
-    void completePaymentMethodModeChange(std::optional<ApplePayPaymentMethodModeUpdate>&&) final { }
+#if ENABLE(APPLE_PAY_COUPON_CODE)
+    void completeCouponCodeChange(std::optional<ApplePayCouponCodeUpdate>&&) final { }
 #endif
     void completePaymentSession(std::optional<PaymentAuthorizationResult>&&) final { }
     void cancelPaymentSession() final { }
@@ -573,6 +578,18 @@ void EmptyChromeClient::runOpenPanel(Frame&, FileChooser&)
 void EmptyChromeClient::showShareSheet(ShareDataWithParsedURL&, CompletionHandler<void(bool)>&&)
 {
 }
+
+#if HAVE(ARKIT_INLINE_PREVIEW_IOS)
+void EmptyChromeClient::takeModelElementFullscreen(WebCore::GraphicsLayer::PlatformLayerID) const
+{
+}
+#endif
+
+#if HAVE(ARKIT_INLINE_PREVIEW_MAC)
+void EmptyChromeClient::modelElementDidCreatePreview(WebCore::HTMLModelElement&, const URL&, const String&, const WebCore::FloatSize&) const
+{
+}
+#endif
 
 void EmptyFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const NavigationAction&, const ResourceRequest&, FormState*, const String&, PolicyCheckIdentifier, FramePolicyFunction&&)
 {
@@ -1147,6 +1164,20 @@ private:
 #endif
 };
 
+class EmptyBroadcastChannelRegistry final : public BroadcastChannelRegistry {
+public:
+    static Ref<EmptyBroadcastChannelRegistry> create()
+    {
+        return adoptRef(*new EmptyBroadcastChannelRegistry);
+    }
+private:
+    EmptyBroadcastChannelRegistry() = default;
+
+    void registerChannel(const SecurityOriginData&, const String&, BroadcastChannelIdentifier) final { }
+    void unregisterChannel(const SecurityOriginData&, const String&, BroadcastChannelIdentifier) final { }
+    void postMessage(const SecurityOriginData&, const String&, BroadcastChannelIdentifier, Ref<SerializedScriptValue>&&, CompletionHandler<void()>&&) final { }
+};
+
 PageConfiguration pageConfigurationWithEmptyClients(PAL::SessionID sessionID)
 {
     PageConfiguration pageConfiguration {
@@ -1161,7 +1192,8 @@ PageConfiguration pageConfigurationWithEmptyClients(PAL::SessionID sessionID)
         makeUniqueRef<EmptyProgressTrackerClient>(),
         makeUniqueRef<EmptyFrameLoaderClient>(),
         makeUniqueRef<DummySpeechRecognitionProvider>(),
-        makeUniqueRef<EmptyMediaRecorderProvider>()
+        makeUniqueRef<EmptyMediaRecorderProvider>(),
+        EmptyBroadcastChannelRegistry::create()
     };
 
     static NeverDestroyed<EmptyChromeClient> dummyChromeClient;

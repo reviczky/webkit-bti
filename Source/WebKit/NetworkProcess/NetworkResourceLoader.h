@@ -125,10 +125,8 @@ public:
     bool isMainFrameLoad() const { return isMainResource() && m_parameters.frameAncestorOrigins.isEmpty(); }
     bool isCrossOriginPrefetch() const;
 
-    bool isAlwaysOnLoggingAllowed() const;
-
 #if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
-    static bool shouldLogCookieInformation(NetworkConnectionToWebProcess&, const PAL::SessionID&);
+    static bool shouldLogCookieInformation(NetworkConnectionToWebProcess&, PAL::SessionID);
     static void logCookieInformation(NetworkConnectionToWebProcess&, const String& label, const void* loggedObject, const WebCore::NetworkStorageSession&, const URL& firstParty, const WebCore::SameSiteInfo&, const URL&, const String& referrer, std::optional<WebCore::FrameIdentifier>, std::optional<WebCore::PageIdentifier>, std::optional<uint64_t> identifier);
 #endif
 
@@ -143,7 +141,7 @@ public:
     void serviceWorkerDidNotHandle(ServiceWorkerFetchTask*);
 #endif
 
-    bool isAppBound();
+    bool isAppInitiated();
 
 private:
     NetworkResourceLoader(NetworkResourceLoadParameters&&, NetworkConnectionToWebProcess&, Messages::NetworkConnectionToWebProcess::PerformSynchronousLoadDelayedReply&&);
@@ -165,6 +163,8 @@ private:
 
     bool shouldInterruptLoadForXFrameOptions(const String&, const URL&);
     bool shouldInterruptLoadForCSPFrameAncestorsOrXFrameOptions(const WebCore::ResourceResponse&);
+    bool shouldInterruptNavigationForCrossOriginEmbedderPolicy(const WebCore::ResourceResponse&);
+    bool shouldInterruptWorkerLoadForCrossOriginEmbedderPolicy(const WebCore::ResourceResponse&);
 
     enum class FirstLoad { No, Yes };
     void startNetworkLoad(WebCore::ResourceRequest&&, FirstLoad);

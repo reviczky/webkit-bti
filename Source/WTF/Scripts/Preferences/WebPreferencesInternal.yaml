@@ -220,6 +220,18 @@ EnterKeyHintEnabled:
     WebCore:
       default: false
 
+EventHandlerDrivenSmoothKeyboardScrollingEnabled:
+ type: bool
+ humanReadableName: "EventHandler driven smooth keyboard scrolling"
+ humanReadableDescription: "Enable EventHandler driven smooth keyboard scrolling"
+ defaultValue:
+  WebKitLegacy:
+   default: false
+  WebKit:
+   default: false
+  WebCore:
+   default: false
+
 # FIXME: This is not relevent for WebKitLegacy, so should be excluded from WebKitLegacy entirely.
 ExperimentalPlugInSandboxProfilesEnabled:
   type: bool
@@ -583,6 +595,19 @@ PreferFasterClickOverDoubleTap:
     WebKit:
       "PLATFORM(IOS_FAMILY) && !PLATFORM(WATCHOS)": true
       default: false
+
+PreferInlineTextSelectionInImages:
+  type: bool
+  humanReadableName: "Inline Text Selection in Images"
+  humanReadableDescription: "Prefer inline text selection in images over using the context menu"
+  condition: ENABLE(IMAGE_ANALYSIS)
+  defaultValue:
+    WebCore:
+      default: true
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
 
 PreferPageRenderingUpdatesNear60FPSEnabled:
   type: bool

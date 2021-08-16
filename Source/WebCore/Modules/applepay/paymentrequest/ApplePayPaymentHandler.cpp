@@ -30,6 +30,8 @@
 
 #include "AddressErrors.h"
 #include "ApplePayContactField.h"
+#include "ApplePayCouponCodeDetails.h"
+#include "ApplePayCouponCodeUpdate.h"
 #include "ApplePayDetailsUpdateData.h"
 #include "ApplePayError.h"
 #include "ApplePayErrorCode.h"
@@ -38,8 +40,6 @@
 #include "ApplePayMerchantCapability.h"
 #include "ApplePayModifier.h"
 #include "ApplePayPayment.h"
-#include "ApplePayPaymentMethodModeDetails.h"
-#include "ApplePayPaymentMethodModeUpdate.h"
 #include "ApplePayPaymentMethodUpdate.h"
 #include "ApplePaySessionPaymentRequest.h"
 #include "ApplePayShippingContactUpdate.h"
@@ -48,11 +48,10 @@
 #include "Document.h"
 #include "EventNames.h"
 #include "Frame.h"
+#include "JSApplePayCouponCodeDetails.h"
 #include "JSApplePayError.h"
-#include "JSApplePayLineItemData.h"
 #include "JSApplePayPayment.h"
 #include "JSApplePayPaymentMethod.h"
-#include "JSApplePayPaymentMethodModeDetails.h"
 #include "JSApplePayRequest.h"
 #include "JSDOMConvert.h"
 #include "LinkIconCollector.h"
@@ -307,11 +306,13 @@ ExceptionOr<Vector<ApplePayShippingMethod>> ApplePayPaymentHandler::computeShipp
         }
     }
 
+#if ENABLE(APPLE_PAY_UPDATE_SHIPPING_METHODS_WHEN_CHANGING_LINE_ITEMS)
     auto modifierException = firstApplicableModifier();
     if (modifierException.hasException())
         return modifierException.releaseException();
     if (auto modifierData = modifierException.releaseReturnValue())
         shippingOptions.appendVector(WTFMove(std::get<1>(*modifierData).additionalShippingMethods));
+#endif
 
     return WTFMove(shippingOptions);
 }
@@ -512,7 +513,7 @@ ExceptionOr<void> ApplePayPaymentHandler::detailsUpdated(PaymentRequest::UpdateR
     case Reason::ShippingOptionChanged:
         return shippingOptionUpdated();
     case Reason::PaymentMethodChanged:
-        return paymentMethodUpdated(computeErrors(paymentMethodErrors));
+        return paymentMethodUpdated(computeErrors(WTFMove(error), WTFMove(addressErrors), WTFMove(payerErrors), paymentMethodErrors));
     }
 
     ASSERT_NOT_REACHED();
@@ -575,6 +576,13 @@ ExceptionOr<void> ApplePayPaymentHandler::shippingOptionUpdated()
 
     ApplePayShippingMethodUpdate update;
 
+#if ENABLE(APPLE_PAY_UPDATE_SHIPPING_METHODS_WHEN_CHANGING_LINE_ITEMS)
+    auto newShippingMethods = computeShippingMethods();
+    if (newShippingMethods.hasException())
+        return newShippingMethods.releaseException();
+    update.newShippingMethods = newShippingMethods.releaseReturnValue();
+#endif
+
     auto newTotalAndLineItems = computeTotalAndLineItems();
     if (newTotalAndLineItems.hasException())
         return newTotalAndLineItems.releaseException();
@@ -592,11 +600,11 @@ ExceptionOr<void> ApplePayPaymentHandler::shippingOptionUpdated()
 
 ExceptionOr<void> ApplePayPaymentHandler::paymentMethodUpdated(Vector<RefPtr<ApplePayError>>&& errors)
 {
-#if ENABLE(APPLE_PAY_PAYMENT_METHOD_MODE)
-    if (m_updateState == UpdateState::PaymentMethodMode) {
+#if ENABLE(APPLE_PAY_COUPON_CODE)
+    if (m_updateState == UpdateState::CouponCode) {
         m_updateState = UpdateState::None;
 
-        ApplePayPaymentMethodModeUpdate update;
+        ApplePayCouponCodeUpdate update;
         update.errors = WTFMove(errors);
 
         auto newShippingMethods = computeShippingMethods();
@@ -615,17 +623,26 @@ ExceptionOr<void> ApplePayPaymentHandler::paymentMethodUpdated(Vector<RefPtr<App
         if (auto modifierData = modifierException.releaseReturnValue())
             merge(update, WTFMove(std::get<1>(*modifierData)));
 
-        paymentCoordinator().completePaymentMethodModeChange(WTFMove(update));
+        paymentCoordinator().completeCouponCodeChange(WTFMove(update));
         return { };
     }
-#else
-    UNUSED_PARAM(errors);
-#endif // ENABLE(APPLE_PAY_PAYMENT_METHOD_MODE)
+#endif // ENABLE(APPLE_PAY_COUPON_CODE)
 
     ASSERT(m_updateState == UpdateState::PaymentMethod);
     m_updateState = UpdateState::None;
 
     ApplePayPaymentMethodUpdate update;
+
+#if ENABLE(APPLE_PAY_UPDATE_SHIPPING_METHODS_WHEN_CHANGING_LINE_ITEMS)
+    update.errors = WTFMove(errors);
+
+    auto newShippingMethods = computeShippingMethods();
+    if (newShippingMethods.hasException())
+        return newShippingMethods.releaseException();
+    update.newShippingMethods = newShippingMethods.releaseReturnValue();
+#else
+    UNUSED_PARAM(errors);
+#endif
 
     auto newTotalAndLineItems = computeTotalAndLineItems();
     if (newTotalAndLineItems.hasException())
@@ -750,20 +767,20 @@ void ApplePayPaymentHandler::didSelectPaymentMethod(const PaymentMethod& payment
     });
 }
 
-#if ENABLE(APPLE_PAY_PAYMENT_METHOD_MODE)
+#if ENABLE(APPLE_PAY_COUPON_CODE)
 
-void ApplePayPaymentHandler::didChangePaymentMethodMode(String&& paymentMethodMode)
+void ApplePayPaymentHandler::didChangeCouponCode(String&& couponCode)
 {
     ASSERT(m_updateState == UpdateState::None);
-    m_updateState = UpdateState::PaymentMethodMode;
+    m_updateState = UpdateState::CouponCode;
 
-    ApplePayPaymentMethodModeDetails applePayPaymentMethodModeDetails { WTFMove(paymentMethodMode) };
-    m_paymentRequest->paymentMethodChanged(WTF::get<URL>(m_identifier).string(), [applePayPaymentMethodModeDetails = WTFMove(applePayPaymentMethodModeDetails)] (JSC::JSGlobalObject& lexicalGlobalObject) {
-        return toJSDictionary(lexicalGlobalObject, applePayPaymentMethodModeDetails);
+    ApplePayCouponCodeDetails applePayCouponCodeDetails { WTFMove(couponCode) };
+    m_paymentRequest->paymentMethodChanged(WTF::get<URL>(m_identifier).string(), [applePayCouponCodeDetails = WTFMove(applePayCouponCodeDetails)] (JSC::JSGlobalObject& lexicalGlobalObject) {
+        return toJSDictionary(lexicalGlobalObject, applePayCouponCodeDetails);
     });
 }
 
-#endif // ENABLE(APPLE_PAY_PAYMENT_METHOD_MODE)
+#endif // ENABLE(APPLE_PAY_COUPON_CODE)
 
 void ApplePayPaymentHandler::didCancelPaymentSession(PaymentSessionError&&)
 {

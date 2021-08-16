@@ -58,6 +58,8 @@ struct RuleFeatureWithInvalidationSelector : public RuleFeature {
     const CSSSelector* invalidationSelector { nullptr };
 };
 
+using RuleFeatureVector = Vector<RuleFeature>;
+
 struct RuleFeatureSet {
     void add(const RuleFeatureSet&);
     void clear();
@@ -70,12 +72,12 @@ struct RuleFeatureSet {
     HashSet<AtomString> attributeCanonicalLocalNamesInRules;
     HashSet<AtomString> attributeLocalNamesInRules;
     HashSet<AtomString> contentAttributeNamesInRules;
-    Vector<RuleFeature> siblingRules;
-    Vector<RuleFeature> uncommonAttributeRules;
+    RuleFeatureVector siblingRules;
+    RuleFeatureVector uncommonAttributeRules;
     
-    HashMap<AtomString, std::unique_ptr<Vector<RuleFeature>>> classRules;
+    HashMap<AtomString, std::unique_ptr<RuleFeatureVector>> classRules;
     HashMap<AtomString, std::unique_ptr<Vector<RuleFeatureWithInvalidationSelector>>> attributeRules;
-    HashMap<CSSSelector::PseudoClassType, std::unique_ptr<Vector<RuleFeature>>, WTF::IntHash<CSSSelector::PseudoClassType>, WTF::StrongEnumHashTraits<CSSSelector::PseudoClassType>> pseudoClassRules;
+    HashMap<CSSSelector::PseudoClassType, std::unique_ptr<RuleFeatureVector>, WTF::IntHash<CSSSelector::PseudoClassType>, WTF::StrongEnumHashTraits<CSSSelector::PseudoClassType>> pseudoClassRules;
     HashSet<AtomString> classesAffectingHost;
     HashSet<AtomString> attributesAffectingHost;
     HashSet<CSSSelector::PseudoClassType, WTF::IntHash<CSSSelector::PseudoClassType>, WTF::StrongEnumHashTraits<CSSSelector::PseudoClassType>> pseudoClassesAffectingHost;

@@ -55,6 +55,10 @@ RemoteMediaPlayerManagerProxy::RemoteMediaPlayerManagerProxy(GPUConnectionToWebP
 
 RemoteMediaPlayerManagerProxy::~RemoteMediaPlayerManagerProxy()
 {
+    auto proxies = std::exchange(m_proxies, { });
+
+    for (auto& proxy : proxies.values())
+        proxy->invalidate();
 }
 
 void RemoteMediaPlayerManagerProxy::createMediaPlayer(MediaPlayerIdentifier identifier, MediaPlayerEnums::MediaEngineIdentifier engineIdentifier, RemoteMediaPlayerProxyConfiguration&& proxyConfiguration)
@@ -189,7 +193,7 @@ Logger& RemoteMediaPlayerManagerProxy::logger()
 {
     if (!m_logger) {
         m_logger = Logger::create(this);
-        m_logger->setEnabled(this, m_gpuConnectionToWebProcess ? m_gpuConnectionToWebProcess->isAlwaysOnLoggingAllowed() : false);
+        m_logger->setEnabled(this, m_gpuConnectionToWebProcess ? m_gpuConnectionToWebProcess->sessionID().isAlwaysOnLoggingAllowed() : false);
     }
 
     return *m_logger;

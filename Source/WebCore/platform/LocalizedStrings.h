@@ -51,8 +51,8 @@ namespace WebCore {
     String copyImageUnknownFileLabel();
 #endif
 #if ENABLE(APP_HIGHLIGHTS)
-    WEBCORE_EXPORT String contextMenuItemTagAddHighlightToCurrentGroup();
-    WEBCORE_EXPORT String contextMenuItemTagAddHighlightToNewGroup();
+    WEBCORE_EXPORT String contextMenuItemTagAddHighlightToCurrentQuickNote();
+    WEBCORE_EXPORT String contextMenuItemTagAddHighlightToNewQuickNote();
 #endif
 
 #if ENABLE(CONTEXT_MENUS)
@@ -368,7 +368,10 @@ namespace WebCore {
 
 #if ENABLE(IMAGE_ANALYSIS)
     WEBCORE_EXPORT String contextMenuItemTagLookUpImage();
-#endif
+    WEBCORE_EXPORT String contextMenuItemTagQuickLookImage();
+    WEBCORE_EXPORT String contextMenuItemTagQuickLookImageForTextSelection();
+    WEBCORE_EXPORT String contextMenuItemTagQuickLookImageForVisualSearch();
+#endif // ENABLE(IMAGE_ANALYSIS)
 
 #if HAVE(TRANSLATION_UI_SERVICES)
     String contextMenuItemTagTranslate(const String& selectedString);

@@ -64,12 +64,14 @@ extern "C" {
     M(IndexedDB) \
     M(Inspector) \
     M(KeyHandling) \
+    M(Language) \
     M(Layers) \
     M(Layout) \
     M(Loading) \
     M(LocalStorageDatabaseTracker) \
     M(Media) \
     M(MemoryPressure) \
+    M(ModelElement) \
     M(MouseHandling) \
     M(Network) \
     M(NetworkCache) \
@@ -101,6 +103,7 @@ extern "C" {
     M(ViewportSizing) \
     M(VirtualMemory) \
     M(VisibleRects) \
+    M(WebAuthn) \
     M(WebGL) \
     M(WebRTC) \
     M(WheelEvents) \
@@ -110,13 +113,8 @@ WEBKIT2_LOG_CHANNELS(DECLARE_LOG_CHANNEL)
 
 #undef DECLARE_LOG_CHANNEL
 
-namespace WebKit {
-WTFLogChannel* getLogChannel(const String&);
-} // namespace WebKit
-
 #ifdef __cplusplus
 }
 #endif
 
 #endif // !LOG_DISABLED || !RELEASE_LOG_DISABLED
-

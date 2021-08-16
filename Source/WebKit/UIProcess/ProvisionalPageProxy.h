@@ -90,6 +90,9 @@ public:
 #if PLATFORM(COCOA)
     Vector<uint8_t> takeAccessibilityToken() { return WTFMove(m_accessibilityToken); }
 #endif
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    const String& accessibilityPlugID() { return m_accessibilityPlugID; }
+#endif
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     LayerHostingContextID contextIDForVisibilityPropagationInWebProcess() const { return m_contextIDForVisibilityPropagationInWebProcess; }
 #if ENABLE(GPU_PROCESS)
@@ -98,7 +101,7 @@ public:
 #endif
 #endif
 
-    void loadData(API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, std::optional<NavigatingToAppBoundDomain>, std::optional<WebsitePoliciesData>&& = std::nullopt);
+    void loadData(API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, std::optional<NavigatingToAppBoundDomain>, std::optional<WebsitePoliciesData>&&, WebCore::SubstituteData::SessionHistoryVisibility);
     void loadRequest(API::Navigation&, WebCore::ResourceRequest&&, API::Object* userData, std::optional<NavigatingToAppBoundDomain>, std::optional<WebsitePoliciesData>&& = std::nullopt);
     void goToBackForwardItem(API::Navigation&, WebBackForwardListItem&, RefPtr<API::WebsitePolicies>&&);
     void cancel();
@@ -145,6 +148,9 @@ private:
 #if PLATFORM(COCOA)
     void registerWebProcessAccessibilityToken(const IPC::DataReference&);
 #endif
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    void bindAccessibilityTree(const String&);
+#endif
 #if ENABLE(CONTENT_FILTERING)
     void contentFilterDidBlockLoadForFrame(const WebCore::ContentFilterUnblockHandler&, WebCore::FrameIdentifier);
 #endif
@@ -169,6 +175,9 @@ private:
 
 #if PLATFORM(COCOA)
     Vector<uint8_t> m_accessibilityToken;
+#endif
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    String m_accessibilityPlugID;
 #endif
 #if PLATFORM(IOS_FAMILY)
     UniqueRef<ProcessThrottler::ForegroundActivity> m_provisionalLoadActivity;

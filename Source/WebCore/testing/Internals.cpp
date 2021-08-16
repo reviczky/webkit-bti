@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -538,10 +538,10 @@ void Internals::resetToConsistentState(Page& page)
     page.mainFrame().loader().clearTestingOverrides();
     page.applicationCacheStorage().setDefaultOriginQuota(ApplicationCacheStorage::noQuota());
 #if ENABLE(VIDEO)
-    page.group().captionPreferences().setTestingMode(true);
-    page.group().captionPreferences().setCaptionDisplayMode(CaptionUserPreferences::ForcedOnly);
-    page.group().captionPreferences().setCaptionsStyleSheetOverride(emptyString());
-    page.group().captionPreferences().setTestingMode(false);
+    page.group().ensureCaptionPreferences().setTestingMode(true);
+    page.group().ensureCaptionPreferences().setCaptionDisplayMode(CaptionUserPreferences::ForcedOnly);
+    page.group().ensureCaptionPreferences().setCaptionsStyleSheetOverride(emptyString());
+    page.group().ensureCaptionPreferences().setTestingMode(false);
     PlatformMediaSessionManager::sharedManager().resetHaveEverRegisteredAsNowPlayingApplicationForTesting();
     PlatformMediaSessionManager::sharedManager().resetRestrictions();
     PlatformMediaSessionManager::sharedManager().setWillIgnoreSystemInterruptions(true);
@@ -600,7 +600,8 @@ void Internals::resetToConsistentState(Page& page)
     WebCore::MediaRecorder::setCustomPrivateRecorderCreator(nullptr);
 #endif
 
-    HTMLCanvasElement::setMaxPixelMemoryForTesting(0); // This means use the default value.
+    HTMLCanvasElement::setMaxPixelMemoryForTesting(std::nullopt);
+    HTMLCanvasElement::setMaxCanvasAreaForTesting(std::nullopt);
     DOMWindow::overrideTransientActivationDurationForTesting(std::nullopt);
 
 #if PLATFORM(IOS)
@@ -616,7 +617,7 @@ Internals::Internals(Document& document)
 {
 #if ENABLE(VIDEO)
     if (document.page())
-        document.page()->group().captionPreferences().setTestingMode(true);
+        document.page()->group().ensureCaptionPreferences().setTestingMode(true);
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -765,6 +766,11 @@ String Internals::styleChangeType(Node& node)
 String Internals::description(JSC::JSValue value)
 {
     return toString(value);
+}
+
+void Internals::log(const String& value)
+{
+    WTFLogAlways("%s", value.utf8().data());
 }
 
 bool Internals::isPreloaded(const String& url)
@@ -1653,6 +1659,23 @@ void Internals::setCustomPrivateRecorderCreator()
 }
 #endif // ENABLE(MEDIA_STREAM)
 
+ExceptionOr<Ref<DOMRect>> Internals::absoluteLineRectFromPoint(int x, int y)
+{
+    if (!contextDocument() || !contextDocument()->page())
+        return Exception { InvalidAccessError };
+
+    auto& document = *contextDocument();
+    if (!document.frame() || !document.view())
+        return Exception { InvalidAccessError };
+
+    auto& frame = *document.frame();
+    auto& view = *document.view();
+    document.updateLayoutIgnorePendingStylesheets();
+
+    auto position = frame.visiblePositionForPoint(view.rootViewToContents(IntPoint { x, y }));
+    return DOMRect::create(position.absoluteSelectionBoundsForLine());
+}
+
 ExceptionOr<Ref<DOMRect>> Internals::absoluteCaretBounds()
 {
     Document* document = contextDocument();
@@ -2223,7 +2246,7 @@ Vector<String> Internals::userPreferredAudioCharacteristics() const
     if (!document || !document->page())
         return Vector<String>();
 #if ENABLE(VIDEO)
-    return document->page()->group().captionPreferences().preferredAudioCharacteristics();
+    return document->page()->group().ensureCaptionPreferences().preferredAudioCharacteristics();
 #else
     return Vector<String>();
 #endif
@@ -2235,7 +2258,7 @@ void Internals::setUserPreferredAudioCharacteristic(const String& characteristic
     if (!document || !document->page())
         return;
 #if ENABLE(VIDEO)
-    document->page()->group().captionPreferences().setPreferredAudioCharacteristic(characteristic);
+    document->page()->group().ensureCaptionPreferences().setPreferredAudioCharacteristic(characteristic);
 #else
     UNUSED_PARAM(characteristic);
 #endif
@@ -2307,13 +2330,19 @@ ExceptionOr<RefPtr<NodeList>> Internals::nodesFromRect(Document& document, int c
 
     HitTestRequest request(hitType);
 
+    auto hitTestResult = [&] {
+        auto size = LayoutSize { leftPadding + rightPadding + 1, topPadding + bottomPadding + 1 };
+        if (size.isEmpty())
+            return HitTestResult { point };
+        auto adjustedPosition = LayoutPoint { flooredIntPoint(point) } - LayoutSize  { leftPadding, topPadding };
+        return HitTestResult { LayoutRect { adjustedPosition, size } };
+    }();
     // When ignoreClipping is false, this method returns null for coordinates outside of the viewport.
-    if (!request.ignoreClipping() && !frameView->visibleContentRect().intersects(HitTestLocation::rectForPoint(point, topPadding, rightPadding, bottomPadding, leftPadding)))
+    if (!request.ignoreClipping() && !hitTestResult.hitTestLocation().intersects(LayoutRect { frameView->visibleContentRect() }))
         return nullptr;
 
-    HitTestResult result(point, topPadding, rightPadding, bottomPadding, leftPadding);
-    document.hitTest(request, result);
-    auto matches = WTF::map(result.listBasedTestResult(), [](const auto& node) { return node.copyRef(); });
+    document.hitTest(request, hitTestResult);
+    auto matches = WTF::map(hitTestResult.listBasedTestResult(), [](const auto& node) { return node.copyRef(); });
     return RefPtr<NodeList> { StaticNodeList::create(WTFMove(matches)) };
 }
 
@@ -2693,6 +2722,11 @@ uint64_t Internals::storageAreaMapCount() const
 uint64_t Internals::elementIdentifier(Element& element) const
 {
     return element.document().identifierForElement(element).toUInt64();
+}
+
+bool Internals::isElementAlive(Document& document, uint64_t elementIdentifier) const
+{
+    return document.searchForElementByIdentifier(makeObjectIdentifier<ElementIdentifierType>(elementIdentifier));
 }
 
 uint64_t Internals::frameIdentifier(const Document& document) const
@@ -3854,6 +3888,11 @@ String Internals::getImageSourceURL(Element& element)
 
 #if ENABLE(VIDEO)
 
+unsigned Internals::mediaElementCount()
+{
+    return HTMLMediaElement::allMediaElements().size();
+}
+
 Vector<String> Internals::mediaResponseSources(HTMLMediaElement& media)
 {
     auto* resourceLoader = media.lastMediaResourceLoaderForTesting();
@@ -3977,7 +4016,7 @@ ExceptionOr<String> Internals::captionsStyleSheetOverride()
         return Exception { InvalidAccessError };
 
 #if ENABLE(VIDEO)
-    return document->page()->group().captionPreferences().captionsStyleSheetOverride();
+    return document->page()->group().ensureCaptionPreferences().captionsStyleSheetOverride();
 #else
     return String { emptyString() };
 #endif
@@ -3990,7 +4029,7 @@ ExceptionOr<void> Internals::setCaptionsStyleSheetOverride(const String& overrid
         return Exception { InvalidAccessError };
 
 #if ENABLE(VIDEO)
-    document->page()->group().captionPreferences().setCaptionsStyleSheetOverride(override);
+    document->page()->group().ensureCaptionPreferences().setCaptionsStyleSheetOverride(override);
 #else
     UNUSED_PARAM(override);
 #endif
@@ -4004,7 +4043,7 @@ ExceptionOr<void> Internals::setPrimaryAudioTrackLanguageOverride(const String& 
         return Exception { InvalidAccessError };
 
 #if ENABLE(VIDEO)
-    document->page()->group().captionPreferences().setPrimaryAudioTrackLanguageOverride(language);
+    document->page()->group().ensureCaptionPreferences().setPrimaryAudioTrackLanguageOverride(language);
 #else
     UNUSED_PARAM(language);
 #endif
@@ -4018,7 +4057,7 @@ ExceptionOr<void> Internals::setCaptionDisplayMode(const String& mode)
         return Exception { InvalidAccessError };
 
 #if ENABLE(VIDEO)
-    auto& captionPreferences = document->page()->group().captionPreferences();
+    auto& captionPreferences = document->page()->group().ensureCaptionPreferences();
 
     if (equalLettersIgnoringASCIICase(mode, "automatic"))
         captionPreferences.setCaptionDisplayMode(CaptionUserPreferences::Automatic);
@@ -4328,6 +4367,8 @@ void Internals::setMediaElementRestrictions(HTMLMediaElement& element, StringVie
             restrictions |= MediaElementSession::RequirePlaybackToControlControlsManager;
         if (equalLettersIgnoringASCIICase(restrictionString, "requireusergestureforvideoduetolowpowermode"))
             restrictions |= MediaElementSession::RequireUserGestureForVideoDueToLowPowerMode;
+        if (equalLettersIgnoringASCIICase(restrictionString, "requirepagevisibilitytoplayaudio"))
+            restrictions |= MediaElementSession::RequirePageVisibilityToPlayAudio;
     }
     element.mediaSession().addBehaviorRestriction(restrictions);
 }
@@ -4379,6 +4420,13 @@ bool Internals::elementIsBlockingDisplaySleep(HTMLMediaElement& element) const
 {
     return element.isDisablingSleep();
 }
+
+bool Internals::isPlayerVisibleInViewport(HTMLMediaElement& element) const
+{
+    auto player = element.player();
+    return player && player->isVisibleInViewport();
+}
+
 #endif // ENABLE(VIDEO)
 
 #if ENABLE(WEB_AUDIO)
@@ -4701,8 +4749,6 @@ MockContentFilterSettings& Internals::mockContentFilterSettings()
 
 #endif
 
-#if ENABLE(CSS_SCROLL_SNAP)
-
 static void appendOffsets(StringBuilder& builder, const Vector<SnapOffset<LayoutUnit>>& snapOffsets)
 {
     bool justStarting = true;
@@ -4765,7 +4811,6 @@ ExceptionOr<bool> Internals::isScrollSnapInProgress(Element& element)
 
     return scrollableArea->isScrollSnapInProgress();
 }
-#endif
 
 bool Internals::testPreloaderSettingViewport()
 {
@@ -4822,7 +4867,25 @@ void Internals::setMediaControlsMaximumRightContainerButtonCountOverride(HTMLMed
     mediaElement.setMediaControlsMaximumRightContainerButtonCountOverride(count);
 }
 
+void Internals::setMediaControlsHidePlaybackRates(HTMLMediaElement& mediaElement, bool hidePlaybackRates)
+{
+    mediaElement.setMediaControlsHidePlaybackRates(hidePlaybackRates);
+}
+
 #endif // ENABLE(VIDEO)
+
+void Internals::setPageMediaVolume(float volume)
+{
+    Document* document = contextDocument();
+    if (!document)
+        return;
+
+    Page* page = document->page();
+    if (!page)
+        return;
+
+    page->setMediaVolume(volume);
+}
 
 #if !PLATFORM(COCOA)
 
@@ -4976,6 +5039,11 @@ bool Internals::privatePlayerMuted(const HTMLMediaElement&)
 bool Internals::isMediaElementHidden(const HTMLMediaElement& media)
 {
     return media.elementIsHidden();
+}
+
+double Internals::elementEffectivePlaybackRate(const HTMLMediaElement& media)
+{
+    return media.effectivePlaybackRate();
 }
 #endif
 
@@ -5623,12 +5691,32 @@ static TextRecognitionLineData makeDataForLine(const Internals::ImageOverlayLine
     return {
         getQuad<Internals::ImageOverlayLine>(line),
         line.children.map([](auto& textChild) -> TextRecognitionWordData {
-            return { textChild.text, getQuad<Internals::ImageOverlayText>(textChild) };
+            return { textChild.text, getQuad<Internals::ImageOverlayText>(textChild), textChild.hasLeadingWhitespace };
         })
     };
 }
 
 #endif // ENABLE(IMAGE_ANALYSIS)
+
+void Internals::requestTextRecognition(Element& element, RefPtr<VoidCallback>&& callback)
+{
+    auto page = contextDocument()->page();
+    if (!page) {
+        if (callback)
+            callback->handleEvent();
+    }
+
+#if ENABLE(IMAGE_ANALYSIS)
+    page->chrome().client().requestTextRecognition(element, [callback = WTFMove(callback)] (auto&&) {
+        if (callback)
+            callback->handleEvent();
+    });
+#else
+    UNUSED_PARAM(element);
+    if (callback)
+        callback->handleEvent();
+#endif
+}
 
 void Internals::installImageOverlay(Element& element, Vector<ImageOverlayLine>&& lines)
 {
@@ -5640,6 +5728,9 @@ void Internals::installImageOverlay(Element& element, Vector<ImageOverlayLine>&&
         lines.map([] (auto& line) -> TextRecognitionLineData {
             return makeDataForLine(line);
         })
+#if ENABLE(DATA_DETECTION)
+        , Vector<TextRecognitionDataDetector>()
+#endif
     });
 #else
     UNUSED_PARAM(lines);
@@ -5926,6 +6017,11 @@ void Internals::setMaxCanvasPixelMemory(unsigned size)
     HTMLCanvasElement::setMaxPixelMemoryForTesting(size);
 }
 
+void Internals::setMaxCanvasArea(unsigned size)
+{
+    HTMLCanvasElement::setMaxCanvasAreaForTesting(size);
+}
+
 int Internals::processIdentifier() const
 {
     return getCurrentProcessID();
@@ -6081,8 +6177,8 @@ bool Internals::hasSandboxIOKitOpenAccessToClass(const String& process, const St
 Vector<String> Internals::appHighlightContextMenuItemTitles() const
 {
     return {{
-        contextMenuItemTagAddHighlightToCurrentGroup(),
-        contextMenuItemTagAddHighlightToNewGroup(),
+        contextMenuItemTagAddHighlightToCurrentQuickNote(),
+        contextMenuItemTagAddHighlightToNewQuickNote(),
     }};
 }
 
@@ -6362,5 +6458,20 @@ String Internals::dumpStyleResolvers()
     return result.toString();
 }
 
+ExceptionOr<void> Internals::setDocumentAutoplayPolicy(Document& document, Internals::AutoplayPolicy policy)
+{
+    static_assert(static_cast<uint8_t>(WebCore::AutoplayPolicy::Default) == static_cast<uint8_t>(Internals::AutoplayPolicy::Default), "Internals::Default != WebCore::Default");
+    static_assert(static_cast<uint8_t>(WebCore::AutoplayPolicy::Allow) == static_cast<uint8_t>(Internals::AutoplayPolicy::Allow), "Internals::Allow != WebCore::Allow");
+    static_assert(static_cast<uint8_t>(WebCore::AutoplayPolicy::AllowWithoutSound) == static_cast<uint8_t>(Internals::AutoplayPolicy::AllowWithoutSound), "Internals::AllowWithoutSound != WebCore::AllowWithoutSound");
+    static_assert(static_cast<uint8_t>(WebCore::AutoplayPolicy::Deny) == static_cast<uint8_t>(Internals::AutoplayPolicy::Deny), "Internals::Deny != WebCore::Deny");
+
+    auto* loader = document.loader();
+    if (!loader)
+        return Exception { InvalidStateError };
+
+    loader->setAutoplayPolicy(static_cast<WebCore::AutoplayPolicy>(policy));
+
+    return { };
+}
 
 } // namespace WebCore

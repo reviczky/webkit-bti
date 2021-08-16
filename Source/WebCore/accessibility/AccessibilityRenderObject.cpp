@@ -41,6 +41,7 @@
 #include "DocumentSVG.h"
 #include "Editing.h"
 #include "Editor.h"
+#include "EditorClient.h"
 #include "ElementIterator.h"
 #include "EventHandler.h"
 #include "FloatRect.h"
@@ -770,7 +771,7 @@ String AccessibilityRenderObject::stringValue() const
     }
     
     if (is<RenderListMarker>(*m_renderer))
-        return downcast<RenderListMarker>(*m_renderer).text();
+        return downcast<RenderListMarker>(*m_renderer).textWithoutSuffix().toString();
     
     if (isWebArea())
         return String();
@@ -1004,7 +1005,7 @@ AccessibilityObject* AccessibilityRenderObject::internalLinkElement() const
     if (!equalIgnoringFragmentIdentifier(documentURL, linkURL))
         return nullptr;
 
-    auto linkedNode = m_renderer->document().findAnchor(fragmentIdentifier.toStringWithoutCopying());
+    auto linkedNode = m_renderer->document().findAnchor(fragmentIdentifier);
     if (!linkedNode)
         return nullptr;
 
@@ -1214,9 +1215,9 @@ void AccessibilityRenderObject::titleElementText(Vector<AccessibilityText>& text
     
 AccessibilityObject* AccessibilityRenderObject::titleUIElement() const
 {
-    if (!m_renderer)
+    if (!m_renderer || !exposesTitleUIElement())
         return nullptr;
-    
+
     // if isFieldset is true, the renderer is guaranteed to be a RenderFieldset
     if (isFieldset())
         return axObjectCache()->getOrCreate(downcast<RenderBlock>(*m_renderer).findFieldsetLegend(RenderBlock::FieldsetIncludeFloatingOrOutOfFlow));
@@ -1551,8 +1552,8 @@ bool AccessibilityRenderObject::computeAccessibilityIsIgnored() const
 
     // Find out if this element is inside of a label element.
     // If so, it may be ignored because it's the label for a checkbox or radio button.
-    AccessibilityObject* controlObject = correspondingControlForLabelElement();
-    if (controlObject && !controlObject->exposesTitleUIElement() && controlObject->isCheckboxOrRadio())
+    auto* controlObject = correspondingControlForLabelElement();
+    if (controlObject && controlObject->isCheckboxOrRadio() && !controlObject->titleUIElement())
         return true;
 
     // By default, objects should be ignored so that the AX hierarchy is not
@@ -1716,6 +1717,9 @@ void AccessibilityRenderObject::setSelectedTextRange(const PlainTextRange& range
 {
     setTextSelectionIntent(axObjectCache(), range.length ? AXTextStateChangeTypeSelectionExtend : AXTextStateChangeTypeSelectionMove);
 
+    if (auto client = m_renderer->document().editor().client())
+        client->willChangeSelectionForAccessibility();
+
     if (isNativeTextControl()) {
         HTMLTextFormControlElement& textControl = downcast<RenderTextControl>(*m_renderer).textFormControlElement();
         textControl.setSelectionRange(range.start, range.start + range.length);
@@ -1733,6 +1737,9 @@ void AccessibilityRenderObject::setSelectedTextRange(const PlainTextRange& range
     }
     
     clearTextSelectionIntent(axObjectCache());
+
+    if (auto client = m_renderer->document().editor().client())
+        client->didChangeSelectionForAccessibility();
 }
 
 URL AccessibilityRenderObject::url() const
@@ -2275,6 +2282,9 @@ void AccessibilityRenderObject::setSelectedVisiblePositionRange(const VisiblePos
         && isVisiblePositionRangeInDifferentDocument(range))
         return;
 
+    if (auto client = m_renderer->document().editor().client())
+        client->willChangeSelectionForAccessibility();
+
     // make selection and tell the document to use it. if it's zero length, then move to that position
     if (range.start == range.end) {
         setTextSelectionIntent(axObjectCache(), AXTextStateChangeTypeSelectionMove);
@@ -2290,10 +2300,13 @@ void AccessibilityRenderObject::setSelectedVisiblePositionRange(const VisiblePos
         setTextSelectionIntent(axObjectCache(), AXTextStateChangeTypeSelectionExtend);
 
         VisibleSelection newSelection = VisibleSelection(range.start, range.end);
-        m_renderer->frame().selection().setSelection(newSelection, FrameSelection::defaultSetSelectionOptions());
+        m_renderer->frame().selection().setSelection(newSelection, FrameSelection::defaultSetSelectionOptions(UserTriggered));
     }
 
     clearTextSelectionIntent(axObjectCache());
+
+    if (auto client = m_renderer->document().editor().client())
+        client->didChangeSelectionForAccessibility();
 }
 
 VisiblePosition AccessibilityRenderObject::visiblePositionForPoint(const IntPoint& point) const
@@ -2565,8 +2578,8 @@ AXCoreObject* AccessibilityRenderObject::accessibilityHitTest(const IntPoint& po
     
     if (result && result->accessibilityIsIgnored()) {
         // If this element is the label of a control, a hit test should return the control.
-        AXCoreObject* controlObject = result->correspondingControlForLabelElement();
-        if (controlObject && !controlObject->exposesTitleUIElement())
+        auto* controlObject = result->correspondingControlForLabelElement();
+        if (controlObject && !controlObject->titleUIElement())
             return controlObject;
 
         result = result->parentObjectUnignored();
@@ -2788,6 +2801,14 @@ bool AccessibilityRenderObject::supportsExpandedTextValue() const
             return parent->hasTagName(abbrTag) || parent->hasTagName(acronymTag);
     }
     
+    return false;
+}
+
+bool AccessibilityRenderObject::shouldIgnoreAttributeRole() const
+{
+    if (m_ariaRole == AccessibilityRole::Document
+        && hasContentEditableAttributeSet())
+        return true;
     return false;
 }
 
@@ -3241,7 +3262,7 @@ AccessibilitySVGRoot* AccessibilityRenderObject::remoteSVGRootElement(CreationCh
     Image* image = cachedImage->image();
     if (!is<SVGImage>(image))
         return nullptr;
-    
+
     FrameView* frameView = downcast<SVGImage>(*image).frameView();
     if (!frameView)
         return nullptr;

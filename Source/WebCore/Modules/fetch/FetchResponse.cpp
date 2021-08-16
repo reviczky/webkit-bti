@@ -298,10 +298,10 @@ void FetchResponse::BodyLoader::didFail(const ResourceError& error)
     m_response.setLoadingError(ResourceError { error });
 
     if (auto responseCallback = WTFMove(m_responseCallback))
-        responseCallback(Exception { TypeError, error.localizedDescription() });
+        responseCallback(Exception { TypeError, error.sanitizedDescription() });
 
     if (auto consumeDataCallback = WTFMove(m_consumeDataCallback))
-        consumeDataCallback(Exception { TypeError, error.localizedDescription() });
+        consumeDataCallback(Exception { TypeError, error.sanitizedDescription() });
 
     if (m_response.m_readableStreamSource) {
         if (!m_response.m_readableStreamSource->isCancelling())
@@ -354,7 +354,7 @@ void FetchResponse::BodyLoader::didReceiveData(const uint8_t* data, size_t size)
     ASSERT(m_response.m_readableStreamSource || m_consumeDataCallback);
 
     if (m_consumeDataCallback) {
-        ReadableStreamChunk chunk { data, size };
+        Span chunk { data, size };
         m_consumeDataCallback(&chunk);
         return;
     }
@@ -400,7 +400,7 @@ void FetchResponse::BodyLoader::consumeDataByChunk(ConsumeDataByChunkCallback&& 
     if (!data)
         return;
 
-    ReadableStreamChunk chunk { data->data(), data->size() };
+    Span chunk { data->data(), data->size() };
     m_consumeDataCallback(&chunk);
 }
 

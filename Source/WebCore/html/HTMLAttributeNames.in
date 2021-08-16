@@ -220,10 +220,12 @@ onbeforepaste
 onbeforeprint
 onbeforeunload
 onblur
+oncancel
 oncanplay
 oncanplaythrough
 onchange
 onclick
+onclose
 oncontextmenu
 oncopy
 oncut
@@ -243,6 +245,7 @@ onerror
 onfocus
 onfocusin
 onfocusout
+onformdata
 onhashchange
 oninput
 oninvalid

@@ -36,6 +36,7 @@
 #include "RemoteRenderingBackendCreationParameters.h"
 #include "RemoteResourceCacheProxy.h"
 #include "RenderingBackendIdentifier.h"
+#include "RenderingUpdateID.h"
 #include <WebCore/DisplayList.h>
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <WebCore/Timer.h>
@@ -104,7 +105,11 @@ public:
     void cacheNativeImage(const ShareableBitmap::Handle&, WebCore::RenderingResourceIdentifier);
     void cacheFont(Ref<WebCore::Font>&&);
     void deleteAllFonts();
-    void releaseRemoteResource(WebCore::RenderingResourceIdentifier);
+    void releaseRemoteResource(WebCore::RenderingResourceIdentifier, uint64_t useCount);
+
+    void finalizeRenderingUpdate();
+    RenderingUpdateID renderingUpdateID() const { return m_renderingUpdateID; }
+    unsigned delayedRenderingUpdateCount() const { return m_renderingUpdateID - m_didRenderingUpdateID; }
 
     enum class DidReceiveBackendCreationResult : bool {
         ReceivedAnyResponse,
@@ -117,6 +122,8 @@ public:
 
     RenderingBackendIdentifier ensureBackendCreated();
 
+    bool isGPUProcessConnectionClosed() const { return !m_gpuProcessConnection; }
+
 private:
     explicit RemoteRenderingBackendProxy(WebPage&);
 
@@ -128,6 +135,7 @@ private:
     // Messages to be received.
     void didCreateImageBufferBackend(ImageBufferBackendHandle, WebCore::RenderingResourceIdentifier);
     void didFlush(WebCore::DisplayList::FlushIdentifier, WebCore::RenderingResourceIdentifier);
+    void didFinalizeRenderingUpdate(RenderingUpdateID didRenderingUpdateID);
 
     RefPtr<DisplayListWriterHandle> mostRecentlyUsedDisplayListHandle();
     RefPtr<DisplayListWriterHandle> findReusableDisplayListHandle(size_t capacity);
@@ -148,6 +156,9 @@ private:
     RefPtr<SharedMemory> m_getPixelBufferSharedMemory;
     uint64_t m_getPixelBufferSharedMemoryLength { 0 };
     WebCore::Timer m_destroyGetPixelBufferSharedMemoryTimer { *this, &RemoteRenderingBackendProxy::destroyGetPixelBufferSharedMemory };
+
+    RenderingUpdateID m_renderingUpdateID;
+    RenderingUpdateID m_didRenderingUpdateID;
 };
 
 } // namespace WebKit

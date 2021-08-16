@@ -45,9 +45,15 @@
 #include "PlatformCALayer.h"
 #endif
 
-#if !USE(ANGLE)
+#if USE(ANGLE)
+#include "GraphicsContextGLANGLEUtilities.h"
+#else
 #include "ANGLEWebKitBridge.h"
 #include "ExtensionsGLOpenGLCommon.h"
+#endif
+
+#if PLATFORM(MAC)
+#include "ScopedHighPerformanceGPURequest.h"
 #endif
 
 // FIXME: Find a better way to avoid the name confliction for NO_ERROR.
@@ -70,10 +76,6 @@ class GraphicsContextGLIOSurfaceSwapChain;
 namespace Nicosia {
 class GCGLLayer;
 }
-#endif
-
-#if PLATFORM(MAC)
-#include "ScopedHighPerformanceGPURequest.h"
 #endif
 
 namespace WebCore {
@@ -138,10 +140,10 @@ public:
     // Compile a shader without going through ANGLE.
     void compileShaderDirect(PlatformGLObject);
 
-#if !USE(ANGLE)
     // Equivalent to ::glTexImage2D(). Allows pixels==0 with no allocation.
     void texImage2DDirect(GCGLenum target, GCGLint level, GCGLenum internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLenum format, GCGLenum type, const void* pixels);
 
+#if !USE(ANGLE)
     // Helper to texImage2D with pixel==0 case: pixels are initialized to 0.
     // Return true if no GL error is synthesized.
     // By default, alignment is 4, the OpenGL default setting.
@@ -534,6 +536,10 @@ public:
     // detach call below.
     void* createPbufferAndAttachIOSurface(GCGLenum target, PbufferAttachmentUsage, GCGLenum internalFormat, GCGLsizei width, GCGLsizei height, GCGLenum type, IOSurfaceRef, GCGLuint plane);
     void destroyPbufferAndDetachIOSurface(void* handle);
+#if !PLATFORM(IOS_FAMILY_SIMULATOR)
+    void* attachIOSurfaceToSharedTexture(GCGLenum target, IOSurface*);
+    void detachIOSurfaceFromSharedTexture(void* handle);
+#endif
 #endif
 
 private:
@@ -573,6 +579,10 @@ private:
     bool reshapeDisplayBufferBacking();
     bool allocateAndBindDisplayBufferBacking();
     bool bindDisplayBufferBacking(std::unique_ptr<IOSurface> backing, void* pbuffer);
+#endif
+#if USE(ANGLE)
+    // Returns false if context should be lost due to timeout.
+    bool waitAndUpdateOldestFrame() WARN_UNUSED_RETURN;
 #endif
 
 #if PLATFORM(COCOA)
@@ -786,6 +796,11 @@ private:
 #endif
 #if ENABLE(VIDEO) && USE(AVFOUNDATION)
     std::unique_ptr<GraphicsContextGLCV> m_cv;
+#endif
+#if USE(ANGLE)
+    static constexpr size_t maxPendingFrames = 3;
+    size_t m_oldestFrameCompletionFence { 0 };
+    ScopedGLFence m_frameCompletionFences[maxPendingFrames];
 #endif
 };
 

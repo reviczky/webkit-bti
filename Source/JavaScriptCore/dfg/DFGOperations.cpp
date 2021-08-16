@@ -63,7 +63,7 @@
 #include "JSWeakMapInlines.h"
 #include "JSWeakSet.h"
 #include "NumberConstructor.h"
-#include "ObjectConstructor.h"
+#include "ObjectConstructorInlines.h"
 #include "Operations.h"
 #include "ParseInt.h"
 #include "RegExpGlobalDataInlines.h"
@@ -202,7 +202,7 @@ static ALWAYS_INLINE void putWithThis(JSGlobalObject* globalObject, EncodedJSVal
 static ALWAYS_INLINE EncodedJSValue parseIntResult(double input)
 {
     int asInt = static_cast<int>(input);
-    if (static_cast<double>(asInt) == input)
+    if (LIKELY(static_cast<double>(asInt) == input && (asInt || !std::signbit(input))))
         return JSValue::encode(jsNumber(asInt));
     return JSValue::encode(jsNumber(input));
 }
@@ -302,6 +302,100 @@ JSC_DEFINE_JIT_OPERATION(operationObjectCreateObject, JSCell*, (JSGlobalObject* 
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     return constructEmptyObject(globalObject, prototype);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationObjectAssignObject, void, (JSGlobalObject* globalObject, JSObject* target, JSObject* source))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    bool targetCanPerformFastPut = jsDynamicCast<JSFinalObject*>(vm, target) && target->canPerformFastPutInlineExcludingProto(vm) && target->isStructureExtensible(vm);
+
+    if (targetCanPerformFastPut) {
+        Vector<RefPtr<UniquedStringImpl>, 8> properties;
+        MarkedArgumentBuffer values;
+        if (!source->staticPropertiesReified(vm)) {
+            source->reifyAllStaticProperties(globalObject);
+            RETURN_IF_EXCEPTION(scope, void());
+        }
+
+        if (canPerformFastPropertyEnumerationForObjectAssign(source->structure(vm))) {
+            // |source| Structure does not have any getters. And target can perform fast put.
+            // So enumerating properties and putting properties are non observable.
+
+            // FIXME: It doesn't seem like we should have to do this in two phases, but
+            // we're running into crashes where it appears that source is transitioning
+            // under us, and even ends up in a state where it has a null butterfly. My
+            // leading hypothesis here is that we fire some value replacement watchpoint
+            // that ends up transitioning the structure underneath us.
+            // https://bugs.webkit.org/show_bug.cgi?id=187837
+
+            // FIXME: This fast path is very similar to ObjectConstructor' one. But extracting it to a function caused performance
+            // regression in object-assign-replace. Since the code is small and fast path, we keep both.
+
+            // Do not clear since Vector::clear shrinks the backing store.
+            properties.resize(0);
+            values.clear();
+            source->structure(vm)->forEachProperty(vm, [&] (const PropertyMapEntry& entry) -> bool {
+                if (entry.attributes & PropertyAttribute::DontEnum)
+                    return true;
+
+                PropertyName propertyName(entry.key);
+                if (propertyName.isPrivateName())
+                    return true;
+
+                properties.append(entry.key);
+                values.appendWithCrashOnOverflow(source->getDirect(entry.offset));
+
+                return true;
+            });
+
+            for (size_t i = 0; i < properties.size(); ++i) {
+                // FIXME: We could put properties in a batching manner to accelerate Object.assign more.
+                // https://bugs.webkit.org/show_bug.cgi?id=185358
+                PutPropertySlot putPropertySlot(target, true);
+                target->putOwnDataProperty(vm, properties[i].get(), values.at(i), putPropertySlot);
+            }
+            return;
+        }
+    }
+
+    scope.release();
+    objectAssignGeneric(globalObject, vm, target, source);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationObjectAssignUntyped, void, (JSGlobalObject* globalObject, JSObject* target, EncodedJSValue encodedSource))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    bool targetCanPerformFastPut = jsDynamicCast<JSFinalObject*>(vm, target) && target->canPerformFastPutInlineExcludingProto(vm) && target->isStructureExtensible(vm);
+
+    JSValue sourceValue = JSValue::decode(encodedSource);
+    if (sourceValue.isUndefinedOrNull())
+        return;
+    JSObject* source = sourceValue.toObject(globalObject);
+    RETURN_IF_EXCEPTION(scope, void());
+
+    if (targetCanPerformFastPut) {
+        if (!source->staticPropertiesReified(vm)) {
+            source->reifyAllStaticProperties(globalObject);
+            RETURN_IF_EXCEPTION(scope, void());
+        }
+
+        if (canPerformFastPropertyEnumerationForObjectAssign(source->structure(vm))) {
+            Vector<RefPtr<UniquedStringImpl>, 8> properties;
+            MarkedArgumentBuffer values;
+            objectAssignFast(vm, target, source, properties, values);
+            return;
+        }
+    }
+
+    scope.release();
+    objectAssignGeneric(globalObject, vm, target, source);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationCreateThis, JSCell*, (JSGlobalObject* globalObject, JSObject* constructor, uint32_t inlineCapacity))
@@ -1039,7 +1133,9 @@ JSC_DEFINE_JIT_OPERATION(operationArrayPushMultiple, EncodedJSValue, (JSGlobalOb
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    ActiveScratchBufferScope activeScratchBufferScope(ScratchBuffer::fromData(buffer), elementCount);
     auto scope = DECLARE_THROW_SCOPE(vm);
+
 
     // We assume that multiple JSArray::push calls with ArrayWithInt32/ArrayWithContiguous do not cause JS traps.
     // If it can cause any JS interactions, we can call the caller JS function of this function and overwrite the
@@ -1064,6 +1160,7 @@ JSC_DEFINE_JIT_OPERATION(operationArrayPushDoubleMultiple, EncodedJSValue, (JSGl
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    // Don't need a ActiveScratchBufferScope here because the scratch buffer only contains double values for this call.
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     // We assume that multiple JSArray::push calls with ArrayWithDouble do not cause JS traps.
@@ -1732,7 +1829,8 @@ JSC_DEFINE_JIT_OPERATION(operationNewArray, char*, (JSGlobalObject* globalObject
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    
+    ActiveScratchBufferScope activeScratchBufferScope(ScratchBuffer::fromData(buffer), size);
+
     return bitwise_cast<char*>(constructArray(globalObject, arrayStructure, static_cast<JSValue*>(buffer), size));
 }
 
@@ -2301,48 +2399,6 @@ JSC_DEFINE_JIT_OPERATION(operationEnsureArrayStorage, char*, (VM* vmPointer, JSC
     return result;
 }
 
-JSC_DEFINE_JIT_OPERATION(operationHasEnumerableProperty, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue encodedBaseValue, JSCell* property))
-{
-    VM& vm = globalObject->vm();
-    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
-    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    JSValue baseValue = JSValue::decode(encodedBaseValue);
-    if (baseValue.isUndefinedOrNull())
-        return JSValue::encode(jsBoolean(false));
-
-    JSObject* base = baseValue.toObject(globalObject);
-    EXCEPTION_ASSERT(!scope.exception() || !base);
-    if (!base)
-        return JSValue::encode(JSValue());
-    auto propertyName = asString(property)->toIdentifier(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
-    RELEASE_AND_RETURN(scope, JSValue::encode(jsBoolean(base->hasEnumerableProperty(globalObject, propertyName))));
-}
-
-JSC_DEFINE_JIT_OPERATION(operationInStructureProperty, EncodedJSValue, (JSGlobalObject* globalObject, JSCell* base, JSString* property))
-{
-    VM& vm = globalObject->vm();
-    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
-    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-
-    return JSValue::encode(jsBoolean(CommonSlowPaths::opInByVal(globalObject, base, property)));
-}
-
-JSC_DEFINE_JIT_OPERATION(operationHasOwnStructureProperty, EncodedJSValue, (JSGlobalObject* globalObject, JSCell* base, JSString* property))
-{
-    VM& vm = globalObject->vm();
-    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
-    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-
-    auto scope = DECLARE_THROW_SCOPE(vm);
-    auto propertyName = property->toIdentifier(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
-    scope.release();
-    return JSValue::encode(jsBoolean(objectPrototypeHasOwnProperty(globalObject, base, propertyName)));
-}
-
 JSC_DEFINE_JIT_OPERATION(operationHasIndexedProperty, size_t, (JSGlobalObject* globalObject, JSCell* baseCell, int32_t subscript))
 {
     VM& vm = globalObject->vm();
@@ -2399,12 +2455,105 @@ JSC_DEFINE_JIT_OPERATION(operationGetPropertyEnumeratorCell, JSCell*, (JSGlobalO
     RELEASE_AND_RETURN(scope, propertyNameEnumerator(globalObject, base));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationToIndexString, JSCell*, (JSGlobalObject* globalObject, int32_t index))
+JSC_DEFINE_JIT_OPERATION(operationEnumeratorNextUpdateIndexAndMode, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue baseValue, uint32_t index, int32_t modeNumber, JSPropertyNameEnumerator* enumerator))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    return jsString(vm, Identifier::from(vm, index).string());
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSPropertyNameEnumerator::Mode mode = static_cast<JSPropertyNameEnumerator::Mode>(modeNumber);
+    if (JSValue::decode(baseValue).isUndefinedOrNull()) {
+        ASSERT(mode == JSPropertyNameEnumerator::InitMode);
+        ASSERT(!index);
+        ASSERT(!enumerator->sizeOfPropertyNames());
+        mode = JSPropertyNameEnumerator::GenericMode;
+    } else {
+        JSObject* base = JSValue::decode(baseValue).toObject(globalObject);
+        RETURN_IF_EXCEPTION(scope, { });
+
+        constexpr bool shouldAllocateIndexedNameString = false;
+        enumerator->computeNext(globalObject, base, index, mode, shouldAllocateIndexedNameString);
+        RETURN_IF_EXCEPTION(scope, { });
+    }
+
+#if USE(JSVALUE64)
+    JSValue result = bitwise_cast<JSValue>(static_cast<uint64_t>(mode) << 32 | index | JSValue::DoubleEncodeOffset);
+#else
+    JSValue result = JSValue(mode, index);
+#endif
+    ASSERT(result.isDouble());
+    return JSValue::encode(result);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationEnumeratorNextUpdatePropertyName, EncodedJSValue, (JSGlobalObject* globalObject, uint32_t index, int32_t modeNumber, JSPropertyNameEnumerator* enumerator))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    if (modeNumber == JSPropertyNameEnumerator::IndexedMode) {
+        if (index < enumerator->indexedLength())
+            return JSValue::encode(jsString(vm, Identifier::from(vm, index).string()));
+        return JSValue::encode(jsNull());
+    }
+
+    JSString* result = enumerator->propertyNameAtIndex(index);
+    if (!result)
+        return JSValue::encode(jsNull());
+
+    return JSValue::encode(result);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationEnumeratorRecoverNameAndGetByVal, EncodedJSValue, (JSGlobalObject* globalObject, JSCell* base, uint32_t index, JSPropertyNameEnumerator* enumerator))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSString* string = enumerator->propertyNameAtIndex(index);
+    PropertyName propertyName = string->toIdentifier(globalObject);
+    // This should only really return for TerminationException since we know string is backed by a UUID.
+    RETURN_IF_EXCEPTION(scope, { });
+    JSObject* object = base->toObject(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+
+    RELEASE_AND_RETURN(scope, JSValue::encode(object->get(globalObject, propertyName)));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationEnumeratorInByVal, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue baseValue, EncodedJSValue propertyNameValue, uint32_t index, int32_t modeNumber))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSValue base = JSValue::decode(baseValue);
+    RETURN_IF_EXCEPTION(scope, { });
+    if (modeNumber == JSPropertyNameEnumerator::IndexedMode && base.isObject())
+        return JSValue::encode(jsBoolean(jsCast<JSObject*>(base)->hasProperty(globalObject, index)));
+
+    JSString* propertyName = jsSecureCast<JSString*>(vm, JSValue::decode(propertyNameValue));
+    RELEASE_AND_RETURN(scope, JSValue::encode(jsBoolean(CommonSlowPaths::opInByVal(globalObject, base, propertyName))));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationEnumeratorHasOwnProperty, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue baseValue, EncodedJSValue propertyNameValue, uint32_t index, int32_t modeNumber))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSValue base = JSValue::decode(baseValue);
+    RETURN_IF_EXCEPTION(scope, { });
+    if (modeNumber == JSPropertyNameEnumerator::IndexedMode && base.isObject())
+        return JSValue::encode(jsBoolean(jsCast<JSObject*>(base)->hasOwnProperty(globalObject, index)));
+
+    JSString* propertyName = jsSecureCast<JSString*>(vm, JSValue::decode(propertyNameValue));
+    auto identifier = propertyName->toIdentifier(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+    RELEASE_AND_RETURN(scope, JSValue::encode(jsBoolean(objectPrototypeHasOwnProperty(globalObject, base, identifier))));
 }
 
 JSC_DEFINE_JIT_OPERATION(operationNewRegexpWithLastIndex, JSCell*, (JSGlobalObject* globalObject, JSCell* regexpPtr, EncodedJSValue encodedLastIndex))
@@ -3039,6 +3188,7 @@ JSC_DEFINE_JIT_OPERATION(operationNewArrayWithSpreadSlow, JSCell*, (JSGlobalObje
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+    ActiveScratchBufferScope activeScratchBufferScope(ScratchBuffer::fromData(buffer), numItems);
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     EncodedJSValue* values = static_cast<EncodedJSValue*>(buffer);

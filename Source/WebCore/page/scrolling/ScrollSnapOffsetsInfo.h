@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(CSS_SCROLL_SNAP)
-
 #include "FloatRect.h"
 #include "LayoutRect.h"
 #include "LayoutUnit.h"
@@ -45,7 +43,8 @@ template <typename T>
 struct SnapOffset {
     T offset;
     ScrollSnapStop stop;
-    size_t snapAreaIndex;
+    bool hasSnapAreaLargerThanViewport;
+    Vector<size_t> snapAreaIndices;
 };
 
 template <typename UnitType, typename RectType>
@@ -72,9 +71,14 @@ struct ScrollSnapOffsetsInfo {
     }
 
     template<typename OutputType> OutputType convertUnits(float deviceScaleFactor = 0.0) const;
-    template<typename SizeType>
-    WEBCORE_EXPORT std::pair<UnitType, unsigned> closestSnapOffset(ScrollEventAxis, const SizeType& viewportSize, UnitType scrollDestinationOffset, float velocity, std::optional<UnitType> originalPositionForDirectionalSnapping = std::nullopt) const;
+    template<typename SizeType, typename PointType>
+    WEBCORE_EXPORT std::pair<UnitType, std::optional<unsigned>> closestSnapOffset(ScrollEventAxis, const SizeType& viewportSize, PointType scrollDestinationOffset, float velocity, std::optional<UnitType> originalPositionForDirectionalSnapping = std::nullopt) const;
 };
+
+template<typename UnitType> inline bool operator==(const SnapOffset<UnitType>& a, const SnapOffset<UnitType>& b)
+{
+    return a.offset == b.offset && a.stop == b.stop && a.snapAreaIndices == b.snapAreaIndices;
+}
 
 using LayoutScrollSnapOffsetsInfo = ScrollSnapOffsetsInfo<LayoutUnit, LayoutRect>;
 using FloatScrollSnapOffsetsInfo = ScrollSnapOffsetsInfo<float, FloatRect>;
@@ -82,16 +86,13 @@ using FloatScrollSnapOffsetsInfo = ScrollSnapOffsetsInfo<float, FloatRect>;
 template <> template <>
 LayoutScrollSnapOffsetsInfo FloatScrollSnapOffsetsInfo::convertUnits(float /* unusedScaleFactor */) const;
 template <> template <>
-WEBCORE_EXPORT std::pair<float, unsigned> FloatScrollSnapOffsetsInfo::closestSnapOffset(ScrollEventAxis, const FloatSize& viewportSize, float scrollDestinationOffset, float velocity, std::optional<float> originalPositionForDirectionalSnapping) const;
+WEBCORE_EXPORT std::pair<float, std::optional<unsigned>> FloatScrollSnapOffsetsInfo::closestSnapOffset(ScrollEventAxis, const FloatSize& viewportSize, FloatPoint scrollDestinationOffset, float velocity, std::optional<float> originalPositionForDirectionalSnapping) const;
 
 
 template <> template <>
 FloatScrollSnapOffsetsInfo LayoutScrollSnapOffsetsInfo::convertUnits(float deviceScaleFactor) const;
 template <> template <>
-WEBCORE_EXPORT std::pair<LayoutUnit, unsigned> LayoutScrollSnapOffsetsInfo::closestSnapOffset(ScrollEventAxis, const LayoutSize& viewportSize, LayoutUnit scrollDestinationOffset, float velocity, std::optional<LayoutUnit> originalPositionForDirectionalSnapping) const;
-
-
-const unsigned invalidSnapOffsetIndex = UINT_MAX;
+WEBCORE_EXPORT std::pair<LayoutUnit, std::optional<unsigned>> LayoutScrollSnapOffsetsInfo::closestSnapOffset(ScrollEventAxis, const LayoutSize& viewportSize, LayoutPoint scrollDestinationOffset, float velocity, std::optional<LayoutUnit> originalPositionForDirectionalSnapping) const;
 
 // Update the snap offsets for this scrollable area, given the RenderBox of the scroll container, the RenderStyle
 // which defines the scroll-snap properties, and the viewport rectangle with the origin at the top left of
@@ -107,5 +108,3 @@ template <typename T> WTF::TextStream& operator<<(WTF::TextStream& ts, SnapOffse
 }
 
 }; // namespace WebCore
-
-#endif // ENABLE(CSS_SCROLL_SNAP)

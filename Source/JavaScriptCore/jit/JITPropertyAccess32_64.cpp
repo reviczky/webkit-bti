@@ -131,9 +131,9 @@ void JIT::emit_op_del_by_id(const Instruction* currentInstruction)
     emitLoad(base, baseRegs.tagGPR(), baseRegs.payloadGPR());
     emitJumpSlowCaseIfNotJSCell(base, baseRegs.tagGPR());
     JITDelByIdGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
         CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident),
-        baseRegs, resultRegs, regT4);
+        baseRegs, resultRegs, InvalidGPRReg, regT4);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_delByIds.append(gen);
@@ -166,8 +166,8 @@ void JIT::emit_op_del_by_val(const Instruction* currentInstruction)
     emitJumpSlowCaseIfNotJSCell(property, propertyRegs.tagGPR());
 
     JITDelByValGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
-        baseRegs, propertyRegs, resultRegs, regT4);
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        baseRegs, propertyRegs, resultRegs, InvalidGPRReg, regT4);
 
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
@@ -257,8 +257,8 @@ void JIT::emit_op_get_by_val(const Instruction* currentInstruction)
         JSValueRegs resultRegs = JSValueRegs(regT1, regT0);
 
         JITGetByValGenerator gen(
-            m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::GetByVal, RegisterSet::stubUnavailableRegisters(),
-            JSValueRegs::payloadOnly(regT0), JSValueRegs(regT3, regT2), resultRegs);
+            m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::GetByVal, RegisterSet::stubUnavailableRegisters(),
+            JSValueRegs::payloadOnly(regT0), JSValueRegs(regT3, regT2), resultRegs, InvalidGPRReg);
         if (isOperandConstantInt(property))
             gen.stubInfo()->propertyIsInt32 = true;
         gen.generateFastPath(*this);
@@ -305,8 +305,8 @@ void JIT::emit_op_get_private_name(const Instruction* currentInstruction)
     JSValueRegs resultRegs = JSValueRegs(regT1, regT0);
 
     JITGetByValGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::GetPrivateName,
-        RegisterSet::stubUnavailableRegisters(), baseGPR, propertyGPR, resultRegs);
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::GetPrivateName,
+        RegisterSet::stubUnavailableRegisters(), baseGPR, propertyGPR, resultRegs, InvalidGPRReg);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_getByVals.append(gen);
@@ -393,8 +393,8 @@ void JIT::emit_op_set_private_brand(const Instruction* currentInstruction)
     emitJumpSlowCaseIfNotJSCell(base, baseRegs.tagGPR());
 
     JITPrivateBrandAccessGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::SetPrivateBrand, RegisterSet::stubUnavailableRegisters(),
-        baseRegs, brandRegs);
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::SetPrivateBrand, RegisterSet::stubUnavailableRegisters(),
+        baseRegs, brandRegs, InvalidGPRReg);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_privateBrandAccesses.append(gen);
@@ -433,8 +433,8 @@ void JIT::emit_op_check_private_brand(const Instruction* currentInstruction)
     emitJumpSlowCaseIfNotJSCell(base, baseRegs.tagGPR());
 
     JITPrivateBrandAccessGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::CheckPrivateBrand, RegisterSet::stubUnavailableRegisters(),
-        baseRegs, brandRegs);
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::CheckPrivateBrand, RegisterSet::stubUnavailableRegisters(),
+        baseRegs, brandRegs, InvalidGPRReg);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_privateBrandAccesses.append(gen);
@@ -486,16 +486,16 @@ void JIT::emit_op_put_by_val(const Instruction* currentInstruction)
     JITArrayMode mode = chooseArrayMode(profile);
     switch (mode) {
     case JITInt32:
-        slowCases = emitInt32PutByVal(bytecode, badType);
+        slowCases = emitInt32PutByVal(bytecode, badType, byValInfo);
         break;
     case JITDouble:
-        slowCases = emitDoublePutByVal(bytecode, badType);
+        slowCases = emitDoublePutByVal(bytecode, badType, byValInfo);
         break;
     case JITContiguous:
-        slowCases = emitContiguousPutByVal(bytecode, badType);
+        slowCases = emitContiguousPutByVal(bytecode, badType, byValInfo);
         break;
     case JITArrayStorage:
-        slowCases = emitArrayStoragePutByVal(bytecode, badType);
+        slowCases = emitArrayStoragePutByVal(bytecode, badType, byValInfo);
         break;
     default:
         CRASH();
@@ -511,7 +511,7 @@ void JIT::emit_op_put_by_val(const Instruction* currentInstruction)
 }
 
 template <typename Op>
-JIT::JumpList JIT::emitGenericContiguousPutByVal(Op bytecode, PatchableJump& badType, IndexingType indexingShape)
+JIT::JumpList JIT::emitGenericContiguousPutByVal(Op bytecode, PatchableJump& badType, ByValInfo* byValInfo, IndexingType indexingShape)
 {
     auto& metadata = bytecode.metadata(m_codeBlock);
     VirtualRegister base = bytecode.m_base;
@@ -520,6 +520,7 @@ JIT::JumpList JIT::emitGenericContiguousPutByVal(Op bytecode, PatchableJump& bad
 
     JumpList slowCases;
     
+    UNUSED_PARAM(byValInfo);
     badType = patchableBranch32(NotEqual, regT1, TrustedImm32(ContiguousShape));
     
     loadPtr(Address(regT0, JSObject::butterflyOffset()), regT3);
@@ -572,7 +573,7 @@ JIT::JumpList JIT::emitGenericContiguousPutByVal(Op bytecode, PatchableJump& bad
 }
 
 template <typename Op>
-JIT::JumpList JIT::emitArrayStoragePutByVal(Op bytecode, PatchableJump& badType)
+JIT::JumpList JIT::emitArrayStoragePutByVal(Op bytecode, PatchableJump& badType, ByValInfo* byValInfo)
 {
     auto& metadata = bytecode.metadata(m_codeBlock);
     VirtualRegister base = bytecode.m_base;
@@ -581,6 +582,7 @@ JIT::JumpList JIT::emitArrayStoragePutByVal(Op bytecode, PatchableJump& badType)
 
     JumpList slowCases;
     
+    UNUSED_PARAM(byValInfo);
     badType = patchableBranch32(NotEqual, regT1, TrustedImm32(ArrayStorageShape));
     
     loadPtr(Address(regT0, JSObject::butterflyOffset()), regT3);
@@ -660,8 +662,8 @@ void JIT::emit_op_try_get_by_id(const Instruction* currentInstruction)
     JSValueRegs resultRegs = JSValueRegs(regT1, regT0);
 
     JITGetByIdGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
-        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), resultRegs, AccessType::TryGetById);
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), resultRegs, InvalidGPRReg, AccessType::TryGetById);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_getByIds.append(gen);
@@ -701,8 +703,8 @@ void JIT::emit_op_get_by_id_direct(const Instruction* currentInstruction)
     JSValueRegs resultRegs = JSValueRegs(regT1, regT0);
 
     JITGetByIdGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
-        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), resultRegs, AccessType::GetByIdDirect);
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), resultRegs, InvalidGPRReg, AccessType::GetByIdDirect);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_getByIds.append(gen);
@@ -748,8 +750,8 @@ void JIT::emit_op_get_by_id(const Instruction* currentInstruction)
 
     JSValueRegs resultRegs = JSValueRegs(regT1, regT0);
     JITGetByIdGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
-        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), resultRegs, AccessType::GetById);
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), resultRegs, InvalidGPRReg, AccessType::GetById);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_getByIds.append(gen);
@@ -791,8 +793,8 @@ void JIT::emit_op_get_by_id_with_this(const Instruction* currentInstruction)
     JSValueRegs resultRegs = JSValueRegs(regT1, regT0);
 
     JITGetByIdWithThisGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
-        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), resultRegs, JSValueRegs::payloadOnly(regT0), JSValueRegs(regT4, regT3));
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), resultRegs, JSValueRegs::payloadOnly(regT0), JSValueRegs(regT4, regT3), InvalidGPRReg);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_getByIdsWithThis.append(gen);
@@ -835,9 +837,9 @@ void JIT::emit_op_put_by_id(const Instruction* currentInstruction)
     emitJumpSlowCaseIfNotJSCell(base, regT1);
 
     JITPutByIdGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
         CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident),
-        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT3, regT2),
+        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT3, regT2), InvalidGPRReg,
         regT1, bytecode.m_flags.ecmaMode(), direct ? PutKind::Direct : PutKind::NotDirect);
     
     gen.generateFastPath(*this);
@@ -882,8 +884,8 @@ void JIT::emit_op_in_by_id(const Instruction* currentInstruction)
     emitJumpSlowCaseIfNotJSCell(base, regT1);
 
     JITInByIdGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
-        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0));
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
+        CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_codeBlock, *ident), JSValueRegs::payloadOnly(regT0), JSValueRegs(regT1, regT0), InvalidGPRReg);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_inByIds.append(gen);
@@ -922,8 +924,8 @@ void JIT::emit_op_in_by_val(const Instruction* currentInstruction)
     emitArrayProfilingSiteWithCell(regT0, regT4, profile);
 
     JITInByValGenerator gen(
-        m_codeBlock, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), RegisterSet::stubUnavailableRegisters(),
-        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT3, regT2), JSValueRegs(regT1, regT0));
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), AccessType::InByVal, RegisterSet::stubUnavailableRegisters(),
+        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT3, regT2), JSValueRegs(regT1, regT0), InvalidGPRReg);
     gen.generateFastPath(*this);
     addSlowCase(gen.slowPathJump());
     m_inByVals.append(gen);
@@ -947,6 +949,61 @@ void JIT::emitSlow_op_in_by_val(const Instruction* currentInstruction, Vector<Sl
     Call call = callOperation(operationInByValOptimize, dst, TrustedImmPtr(m_codeBlock->globalObject()), gen.stubInfo(), profile, JSValueRegs(regT1, regT0), JSValueRegs(regT3, regT2));
 
     gen.reportSlowPathCall(coldPathBegin, call);
+}
+
+void JIT::emitHasPrivate(VirtualRegister dst, VirtualRegister base, VirtualRegister propertyOrBrand, AccessType type)
+{
+    emitLoad2(base, regT1, regT0, propertyOrBrand, regT3, regT2);
+    emitJumpSlowCaseIfNotJSCell(base, regT1);
+
+    JITInByValGenerator gen(
+        m_codeBlock, JITType::BaselineJIT, CodeOrigin(m_bytecodeIndex), CallSiteIndex(m_bytecodeIndex), type, RegisterSet::stubUnavailableRegisters(),
+        JSValueRegs::payloadOnly(regT0), JSValueRegs(regT3, regT2), JSValueRegs(regT1, regT0), InvalidGPRReg);
+    gen.generateFastPath(*this);
+    addSlowCase(gen.slowPathJump());
+    m_inByVals.append(gen);
+
+    emitStore(dst, regT1, regT0);
+}
+
+void JIT::emitHasPrivateSlow(VirtualRegister dst, AccessType type)
+{
+    ASSERT(type == AccessType::HasPrivateName || type == AccessType::HasPrivateBrand);
+
+    JITInByValGenerator& gen = m_inByVals[m_inByValIndex++];
+    Label coldPathBegin = label();
+
+    Call call = callOperation(type == AccessType::HasPrivateName ? operationHasPrivateNameOptimize : operationHasPrivateBrandOptimize, dst, TrustedImmPtr(m_codeBlock->globalObject()), gen.stubInfo(), JSValueRegs(regT1, regT0), JSValueRegs(regT3, regT2));
+
+    gen.reportSlowPathCall(coldPathBegin, call);
+}
+
+void JIT::emit_op_has_private_name(const Instruction* currentInstruction)
+{
+    auto bytecode = currentInstruction->as<OpHasPrivateName>();
+    emitHasPrivate(bytecode.m_dst, bytecode.m_base, bytecode.m_property, AccessType::HasPrivateName);
+}
+
+void JIT::emitSlow_op_has_private_name(const Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter)
+{
+    linkAllSlowCases(iter);
+
+    auto bytecode = currentInstruction->as<OpHasPrivateName>();
+    emitHasPrivateSlow(bytecode.m_dst, AccessType::HasPrivateName);
+}
+
+void JIT::emit_op_has_private_brand(const Instruction* currentInstruction)
+{
+    auto bytecode = currentInstruction->as<OpHasPrivateBrand>();
+    emitHasPrivate(bytecode.m_dst, bytecode.m_base, bytecode.m_brand, AccessType::HasPrivateBrand);
+}
+
+void JIT::emitSlow_op_has_private_brand(const Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter)
+{
+    linkAllSlowCases(iter);
+
+    auto bytecode = currentInstruction->as<OpHasPrivateBrand>();
+    emitHasPrivateSlow(bytecode.m_dst, AccessType::HasPrivateBrand);
 }
 
 void JIT::emitVarInjectionCheck(bool needsVarInjectionChecks)
@@ -1447,6 +1504,35 @@ void JIT::emit_op_put_internal_field(const Instruction* currentInstruction)
 }
 
 template void JIT::emit_op_put_by_val<OpPutByVal>(const Instruction*);
+
+void JIT::emit_op_enumerator_next(const Instruction* currentInstruction)
+{
+    JITSlowPathCall slowPathCall(this, currentInstruction, slow_path_enumerator_next);
+    slowPathCall.call();
+}
+
+void JIT::emit_op_enumerator_get_by_val(const Instruction* currentInstruction)
+{
+    JITSlowPathCall slowPathCall(this, currentInstruction, slow_path_enumerator_get_by_val);
+    slowPathCall.call();
+}
+
+void JIT::emitSlow_op_enumerator_get_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&)
+{
+    UNREACHABLE_FOR_PLATFORM();
+}
+
+void JIT::emit_op_enumerator_in_by_val(const Instruction* currentInstruction)
+{
+    JITSlowPathCall slowPathCall(this, currentInstruction, slow_path_enumerator_in_by_val);
+    slowPathCall.call();
+}
+
+void JIT::emit_op_enumerator_has_own_property(const Instruction* currentInstruction)
+{
+    JITSlowPathCall slowPathCall(this, currentInstruction, slow_path_enumerator_has_own_property);
+    slowPathCall.call();
+}
 
 } // namespace JSC
 

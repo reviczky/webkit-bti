@@ -275,6 +275,7 @@ enum class BoxSizing : uint8_t {
 enum class Overflow : uint8_t {
     Visible,
     Hidden,
+    Clip,
     Scroll,
     Auto,
     PagedX,
@@ -617,8 +618,8 @@ enum class ListStyleType : uint8_t {
     EthiopicHalehameAmEt,
     AmharicAbegede,
     EthiopicAbegedeAmEt,
-    CjkEarthlyBranch,
-    CjkHeavenlyStem,
+    CJKEarthlyBranch,
+    CJKHeavenlyStem,
     Ethiopic,
     EthiopicHalehameGez,
     EthiopicAbegede,
@@ -656,6 +657,20 @@ enum class ListStyleType : uint8_t {
     Katakana,
     HiraganaIroha,
     KatakanaIroha,
+    CJKDecimal,
+    Tamil,
+    DisclosureOpen,
+    DisclosureClosed,
+    JapaneseInformal,
+    JapaneseFormal,
+    KoreanHangulFormal,
+    KoreanHanjaInformal,
+    KoreanHanjaFormal,
+    SimplifiedChineseInformal,
+    SimplifiedChineseFormal,
+    TraditionalChineseInformal,
+    TraditionalChineseFormal,
+    EthiopicNumeric,
     String,
     None
 };
@@ -1121,7 +1136,6 @@ enum class CSSBoxType : uint8_t {
     ViewBox
 };
 
-#if ENABLE(CSS_SCROLL_SNAP)
 enum class ScrollSnapStrictness : uint8_t {
     None,
     Proximity,
@@ -1147,7 +1161,6 @@ enum class ScrollSnapStop : uint8_t {
     Normal,
     Always,
 };
-#endif
 
 #if ENABLE(CSS_TRAILING_WORD)
 enum class TrailingWord : uint8_t {
@@ -1309,12 +1322,10 @@ WTF::TextStream& operator<<(WTF::TextStream&, QuoteType);
 WTF::TextStream& operator<<(WTF::TextStream&, ReflectionDirection);
 WTF::TextStream& operator<<(WTF::TextStream&, Resize);
 WTF::TextStream& operator<<(WTF::TextStream&, RubyPosition);
-#if ENABLE(CSS_SCROLL_SNAP)
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapAxis);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapAxisAlignType);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapStop);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapStrictness);
-#endif
 WTF::TextStream& operator<<(WTF::TextStream&, SpeakAs);
 WTF::TextStream& operator<<(WTF::TextStream&, StyleDifference);
 WTF::TextStream& operator<<(WTF::TextStream&, TableLayoutType);
@@ -1345,7 +1356,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, MathStyle);
 
 } // namespace WebCore
 
-#if ENABLE(CSS_SCROLL_SNAP)
 namespace WTF {
 template<> struct EnumTraits<WebCore::ScrollSnapStop> {
     using values = EnumValues<
@@ -1355,4 +1365,3 @@ template<> struct EnumTraits<WebCore::ScrollSnapStop> {
     >;
 };
 }
-#endif

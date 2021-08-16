@@ -54,14 +54,11 @@
 #include <wtf/CallbackAggregator.h>
 #include <wtf/CrossThreadCopier.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/SuspendableWorkQueue.h>
 #include <wtf/threads/BinarySemaphore.h>
 
 namespace WebKit {
 using namespace WebCore;
-
-WebResourceLoadStatisticsStore::State WebResourceLoadStatisticsStore::suspendedState { WebResourceLoadStatisticsStore::State::Running };
-Lock WebResourceLoadStatisticsStore::suspendedStateLock;
-Condition WebResourceLoadStatisticsStore::suspendedStateChangeCondition;
 
 const OptionSet<WebsiteDataType>& WebResourceLoadStatisticsStore::monitoredDataTypes()
 {
@@ -146,9 +143,9 @@ void WebResourceLoadStatisticsStore::setShouldClassifyResourcesBeforeDataRecords
     });
 }
 
-static Ref<WorkQueue> sharedStatisticsQueue()
+static Ref<SuspendableWorkQueue> sharedStatisticsQueue()
 {
-    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("WebResourceLoadStatisticsStore Process Data Queue", WorkQueue::Type::Serial, WorkQueue::QOS::Utility));
+    static NeverDestroyed<Ref<SuspendableWorkQueue>> queue(SuspendableWorkQueue::create("WebResourceLoadStatisticsStore Process Data Queue",  WorkQueue::QOS::Utility));
     return queue.get().copyRef();
 }
 
@@ -353,13 +350,6 @@ void WebResourceLoadStatisticsStore::resourceLoadStatisticsUpdated(Vector<Resour
             postTaskReply(WTFMove(completionHandler));
             return;
         }
-
-#if ASSERT_ENABLED
-        {
-            Locker stateLocker { suspendedStateLock };
-            ASSERT(suspendedState != State::Suspended);
-        }
-#endif
 
         m_statisticsStore->mergeStatistics(WTFMove(statistics));
         postTaskReply(WTFMove(completionHandler));
@@ -1454,41 +1444,19 @@ void WebResourceLoadStatisticsStore::aggregatedThirdPartyData(CompletionHandler<
 
 void WebResourceLoadStatisticsStore::suspend(CompletionHandler<void()>&& completionHandler)
 {
-    CompletionHandlerCallingScope completionHandlerCaller(WTFMove(completionHandler));
-    Locker stateLocker { suspendedStateLock };
-    if (suspendedState != State::Running)
-        return;
-    suspendedState = State::WillSuspend;
+    ASSERT(RunLoop::isMain());
 
-    sharedStatisticsQueue()->dispatch([completionHandler = completionHandlerCaller.release()] () mutable {
-
+    sharedStatisticsQueue()->suspend([]() mutable {
         for (auto& databaseStore : ResourceLoadStatisticsDatabaseStore::allStores())
             databaseStore->interrupt();
-        
-        Locker stateLocker { suspendedStateLock };
-        ASSERT(suspendedState != State::Suspended);
-
-        if (suspendedState != State::WillSuspend) {
-            postTaskReply(WTFMove(completionHandler));
-            return;
-        }
-
-        suspendedState = State::Suspended;
-        postTaskReply(WTFMove(completionHandler));
-
-        while (suspendedState == State::Suspended)
-            suspendedStateChangeCondition.wait(suspendedStateLock);
-        ASSERT(suspendedState != State::Suspended);
-    });
+    }, WTFMove(completionHandler));
 }
 
 void WebResourceLoadStatisticsStore::resume()
 {
-    Locker stateLocker { suspendedStateLock };
-    auto previousState = suspendedState;
-    suspendedState = State::Running;
-    if (previousState == State::Suspended)
-        suspendedStateChangeCondition.notifyOne();
+    ASSERT(RunLoop::isMain());
+
+    sharedStatisticsQueue()->resume();
 }
 
 void WebResourceLoadStatisticsStore::insertExpiredStatisticForTesting(const RegistrableDomain& domain, unsigned numberOfOperatingDaysPassed, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&& completionHandler)
@@ -1541,7 +1509,7 @@ void WebResourceLoadStatisticsStore::attributePrivateClickMeasurement(const Priv
         return;
     }
 
-    postTask([this, sourceSite, destinationSite, attributionTriggerData = WTFMove(attributionTriggerData), completionHandler = WTFMove(completionHandler)]() mutable {
+    postTask([this, sourceSite = sourceSite.isolatedCopy(), destinationSite = destinationSite.isolatedCopy(), attributionTriggerData = WTFMove(attributionTriggerData), completionHandler = WTFMove(completionHandler)]() mutable {
         if (!m_statisticsStore) {
             postTaskReply([completionHandler = WTFMove(completionHandler)]() mutable {
                 completionHandler(std::nullopt);
@@ -1643,7 +1611,7 @@ void WebResourceLoadStatisticsStore::privateClickMeasurementToString(CompletionH
         }
 
         auto result = m_statisticsStore->privateClickMeasurementToString();
-        postTaskReply([result, completionHandler = WTFMove(completionHandler)]() mutable {
+        postTaskReply([result = result.isolatedCopy(), completionHandler = WTFMove(completionHandler)]() mutable {
             completionHandler(result);
         });
     });

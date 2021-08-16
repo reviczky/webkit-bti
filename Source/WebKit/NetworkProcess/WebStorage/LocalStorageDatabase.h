@@ -26,19 +26,22 @@
 #pragma once
 
 #include <WebCore/SQLiteDatabase.h>
+#include <wtf/Forward.h>
 #include <wtf/HashMap.h>
+#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 class SQLiteStatementAutoResetScope;
+class SQLiteTransaction;
 
 struct SecurityOriginData;
 }
 
 namespace WebKit {
 
-class LocalStorageDatabase : public RefCounted<LocalStorageDatabase> {
+class LocalStorageDatabase : public RefCounted<LocalStorageDatabase>, public CanMakeWeakPtr<LocalStorageDatabase> {
 public:
-    static Ref<LocalStorageDatabase> create(String&& databasePath, unsigned quotaInBytes);
+    static Ref<LocalStorageDatabase> create(Ref<SuspendableWorkQueue>&&, String&& databasePath, unsigned quotaInBytes);
     ~LocalStorageDatabase();
 
     HashMap<String, String> items() const;
@@ -51,24 +54,33 @@ public:
     // Will block until all pending changes have been written to disk.
     void close();
 
+    void flushToDisk();
     void handleLowMemoryWarning();
 
 private:
-    LocalStorageDatabase(String&& databasePath, unsigned quotaInBytes);
+    LocalStorageDatabase(Ref<SuspendableWorkQueue>&&, String&& databasePath, unsigned quotaInBytes);
 
     enum class ShouldCreateDatabase : bool { No, Yes };
     bool openDatabase(ShouldCreateDatabase);
 
+    void startTransactionIfNecessary();
     bool migrateItemTableIfNeeded();
     bool databaseIsEmpty() const;
 
+    String itemBypassingCache(const String& key) const;
+
     WebCore::SQLiteStatementAutoResetScope scopedStatement(std::unique_ptr<WebCore::SQLiteStatement>&, ASCIILiteral query) const;
 
+    Ref<SuspendableWorkQueue> m_workQueue;
     String m_databasePath;
     mutable WebCore::SQLiteDatabase m_database;
+    std::unique_ptr<WebCore::SQLiteTransaction> m_transaction;
     const unsigned m_quotaInBytes { 0 };
     bool m_isClosed { false };
-    std::optional<uint64_t> m_databaseSize;
+
+    // Cached version of the items in memory.
+    // If the value is too large to keep in memory, we store a null String.
+    mutable std::optional<HashMap<String, String>> m_items;
 
     mutable std::unique_ptr<WebCore::SQLiteStatement> m_clearStatement;
     mutable std::unique_ptr<WebCore::SQLiteStatement> m_insertStatement;

@@ -50,7 +50,7 @@
 
 namespace WebCore {
 
-static const uint64_t schemaVersion = 6;
+static const uint64_t schemaVersion = 7;
 
 #define RECORDS_TABLE_SCHEMA_PREFIX "CREATE TABLE "
 #define RECORDS_TABLE_SCHEMA_SUFFIX "(" \
@@ -63,6 +63,7 @@ static const uint64_t schemaVersion = 6;
     ", scriptURL TEXT NOT NULL ON CONFLICT FAIL" \
     ", workerType TEXT NOT NULL ON CONFLICT FAIL" \
     ", contentSecurityPolicy BLOB NOT NULL ON CONFLICT FAIL" \
+    ", crossOriginEmbedderPolicy BLOB NOT NULL ON CONFLICT FAIL" \
     ", referrerPolicy TEXT NOT NULL ON CONFLICT FAIL" \
     ", scriptResourceMap BLOB NOT NULL ON CONFLICT FAIL" \
     ", certificateInfo BLOB NOT NULL ON CONFLICT FAIL" \
@@ -421,7 +422,7 @@ bool RegistrationDatabase::doPushChanges(const Vector<ServiceWorkerContextData>&
     SQLiteTransaction transaction(*m_database);
     transaction.begin();
 
-    auto insertStatement = m_database->prepareStatement("INSERT INTO Records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"_s);
+    auto insertStatement = m_database->prepareStatement("INSERT INTO Records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"_s);
     if (!insertStatement) {
         RELEASE_LOG_ERROR(ServiceWorker, "Failed to prepare statement to store registration data into records table (%i) - %s", m_database->lastError(), m_database->lastErrorMsg());
         return false;
@@ -443,6 +444,9 @@ bool RegistrationDatabase::doPushChanges(const Vector<ServiceWorkerContextData>&
         WTF::Persistence::Encoder cspEncoder;
         data.contentSecurityPolicy.encode(cspEncoder);
 
+        WTF::Persistence::Encoder coepEncoder;
+        data.crossOriginEmbedderPolicy.encode(coepEncoder);
+
         // We don't actually encode the script sources to the database. They will be stored separately in the ScriptStorage.
         // As a result, we need to strip the script sources here before encoding the scriptResourceMap.
         WTF::Persistence::Encoder scriptResourceMapEncoder;
@@ -459,10 +463,11 @@ bool RegistrationDatabase::doPushChanges(const Vector<ServiceWorkerContextData>&
             || insertStatement->bindText(6, updateViaCacheToString(data.registration.updateViaCache)) != SQLITE_OK
             || insertStatement->bindText(7, data.scriptURL.string()) != SQLITE_OK
             || insertStatement->bindText(8, workerTypeToString(data.workerType)) != SQLITE_OK
-            || insertStatement->bindBlob(9, cspEncoder.buffer(), cspEncoder.bufferSize()) != SQLITE_OK
-            || insertStatement->bindText(10, data.referrerPolicy) != SQLITE_OK
-            || insertStatement->bindBlob(11, scriptResourceMapEncoder.buffer(), scriptResourceMapEncoder.bufferSize()) != SQLITE_OK
-            || insertStatement->bindBlob(12, certificateInfoEncoder.buffer(), certificateInfoEncoder.bufferSize()) != SQLITE_OK
+            || insertStatement->bindBlob(9, Span { cspEncoder.buffer(), cspEncoder.bufferSize() }) != SQLITE_OK
+            || insertStatement->bindBlob(10, Span { coepEncoder.buffer(), coepEncoder.bufferSize() }) != SQLITE_OK
+            || insertStatement->bindText(11, data.referrerPolicy) != SQLITE_OK
+            || insertStatement->bindBlob(12, Span { scriptResourceMapEncoder.buffer(), scriptResourceMapEncoder.bufferSize() }) != SQLITE_OK
+            || insertStatement->bindBlob(13, Span { certificateInfoEncoder.buffer(), certificateInfoEncoder.bufferSize() }) != SQLITE_OK
             || insertStatement->step() != SQLITE_DONE) {
             RELEASE_LOG_ERROR(ServiceWorker, "Failed to store registration data into records table (%i) - %s", m_database->lastError(), m_database->lastErrorMsg());
             return false;
@@ -515,9 +520,9 @@ String RegistrationDatabase::importRecords()
         auto workerType = stringToWorkerType(sql->columnText(7));
 
         std::optional<ContentSecurityPolicyResponseHeaders> contentSecurityPolicy;
-        auto contentSecurityPolicyDataView = sql->columnBlobView(8);
-        if (contentSecurityPolicyDataView.size()) {
-            WTF::Persistence::Decoder cspDecoder(contentSecurityPolicyDataView.data(), contentSecurityPolicyDataView.size());
+        auto contentSecurityPolicyDataSpan = sql->columnBlobAsSpan(8);
+        if (contentSecurityPolicyDataSpan.size()) {
+            WTF::Persistence::Decoder cspDecoder(contentSecurityPolicyDataSpan);
             cspDecoder >> contentSecurityPolicy;
             if (!contentSecurityPolicy) {
                 RELEASE_LOG_ERROR(ServiceWorker, "RegistrationDatabase::importRecords: Failed to decode contentSecurityPolicy");
@@ -525,12 +530,23 @@ String RegistrationDatabase::importRecords()
             }
         }
 
-        auto referrerPolicy = sql->columnText(9);
+        std::optional<CrossOriginEmbedderPolicy> coep;
+        auto coepDataSpan = sql->columnBlobAsSpan(9);
+        if (coepDataSpan.size()) {
+            WTF::Persistence::Decoder coepDecoder(coepDataSpan);
+            coepDecoder >> coep;
+            if (!coep) {
+                RELEASE_LOG_ERROR(ServiceWorker, "RegistrationDatabase::importRecords: Failed to decode crossOriginEmbedderPolicy");
+                continue;
+            }
+        }
+
+        auto referrerPolicy = sql->columnText(10);
 
         HashMap<URL, ServiceWorkerContextData::ImportedScript> scriptResourceMap;
-        auto scriptResourceMapDataView = sql->columnBlobView(10);
-        if (scriptResourceMapDataView.size()) {
-            WTF::Persistence::Decoder scriptResourceMapDecoder(scriptResourceMapDataView.data(), scriptResourceMapDataView.size());
+        auto scriptResourceMapDataSpan = sql->columnBlobAsSpan(11);
+        if (scriptResourceMapDataSpan.size()) {
+            WTF::Persistence::Decoder scriptResourceMapDecoder(scriptResourceMapDataSpan);
             std::optional<HashMap<URL, ImportedScriptAttributes>> scriptResourceMapWithoutScripts;
             scriptResourceMapDecoder >> scriptResourceMapWithoutScripts;
             if (!scriptResourceMapWithoutScripts) {
@@ -540,10 +556,10 @@ String RegistrationDatabase::importRecords()
             scriptResourceMap = populateScriptSourcesFromDisk(scriptStorage(), *key, WTFMove(*scriptResourceMapWithoutScripts));
         }
 
-        auto certificateInfoDataView = sql->columnBlobView(11);
+        auto certificateInfoDataSpan = sql->columnBlobAsSpan(12);
         std::optional<CertificateInfo> certificateInfo;
 
-        WTF::Persistence::Decoder certificateInfoDecoder(certificateInfoDataView.data(), certificateInfoDataView.size());
+        WTF::Persistence::Decoder certificateInfoDecoder(certificateInfoDataSpan);
         certificateInfoDecoder >> certificateInfo;
         if (!certificateInfo) {
             RELEASE_LOG_ERROR(ServiceWorker, "RegistrationDatabase::importRecords: Failed to decode certificateInfo");
@@ -569,7 +585,7 @@ String RegistrationDatabase::importRecords()
         auto registrationIdentifier = ServiceWorkerRegistrationIdentifier::generate();
         auto serviceWorkerData = ServiceWorkerData { workerIdentifier, scriptURL, ServiceWorkerState::Activated, *workerType, registrationIdentifier };
         auto registration = ServiceWorkerRegistrationData { WTFMove(*key), registrationIdentifier, WTFMove(scopeURL), *updateViaCache, lastUpdateCheckTime, std::nullopt, std::nullopt, WTFMove(serviceWorkerData) };
-        auto contextData = ServiceWorkerContextData { std::nullopt, WTFMove(registration), workerIdentifier, WTFMove(script), WTFMove(*certificateInfo), WTFMove(*contentSecurityPolicy), WTFMove(referrerPolicy), WTFMove(scriptURL), *workerType, true, LastNavigationWasAppBound::No, WTFMove(scriptResourceMap) };
+        auto contextData = ServiceWorkerContextData { std::nullopt, WTFMove(registration), workerIdentifier, WTFMove(script), WTFMove(*certificateInfo), WTFMove(*contentSecurityPolicy), WTFMove(*coep), WTFMove(referrerPolicy), WTFMove(scriptURL), *workerType, true, LastNavigationWasAppInitiated::Yes, WTFMove(scriptResourceMap) };
 
         callOnMainThread([protectedThis = makeRef(*this), contextData = contextData.isolatedCopy()]() mutable {
             protectedThis->addRegistrationToStore(WTFMove(contextData));

@@ -86,7 +86,9 @@ GPUProcessConnection& RemoteRenderingBackendProxy::ensureGPUProcessConnection()
 void RemoteRenderingBackendProxy::gpuProcessConnectionDidClose(GPUProcessConnection& previousConnection)
 {
     previousConnection.removeClient(*this);
+    previousConnection.messageReceiverMap().removeMessageReceiver(*this);
     m_gpuProcessConnection = nullptr;
+
     m_remoteResourceCacheProxy.remoteResourceCacheWasDestroyed();
 
     m_identifiersOfReusableHandles.clear();
@@ -100,6 +102,9 @@ void RemoteRenderingBackendProxy::gpuProcessConnectionDidClose(GPUProcessConnect
     m_getPixelBufferSemaphore = std::nullopt;
     m_getPixelBufferSharedMemoryLength = 0;
     m_getPixelBufferSharedMemory = nullptr;
+    
+    m_renderingUpdateID = { };
+    m_didRenderingUpdateID = { };
 }
 
 IPC::Connection* RemoteRenderingBackendProxy::messageSenderConnection() const
@@ -247,12 +252,19 @@ void RemoteRenderingBackendProxy::deleteAllFonts()
     send(Messages::RemoteRenderingBackend::DeleteAllFonts(), renderingBackendIdentifier(), IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
-void RemoteRenderingBackendProxy::releaseRemoteResource(RenderingResourceIdentifier renderingResourceIdentifier)
+void RemoteRenderingBackendProxy::releaseRemoteResource(RenderingResourceIdentifier renderingResourceIdentifier, uint64_t useCount)
 {
     if (renderingResourceIdentifier == m_currentDestinationImageBufferIdentifier)
         m_currentDestinationImageBufferIdentifier = std::nullopt;
 
-    send(Messages::RemoteRenderingBackend::ReleaseRemoteResource(renderingResourceIdentifier), renderingBackendIdentifier(), IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    send(Messages::RemoteRenderingBackend::ReleaseRemoteResource(renderingResourceIdentifier, useCount), renderingBackendIdentifier(), IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+}
+
+void RemoteRenderingBackendProxy::finalizeRenderingUpdate()
+{
+    send(Messages::RemoteRenderingBackend::FinalizeRenderingUpdate(m_renderingUpdateID), renderingBackendIdentifier(), IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    m_remoteResourceCacheProxy.finalizeRenderingUpdate();
+    m_renderingUpdateID.increment();
 }
 
 void RemoteRenderingBackendProxy::didCreateImageBufferBackend(ImageBufferBackendHandle handle, RenderingResourceIdentifier renderingResourceIdentifier)
@@ -273,6 +285,12 @@ void RemoteRenderingBackendProxy::didFlush(DisplayList::FlushIdentifier flushIde
 {
     if (auto imageBuffer = m_remoteResourceCacheProxy.cachedImageBuffer(renderingResourceIdentifier))
         imageBuffer->didFlush(flushIdentifier);
+}
+
+void RemoteRenderingBackendProxy::didFinalizeRenderingUpdate(RenderingUpdateID didRenderingUpdateID)
+{
+    ASSERT(didRenderingUpdateID <= m_renderingUpdateID);
+    m_didRenderingUpdateID = std::min(didRenderingUpdateID, m_renderingUpdateID);
 }
 
 void RemoteRenderingBackendProxy::willAppendItem(RenderingResourceIdentifier newDestinationIdentifier)
@@ -326,7 +344,8 @@ void RemoteRenderingBackendProxy::didAppendData(const DisplayList::ItemBufferHan
     bool wasEmpty = sharedHandle->advance(numberOfBytes) == numberOfBytes;
     if (!wasEmpty || didChangeItemBuffer == DisplayList::DidChangeItemBuffer::Yes) {
         if (m_deferredWakeupMessageArguments) {
-            if (sharedHandle->tryToResume({ m_deferredWakeupMessageArguments->offset, m_deferredWakeupMessageArguments->destinationImageBufferIdentifier.toUInt64() })) {
+            auto imageBuffer = m_remoteResourceCacheProxy.cachedImageBuffer(m_deferredWakeupMessageArguments->destinationImageBufferIdentifier);
+            if (imageBuffer && imageBuffer->backend() && sharedHandle->tryToResume({ m_deferredWakeupMessageArguments->offset, m_deferredWakeupMessageArguments->destinationImageBufferIdentifier.toUInt64() })) {
                 m_parameters.resumeDisplayListSemaphore.signal();
                 m_deferredWakeupMessageArguments = std::nullopt;
                 m_remainingItemsToAppendBeforeSendingWakeup = 0;
@@ -340,8 +359,9 @@ void RemoteRenderingBackendProxy::didAppendData(const DisplayList::ItemBufferHan
 
     sendDeferredWakeupMessageIfNeeded();
 
+    auto imageBuffer = m_remoteResourceCacheProxy.cachedImageBuffer(destinationImageBuffer);
     auto offsetToRead = sharedHandle->writableOffset() - numberOfBytes;
-    if (sharedHandle->tryToResume({ offsetToRead, destinationImageBuffer.toUInt64() })) {
+    if (imageBuffer && imageBuffer->backend() && sharedHandle->tryToResume({ offsetToRead, destinationImageBuffer.toUInt64() })) {
         m_parameters.resumeDisplayListSemaphore.signal();
         return;
     }

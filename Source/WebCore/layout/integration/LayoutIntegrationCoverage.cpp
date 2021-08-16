@@ -270,8 +270,8 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
     case AvoidanceReason::InlineBoxHasBackground:
         stream << "inline box has background";
         break;
-    case AvoidanceReason::InlineBoxHasMarginOrPadding:
-        stream << "inline box has margin or padding";
+    case AvoidanceReason::InlineBoxHasNegativeMargin:
+        stream << "inline box has negative margin";
         break;
     default:
         break;
@@ -629,13 +629,15 @@ static OptionSet<AvoidanceReason> canUseForChild(const RenderBlockFlow& flow, co
     auto isSupportedStyle = [] (const auto& style) {
         if (style.verticalAlign() == VerticalAlign::Sub || style.verticalAlign() == VerticalAlign::Super)
             return false;
-        if (style.width().isPercent() || style.height().isPercent())
+        if (style.width().isPercentOrCalculated() || style.height().isPercentOrCalculated())
             return false;
-        if (style.minWidth().isPercent() || style.maxWidth().isPercent())
+        if (style.minWidth().isPercentOrCalculated() || style.maxWidth().isPercentOrCalculated())
             return false;
-        if (style.minHeight().isPercent() || style.maxHeight().isPercent())
+        if (style.minHeight().isPercentOrCalculated() || style.maxHeight().isPercentOrCalculated())
             return false;
         if (style.boxShadow())
+            return false;
+        if (!style.hangingPunctuation().isEmpty())
             return false;
         return true;
     };
@@ -706,9 +708,8 @@ static OptionSet<AvoidanceReason> canUseForChild(const RenderBlockFlow& flow, co
             SET_REASON_AND_RETURN_IF_NEEDED(InlineBoxHasBackground, reasons, includeReasons);
         if (style.hasOutline())
             SET_REASON_AND_RETURN_IF_NEEDED(ContentHasOutline, reasons, includeReasons);
-        if (renderInline.marginLeft() < 0 || renderInline.marginRight() < 0 || renderInline.marginTop() < 0 || renderInline.marginBottom() < 0
-            || renderInline.paddingLeft() < 0 || renderInline.paddingRight() < 0 || renderInline.paddingTop() < 0 || renderInline.paddingBottom() < 0)
-            SET_REASON_AND_RETURN_IF_NEEDED(InlineBoxHasMarginOrPadding, reasons, includeReasons);
+        if (renderInline.marginLeft() < 0 || renderInline.marginRight() < 0 || renderInline.marginTop() < 0 || renderInline.marginBottom() < 0)
+            SET_REASON_AND_RETURN_IF_NEEDED(InlineBoxHasNegativeMargin, reasons, includeReasons);
         if (renderInline.isInFlowPositioned())
             SET_REASON_AND_RETURN_IF_NEEDED(ChildBoxIsFloatingOrPositioned, reasons, includeReasons);
         if (renderInline.containingBlock()->style().lineBoxContain() != RenderStyle::initialLineBoxContain())

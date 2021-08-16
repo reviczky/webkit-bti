@@ -31,7 +31,6 @@
 #include "AudioTrack.h"
 #include "AutoplayEvent.h"
 #include "CaptionUserPreferences.h"
-#include "EventLoopEventQueue.h"
 #include "HTMLElement.h"
 #include "HTMLMediaElementEnums.h"
 #include "MediaCanStartListener.h"
@@ -129,7 +128,7 @@ class HTMLMediaElement
     , private TextTrackClient
     , private VideoTrackClient
 #if USE(AUDIO_SESSION) && PLATFORM(MAC)
-    , private AudioSession::MutedStateObserver
+    , private AudioSession::ConfigurationChangeObserver
 #endif
 #if ENABLE(ENCRYPTED_MEDIA)
     , private CDMClient
@@ -399,10 +398,11 @@ public:
     void textTrackReadyStateChanged(TextTrack*);
     void updateTextTrackRepresentationImageIfNeeded();
 
-#if ENABLE(WIRELESS_PLAYBACK_TARGET)
-    void webkitShowPlaybackTargetPicker();
     bool addEventListener(const AtomString& eventType, Ref<EventListener>&&, const AddEventListenerOptions&) override;
     bool removeEventListener(const AtomString& eventType, EventListener&, const EventListenerOptions&) override;
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    void webkitShowPlaybackTargetPicker();
 
     void wirelessRoutesAvailableDidChange() override;
     void setWirelessPlaybackTarget(Ref<MediaPlaybackTarget>&&) override;
@@ -494,6 +494,7 @@ public:
     void userInterfaceLayoutDirectionChanged();
     WEBCORE_EXPORT String getCurrentMediaControlsStatus();
     WEBCORE_EXPORT void setMediaControlsMaximumRightContainerButtonCountOverride(size_t);
+    WEBCORE_EXPORT void setMediaControlsHidePlaybackRates(bool);
     MediaControlsHost* mediaControlsHost() { return m_mediaControlsHost.get(); }
 
     bool isDisablingSleep() const { return m_sleepDisabler.get(); }
@@ -549,9 +550,7 @@ public:
     WEBCORE_EXPORT void willExitFullscreen();
     WEBCORE_EXPORT void didStopBeingFullscreenElement() final;
 
-#if ENABLE(PICTURE_IN_PICTURE_API)
     void scheduleEvent(Ref<Event>&&);
-#endif
 
     enum class AutoplayEventPlaybackState { None, PreventedAutoplay, StartedWithUserGesture, StartedWithoutUserGesture };
 
@@ -573,6 +572,9 @@ public:
     void setPreferredDynamicRangeMode(DynamicRangeMode);
 
     void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument&) override;
+
+    using EventTarget::dispatchEvent;
+    void dispatchEvent(Event&) override;
 
 protected:
     HTMLMediaElement(const QualifiedName&, Document&, bool createdByParser);
@@ -602,6 +604,7 @@ protected:
     void updateMediaControlsAfterPresentationModeChange();
 
     void scheduleEvent(const AtomString&);
+    template<typename T> void scheduleEventOn(T& target, Ref<Event>&&);
 
     bool showPosterFlag() const { return m_showPoster; }
     void setShowPosterFlag(bool);
@@ -610,6 +613,8 @@ protected:
     bool isChangingVideoFullscreenMode() const { return m_changingVideoFullscreenMode; }
 
 private:
+    friend class Internals;
+
     void createMediaPlayer();
 
     bool supportsFocus() const override;
@@ -642,7 +647,7 @@ private:
     void setReadyState(MediaPlayer::ReadyState);
     void setNetworkState(MediaPlayer::NetworkState);
 
-    double effectivePlaybackRate() const;
+    WEBCORE_EXPORT double effectivePlaybackRate() const;
     double requestedPlaybackRate() const;
 
     void mediaPlayerNetworkStateChanged() final;
@@ -663,6 +668,7 @@ private:
     void mediaPlayerWillInitializeMediaEngine() final;
     void mediaPlayerDidInitializeMediaEngine() final;
     void mediaPlayerReloadAndResumePlaybackIfNeeded() final;
+    void mediaPlayerQueueTaskOnEventLoop(Function<void()>&&) final;
 
     void scheduleMediaEngineWasUpdated();
     void mediaEngineWasUpdated();
@@ -690,13 +696,10 @@ private:
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA) && ENABLE(ENCRYPTED_MEDIA)
     void updateShouldContinueAfterNeedKey();
 #endif
-    
+
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void mediaPlayerCurrentPlaybackTargetIsWirelessChanged(bool) final;
     void enqueuePlaybackTargetAvailabilityChangedEvent();
-
-    using EventTarget::dispatchEvent;
-    void dispatchEvent(Event&) override;
 #endif
 
     String mediaPlayerReferrer() const override;
@@ -879,7 +882,7 @@ private:
     void pageMutedStateDidChange() override;
 
 #if USE(AUDIO_SESSION) && PLATFORM(MAC)
-    void hardwareMutedStateDidChange(AudioSession*) final;
+    void hardwareMutedStateDidChange(const AudioSession&) final;
 #endif
 
     bool processingUserGestureForMedia() const;
@@ -930,6 +933,9 @@ private:
     void checkForAudioAndVideo();
     bool hasLiveSource() const;
 
+    void playPlayer();
+    void pausePlayer();
+
 #if !RELEASE_LOG_DISABLED
     const void* mediaPlayerLogIdentifier() final { return logIdentifier(); }
     const Logger& mediaPlayerLogger() final { return logger(); }
@@ -951,7 +957,7 @@ private:
     TaskCancellationGroup m_bufferedTimeRangesChangedTaskCancellationGroup;
     TaskCancellationGroup m_resourceSelectionTaskCancellationGroup;
     RefPtr<TimeRanges> m_playedTimeRanges;
-    UniqueRef<EventLoopEventQueue> m_asyncEventQueue;
+    TaskCancellationGroup m_asyncEventsCancellationGroup;
 #if PLATFORM(IOS_FAMILY)
     TaskCancellationGroup m_volumeRevertTaskCancellationGroup;
 #endif
@@ -1065,6 +1071,7 @@ private:
     bool m_paused : 1;
     bool m_seeking : 1;
     bool m_seekRequested : 1;
+    bool m_wasPlayingBeforeSeeking : 1;
 
     // data has not been loaded since sending a "stalled" event
     bool m_sentStalledEvent : 1;

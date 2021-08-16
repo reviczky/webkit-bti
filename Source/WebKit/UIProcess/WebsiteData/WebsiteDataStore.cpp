@@ -265,6 +265,10 @@ void WebsiteDataStore::resolveDirectoriesIfNecessary()
         m_resolvedConfiguration->setCacheStorageDirectory(resolvePathForSandboxExtension(m_configuration->cacheStorageDirectory()));
     if (!m_configuration->hstsStorageDirectory().isEmpty() && m_resolvedConfiguration->hstsStorageDirectory().isEmpty())
         m_resolvedConfiguration->setHSTSStorageDirectory(resolvePathForSandboxExtension(m_configuration->hstsStorageDirectory()));
+#if HAVE(ARKIT_INLINE_PREVIEW)
+    if (!m_configuration->modelElementCacheDirectory().isEmpty())
+        m_resolvedConfiguration->setModelElementCacheDirectory(resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration->modelElementCacheDirectory()));
+#endif
 
     // Resolve directories for file paths.
     if (!m_configuration->cookieStorageFile().isEmpty()) {
@@ -1284,7 +1288,7 @@ void WebsiteDataStore::getResourceLoadStatisticsDataSummary(CompletionHandler<vo
         });
     });
     
-    for (auto* processPool : WebProcessPool::allProcessPools())
+    for (auto& processPool : WebProcessPool::allProcessPools())
         processPool->sendResourceLoadStatisticsDataImmediately([wtfCallbackAggregator] { });
 }
 
@@ -1625,7 +1629,7 @@ HashSet<RefPtr<WebProcessPool>> WebsiteDataStore::processPools(size_t limit) con
     if (processPools.isEmpty()) {
         // Check if we're one of the legacy data stores.
         for (auto& processPool : WebProcessPool::allProcessPools()) {
-            processPools.add(processPool);
+            processPools.add(processPool.ptr());
             if (processPools.size() == limit)
                 break;
         }
@@ -1726,7 +1730,7 @@ void WebsiteDataStore::getNetworkProcessConnection(WebProcessProxy& webProcessPr
             RunLoop::main().dispatch([weakThis = WTFMove(weakThis), webProcessProxy = WTFMove(webProcessProxy), reply = WTFMove(reply)] () mutable {
                 if (RefPtr<WebsiteDataStore> strongThis = weakThis.get(); strongThis && webProcessProxy) {
                     strongThis->terminateNetworkProcess();
-                    RELEASE_LOG_IF(strongThis->isPersistent(), Process, "getNetworkProcessConnection: Failed first attempt, retrying");
+                    RELEASE_LOG_ERROR(Process, "getNetworkProcessConnection: Failed first attempt, retrying");
                     strongThis->networkProcess().getNetworkProcessConnection(*webProcessProxy, WTFMove(reply));
                 } else
                     reply({ });
@@ -1907,7 +1911,7 @@ uint64_t WebsiteDataStore::perThirdPartyOriginStorageQuota() const
 
 void WebsiteDataStore::setCacheModelSynchronouslyForTesting(CacheModel cacheModel)
 {
-    for (auto processPool : WebProcessPool::allProcessPools())
+    for (auto& processPool : WebProcessPool::allProcessPools())
         processPool->setCacheModelSynchronouslyForTesting(cacheModel);
 }
 
@@ -1928,18 +1932,26 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
 
     auto resourceLoadStatisticsDirectory = m_configuration->resourceLoadStatisticsDirectory();
     SandboxExtension::Handle resourceLoadStatisticsDirectoryHandle;
-    if (!resourceLoadStatisticsDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(resourceLoadStatisticsDirectory, resourceLoadStatisticsDirectoryHandle);
+    if (!resourceLoadStatisticsDirectory.isEmpty()) {
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(resourceLoadStatisticsDirectory))
+            resourceLoadStatisticsDirectoryHandle = WTFMove(*handle);
+    }
 
     auto networkCacheDirectory = resolvedNetworkCacheDirectory();
     SandboxExtension::Handle networkCacheDirectoryExtensionHandle;
-    if (!networkCacheDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(networkCacheDirectory, networkCacheDirectoryExtensionHandle);
+    if (!networkCacheDirectory.isEmpty()) {
+        // FIXME: SandboxExtension::createHandleForReadWriteDirectory resolves the directory, but that has already been done. Remove this duplicate work.
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(networkCacheDirectory))
+            networkCacheDirectoryExtensionHandle = WTFMove(*handle);
+    }
 
     auto hstsStorageDirectory = resolvedHSTSStorageDirectory();
     SandboxExtension::Handle hstsStorageDirectoryExtensionHandle;
-    if (!hstsStorageDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(hstsStorageDirectory, hstsStorageDirectoryExtensionHandle);
+    if (!hstsStorageDirectory.isEmpty()) {
+        // FIXME: SandboxExtension::createHandleForReadWriteDirectory resolves the directory, but that has already been done. Remove this duplicate work.
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(hstsStorageDirectory))
+            hstsStorageDirectoryExtensionHandle = WTFMove(*handle);
+    }
 
     bool shouldIncludeLocalhostInResourceLoadStatistics = false;
     bool enableResourceLoadStatisticsDebugMode = false;
@@ -1995,30 +2007,40 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     networkSessionParameters.resourceLoadStatisticsParameters = WTFMove(resourceLoadStatisticsParameters);
     networkSessionParameters.requiresSecureHTTPSProxyConnection = m_configuration->requiresSecureHTTPSProxyConnection();
     networkSessionParameters.preventsSystemHTTPProxyAuthentication = m_configuration->preventsSystemHTTPProxyAuthentication();
+    networkSessionParameters.allowsHSTSWithUntrustedRootCertificate = m_configuration->allowsHSTSWithUntrustedRootCertificate();
 
     parameters.networkSessionParameters = WTFMove(networkSessionParameters);
 
     parameters.indexedDatabaseDirectory = resolvedIndexedDatabaseDirectory();
-    if (!parameters.indexedDatabaseDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(parameters.indexedDatabaseDirectory, parameters.indexedDatabaseDirectoryExtensionHandle);
+    if (!parameters.indexedDatabaseDirectory.isEmpty()) {
+        // FIXME: SandboxExtension::createHandleForReadWriteDirectory resolves the directory, but that has already been done. Remove this duplicate work.
+        if (auto handle =  SandboxExtension::createHandleForReadWriteDirectory(parameters.indexedDatabaseDirectory))
+            parameters.indexedDatabaseDirectoryExtensionHandle = WTFMove(*handle);
+    }
 
 #if ENABLE(SERVICE_WORKER)
     parameters.serviceWorkerRegistrationDirectory = resolvedServiceWorkerRegistrationDirectory();
-    if (!parameters.serviceWorkerRegistrationDirectory.isEmpty())
-        SandboxExtension::createHandleForReadWriteDirectory(parameters.serviceWorkerRegistrationDirectory, parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
+    if (!parameters.serviceWorkerRegistrationDirectory.isEmpty()) {
+        // FIXME: SandboxExtension::createHandleForReadWriteDirectory resolves the directory, but that has already been done. Remove this duplicate work.
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(parameters.serviceWorkerRegistrationDirectory))
+            parameters.serviceWorkerRegistrationDirectoryExtensionHandle = WTFMove(*handle);
+    }
     parameters.serviceWorkerProcessTerminationDelayEnabled = m_configuration->serviceWorkerProcessTerminationDelayEnabled();
 #endif
 
     auto localStorageDirectory = resolvedLocalStorageDirectory();
     if (!localStorageDirectory.isEmpty()) {
         parameters.localStorageDirectory = localStorageDirectory;
-        SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory, parameters.localStorageDirectoryExtensionHandle);
+        // FIXME: SandboxExtension::createHandleForReadWriteDirectory resolves the directory, but that has already been done. Remove this duplicate work.
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory))
+            parameters.localStorageDirectoryExtensionHandle = WTFMove(*handle);
     }
 
     auto cacheStorageDirectory = this->cacheStorageDirectory();
     if (!cacheStorageDirectory.isEmpty()) {
         parameters.cacheStorageDirectory = cacheStorageDirectory;
-        SandboxExtension::createHandleForReadWriteDirectory(cacheStorageDirectory, parameters.cacheStorageDirectoryExtensionHandle);
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(cacheStorageDirectory))
+            parameters.cacheStorageDirectoryExtensionHandle = WTFMove(*handle);
     }
 
     parameters.perOriginStorageQuota = perOriginStorageQuota();

@@ -50,7 +50,7 @@ SWServerWorker* SWServerWorker::existingWorkerForIdentifier(ServiceWorkerIdentif
 }
 
 // FIXME: Use r-value references for script and contentSecurityPolicy
-SWServerWorker::SWServerWorker(SWServer& server, SWServerRegistration& registration, const URL& scriptURL, const ScriptBuffer& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, String&& referrerPolicy, WorkerType type, ServiceWorkerIdentifier identifier, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
+SWServerWorker::SWServerWorker(SWServer& server, SWServerRegistration& registration, const URL& scriptURL, const ScriptBuffer& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, const CrossOriginEmbedderPolicy& crossOriginEmbedderPolicy, String&& referrerPolicy, WorkerType type, ServiceWorkerIdentifier identifier, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
     : m_server(makeWeakPtr(server))
     , m_registrationKey(registration.key())
     , m_registration(makeWeakPtr(registration))
@@ -58,11 +58,12 @@ SWServerWorker::SWServerWorker(SWServer& server, SWServerRegistration& registrat
     , m_script(script)
     , m_certificateInfo(certificateInfo)
     , m_contentSecurityPolicy(contentSecurityPolicy)
+    , m_crossOriginEmbedderPolicy(crossOriginEmbedderPolicy)
     , m_referrerPolicy(WTFMove(referrerPolicy))
     , m_registrableDomain(m_data.scriptURL)
     , m_scriptResourceMap(WTFMove(scriptResourceMap))
     , m_terminationTimer(*this, &SWServerWorker::terminationTimerFired)
-    , m_lastNavigationWasAppBound(m_server->clientIsAppBoundForRegistrableDomain(m_registrableDomain))
+    , m_lastNavigationWasAppInitiated(m_server->clientIsAppInitiatedForRegistrableDomain(m_registrableDomain))
 {
     m_data.scriptURL.removeFragmentIdentifier();
 
@@ -87,18 +88,18 @@ ServiceWorkerContextData SWServerWorker::contextData() const
 {
     ASSERT(m_registration);
 
-    return { std::nullopt, m_registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppBound, m_scriptResourceMap };
+    return { std::nullopt, m_registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_crossOriginEmbedderPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppInitiated, m_scriptResourceMap };
 }
 
-void SWServerWorker::updateAppBoundValue(LastNavigationWasAppBound lastNavigationWasAppBound)
+void SWServerWorker::updateAppInitiatedValue(LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
 {
-    m_lastNavigationWasAppBound = lastNavigationWasAppBound;
+    m_lastNavigationWasAppInitiated = lastNavigationWasAppInitiated;
 
     if (!isRunning())
         return;
 
     if (auto* connection = contextConnection())
-        connection->updateAppBoundValue(identifier(), lastNavigationWasAppBound);
+        connection->updateAppInitiatedValue(identifier(), lastNavigationWasAppInitiated);
 }
 
 void SWServerWorker::terminate(CompletionHandler<void()>&& callback)

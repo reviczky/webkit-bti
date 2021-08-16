@@ -43,7 +43,6 @@
 #include "RemoteAudioHardwareListenerProxy.h"
 #include "RemoteAudioMediaStreamTrackRendererInternalUnitManager.h"
 #include "RemoteAudioMediaStreamTrackRendererInternalUnitManagerMessages.h"
-#include "RemoteAudioMediaStreamTrackRendererManager.h"
 #include "RemoteGraphicsContextGLMessages.h"
 #include "RemoteMediaPlayerManagerProxy.h"
 #include "RemoteMediaPlayerManagerProxyMessages.h"
@@ -65,6 +64,7 @@
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
 #include "WebProcessMessages.h"
+#include <WebCore/LogInitialization.h>
 #include <WebCore/Logging.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
 #include <WebCore/NowPlayingManager.h>
@@ -140,6 +140,10 @@
 #include "LocalAudioSessionRoutingArbitrator.h"
 #endif
 
+#if ENABLE(MEDIA_STREAM)
+#include <WebCore/SecurityOrigin.h>
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -179,9 +183,15 @@ private:
             return m_process.allowsDisplayCapture();
         }
     }
+    
+    bool setCaptureAttributionString() final
+    {
+        return m_process.setCaptureAttributionString();
+    }
 
     GPUConnectionToWebProcess& m_process;
 };
+
 #endif
 
 Ref<GPUConnectionToWebProcess> GPUConnectionToWebProcess::create(GPUProcess& gpuProcess, WebCore::ProcessIdentifier webProcessIdentifier, IPC::Connection::Identifier connectionIdentifier, PAL::SessionID sessionID, GPUProcessConnectionParameters&& parameters)
@@ -202,8 +212,10 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
     , m_libWebRTCCodecsProxy(LibWebRTCCodecsProxy::create(*this))
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
-    , m_audioTrackRendererManager(RemoteAudioMediaStreamTrackRendererManager::create(*this))
     , m_sampleBufferDisplayLayerManager(RemoteSampleBufferDisplayLayerManager::create(*this))
+#endif
+#if ENABLE(MEDIA_STREAM)
+    , m_captureOrigin(SecurityOrigin::createUnique())
 #endif
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     , m_routingArbitrator(LocalAudioSessionRoutingArbitrator::create(*this))
@@ -232,7 +244,6 @@ GPUConnectionToWebProcess::~GPUConnectionToWebProcess()
     m_connection->invalidate();
 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
-    m_audioTrackRendererManager->close();
     m_sampleBufferDisplayLayerManager->close();
 #endif
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
@@ -325,7 +336,7 @@ bool GPUConnectionToWebProcess::allowsExitUnderMemoryPressure() const
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     if (m_userMediaCaptureManagerProxy && m_userMediaCaptureManagerProxy->hasSourceProxies())
         return false;
-    if (!m_audioTrackRendererManager->allowsExitUnderMemoryPressure())
+    if (m_audioMediaStreamTrackRendererInternalUnitManager && m_audioMediaStreamTrackRendererInternalUnitManager->hasUnits())
         return false;
     if (!m_sampleBufferDisplayLayerManager->allowsExitUnderMemoryPressure())
         return false;
@@ -361,11 +372,6 @@ Logger& GPUConnectionToWebProcess::logger()
     }
 
     return *m_logger;
-}
-
-bool GPUConnectionToWebProcess::isAlwaysOnLoggingAllowed() const
-{
-    return m_sessionID.isAlwaysOnLoggingAllowed();
 }
 
 void GPUConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
@@ -828,7 +834,18 @@ void GPUConnectionToWebProcess::updateCaptureAccess(bool allowAudioCapture, bool
     m_allowsVideoCapture |= allowVideoCapture;
     m_allowsDisplayCapture |= allowDisplayCapture;
 }
+
+void GPUConnectionToWebProcess::updateCaptureOrigin(const WebCore::SecurityOriginData& originData)
+{
+    m_captureOrigin = originData.securityOrigin();
+}
+
+#if !PLATFORM(COCOA)
+bool GPUConnectionToWebProcess::setCaptureAttributionString() const
+{
+}
 #endif
+#endif // ENABLE(MEDIA_STREAM)
 
 #if PLATFORM(MAC)
 void GPUConnectionToWebProcess::displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags flags)

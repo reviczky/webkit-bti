@@ -362,10 +362,11 @@ void MediaSessionCoordinator::seekSessionToTime(double time, CompletionHandler<v
     completionHandler(true);
 }
 
-void MediaSessionCoordinator::playSession(std::optional<double> atTime, std::optional<double> hostTime, CompletionHandler<void(bool)>&& completionHandler)
+void MediaSessionCoordinator::playSession(std::optional<double> atTime, std::optional<MonotonicTime> hostTime, CompletionHandler<void(bool)>&& completionHandler)
 {
-    UNUSED_PARAM(hostTime);
-    ALWAYS_LOG(LOGIDENTIFIER, m_state);
+    auto now = MonotonicTime::now();
+    auto delta = hostTime ? *hostTime - now : Seconds::nan();
+    ALWAYS_LOG(LOGIDENTIFIER, m_state, " time: ", atTime ? *atTime : -1, " hostTime: ", (hostTime ? *hostTime : MonotonicTime::nan()).secondsSinceEpoch().value(), " delta: ", delta.value());
 
     if (m_state != MediaSessionCoordinatorState::Joined) {
         completionHandler(false);
@@ -375,6 +376,7 @@ void MediaSessionCoordinator::playSession(std::optional<double> atTime, std::opt
     if (atTime && !currentPositionApproximatelyEqualTo(*atTime))
         m_session->callActionHandler({ .action = MediaSessionAction::Seekto, .seekTime = *atTime });
 
+    m_currentPlaySessionCommand = { atTime, hostTime };
     m_session->callActionHandler({ .action = MediaSessionAction::Play });
     completionHandler(true);
 }
