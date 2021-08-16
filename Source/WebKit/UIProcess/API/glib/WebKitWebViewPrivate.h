@@ -91,6 +91,7 @@ void webkitWebViewInsecureContentDetected(WebKitWebView*, WebKitInsecureContentE
 bool webkitWebViewEmitShowNotification(WebKitWebView*, WebKitNotification*);
 void webkitWebViewWebProcessTerminated(WebKitWebView*, WebKitWebProcessTerminationReason);
 void webkitWebViewIsPlayingAudioChanged(WebKitWebView*);
+void webkitWebViewMediaCaptureStateDidChange(WebKitWebView*, WebCore::MediaProducer::MediaStateFlags);
 void webkitWebViewSelectionDidChange(WebKitWebView*);
 void webkitWebViewRequestInstallMissingMediaPlugins(WebKitWebView*, WebKit::InstallMissingMediaPluginsPermissionRequest&);
 WebKitWebsiteDataManager* webkitWebViewGetWebsiteDataManager(WebKitWebView*);
@@ -121,3 +122,5 @@ void webkitWebViewConfirmComposition(WebKitWebView*, const String&);
 void webkitWebViewCancelComposition(WebKitWebView*, const String&);
 void webkitWebViewDeleteSurrounding(WebKitWebView*, int offset, unsigned characterCount);
 void webkitWebViewSetIsWebProcessResponsive(WebKitWebView*, bool);
+
+guint createShowOptionMenuSignal(WebKitWebViewClass*);

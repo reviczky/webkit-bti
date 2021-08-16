@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,6 +35,14 @@ namespace JSC {
 class JITStubRoutineSet;
 class VM;
 
+#if USE(JSVALUE64)
+using StructureID = uint32_t;
+#else
+using StructureID = Structure*;
+#endif
+
+class AccessCase;
+
 // This is a base-class for JIT stub routines, and also the class you want
 // to instantiate directly if you have a routine that does not need any
 // help from the GC. If in doubt, use one of the other stub routines. But
@@ -53,6 +61,14 @@ public:
         : m_code(code)
         , m_refCount(1)
     {
+    }
+    
+    // Use this if you want to pass a CodePtr to someone who insists on taking
+    // a RefPtr<JITStubRoutine>.
+    static Ref<JITStubRoutine> createSelfManagedRoutine(
+        MacroAssemblerCodePtr<JITStubRoutinePtrTag> rawCodePointer)
+    {
+        return adoptRef(*new JITStubRoutine(MacroAssemblerCodeRef<JITStubRoutinePtrTag>::createSelfManagedCodeRef(rawCodePointer)));
     }
     
     virtual ~JITStubRoutine();
@@ -103,6 +119,7 @@ protected:
 
     MacroAssemblerCodeRef<JITStubRoutinePtrTag> m_code;
     unsigned m_refCount;
+    mutable unsigned m_hash { 0 };
 };
 
 // Helper for the creation of simple stub routines that need no help from the GC.

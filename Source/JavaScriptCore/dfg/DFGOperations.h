@@ -36,6 +36,7 @@ namespace JSC {
 class DateInstance;
 class JSBigInt;
 struct UnlinkedStringJumpTable;
+class JSPropertyNameEnumerator;
 
 namespace DFG {
 
@@ -53,6 +54,8 @@ JSC_DECLARE_JIT_OPERATION(operationObjectGetOwnPropertyNames, JSArray*, (JSGloba
 JSC_DECLARE_JIT_OPERATION(operationObjectGetOwnPropertyNamesObject, JSArray*, (JSGlobalObject*, JSObject*));
 JSC_DECLARE_JIT_OPERATION(operationObjectCreate, JSCell*, (JSGlobalObject*, EncodedJSValue));
 JSC_DECLARE_JIT_OPERATION(operationObjectCreateObject, JSCell*, (JSGlobalObject*, JSObject*));
+JSC_DECLARE_JIT_OPERATION(operationObjectAssignObject, void, (JSGlobalObject*, JSObject*, JSObject*));
+JSC_DECLARE_JIT_OPERATION(operationObjectAssignUntyped, void, (JSGlobalObject*, JSObject*, EncodedJSValue));
 JSC_DECLARE_JIT_OPERATION(operationCreateThis, JSCell*, (JSGlobalObject*, JSObject* constructor, uint32_t inlineCapacity));
 JSC_DECLARE_JIT_OPERATION(operationCreatePromise, JSCell*, (JSGlobalObject*, JSObject* constructor));
 JSC_DECLARE_JIT_OPERATION(operationCreateInternalPromise, JSCell*, (JSGlobalObject*, JSObject* constructor));
@@ -102,12 +105,14 @@ JSC_DECLARE_JIT_OPERATION(operationGetPrototypeOf, EncodedJSValue, (JSGlobalObje
 JSC_DECLARE_JIT_OPERATION(operationGetPrototypeOfObject, EncodedJSValue, (JSGlobalObject*, JSObject*));
 JSC_DECLARE_JIT_OPERATION(operationHasIndexedProperty, size_t, (JSGlobalObject*, JSCell*, int32_t));
 JSC_DECLARE_JIT_OPERATION(operationHasEnumerableIndexedProperty, size_t, (JSGlobalObject*, JSCell*, int32_t));
-JSC_DECLARE_JIT_OPERATION(operationHasEnumerableProperty, EncodedJSValue, (JSGlobalObject*, EncodedJSValue, JSCell*));
-JSC_DECLARE_JIT_OPERATION(operationHasOwnStructureProperty, EncodedJSValue, (JSGlobalObject*, JSCell*, JSString*));
-JSC_DECLARE_JIT_OPERATION(operationInStructureProperty, EncodedJSValue, (JSGlobalObject*, JSCell*, JSString*));
 JSC_DECLARE_JIT_OPERATION(operationGetPropertyEnumerator, JSCell*, (JSGlobalObject*, EncodedJSValue));
 JSC_DECLARE_JIT_OPERATION(operationGetPropertyEnumeratorCell, JSCell*, (JSGlobalObject*, JSCell*));
-JSC_DECLARE_JIT_OPERATION(operationToIndexString, JSCell*, (JSGlobalObject*, int32_t));
+JSC_DECLARE_JIT_OPERATION(operationEnumeratorNextUpdateIndexAndMode, EncodedJSValue, (JSGlobalObject*, EncodedJSValue, uint32_t, int32_t, JSPropertyNameEnumerator*));
+JSC_DECLARE_JIT_OPERATION(operationEnumeratorNextUpdatePropertyName, EncodedJSValue, (JSGlobalObject*, uint32_t, int32_t, JSPropertyNameEnumerator*));
+JSC_DECLARE_JIT_OPERATION(operationEnumeratorInByVal, EncodedJSValue, (JSGlobalObject*, EncodedJSValue, EncodedJSValue, uint32_t, int32_t));
+JSC_DECLARE_JIT_OPERATION(operationEnumeratorHasOwnProperty, EncodedJSValue, (JSGlobalObject*, EncodedJSValue, EncodedJSValue, uint32_t, int32_t));
+JSC_DECLARE_JIT_OPERATION(operationEnumeratorRecoverNameAndGetByVal, EncodedJSValue, (JSGlobalObject*, JSCell*, uint32_t, JSPropertyNameEnumerator*));
+
 JSC_DECLARE_JIT_OPERATION(operationNewRegexpWithLastIndex, JSCell*, (JSGlobalObject*, JSCell*, EncodedJSValue));
 JSC_DECLARE_JIT_OPERATION(operationNewArray, char*, (JSGlobalObject*, Structure*, void*, size_t));
 JSC_DECLARE_JIT_OPERATION(operationNewEmptyArray, char*, (VM*, Structure*));

@@ -136,11 +136,9 @@ public:
     explicit WebProcessPool(API::ProcessPoolConfiguration&);        
     virtual ~WebProcessPool();
 
-    void notifyThisWebProcessPoolWasCreated();
-
     API::ProcessPoolConfiguration& configuration() { return m_configuration.get(); }
 
-    static const Vector<WebProcessPool*>& allProcessPools();
+    static Vector<Ref<WebProcessPool>> allProcessPools();
 
     template <typename T>
     T* supplement()
@@ -282,6 +280,7 @@ public:
 
 #if USE(SOUP)
     void setInitialHTTPCookieAcceptPolicy(WebCore::HTTPCookieAcceptPolicy policy) { m_initialHTTPCookieAcceptPolicy = policy; }
+    static void setNetworkProcessMemoryPressureHandlerConfiguration(const std::optional<MemoryPressureHandler::Configuration>& configuration) { s_networkProcessMemoryPressureHandlerConfiguration = configuration; }
 #endif
     void setEnhancedAccessibility(bool);
     
@@ -299,8 +298,7 @@ public:
     };
     static Statistics& statistics();    
 
-    void clearCachedCredentials(const PAL::SessionID&);
-    void terminateNetworkProcess();
+    void clearCachedCredentials(PAL::SessionID);
     void terminateAllWebContentProcesses();
     void sendNetworkProcessPrepareToSuspendForTesting(CompletionHandler<void()>&&);
     void sendNetworkProcessWillSuspendImminentlyForTesting();
@@ -318,7 +316,7 @@ public:
 
     bool shouldTerminate(WebProcessProxy&);
 
-    void disableProcessTermination() { m_processTerminationEnabled = false; }
+    void disableProcessTermination();
     void enableProcessTermination();
 
     void updateAutomationCapabilities() const;
@@ -441,9 +439,6 @@ public:
 
     void clearPermanentCredentialsForProtectionSpace(WebCore::ProtectionSpace&&);
 #endif
-
-    static uint64_t registerProcessPoolCreationListener(Function<void(WebProcessPool&)>&&);
-    static void unregisterProcessPoolCreationListener(uint64_t identifier);
 
     ForegroundWebProcessToken foregroundWebProcessToken() const { return ForegroundWebProcessToken(m_foregroundWebProcessCounter.count()); }
     BackgroundWebProcessToken backgroundWebProcessToken() const { return BackgroundWebProcessToken(m_backgroundWebProcessCounter.count()); }
@@ -577,6 +572,14 @@ private:
 #endif
 #endif
 
+#if PLATFORM(COCOA)
+    static void accessibilityPreferencesChangedCallback(CFNotificationCenterRef, void *observer, CFStringRef name, const void *, CFDictionaryRef userInfo);
+#endif
+
+#if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
+    static void mediaAccessibilityPreferencesChangedCallback(CFNotificationCenterRef, void *observer, CFStringRef name, const void *, CFDictionaryRef userInfo);
+#endif
+
 #if PLATFORM(MAC)
     static void colorPreferencesDidChangeCallback(CFNotificationCenterRef, void *observer, CFStringRef name, const void *, CFDictionaryRef userInfo);
 #endif
@@ -591,6 +594,10 @@ private:
     // PAL::SystemSleepListener
     void systemWillSleep() final;
     void systemDidWake() final;
+#endif
+
+#if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
+    void setMediaAccessibilityPreferences(WebProcessProxy&);
 #endif
 
     Ref<API::ProcessPoolConfiguration> m_configuration;
@@ -658,6 +665,7 @@ private:
 
 #if USE(SOUP)
     WebCore::HTTPCookieAcceptPolicy m_initialHTTPCookieAcceptPolicy { WebCore::HTTPCookieAcceptPolicy::ExclusivelyFromMainDocumentDomain };
+    static std::optional<MemoryPressureHandler::Configuration> s_networkProcessMemoryPressureHandlerConfiguration;
 #endif
 
 #if PLATFORM(MAC)
@@ -765,9 +773,9 @@ private:
     WebProcessWithAudibleMediaCounter m_webProcessWithAudibleMediaCounter;
 
     struct AudibleMediaActivity {
-        UniqueRef<ProcessAssertion> uiProcessMediaPlaybackAssertion;
+        Ref<ProcessAssertion> uiProcessMediaPlaybackAssertion;
 #if ENABLE(GPU_PROCESS)
-        std::unique_ptr<ProcessAssertion> gpuProcessMediaPlaybackAssertion;
+        RefPtr<ProcessAssertion> gpuProcessMediaPlaybackAssertion;
 #endif
     };
     std::optional<AudibleMediaActivity> m_audibleMediaActivity;

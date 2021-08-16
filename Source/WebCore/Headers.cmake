@@ -66,6 +66,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/indexeddb/IDBOpenDBRequest.h
     Modules/indexeddb/IDBRequest.h
     Modules/indexeddb/IDBTransaction.h
+    Modules/indexeddb/IDBTransactionDurability.h
     Modules/indexeddb/IDBTransactionMode.h
     Modules/indexeddb/IDBValue.h
     Modules/indexeddb/IndexedDB.h
@@ -142,7 +143,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/speech/SpeechRecognitionUpdate.h
     Modules/speech/SpeechRecognizer.h
 
-    Modules/streams/ReadableStreamChunk.h
     Modules/streams/ReadableStreamSink.h
     Modules/streams/ReadableStreamSource.h
 
@@ -416,6 +416,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/AddEventListenerOptions.h
     dom/Attr.h
     dom/Attribute.h
+    dom/BroadcastChannel.h
+    dom/BroadcastChannelIdentifier.h
+    dom/BroadcastChannelRegistry.h
     dom/BoundaryPoint.h
     dom/CDATASection.h
     dom/CallbackResult.h
@@ -462,7 +465,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/EventListenerMap.h
     dom/EventListenerOptions.h
     dom/EventLoop.h
-    dom/EventLoopEventQueue.h
     dom/EventModifierInit.h
     dom/EventNames.h
     dom/EventQueue.h
@@ -596,6 +598,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     fileapi/AsyncFileStream.h
     fileapi/Blob.h
     fileapi/BlobPropertyBag.h
+    fileapi/BlobURL.h
     fileapi/EndingType.h
     fileapi/File.h
     fileapi/FileList.h
@@ -774,6 +777,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     loader/ContentFilterClient.h
     loader/CookieJar.h
     loader/CrossOriginAccessControl.h
+    loader/CrossOriginEmbedderPolicy.h
+    loader/CrossOriginOpenerPolicy.h
     loader/CrossOriginPreflightResultCache.h
     loader/CustomHeaderFields.h
     loader/DocumentLoadTiming.h
@@ -804,6 +809,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     loader/NetscapePlugInStreamLoader.h
     loader/PingLoader.h
     loader/PolicyChecker.h
+    loader/PolicyContainer.h
     loader/PrivateClickMeasurement.h
     loader/ProgressTracker.h
     loader/ProgressTrackerClient.h
@@ -900,6 +906,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/FrameViewLayoutContext.h
     page/GlobalFrameIdentifier.h
     page/GlobalWindowIdentifier.h
+    page/KeyboardScroll.h
     page/LayoutMilestone.h
     page/MediaCanStartListener.h
     page/MediaControlsContextMenuItem.h
@@ -1331,6 +1338,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/graphics/angle/ANGLEHeaders.h
     platform/graphics/angle/ExtensionsGLANGLE.h
+    platform/graphics/angle/GraphicsContextGLANGLEUtilities.h
 
     platform/graphics/displaylists/DisplayList.h
     platform/graphics/displaylists/DisplayListDrawGlyphsRecorder.h
@@ -1480,6 +1488,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/StorageSessionProvider.h
     platform/network/StoredCredentialsPolicy.h
     platform/network/SynchronousLoaderClient.h
+    platform/network/TimingAllowOrigin.h
 
     platform/sql/SQLValue.h
     platform/sql/SQLiteDatabase.h

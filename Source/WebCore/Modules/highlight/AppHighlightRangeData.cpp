@@ -31,6 +31,7 @@
 #include "Document.h"
 #include "DocumentMarkerController.h"
 #include "HTMLBodyElement.h"
+#include "Logging.h"
 #include "Node.h"
 #include "RenderedDocumentMarker.h"
 #include "SharedBuffer.h"
@@ -40,6 +41,8 @@
 #include <wtf/persistence/PersistentCoders.h>
 
 namespace WebCore {
+
+constexpr uint64_t highlightFileSignature = 0x4141504832303231; // File Signature  (A)pple(AP)plication(H)ighlights(2021)
 
 std::optional<AppHighlightRangeData> AppHighlightRangeData::create(const SharedBuffer& buffer)
 {
@@ -81,7 +84,7 @@ template<class Decoder> std::optional<AppHighlightRangeData::NodePathComponent> 
     if (!textData)
         return std::nullopt;
 
-    std::optional<unsigned> pathIndex;
+    std::optional<uint32_t> pathIndex;
     decoder >> pathIndex;
     if (!pathIndex)
         return std::nullopt;
@@ -91,6 +94,12 @@ template<class Decoder> std::optional<AppHighlightRangeData::NodePathComponent> 
 
 template<class Encoder> void AppHighlightRangeData::encode(Encoder& encoder) const
 {
+    static_assert(!Encoder::isIPCEncoder, "AppHighlightRangeData should not be used by IPC::Encoder");
+    constexpr uint64_t currentAppHighlightVersion = 1;
+    
+    encoder << highlightFileSignature;
+    encoder << currentAppHighlightVersion;
+    encoder << m_identifier;
     encoder << m_text;
     encoder << m_startContainer;
     encoder << m_startOffset;
@@ -100,6 +109,34 @@ template<class Encoder> void AppHighlightRangeData::encode(Encoder& encoder) con
 
 template<class Decoder> std::optional<AppHighlightRangeData> AppHighlightRangeData::decode(Decoder& decoder)
 {
+    static_assert(!Decoder::isIPCDecoder, "AppHighlightRangeData should not be used by IPC::Decoder");
+    
+    std::optional<uint64_t> version;
+    
+    std::optional<uint64_t> decodedHighlightFileSignature;
+    decoder >> decodedHighlightFileSignature;
+    if (!decodedHighlightFileSignature)
+        return std::nullopt;
+    if (decodedHighlightFileSignature != highlightFileSignature) {
+        if (!decoder.rewind(sizeof(highlightFileSignature)))
+            return std::nullopt;
+        version = 0;
+        RELEASE_LOG(AppHighlights, "Decoded legacy (v0) highlight.");
+    }
+    
+    std::optional<String> identifier;
+    if (version)
+        identifier = nullString();
+    else {
+        decoder >> version;
+        if (!version)
+            return std::nullopt;
+        
+        decoder >> identifier;
+        if (!identifier)
+            return std::nullopt;
+    }
+
     std::optional<String> text;
     decoder >> text;
     if (!text)
@@ -110,7 +147,7 @@ template<class Decoder> std::optional<AppHighlightRangeData> AppHighlightRangeDa
     if (!startContainer)
         return std::nullopt;
 
-    std::optional<unsigned> startOffset;
+    std::optional<uint32_t> startOffset;
     decoder >> startOffset;
     if (!startOffset)
         return std::nullopt;
@@ -120,13 +157,12 @@ template<class Decoder> std::optional<AppHighlightRangeData> AppHighlightRangeDa
     if (!endContainer)
         return std::nullopt;
 
-    std::optional<unsigned> endOffset;
+    std::optional<uint32_t> endOffset;
     decoder >> endOffset;
     if (!endOffset)
         return std::nullopt;
 
-
-    return {{ WTFMove(*text), WTFMove(*startContainer), *startOffset, WTFMove(*endContainer), *endOffset }};
+    return {{ WTFMove(*identifier), WTFMove(*text), WTFMove(*startContainer), *startOffset, WTFMove(*endContainer), *endOffset }};
 }
 
 } // namespace WebCore

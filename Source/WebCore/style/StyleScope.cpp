@@ -39,6 +39,7 @@
 #include "HTMLSlotElement.h"
 #include "HTMLStyleElement.h"
 #include "InspectorInstrumentation.h"
+#include "Logging.h"
 #include "ProcessingInstruction.h"
 #include "SVGStyleElement.h"
 #include "Settings.h"
@@ -60,12 +61,14 @@ namespace Style {
 
 Scope::Scope(Document& document)
     : m_document(document)
+    , m_pendingUpdateTimer(*this, &Scope::pendingUpdateTimerFired)
 {
 }
 
 Scope::Scope(ShadowRoot& shadowRoot)
     : m_document(shadowRoot.documentScope())
     , m_shadowRoot(&shadowRoot)
+    , m_pendingUpdateTimer(*this, &Scope::pendingUpdateTimerFired)
 {
 }
 
@@ -222,6 +225,9 @@ void Scope::addPendingSheet(const Element& element)
     ASSERT(!hasPendingSheet(element));
 
     bool isInHead = ancestorsOfType<HTMLHeadElement>(element).first();
+
+    LOG_WITH_STREAM(StyleSheets, stream << "Scope " << this << " addPendingSheet() " << element << " isInHead " << isInHead);
+
     if (isInHead)
         m_elementsInHeadWithPendingSheets.add(&element);
     else
@@ -310,7 +316,9 @@ void Scope::addStyleSheetCandidateNode(Node& node, bool createdByParser)
         }
         followingNode = n;
     } while (it != begin);
-    
+
+    LOG_WITH_STREAM(StyleSheets, stream << "Scope " << this << " addStyleSheetCandidateNode() " << node);
+
     m_styleSheetCandidateNodes.insertBefore(followingNode, &node);
 }
 
@@ -338,6 +346,8 @@ void Scope::collectActiveStyleSheets(Vector<RefPtr<StyleSheet>>& sheets)
     if (!m_document.settings().authorAndUserStylesEnabled())
         return;
 
+    LOG_WITH_STREAM(StyleSheets, stream << "Scope " << this << " collectActiveStyleSheets()");
+
     for (auto& node : m_styleSheetCandidateNodes) {
         RefPtr<StyleSheet> sheet;
         if (is<ProcessingInstruction>(*node)) {
@@ -345,6 +355,7 @@ void Scope::collectActiveStyleSheets(Vector<RefPtr<StyleSheet>>& sheets)
                 continue;
             // We don't support linking to embedded CSS stylesheets, see <https://bugs.webkit.org/show_bug.cgi?id=49281> for discussion.
             sheet = downcast<ProcessingInstruction>(*node).sheet();
+            LOG_WITH_STREAM(StyleSheets, stream << " adding sheet " << sheet << " from ProcessingInstruction node " << *node);
         } else if (is<HTMLLinkElement>(*node) || is<HTMLStyleElement>(*node) || is<SVGStyleElement>(*node)) {
             Element& element = downcast<Element>(*node);
             AtomString title = element.isInShadowTree() ? nullAtom() : element.attributeWithoutSynchronization(titleAttr);
@@ -374,6 +385,7 @@ void Scope::collectActiveStyleSheets(Vector<RefPtr<StyleSheet>>& sheets)
                 sheet = downcast<HTMLLinkElement>(element).sheet();
             else
                 sheet = downcast<HTMLStyleElement>(element).sheet();
+
             // Check to see if this sheet belongs to a styleset
             // (thus making it PREFERRED or ALTERNATE rather than
             // PERSISTENT).
@@ -394,6 +406,9 @@ void Scope::collectActiveStyleSheets(Vector<RefPtr<StyleSheet>>& sheets)
 
             if (rel.contains("alternate") && title.isEmpty())
                 sheet = nullptr;
+
+            if (sheet)
+                LOG_WITH_STREAM(StyleSheets, stream << " adding sheet " << sheet << " from " << *node);
         }
         if (sheet)
             sheets.append(WTFMove(sheet));
@@ -485,6 +500,8 @@ void Scope::updateActiveStyleSheets(UpdateType updateType)
 
     filterEnabledNonemptyCSSStyleSheets(activeCSSStyleSheets, activeStyleSheets);
 
+    LOG_WITH_STREAM(StyleSheets, stream << "Scope::updateActiveStyleSheets for document " << m_document << " sheets " << activeCSSStyleSheets);
+
     auto styleSheetChange = StyleSheetChange { ResolverUpdateType::Reconstruct };
     if (updateType == UpdateType::ActiveSet)
         styleSheetChange = analyzeStyleSheetChange(activeCSSStyleSheets);
@@ -507,6 +524,9 @@ void Scope::updateActiveStyleSheets(UpdateType updateType)
 
 void Scope::invalidateStyleAfterStyleSheetChange(const StyleSheetChange& styleSheetChange)
 {
+    if (m_shadowRoot && !m_shadowRoot->isConnected())
+        return;
+
     // If we are already parsing the body and so may have significant amount of elements, put some effort into trying to avoid style recalcs.
     bool invalidateAll = !m_document.bodyOrFrameset() || m_document.hasNodesWithNonFinalStyle() || m_document.hasNodesWithMissingStyle();
 
@@ -586,7 +606,8 @@ void Scope::flushPendingSelfUpdate()
     ASSERT(m_pendingUpdate);
 
     auto updateType = *m_pendingUpdate;
-    m_pendingUpdate = { };
+
+    clearPendingUpdate();
     
     updateActiveStyleSheets(updateType);
 }
@@ -598,6 +619,12 @@ void Scope::flushPendingDescendantUpdates()
     for (auto* descendantShadowRoot : m_document.inDocumentShadowRoots())
         descendantShadowRoot->styleScope().flushPendingUpdate();
     m_hasDescendantWithPendingUpdate = false;
+}
+
+void Scope::clearPendingUpdate()
+{
+    m_pendingUpdateTimer.stop();
+    m_pendingUpdate = { };
 }
 
 void Scope::scheduleUpdate(UpdateType update)
@@ -619,16 +646,9 @@ void Scope::scheduleUpdate(UpdateType update)
             documentScope().m_hasDescendantWithPendingUpdate = true;
     }
 
-    m_document.scheduleRenderingUpdate({ });
-}
-
-void Scope::insertedInDocument()
-{
-    if (!m_pendingUpdate)
+    if (m_pendingUpdateTimer.isActive())
         return;
-
-    documentScope().m_hasDescendantWithPendingUpdate = true;
-    m_document.scheduleRenderingUpdate({ });
+    m_pendingUpdateTimer.startOneShot(0_s);
 }
 
 void Scope::evaluateMediaQueriesForViewportChange()
@@ -736,6 +756,11 @@ void Scope::invalidateMatchedDeclarationsCache()
 
     if (auto* resolver = resolverIfExists())
         resolver->invalidateMatchedDeclarationsCache();
+}
+
+void Scope::pendingUpdateTimerFired()
+{
+    flushPendingUpdate();
 }
 
 const Vector<RefPtr<StyleSheet>>& Scope::styleSheetsForStyleSheetList()

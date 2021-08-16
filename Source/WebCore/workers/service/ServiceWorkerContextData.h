@@ -27,6 +27,7 @@
 
 #include "CertificateInfo.h"
 #include "ContentSecurityPolicyResponseHeaders.h"
+#include "CrossOriginEmbedderPolicy.h"
 #include "ScriptBuffer.h"
 #include "ServiceWorkerIdentifier.h"
 #include "ServiceWorkerJobDataIdentifier.h"
@@ -39,7 +40,7 @@
 
 namespace WebCore {
 
-enum class LastNavigationWasAppBound : bool;
+enum class LastNavigationWasAppInitiated : bool;
 
 struct ServiceWorkerContextData {
     struct ImportedScript {
@@ -85,11 +86,12 @@ struct ServiceWorkerContextData {
     ScriptBuffer script;
     CertificateInfo certificateInfo;
     ContentSecurityPolicyResponseHeaders contentSecurityPolicy;
+    CrossOriginEmbedderPolicy crossOriginEmbedderPolicy;
     String referrerPolicy;
     URL scriptURL;
     WorkerType workerType;
     bool loadedFromDisk;
-    std::optional<LastNavigationWasAppBound> lastNavigationWasAppBound;
+    std::optional<LastNavigationWasAppInitiated> lastNavigationWasAppInitiated;
     HashMap<URL, ImportedScript> scriptResourceMap;
 
     template<class Encoder> void encode(Encoder&) const;
@@ -101,8 +103,8 @@ struct ServiceWorkerContextData {
 template<class Encoder>
 void ServiceWorkerContextData::encode(Encoder& encoder) const
 {
-    encoder << jobDataIdentifier << registration << serviceWorkerIdentifier << script << contentSecurityPolicy << referrerPolicy
-        << scriptURL << workerType << loadedFromDisk << lastNavigationWasAppBound << scriptResourceMap << certificateInfo;
+    encoder << jobDataIdentifier << registration << serviceWorkerIdentifier << script << contentSecurityPolicy << crossOriginEmbedderPolicy << referrerPolicy
+        << scriptURL << workerType << loadedFromDisk << lastNavigationWasAppInitiated << scriptResourceMap << certificateInfo;
 }
 
 template<class Decoder>
@@ -131,6 +133,11 @@ std::optional<ServiceWorkerContextData> ServiceWorkerContextData::decode(Decoder
     if (!decoder.decode(contentSecurityPolicy))
         return std::nullopt;
 
+    std::optional<CrossOriginEmbedderPolicy> crossOriginEmbedderPolicy;
+    decoder >> crossOriginEmbedderPolicy;
+    if (!crossOriginEmbedderPolicy)
+        return std::nullopt;
+
     String referrerPolicy;
     if (!decoder.decode(referrerPolicy))
         return std::nullopt;
@@ -147,8 +154,8 @@ std::optional<ServiceWorkerContextData> ServiceWorkerContextData::decode(Decoder
     if (!decoder.decode(loadedFromDisk))
         return std::nullopt;
 
-    std::optional<LastNavigationWasAppBound> lastNavigationWasAppBound;
-    if (!decoder.decode(lastNavigationWasAppBound))
+    std::optional<LastNavigationWasAppInitiated> lastNavigationWasAppInitiated;
+    if (!decoder.decode(lastNavigationWasAppInitiated))
         return std::nullopt;
 
     HashMap<URL, ImportedScript> scriptResourceMap;
@@ -167,11 +174,12 @@ std::optional<ServiceWorkerContextData> ServiceWorkerContextData::decode(Decoder
         WTFMove(*script),
         WTFMove(*certificateInfo),
         WTFMove(contentSecurityPolicy),
+        WTFMove(*crossOriginEmbedderPolicy),
         WTFMove(referrerPolicy),
         WTFMove(scriptURL),
         workerType,
         loadedFromDisk,
-        WTFMove(lastNavigationWasAppBound),
+        WTFMove(lastNavigationWasAppInitiated),
         WTFMove(scriptResourceMap)
     }};
 }

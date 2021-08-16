@@ -37,10 +37,14 @@
 #include <type_traits>
 #include <wtf/text/TextStream.h>
 
+#if PLATFORM(WPE) || PLATFORM(GTK)
+#include "ThemeAdwaita.h"
+#endif
+
 namespace Nicosia {
 using namespace WebCore;
 
-PlatformContextCairo& contextForReplay(PaintingOperationReplay& operationReplay)
+GraphicsContextCairo& contextForReplay(PaintingOperationReplay& operationReplay)
 {
     return static_cast<PaintingOperationReplayCairo&>(operationReplay).platformContext;
 }
@@ -276,9 +280,9 @@ void CairoOperationRecorder::fillRect(const FloatRect& rect, Gradient& gradient)
         void execute(PaintingOperationReplay& replayer) override
         {
             auto& platformContext = contextForReplay(replayer);
-            Cairo::save(platformContext);
+            platformContext.save();
             Cairo::fillRect(platformContext, arg<0>(), arg<1>().get());
-            Cairo::restore(platformContext);
+            platformContext.restore();
         }
 
         void dump(TextStream& ts) override
@@ -381,6 +385,9 @@ void CairoOperationRecorder::fillPath(const Path& path)
         }
     };
 
+    if (path.isEmpty())
+        return;
+
     auto& state = this->state();
     append(createCommand<FillPath>(path, Cairo::FillSource(state), Cairo::ShadowState(state)));
 }
@@ -442,6 +449,9 @@ void CairoOperationRecorder::strokePath(const Path& path)
             ts << indent << "StrokePath<>\n";
         }
     };
+
+    if (path.isEmpty())
+        return;
 
     auto& state = this->state();
     append(createCommand<StrokePath>(path, Cairo::StrokeSource(state), Cairo::ShadowState(state)));
@@ -608,6 +618,9 @@ void CairoOperationRecorder::drawLine(const FloatPoint& point1, const FloatPoint
         }
     };
 
+    if (strokeStyle() == NoStroke)
+        return;
+
     auto& state = this->state();
     append(createCommand<DrawLine>(point1, point2, state.strokeStyle, state.strokeColor, state.strokeThickness, state.shouldAntialias));
 }
@@ -627,6 +640,9 @@ void CairoOperationRecorder::drawLinesForText(const FloatPoint& point, float thi
             ts << indent << "DrawLinesForText<>\n";
         }
     };
+
+    if (widths.isEmpty())
+        return;
 
     auto& state = this->state();
     append(createCommand<DrawLinesForText>(point, thickness, widths, printing, doubleUnderlines, state.strokeColor));
@@ -673,6 +689,10 @@ void CairoOperationRecorder::drawEllipse(const FloatRect& rect)
 
 void CairoOperationRecorder::drawFocusRing(const Path& path, float width, float offset, const Color& color)
 {
+#if PLATFORM(WPE) || PLATFORM(GTK)
+    ThemeAdwaita::paintFocus(*this, path, color);
+    UNUSED_PARAM(width);
+#else
     struct DrawFocusRing final : PaintingOperation, OperationData<Path, float, Color> {
         virtual ~DrawFocusRing() = default;
 
@@ -687,12 +707,17 @@ void CairoOperationRecorder::drawFocusRing(const Path& path, float width, float 
         }
     };
 
-    UNUSED_PARAM(offset);
     append(createCommand<DrawFocusRing>(path, width, color));
+#endif
+    UNUSED_PARAM(offset);
 }
 
 void CairoOperationRecorder::drawFocusRing(const Vector<FloatRect>& rects, float width, float offset, const Color& color)
 {
+#if PLATFORM(WPE) || PLATFORM(GTK)
+    ThemeAdwaita::paintFocus(*this, rects, color);
+    UNUSED_PARAM(width);
+#else
     struct DrawFocusRing final : PaintingOperation, OperationData<Vector<FloatRect>, float, Color> {
         virtual ~DrawFocusRing() = default;
 
@@ -707,8 +732,9 @@ void CairoOperationRecorder::drawFocusRing(const Vector<FloatRect>& rects, float
         }
     };
 
-    UNUSED_PARAM(offset);
     append(createCommand<DrawFocusRing>(rects, width, color));
+#endif
+    UNUSED_PARAM(offset);
 }
 
 void CairoOperationRecorder::save()
@@ -718,7 +744,7 @@ void CairoOperationRecorder::save()
 
         void execute(PaintingOperationReplay& replayer) override
         {
-            Cairo::save(contextForReplay(replayer));
+            contextForReplay(replayer).save();
         }
 
         void dump(TextStream& ts) override
@@ -726,6 +752,8 @@ void CairoOperationRecorder::save()
             ts << indent << "Save<>\n";
         }
     };
+
+    GraphicsContext::save();
 
     append(createCommand<Save>());
 
@@ -739,7 +767,7 @@ void CairoOperationRecorder::restore()
 
         void execute(PaintingOperationReplay& replayer) override
         {
-            Cairo::restore(contextForReplay(replayer));
+            contextForReplay(replayer).restore();
         }
 
         void dump(TextStream& ts) override
@@ -748,9 +776,16 @@ void CairoOperationRecorder::restore()
         }
     };
 
+    if (!stackSize())
+        return;
+
+    GraphicsContext::restore();
+
+    if (m_stateStack.isEmpty())
+        return;
+
     append(createCommand<Restore>());
 
-    ASSERT(!m_stateStack.isEmpty());
     m_stateStack.removeLast();
     if (m_stateStack.isEmpty())
         m_stateStack.clear();
@@ -915,6 +950,8 @@ void CairoOperationRecorder::beginTransparencyLayer(float opacity)
         }
     };
 
+    GraphicsContext::beginTransparencyLayer(opacity);
+
     append(createCommand<BeginTransparencyLayer>(opacity));
 }
 
@@ -933,6 +970,8 @@ void CairoOperationRecorder::endTransparencyLayer()
             ts << indent << "EndTransparencyLayer<>\n";
         }
     };
+
+    GraphicsContext::endTransparencyLayer();
 
     append(createCommand<EndTransparencyLayer>());
 }

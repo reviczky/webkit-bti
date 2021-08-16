@@ -373,7 +373,7 @@ static ShouldIgnoreMouseEvent dispatchPointerEventIfNeeded(Element& element, con
     return ShouldIgnoreMouseEvent::No;
 }
 
-bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget)
+bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget, IsSyntheticClick isSyntheticClick)
 {
     if (isDisabledFormControl())
         return false;
@@ -386,6 +386,7 @@ bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const 
     if (mouseEvent->type().isEmpty())
         return true; // Shouldn't happen.
 
+    Ref protectedThis { *this };
     bool didNotSwallowEvent = true;
 
     if (dispatchPointerEventIfNeeded(*this, mouseEvent.get(), platformEvent, didNotSwallowEvent) == ShouldIgnoreMouseEvent::Yes)
@@ -398,7 +399,7 @@ bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const 
 #elif PLATFORM(MAC)
     isParentProcessAFullWebBrowser = MacApplication::isSafari();
 #endif
-    if (Quirks::StorageAccessResult::ShouldCancelEvent == document().quirks().triggerOptionalStorageAccessQuirk(*this, platformEvent, eventType, detail, relatedTarget, isParentProcessAFullWebBrowser))
+    if (Quirks::StorageAccessResult::ShouldCancelEvent == document().quirks().triggerOptionalStorageAccessQuirk(*this, platformEvent, eventType, detail, relatedTarget, isParentProcessAFullWebBrowser, isSyntheticClick))
         return false;
 
     ASSERT(!mouseEvent->target() || mouseEvent->target() != relatedTarget);
@@ -936,8 +937,7 @@ void Element::scrollIntoView(std::optional<Variant<bool, ScrollIntoViewOptions>>
         isHorizontal ? alignX : alignY,
         isHorizontal ? alignY : alignX,
         ShouldAllowCrossOriginScrolling::No,
-        options.behavior.value_or(ScrollBehavior::Auto),
-        SmoothScrollFeatureEnablement::Default
+        options.behavior.value_or(ScrollBehavior::Auto)
     };
     renderer()->scrollRectToVisible(absoluteBounds, insideFixed, visibleOptions);
 }
@@ -1027,7 +1027,7 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, 
     // If the element does not have any associated CSS layout box, the element has no associated scrolling box,
     // or the element has no overflow, terminate these steps.
     RenderBox* renderer = renderBox();
-    if (!renderer || !renderer->hasOverflowClip())
+    if (!renderer || !renderer->hasNonVisibleOverflow())
         return;
 
     auto scrollToOptions = normalizeNonFiniteCoordinatesOrFallBackTo(options,
@@ -1057,7 +1057,7 @@ void Element::scrollByUnits(int units, ScrollGranularity granularity)
     if (!renderer)
         return;
 
-    if (!renderer->hasOverflowClip())
+    if (!renderer->hasNonVisibleOverflow())
         return;
 
     ScrollDirection direction = ScrollDown;
@@ -1528,8 +1528,7 @@ LayoutRect Element::absoluteEventBounds(bool& boundsIncludeAllDescendantElements
             if (RenderFragmentedFlow* fragmentedFlow = box.enclosingFragmentedFlow()) {
                 bool wasFixed = false;
                 Vector<FloatQuad> quads;
-                FloatRect localRect(0, 0, box.width(), box.height());
-                if (fragmentedFlow->absoluteQuadsForBox(quads, &wasFixed, &box, localRect.y(), localRect.maxY())) {
+                if (fragmentedFlow->absoluteQuadsForBox(quads, &wasFixed, &box)) {
                     result = LayoutRect(unitedBoundingBoxes(quads));
                     computedBounds = true;
                 } else {
@@ -2252,6 +2251,8 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
 
 void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
+    document().removeFromTopLayer(*this);
+
 #if ENABLE(FULLSCREEN_API)
     if (containsFullScreenElement())
         setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(false);
@@ -2461,6 +2462,12 @@ ShadowRoot& Element::ensureUserAgentShadowRoot()
 {
     if (auto shadow = userAgentShadowRoot())
         return *shadow;
+    return createUserAgentShadowRoot();
+}
+
+ShadowRoot& Element::createUserAgentShadowRoot()
+{
+    ASSERT(!userAgentShadowRoot());
     auto newShadow = ShadowRoot::create(document(), ShadowRootMode::UserAgent);
     ShadowRoot& shadow = newShadow;
     addShadowRoot(WTFMove(newShadow));
@@ -3248,15 +3255,19 @@ String Element::outerHTML() const
 
 ExceptionOr<void> Element::setOuterHTML(const String& html)
 {
-    auto* parentElement = this->parentElement();
-    if (!is<HTMLElement>(parentElement))
-        return Exception { NoModificationAllowedError };
+    // The specification allows setting outerHTML on an Element whose parent is a DocumentFragment and Gecko supports this.
+    // However, as of June 2021, Blink matches our behavior and throws a NoModificationAllowedError for non-Element parents.
+    RefPtr parent = parentElement();
+    if (UNLIKELY(!parent)) {
+        if (!parentNode())
+            return Exception { NoModificationAllowedError, "Cannot set outerHTML on element because it doesn't have a parent" };
+        return Exception { NoModificationAllowedError, "Cannot set outerHTML on element because its parent is not an Element" };
+    }
 
-    Ref<HTMLElement> parent = downcast<HTMLElement>(*parentElement);
     RefPtr<Node> prev = previousSibling();
     RefPtr<Node> next = nextSibling();
 
-    auto fragment = createFragmentForInnerOuterHTML(parent, html, AllowScriptingContent);
+    auto fragment = createFragmentForInnerOuterHTML(*parent, html, AllowScriptingContent);
     if (fragment.hasException())
         return fragment.releaseException();
 
@@ -3264,6 +3275,7 @@ ExceptionOr<void> Element::setOuterHTML(const String& html)
     if (replaceResult.hasException())
         return replaceResult.releaseException();
 
+    // The following is not part of the specification but matches Blink's behavior as of June 2021.
     RefPtr<Node> node = next ? next->previousSibling() : nullptr;
     if (is<Text>(node)) {
         auto result = mergeWithNextTextNode(downcast<Text>(*node));
@@ -3447,7 +3459,6 @@ bool Element::hasValidStyle() const
 
 bool Element::isVisibleWithoutResolvingFullStyle() const
 {
-    document().styleScope().flushPendingUpdate();
 
     if (renderStyle() || hasValidStyle())
         return renderStyle() && renderStyle()->visibility() == Visibility::Visible;
@@ -3726,7 +3737,7 @@ URL Element::getURLAttribute(const QualifiedName& name) const
             ASSERT(isURLAttribute(*attribute));
     }
 #endif
-    return document().completeURL(stripLeadingAndTrailingHTMLSpaces(getAttribute(name)));
+    return document().completeURL(getAttribute(name));
 }
 
 URL Element::getNonEmptyURLAttribute(const QualifiedName& name) const

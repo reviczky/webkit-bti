@@ -61,9 +61,11 @@ public:
     void addClient(RenderElement&) final;
     void removeClient(RenderElement&) final;
     bool hasClient(RenderElement&) const final;
+    bool hasImage() const final;
     RefPtr<Image> image(RenderElement*, const FloatSize&) const final;
     float imageScaleFactor() const final;
     bool knownToBeOpaque(const RenderElement&) const final;
+    bool usesDataProtocol() const final;
 
 private:
     StyleCachedImage(CSSImageValue&, float);

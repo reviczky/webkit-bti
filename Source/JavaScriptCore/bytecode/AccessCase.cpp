@@ -68,7 +68,7 @@ AccessCase::AccessCase(VM& vm, JSCell* owner, AccessType type, CacheableIdentifi
     RELEASE_ASSERT(m_conditionSet.isValid());
 }
 
-std::unique_ptr<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType type, CacheableIdentifier identifier, PropertyOffset offset, Structure* structure, const ObjectPropertyConditionSet& conditionSet, RefPtr<PolyProtoAccessChain>&& prototypeAccessChain)
+Ref<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType type, CacheableIdentifier identifier, PropertyOffset offset, Structure* structure, const ObjectPropertyConditionSet& conditionSet, RefPtr<PolyProtoAccessChain>&& prototypeAccessChain)
 {
     switch (type) {
     case InHit:
@@ -105,10 +105,10 @@ std::unique_ptr<AccessCase> AccessCase::create(VM& vm, JSCell* owner, AccessType
         RELEASE_ASSERT_NOT_REACHED();
     };
 
-    return std::unique_ptr<AccessCase>(new AccessCase(vm, owner, type, identifier, offset, structure, conditionSet, WTFMove(prototypeAccessChain)));
+    return adoptRef(*new AccessCase(vm, owner, type, identifier, offset, structure, conditionSet, WTFMove(prototypeAccessChain)));
 }
 
-std::unique_ptr<AccessCase> AccessCase::createTransition(
+RefPtr<AccessCase> AccessCase::createTransition(
     VM& vm, JSCell* owner, CacheableIdentifier identifier, PropertyOffset offset, Structure* oldStructure, Structure* newStructure,
     const ObjectPropertyConditionSet& conditionSet, RefPtr<PolyProtoAccessChain>&& prototypeAccessChain)
 {
@@ -122,48 +122,48 @@ std::unique_ptr<AccessCase> AccessCase::createTransition(
         return nullptr;
     }
 
-    return std::unique_ptr<AccessCase>(new AccessCase(vm, owner, Transition, identifier, offset, newStructure, conditionSet, WTFMove(prototypeAccessChain)));
+    return adoptRef(*new AccessCase(vm, owner, Transition, identifier, offset, newStructure, conditionSet, WTFMove(prototypeAccessChain)));
 }
 
-std::unique_ptr<AccessCase> AccessCase::createDelete(
+Ref<AccessCase> AccessCase::createDelete(
     VM& vm, JSCell* owner, CacheableIdentifier identifier, PropertyOffset offset, Structure* oldStructure, Structure* newStructure)
 {
     RELEASE_ASSERT(oldStructure == newStructure->previousID());
     ASSERT(!newStructure->outOfLineCapacity() || oldStructure->outOfLineCapacity());
-    return std::unique_ptr<AccessCase>(new AccessCase(vm, owner, Delete, identifier, offset, newStructure, { }, { }));
+    return adoptRef(*new AccessCase(vm, owner, Delete, identifier, offset, newStructure, { }, { }));
 }
 
-std::unique_ptr<AccessCase> AccessCase::createCheckPrivateBrand(VM& vm, JSCell* owner, CacheableIdentifier identifier, Structure* structure)
+Ref<AccessCase> AccessCase::createCheckPrivateBrand(VM& vm, JSCell* owner, CacheableIdentifier identifier, Structure* structure)
 {
-    return std::unique_ptr<AccessCase>(new AccessCase(vm, owner, CheckPrivateBrand, identifier, invalidOffset, structure, { }, { }));
+    return adoptRef(*new AccessCase(vm, owner, CheckPrivateBrand, identifier, invalidOffset, structure, { }, { }));
 }
 
-std::unique_ptr<AccessCase> AccessCase::createSetPrivateBrand(
+Ref<AccessCase> AccessCase::createSetPrivateBrand(
     VM& vm, JSCell* owner, CacheableIdentifier identifier, Structure* oldStructure, Structure* newStructure)
 {
     RELEASE_ASSERT(oldStructure == newStructure->previousID());
-    return std::unique_ptr<AccessCase>(new AccessCase(vm, owner, SetPrivateBrand, identifier, invalidOffset, newStructure, { }, { }));
+    return adoptRef(*new AccessCase(vm, owner, SetPrivateBrand, identifier, invalidOffset, newStructure, { }, { }));
 }
 
 AccessCase::~AccessCase()
 {
 }
 
-std::unique_ptr<AccessCase> AccessCase::fromStructureStubInfo(
+RefPtr<AccessCase> AccessCase::fromStructureStubInfo(
     VM& vm, JSCell* owner, CacheableIdentifier identifier, StructureStubInfo& stubInfo)
 {
     switch (stubInfo.cacheType()) {
     case CacheType::GetByIdSelf:
         RELEASE_ASSERT(stubInfo.hasConstantIdentifier);
-        return ProxyableAccessCase::create(vm, owner, Load, identifier, stubInfo.u.byIdSelf.offset, stubInfo.u.byIdSelf.baseObjectStructure.get());
+        return ProxyableAccessCase::create(vm, owner, Load, identifier, stubInfo.u.byIdSelf.offset, stubInfo.m_inlineAccessBaseStructure.get());
 
     case CacheType::PutByIdReplace:
         RELEASE_ASSERT(stubInfo.hasConstantIdentifier);
-        return AccessCase::create(vm, owner, Replace, identifier, stubInfo.u.byIdSelf.offset, stubInfo.u.byIdSelf.baseObjectStructure.get());
+        return AccessCase::create(vm, owner, Replace, identifier, stubInfo.u.byIdSelf.offset, stubInfo.m_inlineAccessBaseStructure.get());
 
     case CacheType::InByIdSelf:
         RELEASE_ASSERT(stubInfo.hasConstantIdentifier);
-        return AccessCase::create(vm, owner, InHit, identifier, stubInfo.u.byIdSelf.offset, stubInfo.u.byIdSelf.baseObjectStructure.get());
+        return AccessCase::create(vm, owner, InHit, identifier, stubInfo.u.byIdSelf.offset, stubInfo.m_inlineAccessBaseStructure.get());
 
     case CacheType::ArrayLength:
         RELEASE_ASSERT(stubInfo.hasConstantIdentifier);
@@ -188,9 +188,9 @@ JSObject* AccessCase::alternateBase() const
     return conditionSet().slotBaseCondition().object();
 }
 
-std::unique_ptr<AccessCase> AccessCase::clone() const
+Ref<AccessCase> AccessCase::clone() const
 {
-    std::unique_ptr<AccessCase> result(new AccessCase(*this));
+    auto result = adoptRef(*new AccessCase(*this));
     result->resetState();
     return result;
 }
@@ -758,16 +758,14 @@ bool AccessCase::visitWeak(VM& vm) const
 }
 
 template<typename Visitor>
-bool AccessCase::propagateTransitions(Visitor& visitor) const
+void AccessCase::propagateTransitions(Visitor& visitor) const
 {
-    bool result = true;
-
     if (m_structure)
-        result &= m_structure->markIfCheap(visitor);
+        m_structure->markIfCheap(visitor);
 
     if (m_polyProtoAccessChain) {
         for (StructureID structureID : m_polyProtoAccessChain->chain())
-            result &= visitor.vm().getStructure(structureID)->markIfCheap(visitor);
+            visitor.vm().getStructure(structureID)->markIfCheap(visitor);
     }
 
     switch (m_type) {
@@ -775,18 +773,14 @@ bool AccessCase::propagateTransitions(Visitor& visitor) const
     case Delete:
         if (visitor.isMarked(m_structure->previousID()))
             visitor.appendUnbarriered(m_structure.get());
-        else
-            result = false;
         break;
     default:
         break;
     }
-
-    return result;
 }
 
-template bool AccessCase::propagateTransitions(AbstractSlotVisitor&) const;
-template bool AccessCase::propagateTransitions(SlotVisitor&) const;
+template void AccessCase::propagateTransitions(AbstractSlotVisitor&) const;
+template void AccessCase::propagateTransitions(SlotVisitor&) const;
 
 
 template<typename Visitor>
@@ -807,6 +801,7 @@ void AccessCase::generateWithGuard(
     RELEASE_ASSERT(m_state == Committed);
     m_state = Generated;
 
+    JSGlobalObject* globalObject = state.m_globalObject;
     CCallHelpers& jit = *state.jit;
     StructureStubInfo& stubInfo = *state.stubInfo;
     VM& vm = state.m_vm;
@@ -853,7 +848,7 @@ void AccessCase::generateWithGuard(
                     }
                 } else {
                     if (structure->hasMonoProto()) {
-                        JSValue prototype = structure->prototypeForLookup(state.m_globalObject);
+                        JSValue prototype = structure->prototypeForLookup(globalObject);
                         RELEASE_ASSERT(prototype.isObject());
                         jit.move(CCallHelpers::TrustedImmPtr(asObject(prototype)), baseForAccessGPR);
                     } else {
@@ -964,6 +959,8 @@ void AccessCase::generateWithGuard(
         allocator.lock(stubInfo.baseRegs());
         allocator.lock(valueRegs);
         allocator.lock(stubInfo.propertyRegs());
+        if (stubInfo.m_stubInfoGPR != InvalidGPRReg)
+            allocator.lock(stubInfo.m_stubInfoGPR);
         allocator.lock(scratchGPR);
         
         GPRReg scratch2GPR = allocator.allocateScratchGPR();
@@ -1061,6 +1058,8 @@ void AccessCase::generateWithGuard(
         allocator.lock(stubInfo.baseRegs());
         allocator.lock(valueRegs);
         allocator.lock(stubInfo.propertyRegs());
+        if (stubInfo.m_stubInfoGPR != InvalidGPRReg)
+            allocator.lock(stubInfo.m_stubInfoGPR);
         allocator.lock(scratchGPR);
         GPRReg scratch2GPR = allocator.allocateScratchGPR();
 
@@ -1144,6 +1143,8 @@ void AccessCase::generateWithGuard(
         allocator.lock(stubInfo.baseRegs());
         allocator.lock(valueRegs);
         allocator.lock(stubInfo.propertyRegs());
+        if (stubInfo.m_stubInfoGPR != InvalidGPRReg)
+            allocator.lock(stubInfo.m_stubInfoGPR);
         allocator.lock(scratchGPR);
         GPRReg scratch2GPR = allocator.allocateScratchGPR();
 
@@ -1205,6 +1206,8 @@ void AccessCase::generateWithGuard(
         allocator.lock(stubInfo.baseRegs());
         allocator.lock(valueRegs);
         allocator.lock(stubInfo.propertyRegs());
+        if (stubInfo.m_stubInfoGPR != InvalidGPRReg)
+            allocator.lock(stubInfo.m_stubInfoGPR);
         allocator.lock(scratchGPR);
         GPRReg scratch2GPR = allocator.allocateScratchGPR();
 #if USE(JSVALUE32_64)
@@ -1317,6 +1320,8 @@ void AccessCase::generateWithGuard(
         allocator.lock(stubInfo.baseRegs());
         allocator.lock(valueRegs);
         allocator.lock(stubInfo.propertyRegs());
+        if (stubInfo.m_stubInfoGPR != InvalidGPRReg)
+            allocator.lock(stubInfo.m_stubInfoGPR);
         allocator.lock(scratchGPR);
         
         GPRReg scratch2GPR = allocator.allocateScratchGPR();
@@ -1405,7 +1410,6 @@ void AccessCase::generateImpl(AccessGenerationState& state)
     CCallHelpers& jit = *state.jit;
     VM& vm = state.m_vm;
     CodeBlock* codeBlock = jit.codeBlock();
-    JSGlobalObject* globalObject = state.m_globalObject;
     ECMAMode ecmaMode = state.m_ecmaMode;
     StructureStubInfo& stubInfo = *state.stubInfo;
     JSValueRegs valueRegs = state.valueRegs;
@@ -1417,7 +1421,7 @@ void AccessCase::generateImpl(AccessGenerationState& state)
         RELEASE_ASSERT(!m_polyProtoAccessChain);
 
         if (condition.isWatchableAssumingImpurePropertyWatchpoint(PropertyCondition::WatchabilityEffort::EnsureWatchability)) {
-            state.installWatchpoint(condition);
+            state.installWatchpoint(codeBlock, condition);
             continue;
         }
 
@@ -1435,7 +1439,7 @@ void AccessCase::generateImpl(AccessGenerationState& state)
 
         // We will emit code that has a weak reference that isn't otherwise listed anywhere.
         Structure* structure = condition.object()->structure(vm);
-        state.weakReferences.append(WriteBarrier<JSCell>(vm, codeBlock, structure));
+        state.weakStructures.append(structure->id());
 
         jit.move(CCallHelpers::TrustedImmPtr(condition.object()), scratchGPR);
         state.failAndRepatch.append(
@@ -1473,14 +1477,9 @@ void AccessCase::generateImpl(AccessGenerationState& state)
     case CustomAccessorSetter: {
         GPRReg valueRegsPayloadGPR = valueRegs.payloadGPR();
 
-        if (isValidOffset(m_offset)) {
-            Structure* currStructure;
-            if (!hasAlternateBase())
-                currStructure = structure();
-            else
-                currStructure = alternateBase()->structure(vm);
+        Structure* currStructure = hasAlternateBase() ? alternateBase()->structure(vm) : structure();
+        if (isValidOffset(m_offset))
             currStructure->startWatchingPropertyForReplacements(vm, offset());
-        }
 
         bool doesPropertyStorageLoads = m_type == Load 
             || m_type == GetGetter
@@ -1582,7 +1581,12 @@ void AccessCase::generateImpl(AccessGenerationState& state)
 
         // This also does the necessary calculations of whether or not we're an
         // exception handling call site.
-        AccessGenerationState::SpillState spillState = state.preserveLiveRegistersToStackForCall();
+        RegisterSet extraRegistersToPreserve;
+#if CPU(ARM64)
+        if (codeBlock->useDataIC())
+            extraRegistersToPreserve.set(ARM64Registers::lr);
+#endif
+        AccessGenerationState::SpillState spillState = state.preserveLiveRegistersToStackForCall(extraRegistersToPreserve);
 
         auto restoreLiveRegistersFromStackForCall = [&](AccessGenerationState::SpillState& spillState, bool callHasReturnValue) {
             RegisterSet dontRestore;
@@ -1602,6 +1606,8 @@ void AccessCase::generateImpl(AccessGenerationState& state)
             auto& access = this->as<GetterSetterAccessCase>();
             ASSERT(baseGPR != loadedValueGPR);
             ASSERT(m_type != Setter || valueRegsPayloadGPR != loadedValueGPR);
+
+            JSGlobalObject* globalObject = state.m_globalObject;
 
             // Create a JS call using a JS call inline cache. Assume that:
             //
@@ -1712,6 +1718,7 @@ void AccessCase::generateImpl(AccessGenerationState& state)
 #endif
             jit.move(CCallHelpers::TrustedImmPtr(globalObject), GPRInfo::regT3);
             access.callLinkInfo()->emitSlowPath(vm, jit);
+
             if (m_type == Getter)
                 jit.setupResults(valueRegs);
             done.append(jit.jump());
@@ -1723,8 +1730,8 @@ void AccessCase::generateImpl(AccessGenerationState& state)
             }
             done.link(&jit);
 
-            jit.addPtr(CCallHelpers::TrustedImm32((codeBlock->stackPointerOffset() * sizeof(Register)) - state.preservedReusedRegisterState.numberOfBytesPreserved - spillState.numberOfStackBytesUsedForRegisterPreservation),
-                GPRInfo::callFrameRegister, CCallHelpers::stackPointerRegister);
+            int stackPointerOffset = (codeBlock->stackPointerOffset() * sizeof(Register)) - state.preservedReusedRegisterState.numberOfBytesPreserved - spillState.numberOfStackBytesUsedForRegisterPreservation;
+            jit.addPtr(CCallHelpers::TrustedImm32(stackPointerOffset), GPRInfo::callFrameRegister, CCallHelpers::stackPointerRegister);
             bool callHasReturnValue = isGetter();
             restoreLiveRegistersFromStackForCall(spillState, callHasReturnValue);
 
@@ -1736,6 +1743,11 @@ void AccessCase::generateImpl(AccessGenerationState& state)
         } else {
             ASSERT(m_type == CustomValueGetter || m_type == CustomAccessorGetter || m_type == CustomValueSetter || m_type == CustomAccessorSetter);
             ASSERT(!doesPropertyStorageLoads); // Or we need an extra register. We rely on propertyOwnerGPR being correct here.
+
+            // We do not need to keep globalObject alive since
+            // 1. if it is CustomValue, the owner CodeBlock (even if JSGlobalObject* is one of CodeBlock that is inlined and held by DFG CodeBlock) must keep it alive.
+            // 2. if it is CustomAccessor, structure should hold it.
+            JSGlobalObject* globalObject = currStructure->globalObject();
 
             // Need to make room for the C call so any of our stack spillage isn't overwritten. It's
             // hard to track if someone did spillage or not, so we just assume that we always need
@@ -1845,7 +1857,14 @@ void AccessCase::generateImpl(AccessGenerationState& state)
             skipBarrier.append(jit.barrierBranch(vm, scratchGPR, scratchGPR));
 
             jit.loadPtr(CCallHelpers::Address(baseGPR, JSProxy::targetOffset()), scratchGPR);
-            auto spillState = state.preserveLiveRegistersToStackForCallWithoutExceptions();
+
+            RegisterSet extraRegistersToPreserve;
+#if CPU(ARM64)
+            if (codeBlock->useDataIC())
+                extraRegistersToPreserve.set(ARM64Registers::lr);
+#endif
+            auto spillState = state.preserveLiveRegistersToStackForCallWithoutExceptions(extraRegistersToPreserve);
+
             jit.setupArguments<decltype(operationWriteBarrierSlowPath)>(CCallHelpers::TrustedImmPtr(&vm), scratchGPR);
             jit.prepareCallOperation(vm);
             auto operationCall = jit.call(OperationPtrTag);
@@ -1875,6 +1894,8 @@ void AccessCase::generateImpl(AccessGenerationState& state)
         ScratchRegisterAllocator allocator(stubInfo.usedRegisters);
         allocator.lock(stubInfo.baseRegs());
         allocator.lock(valueRegs);
+        if (stubInfo.m_stubInfoGPR != InvalidGPRReg)
+            allocator.lock(stubInfo.m_stubInfoGPR);
         allocator.lock(scratchGPR);
 
         GPRReg scratchGPR2 = InvalidGPRReg;
@@ -1933,6 +1954,10 @@ void AccessCase::generateImpl(AccessGenerationState& state)
                 RegisterSet extraRegistersToPreserve;
                 extraRegistersToPreserve.set(baseGPR);
                 extraRegistersToPreserve.set(valueRegs);
+#if CPU(ARM64)
+                if (codeBlock->useDataIC())
+                    extraRegistersToPreserve.set(ARM64Registers::lr);
+#endif
                 AccessGenerationState::SpillState spillState = state.preserveLiveRegistersToStackForCall(extraRegistersToPreserve);
                 
                 jit.store32(
@@ -2031,6 +2056,8 @@ void AccessCase::generateImpl(AccessGenerationState& state)
         allocator.lock(stubInfo.baseRegs());
         allocator.lock(valueRegs);
         allocator.lock(baseGPR);
+        if (stubInfo.m_stubInfoGPR != InvalidGPRReg)
+            allocator.lock(stubInfo.m_stubInfoGPR);
         allocator.lock(scratchGPR);
         ASSERT(structure()->transitionWatchpointSetHasBeenInvalidated());
         ASSERT(newStructure()->transitionKind() == TransitionKind::PropertyDeletion);
@@ -2202,6 +2229,103 @@ void AccessCase::checkConsistency(StructureStubInfo& stubInfo)
     }
 }
 #endif // ASSERT_ENABLED
+
+bool AccessCase::canBeShared(const AccessCase& lhs, const AccessCase& rhs)
+{
+    // We do not care m_state.
+    // And we say "false" if either of them have m_polyProtoAccessChain.
+    if (lhs.m_polyProtoAccessChain || rhs.m_polyProtoAccessChain)
+        return false;
+    if (lhs.additionalSet() || rhs.additionalSet())
+        return false;
+
+    if (lhs.m_type != rhs.m_type)
+        return false;
+    if (lhs.m_offset != rhs.m_offset)
+        return false;
+    if (lhs.m_viaProxy != rhs.m_viaProxy)
+        return false;
+    if (lhs.m_structure.get() != rhs.m_structure.get())
+        return false;
+    if (lhs.m_identifier != rhs.m_identifier)
+        return false;
+    if (lhs.m_conditionSet != rhs.m_conditionSet)
+        return false;
+
+    switch (lhs.m_type) {
+    case Load:
+    case Transition:
+    case Delete:
+    case DeleteNonConfigurable:
+    case DeleteMiss:
+    case Replace:
+    case Miss:
+    case GetGetter:
+    case InHit:
+    case InMiss:
+    case ArrayLength:
+    case StringLength:
+    case DirectArgumentsLength:
+    case ScopedArgumentsLength:
+    case CheckPrivateBrand:
+    case SetPrivateBrand:
+    case IndexedInt32Load:
+    case IndexedDoubleLoad:
+    case IndexedContiguousLoad:
+    case IndexedArrayStorageLoad:
+    case IndexedScopedArgumentsLoad:
+    case IndexedDirectArgumentsLoad:
+    case IndexedTypedArrayInt8Load:
+    case IndexedTypedArrayUint8Load:
+    case IndexedTypedArrayUint8ClampedLoad:
+    case IndexedTypedArrayInt16Load:
+    case IndexedTypedArrayUint16Load:
+    case IndexedTypedArrayInt32Load:
+    case IndexedTypedArrayUint32Load:
+    case IndexedTypedArrayFloat32Load:
+    case IndexedTypedArrayFloat64Load:
+    case IndexedStringLoad:
+    case InstanceOfGeneric:
+        return true;
+
+    case Getter:
+    case Setter: {
+        // Getter and Setter relies on CodeBlock, which makes sharing impossible.
+        return false;
+    }
+
+    case CustomValueGetter:
+    case CustomAccessorGetter:
+    case CustomValueSetter:
+    case CustomAccessorSetter: {
+        // They are embedding JSGlobalObject that are not tied to sharing JITStubRoutine.
+        return false;
+    }
+
+    case IntrinsicGetter: {
+        auto& lhsd = lhs.as<IntrinsicGetterAccessCase>();
+        auto& rhsd = rhs.as<IntrinsicGetterAccessCase>();
+        return lhsd.m_intrinsicFunction == rhsd.m_intrinsicFunction;
+    }
+
+    case ModuleNamespaceLoad: {
+        auto& lhsd = lhs.as<ModuleNamespaceAccessCase>();
+        auto& rhsd = rhs.as<ModuleNamespaceAccessCase>();
+        return lhsd.m_moduleNamespaceObject == rhsd.m_moduleNamespaceObject
+            && lhsd.m_moduleEnvironment == rhsd.m_moduleEnvironment
+            && lhsd.m_scopeOffset == rhsd.m_scopeOffset;
+    }
+
+    case InstanceOfHit:
+    case InstanceOfMiss: {
+        auto& lhsd = lhs.as<InstanceOfAccessCase>();
+        auto& rhsd = rhs.as<InstanceOfAccessCase>();
+        return lhsd.m_prototype == rhsd.m_prototype;
+    }
+    }
+
+    return true;
+}
 
 } // namespace JSC
 

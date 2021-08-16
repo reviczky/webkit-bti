@@ -26,6 +26,7 @@
 #pragma once
 
 #include "IterationKind.h"
+#include <optional>
 
 namespace JSC {
 
@@ -93,6 +94,7 @@ enum Intrinsic : uint8_t {
     RegExpTestIntrinsic,
     RegExpTestFastIntrinsic,
     RegExpMatchFastIntrinsic,
+    ObjectAssignIntrinsic,
     ObjectCreateIntrinsic,
     ObjectGetOwnPropertyNamesIntrinsic,
     ObjectGetPrototypeOfIntrinsic,

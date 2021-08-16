@@ -32,18 +32,15 @@
 #include "RuntimeEnabledFeatures.h"
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/EventNamesAdditions.h>
-#endif
-
 namespace WebCore {
 
-#if !defined(ADDITIONAL_DOM_EVENT_NAMES_FOR_EACH)
-#define ADDITIONAL_DOM_EVENT_NAMES_FOR_EACH(macro)
+#if ENABLE(APPLE_PAY_COUPON_CODE)
+#define DOM_EVENT_NAME_APPLE_PAY_COUPON_CODE_CHANGED(macro) macro(couponcodechanged)
+#else
+#define DOM_EVENT_NAME_APPLE_PAY_COUPON_CODE_CHANGED(macro)
 #endif
 
 #define DOM_EVENT_NAMES_FOR_EACH(macro) \
-    ADDITIONAL_DOM_EVENT_NAMES_FOR_EACH(macro) \
     macro(DOMActivate) \
     macro(DOMCharacterDataModified) \
     macro(DOMContentLoaded) \
@@ -103,6 +100,7 @@ namespace WebCore {
     macro(controllerchange) \
     macro(coordinatorstatechange) \
     macro(copy) \
+    DOM_EVENT_NAME_APPLE_PAY_COUPON_CODE_CHANGED(macro) \
     macro(cuechange) \
     macro(cut) \
     macro(dataavailable) \
@@ -136,6 +134,7 @@ namespace WebCore {
     macro(focus) \
     macro(focusin) \
     macro(focusout) \
+    macro(formdata) \
     macro(gamepadconnected) \
     macro(gamepaddisconnected) \
     macro(gesturechange) \
@@ -195,7 +194,6 @@ namespace WebCore {
     macro(online) \
     macro(open) \
     macro(orientationchange) \
-    macro(overconstrained) \
     macro(overflowchanged) \
     macro(pagehide) \
     macro(pageshow) \

@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "AppPrivacyReport.h"
 #include "AuxiliaryProcess.h"
 #include "CacheModel.h"
 #include "CallbackID.h"
@@ -105,6 +106,7 @@ class NetworkConnectionToWebProcess;
 class NetworkProcessSupplement;
 class NetworkProximityManager;
 class NetworkResourceLoader;
+class ProcessAssertion;
 class StorageManagerSet;
 class WebPageNetworkParameters;
 class WebSWServerConnection;
@@ -173,12 +175,12 @@ public:
     void forEachNetworkSession(const Function<void(NetworkSession&)>&);
 
     void forEachNetworkStorageSession(const Function<void(WebCore::NetworkStorageSession&)>&);
-    WebCore::NetworkStorageSession* storageSession(const PAL::SessionID&) const;
-    std::unique_ptr<WebCore::NetworkStorageSession> newTestingSession(const PAL::SessionID&);
+    WebCore::NetworkStorageSession* storageSession(PAL::SessionID) const;
+    std::unique_ptr<WebCore::NetworkStorageSession> newTestingSession(PAL::SessionID);
 #if PLATFORM(COCOA)
-    void ensureSession(const PAL::SessionID&, bool shouldUseTestingNetworkSession, const String& identifier, RetainPtr<CFHTTPCookieStorageRef>&&);
+    void ensureSession(PAL::SessionID, bool shouldUseTestingNetworkSession, const String& identifier, RetainPtr<CFHTTPCookieStorageRef>&&);
 #else
-    void ensureSession(const PAL::SessionID&, bool shouldUseTestingNetworkSession, const String& identifier);
+    void ensureSession(PAL::SessionID, bool shouldUseTestingNetworkSession, const String& identifier);
 #endif
 
     void processWillSuspendImminentlyForTestingSync(CompletionHandler<void()>&&);
@@ -195,6 +197,7 @@ public:
 
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> sourceApplicationAuditData() const;
+    std::optional<audit_token_t> sourceApplicationAuditToken() const;
 #endif
 #if PLATFORM(COCOA) || USE(SOUP)
     HashSet<String> hostNamesWithHSTSCache(PAL::SessionID) const;
@@ -288,7 +291,7 @@ public:
     using CacheStorageRootPathCallback = CompletionHandler<void(String&&)>;
     void cacheStorageRootPath(PAL::SessionID, CacheStorageRootPathCallback&&);
 
-    void preconnectTo(PAL::SessionID, WebPageProxyIdentifier, WebCore::PageIdentifier, const URL&, const String&, WebCore::StoredCredentialsPolicy, std::optional<NavigatingToAppBoundDomain>, LastNavigationWasAppBound);
+    void preconnectTo(PAL::SessionID, WebPageProxyIdentifier, WebCore::PageIdentifier, const URL&, const String&, WebCore::StoredCredentialsPolicy, std::optional<NavigatingToAppBoundDomain>, LastNavigationWasAppInitiated);
 
     void setSessionIsControlledByAutomation(PAL::SessionID, bool);
     bool sessionIsControlledByAutomation(PAL::SessionID) const;
@@ -329,9 +332,9 @@ public:
     void ref() const override { ThreadSafeRefCounted<NetworkProcess>::ref(); }
     void deref() const override { ThreadSafeRefCounted<NetworkProcess>::deref(); }
 
-    CacheStorage::Engine* findCacheEngine(const PAL::SessionID&);
-    CacheStorage::Engine& ensureCacheEngine(const PAL::SessionID&, Function<Ref<CacheStorage::Engine>()>&&);
-    void removeCacheEngine(const PAL::SessionID&);
+    CacheStorage::Engine* findCacheEngine(PAL::SessionID);
+    CacheStorage::Engine& ensureCacheEngine(PAL::SessionID, Function<Ref<CacheStorage::Engine>()>&&);
+    void removeCacheEngine(PAL::SessionID);
     void requestStorageSpace(PAL::SessionID, const WebCore::ClientOrigin&, uint64_t quota, uint64_t currentSize, uint64_t spaceRequired, CompletionHandler<void(std::optional<uint64_t>)>&&);
 
     void storePrivateClickMeasurement(PAL::SessionID, WebCore::PrivateClickMeasurement&&);
@@ -377,8 +380,8 @@ public:
     void setCORSDisablingPatterns(WebCore::PageIdentifier, Vector<String>&&);
 
 #if PLATFORM(COCOA)
-    void appBoundNavigationData(PAL::SessionID, CompletionHandler<void(const AppBoundNavigationTestingData&)>&&);
-    void clearAppBoundNavigationData(PAL::SessionID, CompletionHandler<void()>&&);
+    void appPrivacyReportTestingData(PAL::SessionID, CompletionHandler<void(const AppPrivacyReportTestingData&)>&&);
+    void clearAppPrivacyReportTestingData(PAL::SessionID, CompletionHandler<void()>&&);
 #endif
 
 #if ENABLE(WEB_RTC)
@@ -395,11 +398,6 @@ private:
 
     void lowMemoryHandler(Critical);
     
-    void processDidTransitionToForeground();
-    void processDidTransitionToBackground();
-    void platformProcessDidTransitionToForeground();
-    void platformProcessDidTransitionToBackground();
-
     // AuxiliaryProcess
     void initializeProcess(const AuxiliaryProcessInitializationParameters&) override;
     void initializeProcessName(const AuxiliaryProcessInitializationParameters&) override;
@@ -451,11 +449,11 @@ private:
     void allowSpecificHTTPSCertificateForHost(const WebCore::CertificateInfo&, const String& host);
     void setAllowsAnySSLCertificateForWebSocket(bool, CompletionHandler<void()>&&);
     
-    void flushCookies(const PAL::SessionID&, CompletionHandler<void()>&&);
+    void flushCookies(PAL::SessionID, CompletionHandler<void()>&&);
 
-    void addWebPageNetworkParameters(const PAL::SessionID&, WebPageProxyIdentifier, WebPageNetworkParameters&&);
-    void removeWebPageNetworkParameters(const PAL::SessionID&, WebPageProxyIdentifier);
-    void countNonDefaultSessionSets(const PAL::SessionID&, CompletionHandler<void(size_t)>&&);
+    void addWebPageNetworkParameters(PAL::SessionID, WebPageProxyIdentifier, WebPageNetworkParameters&&);
+    void removeWebPageNetworkParameters(PAL::SessionID, WebPageProxyIdentifier);
+    void countNonDefaultSessionSets(PAL::SessionID, CompletionHandler<void(size_t)>&&);
 
 #if USE(SOUP)
     void setIgnoreTLSErrors(PAL::SessionID, bool);
@@ -472,7 +470,7 @@ private:
     static void setSharedHTTPCookieStorage(const Vector<uint8_t>& identifier);
 #endif
 
-    void platformFlushCookies(const PAL::SessionID&, CompletionHandler<void()>&&);
+    void platformFlushCookies(PAL::SessionID, CompletionHandler<void()>&&);
     
     void registerURLSchemeAsSecure(const String&) const;
     void registerURLSchemeAsBypassingContentSecurityPolicy(const String&) const;
@@ -484,6 +482,7 @@ private:
     Ref<WebIDBServer> createWebIDBServer(PAL::SessionID);
     void setSessionStorageQuotaManagerIDBRootPath(PAL::SessionID, const String& idbRootPath);
     void removeWebIDBServerIfPossible(PAL::SessionID);
+    void suspendIDBServers(bool isSuspensionImminent);
 
 #if ENABLE(SERVICE_WORKER)
     void didCreateWorkerContextProcessConnection(const IPC::Attachment&);
@@ -495,6 +494,10 @@ private:
     WebSWOriginStore* existingSWOriginStoreForSession(PAL::SessionID) const;
 
     void addServiceWorkerSession(PAL::SessionID, bool processTerminationDelayEnabled, String&& serviceWorkerRegistrationDirectory, const SandboxExtension::Handle&);
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    void setIsHoldingLockedFiles(bool);
 #endif
 
     void firePrivateClickMeasurementTimerImmediately(PAL::SessionID);
@@ -572,10 +575,13 @@ private:
 
 #if PLATFORM(IOS_FAMILY)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
+    RefPtr<ProcessAssertion> m_holdingLockedFileAssertion;
 #endif
 
     HashMap<PAL::SessionID, String> m_idbDatabasePaths;
     HashMap<PAL::SessionID, RefPtr<WebIDBServer>> m_webIDBServers;
+    bool m_shouldSuspendIDBServers { false };
+    uint64_t m_suspensionIdentifier { 0 };
     
 #if ENABLE(SERVICE_WORKER)
     struct ServiceWorkerInfo {

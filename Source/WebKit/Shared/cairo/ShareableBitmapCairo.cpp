@@ -32,7 +32,6 @@
 #include <WebCore/CairoOperations.h>
 #include <WebCore/CairoUtilities.h>
 #include <WebCore/GraphicsContextCairo.h>
-#include <WebCore/PlatformContextCairo.h>
 #include <WebCore/NotImplemented.h>
 
 namespace WebKit {
@@ -59,8 +58,7 @@ static inline RefPtr<cairo_surface_t> createSurfaceFromData(void* data, const We
 std::unique_ptr<GraphicsContext> ShareableBitmap::createGraphicsContext()
 {
     RefPtr<cairo_surface_t> image = createCairoSurface();
-    RefPtr<cairo_t> bitmapContext = adoptRef(cairo_create(image.get()));
-    return makeUnique<GraphicsContextCairo>(bitmapContext.get());
+    return makeUnique<GraphicsContextCairo>(image.get());
 }
 
 void ShareableBitmap::paint(GraphicsContext& context, const IntPoint& dstPoint, const IntRect& srcRect)

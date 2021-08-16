@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,6 +45,7 @@
 namespace WebCore {
 class NowPlayingManager;
 struct MockMediaDevice;
+struct SecurityOriginData;
 }
 
 namespace WebKit {
@@ -84,7 +85,6 @@ public:
     WebCore::NowPlayingManager& nowPlayingManager();
 
 #if ENABLE(MEDIA_STREAM) && PLATFORM(COCOA)
-    WorkQueue& audioMediaStreamTrackRendererQueue();
     WorkQueue& videoMediaStreamTrackRendererQueue();
 #endif
 #if USE(LIBWEBRTC) && PLATFORM(COCOA)
@@ -111,6 +111,7 @@ private:
 
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
+    void didReceiveGPUProcessMessage(IPC::Connection&, IPC::Decoder&);
 
     // Message Handlers
     void initializeGPUProcess(GPUProcessCreationParameters&&);
@@ -118,24 +119,27 @@ private:
     void addSession(PAL::SessionID, GPUProcessSessionParameters&&);
     void removeSession(PAL::SessionID);
 
-    void processDidTransitionToForeground();
-    void processDidTransitionToBackground();
 #if ENABLE(MEDIA_STREAM)
     void setMockCaptureDevicesEnabled(bool);
     void setOrientationForMediaCapture(uint64_t orientation);
     void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture, WebCore::ProcessIdentifier, CompletionHandler<void()>&&);
+    void updateCaptureOrigin(const WebCore::SecurityOriginData&, WebCore::ProcessIdentifier);
     void updateSandboxAccess(const Vector<SandboxExtension::Handle>&);
     void addMockMediaDevice(const WebCore::MockMediaDevice&);
     void clearMockMediaDevices();
     void removeMockMediaDevice(const String& persistentId);
     void resetMockMediaDevices();
+    bool setCaptureAttributionString(const String&);
 #endif
 #if PLATFORM(MAC)
     void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
 #endif
 
+#if USE(OS_STATE)
+    RetainPtr<NSDictionary> additionalStateForDiagnosticReport() const final;
+#endif
 
-#if ENABLE(MEDIA_SOURCE) && ENABLE(VP9)
+#if ENABLE(MEDIA_SOURCE)
     void setWebMParserEnabled(bool);
 #endif
 
@@ -163,7 +167,6 @@ private:
     };
     HashMap<WebCore::ProcessIdentifier, MediaCaptureAccess> m_mediaCaptureAccessMap;
 #if ENABLE(MEDIA_STREAM) && PLATFORM(COCOA)
-    RefPtr<WorkQueue> m_audioMediaStreamTrackRendererQueue;
     RefPtr<WorkQueue> m_videoMediaStreamTrackRendererQueue;
 #endif
     uint64_t m_orientation { 0 };
@@ -189,7 +192,7 @@ private:
     bool m_enableVP9Decoder { false };
     bool m_enableVP9SWDecoder { false };
 #endif
-#if ENABLE(MEDIA_SOURCE) && ENABLE(VP9)
+#if ENABLE(MEDIA_SOURCE)
     bool m_webMParserEnabled { false };
 #endif
 #if ENABLE(WEBM_FORMAT_READER)

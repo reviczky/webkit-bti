@@ -64,6 +64,7 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
     copy->m_processSwapsOnNavigationFromExperimentalFeatures = this->m_processSwapsOnNavigationFromExperimentalFeatures;
     copy->m_alwaysKeepAndReuseSwappedProcesses = this->m_alwaysKeepAndReuseSwappedProcesses;
     copy->m_processSwapsOnWindowOpenWithOpener = this->m_processSwapsOnWindowOpenWithOpener;
+    copy->m_processSwapsOnNavigationWithinSameNonHTTPFamilyProtocol = this->m_processSwapsOnNavigationWithinSameNonHTTPFamilyProtocol;
     copy->m_isAutomaticProcessWarmingEnabledByClient = this->m_isAutomaticProcessWarmingEnabledByClient;
     copy->m_usesWebProcessCache = this->m_usesWebProcessCache;
     copy->m_usesBackForwardCache = this->m_usesBackForwardCache;
@@ -76,6 +77,9 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
     copy->m_webProcessPath = this->m_webProcessPath;
     copy->m_networkProcessPath = this->m_networkProcessPath;
     copy->m_userId = this->m_userId;
+#endif
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    copy->m_memoryPressureHandlerConfiguration = this->m_memoryPressureHandlerConfiguration;
 #endif
     return copy;
 }

@@ -127,6 +127,14 @@ void PageConsoleClient::addMessage(std::unique_ptr<Inspector::ConsoleMessage>&& 
         } else
             message = consoleMessage->message();
         m_page.chrome().client().addMessageToConsole(consoleMessage->source(), consoleMessage->level(), message, consoleMessage->line(), consoleMessage->column(), consoleMessage->url());
+
+        if (UNLIKELY(m_page.settings().logsPageMessagesToSystemConsoleEnabled() || shouldPrintExceptions())) {
+            if (consoleMessage->type() == MessageType::Image) {
+                ASSERT(consoleMessage->arguments());
+                ConsoleClient::printConsoleMessageWithArguments(consoleMessage->source(), consoleMessage->type(), consoleMessage->level(), consoleMessage->arguments()->globalObject(), *consoleMessage->arguments());
+            } else
+                ConsoleClient::printConsoleMessage(consoleMessage->source(), consoleMessage->type(), consoleMessage->level(), consoleMessage->toString(), consoleMessage->url(), consoleMessage->line(), consoleMessage->column());
+        }
     }
 
     InspectorInstrumentation::addMessageToConsole(m_page, WTFMove(consoleMessage));
@@ -358,7 +366,7 @@ void PageConsoleClient::screenshot(JSC::JSGlobalObject* lexicalGlobalObject, Ref
 
                 if (dataURL.isEmpty()) {
                     if (!snapshot)
-                        snapshot = WebCore::snapshotNode(m_page.mainFrame(), *node);
+                        snapshot = WebCore::snapshotNode(m_page.mainFrame(), *node, { { }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() });
 
                     if (snapshot)
                         dataURL = snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
@@ -404,7 +412,7 @@ void PageConsoleClient::screenshot(JSC::JSGlobalObject* lexicalGlobalObject, Ref
         if (!target) {
             // If no target is provided, capture an image of the viewport.
             IntRect imageRect(IntPoint::zero(), m_page.mainFrame().view()->sizeForVisibleContent());
-            if (auto snapshot = WebCore::snapshotFrameRect(m_page.mainFrame(), imageRect, { { SnapshotFlags::InViewCoordinates } }))
+            if (auto snapshot = WebCore::snapshotFrameRect(m_page.mainFrame(), imageRect, { { SnapshotFlags::InViewCoordinates }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() }))
                 dataURL = snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
         }
 

@@ -37,6 +37,7 @@
 #include "CSSFontSelector.h"
 #include "CSSParser.h"
 #include "CSSPropertyNames.h"
+#include "CSSStyleImageValue.h"
 #include "CachedImage.h"
 #include "CanvasGradient.h"
 #include "CanvasPattern.h"
@@ -68,7 +69,6 @@
 #include "StyleResolver.h"
 #include "TextMetrics.h"
 #include "TextRun.h"
-#include "TypedOMCSSImageValue.h"
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
@@ -515,7 +515,7 @@ void CanvasRenderingContext2DBase::setFillStyle(CanvasStyle style)
     state.unparsedFillColor = String();
 }
 
-void CanvasRenderingContext2DBase::setLineWidth(float width)
+void CanvasRenderingContext2DBase::setLineWidth(double width)
 {
     if (!(std::isfinite(width) && width > 0))
         return;
@@ -585,7 +585,7 @@ void CanvasRenderingContext2DBase::setLineJoin(const String& stringValue)
     setLineJoin(join);
 }
 
-void CanvasRenderingContext2DBase::setMiterLimit(float limit)
+void CanvasRenderingContext2DBase::setMiterLimit(double limit)
 {
     if (!(std::isfinite(limit) && limit > 0))
         return;
@@ -644,7 +644,7 @@ void CanvasRenderingContext2DBase::setShadowColor(const String& colorString)
     applyShadow();
 }
 
-static bool lineDashSequenceIsValid(const Vector<float>& dash)
+static bool lineDashSequenceIsValid(const Vector<double>& dash)
 {
     for (size_t i = 0; i < dash.size(); i++) {
         if (!std::isfinite(dash[i]) || dash[i] < 0)
@@ -653,7 +653,7 @@ static bool lineDashSequenceIsValid(const Vector<float>& dash)
     return true;
 }
 
-void CanvasRenderingContext2DBase::setLineDash(const Vector<float>& dash)
+void CanvasRenderingContext2DBase::setLineDash(const Vector<double>& dash)
 {
     if (!lineDashSequenceIsValid(dash))
         return;
@@ -668,7 +668,7 @@ void CanvasRenderingContext2DBase::setLineDash(const Vector<float>& dash)
     applyLineDash();
 }
 
-void CanvasRenderingContext2DBase::setWebkitLineDash(const Vector<float>& dash)
+void CanvasRenderingContext2DBase::setWebkitLineDash(const Vector<double>& dash)
 {
     if (!lineDashSequenceIsValid(dash))
         return;
@@ -679,7 +679,7 @@ void CanvasRenderingContext2DBase::setWebkitLineDash(const Vector<float>& dash)
     applyLineDash();
 }
 
-void CanvasRenderingContext2DBase::setLineDashOffset(float offset)
+void CanvasRenderingContext2DBase::setLineDashOffset(double offset)
 {
     if (!std::isfinite(offset) || state().lineDashOffset == offset)
         return;
@@ -700,7 +700,7 @@ void CanvasRenderingContext2DBase::applyLineDash() const
     c->setLineDash(convertedLineDash, state().lineDashOffset);
 }
 
-void CanvasRenderingContext2DBase::setGlobalAlpha(float alpha)
+void CanvasRenderingContext2DBase::setGlobalAlpha(double alpha)
 {
     if (!(alpha >= 0 && alpha <= 1))
         return;
@@ -731,7 +731,7 @@ void CanvasRenderingContext2DBase::setGlobalCompositeOperation(const String& ope
     c->setCompositeOperation(op, blendMode);
 }
 
-void CanvasRenderingContext2DBase::scale(float sx, float sy)
+void CanvasRenderingContext2DBase::scale(double sx, double sy)
 {
     GraphicsContext* c = drawingContext();
     if (!c)
@@ -759,7 +759,7 @@ void CanvasRenderingContext2DBase::scale(float sx, float sy)
     m_path.transform(AffineTransform().scaleNonUniform(1.0 / sx, 1.0 / sy));
 }
 
-void CanvasRenderingContext2DBase::rotate(float angleInRadians)
+void CanvasRenderingContext2DBase::rotate(double angleInRadians)
 {
     GraphicsContext* c = drawingContext();
     if (!c)
@@ -782,7 +782,7 @@ void CanvasRenderingContext2DBase::rotate(float angleInRadians)
     m_path.transform(AffineTransform().rotate(-angleInRadians / piDouble * 180.0));
 }
 
-void CanvasRenderingContext2DBase::translate(float tx, float ty)
+void CanvasRenderingContext2DBase::translate(double tx, double ty)
 {
     GraphicsContext* c = drawingContext();
     if (!c)
@@ -805,7 +805,7 @@ void CanvasRenderingContext2DBase::translate(float tx, float ty)
     m_path.transform(AffineTransform().translate(-tx, -ty));
 }
 
-void CanvasRenderingContext2DBase::transform(float m11, float m12, float m21, float m22, float dx, float dy)
+void CanvasRenderingContext2DBase::transform(double m11, double m12, double m21, double m22, double dx, double dy)
 {
     GraphicsContext* c = drawingContext();
     if (!c)
@@ -837,7 +837,7 @@ Ref<DOMMatrix> CanvasRenderingContext2DBase::getTransform() const
     return DOMMatrix::create(state().transform.toTransformationMatrix(), DOMMatrixReadOnly::Is2D::Yes);
 }
 
-void CanvasRenderingContext2DBase::setTransform(float m11, float m12, float m21, float m22, float dx, float dy)
+void CanvasRenderingContext2DBase::setTransform(double m11, double m12, double m21, double m22, double dx, double dy)
 {
     GraphicsContext* c = drawingContext();
     if (!c)
@@ -965,7 +965,7 @@ void CanvasRenderingContext2DBase::beginPath()
     m_path.clear();
 }
 
-static bool validateRectForCanvas(float& x, float& y, float& width, float& height)
+static bool validateRectForCanvas(double& x, double& y, double& width, double& height)
 {
     if (!std::isfinite(x) | !std::isfinite(y) | !std::isfinite(width) | !std::isfinite(height))
         return false;
@@ -1137,27 +1137,27 @@ void CanvasRenderingContext2DBase::endCompositeLayer()
 #endif
 }
 
-bool CanvasRenderingContext2DBase::isPointInPath(float x, float y, CanvasFillRule windingRule)
+bool CanvasRenderingContext2DBase::isPointInPath(double x, double y, CanvasFillRule windingRule)
 {
     return isPointInPathInternal(m_path, x, y, windingRule);
 }
 
-bool CanvasRenderingContext2DBase::isPointInStroke(float x, float y)
+bool CanvasRenderingContext2DBase::isPointInStroke(double x, double y)
 {
     return isPointInStrokeInternal(m_path, x, y);
 }
 
-bool CanvasRenderingContext2DBase::isPointInPath(Path2D& path, float x, float y, CanvasFillRule windingRule)
+bool CanvasRenderingContext2DBase::isPointInPath(Path2D& path, double x, double y, CanvasFillRule windingRule)
 {
     return isPointInPathInternal(path.path(), x, y, windingRule);
 }
 
-bool CanvasRenderingContext2DBase::isPointInStroke(Path2D& path, float x, float y)
+bool CanvasRenderingContext2DBase::isPointInStroke(Path2D& path, double x, double y)
 {
     return isPointInStrokeInternal(path.path(), x, y);
 }
 
-bool CanvasRenderingContext2DBase::isPointInPathInternal(const Path& path, float x, float y, CanvasFillRule windingRule)
+bool CanvasRenderingContext2DBase::isPointInPathInternal(const Path& path, double x, double y, CanvasFillRule windingRule)
 {
     if (!drawingContext())
         return false;
@@ -1172,7 +1172,7 @@ bool CanvasRenderingContext2DBase::isPointInPathInternal(const Path& path, float
     return path.contains(transformedPoint, toWindRule(windingRule));
 }
 
-bool CanvasRenderingContext2DBase::isPointInStrokeInternal(const Path& path, float x, float y)
+bool CanvasRenderingContext2DBase::isPointInStrokeInternal(const Path& path, double x, double y)
 {
     if (!drawingContext())
         return false;
@@ -1197,7 +1197,7 @@ bool CanvasRenderingContext2DBase::isPointInStrokeInternal(const Path& path, flo
     });
 }
 
-void CanvasRenderingContext2DBase::clearRect(float x, float y, float width, float height)
+void CanvasRenderingContext2DBase::clearRect(double x, double y, double width, double height)
 {
     if (!validateRectForCanvas(x, y, width, height))
         return;
@@ -1234,7 +1234,7 @@ void CanvasRenderingContext2DBase::clearRect(float x, float y, float width, floa
     didDraw(rect);
 }
 
-void CanvasRenderingContext2DBase::fillRect(float x, float y, float width, float height)
+void CanvasRenderingContext2DBase::fillRect(double x, double y, double width, double height)
 {
     if (!validateRectForCanvas(x, y, width, height))
         return;
@@ -1278,7 +1278,7 @@ void CanvasRenderingContext2DBase::fillRect(float x, float y, float width, float
         didDraw(rect);
 }
 
-void CanvasRenderingContext2DBase::strokeRect(float x, float y, float width, float height)
+void CanvasRenderingContext2DBase::strokeRect(double x, double y, double width, double height)
 {
     if (!validateRectForCanvas(x, y, width, height))
         return;
@@ -1424,7 +1424,7 @@ static inline FloatSize size(HTMLVideoElement& video)
 #endif
 
 #if ENABLE(CSS_TYPED_OM)
-static inline FloatSize size(TypedOMCSSImageValue& image)
+static inline FloatSize size(CSSStyleImageValue& image)
 {
     auto* cachedImage = image.image();
     if (!cachedImage)
@@ -1433,14 +1433,6 @@ static inline FloatSize size(TypedOMCSSImageValue& image)
     return cachedImage->imageSizeForRenderer(nullptr, 1.0f);
 }
 #endif
-
-static inline FloatRect normalizeRect(const FloatRect& rect)
-{
-    return FloatRect(std::min(rect.x(), rect.maxX()),
-        std::min(rect.y(), rect.maxY()),
-        std::max(rect.width(), -rect.width()),
-        std::max(rect.height(), -rect.height()));
-}
 
 ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CanvasImageSource&& image, float dx, float dy)
 {
@@ -1503,7 +1495,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(HTMLImageElement& imag
 }
 
 #if ENABLE(CSS_TYPED_OM)
-ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(TypedOMCSSImageValue& image, const FloatRect& srcRect, const FloatRect& dstRect)
+ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CSSStyleImageValue& image, const FloatRect& srcRect, const FloatRect& dstRect)
 {
     auto* cachedImage = image.image();
     if (!cachedImage || !image.document())
@@ -1562,7 +1554,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, Ca
 
     ImageObserver* observer = image->imageObserver();
 
-    if (image->isSVGImage()) {
+    if (image->drawsSVGImage()) {
         image->setImageObserver(nullptr);
         image->setContainerSize(imageRect.size());
     }
@@ -1597,7 +1589,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, Ca
     else
         didDraw(normalizedDstRect);
 
-    if (image->isSVGImage())
+    if (image->drawsSVGImage())
         image->setImageObserver(observer);
 
     return { };
@@ -1985,7 +1977,7 @@ ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2DBase::createPattern(H
     //      the origin is clean.
     //   2) Dynamically verify the origin checks at draw time, and dirty the canvas accordingly.
     // To be on the safe side, taint the origin for all patterns containing SVG images for now.
-    if (cachedImage->image()->isSVGImage())
+    if (cachedImage->image()->drawsSVGImage())
         originClean = false;
 
     auto* image = cachedImage->imageForRenderer(imageElement.renderer());
@@ -2049,7 +2041,7 @@ ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2DBase::createPattern(I
 }
 
 #if ENABLE(CSS_TYPED_OM)
-ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2DBase::createPattern(TypedOMCSSImageValue&, bool, bool)
+ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2DBase::createPattern(CSSStyleImageValue&, bool, bool)
 {
     // FIXME: Implement.
     return Exception { TypeError };
@@ -2360,7 +2352,7 @@ void CanvasRenderingContext2DBase::setDirection(Direction direction)
     modifiableState().direction = direction;
 }
 
-bool CanvasRenderingContext2DBase::canDrawText(float x, float y, bool fill, std::optional<float> maxWidth)
+bool CanvasRenderingContext2DBase::canDrawText(double x, double y, bool fill, std::optional<double> maxWidth)
 {
     if (!fontProxy()->realized())
         return false;
@@ -2417,7 +2409,7 @@ String CanvasRenderingContext2DBase::normalizeSpaces(const String& text)
     return String::adopt(WTFMove(charVector));
 }
 
-void CanvasRenderingContext2DBase::drawText(const String& text, float x, float y, bool fill, std::optional<float> maxWidth)
+void CanvasRenderingContext2DBase::drawText(const String& text, double x, double y, bool fill, std::optional<double> maxWidth)
 {
     if (!canDrawText(x, y, fill, maxWidth))
         return;
@@ -2428,7 +2420,7 @@ void CanvasRenderingContext2DBase::drawText(const String& text, float x, float y
     drawTextUnchecked(textRun, x, y, fill, maxWidth);
 }
 
-void CanvasRenderingContext2DBase::drawTextUnchecked(const TextRun& textRun, float x, float y, bool fill, std::optional<float> maxWidth)
+void CanvasRenderingContext2DBase::drawTextUnchecked(const TextRun& textRun, double x, double y, bool fill, std::optional<double> maxWidth)
 {
     auto* c = drawingContext();
     auto& fontProxy = *this->fontProxy();

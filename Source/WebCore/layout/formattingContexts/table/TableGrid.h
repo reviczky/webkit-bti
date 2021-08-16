@@ -67,26 +67,26 @@ public:
     public:
         Column(const ContainerBox*);
 
-        void setLogicalLeft(LayoutUnit);
-        LayoutUnit logicalLeft() const;
-        LayoutUnit logicalRight() const { return logicalLeft() + logicalWidth(); }
-        void setLogicalWidth(LayoutUnit);
-        LayoutUnit logicalWidth() const;
+        void setUsedLogicalLeft(LayoutUnit);
+        LayoutUnit usedLogicalLeft() const;
+        LayoutUnit usedLogicalRight() const { return usedLogicalLeft() + usedLogicalWidth(); }
+        void setUsedLogicalWidth(LayoutUnit);
+        LayoutUnit usedLogicalWidth() const;
 
-        void setFixedWidth(LayoutUnit fixedValue) { m_fixedWidth = fixedValue; }
-        std::optional<LayoutUnit> fixedWidth() const { return m_fixedWidth; }
+        void setComputedLogicalWidth(Length&&);
+        const Length& computedLogicalWidth() const { return m_computedLogicalWidth; }
 
         const ContainerBox* box() const { return m_layoutBox.get(); }
 
     private:
-        LayoutUnit m_computedLogicalWidth;
-        LayoutUnit m_computedLogicalLeft;
-        std::optional<LayoutUnit> m_fixedWidth;
+        LayoutUnit m_usedLogicalWidth;
+        LayoutUnit m_usedLogicalLeft;
+        Length m_computedLogicalWidth;
         WeakPtr<const ContainerBox> m_layoutBox;
 
 #if ASSERT_ENABLED
-        bool m_hasComputedWidth { false };
-        bool m_hasComputedLeft { false };
+        bool m_hasUsedWidth { false };
+        bool m_hasUsedLeft { false };
 #endif
     };
 
@@ -100,7 +100,7 @@ public:
         void addColumn(const ContainerBox&);
         void addAnonymousColumn();
 
-        LayoutUnit logicalWidth() const { return m_columnList.last().logicalRight() - m_columnList.first().logicalLeft(); }
+        LayoutUnit logicalWidth() const { return m_columnList.last().usedLogicalRight() - m_columnList.first().usedLogicalLeft(); }
 
     private:
         ColumnList m_columnList;
@@ -229,6 +229,40 @@ private:
     std::optional<IntrinsicWidthConstraints> m_intrinsicWidthConstraints;
     std::optional<Edges> m_collapsedBorder;
 };
+
+inline void TableGrid::Column::setComputedLogicalWidth(Length&& computedLogicalWidth)
+{
+    ASSERT(computedLogicalWidth.type() == LengthType::Fixed || computedLogicalWidth.type() == LengthType::Percent || computedLogicalWidth.type() == LengthType::Relative);
+    m_computedLogicalWidth = WTFMove(computedLogicalWidth);
+}
+
+inline void TableGrid::Column::setUsedLogicalWidth(LayoutUnit usedLogicalWidth)
+{
+#if ASSERT_ENABLED
+    m_hasUsedWidth = true;
+#endif
+    m_usedLogicalWidth = usedLogicalWidth;
+}
+
+inline LayoutUnit TableGrid::Column::usedLogicalWidth() const
+{
+    ASSERT(m_hasUsedWidth);
+    return m_usedLogicalWidth;
+}
+
+inline void TableGrid::Column::setUsedLogicalLeft(LayoutUnit usedLogicalLeft)
+{
+#if ASSERT_ENABLED
+    m_hasUsedLeft = true;
+#endif
+    m_usedLogicalLeft = usedLogicalLeft;
+}
+
+inline LayoutUnit TableGrid::Column::usedLogicalLeft() const
+{
+    ASSERT(m_hasUsedLeft);
+    return m_usedLogicalLeft;
+}
 
 }
 }

@@ -625,6 +625,12 @@ public:
         m_assembler.orb_rm(src, dest.offset, dest.base, dest.index, dest.scale);
     }
 
+    void or8(RegisterID src, AbsoluteAddress address)
+    {
+        move(TrustedImmPtr(address.m_ptr), scratchRegister());
+        or8(src, Address(scratchRegister()));
+    }
+
     void or32(Address src, RegisterID dest)
     {
         m_assembler.orl_mr(src.offset, src.base, dest);
@@ -663,6 +669,12 @@ public:
     void or8(TrustedImm32 imm, BaseIndex address)
     {
         m_assembler.orb_im(static_cast<int8_t>(imm.m_value), address.offset, address.base, address.index, address.scale);
+    }
+
+    void or8(TrustedImm32 imm, AbsoluteAddress address)
+    {
+        move(TrustedImmPtr(address.m_ptr), scratchRegister());
+        or8(imm, Address(scratchRegister()));
     }
 
     void or32(RegisterID op1, RegisterID op2, RegisterID dest)
@@ -1300,6 +1312,23 @@ public:
         m_assembler.movswl_mr(address.offset, address.base, dest);
     }
 
+    void loadPair32(RegisterID src, RegisterID dest1, RegisterID dest2)
+    {
+        loadPair32(src, TrustedImm32(0), dest1, dest2);
+    }
+
+    void loadPair32(RegisterID src, TrustedImm32 offset, RegisterID dest1, RegisterID dest2)
+    {
+        ASSERT(dest1 != dest2); // If it is the same, ldp becomes illegal instruction.
+        if (src == dest1) {
+            load32(Address(src, offset.m_value + 4), dest2);
+            load32(Address(src, offset.m_value), dest1);
+        } else {
+            load32(Address(src, offset.m_value), dest1);
+            load32(Address(src, offset.m_value + 4), dest2);
+        }
+    }
+
     void zeroExtend16To32(RegisterID src, RegisterID dest)
     {
         m_assembler.movzwl_rr(src, dest);
@@ -1337,26 +1366,6 @@ public:
         m_assembler.movl_i32m(imm.m_value, address.offset, address.base, address.index, address.scale);
     }
 
-    void storeZero32(ImplicitAddress address)
-    {
-        store32(TrustedImm32(0), address);
-    }
-
-    void storeZero32(BaseIndex address)
-    {
-        store32(TrustedImm32(0), address);
-    }
-
-    void storeZero16(ImplicitAddress address)
-    {
-        store16(TrustedImm32(0), address);
-    }
-
-    void storeZero16(BaseIndex address)
-    {
-        store16(TrustedImm32(0), address);
-    }
-
     void store8(TrustedImm32 imm, Address address)
     {
         TrustedImm32 imm8(static_cast<int8_t>(imm.m_value));
@@ -1367,6 +1376,17 @@ public:
     {
         TrustedImm32 imm8(static_cast<int8_t>(imm.m_value));
         m_assembler.movb_i8m(imm8.m_value, address.offset, address.base, address.index, address.scale);
+    }
+
+    void storePair32(RegisterID src1, RegisterID src2, RegisterID dest)
+    {
+        storePair32(src1, src2, dest, TrustedImm32(0));
+    }
+
+    void storePair32(RegisterID src1, RegisterID src2, RegisterID dest, TrustedImm32 offset)
+    {
+        store32(src1, Address(dest, offset.m_value));
+        store32(src2, Address(dest, offset.m_value + 4));
     }
 
     static ALWAYS_INLINE RegisterID getUnusedRegister(BaseIndex address)

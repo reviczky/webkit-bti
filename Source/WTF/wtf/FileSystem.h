@@ -34,6 +34,7 @@
 #include <utility>
 #include <wtf/Forward.h>
 #include <wtf/OptionSet.h>
+#include <wtf/Span.h>
 #include <wtf/Vector.h>
 #include <wtf/WallTime.h>
 #include <wtf/text/WTFString.h>
@@ -122,6 +123,7 @@ WTF_EXPORT_PRIVATE bool makeAllDirectories(const String& path);
 WTF_EXPORT_PRIVATE String pathFileName(const String&);
 WTF_EXPORT_PRIVATE String parentPath(const String&);
 WTF_EXPORT_PRIVATE std::optional<uint64_t> volumeFreeSpace(const String&);
+WTF_EXPORT_PRIVATE std::optional<uint32_t> volumeFileBlockSize(const String&);
 WTF_EXPORT_PRIVATE std::optional<int32_t> getFileDeviceId(const CString&);
 WTF_EXPORT_PRIVATE bool createSymbolicLink(const String& targetPath, const String& symbolicLinkPath);
 WTF_EXPORT_PRIVATE String createTemporaryZipArchive(const String& directory);
@@ -210,8 +212,6 @@ WTF_EXPORT_PRIVATE String realPath(const String&);
 WTF_EXPORT_PRIVATE bool isSafeToUseMemoryMapForPath(const String&);
 WTF_EXPORT_PRIVATE void makeSafeToUseMemoryMapForPath(const String&);
 
-WTF_EXPORT_PRIVATE bool unmapViewOfFile(void* buffer, size_t);
-
 class MappedFileData {
     WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -227,13 +227,21 @@ public:
     const void* data() const { return m_fileData; }
     unsigned size() const { return m_fileSize; }
 
+#if PLATFORM(COCOA)
     void* leakHandle() { return std::exchange(m_fileData, nullptr); }
+#endif
+#if OS(WINDOWS)
+    HANDLE fileMapping() const { return m_fileMapping; }
+#endif
 
 private:
     WTF_EXPORT_PRIVATE bool mapFileHandle(PlatformFileHandle, FileOpenMode, MappedFileMode);
 
     void* m_fileData { nullptr };
     unsigned m_fileSize { 0 };
+#if OS(WINDOWS)
+    HANDLE m_fileMapping { nullptr };
+#endif
 };
 
 inline MappedFileData::MappedFileData(PlatformFileHandle handle, MappedFileMode mapMode, bool& success)
@@ -249,6 +257,9 @@ inline MappedFileData::MappedFileData(PlatformFileHandle handle, FileOpenMode op
 inline MappedFileData::MappedFileData(MappedFileData&& other)
     : m_fileData(std::exchange(other.m_fileData, nullptr))
     , m_fileSize(std::exchange(other.m_fileSize, 0))
+#if OS(WINDOWS)
+    , m_fileMapping(std::exchange(other.m_fileMapping, nullptr))
+#endif
 {
 }
 
@@ -256,12 +267,15 @@ inline MappedFileData& MappedFileData::operator=(MappedFileData&& other)
 {
     m_fileData = std::exchange(other.m_fileData, nullptr);
     m_fileSize = std::exchange(other.m_fileSize, 0);
+#if OS(WINDOWS)
+    m_fileMapping = std::exchange(other.m_fileMapping, nullptr);
+#endif
     return *this;
 }
 
 // This creates the destination file, maps it, write the provided data to it and returns the mapped file.
 // This function fails if there is already a file at the destination path.
-WTF_EXPORT_PRIVATE MappedFileData mapToFile(const String& path, size_t bytesSize, Function<void(const Function<bool(const uint8_t*, size_t)>&)>&& apply, PlatformFileHandle* = nullptr);
+WTF_EXPORT_PRIVATE MappedFileData mapToFile(const String& path, size_t bytesSize, Function<void(const Function<bool(Span<const uint8_t>)>&)>&& apply, PlatformFileHandle* = nullptr);
 
 } // namespace FileSystemImpl
 } // namespace WTF

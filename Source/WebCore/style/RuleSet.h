@@ -73,10 +73,10 @@ public:
     struct DynamicMediaQueryRules {
         Vector<Ref<const MediaQuerySet>> mediaQuerySets;
         Vector<size_t> affectedRulePositions;
-        Vector<RuleFeature> ruleFeatures;
+        RuleFeatureVector ruleFeatures;
         bool requiresFullReset { false };
         bool result { true };
-        
+
         void shrinkToFit()
         {
             mediaQuerySets.shrinkToFit();
@@ -94,7 +94,7 @@ public:
         struct DynamicContext {
             Ref<const MediaQuerySet> set;
             Vector<size_t> affectedRulePositions { };
-            Vector<RuleFeature> ruleFeatures { };
+            RuleFeatureVector ruleFeatures { };
         };
         Vector<DynamicContext> dynamicContextStack { };
 
@@ -154,7 +154,7 @@ private:
     struct CollectedMediaQueryChanges {
         bool requiredFullReset { false };
         Vector<size_t> changedQueryIndexes { };
-        Vector<const Vector<RuleFeature>*> ruleFeatures { };
+        Vector<RuleFeatureVector*> ruleFeatures { };
     };
     CollectedMediaQueryChanges evaluateDynamicMediaQueryRules(const MediaQueryEvaluator&, size_t startIndex);
 

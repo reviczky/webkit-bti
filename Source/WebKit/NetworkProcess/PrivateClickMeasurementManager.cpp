@@ -88,12 +88,16 @@ void PrivateClickMeasurementManager::storeUnattributed(PrivateClickMeasurement&&
                 attribution.setSourceUnlinkableTokenValue(m_fraudPreventionValuesForTesting->unlinkableToken);
 #if PLATFORM(COCOA)
             else {
-                if (!attribution.calculateAndUpdateSourceUnlinkableToken(publicKeyBase64URL))
+                if (auto errorMessage = attribution.calculateAndUpdateSourceUnlinkableToken(publicKeyBase64URL)) {
+                    RELEASE_LOG_INFO(PrivateClickMeasurement, "Got the following error in calculateAndUpdateSourceUnlinkableToken(): '%{public}s", errorMessage->utf8().data());
+                    m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Error, makeString("[Private Click Measurement] "_s, *errorMessage));
                     return;
+                }
             }
 #endif
 
             getSignedUnlinkableToken(WTFMove(attribution));
+            return;
         });
     }
 
@@ -171,6 +175,8 @@ void PrivateClickMeasurementManager::getTokenPublicKey(PrivateClickMeasurement&&
             return;
         }
 
+        m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Log, makeString("[Private Click Measurement] Got JSON response for token public key request."_s));
+
         callback(WTFMove(attribution), jsonObject->getString("token_public_key"_s));
     });
 
@@ -213,16 +219,20 @@ void PrivateClickMeasurementManager::getSignedUnlinkableToken(PrivateClickMeasur
         }
 
         auto signatureBase64URL = jsonObject->getString("unlinkable_token"_s);
-        if (signatureBase64URL.isEmpty())
+        if (signatureBase64URL.isEmpty()) {
+            m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Error, makeString("[Private Click Measurement] JSON response doesn't have the key 'unlinkable_token' for token signing request."_s));
             return;
-
+        }
         // FIX NOW!
         if (m_fraudPreventionValuesForTesting)
             attribution.setSourceSecretToken({ m_fraudPreventionValuesForTesting->secretToken, m_fraudPreventionValuesForTesting->signature, m_fraudPreventionValuesForTesting->keyID });
 #if PLATFORM(COCOA)
         else {
-            if (!attribution.calculateAndUpdateSourceSecretToken(signatureBase64URL))
+            if (auto errorMessage = attribution.calculateAndUpdateSourceSecretToken(signatureBase64URL)) {
+                RELEASE_LOG_INFO(PrivateClickMeasurement, "Got the following error in calculateAndUpdateSourceSecretToken(): '%{public}s", errorMessage->utf8().data());
+                m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Error, makeString("[Private Click Measurement] "_s, *errorMessage));
                 return;
+            }
         }
 #endif
 
@@ -245,14 +255,16 @@ void PrivateClickMeasurementManager::handleAttribution(AttributionTriggerData&& 
     auto& firstPartyURL = redirectRequest.firstPartyForCookies();
 
     if (!redirectDomain.matches(requestURL)) {
-        m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Warning, "[Private Click Measurement] Attribution was not accepted because the HTTP redirect was not same-site."_s);
+        m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Warning, "[Private Click Measurement] Triggering event was not accepted because the HTTP redirect was not same-site."_s);
         return;
     }
 
     if (redirectDomain.matches(firstPartyURL)) {
-        m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Warning, "[Private Click Measurement] Attribution was not accepted because it was requested in an HTTP redirect that is same-site as the first-party."_s);
+        m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Warning, "[Private Click Measurement] Triggering event was not accepted because it was requested in an HTTP redirect that is same-site as the first-party."_s);
         return;
     }
+
+    m_networkProcess->broadcastConsoleMessage(m_sessionID, MessageSource::PrivateClickMeasurement, MessageLevel::Log, "[Private Click Measurement] Triggering event accepted."_s);
 
     attribute(SourceSite { WTFMove(redirectDomain) }, AttributionDestinationSite { firstPartyURL }, WTFMove(attributionTriggerData));
 }

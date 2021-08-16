@@ -106,7 +106,29 @@ inline float WidthIterator::applyFontTransforms(GlyphBuffer& glyphBuffer, unsign
     ASSERT(lastGlyphCount <= glyphBufferSize);
 
     font.applyTransforms(glyphBuffer, lastGlyphCount, m_currentCharacterIndex, m_enableKerning, m_requiresShaping, m_font.fontDescription().computedLocale(), m_run.text(), m_run.direction());
+
+#if USE(CTFONTSHAPEGLYPHS_WORKAROUND)
+    // <rdar://problem/80798113>: If a character is not in BMP, and we don't have a glyph for it,
+    // we'll end up with two 0 glyphs in a row for the two surrogates of the character.
+    // We need to make sure that, after shaping, these double-0-glyphs aren't preserved.
+    if (&font == &m_font.primaryFont() && !m_run.text().is8Bit()) {
+        for (unsigned i = 0; i < glyphBuffer.size() - 1; ++i) {
+            if (!glyphBuffer.glyphAt(i) && !glyphBuffer.glyphAt(i + 1)) {
+                if (const auto& firstStringOffset = glyphBuffer.checkedStringOffsetAt(i, m_run.length())) {
+                    if (const auto& secondStringOffset = glyphBuffer.checkedStringOffsetAt(i + 1, m_run.length())) {
+                        if (secondStringOffset.value() == firstStringOffset.value() + 1
+                            && U_IS_LEAD(m_run.text()[firstStringOffset.value()]) && U_IS_TRAIL(m_run.text()[secondStringOffset.value()])) {
+                            glyphBuffer.remove(i + 1, 1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+
     glyphBufferSize = glyphBuffer.size();
+    advances = glyphBuffer.advances(0);
 
     GlyphBufferOrigin* origins = glyphBuffer.origins(0);
     for (unsigned i = lastGlyphCount; i < glyphBufferSize; ++i) {
@@ -203,6 +225,8 @@ inline void WidthIterator::advanceInternal(TextIterator& textIterator, GlyphBuff
 
     auto currentCharacterIndex = textIterator.currentIndex();
     UChar32 character = 0;
+    float width = 0;
+    float previousWidth = 0;
     unsigned clusterLength = 0;
     CharactersTreatedAsSpace charactersTreatedAsSpace;
     float widthOfCurrentFontRange = 0;
@@ -230,15 +254,15 @@ inline void WidthIterator::advanceInternal(TextIterator& textIterator, GlyphBuff
             currentCharacterIndex = textIterator.currentIndex();
             continue;
         }
-        const Font* font = glyphData.font ? glyphData.font : &m_font.primaryFont();
-        ASSERT(font);
+        const Font& font = glyphData.font ? *glyphData.font : primaryFont;
 
-        float width = font->widthForGlyph(glyph);
+        previousWidth = width;
+        width = font.widthForGlyph(glyph);
 
-        if (font != lastFontData) {
+        if (&font != lastFontData) {
             commitCurrentFontRange(glyphBuffer, lastGlyphCount, currentCharacterIndex, *lastFontData, primaryFont, character, widthOfCurrentFontRange, charactersTreatedAsSpace);
             lastGlyphCount = glyphBuffer.size();
-            lastFontData = font;
+            lastFontData = &font;
             widthOfCurrentFontRange = width;
         } else
             widthOfCurrentFontRange += width;
@@ -248,12 +272,12 @@ inline void WidthIterator::advanceInternal(TextIterator& textIterator, GlyphBuff
             charactersTreatedAsSpace.constructAndAppend(
                 currentCharacterIndex,
                 character == ' ',
-                glyphBuffer.size() ? WebCore::width(glyphBuffer.advanceAt(glyphBuffer.size() - 1)) : 0,
+                previousWidth,
                 width);
         }
 
         if (m_accountForGlyphBounds) {
-            bounds = font->boundsForGlyph(glyph);
+            bounds = font.boundsForGlyph(glyph);
             if (!currentCharacterIndex)
                 m_firstGlyphOverflow = std::max<float>(0, -bounds.x());
         }
@@ -261,14 +285,14 @@ inline void WidthIterator::advanceInternal(TextIterator& textIterator, GlyphBuff
         if (m_forTextEmphasis && !FontCascade::canReceiveTextEmphasis(character))
             glyph = 0;
 
-        glyphBuffer.add(glyph, *font, width, currentCharacterIndex);
+        glyphBuffer.add(glyph, font, width, currentCharacterIndex);
 #if USE(CTFONTSHAPEGLYPHS)
         // These 0 glyphs are needed by shapers if the source text has surrogate pairs.
         // However, CTFontTransformGlyphs() can't delete these 0 glyphs from the shaped text,
         // so we shouldn't add them in the first place if we're using that shaping routine.
         // Any other shaping routine should delete these glyphs from the shaped text.
         if (!U_IS_BMP(character))
-            glyphBuffer.add(0, *font, 0, currentCharacterIndex + 1);
+            glyphBuffer.add(0, font, 0, currentCharacterIndex + 1);
 #endif
 
         // Advance past the character we just dealt with.

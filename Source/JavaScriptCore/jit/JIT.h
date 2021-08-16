@@ -294,6 +294,11 @@ namespace JSC {
             return functionCall;
         }
 
+        void appendCall(Address function)
+        {
+            call(function, OperationPtrTag);
+        }
+
 #if OS(WINDOWS) && CPU(X86_64)
         Call appendCallWithSlowPathReturnType(const FunctionPtr<CFunctionPtrTag> function)
         {
@@ -318,9 +323,7 @@ namespace JSC {
             m_exceptionChecksWithCallFrameRollback.append(emitExceptionCheck(vm()));
         }
 
-#if !ENABLE(EXTRA_CTI_THUNKS)
         void privateCompileExceptionHandlers();
-#endif
 
         void advanceToNextCheckpoint();
         void emitJumpSlowToHotForCheckpoint(Jump);
@@ -397,39 +400,39 @@ namespace JSC {
         // Property is int-checked and zero extended. Base is cell checked.
         // Structure is already profiled. Returns the slow cases. Fall-through
         // case contains result in regT0, and it is not yet profiled.
-        JumpList emitInt32Load(const Instruction* instruction, PatchableJump& badType) { return emitContiguousLoad(instruction, badType, Int32Shape); }
-        JumpList emitDoubleLoad(const Instruction*, PatchableJump& badType);
-        JumpList emitContiguousLoad(const Instruction*, PatchableJump& badType, IndexingType expectedShape = ContiguousShape);
-        JumpList emitArrayStorageLoad(const Instruction*, PatchableJump& badType);
-        JumpList emitLoadForArrayMode(const Instruction*, JITArrayMode, PatchableJump& badType);
+        JumpList emitInt32Load(const Instruction* instruction, PatchableJump& badType, ByValInfo* byValInfo) { return emitContiguousLoad(instruction, badType, byValInfo, Int32Shape); }
+        JumpList emitDoubleLoad(const Instruction*, PatchableJump& badType, ByValInfo*);
+        JumpList emitContiguousLoad(const Instruction*, PatchableJump& badType, ByValInfo*, IndexingType expectedShape = ContiguousShape);
+        JumpList emitArrayStorageLoad(const Instruction*, PatchableJump& badType, ByValInfo*);
+        JumpList emitLoadForArrayMode(const Instruction*, JITArrayMode, PatchableJump& badType, ByValInfo*);
 
         // Property is in regT1, base is in regT0. regT2 contains indecing type.
         // The value to store is not yet loaded. Property is int-checked and
         // zero-extended. Base is cell checked. Structure is already profiled.
         // returns the slow cases.
         template<typename Op>
-        JumpList emitInt32PutByVal(Op bytecode, PatchableJump& badType)
+        JumpList emitInt32PutByVal(Op bytecode, PatchableJump& badType, ByValInfo* byValInfo)
         {
-            return emitGenericContiguousPutByVal(bytecode, badType, Int32Shape);
+            return emitGenericContiguousPutByVal(bytecode, badType, byValInfo, Int32Shape);
         }
         template<typename Op>
-        JumpList emitDoublePutByVal(Op bytecode, PatchableJump& badType)
+        JumpList emitDoublePutByVal(Op bytecode, PatchableJump& badType, ByValInfo* byValInfo)
         {
-            return emitGenericContiguousPutByVal(bytecode, badType, DoubleShape);
+            return emitGenericContiguousPutByVal(bytecode, badType, byValInfo, DoubleShape);
         }
         template<typename Op>
-        JumpList emitContiguousPutByVal(Op bytecode, PatchableJump& badType)
+        JumpList emitContiguousPutByVal(Op bytecode, PatchableJump& badType, ByValInfo* byValInfo)
         {
-            return emitGenericContiguousPutByVal(bytecode, badType);
+            return emitGenericContiguousPutByVal(bytecode, badType, byValInfo);
         }
         template<typename Op>
-        JumpList emitGenericContiguousPutByVal(Op, PatchableJump& badType, IndexingType indexingShape = ContiguousShape);
+        JumpList emitGenericContiguousPutByVal(Op, PatchableJump& badType, ByValInfo*, IndexingType indexingShape = ContiguousShape);
         template<typename Op>
-        JumpList emitArrayStoragePutByVal(Op, PatchableJump& badType);
+        JumpList emitArrayStoragePutByVal(Op, PatchableJump& badType, ByValInfo*);
         template<typename Op>
-        JumpList emitIntTypedArrayPutByVal(Op, PatchableJump& badType, TypedArrayType);
+        JumpList emitIntTypedArrayPutByVal(Op, PatchableJump& badType, ByValInfo*, TypedArrayType);
         template<typename Op>
-        JumpList emitFloatTypedArrayPutByVal(Op, PatchableJump& badType, TypedArrayType);
+        JumpList emitFloatTypedArrayPutByVal(Op, PatchableJump& badType, ByValInfo*, TypedArrayType);
 
         template<typename Op>
         ECMAMode ecmaMode(Op);
@@ -450,6 +453,7 @@ namespace JSC {
 
         void emitGetVirtualRegister(VirtualRegister src, JSValueRegs dst);
         void emitPutVirtualRegister(VirtualRegister dst, JSValueRegs src);
+        void emitStore(VirtualRegister, const JSValue constant, RegisterID base = callFrameRegister);
 
         int32_t getOperandConstantInt(VirtualRegister src);
         double getOperandConstantDouble(VirtualRegister src);
@@ -466,7 +470,6 @@ namespace JSC {
         void emitLoad2(VirtualRegister, RegisterID tag1, RegisterID payload1, VirtualRegister, RegisterID tag2, RegisterID payload2);
 
         void emitStore(VirtualRegister, RegisterID tag, RegisterID payload, RegisterID base = callFrameRegister);
-        void emitStore(VirtualRegister, const JSValue constant, RegisterID base = callFrameRegister);
         void emitStoreInt32(VirtualRegister, RegisterID payload, bool indexIsInt32 = false);
         void emitStoreInt32(VirtualRegister, TrustedImm32 payload, bool indexIsInt32 = false);
         void emitStoreCell(VirtualRegister, RegisterID payload, bool indexIsCell = false);
@@ -568,6 +571,8 @@ namespace JSC {
         void emit_op_get_prototype_of(const Instruction*);
         void emit_op_in_by_id(const Instruction*);
         void emit_op_in_by_val(const Instruction*);
+        void emit_op_has_private_name(const Instruction*);
+        void emit_op_has_private_brand(const Instruction*);
         void emit_op_init_lazy_reg(const Instruction*);
         void emit_op_overrides_has_instance(const Instruction*);
         void emit_op_instanceof(const Instruction*);
@@ -665,20 +670,23 @@ namespace JSC {
         void emit_op_unexpected_load(const Instruction*);
         void emit_op_unsigned(const Instruction*);
         void emit_op_urshift(const Instruction*);
-        template <typename OpCodeType>
-        void emit_op_has_structure_propertyImpl(const Instruction*);
-        void emit_op_has_enumerable_indexed_property(const Instruction*);
-        void emit_op_has_enumerable_structure_property(const Instruction*);
-        void emit_op_has_own_structure_property(const Instruction*);
-        void emit_op_in_structure_property(const Instruction*);
-        void emit_op_get_direct_pname(const Instruction*);
-        void emit_op_enumerator_structure_pname(const Instruction*);
-        void emit_op_enumerator_generic_pname(const Instruction*);
         void emit_op_get_internal_field(const Instruction*);
         void emit_op_put_internal_field(const Instruction*);
         void emit_op_log_shadow_chicken_prologue(const Instruction*);
         void emit_op_log_shadow_chicken_tail(const Instruction*);
         void emit_op_to_property_key(const Instruction*);
+
+        template<typename OpcodeType>
+        void generateGetByValSlowCase(const OpcodeType&, Vector<SlowCaseEntry>::iterator&);
+
+        void emit_op_enumerator_next(const Instruction*);
+        void emit_op_enumerator_get_by_val(const Instruction*);
+        void emitSlow_op_enumerator_get_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
+
+        template<typename OpcodeType, typename SlowPathFunctionType>
+        void emit_enumerator_has_propertyImpl(const Instruction*, const OpcodeType&, SlowPathFunctionType);
+        void emit_op_enumerator_in_by_val(const Instruction*);
+        void emit_op_enumerator_has_own_property(const Instruction*);
 
         void emitSlow_op_add(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_call(const Instruction*, Vector<SlowCaseEntry>::iterator&);
@@ -702,6 +710,8 @@ namespace JSC {
         void emitSlow_op_get_argument_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_in_by_id(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_in_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
+        void emitSlow_op_has_private_name(const Instruction*, Vector<SlowCaseEntry>::iterator&);
+        void emitSlow_op_has_private_brand(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_instanceof(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_instanceof_custom(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_jless(const Instruction*, Vector<SlowCaseEntry>::iterator&);
@@ -728,7 +738,6 @@ namespace JSC {
         void emitSlow_op_put_by_val(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_put_private_name(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_sub(const Instruction*, Vector<SlowCaseEntry>::iterator&);
-        void emitSlow_op_has_enumerable_indexed_property(const Instruction*, Vector<SlowCaseEntry>::iterator&);
 
         void emit_op_resolve_scope(const Instruction*);
         void emit_op_get_from_scope(const Instruction*);
@@ -749,6 +758,9 @@ namespace JSC {
 
         void emitRightShift(const Instruction*, bool isUnsigned);
         void emitRightShiftSlowCase(const Instruction*, Vector<SlowCaseEntry>::iterator&, bool isUnsigned);
+
+        void emitHasPrivate(VirtualRegister dst, VirtualRegister base, VirtualRegister propertyOrBrand, AccessType);
+        void emitHasPrivateSlow(VirtualRegister dst, AccessType);
 
         template<typename Op>
         void emitNewFuncCommon(const Instruction*);
@@ -792,26 +804,6 @@ namespace JSC {
 
 #if ENABLE(EXTRA_CTI_THUNKS)
         // Thunk generators.
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator0(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator1(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator2(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator3(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator4(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator5(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator6(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator7(VM&);
-        MacroAssemblerCodeRef<JITThunkPtrTag> prologueGenerator(VM&, bool doesProfiling, bool isConstructor, bool hasHugeFrame, const char* name);
-
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator0(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator1(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator2(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator3(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator4(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator5(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator6(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> arityFixup_prologueGenerator7(VM&);
-        MacroAssemblerCodeRef<JITThunkPtrTag> arityFixupPrologueGenerator(VM&, bool isConstructor, ThunkGenerator normalPrologueGenerator, const char* name);
-
         static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_del_by_id_prepareCallGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_del_by_val_prepareCallGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_id_prepareCallGenerator(VM&);
@@ -826,14 +818,7 @@ namespace JSC {
         static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_resolve_scopeGenerator(VM&);
 
         static MacroAssemblerCodeRef<JITThunkPtrTag> op_check_traps_handlerGenerator(VM&);
-
-        static MacroAssemblerCodeRef<JITThunkPtrTag> op_enter_canBeOptimized_Generator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> op_enter_cannotBeOptimized_Generator(VM&);
-        MacroAssemblerCodeRef<JITThunkPtrTag> op_enter_Generator(VM&, bool canBeOptimized, const char* thunkName);
-
-#if ENABLE(DFG_JIT)
-        static MacroAssemblerCodeRef<JITThunkPtrTag> op_loop_hint_Generator(VM&);
-#endif
+        static MacroAssemblerCodeRef<JITThunkPtrTag> op_enter_handlerGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> op_ret_handlerGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> op_throw_handlerGenerator(VM&);
 
@@ -901,13 +886,17 @@ namespace JSC {
         }
 
         MacroAssembler::Call appendCallWithExceptionCheck(const FunctionPtr<CFunctionPtrTag>);
+        void appendCallWithExceptionCheck(Address);
 #if OS(WINDOWS) && CPU(X86_64)
         MacroAssembler::Call appendCallWithExceptionCheckAndSlowPathReturnType(const FunctionPtr<CFunctionPtrTag>);
 #endif
         MacroAssembler::Call appendCallWithCallFrameRollbackOnException(const FunctionPtr<CFunctionPtrTag>);
         MacroAssembler::Call appendCallWithExceptionCheckSetJSValueResult(const FunctionPtr<CFunctionPtrTag>, VirtualRegister result);
+        void appendCallWithExceptionCheckSetJSValueResult(Address, VirtualRegister result);
         template<typename Metadata>
         MacroAssembler::Call appendCallWithExceptionCheckSetJSValueResultWithProfile(Metadata&, const FunctionPtr<CFunctionPtrTag>, VirtualRegister result);
+        template<typename Metadata>
+        void appendCallWithExceptionCheckSetJSValueResultWithProfile(Metadata&, Address, VirtualRegister result);
         
         template<typename OperationType, typename... Args>
         std::enable_if_t<FunctionTraits<OperationType>::hasResult, MacroAssembler::Call>
@@ -915,6 +904,14 @@ namespace JSC {
         {
             setupArguments<OperationType>(args...);
             return appendCallWithExceptionCheckSetJSValueResult(operation, result);
+        }
+
+        template<typename OperationType, typename... Args>
+        std::enable_if_t<FunctionTraits<OperationType>::hasResult, void>
+        callOperation(Address target, VirtualRegister result, Args... args)
+        {
+            setupArgumentsForIndirectCall<OperationType>(target, args...);
+            return appendCallWithExceptionCheckSetJSValueResult(Address(GPRInfo::nonArgGPR0, target.offset), result);
         }
 
 #if OS(WINDOWS) && CPU(X86_64)
@@ -946,12 +943,31 @@ namespace JSC {
         }
 #endif // OS(WINDOWS) && CPU(X86_64)
 
+        template<typename OperationType, typename... Args>
+        void callOperation(Address target, Args... args)
+        {
+#if OS(WINDOWS) && CPU(X86_64)
+            // x64 Windows cannot use standard call when the return type is larger than 64 bits.
+            static_assert(is64BitType<typename FunctionTraits<OperationType>::ResultType>::value);
+#endif
+            setupArgumentsForIndirectCall<OperationType>(target, args...);
+            appendCallWithExceptionCheck(Address(GPRInfo::nonArgGPR0, target.offset));
+        }
+
         template<typename Metadata, typename OperationType, typename... Args>
         std::enable_if_t<FunctionTraits<OperationType>::hasResult, MacroAssembler::Call>
         callOperationWithProfile(Metadata& metadata, OperationType operation, VirtualRegister result, Args... args)
         {
             setupArguments<OperationType>(args...);
             return appendCallWithExceptionCheckSetJSValueResultWithProfile(metadata, operation, result);
+        }
+
+        template<typename OperationType, typename Metadata, typename... Args>
+        std::enable_if_t<FunctionTraits<OperationType>::hasResult, void>
+        callOperationWithProfile(Metadata& metadata, Address target, VirtualRegister result, Args... args)
+        {
+            setupArgumentsForIndirectCall<OperationType>(target, args...);
+            return appendCallWithExceptionCheckSetJSValueResultWithProfile(metadata, Address(GPRInfo::nonArgGPR0, target.offset), result);
         }
 
         template<typename OperationType, typename... Args>

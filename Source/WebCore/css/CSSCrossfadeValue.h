@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,8 +32,16 @@
 
 namespace WebCore {
 
+namespace Style {
+class BuilderState;
+}
+
 struct BlendingContext;
 class CSSPrimitiveValue;
+
+namespace Style {
+class BuilderState;
+} // namespace Style
 
 class CSSCrossfadeValue final : public CSSImageGeneratorValue {
 public:
@@ -59,6 +67,8 @@ public:
 
     bool equals(const CSSCrossfadeValue&) const;
     bool equalInputImages(const CSSCrossfadeValue&) const;
+
+    Ref<CSSCrossfadeValue> valueWithStylesResolved(Style::BuilderState&);
 
 private:
     CSSCrossfadeValue(Ref<CSSValue>&& fromValue, Ref<CSSValue>&& toValue, Ref<CSSPrimitiveValue>&& percentageValue, bool prefixed);

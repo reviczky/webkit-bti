@@ -93,6 +93,7 @@ public:
     bool isAccessibilityRenderObject() const override { return false; }
     bool isAccessibilityScrollbar() const override { return false; }
     bool isAccessibilityScrollViewInstance() const override { return false; }
+    bool isAXImageInstance() const override { return false; }
     bool isAccessibilitySVGRoot() const override { return false; }
     bool isAccessibilitySVGElement() const override { return false; }
     bool isAccessibilityTableInstance() const override { return false; }
@@ -363,7 +364,6 @@ public:
     AccessibilityObject* observableObject() const override { return nullptr; }
     void linkedUIElements(AccessibilityChildrenVector&) const override { }
     AccessibilityObject* titleUIElement() const override { return nullptr; }
-    bool exposesTitleUIElement() const override { return true; }
     AccessibilityObject* correspondingLabelForControlElement() const override { return nullptr; }
     AccessibilityObject* correspondingControlForLabelElement() const override { return nullptr; }
     AccessibilityObject* scrollBar(AccessibilityOrientation) override { return nullptr; }
@@ -400,6 +400,7 @@ public:
     String brailleLabel() const override { return getAttribute(HTMLNames::aria_braillelabelAttr); }
     String brailleRoleDescription() const override { return getAttribute(HTMLNames::aria_brailleroledescriptionAttr); }
     String embeddedImageDescription() const override;
+    std::optional<AccessibilityChildrenVector> imageOverlayElements() override { return std::nullopt; }
 
     // Abbreviations
     String expandedTextValue() const override { return String(); }
@@ -487,8 +488,6 @@ public:
     void addChildren() override { }
     void addChild(AXCoreObject*) override;
     void insertChild(AXCoreObject*, unsigned) override;
-
-    bool shouldIgnoreAttributeRole() const override { return false; }
 
     bool canHaveChildren() const override { return true; }
     bool hasChildren() const override { return m_haveChildren; }
@@ -778,6 +777,7 @@ protected:
     ScrollableArea* scrollableAreaAncestor() const;
     void scrollAreaAndAncestor(std::pair<ScrollableArea*, AccessibilityObject*>&) const;
 
+    virtual bool shouldIgnoreAttributeRole() const { return false; }
     virtual AccessibilityRole buttonRoleType() const;
     String rolePlatformDescription() const;
     bool isOnScreen() const override;
@@ -786,6 +786,7 @@ protected:
     static bool isARIAInput(AccessibilityRole);
     void ariaElementsFromAttribute(AccessibilityChildrenVector&, const QualifiedName&) const;
     void ariaElementsReferencedByAttribute(AccessibilityChildrenVector&, const QualifiedName&) const;
+    virtual bool exposesTitleUIElement() const { return true; }
 
     AccessibilityObject* radioGroupAncestor() const;
 

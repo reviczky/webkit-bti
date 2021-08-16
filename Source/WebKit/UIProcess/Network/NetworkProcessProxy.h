@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "AppPrivacyReport.h"
 #include "AuxiliaryProcessProxy.h"
 #include "CallbackID.h"
 #include "NetworkProcessProxyMessagesReplies.h"
@@ -128,7 +129,7 @@ public:
 
     void getLocalStorageDetails(PAL::SessionID, CompletionHandler<void(Vector<LocalStorageDatabaseTracker::OriginDetails>&&)>&&);
 
-    void preconnectTo(PAL::SessionID, WebPageProxyIdentifier, WebCore::PageIdentifier, const URL&, const String&, WebCore::StoredCredentialsPolicy, std::optional<NavigatingToAppBoundDomain>, LastNavigationWasAppBound);
+    void preconnectTo(PAL::SessionID, WebPageProxyIdentifier, WebCore::PageIdentifier, const URL&, const String&, WebCore::StoredCredentialsPolicy, std::optional<NavigatingToAppBoundDomain>, LastNavigationWasAppInitiated);
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     void clearPrevalentResource(PAL::SessionID, const RegistrableDomain&, CompletionHandler<void()>&&);
@@ -208,9 +209,7 @@ public:
     
     void synthesizeAppIsBackground(bool background);
 
-    void setIsHoldingLockedFiles(bool);
-
-    void flushCookies(const PAL::SessionID&, CompletionHandler<void()>&&);
+    void flushCookies(PAL::SessionID, CompletionHandler<void()>&&);
 
     void testProcessIncomingSyncMessagesWhenWaitingForSyncReply(WebPageProxyIdentifier, Messages::NetworkProcessProxy::TestProcessIncomingSyncMessagesWhenWaitingForSyncReplyDelayedReply&&);
     void terminateUnresponsiveServiceWorkerProcesses(WebCore::ProcessIdentifier);
@@ -237,7 +236,7 @@ public:
     void registerSchemeForLegacyCustomProtocol(const String&);
     void unregisterSchemeForLegacyCustomProtocol(const String&);
 
-    enum class TerminationReason { RequestedByClient, Crash };
+    enum class TerminationReason { RequestedByClient, Crash, ExceededMemoryLimit };
     void networkProcessDidTerminate(TerminationReason);
     
     void resetQuota(PAL::SessionID, CompletionHandler<void()>&&);
@@ -286,6 +285,9 @@ private:
     void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
     bool didReceiveSyncNetworkProcessProxyMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&);
 
+    // ResponsivenessTimer::Client
+    void didBecomeUnresponsive() final;
+
     // Message handlers
     void didReceiveNetworkProcessProxyMessage(IPC::Connection&, IPC::Decoder&);
     void didReceiveAuthenticationChallenge(PAL::SessionID, WebPageProxyIdentifier, const std::optional<WebCore::SecurityOriginData>&, WebCore::AuthenticationChallenge&&, bool, uint64_t challengeID);
@@ -328,6 +330,10 @@ private:
 
     void processAuthenticationChallenge(PAL::SessionID, Ref<AuthenticationChallengeProxy>&&);
 
+#if USE(SOUP)
+    void didExceedMemoryLimit();
+#endif
+
     std::unique_ptr<DownloadProxyMap> m_downloadProxyMap;
 
     UniqueRef<API::CustomProtocolManagerClient> m_customProtocolManagerClient;
@@ -336,7 +342,6 @@ private:
 #endif
 
     ProcessThrottler m_throttler;
-    std::unique_ptr<ProcessThrottler::BackgroundActivity> m_activityForHoldingLockedFiles;
     ProcessThrottler::ActivityVariant m_activityFromWebProcesses;
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -344,9 +349,9 @@ private:
 #endif
 
     struct UploadActivity {
-        std::unique_ptr<ProcessAssertion> uiAssertion;
-        std::unique_ptr<ProcessAssertion> networkAssertion;
-        HashMap<WebCore::ProcessIdentifier, std::unique_ptr<ProcessAssertion>> webProcessAssertions;
+        RefPtr<ProcessAssertion> uiAssertion;
+        RefPtr<ProcessAssertion> networkAssertion;
+        HashMap<WebCore::ProcessIdentifier, RefPtr<ProcessAssertion>> webProcessAssertions;
     };
     std::optional<UploadActivity> m_uploadActivity;
 
@@ -364,7 +369,7 @@ private:
 #endif
 
     WeakHashSet<WebsiteDataStore> m_websiteDataStores;
-    Ref<WebCookieManagerProxy> m_cookieManager;
+    UniqueRef<WebCookieManagerProxy> m_cookieManager;
 };
 
 } // namespace WebKit

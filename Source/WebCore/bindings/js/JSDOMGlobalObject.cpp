@@ -27,6 +27,7 @@
 #include "config.h"
 #include "JSDOMGlobalObject.h"
 
+#include "DOMConstructors.h"
 #include "DOMWindow.h"
 #include "Document.h"
 #include "FetchResponse.h"
@@ -72,11 +73,13 @@ JSC_DECLARE_HOST_FUNCTION(makeDOMExceptionForBuiltins);
 JSC_DECLARE_HOST_FUNCTION(isReadableByteStreamAPIEnabled);
 JSC_DECLARE_HOST_FUNCTION(isWritableStreamAPIEnabled);
 JSC_DECLARE_HOST_FUNCTION(whenSignalAborted);
+JSC_DECLARE_HOST_FUNCTION(isAbortSignal);
 
 const ClassInfo JSDOMGlobalObject::s_info = { "DOMGlobalObject", &JSGlobalObject::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSDOMGlobalObject) };
 
 JSDOMGlobalObject::JSDOMGlobalObject(VM& vm, Structure* structure, Ref<DOMWrapperWorld>&& world, const GlobalObjectMethodTable* globalObjectMethodTable)
     : JSGlobalObject(vm, structure, globalObjectMethodTable)
+    , m_constructors(makeUnique<DOMConstructors>())
     , m_world(WTFMove(world))
     , m_worldIsNormal(m_world->isNormal())
     , m_builtinInternalFunctions(vm)
@@ -177,6 +180,12 @@ JSC_DEFINE_HOST_FUNCTION(whenSignalAborted, (JSGlobalObject* globalObject, CallF
     return JSValue::encode(result ? JSValue(JSC::JSValue::JSTrue) : JSValue(JSC::JSValue::JSFalse));
 }
 
+JSC_DEFINE_HOST_FUNCTION(isAbortSignal, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    ASSERT(callFrame->argumentCount() == 1);
+    return JSValue::encode(jsBoolean(callFrame->uncheckedArgument(0).inherits<JSAbortSignal>(globalObject->vm())));
+}
+
 SUPPRESS_ASAN void JSDOMGlobalObject::addBuiltinGlobals(VM& vm)
 {
     m_builtinInternalFunctions.initialize(*this);
@@ -193,10 +202,8 @@ SUPPRESS_ASAN void JSDOMGlobalObject::addBuiltinGlobals(VM& vm)
             JSFunction::create(vm, this, 2, String(), whenSignalAborted), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().cloneArrayBufferPrivateName(),
             JSFunction::create(vm, this, 3, String(), cloneArrayBuffer), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
-        JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().structuredCloneArrayBufferPrivateName(),
-            JSFunction::create(vm, this, 1, String(), structuredCloneArrayBuffer), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
-        JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().structuredCloneArrayBufferViewPrivateName(),
-            JSFunction::create(vm, this, 1, String(), structuredCloneArrayBufferView), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+        JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().structuredCloneForStreamPrivateName(),
+            JSFunction::create(vm, this, 1, String(), structuredCloneForStream), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         JSDOMGlobalObject::GlobalPropertyInfo(vm.propertyNames->builtinNames().ArrayBufferPrivateName(), arrayBufferConstructor(), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().streamClosedPrivateName(), jsNumber(1), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().streamClosingPrivateName(), jsNumber(2), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
@@ -206,6 +213,7 @@ SUPPRESS_ASAN void JSDOMGlobalObject::addBuiltinGlobals(VM& vm)
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().streamWritablePrivateName(), jsNumber(6), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().readableByteStreamAPIEnabledPrivateName(), JSFunction::create(vm, this, 0, String(), isReadableByteStreamAPIEnabled), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().writableStreamAPIEnabledPrivateName(), JSFunction::create(vm, this, 0, String(), isWritableStreamAPIEnabled), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+        JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().isAbortSignalPrivateName(), JSFunction::create(vm, this, 1, String(), isAbortSignal), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
     };
     addStaticGlobals(staticGlobals, WTF_ARRAY_LENGTH(staticGlobals));
 }
@@ -262,12 +270,12 @@ void JSDOMGlobalObject::visitChildrenImpl(JSCell* cell, Visitor& visitor)
         for (auto& structure : thisObject->m_structures.values())
             visitor.append(structure);
 
-        for (auto& constructor : thisObject->m_constructors.values())
-            visitor.append(constructor);
-
         for (auto& guarded : thisObject->m_guardedObjects)
             guarded->visitAggregate(visitor);
     }
+
+    for (auto& constructor : thisObject->constructors().array())
+        visitor.append(constructor);
 
     thisObject->m_builtinInternalFunctions.visit(visitor);
 }
@@ -427,8 +435,8 @@ static JSC::JSPromise* handleResponseOnStreamingAction(JSC::JSGlobalObject* glob
                 return;
             }
 
-            if (auto chunk = result.returnValue())
-                compiler->addBytes(chunk->data, chunk->size);
+            if (auto* chunk = result.returnValue())
+                compiler->addBytes(chunk->data(), chunk->size());
             else
                 compiler->finalize(globalObject);
         });
@@ -538,48 +546,6 @@ JSC::JSObject* JSDOMGlobalObject::moduleLoaderCreateImportMetaProperties(JSC::JS
     if (auto* loader = scriptModuleLoader(thisObject))
         return loader->createImportMetaProperties(globalObject, moduleLoader, moduleKey, moduleRecord, scriptFetcher);
     return constructEmptyObject(globalObject->vm(), globalObject->nullPrototypeObjectStructure());
-}
-
-JSDOMGlobalObject& callerGlobalObject(JSGlobalObject& lexicalGlobalObject, CallFrame& callFrame)
-{
-    class GetCallerGlobalObjectFunctor {
-    public:
-        GetCallerGlobalObjectFunctor() = default;
-
-        StackVisitor::Status operator()(StackVisitor& visitor) const
-        {
-            if (!m_hasSkippedFirstFrame) {
-                m_hasSkippedFirstFrame = true;
-                return StackVisitor::Continue;
-            }
-
-            if (auto* codeBlock = visitor->codeBlock())
-                m_globalObject = codeBlock->globalObject();
-            else {
-                ASSERT(visitor->callee().rawPtr());
-                // FIXME: Callee is not an object if the caller is Web Assembly.
-                // Figure out what to do here. We can probably get the global object
-                // from the top-most Wasm Instance. https://bugs.webkit.org/show_bug.cgi?id=165721
-                if (visitor->callee().isCell() && visitor->callee().asCell()->isObject())
-                    m_globalObject = jsCast<JSObject*>(visitor->callee().asCell())->globalObject();
-            }
-            return StackVisitor::Done;
-        }
-
-        JSGlobalObject* globalObject() const { return m_globalObject; }
-
-    private:
-        mutable bool m_hasSkippedFirstFrame { false };
-        mutable JSGlobalObject* m_globalObject { nullptr };
-    };
-
-    GetCallerGlobalObjectFunctor iter;
-    callFrame.iterate(lexicalGlobalObject.vm(), iter);
-    if (iter.globalObject())
-        return *jsCast<JSDOMGlobalObject*>(iter.globalObject());
-
-    // If we cannot find JSGlobalObject in caller frames, we just return the current lexicalGlobalObject.
-    return *jsCast<JSDOMGlobalObject*>(&lexicalGlobalObject);
 }
 
 JSDOMGlobalObject* toJSDOMGlobalObject(ScriptExecutionContext& context, DOMWrapperWorld& world)

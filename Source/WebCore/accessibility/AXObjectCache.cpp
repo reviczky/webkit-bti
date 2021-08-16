@@ -32,6 +32,7 @@
 
 #include "AXObjectCache.h"
 
+#include "AXImage.h"
 #include "AXIsolatedObject.h"
 #include "AXIsolatedTree.h"
 #include "AXLogger.h"
@@ -89,6 +90,7 @@
 #include "Page.h"
 #include "Range.h"
 #include "RenderAttachment.h"
+#include "RenderImage.h"
 #include "RenderLayer.h"
 #include "RenderLineBreak.h"
 #include "RenderListBox.h"
@@ -511,6 +513,28 @@ bool nodeHasRole(Node* node, const String& role)
     return SpaceSplitString(roleValue, true).contains(role);
 }
 
+static bool isSimpleImage(const RenderObject& renderer)
+{
+    if (!is<RenderImage>(renderer))
+        return false;
+
+    // Exclude ImageButtons because they are treated as buttons, not as images.
+    auto* node = renderer.node();
+    if (is<HTMLInputElement>(node))
+        return false;
+
+    // ImageMaps are not simple images.
+    if (downcast<RenderImage>(renderer).imageMap()
+        || (is<HTMLImageElement>(node) && downcast<HTMLImageElement>(node)->hasAttributeWithoutSynchronization(usemapAttr)))
+        return false;
+
+    // Exclude video and audio elements.
+    if (is<HTMLMediaElement>(node))
+        return false;
+
+    return true;
+}
+
 static Ref<AccessibilityObject> createFromRenderer(RenderObject* renderer)
 {
     // FIXME: How could renderer->node() ever not be an Element?
@@ -549,6 +573,9 @@ static Ref<AccessibilityObject> createFromRenderer(RenderObject* renderer)
     
     if (is<SVGElement>(node))
         return AccessibilitySVGElement::create(renderer);
+
+    if (isSimpleImage(*renderer))
+        return AXImage::create(downcast<RenderImage>(renderer));
 
 #if ENABLE(MATHML)
     // The mfenced element creates anonymous RenderMathMLOperators which should be treated
@@ -1272,6 +1299,17 @@ void AXObjectCache::selectedChildrenChanged(RenderObject* renderer)
     postNotification(renderer, AXSelectedChildrenChanged, PostTarget::ObservableParent);
 }
 
+void AXObjectCache::selectedStateChanged(Node* node)
+{
+    // For a table cell, post AXSelectedStateChanged on the cell itself.
+    // For any other element, post AXSelectedChildrenChanged on the parent.
+    if (nodeHasRole(node, "gridcell") || nodeHasRole(node, "cell")
+        || nodeHasRole(node, "columnheader") || nodeHasRole(node, "rowheader"))
+        postNotification(node, AXSelectedStateChanged);
+    else
+        selectedChildrenChanged(node);
+}
+
 #ifndef NDEBUG
 void AXObjectCache::showIntent(const AXTextStateChangeIntent &intent)
 {
@@ -1779,7 +1817,7 @@ void AXObjectCache::handleAttributeChange(const QualifiedName& attrName, Element
     else if (attrName == aria_checkedAttr)
         checkedStateChanged(element);
     else if (attrName == aria_selectedAttr)
-        selectedChildrenChanged(element);
+        selectedStateChanged(element);
     else if (attrName == aria_expandedAttr)
         handleAriaExpandedChange(element);
     else if (attrName == aria_hiddenAttr) {

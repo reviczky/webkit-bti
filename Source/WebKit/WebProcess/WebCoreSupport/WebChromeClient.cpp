@@ -655,7 +655,12 @@ void WebChromeClient::contentsSizeChanged(Frame& frame, const IntSize& size) con
     }
 }
 
-void WebChromeClient::scrollRectIntoView(const IntRect&) const
+void WebChromeClient::scrollMainFrameToRevealRect(const IntRect& rect) const
+{
+    m_page.send(Messages::WebPageProxy::RequestScrollToRect(rect, rect.center()));
+}
+
+void WebChromeClient::scrollContainingScrollViewsToRevealRect(const IntRect&) const
 {
     notImplemented();
 }
@@ -972,6 +977,11 @@ void WebChromeClient::setNeedsOneShotDrawingSynchronization()
     notImplemented();
 }
 
+bool WebChromeClient::shouldTriggerRenderingUpdate(unsigned rescheduledRenderingUpdateCount) const
+{
+    return m_page.shouldTriggerRenderingUpdate(rescheduledRenderingUpdateCount);
+}
+
 void WebChromeClient::triggerRenderingUpdate()
 {
     if (m_page.drawingArea())
@@ -1172,6 +1182,13 @@ void WebChromeClient::sampledPageTopColorChanged() const
 {
     m_page.sampledPageTopColorChanged();
 }
+
+#if ENABLE(APP_HIGHLIGHTS)
+WebCore::HighlightVisibility WebChromeClient::appHighlightsVisiblility() const
+{
+    return m_page.appHighlightsVisiblility();
+}
+#endif
 
 void WebChromeClient::wheelEventHandlersChanged(bool hasHandlers)
 {
@@ -1496,7 +1513,7 @@ void WebChromeClient::showMediaControlsContextMenu(FloatRect&& targetFrame, Vect
 
 #endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
-#if ENABLE(WEBXR) && PLATFORM(COCOA)
+#if ENABLE(WEBXR) && !USE(OPENXR)
 void WebChromeClient::enumerateImmersiveXRDevices(CompletionHandler<void(const PlatformXR::Instance::DeviceList&)>&& completionHandler)
 {
     m_page.xrSystemProxy().enumerateImmersiveXRDevices(WTFMove(completionHandler));
@@ -1507,5 +1524,19 @@ void WebChromeClient::didHandleOrPreventMouseDownOrMouseUpEvent()
 {
     m_page.didHandleOrPreventMouseDownOrMouseUpEvent();
 }
+
+#if HAVE(ARKIT_INLINE_PREVIEW_IOS)
+void WebChromeClient::takeModelElementFullscreen(WebCore::GraphicsLayer::PlatformLayerID contentLayerId) const
+{
+    m_page.takeModelElementFullscreen(contentLayerId);
+}
+#endif
+
+#if HAVE(ARKIT_INLINE_PREVIEW_MAC)
+void WebChromeClient::modelElementDidCreatePreview(WebCore::HTMLModelElement& element, const URL& url, const String& uuid, const WebCore::FloatSize& size) const
+{
+    m_page.modelElementDidCreatePreview(element, url, uuid, size);
+}
+#endif
 
 } // namespace WebKit

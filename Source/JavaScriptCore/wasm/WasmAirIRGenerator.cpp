@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -413,6 +413,7 @@ private:
     TypedTmp g64() { return { newTmp(B3::GP), Types::I64 }; }
     TypedTmp gExternref() { return { newTmp(B3::GP), Types::Externref }; }
     TypedTmp gFuncref() { return { newTmp(B3::GP), Types::Funcref }; }
+    TypedTmp gTypeIdx(Type type) { return { newTmp(B3::GP), type }; }
     TypedTmp f32() { return { newTmp(B3::FP), Types::F32 }; }
     TypedTmp f64() { return { newTmp(B3::FP), Types::F64 }; }
 
@@ -425,6 +426,8 @@ private:
             return g64();
         case TypeKind::Funcref:
             return gFuncref();
+        case TypeKind::TypeIdx:
+            return gTypeIdx(type);
         case TypeKind::Externref:
             return gExternref();
         case TypeKind::F32:
@@ -601,6 +604,7 @@ private:
             case TypeKind::I64:
             case TypeKind::Externref:
             case TypeKind::Funcref:
+            case TypeKind::TypeIdx:
                 resultType = B3::Int64;
                 break;
             case TypeKind::F32:
@@ -650,6 +654,7 @@ private:
         case TypeKind::I64:
         case TypeKind::Externref:
         case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             return Move;
         case TypeKind::F32:
             return MoveFloat;
@@ -663,7 +668,7 @@ private:
     void emitThrowException(CCallHelpers&, ExceptionType);
 
     void emitEntryTierUpCheck();
-    void emitLoopTierUpCheck(uint32_t loopIndex, const Stack& enclosingStack);
+    void emitLoopTierUpCheck(uint32_t loopIndex, const Stack& enclosingStack, const Stack& newStack);
 
     void emitWriteBarrierForJSWrapper();
     ExpressionType emitCheckAndPreparePointer(ExpressionType pointer, uint32_t offset, uint32_t sizeOfOp);
@@ -907,6 +912,7 @@ AirIRGenerator::AirIRGenerator(const ModuleInformation& info, B3::Procedure& pro
         case TypeKind::I64:
         case TypeKind::Externref:
         case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             append(Move, arg, m_locals[i]);
             break;
         case TypeKind::F32:
@@ -1009,6 +1015,7 @@ auto AirIRGenerator::addLocal(Type type, uint32_t count) -> PartialResult
         switch (type.kind) {
         case TypeKind::Externref:
         case TypeKind::Funcref:
+        case TypeKind::TypeIdx:
             append(Move, Arg::imm(JSValue::encode(jsNull())), local);
             break;
         case TypeKind::I32:
@@ -1044,6 +1051,7 @@ auto AirIRGenerator::addConstant(BasicBlock* block, Type type, uint64_t value) -
     case TypeKind::I64:
     case TypeKind::Externref:
     case TypeKind::Funcref:
+    case TypeKind::TypeIdx:
         append(block, Move, Arg::bigImm(value), result);
         break;
     case TypeKind::F32:
@@ -1088,7 +1096,11 @@ auto AirIRGenerator::addRefIsNull(ExpressionType value, ExpressionType& result) 
 auto AirIRGenerator::addRefFunc(uint32_t index, ExpressionType& result) -> PartialResult
 {
     // FIXME: Emit this inline <https://bugs.webkit.org/show_bug.cgi?id=198506>.
-    result = tmpForType(Types::Funcref);
+    if (Options::useWebAssemblyTypedFunctionReferences()) {
+        SignatureIndex signatureIndex = m_info.signatureIndexFromFunctionIndexSpace(index);
+        result = tmpForType(Type { TypeKind::TypeIdx, Nullable::No, signatureIndex });
+    } else
+        result = tmpForType(Types::Funcref);
     emitCCall(&operationWasmRefFunc, result, instanceValue(), addConstant(Types::I32, index));
 
     return { };
@@ -2796,8 +2808,7 @@ void AirIRGenerator::emitEntryTierUpCheck()
         return;
 
     auto countdownPtr = g64();
-
-    append(Move, Arg::bigImm(reinterpret_cast<uint64_t>(&m_tierUp->m_counter)), countdownPtr);
+    append(Move, Arg::bigImm(bitwise_cast<uintptr_t>(&m_tierUp->m_counter)), countdownPtr);
 
     auto* patch = addPatchpoint(B3::Void);
     B3::Effects effects = B3::Effects::none();
@@ -2835,7 +2846,7 @@ void AirIRGenerator::emitEntryTierUpCheck()
     emitPatchpoint(patch, Tmp(), countdownPtr);
 }
 
-void AirIRGenerator::emitLoopTierUpCheck(uint32_t loopIndex, const Stack& enclosingStack)
+void AirIRGenerator::emitLoopTierUpCheck(uint32_t loopIndex, const Stack& enclosingStack, const Stack& newStack)
 {
     uint32_t outerLoopIndex = this->outerLoopIndex();
     m_outerLoops.append(loopIndex);
@@ -2848,8 +2859,7 @@ void AirIRGenerator::emitLoopTierUpCheck(uint32_t loopIndex, const Stack& enclos
     m_tierUp->outerLoops().append(outerLoopIndex);
 
     auto countdownPtr = g64();
-
-    append(Move, Arg::bigImm(reinterpret_cast<uint64_t>(&m_tierUp->m_counter)), countdownPtr);
+    append(Move, Arg::bigImm(bitwise_cast<uintptr_t>(&m_tierUp->m_counter)), countdownPtr);
 
     auto* patch = addPatchpoint(B3::Void);
     B3::Effects effects = B3::Effects::none();
@@ -2874,6 +2884,8 @@ void AirIRGenerator::emitLoopTierUpCheck(uint32_t loopIndex, const Stack& enclos
             patchArgs.append(ConstrainedTmp(value.value(), B3::ValueRep::ColdAny));
     }
     for (TypedExpression value : enclosingStack)
+        patchArgs.append(ConstrainedTmp(value.value(), B3::ValueRep::ColdAny));
+    for (TypedExpression value : newStack)
         patchArgs.append(ConstrainedTmp(value.value(), B3::ValueRep::ColdAny));
 
     TierUpCount::TriggerReason* forceEntryTrigger = &(m_tierUp->osrEntryTriggers().last());
@@ -2926,7 +2938,7 @@ auto AirIRGenerator::addLoop(BlockSignature signature, Stack& enclosingStack, Co
     m_currentBlock->setSuccessors(body);
 
     m_currentBlock = body;
-    emitLoopTierUpCheck(loopIndex, enclosingStack);
+    emitLoopTierUpCheck(loopIndex, enclosingStack, newStack);
 
     return { };
 }
@@ -2981,10 +2993,7 @@ auto AirIRGenerator::addReturn(const ControlData& data, const Stack& returnValue
     B3::PatchpointValue* patch = addPatchpoint(B3::Void);
     patch->setGenerator([] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         auto calleeSaves = params.code().calleeSaveRegisterAtOffsetList();
-
-        for (RegisterAtOffset calleeSave : calleeSaves)
-            jit.load64ToReg(CCallHelpers::Address(GPRInfo::callFrameRegister, calleeSave.offset()), calleeSave.reg());
-
+        jit.emitRestore(calleeSaves);
         jit.emitFunctionEpilogue();
         jit.ret();
     });

@@ -53,8 +53,6 @@
 
 namespace WebCore {
 
-using namespace PAL;
-
 #if !USE(LIBWEBRTC)
 static std::unique_ptr<PeerConnectionBackend> createNoPeerConnectionBackend(RTCPeerConnection&)
 {
@@ -606,7 +604,12 @@ ExceptionOr<Ref<RTCRtpTransceiver>> PeerConnectionBackend::addTransceiver(Ref<Me
 void PeerConnectionBackend::generateCertificate(Document& document, const CertificateInformation& info, DOMPromiseDeferred<IDLInterface<RTCCertificate>>&& promise)
 {
 #if USE(LIBWEBRTC)
-    LibWebRTCCertificateGenerator::generateCertificate(document.securityOrigin(), document.page()->libWebRTCProvider(), info, WTFMove(promise));
+    auto* page = document.page();
+    if (!page) {
+        promise.reject(InvalidStateError);
+        return;
+    }
+    LibWebRTCCertificateGenerator::generateCertificate(document.securityOrigin(), page->libWebRTCProvider(), info, WTFMove(promise));
 #else
     UNUSED_PARAM(document);
     UNUSED_PARAM(expires);

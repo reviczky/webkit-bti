@@ -28,6 +28,8 @@
 #include <wtf/Forward.h>
 #include <wtf/Markable.h>
 #include <wtf/OptionSet.h>
+#include <wtf/Ref.h>
+#include <wtf/RefPtr.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/StringBuilder.h>
 
@@ -70,12 +72,17 @@ public:
     WTF_EXPORT_PRIVATE TextStream& operator<<(double);
     WTF_EXPORT_PRIVATE TextStream& operator<<(const char*);
     WTF_EXPORT_PRIVATE TextStream& operator<<(const void*);
+    WTF_EXPORT_PRIVATE TextStream& operator<<(const AtomString&);
     WTF_EXPORT_PRIVATE TextStream& operator<<(const String&);
+    WTF_EXPORT_PRIVATE TextStream& operator<<(StringView);
     // Deprecated. Use the NumberRespectingIntegers FormattingFlag instead.
     WTF_EXPORT_PRIVATE TextStream& operator<<(const FormatNumberRespectingIntegers&);
 
+#if PLATFORM(COCOA)
+    WTF_EXPORT_PRIVATE TextStream& operator<<(id);
 #ifdef __OBJC__
-    WTF_EXPORT_PRIVATE TextStream& operator<<(id<NSObject>);
+    WTF_EXPORT_PRIVATE TextStream& operator<<(NSArray *);
+#endif
 #endif
 
     OptionSet<Formatting> formattingFlags() const { return m_formattingFlags; }
@@ -233,6 +240,21 @@ TextStream& operator<<(TextStream& ts, const WeakPtr<T>& item)
         return ts << *item;
     
     return ts << "null";
+}
+
+template<typename T>
+TextStream& operator<<(TextStream& ts, const RefPtr<T>& item)
+{
+    if (item)
+        return ts << *item;
+    
+    return ts << "null";
+}
+
+template<typename T>
+TextStream& operator<<(TextStream& ts, const Ref<T>& item)
+{
+    return ts << item.get();
 }
 
 template<typename KeyArg, typename MappedArg, typename HashArg, typename KeyTraitsArg, typename MappedTraitsArg>

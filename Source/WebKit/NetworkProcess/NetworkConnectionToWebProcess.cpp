@@ -30,6 +30,8 @@
 #include "CacheStorageEngineConnectionMessages.h"
 #include "DataReference.h"
 #include "Logging.h"
+#include "NetworkBroadcastChannelRegistry.h"
+#include "NetworkBroadcastChannelRegistryMessages.h"
 #include "NetworkCache.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkLoad.h"
@@ -82,8 +84,7 @@
 #include "LegacyCustomProtocolManager.h"
 #endif
 
-#undef RELEASE_LOG_IF_ALLOWED
-#define RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(m_sessionID.isAlwaysOnLoggingAllowed(), channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
+#define CONNECTION_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
 
 #define NETWORK_PROCESS_MESSAGE_CHECK(assertion) NETWORK_PROCESS_MESSAGE_CHECK_COMPLETION(assertion, (void)0)
 #define NETWORK_PROCESS_MESSAGE_CHECK_COMPLETION(assertion, completion) do { \
@@ -159,7 +160,7 @@ NetworkConnectionToWebProcess::~NetworkConnectionToWebProcess()
 
 void NetworkConnectionToWebProcess::hasUploadStateChanged(bool hasUpload)
 {
-    RELEASE_LOG_IF_ALLOWED(Loading, "hasUploadStateChanged: (hasUpload=%d)", hasUpload);
+    CONNECTION_RELEASE_LOG(Loading, "hasUploadStateChanged: (hasUpload=%d)", hasUpload);
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::SetWebProcessHasUploads(m_webProcessIdentifier, hasUpload), 0);
 }
 
@@ -193,6 +194,12 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
 
     if (decoder.messageReceiverName() == Messages::NetworkConnectionToWebProcess::messageReceiverName()) {
         didReceiveNetworkConnectionToWebProcessMessage(connection, decoder);
+        return;
+    }
+
+    if (decoder.messageReceiverName() == Messages::NetworkBroadcastChannelRegistry::messageReceiverName()) {
+        if (auto* networkSession = this->networkSession())
+            networkSession->broadcastChannelRegistry().didReceiveMessage(connection, decoder);
         return;
     }
 
@@ -361,13 +368,16 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
     Ref<NetworkConnectionToWebProcess> protector(*this);
 
 #if OS(DARWIN)
-    RELEASE_LOG_IF_ALLOWED(Loading, "didClose: WebProcess (%d) closed its connection. Aborting related loaders.", connection.remoteProcessID());
+    CONNECTION_RELEASE_LOG(Loading, "didClose: WebProcess (%d) closed its connection. Aborting related loaders.", connection.remoteProcessID());
 #else
-    RELEASE_LOG_IF_ALLOWED(Loading, "didClose: WebProcess closed its connection. Aborting related loaders.");
+    CONNECTION_RELEASE_LOG(Loading, "didClose: WebProcess closed its connection. Aborting related loaders.");
 #endif
 
     while (!m_networkResourceLoaders.isEmpty())
         m_networkResourceLoaders.begin()->value->abort();
+
+    if (auto* networkSession = this->networkSession())
+        networkSession->broadcastChannelRegistry().removeConnection(connection);
 
     // All trackers of resources that were in the middle of being loaded were
     // stopped with the abort() calls above, but we still need to sweep up the
@@ -449,7 +459,7 @@ NetworkSession* NetworkConnectionToWebProcess::networkSession()
 
 Vector<RefPtr<WebCore::BlobDataFileReference>> NetworkConnectionToWebProcess::resolveBlobReferences(const NetworkResourceLoadParameters& loadParameters)
 {
-    RELEASE_LOG_IF_ALLOWED(Loading, "resolveBlobReferences: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
+    CONNECTION_RELEASE_LOG(Loading, "resolveBlobReferences: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
 
     auto* session = networkSession();
     if (!session)
@@ -478,7 +488,7 @@ std::unique_ptr<ServiceWorkerFetchTask> NetworkConnectionToWebProcess::createFet
 
 void NetworkConnectionToWebProcess::scheduleResourceLoad(NetworkResourceLoadParameters&& loadParameters)
 {
-    RELEASE_LOG_IF_ALLOWED(Loading, "scheduleResourceLoad: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
+    CONNECTION_RELEASE_LOG(Loading, "scheduleResourceLoad: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
 
 #if ENABLE(SERVICE_WORKER)
     auto& server = m_networkProcess->swServerForSession(m_sessionID);
@@ -508,7 +518,7 @@ void NetworkConnectionToWebProcess::scheduleResourceLoad(NetworkResourceLoadPara
 
 void NetworkConnectionToWebProcess::performSynchronousLoad(NetworkResourceLoadParameters&& loadParameters, Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::DelayedReply&& reply)
 {
-    RELEASE_LOG_IF_ALLOWED(Loading, "performSynchronousLoad: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
+    CONNECTION_RELEASE_LOG(Loading, "performSynchronousLoad: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
 
     auto identifier = loadParameters.identifier;
     RELEASE_ASSERT(identifier);
@@ -530,7 +540,7 @@ void NetworkConnectionToWebProcess::testProcessIncomingSyncMessagesWhenWaitingFo
 
 void NetworkConnectionToWebProcess::loadPing(NetworkResourceLoadParameters&& loadParameters)
 {
-    RELEASE_LOG_IF_ALLOWED(Loading, "loadPing: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
+    CONNECTION_RELEASE_LOG(Loading, "loadPing: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
 
     auto completionHandler = [connection = m_connection, identifier = loadParameters.identifier] (const ResourceError& error, const ResourceResponse& response) {
         connection->send(Messages::NetworkProcessConnection::DidFinishPingLoad(identifier, error, response), 0);
@@ -563,7 +573,7 @@ void NetworkConnectionToWebProcess::removeLoadIdentifier(ResourceLoadIdentifier 
 
     // Abort the load now, as the WebProcess won't be able to respond to messages any more which might lead
     // to leaked loader resources (connections, threads, etc).
-    RELEASE_LOG_IF_ALLOWED(Loading, "removeLoadIdentifier: Removing identifier %" PRIu64 " and aborting corresponding loader", identifier);
+    CONNECTION_RELEASE_LOG(Loading, "removeLoadIdentifier: Removing identifier %" PRIu64 " and aborting corresponding loader", identifier);
     loader->abort();
     ASSERT(!m_networkResourceLoaders.contains(identifier));
 }
@@ -605,7 +615,7 @@ void NetworkConnectionToWebProcess::sendH2Ping(NetworkResourceLoadParameters&& p
 
 void NetworkConnectionToWebProcess::preconnectTo(std::optional<uint64_t> preconnectionIdentifier, NetworkResourceLoadParameters&& loadParameters)
 {
-    RELEASE_LOG_IF_ALLOWED(Loading, "preconnectTo: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
+    CONNECTION_RELEASE_LOG(Loading, "preconnectTo: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier);
 
     ASSERT(!loadParameters.request.httpBody());
 
@@ -818,13 +828,13 @@ void NetworkConnectionToWebProcess::registerBlobURL(const URL& url, Vector<BlobP
     session->blobRegistry().registerBlobURL(url, WTFMove(blobParts), contentType);
 }
 
-void NetworkConnectionToWebProcess::registerBlobURLFromURL(const URL& url, const URL& srcURL)
+void NetworkConnectionToWebProcess::registerBlobURLFromURL(const URL& url, const URL& srcURL, PolicyContainer&& policyContainer)
 {
     auto* session = networkSession();
     if (!session)
         return;
 
-    session->blobRegistry().registerBlobURL(url, srcURL);
+    session->blobRegistry().registerBlobURL(url, srcURL, WTFMove(policyContainer));
 }
 
 void NetworkConnectionToWebProcess::registerBlobURLOptionallyFileBacked(const URL& url, const URL& srcURL, const String& fileBackedPath, const String& contentType)
@@ -835,7 +845,7 @@ void NetworkConnectionToWebProcess::registerBlobURLOptionallyFileBacked(const UR
     if (!session)
         return;
 
-    session->blobRegistry().registerBlobURLOptionallyFileBacked(url, srcURL, BlobDataFileReferenceWithSandboxExtension::create(fileBackedPath), contentType);
+    session->blobRegistry().registerBlobURLOptionallyFileBacked(url, srcURL, BlobDataFileReferenceWithSandboxExtension::create(fileBackedPath), contentType, { });
 }
 
 void NetworkConnectionToWebProcess::registerBlobURLForSlice(const URL& url, const URL& srcURL, int64_t start, int64_t end, const String& contentType)
@@ -854,6 +864,24 @@ void NetworkConnectionToWebProcess::unregisterBlobURL(const URL& url)
         return;
 
     session->blobRegistry().unregisterBlobURL(url);
+}
+
+void NetworkConnectionToWebProcess::registerBlobURLHandle(const URL& url)
+{
+    auto* session = networkSession();
+    if (!session)
+        return;
+
+    session->blobRegistry().registerBlobURLHandle(url);
+}
+
+void NetworkConnectionToWebProcess::unregisterBlobURLHandle(const URL& url)
+{
+    auto* session = networkSession();
+    if (!session)
+        return;
+
+    session->blobRegistry().unregisterBlobURLHandle(url);
 }
 
 void NetworkConnectionToWebProcess::blobSize(const URL& url, CompletionHandler<void(uint64_t)>&& completionHandler)
@@ -1113,7 +1141,7 @@ void NetworkConnectionToWebProcess::closeSWContextConnection()
 
 void NetworkConnectionToWebProcess::serverToContextConnectionNoLongerNeeded()
 {
-    RELEASE_LOG_IF_ALLOWED(ServiceWorker, "serverToContextConnectionNoLongerNeeded: WebProcess no longer useful for running service workers");
+    CONNECTION_RELEASE_LOG(ServiceWorker, "serverToContextConnectionNoLongerNeeded: WebProcess no longer useful for running service workers");
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::WorkerContextConnectionNoLongerNeeded { webProcessIdentifier() }, 0);
 
     m_swContextConnection = nullptr;
@@ -1241,13 +1269,8 @@ void NetworkConnectionToWebProcess::prioritizeResourceLoads(Vector<ResourceLoadI
     session->networkLoadScheduler().prioritizeLoads(loads);
 }
 
-void NetworkConnectionToWebProcess::addIDBConnection()
-{
-    m_networkProcess->webIDBServer(m_sessionID).addConnection(m_connection.get(), m_webProcessIdentifier);
-}
-
 } // namespace WebKit
 
-#undef RELEASE_LOG_IF_ALLOWED
+#undef CONNECTION_RELEASE_LOG
 #undef NETWORK_PROCESS_MESSAGE_CHECK_COMPLETION
 #undef NETWORK_PROCESS_MESSAGE_CHECK

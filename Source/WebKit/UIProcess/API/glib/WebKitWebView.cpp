@@ -73,8 +73,7 @@
 #include <jsc/JSCContextPrivate.h>
 #include <WebCore/CertificateInfo.h>
 #include <WebCore/JSDOMExceptionHandling.h>
-#include <WebCore/PlatformScreen.h>
-#include <WebCore/RefPtrCairo.h>
+#include <WebCore/URLSoup.h>
 #include <glib/gi18n-lib.h>
 #include <libsoup/soup.h>
 #include <wtf/SetForScope.h>
@@ -91,6 +90,7 @@
 #include "WebKitWebInspectorPrivate.h"
 #include "WebKitWebViewBasePrivate.h"
 #include <WebCore/GUniquePtrGtk.h>
+#include <WebCore/RefPtrCairo.h>
 #endif
 
 #if PLATFORM(WPE)
@@ -206,6 +206,10 @@ enum {
     PROP_IS_MUTED,
     PROP_WEBSITE_POLICIES,
     PROP_IS_WEB_PROCESS_RESPONSIVE,
+
+    PROP_CAMERA_CAPTURE_STATE,
+    PROP_MICROPHONE_CAPTURE_STATE,
+    PROP_DISPLAY_CAPTURE_STATE,
 
     N_PROPERTIES,
 };
@@ -350,6 +354,22 @@ static void webkitWebViewSetIsLoading(WebKitWebView* webView, bool isLoading)
 void webkitWebViewIsPlayingAudioChanged(WebKitWebView* webView)
 {
     g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_IS_PLAYING_AUDIO]);
+}
+
+void webkitWebViewMediaCaptureStateDidChange(WebKitWebView* webView, WebCore::MediaProducer::MediaStateFlags mediaStateFlags)
+{
+    if (mediaStateFlags.isEmpty()) {
+        g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_CAMERA_CAPTURE_STATE]);
+        g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_DISPLAY_CAPTURE_STATE]);
+        g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_MICROPHONE_CAPTURE_STATE]);
+        return;
+    }
+    if (mediaStateFlags.containsAny(WebCore::MediaProducer::AudioCaptureMask))
+        g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_MICROPHONE_CAPTURE_STATE]);
+    if (mediaStateFlags.containsAny(WebCore::MediaProducer::VideoCaptureMask))
+        g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_CAMERA_CAPTURE_STATE]);
+    if (mediaStateFlags.containsAny(WebCore::MediaProducer::DisplayCaptureMask))
+        g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_DISPLAY_CAPTURE_STATE]);
 }
 
 class PageLoadStateObserver final : public PageLoadState::Observer {
@@ -872,6 +892,15 @@ static void webkitWebViewSetProperty(GObject* object, guint propId, const GValue
     case PROP_WEBSITE_POLICIES:
         webView->priv->websitePolicies = static_cast<WebKitWebsitePolicies*>(g_value_get_object(value));
         break;
+    case PROP_CAMERA_CAPTURE_STATE:
+        webkit_web_view_set_camera_capture_state(webView, static_cast<WebKitMediaCaptureState>(g_value_get_enum(value)));
+        break;
+    case PROP_MICROPHONE_CAPTURE_STATE:
+        webkit_web_view_set_microphone_capture_state(webView, static_cast<WebKitMediaCaptureState>(g_value_get_enum(value)));
+        break;
+    case PROP_DISPLAY_CAPTURE_STATE:
+        webkit_web_view_set_display_capture_state(webView, static_cast<WebKitMediaCaptureState>(g_value_get_enum(value)));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
     }
@@ -943,6 +972,15 @@ static void webkitWebViewGetProperty(GObject* object, guint propId, GValue* valu
     case PROP_IS_WEB_PROCESS_RESPONSIVE:
         g_value_set_boolean(value, webkit_web_view_get_is_web_process_responsive(webView));
         break;
+    case PROP_CAMERA_CAPTURE_STATE:
+        g_value_set_enum(value, webkit_web_view_get_camera_capture_state(webView));
+        break;
+    case PROP_MICROPHONE_CAPTURE_STATE:
+        g_value_set_enum(value, webkit_web_view_get_microphone_capture_state(webView));
+        break;
+    case PROP_DISPLAY_CAPTURE_STATE:
+        g_value_set_enum(value, webkit_web_view_get_display_capture_state(webView));
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
     }
@@ -979,6 +1017,7 @@ static void webkitWebViewDispose(GObject* object)
 #endif
 
     WebCore::setScreenDPIObserverHandler(nullptr, webView);
+    detachUIClientFromView(webView);
 
     G_OBJECT_CLASS(webkit_web_view_parent_class)->dispose(object);
 }
@@ -1336,6 +1375,81 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
             _("Whether the web process currently associated to the web view is responsive"),
             TRUE,
             WEBKIT_PARAM_READABLE);
+
+    /**
+     * WebKitWebView:camera-capture-state:
+     *
+     * Capture state of the camera device. Whenever the user grants a media-request sent by the web
+     * page, requesting video capture capabilities (`navigator.mediaDevices.getUserMedia({video:
+     * true})`) this property will be set to %WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE.
+     *
+     * The application can monitor this property and provide a visual indicator allowing to optionally
+     * deactivate or mute the capture device by setting this property respectively to
+     * %WEBKIT_MEDIA_CAPTURE_STATE_NONE or %WEBKIT_MEDIA_CAPTURE_STATE_MUTED.
+     *
+     * If the capture state of the device is set to %WEBKIT_MEDIA_CAPTURE_STATE_NONE the web-page
+     * can still re-request the permission to the user. Permission desision caching is left to the
+     * application.
+     *
+     * Since: 2.34
+     */
+    sObjProperties[PROP_CAMERA_CAPTURE_STATE] = g_param_spec_enum(
+        "camera-capture-state",
+        "Camera Capture State",
+        _("The capture state of the camera device"),
+        WEBKIT_TYPE_MEDIA_CAPTURE_STATE,
+        WEBKIT_MEDIA_CAPTURE_STATE_NONE,
+        WEBKIT_PARAM_READWRITE);
+
+    /**
+     * WebKitWebView:microphone-capture-state:
+     *
+     * Capture state of the microphone device. Whenever the user grants a media-request sent by the web
+     * page, requesting audio capture capabilities (`navigator.mediaDevices.getUserMedia({audio:
+     * true})`) this property will be set to %WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE.
+     *
+     * The application can monitor this property and provide a visual indicator allowing to
+     * optionally deactivate or mute the capture device by setting this property respectively to
+     * %WEBKIT_MEDIA_CAPTURE_STATE_NONE or %WEBKIT_MEDIA_CAPTURE_STATE_MUTED.
+     *
+     * If the capture state of the device is set to %WEBKIT_MEDIA_CAPTURE_STATE_NONE the web-page
+     * can still re-request the permission to the user. Permission desision caching is left to the
+     * application.
+     *
+     * Since: 2.34
+     */
+    sObjProperties[PROP_MICROPHONE_CAPTURE_STATE] = g_param_spec_enum(
+        "microphone-capture-state",
+        "Microphone Capture State",
+        _("The capture state of the microphone device"),
+        WEBKIT_TYPE_MEDIA_CAPTURE_STATE,
+        WEBKIT_MEDIA_CAPTURE_STATE_NONE,
+        WEBKIT_PARAM_READWRITE);
+
+    /**
+     * WebKitWebView:display-capture-state:
+     *
+     * Capture state of the display device. Whenever the user grants a media-request sent by the web
+     * page, requesting screencasting capabilities (`navigator.mediaDevices.getDisplayMedia() this
+     * property will be set to %WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE.
+     *
+     * The application can monitor this property and provide a visual indicator allowing to
+     * optionally deactivate or mute the capture device by setting this property respectively to
+     * %WEBKIT_MEDIA_CAPTURE_STATE_NONE or %WEBKIT_MEDIA_CAPTURE_STATE_MUTED.
+     *
+     * If the capture state of the device is set to %WEBKIT_MEDIA_CAPTURE_STATE_NONE the web-page
+     * can still re-request the permission to the user. Permission desision caching is left to the
+     * application.
+     *
+     * Since: 2.34
+     */
+    sObjProperties[PROP_DISPLAY_CAPTURE_STATE] = g_param_spec_enum(
+        "display-capture-state",
+        "Display Capture State",
+        _("The capture state of the display device"),
+        WEBKIT_TYPE_MEDIA_CAPTURE_STATE,
+        WEBKIT_MEDIA_CAPTURE_STATE_NONE,
+        WEBKIT_PARAM_READWRITE);
 
     g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
 
@@ -2170,72 +2284,11 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
         g_cclosure_marshal_generic,
         G_TYPE_BOOLEAN, 1,
         WEBKIT_TYPE_COLOR_CHOOSER_REQUEST);
-
-    /**
-     * WebKitWebView::show-option-menu:
-     * @web_view: the #WebKitWebView on which the signal is emitted
-     * @menu: the #WebKitOptionMenu
-     * @event: the #GdkEvent that triggered the menu, or %NULL
-     * @rectangle: the option element area
-     *
-     * This signal is emitted when a select element in @web_view needs to display a
-     * dropdown menu. This signal can be used to show a custom menu, using @menu to get
-     * the details of all items that should be displayed. The area of the element in the
-     * #WebKitWebView is given as @rectangle parameter, it can be used to position the
-     * menu. If this was triggered by a user interaction, like a mouse click,
-     * @event parameter provides the #GdkEvent.
-     * To handle this signal asynchronously you should keep a ref of the @menu.
-     *
-     * The default signal handler will pop up a #GtkMenu.
-     *
-     * Returns: %TRUE to stop other handlers from being invoked for the event.
-     *   %FALSE to propagate the event further.
-     *
-     * Since: 2.18
-     */
-    signals[SHOW_OPTION_MENU] = g_signal_new(
-        "show-option-menu",
-        G_TYPE_FROM_CLASS(webViewClass),
-        G_SIGNAL_RUN_LAST,
-        G_STRUCT_OFFSET(WebKitWebViewClass, show_option_menu),
-        g_signal_accumulator_true_handled, nullptr,
-        g_cclosure_marshal_generic,
-        G_TYPE_BOOLEAN, 3,
-        WEBKIT_TYPE_OPTION_MENU,
-        GDK_TYPE_EVENT | G_SIGNAL_TYPE_STATIC_SCOPE,
-        GDK_TYPE_RECTANGLE | G_SIGNAL_TYPE_STATIC_SCOPE);
 #endif // PLATFORM(GTK)
 
-#if PLATFORM(WPE)
-    /**
-     * WebKitWebView::show-option-menu:
-     * @web_view: the #WebKitWebView on which the signal is emitted
-     * @menu: the #WebKitOptionMenu
-     * @rectangle: the option element area
-     *
-     * This signal is emitted when a select element in @web_view needs to display a
-     * dropdown menu. This signal can be used to show a custom menu, using @menu to get
-     * the details of all items that should be displayed. The area of the element in the
-     * #WebKitWebView is given as @rectangle parameter, it can be used to position the
-     * menu.
-     * To handle this signal asynchronously you should keep a ref of the @menu.
-     *
-     * Returns: %TRUE to stop other handlers from being invoked for the event.
-     *   %FALSE to propagate the event further.
-     *
-     * Since: 2.28
-     */
-    signals[SHOW_OPTION_MENU] = g_signal_new(
-        "show-option-menu",
-        G_TYPE_FROM_CLASS(webViewClass),
-        G_SIGNAL_RUN_LAST,
-        G_STRUCT_OFFSET(WebKitWebViewClass, show_option_menu),
-        g_signal_accumulator_true_handled, nullptr,
-        g_cclosure_marshal_generic,
-        G_TYPE_BOOLEAN, 2,
-        WEBKIT_TYPE_OPTION_MENU,
-        WEBKIT_TYPE_RECTANGLE | G_SIGNAL_TYPE_STATIC_SCOPE);
-#endif
+    // This signal is different for WPE and GTK, so it's declared in
+    // WebKitWebView[Gtk,WPE].cpp to ensure we don't break the introspection.
+    signals[SHOW_OPTION_MENU] = createShowOptionMenuSignal(webViewClass);
 
     /**
      * WebKitWebView::user-message-received:
@@ -4291,10 +4344,10 @@ WebKitDownload* webkit_web_view_download_uri(WebKitWebView* webView, const char*
  * when it's emitted with %WEBKIT_LOAD_COMMITTED event.
  *
  * Note that this function provides no information about the security of the web
- * page if the current #WebKitTLSErrorsPolicy is @WEBKIT_TLS_ERRORS_POLICY_IGNORE,
+ * page if the current #WebKitTLSErrorsPolicy is %WEBKIT_TLS_ERRORS_POLICY_IGNORE,
  * as subresources of the page may be controlled by an attacker. This function
  * may safely be used to determine the security status of the current page only
- * if the current #WebKitTLSErrorsPolicy is @WEBKIT_TLS_ERRORS_POLICY_FAIL, in
+ * if the current #WebKitTLSErrorsPolicy is %WEBKIT_TLS_ERRORS_POLICY_FAIL, in
  * which case subresources that fail certificate verification will be blocked.
  *
  * Returns: %TRUE if the @web_view connection uses HTTPS and a response has been received
@@ -4814,4 +4867,188 @@ void webkit_web_view_set_cors_allowlist(WebKitWebView* webView, const gchar* con
     }
 
     getPage(webView).setCORSDisablingPatterns(WTFMove(allowListVector));
+}
+
+static void webkitWebViewConfigureMediaCapture(WebKitWebView* webView, WebCore::MediaProducer::MediaCaptureKind captureKind, WebKitMediaCaptureState captureState, bool isFromDisplayCapture = false)
+{
+    auto& page = getPage(webView);
+    auto mutedState = page.mutedStateFlags();
+
+    switch (captureState) {
+    case WEBKIT_MEDIA_CAPTURE_STATE_NONE:
+        page.stopMediaCapture(captureKind, [webView, captureKind] {
+            switch (captureKind) {
+            case WebCore::MediaProducer::MediaCaptureKind::Audio:
+                g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_MICROPHONE_CAPTURE_STATE]);
+                break;
+            case WebCore::MediaProducer::MediaCaptureKind::Video:
+                g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_CAMERA_CAPTURE_STATE]);
+                break;
+            case WebCore::MediaProducer::MediaCaptureKind::AudioVideo:
+                ASSERT_NOT_REACHED();
+                return;
+            }
+        });
+        break;
+    case WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE:
+        switch (captureKind) {
+        case WebCore::MediaProducer::MediaCaptureKind::Audio:
+            mutedState.remove(WebCore::MediaProducer::MutedState::AudioCaptureIsMuted);
+            break;
+        case WebCore::MediaProducer::MediaCaptureKind::Video:
+            if (isFromDisplayCapture)
+                mutedState.remove(WebCore::MediaProducer::MutedState::ScreenCaptureIsMuted);
+            else
+                mutedState.remove(WebCore::MediaProducer::MutedState::VideoCaptureIsMuted);
+            break;
+        case WebCore::MediaProducer::MediaCaptureKind::AudioVideo:
+            ASSERT_NOT_REACHED();
+            return;
+        }
+        page.setMuted(mutedState);
+        break;
+    case WEBKIT_MEDIA_CAPTURE_STATE_MUTED:
+        switch (captureKind) {
+        case WebCore::MediaProducer::MediaCaptureKind::Audio:
+            mutedState.add(WebCore::MediaProducer::MutedState::AudioCaptureIsMuted);
+            break;
+        case WebCore::MediaProducer::MediaCaptureKind::Video:
+            if (isFromDisplayCapture)
+                mutedState.add(WebCore::MediaProducer::MutedState::ScreenCaptureIsMuted);
+            else
+                mutedState.add(WebCore::MediaProducer::MutedState::VideoCaptureIsMuted);
+            break;
+        case WebCore::MediaProducer::MediaCaptureKind::AudioVideo:
+            ASSERT_NOT_REACHED();
+            return;
+        }
+        page.setMuted(mutedState);
+        break;
+    }
+}
+
+/**
+ * webkit_web_view_get_camera_capture_state:
+ * @web_view: a #WebKitWebView
+ *
+ * Get the camera capture state of a #WebKitWebView.
+ *
+ * Returns: The #WebKitMediaCaptureState of the camera device. If #WebKitSettings:enable-mediastream
+ * is %FALSE, this method will return %WEBKIT_MEDIA_CAPTURE_STATE_NONE.
+ *
+ * Since: 2.34
+ */
+WebKitMediaCaptureState webkit_web_view_get_camera_capture_state(WebKitWebView* webView)
+{
+    auto state = getPage(webView).reportedMediaState();
+    if (state & WebCore::MediaProducer::MediaState::HasActiveVideoCaptureDevice)
+        return WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE;
+    if (state & WebCore::MediaProducer::MediaState::HasMutedVideoCaptureDevice)
+        return WEBKIT_MEDIA_CAPTURE_STATE_MUTED;
+    return WEBKIT_MEDIA_CAPTURE_STATE_NONE;
+}
+
+/**
+ * webkit_web_view_set_camera_capture_state:
+ * @web_view: a #WebKitWebView
+ * @state: a #WebKitMediaCaptureState
+ *
+ * Set the camera capture state of a #WebKitWebView.
+ *
+ * If #WebKitSettings:enable-mediastream is %FALSE, this method will have no visible effect. Once the
+ * state of the device has been set to %WEBKIT_MEDIA_CAPTURE_STATE_NONE it cannot be changed
+ * anymore. The page can however request capture again using the mediaDevices API.
+ *
+ * Since: 2.34
+ */
+void webkit_web_view_set_camera_capture_state(WebKitWebView* webView, WebKitMediaCaptureState state)
+{
+    if (webkit_web_view_get_camera_capture_state(webView) == WEBKIT_MEDIA_CAPTURE_STATE_NONE)
+        return;
+
+    webkitWebViewConfigureMediaCapture(webView, WebCore::MediaProducer::MediaCaptureKind::Video, state);
+}
+
+/**
+ * webkit_web_view_get_microphone_capture_state:
+ * @web_view: a #WebKitWebView
+ *
+ * Get the microphone capture state of a #WebKitWebView.
+ *
+ * Returns: The #WebKitMediaCaptureState of the microphone device. If #WebKitSettings:enable-mediastream
+ * is %FALSE, this method will return %WEBKIT_MEDIA_CAPTURE_STATE_NONE.
+ *
+ * Since: 2.34
+ */
+WebKitMediaCaptureState webkit_web_view_get_microphone_capture_state(WebKitWebView* webView)
+{
+    auto state = getPage(webView).reportedMediaState();
+    if (state & WebCore::MediaProducer::MediaState::HasActiveAudioCaptureDevice)
+        return WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE;
+    if (state & WebCore::MediaProducer::MediaState::HasMutedAudioCaptureDevice)
+        return WEBKIT_MEDIA_CAPTURE_STATE_MUTED;
+    return WEBKIT_MEDIA_CAPTURE_STATE_NONE;
+}
+
+/**
+ * webkit_web_view_set_microphone_capture_state:
+ * @web_view: a #WebKitWebView
+ * @state: a #WebKitMediaCaptureState
+ *
+ * Set the microphone capture state of a #WebKitWebView.
+ *
+ * If #WebKitSettings:enable-mediastream is %FALSE, this method will have no visible effect. Once the
+ * state of the device has been set to %WEBKIT_MEDIA_CAPTURE_STATE_NONE it cannot be changed
+ * anymore. The page can however request capture again using the mediaDevices API.
+ *
+ * Since: 2.34
+ */
+void webkit_web_view_set_microphone_capture_state(WebKitWebView* webView, WebKitMediaCaptureState state)
+{
+    if (webkit_web_view_get_microphone_capture_state(webView) == WEBKIT_MEDIA_CAPTURE_STATE_NONE)
+        return;
+
+    webkitWebViewConfigureMediaCapture(webView, WebCore::MediaProducer::MediaCaptureKind::Audio, state);
+}
+
+/**
+ * webkit_web_view_get_display_capture_state:
+ * @web_view: a #WebKitWebView
+ *
+ * Get the display capture state of a #WebKitWebView.
+ *
+ * Returns: The #WebKitMediaCaptureState of the display device. If #WebKitSettings:enable-mediastream
+ * is %FALSE, this method will return %WEBKIT_MEDIA_CAPTURE_STATE_NONE.
+ *
+ * Since: 2.34
+ */
+WebKitMediaCaptureState webkit_web_view_get_display_capture_state(WebKitWebView* webView)
+{
+    auto state = getPage(webView).reportedMediaState();
+    if (state & WebCore::MediaProducer::MediaState::HasActiveDisplayCaptureDevice)
+        return WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE;
+    if (state & WebCore::MediaProducer::MediaState::HasMutedDisplayCaptureDevice)
+        return WEBKIT_MEDIA_CAPTURE_STATE_MUTED;
+    return WEBKIT_MEDIA_CAPTURE_STATE_NONE;
+}
+
+/**
+ * webkit_web_view_set_display_capture_state:
+ * @web_view: a #WebKitWebView
+ * @state: a #WebKitMediaCaptureState
+ *
+ * Set the display capture state of a #WebKitWebView.
+ *
+ * If #WebKitSettings:enable-mediastream is %FALSE, this method will have no visible effect. Once the
+ * state of the device has been set to %WEBKIT_MEDIA_CAPTURE_STATE_NONE it cannot be changed
+ * anymore. The page can however request capture again using the mediaDevices API.
+ *
+ * Since: 2.34
+ */
+void webkit_web_view_set_display_capture_state(WebKitWebView* webView, WebKitMediaCaptureState state)
+{
+    if (webkit_web_view_get_display_capture_state(webView) == WEBKIT_MEDIA_CAPTURE_STATE_NONE)
+        return;
+
+    webkitWebViewConfigureMediaCapture(webView, WebCore::MediaProducer::MediaCaptureKind::Video, state, true);
 }

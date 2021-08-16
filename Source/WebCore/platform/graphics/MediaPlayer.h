@@ -284,6 +284,8 @@ public:
     virtual String audioOutputDeviceId() const { return { }; }
     virtual String audioOutputDeviceIdOverride() const { return { }; }
 
+    virtual void mediaPlayerQueueTaskOnEventLoop(Function<void()>&& task) { callOnMainThread(WTFMove(task)); }
+
 #if !RELEASE_LOG_DISABLED
     virtual const void* mediaPlayerLogIdentifier() { return nullptr; }
     virtual const Logger& mediaPlayerLogger() = 0;
@@ -358,6 +360,9 @@ public:
     void setVisible(bool);
     void setVisibleForCanvas(bool);
 
+    void setVisibleInViewport(bool);
+    bool isVisibleInViewport() const { return m_visibleInViewport; }
+
     void prepareToPlay();
     void play();
     void pause();
@@ -387,6 +392,8 @@ public:
     bool shouldContinueAfterKeyNeeded() const { return m_shouldContinueAfterKeyNeeded; }
 #endif
 
+    void queueTaskOnEventLoop(Function<void()>&&);
+
     bool paused() const;
     bool seeking() const;
 
@@ -407,7 +414,14 @@ public:
 
     double rate() const;
     void setRate(double);
+    double effectiveRate() const;
+
     double requestedRate() const;
+
+    bool supportsPlayAtHostTime() const;
+    bool supportsPauseAtHostTime() const;
+    bool playAtHostTime(const MonotonicTime&);
+    bool pauseAtHostTime(const MonotonicTime&);
 
     bool preservesPitch() const;
     void setPreservesPitch(bool);
@@ -425,7 +439,8 @@ public:
     double seekableTimeRangesLastModifiedTime();
     double liveUpdateInterval();
 
-    bool didLoadingProgress();
+    using DidLoadingProgressCompletionHandler = CompletionHandler<void(bool)>;
+    void didLoadingProgress(DidLoadingProgressCompletionHandler&&) const;
 
     double volume() const;
     void setVolume(double);
@@ -687,6 +702,7 @@ private:
     Preload m_preload { Preload::Auto };
     double m_volume { 1 };
     bool m_visible { false };
+    bool m_visibleInViewport { false };
     bool m_muted { false };
     bool m_preservesPitch { true };
     bool m_privateBrowsing { false };

@@ -50,6 +50,7 @@
 #include "HTMLStyleElement.h"
 #include "InputEvent.h"
 #include "InspectorController.h"
+#include "InspectorInstrumentation.h"
 #include "KeyboardEvent.h"
 #include "Logging.h"
 #include "MutationEvent.h"
@@ -348,6 +349,8 @@ Node::~Node()
     ASSERT(m_refCountAndParentBit == s_refCountIncrement);
     ASSERT(m_deletionHasBegun);
     ASSERT(!m_adoptionIsRequired);
+
+    InspectorInstrumentation::willDestroyDOMNode(*this);
 
 #ifndef NDEBUG
     if (!ignoreSet().remove(*this))
@@ -1600,7 +1603,7 @@ ExceptionOr<void> Node::setTextContent(const String& text)
     return { };
 }
 
-static SHA1::Digest hashPointer(void* pointer)
+static SHA1::Digest hashPointer(const void* pointer)
 {
     SHA1 sha1;
     sha1.addBytes(reinterpret_cast<const uint8_t*>(&pointer), sizeof(pointer));
@@ -2429,7 +2432,7 @@ void Node::defaultEventHandler(Event& event)
     if (event.target() != this)
         return;
     const AtomString& eventType = event.type();
-    if (eventType == eventNames().keydownEvent || eventType == eventNames().keypressEvent) {
+    if (eventType == eventNames().keydownEvent || eventType == eventNames().keypressEvent || eventType == eventNames().keyupEvent) {
         if (is<KeyboardEvent>(event)) {
             if (Frame* frame = document().frame())
                 frame->eventHandler().defaultKeyboardEventHandler(downcast<KeyboardEvent>(event));
@@ -2681,6 +2684,7 @@ template<TreeType treeType> Node* commonInclusiveAncestor(const Node& a, const N
 
 template Node* commonInclusiveAncestor<Tree>(const Node&, const Node&);
 template Node* commonInclusiveAncestor<ComposedTree>(const Node&, const Node&);
+template Node* commonInclusiveAncestor<ShadowIncludingTree>(const Node&, const Node&);
 
 static bool isSiblingSubsequent(const Node& siblingA, const Node& siblingB)
 {

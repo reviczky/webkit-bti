@@ -488,8 +488,8 @@ macro cagedPrimitive(ptr, length, scratch, scratch2)
     if GIGACAGE_ENABLED
         cagePrimitive(GigacageConfig + Gigacage::Config::basePtrs + GigacagePrimitiveBasePtrOffset, constexpr Gigacage::primitiveGigacageMask, source, scratch)
         if ARM64E
-            const numberOfPACBits = constexpr MacroAssembler::numberOfPACBits
-            bfiq scratch2, 0, 64 - numberOfPACBits, ptr
+            const maxNumberOfAllowedPACBits = constexpr MacroAssembler::maxNumberOfAllowedPACBits
+            bfiq scratch2, 0, 64 - maxNumberOfAllowedPACBits, ptr
         end
     end
     if ARM64E
@@ -512,8 +512,8 @@ macro cagedPrimitiveMayBeNull(ptr, length, scratch, scratch2)
     if GIGACAGE_ENABLED
         cagePrimitive(GigacageConfig + Gigacage::Config::basePtrs + GigacagePrimitiveBasePtrOffset, constexpr Gigacage::primitiveGigacageMask, source, scratch)
         if ARM64E
-            const numberOfPACBits = constexpr MacroAssembler::numberOfPACBits
-            bfiq scratch2, 0, 64 - numberOfPACBits, ptr
+            const maxNumberOfAllowedPACBits = constexpr MacroAssembler::maxNumberOfAllowedPACBits
+            bfiq scratch2, 0, 64 - maxNumberOfAllowedPACBits, ptr
         end
     end
     if ARM64E
@@ -2160,6 +2160,52 @@ macro compareUnsignedJumpOp(opcodeName, opcodeStruct, integerCompareMacro)
 end
 
 
+macro compareOp(opcodeName, opcodeStruct, integerCompareAndSet, doubleCompareAndSet)
+    llintOpWithReturn(op_%opcodeName%, opcodeStruct, macro (size, get, dispatch, return)
+        get(m_lhs, t2)
+        get(m_rhs, t0)
+        loadConstantOrVariable(size, t0, t1)
+        loadConstantOrVariable(size, t2, t0)
+        bqb t0, numberTag, .op1NotInt
+        bqb t1, numberTag, .op2NotInt
+        integerCompareAndSet(t0, t1, t0)
+        orq ValueFalse, t0
+        return(t0)
+
+    .op1NotInt:
+        btqz t0, numberTag, .slow
+        bqb t1, numberTag, .op1NotIntOp2NotInt
+        ci2ds t1, ft1
+        jmp .op1NotIntReady
+
+    .op1NotIntOp2NotInt:
+        btqz t1, numberTag, .slow
+        addq numberTag, t1
+        fq2d t1, ft1
+
+    .op1NotIntReady:
+        addq numberTag, t0
+        fq2d t0, ft0
+        doubleCompareAndSet(ft0, ft1, t0)
+        orq ValueFalse, t0
+        return(t0)
+
+    .op2NotInt:
+        ci2ds t0, ft0
+        btqz t1, numberTag, .slow
+        addq numberTag, t1
+        fq2d t1, ft1
+        doubleCompareAndSet(ft0, ft1, t0)
+        orq ValueFalse, t0
+        return(t0)
+
+    .slow:
+        callSlowPath(_slow_path_%opcodeName%)
+        dispatch()
+    end)
+end
+
+
 macro compareUnsignedOp(opcodeName, opcodeStruct, integerCompareAndSet)
     llintOpWithReturn(op_%opcodeName%, opcodeStruct, macro (size, get, dispatch, return)
         get(m_lhs, t2)
@@ -3093,34 +3139,6 @@ llintOp(op_log_shadow_chicken_tail, OpLogShadowChickenTail, macro (size, get, di
 .opLogShadowChickenTailSlow:
     callSlowPath(_llint_slow_path_log_shadow_chicken_tail)
     dispatch()
-end)
-
-macro hasStructurePropertyImpl(size, get, dispatch, return, slowPathCall)
-    get(m_base, t0)
-    loadConstantOrVariable(size, t0, t1)
-    btqnz t1, notCellMask, .slowPath
-
-    loadVariable(get, m_enumerator, t0)
-    loadi JSCell::m_structureID[t1], t1
-    bineq t1, JSPropertyNameEnumerator::m_cachedStructureID[t0], .slowPath
-
-    return(ValueTrue)
-
-.slowPath:
-    callSlowPath(slowPathCall)
-    dispatch()
-end
-
-llintOpWithReturn(op_has_enumerable_structure_property, OpHasEnumerableStructureProperty, macro (size, get, dispatch, return)
-    hasStructurePropertyImpl(size, get, dispatch,  return, _slow_path_has_enumerable_structure_property)
-end)
-
-llintOpWithReturn(op_has_own_structure_property, OpHasOwnStructureProperty, macro (size, get, dispatch, return)
-    hasStructurePropertyImpl(size, get, dispatch,  return, _slow_path_has_own_structure_property)
-end)
-
-llintOpWithReturn(op_in_structure_property, OpInStructureProperty, macro (size, get, dispatch, return)
-    hasStructurePropertyImpl(size, get, dispatch,  return, _slow_path_in_structure_property)
 end)
 
 op(fuzzer_return_early_from_loop_hint, macro ()

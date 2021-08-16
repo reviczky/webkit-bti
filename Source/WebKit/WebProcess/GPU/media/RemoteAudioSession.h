@@ -68,6 +68,12 @@ private:
     void setCategory(CategoryType, WebCore::RouteSharingPolicy) final;
     void setPreferredBufferSize(size_t) final;
     bool tryToSetActiveInternal(bool) final;
+    void addConfigurationChangeObserver(ConfigurationChangeObserver&);
+    void removeConfigurationChangeObserver(ConfigurationChangeObserver&);
+
+#if ENABLE(ROUTING_ARBITRATION)
+    void setIsPlayingToBluetoothOverride(std::optional<bool>) final;
+#endif
 
     const RemoteAudioSessionConfiguration& configuration() const;
     RemoteAudioSessionConfiguration& configuration();
@@ -86,8 +92,10 @@ private:
 
     WebProcess& m_process;
 
+    WeakHashSet<ConfigurationChangeObserver> m_configurationChangeObservers;
     CategoryType m_category { CategoryType::None };
     WebCore::RouteSharingPolicy m_routeSharingPolicy { WebCore::RouteSharingPolicy::Default };
+    bool m_isPlayingToBluetoothOverrideChanged { false };
     std::optional<RemoteAudioSessionConfiguration> m_configuration;
     WeakPtr<GPUProcessConnection> m_gpuProcessConnection;
 };

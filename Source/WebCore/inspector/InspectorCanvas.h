@@ -36,10 +36,6 @@
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
-#if ENABLE(WEBGPU)
-#include "WebGPUDevice.h"
-#endif
-
 namespace WebCore {
 
 class CanvasGradient;
@@ -54,25 +50,17 @@ class ImageData;
 class OffscreenCanvas;
 #endif
 #if ENABLE(CSS_TYPED_OM)
-class TypedOMCSSImageValue;
+class CSSStyleImageValue;
 #endif
 
 class InspectorCanvas final : public RefCounted<InspectorCanvas> {
 public:
     static Ref<InspectorCanvas> create(CanvasRenderingContext&);
-#if ENABLE(WEBGPU)
-    static Ref<InspectorCanvas> create(WebGPUDevice&);
-#endif
 
     const String& identifier() const { return m_identifier; }
 
     CanvasRenderingContext* canvasContext() const;
     HTMLCanvasElement* canvasElement() const;
-
-#if ENABLE(WEBGPU)
-    WebGPUDevice* deviceContext() const;
-    bool isDeviceForCanvasContext(CanvasRenderingContext&) const;
-#endif
 
     ScriptExecutionContext* scriptExecutionContext() const;
 
@@ -115,9 +103,6 @@ public:
 
 private:
     InspectorCanvas(CanvasRenderingContext&);
-#if ENABLE(WEBGPU)
-    InspectorCanvas(WebGPUDevice&);
-#endif
 
     void appendActionSnapshotIfNeeded();
 
@@ -133,7 +118,7 @@ private:
         RefPtr<ImageBitmap>,
         RefPtr<Inspector::ScriptCallStack>,
 #if ENABLE(CSS_TYPED_OM)
-        RefPtr<TypedOMCSSImageValue>,
+        RefPtr<CSSStyleImageValue>,
 #endif
         Inspector::ScriptCallFrame,
 #if ENABLE(OFFSCREEN_CANVAS)
@@ -155,9 +140,6 @@ private:
 
     Variant<
         std::reference_wrapper<CanvasRenderingContext>,
-#if ENABLE(WEBGPU)
-        std::reference_wrapper<WebGPUDevice>,
-#endif
         Monostate
     > m_context;
 

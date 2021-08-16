@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -103,6 +103,13 @@ enum TreeType {
     "ContextChange",
     "GPUStatusFailure",
     "Timeout"
+};
+
+enum AutoplayPolicy {
+    "Default",
+    "Allow",
+    "AllowWithoutSound",
+    "Deny"
 };
 
 [
@@ -259,6 +266,7 @@ enum TreeType {
     required DOMPointReadOnly topRight;
     required DOMPointReadOnly bottomRight;
     required DOMPointReadOnly bottomLeft;
+    boolean hasLeadingWhitespace = true;
 };
 
 [
@@ -280,6 +288,7 @@ enum TreeType {
     boolean nodeNeedsStyleRecalc(Node node);
     DOMString styleChangeType(Node node);
     DOMString description(any value);
+    undefined log(DOMString value);
 
     // Animated image pausing testing.
     boolean hasPausedImageAnimations(Element element);
@@ -348,6 +357,8 @@ enum TreeType {
     undefined selectColorInColorChooser(HTMLInputElement element, DOMString colorValue);
     sequence<DOMString> formControlStateOfPreviousHistoryItem();
     undefined setFormControlStateOfPreviousHistoryItem(sequence<DOMString> values);
+
+    DOMRect absoluteLineRectFromPoint(long x, long y);
 
     DOMRect absoluteCaretBounds();
     boolean isCaretBlinkingSuspended();
@@ -690,6 +701,7 @@ enum TreeType {
     [Conditional=VIDEO] boolean privatePlayerMuted(HTMLMediaElement media);
     [Conditional=VIDEO] boolean isMediaElementHidden(HTMLMediaElement media);
     [Conditional=VIDEO] undefined setOverridePreferredDynamicRangeMode(HTMLMediaElement media, DOMString mode);
+    [Conditional=VIDEO] double elementEffectivePlaybackRate(HTMLMediaElement media);
 
     undefined setIsPlayingToBluetoothOverride(optional boolean? isPlaying = null);
 
@@ -761,6 +773,7 @@ enum TreeType {
     [Conditional=VIDEO] undefined simulateSystemSleep();
     [Conditional=VIDEO] undefined simulateSystemWake();
     [Conditional=VIDEO] boolean elementIsBlockingDisplaySleep(HTMLMediaElement element);
+    [Conditional=VIDEO] boolean isPlayerVisibleInViewport(HTMLMediaElement element);
 
     MockPageOverlay installMockPageOverlay(PageOverlayType type);
     DOMString pageOverlayLayerTreeAsText(optional unsigned short flags = 0);
@@ -777,16 +790,18 @@ enum TreeType {
 
     [Conditional=CONTENT_FILTERING] readonly attribute MockContentFilterSettings mockContentFilterSettings;
 
-    [Conditional=CSS_SCROLL_SNAP] DOMString scrollSnapOffsets(Element element);
-    [Conditional=CSS_SCROLL_SNAP] boolean isScrollSnapInProgress(Element element);
-    [Conditional=CSS_SCROLL_SNAP] undefined setPlatformMomentumScrollingPredictionEnabled(boolean enabled);
+    DOMString scrollSnapOffsets(Element element);
+    boolean isScrollSnapInProgress(Element element);
+    undefined setPlatformMomentumScrollingPredictionEnabled(boolean enabled);
 
     DOMString pathStringWithShrinkWrappedRects(sequence<double> rectComponents, double radius);
 
     [Conditional=VIDEO] DOMString getCurrentMediaControlsStatusForElement(HTMLMediaElement element);
     [Conditional=VIDEO] undefined setMediaControlsMaximumRightContainerButtonCountOverride(HTMLMediaElement element, unsigned long count);
+    [Conditional=VIDEO] undefined setMediaControlsHidePlaybackRates(HTMLMediaElement element, boolean hidePlaybackRates);
 
     DOMString userVisibleString(DOMURL url);
+    undefined setPageMediaVolume(float volume);
 
     undefined setShowAllPlugins(boolean showAll);
 
@@ -872,6 +887,7 @@ enum TreeType {
     readonly attribute unsigned long long storageAreaMapCount;
 
     unsigned long long elementIdentifier(Element element);
+    [CallWith=Document] boolean isElementAlive(unsigned long long documentIdentifier);
     unsigned long long frameIdentifier(Document document);
     unsigned long long pageIdentifier(Document document);
 
@@ -906,6 +922,7 @@ enum TreeType {
     boolean isSystemPreviewLink(Element element);
     boolean isSystemPreviewImage(Element element);
 
+    undefined requestTextRecognition(Element element, VoidCallback callback);
     undefined installImageOverlay(Element element, sequence<ImageOverlayLine> lines);
 
     boolean usingAppleInternalSDK();
@@ -921,6 +938,7 @@ enum TreeType {
     undefined markContextAsInsecure();
 
     undefined setMaxCanvasPixelMemory(unsigned long size);
+    undefined setMaxCanvasArea(unsigned long size);
 
     [Conditional=VIDEO] readonly attribute NowPlayingState nowPlayingState;
 
@@ -1032,4 +1050,6 @@ enum TreeType {
     undefined systemBeep();
 
     DOMString dumpStyleResolvers();
+
+    undefined setDocumentAutoplayPolicy(Document document, AutoplayPolicy policy);
 };

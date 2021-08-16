@@ -132,7 +132,7 @@ static void removeControlStatesForRenderer(const RenderBox& renderer)
     controlStatesRendererMap().remove(&renderer);
 }
 
-bool RenderBox::s_hadOverflowClip = false;
+bool RenderBox::s_hadNonVisibleOverflow = false;
 
 RenderBox::RenderBox(Element& element, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
     : RenderBoxModelObject(element, WTFMove(style), baseTypeFlags)
@@ -166,10 +166,8 @@ void RenderBox::willBeDestroyed()
     view().unscheduleLazyRepaint(*this);
     removeControlStatesForRenderer(*this);
 
-#if ENABLE(CSS_SCROLL_SNAP)
     if (hasInitializedStyle() && style().hasSnapPosition())
         view().unregisterBoxWithScrollSnapPositions(*this);
-#endif
 
     RenderBoxModelObject::willBeDestroyed();
 }
@@ -256,7 +254,7 @@ void RenderBox::removeFloatingOrPositionedChildFromBlockLists()
 
 void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyle)
 {
-    s_hadOverflowClip = hasOverflowClip();
+    s_hadNonVisibleOverflow = hasNonVisibleOverflow();
 
     const RenderStyle* oldStyle = hasInitializedStyle() ? &style() : nullptr;
     if (oldStyle) {
@@ -280,7 +278,6 @@ void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyl
     } else if (isBody())
         view().repaintRootContents();
 
-#if ENABLE(CSS_SCROLL_SNAP)
     bool boxContributesSnapPositions = newStyle.hasSnapPosition();
     if (boxContributesSnapPositions || (oldStyle && oldStyle->hasSnapPosition())) {
         if (boxContributesSnapPositions)
@@ -288,7 +285,6 @@ void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyl
         else
             view().unregisterBoxWithScrollSnapPositions(*this);
     }
-#endif
 
     RenderBoxModelObject::styleWillChange(diff, newStyle);
 }
@@ -320,7 +316,7 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
 
     // If our zoom factor changes and we have a defined scrollLeft/Top, we need to adjust that value into the
     // new zoomed coordinate space.
-    if (hasOverflowClip() && layer() && oldStyle && oldStyle->effectiveZoom() != newStyle.effectiveZoom()) {
+    if (hasNonVisibleOverflow() && layer() && oldStyle && oldStyle->effectiveZoom() != newStyle.effectiveZoom()) {
         if (auto* scrollableArea = layer()->scrollableArea()) {
             ScrollPosition scrollPosition = scrollableArea->scrollPosition();
             float zoomScaleFactor = newStyle.effectiveZoom() / oldStyle->effectiveZoom();
@@ -486,8 +482,8 @@ void RenderBox::updateFromStyle()
     setFloating(!isOutOfFlowPositioned() && styleToUse.isFloating());
 
     // We also handle <body> and <html>, whose overflow applies to the viewport.
-    if (styleToUse.overflowX() != Overflow::Visible && !isDocElementRenderer && isRenderBlock()) {
-        bool boxHasOverflowClip = true;
+    if (!(styleToUse.overflowX() == Overflow::Visible && styleToUse.overflowY() == Overflow::Visible) && !isDocElementRenderer && isRenderBlock()) {
+        bool boxHasNonVisibleOverflow = true;
         if (isBody()) {
             // Overflow on the body can propagate to the viewport under the following conditions.
             // (1) The root element is <html>.
@@ -496,20 +492,20 @@ void RenderBox::updateFromStyle()
             if (is<HTMLHtmlElement>(*document().documentElement())
                 && document().body() == element()
                 && document().documentElement()->renderer()->style().overflowX() == Overflow::Visible) {
-                boxHasOverflowClip = false;
+                boxHasNonVisibleOverflow = false;
             }
         }
         // Check for overflow clip.
         // It's sufficient to just check one direction, since it's illegal to have visible on only one overflow value.
-        if (boxHasOverflowClip) {
-            if (!s_hadOverflowClip && hasRenderOverflow()) {
+        if (boxHasNonVisibleOverflow) {
+            if (!s_hadNonVisibleOverflow && hasRenderOverflow()) {
                 // Erase the overflow.
                 // Overflow changes have to result in immediate repaints of the entire layout overflow area because
                 // repaints issued by removal of descendants get clipped using the updated style when they shouldn't.
                 repaintRectangle(visualOverflowRect());
                 repaintRectangle(layoutOverflowRect());
             }
-            setHasOverflowClip();
+            setHasNonVisibleOverflow();
         }
     }
     setHasTransformRelatedProperty(styleToUse.hasTransformRelatedProperty());
@@ -552,7 +548,7 @@ LayoutUnit RenderBox::clientHeight() const
 
 int RenderBox::scrollWidth() const
 {
-    if (hasOverflowClip() && layer())
+    if (hasPotentiallyScrollableOverflow() && layer())
         return layer()->scrollWidth();
     // For objects with visible overflow, this matches IE.
     // FIXME: Need to work right with writing modes.
@@ -565,7 +561,7 @@ int RenderBox::scrollWidth() const
 
 int RenderBox::scrollHeight() const
 {
-    if (hasOverflowClip() && layer())
+    if (hasPotentiallyScrollableOverflow() && layer())
         return layer()->scrollHeight();
     // For objects with visible overflow, this matches IE.
     // FIXME: Need to work right with writing modes.
@@ -576,13 +572,13 @@ int RenderBox::scrollHeight() const
 int RenderBox::scrollLeft() const
 {
     auto* scrollableArea = layer() ? layer()->scrollableArea() : nullptr;
-    return (hasOverflowClip() && scrollableArea) ? scrollableArea->scrollPosition().x() : 0;
+    return (hasNonVisibleOverflow() && scrollableArea) ? scrollableArea->scrollPosition().x() : 0;
 }
 
 int RenderBox::scrollTop() const
 {
     auto* scrollableArea = layer() ? layer()->scrollableArea() : nullptr;
-    return (hasOverflowClip() && scrollableArea) ? scrollableArea->scrollPosition().y() : 0;
+    return (hasNonVisibleOverflow() && scrollableArea) ? scrollableArea->scrollPosition().y() : 0;
 }
 
 void RenderBox::resetLogicalHeightBeforeLayoutIfNeeded()
@@ -601,7 +597,7 @@ static void setupWheelEventMonitor(RenderLayerScrollableArea& scrollableArea)
 
 void RenderBox::setScrollLeft(int newLeft, const ScrollPositionChangeOptions& options)
 {
-    if (!hasOverflowClip() || !layer())
+    if (!hasPotentiallyScrollableOverflow() || !layer())
         return;
     auto* scrollableArea = layer()->scrollableArea();
     ASSERT(scrollableArea);
@@ -611,7 +607,7 @@ void RenderBox::setScrollLeft(int newLeft, const ScrollPositionChangeOptions& op
 
 void RenderBox::setScrollTop(int newTop, const ScrollPositionChangeOptions& options)
 {
-    if (!hasOverflowClip() || !layer())
+    if (!hasPotentiallyScrollableOverflow() || !layer())
         return;
     auto* scrollableArea = layer()->scrollableArea();
     ASSERT(scrollableArea);
@@ -621,7 +617,7 @@ void RenderBox::setScrollTop(int newTop, const ScrollPositionChangeOptions& opti
 
 void RenderBox::setScrollPosition(const ScrollPosition& position, const ScrollPositionChangeOptions& options)
 {
-    if (!hasOverflowClip() || !layer())
+    if (!hasPotentiallyScrollableOverflow() || !layer())
         return;
     auto* scrollableArea = layer()->scrollableArea();
     ASSERT(scrollableArea);
@@ -636,12 +632,11 @@ void RenderBox::absoluteRects(Vector<IntRect>& rects, const LayoutPoint& accumul
 
 void RenderBox::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed) const
 {
-    FloatRect localRect(0, 0, width(), height());
-
     RenderFragmentedFlow* fragmentedFlow = enclosingFragmentedFlow();
-    if (fragmentedFlow && fragmentedFlow->absoluteQuadsForBox(quads, wasFixed, this, localRect.y(), localRect.maxY()))
+    if (fragmentedFlow && fragmentedFlow->absoluteQuadsForBox(quads, wasFixed, this))
         return;
 
+    auto localRect = FloatRect { 0, 0, width(), height() };
     quads.append(localToAbsoluteQuad(localRect, UseTransforms, wasFixed));
 }
 
@@ -669,7 +664,7 @@ LayoutUnit RenderBox::constrainLogicalWidthInFragmentByMinMax(LayoutUnit logical
     if (styleToUse.hasAspectRatio() && minLength.isAuto() && (styleToUse.logicalWidth().isAuto() || styleToUse.logicalWidth().isMinContent() || styleToUse.logicalWidth().isMaxContent()) && styleToUse.overflowInlineDirection() == Overflow::Visible) {
         // Make sure we actually used the aspect ratio.
         if (shouldComputeLogicalWidthFromAspectRatio())
-            minLength = Length(LengthType::MinIntrinsic);
+            minLength = Length(LengthType::MinContent);
     }
     return std::max(logicalWidth, computeLogicalWidthInFragmentUsing(MinSize, minLength, availableWidth, cb, fragment));
 }
@@ -682,8 +677,12 @@ LayoutUnit RenderBox::constrainLogicalHeightByMinMax(LayoutUnit logicalHeight, s
             logicalHeight = std::min(logicalHeight, maxH.value());
     }
     auto logicalMinHeight = styleToUse.logicalMinHeight();
-    if (logicalMinHeight.isAuto() && shouldComputeLogicalHeightFromAspectRatio() && intrinsicContentHeight && styleToUse.overflowBlockDirection() == Overflow::Visible)
-        logicalMinHeight = Length(*intrinsicContentHeight, LengthType::Fixed);
+    if (logicalMinHeight.isAuto() && shouldComputeLogicalHeightFromAspectRatio() && intrinsicContentHeight && styleToUse.overflowBlockDirection() == Overflow::Visible) {
+        auto heightFromAspectRatio = blockSizeFromAspectRatio(horizontalBorderAndPaddingExtent(), verticalBorderAndPaddingExtent(), LayoutUnit(style().logicalAspectRatio()), style().boxSizingForAspectRatio(), logicalWidth()) - borderAndPaddingLogicalHeight();
+        if (firstChild())
+            heightFromAspectRatio = std::max(heightFromAspectRatio, *intrinsicContentHeight);
+        logicalMinHeight = Length(heightFromAspectRatio, LengthType::Fixed);
+    }
     if (logicalMinHeight.isMinContent() || logicalMinHeight.isMaxContent())
         logicalMinHeight = Length();
     if (std::optional<LayoutUnit> computedLogicalHeight = computeLogicalHeightUsing(MinSize, logicalMinHeight, intrinsicContentHeight))
@@ -845,13 +844,13 @@ bool RenderBox::fixedElementLaysOutRelativeToFrame(const FrameView& frameView) c
 
 bool RenderBox::includeVerticalScrollbarSize() const
 {
-    return hasOverflowClip() && layer() && !layer()->hasOverlayScrollbars()
+    return hasNonVisibleOverflow() && layer() && !layer()->hasOverlayScrollbars()
         && (style().overflowY() == Overflow::Scroll || style().overflowY() == Overflow::Auto);
 }
 
 bool RenderBox::includeHorizontalScrollbarSize() const
 {
-    return hasOverflowClip() && layer() && !layer()->hasOverlayScrollbars()
+    return hasNonVisibleOverflow() && layer() && !layer()->hasOverlayScrollbars()
         && (style().overflowX() == Overflow::Scroll || style().overflowX() == Overflow::Auto);
 }
 
@@ -873,7 +872,7 @@ int RenderBox::horizontalScrollbarHeight() const
 
 int RenderBox::intrinsicScrollbarLogicalWidth() const
 {
-    if (!hasOverflowClip())
+    if (!hasNonVisibleOverflow())
         return 0;
 
     if (isHorizontalWritingMode() && (style().overflowY() == Overflow::Scroll && !canUseOverlayScrollbars())) {
@@ -959,19 +958,16 @@ bool RenderBox::isScrollableOrRubberbandableBox() const
 
 bool RenderBox::requiresLayerWithScrollableArea() const
 {
-    // The RenderView is always expected to be potentially scrollable.
+    // FIXME: This is wrong; these boxes' layers should not need ScrollableAreas via RenderLayer.
     if (isRenderView() || isDocumentElementRenderer())
         return true;
 
-    // Overflow handling needs RenderLayerScrollableArea.
-    if (scrollsOverflow() || hasOverflowClip() || hasHorizontalOverflow() || hasVerticalOverflow())
+    if (hasPotentiallyScrollableOverflow())
         return true;
 
-    // Resize handling needs RenderLayerScrollableArea.
     if (style().resize() != Resize::None)
         return true;
 
-    // Marquee handling needs RenderLayerScrollableArea.
     if (isHTMLMarquee() && style().marqueeBehavior() != MarqueeBehavior::None)
         return true;
 
@@ -984,7 +980,7 @@ bool RenderBox::canBeProgramaticallyScrolled() const
     if (isRenderView())
         return true;
 
-    if (!hasOverflowClip())
+    if (!hasPotentiallyScrollableOverflow())
         return false;
 
     if (hasScrollableOverflowX() || hasScrollableOverflowY())
@@ -995,7 +991,7 @@ bool RenderBox::canBeProgramaticallyScrolled() const
 
 bool RenderBox::usesCompositedScrolling() const
 {
-    return hasOverflowClip() && hasLayer() && layer()->usesCompositedScrolling();
+    return hasNonVisibleOverflow() && hasLayer() && layer()->usesCompositedScrolling();
 }
 
 void RenderBox::autoscroll(const IntPoint& position)
@@ -1065,7 +1061,7 @@ bool RenderBox::canUseOverlayScrollbars() const
 
 bool RenderBox::hasAutoScrollbar(ScrollbarOrientation orientation) const
 {
-    if (!hasOverflowClip())
+    if (!hasNonVisibleOverflow())
         return false;
 
     auto isAutoOrScrollWithOverlayScrollbar = [&](Overflow overflow) {
@@ -1083,7 +1079,7 @@ bool RenderBox::hasAutoScrollbar(ScrollbarOrientation orientation) const
 
 bool RenderBox::hasAlwaysPresentScrollbar(ScrollbarOrientation orientation) const
 {
-    if (!hasOverflowClip())
+    if (!hasNonVisibleOverflow())
         return false;
 
     auto isAlwaysVisibleScrollbar = [&](Overflow overflow) {
@@ -1106,7 +1102,7 @@ bool RenderBox::needsPreferredWidthsRecalculation() const
 
 ScrollPosition RenderBox::scrollPosition() const
 {
-    if (!hasOverflowClip())
+    if (!hasPotentiallyScrollableOverflow())
         return { 0, 0 };
 
     ASSERT(hasLayer());
@@ -1119,7 +1115,7 @@ ScrollPosition RenderBox::scrollPosition() const
 
 LayoutSize RenderBox::cachedSizeForOverflowClip() const
 {
-    ASSERT(hasOverflowClip());
+    ASSERT(hasNonVisibleOverflow());
     ASSERT(hasLayer());
     return layer()->size();
 }
@@ -1368,7 +1364,7 @@ LayoutUnit RenderBox::adjustContentBoxLogicalHeightForBoxSizing(std::optional<La
 }
 
 // Hit Testing
-bool RenderBox::hitTestVisualOverflow(const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset) const
+bool RenderBox::hitTestVisualOverflow(const HitTestLocation& hitTestLocation, const LayoutPoint& accumulatedOffset) const
 {
     if (isRenderView())
         return true;
@@ -1377,22 +1373,21 @@ bool RenderBox::hitTestVisualOverflow(const HitTestLocation& locationInContainer
     LayoutRect overflowBox = visualOverflowRect();
     flipForWritingMode(overflowBox);
     overflowBox.moveBy(adjustedLocation);
-    return locationInContainer.intersects(overflowBox);
+    return hitTestLocation.intersects(overflowBox);
 }
 
-bool RenderBox::hitTestClipPath(const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset) const
+bool RenderBox::hitTestClipPath(const HitTestLocation& hitTestLocation, const LayoutPoint& accumulatedOffset) const
 {
     if (!style().clipPath())
         return true;
 
-    LayoutPoint adjustedLocation = accumulatedOffset + location();
-    const LayoutSize localOffset = toLayoutSize(adjustedLocation);
-
+    auto offsetFromHitTestRoot = toLayoutSize(accumulatedOffset + location());
+    auto hitTestLocationInLocalCoordinates = hitTestLocation.point() - offsetFromHitTestRoot;
     switch (style().clipPath()->type()) {
     case ClipPathOperation::Shape: {
         auto& clipPath = downcast<ShapeClipPathOperation>(*style().clipPath());
         auto referenceBoxRect = referenceBox(clipPath.referenceBox());
-        if (!clipPath.pathForReferenceRect(referenceBoxRect).contains(locationInContainer.point() - localOffset, clipPath.windRule()))
+        if (!clipPath.pathForReferenceRect(referenceBoxRect).contains(hitTestLocationInLocalCoordinates, clipPath.windRule()))
             return false;
         break;
     }
@@ -1404,7 +1399,7 @@ bool RenderBox::hitTestClipPath(const HitTestLocation& locationInContainer, cons
         if (!is<SVGClipPathElement>(*element))
             break;
         auto& clipper = downcast<RenderSVGResourceClipper>(*element->renderer());
-        if (!clipper.hitTestClipContent(FloatRect(borderBoxRect()), FloatPoint(locationInContainer.point() - localOffset)))
+        if (!clipper.hitTestClipContent(FloatRect(borderBoxRect()), FloatPoint { hitTestLocationInLocalCoordinates }))
             return false;
         break;
     }
@@ -1415,7 +1410,7 @@ bool RenderBox::hitTestClipPath(const HitTestLocation& locationInContainer, cons
     return true;
 }
 
-bool RenderBox::hitTestBorderRadius(const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset) const
+bool RenderBox::hitTestBorderRadius(const HitTestLocation& hitTestLocation, const LayoutPoint& accumulatedOffset) const
 {
     if (isRenderView() || !style().hasBorderRadius())
         return true;
@@ -1424,7 +1419,7 @@ bool RenderBox::hitTestBorderRadius(const HitTestLocation& locationInContainer, 
     LayoutRect borderRect = borderBoxRect();
     borderRect.moveBy(adjustedLocation);
     RoundedRect border = style().getRoundedBorderFor(borderRect);
-    return locationInContainer.intersects(border);
+    return hitTestLocation.intersects(border);
 }
 
 bool RenderBox::nodeAtPoint(const HitTestRequest& request, HitTestResult& result, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction action)
@@ -1752,7 +1747,7 @@ bool RenderBox::backgroundHasOpaqueTopLayer() const
         return false;
 
     // Clipped with local scrolling
-    if (hasOverflowClip() && fillLayer.attachment() == FillAttachment::LocalBackground)
+    if (hasNonVisibleOverflow() && fillLayer.attachment() == FillAttachment::LocalBackground)
         return false;
 
     if (fillLayer.hasOpaqueImage(*this) && fillLayer.hasRepeatXY() && fillLayer.image()->canRender(this, style().effectiveZoom()))
@@ -2008,7 +2003,7 @@ bool RenderBox::pushContentsClip(PaintInfo& paintInfo, const LayoutPoint& accumu
         return false;
 
     bool isControlClip = hasControlClip();
-    bool isOverflowClip = hasOverflowClip() && !layer()->isSelfPaintingLayer();
+    bool isOverflowClip = hasNonVisibleOverflow() && !layer()->isSelfPaintingLayer();
     
     if (!isControlClip && !isOverflowClip)
         return false;
@@ -2035,7 +2030,7 @@ bool RenderBox::pushContentsClip(PaintInfo& paintInfo, const LayoutPoint& accumu
 
 void RenderBox::popContentsClip(PaintInfo& paintInfo, PaintPhase originalPhase, const LayoutPoint& accumulatedOffset)
 {
-    ASSERT(hasControlClip() || (hasOverflowClip() && !layer()->isSelfPaintingLayer()));
+    ASSERT(hasControlClip() || (hasNonVisibleOverflow() && !layer()->isSelfPaintingLayer()));
 
     if (paintInfo.phase == PaintPhase::EventRegion)
         paintInfo.eventRegionContext->popClip();
@@ -2051,11 +2046,18 @@ void RenderBox::popContentsClip(PaintInfo& paintInfo, PaintPhase originalPhase, 
 
 LayoutRect RenderBox::overflowClipRect(const LayoutPoint& location, RenderFragmentContainer* fragment, OverlayScrollbarSizeRelevancy relevancy, PaintPhase) const
 {
-    // FIXME: When overflow-clip (CSS3) is implemented, we'll obtain the property
-    // here.
     LayoutRect clipRect = borderBoxRectInFragment(fragment);
     clipRect.setLocation(location + clipRect.location() + LayoutSize(borderLeft(), borderTop()));
     clipRect.setSize(clipRect.size() - LayoutSize(borderLeft() + borderRight(), borderTop() + borderBottom()));
+    if (style().overflowX() == Overflow::Clip && style().overflowY() == Overflow::Visible) {
+        LayoutRect infRect = LayoutRect::infiniteRect();
+        clipRect.setY(infRect.y());
+        clipRect.setHeight(infRect.height());
+    } else if (style().overflowY() == Overflow::Clip && style().overflowX() == Overflow::Visible) {
+        LayoutRect infRect = LayoutRect::infiniteRect();
+        clipRect.setX(infRect.x());
+        clipRect.setWidth(infRect.width());
+    }
 
     // Subtract out scrollbars if we have them.
     if (auto* scrollableArea = layer() ? layer()->scrollableArea() : nullptr) {
@@ -2523,7 +2525,7 @@ std::optional<LayoutRect> RenderBox::computeVisibleRectInContainer(const LayoutR
     // FIXME: We ignore the lightweight clipping rect that controls use, since if |o| is in mid-layout,
     // its controlClipRect will be wrong. For overflow clip we use the values cached by the layer.
     adjustedRect.setLocation(topLeft);
-    if (localContainer->hasOverflowClip()) {
+    if (localContainer->hasNonVisibleOverflow()) {
         RenderBox& containerBox = downcast<RenderBox>(*localContainer);
         bool isEmpty = !containerBox.applyCachedClipAndScrollPosition(adjustedRect, container, context);
         if (isEmpty) {
@@ -2698,9 +2700,16 @@ LayoutUnit RenderBox::computeIntrinsicLogicalWidthUsing(Length logicalWidthLengt
 
     LayoutUnit minLogicalWidth;
     LayoutUnit maxLogicalWidth;
-    if (!logicalWidthLength.isMinIntrinsic() && shouldComputeLogicalWidthFromAspectRatio())
-        minLogicalWidth = maxLogicalWidth = computeLogicalWidthFromAspectRatio();
-    else
+    if (!logicalWidthLength.isMinIntrinsic() && shouldComputeLogicalWidthFromAspectRatio()) {
+        minLogicalWidth = maxLogicalWidth = computeLogicalWidthFromAspectRatioInternal() - borderAndPadding;
+        if (firstChild()) {
+            LayoutUnit minChildrenLogicalWidth;
+            LayoutUnit maxChildrenLogicalWidth;
+            computeIntrinsicKeywordLogicalWidths(minChildrenLogicalWidth, maxChildrenLogicalWidth);
+            minLogicalWidth = std::max(minLogicalWidth, minChildrenLogicalWidth);
+            maxLogicalWidth = std::max(maxLogicalWidth, maxChildrenLogicalWidth);
+        }
+    } else
         computeIntrinsicKeywordLogicalWidths(minLogicalWidth, maxLogicalWidth);
 
     if (logicalWidthLength.isMinContent() || logicalWidthLength.isMinIntrinsic())
@@ -2769,7 +2778,24 @@ bool RenderBox::isStretchingColumnFlexItem() const
 }
 
 // FIXME: Can/Should we move this inside specific layout classes (flex. grid)? Can we refactor columnFlexItemHasStretchAlignment logic?
-bool RenderBox::hasStretchedLogicalWidth() const
+bool RenderBox::hasStretchedLogicalHeight() const
+{
+    auto& style = this->style();
+    if (!style.logicalHeight().isAuto() || style.marginBefore().isAuto() || style.marginAfter().isAuto())
+        return false;
+    RenderBlock* containingBlock = this->containingBlock();
+    if (!containingBlock) {
+        // We are evaluating align-self/justify-self, which default to 'normal' for the root element.
+        // The 'normal' value behaves like 'start' except for Flexbox Items, which obviously should have a container.
+        return false;
+    }
+    if (containingBlock->isHorizontalWritingMode() != isHorizontalWritingMode())
+        return style.resolvedJustifySelf(&containingBlock->style(), containingBlock->selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch;
+    return style.resolvedAlignSelf(&containingBlock->style(), containingBlock->selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch;
+}
+
+// FIXME: Can/Should we move this inside specific layout classes (flex. grid)? Can we refactor columnFlexItemHasStretchAlignment logic?
+bool RenderBox::hasStretchedLogicalWidth(StretchingMode stretchingMode) const
 {
     auto& style = this->style();
     if (!style.logicalWidth().isAuto() || style.marginStart().isAuto() || style.marginEnd().isAuto())
@@ -2780,9 +2806,10 @@ bool RenderBox::hasStretchedLogicalWidth() const
         // The 'normal' value behaves like 'start' except for Flexbox Items, which obviously should have a container.
         return false;
     }
+    auto normalItemPosition = stretchingMode == StretchingMode::Any ? containingBlock->selfAlignmentNormalBehavior(this) : ItemPosition::Normal;
     if (containingBlock->isHorizontalWritingMode() != isHorizontalWritingMode())
-        return style.resolvedAlignSelf(&containingBlock->style(), containingBlock->selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch;
-    return style.resolvedJustifySelf(&containingBlock->style(), containingBlock->selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch;
+        return style.resolvedAlignSelf(&containingBlock->style(), normalItemPosition).position() == ItemPosition::Stretch;
+    return style.resolvedJustifySelf(&containingBlock->style(), normalItemPosition).position() == ItemPosition::Stretch;
 }
 
 bool RenderBox::sizesLogicalWidthToFitContent(SizeType widthType) const
@@ -3121,7 +3148,7 @@ std::optional<LayoutUnit> RenderBox::computeIntrinsicLogicalContentHeightUsing(L
 {
     // FIXME: The CSS sizing spec is considering changing what min-content/max-content should resolve to.
     // If that happens, this code will have to change.
-    if (logicalHeightLength.isMinContent() || logicalHeightLength.isMaxContent() || logicalHeightLength.isFitContent() || logicalHeightLength.isMinIntrinsic()) {
+    if (logicalHeightLength.isMinContent() || logicalHeightLength.isMaxContent() || logicalHeightLength.isFitContent() || logicalHeightLength.isLegacyIntrinsic()) {
         if (intrinsicContentHeight && style().boxSizing() == BoxSizing::BorderBox)
             return intrinsicContentHeight.value() + borderAndPaddingLogicalHeight();
         return intrinsicContentHeight;
@@ -3138,7 +3165,7 @@ std::optional<LayoutUnit> RenderBox::computeContentAndScrollbarLogicalHeightUsin
         return heightType == MinSize ? std::optional<LayoutUnit>(0) : std::nullopt;
     // FIXME: The CSS sizing spec is considering changing what min-content/max-content should resolve to.
     // If that happens, this code will have to change.
-    if (height.isIntrinsic() || height.isMinIntrinsic())
+    if (height.isIntrinsic() || height.isLegacyIntrinsic())
         return computeIntrinsicLogicalContentHeightUsing(height, intrinsicContentHeight, borderAndPaddingLogicalHeight());
     if (height.isFixed())
         return LayoutUnit(height.value());
@@ -4794,7 +4821,7 @@ bool RenderBox::shrinkToAvoidFloats() const
 
 bool RenderBox::createsNewFormattingContext() const
 {
-    return isInlineBlockOrInlineTable() || isFloatingOrOutOfFlowPositioned() || hasOverflowClip() || isFlexItemIncludingDeprecated()
+    return isInlineBlockOrInlineTable() || isFloatingOrOutOfFlowPositioned() || hasPotentiallyScrollableOverflow() || isFlexItemIncludingDeprecated()
         || isTableCell() || isTableCaption() || isFieldset() || isWritingModeRoot() || isDocumentElementRenderer() || isRenderFragmentedFlow() || isRenderFragmentContainer()
         || style().containsLayout() || isGridItem() || style().specifiesColumns() || style().columnSpan() == ColumnSpan::All || style().display() == DisplayType::FlowRoot;
 }
@@ -4882,7 +4909,7 @@ void RenderBox::addOverflowFromChild(const RenderBox* child, const LayoutSize& d
     // Add in visual overflow from the child.  Even if the child clips its overflow, it may still
     // have visual overflow of its own set from box shadows or reflections. It is unnecessary to propagate this
     // overflow if we are clipping our own overflow.
-    if (child->hasSelfPaintingLayer() || hasOverflowClip())
+    if (child->hasSelfPaintingLayer() || hasPotentiallyScrollableOverflow())
         return;
     LayoutRect childVisualOverflowRect = child->visualOverflowRectForPropagation(&style());
     childVisualOverflowRect.move(delta);
@@ -4897,7 +4924,7 @@ void RenderBox::addLayoutOverflow(const LayoutRect& rect)
     
     // For overflow clip objects, we don't want to propagate overflow into unreachable areas.
     LayoutRect overflowRect(rect);
-    if (hasOverflowClip() || isRenderView()) {
+    if (hasPotentiallyScrollableOverflow() || isRenderView()) {
         // Overflow is in the block's coordinate space and thus is flipped for horizontal-bt and vertical-rl 
         // writing modes. At this stage that is actually a simplification, since we can treat horizontal-tb/bt as the same
         // and vertical-lr/rl as the same.
@@ -5042,10 +5069,22 @@ LayoutRect RenderBox::logicalLayoutOverflowRectForPropagation(const RenderStyle*
 
 LayoutRect RenderBox::layoutOverflowRectForPropagation(const RenderStyle* parentStyle) const
 {
-    // Only propagate interior layout overflow if we don't clip it.
+    // Only propagate interior layout overflow if we don't completely clip it.
     LayoutRect rect = borderBoxRect();
-    if (!shouldApplyLayoutContainment(*this) && !hasOverflowClip())
-        rect.unite(layoutOverflowRect());
+    if (!shouldApplyLayoutContainment(*this)) {
+        if (style().overflowX() == Overflow::Clip && style().overflowY() == Overflow::Visible) {
+            LayoutRect clippedOverflowRect = layoutOverflowRect();
+            clippedOverflowRect.setX(rect.x());
+            clippedOverflowRect.setWidth(rect.width());
+            rect.unite(clippedOverflowRect);
+        } else if (style().overflowY() == Overflow::Clip && style().overflowX() == Overflow::Visible) {
+            LayoutRect clippedOverflowRect = layoutOverflowRect();
+            clippedOverflowRect.setY(rect.y());
+            clippedOverflowRect.setHeight(rect.height());
+            rect.unite(clippedOverflowRect);
+        } else if (!hasNonVisibleOverflow())
+            rect.unite(layoutOverflowRect());
+    }
 
     bool hasTransform = this->hasTransform();
     // While a stickily positioned renderer is also inflow positioned, they stretch the overflow rect with their inflow geometry
@@ -5260,20 +5299,32 @@ bool RenderBox::shouldComputeLogicalWidthFromAspectRatio() const
     if (shouldIgnoreAspectRatio())
         return false;
 
+    if (isGridItem()) {
+        if (shouldComputeSizeAsReplaced()) {
+            if (hasStretchedLogicalWidth() && hasStretchedLogicalHeight())
+                return false;
+        } else if (hasStretchedLogicalWidth(StretchingMode::Explicit))
+            return false;
+    }
+
     auto isResolvablePercentageHeight = [&] {
         return style().logicalHeight().isPercentOrCalculated() && (isOutOfFlowPositioned() || percentageLogicalHeightIsResolvable());
     };
     return hasOverridingLogicalHeight() || shouldComputeLogicalWidthFromAspectRatioAndInsets(*this) || style().logicalHeight().isFixed() || isResolvablePercentageHeight();
 }
 
-LayoutUnit RenderBox::computeLogicalWidthFromAspectRatio(RenderFragmentContainer* fragment) const
+LayoutUnit RenderBox::computeLogicalWidthFromAspectRatioInternal() const
 {
     ASSERT(shouldComputeLogicalWidthFromAspectRatio());
     auto computedValues = computeLogicalHeight(logicalHeight(), logicalTop());
     LayoutUnit logicalHeightforAspectRatio = computedValues.m_extent;
 
-    auto logicalWidth = inlineSizeFromAspectRatio(horizontalBorderAndPaddingExtent(), verticalBorderAndPaddingExtent(), LayoutUnit(style().logicalAspectRatio()), style().boxSizingForAspectRatio(), logicalHeightforAspectRatio);
+    return inlineSizeFromAspectRatio(horizontalBorderAndPaddingExtent(), verticalBorderAndPaddingExtent(), LayoutUnit(style().logicalAspectRatio()), style().boxSizingForAspectRatio(), logicalHeightforAspectRatio);
+}
 
+LayoutUnit RenderBox::computeLogicalWidthFromAspectRatio(RenderFragmentContainer* fragment) const
+{
+    auto logicalWidth = computeLogicalWidthFromAspectRatioInternal();
     LayoutUnit containerWidthInInlineDirection = std::max<LayoutUnit>(0, containingBlockLogicalWidthForContentInFragment(fragment));
     return constrainLogicalWidthInFragmentByMinMax(logicalWidth, containerWidthInInlineDirection, *containingBlock(), fragment, AllowIntrinsic::No);
 }

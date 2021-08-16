@@ -97,12 +97,6 @@ public:
         or16(imm, Address(scratchRegister()));
     }
 
-    void or8(TrustedImm32 imm, AbsoluteAddress address)
-    {
-        move(TrustedImmPtr(address.m_ptr), scratchRegister());
-        or8(imm, Address(scratchRegister()));
-    }
-
     void sub32(TrustedImm32 imm, AbsoluteAddress address)
     {
         move(TrustedImmPtr(address.m_ptr), scratchRegister());
@@ -587,6 +581,12 @@ public:
         }
     }
 
+    void rshift64(RegisterID src, TrustedImm32 imm, RegisterID dest)
+    {
+        move(src, dest);
+        rshift64(imm, dest);
+    }
+
     void urshift64(TrustedImm32 imm, RegisterID dest)
     {
         m_assembler.shrq_i8r(imm.m_value, dest);
@@ -1013,16 +1013,6 @@ public:
     {
         move(imm, scratchRegister());
         m_assembler.movq_rm(scratchRegister(), address.offset, address.base, address.index, address.scale);
-    }
-    
-    void storeZero64(ImplicitAddress address)
-    {
-        store64(TrustedImm32(0), address);
-    }
-    
-    void storeZero64(BaseIndex address)
-    {
-        store64(TrustedImm32(0), address);
     }
     
     DataLabel32 store64WithAddressOffsetPatch(RegisterID src, Address address)

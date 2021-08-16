@@ -35,6 +35,7 @@
 #include "GraphicsContext.h"
 #include "GraphicsLayer.h"
 #include "HTMLMediaElementEnums.h"
+#include "HighlightVisibility.h"
 #include "HostWindow.h"
 #include "Icon.h"
 #include "ImageBuffer.h"
@@ -75,6 +76,10 @@ class WAKResponder;
 #if ENABLE(MEDIA_USAGE)
 #include "MediaSessionIdentifier.h"
 #include "MediaUsageInfo.h"
+#endif
+
+#if HAVE(ARKIT_INLINE_PREVIEW)
+class HTMLModelElement;
 #endif
 
 #if ENABLE(WEBXR)
@@ -223,7 +228,9 @@ public:
 
     virtual void contentsSizeChanged(Frame&, const IntSize&) const = 0;
     virtual void intrinsicContentsSizeChanged(const IntSize&) const = 0;
-    virtual void scrollRectIntoView(const IntRect&) const { }; // Currently only Mac has a non empty implementation.
+
+    virtual void scrollContainingScrollViewsToRevealRect(const IntRect&) const { }; // Currently only Mac has a non empty implementation.
+    virtual void scrollMainFrameToRevealRect(const IntRect&) const { };
 
     virtual bool shouldUnavailablePluginMessageBeButton(RenderEmbeddedObject::PluginUnavailabilityReason) const { return false; }
     virtual void unavailablePluginButtonClicked(Element&, RenderEmbeddedObject::PluginUnavailabilityReason) const { }
@@ -236,6 +243,10 @@ public:
     virtual void themeColorChanged() const { }
     virtual void pageExtendedBackgroundColorDidChange() const { }
     virtual void sampledPageTopColorChanged() const { }
+    
+#if ENABLE(APP_HIGHLIGHTS)
+    virtual WebCore::HighlightVisibility appHighlightsVisiblility() const { return HighlightVisibility::Hidden; };
+#endif
 
     virtual void exceededDatabaseQuota(Frame&, const String& databaseName, DatabaseDetails) = 0;
 
@@ -353,6 +364,7 @@ public:
     // the changes appear on the screen in synchrony with updates to GraphicsLayers.
     virtual void setNeedsOneShotDrawingSynchronization() = 0;
 
+    virtual bool shouldTriggerRenderingUpdate(unsigned) const { return true; }
     // Makes a rendering update happen soon, typically in the current runloop.
     virtual void triggerRenderingUpdate() = 0;
     // Schedule a rendering update that coordinates with display refresh. Returns true if scheduled. (This is only used by SVGImageChromeClient.)
@@ -589,6 +601,13 @@ public:
 
 #if ENABLE(TEXT_AUTOSIZING)
     virtual void textAutosizingUsesIdempotentModeChanged() { }
+#endif
+
+#if HAVE(ARKIT_INLINE_PREVIEW_IOS)
+    virtual void takeModelElementFullscreen(WebCore::GraphicsLayer::PlatformLayerID) const { }
+#endif
+#if HAVE(ARKIT_INLINE_PREVIEW_MAC)
+    virtual void modelElementDidCreatePreview(WebCore::HTMLModelElement&, const URL&, const String&, const WebCore::FloatSize&) const { };
 #endif
 
 protected:

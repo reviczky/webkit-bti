@@ -643,11 +643,9 @@ public:
     WEBCORE_EXPORT void setViewExposedRect(std::optional<FloatRect>);
     std::optional<FloatRect> viewExposedRect() const { return m_viewExposedRect; }
 
-#if ENABLE(CSS_SCROLL_SNAP)
     void updateSnapOffsets() final;
     bool isScrollSnapInProgress() const final;
     void updateScrollingCoordinatorScrollSnapProperties() const;
-#endif
 
     float adjustScrollStepForFixedContent(float step, ScrollbarOrientation, ScrollGranularity) final;
 
@@ -809,7 +807,7 @@ private:
 
     void updateWidgetPositionsTimerFired();
 
-    bool scrollToFragmentInternal(const String&);
+    bool scrollToFragmentInternal(StringView);
     void scrollToAnchor();
     void scrollPositionChanged(const ScrollPosition& oldPosition, const ScrollPosition& newPosition);
     void scrollableAreaSetChanged();
@@ -955,7 +953,7 @@ private:
 
     bool m_isTransparent { false };
 #if ENABLE(DARK_MODE_CSS)
-    bool m_usesDarkAppearance { false };
+    OptionSet<StyleColor::Options> m_styleColorOptions;
 #endif
 
     bool m_isTrackingRepaints { false }; // Used for testing.

@@ -163,8 +163,10 @@ public:
     void setWebRTCMDNSICECandidatesEnabled(bool isEnabled) { m_isWebRTCMDNSICECandidatesEnabled = isEnabled; }
     bool webRTCH264SimulcastEnabled() const { return m_isWebRTCH264SimulcastEnabled; }
     void setWebRTCH264SimulcastEnabled(bool isEnabled) { m_isWebRTCH264SimulcastEnabled = isEnabled; }
-    bool webRTCPlatformSocketsEnabled() const { return m_isWebRTCPlatformSocketsEnabled; }
-    void setWebRTCPlatformSocketsEnabled(bool isEnabled) { m_isWebRTCPlatformSocketsEnabled = isEnabled; }
+    bool webRTCPlatformTCPSocketsEnabled() const { return m_isWebRTCPlatformTCPSocketsEnabled; }
+    void setWebRTCPlatformTCPSocketsEnabled(bool isEnabled) { m_isWebRTCPlatformTCPSocketsEnabled = isEnabled; }
+    bool webRTCPlatformUDPSocketsEnabled() const { return m_isWebRTCPlatformUDPSocketsEnabled; }
+    void setWebRTCPlatformUDPSocketsEnabled(bool isEnabled) { m_isWebRTCPlatformUDPSocketsEnabled = isEnabled; }
 #endif
 
 #if ENABLE(DATALIST_ELEMENT)
@@ -233,6 +235,8 @@ public:
 #if ENABLE(MEDIA_SOURCE)
     void setWebMParserEnabled(bool isEnabled) { m_webMParserEnabled = isEnabled; }
     bool webMParserEnabled() const { return m_webMParserEnabled; }
+    void setWebMWebAudioEnabled(bool isEnabled) { m_webMWebAudioEnabled = isEnabled; }
+    bool webMWebAudioEnabled() const { return m_webMWebAudioEnabled; }
 #endif
 
 #if HAVE(CELESTIAL)
@@ -241,12 +245,12 @@ public:
 #endif
 
 #if ENABLE(VORBIS)
-    void setVorbisDecoderEnabled(bool isEnabled) { m_vorbisDecoderEnabled = isEnabled; }
+    WEBCORE_EXPORT void setVorbisDecoderEnabled(bool isEnabled);
     bool vorbisDecoderEnabled() const { return m_vorbisDecoderEnabled; }
 #endif
 
 #if ENABLE(OPUS)
-    void setOpusDecoderEnabled(bool isEnabled) { m_opusDecoderEnabled = isEnabled; }
+    WEBCORE_EXPORT void setOpusDecoderEnabled(bool isEnabled);
     bool opusDecoderEnabled() const { return m_opusDecoderEnabled; }
 #endif
 
@@ -319,7 +323,8 @@ private:
     bool m_isWebRTCVP9Profile0CodecEnabled { false };
     bool m_isWebRTCVP9Profile2CodecEnabled { false };
     bool m_isWebRTCH264LowLatencyEncoderEnabled { false };
-    bool m_isWebRTCPlatformSocketsEnabled { false };
+    bool m_isWebRTCPlatformTCPSocketsEnabled { false };
+    bool m_isWebRTCPlatformUDPSocketsEnabled { false };
 #endif
 
 #if ENABLE(DATALIST_ELEMENT)
@@ -341,7 +346,11 @@ private:
     bool m_lineHeightUnitsEnabled { false };
 
     bool m_privateClickMeasurementDebugModeEnabled { false };
+#if HAVE(RSA_BSSA)
+    bool m_privateClickMeasurementFraudPreventionEnabled { true };
+#else
     bool m_privateClickMeasurementFraudPreventionEnabled { false };
+#endif
 
 #if ENABLE(TOUCH_EVENTS)
     bool m_mouseEventsSimulationEnabled { false };
@@ -368,6 +377,7 @@ private:
 
 #if ENABLE(MEDIA_SOURCE)
     bool m_webMParserEnabled { false };
+    bool m_webMWebAudioEnabled { false };
 #endif
 
 #if HAVE(CELESTIAL)

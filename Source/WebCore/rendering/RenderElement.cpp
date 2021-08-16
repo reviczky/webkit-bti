@@ -145,13 +145,13 @@ RenderElement::~RenderElement()
     ASSERT(!m_firstChild);
 }
 
-RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&& style, RendererCreationType creationType)
+RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&& style, OptionSet<ConstructBlockLevelRendererFor> rendererTypeOverride)
 {
     // Minimal support for content properties replacing an entire element.
     // Works only if we have exactly one piece of content and it's a URL.
     // Otherwise acts as if we didn't support this feature.
     const ContentData* contentData = style.contentData();
-    if (creationType == CreateAllRenderers && contentData && !contentData->next() && is<ImageContentData>(*contentData) && !element.isPseudoElement()) {
+    if (!rendererTypeOverride && contentData && !contentData->next() && is<ImageContentData>(*contentData) && !element.isPseudoElement()) {
         Style::loadPendingResources(style, element.document(), &element);
         auto& styleImage = downcast<ImageContentData>(*contentData).image();
         auto image = createRenderer<RenderImage>(element, WTFMove(style), const_cast<StyleImage*>(&styleImage));
@@ -164,20 +164,17 @@ RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&
     case DisplayType::Contents:
         return nullptr;
     case DisplayType::Inline:
-        if (creationType == CreateAllRenderers)
-            return createRenderer<RenderInline>(element, WTFMove(style));
-        FALLTHROUGH; // Fieldsets should make a block flow if display:inline is set.
+        if (rendererTypeOverride.contains(ConstructBlockLevelRendererFor::Inline))
+            return createRenderer<RenderBlockFlow>(element, WTFMove(style));
+        return createRenderer<RenderInline>(element, WTFMove(style));
     case DisplayType::Block:
     case DisplayType::FlowRoot:
     case DisplayType::InlineBlock:
         return createRenderer<RenderBlockFlow>(element, WTFMove(style));
     case DisplayType::ListItem:
-        // <summary> elements with display:list-item should not be rendered as list items because
-        // they'd end up with two markers before the text (one from summary element and the other as
-        // a list item). Let them fallthrough in that case so they will create a RenderFlexibleBox.
-        if (creationType == CreateAllRenderers)
-            return createRenderer<RenderListItem>(element, WTFMove(style));
-        FALLTHROUGH;
+        if (rendererTypeOverride.contains(ConstructBlockLevelRendererFor::ListItem))
+            return createRenderer<RenderBlockFlow>(element, WTFMove(style));
+        return createRenderer<RenderListItem>(element, WTFMove(style));
     case DisplayType::Flex:
     case DisplayType::InlineFlex:
         return createRenderer<RenderFlexibleBox>(element, WTFMove(style));
@@ -188,8 +185,9 @@ RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&
     case DisplayType::InlineBox:
         return createRenderer<RenderDeprecatedFlexibleBox>(element, WTFMove(style));
     default: {
-        if (creationType == OnlyCreateBlockAndFlexboxRenderers)
+        if (style.isDisplayTableOrTablePart() && rendererTypeOverride.contains(ConstructBlockLevelRendererFor::TableOrTablePart))
             return createRenderer<RenderBlockFlow>(element, WTFMove(style));
+
         switch (style.display()) {
         case DisplayType::Table:
         case DisplayType::InlineTable:
@@ -363,6 +361,12 @@ void RenderElement::updateFillImages(const FillLayer* oldLayers, const FillLayer
         for (; layer1 && layer2; layer1 = layer1->next(), layer2 = layer2->next()) {
             if (!arePointingToEqualData(layer1->image(), layer2->image()))
                 return false;
+            if (layer1->image() && layer1->image()->usesDataProtocol())
+                return false;
+            if (auto styleImage = layer1->image()) {
+                if (styleImage->errorOccurred() || !styleImage->hasImage() || styleImage->usesDataProtocol())
+                    return false;
+            }
         }
 
         return !layer1 && !layer2;
@@ -889,7 +893,7 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
 
         setHorizontalWritingMode(true);
         setHasVisibleBoxDecorations(false);
-        setHasOverflowClip(false);
+        setHasNonVisibleOverflow(false);
         setHasTransformRelatedProperty(false);
         setHasReflection(false);
     }
@@ -1336,7 +1340,7 @@ bool RenderElement::mayCauseRepaintInsideViewport(const IntRect* optionalViewpor
     if (frameView.isOffscreen())
         return false;
 
-    if (!hasOverflowClip()) {
+    if (!hasNonVisibleOverflow()) {
         // FIXME: Computing the overflow rect is expensive if any descendant has
         // its own self-painting layer. As a result, we prefer to abort early in
         // this case and assume it may cause us to repaint inside the viewport.

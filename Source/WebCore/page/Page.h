@@ -55,6 +55,7 @@
 #include <wtf/Noncopyable.h>
 #include <wtf/Ref.h>
 #include <wtf/UniqueRef.h>
+#include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
@@ -93,6 +94,7 @@ class AlternativeTextClient;
 class ApplicationCacheStorage;
 class AuthenticatorCoordinator;
 class BackForwardController;
+class BroadcastChannelRegistry;
 class CacheStorageProvider;
 class Chrome;
 class ContextMenuController;
@@ -107,11 +109,13 @@ class Element;
 class FocusController;
 class FormData;
 class Frame;
+class HTMLElement;
 class HTMLMediaElement;
 class HistoryItem;
 class ImageOverlayController;
 class InspectorClient;
 class InspectorController;
+class IntSize;
 class LibWebRTCProvider;
 class LowPowerModeNotifier;
 class MediaCanStartListener;
@@ -158,6 +162,7 @@ class WheelEventDeltaFilter;
 class WheelEventTestMonitor;
 
 struct SimpleRange;
+struct TextRecognitionResult;
 
 using PlatformDisplayID = uint32_t;
 using SharedStringHash = uint32_t;
@@ -269,7 +274,7 @@ public:
     void setOpenedByDOM();
 
     bool openedByDOMWithOpener() const { return m_openedByDOMWithOpener; }
-    void setOpenedByDOMWithOpener() { m_openedByDOMWithOpener = true; }
+    void setOpenedByDOMWithOpener(bool value) { m_openedByDOMWithOpener = value; }
 
     WEBCORE_EXPORT void goToItem(HistoryItem&, FrameLoadType, ShouldTreatAsContinuingLoad);
 
@@ -278,7 +283,11 @@ public:
 
     PageGroup& group();
 
+    BroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry; }
+    WEBCORE_EXPORT void setBroadcastChannelRegistry(Ref<BroadcastChannelRegistry>&&); // Only used by WebKitLegacy.
+
     WEBCORE_EXPORT static void forEachPage(const WTF::Function<void(Page&)>&);
+    static unsigned nonUtilityPageCount();
 
     unsigned subframeCount() const;
 
@@ -780,8 +789,6 @@ public:
     bool isControlledByAutomation() const { return m_controlledByAutomation; }
     void setControlledByAutomation(bool controlled) { m_controlledByAutomation = controlled; }
 
-    WEBCORE_EXPORT bool isAlwaysOnLoggingAllowed() const;
-
     String captionUserPreferencesStyleSheet();
     void setCaptionUserPreferencesStyleSheet(const String&);
 
@@ -808,7 +815,7 @@ public:
     bool isUtilityPage() const { return m_isUtilityPage; }
 
     bool loadsSubresources() const { return m_loadsSubresources; }
-    bool allowsLoadFromURL(const URL&) const;
+    WEBCORE_EXPORT bool allowsLoadFromURL(const URL&) const;
     ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking() const { return m_shouldRelaxThirdPartyCookieBlocking; }
 
     bool isLowPowerModeEnabled() const { return m_throttlingReasons.contains(ThrottlingReason::LowPowerMode); }
@@ -860,6 +867,11 @@ public:
     LoadSchedulingMode loadSchedulingMode() const { return m_loadSchedulingMode; }
     void setLoadSchedulingMode(LoadSchedulingMode);
 
+#if ENABLE(IMAGE_ANALYSIS)
+    WEBCORE_EXPORT bool hasCachedTextRecognitionResult(const HTMLElement&) const;
+    void cacheTextRecognitionResult(const HTMLElement&, const IntRect& containerRect, const TextRecognitionResult&);
+#endif
+
 private:
     struct Navigation {
         RegistrableDomain domain;
@@ -904,6 +916,11 @@ private:
     RenderingUpdateScheduler& renderingUpdateScheduler();
 
     WheelEventTestMonitor& ensureWheelEventTestMonitor();
+
+#if ENABLE(IMAGE_ANALYSIS)
+    void resetTextRecognitionResults();
+    void updateElementsWithTextRecognitionResults();
+#endif
 
     const std::unique_ptr<Chrome> m_chrome;
     const std::unique_ptr<DragCaretController> m_dragCaretController;
@@ -1071,8 +1088,9 @@ private:
     Ref<StorageNamespaceProvider> m_storageNamespaceProvider;
     Ref<UserContentProvider> m_userContentProvider;
     Ref<VisitedLinkStore> m_visitedLinkStore;
+    Ref<BroadcastChannelRegistry> m_broadcastChannelRegistry;
     RefPtr<WheelEventTestMonitor> m_wheelEventTestMonitor;
-    HashSet<ActivityStateChangeObserver*> m_activityStateChangeObservers;
+    WeakHashSet<ActivityStateChangeObserver> m_activityStateChangeObservers;
 
 #if ENABLE(RESOURCE_USAGE)
     std::unique_ptr<ResourceUsageOverlay> m_resourceUsageOverlay;
@@ -1175,6 +1193,12 @@ private:
 
     const bool m_httpsUpgradeEnabled { true };
     mutable MediaSessionGroupIdentifier m_mediaSessionGroupIdentifier;
+
+#if ENABLE(IMAGE_ANALYSIS)
+    // FIXME: These should be refactored to use a weak hash map of HTMLElement to std::pair<TextRecognitionResult, IntSize>.
+    Vector<std::pair<WeakPtr<HTMLElement>, std::pair<TextRecognitionResult, IntRect>>> m_textRecognitionResultsByElement;
+    WeakHashSet<HTMLElement> m_elementsWithTextRecognitionResults;
+#endif
 };
 
 inline PageGroup& Page::group()

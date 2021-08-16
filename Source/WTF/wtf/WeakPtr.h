@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <wtf/HashTraits.h>
 #include <wtf/Threading.h>
 
 namespace WTF {
@@ -82,6 +83,14 @@ private:
 #endif
 };
 
+template<typename Counter> struct HashTraits<Ref<WeakPtrImpl<Counter>>> : RefHashTraits<WeakPtrImpl<Counter>> {
+    static constexpr bool hasIsReleasedWeakValueFunction = true;
+    static bool isReleasedWeakValue(const Ref<WeakPtrImpl<Counter>>& value)
+    {
+        return !value.isHashTableDeletedValue() && !value.isHashTableEmptyValue() && !value.get();
+    }
+};
+
 template<typename T, typename Counter> class WeakPtr {
     WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -119,6 +128,7 @@ public:
     void clear() { m_impl = nullptr; }
 
 private:
+    template<typename, typename, typename> friend class WeakHashMap;
     template<typename, typename> friend class WeakHashSet;
     template<typename, typename> friend class WeakPtr;
     template<typename, typename> friend class WeakPtrFactory;
@@ -193,6 +203,7 @@ public:
 
 private:
     template<typename, typename> friend class WeakHashSet;
+    template<typename, typename, typename> friend class WeakHashMap;
 
     mutable RefPtr<WeakPtrImpl<Counter>> m_impl;
 #if ASSERT_ENABLED
@@ -255,16 +266,26 @@ template<typename T, typename Counter> template<typename U> inline WeakPtr<T, Co
     return *this;
 }
 
-template<typename T> inline auto makeWeakPtr(T& object, EnableWeakPtrThreadingAssertions enableWeakPtrThreadingAssertions = EnableWeakPtrThreadingAssertions::Yes)
+template<typename T, typename = std::enable_if_t<!IsSmartPtr<T>::value>> inline auto makeWeakPtr(T& object, EnableWeakPtrThreadingAssertions enableWeakPtrThreadingAssertions = EnableWeakPtrThreadingAssertions::Yes)
 {
     return object.weakPtrFactory().template createWeakPtr<T>(object, enableWeakPtrThreadingAssertions);
 }
 
-template<typename T> inline auto makeWeakPtr(T* ptr, EnableWeakPtrThreadingAssertions enableWeakPtrThreadingAssertions = EnableWeakPtrThreadingAssertions::Yes) -> decltype(makeWeakPtr(*ptr))
+template<typename T, typename = std::enable_if_t<!IsSmartPtr<T>::value>> inline auto makeWeakPtr(T* ptr, EnableWeakPtrThreadingAssertions enableWeakPtrThreadingAssertions = EnableWeakPtrThreadingAssertions::Yes) -> decltype(makeWeakPtr(*ptr))
 {
     if (!ptr)
         return { };
     return makeWeakPtr(*ptr, enableWeakPtrThreadingAssertions);
+}
+
+template<typename T, typename = std::enable_if_t<!IsSmartPtr<T>::value>> inline auto makeWeakPtr(const Ref<T>& object, EnableWeakPtrThreadingAssertions enableWeakPtrThreadingAssertions = EnableWeakPtrThreadingAssertions::Yes)
+{
+    return makeWeakPtr(object.get(), enableWeakPtrThreadingAssertions);
+}
+
+template<typename T, typename = std::enable_if_t<!IsSmartPtr<T>::value>> inline auto makeWeakPtr(const RefPtr<T>& object, EnableWeakPtrThreadingAssertions enableWeakPtrThreadingAssertions = EnableWeakPtrThreadingAssertions::Yes)
+{
+    return makeWeakPtr(object.get(), enableWeakPtrThreadingAssertions);
 }
 
 template<typename T, typename U, typename Counter> inline bool operator==(const WeakPtr<T, Counter>& a, const WeakPtr<U, Counter>& b)

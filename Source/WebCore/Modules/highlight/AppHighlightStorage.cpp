@@ -43,6 +43,7 @@
 #include "StaticRange.h"
 #include "TextIndicator.h"
 #include "TextIterator.h"
+#include <wtf/UUID.h>
 
 namespace WebCore {
 
@@ -203,7 +204,10 @@ static AppHighlightRangeData createAppHighlightRangeData(const StaticRange& rang
 {
     auto text = plainText(range);
     text.truncate(textPreviewLength);
+    auto identifier = createCanonicalUUIDString();
+
     return {
+        identifier,
         text,
         makeNodePath(&range.startContainer()),
         range.startOffset(),
@@ -266,8 +270,8 @@ bool AppHighlightStorage::attemptToRestoreHighlightAndScroll(AppHighlightRangeDa
         auto textIndicator = TextIndicator::createWithRange(range.value(), { TextIndicatorOption::DoNotClipToVisibleRect }, WebCore::TextIndicatorPresentationTransition::Bounce);
         if (textIndicator)
             m_document->page()->chrome().client().setTextIndicator(textIndicator->data());
-        
-        TemporarySelectionChange selectionChange(*strongDocument, { range.value() }, { TemporarySelectionOption::RevealSelection, TemporarySelectionOption::SmoothScroll, TemporarySelectionOption::OverrideSmoothScrollFeatureEnablment });
+
+        TemporarySelectionChange selectionChange(*strongDocument, { range.value() }, { TemporarySelectionOption::DelegateMainFrameScroll, TemporarySelectionOption::SmoothScroll, TemporarySelectionOption::RevealSelectionBounds });
     }
 
     return true;

@@ -124,7 +124,13 @@ public:
         TimesEight,
         ScalePtr = isAddress64Bit() ? TimesEight : TimesFour,
     };
-    
+
+    enum class Extend : uint8_t {
+        ZExt32,
+        SExt32,
+        None
+    };
+
     struct BaseIndex;
     
     static RegisterID withSwappedRegister(RegisterID original, RegisterID left, RegisterID right)
@@ -210,18 +216,23 @@ public:
     //
     // Describes a complex addressing mode.
     struct BaseIndex {
-        BaseIndex(RegisterID base, RegisterID index, Scale scale, int32_t offset = 0)
+        BaseIndex(RegisterID base, RegisterID index, Scale scale, int32_t offset = 0, Extend extend = Extend::None)
             : base(base)
             , index(index)
             , scale(scale)
             , offset(offset)
+            , extend(extend)
         {
+#if !CPU(ARM64)
+            ASSERT(extend == Extend::None);
+#endif
         }
         
         RegisterID base;
         RegisterID index;
         Scale scale;
         int32_t offset;
+        Extend extend;
         
         BaseIndex withOffset(int32_t additionalOffset)
         {
@@ -232,6 +243,34 @@ public:
         {
             return BaseIndex(AbstractMacroAssembler::withSwappedRegister(base, left, right), AbstractMacroAssembler::withSwappedRegister(index, left, right), scale, offset);
         }
+    };
+
+    // PreIndexAddress:
+    //
+    // Describes an address with base address and pre-increment/decrement index.
+    struct PreIndexAddress {
+        PreIndexAddress(RegisterID base, int index)
+            : base(base)
+            , index(index)
+        {
+        }
+
+        RegisterID base;
+        int index;
+    };
+
+    // PostIndexAddress:
+    //
+    // Describes an address with base address and post-increment/decrement index.
+    struct PostIndexAddress {
+        PostIndexAddress(RegisterID base, int index)
+            : base(base)
+            , index(index)
+        {
+        }
+
+        RegisterID base;
+        int index;
     };
 
     // AbsoluteAddress:
@@ -311,9 +350,9 @@ public:
     // (which are implemented as an enum) from accidentally being passed as
     // immediate values.
     struct TrustedImm32 : public TrustedImm {
-        TrustedImm32() { }
+        constexpr TrustedImm32() = default;
         
-        explicit TrustedImm32(int32_t value)
+        explicit constexpr TrustedImm32(int32_t value)
             : m_value(value)
         {
         }
@@ -325,7 +364,7 @@ public:
         }
 #endif
 
-        int32_t m_value;
+        int32_t m_value { 0 };
     };
 
 
@@ -1003,7 +1042,6 @@ public:
 
     ALWAYS_INLINE void tagReturnAddress() { }
     ALWAYS_INLINE void untagReturnAddress(RegisterID = RegisterID::InvalidGPRReg) { }
-    ALWAYS_INLINE void untagReturnAddressWithoutExtraValidation() { }
 
     ALWAYS_INLINE void tagPtr(PtrTag, RegisterID) { }
     ALWAYS_INLINE void tagPtr(RegisterID, RegisterID) { }

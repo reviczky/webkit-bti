@@ -210,7 +210,7 @@ void RemoteScrollingCoordinatorProxy::applyScrollingTreeLayerPositionsAfterCommi
     m_scrollingTree->applyLayerPositionsAfterCommit();
 }
 
-void RemoteScrollingCoordinatorProxy::currentSnapPointIndicesDidChange(WebCore::ScrollingNodeID nodeID, unsigned horizontal, unsigned vertical)
+void RemoteScrollingCoordinatorProxy::currentSnapPointIndicesDidChange(WebCore::ScrollingNodeID nodeID, std::optional<unsigned> horizontal, std::optional<unsigned> vertical)
 {
     m_webPageProxy.send(Messages::RemoteScrollingCoordinator::CurrentSnapPointIndicesChangedForNode(nodeID, horizontal, vertical));
 }
@@ -302,10 +302,8 @@ void RemoteScrollingCoordinatorProxy::sendUIStateChangedIfNecessary()
 
 void RemoteScrollingCoordinatorProxy::resetStateAfterProcessExited()
 {
-#if ENABLE(CSS_SCROLL_SNAP)
     m_currentHorizontalSnapPointIndex = 0;
     m_currentVerticalSnapPointIndex = 0;
-#endif
     m_uiState.reset();
 }
 

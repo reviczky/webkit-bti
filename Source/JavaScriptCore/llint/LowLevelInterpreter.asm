@@ -1992,30 +1992,19 @@ slowPathOp(create_generator)
 slowPathOp(create_async_generator)
 slowPathOp(define_accessor_property)
 slowPathOp(define_data_property)
-slowPathOp(enumerator_generic_pname)
-slowPathOp(enumerator_structure_pname)
 slowPathOp(get_by_val_with_this)
-slowPathOp(get_direct_pname)
-slowPathOp(get_enumerable_length)
 slowPathOp(get_property_enumerator)
-slowPathOp(greater)
-slowPathOp(greatereq)
-slowPathOp(has_enumerable_indexed_property)
-slowPathOp(has_enumerable_property)
+slowPathOp(enumerator_next)
+slowPathOp(enumerator_get_by_val)
+slowPathOp(enumerator_in_by_val)
+slowPathOp(enumerator_has_own_property)
 
 if not JSVALUE64
-    slowPathOp(has_enumerable_structure_property)
-    slowPathOp(has_own_structure_property)
-    slowPathOp(in_structure_property)
     slowPathOp(get_prototype_of)
 end
 
-slowPathOp(has_private_name)
-slowPathOp(has_private_brand)
 slowPathOp(is_callable)
 slowPathOp(is_constructor)
-slowPathOp(less)
-slowPathOp(lesseq)
 slowPathOp(mod)
 slowPathOp(new_array_buffer)
 slowPathOp(new_array_with_spread)
@@ -2027,7 +2016,6 @@ slowPathOp(resolve_scope_for_hoisting_func_decl_in_eval)
 slowPathOp(spread)
 slowPathOp(strcat)
 slowPathOp(throw_static_error)
-slowPathOp(to_index_string)
 slowPathOp(typeof)
 slowPathOp(typeof_is_object)
 slowPathOp(typeof_is_function)
@@ -2044,6 +2032,8 @@ end
 
 llintSlowPathOp(in_by_id)
 llintSlowPathOp(in_by_val)
+llintSlowPathOp(has_private_name)
+llintSlowPathOp(has_private_brand)
 llintSlowPathOp(del_by_id)
 llintSlowPathOp(del_by_val)
 llintSlowPathOp(instanceof)
@@ -2112,6 +2102,21 @@ llintJumpTrueOrFalseOp(jfalse, OpJfalse,
     # Truthy Cell
     macro (dispatch) dispatch() end)
 
+compareOp(greater, OpGreater,
+    macro (left, right, result) cigt left, right, result end,
+    macro (left, right, result) cdgt left, right, result end)
+
+compareOp(greatereq, OpGreatereq,
+    macro (left, right, result) cigteq left, right, result end,
+    macro (left, right, result) cdgteq left, right, result end)
+
+compareOp(less, OpLess,
+    macro (left, right, result) cilt left, right, result end,
+    macro (left, right, result) cdlt left, right, result end)
+
+compareOp(lesseq, OpLesseq,
+    macro (left, right, result) cilteq left, right, result end,
+    macro (left, right, result) cdlteq left, right, result end)
 
 compareJumpOp(
     jless, OpJless,

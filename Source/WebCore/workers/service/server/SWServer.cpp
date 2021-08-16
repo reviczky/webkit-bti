@@ -158,9 +158,9 @@ void SWServer::addRegistrationFromStore(ServiceWorkerContextData&& data)
 {
     // Pages should not have been able to make a new registration to this key while the import was still taking place.
     ASSERT(!m_scopeToRegistrationMap.contains(data.registration.key));
-    
+
     auto registrableDomain = WebCore::RegistrableDomain(data.scriptURL);
-    validateRegistrationDomain(registrableDomain, [this, weakThis = makeWeakPtr(this), data = WTFMove(data)] (bool isValid) mutable {
+    validateRegistrationDomain(registrableDomain, ServiceWorkerJobType::Register, [this, weakThis = makeWeakPtr(this), data = WTFMove(data)] (bool isValid) mutable {
         if (!weakThis)
             return;
         if (m_hasServiceWorkerEntitlement || isValid) {
@@ -169,7 +169,7 @@ void SWServer::addRegistrationFromStore(ServiceWorkerContextData&& data)
             auto registrationPtr = registration.get();
             addRegistration(WTFMove(registration));
 
-            auto worker = SWServerWorker::create(*this, *registrationPtr, data.scriptURL, data.script, data.certificateInfo, data.contentSecurityPolicy, WTFMove(data.referrerPolicy), data.workerType, data.serviceWorkerIdentifier, WTFMove(data.scriptResourceMap));
+            auto worker = SWServerWorker::create(*this, *registrationPtr, data.scriptURL, data.script, data.certificateInfo, data.contentSecurityPolicy, data.crossOriginEmbedderPolicy, WTFMove(data.referrerPolicy), data.workerType, data.serviceWorkerIdentifier, WTFMove(data.scriptResourceMap));
             registrationPtr->updateRegistrationState(ServiceWorkerRegistrationState::Active, worker.ptr());
             worker->setState(ServiceWorkerState::Activated);
         }
@@ -184,6 +184,9 @@ void SWServer::didSaveWorkerScriptsToDisk(ServiceWorkerIdentifier serviceWorkerI
 
 void SWServer::addRegistration(std::unique_ptr<SWServerRegistration>&& registration)
 {
+    if (!m_scopeToRegistrationMap.contains(registration->key()) && !SecurityOrigin::isLocalHostOrLoopbackIPAddress(registration->key().topOrigin().host))
+        m_uniqueRegistrationCount++;
+
     m_originStore->add(registration->key().topOrigin());
     auto registrationID = registration->identifier();
     ASSERT(!m_scopeToRegistrationMap.contains(registration->key()));
@@ -198,8 +201,11 @@ void SWServer::removeRegistration(ServiceWorkerRegistrationIdentifier registrati
     ASSERT(registration);
     
     auto it = m_scopeToRegistrationMap.find(registration->key());
-    if (it != m_scopeToRegistrationMap.end() && it->value == registration.get())
+    if (it != m_scopeToRegistrationMap.end() && it->value == registration.get()) {
         m_scopeToRegistrationMap.remove(it);
+        if (!SecurityOrigin::isLocalHostOrLoopbackIPAddress(registration->key().topOrigin().host))
+            m_uniqueRegistrationCount--;
+    }
 
     m_originStore->remove(registration->key().topOrigin());
     if (m_registrationStore)
@@ -330,7 +336,7 @@ SWServer::SWServer(UniqueRef<SWOriginStore>&& originStore, bool processTerminati
     , m_appBoundDomainsCallback(WTFMove(appBoundDomainsCallback))
     , m_hasServiceWorkerEntitlement(hasServiceWorkerEntitlement)
 {
-    RELEASE_LOG_IF(registrationDatabaseDirectory.isEmpty() && !m_sessionID.isEphemeral(), ServiceWorker, "No path to store the service worker registrations");
+    RELEASE_LOG_IF(registrationDatabaseDirectory.isEmpty(), ServiceWorker, "No path to store the service worker registrations");
     if (!m_sessionID.isEphemeral())
         m_registrationStore = makeUnique<RegistrationStore>(*this, WTFMove(registrationDatabaseDirectory));
     else
@@ -340,19 +346,19 @@ SWServer::SWServer(UniqueRef<SWOriginStore>&& originStore, bool processTerminati
     allServers().add(this);
 }
 
-void SWServer::validateRegistrationDomain(WebCore::RegistrableDomain domain, CompletionHandler<void(bool)>&& completionHandler)
+void SWServer::validateRegistrationDomain(WebCore::RegistrableDomain domain, ServiceWorkerJobType type, CompletionHandler<void(bool)>&& completionHandler)
 {
     if (m_hasServiceWorkerEntitlement || m_hasReceivedAppBoundDomains) {
-        completionHandler(m_appBoundDomains.contains(domain) && m_scopeToRegistrationMap.keys().size() < maxRegistrationCount);
+        completionHandler(SecurityOrigin::isLocalHostOrLoopbackIPAddress(domain.string()) || type != ServiceWorkerJobType::Register || (m_appBoundDomains.contains(domain) && m_uniqueRegistrationCount < maxRegistrationCount));
         return;
     }
-    
-    m_appBoundDomainsCallback([this, weakThis = makeWeakPtr(this), domain = WTFMove(domain), completionHandler = WTFMove(completionHandler)](auto&& appBoundDomains) mutable {
+
+    m_appBoundDomainsCallback([this, weakThis = makeWeakPtr(this), domain = WTFMove(domain), type, completionHandler = WTFMove(completionHandler)](auto&& appBoundDomains) mutable {
         if (!weakThis)
             return;
         m_hasReceivedAppBoundDomains = true;
         m_appBoundDomains = WTFMove(appBoundDomains);
-        completionHandler(m_appBoundDomains.contains(domain) && m_scopeToRegistrationMap.keys().size() < maxRegistrationCount);
+        completionHandler(SecurityOrigin::isLocalHostOrLoopbackIPAddress(domain.string()) || type != ServiceWorkerJobType::Register || (m_appBoundDomains.contains(domain) && m_uniqueRegistrationCount < maxRegistrationCount));
     });
 }
 
@@ -361,7 +367,7 @@ void SWServer::scheduleJob(ServiceWorkerJobData&& jobData)
 {
     ASSERT(m_connections.contains(jobData.connectionIdentifier()) || jobData.connectionIdentifier() == Process::identifier());
 
-    validateRegistrationDomain(WebCore::RegistrableDomain(jobData.scriptURL), [this, weakThis = makeWeakPtr(this), jobData = WTFMove(jobData)] (bool isValid) mutable {
+    validateRegistrationDomain(WebCore::RegistrableDomain(jobData.scriptURL), jobData.type, [this, weakThis = makeWeakPtr(this), jobData = WTFMove(jobData)] (bool isValid) mutable {
         if (!weakThis)
             return;
         if (m_hasServiceWorkerEntitlement || isValid) {
@@ -474,7 +480,7 @@ void SWServer::startScriptFetch(const ServiceWorkerJobData& jobData, SWServerReg
         request.setHTTPReferrer(originURL(origin).string());
         request.setHTTPUserAgent(serviceWorkerClientUserAgent(ClientOrigin { jobData.topOrigin, SecurityOrigin::create(jobData.scriptURL)->data() }));
         request.setPriority(ResourceLoadPriority::Low);
-        request.setIsAppBound(registration.isAppBound());
+        request.setIsAppInitiated(registration.isAppInitiated());
 
         m_softUpdateCallback(ServiceWorkerJobData { jobData }, shouldRefreshCache, WTFMove(request), [this, weakThis = makeWeakPtr(this)](auto& result) {
             if (!weakThis)
@@ -646,26 +652,26 @@ void SWServer::removeClientServiceWorkerRegistration(Connection& connection, Ser
         registration->removeClientServiceWorkerRegistration(connection.identifier());
 }
 
-void SWServer::updateWorker(const ServiceWorkerJobDataIdentifier& jobDataIdentifier, SWServerRegistration& registration, const URL& url, const ScriptBuffer& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, const String& referrerPolicy, WorkerType type, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
+void SWServer::updateWorker(const ServiceWorkerJobDataIdentifier& jobDataIdentifier, SWServerRegistration& registration, const URL& url, const ScriptBuffer& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, const CrossOriginEmbedderPolicy& coep, const String& referrerPolicy, WorkerType type, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
 {
-    tryInstallContextData(ServiceWorkerContextData { jobDataIdentifier, registration.data(), ServiceWorkerIdentifier::generate(), script, certificateInfo, contentSecurityPolicy, referrerPolicy, url, type, false, clientIsAppBoundForRegistrableDomain(RegistrableDomain(url)), WTFMove(scriptResourceMap) });
+    tryInstallContextData(ServiceWorkerContextData { jobDataIdentifier, registration.data(), ServiceWorkerIdentifier::generate(), script, certificateInfo, contentSecurityPolicy, coep, referrerPolicy, url, type, false, clientIsAppInitiatedForRegistrableDomain(RegistrableDomain(url)), WTFMove(scriptResourceMap) });
 }
 
-LastNavigationWasAppBound SWServer::clientIsAppBoundForRegistrableDomain(const RegistrableDomain& domain)
+LastNavigationWasAppInitiated SWServer::clientIsAppInitiatedForRegistrableDomain(const RegistrableDomain& domain)
 {
     auto clientsByRegistrableDomainIterator = m_clientsByRegistrableDomain.find(domain);
     if (clientsByRegistrableDomainIterator == m_clientsByRegistrableDomain.end())
-        return LastNavigationWasAppBound::No;
+        return LastNavigationWasAppInitiated::Yes;
 
     auto& clientsForRegistrableDomain = clientsByRegistrableDomainIterator->value;
     for (auto& client : clientsForRegistrableDomain) {
         auto data = m_clientsById.find(client);
         ASSERT(data != m_clientsById.end());
-        if (data->value.lastNavigationWasAppBound == LastNavigationWasAppBound::Yes)
-            return LastNavigationWasAppBound::Yes;
+        if (data->value.lastNavigationWasAppInitiated == LastNavigationWasAppInitiated::Yes)
+            return LastNavigationWasAppInitiated::Yes;
     }
 
-    return LastNavigationWasAppBound::No;
+    return LastNavigationWasAppInitiated::No;
 }
 
 void SWServer::tryInstallContextData(ServiceWorkerContextData&& data)
@@ -713,7 +719,7 @@ void SWServer::installContextData(const ServiceWorkerContextData& data)
     }
 
     auto* registration = m_scopeToRegistrationMap.get(data.registration.key).get();
-    auto worker = SWServerWorker::create(*this, *registration, data.scriptURL, data.script, data.certificateInfo, data.contentSecurityPolicy, String { data.referrerPolicy }, data.workerType, data.serviceWorkerIdentifier, HashMap<URL, ServiceWorkerContextData::ImportedScript> { data.scriptResourceMap });
+    auto worker = SWServerWorker::create(*this, *registration, data.scriptURL, data.script, data.certificateInfo, data.contentSecurityPolicy, data.crossOriginEmbedderPolicy, String { data.referrerPolicy }, data.workerType, data.serviceWorkerIdentifier, HashMap<URL, ServiceWorkerContextData::ImportedScript> { data.scriptResourceMap });
 
     auto* connection = worker->contextConnection();
     ASSERT(connection);
@@ -886,11 +892,11 @@ SWServerRegistration* SWServer::registrationFromServiceWorkerIdentifier(ServiceW
     return iterator->value->registration();
 }
 
-void SWServer::updateAppBoundValueForWorkers(const ClientOrigin& clientOrigin, LastNavigationWasAppBound lastNavigationWasAppBound)
+void SWServer::updateAppInitiatedValueForWorkers(const ClientOrigin& clientOrigin, LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
 {
     for (auto& worker : m_runningOrTerminatingWorkers.values()) {
         if (worker->origin().clientRegistrableDomain() == clientOrigin.clientRegistrableDomain())
-            worker->updateAppBoundValue(lastNavigationWasAppBound);
+            worker->updateAppInitiatedValue(lastNavigationWasAppInitiated);
     }
 }
 
@@ -899,9 +905,9 @@ void SWServer::registerServiceWorkerClient(ClientOrigin&& clientOrigin, ServiceW
     auto clientIdentifier = data.identifier;
 
     // Update the app-bound value if the new client is app-bound and the current clients for the origin are not marked app-bound.
-    if (data.lastNavigationWasAppBound == LastNavigationWasAppBound::Yes) {
-        if (clientIsAppBoundForRegistrableDomain(clientOrigin.clientRegistrableDomain()) == LastNavigationWasAppBound::No)
-            updateAppBoundValueForWorkers(clientOrigin, data.lastNavigationWasAppBound);
+    if (data.lastNavigationWasAppInitiated == LastNavigationWasAppInitiated::Yes) {
+        if (clientIsAppInitiatedForRegistrableDomain(clientOrigin.clientRegistrableDomain()) == LastNavigationWasAppInitiated::No)
+            updateAppInitiatedValueForWorkers(clientOrigin, data.lastNavigationWasAppInitiated);
     }
 
     ASSERT(!m_clientsById.contains(clientIdentifier));
@@ -939,7 +945,7 @@ void SWServer::registerServiceWorkerClient(ClientOrigin&& clientOrigin, ServiceW
 void SWServer::unregisterServiceWorkerClient(const ClientOrigin& clientOrigin, ServiceWorkerClientIdentifier clientIdentifier)
 {
     auto clientRegistrableDomain = clientOrigin.clientRegistrableDomain();
-    auto appBoundValueBefore = clientIsAppBoundForRegistrableDomain(clientOrigin.clientRegistrableDomain());
+    auto appInitiatedValueBefore = clientIsAppInitiatedForRegistrableDomain(clientOrigin.clientRegistrableDomain());
 
     bool wasRemoved = m_clientsById.remove(clientIdentifier);
     ASSERT_UNUSED(wasRemoved, wasRemoved);
@@ -984,9 +990,9 @@ void SWServer::unregisterServiceWorkerClient(const ClientOrigin& clientOrigin, S
 
     // If the app-bound value changed after this client was removed, we know it was the only app-bound
     // client for its origin, and we should update all workers to reflect this.
-    auto appBoundValueAfter = clientIsAppBoundForRegistrableDomain(clientOrigin.clientRegistrableDomain());
-    if (appBoundValueBefore != appBoundValueAfter)
-        updateAppBoundValueForWorkers(clientOrigin, appBoundValueAfter);
+    auto appInitiatedValueAfter = clientIsAppInitiatedForRegistrableDomain(clientOrigin.clientRegistrableDomain());
+    if (appInitiatedValueBefore != appInitiatedValueAfter)
+        updateAppInitiatedValueForWorkers(clientOrigin, appInitiatedValueAfter);
 
     auto registrationIterator = m_clientToControllingRegistration.find(clientIdentifier);
     if (registrationIterator == m_clientToControllingRegistration.end())
@@ -1011,6 +1017,9 @@ void SWServer::handleLowMemoryWarning()
 
 void SWServer::removeFromScopeToRegistrationMap(const ServiceWorkerRegistrationKey& key)
 {
+    if (m_scopeToRegistrationMap.contains(key) && !SecurityOrigin::isLocalHostOrLoopbackIPAddress(key.topOrigin().host))
+        m_uniqueRegistrationCount--;
+
     m_scopeToRegistrationMap.remove(key);
 }
 

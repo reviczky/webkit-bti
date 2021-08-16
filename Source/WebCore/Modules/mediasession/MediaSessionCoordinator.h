@@ -70,6 +70,12 @@ public:
     using RefCounted::ref;
     using RefCounted::deref;
 
+    struct PlaySessionCommand {
+        std::optional<double> atTime;
+        std::optional<MonotonicTime> hostTime;
+    };
+    std::optional<PlaySessionCommand> takeCurrentPlaySessionCommand() { return WTFMove(m_currentPlaySessionCommand); }
+
 private:
     MediaSessionCoordinator(ScriptExecutionContext*);
 
@@ -92,7 +98,7 @@ private:
 
     // MediaSessionCoordinatorClient
     void seekSessionToTime(double, CompletionHandler<void(bool)>&&) final;
-    void playSession(std::optional<double> atTime, std::optional<double> hostTime, CompletionHandler<void(bool)>&&) final;
+    void playSession(std::optional<double> atTime, std::optional<MonotonicTime> hostTime, CompletionHandler<void(bool)>&&) final;
     void pauseSession(CompletionHandler<void(bool)>&&) final;
     void setSessionTrack(const String&, CompletionHandler<void(bool)>&&) final;
     void coordinatorStateChanged(WebCore::MediaSessionCoordinatorState) final;
@@ -111,6 +117,7 @@ private:
     const void* m_logIdentifier;
     MediaSessionCoordinatorState m_state { MediaSessionCoordinatorState::Closed };
     bool m_hasCoordinatorsStateChangeEventListener { false };
+    std::optional<PlaySessionCommand> m_currentPlaySessionCommand;
 };
 
 }

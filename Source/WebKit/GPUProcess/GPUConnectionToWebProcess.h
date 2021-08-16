@@ -37,6 +37,7 @@
 #include "ScopedActiveMessageReceiveQueue.h"
 #include <WebCore/LibWebRTCEnumTraits.h>
 #include <WebCore/NowPlayingManager.h>
+#include <WebCore/PageIdentifier.h>
 #include <WebCore/ProcessIdentifier.h>
 #include <pal/SessionID.h>
 #include <wtf/Logger.h>
@@ -52,6 +53,11 @@
 #include <CoreGraphics/CGDisplayConfiguration.h>
 #endif
 
+namespace WebCore {
+class SecurityOrigin;
+struct SecurityOriginData;
+}
+
 namespace WebKit {
 
 class GPUProcess;
@@ -60,7 +66,6 @@ class LibWebRTCCodecsProxy;
 class LocalAudioSessionRoutingArbitrator;
 class RemoteAudioDestinationManager;
 class RemoteAudioHardwareListenerProxy;
-class RemoteAudioMediaStreamTrackRendererManager;
 class RemoteAudioMediaStreamTrackRendererInternalUnitManager;
 class RemoteAudioSessionProxy;
 class RemoteAudioSessionProxyManager;
@@ -100,8 +105,9 @@ public:
 
     RemoteMediaResourceManager& remoteMediaResourceManager();
 
+    PAL::SessionID sessionID() const { return m_sessionID; }
+
     Logger& logger();
-    bool isAlwaysOnLoggingAllowed() const;
 
     const String& mediaCacheDirectory() const;
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
@@ -111,6 +117,8 @@ public:
 #if ENABLE(MEDIA_STREAM)
     void setOrientationForMediaCapture(uint64_t orientation);
     void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture);
+    void updateCaptureOrigin(const WebCore::SecurityOriginData&);
+    bool setCaptureAttributionString();
     bool allowsAudioCapture() const { return m_allowsAudioCapture; }
     bool allowsVideoCapture() const { return m_allowsVideoCapture; }
     bool allowsDisplayCapture() const { return m_allowsDisplayCapture; }
@@ -152,6 +160,10 @@ public:
 #if ENABLE(WEBGL)
     void releaseGraphicsContextGLForTesting(GraphicsContextGLIdentifier);
 #endif
+
+    using RemoteRenderingBackendMap = HashMap<RenderingBackendIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteRenderingBackend>>;
+    const RemoteRenderingBackendMap& remoteRenderingBackendMap() const { return m_remoteRenderingBackendMap; }
+
 private:
     GPUConnectionToWebProcess(GPUProcess&, WebCore::ProcessIdentifier, IPC::Connection::Identifier, PAL::SessionID, GPUProcessConnectionParameters&&);
 
@@ -242,19 +254,18 @@ private:
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     std::unique_ptr<UserMediaCaptureManagerProxy> m_userMediaCaptureManagerProxy;
     std::unique_ptr<RemoteAudioMediaStreamTrackRendererInternalUnitManager> m_audioMediaStreamTrackRendererInternalUnitManager;
-    Ref<RemoteAudioMediaStreamTrackRendererManager> m_audioTrackRendererManager;
     Ref<RemoteSampleBufferDisplayLayerManager> m_sampleBufferDisplayLayerManager;
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM) && HAVE(AVASSETWRITERDELEGATE)
     std::unique_ptr<RemoteMediaRecorderManager> m_remoteMediaRecorderManager;
 #endif
 #if ENABLE(MEDIA_STREAM)
+    Ref<WebCore::SecurityOrigin> m_captureOrigin;
     bool m_allowsAudioCapture { false };
     bool m_allowsVideoCapture { false };
     bool m_allowsDisplayCapture { false };
 #endif
 
-    using RemoteRenderingBackendMap = HashMap<RenderingBackendIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteRenderingBackend>>;
     RemoteRenderingBackendMap m_remoteRenderingBackendMap;
 #if ENABLE(WEBGL)
     using RemoteGraphicsContextGLMap = HashMap<GraphicsContextGLIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGraphicsContextGL>>;

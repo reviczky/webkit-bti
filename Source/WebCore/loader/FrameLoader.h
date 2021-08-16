@@ -85,7 +85,7 @@ enum class NavigationPolicyDecision : uint8_t;
 enum class ShouldTreatAsContinuingLoad : bool;
 enum class UsedLegacyTLS : bool;
 enum class IsMainResource : bool { No, Yes };
-enum class ShouldUpdateAppBoundValue : bool { No, Yes };
+enum class ShouldUpdateAppInitiatedValue : bool { No, Yes };
 
 struct WindowFeatures;
 
@@ -309,7 +309,6 @@ public:
     const URL& provisionalLoadErrorBeingHandledURL() const { return m_provisionalLoadErrorBeingHandledURL; }
     void setProvisionalLoadErrorBeingHandledURL(const URL& url) { m_provisionalLoadErrorBeingHandledURL = url; }
 
-    bool isAlwaysOnLoggingAllowed() const;
     bool shouldSuppressTextInputFromEditing() const;
     bool isReloadingFromOrigin() const { return m_loadType == FrameLoadType::ReloadFromOrigin; }
 
@@ -318,9 +317,11 @@ public:
     bool alwaysAllowLocalWebarchive() const { return m_alwaysAllowLocalWebarchive; }
 
     // For subresource requests the FrameLoadType parameter has no effect and can be skipped.
-    void updateRequestAndAddExtraFields(ResourceRequest&, IsMainResource, FrameLoadType = FrameLoadType::Standard, ShouldUpdateAppBoundValue = ShouldUpdateAppBoundValue::Yes);
+    void updateRequestAndAddExtraFields(ResourceRequest&, IsMainResource, FrameLoadType = FrameLoadType::Standard, ShouldUpdateAppInitiatedValue = ShouldUpdateAppInitiatedValue::Yes);
 
-    void scheduleRefreshIfNeeded(Document&, const String& content);
+    void scheduleRefreshIfNeeded(Document&, const String& content, IsMetaRefresh);
+
+    void switchBrowsingContextsGroup();
 
 private:
     enum FormSubmissionCacheLoadPolicy {
@@ -510,6 +511,6 @@ private:
 //
 // FIXME: Consider making this function part of an appropriate class (not FrameLoader)
 // and moving it to a more appropriate location.
-RefPtr<Frame> createWindow(Frame& openerFrame, Frame& lookupFrame, FrameLoadRequest&&, const WindowFeatures&, bool& created);
+RefPtr<Frame> createWindow(Frame& openerFrame, Frame& lookupFrame, FrameLoadRequest&&, WindowFeatures&, bool& created);
 
 } // namespace WebCore

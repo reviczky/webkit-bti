@@ -11,8 +11,23 @@ file(MAKE_DIRECTORY ${WebKit2Gtk_FRAMEWORK_HEADERS_DIR}/webkit2gtk-${WEBKITGTK_A
 file(MAKE_DIRECTORY ${WebKit2Gtk_FRAMEWORK_HEADERS_DIR}/webkit2gtk-webextension)
 
 configure_file(UIProcess/API/gtk/WebKitVersion.h.in ${WebKit2Gtk_DERIVED_SOURCES_DIR}/webkit2/WebKitVersion.h)
-configure_file(gtk/webkit2gtk.pc.in ${WebKit2_PKGCONFIG_FILE} @ONLY)
-configure_file(gtk/webkit2gtk-web-extension.pc.in ${WebKit2WebExtension_PKGCONFIG_FILE} @ONLY)
+
+if (EXISTS "${TOOLS_DIR}/glib/apply-build-revision-to-files.py")
+    configure_file(gtk/webkit2gtk.pc.in ${WebKit2_PKGCONFIG_FILE} @ONLY)
+    configure_file(gtk/webkit2gtk-web-extension.pc.in ${WebKit2WebExtension_PKGCONFIG_FILE} @ONLY)
+    configure_file(Shared/glib/BuildRevision.h.in ${WebKit2Gtk_FRAMEWORK_HEADERS_DIR}/BuildRevision.h @ONLY)
+    add_custom_target(WebKit-build-revision
+        ${PYTHON_EXECUTABLE} "${TOOLS_DIR}/glib/apply-build-revision-to-files.py" ${WebKit2Gtk_FRAMEWORK_HEADERS_DIR}/BuildRevision.h ${WebKit2_PKGCONFIG_FILE} ${WebKit2WebExtension_PKGCONFIG_FILE}
+        DEPENDS ${WebKit2Gtk_FRAMEWORK_HEADERS_DIR}/BuildRevision.h ${WebKit2_PKGCONFIG_FILE} ${WebKit2WebExtension_PKGCONFIG_FILE}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} VERBATIM)
+    list(APPEND WebKit_DEPENDENCIES
+        WebKit-build-revision
+    )
+else ()
+    configure_file(gtk/webkit2gtk.pc.in ${WebKit2_PKGCONFIG_FILE})
+    configure_file(gtk/webkit2gtk-web-extension.pc.in ${WebKit2WebExtension_PKGCONFIG_FILE})
+    configure_file(Shared/glib/BuildRevision.h.in ${WebKit2Gtk_FRAMEWORK_HEADERS_DIR}/BuildRevision.h)
+endif ()
 
 add_definitions(-DBUILDING_WEBKIT)
 add_definitions(-DWEBKIT2_COMPILATION)
@@ -36,6 +51,7 @@ list(APPEND WebKit_UNIFIED_SOURCE_LIST_FILES
 list(APPEND WebKit_MESSAGES_IN_FILES
     UIProcess/ViewGestureController
 
+    WebProcess/gtk/GtkSettingsManagerProxy
     WebProcess/WebPage/ViewGestureGeometryCollector
 )
 
@@ -111,6 +127,7 @@ set(WebKit2GTK_INSTALLED_HEADERS
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitInstallMissingMediaPluginsPermissionRequest.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitJavascriptResult.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitMediaKeySystemPermissionRequest.h
+    ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitMemoryPressureSettings.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitMimeInfo.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitNavigationAction.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitNavigationPolicyDecision.h
@@ -546,14 +563,14 @@ add_custom_command(
 
 WEBKIT_BUILD_INSPECTOR_GRESOURCES(${WebKit2Gtk_DERIVED_SOURCES_DIR})
 
-set(WebKitResources
-    "        <file alias=\"css/gtk-theme.css\">gtk-theme.css</file>\n"
-    "        <file alias=\"images/missingImage\">missingImage.png</file>\n"
-    "        <file alias=\"images/missingImage@2x\">missingImage@2x.png</file>\n"
-    "        <file alias=\"images/panIcon\">panIcon.png</file>\n"
-    "        <file alias=\"images/textAreaResizeCorner\">textAreaResizeCorner.png</file>\n"
-    "        <file alias=\"images/textAreaResizeCorner@2x\">textAreaResizeCorner@2x.png</file>\n"
-)
+set(WebKitResources "")
+list(APPEND WebKitResources "<file alias=\"css/gtk-theme.css\">gtk-theme.css</file>\n")
+list(APPEND WebKitResources "<file alias=\"images/missingImage\">missingImage.png</file>\n")
+list(APPEND WebKitResources "<file alias=\"images/missingImage@2x\">missingImage@2x.png</file>\n")
+list(APPEND WebKitResources "<file alias=\"images/missingImage@3x\">missingImage@3x.png</file>\n")
+list(APPEND WebKitResources "<file alias=\"images/panIcon\">panIcon.png</file>\n")
+list(APPEND WebKitResources "<file alias=\"images/textAreaResizeCorner\">textAreaResizeCorner.png</file>\n")
+list(APPEND WebKitResources "<file alias=\"images/textAreaResizeCorner@2x\">textAreaResizeCorner@2x.png</file>\n")
 
 if (ENABLE_WEB_AUDIO)
     list(APPEND WebKitResources
@@ -664,6 +681,7 @@ if (ENABLE_INTROSPECTION)
             ${INTROSPECTION_SCANNER}
             --quiet
             --warn-all
+            --warn-error
             --symbol-prefix=webkit
             --identifier-prefix=WebKit
             --namespace=WebKit2
@@ -710,6 +728,7 @@ if (ENABLE_INTROSPECTION)
             ${INTROSPECTION_SCANNER}
             --quiet
             --warn-all
+            --warn-error
             --symbol-prefix=webkit
             --identifier-prefix=WebKit
             --namespace=WebKit2WebExtension

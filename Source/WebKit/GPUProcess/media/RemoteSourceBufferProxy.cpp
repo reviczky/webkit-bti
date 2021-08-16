@@ -165,7 +165,7 @@ void RemoteSourceBufferProxy::sourceBufferPrivateAppendComplete(SourceBufferPriv
         return;
 
     auto buffered = m_sourceBufferPrivate->buffered()->ranges();
-    m_connectionToWebProcess->connection().send(Messages::SourceBufferPrivateRemote::SourceBufferPrivateAppendComplete(appendResult, WTFMove(buffered), m_sourceBufferPrivate->totalTrackBufferSizeInBytes()), m_identifier);
+    m_connectionToWebProcess->connection().send(Messages::SourceBufferPrivateRemote::SourceBufferPrivateAppendComplete(appendResult, WTFMove(buffered), m_sourceBufferPrivate->totalTrackBufferSizeInBytes(), m_sourceBufferPrivate->timestampOffset()), m_identifier);
 }
 
 void RemoteSourceBufferProxy::sourceBufferPrivateDidReceiveRenderingError(int64_t errorCode)
@@ -257,10 +257,10 @@ void RemoteSourceBufferProxy::removeCodedFrames(const MediaTime& start, const Me
     });
 }
 
-void RemoteSourceBufferProxy::evictCodedFrames(uint64_t newDataSize, uint64_t pendingAppendDataCapacity, uint64_t maximumBufferSize, const MediaTime& currentTime, const MediaTime& duration, bool isEnded, EvictCodedFramesDelayedReply&& completionHandler)
+void RemoteSourceBufferProxy::evictCodedFrames(uint64_t newDataSize, uint64_t maximumBufferSize, const MediaTime& currentTime, const MediaTime& duration, bool isEnded, EvictCodedFramesDelayedReply&& completionHandler)
 {
-    m_sourceBufferPrivate->evictCodedFrames(newDataSize, pendingAppendDataCapacity, maximumBufferSize, currentTime, duration, isEnded);
-    completionHandler(m_sourceBufferPrivate->bufferFull(), m_sourceBufferPrivate->totalTrackBufferSizeInBytes());
+    m_sourceBufferPrivate->evictCodedFrames(newDataSize, maximumBufferSize, currentTime, duration, isEnded);
+    completionHandler(m_sourceBufferPrivate->totalTrackBufferSizeInBytes());
 }
 
 void RemoteSourceBufferProxy::addTrackBuffer(TrackPrivateRemoteIdentifier trackPrivateRemoteIdentifier)
@@ -285,10 +285,9 @@ void RemoteSourceBufferProxy::setAllTrackBuffersNeedRandomAccess()
     m_sourceBufferPrivate->setAllTrackBuffersNeedRandomAccess();
 }
 
-void RemoteSourceBufferProxy::reenqueueMediaIfNeeded(const MediaTime& currentMediaTime, uint64_t pendingAppendDataCapacity, uint64_t maximumBufferSize, CompletionHandler<void(bool)>&& completionHandler)
+void RemoteSourceBufferProxy::reenqueueMediaIfNeeded(const MediaTime& currentMediaTime)
 {
-    m_sourceBufferPrivate->reenqueueMediaIfNeeded(currentMediaTime, pendingAppendDataCapacity, maximumBufferSize);
-    completionHandler(m_sourceBufferPrivate->bufferFull());
+    m_sourceBufferPrivate->reenqueueMediaIfNeeded(currentMediaTime);
 }
 
 void RemoteSourceBufferProxy::setGroupStartTimestamp(const MediaTime& timestamp)

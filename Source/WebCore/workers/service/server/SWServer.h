@@ -152,7 +152,7 @@ public:
     void resolveUnregistrationJob(const ServiceWorkerJobData&, const ServiceWorkerRegistrationKey&, bool unregistrationResult);
     void startScriptFetch(const ServiceWorkerJobData&, SWServerRegistration&);
 
-    void updateWorker(const ServiceWorkerJobDataIdentifier&, SWServerRegistration&, const URL&, const ScriptBuffer&, const CertificateInfo&, const ContentSecurityPolicyResponseHeaders&, const String& referrerPolicy, WorkerType, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
+    void updateWorker(const ServiceWorkerJobDataIdentifier&, SWServerRegistration&, const URL&, const ScriptBuffer&, const CertificateInfo&, const ContentSecurityPolicyResponseHeaders&, const CrossOriginEmbedderPolicy&, const String& referrerPolicy, WorkerType, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
     void fireInstallEvent(SWServerWorker&);
     void fireActivateEvent(SWServerWorker&);
 
@@ -217,10 +217,10 @@ public:
 
     static constexpr Seconds defaultTerminationDelay = 10_s;
 
-    LastNavigationWasAppBound clientIsAppBoundForRegistrableDomain(const RegistrableDomain&);
+    LastNavigationWasAppInitiated clientIsAppInitiatedForRegistrableDomain(const RegistrableDomain&);
 
 private:
-    void validateRegistrationDomain(WebCore::RegistrableDomain, CompletionHandler<void(bool)>&&);
+    void validateRegistrationDomain(WebCore::RegistrableDomain, ServiceWorkerJobType, CompletionHandler<void(bool)>&&);
 
     void scriptFetchFinished(const ServiceWorkerFetchResult&);
 
@@ -244,7 +244,7 @@ private:
 
     void contextConnectionCreated(SWServerToContextConnection&);
 
-    void updateAppBoundValueForWorkers(const ClientOrigin&, LastNavigationWasAppBound);
+    void updateAppInitiatedValueForWorkers(const ClientOrigin&, LastNavigationWasAppInitiated);
 
     HashMap<SWServerConnectionIdentifier, std::unique_ptr<Connection>> m_connections;
     HashMap<ServiceWorkerRegistrationKey, WeakPtr<SWServerRegistration>> m_scopeToRegistrationMap;
@@ -283,6 +283,7 @@ private:
     HashSet<WebCore::RegistrableDomain> m_appBoundDomains;
     bool m_hasServiceWorkerEntitlement { false };
     bool m_hasReceivedAppBoundDomains { false };
+    unsigned m_uniqueRegistrationCount { 0 };
 };
 
 } // namespace WebCore

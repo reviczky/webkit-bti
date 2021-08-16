@@ -115,6 +115,7 @@ void RealtimeVideoSource::sourceSettingsChanged()
     auto size = this->size();
     if (size.isEmpty())
         size = m_source->size();
+
     if (rotation == MediaSample::VideoRotation::Left || rotation == MediaSample::VideoRotation::Right)
         size = size.transposedSize();
 
@@ -183,7 +184,8 @@ void RealtimeVideoSource::videoSampleAvailable(MediaSample& sample)
     if (m_frameDecimation > 1 && ++m_frameDecimationCounter % m_frameDecimation)
         return;
 
-    m_frameDecimation = static_cast<size_t>(m_source->observedFrameRate() / frameRate());
+    auto frameRate = this->frameRate();
+    m_frameDecimation = frameRate ? static_cast<size_t>(m_source->observedFrameRate() / frameRate) : 1;
     if (!m_frameDecimation)
         m_frameDecimation = 1;
 

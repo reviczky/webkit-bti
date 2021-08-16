@@ -89,12 +89,6 @@ public:
     WebGLRenderingContextBase* getContextWebGL(WebGLVersion type, WebGLContextAttributes&& = { });
 #endif
 
-#if ENABLE(WEBGPU)
-    static bool isWebGPUType(const String&);
-    GPUCanvasContext* createContextWebGPU(const String&);
-    GPUCanvasContext* getContextWebGPU(const String&);
-#endif
-
     static bool isBitmapRendererType(const String&);
     ImageBitmapRenderingContext* createContextBitmapRenderer(const String&, ImageBitmapRenderingContextSettings&&);
     ImageBitmapRenderingContext* getContextBitmapRenderer(const String&, ImageBitmapRenderingContextSettings&&);
@@ -123,6 +117,7 @@ public:
     SecurityOrigin* securityOrigin() const final;
 
     bool shouldAccelerate(const IntSize&) const;
+    bool shouldAccelerate(unsigned area) const;
 
     WEBCORE_EXPORT void setUsesDisplayListDrawing(bool);
     WEBCORE_EXPORT void setTracksDisplayListReplay(bool);
@@ -133,7 +128,8 @@ public:
     // It would be better to have the contexts own the buffers.
     void setImageBufferAndMarkDirty(RefPtr<ImageBuffer>&&);
 
-    WEBCORE_EXPORT static void setMaxPixelMemoryForTesting(size_t);
+    WEBCORE_EXPORT static void setMaxPixelMemoryForTesting(std::optional<size_t>);
+    WEBCORE_EXPORT static void setMaxCanvasAreaForTesting(std::optional<size_t>);
 
     bool needsPreparationForDisplay();
     void prepareForDisplay();

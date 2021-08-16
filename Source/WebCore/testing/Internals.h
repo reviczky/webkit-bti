@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -169,6 +169,7 @@ public:
     bool nodeNeedsStyleRecalc(Node&);
     String styleChangeType(Node&);
     String description(JSC::JSValue);
+    void log(const String&);
 
     bool isPreloaded(const String& url);
     bool isLoadingFromMemoryCache(const String& url);
@@ -271,6 +272,8 @@ public:
     ExceptionOr<Vector<String>> formControlStateOfPreviousHistoryItem();
     ExceptionOr<void> setFormControlStateOfPreviousHistoryItem(const Vector<String>&);
 
+    ExceptionOr<Ref<DOMRect>> absoluteLineRectFromPoint(int x, int y);
+
     ExceptionOr<Ref<DOMRect>> absoluteCaretBounds();
     ExceptionOr<bool> isCaretBlinkingSuspended();
 
@@ -343,6 +346,7 @@ public:
     void setUserPreferredAudioCharacteristic(const String&);
 
     void setMaxCanvasPixelMemory(unsigned);
+    void setMaxCanvasArea(unsigned);
 
     ExceptionOr<unsigned> wheelEventHandlerCount();
     ExceptionOr<unsigned> touchEventHandlerCount();
@@ -483,6 +487,8 @@ public:
     uint64_t storageAreaMapCount() const;
 
     uint64_t elementIdentifier(Element&) const;
+    bool isElementAlive(Document&, uint64_t documentIdentifier) const;
+
     uint64_t frameIdentifier(const Document&) const;
     uint64_t pageIdentifier(const Document&) const;
 
@@ -643,6 +649,7 @@ public:
     String getImageSourceURL(Element&);
 
 #if ENABLE(VIDEO)
+    unsigned mediaElementCount();
     Vector<String> mediaResponseSources(HTMLMediaElement&);
     Vector<String> mediaResponseContentRanges(HTMLMediaElement&);
     void simulateAudioInterruption(HTMLMediaElement&);
@@ -655,6 +662,7 @@ public:
     double privatePlayerVolume(const HTMLMediaElement&);
     bool privatePlayerMuted(const HTMLMediaElement&);
     bool isMediaElementHidden(const HTMLMediaElement&);
+    double elementEffectivePlaybackRate(const HTMLMediaElement&);
 
     ExceptionOr<void> setOverridePreferredDynamicRangeMode(HTMLMediaElement&, const String&);
 #endif
@@ -705,6 +713,7 @@ public:
     ExceptionOr<void> postRemoteControlCommand(const String&, float argument);
     void activeAudioRouteDidChange(bool shouldPause);
     bool elementIsBlockingDisplaySleep(HTMLMediaElement&) const;
+    bool isPlayerVisibleInViewport(HTMLMediaElement&) const;
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -741,18 +750,19 @@ public:
     MockContentFilterSettings& mockContentFilterSettings();
 #endif
 
-#if ENABLE(CSS_SCROLL_SNAP)
     ExceptionOr<String> scrollSnapOffsets(Element&);
     ExceptionOr<bool> isScrollSnapInProgress(Element&);
     void setPlatformMomentumScrollingPredictionEnabled(bool);
-#endif
 
     ExceptionOr<String> pathStringWithShrinkWrappedRects(const Vector<double>& rectComponents, double radius);
 
 #if ENABLE(VIDEO)
     String getCurrentMediaControlsStatusForElement(HTMLMediaElement&);
     void setMediaControlsMaximumRightContainerButtonCountOverride(HTMLMediaElement&, size_t);
+    void setMediaControlsHidePlaybackRates(HTMLMediaElement&, bool);
 #endif // ENABLE(VIDEO)
+
+    void setPageMediaVolume(float);
 
     String userVisibleString(const DOMURL&);
     void setShowAllPlugins(bool);
@@ -876,6 +886,7 @@ public:
         RefPtr<DOMPointReadOnly> topRight;
         RefPtr<DOMPointReadOnly> bottomRight;
         RefPtr<DOMPointReadOnly> bottomLeft;
+        bool hasLeadingWhitespace { true };
 
         ~ImageOverlayText();
     };
@@ -890,6 +901,7 @@ public:
         ~ImageOverlayLine();
     };
     void installImageOverlay(Element&, Vector<ImageOverlayLine>&&);
+    void requestTextRecognition(Element&, RefPtr<VoidCallback>&&);
 
     bool isSystemPreviewLink(Element&) const;
     bool isSystemPreviewImage(Element&) const;
@@ -1161,6 +1173,14 @@ public:
     void systemBeep();
 
     String dumpStyleResolvers();
+
+    enum class AutoplayPolicy : uint8_t {
+        Default,
+        Allow,
+        AllowWithoutSound,
+        Deny,
+    };
+    ExceptionOr<void> setDocumentAutoplayPolicy(Document&, AutoplayPolicy);
 
 private:
     explicit Internals(Document&);

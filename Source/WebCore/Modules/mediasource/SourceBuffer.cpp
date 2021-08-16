@@ -483,10 +483,10 @@ ExceptionOr<void> SourceBuffer::appendBufferInternal(const unsigned char* data, 
     m_source->openIfInEndedState();
 
     // 4. Run the coded frame eviction algorithm.
-    m_private->evictCodedFrames(size, m_pendingAppendData.size(), maximumBufferSize(), m_source->currentTime(), m_source->duration(), m_source->isEnded());
+    m_private->evictCodedFrames(size, maximumBufferSize(), m_source->currentTime(), m_source->duration(), m_source->isEnded());
 
     // 5. If the buffer full flag equals true, then throw a QuotaExceededError exception and abort these step.
-    if (m_private->bufferFull() || m_private->totalTrackBufferSizeInBytes() + m_pendingAppendData.size() + size >= maximumBufferSize()) {
+    if (m_private->isBufferFullFor(size, maximumBufferSize())) {
         ERROR_LOG(LOGIDENTIFIER, "buffer full, failing with QuotaExceededError error");
         return Exception { QuotaExceededError };
     }
@@ -573,7 +573,7 @@ void SourceBuffer::sourceBufferPrivateAppendComplete(AppendResult result)
     scheduleEvent(eventNames().updateendEvent);
 
     m_source->monitorSourceBuffers();
-    m_private->reenqueueMediaIfNeeded(m_source->currentTime(), m_pendingAppendData.capacity(), maximumBufferSize());
+    m_private->reenqueueMediaIfNeeded(m_source->currentTime());
 
     DEBUG_LOG(LOGIDENTIFIER);
 }
@@ -633,25 +633,21 @@ uint64_t SourceBuffer::maximumBufferSize() const
 VideoTrackList& SourceBuffer::videoTracks()
 {
     if (!m_videoTracks)
-        m_videoTracks = VideoTrackList::create(makeWeakPtr(m_source->mediaElement()), scriptExecutionContext());
+        m_videoTracks = VideoTrackList::create(makeWeakPtr((isRemoved() ? nullptr : m_source->mediaElement())), scriptExecutionContext());
     return *m_videoTracks;
 }
 
 AudioTrackList& SourceBuffer::audioTracks()
 {
-    if (!m_audioTracks) {
-        ASSERT(!isRemoved());
-        m_audioTracks = AudioTrackList::create(makeWeakPtr(m_source->mediaElement()), scriptExecutionContext());
-    }
+    if (!m_audioTracks)
+        m_audioTracks = AudioTrackList::create(makeWeakPtr((isRemoved() ? nullptr : m_source->mediaElement())), scriptExecutionContext());
     return *m_audioTracks;
 }
 
 TextTrackList& SourceBuffer::textTracks()
 {
-    if (!m_textTracks) {
-        ASSERT(!isRemoved());
-        m_textTracks = TextTrackList::create(makeWeakPtr(m_source->mediaElement()), scriptExecutionContext());
-    }
+    if (!m_textTracks)
+        m_textTracks = TextTrackList::create(makeWeakPtr((isRemoved() ? nullptr : m_source->mediaElement())), scriptExecutionContext());
     return *m_textTracks;
 }
 

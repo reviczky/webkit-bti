@@ -54,7 +54,7 @@ messages -> RemoteMediaPlayerProxy NotRefCounted {
     AcceleratedRenderingStateChanged(bool canBeAccelerated)
     SetShouldDisableSleep(bool disable)
     SetRate(double rate)
-    DidLoadingProgress() -> (bool flag) Synchronous
+    DidLoadingProgress() -> (bool flag) Async
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     UpdateVideoFullscreenInlineImage()
@@ -124,8 +124,13 @@ messages -> RemoteMediaPlayerProxy NotRefCounted {
 
 #if PLATFORM(COCOA)
     NativeImageForCurrentTime() -> (std::optional<MachSendRight> sendRight) Synchronous
-    PixelBufferForCurrentTime() -> (std::optional<MachSendRight> sendRight) Synchronous
 #endif
+#if USE(AVFOUNDATION)
+    PixelBufferForCurrentTime() -> (RetainPtr<CVPixelBufferRef> pixelBuffer) Synchronous
+#endif
+
+    PlayAtHostTime(MonotonicTime time)
+    PauseAtHostTime(MonotonicTime time)
 }
 
 #endif

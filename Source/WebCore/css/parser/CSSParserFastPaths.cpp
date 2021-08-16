@@ -99,10 +99,23 @@ static inline bool isSimpleLengthPropertyID(CSSPropertyID propertyId, bool& acce
     }
 }
 
+template<typename CharacterType> static inline std::optional<double> parseCSSNumber(const CharacterType* characters, unsigned length)
+{
+    // The charactersToDouble() function allows a trailing '.' but that is not allowed in CSS number values.
+    if (length && characters[length - 1] == '.')
+        return std::nullopt;
+    // FIXME: If we don't want to skip over leading spaces, we should use parseDouble, not charactersToDouble.
+    bool ok;
+    auto number = charactersToDouble(characters, length, &ok);
+    if (!ok)
+        return std::nullopt;
+    return number;
+}
+
 template <typename CharacterType>
 static inline bool parseSimpleLength(const CharacterType* characters, unsigned length, CSSUnitType& unit, double& number)
 {
-    if (length > 2 && (characters[length - 2] | 0x20) == 'p' && (characters[length - 1] | 0x20) == 'x') {
+    if (length > 2 && isASCIIAlphaCaselessEqual(characters[length - 2], 'p') && isASCIIAlphaCaselessEqual(characters[length - 1], 'x')) {
         length -= 2;
         unit = CSSUnitType::CSS_PX;
     } else if (length > 1 && characters[length - 1] == '%') {
@@ -110,14 +123,9 @@ static inline bool parseSimpleLength(const CharacterType* characters, unsigned l
         unit = CSSUnitType::CSS_PERCENTAGE;
     }
 
-    // We rely on charactersToDouble for validation as well. The function
-    // will set "ok" to "false" if the entire passed-in character range does
-    // not represent a double.
-    bool ok;
-    number = charactersToDouble(characters, length, &ok);
-    if (!ok)
-        return false;
-    return true;
+    auto parsedNumber = parseCSSNumber(characters, length);
+    number = parsedNumber.value_or(0);
+    return parsedNumber.has_value();
 }
 
 template <typename CharacterType>
@@ -127,23 +135,18 @@ static inline bool parseSimpleAngle(const CharacterType* characters, unsigned le
     if (length < 4)
         return false;
 
-    if ((characters[length - 3] | 0x20) == 'd' && (characters[length - 2] | 0x20) == 'e' && (characters[length - 1] | 0x20) == 'g') {
+    if (isASCIIAlphaCaselessEqual(characters[length - 3], 'd') && isASCIIAlphaCaselessEqual(characters[length - 2], 'e') && isASCIIAlphaCaselessEqual(characters[length - 1], 'g')) {
         length -= 3;
         unit = CSSUnitType::CSS_DEG;
-    } else if ((characters[length - 3] | 0x20) == 'r' && (characters[length - 2] | 0x20) == 'a' && (characters[length - 1] | 0x20) == 'd') {
+    } else if (isASCIIAlphaCaselessEqual(characters[length - 3], 'r') && isASCIIAlphaCaselessEqual(characters[length - 2], 'a') && isASCIIAlphaCaselessEqual(characters[length - 1], 'd')) {
         length -= 3;
         unit = CSSUnitType::CSS_RAD;
     } else
         return false;
 
-    // We rely on charactersToDouble for validation as well. The function
-    // will set "ok" to "false" if the entire passed-in character range does
-    // not represent a double.
-    bool ok;
-    number = charactersToDouble(characters, length, &ok);
-    if (!ok)
-        return false;
-    return true;
+    auto parsedNumber = parseCSSNumber(characters, length);
+    number = parsedNumber.value_or(0);
+    return parsedNumber.has_value();
 }
 
 static RefPtr<CSSValue> parseSimpleLengthValue(CSSPropertyID propertyId, StringView string, CSSParserMode cssParserMode)
@@ -671,8 +674,12 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
     case CSSPropertyWordWrap:
         return valueID == CSSValueNormal || valueID == CSSValueBreakWord;
     case CSSPropertyOverflowX: // visible | hidden | scroll | auto | overlay (overlay is a synonym for auto)
+        if (context.overflowClipEnabled && valueID == CSSValueClip)
+            return true;
         return valueID == CSSValueVisible || valueID == CSSValueHidden || valueID == CSSValueScroll || valueID == CSSValueAuto || valueID == CSSValueOverlay;
     case CSSPropertyOverflowY: // visible | hidden | scroll | auto | overlay | -webkit-paged-x | -webkit-paged-y (overlay is a synonym for auto)
+        if (context.overflowClipEnabled && valueID == CSSValueClip)
+            return true;
         return valueID == CSSValueVisible || valueID == CSSValueHidden || valueID == CSSValueScroll || valueID == CSSValueAuto || valueID == CSSValueOverlay || valueID == CSSValueWebkitPagedX || valueID == CSSValueWebkitPagedY;
     case CSSPropertyOverscrollBehaviorX:
     case CSSPropertyOverscrollBehaviorY:
@@ -1083,17 +1090,20 @@ static RefPtr<CSSValue> parseKeywordValue(CSSPropertyID propertyId, StringView s
 {
     ASSERT(!string.isEmpty());
 
+    bool parsingDescriptor = context.enclosingRuleType && *context.enclosingRuleType != StyleRuleType::Style;
+    ASSERT(!CSSProperty::isDescriptorOnly(propertyId) || parsingDescriptor);
+
     if (!CSSParserFastPaths::isKeywordPropertyID(propertyId)) {
-        // All properties accept the values of "initial" and "inherit".
+        // All properties, including non-keyword properties, accept the CSS-wide keywords.
         if (!isUniversalKeyword(string))
             return nullptr;
 
-        // Parse initial/inherit shorthands using the CSSPropertyParser.
+        // Leave shorthands to parse CSS-wide keywords using CSSPropertyParser.
         if (shorthandForProperty(propertyId).length())
             return nullptr;
 
-        // Descriptors do not support css wide keywords.
-        if (CSSProperty::isDescriptorOnly(propertyId))
+        // Descriptors do not support the CSS-wide keywords.
+        if (parsingDescriptor)
             return nullptr;
     }
 
@@ -1102,14 +1112,16 @@ static RefPtr<CSSValue> parseKeywordValue(CSSPropertyID propertyId, StringView s
     if (!valueID)
         return nullptr;
 
-    if (valueID == CSSValueInherit)
-        return CSSValuePool::singleton().createInheritedValue();
-    if (valueID == CSSValueInitial)
-        return CSSValuePool::singleton().createExplicitInitialValue();
-    if (valueID == CSSValueUnset)
-        return CSSValuePool::singleton().createUnsetValue();
-    if (valueID == CSSValueRevert)
-        return CSSValuePool::singleton().createRevertValue();
+    if (!parsingDescriptor) {
+        if (valueID == CSSValueInherit)
+            return CSSValuePool::singleton().createInheritedValue();
+        if (valueID == CSSValueInitial)
+            return CSSValuePool::singleton().createExplicitInitialValue();
+        if (valueID == CSSValueUnset)
+            return CSSValuePool::singleton().createUnsetValue();
+        if (valueID == CSSValueRevert)
+            return CSSValuePool::singleton().createRevertValue();
+    }
     
     if (CSSParserFastPaths::isValidKeywordPropertyAndValue(propertyId, valueID, context))
         return CSSPrimitiveValue::createIdentifier(valueID);
@@ -1168,11 +1180,10 @@ static bool parseTransformNumberArguments(CharType*& pos, CharType* end, unsigne
         if (delimiter == notFound)
             return false;
         unsigned argumentLength = static_cast<unsigned>(delimiter);
-        bool ok;
-        double number = charactersToDouble(pos, argumentLength, &ok);
-        if (!ok)
+        auto number = parseCSSNumber(pos, argumentLength);
+        if (!number)
             return false;
-        transformValue->append(CSSPrimitiveValue::create(number, CSSUnitType::CSS_NUMBER));
+        transformValue->append(CSSPrimitiveValue::create(*number, CSSUnitType::CSS_NUMBER));
         pos += argumentLength + 1;
         --expectedCount;
     }

@@ -88,6 +88,31 @@
         "The regular setter on RenderStyle will only be called if",
         "StyleResolver::applyPropertyToRegularStyle() returns true.",
         "",
+        "* color-property:",
+        "Indicates that this CSS property is color-related (populates",
+        "CSSProperty::isColorProperty().",
+        "",
+        "* logical-property-group:",
+        "Indicates that this CSS property belongs to a logical property group",
+        "(https://drafts.csswg.org/css-logical/#logical-property-group)",
+        "This is used for both logical properties that depend on writing-mode",
+        "and/or text-direction (for which CSSProperty::isDirectionAwareProperty()",
+        "returns true), and also for their physical counterparts.",
+        "If set, the value must be an object with these properties:",
+        " - name: a string identifying the logical property group. All logical",
+        "   and physical properties in the same group should have the same name.",
+        "   Examples: \"border-radius\", \"margin\", \"min-size\".",
+        " - resolver: a string with the mapping that will be used to convert to",
+        "   the equivalent physical or logical property within the same group.",
+        "   Also identifies the mapping logic of the group",
+        "   (https://drafts.csswg.org/css-logical-1/#mapping-logic).",
+        "   Examples: \"top-left\", \"block-start\", \"horizontal\".",
+        "",
+        "* descriptor-only:",
+        "Indicates that this CSS property is descriptor only (populates.",
+        "CSSProperty::isDescriptorOnly().",
+        "",
+        "",
         "* font-property:",
         "Indicates that this CSS property is font-related. It must have corresponding",
         "methods on the FontDescription class.",
@@ -185,10 +210,11 @@
         "to true is chosen for code generation."
     ],
     "properties": {
-        "caret-color" : {
+        "caret-color": {
             "inherited": true,
             "codegen-properties": {
                 "visited-link-color-support": true,
+                "color-property": true,
                 "custom": "All"
             },
             "specification": {
@@ -200,6 +226,7 @@
             "inherited": true,
             "codegen-properties": {
                 "visited-link-color-support": true,
+                "color-property": true,
                 "high-priority": true
             },
             "status": {
@@ -805,6 +832,7 @@
         },
         "additive-symbols": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -1073,7 +1101,8 @@
         },
         "background-color": {
             "codegen-properties": {
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1205,7 +1234,11 @@
                 "aliases": [
                     "-webkit-logical-height"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "size",
+                    "resolver": "block"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1271,7 +1304,11 @@
                     "border-block-end-width",
                     "border-block-end-style",
                     "border-block-end-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1283,7 +1320,12 @@
                 "aliases": [
                     "-webkit-border-after-color"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1307,7 +1349,11 @@
                 "aliases": [
                     "-webkit-border-after-style"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1319,7 +1365,11 @@
                 "aliases": [
                     "-webkit-border-after-width"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1335,7 +1385,11 @@
                     "border-block-start-width",
                     "border-block-start-style",
                     "border-block-start-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1347,7 +1401,12 @@
                 "aliases": [
                     "-webkit-border-before-color"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1371,7 +1430,11 @@
                 "aliases": [
                     "-webkit-border-before-style"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1383,7 +1446,11 @@
                 "aliases": [
                     "-webkit-border-before-width"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1420,7 +1487,11 @@
                     "border-bottom-width",
                     "border-bottom-style",
                     "border-bottom-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1430,7 +1501,12 @@
         "border-bottom-color": {
             "codegen-properties": {
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1443,7 +1519,11 @@
                     "-webkit-border-bottom-left-radius"
                 ],
                 "initial": "initialBorderRadius",
-                "custom": "Inherit|Value"
+                "custom": "Inherit|Value",
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "bottom-left"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1456,7 +1536,11 @@
                     "-webkit-border-bottom-right-radius"
                 ],
                 "initial": "initialBorderRadius",
-                "custom": "Inherit|Value"
+                "custom": "Inherit|Value",
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "bottom-right"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1477,7 +1561,11 @@
                 "double"
             ],
             "codegen-properties": {
-                "initial": "initialBorderStyle"
+                "initial": "initialBorderStyle",
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1487,7 +1575,11 @@
         "border-bottom-width": {
             "codegen-properties": {
                 "initial": "initialBorderWidth",
-                "converter": "LineWidth<float>"
+                "converter": "LineWidth<float>",
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1525,7 +1617,11 @@
         },
         "border-end-end-radius": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "end-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1534,7 +1630,11 @@
         },
         "border-end-start-radius": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "end-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1638,7 +1738,11 @@
                     "border-inline-end-width",
                     "border-inline-end-style",
                     "border-inline-end-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1650,7 +1754,12 @@
                 "aliases": [
                     "-webkit-border-end-color"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1674,7 +1783,11 @@
                 "aliases": [
                     "-webkit-border-end-style"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1686,7 +1799,11 @@
                 "aliases": [
                     "-webkit-border-end-width"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1702,7 +1819,11 @@
                     "border-inline-start-width",
                     "border-inline-start-style",
                     "border-inline-start-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1714,7 +1835,12 @@
                 "aliases": [
                     "-webkit-border-start-color"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1738,7 +1864,11 @@
                 "aliases": [
                     "-webkit-border-start-style"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1750,7 +1880,11 @@
                 "aliases": [
                     "-webkit-border-start-width"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1787,7 +1921,11 @@
                     "border-left-width",
                     "border-left-style",
                     "border-left-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1797,7 +1935,12 @@
         "border-left-color": {
             "codegen-properties": {
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1818,7 +1961,11 @@
                 "double"
             ],
             "codegen-properties": {
-                "initial": "initialBorderStyle"
+                "initial": "initialBorderStyle",
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1828,7 +1975,11 @@
         "border-left-width": {
             "codegen-properties": {
                 "initial": "initialBorderWidth",
-                "converter": "LineWidth<float>"
+                "converter": "LineWidth<float>",
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1855,7 +2006,11 @@
                     "border-right-width",
                     "border-right-style",
                     "border-right-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1865,7 +2020,12 @@
         "border-right-color": {
             "codegen-properties": {
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1886,7 +2046,11 @@
                 "double"
             ],
             "codegen-properties": {
-                "initial": "initialBorderStyle"
+                "initial": "initialBorderStyle",
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1896,7 +2060,11 @@
         "border-right-width": {
             "codegen-properties": {
                 "initial": "initialBorderWidth",
-                "converter": "LineWidth<float>"
+                "converter": "LineWidth<float>",
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1918,7 +2086,11 @@
         },
         "border-start-end-radius": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "start-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1927,7 +2099,11 @@
         },
         "border-start-start-radius": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "start-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -1954,7 +2130,11 @@
                     "border-top-width",
                     "border-top-style",
                     "border-top-color"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "border",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1964,7 +2144,12 @@
         "border-top-color": {
             "codegen-properties": {
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true,
+                "logical-property-group": {
+                    "name": "border-color",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1977,7 +2162,11 @@
                     "-webkit-border-top-left-radius"
                 ],
                 "initial": "initialBorderRadius",
-                "custom": "Inherit|Value"
+                "custom": "Inherit|Value",
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "top-left"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1990,7 +2179,11 @@
                     "-webkit-border-top-right-radius"
                 ],
                 "initial": "initialBorderRadius",
-                "custom": "Inherit|Value"
+                "custom": "Inherit|Value",
+                "logical-property-group": {
+                    "name": "border-radius",
+                    "resolver": "top-right"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -2011,7 +2204,11 @@
                 "double"
             ],
             "codegen-properties": {
-                "initial": "initialBorderStyle"
+                "initial": "initialBorderStyle",
+                "logical-property-group": {
+                    "name": "border-style",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -2021,7 +2218,11 @@
         "border-top-width": {
             "codegen-properties": {
                 "initial": "initialBorderWidth",
-                "converter": "LineWidth<float>"
+                "converter": "LineWidth<float>",
+                "logical-property-group": {
+                    "name": "border-width",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -2045,7 +2246,11 @@
         "bottom": {
             "codegen-properties": {
                 "initial": "initialOffset",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -2448,6 +2653,7 @@
         },
         "fallback": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -2460,7 +2666,8 @@
             "inherited": true,
             "codegen-properties": {
                 "custom": "All",
-                "svg": true
+                "svg": true,
+                "color-property": true
             },
             "specification": {
                 "category": "svg",
@@ -2509,7 +2716,8 @@
         "flood-color": {
             "codegen-properties": {
                 "converter": "SVGColor",
-                "svg": true
+                "svg": true,
+                "color-property": true
             },
             "specification": {
                 "category": "svg",
@@ -2561,7 +2769,11 @@
         "height": {
             "codegen-properties": {
                 "initial": "initialSize",
-                "converter": "LengthSizing"
+                "converter": "LengthSizing",
+                "logical-property-group": {
+                    "name": "size",
+                    "resolver": "vertical"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -2627,7 +2839,11 @@
                 "aliases": [
                     "-webkit-logical-width"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "size",
+                    "resolver": "inline"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2662,7 +2878,11 @@
         },
         "inset-block-end": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2671,7 +2891,11 @@
         },
         "inset-block-start": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2692,7 +2916,11 @@
         },
         "inset-inline-end": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2701,7 +2929,11 @@
         },
         "inset-inline-start": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2722,7 +2954,11 @@
         "left": {
             "codegen-properties": {
                 "initial": "initialOffset",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -2746,7 +2982,8 @@
         "lighting-color": {
             "codegen-properties": {
                 "converter": "SVGColor",
-                "svg": true
+                "svg": true,
+                "color-property": true
             }
         },
         "line-height": {
@@ -2926,7 +3163,11 @@
                 "aliases": [
                     "-webkit-margin-after"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2938,7 +3179,11 @@
                 "aliases": [
                     "-webkit-margin-before"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2948,7 +3193,11 @@
         "margin-bottom": {
             "codegen-properties": {
                 "initial": "initialMargin",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -2972,7 +3221,11 @@
                 "aliases": [
                     "-webkit-margin-end"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2984,7 +3237,11 @@
                 "aliases": [
                     "-webkit-margin-start"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -2994,7 +3251,11 @@
         "margin-left": {
             "codegen-properties": {
                 "initial": "initialMargin",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3004,7 +3265,11 @@
         "margin-right": {
             "codegen-properties": {
                 "initial": "initialMargin",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3014,7 +3279,11 @@
         "margin-top": {
             "codegen-properties": {
                 "initial": "initialMargin",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "margin",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3110,7 +3379,11 @@
                 "aliases": [
                     "-webkit-max-logical-height"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "max-size",
+                    "resolver": "block"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3120,7 +3393,11 @@
         "max-height": {
             "codegen-properties": {
                 "initial": "initialMaxSize",
-                "converter": "LengthMaxSizing"
+                "converter": "LengthMaxSizing",
+                "logical-property-group": {
+                    "name": "max-size",
+                    "resolver": "vertical"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3132,7 +3409,11 @@
                 "aliases": [
                     "-webkit-max-logical-width"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "max-size",
+                    "resolver": "inline"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3142,7 +3423,11 @@
         "max-width": {
             "codegen-properties": {
                 "initial": "initialMaxSize",
-                "converter": "LengthMaxSizing"
+                "converter": "LengthMaxSizing",
+                "logical-property-group": {
+                    "name": "max-size",
+                    "resolver": "horizontal"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3154,7 +3439,11 @@
                 "aliases": [
                     "-webkit-min-logical-height"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "min-size",
+                    "resolver": "block"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3164,7 +3453,11 @@
         "min-height": {
             "codegen-properties": {
                 "initial": "initialMinSize",
-                "converter": "LengthSizing"
+                "converter": "LengthSizing",
+                "logical-property-group": {
+                    "name": "min-size",
+                    "resolver": "vertical"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3176,7 +3469,11 @@
                 "aliases": [
                     "-webkit-min-logical-width"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "min-size",
+                    "resolver": "inline"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3186,7 +3483,11 @@
         "min-width": {
             "codegen-properties": {
                 "initial": "initialMinSize",
-                "converter": "LengthSizing"
+                "converter": "LengthSizing",
+                "logical-property-group": {
+                    "name": "min-size",
+                    "resolver": "horizontal"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3256,7 +3557,8 @@
         "outline-color": {
             "codegen-properties": {
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "specification": {
                 "category": "css-ui",
@@ -3328,6 +3630,7 @@
             "values": [
                 "visible",
                 "hidden",
+                "clip",
                 "scroll",
                 "auto"
             ],
@@ -3340,6 +3643,7 @@
             "values": [
                 "visible",
                 "hidden",
+                "clip",
                 "scroll",
                 "auto",
                 "-webkit-paged-x",
@@ -3399,6 +3703,7 @@
         },
         "pad": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -3438,7 +3743,11 @@
                 "aliases": [
                     "-webkit-padding-after"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3450,7 +3759,11 @@
                 "aliases": [
                     "-webkit-padding-before"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3460,7 +3773,11 @@
         "padding-bottom": {
             "codegen-properties": {
                 "initial": "initialPadding",
-                "converter": "Length"
+                "converter": "Length",
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3484,7 +3801,11 @@
                 "aliases": [
                     "-webkit-padding-end"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3496,7 +3817,11 @@
                 "aliases": [
                     "-webkit-padding-start"
                 ],
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-logical-props",
@@ -3506,7 +3831,11 @@
         "padding-left": {
             "codegen-properties": {
                 "initial": "initialPadding",
-                "converter": "Length"
+                "converter": "Length",
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3516,7 +3845,11 @@
         "padding-right": {
             "codegen-properties": {
                 "initial": "initialPadding",
-                "converter": "Length"
+                "converter": "Length",
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3526,7 +3859,11 @@
         "padding-top": {
             "codegen-properties": {
                 "initial": "initialPadding",
-                "converter": "Length"
+                "converter": "Length",
+                "logical-property-group": {
+                    "name": "padding",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3666,7 +4003,11 @@
         "right": {
             "codegen-properties": {
                 "initial": "initialOffset",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -3720,7 +4061,8 @@
         },
         "src": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "descriptor-only": true
             },
             "specification": {
                 "category": "css-fonts",
@@ -3730,7 +4072,8 @@
         "stop-color": {
             "codegen-properties": {
                 "converter": "SVGColor",
-                "svg": true
+                "svg": true,
+                "color-property": true
             },
             "specification": {
                 "category": "svg",
@@ -3751,7 +4094,8 @@
             "inherited": true,
             "codegen-properties": {
                 "custom": "All",
-                "svg": true
+                "svg": true,
+                "color-property": true
             },
             "specification": {
                 "category": "svg",
@@ -3847,7 +4191,8 @@
             "inherited": true,
             "codegen-properties": {
                 "custom": "Value",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "status": "supported",
             "specification": {
@@ -3882,6 +4227,7 @@
         },
         "symbols": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -4219,7 +4565,11 @@
         "top": {
             "codegen-properties": {
                 "initial": "initialOffset",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "inset",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -4332,7 +4682,8 @@
         },
         "unicode-range": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "descriptor-only": true
             },
             "specification": {
                 "category": "css-fonts",
@@ -4341,7 +4692,8 @@
         },
         "font-display": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "descriptor-only": true
             },
             "specification": {
                 "category": "css-fonts-4",
@@ -4417,7 +4769,11 @@
         "width": {
             "codegen-properties": {
                 "initial": "initialSize",
-                "converter": "LengthSizing"
+                "converter": "LengthSizing",
+                "logical-property-group": {
+                    "name": "size",
+                    "resolver": "horizontal"
+                }
             },
             "specification": {
                 "category": "css-22",
@@ -4971,7 +5327,8 @@
                     "-webkit-column-rule-color"
                 ],
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "specification":  {
                 "category": "css-multicol",
@@ -6086,6 +6443,7 @@
         },
         "negative": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -6181,6 +6539,7 @@
         },
         "prefix": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -6199,6 +6558,7 @@
         },
         "range": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -6221,6 +6581,7 @@
         },
         "suffix": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },
@@ -6344,11 +6705,12 @@
         },
         "text-decoration-color": {
             "codegen-properties": {
-                "initial": "currentColor",
-                "visited-link-color-support": true,
                 "aliases": [
                     "-webkit-text-decoration-color"
-                ]
+                ],
+                "initial": "currentColor",
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "status": {
                 "status": "experimental"
@@ -6458,7 +6820,8 @@
                     "text-emphasis-color"
                 ],
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "status": {
                 "status": "experimental"
@@ -6505,7 +6868,8 @@
             "inherited": true,
             "codegen-properties": {
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "status": {
                 "status": "non-standard",
@@ -6536,7 +6900,8 @@
             "inherited": true,
             "codegen-properties": {
                 "initial": "currentColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "color-property": true
             },
             "status": {
                 "status": "non-standard",
@@ -6765,7 +7130,11 @@
                 "converter": "Length",
                 "aliases": [
                     "scroll-snap-margin-bottom"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6778,7 +7147,11 @@
                 "converter": "Length",
                 "aliases": [
                     "scroll-snap-margin-left"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6791,7 +7164,11 @@
                 "converter": "Length",
                 "aliases": [
                     "scroll-snap-margin-right"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6804,7 +7181,11 @@
                 "converter": "Length",
                 "aliases": [
                     "scroll-snap-margin-top"
-                ]
+                ],
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6813,7 +7194,11 @@
         },
         "scroll-margin-inline-start": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6822,7 +7207,11 @@
         },
         "scroll-margin-block-start": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6831,7 +7220,11 @@
         },
         "scroll-margin-inline-end": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6840,7 +7233,11 @@
         },
         "scroll-margin-block-end": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-margin",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6888,7 +7285,11 @@
         "scroll-padding-bottom": {
             "codegen-properties": {
                 "initial": "initialScrollPadding",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "bottom"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6898,7 +7299,11 @@
         "scroll-padding-left": {
             "codegen-properties": {
                 "initial": "initialScrollPadding",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "left"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6908,7 +7313,11 @@
         "scroll-padding-right": {
             "codegen-properties": {
                 "initial": "initialScrollPadding",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "right"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6918,7 +7327,11 @@
         "scroll-padding-top": {
             "codegen-properties": {
                 "initial": "initialScrollPadding",
-                "converter": "LengthOrAuto"
+                "converter": "LengthOrAuto",
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "top"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6927,7 +7340,11 @@
         },
         "scroll-padding-inline-start": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "inline-start"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6936,7 +7353,11 @@
         },
         "scroll-padding-block-start": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "block-start"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6945,7 +7366,11 @@
         },
         "scroll-padding-inline-end": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "inline-end"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6954,7 +7379,11 @@
         },
         "scroll-padding-block-end": {
             "codegen-properties": {
-                "skip-builder": true
+                "skip-builder": true,
+                "logical-property-group": {
+                    "name": "scroll-padding",
+                    "resolver": "block-end"
+                }
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6987,8 +7416,7 @@
         },
         "scroll-snap-align": {
             "codegen-properties": {
-                "converter": "ScrollSnapAlign",
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP"
+                "converter": "ScrollSnapAlign"
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -6997,8 +7425,7 @@
         },
         "scroll-snap-type": {
             "codegen-properties": {
-                "converter": "ScrollSnapType",
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP"
+                "converter": "ScrollSnapType"
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -7007,8 +7434,7 @@
         },
         "scroll-snap-stop": {
             "codegen-properties": {
-                "converter": "ScrollSnapStop",
-                "enable-if": "ENABLE_CSS_SCROLL_SNAP"
+                "converter": "ScrollSnapStop"
             },
             "specification": {
                 "category": "css-scroll-snap",
@@ -7053,6 +7479,7 @@
         },
         "system": {
             "codegen-properties": {
+                "descriptor-only": true,
                 "settings-flag": "cssCounterStyleAtRules",
                 "skip-builder": true
             },

@@ -575,6 +575,8 @@ void MediaPlayer::loadWithNextMediaEngine(const MediaPlayerFactory* current)
             client().mediaPlayerEngineUpdated();
             if (m_visible)
                 m_private->setVisible(m_visible);
+            if (m_visibleInViewport)
+                m_private->setVisibleInViewport(m_visibleInViewport);
             m_private->prepareForPlayback(m_privateBrowsing, m_preload, m_preservesPitch, m_shouldPrepareToRender);
         }
     }
@@ -603,6 +605,12 @@ void MediaPlayer::loadWithNextMediaEngine(const MediaPlayerFactory* current)
 
     m_initializingMediaEngine = false;
     client().mediaPlayerDidInitializeMediaEngine();
+}
+
+void MediaPlayer::queueTaskOnEventLoop(Function<void()>&& task)
+{
+    ASSERT(isMainThread());
+    client().mediaPlayerQueueTaskOnEventLoop(WTFMove(task));
 }
 
 bool MediaPlayer::hasAvailableVideoFrame() const
@@ -913,6 +921,11 @@ void MediaPlayer::setRate(double rate)
     m_private->setRateDouble(rate);
 }
 
+double MediaPlayer::effectiveRate() const
+{
+    return m_private->effectiveRate();
+}
+
 double MediaPlayer::requestedRate() const
 {
     return client().mediaPlayerRequestedPlaybackRate();
@@ -978,9 +991,9 @@ double MediaPlayer::liveUpdateInterval()
     return m_private->liveUpdateInterval();
 }
 
-bool MediaPlayer::didLoadingProgress()
+void MediaPlayer::didLoadingProgress(DidLoadingProgressCompletionHandler&& callback) const
 {
-    return m_private->didLoadingProgress();
+    m_private->didLoadingProgressAsync(WTFMove(callback));
 }
 
 void MediaPlayer::setSize(const IntSize& size)
@@ -998,6 +1011,12 @@ void MediaPlayer::setVisible(bool visible)
 void MediaPlayer::setVisibleForCanvas(bool visible)
 {
     m_private->setVisibleForCanvas(visible);
+}
+
+void MediaPlayer::setVisibleInViewport(bool visible)
+{
+    m_visibleInViewport = visible;
+    m_private->setVisibleInViewport(visible);
 }
 
 MediaPlayer::Preload MediaPlayer::preload() const
@@ -1677,6 +1696,32 @@ MediaPlayerIdentifier MediaPlayer::identifier() const
 String MediaPlayer::elementId() const
 {
     return client().mediaPlayerElementId();
+}
+
+bool MediaPlayer::supportsPlayAtHostTime() const
+{
+    return m_private->supportsPlayAtHostTime();
+}
+
+bool MediaPlayer::supportsPauseAtHostTime() const
+{
+    return m_private->supportsPauseAtHostTime();
+}
+
+bool MediaPlayer::playAtHostTime(const MonotonicTime& hostTime)
+{
+    // It is invalid to call playAtHostTime() if the underlying
+    // media player does not support it.
+    ASSERT(supportsPlayAtHostTime());
+    return m_private->playAtHostTime(hostTime);
+}
+
+bool MediaPlayer::pauseAtHostTime(const MonotonicTime& hostTime)
+{
+    // It is invalid to call pauseAtHostTime() if the underlying
+    // media player does not support it.
+    ASSERT(supportsPauseAtHostTime());
+    return m_private->pauseAtHostTime(hostTime);
 }
 
 #if !RELEASE_LOG_DISABLED

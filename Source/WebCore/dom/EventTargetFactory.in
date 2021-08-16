@@ -7,6 +7,7 @@ ApplePaySession conditional=APPLE_PAY
 AudioNode conditional=WEB_AUDIO
 AudioTrackList conditional=VIDEO
 BaseAudioContext conditional=WEB_AUDIO
+BroadcastChannel
 Clipboard
 DedicatedWorkerGlobalScope
 DOMApplicationCache
@@ -39,6 +40,7 @@ RemotePlayback conditional=WIRELESS_PLAYBACK_TARGET
 RTCDataChannel conditional=WEB_RTC
 RTCDTMFSender conditional=WEB_RTC
 RTCPeerConnection conditional=WEB_RTC
+RTCRtpSFrameTransform conditional=WEB_RTC
 RTCRtpScriptTransform conditional=WEB_RTC
 ServiceWorker conditional=SERVICE_WORKER
 ServiceWorkerContainer conditional=SERVICE_WORKER
@@ -55,7 +57,6 @@ TextTrackList conditional=VIDEO
 VideoTrackList conditional=VIDEO
 VisualViewport
 WebAnimation
-WebGPUDevice conditional=WEBGPU
 WebKitMediaKeySession conditional=LEGACY_ENCRYPTED_MEDIA
 WebSocket
 Worker

@@ -387,6 +387,8 @@ void Graph::dump(PrintStream& out, const char* prefixStr, Node* node, DumpContex
         out.print(comma, *node->inByStatus());
     if (node->hasPutByIdStatus())
         out.print(comma, *node->putByIdStatus());
+    if (node->hasEnumeratorMetadata())
+        out.print(comma, "enumeratorModes = ", node->enumeratorMetadata().toRaw());
     if (node->isJump())
         out.print(comma, "T:", *node->targetBlock());
     if (node->isBranch())
@@ -1859,6 +1861,26 @@ void Graph::clearCPSCFGData()
     m_cpsNaturalLoops = nullptr;
     m_cpsDominators = nullptr;
     m_cpsCFG = nullptr;
+}
+
+void Graph::freeDFGIRAfterLowering()
+{
+    m_blocks.clear();
+    m_roots.clear();
+    m_varArgChildren.clear();
+    m_nodes.clearAll();
+
+    m_bytecodeLiveness.clear();
+    m_safeToLoad.clear();
+    m_cpsDominators = nullptr;
+    m_ssaDominators = nullptr;
+    m_cpsNaturalLoops = nullptr;
+    m_ssaNaturalLoops = nullptr;
+    m_ssaCFG = nullptr;
+    m_cpsCFG = nullptr;
+    m_backwardsCFG = nullptr;
+    m_backwardsDominators = nullptr;
+    m_controlEquivalenceAnalysis = nullptr;
 }
 
 void Prefix::dump(PrintStream& out) const

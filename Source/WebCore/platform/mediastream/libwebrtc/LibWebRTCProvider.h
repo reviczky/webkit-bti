@@ -62,6 +62,7 @@ class PeerConnectionFactoryInterface;
 namespace WebCore {
 
 class LibWebRTCAudioModule;
+class RegistrableDomain;
 struct PeerConnectionFactoryAndThreads;
 struct RTCRtpCapabilities;
 
@@ -104,6 +105,7 @@ public:
     static void callOnWebRTCNetworkThread(Function<void()>&&);
     static void callOnWebRTCSignalingThread(Function<void()>&&);
     static bool hasWebRTCThreads();
+    static rtc::Thread& signalingThread();
 
     // Used for mock testing
     void setPeerConnectionFactory(rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>&&);
@@ -138,8 +140,9 @@ public:
         virtual ~SuspendableSocketFactory() = default;
         virtual void suspend() { };
         virtual void resume() { };
+        virtual void disableRelay() { };
     };
-    virtual std::unique_ptr<SuspendableSocketFactory> createSocketFactory(String&& /* userAgent */) { return nullptr; }
+    virtual std::unique_ptr<SuspendableSocketFactory> createSocketFactory(String&& /* userAgent */, bool /* isFirstParty */, RegistrableDomain&&) { return nullptr; }
 
 protected:
     LibWebRTCProvider() = default;

@@ -610,7 +610,7 @@ static LayoutRect scrollContainerLayerBox(const RenderBox& renderBox)
 static LayoutRect clippingLayerBox(const RenderBox& renderBox)
 {
     LayoutRect result = LayoutRect::infiniteRect();
-    if (renderBox.hasOverflowClip())
+    if (renderBox.hasNonVisibleOverflow())
         result = renderBox.overflowClipRect({ }, 0); // FIXME: Incorrect for CSS regions.
 
     if (renderBox.hasClip())
@@ -844,7 +844,7 @@ bool RenderLayerBacking::updateCompositedBounds()
     }
 
     // If the backing provider has overflow:clip, we know all sharing layers are affected by the clip because they are containing-block descendants.
-    if (!renderer().hasOverflowClip()) {
+    if (!renderer().hasNonVisibleOverflow()) {
         for (auto& layerWeakPtr : m_backingSharingLayers) {
             auto* boundsRootLayer = &m_owningLayer;
             ASSERT(layerWeakPtr->isDescendantOf(m_owningLayer));
@@ -1063,7 +1063,7 @@ bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAnces
         updateContentsRects();
     }
 #endif
-#if ENABLE(WEBGL) || ENABLE(WEBGPU) || ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(WEBGL) || ENABLE(OFFSCREEN_CANVAS)
     else if (renderer().isCanvas() && canvasCompositingStrategy(renderer()) == CanvasAsLayerContents) {
         const HTMLCanvasElement* canvas = downcast<HTMLCanvasElement>(renderer().element());
         if (auto* context = canvas->renderingContext())
@@ -1075,8 +1075,13 @@ bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAnces
 #if ENABLE(MODEL_ELEMENT)
     else if (is<RenderModel>(renderer())) {
         auto element = downcast<HTMLModelElement>(renderer().element());
+#if HAVE(ARKIT_INLINE_PREVIEW_MAC)
+        if (auto* platformLayer = element->platformLayer())
+            m_graphicsLayer->setContentsToPlatformLayer(platformLayer, GraphicsLayer::ContentsLayerPurpose::Model);
+#else
         if (auto model = element->model())
             m_graphicsLayer->setContentsToModel(WTFMove(model));
+#endif
 
         layerConfigChanged = true;
     }
@@ -1428,6 +1433,7 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
 
         m_overflowControlsContainer->setPosition(snappedBoxInfo.m_snappedRect.location());
         m_overflowControlsContainer->setSize(snappedBoxInfo.m_snappedRect.size());
+        m_overflowControlsContainer->setMasksToBounds(true);
     }
 
     if (m_foregroundLayer) {
@@ -1507,6 +1513,7 @@ void RenderLayerBacking::adjustOverflowControlsPositionRelativeToAncestor(const 
     SnappedRectInfo snappedBoxInfo = snappedGraphicsLayer(boxOffsetFromGraphicsLayer, overflowControlsRect.size(), deviceScaleFactor());
 
     m_overflowControlsContainer->setPosition(snappedBoxInfo.m_snappedRect.location());
+    m_overflowControlsContainer->setSize(snappedBoxInfo.m_snappedRect.size());
 }
 
 void RenderLayerBacking::setLocationOfScrolledContents(ScrollOffset scrollOffset, ScrollingLayerPositionAction setOrSync)
@@ -2878,7 +2885,7 @@ void RenderLayerBacking::contentChanged(ContentChangeType changeType)
     if ((changeType == MaskImageChanged) && m_maskLayer)
         m_owningLayer.setNeedsCompositingConfigurationUpdate();
 
-#if ENABLE(WEBGL) || ENABLE(WEBGPU) || ENABLE(OFFSCREEN_CANVAS)
+#if ENABLE(WEBGL) || ENABLE(OFFSCREEN_CANVAS)
     if ((changeType == CanvasChanged || changeType == CanvasPixelsChanged) && renderer().isCanvas() && canvasCompositingStrategy(renderer()) == CanvasAsLayerContents) {
         if (changeType == CanvasChanged)
             compositor().scheduleCompositingLayerUpdate();

@@ -66,15 +66,52 @@ private:
     GStreamerVideoCaptureDeviceManager() = default;
 };
 
-class GStreamerDisplayCaptureDeviceManager final : public GStreamerCaptureDeviceManager {
+class GStreamerDisplayCaptureDeviceManager final : public CaptureDeviceManager {
     friend class NeverDestroyed<GStreamerDisplayCaptureDeviceManager>;
 public:
     static GStreamerDisplayCaptureDeviceManager& singleton();
-    CaptureDevice::DeviceType deviceType() final { return CaptureDevice::DeviceType::Screen; }
-private:
-    GStreamerDisplayCaptureDeviceManager() = default;
-};
+    const Vector<CaptureDevice>& captureDevices() final { return m_devices; };
+    void computeCaptureDevices(CompletionHandler<void()>&&) final;
+    CaptureSourceOrError createDisplayCaptureSource(const CaptureDevice&, const MediaConstraints*);
 
+    enum PipeWireOutputType {
+        Monitor = 1 << 0,
+        Window = 1 << 1
+    };
+
+    void stopSource(const String& persistentID);
+
+protected:
+    void notifyResponse() { m_currentResponseCallback(); }
+
+private:
+    GStreamerDisplayCaptureDeviceManager();
+    ~GStreamerDisplayCaptureDeviceManager();
+
+    void waitResponseSignal(const char* objectPath);
+
+    Vector<CaptureDevice> m_devices;
+
+    struct Session {
+        WTF_MAKE_STRUCT_FAST_ALLOCATED;
+        WTF_MAKE_NONCOPYABLE(Session);
+        Session(int fd, String&& path)
+            : fd(fd)
+            , path(WTFMove(path)) { }
+
+        ~Session()
+        {
+            close(fd);
+        }
+
+        int fd;
+        String path;
+    };
+    HashMap<String, std::unique_ptr<Session>> m_sessions;
+
+    GRefPtr<GDBusProxy> m_proxy;
+    CompletionHandler<void()> m_currentResponseCallback;
+};
 }
 
-#endif // ENABLE(MEDIA_STREAM)  && USE(GSTREAMER)
+#endif // ENABLE(MEDIA_STREAM) && USE(GSTREAMER)

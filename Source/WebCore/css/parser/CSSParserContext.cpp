@@ -26,6 +26,7 @@
 #include "config.h"
 #include "CSSParserContext.h"
 
+#include "CSSImageValue.h"
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "Page.h"
@@ -96,6 +97,7 @@ CSSParserContext::CSSParserContext(const Document& document, const URL& sheetBas
 #if ENABLE(ATTACHMENT_ELEMENT)
     , attachmentEnabled { RuntimeEnabledFeatures::sharedFeatures().attachmentElementEnabled() }
 #endif
+    , overflowClipEnabled { document.settings().overflowClipEnabled() }
 {
 }
 
@@ -138,6 +140,7 @@ bool operator==(const CSSParserContext& a, const CSSParserContext& b)
 #if ENABLE(ATTACHMENT_ELEMENT)
         && a.attachmentEnabled == b.attachmentEnabled
 #endif
+        && a.overflowClipEnabled == b.overflowClipEnabled
     ;
 }
 
@@ -174,7 +177,8 @@ void add(Hasher& hasher, const CSSParserContext& context)
 #if ENABLE(ATTACHMENT_ELEMENT)
         | context.attachmentEnabled                         << 22
 #endif
-        | context.mode                                      << 23; // This is multiple bits, so keep it last.
+        | context.overflowClipEnabled                       << 23
+        | context.mode                                      << 24; // This is multiple bits, so keep it last.
     add(hasher, context.baseURL, context.charset, bits);
 }
 
@@ -220,22 +224,21 @@ bool CSSParserContext::isPropertyRuntimeDisabled(CSSPropertyID property) const
     }
 }
 
-URL CSSParserContext::completeURL(const String& url) const
+ResolvedURL CSSParserContext::completeURL(const String& string) const
 {
-    auto completedURL = [&] {
-        if (url.isNull())
-            return URL();
+    auto result = [&] () -> ResolvedURL {
+        if (string.isNull())
+            return { };
         if (charset.isEmpty())
-            return URL(baseURL, url);
-        TextEncoding encoding(charset);
-        auto& encodingForURLParsing = encoding.encodingForFormSubmissionOrURLParsing();
-        return URL(baseURL, url, encodingForURLParsing == UTF8Encoding() ? nullptr : &encodingForURLParsing);
+            return { string, { baseURL, string } };
+        auto encodingForURLParsing = TextEncoding { charset }.encodingForFormSubmissionOrURLParsing();
+        return { string, { baseURL, string, encodingForURLParsing == UTF8Encoding() ? nullptr : &encodingForURLParsing } };
     }();
 
-    if (mode == WebVTTMode && !completedURL.protocolIsData())
-        return URL();
+    if (mode == WebVTTMode && !result.resolvedURL.protocolIsData())
+        return { };
 
-    return completedURL;
+    return result;
 }
 
 }

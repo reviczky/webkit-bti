@@ -60,7 +60,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(Performance);
 
 Performance::Performance(ScriptExecutionContext* context, MonotonicTime timeOrigin)
     : ContextDestructionObserver(context)
-    , m_resourceTimingBufferFullTimer(*this, &Performance::resourceTimingBufferFullTimerFired) // FIXME: Migrate this to the event loop as well.
+    , m_resourceTimingBufferFullTimer(*this, &Performance::resourceTimingBufferFullTimerFired) // FIXME: Migrate this to the event loop as well. https://bugs.webkit.org/show_bug.cgi?id=229044
     , m_timeOrigin(timeOrigin)
 {
     ASSERT(m_timeOrigin);
@@ -77,6 +77,11 @@ void Performance::contextDestroyed()
 DOMHighResTimeStamp Performance::now() const
 {
     return nowInReducedResolutionSeconds().milliseconds();
+}
+
+DOMHighResTimeStamp Performance::timeOrigin() const
+{
+    return reduceTimeResolution(m_timeOrigin.approximateWallTime().secondsSinceEpoch()).milliseconds();
 }
 
 ReducedResolutionSeconds Performance::nowInReducedResolutionSeconds() const
@@ -193,10 +198,14 @@ Vector<RefPtr<PerformanceEntry>> Performance::getEntriesByName(const String& nam
     return entries;
 }
 
-void Performance::appendBufferedEntriesByType(const String& entryType, Vector<RefPtr<PerformanceEntry>>& entries) const
+void Performance::appendBufferedEntriesByType(const String& entryType, Vector<RefPtr<PerformanceEntry>>& entries, PerformanceObserver& observer) const
 {
-    if (m_navigationTiming && entryType == "navigation")
+    if (m_navigationTiming
+        && entryType == "navigation"
+        && !observer.hasNavigationTiming()) {
         entries.append(m_navigationTiming);
+        observer.addedNavigationTiming();
+    }
 
     if (entryType == "resource")
         entries.appendVector(m_resourceTimingBuffer);
@@ -368,15 +377,23 @@ void Performance::registerPerformanceObserver(PerformanceObserver& observer)
 {
     m_observers.add(&observer);
 
-    if (m_navigationTiming && observer.typeFilter().contains(PerformanceEntry::Type::Navigation)) {
+    if (m_navigationTiming
+        && observer.typeFilter().contains(PerformanceEntry::Type::Navigation)
+        && !observer.hasNavigationTiming()) {
         observer.queueEntry(*m_navigationTiming);
-        scheduleTaskIfNeeded();
+        observer.addedNavigationTiming();
     }
 }
 
 void Performance::unregisterPerformanceObserver(PerformanceObserver& observer)
 {
     m_observers.remove(&observer);
+}
+
+void Performance::scheduleNavigationObservationTaskIfNeeded()
+{
+    if (m_navigationTiming)
+        scheduleTaskIfNeeded();
 }
 
 void Performance::queueEntry(PerformanceEntry& entry)

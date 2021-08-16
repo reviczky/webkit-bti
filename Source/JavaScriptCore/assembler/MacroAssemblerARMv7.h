@@ -28,6 +28,8 @@
 
 #if ENABLE(ASSEMBLER)
 
+#include <initializer_list>
+
 #include "ARMv7Assembler.h"
 #include "AbstractMacroAssembler.h"
 
@@ -43,9 +45,10 @@ class MacroAssemblerARMv7 : public AbstractMacroAssembler<Assembler> {
     inline ARMRegisters::FPSingleRegisterID fpTempRegisterAsSingle() { return ARMRegisters::asSingle(fpTempRegister); }
 
 public:
-    static constexpr unsigned numGPRs = 16;
-    static constexpr unsigned numFPRs = 16;
-    
+#define DUMMY_REGISTER_VALUE(id, name, r, cs) 0,
+    static constexpr unsigned numGPRs = std::initializer_list<int>({ FOR_EACH_GP_REGISTER(DUMMY_REGISTER_VALUE) }).size();
+    static constexpr unsigned numFPRs = std::initializer_list<int>({ FOR_EACH_FP_REGISTER(DUMMY_REGISTER_VALUE) }).size();
+#undef DUMMY_REGISTER_VALUE
     RegisterID scratchRegister() { return dataTempRegister; }
 
     MacroAssemblerARMv7()
@@ -864,6 +867,24 @@ public:
         UNREACHABLE_FOR_PLATFORM();
     }
 
+    void loadPair32(RegisterID src, RegisterID dest1, RegisterID dest2)
+    {
+        loadPair32(src, TrustedImm32(0), dest1, dest2);
+    }
+
+    void loadPair32(RegisterID src, TrustedImm32 offset, RegisterID dest1, RegisterID dest2)
+    {
+        // FIXME: ldrd/ldm can be used if dest1 and dest2 are consecutive pair of registers.
+        ASSERT(dest1 != dest2); // If it is the same, ldp becomes illegal instruction.
+        if (src == dest1) {
+            load32(Address(src, offset.m_value + 4), dest2);
+            load32(Address(src, offset.m_value), dest1);
+        } else {
+            load32(Address(src, offset.m_value), dest1);
+            load32(Address(src, offset.m_value + 4), dest2);
+        }
+    }
+
     DataLabel32 store32WithAddressOffsetPatch(RegisterID src, Address address)
     {
         DataLabel32 label = moveWithPatch(TrustedImm32(address.offset), dataTempRegister);
@@ -960,6 +981,18 @@ public:
     {
         move(imm, dataTempRegister);
         store16(dataTempRegister, address);
+    }
+
+    void storePair32(RegisterID src1, RegisterID src2, RegisterID dest)
+    {
+        storePair32(src1, src2, dest, TrustedImm32(0));
+    }
+
+    void storePair32(RegisterID src1, RegisterID src2, RegisterID dest, TrustedImm32 offset)
+    {
+        // FIXME: strd/stm can be used if src1 and src2 are consecutive pair of registers.
+        store32(src1, Address(dest, offset.m_value));
+        store32(src2, Address(dest, offset.m_value + 4));
     }
 
     // Possibly clobbers src, but not on this architecture.
@@ -1793,23 +1826,6 @@ public:
     Jump branchAdd32(ResultCondition cond, TrustedImm32 imm, RegisterID dest)
     {
         return branchAdd32(cond, dest, imm, dest);
-    }
-
-    Jump branchAdd32(ResultCondition cond, TrustedImm32 imm, Address dest)
-    {
-        load32(dest, dataTempRegister);
-
-        // Do the add.
-        ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(imm.m_value);
-        if (armImm.isValid())
-            m_assembler.add_S(dataTempRegister, dataTempRegister, armImm);
-        else {
-            move(imm, addressTempRegister);
-            m_assembler.add_S(dataTempRegister, dataTempRegister, addressTempRegister);
-        }
-
-        store32(dataTempRegister, dest);
-        return Jump(makeBranch(cond));
     }
 
     Jump branchAdd32(ResultCondition cond, TrustedImm32 imm, AbsoluteAddress dest)

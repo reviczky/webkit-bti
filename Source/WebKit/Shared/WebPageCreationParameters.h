@@ -38,6 +38,7 @@
 #include <WebCore/Color.h>
 #include <WebCore/DestinationColorSpace.h>
 #include <WebCore/FloatSize.h>
+#include <WebCore/HighlightVisibility.h>
 #include <WebCore/IntSize.h>
 #include <WebCore/LayoutMilestone.h>
 #include <WebCore/MediaProducer.h>
@@ -52,6 +53,10 @@
 
 #if ENABLE(APPLICATION_MANIFEST)
 #include <WebCore/ApplicationManifest.h>
+#endif
+
+#if PLATFORM(GTK)
+#include "GtkSettingsState.h"
 #endif
 
 namespace IPC {
@@ -241,13 +246,13 @@ struct WebPageCreationParameters {
 #if ENABLE(APP_BOUND_DOMAINS)
     bool limitsNavigationsToAppBoundDomains { false };
 #endif
-    bool lastNavigationWasAppBound { false };
+    bool lastNavigationWasAppInitiated { true };
     bool canUseCredentialStorage { true };
 
     WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking { WebCore::ShouldRelaxThirdPartyCookieBlocking::No };
 
 #if PLATFORM(GTK)
-    String themeName;
+    GtkSettingsState gtkSettings;
 #endif
     
     bool httpsUpgradeEnabled { true };
@@ -255,6 +260,11 @@ struct WebPageCreationParameters {
 #if PLATFORM(IOS)
     bool allowsDeprecatedSynchronousXMLHttpRequestDuringUnload { false };
 #endif
+    
+#if ENABLE(APP_HIGHLIGHTS)
+    WebCore::HighlightVisibility appHighlightsVisible { WebCore::HighlightVisibility::Hidden };
+#endif
+    
 };
 
 } // namespace WebKit

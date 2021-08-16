@@ -457,7 +457,7 @@ static void* openFunc(const char* uri)
     Document* document = cachedResourceLoader.document();
     // Same logic as HTMLBaseElement::href(). Keep them in sync.
     auto* encoding = (document && document->decoder()) ? document->decoder()->encodingForURLParsing() : nullptr;
-    URL url(document ? document->url() : URL(), stripLeadingAndTrailingHTMLSpaces(uri), encoding);
+    URL url(document ? document->fallbackBaseURL() : URL(), stripLeadingAndTrailingHTMLSpaces(uri), encoding);
 
     if (!shouldAllowExternalLoad(url))
         return &globalDescriptor;
@@ -488,6 +488,9 @@ static void* openFunc(const char* uri)
             }
         }
     }
+
+    if (!data)
+        return &globalDescriptor;
 
     return new OffsetBuffer({ data->data(), data->size() });
 }

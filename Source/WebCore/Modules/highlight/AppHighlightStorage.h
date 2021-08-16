@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "AppHighlight.h"
 #include "AppHighlightRangeData.h"
 #include <wtf/Forward.h>
 #include <wtf/MonotonicTime.h>
@@ -42,13 +43,11 @@ class SharedBuffer;
 class StaticRange;
 class Highlight;
 
-enum class CreateNewGroupForHighlight : bool;
-
 enum class RestoreWithTextSearch : bool { No, Yes };
 
 enum class ScrollToHighlight : bool { No, Yes };
 
-class AppHighlightStorage final : RefCounted<AppHighlightStorage> {
+class AppHighlightStorage final {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     AppHighlightStorage(Document&);

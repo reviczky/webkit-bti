@@ -191,7 +191,6 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& object, bool isRoot
     setProperty(AXPropertyName::IsGrabbed, object.isGrabbed());
     setProperty(AXPropertyName::DropEffects, object.determineDropEffects());
     setObjectProperty(AXPropertyName::TitleUIElement, object.titleUIElement());
-    setProperty(AXPropertyName::ExposesTitleUIElement, object.exposesTitleUIElement());
     setObjectProperty(AXPropertyName::VerticalScrollBar, object.scrollBar(AccessibilityOrientation::Vertical));
     setObjectProperty(AXPropertyName::HorizontalScrollBar, object.scrollBar(AccessibilityOrientation::Horizontal));
     setProperty(AXPropertyName::ARIARoleAttribute, static_cast<int>(object.ariaRoleAttribute()));
@@ -1259,6 +1258,12 @@ bool AXIsolatedObject::isAccessibilityScrollViewInstance() const
     return false;
 }
 
+bool AXIsolatedObject::isAXImageInstance() const
+{
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
 bool AXIsolatedObject::isAccessibilitySVGRoot() const
 {
     ASSERT_NOT_REACHED();
@@ -2135,12 +2140,6 @@ void AXIsolatedObject::addChild(AXCoreObject*)
 void AXIsolatedObject::insertChild(AXCoreObject*, unsigned)
 {
     ASSERT_NOT_REACHED();
-}
-
-bool AXIsolatedObject::shouldIgnoreAttributeRole() const
-{
-    ASSERT_NOT_REACHED();
-    return false;
 }
 
 bool AXIsolatedObject::canHaveChildren() const

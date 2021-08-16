@@ -30,6 +30,7 @@ set(WTF_PUBLIC_HEADERS
     CheckedArithmetic.h
     CheckedBoolean.h
     CheckedPtr.h
+    CheckedRef.h
     ClockType.h
     CommaPrinter.h
     CompactPointerTuple.h
@@ -122,8 +123,11 @@ set(WTF_PUBLIC_HEADERS
     LockedPrintStream.h
     Locker.h
     LocklessBag.h
+    LogChannels.h
+    LogInitialization.h
     Logger.h
     LoggerHelper.h
+    Logging.h
     LoggingAccumulator.h
     LoggingHashID.h
     LoggingHashMap.h
@@ -162,7 +166,6 @@ set(WTF_PUBLIC_HEADERS
     Observer.h
     OptionSet.h
     OptionSetHash.h
-    Optional.h
     OrderMaker.h
     Packed.h
     PackedRef.h
@@ -240,6 +243,7 @@ set(WTF_PUBLIC_HEADERS
     SmallSet.h
     SoftLinking.h
     SortedArrayMap.h
+    Span.h
     SpanningTree.h
     Spectrum.h
     StackBounds.h
@@ -262,8 +266,10 @@ set(WTF_PUBLIC_HEADERS
     StringExtras.h
     StringHashDumpContext.h
     StringPrintStream.h
+    SuspendableWorkQueue.h
     SynchronizedFixedQueue.h
     SystemFree.h
+    SystemMalloc.h
     SystemTracing.h
     TaggedArrayStoragePtr.h
     ThreadAssertions.h
@@ -303,6 +309,7 @@ set(WTF_PUBLIC_HEADERS
     WTFConfig.h
     WTFSemaphore.h
     WallTime.h
+    WeakHashMap.h
     WeakHashSet.h
     WeakPtr.h
     WeakRandom.h
@@ -419,7 +426,10 @@ set(WTF_SOURCES
     LikelyDenseUnsignedIntegerSet.cpp
     Lock.cpp
     LockedPrintStream.cpp
+    LogChannels.cpp
+    LogInitialization.cpp
     Logger.cpp
+    Logging.cpp
     MainThread.cpp
     MediaTime.cpp
     MemoryPressureHandler.cpp
@@ -453,6 +463,7 @@ set(WTF_SOURCES
     StackStats.cpp
     StackTrace.cpp
     StringPrintStream.cpp
+    SuspendableWorkQueue.cpp
     ThreadGroup.cpp
     ThreadMessage.cpp
     Threading.cpp

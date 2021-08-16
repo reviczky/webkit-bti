@@ -634,7 +634,7 @@ static RefPtr<CSSPrimitiveValue> consumeResolutionCSSPrimitiveValueWithKnownToke
 
     if (auto unit = range.peek().unitType(); unit == CSSUnitType::CSS_DPPX || unit == CSSUnitType::CSS_DPI || unit == CSSUnitType::CSS_DPCM)
         return pool.createValue(range.consumeIncludingWhitespace().numericValue(), unit);
-    if (allowX == AllowXResolutionUnit::Allow && range.peek().value() == "x")
+    if (allowX == AllowXResolutionUnit::Allow && range.peek().unitString() == "x")
         return pool.createValue(range.consumeIncludingWhitespace().numericValue(), CSSUnitType::CSS_DPPX);
 
     return nullptr;
@@ -2442,9 +2442,11 @@ static std::optional<SRGBA<uint8_t>> parseHexColor(CSSParserTokenRange& range, b
     else {
         if (!acceptQuirkyColors)
             return std::nullopt;
-        if (token.type() == IdentToken)
-            string = token.value().toString(); // e.g. FF0000
-        else if (token.type() == NumberToken || token.type() == DimensionToken) {
+        if (token.type() == IdentToken) {
+            view = token.value(); // e.g. FF0000
+            if (view.length() != 3 && view.length() != 6)
+                return std::nullopt;
+        } else if (token.type() == NumberToken || token.type() == DimensionToken) {
             if (token.numericValueType() != IntegerValueType)
                 return std::nullopt;
             auto numericValue = token.numericValue();
@@ -2454,13 +2456,15 @@ static std::optional<SRGBA<uint8_t>> parseHexColor(CSSParserTokenRange& range, b
             if (token.type() == NumberToken)
                 string = String::number(integerValue); // e.g. 112233
             else
-                string = makeString(integerValue, token.value()); // e.g. 0001FF
+                string = makeString(integerValue, token.unitString()); // e.g. 0001FF
             if (string.length() < 6)
                 string = makeString(&"000000"[string.length()], string);
-        }
-        if (string.length() != 3 && string.length() != 6)
+
+            if (string.length() != 3 && string.length() != 6)
+                return std::nullopt;
+            view = string;
+        } else
             return std::nullopt;
-        view = string;
     }
     auto result = CSSParser::parseHexColor(view);
     if (!result)
@@ -3498,9 +3502,9 @@ RefPtr<CSSShadowValue> consumeSingleShadow(CSSParserTokenRange& range, const CSS
 
 RefPtr<CSSValue> consumeImage(CSSParserTokenRange& range, const CSSParserContext& context, OptionSet<AllowedImageType> allowedImageTypes)
 {
-    if ((range.peek().type() == StringToken) && (allowedImageTypes.contains(AllowedImageType::RawStringAsURL))) {
-        auto urlStringView = range.consumeIncludingWhitespace().value();
-        return CSSImageValue::create(completeURL(context, urlStringView.toAtomString()), context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No);
+    if (range.peek().type() == StringToken && allowedImageTypes.contains(AllowedImageType::RawStringAsURL)) {
+        return CSSImageValue::create(context.completeURL(range.consumeIncludingWhitespace().value().toAtomString().string()),
+            context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No);
     }
 
     if (range.peek().type() == FunctionToken) {
@@ -3517,9 +3521,10 @@ RefPtr<CSSValue> consumeImage(CSSParserTokenRange& range, const CSSParserContext
     }
 
     if (allowedImageTypes.contains(AllowedImageType::URLFunction)) {
-        auto uri = consumeUrlAsStringView(range);
-        if (!uri.isNull())
-            return CSSImageValue::create(completeURL(context, uri.toAtomString()), context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No);
+        if (auto string = consumeUrlAsStringView(range); !string.isNull()) {
+            return CSSImageValue::create(context.completeURL(string.toAtomString().string()),
+                context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No);
+        }
     }
 
     return nullptr;
@@ -3528,7 +3533,7 @@ RefPtr<CSSValue> consumeImage(CSSParserTokenRange& range, const CSSParserContext
 // https://www.w3.org/TR/css-counter-styles-3/#predefined-counters
 bool isPredefinedCounterStyle(CSSValueID valueID)
 {
-    return valueID >= CSSValueDisc && valueID <= CSSValueKatakanaIroha;
+    return valueID >= CSSValueDisc && valueID <= CSSValueEthiopicNumeric;
 }
 
 // https://www.w3.org/TR/css-counter-styles-3/#typedef-counter-style-name
@@ -3559,7 +3564,7 @@ AtomString consumeCounterStyleNameInPrelude(CSSParserTokenRange& prelude)
     if (identMatches<CSSValueDecimal, CSSValueDisc, CSSValueNone>(nameToken.id()))
         return AtomString();
     auto name = nameToken.value();
-    return isPredefinedCounterStyle(nameToken.id()) ? name.convertToASCIILowercase() : name.toString();
+    return isPredefinedCounterStyle(nameToken.id()) ? name.convertToASCIILowercaseAtom() : name.toAtomString();
 }
 
 std::optional<CSSValueID> consumeFontVariantCSS21Raw(CSSParserTokenRange& range)

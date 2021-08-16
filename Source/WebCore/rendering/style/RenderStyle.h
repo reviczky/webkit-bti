@@ -755,12 +755,10 @@ public:
     const Length& scrollPaddingLeft() const;
     const Length& scrollPaddingRight() const;
 
-#if ENABLE(CSS_SCROLL_SNAP)
     bool hasSnapPosition() const;
     const ScrollSnapType scrollSnapType() const;
     const ScrollSnapAlign& scrollSnapAlign() const;
     ScrollSnapStop scrollSnapStop() const;
-#endif
 
 #if ENABLE(TOUCH_EVENTS)
     Color tapHighlightColor() const { return m_rareInheritedData->tapHighlightColor; }
@@ -1071,7 +1069,7 @@ public:
     void setPaddingRight(Length&& length) { SET_VAR(m_surroundData, padding.right(), WTFMove(length)); }
 
     void setCursor(CursorType c) { m_inheritedFlags.cursor = static_cast<unsigned>(c); }
-    void addCursor(RefPtr<StyleImage>&&, const IntPoint& hotSpot = IntPoint());
+    void addCursor(RefPtr<StyleImage>&&, const std::optional<IntPoint>& hotSpot);
     void setCursorList(RefPtr<CursorList>&&);
     void clearCursorList();
 
@@ -1315,11 +1313,9 @@ public:
     void setScrollPaddingLeft(Length&&);
     void setScrollPaddingRight(Length&&);
 
-#if ENABLE(CSS_SCROLL_SNAP)
     void setScrollSnapType(const ScrollSnapType);
     void setScrollSnapAlign(const ScrollSnapAlign&);
     void setScrollSnapStop(const ScrollSnapStop);
-#endif
 
 #if ENABLE(TOUCH_EVENTS)
     void setTapHighlightColor(const Color& c) { SET_VAR(m_rareInheritedData, tapHighlightColor, c); }
@@ -1500,6 +1496,7 @@ public:
     bool isOriginalDisplayInlineType() const { return isDisplayInlineType(originalDisplay()); }
     bool isDisplayFlexibleOrGridBox() const { return isDisplayFlexibleOrGridBox(display()); }
     bool isDisplayRegionType() const;
+    bool isDisplayTableOrTablePart() const { return isDisplayTableOrTablePart(display()); }
     bool isOriginalDisplayListItemType() const { return isDisplayListItemType(originalDisplay()); }
 
     bool setWritingMode(WritingMode);
@@ -1726,11 +1723,9 @@ public:
     static Length initialScrollMargin() { return Length(LengthType::Fixed); }
     static Length initialScrollPadding() { return Length(LengthType::Auto); }
 
-#if ENABLE(CSS_SCROLL_SNAP)
     static ScrollSnapType initialScrollSnapType();
     static ScrollSnapAlign initialScrollSnapAlign();
     static ScrollSnapStop initialScrollSnapStop();
-#endif
 
 #if ENABLE(CSS_TRAILING_WORD)
     static TrailingWord initialTrailingWord() { return TrailingWord::Auto; }
@@ -1967,6 +1962,7 @@ private:
     static bool isDisplayGridBox(DisplayType);
     static bool isDisplayFlexibleOrGridBox(DisplayType);
     static bool isDisplayListItemType(DisplayType);
+    static bool isDisplayTableOrTablePart(DisplayType);
 
     static LayoutBoxExtent shadowExtent(const ShadowData*);
     static LayoutBoxExtent shadowInsetExtent(const ShadowData*);
@@ -2375,6 +2371,14 @@ inline bool RenderStyle::isDisplayFlexibleOrGridBox(DisplayType display)
 inline bool RenderStyle::isDisplayListItemType(DisplayType display)
 {
     return display == DisplayType::ListItem;
+}
+
+inline bool RenderStyle::isDisplayTableOrTablePart(DisplayType display)
+{
+    return display == DisplayType::Table || display == DisplayType::InlineTable || display == DisplayType::TableCell
+        || display == DisplayType::TableCaption || display == DisplayType::TableRowGroup || display == DisplayType::TableHeaderGroup
+        || display == DisplayType::TableFooterGroup || display == DisplayType::TableRow || display == DisplayType::TableColumnGroup
+        || display == DisplayType::TableColumn;
 }
 
 inline bool RenderStyle::hasAnyPublicPseudoStyles() const

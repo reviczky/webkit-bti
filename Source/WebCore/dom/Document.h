@@ -31,6 +31,7 @@
 #include "CanvasBase.h"
 #include "Color.h"
 #include "ContainerNode.h"
+#include "CrossOriginOpenerPolicy.h"
 #include "DisabledAdaptations.h"
 #include "DocumentEventTiming.h"
 #include "DocumentIdentifier.h"
@@ -88,6 +89,10 @@
 namespace JSC {
 class CallFrame;
 class InputCursor;
+}
+
+namespace WTF {
+class TextStream;
 }
 
 namespace WebCore {
@@ -149,6 +154,7 @@ class HTMLAttachmentElement;
 class HTMLBodyElement;
 class HTMLCanvasElement;
 class HTMLCollection;
+class HTMLDialogElement;
 class HTMLDocument;
 class HTMLElement;
 class HTMLFrameOwnerElement;
@@ -227,6 +233,7 @@ class VisitedLinkState;
 class WebAnimation;
 class WebGL2RenderingContext;
 class WebGLRenderingContext;
+class WhitespaceCache;
 class WindowEventLoop;
 class WindowProxy;
 class XPathEvaluator;
@@ -313,9 +320,6 @@ using RenderingContext = Variant<
 #endif
 #if ENABLE(WEBGL2)
     RefPtr<WebGL2RenderingContext>,
-#endif
-#if ENABLE(WEBGPU)
-    RefPtr<GPUCanvasContext>,
 #endif
     RefPtr<ImageBitmapRenderingContext>,
     RefPtr<CanvasRenderingContext2D>
@@ -412,9 +416,7 @@ public:
 #endif
 
     void setReferrerPolicy(ReferrerPolicy);
-    ReferrerPolicy referrerPolicy() const final { return m_referrerPolicy.value_or(ReferrerPolicy::NoReferrerWhenDowngrade); }
-
-    bool isAlwaysOnLoggingAllowed() const;
+    ReferrerPolicy referrerPolicy() const final { return m_referrerPolicy.value_or(ReferrerPolicy::Default); }
 
     WEBCORE_EXPORT DocumentType* doctype() const;
 
@@ -734,7 +736,7 @@ public:
     bool parsing() const { return m_bParsing; }
 
     bool shouldScheduleLayout() const;
-    bool isLayoutTimerActive() const;
+    bool isLayoutPending() const;
 #if !LOG_DISABLED
     Seconds timeSinceDocumentCreation() const { return MonotonicTime::now() - m_documentCreationTime; };
 #endif
@@ -890,7 +892,7 @@ public:
     // when a meta tag is encountered during document parsing, and also when a script dynamically changes or adds a meta
     // tag. This enables scripts to use meta tags to perform refreshes and set expiry dates in addition to them being
     // specified in an HTML file.
-    void processHttpEquiv(const String& equiv, const String& content, bool isInDocumentHead);
+    void processMetaHttpEquiv(const String& equiv, const String& content, bool isInDocumentHead);
 
 #if PLATFORM(IOS_FAMILY)
     void processFormatDetection(const String&);
@@ -1011,12 +1013,12 @@ public:
 
     DocumentMarkerController& markers() const { return *m_markers; }
 
-    WEBCORE_EXPORT bool execCommand(const String& command, bool userInterface = false, const String& value = String());
-    WEBCORE_EXPORT bool queryCommandEnabled(const String& command);
-    WEBCORE_EXPORT bool queryCommandIndeterm(const String& command);
-    WEBCORE_EXPORT bool queryCommandState(const String& command);
-    WEBCORE_EXPORT bool queryCommandSupported(const String& command);
-    WEBCORE_EXPORT String queryCommandValue(const String& command);
+    WEBCORE_EXPORT ExceptionOr<bool> execCommand(const String& command, bool userInterface = false, const String& value = String());
+    WEBCORE_EXPORT ExceptionOr<bool> queryCommandEnabled(const String& command);
+    WEBCORE_EXPORT ExceptionOr<bool> queryCommandIndeterm(const String& command);
+    WEBCORE_EXPORT ExceptionOr<bool> queryCommandState(const String& command);
+    WEBCORE_EXPORT ExceptionOr<bool> queryCommandSupported(const String& command);
+    WEBCORE_EXPORT ExceptionOr<String> queryCommandValue(const String& command);
 
     UndoManager& undoManager() const { return m_undoManager.get(); }
 
@@ -1349,6 +1351,12 @@ public:
     SecurityOrigin& securityOrigin() const { return *SecurityContext::securityOrigin(); }
     SecurityOrigin& topOrigin() const final { return topDocument().securityOrigin(); }
 
+    bool isSameOriginAsTopDocument() const { return securityOrigin().isSameOriginAs(topOrigin()); }
+    bool shouldForceNoOpenerBasedOnCOOP() const;
+
+    const CrossOriginOpenerPolicy& crossOriginOpenerPolicy() const final;
+    void setCrossOriginOpenerPolicy(const CrossOriginOpenerPolicy&);
+
     void willLoadScriptElement(const URL&);
     void willLoadFrameElement(const URL&);
 
@@ -1503,6 +1511,14 @@ public:
     DocumentTimelinesController* timelinesController() const { return m_timelinesController.get(); }
     WEBCORE_EXPORT DocumentTimelinesController& ensureTimelinesController();
 
+    void addToTopLayer(Element&);
+    void removeFromTopLayer(Element&);
+    const ListHashSet<Ref<Element>>& topLayerElements() const { return m_topLayerElements; }
+
+    HTMLDialogElement* activeModalDialog() const;
+
+    WhitespaceCache& whitespaceCache() { return m_whitespaceCache; }
+
 #if ENABLE(ATTACHMENT_ELEMENT)
     void registerAttachmentIdentifier(const String&);
     void didInsertAttachmentElement(HTMLAttachmentElement&);
@@ -1611,6 +1627,10 @@ public:
     bool contains(const Node* node) const { return node && contains(*node); }
 
     WEBCORE_EXPORT JSC::VM& vm() final;
+
+    String debugDescription() const;
+
+    URL fallbackBaseURL() const;
 
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
@@ -1876,9 +1896,9 @@ private:
     WeakPtr<Element> m_mainArticleElement;
     WeakHashSet<Element> m_articleElements;
 
-    HashSet<VisibilityChangeClient*> m_visibilityStateCallbackClients;
+    WeakHashSet<VisibilityChangeClient> m_visibilityStateCallbackClients;
 
-    std::unique_ptr<HashMap<String, Element*, ASCIICaseInsensitiveHash>> m_accessKeyCache;
+    std::unique_ptr<HashMap<String, WeakPtr<Element>, ASCIICaseInsensitiveHash>> m_accessKeyCache;
 
     std::unique_ptr<ConstantPropertyMap> m_constantPropertyMap;
 
@@ -2039,6 +2059,7 @@ private:
     BackForwardCacheState m_backForwardCacheState { NotInBackForwardCache };
     std::optional<ReferrerPolicy> m_referrerPolicy;
     ReadyState m_readyState { Complete };
+    CrossOriginOpenerPolicy m_crossOriginOpenerPolicy;
 
     MutationObserverOptions m_mutationObserverTypes { 0 };
 
@@ -2189,6 +2210,9 @@ private:
 
     UniqueRef<Editor> m_editor;
     UniqueRef<FrameSelection> m_selection;
+
+    ListHashSet<Ref<Element>> m_topLayerElements;
+    UniqueRef<WhitespaceCache> m_whitespaceCache;
 };
 
 Element* eventTargetElementForDocument(Document*);
@@ -2229,6 +2253,8 @@ inline ScriptExecutionContext* Node::scriptExecutionContext() const
 {
     return &document().contextDocument();
 }
+
+WTF::TextStream& operator<<(WTF::TextStream&, const Document&);
 
 } // namespace WebCore
 

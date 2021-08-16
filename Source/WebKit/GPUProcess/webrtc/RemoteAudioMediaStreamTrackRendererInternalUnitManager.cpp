@@ -32,6 +32,7 @@
 #include "GPUProcess.h"
 #include "GPUProcessConnectionMessages.h"
 #include "IPCSemaphore.h"
+#include "Logging.h"
 #include <WebCore/AudioMediaStreamTrackRendererInternalUnit.h>
 #include <WebCore/AudioSession.h>
 #include <WebCore/AudioUtilities.h>
@@ -64,6 +65,7 @@ private:
     Ref<IPC::Connection> m_connection;
     UniqueRef<WebCore::AudioMediaStreamTrackRendererInternalUnit> m_localUnit;
     uint64_t m_readOffset { 0 };
+    uint64_t m_generateOffset { 0 };
     uint64_t m_frameChunkSize { 0 };
     IPC::Semaphore m_renderSemaphore;
 #if PLATFORM(COCOA)
@@ -114,7 +116,7 @@ void RemoteAudioMediaStreamTrackRendererInternalUnitManager::setAudioOutputDevic
         unit->setAudioOutputDevice(deviceId);
 }
 
-static AudioMediaStreamTrackRendererInternalUnit::RenderCallback renderCallback(RemoteAudioMediaStreamTrackRendererInternalUnitManager::Unit& unit)
+static WebCore::AudioMediaStreamTrackRendererInternalUnit::RenderCallback renderCallback(RemoteAudioMediaStreamTrackRendererInternalUnitManager::Unit& unit)
 {
     return [&unit](auto sampleCount, auto& list, auto sampleTime, auto hostTime, auto& flags) {
         return unit.render(sampleCount, list, sampleTime, hostTime, flags);
@@ -128,10 +130,11 @@ RemoteAudioMediaStreamTrackRendererInternalUnitManager::Unit::Unit(AudioMediaStr
 {
     m_localUnit->retrieveFormatDescription([weakThis = makeWeakPtr(this), this, callback = WTFMove(callback)](auto&& description) mutable {
         if (!weakThis || !description) {
+            RELEASE_LOG_IF(!description, WebRTC, "RemoteAudioMediaStreamTrackRendererInternalUnitManager::Unit unable to get format description");
             callback({ }, 0);
             return;
         }
-        m_frameChunkSize = std::max(WebCore::AudioUtilities::renderQuantumSize, AudioSession::sharedSession().preferredBufferSize());
+        m_frameChunkSize = std::max(WebCore::AudioUtilities::renderQuantumSize, WebCore::AudioSession::sharedSession().preferredBufferSize());
         callback(*description, m_frameChunkSize);
     });
 }
@@ -147,8 +150,9 @@ void RemoteAudioMediaStreamTrackRendererInternalUnitManager::Unit::start(const S
         stop();
 
     m_readOffset = 0;
+    m_generateOffset = 0;
     m_isPlaying = true;
-    m_ringBuffer = CARingBuffer::adoptStorage(makeUniqueRef<ReadOnlySharedRingBufferStorage>(handle), description, numberOfFrames).moveToUniquePtr();
+    m_ringBuffer = WebCore::CARingBuffer::adoptStorage(makeUniqueRef<ReadOnlySharedRingBufferStorage>(handle), description, numberOfFrames).moveToUniquePtr();
     m_renderSemaphore = WTFMove(semaphore);
     m_localUnit->start();
 }
@@ -175,8 +179,10 @@ OSStatus RemoteAudioMediaStreamTrackRendererInternalUnitManager::Unit::render(si
         status = noErr;
     }
 
-    for (unsigned i = 0; i < sampleCount; i += m_frameChunkSize)
+    auto requestedSamplesCount = m_generateOffset;
+    for (; requestedSamplesCount < sampleCount; requestedSamplesCount += m_frameChunkSize)
         m_renderSemaphore.signal();
+    m_generateOffset = requestedSamplesCount - sampleCount;
 
     return status;
 }

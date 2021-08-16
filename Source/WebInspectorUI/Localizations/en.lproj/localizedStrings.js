@@ -253,10 +253,10 @@ localizedStrings["CSP Hash"] = "CSP Hash";
 localizedStrings["CSS Animation"] = "CSS Animation";
 localizedStrings["CSS Animations"] = "CSS Animations";
 localizedStrings["CSS Canvas"] = "CSS Canvas";
-localizedStrings["CSS Changes:"] = "CSS Changes:";
 localizedStrings["CSS Transition"] = "CSS Transition";
 localizedStrings["CSS Transitions"] = "CSS Transitions";
 localizedStrings["CSS canvas \u201C%s\u201D"] = "CSS canvas \u201C%s\u201D";
+localizedStrings["CSS:"] = "CSS:";
 localizedStrings["Cached"] = "Cached";
 localizedStrings["Call Frames Truncated"] = "Call Frames Truncated";
 localizedStrings["Call Stack"] = "Call Stack";
@@ -323,6 +323,8 @@ localizedStrings["Click to show %d error in the Console"] = "Click to show %d er
 localizedStrings["Click to show %d errors in the Console"] = "Click to show %d errors in the Console";
 localizedStrings["Click to show %d warning in the Console"] = "Click to show %d warning in the Console";
 localizedStrings["Click to show %d warnings in the Console"] = "Click to show %d warnings in the Console";
+/* Tooltip to show purpose of the contextual documentation button */
+localizedStrings["Click to show documentation @ Contextual Documentation Button"] = "Click to show documentation";
 localizedStrings["Click to view variable value\nShift-click to replace variable with value"] = "Click to view variable value\nShift-click to replace variable with value";
 localizedStrings["Clickable"] = "Clickable";
 localizedStrings["Clients"] = "Clients";
@@ -1028,6 +1030,8 @@ localizedStrings["Open"] = "Open";
 /* Context menu item for opening the target item in a new window. */
 localizedStrings["Open in New Window @ Context Menu Item"] = "Open in New Window";
 localizedStrings["Option-click to show source"] = "Option-click to show source";
+/* Tooltip with instructions on how to show all hidden CSS variables */
+localizedStrings["Option-click to show unused CSS variables from all rules @ Styles Sidebar Panel Tooltip"] = "Option-click to show unused CSS variables from all rules";
 localizedStrings["Options"] = "Options";
 /* Property value for `font-variant-numeric: ordinal`. */
 localizedStrings["Ordinal Letter Forms @ Font Details Sidebar Property Value"] = "Ordinal Letter Forms";
@@ -1319,6 +1323,10 @@ localizedStrings["Shadow Content (%s)"] = "Shadow Content (%s)";
 localizedStrings["Shared Focus"] = "Shared Focus";
 localizedStrings["Shortest property path to %s"] = "Shortest property path to %s";
 localizedStrings["Show %d More"] = "Show %d More";
+/* Text label for button to reveal multiple unused CSS variables */
+localizedStrings["Show %d unused CSS variable (singular) @ Styles Sidebar Panel"] = "Show %d unused CSS variable";
+/* Text label for button to reveal one unused CSS variable */
+localizedStrings["Show %d unused CSS variables (plural) @ Styles Sidebar Panel"] = "Show %d unused CSS variables";
 localizedStrings["Show All"] = "Show All";
 localizedStrings["Show All (%d More)"] = "Show All (%d More)";
 localizedStrings["Show All Nodes (%d More)"] = "Show All Nodes (%d More)";
@@ -1330,6 +1338,7 @@ localizedStrings["Show Remaining (%d)"] = "Show Remaining (%d)";
 localizedStrings["Show Scope Chain on pause"] = "Show Scope Chain on pause";
 localizedStrings["Show all actions"] = "Show all actions";
 localizedStrings["Show all resources"] = "Show all resources";
+localizedStrings["Show changes only for selected node"] = "Show changes only for selected node";
 localizedStrings["Show compositing borders"] = "Show compositing borders";
 /* Label for option to toggle the extended lines setting for CSS grid overlays */
 localizedStrings["Show extended lines @ Layout Panel Overlay Options"] = "Extended Grid Lines";
@@ -1339,8 +1348,8 @@ localizedStrings["Show hidden tabs"] = "Show hidden tabs";
 localizedStrings["Show independent Styles sidebar @ Settings Elements Pane"] = "Show independent Styles sidebar";
 localizedStrings["Show jump to effective property button"] = "Show jump to effective property button";
 localizedStrings["Show jump to variable declaration button"] = "Show jump to variable declaration button";
-localizedStrings["Show only for selected node"] = "Show only for selected node";
 localizedStrings["Show page rulers and node border lines"] = "Show page rulers and node border lines";
+localizedStrings["Show property syntax in documentation popover"] = "Show property syntax in documentation popover";
 localizedStrings["Show rulers"] = "Show rulers";
 localizedStrings["Show the details sidebar (%s)"] = "Show the details sidebar (%s)";
 localizedStrings["Show the navigation sidebar (%s)"] = "Show the navigation sidebar (%s)";

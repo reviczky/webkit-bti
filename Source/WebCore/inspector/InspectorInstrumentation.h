@@ -59,11 +59,6 @@
 #include "WebGLRenderingContextBase.h"
 #endif
 
-#if ENABLE(WEBGPU)
-#include "GPUCanvasContext.h"
-#include "WebGPUPipeline.h"
-#endif
-
 namespace Inspector {
 class ConsoleMessage;
 class ScriptArguments;
@@ -104,11 +99,6 @@ class WorkerOrWorkletGlobalScope;
 class WebGLProgram;
 #endif
 
-#if ENABLE(WEBGPU)
-class WebGPUDevice;
-class WebGPUSwapChain;
-#endif
-
 enum class StorageType : uint8_t;
 
 struct ComputedEffectTiming;
@@ -125,6 +115,7 @@ public:
     static void didInsertDOMNode(Document&, Node&);
     static void willRemoveDOMNode(Document&, Node&);
     static void didRemoveDOMNode(Document&, Node&);
+    static void willDestroyDOMNode(Node&);
     static void nodeLayoutContextChanged(Node&, RenderObject*);
     static void willModifyDOMAttr(Document&, Element&, const AtomString& oldValue, const AtomString& newValue);
     static void didModifyDOMAttr(Document&, Element&, const AtomString& name, const AtomString& value);
@@ -193,7 +184,7 @@ public:
     static void applyUserAgentOverride(Frame&, String&);
     static void applyEmulatedMedia(Frame&, String&);
 
-    static void willSendRequest(Frame*, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse& redirectResponse);
+    static void willSendRequest(Frame*, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse& redirectResponse, const CachedResource*);
     static void didLoadResourceFromMemoryCache(Page&, DocumentLoader*, CachedResource*);
     static void didReceiveResourceResponse(Frame&, unsigned long identifier, DocumentLoader*, const ResourceResponse&, ResourceLoader*);
     static void didReceiveThreadableLoaderResponse(DocumentThreadableLoader&, unsigned long identifier);
@@ -302,13 +293,6 @@ public:
     static bool isWebGLProgramDisabled(WebGLRenderingContextBase&, WebGLProgram&);
     static bool isWebGLProgramHighlighted(WebGLRenderingContextBase&, WebGLProgram&);
 #endif
-#if ENABLE(WEBGPU)
-    static void didCreateWebGPUDevice(WebGPUDevice&);
-    static void willDestroyWebGPUDevice(WebGPUDevice&);
-    static void willConfigureSwapChain(GPUCanvasContext&, WebGPUSwapChain&);
-    static void didCreateWebGPUPipeline(WebGPUDevice&, WebGPUPipeline&);
-    static void willDestroyWebGPUPipeline(WebGPUPipeline&);
-#endif
 
     static void willApplyKeyframeEffect(Element&, KeyframeEffect&, ComputedEffectTiming);
     static void didChangeWebAnimationName(WebAnimation&);
@@ -350,6 +334,7 @@ private:
     static void didInsertDOMNodeImpl(InstrumentingAgents&, Node&);
     static void willRemoveDOMNodeImpl(InstrumentingAgents&, Node&);
     static void didRemoveDOMNodeImpl(InstrumentingAgents&, Node&);
+    static void willDestroyDOMNodeImpl(InstrumentingAgents&, Node&);
     static void nodeLayoutContextChangedImpl(InstrumentingAgents&, Node&, RenderObject*);
     static void willModifyDOMAttrImpl(InstrumentingAgents&, Element&, const AtomString& oldValue, const AtomString& newValue);
     static void didModifyDOMAttrImpl(InstrumentingAgents&, Element&, const AtomString& name, const AtomString& value);
@@ -418,7 +403,7 @@ private:
     static void applyUserAgentOverrideImpl(InstrumentingAgents&, String&);
     static void applyEmulatedMediaImpl(InstrumentingAgents&, String&);
 
-    static void willSendRequestImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse& redirectResponse);
+    static void willSendRequestImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse& redirectResponse, const CachedResource*);
     static void willSendRequestOfTypeImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, ResourceRequest&, LoadType);
     static void markResourceAsCachedImpl(InstrumentingAgents&, unsigned long identifier);
     static void didLoadResourceFromMemoryCacheImpl(InstrumentingAgents&, DocumentLoader*, CachedResource*);
@@ -511,14 +496,6 @@ private:
     static bool isWebGLProgramDisabledImpl(InstrumentingAgents&, WebGLProgram&);
     static bool isWebGLProgramHighlightedImpl(InstrumentingAgents&, WebGLProgram&);
 #endif
-#if ENABLE(WEBGPU)
-    static void didCreateWebGPUDeviceImpl(InstrumentingAgents&, WebGPUDevice&);
-    static void willDestroyWebGPUDeviceImpl(InstrumentingAgents&, WebGPUDevice&);
-    static void willConfigureSwapChainImpl(InstrumentingAgents&, GPUCanvasContext&, WebGPUSwapChain&);
-    static void didCreateWebGPUPipelineImpl(InstrumentingAgents&, WebGPUDevice&, WebGPUPipeline&);
-    static void willDestroyWebGPUPipelineImpl(InstrumentingAgents&, WebGPUPipeline&);
-    static InstrumentingAgents* instrumentingAgents(WebGPUDevice&);
-#endif
 
     static void willApplyKeyframeEffectImpl(InstrumentingAgents&, Element&, KeyframeEffect&, ComputedEffectTiming);
     static void didChangeWebAnimationNameImpl(InstrumentingAgents&, WebAnimation&);
@@ -599,6 +576,13 @@ inline void InspectorInstrumentation::didRemoveDOMNode(Document& document, Node&
     FAST_RETURN_IF_NO_FRONTENDS(void());
     if (auto* agents = instrumentingAgents(document))
         didRemoveDOMNodeImpl(*agents, node);
+}
+
+inline void InspectorInstrumentation::willDestroyDOMNode(Node& node)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (auto* agents = instrumentingAgents(node.document()))
+        willDestroyDOMNodeImpl(*agents, node);
 }
 
 inline void InspectorInstrumentation::nodeLayoutContextChanged(Node& node, RenderObject* newRenderer)
@@ -1049,17 +1033,17 @@ inline void InspectorInstrumentation::applyEmulatedMedia(Frame& frame, String& m
         applyEmulatedMediaImpl(*agents, media);
 }
 
-inline void InspectorInstrumentation::willSendRequest(Frame* frame, unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& redirectResponse)
+inline void InspectorInstrumentation::willSendRequest(Frame* frame, unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& redirectResponse, const CachedResource* cachedResource)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
     if (auto* agents = instrumentingAgents(frame))
-        willSendRequestImpl(*agents, identifier, loader, request, redirectResponse);
+        willSendRequestImpl(*agents, identifier, loader, request, redirectResponse, cachedResource);
 }
 
 inline void InspectorInstrumentation::willSendRequest(WorkerOrWorkletGlobalScope& globalScope, unsigned long identifier, ResourceRequest& request)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
-    willSendRequestImpl(instrumentingAgents(globalScope), identifier, nullptr, request, ResourceResponse { });
+    willSendRequestImpl(instrumentingAgents(globalScope), identifier, nullptr, request, ResourceResponse { }, nullptr);
 }
 
 inline void InspectorInstrumentation::willSendRequestOfType(Frame* frame, unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, LoadType loadType)
@@ -1463,43 +1447,6 @@ inline bool InspectorInstrumentation::isWebGLProgramHighlighted(WebGLRenderingCo
     if (auto* agents = instrumentingAgents(contextWebGLBase.canvasBase().scriptExecutionContext()))
         return isWebGLProgramHighlightedImpl(*agents, program);
     return false;
-}
-#endif
-
-#if ENABLE(WEBGPU)
-inline void InspectorInstrumentation::didCreateWebGPUDevice(WebGPUDevice& device)
-{
-    FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(device))
-        didCreateWebGPUDeviceImpl(*agents, device);
-}
-
-inline void InspectorInstrumentation::willDestroyWebGPUDevice(WebGPUDevice& device)
-{
-    FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(device))
-        willDestroyWebGPUDeviceImpl(*agents, device);
-}
-
-inline void InspectorInstrumentation::willConfigureSwapChain(GPUCanvasContext& contextGPU, WebGPUSwapChain& newSwapChain)
-{
-    FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(contextGPU.canvasBase().scriptExecutionContext()))
-        willConfigureSwapChainImpl(*agents, contextGPU, newSwapChain);
-}
-
-inline void InspectorInstrumentation::didCreateWebGPUPipeline(WebGPUDevice& device, WebGPUPipeline& pipeline)
-{
-    FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(device))
-        didCreateWebGPUPipelineImpl(*agents, device, pipeline);
-}
-
-inline void InspectorInstrumentation::willDestroyWebGPUPipeline(WebGPUPipeline& pipeline)
-{
-    FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (auto* agents = instrumentingAgents(pipeline.scriptExecutionContext()))
-        willDestroyWebGPUPipelineImpl(*agents, pipeline);
 }
 #endif
 

@@ -83,7 +83,10 @@ public:
     // Scrolling methods for layers that can scroll their overflow.
     void scrollByRecursively(const IntSize& delta, ScrollableArea** scrolledArea = nullptr);
 
-    WEBCORE_EXPORT void scrollToOffset(const ScrollOffset&, const ScrollPositionChangeOptions& = ScrollPositionChangeOptions::createProgrammatic());
+    // Attempt to scroll the given ScrollOffset, returning the real target offset after it has
+    // been adjusted by scroll snapping.
+    WEBCORE_EXPORT ScrollOffset scrollToOffset(const ScrollOffset&, const ScrollPositionChangeOptions& = ScrollPositionChangeOptions::createProgrammatic());
+
     void scrollToXPosition(int x, const ScrollPositionChangeOptions&);
     void scrollToYPosition(int y, const ScrollPositionChangeOptions&);
     void setScrollPosition(const ScrollPosition&, const ScrollPositionChangeOptions&);
@@ -100,9 +103,6 @@ public:
     bool hasVerticalScrollbar() const { return verticalScrollbar(); }
     void setHasHorizontalScrollbar(bool);
     void setHasVerticalScrollbar(bool);
-
-    Ref<Scrollbar> createScrollbar(ScrollbarOrientation);
-    void destroyScrollbar(ScrollbarOrientation);
 
     bool requiresScrollPositionReconciliation() const { return m_requiresScrollPositionReconciliation; }
     void setRequiresScrollPositionReconciliation(bool requiresReconciliation = true) { m_requiresScrollPositionReconciliation = requiresReconciliation; }
@@ -146,9 +146,7 @@ public:
     bool isScrollableOrRubberbandable() final;
     bool hasScrollableOrRubberbandableAncestor() final;
     bool useDarkAppearance() const final;
-#if ENABLE(CSS_SCROLL_SNAP)
     void updateSnapOffsets() final;
-#endif
 
 #if PLATFORM(IOS_FAMILY)
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -191,9 +189,7 @@ public:
     bool isUserScrollInProgress() const final;
     bool isRubberBandInProgress() const final;
     bool forceUpdateScrollbarsOnMainThreadForPerformanceTesting() const final;
-#if ENABLE(CSS_SCROLL_SNAP)
     bool isScrollSnapInProgress() const final;
-#endif
     bool usesMockScrollAnimator() const final;
     void logMockScrollAnimatorMessage(const String&) const final;
 
@@ -212,12 +208,8 @@ public:
     void updateScrollbarsAfterLayout();
 
     void positionOverflowControls(const IntSize&);
-    void clearScrollCorner();
-    void clearResizer();
 
     void updateAllScrollbarRelatedStyle();
-
-    void drawPlatformResizerImage(GraphicsContext&, const LayoutRect& resizerCornerRect);
 
     LayoutUnit overflowTop() const;
     LayoutUnit overflowBottom() const;
@@ -230,24 +222,13 @@ public:
 
     bool scrollingMayRevealBackground() const;
 
-    void computeScrollDimensions();
-    void computeScrollOrigin();
     void computeHasCompositedScrollableOverflow();
-
-    bool hasHorizontalOverflow() const;
-    bool hasVerticalOverflow() const;
-
-    bool showsOverflowControls() const;
 
     // NOTE: This should only be called by the overridden setScrollOffset from ScrollableArea.
     void scrollTo(const ScrollPosition&);
     void updateCompositingLayersAfterScroll();
 
     IntSize scrollbarOffset(const Scrollbar&) const;
-
-    void updateScrollableAreaSet(bool hasOverflow);
-
-    ScrollOffset clampScrollOffset(const ScrollOffset&) const;
 
     void updateLayerPositionsAfterOverflowScroll();
     void updateLayerPositionsAfterDocumentScroll();
@@ -260,8 +241,30 @@ public:
 #endif
 
 private:
+    bool hasHorizontalOverflow() const;
+    bool hasVerticalOverflow() const;
+
+    bool showsOverflowControls() const;
+
+    ScrollOffset clampScrollOffset(const ScrollOffset&) const;
+
+    void computeScrollDimensions();
+    void computeScrollOrigin();
+
+    void updateScrollableAreaSet(bool hasOverflow);
+
     void updateScrollCornerStyle();
     void updateResizerStyle();
+
+    void drawPlatformResizerImage(GraphicsContext&, const LayoutRect& resizerCornerRect);
+
+    Ref<Scrollbar> createScrollbar(ScrollbarOrientation);
+    void destroyScrollbar(ScrollbarOrientation);
+
+    void clearScrollCorner();
+    void clearResizer();
+
+    void updateScrollbarPresenceAndState(std::optional<bool> hasHorizontalOverflow = std::nullopt, std::optional<bool> hasVerticalOverflow = std::nullopt);
 
 private:
     bool m_scrollDimensionsDirty { true };

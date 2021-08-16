@@ -435,7 +435,9 @@ public:
 
     bool isSelectionBorder() const;
 
-    bool hasOverflowClip() const { return m_bitfields.hasOverflowClip(); }
+    bool hasNonVisibleOverflow() const { return m_bitfields.hasNonVisibleOverflow(); }
+
+    bool hasPotentiallyScrollableOverflow() const;
 
     bool hasTransformRelatedProperty() const { return m_bitfields.hasTransformRelatedProperty(); } // Transform, perspective or transform-style: preserve-3d.
     bool hasTransform() const { return hasTransformRelatedProperty() && (style().hasTransform() || style().translate() || style().scale() || style().rotate()); }
@@ -493,7 +495,7 @@ public:
     void setIsRenderView() { ASSERT(isBox()); m_bitfields.setIsTextOrRenderView(true); }
     void setReplaced(bool b = true) { m_bitfields.setIsReplaced(b); }
     void setHorizontalWritingMode(bool b = true) { m_bitfields.setHorizontalWritingMode(b); }
-    void setHasOverflowClip(bool b = true) { m_bitfields.setHasOverflowClip(b); }
+    void setHasNonVisibleOverflow(bool b = true) { m_bitfields.setHasNonVisibleOverflow(b); }
     void setHasLayer(bool b = true) { m_bitfields.setHasLayer(b); }
     void setHasTransformRelatedProperty(bool b = true) { m_bitfields.setHasTransformRelatedProperty(b); }
 
@@ -846,7 +848,7 @@ private:
             , m_isLineBreak(false)
             , m_horizontalWritingMode(true)
             , m_hasLayer(false)
-            , m_hasOverflowClip(false)
+            , m_hasNonVisibleOverflow(false)
             , m_hasTransformRelatedProperty(false)
             , m_everHadLayout(false)
             , m_childrenInline(false)
@@ -879,7 +881,7 @@ private:
         ADD_BOOLEAN_BITFIELD(horizontalWritingMode, HorizontalWritingMode);
 
         ADD_BOOLEAN_BITFIELD(hasLayer, HasLayer);
-        ADD_BOOLEAN_BITFIELD(hasOverflowClip, HasOverflowClip); // Set in the case of overflow:auto/scroll/hidden
+        ADD_BOOLEAN_BITFIELD(hasNonVisibleOverflow, HasNonVisibleOverflow); // Set in the case of overflow:auto/scroll/hidden
         ADD_BOOLEAN_BITFIELD(hasTransformRelatedProperty, HasTransformRelatedProperty);
 
         ADD_BOOLEAN_BITFIELD(everHadLayout, EverHadLayout);
@@ -1185,6 +1187,13 @@ inline RenderObject* RenderObject::nextInFlowSibling() const
 inline bool RenderObject::isAtomicInlineLevelBox() const
 {
     return style().isDisplayInlineType() && !(style().display() == DisplayType::Inline && !isReplaced());
+}
+
+inline bool RenderObject::hasPotentiallyScrollableOverflow() const
+{
+    // We only need to test one overflow dimension since 'visible' and 'clip' always get accompanied
+    // with 'clip' or 'visible' in the other dimension (see Style::Adjuster::adjust).
+    return hasNonVisibleOverflow() && style().overflowX() != Overflow::Clip && style().overflowX() != Overflow::Visible;
 }
 
 WTF::TextStream& operator<<(WTF::TextStream&, const RenderObject&);

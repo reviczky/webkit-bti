@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "AppPrivacyReport.h"
 #include "NavigatingToAppBoundDomain.h"
 #include "PrefetchCache.h"
 #include "PrivateClickMeasurementNetworkLoader.h"
@@ -53,16 +54,18 @@ struct SecurityOriginData;
 
 namespace WebKit {
 
-class PrivateClickMeasurementManager;
 class NetworkDataTask;
 class NetworkLoadScheduler;
 class NetworkProcess;
 class NetworkResourceLoader;
+class NetworkBroadcastChannelRegistry;
 class NetworkSocketChannel;
+class PrivateClickMeasurementManager;
 class WebPageNetworkParameters;
 class WebResourceLoadStatisticsStore;
 class WebSocketTask;
 struct NetworkSessionCreationParameters;
+struct SessionSet;
 
 enum class WebsiteDataType : uint32_t;
 
@@ -142,10 +145,11 @@ public:
     void clearPrefetchCache() { m_prefetchCache.clear(); }
 
     virtual std::unique_ptr<WebSocketTask> createWebSocketTask(WebPageProxyIdentifier, NetworkSocketChannel&, const WebCore::ResourceRequest&, const String& protocol);
-    virtual void removeWebSocketTask(WebPageProxyIdentifier, WebSocketTask&) { }
+    virtual void removeWebSocketTask(SessionSet&, WebSocketTask&) { }
     virtual void addWebSocketTask(WebPageProxyIdentifier, WebSocketTask&) { }
 
     WebCore::BlobRegistryImpl& blobRegistry() { return m_blobRegistry; }
+    NetworkBroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry; }
 
     unsigned testSpeedMultiplier() const { return m_testSpeedMultiplier; }
     bool allowsServerPreconnect() const { return m_allowsServerPreconnect; }
@@ -161,7 +165,7 @@ public:
     PrivateClickMeasurementManager& privateClickMeasurement() { return *m_privateClickMeasurement; }
 
 #if PLATFORM(COCOA)
-    AppBoundNavigationTestingData& appBoundNavigationTestingData() { return m_appBoundNavigationTestingData; }
+    AppPrivacyReportTestingData& appPrivacyReportTestingData() { return m_appPrivacyReportTestingData; }
 #endif
 
     void addPrivateClickMeasurementNetworkLoader(std::unique_ptr<PrivateClickMeasurementNetworkLoader>&& loader) { m_privateClickMeasurementNetworkLoaders.add(WTFMove(loader)); }
@@ -172,6 +176,8 @@ public:
     virtual void addWebPageNetworkParameters(WebPageProxyIdentifier, WebPageNetworkParameters&&) { }
     virtual void removeWebPageNetworkParameters(WebPageProxyIdentifier) { }
     virtual size_t countNonDefaultSessionSets() const { return 0; }
+
+    String attributedBundleIdentifierFromPageIdentifier(WebPageProxyIdentifier) const;
 
 protected:
     NetworkSession(NetworkProcess&, const NetworkSessionCreationParameters&);
@@ -211,6 +217,7 @@ protected:
     RefPtr<NetworkCache::Cache> m_cache;
     std::unique_ptr<NetworkLoadScheduler> m_networkLoadScheduler;
     WebCore::BlobRegistryImpl m_blobRegistry;
+    UniqueRef<NetworkBroadcastChannelRegistry> m_broadcastChannelRegistry;
     unsigned m_testSpeedMultiplier { 1 };
     bool m_allowsServerPreconnect { true };
 
@@ -219,10 +226,11 @@ protected:
 #endif
     
 #if PLATFORM(COCOA)
-    AppBoundNavigationTestingData m_appBoundNavigationTestingData;
+    AppPrivacyReportTestingData m_appPrivacyReportTestingData;
 #endif
 
     HashSet<std::unique_ptr<PrivateClickMeasurementNetworkLoader>> m_privateClickMeasurementNetworkLoaders;
+    HashMap<WebPageProxyIdentifier, String> m_attributedBundleIdentifierFromPageIdentifiers;
 };
 
 } // namespace WebKit

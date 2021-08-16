@@ -55,7 +55,7 @@
 
 namespace WebCore {
 
-#define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(document() && document()->page() && document()->page()->isAlwaysOnLoggingAllowed(), Media, "%p - AudioContext::" fmt, this, ##__VA_ARGS__)
+#define AUDIOCONTEXT_RELEASE_LOG(fmt, ...) RELEASE_LOG(Media, "%p - AudioContext::" fmt, this, ##__VA_ARGS__)
 
 #if OS(WINDOWS)
 // Don't allow more than this number of simultaneous AudioContexts talking to hardware.
@@ -103,7 +103,7 @@ ExceptionOr<Ref<AudioContext>> AudioContext::create(Document& document, AudioCon
         contextOptions.sampleRate = *defaultSampleRateForTesting();
 
     if (contextOptions.sampleRate && !isSupportedSampleRate(*contextOptions.sampleRate))
-        return Exception { SyntaxError, "sampleRate is not in range"_s };
+        return Exception { NotSupportedError, "sampleRate is not in range"_s };
     
     auto audioContext = adoptRef(*new AudioContext(document, contextOptions));
     audioContext->suspendIfNeeded();
@@ -135,7 +135,7 @@ AudioContext::AudioContext(Document& document, const AudioContextOptions& contex
 void AudioContext::constructCommon()
 {
     ASSERT(document());
-    if (document()->audioPlaybackRequiresUserGesture())
+    if (document()->topDocument().audioPlaybackRequiresUserGesture())
         addBehaviorRestriction(RequireUserGestureForAudioStartRestriction);
     else
         m_restrictions = NoRestrictions;
