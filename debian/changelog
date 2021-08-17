@@ -6,6 +6,8 @@ webkit2gtk (2.33.3-1) UNRELEASED; urgency=medium
     + Fix gtk-doc build (WebKit bug #229152).
   * debian/control:
     + Remove the dummy libwebkit2gtk-4.0-37-gtk2 package.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 16 Aug 2021 15:37:24 +0200
 
