@@ -1,3 +1,9 @@
+wpewebkit (2.32.3-2+qt) UNRELEASED; urgency=medium
+
+  * Enable the Qt API.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 24 Aug 2021 16:52:18 +0200
+
 wpewebkit (2.32.3-2) unstable; urgency=high
 
   * disable-external-audio-rendering.patch:

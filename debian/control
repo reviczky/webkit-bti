@@ -33,6 +33,8 @@ Build-Depends: debhelper (>= 10),
                libwpebackend-fdo-1.0-dev,
                libxslt1-dev (>= 1.1.7),
                ninja-build,
+               qtbase5-private-dev,
+               qtdeclarative5-dev,
                ruby:native,
                wayland-protocols
 Build-Depends-Indep: gtk-doc-tools,
@@ -53,6 +55,7 @@ Depends: libwpewebkit-1.0-3 (= ${binary:Version}),
          libsoup2.4-dev,
          libwpe-1.0-dev,
          ${misc:Depends}
+Suggests: qtbase5-dev, qtdeclarative5-dev
 Description: Web content engine for embedded devices - development files
  WebKit is a modern web engine that is able to display content such as
  HTML, SVG, XML, and others. It also supports DOM, XMLHttpRequest,
@@ -123,3 +126,15 @@ Description: Web content engine for embedded devices - documentation
  best performance.
  .
  This package contains the documentation.
+
+Package: qml-module-wpewebkit
+Architecture: linux-any
+Multi-Arch: same
+Depends: libwpewebkit-1.0-3 (= ${binary:Version}),
+         ${shlibs:Depends},
+         qml-module-qtquick-window2,
+         qml-module-qtquick2,
+         qtwayland5,
+         ${misc:Depends}
+Description: Web content engine for embedded devices - Qt bindings
+ This package contains QtWPE

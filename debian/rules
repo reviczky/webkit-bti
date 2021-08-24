@@ -81,7 +81,7 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
-	   -DENABLE_WPE_QT_API=OFF \
+	   -DENABLE_WPE_QT_API=ON \
 	   $(EXTRA_CMAKE_ARGUMENTS)
 
 # Create dummy doc directories in case the "nodoc" build option is set
