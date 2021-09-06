@@ -140,6 +140,21 @@ AuxiliaryProcessProxy::State AuxiliaryProcessProxy::state() const
     return AuxiliaryProcessProxy::State::Running;
 }
 
+String AuxiliaryProcessProxy::stateString() const
+{
+    auto currentState = state();
+    switch (currentState) {
+    case AuxiliaryProcessProxy::State::Launching:
+        return "Launching"_s;
+    case AuxiliaryProcessProxy::State::Running:
+        return "Running"_s;
+    case AuxiliaryProcessProxy::State::Terminated:
+        return "Terminated"_s;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
 bool AuxiliaryProcessProxy::wasTerminated() const
 {
     switch (state()) {

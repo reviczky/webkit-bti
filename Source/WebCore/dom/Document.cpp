@@ -161,6 +161,7 @@
 #include "PageTransitionEvent.h"
 #include "PaintWorkletGlobalScope.h"
 #include "Performance.h"
+#include "PerformanceNavigationTiming.h"
 #include "PlatformLocale.h"
 #include "PlatformMediaSessionManager.h"
 #include "PlatformScreen.h"
@@ -288,10 +289,12 @@
 #include "RenderFullScreen.h"
 #endif
 
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
 #include "ContentChangeObserver.h"
-#include "CSSFontSelector.h"
 #include "DOMTimerHoldingTank.h"
+#endif
+
+#if PLATFORM(IOS_FAMILY)
 #include "DeviceMotionClientIOS.h"
 #include "DeviceMotionController.h"
 #include "DeviceOrientationClientIOS.h"
@@ -822,6 +825,7 @@ void Document::removedLastRef()
 
         destroyTreeScopeData();
         removeDetachedChildren();
+        RELEASE_ASSERT(m_topLayerElements.isEmpty());
         m_formController = nullptr;
         
         m_markers->detach();
@@ -1374,6 +1378,17 @@ ExceptionOr<Ref<Element>> Document::createElementNS(const AtomString& namespaceU
     return createElement(parsedName, false);
 }
 
+DocumentEventTiming* Document::documentEventTimingFromNavigationTiming()
+{
+    auto* window = domWindow();
+    if (!window)
+        return nullptr;
+    auto* navigationTiming = window->performance().navigationTiming();
+    if (!navigationTiming)
+        return nullptr;
+    return &navigationTiming->documentEventTiming();
+}
+
 void Document::setReadyState(ReadyState readyState)
 {
     if (readyState == m_readyState)
@@ -1381,16 +1396,28 @@ void Document::setReadyState(ReadyState readyState)
 
     switch (readyState) {
     case Loading:
-        if (!m_eventTiming.domLoading)
-            m_eventTiming.domLoading = MonotonicTime::now();
+        if (!m_eventTiming.domLoading) {
+            auto now = MonotonicTime::now();
+            m_eventTiming.domLoading = now;
+            if (auto* eventTiming = documentEventTimingFromNavigationTiming())
+                eventTiming->domLoading = now;
+        }
         break;
     case Complete:
-        if (!m_eventTiming.domComplete)
-            m_eventTiming.domComplete = MonotonicTime::now();
+        if (!m_eventTiming.domComplete) {
+            auto now = MonotonicTime::now();
+            m_eventTiming.domComplete = now;
+            if (auto* eventTiming = documentEventTimingFromNavigationTiming())
+                eventTiming->domComplete = now;
+        }
         FALLTHROUGH;
     case Interactive:
-        if (!m_eventTiming.domInteractive)
-            m_eventTiming.domInteractive = MonotonicTime::now();
+        if (!m_eventTiming.domInteractive) {
+            auto now = MonotonicTime::now();
+            m_eventTiming.domInteractive = now;
+            if (auto* eventTiming = documentEventTimingFromNavigationTiming())
+                eventTiming->domInteractive = now;
+        }
         break;
     }
 
@@ -2170,7 +2197,7 @@ bool Document::updateStyleIfNeeded()
             return false;
     }
 
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
     ContentChangeObserver::StyleRecalcScope observingScope(*this);
 #endif
     // The early exit above for !needsStyleRecalc() is needed when updateWidgetPositions() is called in runOrScheduleAsynchronousTasks().
@@ -2493,7 +2520,7 @@ void Document::frameDestroyed()
 void Document::willDetachPage()
 {
     FrameDestructionObserver::willDetachPage();
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
     contentChangeObserver().willDetachPage();
 #endif
     if (domWindow() && frame())
@@ -2734,7 +2761,7 @@ bool Document::shouldBypassMainWorldContentSecurityPolicy() const
 
 void Document::platformSuspendOrStopActiveDOMObjects()
 {
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
     contentChangeObserver().didSuspendActiveDOMObjects();
 #endif
 }
@@ -3528,6 +3555,11 @@ IDBClient::IDBConnectionProxy* Document::idbConnectionProxy()
         m_idbConnectionProxy = &currentPage->idbConnection().proxy();
     }
     return m_idbConnectionProxy.get();
+}
+
+RefPtr<PermissionController> Document::permissionController()
+{
+    return page() ? &page()->permissionController() : nullptr;
 }
 
 SocketProvider* Document::socketProvider()
@@ -6070,15 +6102,23 @@ void Document::finishedParsing()
 
     scriptRunner().documentFinishedParsing();
 
-    if (!m_eventTiming.domContentLoadedEventStart)
-        m_eventTiming.domContentLoadedEventStart = MonotonicTime::now();
+    if (!m_eventTiming.domContentLoadedEventStart) {
+        auto now = MonotonicTime::now();
+        m_eventTiming.domContentLoadedEventStart = now;
+        if (auto* eventTiming = documentEventTimingFromNavigationTiming())
+            eventTiming->domContentLoadedEventStart = now;
+    }
 
     // FIXME: Schedule a task to fire DOMContentLoaded event instead. See webkit.org/b/82931
     eventLoop().performMicrotaskCheckpoint();
     dispatchEvent(Event::create(eventNames().DOMContentLoadedEvent, Event::CanBubble::Yes, Event::IsCancelable::No));
 
-    if (!m_eventTiming.domContentLoadedEventEnd)
-        m_eventTiming.domContentLoadedEventEnd = MonotonicTime::now();
+    if (!m_eventTiming.domContentLoadedEventEnd) {
+        auto now = MonotonicTime::now();
+        m_eventTiming.domContentLoadedEventEnd = now;
+        if (auto* eventTiming = documentEventTimingFromNavigationTiming())
+            eventTiming->domContentLoadedEventEnd = now;
+    }
 
     if (RefPtr<Frame> frame = this->frame()) {
 #if ENABLE(XSLT)
@@ -7587,7 +7627,7 @@ Element* Document::activeElement()
 bool Document::hasFocus() const
 {
     Page* page = this->page();
-    if (!page || !page->focusController().isActive())
+    if (!page || !page->focusController().isActive() || !page->focusController().isFocused())
         return false;
     if (Frame* focusedFrame = page->focusController().focusedFrame()) {
         if (focusedFrame->tree().isDescendantOf(frame()))
@@ -8435,20 +8475,19 @@ Vector<RefPtr<WebAnimation>> Document::matchingAnimations(const WTF::Function<bo
     return animations;
 }
 
-void Document::addToTopLayer(Element& element)
+void Document::addTopLayerElement(Element& element)
 {
+    RELEASE_ASSERT(&element.document() == this && element.isConnected() && !element.isInTopLayer());
     // To add an element to a top layer, remove it from top layer and then append it to top layer.
-    m_topLayerElements.appendOrMoveToLast(element);
-
-    element.invalidateStyle();
+    auto result = m_topLayerElements.add(element);
+    RELEASE_ASSERT(result.isNewEntry);
 }
 
-void Document::removeFromTopLayer(Element& element)
+void Document::removeTopLayerElement(Element& element)
 {
-    if (!m_topLayerElements.remove(element))
-        return;
-
-    element.invalidateStyle();
+    RELEASE_ASSERT(&element.document() == this && element.isInTopLayer());
+    auto didRemove = m_topLayerElements.remove(element);
+    RELEASE_ASSERT(didRemove);
 }
 
 HTMLDialogElement* Document::activeModalDialog() const
@@ -8738,7 +8777,7 @@ void Document::setPaintWorkletGlobalScopeForName(const String& name, Ref<PaintWo
 }
 #endif
 
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
 
 ContentChangeObserver& Document::contentChangeObserver()
 {
@@ -8894,15 +8933,8 @@ void Document::prepareCanvasesForDisplayIfNeeded()
 
     auto canvases = copyToVectorOf<Ref<HTMLCanvasElement>>(m_canvasesNeedingDisplayPreparation);
     m_canvasesNeedingDisplayPreparation.clear();
-    for (auto& canvas : canvases) {
-        // However, if they are not in the document body, then they won't
-        // be composited and thus don't need preparation. Unfortunately they
-        // can't tell at the time they were added to the list, since they
-        // could be inserted or removed from the document body afterwards.
-        if (!canvas->isInTreeScope())
-            continue;
+    for (auto& canvas : canvases)
         canvas->prepareForDisplay();
-    }
 }
 
 void Document::clearCanvasPreparation(HTMLCanvasElement& canvas)

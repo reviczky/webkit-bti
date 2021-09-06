@@ -81,6 +81,8 @@ struct CSSParserContext {
 #endif
     bool useLegacyBackgroundSizeShorthandBehavior { false };
     bool focusVisibleEnabled { false };
+    bool hasPseudoClassEnabled { false };
+    bool cascadeLayersEnabled { false };
 
     // RuntimeEnabledFeatures.
 #if ENABLE(ATTACHMENT_ELEMENT)

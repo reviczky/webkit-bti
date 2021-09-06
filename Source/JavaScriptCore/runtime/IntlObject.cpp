@@ -58,7 +58,9 @@
 #include "JSCInlines.h"
 #include "Options.h"
 #include <unicode/ubrk.h>
+#include <unicode/ucal.h>
 #include <unicode/ucol.h>
+#include <unicode/ucurr.h>
 #include <unicode/ufieldpositer.h>
 #include <unicode/uloc.h>
 #include <unicode/unumsys.h>
@@ -67,6 +69,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringImpl.h>
+#include <wtf/text/StringParsingBuffer.h>
 #include <wtf/unicode/icu/ICUHelpers.h>
 
 namespace JSC {
@@ -74,6 +77,7 @@ namespace JSC {
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(IntlObject);
 
 static JSC_DECLARE_HOST_FUNCTION(intlObjectFuncGetCanonicalLocales);
+static JSC_DECLARE_HOST_FUNCTION(intlObjectFuncSupportedValuesOf);
 
 static JSValue createCollatorConstructor(VM& vm, JSObject* object)
 {
@@ -171,6 +175,52 @@ void UFieldPositionIteratorDeleter::operator()(UFieldPositionIterator* iterator)
         ufieldpositer_close(iterator);
 }
 
+const MeasureUnit simpleUnits[43] = {
+    { "area"_s, "acre"_s },
+    { "digital"_s, "bit"_s },
+    { "digital"_s, "byte"_s },
+    { "temperature"_s, "celsius"_s },
+    { "length"_s, "centimeter"_s },
+    { "duration"_s, "day"_s },
+    { "angle"_s, "degree"_s },
+    { "temperature"_s, "fahrenheit"_s },
+    { "volume"_s, "fluid-ounce"_s },
+    { "length"_s, "foot"_s },
+    { "volume"_s, "gallon"_s },
+    { "digital"_s, "gigabit"_s },
+    { "digital"_s, "gigabyte"_s },
+    { "mass"_s, "gram"_s },
+    { "area"_s, "hectare"_s },
+    { "duration"_s, "hour"_s },
+    { "length"_s, "inch"_s },
+    { "digital"_s, "kilobit"_s },
+    { "digital"_s, "kilobyte"_s },
+    { "mass"_s, "kilogram"_s },
+    { "length"_s, "kilometer"_s },
+    { "volume"_s, "liter"_s },
+    { "digital"_s, "megabit"_s },
+    { "digital"_s, "megabyte"_s },
+    { "length"_s, "meter"_s },
+    { "length"_s, "mile"_s },
+    { "length"_s, "mile-scandinavian"_s },
+    { "volume"_s, "milliliter"_s },
+    { "length"_s, "millimeter"_s },
+    { "duration"_s, "millisecond"_s },
+    { "duration"_s, "minute"_s },
+    { "duration"_s, "month"_s },
+    { "mass"_s, "ounce"_s },
+    { "concentr"_s, "percent"_s },
+    { "digital"_s, "petabyte"_s },
+    { "mass"_s, "pound"_s },
+    { "duration"_s, "second"_s },
+    { "mass"_s, "stone"_s },
+    { "digital"_s, "terabit"_s },
+    { "digital"_s, "terabyte"_s },
+    { "duration"_s, "week"_s },
+    { "length"_s, "yard"_s },
+    { "duration"_s, "year"_s },
+};
+
 IntlObject::IntlObject(VM& vm, Structure* structure)
     : Base(vm, structure)
 {
@@ -183,7 +233,7 @@ IntlObject* IntlObject::create(VM& vm, JSGlobalObject* globalObject, Structure* 
     return object;
 }
 
-void IntlObject::finishCreation(VM& vm, JSGlobalObject*)
+void IntlObject::finishCreation(VM& vm, JSGlobalObject* globalObject)
 {
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
@@ -198,6 +248,8 @@ void IntlObject::finishCreation(VM& vm, JSGlobalObject*)
 #else
     UNUSED_PARAM(&createListFormatConstructor);
 #endif
+    if (Options::useIntlEnumeration())
+        JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("supportedValuesOf", intlObjectFuncSupportedValuesOf, static_cast<unsigned>(PropertyAttribute::DontEnum), 1);
 }
 
 Structure* IntlObject::createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
@@ -609,24 +661,29 @@ unsigned intlDefaultNumberOption(JSGlobalObject* globalObject, JSValue value, Pr
 // http://www.unicode.org/reports/tr35/#Unicode_locale_identifier
 bool isUnicodeLocaleIdentifierType(StringView string)
 {
-    ASSERT(!string.isNull());
-
-    for (auto part : string.splitAllowingEmptyEntries('-')) {
-        auto length = part.length();
-        if (length < 3 || length > 8)
-            return false;
-
-        for (auto character : part.codeUnits()) {
-            if (!isASCIIAlphanumeric(character))
+    // Matching the Unicode Locale Identifier type nonterminal.
+    // Because the spec abstract operation is not mentioning to BCP-47 conformance for this matching,
+    // '-' and '_' separators are allowed while BCP-47 only accepts '-'.
+    // On the other hand, IsStructurallyValidLanguageTag explicitly mentions to BCP-47.
+    return readCharactersForParsing(string, [](auto buffer) -> bool {
+        while (true) {
+            auto begin = buffer.position();
+            while (buffer.hasCharactersRemaining() && isASCIIAlphanumeric(*buffer))
+                ++buffer;
+            unsigned length = buffer.position() - begin;
+            if (length < 3 || length > 8)
                 return false;
+            if (!buffer.hasCharactersRemaining())
+                return true;
+            if (*buffer != '-' && *buffer != '_')
+                return false;
+            ++buffer;
         }
-    }
-
-    return true;
+    });
 }
 
 // https://tc39.es/ecma402/#sec-canonicalizeunicodelocaleid
-static String canonicalizeLanguageTag(const CString& tag)
+String canonicalizeUnicodeLocaleID(const CString& tag)
 {
     auto buffer = localeIDBufferForLanguageTagWithNullTerminator(tag);
     if (buffer.isEmpty())
@@ -702,7 +759,7 @@ Vector<String> canonicalizeLocaleList(JSGlobalObject* globalObject, JSValue loca
 
             if (isStructurallyValidLanguageTag(tag)) {
                 ASSERT(tag.isAllASCII());
-                String canonicalizedTag = canonicalizeLanguageTag(tag.ascii());
+                String canonicalizedTag = canonicalizeUnicodeLocaleID(tag.ascii());
                 if (!canonicalizedTag.isNull()) {
                     if (seenSet.add(canonicalizedTag).isNewEntry)
                         seen.append(canonicalizedTag);
@@ -739,14 +796,14 @@ String defaultLocale(JSGlobalObject* globalObject)
     // be determined by WebCore-specific logic like some WK settings. Usually this will return the
     // same thing as userPreferredLanguages()[0].
     if (auto defaultLanguage = globalObject->globalObjectMethodTable()->defaultLanguage) {
-        String locale = canonicalizeLanguageTag(defaultLanguage().utf8());
+        String locale = canonicalizeUnicodeLocaleID(defaultLanguage().utf8());
         if (!locale.isEmpty())
             return locale;
     }
 
     Vector<String> languages = userPreferredLanguages();
     for (const auto& language : languages) {
-        String locale = canonicalizeLanguageTag(language.utf8());
+        String locale = canonicalizeUnicodeLocaleID(language.utf8());
         if (!locale.isEmpty())
             return locale;
     }
@@ -1458,6 +1515,41 @@ std::optional<Vector<char, 32>> canonicalizeLocaleIDWithoutNullTerminator(const 
 #endif
 }
 
+std::optional<String> mapICUCalendarKeywordToBCP47(const String& calendar)
+{
+    if (calendar == "gregorian"_s)
+        return "gregory"_s;
+    // islamicc is deprecated in BCP47, and islamic-civil is preferred.
+    // https://github.com/unicode-org/cldr/blob/master/common/bcp47/calendar.xml
+    if (calendar == "ethiopic-amete-alem"_s)
+        return "ethioaa"_s;
+    return std::nullopt;
+}
+
+std::optional<String> mapBCP47ToICUCalendarKeyword(const String& calendar)
+{
+    if (calendar == "gregory"_s)
+        return "gregorian"_s;
+    if (calendar == "islamicc"_s)
+        return "islamic-civil"_s;
+    if (calendar == "ethioaa"_s)
+        return "ethiopic-amete-alem"_s;
+    return std::nullopt;
+}
+
+std::optional<String> mapICUCollationKeywordToBCP47(const String& collation)
+{
+    if (collation == "dictionary"_s)
+        return "dict"_s;
+    if (collation == "gb2312han"_s)
+        return "gb2312"_s;
+    if (collation == "phonebook"_s)
+        return "phonebk"_s;
+    if (collation == "traditional"_s)
+        return "trad"_s;
+    return std::nullopt;
+}
+
 JSC_DEFINE_HOST_FUNCTION(intlObjectFuncGetCanonicalLocales, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     // Intl.getCanonicalLocales(locales)
@@ -1481,6 +1573,317 @@ JSC_DEFINE_HOST_FUNCTION(intlObjectFuncGetCanonicalLocales, (JSGlobalObject* glo
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
     }
     return JSValue::encode(localeArray);
+}
+
+const Vector<String>& intlAvailableCalendars()
+{
+    static LazyNeverDestroyed<Vector<String>> availableCalendars;
+    static std::once_flag initializeOnce;
+    std::call_once(initializeOnce, [&] {
+        availableCalendars.construct();
+        ASSERT(availableCalendars->isEmpty());
+
+        UErrorCode status = U_ZERO_ERROR;
+        auto enumeration = std::unique_ptr<UEnumeration, ICUDeleter<uenum_close>>(ucal_getKeywordValuesForLocale("calendars", "und", false, &status));
+        ASSERT(U_SUCCESS(status));
+
+        int32_t count = uenum_count(enumeration.get(), &status);
+        ASSERT(U_SUCCESS(status));
+        availableCalendars->reserveInitialCapacity(count);
+
+        auto createImmortalThreadSafeString = [&](String&& string) {
+            if (string.is8Bit())
+                return StringImpl::createStaticStringImpl(string.characters8(), string.length());
+            return StringImpl::createStaticStringImpl(string.characters16(), string.length());
+        };
+
+        for (int32_t index = 0; index < count; ++index) {
+            int32_t length = 0;
+            const char* pointer = uenum_next(enumeration.get(), &length, &status);
+            ASSERT(U_SUCCESS(status));
+            String calendar(pointer, length);
+            if (auto mapped = mapICUCalendarKeywordToBCP47(calendar))
+                availableCalendars->append(createImmortalThreadSafeString(WTFMove(mapped.value())));
+            else
+                availableCalendars->append(createImmortalThreadSafeString(WTFMove(calendar)));
+        }
+
+        // The AvailableCalendars abstract operation returns a List, ordered as if an Array of the same
+        // values had been sorted using %Array.prototype.sort% using undefined as comparefn
+        std::sort(availableCalendars->begin(), availableCalendars->end(),
+            [](const String& a, const String& b) {
+                return WTF::codePointCompare(a, b) < 0;
+            });
+    });
+    return availableCalendars;
+}
+
+CalendarID iso8601CalendarIDStorage { std::numeric_limits<CalendarID>::max() };
+CalendarID iso8601CalendarIDSlow()
+{
+    static std::once_flag initializeOnce;
+    std::call_once(initializeOnce, [&] {
+        const auto& calendars = intlAvailableCalendars();
+        for (unsigned index = 0; index < calendars.size(); ++index) {
+            if (calendars[index] == "iso8601"_s) {
+                iso8601CalendarIDStorage = index;
+                return;
+            }
+        }
+        RELEASE_ASSERT_NOT_REACHED();
+    });
+    return iso8601CalendarIDStorage;
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-availablecalendars
+static JSArray* availableCalendars(JSGlobalObject* globalObject)
+{
+    return createArrayFromStringVector(globalObject, intlAvailableCalendars());
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-availablecollations
+static JSArray* availableCollations(JSGlobalObject* globalObject)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    UErrorCode status = U_ZERO_ERROR;
+    auto enumeration = std::unique_ptr<UEnumeration, ICUDeleter<uenum_close>>(ucol_getKeywordValues("collation", &status));
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available collations"_s);
+        return { };
+    }
+
+    int32_t count = uenum_count(enumeration.get(), &status);
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available collations"_s);
+        return { };
+    }
+
+    Vector<String, 1> elements;
+    elements.reserveInitialCapacity(count);
+    for (int32_t index = 0; index < count; ++index) {
+        int32_t length = 0;
+        const char* pointer = uenum_next(enumeration.get(), &length, &status);
+        if (U_FAILURE(status)) {
+            throwTypeError(globalObject, scope, "failed to enumerate available collations"_s);
+            return { };
+        }
+        String collation(pointer, length);
+        if (collation == "standard"_s || collation == "search"_s)
+            continue;
+        if (auto mapped = mapICUCollationKeywordToBCP47(collation))
+            elements.append(WTFMove(mapped.value()));
+        else
+            elements.append(WTFMove(collation));
+    }
+
+    // The AvailableCollations abstract operation returns a List, ordered as if an Array of the same
+    // values had been sorted using %Array.prototype.sort% using undefined as comparefn
+    std::sort(elements.begin(), elements.end(),
+        [](const String& a, const String& b) {
+            return WTF::codePointCompare(a, b) < 0;
+        });
+
+    RELEASE_AND_RETURN(scope, createArrayFromStringVector(globalObject, WTFMove(elements)));
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-availablecurrencies
+static JSArray* availableCurrencies(JSGlobalObject* globalObject)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    UErrorCode status = U_ZERO_ERROR;
+    auto enumeration = std::unique_ptr<UEnumeration, ICUDeleter<uenum_close>>(ucurr_openISOCurrencies(UCURR_COMMON | UCURR_NON_DEPRECATED, &status));
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available currencies"_s);
+        return { };
+    }
+
+    int32_t count = uenum_count(enumeration.get(), &status);
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available currencies"_s);
+        return { };
+    }
+
+    Vector<String, 1> elements;
+    elements.reserveInitialCapacity(count);
+    for (int32_t index = 0; index < count; ++index) {
+        int32_t length = 0;
+        const char* currency = uenum_next(enumeration.get(), &length, &status);
+        if (U_FAILURE(status)) {
+            throwTypeError(globalObject, scope, "failed to enumerate available currencies"_s);
+            return { };
+        }
+        elements.constructAndAppend(currency, length);
+    }
+
+    // The AvailableCurrencies abstract operation returns a List, ordered as if an Array of the same
+    // values had been sorted using %Array.prototype.sort% using undefined as comparefn
+    std::sort(elements.begin(), elements.end(),
+        [](const String& a, const String& b) {
+            return WTF::codePointCompare(a, b) < 0;
+        });
+
+    RELEASE_AND_RETURN(scope, createArrayFromStringVector(globalObject, WTFMove(elements)));
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-availablenumberingsystems
+static JSArray* availableNumberingSystems(JSGlobalObject* globalObject)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    UErrorCode status = U_ZERO_ERROR;
+    auto enumeration = std::unique_ptr<UEnumeration, ICUDeleter<uenum_close>>(unumsys_openAvailableNames(&status));
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available numbering systems"_s);
+        return { };
+    }
+
+    int32_t count = uenum_count(enumeration.get(), &status);
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available numbering systems"_s);
+        return { };
+    }
+
+    Vector<String, 1> elements;
+    elements.reserveInitialCapacity(count);
+    for (int32_t index = 0; index < count; ++index) {
+        int32_t length = 0;
+        const char* numberingSystem = uenum_next(enumeration.get(), &length, &status);
+        if (U_FAILURE(status)) {
+            throwTypeError(globalObject, scope, "failed to enumerate available numbering systems"_s);
+            return { };
+        }
+        elements.constructAndAppend(numberingSystem, length);
+    }
+
+    // The AvailableNumberingSystems abstract operation returns a List, ordered as if an Array of the same
+    // values had been sorted using %Array.prototype.sort% using undefined as comparefn
+    std::sort(elements.begin(), elements.end(),
+        [](const String& a, const String& b) {
+            return WTF::codePointCompare(a, b) < 0;
+        });
+
+    RELEASE_AND_RETURN(scope, createArrayFromStringVector(globalObject, WTFMove(elements)));
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-canonicalizetimezonename
+static std::optional<String> canonicalizeTimeZoneNameFromICUTimeZone(const String& timeZoneName)
+{
+    // Some time zone names are included in ICU, but they are not included in the IANA Time Zone Database.
+    // We need to filter them out.
+    if (timeZoneName.startsWith("SystemV/"))
+        return std::nullopt;
+    if (timeZoneName.startsWith("Etc/"))
+        return std::nullopt;
+    // IANA time zone names include '/'. Some of them are not including, but it is in backward links.
+    // And ICU already resolved these backward links.
+    if (!timeZoneName.contains('/'))
+        return std::nullopt;
+
+    return timeZoneName;
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-availabletimezones
+static JSArray* availableTimeZones(JSGlobalObject* globalObject)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    UErrorCode status = U_ZERO_ERROR;
+    auto enumeration = std::unique_ptr<UEnumeration, ICUDeleter<uenum_close>>(ucal_openTimeZoneIDEnumeration(UCAL_ZONE_TYPE_CANONICAL, nullptr, nullptr, &status));
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available timezones"_s);
+        return { };
+    }
+
+    int32_t count = uenum_count(enumeration.get(), &status);
+    if (U_FAILURE(status)) {
+        throwTypeError(globalObject, scope, "failed to enumerate available timezones"_s);
+        return { };
+    }
+
+    Vector<String, 1> elements;
+    elements.reserveInitialCapacity(count);
+    for (int32_t index = 0; index < count; ++index) {
+        int32_t length = 0;
+        const char* pointer = uenum_next(enumeration.get(), &length, &status);
+        if (U_FAILURE(status)) {
+            throwTypeError(globalObject, scope, "failed to enumerate available timezones"_s);
+            return { };
+        }
+        String timeZone(pointer, length);
+        if (auto mapped = canonicalizeTimeZoneNameFromICUTimeZone(timeZone))
+            elements.append(WTFMove(mapped.value()));
+    }
+
+    // 4. Sort result in order as if an Array of the same values had been sorted using %Array.prototype.sort% using undefined as comparefn.
+    std::sort(elements.begin(), elements.end(),
+        [](const String& a, const String& b) {
+            return WTF::codePointCompare(a, b) < 0;
+        });
+
+    RELEASE_AND_RETURN(scope, createArrayFromStringVector(globalObject, WTFMove(elements)));
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-availableunits
+static JSArray* availableUnits(JSGlobalObject* globalObject)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSArray* result = JSArray::tryCreate(vm, globalObject->arrayStructureForIndexingTypeDuringAllocation(ArrayWithUndecided), std::size(simpleUnits));
+    if (!result) {
+        throwOutOfMemoryError(globalObject, scope);
+        return { };
+    }
+
+    ASSERT(
+        std::is_sorted(std::begin(simpleUnits), std::end(simpleUnits),
+            [](const MeasureUnit& a, const MeasureUnit& b) {
+                return WTF::codePointCompare(StringView(a.subType), StringView(b.subType)) < 0;
+            }));
+
+    int32_t index = 0;
+    for (const MeasureUnit& unit : simpleUnits) {
+        result->putDirectIndex(globalObject, index++, jsString(vm, StringImpl::createFromLiteral(unit.subType)));
+        RETURN_IF_EXCEPTION(scope, { });
+    }
+    return result;
+}
+
+// https://tc39.es/proposal-intl-enumeration/#sec-intl.supportedvaluesof
+JSC_DEFINE_HOST_FUNCTION(intlObjectFuncSupportedValuesOf, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    String key = callFrame->argument(0).toWTFString(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+
+    if (key == "calendar"_s)
+        RELEASE_AND_RETURN(scope, JSValue::encode(availableCalendars(globalObject)));
+
+    if (key == "collation"_s)
+        RELEASE_AND_RETURN(scope, JSValue::encode(availableCollations(globalObject)));
+
+    if (key == "currency"_s)
+        RELEASE_AND_RETURN(scope, JSValue::encode(availableCurrencies(globalObject)));
+
+    if (key == "numberingSystem"_s)
+        RELEASE_AND_RETURN(scope, JSValue::encode(availableNumberingSystems(globalObject)));
+
+    if (key == "timeZone"_s)
+        RELEASE_AND_RETURN(scope, JSValue::encode(availableTimeZones(globalObject)));
+
+    if (key == "unit"_s)
+        RELEASE_AND_RETURN(scope, JSValue::encode(availableUnits(globalObject)));
+
+    throwRangeError(globalObject, scope, "Unknown key for Intl.supportedValuesOf"_s);
+    return { };
 }
 
 } // namespace JSC

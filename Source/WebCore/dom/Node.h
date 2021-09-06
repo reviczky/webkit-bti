@@ -524,6 +524,13 @@ public:
     static int32_t flagIsParsingChildrenFinished() { return static_cast<int32_t>(NodeFlag::IsParsingChildrenFinished); }
 #endif // ENABLE(JIT)
 
+    // Whether the node is inert:
+    // https://html.spec.whatwg.org/multipage/interaction.html#inert
+    // https://github.com/WICG/inert/blob/master/README.md
+    // This can't be in Element because text nodes must be recognized as
+    // inert to prevent text selection.
+    bool isInert() const;
+
 protected:
     enum class NodeFlag : uint32_t {
         IsCharacterData = 1 << 0,
@@ -559,10 +566,10 @@ protected:
         ContainsFullScreenElement = 1 << 24,
 #endif
         IsComputedStyleInvalidFlag = 1 << 25,
-
         HasShadowRootContainingSlots = 1 << 26,
+        IsInTopLayer = 1 << 27,
 
-        // Bits 27-31 are free.
+        // Bits 28-31 are free.
     };
 
     enum class TabIndexState : uint8_t {

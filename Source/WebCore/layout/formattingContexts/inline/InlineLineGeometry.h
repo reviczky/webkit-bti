@@ -32,7 +32,7 @@
 namespace WebCore {
 namespace Layout {
 
-class InlineLineGeometry {
+class LineGeometry {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     struct EnclosingTopAndBottom {
@@ -40,7 +40,7 @@ public:
         InlineLayoutUnit top { 0 };
         InlineLayoutUnit bottom { 0 };
     };
-    InlineLineGeometry(const InlineRect& lineBoxLogicalRect, EnclosingTopAndBottom, InlineLayoutUnit aligmentBaseline, InlineLayoutUnit contentLogicalLeft, InlineLayoutUnit contentLogicalWidth);
+    LineGeometry(const InlineRect& lineBoxLogicalRect, EnclosingTopAndBottom, InlineLayoutUnit aligmentBaseline, InlineLayoutUnit contentLogicalLeft, InlineLayoutUnit contentLogicalWidth);
 
     const InlineRect& lineBoxLogicalRect() const { return m_lineBoxLogicalRect; }
 
@@ -51,7 +51,10 @@ public:
     InlineLayoutUnit contentLogicalLeft() const { return m_contentLogicalLeft; }
     InlineLayoutUnit contentLogicalWidth() const { return m_contentLogicalWidth; }
 
+    bool needsIntegralPosition() const { return m_needsIntegralPosition; }
+
     void moveVertically(InlineLayoutUnit offset) { m_lineBoxLogicalRect.moveVertically(offset); }
+    void setNeedsIntegralPosition(bool needsIntegralPosition) { m_needsIntegralPosition = needsIntegralPosition; }
 
 private:
     // This is line box geometry (see https://www.w3.org/TR/css-inline-3/#line-box).
@@ -63,9 +66,12 @@ private:
     InlineLayoutUnit m_aligmentBaseline { 0 };
     InlineLayoutUnit m_contentLogicalLeft { 0 };
     InlineLayoutUnit m_contentLogicalWidth { 0 };
+    // FIXME: This is just matching legacy line layout integral snapping.
+    // See shouldClearDescendantsHaveSameLineHeightAndBaseline in LegacyInlineFlowBox::addToLine.
+    bool m_needsIntegralPosition { true };
 };
 
-inline InlineLineGeometry::InlineLineGeometry(const InlineRect& lineBoxLogicalRect, EnclosingTopAndBottom enclosingTopAndBottom, InlineLayoutUnit aligmentBaseline, InlineLayoutUnit contentLogicalLeft, InlineLayoutUnit contentLogicalWidth)
+inline LineGeometry::LineGeometry(const InlineRect& lineBoxLogicalRect, EnclosingTopAndBottom enclosingTopAndBottom, InlineLayoutUnit aligmentBaseline, InlineLayoutUnit contentLogicalLeft, InlineLayoutUnit contentLogicalWidth)
     : m_lineBoxLogicalRect(lineBoxLogicalRect)
     , m_enclosingTopAndBottom(enclosingTopAndBottom)
     , m_aligmentBaseline(aligmentBaseline)

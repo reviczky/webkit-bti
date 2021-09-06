@@ -78,6 +78,10 @@
 #include "RemoteMediaSourceIdentifier.h"
 #endif
 
+#if PLATFORM(COCOA)
+#import <WebCore/VideoLayerManagerObjC.h>
+#endif
+
 namespace WebCore {
 #if !RELEASE_LOG_DISABLED
 extern WTFLogChannel LogMedia;
@@ -98,7 +102,6 @@ using namespace WebCore;
 } while (0)
 #endif
 
-#if !PLATFORM(COCOA)
 MediaPlayerPrivateRemote::MediaPlayerPrivateRemote(MediaPlayer* player, MediaPlayerEnums::MediaEngineIdentifier engineIdentifier, MediaPlayerIdentifier playerIdentifier, RemoteMediaPlayerManager& manager)
     :
 #if !RELEASE_LOG_DISABLED
@@ -108,6 +111,9 @@ MediaPlayerPrivateRemote::MediaPlayerPrivateRemote(MediaPlayer* player, MediaPla
 #endif
       m_player(makeWeakPtr(*player))
     , m_mediaResourceLoader(*player->createResourceLoader())
+#if PLATFORM(COCOA)
+    , m_videoLayerManager(makeUniqueRef<VideoLayerManagerObjC>(logger(), logIdentifier()))
+#endif
     , m_manager(manager)
     , m_remoteEngineIdentifier(engineIdentifier)
     , m_id(playerIdentifier)
@@ -117,7 +123,6 @@ MediaPlayerPrivateRemote::MediaPlayerPrivateRemote(MediaPlayer* player, MediaPla
 
     acceleratedRenderingStateChanged();
 }
-#endif
 
 MediaPlayerPrivateRemote::~MediaPlayerPrivateRemote()
 {
@@ -527,9 +532,9 @@ void MediaPlayerPrivateRemote::prepareForRendering()
     connection().send(Messages::RemoteMediaPlayerProxy::PrepareForRendering(), m_id);
 }
 
-void MediaPlayerPrivateRemote::setVisible(bool visible)
+void MediaPlayerPrivateRemote::setPageIsVisible(bool visible)
 {
-    connection().send(Messages::RemoteMediaPlayerProxy::SetVisible(visible), m_id);
+    connection().send(Messages::RemoteMediaPlayerProxy::SetPageIsVisible(visible), m_id);
 }
 
 void MediaPlayerPrivateRemote::setShouldMaintainAspectRatio(bool maintainRatio)
@@ -1391,7 +1396,7 @@ void MediaPlayerPrivateRemote::getRawCookies(const URL& url, WebCore::MediaPlaye
 #if !RELEASE_LOG_DISABLED
 WTFLogChannel& MediaPlayerPrivateRemote::logChannel() const
 {
-    return LogMedia;
+    return JOIN_LOG_CHANNEL_WITH_PREFIX(LOG_CHANNEL_PREFIX, Media);
 }
 #endif
 

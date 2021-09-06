@@ -60,6 +60,13 @@ JSC_INTL_RELEVANT_EXTENSION_KEYS(JSC_DECLARE_INTL_RELEVANT_EXTENSION_KEYS)
 static constexpr uint8_t numberOfRelevantExtensionKeys = 0 JSC_INTL_RELEVANT_EXTENSION_KEYS(JSC_COUNT_INTL_RELEVANT_EXTENSION_KEYS);
 #undef JSC_COUNT_INTL_RELEVANT_EXTENSION_KEYS
 
+struct MeasureUnit {
+    ASCIILiteral type;
+    ASCIILiteral subType;
+};
+
+extern JS_EXPORT_PRIVATE const MeasureUnit simpleUnits[43];
+
 class IntlObject final : public JSNonFinalObject {
 public:
     using Base = JSNonFinalObject;
@@ -94,6 +101,19 @@ inline const LocaleSet& intlPluralRulesAvailableLocales() { return intlAvailable
 inline const LocaleSet& intlRelativeTimeFormatAvailableLocales() { return intlAvailableLocales(); }
 inline const LocaleSet& intlListFormatAvailableLocales() { return intlAvailableLocales(); }
 
+using CalendarID = unsigned;
+const Vector<String>& intlAvailableCalendars();
+
+extern CalendarID iso8601CalendarIDStorage;
+CalendarID iso8601CalendarIDSlow();
+inline CalendarID iso8601CalendarID()
+{
+    unsigned value = iso8601CalendarIDStorage;
+    if (value == std::numeric_limits<CalendarID>::max())
+        return iso8601CalendarIDSlow();
+    return value;
+}
+
 TriState intlBooleanOption(JSGlobalObject*, JSObject* options, PropertyName);
 String intlStringOption(JSGlobalObject*, JSObject* options, PropertyName, std::initializer_list<const char*> values, const char* notFound, const char* fallback);
 unsigned intlNumberOption(JSGlobalObject*, JSObject* options, PropertyName, unsigned minimum, unsigned maximum, unsigned fallback);
@@ -127,6 +147,7 @@ bool isUnicodeRegionSubtag(StringView);
 bool isUnicodeVariantSubtag(StringView);
 bool isUnicodeLanguageId(StringView);
 bool isStructurallyValidLanguageTag(StringView);
+String canonicalizeUnicodeLocaleID(const CString& languageTag);
 
 bool isWellFormedCurrencyCode(StringView);
 
@@ -135,5 +156,9 @@ std::optional<Vector<char, 32>> canonicalizeLocaleIDWithoutNullTerminator(const 
 struct UFieldPositionIteratorDeleter {
     void operator()(UFieldPositionIterator*) const;
 };
+
+std::optional<String> mapICUCollationKeywordToBCP47(const String&);
+std::optional<String> mapICUCalendarKeywordToBCP47(const String&);
+std::optional<String> mapBCP47ToICUCalendarKeyword(const String&);
 
 } // namespace JSC

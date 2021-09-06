@@ -990,25 +990,25 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
     if (UNLIKELY(!m_pipeline || !m_source))
         return;
 
-    ASSERT(m_isLegacyPlaybin || isMediaSource());
+    ASSERT(m_isLegacyPlaybin);
 
-    enum TrackType { Audio = 0, Video = 1, Text = 2 };
+    using TrackType = TrackPrivateBaseGStreamer::TrackType;
     Variant<HashMap<AtomString, RefPtr<AudioTrackPrivateGStreamer>>*, HashMap<AtomString, RefPtr<VideoTrackPrivateGStreamer>>*, HashMap<AtomString, RefPtr<InbandTextTrackPrivateGStreamer>>*> variantTracks = static_cast<HashMap<AtomString, RefPtr<TrackPrivateType>>*>(0);
     auto type(static_cast<TrackType>(variantTracks.index()));
     const char* typeName;
     bool* hasType;
     switch (type) {
-    case Audio:
+    case TrackType::Audio:
         typeName = "audio";
         hasType = &m_hasAudio;
         variantTracks = &m_audioTracks;
         break;
-    case Video:
+    case TrackType::Video:
         typeName = "video";
         hasType = &m_hasVideo;
         variantTracks = &m_videoTracks;
         break;
-    case Text:
+    case TrackType::Text:
         typeName = "text";
         hasType = nullptr;
         variantTracks = &m_textTracks;
@@ -1019,17 +1019,13 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
     HashMap<AtomString, RefPtr<TrackPrivateType>>& tracks = *get<HashMap<AtomString, RefPtr<TrackPrivateType>>*>(variantTracks);
 
     // Ignore notifications after a EOS. We don't want the tracks to disappear when the video is finished.
-    if (m_isEndReached && (type == Audio || type == Video))
+    if (m_isEndReached && (type == TrackType::Audio || type == TrackType::Video))
         return;
 
     unsigned numberOfTracks = 0;
-    bool useMediaSource = isMediaSource();
-
     StringPrintStream numberOfTracksProperty;
     numberOfTracksProperty.printf("n-%s", typeName);
-
-    GstElement* element = useMediaSource ? m_source.get() : m_pipeline.get();
-    g_object_get(element, numberOfTracksProperty.toCString().data(), &numberOfTracks, nullptr);
+    g_object_get(m_pipeline.get(), numberOfTracksProperty.toCString().data(), &numberOfTracks, nullptr);
 
     GST_INFO_OBJECT(pipeline(), "Media has %d %s tracks", numberOfTracks, typeName);
 
@@ -1039,17 +1035,11 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
         if (oldHasType != *hasType)
             m_player->characteristicChanged();
 
-        if (*hasType && type == Video)
+        if (*hasType && type == TrackType::Video)
             m_player->sizeChanged();
     }
 
-    if (useMediaSource) {
-        GST_DEBUG_OBJECT(pipeline(), "Tracks managed by source element. Bailing out now.");
-        m_player->mediaEngineUpdated();
-        return;
-    }
-
-    Vector<String> validStreams;
+    Vector<AtomString> validStreams;
     StringPrintStream getPadProperty;
     getPadProperty.printf("get-%s-pad", typeName);
 
@@ -1058,7 +1048,9 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
         g_signal_emit_by_name(m_pipeline.get(), getPadProperty.toCString().data(), i, &pad.outPtr(), nullptr);
         ASSERT(pad);
 
-        String streamId = String(typeName).substring(0, 1).convertToASCIIUppercase() + String::number(i);
+        // The pad might not have a sticky stream-start event yet, so we can't use
+        // gst_pad_get_stream_id() here.
+        auto streamId = TrackPrivateBaseGStreamer::generateUniquePlaybin2StreamID(type, i);
         validStreams.append(streamId);
 
         if (i < tracks.size()) {
@@ -1073,17 +1065,23 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
             }
         }
 
-        auto track = TrackPrivateType::create(makeWeakPtr(*this), i, pad);
-        if (!track->trackIndex() && (type == Audio || type == Video))
+        auto track = TrackPrivateType::create(makeWeakPtr(*this), i, WTFMove(pad));
+        if (!track->trackIndex() && (type == TrackType::Audio || type == TrackType::Video))
             track->setActive(true);
         ASSERT(streamId == track->id());
         tracks.add(streamId, track.copyRef());
 
         Variant<AudioTrackPrivate&, VideoTrackPrivate&, InbandTextTrackPrivate&> variantTrack(track.get());
         switch (variantTrack.index()) {
-        case Audio: m_player->addAudioTrack(get<AudioTrackPrivate&>(variantTrack)); break;
-        case Video: m_player->addVideoTrack(get<VideoTrackPrivate&>(variantTrack)); break;
-        case Text: m_player->addTextTrack(get<InbandTextTrackPrivate&>(variantTrack)); break;
+        case TrackType::Audio:
+            m_player->addAudioTrack(get<AudioTrackPrivate&>(variantTrack));
+            break;
+        case TrackType::Video:
+            m_player->addVideoTrack(get<VideoTrackPrivate&>(variantTrack));
+            break;
+        case TrackType::Text:
+            m_player->addTextTrack(get<InbandTextTrackPrivate&>(variantTrack));
+            break;
         }
     }
 
@@ -1143,7 +1141,7 @@ void MediaPlayerPrivateGStreamer::textChangedCallback(MediaPlayerPrivateGStreame
 void MediaPlayerPrivateGStreamer::handleTextSample(GstSample* sample, const char* streamId)
 {
     for (auto& track : m_textTracks.values()) {
-        if (!strcmp(track->streamId().utf8().data(), streamId)) {
+        if (!strcmp(track->id().string().utf8().data(), streamId)) {
             track->handleSample(sample);
             return;
         }
@@ -1449,8 +1447,8 @@ void MediaPlayerPrivateGStreamer::updateTracks(const GRefPtr<GstStreamCollection
     unsigned videoTrackIndex = 0;
     unsigned textTrackIndex = 0;
 
-#define CREATE_TRACK(type, Type) G_STMT_START {                         \
-        RefPtr<Type##TrackPrivateGStreamer> track = Type##TrackPrivateGStreamer::create(makeWeakPtr(*this), type##TrackIndex, stream); \
+#define CREATE_TRACK(type, Type) G_STMT_START {                     \
+        RefPtr<Type##TrackPrivateGStreamer> track = Type##TrackPrivateGStreamer::create(makeWeakPtr(*this), type##TrackIndex, WTFMove(stream)); \
         auto trackId = track->id();                                 \
         if (!type##TrackIndex) {                                    \
             m_wanted##Type##StreamId = trackId;                     \
@@ -1463,11 +1461,11 @@ void MediaPlayerPrivateGStreamer::updateTracks(const GRefPtr<GstStreamCollection
     } G_STMT_END
 
     for (unsigned i = 0; i < length; i++) {
-        auto* stream = gst_stream_collection_get_stream(streamCollection.get(), i);
-        String streamId(gst_stream_get_stream_id(stream));
-        auto type = gst_stream_get_stream_type(stream);
+        GRefPtr<GstStream> stream = gst_stream_collection_get_stream(streamCollection.get(), i);
+        const char* streamId = gst_stream_get_stream_id(stream.get());
+        auto type = gst_stream_get_stream_type(stream.get());
 
-        GST_DEBUG_OBJECT(pipeline(), "Inspecting %s track with ID %s", gst_stream_type_get_name(type), streamId.utf8().data());
+        GST_DEBUG_OBJECT(pipeline(), "Inspecting %s track with ID %s", gst_stream_type_get_name(type), streamId);
 
         if (type & GST_STREAM_TYPE_AUDIO) {
             CREATE_TRACK(audio, Audio);
@@ -1475,11 +1473,11 @@ void MediaPlayerPrivateGStreamer::updateTracks(const GRefPtr<GstStreamCollection
         } else if (type & GST_STREAM_TYPE_VIDEO && m_player->isVideoPlayer())
             CREATE_TRACK(video, Video);
         else if (type & GST_STREAM_TYPE_TEXT && !useMediaSource) {
-            auto track = InbandTextTrackPrivateGStreamer::create(textTrackIndex++, stream);
+            auto track = InbandTextTrackPrivateGStreamer::create(textTrackIndex++, WTFMove(stream));
             m_textTracks.add(streamId, track.copyRef());
             m_player->addTextTrack(track.get());
         } else
-            GST_WARNING("Unknown track type found for stream %s", streamId.utf8().data());
+            GST_WARNING("Unknown track type found for stream %s", streamId);
     }
 
     m_hasAudio = !m_audioTracks.isEmpty();
@@ -1506,10 +1504,10 @@ void MediaPlayerPrivateGStreamer::handleStreamCollectionMessage(GstMessage* mess
     if (m_isLegacyPlaybin)
         return;
 
-    // GStreamer workaround:
-    // Unfortunately, when we have a stream-collection aware source (like WebKitMediaSrc) parsebin and decodebin3 emit
-    // their own stream-collection messages, but late, and sometimes with duplicated streams. Let's only listen for
-    // stream-collection messages from the source in the MSE case to avoid these issues.
+    // GStreamer workaround: Unfortunately, when we have a stream-collection aware source (like
+    // WebKitMediaSrc) parsebin and decodebin3 emit their own stream-collection messages, but late,
+    // and sometimes with duplicated streams. Let's only listen for stream-collection messages from
+    // the source to avoid these issues.
     if (isMediaSource() && GST_MESSAGE_SRC(message) != GST_OBJECT(m_source.get())) {
         GST_DEBUG_OBJECT(pipeline(), "Ignoring redundant STREAM_COLLECTION from %" GST_PTR_FORMAT, message->src);
         return;
@@ -1518,8 +1516,11 @@ void MediaPlayerPrivateGStreamer::handleStreamCollectionMessage(GstMessage* mess
     ASSERT(GST_MESSAGE_TYPE(message) == GST_MESSAGE_STREAM_COLLECTION);
     GRefPtr<GstStreamCollection> collection;
     gst_message_parse_stream_collection(message, &collection.outPtr());
+    if (!collection)
+        return;
+
 #ifndef GST_DISABLE_DEBUG
-    GST_DEBUG_OBJECT(pipeline(), "Received STREAM_COLLECTION message with upstream id \"%s\" defining the following streams:", gst_stream_collection_get_upstream_id(collection.get()));
+    GST_DEBUG_OBJECT(pipeline(), "Received STREAM_COLLECTION message with upstream id \"%s\" from %" GST_PTR_FORMAT " defining the following streams:", gst_stream_collection_get_upstream_id(collection.get()), GST_MESSAGE_SRC(message));
     unsigned numStreams = gst_stream_collection_get_size(collection.get());
     for (unsigned i = 0; i < numStreams; i++) {
         GstStream* stream = gst_stream_collection_get_stream(collection.get(), i);
@@ -1527,13 +1528,15 @@ void MediaPlayerPrivateGStreamer::handleStreamCollectionMessage(GstMessage* mess
     }
 #endif
 
-    if (!collection)
-        return;
-
-    callOnMainThreadAndWait([player = makeWeakPtr(*this), collection = WTFMove(collection)] {
+    auto callback = [player = makeWeakPtr(*this), collection = WTFMove(collection)] {
         if (player)
             player->updateTracks(collection);
-    });
+    };
+
+    if (isMediaSource())
+        callOnMainThreadAndWait(WTFMove(callback));
+    else
+        callOnMainThread(WTFMove(callback));
 }
 
 bool MediaPlayerPrivateGStreamer::handleNeedContextMessage(GstMessage* message)
@@ -2681,10 +2684,14 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
     g_signal_connect_swapped(bus.get(), "sync-message::need-context", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstMessage* message) {
         player->handleNeedContextMessage(message);
     }), this);
-    // In the MSE case stream collection messages are emitted from the main thread right before the initilization segment
-    // is parsed and "updateend" is fired. We need therefore to handle these synchronously in the same main thread tick
-    // to make the tracks information available to JS no later than "updateend".
-    g_signal_connect_swapped(bus.get(), "sync-message::stream-collection", G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstMessage* message) {
+
+    // In the MSE case stream collection messages are emitted from the main thread right before the
+    // initilization segment is parsed and "updateend" is fired. We need therefore to handle these
+    // synchronously in the same main thread tick to make the tracks information available to JS no
+    // later than "updateend". There is no such limitation otherwise (if playbin3 is enabled or in
+    // MediaStream cases).
+    auto streamCollectionSignalName = makeString(isMediaSource() ? "sync-" : "", "message::stream-collection");
+    g_signal_connect_swapped(bus.get(), streamCollectionSignalName.ascii().data(), G_CALLBACK(+[](MediaPlayerPrivateGStreamer* player, GstMessage* message) {
         player->handleStreamCollectionMessage(message);
     }), this);
 
@@ -3129,7 +3136,7 @@ void MediaPlayerPrivateGStreamer::cancelRepaint(bool destroying)
     //
     // This function is also used when destroying the player (destroying parameter is true), to release the gstreamer thread from
     // m_drawCondition and to ensure that new triggerRepaint calls won't wait on m_drawCondition.
-    if (!m_canRenderingBeAccelerated) {
+    if (m_isUsingFallbackVideoSink) {
         Locker locker { m_drawLock };
         m_drawTimer.stop();
         m_isBeingDestroyed = destroying;

@@ -732,7 +732,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
             case ConstructorKind::None:
             case ConstructorKind::Base:
                 emitCreateThis(&m_thisRegister);
-                if (Options::usePrivateMethods() && privateBrandRequirement() == PrivateBrandRequirement::Needed)
+                if (privateBrandRequirement() == PrivateBrandRequirement::Needed)
                     emitInstallPrivateBrand(&m_thisRegister);
 
                 emitInstanceFieldInitializationIfNeeded(&m_thisRegister, &m_calleeRegister, m_scopeNode->position(), m_scopeNode->position(), m_scopeNode->position());
@@ -5369,9 +5369,6 @@ void ForInContext::finalize(BytecodeGenerator& generator, UnlinkedCodeBlockGener
     if (!escaped)
         return;
 
-    OpcodeID lastOpcodeID = generator.m_lastOpcodeID;
-    InstructionStream::MutableRef lastInstruction = generator.m_lastInstruction;
-
     for (const auto& instTuple : m_getInsts)
         rewriteOp<OpEnumeratorGetByVal, OpGetByVal>(generator, instTuple);
 
@@ -5389,7 +5386,6 @@ void ForInContext::finalize(BytecodeGenerator& generator, UnlinkedCodeBlockGener
         auto end = branchInstIndex + instruction->size();
 
         generator.m_writer.seek(branchInstIndex);
-
         generator.disablePeepholeOptimization();
 
         OpJmp::emit(&generator, BoundLabel(static_cast<int>(newBranchTarget) - static_cast<int>(branchInstIndex)));
@@ -5399,10 +5395,7 @@ void ForInContext::finalize(BytecodeGenerator& generator, UnlinkedCodeBlockGener
     }
 
     generator.m_writer.seek(generator.m_writer.size());
-    if (generator.m_lastInstruction.offset() + generator.m_lastInstruction->size() != generator.m_writer.size()) {
-        generator.m_lastOpcodeID = lastOpcodeID;
-        generator.m_lastInstruction = lastInstruction;
-    }
+    generator.disablePeepholeOptimization(); // We might've just changed the last bytecode that was emitted.
 }
 
 void StaticPropertyAnalysis::record()

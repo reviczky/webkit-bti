@@ -138,10 +138,12 @@ namespace WebCore {
             PseudoClassNot,
             PseudoClassRoot,
             PseudoClassScope,
+            PseudoClassRelativeScope, // Like :scope but for internal use with relative selectors like :has(> foo).
             PseudoClassWindowInactive,
             PseudoClassCornerPresent,
             PseudoClassDecrement,
             PseudoClassIncrement,
+            PseudoClassHas,
             PseudoClassHorizontal,
             PseudoClassVertical,
             PseudoClassStart,
@@ -164,6 +166,13 @@ namespace WebCore {
 #if ENABLE(VIDEO)
             PseudoClassFuture,
             PseudoClassPast,
+            PseudoClassPlaying,
+            PseudoClassPaused,
+            PseudoClassSeeking,
+            PseudoClassBuffering,
+            PseudoClassStalled,
+            PseudoClassMuted,
+            PseudoClassVolumeLocked,
 #endif
 #if ENABLE(CSS_SELECTORS_LEVEL4)
             PseudoClassDir,
@@ -180,6 +189,7 @@ namespace WebCore {
         enum PseudoElementType {
             PseudoElementUnknown = 0,
             PseudoElementAfter,
+            PseudoElementBackdrop,
             PseudoElementBefore,
 #if ENABLE(VIDEO)
             PseudoElementCue,

@@ -146,6 +146,10 @@ static unsigned simpleSelectorSpecificityInternal(const CSSSelector& simpleSelec
     case CSSSelector::Tag:
         return (simpleSelector.tagQName().localName() != starAtom()) ? static_cast<unsigned>(SelectorSpecificityIncrement::ClassC) : 0;
     case CSSSelector::PseudoElement:
+        // Slotted only competes with other slotted selectors for specificity,
+        // so whether we add the ClassC specificity shouldn't be observable.
+        if (simpleSelector.pseudoElementType() == CSSSelector::PseudoElementSlotted)
+            return maxSpecificity(*simpleSelector.selectorList());
         return static_cast<unsigned>(SelectorSpecificityIncrement::ClassC);
     case CSSSelector::Unknown:
         return 0;
@@ -232,6 +236,8 @@ PseudoId CSSSelector::pseudoId(PseudoElementType type)
         return PseudoId::Highlight;
     case PseudoElementMarker:
         return PseudoId::Marker;
+    case PseudoElementBackdrop:
+        return PseudoId::Backdrop;
     case PseudoElementBefore:
         return PseudoId::Before;
     case PseudoElementAfter:
@@ -505,7 +511,33 @@ String CSSSelector::selectorText(const String& rightSide) const
             case CSSSelector::PseudoClassFuture:
                 builder.append(":future");
                 break;
+            case CSSSelector::PseudoClassPlaying:
+                builder.append(":playing");
+                break;
+            case CSSSelector::PseudoClassPaused:
+                builder.append(":paused");
+                break;
+            case CSSSelector::PseudoClassSeeking:
+                builder.append(":seeking");
+                break;
+            case CSSSelector::PseudoClassBuffering:
+                builder.append(":buffering");
+                break;
+            case CSSSelector::PseudoClassStalled:
+                builder.append(":stalled");
+                break;
+            case CSSSelector::PseudoClassMuted:
+                builder.append(":muted");
+                break;
+            case CSSSelector::PseudoClassVolumeLocked:
+                builder.append(":volume-locked");
+                break;
 #endif
+            case CSSSelector::PseudoClassHas:
+                builder.append(":has(");
+                cs->selectorList()->buildSelectorsText(builder);
+                builder.append(')');
+                break;
 #if ENABLE(ATTACHMENT_ELEMENT)
             case CSSSelector::PseudoClassHasAttachment:
                 builder.append(":has-attachment");
@@ -640,6 +672,9 @@ String CSSSelector::selectorText(const String& rightSide) const
             case CSSSelector::PseudoClassScope:
                 builder.append(":scope");
                 break;
+            case CSSSelector::PseudoClassRelativeScope:
+                // Just remove the space from the start to generate a relative selector string like in ":has(> foo)".
+                return rightSide.substring(1);
             case CSSSelector::PseudoClassSingleButton:
                 builder.append(":single-button");
                 break;

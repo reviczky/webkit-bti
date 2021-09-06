@@ -644,7 +644,7 @@ Vector<String> Element::getAttributeNames() const
 
 bool Element::isFocusable() const
 {
-    if (!isConnected() || !supportsFocus())
+    if (!isConnected() || !supportsFocus() || isInert())
         return false;
 
     if (!renderer()) {
@@ -1467,6 +1467,13 @@ IntRect Element::boundsInRootViewSpace()
     return view->contentsToRootView(enclosingIntRect(unitedBoundingBoxes(quads)));
 }
 
+IntRect Element::boundingBoxInRootViewCoordinates() const
+{
+    if (RenderObject* renderer = this->renderer())
+        return document().view()->contentsToRootView(renderer->absoluteBoundingBoxRect());
+    return IntRect();
+}
+
 static bool layoutOverflowRectContainsAllDescendants(const RenderBox& renderBox)
 {
     if (renderBox.isRenderView())
@@ -1681,14 +1688,6 @@ FloatRect Element::boundingClientRect()
 Ref<DOMRect> Element::getBoundingClientRect()
 {
     return DOMRect::create(boundingClientRect());
-}
-
-// Note that this is not web-exposed, and does not use the same coordinate system as getBoundingClientRect() and friends.
-IntRect Element::clientRect() const
-{
-    if (RenderObject* renderer = this->renderer())
-        return document().view()->contentsToRootView(renderer->absoluteBoundingBoxRect());
-    return IntRect();
 }
     
 IntRect Element::screenRect() const
@@ -2251,13 +2250,11 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
 
 void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
-    document().removeFromTopLayer(*this);
-
 #if ENABLE(FULLSCREEN_API)
     if (containsFullScreenElement())
         setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(false);
 #endif
-    
+
     if (auto* page = document().page()) {
 #if ENABLE(POINTER_LOCK)
         page->pointerLockController().elementWasRemoved(*this);
@@ -2328,6 +2325,9 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
             scrollLatchingController->removeLatchingStateForTarget(*this);
     }
 #endif
+
+    if (UNLIKELY(isInTopLayer()))
+        removeFromTopLayer();
 
     if (hasNodeFlag(NodeFlag::HasElementIdentifier)) {
         document().identifiedElementWasRemovedFromDocument(*this);
@@ -3357,6 +3357,48 @@ void Element::willBecomeFullscreenElement()
 {
     for (auto& child : descendantsOfType<Element>(*this))
         child.ancestorWillEnterFullscreen();
+}
+
+static inline RenderLayer* renderLayerForElement(Element& element)
+{
+    auto* renderer = element.renderer();
+    if (!renderer || !renderer->hasLayer() || !is<RenderLayerModelObject>(renderer))
+        return nullptr;
+    return downcast<RenderLayerModelObject>(*renderer).layer();
+}
+
+void Element::addToTopLayer()
+{
+    RELEASE_ASSERT(!isInTopLayer());
+    ScriptDisallowedScope scriptDisallowedScope;
+
+    if (auto* layer = renderLayerForElement(*this))
+        layer->establishesTopLayerWillChange();
+
+    document().addTopLayerElement(*this);
+    setNodeFlag(NodeFlag::IsInTopLayer);
+
+    invalidateStyleInternal();
+
+    if (auto* layer = renderLayerForElement(*this))
+        layer->establishesTopLayerDidChange();
+}
+
+void Element::removeFromTopLayer()
+{
+    RELEASE_ASSERT(isInTopLayer());
+    ScriptDisallowedScope scriptDisallowedScope;
+
+    if (auto* layer = renderLayerForElement(*this))
+        layer->establishesTopLayerWillChange();
+
+    document().removeTopLayerElement(*this);
+    clearNodeFlag(NodeFlag::IsInTopLayer);
+
+    invalidateStyleInternal();
+
+    if (auto* layer = renderLayerForElement(*this))
+        layer->establishesTopLayerDidChange();
 }
 
 static PseudoElement* beforeOrAfterPseudoElement(const Element& host, PseudoId pseudoElementSpecifier)
