@@ -402,6 +402,13 @@ void LibWebRTCMediaEndpoint::collectTransceivers()
     }
 }
 
+std::optional<bool> LibWebRTCMediaEndpoint::canTrickleIceCandidates() const
+{
+    if (!m_backend)
+        return { };
+    return m_backend->can_trickle_ice_candidates();
+}
+
 void LibWebRTCMediaEndpoint::newTransceiver(rtc::scoped_refptr<webrtc::RtpTransceiverInterface>&& rtcTransceiver)
 {
     auto rtcReceiver = rtcTransceiver->receiver();
@@ -591,8 +598,7 @@ void LibWebRTCMediaEndpoint::OnIceConnectionChange(webrtc::PeerConnectionInterfa
     callOnMainThread([protectedThis = makeRef(*this), connectionState] {
         if (protectedThis->isStopped())
             return;
-        if (protectedThis->m_peerConnectionBackend.connection().iceConnectionState() != connectionState)
-            protectedThis->m_peerConnectionBackend.connection().updateIceConnectionState(connectionState);
+        protectedThis->m_peerConnectionBackend.connection().updateIceConnectionState(connectionState);
     });
 }
 

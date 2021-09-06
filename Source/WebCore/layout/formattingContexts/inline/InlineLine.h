@@ -68,19 +68,22 @@ public:
         bool isWordBreakOpportunity() const { return m_type == InlineItem::Type::WordBreakOpportunity; }
         bool isInlineBoxStart() const { return m_type == InlineItem::Type::InlineBoxStart; }
         bool isInlineBoxEnd() const { return m_type == InlineItem::Type::InlineBoxEnd; }
+        auto type() const { return m_type; }
 
         const Box& layoutBox() const { return *m_layoutBox; }
         const RenderStyle& style() const { return m_layoutBox->style(); }
-        const std::optional<LineRun::Text>& textContent() const { return m_textContent; }
+        struct Text {
+            size_t start { 0 };
+            size_t length { 0 };
+            bool needsHyphen { false };
+        };
+        const std::optional<Text>& textContent() const { return m_textContent; }
 
         InlineLayoutUnit logicalWidth() const { return m_logicalWidth; }
         InlineLayoutUnit logicalLeft() const { return m_logicalLeft; }
         InlineLayoutUnit logicalRight() const { return logicalLeft() + logicalWidth(); }
 
-        const LineRun::Expansion& expansion() const { return m_expansion; }
-        bool hasExpansionOpportunity() const { return m_expansionOpportunityCount; }
-        ExpansionBehavior expansionBehavior() const;
-        unsigned expansionOpportunityCount() const { return m_expansionOpportunityCount; }
+        const ::WebCore::Layout::Run::Expansion& expansion() const { return m_expansion; }
 
         bool hasTrailingWhitespace() const { return m_trailingWhitespaceType != TrailingWhitespace::None; }
         InlineLayoutUnit trailingWhitespaceWidth() const { return m_trailingWhitespaceWidth; }
@@ -95,8 +98,7 @@ public:
         void expand(const InlineTextItem&, InlineLayoutUnit logicalWidth);
         void moveHorizontally(InlineLayoutUnit offset) { m_logicalLeft += offset; }
         void shrinkHorizontally(InlineLayoutUnit width) { m_logicalWidth -= width; }
-        void setExpansionBehavior(ExpansionBehavior);
-        void setHorizontalExpansion(InlineLayoutUnit logicalExpansion);
+        void setExpansion(::WebCore::Layout::Run::Expansion expansion) { m_expansion = expansion; }
         void setNeedsHyphen(InlineLayoutUnit hyphenLogicalWidth);
 
         enum class TrailingWhitespace {
@@ -119,12 +121,10 @@ public:
         const Box* m_layoutBox { nullptr };
         InlineLayoutUnit m_logicalLeft { 0 };
         InlineLayoutUnit m_logicalWidth { 0 };
-        bool m_whitespaceIsExpansionOpportunity { false };
         TrailingWhitespace m_trailingWhitespaceType { TrailingWhitespace::None };
         InlineLayoutUnit m_trailingWhitespaceWidth { 0 };
-        std::optional<LineRun::Text> m_textContent;
-        LineRun::Expansion m_expansion;
-        unsigned m_expansionOpportunityCount { 0 };
+        std::optional<Text> m_textContent;
+        ::WebCore::Layout::Run::Expansion m_expansion;
     };
     using RunList = Vector<Run, 10>;
     const RunList& runs() const { return m_runs; }
@@ -197,7 +197,7 @@ inline Line::Run::TrailingWhitespace Line::Run::trailingWhitespaceType(const Inl
 inline void Line::Run::setNeedsHyphen(InlineLayoutUnit hyphenLogicalWidth)
 {
     ASSERT(m_textContent);
-    m_textContent->setNeedsHyphen();
+    m_textContent->needsHyphen = true;
     m_logicalWidth += hyphenLogicalWidth;
 }
 

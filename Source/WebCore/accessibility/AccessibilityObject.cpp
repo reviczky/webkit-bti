@@ -1505,10 +1505,9 @@ int AccessibilityObject::lineForPosition(const VisiblePosition& visiblePos) cons
     // top document.
     do {
         savedVisiblePos = currentVisiblePos;
-        VisiblePosition prevVisiblePos = previousLinePosition(currentVisiblePos, 0, HasEditableAXRole);
-        currentVisiblePos = prevVisiblePos;
+        currentVisiblePos = previousLinePosition(currentVisiblePos, 0, HasEditableAXRole);
         ++lineCount;
-    }  while (currentVisiblePos.isNotNull() && !(inSameLine(currentVisiblePos, savedVisiblePos)));
+    } while (currentVisiblePos.isNotNull() && !(inSameLine(currentVisiblePos, savedVisiblePos)));
 
     return lineCount;
 }
@@ -3228,6 +3227,9 @@ bool AccessibilityObject::accessibilityIsIgnoredByDefault() const
 // http://www.w3.org/TR/wai-aria/terms#def_hidden
 bool AccessibilityObject::isAXHidden() const
 {
+    if (node() && node()->isInert())
+        return true;
+
     if (isFocused())
         return false;
     
@@ -3637,6 +3639,21 @@ String roleToPlatformString(AccessibilityRole role)
     return roleMap->get(static_cast<unsigned>(role));
 }
 
+// This function determines if the given `axObject` is a radio button part of a different ad-hoc radio group
+// than `referenceObject`, where ad-hoc radio group membership is determined by comparing `name` attributes.
+static bool isRadioButtonInDifferentAdhocGroup(AXCoreObject* axObject, AXCoreObject* referenceObject)
+{
+    if (!axObject || !axObject->isRadioButton())
+        return false;
+
+    // If the `referenceObject` is not a radio button and this `axObject` is, their radio group membership is different because
+    // `axObject` belongs to a group and `referenceObject` doesn't.
+    if (!referenceObject || !referenceObject->isRadioButton())
+        return true;
+
+    return axObject->element()->getNameAttribute() != referenceObject->element()->getNameAttribute();
+}
+
 static bool isAccessibilityObjectSearchMatchAtIndex(AXCoreObject* axObject, AccessibilitySearchCriteria const& criteria, size_t index)
 {
     switch (criteria.searchKeys[index]) {
@@ -3717,7 +3734,7 @@ static bool isAccessibilityObjectSearchMatchAtIndex(AXCoreObject* axObject, Acce
     case AccessibilitySearchKey::PlainText:
         return axObject->hasPlainText();
     case AccessibilitySearchKey::RadioGroup:
-        return axObject->isRadioGroup();
+        return axObject->isRadioGroup() || isRadioButtonInDifferentAdhocGroup(axObject, criteria.startObject);
     case AccessibilitySearchKey::SameType:
         return criteria.startObject
             && axObject->roleValue() == criteria.startObject->roleValue();

@@ -3023,6 +3023,18 @@ ProcessID WKPageGetProcessIdentifier(WKPageRef page)
     return toImpl(page)->processIdentifier();
 }
 
+ProcessID WKPageGetGPUProcessIdentifier(WKPageRef page)
+{
+#if ENABLE(GPU_PROCESS)
+    auto* gpuProcess = toImpl(page)->process().processPool().gpuProcess();
+    if (!gpuProcess)
+        return 0;
+    return gpuProcess->processIdentifier();
+#else
+    return 0;
+#endif
+}
+
 #ifdef __BLOCKS__
 void WKPageGetApplicationManifest_b(WKPageRef pageRef, WKPageGetApplicationManifestBlock block)
 {
@@ -3066,6 +3078,14 @@ void WKPageMarkAttributedPrivateClickMeasurementsAsExpiredForTesting(WKPageRef p
 {
     CRASH_IF_SUSPENDED;
     toImpl(pageRef)->markAttributedPrivateClickMeasurementsAsExpiredForTesting([callbackContext, callback] () {
+        callback(callbackContext);
+    });
+}
+
+void WKPageSetPrivateClickMeasurementEphemeralMeasurementForTesting(WKPageRef pageRef, bool value, WKPageSetPrivateClickMeasurementEphemeralMeasurementForTestingFunction callback, void* callbackContext)
+{
+    CRASH_IF_SUSPENDED;
+    toImpl(pageRef)->setPrivateClickMeasurementEphemeralMeasurementForTesting(value, [callbackContext, callback] () {
         callback(callbackContext);
     });
 }

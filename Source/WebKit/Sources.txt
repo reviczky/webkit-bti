@@ -57,6 +57,7 @@ GPUProcess/webrtc/RemoteMediaRecorderManager.cpp
 GPUProcess/webrtc/RemoteSampleBufferDisplayLayer.cpp
 GPUProcess/webrtc/RemoteSampleBufferDisplayLayerManager.cpp
 
+NetworkProcess/DatabaseUtilities.cpp
 NetworkProcess/PrivateClickMeasurementManager.cpp
 NetworkProcess/PrivateClickMeasurementNetworkLoader.cpp
 NetworkProcess/NetworkActivityTracker.cpp
@@ -97,6 +98,10 @@ NetworkProcess/Downloads/PendingDownload.cpp
 
 NetworkProcess/IndexedDB/WebIDBConnectionToClient.cpp
 NetworkProcess/IndexedDB/WebIDBServer.cpp
+
+NetworkProcess/PrivateClickMeasurement/PrivateClickMeasurementDatabase.cpp
+NetworkProcess/PrivateClickMeasurement/PrivateClickMeasurementDebugInfo.cpp
+NetworkProcess/PrivateClickMeasurement/PrivateClickMeasurementStore.cpp
 
 NetworkProcess/ServiceWorker/ServiceWorkerFetchTask.cpp @no-unify
 NetworkProcess/ServiceWorker/ServiceWorkerSoftUpdateLoader.cpp
@@ -166,7 +171,6 @@ PluginProcess/WebProcessConnection.cpp @no-unify
 // TODO: The files here marked @no-unify should be unified once GTK's PluginProcess2 is removed.
 Shared/AccessibilityPreferences.cpp
 Shared/ActivityAssertion.cpp @no-unify
-Shared/AsyncRequest.cpp
 Shared/AuxiliaryProcess.cpp @no-unify
 Shared/BlobDataFileReferenceWithSandboxExtension.cpp @no-unify
 Shared/CacheModel.cpp
@@ -695,6 +699,7 @@ WebProcess/WebCoreSupport/WebMediaKeySystemClient.cpp
 WebProcess/WebCoreSupport/WebMessagePortChannelProvider.cpp
 WebProcess/WebCoreSupport/WebNotificationClient.cpp
 WebProcess/WebCoreSupport/WebPerformanceLoggingClient.cpp
+WebProcess/WebCoreSupport/WebPermissionController.cpp
 WebProcess/WebCoreSupport/WebPlatformStrategies.cpp
 WebProcess/WebCoreSupport/WebPopupMenu.cpp
 WebProcess/WebCoreSupport/WebProgressTrackerClient.cpp

@@ -245,6 +245,8 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/mediastream/RTCDataChannel.idl \
     $(WebCore)/Modules/mediastream/RTCDataChannelEvent.idl \
     $(WebCore)/Modules/mediastream/RTCDegradationPreference.idl \
+    $(WebCore)/Modules/mediastream/RTCDtlsTransport.idl \
+    $(WebCore)/Modules/mediastream/RTCDtlsTransportState.idl \
     $(WebCore)/Modules/mediastream/RTCDtxStatus.idl \
     $(WebCore)/Modules/mediastream/RTCEncodedAudioFrame.idl \
     $(WebCore)/Modules/mediastream/RTCEncodedVideoFrame.idl \
@@ -322,6 +324,12 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/paymentrequest/PaymentShippingOption.idl \
     $(WebCore)/Modules/paymentrequest/PaymentShippingType.idl \
     $(WebCore)/Modules/paymentrequest/PaymentValidationErrors.idl \
+    $(WebCore)/Modules/permissions/Navigator+Permissions.idl \
+    $(WebCore)/Modules/permissions/PermissionDescriptor.idl \
+    $(WebCore)/Modules/permissions/PermissionName.idl \
+    $(WebCore)/Modules/permissions/PermissionState.idl \
+    $(WebCore)/Modules/permissions/PermissionStatus.idl \
+    $(WebCore)/Modules/permissions/Permissions.idl \
     $(WebCore)/Modules/pictureinpicture/DocumentOrShadowRoot+PictureInPicture.idl \
     $(WebCore)/Modules/pictureinpicture/Document+PictureInPicture.idl \
     $(WebCore)/Modules/pictureinpicture/EnterPictureInPictureEvent.idl \
@@ -604,6 +612,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/css/typedom/CSSStyleValue.idl \
     $(WebCore)/css/typedom/CSSUnitValue.idl \
     $(WebCore)/css/typedom/CSSUnparsedValue.idl \
+    $(WebCore)/css/typedom/CSSOMVariableReferenceValue.idl \
     $(WebCore)/dom/AbortAlgorithm.idl \
     $(WebCore)/dom/AbortController.idl \
     $(WebCore)/dom/AbortSignal.idl \
@@ -1003,7 +1012,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/page/PerformanceResourceTiming.idl \
     $(WebCore)/page/PerformanceServerTiming.idl \
     $(WebCore)/page/PerformanceTiming.idl \
-    $(WebCore)/page/PostMessageOptions.idl \
     $(WebCore)/page/RemoteDOMWindow.idl \
     $(WebCore)/page/ResizeObserver.idl \
     $(WebCore)/page/ResizeObserverCallback.idl \
@@ -1015,6 +1023,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/page/ScrollOptions.idl \
     $(WebCore)/page/ScrollToOptions.idl \
     $(WebCore)/page/ShareData.idl \
+    $(WebCore)/page/StructuredSerializeOptions.idl \
     $(WebCore)/page/UndoItem.idl \
     $(WebCore)/page/UndoManager.idl \
     $(WebCore)/page/UserMessageHandler.idl \

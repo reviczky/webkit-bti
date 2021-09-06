@@ -27,6 +27,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/encryptedmedia/MediaKeySystemClient.h
     Modules/encryptedmedia/MediaKeySystemController.h
     Modules/encryptedmedia/MediaKeySystemRequest.h
+    Modules/encryptedmedia/MediaKeySystemRequestIdentifier.h
 
     Modules/fetch/FetchBodyConsumer.h
     Modules/fetch/FetchBodySource.h
@@ -127,6 +128,12 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/notifications/NotificationDirection.h
     Modules/notifications/NotificationPermission.h
     Modules/notifications/NotificationPermissionCallback.h
+
+    Modules/permissions/PermissionController.h
+    Modules/permissions/PermissionDescriptor.h
+    Modules/permissions/PermissionName.h
+    Modules/permissions/PermissionObserver.h
+    Modules/permissions/PermissionState.h
 
     Modules/plugins/PluginReplacement.h
     Modules/plugins/YouTubePluginReplacement.h
@@ -427,6 +434,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/Comment.h
     dom/ContainerNode.h
     dom/ContextDestructionObserver.h
+    dom/CrossOriginMode.h
     dom/CustomElementReactionQueue.h
     dom/DOMException.h
     dom/DOMHighResTimeStamp.h
@@ -928,7 +936,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/PointerCaptureController.h
     page/PointerCharacteristics.h
     page/PointerLockController.h
-    page/PostMessageOptions.h
     page/PrewarmInformation.h
     page/PrintContext.h
     page/ProcessWarming.h
@@ -953,6 +960,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/SpeechRecognitionProvider.h
     page/SpeechSynthesisClient.h
     page/StorageBlockingPolicy.h
+    page/StructuredSerializeOptions.h
     page/SuspendableTimer.h
     page/TextDirectionSubmenuInclusionBehavior.h
     page/TextIndicator.h
@@ -962,6 +970,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/UserContentTypes.h
     page/UserContentURLPattern.h
     page/UserInterfaceDirectionPolicy.h
+    page/UserMediaRequestIdentifier.h
     page/UserMessageHandler.h
     page/UserMessageHandlerDescriptor.h
     page/UserMessageHandlersNamespace.h
@@ -977,6 +986,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/WheelEventDeltaFilter.h
     page/WheelEventTestMonitor.h
     page/WindowFeatures.h
+    page/WindowOrWorkerGlobalScope.h
 
     page/csp/ContentSecurityPolicy.h
     page/csp/ContentSecurityPolicyClient.h
@@ -1280,6 +1290,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/IntRectHash.h
     platform/graphics/IntSize.h
     platform/graphics/IntSizeHash.h
+    platform/graphics/LayerTreeAsTextOptions.h
     platform/graphics/LayoutPoint.h
     platform/graphics/LayoutRect.h
     platform/graphics/LayoutSize.h

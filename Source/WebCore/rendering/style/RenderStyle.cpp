@@ -638,7 +638,7 @@ inline bool RenderStyle::changeAffectsVisualOverflow(const RenderStyle& other) c
         // is specified. We can take an early out here.
         if (textUnderlinePosition() == TextUnderlinePosition::Under || other.textUnderlinePosition() == TextUnderlinePosition::Under)
             return true;
-        return visualOverflowForDecorations(*this, nullptr) != visualOverflowForDecorations(other, nullptr);
+        return visualOverflowForDecorations(*this, { }) != visualOverflowForDecorations(other, { });
     }
 
     if (hasOutlineInVisualOverflow() != other.hasOutlineInVisualOverflow())
@@ -724,7 +724,7 @@ static bool rareNonInheritedDataChangeRequiresLayout(const StyleRareNonInherited
 
 #if ENABLE(CSS_COMPOSITING)
     if (first.isolation != second.isolation) {
-        // Ideally this would trigger a cheaper layout that just updates layer z-order trees (webit.org/b/190088).
+        // Ideally this would trigger a cheaper layout that just updates layer z-order trees (webkit.org/b/190088).
         return true;
     }
 #endif

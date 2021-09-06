@@ -72,6 +72,7 @@
 #include "History.h"
 #include "IdleRequestOptions.h"
 #include "InspectorInstrumentation.h"
+#include "JSDOMExceptionHandling.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSDOMWindowBase.h"
 #include "JSExecState.h"
@@ -86,6 +87,7 @@
 #include "PageConsoleClient.h"
 #include "PageTransitionEvent.h"
 #include "Performance.h"
+#include "PerformanceNavigationTiming.h"
 #include "RequestAnimationFrameCallback.h"
 #include "ResourceLoadInfo.h"
 #include "ResourceLoadObserver.h"
@@ -1922,9 +1924,8 @@ bool DOMWindow::isSecureContext() const
 
 bool DOMWindow::crossOriginIsolated() const
 {
-    // FIXME: Implemented this. This should return true if COOP/COEP are used and the page is allowed to use APIs
-    // that require cross-origin isolation (e.g. SharedArrayBuffer).
-    return false;
+    ASSERT(ScriptExecutionContext::crossOriginMode() == CrossOriginMode::Shared || !document() || document()->topDocument().crossOriginOpenerPolicy().value == CrossOriginOpenerPolicyValue::SameOriginPlusCOEP);
+    return ScriptExecutionContext::crossOriginMode() == CrossOriginMode::Isolated;
 }
 
 static void didAddStorageEventListener(DOMWindow& window)
@@ -2259,13 +2260,21 @@ void DOMWindow::dispatchLoadEvent()
     auto protectedLoader = makeRefPtr(frame() ? frame()->loader().documentLoader() : nullptr);
     bool shouldMarkLoadEventTimes = protectedLoader && !protectedLoader->timing().loadEventStart();
 
-    if (shouldMarkLoadEventTimes)
-        protectedLoader->timing().markLoadEventStart();
+    if (shouldMarkLoadEventTimes) {
+        auto now = MonotonicTime::now();
+        protectedLoader->timing().setLoadEventStart(now);
+        if (auto* navigationTiming = performance().navigationTiming())
+            navigationTiming->documentLoadTiming().setLoadEventStart(now);
+    }
 
     dispatchEvent(Event::create(eventNames().loadEvent, Event::CanBubble::No, Event::IsCancelable::No), document());
 
-    if (shouldMarkLoadEventTimes)
-        protectedLoader->timing().markLoadEventEnd();
+    if (shouldMarkLoadEventTimes) {
+        auto now = MonotonicTime::now();
+        protectedLoader->timing().setLoadEventEnd(now);
+        if (auto* navigationTiming = performance().navigationTiming())
+            navigationTiming->documentLoadTiming().setLoadEventEnd(now);
+    }
 
     // Send a separate load event to the element that owns this frame.
     if (RefPtr ownerFrame = frame()) {

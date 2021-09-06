@@ -121,6 +121,7 @@
 #include "WebPageProxyMessages.h"
 #include "WebPaymentCoordinator.h"
 #include "WebPerformanceLoggingClient.h"
+#include "WebPermissionController.h"
 #include "WebPluginInfoProvider.h"
 #include "WebPopupMenu.h"
 #include "WebPreferencesDefinitions.h"
@@ -262,6 +263,7 @@
 #include <pal/SessionID.h>
 #include <wtf/ProcessID.h>
 #include <wtf/RunLoop.h>
+#include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
 #include <wtf/text/TextStream.h>
@@ -563,7 +565,8 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
         makeUniqueRef<WebFrameLoaderClient>(m_mainFrame.copyRef()),
         makeUniqueRef<WebSpeechRecognitionProvider>(m_identifier),
         makeUniqueRef<MediaRecorderProvider>(*this),
-        WebProcess::singleton().broadcastChannelRegistry()
+        WebProcess::singleton().broadcastChannelRegistry(),
+        WebPermissionController::create(*this)
     );
     pageConfiguration.chromeClient = new WebChromeClient(*this);
 #if ENABLE(CONTEXT_MENUS)
@@ -1225,7 +1228,7 @@ EditorState WebPage::editorState(ShouldPerformLayout shouldPerformLayout) const
     const VisibleSelection& selection = frame->selection().selection();
     auto& editor = frame->editor();
 
-    result.transactionID = m_lastEditorStateTransactionID.increment();
+    result.identifier = m_lastEditorStateIdentifier.increment();
     result.selectionIsNone = selection.isNone();
     result.selectionIsRange = selection.isRange();
     result.isContentEditable = selection.isContentEditable();
@@ -1689,6 +1692,11 @@ void WebPage::loadRequest(LoadParameters&& loadParameters)
     setIsNavigatingToAppBoundDomain(loadParameters.isNavigatingToAppBoundDomain, &m_mainFrame.get());
 #endif
 
+    WebProcess::singleton().webLoaderStrategy().setExistingNetworkResourceLoadIdentifierToResume(loadParameters.existingNetworkResourceLoadIdentifierToResume);
+    auto resumingLoadScope = makeScopeExit([] {
+        WebProcess::singleton().webLoaderStrategy().setExistingNetworkResourceLoadIdentifierToResume(std::nullopt);
+    });
+
     SendStopResponsivenessTimer stopper;
 
     m_pendingNavigationID = loadParameters.navigationID;
@@ -1723,7 +1731,7 @@ NO_RETURN void WebPage::loadRequestWaitingForProcessLaunch(LoadParameters&&, URL
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-void WebPage::loadDataImpl(uint64_t navigationID, bool shouldTreatAsContinuingLoad, std::optional<WebsitePoliciesData>&& websitePolicies, Ref<SharedBuffer>&& sharedBuffer, ResourceRequest&& request, ResourceResponse&& response, const URL& unreachableURL, const UserData& userData, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, SubstituteData::SessionHistoryVisibility sessionHistoryVisibility, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy)
+void WebPage::loadDataImpl(uint64_t navigationID, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, std::optional<WebsitePoliciesData>&& websitePolicies, Ref<SharedBuffer>&& sharedBuffer, ResourceRequest&& request, ResourceResponse&& response, const URL& unreachableURL, const UserData& userData, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, SubstituteData::SessionHistoryVisibility sessionHistoryVisibility, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy)
 {
 #if ENABLE(APP_BOUND_DOMAINS)
     setIsNavigatingToAppBoundDomain(isNavigatingToAppBoundDomain, &m_mainFrame.get());
@@ -1857,9 +1865,11 @@ void WebPage::reload(uint64_t navigationID, uint32_t reloadOptions, SandboxExten
     }
 }
 
-void WebPage::goToBackForwardItem(uint64_t navigationID, const BackForwardItemIdentifier& backForwardItemID, FrameLoadType backForwardType, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, std::optional<WebsitePoliciesData>&& websitePolicies)
+void WebPage::goToBackForwardItem(uint64_t navigationID, const BackForwardItemIdentifier& backForwardItemID, FrameLoadType backForwardType, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, std::optional<WebsitePoliciesData>&& websitePolicies, bool lastNavigationWasAppInitiated)
 {
     SendStopResponsivenessTimer stopper;
+
+    m_lastNavigationWasAppInitiated = lastNavigationWasAppInitiated;
 
     ASSERT(isBackForwardLoadType(backForwardType));
 
@@ -2963,7 +2973,7 @@ static bool handleMouseEvent(const WebMouseEvent& mouseEvent, WebPage* page)
     }
 }
 
-void WebPage::mouseEvent(const WebMouseEvent& mouseEvent, std::optional<SandboxExtension::HandleArray>&& sandboxExtensions)
+void WebPage::mouseEvent(const WebMouseEvent& mouseEvent, std::optional<Vector<SandboxExtension::Handle>>&& sandboxExtensions)
 {
     SetForScope<bool> userIsInteractingChange { m_userIsInteracting, true };
 
@@ -3506,7 +3516,7 @@ void WebPage::setLayerHostingMode(LayerHostingMode layerHostingMode)
         pluginView->setLayerHostingMode(m_layerHostingMode);
 }
 
-void WebPage::didReceivePolicyDecision(FrameIdentifier frameID, uint64_t listenerID, PolicyDecision&& policyDecision, const SandboxExtension::HandleArray& networkExtensionsHandles)
+void WebPage::didReceivePolicyDecision(FrameIdentifier frameID, uint64_t listenerID, PolicyDecision&& policyDecision, const Vector<SandboxExtension::Handle>& networkExtensionsHandles)
 {
     consumeNetworkExtensionSandboxExtensions(networkExtensionsHandles);
 
@@ -3521,7 +3531,7 @@ void WebPage::didReceivePolicyDecision(FrameIdentifier frameID, uint64_t listene
     frame->didReceivePolicyDecision(listenerID, WTFMove(policyDecision));
 }
 
-void WebPage::continueWillSubmitForm(FrameIdentifier frameID, uint64_t listenerID)
+void WebPage::continueWillSubmitForm(FrameIdentifier frameID, FormSubmitListenerIdentifier listenerID)
 {
     WebFrame* frame = WebProcess::singleton().webFrame(frameID);
     if (!frame)
@@ -4062,10 +4072,9 @@ void WebPage::removeDataDetectedLinks(CompletionHandler<void(const DataDetection
     completionHandler({ });
 }
 
-void WebPage::detectDataInAllFrames(uint64_t types, CompletionHandler<void(const DataDetectionResult&)>&& completionHandler)
+void WebPage::detectDataInAllFrames(OptionSet<WebCore::DataDetectorType> dataDetectorTypes, CompletionHandler<void(const DataDetectionResult&)>&& completionHandler)
 {
     DataDetectionResult mainFrameResult;
-    auto dataDetectorTypes = OptionSet<DataDetectorType>::fromRaw(types);
     for (auto frame = makeRefPtr(&m_page->mainFrame()); frame; frame = frame->tree().traverseNext()) {
         auto document = makeRefPtr(frame->document());
         if (!document)
@@ -4357,7 +4366,7 @@ void WebPage::performDragControllerAction(DragControllerAction action, const Int
     ASSERT_NOT_REACHED();
 }
 #else
-void WebPage::performDragControllerAction(DragControllerAction action, const WebCore::DragData& dragData, SandboxExtension::Handle&& sandboxExtensionHandle, SandboxExtension::HandleArray&& sandboxExtensionsHandleArray)
+void WebPage::performDragControllerAction(DragControllerAction action, const WebCore::DragData& dragData, SandboxExtension::Handle&& sandboxExtensionHandle, Vector<SandboxExtension::Handle>&& sandboxExtensionsHandleArray)
 {
     if (!m_page) {
         send(Messages::WebPageProxy::DidPerformDragControllerAction(std::nullopt, DragHandlingMethod::None, false, 0, { }, { }));
@@ -4696,7 +4705,7 @@ void WebPage::didCancelForOpenPanel()
 }
 
 #if ENABLE(SANDBOX_EXTENSIONS)
-void WebPage::extendSandboxForFilesFromOpenPanel(SandboxExtension::HandleArray&& handles)
+void WebPage::extendSandboxForFilesFromOpenPanel(Vector<SandboxExtension::Handle>&& handles)
 {
     bool result = SandboxExtension::consumePermanently(handles);
     if (!result) {
@@ -4715,14 +4724,14 @@ void WebPage::didReceiveGeolocationPermissionDecision(GeolocationIdentifier geol
 
 #if ENABLE(MEDIA_STREAM)
 
-void WebPage::userMediaAccessWasGranted(uint64_t userMediaID, WebCore::CaptureDevice&& audioDevice, WebCore::CaptureDevice&& videoDevice, String&& mediaDeviceIdentifierHashSalt, SandboxExtension::Handle&& handle, CompletionHandler<void()>&& completionHandler)
+void WebPage::userMediaAccessWasGranted(UserMediaRequestIdentifier userMediaID, WebCore::CaptureDevice&& audioDevice, WebCore::CaptureDevice&& videoDevice, String&& mediaDeviceIdentifierHashSalt, SandboxExtension::Handle&& handle, CompletionHandler<void()>&& completionHandler)
 {
     SandboxExtension::consumePermanently(handle);
 
     m_userMediaPermissionRequestManager->userMediaAccessWasGranted(userMediaID, WTFMove(audioDevice), WTFMove(videoDevice), WTFMove(mediaDeviceIdentifierHashSalt), WTFMove(completionHandler));
 }
 
-void WebPage::userMediaAccessWasDenied(uint64_t userMediaID, uint64_t reason, String&& invalidConstraint)
+void WebPage::userMediaAccessWasDenied(UserMediaRequestIdentifier userMediaID, uint64_t reason, String&& invalidConstraint)
 {
     m_userMediaPermissionRequestManager->userMediaAccessWasDenied(userMediaID, static_cast<UserMediaRequest::MediaAccessDenialReason>(reason), WTFMove(invalidConstraint));
 }
@@ -4735,12 +4744,12 @@ void WebPage::captureDevicesChanged()
 #endif
 
 #if ENABLE(ENCRYPTED_MEDIA)
-void WebPage::mediaKeySystemWasGranted(uint64_t mediaKeySystemID, CompletionHandler<void()>&& completionHandler)
+void WebPage::mediaKeySystemWasGranted(MediaKeySystemRequestIdentifier mediaKeySystemID, CompletionHandler<void()>&& completionHandler)
 {
     m_mediaKeySystemPermissionRequestManager->mediaKeySystemWasGranted(mediaKeySystemID, WTFMove(completionHandler));
 }
 
-void WebPage::mediaKeySystemWasDenied(uint64_t mediaKeySystemID, String&& message)
+void WebPage::mediaKeySystemWasDenied(MediaKeySystemRequestIdentifier mediaKeySystemID, String&& message)
 {
     m_mediaKeySystemPermissionRequestManager->mediaKeySystemWasDenied(mediaKeySystemID, WTFMove(message));
 }
@@ -6032,7 +6041,6 @@ void WebPage::elementDidFocus(WebCore::Element& element)
             element.document().fullscreenManager().cancelFullscreen();
 #endif
 
-        ++m_currentFocusedElementIdentifier;
         auto information = focusedElementInformation();
         if (!information)
             return;
@@ -6241,12 +6249,12 @@ bool WebPage::canShowMIMEType(const String& mimeType, const Function<bool(const 
     return false;
 }
 
-void WebPage::addTextCheckingRequest(uint64_t requestID, Ref<TextCheckingRequest>&& request)
+void WebPage::addTextCheckingRequest(TextCheckerRequestID requestID, Ref<TextCheckingRequest>&& request)
 {
     m_pendingTextCheckingRequestMap.add(requestID, WTFMove(request));
 }
 
-void WebPage::didFinishCheckingText(uint64_t requestID, const Vector<TextCheckingResult>& result)
+void WebPage::didFinishCheckingText(TextCheckerRequestID requestID, const Vector<TextCheckingResult>& result)
 {
     RefPtr<TextCheckingRequest> request = m_pendingTextCheckingRequestMap.take(requestID);
     if (!request)
@@ -6255,7 +6263,7 @@ void WebPage::didFinishCheckingText(uint64_t requestID, const Vector<TextCheckin
     request->didSucceed(result);
 }
 
-void WebPage::didCancelCheckingText(uint64_t requestID)
+void WebPage::didCancelCheckingText(TextCheckerRequestID requestID)
 {
     RefPtr<TextCheckingRequest> request = m_pendingTextCheckingRequestMap.take(requestID);
     if (!request)
@@ -7260,7 +7268,7 @@ std::optional<WebCore::ElementContext> WebPage::contextForElement(WebCore::Eleme
     if (!frame)
         return std::nullopt;
 
-    return WebCore::ElementContext { element.clientRect(), m_identifier, document.identifier(), document.identifierForElement(element) };
+    return WebCore::ElementContext { element.boundingBoxInRootViewCoordinates(), m_identifier, document.identifier(), document.identifierForElement(element) };
 }
 
 void WebPage::startTextManipulations(Vector<WebCore::TextManipulationController::ExclusionRule>&& exclusionRules, CompletionHandler<void()>&& completionHandler)
@@ -7406,7 +7414,6 @@ void WebPage::synchronizeCORSDisablingPatternsWithNetworkProcess()
 
 void WebPage::isPlayingMediaDidChange(WebCore::MediaProducer::MediaStateFlags state)
 {
-    platformIsPlayingMediaDidChange();
     send(Messages::WebPageProxy::IsPlayingMediaDidChange(state));
 }
 
@@ -7600,7 +7607,7 @@ RemoteRenderingBackendProxy& WebPage::ensureRemoteRenderingBackendProxy()
 }
 #endif
 
-Vector<RefPtr<SandboxExtension>> WebPage::consumeSandboxExtensions(SandboxExtension::HandleArray&& sandboxExtensions)
+Vector<RefPtr<SandboxExtension>> WebPage::consumeSandboxExtensions(Vector<SandboxExtension::Handle>&& sandboxExtensions)
 {
     Vector<RefPtr<SandboxExtension>> dragSandboxExtensions;
     for (auto& sandboxExtension : sandboxExtensions) {
@@ -7689,7 +7696,7 @@ void WebPage::invalidateMediaSessionCoordinator()
 #endif
 
 #if !PLATFORM(COCOA)
-void WebPage::consumeNetworkExtensionSandboxExtensions(const SandboxExtension::HandleArray&)
+void WebPage::consumeNetworkExtensionSandboxExtensions(const Vector<SandboxExtension::Handle>&)
 {
 }
 #endif

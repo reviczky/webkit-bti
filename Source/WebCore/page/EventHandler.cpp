@@ -120,6 +120,10 @@
 #include "PlatformTouchEventIOS.h"
 #endif
 
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
+#include "DOMTimerHoldingTank.h"
+#endif
+
 #if ENABLE(TOUCH_EVENTS)
 #include "TouchEvent.h"
 #include "TouchList.h"
@@ -135,10 +139,6 @@
 
 #if ENABLE(POINTER_LOCK)
 #include "PointerLockController.h"
-#endif
-
-#if PLATFORM(IOS_FAMILY)
-#include "DOMTimerHoldingTank.h"
 #endif
 
 namespace WebCore {
@@ -1778,8 +1778,6 @@ bool EventHandler::handleMousePressEvent(const PlatformMouseEvent& platformMouse
     m_frame.selection().setCaretBlinkingSuspended(true);
 
     bool swallowEvent = !dispatchMouseEvent(eventNames().mousedownEvent, mouseEvent.targetNode(), m_clickCount, platformMouseEvent, FireMouseOverOut::Yes);
-    if (auto page = m_frame.page(); page && swallowEvent)
-        page->chrome().client().didHandleOrPreventMouseDownOrMouseUpEvent();
     m_capturesDragging = !swallowEvent || mouseEvent.scrollbar();
 
     // If the hit testing originally determined the event was in a scrollbar, refetch the MouseEventWithHitTestResults
@@ -1842,9 +1840,6 @@ bool EventHandler::handleMouseDoubleClickEvent(const PlatformMouseEvent& platfor
 
     m_clickCount = platformMouseEvent.clickCount();
     bool swallowMouseUpEvent = !dispatchMouseEvent(eventNames().mouseupEvent, mouseEvent.targetNode(), m_clickCount, platformMouseEvent, FireMouseOverOut::No);
-    if (auto page = m_frame.page(); page && swallowMouseUpEvent)
-        page->chrome().client().didHandleOrPreventMouseDownOrMouseUpEvent();
-
     bool swallowClickEvent = platformMouseEvent.button() != RightButton && mouseEvent.targetNode() == m_clickNode && !dispatchMouseEvent(eventNames().clickEvent, mouseEvent.targetNode(), m_clickCount, platformMouseEvent, FireMouseOverOut::Yes);
 
     if (m_lastScrollbarUnderMouse)
@@ -2148,9 +2143,6 @@ bool EventHandler::handleMouseReleaseEvent(const PlatformMouseEvent& platformMou
         return true;
 
     bool swallowMouseUpEvent = !dispatchMouseEvent(eventNames().mouseupEvent, mouseEvent.targetNode(), m_clickCount, platformMouseEvent, FireMouseOverOut::No);
-    if (auto page = m_frame.page(); page && swallowMouseUpEvent)
-        page->chrome().client().didHandleOrPreventMouseDownOrMouseUpEvent();
-
     bool contextMenuEvent = platformMouseEvent.button() == RightButton;
 
     auto nodeToClick = targetNodeForClickEvent(m_clickNode.get(), mouseEvent.targetNode());
@@ -3528,13 +3520,6 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
         }
     }
 
-    if (auto* activeModalDialog = m_frame.document()->activeModalDialog()) {
-        if (initialKeyEvent.type() == PlatformEvent::KeyDown && initialKeyEvent.windowsVirtualKeyCode() == VK_ESCAPE) {
-            activeModalDialog->cancel();
-            return true;
-        }
-    }
-
 #if ENABLE(FULLSCREEN_API)
     if (m_frame.document()->fullscreenManager().isFullscreen()) {
         if (initialKeyEvent.type() == PlatformEvent::KeyDown && initialKeyEvent.windowsVirtualKeyCode() == VK_ESCAPE) {
@@ -3636,7 +3621,7 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     if (accessibilityPreventsEventPropagation(keydown))
         keydown->stopPropagation();
 
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
     DeferDOMTimersForScope deferralScope { m_frame.document()->quirks().needsDeferKeyDownAndKeyPressTimersUntilNextEditingCommand() };
 #endif
 
@@ -3815,7 +3800,10 @@ void EventHandler::defaultKeyboardEventHandler(KeyboardEvent& event)
         m_frame.editor().handleKeyboardEvent(event);
         if (event.defaultHandled())
             return;
-        if (event.keyIdentifier() == "U+0009")
+        if (event.key() == "Escape") {
+            if (RefPtr activeModalDialog = m_frame.document()->activeModalDialog())
+                activeModalDialog->queueCancelTask();
+        } else if (event.keyIdentifier() == "U+0009")
             defaultTabEventHandler(event);
         else if (event.keyIdentifier() == "U+0008")
             defaultBackspaceEventHandler(event);
@@ -4362,7 +4350,7 @@ void EventHandler::defaultTabEventHandler(KeyboardEvent& event)
         event.setDefaultHandled();
 }
 
-void EventHandler::sendScrollEvent()
+void EventHandler::scheduleScrollEvent()
 {
     Ref<Frame> protectedFrame(m_frame);
     setFrameWasScrolledByUser();

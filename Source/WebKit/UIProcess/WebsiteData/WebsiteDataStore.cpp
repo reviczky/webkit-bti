@@ -66,6 +66,10 @@
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
 
+#if OS(DARWIN)
+#include <wtf/spi/darwin/OSVariantSPI.h>
+#endif
+
 #if ENABLE(NETSCAPE_PLUGIN_API)
 #include "PluginProcessManager.h"
 #endif
@@ -257,6 +261,8 @@ void WebsiteDataStore::resolveDirectoriesIfNecessary()
         m_resolvedConfiguration->setNetworkCacheDirectory(resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration->networkCacheDirectory()));
     if (!m_configuration->resourceLoadStatisticsDirectory().isEmpty())
         m_resolvedConfiguration->setResourceLoadStatisticsDirectory(resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration->resourceLoadStatisticsDirectory()));
+    if (!m_configuration->privateClickMeasurementStorageDirectory().isEmpty())
+        m_resolvedConfiguration->setPrivateClickMeasurementStorageDirectory(resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration->privateClickMeasurementStorageDirectory()));
     if (!m_configuration->serviceWorkerRegistrationDirectory().isEmpty() && m_resolvedConfiguration->serviceWorkerRegistrationDirectory().isEmpty())
         m_resolvedConfiguration->setServiceWorkerRegistrationDirectory(resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration->serviceWorkerRegistrationDirectory()));
     if (!m_configuration->javaScriptConfigurationDirectory().isEmpty())
@@ -1722,21 +1728,51 @@ void WebsiteDataStore::removeMediaKeys(const String& mediaKeysStorageDirectory, 
     }
 }
 
-void WebsiteDataStore::getNetworkProcessConnection(WebProcessProxy& webProcessProxy, CompletionHandler<void(const NetworkProcessConnectionInfo&)>&& reply)
+void WebsiteDataStore::getNetworkProcessConnection(WebProcessProxy& webProcessProxy, CompletionHandler<void(const NetworkProcessConnectionInfo&)>&& reply, ShouldRetryOnFailure shouldRetryOnFailure)
 {
-    networkProcess().getNetworkProcessConnection(webProcessProxy, [weakThis = makeWeakPtr(*this), webProcessProxy = makeWeakPtr(webProcessProxy), reply = WTFMove(reply)] (auto& connectionInfo) mutable {
+    auto& networkProcessProxy = networkProcess();
+    networkProcessProxy.getNetworkProcessConnection(webProcessProxy, [weakThis = makeWeakPtr(*this), networkProcessProxy = makeWeakPtr(networkProcessProxy), webProcessProxy = makeWeakPtr(webProcessProxy), reply = WTFMove(reply), shouldRetryOnFailure] (auto& connectionInfo) mutable {
         if (UNLIKELY(!IPC::Connection::identifierIsValid(connectionInfo.identifier()))) {
+            auto logError = [networkProcessProxy, webProcessProxy]() {
+#if OS(DARWIN)
+                if (!os_variant_allows_internal_security_policies("com.apple.WebKit"))
+                    return;
+
+                if (!webProcessProxy)
+                    return;
+
+                int networkProcessIdentifier = 0;
+                String networkProcessState = "Unknown"_s;
+                if (networkProcessProxy) {
+                    networkProcessIdentifier = networkProcessProxy->processIdentifier();
+                    networkProcessState = networkProcessProxy->stateString();
+                }
+                RELEASE_ASSERT_NOT_REACHED_WITH_MESSAGE("WebsiteDataStore::getNetworkProcessConnection: Failed to get connection - networkProcessProxy=%p, networkProcessIdentifier=%d, processState=%s, webProcessProxy=%p, webProcessIdentifier=%d", networkProcessProxy.get(), networkProcessIdentifier, networkProcessState.utf8().data(), webProcessProxy.get(), webProcessProxy->processIdentifier());
+#endif
+            };
+
+            if (shouldRetryOnFailure == ShouldRetryOnFailure::No || !webProcessProxy) {
+                logError();
+                reply({ });
+                return;
+            }
+
             // Retry on the next RunLoop iteration because we may be inside the WebsiteDataStore destructor.
-            RunLoop::main().dispatch([weakThis = WTFMove(weakThis), webProcessProxy = WTFMove(webProcessProxy), reply = WTFMove(reply)] () mutable {
+            RunLoop::main().dispatch([weakThis = WTFMove(weakThis), networkProcessProxy = WTFMove(networkProcessProxy), webProcessProxy = WTFMove(webProcessProxy), reply = WTFMove(reply), logError = WTFMove(logError)] () mutable {
                 if (RefPtr<WebsiteDataStore> strongThis = weakThis.get(); strongThis && webProcessProxy) {
-                    strongThis->terminateNetworkProcess();
-                    RELEASE_LOG_ERROR(Process, "getNetworkProcessConnection: Failed first attempt, retrying");
-                    strongThis->networkProcess().getNetworkProcessConnection(*webProcessProxy, WTFMove(reply));
-                } else
+                    // Terminate if it is the same network process.
+                    if (networkProcessProxy && strongThis->m_networkProcess == networkProcessProxy.get())
+                        strongThis->terminateNetworkProcess();
+                    RELEASE_LOG_ERROR(Process, "getNetworkProcessConnection: Failed to get connection to network process, will retry ...");
+                    strongThis->getNetworkProcessConnection(*webProcessProxy, WTFMove(reply), ShouldRetryOnFailure::No);
+                } else {
+                    logError();
                     reply({ });
+                }
             });
             return;
         }
+
         reply(connectionInfo);
     });
 }
@@ -1930,11 +1966,18 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
 
     resolveDirectoriesIfNecessary();
 
-    auto resourceLoadStatisticsDirectory = m_configuration->resourceLoadStatisticsDirectory();
+    auto resourceLoadStatisticsDirectory = m_resolvedConfiguration->resourceLoadStatisticsDirectory();
     SandboxExtension::Handle resourceLoadStatisticsDirectoryHandle;
     if (!resourceLoadStatisticsDirectory.isEmpty()) {
         if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(resourceLoadStatisticsDirectory))
             resourceLoadStatisticsDirectoryHandle = WTFMove(*handle);
+    }
+
+    auto privateClickMeasurementStorageDirectory = m_resolvedConfiguration->privateClickMeasurementStorageDirectory();
+    SandboxExtension::Handle privateClickMeasurementStorageDirectoryHandle;
+    if (!privateClickMeasurementStorageDirectory.isEmpty()) {
+        if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(privateClickMeasurementStorageDirectory))
+            privateClickMeasurementStorageDirectoryHandle = WTFMove(*handle);
     }
 
     auto networkCacheDirectory = resolvedNetworkCacheDirectory();
@@ -1966,6 +2009,8 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     ResourceLoadStatisticsParameters resourceLoadStatisticsParameters = {
         WTFMove(resourceLoadStatisticsDirectory),
         WTFMove(resourceLoadStatisticsDirectoryHandle),
+        WTFMove(privateClickMeasurementStorageDirectory),
+        WTFMove(privateClickMeasurementStorageDirectoryHandle),
         resourceLoadStatisticsEnabled(),
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
         isItpStateExplicitlySet(),

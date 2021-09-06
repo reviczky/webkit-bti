@@ -44,6 +44,7 @@
 #include "FrameView.h"
 #include "HTMLAreaElement.h"
 #include "HTMLBodyElement.h"
+#include "HTMLDialogElement.h"
 #include "HTMLElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLSlotElement.h"
@@ -85,7 +86,7 @@
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/TextStream.h>
 
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
 #include "ContentChangeObserver.h"
 #endif
 
@@ -1125,6 +1126,9 @@ bool Node::canStartSelection() const
 {
     if (hasEditableStyle())
         return true;
+
+    if (isInert())
+        return false;
 
     if (renderer()) {
         const RenderStyle& style = renderer()->style();
@@ -2481,11 +2485,13 @@ void Node::defaultEventHandler(Event& event)
     } else if (is<TouchEvent>(event) && eventNames().isTouchRelatedEventType(eventType, *this)) {
         // Capture the target node's visibility state before dispatching touchStart.
         if (is<Element>(*this) && eventType == eventNames().touchstartEvent) {
-            auto& contentChangeObserver = document().contentChangeObserver(); 
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
+            auto& contentChangeObserver = document().contentChangeObserver();
             if (ContentChangeObserver::isVisuallyHidden(*this))
                 contentChangeObserver.setHiddenTouchTarget(downcast<Element>(*this));
             else
                 contentChangeObserver.resetHiddenTouchTarget();
+#endif
         }
 
         RenderObject* renderer = this->renderer();
@@ -2615,6 +2621,30 @@ void* Node::opaqueRootSlow() const
         node = nextNode;
     }
     return const_cast<void*>(static_cast<const void*>(node));
+}
+
+bool Node::isInert() const
+{
+    if (!isConnected())
+        return true;
+
+    if (this != &document() && this != document().documentElement()) {
+        Node* activeModalDialog = document().activeModalDialog();
+        if (activeModalDialog && !activeModalDialog->containsIncludingShadowDOM(this))
+            return true;
+    }
+
+    if (document().settings().inertAttributeEnabled()) {
+        for (RefPtr element = this; element; element = element->parentElementInComposedTree()) {
+            if (is<HTMLElement>(*element) && downcast<HTMLElement>(*element).hasAttribute(HTMLNames::inertAttr))
+                return true;
+        }
+    }
+
+    if (!document().frame() || !document().frame()->ownerElement())
+        return false;
+
+    return document().frame()->ownerElement()->isInert();
 }
 
 template<> ContainerNode* parent<Tree>(const Node& node)

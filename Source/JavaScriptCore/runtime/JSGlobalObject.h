@@ -141,8 +141,8 @@ constexpr bool typeExposedByDefault = true;
     macro(String, string, stringObject, StringObject, String, object, typeExposedByDefault) \
     macro(JSPromise, promise, promise, JSPromise, Promise, object, typeExposedByDefault) \
     macro(BigInt, bigInt, bigIntObject, BigIntObject, BigInt, object, typeExposedByDefault) \
-    macro(WeakObjectRef, weakObjectRef, weakObjectRef, JSWeakObjectRef, WeakRef, object, Options::useWeakRefs()) \
-    macro(FinalizationRegistry, finalizationRegistry, finalizationRegistry, JSFinalizationRegistry, FinalizationRegistry, object, Options::useWeakRefs()) \
+    macro(WeakObjectRef, weakObjectRef, weakObjectRef, JSWeakObjectRef, WeakRef, object, typeExposedByDefault) \
+    macro(FinalizationRegistry, finalizationRegistry, finalizationRegistry, JSFinalizationRegistry, FinalizationRegistry, object, typeExposedByDefault) \
 
 
 #define FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(macro) \
@@ -323,6 +323,9 @@ public:
     LazyProperty<JSGlobalObject, Structure> m_segmentsStructure;
     LazyClassStructure m_dateTimeFormatStructure;
     LazyClassStructure m_numberFormatStructure;
+
+    LazyProperty<JSGlobalObject, Structure> m_calendarStructure;
+    LazyProperty<JSGlobalObject, Structure> m_durationStructure;
 
     WriteBarrier<NullGetterFunction> m_nullGetterFunction;
     WriteBarrier<NullSetterFunction> m_nullSetterFunction;
@@ -869,6 +872,9 @@ public:
     JSObject* dateTimeFormatPrototype() { return m_dateTimeFormatStructure.prototype(this); }
     JSObject* numberFormatConstructor() { return m_numberFormatStructure.constructor(this); }
     JSObject* numberFormatPrototype() { return m_numberFormatStructure.prototype(this); }
+
+    Structure* calendarStructure() { return m_calendarStructure.get(this); }
+    Structure* durationStructure() { return m_durationStructure.get(this); }
 
     JS_EXPORT_PRIVATE void setRemoteDebuggingEnabled(bool);
     JS_EXPORT_PRIVATE bool remoteDebuggingEnabled() const;

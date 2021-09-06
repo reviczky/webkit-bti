@@ -63,6 +63,7 @@
 #include "Page.h"
 #include "PageConfiguration.h"
 #include "PaymentCoordinatorClient.h"
+#include "PermissionController.h"
 #include "PluginInfoProvider.h"
 #include "ProgressTrackerClient.h"
 #include "SecurityOriginData.h"
@@ -816,7 +817,7 @@ void EmptyFrameLoaderClient::dispatchShow()
 {
 }
 
-void EmptyFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceResponse&, const ResourceRequest&, PolicyCheckIdentifier, const String&, FramePolicyFunction&&)
+void EmptyFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceResponse&, const ResourceRequest&, PolicyCheckIdentifier, const String&, BrowsingContextGroupSwitchDecision, FramePolicyFunction&&)
 {
 }
 
@@ -1193,7 +1194,8 @@ PageConfiguration pageConfigurationWithEmptyClients(PAL::SessionID sessionID)
         makeUniqueRef<EmptyFrameLoaderClient>(),
         makeUniqueRef<DummySpeechRecognitionProvider>(),
         makeUniqueRef<EmptyMediaRecorderProvider>(),
-        EmptyBroadcastChannelRegistry::create()
+        EmptyBroadcastChannelRegistry::create(),
+        DummyPermissionController::create()
     };
 
     static NeverDestroyed<EmptyChromeClient> dummyChromeClient;

@@ -129,6 +129,7 @@
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
+#include <WebCore/ScriptExecutionContext.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/ServiceWorkerContextData.h>
 #include <WebCore/Settings.h>
@@ -522,6 +523,8 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     WebCore::RuntimeEnabledFeatures::sharedFeatures().setAttrStyleEnabled(parameters.attrStyleEnabled);
     
     commonVM().setGlobalConstRedeclarationShouldThrow(parameters.shouldThrowExceptionForGlobalConstantRedeclaration);
+
+    ScriptExecutionContext::setCrossOriginMode(parameters.crossOriginMode);
 
 #if ENABLE(SERVICE_CONTROLS)
     setEnabledServices(parameters.hasImageServices, parameters.hasSelectionServices, parameters.hasRichContentServices);
@@ -924,7 +927,7 @@ WebPageGroupProxy* WebProcess::webPageGroup(PageGroup* pageGroup)
     return 0;
 }
 
-WebPageGroupProxy* WebProcess::webPageGroup(uint64_t pageGroupID)
+WebPageGroupProxy* WebProcess::webPageGroup(PageGroupIdentifier pageGroupID)
 {
     return m_pageGroupMap.get(pageGroupID);
 }
@@ -1081,8 +1084,10 @@ static NetworkProcessConnectionInfo getNetworkProcessConnection(IPC::Connection&
             // Connection to UIProcess has been severed, exit cleanly.
             exit(0);
         }
-        if (!connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), Messages::WebProcessProxy::GetNetworkProcessConnection::Reply(connectionInfo), 0))
+        if (!connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), Messages::WebProcessProxy::GetNetworkProcessConnection::Reply(connectionInfo), 0)) {
+            RELEASE_LOG_ERROR(Process, "getNetworkProcessConnection: Failed to send or receive message");
             return false;
+        }
         return IPC::Connection::identifierIsValid(connectionInfo.identifier());
     };
 
@@ -1886,7 +1891,7 @@ LibWebRTCNetwork& WebProcess::libWebRTCNetwork()
 }
 
 #if ENABLE(SERVICE_WORKER)
-void WebProcess::establishWorkerContextConnectionToNetworkProcess(uint64_t pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, RegistrableDomain&& registrableDomain, ServiceWorkerInitializationData&& initializationData, CompletionHandler<void()>&& completionHandler)
+void WebProcess::establishWorkerContextConnectionToNetworkProcess(PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, RegistrableDomain&& registrableDomain, ServiceWorkerInitializationData&& initializationData, CompletionHandler<void()>&& completionHandler)
 {
     // We are in the Service Worker context process and the call below establishes our connection to the Network Process
     // by calling ensureNetworkProcessConnection. SWContextManager needs to use the same underlying IPC::Connection as the

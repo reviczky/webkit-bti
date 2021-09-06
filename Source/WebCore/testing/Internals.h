@@ -818,6 +818,15 @@ public:
     };
     void simulateEventForWebGLContext(SimulatedWebGLContextEvent, WebGLRenderingContext&);
     bool hasLowAndHighPowerGPUs();
+
+    enum class RequestedGPU {
+        Default,
+        LowPower,
+        HighPerformance
+    };
+    RequestedGPU requestedGPU(WebGLRenderingContext&);
+    bool requestedMetal(WebGLRenderingContext&);
+    bool platformSupportsMetal(bool isWebGL2);
 #endif
 
     void setPageVisibility(bool isVisible);
@@ -972,6 +981,8 @@ public:
     MediaSessionState mediaSessionState(HTMLMediaElement&);
 
     size_t mediaElementCount() const;
+
+    void setMediaElementVolumeLocked(HTMLMediaElement&, bool);
 #endif
 
     void setCaptureExtraNetworkLoadMetricsEnabled(bool);
@@ -1153,6 +1164,7 @@ public:
 
         using ArtworkImagePromise = DOMPromiseDeferred<IDLInterface<ImageData>>;
     void loadArtworkImage(String&&, ArtworkImagePromise&&);
+    ExceptionOr<Vector<String>> platformSupportedCommands() const;
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
     ExceptionOr<void> registerMockMediaSessionCoordinator(ScriptExecutionContext&, RefPtr<StringCallback>&&);
