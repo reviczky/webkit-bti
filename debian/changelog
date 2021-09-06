@@ -6,6 +6,8 @@ webkit2gtk (2.33.90-1) UNRELEASED; urgency=medium
     + Update copyright information of all files.
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing override.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 06 Sep 2021 16:36:54 +0200
 
