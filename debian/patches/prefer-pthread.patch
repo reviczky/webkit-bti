@@ -8,7 +8,7 @@ Index: webkitgtk/Source/cmake/OptionsGTK.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/OptionsGTK.cmake
 +++ webkitgtk/Source/cmake/OptionsGTK.cmake
-@@ -12,6 +12,8 @@ set(WTF_LIBRARY_TYPE OBJECT)
+@@ -8,6 +8,8 @@ SET_PROJECT_VERSION(2 33 90)
  
  set(USER_AGENT_BRANDING "" CACHE STRING "Branding to add to user agent string")
  

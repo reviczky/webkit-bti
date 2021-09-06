@@ -1,6 +1,7 @@
 webkit2gtk (2.33.90-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * Refresh all patches and drop debian/patches/fix-gtkdoc-build.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 06 Sep 2021 16:36:54 +0200
 
