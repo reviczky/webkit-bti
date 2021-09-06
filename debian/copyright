@@ -34,7 +34,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2007-2008 Alp Toker <alp@atoker.com>
            2007-2009 Torch Mobile Inc
            2008 Alex Mathews <possessedpenguinbob@gmail.com>
-           2008 Brent Fulgham <bfulgham@gmail.com>
            2008 Christian Dywan <christian@imendio.com>
            2008 Collin Jackson <collinj@webkit.org>
            2008 Dirk Schulze <vbs85@gmx.de>
@@ -133,11 +132,13 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2018 Yusuke Suzuki <yusukesuzuki@slowstart.org>
            2018 mce sys Ltd
            2019 Carlos Eduardo Ramalho <cadubentzen@gmail.com>
+           2019 the V8 project authors
            2019-2021 Alexey Shvayka <shvaikalesh@gmail.com>
            2020 Cloudinary Inc
            2020 Darryl Pogue <darryl@dpogue.ca>
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 WikiMedia Foundation. All Rights Reserve
+           2021 Purism SPC
            2021 Tyler Wilcock <twilco.o@protonmail.com>
 License: BSD-2-clause
 Comment:
@@ -157,6 +158,7 @@ Files: Source/ThirdParty/ANGLE/include/GLES/*
        Source/ThirdParty/ANGLE/src/tests/deqp_support/*
        Source/ThirdParty/ANGLE/src/tests/test_utils/third_party/*
        Source/ThirdParty/ANGLE/util/android/third_party/*
+       Source/WTF/wtf/Span.h
 Copyright: 2008-2017 The Khronos Group Inc
            2010, 2014, 2018-2019 The Android Open Source Project
            2015-2016 LunarG Inc
@@ -230,7 +232,12 @@ Files: Source/JavaScriptCore/API/*
        Source/WebCore/dom/*
        Source/WebCore/editing/*
        Source/WebCore/history/CachedFramePlatformData.h
-       Source/WebCore/html/*
+       Source/WebCore/html/HTMLTableRowsCollection.cpp
+       Source/WebCore/html/HTMLTableRowsCollection.h
+       Source/WebCore/html/ImageData.cpp
+       Source/WebCore/html/ImageData.h
+       Source/WebCore/html/forms/*
+       Source/WebCore/html/shadow/*
        Source/WebCore/inspector/*
        Source/WebCore/loader/DocumentLoader.cpp
        Source/WebCore/loader/DocumentLoader.h
@@ -272,6 +279,8 @@ Files: Source/JavaScriptCore/API/*
        Source/WebInspectorUI/UserInterface/Models/*
        Source/WebInspectorUI/UserInterface/Views/*
        Source/WebKit/UIProcess/Launcher/playstation/ProcessLauncherPlayStation.cpp
+       Source/bmalloc/libpas/src/libpas/*
+       Source/bmalloc/libpas/src/test/*
        Tools/TestWebKitAPI/Tests/WTF/*
 Copyright: 2003, 2005-2021 Apple Inc
            2006 Alexey Proskuryakov
@@ -367,6 +376,7 @@ Files: Source/WebCore/Modules/mediastream/MediaDevices.cpp
        Source/WebCore/Modules/mediastream/UserMediaRequest.h
        Source/WebCore/page/EventSource.cpp
        Source/WebCore/page/EventSource.h
+       Source/WebCore/page/UserMediaRequestIdentifier.h
        Source/WebCore/platform/mediastream/IceCandidate.h
        Source/WebCore/platform/mediastream/MediaEndpointConfiguration.cpp
        Source/WebCore/platform/mediastream/MediaEndpointConfiguration.h
@@ -381,7 +391,7 @@ Files: Source/WebCore/Modules/mediastream/MediaDevices.cpp
        Source/WebCore/platform/mediastream/RealtimeMediaSourceCenter.h
        Source/WebCore/platform/mock/*
 Copyright: 2009, 2011-2012, 2015-2016 Ericsson AB
-           2010, 2013-2019 Apple Inc
+           2010, 2013-2019, 2021 Apple Inc
            2011 Code Aurora Forum
            2012 Google Inc
            2013 Nokia
@@ -796,7 +806,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WebCore/*
        Tools/TestWebKitAPI/WTFStringUtilities.h
 Copyright: 2004-2021 Apple Inc
-           2005-2013, 2015, 2018-2021 Google Inc
+           2005-2021 Google Inc
            2006-2008, 2010, 2012 the V8 project authors
            2007-2009 Torch Mobile Inc
            2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
@@ -1086,6 +1096,10 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/JavaScriptCore/runtime/StringRecursionChecker.cpp
        Source/JavaScriptCore/runtime/StringRecursionChecker.h
        Source/JavaScriptCore/runtime/SymbolObject.h
+       Source/JavaScriptCore/runtime/TemporalNow.cpp
+       Source/JavaScriptCore/runtime/TemporalNow.h
+       Source/JavaScriptCore/runtime/TemporalObject.cpp
+       Source/JavaScriptCore/runtime/TemporalObject.h
        Source/JavaScriptCore/testRegExp.cpp
        Source/JavaScriptCore/yarr/hasher.py
        Source/WTF/config.h
@@ -1109,7 +1123,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WTF/wtf/MainThreadData.h
        Source/WTF/wtf/Noncopyable.h
        Source/WTF/wtf/NumberOfCores.h
-       Source/WTF/wtf/Optional.h
        Source/WTF/wtf/RefCounted.cpp
        Source/WTF/wtf/RefCounted.h
        Source/WTF/wtf/RefCountedLeakCounter.cpp
@@ -1143,7 +1156,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WTF/wtf/text/WTFString.h
        Source/WTF/wtf/text/icu/TextBreakIteratorICU.h
        Source/WTF/wtf/text/unix/TextBreakIteratorInternalICUUnix.cpp
-       Source/WTF/wtf/unix/LanguageUnix.cpp
+       Source/WTF/wtf/unix/*
        Source/WebCore/Modules/geolocation/*
        Source/WebCore/Modules/webaudio/MediaStreamAudioSourceGStreamer.cpp
        Source/WebCore/Modules/websockets/WebSocketFrame.cpp
@@ -1654,7 +1667,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/IntSizeHash.h
        Source/WebCore/platform/graphics/Latin1TextIterator.h
        Source/WebCore/platform/graphics/PathTraversalState.cpp
-       Source/WebCore/platform/graphics/SurrogatePairAwareTextIterator.cpp
        Source/WebCore/platform/graphics/SurrogatePairAwareTextIterator.h
        Source/WebCore/platform/graphics/TextRun.h
        Source/WebCore/platform/graphics/WidthIterator.cpp
@@ -1724,14 +1736,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/gtk/*
        Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp
        Source/WebCore/platform/mediastream/gstreamer/*
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoCommon.cpp
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoCommon.h
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.h
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoder.h
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
-       Source/WebCore/platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.h
+       Source/WebCore/platform/mediastream/libwebrtc/gstreamer/*
        Source/WebCore/platform/network/FormData.cpp
        Source/WebCore/platform/network/FormData.h
        Source/WebCore/platform/network/FormDataBuilder.cpp
@@ -2390,6 +2395,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/WebKitJavascriptResultPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitMediaKeySystemPermissionRequest.cpp
        Source/WebKit/UIProcess/API/glib/WebKitMediaKeySystemPermissionRequestPrivate.h
+       Source/WebKit/UIProcess/API/glib/WebKitMemoryPressureSettings.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitMemoryPressureSettingsPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitMimeInfo.cpp
        Source/WebKit/UIProcess/API/glib/WebKitNavigationAction.cpp
        Source/WebKit/UIProcess/API/glib/WebKitNavigationActionPrivate.h
@@ -2482,6 +2489,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/gtk/WebKitInstallMissingMediaPluginsPermissionRequest.h
        Source/WebKit/UIProcess/API/gtk/WebKitJavascriptResult.h
        Source/WebKit/UIProcess/API/gtk/WebKitMediaKeySystemPermissionRequest.h
+       Source/WebKit/UIProcess/API/gtk/WebKitMemoryPressureSettings.h
        Source/WebKit/UIProcess/API/gtk/WebKitMimeInfo.h
        Source/WebKit/UIProcess/API/gtk/WebKitNavigationAction.h
        Source/WebKit/UIProcess/API/gtk/WebKitNavigationPolicyDecision.h
@@ -2638,7 +2646,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2007-2009 Holger Hans Peter Freyther
            2007-2009 Torch Mobile Inc
            2007-2011, 2013-2014, 2017 Collabora Ltd
-           2007-2014 Google Inc
+           2007-2021 Google Inc
            2008 Alex Mathews <possessedpenguinbob@gmail.com>
            2008 Apple Ltd
            2008 David Levin <levin@chromium.org>
@@ -2708,10 +2716,10 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2015 Jordan Harband <ljharb@gmail.com>
            2015 Yusuke Suzuki<utatane.tea@gmail.com>
            2015-2016 Canon Inc
-           2015-2020 Metrological Group B.V
+           2015-2021 Metrological Group B.V
            2017 Aidan Holm <aidanholm@gmail.com>
            2017 Endless Mobile Inc
-           2017, 2020 Sony Interactive Entertainment
+           2017, 2020-2021 Sony Interactive Entertainment
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
            2020 Noam Rosenthal <noam@webkit.org>
            2020 WikiMedia Inc
