@@ -1,4 +1,4 @@
-webkit2gtk (2.33.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.33.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches and drop debian/patches/fix-gtkdoc-build.
@@ -9,7 +9,7 @@ webkit2gtk (2.33.90-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     + Update source-is-missing override.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 06 Sep 2021 16:36:54 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 06 Sep 2021 19:05:29 +0200
 
 webkit2gtk (2.33.3-1) experimental; urgency=medium
 
