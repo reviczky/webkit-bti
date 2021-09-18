@@ -1,6 +1,8 @@
 webkit2gtk (2.33.91-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing override.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 18 Sep 2021 13:31:20 +0200
 
