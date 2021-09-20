@@ -6,3 +6,4 @@ dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-mips-page-size.patch
 fix-ftbfs-hurd.patch
+force-single-process.patch
