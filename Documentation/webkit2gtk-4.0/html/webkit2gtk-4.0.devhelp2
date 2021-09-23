@@ -143,6 +143,7 @@
     <keyword type="enum" name="enum WebKitCacheModel" link="WebKitWebContext.html#WebKitCacheModel"/>
     <keyword type="enum" name="enum WebKitProcessModel" link="WebKitWebContext.html#WebKitProcessModel" since="2.4"/>
     <keyword type="property" name="The “local-storage-directory” property" link="WebKitWebContext.html#WebKitWebContext--local-storage-directory"/>
+    <keyword type="property" name="The “memory-pressure-settings” property" link="WebKitWebContext.html#WebKitWebContext--memory-pressure-settings"/>
     <keyword type="property" name="The “process-swap-on-cross-site-navigation-enabled” property" link="WebKitWebContext.html#WebKitWebContext--process-swap-on-cross-site-navigation-enabled"/>
     <keyword type="property" name="The “use-system-appearance-for-scrollbars” property" link="WebKitWebContext.html#WebKitWebContext--use-system-appearance-for-scrollbars"/>
     <keyword type="property" name="The “website-data-manager” property" link="WebKitWebContext.html#WebKitWebContext--website-data-manager"/>
@@ -229,6 +230,15 @@
     <keyword type="function" name="webkit_web_view_set_input_method_context ()" link="WebKitWebView.html#webkit-web-view-set-input-method-context" since="2.28"/>
     <keyword type="function" name="webkit_web_view_get_input_method_context ()" link="WebKitWebView.html#webkit-web-view-get-input-method-context" since="2.28"/>
     <keyword type="function" name="webkit_web_view_get_website_policies ()" link="WebKitWebView.html#webkit-web-view-get-website-policies" since="2.30"/>
+    <keyword type="function" name="webkit_web_view_get_is_web_process_responsive ()" link="WebKitWebView.html#webkit-web-view-get-is-web-process-responsive"/>
+    <keyword type="function" name="webkit_web_view_terminate_web_process ()" link="WebKitWebView.html#webkit-web-view-terminate-web-process" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_set_cors_allowlist ()" link="WebKitWebView.html#webkit-web-view-set-cors-allowlist" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_get_camera_capture_state ()" link="WebKitWebView.html#webkit-web-view-get-camera-capture-state" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_get_microphone_capture_state ()" link="WebKitWebView.html#webkit-web-view-get-microphone-capture-state" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_set_camera_capture_state ()" link="WebKitWebView.html#webkit-web-view-set-camera-capture-state" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_set_microphone_capture_state ()" link="WebKitWebView.html#webkit-web-view-set-microphone-capture-state" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_get_display_capture_state ()" link="WebKitWebView.html#webkit-web-view-get-display-capture-state" since="2.34"/>
+    <keyword type="function" name="webkit_web_view_set_display_capture_state ()" link="WebKitWebView.html#webkit-web-view-set-display-capture-state" since="2.34"/>
     <keyword type="function" name="webkit_javascript_result_ref ()" link="WebKitWebView.html#webkit-javascript-result-ref"/>
     <keyword type="function" name="webkit_javascript_result_unref ()" link="WebKitWebView.html#webkit-javascript-result-unref"/>
     <keyword type="function" name="webkit_javascript_result_get_global_context ()" link="WebKitWebView.html#webkit-javascript-result-get-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>
@@ -255,6 +265,7 @@
     <keyword type="enum" name="enum WebKitSnapshotRegion" link="WebKitWebView.html#WebKitSnapshotRegion"/>
     <keyword type="enum" name="enum WebKitWebProcessTerminationReason" link="WebKitWebView.html#WebKitWebProcessTerminationReason" since="2.20"/>
     <keyword type="enum" name="enum WebKitAutoplayPolicy" link="WebKitWebView.html#WebKitAutoplayPolicy" since="2.30"/>
+    <keyword type="enum" name="enum WebKitMediaCaptureState" link="WebKitWebView.html#WebKitMediaCaptureState" since="2.34"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_CUT" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-CUT:CAPS"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_COPY" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-COPY:CAPS"/>
     <keyword type="macro" name="WEBKIT_EDITING_COMMAND_PASTE" link="WebKitWebView.html#WEBKIT-EDITING-COMMAND-PASTE:CAPS"/>
@@ -269,6 +280,8 @@
     <keyword type="enum" name="enum WebKitScriptDialogType" link="WebKitWebView.html#WebKitScriptDialogType"/>
     <keyword type="struct" name="WebKitWebViewSessionState" link="WebKitWebView.html#WebKitWebViewSessionState-struct"/>
     <keyword type="property" name="The “automation-presentation-type” property" link="WebKitWebView.html#WebKitWebView--automation-presentation-type"/>
+    <keyword type="property" name="The “camera-capture-state” property" link="WebKitWebView.html#WebKitWebView--camera-capture-state"/>
+    <keyword type="property" name="The “display-capture-state” property" link="WebKitWebView.html#WebKitWebView--display-capture-state"/>
     <keyword type="property" name="The “editable” property" link="WebKitWebView.html#WebKitWebView--editable"/>
     <keyword type="property" name="The “estimated-load-progress” property" link="WebKitWebView.html#WebKitWebView--estimated-load-progress"/>
     <keyword type="property" name="The “favicon” property" link="WebKitWebView.html#WebKitWebView--favicon"/>
@@ -277,6 +290,8 @@
     <keyword type="property" name="The “is-loading” property" link="WebKitWebView.html#WebKitWebView--is-loading"/>
     <keyword type="property" name="The “is-muted” property" link="WebKitWebView.html#WebKitWebView--is-muted"/>
     <keyword type="property" name="The “is-playing-audio” property" link="WebKitWebView.html#WebKitWebView--is-playing-audio"/>
+    <keyword type="property" name="The “is-web-process-responsive” property" link="WebKitWebView.html#WebKitWebView--is-web-process-responsive"/>
+    <keyword type="property" name="The “microphone-capture-state” property" link="WebKitWebView.html#WebKitWebView--microphone-capture-state"/>
     <keyword type="property" name="The “page-id” property" link="WebKitWebView.html#WebKitWebView--page-id"/>
     <keyword type="property" name="The “related-view” property" link="WebKitWebView.html#WebKitWebView--related-view"/>
     <keyword type="property" name="The “settings” property" link="WebKitWebView.html#WebKitWebView--settings"/>
@@ -325,14 +340,18 @@
     <keyword type="function" name="webkit_authentication_request_set_proposed_credential ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-set-proposed-credential" since="2.30"/>
     <keyword type="function" name="webkit_authentication_request_get_realm ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-realm" since="2.2"/>
     <keyword type="function" name="webkit_authentication_request_get_scheme ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-scheme" since="2.2"/>
+    <keyword type="function" name="webkit_authentication_request_get_certificate_pin_flags ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-get-certificate-pin-flags" since="2.34"/>
     <keyword type="function" name="webkit_authentication_request_is_for_proxy ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-is-for-proxy" since="2.2"/>
     <keyword type="function" name="webkit_credential_new ()" link="WebKitAuthenticationRequest.html#webkit-credential-new" since="2.2"/>
+    <keyword type="function" name="webkit_credential_new_for_certificate_pin ()" link="WebKitAuthenticationRequest.html#webkit-credential-new-for-certificate-pin" since="2.34"/>
+    <keyword type="function" name="webkit_credential_new_for_certificate ()" link="WebKitAuthenticationRequest.html#webkit-credential-new-for-certificate" since="2.34"/>
     <keyword type="function" name="webkit_credential_copy ()" link="WebKitAuthenticationRequest.html#webkit-credential-copy" since="2.2"/>
     <keyword type="function" name="webkit_credential_free ()" link="WebKitAuthenticationRequest.html#webkit-credential-free" since="2.2"/>
     <keyword type="function" name="webkit_credential_get_password ()" link="WebKitAuthenticationRequest.html#webkit-credential-get-password" since="2.2"/>
     <keyword type="function" name="webkit_credential_get_persistence ()" link="WebKitAuthenticationRequest.html#webkit-credential-get-persistence" since="2.2"/>
     <keyword type="function" name="webkit_credential_get_username ()" link="WebKitAuthenticationRequest.html#webkit-credential-get-username" since="2.2"/>
     <keyword type="function" name="webkit_credential_has_password ()" link="WebKitAuthenticationRequest.html#webkit-credential-has-password" since="2.2"/>
+    <keyword type="function" name="webkit_credential_get_certificate ()" link="WebKitAuthenticationRequest.html#webkit-credential-get-certificate" since="2.34"/>
     <keyword type="struct" name="struct WebKitAuthenticationRequest" link="WebKitAuthenticationRequest.html#WebKitAuthenticationRequest-struct"/>
     <keyword type="enum" name="enum WebKitAuthenticationScheme" link="WebKitAuthenticationRequest.html#WebKitAuthenticationScheme" since="2.2"/>
     <keyword type="struct" name="WebKitCredential" link="WebKitAuthenticationRequest.html#WebKitCredential-struct"/>
@@ -615,6 +634,7 @@
     <keyword type="struct" name="WebKitNavigationAction" link="WebKitNavigationAction.html#WebKitNavigationAction-struct"/>
     <keyword type="function" name="webkit_user_media_permission_is_for_audio_device ()" link="WebKitUserMediaPermissionRequest.html#webkit-user-media-permission-is-for-audio-device" since="2.8"/>
     <keyword type="function" name="webkit_user_media_permission_is_for_video_device ()" link="WebKitUserMediaPermissionRequest.html#webkit-user-media-permission-is-for-video-device" since="2.8"/>
+    <keyword type="function" name="webkit_user_media_permission_is_for_display_device ()" link="WebKitUserMediaPermissionRequest.html#webkit-user-media-permission-is-for-display-device" since="2.34"/>
     <keyword type="struct" name="struct WebKitUserMediaPermissionRequest" link="WebKitUserMediaPermissionRequest.html#WebKitUserMediaPermissionRequest-struct"/>
     <keyword type="property" name="The “is-for-audio-device” property" link="WebKitUserMediaPermissionRequest.html#WebKitUserMediaPermissionRequest--is-for-audio-device"/>
     <keyword type="property" name="The “is-for-video-device” property" link="WebKitUserMediaPermissionRequest.html#WebKitUserMediaPermissionRequest--is-for-video-device"/>
@@ -1001,6 +1021,7 @@
     <keyword type="function" name="webkit_website_data_manager_remove_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-remove-finish" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_clear ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-clear" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_clear_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-clear-finish" since="2.16"/>
+    <keyword type="function" name="webkit_website_data_manager_set_memory_pressure_settings ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-memory-pressure-settings" since="2.34"/>
     <keyword type="function" name="webkit_itp_first_party_ref ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-ref" since="2.30"/>
     <keyword type="function" name="webkit_itp_first_party_unref ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-unref" since="2.30"/>
     <keyword type="function" name="webkit_itp_first_party_get_domain ()" link="WebKitWebsiteDataManager.html#webkit-itp-first-party-get-domain" since="2.30"/>
@@ -1197,9 +1218,13 @@
     <keyword type="constant" name="WEBKIT_SNAPSHOT_REGION_FULL_DOCUMENT" link="WebKitWebView.html#WEBKIT-SNAPSHOT-REGION-FULL-DOCUMENT:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEB_PROCESS_CRASHED" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-CRASHED:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEB_PROCESS_EXCEEDED_MEMORY_LIMIT" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-EXCEEDED-MEMORY-LIMIT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_WEB_PROCESS_TERMINATED_BY_API" link="WebKitWebView.html#WEBKIT-WEB-PROCESS-TERMINATED-BY-API:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOPLAY_ALLOW" link="WebKitWebView.html#WEBKIT-AUTOPLAY-ALLOW:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOPLAY_ALLOW_WITHOUT_SOUND" link="WebKitWebView.html#WEBKIT-AUTOPLAY-ALLOW-WITHOUT-SOUND:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOPLAY_DENY" link="WebKitWebView.html#WEBKIT-AUTOPLAY-DENY:CAPS"/>
+    <keyword type="constant" name="WEBKIT_MEDIA_CAPTURE_STATE_NONE" link="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE" link="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-ACTIVE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_MEDIA_CAPTURE_STATE_MUTED" link="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-MUTED:CAPS"/>
     <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_ALERT" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-ALERT:CAPS"/>
     <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_CONFIRM" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-CONFIRM:CAPS"/>
     <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_PROMPT" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-PROMPT:CAPS"/>
@@ -1212,6 +1237,7 @@
     <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_NEGOTIATE" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-NEGOTIATE:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_CLIENT_CERTIFICATE_REQUESTED" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-CLIENT-CERTIFICATE-REQUESTED:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_SERVER_TRUST_EVALUATION_REQUESTED" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-SERVER-TRUST-EVALUATION-REQUESTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_CLIENT_CERTIFICATE_PIN_REQUESTED" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-CLIENT-CERTIFICATE-PIN-REQUESTED:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_UNKNOWN" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-UNKNOWN:CAPS"/>
     <keyword type="constant" name="WEBKIT_CREDENTIAL_PERSISTENCE_NONE" link="WebKitAuthenticationRequest.html#WEBKIT-CREDENTIAL-PERSISTENCE-NONE:CAPS"/>
     <keyword type="constant" name="WEBKIT_CREDENTIAL_PERSISTENCE_FOR_SESSION" link="WebKitAuthenticationRequest.html#WEBKIT-CREDENTIAL-PERSISTENCE-FOR-SESSION:CAPS"/>

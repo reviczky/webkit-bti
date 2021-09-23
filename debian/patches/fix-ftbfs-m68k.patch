@@ -22,7 +22,7 @@ Index: webkitgtk/Source/WebCore/css/CSSProperty.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSProperty.cpp
 +++ webkitgtk/Source/WebCore/css/CSSProperty.cpp
-@@ -33,7 +33,11 @@ struct SameSizeAsCSSProperty {
+@@ -32,7 +32,11 @@ struct SameSizeAsCSSProperty {
      void* value;
  };
  
@@ -69,14 +69,17 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -59,7 +59,11 @@ struct SameSizeAsShadowRoot : public Doc
-     Optional<HashMap<AtomString, AtomString>> partMappings;
+@@ -59,10 +59,14 @@ struct SameSizeAsShadowRoot : public Doc
+     std::optional<HashMap<AtomString, AtomString>> partMappings;
  };
  
 +#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(ShadowRoot) <= sizeof(SameSizeAsShadowRoot), shadowroot_should_stay_small);
 +#else
  COMPILE_ASSERT(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), shadowroot_should_stay_small);
+ #if !ASSERT_ENABLED
+ COMPILE_ASSERT(sizeof(WeakPtr<Element>) == sizeof(void*), WeakPtr_should_be_same_size_as_raw_pointer);
+ #endif
 +#endif
  
  ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type, DelegatesFocus delegatesFocus)
@@ -85,7 +88,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/RenderStyle.cpp
 +++ webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
-@@ -65,7 +65,11 @@ struct SameSizeAsBorderValue {
+@@ -66,7 +66,11 @@ struct SameSizeAsBorderValue {
      int m_restBits;
  };
  
@@ -97,7 +100,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  
  struct SameSizeAsRenderStyle {
      void* dataRefs[7];
-@@ -83,7 +87,11 @@ struct SameSizeAsRenderStyle {
+@@ -84,7 +88,11 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -161,7 +164,7 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
 +++ webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
-@@ -62,6 +62,11 @@
+@@ -61,6 +61,11 @@
  #include <wtf/StdLibExtras.h>
  #include <wtf/text/WTFString.h>
  
@@ -173,13 +176,29 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5503,3 +5508,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5455,3 +5460,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  
 +#if defined(__m68k__) || defined(__SH4__)
 +#pragma GCC pop_options
 +#endif
+Index: webkitgtk/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
++++ webkitgtk/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
+@@ -53,7 +53,11 @@ struct SameSizeAsLegacyInlineFlowBox : p
+     void* pointers[5];
+ };
+ 
++#if defined(__m68k__)
++COMPILE_ASSERT(sizeof(LegacyInlineFlowBox) >= sizeof(SameSizeAsLegacyInlineFlowBox), LegacyInlineFlowBox_should_stay_small);
++#else
+ COMPILE_ASSERT(sizeof(LegacyInlineFlowBox) == sizeof(SameSizeAsLegacyInlineFlowBox), LegacyInlineFlowBox_should_stay_small);
++#endif
+ 
+ #if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
+ 
 Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
@@ -196,19 +215,3 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
  
  bool CSSValue::isImplicitInitialValue() const
  {
-Index: webkitgtk/Source/WebCore/rendering/InlineFlowBox.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/rendering/InlineFlowBox.cpp
-+++ webkitgtk/Source/WebCore/rendering/InlineFlowBox.cpp
-@@ -53,7 +53,11 @@ struct SameSizeAsInlineFlowBox : public
-     void* pointers[5];
- };
- 
-+#if defined(__m68k__)
-+COMPILE_ASSERT(sizeof(InlineFlowBox) >= sizeof(SameSizeAsInlineFlowBox), InlineFlowBox_should_stay_small);
-+#else
- COMPILE_ASSERT(sizeof(InlineFlowBox) == sizeof(SameSizeAsInlineFlowBox), InlineFlowBox_should_stay_small);
-+#endif
- 
- #if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
- 

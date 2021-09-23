@@ -21,6 +21,7 @@ Build-Depends: bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 
                libicu-dev,
                libgcrypt20-dev (>= 1.7.0),
                libhyphen-dev,
+               liblcms2-dev,
                libmanette-0.2-dev (>= 0.2.4) [linux-any],
                libnotify-dev,
                libxslt1-dev (>= 1.1.7),
@@ -240,16 +241,6 @@ Description: Web content engine library for GTK - GObject introspection data
  .
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
-
-Package: libwebkit2gtk-4.0-37-gtk2
-Section: oldlibs
-Architecture: all
-Multi-Arch: foreign
-Depends: ${misc:Depends}
-Description: Transitional dummy package
- This is a transitional dummy package, it can be safely removed.
- .
- Support for NPAPI plugins has been completely removed from WebKitGTK.
 
 Package: webkit2gtk-driver
 Architecture: any

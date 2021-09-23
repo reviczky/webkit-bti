@@ -668,6 +668,78 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-is-web-process-responsive" title="webkit_web_view_get_is_web_process_responsive ()">webkit_web_view_get_is_web_process_responsive</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-terminate-web-process" title="webkit_web_view_terminate_web_process ()">webkit_web_view_terminate_web_process</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-set-cors-allowlist" title="webkit_web_view_set_cors_allowlist ()">webkit_web_view_set_cors_allowlist</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="returnvalue">WebKitMediaCaptureState</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-camera-capture-state" title="webkit_web_view_get_camera_capture_state ()">webkit_web_view_get_camera_capture_state</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="returnvalue">WebKitMediaCaptureState</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-microphone-capture-state" title="webkit_web_view_get_microphone_capture_state ()">webkit_web_view_get_microphone_capture_state</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-set-camera-capture-state" title="webkit_web_view_set_camera_capture_state ()">webkit_web_view_set_camera_capture_state</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-set-microphone-capture-state" title="webkit_web_view_set_microphone_capture_state ()">webkit_web_view_set_microphone_capture_state</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="returnvalue">WebKitMediaCaptureState</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-display-capture-state" title="webkit_web_view_get_display_capture_state ()">webkit_web_view_get_display_capture_state</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-set-display-capture-state" title="webkit_web_view_set_display_capture_state ()">webkit_web_view_set_display_capture_state</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="returnvalue">WebKitJavascriptResult</span></a> *
 </td>
 <td class="function_name">
@@ -818,6 +890,16 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
+<td class="property_type"><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--camera-capture-state" title="The “camera-capture-state” property">camera-capture-state</a></td>
+<td class="property_flags">Read / Write</td>
+</tr>
+<tr>
+<td class="property_type"><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--display-capture-state" title="The “display-capture-state” property">display-capture-state</a></td>
+<td class="property_flags">Read / Write</td>
+</tr>
+<tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--editable" title="The “editable” property">editable</a></td>
 <td class="property_flags">Read / Write</td>
@@ -856,6 +938,16 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-playing-audio" title="The “is-playing-audio” property">is-playing-audio</a></td>
 <td class="property_flags">Read</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-web-process-responsive" title="The “is-web-process-responsive” property">is-web-process-responsive</a></td>
+<td class="property_flags">Read</td>
+</tr>
+<tr>
+<td class="property_type"><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--microphone-capture-state" title="The “microphone-capture-state” property">microphone-capture-state</a></td>
+<td class="property_flags">Read / Write</td>
 </tr>
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#guint64"><span class="type">guint64</span></a></td>
@@ -1105,6 +1197,10 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <td class="function_name"><a class="link" href="WebKitWebView.html#WebKitAutoplayPolicy" title="enum WebKitAutoplayPolicy">WebKitAutoplayPolicy</a></td>
 </tr>
 <tr>
+<td class="datatype_keyword">enum</td>
+<td class="function_name"><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState">WebKitMediaCaptureState</a></td>
+</tr>
+<tr>
 <td class="define_keyword">#define</td>
 <td class="function_name"><a class="link" href="WebKitWebView.html#WEBKIT-EDITING-COMMAND-CUT:CAPS" title="WEBKIT_EDITING_COMMAND_CUT">WEBKIT_EDITING_COMMAND_CUT</a></td>
 </tr>
@@ -1169,6 +1265,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
     <span class="lineart">├──</span> WebKitAutoplayPolicy
     <span class="lineart">├──</span> WebKitInsecureContentEvent
     <span class="lineart">├──</span> WebKitLoadEvent
+    <span class="lineart">├──</span> WebKitMediaCaptureState
     <span class="lineart">├──</span> WebKitPolicyDecisionType
     <span class="lineart">╰──</span> WebKitWebProcessTerminationReason
     <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
@@ -3573,12 +3670,10 @@ This function should be called after a response has been received from the
 server, so you can connect to <a class="link" href="WebKitWebView.html#WebKitWebView-load-changed" title="The “load-changed” signal"><span class="type">“load-changed”</span></a> and call this function
 when it's emitted with <a class="link" href="WebKitWebView.html#WEBKIT-LOAD-COMMITTED:CAPS"><code class="literal">WEBKIT_LOAD_COMMITTED</code></a> event.</p>
 <p>Note that this function provides no information about the security of the web
-page if the current <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <em class="parameter"><code>WEBKIT_TLS_ERRORS_POLICY_IGNORE</code></em>
-,
+page if the current <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <a class="link" href="WebKitWebsiteDataManager.html#WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"><code class="literal">WEBKIT_TLS_ERRORS_POLICY_IGNORE</code></a>,
 as subresources of the page may be controlled by an attacker. This function
 may safely be used to determine the security status of the current page only
-if the current <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <em class="parameter"><code>WEBKIT_TLS_ERRORS_POLICY_FAIL</code></em>
-, in
+if the current <a class="link" href="WebKitWebsiteDataManager.html#WebKitTLSErrorsPolicy" title="enum WebKitTLSErrorsPolicy"><span class="type">WebKitTLSErrorsPolicy</span></a> is <a class="link" href="WebKitWebsiteDataManager.html#WEBKIT-TLS-ERRORS-POLICY-FAIL:CAPS"><code class="literal">WEBKIT_TLS_ERRORS_POLICY_FAIL</code></a>, in
 which case subresources that fail certificate verification will be blocked.</p>
 <div class="refsect3">
 <a name="webkit-web-view-get-tls-info.parameters"></a><h4>Parameters</h4>
@@ -4197,6 +4292,275 @@ associated with the view. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-get-is-web-process-responsive"></a><h3>webkit_web_view_get_is_web_process_responsive ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_web_view_get_is_web_process_responsive
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-terminate-web-process"></a><h3>webkit_web_view_terminate_web_process ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_terminate_web_process (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Terminates the web process associated to <em class="parameter"><code>web_view</code></em>
+. When the web process gets terminated
+using this method, the <a class="link" href="WebKitWebView.html#WebKitWebView-web-process-terminated" title="The “web-process-terminated” signal"><span class="type">“web-process-terminated”</span></a> signal is emitted with
+<a class="link" href="WebKitWebView.html#WEBKIT-WEB-PROCESS-TERMINATED-BY-API:CAPS"><code class="literal">WEBKIT_WEB_PROCESS_TERMINATED_BY_API</code></a> as the reason for termination.</p>
+<div class="refsect3">
+<a name="webkit-web-view-terminate-web-process.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-set-cors-allowlist"></a><h3>webkit_web_view_set_cors_allowlist ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_set_cors_allowlist (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
+                                    <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *allowlist</code></em>);</pre>
+<p>Sets the <em class="parameter"><code>allowlist</code></em>
+ for which
+<a class="ulink" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS" target="_top">Cross-Origin Resource Sharing</a>
+checks are disabled in <em class="parameter"><code>web_view</code></em>
+. URI patterns must be of the form
+<code class="literal">[protocol]://[host]/[path]</code>, each component may contain the wildcard
+character (<code class="literal">*</code>) to represent zero or more other characters. All three
+components are required and must not be omitted from the URI
+patterns.</p>
+<p>Disabling CORS checks permits resources from other origins to load
+allowlisted resources. It does not permit the allowlisted resources
+to load resources from other origins.</p>
+<p>If this function is called multiple times, only the allowlist set by
+the most recent call will be effective.</p>
+<div class="refsect3">
+<a name="webkit-web-view-set-cors-allowlist.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>allowlist</p></td>
+<td class="parameter_description"><p>an allowlist of URI patterns, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-get-camera-capture-state"></a><h3>webkit_web_view_get_camera_capture_state ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="returnvalue">WebKitMediaCaptureState</span></a>
+webkit_web_view_get_camera_capture_state
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Get the camera capture state of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-camera-capture-state.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-camera-capture-state.returns"></a><h4>Returns</h4>
+<p> The <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a> of the camera device. If <span class="type">“enable-mediastream”</span>
+is <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, this method will return <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a>.</p>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-get-microphone-capture-state"></a><h3>webkit_web_view_get_microphone_capture_state ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="returnvalue">WebKitMediaCaptureState</span></a>
+webkit_web_view_get_microphone_capture_state
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Get the microphone capture state of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-microphone-capture-state.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-microphone-capture-state.returns"></a><h4>Returns</h4>
+<p> The <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a> of the microphone device. If <span class="type">“enable-mediastream”</span>
+is <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, this method will return <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a>.</p>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-set-camera-capture-state"></a><h3>webkit_web_view_set_camera_capture_state ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_set_camera_capture_state
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a> state</code></em>);</pre>
+<p>Set the camera capture state of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.</p>
+<p>If <span class="type">“enable-mediastream”</span> is <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, this method will have no visible effect. Once the
+state of the device has been set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> it cannot be changed
+anymore. The page can however request capture again using the mediaDevices API.</p>
+<div class="refsect3">
+<a name="webkit-web-view-set-camera-capture-state.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>state</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-set-microphone-capture-state"></a><h3>webkit_web_view_set_microphone_capture_state ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_set_microphone_capture_state
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a> state</code></em>);</pre>
+<p>Set the microphone capture state of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.</p>
+<p>If <span class="type">“enable-mediastream”</span> is <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, this method will have no visible effect. Once the
+state of the device has been set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> it cannot be changed
+anymore. The page can however request capture again using the mediaDevices API.</p>
+<div class="refsect3">
+<a name="webkit-web-view-set-microphone-capture-state.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>state</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-get-display-capture-state"></a><h3>webkit_web_view_get_display_capture_state ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="returnvalue">WebKitMediaCaptureState</span></a>
+webkit_web_view_get_display_capture_state
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Get the display capture state of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-display-capture-state.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-display-capture-state.returns"></a><h4>Returns</h4>
+<p> The <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a> of the display device. If <span class="type">“enable-mediastream”</span>
+is <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, this method will return <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a>.</p>
+</div>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-set-display-capture-state"></a><h3>webkit_web_view_set_display_capture_state ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_set_display_capture_state
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a> state</code></em>);</pre>
+<p>Set the display capture state of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.</p>
+<p>If <span class="type">“enable-mediastream”</span> is <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, this method will have no visible effect. Once the
+state of the device has been set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> it cannot be changed
+anymore. The page can however request capture again using the mediaDevices API.</p>
+<div class="refsect3">
+<a name="webkit-web-view-set-display-capture-state.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>state</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.34</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -4979,6 +5343,13 @@ visible in the webview</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-WEB-PROCESS-TERMINATED-BY-API:CAPS"></a>WEBKIT_WEB_PROCESS_TERMINATED_BY_API</p></td>
+<td class="enum_member_description">
+<p>the web process termination was requested by an API call. Since: 2.34</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
 </tbody>
 </table></div>
 </div>
@@ -5023,6 +5394,45 @@ they have no audio track, or if their audio track is muted.</p>
 </table></div>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-30.html#api-index-2.30">2.30</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitMediaCaptureState"></a><h3>enum WebKitMediaCaptureState</h3>
+<p>Enum values used to specify the capture state of a media device.</p>
+<div class="refsect3">
+<a name="WebKitMediaCaptureState.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="300px" class="enum_members_name">
+<col class="enum_members_description">
+<col width="200px" class="enum_members_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"></a>WEBKIT_MEDIA_CAPTURE_STATE_NONE</p></td>
+<td class="enum_member_description">
+<p>Media capture is disabled.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-MEDIA-CAPTURE-STATE-ACTIVE:CAPS"></a>WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE</p></td>
+<td class="enum_member_description">
+<p>Media capture is active.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+<tr>
+<td class="enum_member_name"><p><a name="WEBKIT-MEDIA-CAPTURE-STATE-MUTED:CAPS"></a>WEBKIT_MEDIA_CAPTURE_STATE_MUTED</p></td>
+<td class="enum_member_description">
+<p>Media capture is muted.</p>
+</td>
+<td class="enum_member_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.34</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -5209,6 +5619,42 @@ signal request. If the new WebView was added to a new tab of current browsing co
 </div>
 <hr>
 <div class="refsect2">
+<a name="WebKitWebView--camera-capture-state"></a><h3>The <code class="literal">“camera-capture-state”</code> property</h3>
+<pre class="programlisting">  “camera-capture-state”     <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></pre>
+<p>Capture state of the camera device. Whenever the user grants a media-request sent by the web
+page, requesting video capture capabilities (<code class="literal">navigator.mediaDevices.getUserMedia({video:
+true})</code>) this property will be set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-ACTIVE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE</code></a>.</p>
+<p>The application can monitor this property and provide a visual indicator allowing to optionally
+deactivate or mute the capture device by setting this property respectively to
+<a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> or <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-MUTED:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_MUTED</code></a>.</p>
+<p>If the capture state of the device is set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> the web-page
+can still re-request the permission to the user. Permission desision caching is left to the
+application.</p>
+<p>Owner: WebKitWebView</p>
+<p>Flags: Read / Write</p>
+<p>Default value: WEBKIT_MEDIA_CAPTURE_STATE_NONE</p>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebView--display-capture-state"></a><h3>The <code class="literal">“display-capture-state”</code> property</h3>
+<pre class="programlisting">  “display-capture-state”    <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></pre>
+<p>Capture state of the display device. Whenever the user grants a media-request sent by the web
+page, requesting screencasting capabilities (`navigator.mediaDevices.getDisplayMedia() this
+property will be set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-ACTIVE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE</code></a>.</p>
+<p>The application can monitor this property and provide a visual indicator allowing to
+optionally deactivate or mute the capture device by setting this property respectively to
+<a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> or <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-MUTED:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_MUTED</code></a>.</p>
+<p>If the capture state of the device is set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> the web-page
+can still re-request the permission to the user. Permission desision caching is left to the
+application.</p>
+<p>Owner: WebKitWebView</p>
+<p>Flags: Read / Write</p>
+<p>Default value: WEBKIT_MEDIA_CAPTURE_STATE_NONE</p>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="WebKitWebView--editable"></a><h3>The <code class="literal">“editable”</code> property</h3>
 <pre class="programlisting">  “editable”                 <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether the pages loaded inside <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> are editable. For more
@@ -5313,6 +5759,34 @@ the property is set back to <a href="../glib/glib-Standard-Macros.html#FALSE:CAP
 <p>Flags: Read</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebView--is-web-process-responsive"></a><h3>The <code class="literal">“is-web-process-responsive”</code> property</h3>
+<pre class="programlisting">  “is-web-process-responsive” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Whether the web process currently associated to the <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> is responsive.</p>
+<p>Owner: WebKitWebView</p>
+<p>Flags: Read</p>
+<p>Default value: TRUE</p>
+<p class="since">Since: 2.34</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebView--microphone-capture-state"></a><h3>The <code class="literal">“microphone-capture-state”</code> property</h3>
+<pre class="programlisting">  “microphone-capture-state” <a class="link" href="WebKitWebView.html#WebKitMediaCaptureState" title="enum WebKitMediaCaptureState"><span class="type">WebKitMediaCaptureState</span></a></pre>
+<p>Capture state of the microphone device. Whenever the user grants a media-request sent by the web
+page, requesting audio capture capabilities (<code class="literal">navigator.mediaDevices.getUserMedia({audio:
+true})</code>) this property will be set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-ACTIVE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_ACTIVE</code></a>.</p>
+<p>The application can monitor this property and provide a visual indicator allowing to
+optionally deactivate or mute the capture device by setting this property respectively to
+<a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> or <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-MUTED:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_MUTED</code></a>.</p>
+<p>If the capture state of the device is set to <a class="link" href="WebKitWebView.html#WEBKIT-MEDIA-CAPTURE-STATE-NONE:CAPS"><code class="literal">WEBKIT_MEDIA_CAPTURE_STATE_NONE</code></a> the web-page
+can still re-request the permission to the user. Permission desision caching is left to the
+application.</p>
+<p>Owner: WebKitWebView</p>
+<p>Flags: Read / Write</p>
+<p>Default value: WEBKIT_MEDIA_CAPTURE_STATE_NONE</p>
+<p class="since">Since: 2.34</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -6738,8 +7212,8 @@ support for it.</p>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 user_function (<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>    *web_view,
                <a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu,
-               <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>         *rectangle,
-               <a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a>     *Returns,
+               <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>         *event,
+               <a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a>     *rectangle,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>          user_data)</pre>
 <p>This signal is emitted when a select element in <em class="parameter"><code>web_view</code></em>
  needs to display a
@@ -6748,9 +7222,12 @@ dropdown menu. This signal can be used to show a custom menu, using <em class="p
 the details of all items that should be displayed. The area of the element in the
 <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> is given as <em class="parameter"><code>rectangle</code></em>
  parameter, it can be used to position the
-menu.
+menu. If this was triggered by a user interaction, like a mouse click,
+<em class="parameter"><code>event</code></em>
+ parameter provides the <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>.
 To handle this signal asynchronously you should keep a ref of the <em class="parameter"><code>menu</code></em>
 .</p>
+<p>The default signal handler will pop up a <a href="../gtk3/GtkMenu.html#GtkMenu-struct"><span class="type">GtkMenu</span></a>.</p>
 <div class="refsect3">
 <a name="WebKitWebView-show-option-menu.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -6768,6 +7245,11 @@ To handle this signal asynchronously you should keep a ref of the <em class="par
 <tr>
 <td class="parameter_name"><p>menu</p></td>
 <td class="parameter_description"><p>the <a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>event</p></td>
+<td class="parameter_description"><p>the <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a> that triggered the menu, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -6789,7 +7271,7 @@ To handle this signal asynchronously you should keep a ref of the <em class="par
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
 </div>
 <p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
-<p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
+<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 <hr>
 <div class="refsect2">
