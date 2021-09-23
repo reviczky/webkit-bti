@@ -1,5 +1,6 @@
-webkit2gtk (2.33.91-2) UNRELEASED; urgency=medium
+webkit2gtk (2.34.0-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * Bring all changes from the 2.33 (experimental) branch.
   * debian/rules:
     + Build with -DUSE_SOUP2=ON.
