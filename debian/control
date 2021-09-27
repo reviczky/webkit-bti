@@ -144,8 +144,7 @@ Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${bwrap:Depends},
          ${shlibs:Depends},
          ${misc:Depends}
-Recommends: gstreamer1.0-plugins-bad,
-            gstreamer1.0-gl,
+Recommends: gstreamer1.0-gl,
             libgl1-mesa-dri,
             ${bwrap:Recommends},
             ${gst:Recommends}
