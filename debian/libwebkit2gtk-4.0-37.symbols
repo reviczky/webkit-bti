@@ -1467,7 +1467,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_editor_state_is_redo_available@Base 2.19.1
  webkit_editor_state_is_undo_available@Base 2.19.1
  webkit_editor_typing_attributes_get_type@Base 2.10.0
- webkit_emoji_chooser_get_type@Base 2.33.90
  webkit_favicon_database_clear@Base 2.5.3
  webkit_favicon_database_error_get_type@Base 2.5.3
  webkit_favicon_database_error_quark@Base 2.5.3
