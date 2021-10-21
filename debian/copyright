@@ -158,7 +158,6 @@ Files: Source/ThirdParty/ANGLE/include/GLES/*
        Source/ThirdParty/ANGLE/src/tests/deqp_support/*
        Source/ThirdParty/ANGLE/src/tests/test_utils/third_party/*
        Source/ThirdParty/ANGLE/util/android/third_party/*
-       Source/WTF/wtf/Span.h
 Copyright: 2008-2017 The Khronos Group Inc
            2010, 2014, 2018-2019 The Android Open Source Project
            2015-2016 LunarG Inc
@@ -176,6 +175,14 @@ Files: Source/WTF/wtf/RobinHoodHashTable.h
 Copyright: 2021 Apple Inc
 License: BSD-2-clause or Expat
 
+Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
+       Source/WTF/wtf/DateMath.cpp
+Copyright: 1999-2000 Harri Porten <porten@kde.org>
+           2006-2021 Apple Inc
+           2007-2009 Torch Mobile Inc
+           2009 Google Inc
+License: LGPL-2.1+ or MPL-1.1
+
 Files: Source/WebCore/loader/DocumentWriter.h
 Copyright: 2010 Adam Barth
 License: BSD-3-clause-adam-barth
@@ -191,7 +198,29 @@ Files: Source/JavaScriptCore/API/*
        Source/JavaScriptCore/interpreter/*
        Source/JavaScriptCore/jit/IntrinsicEmitter.cpp
        Source/JavaScriptCore/parser/*
-       Source/JavaScriptCore/runtime/*
+       Source/JavaScriptCore/runtime/CallData.h
+       Source/JavaScriptCore/runtime/ConstructData.h
+       Source/JavaScriptCore/runtime/ExceptionHelpers.cpp
+       Source/JavaScriptCore/runtime/ExceptionHelpers.h
+       Source/JavaScriptCore/runtime/InitializeThreading.cpp
+       Source/JavaScriptCore/runtime/InitializeThreading.h
+       Source/JavaScriptCore/runtime/JSGlobalObject.cpp
+       Source/JavaScriptCore/runtime/JSLexicalEnvironment.cpp
+       Source/JavaScriptCore/runtime/JSLexicalEnvironment.h
+       Source/JavaScriptCore/runtime/JSModuleEnvironment.cpp
+       Source/JavaScriptCore/runtime/JSModuleEnvironment.h
+       Source/JavaScriptCore/runtime/JSSegmentedVariableObject.cpp
+       Source/JavaScriptCore/runtime/JSSegmentedVariableObject.h
+       Source/JavaScriptCore/runtime/JSSymbolTableObject.cpp
+       Source/JavaScriptCore/runtime/JSSymbolTableObject.h
+       Source/JavaScriptCore/runtime/SamplingCounter.cpp
+       Source/JavaScriptCore/runtime/SamplingCounter.h
+       Source/JavaScriptCore/runtime/SymbolTable.cpp
+       Source/JavaScriptCore/runtime/SymbolTable.h
+       Source/JavaScriptCore/runtime/TypeProfilerLog.cpp
+       Source/JavaScriptCore/runtime/TypeProfilerLog.h
+       Source/JavaScriptCore/runtime/VM.cpp
+       Source/JavaScriptCore/runtime/VM.h
        Source/JavaScriptCore/shell/playstation/Initializer.cpp
        Source/WTF/wtf/AutodrainedPool.h
        Source/WTF/wtf/ConcurrentVector.h
@@ -232,12 +261,7 @@ Files: Source/JavaScriptCore/API/*
        Source/WebCore/dom/*
        Source/WebCore/editing/*
        Source/WebCore/history/CachedFramePlatformData.h
-       Source/WebCore/html/HTMLTableRowsCollection.cpp
-       Source/WebCore/html/HTMLTableRowsCollection.h
-       Source/WebCore/html/ImageData.cpp
-       Source/WebCore/html/ImageData.h
-       Source/WebCore/html/forms/*
-       Source/WebCore/html/shadow/*
+       Source/WebCore/html/*
        Source/WebCore/inspector/*
        Source/WebCore/loader/DocumentLoader.cpp
        Source/WebCore/loader/DocumentLoader.h
@@ -354,6 +378,10 @@ License: BSD-3-clause-canon
 Files: Source/WebCore/html/HTMLUnknownElement.h
 Copyright: 2011 Code Aurora Forum
 License: BSD-3-clause-code-aurora
+
+Files: Source/WTF/wtf/Variant.h
+Copyright: 2015 Just Software Solutions Ltd
+License: BSD-3-clause-copyright-holder
 
 Files: Source/WebCore/Modules/mediastream/MediaDevices.cpp
        Source/WebCore/Modules/mediastream/MediaDevices.h
@@ -520,22 +548,14 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Source/WebCore/dom/MutationRecord.cpp
        Source/WebCore/dom/MutationRecord.h
        Source/WebCore/dom/NodeRareData.cpp
-       Source/WebCore/dom/PseudoElement.cpp
-       Source/WebCore/dom/PseudoElement.h
-       Source/WebCore/dom/RenderedDocumentMarker.h
        Source/WebCore/dom/RequestAnimationFrameCallback.h
        Source/WebCore/dom/ScopedEventQueue.cpp
        Source/WebCore/dom/ScopedEventQueue.h
-       Source/WebCore/dom/ShadowRoot.cpp
-       Source/WebCore/dom/ShadowRoot.h
        Source/WebCore/dom/StringCallback.cpp
        Source/WebCore/dom/StringCallback.h
-       Source/WebCore/dom/TemplateContentDocumentFragment.h
        Source/WebCore/dom/TreeDepthLimit.h
        Source/WebCore/dom/TreeScopeOrderedMap.cpp
        Source/WebCore/dom/TreeScopeOrderedMap.h
-       Source/WebCore/dom/UserActionElementSet.cpp
-       Source/WebCore/dom/UserActionElementSet.h
        Source/WebCore/dom/VisibilityState.h
        Source/WebCore/editing/ApplyBlockElementCommand.h
        Source/WebCore/editing/EditingStyle.h
@@ -833,7 +853,7 @@ License: BSD-3-clause-google
 
 Files: Source/ThirdParty/ANGLE/util/windows/third_party/StackWalker/src/StackWalker.h
 Copyright: 2005-2009 Jochen Kalmbach
-License: BSD-3-clause-copyright-holder
+License: BSD-3-clause-jochen-kalmbach
 
 Files: Source/JavaScriptCore/inspector/InspectorTarget.cpp
 Copyright: 2019 Microsoft Corporation
@@ -858,40 +878,48 @@ Files: Source/WebCore/html/track/VTTScanner.cpp
 Copyright: 2013-2014 Opera Software ASA
 License: BSD-3-clause-opera
 
-Files: Source/WTF/wtf/Variant.h
-Copyright: 2015 Just Software Solutions Ltd
-License: BSD-3-clause-copyright-holder
-
 Files: Source/WTF/wtf/Brigand.h
 Copyright: 2015 Edouard Alligand and Joel Falcou
 License: BSL-1.0
 
 Files: Source/JavaScriptCore/Scripts/jsmin.py
        Source/ThirdParty/ANGLE/src/libANGLE/renderer/vulkan/shaders/src/third_party/ffx_spd/*
+       Source/ThirdParty/ANGLE/src/third_party/volk/*
        Source/WebCore/xml/XSLTExtensions.cpp
 Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2007 Alexey Proskuryakov <ap@webkit.org>
            2013 Dave St.Germain
            2017-2020 Advanced Micro Devices Inc
+           2018-2019 Arseny Kapoulkine <arseny.kapoulkine@gmail.com>
 License: Expat
 
-Files: Source/WebCore/xml/XPathGrammar.cpp
-       Source/WebCore/xml/XPathGrammar.h
-Copyright: 1984, 1989-1990, 2000-2006 Free Software Foundation Inc
-License: GPL-2+
+Files: Source/JavaScriptCore/runtime/JSDateMath.h
+       Source/WTF/wtf/DateMath.h
+Copyright: 1999-2000 Harri Porten <porten@kde.org>
+           2006-2020 Apple Inc
+           2009 Google Inc
+           2010 Research In Motion Limited
+License: GPL-2+ or LGPL-2.1+ or MPL-1.1
 
 Files: Source/WebCore/platform/image-decoders/gif/*
        Source/WebCore/plugins/npapi.h
        Source/WebCore/plugins/nptypes.h
-Copyright: 1998, 2004 the Initial Developer
+Copyright: 1998, 2004 Netscape Communications Corporation
 License: GPL-2+ or LGPL-2.1+ or MPL-1.1
+
+Files: Source/WebCore/xml/XPathGrammar.cpp
+       Source/WebCore/xml/XPathGrammar.h
+Copyright: 1984, 1989-1990, 2000-2006 Free Software Foundation Inc
+License: GPL-2+ with Bison exception
+
+Files: Source/ThirdParty/ANGLE/tools/flex-bison/third_party/skeletons/yacc.c
+Copyright: 1984, 1989-1990, 2000-2015, 2018-2019 Free Software
+License: GPL-3+
 
 Files: Source/ThirdParty/ANGLE/src/compiler/preprocessor/preprocessor_tab_autogen.cpp
        Source/ThirdParty/ANGLE/src/compiler/translator/*
-       Source/ThirdParty/ANGLE/tools/flex-bison/third_party/skeletons/yacc.c
-Copyright: 1984, 1989-1990, 2000-2015, 2018-2019 Free Software
-           1984, 1989-1990, 2000-2015, 2018-2019 Free Software Foundation,
-License: GPL-3+
+Copyright: 1984, 1989-1990, 2000-2015, 2018-2019 Free Software Foundation,
+License: GPL-3+ with Bison exception
 
 Files: Source/WTF/wtf/CryptographicallyRandomNumber.cpp
        Source/bmalloc/bmalloc/CryptoRandom.cpp
@@ -900,66 +928,29 @@ Copyright: 1996 David Mazieres <dm@uun.org>
            2017 Apple Inc
 License: ISC
 
+Files: Source/ThirdParty/ANGLE/include/EGL/*
+       Source/ThirdParty/ANGLE/include/GLES/gl.h
+       Source/ThirdParty/ANGLE/include/GLES/glext.h
+       Source/ThirdParty/ANGLE/include/GLES2/*
+       Source/ThirdParty/ANGLE/include/GLES3/*
+       Source/ThirdParty/ANGLE/include/KHR/khrplatform.h
+       Source/ThirdParty/ANGLE/include/WGL/wgl.h
+       Source/ThirdParty/ANGLE/src/third_party/khronos/GL/wglext.h
+Copyright: 2007-2018 The Khronos Group Inc
+License: Expat
+
 Files: Source/WTF/wtf/text/Base64.cpp
        Source/WebCore/rendering/AutoTableLayout.cpp
        Source/WebCore/rendering/AutoTableLayout.h
        Source/WebCore/rendering/FixedTableLayout.cpp
        Source/WebCore/rendering/FixedTableLayout.h
        Source/WebCore/rendering/TableLayout.h
-       Source/WebKit/UIProcess/API/glib/WebKitCookieManager.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitFaviconDatabase.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitFindController.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitProtocolHandler.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitProtocolHandler.h
-       Source/WebKit/UIProcess/API/glib/WebKitSecurityManager.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitWebsiteDataManager.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitWebsitePolicies.cpp
-       Source/WebKit/UIProcess/API/gtk/WebKitCookieManager.h
-       Source/WebKit/UIProcess/API/gtk/WebKitFaviconDatabase.h
-       Source/WebKit/UIProcess/API/gtk/WebKitFindController.h
-       Source/WebKit/UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.cpp
-       Source/WebKit/UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.h
-       Source/WebKit/UIProcess/API/gtk/WebKitSecurityManager.h
-       Source/WebKit/UIProcess/API/gtk/WebKitWebInspector.cpp
-       Source/WebKit/UIProcess/API/gtk/WebKitWebInspector.h
-       Source/WebKit/UIProcess/API/gtk/WebKitWebsiteDataManager.h
-       Source/WebKit/UIProcess/API/gtk/WebKitWebsitePolicies.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/*
-       Source/WebKit/WebProcess/InjectedBundle/API/gtk/*
-       Tools/TestWebKitAPI/Tests/JavaScriptCore/glib/TestJSC.cpp
-       Tools/TestWebKitAPI/Tests/WPEQt/*
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestAuthentication.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestAutomationSession.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestConsoleMessage.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestDOMElement.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestEditor.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestFrame.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestGeolocationManager.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestInputMethodContext.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestMultiprocess.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestOptionMenu.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestUIClient.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebExtensions.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitFaviconDatabase.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitFindController.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitSecurityOrigin.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitUserContentFilterStore.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitUserContentManager.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebContext.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebView.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebsiteData.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/*
 Copyright: 2000-2001 Dawit Alemayehu <adawit@kde.org>
            2002 Dirk Mueller <mueller@kde.org>
            2002 Lars Knoll <knoll@kde.org>
            2003-2021 Apple Inc
            2006 Alexey Proskuryakov <ap@webkit.org>
            2010 Patrick Gansterer <paroga@paroga.com>
-           2011-2015, 2017-2020 Igalia S.L.
-           2014 Collabora Ltd
-           2015 Red Hat Inc
-           2017 Aidan Holm <aidanholm@gmail.com>
-           2017 Endless Mobile Inc
 License: LGPL-2
 
 Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
@@ -2345,8 +2336,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/Shared/WebHitTestResultData.h
        Source/WebKit/UIProcess/API/APIHitTestResult.cpp
        Source/WebKit/UIProcess/API/APIHitTestResult.h
-       Source/WebKit/UIProcess/API/C/WKUserMediaPermissionRequest.cpp
-       Source/WebKit/UIProcess/API/C/WKUserMediaPermissionRequest.h
+       Source/WebKit/UIProcess/API/C/*
        Source/WebKit/UIProcess/API/glib/IconDatabase.cpp
        Source/WebKit/UIProcess/API/glib/IconDatabase.h
        Source/WebKit/UIProcess/API/glib/InputMethodFilter.cpp
@@ -2549,21 +2539,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/UserMediaProcessManager.h
        Source/WebKit/UIProcess/glib/UserMediaPermissionRequestManagerProxyGLib.cpp
        Source/WebKit/UIProcess/gtk/*
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/DOM/*
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitConsoleMessage.cpp
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitConsoleMessagePrivate.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitExtensionManager.cpp
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitExtensionManager.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitFramePrivate.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitInjectedBundleMain.cpp
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitScriptWorldPrivate.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebEditorPrivate.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebExtensionPrivate.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebHitTestResultPrivate.h
-       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebPagePrivate.h
-       Source/WebKit/WebProcess/InjectedBundle/API/gtk/DOM/*
-       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitConsoleMessage.h
-       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitWebExtensionAutocleanups.h
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/*
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/*
        Source/WebKit/WebProcess/MediaStream/*
        Source/WebKit/WebProcess/WebCoreSupport/*
        Source/WebKit/WebProcess/WebPage/*
@@ -2581,14 +2558,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/WebExtensionTest.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/WebProcessTest.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/WebProcessTest.h
-       Tools/TestWebKitAPI/Tests/WebKitGtk/AutocleanupsTest.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/DOMClientRectTest.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/DOMDOMWindowTest.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/DOMNodeFilterTest.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/DOMNodeTest.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/DOMXPathNSResolverTest.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/TestAutocleanups.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGtk/TestInspector.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/*
        Tools/TestWebKitAPI/glib/WebKitGLib/*
        Tools/glib/*
        Tools/gtkdoc/*
@@ -2740,16 +2710,80 @@ License: LGPL-2.1
 Files: Source/WebCore/bridge/npruntime_internal.h
        Source/WebCore/platform/graphics/OpenGLShims.cpp
        Source/WebCore/platform/graphics/OpenGLShims.h
-       Source/WebKit/UIProcess/Launcher/glib/BubblewrapLauncher.cpp
-Copyright: 2007-2008 Collabora Ltd
+       Source/WebKit/UIProcess/API/glib/WebKitCookieManager.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitFaviconDatabase.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitFindController.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitProtocolHandler.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitProtocolHandler.h
+       Source/WebKit/UIProcess/API/glib/WebKitSecurityManager.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitWebsiteDataManager.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitWebsitePolicies.cpp
+       Source/WebKit/UIProcess/API/gtk/WebKitCookieManager.h
+       Source/WebKit/UIProcess/API/gtk/WebKitFaviconDatabase.h
+       Source/WebKit/UIProcess/API/gtk/WebKitFindController.h
+       Source/WebKit/UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.cpp
+       Source/WebKit/UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.h
+       Source/WebKit/UIProcess/API/gtk/WebKitSecurityManager.h
+       Source/WebKit/UIProcess/API/gtk/WebKitWebInspector.cpp
+       Source/WebKit/UIProcess/API/gtk/WebKitWebInspector.h
+       Source/WebKit/UIProcess/API/gtk/WebKitWebsiteDataManager.h
+       Source/WebKit/UIProcess/API/gtk/WebKitWebsitePolicies.h
+       Source/WebKit/UIProcess/Launcher/glib/*
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitFrame.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitScriptWorld.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebEditor.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebExtension.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebHitTestResult.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebPage.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitFrame.h
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitScriptWorld.h
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitWebEditor.h
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitWebExtension.h
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitWebHitTestResult.h
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/WebKitWebPage.h
+       Source/WebKit/WebProcess/InjectedBundle/API/gtk/webkit-web-extension.h
+       Tools/TestWebKitAPI/Tests/JavaScriptCore/glib/TestJSC.cpp
+       Tools/TestWebKitAPI/Tests/WPEQt/*
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestAuthentication.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestAutomationSession.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestConsoleMessage.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestDOMElement.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestEditor.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestFrame.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestGeolocationManager.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestInputMethodContext.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestMultiprocess.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestOptionMenu.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestUIClient.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebExtensions.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitFaviconDatabase.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitFindController.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitSecurityOrigin.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitUserContentFilterStore.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitUserContentManager.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebContext.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebView.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebsiteData.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestContextMenu.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestDOMClientRect.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestDOMDOMWindow.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestDOMNode.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestDOMNodeFilter.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestDOMXPathNSResolver.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestPrinting.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestWebKitAccessibility.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestWebKitVersion.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGtk/TestWebViewEditor.cpp
+Copyright: 2007-2008, 2014, 2021 Collabora Ltd
            2010 Tieto Corporation
-           2011, 2018 Igalia S.L.
+           2011-2015, 2017-2020 Igalia S.L.
+           2015 Red Hat Inc
+           2017 Aidan Holm <aidanholm@gmail.com>
+           2017 Endless Mobile Inc
            2020 Apple Inc
 License: LGPL-2.1+
 
-Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
-       Source/WTF/wtf/DateMath.cpp
-       Source/WebCore/platform/image-decoders/jpeg/JPEGImageDecoder.cpp
+Files: Source/WebCore/platform/image-decoders/jpeg/JPEGImageDecoder.cpp
        Source/WebCore/platform/image-decoders/png/PNGImageDecoder.cpp
        Source/WebCore/rendering/RenderLayer.cpp
        Source/WebCore/rendering/RenderLayer.h
@@ -2760,22 +2794,12 @@ Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
        Source/WebCore/rendering/ScrollAlignment.cpp
        Source/WebCore/rendering/ScrollAlignment.h
 Copyright: 1998 Netscape Communications Corporation
-           1999-2000 Harri Porten <porten@kde.org>
            2001-2006 mozilla.org
-           2003, 2006-2021 Apple Inc
+           2003, 2006-2020 Apple Inc
            2007-2009 Torch Mobile Inc
-           2009 Google Inc
            2019 Adobe
            2020 Igalia S.L.
 License: LGPL-2.1+ or MPL-1.1
-
-Files: Source/JavaScriptCore/runtime/JSDateMath.h
-       Source/WTF/wtf/DateMath.h
-Copyright: 1999-2000 Harri Porten <porten@kde.org>
-           2006-2020 Apple Inc
-           2009 Google Inc
-           2010 Research In Motion Limited
-License: MPL-1.1
 
 Files: Source/WTF/wtf/text/StringBuilderJSON.cpp
 Copyright: 2010-2018 Apple Inc
@@ -2783,6 +2807,12 @@ Copyright: 2010-2018 Apple Inc
            2017 Mozilla Foundation
            2017 Yusuke Suzuki <utatane.tea@gmail.com>
 License: MPL-2.0
+
+Files: Source/ThirdParty/ANGLE/src/common/third_party/smhasher/src/*
+Copyright: public domain
+License: public-domain
+ All MurmurHash versions are public domain software, and the author
+ disclaims all copyright to their code.
 
 Files: debian/*
 Copyright: 2007-2009 Mike Hommey <glandium@debian.org>
@@ -3202,6 +3232,34 @@ License: BSD-3-clause-copyright-holder
  WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  POSSIBILITY OF SUCH DAMAGE.
 
+License: BSD-3-clause-jochen-kalmbach
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ .
+ Redistributions of source code must retain the above copyright
+ notice, this list of conditions and the following disclaimer.
+ .
+ Redistributions in binary form must reproduce the above copyright
+ notice, this list of conditions and the following disclaimer in the
+ documentation and/or other materials provided with the distribution.
+ .
+ Neither the name of Jochen Kalmbach nor the names of its contributors
+ may be used to endorse or promote products derived from this software
+ without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 License: BSD-3-clause-microsoft
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
@@ -3346,6 +3404,29 @@ License: GPL-2+
  On Debian systems, the complete text of the license can be found in
  the file /usr/share/common-licenses/GPL-2
 
+License: GPL-2+ with Bison exception
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or (at
+ your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ .
+ On Debian systems, the complete text of the license can be found in
+ the file /usr/share/common-licenses/GPL-2
+ .
+ As a special exception, you may create a larger work that contains
+ part or all of the Bison parser skeleton and distribute that work
+ under terms of your choice, so long as that work isn't itself a
+ parser generator using the skeleton or a modified version thereof as
+ a parser skeleton.  Alternatively, if you modify or redistribute the
+ parser skeleton itself, you may (at your option) remove this special
+ exception, which will cause the skeleton and the resulting Bison
+ output files to be licensed under the GNU General Public License
+ without this special exception.
+
 License: GPL-3+
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -3359,6 +3440,30 @@ License: GPL-3+
  .
  On Debian systems, the complete text of the license can be found in
  the file /usr/share/common-licenses/GPL-3
+
+License: GPL-3+ with Bison exception
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 3 of the License, or (at
+ your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful, but
+ WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ General Public License for more details.
+ .
+ On Debian systems, the complete text of the license can be found in
+ the file /usr/share/common-licenses/GPL-3
+ .
+ As a special exception, you may create a larger work that contains
+ part or all of the Bison parser skeleton and distribute that work
+ under terms of your choice, so long as that work isn't itself a
+ parser generator using the skeleton or a modified version thereof as
+ a parser skeleton.  Alternatively, if you modify or redistribute the
+ parser skeleton itself, you may (at your option) remove this special
+ exception, which will cause the skeleton and the resulting Bison
+ output files to be licensed under the GNU General Public License
+ without this special exception.
 
 License: ISC
  Permission to use, copy, modify, and distribute this software for any

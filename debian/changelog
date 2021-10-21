@@ -4,6 +4,8 @@ webkit2gtk (2.34.1-1) UNRELEASED; urgency=medium
   * New upstream release.
   * debian/rules:
     + Build with -O1 in sh3 and sh4 (Closes: #995717).
+  * debian/copyright:
+    + Update copyright information of all files.
 
   [ Sebastien Bacher ]
   * debian/control, debian/rules:
