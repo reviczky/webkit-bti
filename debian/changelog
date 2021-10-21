@@ -8,6 +8,8 @@ webkit2gtk (2.34.1-1) UNRELEASED; urgency=medium
     + Update copyright information of all files.
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
+  * debian/libwebkit2gtk-4.0-37.lintian-overrides:
+    + Override library-not-linked-against-libc.
 
   [ Sebastien Bacher ]
   * debian/control, debian/rules:
