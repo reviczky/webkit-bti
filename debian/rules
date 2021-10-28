@@ -27,7 +27,7 @@ endif
 
 # Systemd and libmanette are Linux-only
 ifneq ($(DEB_HOST_ARCH_OS),linux)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEMD=OFF -DENABLE_GAMEPAD=OFF
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEMD=OFF
 endif
 
 # See https://bugs.webkit.org/show_bug.cgi?id=197192
@@ -71,7 +71,7 @@ ifeq ($(shell pkg-config --exists libseccomp && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=ON
 	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), \
 					xdg-dbus-proxy"
-	DH_GENCONTROL_ARGS += -Vbwrap:Recommends="xdg-desktop-portal-gtk"
+	DH_GENCONTROL_ARGS += -Vbwrap:Suggests="xdg-desktop-portal-gtk"
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
@@ -115,6 +115,8 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
 	   -DUSE_SOUP2=ON \
+	   -DENABLE_GAMEPAD=OFF \
+	   -DUSE_LCMS=OFF \
 	   $(EXTRA_CMAKE_ARGUMENTS)
 
 # Create a dummy doc directory in case the "nodoc" build option is set
