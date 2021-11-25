@@ -6,7 +6,7 @@ Index: webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
 +++ webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
-@@ -72,11 +72,21 @@ static void scanDirectoryForDictionaries
+@@ -71,11 +71,21 @@ static void scanDirectoryForDictionaries
              continue;
  
          auto filePath = FileSystem::pathByAppendingComponent(directoryPath, fileName);
