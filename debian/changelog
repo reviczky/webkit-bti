@@ -10,6 +10,9 @@ webkit2gtk (2.35.2-1) UNRELEASED; urgency=medium
     + Stop using --builddirectory=build, .gir files no longer seem to
       contain references to the build directory (see the 2.27.90-1 entry
       for more details).
+    + Explicitly disable lto since when it's on the build is failing, that
+      doesn't impact Debian by default but is an issue on Ubuntu.
+      (See #1000598)
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 03 Feb 2022 11:22:05 +0100
 
