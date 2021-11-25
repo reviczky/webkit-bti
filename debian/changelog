@@ -1,4 +1,4 @@
-webkit2gtk (2.35.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.35.1-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/watch, debian/gbp.conf:
@@ -7,7 +7,7 @@ webkit2gtk (2.35.1-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 25 Nov 2021 11:19:15 +0100
+ -- Alberto Garcia <berto@igalia.com>  Thu, 25 Nov 2021 12:55:09 +0100
 
 webkit2gtk (2.34.2-1) unstable; urgency=medium
 
