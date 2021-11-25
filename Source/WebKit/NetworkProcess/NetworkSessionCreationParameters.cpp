@@ -83,10 +83,14 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << suppressesConnectionTerminationOnSystemChange;
     encoder << allowsServerPreconnect;
     encoder << requiresSecureHTTPSProxyConnection;
+    encoder << shouldRunServiceWorkersOnMainThreadForTesting;
     encoder << preventsSystemHTTPProxyAuthentication;
     encoder << appHasRequestedCrossWebsiteTrackingPermission;
     encoder << useNetworkLoader;
     encoder << allowsHSTSWithUntrustedRootCertificate;
+    encoder << pcmMachServiceName;
+    encoder << webPushMachServiceName;
+    encoder << enablePrivateClickMeasurementDebugMode;
     encoder << resourceLoadStatisticsParameters;
 }
 
@@ -273,6 +277,11 @@ std::optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters
     decoder >> requiresSecureHTTPSProxyConnection;
     if (!requiresSecureHTTPSProxyConnection)
         return std::nullopt;
+
+    std::optional<bool> shouldRunServiceWorkersOnMainThreadForTesting;
+    decoder >> shouldRunServiceWorkersOnMainThreadForTesting;
+    if (!shouldRunServiceWorkersOnMainThreadForTesting)
+        return std::nullopt;
     
     std::optional<bool> preventsSystemHTTPProxyAuthentication;
     decoder >> preventsSystemHTTPProxyAuthentication;
@@ -293,12 +302,27 @@ std::optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters
     decoder >> allowsHSTSWithUntrustedRootCertificate;
     if (!allowsHSTSWithUntrustedRootCertificate)
         return std::nullopt;
+
+    std::optional<String> pcmMachServiceName;
+    decoder >> pcmMachServiceName;
+    if (!pcmMachServiceName)
+        return std::nullopt;
+
+    std::optional<String> webPushMachServiceName;
+    decoder >> webPushMachServiceName;
+    if (!webPushMachServiceName)
+        return std::nullopt;
     
+    std::optional<bool> enablePrivateClickMeasurementDebugMode;
+    decoder >> enablePrivateClickMeasurementDebugMode;
+    if (!enablePrivateClickMeasurementDebugMode)
+        return std::nullopt;
+
     std::optional<ResourceLoadStatisticsParameters> resourceLoadStatisticsParameters;
     decoder >> resourceLoadStatisticsParameters;
     if (!resourceLoadStatisticsParameters)
         return std::nullopt;
-    
+
     return {{
         *sessionID
         , WTFMove(*boundInterfaceIdentifier)
@@ -343,10 +367,14 @@ std::optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters
         , WTFMove(*suppressesConnectionTerminationOnSystemChange)
         , WTFMove(*allowsServerPreconnect)
         , WTFMove(*requiresSecureHTTPSProxyConnection)
+        , *shouldRunServiceWorkersOnMainThreadForTesting
         , WTFMove(*preventsSystemHTTPProxyAuthentication)
         , WTFMove(*appHasRequestedCrossWebsiteTrackingPermission)
         , WTFMove(*useNetworkLoader)
         , WTFMove(*allowsHSTSWithUntrustedRootCertificate)
+        , WTFMove(*pcmMachServiceName)
+        , WTFMove(*webPushMachServiceName)
+        , WTFMove(*enablePrivateClickMeasurementDebugMode)
         , WTFMove(*resourceLoadStatisticsParameters)
     }};
 }

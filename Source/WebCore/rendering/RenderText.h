@@ -107,6 +107,7 @@ public:
         bool endWS { false };
         bool hasBreakableChar { false };
         bool hasBreak { false };
+        bool endsWithBreak { false };
     };
     Widths trimmedPreferredWidths(float leadWidth, bool& stripFrontSpaces);
 
@@ -117,8 +118,6 @@ public:
     static bool isHangableStopOrComma(UChar);
     
     WEBCORE_EXPORT virtual IntRect linesBoundingBox() const;
-    LayoutRect linesVisualOverflowBoundingBox() const;
-
     WEBCORE_EXPORT IntPoint firstRunLocation() const;
 
     virtual void setText(const String&, bool force = false);
@@ -146,7 +145,8 @@ public:
     int previousOffsetForBackwardDeletion(int current) const final;
     int nextOffset(int current) const final;
 
-    bool containsReversedText() const { return m_containsReversedText; }
+    bool containsBidiText() const { return m_containsBidiText; }
+    void setContainsBidiText() { m_containsBidiText = true; }
 
     void momentarilyRevealLastTypedCharacter(unsigned offsetAfterLastTypedCharacter);
 
@@ -232,7 +232,7 @@ private:
                            // line boxes, and this hint will enable layoutInlineChildren to avoid
                            // just dirtying everything when character data is modified (e.g., appended/inserted
                            // or removed).
-    unsigned m_containsReversedText : 1;
+    unsigned m_containsBidiText : 1;
     unsigned m_isAllASCII : 1;
     unsigned m_canUseSimpleFontCodePath : 1;
     mutable unsigned m_knownToHaveNoOverflowAndNoFallbackFonts : 1;

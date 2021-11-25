@@ -25,7 +25,7 @@
 messages -> WebSWServerConnection NotRefCounted {
     # When possible, these messages can be implemented directly by WebCore::SWClientConnection
     ScheduleJobInServer(struct WebCore::ServiceWorkerJobData jobData)
-    ScheduleUnregisterJobInServer(WebCore::ServiceWorkerJobIdentifier jobIdentifier, WebCore::ServiceWorkerRegistrationIdentifier identifier, WebCore::DocumentOrWorkerIdentifier documentIdentifier) -> (Expected<bool, WebCore::ExceptionData> result) Async
+    ScheduleUnregisterJobInServer(WebCore::ServiceWorkerJobIdentifier jobIdentifier, WebCore::ServiceWorkerRegistrationIdentifier identifier, WebCore::ServiceWorkerOrClientIdentifier documentIdentifier) -> (Expected<bool, WebCore::ExceptionData> result) Async
 
     FinishFetchingScriptInServer(struct WebCore::ServiceWorkerFetchResult result)
     AddServiceWorkerRegistrationInServer(WebCore::ServiceWorkerRegistrationIdentifier identifier)
@@ -39,13 +39,18 @@ messages -> WebSWServerConnection NotRefCounted {
     WhenRegistrationReady(uint64_t serviceRegistrationMatchRequestIdentifier, struct WebCore::SecurityOriginData topOrigin, URL clientURL)
     GetRegistrations(uint64_t serviceRegistrationMatchRequestIdentifier, struct WebCore::SecurityOriginData topOrigin, URL clientURL)
     RegisterServiceWorkerClient(struct WebCore::SecurityOriginData topOrigin, struct WebCore::ServiceWorkerClientData data, std::optional<WebCore::ServiceWorkerRegistrationIdentifier> controllingServiceWorkerRegistrationIdentifier, String userAgent)
-    UnregisterServiceWorkerClient(struct WebCore::ServiceWorkerClientIdentifier identifier)
+    UnregisterServiceWorkerClient(WebCore::ScriptExecutionContextIdentifier identifier)
 
     TerminateWorkerFromClient(WebCore::ServiceWorkerIdentifier workerIdentifier) -> () Async
     WhenServiceWorkerIsTerminatedForTesting(WebCore::ServiceWorkerIdentifier workerIdentifier) -> () Async
 
     SetThrottleState(bool isThrottleable)
     StoreRegistrationsOnDisk() -> () Async
+
+    SubscribeToPushService(WebCore::ServiceWorkerRegistrationIdentifier identifier, Vector<uint8_t> applicationServerKey) -> (Expected<WebCore::PushSubscriptionData, WebCore::ExceptionData> result) Async
+    UnsubscribeFromPushService(WebCore::ServiceWorkerRegistrationIdentifier identifier) -> (Expected<bool, WebCore::ExceptionData> result) Async
+    GetPushSubscription(WebCore::ServiceWorkerRegistrationIdentifier identifier) -> (Expected<std::optional<WebCore::PushSubscriptionData>, WebCore::ExceptionData> result) Async
+    GetPushPermissionState(WebCore::ServiceWorkerRegistrationIdentifier identifier) -> (Expected<uint8_t, WebCore::ExceptionData> result) Async 
 }
 
 #endif // ENABLE(SERVICE_WORKER)

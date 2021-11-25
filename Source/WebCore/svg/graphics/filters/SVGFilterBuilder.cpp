@@ -20,18 +20,93 @@
 #include "config.h"
 #include "SVGFilterBuilder.h"
 
-#include "FilterEffect.h"
+#include "ElementIterator.h"
+#include "SVGFilterElement.h"
+#include "SVGFilterPrimitiveStandardAttributes.h"
 #include "SourceAlpha.h"
 #include "SourceGraphic.h"
-#include <wtf/text/StringConcatenateNumbers.h>
+
+#if ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB)
+#include "CSSComputedStyleDeclaration.h"
+#include "CSSPrimitiveValueMappings.h"
+#endif
 
 namespace WebCore {
 
-SVGFilterBuilder::SVGFilterBuilder(RefPtr<FilterEffect> sourceGraphic)
+void SVGFilterBuilder::setupBuiltinEffects(Ref<FilterEffect> sourceGraphic)
 {
-    m_builtinEffects.add(SourceGraphic::effectName(), sourceGraphic);
-    m_builtinEffects.add(SourceAlpha::effectName(), SourceAlpha::create(*sourceGraphic));
+    m_builtinEffects.add(SourceGraphic::effectName(), sourceGraphic.ptr());
+    m_builtinEffects.add(SourceAlpha::effectName(), SourceAlpha::create(sourceGraphic));
     addBuiltinEffects();
+}
+
+#if ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB)
+static ColorInterpolation colorInterpolationForElement(SVGElement& element)
+{
+    if (auto renderer = element.renderer())
+        return renderer->style().svgStyle().colorInterpolationFilters();
+
+    // Try to determine the property value from the computed style.
+    if (auto value = ComputedStyleExtractor(&element).propertyValue(CSSPropertyColorInterpolationFilters)) {
+        if (is<CSSPrimitiveValue>(value))
+            return downcast<CSSPrimitiveValue>(*value);
+    }
+
+    return ColorInterpolation::Auto;
+}
+#endif
+
+static unsigned collectEffects(const FilterEffect* effect, HashSet<const FilterEffect*>& allEffects)
+{
+    allEffects.add(effect);
+    unsigned size = effect->numberOfEffectInputs();
+    for (unsigned i = 0; i < size; ++i) {
+        FilterEffect* in = effect->inputEffect(i);
+        collectEffects(in, allEffects);
+    }
+    return allEffects.size();
+}
+
+static unsigned totalNumberFilterEffects(const FilterEffect& lastEffect)
+{
+    HashSet<const FilterEffect*> allEffects;
+    return collectEffects(&lastEffect, allEffects);
+}
+
+RefPtr<FilterEffect> SVGFilterBuilder::buildFilterEffects(SVGFilterElement& filterElement)
+{
+    static constexpr unsigned maxCountChildNodes = 200;
+    static constexpr unsigned maxTotalNumberFilterEffects = 100;
+
+    if (filterElement.countChildNodes() > maxCountChildNodes)
+        return nullptr;
+
+    RefPtr<FilterEffect> effect;
+
+    for (auto& effectElement : childrenOfType<SVGFilterPrimitiveStandardAttributes>(filterElement)) {
+        effect = effectElement.build(*this);
+        if (!effect) {
+            clearEffects();
+            return nullptr;
+        }
+
+        effectElement.setStandardAttributes(effect.get());
+        effect->setEffectBoundaries(SVGLengthContext::resolveRectangle<SVGFilterPrimitiveStandardAttributes>(&effectElement, m_primitiveUnits, m_targetBoundingBox));
+
+#if ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB)
+        if (colorInterpolationForElement(effectElement) == ColorInterpolation::LinearRGB)
+            effect->setOperatingColorSpace(DestinationColorSpace::LinearSRGB());
+#endif
+        if (auto renderer = effectElement.renderer())
+            appendEffectToEffectReferences(effect.copyRef(), renderer);
+
+        add(effectElement.result(), effect);
+    }
+
+    if (!effect || totalNumberFilterEffects(*effect) > maxTotalNumberFilterEffects)
+        return nullptr;
+
+    return effect;
 }
 
 void SVGFilterBuilder::add(const AtomString& id, RefPtr<FilterEffect> effect)
@@ -101,6 +176,42 @@ void SVGFilterBuilder::clearResultsRecursive(FilterEffect* effect)
 
     for (auto& reference : effectReferences(effect))
         clearResultsRecursive(reference);
+}
+
+static bool buildEffectExpression(const RefPtr<FilterEffect>& effect, FilterEffectVector& stack, FilterEffectVector& expression)
+{
+    // A cycle is detected.
+    if (stack.contains(effect))
+        return false;
+
+    stack.append(effect);
+    
+    expression.append(effect);
+
+    for (auto& inputEffect : effect->inputEffects()) {
+        if (!buildEffectExpression(inputEffect, stack, expression))
+            return false;
+    }
+
+    ASSERT(!stack.isEmpty());
+    ASSERT(stack.last() == effect);
+
+    stack.removeLast();
+    return true;
+}
+
+bool SVGFilterBuilder::buildExpression(FilterEffectVector& expression) const
+{
+    if (!m_lastEffect)
+        return false;
+
+    FilterEffectVector stack;
+    if (!buildEffectExpression(m_lastEffect, stack, expression))
+        return false;
+
+    expression.reverse();
+    expression.shrinkToFit();
+    return true;
 }
 
 } // namespace WebCore

@@ -22,16 +22,11 @@
 
 #pragma once
 
-#include "AlphaPremultiplication.h"
 #include "DestinationColorSpace.h"
-#include "FloatRect.h"
+#include "FilterEffectVector.h"
+#include "FilterFunction.h"
+#include "FilterImage.h"
 #include "IntRect.h"
-#include "IntRectExtent.h"
-#include "PixelBuffer.h"
-#include <JavaScriptCore/Uint8ClampedArray.h>
-#include <wtf/MathExtras.h>
-#include <wtf/RefCounted.h>
-#include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
 
 namespace WTF {
@@ -41,70 +36,31 @@ class TextStream;
 namespace WebCore {
 
 class Filter;
-class FilterEffect;
 class ImageBuffer;
 
-typedef Vector<RefPtr<FilterEffect>> FilterEffectVector;
-
-enum FilterEffectType {
-    FilterEffectTypeUnknown,
-    FilterEffectTypeImage,
-    FilterEffectTypeTile,
-    FilterEffectTypeSourceInput
-};
-
-class FilterEffect : public RefCounted<FilterEffect> {
+class FilterEffect : public FilterFunction {
 public:
-    enum class Type : uint8_t {
-        Blend,
-        ColorMatrix,
-        ComponentTransfer,
-        Composite,
-        ConvolveMatrix,
-        DiffuseLighting,
-        DisplacementMap,
-        DropShadow,
-        Flood,
-        GaussianBlur,
-        Image,
-        Lighting,
-        Merge,
-        Morphology,
-        Offset,
-        SpecularLighting,
-        Tile,
-        Turbulence,
-        SourceAlpha,
-        SourceGraphic
-    };
-    virtual ~FilterEffect();
-
-    void clearResult();
+    bool createResult();
+    void clearResult() override;
     void clearResultsRecursive();
 
+    bool hasResult() const { return m_filterImage; }
+
     ImageBuffer* imageBufferResult();
-    RefPtr<Uint8ClampedArray> unmultipliedResult(const IntRect&, std::optional<DestinationColorSpace> = std::nullopt);
-    RefPtr<Uint8ClampedArray> premultipliedResult(const IntRect&, std::optional<DestinationColorSpace> = std::nullopt);
-    void copyUnmultipliedResult(Uint8ClampedArray& destination, const IntRect&, std::optional<DestinationColorSpace> = std::nullopt);
-    void copyPremultipliedResult(Uint8ClampedArray& destination, const IntRect&, std::optional<DestinationColorSpace> = std::nullopt);
+    PixelBuffer* pixelBufferResult(AlphaPremultiplication);
+    std::optional<PixelBuffer> getPixelBufferResult(AlphaPremultiplication, const IntRect& sourceRect, std::optional<DestinationColorSpace> = std::nullopt);
+    void copyPixelBufferResult(PixelBuffer& destinationPixelBuffer, const IntRect& sourceRect) const;
+    void correctPremultipliedResultIfNeeded();
+
     FilterEffectVector& inputEffects() { return m_inputEffects; }
     FilterEffect* inputEffect(unsigned) const;
     unsigned numberOfEffectInputs() const { return m_inputEffects.size(); }
-    unsigned totalNumberOfEffectInputs() const;
     
-    inline bool hasResult() const
-    {
-        // This function needs platform specific checks, if the memory managment is not done by FilterEffect.
-        return m_imageBufferResult
-            || m_unmultipliedImageResult
-            || m_premultipliedImageResult;
-    }
-
     FloatRect drawingRegionOfInputImage(const IntRect&) const;
     IntRect requestedRegionOfInputPixelBuffer(const IntRect&) const;
     
     // Recurses on inputs.
-    FloatRect determineFilterPrimitiveSubregion();
+    FloatRect determineFilterPrimitiveSubregion(const Filter&);
 
     // Solid black image with different alpha values.
     bool isAlphaImage() const { return m_alphaImage; }
@@ -114,20 +70,16 @@ public:
     void setAbsolutePaintRect(const IntRect& absolutePaintRect) { m_absolutePaintRect = absolutePaintRect; }
 
     FloatRect maxEffectRect() const { return m_maxEffectRect; }
-    void setMaxEffectRect(const FloatRect& maxEffectRect) { m_maxEffectRect = maxEffectRect; } 
+    void setMaxEffectRect(const FloatRect& maxEffectRect) { m_maxEffectRect = maxEffectRect; }
 
-    void apply();
+    bool apply(const Filter&) override;
 
     // Correct any invalid pixels, if necessary, in the result of a filter operation.
     // This method is used to ensure valid pixel values on filter inputs and the final result.
     // Only the arithmetic composite filter ever needs to perform correction.
     virtual void correctFilterResultIfNeeded() { }
 
-    virtual void determineAbsolutePaintRect();
-
-    virtual FilterEffectType filterEffectType() const { return FilterEffectTypeUnknown; }
-
-    virtual IntOutsets outsets() const { return IntOutsets(); }
+    virtual void determineAbsolutePaintRect(const Filter&);
 
     enum class RepresentationType { TestOutput, Debugging };
     virtual WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType = RepresentationType::TestOutput) const;
@@ -156,18 +108,13 @@ public:
     
     FloatPoint mapPointFromUserSpaceToBuffer(FloatPoint) const;
     
-    Type filterEffectClassType() const { return m_filterEffectClassType; }
-
-    Filter& filter() { return m_filter; }
-    const Filter& filter() const { return m_filter; }
-
     bool clipsToBounds() const { return m_clipsToBounds; }
     void setClipsToBounds(bool value) { m_clipsToBounds = value; }
 
     const DestinationColorSpace& operatingColorSpace() const { return m_operatingColorSpace; }
     virtual void setOperatingColorSpace(const DestinationColorSpace& colorSpace) { m_operatingColorSpace = colorSpace; }
-    const DestinationColorSpace& resultColorSpace() const { return m_resultColorSpace; }
-    virtual void setResultColorSpace(const DestinationColorSpace& colorSpace) { m_resultColorSpace = colorSpace; }
+
+    virtual const DestinationColorSpace& resultColorSpace() const { return m_operatingColorSpace; }
 
     virtual void transformResultColorSpace(FilterEffect* in, const int) { in->transformResultColorSpace(m_operatingColorSpace); }
     void transformResultColorSpace(const DestinationColorSpace&);
@@ -181,40 +128,18 @@ public:
     }
 
 protected:
-    FilterEffect(Filter&, Type);
-    
-    virtual const char* filterName() const = 0;
+    using FilterFunction::FilterFunction;
 
-    ImageBuffer* createImageBufferResult();
-    std::optional<PixelBuffer>& createUnmultipliedImageResult();
-    std::optional<PixelBuffer>& createPremultipliedImageResult();
-
-    // Return true if the filter will only operate correctly on valid RGBA values, with
-    // alpha in [0,255] and each color component in [0, alpha].
-    virtual bool requiresValidPreMultipliedPixels() { return true; }
-
-    // If a pre-multiplied image, check every pixel for validity and correct if necessary.
-    void forceValidPreMultipliedPixels();
+    virtual bool mayProduceInvalidPremultipliedPixels() const { return false; }
 
     void clipAbsolutePaintRect();
 
 private:
-    virtual void platformApplySoftware() = 0;
+    virtual bool platformApplySoftware(const Filter&) = 0;
 
-    void copyImageBytes(const Uint8ClampedArray& source, Uint8ClampedArray& destination, const IntRect&) const;
-    void copyConvertedImageBufferToDestination(Uint8ClampedArray&, const DestinationColorSpace&, AlphaPremultiplication, const IntRect&);
-    void copyConvertedPixelBufferToDestination(Uint8ClampedArray&, PixelBuffer&, const DestinationColorSpace&, const IntRect&);
-    bool requiresPixelBufferColorSpaceConversion(std::optional<DestinationColorSpace>);
-    std::optional<PixelBuffer> convertImageBufferToColorSpace(const DestinationColorSpace&, ImageBuffer&, const IntRect&, AlphaPremultiplication);
-    std::optional<PixelBuffer> convertPixelBufferToColorSpace(const DestinationColorSpace&, PixelBuffer&);
-    
-
-    Filter& m_filter;
     FilterEffectVector m_inputEffects;
 
-    RefPtr<ImageBuffer> m_imageBufferResult;
-    std::optional<PixelBuffer> m_unmultipliedImageResult;
-    std::optional<PixelBuffer> m_premultipliedImageResult;
+    RefPtr<FilterImage> m_filterImage;
 
     IntRect m_absolutePaintRect;
     
@@ -242,17 +167,18 @@ private:
     // Should the effect clip to its primitive region, or expand to use the combined region of its inputs.
     bool m_clipsToBounds { true };
 
-#if ENABLE(DESTINATION_COLOR_SPACE_LINEAR_SRGB)
-    DestinationColorSpace m_operatingColorSpace { DestinationColorSpace::LinearSRGB() };
-#else
     DestinationColorSpace m_operatingColorSpace { DestinationColorSpace::SRGB() };
-#endif
-    DestinationColorSpace m_resultColorSpace { DestinationColorSpace::SRGB() };
-    
-    const Type m_filterEffectClassType;
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const FilterEffect&);
 
 } // namespace WebCore
 
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::FilterEffect)
+    static bool isType(const WebCore::FilterFunction& function) { return function.isFilterEffect(); }
+SPECIALIZE_TYPE_TRAITS_END()
+
+#define SPECIALIZE_TYPE_TRAITS_FILTER_EFFECT(ClassName) \
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::ClassName) \
+    static bool isType(const WebCore::FilterEffect& effect) { return effect.filterType() == WebCore::FilterEffect::Type::ClassName; } \
+SPECIALIZE_TYPE_TRAITS_END()

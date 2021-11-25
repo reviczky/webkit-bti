@@ -35,6 +35,7 @@
 #include <wtf/Assertions.h>
 #include <wtf/Forward.h>
 #include <wtf/HashSet.h>
+#include <wtf/ObjectIdentifier.h>
 #include <wtf/RefPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/text/WTFString.h>
@@ -104,6 +105,14 @@ template<> struct CrossThreadCopierBase<false, false, WTF::ASCIILiteral> {
     }
 };
 
+template<typename T> struct CrossThreadCopierBase<false, false, ObjectIdentifier<T>> {
+    typedef ObjectIdentifier<T> Type;
+    static Type copy(const Type& source)
+    {
+        return source;
+    }
+};
+
 template<typename T>
 struct CrossThreadCopier : public CrossThreadCopierBase<CrossThreadCopierBaseHelper::IsEnumOrConvertibleToInteger<T>::value, CrossThreadCopierBaseHelper::IsThreadSafeRefCountedPointer<T>::value, T> {
 };
@@ -154,13 +163,23 @@ template<typename F, typename S> struct CrossThreadCopierBase<false, false, std:
     }
 };
 
-// Default specialization for Optional of CrossThreadCopyable class.
+// Default specialization for std::optional of CrossThreadCopyable class.
 template<typename T> struct CrossThreadCopierBase<false, false, std::optional<T>> {
     template<typename U> static std::optional<T> copy(U&& source)
     {
         if (!source)
             return std::nullopt;
         return CrossThreadCopier<T>::copy(std::forward<U>(source).value());
+    }
+};
+
+// Default specialization for std::variant of CrossThreadCopyable classes.
+template<typename... Types> struct CrossThreadCopierBase<false, false, std::variant<Types...>> {
+    template<typename U> static std::variant<Types...> copy(U&& source)
+    {
+        return std::visit([] (auto& type) -> std::variant<Types...> {
+            return CrossThreadCopier<std::remove_const_t<std::remove_reference_t<decltype(type)>>>::copy(type);
+        }, std::forward<U>(source));
     }
 };
 

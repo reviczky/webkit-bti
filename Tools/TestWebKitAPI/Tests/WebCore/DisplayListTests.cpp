@@ -122,8 +122,6 @@ TEST(DisplayListTests, AppendItems)
             break;
         }
 #endif
-        case ItemType::MetaCommandChangeItemBuffer:
-            break;
         default: {
             observedUnexpectedItem = true;
             break;
@@ -203,7 +201,7 @@ TEST(DisplayListTests, ItemBufferClient)
         RefPtr<SharedBuffer> encodeItemOutOfLine(const DisplayListItem& displayListItem) const final
         {
             auto index = m_items.size();
-            m_items.append(WTF::get<StrokePath>(displayListItem));
+            m_items.append(std::get<StrokePath>(displayListItem));
             return SharedBuffer::create(reinterpret_cast<uint8_t*>(&index), sizeof(size_t));
         }
 

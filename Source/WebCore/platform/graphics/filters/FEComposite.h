@@ -2,6 +2,7 @@
  * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,8 +23,6 @@
 #pragma once
 
 #include "FilterEffect.h"
-
-#include "Filter.h"
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -41,7 +40,7 @@ enum CompositeOperationType {
 
 class FEComposite : public FilterEffect {
 public:
-    static Ref<FEComposite> create(Filter&, const CompositeOperationType&, float, float, float, float);
+    static Ref<FEComposite> create(const CompositeOperationType&, float k1, float k2, float k3, float k4);
 
     CompositeOperationType operation() const { return m_type; }
     bool setOperation(CompositeOperationType);
@@ -58,18 +57,15 @@ public:
     float k4() const { return m_k4; }
     bool setK4(float);
 
-protected:
-    bool requiresValidPreMultipliedPixels() override { return m_type != FECOMPOSITE_OPERATOR_ARITHMETIC; }
-
 private:
-    FEComposite(Filter&, const CompositeOperationType&, float, float, float, float);
+    FEComposite(const CompositeOperationType&, float k1, float k2, float k3, float k4);
 
-    const char* filterName() const final { return "FEComposite"; }
+    void determineAbsolutePaintRect(const Filter&) override;
 
-    void correctFilterResultIfNeeded() override;
-    void determineAbsolutePaintRect() override;
+    bool mayProduceInvalidPremultipliedPixels() const override { return m_type == FECOMPOSITE_OPERATOR_ARITHMETIC; }
 
-    void platformApplySoftware() override;
+    bool platformApplySoftware(const Filter&) override;
+
     WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     inline void platformArithmeticSoftware(const Uint8ClampedArray& source, Uint8ClampedArray& destination, float k1, float k2, float k3, float k4);
@@ -90,3 +86,4 @@ private:
 
 } // namespace WebCore
 
+SPECIALIZE_TYPE_TRAITS_FILTER_EFFECT(FEComposite)

@@ -46,11 +46,16 @@ public:
     ContentSecurityPolicyHeaderType headerType() const { return m_headerType; }
 
     const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeEval() const;
-    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeInlineScript() const;
-    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeInlineStyle() const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForParserInsertedScript(ParserInserted) const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeInlineScriptElement() const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeInlineScriptAttribute() const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeInlineStyleElement() const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeInlineStyleAttribute() const;
 
-    const ContentSecurityPolicyDirective* violatedDirectiveForScriptHash(const ContentSecurityPolicyHash&) const;
-    const ContentSecurityPolicyDirective* violatedDirectiveForStyleHash(const ContentSecurityPolicyHash&) const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForScriptHash(const Vector<ContentSecurityPolicyHash>&) const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForStyleHash(const Vector<ContentSecurityPolicyHash>&) const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeHashScript(const Vector<ContentSecurityPolicyHash>&) const;
+    const ContentSecurityPolicyDirective* violatedDirectiveForUnsafeHashStyle(const Vector<ContentSecurityPolicyHash>&) const;
 
     const ContentSecurityPolicyDirective* violatedDirectiveForScriptNonce(const String&) const;
     const ContentSecurityPolicyDirective* violatedDirectiveForStyleNonce(const String&) const;
@@ -81,10 +86,13 @@ public:
     const String& evalDisabledErrorMessage() const { return m_evalDisabledErrorMessage; }
     const String& webAssemblyDisabledErrorMessage() const { return m_webAssemblyDisabledErrorMessage; }
     bool isReportOnly() const { return m_reportOnly; }
+    bool shouldReportSample(const String&) const;
     const Vector<String>& reportURIs() const { return m_reportURIs; }
 
     // FIXME: Remove this once we teach ContentSecurityPolicyDirectiveList how to log an arbitrary console message.
     const ContentSecurityPolicy& policy() const { return m_policy; }
+
+    bool strictDynamicIncluded();
 
 private:
     void parse(const String&, ContentSecurityPolicy::PolicyFrom);
@@ -103,7 +111,9 @@ private:
     template <class CSPDirectiveType>
     void setCSPDirective(ParsedDirective&&, std::unique_ptr<CSPDirectiveType>&);
 
-    ContentSecurityPolicySourceListDirective* operativeDirective(ContentSecurityPolicySourceListDirective*) const;
+    ContentSecurityPolicySourceListDirective* operativeDirective(ContentSecurityPolicySourceListDirective*, const String&) const;
+    ContentSecurityPolicySourceListDirective* operativeDirectiveScript(ContentSecurityPolicySourceListDirective*, const String&) const;
+    ContentSecurityPolicySourceListDirective* operativeDirectiveStyle(ContentSecurityPolicySourceListDirective*, const String&) const;
 
     void setEvalDisabledErrorMessage(const String& errorMessage) { m_evalDisabledErrorMessage = errorMessage; }
     void setWebAssemblyDisabledErrorMessage(const String& errorMessage) { m_webAssemblyDisabledErrorMessage = errorMessage; }
@@ -136,7 +146,11 @@ private:
     std::unique_ptr<ContentSecurityPolicySourceListDirective> m_objectSrc;
     std::unique_ptr<ContentSecurityPolicySourceListDirective> m_scriptSrc;
     std::unique_ptr<ContentSecurityPolicySourceListDirective> m_styleSrc;
-    
+    std::unique_ptr<ContentSecurityPolicySourceListDirective> m_scriptSrcElem;
+    std::unique_ptr<ContentSecurityPolicySourceListDirective> m_scriptSrcAttr;
+    std::unique_ptr<ContentSecurityPolicySourceListDirective> m_styleSrcElem;
+    std::unique_ptr<ContentSecurityPolicySourceListDirective> m_styleSrcAttr;
+
     Vector<String> m_reportURIs;
     
     String m_evalDisabledErrorMessage;

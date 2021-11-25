@@ -25,7 +25,6 @@
 
 #include "config.h"
 
-#include "PluginProcessManager.h"
 #include "WKPreferencesRef.h"
 #include "WKPreferencesRefPrivate.h"
 #include "WKAPICast.h"
@@ -183,16 +182,6 @@ void WKPreferencesSetDatabasesEnabled(WKPreferencesRef preferencesRef, bool data
 bool WKPreferencesGetDatabasesEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->databasesEnabled();
-}
-
-void WKPreferencesSetXSSAuditorEnabled(WKPreferencesRef preferencesRef, bool xssAuditorEnabled)
-{
-    toImpl(preferencesRef)->setXSSAuditorEnabled(xssAuditorEnabled);
-}
-
-bool WKPreferencesGetXSSAuditorEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->xssAuditorEnabled();
 }
 
 void WKPreferencesSetFrameFlatteningEnabled(WKPreferencesRef preferencesRef, bool frameFlatteningEnabled)
@@ -1077,9 +1066,6 @@ bool WKPreferencesGetPlugInSnapshottingEnabled(WKPreferencesRef preferencesRef)
 
 void WKPreferencesSetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef preferencesRef, bool enabled)
 {
-#if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
-    WebKit::PluginProcessManager::singleton().setExperimentalPlugInSandboxProfilesEnabled(enabled);
-#endif
     toImpl(preferencesRef)->setExperimentalPlugInSandboxProfilesEnabled(enabled);
 }
 
@@ -1604,16 +1590,6 @@ void WKPreferencesSetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef
 bool WKPreferencesGetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->customPasteboardDataEnabled();
-}
-
-void WKPreferencesSetDialogElementEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setDialogElementEnabled(flag);
-}
-
-bool WKPreferencesGetDialogElementEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->dialogElementEnabled();
 }
 
 void WKPreferencesSetKeygenElementEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -2225,4 +2201,23 @@ void WKPreferencesSetWebSQLDisabled(WKPreferencesRef, bool)
 bool WKPreferencesGetWebSQLDisabled(WKPreferencesRef preferencesRef)
 {
     return true;
+}
+
+void WKPreferencesSetXSSAuditorEnabled(WKPreferencesRef, bool)
+{
+}
+
+bool WKPreferencesGetXSSAuditorEnabled(WKPreferencesRef)
+{
+    return false;
+}
+
+void WKPreferencesSetRequestVideoFrameCallbackEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setRequestVideoFrameCallbackEnabled(enabled);
+}
+
+bool WKPreferencesGetRequestVideoFrameCallbackEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->requestVideoFrameCallbackEnabled();
 }

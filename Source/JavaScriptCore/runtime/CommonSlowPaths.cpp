@@ -355,7 +355,7 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_to_this)
             if (otherStructureID)
                 metadata.m_toThisStatus = ToThisConflicted;
             metadata.m_cachedStructureID = myStructureID;
-            vm.heap.writeBarrier(codeBlock, vm.getStructure(myStructureID));
+            vm.writeBarrier(codeBlock, vm.getStructure(myStructureID));
         }
     } else {
         metadata.m_toThisStatus = ToThisConflicted;
@@ -478,9 +478,8 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_to_string)
 }
 
 #if ENABLE(JIT)
-static void updateArithProfileForUnaryArithOp(OpNegate::Metadata& metadata, JSValue result, JSValue operand)
+static void updateArithProfileForUnaryArithOp(UnaryArithProfile& profile, JSValue result, JSValue operand)
 {
-    UnaryArithProfile& profile = metadata.m_arithProfile;
     profile.observeArg(operand);
     ASSERT(result.isNumber() || result.isBigInt());
 
@@ -514,24 +513,25 @@ static void updateArithProfileForUnaryArithOp(OpNegate::Metadata& metadata, JSVa
     }
 }
 #else
-static void updateArithProfileForUnaryArithOp(OpNegate::Metadata&, JSValue, JSValue) { }
+static void updateArithProfileForUnaryArithOp(UnaryArithProfile&, JSValue, JSValue) { }
 #endif
 
 JSC_DEFINE_COMMON_SLOW_PATH(slow_path_negate)
 {
     BEGIN();
     auto bytecode = pc->as<OpNegate>();
-    auto& metadata = bytecode.metadata(codeBlock);
     JSValue operand = GET_C(bytecode.m_operand).jsValue();
     JSValue primValue = operand.toPrimitive(globalObject, PreferNumber);
     CHECK_EXCEPTION();
+
+    auto& profile = codeBlock->unlinkedCodeBlock()->unaryArithProfile(bytecode.m_profileIndex);
 
 #if USE(BIGINT32)
     if (primValue.isBigInt32()) {
         JSValue result = JSBigInt::unaryMinus(globalObject, primValue.bigInt32AsInt32());
         CHECK_EXCEPTION();
         RETURN_WITH_PROFILING(result, {
-            updateArithProfileForUnaryArithOp(metadata, result, operand);
+            updateArithProfileForUnaryArithOp(profile, result, operand);
         });
     }
 #endif
@@ -540,14 +540,14 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_negate)
         JSValue result = JSBigInt::unaryMinus(globalObject, primValue.asHeapBigInt());
         CHECK_EXCEPTION();
         RETURN_WITH_PROFILING(result, {
-            updateArithProfileForUnaryArithOp(metadata, result, operand);
+            updateArithProfileForUnaryArithOp(profile, result, operand);
         });
     }
     
     JSValue result = jsNumber(-primValue.toNumber(globalObject));
     CHECK_EXCEPTION();
     RETURN_WITH_PROFILING(result, {
-        updateArithProfileForUnaryArithOp(metadata, result, operand);
+        updateArithProfileForUnaryArithOp(profile, result, operand);
     });
 }
 
@@ -985,7 +985,7 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_enumerator_next)
     Register& indexRegister = GET(bytecode.m_index);
     Register& nameRegister = GET(bytecode.m_propertyName);
 
-    auto mode = static_cast<JSPropertyNameEnumerator::Mode>(modeRegister.jsValue().asUInt32());
+    auto mode = static_cast<JSPropertyNameEnumerator::Flag>(modeRegister.jsValue().asUInt32());
     uint32_t index = indexRegister.jsValue().asUInt32();
 
     JSPropertyNameEnumerator* enumerator = jsCast<JSPropertyNameEnumerator*>(GET(bytecode.m_enumerator).jsValue());
@@ -1001,7 +1001,7 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_enumerator_next)
     metadata.m_enumeratorMetadata |= static_cast<uint8_t>(mode);
     modeRegister = jsNumber(static_cast<uint8_t>(mode));
     indexRegister = jsNumber(index);
-    nameRegister = name ? name : jsNull();
+    nameRegister = name ? name : vm.smallStrings.sentinelString();
     END();
 }
 
@@ -1012,7 +1012,7 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_enumerator_get_by_val)
     JSValue baseValue = GET_C(bytecode.m_base).jsValue();
     JSValue propertyName = GET(bytecode.m_propertyName).jsValue();
     auto& metadata = bytecode.metadata(codeBlock);
-    auto mode = static_cast<JSPropertyNameEnumerator::Mode>(GET(bytecode.m_mode).jsValue().asUInt32());
+    auto mode = static_cast<JSPropertyNameEnumerator::Flag>(GET(bytecode.m_mode).jsValue().asUInt32());
     metadata.m_enumeratorMetadata |= static_cast<uint8_t>(mode);
     JSPropertyNameEnumerator* enumerator = jsCast<JSPropertyNameEnumerator*>(GET(bytecode.m_enumerator).jsValue());
     unsigned index = GET(bytecode.m_index).jsValue().asInt32();
@@ -1026,7 +1026,7 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_enumerator_in_by_val)
     auto bytecode = pc->as<OpEnumeratorInByVal>();
     JSValue baseValue = GET_C(bytecode.m_base).jsValue();
     auto& metadata = bytecode.metadata(codeBlock);
-    auto mode = static_cast<JSPropertyNameEnumerator::Mode>(GET(bytecode.m_mode).jsValue().asUInt32());
+    auto mode = static_cast<JSPropertyNameEnumerator::Flag>(GET(bytecode.m_mode).jsValue().asUInt32());
     metadata.m_enumeratorMetadata |= static_cast<uint8_t>(mode);
 
     CHECK_EXCEPTION();
@@ -1049,7 +1049,7 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_enumerator_has_own_property)
     auto bytecode = pc->as<OpEnumeratorHasOwnProperty>();
     JSValue baseValue = GET_C(bytecode.m_base).jsValue();
     auto& metadata = bytecode.metadata(codeBlock);
-    auto mode = static_cast<JSPropertyNameEnumerator::Mode>(GET(bytecode.m_mode).jsValue().asUInt32());
+    auto mode = static_cast<JSPropertyNameEnumerator::Flag>(GET(bytecode.m_mode).jsValue().asUInt32());
     metadata.m_enumeratorMetadata |= static_cast<uint8_t>(mode);
 
     JSPropertyNameEnumerator* enumerator = jsCast<JSPropertyNameEnumerator*>(GET(bytecode.m_enumerator).jsValue());

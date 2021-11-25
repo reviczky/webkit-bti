@@ -21,6 +21,7 @@
 #pragma once
 
 #include <optional>
+#include <variant>
 #include <wtf/StdLibExtras.h>
 #include <wtf/URL.h>
 #include <wtf/text/AtomString.h>
@@ -95,6 +96,11 @@ inline void add(Hasher& hasher, float number)
     add(hasher, bitwise_cast<uint32_t>(number));
 }
 
+template<typename T> inline void add(Hasher& hasher, T* ptr)
+{
+    add(hasher, bitwise_cast<uintptr_t>(ptr));
+}
+
 inline void add(Hasher& hasher, const String& string)
 {
     // Chose to hash the characters here. Assuming this is better than hashing the possibly-already-computed hash of the characters.
@@ -166,10 +172,10 @@ template<typename T> void add(Hasher& hasher, const std::optional<T>& optional)
         add(hasher, optional.value());
 }
 
-template<typename... Types> void add(Hasher& hasher, const Variant<Types...>& variant)
+template<typename... Types> void add(Hasher& hasher, const std::variant<Types...>& variant)
 {
     add(hasher, variant.index());
-    visit([&hasher] (auto& value) {
+    std::visit([&hasher] (auto& value) {
         add(hasher, value);
     }, variant);
 }

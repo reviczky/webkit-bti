@@ -51,13 +51,22 @@ static const void* nextLogIdentifier()
     return reinterpret_cast<const void*>(++logIdentifier);
 }
 
-static WTFLogChannel& logChannel() { return LogMedia; }
-static const char* logClassName() { return "MediaSession"; }
+#if !RELEASE_LOG_DISABLED
+static WTFLogChannel& logChannel()
+{
+    return LogMedia;
+}
+
+static const char* logClassName()
+{
+    return "MediaSession";
+}
+#endif
 
 static PlatformMediaSession::RemoteControlCommandType platformCommandForMediaSessionAction(MediaSessionAction action)
 {
     static const auto commandMap = makeNeverDestroyed([] {
-        using ActionToCommandMap = HashMap<MediaSessionAction, PlatformMediaSession::RemoteControlCommandType, WTF::IntHash<MediaSessionAction>, WTF::StrongEnumHashTraits<MediaSessionAction>>;
+        using ActionToCommandMap = HashMap<MediaSessionAction, PlatformMediaSession::RemoteControlCommandType, IntHash<MediaSessionAction>, WTF::StrongEnumHashTraits<MediaSessionAction>>;
 
         return ActionToCommandMap {
             { MediaSessionAction::Play, PlatformMediaSession::PlayCommand },
@@ -135,12 +144,12 @@ Ref<MediaSession> MediaSession::create(Navigator& navigator)
 
 MediaSession::MediaSession(Navigator& navigator)
     : ActiveDOMObject(navigator.scriptExecutionContext())
-    , m_navigator(makeWeakPtr(navigator))
+    , m_navigator(navigator)
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
     , m_coordinator(MediaSessionCoordinator::create(navigator.scriptExecutionContext()))
 #endif
 {
-    m_logger = makeRefPtr(Document::sharedLogger());
+    m_logger = &Document::sharedLogger();
     m_logIdentifier = nextLogIdentifier();
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
@@ -353,7 +362,7 @@ void MediaSession::removeObserver(Observer& observer)
 void MediaSession::forEachObserver(const Function<void(Observer&)>& apply)
 {
     ASSERT(isMainThread());
-    auto protectedThis = makeRef(*this);
+    Ref protectedThis { *this };
     m_observers.forEach(apply);
 }
 

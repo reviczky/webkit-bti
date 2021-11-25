@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(CONTENT_EXTENSIONS)
-
 #include "APIObject.h"
 #include <system_error>
 #include <wtf/text/WTFString.h>
@@ -36,6 +34,7 @@ class SharedBuffer;
 }
 
 namespace WTF {
+class ConcurrentWorkQueue;
 class WorkQueue;
 }
 
@@ -51,7 +50,8 @@ public:
         CompileFailed,
         RemoveFailed
     };
-    
+
+#if ENABLE(CONTENT_EXTENSIONS)
     // This should be incremented every time a functional change is made to the bytecode, file format, etc.
     // to prevent crashing while loading old data.
     // Also update ContentRuleListStore::getContentRuleListSource to be able to find the original JSON
@@ -80,9 +80,10 @@ private:
     WTF::String defaultStorePath();
     
     const WTF::String m_storePath;
-    Ref<WTF::WorkQueue> m_compileQueue;
+    Ref<WTF::ConcurrentWorkQueue> m_compileQueue;
     Ref<WTF::WorkQueue> m_readQueue;
     Ref<WTF::WorkQueue> m_removeQueue;
+#endif // ENABLE(CONTENT_EXTENSIONS)
 };
 
 const std::error_category& contentRuleListStoreErrorCategory();
@@ -97,5 +98,3 @@ inline std::error_code make_error_code(ContentRuleListStore::Error error)
 namespace std {
 template<> struct is_error_code_enum<API::ContentRuleListStore::Error> : public true_type { };
 }
-
-#endif // ENABLE(CONTENT_EXTENSIONS)

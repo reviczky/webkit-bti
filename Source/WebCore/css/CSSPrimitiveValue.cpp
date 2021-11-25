@@ -26,6 +26,7 @@
 #include "CSSFontFamily.h"
 #include "CSSHelper.h"
 #include "CSSMarkup.h"
+#include "CSSParserIdioms.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSPropertyNames.h"
 #include "CSSToLengthConversionData.h"
@@ -37,6 +38,7 @@
 #include "Counter.h"
 #include "DeprecatedCSSOMPrimitiveValue.h"
 #include "FontCascade.h"
+#include "Length.h"
 #include "Node.h"
 #include "Pair.h"
 #include "Rect.h"
@@ -56,9 +58,14 @@ static inline bool isValidCSSUnitTypeForDoubleConversion(CSSUnitType unitType)
     case CSSUnitType::CSS_CALC_PERCENTAGE_WITH_LENGTH:
     case CSSUnitType::CSS_CALC_PERCENTAGE_WITH_NUMBER:
     case CSSUnitType::CSS_CHS:
+    case CSSUnitType::CSS_IC:
     case CSSUnitType::CSS_CM:
     case CSSUnitType::CSS_DEG:
     case CSSUnitType::CSS_DIMENSION:
+    case CSSUnitType::CSS_DVH:
+    case CSSUnitType::CSS_DVMAX:
+    case CSSUnitType::CSS_DVMIN:
+    case CSSUnitType::CSS_DVW:
     case CSSUnitType::CSS_EMS:
     case CSSUnitType::CSS_EXS:
     case CSSUnitType::CSS_FR:
@@ -75,11 +82,19 @@ static inline bool isValidCSSUnitTypeForDoubleConversion(CSSUnitType unitType)
     case CSSUnitType::CSS_PX:
     case CSSUnitType::CSS_Q:
     case CSSUnitType::CSS_LHS:
+    case CSSUnitType::CSS_LVH:
+    case CSSUnitType::CSS_LVMAX:
+    case CSSUnitType::CSS_LVMIN:
+    case CSSUnitType::CSS_LVW:
     case CSSUnitType::CSS_RLHS:
     case CSSUnitType::CSS_QUIRKY_EMS:
     case CSSUnitType::CSS_RAD:
     case CSSUnitType::CSS_REMS:
     case CSSUnitType::CSS_S:
+    case CSSUnitType::CSS_SVH:
+    case CSSUnitType::CSS_SVMAX:
+    case CSSUnitType::CSS_SVMIN:
+    case CSSUnitType::CSS_SVW:
     case CSSUnitType::CSS_TURN:
     case CSSUnitType::CSS_VH:
     case CSSUnitType::CSS_VMAX:
@@ -88,6 +103,7 @@ static inline bool isValidCSSUnitTypeForDoubleConversion(CSSUnitType unitType)
     case CSSUnitType::CSS_DPCM:
     case CSSUnitType::CSS_DPI:
     case CSSUnitType::CSS_DPPX:
+    case CSSUnitType::CSS_X:
         return true;
     case CSSUnitType::CSS_ATTR:
     case CSSUnitType::CSS_COUNTER:
@@ -129,6 +145,7 @@ static inline bool isStringType(CSSUnitType type)
     case CSSUnitType::CSS_CALC_PERCENTAGE_WITH_LENGTH:
     case CSSUnitType::CSS_CALC_PERCENTAGE_WITH_NUMBER:
     case CSSUnitType::CSS_CHS:
+    case CSSUnitType::CSS_IC:
     case CSSUnitType::CSS_CM:
     case CSSUnitType::CSS_COUNTER:
     case CSSUnitType::CSS_DEG:
@@ -136,6 +153,11 @@ static inline bool isStringType(CSSUnitType type)
     case CSSUnitType::CSS_DPCM:
     case CSSUnitType::CSS_DPI:
     case CSSUnitType::CSS_DPPX:
+    case CSSUnitType::CSS_DVH:
+    case CSSUnitType::CSS_DVMAX:
+    case CSSUnitType::CSS_DVMIN:
+    case CSSUnitType::CSS_DVW:
+    case CSSUnitType::CSS_X:
     case CSSUnitType::CSS_EMS:
     case CSSUnitType::CSS_EXS:
     case CSSUnitType::CSS_FONT_FAMILY:
@@ -145,6 +167,10 @@ static inline bool isStringType(CSSUnitType type)
     case CSSUnitType::CSS_IDENT:
     case CSSUnitType::CSS_IN:
     case CSSUnitType::CSS_KHZ:
+    case CSSUnitType::CSS_LVH:
+    case CSSUnitType::CSS_LVMAX:
+    case CSSUnitType::CSS_LVMIN:
+    case CSSUnitType::CSS_LVW:
     case CSSUnitType::CSS_MM:
     case CSSUnitType::CSS_MS:
     case CSSUnitType::CSS_NUMBER:
@@ -164,6 +190,10 @@ static inline bool isStringType(CSSUnitType type)
     case CSSUnitType::CSS_REMS:
     case CSSUnitType::CSS_RGBCOLOR:
     case CSSUnitType::CSS_S:
+    case CSSUnitType::CSS_SVH:
+    case CSSUnitType::CSS_SVMAX:
+    case CSSUnitType::CSS_SVMIN:
+    case CSSUnitType::CSS_SVW:
     case CSSUnitType::CSS_SHAPE:
     case CSSUnitType::CSS_TURN:
     case CSSUnitType::CSS_UNICODE_RANGE:
@@ -256,7 +286,6 @@ CSSPrimitiveValue::CSSPrimitiveValue(double num, CSSUnitType type)
     : CSSValue(PrimitiveClass)
 {
     setPrimitiveUnitType(type);
-    ASSERT(std::isfinite(num));
     m_value.num = num;
 }
 
@@ -287,6 +316,7 @@ CSSPrimitiveValue::CSSPrimitiveValue(const Length& length, const RenderStyle& st
 {
     switch (length.type()) {
     case LengthType::Auto:
+    case LengthType::Content:
     case LengthType::Intrinsic:
     case LengthType::MinIntrinsic:
     case LengthType::MinContent:
@@ -335,12 +365,23 @@ CSSPrimitiveValue::CSSPrimitiveValue(StaticCSSValueTag, double num, CSSUnitType 
     makeStatic();
 }
 
+CSSPrimitiveValue::CSSPrimitiveValue(StaticCSSValueTag, ImplicitInitialValueTag)
+    : CSSPrimitiveValue(CSSValueInitial)
+{
+    m_isImplicit = true;
+    makeStatic();
+}
+
 void CSSPrimitiveValue::init(const Length& length)
 {
     switch (length.type()) {
     case LengthType::Auto:
         setPrimitiveUnitType(CSSUnitType::CSS_VALUE_ID);
         m_value.valueID = CSSValueAuto;
+        return;
+    case LengthType::Content:
+        setPrimitiveUnitType(CSSUnitType::CSS_VALUE_ID);
+        m_value.valueID = CSSValueContent;
         return;
     case LengthType::Fixed:
         setPrimitiveUnitType(CSSUnitType::CSS_PX);
@@ -428,6 +469,9 @@ void CSSPrimitiveValue::init(Ref<CSSBasicShape>&& shape)
 
 void CSSPrimitiveValue::init(RefPtr<CSSCalcValue>&& c)
 {
+    // FIXME (231111): This init should take Ref<CSSCalcValue> instead.
+    if (!c)
+        return;
     setPrimitiveUnitType(CSSUnitType::CSS_CALC);
     m_hasCachedCSSText = false;
     m_value.calc = c.leakRef();
@@ -491,6 +535,7 @@ void CSSPrimitiveValue::cleanup()
     case CSSUnitType::CSS_EXS:
     case CSSUnitType::CSS_REMS:
     case CSSUnitType::CSS_CHS:
+    case CSSUnitType::CSS_IC:
     case CSSUnitType::CSS_PX:
     case CSSUnitType::CSS_CM:
     case CSSUnitType::CSS_MM:
@@ -509,7 +554,20 @@ void CSSPrimitiveValue::cleanup()
     case CSSUnitType::CSS_VH:
     case CSSUnitType::CSS_VMIN:
     case CSSUnitType::CSS_VMAX:
+    case CSSUnitType::CSS_SVW:
+    case CSSUnitType::CSS_SVH:
+    case CSSUnitType::CSS_SVMIN:
+    case CSSUnitType::CSS_SVMAX:
+    case CSSUnitType::CSS_LVW:
+    case CSSUnitType::CSS_LVH:
+    case CSSUnitType::CSS_LVMIN:
+    case CSSUnitType::CSS_LVMAX:
+    case CSSUnitType::CSS_DVW:
+    case CSSUnitType::CSS_DVH:
+    case CSSUnitType::CSS_DVMIN:
+    case CSSUnitType::CSS_DVMAX:
     case CSSUnitType::CSS_DPPX:
+    case CSSUnitType::CSS_X:
     case CSSUnitType::CSS_DPI:
     case CSSUnitType::CSS_DPCM:
     case CSSUnitType::CSS_FR:
@@ -610,6 +668,9 @@ double CSSPrimitiveValue::computeUnzoomedNonCalcLengthDouble(CSSUnitType primiti
     case CSSUnitType::CSS_CHS:
         ASSERT(fontMetrics);
         return fontMetrics->zeroWidth() * value;
+    case CSSUnitType::CSS_IC:
+        ASSERT(fontMetrics);
+        return fontMetrics->ideogramWidth() * value;
     case CSSUnitType::CSS_PX:
         return value;
     case CSSUnitType::CSS_CM:
@@ -634,21 +695,37 @@ double CSSPrimitiveValue::computeUnzoomedNonCalcLengthDouble(CSSUnitType primiti
         ASSERT_NOT_REACHED();
         return -1.0;
     case CSSUnitType::CSS_VH:
-        return renderView ? renderView->viewportSizeForCSSViewportUnits().height() / 100.0 * value : 0;
+        return renderView ? renderView->sizeForCSSDefaultViewportUnits().height() / 100.0 * value : 0;
     case CSSUnitType::CSS_VW:
-        return renderView ? renderView->viewportSizeForCSSViewportUnits().width() / 100.0 * value : 0;
+        return renderView ? renderView->sizeForCSSDefaultViewportUnits().width() / 100.0 * value : 0;
     case CSSUnitType::CSS_VMAX:
-        if (renderView) {
-            IntSize viewportSizeForCSSViewportUnits = renderView->viewportSizeForCSSViewportUnits();
-            return std::max(viewportSizeForCSSViewportUnits.width(), viewportSizeForCSSViewportUnits.height()) / 100.0 * value;
-        }
-        return value;
+        return renderView ? renderView->sizeForCSSDefaultViewportUnits().maxDimension() / 100.0 * value : value;
     case CSSUnitType::CSS_VMIN:
-        if (renderView) {
-            IntSize viewportSizeForCSSViewportUnits = renderView->viewportSizeForCSSViewportUnits();
-            return std::min(viewportSizeForCSSViewportUnits.width(), viewportSizeForCSSViewportUnits.height()) / 100.0 * value;
-        }
-        return value;
+        return renderView ? renderView->sizeForCSSDefaultViewportUnits().minDimension() / 100.0 * value : value;
+    case CSSUnitType::CSS_SVH:
+        return renderView ? renderView->sizeForCSSSmallViewportUnits().height() / 100.0 * value : 0;
+    case CSSUnitType::CSS_SVW:
+        return renderView ? renderView->sizeForCSSSmallViewportUnits().width() / 100.0 * value : 0;
+    case CSSUnitType::CSS_SVMAX:
+        return renderView ? renderView->sizeForCSSSmallViewportUnits().maxDimension() / 100.0 * value : value;
+    case CSSUnitType::CSS_SVMIN:
+        return renderView ? renderView->sizeForCSSSmallViewportUnits().minDimension() / 100.0 * value : value;
+    case CSSUnitType::CSS_LVH:
+        return renderView ? renderView->sizeForCSSLargeViewportUnits().height() / 100.0 * value : 0;
+    case CSSUnitType::CSS_LVW:
+        return renderView ? renderView->sizeForCSSLargeViewportUnits().width() / 100.0 * value : 0;
+    case CSSUnitType::CSS_LVMAX:
+        return renderView ? renderView->sizeForCSSLargeViewportUnits().maxDimension() / 100.0 * value : value;
+    case CSSUnitType::CSS_LVMIN:
+        return renderView ? renderView->sizeForCSSLargeViewportUnits().minDimension() / 100.0 * value : value;
+    case CSSUnitType::CSS_DVH:
+        return renderView ? renderView->sizeForCSSDynamicViewportUnits().height() / 100.0 * value : 0;
+    case CSSUnitType::CSS_DVW:
+        return renderView ? renderView->sizeForCSSDynamicViewportUnits().width() / 100.0 * value : 0;
+    case CSSUnitType::CSS_DVMAX:
+        return renderView ? renderView->sizeForCSSDynamicViewportUnits().maxDimension() / 100.0 * value : value;
+    case CSSUnitType::CSS_DVMIN:
+        return renderView ? renderView->sizeForCSSDynamicViewportUnits().minDimension() / 100.0 * value : value;
     default:
         ASSERT_NOT_REACHED();
         return -1.0;
@@ -677,6 +754,7 @@ double CSSPrimitiveValue::computeNonCalcLengthDouble(const CSSToLengthConversion
         break;
 
     case CSSUnitType::CSS_CHS:
+    case CSSUnitType::CSS_IC:
         ASSERT(conversionData.style());
         value = computeUnzoomedNonCalcLengthDouble(primitiveType, value, conversionData.propertyToCompute(), &conversionData.style()->fontMetrics());
         break;
@@ -694,16 +772,52 @@ double CSSPrimitiveValue::computeNonCalcLengthDouble(const CSSToLengthConversion
         break;
 
     case CSSUnitType::CSS_VH:
-        return value * conversionData.viewportHeightFactor();
+        return value * conversionData.defaultViewportFactor().height();
 
     case CSSUnitType::CSS_VW:
-        return value * conversionData.viewportWidthFactor();
+        return value * conversionData.defaultViewportFactor().width();
 
     case CSSUnitType::CSS_VMAX:
-        return value * conversionData.viewportMaxFactor();
+        return value * conversionData.defaultViewportFactor().maxDimension();
 
     case CSSUnitType::CSS_VMIN:
-        return value * conversionData.viewportMinFactor();
+        return value * conversionData.defaultViewportFactor().minDimension();
+
+    case CSSUnitType::CSS_SVH:
+        return value * conversionData.smallViewportFactor().height();
+
+    case CSSUnitType::CSS_SVW:
+        return value * conversionData.smallViewportFactor().width();
+
+    case CSSUnitType::CSS_SVMAX:
+        return value * conversionData.smallViewportFactor().maxDimension();
+
+    case CSSUnitType::CSS_SVMIN:
+        return value * conversionData.smallViewportFactor().minDimension();
+
+    case CSSUnitType::CSS_LVH:
+        return value * conversionData.largeViewportFactor().height();
+
+    case CSSUnitType::CSS_LVW:
+        return value * conversionData.largeViewportFactor().width();
+
+    case CSSUnitType::CSS_LVMAX:
+        return value * conversionData.largeViewportFactor().maxDimension();
+
+    case CSSUnitType::CSS_LVMIN:
+        return value * conversionData.largeViewportFactor().minDimension();
+
+    case CSSUnitType::CSS_DVH:
+        return value * conversionData.dynamicViewportFactor().height();
+
+    case CSSUnitType::CSS_DVW:
+        return value * conversionData.dynamicViewportFactor().width();
+
+    case CSSUnitType::CSS_DVMAX:
+        return value * conversionData.dynamicViewportFactor().maxDimension();
+
+    case CSSUnitType::CSS_DVMIN:
+        return value * conversionData.dynamicViewportFactor().minDimension();
 
     case CSSUnitType::CSS_LHS:
         ASSERT(conversionData.style());
@@ -768,6 +882,9 @@ double CSSPrimitiveValue::conversionToCanonicalUnitsScaleFactor(CSSUnitType unit
     case CSSUnitType::CSS_HZ:
     case CSSUnitType::CSS_DPPX:
         break;
+    case CSSUnitType::CSS_X:
+        // This is semantically identical to (canonical) dppx
+        break;
     case CSSUnitType::CSS_CM:
         factor = cssPixelsPerInch / cmPerInch;
         break;
@@ -828,6 +945,20 @@ double CSSPrimitiveValue::doubleValue(CSSUnitType unitType) const
 double CSSPrimitiveValue::doubleValue() const
 {
     return primitiveUnitType() != CSSUnitType::CSS_CALC ? m_value.num : m_value.calc->doubleValue();
+}
+
+double CSSPrimitiveValue::doubleValueDividingBy100IfPercentage() const
+{
+    switch (primitiveUnitType()) {
+    case CSSUnitType::CSS_CALC:
+        return m_value.calc->primitiveType() == CSSUnitType::CSS_PERCENTAGE ? m_value.calc->doubleValue() / 100.0 : m_value.calc->doubleValue();
+    
+    case CSSUnitType::CSS_PERCENTAGE:
+        return m_value.num / 100.0;
+        
+    default:
+        return m_value.num;
+    }
 }
 
 std::optional<bool> CSSPrimitiveValue::isZero() const
@@ -924,6 +1055,10 @@ String CSSPrimitiveValue::stringValue() const
 
 NEVER_INLINE String CSSPrimitiveValue::formatNumberValue(StringView suffix) const
 {
+    if (m_value.num == std::numeric_limits<double>::infinity())
+        return makeString("infinity", suffix);
+    if (m_value.num == -1 * std::numeric_limits<double>::infinity())
+        return makeString("-infinity", suffix);
     return makeString(m_value.num, suffix);
 }
 
@@ -951,7 +1086,20 @@ String CSSPrimitiveValue::unitTypeString(CSSUnitType unitType)
         case CSSUnitType::CSS_VH: return "vh";
         case CSSUnitType::CSS_VMIN: return "vmin";
         case CSSUnitType::CSS_VMAX: return "vmax";
+        case CSSUnitType::CSS_SVW: return "svw";
+        case CSSUnitType::CSS_SVH: return "svh";
+        case CSSUnitType::CSS_SVMIN: return "svmin";
+        case CSSUnitType::CSS_SVMAX: return "svmax";
+        case CSSUnitType::CSS_LVW: return "lvw";
+        case CSSUnitType::CSS_LVH: return "lvh";
+        case CSSUnitType::CSS_LVMIN: return "lvmin";
+        case CSSUnitType::CSS_LVMAX: return "lvmax";
+        case CSSUnitType::CSS_DVW: return "dvw";
+        case CSSUnitType::CSS_DVH: return "dvh";
+        case CSSUnitType::CSS_DVMIN: return "dvmin";
+        case CSSUnitType::CSS_DVMAX: return "dvmax";
         case CSSUnitType::CSS_DPPX: return "dppx";
+        case CSSUnitType::CSS_X: return "x";
         case CSSUnitType::CSS_DPI: return "dpi";
         case CSSUnitType::CSS_DPCM: return "dpcm";
         case CSSUnitType::CSS_FR: return "fr";
@@ -961,6 +1109,7 @@ String CSSPrimitiveValue::unitTypeString(CSSUnitType unitType)
         case CSSUnitType::CSS_TURN: return "turn";
         case CSSUnitType::CSS_REMS: return "rem";
         case CSSUnitType::CSS_CHS: return "ch";
+        case CSSUnitType::CSS_IC: return "ic";
 
         case CSSUnitType::CSS_UNKNOWN:
         case CSSUnitType::CSS_NUMBER:
@@ -1009,12 +1158,16 @@ ALWAYS_INLINE String CSSPrimitiveValue::formatNumberForCustomCSSText() const
         return formatNumberValue("rem");
     case CSSUnitType::CSS_CHS:
         return formatNumberValue("ch");
+    case CSSUnitType::CSS_IC:
+        return formatNumberValue("ic");
     case CSSUnitType::CSS_PX:
         return formatNumberValue("px");
     case CSSUnitType::CSS_CM:
         return formatNumberValue("cm");
     case CSSUnitType::CSS_DPPX:
         return formatNumberValue("dppx");
+    case CSSUnitType::CSS_X:
+        return formatNumberValue("x");
     case CSSUnitType::CSS_DPI:
         return formatNumberValue("dpi");
     case CSSUnitType::CSS_DPCM:
@@ -1107,6 +1260,30 @@ ALWAYS_INLINE String CSSPrimitiveValue::formatNumberForCustomCSSText() const
         return formatNumberValue("vmin");
     case CSSUnitType::CSS_VMAX:
         return formatNumberValue("vmax");
+    case CSSUnitType::CSS_SVW:
+        return formatNumberValue("svw");
+    case CSSUnitType::CSS_SVH:
+        return formatNumberValue("svh");
+    case CSSUnitType::CSS_SVMIN:
+        return formatNumberValue("svmin");
+    case CSSUnitType::CSS_SVMAX:
+        return formatNumberValue("svmax");
+    case CSSUnitType::CSS_LVW:
+        return formatNumberValue("lvw");
+    case CSSUnitType::CSS_LVH:
+        return formatNumberValue("lvh");
+    case CSSUnitType::CSS_LVMIN:
+        return formatNumberValue("lvmin");
+    case CSSUnitType::CSS_LVMAX:
+        return formatNumberValue("lvmax");
+    case CSSUnitType::CSS_DVW:
+        return formatNumberValue("dvw");
+    case CSSUnitType::CSS_DVH:
+        return formatNumberValue("dvh");
+    case CSSUnitType::CSS_DVMIN:
+        return formatNumberValue("dvmin");
+    case CSSUnitType::CSS_DVMAX:
+        return formatNumberValue("dvmax");
     case CSSUnitType::CSS_IDENT:
     case CSSUnitType::CSS_UNICODE_RANGE:
     case CSSUnitType::CSS_CALC_PERCENTAGE_WITH_NUMBER:
@@ -1151,9 +1328,11 @@ bool CSSPrimitiveValue::equals(const CSSPrimitiveValue& other) const
     case CSSUnitType::CSS_EXS:
     case CSSUnitType::CSS_REMS:
     case CSSUnitType::CSS_CHS:
+    case CSSUnitType::CSS_IC:
     case CSSUnitType::CSS_PX:
     case CSSUnitType::CSS_CM:
     case CSSUnitType::CSS_DPPX:
+    case CSSUnitType::CSS_X:
     case CSSUnitType::CSS_DPI:
     case CSSUnitType::CSS_DPCM:
     case CSSUnitType::CSS_MM:
@@ -1172,6 +1351,18 @@ bool CSSPrimitiveValue::equals(const CSSPrimitiveValue& other) const
     case CSSUnitType::CSS_VH:
     case CSSUnitType::CSS_VMIN:
     case CSSUnitType::CSS_VMAX:
+    case CSSUnitType::CSS_SVW:
+    case CSSUnitType::CSS_SVH:
+    case CSSUnitType::CSS_SVMIN:
+    case CSSUnitType::CSS_SVMAX:
+    case CSSUnitType::CSS_LVW:
+    case CSSUnitType::CSS_LVH:
+    case CSSUnitType::CSS_LVMIN:
+    case CSSUnitType::CSS_LVMAX:
+    case CSSUnitType::CSS_DVW:
+    case CSSUnitType::CSS_DVH:
+    case CSSUnitType::CSS_DVMIN:
+    case CSSUnitType::CSS_DVMAX:
     case CSSUnitType::CSS_FR:
     case CSSUnitType::CSS_Q:
     case CSSUnitType::CSS_LHS:
@@ -1228,6 +1419,7 @@ void CSSPrimitiveValue::collectDirectComputationalDependencies(HashSet<CSSProper
     case CSSUnitType::CSS_QUIRKY_EMS:
     case CSSUnitType::CSS_EXS:
     case CSSUnitType::CSS_CHS:
+    case CSSUnitType::CSS_IC:
         values.add(CSSPropertyFontSize);
         break;
     case CSSUnitType::CSS_LHS:
@@ -1258,6 +1450,11 @@ void CSSPrimitiveValue::collectDirectRootComputationalDependencies(HashSet<CSSPr
     default:
         break;
     }
+}
+
+bool CSSPrimitiveValue::isCSSWideKeyword() const
+{
+    return WebCore::isCSSWideKeyword(valueID());
 }
 
 } // namespace WebCore

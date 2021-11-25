@@ -47,34 +47,26 @@ OBJC_CLASS RSABSSATokenBlinder;
 
 namespace WebCore {
 
-enum class PrivateClickMeasurementAttributionEphemeral : bool { No, Yes };
-
 class PrivateClickMeasurement {
 public:
-    using PriorityValue = uint32_t;
+    using PriorityValue = uint8_t;
+    enum class AttributionEphemeral : bool { No, Yes };
 
     enum class PcmDataCarried : bool { NonPersonallyIdentifiable, PersonallyIdentifiable };
     enum class AttributionReportEndpoint : bool { Source, Destination };
+    enum class IsRunningLayoutTest : bool { No, Yes };
 
     struct SourceID {
-        static constexpr uint32_t MaxEntropy = 255;
-
-        SourceID() = default;
-        explicit SourceID(uint32_t id)
+        static constexpr uint8_t MaxEntropy = 255;
+        explicit SourceID(uint8_t id)
             : id { id }
         {
         }
-        
-        bool isValid() const
-        {
-            return id <= MaxEntropy;
-        }
-        
-        uint32_t id { 0 };
+
+        uint8_t id { 0 };
     };
 
     struct SourceSite {
-        SourceSite() = default;
         explicit SourceSite(const URL& url)
             : registrableDomain { url }
         {
@@ -166,10 +158,10 @@ public:
     };
 
     struct Priority {
-        static constexpr uint32_t MaxEntropy = 63;
+        static constexpr uint8_t MaxEntropy = 63;
 
         explicit Priority(PriorityValue value)
-        : value { value }
+            : value { value }
         {
         }
         
@@ -177,11 +169,12 @@ public:
     };
     
     struct AttributionTriggerData {
-        static constexpr uint32_t MaxEntropy = 15;
+        static constexpr uint8_t MaxEntropy = 15;
 
         enum class WasSent : bool { No, Yes };
-        
-        AttributionTriggerData(uint32_t data, Priority priority, WasSent wasSent = WasSent::No)
+
+        AttributionTriggerData() = default;
+        AttributionTriggerData(uint8_t data, Priority priority, WasSent wasSent = WasSent::No)
             : data { data }
             , priority { priority.value }
             , wasSent { wasSent }
@@ -193,9 +186,10 @@ public:
             return data <= MaxEntropy && priority <= Priority::MaxEntropy;
         }
         
-        uint32_t data;
+        uint8_t data { 0 };
         PriorityValue priority;
         WasSent wasSent = WasSent::No;
+        std::optional<RegistrableDomain> sourceRegistrableDomain;
 
         template<class Encoder> void encode(Encoder&) const;
         template<class Decoder> static std::optional<AttributionTriggerData> decode(Decoder&);
@@ -311,24 +305,22 @@ public:
         }
     };
 
-    PrivateClickMeasurement() = default;
-    PrivateClickMeasurement(SourceID sourceID, const SourceSite& sourceSite, const AttributionDestinationSite& destinationSite, String&& sourceDescription = { }, String&& purchaser = { }, WallTime timeOfAdClick = WallTime::now(), PrivateClickMeasurementAttributionEphemeral isEphemeral = PrivateClickMeasurementAttributionEphemeral::No)
+    PrivateClickMeasurement(SourceID sourceID, const SourceSite& sourceSite, const AttributionDestinationSite& destinationSite, const String& sourceApplicationBundleID, WallTime timeOfAdClick, AttributionEphemeral isEphemeral)
         : m_sourceID { sourceID }
         , m_sourceSite { sourceSite }
         , m_destinationSite { destinationSite }
-        , m_sourceDescription { WTFMove(sourceDescription) }
-        , m_purchaser { WTFMove(purchaser) }
         , m_timeOfAdClick { timeOfAdClick }
         , m_isEphemeral { isEphemeral }
+        , m_sourceApplicationBundleID { sourceApplicationBundleID }
     {
     }
 
     WEBCORE_EXPORT static const Seconds maxAge();
     WEBCORE_EXPORT static Expected<AttributionTriggerData, String> parseAttributionRequest(const URL& redirectURL);
-    WEBCORE_EXPORT AttributionSecondsUntilSendData attributeAndGetEarliestTimeToSend(AttributionTriggerData&&);
+    WEBCORE_EXPORT AttributionSecondsUntilSendData attributeAndGetEarliestTimeToSend(AttributionTriggerData&&, IsRunningLayoutTest);
     WEBCORE_EXPORT bool hasHigherPriorityThan(const PrivateClickMeasurement&) const;
-    WEBCORE_EXPORT URL attributionReportSourceURL() const;
-    WEBCORE_EXPORT URL attributionReportAttributeOnURL() const;
+    WEBCORE_EXPORT URL attributionReportClickSourceURL() const;
+    WEBCORE_EXPORT URL attributionReportClickDestinationURL() const;
     WEBCORE_EXPORT Ref<JSON::Object> attributionReportJSON() const;
     const SourceSite& sourceSite() const { return m_sourceSite; };
     const AttributionDestinationSite& destinationSite() const { return m_destinationSite; };
@@ -337,13 +329,13 @@ public:
     AttributionTimeToSendData timesToSend() const { return m_timesToSend; };
     void setTimesToSend(AttributionTimeToSendData data) { m_timesToSend = data; }
     const SourceID& sourceID() const { return m_sourceID; }
-    std::optional<AttributionTriggerData> attributionTriggerData() { return m_attributionTriggerData; }
+    const std::optional<AttributionTriggerData>& attributionTriggerData() const { return m_attributionTriggerData; }
     void setAttribution(AttributionTriggerData&& attributionTriggerData) { m_attributionTriggerData = WTFMove(attributionTriggerData); }
+    const String& sourceApplicationBundleID() const { return m_sourceApplicationBundleID; }
+    WEBCORE_EXPORT void setSourceApplicationBundleIDForTesting(const String&);
 
-    const String& sourceDescription() const { return m_sourceDescription; }
-    const String& purchaser() const { return m_purchaser; }
-    bool isEphemeral() const { return m_isEphemeral == PrivateClickMeasurementAttributionEphemeral::Yes; }
-    void setEphemeral(PrivateClickMeasurementAttributionEphemeral isEphemeral) { m_isEphemeral = isEphemeral; }
+    bool isEphemeral() const { return m_isEphemeral == AttributionEphemeral::Yes; }
+    void setEphemeral(AttributionEphemeral isEphemeral) { m_isEphemeral = isEphemeral; }
 
     // MARK: - Fraud Prevention
     WEBCORE_EXPORT URL tokenPublicKeyURL() const;
@@ -381,7 +373,7 @@ public:
 #endif
 
     void setSourceUnlinkableTokenValue(const String& value) { m_sourceUnlinkableToken.valueBase64URL = value; }
-    const std::optional<SourceSecretToken>& sourceUnlinkableToken() const { return m_sourceSecretToken; }
+    const std::optional<SourceSecretToken>& sourceSecretToken() const { return m_sourceSecretToken; }
     WEBCORE_EXPORT void setSourceSecretToken(SourceSecretToken&&);
 
     template<class Encoder> void encode(Encoder&) const;
@@ -390,15 +382,14 @@ public:
     WEBCORE_EXPORT PrivateClickMeasurement isolatedCopy() const;
 
 private:
+    static Expected<AttributionTriggerData, String> parseAttributionRequestQuery(const URL&);
     bool isValid() const;
 
     SourceID m_sourceID;
     SourceSite m_sourceSite;
     AttributionDestinationSite m_destinationSite;
-    String m_sourceDescription;
-    String m_purchaser;
     WallTime m_timeOfAdClick;
-    PrivateClickMeasurementAttributionEphemeral m_isEphemeral;
+    AttributionEphemeral m_isEphemeral;
 
     std::optional<AttributionTriggerData> m_attributionTriggerData;
     AttributionTimeToSendData m_timesToSend;
@@ -417,6 +408,7 @@ private:
     std::optional<EphemeralSourceNonce> m_ephemeralSourceNonce;
     SourceUnlinkableToken m_sourceUnlinkableToken;
     std::optional<SourceSecretToken> m_sourceSecretToken;
+    String m_sourceApplicationBundleID;
 };
 
 template<class Encoder>
@@ -425,19 +417,18 @@ void PrivateClickMeasurement::encode(Encoder& encoder) const
     encoder << m_sourceID.id
         << m_sourceSite.registrableDomain
         << m_destinationSite.registrableDomain
-        << m_sourceDescription
-        << m_purchaser
         << m_timeOfAdClick
         << m_ephemeralSourceNonce
         << m_isEphemeral
         << m_attributionTriggerData
+        << m_sourceApplicationBundleID
         << m_timesToSend;
 }
 
 template<class Decoder>
 std::optional<PrivateClickMeasurement> PrivateClickMeasurement::decode(Decoder& decoder)
 {
-    std::optional<uint32_t> sourceID;
+    std::optional<uint8_t> sourceID;
     decoder >> sourceID;
     if (!sourceID)
         return std::nullopt;
@@ -452,16 +443,6 @@ std::optional<PrivateClickMeasurement> PrivateClickMeasurement::decode(Decoder& 
     if (!destinationRegistrableDomain)
         return std::nullopt;
     
-    std::optional<String> sourceDescription;
-    decoder >> sourceDescription;
-    if (!sourceDescription)
-        return std::nullopt;
-    
-    std::optional<String> purchaser;
-    decoder >> purchaser;
-    if (!purchaser)
-        return std::nullopt;
-    
     std::optional<WallTime> timeOfAdClick;
     decoder >> timeOfAdClick;
     if (!timeOfAdClick)
@@ -472,7 +453,7 @@ std::optional<PrivateClickMeasurement> PrivateClickMeasurement::decode(Decoder& 
     if (!ephemeralSourceNonce)
         return std::nullopt;
 
-    std::optional<PrivateClickMeasurementAttributionEphemeral> isEphemeral;
+    std::optional<AttributionEphemeral> isEphemeral;
     decoder >> isEphemeral;
     if (!isEphemeral)
         return std::nullopt;
@@ -481,7 +462,12 @@ std::optional<PrivateClickMeasurement> PrivateClickMeasurement::decode(Decoder& 
     decoder >> attributionTriggerData;
     if (!attributionTriggerData)
         return std::nullopt;
-    
+
+    std::optional<String> sourceApplicationBundleID;
+    decoder >> sourceApplicationBundleID;
+    if (!sourceApplicationBundleID)
+        return std::nullopt;
+
     std::optional<AttributionTimeToSendData> timesToSend;
     decoder >> timesToSend;
     if (!timesToSend)
@@ -491,8 +477,7 @@ std::optional<PrivateClickMeasurement> PrivateClickMeasurement::decode(Decoder& 
         SourceID { WTFMove(*sourceID) },
         SourceSite { WTFMove(*sourceRegistrableDomain) },
         AttributionDestinationSite { WTFMove(*destinationRegistrableDomain) },
-        WTFMove(*sourceDescription),
-        WTFMove(*purchaser),
+        WTFMove(*sourceApplicationBundleID),
         WTFMove(*timeOfAdClick),
         WTFMove(*isEphemeral)
     };
@@ -523,13 +508,13 @@ std::optional<PrivateClickMeasurement::EphemeralSourceNonce> PrivateClickMeasure
 template<class Encoder>
 void PrivateClickMeasurement::AttributionTriggerData::encode(Encoder& encoder) const
 {
-    encoder << data << priority << wasSent;
+    encoder << data << priority << wasSent << sourceRegistrableDomain;
 }
 
 template<class Decoder>
 std::optional<PrivateClickMeasurement::AttributionTriggerData> PrivateClickMeasurement::AttributionTriggerData::decode(Decoder& decoder)
 {
-    std::optional<uint32_t> data;
+    std::optional<uint8_t> data;
     decoder >> data;
     if (!data)
         return std::nullopt;
@@ -544,7 +529,14 @@ std::optional<PrivateClickMeasurement::AttributionTriggerData> PrivateClickMeasu
     if (!wasSent)
         return std::nullopt;
     
-    return AttributionTriggerData { WTFMove(*data), Priority { *priority }, *wasSent };
+    std::optional<std::optional<RegistrableDomain>> sourceRegistrableDomain;
+    decoder >> sourceRegistrableDomain;
+    if (!sourceRegistrableDomain)
+        return std::nullopt;
+    
+    AttributionTriggerData attributionTriggerData { WTFMove(*data), Priority { *priority }, *wasSent };
+    attributionTriggerData.sourceRegistrableDomain = WTFMove(*sourceRegistrableDomain);
+    return attributionTriggerData;
 }
 
 } // namespace WebCore
@@ -554,7 +546,7 @@ template<typename T> struct DefaultHash;
 
 template<> struct DefaultHash<WebCore::PrivateClickMeasurement::SourceSite> : WebCore::PrivateClickMeasurement::SourceSiteHash { };
 template<> struct HashTraits<WebCore::PrivateClickMeasurement::SourceSite> : GenericHashTraits<WebCore::PrivateClickMeasurement::SourceSite> {
-    static WebCore::PrivateClickMeasurement::SourceSite emptyValue() { return { }; }
+    static WebCore::PrivateClickMeasurement::SourceSite emptyValue() { return WebCore::PrivateClickMeasurement::SourceSite(WebCore::RegistrableDomain()); }
     static void constructDeletedValue(WebCore::PrivateClickMeasurement::SourceSite& slot) { new (NotNull, &slot.registrableDomain) WebCore::RegistrableDomain(WTF::HashTableDeletedValue); }
     static bool isDeletedValue(const WebCore::PrivateClickMeasurement::SourceSite& slot) { return slot.registrableDomain.isHashTableDeletedValue(); }
 };

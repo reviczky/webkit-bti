@@ -34,7 +34,9 @@
 
 #if ENABLE(VIDEO)
 
-#include "HTMLMediaElement.h"
+#include "AudioTrackClient.h"
+#include "AudioTrackList.h"
+#include "AudioTrackPrivate.h"
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
@@ -75,19 +77,18 @@ const AtomString& AudioTrack::commentaryKeyword()
     return commentary;
 }
 
-AudioTrack::AudioTrack(AudioTrackClient& client, AudioTrackPrivate& trackPrivate)
-    : MediaTrackBase(MediaTrackBase::AudioTrack, trackPrivate.id(), trackPrivate.label(), trackPrivate.language())
-    , m_client(&client)
+AudioTrack::AudioTrack(ScriptExecutionContext* context, AudioTrackPrivate& trackPrivate)
+    : MediaTrackBase(context, MediaTrackBase::AudioTrack, trackPrivate.id(), trackPrivate.label(), trackPrivate.language())
     , m_private(trackPrivate)
     , m_enabled(trackPrivate.enabled())
 {
-    m_private->setClient(this);
+    m_private->setClient(*this);
     updateKindFromPrivate();
 }
 
 AudioTrack::~AudioTrack()
 {
-    m_private->setClient(nullptr);
+    m_private->clearClient();
 }
 
 void AudioTrack::setPrivate(AudioTrackPrivate& trackPrivate)
@@ -95,16 +96,25 @@ void AudioTrack::setPrivate(AudioTrackPrivate& trackPrivate)
     if (m_private.ptr() == &trackPrivate)
         return;
 
-    m_private->setClient(nullptr);
+    m_private->clearClient();
     m_private = trackPrivate;
     m_private->setEnabled(m_enabled);
-    m_private->setClient(this);
+    m_private->setClient(*this);
 #if !RELEASE_LOG_DISABLED
     m_private->setLogger(logger(), logIdentifier());
 #endif
 
     updateKindFromPrivate();
     setId(m_private->id());
+}
+
+void AudioTrack::setLanguage(const AtomString& language)
+{
+    TrackBase::setLanguage(language);
+
+    m_clients.forEach([&] (auto& client) {
+        client.audioTrackLanguageChanged(*this);
+    });
 }
 
 bool AudioTrack::isValidKind(const AtomString& value) const
@@ -123,6 +133,21 @@ void AudioTrack::setEnabled(bool enabled)
         return;
 
     m_private->setEnabled(enabled);
+    m_clients.forEach([this] (auto& client) {
+        client.audioTrackEnabledChanged(*this);
+    });
+}
+
+void AudioTrack::addClient(AudioTrackClient& client)
+{
+    ASSERT(!m_clients.contains(client));
+    m_clients.add(client);
+}
+
+void AudioTrack::clearClient(AudioTrackClient& client)
+{
+    ASSERT(m_clients.contains(client));
+    m_clients.remove(client);
 }
 
 size_t AudioTrack::inbandTrackIndex() const
@@ -137,18 +162,25 @@ void AudioTrack::enabledChanged(bool enabled)
 
     m_enabled = enabled;
 
-    if (m_client)
-        m_client->audioTrackEnabledChanged(*this);
+    m_clients.forEach([this] (auto& client) {
+        client.audioTrackEnabledChanged(*this);
+    });
 }
 
 void AudioTrack::idChanged(const AtomString& id)
 {
     setId(id);
+    m_clients.forEach([this] (auto& client) {
+        client.audioTrackIdChanged(*this);
+    });
 }
 
 void AudioTrack::labelChanged(const AtomString& label)
 {
     setLabel(label);
+    m_clients.forEach([this] (auto& client) {
+        client.audioTrackLabelChanged(*this);
+    });
 }
 
 void AudioTrack::languageChanged(const AtomString& language)
@@ -158,11 +190,9 @@ void AudioTrack::languageChanged(const AtomString& language)
 
 void AudioTrack::willRemove()
 {
-    auto element = makeRefPtr(mediaElement().get());
-    if (!element)
-        return;
-
-    element->removeAudioTrack(*this);
+    m_clients.forEach([this] (auto& client) {
+        client.willRemoveAudioTrack(*this);
+    });
 }
 
 void AudioTrack::updateKindFromPrivate()
@@ -193,11 +223,6 @@ void AudioTrack::updateKindFromPrivate()
         ASSERT_NOT_REACHED();
         break;
     }
-}
-
-void AudioTrack::setMediaElement(WeakPtr<HTMLMediaElement> element)
-{
-    TrackBase::setMediaElement(element);
 }
 
 #if !RELEASE_LOG_DISABLED

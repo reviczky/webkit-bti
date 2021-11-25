@@ -92,7 +92,7 @@ ALWAYS_INLINE int arityCheckFor(VM& vm, CallFrame* callFrame, CodeSpecialization
     return padding;
 }
 
-inline JSValue opEnumeratorGetByVal(JSGlobalObject* globalObject, JSValue baseValue, JSValue propertyNameValue, unsigned index, JSPropertyNameEnumerator::Mode mode, JSPropertyNameEnumerator* enumerator, ArrayProfile* arrayProfile = nullptr, uint8_t* enumeratorMetadata = nullptr)
+inline JSValue opEnumeratorGetByVal(JSGlobalObject* globalObject, JSValue baseValue, JSValue propertyNameValue, unsigned index, JSPropertyNameEnumerator::Flag mode, JSPropertyNameEnumerator* enumerator, ArrayProfile* arrayProfile = nullptr, uint8_t* enumeratorMetadata = nullptr)
 {
     VM& vm = getVM(globalObject);
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -118,21 +118,6 @@ inline JSValue opEnumeratorGetByVal(JSGlobalObject* globalObject, JSValue baseVa
     case JSPropertyNameEnumerator::GenericMode: {
         if (arrayProfile && baseValue.isCell() && mode != JSPropertyNameEnumerator::OwnStructureMode)
             arrayProfile->observeStructureID(baseValue.asCell()->structureID());
-#if USE(JSVALUE32_64)
-        if (!propertyNameValue.isCell()) {
-            // This branch is only needed because we use this method
-            // both as a slow_path and as a DFG call op. We'll end up
-            // here if propertyName is not a cell then we are in
-            // index+named mode, so do what RecoverNameAndGetVal
-            // does. This can probably be removed if we re-enable the
-            // optimizations for enumeratorGetByVal in DFG, see bug
-            // #230189.
-            JSString* string = enumerator->propertyNameAtIndex(index);
-            auto propertyName = string->toIdentifier(globalObject);
-            RETURN_IF_EXCEPTION(scope, { });
-            RELEASE_AND_RETURN(scope, baseValue.get(globalObject, propertyName));
-        }
-#endif
         JSString* string = asString(propertyNameValue);
         auto propertyName = string->toIdentifier(globalObject);
         RETURN_IF_EXCEPTION(scope, { });
@@ -255,7 +240,7 @@ class CallFrame;
 struct Instruction;
 
 #define JSC_DECLARE_COMMON_SLOW_PATH(name) \
-    extern "C" JSC_DECLARE_JIT_OPERATION(name, SlowPathReturnType, (CallFrame*, const Instruction*))
+    JSC_DECLARE_JIT_OPERATION(name, SlowPathReturnType, (CallFrame*, const Instruction*))
 
 #define JSC_DEFINE_COMMON_SLOW_PATH(name) \
     JSC_DEFINE_JIT_OPERATION(name, SlowPathReturnType, (CallFrame* callFrame, const Instruction* pc))

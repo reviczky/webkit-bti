@@ -33,7 +33,6 @@
 #include "WebSocketChannel.h"
 
 #include "Blob.h"
-#include "ContentRuleListResults.h"
 #include "CookieJar.h"
 #include "Document.h"
 #include "ExceptionCode.h"
@@ -62,16 +61,14 @@ namespace WebCore {
 const Seconds TCPMaximumSegmentLifetime { 2_min };
 
 WebSocketChannel::WebSocketChannel(Document& document, WebSocketChannelClient& client, SocketProvider& provider)
-    : m_document(makeWeakPtr(document))
-    , m_client(makeWeakPtr(client))
+    : m_document(document)
+    , m_client(client)
     , m_resumeTimer(*this, &WebSocketChannel::resumeTimerFired)
     , m_closingTimer(*this, &WebSocketChannel::closingTimerFired)
+    , m_progressIdentifier(WebSocketChannelIdentifier::generateThreadSafe())
     , m_socketProvider(provider)
 {
-    if (Page* page = document.page())
-        m_progressIdentifier = page->progress().createUniqueIdentifier();
-
-    LOG(Network, "WebSocketChannel %p ctor, progress identifier %u", this, m_progressIdentifier);
+    LOG(Network, "WebSocketChannel %p ctor, progress identifier %" PRIu64, this, m_progressIdentifier.toUInt64());
 }
 
 WebSocketChannel::~WebSocketChannel()
@@ -141,6 +138,9 @@ String WebSocketChannel::extensions()
 
 ThreadableWebSocketChannel::SendResult WebSocketChannel::send(const String& message)
 {
+    if (m_outgoingFrameQueueStatus != OutgoingFrameQueueOpen)
+        return ThreadableWebSocketChannel::SendSuccess;
+
     LOG(Network, "WebSocketChannel %p send() Sending String '%s'", this, message.utf8().data());
     CString utf8 = message.utf8(StrictConversionReplacingUnpairedSurrogatesWithFFFD);
     enqueueTextFrame(utf8);
@@ -156,6 +156,9 @@ ThreadableWebSocketChannel::SendResult WebSocketChannel::send(const String& mess
 
 ThreadableWebSocketChannel::SendResult WebSocketChannel::send(const ArrayBuffer& binaryData, unsigned byteOffset, unsigned byteLength)
 {
+    if (m_outgoingFrameQueueStatus != OutgoingFrameQueueOpen)
+        return ThreadableWebSocketChannel::SendSuccess;
+
     LOG(Network, "WebSocketChannel %p send() Sending ArrayBuffer %p byteOffset=%u byteLength=%u", this, &binaryData, byteOffset, byteLength);
     enqueueRawFrame(WebSocketFrame::OpCodeBinary, static_cast<const uint8_t*>(binaryData.data()) + byteOffset, byteLength);
     processOutgoingFrameQueue();
@@ -164,6 +167,9 @@ ThreadableWebSocketChannel::SendResult WebSocketChannel::send(const ArrayBuffer&
 
 ThreadableWebSocketChannel::SendResult WebSocketChannel::send(Blob& binaryData)
 {
+    if (m_outgoingFrameQueueStatus != OutgoingFrameQueueOpen)
+        return ThreadableWebSocketChannel::SendSuccess;
+
     LOG(Network, "WebSocketChannel %p send() Sending Blob '%s'", this, binaryData.url().string().utf8().data());
     enqueueBlobFrame(WebSocketFrame::OpCodeBinary, binaryData);
     processOutgoingFrameQueue();
@@ -172,6 +178,9 @@ ThreadableWebSocketChannel::SendResult WebSocketChannel::send(Blob& binaryData)
 
 bool WebSocketChannel::send(const uint8_t* data, int length)
 {
+    if (m_outgoingFrameQueueStatus != OutgoingFrameQueueOpen)
+        return ThreadableWebSocketChannel::SendSuccess;
+
     LOG(Network, "WebSocketChannel %p send() Sending uint8_t* data=%p length=%d", this, data, length);
     enqueueRawFrame(WebSocketFrame::OpCodeBinary, data, length);
     processOutgoingFrameQueue();
@@ -271,7 +280,7 @@ void WebSocketChannel::didOpenSocketStream(SocketStreamHandle& handle)
     std::optional<CookieRequestHeaderFieldProxy> cookieRequestHeaderFieldProxy;
     if (m_allowCookies)
         cookieRequestHeaderFieldProxy = CookieJar::cookieRequestHeaderFieldProxy(*m_document, m_handshake->httpURLForAuthenticationAndCookies());
-    handle.sendHandshake(WTFMove(handshakeMessage), WTFMove(cookieRequestHeaderFieldProxy), [this, protectedThis = makeRef(*this)] (bool success, bool didAccessSecureCookies) {
+    handle.sendHandshake(WTFMove(handshakeMessage), WTFMove(cookieRequestHeaderFieldProxy), [this, protectedThis = Ref { *this }] (bool success, bool didAccessSecureCookies) {
         if (!success)
             fail("Failed to send WebSocket handshake.");
 
@@ -743,7 +752,7 @@ void WebSocketChannel::processOutgoingFrameQueue()
         auto frame = m_outgoingFrameQueue.takeFirst();
         switch (frame->frameType) {
         case QueuedFrameTypeString: {
-            sendFrame(frame->opCode, frame->stringData.dataAsUInt8Ptr(), frame->stringData.length(), [this, protectedThis = makeRef(*this)] (bool success) {
+            sendFrame(frame->opCode, frame->stringData.dataAsUInt8Ptr(), frame->stringData.length(), [this, protectedThis = Ref { *this }] (bool success) {
                 if (!success)
                     fail("Failed to send WebSocket frame.");
             });
@@ -751,7 +760,7 @@ void WebSocketChannel::processOutgoingFrameQueue()
         }
 
         case QueuedFrameTypeVector:
-            sendFrame(frame->opCode, frame->vectorData.data(), frame->vectorData.size(), [this, protectedThis = makeRef(*this)] (bool success) {
+            sendFrame(frame->opCode, frame->vectorData.data(), frame->vectorData.size(), [this, protectedThis = Ref { *this }] (bool success) {
                 if (!success)
                     fail("Failed to send WebSocket frame.");
             });
@@ -778,7 +787,7 @@ void WebSocketChannel::processOutgoingFrameQueue()
                 RefPtr<ArrayBuffer> result = m_blobLoader->arrayBufferResult();
                 m_blobLoader = nullptr;
                 m_blobLoaderStatus = BlobLoaderNotStarted;
-                sendFrame(frame->opCode, static_cast<const uint8_t*>(result->data()), result->byteLength(), [this, protectedThis = makeRef(*this)] (bool success) {
+                sendFrame(frame->opCode, static_cast<const uint8_t*>(result->data()), result->byteLength(), [this, protectedThis = Ref { *this }] (bool success) {
                     if (!success)
                         fail("Failed to send WebSocket frame.");
                 });
@@ -811,7 +820,7 @@ void WebSocketChannel::abortOutgoingFrameQueue()
     }
 }
 
-void WebSocketChannel::sendFrame(WebSocketFrame::OpCode opCode, const uint8_t* data, size_t dataLength, WTF::Function<void(bool)> completionHandler)
+void WebSocketChannel::sendFrame(WebSocketFrame::OpCode opCode, const uint8_t* data, size_t dataLength, Function<void(bool)> completionHandler)
 {
     ASSERT(m_handle);
     ASSERT(!m_suspended);

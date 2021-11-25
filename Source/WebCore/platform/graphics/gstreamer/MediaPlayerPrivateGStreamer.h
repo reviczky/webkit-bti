@@ -107,7 +107,7 @@ class VideoTrackPrivateGStreamer;
 
 void registerWebKitGStreamerElements();
 
-// Use eager initialization for the WeakPtrFactory since we call makeWeakPtr() from another thread.
+// Use eager initialization for the WeakPtrFactory since we construct WeakPtrs on another thread.
 class MediaPlayerPrivateGStreamer : public MediaPlayerPrivateInterface
     , public CanMakeWeakPtr<MediaPlayerPrivateGStreamer, WeakPtrFactoryInitialization::Eager>
 #if !RELEASE_LOG_DISABLED
@@ -181,6 +181,7 @@ public:
     AudioSourceProvider* audioSourceProvider() final;
 #endif
     void paint(GraphicsContext&, const FloatRect&) final;
+    DestinationColorSpace colorSpace() final;
     bool supportsFullscreen() const final;
     MediaPlayer::MovieLoadType movieLoadType() const final;
 
@@ -215,6 +216,8 @@ public:
     void updateEnabledVideoTrack();
     void updateEnabledAudioTrack();
     void playbin3SendSelectStreamsIfAppropriate();
+
+    void updateVideoOrientation(const GstTagList*);
 
     // Append pipeline interface
     // FIXME: Use the client interface pattern, AppendPipeline does not need the full interface to this class just for this function.
@@ -435,6 +438,7 @@ private:
 
     void syncOnClock(bool sync);
 
+    GstClockTime gstreamerPositionFromSinks() const;
     MediaTime playbackPosition() const;
 
     virtual void updateStates();

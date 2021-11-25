@@ -124,7 +124,7 @@ static std::optional<Lab<float>> sampleColor(Document& document, IntPoint&& loca
     if (!snapshot)
         return std::nullopt;
 
-    auto pixelBuffer = snapshot->getPixelBuffer({ AlphaPremultiplication::Unpremultiplied, PixelFormat::BGRA8, colorSpace }, { { }, snapshot->logicalSize() });
+    auto pixelBuffer = snapshot->getPixelBuffer({ AlphaPremultiplication::Unpremultiplied, PixelFormat::BGRA8, colorSpace }, { { }, snapshot->truncatedLogicalSize() });
     if (!pixelBuffer)
         return std::nullopt;
 
@@ -169,11 +169,11 @@ std::optional<Color> PageColorSampler::sampleTop(Page& page)
         return Color();
     }
 
-    auto mainDocument = makeRefPtr(page.mainFrame().document());
+    RefPtr mainDocument = page.mainFrame().document();
     if (!mainDocument)
         return std::nullopt;
 
-    auto frameView = makeRefPtr(page.mainFrame().view());
+    RefPtr frameView = page.mainFrame().view();
     if (!frameView)
         return std::nullopt;
 

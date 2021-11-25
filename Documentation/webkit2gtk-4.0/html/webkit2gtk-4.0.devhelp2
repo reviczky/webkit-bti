@@ -36,6 +36,7 @@
       <sub name="WebKitPlugin" link="WebKitPlugin.html"/>
       <sub name="WebKitWebInspector" link="WebKitWebInspector.html"/>
       <sub name="WebKitURISchemeRequest" link="WebKitURISchemeRequest.html"/>
+      <sub name="WebKitURISchemeResponse" link="WebKitURISchemeResponse.html"/>
       <sub name="WebKitVersion" link="webkit2gtk-4.0-WebKitVersion.html"/>
       <sub name="WebKitContextMenu" link="WebKitContextMenu.html"/>
       <sub name="WebKitContextMenuItem" link="WebKitContextMenuItem.html"/>
@@ -89,6 +90,7 @@
     <sub name="Index of new symbols in 2.26" link="api-index-2-26.html"/>
     <sub name="Index of new symbols in 2.28" link="api-index-2-28.html"/>
     <sub name="Index of new symbols in 2.30" link="api-index-2-30.html"/>
+    <sub name="Index of new symbols in 2.36" link="api-index-2-36.html"/>
     <sub name="Annotation Glossary" link="annotation-glossary.html"/>
   </chapters>
   <functions>
@@ -848,9 +850,19 @@
     <keyword type="function" name="webkit_uri_scheme_request_get_uri ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-uri"/>
     <keyword type="function" name="webkit_uri_scheme_request_get_path ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-path"/>
     <keyword type="function" name="webkit_uri_scheme_request_get_web_view ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-web-view"/>
+    <keyword type="function" name="webkit_uri_scheme_request_get_http_method ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-http-method" since="2.36"/>
+    <keyword type="function" name="webkit_uri_scheme_request_get_http_headers ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-http-headers"/>
     <keyword type="function" name="webkit_uri_scheme_request_finish ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish"/>
+    <keyword type="function" name="webkit_uri_scheme_request_finish_with_response ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish-with-response" since="2.36"/>
     <keyword type="function" name="webkit_uri_scheme_request_finish_error ()" link="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish-error" since="2.2"/>
     <keyword type="struct" name="struct WebKitURISchemeRequest" link="WebKitURISchemeRequest.html#WebKitURISchemeRequest-struct"/>
+    <keyword type="function" name="webkit_uri_scheme_response_new ()" link="WebKitURISchemeResponse.html#webkit-uri-scheme-response-new" since="2.36"/>
+    <keyword type="function" name="webkit_uri_scheme_response_set_content_type ()" link="WebKitURISchemeResponse.html#webkit-uri-scheme-response-set-content-type" since="2.36"/>
+    <keyword type="function" name="webkit_uri_scheme_response_set_status ()" link="WebKitURISchemeResponse.html#webkit-uri-scheme-response-set-status" since="2.36"/>
+    <keyword type="function" name="webkit_uri_scheme_response_set_http_headers ()" link="WebKitURISchemeResponse.html#webkit-uri-scheme-response-set-http-headers"/>
+    <keyword type="struct" name="struct WebKitURISchemeResponse" link="WebKitURISchemeResponse.html#WebKitURISchemeResponse-struct"/>
+    <keyword type="property" name="The “stream” property" link="WebKitURISchemeResponse.html#WebKitURISchemeResponse--stream"/>
+    <keyword type="property" name="The “stream-length” property" link="WebKitURISchemeResponse.html#WebKitURISchemeResponse--stream-length"/>
     <keyword type="function" name="webkit_get_major_version ()" link="webkit2gtk-4.0-WebKitVersion.html#webkit-get-major-version"/>
     <keyword type="function" name="webkit_get_minor_version ()" link="webkit2gtk-4.0-WebKitVersion.html#webkit-get-minor-version"/>
     <keyword type="function" name="webkit_get_micro_version ()" link="webkit2gtk-4.0-WebKitVersion.html#webkit-get-micro-version"/>

@@ -1674,6 +1674,10 @@ when used with an accessor descriptor.</p>
 <a href="../gobject/gobject-Type-Information.html#G-TYPE-POINTER:CAPS"><code class="literal">G_TYPE_POINTER</code></a> instead of the actual boxed <a href="../gobject/gobject-Type-Information.html#GType"><span class="type">GType</span></a> to ensure that the instance owned by <a class="link" href="JSCClass.html" title="JSCClass"><span class="type">JSCClass</span></a> is used.
 If you really want to return a new copy of the boxed type, use <span class="type">JSC_TYPE_VALUE</span> and return a <a class="link" href="JSCValue.html" title="JSCValue"><span class="type">JSCValue</span></a> created
 with <a class="link" href="JSCValue.html#jsc-value-new-object" title="jsc_value_new_object ()"><code class="function">jsc_value_new_object()</code></a> that receives the copy as instance parameter.</p>
+<p>Note that <em class="parameter"><code>getter</code></em>
+ and <em class="parameter"><code>setter</code></em>
+ are called as functions and not methods, so they don't receive an instance as
+first parameter. Use <a class="link" href="JSCClass.html#jsc-class-add-property" title="jsc_class_add_property ()"><code class="function">jsc_class_add_property()</code></a> if you want to add property accessor invoked as a method.</p>
 <div class="refsect3">
 <a name="jsc-value-object-define-property-accessor.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">

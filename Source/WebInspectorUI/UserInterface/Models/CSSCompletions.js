@@ -36,7 +36,6 @@ WI.CSSCompletions = class CSSCompletions
     constructor(properties, acceptEmptyPrefix)
     {
         this._values = [];
-        this._shorthands = {};
 
         // The `properties` parameter can be either a list of objects with 'name' / 'longhand'
         // properties when initialized from the protocol for CSSCompletions.cssNameCompletions.
@@ -53,21 +52,6 @@ WI.CSSCompletions = class CSSCompletions
                 let aliases = property.aliases;
                 if (aliases)
                     this._values.pushAll(aliases);
-
-                var longhands = property.longhands;
-                if (longhands) {
-                    for (var j = 0; j < longhands.length; ++j) {
-                        var longhandName = longhands[j];
-
-                        var shorthands = this._shorthands[longhandName];
-                        if (!shorthands) {
-                            shorthands = [];
-                            this._shorthands[longhandName] = shorthands;
-                        }
-
-                        shorthands.push(propertyName);
-                    }
-                }
             }
         }
 
@@ -85,14 +69,14 @@ WI.CSSCompletions = class CSSCompletions
         if (WI.CSSCompletions.cssNameCompletions)
             return;
 
-        function propertyNamesCallback(error, names)
+        function propertiesCallback(error, cssProperties)
         {
             if (error)
                 return;
 
-            WI.CSSCompletions.cssNameCompletions = new WI.CSSCompletions(names, false);
+            WI.CSSCompletions.cssNameCompletions = new WI.CSSCompletions(cssProperties, false);
 
-            WI.CSSKeywordCompletions.addCustomCompletions(names);
+            WI.CSSKeywordCompletions.addCustomCompletions(cssProperties);
 
             // CodeMirror is not included by tests so we shouldn't assume it always exists.
             // If it isn't available we skip MIME type associations.
@@ -119,7 +103,7 @@ WI.CSSCompletions = class CSSCompletions
                 valueKeywordsForCodeMirror[codeMirrorPropertyName] = true;
             }
 
-            for (var property of names)
+            for (var property of cssProperties)
                 collectPropertyNameForCodeMirror(property.name);
 
             for (var propertyName in WI.CSSKeywordCompletions._propertyKeywordMap) {
@@ -164,7 +148,7 @@ WI.CSSCompletions = class CSSCompletions
             WI.CSSKeywordCompletions.addPropertyCompletionValues("font", fontFamilyNames);
         }
 
-        target.CSSAgent.getSupportedCSSProperties(propertyNamesCallback);
+        target.CSSAgent.getSupportedCSSProperties(propertiesCallback);
         if (target.hasCommand("CSS.getSupportedSystemFontFamilyNames"))
             target.CSSAgent.getSupportedSystemFontFamilyNames(fontFamilyNamesCallback);
     }
@@ -348,16 +332,6 @@ WI.CSSCompletions = class CSSCompletions
         return propertiesWithPrefix[j];
     }
 
-    isShorthandPropertyName(shorthand)
-    {
-        return WI.CSSKeywordCompletions.LonghandNamesForShorthandProperty.has(shorthand);
-    }
-
-    shorthandsForLonghand(longhand)
-    {
-        return this._shorthands[longhand] || [];
-    }
-
     isValidPropertyName(name)
     {
         return this._values.includes(name);
@@ -369,15 +343,27 @@ WI.CSSCompletions.cssNameCompletions = null;
 WI.CSSCompletions.lengthUnits = new Set([
     "ch",
     "cm",
+    "dvh",
+    "dvmax",
+    "dvmin",
+    "dvw",
     "em",
     "ex",
     "in",
+    "lvh",
+    "lvmax",
+    "lvmin",
+    "lvw",
     "mm",
     "pc",
     "pt",
     "px",
     "q",
     "rem",
+    "svh",
+    "svmax",
+    "svmin",
+    "svw",
     "vh",
     "vmax",
     "vmin",

@@ -2,6 +2,7 @@
  * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,13 +23,12 @@
 #pragma once
 
 #include "FilterEffect.h"
-#include "Filter.h"
 
 namespace WebCore {
 
 class FEOffset : public FilterEffect {
 public:
-    static Ref<FEOffset> create(Filter&, float dx, float dy);
+    static Ref<FEOffset> create(float dx, float dy);
 
     float dx() const { return m_dx; }
     void setDx(float);
@@ -37,13 +37,11 @@ public:
     void setDy(float);
 
 private:
-    FEOffset(Filter&, float dx, float dy);
+    FEOffset(float dx, float dy);
 
-    const char* filterName() const final { return "FEOffset"; }
+    void determineAbsolutePaintRect(const Filter&) override;
 
-    void platformApplySoftware() override;
-    
-    void determineAbsolutePaintRect() override;
+    bool platformApplySoftware(const Filter&) override;
 
     WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
@@ -53,3 +51,4 @@ private:
 
 } // namespace WebCore
 
+SPECIALIZE_TYPE_TRAITS_FILTER_EFFECT(FEOffset)

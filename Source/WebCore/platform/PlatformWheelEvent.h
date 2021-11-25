@@ -120,11 +120,18 @@ public:
         return copy;
     }
 
-    PlatformWheelEvent copyWithDeltasAndVelocity(float deltaX, float deltaY, const FloatSize& velocity) const
+    PlatformWheelEvent copyWithDeltaAndVelocity(FloatSize delta, FloatSize velocity) const
     {
         PlatformWheelEvent copy = *this;
-        copy.m_deltaX = deltaX;
-        copy.m_deltaY = deltaY;
+        copy.m_deltaX = delta.width();
+        copy.m_deltaY = delta.height();
+        copy.m_scrollingVelocity = velocity;
+        return copy;
+    }
+
+    PlatformWheelEvent copyWithVelocity(FloatSize velocity) const
+    {
+        PlatformWheelEvent copy = *this;
         copy.m_scrollingVelocity = velocity;
         return copy;
     }
@@ -150,8 +157,9 @@ public:
 
 #if PLATFORM(COCOA)
     unsigned scrollCount() const { return m_scrollCount; }
-    float unacceleratedScrollingDeltaX() const { return m_unacceleratedScrollingDeltaX; }
-    float unacceleratedScrollingDeltaY() const { return m_unacceleratedScrollingDeltaY; }
+    FloatSize unacceleratedScrollingDelta() const { return { m_unacceleratedScrollingDeltaX, m_unacceleratedScrollingDeltaY }; }
+    
+    WallTime ioHIDEventTimestamp() const { return m_ioHIDEventTimestamp; }
 #endif
 
 #if ENABLE(ASYNC_SCROLLING)
@@ -173,7 +181,7 @@ public:
 
     bool isEndOfNonMomentumScroll() const;
     bool isTransitioningToMomentumScroll() const;
-    FloatPoint swipeVelocity() const;
+    FloatSize swipeVelocity() const;
 #endif
 
 #if PLATFORM(WIN)
@@ -200,6 +208,7 @@ protected:
     PlatformWheelEventPhase m_momentumPhase { PlatformWheelEventPhase::None };
 #endif
 #if PLATFORM(COCOA)
+    WallTime m_ioHIDEventTimestamp;
     unsigned m_scrollCount { 0 };
     float m_unacceleratedScrollingDeltaX { 0 };
     float m_unacceleratedScrollingDeltaY { 0 };
@@ -262,10 +271,10 @@ inline bool PlatformWheelEvent::isTransitioningToMomentumScroll() const
     return m_phase == PlatformWheelEventPhase::None && m_momentumPhase == PlatformWheelEventPhase::Began;
 }
 
-inline FloatPoint PlatformWheelEvent::swipeVelocity() const
+inline FloatSize PlatformWheelEvent::swipeVelocity() const
 {
     // The swiping velocity is stored in the deltas of the event declaring it.
-    return isTransitioningToMomentumScroll() ? FloatPoint(m_wheelTicksX, m_wheelTicksY) : FloatPoint();
+    return isTransitioningToMomentumScroll() ? FloatSize(m_wheelTicksX, m_wheelTicksY) : FloatSize();
 }
 
 #endif // ENABLE(KINETIC_SCROLLING)

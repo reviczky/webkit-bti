@@ -39,6 +39,7 @@
 #include "VideoTrackPrivateRemote.h"
 #include <WebCore/MediaPlayerPrivate.h>
 #include <WebCore/SecurityOriginData.h>
+#include <WebCore/VideoFrameMetadata.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>
 #include <wtf/WeakPtr.h>
@@ -56,6 +57,10 @@ struct GenericCueData;
 class ISOWebVTTCue;
 class SerializedPlatformDataCueValue;
 class VideoLayerManager;
+
+#if PLATFORM(COCOA)
+class PixelBufferConformerCV;
+#endif
 }
 
 namespace WebKit {
@@ -290,6 +295,7 @@ private:
     RetainPtr<CVPixelBufferRef> pixelBufferForCurrentTime() final;
 #endif
     RefPtr<WebCore::NativeImage> nativeImageForCurrentTime() final;
+    WebCore::DestinationColorSpace colorSpace() final;
 
     WebCore::MediaPlayerIdentifier identifier() const final;
 
@@ -313,6 +319,7 @@ private:
 
     bool supportsAcceleratedRendering() const final;
     void acceleratedRenderingStateChanged() final;
+    void checkAcceleratedRenderingState();
 
     void setShouldMaintainAspectRatio(bool) final;
 
@@ -396,7 +403,15 @@ private:
     bool supportsPauseAtHostTime() const final { return m_configuration.supportsPauseAtHostTime; }
     bool playAtHostTime(const MonotonicTime&) final;
     bool pauseAtHostTime(const MonotonicTime&) final;
+    void updateConfiguration(RemoteMediaPlayerConfiguration&&);
 
+    std::optional<WebCore::VideoFrameMetadata> videoFrameMetadata() final;
+    void startVideoFrameMetadataGathering() final;
+    void stopVideoFrameMetadataGathering() final;
+
+#if PLATFORM(COCOA)
+    void pushVideoFrameMetadata(WebCore::VideoFrameMetadata&&, RetainPtr<CVPixelBufferRef>&&);
+#endif
 
     WeakPtr<WebCore::MediaPlayer> m_player;
     Ref<WebCore::PlatformMediaResourceLoader> m_mediaResourceLoader;
@@ -444,6 +459,16 @@ private:
     bool m_invalid { false };
     bool m_waitingForKey { false };
     bool m_timeIsProgressing { false };
+    bool m_renderingCanBeAccelerated { false };
+#if USE(AVFOUNDATION)
+    RetainPtr<CVPixelBufferRef> m_pixelBufferForCurrentTime;
+#endif
+#if PLATFORM(COCOA)
+    RetainPtr<CVPixelBufferRef> m_pixelBufferGatheredWithVideoFrameMetadata;
+    std::unique_ptr<WebCore::PixelBufferConformerCV> m_pixelBufferConformer;
+#endif
+    std::optional<WebCore::VideoFrameMetadata> m_videoFrameMetadata;
+    bool m_isGatheringVideoFrameMetadata { false };
 };
 
 } // namespace WebKit

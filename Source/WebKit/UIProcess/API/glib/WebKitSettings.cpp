@@ -196,6 +196,13 @@ static void webKitSettingsConstructed(GObject* object)
     prefs->setPeerConnectionEnabled(true);
 #endif
 #endif
+
+    // FIXME: Expose API for this when this feature is officially non-experimental.
+#if ENABLE(MEDIA_SESSION)
+    prefs->setMediaSessionEnabled(true);
+    prefs->setMediaSessionCoordinatorEnabled(true);
+    prefs->setMediaSessionPlaylistEnabled(true);
+#endif
 }
 
 static void webKitSettingsSetProperty(GObject* object, guint propId, const GValue* value, GParamSpec* paramSpec)
@@ -1245,7 +1252,7 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
             "enable-smooth-scrolling",
             _("Enable smooth scrolling"),
             _("Whether to enable smooth scrolling"),
-            FALSE,
+            TRUE,
             readWriteConstructParamFlags);
 
     /**
@@ -1481,7 +1488,7 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
             _("Hardware Acceleration Policy"),
             _("The policy to decide how to enable and disable hardware acceleration"),
             WEBKIT_TYPE_HARDWARE_ACCELERATION_POLICY,
-            WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND,
+            WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS,
             readWriteConstructParamFlags);
 
     /**

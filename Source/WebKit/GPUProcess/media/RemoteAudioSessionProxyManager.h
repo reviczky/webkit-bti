@@ -41,10 +41,10 @@ class RemoteAudioSessionProxyManager
     , private WebCore::AudioSession::ConfigurationChangeObserver {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    RemoteAudioSessionProxyManager();
+    RemoteAudioSessionProxyManager(GPUProcess&);
     ~RemoteAudioSessionProxyManager();
 
-    void addProxy(RemoteAudioSessionProxy&);
+    void addProxy(RemoteAudioSessionProxy&, std::optional<audit_token_t>);
     void removeProxy(RemoteAudioSessionProxy&);
 
     void updateCategory();
@@ -55,6 +55,8 @@ public:
     WebCore::AudioSession& session() { return WebCore::AudioSession::sharedSession(); }
     const WebCore::AudioSession& session() const { return WebCore::AudioSession::sharedSession(); }
 
+    void updatePresentingProcesses();
+
 private:
     void beginAudioSessionInterruption() final;
     void endAudioSessionInterruption(WebCore::AudioSession::MayResume) final;
@@ -64,6 +66,7 @@ private:
     void sampleRateDidChange(const WebCore::AudioSession&) final;
     void configurationDidChange(const WebCore::AudioSession&);
 
+    GPUProcess& m_gpuProcess;
     WeakHashSet<RemoteAudioSessionProxy> m_proxies;
 };
 

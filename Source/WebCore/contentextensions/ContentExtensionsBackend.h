@@ -36,7 +36,9 @@
 namespace WebCore {
 
 class DocumentLoader;
+class Page;
 class ResourceRequest;
+struct ContentRuleListResults;
 
 namespace ContentExtensions {
 
@@ -55,11 +57,16 @@ public:
 
     // Set a list of rules for a given name. If there were existing rules for the name, they are overridden.
     // The identifier cannot be empty.
-    WEBCORE_EXPORT void addContentExtension(const String& identifier, Ref<CompiledContentExtension>, ContentExtension::ShouldCompileCSS = ContentExtension::ShouldCompileCSS::Yes);
+    WEBCORE_EXPORT void addContentExtension(const String& identifier, Ref<CompiledContentExtension>, URL&& extensionBaseURL, ContentExtension::ShouldCompileCSS = ContentExtension::ShouldCompileCSS::Yes);
     WEBCORE_EXPORT void removeContentExtension(const String& identifier);
     WEBCORE_EXPORT void removeAllContentExtensions();
 
     // - Internal WebCore Interface.
+    struct ActionsFromContentRuleList {
+        String contentRuleListIdentifier;
+        bool sawIgnorePreviousRules { false };
+        Vector<DeserializedAction> actions;
+    };
     WEBCORE_EXPORT Vector<ActionsFromContentRuleList> actionsForResourceLoad(const ResourceLoadInfo&) const;
     WEBCORE_EXPORT StyleSheetContents* globalDisplayNoneStyleSheet(const String& identifier) const;
 
@@ -75,6 +82,8 @@ public:
 private:
     HashMap<String, Ref<ContentExtension>> m_contentExtensions;
 };
+
+WEBCORE_EXPORT void applyResultsToRequest(ContentRuleListResults&&, Page*, ResourceRequest&);
 
 } // namespace ContentExtensions
 } // namespace WebCore

@@ -86,7 +86,9 @@ namespace WebCore {
             Child,
             DirectAdjacent,
             IndirectAdjacent,
-            ShadowDescendant
+            ShadowDescendant,
+            ShadowPartDescendant,
+            ShadowSlotted
         };
 
         enum PseudoClassType {
@@ -108,6 +110,7 @@ namespace WebCore {
             PseudoClassAnyLink,
             PseudoClassAnyLinkDeprecated,
             PseudoClassAutofill,
+            PseudoClassAutofillAndObscured,
             PseudoClassAutofillStrongPassword,
             PseudoClassAutofillStrongPasswordViewable,
             PseudoClassHover,

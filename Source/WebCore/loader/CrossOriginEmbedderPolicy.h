@@ -25,12 +25,16 @@
 
 #pragma once
 
+#include "FetchOptions.h"
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
+class Frame;
 class ResourceResponse;
 class ScriptExecutionContext;
+
+struct SecurityOriginData;
 
 // https://html.spec.whatwg.org/multipage/origin.html#embedder-policy-value
 enum class CrossOriginEmbedderPolicyValue : bool {
@@ -45,7 +49,8 @@ struct CrossOriginEmbedderPolicy {
     CrossOriginEmbedderPolicyValue reportOnlyValue { CrossOriginEmbedderPolicyValue::UnsafeNone };
     String reportOnlyReportingEndpoint;
 
-    CrossOriginEmbedderPolicy isolatedCopy() const;
+    CrossOriginEmbedderPolicy isolatedCopy() const &;
+    CrossOriginEmbedderPolicy isolatedCopy() &&;
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static std::optional<CrossOriginEmbedderPolicy> decode(Decoder&);
 };
@@ -92,10 +97,11 @@ std::optional<CrossOriginEmbedderPolicy> CrossOriginEmbedderPolicy::decode(Decod
     }};
 }
 
-CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse&, const ScriptExecutionContext&);
-WEBCORE_EXPORT void addCrossOriginEmbedderPolicyHeaders(ResourceResponse&, const CrossOriginEmbedderPolicy&);
+enum class COEPDisposition : bool { Reporting , Enforce };
 
-enum class IsSecureContext : bool { No, Yes };
-WEBCORE_EXPORT CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse&, IsSecureContext);
+WEBCORE_EXPORT CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse&, const ScriptExecutionContext*);
+WEBCORE_EXPORT void addCrossOriginEmbedderPolicyHeaders(ResourceResponse&, const CrossOriginEmbedderPolicy&);
+WEBCORE_EXPORT void sendCOEPPolicyInheritenceViolation(Frame&, const SecurityOriginData& embedderOrigin, const String& endpoint, COEPDisposition, const String& type, const URL& blockedURL);
+WEBCORE_EXPORT void sendCOEPCORPViolation(Frame&, const SecurityOriginData& embedderOrigin, const String& endpoint, COEPDisposition, FetchOptions::Destination, const URL& blockedURL);
 
 } // namespace WebCore

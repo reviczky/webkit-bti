@@ -39,6 +39,7 @@
 #include "RenderSVGResourceMasker.h"
 #include "SVGDocumentExtensions.h"
 #include "SVGElementRareData.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGForeignObjectElement.h"
 #include "SVGGraphicsElement.h"
 #include "SVGImageElement.h"
@@ -46,6 +47,7 @@
 #include "SVGPropertyAnimatorFactory.h"
 #include "SVGRenderStyle.h"
 #include "SVGRenderSupport.h"
+#include "SVGResourceElementClient.h"
 #include "SVGSVGElement.h"
 #include "SVGTitleElement.h"
 #include "SVGUseElement.h"
@@ -78,15 +80,12 @@ static NEVER_INLINE MemoryCompactLookupOnlyRobinHoodHashMap<AtomString, CSSPrope
         &SVGNames::colorAttr.get(),
         &color_interpolationAttr.get(),
         &color_interpolation_filtersAttr.get(),
-        &color_profileAttr.get(),
-        &color_renderingAttr.get(),
         &cursorAttr.get(),
         &cxAttr.get(),
         &cyAttr.get(),
         &SVGNames::directionAttr.get(),
         &displayAttr.get(),
         &dominant_baselineAttr.get(),
-        &enable_backgroundAttr.get(),
         &fillAttr.get(),
         &fill_opacityAttr.get(),
         &fill_ruleAttr.get(),
@@ -249,7 +248,7 @@ void SVGElement::removedFromAncestor(RemovalType removalType, ContainerNode& old
         if (m_svgRareData) {
             for (auto& element : m_svgRareData->takeReferencingElements()) {
                 extensions.addElementToRebuild(element);
-                makeRef(element)->clearTarget();
+                Ref { element }->clearTarget();
             }
             RELEASE_ASSERT(m_svgRareData->referencingElements().computesEmpty());
         }
@@ -319,7 +318,7 @@ void SVGElement::addReferencingElement(SVGElement& element)
     ensureSVGRareData().addReferencingElement(element);
     auto& rareDataOfReferencingElement = element.ensureSVGRareData();
     RELEASE_ASSERT(!rareDataOfReferencingElement.referenceTarget());
-    rareDataOfReferencingElement.setReferenceTarget(makeWeakPtr(*this));
+    rareDataOfReferencingElement.setReferenceTarget(*this);
 }
 
 void SVGElement::removeReferencingElement(SVGElement& element)
@@ -332,8 +331,27 @@ void SVGElement::removeElementReference()
 {
     if (!m_svgRareData)
         return;
-    if (auto destination = makeRefPtr(m_svgRareData->referenceTarget()))
+    if (RefPtr destination = m_svgRareData->referenceTarget())
         destination->removeReferencingElement(*this);
+}
+
+Vector<WeakPtr<SVGResourceElementClient>> SVGElement::referencingCSSClients() const
+{
+    if (!m_svgRareData)
+        return { };
+    return copyToVector(m_svgRareData->referencingCSSClients());
+}
+
+void SVGElement::addReferencingCSSClient(SVGResourceElementClient& client)
+{
+    ensureSVGRareData().addReferencingCSSClient(client);
+}
+
+void SVGElement::removeReferencingCSSClient(SVGResourceElementClient& client)
+{
+    if (!m_svgRareData)
+        return;
+    ensureSVGRareData().removeReferencingCSSClient(client);
 }
 
 SVGElement* SVGElement::correspondingElement() const
@@ -357,7 +375,7 @@ RefPtr<SVGUseElement> SVGElement::correspondingUseElement() const
 void SVGElement::setCorrespondingElement(SVGElement* correspondingElement)
 {
     if (m_svgRareData) {
-        if (auto oldCorrespondingElement = makeRefPtr(m_svgRareData->correspondingElement()))
+        if (RefPtr oldCorrespondingElement = m_svgRareData->correspondingElement())
             oldCorrespondingElement->m_svgRareData->removeInstance(*this);
     }
     if (m_svgRareData || correspondingElement)
@@ -620,16 +638,19 @@ void SVGElement::animatorWillBeDeleted(const QualifiedName& attributeName)
     propertyAnimatorFactory().animatorWillBeDeleted(attributeName);
 }
 
-std::optional<Style::ElementStyle> SVGElement::resolveCustomStyle(const RenderStyle& parentStyle, const RenderStyle*)
+std::optional<Style::ElementStyle> SVGElement::resolveCustomStyle(const Style::ResolutionContext& resolutionContext, const RenderStyle*)
 {
     // If the element is in a <use> tree we get the style from the definition tree.
-    if (auto styleElement = makeRefPtr(this->correspondingElement())) {
-        auto style = styleElement->resolveStyle(&parentStyle);
+    if (RefPtr styleElement = this->correspondingElement()) {
+        auto styleElementResolutionContext = resolutionContext;
+        // Can't use the state since we are going to another part of the tree.
+        styleElementResolutionContext.selectorMatchingState = nullptr;
+        auto style = styleElement->resolveStyle(styleElementResolutionContext);
         Style::Adjuster::adjustSVGElementStyle(*style.renderStyle, *this);
         return style;
     }
 
-    return resolveStyle(&parentStyle);
+    return resolveStyle(resolutionContext);
 }
 
 MutableStyleProperties* SVGElement::animatedSMILStyleProperties() const
@@ -656,7 +677,7 @@ const RenderStyle* SVGElement::computedStyle(PseudoId pseudoElementSpecifier)
         return Element::computedStyle(pseudoElementSpecifier);
 
     const RenderStyle* parentStyle = nullptr;
-    if (auto parent = makeRefPtr(parentOrShadowHostElement())) {
+    if (RefPtr parent = parentOrShadowHostElement()) {
         if (auto renderer = parent->renderer())
             parentStyle = &renderer->style();
     }
@@ -873,6 +894,8 @@ Node::InsertedIntoAncestorResult SVGElement::insertedIntoAncestor(InsertionType 
             return InsertedIntoAncestorResult::NeedsPostInsertionCallback;
     }
 
+    hideNonce();
+
     return InsertedIntoAncestorResult::Done;
 }
 
@@ -959,7 +982,7 @@ void SVGElement::updateRelativeLengthsInformation(bool hasRelativeLengths, SVGEl
     }
 
     if (is<SVGGraphicsElement>(element)) {
-        if (auto parent = makeRefPtr(parentNode()); is<SVGElement>(parent))
+        if (RefPtr parent = parentNode(); is<SVGElement>(parent))
             downcast<SVGElement>(*parent).updateRelativeLengthsInformation(hasRelativeLengths, *this);
     }
 }

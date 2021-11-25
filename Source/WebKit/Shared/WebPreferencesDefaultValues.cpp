@@ -36,12 +36,13 @@
 #endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
+#import "WebProcess.h"
 #import <wtf/cocoa/Entitlements.h>
 #endif
 
 namespace WebKit {
 
-#if !PLATFORM(COCOA)
+#if !PLATFORM(COCOA) && !PLATFORM(WIN)
 bool isFeatureFlagEnabled(const char*, bool defaultValue)
 {
     return defaultValue;
@@ -61,6 +62,13 @@ bool defaultCSSOMViewScrollingAPIEnabled()
     static bool result = WebCore::IOSApplication::isIMDb() && applicationSDKVersion() < DYLD_IOS_VERSION_13_0;
     return !result;
 }
+
+#if !USE(APPLE_INTERNAL_SDK)
+bool defaultAlternateFormControlDesignEnabled()
+{
+    return false;
+}
+#endif
 
 #endif
 
@@ -154,7 +162,7 @@ bool defaultOfflineWebApplicationCacheEnabled()
 
 bool defaultUseGPUProcessForCanvasRenderingEnabled()
 {
-#if ENABLE(GPU_PROCESS_BY_DEFAULT)
+#if ENABLE(GPU_PROCESS_BY_DEFAULT) || PLATFORM(WIN)
     bool defaultValue = true;
 #else
     bool defaultValue = false;
@@ -181,7 +189,12 @@ bool defaultUseGPUProcessForMediaEnabled()
 
 bool defaultUseGPUProcessForWebGLEnabled()
 {
-    return isFeatureFlagEnabled("gpu_process_webgl", false);
+#if PLATFORM(WIN)
+    bool defaultValue = true;
+#else
+    bool defaultValue = false;
+#endif
+    return isFeatureFlagEnabled("gpu_process_webgl", defaultValue);
 }
 
 #endif // ENABLE(GPU_PROCESS)
@@ -314,11 +327,6 @@ bool defaultWebMParserEnabled()
     return isFeatureFlagEnabled("webm_parser", true);
 }
 
-bool defaultWebMWebAudioEnabled()
-{
-    return isFeatureFlagEnabled("webm_webaudio", false);
-}
-
 #endif // ENABLE(MEDIA_SOURCE)
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
@@ -327,7 +335,10 @@ bool defaultMediaSessionCoordinatorEnabled()
     static dispatch_once_t onceToken;
     static bool enabled { false };
     dispatch_once(&onceToken, ^{
-        enabled = WTF::processHasEntitlement("com.apple.developer.group-session.urlactivity");
+        if (isInWebProcess())
+            enabled = WebProcess::singleton().parentProcessHasEntitlement("com.apple.developer.group-session.urlactivity");
+        else
+            enabled = WTF::processHasEntitlement("com.apple.developer.group-session.urlactivity");
     });
     return enabled;
 }

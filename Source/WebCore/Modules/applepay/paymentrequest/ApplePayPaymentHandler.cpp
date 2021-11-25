@@ -78,7 +78,7 @@
 
 namespace WebCore {
 
-static ExceptionOr<ApplePayRequest> convertAndValidate(ScriptExecutionContext& context, JSC::JSValue data)
+static ExceptionOr<ApplePayRequest> convertAndValidateApplePayRequest(ScriptExecutionContext& context, JSC::JSValue data)
 {
     if (data.isEmpty())
         return Exception { TypeError, "Missing payment method data." };
@@ -93,7 +93,7 @@ static ExceptionOr<ApplePayRequest> convertAndValidate(ScriptExecutionContext& c
 
 ExceptionOr<void> ApplePayPaymentHandler::validateData(Document& document, JSC::JSValue data)
 {
-    auto requestOrException = convertAndValidate(document, data);
+    auto requestOrException = convertAndValidateApplePayRequest(document, data);
     if (requestOrException.hasException())
         return requestOrException.releaseException();
 
@@ -102,10 +102,10 @@ ExceptionOr<void> ApplePayPaymentHandler::validateData(Document& document, JSC::
 
 bool ApplePayPaymentHandler::handlesIdentifier(const PaymentRequest::MethodIdentifier& identifier)
 {
-    if (!WTF::holds_alternative<URL>(identifier))
+    if (!std::holds_alternative<URL>(identifier))
         return false;
 
-    auto& url = WTF::get<URL>(identifier);
+    auto& url = std::get<URL>(identifier);
     return url.host() == "apple.com" && url.path() == "/apple-pay";
 }
 
@@ -202,7 +202,7 @@ static ExceptionOr<ApplePayShippingMethod> convertAndValidate(const PaymentShipp
 
 ExceptionOr<void> ApplePayPaymentHandler::convertData(JSC::JSValue data)
 {
-    auto requestOrException = convertAndValidate(*scriptExecutionContext(), data);
+    auto requestOrException = convertAndValidateApplePayRequest(*scriptExecutionContext(), data);
     if (requestOrException.hasException())
         return requestOrException.releaseException();
 
@@ -227,9 +227,9 @@ static void mergePaymentOptions(const PaymentOptions& options, ApplePaySessionPa
         request.setShippingType(convert(options.shippingType));
 }
 
-#if !ENABLE(APPLE_PAY_PAYMENT_DETAILS_DATA)
+#if !USE(APPLE_INTERNAL_SDK)
 static void merge(ApplePaySessionPaymentRequest&, ApplePayModifier&&) { }
-#endif // !ENABLE(APPLE_PAY_PAYMENT_DETAILS_DATA)
+#endif
 
 ExceptionOr<void> ApplePayPaymentHandler::show(Document& document)
 {
@@ -299,10 +299,18 @@ ExceptionOr<Vector<ApplePayShippingMethod>> ApplePayPaymentHandler::computeShipp
 
         shippingOptions.reserveInitialCapacity(details.shippingOptions->size());
         for (auto& shippingOption : *details.shippingOptions) {
-            auto shippingMethod = convertAndValidate(shippingOption, currency);
-            if (shippingMethod.hasException())
-                return shippingMethod.releaseException();
-            shippingOptions.uncheckedAppend(shippingMethod.releaseReturnValue());
+            auto shippingMethodOrException = convertAndValidate(shippingOption, currency);
+            if (shippingMethodOrException.hasException())
+                return shippingMethodOrException.releaseException();
+
+            auto shippingMethod = shippingMethodOrException.releaseReturnValue();
+
+#if ENABLE(APPLE_PAY_SELECTED_SHIPPING_METHOD)
+            if (shippingMethod.identifier == m_paymentRequest->shippingOption())
+                shippingMethod.selected = true;
+#endif
+
+            shippingOptions.uncheckedAppend(WTFMove(shippingMethod));
         }
     }
 
@@ -537,9 +545,9 @@ ExceptionOr<void> ApplePayPaymentHandler::merchantValidationCompleted(JSC::JSVal
     return { };
 }
 
-#if !ENABLE(APPLE_PAY_PAYMENT_DETAILS_DATA)
+#if !USE(APPLE_INTERNAL_SDK)
 static void merge(ApplePayDetailsUpdateBase&, ApplePayModifier&&) { }
-#endif // !ENABLE(APPLE_PAY_PAYMENT_DETAILS_DATA)
+#endif
 
 ExceptionOr<void> ApplePayPaymentHandler::shippingAddressUpdated(Vector<RefPtr<ApplePayError>>&& errors)
 {
@@ -711,7 +719,7 @@ unsigned ApplePayPaymentHandler::version() const
 void ApplePayPaymentHandler::validateMerchant(URL&& validationURL)
 {
     if (validationURL.isValid())
-        m_paymentRequest->dispatchEvent(MerchantValidationEvent::create(eventNames().merchantvalidationEvent, WTF::get<URL>(m_identifier).string(), WTFMove(validationURL)).get());
+        m_paymentRequest->dispatchEvent(MerchantValidationEvent::create(eventNames().merchantvalidationEvent, std::get<URL>(m_identifier).string(), WTFMove(validationURL)).get());
 }
 
 static Ref<PaymentAddress> convert(const ApplePayPaymentContact& contact)
@@ -736,7 +744,7 @@ void ApplePayPaymentHandler::didAuthorizePayment(const Payment& payment)
         return toJSDictionary(lexicalGlobalObject, applePayPayment);
     };
 
-    m_paymentRequest->accept(WTF::get<URL>(m_identifier).string(), WTFMove(detailsFunction), convert(shippingContact), shippingContact.localizedName, shippingContact.emailAddress, shippingContact.phoneNumber);
+    m_paymentRequest->accept(std::get<URL>(m_identifier).string(), WTFMove(detailsFunction), convert(shippingContact), shippingContact.localizedName, shippingContact.emailAddress, shippingContact.phoneNumber);
 }
 
 void ApplePayPaymentHandler::didSelectShippingMethod(const ApplePayShippingMethod& shippingMethod)
@@ -762,7 +770,7 @@ void ApplePayPaymentHandler::didSelectPaymentMethod(const PaymentMethod& payment
 
     auto applePayPaymentMethod = paymentMethod.toApplePayPaymentMethod();
     m_selectedPaymentMethodType = applePayPaymentMethod.type;
-    m_paymentRequest->paymentMethodChanged(WTF::get<URL>(m_identifier).string(), [applePayPaymentMethod = WTFMove(applePayPaymentMethod)](JSC::JSGlobalObject& lexicalGlobalObject) {
+    m_paymentRequest->paymentMethodChanged(std::get<URL>(m_identifier).string(), [applePayPaymentMethod = WTFMove(applePayPaymentMethod)](JSC::JSGlobalObject& lexicalGlobalObject) {
         return toJSDictionary(lexicalGlobalObject, applePayPaymentMethod);
     });
 }
@@ -775,7 +783,7 @@ void ApplePayPaymentHandler::didChangeCouponCode(String&& couponCode)
     m_updateState = UpdateState::CouponCode;
 
     ApplePayCouponCodeDetails applePayCouponCodeDetails { WTFMove(couponCode) };
-    m_paymentRequest->paymentMethodChanged(WTF::get<URL>(m_identifier).string(), [applePayCouponCodeDetails = WTFMove(applePayCouponCodeDetails)] (JSC::JSGlobalObject& lexicalGlobalObject) {
+    m_paymentRequest->paymentMethodChanged(std::get<URL>(m_identifier).string(), [applePayCouponCodeDetails = WTFMove(applePayCouponCodeDetails)] (JSC::JSGlobalObject& lexicalGlobalObject) {
         return toJSDictionary(lexicalGlobalObject, applePayCouponCodeDetails);
     });
 }

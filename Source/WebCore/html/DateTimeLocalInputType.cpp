@@ -36,6 +36,7 @@
 #include "DateComponents.h"
 #include "DateTimeFieldsState.h"
 #include "Decimal.h"
+#include "ElementInlines.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
 #include "InputTypeNames.h"
@@ -83,7 +84,7 @@ StepRange DateTimeLocalInputType::createStepRange(AnyStepHandling anyStepHandlin
     return StepRange(stepBase, RangeLimitations::Valid, minimum, maximum, step, dateTimeLocalStepDescription);
 }
 
-std::optional<DateComponents> DateTimeLocalInputType::parseToDateComponents(const StringView& source) const
+std::optional<DateComponents> DateTimeLocalInputType::parseToDateComponents(StringView source) const
 {
     return DateComponents::fromParsingDateTimeLocal(source);
 }

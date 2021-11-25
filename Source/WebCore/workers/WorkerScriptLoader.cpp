@@ -58,7 +58,7 @@ std::optional<Exception> WorkerScriptLoader::loadSynchronously(ScriptExecutionCo
 
     m_url = url;
     m_destination = FetchOptions::Destination::Script;
-    m_isSecureContext = workerGlobalScope.isSecureContext();
+    m_isCOEPEnabled = scriptExecutionContext->settingsValues().crossOriginEmbedderPolicyEnabled;
 
 #if ENABLE(SERVICE_WORKER)
     bool isServiceWorkerGlobalScope = is<ServiceWorkerGlobalScope>(workerGlobalScope);
@@ -117,7 +117,7 @@ void WorkerScriptLoader::loadAsynchronously(ScriptExecutionContext& scriptExecut
     m_client = &client;
     m_url = scriptRequest.url();
     m_destination = fetchOptions.destination;
-    m_isSecureContext = scriptExecutionContext.isSecureContext();
+    m_isCOEPEnabled = scriptExecutionContext.settingsValues().crossOriginEmbedderPolicyEnabled;
 
     ASSERT(scriptRequest.httpMethod() == "GET");
 
@@ -178,7 +178,7 @@ ResourceError WorkerScriptLoader::validateWorkerResponse(const ResourceResponse&
     return { };
 }
 
-void WorkerScriptLoader::didReceiveResponse(unsigned long identifier, const ResourceResponse& response)
+void WorkerScriptLoader::didReceiveResponse(ResourceLoaderIdentifier identifier, const ResourceResponse& response)
 {
     m_error = validateWorkerResponse(response, m_destination);
     if (!m_error.isNull()) {
@@ -193,7 +193,8 @@ void WorkerScriptLoader::didReceiveResponse(unsigned long identifier, const Reso
     m_responseSource = response.source();
     m_isRedirected = response.isRedirected();
     m_contentSecurityPolicy = ContentSecurityPolicyResponseHeaders { response };
-    m_crossOriginEmbedderPolicy = obtainCrossOriginEmbedderPolicy(response, m_isSecureContext ? IsSecureContext::Yes : IsSecureContext::No);
+    if (m_isCOEPEnabled)
+        m_crossOriginEmbedderPolicy = obtainCrossOriginEmbedderPolicy(response, nullptr);
     m_referrerPolicy = response.httpHeaderField(HTTPHeaderName::ReferrerPolicy);
     if (m_client)
         m_client->didReceiveResponse(identifier, response);
@@ -220,7 +221,7 @@ void WorkerScriptLoader::didReceiveData(const uint8_t* data, int len)
     m_script.append(m_decoder->decode(data, len));
 }
 
-void WorkerScriptLoader::didFinishLoading(unsigned long identifier)
+void WorkerScriptLoader::didFinishLoading(ResourceLoaderIdentifier identifier)
 {
     if (m_failed) {
         notifyError();

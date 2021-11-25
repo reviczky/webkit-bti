@@ -47,13 +47,15 @@ PAS_BEGIN_EXTERN_C;
     .activate = pas_heap_config_utils_null_activate, \
     .get_type_size = pas_simple_type_as_heap_type_get_type_size, \
     .get_type_alignment = pas_simple_type_as_heap_type_get_type_alignment, \
+    .dump_type = pas_simple_type_as_heap_type_dump, \
     .check_deallocation = true, \
     .small_segregated_min_align_shift = THINGY_MIN_ALIGN_SHIFT, \
     .small_segregated_sharing_shift = PAS_SMALL_SHARING_SHIFT, \
     .small_segregated_page_size = PAS_SMALL_PAGE_DEFAULT_SIZE, \
     .small_segregated_wasteage_handicap = PAS_SMALL_PAGE_HANDICAP, \
     .small_segregated_enable_empty_word_eligibility_optimization = false, \
-    .small_use_reversed_current_word = PAS_ARM64, \
+    .small_segregated_use_reversed_current_word = PAS_ARM64, \
+    .enable_view_cache = false, \
     .use_small_bitfit = true, \
     .small_bitfit_min_align_shift = THINGY_MIN_ALIGN_SHIFT, \
     .small_bitfit_page_size = PAS_SMALL_BITFIT_PAGE_DEFAULT_SIZE, \

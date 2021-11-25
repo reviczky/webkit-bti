@@ -153,7 +153,7 @@ AudioWorkletNode::~AudioWorkletNode()
     uninitialize();
 }
 
-void AudioWorkletNode::initializeAudioParameters(const Vector<AudioParamDescriptor>& descriptors, const std::optional<Vector<WTF::KeyValuePair<String, double>>>& paramValues)
+void AudioWorkletNode::initializeAudioParameters(const Vector<AudioParamDescriptor>& descriptors, const std::optional<Vector<KeyValuePair<String, double>>>& paramValues)
 {
     ASSERT(isMainThread());
     ASSERT(m_parameters->map().isEmpty());
@@ -287,7 +287,7 @@ void AudioWorkletNode::fireProcessorErrorOnMainThread(ProcessorError error)
     // Heap allocations are forbidden on the audio thread for performance reasons so we need to
     // explicitly allow the following allocation(s).
     DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
-    callOnMainThread([this, protectedThis = makeRef(*this), error]() mutable {
+    callOnMainThread([this, protectedThis = Ref { *this }, error]() mutable {
         String errorMessage;
         switch (error) {
         case ProcessorError::ConstructorError:

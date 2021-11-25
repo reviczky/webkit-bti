@@ -51,6 +51,7 @@
 #include "HTMLFormControlElement.h"
 #include "HTMLFormElement.h"
 #include "HitTestResult.h"
+#include "ImageOverlay.h"
 #include "InspectorController.h"
 #include "LocalizedStrings.h"
 #include "MouseEvent.h"
@@ -527,7 +528,7 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuAction action, co
         break;
     case ContextMenuItemTagTranslate:
 #if HAVE(TRANSLATION_UI_SERVICES)
-        if (auto view = makeRefPtr(frame->view())) {
+        if (RefPtr view = frame->view()) {
             m_client.handleTranslation({
                 m_context.hitTestResult().selectedText(),
                 view->contentsToRootView(enclosingIntRect(frame->selection().selectionBounds())),
@@ -844,7 +845,7 @@ void ContextMenuController::populate()
     if (!m_context.hitTestResult().isContentEditable() && is<HTMLFormControlElement>(*node))
         return;
 #endif
-    auto frame = makeRefPtr(node->document().frame());
+    RefPtr frame = node->document().frame();
     if (!frame)
         return;
 
@@ -943,7 +944,7 @@ void ContextMenuController::populate()
         }
 
         auto selectedRange = frame->selection().selection().range();
-        bool selectionIsInsideImageOverlay = selectedRange && HTMLElement::isInsideImageOverlay(*selectedRange);
+        bool selectionIsInsideImageOverlay = selectedRange && ImageOverlay::isInsideOverlay(*selectedRange);
         bool shouldShowItemsForNonEditableText = ([&] {
             if (!linkURL.isEmpty())
                 return false;

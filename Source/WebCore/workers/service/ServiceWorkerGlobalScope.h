@@ -27,7 +27,7 @@
 
 #if ENABLE(SERVICE_WORKER)
 
-#include "ServiceWorkerClientIdentifier.h"
+#include "ScriptExecutionContextIdentifier.h"
 #include "ServiceWorkerContextData.h"
 #include "ServiceWorkerRegistration.h"
 #include "WorkerGlobalScope.h"
@@ -37,6 +37,7 @@ namespace WebCore {
 
 class DeferredPromise;
 class ExtendableEvent;
+class Page;
 struct ServiceWorkerClientData;
 class ServiceWorkerClient;
 class ServiceWorkerClients;
@@ -45,7 +46,7 @@ class ServiceWorkerThread;
 class ServiceWorkerGlobalScope final : public WorkerGlobalScope {
     WTF_MAKE_ISO_ALLOCATED(ServiceWorkerGlobalScope);
 public:
-    static Ref<ServiceWorkerGlobalScope> create(ServiceWorkerContextData&&, const WorkerParameters&, Ref<SecurityOrigin>&&, ServiceWorkerThread&, Ref<SecurityOrigin>&& topOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
+    static Ref<ServiceWorkerGlobalScope> create(ServiceWorkerContextData&&, ServiceWorkerData&&, const WorkerParameters&, Ref<SecurityOrigin>&&, ServiceWorkerThread&, Ref<SecurityOrigin>&& topOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
 
     ~ServiceWorkerGlobalScope();
 
@@ -53,6 +54,7 @@ public:
 
     ServiceWorkerClients& clients() { return m_clients.get(); }
     ServiceWorkerRegistration& registration() { return m_registration.get(); }
+    ServiceWorker& serviceWorker() { return m_serviceWorker.get(); }
     
     void skipWaiting(Ref<DeferredPromise>&&);
 
@@ -60,7 +62,7 @@ public:
 
     ServiceWorkerThread& thread();
 
-    ServiceWorkerClient* serviceWorkerClient(ServiceWorkerClientIdentifier);
+    ServiceWorkerClient* serviceWorkerClient(ScriptExecutionContextIdentifier);
     void addServiceWorkerClient(ServiceWorkerClient&);
     void removeServiceWorkerClient(ServiceWorkerClient&);
 
@@ -75,16 +77,20 @@ public:
     const CertificateInfo& certificateInfo() const { return m_contextData.certificateInfo; }
 
     FetchOptions::Destination destination() const final { return FetchOptions::Destination::Serviceworker; }
+
+    WEBCORE_EXPORT Page* serviceWorkerPage();
     
 private:
-    ServiceWorkerGlobalScope(ServiceWorkerContextData&&, const WorkerParameters&, Ref<SecurityOrigin>&&, ServiceWorkerThread&, Ref<SecurityOrigin>&& topOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
+    ServiceWorkerGlobalScope(ServiceWorkerContextData&&, ServiceWorkerData&&, const WorkerParameters&, Ref<SecurityOrigin>&&, ServiceWorkerThread&, Ref<SecurityOrigin>&& topOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
+    void notifyServiceWorkerPageOfCreationIfNecessary();
 
     bool hasPendingEvents() const { return !m_extendedEvents.isEmpty(); }
 
     ServiceWorkerContextData m_contextData;
     Ref<ServiceWorkerRegistration> m_registration;
+    Ref<ServiceWorker> m_serviceWorker;
     Ref<ServiceWorkerClients> m_clients;
-    HashMap<ServiceWorkerClientIdentifier, ServiceWorkerClient*> m_clientMap;
+    HashMap<ScriptExecutionContextIdentifier, ServiceWorkerClient*> m_clientMap;
     Vector<Ref<ExtendableEvent>> m_extendedEvents;
 
     uint64_t m_lastRequestIdentifier { 0 };

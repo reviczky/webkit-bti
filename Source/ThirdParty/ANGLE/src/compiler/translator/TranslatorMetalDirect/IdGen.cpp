@@ -9,9 +9,7 @@
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
-
-#include "compiler/translator/TranslatorMetalDirect/RewriteKeywords.h"
-
+#include "compiler/translator/TranslatorMetalDirect/IdGen.h"
 using namespace sh;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +23,7 @@ Name IdGen::createNewName(size_t count,
 {
     const unsigned id = mNext++;
     char idBuffer[std::numeric_limits<unsigned>::digits10 + 1];
-    sprintf(idBuffer, "%u", id);
+    snprintf(idBuffer, sizeof(idBuffer), "%u", id);
 
     mNewNameBuffer.clear();
     mNewNameBuffer += '_';

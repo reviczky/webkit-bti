@@ -5,6 +5,7 @@
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies)
  * Copyright (C) 2014 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,23 +27,20 @@
 #include "FEBlend.h"
 
 #include "FEBlendNEON.h"
-#include "Filter.h"
-#include "FloatPoint.h"
-#include "GraphicsContext.h"
-#include <JavaScriptCore/Uint8ClampedArray.h>
+#include "FEBlendSoftwareApplier.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-FEBlend::FEBlend(Filter& filter, BlendMode mode)
-    : FilterEffect(filter, Type::Blend)
-    , m_mode(mode)
+Ref<FEBlend> FEBlend::create(BlendMode mode)
 {
+    return adoptRef(*new FEBlend(mode));
 }
 
-Ref<FEBlend> FEBlend::create(Filter& filter, BlendMode mode)
+FEBlend::FEBlend(BlendMode mode)
+    : FilterEffect(FilterEffect::Type::FEBlend)
+    , m_mode(mode)
 {
-    return adoptRef(*new FEBlend(filter, mode));
 }
 
 bool FEBlend::setBlendMode(BlendMode mode)
@@ -53,26 +51,10 @@ bool FEBlend::setBlendMode(BlendMode mode)
     return true;
 }
 
-#if !HAVE(ARM_NEON_INTRINSICS)
-void FEBlend::platformApplySoftware()
+bool FEBlend::platformApplySoftware(const Filter& filter)
 {
-    FilterEffect* in = inputEffect(0);
-    FilterEffect* in2 = inputEffect(1);
-
-    ImageBuffer* resultImage = createImageBufferResult();
-    if (!resultImage)
-        return;
-    GraphicsContext& filterContext = resultImage->context();
-
-    ImageBuffer* imageBuffer = in->imageBufferResult();
-    ImageBuffer* imageBuffer2 = in2->imageBufferResult();
-    if (!imageBuffer || !imageBuffer2)
-        return;
-
-    filterContext.drawImageBuffer(*imageBuffer2, drawingRegionOfInputImage(in2->absolutePaintRect()));
-    filterContext.drawImageBuffer(*imageBuffer, drawingRegionOfInputImage(in->absolutePaintRect()), IntRect(IntPoint(), imageBuffer->logicalSize()), { CompositeOperator::SourceOver, m_mode });
+    return FEBlendSoftwareApplier(*this).apply(filter, inputEffects());
 }
-#endif
 
 TextStream& FEBlend::externalRepresentation(TextStream& ts, RepresentationType representation) const
 {

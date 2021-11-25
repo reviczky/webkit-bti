@@ -373,6 +373,7 @@ enum AutoplayPolicy {
 
     unsigned long inspectorGridOverlayCount();
     DOMRectList inspectorHighlightRects();
+    unsigned long inspectorPaintRectCount();
 
     unsigned long markerCountForNode(Node node, DOMString markerType);
     Range? markerRangeForNode(Node node, DOMString markerType, unsigned long index);
@@ -408,6 +409,7 @@ enum AutoplayPolicy {
     boolean elementShouldAutoComplete(HTMLInputElement inputElement);
     undefined setAutofilled(HTMLInputElement inputElement, boolean enabled);
     undefined setAutoFilledAndViewable(HTMLInputElement inputElement, boolean enabled);
+    undefined setAutoFilledAndObscured(HTMLInputElement inputElement, boolean enabled);
     undefined setShowAutoFillButton(HTMLInputElement inputElement, AutoFillButtonType autoFillButtonType);
     AutoFillButtonType autoFillButtonType(HTMLInputElement inputElement);
     AutoFillButtonType lastAutoFillButtonType(HTMLInputElement inputElement);
@@ -497,6 +499,7 @@ enum AutoplayPolicy {
     undefined setClearDecoderAfterAsyncFrameRequestForTesting(HTMLImageElement element, boolean enabled);
     unsigned long imageDecodeCount(HTMLImageElement element);
     unsigned long pdfDocumentCachingCount(HTMLImageElement element);
+    unsigned long remoteImagesCountForTesting();
     undefined setLargeImageAsyncDecodingEnabledForTesting(HTMLImageElement element, boolean enabled);
     undefined setForceUpdateImageDataEnabledForTesting(HTMLImageElement element, boolean enabled);
 
@@ -569,8 +572,8 @@ enum AutoplayPolicy {
     unsigned long numberOfLiveNodes();
     unsigned long numberOfLiveDocuments();
     unsigned long referencingNodeCount(Document document);
-    [Conditional=INTERSECTION_OBSERVER] unsigned long numberOfIntersectionObservers(Document document);
-    [Conditional = RESIZE_OBSERVER] unsigned long numberOfResizeObservers(Document document);
+    unsigned long numberOfIntersectionObservers(Document document);
+    unsigned long numberOfResizeObservers(Document document);
     WindowProxy? openDummyInspectorFrontend(DOMString url);
     undefined closeDummyInspectorFrontend();
     undefined setInspectorIsUnderTest(boolean isUnderTest);
@@ -686,7 +689,6 @@ enum AutoplayPolicy {
     any evaluateInWorldIgnoringException(DOMString name, DOMString source);
 
     undefined setUsesOverlayScrollbars(boolean enabled);
-    undefined setUsesMockScrollAnimator(boolean enabled);
 
     undefined forceReload(boolean endToEnd);
     undefined reloadExpiredOnly();
@@ -700,6 +702,7 @@ enum AutoplayPolicy {
     [Conditional=VIDEO] boolean mediaElementHasCharacteristic(HTMLMediaElement element, DOMString characteristic);
     [Conditional=VIDEO] undefined beginSimulatedHDCPError(HTMLMediaElement media);
     [Conditional=VIDEO] undefined endSimulatedHDCPError(HTMLMediaElement media);
+    [Conditional=VIDEO] boolean mediaPlayerRenderingCanBeAccelerated(HTMLMediaElement media);
 
     [Conditional=VIDEO] boolean elementShouldBufferData(HTMLMediaElement media);
     [Conditional=VIDEO] DOMString elementBufferingPolicy(HTMLMediaElement media);
@@ -868,6 +871,8 @@ enum AutoplayPolicy {
     [Conditional=WEB_RTC] undefined setWebRTCH265Support(boolean allowed);
     [Conditional=WEB_RTC] undefined setWebRTCVP9Support(boolean supportVP9Profile0, boolean supportVP9Profile2);
     [Conditional=WEB_RTC] undefined setWebRTCVP9VTBSupport(boolean allowed);
+    [Conditional=WEB_RTC] boolean isSupportingVP9VTB();
+    [Conditional=WEB_RTC] Promise<boolean> isVP9VTBDeccoderUsed(RTCPeerConnection connection);
     [Conditional=WEB_RTC] undefined setSFrameCounter(RTCRtpSFrameTransform transform, DOMString counter);
     [Conditional=WEB_RTC] unsigned long long sframeCounter(RTCRtpSFrameTransform transform);
     [Conditional=WEB_RTC] unsigned long long sframeKeyId(RTCRtpSFrameTransform transform);
@@ -912,6 +917,9 @@ enum AutoplayPolicy {
     undefined setResponseSizeWithPadding(FetchResponse response, unsigned long long size);
     unsigned long long responseSizeWithPadding(FetchResponse response);
 
+    DOMString blobInternalURL(Blob blob);
+    Promise<boolean> isBlobInternalURLRegistered(DOMString url);
+
     undefined updateQuotaBasedOnSpaceUsage();
 
     undefined setConsoleMessageListener(StringCallback callback);
@@ -931,7 +939,8 @@ enum AutoplayPolicy {
     boolean isSystemPreviewLink(Element element);
     boolean isSystemPreviewImage(Element element);
 
-    undefined requestTextRecognition(Element element, VoidCallback callback);
+    [Conditional=IMAGE_ANALYSIS] readonly attribute Element? textRecognitionCandidate;
+    [Conditional=IMAGE_ANALYSIS] undefined requestTextRecognition(Element element, VoidCallback callback);
     undefined installImageOverlay(Element element, sequence<ImageOverlayLine> lines);
 
     boolean usingAppleInternalSDK();
@@ -1063,4 +1072,8 @@ enum AutoplayPolicy {
     DOMString dumpStyleResolvers();
 
     undefined setDocumentAutoplayPolicy(Document document, AutoplayPolicy policy);
+
+    undefined retainTextIteratorForDocumentContent();
+
+    [Conditional=SERVICE_WORKER] PushSubscription createPushSubscription(USVString endpoint, EpochTimeStamp? expirationTime, ArrayBuffer serverVAPIDPublicKey, ArrayBuffer clientECDHPublicKey, ArrayBuffer auth);
 };

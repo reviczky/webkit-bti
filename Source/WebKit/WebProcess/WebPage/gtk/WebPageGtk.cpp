@@ -61,9 +61,27 @@ void WebPage::platformInitialize()
     // entry point to the Web process, and send a message to the UI
     // process to connect the two worlds through the accessibility
     // object there specifically placed for that purpose (the socket).
+#if USE(ATK)
     m_accessibilityObject = adoptGRef(webkitWebPageAccessibilityObjectNew(this));
     GUniquePtr<gchar> plugID(atk_plug_get_id(ATK_PLUG(m_accessibilityObject.get())));
-    send(Messages::WebPageProxy::BindAccessibilityTree(String(plugID.get())));
+    sendWithAsyncReply(Messages::WebPageProxy::BindAccessibilityTree(String(plugID.get())), [](String&&) { });
+#elif USE(ATSPI)
+#if USE(GTK4)
+    // FIXME: we need a way to connect DOM and app a11y tree in GTK4.
+#else
+    if (auto* page = corePage()) {
+        m_accessibilityRootObject = AccessibilityRootAtspi::create(*page, WebProcess::singleton().accessibilityAtspi());
+        m_accessibilityRootObject->registerObject([&](const String& plugID) {
+            // ATK uses a custom DBus message to send the socket path to the AtkPlug object. GDBus doesn't allow
+            // to send a message that is not defined in the interface, so we use the WebKit IPC to get the socket
+            // path from the UI process.
+            sendWithAsyncReply(Messages::WebPageProxy::BindAccessibilityTree(plugID), [&](String&& socketPath) {
+                m_accessibilityRootObject->setParentPath(WTFMove(socketPath));
+            });
+        });
+    }
+#endif
+#endif
 #endif
 }
 
@@ -73,6 +91,10 @@ void WebPage::platformReinitialize()
 
 void WebPage::platformDetach()
 {
+#if USE(ATSPI)
+    if (m_accessibilityRootObject)
+        m_accessibilityRootObject->unregisterObject();
+#endif
 }
 
 bool WebPage::performDefaultBehaviorForKeyEvent(const WebKeyboardEvent& keyboardEvent)
@@ -82,31 +104,31 @@ bool WebPage::performDefaultBehaviorForKeyEvent(const WebKeyboardEvent& keyboard
 
     switch (keyboardEvent.windowsVirtualKeyCode()) {
     case VK_SPACE:
-        scroll(m_page.get(), keyboardEvent.shiftKey() ? ScrollUp : ScrollDown, ScrollByPage);
+        scroll(m_page.get(), keyboardEvent.shiftKey() ? ScrollUp : ScrollDown, ScrollGranularity::Page);
         break;
     case VK_LEFT:
-        scroll(m_page.get(), ScrollLeft, ScrollByLine);
+        scroll(m_page.get(), ScrollLeft, ScrollGranularity::Line);
         break;
     case VK_RIGHT:
-        scroll(m_page.get(), ScrollRight, ScrollByLine);
+        scroll(m_page.get(), ScrollRight, ScrollGranularity::Line);
         break;
     case VK_UP:
-        scroll(m_page.get(), ScrollUp, ScrollByLine);
+        scroll(m_page.get(), ScrollUp, ScrollGranularity::Line);
         break;
     case VK_DOWN:
-        scroll(m_page.get(), ScrollDown, ScrollByLine);
+        scroll(m_page.get(), ScrollDown, ScrollGranularity::Line);
         break;
     case VK_HOME:
-        scroll(m_page.get(), ScrollUp, ScrollByDocument);
+        scroll(m_page.get(), ScrollUp, ScrollGranularity::Document);
         break;
     case VK_END:
-        scroll(m_page.get(), ScrollDown, ScrollByDocument);
+        scroll(m_page.get(), ScrollDown, ScrollGranularity::Document);
         break;
     case VK_PRIOR:
-        scroll(m_page.get(), ScrollUp, ScrollByPage);
+        scroll(m_page.get(), ScrollUp, ScrollGranularity::Page);
         break;
     case VK_NEXT:
-        scroll(m_page.get(), ScrollDown, ScrollByPage);
+        scroll(m_page.get(), ScrollDown, ScrollGranularity::Page);
         break;
     default:
         return false;
@@ -170,7 +192,7 @@ void WebPage::collapseSelectionInFrame(FrameIdentifier frameID)
 
 void WebPage::showEmojiPicker(Frame& frame)
 {
-    CompletionHandler<void(String)> completionHandler = [frame = makeRef(frame)](String result) {
+    CompletionHandler<void(String)> completionHandler = [frame = Ref { frame }](String result) {
         if (!result.isEmpty())
             frame->editor().insertText(result, nullptr);
     };

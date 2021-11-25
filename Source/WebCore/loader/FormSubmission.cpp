@@ -34,7 +34,8 @@
 
 #include "ContentSecurityPolicy.h"
 #include "DOMFormData.h"
-#include "Document.h"
+#include "DocumentInlines.h"
+#include "ElementInlines.h"
 #include "Event.h"
 #include "FormData.h"
 #include "FormDataBuilder.h"
@@ -84,9 +85,9 @@ static void appendMailtoPostFormDataToURL(URL& url, const FormData& data, const 
         url.setQuery(makeString(query, '&', body));
 }
 
-ASCIILiteral FormSubmission::Attributes::methodString(Method method)
+ASCIILiteral FormSubmission::Attributes::methodString(Method method, bool dialogElementEnabled)
 {
-    if (RuntimeEnabledFeatures::sharedFeatures().dialogElementEnabled() && method == Method::Dialog)
+    if (dialogElementEnabled && method == Method::Dialog)
         return "dialog"_s;
     return method == Method::Post ? "post"_s : "get"_s;
 }
@@ -112,9 +113,9 @@ void FormSubmission::Attributes::updateEncodingType(const String& type)
     m_isMultiPartForm = (m_encodingType == "multipart/form-data");
 }
 
-FormSubmission::Method FormSubmission::Attributes::parseMethodType(const String& type)
+FormSubmission::Method FormSubmission::Attributes::parseMethodType(const String& type, bool dialogElementEnabled)
 {
-    if (RuntimeEnabledFeatures::sharedFeatures().dialogElementEnabled() && equalLettersIgnoringASCIICase(type, "dialog"))
+    if (dialogElementEnabled && equalLettersIgnoringASCIICase(type, "dialog"))
         return FormSubmission::Method::Dialog;
 
     if (equalLettersIgnoringASCIICase(type, "post"))
@@ -123,9 +124,9 @@ FormSubmission::Method FormSubmission::Attributes::parseMethodType(const String&
     return FormSubmission::Method::Get;
 }
 
-void FormSubmission::Attributes::updateMethodType(const String& type)
+void FormSubmission::Attributes::updateMethodType(const String& type, bool dialogElementEnabled)
 {
-    m_method = parseMethodType(type);
+    m_method = parseMethodType(type, dialogElementEnabled);
 }
 
 inline FormSubmission::FormSubmission(Method method, const String& returnValue, const URL& action, const String& target, const String& contentType, LockHistory lockHistory, Event* event)
@@ -170,7 +171,7 @@ Ref<FormSubmission> FormSubmission::create(HTMLFormElement& form, HTMLFormContro
 {
     auto copiedAttributes = attributes;
 
-    auto submitter = makeRefPtr(overrideSubmitter ? overrideSubmitter : form.findSubmitter(event));
+    RefPtr submitter = overrideSubmitter ? overrideSubmitter : form.findSubmitter(event);
     if (submitter) {
         AtomString attributeValue;
         if (!(attributeValue = submitter->attributeWithoutSynchronization(formactionAttr)).isNull())
@@ -178,7 +179,7 @@ Ref<FormSubmission> FormSubmission::create(HTMLFormElement& form, HTMLFormContro
         if (!(attributeValue = submitter->attributeWithoutSynchronization(formenctypeAttr)).isNull())
             copiedAttributes.updateEncodingType(attributeValue);
         if (!(attributeValue = submitter->attributeWithoutSynchronization(formmethodAttr)).isNull())
-            copiedAttributes.updateMethodType(attributeValue);
+            copiedAttributes.updateMethodType(attributeValue, form.document().settings().dialogElementEnabled());
         if (!(attributeValue = submitter->attributeWithoutSynchronization(formtargetAttr)).isNull())
             copiedAttributes.setTarget(attributeValue);
     }
@@ -187,7 +188,7 @@ Ref<FormSubmission> FormSubmission::create(HTMLFormElement& form, HTMLFormContro
     auto encodingType = copiedAttributes.encodingType();
     auto actionURL = document.completeURL(copiedAttributes.action().isEmpty() ? document.url().string() : copiedAttributes.action());
 
-    if (RuntimeEnabledFeatures::sharedFeatures().dialogElementEnabled() && copiedAttributes.method() == Method::Dialog) {
+    if (document.settings().dialogElementEnabled() && copiedAttributes.method() == Method::Dialog) {
         String returnValue = submitter ? submitter->resultForDialogSubmit() : emptyString();
         return adoptRef(*new FormSubmission(copiedAttributes.method(), returnValue, actionURL, form.effectiveTarget(event, submitter.get()), encodingType, lockHistory, event));
     }
@@ -245,7 +246,8 @@ URL FormSubmission::requestURL() const
         return m_action;
 
     URL requestURL(m_action);
-    requestURL.setQuery(m_formData->flattenToString());
+    if (!requestURL.protocolIsJavaScript())
+        requestURL.setQuery(m_formData->flattenToString());
     return requestURL;
 }
 

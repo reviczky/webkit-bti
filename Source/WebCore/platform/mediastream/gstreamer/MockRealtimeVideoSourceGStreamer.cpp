@@ -88,9 +88,9 @@ void MockDisplayCaptureSourceGStreamer::requestToEnd(Observer& callingObserver)
     m_source->requestToEnd(callingObserver);
 }
 
-void MockDisplayCaptureSourceGStreamer::videoSampleAvailable(MediaSample& sample)
+void MockDisplayCaptureSourceGStreamer::videoSampleAvailable(MediaSample& sample, VideoSampleMetadata metadata)
 {
-    RealtimeMediaSource::videoSampleAvailable(sample);
+    RealtimeMediaSource::videoSampleAvailable(sample, metadata);
 }
 
 const RealtimeMediaSourceCapabilities& MockDisplayCaptureSourceGStreamer::capabilities()
@@ -99,8 +99,9 @@ const RealtimeMediaSourceCapabilities& MockDisplayCaptureSourceGStreamer::capabi
         RealtimeMediaSourceCapabilities capabilities(settings().supportedConstraints());
 
         // FIXME: what should these be?
-        capabilities.setWidth(CapabilityValueOrRange(1, 3840));
-        capabilities.setHeight(CapabilityValueOrRange(1, 2160));
+        // Currently mimicking the values for SCREEN-1 in MockRealtimeMediaSourceCenter.cpp::defaultDevices()
+        capabilities.setWidth(CapabilityValueOrRange(1, 1920));
+        capabilities.setHeight(CapabilityValueOrRange(1, 1080));
         capabilities.setFrameRate(CapabilityValueOrRange(.01, 30.0));
 
         m_capabilities = WTFMove(capabilities);
@@ -147,13 +148,13 @@ void MockRealtimeVideoSourceGStreamer::updateSampleBuffer()
     if (!imageBuffer)
         return;
 
-    auto pixelBuffer = imageBuffer->getPixelBuffer({ AlphaPremultiplication::Unpremultiplied, PixelFormat::BGRA8, DestinationColorSpace::SRGB() }, { { }, imageBuffer->logicalSize() });
+    auto pixelBuffer = imageBuffer->getPixelBuffer({ AlphaPremultiplication::Premultiplied, PixelFormat::BGRA8, DestinationColorSpace::SRGB() }, { { }, imageBuffer->truncatedLogicalSize() });
     if (!pixelBuffer)
         return;
 
-    auto sample = MediaSampleGStreamer::createImageSample(WTFMove(*pixelBuffer), size(), frameRate());
+    auto sample = MediaSampleGStreamer::createImageSample(WTFMove(*pixelBuffer), size(), frameRate(), sampleRotation());
     sample->offsetTimestampsBy(MediaTime::createWithDouble((elapsedTime() + 100_ms).seconds()));
-    dispatchMediaSampleToObservers(sample.get());
+    dispatchMediaSampleToObservers(sample.get(), { });
 }
 
 } // namespace WebCore

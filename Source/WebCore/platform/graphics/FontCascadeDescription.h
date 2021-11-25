@@ -2,7 +2,7 @@
  * Copyright (C) 2000 Lars Knoll (knoll@kde.org)
  *           (C) 2000 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2013 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2021 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Nicholas Shanks <webkit@nickshanks.com>
  *
  * This library is free software; you can redistribute it and/or
@@ -16,9 +16,9 @@
  * Library General Public License for more details.
  *
  * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIother.m_  If not, write to
+ * along with this library; see the file COPYING.LIB.  If not, write to
  * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USm_
+ * Boston, MA 02110-1301, USA.
  *
  */
 
@@ -26,8 +26,8 @@
 
 #include "CSSValueKeywords.h"
 #include "FontDescription.h"
+#include <variant>
 #include <wtf/RefCountedArray.h>
-#include <wtf/Variant.h>
 
 #if PLATFORM(COCOA)
 #include "FontFamilySpecificationCoreText.h"
@@ -43,7 +43,7 @@ typedef FontFamilySpecificationCoreText FontFamilyPlatformSpecification;
 typedef FontFamilySpecificationNull FontFamilyPlatformSpecification;
 #endif
 
-typedef Variant<AtomString, FontFamilyPlatformSpecification> FontFamilySpecification;
+typedef std::variant<AtomString, FontFamilyPlatformSpecification> FontFamilySpecification;
 
 class FontCascadeDescription : public FontDescription {
 public:
@@ -133,6 +133,7 @@ public:
     static FontVariantAlternates initialVariantAlternates() { return FontVariantAlternates::Normal; }
     static FontOpticalSizing initialOpticalSizing() { return FontOpticalSizing::Enabled; }
     static const AtomString& initialSpecifiedLocale() { return nullAtom(); }
+    static FontPalette initialFontPalette() { return { FontPalette::Type::Normal, nullAtom() }; }
 
 private:
     RefCountedArray<AtomString> m_families { 1 };

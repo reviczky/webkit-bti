@@ -150,7 +150,7 @@ JSC_DEFINE_JIT_OPERATION(operationCompileOSRExit, void, (CallFrame* callFrame, v
     if constexpr (validateDFGDoesGC) {
         // We're about to exit optimized code. So, there's no longer any optimized
         // code running that expects no GC.
-        vm.heap.setDoesGCExpectation(true, DoesGCCheck::Special::DFGOSRExit);
+        vm.setDoesGCExpectation(true, DoesGCCheck::Special::DFGOSRExit);
     }
 
     if (vm.callFrameForCatch)
@@ -162,7 +162,7 @@ JSC_DEFINE_JIT_OPERATION(operationCompileOSRExit, void, (CallFrame* callFrame, v
 
     // It's sort of preferable that we don't GC while in here. Anyways, doing so wouldn't
     // really be profitable.
-    DeferGCForAWhile deferGC(vm.heap);
+    DeferGCForAWhile deferGC(vm);
 
     uint32_t exitIndex = vm.osrExitIndex;
     OSRExit& exit = codeBlock->jitCode()->dfg()->m_osrExit[exitIndex];
@@ -606,6 +606,7 @@ void OSRExit::compileExit(CCallHelpers& jit, VM& vm, const OSRExit& exit, const 
                 jit.store64(GPRInfo::regT0, scratch + index);
             }
 #else // not USE(JSVALUE64)
+            UNUSED_VARIABLE(firstTmpToRestoreEarly);
             jit.store32(
                 AssemblyHelpers::TrustedImm32(recovery.constant().tag()),
                 &bitwise_cast<EncodedValueDescriptor*>(scratch + index)->asBits.tag);
@@ -753,7 +754,14 @@ void OSRExit::compileExit(CCallHelpers& jit, VM& vm, const OSRExit& exit, const 
             // to set it here because compileOSRExit() is only called on the first time
             // we exit from this site, but all subsequent exits will take this compiled
             // ramp without calling compileOSRExit() first.
-            jit.store32(CCallHelpers::TrustedImm32(DoesGCCheck::encode(true, DoesGCCheck::Special::DFGOSRExit)), vm.heap.addressOfDoesGC());
+            DoesGCCheck check;
+            check.u.encoded = DoesGCCheck::encode(true, DoesGCCheck::Special::DFGOSRExit);
+#if USE(JSVALUE64)
+            jit.store64(CCallHelpers::TrustedImm64(check.u.encoded), vm.addressOfDoesGC());
+#else
+            jit.store32(CCallHelpers::TrustedImm32(check.u.other), &vm.addressOfDoesGC()->u.other);
+            jit.store32(CCallHelpers::TrustedImm32(check.u.nodeIndex), &vm.addressOfDoesGC()->u.nodeIndex);
+#endif
         }
     }
     
@@ -771,9 +779,6 @@ void OSRExit::compileExit(CCallHelpers& jit, VM& vm, const OSRExit& exit, const 
 
     // The tag registers are needed to materialize recoveries below.
     jit.emitMaterializeTagCheckRegisters();
-
-    if (exit.isExceptionHandler())
-        jit.copyCalleeSavesToEntryFrameCalleeSavesBuffer(vm.topEntryFrame);
 
     if (inlineStackContainsActiveCheckpoint) {
         EncodedJSValue* tmpScratch = scratch + operands.tmpIndex(0);

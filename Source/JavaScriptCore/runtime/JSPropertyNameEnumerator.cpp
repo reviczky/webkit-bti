@@ -42,7 +42,7 @@ JSPropertyNameEnumerator* JSPropertyNameEnumerator::create(VM& vm, Structure* st
         for (unsigned i = 0; i < propertyNamesSize; ++i)
             propertyNamesBuffer[i].clear();
     }
-    JSPropertyNameEnumerator* enumerator = new (NotNull, allocateCell<JSPropertyNameEnumerator>(vm.heap)) JSPropertyNameEnumerator(vm, structure, indexedLength, numberStructureProperties, propertyNamesBuffer, propertyNamesSize);
+    JSPropertyNameEnumerator* enumerator = new (NotNull, allocateCell<JSPropertyNameEnumerator>(vm)) JSPropertyNameEnumerator(vm, structure, indexedLength, numberStructureProperties, propertyNamesBuffer, propertyNamesSize);
     enumerator->finishCreation(vm, propertyNames.releaseData());
     return enumerator;
 }
@@ -57,11 +57,11 @@ JSPropertyNameEnumerator::JSPropertyNameEnumerator(VM& vm, Structure* structure,
     , m_cachedInlineCapacity(structure ? structure->inlineCapacity() : 0)
 {
     if (m_indexedLength)
-        m_modeSet |= JSPropertyNameEnumerator::IndexedMode;
+        m_flags |= JSPropertyNameEnumerator::IndexedMode;
     if (m_endStructurePropertyIndex)
-        m_modeSet |= JSPropertyNameEnumerator::OwnStructureMode;
+        m_flags |= JSPropertyNameEnumerator::OwnStructureMode;
     if (m_endGenericPropertyIndex - m_endStructurePropertyIndex)
-        m_modeSet |= JSPropertyNameEnumerator::GenericMode;
+        m_flags |= JSPropertyNameEnumerator::GenericMode;
 }
 
 void JSPropertyNameEnumerator::finishCreation(VM& vm, RefPtr<PropertyNameArrayData>&& identifiers)
@@ -86,7 +86,6 @@ void JSPropertyNameEnumerator::visitChildrenImpl(JSCell* cell, Visitor& visitor)
         visitor.markAuxiliary(propertyNames);
         visitor.append(propertyNames, propertyNames + thisObject->sizeOfPropertyNames());
     }
-    visitor.append(thisObject->m_prototypeChain);
 
     if (thisObject->cachedStructureID()) {
         VM& vm = visitor.vm();
@@ -154,7 +153,7 @@ void getEnumerablePropertyNames(JSGlobalObject* globalObject, JSObject* base, Pr
     }
 }
 
-JSString* JSPropertyNameEnumerator::computeNext(JSGlobalObject* globalObject, JSObject* base, uint32_t& index, Mode& mode, bool shouldAllocateIndexedNameString)
+JSString* JSPropertyNameEnumerator::computeNext(JSGlobalObject* globalObject, JSObject* base, uint32_t& index, Flag& mode, bool shouldAllocateIndexedNameString)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);

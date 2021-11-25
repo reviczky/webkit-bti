@@ -38,8 +38,9 @@
 #include "ChromeClient.h"
 #include "DateComponents.h"
 #include "DateTimeChooser.h"
-#include "Document.h"
+#include "DocumentInlines.h"
 #include "Editor.h"
+#include "ElementInlines.h"
 #include "EventNames.h"
 #include "FileInputType.h"
 #include "FileList.h"
@@ -115,6 +116,7 @@ HTMLInputElement::HTMLInputElement(const QualifiedName& tagName, Document& docum
     , m_autocomplete(Uninitialized)
     , m_isAutoFilled(false)
     , m_isAutoFilledAndViewable(false)
+    , m_isAutoFilledAndObscured(false)
     , m_autoFillButtonType(static_cast<uint8_t>(AutoFillButtonType::None))
     , m_lastAutoFillButtonType(static_cast<uint8_t>(AutoFillButtonType::None))
     , m_isAutoFillAvailable(false)
@@ -893,7 +895,7 @@ void HTMLInputElement::didAttachRenderers()
     m_inputType->attach();
 
     if (document().focusedElement() == this) {
-        document().view()->queuePostLayoutCallback([protectedThis = makeRef(*this)] {
+        document().view()->queuePostLayoutCallback([protectedThis = Ref { *this }] {
             protectedThis->updateFocusAppearance(SelectionRestorationMode::RestoreOrSelectAll, SelectionRevealMode::Reveal);
         });
     }
@@ -959,6 +961,7 @@ void HTMLInputElement::reset()
 
     setAutoFilled(false);
     setAutoFilledAndViewable(false);
+    setAutoFilledAndObscured(false);
     setShowAutoFillButton(AutoFillButtonType::None);
     setChecked(hasAttributeWithoutSynchronization(checkedAttr));
     m_dirtyCheckednessFlag = false;
@@ -985,7 +988,7 @@ void HTMLInputElement::setChecked(bool nowChecked)
 
     if (RadioButtonGroups* buttons = radioButtonGroups())
         buttons->updateCheckedState(*this);
-    if (renderer() && renderer()->style().hasAppearance())
+    if (renderer() && renderer()->style().hasEffectiveAppearance())
         renderer()->theme().stateChanged(*renderer(), ControlStates::States::Checked);
     updateValidity();
 
@@ -1009,7 +1012,7 @@ void HTMLInputElement::setIndeterminate(bool newValue)
 
     invalidateStyleForSubtree();
 
-    if (renderer() && renderer()->style().hasAppearance())
+    if (renderer() && renderer()->style().hasEffectiveAppearance())
         renderer()->theme().stateChanged(*renderer(), ControlStates::States::Checked);
 }
 
@@ -1156,8 +1159,10 @@ void HTMLInputElement::setValueFromRenderer(const String& value)
 
     updateValidity();
 
-    // Clear auto fill flag (and yellow background) on user edit.
+    // We clear certain AutoFill flags here because this catches user edits.
     setAutoFilled(false);
+    if (m_isAutoFilledAndViewable && value.isEmpty())
+        setAutoFilledAndViewable(false);
 }
 
 void HTMLInputElement::willDispatchEvent(Event& event, InputElementClickState& state)
@@ -1247,7 +1252,7 @@ void HTMLInputElement::defaultEventHandler(Event& event)
             dispatchFormControlChangeEvent();
 
         // Form may never have been present, or may have been destroyed by code responding to the change event.
-        if (auto formElement = makeRefPtr(form()))
+        if (RefPtr formElement = form())
             formElement->submitImplicitly(event, canTriggerImplicitSubmission());
 
         event.setDefaultHandled();
@@ -1393,6 +1398,15 @@ void HTMLInputElement::setAutoFilledAndViewable(bool autoFilledAndViewable)
         return;
 
     m_isAutoFilledAndViewable = autoFilledAndViewable;
+    invalidateStyleForSubtree();
+}
+
+void HTMLInputElement::setAutoFilledAndObscured(bool autoFilledAndObscured)
+{
+    if (autoFilledAndObscured == m_isAutoFilledAndObscured)
+        return;
+
+    m_isAutoFilledAndObscured = autoFilledAndObscured;
     invalidateStyleForSubtree();
 }
 
@@ -1542,7 +1556,7 @@ void HTMLInputElement::resumeFromDocumentSuspension()
     if (isColorControl())
         return;
 #endif // ENABLE(INPUT_TYPE_COLOR)
-    document().postTask([inputElement = makeRef(*this)] (ScriptExecutionContext&) {
+    document().postTask([inputElement = Ref { *this }] (ScriptExecutionContext&) {
         inputElement->reset();
     });
 }

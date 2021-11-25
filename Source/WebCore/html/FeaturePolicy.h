@@ -44,8 +44,10 @@ public:
         SpeakerSelection,
         DisplayCapture,
         Geolocation,
+        Payment,
         SyncXHR,
         Fullscreen,
+        WebShare,
 #if ENABLE(DEVICE_ORIENTATION)
         Gyroscope,
         Accelerometer,
@@ -69,8 +71,11 @@ private:
     AllowRule m_speakerSelectionRule;
     AllowRule m_displayCaptureRule;
     AllowRule m_geolocationRule;
+    AllowRule m_paymentRule;
     AllowRule m_syncXHRRule;
     AllowRule m_fullscreenRule;
+    AllowRule m_webShareRule;
+
 #if ENABLE(DEVICE_ORIENTATION)
     AllowRule m_gyroscopeRule;
     AllowRule m_accelerometerRule;

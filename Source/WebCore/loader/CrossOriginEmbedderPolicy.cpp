@@ -26,16 +26,32 @@
 #include "config.h"
 #include "CrossOriginEmbedderPolicy.h"
 
+#include "Frame.h"
+#include "FrameLoader.h"
 #include "HTTPHeaderNames.h"
 #include "HTTPParsers.h"
+#include "JSFetchRequest.h"
+#include "PingLoader.h"
 #include "ResourceResponse.h"
 #include "ScriptExecutionContext.h"
 #include "SecurityOrigin.h"
 
 namespace WebCore {
 
+static URL contextURLForReport(Frame& frame)
+{
+    auto reportURL = frame.document() ? frame.document()->url() : aboutBlankURL();
+    if (reportURL.isAboutBlank()) {
+        if (auto* parentFrame = frame.tree().parent(); parentFrame->document())
+            reportURL = parentFrame->document()->url();
+        else if (auto* openerFrame = frame.loader().opener(); openerFrame->document())
+            reportURL = openerFrame->document()->url();
+    }
+    return reportURL;
+}
+
 // https://html.spec.whatwg.org/multipage/origin.html#obtain-an-embedder-policy
-CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse& response, IsSecureContext isSecureContext)
+CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse& response, const ScriptExecutionContext* context)
 {
     auto parseCOEPHeader = [&response](HTTPHeaderName headerName, auto& value, auto& reportingEndpoint) {
         auto coepParsingResult = parseStructuredFieldValue(response.httpHeaderField(headerName));
@@ -46,7 +62,9 @@ CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse
     };
 
     CrossOriginEmbedderPolicy policy;
-    if (isSecureContext == IsSecureContext::No)
+    if (context && !context->settingsValues().crossOriginEmbedderPolicyEnabled)
+        return policy;
+    if (!SecurityOrigin::create(response.url())->isPotentiallyTrustworthy())
         return policy;
 
     parseCOEPHeader(HTTPHeaderName::CrossOriginEmbedderPolicy, policy.value, policy.reportingEndpoint);
@@ -54,23 +72,23 @@ CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse
     return policy;
 }
 
-CrossOriginEmbedderPolicy obtainCrossOriginEmbedderPolicy(const ResourceResponse& response, const ScriptExecutionContext& context)
-{
-    if (!context.settingsValues().crossOriginEmbedderPolicyEnabled)
-        return { };
-
-    // FIXME: about:blank should be marked as secure as per https://w3c.github.io/webappsec-secure-contexts/#potentially-trustworthy-url.
-    auto isSecureContext = context.isSecureContext() || context.url() == aboutBlankURL() || context.url().isEmpty() ? IsSecureContext::Yes : IsSecureContext::No;
-    return obtainCrossOriginEmbedderPolicy(response, isSecureContext);
-}
-
-CrossOriginEmbedderPolicy CrossOriginEmbedderPolicy::isolatedCopy() const
+CrossOriginEmbedderPolicy CrossOriginEmbedderPolicy::isolatedCopy() const &
 {
     return {
         value,
         reportingEndpoint.isolatedCopy(),
         reportOnlyValue,
         reportOnlyReportingEndpoint.isolatedCopy()
+    };
+}
+
+CrossOriginEmbedderPolicy CrossOriginEmbedderPolicy::isolatedCopy() &&
+{
+    return {
+        value,
+        WTFMove(reportingEndpoint).isolatedCopy(),
+        reportOnlyValue,
+        WTFMove(reportOnlyReportingEndpoint).isolatedCopy()
     };
 }
 
@@ -90,6 +108,35 @@ void addCrossOriginEmbedderPolicyHeaders(ResourceResponse& response, const Cross
         else
             response.setHTTPHeaderField(HTTPHeaderName::CrossOriginEmbedderPolicyReportOnly, makeString("require-corp; report-to=\"", coep.reportOnlyReportingEndpoint, '\"'));
     }
+}
+
+// https://html.spec.whatwg.org/multipage/origin.html#queue-a-cross-origin-embedder-policy-inheritance-violation
+void sendCOEPPolicyInheritenceViolation(Frame& frame, const WebCore::SecurityOriginData& embedderOrigin, const String& endpoint, COEPDisposition disposition, const String& type, const URL& blockedURL)
+{
+    if (!frame.settings().coopCoepViolationReportingEnabled())
+        return;
+
+    ASSERT(!endpoint.isEmpty());
+    PingLoader::sendReportToEndpoint(frame, embedderOrigin, endpoint, "coep"_s, contextURLForReport(frame), frame.loader().userAgent(blockedURL), [&](auto& body) {
+        body.setString("disposition"_s, disposition == COEPDisposition::Reporting ? "reporting"_s : "enforce"_s);
+        body.setString("type"_s, type);
+        body.setString("blockedURL"_s, PingLoader::sanitizeURLForReport(blockedURL));
+    });
+}
+
+// https://fetch.spec.whatwg.org/#queue-a-cross-origin-embedder-policy-corp-violation-report
+void sendCOEPCORPViolation(Frame& frame, const SecurityOriginData& embedderOrigin, const String& endpoint, COEPDisposition disposition, FetchOptions::Destination destination, const URL& blockedURL)
+{
+    ASSERT(!endpoint.isEmpty());
+    if (!frame.settings().coopCoepViolationReportingEnabled())
+        return;
+
+    PingLoader::sendReportToEndpoint(frame, embedderOrigin, endpoint, "coep"_s, contextURLForReport(frame), frame.loader().userAgent(blockedURL), [&](auto& body) {
+        body.setString("disposition"_s, disposition == COEPDisposition::Reporting ? "reporting"_s : "enforce"_s);
+        body.setString("type"_s, "corp");
+        body.setString("blockedURL"_s, PingLoader::sanitizeURLForReport(blockedURL));
+        body.setString("destination"_s, convertEnumerationToString(destination));
+    });
 }
 
 } // namespace WebCore
