@@ -25,13 +25,14 @@
 #pragma once
 
 #include "CSSPropertyNames.h"
-#include "ClipPathOperation.h"
 #include "CounterDirectives.h"
 #include "FillLayer.h"
 #include "GapLength.h"
 #include "LengthPoint.h"
 #include "LineClampValue.h"
 #include "NinePieceImage.h"
+#include "OffsetRotation.h"
+#include "PathOperation.h"
 #include "RotateTransformOperation.h"
 #include "ScaleTransformOperation.h"
 #include "ShapeValue.h"
@@ -164,7 +165,7 @@ public:
 
     int order;
 
-    RefPtr<ClipPathOperation> clipPath;
+    RefPtr<PathOperation> clipPath;
 
     Color textDecorationColor;
     Color visitedLinkTextDecorationColor;
@@ -188,6 +189,7 @@ public:
     RefPtr<RotateTransformOperation> rotate;
     RefPtr<ScaleTransformOperation> scale;
     RefPtr<TranslateTransformOperation> translate;
+    RefPtr<PathOperation> offsetPath;
 
     OptionSet<TouchAction> touchActions;
 
@@ -201,6 +203,7 @@ public:
     unsigned marginBeforeCollapse : 2; // MarginCollapse
     unsigned marginAfterCollapse : 2; // MarginCollapse
     unsigned appearance : 6; // EAppearance
+    unsigned effectiveAppearance : 6; // EAppearance
     unsigned borderFit : 1; // BorderFit
     unsigned textCombine : 1; // CSS3 text-combine properties
 
@@ -225,12 +228,19 @@ public:
     unsigned breakInside : 3; // BreakInside
     unsigned resize : 2; // Resize
 
+    unsigned inputSecurity : 1; // InputSecurity
+
     unsigned hasAttrContent : 1;
 
     unsigned isNotFinal : 1;
 
     GapLength columnGap;
     GapLength rowGap;
+
+    Length offsetDistance;
+    LengthPoint offsetPosition;
+    LengthPoint offsetAnchor;
+    OffsetRotation offsetRotate;
 
 private:
     StyleRareNonInheritedData();

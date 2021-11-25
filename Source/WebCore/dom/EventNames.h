@@ -89,6 +89,7 @@ namespace WebCore {
     macro(checking) \
     macro(click) \
     macro(close) \
+    macro(closing) \
     macro(complete) \
     macro(compositionend) \
     macro(compositionstart) \
@@ -220,6 +221,8 @@ namespace WebCore {
     macro(previoustrack) \
     macro(processorerror) \
     macro(progress) \
+    macro(push) \
+    macro(pushsubscriptionchange) \
     macro(ratechange) \
     macro(readystatechange) \
     macro(rejectionhandled) \

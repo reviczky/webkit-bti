@@ -29,6 +29,7 @@
 #include "GraphicsContext.h"
 #include "HTMLBodyElement.h"
 #include "HTMLFrameOwnerElement.h"
+#include "HTMLFrameSetElement.h"
 #include "HTMLHtmlElement.h"
 #include "HTMLIFrameElement.h"
 #include "HitTestResult.h"
@@ -593,6 +594,46 @@ bool RenderView::rootBackgroundIsEntirelyFixed() const
         return rootBackgroundRenderer->style().hasEntirelyFixedBackground();
     return false;
 }
+
+bool RenderView::shouldPaintBaseBackground() const
+{
+    auto& document = this->document();
+    auto& frameView = this->frameView();
+    auto* ownerElement = document.ownerElement();
+
+    // Fill with a base color if we're the root document.
+    if (!ownerElement)
+        return !frameView.isTransparent();
+
+    if (ownerElement->hasTagName(HTMLNames::frameTag))
+        return true;
+
+    // Locate the <body> element using the DOM. This is easier than trying
+    // to crawl around a render tree with potential :before/:after content and
+    // anonymous blocks created by inline <body> tags etc. We can locate the <body>
+    // render object very easily via the DOM.
+    auto* body = document.bodyOrFrameset();
+
+    // SVG documents and XML documents with SVG root nodes are transparent.
+    if (!body)
+        return !document.hasSVGRootNode();
+
+    // Can't scroll a frameset document anyway.
+    if (is<HTMLFrameSetElement>(*body))
+        return true;
+
+    auto* frameRenderer = ownerElement->renderer();
+    if (!frameRenderer)
+        return false;
+
+    // iframes should fill with a base color if the used color scheme of the
+    // element and the used color scheme of the embedded document’s root
+    // element do not match.
+    if (frameView.useDarkAppearance() != frameRenderer->useDarkAppearance())
+        return !frameView.isTransparent();
+
+    return false;
+}
     
 LayoutRect RenderView::unextendedBackgroundRect() const
 {
@@ -656,9 +697,24 @@ float RenderView::zoomFactor() const
     return frameView().frame().pageZoomFactor();
 }
 
-IntSize RenderView::viewportSizeForCSSViewportUnits() const
+FloatSize RenderView::sizeForCSSSmallViewportUnits() const
 {
-    return frameView().viewportSizeForCSSViewportUnits();
+    return frameView().sizeForCSSSmallViewportUnits();
+}
+
+FloatSize RenderView::sizeForCSSLargeViewportUnits() const
+{
+    return frameView().sizeForCSSLargeViewportUnits();
+}
+
+FloatSize RenderView::sizeForCSSDynamicViewportUnits() const
+{
+    return frameView().sizeForCSSDynamicViewportUnits();
+}
+
+FloatSize RenderView::sizeForCSSDefaultViewportUnits() const
+{
+    return frameView().sizeForCSSDefaultViewportUnits();
 }
 
 Node* RenderView::nodeForHitTest() const
@@ -823,7 +879,7 @@ RenderView::RepaintRegionAccumulator::RepaintRegionAccumulator(RenderView* view)
     m_wasAccumulatingRepaintRegion = !!rootRenderView->m_accumulatedRepaintRegion;
     if (!m_wasAccumulatingRepaintRegion)
         rootRenderView->m_accumulatedRepaintRegion = makeUnique<Region>();
-    m_rootView = makeWeakPtr(*rootRenderView);
+    m_rootView = *rootRenderView;
 }
 
 RenderView::RepaintRegionAccumulator::~RepaintRegionAccumulator()
@@ -876,12 +932,12 @@ unsigned RenderView::pageCount() const
 void RenderView::layerChildrenChangedDuringStyleChange(RenderLayer& layer)
 {
     if (!m_styleChangeLayerMutationRoot) {
-        m_styleChangeLayerMutationRoot = makeWeakPtr(layer);
+        m_styleChangeLayerMutationRoot = layer;
         return;
     }
 
     RenderLayer* commonAncestor = m_styleChangeLayerMutationRoot->commonAncestorWithLayer(layer);
-    m_styleChangeLayerMutationRoot = makeWeakPtr(commonAncestor);
+    m_styleChangeLayerMutationRoot = commonAncestor;
 }
 
 RenderLayer* RenderView::takeStyleChangeLayerTreeMutationRoot()

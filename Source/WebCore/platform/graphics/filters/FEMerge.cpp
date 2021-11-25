@@ -2,6 +2,7 @@
  * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
+ * Copyright (C) Apple Inc. 2021 All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,38 +23,24 @@
 #include "config.h"
 #include "FEMerge.h"
 
-#include "Filter.h"
-#include "GraphicsContext.h"
+#include "FEMergeSoftwareApplier.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-FEMerge::FEMerge(Filter& filter)
-    : FilterEffect(filter, Type::Merge)
+Ref<FEMerge> FEMerge::create()
+{
+    return adoptRef(*new FEMerge());
+}
+
+FEMerge::FEMerge()
+    : FilterEffect(FilterEffect::Type::FEMerge)
 {
 }
 
-Ref<FEMerge> FEMerge::create(Filter& filter)
+bool FEMerge::platformApplySoftware(const Filter& filter)
 {
-    return adoptRef(*new FEMerge(filter));
-}
-
-void FEMerge::platformApplySoftware()
-{
-    unsigned size = numberOfEffectInputs();
-    ASSERT(size > 0);
-
-    ImageBuffer* resultImage = createImageBufferResult();
-    if (!resultImage)
-        return;
-
-
-    GraphicsContext& filterContext = resultImage->context();
-    for (unsigned i = 0; i < size; ++i) {
-        FilterEffect* in = inputEffect(i);
-        if (ImageBuffer* inBuffer = in->imageBufferResult())
-            filterContext.drawImageBuffer(*inBuffer, drawingRegionOfInputImage(in->absolutePaintRect()));
-    }
+    return FEMergeSoftwareApplier(*this).apply(filter, inputEffects());
 }
 
 TextStream& FEMerge::externalRepresentation(TextStream& ts, RepresentationType representation) const

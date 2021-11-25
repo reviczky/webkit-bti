@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,6 +26,7 @@
 #pragma once
 
 #include "CPU.h"
+#include "JITOperationValidation.h"
 #include <cmath>
 
 namespace JSC {
@@ -60,6 +61,11 @@ inline bool isInteger(float value)
 inline bool isSafeInteger(double value)
 {
     return std::trunc(value) == value && std::abs(value) <= maxSafeInteger();
+}
+
+inline bool isNegativeZero(double value)
+{
+    return std::signbit(value) && value == 0;
 }
 
 // This in the ToInt32 operation is defined in section 9.5 of the ECMA-262 spec.

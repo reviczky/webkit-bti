@@ -53,6 +53,14 @@
 #include <CoreGraphics/CGDisplayConfiguration.h>
 #endif
 
+#if PLATFORM(COCOA)
+#include <pal/spi/cocoa/TCCSPI.h>
+#endif
+
+#if USE(GRAPHICS_LAYER_WC)
+#include "WCLayerTreeHostIdentifier.h"
+#endif
+
 namespace WebCore {
 class SecurityOrigin;
 struct SecurityOriginData;
@@ -86,6 +94,10 @@ struct GPUProcessConnectionParameters;
 struct MediaOverridesForTesting;
 struct RemoteAudioSessionConfiguration;
 struct RemoteRenderingBackendCreationParameters;
+
+#if USE(GRAPHICS_LAYER_WC)
+class RemoteWCLayerTreeHost;
+#endif
 
 class GPUConnectionToWebProcess
     : public ThreadSafeRefCounted<GPUConnectionToWebProcess, WTF::DestructionThread::Main>
@@ -123,6 +135,11 @@ public:
     bool allowsVideoCapture() const { return m_allowsVideoCapture; }
     bool allowsDisplayCapture() const { return m_allowsDisplayCapture; }
 #endif
+
+#if ENABLE(APP_PRIVACY_REPORT)
+    void setTCCIdentity();
+#endif
+
 #if PLATFORM(MAC)
     void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
 #endif
@@ -152,6 +169,10 @@ public:
     RemoteImageDecoderAVFProxy& imageDecoderAVFProxy();
 #endif
 
+#if USE(GRAPHICS_LAYER_WC)
+    RefPtr<RemoteGraphicsContextGL> findRemoteGraphicsContextGL(GraphicsContextGLIdentifier);
+#endif
+
     void updateSupportedRemoteCommands();
 
     bool allowsExitUnderMemoryPressure() const;
@@ -161,8 +182,14 @@ public:
     void releaseGraphicsContextGLForTesting(GraphicsContextGLIdentifier);
 #endif
 
+    static uint64_t objectCountForTesting() { return gObjectCountForTesting; }
+
     using RemoteRenderingBackendMap = HashMap<RenderingBackendIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteRenderingBackend>>;
     const RemoteRenderingBackendMap& remoteRenderingBackendMap() const { return m_remoteRenderingBackendMap; }
+
+#if HAVE(AUDIT_TOKEN)
+    const std::optional<audit_token_t>& presentingApplicationAuditToken() const { return m_presentingApplicationAuditToken; }
+#endif
 
 private:
     GPUConnectionToWebProcess(GPUProcess&, WebCore::ProcessIdentifier, IPC::Connection::Identifier, PAL::SessionID, GPUProcessConnectionParameters&&);
@@ -174,11 +201,11 @@ private:
     UserMediaCaptureManagerProxy& userMediaCaptureManagerProxy();
     RemoteAudioMediaStreamTrackRendererInternalUnitManager& audioMediaStreamTrackRendererInternalUnitManager();
 #endif
-#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM) && HAVE(AVASSETWRITERDELEGATE)
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     RemoteMediaRecorderManager& mediaRecorderManager();
 #endif
 
-    void createRenderingBackend(RemoteRenderingBackendCreationParameters&&);
+    void createRenderingBackend(RemoteRenderingBackendCreationParameters&&, IPC::StreamConnectionBuffer&&);
     void releaseRenderingBackend(RenderingBackendIdentifier);
 
 #if ENABLE(WEBGL)
@@ -217,6 +244,11 @@ private:
     void setUserPreferredLanguages(const Vector<String>&);
     void configureLoggingChannel(const String&, WTFLogChannelState, WTFLogLevel);
 
+#if USE(GRAPHICS_LAYER_WC)
+    void createWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier, uint64_t nativeWindow);
+    void releaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier);
+#endif
+
     // IPC::Connection::Client
     void didClose(IPC::Connection&) final;
     void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) final;
@@ -232,6 +264,8 @@ private:
 #if PLATFORM(MAC) && ENABLE(WEBGL)
     void dispatchDisplayWasReconfigured();
 #endif
+
+    static uint64_t gObjectCountForTesting;
 
     RefPtr<Logger> m_logger;
 
@@ -256,7 +290,7 @@ private:
     std::unique_ptr<RemoteAudioMediaStreamTrackRendererInternalUnitManager> m_audioMediaStreamTrackRendererInternalUnitManager;
     Ref<RemoteSampleBufferDisplayLayerManager> m_sampleBufferDisplayLayerManager;
 #endif
-#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM) && HAVE(AVASSETWRITERDELEGATE)
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     std::unique_ptr<RemoteMediaRecorderManager> m_remoteMediaRecorderManager;
 #endif
 #if ENABLE(MEDIA_STREAM)
@@ -264,6 +298,9 @@ private:
     bool m_allowsAudioCapture { false };
     bool m_allowsVideoCapture { false };
     bool m_allowsDisplayCapture { false };
+#endif
+#if HAVE(AUDIT_TOKEN)
+    std::optional<audit_token_t> m_presentingApplicationAuditToken;
 #endif
 
     RemoteRenderingBackendMap m_remoteRenderingBackendMap;
@@ -295,6 +332,11 @@ private:
 
     using RemoteAudioHardwareListenerMap = HashMap<RemoteAudioHardwareListenerIdentifier, std::unique_ptr<RemoteAudioHardwareListenerProxy>>;
     RemoteAudioHardwareListenerMap m_remoteAudioHardwareListenerMap;
+
+#if USE(GRAPHICS_LAYER_WC)
+    using RemoteWCLayerTreeHostMap = HashMap<WCLayerTreeHostIdentifier, std::unique_ptr<RemoteWCLayerTreeHost>>;
+    RemoteWCLayerTreeHostMap m_remoteWCLayerTreeHostMap;
+#endif
 
     RefPtr<RemoteRemoteCommandListenerProxy> m_remoteRemoteCommandListener;
     bool m_isActiveNowPlayingProcess { false };

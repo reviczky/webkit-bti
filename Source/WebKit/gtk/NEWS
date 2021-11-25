@@ -1,53 +1,14 @@
 ================
-WebKitGTK 2.34.2
+WebKitGTK 2.35.1
 ================
 
-What's new in WebKitGTK 2.34.2?
+What's new in WebKitGTK 2.35.1?
 
-  - Fix scrolling issues when pressing Home and PgDown keys.
-  - Update effective appearance after web process switch on navigation.
-  - Fix the build with video disabled.
-
-================
-WebKitGTK 2.34.1
-================
-
-What's new in WebKitGTK 2.34.1?
-
-  - Update user agent browser versions.
-  - Fix a crash with GTK >= 3.24.30.
-  - Fix a crash when loading videos on reddit.
-  - Fix file type detection when application calls g_desktop_app_info_set_as_default_for_extension() passing html.
-
-================
-WebKitGTK 2.34.0
-================
-
-What's new in WebKitGTK 2.34.0?
-
-  - Fix another regression in JavaScriptCore on 32bit systems.
-
-=================
-WebKitGTK 2.33.91
-=================
-
-What's new in WebKitGTK 2.33.91?
-
-  - Use the right display refresh monitor for animations in accelerated compositng mode.
-  - Fix several issues in JavaScriptCore on 32bit systems.
-  - Prefer python3 over python2 in CMake.
-
-=================
-WebKitGTK 2.33.90
-=================
-
-What's new in WebKitGTK 2.33.90?
-
-  - Show TLS protocol version and ciphersuite name in the inspector when building with libsoup3.
-  - Add multi-track support to media backend.
-  - Avoid strong alias computations in font fallback code.
-  - Fix deadlock tearing down pipeline when using fallback sink.
-  - Fix the build with gtk-doc enabled.
+  - Make user interactive threads (event handler, scrolling, ...) real time in linux.
+  - Add new API to set HTTP response information to custom uri schemes.
+  - Add support for media session.
+  - Change hardware-acceleration-policy setting default value to always.
+  - Fix jsc_value_object_define_property_accessor() to work with objects not having a wrapped instance.
   - Fix several crashes and rendering issues.
 
 ================

@@ -39,9 +39,12 @@
 #include "CSSImageSetValue.h"
 #include "CSSImageValue.h"
 #include "CSSShadowValue.h"
+#include "Document.h"
+#include "ElementInlines.h"
 #include "FontCache.h"
 #include "HTMLElement.h"
 #include "RenderTheme.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGSVGElement.h"
 #include "Settings.h"
 #include "StyleBuilder.h"
@@ -96,7 +99,7 @@ Ref<CSSValue> BuilderState::resolveImageStyles(CSSValue& value)
         return downcast<CSSImageSetValue>(value).valueWithStylesResolved(*this);
     if (is<CSSImageValue>(value))
         return downcast<CSSImageValue>(value).valueWithStylesResolved(*this);
-    return makeRef(value);
+    return value;
 }
 
 RefPtr<StyleImage> BuilderState::createStyleImage(CSSValue& value)

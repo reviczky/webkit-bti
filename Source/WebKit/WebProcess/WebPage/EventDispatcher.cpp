@@ -48,6 +48,7 @@
 
 #if ENABLE(SCROLLING_THREAD)
 #include <WebCore/ScrollingThread.h>
+#include <WebCore/ScrollingTreeNode.h>
 #include <WebCore/ThreadedScrollingTree.h>
 #endif
 
@@ -60,7 +61,7 @@ Ref<EventDispatcher> EventDispatcher::create()
 }
 
 EventDispatcher::EventDispatcher()
-    : m_queue(WorkQueue::create("com.apple.WebKit.EventDispatcher", WorkQueue::Type::Serial, WorkQueue::QOS::UserInteractive))
+    : m_queue(WorkQueue::create("com.apple.WebKit.EventDispatcher", WorkQueue::QOS::UserInteractive))
     , m_recentWheelEventDeltaFilter(WheelEventDeltaFilter::create())
 {
 }
@@ -96,36 +97,21 @@ void EventDispatcher::initializeConnection(IPC::Connection* connection)
     connection->addWorkQueueMessageReceiver(Messages::EventDispatcher::messageReceiverName(), m_queue.get(), this);
 }
 
-void EventDispatcher::wheelEvent(PageIdentifier pageID, const WebWheelEvent& wheelEvent, bool canRubberBandAtLeft, bool canRubberBandAtRight, bool canRubberBandAtTop, bool canRubberBandAtBottom)
+void EventDispatcher::wheelEvent(PageIdentifier pageID, const WebWheelEvent& wheelEvent, RectEdges<bool> rubberBandableEdges)
 {
-#if PLATFORM(COCOA) || ENABLE(SCROLLING_THREAD)
-    PlatformWheelEvent platformWheelEvent = platform(wheelEvent);
-#endif
-
-#if PLATFORM(COCOA)
-    switch (wheelEvent.phase()) {
-    case WebWheelEvent::PhaseBegan:
-        m_recentWheelEventDeltaFilter->beginFilteringDeltas();
-        break;
-    case WebWheelEvent::PhaseEnded:
-        m_recentWheelEventDeltaFilter->endFilteringDeltas();
-        break;
-    default:
-        break;
-    }
-
-    if (m_recentWheelEventDeltaFilter->isFilteringDeltas()) {
-        m_recentWheelEventDeltaFilter->updateFromDelta(FloatSize(platformWheelEvent.deltaX(), platformWheelEvent.deltaY()));
-        FloatSize filteredDelta = m_recentWheelEventDeltaFilter->filteredDelta();
-        platformWheelEvent = platformWheelEvent.copyWithDeltasAndVelocity(filteredDelta.width(), filteredDelta.height(), m_recentWheelEventDeltaFilter->filteredVelocity());
-    }
-#endif
-
     auto processingSteps = OptionSet<WebCore::WheelEventProcessingSteps> { WheelEventProcessingSteps::MainThreadForScrolling, WheelEventProcessingSteps::MainThreadForBlockingDOMEventDispatch };
 #if ENABLE(SCROLLING_THREAD)
     do {
-        Locker locker { m_scrollingTreesLock };
+        auto platformWheelEvent = platform(wheelEvent);
+#if PLATFORM(COCOA)
+        m_recentWheelEventDeltaFilter->updateFromEvent(platformWheelEvent);
+        if (WheelEventDeltaFilter::shouldApplyFilteringForEvent(platformWheelEvent))
+            platformWheelEvent = m_recentWheelEventDeltaFilter->eventCopyWithFilteredDeltas(platformWheelEvent);
+        else if (WheelEventDeltaFilter::shouldIncludeVelocityForEvent(platformWheelEvent))
+            platformWheelEvent = m_recentWheelEventDeltaFilter->eventCopyWithVelocity(platformWheelEvent);
+#endif
 
+        Locker locker { m_scrollingTreesLock };
         auto scrollingTree = m_scrollingTrees.get(pageID);
         if (!scrollingTree) {
             dispatchWheelEventViaMainThread(pageID, wheelEvent, processingSteps);
@@ -137,20 +123,27 @@ void EventDispatcher::wheelEvent(PageIdentifier pageID, const WebWheelEvent& whe
         // scrolling tree can be notified.
         // We only need to do this at the beginning of the gesture.
         if (platformWheelEvent.phase() == PlatformWheelEventPhase::Began)
-            scrollingTree->setMainFrameCanRubberBand({ canRubberBandAtTop, canRubberBandAtRight, canRubberBandAtBottom, canRubberBandAtLeft });
+            scrollingTree->setMainFrameCanRubberBand(rubberBandableEdges);
 
         auto processingSteps = scrollingTree->determineWheelEventProcessing(platformWheelEvent);
+        bool useMainThreadForScrolling = processingSteps.contains(WheelEventProcessingSteps::MainThreadForScrolling);
+
+#if !PLATFORM(COCOA)
+        // Deliver continuing scroll gestures directly to the scrolling thread.
+        if (platformWheelEvent.phase() == PlatformWheelEventPhase::Changed && scrollingTree->isUserScrollInProgressAtEventLocation(platformWheelEvent))
+            useMainThreadForScrolling = false;
+#endif
 
         scrollingTree->willProcessWheelEvent();
 
-        ScrollingThread::dispatch([scrollingTree, wheelEvent, platformWheelEvent, processingSteps, pageID, protectedThis = makeRef(*this)] {
-            if (processingSteps.contains(WheelEventProcessingSteps::MainThreadForScrolling)) {
+        ScrollingThread::dispatch([scrollingTree, wheelEvent, platformWheelEvent, processingSteps, useMainThreadForScrolling, pageID, protectedThis = Ref { *this }] {
+            if (useMainThreadForScrolling) {
                 scrollingTree->willSendEventToMainThread(platformWheelEvent);
                 protectedThis->dispatchWheelEventViaMainThread(pageID, wheelEvent, processingSteps);
                 scrollingTree->waitForEventToBeProcessedByMainThread(platformWheelEvent);
                 return;
             }
-        
+
             auto result = scrollingTree->handleWheelEvent(platformWheelEvent, processingSteps);
 
             if (result.needsMainThreadProcessing()) {
@@ -165,10 +158,7 @@ void EventDispatcher::wheelEvent(PageIdentifier pageID, const WebWheelEvent& whe
         });
     } while (false);
 #else
-    UNUSED_PARAM(canRubberBandAtLeft);
-    UNUSED_PARAM(canRubberBandAtRight);
-    UNUSED_PARAM(canRubberBandAtTop);
-    UNUSED_PARAM(canRubberBandAtBottom);
+    UNUSED_PARAM(rubberBandableEdges);
 
     dispatchWheelEventViaMainThread(pageID, wheelEvent, processingSteps);
 #endif
@@ -177,7 +167,7 @@ void EventDispatcher::wheelEvent(PageIdentifier pageID, const WebWheelEvent& whe
 #if ENABLE(MAC_GESTURE_EVENTS)
 void EventDispatcher::gestureEvent(PageIdentifier pageID, const WebKit::WebGestureEvent& gestureEvent)
 {
-    RunLoop::main().dispatch([protectedThis = makeRef(*this), pageID, gestureEvent]() mutable {
+    RunLoop::main().dispatch([protectedThis = Ref { *this }, pageID, gestureEvent]() mutable {
         protectedThis->dispatchGestureEvent(pageID, gestureEvent);
     });
 }
@@ -217,7 +207,7 @@ void EventDispatcher::touchEvent(PageIdentifier pageID, const WebTouchEvent& tou
     }
 
     if (updateListWasEmpty) {
-        RunLoop::main().dispatch([protectedThis = makeRef(*this)]() mutable {
+        RunLoop::main().dispatch([protectedThis = Ref { *this }]() mutable {
             protectedThis->dispatchTouchEvents();
         });
     }
@@ -243,7 +233,7 @@ void EventDispatcher::dispatchTouchEvents()
 void EventDispatcher::dispatchWheelEventViaMainThread(WebCore::PageIdentifier pageID, const WebWheelEvent& wheelEvent, OptionSet<WheelEventProcessingSteps> processingSteps)
 {
     ASSERT(!RunLoop::isMain());
-    RunLoop::main().dispatch([protectedThis = makeRef(*this), pageID, wheelEvent, steps = processingSteps - WheelEventProcessingSteps::ScrollingThread]() mutable {
+    RunLoop::main().dispatch([protectedThis = Ref { *this }, pageID, wheelEvent, steps = processingSteps - WheelEventProcessingSteps::ScrollingThread]() mutable {
         protectedThis->dispatchWheelEvent(pageID, wheelEvent, steps);
     });
 }

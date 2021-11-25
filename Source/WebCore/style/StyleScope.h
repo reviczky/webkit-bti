@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include "MediaQueryEvaluator.h"
 #include "StyleScopeOrdinal.h"
 #include "Timer.h"
 #include <memory>
@@ -44,6 +45,7 @@ namespace WebCore {
 class CSSStyleSheet;
 class Document;
 class Element;
+class HTMLSlotElement;
 class Node;
 class ProcessingInstruction;
 class StyleSheet;
@@ -196,9 +198,14 @@ private:
     bool m_usesStyleBasedEditability { false };
     bool m_isUpdatingStyleResolver { false };
 
+    std::optional<MediaQueryViewportState> m_viewportStateOnPreviousMediaQueryEvaluation;
+
     // FIXME: These (and some things above) are only relevant for the root scope.
     HashMap<ResolverSharingKey, Ref<Resolver>> m_sharedShadowTreeResolvers;
 };
+
+HTMLSlotElement* assignedSlotForScopeOrdinal(const Element&, ScopeOrdinal);
+Element* hostForScopeOrdinal(const Element&, ScopeOrdinal);
 
 inline bool Scope::hasPendingSheets() const
 {

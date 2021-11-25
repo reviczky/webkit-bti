@@ -27,6 +27,7 @@
 
 #if ENABLE(ASYNC_SCROLLING) && ENABLE(SCROLLING_THREAD)
 
+#include "ScrollingStateScrollingNode.h"
 #include "ScrollingStateTree.h"
 #include "ScrollingTree.h"
 #include <wtf/Condition.h>
@@ -63,11 +64,15 @@ public:
     Lock& treeLock() WTF_RETURNS_LOCK(m_treeLock) { return m_treeLock; }
 
     bool scrollAnimatorEnabled() const { return m_scrollAnimatorEnabled; }
+    void removePendingScrollAnimationForNode(ScrollingNodeID) WTF_REQUIRES_LOCK(m_treeLock) final;
 
 protected:
     explicit ThreadedScrollingTree(AsyncScrollingCoordinator&);
 
     void scrollingTreeNodeDidScroll(ScrollingTreeScrollingNode&, ScrollingLayerPositionAction = ScrollingLayerPositionAction::Sync) override;
+    void scrollingTreeNodeDidStopAnimatedScroll(ScrollingTreeScrollingNode&) override;
+    bool scrollingTreeNodeRequestsScroll(ScrollingNodeID, const RequestedScrollData&) override WTF_REQUIRES_LOCK(m_treeLock);
+
 #if PLATFORM(MAC)
     void handleWheelEventPhase(ScrollingNodeID, PlatformWheelEventPhase) override;
     void setActiveScrollSnapIndices(ScrollingNodeID, std::optional<unsigned> horizontalIndex, std::optional<unsigned> verticalIndex) override;
@@ -86,6 +91,9 @@ private:
     bool isThreadedScrollingTree() const override { return true; }
     void propagateSynchronousScrollingReasons(const HashSet<ScrollingNodeID>&) WTF_REQUIRES_LOCK(m_treeLock) override;
 
+    void didCommitTree() final;
+    void didCommitTreeOnScrollingThread() WTF_REQUIRES_LOCK(m_treeLock);
+
     void displayDidRefreshOnScrollingThread();
     void waitForRenderingUpdateCompletionOrTimeout() WTF_REQUIRES_LOCK(m_treeLock);
 
@@ -94,7 +102,13 @@ private:
     void scheduleDelayedRenderingUpdateDetectionTimer(Seconds) WTF_REQUIRES_LOCK(m_treeLock);
     void delayedRenderingUpdateDetectionTimerFired();
 
+    void hasNodeWithAnimatedScrollChanged(bool) final;
+    
+    void serviceScrollAnimations() WTF_REQUIRES_LOCK(m_treeLock);
+
     Seconds maxAllowableRenderingUpdateDurationForSynchronization();
+    
+    bool scrollingThreadIsActive();
 
     enum class SynchronizationState : uint8_t {
         Idle,
@@ -112,6 +126,7 @@ private:
     // Dynamically allocated because it has to use the ScrollingThread's runloop.
     std::unique_ptr<RunLoop::Timer<ThreadedScrollingTree>> m_delayedRenderingUpdateDetectionTimer WTF_GUARDED_BY_LOCK(m_treeLock);
 
+    HashMap<ScrollingNodeID, RequestedScrollData> m_nodesWithPendingScrollAnimations WTF_GUARDED_BY_LOCK(m_treeLock);
     const bool m_scrollAnimatorEnabled { false };
     bool m_hasNodesWithSynchronousScrollingReasons WTF_GUARDED_BY_LOCK(m_treeLock) { false };
 };

@@ -41,17 +41,18 @@ class InlineDisplayContentBuilder {
 public:
     InlineDisplayContentBuilder(const ContainerBox& formattingContextRoot, InlineFormattingState&);
 
-    void build(const LineBuilder::LineContent&, const LineBox&, const InlineLayoutPoint& lineBoxLogicalTopLeft, const size_t lineIndex);
+    DisplayBoxes build(const LineBuilder::LineContent&, const LineBox&, const InlineLayoutPoint& lineBoxLogicalTopLeft, const size_t lineIndex);
 
 private:
-    void createRunsAndUpdateGeometryForLineContent(const LineBuilder::LineContent&, const LineBox&, const InlineLayoutPoint& lineBoxLogicalTopLeft, const size_t lineIndex);
-    void createRunsAndUpdateGeometryForLineSpanningInlineBoxes(const LineBox&, const InlineLayoutPoint& lineBoxLogicalTopLeft, const size_t lineIndex, size_t lineSpanningInlineBoxIndex);
+    void createBoxesAndUpdateGeometryForLineContent(const LineBuilder::LineContent&, const LineBox&, const InlineLayoutPoint& lineBoxLogicalTopLeft, const size_t lineIndex, DisplayBoxes&);
+    void collectInkOverflowForInlineBoxes(const LineBox&, DisplayBoxes&);
 
     const ContainerBox& root() const { return m_formattingContextRoot; }
     InlineFormattingState& formattingState() const { return m_formattingState; } 
 
     const ContainerBox& m_formattingContextRoot;
     InlineFormattingState& m_formattingState;
+    HashMap<const Box*, size_t> m_inlineBoxIndexMap;
 };
 
 }

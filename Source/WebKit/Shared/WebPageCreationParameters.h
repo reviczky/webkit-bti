@@ -34,6 +34,7 @@
 #include "WebPageGroupData.h"
 #include "WebPageProxyIdentifier.h"
 #include "WebPreferencesStore.h"
+#include "WebURLSchemeHandlerIdentifier.h"
 #include <WebCore/ActivityState.h>
 #include <WebCore/Color.h>
 #include <WebCore/DestinationColorSpace.h>
@@ -118,14 +119,15 @@ struct WebPageCreationParameters {
     float topContentInset;
     
     float mediaVolume;
-    WebCore::MediaProducer::MutedStateFlags muted;
+    WebCore::MediaProducerMutedStateFlags muted;
+    bool openedByDOM { false };
     bool mayStartMediaWhenInWindow;
     bool mediaPlaybackIsSuspended { false };
 
     WebCore::IntSize minimumSizeForAutoLayout;
     WebCore::IntSize sizeToContentAutoSizeMaximumSize;
     bool autoSizingShouldExpandToViewHeight;
-    std::optional<WebCore::IntSize> viewportSizeForCSSViewportUnits;
+    std::optional<WebCore::FloatSize> viewportSizeForCSSViewportUnits;
     
     WebCore::ScrollPinningBehavior scrollPinningBehavior;
 
@@ -167,6 +169,7 @@ struct WebPageCreationParameters {
     WebCore::FloatSize availableScreenSize;
     WebCore::FloatSize overrideScreenSize;
     float textAutosizingWidth;
+    WebCore::FloatSize minimumUnobscuredSize;
     WebCore::FloatSize maximumUnobscuredSize;
     int32_t deviceOrientation { 0 };
     bool keyboardIsAttached { false };
@@ -201,7 +204,7 @@ struct WebPageCreationParameters {
     String overrideContentSecurityPolicy;
     std::optional<double> cpuLimit;
 
-    HashMap<String, uint64_t> urlSchemeHandlers;
+    HashMap<String, WebURLSchemeHandlerIdentifier> urlSchemeHandlers;
     Vector<String> urlSchemesWithLegacyCustomProtocolHandlers;
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -264,7 +267,10 @@ struct WebPageCreationParameters {
 #if ENABLE(APP_HIGHLIGHTS)
     WebCore::HighlightVisibility appHighlightsVisible { WebCore::HighlightVisibility::Hidden };
 #endif
-    
+
+#if HAVE(TOUCH_BAR)
+    bool requiresUserActionForEditingControlsManager { false };
+#endif
 };
 
 } // namespace WebKit

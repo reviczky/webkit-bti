@@ -145,13 +145,21 @@ bool ContentSecurityPolicySourceList::matches(const URL& url, bool didReceiveRed
     return false;
 }
 
-bool ContentSecurityPolicySourceList::matches(const ContentSecurityPolicyHash& hash) const
+bool ContentSecurityPolicySourceList::matches(const Vector<ContentSecurityPolicyHash>& hashes) const
 {
-    return m_hashes.contains(hash);
+    for (auto& hash : hashes) {
+        if (m_hashes.contains(hash))
+            return true;
+    }
+
+    return false;
 }
 
 bool ContentSecurityPolicySourceList::matches(const String& nonce) const
 {
+    if (nonce.isEmpty())
+        return false;
+
     return m_nonces.contains(nonce);
 }
 
@@ -213,6 +221,13 @@ template<typename CharacterType> std::optional<ContentSecurityPolicySourceList::
         return source;
     }
 
+    if (skipExactlyIgnoringASCIICase(buffer, "'strict-dynamic'")) {
+        m_allowNonParserInsertedScripts = true;
+        m_allowSelf = false;
+        m_allowInline = false;
+        return source;
+    }
+
     if (skipExactlyIgnoringASCIICase(buffer, "'self'")) {
         m_allowSelf = true;
         return source;
@@ -225,6 +240,16 @@ template<typename CharacterType> std::optional<ContentSecurityPolicySourceList::
 
     if (skipExactlyIgnoringASCIICase(buffer, "'unsafe-eval'")) {
         m_allowEval = true;
+        return source;
+    }
+    
+    if (skipExactlyIgnoringASCIICase(buffer, "'unsafe-hashes'")) {
+        m_allowUnsafeHashes = true;
+        return source;
+    }
+
+    if (skipExactlyIgnoringASCIICase(buffer, "'report-sample'")) {
+        m_reportSample = true;
         return source;
     }
 

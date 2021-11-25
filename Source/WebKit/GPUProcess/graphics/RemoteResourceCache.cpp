@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,36 +31,60 @@
 namespace WebKit {
 using namespace WebCore;
 
-void RemoteResourceCache::cacheImageBuffer(Ref<ImageBuffer>&& imageBuffer)
+RemoteResourceCache::RemoteResourceCache(ProcessIdentifier webProcessIdentifier)
+    : m_resourceHeap(webProcessIdentifier)
 {
-    auto renderingResourceIdentifier = imageBuffer->renderingResourceIdentifier();
-    m_imageBuffers.add(renderingResourceIdentifier, WTFMove(imageBuffer));
+}
+
+RemoteResourceCache::RemoteResourceCache(RemoteResourceCache&& other)
+    : m_resourceHeap(WTFMove(other.m_resourceHeap))
+    , m_resourceUseCounters(WTFMove(other.m_resourceUseCounters))
+{
+    updateHasActiveDrawables();
+}
+
+void RemoteResourceCache::cacheImageBuffer(Ref<ImageBuffer>&& imageBuffer, QualifiedRenderingResourceIdentifier renderingResourceIdentifier)
+{
+    ASSERT(renderingResourceIdentifier.object() == imageBuffer->renderingResourceIdentifier());
+    m_resourceHeap.add(renderingResourceIdentifier, WTFMove(imageBuffer));
+    updateHasActiveDrawables();
 
     ensureResourceUseCounter(renderingResourceIdentifier);
 }
 
-ImageBuffer* RemoteResourceCache::cachedImageBuffer(RenderingResourceIdentifier renderingResourceIdentifier)
+ImageBuffer* RemoteResourceCache::cachedImageBuffer(QualifiedRenderingResourceIdentifier renderingResourceIdentifier) const
 {
-    return m_imageBuffers.get(renderingResourceIdentifier);
+    return m_resourceHeap.getImageBuffer(renderingResourceIdentifier);
 }
 
-void RemoteResourceCache::cacheNativeImage(Ref<NativeImage>&& image)
+void RemoteResourceCache::cacheNativeImage(Ref<NativeImage>&& image, QualifiedRenderingResourceIdentifier renderingResourceIdentifier)
 {
-    auto renderingResourceIdentifier = image->renderingResourceIdentifier();
-    m_nativeImages.add(renderingResourceIdentifier, WTFMove(image));
+    ASSERT(renderingResourceIdentifier.object() == image->renderingResourceIdentifier());
+    m_resourceHeap.add(renderingResourceIdentifier, WTFMove(image));
+    updateHasActiveDrawables();
 
     ensureResourceUseCounter(renderingResourceIdentifier);
 }
 
-void RemoteResourceCache::cacheFont(Ref<Font>&& font)
+NativeImage* RemoteResourceCache::cachedNativeImage(QualifiedRenderingResourceIdentifier renderingResourceIdentifier) const
 {
-    auto renderingResourceIdentifier = font->renderingResourceIdentifier();
-    m_fonts.add(renderingResourceIdentifier, WTFMove(font));
+    return m_resourceHeap.getNativeImage(renderingResourceIdentifier);
+}
+
+void RemoteResourceCache::cacheFont(Ref<Font>&& font, QualifiedRenderingResourceIdentifier renderingResourceIdentifier)
+{
+    ASSERT(renderingResourceIdentifier.object() == font->renderingResourceIdentifier());
+    m_resourceHeap.add(renderingResourceIdentifier, WTFMove(font));
 
     ensureResourceUseCounter(renderingResourceIdentifier);
 }
 
-void RemoteResourceCache::ensureResourceUseCounter(RenderingResourceIdentifier renderingResourceIdentifier)
+Font* RemoteResourceCache::cachedFont(QualifiedRenderingResourceIdentifier renderingResourceIdentifier) const
+{
+    return m_resourceHeap.getFont(renderingResourceIdentifier);
+}
+
+void RemoteResourceCache::ensureResourceUseCounter(QualifiedRenderingResourceIdentifier renderingResourceIdentifier)
 {
     auto result = m_resourceUseCounters.add(renderingResourceIdentifier, ResourceUseCounter { });
     if (!result.isNewEntry) {
@@ -73,10 +97,10 @@ void RemoteResourceCache::ensureResourceUseCounter(RenderingResourceIdentifier r
 
 void RemoteResourceCache::deleteAllFonts()
 {
-    m_fonts.clear();
+    m_resourceHeap.deleteAllFonts();
 }
 
-bool RemoteResourceCache::maybeRemoveResource(RenderingResourceIdentifier renderingResourceIdentifier, ResourceUseCountersMap::iterator& iterator)
+bool RemoteResourceCache::maybeRemoveResource(QualifiedRenderingResourceIdentifier renderingResourceIdentifier, ResourceUseCountersMap::iterator& iterator)
 {
     auto& value = iterator->value;
     if (value.state == ResourceState::Alive || value.useOrPendingCount < 0)
@@ -117,18 +141,19 @@ bool RemoteResourceCache::maybeRemoveResource(RenderingResourceIdentifier render
 
     m_resourceUseCounters.remove(iterator);
 
-    if (m_imageBuffers.remove(renderingResourceIdentifier))
+    if (m_resourceHeap.removeImageBuffer(renderingResourceIdentifier)
+        || m_resourceHeap.removeNativeImage(renderingResourceIdentifier)) {
+        updateHasActiveDrawables();
         return true;
-    if (m_nativeImages.remove(renderingResourceIdentifier))
-        return true;
-    if (m_fonts.remove(renderingResourceIdentifier))
+    }
+    if (m_resourceHeap.removeFont(renderingResourceIdentifier))
         return true;
 
     // Caching the remote resource should have happened before releasing it.
     return false;
 }
 
-void RemoteResourceCache::recordResourceUse(RenderingResourceIdentifier renderingResourceIdentifier)
+void RemoteResourceCache::recordResourceUse(QualifiedRenderingResourceIdentifier renderingResourceIdentifier)
 {
     auto iterator = m_resourceUseCounters.find(renderingResourceIdentifier);
 
@@ -140,7 +165,7 @@ void RemoteResourceCache::recordResourceUse(RenderingResourceIdentifier renderin
     maybeRemoveResource(renderingResourceIdentifier, iterator);
 }
 
-bool RemoteResourceCache::releaseRemoteResource(RenderingResourceIdentifier renderingResourceIdentifier, uint64_t useCount)
+bool RemoteResourceCache::releaseRemoteResource(QualifiedRenderingResourceIdentifier renderingResourceIdentifier, uint64_t useCount)
 {
     auto iterator = m_resourceUseCounters.find(renderingResourceIdentifier);
     if (iterator == m_resourceUseCounters.end())
@@ -149,6 +174,11 @@ bool RemoteResourceCache::releaseRemoteResource(RenderingResourceIdentifier rend
     useCounter.state = ResourceState::ToBeDeleted;
     useCounter.useOrPendingCount -= useCount;
     return maybeRemoveResource(renderingResourceIdentifier, iterator);
+}
+
+void RemoteResourceCache::updateHasActiveDrawables()
+{
+    m_hasActiveDrawables = m_resourceHeap.hasImageBuffer() || m_resourceHeap.hasNativeImage();
 }
 
 } // namespace WebKit

@@ -49,10 +49,6 @@
 #include <WebCore/RenderThemeIOS.h>
 #endif
 
-#if ENABLE(NETSCAPE_PLUGIN_API)
-#include <WebCore/PluginData.h>
-#endif
-
 #if PLATFORM(GTK) || PLATFORM(WPE)
 #include <wtf/MemoryPressureHandler.h>
 #endif
@@ -137,6 +133,7 @@ struct WebProcessCreationParameters {
     bool attrStyleEnabled { false };
     bool shouldThrowExceptionForGlobalConstantRedeclaration { true };
     WebCore::CrossOriginMode crossOriginMode { WebCore::CrossOriginMode::Shared }; // Cross-origin isolation via COOP+COEP headers.
+    bool isCaptivePortalModeEnabled { false };
 
 #if ENABLE(SERVICE_CONTROLS)
     bool hasImageServices { false };
@@ -173,10 +170,6 @@ struct WebProcessCreationParameters {
     HashMap<String, bool> notificationPermissions;
 #endif
 
-#if ENABLE(NETSCAPE_PLUGIN_API)
-    HashMap<String, HashMap<String, HashMap<String, WebCore::PluginLoadClientPolicy>>> pluginLoadClientPolicies;
-#endif
-
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> networkATSContext;
 #endif
@@ -190,7 +183,7 @@ struct WebProcessCreationParameters {
     WebCore::ScreenProperties screenProperties;
 #endif
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION) && !RELEASE_LOG_DISABLED
     bool shouldLogUserInteraction { false };
 #endif
 
@@ -217,7 +210,6 @@ struct WebProcessCreationParameters {
     Vector<SandboxExtension::Handle> videoDecoderExtensionHandles;
 #endif
 
-    Vector<SandboxExtension::Handle> diagnosticsExtensionHandles;
 #if PLATFORM(IOS_FAMILY)
     Vector<SandboxExtension::Handle> dynamicMachExtensionHandles;
     Vector<SandboxExtension::Handle> dynamicIOKitExtensionHandles;
@@ -229,7 +221,7 @@ struct WebProcessCreationParameters {
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    bool currentUserInterfaceIdiomIsPhoneOrWatch { false };
+    bool currentUserInterfaceIdiomIsSmallScreen { false };
     bool supportsPictureInPicture { false };
     WebCore::RenderThemeIOS::CSSValueToSystemColorMap cssValueToSystemColorMap;
     WebCore::Color focusRingColor;
@@ -259,6 +251,15 @@ struct WebProcessCreationParameters {
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     std::optional<MemoryPressureHandler::Configuration> memoryPressureHandlerConfiguration;
+#endif
+
+#if USE(GLIB)
+    String applicationID;
+    String applicationName;
+#endif
+
+#if USE(ATSPI)
+    String accessibilityBusAddress;
 #endif
 };
 

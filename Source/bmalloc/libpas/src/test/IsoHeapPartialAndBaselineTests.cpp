@@ -185,7 +185,7 @@ void testSimplePartialAllocations(size_t size,
     set<void*> objectSet;
     set<pas_segregated_view> viewSet;
     set<pas_segregated_page*> pageSet;
-    set<pas_segregated_global_size_directory*> sizeDirectorySet;
+    set<pas_segregated_size_directory*> sizeDirectorySet;
     
     pas_heap_ref heap = ISO_HEAP_REF_INITIALIZER_WITH_ALIGNMENT(size, alignment);
 
@@ -209,9 +209,9 @@ void testSimplePartialAllocations(size_t size,
         objectSet.insert(ptr);
         viewSet.insert(view);
         pageSet.insert(pas_segregated_view_get_page(view));
-        pas_segregated_global_size_directory* sizeDirectory = pas_segregated_view_get_global_size_directory(view);
+        pas_segregated_size_directory* sizeDirectory = pas_segregated_view_get_size_directory(view);
         CHECK_EQUAL(sizeDirectory->object_size, size);
-        CHECK(pas_is_aligned(pas_segregated_global_size_directory_alignment(sizeDirectory), alignment));
+        CHECK(pas_is_aligned(pas_segregated_size_directory_alignment(sizeDirectory), alignment));
         sizeDirectorySet.insert(sizeDirectory);
     }
 
@@ -287,9 +287,9 @@ void testSimplePartialAllocations(size_t size,
         objectSet.insert(ptr);
         viewSet.insert(view);
         pageSet.insert(pas_segregated_view_get_page(view));
-        pas_segregated_global_size_directory* sizeDirectory = pas_segregated_view_get_global_size_directory(view);
+        pas_segregated_size_directory* sizeDirectory = pas_segregated_view_get_size_directory(view);
         CHECK_EQUAL(sizeDirectory->object_size, size);
-        CHECK(pas_is_aligned(pas_segregated_global_size_directory_alignment(sizeDirectory), alignment));
+        CHECK(pas_is_aligned(pas_segregated_size_directory_alignment(sizeDirectory), alignment));
         sizeDirectorySet.insert(sizeDirectory);
     }
 
@@ -603,8 +603,6 @@ void testMultiplePartialsFromDifferentThreadsPerShared(size_t size,
 {
     static constexpr bool verbose = false;
 
-    pas_segregated_size_directory_use_tabling = false;
-    
     pas_heap_ref heap = ISO_HEAP_REF_INITIALIZER_WITH_ALIGNMENT(size, alignment);
 
     vector<thread> threads;
@@ -792,7 +790,6 @@ void testTwoBaselinesEvictions(size_t size1, size_t size2, size_t count,
 void addScavengerDependentTests()
 {
     DisableBitfit disableBitfit;
-    DisableExplosion disableExplosion;
     
     {
         ForcePartials forcePartials;
@@ -834,7 +831,7 @@ void addScavengerDependentTests()
             ADD_TEST(testSimplePartialAllocations(3072, 8, pas_medium_segregated_page_config_variant, 1, 100, 1, 1, 4, 3, FreeInOrder()));
             ADD_TEST(testSimplePartialAllocations(4096, 8, pas_medium_segregated_page_config_variant, 1, 1, 1, 1, 1, 1, FreeInOrder()));
             ADD_TEST(testSimplePartialAllocations(10752, 8, pas_medium_segregated_page_config_variant, 1, 1, 1, 1, 1, 1, FreeInOrder()));
-            ADD_TEST(testSimplePartialAllocations(20480, 8, pas_medium_segregated_page_config_variant, 1, 1, 1, 1, 1, 1, FreeInOrder()));
+            ADD_TEST(testSimplePartialAllocations(21504, 8, pas_medium_segregated_page_config_variant, 1, 1, 1, 1, 1, 1, FreeInOrder()));
     
             // Test that we can allocate objects with interesting alignment.
             ADD_TEST(testSimplePartialAllocations(32, 32, pas_small_segregated_page_config_variant, 1, 1, 1, 1, 1, 1, FreeInOrder()));

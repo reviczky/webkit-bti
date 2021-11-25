@@ -199,7 +199,7 @@ Vector<Ref<NativeImage>> BitmapImage::framesNativeImages()
 
     for (size_t i = 0; i < count; ++i) {
         if (auto image = frameImageAtIndexCacheIfNeeded(i))
-            images.append(makeRef(*image));
+            images.append(*image);
     }
 
     return images;
@@ -572,7 +572,7 @@ void BitmapImage::resetAnimation()
     destroyDecodedDataIfNecessary(true);
 }
 
-void BitmapImage::decode(WTF::Function<void()>&& callback)
+void BitmapImage::decode(Function<void()>&& callback)
 {
     if (!m_decodingCallbacks)
         m_decodingCallbacks = makeUnique<Vector<Function<void()>, 1>>();
@@ -655,6 +655,13 @@ void BitmapImage::imageFrameAvailableAtIndex(size_t index)
 
     if (imageObserver())
         imageObserver()->imageFrameAvailable(*this, ImageAnimatingState::No, nullptr, decodingStatus);
+}
+
+DestinationColorSpace BitmapImage::colorSpace()
+{
+    if (auto nativeImage = this->nativeImage())
+        return nativeImage->colorSpace();
+    return DestinationColorSpace::SRGB();
 }
 
 unsigned BitmapImage::decodeCountForTesting() const

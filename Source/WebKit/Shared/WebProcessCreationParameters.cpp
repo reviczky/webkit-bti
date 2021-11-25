@@ -123,6 +123,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << attrStyleEnabled;
     encoder << shouldThrowExceptionForGlobalConstantRedeclaration;
     encoder << crossOriginMode;
+    encoder << isCaptivePortalModeEnabled;
 
 #if ENABLE(SERVICE_CONTROLS)
     encoder << hasImageServices;
@@ -138,7 +139,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << waylandCompositorDisplayName;
 #endif
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION) && !RELEASE_LOG_DISABLED
     encoder << shouldLogUserInteraction;
 #endif
 
@@ -171,7 +172,6 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << videoDecoderExtensionHandles;
 #endif
 
-    encoder << diagnosticsExtensionHandles;
 #if PLATFORM(IOS_FAMILY)
     encoder << dynamicMachExtensionHandles;
     encoder << dynamicIOKitExtensionHandles;
@@ -183,7 +183,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    encoder << currentUserInterfaceIdiomIsPhoneOrWatch;
+    encoder << currentUserInterfaceIdiomIsSmallScreen;
     encoder << supportsPictureInPicture;
     encoder << cssValueToSystemColorMap;
     encoder << focusRingColor;
@@ -213,6 +213,15 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     encoder << memoryPressureHandlerConfiguration;
+#endif
+
+#if USE(GLIB)
+    encoder << applicationID;
+    encoder << applicationName;
+#endif
+
+#if USE(ATSPI)
+    encoder << accessibilityBusAddress;
 #endif
 }
 
@@ -392,6 +401,8 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     if (!decoder.decode(parameters.crossOriginMode))
         return false;
+    if (!decoder.decode(parameters.isCaptivePortalModeEnabled))
+        return false;
 
 #if ENABLE(SERVICE_CONTROLS)
     if (!decoder.decode(parameters.hasImageServices))
@@ -412,7 +423,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
 #endif
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION) && !RELEASE_LOG_DISABLED
     if (!decoder.decode(parameters.shouldLogUserInteraction))
         return false;
 #endif
@@ -482,12 +493,6 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     parameters.videoDecoderExtensionHandles = WTFMove(*videoDecoderExtensionHandles);
 #endif
 
-    std::optional<Vector<SandboxExtension::Handle>> diagnosticsExtensionHandles;
-    decoder >> diagnosticsExtensionHandles;
-    if (!diagnosticsExtensionHandles)
-        return false;
-    parameters.diagnosticsExtensionHandles = WTFMove(*diagnosticsExtensionHandles);
-
 #if PLATFORM(IOS_FAMILY)
     std::optional<Vector<SandboxExtension::Handle>> dynamicMachExtensionHandles;
     decoder >> dynamicMachExtensionHandles;
@@ -517,7 +522,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    if (!decoder.decode(parameters.currentUserInterfaceIdiomIsPhoneOrWatch))
+    if (!decoder.decode(parameters.currentUserInterfaceIdiomIsSmallScreen))
         return false;
 
     if (!decoder.decode(parameters.supportsPictureInPicture))
@@ -585,6 +590,21 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!memoryPressureHandlerConfiguration)
         return false;
     parameters.memoryPressureHandlerConfiguration = WTFMove(*memoryPressureHandlerConfiguration);
+#endif
+
+#if USE(GLIB)
+    if (!decoder.decode(parameters.applicationID))
+        return false;
+    if (!decoder.decode(parameters.applicationName))
+        return false;
+#endif
+
+#if USE(ATSPI)
+    std::optional<String> accessibilityBusAddress;
+    decoder >> accessibilityBusAddress;
+    if (!accessibilityBusAddress)
+        return false;
+    parameters.accessibilityBusAddress = WTFMove(*accessibilityBusAddress);
 #endif
 
     return true;

@@ -25,6 +25,7 @@
 
 #include "FilterEffect.h"
 #include "RenderSVGResourceFilterPrimitive.h"
+#include "SVGElementInlines.h"
 #include "SVGFilterBuilder.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
@@ -127,8 +128,7 @@ void invalidateFilterPrimitiveParent(SVGElement* element)
     if (!element)
         return;
 
-    auto parent = makeRefPtr(element->parentNode());
-
+    RefPtr parent = element->parentNode();
     if (!parent)
         return;
 

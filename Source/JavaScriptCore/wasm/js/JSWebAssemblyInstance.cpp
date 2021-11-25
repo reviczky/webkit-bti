@@ -143,7 +143,9 @@ void JSWebAssemblyInstance::finalizeCreation(VM& vm, JSGlobalObject* globalObjec
     m_moduleRecord->prepareLink(vm, this);
 
     if (creationMode == Wasm::CreationMode::FromJS) {
-        m_moduleRecord->link(globalObject, jsNull(), importObject, creationMode);
+        m_moduleRecord->link(globalObject, jsNull());
+        RETURN_IF_EXCEPTION(scope, void());
+        m_moduleRecord->initializeImportsAndExports(globalObject, importObject, creationMode);
         RETURN_IF_EXCEPTION(scope, void());
 
         JSValue startResult = m_moduleRecord->evaluate(globalObject);
@@ -183,7 +185,7 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::tryCreate(VM& vm, JSGlobalObject* 
     };
 
     // FIXME: These objects could be pretty big we should try to throw OOM here.
-    auto* jsInstance = new (NotNull, allocateCell<JSWebAssemblyInstance>(vm.heap)) JSWebAssemblyInstance(vm, instanceStructure, 
+    auto* jsInstance = new (NotNull, allocateCell<JSWebAssemblyInstance>(vm)) JSWebAssemblyInstance(vm, instanceStructure, 
         Wasm::Instance::create(&vm.wasmContext, WTFMove(module), &vm.topEntryFrame, vm.addressOfSoftStackLimit(), WTFMove(storeTopCallFrame)));
     jsInstance->finishCreation(vm, jsModule, moduleRecord);
     RETURN_IF_EXCEPTION(throwScope, nullptr);
@@ -216,6 +218,7 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::tryCreate(VM& vm, JSGlobalObject* 
         case Wasm::ExternalKind::Function:
         case Wasm::ExternalKind::Global:
         case Wasm::ExternalKind::Table:
+        case Wasm::ExternalKind::Exception:
             continue;
         case Wasm::ExternalKind::Memory:
             break;
@@ -242,6 +245,7 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::tryCreate(VM& vm, JSGlobalObject* 
         case Wasm::ExternalKind::Function:
         case Wasm::ExternalKind::Global:
         case Wasm::ExternalKind::Table:
+        case Wasm::ExternalKind::Exception:
             break;
 
         case Wasm::ExternalKind::Memory: {

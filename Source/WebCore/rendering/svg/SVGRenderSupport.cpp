@@ -43,6 +43,7 @@
 #include "RenderSVGText.h"
 #include "RenderSVGTransformableContainer.h"
 #include "RenderSVGViewportContainer.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGGeometryElement.h"
 #include "SVGResources.h"
 #include "SVGResourcesCache.h"
@@ -335,6 +336,26 @@ bool SVGRenderSupport::filtersForceContainerLayout(const RenderElement& renderer
     return true;
 }
 
+FloatRect SVGRenderSupport::transformReferenceBox(const RenderElement& renderer, const SVGElement& element, const RenderStyle& style)
+{
+    switch (style.transformBox()) {
+    case TransformBox::BorderBox:
+        // For SVG elements without an associated CSS layout box, the used value for border-box is stroke-box.
+    case TransformBox::StrokeBox:
+        return renderer.strokeBoundingBox();
+    case TransformBox::ContentBox:
+        // For SVG elements without an associated CSS layout box, the used value for content-box is fill-box.
+    case TransformBox::FillBox:
+        return renderer.objectBoundingBox();
+    case TransformBox::ViewBox: {
+        FloatSize viewportSize;
+        SVGLengthContext(&element).determineViewport(viewportSize);
+        return FloatRect { { }, viewportSize };
+        }
+    }
+    return { };
+}
+
 inline FloatRect clipPathReferenceBox(const RenderElement& renderer, CSSBoxType boxType)
 {
     FloatRect referenceBox;
@@ -365,16 +386,16 @@ inline FloatRect clipPathReferenceBox(const RenderElement& renderer, CSSBoxType 
 
 inline bool isPointInCSSClippingArea(const RenderElement& renderer, const FloatPoint& point)
 {
-    ClipPathOperation* clipPathOperation = renderer.style().clipPath();
-    if (is<ShapeClipPathOperation>(clipPathOperation)) {
-        auto& clipPath = downcast<ShapeClipPathOperation>(*clipPathOperation);
+    PathOperation* clipPathOperation = renderer.style().clipPath();
+    if (is<ShapePathOperation>(clipPathOperation)) {
+        auto& clipPath = downcast<ShapePathOperation>(*clipPathOperation);
         FloatRect referenceBox = clipPathReferenceBox(renderer, clipPath.referenceBox());
         if (!referenceBox.contains(point))
             return false;
         return clipPath.pathForReferenceRect(referenceBox).contains(point, clipPath.windRule());
     }
-    if (is<BoxClipPathOperation>(clipPathOperation)) {
-        auto& clipPath = downcast<BoxClipPathOperation>(*clipPathOperation);
+    if (is<BoxPathOperation>(clipPathOperation)) {
+        auto& clipPath = downcast<BoxPathOperation>(*clipPathOperation);
         FloatRect referenceBox = clipPathReferenceBox(renderer, clipPath.referenceBox());
         if (!referenceBox.contains(point))
             return false;
@@ -386,9 +407,9 @@ inline bool isPointInCSSClippingArea(const RenderElement& renderer, const FloatP
 
 void SVGRenderSupport::clipContextToCSSClippingArea(GraphicsContext& context, const RenderElement& renderer)
 {
-    ClipPathOperation* clipPathOperation = renderer.style().clipPath();
-    if (is<ShapeClipPathOperation>(clipPathOperation)) {
-        auto& clipPath = downcast<ShapeClipPathOperation>(*clipPathOperation);
+    PathOperation* clipPathOperation = renderer.style().clipPath();
+    if (is<ShapePathOperation>(clipPathOperation)) {
+        auto& clipPath = downcast<ShapePathOperation>(*clipPathOperation);
         auto localToParentTransform = renderer.localToParentTransform();
 
         auto referenceBox = clipPathReferenceBox(renderer, clipPath.referenceBox());
@@ -399,8 +420,8 @@ void SVGRenderSupport::clipContextToCSSClippingArea(GraphicsContext& context, co
 
         context.clipPath(path, clipPath.windRule());
     }
-    if (is<BoxClipPathOperation>(clipPathOperation)) {
-        auto& clipPath = downcast<BoxClipPathOperation>(*clipPathOperation);
+    if (is<BoxPathOperation>(clipPathOperation)) {
+        auto& clipPath = downcast<BoxPathOperation>(*clipPathOperation);
         FloatRect referenceBox = clipPathReferenceBox(renderer, clipPath.referenceBox());
         context.clipPath(clipPath.pathForReferenceRect(FloatRoundedRect {referenceBox}));
     }
@@ -411,8 +432,8 @@ bool SVGRenderSupport::pointInClippingArea(const RenderElement& renderer, const 
     if (SVGHitTestCycleDetectionScope::isVisiting(renderer))
         return false;
 
-    ClipPathOperation* clipPathOperation = renderer.style().clipPath();
-    if (is<ShapeClipPathOperation>(clipPathOperation) || is<BoxClipPathOperation>(clipPathOperation))
+    PathOperation* clipPathOperation = renderer.style().clipPath();
+    if (is<ShapePathOperation>(clipPathOperation) || is<BoxPathOperation>(clipPathOperation))
         return isPointInCSSClippingArea(renderer, point);
 
     // We just take clippers into account to determine if a point is on the node. The Specification may
@@ -441,7 +462,7 @@ void SVGRenderSupport::applyStrokeStyleToContext(GraphicsContext& context, const
     context.setStrokeThickness(lengthContext.valueForLength(style.strokeWidth()));
     context.setLineCap(style.capStyle());
     context.setLineJoin(style.joinStyle());
-    if (style.joinStyle() == MiterJoin)
+    if (style.joinStyle() == LineJoin::Miter)
         context.setMiterLimit(style.strokeMiterLimit());
 
     const Vector<SVGLengthValue>& dashes = svgStyle.strokeDashArray();
@@ -510,7 +531,7 @@ void SVGRenderSupport::updateMaskedAncestorShouldIsolateBlending(const RenderEle
 
 SVGHitTestCycleDetectionScope::SVGHitTestCycleDetectionScope(const RenderElement& element)
 {
-    m_element = makeWeakPtr(&element);
+    m_element = element;
     auto result = visitedElements().add(*m_element);
     ASSERT_UNUSED(result, result.isNewEntry);
 }

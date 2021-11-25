@@ -246,7 +246,11 @@ void* WKAccessibilityRootObject(WKBundlePageRef pageRef)
 #if ENABLE(ACCESSIBILITY)
     if (!pageRef)
         return 0;
-    
+
+#if USE(ATSPI)
+    return WebKit::toImpl(pageRef)->accessibilityRootObject().child();
+#endif
+
     WebCore::Page* page = WebKit::toImpl(pageRef)->corePage();
     if (!page)
         return 0;
@@ -273,12 +277,16 @@ void* WKAccessibilityFocusedObject(WKBundlePageRef pageRef)
 #if ENABLE(ACCESSIBILITY)
     if (!pageRef)
         return 0;
-    
+
+#if USE(ATSPI)
+    return WebKit::toImpl(pageRef)->accessibilityRootObject().focusedObject();
+#endif
+
     WebCore::Page* page = WebKit::toImpl(pageRef)->corePage();
     if (!page)
         return 0;
 
-    auto* focusedDocument = page->focusController().focusedOrMainFrame().document();
+    RefPtr focusedDocument = CheckedRef(page->focusController())->focusedOrMainFrame().document();
     if (!focusedDocument)
         return 0;
 
@@ -288,11 +296,8 @@ void* WKAccessibilityFocusedObject(WKBundlePageRef pageRef)
     if (!axObjectCache)
         return 0;
 
-    auto* focusedObject = axObjectCache->focusedUIElementForPage(page);
-    if (!focusedObject)
-        return 0;
-    
-    return focusedObject->wrapper();
+    auto* focus = axObjectCache->focusedObjectForPage(page);
+    return focus ? focus->wrapper() : 0;
 #else
     UNUSED_PARAM(pageRef);
     return 0;

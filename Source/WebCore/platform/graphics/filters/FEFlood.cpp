@@ -3,6 +3,7 @@
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,22 +25,21 @@
 #include "FEFlood.h"
 
 #include "ColorSerialization.h"
-#include "Filter.h"
-#include "GraphicsContext.h"
+#include "FEFloodSoftwareApplier.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-FEFlood::FEFlood(Filter& filter, const Color& floodColor, float floodOpacity)
-    : FilterEffect(filter, Type::Flood)
+Ref<FEFlood> FEFlood::create(const Color& floodColor, float floodOpacity)
+{
+    return adoptRef(*new FEFlood(floodColor, floodOpacity));
+}
+
+FEFlood::FEFlood(const Color& floodColor, float floodOpacity)
+    : FilterEffect(FilterEffect::Type::FEFlood)
     , m_floodColor(floodColor)
     , m_floodOpacity(floodOpacity)
 {
-}
-
-Ref<FEFlood> FEFlood::create(Filter& filter, const Color& floodColor, float floodOpacity)
-{
-    return adoptRef(*new FEFlood(filter, floodColor, floodOpacity));
 }
 
 bool FEFlood::setFloodColor(const Color& color)
@@ -58,14 +58,9 @@ bool FEFlood::setFloodOpacity(float floodOpacity)
     return true;
 }
 
-void FEFlood::platformApplySoftware()
+bool FEFlood::platformApplySoftware(const Filter& filter)
 {
-    ImageBuffer* resultImage = createImageBufferResult();
-    if (!resultImage)
-        return;
-
-    auto color = floodColor().colorWithAlphaMultipliedBy(floodOpacity());
-    resultImage->context().fillRect(FloatRect(FloatPoint(), absolutePaintRect().size()), color);
+    return FEFloodSoftwareApplier(*this).apply(filter, inputEffects());
 }
 
 TextStream& FEFlood::externalRepresentation(TextStream& ts, RepresentationType representation) const

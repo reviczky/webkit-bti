@@ -138,22 +138,6 @@ size_t proportionalHeapSize(size_t heapSize, size_t ramSize)
     return Options::largeHeapGrowthFactor() * heapSize;
 }
 
-bool isValidSharedInstanceThreadState(VM& vm)
-{
-    return vm.currentThreadIsHoldingAPILock();
-}
-
-bool isValidThreadState(VM& vm)
-{
-    if (vm.atomStringTable() != Thread::current().atomStringTable())
-        return false;
-
-    if (vm.isSharedInstance() && !isValidSharedInstanceThreadState(vm))
-        return false;
-
-    return true;
-}
-
 void recordType(VM& vm, TypeCountSet& set, JSCell* cell)
 {
     const char* typeName = "[unknown]";
@@ -291,8 +275,7 @@ Heap::Heap(VM& vm, HeapType heapType)
     , m_handleSet(vm)
     , m_codeBlocks(makeUnique<CodeBlockSet>())
     , m_jitStubRoutines(makeUnique<JITStubRoutineSet>())
-    , m_vm(vm)
-    // We seed with 10ms so that GCActivityCallback::didAllocate doesn't continuously 
+    // We seed with 10ms so that GCActivityCallback::didAllocate doesn't continuously
     // schedule the timer if we've never done a collection.
     , m_fullActivityCallback(GCActivityCallback::tryCreateFullTimer(this))
     , m_edenActivityCallback(GCActivityCallback::tryCreateEdenTimer(this))
@@ -395,7 +378,7 @@ void Heap::lastChanceToFinalize()
     
     m_isShuttingDown = true;
     
-    RELEASE_ASSERT(!m_vm.entryScope);
+    RELEASE_ASSERT(!vm().entryScope);
     RELEASE_ASSERT(m_mutatorState == MutatorState::Running);
     
     if (m_collectContinuouslyThread) {
@@ -483,13 +466,13 @@ void Heap::releaseDelayedReleasedObjects()
     // and use a temp Vector for the actual releasing.
     if (!m_delayedReleaseRecursionCount++) {
         while (!m_delayedReleaseObjects.isEmpty()) {
-            ASSERT(m_vm.currentThreadIsHoldingAPILock());
+            ASSERT(vm().currentThreadIsHoldingAPILock());
 
             auto objectsToRelease = WTFMove(m_delayedReleaseObjects);
 
             {
                 // We need to drop locks before calling out to arbitrary code.
-                JSLock::DropAllLocks dropAllLocks(m_vm);
+                JSLock::DropAllLocks dropAllLocks(vm());
 
 #if USE(FOUNDATION)
                 void* context = objc_autoreleasePoolPush();
@@ -556,7 +539,7 @@ void Heap::reportAbandonedObjectGraph()
 void Heap::protect(JSValue k)
 {
     ASSERT(k);
-    ASSERT(m_vm.currentThreadIsHoldingAPILock());
+    ASSERT(vm().currentThreadIsHoldingAPILock());
 
     if (!k.isCell())
         return;
@@ -567,7 +550,7 @@ void Heap::protect(JSValue k)
 bool Heap::unprotect(JSValue k)
 {
     ASSERT(k);
-    ASSERT(m_vm.currentThreadIsHoldingAPILock());
+    ASSERT(vm().currentThreadIsHoldingAPILock());
 
     if (!k.isCell())
         return false;
@@ -594,32 +577,33 @@ void Heap::finalizeMarkedUnconditionalFinalizers(CellSet& cellSet)
 
 void Heap::finalizeUnconditionalFinalizers()
 {
-    vm().builtinExecutables()->finalizeUnconditionally();
-    finalizeMarkedUnconditionalFinalizers<FunctionExecutable>(vm().functionExecutableSpace.space);
-    finalizeMarkedUnconditionalFinalizers<SymbolTable>(vm().symbolTableSpace);
-    finalizeMarkedUnconditionalFinalizers<ExecutableToCodeBlockEdge>(vm().executableToCodeBlockEdgesWithFinalizers); // We run this before CodeBlock's unconditional finalizer since CodeBlock looks at the owner executable's installed CodeBlock in its finalizeUnconditionally.
-    vm().forEachCodeBlockSpace(
+    VM& vm = this->vm();
+    vm.builtinExecutables()->finalizeUnconditionally();
+    finalizeMarkedUnconditionalFinalizers<FunctionExecutable>(vm.functionExecutableSpace.space);
+    finalizeMarkedUnconditionalFinalizers<SymbolTable>(vm.symbolTableSpace);
+    finalizeMarkedUnconditionalFinalizers<ExecutableToCodeBlockEdge>(vm.executableToCodeBlockEdgesWithFinalizers); // We run this before CodeBlock's unconditional finalizer since CodeBlock looks at the owner executable's installed CodeBlock in its finalizeUnconditionally.
+    vm.forEachCodeBlockSpace(
         [&] (auto& space) {
             this->finalizeMarkedUnconditionalFinalizers<CodeBlock>(space.set);
         });
-    finalizeMarkedUnconditionalFinalizers<StructureRareData>(vm().structureRareDataSpace);
-    finalizeMarkedUnconditionalFinalizers<UnlinkedFunctionExecutable>(vm().unlinkedFunctionExecutableSpace.set);
-    if (vm().m_weakSetSpace)
-        finalizeMarkedUnconditionalFinalizers<JSWeakSet>(*vm().m_weakSetSpace);
-    if (vm().m_weakMapSpace)
-        finalizeMarkedUnconditionalFinalizers<JSWeakMap>(*vm().m_weakMapSpace);
-    if (vm().m_weakObjectRefSpace)
-        finalizeMarkedUnconditionalFinalizers<JSWeakObjectRef>(*vm().m_weakObjectRefSpace);
-    if (vm().m_errorInstanceSpace)
-        finalizeMarkedUnconditionalFinalizers<ErrorInstance>(*vm().m_errorInstanceSpace);
+    finalizeMarkedUnconditionalFinalizers<StructureRareData>(vm.structureRareDataSpace);
+    finalizeMarkedUnconditionalFinalizers<UnlinkedFunctionExecutable>(vm.unlinkedFunctionExecutableSpace.set);
+    if (vm.m_weakSetSpace)
+        finalizeMarkedUnconditionalFinalizers<JSWeakSet>(*vm.m_weakSetSpace);
+    if (vm.m_weakMapSpace)
+        finalizeMarkedUnconditionalFinalizers<JSWeakMap>(*vm.m_weakMapSpace);
+    if (vm.m_weakObjectRefSpace)
+        finalizeMarkedUnconditionalFinalizers<JSWeakObjectRef>(*vm.m_weakObjectRefSpace);
+    if (vm.m_errorInstanceSpace)
+        finalizeMarkedUnconditionalFinalizers<ErrorInstance>(*vm.m_errorInstanceSpace);
 
     // FinalizationRegistries currently rely on serial finalization because they can post tasks to the deferredWorkTimer, which normally expects tasks to only be posted by the API lock holder.
-    if (vm().m_finalizationRegistrySpace)
-        finalizeMarkedUnconditionalFinalizers<JSFinalizationRegistry>(*vm().m_finalizationRegistrySpace);
+    if (vm.m_finalizationRegistrySpace)
+        finalizeMarkedUnconditionalFinalizers<JSFinalizationRegistry>(*vm.m_finalizationRegistrySpace);
 
 #if ENABLE(WEBASSEMBLY)
-    if (vm().m_webAssemblyCodeBlockSpace)
-        finalizeMarkedUnconditionalFinalizers<JSWebAssemblyCodeBlock>(*vm().m_webAssemblyCodeBlockSpace);
+    if (vm.m_webAssemblyCodeBlockSpace)
+        finalizeMarkedUnconditionalFinalizers<JSWebAssemblyCodeBlock>(*vm.m_webAssemblyCodeBlockSpace);
 #endif
 }
 
@@ -638,7 +622,7 @@ void Heap::completeAllJITPlans()
     if (!Options::useJIT())
         return;
 #if ENABLE(JIT)
-    JITWorklist::ensureGlobalWorklist().completeAllPlansForVM(m_vm);
+    JITWorklist::ensureGlobalWorklist().completeAllPlansForVM(vm());
 #endif // ENABLE(JIT)
 }
 
@@ -648,7 +632,7 @@ void Heap::iterateExecutingAndCompilingCodeBlocks(Visitor& visitor, const Functi
     m_codeBlocks->iterateCurrentlyExecuting(func);
 #if ENABLE(JIT)
     if (Options::useJIT())
-        JITWorklist::ensureGlobalWorklist().iterateCodeBlocksForGC(visitor, m_vm, func);
+        JITWorklist::ensureGlobalWorklist().iterateCodeBlocksForGC(visitor, vm(), func);
 #else
     UNUSED_PARAM(visitor);
 #endif // ENABLE(JIT)
@@ -700,7 +684,7 @@ void Heap::gatherStackRoots(ConservativeRoots& roots)
 void Heap::gatherJSStackRoots(ConservativeRoots& roots)
 {
 #if ENABLE(C_LOOP)
-    m_vm.interpreter->cloopStack().gatherConservativeRoots(roots, *m_jitStubRoutines, *m_codeBlocks);
+    vm().interpreter->cloopStack().gatherConservativeRoots(roots, *m_jitStubRoutines, *m_codeBlocks);
 #else
     UNUSED_PARAM(roots);
 #endif
@@ -711,8 +695,9 @@ void Heap::gatherScratchBufferRoots(ConservativeRoots& roots)
 #if ENABLE(DFG_JIT)
     if (!Options::useJIT())
         return;
-    m_vm.gatherScratchBufferRoots(roots);
-    m_vm.scanSideState(roots);
+    VM& vm = this->vm();
+    vm.gatherScratchBufferRoots(roots);
+    vm.scanSideState(roots);
 #else
     UNUSED_PARAM(roots);
 #endif
@@ -731,7 +716,7 @@ void Heap::removeDeadCompilerWorklistEntries()
     if (!Options::useJIT())
         return;
 #if ENABLE(JIT)
-    JITWorklist::ensureGlobalWorklist().removeDeadPlans(m_vm);
+    JITWorklist::ensureGlobalWorklist().removeDeadPlans(vm());
 #endif // ENABLE(JIT)
 }
 
@@ -759,7 +744,7 @@ void Heap::gatherExtraHeapData(HeapProfiler& heapProfiler)
 {
     if (auto* analyzer = heapProfiler.activeHeapAnalyzer()) {
         HeapIterationScope heapIterationScope(*this);
-        GatherExtraHeapData functor(m_vm, *analyzer);
+        GatherExtraHeapData functor(vm(), *analyzer);
         m_objectSpace.forEachLiveCell(heapIterationScope, functor);
     }
 }
@@ -910,7 +895,7 @@ void Heap::deleteAllCodeBlocks(DeleteAllCodeEffort effort)
     if (m_collectionScope && effort == DeleteAllCodeIfNotCollecting)
         return;
 
-    VM& vm = m_vm;
+    VM& vm = this->vm();
     PreventCollectionScope preventCollectionScope(*this);
     
     // If JavaScript is running, it's not safe to delete all JavaScript code, since
@@ -955,7 +940,7 @@ void Heap::deleteAllUnlinkedCodeBlocks(DeleteAllCodeEffort effort)
     if (m_collectionScope && effort == DeleteAllCodeIfNotCollecting)
         return;
 
-    VM& vm = m_vm;
+    VM& vm = this->vm();
     PreventCollectionScope preventCollectionScope(*this);
 
     RELEASE_ASSERT(!m_collectionScope);
@@ -1063,7 +1048,7 @@ void Heap::collect(Synchronousness synchronousness, GCRequest request)
 void Heap::collectNow(Synchronousness synchronousness, GCRequest request)
 {
     if constexpr (validateDFGDoesGC)
-        verifyCanGC();
+        vm().verifyCanGC();
 
     switch (synchronousness) {
     case Async: {
@@ -1075,7 +1060,7 @@ void Heap::collectNow(Synchronousness synchronousness, GCRequest request)
     case Sync: {
         collectSync(request);
         
-        DeferGCForAWhile deferGC(*this);
+        DeferGCForAWhile deferGC(vm());
         if (UNLIKELY(Options::useImmortalObjects()))
             sweeper().stopSweeping();
         
@@ -1096,7 +1081,7 @@ void Heap::collectNow(Synchronousness synchronousness, GCRequest request)
 void Heap::collectAsync(GCRequest request)
 {
     if constexpr (validateDFGDoesGC)
-        verifyCanGC();
+        vm().verifyCanGC();
 
     if (!m_isSafeToCollect)
         return;
@@ -1120,7 +1105,7 @@ void Heap::collectAsync(GCRequest request)
 void Heap::collectSync(GCRequest request)
 {
     if constexpr (validateDFGDoesGC)
-        verifyCanGC();
+        vm().verifyCanGC();
 
     if (!m_isSafeToCollect)
         return;
@@ -1614,7 +1599,7 @@ NEVER_INLINE bool Heap::finishChangingPhase(GCConductor conn)
                     return false;
                 }
             } else {
-                sanitizeStackForVM(m_vm);
+                sanitizeStackForVM(vm());
                 handleNeedFinalize();
             }
             stopThePeriphery(conn);
@@ -1783,7 +1768,7 @@ NEVER_INLINE void Heap::resumeTheMutator()
 void Heap::stopIfNecessarySlow()
 {
     if constexpr (validateDFGDoesGC)
-        verifyCanGC();
+        vm().verifyCanGC();
 
     while (stopIfNecessarySlow(m_worldState.load())) { }
     
@@ -1797,7 +1782,7 @@ void Heap::stopIfNecessarySlow()
 bool Heap::stopIfNecessarySlow(unsigned oldState)
 {
     if constexpr (validateDFGDoesGC)
-        verifyCanGC();
+        vm().verifyCanGC();
 
     RELEASE_ASSERT(oldState & hasAccessBit);
     RELEASE_ASSERT(!(oldState & stoppedBit));
@@ -1829,7 +1814,7 @@ NEVER_INLINE void Heap::collectInMutatorThread()
         case RunCurrentPhaseResult::Continue:
             break;
         case RunCurrentPhaseResult::NeedCurrentThreadState:
-            sanitizeStackForVM(m_vm);
+            sanitizeStackForVM(vm());
             auto lambda = [&] (CurrentThreadState& state) {
                 for (;;) {
                     RunCurrentPhaseResult result = runCurrentPhase(GCConductor::Mutator, &state);
@@ -1973,7 +1958,7 @@ void Heap::finishRelinquishingConn()
     if (false)
         dataLog("Relinquished the conn.\n");
     
-    sanitizeStackForVM(m_vm);
+    sanitizeStackForVM(vm());
     
     Locker locker { *m_threadLock };
     if (!m_requests.isEmpty())
@@ -2041,7 +2026,6 @@ void Heap::clearMutatorWaiting()
 
 void Heap::notifyThreadStopping(const AbstractLocker&)
 {
-    m_threadIsStopping = true;
     clearMutatorWaiting();
     ParkingLot::unparkAll(&m_worldState);
 }
@@ -2063,6 +2047,9 @@ void Heap::finalize()
     
     if (HasOwnPropertyCache* cache = vm().hasOwnPropertyCache())
         cache->clear();
+
+    if (m_lastCollectionScope && m_lastCollectionScope.value() == CollectionScope::Full)
+        vm().jsonAtomStringCache.clear();
 
     immutableButterflyToStringCache.clear();
     
@@ -2204,7 +2191,7 @@ void Heap::snapshotUnswept()
 void Heap::deleteSourceProviderCaches()
 {
     if (m_lastCollectionScope && m_lastCollectionScope.value() == CollectionScope::Full)
-        m_vm.clearSourceProviderCaches();
+        vm().clearSourceProviderCaches();
 }
 
 void Heap::notifyIncrementalSweeper()
@@ -2323,7 +2310,7 @@ void Heap::didFinishCollection()
     ASSERT(externalMemorySize() <= extraMemorySize());
 #endif
 
-    if (HeapProfiler* heapProfiler = m_vm.heapProfiler()) {
+    if (HeapProfiler* heapProfiler = vm().heapProfiler()) {
         gatherExtraHeapData(*heapProfiler);
         removeDeadHeapSnapshotNodes(*heapProfiler);
     }
@@ -2377,17 +2364,6 @@ void Heap::didAllocate(size_t bytes)
         m_edenActivityCallback->didAllocate(*this, m_bytesAllocatedThisCycle + m_bytesAbandonedSinceLastFullCollect);
     m_bytesAllocatedThisCycle += bytes;
     performIncrement(bytes);
-}
-
-bool Heap::isValidAllocation(size_t)
-{
-    if (!isValidThreadState(m_vm))
-        return false;
-
-    if (isCurrentThreadBusy())
-        return false;
-    
-    return true;
 }
 
 void Heap::addFinalizer(JSCell* cell, CFinalizer finalizer)
@@ -2536,7 +2512,7 @@ void Heap::writeBarrierSlowPath(const JSCell* from)
     addToRememberedSet(from);
 }
 
-bool Heap::isCurrentThreadBusy()
+bool Heap::currentThreadIsDoingGCWork()
 {
     return Thread::mayBeGCThread() || mutatorState() != MutatorState::Running;
 }
@@ -2574,7 +2550,7 @@ void Heap::collectIfNecessaryOrDefer(GCDeferralContext* deferralContext)
 {
     ASSERT(deferralContext || isDeferred() || !DisallowGC::isInEffectOnCurrentThread());
     if constexpr (validateDFGDoesGC)
-        verifyCanGC();
+        vm().verifyCanGC();
 
     if (!m_isSafeToCollect)
         return;
@@ -2749,14 +2725,15 @@ void Heap::addCoreConstraints()
     m_constraintSet->add(
         "Msr", "Misc Small Roots",
         MAKE_MARKING_CONSTRAINT_EXECUTOR_PAIR(([this] (auto& visitor) {
+            VM& vm = this->vm();
             if constexpr (objcAPIEnabled) {
                 SetRootMarkReasonScope rootScope(visitor, RootMarkReason::ExternalRememberedSet);
-                scanExternalRememberedSet(m_vm, visitor);
+                scanExternalRememberedSet(vm, visitor);
             }
 
-            if (m_vm.smallStrings.needsToBeVisited(*m_collectionScope)) {
+            if (vm.smallStrings.needsToBeVisited(*m_collectionScope)) {
                 SetRootMarkReasonScope rootScope(visitor, RootMarkReason::StrongReferences);
-                m_vm.smallStrings.visitStrongReferences(visitor);
+                vm.smallStrings.visitStrongReferences(visitor);
             }
             
             {
@@ -2767,7 +2744,7 @@ void Heap::addCoreConstraints()
             
             if (m_markListSet && m_markListSet->size()) {
                 SetRootMarkReasonScope rootScope(visitor, RootMarkReason::ConservativeScan);
-                MarkedArgumentBuffer::markLists(visitor, *m_markListSet);
+                MarkedArgumentBufferBase::markLists(visitor, *m_markListSet);
             }
 
             {
@@ -2779,14 +2756,14 @@ void Heap::addCoreConstraints()
 
             {
                 SetRootMarkReasonScope rootScope(visitor, RootMarkReason::VMExceptions);
-                visitor.appendUnbarriered(m_vm.exception());
-                visitor.appendUnbarriered(m_vm.lastException());
+                visitor.appendUnbarriered(vm.exception());
+                visitor.appendUnbarriered(vm.lastException());
 
                 // We're going to m_terminationException directly instead of going through
                 // the exception() getter because we want to assert in the getter that the
                 // TerminationException has been reified. Here, we don't care if it is
                 // reified or not.
-                visitor.appendUnbarriered(m_vm.m_terminationException);
+                visitor.appendUnbarriered(vm.m_terminationException);
             }
         })),
         ConstraintVolatility::GreyedByExecution);
@@ -2804,13 +2781,14 @@ void Heap::addCoreConstraints()
         MAKE_MARKING_CONSTRAINT_EXECUTOR_PAIR(([this] (auto& visitor) {
             SetRootMarkReasonScope rootScope(visitor, RootMarkReason::Debugger);
 
+            VM& vm = this->vm();
             if constexpr (samplingProfilerSupported)
-                visitSamplingProfiler(m_vm, visitor);
+                visitSamplingProfiler(vm, visitor);
 
-            if (m_vm.typeProfiler())
-                m_vm.typeProfilerLog()->visit(visitor);
+            if (vm.typeProfiler())
+                vm.typeProfilerLog()->visit(visitor);
             
-            if (auto* shadowChicken = m_vm.shadowChicken())
+            if (auto* shadowChicken = vm.shadowChicken())
                 shadowChicken->visitChildren(visitor);
         })),
         ConstraintVolatility::GreyedByExecution);
@@ -2868,7 +2846,7 @@ void Heap::addCoreConstraints()
                 // FIXME: This is almost certainly unnecessary.
                 // https://bugs.webkit.org/show_bug.cgi?id=166829
                 JITWorklist::ensureGlobalWorklist().iterateCodeBlocksForGC(visitor,
-                    m_vm,
+                    vm(),
                     [&] (CodeBlock* codeBlock) {
                         visitor.appendUnbarriered(codeBlock);
                     });

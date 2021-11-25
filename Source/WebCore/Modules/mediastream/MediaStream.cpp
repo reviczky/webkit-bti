@@ -66,7 +66,7 @@ Ref<MediaStream> MediaStream::create(Document& document, Ref<MediaStreamPrivate>
 static inline MediaStreamTrackPrivateVector createTrackPrivateVector(const MediaStreamTrackVector& tracks)
 {
     return map(tracks, [](auto& track) {
-        return makeRefPtr(&track->privateTrack());
+        return RefPtr { &track->privateTrack() };
     });
 }
 
@@ -277,9 +277,9 @@ void MediaStream::stopProducingData()
     m_private->stopProducingData();
 }
 
-MediaProducer::MediaStateFlags MediaStream::mediaState() const
+MediaProducerMediaStateFlags MediaStream::mediaState() const
 {
-    MediaProducer::MediaStateFlags state;
+    MediaProducerMediaStateFlags state;
 
     if (!m_isActive || !document() || !document()->page())
         return state;

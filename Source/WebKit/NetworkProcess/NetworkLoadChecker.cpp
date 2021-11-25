@@ -32,6 +32,7 @@
 #include "NetworkProcess.h"
 #include "NetworkResourceLoader.h"
 #include "NetworkSchemeRegistry.h"
+#include "WebPageMessages.h"
 #include <WebCore/ContentRuleListResults.h>
 #include <WebCore/ContentSecurityPolicy.h>
 #include <WebCore/CrossOriginAccessControl.h>
@@ -66,7 +67,7 @@ NetworkLoadChecker::NetworkLoadChecker(NetworkProcess& networkProcess, NetworkRe
     , m_shouldCaptureExtraNetworkLoadMetrics(shouldCaptureExtraNetworkLoadMetrics)
     , m_requestLoadType(requestLoadType)
     , m_schemeRegistry(schemeRegistry)
-    , m_networkResourceLoader(makeWeakPtr(networkResourceLoader))
+    , m_networkResourceLoader(networkResourceLoader)
 {
     m_isSameOriginRequest = isSameOrigin(m_url, m_origin.get());
     switch (options.credentials) {
@@ -158,6 +159,27 @@ void NetworkLoadChecker::checkRedirection(ResourceRequest&& request, ResourceReq
     });
 }
 
+// https://fetch.spec.whatwg.org/#cross-origin-resource-policy-check
+static std::optional<ResourceError> performCORPCheck(const CrossOriginEmbedderPolicy& embedderCOEP, const SecurityOrigin& embedderOrigin, const URL& url, ResourceResponse& response, ForNavigation forNavigation, NetworkResourceLoader* loader)
+{
+    if (auto error = validateCrossOriginResourcePolicy(CrossOriginEmbedderPolicyValue::UnsafeNone, embedderOrigin, url, response, forNavigation))
+        return error;
+
+    if (embedderCOEP.reportOnlyValue == CrossOriginEmbedderPolicyValue::RequireCORP && !embedderCOEP.reportOnlyReportingEndpoint.isEmpty() && loader) {
+        if (auto error = validateCrossOriginResourcePolicy(embedderCOEP.reportOnlyValue, embedderOrigin, url, response, forNavigation))
+            loader->send(Messages::WebPage::SendCOEPCORPViolation { loader->frameID(), embedderOrigin.data(), embedderCOEP.reportOnlyReportingEndpoint, COEPDisposition::Reporting, loader->parameters().options.destination, loader->firstResponseURL() }, loader->pageID());
+    }
+
+    if (embedderCOEP.value == CrossOriginEmbedderPolicyValue::RequireCORP) {
+        if (auto error = validateCrossOriginResourcePolicy(embedderCOEP.value, embedderOrigin, url, response, forNavigation)) {
+            if (loader && !embedderCOEP.reportingEndpoint.isEmpty())
+                loader->send(Messages::WebPage::SendCOEPCORPViolation { loader->frameID(), embedderOrigin.data(), embedderCOEP.reportingEndpoint, COEPDisposition::Enforce, loader->parameters().options.destination, loader->firstResponseURL() }, loader->pageID());
+            return error;
+        }
+    }
+    return std::nullopt;
+}
+
 ResourceError NetworkLoadChecker::validateResponse(const ResourceRequest& request, ResourceResponse& response)
 {
     if (m_redirectCount)
@@ -170,7 +192,7 @@ ResourceError NetworkLoadChecker::validateResponse(const ResourceRequest& reques
 
     if (m_options.mode == FetchOptions::Mode::Navigate || m_isSameOriginRequest) {
         if (m_options.mode == FetchOptions::Mode::Navigate && m_parentOrigin) {
-            if (auto error = validateCrossOriginResourcePolicy(m_parentCrossOriginEmbedderPolicy.value, *m_parentOrigin, m_url, response, ForNavigation::Yes))
+            if (auto error = performCORPCheck(m_parentCrossOriginEmbedderPolicy, *m_parentOrigin, m_url, response, ForNavigation::Yes, m_networkResourceLoader.get()))
                 return WTFMove(*error);
         }
         response.setTainting(ResourceResponse::Tainting::Basic);
@@ -181,7 +203,7 @@ ResourceError NetworkLoadChecker::validateResponse(const ResourceRequest& reques
         response.setAsRangeRequested();
 
     if (m_options.mode == FetchOptions::Mode::NoCors) {
-        if (auto error = validateCrossOriginResourcePolicy(m_crossOriginEmbedderPolicy.value, *m_origin, m_url, response, ForNavigation::No))
+        if (auto error = performCORPCheck(m_crossOriginEmbedderPolicy, *m_origin, m_url, response, ForNavigation::No, m_networkResourceLoader.get()))
             return WTFMove(*error);
 
         response.setTainting(ResourceResponse::Tainting::Opaque);
@@ -223,7 +245,7 @@ void NetworkLoadChecker::checkRequest(ResourceRequest&& request, ContentSecurity
     }
 
 #if ENABLE(CONTENT_EXTENSIONS)
-    this->processContentRuleListsForLoad(WTFMove(request), [weakThis = makeWeakPtr(*this), handler = WTFMove(handler), originalRequest = WTFMove(originalRequest)](auto&& result) mutable {
+    this->processContentRuleListsForLoad(WTFMove(request), [weakThis = WeakPtr { *this }, handler = WTFMove(handler), originalRequest = WTFMove(originalRequest)](auto&& result) mutable {
         if (!result.has_value()) {
             ASSERT(result.error().isCancellation());
             handler(WTFMove(result.error()));
@@ -268,9 +290,9 @@ bool NetworkLoadChecker::isAllowedByContentSecurityPolicy(const ResourceRequest&
     case FetchOptions::Destination::Worker:
     case FetchOptions::Destination::Serviceworker:
     case FetchOptions::Destination::Sharedworker:
-        return contentSecurityPolicy->allowChildContextFromSource(request.url(), redirectResponseReceived);
+        return contentSecurityPolicy->allowChildContextFromSource(request.url(), redirectResponseReceived, preRedirectURL);
     case FetchOptions::Destination::Script:
-        if (request.requester() == ResourceRequest::Requester::ImportScripts && !contentSecurityPolicy->allowScriptFromSource(request.url(), redirectResponseReceived))
+        if (request.requester() == ResourceRequest::Requester::ImportScripts && !contentSecurityPolicy->allowScriptFromSource(request.url(), redirectResponseReceived, preRedirectURL))
             return false;
         // FIXME: Check CSP for non-importScripts() initiated loads.
         return true;
@@ -281,6 +303,7 @@ bool NetworkLoadChecker::isAllowedByContentSecurityPolicy(const ResourceRequest&
     case FetchOptions::Destination::Embed:
     case FetchOptions::Destination::Font:
     case FetchOptions::Destination::Image:
+    case FetchOptions::Destination::Iframe:
     case FetchOptions::Destination::Manifest:
     case FetchOptions::Destination::Model:
     case FetchOptions::Destination::Object:
@@ -445,7 +468,7 @@ void NetworkLoadChecker::processContentRuleListsForLoad(ResourceRequest&& reques
         return;
     }
 
-    m_networkProcess->networkContentRuleListManager().contentExtensionsBackend(*m_userContentControllerIdentifier, [this, weakThis = makeWeakPtr(this), request = WTFMove(request), callback = WTFMove(callback)](auto& backend) mutable {
+    m_networkProcess->networkContentRuleListManager().contentExtensionsBackend(*m_userContentControllerIdentifier, [this, weakThis = WeakPtr { *this }, request = WTFMove(request), callback = WTFMove(callback)](auto& backend) mutable {
         if (!weakThis) {
             callback(makeUnexpected(ResourceError { ResourceError::Type::Cancellation }));
             return;

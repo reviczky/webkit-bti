@@ -58,7 +58,7 @@ Ref<DocumentTimeline> DocumentTimeline::create(Document& document, DocumentTimel
 DocumentTimeline::DocumentTimeline(Document& document, Seconds originTime)
     : AnimationTimeline()
     , m_tickScheduleTimer(*this, &DocumentTimeline::scheduleAnimationResolution)
-    , m_document(makeWeakPtr(document))
+    , m_document(document)
     , m_originTime(originTime)
 {
     if (auto* controller = this->controller())
@@ -242,7 +242,7 @@ bool DocumentTimeline::animationCanBeRemoved(WebAnimation& animation)
         }
     }
 
-    for (auto& animationWithHigherCompositeOrder : WTF::makeReversedRange(animations)) {
+    for (auto& animationWithHigherCompositeOrder : makeReversedRange(animations)) {
         if (&animation == animationWithHigherCompositeOrder)
             break;
 
@@ -359,28 +359,6 @@ bool DocumentTimeline::computeExtentOfAnimation(RenderElement& renderer, LayoutR
     return true;
 }
 
-bool DocumentTimeline::isRunningAnimationOnRenderer(RenderElement& renderer, CSSPropertyID property) const
-{
-    auto styleable = Styleable::fromRenderer(renderer);
-    if (!styleable)
-        return false;
-
-    auto* animations = styleable->animations();
-    if (!animations)
-        return false;
-
-    for (const auto& animation : *animations) {
-        auto playState = animation->playState();
-        if (playState != WebAnimation::PlayState::Running && playState != WebAnimation::PlayState::Paused)
-            continue;
-        auto* effect = animation->effect();
-        if (is<KeyframeEffect>(effect) && downcast<KeyframeEffect>(effect)->animatedProperties().contains(property))
-            return true;
-    }
-
-    return false;
-}
-
 bool DocumentTimeline::isRunningAcceleratedAnimationOnRenderer(RenderElement& renderer, CSSPropertyID property) const
 {
     auto styleable = Styleable::fromRenderer(renderer);
@@ -412,15 +390,13 @@ std::unique_ptr<RenderStyle> DocumentTimeline::animatedStyleForRenderer(RenderEl
     if (!styleable)
         return RenderStyle::clonePtr(renderer.style());
 
-    auto* animations = styleable->animations();
-    if (!animations)
+    auto* effectStack = styleable->keyframeEffectStack();
+    if (!effectStack)
         return RenderStyle::clonePtr(renderer.style());
 
     std::unique_ptr<RenderStyle> result;
-    for (const auto& animation : *animations) {
-        if (is<KeyframeEffect>(animation->effect()))
-            downcast<KeyframeEffect>(animation->effect())->getAnimatedStyle(result);
-    }
+    for (const auto& effect : effectStack->sortedEffects())
+        effect->getAnimatedStyle(result);
 
     if (!result)
         result = RenderStyle::clonePtr(renderer.style());

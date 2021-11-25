@@ -55,7 +55,7 @@
 #include "DOMException.h"
 #include "DOMPatchSupport.h"
 #include "DOMWindow.h"
-#include "Document.h"
+#include "DocumentInlines.h"
 #include "DocumentType.h"
 #include "Editing.h"
 #include "Element.h"
@@ -382,7 +382,7 @@ Protocol::DOM::NodeId InspectorDOMAgent::bind(Node& node)
 {
     return m_nodeToId.ensure(node, [&] {
         auto id = m_lastNodeId++;
-        m_idToNode.set(id, makeWeakPtr(node));
+        m_idToNode.set(id, node);
         return id;
     }).iterator->value;
 }
@@ -1875,7 +1875,7 @@ Ref<Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEventListener
     int lineNumber = 0;
     int columnNumber = 0;
     String scriptID;
-    if (is<JSEventListener>(eventListener.get())) {
+    if (is<JSEventListener>(eventListener)) {
         auto& scriptListener = downcast<JSEventListener>(eventListener.get());
 
         Document* document = nullptr;
@@ -2117,7 +2117,7 @@ Ref<Protocol::DOM::AccessibilityProperties> InspectorDOMAgent::buildObjectForAcc
             else // Future versions of ARIA may allow additional truthy values. Ex. format, order, or size.
                 invalid = Protocol::DOM::AccessibilityProperties::Invalid::True;
             
-            if (axObject->isAXHidden() || axObject->isDOMHidden())
+            if (axObject->isHidden())
                 hidden = true;
             
             label = axObject->computedLabel();

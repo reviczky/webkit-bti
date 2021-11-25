@@ -918,7 +918,7 @@ unsigned SamplingProfiler::StackFrame::functionStartColumn()
     return std::numeric_limits<unsigned>::max();
 }
 
-intptr_t SamplingProfiler::StackFrame::sourceID()
+SourceID SamplingProfiler::StackFrame::sourceID()
 {
     switch (frameType) {
     case FrameType::Unknown:
@@ -975,7 +975,7 @@ Vector<SamplingProfiler::StackTrace> SamplingProfiler::releaseStackTraces()
 
 String SamplingProfiler::stackTracesAsJSON()
 {
-    DeferGC deferGC(m_vm.heap);
+    DeferGC deferGC(m_vm);
     Locker locker { m_lock };
 
     {
@@ -1053,7 +1053,7 @@ void SamplingProfiler::reportTopFunctions()
 void SamplingProfiler::reportTopFunctions(PrintStream& out)
 {
     Locker locker { m_lock };
-    DeferGCForAWhile deferGC(m_vm.heap);
+    DeferGCForAWhile deferGC(m_vm);
 
     {
         HeapIterationScope heapIterationScope(m_vm.heap);
@@ -1074,7 +1074,7 @@ void SamplingProfiler::reportTopFunctions(PrintStream& out)
             hash = stream.toString();
         } else
             hash = "<nil>"_s;
-        intptr_t sourceID = frame.sourceID();
+        SourceID sourceID = frame.sourceID();
         if (Options::samplingProfilerIgnoreExternalSourceID()) {
             if (sourceID != internalSourceID)
                 sourceID = aggregatedExternalSourceID;
@@ -1119,7 +1119,7 @@ void SamplingProfiler::reportTopBytecodes()
 void SamplingProfiler::reportTopBytecodes(PrintStream& out)
 {
     Locker locker { m_lock };
-    DeferGCForAWhile deferGC(m_vm.heap);
+    DeferGCForAWhile deferGC(m_vm);
 
     {
         HeapIterationScope heapIterationScope(m_vm.heap);

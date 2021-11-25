@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,43 +22,30 @@
 #include "SourceGraphic.h"
 
 #include "Filter.h"
-#include "GraphicsContext.h"
-#include <wtf/NeverDestroyed.h>
-#include <wtf/StdLibExtras.h>
+#include "SourceGraphicSoftwareApplier.h"
 #include <wtf/text/TextStream.h>
-#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
-Ref<SourceGraphic> SourceGraphic::create(Filter& filter)
+Ref<SourceGraphic> SourceGraphic::create()
 {
-    return adoptRef(*new SourceGraphic(filter));
+    return adoptRef(*new SourceGraphic());
 }
 
-const AtomString& SourceGraphic::effectName()
+SourceGraphic::SourceGraphic()
+    : FilterEffect(FilterEffect::Type::SourceGraphic)
 {
-    static MainThreadNeverDestroyed<const AtomString> s_effectName("SourceGraphic", AtomString::ConstructFromLiteral);
-    return s_effectName;
 }
 
-void SourceGraphic::determineAbsolutePaintRect()
+void SourceGraphic::determineAbsolutePaintRect(const Filter& filter)
 {
-    Filter& filter = this->filter();
     FloatRect paintRect = filter.sourceImageRect();
-    paintRect.scale(filter.filterResolution().width(), filter.filterResolution().height());
     setAbsolutePaintRect(enclosingIntRect(paintRect));
 }
 
-void SourceGraphic::platformApplySoftware()
+bool SourceGraphic::platformApplySoftware(const Filter& filter)
 {
-    Filter& filter = this->filter();
-
-    ImageBuffer* resultImage = createImageBufferResult();
-    ImageBuffer* sourceImage = filter.sourceImage();
-    if (!resultImage || !sourceImage)
-        return;
-
-    resultImage->context().drawImageBuffer(*sourceImage, IntPoint());
+    return SourceGraphicSoftwareApplier(*this).apply(filter, inputEffects());
 }
 
 TextStream& SourceGraphic::externalRepresentation(TextStream& ts, RepresentationType) const

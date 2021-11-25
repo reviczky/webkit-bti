@@ -29,12 +29,19 @@
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
 #include "NotImplemented.h"
 
+#if PLATFORM(COCOA)
+#include "IOSurface.h"
+#endif
+
+#if USE(GRAPHICS_LAYER_WC)
+#include "TextureMapperPlatformLayer.h"
+#endif
+
 namespace WebCore {
 
 RemoteGraphicsContextGLProxyBase::RemoteGraphicsContextGLProxyBase(const GraphicsContextGLAttributes& attrs)
     : GraphicsContextGL(attrs)
 {
-    platformInitialize();
 }
 
 RemoteGraphicsContextGLProxyBase::~RemoteGraphicsContextGLProxyBase() = default;
@@ -97,13 +104,6 @@ GCGLbitfield RemoteGraphicsContextGLProxyBase::getBuffersToAutoClear() const
     return m_buffersToAutoClear;
 }
 
-void RemoteGraphicsContextGLProxyBase::enablePreserveDrawingBuffer()
-{
-    // Redeclared for export reasons.
-    // FIXME: The whole function should be removed.
-    GraphicsContextGL::enablePreserveDrawingBuffer();
-}
-
 bool RemoteGraphicsContextGLProxyBase::supports(const String& name)
 {
     waitUntilInitialized();
@@ -133,16 +133,6 @@ void RemoteGraphicsContextGLProxyBase::initialize(const String& availableExtensi
         m_requestableExtensions.add(extension);
 }
 
-#if !PLATFORM(COCOA)
-void RemoteGraphicsContextGLProxyBase::platformInitialize()
-{
-}
-
-PlatformLayer* RemoteGraphicsContextGLProxyBase::platformLayer() const
-{
-    return nullptr;
-}
-#endif
 #if !USE(ANGLE)
 void RemoteGraphicsContextGLProxyBase::readnPixelsEXT(GCGLint, GCGLint, GCGLsizei, GCGLsizei, GCGLenum, GCGLenum, GCGLsizei, GCGLvoid*)
 {
@@ -155,6 +145,9 @@ void RemoteGraphicsContextGLProxyBase::getnUniformfvEXT(GCGLuint, GCGLint, GCGLs
 void RemoteGraphicsContextGLProxyBase::getnUniformivEXT(GCGLuint, GCGLint, GCGLsizei, GCGLint*)
 {
 }
+#endif
+
+#if ENABLE(MEDIA_STREAM) && !PLATFORM(COCOA)
 #endif
 }
 #endif

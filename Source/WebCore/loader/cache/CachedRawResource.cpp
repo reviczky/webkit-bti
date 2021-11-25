@@ -43,7 +43,6 @@ namespace WebCore {
 
 CachedRawResource::CachedRawResource(CachedResourceRequest&& request, Type type, PAL::SessionID sessionID, const CookieJar* cookieJar)
     : CachedResource(WTFMove(request), type, sessionID, cookieJar)
-    , m_identifier(0)
     , m_allowEncodedDataReplacement(true)
 {
     ASSERT(isMainOrMediaOrIconOrRawResource());
@@ -167,8 +166,8 @@ void CachedRawResource::didAddClient(CachedResourceClient& c)
         auto responseProcessedHandler = [this, protectedThis = WTFMove(protectedThis), client] {
             if (!hasClient(*client))
                 return;
-            if (auto data = m_data) {
-                data->forEachSegment([&](auto& segment) {
+            if (m_data) {
+                m_data->forEachSegment([&](auto& segment) {
                     if (hasClient(*client))
                         client->dataReceived(*this, segment.data(), segment.size());
                 });

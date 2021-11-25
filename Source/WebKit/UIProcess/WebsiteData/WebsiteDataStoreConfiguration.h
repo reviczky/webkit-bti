@@ -74,7 +74,7 @@ public:
     const String& localStorageDirectory() const { return m_localStorageDirectory; }
     void setLocalStorageDirectory(String&& directory) { m_localStorageDirectory = WTFMove(directory); }
 
-#if HAVE(ARKIT_INLINE_PREVIEW)
+#if ENABLE(ARKIT_INLINE_PREVIEW)
     const String& modelElementCacheDirectory() const { return m_modelElementCacheDirectory; }
     void setModelElementCacheDirectory(String&& directory) { m_modelElementCacheDirectory = WTFMove(directory); }
 #endif
@@ -125,7 +125,10 @@ public:
     
     const String& cacheStorageDirectory() const { return m_cacheStorageDirectory; }
     void setCacheStorageDirectory(String&& directory) { m_cacheStorageDirectory = WTFMove(directory); }
-    
+
+    const String& generalStorageDirectory() const { return m_generalStorageDirectory; }
+    void setGeneralStorageDirectory(String&& directory) { m_generalStorageDirectory = WTFMove(directory); }
+
     const String& applicationCacheFlatFileSubdirectoryName() const { return m_applicationCacheFlatFileSubdirectoryName; }
     void setApplicationCacheFlatFileSubdirectoryName(String&& directory) { m_applicationCacheFlatFileSubdirectoryName = WTFMove(directory); }
     
@@ -168,6 +171,9 @@ public:
     bool requiresSecureHTTPSProxyConnection() const { return m_requiresSecureHTTPSProxyConnection; };
     void setRequiresSecureHTTPSProxyConnection(bool requires) { m_requiresSecureHTTPSProxyConnection = requires; }
 
+    bool shouldRunServiceWorkersOnMainThreadForTesting() const { return m_shouldRunServiceWorkersOnMainThreadForTesting; }
+    void setShouldRunServiceWorkersOnMainThreadForTesting(bool shouldRunOnMainThread) { m_shouldRunServiceWorkersOnMainThreadForTesting = shouldRunOnMainThread; }
+
     const URL& standaloneApplicationURL() const { return m_standaloneApplicationURL; }
     void setStandaloneApplicationURL(URL&& url) { m_standaloneApplicationURL = WTFMove(url); }
 
@@ -177,10 +183,17 @@ public:
     bool allowsHSTSWithUntrustedRootCertificate() const { return m_allowsHSTSWithUntrustedRootCertificate; }
     void setAllowsHSTSWithUntrustedRootCertificate(bool allows) { m_allowsHSTSWithUntrustedRootCertificate = allows; }
     
+    void setPCMMachServiceName(String&& name) { m_pcmMachServiceName = WTFMove(name); }
+    const String& pcmMachServiceName() const { return m_pcmMachServiceName; }
+
+    void setWebPushMachServiceName(String&& name) { m_webPushMachServiceName = WTFMove(name); }
+    const String& webPushMachServiceName() const { return m_webPushMachServiceName; }
+
 private:
     IsPersistent m_isPersistent { IsPersistent::No };
 
     String m_cacheStorageDirectory;
+    String m_generalStorageDirectory;
     uint64_t m_perOriginStorageQuota { WebCore::StorageQuotaManager::defaultQuota() };
     String m_networkCacheDirectory;
     String m_applicationCacheDirectory;
@@ -190,7 +203,7 @@ private:
     String m_serviceWorkerRegistrationDirectory;
     String m_webSQLDatabaseDirectory;
     String m_hstsStorageDirectory;
-#if HAVE(ARKIT_INLINE_PREVIEW)
+#if ENABLE(ARKIT_INLINE_PREVIEW)
     String m_modelElementCacheDirectory;
 #endif
 #if USE(GLIB)
@@ -224,10 +237,13 @@ private:
     bool m_allowsServerPreconnect { true };
     bool m_preventsSystemHTTPProxyAuthentication { false };
     bool m_requiresSecureHTTPSProxyConnection { false };
+    bool m_shouldRunServiceWorkersOnMainThreadForTesting { false };
     unsigned m_testSpeedMultiplier { 1 };
     URL m_standaloneApplicationURL;
     bool m_enableInAppBrowserPrivacyForTesting { false };
     bool m_allowsHSTSWithUntrustedRootCertificate { false };
+    String m_pcmMachServiceName;
+    String m_webPushMachServiceName;
 #if PLATFORM(COCOA)
     RetainPtr<CFDictionaryRef> m_proxyConfiguration;
 #endif

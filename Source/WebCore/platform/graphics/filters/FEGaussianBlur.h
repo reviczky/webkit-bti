@@ -2,6 +2,7 @@
  * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,14 +23,13 @@
 #pragma once
 
 #include "FEConvolveMatrix.h"
-#include "Filter.h"
 #include "FilterEffect.h"
 
 namespace WebCore {
 
 class FEGaussianBlur : public FilterEffect {
 public:
-    static Ref<FEGaussianBlur> create(Filter&, float, float, EdgeModeType);
+    static Ref<FEGaussianBlur> create(float x, float y, EdgeModeType);
 
     float stdDeviationX() const { return m_stdX; }
     void setStdDeviationX(float);
@@ -45,36 +45,15 @@ public:
     static IntSize calculateOutsetSize(FloatSize stdDeviation);
 
 private:
-    FEGaussianBlur(Filter&, float, float, EdgeModeType);
+    FEGaussianBlur(float x, float y, EdgeModeType);
 
-    const char* filterName() const final { return "FEGaussianBlur"; }
-
-    static const int s_minimalRectDimension = 100 * 100; // Empirical data limit for parallel jobs
-
-    template<typename Type>
-    friend class ParallelJobs;
-
-    struct PlatformApplyParameters {
-        FEGaussianBlur* filter;
-        RefPtr<Uint8ClampedArray> ioPixelArray;
-        RefPtr<Uint8ClampedArray> tmpPixelArray;
-        int width;
-        int height;
-        unsigned kernelSizeX;
-        unsigned kernelSizeY;
-    };
-
-    void platformApplySoftware() override;
-
-    void determineAbsolutePaintRect() override;
+    void determineAbsolutePaintRect(const Filter&) override;
 
     IntOutsets outsets() const override;
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
+    bool platformApplySoftware(const Filter&) override;
 
-    static void platformApplyWorker(PlatformApplyParameters*);
-    void platformApply(Uint8ClampedArray& ioBuffer, Uint8ClampedArray& tempBuffer, unsigned kernelSizeX, unsigned kernelSizeY, IntSize& paintSize);
-    void platformApplyGeneric(Uint8ClampedArray& ioBuffer, Uint8ClampedArray& tempBuffer, unsigned kernelSizeX, unsigned kernelSizeY, IntSize& paintSize);
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     float m_stdX;
     float m_stdY;
@@ -83,3 +62,4 @@ private:
 
 } // namespace WebCore
 
+SPECIALIZE_TYPE_TRAITS_FILTER_EFFECT(FEGaussianBlur)

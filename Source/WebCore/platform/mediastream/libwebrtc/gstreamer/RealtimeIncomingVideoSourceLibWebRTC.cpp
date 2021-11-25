@@ -58,10 +58,10 @@ void RealtimeIncomingVideoSourceLibWebRTC::OnFrame(const webrtc::VideoFrame& fra
     if (!isProducingData())
         return;
 
-    callOnMainThread([protectedThis = makeRef(*this), frame] {
+    callOnMainThread([protectedThis = Ref { *this }, frame] {
         auto gstSample = GStreamerSampleFromLibWebRTCVideoFrame(frame);
         auto sample = MediaSampleGStreamer::create(WTFMove(gstSample), { }, { });
-        protectedThis->videoSampleAvailable(sample.get());
+        protectedThis->videoSampleAvailable(sample.get(), { });
     });
 }
 

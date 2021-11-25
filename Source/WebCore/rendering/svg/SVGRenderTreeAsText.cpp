@@ -34,22 +34,25 @@
 #include "NodeRenderStyle.h"
 #include "RenderImage.h"
 #include "RenderIterator.h"
-#include "RenderSVGGradientStop.h"
+#include "RenderSVGGradientStopInlines.h"
 #include "RenderSVGImage.h"
+#include "RenderSVGInlineText.h"
 #include "RenderSVGPath.h"
-#include "RenderSVGResourceClipper.h"
-#include "RenderSVGResourceFilter.h"
-#include "RenderSVGResourceLinearGradient.h"
-#include "RenderSVGResourceMarker.h"
-#include "RenderSVGResourceMasker.h"
+#include "RenderSVGResourceClipperInlines.h"
+#include "RenderSVGResourceFilterInlines.h"
+#include "RenderSVGResourceLinearGradientInlines.h"
+#include "RenderSVGResourceMarkerInlines.h"
+#include "RenderSVGResourceMaskerInlines.h"
 #include "RenderSVGResourcePattern.h"
-#include "RenderSVGResourceRadialGradient.h"
+#include "RenderSVGResourceRadialGradientInlines.h"
 #include "RenderSVGResourceSolidColor.h"
 #include "RenderSVGRoot.h"
+#include "RenderSVGShapeInlines.h"
 #include "RenderSVGText.h"
 #include "SVGCircleElement.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGEllipseElement.h"
-#include "SVGInlineTextBox.h"
+#include "SVGInlineTextBoxInlines.h"
 #include "SVGLineElement.h"
 #include "SVGPathElement.h"
 #include "SVGPathUtilities.h"
@@ -197,8 +200,8 @@ static void writeStyle(TextStream& ts, const RenderElement& renderer)
             writeIfNotDefault(ts, "opacity", svgStyle.strokeOpacity(), 1.0f);
             writeIfNotDefault(ts, "stroke width", strokeWidth, 1.0);
             writeIfNotDefault(ts, "miter limit", style.strokeMiterLimit(), 4.0f);
-            writeIfNotDefault(ts, "line cap", style.capStyle(), ButtCap);
-            writeIfNotDefault(ts, "line join", style.joinStyle(), MiterJoin);
+            writeIfNotDefault(ts, "line cap", style.capStyle(), LineCap::Butt);
+            writeIfNotDefault(ts, "line join", style.joinStyle(), LineJoin::Miter);
             writeIfNotDefault(ts, "dash offset", dashOffset, 0.0);
             if (!dashArray.isEmpty())
                 writeNameValuePair(ts, "dash array", dashArray);
@@ -350,11 +353,8 @@ static inline void writeSVGInlineTextBox(TextStream& ts, SVGInlineTextBox* textB
         else
             ts << " width " << fragment.width;
 
-        if (!textBox->isLeftToRightDirection() || textBox->dirOverride()) {
-            ts << (textBox->isLeftToRightDirection() ? " LTR" : " RTL");
-            if (textBox->dirOverride())
-                ts << " override";
-        }
+        if (!textBox->isLeftToRightDirection())
+            ts << " RTL";
 
         ts << ": " << quoteAndEscapeNonPrintables(text.substring(fragment.characterOffset, fragment.length)) << "\n";
     }
@@ -429,11 +429,13 @@ void writeSVGResourceContainer(TextStream& ts, const RenderSVGResourceContainer&
         ts << "\n";
         // Creating a placeholder filter which is passed to the builder.
         FloatRect dummyRect;
-        auto dummyFilter = SVGFilter::create(AffineTransform(), dummyRect, dummyRect, dummyRect, true);
-        if (auto builder = filter.buildPrimitives(dummyFilter.get())) {
+        FloatSize dummyScale(1, 1);
+        SVGFilterBuilder builder;
+        auto dummyFilter = SVGFilter::create(filter.filterElement(), builder, dummyScale, dummyRect, dummyRect, dummyRect);
+        if (dummyFilter) {
             TextStream::IndentScope indentScope(ts);
 
-            if (FilterEffect* lastEffect = builder->lastEffect())
+            if (auto lastEffect = dummyFilter->lastEffect())
                 lastEffect->externalRepresentation(ts);
         }
     } else if (resource.resourceType() == ClipperResourceType) {
@@ -569,8 +571,8 @@ void writeResources(TextStream& ts, const RenderObject& renderer, OptionSet<Rend
             ts << " " << masker->resourceBoundingBox(renderer) << "\n";
         }
     }
-    if (style.clipPath() && is<ReferenceClipPathOperation>(style.clipPath())) {
-        auto resourceClipPath = downcast<ReferenceClipPathOperation>(style.clipPath());
+    if (style.clipPath() && is<ReferencePathOperation>(style.clipPath())) {
+        auto resourceClipPath = downcast<ReferencePathOperation>(style.clipPath());
         AtomString id = resourceClipPath->fragment();
         if (RenderSVGResourceClipper* clipper = getRenderSVGResourceById<RenderSVGResourceClipper>(renderer.document(), id)) {
             ts << indent << " ";

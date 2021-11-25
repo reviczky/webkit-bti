@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2003-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2021 Apple Inc. All rights reserved.
  *  Copyright (C) 2003 Peter Kelly (pmk@post.com)
  *  Copyright (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *
@@ -61,7 +61,7 @@ const ClassInfo ArrayPrototype::s_info = {"Array", &JSArray::s_info, nullptr, nu
 
 ArrayPrototype* ArrayPrototype::create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
 {
-    ArrayPrototype* prototype = new (NotNull, allocateCell<ArrayPrototype>(vm.heap)) ArrayPrototype(vm, structure);
+    ArrayPrototype* prototype = new (NotNull, allocateCell<ArrayPrototype>(vm)) ArrayPrototype(vm, structure);
     prototype->finishCreation(vm, globalObject);
     return prototype;
 }
@@ -186,15 +186,15 @@ static ALWAYS_INLINE bool speciesWatchpointIsValid(VM& vm, JSObject* thisObject)
     JSGlobalObject* globalObject = thisObject->globalObject(vm);
     ArrayPrototype* arrayPrototype = globalObject->arrayPrototype();
 
-    if (globalObject->arraySpeciesWatchpointSet().stateOnJSThread() == ClearWatchpoint) {
+    if (globalObject->arraySpeciesWatchpointSet().state() == ClearWatchpoint) {
         dataLogLnIf(ArrayPrototypeInternal::verbose, "Initializing Array species watchpoints for Array.prototype: ", pointerDump(arrayPrototype), " with structure: ", pointerDump(arrayPrototype->structure(vm)), "\nand Array: ", pointerDump(globalObject->arrayConstructor()), " with structure: ", pointerDump(globalObject->arrayConstructor()->structure(vm)));
         globalObject->tryInstallArraySpeciesWatchpoint();
-        ASSERT(globalObject->arraySpeciesWatchpointSet().stateOnJSThread() != ClearWatchpoint);
+        ASSERT(globalObject->arraySpeciesWatchpointSet().state() != ClearWatchpoint);
     }
 
     return !thisObject->hasCustomProperties(vm)
         && arrayPrototype == thisObject->getPrototypeDirect(vm)
-        && globalObject->arraySpeciesWatchpointSet().stateOnJSThread() == IsWatched;
+        && globalObject->arraySpeciesWatchpointSet().state() == IsWatched;
 }
 
 enum class SpeciesConstructResult : uint8_t {
@@ -583,7 +583,7 @@ inline bool canUseDefaultArrayJoinForToString(VM& vm, JSObject* thisObject)
 {
     JSGlobalObject* globalObject = thisObject->globalObject();
 
-    if (globalObject->arrayJoinWatchpointSet().stateOnJSThread() != IsWatched)
+    if (globalObject->arrayJoinWatchpointSet().state() != IsWatched)
         return false;
 
     Structure* structure = thisObject->structure(vm);
@@ -951,7 +951,7 @@ JSC_DEFINE_HOST_FUNCTION(arrayProtoFuncReverse, (JSGlobalObject* globalObject, C
             break;
         std::reverse(data, data + length);
         if (!hasInt32(thisObject->indexingType()))
-            vm.heap.writeBarrier(thisObject);
+            vm.writeBarrier(thisObject);
         return JSValue::encode(thisObject);
     }
     case ALL_DOUBLE_INDEXING_TYPES: {
@@ -972,7 +972,7 @@ JSC_DEFINE_HOST_FUNCTION(arrayProtoFuncReverse, (JSGlobalObject* globalObject, C
             break;
         auto data = storage.vector().data();
         std::reverse(data, data + length);
-        vm.heap.writeBarrier(thisObject);
+        vm.writeBarrier(thisObject);
         return JSValue::encode(thisObject);
     }
     }

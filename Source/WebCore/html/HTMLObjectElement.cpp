@@ -321,12 +321,7 @@ void HTMLObjectElement::childrenChanged(const ChildChange& change)
 
 bool HTMLObjectElement::isURLAttribute(const Attribute& attribute) const
 {
-    return attribute.name() == dataAttr || attribute.name() == codebaseAttr || (attribute.name() == usemapAttr && attribute.value().string()[0] != '#') || HTMLPlugInImageElement::isURLAttribute(attribute);
-}
-
-bool HTMLObjectElement::isInteractiveContent() const
-{
-    return hasAttributeWithoutSynchronization(usemapAttr);
+    return attribute.name() == dataAttr || attribute.name() == codebaseAttr || HTMLPlugInImageElement::isURLAttribute(attribute);
 }
 
 const AtomString& HTMLObjectElement::imageSourceURL() const
@@ -404,7 +399,7 @@ static inline bool shouldBeExposed(const HTMLObjectElement& element)
     // with no children other than param elements, unknown elements and whitespace can be found
     // by name in a document, and other object elements cannot".
 
-    for (auto child = makeRefPtr(element.firstChild()); child; child = child->nextSibling()) {
+    for (RefPtr child = element.firstChild(); child; child = child->nextSibling()) {
         if (preventsParentObjectFromExposure(*child))
             return false;
     }
@@ -459,12 +454,6 @@ void HTMLObjectElement::addSubresourceAttributeURLs(ListHashSet<URL>& urls) cons
     HTMLPlugInImageElement::addSubresourceAttributeURLs(urls);
 
     addSubresourceURL(urls, document().completeURL(attributeWithoutSynchronization(dataAttr)));
-
-    // FIXME: Passing a string that starts with "#" to the completeURL function does
-    // not seem like it would work. The image element has similar but not identical code.
-    const AtomString& useMap = attributeWithoutSynchronization(usemapAttr);
-    if (useMap.startsWith('#'))
-        addSubresourceURL(urls, document().completeURL(useMap));
 }
 
 void HTMLObjectElement::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
@@ -480,7 +469,7 @@ bool HTMLObjectElement::appendFormData(DOMFormData& formData, bool)
 
     // Use PluginLoadingPolicy::DoNotLoad here or it would fire JS events synchronously
     // which would not be safe here.
-    auto widget = makeRefPtr(pluginWidget(PluginLoadingPolicy::DoNotLoad));
+    RefPtr widget = pluginWidget(PluginLoadingPolicy::DoNotLoad);
     if (!is<PluginViewBase>(widget))
         return false;
     String value;

@@ -74,7 +74,7 @@ public:
 
         bool isNull() const;
 
-#if OS(DARWIN) || OS(WINDOWS)
+#if (OS(DARWIN) || OS(WINDOWS)) && !USE(UNIX_DOMAIN_SOCKETS)
         size_t size() const { return m_size; }
 #endif
 
@@ -152,6 +152,8 @@ public:
 
     // Return the system page size in bytes.
     static unsigned systemPageSize();
+
+    Ref<WebCore::SharedBuffer> createSharedBuffer(size_t) const;
 
 private:
 #if OS(DARWIN)

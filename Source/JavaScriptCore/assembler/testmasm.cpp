@@ -303,16 +303,16 @@ void testBranchTruncateDoubleToInt32(double val, int32_t expected)
         jit.subPtr(CCallHelpers::TrustedImm32(stackAlignmentBytes()), MacroAssembler::stackPointerRegister);
         if (isBigEndian) {
             jit.store32(CCallHelpers::TrustedImm32(valAsUInt >> 32),
-                MacroAssembler::stackPointerRegister);
+                MacroAssembler::Address(MacroAssembler::stackPointerRegister));
             jit.store32(CCallHelpers::TrustedImm32(valAsUInt & 0xffffffff),
                 MacroAssembler::Address(MacroAssembler::stackPointerRegister, 4));
         } else {
             jit.store32(CCallHelpers::TrustedImm32(valAsUInt & 0xffffffff),
-                MacroAssembler::stackPointerRegister);
+                MacroAssembler::Address(MacroAssembler::stackPointerRegister));
             jit.store32(CCallHelpers::TrustedImm32(valAsUInt >> 32),
                 MacroAssembler::Address(MacroAssembler::stackPointerRegister, 4));
         }
-        jit.loadDouble(MacroAssembler::stackPointerRegister, FPRInfo::fpRegT0);
+        jit.loadDouble(MacroAssembler::Address(MacroAssembler::stackPointerRegister), FPRInfo::fpRegT0);
 
         MacroAssembler::Jump done;
         done = jit.branchTruncateDoubleToInt32(FPRInfo::fpRegT0, GPRInfo::returnValueGPR, MacroAssembler::BranchIfTruncateSuccessful);
@@ -324,6 +324,98 @@ void testBranchTruncateDoubleToInt32(double val, int32_t expected)
         emitFunctionEpilogue(jit);
         jit.ret();
     }), expected);
+}
+
+void testBranchTest8()
+{
+    for (auto value : int32Operands()) {
+        for (auto value2 : int32Operands()) {
+            auto test1 = compile([=] (CCallHelpers& jit) {
+                emitFunctionPrologue(jit);
+
+                auto branch = jit.branchTest8(MacroAssembler::NonZero, CCallHelpers::Address(GPRInfo::argumentGPR0, 1), CCallHelpers::TrustedImm32(value2));
+                jit.move(CCallHelpers::TrustedImm32(0), GPRInfo::returnValueGPR);
+                auto done = jit.jump();
+                branch.link(&jit);
+                jit.move(CCallHelpers::TrustedImm32(1), GPRInfo::returnValueGPR);
+                done.link(&jit);
+
+                emitFunctionEpilogue(jit);
+                jit.ret();
+            });
+
+            auto test2 = compile([=] (CCallHelpers& jit) {
+                emitFunctionPrologue(jit);
+
+                auto branch = jit.branchTest8(MacroAssembler::NonZero, CCallHelpers::BaseIndex(GPRInfo::argumentGPR0, GPRInfo::argumentGPR1, CCallHelpers::TimesOne), CCallHelpers::TrustedImm32(value2));
+                jit.move(CCallHelpers::TrustedImm32(0), GPRInfo::returnValueGPR);
+                auto done = jit.jump();
+                branch.link(&jit);
+                jit.move(CCallHelpers::TrustedImm32(1), GPRInfo::returnValueGPR);
+                done.link(&jit);
+
+                emitFunctionEpilogue(jit);
+                jit.ret();
+            });
+
+            int result = 0;
+            if (static_cast<uint8_t>(value) & static_cast<uint8_t>(value2))
+                result = 1;
+
+            uint8_t array[] = {
+                0,
+                static_cast<uint8_t>(value)
+            };
+            CHECK_EQ(invoke<int>(test1, array), result);
+            CHECK_EQ(invoke<int>(test2, array, 1), result);
+        }
+    }
+}
+
+void testBranchTest16()
+{
+    for (auto value : int32Operands()) {
+        for (auto value2 : int32Operands()) {
+            auto test1 = compile([=] (CCallHelpers& jit) {
+                emitFunctionPrologue(jit);
+
+                auto branch = jit.branchTest16(MacroAssembler::NonZero, CCallHelpers::Address(GPRInfo::argumentGPR0, 2), CCallHelpers::TrustedImm32(value2));
+                jit.move(CCallHelpers::TrustedImm32(0), GPRInfo::returnValueGPR);
+                auto done = jit.jump();
+                branch.link(&jit);
+                jit.move(CCallHelpers::TrustedImm32(1), GPRInfo::returnValueGPR);
+                done.link(&jit);
+
+                emitFunctionEpilogue(jit);
+                jit.ret();
+            });
+
+            auto test2 = compile([=] (CCallHelpers& jit) {
+                emitFunctionPrologue(jit);
+
+                auto branch = jit.branchTest16(MacroAssembler::NonZero, CCallHelpers::BaseIndex(GPRInfo::argumentGPR0, GPRInfo::argumentGPR1, CCallHelpers::TimesTwo), CCallHelpers::TrustedImm32(value2));
+                jit.move(CCallHelpers::TrustedImm32(0), GPRInfo::returnValueGPR);
+                auto done = jit.jump();
+                branch.link(&jit);
+                jit.move(CCallHelpers::TrustedImm32(1), GPRInfo::returnValueGPR);
+                done.link(&jit);
+
+                emitFunctionEpilogue(jit);
+                jit.ret();
+            });
+
+            int result = 0;
+            if (static_cast<uint16_t>(value) & static_cast<uint16_t>(value2))
+                result = 1;
+
+            uint16_t array[] = {
+                0,
+                static_cast<uint16_t>(value)
+            };
+            CHECK_EQ(invoke<int>(test1, array), result);
+            CHECK_EQ(invoke<int>(test2, array, 1), result);
+        }
+    }
 }
 
 #if CPU(X86_64)
@@ -2313,7 +2405,7 @@ void testLoadPrePostIndex32()
 
             // res = *++p1; *p1 = 4; return res;
             jit.load32(CCallHelpers::PreIndexAddress(GPRInfo::argumentGPR0, index), GPRInfo::argumentGPR1);
-            jit.store32(CCallHelpers::TrustedImm32(replace), CCallHelpers::ImplicitAddress(GPRInfo::argumentGPR0));
+            jit.store32(CCallHelpers::TrustedImm32(replace), CCallHelpers::Address(GPRInfo::argumentGPR0));
             jit.move(GPRInfo::argumentGPR1, GPRInfo::returnValueGPR);
 
             emitFunctionEpilogue(jit);
@@ -2331,7 +2423,7 @@ void testLoadPrePostIndex32()
 
             // res = *p2++; *p2 = 5; return res;
             jit.load32(CCallHelpers::PostIndexAddress(GPRInfo::argumentGPR0, index), GPRInfo::argumentGPR1);
-            jit.store32(CCallHelpers::TrustedImm32(replace), CCallHelpers::ImplicitAddress(GPRInfo::argumentGPR0));
+            jit.store32(CCallHelpers::TrustedImm32(replace), CCallHelpers::Address(GPRInfo::argumentGPR0));
             jit.move(GPRInfo::argumentGPR1, GPRInfo::returnValueGPR);
 
             emitFunctionEpilogue(jit);
@@ -2355,7 +2447,7 @@ void testLoadPrePostIndex64()
 
             // res = *++p1; *p1 = 4; return res;
             jit.load64(CCallHelpers::PreIndexAddress(GPRInfo::argumentGPR0, index), GPRInfo::argumentGPR1);
-            jit.store64(CCallHelpers::TrustedImm64(replace), CCallHelpers::ImplicitAddress(GPRInfo::argumentGPR0));
+            jit.store64(CCallHelpers::TrustedImm64(replace), CCallHelpers::Address(GPRInfo::argumentGPR0));
             jit.move(GPRInfo::argumentGPR1, GPRInfo::returnValueGPR);
 
             emitFunctionEpilogue(jit);
@@ -2373,7 +2465,7 @@ void testLoadPrePostIndex64()
 
             // res = *p2++; *p2 = 5; return res;
             jit.load64(CCallHelpers::PostIndexAddress(GPRInfo::argumentGPR0, index), GPRInfo::argumentGPR1);
-            jit.store64(CCallHelpers::TrustedImm64(replace), CCallHelpers::ImplicitAddress(GPRInfo::argumentGPR0));
+            jit.store64(CCallHelpers::TrustedImm64(replace), CCallHelpers::Address(GPRInfo::argumentGPR0));
             jit.move(GPRInfo::argumentGPR1, GPRInfo::returnValueGPR);
 
             emitFunctionEpilogue(jit);
@@ -5413,6 +5505,7 @@ void testStoreBaseIndex()
         CHECK_EQ(array[4], UINT8_MAX - 42);
     }
 
+#if CPU(ARM_HARDFP)
     // storeDouble
     {
         auto test = compile([=](CCallHelpers& jit) {
@@ -5460,6 +5553,7 @@ void testStoreBaseIndex()
         invoke<void>(test, array, static_cast<UCPURegister>(3), 42.0f);
         CHECK_EQ(array[4], 42.0f);
     }
+#endif
 }
 
 static void testCagePreservesPACFailureBit()
@@ -5646,6 +5740,9 @@ void run(const char* filter) WTF_IGNORES_THREAD_SAFETY_ANALYSIS
     RUN(testMul32WithImmediates());
     RUN(testLoadStorePair32());
     RUN(testSub32ArgImm());
+
+    RUN(testBranchTest8());
+    RUN(testBranchTest16());
 
 #if CPU(X86_64)
     RUN(testBranchTestBit32RegReg());

@@ -31,6 +31,7 @@ namespace WebCore {
 class ContentData;
 class ControlStates;
 class KeyframeList;
+class ReferencedSVGResources;
 class RenderBlock;
 class RenderStyle;
 class RenderTreeBuilder;
@@ -108,7 +109,7 @@ public:
     // can contain a mixture of boxes and other object types, these functions need to be in the base class.
     void addLayers(RenderLayer* parentLayer);
     void removeLayers(RenderLayer* parentLayer);
-    void moveLayers(RenderLayer* oldParent, RenderLayer* newParent);
+    void moveLayers(RenderLayer* oldParent, RenderLayer& newParent);
     RenderLayer* findNextLayer(RenderLayer* parentLayer, RenderObject* startPoint, bool checkParent = true);
 
     virtual void dirtyLinesFromChangedChild(RenderObject&) { }
@@ -155,6 +156,9 @@ public:
 
     bool visibleToHitTesting(std::optional<HitTestRequest> hitTestRequest = std::nullopt) const
     {
+        if (style().effectiveInert())
+            return false;
+
         if (style().visibility() != Visibility::Visible)
             return false;
 
@@ -262,6 +266,13 @@ public:
     WeakPtr<RenderBlockFlow> backdropRenderer() const;
     void setBackdropRenderer(RenderBlockFlow&);
 
+    ReferencedSVGResources& ensureReferencedSVGResources();
+
+    Overflow effectiveOverflowX() const;
+    Overflow effectiveOverflowY() const;
+    Overflow effectiveOverflowInlineDirection() const { return style().isHorizontalWritingMode() ? effectiveOverflowX() : effectiveOverflowY(); }
+    Overflow effectiveOverflowBlockDirection() const { return style().isHorizontalWritingMode() ? effectiveOverflowY() : effectiveOverflowX(); }
+
 protected:
     enum BaseTypeFlag {
         RenderLayerModelObjectFlag  = 1 << 0,
@@ -294,9 +305,6 @@ protected:
     void willBeRemovedFromTree(IsInternalMove) override;
     void willBeDestroyed() override;
     void notifyFinished(CachedResource&, const NetworkLoadMetrics&) override;
-
-    void setRenderInlineAlwaysCreatesLineBoxes(bool b) { m_renderInlineAlwaysCreatesLineBoxes = b; }
-    bool renderInlineAlwaysCreatesLineBoxes() const { return m_renderInlineAlwaysCreatesLineBoxes; }
 
     void setHasContinuationChainNode(bool b) { m_hasContinuationChainNode = b; }
 
@@ -361,12 +369,14 @@ private:
     
     bool shouldWillChangeCreateStackingContext() const;
     void issueRepaintForOutlineAuto(float outlineSize);
+    
+    void updateReferencedSVGResources();
+    void clearReferencedSVGResources();
 
     unsigned m_baseTypeFlags : 6;
     unsigned m_ancestorLineBoxDirty : 1;
     unsigned m_hasInitializedStyle : 1;
 
-    unsigned m_renderInlineAlwaysCreatesLineBoxes : 1;
     unsigned m_renderBoxNeedsLazyRepaint : 1;
     unsigned m_hasPausedImageAnimations : 1;
     unsigned m_hasCounterNodeMap : 1;
@@ -451,7 +461,8 @@ inline bool RenderElement::canContainFixedPositionObjects() const
         // FIXME: will-change should create containing blocks on inline boxes (bug 225035)
         || (isRenderBlock() && style().willChange() && style().willChange()->createsContainingBlockForOutOfFlowPositioned())
         || isSVGForeignObject()
-        || shouldApplyLayoutContainment(*this);
+        || shouldApplyLayoutContainment(*this)
+        || shouldApplyPaintContainment(*this);
 }
 
 inline bool RenderElement::canContainAbsolutelyPositionedObjects() const
@@ -462,6 +473,7 @@ inline bool RenderElement::canContainAbsolutelyPositionedObjects() const
         || (isRenderBlock() && style().willChange() && style().willChange()->createsContainingBlockForAbsolutelyPositioned())
         || isSVGForeignObject()
         || shouldApplyLayoutContainment(*this)
+        || shouldApplyPaintContainment(*this)
         || isRenderView();
 }
 
@@ -527,6 +539,11 @@ inline int adjustForAbsoluteZoom(int value, const RenderElement& renderer)
 inline LayoutUnit adjustLayoutUnitForAbsoluteZoom(LayoutUnit value, const RenderElement& renderer)
 {
     return adjustLayoutUnitForAbsoluteZoom(value, renderer.style());
+}
+
+inline LayoutSize adjustLayoutSizeForAbsoluteZoom(LayoutSize size, const RenderElement& renderer)
+{
+    return adjustLayoutSizeForAbsoluteZoom(size, renderer.style());
 }
 
 inline RenderObject* RenderElement::firstInFlowChild() const

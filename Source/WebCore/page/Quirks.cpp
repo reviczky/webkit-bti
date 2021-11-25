@@ -33,6 +33,7 @@
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "DocumentStorageAccess.h"
+#include "ElementInlines.h"
 #include "EventNames.h"
 #include "FrameLoader.h"
 #include "HTMLBodyElement.h"
@@ -49,6 +50,7 @@
 #include "ResourceLoadObserver.h"
 #include "RuntimeApplicationChecks.h"
 #include "RuntimeEnabledFeatures.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGPathElement.h"
 #include "SVGSVGElement.h"
 #include "ScriptController.h"
@@ -84,7 +86,7 @@ static inline bool isYahooMail(Document& document)
 #endif
 
 Quirks::Quirks(Document& document)
-    : m_document(makeWeakPtr(document))
+    : m_document(document)
 {
 }
 
@@ -285,7 +287,7 @@ bool Quirks::isNeverRichlyEditableForTouchBar() const
     return false;
 }
 
-static bool shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreasForHost(const StringView& host)
+static bool shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreasForHost(StringView host)
 {
 #if PLATFORM(IOS_FAMILY)
     return equalLettersIgnoringASCIICase(host, "docs.google.com");
@@ -1012,7 +1014,7 @@ bool Quirks::shouldAvoidPastingImagesAsWebContent() const
 #endif
 }
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
 static bool isKinjaLoginAvatarElement(const Element& element)
 {
     // The click event handler has been found to trigger on a div or
@@ -1151,7 +1153,7 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
     if (!DeprecatedGlobalSettings::resourceLoadStatisticsEnabled() || !isParentProcessAFullWebBrowser)
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     if (!needsQuirks())
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
@@ -1224,7 +1226,7 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
 
         // If the click is synthetic, the user has already gone through the storage access flow and we should not request again.
         if (isStorageAccessQuirkDomainAndElement(m_document->url(), element) && isSyntheticClick == IsSyntheticClick::No) {
-            return requestStorageAccessAndHandleClick([element = makeWeakPtr(element), platformEvent, eventType, detail, relatedTarget] (ShouldDispatchClick shouldDispatchClick) mutable {
+            return requestStorageAccessAndHandleClick([element = WeakPtr { element }, platformEvent, eventType, detail, relatedTarget] (ShouldDispatchClick shouldDispatchClick) mutable {
                 RefPtr protectedElement { element.get() };
                 if (!protectedElement)
                     return;

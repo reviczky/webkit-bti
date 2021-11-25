@@ -172,7 +172,7 @@ void BaseAudioContext::lazyInitialize()
 
 void BaseAudioContext::clear()
 {
-    auto protectedThis = makeRef(*this);
+    Ref protectedThis { *this };
 
     // Audio thread is dead. Nobody will schedule node deletion action. Let's do it ourselves.
     do {
@@ -249,7 +249,7 @@ void BaseAudioContext::stop()
     if (m_isStopScheduled)
         return;
 
-    auto protectedThis = makeRef(*this);
+    Ref protectedThis { *this };
 
     m_isStopScheduled = true;
 
@@ -549,6 +549,8 @@ void BaseAudioContext::handlePreRenderTasks(const AudioIOPosition& outputPositio
 
         updateAutomaticPullNodes();
         m_outputPosition = outputPosition;
+
+        m_listener->updateDirtyState();
     }
 }
 
@@ -655,7 +657,7 @@ void BaseAudioContext::updateTailProcessingNodes()
     // We try to avoid heap allocations on the audio thread but there is no way to do a main thread dispatch
     // without one.
     DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
-    callOnMainThread([this, protectedThis = makeRef(*this)]() mutable {
+    callOnMainThread([this, protectedThis = Ref { *this }]() mutable {
         Locker locker { graphLock() };
         disableOutputsForFinishedTailProcessingNodes();
         m_disableOutputsForTailProcessingScheduled = false;
@@ -721,7 +723,7 @@ void BaseAudioContext::scheduleNodeDeletion()
         // Heap allocations are forbidden on the audio thread for performance reasons so we need to
         // explicitly allow the following allocation(s).
         DisableMallocRestrictionsForCurrentThreadScope disableMallocRestrictions;
-        callOnMainThread([protectedThis = makeRef(*this)]() mutable {
+        callOnMainThread([protectedThis = Ref { *this }]() mutable {
             protectedThis->deleteMarkedNodes();
         });
     }
@@ -732,7 +734,7 @@ void BaseAudioContext::deleteMarkedNodes()
     ASSERT(isMainThread());
 
     // Protect this object from being deleted before we release the lock.
-    auto protectedThis = makeRef(*this);
+    Ref protectedThis { *this };
 
     Locker locker { graphLock() };
 

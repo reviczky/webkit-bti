@@ -36,8 +36,9 @@
 #include "CSSShadowValue.h"
 #include "CSSValuePool.h"
 #include "Length.h" // For ValueRange
+#include "StyleColor.h"
+#include <variant>
 #include <wtf/OptionSet.h>
-#include <wtf/Variant.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -45,6 +46,8 @@ namespace WebCore {
 namespace WebKitFontFamilyNames {
 enum class FamilyNamesIndex;
 }
+
+enum class BoxOrient : uint8_t;
 
 // When these functions are successful, they will consume all the relevant
 // tokens from the range and also consume any whitespace which follows. When
@@ -60,7 +63,6 @@ CSSParserTokenRange consumeFunction(CSSParserTokenRange&);
 
 enum class UnitlessQuirk { Allow, Forbid };
 enum class UnitlessZeroQuirk { Allow, Forbid };
-enum class AllowXResolutionUnit { Allow, Forbid };
 
 struct AngleRaw {
     CSSUnitType type;
@@ -72,7 +74,7 @@ struct LengthRaw {
     double value;
 };
 
-using LengthOrPercentRaw = Variant<LengthRaw, double>;
+using LengthOrPercentRaw = std::variant<LengthRaw, double>;
 
 std::optional<int> consumeIntegerRaw(CSSParserTokenRange&, double minimumValue = -std::numeric_limits<double>::max());
 RefPtr<CSSPrimitiveValue> consumeInteger(CSSParserTokenRange&, double minimumValue = -std::numeric_limits<double>::max());
@@ -80,6 +82,7 @@ std::optional<unsigned> consumePositiveIntegerRaw(CSSParserTokenRange&);
 RefPtr<CSSPrimitiveValue> consumePositiveInteger(CSSParserTokenRange&);
 std::optional<double> consumeNumberRaw(CSSParserTokenRange&, ValueRange = ValueRange::All);
 RefPtr<CSSPrimitiveValue> consumeNumber(CSSParserTokenRange&, ValueRange);
+RefPtr<CSSPrimitiveValue> consumeNumberOrPercent(CSSParserTokenRange&, ValueRange);
 std::optional<double> consumeFontWeightNumberRaw(CSSParserTokenRange&);
 RefPtr<CSSPrimitiveValue> consumeFontWeightNumber(CSSParserTokenRange&);
 RefPtr<CSSPrimitiveValue> consumeFontWeightNumberWorkerSafe(CSSParserTokenRange&, CSSValuePool&);
@@ -94,7 +97,7 @@ std::optional<AngleRaw> consumeAngleRaw(CSSParserTokenRange&, CSSParserMode, Uni
 RefPtr<CSSPrimitiveValue> consumeAngle(CSSParserTokenRange&, CSSParserMode, UnitlessQuirk = UnitlessQuirk::Forbid, UnitlessZeroQuirk = UnitlessZeroQuirk::Forbid);
 RefPtr<CSSPrimitiveValue> consumeAngleWorkerSafe(CSSParserTokenRange&, CSSParserMode, CSSValuePool&, UnitlessQuirk = UnitlessQuirk::Forbid, UnitlessZeroQuirk = UnitlessZeroQuirk::Forbid);
 RefPtr<CSSPrimitiveValue> consumeTime(CSSParserTokenRange&, CSSParserMode, ValueRange, UnitlessQuirk = UnitlessQuirk::Forbid);
-RefPtr<CSSPrimitiveValue> consumeResolution(CSSParserTokenRange&, AllowXResolutionUnit = AllowXResolutionUnit::Forbid);
+RefPtr<CSSPrimitiveValue> consumeResolution(CSSParserTokenRange&);
 
 std::optional<CSSValueID> consumeIdentRaw(CSSParserTokenRange&);
 RefPtr<CSSPrimitiveValue> consumeIdent(CSSParserTokenRange&);
@@ -107,12 +110,13 @@ template<CSSValueID... allowedIdents> RefPtr<CSSPrimitiveValue> consumeIdent(CSS
 template<CSSValueID... allowedIdents> RefPtr<CSSPrimitiveValue> consumeIdentWorkerSafe(CSSParserTokenRange&, CSSValuePool&);
 
 RefPtr<CSSPrimitiveValue> consumeCustomIdent(CSSParserTokenRange&, bool shouldLowercase = false);
+RefPtr<CSSPrimitiveValue> consumeDashedIdent(CSSParserTokenRange&, bool shouldLowercase = false);
 RefPtr<CSSPrimitiveValue> consumeString(CSSParserTokenRange&);
 StringView consumeUrlAsStringView(CSSParserTokenRange&);
 RefPtr<CSSPrimitiveValue> consumeUrl(CSSParserTokenRange&);
 
 Color consumeColorWorkerSafe(CSSParserTokenRange&, const CSSParserContext&);
-RefPtr<CSSPrimitiveValue> consumeColor(CSSParserTokenRange&, const CSSParserContext&, bool acceptQuirkyColors = false);
+RefPtr<CSSPrimitiveValue> consumeColor(CSSParserTokenRange&, const CSSParserContext&, bool acceptQuirkyColors = false, OptionSet<StyleColor::CSSColorType> = { StyleColor::CSSColorType::Absolute, StyleColor::CSSColorType::Current, StyleColor::CSSColorType::System });
 
 enum class PositionSyntax {
     Position, // <position>
@@ -125,6 +129,7 @@ struct PositionCoordinates {
 };
 
 RefPtr<CSSPrimitiveValue> consumePosition(CSSParserTokenRange&, CSSParserMode, UnitlessQuirk, PositionSyntax);
+RefPtr<CSSPrimitiveValue> consumeSingleAxisPosition(CSSParserTokenRange&, CSSParserMode, BoxOrient);
 std::optional<PositionCoordinates> consumePositionCoordinates(CSSParserTokenRange&, CSSParserMode, UnitlessQuirk, PositionSyntax);
 std::optional<PositionCoordinates> consumeOneOrTwoValuedPositionCoordinates(CSSParserTokenRange&, CSSParserMode, UnitlessQuirk);
 
@@ -150,10 +155,10 @@ struct FontStyleRaw {
     CSSValueID style;
     std::optional<AngleRaw> angle;
 };
-using FontWeightRaw = Variant<CSSValueID, double>;
-using FontSizeRaw = Variant<CSSValueID, CSSPropertyParserHelpers::LengthOrPercentRaw>;
-using LineHeightRaw = Variant<CSSValueID, double, CSSPropertyParserHelpers::LengthOrPercentRaw>;
-using FontFamilyRaw = Variant<CSSValueID, String>;
+using FontWeightRaw = std::variant<CSSValueID, double>;
+using FontSizeRaw = std::variant<CSSValueID, CSSPropertyParserHelpers::LengthOrPercentRaw>;
+using LineHeightRaw = std::variant<CSSValueID, double, CSSPropertyParserHelpers::LengthOrPercentRaw>;
+using FontFamilyRaw = std::variant<CSSValueID, String>;
 
 struct FontRaw {
     std::optional<FontStyleRaw> style;

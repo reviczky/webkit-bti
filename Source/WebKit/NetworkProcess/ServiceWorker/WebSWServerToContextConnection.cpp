@@ -44,10 +44,10 @@
 namespace WebKit {
 using namespace WebCore;
 
-WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkConnectionToWebProcess& connection, WebPageProxyIdentifier webPageProxyID, RegistrableDomain&& registrableDomain, SWServer& server)
-    : SWServerToContextConnection(WTFMove(registrableDomain))
+WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkConnectionToWebProcess& connection, WebPageProxyIdentifier webPageProxyID, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, SWServer& server)
+    : SWServerToContextConnection(WTFMove(registrableDomain), serviceWorkerPageIdentifier)
     , m_connection(connection)
-    , m_server(makeWeakPtr(server))
+    , m_server(server)
     , m_webPageProxyID(webPageProxyID)
 {
     server.addContextConnection(*this);
@@ -78,18 +78,18 @@ uint64_t WebSWServerToContextConnection::messageSenderDestinationID() const
     return 0;
 }
 
-void WebSWServerToContextConnection::postMessageToServiceWorkerClient(const ServiceWorkerClientIdentifier& destinationIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
+void WebSWServerToContextConnection::postMessageToServiceWorkerClient(const ScriptExecutionContextIdentifier& destinationIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
 {
     if (!m_server)
         return;
 
-    if (auto* connection = m_server->connection(destinationIdentifier.serverConnectionIdentifier))
-        connection->postMessageToServiceWorkerClient(destinationIdentifier.contextIdentifier, message, sourceIdentifier, sourceOrigin);
+    if (auto* connection = m_server->connection(destinationIdentifier.processIdentifier()))
+        connection->postMessageToServiceWorkerClient(destinationIdentifier, message, sourceIdentifier, sourceOrigin);
 }
 
-void WebSWServerToContextConnection::installServiceWorkerContext(const ServiceWorkerContextData& data, const String& userAgent)
+void WebSWServerToContextConnection::installServiceWorkerContext(const ServiceWorkerContextData& contextData, const ServiceWorkerData& workerData, const String& userAgent, WorkerThreadMode workerThreadMode)
 {
-    send(Messages::WebSWContextManagerConnection::InstallServiceWorker { data, userAgent });
+    send(Messages::WebSWContextManagerConnection::InstallServiceWorker { contextData, workerData, userAgent, workerThreadMode });
 }
 
 void WebSWServerToContextConnection::updateAppInitiatedValue(ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
@@ -105,6 +105,21 @@ void WebSWServerToContextConnection::fireInstallEvent(ServiceWorkerIdentifier se
 void WebSWServerToContextConnection::fireActivateEvent(ServiceWorkerIdentifier serviceWorkerIdentifier)
 {
     send(Messages::WebSWContextManagerConnection::FireActivateEvent(serviceWorkerIdentifier));
+}
+
+void WebSWServerToContextConnection::firePushEvent(WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, const std::optional<Vector<uint8_t>>& data, CompletionHandler<void(bool)>&& callback)
+{
+    if (!m_processingPushEventsCount++)
+        m_connection.networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::StartServiceWorkerBackgroundProcessing { webProcessIdentifier() }, 0);
+
+    std::optional<IPC::DataReference> ipcData;
+    if (data)
+        ipcData = IPC::DataReference { data->data(), data->size() };
+    sendWithAsyncReply(Messages::WebSWContextManagerConnection::FirePushEvent(serviceWorkerIdentifier, ipcData), [weakThis = WeakPtr { *this }, callback = WTFMove(callback)](bool wasProcessed) mutable {
+        if (weakThis && !--weakThis->m_processingPushEventsCount)
+            weakThis->m_connection.networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::EndServiceWorkerBackgroundProcessing { weakThis->webProcessIdentifier() }, 0);
+        callback(wasProcessed);
+    });
 }
 
 void WebSWServerToContextConnection::terminateWorker(ServiceWorkerIdentifier serviceWorkerIdentifier)
@@ -173,7 +188,7 @@ void WebSWServerToContextConnection::didReceiveFetchTaskMessage(IPC::Connection&
 void WebSWServerToContextConnection::registerFetch(ServiceWorkerFetchTask& task)
 {
     ASSERT(!m_ongoingFetches.contains(task.fetchIdentifier()));
-    m_ongoingFetches.add(task.fetchIdentifier(), makeWeakPtr(task));
+    m_ongoingFetches.add(task.fetchIdentifier(), task);
 }
 
 void WebSWServerToContextConnection::unregisterFetch(ServiceWorkerFetchTask& task)

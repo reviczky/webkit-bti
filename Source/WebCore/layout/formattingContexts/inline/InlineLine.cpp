@@ -32,7 +32,6 @@
 #include "InlineFormattingContext.h"
 #include "InlineSoftLineBreakItem.h"
 #include "LayoutBoxGeometry.h"
-#include "RuntimeEnabledFeatures.h"
 #include "TextFlags.h"
 #include "TextUtil.h"
 #include <wtf/IsoMallocInlines.h>
@@ -50,22 +49,47 @@ Line::~Line()
 {
 }
 
-void Line::initialize()
+void Line::initialize(const Vector<InlineItem>& lineSpanningInlineBoxes)
 {
+    m_inlineBoxListWithClonedDecorationEnd.clear();
+    m_clonedEndDecorationWidthForInlineBoxRuns = { };
     m_nonSpanningInlineLevelBoxCount = 0;
+    m_hasNonDefaultBidiLevelRun = false;
     m_contentLogicalWidth = { };
     m_runs.clear();
-    m_trailingSoftHyphenWidth = { };
-    m_trimmableTrailingContent.reset();
+    resetTrailingContent();
+    auto appendLineSpanningInlineBoxes = [&] {
+        for (auto& inlineBoxStartItem : lineSpanningInlineBoxes) {
+#if ENABLE(CSS_BOX_DECORATION_BREAK)
+            if (inlineBoxStartItem.style().boxDecorationBreak() != BoxDecorationBreak::Clone)
+                m_runs.append({ inlineBoxStartItem, lastRunLogicalRight(), { } });
+            else {
+                // https://drafts.csswg.org/css-break/#break-decoration
+                // clone: Each box fragment is independently wrapped with the border, padding, and margin.
+                auto& inlineBoxGeometry = formattingContext().geometryForBox(inlineBoxStartItem.layoutBox());
+                auto marginBorderAndPaddingStart = inlineBoxGeometry.marginStart() + inlineBoxGeometry.borderLeft() + inlineBoxGeometry.paddingLeft().value_or(0_lu);
+                auto runLogicalLeft = lastRunLogicalRight();
+                m_runs.append({ inlineBoxStartItem, runLogicalLeft, marginBorderAndPaddingStart });
+                // Do not let negative margin make the content shorter than it already is.
+                m_contentLogicalWidth = std::max(m_contentLogicalWidth, runLogicalLeft + marginBorderAndPaddingStart);
+                m_contentLogicalWidth += addBorderAndPaddingEndForInlineBoxDecorationClone(inlineBoxStartItem);
+            }
+#else
+            m_runs.append({ inlineBoxStartItem, lastRunLogicalRight(), { } });
+#endif
+        }
+    };
+    appendLineSpanningInlineBoxes();
 }
 
-void Line::removeCollapsibleContent(InlineLayoutUnit extraHorizontalSpace)
+void Line::resetTrailingContent()
 {
-    removeTrailingTrimmableContent();
-    visuallyCollapsePreWrapOverflowContent(extraHorizontalSpace);
+    m_trimmableTrailingContent.reset();
+    m_hangingTrailingContent.reset();
+    m_trailingSoftHyphenWidth = { };
 }
 
-void Line::applyRunExpansion(InlineLayoutUnit extraHorizontalSpace)
+void Line::applyRunExpansion(InlineLayoutUnit horizontalAvailableSpace)
 {
     ASSERT(formattingContext().root().style().textAlign() == TextAlignMode::Justify);
     // Text is justified according to the method specified by the text-justify property,
@@ -73,10 +97,12 @@ void Line::applyRunExpansion(InlineLayoutUnit extraHorizontalSpace)
     // the last line before a forced break or the end of the block is start-aligned.
     if (m_runs.isEmpty() || m_runs.last().isLineBreak())
         return;
-    // Anything to distribute?
-    if (!extraHorizontalSpace)
+    // A hanging glyph is still enclosed inside its parent inline box and still participates in text justification:
+    // its character advance is just not measured when determining how much content fits on the line, how much the line’s contents
+    // need to be expanded or compressed for justification, or how to position the content within the line box for text alignment.
+    auto spaceToDistribute = horizontalAvailableSpace - contentLogicalWidth() + m_hangingTrailingContent.width();
+    if (spaceToDistribute <= 0)
         return;
-
     // Collect and distribute the expansion opportunities.
     size_t lineExpansionOpportunities = 0;
     Vector<size_t> runsExpansionOpportunities(m_runs.size());
@@ -85,18 +111,24 @@ void Line::applyRunExpansion(InlineLayoutUnit extraHorizontalSpace)
 
     // Line start behaves as if we had an expansion here (i.e. fist runs should not start with allowing left expansion).
     auto runIsAfterExpansion = true;
+    auto hangingTrailingContentLength = m_hangingTrailingContent.length();
     for (size_t runIndex = 0; runIndex < m_runs.size(); ++runIndex) {
         auto& run = m_runs[runIndex];
-        auto& style = run.style();
         int expansionBehavior = DefaultExpansion;
         size_t expansionOpportunitiesInRun = 0;
 
-        if (run.isText() && !TextUtil::shouldPreserveSpacesAndTabs(run.layoutBox())) {
-            if (style.textCombine() == TextCombine::Horizontal)
+        // FIXME: Check why we don't apply expansion when whitespace is preserved.
+        if (run.isText() && (!TextUtil::shouldPreserveSpacesAndTabs(run.layoutBox()) || hangingTrailingContentLength)) {
+            if (run.hasTextCombine())
                 expansionBehavior = ForbidLeftExpansion | ForbidRightExpansion;
             else {
                 expansionBehavior = (runIsAfterExpansion ? ForbidLeftExpansion : AllowLeftExpansion) | AllowRightExpansion;
-                std::tie(expansionOpportunitiesInRun, runIsAfterExpansion) = FontCascade::expansionOpportunityCount(StringView(downcast<InlineTextBox>(run.layoutBox()).content()).substring(run.textContent()->start, run.textContent()->length), run.style().direction(), expansionBehavior);
+                auto& textContent = *run.textContent();
+                // Trailing hanging whitespace sequence is ignored when computing the expansion opportunities.
+                auto hangingTrailingContentInCurrentRun = std::min(textContent.length, hangingTrailingContentLength);
+                auto length = textContent.length - hangingTrailingContentInCurrentRun;
+                hangingTrailingContentLength -= hangingTrailingContentInCurrentRun;
+                std::tie(expansionOpportunitiesInRun, runIsAfterExpansion) = FontCascade::expansionOpportunityCount(StringView(downcast<InlineTextBox>(run.layoutBox()).content()).substring(textContent.start, length), run.inlineDirection(), expansionBehavior);
             }
         } else if (run.isBox())
             runIsAfterExpansion = false;
@@ -125,7 +157,7 @@ void Line::applyRunExpansion(InlineLayoutUnit extraHorizontalSpace)
     if (!lineExpansionOpportunities)
         return;
     // Distribute the extra space.
-    auto expansionToDistribute = extraHorizontalSpace / lineExpansionOpportunities;
+    auto expansionToDistribute = spaceToDistribute / lineExpansionOpportunities;
     auto accumulatedExpansion = InlineLayoutUnit { };
     for (size_t runIndex = 0; runIndex < m_runs.size(); ++runIndex) {
         auto& run = m_runs[runIndex];
@@ -140,13 +172,12 @@ void Line::applyRunExpansion(InlineLayoutUnit extraHorizontalSpace)
     m_contentLogicalWidth += accumulatedExpansion;
 }
 
-void Line::removeTrailingTrimmableContent()
+void Line::removeTrailingTrimmableContent(ShouldApplyTrailingWhiteSpaceFollowedByBRQuirk shouldApplyTrailingWhiteSpaceFollowedByBRQuirk)
 {
     if (m_trimmableTrailingContent.isEmpty() || m_runs.isEmpty())
         return;
 
-    // Complex line layout quirk: keep the trailing whitespace around when it is followed by a line break, unless the content overflows the line.
-    if (RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextIntegrationEnabled()) {
+    if (shouldApplyTrailingWhiteSpaceFollowedByBRQuirk == ShouldApplyTrailingWhiteSpaceFollowedByBRQuirk::Yes) {
         auto isTextAlignRight = [&] {
             auto textAlign = formattingContext().root().style().textAlign();
             return textAlign == TextAlignMode::Right
@@ -159,28 +190,32 @@ void Line::removeTrailingTrimmableContent()
             return;
         }
     }
-
     m_contentLogicalWidth -= m_trimmableTrailingContent.remove();
 }
 
-void Line::visuallyCollapsePreWrapOverflowContent(InlineLayoutUnit extraHorizontalSpace)
+void Line::removeHangingGlyphs()
+{
+    ASSERT(m_trimmableTrailingContent.isEmpty());
+    m_contentLogicalWidth -= m_hangingTrailingContent.width();
+    m_hangingTrailingContent.reset();
+}
+
+void Line::visuallyCollapseHangingOverflowingGlyphs(InlineLayoutUnit horizontalAvailableSpace)
 {
     ASSERT(m_trimmableTrailingContent.isEmpty());
     // If white-space is set to pre-wrap, the UA must
     // ...
     // It may also visually collapse the character advance widths of any that would otherwise overflow.
-    auto overflowWidth = -extraHorizontalSpace;
+    auto overflowWidth = contentLogicalWidth() - horizontalAvailableSpace;
     if (overflowWidth <= 0)
         return;
     // Let's just find the trailing pre-wrap whitespace content for now (e.g check if there are multiple trailing runs with
     // different set of white-space values and decide if the in-between pre-wrap content should be collapsed as well.)
     auto trimmedContentWidth = InlineLayoutUnit { };
-    for (auto& run : WTF::makeReversedRange(m_runs)) {
-        if (run.style().whiteSpace() != WhiteSpace::PreWrap) {
-            // We are only interested in pre-wrap trailing content.
+    for (auto& run : makeReversedRange(m_runs)) {
+        if (!run.shouldTrailingWhitespaceHang())
             break;
-        }
-        auto visuallyCollapsibleInlineItem = run.isInlineBoxStart() || run.isInlineBoxEnd() || run.hasTrailingWhitespace();
+        auto visuallyCollapsibleInlineItem = run.isLineSpanningInlineBoxStart() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.hasTrailingWhitespace();
         if (!visuallyCollapsibleInlineItem)
             break;
         ASSERT(!run.hasCollapsibleTrailingWhitespace());
@@ -198,45 +233,45 @@ void Line::visuallyCollapsePreWrapOverflowContent(InlineLayoutUnit extraHorizont
         if (overflowWidth <= 0)
             break;
     }
+    // FIXME: Add support for incremental reset, where the hanging whitespace partially overflows.
+    m_hangingTrailingContent.reset();
     m_contentLogicalWidth -= trimmedContentWidth;
 }
 
-void Line::append(const InlineItem& inlineItem, InlineLayoutUnit logicalWidth)
+void Line::append(const InlineItem& inlineItem, const RenderStyle& style, InlineLayoutUnit logicalWidth)
 {
     if (inlineItem.isText())
-        appendTextContent(downcast<InlineTextItem>(inlineItem), logicalWidth);
+        appendTextContent(downcast<InlineTextItem>(inlineItem), style, logicalWidth);
     else if (inlineItem.isLineBreak())
         appendLineBreak(inlineItem);
     else if (inlineItem.isWordBreakOpportunity())
         appendWordBreakOpportunity(inlineItem);
     else if (inlineItem.isInlineBoxStart())
-        appendInlineBoxStart(inlineItem, logicalWidth);
+        appendInlineBoxStart(inlineItem, style, logicalWidth);
     else if (inlineItem.isInlineBoxEnd())
-        appendInlineBoxEnd(inlineItem, logicalWidth);
+        appendInlineBoxEnd(inlineItem, style, logicalWidth);
     else if (inlineItem.layoutBox().isReplacedBox())
-        appendReplacedInlineLevelBox(inlineItem, logicalWidth);
+        appendReplacedInlineLevelBox(inlineItem, style, logicalWidth);
     else if (inlineItem.isBox())
-        appendNonReplacedInlineLevelBox(inlineItem, logicalWidth);
+        appendNonReplacedInlineLevelBox(inlineItem, style, logicalWidth);
     else
         ASSERT_NOT_REACHED();
+    m_hasNonDefaultBidiLevelRun = m_hasNonDefaultBidiLevelRun || inlineItem.bidiLevel() != UBIDI_DEFAULT_LTR;
 }
 
-void Line::appendNonBreakableSpace(const InlineItem& inlineItem, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth)
-{
-    m_runs.append({ inlineItem, logicalLeft, logicalWidth });
-    // Do not let negative margin make the content shorter than it already is.
-    auto runLogicalRight = logicalLeft + logicalWidth;
-    m_contentLogicalWidth = std::max(m_contentLogicalWidth, runLogicalRight);
-}
-
-void Line::appendInlineBoxStart(const InlineItem& inlineItem, InlineLayoutUnit logicalWidth)
+void Line::appendInlineBoxStart(const InlineItem& inlineItem, const RenderStyle& style, InlineLayoutUnit logicalWidth)
 {
     // This is really just a placeholder to mark the start of the inline box <span>.
     ++m_nonSpanningInlineLevelBoxCount;
-    appendNonBreakableSpace(inlineItem, contentLogicalRight(), logicalWidth);
+    auto logicalLeft = lastRunLogicalRight();
+    // Incoming logical width includes the cloned decoration end to be able to do line breaking.
+    auto borderAndPaddingEndForDecorationClone = addBorderAndPaddingEndForInlineBoxDecorationClone(inlineItem);
+    m_runs.append({ inlineItem, style, logicalLeft, logicalWidth - borderAndPaddingEndForDecorationClone });
+    // Do not let negative margin make the content shorter than it already is.
+    m_contentLogicalWidth = std::max(m_contentLogicalWidth, logicalLeft + logicalWidth);
 }
 
-void Line::appendInlineBoxEnd(const InlineItem& inlineItem, InlineLayoutUnit logicalWidth)
+void Line::appendInlineBoxEnd(const InlineItem& inlineItem, const RenderStyle& style, InlineLayoutUnit logicalWidth)
 {
     // This is really just a placeholder to mark the end of the inline box </span>.
     auto removeTrailingLetterSpacing = [&] {
@@ -247,31 +282,30 @@ void Line::appendInlineBoxEnd(const InlineItem& inlineItem, InlineLayoutUnit log
     // Prevent trailing letter-spacing from spilling out of the inline box.
     // https://drafts.csswg.org/css-text-3/#letter-spacing-property See example 21.
     removeTrailingLetterSpacing();
-    appendNonBreakableSpace(inlineItem, contentLogicalRight(), logicalWidth);
+    m_contentLogicalWidth -= removeBorderAndPaddingEndForInlineBoxDecorationClone(inlineItem);
+    auto logicalLeft = lastRunLogicalRight();
+    m_runs.append({ inlineItem, style, logicalLeft, logicalWidth });
+    // Do not let negative margin make the content shorter than it already is.
+    m_contentLogicalWidth = std::max(m_contentLogicalWidth, logicalLeft + logicalWidth);
 }
 
-void Line::appendTextContent(const InlineTextItem& inlineTextItem, InlineLayoutUnit logicalWidth)
+void Line::appendTextContent(const InlineTextItem& inlineTextItem, const RenderStyle& style, InlineLayoutUnit logicalWidth)
 {
-    auto& style = inlineTextItem.style();
     auto willCollapseCompletely = [&] {
-        if (inlineTextItem.isEmptyContent())
-            return true;
         if (!inlineTextItem.isWhitespace())
             return false;
         if (InlineTextItem::shouldPreserveSpacesAndTabs(inlineTextItem))
             return false;
-        // Check if the last item is collapsed as well.
-        for (auto& run : WTF::makeReversedRange(m_runs)) {
+        // This content is collapsible. Let's check if the last item is collapsed.
+        for (auto& run : makeReversedRange(m_runs)) {
             if (run.isBox())
                 return false;
             // https://drafts.csswg.org/css-text-3/#white-space-phase-1
             // Any collapsible space immediately following another collapsible space—even one outside the boundary of the inline containing that space,
             // provided both spaces are within the same inline formatting context—is collapsed to have zero advance width.
-            // : "<span>  </span> " <- the trailing whitespace collapses completely.
-            // Not that when the inline box has preserve whitespace style, "<span style="white-space: pre">  </span> " <- this whitespace stays around.
             if (run.isText())
                 return run.hasCollapsibleTrailingWhitespace();
-            ASSERT(run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isWordBreakOpportunity());
+            ASSERT(run.isLineSpanningInlineBoxStart() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isWordBreakOpportunity());
         }
         // Leading whitespace.
         return true;
@@ -286,60 +320,93 @@ void Line::appendTextContent(const InlineTextItem& inlineTextItem, InlineLayoutU
         auto& lastRun = m_runs.last();
         if (&lastRun.layoutBox() != &inlineTextItem.layoutBox())
             return true;
+        if (lastRun.bidiLevel() != inlineTextItem.bidiLevel())
+            return true;
         if (!lastRun.isText())
             return true;
         if (lastRun.hasCollapsedTrailingWhitespace())
             return true;
         if (inlineTextItem.isWordSeparator() && style.fontCascade().wordSpacing())
             return true;
+        if (inlineTextItem.isZeroWidthSpaceSeparator())
+            return true;
         return false;
     }();
     auto oldContentLogicalWidth = contentLogicalWidth();
     if (needsNewRun) {
-        // Note, negative words spacing may cause glyph overlap.
-        auto runLogicalLeft = contentLogicalRight() + (inlineTextItem.isWordSeparator() ? style.fontCascade().wordSpacing() : 0.0f);
-        m_runs.append({ inlineTextItem, runLogicalLeft, logicalWidth });
-        m_contentLogicalWidth = std::max(oldContentLogicalWidth, runLogicalLeft + logicalWidth);
+        // Note, negative word spacing may cause glyph overlap.
+        auto runLogicalLeft = lastRunLogicalRight() + (inlineTextItem.isWordSeparator() ? style.fontCascade().wordSpacing() : 0.0f);
+        m_runs.append({ inlineTextItem, style, runLogicalLeft, logicalWidth });
+        // Note that the _content_ logical right may be larger than the _run_ logical right.
+        auto contentLogicalRight = runLogicalLeft + logicalWidth + m_clonedEndDecorationWidthForInlineBoxRuns;
+        m_contentLogicalWidth = std::max(oldContentLogicalWidth, contentLogicalRight);
+    } else if (style.letterSpacing() >= 0) {
+        auto& lastRun = m_runs.last();
+        lastRun.expand(inlineTextItem, logicalWidth);
+        // Ensure that property values that act like negative margin are not making the line wider.
+        m_contentLogicalWidth = std::max(oldContentLogicalWidth, lastRun.logicalRight());
     } else {
-        m_runs.last().expand(inlineTextItem, logicalWidth);
-        // Do not let negative letter spacing make the content shorter than it already is.
-        m_contentLogicalWidth += std::max(0.0f, logicalWidth);
+        auto& lastRun = m_runs.last();
+        ASSERT(lastRun.isText());
+        // Negative letter spacing should only shorten the content to the boundary of the previous run.
+        // FIXME: We may need to traverse all the way to the previous non-text run (or even across inline boxes).
+        auto contentWidthWithoutLastTextRun = [&] {
+            if (style.fontCascade().wordSpacing() >= 0)
+                return m_contentLogicalWidth - std::max(0.f, lastRun.logicalWidth());
+            // FIXME: Let's see if we need to optimize for this is the rare case of both letter and word spacing being negative.
+            auto rightMostPosition = InlineLayoutUnit { };
+            for (auto& run : makeReversedRange(m_runs))
+                rightMostPosition = std::max(rightMostPosition, run.logicalRight());
+            return std::max(0.f, rightMostPosition);
+        }();
+        auto lastRunLogicalRight = lastRun.logicalRight();
+        lastRun.expand(inlineTextItem, logicalWidth);
+        m_contentLogicalWidth = std::max(contentWidthWithoutLastTextRun, lastRunLogicalRight + logicalWidth);
     }
-    // Set the trailing trimmable content.
-    if (inlineTextItem.isWhitespace() && !InlineTextItem::shouldPreserveSpacesAndTabs(inlineTextItem)) {
-        m_trimmableTrailingContent.addFullyTrimmableContent(m_runs.size() - 1, contentLogicalWidth() - oldContentLogicalWidth);
-        return;
+
+    // Handle trailing content, specifically whitespace and letter spacing.
+    auto lastRunIndex = m_runs.size() - 1;
+    if (inlineTextItem.isWhitespace()) {
+        if (InlineTextItem::shouldPreserveSpacesAndTabs(inlineTextItem)) {
+            m_trimmableTrailingContent.reset();
+            if (m_runs[lastRunIndex].shouldTrailingWhitespaceHang())
+                m_hangingTrailingContent.add(inlineTextItem, logicalWidth);
+        } else  {
+            m_hangingTrailingContent.reset();
+            m_trimmableTrailingContent.addFullyTrimmableContent(lastRunIndex, contentLogicalWidth() - oldContentLogicalWidth);
+        }
+        m_trailingSoftHyphenWidth = { };
+    } else {
+        resetTrailingContent();
+        if (style.letterSpacing() > 0 && !formattingContext().layoutState().shouldIgnoreTrailingLetterSpacing())
+            m_trimmableTrailingContent.addPartiallyTrimmableContent(lastRunIndex, style.letterSpacing());
+        if (inlineTextItem.hasTrailingSoftHyphen())
+            m_trailingSoftHyphenWidth = style.fontCascade().width(TextRun { StringView { style.hyphenString() } });
     }
-    // Any non-whitespace, no-trimmable content resets the existing trimmable.
-    m_trimmableTrailingContent.reset();
-    if (!formattingContext().layoutState().shouldIgnoreTrailingLetterSpacing() && !inlineTextItem.isWhitespace() && style.letterSpacing() > 0)
-        m_trimmableTrailingContent.addPartiallyTrimmableContent(m_runs.size() - 1, style.letterSpacing());
-    m_trailingSoftHyphenWidth = inlineTextItem.hasTrailingSoftHyphen() ? std::make_optional(style.fontCascade().width(TextRun { StringView { style.hyphenString() } })) : std::nullopt;
 }
 
-void Line::appendNonReplacedInlineLevelBox(const InlineItem& inlineItem, InlineLayoutUnit marginBoxLogicalWidth)
+void Line::appendNonReplacedInlineLevelBox(const InlineItem& inlineItem, const RenderStyle& style, InlineLayoutUnit marginBoxLogicalWidth)
 {
-    m_trimmableTrailingContent.reset();
-    m_trailingSoftHyphenWidth = { };
+    resetTrailingContent();
     m_contentLogicalWidth += marginBoxLogicalWidth;
     ++m_nonSpanningInlineLevelBoxCount;
     auto marginStart = formattingContext().geometryForBox(inlineItem.layoutBox()).marginStart();
     if (marginStart >= 0) {
-        m_runs.append({ inlineItem, contentLogicalRight(), marginBoxLogicalWidth });
+        m_runs.append({ inlineItem, style, lastRunLogicalRight(), marginBoxLogicalWidth });
         return;
     }
     // Negative margin-start pulls the content to the logical left direction.
     // Negative margin also squeezes the margin box, we need to stretch it to make sure the subsequent content won't overlap.
     // e.g. <img style="width: 100px; margin-left: -100px;"> pulls the replaced box to -100px with the margin box width of 0px.
     // Instead we need to position it at -100px and size it to 100px so the subsequent content starts at 0px. 
-    m_runs.append({ inlineItem, contentLogicalRight() + marginStart, marginBoxLogicalWidth - marginStart });
+    m_runs.append({ inlineItem, style, lastRunLogicalRight() + marginStart, marginBoxLogicalWidth - marginStart });
 }
 
-void Line::appendReplacedInlineLevelBox(const InlineItem& inlineItem, InlineLayoutUnit marginBoxLogicalWidth)
+void Line::appendReplacedInlineLevelBox(const InlineItem& inlineItem, const RenderStyle& style, InlineLayoutUnit marginBoxLogicalWidth)
 {
     ASSERT(inlineItem.layoutBox().isReplacedBox());
     // FIXME: Surely replaced boxes behave differently.
-    appendNonReplacedInlineLevelBox(inlineItem, marginBoxLogicalWidth);
+    appendNonReplacedInlineLevelBox(inlineItem, style, marginBoxLogicalWidth);
 }
 
 void Line::appendLineBreak(const InlineItem& inlineItem)
@@ -347,21 +414,52 @@ void Line::appendLineBreak(const InlineItem& inlineItem)
     m_trailingSoftHyphenWidth = { };
     if (inlineItem.isHardLineBreak()) {
         ++m_nonSpanningInlineLevelBoxCount;
-        return m_runs.append({ inlineItem, contentLogicalRight(), 0_lu });
+        return m_runs.append({ inlineItem, lastRunLogicalRight() });
     }
     // Soft line breaks (preserved new line characters) require inline text boxes for compatibility reasons.
     ASSERT(inlineItem.isSoftLineBreak());
-    m_runs.append({ downcast<InlineSoftLineBreakItem>(inlineItem), contentLogicalRight() });
+    m_runs.append({ downcast<InlineSoftLineBreakItem>(inlineItem), lastRunLogicalRight() });
 }
 
 void Line::appendWordBreakOpportunity(const InlineItem& inlineItem)
 {
-    m_runs.append({ inlineItem, contentLogicalRight(), 0_lu });
+    m_runs.append({ inlineItem, lastRunLogicalRight() });
+}
+
+InlineLayoutUnit Line::addBorderAndPaddingEndForInlineBoxDecorationClone(const InlineItem& inlineBoxStartItem)
+{
+    ASSERT(inlineBoxStartItem.isInlineBoxStart());
+#if ENABLE(CSS_BOX_DECORATION_BREAK)
+    if (inlineBoxStartItem.style().boxDecorationBreak() != BoxDecorationBreak::Clone)
+        return { };
+    // https://drafts.csswg.org/css-break/#break-decoration
+    auto& inlineBoxGeometry = formattingContext().geometryForBox(inlineBoxStartItem.layoutBox());
+    auto borderAndPaddingEnd = inlineBoxGeometry.borderRight() + inlineBoxGeometry.paddingRight().value_or(0_lu);
+    m_inlineBoxListWithClonedDecorationEnd.add(&inlineBoxStartItem.layoutBox(), borderAndPaddingEnd);
+    m_clonedEndDecorationWidthForInlineBoxRuns += borderAndPaddingEnd;
+    return borderAndPaddingEnd;
+#endif
+    return { };
+}
+
+InlineLayoutUnit Line::removeBorderAndPaddingEndForInlineBoxDecorationClone(const InlineItem& inlineBoxEndItem)
+{
+    ASSERT(inlineBoxEndItem.isInlineBoxEnd());
+#if ENABLE(CSS_BOX_DECORATION_BREAK)
+    auto borderAndPaddingEnd = m_inlineBoxListWithClonedDecorationEnd.take(&inlineBoxEndItem.layoutBox());
+    if (std::isinf(borderAndPaddingEnd))
+        return { };
+    // This inline box end now contributes to the line content width in the regular way, so let's remove
+    // it from the side structure where we keep track of the "not-yet placed but space taking" decorations.
+    m_clonedEndDecorationWidthForInlineBoxRuns -= borderAndPaddingEnd;
+    return borderAndPaddingEnd;
+#endif
+    return { };
 }
 
 void Line::addTrailingHyphen(InlineLayoutUnit hyphenLogicalWidth)
 {
-    for (auto& run : WTF::makeReversedRange(m_runs)) {
+    for (auto& run : makeReversedRange(m_runs)) {
         if (!run.isText())
             continue;
         run.setNeedsHyphen(hyphenLogicalWidth);
@@ -425,7 +523,7 @@ InlineLayoutUnit Line::TrimmableTrailingContent::remove()
     // not produce a run since in ::appendText() we see it as a fully collapsible run.
     for (auto index = *m_firstTrimmableRunIndex + 1; index < m_runs.size(); ++index) {
         auto& run = m_runs[index];
-        ASSERT(run.isWordBreakOpportunity() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isLineBreak());
+        ASSERT(run.isWordBreakOpportunity() || run.isLineSpanningInlineBoxStart() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isLineBreak());
         run.moveHorizontally(-trimmableWidth);
     }
     if (!trimmableRun.textContent()->length) {
@@ -445,30 +543,82 @@ InlineLayoutUnit Line::TrimmableTrailingContent::removePartiallyTrimmableContent
     return remove();
 }
 
-Line::Run::Run(const InlineItem& inlineItem, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth)
-    : m_type(inlineItem.type())
+void Line::HangingTrailingContent::add(const InlineTextItem& trailingWhitespace, InlineLayoutUnit logicalWidth)
+{
+    // When a glyph at the start or end edge of a line hangs, it is not considered when measuring the line’s contents for fit, alignment, or justification.
+    // Depending on the line’s alignment/justification, this can result in the mark being placed outside the line box.
+    // https://drafts.csswg.org/css-text-3/#hanging
+    ASSERT(trailingWhitespace.isWhitespace());
+    m_width += logicalWidth;
+    m_length += trailingWhitespace.length();
+}
+
+inline static Line::Run::Type toLineRunType(InlineItem::Type inlineItemType)
+{
+    switch (inlineItemType) {
+    case InlineItem::Type::HardLineBreak:
+        return Line::Run::Type::HardLineBreak;
+    case InlineItem::Type::WordBreakOpportunity:
+        return Line::Run::Type::WordBreakOpportunity;
+    case InlineItem::Type::Box:
+        return Line::Run::Type::AtomicBox;
+    case InlineItem::Type::InlineBoxStart:
+        return Line::Run::Type::InlineBoxStart;
+    case InlineItem::Type::InlineBoxEnd:
+        return Line::Run::Type::InlineBoxEnd;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+    return { };
+}
+
+Line::Run::Run(const InlineItem& inlineItem, const RenderStyle& style, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth)
+    : m_type(toLineRunType(inlineItem.type()))
     , m_layoutBox(&inlineItem.layoutBox())
     , m_logicalLeft(logicalLeft)
     , m_logicalWidth(logicalWidth)
+    , m_style({ { }, style.direction(), { }, { } })
+    , m_bidiLevel(inlineItem.bidiLevel())
 {
+}
+
+Line::Run::Run(const InlineItem& zeroWidhtInlineItem, InlineLayoutUnit logicalLeft)
+    : m_type(toLineRunType(zeroWidhtInlineItem.type()))
+    , m_layoutBox(&zeroWidhtInlineItem.layoutBox())
+    , m_logicalLeft(logicalLeft)
+    , m_bidiLevel(zeroWidhtInlineItem.bidiLevel())
+{
+}
+
+Line::Run::Run(const InlineItem& lineSpanningInlineBoxItem, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth)
+    : m_type(Type::LineSpanningInlineBoxStart)
+    , m_layoutBox(&lineSpanningInlineBoxItem.layoutBox())
+    , m_logicalLeft(logicalLeft)
+    , m_logicalWidth(logicalWidth)
+    , m_bidiLevel(lineSpanningInlineBoxItem.bidiLevel())
+{
+    ASSERT(lineSpanningInlineBoxItem.isInlineBoxStart());
 }
 
 Line::Run::Run(const InlineSoftLineBreakItem& softLineBreakItem, InlineLayoutUnit logicalLeft)
-    : m_type(softLineBreakItem.type())
+    : m_type(Type::SoftLineBreak)
     , m_layoutBox(&softLineBreakItem.layoutBox())
     , m_logicalLeft(logicalLeft)
     , m_textContent({ softLineBreakItem.position(), 1 })
+    , m_bidiLevel(softLineBreakItem.bidiLevel())
 {
 }
 
-Line::Run::Run(const InlineTextItem& inlineTextItem, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth)
-    : m_type(InlineItem::Type::Text)
+Line::Run::Run(const InlineTextItem& inlineTextItem, const RenderStyle& style, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth)
+    : m_type(Type::Text)
     , m_layoutBox(&inlineTextItem.layoutBox())
     , m_logicalLeft(logicalLeft)
     , m_logicalWidth(logicalWidth)
     , m_trailingWhitespaceType(trailingWhitespaceType(inlineTextItem))
     , m_trailingWhitespaceWidth(m_trailingWhitespaceType != TrailingWhitespace::None ? logicalWidth : InlineLayoutUnit { })
     , m_textContent({ inlineTextItem.start(), m_trailingWhitespaceType == TrailingWhitespace::Collapsed ? 1 : inlineTextItem.length() })
+    , m_style({ style.whiteSpace() == WhiteSpace::PreWrap, style.direction(), style.letterSpacing(), style.hasTextCombine() })
+    , m_bidiLevel(inlineTextItem.bidiLevel())
 {
 }
 
@@ -477,6 +627,7 @@ void Line::Run::expand(const InlineTextItem& inlineTextItem, InlineLayoutUnit lo
     ASSERT(!hasCollapsedTrailingWhitespace());
     ASSERT(isText() && inlineTextItem.isText());
     ASSERT(m_layoutBox == &inlineTextItem.layoutBox());
+    ASSERT(m_bidiLevel == inlineTextItem.bidiLevel());
 
     m_logicalWidth += logicalWidth;
     m_trailingWhitespaceType = trailingWhitespaceType(inlineTextItem);
@@ -492,21 +643,21 @@ void Line::Run::expand(const InlineTextItem& inlineTextItem, InlineLayoutUnit lo
 
 bool Line::Run::hasTrailingLetterSpacing() const
 {
-    return !hasTrailingWhitespace() && style().letterSpacing() > 0;
+    return !hasTrailingWhitespace() && letterSpacing() > 0;
 }
 
 InlineLayoutUnit Line::Run::trailingLetterSpacing() const
 {
     if (!hasTrailingLetterSpacing())
         return { };
-    return InlineLayoutUnit { style().letterSpacing() };
+    return InlineLayoutUnit { letterSpacing() };
 }
 
 void Line::Run::removeTrailingLetterSpacing()
 {
     ASSERT(hasTrailingLetterSpacing());
     shrinkHorizontally(trailingLetterSpacing());
-    ASSERT(logicalWidth() > 0 || (!logicalWidth() && style().letterSpacing() >= static_cast<float>(intMaxForLayoutUnit)));
+    ASSERT(logicalWidth() > 0 || (!logicalWidth() && letterSpacing() >= static_cast<float>(intMaxForLayoutUnit)));
 }
 
 void Line::Run::removeTrailingWhitespace()

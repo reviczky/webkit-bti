@@ -198,7 +198,7 @@ void ImageDocumentParser::finish()
 }
 
 ImageDocument::ImageDocument(Frame& frame, const URL& url)
-    : HTMLDocument(&frame, frame.settings(), url, ImageDocumentClass)
+    : HTMLDocument(&frame, frame.settings(), url, { DocumentClass::Image })
     , m_imageElement(nullptr)
     , m_imageSizeIsKnown(false)
 #if !PLATFORM(IOS_FAMILY)
@@ -242,6 +242,7 @@ void ImageDocument::createDocumentStructure()
     imageElement->setSrc(url().string());
     imageElement->cachedImage()->setResponse(loader()->response());
     body->appendChild(imageElement);
+    imageElement->setLoadManually(false);
     
     if (m_shouldShrinkImage) {
 #if PLATFORM(IOS_FAMILY)

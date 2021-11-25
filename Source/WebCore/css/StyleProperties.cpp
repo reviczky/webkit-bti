@@ -35,6 +35,7 @@
 #include "CSSValuePool.h"
 #include "Color.h"
 #include "Document.h"
+#include "Pair.h"
 #include "PropertySetCSSStyleDeclaration.h"
 #include "StylePropertyShorthand.h"
 #include "StylePropertyShorthandFunctions.h"
@@ -125,6 +126,37 @@ MutableStyleProperties::MutableStyleProperties(const StyleProperties& other)
     }
 }
 
+bool StyleProperties::shorthandHasVariableReference(CSSPropertyID propertyID, String& shorthandValue) const
+{
+    auto shorthand = shorthandForProperty(propertyID);
+    if (shorthand.length()) {
+        size_t numSetFromShorthand = 0;
+        // Checks for shorthand property if any of its longhand properties have set to a variable
+        // or are all pending substitution
+        for (size_t i = 0; i < shorthand.length(); i++) {
+            auto cssPropertyValue =  getPropertyCSSValue(shorthand.properties()[i]);
+            
+            auto hasBeenSetFromLonghand = is<CSSVariableReferenceValue>(cssPropertyValue);
+            auto hasBeenSetFromShorthand = is<CSSPendingSubstitutionValue>(cssPropertyValue);
+            auto hasNotBeenSetFromRequestedShorthand = hasBeenSetFromShorthand && downcast<CSSPendingSubstitutionValue>(*cssPropertyValue).shorthandPropertyId() != propertyID;
+            
+            // Request for shorthand value should return empty string if any longhand values have been
+            // set to a variable or if they were set to a variable by a different shorthand.
+            if (hasBeenSetFromLonghand || hasNotBeenSetFromRequestedShorthand)
+                return true;
+            if (hasBeenSetFromShorthand)
+                numSetFromShorthand += 1;
+        }
+        if (numSetFromShorthand) {
+            if (numSetFromShorthand != shorthand.length())
+                return true;
+            shorthandValue = downcast<CSSPendingSubstitutionValue>(* getPropertyCSSValue(shorthand.properties()[0])).shorthandValue().cssText();
+            return true;
+        }
+    }
+    return false;
+}
+
 String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
 {
     if (auto value = getPropertyCSSValue(propertyID)) {
@@ -144,9 +176,9 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
     }
 
     {
-        auto shorthand = shorthandForProperty(propertyID);
-        if (shorthand.length() && is<CSSPendingSubstitutionValue>(getPropertyCSSValue(shorthand.properties()[0])))
-            return String();
+        auto shorthandValue = String();
+        if (shorthandHasVariableReference(propertyID, shorthandValue))
+            return shorthandValue;
     }
 
     // Shorthand and 4-values properties
@@ -239,6 +271,8 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
         return fontValue();
     case CSSPropertyFontVariant:
         return fontVariantValue();
+    case CSSPropertyTextDecorationSkip:
+        return textDecorationSkipValue();
     case CSSPropertyInset:
         return get4Values(insetShorthand());
     case CSSPropertyInsetBlock:
@@ -286,7 +320,7 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
             return value->cssText();
         return String();
     case CSSPropertyBorderRadius:
-        return get4Values(borderRadiusShorthand());
+        return borderRadiusValue(borderRadiusShorthand());
     case CSSPropertyGap:
         return get2Values(gapShorthand());
     case CSSPropertyScrollMargin:
@@ -328,6 +362,61 @@ String StyleProperties::getCustomPropertyValue(const String& propertyName) const
     if (value)
         return value->cssText();
     return String();
+}
+
+String StyleProperties::borderRadiusValue(const StylePropertyShorthand& shorthand) const
+{
+    auto serialize = [](const CSSValue* topLeft, const CSSValue* topRight, const CSSValue* bottomRight, const CSSValue* bottomLeft) -> String {
+        bool showBottomLeft = !(*topRight == *bottomLeft);
+        bool showBottomRight = !(*topLeft == *bottomRight) || showBottomLeft;
+        bool showTopRight = !(*topLeft == *topRight) || showBottomRight;
+
+        return makeString(topLeft->cssText(), showTopRight ? " " : "", showTopRight ? topRight->cssText() : "", showBottomRight ? " " : "", showBottomRight ? bottomRight->cssText() : "", showBottomLeft ? " " : "", showBottomLeft ? bottomLeft->cssText() : "");
+    };
+
+    int topLeftValueIndex = findPropertyIndex(shorthand.properties()[0]);
+    int topRightValueIndex = findPropertyIndex(shorthand.properties()[1]);
+    int bottomRightValueIndex = findPropertyIndex(shorthand.properties()[2]);
+    int bottomLeftValueIndex = findPropertyIndex(shorthand.properties()[3]);
+
+    if (topLeftValueIndex == -1 || topRightValueIndex == -1 || bottomRightValueIndex == -1 || bottomLeftValueIndex == -1)
+        return String();
+
+    PropertyReference topLeft = propertyAt(topLeftValueIndex);
+    PropertyReference topRight = propertyAt(topRightValueIndex);
+    PropertyReference bottomRight = propertyAt(bottomRightValueIndex);
+    PropertyReference bottomLeft = propertyAt(bottomLeftValueIndex);
+
+    auto* topLeftValue = topLeft.value();
+    if (!topLeftValue)
+        return String();
+    if (topLeftValue->isCSSWideKeyword())
+        return topLeftValue->cssText();
+
+    auto* topRightValue = topRight.value();
+    auto* bottomRightValue = bottomRight.value();
+    auto* bottomLeftValue = bottomLeft.value();
+
+    // All 4 properties must be specified and the remaining ones other than topLeftValue are checked here.
+    if (!topRightValue || !bottomRightValue || !bottomLeftValue)
+        return String();
+
+    // Important flags must be the same
+    bool isImportant = topLeft.isImportant();
+    if (topRight.isImportant() != isImportant || bottomRight.isImportant() != isImportant || bottomLeft.isImportant() != isImportant)
+        return String();
+
+    auto& topLeftPair = *downcast<CSSPrimitiveValue>(*topLeftValue).pairValue();
+    auto& topRightPair = *downcast<CSSPrimitiveValue>(*topRightValue).pairValue();
+    auto& bottomRightPair = *downcast<CSSPrimitiveValue>(*bottomRightValue).pairValue();
+    auto& bottomLeftPair = *downcast<CSSPrimitiveValue>(*bottomLeftValue).pairValue();
+
+    auto first = serialize(topLeftPair.first(), topRightPair.first(), bottomRightPair.first(), bottomLeftPair.first());
+    auto second = serialize(topLeftPair.second(), topRightPair.second(), bottomRightPair.second(), bottomLeftPair.second());
+    if (first == second)
+        return first;
+
+    return makeString(first, " / ", second);
 }
 
 String StyleProperties::borderSpacingValue(const StylePropertyShorthand& shorthand) const
@@ -417,6 +506,17 @@ String StyleProperties::fontValue() const
     if (isCSSWideValueKeyword(commonValue))
         return commonValue;
     return result.toString();
+}
+
+String StyleProperties::textDecorationSkipValue() const
+{
+    int textDecorationSkipInkPropertyIndex = findPropertyIndex(CSSPropertyTextDecorationSkipInk);
+    if (textDecorationSkipInkPropertyIndex == -1)
+        return emptyString();
+    PropertyReference textDecorationSkipInkProperty = propertyAt(textDecorationSkipInkPropertyIndex);
+    if (textDecorationSkipInkProperty.isImplicit())
+        return emptyString();
+    return textDecorationSkipInkProperty.value()->cssText();
 }
 
 String StyleProperties::fontVariantValue() const
@@ -747,8 +847,8 @@ String StyleProperties::pageBreakPropertyValue(const StylePropertyShorthand& sho
     auto value = getPropertyCSSValue(shorthand.properties()[0]);
     if (!value)
         return String();
-    // FIXME: Remove this isGlobalKeyword check after we do this consistently for all shorthands in getPropertyValue.
-    if (value->isGlobalKeyword())
+    // FIXME: Remove this isCSSWideKeyword check after we do this consistently for all shorthands in getPropertyValue.
+    if (value->isCSSWideKeyword())
         return value->cssText();
     
     if (!is<CSSPrimitiveValue>(*value))
@@ -1375,7 +1475,7 @@ void MutableStyleProperties::mergeAndOverrideOnConflict(const StyleProperties& o
         addParsedProperty(other.propertyAt(i).toCSSProperty());
 }
 
-bool StyleProperties::traverseSubresources(const WTF::Function<bool (const CachedResource&)>& handler) const
+bool StyleProperties::traverseSubresources(const Function<bool(const CachedResource&)>& handler) const
 {
     unsigned size = propertyCount();
     for (unsigned i = 0; i < size; ++i) {

@@ -363,11 +363,12 @@ enum class Edge : uint8_t {
     Left
 };
 
-// CSS3 Mask Source Types
+// CSS3 Mask Mode
 
-enum class MaskSourceType : uint8_t {
+enum class MaskMode : uint8_t {
     Alpha,
-    Luminance
+    Luminance,
+    MatchSource,
 };
 
 // CSS3 Marquee Properties
@@ -501,6 +502,11 @@ enum class TextSecurity : uint8_t {
     Disc,
     Circle,
     Square
+};
+
+enum class InputSecurity : uint8_t {
+    Auto,
+    None
 };
 
 // CSS3 User Modify Properties
@@ -684,11 +690,6 @@ enum class QuoteType : uint8_t {
     NoCloseQuote
 };
 
-enum class BorderFit : uint8_t {
-    Border,
-    Lines
-};
-
 enum class AnimationFillMode : uint8_t {
     None,
     Forwards,
@@ -738,20 +739,13 @@ enum class TextTransform : uint8_t {
     None
 };
 
-#if ENABLE(LETTERPRESS)
-static const size_t TextDecorationBits = 5;
-#else
 static const size_t TextDecorationBits = 4;
-#endif
-enum class TextDecoration : uint8_t {
+enum class TextDecorationLine : uint8_t {
     None          = 0,
     Underline     = 1 << 0,
     Overline      = 1 << 1,
     LineThrough   = 1 << 2,
     Blink         = 1 << 3,
-#if ENABLE(LETTERPRESS)
-    Letterpress   = 1 << 4,
-#endif
 };
 
 enum class TextDecorationStyle : uint8_t {
@@ -781,11 +775,10 @@ enum class TextJustify : uint8_t {
 };
 #endif // CSS3_TEXT
 
-enum class TextDecorationSkip : uint8_t {
-    None      = 0,
-    Ink       = 1 << 0,
-    Objects   = 1 << 1,
-    Auto      = 1 << 2
+enum class TextDecorationSkipInk : uint8_t {
+    None,
+    Auto,
+    All
 };
 
 enum class TextUnderlinePosition : uint8_t {
@@ -1243,7 +1236,10 @@ enum class Containment : uint8_t {
     Layout   = 1 << 0,
     Paint    = 1 << 1,
     Size     = 1 << 2,
+    Style    = 1 << 3,
 };
+
+CSSBoxType transformBoxToCSSBoxType(TransformBox);
 
 extern const float defaultMiterLimit;
 
@@ -1257,7 +1253,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, AspectRatioType);
 WTF::TextStream& operator<<(WTF::TextStream&, AutoRepeatType);
 WTF::TextStream& operator<<(WTF::TextStream&, BackfaceVisibility);
 WTF::TextStream& operator<<(WTF::TextStream&, BorderCollapse);
-WTF::TextStream& operator<<(WTF::TextStream&, BorderFit);
 WTF::TextStream& operator<<(WTF::TextStream&, BorderStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, BoxAlignment);
 WTF::TextStream& operator<<(WTF::TextStream&, BoxDecorationBreak);
@@ -1313,7 +1308,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, ListStyleType);
 WTF::TextStream& operator<<(WTF::TextStream&, MarginCollapse);
 WTF::TextStream& operator<<(WTF::TextStream&, MarqueeBehavior);
 WTF::TextStream& operator<<(WTF::TextStream&, MarqueeDirection);
-WTF::TextStream& operator<<(WTF::TextStream&, MaskSourceType);
+WTF::TextStream& operator<<(WTF::TextStream&, MaskMode);
 WTF::TextStream& operator<<(WTF::TextStream&, NBSPMode);
 WTF::TextStream& operator<<(WTF::TextStream&, ObjectFit);
 WTF::TextStream& operator<<(WTF::TextStream&, Order);
@@ -1338,8 +1333,8 @@ WTF::TextStream& operator<<(WTF::TextStream&, StyleDifference);
 WTF::TextStream& operator<<(WTF::TextStream&, TableLayoutType);
 WTF::TextStream& operator<<(WTF::TextStream&, TextAlignMode);
 WTF::TextStream& operator<<(WTF::TextStream&, TextCombine);
-WTF::TextStream& operator<<(WTF::TextStream&, TextDecoration);
-WTF::TextStream& operator<<(WTF::TextStream&, TextDecorationSkip);
+WTF::TextStream& operator<<(WTF::TextStream&, TextDecorationLine);
+WTF::TextStream& operator<<(WTF::TextStream&, TextDecorationSkipInk);
 WTF::TextStream& operator<<(WTF::TextStream&, TextDecorationStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisFill);
 WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisMark);

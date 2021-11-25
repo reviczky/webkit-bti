@@ -41,12 +41,14 @@
 #include "NetworkConnectionToWebProcess.h"
 #include "NetworkContentRuleListManagerMessages.h"
 #include "NetworkLoad.h"
+#include "NetworkLoadScheduler.h"
 #include "NetworkProcessCreationParameters.h"
 #include "NetworkProcessPlatformStrategies.h"
 #include "NetworkProcessProxyMessages.h"
 #include "NetworkResourceLoader.h"
 #include "NetworkSession.h"
 #include "NetworkSessionCreationParameters.h"
+#include "NetworkStorageManager.h"
 #include "PreconnectTask.h"
 #include "PrivateClickMeasurementStore.h"
 #include "RemoteNetworkingContext.h"
@@ -178,7 +180,7 @@ NetworkProcess::NetworkProcess(AuxiliaryProcessInitializationParameters&& parame
     LegacyCustomProtocolManager::networkProcessCreated(*this);
 #endif
 
-    NetworkStateNotifier::singleton().addListener([weakThis = makeWeakPtr(*this)](bool isOnLine) {
+    NetworkStateNotifier::singleton().addListener([weakThis = WeakPtr { *this }](bool isOnLine) {
         if (!weakThis)
             return;
         for (auto& webProcessConnection : weakThis->m_webProcessConnections.values())
@@ -344,7 +346,7 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
     setCacheModel(parameters.cacheModel);
 
     setPrivateClickMeasurementEnabled(parameters.enablePrivateClickMeasurement);
-    setPrivateClickMeasurementDebugMode(parameters.enablePrivateClickMeasurementDebugMode);
+    m_ftpEnabled = parameters.ftpEnabled;
 
     for (auto& supplement : m_supplements.values())
         supplement->initialize(parameters);
@@ -400,6 +402,8 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
 
     m_storageManagerSet->addConnection(connection.connection());
     webIDBServer(sessionID).addConnection(connection.connection(), identifier);
+    if (auto manager = m_storageManagers.get(sessionID))
+        manager->startReceivingMessageFromConnection(connection.connection());
 }
 
 void NetworkProcess::clearCachedCredentials(PAL::SessionID sessionID)
@@ -415,6 +419,7 @@ void NetworkProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters
 {
     auto sessionID = parameters.networkSessionParameters.sessionID;
 
+    addStorageManagerForSession(sessionID, parameters.generalStorageDirectory, parameters.generalStorageDirectoryHandle);
     addSessionStorageQuotaManager(sessionID, parameters.perOriginStorageQuota, parameters.perThirdPartyOriginStorageQuota, parameters.cacheStorageDirectory, parameters.cacheStorageDirectoryExtensionHandle);
 
     addIndexedDatabaseSession(sessionID, parameters.indexedDatabaseDirectory, parameters.indexedDatabaseDirectoryExtensionHandle);
@@ -445,6 +450,20 @@ void NetworkProcess::removeSessionStorageQuotaManager(PAL::SessionID sessionID)
     Locker locker { m_sessionStorageQuotaManagersLock };
     ASSERT(m_sessionStorageQuotaManagers.contains(sessionID));
     m_sessionStorageQuotaManagers.remove(sessionID);
+}
+
+void NetworkProcess::addStorageManagerForSession(PAL::SessionID sessionID, const String& generalStoragePath, SandboxExtension::Handle& generalStoragePathHandle)
+{
+    m_storageManagers.ensure(sessionID, [&] {
+        SandboxExtension::consumePermanently(generalStoragePathHandle);
+        return NetworkStorageManager::create(sessionID, generalStoragePath);
+    });
+}
+
+void NetworkProcess::removeStorageManagerForSession(PAL::SessionID sessionID)
+{
+    if (auto manager = m_storageManagers.take(sessionID))
+        manager->close();
 }
 
 void NetworkProcess::forEachNetworkSession(const Function<void(NetworkSession&)>& functor)
@@ -557,9 +576,10 @@ void NetworkProcess::destroySession(PAL::SessionID sessionID)
     m_storageManagerSet->remove(sessionID);
     if (auto server = m_webIDBServers.take(sessionID))
         server->close();
+    removeStorageManagerForSession(sessionID);
 }
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
 void NetworkProcess::dumpResourceLoadStatistics(PAL::SessionID sessionID, CompletionHandler<void(String)>&& completionHandler)
 {
     if (auto* networkSession = this->networkSession(sessionID)) {
@@ -771,19 +791,6 @@ void NetworkProcess::statisticsDatabaseHasAllTables(PAL::SessionID sessionID, Co
     } else {
         ASSERT_NOT_REACHED();
         completionHandler(false);
-    }
-}
-
-void NetworkProcess::statisticsDatabaseColumnsForTable(PAL::SessionID sessionID, const String& tableName, CompletionHandler<void(Vector<String>&&)>&& completionHandler)
-{
-    if (auto* networkSession = this->networkSession(sessionID)) {
-        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->statisticsDatabaseColumnsForTable(tableName, WTFMove(completionHandler));
-        else
-            completionHandler({ });
-    } else {
-        ASSERT_NOT_REACHED();
-        completionHandler({ });
     }
 }
 
@@ -1332,7 +1339,7 @@ void NetworkProcess::setThirdPartyCNAMEDomainForTesting(PAL::SessionID sessionID
         networkSession->setThirdPartyCNAMEDomainForTesting(WTFMove(domain));
     completionHandler();
 }
-#endif // ENABLE(RESOURCE_LOAD_STATISTICS)
+#endif // ENABLE(INTELLIGENT_TRACKING_PREVENTION)
 
 void NetworkProcess::setPrivateClickMeasurementEnabled(bool enabled)
 {
@@ -1344,24 +1351,10 @@ bool NetworkProcess::privateClickMeasurementEnabled() const
     return m_privateClickMeasurementEnabled;
 }
 
-void NetworkProcess::setPrivateClickMeasurementDebugMode(bool enabled)
+void NetworkProcess::setPrivateClickMeasurementDebugMode(PAL::SessionID sessionID, bool enabled)
 {
-    if (m_privateClickMeasurementDebugModeEnabled == enabled)
-        return;
-
-    m_privateClickMeasurementDebugModeEnabled = enabled;
-
-    String message = enabled ? "[Private Click Measurement] Turned Debug Mode on."_s : "[Private Click Measurement] Turned Debug Mode off."_s;
-    for (auto& networkConnectionToWebProcess : m_webProcessConnections.values()) {
-        if (networkConnectionToWebProcess->sessionID().isEphemeral())
-            continue;
-        networkConnectionToWebProcess->broadcastConsoleMessage(MessageSource::PrivateClickMeasurement, MessageLevel::Info, message);
-    }
-}
-
-bool NetworkProcess::privateClickMeasurementDebugModeEnabled() const
-{
-    return m_privateClickMeasurementDebugModeEnabled;
+    if (auto* networkSession = this->networkSession(sessionID))
+        networkSession->setPrivateClickMeasurementDebugMode(enabled);
 }
 
 void NetworkProcess::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier webPageID, const URL& url, const String& userAgent, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
@@ -1382,6 +1375,7 @@ void NetworkProcess::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifi
     parameters.request = ResourceRequest { url };
     parameters.request.setIsAppInitiated(lastNavigationWasAppInitiated == LastNavigationWasAppInitiated::Yes);
     parameters.request.setFirstPartyForCookies(url);
+    parameters.request.setPriority(WebCore::ResourceLoadPriority::VeryHigh);
     parameters.webPageProxyID = webPageProxyID;
     parameters.webPageID = webPageID;
     parameters.isNavigatingToAppBoundDomain = isNavigatingToAppBoundDomain;
@@ -1393,7 +1387,13 @@ void NetworkProcess::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifi
     parameters.storedCredentialsPolicy = storedCredentialsPolicy;
     parameters.shouldPreconnectOnly = PreconnectOnly::Yes;
 
-    (new PreconnectTask(*networkSession, WTFMove(parameters), [](const WebCore::ResourceError&) { }))->start();
+    networkSession->networkLoadScheduler().startedPreconnectForMainResource(url, userAgent);
+    auto task = new PreconnectTask(*networkSession, WTFMove(parameters), [weakNetworkSession = WeakPtr { *networkSession }, url, userAgent](const WebCore::ResourceError& error) {
+        if (weakNetworkSession)
+            weakNetworkSession->networkLoadScheduler().finishedPreconnectForMainResource(url, userAgent, error);
+    });
+    task->setTimeout(10_s);
+    task->start();
 #else
     UNUSED_PARAM(url);
     UNUSED_PARAM(userAgent);
@@ -1542,7 +1542,7 @@ void NetworkProcess::fetchWebsiteData(PAL::SessionID sessionID, OptionSet<Websit
     }
 #endif
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     if (websiteDataTypes.contains(WebsiteDataType::ResourceLoadStatistics)) {
         if (auto* session = networkSession(sessionID)) {
             if (auto* resourceLoadStatistics = session->resourceLoadStatistics()) {
@@ -1594,7 +1594,7 @@ void NetworkProcess::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<Websi
         swServerForSession(sessionID).clearAll([clearTasksHandler] { });
 #endif
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     if (websiteDataTypes.contains(WebsiteDataType::ResourceLoadStatistics)) {
         if (auto* networkSession = this->networkSession(sessionID)) {
             if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics()) {
@@ -1724,7 +1724,7 @@ void NetworkProcess::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, Optio
         WebCore::CredentialStorage::removeSessionCredentialsWithOrigins(originDatas);
     }
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     if (websiteDataTypes.contains(WebsiteDataType::ResourceLoadStatistics)) {
         if (auto* networkSession = this->networkSession(sessionID)) {
             for (auto& domain : registrableDomains) {
@@ -1750,7 +1750,7 @@ void NetworkProcess::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, Optio
     }
 }
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
 static Vector<String> filterForRegistrableDomains(const Vector<RegistrableDomain>& registrableDomains, const HashSet<String>& foundValues)
 {
     Vector<String> result;
@@ -1892,7 +1892,7 @@ void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::Sess
 
     if (m_storageManagerSet->contains(sessionID)) {
         if (websiteDataTypes.contains(WebsiteDataType::SessionStorage)) {
-            m_storageManagerSet->getSessionStorageOrigins(sessionID, [protectedThis = makeRef(*this), this, sessionID, callbackAggregator, domainsToDeleteAllNonCookieWebsiteDataFor](auto&& origins) {
+            m_storageManagerSet->getSessionStorageOrigins(sessionID, [protectedThis = Ref { *this }, this, sessionID, callbackAggregator, domainsToDeleteAllNonCookieWebsiteDataFor](auto&& origins) {
                 if (!m_storageManagerSet->contains(sessionID))
                     return;
 
@@ -1902,7 +1902,7 @@ void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::Sess
         }
 
         if (websiteDataTypes.contains(WebsiteDataType::LocalStorage)) {
-            m_storageManagerSet->getLocalStorageOrigins(sessionID, [protectedThis = makeRef(*this), this, sessionID, callbackAggregator, domainsToDeleteAllNonCookieWebsiteDataFor](auto&& origins) {
+            m_storageManagerSet->getLocalStorageOrigins(sessionID, [protectedThis = Ref { *this }, this, sessionID, callbackAggregator, domainsToDeleteAllNonCookieWebsiteDataFor](auto&& origins) {
                 if (!m_storageManagerSet->contains(sessionID))
                     return;
 
@@ -1914,7 +1914,7 @@ void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::Sess
 
     auto path = m_idbDatabasePaths.get(sessionID);
     if (!path.isEmpty() && websiteDataTypes.contains(WebsiteDataType::IndexedDBDatabases)) {
-        webIDBServer(sessionID).getOrigins([this, protectedThis = makeRef(*this), sessionID, callbackAggregator, domainsToDeleteAllNonCookieWebsiteDataFor](auto&& origins) {
+        webIDBServer(sessionID).getOrigins([this, protectedThis = Ref { *this }, sessionID, callbackAggregator, domainsToDeleteAllNonCookieWebsiteDataFor](auto&& origins) {
             if (!m_webIDBServers.contains(sessionID))
                 return;
 
@@ -1940,7 +1940,9 @@ void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::Sess
 
     if (websiteDataTypes.contains(WebsiteDataType::DiskCache)) {
         forEachNetworkSession([sessionID, fetchOptions, &domainsToDeleteAllNonCookieWebsiteDataFor, &callbackAggregator](auto& session) {
-            fetchDiskCacheEntries(session.cache(), sessionID, fetchOptions, [domainsToDeleteAllNonCookieWebsiteDataFor, callbackAggregator, session = makeWeakPtr(&session)](auto entries) mutable {
+            /* hack: gcc 8.4 will segfault if the WeakPtr is instantiated within the lambda captures */
+            auto ws = WeakPtr { session };
+            fetchDiskCacheEntries(session.cache(), sessionID, fetchOptions, [domainsToDeleteAllNonCookieWebsiteDataFor, callbackAggregator, session = WTFMove(ws)](auto entries) mutable {
                 if (!session)
                     return;
 
@@ -2073,7 +2075,7 @@ void NetworkProcess::registrableDomainsWithWebsiteData(PAL::SessionID sessionID,
         });
     }
 }
-#endif // ENABLE(RESOURCE_LOAD_STATISTICS)
+#endif // ENABLE(INTELLIGENT_TRACKING_PREVENTION)
 
 CacheStorage::Engine* NetworkProcess::findCacheEngine(PAL::SessionID sessionID)
 {
@@ -2123,7 +2125,7 @@ void NetworkProcess::findPendingDownloadLocation(NetworkDataTask& networkDataTas
 
     String suggestedFilename = networkDataTask.suggestedFilename();
 
-    downloadProxyConnection()->sendWithAsyncReply(Messages::DownloadProxy::DecideDestinationWithSuggestedFilename(response, suggestedFilename), [this, protectedThis = makeRef(*this), completionHandler = WTFMove(completionHandler), networkDataTask = makeRef(networkDataTask)] (String&& destination, SandboxExtension::Handle&& sandboxExtensionHandle, AllowOverwrite allowOverwrite) mutable {
+    downloadProxyConnection()->sendWithAsyncReply(Messages::DownloadProxy::DecideDestinationWithSuggestedFilename(response, suggestedFilename), [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), networkDataTask = Ref { networkDataTask }] (String&& destination, SandboxExtension::Handle&& sandboxExtensionHandle, AllowOverwrite allowOverwrite) mutable {
         auto downloadID = networkDataTask->pendingDownloadID();
         if (destination.isEmpty())
             return completionHandler(PolicyAction::Ignore);
@@ -2163,8 +2165,15 @@ void NetworkProcess::setCacheModel(CacheModel cacheModel)
 
 void NetworkProcess::setAllowsAnySSLCertificateForWebSocket(bool allows, CompletionHandler<void()>&& completionHandler)
 {
+    // FIXME: Stop using this when HAVE(NSURLSESSION_WEBSOCKET) is true.
     DeprecatedGlobalSettings::setAllowsAnySSLCertificate(allows);
     completionHandler();
+}
+
+void NetworkProcess::allowTLSCertificateChainForLocalPCMTesting(PAL::SessionID sessionID, const WebCore::CertificateInfo& certificateInfo)
+{
+    if (auto* networkSession = m_networkSessions.get(sessionID))
+        networkSession->allowTLSCertificateChainForLocalPCMTesting(certificateInfo);
 }
 
 void NetworkProcess::logDiagnosticMessage(WebPageProxyIdentifier webPageProxyID, const String& message, const String& description, ShouldSample shouldSample)
@@ -2215,7 +2224,7 @@ void NetworkProcess::suspendIDBServers(bool isSuspensionImminent)
     if (allSuspended)
         return;
 
-    RunLoop::main().dispatchAfter(5_s, [this, weakThis = makeWeakPtr(*this), suspensionIdentifier = m_suspensionIdentifier] {
+    RunLoop::main().dispatchAfter(5_s, [this, weakThis = WeakPtr { *this }, suspensionIdentifier = m_suspensionIdentifier] {
         if (!weakThis)
             return;
 
@@ -2243,7 +2252,7 @@ void NetworkProcess::prepareToSuspend(bool isSuspensionImminent, CompletionHandl
         completionHandler();
     });
     
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     WebResourceLoadStatisticsStore::suspend([callbackAggregator] { });
 #endif
     PCM::Store::prepareForProcessToSuspend([callbackAggregator] { });
@@ -2286,7 +2295,7 @@ void NetworkProcess::resume()
     for (auto& connection : m_webProcessConnections.values())
         connection->endSuspension();
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     WebResourceLoadStatisticsStore::resume();
 #endif
     PCM::Store::processDidResume();
@@ -2358,7 +2367,7 @@ Ref<WebIDBServer> NetworkProcess::createWebIDBServer(PAL::SessionID sessionID)
         path = m_idbDatabasePaths.get(sessionID);
     }
 
-    auto spaceRequester = [protectedThis = makeRef(*this), sessionID](const auto& origin, uint64_t spaceRequested) {
+    auto spaceRequester = [protectedThis = Ref { *this }, sessionID](const auto& origin, uint64_t spaceRequested) {
         return protectedThis->storageQuotaManager(sessionID, origin)->requestSpaceOnBackgroundThread(spaceRequested);
     };
 
@@ -2411,6 +2420,14 @@ void NetworkProcess::resetQuota(PAL::SessionID sessionID, CompletionHandler<void
     completionHandler();
 }
 
+void NetworkProcess::clearStorage(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+{
+    if (auto manager = m_storageManagers.get(sessionID))
+        manager->clearStorageForTesting(WTFMove(completionHandler));
+    else
+        completionHandler();
+}
+
 void NetworkProcess::renameOriginInWebsiteData(PAL::SessionID sessionID, const URL& oldName, const URL& newName, OptionSet<WebsiteDataType> dataTypes, CompletionHandler<void()>&& completionHandler)
 {
     auto aggregator = CallbackAggregator::create(WTFMove(completionHandler));
@@ -2457,11 +2474,14 @@ SWServer& NetworkProcess::swServerForSession(PAL::SessionID sessionID)
             completionHandler({ });
         };
 #endif
-        return makeUnique<SWServer>(makeUniqueRef<WebSWOriginStore>(), info.processTerminationDelayEnabled, WTFMove(path), sessionID, parentProcessHasServiceWorkerEntitlement(), [this, sessionID](auto&& jobData, bool shouldRefreshCache, auto&& request, auto&& completionHandler) mutable {
+        bool shouldRunServiceWorkersOnMainThreadForTesting = false;
+        if (auto* session = networkSession(sessionID))
+            shouldRunServiceWorkersOnMainThreadForTesting = session->shouldRunServiceWorkersOnMainThreadForTesting();
+        return makeUnique<SWServer>(makeUniqueRef<WebSWOriginStore>(), info.processTerminationDelayEnabled, WTFMove(path), sessionID, shouldRunServiceWorkersOnMainThreadForTesting, parentProcessHasServiceWorkerEntitlement(), [this, sessionID](auto&& jobData, bool shouldRefreshCache, auto&& request, auto&& completionHandler) mutable {
             ServiceWorkerSoftUpdateLoader::start(networkSession(sessionID), WTFMove(jobData), shouldRefreshCache, WTFMove(request), WTFMove(completionHandler));
-        }, [this, sessionID](auto& registrableDomain, auto&& completionHandler) {
+        }, [this, sessionID](auto& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, auto&& completionHandler) {
             ASSERT(!registrableDomain.isEmpty());
-            parentProcessConnection()->sendWithAsyncReply(Messages::NetworkProcessProxy::EstablishWorkerContextConnectionToNetworkProcess { registrableDomain, sessionID }, WTFMove(completionHandler), 0);
+            parentProcessConnection()->sendWithAsyncReply(Messages::NetworkProcessProxy::EstablishWorkerContextConnectionToNetworkProcess { registrableDomain, serviceWorkerPageIdentifier, sessionID }, WTFMove(completionHandler), 0);
         }, WTFMove(appBoundDomainsCallback));
     });
     return *result.iterator->value;
@@ -2499,7 +2519,37 @@ void NetworkProcess::addServiceWorkerSession(PAL::SessionID sessionID, bool proc
     if (addResult.isNewEntry)
         SandboxExtension::consumePermanently(handle);
 }
+
+void NetworkProcess::processPushMessage(PAL::SessionID sessionID, const std::optional<IPC::DataReference>& ipcData, URL&& registrationURL, CompletionHandler<void(bool)>&& callback)
+{
+    std::optional<Vector<uint8_t>> data;
+    if (ipcData)
+        data = Vector<uint8_t> { ipcData->data(), ipcData->size() };
+    swServerForSession(sessionID).processPushMessage(WTFMove(data), WTFMove(registrationURL), WTFMove(callback));
+}
 #endif // ENABLE(SERVICE_WORKER)
+
+void NetworkProcess::deletePushAndNotificationRegistration(PAL::SessionID sessionID, const SecurityOriginData& origin, CompletionHandler<void(const String&)>&& callback)
+{
+#if ENABLE(BUILT_IN_NOTIFICATIONS)
+    if (auto* session = networkSession(sessionID)) {
+        session->notificationManager().deletePushAndNotificationRegistration(origin, WTFMove(callback));
+        return;
+    }
+#endif
+    callback("Cannot find network session");
+}
+
+void NetworkProcess::getOriginsWithPushAndNotificationPermissions(PAL::SessionID sessionID, CompletionHandler<void(const Vector<WebCore::SecurityOriginData>&)>&& callback)
+{
+#if ENABLE(BUILT_IN_NOTIFICATIONS)
+    if (auto* session = networkSession(sessionID)) {
+        session->notificationManager().getOriginsWithPushAndNotificationPermissions(WTFMove(callback));
+        return;
+    }
+#endif
+    callback({ });
+}
 
 void NetworkProcess::requestStorageSpace(PAL::SessionID sessionID, const ClientOrigin& origin, uint64_t quota, uint64_t currentSize, uint64_t spaceRequired, CompletionHandler<void(std::optional<uint64_t>)>&& callback)
 {
@@ -2519,7 +2569,7 @@ RefPtr<StorageQuotaManager> NetworkProcess::storageQuotaManager(PAL::SessionID s
 
         return CacheStorage::Engine::diskUsage(cacheRootPath, origin) + IDBServer::IDBServer::diskUsage(idbRootPath, origin);
     };
-    StorageQuotaManager::QuotaIncreaseRequester quotaIncreaseRequester = [this, weakThis = makeWeakPtr(*this), sessionID, origin] (uint64_t currentQuota, uint64_t currentSpace, uint64_t requestedIncrease, auto&& callback) {
+    StorageQuotaManager::QuotaIncreaseRequester quotaIncreaseRequester = [this, weakThis = WeakPtr { *this }, sessionID, origin] (uint64_t currentQuota, uint64_t currentSpace, uint64_t requestedIncrease, auto&& callback) {
         ASSERT(isMainRunLoop());
         if (!weakThis)
             callback({ });
@@ -2585,23 +2635,17 @@ void NetworkProcess::setPrivateClickMeasurementOverrideTimerForTesting(PAL::Sess
     completionHandler();
 }
 
-void NetworkProcess::firePrivateClickMeasurementTimerImmediately(PAL::SessionID sessionID)
-{
-    if (auto* session = networkSession(sessionID))
-        session->firePrivateClickMeasurementTimerImmediately();
-}
-
 void NetworkProcess::simulateResourceLoadStatisticsSessionRestart(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
 {
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    // FIXME: Rename this to simulatePrivateClickMeasurementSessionRestart.
     if (auto* session = networkSession(sessionID)) {
-        session->recreateResourceLoadStatisticStore([this, sessionID, completionHandler = WTFMove(completionHandler)] () mutable {
-            firePrivateClickMeasurementTimerImmediately(sessionID);
+        session->recreatePrivateClickMeasurementStore([session = WeakPtr { *session }, completionHandler = WTFMove(completionHandler)] () mutable {
+            if (session)
+                session->firePrivateClickMeasurementTimerImmediatelyForTesting();
             completionHandler();
         });
         return;
     }
-#endif
     completionHandler();
 }
 
@@ -2663,6 +2707,14 @@ void NetworkProcess::setPCMFraudPreventionValuesForTesting(PAL::SessionID sessio
     completionHandler();
 }
 
+void NetworkProcess::setPrivateClickMeasurementAppBundleIDForTesting(PAL::SessionID sessionID, String&& appBundleIDForTesting, CompletionHandler<void()>&& completionHandler)
+{
+    if (auto* session = networkSession(sessionID))
+        session->setPrivateClickMeasurementAppBundleIDForTesting(WTFMove(appBundleIDForTesting));
+
+    completionHandler();
+}
+
 void NetworkProcess::addKeptAliveLoad(Ref<NetworkResourceLoader>&& loader)
 {
     if (auto* session = networkSession(loader->sessionID()))
@@ -2692,6 +2744,9 @@ void NetworkProcess::connectionToWebProcessClosed(IPC::Connection& connection, P
 
     if (auto* server = m_webIDBServers.get(sessionID))
         server->removeConnection(connection);
+
+    if (auto manager = m_storageManagers.get(sessionID))
+        manager->stopReceivingMessageFromConnection(connection);
 }
 
 NetworkConnectionToWebProcess* NetworkProcess::webProcessConnection(ProcessIdentifier identifier) const
@@ -2752,7 +2807,7 @@ void NetworkProcess::updateBundleIdentifier(String&& bundleIdentifier, Completio
 {
 #if PLATFORM(COCOA)
     WebCore::clearApplicationBundleIdentifierTestingOverride();
-    WebCore::setApplicationBundleIdentifier(bundleIdentifier);
+    WebCore::setApplicationBundleIdentifierOverride(bundleIdentifier);
 #endif
     completionHandler();
 }
@@ -2817,26 +2872,6 @@ RTCDataChannelRemoteManagerProxy& NetworkProcess::rtcDataChannelProxy()
     return *m_rtcDataChannelProxy;
 }
 #endif
-
-void NetworkProcess::prepareLoadForWebProcessTransfer(WebCore::ProcessIdentifier sourceProcessIdentifier, uint64_t resourceLoadIdentifier, CompletionHandler<void(std::optional<NetworkResourceLoadIdentifier>)>&& completionHandler)
-{
-    ASSERT(resourceLoadIdentifier);
-    auto* connection = webProcessConnection(sourceProcessIdentifier);
-    if (!connection)
-        return completionHandler(std::nullopt);
-
-    auto session = connection->networkSession();
-    if (!session)
-        return completionHandler(std::nullopt);
-
-    auto loader = connection->takeNetworkResourceLoader(resourceLoadIdentifier);
-    if (!loader)
-        return completionHandler(std::nullopt);
-
-    auto identifier = loader->identifier();
-    session->addLoaderAwaitingWebProcessTransfer(loader.releaseNonNull());
-    completionHandler(identifier);
-}
 
 void NetworkProcess::addWebPageNetworkParameters(PAL::SessionID sessionID, WebPageProxyIdentifier pageID, WebPageNetworkParameters&& parameters)
 {

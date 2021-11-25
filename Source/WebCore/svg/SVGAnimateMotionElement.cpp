@@ -26,6 +26,7 @@
 #include "ElementIterator.h"
 #include "PathTraversalState.h"
 #include "RenderSVGResource.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGImageElement.h"
 #include "SVGMPathElement.h"
 #include "SVGNames.h"
@@ -58,7 +59,7 @@ Ref<SVGAnimateMotionElement> SVGAnimateMotionElement::create(const QualifiedName
 
 bool SVGAnimateMotionElement::hasValidAttributeType() const
 {
-    auto targetElement = makeRefPtr(this->targetElement());
+    RefPtr targetElement = this->targetElement();
     if (!targetElement)
         return false;
 
@@ -142,7 +143,7 @@ void SVGAnimateMotionElement::startAnimation()
 {
     if (!hasValidAttributeType())
         return;
-    auto targetElement = makeRefPtr(this->targetElement());
+    RefPtr targetElement = this->targetElement();
     if (!targetElement)
         return;
     if (AffineTransform* transform = targetElement->supplementalTransform())
@@ -206,7 +207,7 @@ void SVGAnimateMotionElement::buildTransformForProgress(AffineTransform* transfo
 
 void SVGAnimateMotionElement::calculateAnimatedValue(float percentage, unsigned repeatCount)
 {
-    auto targetElement = makeRefPtr(this->targetElement());
+    RefPtr targetElement = this->targetElement();
     if (!targetElement)
         return;
 
@@ -244,7 +245,7 @@ void SVGAnimateMotionElement::calculateAnimatedValue(float percentage, unsigned 
 void SVGAnimateMotionElement::applyResultsToTarget()
 {
     // We accumulate to the target element transform list so there is not much to do here.
-    auto targetElement = makeRefPtr(this->targetElement());
+    RefPtr targetElement = this->targetElement();
     if (!targetElement)
         return;
 

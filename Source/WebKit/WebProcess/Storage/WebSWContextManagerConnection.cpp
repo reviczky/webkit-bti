@@ -36,6 +36,7 @@
 #include "RTCDataChannelRemoteManager.h"
 #include "ServiceWorkerFetchTaskMessages.h"
 #include "ServiceWorkerInitializationData.h"
+#include "WebBroadcastChannelRegistry.h"
 #include "WebCacheStorageProvider.h"
 #include "WebCompiledContentRuleListData.h"
 #include "WebCoreArgumentCoders.h"
@@ -58,9 +59,9 @@
 #include <WebCore/MessageWithMessagePorts.h>
 #include <WebCore/PageConfiguration.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
+#include <WebCore/ScriptExecutionContextIdentifier.h>
 #include <WebCore/SerializedScriptValue.h>
 #include <WebCore/ServiceWorkerClientData.h>
-#include <WebCore/ServiceWorkerClientIdentifier.h>
 #include <WebCore/ServiceWorkerClientQueryOptions.h>
 #include <WebCore/ServiceWorkerJobDataIdentifier.h>
 #include <WebCore/UserAgent.h>
@@ -99,9 +100,10 @@ Ref<DocumentLoader> ServiceWorkerFrameLoaderClient::createDocumentLoader(const R
     return WebDocumentLoader::create(request, substituteData);
 }
 
-WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection>&& connection, WebCore::RegistrableDomain&& registrableDomain, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, ServiceWorkerInitializationData&& initializationData)
+WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection>&& connection, WebCore::RegistrableDomain&& registrableDomain, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, ServiceWorkerInitializationData&& initializationData)
     : m_connectionToNetworkProcess(WTFMove(connection))
     , m_registrableDomain(WTFMove(registrableDomain))
+    , m_serviceWorkerPageIdentifier(serviceWorkerPageIdentifier)
     , m_pageGroupID(pageGroupID)
     , m_webPageProxyID(webPageProxyID)
     , m_pageID(pageID)
@@ -124,7 +126,7 @@ WebSWContextManagerConnection::~WebSWContextManagerConnection() = default;
 
 void WebSWContextManagerConnection::establishConnection(CompletionHandler<void()>&& completionHandler)
 {
-    m_connectionToNetworkProcess->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::EstablishSWContextConnection { m_webPageProxyID, m_registrableDomain }, WTFMove(completionHandler), 0);
+    m_connectionToNetworkProcess->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::EstablishSWContextConnection { m_webPageProxyID, m_registrableDomain, m_serviceWorkerPageIdentifier }, WTFMove(completionHandler), 0);
 }
 
 void WebSWContextManagerConnection::updatePreferencesStore(const WebPreferencesStore& store)
@@ -141,12 +143,13 @@ void WebSWContextManagerConnection::updateAppInitiatedValue(ServiceWorkerIdentif
         serviceWorkerThreadProxy->setLastNavigationWasAppInitiated(lastNavigationWasAppInitiated == WebCore::LastNavigationWasAppInitiated::Yes);
 }
 
-void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextData&& data, String&& userAgent)
+void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextData&& contextData, ServiceWorkerData&& workerData, String&& userAgent, WorkerThreadMode workerThreadMode)
 {
     auto pageConfiguration = pageConfigurationWithEmptyClients(WebProcess::singleton().sessionID());
 
     pageConfiguration.databaseProvider = WebDatabaseProvider::getOrCreate(m_pageGroupID);
     pageConfiguration.socketProvider = WebSocketProvider::create(m_webPageProxyID);
+    pageConfiguration.broadcastChannelRegistry = WebProcess::singleton().broadcastChannelRegistry();
     pageConfiguration.userContentProvider = m_userContentController;
 #if ENABLE(WEB_RTC)
     pageConfiguration.libWebRTCProvider = makeUniqueRef<ServiceWorkerLibWebRTCProvider>();
@@ -159,11 +162,11 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
     pageConfiguration.loaderClientForMainFrame = makeUniqueRef<ServiceWorkerFrameLoaderClient>(m_webPageProxyID, m_pageID, FrameIdentifier::generate(), effectiveUserAgent);
 
 #if !RELEASE_LOG_DISABLED
-    auto serviceWorkerIdentifier = data.serviceWorkerIdentifier;
+    auto serviceWorkerIdentifier = contextData.serviceWorkerIdentifier;
 #endif
     
-    auto lastNavigationWasAppInitiated = data.lastNavigationWasAppInitiated;
-    auto serviceWorkerThreadProxy = ServiceWorkerThreadProxy::create(WTFMove(pageConfiguration), WTFMove(data), WTFMove(effectiveUserAgent), WebProcess::singleton().cacheStorageProvider(), m_storageBlockingPolicy);
+    auto lastNavigationWasAppInitiated = contextData.lastNavigationWasAppInitiated;
+    auto serviceWorkerThreadProxy = ServiceWorkerThreadProxy::create(WTFMove(pageConfiguration), WTFMove(contextData), WTFMove(workerData), WTFMove(effectiveUserAgent), workerThreadMode, WebProcess::singleton().cacheStorageProvider(), m_storageBlockingPolicy);
 
     if (lastNavigationWasAppInitiated)
         serviceWorkerThreadProxy->setLastNavigationWasAppInitiated(lastNavigationWasAppInitiated == WebCore::LastNavigationWasAppInitiated::Yes);
@@ -248,9 +251,7 @@ void WebSWContextManagerConnection::startFetch(SWServerConnectionIdentifier serv
     }
 
     auto client = WebServiceWorkerFetchTaskClient::create(m_connectionToNetworkProcess.copyRef(), serviceWorkerIdentifier, serverConnectionIdentifier, fetchIdentifier, request.requester() == ResourceRequest::Requester::Main);
-    std::optional<ServiceWorkerClientIdentifier> clientId;
-    if (options.clientIdentifier)
-        clientId = ServiceWorkerClientIdentifier { serverConnectionIdentifier, options.clientIdentifier.value() };
+    std::optional<ScriptExecutionContextIdentifier> clientId = options.clientIdentifier;
 
     request.setHTTPBody(formData.takeData());
     serviceWorkerThreadProxy->startFetch(serverConnectionIdentifier, fetchIdentifier, WTFMove(client), WTFMove(clientId), WTFMove(request), WTFMove(referrer), WTFMove(options));
@@ -271,6 +272,14 @@ void WebSWContextManagerConnection::fireActivateEvent(ServiceWorkerIdentifier id
     SWContextManager::singleton().fireActivateEvent(identifier);
 }
 
+void WebSWContextManagerConnection::firePushEvent(ServiceWorkerIdentifier identifier, const std::optional<IPC::DataReference>& ipcData, CompletionHandler<void(bool)>&& callback)
+{
+    std::optional<Vector<uint8_t>> data;
+    if (ipcData)
+        data = Vector<uint8_t> { ipcData->data(), ipcData->size() };
+    SWContextManager::singleton().firePushEvent(identifier, WTFMove(data), WTFMove(callback));
+}
+
 void WebSWContextManagerConnection::terminateWorker(ServiceWorkerIdentifier identifier)
 {
     SWContextManager::singleton().terminateWorker(identifier, SWContextManager::workerTerminationTimeout, nullptr);
@@ -283,7 +292,7 @@ void WebSWContextManagerConnection::didSaveScriptsToDisk(WebCore::ServiceWorkerI
 }
 #endif
 
-void WebSWContextManagerConnection::postMessageToServiceWorkerClient(const ServiceWorkerClientIdentifier& destinationIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
+void WebSWContextManagerConnection::postMessageToServiceWorkerClient(const ScriptExecutionContextIdentifier& destinationIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
 {
     m_connectionToNetworkProcess->send(Messages::WebSWServerToContextConnection::PostMessageToServiceWorkerClient(destinationIdentifier, message, sourceIdentifier, sourceOrigin), 0);
 }
@@ -318,7 +327,7 @@ void WebSWContextManagerConnection::workerTerminated(ServiceWorkerIdentifier ser
     m_connectionToNetworkProcess->send(Messages::WebSWServerToContextConnection::WorkerTerminated(serviceWorkerIdentifier), 0);
 }
 
-void WebSWContextManagerConnection::findClientByIdentifier(WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, ServiceWorkerClientIdentifier clientIdentifier, FindClientByIdentifierCallback&& callback)
+void WebSWContextManagerConnection::findClientByIdentifier(WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, ScriptExecutionContextIdentifier clientIdentifier, FindClientByIdentifierCallback&& callback)
 {
     auto requestIdentifier = ++m_previousRequestIdentifier;
     m_findClientByIdentifierRequests.add(requestIdentifier, WTFMove(callback));

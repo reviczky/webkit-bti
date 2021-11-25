@@ -29,6 +29,7 @@
 #include "CachedResourceLoader.h"
 #include "ContentData.h"
 #include "CursorList.h"
+#include "DocumentInlines.h"
 #include "DocumentTimeline.h"
 #include "ElementChildIterator.h"
 #include "EventHandler.h"
@@ -40,12 +41,13 @@
 #include "HTMLHtmlElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLNames.h"
-#include "LayoutIntegrationLineIterator.h"
-#include "LayoutIntegrationRunIterator.h"
+#include "InlineIteratorLine.h"
+#include "InlineIteratorTextBox.h"
 #include "LengthFunctions.h"
 #include "Logging.h"
 #include "Page.h"
 #include "PathUtilities.h"
+#include "ReferencedSVGResources.h"
 #include "RenderBlock.h"
 #include "RenderChildIterator.h"
 #include "RenderCounter.h"
@@ -75,6 +77,7 @@
 #include "RenderTheme.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGImage.h"
 #include "SVGRenderSupport.h"
 #include "Settings.h"
@@ -108,7 +111,6 @@ inline RenderElement::RenderElement(ContainerNode& elementOrDocument, RenderStyl
     , m_baseTypeFlags(baseTypeFlags)
     , m_ancestorLineBoxDirty(false)
     , m_hasInitializedStyle(false)
-    , m_renderInlineAlwaysCreatesLineBoxes(false)
     , m_renderBoxNeedsLazyRepaint(false)
     , m_hasPausedImageAnimations(false)
     , m_hasCounterNodeMap(false)
@@ -253,7 +255,7 @@ std::unique_ptr<RenderStyle> RenderElement::computeFirstLineStyle() const
         if (!composedTreeParentElement)
             return nullptr;
 
-        auto style = composedTreeParentElement->styleResolver().styleForElement(*composedTreeParentElement, &parentStyle).renderStyle;
+        auto style = composedTreeParentElement->styleResolver().styleForElement(*composedTreeParentElement, { &parentStyle }).renderStyle;
         ASSERT(style->display() == DisplayType::Contents);
 
         // We act as if there was an unstyled <span> around the text node. Only styling happens via inheritance.
@@ -262,7 +264,7 @@ std::unique_ptr<RenderStyle> RenderElement::computeFirstLineStyle() const
         return firstLineStyle;
     }
 
-    return rendererForFirstLineStyle.element()->styleResolver().styleForElement(*element(), &parentStyle).renderStyle;
+    return rendererForFirstLineStyle.element()->styleResolver().styleForElement(*element(), { &parentStyle }).renderStyle;
 }
 
 const RenderStyle& RenderElement::firstLineStyle() const
@@ -306,10 +308,7 @@ StyleDifference RenderElement::adjustStyleDifference(StyleDifference diff, Optio
     }
 
     if (contextSensitiveProperties & StyleDifferenceContextSensitiveProperty::ClipPath) {
-        if (hasLayer()
-            && downcast<RenderLayerModelObject>(*this).layer()->isComposited()
-            && hasClipPath()
-            && RenderLayerCompositor::canCompositeClipPath(*downcast<RenderLayerModelObject>(*this).layer()))
+        if (hasLayer() && downcast<RenderLayerModelObject>(*this).layer()->willCompositeClipPath())
             diff = std::max(diff, StyleDifference::RecompositeLayer);
         else
             diff = std::max(diff, StyleDifference::Repaint);
@@ -706,17 +705,14 @@ void RenderElement::removeLayers(RenderLayer* parentLayer)
         child.removeLayers(parentLayer);
 }
 
-void RenderElement::moveLayers(RenderLayer* oldParent, RenderLayer* newParent)
+void RenderElement::moveLayers(RenderLayer* oldParent, RenderLayer& newParent)
 {
-    if (!newParent)
-        return;
-
     if (hasLayer()) {
         RenderLayer* layer = downcast<RenderLayerModelObject>(*this).layer();
         ASSERT(oldParent == layer->parent());
         if (oldParent)
             oldParent->removeChild(*layer);
-        newParent->addChild(*layer);
+        newParent.addChild(*layer);
         return;
     }
 
@@ -856,6 +852,8 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
         }
 
         auto needsInvalidateEventRegion = [&] {
+            if (m_style.effectiveInert() != newStyle.effectiveInert())
+                return true;
             if (m_style.pointerEvents() != newStyle.pointerEvents())
                 return true;
 #if ENABLE(TOUCH_ACTION_REGIONS)
@@ -954,6 +952,9 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     updateShapeImage(oldStyle ? oldStyle->shapeOutside() : nullptr, m_style.shapeOutside());
 
     SVGRenderSupport::styleChanged(*this, oldStyle);
+
+    if (diff >= StyleDifference::Repaint)
+        updateReferencedSVGResources();
 
     if (!m_parent)
         return;
@@ -1234,9 +1235,6 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
     LayoutRect newOutlineBox;
 
     bool fullRepaint = selfNeedsLayout();
-    // Presumably a background or a border exists if border-fit:lines was specified.
-    if (!fullRepaint && style().borderFit() == BorderFit::Lines)
-        fullRepaint = true;
     if (!fullRepaint) {
         // This ASSERT fails due to animations. See https://bugs.webkit.org/show_bug.cgi?id=37048
         // ASSERT(!newOutlineBoxRectPtr || *newOutlineBoxRectPtr == outlineBoundsForRepaint(repaintContainer));
@@ -1530,7 +1528,7 @@ std::unique_ptr<RenderStyle> RenderElement::getUncachedPseudoStyle(const Style::
 
     auto& styleResolver = element()->styleResolver();
 
-    std::unique_ptr<RenderStyle> style = styleResolver.pseudoStyleForElement(*element(), pseudoElementRequest, *parentStyle);
+    std::unique_ptr<RenderStyle> style = styleResolver.pseudoStyleForElement(*element(), pseudoElementRequest, { parentStyle });
 
     if (style)
         Style::loadPendingResources(*style, document(), element());
@@ -1542,7 +1540,7 @@ Color RenderElement::selectionColor(CSSPropertyID colorProperty) const
 {
     // If the element is unselectable, or we are only painting the selection,
     // don't override the foreground color with the selection foreground color.
-    if (style().userSelect() == UserSelect::None
+    if (style().userSelectIncludingInert() == UserSelect::None
         || (view().frameView().paintBehavior().containsAny({ PaintBehavior::SelectionOnly, PaintBehavior::SelectionAndBackgroundsOnly })))
         return Color();
 
@@ -1570,9 +1568,9 @@ std::unique_ptr<RenderStyle> RenderElement::selectionPseudoStyle() const
         return selectionStyle;
     }
 
-    if (auto root = makeRefPtr(element()->containingShadowRoot())) {
+    if (RefPtr root = element()->containingShadowRoot()) {
         if (root->mode() == ShadowRootMode::UserAgent) {
-            auto currentElement = makeRefPtr(element()->shadowHost());
+            RefPtr currentElement = element()->shadowHost();
             // When an element has display: contents, this element doesn't have a renderer
             // and its children will render as children of the parent element.
             while (currentElement && currentElement->hasDisplayContents())
@@ -1597,7 +1595,7 @@ Color RenderElement::selectionEmphasisMarkColor() const
 
 Color RenderElement::selectionBackgroundColor() const
 {
-    if (style().userSelect() == UserSelect::None)
+    if (style().userSelectIncludingInert() == UserSelect::None)
         return Color();
 
     if (frame().selection().shouldShowBlockCursor() && frame().selection().isCaret())
@@ -1614,8 +1612,12 @@ Color RenderElement::selectionBackgroundColor() const
 
 bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
 {
+    // When scrolling elements into view, ignore sticky offsets and scroll to the static
+    // position of the element. See: https://drafts.csswg.org/css-position/#stickypos-scroll.
+    OptionSet<MapCoordinatesMode> localToAbsoluteMode { UseTransforms, IgnoreStickyOffsets };
+
     if (!isInline() || isReplaced()) {
-        point = localToAbsolute(FloatPoint(), UseTransforms, &insideFixed);
+        point = localToAbsolute(FloatPoint(), localToAbsoluteMode, &insideFixed);
         return true;
     }
 
@@ -1641,21 +1643,21 @@ bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
         ASSERT(o);
 
         if (!o->isInline() || o->isReplaced()) {
-            point = o->localToAbsolute(FloatPoint(), UseTransforms, &insideFixed);
+            point = o->localToAbsolute(FloatPoint(), localToAbsoluteMode, &insideFixed);
             return true;
         }
 
-        if (p->node() && p->node() == element() && is<RenderText>(*o) && !LayoutIntegration::firstTextRunFor(downcast<RenderText>(*o))) {
+        if (p->node() && p->node() == element() && is<RenderText>(*o) && !InlineIterator::firstTextBoxFor(downcast<RenderText>(*o))) {
             // do nothing - skip unrendered whitespace that is a child or next sibling of the anchor
         } else if (is<RenderText>(*o) || o->isReplaced()) {
             point = FloatPoint();
             if (is<RenderText>(*o)) {
                 auto& textRenderer = downcast<RenderText>(*o);
-                if (auto run = LayoutIntegration::firstTextRunFor(textRenderer))
-                    point.move(textRenderer.linesBoundingBox().x(), run.line()->top());
+                if (auto run = InlineIterator::firstTextBoxFor(textRenderer))
+                    point.move(textRenderer.linesBoundingBox().x(), run->line()->top());
             } else if (is<RenderBox>(*o))
                 point.moveBy(downcast<RenderBox>(*o).location());
-            point = o->container()->localToAbsolute(point, UseTransforms, &insideFixed);
+            point = o->container()->localToAbsolute(point, localToAbsoluteMode, &insideFixed);
             return true;
         }
     }
@@ -1671,8 +1673,12 @@ bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
 
 bool RenderElement::getTrailingCorner(FloatPoint& point, bool& insideFixed) const
 {
+    // When scrolling elements into view, ignore sticky offsets and scroll to the static
+    // position of the element. See: https://drafts.csswg.org/css-position/#stickypos-scroll.
+    OptionSet<MapCoordinatesMode> localToAbsoluteMode { UseTransforms, IgnoreStickyOffsets };
+
     if (!isInline() || isReplaced()) {
-        point = localToAbsolute(LayoutPoint(downcast<RenderBox>(*this).size()), UseTransforms, &insideFixed);
+        point = localToAbsolute(LayoutPoint(downcast<RenderBox>(*this).size()), localToAbsoluteMode, &insideFixed);
         return true;
     }
 
@@ -1703,7 +1709,7 @@ bool RenderElement::getTrailingCorner(FloatPoint& point, bool& insideFixed) cons
                 point.moveBy(linesBox.maxXMaxYCorner());
             } else
                 point.moveBy(downcast<RenderBox>(*o).frameRect().maxXMaxYCorner());
-            point = o->container()->localToAbsolute(point, UseTransforms, &insideFixed);
+            point = o->container()->localToAbsolute(point, localToAbsoluteMode, &insideFixed);
             return true;
         }
     }
@@ -2276,6 +2282,33 @@ void RenderElement::resetEnclosingFragmentedFlowAndChildInfoIncludingDescendants
         child.resetEnclosingFragmentedFlowAndChildInfoIncludingDescendants(fragmentedFlow);
 }
 
+ReferencedSVGResources& RenderElement::ensureReferencedSVGResources()
+{
+    auto& rareData = ensureRareData();
+    if (!rareData.referencedSVGResources)
+        rareData.referencedSVGResources = makeUnique<ReferencedSVGResources>(*this);
+
+    return *rareData.referencedSVGResources;
+}
+
+void RenderElement::clearReferencedSVGResources()
+{
+    if (!hasRareData())
+        return;
+
+    ensureRareData().referencedSVGResources = nullptr;
+}
+
+// This needs to run when the entire render tree has been constructed, so can't be called from styleDidChange.
+void RenderElement::updateReferencedSVGResources()
+{
+    auto referencedElementIDs = ReferencedSVGResources::referencedSVGResourceIDs(style());
+    if (!referencedElementIDs.isEmpty())
+        ensureReferencedSVGResources().updateReferencedResources(document(), referencedElementIDs);
+    else
+        clearReferencedSVGResources();
+}
+
 #if ENABLE(TEXT_AUTOSIZING)
 static RenderObject::BlockContentHeightType includeNonFixedHeight(const RenderObject& renderer)
 {
@@ -2284,7 +2317,7 @@ static RenderObject::BlockContentHeightType includeNonFixedHeight(const RenderOb
         if (is<RenderBlock>(renderer)) {
             // For fixed height styles, if the overflow size of the element spills out of the specified
             // height, assume we can apply text auto-sizing.
-            if (style.overflowY() == Overflow::Visible
+            if (downcast<RenderBlock>(renderer).effectiveOverflowY() == Overflow::Visible
                 && style.height().value() < downcast<RenderBlock>(renderer).layoutOverflowRect().maxY())
                 return RenderObject::OverflowHeight;
         }
@@ -2371,7 +2404,23 @@ WeakPtr<RenderBlockFlow> RenderElement::backdropRenderer() const
 
 void RenderElement::setBackdropRenderer(RenderBlockFlow& renderer)
 {
-    ensureRareData().backdropRenderer = makeWeakPtr(renderer);
+    ensureRareData().backdropRenderer = renderer;
+}
+
+Overflow RenderElement::effectiveOverflowX() const
+{
+    auto overflowX = style().overflowX();
+    if (paintContainmentApplies() && overflowX == Overflow::Visible)
+        return Overflow::Clip;
+    return overflowX;
+}
+
+Overflow RenderElement::effectiveOverflowY() const
+{
+    auto overflowY = style().overflowY();
+    if (paintContainmentApplies() && overflowY == Overflow::Visible)
+        return Overflow::Clip;
+    return overflowY;
 }
 
 }

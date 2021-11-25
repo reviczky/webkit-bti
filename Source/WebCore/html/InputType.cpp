@@ -38,6 +38,8 @@
 #include "DateInputType.h"
 #include "DateTimeLocalInputType.h"
 #include "Decimal.h"
+#include "DocumentInlines.h"
+#include "ElementInlines.h"
 #include "EmailInputType.h"
 #include "EventNames.h"
 #include "FileInputType.h"
@@ -729,6 +731,11 @@ void InputType::setValue(const String& sanitizedValue, bool valueChanged, TextFi
     case DispatchNoEvent:
         break;
     }
+
+    if (isRangeControl()) {
+        if (auto* cache = element()->document().existingAXObjectCache())
+            cache->postNotification(element(), AXObjectCache::AXValueChanged);
+    }
 }
 
 bool InputType::canSetValue(const String&)
@@ -930,7 +937,7 @@ ExceptionOr<void> InputType::applyStep(int count, AnyStepHandling anyStepHandlin
     if (newValue > stepRange.maximum())
         newValue = stepRange.maximum();
 
-    auto protectedThis = makeRef(*this);
+    Ref protectedThis { *this };
     auto result = setValueAsDecimal(newValue, eventBehavior);
     if (result.hasException() || !element())
         return result;

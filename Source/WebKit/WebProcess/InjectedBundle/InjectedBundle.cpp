@@ -142,7 +142,7 @@ void InjectedBundle::postSynchronousMessage(const String& messageName, API::Obje
 
     auto& webProcess = WebProcess::singleton();
     if (!webProcess.parentProcessConnection()->sendSync(Messages::WebProcessPool::HandleSynchronousMessage(messageName, UserData(webProcess.transformObjectsToHandles(messageBody))),
-        Messages::WebProcessPool::HandleSynchronousMessage::Reply(returnUserData), 0))
+        Messages::WebProcessPool::HandleSynchronousMessage::Reply(returnUserData), 0, IPC::Timeout::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend))
         returnData = nullptr;
     else
         returnData = webProcess.transformHandlesToObjects(returnUserData.object());
@@ -338,14 +338,14 @@ InjectedBundle::DocumentIDToURLMap InjectedBundle::liveDocumentURLs(bool exclude
     DocumentIDToURLMap result;
 
     for (const auto* document : Document::allDocuments())
-        result.add(document->identifier().toUInt64(), document->url().string());
+        result.add(document->identifier().object().toUInt64(), document->url().string());
 
     if (excludeDocumentsInPageGroupPages) {
         Page::forEachPage([&](Page& page) {
             for (auto* frame = &page.mainFrame(); frame; frame = frame->tree().traverseNext()) {
                 if (!frame->document())
                     continue;
-                result.remove(frame->document()->identifier().toUInt64());
+                result.remove(frame->document()->identifier().object().toUInt64());
             }
         });
     }

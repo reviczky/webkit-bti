@@ -33,6 +33,10 @@
 #include <WebCore/FloatRect.h>
 #include <wtf/CompletionHandler.h>
 
+#if PLATFORM(COCOA)
+#include <WebCore/PlatformViewController.h>
+#endif
+
 #if PLATFORM(IOS_FAMILY)
 OBJC_CLASS NSArray;
 OBJC_CLASS _WKActivatedElementInfo;
@@ -97,9 +101,6 @@ public:
 
     virtual void setStatusText(WebKit::WebPageProxy*, const WTF::String&) { }
     virtual void mouseDidMoveOverElement(WebKit::WebPageProxy&, const WebKit::WebHitTestResultData&, OptionSet<WebKit::WebEvent::Modifier>, Object*) { }
-#if ENABLE(NETSCAPE_PLUGIN_API)
-    virtual void unavailablePluginButtonClicked(WebKit::WebPageProxy&, WKPluginUnavailabilityReason, Dictionary&) { }
-#endif // ENABLE(NETSCAPE_PLUGIN_API)
 
     virtual void didNotHandleKeyEvent(WebKit::WebPageProxy*, const WebKit::NativeWebKeyboardEvent&) { }
     virtual void didNotHandleWheelEvent(WebKit::WebPageProxy*, const WebKit::NativeWebWheelEvent&) { }
@@ -155,7 +156,7 @@ public:
     virtual void pinnedStateDidChange(WebKit::WebPageProxy&) { }
 
     virtual void isPlayingMediaDidChange(WebKit::WebPageProxy&) { }
-    virtual void mediaCaptureStateDidChange(WebCore::MediaProducer::MediaStateFlags) { }
+    virtual void mediaCaptureStateDidChange(WebCore::MediaProducerMediaStateFlags) { }
     virtual void handleAutoplayEvent(WebKit::WebPageProxy&, WebCore::AutoplayEvent, OptionSet<WebCore::AutoplayEventFlags>) { }
 
 #if PLATFORM(IOS_FAMILY)
@@ -164,9 +165,9 @@ public:
 #endif
     virtual RetainPtr<NSArray> actionsForElement(_WKActivatedElementInfo *, RetainPtr<NSArray> defaultActions) { return defaultActions; }
     virtual void didNotHandleTapAsClick(const WebCore::IntPoint&) { }
-    virtual UIViewController *presentingViewController() { return nullptr; }
 #endif
 #if PLATFORM(COCOA)
+    virtual PlatformViewController *presentingViewController() { return nullptr; }
     virtual NSDictionary *dataDetectionContext() { return nullptr; }
 #endif
 

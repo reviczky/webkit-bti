@@ -22,29 +22,91 @@
 #include "config.h"
 #include "SVGFilter.h"
 
+#include "SVGFilterBuilder.h"
+#include "SVGFilterElement.h"
+#include "SourceGraphic.h"
+
 namespace WebCore {
 
-SVGFilter::SVGFilter(const AffineTransform& absoluteTransform, const FloatRect& absoluteSourceDrawingRegion, const FloatRect& targetBoundingBox, const FloatRect& filterRegion, bool effectBBoxMode)
-    : Filter(absoluteTransform)
-    , m_absoluteSourceDrawingRegion(absoluteSourceDrawingRegion)
-    , m_targetBoundingBox(targetBoundingBox)
-    , m_filterRegion(filterRegion)
-    , m_effectBBoxMode(effectBBoxMode)
+RefPtr<SVGFilter> SVGFilter::create(SVGFilterElement& filterElement, SVGFilterBuilder& builder, const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& filterRegion, FilterEffect& previousEffect)
 {
-    m_absoluteFilterRegion = absoluteTransform.mapRect(filterRegion);
+    return create(filterElement, builder, filterScale, sourceImageRect, filterRegion, filterRegion, &previousEffect);
 }
 
-FloatSize SVGFilter::scaledByFilterResolution(FloatSize size) const
+RefPtr<SVGFilter> SVGFilter::create(SVGFilterElement& filterElement, SVGFilterBuilder& builder, const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& filterRegion, const FloatRect& targetBoundingBox)
+{
+    return create(filterElement, builder, filterScale, sourceImageRect, filterRegion, targetBoundingBox, nullptr);
+}
+
+RefPtr<SVGFilter> SVGFilter::create(SVGFilterElement& filterElement, SVGFilterBuilder& builder, const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& filterRegion, const FloatRect& targetBoundingBox, FilterEffect* previousEffect)
+{
+    bool primitiveBoundingBoxMode = filterElement.primitiveUnits() == SVGUnitTypes::SVG_UNIT_TYPE_OBJECTBOUNDINGBOX;
+
+    auto filter = adoptRef(*new SVGFilter(filterScale, sourceImageRect, filterRegion, targetBoundingBox, primitiveBoundingBoxMode));
+
+    if (!previousEffect)
+        builder.setupBuiltinEffects(SourceGraphic::create());
+    else
+        builder.setupBuiltinEffects({ *previousEffect });
+
+    builder.setTargetBoundingBox(targetBoundingBox);
+    builder.setPrimitiveUnits(filterElement.primitiveUnits());
+
+    auto lastEffect = builder.buildFilterEffects(filterElement);
+    if (!lastEffect)
+        return nullptr;
+
+    FilterEffectVector expression;
+    if (!builder.buildExpression(expression))
+        return nullptr;
+
+    ASSERT(!expression.isEmpty());
+    filter->setExpression(WTFMove(expression));
+    return filter;
+}
+
+SVGFilter::SVGFilter(const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& filterRegion, const FloatRect& targetBoundingBox, bool effectBBoxMode)
+    : Filter(Filter::Type::SVGFilter, filterScale, sourceImageRect, filterRegion)
+    , m_targetBoundingBox(targetBoundingBox)
+    , m_effectBBoxMode(effectBBoxMode)
+{
+}
+
+FloatSize SVGFilter::scaledByFilterScale(FloatSize size) const
 {
     if (m_effectBBoxMode)
         size = size * m_targetBoundingBox.size();
 
-    return Filter::scaledByFilterResolution(size) * m_absoluteFilterRegion.size() / m_filterRegion.size();
+    return Filter::scaledByFilterScale(size);
 }
 
-Ref<SVGFilter> SVGFilter::create(const AffineTransform& absoluteTransform, const FloatRect& absoluteSourceDrawingRegion, const FloatRect& targetBoundingBox, const FloatRect& filterRegion, bool effectBBoxMode)
+bool SVGFilter::apply(const Filter& filter)
 {
-    return adoptRef(*new SVGFilter(absoluteTransform, absoluteSourceDrawingRegion, targetBoundingBox, filterRegion, effectBBoxMode));
+    setSourceImage({ filter.sourceImage() });
+    return apply();
+}
+
+bool SVGFilter::apply()
+{
+    ASSERT(!m_expression.isEmpty());
+    for (auto& effect : m_expression) {
+        if (!effect->apply(*this))
+            return false;
+    }
+    return true;
+}
+
+IntOutsets SVGFilter::outsets() const
+{
+    ASSERT(lastEffect());
+    return lastEffect()->outsets();
+}
+
+void SVGFilter::clearResult()
+{
+    ASSERT(!m_expression.isEmpty());
+    for (auto& effect : m_expression)
+        effect->clearResult();
 }
 
 } // namespace WebCore

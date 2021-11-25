@@ -29,7 +29,6 @@
 #if ENABLE(DFG_JIT)
 
 #include "DFGArgumentsEliminationPhase.h"
-#include "DFGBackwardsPropagationPhase.h"
 #include "DFGByteCodeParser.h"
 #include "DFGCFAPhase.h"
 #include "DFGCFGSimplificationPhase.h"
@@ -255,7 +254,6 @@ Plan::CompilationPath Plan::compileInThreadImpl()
     if (validationEnabled())
         validate(dfg);
     
-    RUN_PHASE(performBackwardsPropagation);
     RUN_PHASE(performPredictionPropagation);
     RUN_PHASE(performFixup);
     RUN_PHASE(performInvalidationPointInjection);
@@ -585,7 +583,7 @@ CompilationResult Plan::finalize()
     }();
 
     // We will establish new references from the code block to things. So, we need a barrier.
-    m_vm->heap.writeBarrier(m_codeBlock);
+    m_vm->writeBarrier(m_codeBlock);
 
     m_callback->compilationDidComplete(m_codeBlock, m_profiledDFGCodeBlock, result);
 

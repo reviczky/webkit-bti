@@ -64,12 +64,15 @@ public:
     
     JSC::IsoSubspace& domBuiltinConstructorSpace() { return m_domBuiltinConstructorSpace; }
     JSC::IsoSubspace& domConstructorSpace() { return m_domConstructorSpace; }
+    JSC::IsoSubspace& domNamespaceObjectSpace() { return m_domNamespaceObjectSpace; }
     JSC::IsoSubspace& domWindowPropertiesSpace() { return m_domWindowPropertiesSpace; }
     JSC::IsoSubspace& runtimeArraySpace() { return m_runtimeArraySpace; }
     JSC::IsoSubspace& runtimeMethodSpace() { return m_runtimeMethodSpace; }
     JSC::IsoSubspace& runtimeObjectSpace() { return m_runtimeObjectSpace; }
     JSC::IsoSubspace& windowProxySpace() { return m_windowProxySpace; }
     JSC::IsoSubspace& idbSerializationSpace() { return m_idbSerializationSpace; }
+    JSC::IsoSubspace* fileSystemDirectoryHandleIteratorSpace() { return m_fileSystemDirectoryHandleIteratorSpace.get(); }
+    void setFileSystemDirectoryHandleIteratorSpace(std::unique_ptr<JSC::IsoSubspace> space) { m_fileSystemDirectoryHandleIteratorSpace = std::exchange(space, nullptr); }
 
     Vector<JSC::IsoSubspace*>& outputConstraintSpaces() { return m_outputConstraintSpaces; }
 
@@ -97,6 +100,7 @@ public:
     std::unique_ptr<JSC::HeapCellType> m_heapCellTypeForJSDedicatedWorkerGlobalScope;
     std::unique_ptr<JSC::HeapCellType> m_heapCellTypeForJSRemoteDOMWindow;
     std::unique_ptr<JSC::HeapCellType> m_heapCellTypeForJSWorkerGlobalScope;
+    std::unique_ptr<JSC::HeapCellType> m_heapCellTypeForJSSharedWorkerGlobalScope;
 #if ENABLE(SERVICE_WORKER)
     std::unique_ptr<JSC::HeapCellType> m_heapCellTypeForJSServiceWorkerGlobalScope;
 #endif
@@ -112,12 +116,14 @@ public:
 private:
     JSC::IsoSubspace m_domBuiltinConstructorSpace;
     JSC::IsoSubspace m_domConstructorSpace;
+    JSC::IsoSubspace m_domNamespaceObjectSpace;
     JSC::IsoSubspace m_domWindowPropertiesSpace;
     JSC::IsoSubspace m_runtimeArraySpace;
     JSC::IsoSubspace m_runtimeMethodSpace;
     JSC::IsoSubspace m_runtimeObjectSpace;
     JSC::IsoSubspace m_windowProxySpace;
     JSC::IsoSubspace m_idbSerializationSpace;
+    std::unique_ptr<JSC::IsoSubspace> m_fileSystemDirectoryHandleIteratorSpace;
     std::unique_ptr<DOMIsoSubspaces> m_subspaces;
     Vector<JSC::IsoSubspace*> m_outputConstraintSpaces;
 };

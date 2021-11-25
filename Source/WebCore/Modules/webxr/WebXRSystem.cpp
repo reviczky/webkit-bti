@@ -61,10 +61,10 @@ Ref<WebXRSystem> WebXRSystem::create(Navigator& navigator)
 
 WebXRSystem::WebXRSystem(Navigator& navigator)
     : ActiveDOMObject(navigator.scriptExecutionContext())
-    , m_navigator(makeWeakPtr(navigator))
+    , m_navigator(navigator)
     , m_defaultInlineDevice(*navigator.scriptExecutionContext())
 {
-    m_inlineXRDevice = makeWeakPtr(m_defaultInlineDevice);
+    m_inlineXRDevice = m_defaultInlineDevice;
     suspendIfNeeded();
 }
 
@@ -97,7 +97,7 @@ void WebXRSystem::ensureImmersiveXRDeviceIsSelected(CompletionHandler<void()>&& 
     }
 
     bool isFirstXRDevicesEnumeration = !m_immersiveXRDevicesHaveBeenEnumerated;
-    document->page()->chrome().client().enumerateImmersiveXRDevices([this, protectedThis = makeRef(*this), isFirstXRDevicesEnumeration, callback = WTFMove(callback)](auto& immersiveXRDevices) mutable {
+    document->page()->chrome().client().enumerateImmersiveXRDevices([this, protectedThis = Ref { *this }, isFirstXRDevicesEnumeration, callback = WTFMove(callback)](auto& immersiveXRDevices) mutable {
         m_immersiveXRDevicesHaveBeenEnumerated = true;
 
         auto callbackOnExit = makeScopeExit([&]() {
@@ -111,7 +111,7 @@ void WebXRSystem::ensureImmersiveXRDeviceIsSelected(CompletionHandler<void()>&& 
             return;
         }
         if (immersiveXRDevices.size() == 1) {
-            m_activeImmersiveDevice = makeWeakPtr(immersiveXRDevices.first().get());
+            m_activeImmersiveDevice = immersiveXRDevices.first().get();
             return;
         }
 
@@ -119,7 +119,7 @@ void WebXRSystem::ensureImmersiveXRDeviceIsSelected(CompletionHandler<void()>&& 
             ASSERT(m_activeImmersiveDevice.get() == oldDevice);
         else {
             // FIXME: implement a better UA selection mechanism if required.
-            m_activeImmersiveDevice = makeWeakPtr(immersiveXRDevices.first().get());
+            m_activeImmersiveDevice = immersiveXRDevices.first().get();
         }
 
         if (isFirstXRDevicesEnumeration || m_activeImmersiveDevice.get() == oldDevice) {
@@ -291,6 +291,9 @@ std::optional<WebXRSystem::ResolvedRequestedFeatures> WebXRSystem::resolveReques
             if (sessionFeature.isNull())
                 continue;
 
+            // FIXME: This is only testing for XRReferenceSpaceType features. It
+            // needs to handle optional features like "hand-tracking".
+
             // 2. If feature is not a valid feature descriptor, perform the following steps
             //   2.1. Let s be the result of calling ? ToString(feature).
             //   2.2. If s is not a valid feature descriptor or is undefined, (return null|continue to next entry).
@@ -406,7 +409,7 @@ void WebXRSystem::requestSession(Document& document, XRSessionMode mode, const X
     // 5.2 Let optionalFeatures be options' optionalFeatures.
     // 5.3 Set device to the result of obtaining the current device for mode, requiredFeatures, and optionalFeatures.
     // 5.4 Queue a task to perform the following steps:
-    obtainCurrentDevice(mode, init.requiredFeatures, init.optionalFeatures, [this, protectedDocument = makeRef(document), immersive, init, mode, promise = WTFMove(promise)](auto* device) mutable {
+    obtainCurrentDevice(mode, init.requiredFeatures, init.optionalFeatures, [this, protectedDocument = Ref { document }, immersive, init, mode, promise = WTFMove(promise)](auto* device) mutable {
         auto rejectPromiseWithNotSupportedError = makeScopeExit([&]() {
             promise.reject(Exception { NotSupportedError });
             m_pendingImmersiveSession = false;
@@ -475,10 +478,10 @@ void WebXRSystem::registerSimulatedXRDeviceForTesting(PlatformXR::Device& device
     m_testingDevices++;
     if (device.supports(XRSessionMode::ImmersiveVr) || device.supports(XRSessionMode::ImmersiveAr)) {
         m_immersiveDevices.add(device);
-        m_activeImmersiveDevice = makeWeakPtr(device);
+        m_activeImmersiveDevice = device;
     }
     if (device.supports(XRSessionMode::Inline))
-        m_inlineXRDevice = makeWeakPtr(device);
+        m_inlineXRDevice = device;
 }
 
 void WebXRSystem::unregisterSimulatedXRDeviceForTesting(PlatformXR::Device& device)
@@ -493,7 +496,7 @@ void WebXRSystem::unregisterSimulatedXRDeviceForTesting(PlatformXR::Device& devi
     if (m_activeImmersiveDevice == &device)
         m_activeImmersiveDevice = nullptr;
     if (m_inlineXRDevice == &device)
-        m_inlineXRDevice = makeWeakPtr(m_defaultInlineDevice);
+        m_inlineXRDevice = m_defaultInlineDevice;
     m_testingDevices--;
 }
 

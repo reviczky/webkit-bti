@@ -45,7 +45,7 @@ static const size_t minInterToneGapMs = 30;
 RTCDTMFSender::RTCDTMFSender(ScriptExecutionContext& context, RTCRtpSender& sender, std::unique_ptr<RTCDTMFSenderBackend>&& backend)
     : ActiveDOMObject(&context)
     , m_toneTimer(*this, &RTCDTMFSender::toneTimerFired)
-    , m_sender(makeWeakPtr(sender))
+    , m_sender(sender)
     , m_backend(WTFMove(backend))
 {
     m_backend->onTonePlayed([this](const String&) {
@@ -101,7 +101,7 @@ ExceptionOr<void> RTCDTMFSender::insertDTMF(const String& tones, size_t duration
         return { };
 
     m_isPendingPlayoutTask = true;
-    scriptExecutionContext()->postTask([this, protectedThis = makeRef(*this)](auto&) {
+    scriptExecutionContext()->postTask([this, protectedThis = Ref { *this }](auto&) {
         playNextTone();
     });
     return { };

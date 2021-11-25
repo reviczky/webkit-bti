@@ -29,7 +29,6 @@
 #include <unistd.h>
 #include <wtf/FileSystem.h>
 #include <wtf/UniStdExtras.h>
-#include <wtf/glib/GLibUtilities.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 
@@ -129,6 +128,22 @@ argsToFd(const Vector<CString>& args, const char *name)
     return memfd;
 }
 
+static const char* applicationId(GError** error)
+{
+    GApplication* app = g_application_get_default();
+    if (!app) {
+        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA, "GApplication is required.");
+        return nullptr;
+    }
+
+    const char* appID = g_application_get_application_id(app);
+    if (!appID) {
+        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA, "GApplication must have a valid ID.");
+        return nullptr;
+    }
+    return appID;
+}
+
 static int createFlatpakInfo()
 {
     static NeverDestroyed<GUniquePtr<char>> data;
@@ -137,13 +152,10 @@ static int createFlatpakInfo()
     if (!data.get()) {
         // xdg-desktop-portal relates your name to certain permissions so we want
         // them to be application unique which is best done via GApplication.
-        GApplication* app = g_application_get_default();
-        if (!app)
-            g_error("GApplication is required for xdg-desktop-portal access in the WebKit sandbox.");
-
-        const char* appID = g_application_get_application_id(app);
+        GUniqueOutPtr<GError> error;
+        const char* appID = applicationId(&error.outPtr());
         if (!appID)
-            g_error("GApplication must have a valid ID for xdg-desktop-portal access in the WebKit sandbox.");
+            g_error("Unable to configure xdg-desktop-portal access in the WebKit sandbox: %s", error->message);
 
         GUniquePtr<GKeyFile> keyFile(g_key_file_new());
         g_key_file_set_string(keyFile.get(), "Application", "name", appID);
@@ -206,6 +218,16 @@ public:
         if (enableLogging)
             proxyArgs.append("--log");
 
+        GUniqueOutPtr<GError> error;
+#if ENABLE(MEDIA_SESSION)
+        const char* appID = applicationId(&error.outPtr());
+        if (!appID)
+            g_warning("Unable to own D-Bus MPRIS name in the WebKit sandbox: %s", error->message);
+
+        auto mprisSessionID = makeString("--own=org.mpris.MediaPlayer2.", appID);
+        proxyArgs.append(mprisSessionID.ascii().data());
+#endif
+
         proxyArgs.appendVector(m_permissions);
 
         int proxyFd = argsToFd(proxyArgs, "dbus-proxy");
@@ -226,6 +248,9 @@ public:
             argv[i++] = const_cast<char*>(arg.data());
         argv[i] = nullptr;
 
+        // Warning: do not set a child setup function, because we want GIO to be able to spawn with
+        // posix_spawn() rather than fork()/exec(), in order to better accomodate applications that use
+        // a huge amount of memory or address space in the UI process, like Eclipse.
         GRefPtr<GSubprocessLauncher> launcher = adoptGRef(g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_INHERIT_FDS));
         g_subprocess_launcher_take_fd(launcher.get(), proxyFd, proxyFd);
         g_subprocess_launcher_take_fd(launcher.get(), syncFds[1], syncFds[1]);
@@ -235,7 +260,6 @@ public:
 
         ProcessLauncher::LaunchOptions launchOptions;
         launchOptions.processType = ProcessLauncher::ProcessType::DBusProxy;
-        GUniqueOutPtr<GError> error;
         GRefPtr<GSubprocess> process = bubblewrapSpawn(launcher.get(), launchOptions, argv, &error.outPtr());
         if (!process.get())
             g_error("Failed to start dbus proxy: %s", error->message);
@@ -491,6 +515,9 @@ static void bindA11y(Vector<CString>& args)
                 GUniqueOutPtr<char> a11yAddress;
                 g_variant_get(g_dbus_message_get_body(reply.get()), "(s)", &a11yAddress.outPtr());
                 proxy.setAddress(a11yAddress.get(), DBusAddressType::Abstract);
+#if USE(ATSPI)
+                PlatformDisplay::sharedDisplay().setAccessibilityBusAddress(makeString("unix:path=", proxy.proxyPath().data()));
+#endif
             }
         }
 
@@ -953,7 +980,7 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
         bindIfExists(sandboxArgs, parentDir.utf8().data());
     }
 
-    CString executablePath = getCurrentExecutablePath();
+    CString executablePath = FileSystem::currentExecutablePath();
     if (!executablePath.isNull()) {
         // Our executable is `/foo/bar/bin/Process`, we want `/foo/bar` as a usable prefix
         String parentDir = FileSystem::parentPath(FileSystem::parentPath(FileSystem::stringFromFileSystemRepresentation(executablePath.data())));

@@ -63,6 +63,9 @@ public:
     bool contentBlockersEnabled() const { return m_contentBlockersEnabled; }
     void setContentBlockersEnabled(bool enabled) { m_contentBlockersEnabled = enabled; }
     
+    void setActiveContentRuleListActionPatterns(std::optional<HashSet<WTF::String>>&& patterns) { m_activeContentRuleListActionPatterns = WTFMove(patterns); }
+    const std::optional<HashSet<WTF::String>>& activeContentRuleListActionPatterns() const { return m_activeContentRuleListActionPatterns; }
+    
     OptionSet<WebKit::WebsiteAutoplayQuirk> allowedAutoplayQuirks() const { return m_allowedAutoplayQuirks; }
     void setAllowedAutoplayQuirks(OptionSet<WebKit::WebsiteAutoplayQuirk> quirks) { m_allowedAutoplayQuirks = quirks; }
     
@@ -125,6 +128,9 @@ public:
     WebCore::AllowsContentJavaScript allowsContentJavaScript() const { return m_allowsContentJavaScript; }
     void setAllowsContentJavaScript(WebCore::AllowsContentJavaScript allows) { m_allowsContentJavaScript = allows; }
 
+    bool captivePortalModeEnabled() const;
+    void setCaptivePortalModeEnabled(std::optional<bool> captivePortalModeEnabled) { m_captivePortalModeEnabled = captivePortalModeEnabled; }
+
     WebCore::MouseEventPolicy mouseEventPolicy() const { return m_mouseEventPolicy; }
     void setMouseEventPolicy(WebCore::MouseEventPolicy policy) { m_mouseEventPolicy = policy; }
 
@@ -132,7 +138,9 @@ public:
     void setIdempotentModeAutosizingOnlyHonorsPercentages(bool idempotentModeAutosizingOnlyHonorsPercentages) { m_idempotentModeAutosizingOnlyHonorsPercentages = idempotentModeAutosizingOnlyHonorsPercentages; }
 
 private:
+    // FIXME: replace most or all of these members with a WebsitePoliciesData.
     bool m_contentBlockersEnabled { true };
+    std::optional<HashSet<WTF::String>> m_activeContentRuleListActionPatterns { HashSet<WTF::String>() };
     OptionSet<WebKit::WebsiteAutoplayQuirk> m_allowedAutoplayQuirks;
     WebKit::WebsiteAutoplayPolicy m_autoplayPolicy { WebKit::WebsiteAutoplayPolicy::Default };
 #if ENABLE(DEVICE_ORIENTATION)
@@ -157,6 +165,7 @@ private:
     WebCore::AllowsContentJavaScript m_allowsContentJavaScript { WebCore::AllowsContentJavaScript::Yes };
     WebCore::MouseEventPolicy m_mouseEventPolicy { WebCore::MouseEventPolicy::Default };
     bool m_idempotentModeAutosizingOnlyHonorsPercentages { false };
+    std::optional<bool> m_captivePortalModeEnabled;
 };
 
 } // namespace API

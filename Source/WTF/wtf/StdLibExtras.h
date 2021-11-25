@@ -29,9 +29,12 @@
 #include <cstring>
 #include <memory>
 #include <type_traits>
+#include <variant>
 #include <wtf/Assertions.h>
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/Compiler.h>
+#include <wtf/GetPtr.h>
+#include <wtf/TypeCasts.h>
 
 // Use this macro to declare and define a debug-only global variable that may have a
 // non-trivial constructor and destructor. When building with clang, this will suppress
@@ -382,6 +385,36 @@ Visitor<F...> makeVisitor(F... f)
 {
     return Visitor<F...>(f...);
 }
+
+template<class V, class... F>
+auto switchOn(V&& v, F&&... f) -> decltype(std::visit(makeVisitor(std::forward<F>(f)...), std::forward<V>(v)))
+{
+    return std::visit(makeVisitor(std::forward<F>(f)...), std::forward<V>(v));
+}
+
+namespace Detail {
+
+template<std::size_t, class, class> struct AlternativeIndexHelper;
+
+template<std::size_t index, class T, class U>
+struct AlternativeIndexHelper<index, T, std::variant<U>> {
+    static constexpr std::size_t count = std::is_same_v<T, U>;
+    static constexpr std::size_t value = index;
+};
+
+template<std::size_t index, class T, class U, class... Types> struct AlternativeIndexHelper<index, T, std::variant<U, Types...>> {
+    static constexpr std::size_t count = std::is_same_v<T, U> + AlternativeIndexHelper<index + 1, T, std::variant<Types...>>::count;
+    static constexpr std::size_t value = std::is_same_v<T, U> ? index : AlternativeIndexHelper<index + 1, T, std::variant<Types...>>::value;
+};
+
+} // namespace Detail
+
+template<class T, class U> struct alternativeIndex {
+    static_assert(Detail::AlternativeIndexHelper<0, T, U>::count == 1, "There needs to be exactly one of the given type in the variant");
+    static constexpr std::size_t value = Detail::AlternativeIndexHelper<0, T, U>::value;
+};
+
+template <class T, class U> inline constexpr std::size_t alternativeIndexV = alternativeIndex<T, U>::value;
 
 namespace Detail
 {

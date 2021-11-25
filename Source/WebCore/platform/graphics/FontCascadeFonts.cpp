@@ -106,7 +106,7 @@ FontCascadeFonts::FontCascadeFonts(RefPtr<FontSelector>&& fontSelector)
 {
 #if ASSERT_ENABLED
     if (!isMainThread())
-        m_thread = makeRef(Thread::current());
+        m_thread = Thread::current();
 #endif
 }
 
@@ -161,7 +161,7 @@ static FontRanges realizeNextFallback(const FontCascadeDescription& description,
             return fontFamilySpecification.fontRanges(description);
         });
         const auto& currentFamily = description.effectiveFamilyAt(index++);
-        auto ranges = WTF::visit(visitor, currentFamily);
+        auto ranges = std::visit(visitor, currentFamily);
         if (!ranges.isNull())
             return ranges;
     }

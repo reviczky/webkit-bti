@@ -66,6 +66,7 @@ private:
     template<typename Visitor> void visitJSFunctionImpl(Visitor&);
     void visitJSFunction(JSC::AbstractSlotVisitor&) final;
     void visitJSFunction(JSC::SlotVisitor&) final;
+    virtual String code() const { return String(); }
 
 protected:
     JSEventListener(JSC::JSObject* function, JSC::JSObject* wrapper, bool isAttribute, DOMWrapperWorld&);
@@ -102,7 +103,7 @@ inline JSC::JSObject* JSEventListener::ensureJSFunction(ScriptExecutionContext& 
     // initializeJSFunction can trigger code that deletes this event listener
     // before we're done. It should always return null in this case.
     JSC::VM& vm = m_isolatedWorld->vm();
-    auto protect = makeRef(const_cast<JSEventListener&>(*this));
+    Ref protect = const_cast<JSEventListener&>(*this);
     JSC::EnsureStillAliveScope protectedWrapper(m_wrapper.get());
 
     if (!m_isInitialized) {
@@ -112,7 +113,7 @@ inline JSC::JSObject* JSEventListener::ensureJSFunction(ScriptExecutionContext& 
             m_jsFunction = JSC::Weak<JSC::JSObject>(function);
             // When JSFunction is initialized, initializeJSFunction must ensure that m_wrapper should be initialized too.
             ASSERT(m_wrapper);
-            vm.heap.writeBarrier(m_wrapper.get(), function);
+            vm.writeBarrier(m_wrapper.get(), function);
             m_isInitialized = true;
         }
     }

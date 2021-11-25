@@ -29,6 +29,7 @@
 #include "CSSComputedStyleDeclaration.h"
 #include "ContextDestructionObserver.h"
 #include "Cookie.h"
+#include "EpochTimeStamp.h"
 #include "ExceptionOr.h"
 #include "HEVCUtilities.h"
 #include "IDLTypes.h"
@@ -38,7 +39,7 @@
 #include "SleepDisabler.h"
 #include "TextIndicator.h"
 #include "VP9Utilities.h"
-#include <JavaScriptCore/Float32Array.h>
+#include <JavaScriptCore/Forward.h>
 
 #if ENABLE(VIDEO)
 #include "MediaElementSession.h"
@@ -53,6 +54,7 @@ class ArtworkImageLoader;
 class AudioContext;
 class AudioTrack;
 class BaseAudioContext;
+class Blob;
 class CacheStorageConnection;
 class DOMPointReadOnly;
 class DOMRect;
@@ -102,6 +104,7 @@ class SerializedScriptValue;
 class SourceBuffer;
 class StringCallback;
 class StyleSheet;
+class TextIterator;
 class TextTrack;
 class TimeRanges;
 class TypeConversions;
@@ -122,6 +125,7 @@ class TextTrackCueGeneric;
 #endif
 
 #if ENABLE(SERVICE_WORKER)
+class PushSubscription;
 class ServiceWorker;
 #endif
 
@@ -148,7 +152,7 @@ struct MockWebAuthenticationConfiguration;
 
 class Internals final : public RefCounted<Internals>, private ContextDestructionObserver
 #if ENABLE(MEDIA_STREAM)
-    , private RealtimeMediaSource::Observer
+    , public RealtimeMediaSource::Observer
     , private RealtimeMediaSource::AudioSampleObserver
     , private RealtimeMediaSource::VideoSampleObserver
 #endif
@@ -199,6 +203,7 @@ public:
     void setClearDecoderAfterAsyncFrameRequestForTesting(HTMLImageElement&, bool enabled);
     unsigned imageDecodeCount(HTMLImageElement&);
     unsigned pdfDocumentCachingCount(HTMLImageElement&);
+    unsigned remoteImagesCountForTesting() const;
     void setLargeImageAsyncDecodingEnabledForTesting(HTMLImageElement&, bool enabled);
     void setForceUpdateImageDataEnabledForTesting(HTMLImageElement&, bool enabled);
 
@@ -281,6 +286,7 @@ public:
 
     ExceptionOr<Ref<DOMRectList>> inspectorHighlightRects();
     ExceptionOr<unsigned> inspectorGridOverlayCount();
+    ExceptionOr<unsigned> inspectorPaintRectCount();
 
     ExceptionOr<unsigned> markerCountForNode(Node&, const String&);
     ExceptionOr<RefPtr<Range>> markerRangeForNode(Node&, const String& markerType, unsigned index);
@@ -314,6 +320,7 @@ public:
     bool elementShouldAutoComplete(HTMLInputElement&);
     void setAutofilled(HTMLInputElement&, bool enabled);
     void setAutoFilledAndViewable(HTMLInputElement&, bool enabled);
+    void setAutoFilledAndObscured(HTMLInputElement&, bool enabled);
     enum class AutoFillButtonType { None, Contacts, Credentials, StrongPassword, CreditCard };
     void setShowAutoFillButton(HTMLInputElement&, AutoFillButtonType);
     AutoFillButtonType autoFillButtonType(const HTMLInputElement&);
@@ -473,13 +480,9 @@ public:
     static bool isBaseAudioContextAlive(uint64_t contextID);
 #endif
 
-#if ENABLE(INTERSECTION_OBSERVER)
     unsigned numberOfIntersectionObservers(const Document&) const;
-#endif
 
-#if ENABLE(RESIZE_OBSERVER)
     unsigned numberOfResizeObservers(const Document&) const;
-#endif
 
     uint64_t documentIdentifier(const Document&) const;
     bool isDocumentAlive(uint64_t documentIdentifier) const;
@@ -595,7 +598,6 @@ public:
     JSC::JSValue evaluateInWorldIgnoringException(const String& name, const String& source);
 
     void setUsesOverlayScrollbars(bool);
-    void setUsesMockScrollAnimator(bool);
 
     ExceptionOr<String> getCurrentCursorInfo();
 
@@ -639,6 +641,9 @@ public:
     void setWebRTCH265Support(bool);
     void setWebRTCVP9Support(bool supportVP9Profile0, bool supportVP9Profile2);
     void setWebRTCVP9VTBSupport(bool);
+    bool isSupportingVP9VTB() const;
+    void isVP9VTBDeccoderUsed(RTCPeerConnection&, DOMPromiseDeferred<IDLBoolean>&&);
+
     void setSFrameCounter(RTCRtpSFrameTransform&, const String&);
     uint64_t sframeCounter(const RTCRtpSFrameTransform&);
     uint64_t sframeKeyId(const RTCRtpSFrameTransform&);
@@ -648,6 +653,9 @@ public:
 
     String getImageSourceURL(Element&);
 
+    String blobInternalURL(const Blob&);
+    void isBlobInternalURLRegistered(const String&, DOMPromiseDeferred<IDLBoolean>&&);
+
 #if ENABLE(VIDEO)
     unsigned mediaElementCount();
     Vector<String> mediaResponseSources(HTMLMediaElement&);
@@ -656,6 +664,7 @@ public:
     ExceptionOr<bool> mediaElementHasCharacteristic(HTMLMediaElement&, const String&);
     void beginSimulatedHDCPError(HTMLMediaElement&);
     void endSimulatedHDCPError(HTMLMediaElement&);
+    ExceptionOr<bool> mediaPlayerRenderingCanBeAccelerated(HTMLMediaElement&);
 
     bool elementShouldBufferData(HTMLMediaElement&);
     String elementBufferingPolicy(HTMLMediaElement&);
@@ -910,7 +919,11 @@ public:
         ~ImageOverlayLine();
     };
     void installImageOverlay(Element&, Vector<ImageOverlayLine>&&);
+
+#if ENABLE(IMAGE_ANALYSIS)
     void requestTextRecognition(Element&, RefPtr<VoidCallback>&&);
+    RefPtr<Element> textRecognitionCandidate() const;
+#endif
 
     bool isSystemPreviewLink(Element&) const;
     bool isSystemPreviewImage(Element&) const;
@@ -1194,6 +1207,12 @@ public:
     };
     ExceptionOr<void> setDocumentAutoplayPolicy(Document&, AutoplayPolicy);
 
+    void retainTextIteratorForDocumentContent();
+
+#if ENABLE(SERVICE_WORKER)
+    RefPtr<PushSubscription> createPushSubscription(const String& endpoint, std::optional<EpochTimeStamp> expirationTime, const ArrayBuffer& serverVAPIDPublicKey, const ArrayBuffer& clientECDHPublicKey, const ArrayBuffer& auth);
+#endif
+
 private:
     explicit Internals(Document&);
     Document* contextDocument() const;
@@ -1204,7 +1223,7 @@ private:
 
 #if ENABLE(MEDIA_STREAM)
     // RealtimeMediaSource::Observer API
-    void videoSampleAvailable(MediaSample&) final;
+    void videoSampleAvailable(MediaSample&, VideoSampleMetadata) final;
     // RealtimeMediaSource::AudioSampleObserver API
     void audioSamplesAvailable(const MediaTime&, const PlatformAudioData&, const AudioStreamDescription&, size_t) final { m_trackAudioSampleCount++; }
 
@@ -1222,6 +1241,8 @@ private:
     RefPtr<CacheStorageConnection> m_cacheStorageConnection;
 
     HashMap<unsigned, std::unique_ptr<WebCore::SleepDisabler>> m_sleepDisablers;
+
+    std::unique_ptr<TextIterator> m_textIterator;
 
 #if ENABLE(WEBXR)
     RefPtr<WebXRTest> m_xrTest;

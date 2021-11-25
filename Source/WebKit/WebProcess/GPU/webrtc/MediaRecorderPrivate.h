@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM) && HAVE(AVASSETWRITERDELEGATE)
+#if PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)
 
 #include "MediaRecorderIdentifier.h"
 #include "SharedRingBufferStorage.h"
@@ -56,7 +56,7 @@ public:
 
 private:
     // WebCore::MediaRecorderPrivate
-    void videoSampleAvailable(WebCore::MediaSample&) final;
+    void videoSampleAvailable(WebCore::MediaSample&, WebCore::VideoSampleMetadata) final;
     void fetchData(CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&, const String& mimeType, double)>&&) final;
     void stopRecording(CompletionHandler<void()>&&) final;
     void startRecording(StartRecordingCallback&&) final;
@@ -86,4 +86,4 @@ private:
 
 }
 
-#endif // PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM) && HAVE(AVASSETWRITERDELEGATE)
+#endif // PLATFORM(COCOA) && ENABLE(GPU_PROCESS) && ENABLE(MEDIA_STREAM)

@@ -52,7 +52,7 @@ void ServiceWorkerSoftUpdateLoader::start(NetworkSession* session, ServiceWorker
 ServiceWorkerSoftUpdateLoader::ServiceWorkerSoftUpdateLoader(NetworkSession& session, ServiceWorkerJobData&& jobData, bool shouldRefreshCache, ResourceRequest&& request, Handler&& completionHandler)
     : m_completionHandler(WTFMove(completionHandler))
     , m_jobData(WTFMove(jobData))
-    , m_session(makeWeakPtr(session))
+    , m_session(session)
 {
     ASSERT(!request.isConditional());
 
@@ -60,7 +60,7 @@ ServiceWorkerSoftUpdateLoader::ServiceWorkerSoftUpdateLoader(NetworkSession& ses
         // We set cache policy to disable speculative loading/async revalidation from the cache.
         request.setCachePolicy(ResourceRequestCachePolicy::ReturnCacheDataDontLoad);
 
-        session.cache()->retrieve(request, NetworkCache::GlobalFrameID { }, NavigatingToAppBoundDomain::No, [this, weakThis = makeWeakPtr(*this), request, shouldRefreshCache](auto&& entry, auto&&) mutable {
+        session.cache()->retrieve(request, NetworkCache::GlobalFrameID { }, NavigatingToAppBoundDomain::No, [this, weakThis = WeakPtr { *this }, request, shouldRefreshCache](auto&& entry, auto&&) mutable {
             if (!weakThis)
                 return;
             if (!m_session) {
@@ -115,7 +115,7 @@ void ServiceWorkerSoftUpdateLoader::loadWithCacheEntry(NetworkCache::Entry& entr
     }
 
     if (entry.buffer())
-        didReceiveBuffer(makeRef(*entry.buffer()), 0);
+        didReceiveBuffer(*entry.buffer(), 0);
     didFinishLoading({ });
 }
 
@@ -170,7 +170,7 @@ ResourceError ServiceWorkerSoftUpdateLoader::processResponse(const ResourceRespo
 
     m_contentSecurityPolicy = ContentSecurityPolicyResponseHeaders { response };
     // Service workers are always secure contexts.
-    m_crossOriginEmbedderPolicy = obtainCrossOriginEmbedderPolicy(response, IsSecureContext::Yes);
+    m_crossOriginEmbedderPolicy = obtainCrossOriginEmbedderPolicy(response, nullptr);
     m_referrerPolicy = response.httpHeaderField(HTTPHeaderName::ReferrerPolicy);
     m_responseEncoding = response.textEncodingName();
 

@@ -68,6 +68,8 @@ PAS_BEGIN_EXTERN_C;
 
 #define PAS_ALIGNED(amount) __attribute__((aligned(amount)))
 
+#define PAS_FORMAT_PRINTF(fmt, args) __attribute__((format(__printf__, fmt, args)))
+
 #define PAS_UNUSED __attribute__((unused))
 
 #define PAS_OFFSETOF(type, field) __PAS_OFFSETOF(type, field)
@@ -81,8 +83,14 @@ PAS_BEGIN_EXTERN_C;
 
 #define PAS_ARM __PAS_ARM
 
+#ifdef __cplusplus
+#define PAS_TYPEOF(a) decltype (a)
+#else
+#define PAS_TYPEOF(a) typeof (a)
+#endif
+
 /* NOTE: panic format string must have \n at the end. */
-PAS_API PAS_NO_RETURN void pas_panic(const char* format, ...);
+PAS_API PAS_NO_RETURN void pas_panic(const char* format, ...) PAS_FORMAT_PRINTF(1, 2);
 
 #define pas_set_deallocation_did_fail_callback __pas_set_deallocation_did_fail_callback
 #define pas_set_reallocation_did_fail_callback __pas_set_reallocation_did_fail_callback
@@ -94,7 +102,7 @@ PAS_API PAS_NO_RETURN PAS_NEVER_INLINE void pas_reallocation_did_fail(const char
                                                                       void* target_heap,
                                                                       void* old_ptr,
                                                                       size_t old_size,
-                                                                      size_t new_count);
+                                                                      size_t new_size);
 
 PAS_API PAS_NO_RETURN void pas_assertion_failed(const char* filename, int line, const char* function, const char* expression);
 
@@ -201,61 +209,114 @@ static inline uint64_t pas_make_mask64(uint64_t num_bits)
 
 static inline bool pas_compare_and_swap_uintptr_weak(uintptr_t* ptr, uintptr_t old_value, uintptr_t new_value)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_compare_exchange_weak((_Atomic uintptr_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((uintptr_t*)ptr, &old_value, new_value, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline uintptr_t pas_compare_and_swap_uintptr_strong(uintptr_t* ptr, uintptr_t old_value, uintptr_t new_value)
 {
+#if PAS_COMPILER(CLANG)
     __c11_atomic_compare_exchange_strong((_Atomic uintptr_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    __atomic_compare_exchange_n((uintptr_t*)ptr, &old_value, new_value, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
     return old_value;
 }
 
 static inline bool pas_compare_and_swap_bool_weak(bool* ptr, bool old_value, bool new_value)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_compare_exchange_weak((_Atomic bool*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((bool*)ptr, &old_value, new_value, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline bool pas_compare_and_swap_bool_strong(bool* ptr, bool old_value, bool new_value)
 {
+#if PAS_COMPILER(CLANG)
     __c11_atomic_compare_exchange_strong((_Atomic bool*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    __atomic_compare_exchange_n((bool*)ptr, &old_value, new_value, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
     return old_value;
+}
+
+static inline bool pas_compare_and_swap_uint8_weak(uint8_t* ptr, uint8_t old_value, uint8_t new_value)
+{
+#if PAS_COMPILER(CLANG)
+    return __c11_atomic_compare_exchange_weak((_Atomic uint8_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((uint8_t*)ptr, &old_value, new_value, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline bool pas_compare_and_swap_uint16_weak(uint16_t* ptr, uint16_t old_value, uint16_t new_value)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_compare_exchange_weak((_Atomic uint16_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((uint16_t*)ptr, &old_value, new_value, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline bool pas_compare_and_swap_uint32_weak(uint32_t* ptr, uint32_t old_value, uint32_t new_value)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_compare_exchange_weak((_Atomic uint32_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((uint32_t*)ptr, &old_value, new_value, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline uint32_t pas_compare_and_swap_uint32_strong(uint32_t* ptr, uint32_t old_value, uint32_t new_value)
 {
+#if PAS_COMPILER(CLANG)
     __c11_atomic_compare_exchange_strong((_Atomic uint32_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    __atomic_compare_exchange_n((uint32_t*)ptr, &old_value, new_value, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
     return old_value;
 }
 
 static inline bool pas_compare_and_swap_uint64_weak(uint64_t* ptr, uint64_t old_value, uint64_t new_value)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_compare_exchange_weak((_Atomic uint64_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((uint64_t*)ptr, &old_value, new_value, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline uint64_t pas_compare_and_swap_uint64_strong(uint64_t* ptr, uint64_t old_value, uint64_t new_value)
 {
+#if PAS_COMPILER(CLANG)
     __c11_atomic_compare_exchange_strong((_Atomic uint64_t*)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    __atomic_compare_exchange_n((uint64_t*)ptr, &old_value, new_value, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
     return old_value;
 }
 
 static inline bool pas_compare_and_swap_ptr_weak(void* ptr, const void* old_value, const void* new_value)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_compare_exchange_weak((const void* _Atomic *)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((const void**)ptr, &old_value, new_value, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline void* pas_compare_and_swap_ptr_strong(void* ptr, const void* old_value, const void* new_value)
 {
+#if PAS_COMPILER(CLANG)
     __c11_atomic_compare_exchange_strong((const void* _Atomic *)ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    __atomic_compare_exchange_n((const void**)ptr, &old_value, new_value, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
     return (void*)(uintptr_t)old_value;
 }
 
@@ -287,6 +348,7 @@ static PAS_ALWAYS_INLINE uintptr_t pas_opaque(uintptr_t value)
     return value;
 }
 
+#if PAS_COMPILER(CLANG)
 struct pas_pair;
 typedef struct pas_pair pas_pair;
 
@@ -303,37 +365,84 @@ static inline pas_pair pas_pair_create(uintptr_t low, uintptr_t high)
     return result;
 }
 
+static inline uintptr_t pas_pair_low(pas_pair pair)
+{
+    return pair.low;
+}
+
+static inline uintptr_t pas_pair_high(pas_pair pair)
+{
+    return pair.high;
+}
+
+#else
+
+typedef __uint128_t pas_pair;
+
+static inline pas_pair pas_pair_create(uintptr_t low, uintptr_t high)
+{
+    return ((pas_pair)low) | ((pas_pair)(high) << 64);
+}
+
+static inline uintptr_t pas_pair_low(pas_pair pair)
+{
+    return pair;
+}
+
+static inline uintptr_t pas_pair_high(pas_pair pair)
+{
+    return pair >> 64;
+}
+
+#endif
+
 static inline bool pas_compare_and_swap_pair_weak(void* raw_ptr,
                                                   pas_pair old_value, pas_pair new_value)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_compare_exchange_weak((_Atomic pas_pair*)raw_ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    return __atomic_compare_exchange_n((pas_pair*)raw_ptr, &old_value, new_value, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
 }
 
 static inline pas_pair pas_compare_and_swap_pair_strong(void* raw_ptr,
                                                         pas_pair old_value, pas_pair new_value)
 {
+#if PAS_COMPILER(CLANG)
     __c11_atomic_compare_exchange_strong((_Atomic pas_pair*)raw_ptr, &old_value, new_value, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#else
+    __atomic_compare_exchange_n((pas_pair*)raw_ptr, &old_value, new_value, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
     return old_value;
 }
 
 static inline pas_pair pas_atomic_load_pair(void* raw_ptr)
 {
+#if PAS_COMPILER(CLANG)
     return __c11_atomic_load((_Atomic pas_pair*)raw_ptr, __ATOMIC_RELAXED);
+#else
+    return __atomic_load_n((pas_pair*)raw_ptr, __ATOMIC_RELAXED);
+#endif
 }
 
 static inline void pas_atomic_store_pair(void* raw_ptr, pas_pair value)
 {
+#if PAS_COMPILER(CLANG)
     __c11_atomic_store((_Atomic pas_pair*)raw_ptr, value, __ATOMIC_SEQ_CST);
+#else
+    __atomic_store_n((pas_pair*)raw_ptr, value, __ATOMIC_SEQ_CST);
+#endif
 }
 
 #define PAS_MIN(a, b) ({ \
-        typeof (a) _tmp_a = (a); \
-        typeof (b) _tmp_b = (b); \
+        PAS_TYPEOF(a) _tmp_a = (a); \
+        PAS_TYPEOF(b) _tmp_b = (b); \
         _tmp_a < _tmp_b ? _tmp_a : _tmp_b; \
     })
 #define PAS_MAX(a, b) ({ \
-        typeof (a) _tmp_a = (a); \
-        typeof (b) _tmp_b = (b); \
+        PAS_TYPEOF(a) _tmp_a = (a); \
+        PAS_TYPEOF(b) _tmp_b = (b); \
         _tmp_a > _tmp_b ? _tmp_a : _tmp_b; \
     })
 #define PAS_CLIP(x, min, max) PAS_MIN(PAS_MAX(x, min), max)
@@ -372,13 +481,13 @@ static inline unsigned pas_hash_ptr(const void* ptr)
 /* Undefined for value == 0. */
 static inline unsigned pas_log2(uintptr_t value)
 {
-    return (sizeof(uintptr_t) * 8 - 1) - __builtin_clzl(value);
+    return (sizeof(uintptr_t) * 8 - 1) - (unsigned)__builtin_clzl(value);
 }
 
 /* Undefined for value <= 1. */
 static inline unsigned pas_log2_rounded_up(uintptr_t value)
 {
-    return (sizeof(uintptr_t) * 8 - 1) - (__builtin_clzl(value - 1) - 1);
+    return (sizeof(uintptr_t) * 8 - 1) - ((unsigned)__builtin_clzl(value - 1) - 1);
 }
 
 static inline unsigned pas_log2_rounded_up_safe(uintptr_t value)
@@ -388,8 +497,13 @@ static inline unsigned pas_log2_rounded_up_safe(uintptr_t value)
     return pas_log2_rounded_up(value);
 }
 
+static inline uintptr_t pas_round_up_to_next_power_of_2(uintptr_t value)
+{
+    return (uintptr_t)1 << pas_log2_rounded_up_safe(value);
+}
+
 #define PAS_SWAP(left, right) do { \
-        typeof (left) _swap_tmp = left; \
+        PAS_TYPEOF(left) _swap_tmp = left; \
         left = right; \
         right = _swap_tmp; \
     } while (0)
@@ -450,6 +564,10 @@ static inline bool pas_is_divisible_by(unsigned value, uint64_t magic_constant)
 }
 
 #define PAS_CONCAT(a, b) a ## b
+
+#ifdef __cplusplus
+enum cpp_initialization_t { cpp_initialization };
+#endif
 
 PAS_END_EXTERN_C;
 

@@ -64,7 +64,6 @@
 #include "NavigationActionData.h"
 #include "NotificationPermissionRequest.h"
 #include "PageClient.h"
-#include "PluginInformation.h"
 #include "PrintInfo.h"
 #include "SpeechRecognitionPermissionRequest.h"
 #include "WKAPICast.h"
@@ -678,27 +677,27 @@ bool WKPageAreScrollbarAnimationsSuppressed(WKPageRef pageRef)
 
 bool WKPageIsPinnedToLeftSide(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->isPinnedToLeftSide();
+    return toImpl(pageRef)->pinnedState().left();
 }
 
 bool WKPageIsPinnedToRightSide(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->isPinnedToRightSide();
+    return toImpl(pageRef)->pinnedState().right();
 }
 
 bool WKPageIsPinnedToTopSide(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->isPinnedToTopSide();
+    return toImpl(pageRef)->pinnedState().top();
 }
 
 bool WKPageIsPinnedToBottomSide(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->isPinnedToBottomSide();
+    return toImpl(pageRef)->pinnedState().bottom();
 }
 
 bool WKPageRubberBandsAtLeft(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->rubberBandsAtLeft();
+    return toImpl(pageRef)->rubberBandableEdges().left();
 }
 
 void WKPageSetRubberBandsAtLeft(WKPageRef pageRef, bool rubberBandsAtLeft)
@@ -709,7 +708,7 @@ void WKPageSetRubberBandsAtLeft(WKPageRef pageRef, bool rubberBandsAtLeft)
 
 bool WKPageRubberBandsAtRight(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->rubberBandsAtRight();
+    return toImpl(pageRef)->rubberBandableEdges().right();
 }
 
 void WKPageSetRubberBandsAtRight(WKPageRef pageRef, bool rubberBandsAtRight)
@@ -720,7 +719,7 @@ void WKPageSetRubberBandsAtRight(WKPageRef pageRef, bool rubberBandsAtRight)
 
 bool WKPageRubberBandsAtTop(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->rubberBandsAtTop();
+    return toImpl(pageRef)->rubberBandableEdges().top();
 }
 
 void WKPageSetRubberBandsAtTop(WKPageRef pageRef, bool rubberBandsAtTop)
@@ -731,7 +730,7 @@ void WKPageSetRubberBandsAtTop(WKPageRef pageRef, bool rubberBandsAtTop)
 
 bool WKPageRubberBandsAtBottom(WKPageRef pageRef)
 {
-    return toImpl(pageRef)->rubberBandsAtBottom();
+    return toImpl(pageRef)->rubberBandableEdges().bottom();
 }
 
 void WKPageSetRubberBandsAtBottom(WKPageRef pageRef, bool rubberBandsAtBottom)
@@ -1151,7 +1150,6 @@ void WKPageSetPageLoaderClient(WKPageRef pageRef, const WKPageLoaderClientBase* 
         {
             initialize(client);
             
-#if !PLATFORM(MAC) || __MAC_OS_X_VERSION_MIN_REQUIRED > 101400
             // WKPageSetPageLoaderClient is deprecated. Use WKPageSetPageNavigationClient instead.
             RELEASE_ASSERT(!m_client.didFinishDocumentLoadForFrame);
             RELEASE_ASSERT(!m_client.didSameDocumentNavigationForFrame);
@@ -1184,7 +1182,6 @@ void WKPageSetPageLoaderClient(WKPageRef pageRef, const WKPageLoaderClientBase* 
             RELEASE_ASSERT(!m_client.navigationGestureDidBegin);
             RELEASE_ASSERT(!m_client.navigationGestureWillEnd);
             RELEASE_ASSERT(!m_client.navigationGestureDidEnd);
-#endif
         }
 
     private:
@@ -1803,37 +1800,6 @@ void WKPageSetPageUIClient(WKPageRef pageRef, const WKPageUIClientBase* wkClient
             m_client.mouseDidMoveOverElement(toAPI(&page), toAPI(apiHitTestResult.ptr()), toAPI(modifiers), toAPI(userData), m_client.base.clientInfo);
         }
 
-#if ENABLE(NETSCAPE_PLUGIN_API)
-        void unavailablePluginButtonClicked(WebPageProxy& page, WKPluginUnavailabilityReason pluginUnavailabilityReason, API::Dictionary& pluginInformation) final
-        {
-            if (pluginUnavailabilityReason == kWKPluginUnavailabilityReasonPluginMissing) {
-                if (m_client.missingPluginButtonClicked_deprecatedForUseWithV0)
-                    m_client.missingPluginButtonClicked_deprecatedForUseWithV0(
-                        toAPI(&page),
-                        toAPI(pluginInformation.get<API::String>(pluginInformationMIMETypeKey())),
-                        toAPI(pluginInformation.get<API::String>(pluginInformationPluginURLKey())),
-                        toAPI(pluginInformation.get<API::String>(pluginInformationPluginspageAttributeURLKey())),
-                        m_client.base.clientInfo);
-            }
-
-            if (m_client.unavailablePluginButtonClicked_deprecatedForUseWithV1)
-                m_client.unavailablePluginButtonClicked_deprecatedForUseWithV1(
-                    toAPI(&page),
-                    pluginUnavailabilityReason,
-                    toAPI(pluginInformation.get<API::String>(pluginInformationMIMETypeKey())),
-                    toAPI(pluginInformation.get<API::String>(pluginInformationPluginURLKey())),
-                    toAPI(pluginInformation.get<API::String>(pluginInformationPluginspageAttributeURLKey())),
-                    m_client.base.clientInfo);
-
-            if (m_client.unavailablePluginButtonClicked)
-                m_client.unavailablePluginButtonClicked(
-                    toAPI(&page),
-                    pluginUnavailabilityReason,
-                    toAPI(&pluginInformation),
-                    m_client.base.clientInfo);
-        }
-#endif // ENABLE(NETSCAPE_PLUGIN_API)
-
         void didNotHandleKeyEvent(WebPageProxy* page, const NativeWebKeyboardEvent& event) final
         {
             if (!m_client.didNotHandleKeyEvent)
@@ -2406,6 +2372,7 @@ void WKPageSetPageNavigationClient(WKPageRef pageRef, const WKPageNavigationClie
             m_client.didRemoveNavigationGestureSnapshot(toAPI(&page), m_client.base.clientInfo);
         }
         
+#if ENABLE(CONTENT_EXTENSIONS)
         void contentRuleListNotification(WebPageProxy& page, URL&& url, ContentRuleListResults&& results) final
         {
             if (!m_client.contentRuleListNotification)
@@ -2425,6 +2392,7 @@ void WKPageSetPageNavigationClient(WKPageRef pageRef, const WKPageNavigationClie
             if (!apiNotifications.isEmpty())
                 m_client.contentRuleListNotification(toAPI(&page), toURLRef(url.string().impl()), toAPI(API::Array::create(WTFMove(apiListIdentifiers)).ptr()), toAPI(API::Array::create(WTFMove(apiNotifications)).ptr()), m_client.base.clientInfo);
         }
+#endif
     };
 
     WebPageProxy* webPageProxy = toImpl(pageRef);
@@ -2818,14 +2786,14 @@ void WKPageSetMediaVolume(WKPageRef pageRef, float volume)
 void WKPageSetMuted(WKPageRef pageRef, WKMediaMutedState mutedState)
 {
     CRASH_IF_SUSPENDED;
-    WebCore::MediaProducer::MutedStateFlags coreState;
+    WebCore::MediaProducerMutedStateFlags coreState;
 
     if (mutedState & kWKMediaAudioMuted)
-        coreState.add(WebCore::MediaProducer::MutedState::AudioIsMuted);
+        coreState.add(WebCore::MediaProducerMutedState::AudioIsMuted);
     if (mutedState & kWKMediaCaptureDevicesMuted)
         coreState.add(WebCore::MediaProducer::AudioAndVideoCaptureIsMuted);
     if (mutedState & kWKMediaScreenCaptureMuted)
-        coreState.add(WebCore::MediaProducer::MutedState::ScreenCaptureIsMuted);
+        coreState.add(WebCore::MediaProducerMutedState::ScreenCaptureIsMuted);
 
     toImpl(pageRef)->setMuted(coreState);
 }
@@ -2973,24 +2941,24 @@ bool WKPageIsPlayingAudio(WKPageRef page)
 
 WKMediaState WKPageGetMediaState(WKPageRef page)
 {
-    WebCore::MediaProducer::MediaStateFlags coreState = toImpl(page)->reportedMediaState();
+    WebCore::MediaProducerMediaStateFlags coreState = toImpl(page)->reportedMediaState();
     WKMediaState state = kWKMediaIsNotPlaying;
 
-    if (coreState & WebCore::MediaProducer::MediaState::IsPlayingAudio)
+    if (coreState & WebCore::MediaProducerMediaState::IsPlayingAudio)
         state |= kWKMediaIsPlayingAudio;
-    if (coreState & WebCore::MediaProducer::MediaState::IsPlayingVideo)
+    if (coreState & WebCore::MediaProducerMediaState::IsPlayingVideo)
         state |= kWKMediaIsPlayingVideo;
-    if (coreState & WebCore::MediaProducer::MediaState::HasActiveAudioCaptureDevice)
+    if (coreState & WebCore::MediaProducerMediaState::HasActiveAudioCaptureDevice)
         state |= kWKMediaHasActiveAudioCaptureDevice;
-    if (coreState & WebCore::MediaProducer::MediaState::HasActiveVideoCaptureDevice)
+    if (coreState & WebCore::MediaProducerMediaState::HasActiveVideoCaptureDevice)
         state |= kWKMediaHasActiveVideoCaptureDevice;
-    if (coreState & WebCore::MediaProducer::MediaState::HasMutedAudioCaptureDevice)
+    if (coreState & WebCore::MediaProducerMediaState::HasMutedAudioCaptureDevice)
         state |= kWKMediaHasMutedAudioCaptureDevice;
-    if (coreState & WebCore::MediaProducer::MediaState::HasMutedVideoCaptureDevice)
+    if (coreState & WebCore::MediaProducerMediaState::HasMutedVideoCaptureDevice)
         state |= kWKMediaHasMutedVideoCaptureDevice;
-    if (coreState & WebCore::MediaProducer::MediaState::HasActiveDisplayCaptureDevice)
+    if (coreState & WebCore::MediaProducerMediaState::HasActiveDisplayCaptureDevice)
         state |= kWKMediaHasActiveDisplayCaptureDevice;
-    if (coreState & WebCore::MediaProducer::MediaState::HasMutedDisplayCaptureDevice)
+    if (coreState & WebCore::MediaProducerMediaState::HasMutedDisplayCaptureDevice)
         state |= kWKMediaHasMutedDisplayCaptureDevice;
 
     return state;
@@ -3138,27 +3106,45 @@ void WKPageSetPCMFraudPreventionValuesForTesting(WKPageRef pageRef, WKStringRef 
     });
 }
 
+void WKPageSetPrivateClickMeasurementAppBundleIDForTesting(WKPageRef pageRef, WKStringRef appBundleIDForTesting, WKPageSetPrivateClickMeasurementAppBundleIDForTestingFunction callback, void* callbackContext)
+{
+    CRASH_IF_SUSPENDED;
+    toImpl(pageRef)->setPrivateClickMeasurementAppBundleIDForTesting(toWTFString(appBundleIDForTesting), [callbackContext, callback] () {
+        callback(callbackContext);
+    });
+}
+
 void WKPageSetMockCameraOrientation(WKPageRef pageRef, uint64_t orientation)
 {
     CRASH_IF_SUSPENDED;
-#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     toImpl(pageRef)->setOrientationForMediaCapture(orientation);
-#endif
 }
 
-WK_EXPORT bool WKPageIsMockRealtimeMediaSourceCenterEnabled(WKPageRef)
+bool WKPageIsMockRealtimeMediaSourceCenterEnabled(WKPageRef)
 {
-#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+#if (PLATFORM(COCOA) || USE(GSTREAMER)) && ENABLE(MEDIA_STREAM)
     return MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled();
 #else
     return false;
 #endif
 }
 
+void WKPageSetMockCameraIsInterrupted(WKPageRef pageRef, bool isInterrupted)
+{
+    CRASH_IF_SUSPENDED;
+#if ENABLE(MEDIA_STREAM) && ENABLE(GPU_PROCESS)
+    auto& gpuProcess = toImpl(pageRef)->process().processPool().ensureGPUProcess();
+    gpuProcess.setMockCameraIsInterrupted(isInterrupted);
+#endif
+#if ENABLE(MEDIA_STREAM) && USE(GSTREAMER)
+    toImpl(pageRef)->setMockCameraIsInterrupted(isInterrupted);
+#endif
+}
+
 void WKPageLoadedSubresourceDomains(WKPageRef pageRef, WKPageLoadedSubresourceDomainsFunction callback, void* callbackContext)
 {
     CRASH_IF_SUSPENDED;
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     toImpl(pageRef)->getLoadedSubresourceDomains([callbackContext, callback](Vector<RegistrableDomain>&& domains) {
         Vector<RefPtr<API::Object>> apiDomains = WTF::map(domains, [](auto& domain) {
             return RefPtr<API::Object>(API::String::create(WTFMove(domain.string())));
@@ -3174,7 +3160,7 @@ void WKPageLoadedSubresourceDomains(WKPageRef pageRef, WKPageLoadedSubresourceDo
 void WKPageClearLoadedSubresourceDomains(WKPageRef pageRef)
 {
     CRASH_IF_SUSPENDED;
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     toImpl(pageRef)->clearLoadedSubresourceDomains();
 #else
     UNUSED_PARAM(pageRef);

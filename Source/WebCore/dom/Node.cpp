@@ -35,6 +35,7 @@
 #include "ContextMenuController.h"
 #include "DOMWindow.h"
 #include "DataTransfer.h"
+#include "DocumentInlines.h"
 #include "DocumentType.h"
 #include "ElementIterator.h"
 #include "ElementRareData.h"
@@ -77,11 +78,11 @@
 #include "XMLNSNames.h"
 #include "XMLNames.h"
 #include <JavaScriptCore/HeapInlines.h>
+#include <variant>
 #include <wtf/HexNumber.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/SHA1.h>
-#include <wtf/Variant.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/TextStream.h>
@@ -763,7 +764,7 @@ static Node::Editability computeEditabilityFromComputedStyle(const Node& startNo
             continue;
         // Elements with user-select: all style are considered atomic
         // therefore non editable.
-        if (treatment == Node::UserSelectAllIsAlwaysNonEditable && style->userSelect() == UserSelect::All)
+        if (treatment == Node::UserSelectAllIsAlwaysNonEditable && style->userSelectIncludingInert() == UserSelect::All)
             return Node::Editability::ReadOnly;
         switch (style->userModify()) {
         case UserModify::ReadOnly:
@@ -1127,14 +1128,12 @@ bool Node::canStartSelection() const
     if (hasEditableStyle())
         return true;
 
-    if (isInert())
-        return false;
-
     if (renderer()) {
         const RenderStyle& style = renderer()->style();
+
         // We allow selections to begin within an element that has -webkit-user-select: none set,
         // but if the element is draggable then dragging should take priority over selection.
-        if (style.userDrag() == UserDrag::Element && style.userSelect() == UserSelect::None)
+        if (style.userDrag() == UserDrag::Element && style.userSelectIncludingInert() == UserSelect::None)
             return false;
     }
     return parentOrShadowHostNode() ? parentOrShadowHostNode()->canStartSelection() : true;
@@ -2282,7 +2281,7 @@ HashSet<MutationObserverRegistration*>* Node::transientMutationObserverRegistry(
     return &data->transientRegistry;
 }
 
-template<typename Registry> static inline void collectMatchingObserversForMutation(HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions>& observers, Registry* registry, Node& target, MutationObserver::MutationType type, const QualifiedName* attributeName)
+template<typename Registry> static inline void collectMatchingObserversForMutation(HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions>& observers, Registry* registry, Node& target, MutationObserverOptionType type, const QualifiedName* attributeName)
 {
     if (!registry)
         return;
@@ -2292,15 +2291,15 @@ template<typename Registry> static inline void collectMatchingObserversForMutati
             auto deliveryOptions = registration->deliveryOptions();
             auto result = observers.add(registration->observer(), deliveryOptions);
             if (!result.isNewEntry)
-                result.iterator->value |= deliveryOptions;
+                result.iterator->value.add(deliveryOptions);
         }
     }
 }
 
-HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> Node::registeredMutationObservers(MutationObserver::MutationType type, const QualifiedName* attributeName)
+HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> Node::registeredMutationObservers(MutationObserverOptionType type, const QualifiedName* attributeName)
 {
     HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> result;
-    ASSERT((type == MutationObserver::Attributes && attributeName) || !attributeName);
+    ASSERT((type == MutationObserverOptionType::Attributes && attributeName) || !attributeName);
     collectMatchingObserversForMutation(result, mutationObserverRegistry(), *this, type, attributeName);
     collectMatchingObserversForMutation(result, transientMutationObserverRegistry(), *this, type, attributeName);
     for (Node* node = parentNode(); node; node = node->parentNode()) {
@@ -2623,12 +2622,13 @@ void* Node::opaqueRootSlow() const
     return const_cast<void*>(static_cast<const void*>(node));
 }
 
-bool Node::isInert() const
+// Please use RenderStyle::effectiveInert instead!
+bool Node::deprecatedIsInert() const
 {
     if (!isConnected())
         return true;
 
-    if (this != &document() && this != document().documentElement()) {
+    if (this != &document()) {
         Node* activeModalDialog = document().activeModalDialog();
         if (activeModalDialog && !activeModalDialog->containsIncludingShadowDOM(this))
             return true;
@@ -2644,7 +2644,7 @@ bool Node::isInert() const
     if (!document().frame() || !document().frame()->ownerElement())
         return false;
 
-    return document().frame()->ownerElement()->isInert();
+    return document().frame()->ownerElement()->deprecatedIsInert();
 }
 
 template<> ContainerNode* parent<Tree>(const Node& node)

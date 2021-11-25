@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007, 2008, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -70,6 +70,7 @@ public:
     void buildCompleted();
 
     void addFontFaceRule(StyleRuleFontFace&, bool isInitiatingElementInUserAgentShadowTree);
+    void addFontPaletteValuesRule(StyleRuleFontPaletteValues&);
 
     FontCache& fontCache() const final { return m_fontCache.get(); }
     void fontCacheInvalidated() final;
@@ -89,6 +90,8 @@ public:
 
     void loadPendingFonts();
 
+    void updateStyleIfNeeded();
+
     // CSSFontFace::Client needs to be able to be held in a RefPtr.
     void ref() final { FontSelector::ref(); }
     void deref() final { FontSelector::deref(); }
@@ -102,9 +105,11 @@ private:
 
     std::optional<AtomString> resolveGenericFamily(const FontDescription&, const AtomString& family);
 
+    const FontPaletteValues& lookupFontPaletteValues(const AtomString& familyName, const FontDescription&);
+
     // CSSFontFace::Client
     void fontLoaded(CSSFontFace&) final;
-    void fontStyleUpdateNeeded(CSSFontFace&) final;
+    void updateStyleIfNeeded(CSSFontFace&) final;
 
     void fontModified();
 
@@ -122,6 +127,19 @@ private:
     RefPtr<FontFaceSet> m_fontFaceSet;
     Ref<CSSFontFaceSet> m_cssFontFaceSet;
     HashSet<FontSelectorClient*> m_clients;
+
+    struct PaletteMapHash : DefaultHash<std::pair<AtomString, AtomString>> {
+        static unsigned hash(const std::pair<AtomString, AtomString>& key)
+        {
+            return pairIntHash(ASCIICaseInsensitiveHash::hash(key.first), DefaultHash<AtomString>::hash(key.second));
+        }
+
+        static bool equal(const std::pair<AtomString, AtomString>& a, const std::pair<AtomString, AtomString>& b)
+        {
+            return ASCIICaseInsensitiveHash::equal(a.first, b.first) && DefaultHash<AtomString>::equal(a.second, b.second);
+        }
+    };
+    HashMap<std::pair<AtomString, AtomString>, FontPaletteValues, PaletteMapHash> m_paletteMap;
 
     HashSet<RefPtr<CSSFontFace>> m_cssConnectionsPossiblyToRemove;
     HashSet<RefPtr<StyleRuleFontFace>> m_cssConnectionsEncounteredDuringBuild;

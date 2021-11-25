@@ -5,6 +5,7 @@ inherit
 initial
 unset
 revert
+revert-layer
 
 //
 // CSS_PROP_OUTLINE_STYLE
@@ -963,11 +964,6 @@ logical
 visual
 
 //
-// CSS_PROP__WEBKIT_BORDER_FIT
-//
-lines
-
-//
 // CSS_PROP__WEBKIT_ANIMATION_DIRECTION
 //
 // alternate
@@ -1072,10 +1068,6 @@ no-limit
 // none
 manual
 // auto
-
-#if defined(ENABLE_LETTERPRESS) && ENABLE_LETTERPRESS
--webkit-letterpress
-#endif
 
 #if defined(ENABLE_OVERFLOW_SCROLLING_TOUCH) && ENABLE_OVERFLOW_SCROLLING_TOUCH
 // -webkit-overflow-scrolling
@@ -1351,6 +1343,28 @@ calc
 min
 max
 clamp
+pow
+sqrt
+hypot
+sin
+cos
+e
+pi
+exp
+log
+asin
+acos
+atan
+atan2
+abs
+sign
+mod
+rem
+to-zero
+nearest
+infinity
+-infinity
+NaN
 
 from-image
 
@@ -1482,11 +1496,11 @@ more
 less
 // no-preference
 
-#if defined(ENABLE_DARK_MODE_CSS) && ENABLE_DARK_MODE_CSS
-// prefers-color-scheme
+// prefers-color-scheme, font-palette
 light
 dark
 
+#if defined(ENABLE_DARK_MODE_CSS) && ENABLE_DARK_MODE_CSS
 // color-scheme
 only
 // light
@@ -1544,6 +1558,11 @@ selector
 // normal
 compact
 
+// mask-type, mask-mode
+// alpha
+// luminance
+match-source
+
 // rotate
 x
 y
@@ -1558,3 +1577,13 @@ layout
 #if !(defined(ENABLE_CSS_PAINTING_API) && ENABLE_CSS_PAINTING_API)
 paint
 #endif
+
+// offset-path
+// https://drafts.fxtf.org/motion-1/#offset-path-property
+ray
+// closest-side
+// closest-corner
+// farthest-side
+// farthest-corner
+sides
+// contain

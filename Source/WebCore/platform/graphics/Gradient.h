@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2021 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Alp Toker <alp@atoker.com>
  * Copyright (C) 2008 Torch Mobile, Inc.
  *
@@ -31,7 +31,7 @@
 #include "Color.h"
 #include "FloatPoint.h"
 #include "GraphicsTypes.h"
-#include <wtf/Variant.h>
+#include <variant>
 #include <wtf/Vector.h>
 
 #if USE(CG)
@@ -100,7 +100,7 @@ public:
         template<typename Decoder> static std::optional<ConicData> decode(Decoder&);
     };
 
-    using Data = Variant<LinearData, RadialData, ConicData>;
+    using Data = std::variant<LinearData, RadialData, ConicData>;
 
     WEBCORE_EXPORT static Ref<Gradient> create(Data&&);
 
@@ -302,6 +302,12 @@ template<typename Decoder> std::optional<Ref<Gradient>> Gradient::decode(Decoder
     gradient->setSpreadMethod(spreadMethod);
 
     return gradient;
+}
+
+inline void add(Hasher& hasher, const Color& color)
+{
+    // FIXME: We don't want to hash a hash; do better.
+    add(hasher, color.hash());
 }
 
 } // namespace WebCore

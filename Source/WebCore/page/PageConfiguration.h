@@ -46,9 +46,9 @@ class AuthenticatorCoordinatorClient;
 class BackForwardClient;
 class BroadcastChannelRegistry;
 class CacheStorageProvider;
-class CookieJar;
 class ChromeClient;
 class ContextMenuClient;
+class CookieJar;
 class DatabaseProvider;
 class DiagnosticLoggingClient;
 class DragClient;
@@ -57,25 +57,28 @@ class FrameLoaderClient;
 class InspectorClient;
 class LibWebRTCProvider;
 class MediaRecorderProvider;
+class ModelPlayerProvider;
 class PaymentCoordinatorClient;
 class PerformanceLoggingClient;
 class PermissionController;
 class PluginInfoProvider;
 class ProgressTrackerClient;
+class ReportingEndpointsCache;
 class SocketProvider;
 class SpeechRecognitionProvider;
+class SpeechSynthesisClient;
 class StorageNamespaceProvider;
+class StorageProvider;
 class UserContentProvider;
 class UserContentURLPattern;
 class ValidationMessageClient;
 class VisitedLinkStore;
 class WebGLStateTracker;
-class SpeechSynthesisClient;
 
 class PageConfiguration {
     WTF_MAKE_NONCOPYABLE(PageConfiguration); WTF_MAKE_FAST_ALLOCATED;
 public:
-    WEBCORE_EXPORT PageConfiguration(PAL::SessionID, UniqueRef<EditorClient>&&, Ref<SocketProvider>&&, UniqueRef<LibWebRTCProvider>&&, Ref<CacheStorageProvider>&&, Ref<UserContentProvider>&&, Ref<BackForwardClient>&&, Ref<CookieJar>&&, UniqueRef<ProgressTrackerClient>&&, UniqueRef<FrameLoaderClient>&&, UniqueRef<SpeechRecognitionProvider>&&, UniqueRef<MediaRecorderProvider>&&, Ref<BroadcastChannelRegistry>&&, Ref<PermissionController>&&);
+    WEBCORE_EXPORT PageConfiguration(PAL::SessionID, UniqueRef<EditorClient>&&, Ref<SocketProvider>&&, UniqueRef<LibWebRTCProvider>&&, Ref<CacheStorageProvider>&&, Ref<UserContentProvider>&&, Ref<BackForwardClient>&&, Ref<CookieJar>&&, UniqueRef<ProgressTrackerClient>&&, UniqueRef<FrameLoaderClient>&&, UniqueRef<SpeechRecognitionProvider>&&, UniqueRef<MediaRecorderProvider>&&, Ref<BroadcastChannelRegistry>&&, Ref<PermissionController>&&, UniqueRef<StorageProvider>&&, UniqueRef<ModelPlayerProvider>&&);
     WEBCORE_EXPORT ~PageConfiguration();
     PageConfiguration(PageConfiguration&&);
 
@@ -132,6 +135,7 @@ public:
     Vector<UserContentURLPattern> corsDisablingPatterns;
     UniqueRef<SpeechRecognitionProvider> speechRecognitionProvider;
     UniqueRef<MediaRecorderProvider> mediaRecorderProvider;
+    RefPtr<ReportingEndpointsCache> reportingEndpointsCache;
 
     // FIXME: These should be all be Settings.
     bool loadsSubresources { true };
@@ -141,6 +145,9 @@ public:
     bool httpsUpgradeEnabled { true };
 
     Ref<PermissionController> permissionController;
+    UniqueRef<StorageProvider> storageProvider;
+
+    UniqueRef<ModelPlayerProvider> modelPlayerProvider;
 };
 
 }

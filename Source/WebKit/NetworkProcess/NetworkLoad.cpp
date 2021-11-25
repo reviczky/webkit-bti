@@ -58,15 +58,25 @@ NetworkLoad::NetworkLoad(NetworkLoadClient& client, BlobRegistryImpl* blobRegist
 
 void NetworkLoad::start()
 {
-    if (m_task)
-        m_task->resume();
+    if (!m_task)
+        return;
+
+    if (!m_networkProcess->ftpEnabled() && m_parameters.request.url().protocolIsInFTPFamily()) {
+        m_task->clearClient();
+        m_task = nullptr;
+        WebCore::NetworkLoadMetrics emptyMetrics;
+        didCompleteWithError(ResourceError { errorDomainWebKitInternal, 0, url(), "FTP URLs are disabled"_s, ResourceError::Type::AccessControl }, emptyMetrics);
+        return;
+    }
+
+    m_task->resume();
 }
 
 void NetworkLoad::startWithScheduling()
 {
     if (!m_task || !m_task->networkSession())
         return;
-    m_scheduler = makeWeakPtr(m_task->networkSession()->networkLoadScheduler());
+    m_scheduler = m_task->networkSession()->networkLoadScheduler();
     m_scheduler->schedule(*this);
 }
 
@@ -181,6 +191,17 @@ void NetworkLoad::willPerformHTTPRedirection(ResourceResponse&& redirectResponse
     ASSERT(RunLoop::isMain());
     ASSERT(!m_redirectCompletionHandler);
 
+    if (!m_networkProcess->ftpEnabled() && request.url().protocolIsInFTPFamily()) {
+        m_task->clearClient();
+        m_task = nullptr;
+        WebCore::NetworkLoadMetrics emptyMetrics;
+        didCompleteWithError(ResourceError { errorDomainWebKitInternal, 0, url(), "FTP URLs are disabled"_s, ResourceError::Type::AccessControl }, emptyMetrics);
+        
+        if (completionHandler)
+            completionHandler({ });
+        return;
+    }
+    
     redirectResponse.setSource(ResourceResponse::Source::Network);
     m_redirectCompletionHandler = WTFMove(completionHandler);
 
@@ -245,7 +266,7 @@ void NetworkLoad::didReceiveData(Ref<SharedBuffer>&& buffer)
 void NetworkLoad::didCompleteWithError(const ResourceError& error, const WebCore::NetworkLoadMetrics& networkLoadMetrics)
 {
     if (m_scheduler) {
-        m_scheduler->unschedule(*this);
+        m_scheduler->unschedule(*this, &networkLoadMetrics);
         m_scheduler = nullptr;
     }
 
@@ -294,6 +315,13 @@ void NetworkLoad::setH2PingCallback(const URL& url, CompletionHandler<void(Expec
         m_task->setH2PingCallback(url, WTFMove(completionHandler));
     else
         completionHandler(makeUnexpected(internalError(url)));
+}
+
+String NetworkLoad::attributedBundleIdentifier(WebPageProxyIdentifier pageID)
+{
+    if (m_task)
+        return m_task->attributedBundleIdentifier(pageID);
+    return { };
 }
 
 } // namespace WebKit

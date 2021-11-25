@@ -44,7 +44,7 @@
 #include "TagRegistersMode.h"
 #include "TypeofType.h"
 #include "VM.h"
-#include <wtf/Variant.h>
+#include <variant>
 
 namespace JSC {
 
@@ -234,8 +234,9 @@ public:
 #endif
     }
     
-    // Note that this clobbers offset.
+    // Note that these clobber offset.
     void loadProperty(GPRReg object, GPRReg offset, JSValueRegs result);
+    void storeProperty(JSValueRegs value, GPRReg object, GPRReg offset, GPRReg scratch);
 
     void moveValueRegs(JSValueRegs srcRegs, JSValueRegs destRegs)
     {
@@ -275,7 +276,17 @@ public:
         move(TrustedImm32(value.payload()), regs.payloadGPR());
 #endif
     }
-    
+
+    void storeValue(JSValue value, Address address)
+    {
+#if USE(JSVALUE64)
+        store64(Imm64(JSValue::encode(value)), address);
+#elif USE(JSVALUE32_64)
+        store32(Imm32(value.tag()), address.withOffset(TagOffset));
+        store32(Imm32(value.payload()), address.withOffset(PayloadOffset));
+#endif
+    }
+
     void storeTrustedValue(JSValue value, Address address)
     {
 #if USE(JSVALUE64)
@@ -379,14 +390,25 @@ public:
 #endif
     }
 
+    void copyCalleeSavesToEntryFrameCalleeSavesBuffer(EntryFrame*& topEntryFrame, GPRReg scratch)
+    {
+#if NUMBER_OF_CALLEE_SAVES_REGISTERS > 0
+        loadPtr(&topEntryFrame, scratch);
+        copyCalleeSavesToEntryFrameCalleeSavesBufferImpl(scratch);
+#else
+        UNUSED_PARAM(topEntryFrame);
+        UNUSED_PARAM(scratch);
+#endif
+    }
+
     void copyCalleeSavesToEntryFrameCalleeSavesBuffer(EntryFrame*& topEntryFrame)
     {
 #if NUMBER_OF_CALLEE_SAVES_REGISTERS > 0
         const TempRegisterSet& usedRegisters = { RegisterSet::stubUnavailableRegisters() };
         GPRReg temp1 = usedRegisters.getFreeGPR(0);
-        loadPtr(&topEntryFrame, temp1);
-        copyCalleeSavesToEntryFrameCalleeSavesBufferImpl(temp1);
+        copyCalleeSavesToEntryFrameCalleeSavesBuffer(topEntryFrame, temp1);
 #else
+        UNUSED_PARAM(topEntryFrame);
         UNUSED_PARAM(topEntryFrame);
 #endif
     }
@@ -401,6 +423,8 @@ public:
     }
 
     void restoreCalleeSavesFromEntryFrameCalleeSavesBuffer(EntryFrame*&);
+    void restoreCalleeSavesFromVMEntryFrameCalleeSavesBuffer(GPRReg vmGPR, GPRReg scratchGPR);
+    void restoreCalleeSavesFromVMEntryFrameCalleeSavesBufferImpl(GPRReg entryFrame, const RegisterSet& skipList);
 
     void copyLLIntBaselineCalleeSavesFromFrameOrRegisterToEntryFrameCalleeSavesBuffer(EntryFrame*&, const TempRegisterSet& usedRegisters = { RegisterSet::stubUnavailableRegisters() });
 
@@ -934,6 +958,8 @@ public:
     Jump branchIfNotHeapBigInt(GPRReg cellGPR) { return branchIfNotType(cellGPR, HeapBigIntType); }
     Jump branchIfFunction(GPRReg cellGPR) { return branchIfType(cellGPR, JSFunctionType); }
     Jump branchIfNotFunction(GPRReg cellGPR) { return branchIfNotType(cellGPR, JSFunctionType); }
+    Jump branchIfStructure(GPRReg cellGPR) { return branchIfType(cellGPR, StructureType); }
+    Jump branchIfNotStructure(GPRReg cellGPR) { return branchIfNotType(cellGPR, StructureType); }
     
     void isEmpty(GPRReg gpr, GPRReg dst)
     {
@@ -953,6 +979,15 @@ public:
 #endif
     }
 
+    Jump branchIfEmpty(BaseIndex address)
+    {
+#if USE(JSVALUE64)
+        return branchTest64(Zero, address);
+#else
+        return branch32(Equal, address.withOffset(TagOffset), TrustedImm32(JSValue::EmptyValueTag));
+#endif
+    }
+
     Jump branchIfEmpty(GPRReg gpr)
     {
 #if USE(JSVALUE64)
@@ -968,6 +1003,15 @@ public:
         return branchIfEmpty(regs.gpr());
 #else
         return branchIfEmpty(regs.tagGPR());
+#endif
+    }
+
+    Jump branchIfNotEmpty(BaseIndex address)
+    {
+#if USE(JSVALUE64)
+        return branchTest64(NonZero, address);
+#else
+        return branch32(NotEqual, address.withOffset(TagOffset), TrustedImm32(JSValue::EmptyValueTag));
 #endif
     }
 
@@ -1026,6 +1070,24 @@ public:
         return branchIfNotUndefined(regs.gpr());
 #else
         return branchIfNotUndefined(regs.tagGPR());
+#endif
+    }
+
+    void isNull(JSValueRegs regs, GPRReg dst)
+    {
+#if USE(JSVALUE64)
+        compare64(Equal, regs.payloadGPR(), TrustedImm32(JSValue::ValueNull), dst);
+#elif USE(JSVALUE32_64)
+        compare32(Equal, regs.tagGPR(), TrustedImm32(JSValue::NullTag), dst);
+#endif
+    }
+
+    void isNotNull(JSValueRegs regs, GPRReg dst)
+    {
+#if USE(JSVALUE64)
+        compare64(NotEqual, regs.payloadGPR(), TrustedImm32(JSValue::ValueNull), dst);
+#elif USE(JSVALUE32_64)
+        compare32(NotEqual, regs.tagGPR(), TrustedImm32(JSValue::NullTag), dst);
 #endif
     }
 
@@ -1096,6 +1158,17 @@ public:
     Jump branchIfNotRopeStringImpl(GPRReg stringImplGPR)
     {
         return branchTestPtr(Zero, stringImplGPR, TrustedImm32(JSString::isRopeInPointer));
+    }
+
+    void emitTurnUndefinedIntoNull(JSValueRegs regs)
+    {
+#if USE(JSVALUE64)
+        static_assert((JSValue::ValueUndefined & ~JSValue::UndefinedTag) == JSValue::ValueNull);
+        and64(TrustedImm32(~JSValue::UndefinedTag), regs.payloadGPR());
+#elif USE(JSVALUE32_64)
+        static_assert((JSValue::UndefinedTag | 1) == JSValue::NullTag);
+        or32(TrustedImm32(1), regs.tagGPR());
+#endif
     }
 
     static Address addressForByteOffset(ptrdiff_t byteOffset)
@@ -1718,6 +1791,7 @@ public:
     }
     
     void emitVirtualCall(VM&, JSGlobalObject*, CallLinkInfo*);
+    void emitVirtualCallWithoutMovingGlobalObject(VM&, GPRReg callLinkInfoGPR, CallMode);
     
     void makeSpaceOnStackForCCall();
     void reclaimSpaceOnStackForCCall();
@@ -1784,12 +1858,12 @@ public:
         storePtr(TrustedImmPtr(nullptr), Address(resultGPR, JSObject::butterflyOffset()));
     }
 
-    JumpList branchIfValue(VM&, JSValueRegs, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg, FPRReg, bool shouldCheckMasqueradesAsUndefined, Variant<JSGlobalObject*, GPRReg>, bool negateResult);
-    JumpList branchIfTruthy(VM& vm, JSValueRegs value, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg scratchFPR0, FPRReg scratchFPR1, bool shouldCheckMasqueradesAsUndefined, Variant<JSGlobalObject*, GPRReg> globalObject)
+    JumpList branchIfValue(VM&, JSValueRegs, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg, FPRReg, bool shouldCheckMasqueradesAsUndefined, std::variant<JSGlobalObject*, GPRReg>, bool negateResult);
+    JumpList branchIfTruthy(VM& vm, JSValueRegs value, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg scratchFPR0, FPRReg scratchFPR1, bool shouldCheckMasqueradesAsUndefined, std::variant<JSGlobalObject*, GPRReg> globalObject)
     {
         return branchIfValue(vm, value, scratch, scratchIfShouldCheckMasqueradesAsUndefined, scratchFPR0, scratchFPR1, shouldCheckMasqueradesAsUndefined, globalObject, false);
     }
-    JumpList branchIfFalsey(VM& vm, JSValueRegs value, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg scratchFPR0, FPRReg scratchFPR1, bool shouldCheckMasqueradesAsUndefined, Variant<JSGlobalObject*, GPRReg> globalObject)
+    JumpList branchIfFalsey(VM& vm, JSValueRegs value, GPRReg scratch, GPRReg scratchIfShouldCheckMasqueradesAsUndefined, FPRReg scratchFPR0, FPRReg scratchFPR1, bool shouldCheckMasqueradesAsUndefined, std::variant<JSGlobalObject*, GPRReg> globalObject)
     {
         return branchIfValue(vm, value, scratch, scratchIfShouldCheckMasqueradesAsUndefined, scratchFPR0, scratchFPR1, shouldCheckMasqueradesAsUndefined, globalObject, true);
     }
@@ -1827,6 +1901,49 @@ public:
     static bool loadWasmContextInstanceNeedsMacroScratchRegister();
     static bool storeWasmContextInstanceNeedsMacroScratchRegister();
 #endif
+
+    // Checks that the given list of GPRRegs and JSValueRegs do not overlap. Use this in static
+    // assertions to ensure that register aliases live at the same point do not map to the same
+    // architectural register.
+    template <typename... Args>
+    static constexpr bool noOverlap(Args... args) { return noOverlapImpl(0, args...); }
+
+private:
+    // Base case
+    template <typename... Args>
+    static constexpr bool noOverlapImpl(uint64_t) { return true; }
+
+    // GPRReg case
+    template <typename... Args>
+    static constexpr bool noOverlapImpl(uint64_t used, RegisterID gpr, Args... args)
+    {
+        unsigned mask = noOverlapImplRegMask(gpr);
+        if (used & mask)
+            return false;
+        return noOverlapImpl(used | mask, args...);
+    }
+
+    // JSValueRegs case
+    template <typename... Args>
+    static constexpr bool noOverlapImpl(uint64_t used, JSValueRegs jsr, Args... args)
+    {
+        unsigned mask = noOverlapImplRegMask(jsr.payloadGPR());
+#if USE(JSVALUE32_64)
+        mask |= noOverlapImplRegMask(jsr.tagGPR());
+#endif
+        if (used & mask)
+            return false;
+        return noOverlapImpl(used | mask, args...);
+    }
+
+    static constexpr unsigned noOverlapImplRegMask(RegisterID gpr)
+    {
+        if (gpr == InvalidGPRReg)
+            return 0ULL;
+        unsigned bit = static_cast<unsigned>(gpr);
+        RELEASE_ASSERT(bit < sizeof(uint64_t) * CHAR_BIT);
+        return 1ULL << bit;
+    }
 
 protected:
     void copyCalleeSavesToEntryFrameCalleeSavesBufferImpl(GPRReg calleeSavesBuffer);

@@ -56,7 +56,7 @@ const int defaultBufferLength = 32768;
 
 FileReaderLoader::FileReaderLoader(ReadType readType, FileReaderLoaderClient* client)
     : m_readType(readType)
-    , m_client(makeWeakPtr(client))
+    , m_client(client)
     , m_isRawDataConverted(false)
     , m_stringResult(emptyString())
     , m_variableLength(false)
@@ -126,7 +126,7 @@ void FileReaderLoader::cleanup()
     }
 }
 
-void FileReaderLoader::didReceiveResponse(unsigned long, const ResourceResponse& response)
+void FileReaderLoader::didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse& response)
 {
     if (response.httpStatusCode() != 200) {
         failed(httpStatusCodeToErrorCode(response.httpStatusCode()));
@@ -215,7 +215,7 @@ void FileReaderLoader::didReceiveData(const uint8_t* data, int dataLength)
         m_client->didReceiveData();
 }
 
-void FileReaderLoader::didFinishLoading(unsigned long)
+void FileReaderLoader::didFinishLoading(ResourceLoaderIdentifier)
 {
     if (m_variableLength && m_totalBytes > m_bytesLoaded) {
         m_rawData = m_rawData->slice(0, m_bytesLoaded);

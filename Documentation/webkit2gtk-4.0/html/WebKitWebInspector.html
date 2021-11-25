@@ -224,7 +224,7 @@ to true, otherwise no inspector is available.</p>
 9
 10</pre></td>
         <td class="listing_code"><pre class="programlisting"><span class="cm">/* Enable the developer extras */</span>
-<span class="n">WebKitSettings</span> <span class="o">*</span><span class="n">setting</span> <span class="o">=</span> <span class="n">webkit_web_view_get_settings</span> <span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">));</span>
+<span class="n">WebKitSettings</span> <span class="o">*</span><span class="n">settings</span> <span class="o">=</span> <span class="n">webkit_web_view_get_settings</span> <span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">));</span>
 <span class="n">g_object_set</span> <span class="p">(</span><span class="n">G_OBJECT</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span> <span class="s">&quot;enable-developer-extras&quot;</span><span class="p">,</span> <span class="n">TRUE</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
 
 <span class="cm">/* Load some data or reload to be able to inspect the page*/</span>

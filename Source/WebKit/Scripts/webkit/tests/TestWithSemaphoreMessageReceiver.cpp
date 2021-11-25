@@ -34,9 +34,9 @@ namespace WebKit {
 
 void TestWithSemaphore::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
-    auto protectedThis = makeRef(*this);
+    Ref protectedThis { *this };
     if (decoder.messageName() == Messages::TestWithSemaphore::SendSemaphore::name())
-        return IPC::handleMessage<Messages::TestWithSemaphore::SendSemaphore>(decoder, this, &TestWithSemaphore::sendSemaphore);
+        return IPC::handleMessage<Messages::TestWithSemaphore::SendSemaphore>(connection, decoder, this, &TestWithSemaphore::sendSemaphore);
     UNUSED_PARAM(connection);
     UNUSED_PARAM(decoder);
 #if ENABLE(IPC_TESTING_API)
@@ -48,9 +48,9 @@ void TestWithSemaphore::didReceiveMessage(IPC::Connection& connection, IPC::Deco
 
 bool TestWithSemaphore::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& replyEncoder)
 {
-    auto protectedThis = makeRef(*this);
+    Ref protectedThis { *this };
     if (decoder.messageName() == Messages::TestWithSemaphore::ReceiveSemaphore::name())
-        return IPC::handleMessage<Messages::TestWithSemaphore::ReceiveSemaphore>(decoder, *replyEncoder, this, &TestWithSemaphore::receiveSemaphore);
+        return IPC::handleMessage<Messages::TestWithSemaphore::ReceiveSemaphore>(connection, decoder, *replyEncoder, this, &TestWithSemaphore::receiveSemaphore);
     UNUSED_PARAM(connection);
     UNUSED_PARAM(decoder);
     UNUSED_PARAM(replyEncoder);

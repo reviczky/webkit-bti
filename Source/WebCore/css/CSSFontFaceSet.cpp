@@ -44,7 +44,7 @@
 namespace WebCore {
 
 CSSFontFaceSet::CSSFontFaceSet(CSSFontSelector* owningFontSelector)
-    : m_owningFontSelector(makeWeakPtr(owningFontSelector))
+    : m_owningFontSelector(owningFontSelector)
 {
 }
 
@@ -101,6 +101,13 @@ bool CSSFontFaceSet::hasFace(const CSSFontFace& face) const
     }
 
     return false;
+}
+
+// Calling updateStyleIfNeeded() might delete |this|.
+void CSSFontFaceSet::updateStyleIfNeeded()
+{
+    if (m_owningFontSelector)
+        m_owningFontSelector->updateStyleIfNeeded();
 }
 
 void CSSFontFaceSet::ensureLocalFontFacesForFamilyRegistered(const String& familyName)
@@ -245,7 +252,7 @@ void CSSFontFaceSet::removeFromFacesLookupTable(const CSSFontFace& face, const C
 
 void CSSFontFaceSet::remove(const CSSFontFace& face)
 {
-    auto protect = makeRef(face);
+    Ref protect { face };
 
     m_cache.clear();
 
@@ -435,7 +442,8 @@ ExceptionOr<bool> CSSFontFaceSet::check(const String& font, const String& text)
         return matchingFaces.releaseException();
 
     for (auto& face : matchingFaces.releaseReturnValue()) {
-        if (face.get().status() == CSSFontFace::Status::Pending)
+        if (face.get().status() == CSSFontFace::Status::Pending
+            || face.get().status() == CSSFontFace::Status::Loading)
             return false;
     }
     return true;

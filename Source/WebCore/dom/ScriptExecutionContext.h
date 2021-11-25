@@ -30,12 +30,9 @@
 #include "ActiveDOMObject.h"
 #include "CrossOriginMode.h"
 #include "DOMTimer.h"
-#include "PermissionController.h"
-#include "RTCDataChannelRemoteHandlerConnection.h"
-#include "ResourceLoaderOptions.h"
 #include "ScriptExecutionContextIdentifier.h"
 #include "SecurityContext.h"
-#include "ServiceWorkerTypes.h"
+#include "ServiceWorkerIdentifier.h"
 #include "Settings.h"
 #include <JavaScriptCore/ConsoleTypes.h>
 #include <JavaScriptCore/HandleTypes.h>
@@ -72,11 +69,13 @@ class EventTarget;
 class FontCache;
 class FontLoadRequest;
 class MessagePort;
+class PermissionController;
 class PublicURLManager;
 class RejectedPromiseTracker;
+class RTCDataChannelRemoteHandlerConnection;
 class ResourceRequest;
-class SecurityOrigin;
 class SocketProvider;
+enum class LoadedFromOpaqueSource : uint8_t;
 enum class ReferrerPolicy : uint8_t;
 enum class TaskSource : uint8_t;
 
@@ -117,11 +116,11 @@ public:
     virtual void disableWebAssembly(const String& errorMessage) = 0;
 
     virtual IDBClient::IDBConnectionProxy* idbConnectionProxy() = 0;
-    virtual RefPtr<PermissionController> permissionController() { return nullptr; }
+    virtual RefPtr<PermissionController> permissionController();
 
     virtual SocketProvider* socketProvider() = 0;
 
-    virtual RefPtr<RTCDataChannelRemoteHandlerConnection> createRTCDataChannelRemoteHandlerConnection() { return nullptr; }
+    virtual RefPtr<RTCDataChannelRemoteHandlerConnection> createRTCDataChannelRemoteHandlerConnection();
 
     virtual String resourceRequestIdentifier() const { return String(); };
 
@@ -186,20 +185,20 @@ public:
     public:
         enum CleanupTaskTag { CleanupTask };
 
-        template<typename T, typename = typename std::enable_if<!std::is_base_of<Task, T>::value && std::is_convertible<T, WTF::Function<void (ScriptExecutionContext&)>>::value>::type>
+        template<typename T, typename = typename std::enable_if<!std::is_base_of<Task, T>::value && std::is_convertible<T, Function<void(ScriptExecutionContext&)>>::value>::type>
         Task(T task)
             : m_task(WTFMove(task))
             , m_isCleanupTask(false)
         {
         }
 
-        Task(WTF::Function<void ()>&& task)
+        Task(Function<void()>&& task)
             : m_task([task = WTFMove(task)](ScriptExecutionContext&) { task(); })
             , m_isCleanupTask(false)
         {
         }
 
-        template<typename T, typename = typename std::enable_if<std::is_convertible<T, WTF::Function<void (ScriptExecutionContext&)>>::value>::type>
+        template<typename T, typename = typename std::enable_if<std::is_convertible<T, Function<void(ScriptExecutionContext&)>>::value>::type>
         Task(CleanupTaskTag, T task)
             : m_task(WTFMove(task))
             , m_isCleanupTask(true)
@@ -210,7 +209,7 @@ public:
         bool isCleanupTask() const { return m_isCleanupTask; }
 
     protected:
-        WTF::Function<void (ScriptExecutionContext&)> m_task;
+        Function<void(ScriptExecutionContext&)> m_task;
         bool m_isCleanupTask;
     };
 
@@ -223,6 +222,8 @@ public:
             crossThreadTask.performTask();
         });
     }
+
+    void postTaskToResponsibleDocument(Function<void(Document&)>&&);
 
     // Gets the next id in a circular sequence from 1 to 2^31-1.
     int circularSequentialID();
@@ -280,8 +281,9 @@ public:
     ServiceWorkerContainer* ensureServiceWorkerContainer();
 #endif
     WEBCORE_EXPORT static bool postTaskTo(ScriptExecutionContextIdentifier, Task&&);
+    WEBCORE_EXPORT static bool ensureOnContextThread(ScriptExecutionContextIdentifier, Task&&);
 
-    ScriptExecutionContextIdentifier contextIdentifier() const;
+    ScriptExecutionContextIdentifier identifier() const { return m_identifier; }
 
 protected:
     class AddConsoleMessageTask : public Task {
@@ -359,7 +361,7 @@ private:
 #endif
 
     String m_domainForCachePartition;
-    mutable ScriptExecutionContextIdentifier m_contextIdentifier;
+    mutable ScriptExecutionContextIdentifier m_identifier;
 };
 
 } // namespace WebCore

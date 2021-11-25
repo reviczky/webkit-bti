@@ -63,6 +63,25 @@ ScrollingTree::ScrollingTree()
 
 ScrollingTree::~ScrollingTree() = default;
 
+bool ScrollingTree::isUserScrollInProgressAtEventLocation(const PlatformWheelEvent& wheelEvent)
+{
+    if (!m_rootNode)
+        return false;
+
+    // This method is invoked by the event handling thread
+    Locker locker { m_treeStateLock };
+
+    if (m_treeState.nodesWithActiveUserScrolls.isEmpty())
+        return false;
+
+    FloatPoint position = wheelEvent.position();
+    position.move(m_rootNode->viewToContentsOffset(m_treeState.mainFrameScrollPosition));
+    if (auto node = scrollingNodeForPoint(position))
+        return m_treeState.nodesWithActiveUserScrolls.contains(node->scrollingNodeID());
+
+    return false;
+}
+
 OptionSet<WheelEventProcessingSteps> ScrollingTree::computeWheelProcessingSteps(const PlatformWheelEvent& wheelEvent)
 {
     if (!m_rootNode)
@@ -279,7 +298,8 @@ void ScrollingTree::commitTreeState(std::unique_ptr<ScrollingStateTree>&& scroll
             || rootNode->hasChangedProperty(ScrollingStateNode::Property::AsyncFrameOrOverflowScrollingEnabled)
             || rootNode->hasChangedProperty(ScrollingStateNode::Property::WheelEventGesturesBecomeNonBlocking)
             || rootNode->hasChangedProperty(ScrollingStateNode::Property::ScrollingPerformanceTestingEnabled)
-            || rootNode->hasChangedProperty(ScrollingStateNode::Property::IsMonitoringWheelEvents))) {
+            || rootNode->hasChangedProperty(ScrollingStateNode::Property::IsMonitoringWheelEvents)
+            || rootNode->hasChangedProperty(ScrollingStateNode::Property::MomentumScrollingAnimatorEnabled))) {
         Locker locker { m_treeStateLock };
 
         if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::ScrolledContentsLayer))
@@ -299,6 +319,9 @@ void ScrollingTree::commitTreeState(std::unique_ptr<ScrollingStateTree>&& scroll
 
         if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::IsMonitoringWheelEvents))
             m_isMonitoringWheelEvents = scrollingStateTree->rootStateNode()->isMonitoringWheelEvents();
+
+        if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::MomentumScrollingAnimatorEnabled))
+            m_momentumScrollingAnimatorEnabled = scrollingStateTree->rootStateNode()->momentumScrollingAnimatorEnabled();
     }
 
     m_overflowRelatedNodesMap.clear();
@@ -321,7 +344,12 @@ void ScrollingTree::commitTreeState(std::unique_ptr<ScrollingStateTree>&& scroll
             node->willBeDestroyed();
     }
 
-    LOG_WITH_STREAM(ScrollingTree, stream << "committed ScrollingTree" << scrollingTreeAsText(ScrollingStateTreeAsTextBehaviorDebug));
+    if (rootNode && (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::MomentumScrollingAnimatorEnabled)))
+        RELEASE_LOG(Scrolling, "ScrollingTree momentum scrolling animator enabled: %d", rootNode->momentumScrollingAnimatorEnabled());
+    
+    didCommitTree();
+
+    LOG_WITH_STREAM(ScrollingTree, stream << "committed ScrollingTree" << scrollingTreeAsText(debugScrollingStateTreeAsTextBehaviors));
 }
 
 void ScrollingTree::updateTreeFromStateNodeRecursive(const ScrollingStateNode* stateNode, CommitTreeState& state)
@@ -581,6 +609,46 @@ void ScrollingTree::setNodeScrollSnapInProgress(ScrollingNodeID nodeID, bool isS
         m_treeState.nodesWithActiveScrollSnap.remove(nodeID);
 }
 
+bool ScrollingTree::isScrollAnimationInProgressForNode(ScrollingNodeID nodeID)
+{
+    if (!nodeID)
+        return false;
+
+    Locker locker { m_treeStateLock };
+    return m_treeState.nodesWithActiveScrollAnimations.contains(nodeID);
+}
+
+void ScrollingTree::setScrollAnimationInProgressForNode(ScrollingNodeID nodeID, bool isScrollAnimationInProgress)
+{
+    if (!nodeID)
+        return;
+
+    Locker locker { m_treeStateLock };
+    
+    bool hadAnyAnimatedScrollingNodes = !m_treeState.nodesWithActiveScrollAnimations.isEmpty();
+    
+    if (isScrollAnimationInProgress)
+        m_treeState.nodesWithActiveScrollAnimations.add(nodeID);
+    else
+        m_treeState.nodesWithActiveScrollAnimations.remove(nodeID);
+
+    bool hasAnyAnimatedScrollingNodes = !m_treeState.nodesWithActiveScrollAnimations.isEmpty();
+    if (hasAnyAnimatedScrollingNodes != hadAnyAnimatedScrollingNodes)
+        hasNodeWithAnimatedScrollChanged(hasAnyAnimatedScrollingNodes);
+}
+
+bool ScrollingTree::hasNodeWithActiveScrollAnimations()
+{
+    Locker locker { m_treeStateLock };
+    return !m_treeState.nodesWithActiveScrollAnimations.isEmpty();
+}
+
+HashSet<ScrollingNodeID> ScrollingTree::nodesWithActiveScrollAnimations()
+{
+    Locker locker { m_treeStateLock };
+    return m_treeState.nodesWithActiveScrollAnimations;
+}
+
 void ScrollingTree::setMainFramePinnedState(RectEdges<bool> edgePinningState)
 {
     Locker locker { m_swipeStateLock };
@@ -595,18 +663,10 @@ void ScrollingTree::setMainFrameCanRubberBand(RectEdges<bool> canRubberBand)
     m_swipeState.canRubberBand = canRubberBand;
 }
 
-bool ScrollingTree::mainFrameCanRubberBandInDirection(ScrollDirection direction)
+bool ScrollingTree::mainFrameCanRubberBandOnSide(BoxSide side)
 {
     Locker locker { m_swipeStateLock };
-
-    switch (direction) {
-    case ScrollUp: return m_swipeState.canRubberBand.top();
-    case ScrollDown: return m_swipeState.canRubberBand.bottom();
-    case ScrollLeft: return m_swipeState.canRubberBand.left();
-    case ScrollRight: return m_swipeState.canRubberBand.right();
-    };
-
-    return false;
+    return m_swipeState.canRubberBand.at(side);
 }
 
 void ScrollingTree::addPendingScrollUpdate(ScrollUpdate&& update)
@@ -622,7 +682,7 @@ void ScrollingTree::addPendingScrollUpdate(ScrollUpdate&& update)
     m_pendingScrollUpdates.append(WTFMove(update));
 }
 
-Vector<ScrollingTree::ScrollUpdate> ScrollingTree::takePendingScrollUpdates()
+Vector<ScrollUpdate> ScrollingTree::takePendingScrollUpdates()
 {
     Locker locker { m_pendingScrollUpdatesLock };
     return std::exchange(m_pendingScrollUpdates, { });
@@ -706,7 +766,7 @@ std::optional<unsigned> ScrollingTree::nominalFramesPerSecond()
     return m_treeState.nominalFramesPerSecond;
 }
 
-String ScrollingTree::scrollingTreeAsText(ScrollingStateTreeAsTextBehavior behavior)
+String ScrollingTree::scrollingTreeAsText(OptionSet<ScrollingStateTreeAsTextBehavior> behavior)
 {
     TextStream ts(TextStream::LineMode::MultipleLine);
 
@@ -724,10 +784,10 @@ String ScrollingTree::scrollingTreeAsText(ScrollingStateTreeAsTextBehavior behav
         
         if (m_rootNode) {
             TextStream::GroupScope scope(ts);
-            m_rootNode->dump(ts, behavior | ScrollingStateTreeAsTextBehaviorIncludeLayerPositions);
+            m_rootNode->dump(ts, behavior | ScrollingStateTreeAsTextBehavior::IncludeLayerPositions);
         }
         
-        if (behavior & ScrollingStateTreeAsTextBehaviorIncludeNodeIDs) {
+        if (behavior & ScrollingStateTreeAsTextBehavior::IncludeNodeIDs) {
             if (!m_overflowRelatedNodesMap.isEmpty()) {
                 TextStream::GroupScope scope(ts);
                 ts << "overflow related nodes";

@@ -36,7 +36,6 @@ enum class ItemType : uint8_t {
     Scale,
     ConcatenateCTM,
     SetCTM,
-    SetInlineFillGradient,
     SetInlineFillColor,
     SetInlineStrokeColor,
     SetStrokeThickness,
@@ -80,8 +79,6 @@ enum class ItemType : uint8_t {
     FillPath,
     FillEllipse,
     FlushContext,
-    MetaCommandChangeDestinationImageBuffer,
-    MetaCommandChangeItemBuffer,
     GetPixelBuffer,
     PutPixelBuffer,
 #if ENABLE(VIDEO)

@@ -161,7 +161,14 @@ void RenderGrid::repeatTracksSizingIfNeeded(LayoutUnit availableSpaceForColumns,
     // a new cycle of the sizing algorithm; there may be more. In addition, not all the
     // cases with orthogonal flows require this extra cycle; we need a more specific
     // condition to detect whether child's min-content contribution has changed or not.
-    if (m_hasAnyOrthogonalItem || m_trackSizingAlgorithm.hasAnyPercentSizedRowsIndefiniteHeight()) {
+    // The complication with repeating the track sizing algorithm for flex max-sizing is that
+    // it might change a grid item's status of participating in Baseline Alignment for
+    // a cyclic sizing dependncy case, which should be definitively excluded. See
+    // https://github.com/w3c/csswg-drafts/issues/3046 for details.
+    // FIXME: we are avoiding repeating the track sizing algorithm for grid item with baseline alignment
+    // here in the case of using flex max-sizing functions. We probably also need to investigate whether
+    // it is applicable for the case of percent-sized rows with indefinite height as well.
+    if (m_hasAnyOrthogonalItem || m_trackSizingAlgorithm.hasAnyPercentSizedRowsIndefiniteHeight() || (m_trackSizingAlgorithm.hasAnyFlexibleMaxTrackBreadth() && !m_trackSizingAlgorithm.hasAnyBaselineAlignmentItem()) || m_hasAspectRatioBlockSizeDependentItem) {
         computeTrackSizesForDefiniteSize(ForColumns, availableSpaceForColumns);
         computeContentPositionAndDistributionOffset(ForColumns, m_trackSizingAlgorithm.freeSpace(ForColumns).value(), nonCollapsedTracks(ForColumns));
         computeTrackSizesForDefiniteSize(ForRows, availableSpaceForRows);
@@ -199,6 +206,8 @@ void RenderGrid::layoutBlock(bool relayoutChildren, LayoutUnit)
         // FIXME: We might need to cache the hasDefiniteLogicalHeight if the call of RenderBlock::hasDefiniteLogicalHeight() causes a relevant performance regression.
         bool hasDefiniteLogicalHeight = RenderBlock::hasDefiniteLogicalHeight() || hasOverridingLogicalHeight() || computeContentLogicalHeight(MainOrPreferredSize, style().logicalHeight(), std::nullopt);
         m_hasAnyOrthogonalItem = false;
+        m_hasAspectRatioBlockSizeDependentItem = false;
+        Vector<RenderBox*> aspectRatioBlockSizeDependentGridItems;
         for (auto* child = firstChildBox(); child; child = child->nextSiblingBox()) {
             if (child->isOutOfFlowPositioned())
                 continue;
@@ -210,7 +219,13 @@ void RenderGrid::layoutBlock(bool relayoutChildren, LayoutUnit)
             // We may need to repeat the track sizing in case of any grid item was orthogonal.
             if (GridLayoutFunctions::isOrthogonalChild(*this, *child))
                 m_hasAnyOrthogonalItem = true;
-
+            
+            // For a grid item that has an aspect-ratio and block-constraints such as the relative logical height,
+            // when the grid width is auto, we may need get the real grid width before laying out the item. 
+            if (GridLayoutFunctions::isAspectRatioBlockSizeDependentChild(*child) && (style().logicalWidth().isAuto() || style().logicalWidth().isMinContent() || style().logicalWidth().isMaxContent())) {
+                aspectRatioBlockSizeDependentGridItems.append(child);
+                m_hasAspectRatioBlockSizeDependentItem = true;
+            }
             // We keep a cache of items with baseline as alignment values so
             // that we only compute the baseline shims for such items. This
             // cache is needed for performance related reasons due to the
@@ -263,7 +278,6 @@ void RenderGrid::layoutBlock(bool relayoutChildren, LayoutUnit)
 
         setLogicalHeight(trackBasedLogicalHeight);
 
-        LayoutUnit oldClientAfterEdge = clientLogicalBottom();
         updateLogicalHeight();
 
         // Once grid's indefinite height is resolved, we can compute the
@@ -273,6 +287,11 @@ void RenderGrid::layoutBlock(bool relayoutChildren, LayoutUnit)
 
         // 2.5- Compute Content Distribution offsets for rows tracks
         computeContentPositionAndDistributionOffset(ForRows, m_trackSizingAlgorithm.freeSpace(ForRows).value(), nonCollapsedTracks(ForRows));
+
+        if (!aspectRatioBlockSizeDependentGridItems.isEmpty()) {
+            updateGridAreaForAspectRatioItems(aspectRatioBlockSizeDependentGridItems);
+            updateLogicalWidth();
+        }
 
         // 3- If the min-content contribution of any grid items have changed based on the row
         // sizes calculated in step 2, steps 1 and 2 are repeated with the new min-content
@@ -300,7 +319,7 @@ void RenderGrid::layoutBlock(bool relayoutChildren, LayoutUnit)
 
         layoutPositionedObjects(relayoutChildren || isDocumentElementRenderer());
 
-        computeOverflow(oldClientAfterEdge);
+        computeOverflow(clientLogicalRightAndBottomAfterRepositioning().height());
     }
 
     updateLayerTransform();
@@ -480,7 +499,10 @@ unsigned RenderGrid::computeAutoRepeatTracksCount(GridTrackSizingDirection direc
         }
 
         const Length& minSize = isRowAxis ? style().logicalMinWidth() : style().logicalMinHeight();
-        if (!availableMaxSize && !minSize.isSpecified())
+        const auto& minSizeForOrthogonalAxis = isRowAxis ? style().logicalMinHeight() : style().logicalMinWidth();
+        bool shouldComputeMinSizeFromAspectRatio = minSizeForOrthogonalAxis.isSpecified() && !shouldIgnoreAspectRatio();
+
+        if (!availableMaxSize && !minSize.isSpecified() && !shouldComputeMinSizeFromAspectRatio)
             return autoRepeatTrackListLength;
 
         std::optional<LayoutUnit> availableMinSize;
@@ -489,9 +511,12 @@ unsigned RenderGrid::computeAutoRepeatTracksCount(GridTrackSizingDirection direc
                 containingBlockAvailableSize = isRowAxis ? containingBlockLogicalWidthForContent() : containingBlockLogicalHeightForContent(ExcludeMarginBorderPadding);
             LayoutUnit minSizeValue = valueForLength(minSize, containingBlockAvailableSize.value_or(LayoutUnit()));
             availableMinSize = isRowAxis ? adjustContentBoxLogicalWidthForBoxSizing(minSizeValue, minSize.type()) : adjustContentBoxLogicalHeightForBoxSizing(minSizeValue);
-            if (!maxSize.isSpecified())
-                needsToFulfillMinimumSize = true;
+        } else if (shouldComputeMinSizeFromAspectRatio) {
+            auto [logicalMinWidth, logicalMaxWidth] = computeMinMaxLogicalWidthFromAspectRatio();
+            availableMinSize = logicalMinWidth;
         }
+        if (!maxSize.isSpecified())
+            needsToFulfillMinimumSize = true;
 
         availableSize = std::max(availableMinSize.value_or(LayoutUnit()), availableMaxSize.value_or(LayoutUnit()));
     }
@@ -502,6 +527,9 @@ unsigned RenderGrid::computeAutoRepeatTracksCount(GridTrackSizingDirection direc
         ASSERT(!autoTrackSize.minTrackBreadth().isFlex());
         bool hasDefiniteMaxTrackSizingFunction = autoTrackSize.maxTrackBreadth().isLength() && !autoTrackSize.maxTrackBreadth().isContentSized();
         auto trackLength = hasDefiniteMaxTrackSizingFunction ? autoTrackSize.maxTrackBreadth().length() : autoTrackSize.minTrackBreadth().length();
+        bool hasDefiniteMinTrackSizingFunction = autoTrackSize.minTrackBreadth().isLength() && !autoTrackSize.minTrackBreadth().isContentSized();
+        if (hasDefiniteMinTrackSizingFunction && (trackLength.value() < autoTrackSize.minTrackBreadth().length().value()))
+            trackLength = autoTrackSize.minTrackBreadth().length();
         autoRepeatTracksSize += valueForLength(trackLength, availableSize.value());
     }
     // For the purpose of finding the number of auto-repeated tracks, the UA must floor the track size to a UA-specified
@@ -934,6 +962,19 @@ void RenderGrid::updateGridAreaLogicalSize(RenderBox& child, std::optional<Layou
     child.setOverridingContainingBlockContentLogicalHeight(height);
 }
 
+void RenderGrid::updateGridAreaForAspectRatioItems(const Vector<RenderBox*>& autoGridItems)
+{
+    populateGridPositionsForDirection(ForColumns);
+    populateGridPositionsForDirection(ForRows);
+
+    for (auto& autoGridItem : autoGridItems) {
+        updateGridAreaLogicalSize(*autoGridItem, gridAreaBreadthForChildIncludingAlignmentOffsets(*autoGridItem, ForColumns), gridAreaBreadthForChildIncludingAlignmentOffsets(*autoGridItem, ForRows));
+        // For an item wtih aspect-ratio, if it has stretch alignment that stretches to the definite row, we also need to transfer the size before laying out the grid item.
+        if (autoGridItem->hasStretchedLogicalHeight())
+            applyStretchAlignmentToChildIfNeeded(*autoGridItem);
+    }
+}
+
 void RenderGrid::layoutGridItems()
 {
     populateGridPositionsForDirection(ForColumns);
@@ -1175,12 +1216,10 @@ void RenderGrid::applyStretchAlignmentToChildIfNeeded(RenderBox& child)
         }
     } else if (!allowedToStretchChildBlockSize && allowedToStretchChildAlongRowAxis(child)) {
         LayoutUnit stretchedLogicalWidth = availableAlignmentSpaceForChildBeforeStretching(GridLayoutFunctions::overridingContainingBlockContentSizeForChild(child, childInlineDirection).value(), child);
-        LayoutUnit desiredLogicalWidth = constrainLogicalWidthInFragmentByMinMax(stretchedLogicalWidth, contentWidth(), *this, nullptr);
+        LayoutUnit desiredLogicalWidth = child.constrainLogicalWidthInFragmentByMinMax(stretchedLogicalWidth, contentWidth(), *this, nullptr);
         child.setOverridingLogicalWidth(desiredLogicalWidth);
-        if (desiredLogicalWidth != child.logicalWidth()) {
-            child.setLogicalWidth(0_lu);
+        if (desiredLogicalWidth != child.logicalWidth())
             child.setNeedsLayout(MarkOnlyThis);
-        }
     } 
 }
 
@@ -1580,7 +1619,7 @@ LayoutUnit RenderGrid::gridAreaBreadthForOutOfFlowChild(const RenderBox& child, 
     LayoutUnit end;
     auto& positions = isRowAxis ? m_columnPositions : m_rowPositions;
     auto& outOfFlowItemLine = isRowAxis ? m_outOfFlowItemColumn : m_outOfFlowItemRow;
-    LayoutUnit borderEdge = isRowAxis ? borderLogicalLeft() : borderBefore();
+    LayoutUnit borderEdge = isRowAxis ? (style().isLeftToRightDirection() ? borderLogicalLeft() : borderLogicalRight()) : borderBefore();
     if (startIsAuto)
         start = resolveAutoStartGridPosition(direction) + borderEdge;
     else {
@@ -1628,7 +1667,7 @@ void RenderGrid::gridAreaPositionForOutOfFlowChild(const RenderBox& child, GridT
     LayoutUnit trackBreadth = GridLayoutFunctions::overridingContainingBlockContentSizeForChild(child, direction).value();
     bool isRowAxis = direction == ForColumns;
     auto& outOfFlowItemLine = isRowAxis ? m_outOfFlowItemColumn : m_outOfFlowItemRow;
-    start = isRowAxis ? borderLogicalLeft() : borderBefore();
+    start = isRowAxis ? (style().isLeftToRightDirection() ? borderLogicalLeft() : borderLogicalRight()) : borderBefore();
     if (auto line = outOfFlowItemLine.get(&child)) {
         auto& positions = isRowAxis ? m_columnPositions : m_rowPositions;
         start = positions[line.value()];

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,7 +37,7 @@ class IsoCellSet;
 
 class IsoSubspace : public Subspace {
 public:
-    JS_EXPORT_PRIVATE IsoSubspace(CString name, Heap&, HeapCellType*, size_t size, uint8_t numberOfLowerTierCells);
+    JS_EXPORT_PRIVATE IsoSubspace(CString name, Heap&, const HeapCellType&, size_t, uint8_t numberOfLowerTierCells);
     JS_EXPORT_PRIVATE ~IsoSubspace() override;
 
     size_t cellSize() { return m_directory.cellSize(); }
@@ -82,7 +82,7 @@ ALWAYS_INLINE Allocator IsoSubspace::allocatorForNonVirtual(size_t size, Allocat
 
 template<typename T>
 struct isAllocatedFromIsoSubspace {
-    static constexpr bool value = std::is_same<std::result_of_t<decltype(T::template subspaceFor<T, SubspaceAccess::OnMainThread>)&(VM&)>, IsoSubspace*>::value;
+    static constexpr bool value = std::is_same<std::invoke_result_t<decltype(T::template subspaceFor<T, SubspaceAccess::OnMainThread>)&, VM&>, IsoSubspace*>::value;
 };
 
 } // namespace JSC

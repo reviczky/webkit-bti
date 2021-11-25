@@ -82,7 +82,6 @@
 #include <gst/video/gstvideometa.h>
 #include <limits>
 #include <wtf/FileSystem.h>
-#include <wtf/glib/GLibUtilities.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
 #include <wtf/MathExtras.h>
@@ -984,7 +983,7 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
     ASSERT(m_isLegacyPlaybin);
 
     using TrackType = TrackPrivateBaseGStreamer::TrackType;
-    Variant<HashMap<AtomString, RefPtr<AudioTrackPrivateGStreamer>>*, HashMap<AtomString, RefPtr<VideoTrackPrivateGStreamer>>*, HashMap<AtomString, RefPtr<InbandTextTrackPrivateGStreamer>>*> variantTracks = static_cast<HashMap<AtomString, RefPtr<TrackPrivateType>>*>(0);
+    std::variant<HashMap<AtomString, RefPtr<AudioTrackPrivateGStreamer>>*, HashMap<AtomString, RefPtr<VideoTrackPrivateGStreamer>>*, HashMap<AtomString, RefPtr<InbandTextTrackPrivateGStreamer>>*> variantTracks = static_cast<HashMap<AtomString, RefPtr<TrackPrivateType>>*>(0);
     auto type(static_cast<TrackType>(variantTracks.index()));
     const char* typeName;
     bool* hasType;
@@ -1007,7 +1006,7 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
     default:
         ASSERT_NOT_REACHED();
     }
-    HashMap<AtomString, RefPtr<TrackPrivateType>>& tracks = *get<HashMap<AtomString, RefPtr<TrackPrivateType>>*>(variantTracks);
+    HashMap<AtomString, RefPtr<TrackPrivateType>>& tracks = *std::get<HashMap<AtomString, RefPtr<TrackPrivateType>>*>(variantTracks);
 
     // Ignore notifications after a EOS. We don't want the tracks to disappear when the video is finished.
     if (m_isEndReached && (type == TrackType::Audio || type == TrackType::Video))
@@ -1056,22 +1055,22 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfTrack()
             }
         }
 
-        auto track = TrackPrivateType::create(makeWeakPtr(*this), i, WTFMove(pad));
+        auto track = TrackPrivateType::create(*this, i, WTFMove(pad));
         if (!track->trackIndex() && (type == TrackType::Audio || type == TrackType::Video))
             track->setActive(true);
         ASSERT(streamId == track->id());
         tracks.add(streamId, track.copyRef());
 
-        Variant<AudioTrackPrivate&, VideoTrackPrivate&, InbandTextTrackPrivate&> variantTrack(track.get());
+        std::variant<AudioTrackPrivate*, VideoTrackPrivate*, InbandTextTrackPrivate*> variantTrack(&track.get());
         switch (variantTrack.index()) {
         case TrackType::Audio:
-            m_player->addAudioTrack(get<AudioTrackPrivate&>(variantTrack));
+            m_player->addAudioTrack(*std::get<AudioTrackPrivate*>(variantTrack));
             break;
         case TrackType::Video:
-            m_player->addVideoTrack(get<VideoTrackPrivate&>(variantTrack));
+            m_player->addVideoTrack(*std::get<VideoTrackPrivate*>(variantTrack));
             break;
         case TrackType::Text:
-            m_player->addTextTrack(get<InbandTextTrackPrivate&>(variantTrack));
+            m_player->addTextTrack(*std::get<InbandTextTrackPrivate*>(variantTrack));
             break;
         }
     }
@@ -1108,7 +1107,7 @@ void MediaPlayerPrivateGStreamer::videoSinkCapsChanged(GstPad* videoSinkPad)
         return;
     }
 
-    RunLoop::main().dispatch([weakThis = makeWeakPtr(this), this, caps = WTFMove(caps)] {
+    RunLoop::main().dispatch([weakThis = WeakPtr { *this }, this, caps = WTFMove(caps)] {
         if (!weakThis)
             return;
         updateVideoSizeAndOrientationFromCaps(caps.get());
@@ -1277,6 +1276,31 @@ GstElement* MediaPlayerPrivateGStreamer::audioSink() const
     return sink;
 }
 
+GstClockTime MediaPlayerPrivateGStreamer::gstreamerPositionFromSinks() const
+{
+    gint64 gstreamerPosition = GST_CLOCK_TIME_NONE;
+    // Asking directly to the sinks and choosing the highest value is faster than asking to the pipeline.
+    GRefPtr<GstQuery> query = adoptGRef(gst_query_new_position(GST_FORMAT_TIME));
+    if (m_audioSink && gst_element_query(m_audioSink.get(), query.get())) {
+        gint64 audioPosition = GST_CLOCK_TIME_NONE;
+        gst_query_parse_position(query.get(), 0, &audioPosition);
+        if (GST_CLOCK_TIME_IS_VALID(audioPosition))
+            gstreamerPosition = audioPosition;
+        GST_TRACE_OBJECT(pipeline(), "Audio position %" GST_TIME_FORMAT, GST_TIME_ARGS(audioPosition));
+        query = adoptGRef(gst_query_new_position(GST_FORMAT_TIME));
+    }
+    if (m_videoSink && gst_element_query(m_videoSink.get(), query.get())) {
+        gint64 videoPosition = GST_CLOCK_TIME_NONE;
+        gst_query_parse_position(query.get(), 0, &videoPosition);
+        GST_TRACE_OBJECT(pipeline(), "Video position %" GST_TIME_FORMAT, GST_TIME_ARGS(videoPosition));
+        if (GST_CLOCK_TIME_IS_VALID(videoPosition) && (!GST_CLOCK_TIME_IS_VALID(gstreamerPosition)
+            || (m_playbackRate >= 0 && videoPosition > gstreamerPosition)
+            || (m_playbackRate < 0 && videoPosition < gstreamerPosition)))
+            gstreamerPosition = videoPosition;
+    }
+    return static_cast<GstClockTime>(gstreamerPosition);
+}
+
 MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
 {
     GST_TRACE_OBJECT(pipeline(), "isEndReached: %s, seeking: %s, seekTime: %s", boolForPrinting(m_isEndReached), boolForPrinting(m_isSeeking), m_seekTime.toString().utf8().data());
@@ -1296,28 +1320,7 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
         return m_cachedPosition.value();
     }
 
-    // Position is only available if no async state change is going on and the state is either paused or playing.
-    gint64 position = GST_CLOCK_TIME_NONE;
-
-    // Asking directly to the sinks and choosing the highest value is faster than asking to the pipeline.
-    GRefPtr<GstQuery> query = adoptGRef(gst_query_new_position(GST_FORMAT_TIME));
-    if (m_audioSink && gst_element_query(m_audioSink.get(), query.get())) {
-        gint64 audioPosition = GST_CLOCK_TIME_NONE;
-        gst_query_parse_position(query.get(), 0, &audioPosition);
-        if (GST_CLOCK_TIME_IS_VALID(audioPosition))
-            position = audioPosition;
-        query = adoptGRef(gst_query_new_position(GST_FORMAT_TIME));
-    }
-    if (m_videoSink && gst_element_query(m_videoSink.get(), query.get())) {
-        gint64 videoPosition = GST_CLOCK_TIME_NONE;
-        gst_query_parse_position(query.get(), 0, &videoPosition);
-        if (GST_CLOCK_TIME_IS_VALID(videoPosition) && (!GST_CLOCK_TIME_IS_VALID(position)
-            || (m_playbackRate >= 0 && videoPosition > position)
-            || (m_playbackRate < 0 && videoPosition < position)))
-            position = videoPosition;
-    }
-
-    GstClockTime gstreamerPosition = static_cast<GstClockTime>(position);
+    GstClockTime gstreamerPosition = gstreamerPositionFromSinks();
     GST_TRACE_OBJECT(pipeline(), "Position %" GST_TIME_FORMAT ", canFallBackToLastFinishedSeekPosition: %s", GST_TIME_ARGS(gstreamerPosition), boolForPrinting(m_canFallBackToLastFinishedSeekPosition));
 
     MediaTime playbackPosition = MediaTime::zeroTime();
@@ -1439,7 +1442,7 @@ void MediaPlayerPrivateGStreamer::updateTracks(const GRefPtr<GstStreamCollection
     unsigned textTrackIndex = 0;
 
 #define CREATE_TRACK(type, Type) G_STMT_START {                     \
-        RefPtr<Type##TrackPrivateGStreamer> track = Type##TrackPrivateGStreamer::create(makeWeakPtr(*this), type##TrackIndex, WTFMove(stream)); \
+        RefPtr<Type##TrackPrivateGStreamer> track = Type##TrackPrivateGStreamer::create(*this, type##TrackIndex, WTFMove(stream)); \
         auto trackId = track->id();                                 \
         if (!type##TrackIndex) {                                    \
             m_wanted##Type##StreamId = trackId;                     \
@@ -1519,7 +1522,7 @@ void MediaPlayerPrivateGStreamer::handleStreamCollectionMessage(GstMessage* mess
     }
 #endif
 
-    auto callback = [player = makeWeakPtr(*this), collection = WTFMove(collection)] {
+    auto callback = [player = WeakPtr { *this }, collection = WTFMove(collection)] {
         if (player)
             player->updateTracks(collection);
     };
@@ -1763,9 +1766,32 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
             }
         }
         break;
-    case GST_MESSAGE_EOS:
+    case GST_MESSAGE_EOS: {
+        // In some specific cases, an EOS GstEvent can happen right before a seek. The event is translated
+        // by playbin as an EOS GstMessage and posted to the bus, waiting to be forwarded to the main thread.
+        // The EOS message (now irrelevant after the seek) is received and processed right after the seek,
+        // causing the termination of the media at the player private and upper levels. This can even happen
+        // after the seek has completed (m_isSeeking already false).
+        // The code below detects that condition by ensuring that the playback is coherent with the EOS message,
+        // that is, if we're still playing somewhere inside the playable ranges, there should be no EOS at
+        // all. If that's the case, it's considered to be one of those spureous EOS and is ignored.
+        // Live streams (infinite duration) are special and we still have to detect legitimate EOS there, so
+        // this message bailout isn't done in those cases.
+        MediaTime playbackPosition = MediaTime::invalidTime();
+        MediaTime duration = durationMediaTime();
+        GstClockTime gstreamerPosition = gstreamerPositionFromSinks();
+        if (GST_CLOCK_TIME_IS_VALID(gstreamerPosition))
+            playbackPosition = MediaTime(gstreamerPosition, GST_SECOND);
+        if (playbackPosition.isValid() && duration.isValid()
+            && ((m_playbackRate >= 0 && playbackPosition < duration && duration.isFinite())
+            || (m_playbackRate < 0 && playbackPosition > MediaTime::zeroTime()))) {
+            GST_DEBUG_OBJECT(pipeline(), "EOS received but position %s is still in the finite playable limits [%s, %s], ignoring it",
+                playbackPosition.toString().utf8().data(), MediaTime::zeroTime().toString().utf8().data(), duration.toString().utf8().data());
+            break;
+        }
         didEnd();
         break;
+    }
     case GST_MESSAGE_ASYNC_DONE:
         if (!messageSourceIsPlaybin || m_isDelayingLoad)
             break;
@@ -1834,7 +1860,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         if (gst_is_missing_plugin_message(message)) {
 #if !USE(GSTREAMER_FULL)
             if (gst_install_plugins_supported()) {
-                auto missingPluginCallback = MediaPlayerRequestInstallMissingPluginsCallback::create([weakThis = makeWeakPtr(*this)](uint32_t result, MediaPlayerRequestInstallMissingPluginsCallback& missingPluginCallback) {
+                auto missingPluginCallback = MediaPlayerRequestInstallMissingPluginsCallback::create([weakThis = WeakPtr { *this }](uint32_t result, MediaPlayerRequestInstallMissingPluginsCallback& missingPluginCallback) {
                     if (!weakThis) {
                         GST_INFO("got missing pluging installation callback in destroyed player with result %u", result);
                         return;
@@ -1976,7 +2002,10 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
 {
     bool wasBuffering = m_isBuffering;
 
-    GST_DEBUG_OBJECT(pipeline(), "[Buffering] mode: %s, status: %f%%", enumToString(GST_TYPE_BUFFERING_MODE, mode).data(), percentage);
+#ifndef GST_DISABLE_GST_DEBUG
+    GUniquePtr<char> modeString(g_enum_to_string(GST_TYPE_BUFFERING_MODE, mode));
+    GST_DEBUG_OBJECT(pipeline(), "[Buffering] mode: %s, status: %f%%", modeString.get(), percentage);
+#endif
 
     m_didDownloadFinish = percentage == 100;
     m_isBuffering = !m_didDownloadFinish;
@@ -2003,7 +2032,9 @@ void MediaPlayerPrivateGStreamer::updateBufferingStatus(GstBufferingMode mode, d
         break;
     }
     default:
-        GST_DEBUG_OBJECT(pipeline(), "Unhandled buffering mode: %s", enumToString(GST_TYPE_BUFFERING_MODE, mode).data());
+#ifndef GST_DISABLE_GST_DEBUG
+        GST_DEBUG_OBJECT(pipeline(), "Unhandled buffering mode: %s", modeString.get());
+#endif
         break;
     }
 }
@@ -2730,7 +2761,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
     ASSERT(textCombiner);
     g_object_set(m_pipeline.get(), "text-stream-combiner", textCombiner, nullptr);
 
-    m_textSink = webkitTextSinkNew(makeWeakPtr(*this));
+    m_textSink = webkitTextSinkNew(*this);
     ASSERT(m_textSink);
 
     g_object_set(m_pipeline.get(), "text-sink", m_textSink.get(), nullptr);
@@ -2941,26 +2972,16 @@ void MediaPlayerPrivateGStreamer::repaint()
     m_drawCondition.notifyOne();
 }
 
-static ImageOrientation getVideoOrientation(GstElement* sink)
+static ImageOrientation getVideoOrientation(const GstTagList* tagList)
 {
-    GRefPtr<GstPad> pad = adoptGRef(gst_element_get_static_pad(sink, "sink"));
-    ASSERT(pad);
-    GRefPtr<GstEvent> tagsEvent = adoptGRef(gst_pad_get_sticky_event(pad.get(), GST_EVENT_TAG, 0));
-    if (!tagsEvent) {
-        GST_DEBUG_OBJECT(pad.get(), "No sticky tag event, applying no rotation.");
-        return ImageOrientation::None;
-    }
-
-    GstTagList* tagList;
-    gst_event_parse_tag(tagsEvent.get(), &tagList);
     ASSERT(tagList);
     GUniqueOutPtr<gchar> tag;
     if (!gst_tag_list_get_string(tagList, GST_TAG_IMAGE_ORIENTATION, &tag.outPtr())) {
-        GST_DEBUG_OBJECT(pad.get(), "No image_orientation tag, applying no rotation.");
+        GST_DEBUG("No image_orientation tag, applying no rotation.");
         return ImageOrientation::None;
     }
 
-    GST_DEBUG_OBJECT(pad.get(), "Found image_orientation tag: %s", tag.get());
+    GST_DEBUG("Found image_orientation tag: %s", tag.get());
     if (!g_strcmp0(tag.get(), "flip-rotate-0"))
         return ImageOrientation::OriginTopRight;
     if (!g_strcmp0(tag.get(), "rotate-180"))
@@ -2980,6 +3001,20 @@ static ImageOrientation getVideoOrientation(GstElement* sink)
     return ImageOrientation::None;
 }
 
+void MediaPlayerPrivateGStreamer::updateVideoOrientation(const GstTagList* tagList)
+{
+    GST_DEBUG_OBJECT(pipeline(), "Updating orientation from %" GST_PTR_FORMAT, tagList);
+    setVideoSourceOrientation(getVideoOrientation(tagList));
+
+    // If the video is tagged as rotated 90 or 270 degrees, swap width and height.
+    if (m_videoSourceOrientation.usesWidthAsHeight())
+        m_videoSize = m_videoSize.transposedSize();
+
+    callOnMainThreadAndWait([this] {
+        m_player->sizeChanged();
+    });
+}
+
 void MediaPlayerPrivateGStreamer::updateVideoSizeAndOrientationFromCaps(const GstCaps* caps)
 {
     ASSERT(isMainThread());
@@ -2997,7 +3032,17 @@ void MediaPlayerPrivateGStreamer::updateVideoSizeAndOrientationFromCaps(const Gs
         return;
     }
 
-    setVideoSourceOrientation(getVideoOrientation(m_videoSink.get()));
+    auto pad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
+    ASSERT(pad);
+    auto tagsEvent = adoptGRef(gst_pad_get_sticky_event(pad.get(), GST_EVENT_TAG, 0));
+    auto orientation = ImageOrientation::None;
+    if (tagsEvent) {
+        GstTagList* tagList;
+        gst_event_parse_tag(tagsEvent.get(), &tagList);
+        orientation = getVideoOrientation(tagList);
+    }
+
+    setVideoSourceOrientation(orientation);
     // If the video is tagged as rotated 90 or 270 degrees, swap width and height.
     if (m_videoSourceOrientation.usesWidthAsHeight())
         originalSize = originalSize.transposedSize();
@@ -3042,7 +3087,7 @@ void MediaPlayerPrivateGStreamer::invalidateCachedPosition() const
 
 void MediaPlayerPrivateGStreamer::invalidateCachedPositionOnNextIteration() const
 {
-    RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), this] {
+    RunLoop::main().dispatch([weakThis = WeakPtr { *this }, this] {
         if (!weakThis)
             return;
         invalidateCachedPosition();
@@ -3076,7 +3121,7 @@ void MediaPlayerPrivateGStreamer::triggerRepaint(GstSample* sample)
             GST_ERROR_OBJECT(pipeline(), "Received sample without caps: %" GST_PTR_FORMAT, sample);
             return;
         }
-        RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), this, caps = WTFMove(caps)] {
+        RunLoop::main().dispatch([weakThis = WeakPtr { *this }, this, caps = WTFMove(caps)] {
             if (!weakThis)
                 return;
             updateVideoSizeAndOrientationFromCaps(caps.get());
@@ -3262,6 +3307,11 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
     FloatRect imageRect = m_videoSourceOrientation.usesWidthAsHeight() ? FloatRect(gstImage->rect().location(), gstImage->rect().size().transposedSize()) : gstImage->rect();
 
     context.drawImage(gstImage->image(), rect, imageRect, { gstImage->hasAlpha() ? CompositeOperator::SourceOver : CompositeOperator::Copy, m_videoSourceOrientation });
+}
+
+DestinationColorSpace MediaPlayerPrivateGStreamer::colorSpace()
+{
+    return DestinationColorSpace::SRGB();
 }
 
 #if USE(GSTREAMER_GL)
@@ -3588,7 +3638,7 @@ void MediaPlayerPrivateGStreamer::initializationDataEncountered(InitData&& initD
 {
     ASSERT(!isMainThread());
 
-    RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), initData = WTFMove(initData)] {
+    RunLoop::main().dispatch([weakThis = WeakPtr { *this }, initData = WTFMove(initData)] {
         if (!weakThis)
             return;
 

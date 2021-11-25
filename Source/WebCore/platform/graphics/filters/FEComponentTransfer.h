@@ -2,6 +2,7 @@
  * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,8 +23,6 @@
 #pragma once
 
 #include "FilterEffect.h"
-
-#include "Filter.h"
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -53,8 +52,7 @@ struct ComponentTransferFunction {
 
 class FEComponentTransfer : public FilterEffect {
 public:
-    static Ref<FEComponentTransfer> create(Filter&, const ComponentTransferFunction& redFunc, const ComponentTransferFunction& greenFunc,
-                                           const ComponentTransferFunction& blueFunc, const ComponentTransferFunction& alphaFunc);
+    static Ref<FEComponentTransfer> create(const ComponentTransferFunction& redFunc, const ComponentTransferFunction& greenFunc, const ComponentTransferFunction& blueFunc, const ComponentTransferFunction& alphaFunc);
 
     ComponentTransferFunction redFunction() const { return m_redFunction; }
     ComponentTransferFunction greenFunction() const { return m_greenFunction; }
@@ -62,22 +60,9 @@ public:
     ComponentTransferFunction alphaFunction() const { return m_alphaFunction; }
 
 private:
-    FEComponentTransfer(Filter&, const ComponentTransferFunction& redFunc, const ComponentTransferFunction& greenFunc,
-                        const ComponentTransferFunction& blueFunc, const ComponentTransferFunction& alphaFunc);
+    FEComponentTransfer(const ComponentTransferFunction& redFunc, const ComponentTransferFunction& greenFunc, const ComponentTransferFunction& blueFunc, const ComponentTransferFunction& alphaFunc);
 
-     const char* filterName() const final { return "FEComponentTransfer"; }
-
-    using LookupTable = std::array<uint8_t, 256>;
-
-    static void computeIdentityTable(LookupTable&, const ComponentTransferFunction&);
-    static void computeTabularTable(LookupTable&, const ComponentTransferFunction&);
-    static void computeDiscreteTable(LookupTable&, const ComponentTransferFunction&);
-    static void computeLinearTable(LookupTable&, const ComponentTransferFunction&);
-    static void computeGammaTable(LookupTable&, const ComponentTransferFunction&);
-
-    void computeLookupTables(LookupTable& redTable, LookupTable& greenTable, LookupTable& blueTable, LookupTable& alphaTable);
-
-    void platformApplySoftware() override;
+    bool platformApplySoftware(const Filter&) override;
 
     WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
@@ -89,6 +74,4 @@ private:
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::FEComponentTransfer)
-    static bool isType(const WebCore::FilterEffect& effect) { return effect.filterEffectClassType() == WebCore::FilterEffect::Type::ComponentTransfer; }
-SPECIALIZE_TYPE_TRAITS_END()
+SPECIALIZE_TYPE_TRAITS_FILTER_EFFECT(FEComponentTransfer)

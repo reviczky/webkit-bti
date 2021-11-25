@@ -47,7 +47,7 @@ public:
     ~RemoteResourceCacheProxy();
 
     void cacheImageBuffer(WebCore::ImageBuffer&);
-    WebCore::ImageBuffer* cachedImageBuffer(WebCore::RenderingResourceIdentifier);
+    WebCore::ImageBuffer* cachedImageBuffer(WebCore::RenderingResourceIdentifier) const;
     void releaseImageBuffer(WebCore::RenderingResourceIdentifier);
 
     void recordNativeImageUse(WebCore::NativeImage&);
@@ -59,6 +59,8 @@ public:
     void remoteResourceCacheWasDestroyed();
     void releaseAllRemoteFonts();
     void releaseMemory();
+    
+    unsigned imagesCount() const { return m_nativeImages.size(); }
 
 private:
     struct ImageBufferState {

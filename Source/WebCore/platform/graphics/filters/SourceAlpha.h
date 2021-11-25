@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
+ * Copyright (C) 2021 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,8 +18,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef SourceAlpha_h
-#define SourceAlpha_h
+#pragma once
 
 #include "FilterEffect.h"
 
@@ -28,19 +28,18 @@ class SourceAlpha : public FilterEffect {
 public:        
     static Ref<SourceAlpha> create(FilterEffect&);
 
-    static const AtomString& effectName();
+    static AtomString effectName() { return FilterEffect::sourceAlphaName(); }
 
 private:
     explicit SourceAlpha(FilterEffect&);
-    FilterEffectType filterEffectType() const override { return FilterEffectTypeSourceInput; }
 
-    const char* filterName() const final { return "SourceAlpha"; }
+    void determineAbsolutePaintRect(const Filter&) override;
 
-    void platformApplySoftware() override;
-    void determineAbsolutePaintRect() override;
+    bool platformApplySoftware(const Filter&) override;
+
     WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 };
 
 } //namespace WebCore
 
-#endif // SourceAlpha_h
+SPECIALIZE_TYPE_TRAITS_FILTER_EFFECT(SourceAlpha)

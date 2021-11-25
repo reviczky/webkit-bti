@@ -40,6 +40,7 @@
 #include <WebCore/FrameSelection.h>
 #include <WebCore/FrameView.h>
 #include <WebCore/GraphicsContext.h>
+#include <WebCore/ImageOverlay.h>
 #include <WebCore/Page.h>
 #include <WebCore/PageOverlayController.h>
 #include <WebCore/PathUtilities.h>
@@ -295,7 +296,7 @@ void FindController::findStringMatches(const String& string, OptionSet<FindOptio
         return;
 
     bool found = !m_findMatches.isEmpty();
-    m_webPage->drawingArea()->dispatchAfterEnsuringUpdatedScrollPosition([protectedWebPage = makeRefPtr(m_webPage), found, string, options, maxMatchCount] () {
+    m_webPage->drawingArea()->dispatchAfterEnsuringUpdatedScrollPosition([protectedWebPage = RefPtr { m_webPage }, found, string, options, maxMatchCount] () {
         protectedWebPage->findController().updateFindUIAfterPageScroll(found, string, options, maxMatchCount, DidWrap::No, FindUIOriginator::FindStringMatches);
     });
 }
@@ -374,7 +375,7 @@ void FindController::hideFindUI()
 bool FindController::updateFindIndicator(Frame& selectedFrame, bool isShowingOverlay, bool shouldAnimate)
 {
     OptionSet<TextIndicatorOption> textIndicatorOptions { TextIndicatorOption::IncludeMarginIfRangeMatchesSelection };
-    if (auto selectedRange = selectedFrame.selection().selection().range(); selectedRange && HTMLElement::isInsideImageOverlay(*selectedRange))
+    if (auto selectedRange = selectedFrame.selection().selection().range(); selectedRange && ImageOverlay::isInsideOverlay(*selectedRange))
         textIndicatorOptions.add({ TextIndicatorOption::PaintAllContent, TextIndicatorOption::PaintBackgrounds });
 
     auto indicator = TextIndicator::createWithSelectionInFrame(selectedFrame, textIndicatorOptions, shouldAnimate ? TextIndicatorPresentationTransition::Bounce : TextIndicatorPresentationTransition::None);
@@ -435,7 +436,7 @@ bool FindController::shouldHideFindIndicatorOnScroll() const
 
 void FindController::showFindIndicatorInSelection()
 {
-    Frame& selectedFrame = m_webPage->corePage()->focusController().focusedOrMainFrame();
+    Ref selectedFrame = CheckedRef(m_webPage->corePage()->focusController())->focusedOrMainFrame();
     updateFindIndicator(selectedFrame, false);
 }
 
@@ -545,7 +546,7 @@ void FindController::drawRect(PageOverlay&, GraphicsContext& graphicsContext, co
 
         if (findIndicatorRect != m_findIndicatorRect) {
             // We are underneath painting, so it's not safe to mutate the layer tree synchronously.
-            callOnMainRunLoop([weakWebPage = makeWeakPtr(m_webPage)] {
+            callOnMainRunLoop([weakWebPage = WeakPtr { m_webPage }] {
                 if (!weakWebPage)
                     return;
                 weakWebPage->findController().didScrollAffectingFindIndicatorPosition();

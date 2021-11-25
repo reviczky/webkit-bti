@@ -35,16 +35,17 @@
 #include "ContentSecurityPolicyClient.h"
 #include "CrossOriginOpenerPolicy.h"
 #include "DeviceOrientationOrMotionPermissionState.h"
-#include "DocumentIdentifier.h"
 #include "DocumentLoadTiming.h"
 #include "DocumentWriter.h"
 #include "FrameDestructionObserver.h"
 #include "LinkIcon.h"
 #include "NavigationAction.h"
 #include "ResourceError.h"
+#include "ResourceLoaderIdentifier.h"
 #include "ResourceLoaderOptions.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
+#include "ScriptExecutionContextIdentifier.h"
 #include "SecurityPolicyViolationEvent.h"
 #include "ServiceWorkerRegistrationData.h"
 #include "StringWithDirection.h"
@@ -86,10 +87,11 @@ class SharedBuffer;
 class SWClientConnection;
 class SubresourceLoader;
 class SubstituteResource;
+class UserContentURLPattern;
 
 enum class ShouldContinue;
 
-using ResourceLoaderMap = HashMap<unsigned long, RefPtr<ResourceLoader>>;
+using ResourceLoaderMap = HashMap<ResourceLoaderIdentifier, RefPtr<ResourceLoader>>;
 
 enum class AutoplayPolicy : uint8_t {
     Default, // Uses policies specified in document settings.
@@ -159,7 +161,7 @@ public:
         return adoptRef(*new DocumentLoader(request, data));
     }
 
-    WEBCORE_EXPORT static DocumentLoader* fromTemporaryDocumentIdentifier(DocumentIdentifier);
+    WEBCORE_EXPORT static DocumentLoader* fromTemporaryDocumentIdentifier(ScriptExecutionContextIdentifier);
 
     WEBCORE_EXPORT virtual ~DocumentLoader();
 
@@ -295,10 +297,13 @@ public:
 
     void stopLoadingPlugIns();
     void stopLoadingSubresources();
-    WEBCORE_EXPORT void stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(unsigned long identifier, const ResourceResponse&);
+    WEBCORE_EXPORT void stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(ResourceLoaderIdentifier, const ResourceResponse&);
 
     bool userContentExtensionsEnabled() const { return m_userContentExtensionsEnabled; }
     void setUserContentExtensionsEnabled(bool enabled) { m_userContentExtensionsEnabled = enabled; }
+
+    bool allowsActiveContentRuleListActionsForURL(const URL&) const;
+    WEBCORE_EXPORT void setActiveContentRuleListActionPatterns(const std::optional<HashSet<String>>&);
 
 #if ENABLE(DEVICE_ORIENTATION)
     DeviceOrientationOrMotionPermissionState deviceOrientationAndMotionAccessState() const { return m_deviceOrientationAndMotionAccessState; }
@@ -338,12 +343,12 @@ public:
     WEBCORE_EXPORT MouseEventPolicy mouseEventPolicy() const;
     void setMouseEventPolicy(MouseEventPolicy policy) { m_mouseEventPolicy = policy; }
 
-    void addSubresourceLoader(ResourceLoader*);
+    void addSubresourceLoader(ResourceLoader&);
     void removeSubresourceLoader(LoadCompletionType, ResourceLoader*);
     void addPlugInStreamLoader(ResourceLoader&);
     void removePlugInStreamLoader(ResourceLoader&);
 
-    void subresourceLoaderFinishedLoadingOnePart(ResourceLoader*);
+    void subresourceLoaderFinishedLoadingOnePart(ResourceLoader&);
 
     void setDeferMainResourceDataLoad(bool defer) { m_deferMainResourceDataLoad = defer; }
     
@@ -393,7 +398,7 @@ public:
     const Vector<LinkIcon>& linkIcons() const { return m_linkIcons; }
 
 #if ENABLE(APPLICATION_MANIFEST)
-    WEBCORE_EXPORT uint64_t loadApplicationManifest();
+    WEBCORE_EXPORT void loadApplicationManifest(CompletionHandler<void(const std::optional<ApplicationManifest>&)>&&);
     void finishedLoadingApplicationManifest(ApplicationManifestLoader&);
 #endif
 
@@ -423,10 +428,11 @@ public:
     bool lastNavigationWasAppInitiated() const { return m_lastNavigationWasAppInitiated; }
     void setLastNavigationWasAppInitiated(bool lastNavigationWasAppInitiated) { m_lastNavigationWasAppInitiated = lastNavigationWasAppInitiated; }
 
-    std::optional<CrossOriginOpenerPolicy> crossOriginOpenerPolicy() const { return m_currentCoopEnforcementResult ? std::make_optional(m_currentCoopEnforcementResult->crossOriginOpenerPolicy) : std::nullopt; }
+    ContentSecurityPolicy* contentSecurityPolicy() const { return m_contentSecurityPolicy.get(); }
+    const std::optional<CrossOriginOpenerPolicy>& crossOriginOpenerPolicy() const { return m_responseCOOP; }
 
-    bool isContinuingLoadAfterResponsePolicyCheck() const { return m_isContinuingLoadAfterResponsePolicyCheck; }
-    void setIsContinuingLoadAfterResponsePolicyCheck(bool isContinuingLoadAfterResponsePolicyCheck) { m_isContinuingLoadAfterResponsePolicyCheck = isContinuingLoadAfterResponsePolicyCheck; }
+    bool isContinuingLoadAfterProvisionalLoadStarted() const { return m_isContinuingLoadAfterProvisionalLoadStarted; }
+    void setIsContinuingLoadAfterProvisionalLoadStarted(bool isContinuingLoadAfterProvisionalLoadStarted) { m_isContinuingLoadAfterProvisionalLoadStarted = isContinuingLoadAfterProvisionalLoadStarted; }
 
 protected:
     WEBCORE_EXPORT DocumentLoader(const ResourceRequest&, const SubstituteData&);
@@ -448,8 +454,7 @@ private:
 #endif
     void unregisterTemporaryServiceWorkerClient();
 
-    bool doCrossOriginOpenerHandlingOfResponse(const ResourceResponse&);
-    CrossOriginOpenerPolicyEnforcementResult enforceResponseCrossOriginOpenerPolicy(const URL& responseURL, SecurityOrigin& responseOrigin, const CrossOriginOpenerPolicy& responseCOOP);
+    std::optional<CrossOriginOpenerPolicyEnforcementResult> doCrossOriginOpenerHandlingOfResponse(const ResourceResponse&);
 
     void loadMainResource(ResourceRequest&&);
 
@@ -515,13 +520,13 @@ private:
     void becomeMainResourceClient();
 
 #if ENABLE(APPLICATION_MANIFEST)
-    void notifyFinishedLoadingApplicationManifest(uint64_t callbackIdentifier, std::optional<ApplicationManifest>);
+    void notifyFinishedLoadingApplicationManifest();
 #endif
 
     // ContentSecurityPolicyClient
     WEBCORE_EXPORT void addConsoleMessage(MessageSource, MessageLevel, const String&, unsigned long requestIdentifier) final;
     WEBCORE_EXPORT void sendCSPViolationReport(URL&&, Ref<FormData>&&) final;
-    WEBCORE_EXPORT void enqueueSecurityPolicyViolationEvent(SecurityPolicyViolationEvent::Init&&) final;
+    WEBCORE_EXPORT void enqueueSecurityPolicyViolationEvent(SecurityPolicyViolationEventInit&&) final;
 
     bool disallowWebArchive() const;
     bool disallowDataRequest() const;
@@ -564,7 +569,7 @@ private:
     bool m_gotFirstByte { false };
     bool m_isClientRedirect { false };
     bool m_isLoadingMultipartContent { false };
-    bool m_isContinuingLoadAfterResponsePolicyCheck { false };
+    bool m_isContinuingLoadAfterProvisionalLoadStarted { false };
 
     // FIXME: Document::m_processingLoadEvent and DocumentLoader::m_wasOnloadDispatched are roughly the same
     // and should be merged.
@@ -588,7 +593,7 @@ private:
     Vector<ResourceResponse> m_responses;
     bool m_stopRecordingResponses { false };
 
-    std::optional<CrossOriginOpenerPolicyEnforcementResult> m_currentCoopEnforcementResult;
+    std::optional<CrossOriginOpenerPolicy> m_responseCOOP;
     
     typedef HashMap<RefPtr<ResourceLoader>, RefPtr<SubstituteResource>> SubstituteResourceMap;
     SubstituteResourceMap m_pendingSubstituteResources;
@@ -609,7 +614,7 @@ private:
     bool m_loadingMainResource { false };
     DocumentLoadTiming m_loadTiming;
 
-    unsigned long m_identifierForLoadWithoutResourceLoader { 0 };
+    ResourceLoaderIdentifier m_identifierForLoadWithoutResourceLoader;
 
     DataLoadToken m_dataLoadToken;
     bool m_waitingForContentPolicy { false };
@@ -620,7 +625,9 @@ private:
     Vector<LinkIcon> m_linkIcons;
 
 #if ENABLE(APPLICATION_MANIFEST)
-    HashMap<std::unique_ptr<ApplicationManifestLoader>, uint64_t> m_applicationManifestLoaders;
+    std::unique_ptr<ApplicationManifestLoader> m_applicationManifestLoader;
+    Vector<CompletionHandler<void(const std::optional<ApplicationManifest>&)>> m_loadApplicationManifestCallbacks;
+    bool m_finishedLoadingApplicationManifest { false };
 #endif
 
     Vector<CustomHeaderFields> m_customHeaderFields;
@@ -628,6 +635,7 @@ private:
     ShouldOpenExternalURLsPolicy m_shouldOpenExternalURLsPolicy { ShouldOpenExternalURLsPolicy::ShouldNotAllow };
 
     std::unique_ptr<ApplicationCacheHost> m_applicationCacheHost;
+    std::unique_ptr<ContentSecurityPolicy> m_contentSecurityPolicy;
 
 #if ENABLE(CONTENT_FILTERING)
     std::unique_ptr<ContentFilter> m_contentFilter;
@@ -647,6 +655,7 @@ private:
     bool m_idempotentModeAutosizingOnlyHonorsPercentages { false };
     String m_customNavigatorPlatform;
     bool m_userContentExtensionsEnabled { true };
+    std::optional<Vector<UserContentURLPattern>> m_activeContentRuleListActionPatterns;
 #if ENABLE(DEVICE_ORIENTATION)
     DeviceOrientationOrMotionPermissionState m_deviceOrientationAndMotionAccessState { DeviceOrientationOrMotionPermissionState::Prompt };
 #endif
@@ -661,7 +670,7 @@ private:
 
 #if ENABLE(SERVICE_WORKER)
     std::optional<ServiceWorkerRegistrationData> m_serviceWorkerRegistrationData;
-    std::optional<DocumentIdentifier> m_temporaryServiceWorkerClient;
+    std::optional<ScriptExecutionContextIdentifier> m_temporaryServiceWorkerClient;
 #endif
 
 #if ASSERT_ENABLED

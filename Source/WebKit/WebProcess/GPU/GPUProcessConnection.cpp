@@ -28,8 +28,10 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "AudioMediaStreamTrackRendererInternalUnitManager.h"
 #include "DataReference.h"
 #include "GPUConnectionToWebProcessMessages.h"
+#include "GPUProcessConnectionInitializationParameters.h"
 #include "LibWebRTCCodecs.h"
 #include "LibWebRTCCodecsMessages.h"
 #include "Logging.h"
@@ -98,8 +100,11 @@ static void languagesChanged(void* context)
     static_cast<GPUProcessConnection*>(context)->connection().send(Messages::GPUConnectionToWebProcess::SetUserPreferredLanguages(userPreferredLanguages()), { });
 }
 
-GPUProcessConnection::GPUProcessConnection(IPC::Connection::Identifier connectionIdentifier)
+GPUProcessConnection::GPUProcessConnection(IPC::Connection::Identifier connectionIdentifier, const GPUProcessConnectionInitializationParameters& parameters)
     : m_connection(IPC::Connection::createClientConnection(connectionIdentifier, *this))
+#if ENABLE(VP9)
+    , m_hasVP9HardwareDecoder(parameters.hasVP9HardwareDecoder)
+#endif
 {
     m_connection->open();
 
@@ -124,7 +129,7 @@ GPUProcessConnection::~GPUProcessConnection()
 
 void GPUProcessConnection::didClose(IPC::Connection&)
 {
-    auto protector = makeRef(*this);
+    auto protector = Ref { *this };
     WebProcess::singleton().gpuProcessConnectionClosed(*this);
 
 #if ENABLE(ROUTING_ARBITRATION)
@@ -147,6 +152,11 @@ SampleBufferDisplayLayerManager& GPUProcessConnection::sampleBufferDisplayLayerM
     if (!m_sampleBufferDisplayLayerManager)
         m_sampleBufferDisplayLayerManager = makeUnique<SampleBufferDisplayLayerManager>();
     return *m_sampleBufferDisplayLayerManager;
+}
+
+void GPUProcessConnection::resetAudioMediaStreamTrackRendererInternalUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier identifier)
+{
+    WebProcess::singleton().audioMediaStreamTrackRendererInternalUnitManager().reset(identifier);
 }
 #endif
 

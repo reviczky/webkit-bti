@@ -66,9 +66,6 @@ void ItemHandle::apply(GraphicsContext& context)
     case ItemType::SetCTM:
         get<SetCTM>().apply(context);
         return;
-    case ItemType::SetInlineFillGradient:
-        get<SetInlineFillGradient>().apply(context);
-        return;
     case ItemType::SetInlineFillColor:
         get<SetInlineFillColor>().apply(context);
         return;
@@ -193,9 +190,6 @@ void ItemHandle::apply(GraphicsContext& context)
         return;
     case ItemType::FlushContext:
         get<FlushContext>().apply(context);
-        return;
-    case ItemType::MetaCommandChangeDestinationImageBuffer:
-    case ItemType::MetaCommandChangeItemBuffer:
         return;
     case ItemType::GetPixelBuffer:
     case ItemType::PutPixelBuffer:
@@ -395,12 +389,6 @@ void ItemHandle::destroy()
     case ItemType::FlushContext:
         static_assert(std::is_trivially_destructible<FlushContext>::value);
         return;
-    case ItemType::MetaCommandChangeDestinationImageBuffer:
-        static_assert(std::is_trivially_destructible<MetaCommandChangeDestinationImageBuffer>::value);
-        return;
-    case ItemType::MetaCommandChangeItemBuffer:
-        static_assert(std::is_trivially_destructible<MetaCommandChangeItemBuffer>::value);
-        return;
 #if ENABLE(VIDEO)
     case ItemType::PaintFrameForMedia:
         static_assert(std::is_trivially_destructible<PaintFrameForMedia>::value);
@@ -423,9 +411,6 @@ void ItemHandle::destroy()
         return;
     case ItemType::SetInlineFillColor:
         static_assert(std::is_trivially_destructible<SetInlineFillColor>::value);
-        return;
-    case ItemType::SetInlineFillGradient:
-        static_assert(std::is_trivially_destructible<SetInlineFillGradient>::value);
         return;
     case ItemType::SetInlineStrokeColor:
         static_assert(std::is_trivially_destructible<SetInlineStrokeColor>::value);
@@ -596,10 +581,6 @@ bool ItemHandle::safeCopy(ItemType itemType, ItemHandle destination) const
         return copyInto<FillRect>(itemOffset, *this);
     case ItemType::FlushContext:
         return copyInto<FlushContext>(itemOffset, *this);
-    case ItemType::MetaCommandChangeDestinationImageBuffer:
-        return copyInto<MetaCommandChangeDestinationImageBuffer>(itemOffset, *this);
-    case ItemType::MetaCommandChangeItemBuffer:
-        return copyInto<MetaCommandChangeItemBuffer>(itemOffset, *this);
 #if ENABLE(VIDEO)
     case ItemType::PaintFrameForMedia:
         return copyInto<PaintFrameForMedia>(itemOffset, *this);
@@ -616,8 +597,6 @@ bool ItemHandle::safeCopy(ItemType itemType, ItemHandle destination) const
         return copyInto<SetCTM>(itemOffset, *this);
     case ItemType::SetInlineFillColor:
         return copyInto<SetInlineFillColor>(itemOffset, *this);
-    case ItemType::SetInlineFillGradient:
-        return copyInto<SetInlineFillGradient>(itemOffset, *this);
     case ItemType::SetInlineStrokeColor:
         return copyInto<SetInlineStrokeColor>(itemOffset, *this);
     case ItemType::SetLineCap:
@@ -650,7 +629,7 @@ bool ItemHandle::safeCopy(ItemType itemType, ItemHandle destination) const
 
 bool safeCopy(ItemHandle destination, const DisplayListItem& source)
 {
-    return WTF::visit([&](const auto& source) {
+    return std::visit([&](const auto& source) {
         using DisplayListItemType = typename WTF::RemoveCVAndReference<decltype(source)>::type;
         constexpr auto itemType = DisplayListItemType::itemType;
         destination.data[0] = static_cast<uint8_t>(itemType);
@@ -733,14 +712,12 @@ void ItemBuffer::shrinkToFit()
 
 DidChangeItemBuffer ItemBuffer::swapWritableBufferIfNeeded(size_t numberOfBytes)
 {
-    auto sizeForBufferSwitchItem = paddedSizeOfTypeAndItemInBytes(ItemType::MetaCommandChangeItemBuffer);
-    if (m_writtenNumberOfBytes + numberOfBytes + sizeForBufferSwitchItem <= m_writableBuffer.capacity)
+    if (m_writtenNumberOfBytes + numberOfBytes <= m_writableBuffer.capacity)
         return DidChangeItemBuffer::No;
 
-    auto nextBuffer = createItemBuffer(numberOfBytes + sizeForBufferSwitchItem);
+    auto nextBuffer = createItemBuffer(numberOfBytes);
     bool hadPreviousBuffer = m_writableBuffer && m_writableBuffer.identifier != nextBuffer.identifier;
     if (hadPreviousBuffer) {
-        uncheckedAppend<MetaCommandChangeItemBuffer>(DidChangeItemBuffer::No, nextBuffer.identifier);
         m_writableBuffer.capacity = m_writtenNumberOfBytes;
         m_readOnlyBuffers.append(m_writableBuffer);
     }

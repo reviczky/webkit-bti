@@ -109,7 +109,7 @@ bool CSSGradientValue::hasColorDerivedFromElement() const
 
 Ref<CSSGradientValue> CSSGradientValue::valueWithStylesResolved(Style::BuilderState& builderState)
 {
-    auto result = hasColorDerivedFromElement() ? clone(*this) : makeRef(*this);
+    auto result = hasColorDerivedFromElement() ? clone(*this) : Ref { *this };
     resolveStopColors(result->m_stops, [&](const CSSPrimitiveValue& colorValue) {
         return builderState.colorFromPrimitiveValueWithResolvedCurrentColor(colorValue);
     });
@@ -977,6 +977,10 @@ float CSSRadialGradientValue::resolveRadius(CSSPrimitiveValue& radius, const CSS
         result = radius.floatValue() * conversionData.zoom();
     else if (widthOrHeight && radius.isPercentage())
         result = *widthOrHeight * radius.floatValue() / 100;
+    else if (widthOrHeight && radius.isCalculatedPercentageWithLength()) {
+        auto expression = radius.cssCalcValue()->createCalculationValue(conversionData);
+        result = expression->evaluate(*widthOrHeight);
+    }
     else
         result = radius.computeLength<float>(conversionData);
     return result;

@@ -1894,6 +1894,7 @@ CREATE_INTRINSIC_FOR_BRAND_CHECK(isPromise, IsPromise)
 CREATE_INTRINSIC_FOR_BRAND_CHECK(isRegExpObject, IsRegExpObject)
 CREATE_INTRINSIC_FOR_BRAND_CHECK(isMap, IsMap)
 CREATE_INTRINSIC_FOR_BRAND_CHECK(isSet, IsSet)
+CREATE_INTRINSIC_FOR_BRAND_CHECK(isShadowRealm, IsShadowRealm)
 CREATE_INTRINSIC_FOR_BRAND_CHECK(isStringIterator, IsStringIterator)
 CREATE_INTRINSIC_FOR_BRAND_CHECK(isArrayIterator, IsArrayIterator)
 CREATE_INTRINSIC_FOR_BRAND_CHECK(isMapIterator, IsMapIterator)
@@ -4216,9 +4217,7 @@ void ForInNode::emitBytecode(BytecodeGenerator& generator, RegisterID* dst)
         Ref<LabelScope> scope = generator.newLabelScope(LabelScope::Loop);
 
         enumerator = generator.emitGetPropertyEnumerator(generator.newTemporary(), base.get());
-        generator.moveLinkTimeConstant(propertyName.get(), LinkTimeConstant::emptyPropertyNameEnumerator);
-        generator.emitEqualityOp<OpStricteq>(propertyName.get(), enumerator.get(), propertyName.get());
-        generator.emitJumpIfTrue(propertyName.get(), scope->breakTarget());
+        generator.emitJumpIfEmptyPropertyNameEnumerator(enumerator.get(), scope->breakTarget());
 
         generator.emitLabel(*scope->continueTarget());
         generator.emitLoopHint();
@@ -4227,9 +4226,7 @@ void ForInNode::emitBytecode(BytecodeGenerator& generator, RegisterID* dst)
 
         // FIXME: We should have a way to see if anyone is actually using the propertyName for something other than a get_by_val. If not, we could eliminate the toString in this opcode.
         generator.emitEnumeratorNext(propertyName.get(), mode.get(), index.get(), base.get(), enumerator.get());
-
-        // Note, choosing undefined or null helps please DFG's Abstract Interpreter as it doesn't distinguish null and undefined as types (via SpecOther).
-        generator.emitJumpIfTrue(generator.emitIsUndefinedOrNull(generator.newTemporary(), propertyName.get()), scope->breakTarget());
+        generator.emitJumpIfSentinelString(propertyName.get(), scope->breakTarget());
 
         this->emitLoopHeader(generator, propertyName.get());
 

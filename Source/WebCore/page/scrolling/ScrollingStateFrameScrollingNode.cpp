@@ -61,6 +61,7 @@ ScrollingStateFrameScrollingNode::ScrollingStateFrameScrollingNode(const Scrolli
     , m_asyncFrameOrOverflowScrollingEnabled(stateNode.asyncFrameOrOverflowScrollingEnabled())
     , m_wheelEventGesturesBecomeNonBlocking(stateNode.wheelEventGesturesBecomeNonBlocking())
     , m_scrollingPerformanceTestingEnabled(stateNode.scrollingPerformanceTestingEnabled())
+    , m_momentumScrollingAnimatorEnabled(stateNode.momentumScrollingAnimatorEnabled())
 {
     if (hasChangedProperty(Property::RootContentsLayer))
         setRootContentsLayer(stateNode.rootContentsLayer().toRepresentation(adoptiveTree.preferredLayerRepresentation()));
@@ -112,6 +113,7 @@ OptionSet<ScrollingStateNode::Property> ScrollingStateFrameScrollingNode::applic
         Property::MinLayoutViewportOrigin,
         Property::MaxLayoutViewportOrigin,
         Property::OverrideVisualViewportSize,
+        Property::MomentumScrollingAnimatorEnabled,
     };
 
     auto properties = ScrollingStateScrollingNode::applicableProperties();
@@ -309,13 +311,22 @@ void ScrollingStateFrameScrollingNode::setScrollingPerformanceTestingEnabled(boo
     setPropertyChanged(Property::ScrollingPerformanceTestingEnabled);
 }
 
-void ScrollingStateFrameScrollingNode::dumpProperties(TextStream& ts, ScrollingStateTreeAsTextBehavior behavior) const
+void ScrollingStateFrameScrollingNode::setMomentumScrollingAnimatorEnabled(bool enabled)
+{
+    if (enabled == m_momentumScrollingAnimatorEnabled)
+        return;
+    
+    m_momentumScrollingAnimatorEnabled = enabled;
+    setPropertyChanged(Property::MomentumScrollingAnimatorEnabled);
+}
+
+void ScrollingStateFrameScrollingNode::dumpProperties(TextStream& ts, OptionSet<ScrollingStateTreeAsTextBehavior> behavior) const
 {
     ts << "Frame scrolling node";
     
     ScrollingStateScrollingNode::dumpProperties(ts, behavior);
     
-    if (behavior & ScrollingStateTreeAsTextBehaviorIncludeLayerIDs) {
+    if (behavior & ScrollingStateTreeAsTextBehavior::IncludeLayerIDs) {
         ts.dumpProperty("root contents layer ID", m_rootContentsLayer.layerID());
         if (m_counterScrollingLayer.layerID())
             ts.dumpProperty("counter scrolling layer ID", m_counterScrollingLayer.layerID());

@@ -63,6 +63,8 @@
 namespace WebCore {
 namespace SelectorCompiler {
 
+extern "C" {
+
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationAddStyleRelationFunction, void, (SelectorChecker::CheckingContext*, const Element*));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationElementIsActive, bool, (const Element*));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationElementIsHovered, bool, (const Element*));
@@ -75,6 +77,7 @@ static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationSynchronizeAllAni
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationSynchronizeStyleAttributeInternal, void, (StyledElement* styledElement));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationEqualIgnoringASCIICaseNonNull, bool, (const StringImpl*, const StringImpl*));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsAutofilled, bool, (const Element&));
+static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsAutofilledAndObscured, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsAutofilledStrongPassword, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsAutofilledStrongPasswordViewable, bool, (const Element&));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationIsChecked, bool, (const Element&));
@@ -134,6 +137,8 @@ static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationAttributeValueMat
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationAttributeValueMatchHyphenRuleCaseInsensitive, bool, (const Attribute* attribute, AtomStringImpl* expectedString));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationAttributeValueSpaceSeparatedListContainsCaseSensitive, bool, (const Attribute* attribute, AtomStringImpl* expectedString));
 static JSC_DECLARE_JIT_OPERATION_WITHOUT_WTF_INTERNAL(operationAttributeValueSpaceSeparatedListContainsCaseInsensitive, bool, (const Attribute* attribute, AtomStringImpl* expectedString));
+
+} // extern "C"
 
 #define CSS_SELECTOR_JIT_DEBUGGING 0
 
@@ -496,6 +501,8 @@ static inline FragmentRelation fragmentRelationForSelectorRelation(CSSSelector::
         return FragmentRelation::IndirectAdjacent;
     case CSSSelector::Subselector:
     case CSSSelector::ShadowDescendant:
+    case CSSSelector::ShadowPartDescendant:
+    case CSSSelector::ShadowSlotted:
         ASSERT_NOT_REACHED();
     }
     ASSERT_NOT_REACHED();
@@ -592,6 +599,11 @@ static FunctionType addNthChildType(const CSSSelector& selector, SelectorContext
 JSC_DEFINE_JIT_OPERATION(operationIsAutofilled, bool, (const Element& element))
 {
     return isAutofilled(element);
+}
+
+JSC_DEFINE_JIT_OPERATION(operationIsAutofilledAndObscured, bool, (const Element& element))
+{
+    return isAutofilledAndObscured(element);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationIsAutofilledStrongPassword, bool, (const Element& element))
@@ -809,6 +821,9 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
     // Unoptimized pseudo selector. They are just function call to a simple testing function.
     case CSSSelector::PseudoClassAutofill:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<JSC::OperationPtrTag>(operationIsAutofilled));
+        return FunctionType::SimpleSelectorChecker;
+    case CSSSelector::PseudoClassAutofillAndObscured:
+        fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<JSC::OperationPtrTag>(operationIsAutofilledAndObscured));
         return FunctionType::SimpleSelectorChecker;
     case CSSSelector::PseudoClassAutofillStrongPassword:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<JSC::OperationPtrTag>(operationIsAutofilledStrongPassword));
@@ -1059,44 +1074,6 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
 
             return functionType;
         }
-
-    case CSSSelector::PseudoClassAny:
-        {
-            Vector<SelectorFragment, 32> anyFragments;
-            FunctionType functionType = FunctionType::SimpleSelectorChecker;
-            for (const CSSSelector* rootSelector = selector.selectorList()->first(); rootSelector; rootSelector = CSSSelectorList::next(rootSelector)) {
-                SelectorFragmentList fragmentList;
-                VisitedMode ignoreVisitedMode = VisitedMode::None;
-                FunctionType subFunctionType = constructFragments(rootSelector, selectorContext, fragmentList, FragmentsLevel::InFunctionalPseudoType, positionInRootFragments, visitedMatchEnabled, ignoreVisitedMode, PseudoElementMatchingBehavior::NeverMatch);
-                ASSERT_WITH_MESSAGE(ignoreVisitedMode == VisitedMode::None, ":visited is disabled in the functional pseudo classes");
-
-                // Since this fragment always unmatch against the element, don't insert it to anyFragments.
-                if (subFunctionType == FunctionType::CannotMatchAnything)
-                    continue;
-
-                if (subFunctionType == FunctionType::CannotCompile)
-                    return FunctionType::CannotCompile;
-
-                // :any() may not contain complex selectors which have combinators.
-                ASSERT(fragmentList.size() == 1);
-                if (fragmentList.size() != 1)
-                    return FunctionType::CannotCompile;
-
-                const SelectorFragment& subFragment = fragmentList.first();
-                anyFragments.append(subFragment);
-                functionType = mostRestrictiveFunctionType(functionType, subFunctionType);
-            }
-
-            // Since all fragments in :any() cannot match anything, this :any() filter cannot match anything.
-            if (anyFragments.isEmpty())
-                return FunctionType::CannotMatchAnything;
-
-            ASSERT(!anyFragments.isEmpty());
-            fragment.anyFilters.append(anyFragments);
-
-            return functionType;
-        }
-
     case CSSSelector::PseudoClassLang:
         {
             const Vector<AtomString>* selectorLangArgumentList = selector.argumentList();
@@ -1106,8 +1083,9 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
         }
 
     case CSSSelector::PseudoClassIs:
-    case CSSSelector::PseudoClassMatches:
     case CSSSelector::PseudoClassWhere:
+    case CSSSelector::PseudoClassMatches:
+    case CSSSelector::PseudoClassAny:
         {
             SelectorList matchesList;
             const CSSSelectorList* selectorList = selector.selectorList();
@@ -1318,7 +1296,10 @@ static FunctionType constructFragmentsInternal(const CSSSelector* rootSelector, 
         if (relation == CSSSelector::Subselector)
             continue;
 
-        if (relation == CSSSelector::ShadowDescendant && !selector->isLastInTagHistory())
+        if ((relation == CSSSelector::ShadowDescendant || relation == CSSSelector::ShadowPartDescendant) && !selector->isLastInTagHistory())
+            return FunctionType::CannotCompile;
+
+        if (relation == CSSSelector::ShadowSlotted)
             return FunctionType::CannotCompile;
 
         if (relation == CSSSelector::DirectAdjacent || relation == CSSSelector::IndirectAdjacent) {
@@ -2077,9 +2058,9 @@ void SelectorCodeGenerator::generateSelectorChecker()
     if (m_selectorContext == SelectorContext::RuleCollector) {
         unsigned specificity = m_selectorFragments.staticSpecificity;
         if (m_functionType == FunctionType::SelectorCheckerWithCheckingContext)
-            m_assembler.store32(Assembler::TrustedImm32(specificity), JSC::GPRInfo::argumentGPR2);
+            m_assembler.store32(Assembler::TrustedImm32(specificity), Assembler::Address(JSC::GPRInfo::argumentGPR2));
         else
-            m_assembler.store32(Assembler::TrustedImm32(specificity), JSC::GPRInfo::argumentGPR1);
+            m_assembler.store32(Assembler::TrustedImm32(specificity), Assembler::Address(JSC::GPRInfo::argumentGPR1));
     }
 
     computeBacktrackingMemoryRequirements(m_selectorFragments);
@@ -3353,7 +3334,8 @@ void SelectorCodeGenerator::generateElementAttributeValueMatching(Assembler::Jum
 
 static inline Assembler::Jump testIsHTMLClassOnDocument(Assembler::ResultCondition condition, Assembler& assembler, Assembler::RegisterID documentAddress)
 {
-    return assembler.branchTest32(condition, Assembler::Address(documentAddress, Document::documentClassesMemoryOffset()), Assembler::TrustedImm32(Document::isHTMLDocumentClassFlag()));
+    static_assert(sizeof(Document::DocumentClass) == 2, "Document::DocumentClass must be a 16-bit value for branchTest16");
+    return assembler.branchTest16(condition, Assembler::Address(documentAddress, Document::documentClassesMemoryOffset()), Assembler::TrustedImm32(Document::isHTMLDocumentClassFlag()));
 }
 
 void SelectorCodeGenerator::generateElementAttributeValueExactMatching(Assembler::JumpList& failureCases, Assembler::RegisterID currentAttributeAddress, const AtomString& expectedValue, AttributeCaseSensitivity valueCaseSensitivity)

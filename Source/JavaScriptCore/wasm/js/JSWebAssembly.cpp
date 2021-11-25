@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2021 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -78,6 +78,7 @@ const ClassInfo JSWebAssembly::s_info = { "WebAssembly", &Base::s_info, &webAsse
 /* Source for JSWebAssembly.lut.h
 @begin webAssemblyTable
   CompileError    createWebAssemblyCompileError  DontEnum|PropertyCallback
+  Exception       createWebAssemblyException     DontEnum|PropertyCallback
   Global          createWebAssemblyGlobal        DontEnum|PropertyCallback
   Instance        createWebAssemblyInstance      DontEnum|PropertyCallback
   LinkError       createWebAssemblyLinkError     DontEnum|PropertyCallback
@@ -85,6 +86,7 @@ const ClassInfo JSWebAssembly::s_info = { "WebAssembly", &Base::s_info, &webAsse
   Module          createWebAssemblyModule        DontEnum|PropertyCallback
   RuntimeError    createWebAssemblyRuntimeError  DontEnum|PropertyCallback
   Table           createWebAssemblyTable         DontEnum|PropertyCallback
+  Tag             createWebAssemblyTag           DontEnum|PropertyCallback
   compile         webAssemblyCompileFunc         Function 1
   instantiate     webAssemblyInstantiateFunc     Function 1
   validate        webAssemblyValidateFunc        Function 1
@@ -93,7 +95,7 @@ const ClassInfo JSWebAssembly::s_info = { "WebAssembly", &Base::s_info, &webAsse
 
 JSWebAssembly* JSWebAssembly::create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
 {
-    auto* object = new (NotNull, allocateCell<JSWebAssembly>(vm.heap)) JSWebAssembly(vm, structure);
+    auto* object = new (NotNull, allocateCell<JSWebAssembly>(vm)) JSWebAssembly(vm, structure);
     object->finishCreation(vm, globalObject);
     return object;
 }

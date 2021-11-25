@@ -36,7 +36,7 @@ namespace Style {
 
 class RuleData;
 
-enum class MatchElement : uint8_t { Subject, Parent, Ancestor, DirectSibling, IndirectSibling, AnySibling, ParentSibling, AncestorSibling, Host };
+enum class MatchElement : uint8_t { Subject, Parent, Ancestor, DirectSibling, IndirectSibling, AnySibling, ParentSibling, AncestorSibling, HasChild, HasDescendant, HasSibling, Host };
 constexpr unsigned matchElementCount = static_cast<unsigned>(MatchElement::Host) + 1;
 
 struct RuleFeature {
@@ -77,17 +77,17 @@ struct RuleFeatureSet {
     
     HashMap<AtomString, std::unique_ptr<RuleFeatureVector>> classRules;
     HashMap<AtomString, std::unique_ptr<Vector<RuleFeatureWithInvalidationSelector>>> attributeRules;
-    HashMap<CSSSelector::PseudoClassType, std::unique_ptr<RuleFeatureVector>, WTF::IntHash<CSSSelector::PseudoClassType>, WTF::StrongEnumHashTraits<CSSSelector::PseudoClassType>> pseudoClassRules;
+    HashMap<CSSSelector::PseudoClassType, std::unique_ptr<RuleFeatureVector>, IntHash<CSSSelector::PseudoClassType>, WTF::StrongEnumHashTraits<CSSSelector::PseudoClassType>> pseudoClassRules;
     HashSet<AtomString> classesAffectingHost;
     HashSet<AtomString> attributesAffectingHost;
-    HashSet<CSSSelector::PseudoClassType, WTF::IntHash<CSSSelector::PseudoClassType>, WTF::StrongEnumHashTraits<CSSSelector::PseudoClassType>> pseudoClassesAffectingHost;
+    HashSet<CSSSelector::PseudoClassType, IntHash<CSSSelector::PseudoClassType>, WTF::StrongEnumHashTraits<CSSSelector::PseudoClassType>> pseudoClassesAffectingHost;
 
     bool usesFirstLineRules { false };
     bool usesFirstLetterRules { false };
 
 private:
     static MatchElement computeNextMatchElement(MatchElement, CSSSelector::RelationType);
-    static MatchElement computeSubSelectorMatchElement(MatchElement, const CSSSelector&);
+    static MatchElement computeSubSelectorMatchElement(MatchElement, const CSSSelector&, const CSSSelector& childSelector);
 
     struct SelectorFeatures {
         bool hasSiblingSelector { false };

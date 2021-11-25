@@ -73,8 +73,9 @@ private:
     // PaymentHandler
     ExceptionOr<void> convertData(JSC::JSValue) final;
     ExceptionOr<void> show(Document&) final;
+    bool canAbortSession() final { return true; }
     void hide() final;
-    void canMakePayment(Document&, WTF::Function<void(bool)>&& completionHandler) final;
+    void canMakePayment(Document&, Function<void(bool)>&& completionHandler) final;
     ExceptionOr<void> detailsUpdated(PaymentRequest::UpdateReason, String&& error, AddressErrors&&, PayerErrorFields&&, JSC::JSObject* paymentMethodErrors) final;
     ExceptionOr<void> merchantValidationCompleted(JSC::JSValue&&) final;
     void complete(std::optional<PaymentComplete>&&) final;

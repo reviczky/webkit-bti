@@ -32,6 +32,7 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "Document.h"
+#include "ElementInlines.h"
 #include "EventNames.h"
 #include "Frame.h"
 #include "HTMLImageLoader.h"
@@ -40,6 +41,7 @@
 #include "ImageBuffer.h"
 #include "Logging.h"
 #include "Page.h"
+#include "Performance.h"
 #include "PictureInPictureSupport.h"
 #include "RenderImage.h"
 #include "RenderVideo.h"
@@ -281,6 +283,15 @@ void HTMLVideoElement::mediaPlayerFirstVideoFrameAvailable()
 
     if (auto* renderer = this->renderer())
         renderer->updateFromElement();
+}
+
+std::optional<DestinationColorSpace> HTMLVideoElement::colorSpace() const
+{
+    RefPtr<MediaPlayer> player = HTMLMediaElement::player();
+    if (!player)
+        return std::nullopt;
+
+    return player->colorSpace();
 }
 
 RefPtr<ImageBuffer> HTMLVideoElement::createBufferForPainting(const FloatSize& size, RenderingMode renderingMode, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat) const
@@ -575,6 +586,84 @@ void HTMLVideoElement::exitToFullscreenModeWithoutAnimationIfPossible(HTMLMediaE
         document().page()->chrome().client().exitVideoFullscreenToModeWithoutAnimation(*this, toMode);
 }
 #endif
+
+unsigned HTMLVideoElement::requestVideoFrameCallback(Ref<VideoFrameRequestCallback>&& callback)
+{
+    if (m_videoFrameRequests.isEmpty() && player())
+        player()->startVideoFrameMetadataGathering();
+
+    auto identifier = ++m_nextVideoFrameRequestIndex;
+    m_videoFrameRequests.append(makeUniqueRef<VideoFrameRequest>(identifier, WTFMove(callback)));
+
+    if (auto* page = document().page())
+        page->scheduleRenderingUpdate(RenderingUpdateStep::VideoFrameCallbacks);
+
+    return identifier;
+}
+
+void HTMLVideoElement::cancelVideoFrameCallback(unsigned identifier)
+{
+    auto index = m_videoFrameRequests.findMatching([identifier](auto& request) { return request->identifier == identifier; });
+    if (index == notFound)
+        return;
+    if (m_isRunningVideoFrameRequests) {
+        m_videoFrameRequests[index]->cancelled = true;
+        return;
+    }
+    m_videoFrameRequests.remove(index);
+
+    if (m_videoFrameRequests.isEmpty() && player())
+        player()->stopVideoFrameMetadataGathering();
+}
+
+static void processVideoFrameMetadataTimestamps(VideoFrameMetadata& metadata, Performance& performance)
+{
+    metadata.presentationTime = performance.relativeTimeFromTimeOriginInReducedResolution(MonotonicTime::fromRawSeconds(metadata.presentationTime));
+    metadata.expectedDisplayTime = performance.relativeTimeFromTimeOriginInReducedResolution(MonotonicTime::fromRawSeconds(metadata.expectedDisplayTime));
+    if (metadata.captureTime)
+        metadata.captureTime = performance.relativeTimeFromTimeOriginInReducedResolution(MonotonicTime::fromRawSeconds(*metadata.captureTime));
+    if (metadata.receiveTime)
+        metadata.receiveTime = performance.relativeTimeFromTimeOriginInReducedResolution(MonotonicTime::fromRawSeconds(*metadata.receiveTime));
+}
+
+void HTMLVideoElement::serviceRequestVideoFrameCallbacks(ReducedResolutionSeconds now)
+{
+    if (!player())
+        return;
+
+    auto videoFrameMetadata = player()->videoFrameMetadata();
+    if (!videoFrameMetadata || !document().domWindow())
+        return;
+
+    processVideoFrameMetadataTimestamps(*videoFrameMetadata, document().domWindow()->performance());
+
+    Ref protectedThis { *this };
+
+    // We store the size before calling callbacks as we do not want to call newly added callbacks.
+    auto callbackCount = m_videoFrameRequests.size();
+
+    m_isRunningVideoFrameRequests = true;
+    for (size_t index = 0; index < callbackCount; ++index) {
+        auto& request = m_videoFrameRequests[index];
+        if (!request->cancelled) {
+            request->callback->handleEvent(std::round(now.milliseconds()), *videoFrameMetadata);
+            request->cancelled = true;
+        }
+    }
+    m_isRunningVideoFrameRequests = false;
+
+    m_videoFrameRequests.removeAllMatching([](auto& callback) { return callback->cancelled; });
+
+    if (m_videoFrameRequests.isEmpty() && player())
+        player()->stopVideoFrameMetadataGathering();
+}
+
+void HTMLVideoElement::mediaPlayerEngineUpdated()
+{
+    HTMLMediaElement::mediaPlayerEngineUpdated();
+    if (!m_videoFrameRequests.isEmpty() && player())
+        player()->startVideoFrameMetadataGathering();
+}
 
 }
 

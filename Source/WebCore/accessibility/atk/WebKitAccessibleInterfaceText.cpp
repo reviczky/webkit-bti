@@ -32,7 +32,7 @@
 #include "config.h"
 #include "WebKitAccessibleInterfaceText.h"
 
-#if ENABLE(ACCESSIBILITY)
+#if ENABLE(ACCESSIBILITY) && USE(ATK)
 
 #include "AccessibilityObject.h"
 #include "Document.h"
@@ -164,11 +164,11 @@ static AtkAttributeSet* getAttributeSetForAccessibilityObject(const Accessibilit
         result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_JUSTIFICATION), "fill");
     }
 
-    result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_UNDERLINE), (style->textDecoration() & TextDecoration::Underline) ? "single" : "none");
+    result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_UNDERLINE), (style->textDecoration() & TextDecorationLine::Underline) ? "single" : "none");
 
     result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_STYLE), style->fontCascade().italic() ? "italic" : "normal");
 
-    result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_STRIKETHROUGH), (style->textDecoration() & TextDecoration::LineThrough) ? "true" : "false");
+    result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_STRIKETHROUGH), (style->textDecoration() & TextDecorationLine::LineThrough) ? "true" : "false");
 
     result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_INVISIBLE), (style->visibility() == Visibility::Hidden) ? "true" : "false");
 
@@ -604,7 +604,7 @@ static int numberOfReplacedElementsBeforeOffset(AtkText* text, unsigned offset)
 
     int count = 0;
     size_t index = textBeforeOffset.find(objectReplacementCharacter, 0);
-    while (index < offset && index != WTF::notFound) {
+    while (index < offset && index != notFound) {
         index = textBeforeOffset.find(objectReplacementCharacter, index + 1);
         count++;
     }
