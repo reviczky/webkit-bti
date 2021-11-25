@@ -13,6 +13,8 @@ webkit2gtk (2.35.2-1) UNRELEASED; urgency=medium
     + Explicitly disable lto since when it's on the build is failing, that
       doesn't impact Debian by default but is an issue on Ubuntu.
       (See #1000598)
+    + Don't recommend xdg-desktop-portal-gtk on Ubuntu i386, it's a partial
+      architecture and the binary doesn't exist (See #1000599).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 03 Feb 2022 11:22:05 +0100
 
