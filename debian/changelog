@@ -1,3 +1,10 @@
+wpewebkit (2.34.3-1~deb11u1) bullseye-security; urgency=high
+
+  * Rebuild for bullseye-security.
+    + Fixes CVE-2021-30887, CVE-2021-30890.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 23 Dec 2021 13:54:49 +0100
+
 wpewebkit (2.34.3-1) unstable; urgency=high
 
   * New upstream release.
