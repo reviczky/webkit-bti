@@ -104,7 +104,7 @@ else
 endif
 
 %:
-	dh $@ --with gir --buildsystem=cmake+ninja --builddirectory=build
+	dh $@ --with gir --buildsystem=cmake+ninja
 
 override_dh_gencontrol:
 	dh_gencontrol -- $(DH_GENCONTROL_ARGS)

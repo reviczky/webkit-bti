@@ -3,6 +3,10 @@ webkit2gtk (2.34.3-2) UNRELEASED; urgency=medium
   * Set the debhelper compatibility level to 12:
     - Get rid of debian/compat.
     - Add build dependency on debhelper-compat.
+  * debian/rules:
+    - Stop using --builddirectory=build, .gir files no longer seem to
+      contain references to the build directory (see the 2.27.90-1 entry
+      for more details).
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 14 Jan 2022 12:40:55 +0100
 
