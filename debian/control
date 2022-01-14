@@ -6,11 +6,11 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Emilio Pozuelo Monfort <pochu@debian.org>,
            Alberto Garcia <berto@igalia.com>
 X-Ubuntu-Use-Langpack: no
-Build-Depends: bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
+Build-Depends: debhelper-compat (= 12),
+               bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                xdg-dbus-proxy [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                cmake (>= 3.10),
-               debhelper (>= 11.2~),
                jdupes,
                libglib2.0-dev (>= 2.44.0),
                libgtk-3-dev (>= 3.22.0),
