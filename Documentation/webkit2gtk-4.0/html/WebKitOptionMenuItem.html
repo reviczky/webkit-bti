@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitOptionMenuItem: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitOptionMenu.html" title="WebKitOptionMenu">
 <link rel="next" href="WebKitFormSubmissionRequest.html" title="WebKitFormSubmissionRequest">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -57,14 +57,14 @@
 </td>
 </tr>
 <tr>
-<td class="function_type">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<td class="function_type">const <span class="returnvalue">gchar</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitOptionMenuItem.html#webkit-option-menu-item-get-label" title="webkit_option_menu_item_get_label ()">webkit_option_menu_item_get_label</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
-<td class="function_type">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<td class="function_type">const <span class="returnvalue">gchar</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitOptionMenuItem.html#webkit-option-menu-item-get-tooltip" title="webkit_option_menu_item_get_tooltip ()">webkit_option_menu_item_get_tooltip</a> <span class="c_punctuation">()</span>
@@ -72,7 +72,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitOptionMenuItem.html#webkit-option-menu-item-is-group-label" title="webkit_option_menu_item_is_group_label ()">webkit_option_menu_item_is_group_label</a> <span class="c_punctuation">()</span>
@@ -80,7 +80,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitOptionMenuItem.html#webkit-option-menu-item-is-group-child" title="webkit_option_menu_item_is_group_child ()">webkit_option_menu_item_is_group_child</a> <span class="c_punctuation">()</span>
@@ -88,7 +88,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitOptionMenuItem.html#webkit-option-menu-item-is-enabled" title="webkit_option_menu_item_is_enabled ()">webkit_option_menu_item_is_enabled</a> <span class="c_punctuation">()</span>
@@ -96,7 +96,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitOptionMenuItem.html#webkit-option-menu-item-is-selected" title="webkit_option_menu_item_is_selected ()">webkit_option_menu_item_is_selected</a> <span class="c_punctuation">()</span>
@@ -120,7 +120,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitOptionMenuItem.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-Boxed-Types.html">GBoxed</a>
+<pre class="screen">    GBoxed
     <span class="lineart">╰──</span> WebKitOptionMenuItem
 </pre>
 </div>
@@ -156,7 +156,7 @@ webkit_option_menu_item_copy (<em class="parameter"><code><a class="link" href="
 <div class="refsect3">
 <a name="webkit-option-menu-item-copy.returns"></a><h4>Returns</h4>
 <p>A copy of passed in <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
@@ -186,7 +186,7 @@ webkit_option_menu_item_free (<em class="parameter"><code><a class="link" href="
 <hr>
 <div class="refsect2">
 <a name="webkit-option-menu-item-get-label"></a><h3>webkit_option_menu_item_get_label ()</h3>
-<pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<pre class="programlisting">const <span class="returnvalue">gchar</span> *
 webkit_option_menu_item_get_label (<em class="parameter"><code><a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> *item</code></em>);</pre>
 <p>Get the label of a <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a>.</p>
 <div class="refsect3">
@@ -214,7 +214,7 @@ webkit_option_menu_item_get_label (<em class="parameter"><code><a class="link" h
 <hr>
 <div class="refsect2">
 <a name="webkit-option-menu-item-get-tooltip"></a><h3>webkit_option_menu_item_get_tooltip ()</h3>
-<pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<pre class="programlisting">const <span class="returnvalue">gchar</span> *
 webkit_option_menu_item_get_tooltip (<em class="parameter"><code><a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> *item</code></em>);</pre>
 <p>Get the tooltip of a <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a>.</p>
 <div class="refsect3">
@@ -235,14 +235,14 @@ webkit_option_menu_item_get_tooltip (<em class="parameter"><code><a class="link"
 <div class="refsect3">
 <a name="webkit-option-menu-item-get-tooltip.returns"></a><h4>Returns</h4>
 <p> The tooltip of <em class="parameter"><code>item</code></em>
-, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>.</p>
+, or <code class="literal">NULL</code>.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-option-menu-item-is-group-label"></a><h3>webkit_option_menu_item_is_group_label ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 webkit_option_menu_item_is_group_label
                                (<em class="parameter"><code><a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> *item</code></em>);</pre>
 <p>Whether a <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> is a group label.</p>
@@ -263,15 +263,15 @@ webkit_option_menu_item_is_group_label
 </div>
 <div class="refsect3">
 <a name="webkit-option-menu-item-is-group-label.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the <em class="parameter"><code>item</code></em>
-is a group label or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+<p> <code class="literal">TRUE</code> if the <em class="parameter"><code>item</code></em>
+is a group label or <code class="literal">FALSE</code> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-option-menu-item-is-group-child"></a><h3>webkit_option_menu_item_is_group_child ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 webkit_option_menu_item_is_group_child
                                (<em class="parameter"><code><a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> *item</code></em>);</pre>
 <p>Whether a <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> is a group child.</p>
@@ -292,15 +292,15 @@ webkit_option_menu_item_is_group_child
 </div>
 <div class="refsect3">
 <a name="webkit-option-menu-item-is-group-child.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the <em class="parameter"><code>item</code></em>
-is a group child or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+<p> <code class="literal">TRUE</code> if the <em class="parameter"><code>item</code></em>
+is a group child or <code class="literal">FALSE</code> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-option-menu-item-is-enabled"></a><h3>webkit_option_menu_item_is_enabled ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 webkit_option_menu_item_is_enabled (<em class="parameter"><code><a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> *item</code></em>);</pre>
 <p>Whether a <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> is enabled.</p>
 <div class="refsect3">
@@ -320,15 +320,15 @@ webkit_option_menu_item_is_enabled (<em class="parameter"><code><a class="link" 
 </div>
 <div class="refsect3">
 <a name="webkit-option-menu-item-is-enabled.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the <em class="parameter"><code>item</code></em>
-is enabled or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+<p> <code class="literal">TRUE</code> if the <em class="parameter"><code>item</code></em>
+is enabled or <code class="literal">FALSE</code> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-option-menu-item-is-selected"></a><h3>webkit_option_menu_item_is_selected ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 webkit_option_menu_item_is_selected (<em class="parameter"><code><a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> *item</code></em>);</pre>
 <p>Whether a <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> is the currently selected one.</p>
 <div class="refsect3">
@@ -348,8 +348,8 @@ webkit_option_menu_item_is_selected (<em class="parameter"><code><a class="link"
 </div>
 <div class="refsect3">
 <a name="webkit-option-menu-item-is-selected.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the <em class="parameter"><code>item</code></em>
-is selected or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+<p> <code class="literal">TRUE</code> if the <em class="parameter"><code>item</code></em>
+is selected or <code class="literal">FALSE</code> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
@@ -363,6 +363,6 @@ is selected or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code clas
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

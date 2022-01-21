@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>JSCException: JavaScriptCore GLib Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="JavaScriptCore GLib Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="JSCWeakValue.html" title="JSCWeakValue">
 <link rel="next" href="JSCClass.html" title="JSCClass">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -104,7 +104,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
+<span class="returnvalue">guint</span>
 </td>
 <td class="function_name">
 <a class="link" href="JSCException.html#jsc-exception-get-line-number" title="jsc_exception_get_line_number ()">jsc_exception_get_line_number</a> <span class="c_punctuation">()</span>
@@ -112,7 +112,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
+<span class="returnvalue">guint</span>
 </td>
 <td class="function_name">
 <a class="link" href="JSCException.html#jsc-exception-get-column-number" title="jsc_exception_get_column_number ()">jsc_exception_get_column_number</a> <span class="c_punctuation">()</span>
@@ -166,7 +166,7 @@
 </div>
 <div class="refsect1">
 <a name="JSCException.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> JSCException
 </pre>
 </div>
@@ -209,7 +209,7 @@ jsc_exception_new (<em class="parameter"><code><a class="link" href="JSCContext.
 <div class="refsect3">
 <a name="jsc-exception-new.returns"></a><h4>Returns</h4>
 <p>a new <a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -252,7 +252,7 @@ for the message.</p>
 <div class="refsect3">
 <a name="jsc-exception-new-printf.returns"></a><h4>Returns</h4>
 <p>a new <a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -296,7 +296,7 @@ except that the arguments to the format string are passed as a va_list.</p>
 <div class="refsect3">
 <a name="jsc-exception-new-vprintf.returns"></a><h4>Returns</h4>
 <p>a new <a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -340,7 +340,7 @@ jsc_exception_new_with_name (<em class="parameter"><code><a class="link" href="J
 <div class="refsect3">
 <a name="jsc-exception-new-with-name.returns"></a><h4>Returns</h4>
 <p>a new <a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -390,7 +390,7 @@ for the message.</p>
 <div class="refsect3">
 <a name="jsc-exception-new-with-name-printf.returns"></a><h4>Returns</h4>
 <p>a new <a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -441,7 +441,7 @@ except that the arguments to the format string are passed as a va_list.</p>
 <div class="refsect3">
 <a name="jsc-exception-new-with-name-vprintf.returns"></a><h4>Returns</h4>
 <p>a new <a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -503,7 +503,7 @@ error message.</p>
 <hr>
 <div class="refsect2">
 <a name="jsc-exception-get-line-number"></a><h3>jsc_exception_get_line_number ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
+<pre class="programlisting"><span class="returnvalue">guint</span>
 jsc_exception_get_line_number (<em class="parameter"><code><a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a> *exception</code></em>);</pre>
 <p>Get the line number at which <em class="parameter"><code>exception</code></em>
  happened.</p>
@@ -531,7 +531,7 @@ jsc_exception_get_line_number (<em class="parameter"><code><a class="link" href=
 <hr>
 <div class="refsect2">
 <a name="jsc-exception-get-column-number"></a><h3>jsc_exception_get_column_number ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
+<pre class="programlisting"><span class="returnvalue">guint</span>
 jsc_exception_get_column_number (<em class="parameter"><code><a class="link" href="JSCException.html" title="JSCException"><span class="type">JSCException</span></a> *exception</code></em>);</pre>
 <p>Get the column number at which <em class="parameter"><code>exception</code></em>
  happened.</p>
@@ -581,7 +581,7 @@ jsc_exception_get_source_uri (<em class="parameter"><code><a class="link" href="
 <div class="refsect3">
 <a name="jsc-exception-get-source-uri.returns"></a><h4>Returns</h4>
 <p>the the source URI of <em class="parameter"><code>exception</code></em>
-, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p>
+, or <code class="literal">NULL</code>. </p>
 <p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
 </div>
@@ -608,7 +608,7 @@ jsc_exception_get_backtrace_string (<em class="parameter"><code><a class="link" 
 </div>
 <div class="refsect3">
 <a name="jsc-exception-get-backtrace-string.returns"></a><h4>Returns</h4>
-<p>the exception backtrace string or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p>
+<p>the exception backtrace string or <code class="literal">NULL</code>. </p>
 <p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
 </div>
@@ -638,7 +638,7 @@ jsc_exception_to_string (<em class="parameter"><code><a class="link" href="JSCEx
 <a name="jsc-exception-to-string.returns"></a><h4>Returns</h4>
 <p>the string representation of <em class="parameter"><code>exception</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -667,7 +667,7 @@ source URI, line, column and backtrace, and formatted to be printed.</p>
 <div class="refsect3">
 <a name="jsc-exception-report.returns"></a><h4>Returns</h4>
 <p>a new string with the exception report. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 </div>
@@ -684,6 +684,6 @@ source URI, line, column and backtrace, and formatted to be printed.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>
