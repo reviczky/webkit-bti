@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitColorChooserRequest: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitFaviconDatabase.html" title="WebKitFaviconDatabase">
 <link rel="next" href="WebKitFileChooserRequest.html" title="WebKitFileChooserRequest">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -95,7 +95,7 @@
 </colgroup>
 <tbody><tr>
 <td class="property_type">
-<a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *</td>
+<span class="type">GdkRGBA</span> *</td>
 <td class="property_name"><a class="link" href="WebKitColorChooserRequest.html#WebKitColorChooserRequest--rgba" title="The “rgba” property">rgba</a></td>
 <td class="property_flags">Read / Write / Construct</td>
 </tr></tbody>
@@ -112,7 +112,7 @@
 <tbody><tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitColorChooserRequest.html#WebKitColorChooserRequest-finished" title="The “finished” signal">finished</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr></tbody>
 </table></div>
 </div>
@@ -131,7 +131,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitColorChooserRequest.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> WebKitColorChooserRequest
 </pre>
 </div>
@@ -139,7 +139,7 @@
 <a name="WebKitColorChooserRequest.description"></a><h2>Description</h2>
 <p>Whenever the user interacts with an &lt;input type='color' /&gt;
 HTML element, WebKit will need to show a dialog to choose a color. For that
-to happen in a general way, instead of just opening a <a href="../gtk3/GtkColorChooser.html#GtkColorChooser-struct"><span class="type">GtkColorChooser</span></a>
+to happen in a general way, instead of just opening a <span class="type">GtkColorChooser</span>
 (which might be not desirable in some cases, which could prefer to use their
 own color chooser dialog), WebKit will fire the
 <a class="link" href="WebKitWebView.html#WebKitWebView-run-color-chooser" title="The “run-color-chooser” signal"><span class="type">“run-color-chooser”</span></a> signal with a <a class="link" href="WebKitColorChooserRequest.html" title="WebKitColorChooserRequest"><span class="type">WebKitColorChooserRequest</span></a>
@@ -148,7 +148,7 @@ selected, to inspect the details of the request (e.g. to get initial color)
 and to cancel the request, in case nothing was selected.</p>
 <p>In case the client application does not wish to handle this signal,
 WebKit will provide a default handler which will asynchronously run
-a regular <a href="../gtk3/GtkColorChooserDialog.html#GtkColorChooserDialog-struct"><span class="type">GtkColorChooserDialog</span></a> for the user to interact with.</p>
+a regular <span class="type">GtkColorChooserDialog</span> for the user to interact with.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitColorChooserRequest.functions_details"></a><h2>Functions</h2>
@@ -156,8 +156,8 @@ a regular <a href="../gtk3/GtkColorChooserDialog.html#GtkColorChooserDialog-stru
 <a name="webkit-color-chooser-request-get-rgba"></a><h3>webkit_color_chooser_request_get_rgba ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_color_chooser_request_get_rgba (<em class="parameter"><code><a class="link" href="WebKitColorChooserRequest.html" title="WebKitColorChooserRequest"><span class="type">WebKitColorChooserRequest</span></a> *request</code></em>,
-                                       <em class="parameter"><code><a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *rgba</code></em>);</pre>
-<p>Gets the current <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> color of <em class="parameter"><code>request</code></em>
+                                       <em class="parameter"><code><span class="type">GdkRGBA</span> *rgba</code></em>);</pre>
+<p>Gets the current <span class="type">GdkRGBA</span> color of <em class="parameter"><code>request</code></em>
 </p>
 <div class="refsect3">
 <a name="webkit-color-chooser-request-get-rgba.parameters"></a><h4>Parameters</h4>
@@ -175,7 +175,7 @@ webkit_color_chooser_request_get_rgba (<em class="parameter"><code><a class="lin
 </tr>
 <tr>
 <td class="parameter_name"><p>rgba</p></td>
-<td class="parameter_description"><p>a <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> to fill in with the current color. </p></td>
+<td class="parameter_description"><p>a <span class="type">GdkRGBA</span> to fill in with the current color. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -188,8 +188,8 @@ webkit_color_chooser_request_get_rgba (<em class="parameter"><code><a class="lin
 <a name="webkit-color-chooser-request-set-rgba"></a><h3>webkit_color_chooser_request_set_rgba ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_color_chooser_request_set_rgba (<em class="parameter"><code><a class="link" href="WebKitColorChooserRequest.html" title="WebKitColorChooserRequest"><span class="type">WebKitColorChooserRequest</span></a> *request</code></em>,
-                                       <em class="parameter"><code>const <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *rgba</code></em>);</pre>
-<p>Sets the current <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> color of <em class="parameter"><code>request</code></em>
+                                       <em class="parameter"><code>const <span class="type">GdkRGBA</span> *rgba</code></em>);</pre>
+<p>Sets the current <span class="type">GdkRGBA</span> color of <em class="parameter"><code>request</code></em>
 </p>
 <div class="refsect3">
 <a name="webkit-color-chooser-request-set-rgba.parameters"></a><h4>Parameters</h4>
@@ -207,7 +207,7 @@ webkit_color_chooser_request_set_rgba (<em class="parameter"><code><a class="lin
 </tr>
 <tr>
 <td class="parameter_name"><p>rgba</p></td>
-<td class="parameter_description"><p>a pointer <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a></p></td>
+<td class="parameter_description"><p>a pointer <span class="type">GdkRGBA</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -221,7 +221,7 @@ webkit_color_chooser_request_set_rgba (<em class="parameter"><code><a class="lin
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_color_chooser_request_get_element_rectangle
                                (<em class="parameter"><code><a class="link" href="WebKitColorChooserRequest.html" title="WebKitColorChooserRequest"><span class="type">WebKitColorChooserRequest</span></a> *request</code></em>,
-                                <em class="parameter"><code><a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> *rect</code></em>);</pre>
+                                <em class="parameter"><code><span class="type">GdkRectangle</span> *rect</code></em>);</pre>
 <p>Gets the bounding box of the color input element.</p>
 <div class="refsect3">
 <a name="webkit-color-chooser-request-get-element-rectangle.parameters"></a><h4>Parameters</h4>
@@ -239,7 +239,7 @@ webkit_color_chooser_request_get_element_rectangle
 </tr>
 <tr>
 <td class="parameter_name"><p>rect</p></td>
-<td class="parameter_description"><p>a <a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> to fill in with the element area. </p></td>
+<td class="parameter_description"><p>a <span class="type">GdkRectangle</span> to fill in with the element area. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -313,7 +313,7 @@ is emitted to notify that the request has finished.</p>
 <a name="WebKitColorChooserRequest.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="WebKitColorChooserRequest--rgba"></a><h3>The <code class="literal">“rgba”</code> property</h3>
-<pre class="programlisting">  “rgba”                     <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *</pre>
+<pre class="programlisting">  “rgba”                     <span class="type">GdkRGBA</span> *</pre>
 <p>The current RGBA color for the request.</p>
 <p>Owner: WebKitColorChooserRequest</p>
 <p>Flags: Read / Write / Construct</p>
@@ -325,7 +325,7 @@ is emitted to notify that the request has finished.</p>
 <a name="WebKitColorChooserRequest-finished"></a><h3>The <code class="literal">“finished”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitColorChooserRequest.html" title="WebKitColorChooserRequest"><span class="type">WebKitColorChooserRequest</span></a> *request,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                   user_data)</pre>
+               <span class="type">gpointer</span>                   user_data)</pre>
 <p>Emitted when the <em class="parameter"><code>request</code></em>
  finishes. This signal can be emitted because the
 user completed the <em class="parameter"><code>request</code></em>
@@ -354,7 +354,7 @@ color input element is removed from the DOM.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
 </div>
 </div>
@@ -364,6 +364,6 @@ color input element is removed from the DOM.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

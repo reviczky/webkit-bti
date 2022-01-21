@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitDOMDocumentFragment: WebKitDOMGTK+ Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitDOMGTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitDOMDocument.html" title="WebKitDOMDocument">
 <link rel="next" href="WebKitDOMDocumentType.html" title="WebKitDOMDocumentType">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -92,7 +92,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gulong"><span class="returnvalue">gulong</span></a>
+<span class="returnvalue">gulong</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitDOMDocumentFragment.html#webkit-dom-document-fragment-get-child-element-count" title="webkit_dom_document_fragment_get_child_element_count ()">webkit_dom_document_fragment_get_child_element_count</a> <span class="c_punctuation">()</span>
@@ -111,7 +111,7 @@
 </colgroup>
 <tbody>
 <tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></td>
+<td class="property_type"><span class="type">gulong</span></td>
 <td class="property_name"><a class="link" href="WebKitDOMDocumentFragment.html#WebKitDOMDocumentFragment--child-element-count" title="The “child-element-count” property">child-element-count</a></td>
 <td class="property_flags">Read</td>
 </tr>
@@ -151,7 +151,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDOMDocumentFragment.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> <a class="link" href="WebKitDOMObject.html" title="WebKitDOMObject">WebKitDOMObject</a>
         <span class="lineart">╰──</span> <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode">WebKitDOMNode</a>
             <span class="lineart">╰──</span> WebKitDOMDocumentFragment
@@ -173,7 +173,7 @@ WebKitDOMDocumentFragment implements
 <pre class="programlisting"><a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="returnvalue">WebKitDOMElement</span></a> *
 webkit_dom_document_fragment_get_element_by_id
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDocumentFragment.html" title="WebKitDOMDocumentFragment"><span class="type">WebKitDOMDocumentFragment</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *elementId</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">gchar</span> *elementId</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_document_fragment_get_element_by_id</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -194,7 +194,7 @@ webkit_dom_document_fragment_get_element_by_id
 </tr>
 <tr>
 <td class="parameter_name"><p>elementId</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -203,7 +203,7 @@ webkit_dom_document_fragment_get_element_by_id
 <div class="refsect3">
 <a name="webkit-dom-document-fragment-get-element-by-id.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: 2.16</p>
 </div>
@@ -213,8 +213,8 @@ webkit_dom_document_fragment_get_element_by_id
 <pre class="programlisting"><a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="returnvalue">WebKitDOMElement</span></a> *
 webkit_dom_document_fragment_query_selector
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDocumentFragment.html" title="WebKitDOMDocumentFragment"><span class="type">WebKitDOMDocumentFragment</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *selectors</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">gchar</span> *selectors</code></em>,
+                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_document_fragment_query_selector</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -235,12 +235,12 @@ webkit_dom_document_fragment_query_selector
 </tr>
 <tr>
 <td class="parameter_name"><p>selectors</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
+<td class="parameter_description"><p><span class="type">GError</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -249,7 +249,7 @@ webkit_dom_document_fragment_query_selector
 <div class="refsect3">
 <a name="webkit-dom-document-fragment-query-selector.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: 2.16</p>
 </div>
@@ -259,8 +259,8 @@ webkit_dom_document_fragment_query_selector
 <pre class="programlisting"><a class="link" href="WebKitDOMNodeList.html" title="WebKitDOMNodeList"><span class="returnvalue">WebKitDOMNodeList</span></a> *
 webkit_dom_document_fragment_query_selector_all
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDocumentFragment.html" title="WebKitDOMDocumentFragment"><span class="type">WebKitDOMDocumentFragment</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *selectors</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">gchar</span> *selectors</code></em>,
+                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_document_fragment_query_selector_all</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -281,12 +281,12 @@ webkit_dom_document_fragment_query_selector_all
 </tr>
 <tr>
 <td class="parameter_name"><p>selectors</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
+<td class="parameter_description"><p><span class="type">GError</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -295,7 +295,7 @@ webkit_dom_document_fragment_query_selector_all
 <div class="refsect3">
 <a name="webkit-dom-document-fragment-query-selector-all.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNodeList.html" title="WebKitDOMNodeList"><span class="type">WebKitDOMNodeList</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: 2.16</p>
 </div>
@@ -327,7 +327,7 @@ webkit_dom_document_fragment_get_children
 <div class="refsect3">
 <a name="webkit-dom-document-fragment-get-children.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="type">WebKitDOMHTMLCollection</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: 2.16</p>
 </div>
@@ -359,7 +359,7 @@ webkit_dom_document_fragment_get_first_element_child
 <div class="refsect3">
 <a name="webkit-dom-document-fragment-get-first-element-child.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: 2.16</p>
 </div>
@@ -391,14 +391,14 @@ webkit_dom_document_fragment_get_last_element_child
 <div class="refsect3">
 <a name="webkit-dom-document-fragment-get-last-element-child.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: 2.16</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-dom-document-fragment-get-child-element-count"></a><h3>webkit_dom_document_fragment_get_child_element_count ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gulong"><span class="returnvalue">gulong</span></a>
+<pre class="programlisting"><span class="returnvalue">gulong</span>
 webkit_dom_document_fragment_get_child_element_count
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDocumentFragment.html" title="WebKitDOMDocumentFragment"><span class="type">WebKitDOMDocumentFragment</span></a> *self</code></em>);</pre>
 <div class="warning">
@@ -422,7 +422,7 @@ webkit_dom_document_fragment_get_child_element_count
 </div>
 <div class="refsect3">
 <a name="webkit-dom-document-fragment-get-child-element-count.returns"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></p>
+<p> A <span class="type">gulong</span></p>
 </div>
 <p class="since">Since: 2.16</p>
 </div>
@@ -438,7 +438,7 @@ webkit_dom_document_fragment_get_child_element_count
 <a name="WebKitDOMDocumentFragment.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="WebKitDOMDocumentFragment--child-element-count"></a><h3>The <code class="literal">“child-element-count”</code> property</h3>
-<pre class="programlisting">  “child-element-count”      <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></pre>
+<pre class="programlisting">  “child-element-count”      <span class="type">gulong</span></pre>
 <p>read-only gulong DocumentFragment:child-element-count.</p>
 <p>Owner: WebKitDOMDocumentFragment</p>
 <p>Flags: Read</p>
@@ -470,6 +470,6 @@ webkit_dom_document_fragment_get_child_element_count
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>
