@@ -1,5 +1,6 @@
-webkit2gtk (2.34.3-2) UNRELEASED; urgency=medium
+webkit2gtk (2.34.4-1) UNRELEASED; urgency=high
 
+  * New upstream release.
   * Set the debhelper compatibility level to 12:
     - Get rid of debian/compat.
     - Add build dependency on debhelper-compat.
