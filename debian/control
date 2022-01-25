@@ -6,7 +6,7 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Emilio Pozuelo Monfort <pochu@debian.org>,
            Alberto Garcia <berto@igalia.com>
 X-Ubuntu-Use-Langpack: no
-Build-Depends: debhelper-compat (= 12),
+Build-Depends: debhelper (>= 11.2~),
                bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                xdg-dbus-proxy [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
@@ -21,8 +21,6 @@ Build-Depends: debhelper-compat (= 12),
                libicu-dev,
                libgcrypt20-dev (>= 1.7.0),
                libhyphen-dev,
-               liblcms2-dev,
-               libmanette-0.2-dev (>= 0.2.4) [linux-any],
                libnotify-dev,
                libxslt1-dev (>= 1.1.7),
                libxml2-dev (>= 2.8),
@@ -31,7 +29,6 @@ Build-Depends: debhelper-compat (= 12),
                libsystemd-dev [linux-any],
                libgudev-1.0-dev [linux-any],
                libwoff-dev (>= 1.0.2),
-               libwpebackend-fdo-1.0-dev [linux-any],
                gperf,
                bison,
                flex,
@@ -44,14 +41,14 @@ Build-Depends: debhelper-compat (= 12),
                libxt-dev,
                libgstreamer1.0-dev (>= 1.14.0),
                libgstreamer-plugins-base1.0-dev (>= 1.14.0),
-               libenchant-2-dev,
+               libenchant-dev,
                libsecret-1-dev,
                gobject-introspection (>= 1.32.0),
                libgirepository1.0-dev (>= 0.9.12-4),
                ninja-build,
                libegl1-mesa-dev,
-               libgl-dev,
-               libgles-dev
+               libgl1-mesa-dev,
+               libgles2-mesa-dev
 Build-Depends-Indep: gtk-doc-tools,
                libglib2.0-doc,
                libgtk-3-doc,
@@ -146,11 +143,10 @@ Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${misc:Depends}
 Recommends: gstreamer1.0-gl,
             libgl1-mesa-dri,
-            ${bwrap:Recommends},
             ${gst:Recommends}
 Suggests: ${gst:Suggests},
+          ${bwrap:Suggests},
          gstreamer1.0-alsa
-Breaks: evolution (<< 3.34.1)
 Description: Web content engine library for GTK
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in

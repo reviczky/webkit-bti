@@ -1,3 +1,28 @@
+webkit2gtk (2.34.4-1~deb10u1) buster-security; urgency=high
+
+  * Rebuild for buster-security.
+    - Fixes CVE-2021-30934, CVE-2021-30936, CVE-2021-30951,
+      CVE-2021-30952, CVE-2021-30953, CVE-2021-30954, CVE-2021-30984.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/control:
+    + Remove Breaks for Evolution < 3.34.1.
+    + Remove build dependency on libwpebackend-fdo-1.0-dev,
+      libmanette-0.2-dev and liblcms2-dev.
+    + Switch build dependency from libenchant-2-dev to libenchant-dev.
+    + Switch build dependencies on libgl-dev and libgles-dev with
+      libgl1-mesa-dev and libgles2-mesa-dev.
+  * Downgrade xdg-desktop-portal-gtk from a recommendation to a
+    suggestion (See #989307)
+  * debian/rules:
+    + Build with -DENABLE_GAMEPAD=OFF -DUSE_LCMS=OFF.
+  * Set the debhelper compatibility level back to 10. This fixes a dh_dwz
+    error ".debug_info section not present"
+    - Add debian/compat file.
+    - Update build dependency on debhelper.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 25 Jan 2022 09:56:19 +0100
+
 webkit2gtk (2.34.4-1) unstable; urgency=high
 
   * New upstream release.
