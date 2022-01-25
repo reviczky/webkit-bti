@@ -1,3 +1,11 @@
+webkit2gtk (2.34.4-1~deb11u1) bullseye-security; urgency=high
+
+  * Rebuild for bullseye-security.
+    - Fixes CVE-2021-30934, CVE-2021-30936, CVE-2021-30951,
+      CVE-2021-30952, CVE-2021-30953, CVE-2021-30954, CVE-2021-30984.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 25 Jan 2022 09:35:24 +0100
+
 webkit2gtk (2.34.4-1) unstable; urgency=high
 
   * New upstream release.
