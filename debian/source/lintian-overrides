@@ -14,5 +14,6 @@ webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/Protoco
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/Protocol/Legacy/14.0/InspectorBackendCommands.js
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/Protocol/Legacy/14.5/InspectorBackendCommands.js
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/Protocol/Legacy/15.0/InspectorBackendCommands.js
+webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/Protocol/Legacy/15.4/InspectorBackendCommands.js
 webkit2gtk source: source-is-missing Tools/TestWebKitAPI/Tests/WebKitCocoa/IndexedDBStructuredCloneBackwardCompatibilityRead.html
 webkit2gtk source: source-is-missing Tools/TestWebKitAPI/Tests/WebKitCocoa/IndexedDBStructuredCloneBackwardCompatibilityWrite.html
