@@ -36,6 +36,8 @@
 #include "RenderBox.h"
 #include "RenderStyle.h"
 #include "SurrogatePairAwareTextIterator.h"
+#include <unicode/ubidi.h>
+#include <wtf/text/TextBreakIterator.h>
 
 namespace WebCore {
 namespace Layout {
@@ -50,13 +52,13 @@ InlineLayoutUnit TextUtil::width(const InlineTextItem& inlineTextItem, const Fon
     RELEASE_ASSERT(from >= inlineTextItem.start());
     RELEASE_ASSERT(to <= inlineTextItem.end());
     if (inlineTextItem.isWhitespace() && !TextUtil::shouldPreserveSpacesAndTabs(inlineTextItem.layoutBox())) {
-        auto spaceWidth = fontCascade.spaceWidth();
+        auto spaceWidth = TextUtil::spaceWidth(fontCascade);
         return std::isnan(spaceWidth) ? 0.0f : std::isinf(spaceWidth) ? maxInlineLayoutUnit() : spaceWidth;
     }
     return TextUtil::width(inlineTextItem.inlineTextBox(), fontCascade, from, to, contentLogicalLeft);
 }
 
-InlineLayoutUnit TextUtil::width(const InlineTextBox& inlineTextBox, const FontCascade& fontCascade, unsigned from, unsigned to, InlineLayoutUnit contentLogicalLeft)
+InlineLayoutUnit TextUtil::width(const InlineTextBox& inlineTextBox, const FontCascade& fontCascade, unsigned from, unsigned to, InlineLayoutUnit contentLogicalLeft, UseTrailingWhitespaceMeasuringOptimization useTrailingWhitespaceMeasuringOptimization)
 {
     if (from == to)
         return 0;
@@ -64,8 +66,11 @@ InlineLayoutUnit TextUtil::width(const InlineTextBox& inlineTextBox, const FontC
     auto text = inlineTextBox.content();
     ASSERT(to <= text.length());
     auto hasKerningOrLigatures = fontCascade.enableKerning() || fontCascade.requiresShaping();
-    auto measureWithEndSpace = hasKerningOrLigatures && to < text.length() && text[to] == ' ';
-    if (measureWithEndSpace)
+    // The "non-whitespace" + "whitespace" pattern is very common for inline content and since most of the "non-whitespace" runs end up with
+    // their "whitespace" pair on the line (notable exception is when trailing whitespace is trimmed).
+    // Including the trailing whitespace here enables us to cut the number of text measures when placing content on the line.
+    auto extendedMeasuring = useTrailingWhitespaceMeasuringOptimization == UseTrailingWhitespaceMeasuringOptimization::Yes && hasKerningOrLigatures && to < text.length() && text[to] == space;
+    if (extendedMeasuring)
         ++to;
     float width = 0;
     if (inlineTextBox.canUseSimplifiedContentMeasuring())
@@ -78,10 +83,24 @@ InlineLayoutUnit TextUtil::width(const InlineTextBox& inlineTextBox, const FontC
         width = fontCascade.width(run);
     }
 
-    if (measureWithEndSpace)
-        width -= (fontCascade.spaceWidth() + fontCascade.wordSpacing());
+    if (extendedMeasuring)
+        width -= (spaceWidth(fontCascade) + fontCascade.wordSpacing());
 
     return std::isnan(width) ? 0.0f : std::isinf(width) ? maxInlineLayoutUnit() : width;
+}
+
+InlineLayoutUnit TextUtil::spaceWidth(const FontCascade& fontCascade)
+{
+    return fontCascade.widthOfSpaceString();
+}
+
+InlineLayoutUnit TextUtil::trailingWhitespaceWidth(const InlineTextBox& inlineTextBox, const FontCascade& fontCascade, size_t startPosition, size_t endPosition)
+{
+    auto text = inlineTextBox.content();
+    ASSERT(endPosition > startPosition + 1);
+    ASSERT(text[endPosition - 1] == space);
+    return width(inlineTextBox, fontCascade, startPosition, endPosition, { }, TextUtil::UseTrailingWhitespaceMeasuringOptimization::Yes) - 
+        width(inlineTextBox, fontCascade, startPosition, endPosition - 1, { }, TextUtil::UseTrailingWhitespaceMeasuringOptimization::No);
 }
 
 template <typename TextIterator>
@@ -100,8 +119,11 @@ static void fallbackFontsForRunWithIterator(HashSet<const Font*>& fallbackFonts,
                 character = u_toupper(character);
 
             auto glyphData = fontCascade.glyphDataForCharacter(character, isRTL);
-            if (glyphData.glyph && glyphData.font && glyphData.font != &primaryFont)
-                fallbackFonts.add(glyphData.font);
+            if (glyphData.glyph && glyphData.font && glyphData.font != &primaryFont) {
+                auto isNonSpacingMark = U_MASK(u_charType(character)) & U_GC_MN_MASK;
+                if (isNonSpacingMark || glyphData.font->widthForGlyph(glyphData.glyph))
+                    fallbackFonts.add(glyphData.font);
+            }
         };
         addFallbackFontForCharacterIfApplicable(currentCharacter);
         textIterator.advance(clusterLength);
@@ -141,49 +163,76 @@ TextUtil::FallbackFontList TextUtil::fallbackFontsForRun(const Line::Run& run, c
 
 TextUtil::WordBreakLeft TextUtil::breakWord(const InlineTextItem& inlineTextItem, const FontCascade& fontCascade, InlineLayoutUnit textWidth, InlineLayoutUnit availableWidth, InlineLayoutUnit contentLogicalLeft)
 {
+    return breakWord(inlineTextItem.inlineTextBox(), inlineTextItem.start(), inlineTextItem.length(), textWidth, availableWidth, contentLogicalLeft, fontCascade);
+}
+
+TextUtil::WordBreakLeft TextUtil::breakWord(const InlineTextBox& inlineTextBox, size_t startPosition, size_t length, InlineLayoutUnit textWidth, InlineLayoutUnit availableWidth, InlineLayoutUnit contentLogicalLeft, const FontCascade& fontCascade)
+{
     ASSERT(availableWidth >= 0);
-    auto startPosition = inlineTextItem.start();
-    auto length = inlineTextItem.length();
     ASSERT(length);
+    auto text = inlineTextBox.content();
 
-    auto text = inlineTextItem.inlineTextBox().content();
-    auto surrogatePairAwareIndex = [&] (auto index) {
-        // We should never break in the middle of a surrogate pair. They are considered one joint entity.
-        auto offset = index + 1;
-        U16_SET_CP_LIMIT(text, 0, offset, text.length());
+    if (inlineTextBox.canUseSimpleFontCodePath()) {
 
-        // Returns the index at trail.
-        return offset - 1;
-    };
+        auto findBreakingPositionInSimpleText = [&] {
+            auto userPerceivedCharacterBoundaryAlignedIndex = [&] (auto index) -> size_t {
+                if (text.is8Bit())
+                    return index;
+                auto alignedStartIndex = index;
+                U16_SET_CP_START(text, startPosition, alignedStartIndex);
+                ASSERT(alignedStartIndex >= startPosition);
+                return alignedStartIndex;
+            };
 
-    auto left = startPosition;
-    // Pathological case of (extremely)long string and narrow lines.
-    // Adjust the range so that we can pick a reasonable midpoint.
-    auto averageCharacterWidth = InlineLayoutUnit { textWidth / length };
-    unsigned offset = toLayoutUnit(2 * availableWidth / averageCharacterWidth).toUnsigned();
-    auto right = surrogatePairAwareIndex(std::min<unsigned>(left + offset, (startPosition + length - 1)));
-    // Preserve the left width for the final split position so that we don't need to remeasure the left side again.
-    auto leftSideWidth = InlineLayoutUnit { 0 };
-    while (left < right) {
-        auto middle = surrogatePairAwareIndex((left + right) / 2);
-        auto width = TextUtil::width(inlineTextItem, fontCascade, startPosition, middle + 1, contentLogicalLeft);
-        if (width < availableWidth) {
-            left = middle + 1;
-            leftSideWidth = width;
-        } else if (width > availableWidth) {
-            // When the substring does not fit, the right side is supposed to be the start of the surrogate pair if applicable, unless startPosition falls between surrogate pair.
-            right = middle;
-            U16_SET_CP_START(text, 0, right);
-            if (right < startPosition)
-                return { };
-        } else {
-            right = middle + 1;
-            leftSideWidth = width;
-            break;
-        }
+            auto nextUserPerceivedCharacterIndex = [&] (auto index) -> size_t {
+                if (text.is8Bit())
+                    return index + 1;
+                U16_FWD_1(text, index, length);
+                return index;
+            };
+
+            auto left = startPosition;
+            auto right = left + length - 1;
+            // Pathological case of (extremely)long string and narrow lines.
+            // Adjust the range so that we can pick a reasonable midpoint.
+            auto averageCharacterWidth = InlineLayoutUnit { textWidth / length };
+            size_t startOffset = 2 * availableWidth / averageCharacterWidth;
+            right = userPerceivedCharacterBoundaryAlignedIndex(std::min(left + startOffset, right));
+            // Preserve the left width for the final split position so that we don't need to remeasure the left side again.
+            auto leftSideWidth = InlineLayoutUnit { 0 };
+            while (left < right) {
+                auto middle = userPerceivedCharacterBoundaryAlignedIndex((left + right) / 2);
+                ASSERT(middle >= left && middle < right);
+                auto endOfMiddleCharacter = nextUserPerceivedCharacterIndex(middle);
+                auto width = TextUtil::width(inlineTextBox, fontCascade, startPosition, endOfMiddleCharacter, contentLogicalLeft);
+                if (width < availableWidth) {
+                    left = endOfMiddleCharacter;
+                    leftSideWidth = width;
+                } else if (width > availableWidth)
+                    right = middle;
+                else {
+                    right = endOfMiddleCharacter;
+                    leftSideWidth = width;
+                    break;
+                }
+            }
+            RELEASE_ASSERT(right >= startPosition);
+            return TextUtil::WordBreakLeft { right - startPosition, leftSideWidth };
+        };
+        return findBreakingPositionInSimpleText();
     }
-    RELEASE_ASSERT(right >= startPosition);
-    return { right - startPosition, leftSideWidth };
+
+    auto graphemeClusterIterator = NonSharedCharacterBreakIterator { StringView { text }.substring(startPosition, length) };
+    auto leftSide = TextUtil::WordBreakLeft { };
+    for (auto clusterStartPosition = ubrk_next(graphemeClusterIterator); clusterStartPosition != UBRK_DONE; clusterStartPosition = ubrk_next(graphemeClusterIterator)) {
+        auto width = TextUtil::width(inlineTextBox, fontCascade, startPosition, startPosition + clusterStartPosition, contentLogicalLeft);
+        if (width > availableWidth)
+            return leftSide;
+        leftSide = { static_cast<size_t>(clusterStartPosition), width };
+    }
+    // This content is not supposed to fit availableWidth.
+    ASSERT_NOT_REACHED();
+    return { };
 }
 
 unsigned TextUtil::findNextBreakablePosition(LazyLineBreakIterator& lineBreakIterator, unsigned startPosition, const RenderStyle& style)
@@ -246,7 +295,7 @@ LineBreakIteratorMode TextUtil::lineBreakIteratorMode(LineBreak lineBreak)
     return LineBreakIteratorMode::Default;
 }
 
-bool TextUtil::containsBidiText(StringView text)
+bool TextUtil::containsStrongDirectionalityText(StringView text)
 {
     if (text.is8Bit())
         return false;
@@ -269,6 +318,35 @@ bool TextUtil::containsBidiText(StringView text)
     }
 
     return false;
+}
+
+size_t TextUtil::firstUserPerceivedCharacterLength(const InlineTextItem& inlineTextItem)
+{
+    auto& inlineTextBox = inlineTextItem.inlineTextBox();
+    auto textContent = inlineTextBox.content();
+    RELEASE_ASSERT(!textContent.isEmpty());
+
+    if (textContent.is8Bit())
+        return 1;
+    if (inlineTextBox.canUseSimpleFontCodePath()) {
+        UChar32 character;
+        size_t endOfCodePoint = inlineTextItem.start();
+        U16_NEXT(textContent.characters16(), endOfCodePoint, textContent.length(), character);
+        ASSERT(endOfCodePoint > inlineTextItem.start());
+        return endOfCodePoint - inlineTextItem.start();
+    }
+    auto graphemeClustersIterator = NonSharedCharacterBreakIterator { textContent };
+    auto nextPosition = ubrk_following(graphemeClustersIterator, inlineTextItem.start());
+    if (nextPosition == UBRK_DONE)
+        return inlineTextItem.length();
+    return nextPosition - inlineTextItem.start();
+}
+
+TextDirection TextUtil::directionForTextContent(StringView content)
+{
+    if (content.is8Bit())
+        return TextDirection::LTR;
+    return ubidi_getBaseDirection(content.characters16(), content.length()) == UBIDI_RTL ? TextDirection::RTL : TextDirection::LTR;
 }
 
 }

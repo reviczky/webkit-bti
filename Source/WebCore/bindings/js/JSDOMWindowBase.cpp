@@ -36,7 +36,6 @@
 #include "Frame.h"
 #include "InspectorController.h"
 #include "JSDOMBindingSecurity.h"
-#include "JSDOMGlobalObjectTask.h"
 #include "JSDOMWindowCustom.h"
 #include "JSDocument.h"
 #include "JSFetchResponse.h"
@@ -95,6 +94,7 @@ const GlobalObjectMethodTable JSDOMWindowBase::s_globalObjectMethodTable = {
     nullptr,
     nullptr,
 #endif
+    &deriveShadowRealmGlobalObject
 };
 
 JSDOMWindowBase::JSDOMWindowBase(VM& vm, Structure* structure, RefPtr<DOMWindow>&& window, JSWindowProxy* proxy)
@@ -127,6 +127,8 @@ void JSDOMWindowBase::finishCreation(VM& vm, JSWindowProxy* proxy)
 
     if (m_wrapped && m_wrapped->frame() && m_wrapped->frame()->settings().needsSiteSpecificQuirks())
         setNeedsSiteSpecificQuirks(true);
+
+    putDirectCustomAccessor(vm, static_cast<JSVMClientData*>(vm.clientData)->builtinNames().showModalDialogPublicName(), CustomGetterSetter::create(vm, showModalDialogGetter, nullptr), static_cast<unsigned>(PropertyAttribute::CustomValue));
 }
 
 void JSDOMWindowBase::destroy(JSCell* cell)
@@ -255,7 +257,7 @@ JSC::ScriptExecutionStatus JSDOMWindowBase::scriptExecutionStatus(JSC::JSGlobalO
     return jsCast<JSDocument*>(owner)->wrapped().jscScriptExecutionStatus();
 }
 
-void JSDOMWindowBase::reportViolationForUnsafeEval(JSGlobalObject* object)
+void JSDOMWindowBase::reportViolationForUnsafeEval(JSGlobalObject* object, JSString* source)
 {
     const JSDOMWindowBase* thisObject = static_cast<const JSDOMWindowBase*>(object);
     ContentSecurityPolicy* contentSecurityPolicy = nullptr;
@@ -270,7 +272,7 @@ void JSDOMWindowBase::reportViolationForUnsafeEval(JSGlobalObject* object)
     if (!contentSecurityPolicy)
         return;
 
-    contentSecurityPolicy->allowEval(object, LogToConsole::No, false);
+    contentSecurityPolicy->allowEval(object, LogToConsole::No, source ? source->tryGetValue() : StringView());
 }
 
 void JSDOMWindowBase::willRemoveFromWindowProxy()

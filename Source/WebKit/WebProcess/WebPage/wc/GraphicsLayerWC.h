@@ -26,9 +26,15 @@
 #pragma once
 
 #include "WCUpateInfo.h"
+#include <WebCore/GraphicsLayerContentsDisplayDelegate.h>
 #include <wtf/DoublyLinkedList.h>
 
+namespace WebCore {
+class TransformState;
+}
+
 namespace WebKit {
+class WCTiledBacking;
 
 class GraphicsLayerWC final : public WebCore::GraphicsLayer, public DoublyLinkedListNode<GraphicsLayerWC> {
 public:
@@ -76,6 +82,7 @@ public:
     void setBackfaceVisibility(bool) override;
     void setContentsToSolidColor(const WebCore::Color&) override;
     void setContentsToPlatformLayer(PlatformLayer*, ContentsLayerPurpose) override;
+    void setContentsDisplayDelegate(RefPtr<WebCore::GraphicsLayerContentsDisplayDelegate>&&, ContentsLayerPurpose) override;
     bool shouldDirectlyCompositeImage(WebCore::Image*) const override { return false; }
     bool usesContentsLayer() const override;
     void setShowDebugBorder(bool) override;
@@ -86,9 +93,27 @@ public:
     void setBackdropFiltersRect(const WebCore::FloatRoundedRect&) override;
     void flushCompositingState(const WebCore::FloatRect& clipRect) override;
     void flushCompositingStateForThisLayerOnly() override;
+    WebCore::TiledBacking* tiledBacking() const override;
 
+protected:
+    friend WCTiledBacking;
+
+    RefPtr<WebCore::ImageBuffer> createImageBuffer(WebCore::FloatSize);
+    
 private:
-    void noteLayerPropertyChanged(OptionSet<WCLayerChange>);
+    struct VisibleAndCoverageRects {
+        WTF_MAKE_STRUCT_FAST_ALLOCATED;
+        WebCore::FloatRect visibleRect;
+        WebCore::FloatRect coverageRect;
+        WebCore::TransformationMatrix animatingTransform;
+    };
+
+    enum ScheduleFlushOrNot { ScheduleFlush, DontScheduleFlush };
+    void noteLayerPropertyChanged(OptionSet<WCLayerChange>, ScheduleFlushOrNot = ScheduleFlush);
+    WebCore::TransformationMatrix transformByApplyingAnchorPoint(const WebCore::TransformationMatrix&) const;
+    WebCore::TransformationMatrix layerTransform(const WebCore::FloatPoint&, const WebCore::TransformationMatrix* = nullptr) const;
+    VisibleAndCoverageRects computeVisibleAndCoverageRect(WebCore::TransformState&, bool preserves3D) const;
+    void recursiveCommitChanges(const WebCore::TransformState&);
 
     static GraphicsLayer::PlatformLayerID generateLayerID();
 
@@ -98,6 +123,7 @@ private:
     GraphicsLayerWC* m_next;
     WebCore::GraphicsLayer::PlatformLayerID m_layerID { generateLayerID() };
     Observer* m_observer;
+    std::unique_ptr<WCTiledBacking> m_tiledBacking;
     PlatformLayer* m_platformLayer { nullptr };
     WebCore::Color m_solidColor;
     WebCore::Color m_debugBorderColor;

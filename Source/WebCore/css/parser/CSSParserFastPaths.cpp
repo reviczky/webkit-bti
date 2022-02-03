@@ -648,6 +648,8 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
     case CSSPropertyImageRendering: // auto | optimizeContrast | pixelated | optimizeSpeed | crispEdges | optimizeQuality | webkit-crispEdges
         return valueID == CSSValueAuto || valueID == CSSValueOptimizeSpeed || valueID == CSSValueOptimizeQuality || valueID == CSSValueWebkitCrispEdges || valueID == CSSValueWebkitOptimizeContrast || valueID == CSSValueCrispEdges || valueID == CSSValuePixelated;
     case CSSPropertyInputSecurity:
+        if (!context.inputSecurityEnabled)
+            return false;
         return valueID == CSSValueAuto || valueID == CSSValueNone;
 #if ENABLE(CSS_COMPOSITING)
     case CSSPropertyIsolation: // auto | isolate
@@ -792,7 +794,7 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return valueID == CSSValueNowrap || valueID == CSSValueWrap || valueID == CSSValueWrapReverse;
     case CSSPropertyWebkitHyphens:
         return valueID == CSSValueAuto || valueID == CSSValueNone || valueID == CSSValueManual;
-    case CSSPropertyWebkitFontKerning:
+    case CSSPropertyFontKerning:
         return valueID == CSSValueAuto || valueID == CSSValueNormal || valueID == CSSValueNone;
     case CSSPropertyWebkitFontSmoothing:
         return valueID == CSSValueAuto || valueID == CSSValueNone || valueID == CSSValueAntialiased || valueID == CSSValueSubpixelAntialiased;
@@ -802,12 +804,7 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return valueID == CSSValueAuto || valueID == CSSValueLoose || valueID == CSSValueNormal || valueID == CSSValueStrict || valueID == CSSValueAfterWhiteSpace || valueID == CSSValueAnywhere;
     case CSSPropertyWebkitLineSnap:
         return valueID == CSSValueNone || valueID == CSSValueBaseline || valueID == CSSValueContain;
-    case CSSPropertyWebkitMarginAfterCollapse:
-    case CSSPropertyWebkitMarginBeforeCollapse:
-    case CSSPropertyWebkitMarginBottomCollapse:
-    case CSSPropertyWebkitMarginTopCollapse:
-        return valueID == CSSValueCollapse || valueID == CSSValueSeparate || valueID == CSSValueDiscard;
-    case CSSPropertyWebkitPrintColorAdjust:
+    case CSSPropertyPrintColorAdjust:
         return valueID == CSSValueExact || valueID == CSSValueEconomy;
     case CSSPropertyWebkitRtlOrdering:
         return valueID == CSSValueLogical || valueID == CSSValueVisual;
@@ -815,6 +812,8 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return valueID == CSSValueBefore || valueID == CSSValueAfter || valueID == CSSValueInterCharacter;
     case CSSPropertyWebkitTextCombine:
         return valueID == CSSValueNone || valueID == CSSValueHorizontal;
+    case CSSPropertyTextCombineUpright:
+        return valueID == CSSValueNone || valueID == CSSValueAll;
     case CSSPropertyWebkitTextSecurity: // disc | circle | square | none
         return valueID == CSSValueDisc || valueID == CSSValueCircle || valueID == CSSValueSquare || valueID == CSSValueNone;
     case CSSPropertyTransformStyle:
@@ -901,6 +900,9 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
 #endif
     case CSSPropertyTextDecorationSkipInk:
         return valueID == CSSValueAuto || valueID == CSSValueNone || valueID == CSSValueAll;
+    case CSSPropertyContainerType:
+        // FIXME: Support 'style', 'state'. Those will require parsing the value as a list.
+        return valueID == CSSValueNone || valueID == CSSValueSize || valueID == CSSValueInlineSize;
     default:
         ASSERT_NOT_REACHED();
         return false;
@@ -933,6 +935,7 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
     case CSSPropertyFlexDirection:
     case CSSPropertyFlexWrap:
     case CSSPropertyFloat:
+    case CSSPropertyFontKerning:
     case CSSPropertyFontVariantAlternates:
     case CSSPropertyFontVariantCaps:
     case CSSPropertyFontVariantPosition:
@@ -968,23 +971,19 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
     case CSSPropertyWebkitBoxOrient:
     case CSSPropertyWebkitBoxPack:
     case CSSPropertyWebkitColumnAxis:
-    case CSSPropertyWebkitFontKerning:
     case CSSPropertyWebkitFontSmoothing:
     case CSSPropertyWebkitHyphens:
     case CSSPropertyWebkitLineAlign:
     case CSSPropertyLineBreak:
     case CSSPropertyWebkitLineSnap:
-    case CSSPropertyWebkitMarginAfterCollapse:
-    case CSSPropertyWebkitMarginBeforeCollapse:
-    case CSSPropertyWebkitMarginBottomCollapse:
-    case CSSPropertyWebkitMarginTopCollapse:
     case CSSPropertyWebkitMarqueeDirection:
     case CSSPropertyWebkitMarqueeStyle:
     case CSSPropertyWebkitNbspMode:
-    case CSSPropertyWebkitPrintColorAdjust:
+    case CSSPropertyPrintColorAdjust:
     case CSSPropertyWebkitRtlOrdering:
     case CSSPropertyWebkitRubyPosition:
     case CSSPropertyWebkitTextCombine:
+    case CSSPropertyTextCombineUpright:
     case CSSPropertyTextDecorationStyle:
     case CSSPropertyWebkitTextOrientation:
     case CSSPropertyWebkitTextSecurity:
@@ -1018,13 +1017,11 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
 
     // FIXME-NEWPARSER: Add the following unprefixed properties:
     // case CSSPropertyBackfaceVisibility:
-    // case CSSPropertyFontKerning:
     // case CSSPropertyHyphens:
     // case CSSPropertyOverflowAnchor:
     // case CSSPropertyScrollSnapType:
     // case CSSPropertyTextAlignLast:
     // case CSSPropertyTextCombineUpright:
-    // case CSSPropertyTextDecorationStyle:
     // case CSSPropertyTextJustify:
     // case CSSPropertyUserSelect:
 #if ENABLE(CSS_TRAILING_WORD)
@@ -1061,6 +1058,7 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
 #endif
     case CSSPropertyMathStyle:
     case CSSPropertyTextDecorationSkipInk:
+    case CSSPropertyContainerType:
         return true;
     default:
         return false;

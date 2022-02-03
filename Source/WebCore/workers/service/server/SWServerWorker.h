@@ -53,7 +53,7 @@ struct ServiceWorkerClientQueryOptions;
 struct ServiceWorkerContextData;
 struct ServiceWorkerJobDataIdentifier;
 enum class WorkerThreadMode : bool;
-enum class WorkerType : uint8_t;
+enum class WorkerType : bool;
 
 class SWServerWorker : public RefCounted<SWServerWorker> {
 public:
@@ -103,6 +103,7 @@ public:
     void didFinishActivation();
     void contextTerminated();
     WEBCORE_EXPORT std::optional<ServiceWorkerClientData> findClientByIdentifier(const ScriptExecutionContextIdentifier&) const;
+    WEBCORE_EXPORT void findClientByVisibleIdentifier(const String& clientIdentifier, CompletionHandler<void(std::optional<WebCore::ServiceWorkerClientData>&&)>&&);
     void matchAll(const ServiceWorkerClientQueryOptions&, ServiceWorkerClientsMatchAllCallback&&);
     void setScriptResource(URL&&, ServiceWorkerContextData::ImportedScript&&);
     void didSaveScriptsToDisk(ScriptBuffer&& mainScript, HashMap<URL, ScriptBuffer>&& importedScripts);

@@ -27,7 +27,6 @@
 #include "WebProcessProxy.h"
 
 #include "APIFrameHandle.h"
-#include "APIPageGroupHandle.h"
 #include "APIPageHandle.h"
 #include "AuthenticatorManager.h"
 #include "DataReference.h"
@@ -46,6 +45,7 @@
 #include "WebBackForwardCache.h"
 #include "WebBackForwardListItem.h"
 #include "WebInspectorUtilities.h"
+#include "WebLockRegistryProxy.h"
 #include "WebNavigationDataStore.h"
 #include "WebNotificationManagerProxy.h"
 #include "WebPageGroup.h"
@@ -81,7 +81,7 @@
 #include "ObjCObjectGraph.h"
 #include "PDFPlugin.h"
 #include "UserMediaCaptureManagerProxy.h"
-#include <WebCore/VersionChecks.h>
+#include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
 #if PLATFORM(MAC)
@@ -128,9 +128,9 @@ bool WebProcessProxy::hasReachedProcessCountLimit()
 static bool isMainThreadOrCheckDisabled()
 {
 #if PLATFORM(IOS_FAMILY)
-    return LIKELY(RunLoop::isMain()) || !linkedOnOrAfter(WebCore::SDKVersion::FirstWithMainThreadReleaseAssertionInWebPageProxy);
+    return LIKELY(RunLoop::isMain()) || !linkedOnOrAfter(SDKVersion::FirstWithMainThreadReleaseAssertionInWebPageProxy);
 #elif PLATFORM(MAC)
-    return LIKELY(RunLoop::isMain()) || !linkedOnOrAfter(WebCore::SDKVersion::FirstWithMainThreadReleaseAssertionInWebPageProxy);
+    return LIKELY(RunLoop::isMain()) || !linkedOnOrAfter(SDKVersion::FirstWithMainThreadReleaseAssertionInWebPageProxy);
 #else
     return RunLoop::isMain();
 #endif
@@ -215,6 +215,13 @@ private:
         return true;
     }
 
+    const WebCore::ProcessIdentity& resourceOwner() const final
+    {
+        // FIXME: should obtain WebContent process identity from WebContent.
+        static NeverDestroyed<WebCore::ProcessIdentity> dummy;
+        return dummy.get();
+    }
+
     RefPtr<Logger> m_logger;
     WebProcessProxy& m_process;
 };
@@ -240,6 +247,7 @@ WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore* 
     , m_captivePortalMode(captivePortalMode)
     , m_crossOriginMode(crossOriginMode)
     , m_shutdownPreventingScopeCounter([this](RefCounterEvent event) { if (event == RefCounterEvent::Decrement) maybeShutDown(); })
+    , m_webLockRegistry(websiteDataStore ? makeUnique<WebLockRegistryProxy>(*this) : nullptr)
 {
     RELEASE_ASSERT(isMainThreadOrCheckDisabled());
     WEBPROCESSPROXY_RELEASE_LOG(Process, "constructor:");
@@ -307,7 +315,7 @@ void WebProcessProxy::platformDestroy()
 }
 #endif
 
-void WebProcessProxy::setIsInProcessCache(bool value)
+void WebProcessProxy::setIsInProcessCache(bool value, WillShutDown willShutDown)
 {
     WEBPROCESSPROXY_RELEASE_LOG(Process, "setIsInProcessCache(%d)", value);
     if (value) {
@@ -318,6 +326,11 @@ void WebProcessProxy::setIsInProcessCache(bool value)
 
     ASSERT(m_isInProcessCache != value);
     m_isInProcessCache = value;
+
+    // No point in doing anything else if the process is about to shut down.
+    ASSERT(willShutDown == WillShutDown::No || !value);
+    if (willShutDown == WillShutDown::Yes)
+        return;
 
     send(Messages::WebProcess::SetIsInProcessCache(m_isInProcessCache), 0);
 
@@ -336,15 +349,12 @@ void WebProcessProxy::setWebsiteDataStore(WebsiteDataStore& dataStore)
     ASSERT(!m_websiteDataStore);
     WEBPROCESSPROXY_RELEASE_LOG(Process, "setWebsiteDataStore() dataStore=%p, sessionID=%" PRIu64, &dataStore, dataStore.sessionID().toUInt64());
     m_websiteDataStore = &dataStore;
-#if PLATFORM(COCOA)
-    dataStore.sendNetworkProcessXPCEndpointToProcess(*this);
-#if ENABLE(GPU_PROCESS)
-    if (GPUProcessProxy::singletonIfCreated())
-        dataStore.sendNetworkProcessXPCEndpointToProcess(*GPUProcessProxy::singletonIfCreated());
-#endif
-#endif
     updateRegistrationWithDataStore();
     send(Messages::WebProcess::SetWebsiteDataStoreParameters(processPool().webProcessDataStoreParameters(*this, dataStore)), 0);
+
+    // Delay construction of the WebLockRegistryProxy until the WebProcessProxy has a data store since the data store holds the
+    // LocalWebLockRegistry.
+    m_webLockRegistry = makeUnique<WebLockRegistryProxy>(*this);
 }
 
 bool WebProcessProxy::isDummyProcessProxy() const
@@ -447,7 +457,7 @@ bool WebProcessProxy::shouldSendPendingMessage(const PendingMessage& message)
     if (message.encoder->messageName() == IPC::MessageName::WebPage_LoadRequestWaitingForProcessLaunch) {
         auto buffer = message.encoder->buffer();
         auto bufferSize = message.encoder->bufferSize();
-        auto decoder = IPC::Decoder::create(buffer, bufferSize, nullptr, { });
+        auto decoder = IPC::Decoder::create(buffer, bufferSize, { });
         ASSERT(decoder);
         if (!decoder)
             return false;
@@ -527,6 +537,9 @@ void WebProcessProxy::shutDown()
 
     m_userInitiatedActionMap.clear();
     m_sleepDisablers.clear();
+
+    if (m_webLockRegistry)
+        m_webLockRegistry->processDidExit();
 
 #if ENABLE(ROUTING_ARBITRATION)
     m_routingArbitrator->processDidTerminate();
@@ -1035,8 +1048,8 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
     }
 
 #if PLATFORM(COCOA)
-    if (m_websiteDataStore)
-        m_websiteDataStore->sendNetworkProcessXPCEndpointToProcess(*this);
+    if (auto networkProcess = NetworkProcessProxy::defaultNetworkProcess())
+        networkProcess->sendXPCEndpointToProcess(*this);
 #endif
 
     RELEASE_ASSERT(!m_webConnection);
@@ -1340,7 +1353,6 @@ RefPtr<API::Object> WebProcessProxy::transformHandlesToObjects(API::Object* obje
             case API::Object::Type::PageHandle:
                 return static_cast<const API::PageHandle&>(object).isAutoconverting();
 
-            case API::Object::Type::PageGroupHandle:
 #if PLATFORM(COCOA)
             case API::Object::Type::ObjCObjectGraph:
 #endif
@@ -1357,9 +1369,6 @@ RefPtr<API::Object> WebProcessProxy::transformHandlesToObjects(API::Object* obje
             case API::Object::Type::FrameHandle:
                 ASSERT(static_cast<API::FrameHandle&>(object).isAutoconverting());
                 return m_webProcessProxy.webFrame(static_cast<API::FrameHandle&>(object).frameID());
-
-            case API::Object::Type::PageGroupHandle:
-                return WebPageGroup::get(static_cast<API::PageGroupHandle&>(object).webPageGroupData().pageGroupID);
 
             case API::Object::Type::PageHandle:
                 ASSERT(static_cast<API::PageHandle&>(object).isAutoconverting());
@@ -1407,9 +1416,6 @@ RefPtr<API::Object> WebProcessProxy::transformObjectsToHandles(API::Object* obje
 
             case API::Object::Type::Page:
                 return API::PageHandle::createAutoconverting(static_cast<const WebPageProxy&>(object).identifier(), static_cast<const WebPageProxy&>(object).webPageID());
-
-            case API::Object::Type::PageGroup:
-                return API::PageGroupHandle::create(WebPageGroupData(static_cast<const WebPageGroup&>(object).data()));
 
 #if PLATFORM(COCOA)
             case API::Object::Type::ObjCObjectGraph:
@@ -1860,7 +1866,7 @@ void WebProcessProxy::establishServiceWorkerContext(const WebPreferencesStore& s
 {
     WEBPROCESSPROXY_RELEASE_LOG(Loading, "establishServiceWorkerContext: Started");
     markProcessAsRecentlyUsed();
-    sendWithAsyncReply(Messages::WebProcess::EstablishWorkerContextConnectionToNetworkProcess { processPool().defaultPageGroup().pageGroupID(), m_serviceWorkerInformation->serviceWorkerPageProxyID, m_serviceWorkerInformation->serviceWorkerPageID, store, registrableDomain, serviceWorkerPageIdentifier, m_serviceWorkerInformation->initializationData }, [this, weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
+    sendWithAsyncReply(Messages::WebProcess::EstablishServiceWorkerContextConnectionToNetworkProcess { processPool().defaultPageGroup().pageGroupID(), m_serviceWorkerInformation->serviceWorkerPageProxyID, m_serviceWorkerInformation->serviceWorkerPageID, store, registrableDomain, serviceWorkerPageIdentifier, m_serviceWorkerInformation->initializationData }, [this, weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
         if (weakThis)
             WEBPROCESSPROXY_RELEASE_LOG(Loading, "establishServiceWorkerContext: Finished");
         completionHandler();

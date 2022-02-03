@@ -94,7 +94,9 @@ macro dispatchAfterCall(size, opcodeStruct, valueProfileName, dstVirtualRegister
 end
 
 macro cCall2(function)
-    if ARMv7 or MIPS
+    if C_LOOP or C_LOOP_WIN
+        cloopCallSlowPath function, a0, a1
+    elsif ARMv7 or MIPS
         call function
     elsif X86 or X86_WIN
         subp 8, sp
@@ -102,8 +104,6 @@ macro cCall2(function)
         push a0
         call function
         addp 16, sp
-    elsif C_LOOP or C_LOOP_WIN
-        cloopCallSlowPath function, a0, a1
     else
         error
     end
@@ -114,6 +114,23 @@ macro cCall2Void(function)
         cloopCallSlowPathVoid function, a0, a1
     else
         cCall2(function)
+    end
+end
+
+macro cCall3(function)
+    if C_LOOP or C_LOOP_WIN
+        cloopCallSlowPath3 function, a0, a1, a2
+    elsif ARMv7 or MIPS
+        call function
+    elsif X86 or X86_WIN
+        subp 4, sp
+        push a2
+        push a1
+        push a0
+        call function
+        addp 16, sp
+    else
+        error
     end
 end
 
@@ -1208,6 +1225,42 @@ binaryOpCustomStore(div, OpDiv,
     end,
     macro (lhs, rhs) divd rhs, lhs end)
 
+llintOpWithReturn(op_pow, OpPow, macro (size, get, dispatch, return)
+    get(m_rhs, t2)
+    get(m_lhs, t0)
+    loadConstantOrVariable(size, t2, t3, t1)
+    loadConstantOrVariable2Reg(size, t0, t2, t0)
+    bineq t3, Int32Tag, .slow
+
+    bilt t1, 0, .slow
+    bigt t1, (constexpr maxExponentForIntegerMathPow), .slow
+
+    bineq t2, Int32Tag, .lhsNotInt
+    ci2ds t0, ft0
+    jmp .lhsReady
+.lhsNotInt:
+    bia t2, LowestTag, .slow
+    fii2d t0, t2, ft0
+.lhsReady:
+    get(m_dst, t2)
+    move 1, t0
+    ci2ds t0, ft1
+
+.loop:
+    btiz t1, 0x1, .exponentIsEven
+    muld ft0, ft1
+.exponentIsEven:
+    muld ft0, ft0
+    rshifti 1, t1
+    btinz t1, .loop
+
+    stored ft1, [cfr, t2, 8]
+    dispatch()
+
+.slow:
+    callSlowPath(_slow_path_pow)
+    dispatch()
+end)
 
 llintOpWithReturn(op_unsigned, OpUnsigned, macro (size, get, dispatch, return)
     get(m_operand, t1)
@@ -1420,6 +1473,22 @@ end
 # we would have been doing anyway. For prototype/unset properties, we will attempt to
 # convert opcode into a get_by_id_proto_load/get_by_id_unset, respectively, after an
 # execution counter hits zero.
+
+llintOpWithMetadata(op_try_get_by_id, OpTryGetById, macro (size, get, dispatch, metadata, return)
+    metadata(t5, t0)
+    get(m_base, t0)
+    loadi OpTryGetById::Metadata::m_structureID[t5], t1
+    loadConstantOrVariablePayload(size, t0, CellTag, t3, .opTryGetByIdSlow)
+    loadi OpTryGetById::Metadata::m_offset[t5], t2
+    bineq JSCell::m_structureID[t3], t1, .opTryGetByIdSlow
+    loadPropertyAtVariableOffset(t2, t3, t0, t1)
+    valueProfile(OpTryGetById, m_profile, t5, t0, t1)
+    return(t0, t1)
+
+.opTryGetByIdSlow:
+    callSlowPath(_llint_slow_path_try_get_by_id)
+    dispatch()
+end)
 
 llintOpWithMetadata(op_get_by_id_direct, OpGetByIdDirect, macro (size, get, dispatch, metadata, return)
     metadata(t5, t0)
@@ -2083,14 +2152,15 @@ llintOpWithJump(op_switch_imm, OpSwitchImm, macro (size, get, jump, dispatch)
     loadp CodeBlock::m_unlinkedCode[t2], t2
     loadp UnlinkedCodeBlock::m_rareData[t2], t2
     muli sizeof UnlinkedSimpleJumpTable, t3
-    loadp UnlinkedCodeBlock::RareData::m_unlinkedSwitchJumpTables + FixedVector::m_storage + RefCountedArray::m_data[t2], t2
+    loadp UnlinkedCodeBlock::RareData::m_unlinkedSwitchJumpTables + UnlinkedSimpleJumpTableFixedVector::m_storage[t2], t2
+    addp (constexpr (UnlinkedSimpleJumpTableFixedVector::Storage::offsetOfData())), t2
     addp t3, t2
     bineq t1, Int32Tag, .opSwitchImmNotInt
     subi UnlinkedSimpleJumpTable::m_min[t2], t0
-    loadp UnlinkedSimpleJumpTable::m_branchOffsets + FixedVector::m_storage + RefCountedArray::m_data[t2], t2
+    loadp UnlinkedSimpleJumpTable::m_branchOffsets + Int32FixedVector::m_storage[t2], t2
     btpz t2, .opSwitchImmFallThrough
-    biaeq t0, RefCountedArrayStorageNonNullSizeOffset[t2], .opSwitchImmFallThrough
-    loadi [t2, t0, 4], t1
+    biaeq t0, Int32FixedVector::Storage::m_size[t2], .opSwitchImmFallThrough
+    loadi (constexpr (Int32FixedVector::Storage::offsetOfData()))[t2, t0, 4], t1
     btiz t1, .opSwitchImmFallThrough
     dispatchIndirect(t1)
 
@@ -2113,7 +2183,8 @@ llintOpWithJump(op_switch_char, OpSwitchChar, macro (size, get, jump, dispatch)
     loadp CodeBlock::m_unlinkedCode[t2], t2
     loadp UnlinkedCodeBlock::m_rareData[t2], t2
     muli sizeof UnlinkedSimpleJumpTable, t3
-    loadp UnlinkedCodeBlock::RareData::m_unlinkedSwitchJumpTables + FixedVector::m_storage + RefCountedArray::m_data[t2], t2
+    loadp UnlinkedCodeBlock::RareData::m_unlinkedSwitchJumpTables + UnlinkedSimpleJumpTableFixedVector::m_storage[t2], t2
+    addp (constexpr (UnlinkedSimpleJumpTableFixedVector::Storage::offsetOfData())), t2
     addp t3, t2
     bineq t1, CellTag, .opSwitchCharFallThrough
     bbneq JSCell::m_type[t0], StringType, .opSwitchCharFallThrough
@@ -2128,10 +2199,10 @@ llintOpWithJump(op_switch_char, OpSwitchChar, macro (size, get, jump, dispatch)
     loadb [t0], t0
 .opSwitchCharReady:
     subi UnlinkedSimpleJumpTable::m_min[t2], t0
-    loadp UnlinkedSimpleJumpTable::m_branchOffsets + FixedVector::m_storage + RefCountedArray::m_data[t2], t2
+    loadp UnlinkedSimpleJumpTable::m_branchOffsets + Int32FixedVector::m_storage[t2], t2
     btpz t2, .opSwitchCharFallThrough
-    biaeq t0, RefCountedArrayStorageNonNullSizeOffset[t2], .opSwitchCharFallThrough
-    loadi [t2, t0, 4], t1
+    biaeq t0, Int32FixedVector::Storage::m_size[t2], .opSwitchCharFallThrough
+    loadi (constexpr (Int32FixedVector::Storage::offsetOfData()))[t2, t0, 4], t1
     btiz t1, .opSwitchCharFallThrough
     dispatchIndirect(t1)
 

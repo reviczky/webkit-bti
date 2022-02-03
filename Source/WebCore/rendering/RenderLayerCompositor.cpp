@@ -56,7 +56,6 @@
 #include "RenderImage.h"
 #include "RenderLayerBacking.h"
 #include "RenderLayerScrollableArea.h"
-#include "RenderReplica.h"
 #include "RenderVideo.h"
 #include "RenderView.h"
 #include "RuntimeEnabledFeatures.h"
@@ -1642,7 +1641,7 @@ static bool recompositeChangeRequiresGeometryUpdate(const RenderStyle& oldStyle,
         || oldStyle.transformOriginX() != newStyle.transformOriginX()
         || oldStyle.transformOriginY() != newStyle.transformOriginY()
         || oldStyle.transformOriginZ() != newStyle.transformOriginZ()
-        || oldStyle.transformStyle3D() != newStyle.transformStyle3D()
+        || oldStyle.usedTransformStyle3D() != newStyle.usedTransformStyle3D()
         || oldStyle.perspective() != newStyle.perspective()
         || oldStyle.perspectiveOriginX() != newStyle.perspectiveOriginX()
         || oldStyle.perspectiveOriginY() != newStyle.perspectiveOriginY()
@@ -1652,7 +1651,9 @@ static bool recompositeChangeRequiresGeometryUpdate(const RenderStyle& oldStyle,
         || oldStyle.offsetPosition() != newStyle.offsetPosition()
         || oldStyle.offsetDistance() != newStyle.offsetDistance()
         || oldStyle.offsetRotate() != newStyle.offsetRotate()
-        || !arePointingToEqualData(oldStyle.clipPath(), newStyle.clipPath());
+        || !arePointingToEqualData(oldStyle.clipPath(), newStyle.clipPath())
+        || oldStyle.overscrollBehaviorX() != newStyle.overscrollBehaviorX()
+        || oldStyle.overscrollBehaviorY() != newStyle.overscrollBehaviorY();
 }
 
 void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer& layer, const RenderStyle* oldStyle)
@@ -3044,7 +3045,7 @@ bool RenderLayerCompositor::requiresCompositingForBackfaceVisibility(RenderLayer
     
     // FIXME: workaround for webkit.org/b/132801
     auto* stackingContext = renderer.layer()->stackingContext();
-    if (stackingContext && stackingContext->renderer().style().transformStyle3D() == TransformStyle3D::Preserve3D)
+    if (stackingContext && stackingContext->renderer().style().preserves3D())
         return true;
 
     return false;
@@ -3291,7 +3292,7 @@ IndirectCompositingReason RenderLayerCompositor::computeIndirectCompositingReaso
     // A layer with preserve-3d or perspective only needs to be composited if there are descendant layers that
     // will be affected by the preserve-3d or perspective.
     if (has3DTransformedDescendants) {
-        if (renderer.style().transformStyle3D() == TransformStyle3D::Preserve3D)
+        if (renderer.style().preserves3D())
             return IndirectCompositingReason::Preserve3D;
     
         if (renderer.style().hasPerspective())
@@ -3322,7 +3323,7 @@ bool RenderLayerCompositor::styleChangeMayAffectIndirectCompositingReasons(const
         return true;
     if (newStyle.boxReflect() != oldStyle.boxReflect())
         return true;
-    if (newStyle.transformStyle3D() != oldStyle.transformStyle3D())
+    if (newStyle.usedTransformStyle3D() != oldStyle.usedTransformStyle3D())
         return true;
     if (newStyle.hasPerspective() != oldStyle.hasPerspective())
         return true;
@@ -3945,6 +3946,11 @@ void RenderLayerCompositor::rootOrBodyStyleChanged(RenderElement& renderer, cons
     bool hadFixedBackground = oldStyle && oldStyle->hasEntirelyFixedBackground();
     if (hadFixedBackground != renderer.style().hasEntirelyFixedBackground())
         rootLayerConfigurationChanged();
+    
+    if (oldStyle && (oldStyle->overscrollBehaviorX() != renderer.style().overscrollBehaviorX() || oldStyle->overscrollBehaviorY() != renderer.style().overscrollBehaviorY())) {
+        if (auto* layer = m_renderView.layer())
+            layer->setNeedsCompositingGeometryUpdate();
+    }
 }
 
 void RenderLayerCompositor::rootBackgroundColorOrTransparencyChanged()
@@ -4329,7 +4335,7 @@ bool RenderLayerCompositor::layerHas3DContent(const RenderLayer& layer) const
 {
     const RenderStyle& style = layer.renderer().style();
 
-    if (style.transformStyle3D() == TransformStyle3D::Preserve3D || style.hasPerspective() || styleHas3DTransformOperation(style))
+    if (style.preserves3D() || style.hasPerspective() || styleHas3DTransformOperation(style))
         return true;
 
     const_cast<RenderLayer&>(layer).updateLayerListsIfNeeded();

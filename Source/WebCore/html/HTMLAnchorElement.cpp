@@ -213,7 +213,7 @@ void HTMLAnchorElement::defaultEventHandler(Event& event)
 
 void HTMLAnchorElement::setActive(bool down, bool pause, Style::InvalidationScope invalidationScope)
 {
-    if (hasEditableStyle()) {
+    if (down && hasEditableStyle()) {
         switch (document().settings().editableLinkBehavior()) {
         case EditableLinkBehavior::Default:
         case EditableLinkBehavior::AlwaysLive:
@@ -269,11 +269,6 @@ void HTMLAnchorElement::parseAttribute(const QualifiedName& name, const AtomStri
     }
     else
         HTMLElement::parseAttribute(name, value);
-}
-
-bool HTMLAnchorElement::accessKeyAction(bool sendMouseEvents)
-{
-    return dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
 bool HTMLAnchorElement::isURLAttribute(const Attribute& attribute) const
@@ -463,7 +458,7 @@ std::optional<PrivateClickMeasurement> HTMLAnchorElement::parsePrivateClickMeasu
 
     auto attributionSourceNonceAttr = attributeWithoutSynchronization(attributionsourcenonceAttr);
     if (!attributionSourceNonceAttr.isEmpty()) {
-        auto ephemeralNonce = PrivateClickMeasurement::EphemeralSourceNonce { attributionSourceNonceAttr };
+        auto ephemeralNonce = PrivateClickMeasurement::EphemeralNonce { attributionSourceNonceAttr };
         if (!ephemeralNonce.isValid()) {
             document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "attributionsourcenonce was not valid."_s);
             return std::nullopt;
@@ -518,7 +513,7 @@ void HTMLAnchorElement::handleClick(Event& event)
     if (systemPreviewInfo.isPreview) {
         systemPreviewInfo.element.elementIdentifier = document().identifierForElement(*this);
         systemPreviewInfo.element.documentIdentifier = document().identifier();
-        systemPreviewInfo.element.webPageIdentifier = document().frame()->loader().pageID().value_or(PageIdentifier { });
+        systemPreviewInfo.element.webPageIdentifier = valueOrDefault(document().frame()->loader().pageID());
         if (auto* child = firstElementChild())
             systemPreviewInfo.previewRect = child->boundsInRootViewSpace();
     }

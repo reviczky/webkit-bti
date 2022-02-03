@@ -29,6 +29,7 @@
 
 #include "CSSSelector.h"
 #include "Element.h"
+#include "SelectorMatchingState.h"
 #include "StyleRelations.h"
 #include "StyleScopeOrdinal.h"
 
@@ -94,11 +95,14 @@ public:
         std::optional<StyleScrollbarState> scrollbarState;
         AtomString nameForHightlightPseudoElement;
         const ContainerNode* scope { nullptr };
+        bool matchesAllScopes { false };
         Style::ScopeOrdinal styleScopeOrdinal { Style::ScopeOrdinal::Element };
+        Style::SelectorMatchingState* selectorMatchingState { nullptr };
 
         // FIXME: It would be nicer to have a separate object for return values. This requires some more work in the selector compiler.
         Style::Relations styleRelations;
         PseudoIdSet pseudoIDSet;
+        bool matchedInsideScope { false };
     };
 
     bool match(const CSSSelector&, const Element&, CheckingContext&) const;
@@ -117,6 +121,7 @@ private:
     MatchResult matchRecursively(CheckingContext&, const LocalContext&, PseudoIdSet&) const;
     bool checkOne(CheckingContext&, const LocalContext&, MatchType&) const;
     bool matchSelectorList(CheckingContext&, const LocalContext&, const Element&, const CSSSelectorList&) const;
+    bool matchHasPseudoClass(CheckingContext&, const Element&, const CSSSelector&) const;
 
     bool checkScrollbarPseudoClass(const CheckingContext&, const Element&, const CSSSelector&) const;
 

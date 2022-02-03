@@ -31,6 +31,7 @@
 #include "GStreamerCommon.h"
 #include "MediaSampleGStreamer.h"
 #include "MediaStreamPrivate.h"
+#include "VideoFrameMetadataGStreamer.h"
 #include "VideoTrackPrivateMediaStream.h"
 
 #include <gst/app/gstappsrc.h>
@@ -61,8 +62,10 @@ GRefPtr<GstTagList> mediaStreamTrackPrivateGetTags(const MediaStreamTrackPrivate
         gst_tag_list_add(tagList.get(), GST_TAG_MERGE_APPEND, WEBKIT_MEDIA_TRACK_TAG_KIND, static_cast<int>(VideoTrackPrivate::Kind::Main), nullptr);
 
         auto& settings = track->settings();
-        gst_tag_list_add(tagList.get(), GST_TAG_MERGE_APPEND, WEBKIT_MEDIA_TRACK_TAG_WIDTH, settings.width(),
-            WEBKIT_MEDIA_TRACK_TAG_HEIGHT, settings.height(), nullptr);
+        if (settings.width())
+            gst_tag_list_add(tagList.get(), GST_TAG_MERGE_APPEND, WEBKIT_MEDIA_TRACK_TAG_WIDTH, settings.width(), nullptr);
+        if (settings.height())
+            gst_tag_list_add(tagList.get(), GST_TAG_MERGE_APPEND, WEBKIT_MEDIA_TRACK_TAG_HEIGHT, settings.height(), nullptr);
     }
 
     GST_DEBUG("Track tags: %" GST_PTR_FORMAT, tagList.get());
@@ -267,19 +270,19 @@ public:
         if (!m_parent)
             return;
 
-        auto* gstSample = static_cast<MediaSampleGStreamer*>(&sample)->platformSample().sample.gstSample;
-        auto* caps = gst_sample_get_caps(gstSample);
-        GstVideoInfo info;
-        gst_video_info_from_caps(&info, caps);
+        auto sampleSize = sample.presentationSize();
+        IntSize captureSize(sampleSize.width(), sampleSize.height());
 
-        int width = GST_VIDEO_INFO_WIDTH(&info);
-        int height = GST_VIDEO_INFO_HEIGHT(&info);
-        if (m_lastKnownSize != IntSize(width, height)) {
-            m_lastKnownSize.setWidth(width);
-            m_lastKnownSize.setHeight(height);
-            updateBlackFrame(caps);
-        }
+        auto settings = m_track.settings();
+        m_configuredSize.setWidth(settings.width());
+        m_configuredSize.setHeight(settings.height());
 
+        if (!m_configuredSize.width())
+            m_configuredSize.setWidth(captureSize.width());
+        if (!m_configuredSize.height())
+            m_configuredSize.setHeight(captureSize.height());
+
+        auto* mediaSample = static_cast<MediaSampleGStreamer*>(&sample);
         auto videoRotation = sample.videoRotation();
         bool videoMirrored = sample.videoMirrored();
         if (m_videoRotation != videoRotation || m_videoMirrored != videoMirrored) {
@@ -290,6 +293,12 @@ public:
             GST_DEBUG_OBJECT(m_src.get(), "Pushing orientation tag: %s", orientation.utf8().data());
             auto pad = adoptGRef(gst_element_get_static_pad(m_src.get(), "src"));
             gst_pad_push_event(pad.get(), gst_event_new_tag(gst_tag_list_new(GST_TAG_IMAGE_ORIENTATION, orientation.utf8().data(), nullptr)));
+        }
+
+        auto* gstSample = mediaSample->platformSample().sample.gstSample;
+        if (!m_configuredSize.isEmpty() && m_lastKnownSize != m_configuredSize) {
+            m_lastKnownSize = m_configuredSize;
+            updateBlackFrame(gst_sample_get_caps(gstSample));
         }
 
         if (m_track.enabled()) {
@@ -336,6 +345,12 @@ private:
     void pushBlackFrame()
     {
         GST_TRACE_OBJECT(m_src.get(), "Pushing black video frame");
+        VideoSampleMetadata metadata;
+        metadata.captureTime = MonotonicTime::now().secondsSinceEpoch();
+        auto* buffer = webkitGstBufferSetVideoSampleMetadata(gst_sample_get_buffer(m_blackFrame.get()), metadata);
+        // TODO: Use gst_sample_set_buffer() after bumping GStreamer dependency to 1.16.
+        auto* caps = gst_sample_get_caps(m_blackFrame.get());
+        m_blackFrame = adoptGRef(gst_sample_new(buffer, caps, nullptr, nullptr));
         pushSample(m_blackFrame.get());
     }
 
@@ -349,6 +364,7 @@ private:
     bool m_isObserving { false };
     RefPtr<AudioTrackPrivateMediaStream> m_audioTrack;
     RefPtr<VideoTrackPrivateMediaStream> m_videoTrack;
+    IntSize m_configuredSize;
     IntSize m_lastKnownSize;
     GRefPtr<GstSample> m_blackFrame;
     MediaSample::VideoRotation m_videoRotation { MediaSample::VideoRotation::None };
@@ -384,7 +400,7 @@ void WebKitMediaStreamObserver::didRemoveTrack(MediaStreamTrackPrivate& track)
     auto* priv = element->priv;
 
     // Lookup the corresponding InternalSource and take it from the storage.
-    auto index = priv->sources.findMatching([&](auto& item) {
+    auto index = priv->sources.findIf([&](auto& item) {
         return item->track().id() == track.id();
     });
     std::unique_ptr<InternalSource> source = WTFMove(priv->sources[index]);
@@ -468,6 +484,9 @@ static void webkitMediaStreamSrcConstructed(GObject* object)
     GST_CALL_PARENT(G_OBJECT_CLASS, constructed, (object));
     WebKitMediaStreamSrc* self = WEBKIT_MEDIA_STREAM_SRC_CAST(object);
     auto* priv = self->priv;
+
+    GST_OBJECT_FLAG_SET(GST_OBJECT_CAST(self), static_cast<GstElementFlags>(GST_ELEMENT_FLAG_SOURCE | static_cast<GstElementFlags>(GST_BIN_FLAG_STREAMS_AWARE)));
+    gst_bin_set_suppressed_flags(GST_BIN_CAST(self), static_cast<GstElementFlags>(GST_ELEMENT_FLAG_SOURCE | GST_ELEMENT_FLAG_SINK));
 
     priv->mediaStreamObserver = makeUnique<WebKitMediaStreamObserver>(GST_ELEMENT_CAST(self));
     priv->flowCombiner = GUniquePtr<GstFlowCombiner>(gst_flow_combiner_new());
@@ -558,7 +577,7 @@ static void webkitMediaStreamSrcPostStreamCollection(WebKitMediaStreamSrc* self)
         return;
     }
 
-    auto upstreamId = priv->stream ? priv->stream->id() : createCanonicalUUIDString();
+    auto upstreamId = priv->stream ? priv->stream->id() : createVersion4UUIDString();
     priv->streamCollection = adoptGRef(gst_stream_collection_new(upstreamId.ascii().data()));
     for (auto& track : priv->tracks) {
         if (!track->isActive())

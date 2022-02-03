@@ -226,7 +226,6 @@ void Connection::SyncMessageState::dispatchMessagesAndResetDidScheduleDispatchMe
         Locker locker { m_lock };
         ASSERT(m_didScheduleDispatchMessagesWorkSet.contains(&connection));
         m_didScheduleDispatchMessagesWorkSet.remove(&connection);
-        ASSERT(m_messagesBeingDispatched.isEmpty());
         Deque<ConnectionAndIncomingMessage> messagesToPutBack;
         for (auto& connectionAndIncomingMessage : m_messagesToDispatchWhileWaitingForSyncReply) {
             if (&connection == connectionAndIncomingMessage.connection.ptr())
@@ -238,7 +237,7 @@ void Connection::SyncMessageState::dispatchMessagesAndResetDidScheduleDispatchMe
     }
 
     while (!m_messagesBeingDispatched.isEmpty())
-        m_messagesBeingDispatched.takeFirst().dispatch();
+        m_messagesBeingDispatched.takeFirst().dispatch(); // This may cause the function to re-enter when there is a nested run loop.
 }
 
 // Represents a sync request for which we're waiting on a reply.
@@ -875,6 +874,13 @@ void Connection::addMessageObserver(const MessageObserver& observer)
 {
     m_messageObservers.append(observer);
 }
+
+void Connection::dispatchIncomingMessageForTesting(std::unique_ptr<Decoder>&& decoder)
+{
+    m_connectionQueue->dispatch([protectedThis = Ref { *this }, decoder = WTFMove(decoder)]() mutable {
+        protectedThis->processIncomingMessage(WTFMove(decoder));
+    });
+}
 #endif
 
 void Connection::postConnectionDidCloseOnConnectionWorkQueue()
@@ -1057,6 +1063,11 @@ void Connection::dispatchMessage(Decoder& decoder)
     if (decoder.messageReceiverName() == ReceiverName::AsyncReply) {
         auto handler = takeAsyncReplyHandler(*this, decoder.destinationID());
         if (!handler) {
+            markCurrentlyDispatchedMessageAsInvalid();
+#if ENABLE(IPC_TESTING_API)
+            if (m_ignoreInvalidMessageForTesting)
+                return;
+#endif
             ASSERT_NOT_REACHED();
             return;
         }
@@ -1275,17 +1286,11 @@ CompletionHandler<void(Decoder*)> takeAsyncReplyHandler(Connection& connection, 
     Locker locker { asyncReplyHandlerMapLock };
     auto& map = asyncReplyHandlerMap();
     auto iterator = map.find(reinterpret_cast<uintptr_t>(&connection));
-    if (iterator != map.end()) {
-        if (!iterator->value.isValidKey(identifier)) {
-            ASSERT_NOT_REACHED();
-            connection.markCurrentlyDispatchedMessageAsInvalid();
-            return nullptr;
-        }
-        ASSERT(iterator->value.contains(identifier));
-        return iterator->value.take(identifier);
-    }
-    ASSERT_NOT_REACHED();
-    return nullptr;
+    if (iterator == map.end())
+        return nullptr;
+    if (!iterator->value.isValidKey(identifier))
+        return nullptr;
+    return iterator->value.take(identifier);
 }
 
 void Connection::wakeUpRunLoop()

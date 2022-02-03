@@ -32,6 +32,8 @@
 
 namespace WebCore {
 
+class FileHandle;
+class FileSystemSyncAccessHandle;
 class WorkerGlobalScope;
 class WorkerThread;
 
@@ -43,20 +45,21 @@ public:
     FileSystemStorageConnection* mainThreadConnection() const { return m_mainThreadConnection.get(); }
     void connectionClosed();
     void scopeClosed();
+    void registerSyncAccessHandle(FileSystemSyncAccessHandleIdentifier, FileSystemSyncAccessHandle&);
     using CallbackIdentifier = WorkerFileSystemStorageConnectionCallbackIdentifier;
     void didIsSameEntry(CallbackIdentifier, ExceptionOr<bool>&&);
-    void didGetHandle(CallbackIdentifier, ExceptionOr<FileSystemHandleIdentifier>&&);
+    void didGetHandle(CallbackIdentifier, ExceptionOr<Ref<FileSystemHandleCloseScope>>&&);
     void didResolve(CallbackIdentifier, ExceptionOr<Vector<String>>&&);
     void completeStringCallback(CallbackIdentifier, ExceptionOr<String>&&);
-    void didCreateSyncAccessHandle(CallbackIdentifier, ExceptionOr<std::pair<FileSystemSyncAccessHandleIdentifier, FileSystem::PlatformFileHandle>>&&);
+    void didCreateSyncAccessHandle(CallbackIdentifier, ExceptionOr<std::pair<FileSystemSyncAccessHandleIdentifier, FileHandle>>&&);
     void completeVoidCallback(CallbackIdentifier, ExceptionOr<void>&& result);
     void didGetHandleNames(CallbackIdentifier, ExceptionOr<Vector<String>>&&);
-    void didGetHandleWithType(CallbackIdentifier, ExceptionOr<std::pair<FileSystemHandleIdentifier, bool>>&&);
 
 private:
     WorkerFileSystemStorageConnection(WorkerGlobalScope&, Ref<FileSystemStorageConnection>&&);
 
     // FileSystemStorageConnection
+    bool isWorker() const final { return true; }
     void closeHandle(FileSystemHandleIdentifier) final;
     void isSameEntry(FileSystemHandleIdentifier, FileSystemHandleIdentifier, FileSystemStorageConnection::SameEntryCallback&&) final;
     void move(FileSystemHandleIdentifier, FileSystemHandleIdentifier, const String& newName, VoidCallback&&) final;
@@ -65,11 +68,13 @@ private:
     void removeEntry(FileSystemHandleIdentifier, const String& name, bool deleteRecursively, FileSystemStorageConnection::VoidCallback&&) final;
     void resolve(FileSystemHandleIdentifier, FileSystemHandleIdentifier, FileSystemStorageConnection::ResolveCallback&&) final;
     void getHandleNames(FileSystemHandleIdentifier, GetHandleNamesCallback&&) final;
-    void getHandle(FileSystemHandleIdentifier, const String& name, GetHandleWithTypeCallback&&) final;
+    void getHandle(FileSystemHandleIdentifier, const String& name, GetHandleCallback&&) final;
     void getFile(FileSystemHandleIdentifier, StringCallback&&) final;
-
     void createSyncAccessHandle(FileSystemHandleIdentifier, FileSystemStorageConnection::GetAccessHandleCallback&&) final;
-    void close(FileSystemHandleIdentifier, FileSystemSyncAccessHandleIdentifier, FileSystemStorageConnection::VoidCallback&&) final;
+    void closeSyncAccessHandle(FileSystemHandleIdentifier, FileSystemSyncAccessHandleIdentifier, FileSystemStorageConnection::VoidCallback&&) final;
+    void registerSyncAccessHandle(FileSystemSyncAccessHandleIdentifier, ScriptExecutionContextIdentifier) final { };
+    void unregisterSyncAccessHandle(FileSystemSyncAccessHandleIdentifier) final;
+    void invalidateAccessHandle(FileSystemSyncAccessHandleIdentifier) final;
 
     WeakPtr<WorkerGlobalScope> m_scope;
     RefPtr<FileSystemStorageConnection> m_mainThreadConnection;
@@ -79,8 +84,13 @@ private:
     HashMap<CallbackIdentifier, FileSystemStorageConnection::GetAccessHandleCallback> m_getAccessHandlCallbacks;
     HashMap<CallbackIdentifier, FileSystemStorageConnection::VoidCallback> m_voidCallbacks;
     HashMap<CallbackIdentifier, FileSystemStorageConnection::GetHandleNamesCallback> m_getHandleNamesCallbacks;
-    HashMap<CallbackIdentifier, FileSystemStorageConnection::GetHandleWithTypeCallback> m_getHandleWithTypeCallbacks;
     HashMap<CallbackIdentifier, FileSystemStorageConnection::StringCallback> m_stringCallbacks;
+    HashMap<FileSystemSyncAccessHandleIdentifier, Function<void()>> m_accessHandleInvalidationHandlers;
+    HashMap<FileSystemSyncAccessHandleIdentifier, WeakPtr<FileSystemSyncAccessHandle>> m_syncAccessHandles;
 };
 
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::WorkerFileSystemStorageConnection)
+    static bool isType(const WebCore::FileSystemStorageConnection& connection) { return connection.isWorker(); }
+SPECIALIZE_TYPE_TRAITS_END()

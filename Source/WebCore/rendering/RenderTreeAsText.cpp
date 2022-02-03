@@ -38,6 +38,9 @@
 #include "HTMLSpanElement.h"
 #include "InlineIteratorTextBox.h"
 #include "LegacyInlineTextBox.h"
+#include "LegacyRenderSVGContainer.h"
+#include "LegacyRenderSVGRoot.h"
+#include "LegacyRenderSVGShape.h"
 #include "Logging.h"
 #include "PrintContext.h"
 #include "PseudoElement.h"
@@ -63,6 +66,7 @@
 #include "RenderSVGPath.h"
 #include "RenderSVGResourceContainer.h"
 #include "RenderSVGRoot.h"
+#include "RenderSVGShape.h"
 #include "RenderSVGText.h"
 #include "RenderTableCell.h"
 #include "RenderView.h"
@@ -469,7 +473,7 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
 void writeDebugInfo(TextStream& ts, const RenderObject& object, OptionSet<RenderAsTextFlag> behavior)
 {
     if (behavior.contains(RenderAsTextFlag::ShowIDAndClass)) {
-        if (Element* element = is<Element>(object.node()) ? downcast<Element>(object.node()) : nullptr) {
+        if (auto* element = dynamicDowncast<Element>(object.node())) {
             if (element->hasID())
                 ts << " id=\"" << element->getIdAttribute() << "\"";
 
@@ -557,8 +561,14 @@ void write(TextStream& ts, const RenderObject& o, OptionSet<RenderAsTextFlag> be
         ts << "\n";
     };
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGShape>(o)) {
         write(ts, downcast<RenderSVGShape>(o), behavior);
+        return;
+    }
+#endif
+    if (is<LegacyRenderSVGShape>(o)) {
+        write(ts, downcast<LegacyRenderSVGShape>(o), behavior);
         return;
     }
     if (is<RenderSVGGradientStop>(o)) {
@@ -569,12 +579,24 @@ void write(TextStream& ts, const RenderObject& o, OptionSet<RenderAsTextFlag> be
         writeSVGResourceContainer(ts, downcast<RenderSVGResourceContainer>(o), behavior);
         return;
     }
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGContainer>(o)) {
         writeSVGContainer(ts, downcast<RenderSVGContainer>(o), behavior);
         return;
     }
+#endif
+    if (is<LegacyRenderSVGContainer>(o)) {
+        writeSVGContainer(ts, downcast<LegacyRenderSVGContainer>(o), behavior);
+        return;
+    }
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGRoot>(o)) {
         write(ts, downcast<RenderSVGRoot>(o), behavior);
+        return;
+    }
+#endif
+    if (is<LegacyRenderSVGRoot>(o)) {
+        write(ts, downcast<LegacyRenderSVGRoot>(o), behavior);
         return;
     }
     if (is<RenderSVGText>(o)) {

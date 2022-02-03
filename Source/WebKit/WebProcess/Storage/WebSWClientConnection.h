@@ -71,7 +71,7 @@ private:
     WebSWClientConnection();
 
     void scheduleJobInServer(const WebCore::ServiceWorkerJobData&) final;
-    void finishFetchingScriptInServer(const WebCore::ServiceWorkerFetchResult&) final;
+    void finishFetchingScriptInServer(const WebCore::ServiceWorkerJobDataIdentifier&, const WebCore::ServiceWorkerRegistrationKey&, const WebCore::WorkerFetchResult&) final;
     void postMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destinationIdentifier, WebCore::MessageWithMessagePorts&&, const WebCore::ServiceWorkerOrClientIdentifier& source) final;
     void registerServiceWorkerClient(const WebCore::SecurityOrigin& topOrigin, const WebCore::ServiceWorkerClientData&, const std::optional<WebCore::ServiceWorkerRegistrationIdentifier>&, const String& userAgent) final;
     void unregisterServiceWorkerClient(WebCore::ScriptExecutionContextIdentifier) final;
@@ -81,7 +81,6 @@ private:
     void didMatchRegistration(uint64_t matchRequestIdentifier, std::optional<WebCore::ServiceWorkerRegistrationData>&&);
     void didGetRegistrations(uint64_t matchRequestIdentifier, Vector<WebCore::ServiceWorkerRegistrationData>&&);
     void whenRegistrationReady(const WebCore::SecurityOriginData& topOrigin, const URL& clientURL, WhenRegistrationReadyCallback&&) final;
-    void registrationReady(uint64_t callbackID, WebCore::ServiceWorkerRegistrationData&&);
 
     void setDocumentIsControlled(WebCore::ScriptExecutionContextIdentifier, WebCore::ServiceWorkerRegistrationData&&, CompletionHandler<void(bool)>&&);
 
@@ -92,9 +91,14 @@ private:
     void storeRegistrationsOnDiskForTesting(CompletionHandler<void()>&&) final;
     
     void subscribeToPushService(WebCore::ServiceWorkerRegistrationIdentifier, const Vector<uint8_t>& applicationServerKey, SubscribeToPushServiceCallback&&) final;
-    void unsubscribeFromPushService(WebCore::ServiceWorkerRegistrationIdentifier, UnsubscribeFromPushServiceCallback&&) final;
+    void unsubscribeFromPushService(WebCore::ServiceWorkerRegistrationIdentifier, WebCore::PushSubscriptionIdentifier, UnsubscribeFromPushServiceCallback&&) final;
     void getPushSubscription(WebCore::ServiceWorkerRegistrationIdentifier, GetPushSubscriptionCallback&&) final;
     void getPushPermissionState(WebCore::ServiceWorkerRegistrationIdentifier, GetPushPermissionStateCallback&&) final;
+
+    void enableNavigationPreload(WebCore::ServiceWorkerRegistrationIdentifier, ExceptionOrVoidCallback&&) final;
+    void disableNavigationPreload(WebCore::ServiceWorkerRegistrationIdentifier, ExceptionOrVoidCallback&&) final;
+    void setNavigationPreloadHeaderValue(WebCore::ServiceWorkerRegistrationIdentifier, String&&, ExceptionOrVoidCallback&&) final;
+    void getNavigationPreloadState(WebCore::ServiceWorkerRegistrationIdentifier, ExceptionOrNavigationPreloadStateCallback&&) final;
 
     void scheduleStorageJob(const WebCore::ServiceWorkerJobData&);
 
@@ -112,10 +116,6 @@ private:
 
     UniqueRef<WebSWOriginTable> m_swOriginTable;
 
-    uint64_t m_previousCallbackIdentifier { 0 };
-    HashMap<uint64_t, RegistrationCallback> m_ongoingMatchRegistrationTasks;
-    HashMap<uint64_t, GetRegistrationsCallback> m_ongoingGetRegistrationsTasks;
-    HashMap<uint64_t, WhenRegistrationReadyCallback> m_ongoingRegistrationReadyTasks;
     Deque<Function<void()>> m_tasksPendingOriginImport;
     bool m_isThrottleable { true };
 }; // class WebSWServerConnection

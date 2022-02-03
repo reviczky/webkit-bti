@@ -39,6 +39,7 @@
 #include <wtf/MathExtras.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RobinHoodHashSet.h>
+#include <wtf/SortedArrayMap.h>
 #include <wtf/text/AtomStringHash.h>
 #include <wtf/text/StringBuilder.h>
 
@@ -50,7 +51,7 @@ static bool useBackslashAsYenSignForFamily(const AtomString& family)
 {
     if (family.isEmpty())
         return false;
-    static const auto set = makeNeverDestroyed([] {
+    static NeverDestroyed set = [] {
         MemoryCompactLookupOnlyRobinHoodHashSet<AtomString> set;
         auto add = [&set] (const char* name, std::initializer_list<UChar> unicodeName) {
             unsigned nameLength = strlen(name);
@@ -64,7 +65,7 @@ static bool useBackslashAsYenSignForFamily(const AtomString& family)
         add("MS Mincho", { 0xFF2D, 0xFF33, 0x0020, 0x660E, 0x671D });
         add("Meiryo", { 0x30E1, 0x30A4, 0x30EA, 0x30AA });
         return set;
-    }());
+    }();
     return set.get().contains(family);
 }
 
@@ -136,7 +137,7 @@ bool FontCascade::isCurrent(const FontSelector& fontSelector) const
 {
     if (!m_fonts)
         return false;
-    if (m_fonts->generation() != fontSelector.fontCache().generation())
+    if (m_fonts->generation() != FontCache::forCurrentThread().generation())
         return false;
     if (m_fonts->fontSelectorVersion() != fontSelector.version())
         return false;
@@ -154,7 +155,7 @@ void FontCascade::updateFonts(Ref<FontCascadeFonts>&& fonts) const
 
 void FontCascade::update(RefPtr<FontSelector>&& fontSelector) const
 {
-    FontCache::fontCacheFallingBackToSingleton(fontSelector).updateFontCascade(*this, WTFMove(fontSelector));
+    FontCache::forCurrentThread().updateFontCascade(*this, WTFMove(fontSelector));
 }
 
 GlyphBuffer FontCascade::layoutText(CodePath codePathToUse, const TextRun& run, unsigned from, unsigned to, ForTextEmphasisOrNot forTextEmphasis) const
@@ -213,7 +214,7 @@ std::unique_ptr<DisplayList::InMemoryDisplayList> FontCascade::displayListForTex
         return nullptr;
     
     std::unique_ptr<DisplayList::InMemoryDisplayList> displayList = makeUnique<DisplayList::InMemoryDisplayList>();
-    DisplayList::RecorderImpl recordingContext(*displayList, context.state(), FloatRect(), AffineTransform(), nullptr, DrawGlyphsRecorder::DeconstructDrawGlyphs::No);
+    DisplayList::RecorderImpl recordingContext(*displayList, context.state(), FloatRect(), AffineTransform(), DrawGlyphsRecorder::DeconstructDrawGlyphs::No);
     
     FloatPoint startPoint = toFloatPoint(WebCore::size(glyphBuffer.initialAdvance()));
     drawGlyphBuffer(recordingContext, glyphBuffer, startPoint, customFontNotReadyAction);
@@ -373,43 +374,44 @@ bool FontCascade::hasValidAverageCharWidth() const
         return false;
 #endif
 
-    static const auto map = makeNeverDestroyed(MemoryCompactLookupOnlyRobinHoodHashSet<AtomString> {
-        "American Typewriter"_s,
-        "Arial Hebrew"_s,
-        "Chalkboard"_s,
-        "Cochin"_s,
-        "Corsiva Hebrew"_s,
-        "Courier"_s,
-        "Euphemia UCAS"_s,
-        "Geneva"_s,
-        "Gill Sans"_s,
-        "Hei"_s,
-        "Helvetica"_s,
-        "Hoefler Text"_s,
-        "InaiMathi"_s,
-        "Kai"_s,
-        "Lucida Grande"_s,
-        "Marker Felt"_s,
-        "Monaco"_s,
-        "Mshtakan"_s,
-        "New Peninim MT"_s,
-        "Osaka"_s,
-        "Raanana"_s,
-        "STHeiti"_s,
-        "Symbol"_s,
-        "Times"_s,
-        "Apple Braille"_s,
-        "Apple LiGothic"_s,
-        "Apple LiSung"_s,
-        "Apple Symbols"_s,
-        "AppleGothic"_s,
-        "AppleMyungjo"_s,
-        "#GungSeo"_s,
-        "#HeadLineA"_s,
-        "#PCMyungjo"_s,
-        "#PilGi"_s,
-    });
-    return !map.get().contains(family);
+    static constexpr ComparableASCIILiteral names[] = {
+        "#GungSeo",
+        "#HeadLineA",
+        "#PCMyungjo",
+        "#PilGi",
+        "American Typewriter",
+        "Apple Braille",
+        "Apple LiGothic",
+        "Apple LiSung",
+        "Apple Symbols",
+        "AppleGothic",
+        "AppleMyungjo",
+        "Arial Hebrew",
+        "Chalkboard",
+        "Cochin",
+        "Corsiva Hebrew",
+        "Courier",
+        "Euphemia UCAS",
+        "Geneva",
+        "Gill Sans",
+        "Hei",
+        "Helvetica",
+        "Hoefler Text",
+        "InaiMathi",
+        "Kai",
+        "Lucida Grande",
+        "Marker Felt",
+        "Monaco",
+        "Mshtakan",
+        "New Peninim MT",
+        "Osaka",
+        "Raanana",
+        "STHeiti",
+        "Symbol",
+        "Times",
+    };
+    static constexpr SortedArraySet set { names };
+    return !set.contains(family);
 }
 
 bool FontCascade::fastAverageCharWidthIfAvailable(float& width) const
@@ -1001,7 +1003,6 @@ std::pair<unsigned, bool> FontCascade::expansionOpportunityCountInternal(const L
 
 std::pair<unsigned, bool> FontCascade::expansionOpportunityCountInternal(const UChar* characters, unsigned length, TextDirection direction, ExpansionBehavior expansionBehavior)
 {
-    static bool expandAroundIdeographs = canExpandAroundIdeographsInComplexText();
     unsigned count = 0;
     bool isAfterExpansion = (expansionBehavior & LeftExpansionMask) == ForbidLeftExpansion;
     if ((expansionBehavior & LeftExpansionMask) == ForceLeftExpansion) {
@@ -1020,7 +1021,7 @@ std::pair<unsigned, bool> FontCascade::expansionOpportunityCountInternal(const U
                 character = U16_GET_SUPPLEMENTARY(character, characters[i + 1]);
                 i++;
             }
-            if (expandAroundIdeographs && isCJKIdeographOrSymbol(character)) {
+            if (canExpandAroundIdeographsInComplexText() && isCJKIdeographOrSymbol(character)) {
                 if (!isAfterExpansion)
                     count++;
                 count++;
@@ -1041,7 +1042,7 @@ std::pair<unsigned, bool> FontCascade::expansionOpportunityCountInternal(const U
                 character = U16_GET_SUPPLEMENTARY(characters[i - 2], character);
                 i--;
             }
-            if (expandAroundIdeographs && isCJKIdeographOrSymbol(character)) {
+            if (canExpandAroundIdeographsInComplexText() && isCJKIdeographOrSymbol(character)) {
                 if (!isAfterExpansion)
                     count++;
                 count++;
@@ -1412,8 +1413,8 @@ float FontCascade::floatWidthForSimpleText(const TextRun& run, HashSet<const Fon
     it.finalize(glyphBuffer);
 
     if (glyphOverflow) {
-        glyphOverflow->top = std::max<int>(glyphOverflow->top, ceilf(-it.minGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : fontMetrics().ascent()));
-        glyphOverflow->bottom = std::max<int>(glyphOverflow->bottom, ceilf(it.maxGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : fontMetrics().descent()));
+        glyphOverflow->top = std::max<int>(glyphOverflow->top, ceilf(-it.minGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().ascent()));
+        glyphOverflow->bottom = std::max<int>(glyphOverflow->bottom, ceilf(it.maxGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().descent()));
         glyphOverflow->left = ceilf(it.firstGlyphOverflow());
         glyphOverflow->right = ceilf(it.lastGlyphOverflow());
     }
@@ -1425,8 +1426,8 @@ float FontCascade::floatWidthForComplexText(const TextRun& run, HashSet<const Fo
 {
     ComplexTextController controller(*this, run, true, fallbackFonts);
     if (glyphOverflow) {
-        glyphOverflow->top = std::max<int>(glyphOverflow->top, ceilf(-controller.minGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : fontMetrics().ascent()));
-        glyphOverflow->bottom = std::max<int>(glyphOverflow->bottom, ceilf(controller.maxGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : fontMetrics().descent()));
+        glyphOverflow->top = std::max<int>(glyphOverflow->top, ceilf(-controller.minGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().ascent()));
+        glyphOverflow->bottom = std::max<int>(glyphOverflow->bottom, ceilf(controller.maxGlyphBoundingBoxY()) - (glyphOverflow->computeBounds ? 0 : metricsOfPrimaryFont().descent()));
         glyphOverflow->left = std::max<int>(0, ceilf(-controller.minGlyphBoundingBoxX()));
         glyphOverflow->right = std::max<int>(0, ceilf(controller.maxGlyphBoundingBoxX() - controller.totalAdvance().width()));
     }

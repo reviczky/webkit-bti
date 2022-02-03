@@ -110,6 +110,7 @@ enum class RouteSharingPolicy : uint8_t;
 enum class ScrollbarStyle : uint8_t;
 enum class TextIndicatorLifetime : uint8_t;
 enum class TextIndicatorDismissalAnimation : uint8_t;
+enum class DOMPasteAccessCategory : uint8_t;
 enum class DOMPasteAccessResponse : uint8_t;
 enum class ScrollIsAnimated : uint8_t;
 
@@ -328,7 +329,7 @@ public:
 #endif
 
 #if USE(APPKIT)
-    virtual void setPromisedDataForImage(const String& pasteboardName, Ref<WebCore::SharedBuffer>&& imageBuffer, const String& filename, const String& extension, const String& title, const String& url, const String& visibleURL, RefPtr<WebCore::SharedBuffer>&& archiveBuffer, const String& originIdentifier) = 0;
+    virtual void setPromisedDataForImage(const String& pasteboardName, Ref<WebCore::FragmentedSharedBuffer>&& imageBuffer, const String& filename, const String& extension, const String& title, const String& url, const String& visibleURL, RefPtr<WebCore::FragmentedSharedBuffer>&& archiveBuffer, const String& originIdentifier) = 0;
 #endif
 
     virtual WebCore::FloatRect convertToDeviceSpace(const WebCore::FloatRect&) = 0;
@@ -386,7 +387,7 @@ public:
     virtual RefPtr<WebDateTimePicker> createDateTimePicker(WebPageProxy&) = 0;
 #endif
 
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || PLATFORM(GTK)
     virtual Ref<WebCore::ValidationBubble> createValidationBubble(const String& message, const WebCore::ValidationBubble::Settings&) = 0;
 #endif
 
@@ -421,7 +422,6 @@ public:
 #endif
 
 #if PLATFORM(MAC)
-    virtual void pluginFocusOrWindowFocusChanged(uint64_t pluginComplexTextInputIdentifier, bool pluginHasFocusAndWindowHasFocus) = 0;
     virtual void showCorrectionPanel(WebCore::AlternativeTextType, const WebCore::FloatRect& boundingBoxOfReplacedString, const String& replacedString, const String& replacementString, const Vector<String>& alternativeReplacementStrings) = 0;
     virtual void dismissCorrectionPanel(WebCore::ReasonForDismissingAlternativeText) = 0;
     virtual String dismissCorrectionPanelSoon(WebCore::ReasonForDismissingAlternativeText) = 0;
@@ -432,6 +432,8 @@ public:
     virtual CGRect boundsOfLayerInLayerBackedWindowCoordinates(CALayer *) const = 0;
 
     virtual WebCore::DestinationColorSpace colorSpace() = 0;
+    
+    virtual NSView *viewForPresentingRevealPopover() const = 0;
 
     virtual void showPlatformContextMenu(NSMenu *, WebCore::IntPoint) = 0;
 
@@ -563,8 +565,14 @@ public:
 
     virtual void microphoneCaptureWillChange() { }
     virtual void cameraCaptureWillChange() { }
+    virtual void displayCaptureWillChange() { }
+    virtual void displayCaptureSurfacesWillChange() { }
+    virtual void systemAudioCaptureWillChange() { }
     virtual void microphoneCaptureChanged() { }
     virtual void cameraCaptureChanged() { }
+    virtual void displayCaptureChanged() { }
+    virtual void displayCaptureSurfacesChanged() { }
+    virtual void systemAudioCaptureChanged() { }
 
     virtual void videoControlsManagerDidChange() { }
 
@@ -599,7 +607,7 @@ public:
     virtual void didChangeDragCaretRect(const WebCore::IntRect& previousCaretRect, const WebCore::IntRect& caretRect) = 0;
 #endif
 
-    virtual void requestDOMPasteAccess(const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) = 0;
+    virtual void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&) = 0;
 
 #if ENABLE(ATTACHMENT_ELEMENT)
     virtual void didInsertAttachment(API::Attachment&, const String& source) { }
@@ -635,6 +643,10 @@ public:
 
 #if ENABLE(DATA_DETECTION)
     virtual void handleClickForDataDetectionResult(const WebCore::DataDetectorElementInfo&, const WebCore::IntPoint&) { }
+#endif
+
+#if USE(GRAPHICS_LAYER_WC)
+    virtual bool usesOffscreenRendering() const = 0;
 #endif
 };
 

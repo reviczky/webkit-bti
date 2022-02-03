@@ -133,6 +133,7 @@ bool canUseWebAssemblyFastMemory();
     v(Bool, dumpFTLDisassembly, false, Normal, "dumps disassembly of FTL function upon compilation") \
     v(Bool, dumpRegExpDisassembly, false, Normal, "dumps disassembly of RegExp upon compilation") \
     v(Bool, dumpWasmDisassembly, false, Normal, "dumps disassembly of all Wasm code upon compilation") \
+    v(OptionString, wasmB3FunctionsToDump, nullptr, Normal, "file with newline separated list of function indices to dump IR/disassembly for, if no such file exists, the function index itself") \
     v(Bool, dumpBBQDisassembly, false, Normal, "dumps disassembly of BBQ Wasm code upon compilation") \
     v(Bool, dumpOMGDisassembly, false, Normal, "dumps disassembly of OMG Wasm code upon compilation") \
     v(Bool, logJITCodeForPerf, false, Configurable, nullptr) \
@@ -537,8 +538,10 @@ bool canUseWebAssemblyFastMemory();
     /* Feature Flags */\
     \
     v(Bool, useArrayFindLastMethod, true, Normal, "Expose the findLast() and findLastIndex() methods on Array and %TypedArray%.") \
+    v(Bool, useArrayGroupByMethod, false, Normal, "Expose the groupBy() and groupByToMap() methods on Array.") \
     v(Bool, useAtMethod, true, Normal, "Expose the at() method on Array, %TypedArray%, and String.") \
     v(Bool, useHasOwn, true, Normal, "Expose the Object.hasOwn method") \
+    v(Bool, useImportAssertion, false, Normal, "Enable import assertion.") \
     v(Bool, useIntlEnumeration, true, Normal, "Expose the Intl enumeration APIs.") \
     v(Bool, useSharedArrayBuffer, false, Normal, nullptr) \
     /* FIXME: ShadownRealm can be enabled once WebCore's JSGlobalObject == JSDOMGlobalObject assumption is removed,  https://bugs.webkit.org/show_bug.cgi?id=231506 */\
@@ -547,6 +550,7 @@ bool canUseWebAssemblyFastMemory();
     v(Bool, useWebAssemblyThreading, true, Normal, "Allow instructions from the wasm threading spec.") \
     v(Bool, useWebAssemblyTypedFunctionReferences, false, Normal, "Allow function types from the wasm typed function references spec.") \
     v(Bool, useWebAssemblyExceptions, true, Normal, "Allow the new section and instructions from the wasm exception handling spec.") \
+    v(Bool, useWebAssemblyBranchHints, true, Normal, "Allow the new section from the wasm branch hinting spec.") \
 
 
 enum OptionEquivalence {

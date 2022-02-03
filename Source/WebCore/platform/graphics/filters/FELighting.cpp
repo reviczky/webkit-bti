@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2010 University of Szeged
  * Copyright (C) 2010 Zoltan Herczeg
- * Copyright (C) 2018-2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2018-2022 Apple Inc.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,7 @@
 #include "FELighting.h"
 
 #include "FELightingSoftwareApplier.h"
+#include "Filter.h"
 
 namespace WebCore {
 
@@ -81,9 +82,14 @@ bool FELighting::setKernelUnitLengthY(float kernelUnitLengthY)
     return true;
 }
 
-bool FELighting::platformApplySoftware(const Filter& filter)
+FloatRect FELighting::calculateImageRect(const Filter& filter, const FilterImageVector&, const FloatRect& primitiveSubregion) const
 {
-    return FELightingSoftwareApplier(*this).apply(filter, inputEffects());
+    return filter.maxEffectRect(primitiveSubregion);
+}
+
+std::unique_ptr<FilterEffectApplier> FELighting::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FELightingSoftwareApplier>(*this);
 }
 
 } // namespace WebCore

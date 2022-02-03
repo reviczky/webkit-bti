@@ -55,8 +55,7 @@
 namespace WebCore {
 
 WorkerThreadableLoader::WorkerThreadableLoader(WorkerOrWorkletGlobalScope& workerOrWorkletGlobalScope, ThreadableLoaderClient& client, const String& taskMode, ResourceRequest&& request, const ThreadableLoaderOptions& options, const String& referrer)
-    : m_WorkerOrWorkletGlobalScope(workerOrWorkletGlobalScope)
-    , m_workerClientWrapper(ThreadableLoaderClientWrapper::create(client, options.initiator))
+    : m_workerClientWrapper(ThreadableLoaderClientWrapper::create(client, options.initiator))
     , m_bridge(*new MainThreadBridge(m_workerClientWrapper.get(), workerOrWorkletGlobalScope.workerOrWorkletThread()->workerLoaderProxy(), taskMode, WTFMove(request), options, referrer.isEmpty() ? workerOrWorkletGlobalScope.url().strippedForUseAsReferrer() : referrer, workerOrWorkletGlobalScope))
 {
 }
@@ -231,25 +230,24 @@ void WorkerThreadableLoader::MainThreadBridge::didReceiveResponse(ResourceLoader
     }, m_taskMode);
 }
 
-void WorkerThreadableLoader::MainThreadBridge::didReceiveData(const uint8_t* data, int dataLength)
+void WorkerThreadableLoader::MainThreadBridge::didReceiveData(const SharedBuffer& data)
 {
-    Vector<uint8_t> buffer(data, dataLength);
-    m_loaderProxy.postTaskForModeToWorkerOrWorkletGlobalScope([protectedWorkerClientWrapper = Ref { *m_workerClientWrapper }, workerRequestIdentifier = m_workerRequestIdentifier, buffer = WTFMove(buffer)] (ScriptExecutionContext& context) mutable {
+    m_loaderProxy.postTaskForModeToWorkerOrWorkletGlobalScope([protectedWorkerClientWrapper = Ref { *m_workerClientWrapper }, workerRequestIdentifier = m_workerRequestIdentifier, buffer = Ref { data }] (ScriptExecutionContext& context) {
         ASSERT(context.isWorkerGlobalScope() || context.isWorkletGlobalScope());
-        protectedWorkerClientWrapper->didReceiveData(buffer.data(), buffer.size());
+        protectedWorkerClientWrapper->didReceiveData(buffer);
         if (is<WorkerGlobalScope>(context))
-            InspectorInstrumentation::didReceiveData(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, buffer.data(), buffer.size());
+            InspectorInstrumentation::didReceiveData(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, buffer);
     }, m_taskMode);
 }
 
-void WorkerThreadableLoader::MainThreadBridge::didFinishLoading(ResourceLoaderIdentifier identifier)
+void WorkerThreadableLoader::MainThreadBridge::didFinishLoading(ResourceLoaderIdentifier identifier, const NetworkLoadMetrics& metrics)
 {
     m_loadingFinished = true;
-    m_loaderProxy.postTaskForModeToWorkerOrWorkletGlobalScope([protectedWorkerClientWrapper = Ref { *m_workerClientWrapper }, workerRequestIdentifier = m_workerRequestIdentifier, networkLoadMetrics = m_networkLoadMetrics.isolatedCopy(), identifier] (ScriptExecutionContext& context) mutable {
+    m_loaderProxy.postTaskForModeToWorkerOrWorkletGlobalScope([protectedWorkerClientWrapper = Ref { *m_workerClientWrapper }, workerRequestIdentifier = m_workerRequestIdentifier, metrics = metrics.isolatedCopy(), identifier] (ScriptExecutionContext& context) mutable {
         ASSERT(context.isWorkerGlobalScope() || context.isWorkletGlobalScope());
-        protectedWorkerClientWrapper->didFinishLoading(identifier);
+        protectedWorkerClientWrapper->didFinishLoading(identifier, metrics);
         if (is<WorkerGlobalScope>(context))
-            InspectorInstrumentation::didFinishLoading(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, networkLoadMetrics);
+            InspectorInstrumentation::didFinishLoading(downcast<WorkerGlobalScope>(context), workerRequestIdentifier, metrics);
     }, m_taskMode);
 }
 

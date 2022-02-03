@@ -349,7 +349,7 @@ LayoutSize RenderBoxModelObject::relativePositionOffset() const
     // https://drafts.csswg.org/css-grid/#grid-item-sizing
     if (!style().left().isAuto() || !style().right().isAuto()) {
         LayoutUnit availableWidth = hasOverridingContainingBlockContentWidth()
-            ? overridingContainingBlockContentWidth().value_or(LayoutUnit()) : containingBlock()->availableWidth();
+            ? valueOrDefault(overridingContainingBlockContentWidth()) : containingBlock()->availableWidth();
         if (!style().left().isAuto()) {
             if (!style().right().isAuto() && !containingBlock()->style().isLeftToRightDirection())
                 offset.setWidth(-valueForLength(style().right(), !style().right().isFixed() ? availableWidth : 0_lu));
@@ -2422,6 +2422,9 @@ void RenderBoxModelObject::paintBoxShadow(const PaintInfo& info, const LayoutRec
     RoundedRect borderRect = (shadowStyle == ShadowStyle::Inset) ? style.getRoundedInnerBorderFor(paintRect, includeLogicalLeftEdge, includeLogicalRightEdge)
         : style.getRoundedBorderFor(paintRect, includeLogicalLeftEdge, includeLogicalRightEdge);
 
+    if (!borderRect.isRenderable())
+        borderRect.adjustRadii();
+
     bool hasBorderRadius = style.hasBorderRadius();
     float deviceScaleFactor = document().deviceScaleFactor();
 
@@ -2604,6 +2607,19 @@ RenderInline* RenderBoxModelObject::inlineContinuation() const
             return downcast<RenderInline>(next->renderer.get());
     }
     return nullptr;
+}
+
+void RenderBoxModelObject::forRendererAndContinuations(RenderBoxModelObject& renderer, const std::function<void(RenderBoxModelObject&)>& function)
+{
+    function(renderer);
+    if (!renderer.hasContinuationChainNode())
+        return;
+
+    for (auto* next = continuationChainNodeMap().get(&renderer)->next; next; next = next->next) {
+        if (!next->renderer)
+            continue;
+        function(*next->renderer);
+    }
 }
 
 RenderBoxModelObject::ContinuationChainNode* RenderBoxModelObject::continuationChainNode() const

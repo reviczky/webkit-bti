@@ -128,6 +128,7 @@ void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
     encoder << serviceWorkersMode;
     encoder << serviceWorkerRegistrationIdentifier;
     encoder << httpHeadersToKeep;
+    encoder << navigationPreloadIdentifier;
 #endif
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -136,6 +137,7 @@ void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
 #endif
     
     encoder << isNavigatingToAppBoundDomain;
+    encoder << mainResourceWasPrivateRelayed;
 }
 
 std::optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::decode(IPC::Decoder& decoder)
@@ -362,6 +364,12 @@ std::optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::deco
     if (!httpHeadersToKeep)
         return std::nullopt;
     result.httpHeadersToKeep = WTFMove(*httpHeadersToKeep);
+
+    std::optional<std::optional<FetchIdentifier>> navigationPreloadIdentifier;
+    decoder >> navigationPreloadIdentifier;
+    if (!navigationPreloadIdentifier)
+        return std::nullopt;
+    result.navigationPreloadIdentifier = *navigationPreloadIdentifier;
 #endif
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -381,6 +389,12 @@ std::optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::deco
         return std::nullopt;
     result.isNavigatingToAppBoundDomain = *isNavigatingToAppBoundDomain;
     
+    std::optional<bool> mainResourceWasPrivateRelayed;
+    decoder >> mainResourceWasPrivateRelayed;
+    if (!mainResourceWasPrivateRelayed)
+        return std::nullopt;
+    result.mainResourceWasPrivateRelayed = *mainResourceWasPrivateRelayed;
+
     return result;
 }
     

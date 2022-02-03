@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2008 Alex Mathews <possessedpenguinbob@gmail.com>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -27,18 +27,20 @@ namespace WebCore {
 
 class SourceGraphic : public FilterEffect {
 public:        
-    static Ref<SourceGraphic> create();
+    WEBCORE_EXPORT static Ref<SourceGraphic> create();
 
     static AtomString effectName() { return FilterEffect::sourceGraphicName(); }
 
 private:
     SourceGraphic();
 
-    void determineAbsolutePaintRect(const Filter&) override;
+    unsigned numberOfEffectInputs() const override { return 0; }
 
-    bool platformApplySoftware(const Filter&) override;
+    bool supportsAcceleratedRendering() const override;
+    std::unique_ptr<FilterEffectApplier> createAcceleratedApplier() const override;
+    std::unique_ptr<FilterEffectApplier> createSoftwareApplier() const override;
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, FilterRepresentation) const override;
 };
 
 } //namespace WebCore

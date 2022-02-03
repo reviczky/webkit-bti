@@ -40,6 +40,7 @@ class FetchEvent;
 class FetchResponse;
 class PushSubscription;
 class ScriptExecutionContext;
+class ServiceWorkerClient;
 
 template<typename IDLType> class DOMPromiseDeferred;
 
@@ -68,6 +69,10 @@ public:
     void lastNavigationWasAppInitiated(Ref<DeferredPromise>&&);
     
     RefPtr<PushSubscription> createPushSubscription(const String& endpoint, std::optional<EpochTimeStamp> expirationTime, const ArrayBuffer& serverVAPIDPublicKey, const ArrayBuffer& clientECDHPublicKey, const ArrayBuffer& auth);
+
+    bool fetchEventIsSameSite(FetchEvent&);
+
+    String serviceWorkerClientInternalIdentifier(const ServiceWorkerClient&);
 
 private:
     explicit ServiceWorkerInternals(ServiceWorkerIdentifier);

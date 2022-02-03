@@ -31,6 +31,7 @@
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkProcessConnection.h"
 #include "NetworkResourceLoadParameters.h"
+#include "RemoteWorkerFrameLoaderClient.h"
 #include "WebCompiledContentRuleList.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebDocumentLoader.h"
@@ -116,7 +117,7 @@ void WebLoaderStrategy::loadResource(Frame& frame, CachedResource& resource, Res
         if (loader)
             scheduleLoad(*loader, resource.get(), referrerPolicy == ReferrerPolicy::NoReferrerWhenDowngrade);
         else
-            RELEASE_LOG(Network, "%p - [webPageID=%" PRIu64 ", frameID=%" PRIu64 "] WebLoaderStrategy::loadResource: Unable to create SubresourceLoader", this, frame->pageID().value_or(PageIdentifier()).toUInt64(), frame->frameID().value_or(FrameIdentifier()).toUInt64());
+            RELEASE_LOG(Network, "%p - [webPageID=%" PRIu64 ", frameID=%" PRIu64 "] WebLoaderStrategy::loadResource: Unable to create SubresourceLoader", this, valueOrDefault(frame->pageID()).toUInt64(), valueOrDefault(frame->frameID()).toUInt64());
         completionHandler(WTFMove(loader));
     });
 }
@@ -178,13 +179,11 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
 
     WebResourceLoader::TrackingParameters trackingParameters;
     if (auto* webFrameLoaderClient = toWebFrameLoaderClient(frameLoaderClient))
-        trackingParameters.webPageProxyID = webFrameLoaderClient->webPageProxyID().value_or(WebPageProxyIdentifier { });
-#if ENABLE(SERVICE_WORKER)
-    else if (is<ServiceWorkerFrameLoaderClient>(frameLoaderClient))
-        trackingParameters.webPageProxyID = downcast<ServiceWorkerFrameLoaderClient>(frameLoaderClient).webPageProxyID();
-#endif
-    trackingParameters.pageID = frameLoaderClient.pageID().value_or(PageIdentifier { });
-    trackingParameters.frameID = frameLoaderClient.frameID().value_or(FrameIdentifier { });
+        trackingParameters.webPageProxyID = valueOrDefault(webFrameLoaderClient->webPageProxyID());
+    else if (is<RemoteWorkerFrameLoaderClient>(frameLoaderClient))
+        trackingParameters.webPageProxyID = downcast<RemoteWorkerFrameLoaderClient>(frameLoaderClient).webPageProxyID();
+    trackingParameters.pageID = valueOrDefault(frameLoaderClient.pageID());
+    trackingParameters.frameID = valueOrDefault(frameLoaderClient.frameID());
     trackingParameters.resourceID = identifier;
 
 #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
@@ -277,6 +276,11 @@ static void addParametersShared(const Frame* frame, NetworkResourceLoadParameter
     if (!frame)
         return;
 
+    if (auto* mainFrameDocument = frame->mainFrame().document()) {
+        if (auto* mainDocumentLoader = mainFrameDocument->loader())
+            parameters.mainResourceWasPrivateRelayed = mainDocumentLoader->mainResourceWasPrivateRelayed();
+    }
+    
     if (auto* document = frame->document())
         parameters.crossOriginEmbedderPolicy = document->crossOriginEmbedderPolicy();
 
@@ -299,13 +303,26 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     auto identifier = resourceLoader.identifier();
     ASSERT(identifier);
 
+    auto* frame = resourceLoader.frame();
+
+    if (auto* page = frame ? frame->page() : nullptr) {
+        auto mainFrameMainResource = frame->isMainFrame()
+            && resourceLoader.frameLoader()
+            && resourceLoader.frameLoader()->notifier().isInitialRequestIdentifier(identifier)
+            ? MainFrameMainResource::Yes : MainFrameMainResource::No;
+        if (!page->allowsLoadFromURL(request.url(), mainFrameMainResource)) {
+            RunLoop::main().dispatch([resourceLoader = Ref { resourceLoader }] {
+                resourceLoader->didFail(resourceLoader->blockedError());
+            });
+            return;
+        }
+    }
+
     ContentSniffingPolicy contentSniffingPolicy = resourceLoader.shouldSniffContent() ? ContentSniffingPolicy::SniffContent : ContentSniffingPolicy::DoNotSniffContent;
     ContentEncodingSniffingPolicy contentEncodingSniffingPolicy = resourceLoader.shouldSniffContentEncoding() ? ContentEncodingSniffingPolicy::Sniff : ContentEncodingSniffingPolicy::DoNotSniff;
     StoredCredentialsPolicy storedCredentialsPolicy = resourceLoader.shouldUseCredentialStorage() ? StoredCredentialsPolicy::Use : StoredCredentialsPolicy::DoNotUse;
 
     LOG(NetworkScheduling, "(WebProcess) WebLoaderStrategy::scheduleLoad, url '%s' will be scheduled with the NetworkProcess with priority %d, storedCredentialsPolicy %i", resourceLoader.url().string().latin1().data(), static_cast<int>(resourceLoader.request().priority()), (int)storedCredentialsPolicy);
-
-    auto* frame = resourceLoader.frame();
 
     NetworkResourceLoadParameters loadParameters;
     loadParameters.identifier = identifier;
@@ -333,6 +350,8 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     loadParameters.serviceWorkersMode = resourceLoader.options().loadedFromOpaqueSource == LoadedFromOpaqueSource::No ? resourceLoader.options().serviceWorkersMode : ServiceWorkersMode::None;
     loadParameters.serviceWorkerRegistrationIdentifier = resourceLoader.options().serviceWorkerRegistrationIdentifier;
     loadParameters.httpHeadersToKeep = resourceLoader.options().httpHeadersToKeep;
+    if (resourceLoader.options().navigationPreloadIdentifier)
+        loadParameters.navigationPreloadIdentifier = resourceLoader.options().navigationPreloadIdentifier;
 #endif
 
     auto* document = frame ? frame->document() : nullptr;
@@ -359,6 +378,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
 #if ENABLE(CONTENT_EXTENSIONS)
     if (document) {
         loadParameters.mainDocumentURL = document->topDocument().url();
+        loadParameters.frameURL = document->url();
         // FIXME: Instead of passing userContentControllerIdentifier, the NetworkProcess should be able to get it using webPageId.
         if (auto* webPage = webFrame ? webFrame->page() : nullptr)
             loadParameters.userContentControllerIdentifier = webPage->userContentControllerIdentifier();
@@ -425,6 +445,13 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
         for (auto* frame = resourceLoader.frame()->tree().parent(); frame; frame = frame->tree().parent())
             frameAncestorOrigins.append(&frame->document()->securityOrigin());
         loadParameters.frameAncestorOrigins = WTFMove(frameAncestorOrigins);
+
+#if ENABLE(SERVICE_WORKER)
+        if (auto* documentLoader = resourceLoader.documentLoader()) {
+            if (auto resultingClientId = static_cast<WebDocumentLoader&>(*documentLoader).resultingClientId())
+                loadParameters.options.clientIdentifier = resultingClientId;
+        }
+#endif
     }
 
     ASSERT((loadParameters.webPageID && loadParameters.webFrameID) || loadParameters.clientCredentialPolicy == ClientCredentialPolicy::CannotAskClientForCredentials);
@@ -432,7 +459,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     std::optional<NetworkResourceLoadIdentifier> existingNetworkResourceLoadIdentifierToResume;
     if (loadParameters.isMainFrameNavigation)
         existingNetworkResourceLoadIdentifierToResume = std::exchange(m_existingNetworkResourceLoadIdentifierToResume, std::nullopt);
-    WEBLOADERSTRATEGY_RELEASE_LOG("scheduleLoad: Resource is being scheduled with the NetworkProcess (priority=%d, existingNetworkResourceLoadIdentifierToResume=%" PRIu64 ")", static_cast<int>(resourceLoader.request().priority()), existingNetworkResourceLoadIdentifierToResume.value_or(NetworkResourceLoadIdentifier { }).toUInt64());
+    WEBLOADERSTRATEGY_RELEASE_LOG("scheduleLoad: Resource is being scheduled with the NetworkProcess (priority=%d, existingNetworkResourceLoadIdentifierToResume=%" PRIu64 ")", static_cast<int>(resourceLoader.request().priority()), valueOrDefault(existingNetworkResourceLoadIdentifierToResume).toUInt64());
     if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::ScheduleResourceLoad(loadParameters, existingNetworkResourceLoadIdentifierToResume), 0)) {
         WEBLOADERSTRATEGY_RELEASE_LOG_ERROR("scheduleLoad: Unable to schedule resource with the NetworkProcess (priority=%d)", static_cast<int>(resourceLoader.request().priority()));
         // We probably failed to schedule this load with the NetworkProcess because it had crashed.
@@ -750,6 +777,7 @@ void WebLoaderStrategy::startPingLoad(Frame& frame, ResourceRequest& request, co
 
 #if ENABLE(CONTENT_EXTENSIONS)
     loadParameters.mainDocumentURL = document->topDocument().url();
+    loadParameters.frameURL = document->url();
     // FIXME: Instead of passing userContentControllerIdentifier, we should just pass webPageId to NetworkProcess.
     loadParameters.userContentControllerIdentifier = webPage->userContentControllerIdentifier();
 #endif

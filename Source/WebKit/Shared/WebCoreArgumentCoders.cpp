@@ -26,10 +26,8 @@
 #include "config.h"
 #include "WebCoreArgumentCoders.h"
 
-#include "DataReference.h"
 #include "ShareableBitmap.h"
 #include "ShareableResource.h"
-#include "SharedBufferDataReference.h"
 #include "StreamConnectionEncoder.h"
 #include <JavaScriptCore/GenericTypedArrayViewInlines.h>
 #include <JavaScriptCore/JSGenericTypedArrayViewInlines.h>
@@ -85,6 +83,7 @@
 #include <WebCore/ServiceWorkerClientData.h>
 #include <WebCore/ServiceWorkerData.h>
 #include <WebCore/ShareData.h>
+#include <WebCore/SharedBuffer.h>
 #include <WebCore/TextCheckerClient.h>
 #include <WebCore/TextIndicator.h>
 #include <WebCore/TimingFunction.h>
@@ -103,7 +102,6 @@
 
 #if PLATFORM(IOS_FAMILY)
 #include <WebCore/SelectionGeometry.h>
-#include <WebCore/SharedBuffer.h>
 #endif // PLATFORM(IOS_FAMILY)
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -164,7 +162,7 @@ DEFINE_SIMPLE_ARGUMENT_CODER_FOR_SOURCE(DisplayList::SetInlineStrokeColor)
 
 #undef DEFINE_SIMPLE_ARGUMENT_CODER_FOR_SOURCE
 
-static void encodeSharedBuffer(Encoder& encoder, const SharedBuffer* buffer)
+static void encodeSharedBuffer(Encoder& encoder, const FragmentedSharedBuffer* buffer)
 {
     bool isNull = !buffer;
     encoder << isNull;
@@ -177,7 +175,7 @@ static void encodeSharedBuffer(Encoder& encoder, const SharedBuffer* buffer)
         return;
 
 #if USE(UNIX_DOMAIN_SOCKETS)
-    // Do not use shared memory for SharedBuffer encoding in Unix, because it's easy to reach the
+    // Do not use shared memory for FragmentedSharedBuffer encoding in Unix, because it's easy to reach the
     // maximum number of file descriptors open per process when sending large data in small chunks
     // over the IPC. ConnectionUnix.cpp already uses shared memory to send any IPC message that is
     // too large. See https://bugs.webkit.org/show_bug.cgi?id=208571.
@@ -234,7 +232,7 @@ static WARN_UNUSED_RETURN bool decodeSharedBuffer(Decoder& decoder, RefPtr<Share
     if (sharedMemoryBuffer->size() < bufferSize)
         return false;
 
-    buffer = SharedBuffer::create(static_cast<unsigned char*>(sharedMemoryBuffer->data()), bufferSize);
+    buffer = sharedMemoryBuffer->createSharedBuffer(bufferSize);
 #endif
 
     return true;
@@ -264,7 +262,7 @@ static WARN_UNUSED_RETURN bool decodeTypesAndData(Decoder& decoder, Vector<Strin
         RefPtr<SharedBuffer> buffer;
         if (!decodeSharedBuffer(decoder, buffer))
             return false;
-        data.append(WTFMove(buffer));
+        data.append(buffer);
     }
 
     return true;
@@ -962,11 +960,11 @@ bool ArgumentCoder<ProtectionSpace>::decode(Decoder& decoder, ProtectionSpace& s
     if (!decoder.decode(realm))
         return false;
     
-    ProtectionSpaceAuthenticationScheme authenticationScheme;
+    ProtectionSpace::AuthenticationScheme authenticationScheme;
     if (!decoder.decode(authenticationScheme))
         return false;
 
-    ProtectionSpaceServerType serverType;
+    ProtectionSpace::ServerType serverType;
     if (!decoder.decode(serverType))
         return false;
 
@@ -1069,6 +1067,31 @@ static WARN_UNUSED_RETURN bool decodeOptionalImage(Decoder& decoder, RefPtr<Imag
         return true;
 
     return decodeImage(decoder, image);
+}
+
+void ArgumentCoder<RefPtr<Font>>::encode(Encoder& encoder, const RefPtr<Font>& font)
+{
+    encoder << !!font;
+    if (font)
+        encoder << Ref { *font };
+}
+
+std::optional<RefPtr<Font>> ArgumentCoder<RefPtr<Font>>::decode(Decoder& decoder)
+{
+    std::optional<bool> hasFont;
+    decoder >> hasFont;
+    if (!hasFont)
+        return std::nullopt;
+
+    if (!hasFont.value())
+        return std::make_optional(nullptr);
+
+    std::optional<Ref<Font>> font;
+    decoder >> font;
+    if (!font)
+        return std::nullopt;
+
+    return { WTFMove(*font) };
 }
 
 void ArgumentCoder<Ref<Font>>::encode(Encoder& encoder, const Ref<WebCore::Font>& font)
@@ -2907,59 +2930,78 @@ std::optional<RefPtr<SecurityOrigin>> ArgumentCoder<RefPtr<SecurityOrigin>>::dec
 
 void ArgumentCoder<FontAttributes>::encode(Encoder& encoder, const FontAttributes& attributes)
 {
-    encoder << attributes.backgroundColor << attributes.foregroundColor << attributes.fontShadow << attributes.hasUnderline << attributes.hasStrikeThrough << attributes.textLists;
+    encoder << attributes.backgroundColor;
+    encoder << attributes.foregroundColor;
+    encoder << attributes.fontShadow;
+    encoder << attributes.hasUnderline;
+    encoder << attributes.hasStrikeThrough;
+    encoder << attributes.hasMultipleFonts;
+    encoder << attributes.textLists;
     encoder << attributes.horizontalAlignment;
     encoder << attributes.subscriptOrSuperscript;
-
-    if (attributes.encodingRequiresPlatformData()) {
-        encoder << true;
-        encodePlatformData(encoder, attributes);
-        return;
-    }
+    encoder << attributes.font;
 }
 
 std::optional<FontAttributes> ArgumentCoder<FontAttributes>::decode(Decoder& decoder)
 {
-    FontAttributes attributes;
-
-    if (!decoder.decode(attributes.backgroundColor))
+    std::optional<Color> backgroundColor;
+    decoder >> backgroundColor;
+    if (!backgroundColor)
         return std::nullopt;
 
-    if (!decoder.decode(attributes.foregroundColor))
+    std::optional<Color> foregroundColor;
+    decoder >> foregroundColor;
+    if (!foregroundColor)
         return std::nullopt;
 
-    if (!decoder.decode(attributes.fontShadow))
+    std::optional<FontShadow> fontShadow;
+    decoder >> fontShadow;
+    if (!fontShadow)
         return std::nullopt;
 
-    if (!decoder.decode(attributes.hasUnderline))
+    std::optional<bool> hasUnderline;
+    decoder >> hasUnderline;
+    if (!hasUnderline)
         return std::nullopt;
 
-    if (!decoder.decode(attributes.hasStrikeThrough))
+    std::optional<bool> hasStrikeThrough;
+    decoder >> hasStrikeThrough;
+    if (!hasStrikeThrough)
         return std::nullopt;
 
-    if (!decoder.decode(attributes.textLists))
+    std::optional<bool> hasMultipleFonts;
+    decoder >> hasMultipleFonts;
+    if (!hasMultipleFonts)
         return std::nullopt;
 
-    if (!decoder.decode(attributes.horizontalAlignment))
+    std::optional<Vector<TextList>> textLists;
+    decoder >> textLists;
+    if (!textLists)
         return std::nullopt;
 
-    if (!decoder.decode(attributes.subscriptOrSuperscript))
+    std::optional<FontAttributes::HorizontalAlignment> horizontalAlignment;
+    decoder >> horizontalAlignment;
+    if (!horizontalAlignment)
         return std::nullopt;
 
-    bool hasPlatformData;
-    if (!decoder.decode(hasPlatformData))
+    std::optional<FontAttributes::SubscriptOrSuperscript> subscriptOrSuperscript;
+    decoder >> subscriptOrSuperscript;
+    if (!subscriptOrSuperscript)
         return std::nullopt;
-    if (hasPlatformData)
-        return decodePlatformData(decoder, attributes);
 
-    return attributes;
+    std::optional<RefPtr<Font>> font;
+    decoder >> font;
+    if (!font)
+        return std::nullopt;
+
+    return { { WTFMove(*font), WTFMove(*backgroundColor), WTFMove(*foregroundColor), WTFMove(*fontShadow), *subscriptOrSuperscript, *horizontalAlignment, WTFMove(*textLists), *hasUnderline, *hasStrikeThrough, *hasMultipleFonts } };
 }
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 
 void ArgumentCoder<SerializedAttachmentData>::encode(IPC::Encoder& encoder, const WebCore::SerializedAttachmentData& data)
 {
-    encoder << data.identifier << data.mimeType << IPC::SharedBufferDataReference { data.data.get() };
+    encoder << data.identifier << data.mimeType << data.data;
 }
 
 std::optional<SerializedAttachmentData> ArgumentCoder<WebCore::SerializedAttachmentData>::decode(IPC::Decoder& decoder)
@@ -2972,11 +3014,11 @@ std::optional<SerializedAttachmentData> ArgumentCoder<WebCore::SerializedAttachm
     if (!decoder.decode(mimeType))
         return std::nullopt;
 
-    IPC::DataReference data;
-    if (!decoder.decode(data))
+    RefPtr<SharedBuffer> buffer;
+    if (!decoder.decode(buffer))
         return std::nullopt;
 
-    return {{ WTFMove(identifier), WTFMove(mimeType), WebCore::SharedBuffer::create(data.data(), data.size()) }};
+    return { { WTFMove(identifier), WTFMove(mimeType), buffer.releaseNonNull() } };
 }
 
 #endif // ENABLE(ATTACHMENT_ELEMENT)
@@ -3009,6 +3051,34 @@ std::optional<SerializedPlatformDataCueValue> ArgumentCoder<WebCore::SerializedP
 
 }
 #endif
+
+void ArgumentCoder<RefPtr<WebCore::FragmentedSharedBuffer>>::encode(Encoder& encoder, const RefPtr<WebCore::FragmentedSharedBuffer>& buffer)
+{
+    encodeSharedBuffer(encoder, buffer.get());
+}
+
+std::optional<RefPtr<FragmentedSharedBuffer>> ArgumentCoder<RefPtr<WebCore::FragmentedSharedBuffer>>::decode(Decoder& decoder)
+{
+    RefPtr<SharedBuffer> buffer;
+    if (!decodeSharedBuffer(decoder, buffer))
+        return std::nullopt;
+
+    return buffer;
+}
+
+void ArgumentCoder<Ref<WebCore::FragmentedSharedBuffer>>::encode(Encoder& encoder, const Ref<WebCore::FragmentedSharedBuffer>& buffer)
+{
+    encodeSharedBuffer(encoder, buffer.ptr());
+}
+
+std::optional<Ref<FragmentedSharedBuffer>> ArgumentCoder<Ref<WebCore::FragmentedSharedBuffer>>::decode(Decoder& decoder)
+{
+    RefPtr<SharedBuffer> buffer;
+    if (!decodeSharedBuffer(decoder, buffer) || !buffer)
+        return std::nullopt;
+
+    return buffer.releaseNonNull();
+}
 
 void ArgumentCoder<RefPtr<WebCore::SharedBuffer>>::encode(Encoder& encoder, const RefPtr<WebCore::SharedBuffer>& buffer)
 {
@@ -3107,7 +3177,7 @@ void ArgumentCoder<WebCore::CDMInstanceSession::Message>::encode(Encoder& encode
 {
     encoder << message.first;
 
-    RefPtr<SharedBuffer> messageData = message.second.copyRef();
+    RefPtr<FragmentedSharedBuffer> messageData = message.second.copyRef();
     encoder << messageData;
 }
 
@@ -3117,7 +3187,7 @@ std::optional<WebCore::CDMInstanceSession::Message>  ArgumentCoder<WebCore::CDMI
     if (!decoder.decode(type))
         return std::nullopt;
 
-    RefPtr<SharedBuffer> buffer;
+    RefPtr<FragmentedSharedBuffer> buffer;
     if (!decoder.decode(buffer) || !buffer)
         return std::nullopt;
 

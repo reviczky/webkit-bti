@@ -63,8 +63,8 @@ public:
     bool contentBlockersEnabled() const { return m_contentBlockersEnabled; }
     void setContentBlockersEnabled(bool enabled) { m_contentBlockersEnabled = enabled; }
     
-    void setActiveContentRuleListActionPatterns(std::optional<HashSet<WTF::String>>&& patterns) { m_activeContentRuleListActionPatterns = WTFMove(patterns); }
-    const std::optional<HashSet<WTF::String>>& activeContentRuleListActionPatterns() const { return m_activeContentRuleListActionPatterns; }
+    void setActiveContentRuleListActionPatterns(HashMap<WTF::String, Vector<WTF::String>>&& patterns) { m_activeContentRuleListActionPatterns = WTFMove(patterns); }
+    const HashMap<WTF::String, Vector<WTF::String>>& activeContentRuleListActionPatterns() const { return m_activeContentRuleListActionPatterns; }
     
     OptionSet<WebKit::WebsiteAutoplayQuirk> allowedAutoplayQuirks() const { return m_allowedAutoplayQuirks; }
     void setAllowedAutoplayQuirks(OptionSet<WebKit::WebsiteAutoplayQuirk> quirks) { m_allowedAutoplayQuirks = quirks; }
@@ -130,9 +130,16 @@ public:
 
     bool captivePortalModeEnabled() const;
     void setCaptivePortalModeEnabled(std::optional<bool> captivePortalModeEnabled) { m_captivePortalModeEnabled = captivePortalModeEnabled; }
+    bool isCaptivePortalModeExplicitlySet() const { return !!m_captivePortalModeEnabled; }
+
+    WebCore::ColorSchemePreference colorSchemePreference() const { return m_colorSchemePreference; }
+    void setColorSchemePreference(WebCore::ColorSchemePreference colorSchemePreference) { m_colorSchemePreference = colorSchemePreference; }
 
     WebCore::MouseEventPolicy mouseEventPolicy() const { return m_mouseEventPolicy; }
     void setMouseEventPolicy(WebCore::MouseEventPolicy policy) { m_mouseEventPolicy = policy; }
+
+    WebCore::ModalContainerObservationPolicy modalContainerObservationPolicy() const { return m_modalContainerObservationPolicy; }
+    void setModalContainerObservationPolicy(WebCore::ModalContainerObservationPolicy policy) { m_modalContainerObservationPolicy = policy; }
 
     bool idempotentModeAutosizingOnlyHonorsPercentages() const { return m_idempotentModeAutosizingOnlyHonorsPercentages; }
     void setIdempotentModeAutosizingOnlyHonorsPercentages(bool idempotentModeAutosizingOnlyHonorsPercentages) { m_idempotentModeAutosizingOnlyHonorsPercentages = idempotentModeAutosizingOnlyHonorsPercentages; }
@@ -140,7 +147,7 @@ public:
 private:
     // FIXME: replace most or all of these members with a WebsitePoliciesData.
     bool m_contentBlockersEnabled { true };
-    std::optional<HashSet<WTF::String>> m_activeContentRuleListActionPatterns { HashSet<WTF::String>() };
+    HashMap<WTF::String, Vector<WTF::String>> m_activeContentRuleListActionPatterns;
     OptionSet<WebKit::WebsiteAutoplayQuirk> m_allowedAutoplayQuirks;
     WebKit::WebsiteAutoplayPolicy m_autoplayPolicy { WebKit::WebsiteAutoplayPolicy::Default };
 #if ENABLE(DEVICE_ORIENTATION)
@@ -164,8 +171,10 @@ private:
     bool m_allowContentChangeObserverQuirk { false };
     WebCore::AllowsContentJavaScript m_allowsContentJavaScript { WebCore::AllowsContentJavaScript::Yes };
     WebCore::MouseEventPolicy m_mouseEventPolicy { WebCore::MouseEventPolicy::Default };
+    WebCore::ModalContainerObservationPolicy m_modalContainerObservationPolicy { WebCore::ModalContainerObservationPolicy::Disabled };
     bool m_idempotentModeAutosizingOnlyHonorsPercentages { false };
     std::optional<bool> m_captivePortalModeEnabled;
+    WebCore::ColorSchemePreference m_colorSchemePreference { WebCore::ColorSchemePreference::NoPreference };
 };
 
 } // namespace API

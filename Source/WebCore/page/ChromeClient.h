@@ -52,6 +52,7 @@
 #include "SearchPopupMenu.h"
 #include "WebCoreKeyboardUIMode.h"
 #include <JavaScriptCore/ConsoleTypes.h>
+#include <pal/graphics/WebGPU/WebGPU.h>
 #include <wtf/Assertions.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
@@ -84,6 +85,10 @@ class HTMLModelElement;
 
 #if ENABLE(WEBXR)
 #include "PlatformXR.h"
+#endif
+
+#if ENABLE(WEBGL)
+#include "GraphicsContextGL.h"
 #endif
 
 OBJC_CLASS NSResponder;
@@ -131,11 +136,15 @@ struct DataDetectorElementInfo;
 struct DateTimeChooserParameters;
 struct GraphicsDeviceAdapter;
 struct MockWebAuthenticationConfiguration;
+struct SecurityOriginData;
 struct ShareDataWithParsedURL;
 struct TextIndicatorData;
 struct ViewportArguments;
 struct WindowFeatures;
 
+enum class CookieConsentDecisionResult : uint8_t;
+enum class ModalContainerControlType : uint8_t;
+enum class ModalContainerDecision : uint8_t;
 enum class RouteSharingPolicy : uint8_t;
 
 class ChromeClient {
@@ -353,8 +362,10 @@ public:
     virtual RefPtr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingMode, RenderingPurpose, float, const DestinationColorSpace&, PixelFormat) const { return nullptr; }
 
 #if ENABLE(WEBGL)
-    virtual RefPtr<GraphicsContextGL> createGraphicsContextGL(const GraphicsContextGLAttributes&, WebCore::PlatformDisplayID) const { return nullptr; }
+    virtual RefPtr<GraphicsContextGL> createGraphicsContextGL(const GraphicsContextGLAttributes& attributes, WebCore::PlatformDisplayID) const { return createWebProcessGraphicsContextGL(attributes); }
 #endif
+
+    virtual RefPtr<PAL::WebGPU::GPU> createGPUForWebGPU() const { return nullptr; }
 
     // Pass nullptr as the GraphicsLayer to detatch the root layer.
     virtual void attachRootGraphicsLayer(Frame&, GraphicsLayer*) = 0;
@@ -513,7 +524,7 @@ public:
 #endif
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
-    virtual void handleTelephoneNumberClick(const String&, const IntPoint&) { }
+    virtual void handleTelephoneNumberClick(const String&, const IntPoint&, const IntRect&) { }
 #endif
 
 #if ENABLE(DATA_DETECTION)
@@ -523,6 +534,7 @@ public:
 #if ENABLE(SERVICE_CONTROLS)
     virtual void handleSelectionServiceClick(FrameSelection&, const Vector<String>&, const IntPoint&) { }
     virtual bool hasRelevantSelectionServices(bool /*isTextOnly*/) const { return false; }
+    virtual void handleImageServiceClick(const IntPoint&, Image&, bool /*isEditable*/, const IntRect&, const String& /*attachmentID*/) { }
 #endif
 
     virtual bool shouldDispatchFakeMouseMoveEvents() const { return true; }
@@ -599,6 +611,7 @@ public:
 
 #if ENABLE(WEBXR)
     virtual void enumerateImmersiveXRDevices(CompletionHandler<void(const PlatformXR::Instance::DeviceList&)>&& completionHandler) { PlatformXR::Instance::singleton().enumerateImmersiveXRDevices(WTFMove(completionHandler)); }
+    virtual void requestPermissionOnXRSessionFeatures(const SecurityOriginData&, PlatformXR::SessionMode, const PlatformXR::Device::FeatureList& granted, const PlatformXR::Device::FeatureList& /* consentRequired */, const PlatformXR::Device::FeatureList& /* consentOptional */, CompletionHandler<void(std::optional<PlatformXR::Device::FeatureList>&&)>&& completionHandler) { completionHandler(granted); }
 #endif
 
 #if ENABLE(TEXT_AUTOSIZING)
@@ -609,6 +622,13 @@ public:
     virtual void startApplePayAMSUISession(const URL&, const ApplePayAMSUIRequest&, CompletionHandler<void(std::optional<bool>&&)>&& completionHandler) { completionHandler(std::nullopt); }
     virtual void abortApplePayAMSUISession() { }
 #endif
+
+    virtual void requestCookieConsent(CompletionHandler<void(CookieConsentDecisionResult)>&&) = 0;
+
+    virtual const AtomString& searchStringForModalContainerObserver() const { return nullAtom(); }
+    virtual void classifyModalContainerControls(Vector<String>&& texts, CompletionHandler<void(Vector<ModalContainerControlType>&&)>&&) = 0;
+
+    virtual void decidePolicyForModalContainer(OptionSet<ModalContainerControlType>, CompletionHandler<void(ModalContainerDecision)>&&) = 0;
 
 protected:
     virtual ~ChromeClient() = default;

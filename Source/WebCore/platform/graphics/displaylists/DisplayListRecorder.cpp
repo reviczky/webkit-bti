@@ -29,6 +29,8 @@
 #include "DisplayList.h"
 #include "DisplayListDrawingContext.h"
 #include "DisplayListItems.h"
+#include "FEImage.h"
+#include "Filter.h"
 #include "GraphicsContext.h"
 #include "ImageBuffer.h"
 #include "Logging.h"
@@ -144,6 +146,31 @@ void Recorder::setMiterLimit(float miterLimit)
     recordSetMiterLimit(miterLimit);
 }
 
+void Recorder::drawFilteredImageBuffer(ImageBuffer* sourceImage, const FloatRect& sourceImageRect, Filter& filter, FilterResults& results)
+{
+    appendStateChangeItemIfNecessary();
+
+    for (auto& effect : filter.effectsOfType(FilterEffect::Type::FEImage)) {
+        auto& feImage = downcast<FEImage>(effect.get());
+        if (!recordResourceUse(feImage.sourceImage())) {
+            GraphicsContext::drawFilteredImageBuffer(sourceImage, sourceImageRect, filter, results);
+            return;
+        }
+    }
+
+    if (!sourceImage) {
+        recordDrawFilteredImageBuffer({ }, sourceImageRect, filter);
+        return;
+    }
+
+    if (!recordResourceUse(*sourceImage)) {
+        GraphicsContext::drawFilteredImageBuffer(sourceImage, sourceImageRect, filter, results);
+        return;
+    }
+
+    recordDrawFilteredImageBuffer(sourceImage->renderingResourceIdentifier(), sourceImageRect, filter);
+}
+
 void Recorder::drawGlyphs(const Font& font, const GlyphBufferGlyph* glyphs, const GlyphBufferAdvance* advances, unsigned numGlyphs, const FloatPoint& startPoint, FontSmoothingMode smoothingMode)
 {
     m_drawGlyphsRecorder.drawGlyphs(font, glyphs, advances, numGlyphs, startPoint, smoothingMode);
@@ -159,12 +186,12 @@ void Recorder::drawGlyphsAndCacheFont(const Font& font, const GlyphBufferGlyph* 
 void Recorder::drawImageBuffer(ImageBuffer& imageBuffer, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
 {
     appendStateChangeItemIfNecessary();
-    if (!canDrawImageBuffer(imageBuffer)) {
+
+    if (!recordResourceUse(imageBuffer)) {
         GraphicsContext::drawImageBuffer(imageBuffer, destRect, srcRect, options);
         return;
     }
 
-    recordResourceUse(imageBuffer);
     recordDrawImageBuffer(imageBuffer.renderingResourceIdentifier(), destRect, srcRect, options);
 }
 

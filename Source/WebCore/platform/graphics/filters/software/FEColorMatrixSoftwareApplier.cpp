@@ -36,7 +36,7 @@
 
 namespace WebCore {
 
-FEColorMatrixSoftwareApplier::FEColorMatrixSoftwareApplier(FEColorMatrix& effect)
+FEColorMatrixSoftwareApplier::FEColorMatrixSoftwareApplier(const FEColorMatrix& effect)
     : Base(effect)
 {
     if (m_effect.type() == FECOLORMATRIX_TYPE_SATURATE)
@@ -259,26 +259,25 @@ void FEColorMatrixSoftwareApplier::applyPlatform(PixelBuffer& pixelBuffer) const
     applyPlatformUnaccelerated(pixelBuffer);
 }
 
-bool FEColorMatrixSoftwareApplier::apply(const Filter&, const FilterEffectVector& inputEffects)
+bool FEColorMatrixSoftwareApplier::apply(const Filter&, const FilterImageVector& inputs, FilterImage& result) const
 {
-    auto in = inputEffects[0].get();
+    auto& input = inputs[0].get();
 
-    auto resultImage = m_effect.imageBufferResult();
+    auto resultImage = result.imageBuffer();
     if (!resultImage)
         return false;
 
-    auto inBuffer = in->imageBufferResult();
-    if (inBuffer)
-        resultImage->context().drawImageBuffer(*inBuffer, m_effect.drawingRegionOfInputImage(in->absolutePaintRect()));
+    auto inputImage = input.imageBuffer();
+    if (inputImage) {
+        auto inputImageRect = input.absoluteImageRectRelativeTo(result);
+        resultImage->context().drawImageBuffer(*inputImage, inputImageRect);
+    }
 
-    PixelBufferFormat format { AlphaPremultiplication::Unpremultiplied, PixelFormat::RGBA8, m_effect.resultColorSpace() };
+    PixelBufferFormat format { AlphaPremultiplication::Unpremultiplied, PixelFormat::RGBA8, result.colorSpace() };
     IntRect imageRect(IntPoint(), resultImage->truncatedLogicalSize());
     auto pixelBuffer = resultImage->getPixelBuffer(format, imageRect);
     if (!pixelBuffer)
         return false;
-
-    if (m_effect.type() == FECOLORMATRIX_TYPE_LUMINANCETOALPHA)
-        m_effect.setIsAlphaImage(true);
 
     applyPlatform(*pixelBuffer);
     resultImage->putPixelBuffer(*pixelBuffer, imageRect);

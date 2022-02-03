@@ -3,7 +3,7 @@
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -25,7 +25,12 @@
 #include "FEColorMatrix.h"
 
 #include "FEColorMatrixSoftwareApplier.h"
+#include "Filter.h"
 #include <wtf/text/TextStream.h>
+
+#if USE(CORE_IMAGE)
+#include "FEColorMatrixCoreImageApplier.h"
+#endif
 
 namespace WebCore {
 
@@ -93,9 +98,32 @@ Vector<float> FEColorMatrix::normalizedFloats(const Vector<float>& values)
     return normalizedValues;
 }
 
-bool FEColorMatrix::platformApplySoftware(const Filter& filter)
+bool FEColorMatrix::resultIsAlphaImage(const FilterImageVector&) const
 {
-    return FEColorMatrixSoftwareApplier(*this).apply(filter, inputEffects());
+    return m_type == FECOLORMATRIX_TYPE_LUMINANCETOALPHA;
+}
+
+bool FEColorMatrix::supportsAcceleratedRendering() const
+{
+#if USE(CORE_IMAGE)
+    return FEColorMatrixCoreImageApplier::supportsCoreImageRendering(*this);
+#else
+    return false;
+#endif
+}
+
+std::unique_ptr<FilterEffectApplier> FEColorMatrix::createAcceleratedApplier() const
+{
+#if USE(CORE_IMAGE)
+    return FilterEffectApplier::create<FEColorMatrixCoreImageApplier>(*this);
+#else
+    return nullptr;
+#endif
+}
+
+std::unique_ptr<FilterEffectApplier> FEColorMatrix::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FEColorMatrixSoftwareApplier>(*this);
 }
 
 static TextStream& operator<<(TextStream& ts, const ColorMatrixType& type)
@@ -120,10 +148,11 @@ static TextStream& operator<<(TextStream& ts, const ColorMatrixType& type)
     return ts;
 }
 
-TextStream& FEColorMatrix::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FEColorMatrix::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feColorMatrix";
     FilterEffect::externalRepresentation(ts, representation);
+
     ts << " type=\"" << m_type << "\"";
     if (!m_values.isEmpty()) {
         ts << " values=\"";
@@ -132,15 +161,13 @@ TextStream& FEColorMatrix::externalRepresentation(TextStream& ts, Representation
         while (ptr < end) {
             ts << *ptr;
             ++ptr;
-            if (ptr < end) 
+            if (ptr < end)
                 ts << " ";
         }
         ts << "\"";
     }
+
     ts << "]\n";
-    
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
     return ts;
 }
 

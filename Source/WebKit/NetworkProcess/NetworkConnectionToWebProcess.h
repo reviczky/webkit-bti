@@ -56,6 +56,10 @@
 #include <wtf/RefCounted.h>
 #include <wtf/URLHash.h>
 
+#if ENABLE(IPC_TESTING_API)
+#include "IPCTester.h"
+#endif
+
 namespace PAL {
 class SessionID;
 }
@@ -178,7 +182,7 @@ public:
 
 #if ENABLE(SERVICE_WORKER)
     void serverToContextConnectionNoLongerNeeded();
-    WebSWServerConnection& swConnection();
+    WebSWServerConnection* swConnection();
     std::unique_ptr<ServiceWorkerFetchTask> createFetchTask(NetworkResourceLoader&, const WebCore::ResourceRequest&);
 #endif
 
@@ -246,7 +250,7 @@ private:
 
     void createSocketStream(URL&&, String cachePartition, WebCore::WebSocketIdentifier);
 
-    void createSocketChannel(const WebCore::ResourceRequest&, const String& protocol, WebCore::WebSocketIdentifier, WebPageProxyIdentifier);
+    void createSocketChannel(const WebCore::ResourceRequest&, const String& protocol, WebCore::WebSocketIdentifier, WebPageProxyIdentifier, const WebCore::ClientOrigin&);
     void updateQuotaBasedOnSpaceUsageForTesting(const WebCore::ClientOrigin&);
 
 #if ENABLE(SERVICE_WORKER)
@@ -274,6 +278,7 @@ private:
 
 #if PLATFORM(MAC)
     void updateActivePages(const String& name, const Vector<String>& activePagesOrigins, audit_token_t);
+    void getProcessDisplayName(audit_token_t, CompletionHandler<void(const String&)>&&);
 #endif
 
 #if USE(LIBWEBRTC)
@@ -303,7 +308,7 @@ private:
     void removeOriginAccessAllowListEntry(const String& sourceOrigin, const String& destinationProtocol, const String& destinationHost, bool allowDestinationSubdomains);
     void resetOriginAccessAllowLists();
 
-    uint64_t nextMessageBatchIdentifier(Function<void()>&&);
+    uint64_t nextMessageBatchIdentifier(CompletionHandler<void()>&&);
 
     void domCookiesForHost(const String& host, bool subscribeToCookieChangeNotifications, CompletionHandler<void(const Vector<WebCore::Cookie>&)>&&);
 
@@ -410,11 +415,14 @@ private:
     const WebCore::ProcessIdentifier m_webProcessIdentifier;
 
     HashSet<WebCore::MessagePortIdentifier> m_processEntangledPorts;
-    HashMap<uint64_t, Function<void()>> m_messageBatchDeliveryCompletionHandlers;
+    HashMap<uint64_t, CompletionHandler<void()>> m_messageBatchDeliveryCompletionHandlers;
     Ref<NetworkSchemeRegistry> m_schemeRegistry;
         
     HashSet<URL> m_blobURLs;
     HashSet<URL> m_blobURLHandles;
+#if ENABLE(IPC_TESTING_API)
+    IPCTester m_ipcTester;
+#endif
 };
 
 } // namespace WebKit

@@ -28,6 +28,7 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "FloatRect.h"
+#include "InlineIteratorInlineBox.h"
 #include "InlineIteratorLine.h"
 #include "InlineIteratorTextBox.h"
 #include "LayoutIntegrationBoxTree.h"
@@ -94,13 +95,15 @@ public:
     void collectOverflow();
 
     const InlineContent* inlineContent() const { return m_inlineContent.get(); }
-    bool isPaginated() const { return !!m_paginatedHeight; }
+    bool isPaginated() const { return m_isPaginatedContent; }
 
     void paint(PaintInfo&, const LayoutPoint& paintOffset);
     bool hitTest(const HitTestRequest&, HitTestResult&, const HitTestLocation&, const LayoutPoint& accumulatedOffset, HitTestAction);
 
     InlineIterator::TextBoxIterator textBoxesFor(const RenderText&) const;
     InlineIterator::LeafBoxIterator boxFor(const RenderElement&) const;
+    InlineIterator::InlineBoxIterator firstInlineBoxFor(const RenderInline&) const;
+    InlineIterator::InlineBoxIterator firstRootInlineBox() const;
     InlineIterator::LineIterator firstLine() const;
     InlineIterator::LineIterator lastLine() const;
 
@@ -140,7 +143,7 @@ private:
     // FIXME: This should be part of LayoutState.
     std::unique_ptr<Layout::InlineDamage> m_lineDamage;
     RefPtr<InlineContent> m_inlineContent;
-    std::optional<LayoutUnit> m_paginatedHeight;
+    bool m_isPaginatedContent { false };
 };
 
 }

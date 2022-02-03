@@ -2706,6 +2706,26 @@ public:
         orDouble(op1, op2, dest);
     }
 
+    void floatMax(FPRegisterID op1, FPRegisterID op2, FPRegisterID dest)
+    {
+        m_assembler.fmax<32>(dest, op1, op2);
+    }
+
+    void floatMin(FPRegisterID op1, FPRegisterID op2, FPRegisterID dest)
+    {
+        m_assembler.fmin<32>(dest, op1, op2);
+    }
+
+    void doubleMax(FPRegisterID op1, FPRegisterID op2, FPRegisterID dest)
+    {
+        m_assembler.fmax<64>(dest, op1, op2);
+    }
+
+    void doubleMin(FPRegisterID op1, FPRegisterID op2, FPRegisterID dest)
+    {
+        m_assembler.fmin<64>(dest, op1, op2);
+    }
+
     void negateDouble(FPRegisterID src, FPRegisterID dest)
     {
         m_assembler.fneg<64>(dest, src);
@@ -4501,14 +4521,18 @@ public:
     void loadFromTLS32(uint32_t offset, RegisterID dst)
     {
         m_assembler.mrs_TPIDRRO_EL0(dst);
+#if !HAVE(SIMPLIFIED_FAST_TLS_BASE)
         and64(TrustedImm32(~7), dst);
+#endif
         load32(Address(dst, offset), dst);
     }
     
     void loadFromTLS64(uint32_t offset, RegisterID dst)
     {
         m_assembler.mrs_TPIDRRO_EL0(dst);
+#if !HAVE(SIMPLIFIED_FAST_TLS_BASE)
         and64(TrustedImm32(~7), dst);
+#endif
         load64(Address(dst, offset), dst);
     }
 
@@ -4522,7 +4546,9 @@ public:
         RegisterID tmp = getCachedDataTempRegisterIDAndInvalidate();
         ASSERT(src != tmp);
         m_assembler.mrs_TPIDRRO_EL0(tmp);
+#if !HAVE(SIMPLIFIED_FAST_TLS_BASE)
         and64(TrustedImm32(~7), tmp);
+#endif
         store32(src, Address(tmp, offset));
     }
     
@@ -4531,7 +4557,9 @@ public:
         RegisterID tmp = getCachedDataTempRegisterIDAndInvalidate();
         ASSERT(src != tmp);
         m_assembler.mrs_TPIDRRO_EL0(tmp);
+#if !HAVE(SIMPLIFIED_FAST_TLS_BASE)
         and64(TrustedImm32(~7), tmp);
+#endif
         store64(src, Address(tmp, offset));
     }
 

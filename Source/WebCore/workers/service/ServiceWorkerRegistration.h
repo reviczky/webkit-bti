@@ -30,6 +30,7 @@
 #include "ActiveDOMObject.h"
 #include "EventTarget.h"
 #include "JSDOMPromiseDeferred.h"
+#include "NotificationOptions.h"
 #include "PushPermissionState.h"
 #include "PushSubscription.h"
 #include "SWClientConnection.h"
@@ -40,6 +41,7 @@
 namespace WebCore {
 
 class DeferredPromise;
+class NavigationPreloadManager;
 class ScriptExecutionContext;
 class ServiceWorker;
 class ServiceWorkerContainer;
@@ -73,7 +75,7 @@ public:
     void unregister(Ref<DeferredPromise>&&);
 
     void subscribeToPushService(const Vector<uint8_t>& applicationServerKey, DOMPromiseDeferred<IDLInterface<PushSubscription>>&&);
-    void unsubscribeFromPushService(DOMPromiseDeferred<IDLBoolean>&&);
+    void unsubscribeFromPushService(PushSubscriptionIdentifier, DOMPromiseDeferred<IDLBoolean>&&);
     void getPushSubscription(DOMPromiseDeferred<IDLNullable<IDLInterface<PushSubscription>>>&&);
     void getPushPermissionState(DOMPromiseDeferred<IDLEnumeration<PushPermissionState>>&&);
 
@@ -84,6 +86,18 @@ public:
 
     void updateStateFromServer(ServiceWorkerRegistrationState, RefPtr<ServiceWorker>&&);
     void queueTaskToFireUpdateFoundEvent();
+
+    NavigationPreloadManager& navigationPreload();
+    ServiceWorkerContainer& container() { return m_container.get(); }
+
+#if ENABLE(NOTIFICATION_EVENT)
+    struct GetNotificationOptions {
+        String tag;
+    };
+
+    void showNotification(ScriptExecutionContext&, const String& title, const NotificationOptions&, DOMPromiseDeferred<void>&&);
+    void getNotifications(ScriptExecutionContext&, const GetNotificationOptions& filter, DOMPromiseDeferred<IDLSequence<IDLDOMString>>);
+#endif
 
 private:
     ServiceWorkerRegistration(ScriptExecutionContext&, Ref<ServiceWorkerContainer>&&, ServiceWorkerRegistrationData&&);
@@ -104,6 +118,8 @@ private:
     RefPtr<ServiceWorker> m_installingWorker;
     RefPtr<ServiceWorker> m_waitingWorker;
     RefPtr<ServiceWorker> m_activeWorker;
+
+    std::unique_ptr<NavigationPreloadManager> m_navigationPreload;
 };
 
 } // namespace WebCore

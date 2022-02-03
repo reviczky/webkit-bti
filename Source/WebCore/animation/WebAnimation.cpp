@@ -66,6 +66,7 @@ HashSet<WebAnimation*>& WebAnimation::instances()
 Ref<WebAnimation> WebAnimation::create(Document& document, AnimationEffect* effect)
 {
     auto result = adoptRef(*new WebAnimation(document));
+    result->initialize();
     result->setEffect(effect);
     result->setTimeline(&document.timeline());
 
@@ -77,6 +78,7 @@ Ref<WebAnimation> WebAnimation::create(Document& document, AnimationEffect* effe
 Ref<WebAnimation> WebAnimation::create(Document& document, AnimationEffect* effect, AnimationTimeline* timeline)
 {
     auto result = adoptRef(*new WebAnimation(document));
+    result->initialize();
     result->setEffect(effect);
     if (timeline)
         result->setTimeline(timeline);
@@ -86,14 +88,17 @@ Ref<WebAnimation> WebAnimation::create(Document& document, AnimationEffect* effe
     return result;
 }
 
+void WebAnimation::initialize()
+{
+    suspendIfNeeded();
+    m_readyPromise->resolve(*this);
+}
+
 WebAnimation::WebAnimation(Document& document)
     : ActiveDOMObject(document)
     , m_readyPromise(makeUniqueRef<ReadyPromise>(*this, &WebAnimation::readyPromiseResolve))
     , m_finishedPromise(makeUniqueRef<FinishedPromise>(*this, &WebAnimation::finishedPromiseResolve))
 {
-    m_readyPromise->resolve(*this);
-    suspendIfNeeded();
-
     instances().add(this);
 }
 
@@ -239,8 +244,8 @@ void WebAnimation::setTimeline(RefPtr<AnimationTimeline>&& timeline)
     if (m_startTime)
         m_holdTime = std::nullopt;
 
-    if (is<KeyframeEffect>(m_effect)) {
-        if (auto target = downcast<KeyframeEffect>(m_effect.get())->targetStyleable()) {
+    if (auto keyframeEffect = dynamicDowncast<KeyframeEffect>(m_effect.get())) {
+        if (auto target = keyframeEffect->targetStyleable()) {
             // In the case of a declarative animation, we don't want to remove the animation from the relevant maps because
             // while the timeline was set via the API, the element still has a transition or animation set up and we must
             // not break the relationship.
@@ -580,6 +585,53 @@ void WebAnimation::applyPendingPlaybackRate()
     m_pendingPlaybackRate = std::nullopt;
 }
 
+void WebAnimation::setBindingsFrameRate(std::variant<FramesPerSecond, AnimationFrameRatePreset>&& frameRate)
+{
+    m_bindingsFrameRate = WTFMove(frameRate);
+
+    if (std::holds_alternative<FramesPerSecond>(m_bindingsFrameRate)) {
+        setEffectiveFrameRate(std::get<FramesPerSecond>(m_bindingsFrameRate));
+        return;
+    }
+
+    switch (std::get<AnimationFrameRatePreset>(m_bindingsFrameRate)) {
+    case AnimationFrameRatePreset::Auto:
+        setEffectiveFrameRate(std::nullopt);
+        break;
+    case AnimationFrameRatePreset::High:
+        setEffectiveFrameRate(AnimationFrameRatePresetHigh);
+        break;
+    case AnimationFrameRatePreset::Low:
+        setEffectiveFrameRate(AnimationFrameRatePresetLow);
+        break;
+    case AnimationFrameRatePreset::Highest:
+        setEffectiveFrameRate(std::numeric_limits<FramesPerSecond>::max());
+        break;
+    }
+}
+
+void WebAnimation::setEffectiveFrameRate(std::optional<FramesPerSecond> effectiveFrameRate)
+{
+    if (m_effectiveFrameRate == effectiveFrameRate)
+        return;
+
+    std::optional<FramesPerSecond> maximumFrameRate = std::nullopt;
+    if (is<DocumentTimeline>(m_timeline))
+        maximumFrameRate = downcast<DocumentTimeline>(*m_timeline).maximumFrameRate();
+
+    std::optional<FramesPerSecond> adjustedEffectiveFrameRate;
+    if (maximumFrameRate && effectiveFrameRate)
+        adjustedEffectiveFrameRate = std::min<FramesPerSecond>(*maximumFrameRate, *effectiveFrameRate);
+
+    if (adjustedEffectiveFrameRate && !*adjustedEffectiveFrameRate)
+        adjustedEffectiveFrameRate = std::nullopt;
+
+    if (m_effectiveFrameRate == adjustedEffectiveFrameRate)
+        return;
+
+    m_effectiveFrameRate = adjustedEffectiveFrameRate;
+}
+
 auto WebAnimation::playState() const -> PlayState
 {
     // 3.5.19 Play states
@@ -673,8 +725,8 @@ void WebAnimation::cancel()
 
 void WebAnimation::willChangeRenderer()
 {
-    if (is<KeyframeEffect>(m_effect))
-        downcast<KeyframeEffect>(*m_effect).willChangeRenderer();
+    if (auto keyframeEffect = dynamicDowncast<KeyframeEffect>(m_effect.get()))
+        keyframeEffect->willChangeRenderer();
 }
 
 void WebAnimation::enqueueAnimationPlaybackEvent(const AtomString& type, std::optional<Seconds> currentTime, std::optional<Seconds> timelineTime)
@@ -786,9 +838,9 @@ void WebAnimation::timingDidChange(DidSeek didSeek, SynchronouslyNotify synchron
     m_shouldSkipUpdatingFinishedStateWhenResolving = false;
     updateFinishedState(didSeek, synchronouslyNotify);
 
-    if (is<KeyframeEffect>(m_effect)) {
+    if (auto keyframeEffect = dynamicDowncast<KeyframeEffect>(m_effect.get())) {
         updateRelevance();
-        downcast<KeyframeEffect>(*m_effect).animationTimingDidChange();
+        keyframeEffect->animationTimingDidChange();
     }
 
     if (silently == Silently::No && m_timeline)
@@ -797,8 +849,8 @@ void WebAnimation::timingDidChange(DidSeek didSeek, SynchronouslyNotify synchron
 
 void WebAnimation::invalidateEffect()
 {
-    if (!isEffectInvalidationSuspended() && m_effect)
-        m_effect->invalidate();
+    if (auto keyframeEffect = dynamicDowncast<KeyframeEffect>(m_effect.get()); !isEffectInvalidationSuspended() && keyframeEffect)
+        keyframeEffect->invalidate();
 }
 
 void WebAnimation::updateFinishedState(DidSeek didSeek, SynchronouslyNotify synchronouslyNotify)
@@ -857,6 +909,7 @@ void WebAnimation::updateFinishedState(DidSeek didSeek, SynchronouslyNotify sync
 
     // 5. If current finished state is true and the current finished promise is not yet resolved, perform the following steps:
     if (currentFinishedState && !m_finishedPromise->isFulfilled()) {
+        animationDidFinish();
         if (synchronouslyNotify == SynchronouslyNotify::Yes) {
             // If synchronously notify is true, cancel any queued microtask to run the finish notification steps for this animation,
             // and run the finish notification steps immediately.
@@ -909,8 +962,8 @@ void WebAnimation::finishNotificationSteps()
     //    Otherwise, queue a task to dispatch finishEvent at animation. The task source for this task is the DOM manipulation task source.
     enqueueAnimationPlaybackEvent(eventNames().finishEvent, currentTime(), m_timeline ? m_timeline->currentTime() : std::nullopt);
 
-    if (is<KeyframeEffect>(m_effect)) {
-        if (RefPtr target = downcast<KeyframeEffect>(*m_effect).target()) {
+    if (auto keyframeEffect = dynamicDowncast<KeyframeEffect>(m_effect.get())) {
+        if (RefPtr target = keyframeEffect->target()) {
             if (auto* page = target->document().page())
                 page->chrome().client().animationDidFinishForElement(*target);
         }
@@ -1234,8 +1287,8 @@ void WebAnimation::resolve(RenderStyle& targetStyle, const Style::ResolutionCont
         updateFinishedState(DidSeek::No, SynchronouslyNotify::Yes);
     m_shouldSkipUpdatingFinishedStateWhenResolving = false;
 
-    if (m_effect)
-        m_effect->apply(targetStyle, resolutionContext, startTime);
+    if (auto keyframeEffect = dynamicDowncast<KeyframeEffect>(m_effect.get()))
+        keyframeEffect->apply(targetStyle, resolutionContext, startTime);
 }
 
 void WebAnimation::setSuspended(bool isSuspended)
@@ -1364,11 +1417,10 @@ void WebAnimation::persist()
     auto previousReplaceState = std::exchange(m_replaceState, ReplaceState::Persisted);
 
     if (previousReplaceState == ReplaceState::Removed && m_timeline) {
-        if (is<KeyframeEffect>(m_effect)) {
-            auto& keyframeEffect = downcast<KeyframeEffect>(*m_effect);
-            auto styleable = keyframeEffect.targetStyleable();
+        if (auto keyframeEffect = dynamicDowncast<KeyframeEffect>(m_effect.get())) {
+            auto styleable = keyframeEffect->targetStyleable();
             styleable->animationWasAdded(*this);
-            styleable->ensureKeyframeEffectStack().addEffect(keyframeEffect);
+            styleable->ensureKeyframeEffectStack().addEffect(*keyframeEffect);
         }
     }
 }
@@ -1378,7 +1430,7 @@ ExceptionOr<void> WebAnimation::commitStyles()
     // https://drafts.csswg.org/web-animations-1/#commit-computed-styles
 
     // 1. Let targets be the set of all effect targets for animation effects associated with animation.
-    auto* effect = is<KeyframeEffect>(m_effect) ? downcast<KeyframeEffect>(m_effect.get()) : nullptr;
+    auto* effect = dynamicDowncast<KeyframeEffect>(m_effect.get());
     auto* target = effect ? effect->target() : nullptr;
 
     // 2. For each target in targets:
@@ -1453,7 +1505,7 @@ Seconds WebAnimation::timeToNextTick() const
         return Seconds::infinity();
 
     ASSERT(effect());
-    return effect()->timeToNextTick() / playbackRate;
+    return effect()->timeToNextTick(effect()->getBasicTiming()) / playbackRate;
 }
 
 } // namespace WebCore

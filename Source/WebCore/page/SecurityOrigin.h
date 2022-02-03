@@ -150,6 +150,7 @@ public:
     bool canAccessLocalStorage(const SecurityOrigin* topOrigin) const { return canAccessStorage(topOrigin); };
     bool canAccessPluginStorage(const SecurityOrigin& topOrigin) const { return canAccessStorage(&topOrigin); }
     bool canAccessApplicationCache(const SecurityOrigin& topOrigin) const { return canAccessStorage(&topOrigin); }
+    bool canAccessSharedWorkers(const SecurityOrigin& topOrigin) const { return canAccessStorage(&topOrigin); }
     bool canAccessCookies() const { return !isUnique(); }
     bool canRequestGeolocation() const { return !isUnique(); }
     Policy canShowNotifications() const;
@@ -188,6 +189,8 @@ public:
     // Similar to toString(), but does not take into account any factors that
     // could make the string return "null".
     WEBCORE_EXPORT String toRawString() const;
+
+    URL toURL() const;
 
     // This method checks for equality between SecurityOrigins, not whether
     // one origin can access another. It is used for hash table keys.

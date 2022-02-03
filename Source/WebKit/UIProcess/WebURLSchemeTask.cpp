@@ -27,7 +27,6 @@
 #include "WebURLSchemeTask.h"
 
 #include "APIFrameInfo.h"
-#include "SharedBufferDataReference.h"
 #include "URLSchemeTaskParameters.h"
 #include "WebErrors.h"
 #include "WebPageMessages.h"
@@ -168,7 +167,7 @@ auto WebURLSchemeTask::didReceiveResponse(const ResourceResponse& response) -> E
     return ExceptionType::None;
 }
 
-auto WebURLSchemeTask::didReceiveData(Ref<SharedBuffer>&& buffer) -> ExceptionType
+auto WebURLSchemeTask::didReceiveData(const SharedBuffer& buffer) -> ExceptionType
 {
     ASSERT(RunLoop::isMain());
 
@@ -187,14 +186,11 @@ auto WebURLSchemeTask::didReceiveData(Ref<SharedBuffer>&& buffer) -> ExceptionTy
     m_dataSent = true;
 
     if (isSync()) {
-        if (m_syncData)
-            m_syncData->append(WTFMove(buffer));
-        else
-            m_syncData = WTFMove(buffer);
+        m_syncData.append(buffer);
         return ExceptionType::None;
     }
 
-    m_process->send(Messages::WebPage::URLSchemeTaskDidReceiveData(m_urlSchemeHandler->identifier(), m_resourceLoaderID, buffer.get()), m_webPageID);
+    m_process->send(Messages::WebPage::URLSchemeTaskDidReceiveData(m_urlSchemeHandler->identifier(), m_resourceLoaderID, IPC::SharedBufferCopy(buffer)), m_webPageID);
     return ExceptionType::None;
 }
 
@@ -215,14 +211,11 @@ auto WebURLSchemeTask::didComplete(const ResourceError& error) -> ExceptionType
         return ExceptionType::WaitingForRedirectCompletionHandler;
 
     m_completed = true;
-    
-    if (isSync()) {
-        Vector<uint8_t> data;
-        if (m_syncData)
-            data = { m_syncData->data(), m_syncData->size() };
 
+    if (isSync()) {
+        size_t size = m_syncData.size();
+        Vector<uint8_t> data = { m_syncData.takeAsContiguous()->data(), size };
         m_syncCompletionHandler(m_syncResponse, error, WTFMove(data));
-        m_syncData = nullptr;
     }
 
     m_process->send(Messages::WebPage::URLSchemeTaskDidComplete(m_urlSchemeHandler->identifier(), m_resourceLoaderID, error), m_webPageID);

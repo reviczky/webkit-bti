@@ -37,6 +37,8 @@
 #include "WebCacheStorageProvider.h"
 #include "WebCookieJar.h"
 #include "WebCoreArgumentCoders.h"
+#include "WebFileSystemStorageConnection.h"
+#include "WebFileSystemStorageConnectionMessages.h"
 #include "WebFrame.h"
 #include "WebIDBConnectionToServer.h"
 #include "WebIDBConnectionToServerMessages.h"
@@ -115,8 +117,12 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
         return;
     }
     if (decoder.messageReceiverName() == Messages::StorageAreaMap::messageReceiverName()) {
-        if (auto* storageAreaMap = WebProcess::singleton().storageAreaMap(makeObjectIdentifier<StorageAreaIdentifierType>(decoder.destinationID())))
+        if (auto storageAreaMap = WebProcess::singleton().storageAreaMap(makeObjectIdentifier<StorageAreaMapIdentifierType>(decoder.destinationID())))
             storageAreaMap->didReceiveMessage(connection, decoder);
+        return;
+    }
+    if (decoder.messageReceiverName() == Messages::WebFileSystemStorageConnection::messageReceiverName()) {
+        WebProcess::singleton().fileSystemStorageConnection().didReceiveMessage(connection, decoder);
         return;
     }
 
@@ -275,9 +281,9 @@ void NetworkProcessConnection::didCacheResource(const ResourceRequest& request, 
     if (!resource)
         return;
     
-    RefPtr<SharedBuffer> buffer = handle.tryWrapInSharedBuffer();
+    auto buffer = handle.tryWrapInSharedBuffer();
     if (!buffer) {
-        LOG_ERROR("Unable to create SharedBuffer from ShareableResource handle for resource url %s", request.url().string().utf8().data());
+        LOG_ERROR("Unable to create FragmentedSharedBuffer from ShareableResource handle for resource url %s", request.url().string().utf8().data());
         return;
     }
 

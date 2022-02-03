@@ -30,7 +30,7 @@
 #include "ContentSecurityPolicy.h"
 #include "ContentSecurityPolicyDirectiveNames.h"
 #include "ParsingUtilities.h"
-#include "TextEncoding.h"
+#include <pal/text/TextEncoding.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/URL.h>
@@ -155,6 +155,19 @@ bool ContentSecurityPolicySourceList::matches(const Vector<ContentSecurityPolicy
     return false;
 }
 
+bool ContentSecurityPolicySourceList::matchesAll(const Vector<ContentSecurityPolicyHash>& hashes) const
+{
+    if (hashes.isEmpty())
+        return false;
+
+    for (auto& hash : hashes) {
+        if (!m_hashes.contains(hash))
+            return false;
+    }
+
+    return true;
+}
+
 bool ContentSecurityPolicySourceList::matches(const String& nonce) const
 {
     if (nonce.isEmpty())
@@ -221,7 +234,7 @@ template<typename CharacterType> std::optional<ContentSecurityPolicySourceList::
         return source;
     }
 
-    if (skipExactlyIgnoringASCIICase(buffer, "'strict-dynamic'")) {
+    if (skipExactlyIgnoringASCIICase(buffer, "'strict-dynamic'") && (m_directiveName == ContentSecurityPolicyDirectiveNames::scriptSrc || m_directiveName == ContentSecurityPolicyDirectiveNames::scriptSrcElem)) {
         m_allowNonParserInsertedScripts = true;
         m_allowSelf = false;
         m_allowInline = false;
@@ -229,20 +242,26 @@ template<typename CharacterType> std::optional<ContentSecurityPolicySourceList::
     }
 
     if (skipExactlyIgnoringASCIICase(buffer, "'self'")) {
-        m_allowSelf = true;
+        m_allowSelf = !m_allowNonParserInsertedScripts;
         return source;
     }
 
     if (skipExactlyIgnoringASCIICase(buffer, "'unsafe-inline'")) {
-        m_allowInline = true;
+        m_allowInline = !m_allowNonParserInsertedScripts;
         return source;
     }
 
     if (skipExactlyIgnoringASCIICase(buffer, "'unsafe-eval'")) {
         m_allowEval = true;
+        m_allowWasmEval = true;
         return source;
     }
-    
+
+    if (skipExactlyIgnoringASCIICase(buffer, "'wasm-unsafe-eval'")) {
+        m_allowWasmEval = true;
+        return source;
+    }
+
     if (skipExactlyIgnoringASCIICase(buffer, "'unsafe-hashes'")) {
         m_allowUnsafeHashes = true;
         return source;
@@ -252,6 +271,9 @@ template<typename CharacterType> std::optional<ContentSecurityPolicySourceList::
         m_reportSample = true;
         return source;
     }
+
+    if (m_allowNonParserInsertedScripts)
+        return source;
 
     auto begin = buffer.position();
     auto beginHost = begin;
@@ -435,7 +457,7 @@ template<typename CharacterType> std::optional<String> ContentSecurityPolicySour
     ASSERT(buffer.position() <= buffer.end());
     ASSERT(buffer.atEnd() || (*buffer == '#' || *buffer == '?'));
 
-    return decodeURLEscapeSequences(StringView(begin, buffer.position() - begin));
+    return PAL::decodeURLEscapeSequences(StringView(begin, buffer.position() - begin));
 }
 
 // port              = ":" ( 1*DIGIT / "*" )

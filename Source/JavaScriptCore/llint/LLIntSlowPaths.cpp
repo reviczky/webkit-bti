@@ -477,10 +477,8 @@ LLINT_SLOW_PATH_DECL(loop_osr)
     if (UNLIKELY(Options::returnEarlyFromInfiniteLoopsForFuzzing() && codeBlock->loopHintsAreEligibleForFuzzingEarlyReturn())) {
         uintptr_t* ptr = vm.getLoopHintExecutionCounter(pc);
         *ptr += codeBlock->llintExecuteCounter().m_activeThreshold;
-        if (*ptr >= Options::earlyReturnFromInfiniteLoopsLimit()) {
-            codeBlock->ensureJITData(ConcurrentJSLocker(codeBlock->m_lock)); // We're returning to the OSR entry code here, which expects that m_jitData is not null.
+        if (*ptr >= Options::earlyReturnFromInfiniteLoopsLimit())
             LLINT_RETURN_TWO(LLInt::fuzzerReturnEarlyFromLoopHintEntrypoint().code().executableAddress(), callFrame->topOfFrame());
-        }
     }
     
     
@@ -583,12 +581,12 @@ LLINT_SLOW_PATH_DECL(stack_check)
     LLINT_RETURN_TWO(pc, callFrame);
 }
 
-extern "C" SlowPathReturnType llint_link_call(CallFrame* calleeFrame, JSCell* globalObject, CallLinkInfo* callLinkInfo, JSCell*)
+extern "C" SlowPathReturnType llint_link_call(CallFrame* calleeFrame, JSCell* globalObject, CallLinkInfo* callLinkInfo)
 {
     return linkFor(calleeFrame, jsCast<JSGlobalObject*>(globalObject), callLinkInfo);
 }
 
-extern "C" SlowPathReturnType llint_virtual_call(CallFrame* calleeFrame, JSCell* globalObject, CallLinkInfo* callLinkInfo, JSCell*)
+extern "C" SlowPathReturnType llint_virtual_call(CallFrame* calleeFrame, JSCell* globalObject, CallLinkInfo* callLinkInfo)
 {
     JSCell* calleeAsFunctionCellIgnored;
     return virtualForWithFunction(jsCast<JSGlobalObject*>(globalObject), calleeFrame, callLinkInfo, calleeAsFunctionCellIgnored);
@@ -637,22 +635,6 @@ LLINT_SLOW_PATH_DECL(slow_path_instanceof)
     LLINT_RETURN(jsBoolean(JSObject::defaultHasInstance(globalObject, value, proto)));
 }
 
-LLINT_SLOW_PATH_DECL(slow_path_instanceof_custom)
-{
-    LLINT_BEGIN();
-
-    auto bytecode = pc->as<OpInstanceofCustom>();
-    JSValue value = getOperand(callFrame, bytecode.m_value);
-    JSValue constructor = getOperand(callFrame, bytecode.m_constructor);
-    JSValue hasInstanceValue = getOperand(callFrame, bytecode.m_hasInstanceValue);
-
-    ASSERT(constructor.isObject());
-    ASSERT(hasInstanceValue != globalObject->functionProtoHasInstanceSymbolFunction() || !constructor.getObject()->structure(vm)->typeInfo().implementsDefaultHasInstance());
-
-    JSValue result = jsBoolean(constructor.getObject()->hasInstance(globalObject, value, hasInstanceValue));
-    LLINT_RETURN(result);
-}
-
 LLINT_SLOW_PATH_DECL(slow_path_try_get_by_id)
 {
     LLINT_BEGIN();
@@ -663,6 +645,42 @@ LLINT_SLOW_PATH_DECL(slow_path_try_get_by_id)
 
     baseValue.getPropertySlot(globalObject, ident, slot);
     JSValue result = slot.getPureResult();
+
+    if (!LLINT_ALWAYS_ACCESS_SLOW && slot.isCacheable() && !slot.isUnset()) {
+        ASSERT(!slot.isTaintedByOpaqueObject());
+        ASSERT(baseValue.isCell());
+
+        auto& metadata = bytecode.metadata(codeBlock);
+        {
+            StructureID oldStructureID = metadata.m_structureID;
+            if (oldStructureID) {
+                Structure* a = oldStructureID.decode();
+                Structure* b = baseValue.asCell()->structure(vm);
+
+                if (Structure::shouldConvertToPolyProto(a, b)) {
+                    ASSERT(a->rareData()->sharedPolyProtoWatchpoint().get() == b->rareData()->sharedPolyProtoWatchpoint().get());
+                    a->rareData()->sharedPolyProtoWatchpoint()->invalidate(vm, StringFireDetail("Detected poly proto opportunity."));
+                }
+            }
+        }
+
+        JSCell* baseCell = baseValue.asCell();
+        Structure* structure = baseCell->structure(vm);
+        if (slot.isValue() && slot.slotBase() == baseValue) {
+            // Start out by clearing out the old cache.
+            metadata.m_structureID = StructureID();
+            metadata.m_offset = 0;
+
+            if (structure->propertyAccessesAreCacheable() && !structure->needImpurePropertyWatchpoint()) {
+                {
+                    ConcurrentJSLocker locker(codeBlock->m_lock);
+                    metadata.m_structureID = structure->id();
+                    metadata.m_offset = slot.cachedOffset();
+                }
+                vm.writeBarrier(codeBlock);
+            }
+        }
+    }
 
     LLINT_RETURN_PROFILED(result);
 }
@@ -685,7 +703,7 @@ LLINT_SLOW_PATH_DECL(slow_path_get_by_id_direct)
         {
             StructureID oldStructureID = metadata.m_structureID;
             if (oldStructureID) {
-                Structure* a = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* a = oldStructureID.decode();
                 Structure* b = baseValue.asCell()->structure(vm);
 
                 if (Structure::shouldConvertToPolyProto(a, b)) {
@@ -699,7 +717,7 @@ LLINT_SLOW_PATH_DECL(slow_path_get_by_id_direct)
         Structure* structure = baseCell->structure(vm);
         if (slot.isValue()) {
             // Start out by clearing out the old cache.
-            metadata.m_structureID = 0;
+            metadata.m_structureID = StructureID();
             metadata.m_offset = 0;
 
             if (structure->propertyAccessesAreCacheable() && !structure->needImpurePropertyWatchpoint()) {
@@ -812,10 +830,10 @@ static JSValue performLLIntGetByID(const Instruction* pc, CodeBlock* codeBlock, 
                 oldStructureID = metadata.protoLoadMode.structureID;
                 break;
             default:
-                oldStructureID = 0;
+                oldStructureID = StructureID();
             }
             if (oldStructureID) {
-                Structure* a = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* a = oldStructureID.decode();
                 Structure* b = baseValue.asCell()->structure(vm);
 
                 if (Structure::shouldConvertToPolyProto(a, b)) {
@@ -950,7 +968,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_id)
         {
             StructureID oldStructureID = metadata.m_oldStructureID;
             if (oldStructureID) {
-                Structure* a = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* a = oldStructureID.decode();
                 Structure* b = baseValue.asCell()->structure(vm);
                 if (slot.type() == PutPropertySlot::NewProperty)
                     b = b->previousID();
@@ -963,9 +981,9 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_id)
         }
 
         // Start out by clearing out the old cache.
-        metadata.m_oldStructureID = 0;
+        metadata.m_oldStructureID = StructureID();
         metadata.m_offset = 0;
-        metadata.m_newStructureID = 0;
+        metadata.m_newStructureID = StructureID();
         metadata.m_structureChain.clear();
         
         JSCell* baseCell = baseValue.asCell();
@@ -1139,7 +1157,7 @@ LLINT_SLOW_PATH_DECL(slow_path_get_private_name)
         {
             StructureID oldStructureID = metadata.m_structureID;
             if (oldStructureID) {
-                Structure* a = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* a = oldStructureID.decode();
                 Structure* b = baseValue.asCell()->structure(vm);
 
                 if (Structure::shouldConvertToPolyProto(a, b)) {
@@ -1153,7 +1171,7 @@ LLINT_SLOW_PATH_DECL(slow_path_get_private_name)
         Structure* structure = baseCell->structure(vm);
         if (slot.isValue()) {
             // Start out by clearing out the old cache.
-            metadata.m_structureID = 0;
+            metadata.m_structureID = StructureID();
             metadata.m_offset = 0;
 
             if (!structure->isUncacheableDictionary()) {
@@ -1272,7 +1290,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_private_name)
         {
             StructureID oldStructureID = metadata.m_oldStructureID;
             if (oldStructureID) {
-                Structure* a = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* a = oldStructureID.decode();
                 Structure* b = baseValue.asCell()->structure(vm);
                 if (slot.type() == PutPropertySlot::NewProperty)
                     b = b->previousID();
@@ -1285,9 +1303,9 @@ LLINT_SLOW_PATH_DECL(slow_path_put_private_name)
         }
 
         // Start out by clearing out the old cache.
-        metadata.m_oldStructureID = 0;
+        metadata.m_oldStructureID = StructureID();
         metadata.m_offset = 0;
-        metadata.m_newStructureID = 0;
+        metadata.m_newStructureID = StructureID();
         metadata.m_property.clear();
         
         JSCell* baseCell = baseValue.asCell();
@@ -1361,8 +1379,8 @@ LLINT_SLOW_PATH_DECL(slow_path_set_private_brand)
         ASSERT(oldStructure->transitionWatchpointSetHasBeenInvalidated());
 
         // Start out by clearing out the old cache.
-        metadata.m_oldStructureID = 0;
-        metadata.m_newStructureID = 0;
+        metadata.m_oldStructureID = StructureID();
+        metadata.m_newStructureID = StructureID();
         metadata.m_brand.clear();
 
         if (!newStructure->isDictionary()) {
@@ -1468,7 +1486,7 @@ LLINT_SLOW_PATH_DECL(slow_path_has_private_name)
     auto propertyValue = getOperand(callFrame, bytecode.m_property);
     ASSERT(propertyValue.isSymbol());
     auto property = propertyValue.toPropertyKey(globalObject);
-    EXCEPTION_ASSERT(!throwScope.exception());
+    LLINT_CHECK_EXCEPTION();
 
     LLINT_RETURN(jsBoolean(asObject(baseValue)->hasPrivateField(globalObject, property)));
 }

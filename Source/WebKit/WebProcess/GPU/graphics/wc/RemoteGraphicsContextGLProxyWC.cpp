@@ -33,42 +33,65 @@
 #include "RemoteGraphicsContextGLMessages.h"
 #include "WCPlatformLayerGCGL.h"
 #include "WebProcess.h"
+#include <WebCore/GraphicsLayerContentsDisplayDelegate.h>
 #include <WebCore/TextureMapperPlatformLayer.h>
 
 namespace WebKit {
 
 namespace {
 
+class PlatformLayerDisplayDelegate final : public WebCore::GraphicsLayerContentsDisplayDelegate {
+public:
+    static Ref<PlatformLayerDisplayDelegate> create(PlatformLayerContainer&& platformLayer)
+    {
+        return adoptRef(*new PlatformLayerDisplayDelegate(WTFMove(platformLayer)));
+    }
+
+    PlatformLayer* platformLayer() const final
+    {
+        return m_platformLayer.get();
+    }
+
+private:
+    PlatformLayerDisplayDelegate(PlatformLayerContainer&& platformLayer)
+        : m_platformLayer(WTFMove(platformLayer))
+    {
+    }
+
+    PlatformLayerContainer m_platformLayer;
+};
+
 class RemoteGraphicsContextGLProxyWC final : public RemoteGraphicsContextGLProxy {
 public:
     // RemoteGraphicsContextGLProxy overrides.
     void prepareForDisplay() final;
-    PlatformLayer* platformLayer() const final { return m_platformLayer.get(); }
+    RefPtr<WebCore::GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() final { return m_layerContentsDisplayDelegate.ptr(); }
 #if ENABLE(MEDIA_STREAM)
     RefPtr<WebCore::MediaSample> paintCompositedResultsToMediaSample() final { return nullptr; }
 #endif
 private:
-    RemoteGraphicsContextGLProxyWC(GPUProcessConnection&, const WebCore::GraphicsContextGLAttributes&, RenderingBackendIdentifier);
+    RemoteGraphicsContextGLProxyWC(GPUProcessConnection& gpuProcessConnection, const WebCore::GraphicsContextGLAttributes& attributes, RenderingBackendIdentifier renderingBackend)
+        : RemoteGraphicsContextGLProxy(gpuProcessConnection, attributes, renderingBackend)
+        , m_layerContentsDisplayDelegate(PlatformLayerDisplayDelegate::create(makeUnique<WCPlatformLayerGCGL>()))
+    {
+    }
 
-    PlatformLayerContainer m_platformLayer;
+    Ref<PlatformLayerDisplayDelegate> m_layerContentsDisplayDelegate;
     friend class RemoteGraphicsContextGLProxy;
 };
-
-RemoteGraphicsContextGLProxyWC::RemoteGraphicsContextGLProxyWC(GPUProcessConnection& gpuProcessConnection, const WebCore::GraphicsContextGLAttributes& attributes, RenderingBackendIdentifier renderingBackend)
-    : RemoteGraphicsContextGLProxy(gpuProcessConnection, attributes, renderingBackend)
-    , m_platformLayer(makeUnique<WCPlatformLayerGCGL>(m_graphicsContextGLIdentifier))
-{
-}
 
 void RemoteGraphicsContextGLProxyWC::prepareForDisplay()
 {
     if (isContextLost())
         return;
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::PrepareForDisplay(), Messages::RemoteGraphicsContextGL::PrepareForDisplay::Reply());
+    std::optional<WCContentBufferIdentifier> contentBuffer;
+    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::PrepareForDisplay(), Messages::RemoteGraphicsContextGL::PrepareForDisplay::Reply(contentBuffer));
     if (!sendResult) {
         markContextLost();
         return;
     }
+    if (contentBuffer)
+        static_cast<WCPlatformLayerGCGL*>(m_layerContentsDisplayDelegate->platformLayer())->addContentBufferIdentifier(*contentBuffer);
     markLayerComposited();
 }
 

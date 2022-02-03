@@ -58,6 +58,7 @@ namespace WebCore {
 class Animation;
 class GraphicsContext;
 class GraphicsLayerFactory;
+class GraphicsLayerContentsDisplayDelegate;
 class Image;
 class Model;
 class TiledBacking;
@@ -522,6 +523,7 @@ public:
     // Pass an invalid color to remove the contents layer.
     virtual void setContentsToSolidColor(const Color&) { }
     virtual void setContentsToPlatformLayer(PlatformLayer*, ContentsLayerPurpose) { }
+    virtual void setContentsDisplayDelegate(RefPtr<GraphicsLayerContentsDisplayDelegate>&&, ContentsLayerPurpose);
 #if ENABLE(MODEL_ELEMENT)
     virtual void setContentsToModel(RefPtr<Model>&&) { }
     virtual PlatformLayerID contentsLayerIDForModel() const { return 0; }
@@ -662,12 +664,10 @@ protected:
     // Given a KeyframeValueList containing filterOperations, return true if the operations are valid.
     static int validateFilterOperations(const KeyframeValueList&);
 
-    // Given a list of TransformAnimationValues, see if all the operations for each keyframe match. If so
-    // return the index of the KeyframeValueList entry that has that list of operations (it may not be
-    // the first entry because some keyframes might have an empty transform and those match any list).
-    // If the lists don't match return -1. On return, if hasBigRotation is true, functions contain 
-    // rotations of >= 180 degrees
-    static int validateTransformOperations(const KeyframeValueList&, bool& hasBigRotation);
+    // Given a list of TransformAnimationValues keyframes, place a list of primitive operations which can
+    // represent the transform functions of every keyframe in the sharedPrimitives out parameter and return
+    // true. If the keyframes do not share compatible functions, return false.
+    static bool getSharedPrimitivesForTransformKeyframes(const KeyframeValueList&, Vector<TransformOperation::OperationType>& sharedPrimitives);
 
     virtual bool shouldRepaintOnSizeChange() const { return drawsContent(); }
 

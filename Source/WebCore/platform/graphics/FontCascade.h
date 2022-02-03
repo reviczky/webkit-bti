@@ -135,6 +135,10 @@ public:
 
     std::unique_ptr<TextLayout, TextLayoutDeleter> createLayout(RenderText&, float xPos, bool collapseWhiteSpace) const;
     static float width(TextLayout&, unsigned from, unsigned len, HashSet<const Font*>* fallbackFonts = 0);
+    float widthOfSpaceString() const
+    {
+        return width(TextRun { String { &space, 1 } });
+    }
 
     int offsetForPosition(const TextRun&, float position, bool includePartialGlyphs) const;
     void adjustSelectionRectForText(const TextRun&, LayoutRect& selectionRect, unsigned from = 0, std::optional<unsigned> to = std::nullopt) const;
@@ -163,8 +167,7 @@ public:
 
     bool isPlatformFont() const { return m_fonts->isForPlatformFont(); }
 
-    const FontMetrics& fontMetrics() const { return primaryFont().fontMetrics(); }
-    float spaceWidth() const { return primaryFont().spaceWidth() + m_letterSpacing; }
+    const FontMetrics& metricsOfPrimaryFont() const { return primaryFont().fontMetrics(); }
     float tabWidth(const Font&, const TabSize&, float) const;
     float tabWidth(const TabSize& tabSize, float position) const { return tabWidth(primaryFont(), tabSize, position); }
     bool hasValidAverageCharWidth() const;
@@ -259,9 +262,19 @@ public:
     static CodePath s_codePath;
 
     FontSelector* fontSelector() const;
-    static bool treatAsSpace(UChar32 c) { return c == ' ' || c == '\t' || c == '\n' || c == noBreakSpace; }
-    static bool treatAsZeroWidthSpace(UChar32 c) { return treatAsZeroWidthSpaceInComplexScript(c) || c == 0x200c || c == 0x200d; }
-    static bool treatAsZeroWidthSpaceInComplexScript(UChar32 c) { return c < 0x20 || (c >= 0x7F && c < 0xA0) || c == softHyphen || c == zeroWidthSpace || (c >= 0x200e && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || c == zeroWidthNoBreakSpace || c == objectReplacementCharacter; }
+    static bool treatAsSpace(UChar32 c) { return c == space || c == tabCharacter || c == newlineCharacter || c == noBreakSpace; }
+    static bool isCharacterWhoseGlyphsShouldBeDeletedForTextRendering(UChar32 character)
+    {
+        // https://drafts.csswg.org/css-text-3/#white-space-processing
+        // "Unsupported Default_ignorable characters must be ignored for text rendering."
+        return (character >= nullCharacter && character < space)
+            || (character >= deleteCharacter && character < noBreakSpace)
+            || character == objectReplacementCharacter
+            || u_hasBinaryProperty(character, UCHAR_DEFAULT_IGNORABLE_CODE_POINT);
+    }
+    // FIXME: Callers of treatAsZeroWidthSpace() and treatAsZeroWidthSpaceInComplexScript() should probably be calling isCharacterWhoseGlyphsShouldBeDeletedForTextRendering() instead.
+    static bool treatAsZeroWidthSpace(UChar32 c) { return treatAsZeroWidthSpaceInComplexScript(c) || c == zeroWidthNonJoiner || c == zeroWidthJoiner; }
+    static bool treatAsZeroWidthSpaceInComplexScript(UChar32 c) { return c < space || (c >= deleteCharacter && c < noBreakSpace) || c == softHyphen || c == zeroWidthSpace || (c >= leftToRightMark && c <= rightToLeftMark) || (c >= leftToRightEmbed && c <= rightToLeftOverride) || c == zeroWidthNoBreakSpace || c == objectReplacementCharacter; }
     static bool canReceiveTextEmphasis(UChar32);
 
     static inline UChar normalizeSpaces(UChar character)

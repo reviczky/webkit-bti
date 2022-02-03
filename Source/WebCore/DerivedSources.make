@@ -46,7 +46,7 @@ endif
 FRAMEWORK_FLAGS := $(shell echo $(BUILT_PRODUCTS_DIR) $(FRAMEWORK_SEARCH_PATHS) $(SYSTEM_FRAMEWORK_SEARCH_PATHS) | $(PERL) -e 'print "-F " . join(" -F ", split(" ", <>));')
 HEADER_FLAGS := $(shell echo $(BUILT_PRODUCTS_DIR) $(HEADER_SEARCH_PATHS) $(SYSTEM_HEADER_SEARCH_PATHS) | $(PERL) -e 'print "-I" . join(" -I", split(" ", <>));')
 
-platform_h_compiler_command = $(CC) -std=gnu++1z -x c++ $(1) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) -include "wtf/Platform.h" /dev/null
+platform_h_compiler_command = $(CC) -std=c++2a -x c++ $(1) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) -include "wtf/Platform.h" /dev/null
 
 FEATURE_AND_PLATFORM_DEFINES := $(shell $(call platform_h_compiler_command,-E -P -dM) | $(PERL) -ne "print if s/\#define ((HAVE_|USE_|ENABLE_|WTF_PLATFORM_)\w+) 1/\1/")
 
@@ -239,6 +239,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/applepay/ApplePayShippingMethodUpdate.idl \
     $(WebCore)/Modules/applepay/ApplePayValidateMerchantEvent.idl \
     $(WebCore)/Modules/applepay/paymentrequest/ApplePayModifier.idl \
+    $(WebCore)/Modules/applepay/paymentrequest/ApplePayPaymentCompleteDetails.idl \
     $(WebCore)/Modules/applepay/paymentrequest/ApplePayRequest.idl \
     $(WebCore)/Modules/applepay-ams-ui/ApplePayAMSUIRequest.idl \
     $(WebCore)/Modules/async-clipboard/Clipboard.idl \
@@ -254,6 +255,8 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/contact-picker/ContactsManager.idl \
     $(WebCore)/Modules/contact-picker/ContactsSelectOptions.idl \
     $(WebCore)/Modules/contact-picker/Navigator+Contacts.idl \
+    $(WebCore)/Modules/cookie-consent/Navigator+CookieConsent.idl \
+    $(WebCore)/Modules/cookie-consent/RequestCookieConsentOptions.idl \
     $(WebCore)/Modules/credentialmanagement/BasicCredential.idl \
     $(WebCore)/Modules/credentialmanagement/CredentialCreationOptions.idl \
     $(WebCore)/Modules/credentialmanagement/CredentialRequestOptions.idl \
@@ -459,6 +462,9 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/model-element/HTMLModelElement.idl \
     $(WebCore)/Modules/model-element/HTMLModelElementCamera.idl \
     $(WebCore)/Modules/notifications/Notification.idl \
+    $(WebCore)/Modules/notifications/NotificationDirection.idl \
+    $(WebCore)/Modules/notifications/NotificationEvent.idl \
+    $(WebCore)/Modules/notifications/NotificationOptions.idl \
     $(WebCore)/Modules/notifications/NotificationPermission.idl \
     $(WebCore)/Modules/notifications/NotificationPermissionCallback.idl \
     $(WebCore)/Modules/paymentrequest/AddressErrors.idl \
@@ -466,6 +472,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/paymentrequest/PayerErrorFields.idl \
     $(WebCore)/Modules/paymentrequest/PaymentAddress.idl \
     $(WebCore)/Modules/paymentrequest/PaymentComplete.idl \
+    $(WebCore)/Modules/paymentrequest/PaymentCompleteDetails.idl \
     $(WebCore)/Modules/paymentrequest/PaymentCurrencyAmount.idl \
     $(WebCore)/Modules/paymentrequest/PaymentDetailsBase.idl \
     $(WebCore)/Modules/paymentrequest/PaymentDetailsInit.idl \
@@ -543,6 +550,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/web-locks/WebLock.idl \
     $(WebCore)/Modules/web-locks/WebLockGrantedCallback.idl \
     $(WebCore)/Modules/web-locks/WebLockManager.idl \
+    $(WebCore)/Modules/web-locks/WebLockManagerSnapshot.idl \
     $(WebCore)/Modules/web-locks/WebLockMode.idl \
     $(WebCore)/Modules/webaudio/AnalyserNode.idl \
     $(WebCore)/Modules/webaudio/AnalyserOptions.idl \
@@ -634,6 +642,11 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/webauthn/PublicKeyCredentialRequestOptions.idl \
     $(WebCore)/Modules/webauthn/PublicKeyCredentialType.idl \
     $(WebCore)/Modules/webauthn/UserVerificationRequirement.idl \
+	$(WebCore)/Modules/webcodecs/VideoColorPrimaries.idl \
+	$(WebCore)/Modules/webcodecs/VideoColorSpace.idl \
+	$(WebCore)/Modules/webcodecs/VideoColorSpaceInit.idl \
+	$(WebCore)/Modules/webcodecs/VideoMatrixCoefficients.idl \
+	$(WebCore)/Modules/webcodecs/VideoTransferCharacteristics.idl \
     $(WebCore)/Modules/webdatabase/DOMWindow+WebDatabase.idl \
     $(WebCore)/Modules/webdatabase/Database.idl \
     $(WebCore)/Modules/webdatabase/DatabaseCallback.idl \
@@ -694,6 +707,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/animation/Animatable.idl \
     $(WebCore)/animation/AnimationEffect.idl \
     $(WebCore)/animation/AnimationFrameProvider.idl \
+    $(WebCore)/animation/AnimationFrameRatePreset.idl \
     $(WebCore)/animation/AnimationPlaybackEvent.idl \
     $(WebCore)/animation/AnimationPlaybackEventInit.idl \
     $(WebCore)/animation/AnimationTimeline.idl \
@@ -702,6 +716,9 @@ JS_BINDING_IDLS := \
     $(WebCore)/animation/CompositeOperation.idl \
     $(WebCore)/animation/CompositeOperationOrAuto.idl \
     $(WebCore)/animation/ComputedEffectTiming.idl \
+    $(WebCore)/animation/CustomAnimationOptions.idl \
+    $(WebCore)/animation/CustomEffect.idl \
+    $(WebCore)/animation/CustomEffectCallback.idl \
     $(WebCore)/animation/Document+WebAnimations.idl \
     $(WebCore)/animation/DocumentOrShadowRoot+WebAnimations.idl \
     $(WebCore)/animation/DocumentTimeline.idl \
@@ -752,7 +769,9 @@ JS_BINDING_IDLS := \
     $(WebCore)/css/CSSFontPaletteValuesRule.idl \
     $(WebCore)/css/CSSGroupingRule.idl \
     $(WebCore)/css/CSSImportRule.idl \
-    $(WebCore)/css/CSSLayerRule.idl \
+    $(WebCore)/css/CSSImportRule+Layer.idl \
+    $(WebCore)/css/CSSLayerBlockRule.idl \
+    $(WebCore)/css/CSSLayerStatementRule.idl \
     $(WebCore)/css/CSSKeyframeRule.idl \
     $(WebCore)/css/CSSKeyframesRule.idl \
     $(WebCore)/css/CSSMediaRule.idl \
@@ -831,7 +850,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/AddEventListenerOptions.idl \
     $(WebCore)/dom/AnimationEvent.idl \
     $(WebCore)/dom/Attr.idl \
-    $(WebCore)/dom/BeforeLoadEvent.idl \
     $(WebCore)/dom/BeforeUnloadEvent.idl \
     $(WebCore)/dom/BroadcastChannel.idl \
     $(WebCore)/dom/CDATASection.idl \
@@ -953,8 +971,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/UIEvent.idl \
     $(WebCore)/dom/UIEventInit.idl \
     $(WebCore)/dom/VisibilityState.idl \
-    $(WebCore)/dom/WebKitAnimationEvent.idl \
-    $(WebCore)/dom/WebKitTransitionEvent.idl \
     $(WebCore)/dom/WheelEvent.idl \
     $(WebCore)/dom/XMLDocument.idl \
     $(WebCore)/fileapi/Blob.idl \
@@ -1006,7 +1022,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/HTMLImageElement+CSSOMView.idl \
     $(WebCore)/html/HTMLImageElement.idl \
     $(WebCore)/html/HTMLInputElement.idl \
-    $(WebCore)/html/HTMLKeygenElement.idl \
     $(WebCore)/html/HTMLLIElement.idl \
     $(WebCore)/html/HTMLLabelElement.idl \
     $(WebCore)/html/HTMLLegendElement.idl \
@@ -1159,6 +1174,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/canvas/WebGLVertexArrayObject.idl \
     $(WebCore)/html/canvas/WebGLVertexArrayObjectOES.idl \
     $(WebCore)/html/track/AudioTrack.idl \
+    $(WebCore)/html/track/AudioTrackConfiguration.idl \
     $(WebCore)/html/track/AudioTrackList.idl \
     $(WebCore)/html/track/DataCue.idl \
     $(WebCore)/html/track/TextTrack.idl \
@@ -1171,6 +1187,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/track/VTTRegion.idl \
     $(WebCore)/html/track/VTTRegionList.idl \
     $(WebCore)/html/track/VideoTrack.idl \
+	$(WebCore)/html/track/VideoTrackConfiguration.idl \
     $(WebCore)/html/track/VideoTrackList.idl \
     $(WebCore)/mathml/MathMLElement.idl \
     $(WebCore)/mathml/MathMLMathElement.idl \
@@ -1240,6 +1257,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/page/ScrollLogicalPosition.idl \
     $(WebCore)/page/ScrollOptions.idl \
     $(WebCore)/page/ScrollToOptions.idl \
+    $(WebCore)/page/ShadowRealmGlobalScope.idl \
     $(WebCore)/page/ShareData.idl \
     $(WebCore)/page/StructuredSerializeOptions.idl \
     $(WebCore)/page/UndoItem.idl \
@@ -1434,17 +1452,17 @@ JS_BINDING_IDLS := \
     $(WebCore)/testing/XRSimulateUserActivationFunction.idl \
     $(WebCore)/workers/AbstractWorker.idl \
     $(WebCore)/workers/DedicatedWorkerGlobalScope.idl \
-    $(WebCore)/workers/SharedWorker.idl \
-    $(WebCore)/workers/SharedWorkerGlobalScope.idl \
     $(WebCore)/workers/Worker.idl \
     $(WebCore)/workers/WorkerGlobalScope.idl \
     $(WebCore)/workers/WorkerLocation.idl \
-	$(WebCore)/workers/WorkerOptions.idl \
+    $(WebCore)/workers/WorkerOptions.idl \
     $(WebCore)/workers/WorkerType.idl \
     $(WebCore)/workers/service/ExtendableEvent.idl \
     $(WebCore)/workers/service/ExtendableEventInit.idl \
     $(WebCore)/workers/service/ExtendableMessageEvent.idl \
     $(WebCore)/workers/service/FetchEvent.idl \
+    $(WebCore)/workers/service/NavigationPreloadManager.idl \
+    $(WebCore)/workers/service/NavigationPreloadState.idl \
     $(WebCore)/workers/service/ServiceWorker.idl \
     $(WebCore)/workers/service/ServiceWorkerClient.idl \
     $(WebCore)/workers/service/ServiceWorkerClientType.idl \
@@ -1454,6 +1472,8 @@ JS_BINDING_IDLS := \
     $(WebCore)/workers/service/ServiceWorkerRegistration.idl \
     $(WebCore)/workers/service/ServiceWorkerUpdateViaCache.idl \
     $(WebCore)/workers/service/ServiceWorkerWindowClient.idl \
+    $(WebCore)/workers/shared/SharedWorker.idl \
+    $(WebCore)/workers/shared/SharedWorkerGlobalScope.idl \
     $(WebCore)/worklets/PaintWorkletGlobalScope.idl \
     $(WebCore)/worklets/Worklet.idl \
     $(WebCore)/worklets/WorkletGlobalScope.idl \
@@ -1763,6 +1783,7 @@ USER_AGENT_STYLE_SHEETS = \
     $(WebCore)/css/plugIns.css \
     $(WebCore)/css/quirks.css \
     $(WebCore)/css/svg.css \
+    $(WebCore)/html/shadow/mac/imageControlsMac.css \
     $(WebCore)/html/shadow/imageOverlay.css \
     $(WebCore)/html/shadow/meterElementShadow.css \
     ModernMediaControls.css \
@@ -2058,6 +2079,7 @@ ISO_SUBSPACES_HEADER_FILE = DOMIsoSubspaces.h
 CONSTRUCTORS_HEADER_FILE = DOMConstructors.h
 WINDOW_CONSTRUCTORS_FILE = DOMWindowConstructors.idl
 WORKERGLOBALSCOPE_CONSTRUCTORS_FILE = WorkerGlobalScopeConstructors.idl
+SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE = ShadowRealmGlobalScopeConstructors.idl
 DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE = DedicatedWorkerGlobalScopeConstructors.idl
 SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE = ServiceWorkerGlobalScopeConstructors.idl
 SHAREDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE = SharedWorkerGlobalScopeConstructors.idl
@@ -2073,6 +2095,7 @@ IDL_INTERMEDIATE_FILES = \
     $(CONSTRUCTORS_HEADER_FILE) \
     $(WINDOW_CONSTRUCTORS_FILE) \
     $(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE) \
+    $(SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE) \
     $(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) \
     $(SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) \
     $(WORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) \
@@ -2083,7 +2106,7 @@ IDL_INTERMEDIATE_PATTERNS = $(subst .,%,$(IDL_INTERMEDIATE_FILES))
 
 $(IDL_INTERMEDIATE_PATTERNS) : $(PREPROCESS_IDLS_SCRIPTS) $(IDL_ATTRIBUTES_FILE) $(JS_BINDING_IDLS) $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES)
 	$(shell echo $(JS_BINDING_IDLS) | tr " " "\n" > IDLFileNamesList.txt)
-	$(PERL) $(WebCore)/bindings/scripts/preprocess-idls.pl --defines "$(FEATURE_AND_PLATFORM_DEFINES) LANGUAGE_JAVASCRIPT" --idlFileNamesList IDLFileNamesList.txt --idlAttributesFile $(IDL_ATTRIBUTES_FILE) --supplementalDependencyFile $(SUPPLEMENTAL_DEPENDENCY_FILE) --isoSubspacesHeaderFile $(ISO_SUBSPACES_HEADER_FILE) --constructorsHeaderFile $(CONSTRUCTORS_HEADER_FILE) --windowConstructorsFile $(WINDOW_CONSTRUCTORS_FILE) --workerGlobalScopeConstructorsFile $(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --dedicatedWorkerGlobalScopeConstructorsFile $(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --serviceWorkerGlobalScopeConstructorsFile $(SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --sharedWorkerGlobalScopeConstructorsFile $(SHAREDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --workletGlobalScopeConstructorsFile $(WORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --paintWorkletGlobalScopeConstructorsFile $(PAINTWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --audioWorkletGlobalScopeConstructorsFile $(AUDIOWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --supplementalMakefileDeps $(SUPPLEMENTAL_MAKEFILE_DEPS)
+	$(PERL) $(WebCore)/bindings/scripts/preprocess-idls.pl --defines "$(FEATURE_AND_PLATFORM_DEFINES) LANGUAGE_JAVASCRIPT" --idlFileNamesList IDLFileNamesList.txt --idlAttributesFile $(IDL_ATTRIBUTES_FILE) --supplementalDependencyFile $(SUPPLEMENTAL_DEPENDENCY_FILE) --isoSubspacesHeaderFile $(ISO_SUBSPACES_HEADER_FILE) --constructorsHeaderFile $(CONSTRUCTORS_HEADER_FILE) --windowConstructorsFile $(WINDOW_CONSTRUCTORS_FILE) --workerGlobalScopeConstructorsFile $(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --shadowRealmGlobalScopeConstructorsFile $(SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE) --dedicatedWorkerGlobalScopeConstructorsFile $(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --serviceWorkerGlobalScopeConstructorsFile $(SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --sharedWorkerGlobalScopeConstructorsFile $(SHAREDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE) --workletGlobalScopeConstructorsFile $(WORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --paintWorkletGlobalScopeConstructorsFile $(PAINTWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --audioWorkletGlobalScopeConstructorsFile $(AUDIOWORKLETGLOBALSCOPE_CONSTRUCTORS_FILE) --supplementalMakefileDeps $(SUPPLEMENTAL_MAKEFILE_DEPS)
 
 #
 # Emit the rules to generate bindings from IDL files. Note that there are

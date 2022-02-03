@@ -52,9 +52,11 @@
 #include "GraphicsContext.h"
 #include "GraphicsContextGLImageExtractor.h"
 #include "GraphicsContextGLOpenGL.h"
+#include "GraphicsLayerContentsDisplayDelegate.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLVideoElement.h"
+#include "HostWindow.h"
 #include "ImageBitmap.h"
 #include "ImageBuffer.h"
 #include "ImageData.h"
@@ -792,7 +794,7 @@ std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(Can
     bool isPendingPolicyResolution = false;
     HostWindow* hostWindow = nullptr;
 
-    auto* canvasElement = is<HTMLCanvasElement>(canvas) ? &downcast<HTMLCanvasElement>(canvas) : nullptr;
+    auto* canvasElement = dynamicDowncast<HTMLCanvasElement>(canvas);
 
     if (canvasElement) {
         Document& document = canvasElement->document();
@@ -859,7 +861,13 @@ std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(Can
         renderingContext->suspendIfNeeded();
         return renderingContext;
     }
-    auto context = GraphicsContextGL::create(attributes, hostWindow);
+    RefPtr<GraphicsContextGL> context;
+    if (hostWindow)
+        context = hostWindow->createGraphicsContextGL(attributes);
+    else {
+        // FIXME: OffscreenCanvas does not support GPU process.
+        context = createWebProcessGraphicsContextGL(attributes);
+    }
     if (!context) {
         if (canvasElement) {
             canvasElement->dispatchEvent(WebGLContextEvent::create(eventNames().webglcontextcreationerrorEvent,
@@ -2758,22 +2766,6 @@ void WebGLRenderingContextBase::drawArrays(GCGLenum mode, GCGLint first, GCGLsiz
     markContextChangedAndNotifyCanvasObserver();
 }
 
-#if USE(OPENGL) && ENABLE(WEBGL2)
-static GCGLuint getRestartIndex(GCGLenum type)
-{
-    switch (type) {
-    case GraphicsContextGL::UNSIGNED_BYTE:
-        return std::numeric_limits<GCGLubyte>::max();
-    case GraphicsContextGL::UNSIGNED_SHORT:
-        return std::numeric_limits<GCGLushort>::max();
-    case GraphicsContextGL::UNSIGNED_INT:
-        return std::numeric_limits<GCGLuint>::max();
-    }
-
-    return 0;
-}
-#endif
-
 void WebGLRenderingContextBase::drawElements(GCGLenum mode, GCGLsizei count, GCGLenum type, long long offset)
 {
 #if USE(ANGLE)
@@ -2808,11 +2800,6 @@ void WebGLRenderingContextBase::drawElements(GCGLenum mode, GCGLsizei count, GCG
     bool usesFallbackTexture = false;
     if (!isGLES2NPOTStrict())
         usesFallbackTexture = checkTextureCompleteness("drawElements", true);
-#endif
-
-#if USE(OPENGL) && ENABLE(WEBGL2)
-    if (isWebGL2())
-        m_context->primitiveRestartIndex(getRestartIndex(type));
 #endif
 
     {
@@ -5901,6 +5888,7 @@ RefPtr<Image> WebGLRenderingContextBase::drawImageIntoBuffer(Image& image, int w
 
 RefPtr<Image> WebGLRenderingContextBase::videoFrameToImage(HTMLVideoElement* video, BackingStoreCopy backingStoreCopy, const char* functionName)
 {
+    ImageBuffer* imageBuffer = nullptr;
     // FIXME: When texImage2D is passed an HTMLVideoElement, implementations
     // interoperably use the native RGB color values of the video frame (e.g.
     // Rec.601 color space values) for the texture. But nativeImageForCurrentTime
@@ -5915,35 +5903,36 @@ RefPtr<Image> WebGLRenderingContextBase::videoFrameToImage(HTMLVideoElement* vid
     auto nativeImage = video->nativeImageForCurrentTime();
     // Currently we might be missing an image due to MSE not being able to provide the first requested frame.
     // https://bugs.webkit.org/show_bug.cgi?id=228997
-    if (!nativeImage)
-        return nullptr;
-    IntSize imageSize = nativeImage->size();
-    if (imageSize.isEmpty()) {
-        synthesizeGLError(GraphicsContextGL::INVALID_VALUE, functionName, "video visible size is empty");
-        return nullptr;
+    if (nativeImage) {
+        IntSize imageSize = nativeImage->size();
+        if (imageSize.isEmpty()) {
+            synthesizeGLError(GraphicsContextGL::INVALID_VALUE, functionName, "video visible size is empty");
+            return nullptr;
+        }
+        FloatRect imageRect { { }, imageSize };
+        ImageBuffer* imageBuffer = m_generatedImageCache.imageBuffer(imageSize, nativeImage->colorSpace(), CompositeOperator::Copy);
+        if (!imageBuffer) {
+            synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
+            return nullptr;
+        }
+        imageBuffer->context().drawNativeImage(*nativeImage, imageRect.size(), imageRect, imageRect, CompositeOperator::Copy);
     }
-    FloatRect imageRect { { }, imageSize };
-    ImageBuffer* imageBuffer = m_generatedImageCache.imageBuffer(imageSize, nativeImage->colorSpace(), CompositeOperator::Copy);
-    if (!imageBuffer) {
-        synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
-        return nullptr;
-    }
-    imageBuffer->context().drawNativeImage(*nativeImage, imageRect.size(), imageRect, imageRect, CompositeOperator::Copy);
-#else
-    // This is a legacy code path that produces incompatible texture size when the
-    // video visible size is different to the natural size. This should be removed
-    // once all platforms implement nativeImageForCurrentTime().
-    IntSize videoSize { static_cast<int>(video->videoWidth()), static_cast<int>(video->videoHeight()) };
-    auto colorSpace = video->colorSpace();
-    if (!colorSpace)
-        colorSpace = DestinationColorSpace::SRGB();
-    ImageBuffer* imageBuffer = m_generatedImageCache.imageBuffer(videoSize, *colorSpace);
-    if (!imageBuffer) {
-        synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
-        return nullptr;
-    }
-    video->paintCurrentFrameInContext(imageBuffer->context(), { { }, videoSize });
 #endif
+    if (!imageBuffer) {
+        // This is a legacy code path that produces incompatible texture size when the
+        // video visible size is different to the natural size. This should be removed
+        // once all platforms implement nativeImageForCurrentTime().
+        IntSize videoSize { static_cast<int>(video->videoWidth()), static_cast<int>(video->videoHeight()) };
+        auto colorSpace = video->colorSpace();
+        if (!colorSpace)
+            colorSpace = DestinationColorSpace::SRGB();
+        imageBuffer = m_generatedImageCache.imageBuffer(videoSize, *colorSpace);
+        if (!imageBuffer) {
+            synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
+            return nullptr;
+        }
+        video->paintCurrentFrameInContext(imageBuffer->context(), { { }, videoSize });
+    }
     RefPtr<Image> image = imageBuffer->copyImage(backingStoreCopy);
     if (!image) {
         synthesizeGLError(GraphicsContextGL::OUT_OF_MEMORY, functionName, "out of memory");
@@ -6445,9 +6434,11 @@ bool WebGLRenderingContextBase::isContextUnrecoverablyLost() const
     return m_contextLost && !m_restoreAllowed;
 }
 
-PlatformLayer* WebGLRenderingContextBase::platformLayer() const
+RefPtr<GraphicsLayerContentsDisplayDelegate> WebGLRenderingContextBase::layerContentsDisplayDelegate()
 {
-    return (!isContextLost() && !m_isPendingPolicyResolution) ? m_context->platformLayer() : 0;
+    if (isContextLost() || m_isPendingPolicyResolution)
+        return nullptr;
+    return m_context->layerContentsDisplayDelegate();
 }
 
 void WebGLRenderingContextBase::removeSharedObject(WebGLSharedObject& object)
@@ -7755,7 +7746,7 @@ void WebGLRenderingContextBase::maybeRestoreContext()
     if (!hostWindow)
         return;
 
-    RefPtr<GraphicsContextGL> context(GraphicsContextGLOpenGL::create(m_attributes, hostWindow));
+    RefPtr<GraphicsContextGL> context = hostWindow->createGraphicsContextGL(m_attributes);
     if (!context) {
         if (m_contextLostMode == RealLostContext)
             m_restoreTimer.startOneShot(secondsBetweenRestoreAttempts);
@@ -8018,11 +8009,6 @@ void WebGLRenderingContextBase::drawElementsInstanced(GCGLenum mode, GCGLsizei c
     }
     if (!isGLES2NPOTStrict())
         checkTextureCompleteness("drawElementsInstanced", true);
-#endif
-
-#if USE(OPENGL) && ENABLE(WEBGL2)
-    if (isWebGL2())
-        static_cast<GraphicsContextGLOpenGL*>(m_context.get())->primitiveRestartIndex(getRestartIndex(type));
 #endif
 
     m_context->drawElementsInstanced(mode, count, type, static_cast<GCGLintptr>(offset), primcount);

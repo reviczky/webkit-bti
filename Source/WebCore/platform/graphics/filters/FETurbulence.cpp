@@ -5,7 +5,7 @@
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) 2010 Renata Hodovan <reni@inf.u-szeged.hu>
  * Copyright (C) 2011 Gabor Loki <loki@webkit.org>
- * Copyright (C) 2017-2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2017-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -27,6 +27,7 @@
 #include "FETurbulence.h"
 
 #include "FETurbulenceSoftwareApplier.h"
+#include "Filter.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
@@ -95,9 +96,14 @@ bool FETurbulence::setStitchTiles(bool stitch)
     return true;
 }
 
-bool FETurbulence::platformApplySoftware(const Filter& filter)
+FloatRect FETurbulence::calculateImageRect(const Filter& filter, const FilterImageVector&, const FloatRect& primitiveSubregion) const
 {
-    return FETurbulenceSoftwareApplier(*this).apply(filter, inputEffects());
+    return filter.maxEffectRect(primitiveSubregion);
+}
+
+std::unique_ptr<FilterEffectApplier> FETurbulence::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FETurbulenceSoftwareApplier>(*this);
 }
 
 static TextStream& operator<<(TextStream& ts, TurbulenceType type)
@@ -116,15 +122,18 @@ static TextStream& operator<<(TextStream& ts, TurbulenceType type)
     return ts;
 }
 
-TextStream& FETurbulence::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FETurbulence::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feTurbulence";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " type=\"" << type() << "\" "
-       << "baseFrequency=\"" << baseFrequencyX() << ", " << baseFrequencyY() << "\" "
-       << "seed=\"" << seed() << "\" "
-       << "numOctaves=\"" << numOctaves() << "\" "
-       << "stitchTiles=\"" << stitchTiles() << "\"]\n";
+    
+    ts << " type=\"" << type() << "\"";
+    ts << " baseFrequency=\"" << baseFrequencyX() << ", " << baseFrequencyY() << "\"";
+    ts << " seed=\"" << seed() << "\"";
+    ts << " numOctaves=\"" << numOctaves() << "\"";
+    ts << " stitchTiles=\"" << stitchTiles() << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

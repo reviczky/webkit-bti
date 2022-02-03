@@ -57,6 +57,9 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringConcatenateNumbers.h>
 
+#if ENABLE(SERVICE_CONTROLS)
+#include "ImageControlsMac.h"
+#endif
 
 #if ENABLE(DATALIST_ELEMENT)
 #include "HTMLDataListElement.h"
@@ -267,6 +270,10 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
     case DiscreteCapacityLevelIndicatorPart:
     case RatingLevelIndicatorPart:
         return adjustMeterStyle(style, element);
+#if ENABLE(SERVICE_CONTROLS)
+    case ImageControlsButtonPart:
+        return adjustImageControlsButtonStyle(style, element);
+#endif
     case CapsLockIndicatorPart:
         return adjustCapsLockIndicatorStyle(style, element);
 #if ENABLE(APPLE_PAY)
@@ -292,6 +299,11 @@ ControlPart RenderTheme::autoAppearanceForElement(const Element* elementPtr) con
     if (!elementPtr)
         return NoControlPart;
 
+#if ENABLE(SERVICE_CONTROLS)
+    if (isImageControl(*elementPtr))
+        return ImageControlsButtonPart;
+#endif
+    
     Ref element = *elementPtr;
 
     if (is<HTMLInputElement>(element)) {
@@ -546,6 +558,10 @@ bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, cons
         return paintSearchFieldResultsDecorationPart(box, paintInfo, integralSnappedRect);
     case SearchFieldResultsButtonPart:
         return paintSearchFieldResultsButton(box, paintInfo, integralSnappedRect);
+#if ENABLE(SERVICE_CONTROLS)
+    case ImageControlsButtonPart:
+        return paintImageControlsButton(box, paintInfo, integralSnappedRect);
+#endif
     case CapsLockIndicatorPart:
         return paintCapsLockIndicator(box, paintInfo, integralSnappedRect);
 #if ENABLE(APPLE_PAY)
@@ -612,6 +628,9 @@ bool RenderTheme::paintBorderOnly(const RenderBox& box, const PaintInfo& paintIn
     case SearchFieldDecorationPart:
     case SearchFieldResultsDecorationPart:
     case SearchFieldResultsButtonPart:
+#if ENABLE(SERVICE_CONTROLS)
+    case ImageControlsButtonPart:
+#endif
     default:
         break;
     }
@@ -686,6 +705,9 @@ void RenderTheme::paintDecorations(const RenderBox& box, const PaintInfo& paintI
     case SearchFieldDecorationPart:
     case SearchFieldResultsDecorationPart:
     case SearchFieldResultsButtonPart:
+#if ENABLE(SERVICE_CONTROLS)
+    case ImageControlsButtonPart:
+#endif
     default:
         break;
     }
@@ -1277,6 +1299,12 @@ void RenderTheme::paintSliderTicks(const RenderObject& o, const PaintInfo& paint
 
 #endif
 
+#if ENABLE(SERVICE_CONTROLS)
+void RenderTheme::adjustImageControlsButtonStyle(RenderStyle&, const Element*) const
+{
+}
+#endif
+
 Seconds RenderTheme::animationRepeatIntervalForProgressBar(const RenderProgress&) const
 {
     return 0_s;
@@ -1371,8 +1399,7 @@ auto RenderTheme::colorCache(OptionSet<StyleColorOptions> options) const -> Colo
 
 FontCascadeDescription& RenderTheme::cachedSystemFontDescription(CSSValueID systemFontID) const
 {
-    static auto fontDescriptions = makeNeverDestroyed<std::array<FontCascadeDescription, 10>>({ });
-
+    static NeverDestroyed<std::array<FontCascadeDescription, 10>> fontDescriptions;
     switch (systemFontID) {
     case CSSValueCaption:
         return fontDescriptions.get()[0];
@@ -1575,7 +1602,7 @@ constexpr float datePlaceholderColorLightnessAdjustmentFactor = 0.66f;
 Color RenderTheme::datePlaceholderTextColor(const Color& textColor, const Color& backgroundColor) const
 {
     // FIXME: Consider using LCHA<float> rather than HSLA<float> for better perceptual results and to avoid clamping to sRGB gamut, which is what HSLA does.
-    auto hsla = textColor.toColorTypeLossy<HSLA<float>>();
+    auto hsla = textColor.toColorTypeLossy<HSLA<float>>().resolved();
     if (textColor.luminance() < backgroundColor.luminance())
         hsla.lightness += datePlaceholderColorLightnessAdjustmentFactor * (100.0f - hsla.lightness);
     else

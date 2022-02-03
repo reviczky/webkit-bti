@@ -28,6 +28,7 @@
 
 #if ENABLE(SERVICE_WORKER)
 
+#include "ContentSecurityPolicy.h"
 #include "DOMPromiseProxy.h"
 #include "Document.h"
 #include "Event.h"
@@ -38,6 +39,7 @@
 #include "FrameLoaderClient.h"
 #include "IDLTypes.h"
 #include "JSDOMPromiseDeferred.h"
+#include "JSNavigationPreloadState.h"
 #include "JSPushSubscription.h"
 #include "JSServiceWorkerRegistration.h"
 #include "LegacySchemeRegistry.h"
@@ -50,12 +52,12 @@
 #include "ScriptExecutionContext.h"
 #include "SecurityOrigin.h"
 #include "ServiceWorker.h"
-#include "ServiceWorkerFetchResult.h"
 #include "ServiceWorkerGlobalScope.h"
 #include "ServiceWorkerJob.h"
 #include "ServiceWorkerJobData.h"
 #include "ServiceWorkerProvider.h"
 #include "ServiceWorkerThread.h"
+#include "WorkerFetchResult.h"
 #include "WorkerSWClientConnection.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/RunLoop.h>
@@ -74,12 +76,17 @@ static inline SWClientConnection& mainThreadConnection()
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(ServiceWorkerContainer);
 
+UniqueRef<ServiceWorkerContainer> ServiceWorkerContainer::create(ScriptExecutionContext* context, NavigatorBase& navigator)
+{
+    auto result = UniqueRef(*new ServiceWorkerContainer(context, navigator));
+    result->suspendIfNeeded();
+    return result;
+}
+
 ServiceWorkerContainer::ServiceWorkerContainer(ScriptExecutionContext* context, NavigatorBase& navigator)
     : ActiveDOMObject(context)
     , m_navigator(navigator)
 {
-    suspendIfNeeded();
-    
     // We should queue messages until the DOMContentLoaded event has fired or startMessages() has been called.
     if (is<Document>(context) && downcast<Document>(*context).parsing())
         m_shouldDeferMessageEvents = true;
@@ -145,6 +152,13 @@ void ServiceWorkerContainer::addRegistration(const String& relativeScriptURL, co
     ServiceWorkerJobData jobData(ensureSWClientConnection().serverConnectionIdentifier(), contextIdentifier());
 
     jobData.scriptURL = context->completeURL(relativeScriptURL);
+
+    auto* contentSecurityPolicy = is<Document>(context) ? downcast<Document>(context)->contentSecurityPolicy() : nullptr;
+    if (contentSecurityPolicy && !contentSecurityPolicy->allowWorkerFromSource(jobData.scriptURL)) {
+        promise->reject(Exception { SecurityError });
+        return;
+    }
+
     if (!jobData.scriptURL.isValid()) {
         CONTAINER_RELEASE_LOG_ERROR("addRegistration: Invalid scriptURL");
         promise->reject(Exception { TypeError, "serviceWorker.register() must be called with a valid relative script URL"_s });
@@ -483,7 +497,7 @@ void ServiceWorkerContainer::jobFinishedLoadingScript(ServiceWorkerJob& job, con
 
     CONTAINER_RELEASE_LOG("jobFinishedLoadingScript: Successfuly finished fetching script for job %" PRIu64, job.identifier().toUInt64());
 
-    ensureSWClientConnection().finishFetchingScriptInServer(ServiceWorkerFetchResult { job.data().identifier(), job.data().registrationKey(), script, certificateInfo, contentSecurityPolicy, coep, referrerPolicy, { } });
+    ensureSWClientConnection().finishFetchingScriptInServer(job.data().identifier(), job.data().registrationKey(), WorkerFetchResult { script, certificateInfo, contentSecurityPolicy, coep, referrerPolicy, { } });
 }
 
 void ServiceWorkerContainer::jobFailedLoadingScript(ServiceWorkerJob& job, const ResourceError& error, Exception&& exception)
@@ -508,7 +522,7 @@ void ServiceWorkerContainer::jobFailedLoadingScript(ServiceWorkerJob& job, const
 
 void ServiceWorkerContainer::notifyFailedFetchingScript(ServiceWorkerJob& job, const ResourceError& error)
 {
-    ensureSWClientConnection().finishFetchingScriptInServer(serviceWorkerFetchError(job.data().identifier(), ServiceWorkerRegistrationKey { job.data().registrationKey() }, ResourceError { error }));
+    ensureSWClientConnection().finishFetchingScriptInServer(job.data().identifier(), job.data().registrationKey(), workerFetchError(ResourceError { error }));
 }
 
 void ServiceWorkerContainer::destroyJob(ServiceWorkerJob& job)
@@ -526,7 +540,7 @@ const char* ServiceWorkerContainer::activeDOMObjectName() const
 SWClientConnection& ServiceWorkerContainer::ensureSWClientConnection()
 {
     ASSERT(scriptExecutionContext());
-    if (!m_swConnection) {
+    if (!m_swConnection || m_swConnection->isClosed()) {
         auto& context = *scriptExecutionContext();
         if (is<WorkerGlobalScope>(context))
             m_swConnection = &downcast<WorkerGlobalScope>(context).swClientConnection();
@@ -564,9 +578,9 @@ void ServiceWorkerContainer::subscribeToPushService(ServiceWorkerRegistration& r
     });
 }
 
-void ServiceWorkerContainer::unsubscribeFromPushService(ServiceWorkerRegistrationIdentifier identifier, DOMPromiseDeferred<IDLBoolean>&& promise)
+void ServiceWorkerContainer::unsubscribeFromPushService(ServiceWorkerRegistrationIdentifier identifier, PushSubscriptionIdentifier subscriptionIdentifier, DOMPromiseDeferred<IDLBoolean>&& promise)
 {
-    ensureSWClientConnection().unsubscribeFromPushService(identifier, [promise = WTFMove(promise)](auto&& result) mutable {
+    ensureSWClientConnection().unsubscribeFromPushService(identifier, subscriptionIdentifier, [promise = WTFMove(promise)](auto&& result) mutable {
         promise.settle(WTFMove(result));
     });
 }
@@ -644,6 +658,34 @@ bool ServiceWorkerContainer::addEventListener(const AtomString& eventType, Ref<E
         startMessages();
 
     return EventTargetWithInlineData::addEventListener(eventType, WTFMove(eventListener), options);
+}
+
+void ServiceWorkerContainer::enableNavigationPreload(ServiceWorkerRegistrationIdentifier identifier, VoidPromise&& promise)
+{
+    ensureSWClientConnection().enableNavigationPreload(identifier, [promise = WTFMove(promise)](auto&& result) mutable {
+        promise.settle(WTFMove(result));
+    });
+}
+
+void ServiceWorkerContainer::disableNavigationPreload(ServiceWorkerRegistrationIdentifier identifier, VoidPromise&& promise)
+{
+    ensureSWClientConnection().disableNavigationPreload(identifier, [promise = WTFMove(promise)](auto&& result) mutable {
+        promise.settle(WTFMove(result));
+    });
+}
+
+void ServiceWorkerContainer::setNavigationPreloadHeaderValue(ServiceWorkerRegistrationIdentifier identifier, String&& headerValue, VoidPromise&& promise)
+{
+    ensureSWClientConnection().setNavigationPreloadHeaderValue(identifier, WTFMove(headerValue), [promise = WTFMove(promise)](auto&& result) mutable {
+        promise.settle(WTFMove(result));
+    });
+}
+
+void ServiceWorkerContainer::getNavigationPreloadState(ServiceWorkerRegistrationIdentifier identifier, NavigationPreloadStatePromise&& promise)
+{
+    ensureSWClientConnection().getNavigationPreloadState(identifier, [promise = WTFMove(promise)](auto&& result) mutable {
+        promise.settle(WTFMove(result));
+    });
 }
 
 } // namespace WebCore

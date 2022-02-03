@@ -35,7 +35,6 @@
 #include "CSSValuePool.h"
 #include "Color.h"
 #include "Document.h"
-#include "Pair.h"
 #include "PropertySetCSSStyleDeclaration.h"
 #include "StylePropertyShorthand.h"
 #include "StylePropertyShorthandFunctions.h"
@@ -166,7 +165,7 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
         case CSSPropertyOpacity:
         case CSSPropertyStopOpacity:
         case CSSPropertyStrokeOpacity:
-            // Opacity percentage values serialize as a fraction in the range 0-1, no "%".
+            // Opacity percentage values serialize as a fraction in the range 0-1, not "%".
             if (is<CSSPrimitiveValue>(*value) && downcast<CSSPrimitiveValue>(*value).isPercentage())
                 return makeString(downcast<CSSPrimitiveValue>(*value).doubleValue() / 100);
             FALLTHROUGH;
@@ -285,8 +284,6 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
         return get2Values(marginBlockShorthand());
     case CSSPropertyMarginInline:
         return get2Values(marginInlineShorthand());
-    case CSSPropertyWebkitMarginCollapse:
-        return getShorthandValue(webkitMarginCollapseShorthand());
     case CSSPropertyOverflow:
         return get2Values(overflowShorthand());
     case CSSPropertyOverscrollBehavior:
@@ -301,14 +298,17 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
         return getLayeredShorthandValue(transitionShorthand());
     case CSSPropertyListStyle:
         return getShorthandValue(listStyleShorthand());
+    case CSSPropertyMaskPosition:
+        return getLayeredShorthandValue(maskPositionShorthand());
     case CSSPropertyWebkitMaskPosition:
         return getLayeredShorthandValue(webkitMaskPositionShorthand());
-    case CSSPropertyWebkitMaskRepeat:
-        return getLayeredShorthandValue(webkitMaskRepeatShorthand());
+    case CSSPropertyMaskRepeat:
+        return getLayeredShorthandValue(maskRepeatShorthand());
+    case CSSPropertyMask:
     case CSSPropertyWebkitMask:
-        return getLayeredShorthandValue(webkitMaskShorthand());
-    case CSSPropertyWebkitTextEmphasis:
-        return getShorthandValue(webkitTextEmphasisShorthand());
+        return getLayeredShorthandValue(shorthandForProperty(propertyID));
+    case CSSPropertyTextEmphasis:
+        return getShorthandValue(textEmphasisShorthand());
     case CSSPropertyWebkitTextStroke:
         return getShorthandValue(webkitTextStrokeShorthand());
     case CSSPropertyPerspectiveOrigin:
@@ -320,7 +320,7 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
             return value->cssText();
         return String();
     case CSSPropertyBorderRadius:
-        return borderRadiusValue(borderRadiusShorthand());
+        return get4Values(borderRadiusShorthand());
     case CSSPropertyGap:
         return get2Values(gapShorthand());
     case CSSPropertyScrollMargin:
@@ -347,7 +347,7 @@ std::optional<Color> StyleProperties::propertyAsColor(CSSPropertyID property) co
         return std::nullopt;
 
     auto& primitiveColor = downcast<CSSPrimitiveValue>(*colorValue);
-    return primitiveColor.isRGBColor() ? primitiveColor.color() : CSSParser::parseColor(colorValue->cssText());
+    return primitiveColor.isRGBColor() ? primitiveColor.color() : CSSParser::parseColorWithoutContext(colorValue->cssText());
 }
 
 CSSValueID StyleProperties::propertyAsValueID(CSSPropertyID property) const
@@ -362,61 +362,6 @@ String StyleProperties::getCustomPropertyValue(const String& propertyName) const
     if (value)
         return value->cssText();
     return String();
-}
-
-String StyleProperties::borderRadiusValue(const StylePropertyShorthand& shorthand) const
-{
-    auto serialize = [](const CSSValue* topLeft, const CSSValue* topRight, const CSSValue* bottomRight, const CSSValue* bottomLeft) -> String {
-        bool showBottomLeft = !(*topRight == *bottomLeft);
-        bool showBottomRight = !(*topLeft == *bottomRight) || showBottomLeft;
-        bool showTopRight = !(*topLeft == *topRight) || showBottomRight;
-
-        return makeString(topLeft->cssText(), showTopRight ? " " : "", showTopRight ? topRight->cssText() : "", showBottomRight ? " " : "", showBottomRight ? bottomRight->cssText() : "", showBottomLeft ? " " : "", showBottomLeft ? bottomLeft->cssText() : "");
-    };
-
-    int topLeftValueIndex = findPropertyIndex(shorthand.properties()[0]);
-    int topRightValueIndex = findPropertyIndex(shorthand.properties()[1]);
-    int bottomRightValueIndex = findPropertyIndex(shorthand.properties()[2]);
-    int bottomLeftValueIndex = findPropertyIndex(shorthand.properties()[3]);
-
-    if (topLeftValueIndex == -1 || topRightValueIndex == -1 || bottomRightValueIndex == -1 || bottomLeftValueIndex == -1)
-        return String();
-
-    PropertyReference topLeft = propertyAt(topLeftValueIndex);
-    PropertyReference topRight = propertyAt(topRightValueIndex);
-    PropertyReference bottomRight = propertyAt(bottomRightValueIndex);
-    PropertyReference bottomLeft = propertyAt(bottomLeftValueIndex);
-
-    auto* topLeftValue = topLeft.value();
-    if (!topLeftValue)
-        return String();
-    if (topLeftValue->isCSSWideKeyword())
-        return topLeftValue->cssText();
-
-    auto* topRightValue = topRight.value();
-    auto* bottomRightValue = bottomRight.value();
-    auto* bottomLeftValue = bottomLeft.value();
-
-    // All 4 properties must be specified and the remaining ones other than topLeftValue are checked here.
-    if (!topRightValue || !bottomRightValue || !bottomLeftValue)
-        return String();
-
-    // Important flags must be the same
-    bool isImportant = topLeft.isImportant();
-    if (topRight.isImportant() != isImportant || bottomRight.isImportant() != isImportant || bottomLeft.isImportant() != isImportant)
-        return String();
-
-    auto& topLeftPair = *downcast<CSSPrimitiveValue>(*topLeftValue).pairValue();
-    auto& topRightPair = *downcast<CSSPrimitiveValue>(*topRightValue).pairValue();
-    auto& bottomRightPair = *downcast<CSSPrimitiveValue>(*bottomRightValue).pairValue();
-    auto& bottomLeftPair = *downcast<CSSPrimitiveValue>(*bottomLeftValue).pairValue();
-
-    auto first = serialize(topLeftPair.first(), topRightPair.first(), bottomRightPair.first(), bottomLeftPair.first());
-    auto second = serialize(topLeftPair.second(), topRightPair.second(), bottomRightPair.second(), bottomLeftPair.second());
-    if (first == second)
-        return first;
-
-    return makeString(first, " / ", second);
 }
 
 String StyleProperties::borderSpacingValue(const StylePropertyShorthand& shorthand) const
@@ -679,10 +624,10 @@ String StyleProperties::getLayeredShorthandValue(const StylePropertyShorthand& s
 
             // We need to report background-repeat as it was written in the CSS.
             // If the property is implicit, then it was written with only one value. Here we figure out which value that was so we can report back correctly.
-            if (value && j < size - 1 && (property == CSSPropertyBackgroundRepeatX || property == CSSPropertyWebkitMaskRepeatX) && isPropertyImplicit(property)) {
+            if (value && j < size - 1 && (property == CSSPropertyBackgroundRepeatX || property == CSSPropertyMaskRepeatX) && isPropertyImplicit(property)) {
                 // Make sure the value was not reset in the layer check just above.
                 auto nextProperty = shorthand.properties()[j + 1];
-                if (nextProperty == CSSPropertyBackgroundRepeatY || nextProperty == CSSPropertyWebkitMaskRepeatY) {
+                if (nextProperty == CSSPropertyBackgroundRepeatY || nextProperty == CSSPropertyMaskRepeatY) {
                     if (auto yValue = values[j + 1]) {
                         if (is<CSSValueList>(*yValue))
                             yValue = downcast<CSSValueList>(*yValue).itemWithoutBoundsCheck(i);
@@ -707,12 +652,44 @@ String StyleProperties::getLayeredShorthandValue(const StylePropertyShorthand& s
                 }
             }
 
+            auto canOmitValue = [&]() {
+                if (shorthand.id() == CSSPropertyMask) {
+                    if (property == CSSPropertyMaskClip) {
+                        // If the mask-clip value is the same as the value for mask-origin (the previous value),
+                        // then we can skip serializing it, as one value sets both properties.
+                        ASSERT(j > 0);
+                        ASSERT(shorthand.properties()[j - 1] == CSSPropertyMaskOrigin);
+                        auto originValue = values[j - 1];
+                        if (is<CSSValueList>(*originValue))
+                            originValue = downcast<CSSValueList>(*originValue).itemWithoutBoundsCheck(i);
+                        if (!is<CSSPrimitiveValue>(*value) || !is<CSSPrimitiveValue>(*originValue))
+                            return false;
+
+                        auto maskId = downcast<CSSPrimitiveValue>(*value).valueID();
+                        auto originId = downcast<CSSPrimitiveValue>(*originValue).valueID();
+                        return maskId == originId && (!isCSSWideValueKeyword(getValueName(maskId)) || value->isImplicitInitialValue());
+                    }
+                    if (property == CSSPropertyMaskOrigin) {
+                        // We can skip serializing mask-origin if it's the initial value, but only if we're also going to skip serializing
+                        // the mask-clip as well (otherwise the single value for mask-clip would be assumed to be setting the value for both).
+                        ASSERT(j + 1 < size);
+                        ASSERT(shorthand.properties()[j + 1] == CSSPropertyMaskClip);
+                        auto clipValue = values[j + 1];
+                        if (is<CSSValueList>(*clipValue))
+                            clipValue = downcast<CSSValueList>(*clipValue).itemWithoutBoundsCheck(i);
+                        return value->isImplicitInitialValue() && clipValue->isImplicitInitialValue();
+                    }
+                }
+
+                return value->isImplicitInitialValue();
+            };
+
             String valueText;
-            if (value && !value->isImplicitInitialValue()) {
+            if (value && !canOmitValue()) {
                 if (!layerResult.isEmpty())
                     layerResult.append(' ');
 
-                if (property == CSSPropertyBackgroundSize || property == CSSPropertyWebkitMaskSize) {
+                if (property == CSSPropertyBackgroundSize || property == CSSPropertyMaskSize) {
                     if (!foundPositionYCSSProperty)
                         continue;
                     layerResult.append("/ ");
@@ -724,6 +701,10 @@ String StyleProperties::getLayeredShorthandValue(const StylePropertyShorthand& s
                 } else if (useRepeatYShorthand) {
                     useRepeatYShorthand = false;
                     layerResult.append(getValueName(CSSValueRepeatY));
+                } else if (shorthand.id() == CSSPropertyMask && property == CSSPropertyMaskOrigin && value->isImplicitInitialValue()) {
+                    // If we're about to write the value for mask-origin, but it's an implicit initial value that's just a placeholder
+                    // for a 'real' mask-clip value, then write the actual value not 'initial'.
+                    layerResult.append(getValueName(CSSValueBorderBox));
                 } else {
                     if (useSingleWordShorthand)
                         useSingleWordShorthand = false;
@@ -740,6 +721,9 @@ String StyleProperties::getLayeredShorthandValue(const StylePropertyShorthand& s
             else if (commonValue != valueText)
                 commonValue = emptyString(); // Could use value here other than a CSS-wide value keyword or the null string.
         }
+
+        if (shorthand.id() == CSSPropertyMask && layerResult.isEmpty())
+            layerResult.append(getValueName(CSSValueNone));
 
         if (!layerResult.isEmpty())
             result.append(result.isEmpty() ? "" : ", ", layerResult.toString());
@@ -1168,7 +1152,7 @@ String StyleProperties::asText() const
             if (!shorthandPropertyID)
                 shorthandPropertyID = fallbackProperty;
         };
-        
+
         if (is<CSSPendingSubstitutionValue>(property.value())) {
             auto& substitutionValue = downcast<CSSPendingSubstitutionValue>(*property.value());
             shorthandPropertyID = substitutionValue.shorthandPropertyId();
@@ -1245,6 +1229,12 @@ String StyleProperties::asText() const
                 if (!borderInlineFallbackShorthandProperty)
                     borderInlineFallbackShorthandProperty = CSSPropertyBorderInlineStyle;
                 FALLTHROUGH;
+            case CSSPropertyBorderTopLeftRadius:
+            case CSSPropertyBorderTopRightRadius:
+            case CSSPropertyBorderBottomRightRadius:
+            case CSSPropertyBorderBottomLeftRadius:
+                shorthandPropertyID = CSSPropertyBorderRadius;
+                break;
             case CSSPropertyBorderInlineStartColor:
             case CSSPropertyBorderInlineEndColor:
                 if (!borderInlineFallbackShorthandProperty)
@@ -1368,13 +1358,18 @@ String StyleProperties::asText() const
                 break;
             case CSSPropertyWebkitMaskPositionX:
             case CSSPropertyWebkitMaskPositionY:
-            case CSSPropertyWebkitMaskRepeatX:
-            case CSSPropertyWebkitMaskRepeatY:
-            case CSSPropertyWebkitMaskImage:
-            case CSSPropertyWebkitMaskRepeat:
-            case CSSPropertyWebkitMaskPosition:
+            case CSSPropertyMaskRepeatX:
+            case CSSPropertyMaskRepeatY:
+            case CSSPropertyMaskImage:
+            case CSSPropertyMaskRepeat:
+            case CSSPropertyMaskPosition:
+            case CSSPropertyMaskClip:
+            case CSSPropertyMaskOrigin:
+                shorthandPropertyID = CSSPropertyMask;
+                break;
             case CSSPropertyWebkitMaskClip:
-            case CSSPropertyWebkitMaskOrigin:
+            case CSSPropertyWebkitMaskPosition:
+                // TODO: A lot of the above properties can be both prefixed and unprefixed?
                 shorthandPropertyID = CSSPropertyWebkitMask;
                 break;
             case CSSPropertyPerspectiveOriginX:

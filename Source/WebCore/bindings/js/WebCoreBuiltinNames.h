@@ -62,7 +62,6 @@ namespace WebCore {
     macro(AuthenticatorAttestationResponse) \
     macro(AuthenticatorResponse) \
     macro(BaseAudioContext) \
-    macro(BeforeLoadEvent) \
     macro(BlobEvent) \
     macro(BroadcastChannel) \
     macro(Cache) \
@@ -106,6 +105,7 @@ namespace WebCore {
     macro(CSSUnparsedValue) \
     macro(CSSVariableReferenceValue) \
     macro(CustomElementRegistry) \
+    macro(CustomEffect) \
     macro(Database) \
     macro(DataTransferItem) \
     macro(DataTransferItemList) \
@@ -173,8 +173,6 @@ namespace WebCore {
     macro(HTMLDataListElement) \
     macro(HTMLMenuItemElement) \
     macro(HTMLModelElement) \
-    macro(HTMLKeygenElement) \
-    macro(HTMLSlotElement) \
     macro(Headers) \
     macro(IDBCursor) \
     macro(IDBCursorWithValue) \
@@ -217,11 +215,13 @@ namespace WebCore {
     macro(MediaStreamTrack) \
     macro(MerchantValidationEvent) \
     macro(MockRTCRtpTransform) \
+    macro(NavigationPreloadManager) \
     macro(NavigatorCredentials) \
     macro(NavigatorMediaDevices) \
     macro(NavigatorPermissions) \
     macro(NavigatorUserMedia) \
     macro(Notification) \
+    macro(NotificationEvent) \
     macro(OfflineAudioContext) \
     macro(OffscreenCanvas) \
     macro(OffscreenCanvasRenderingContext2D) \
@@ -452,6 +452,8 @@ namespace WebCore {
     macro(makeThisTypeError) \
     macro(matchingElementInFlatTree) \
     macro(mediaStreamTrackConstraints) \
+    macro(onnotificationclick) \
+    macro(onnotificationclose) \
     macro(onpush) \
     macro(onpushsubscriptionchange) \
     macro(onrtctransform) \

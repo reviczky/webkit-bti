@@ -101,8 +101,12 @@ public:
     // Traverses the scrolling tree, setting layer positions to represent the current scrolled state.
     virtual void applyScrollingTreeLayerPositions() { }
 
+    virtual void didScheduleRenderingUpdate() { }
     virtual void willStartRenderingUpdate() { }
     virtual void didCompleteRenderingUpdate() { }
+
+    virtual void willStartPlatformRenderingUpdate() { }
+    virtual void didCompletePlatformRenderingUpdate() { }
 
 #if ENABLE(KINETIC_SCROLLING)
     // Dispatched by the scrolling tree during handleWheelEvent. This is required as long as scrollbars are painted on the main thread.

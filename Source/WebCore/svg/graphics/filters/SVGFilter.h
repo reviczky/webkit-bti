@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) 2013 Google Inc. All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,41 +22,53 @@
 #pragma once
 
 #include "Filter.h"
-#include "FilterEffectVector.h"
 #include "FloatRect.h"
+#include "SVGFilterExpression.h"
+#include "SVGUnitTypes.h"
 #include <wtf/Ref.h>
 #include <wtf/TypeCasts.h>
 
 namespace WebCore {
 
+class FilterImage;
 class SVGFilterBuilder;
 class SVGFilterElement;
 
 class SVGFilter final : public Filter {
 public:
-    static RefPtr<SVGFilter> create(SVGFilterElement&, SVGFilterBuilder&, const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& filterRegion, FilterEffect& previousEffect);
-    static RefPtr<SVGFilter> create(SVGFilterElement&, SVGFilterBuilder&, const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& filterRegion, const FloatRect& targetBoundingBox);
-    static RefPtr<SVGFilter> create(SVGFilterElement&, SVGFilterBuilder&, const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& filterRegion, const FloatRect& targetBoundingBox, FilterEffect* previousEffect);
-
-    FloatSize scaledByFilterScale(FloatSize) const final;
+    static RefPtr<SVGFilter> create(SVGFilterElement&, SVGFilterBuilder&, RenderingMode, const FloatSize& filterScale, ClipOperation, const FloatRect& filterRegion, const FloatRect& targetBoundingBox);
+    WEBCORE_EXPORT static RefPtr<SVGFilter> create(const FloatRect& targetBoundingBox, SVGUnitTypes::SVGUnitType primitiveUnits, SVGFilterExpression&&);
 
     FloatRect targetBoundingBox() const { return m_targetBoundingBox; }
-    bool apply() override;
+    SVGUnitTypes::SVGUnitType primitiveUnits() const { return m_primitiveUnits; }
 
-    void setExpression(FilterEffectVector&& expression) { m_expression = WTFMove(expression); }
-    RefPtr<FilterEffect> lastEffect() const { return !m_expression.isEmpty() ? m_expression.last() : nullptr; }
+    const SVGFilterExpression& expression() const { return m_expression; }
+    
+    FilterEffectVector effectsOfType(FilterFunction::Type) const final;
+
+    RefPtr<FilterImage> apply(FilterImage* sourceImage, FilterResults&) final;
+
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, FilterRepresentation) const final;
 
 private:
-    SVGFilter(const FloatSize& filterScale, const FloatRect& sourceImageRect, const FloatRect& targetBoundingBox, const FloatRect& filterRegion, bool effectBBoxMode);
+    SVGFilter(RenderingMode, const FloatSize& filterScale, ClipOperation, const FloatRect& filterRegion, const FloatRect& targetBoundingBox, SVGUnitTypes::SVGUnitType primitiveUnits);
+    SVGFilter(const FloatRect& targetBoundingBox, SVGUnitTypes::SVGUnitType primitiveUnits, SVGFilterExpression&&);
 
-    bool apply(const Filter&) override;
-    IntOutsets outsets() const override;
-    void clearResult() override;
+    void setExpression(SVGFilterExpression&& expression) { m_expression = WTFMove(expression); }
+
+    FloatSize resolvedSize(const FloatSize&) const final;
+
+    bool supportsAcceleratedRendering() const final;
+
+    RefPtr<FilterImage> apply(const Filter&, FilterImage& sourceImage, FilterResults&) final;
+
+    IntOutsets outsets(const Filter&) const final { return outsets(); }
+    IntOutsets outsets() const final;
 
     FloatRect m_targetBoundingBox;
-    bool m_effectBBoxMode;
+    SVGUnitTypes::SVGUnitType m_primitiveUnits;
 
-    FilterEffectVector m_expression;
+    SVGFilterExpression m_expression;
 };
 
 } // namespace WebCore

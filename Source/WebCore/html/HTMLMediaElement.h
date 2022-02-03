@@ -46,6 +46,7 @@
 #include <wtf/Function.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/Observer.h>
+#include <wtf/WallTime.h>
 #include <wtf/WeakPtr.h>
 
 #if USE(AUDIO_SESSION) && PLATFORM(MAC)
@@ -242,7 +243,7 @@ public:
     void setCurrentTimeWithTolerance(double, double toleranceBefore, double toleranceAfter);
     double currentTimeForBindings() const { return currentTime(); }
     WEBCORE_EXPORT ExceptionOr<void> setCurrentTimeForBindings(double);
-    WEBCORE_EXPORT double getStartDate() const;
+    WEBCORE_EXPORT WallTime getStartDate() const;
     WEBCORE_EXPORT double duration() const override;
     WEBCORE_EXPORT bool paused() const override;
     void setPaused(bool);
@@ -379,9 +380,7 @@ public:
     void mediaPlayerDidRemoveTextTrack(InbandTextTrackPrivate&) final;
     void mediaPlayerDidRemoveVideoTrack(VideoTrackPrivate&) final;
 
-#if ENABLE(AVF_CAPTIONS)
     Vector<RefPtr<PlatformTextTrack>> outOfBandTrackSources() final;
-#endif
 
     struct TrackGroup;
     void configureTextTrackGroupForLanguage(const TrackGroup&) const;
@@ -720,7 +719,7 @@ private:
 
     // CDMClient
     void cdmClientAttemptToResumePlaybackIfNecessary() final;
-    void cdmClientUnrequestedInitializationDataReceived(const String&, Ref<SharedBuffer>&&) final;
+    void cdmClientUnrequestedInitializationDataReceived(const String&, Ref<FragmentedSharedBuffer>&&) final;
 #endif
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA) && ENABLE(ENCRYPTED_MEDIA)

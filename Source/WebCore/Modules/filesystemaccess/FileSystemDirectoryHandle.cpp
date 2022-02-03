@@ -26,6 +26,7 @@
 #include "config.h"
 #include "FileSystemDirectoryHandle.h"
 
+#include "FileSystemHandleCloseScope.h"
 #include "FileSystemStorageConnection.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSFileSystemDirectoryHandle.h"
@@ -38,7 +39,9 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(FileSystemDirectoryHandle);
 
 Ref<FileSystemDirectoryHandle> FileSystemDirectoryHandle::create(ScriptExecutionContext& context, String&& name, FileSystemHandleIdentifier identifier, Ref<FileSystemStorageConnection>&& connection)
 {
-    return adoptRef(*new FileSystemDirectoryHandle(context, WTFMove(name), identifier, WTFMove(connection)));
+    auto result = adoptRef(*new FileSystemDirectoryHandle(context, WTFMove(name), identifier, WTFMove(connection)));
+    result->suspendIfNeeded();
+    return result;
 }
 
 FileSystemDirectoryHandle::FileSystemDirectoryHandle(ScriptExecutionContext& context, String&& name, FileSystemHandleIdentifier identifier, Ref<FileSystemStorageConnection>&& connection)
@@ -56,14 +59,13 @@ void FileSystemDirectoryHandle::getFileHandle(const String& name, std::optional<
         if (result.hasException())
             return promise.reject(result.releaseException());
 
-        auto identifier = result.returnValue();
         auto* context = weakThis ? weakThis->scriptExecutionContext() : nullptr;
-        if (!context) {
-            connection->closeHandle(identifier);
+        if (!context)
             return promise.reject(Exception { InvalidStateError, "Context has stopped"_s });
-        }
 
-        promise.settle(FileSystemFileHandle::create(*context, String { name }, result.returnValue(), WTFMove(connection)));
+        auto [identifier, isDirectory] = result.returnValue()->release();
+        ASSERT(!isDirectory);
+        promise.resolve(FileSystemFileHandle::create(*context, String { name }, identifier, WTFMove(connection)));
     });
 }
 
@@ -77,14 +79,13 @@ void FileSystemDirectoryHandle::getDirectoryHandle(const String& name, std::opti
         if (result.hasException())
             return promise.reject(result.releaseException());
 
-        auto identifier = result.returnValue();
         auto* context = weakThis ? weakThis->scriptExecutionContext() : nullptr;
-        if (!context) {
-            connection->closeHandle(identifier);
+        if (!context)
             return promise.reject(Exception { InvalidStateError, "Context has stopped"_s });
-        }
 
-        promise.settle(FileSystemDirectoryHandle::create(*context, String { name }, identifier, WTFMove(connection)));
+        auto [identifier, isDirectory] = result.returnValue()->release();
+        ASSERT(isDirectory);
+        promise.resolve(FileSystemDirectoryHandle::create(*context, String { name }, identifier, WTFMove(connection)));
     });
 }
 
@@ -105,10 +106,7 @@ void FileSystemDirectoryHandle::resolve(const FileSystemHandle& handle, DOMPromi
         return promise.reject(Exception { InvalidStateError, "Handle is closed"_s });
 
     connection().resolve(identifier(), handle.identifier(), [promise = WTFMove(promise)](auto result) mutable {
-        if (result.hasException())
-            return promise.reject(result.releaseException());
-
-        promise.resolve(result.releaseReturnValue());
+        promise.settle(WTFMove(result));
     });
 }
 
@@ -129,12 +127,10 @@ void FileSystemDirectoryHandle::getHandle(const String& name, CompletionHandler<
         if (result.hasException())
             return completionHandler(result.releaseException());
 
-        auto [identifier, isDirectory] = result.releaseReturnValue();
+        auto [identifier, isDirectory] = result.returnValue()->release();
         auto* context = weakThis ? weakThis->scriptExecutionContext() : nullptr;
-        if (!context) {
-            connection->closeHandle(identifier);
+        if (!context)
             return completionHandler(Exception { InvalidStateError, "Context has stopped"_s });
-        }
 
         if (isDirectory) {
             Ref<FileSystemHandle> handle = FileSystemDirectoryHandle::create(*context, String { name }, identifier, WTFMove(connection));

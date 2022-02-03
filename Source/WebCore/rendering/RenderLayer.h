@@ -169,7 +169,7 @@ public:
 
     Page& page() const { return renderer().page(); }
     RenderLayerModelObject& renderer() const { return m_renderer; }
-    RenderBox* renderBox() const { return is<RenderBox>(renderer()) ? &downcast<RenderBox>(renderer()) : nullptr; }
+    RenderBox* renderBox() const { return dynamicDowncast<RenderBox>(renderer()); }
 
     RenderLayer* parent() const { return m_parent; }
     RenderLayer* previousSibling() const { return m_previous; }
@@ -439,7 +439,6 @@ public:
 
     bool hasReflection() const { return renderer().hasReflection(); }
     bool isReflection() const { return renderer().isReplica(); }
-    RenderReplica* reflection() const { return m_reflection.get(); }
     RenderLayer* reflectionLayer() const;
     bool isReflectionLayer(const RenderLayer&) const;
 
@@ -496,6 +495,8 @@ public:
 
     void updateLayerPositionsAfterStyleChange();
     void updateLayerPositionsAfterLayout(bool isRelayoutingSubtree, bool didFullRepaint);
+    void updateLayerPositionsAfterOverflowScroll();
+    void updateLayerPositionsAfterDocumentScroll();
 
     bool hasCompositedLayerInEnclosingPaginationChain() const;
     enum PaginationInclusionMode { ExcludeCompositedPaginatedLayers, IncludeCompositedPaginatedLayers };
@@ -513,7 +514,7 @@ public:
     void willRemoveChildWithBlendMode();
 #endif
 
-    const LayoutSize& offsetForInFlowPosition() const { return m_offsetForInFlowPosition; }
+    const LayoutSize& offsetForInFlowPosition() const { return m_offsetForPosition; }
 
     void clearClipRectsIncludingDescendants(ClipRectsType typeToClear = AllClipRectTypes);
     void clearClipRects(ClipRectsType typeToClear = AllClipRectTypes);
@@ -587,7 +588,6 @@ public:
     // Enclosing compositing layer; if includeSelf is true, may return this.
     RenderLayer* enclosingCompositingLayer(IncludeSelfOrNot = IncludeSelf) const;
     RenderLayer* enclosingCompositingLayerForRepaint(IncludeSelfOrNot = IncludeSelf) const;
-    bool sharesCompositingLayerForRepaint(const RenderLayer& otherLayer) const;
     // Ancestor compositing layer, excluding this.
     RenderLayer* ancestorCompositingLayer() const { return enclosingCompositingLayer(ExcludeSelf); }
 
@@ -600,7 +600,7 @@ public:
     {
         // FIXME: This really needs to know if there are transforms on this layer and any of the layers
         // between it and the ancestor in question.
-        return !renderer().hasTransform() && !renderer().isSVGRoot();
+        return !renderer().hasTransform() && !renderer().isSVGRootOrLegacySVGRoot();
     }
 
     // FIXME: adjustForColumns allows us to position compositing layers in columns correctly, but eventually they need to be split across columns too.
@@ -717,11 +717,11 @@ public:
     void setRepaintStatus(RepaintStatus status) { m_repaintStatus = status; }
     RepaintStatus repaintStatus() const { return static_cast<RepaintStatus>(m_repaintStatus); }
 
-    LayoutUnit staticInlinePosition() const { return m_staticInlinePosition; }
-    LayoutUnit staticBlockPosition() const { return m_staticBlockPosition; }
+    LayoutUnit staticInlinePosition() const { return m_offsetForPosition.width(); }
+    LayoutUnit staticBlockPosition() const { return m_offsetForPosition.height(); }
    
-    void setStaticInlinePosition(LayoutUnit position) { m_staticInlinePosition = position; }
-    void setStaticBlockPosition(LayoutUnit position) { m_staticBlockPosition = position; }
+    void setStaticInlinePosition(LayoutUnit position) { m_offsetForPosition.setWidth(position); }
+    void setStaticBlockPosition(LayoutUnit position) { m_offsetForPosition.setHeight(position); }
 
     bool hasTransform() const { return renderer().hasTransform(); }
     // Note that this transform has the transform-origin baked in.
@@ -737,7 +737,7 @@ public:
     // Note that this transform has the perspective-origin baked in.
     TransformationMatrix perspectiveTransform(const LayoutRect& layerRect) const;
     FloatPoint perspectiveOrigin() const;
-    bool preserves3D() const { return renderer().style().transformStyle3D() == TransformStyle3D::Preserve3D; }
+    bool preserves3D() const { return renderer().style().preserves3D(); }
     bool has3DTransform() const { return m_transform && !m_transform->isAffine(); }
     bool hasTransformedAncestor() const { return m_hasTransformedAncestor; }
 
@@ -818,6 +818,8 @@ public:
     bool requiresFullLayerImageForFilters() const;
 
     Element* enclosingElement() const;
+
+    static Vector<RenderLayer*> topLayerRenderLayers(RenderView&);
 
     bool establishesTopLayer() const;
     void establishesTopLayerWillChange();
@@ -936,6 +938,8 @@ private:
 
     void updateSelfPaintingLayer();
 
+    void willUpdateLayerPositions();
+
     enum UpdateLayerPositionsFlag {
         CheckForRepaint                     = 1 << 0,
         NeedsFullRepaintInBacking           = 1 << 1,
@@ -951,7 +955,7 @@ private:
     // Returns true if the position changed.
     bool updateLayerPosition(OptionSet<UpdateLayerPositionsFlag>* = nullptr);
 
-    void updateLayerPositions(RenderGeometryMap*, OptionSet<UpdateLayerPositionsFlag>);
+    void recursiveUpdateLayerPositions(RenderGeometryMap*, OptionSet<UpdateLayerPositionsFlag>);
 
     enum UpdateLayerPositionsAfterScrollFlag {
         IsOverflowScroll                        = 1 << 0,
@@ -959,7 +963,7 @@ private:
         HasSeenAncestorWithOverflowClip         = 1 << 2,
         HasChangedAncestor                      = 1 << 3,
     };
-    void updateLayerPositionsAfterScroll(RenderGeometryMap*, OptionSet<UpdateLayerPositionsAfterScrollFlag> = { });
+    void recursiveUpdateLayerPositionsAfterScroll(RenderGeometryMap*, OptionSet<UpdateLayerPositionsAfterScrollFlag> = { });
 
     RenderLayer* enclosingPaginationLayerInSubtree(const RenderLayer* rootLayer, PaginationInclusionMode) const;
 
@@ -1034,6 +1038,8 @@ private:
 
     void dirtyAncestorChainVisibleDescendantStatus();
     void setAncestorChainHasVisibleDescendant();
+    
+    bool computeHasVisibleContent() const;
 
     bool has3DTransformedDescendant() const { return m_has3DTransformedDescendant; }
     bool has3DTransformedAncestor() const { return m_has3DTransformedAncestor; }
@@ -1176,8 +1182,8 @@ private:
     // Only valid if m_repaintRectsValid is set (std::optional<> not used to avoid padding).
     LayerRepaintRects m_repaintRects;
 
-    // Our current relative position offset.
-    LayoutSize m_offsetForInFlowPosition;
+    // Our current relative or absolute position offset.
+    LayoutSize m_offsetForPosition;
 
     // Our (x,y) coordinates are in our parent layer's coordinate space.
     LayoutPoint m_topLeft;
@@ -1189,10 +1195,6 @@ private:
 
     Markable<ScrollingScope, IntegralMarkableTraits<ScrollingScope, 0>> m_boxScrollingScope;
     Markable<ScrollingScope, IntegralMarkableTraits<ScrollingScope, 0>> m_contentsScrollingScope;
-
-    // Cached normal flow values for absolute positioned elements with static left/top values.
-    LayoutUnit m_staticInlinePosition;
-    LayoutUnit m_staticBlockPosition;
 
     std::unique_ptr<TransformationMatrix> m_transform;
     

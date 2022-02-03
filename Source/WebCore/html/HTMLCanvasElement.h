@@ -74,7 +74,7 @@ public:
     void setSize(const IntSize& newSize) override;
 
     CanvasRenderingContext* renderingContext() const final { return m_context.get(); }
-    ExceptionOr<std::optional<RenderingContext>> getContext(JSC::JSGlobalObject&, const String& contextId, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
+    ExceptionOr<std::optional<RenderingContext>> getContext(JSC::JSGlobalObject&, const String& contextId, FixedVector<JSC::Strong<JSC::Unknown>>&& arguments);
 
     CanvasRenderingContext* getContext(const String&);
 
@@ -96,9 +96,9 @@ public:
 
     WEBCORE_EXPORT ExceptionOr<UncachedString> toDataURL(const String& mimeType, JSC::JSValue quality);
     WEBCORE_EXPORT ExceptionOr<UncachedString> toDataURL(const String& mimeType);
-    ExceptionOr<void> toBlob(ScriptExecutionContext&, Ref<BlobCallback>&&, const String& mimeType, JSC::JSValue quality);
+    ExceptionOr<void> toBlob(Ref<BlobCallback>&&, const String& mimeType, JSC::JSValue quality);
 #if ENABLE(OFFSCREEN_CANVAS)
-    ExceptionOr<Ref<OffscreenCanvas>> transferControlToOffscreen(ScriptExecutionContext&);
+    ExceptionOr<Ref<OffscreenCanvas>> transferControlToOffscreen();
 #endif
 
     // Used for rendering
@@ -108,7 +108,7 @@ public:
 
 #if ENABLE(MEDIA_STREAM)
     RefPtr<MediaSample> toMediaSample();
-    ExceptionOr<Ref<MediaStream>> captureStream(Document&, std::optional<double>&& frameRequestRate);
+    ExceptionOr<Ref<MediaStream>> captureStream(std::optional<double>&& frameRequestRate);
 #endif
 
     Image* copiedImage() const final;
@@ -136,6 +136,12 @@ public:
     bool isSnapshotting() const { return m_isSnapshotting; }
 
     bool isControlledByOffscreen() const;
+
+    WEBCORE_EXPORT static size_t maxActivePixelMemory();
+
+#if PLATFORM(COCOA)
+    GraphicsContext* drawingContext() const final;
+#endif
 
 private:
     HTMLCanvasElement(const QualifiedName&, Document&);
@@ -190,6 +196,9 @@ private:
     bool m_hasRelevantWebGLEventListener { false };
 #endif
     bool m_isSnapshotting { false };
+#if PLATFORM(COCOA)
+    mutable bool m_mustGuardAgainstUseByPendingLayerTransaction { false };
+#endif
 };
 
 } // namespace WebCore

@@ -101,8 +101,8 @@
 #include "YarrJITRegisters.h"
 #include <atomic>
 #include <wtf/Box.h>
+#include <wtf/GenericHashKey.h>
 #include <wtf/RecursableLambda.h>
-#include <wtf/StdUnorderedSet.h>
 
 #undef RELEASE_ASSERT
 #define RELEASE_ASSERT(assertion) do { \
@@ -5107,6 +5107,7 @@ IGNORE_CLANG_WARNINGS_END
 IGNORE_CLANG_WARNINGS_BEGIN("missing-noreturn")
     void compileGetTypedArrayLengthAsInt52()
     {
+        // If arrayMode is ForceExit, we would not compile this node and hence, should not have arrived here.
         RELEASE_ASSERT(m_node->arrayMode().isSomeTypedArrayView());
         // The preprocessor chokes on RELEASE_ASSERT(USE(LARGE_TYPED_ARRAYS)), this is equivalent.
         RELEASE_ASSERT(sizeof(size_t) == sizeof(uint64_t));
@@ -5651,18 +5652,18 @@ IGNORE_CLANG_WARNINGS_END
             VirtualRegister argumentCountRegister = AssemblyHelpers::argumentCount(inlineCallFrame);
             numberOfArgsIncludingThis = m_out.load32(payloadFor(argumentCountRegister));
         }
+
+        speculate(NegativeIndex, noValue(), nullptr, m_out.lessThan(originalIndex, m_out.int32Zero));
         
         LValue numberOfArgs = m_out.sub(numberOfArgsIncludingThis, m_out.int32One);
         LValue indexToCheck = originalIndex;
-        LValue numberOfArgumentsToSkip = m_out.int32Zero;
         if (m_node->numberOfArgumentsToSkip()) {
-            numberOfArgumentsToSkip = m_out.constInt32(m_node->numberOfArgumentsToSkip());
-            CheckValue* check = m_out.speculateAdd(indexToCheck, numberOfArgumentsToSkip);
+            CheckValue* check = m_out.speculateAdd(indexToCheck, m_out.constInt32(m_node->numberOfArgumentsToSkip()));
             blessSpeculation(check, Overflow, noValue(), nullptr, m_origin);
             indexToCheck = check;
         }
 
-        LValue isOutOfBounds = m_out.bitOr(m_out.aboveOrEqual(indexToCheck, numberOfArgs), m_out.below(indexToCheck, numberOfArgumentsToSkip));
+        LValue isOutOfBounds = m_out.aboveOrEqual(indexToCheck, numberOfArgs);
         LBasicBlock continuation = nullptr;
         LBasicBlock lastNext = nullptr;
         ValueFromBlock slowResult;
@@ -7876,10 +7877,11 @@ IGNORE_CLANG_WARNINGS_END
 
         m_out.appendTo(hasRareData, hasStructure);
         LValue rareData = m_out.sub(rareDataTags, m_out.constIntPtr(JSFunction::rareDataTag));
-        LValue structure = m_out.loadPtr(rareData, m_heaps.FunctionRareData_internalFunctionAllocationProfile_structure);
-        m_out.branch(m_out.isZero64(structure), rarely(slowCase), usually(hasStructure));
+        LValue structureID = m_out.load32(rareData, m_heaps.FunctionRareData_internalFunctionAllocationProfile_structureID);
+        m_out.branch(m_out.isZero32(structureID), rarely(slowCase), usually(hasStructure));
 
         m_out.appendTo(hasStructure, checkGlobalObjectCase);
+        LValue structure = decodeNonNullStructure(structureID);
         m_out.branch(m_out.equal(m_out.loadPtr(structure, m_heaps.Structure_classInfo), m_out.constIntPtr(m_node->isInternalPromise() ? JSInternalPromise::info() : JSPromise::info())), usually(checkGlobalObjectCase), rarely(slowCase));
 
         m_out.appendTo(checkGlobalObjectCase, fastAllocationCase);
@@ -7931,10 +7933,11 @@ IGNORE_CLANG_WARNINGS_END
 
         m_out.appendTo(hasRareData, hasStructure);
         LValue rareData = m_out.sub(rareDataTags, m_out.constIntPtr(JSFunction::rareDataTag));
-        LValue structure = m_out.loadPtr(rareData, m_heaps.FunctionRareData_internalFunctionAllocationProfile_structure);
-        m_out.branch(m_out.isZero64(structure), rarely(slowCase), usually(hasStructure));
+        LValue structureID = m_out.load32(rareData, m_heaps.FunctionRareData_internalFunctionAllocationProfile_structureID);
+        m_out.branch(m_out.isZero32(structureID), rarely(slowCase), usually(hasStructure));
 
         m_out.appendTo(hasStructure, checkGlobalObjectCase);
+        LValue structure = decodeNonNullStructure(structureID);
         m_out.branch(m_out.equal(m_out.loadPtr(structure, m_heaps.Structure_classInfo), m_out.constIntPtr(JSClass::info())), usually(checkGlobalObjectCase), rarely(slowCase));
 
         m_out.appendTo(checkGlobalObjectCase, fastAllocationCase);
@@ -8300,7 +8303,7 @@ IGNORE_CLANG_WARNINGS_END
                 m_out.constIntPtr(~static_cast<intptr_t>(7)));
         }
 
-        LValue allocator = allocatorForSize(vm().primitiveGigacageAuxiliarySpace, byteSize, slowCase);
+        LValue allocator = allocatorForSize(vm().primitiveGigacageAuxiliarySpace(), byteSize, slowCase);
         LValue storage = allocateHeapCell(allocator, slowCase);
 
         splatWords(
@@ -8746,7 +8749,7 @@ IGNORE_CLANG_WARNINGS_END
         LBasicBlock slowPath = m_out.newBlock();
         LBasicBlock continuation = m_out.newBlock();
         
-        Allocator allocator = allocatorForNonVirtualConcurrently<JSRopeString>(vm(), sizeof(JSRopeString), AllocatorForMode::AllocatorIfExists);
+        Allocator allocator = allocatorForConcurrently<JSRopeString>(vm(), sizeof(JSRopeString), AllocatorForMode::AllocatorIfExists);
         
         LValue result = allocateCell(
             m_out.constIntPtr(allocator.localAllocator()), vm().stringStructure.get(), slowPath);
@@ -10262,7 +10265,7 @@ IGNORE_CLANG_WARNINGS_END
                     CCallHelpers::TrustedImm32(callSiteIndex.bits()),
                     CCallHelpers::tagFor(VirtualRegister(CallFrameSlot::argumentCountIncludingThis)));
 
-                CallLinkInfo* callLinkInfo = state->jitCode->common.addCallLinkInfo(nodeSemanticOrigin);
+                auto* callLinkInfo = state->jitCode->common.addCallLinkInfo(nodeSemanticOrigin);
                 callLinkInfo->setUpCall(
                     nodeOp == Construct ? CallLinkInfo::Construct : CallLinkInfo::Call, GPRInfo::regT0);
 
@@ -10394,9 +10397,9 @@ IGNORE_CLANG_WARNINGS_END
                         shuffleData.args.append(ValueRecovery::constant(jsUndefined()));
                     shuffleData.numPassedArgs = numPassedArgs;
                     shuffleData.numParameters = jit.codeBlock()->numParameters();
-                    shuffleData.setupCalleeSaveRegisters(jit.codeBlock());
+                    shuffleData.setupCalleeSaveRegisters(state->jitCode->calleeSaveRegisters());
                     
-                    CallLinkInfo* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
+                    auto* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
                     callLinkInfo->setUpCall(CallLinkInfo::DirectTailCall, InvalidGPRReg);
                     
                     CCallHelpers::Label mainPath = jit.label();
@@ -10428,7 +10431,7 @@ IGNORE_CLANG_WARNINGS_END
                     return;
                 }
                 
-                CallLinkInfo* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
+                auto* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
                 callLinkInfo->setUpCall(
                     isConstruct ? CallLinkInfo::DirectConstruct : CallLinkInfo::DirectCall, InvalidGPRReg);
 
@@ -10554,9 +10557,9 @@ IGNORE_CLANG_WARNINGS_END
                 shuffleData.numPassedArgs = numArgs;
                 shuffleData.numParameters = jit.codeBlock()->numParameters();
                 
-                shuffleData.setupCalleeSaveRegisters(jit.codeBlock());
+                shuffleData.setupCalleeSaveRegisters(state->jitCode->calleeSaveRegisters());
 
-                CallLinkInfo* callLinkInfo = state->jitCode->common.addCallLinkInfo(codeOrigin);
+                auto* callLinkInfo = state->jitCode->common.addCallLinkInfo(codeOrigin);
                 callLinkInfo->setUpCall(CallLinkInfo::TailCall, GPRInfo::regT0);
 
                 auto slowPath = callLinkInfo->emitTailCallFastPath(jit, GPRInfo::regT0, scopedLambda<void()>([&]{
@@ -10761,7 +10764,7 @@ IGNORE_CLANG_WARNINGS_END
                     CCallHelpers::TrustedImm32(callSiteIndex.bits()),
                     CCallHelpers::tagFor(VirtualRegister(CallFrameSlot::argumentCountIncludingThis)));
 
-                CallLinkInfo* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
+                auto* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
 
                 RegisterSet usedRegisters = RegisterSet::allRegisters();
                 usedRegisters.exclude(RegisterSet::volatileRegistersForJSCall());
@@ -10903,7 +10906,7 @@ IGNORE_CLANG_WARNINGS_END
                 CCallHelpers::Jump done;
                 if (isTailCall) {
                     slowPath = callLinkInfo->emitTailCallFastPath(jit, GPRInfo::regT0, scopedLambda<void()>([&]{
-                        jit.emitRestoreCalleeSaves();
+                        jit.emitRestoreCalleeSavesFor(state->jitCode->calleeSaveRegisters());
                         jit.prepareForTailCallSlow();
                     }));
                 } else {
@@ -10915,7 +10918,7 @@ IGNORE_CLANG_WARNINGS_END
                 auto slowPathStart = jit.label();
 
                 if (isTailCall)
-                    jit.emitRestoreCalleeSaves();
+                    jit.emitRestoreCalleeSavesFor(state->jitCode->calleeSaveRegisters());
                 jit.move(CCallHelpers::TrustedImmPtr(jit.codeBlock()->globalObjectFor(semanticNodeOrigin)), GPRInfo::regT3);
                 callLinkInfo->emitSlowPath(*vm, jit);
                 
@@ -11045,7 +11048,7 @@ IGNORE_CLANG_WARNINGS_END
                     CCallHelpers::TrustedImm32(callSiteIndex.bits()),
                     CCallHelpers::tagFor(VirtualRegister(CallFrameSlot::argumentCountIncludingThis)));
 
-                CallLinkInfo* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
+                auto* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
 
                 unsigned argIndex = 1;
                 GPRReg calleeGPR = params[argIndex++].gpr();
@@ -11184,7 +11187,7 @@ IGNORE_CLANG_WARNINGS_END
                 CCallHelpers::Jump done;
                 if (isTailCall) {
                     slowPath = callLinkInfo->emitTailCallFastPath(jit, GPRInfo::regT0, scopedLambda<void()>([&]{
-                        jit.emitRestoreCalleeSaves();
+                        jit.emitRestoreCalleeSavesFor(state->jitCode->calleeSaveRegisters());
                         jit.prepareForTailCallSlow();
                     }));
                 } else {
@@ -11196,7 +11199,7 @@ IGNORE_CLANG_WARNINGS_END
                 auto slowPathStart = jit.label();
 
                 if (isTailCall)
-                    jit.emitRestoreCalleeSaves();
+                    jit.emitRestoreCalleeSavesFor(state->jitCode->calleeSaveRegisters());
                 jit.move(CCallHelpers::TrustedImmPtr(jit.codeBlock()->globalObjectFor(semanticNodeOrigin)), GPRInfo::regT3);
                 callLinkInfo->emitSlowPath(*vm, jit);
                 
@@ -11287,7 +11290,7 @@ IGNORE_CLANG_WARNINGS_END
                     CCallHelpers::TrustedImm32(callSiteIndex.bits()),
                     CCallHelpers::tagFor(VirtualRegister(CallFrameSlot::argumentCountIncludingThis)));
                 
-                CallLinkInfo* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
+                auto* callLinkInfo = state->jitCode->common.addCallLinkInfo(semanticNodeOrigin);
                 callLinkInfo->setUpCall(CallLinkInfo::Call, GPRInfo::regT0);
                 
                 jit.addPtr(CCallHelpers::TrustedImm32(-static_cast<ptrdiff_t>(sizeof(CallerFrameAndPC))), CCallHelpers::stackPointerRegister, GPRInfo::regT1);
@@ -13321,15 +13324,15 @@ IGNORE_CLANG_WARNINGS_END
             } else
                 lastNext = m_out.insertNewBlocksBefore(slowCase);
 
-            LValue checkHoleResultValue =
-                m_out.notZero64(m_out.load64(baseIndex(heap, storage, index, m_graph.varArgChild(m_node, 1))));
-            ValueFromBlock checkHoleResult = m_out.anchor(checkHoleResultValue);
+            LValue isHole =
+                m_out.isZero64(m_out.load64(baseIndex(heap, storage, index, m_graph.varArgChild(m_node, 1))));
+            ValueFromBlock checkHoleResult = m_out.anchor(m_out.logicalNot(isHole));
             if (mode.isInBoundsSaneChain())
                 m_out.jump(continuation);
             else if (!mode.isInBounds())
-                m_out.branch(checkHoleResultValue, usually(continuation), rarely(slowCase));
+                m_out.branch(isHole, rarely(slowCase), usually(continuation));
             else
-                speculateAndJump(continuation, LoadFromHole, noValue(), nullptr, checkHoleResultValue);
+                speculateAndJump(continuation, LoadFromHole, noValue(), nullptr, isHole);
 
             m_out.appendTo(slowCase, continuation);
             ValueFromBlock slowResult = m_out.anchor(
@@ -13359,14 +13362,14 @@ IGNORE_CLANG_WARNINGS_END
                 lastNext = m_out.insertNewBlocksBefore(slowCase);
 
             LValue doubleValue = m_out.loadDouble(baseIndex(heap, storage, index, m_graph.varArgChild(m_node, 1)));
-            LValue checkHoleResultValue = m_out.doubleEqual(doubleValue, doubleValue);
-            ValueFromBlock checkHoleResult = m_out.anchor(checkHoleResultValue);
+            LValue notHole = m_out.doubleEqual(doubleValue, doubleValue);
+            ValueFromBlock checkHoleResult = m_out.anchor(notHole);
             if (mode.isInBoundsSaneChain())
                 m_out.jump(continuation);
             else if (!mode.isInBounds())
-                m_out.branch(checkHoleResultValue, usually(continuation), rarely(slowCase));
+                m_out.branch(notHole, usually(continuation), rarely(slowCase));
             else
-                speculateAndJump(continuation, LoadFromHole, noValue(), nullptr, checkHoleResultValue);
+                speculateAndJump(continuation, LoadFromHole, noValue(), nullptr, m_out.logicalNot(notHole));
             
             m_out.appendTo(slowCase, continuation);
             ValueFromBlock slowResult = m_out.anchor(
@@ -13394,15 +13397,15 @@ IGNORE_CLANG_WARNINGS_END
             } else
                 lastNext = m_out.insertNewBlocksBefore(slowCase);
 
-            LValue checkHoleResultValue =
-                m_out.notZero64(m_out.load64(baseIndex(m_heaps.ArrayStorage_vector, storage, index, m_graph.varArgChild(m_node, 1))));
-            ValueFromBlock checkHoleResult = m_out.anchor(checkHoleResultValue);
+            LValue isHole =
+                m_out.isZero64(m_out.load64(baseIndex(m_heaps.ArrayStorage_vector, storage, index, m_graph.varArgChild(m_node, 1))));
+            ValueFromBlock checkHoleResult = m_out.anchor(m_out.logicalNot(isHole));
             if (mode.isInBoundsSaneChain())
                 m_out.jump(continuation);
             else if (!mode.isInBounds())
-                m_out.branch(checkHoleResultValue, usually(continuation), rarely(slowCase));
+                m_out.branch(isHole, rarely(slowCase), usually(continuation));
             else
-                speculateAndJump(continuation, LoadFromHole, noValue(), nullptr, checkHoleResultValue);
+                speculateAndJump(continuation, LoadFromHole, noValue(), nullptr, isHole);
 
             m_out.appendTo(slowCase, continuation);
             ValueFromBlock slowResult = m_out.anchor(
@@ -13709,7 +13712,7 @@ IGNORE_CLANG_WARNINGS_END
         LValue structureID;
         auto structure = m_state.forNode(baseEdge.node()).m_structure.onlyStructure();
         if (structure)
-            structureID = m_out.constInt32(structure->id());
+            structureID = m_out.constInt32(structure->id().bits());
         else
             structureID = m_out.load32(base, m_heaps.JSCell_structureID);
 
@@ -13880,9 +13883,9 @@ IGNORE_CLANG_WARNINGS_END
             if (structure->outOfLineCapacity() || hasIndexedProperties(structure->indexingType())) {
                 Allocator cellAllocator;
                 if (structure->typeInfo().type() == JSType::ArrayType)
-                    cellAllocator = allocatorForNonVirtualConcurrently<JSArray>(vm(), JSArray::allocationSize(structure->inlineCapacity()), AllocatorForMode::AllocatorIfExists);
+                    cellAllocator = allocatorForConcurrently<JSArray>(vm(), JSArray::allocationSize(structure->inlineCapacity()), AllocatorForMode::AllocatorIfExists);
                 else
-                    cellAllocator = allocatorForNonVirtualConcurrently<JSFinalObject>(vm(), JSFinalObject::allocationSize(structure->inlineCapacity()), AllocatorForMode::AllocatorIfExists);
+                    cellAllocator = allocatorForConcurrently<JSFinalObject>(vm(), JSFinalObject::allocationSize(structure->inlineCapacity()), AllocatorForMode::AllocatorIfExists);
 
                 bool hasIndexingHeader = hasIndexedProperties(structure->indexingType());
                 unsigned indexingHeaderSize = 0;
@@ -13921,7 +13924,7 @@ IGNORE_CLANG_WARNINGS_END
                 ValueFromBlock noButterfly = m_out.anchor(m_out.intPtrZero);
                 
                 LValue startOfStorage = allocateHeapCell(
-                    allocatorForSize(vm().jsValueGigacageAuxiliarySpace, butterflySize, slowPath),
+                    allocatorForSize(vm().jsValueGigacageAuxiliarySpace(), butterflySize, slowPath),
                     slowPath);
 
                 LValue fastButterflyValue = m_out.add(
@@ -15016,7 +15019,7 @@ IGNORE_CLANG_WARNINGS_END
         LBasicBlock lastNext = m_out.insertNewBlocksBefore(slowPath);
 
         size_t sizeInBytes = sizeInValues * sizeof(JSValue);
-        Allocator allocator = vm().jsValueGigacageAuxiliarySpace.allocatorForNonVirtual(sizeInBytes, AllocatorForMode::AllocatorIfExists);
+        Allocator allocator = vm().jsValueGigacageAuxiliarySpace().allocatorFor(sizeInBytes, AllocatorForMode::AllocatorIfExists);
         LValue startOfStorage = allocateHeapCell(
             m_out.constIntPtr(allocator.localAllocator()), slowPath);
         ValueFromBlock fastButterfly = m_out.anchor(
@@ -16788,7 +16791,7 @@ IGNORE_CLANG_WARNINGS_END
     
     void storeStructure(LValue object, Structure* structure)
     {
-        m_out.store32(m_out.constInt32(structure->id()), object, m_heaps.JSCell_structureID);
+        m_out.store32(m_out.constInt32(structure->id().bits()), object, m_heaps.JSCell_structureID);
         m_out.store32(
             m_out.constInt32(structure->objectInitializationBlob()),
             object, m_heaps.JSCell_usefulBytes);
@@ -16851,7 +16854,7 @@ IGNORE_CLANG_WARNINGS_END
     LValue allocateObject(
         size_t size, StructureType structure, LValue butterfly, LBasicBlock slowPath)
     {
-        Allocator allocator = allocatorForNonVirtualConcurrently<ClassType>(vm(), size, AllocatorForMode::AllocatorIfExists);
+        Allocator allocator = allocatorForConcurrently<ClassType>(vm(), size, AllocatorForMode::AllocatorIfExists);
         return allocateObject(
             m_out.constIntPtr(allocator.localAllocator()), structure, butterfly, slowPath);
     }
@@ -16872,7 +16875,7 @@ IGNORE_CLANG_WARNINGS_END
             CompleteSubspace* actualSubspace = bitwise_cast<CompleteSubspace*>(subspace->asIntPtr());
             size_t actualSize = size->asIntPtr();
 
-            Allocator actualAllocator = actualSubspace->allocatorForNonVirtual(actualSize, AllocatorForMode::AllocatorIfExists);
+            Allocator actualAllocator = actualSubspace->allocatorFor(actualSize, AllocatorForMode::AllocatorIfExists);
             if (!actualAllocator) {
                 LBasicBlock continuation = m_out.newBlock();
                 LBasicBlock lastNext = m_out.insertNewBlocksBefore(continuation);
@@ -16934,7 +16937,7 @@ IGNORE_CLANG_WARNINGS_END
     LValue allocateObject(RegisteredStructure structure)
     {
         size_t allocationSize = JSFinalObject::allocationSize(structure.get()->inlineCapacity());
-        Allocator allocator = allocatorForNonVirtualConcurrently<JSFinalObject>(vm(), allocationSize, AllocatorForMode::AllocatorIfExists);
+        Allocator allocator = allocatorForConcurrently<JSFinalObject>(vm(), allocationSize, AllocatorForMode::AllocatorIfExists);
         
         // FIXME: If the allocator is null, we could simply emit a normal C call to the allocator
         // instead of putting it on the slow path.
@@ -17038,7 +17041,7 @@ IGNORE_CLANG_WARNINGS_END
         LValue butterflySize = m_out.add(
             payloadSize, m_out.constIntPtr(sizeof(IndexingHeader)));
 
-        LValue allocator = allocatorForSize(vm().jsValueGigacageAuxiliarySpace, butterflySize, failCase);
+        LValue allocator = allocatorForSize(vm().jsValueGigacageAuxiliarySpace(), butterflySize, failCase);
         LValue startOfStorage = allocateHeapCell(allocator, failCase);
 
         LValue butterfly = m_out.add(startOfStorage, m_out.constIntPtr(sizeof(IndexingHeader)));
@@ -17845,7 +17848,7 @@ IGNORE_CLANG_WARNINGS_END
         
         Vector<SwitchCase> cases;
         // These may be negative, or zero, or probably other stuff, too. We don't want to mess with HashSet's corner cases and we don't really care about throughput here.
-        StdUnorderedSet<int32_t> alreadyHandled;
+        HashSet<GenericHashKey<int32_t>> alreadyHandled;
         for (unsigned i = 0; i < data->cases.size(); ++i) {
             // FIXME: The fact that we're using the bytecode's switch table means that the
             // following DFG IR transformation would be invalid.
@@ -17883,7 +17886,7 @@ IGNORE_CLANG_WARNINGS_END
             DFG_ASSERT(m_graph, m_node, iter != unlinkedTable.m_offsetTable.end());
             
             // Use m_indexInTable instead of m_branchOffset to make Switch table dense.
-            if (!alreadyHandled.insert(iter->value.m_indexInTable).second)
+            if (!alreadyHandled.add(iter->value.m_indexInTable).isNewEntry)
                 continue;
 
             cases.append(SwitchCase(
@@ -19569,7 +19572,7 @@ IGNORE_CLANG_WARNINGS_END
             return proven;
         return m_out.notEqual(
             m_out.load32(cell, m_heaps.JSCell_structureID),
-            m_out.constInt32(vm().stringStructure->id()));
+            m_out.constInt32(vm().stringStructure->id().bits()));
     }
     
     LValue isString(LValue cell, SpeculatedType type = SpecFullTop)
@@ -19578,7 +19581,7 @@ IGNORE_CLANG_WARNINGS_END
             return proven;
         return m_out.equal(
             m_out.load32(cell, m_heaps.JSCell_structureID),
-            m_out.constInt32(vm().stringStructure->id()));
+            m_out.constInt32(vm().stringStructure->id().bits()));
     }
 
     LValue isRopeString(LValue string, Edge edge = Edge())
@@ -19625,7 +19628,7 @@ IGNORE_CLANG_WARNINGS_END
             return proven;
         return m_out.notEqual(
             m_out.load32(cell, m_heaps.JSCell_structureID),
-            m_out.constInt32(vm().symbolStructure->id()));
+            m_out.constInt32(vm().symbolStructure->id().bits()));
     }
     
     LValue isSymbol(LValue cell, SpeculatedType type = SpecFullTop)
@@ -19634,7 +19637,7 @@ IGNORE_CLANG_WARNINGS_END
             return proven;
         return m_out.equal(
             m_out.load32(cell, m_heaps.JSCell_structureID),
-            m_out.constInt32(vm().symbolStructure->id()));
+            m_out.constInt32(vm().symbolStructure->id().bits()));
     }
 
     LValue isNotHeapBigIntUnknownWhetherCell(LValue value, SpeculatedType type = SpecFullTop)
@@ -19663,7 +19666,7 @@ IGNORE_CLANG_WARNINGS_END
             return proven;
         return m_out.notEqual(
             m_out.load32(cell, m_heaps.JSCell_structureID),
-            m_out.constInt32(vm().bigIntStructure->id()));
+            m_out.constInt32(vm().bigIntStructure->id().bits()));
     }
 
     LValue isHeapBigInt(LValue cell, SpeculatedType type = SpecFullTop)
@@ -19672,7 +19675,7 @@ IGNORE_CLANG_WARNINGS_END
             return proven;
         return m_out.equal(
             m_out.load32(cell, m_heaps.JSCell_structureID),
-            m_out.constInt32(vm().bigIntStructure->id()));
+            m_out.constInt32(vm().bigIntStructure->id().bits()));
     }
 
     LValue isArrayTypeForArrayify(LValue cell, ArrayMode arrayMode)
@@ -20399,7 +20402,7 @@ IGNORE_CLANG_WARNINGS_END
             m_out.store32(
                 m_out.bitOr(
                     m_out.load32(object, m_heaps.JSCell_structureID),
-                    m_out.constInt32(nukedStructureIDBit())),
+                    m_out.constInt32(StructureID::nukedStructureIDBit)),
                 object, m_heaps.JSCell_structureID);
             m_out.fence(&m_heaps.root, nullptr);
             m_out.storePtr(butterfly, object, m_heaps.JSObject_butterfly);
@@ -20427,7 +20430,7 @@ IGNORE_CLANG_WARNINGS_END
         m_out.store32(
             m_out.bitOr(
                 m_out.load32(object, m_heaps.JSCell_structureID),
-                m_out.constInt32(nukedStructureIDBit())),
+                m_out.constInt32(StructureID::nukedStructureIDBit)),
             object, m_heaps.JSCell_structureID);
         m_out.fence(&m_heaps.root, nullptr);
         m_out.storePtr(butterfly, object, m_heaps.JSObject_butterfly);
@@ -20972,15 +20975,16 @@ IGNORE_CLANG_WARNINGS_END
         m_graph.m_plan.weakReferences().addLazily(target);
     }
 
+    LValue decodeNonNullStructure(LValue structureID)
+    {
+        LValue maskedStructureID = m_out.bitAnd(structureID, m_out.constInt32(structureIDMask));
+        return m_out.add(m_out.constIntPtr(g_jscConfig.startOfStructureHeap), m_out.zeroExtPtr(maskedStructureID));
+    }
+
     LValue loadStructure(LValue value)
     {
         LValue structureID = m_out.load32(value, m_heaps.JSCell_structureID);
-        LValue tableBase = m_out.loadPtr(m_out.absolute(vm().heap.structureIDTable().base()));
-        LValue tableIndex = m_out.aShr(structureID, m_out.constInt32(StructureIDTable::s_numberOfEntropyBits));
-        LValue entropyBits = m_out.shl(m_out.zeroExtPtr(structureID), m_out.constInt32(StructureIDTable::s_entropyBitsShiftForStructurePointer));
-        TypedPointer address = m_out.baseIndex(m_heaps.structureTable, tableBase, m_out.zeroExtPtr(tableIndex));
-        LValue encodedStructureBits = m_out.loadPtr(address);
-        return m_out.bitXor(encodedStructureBits, entropyBits);
+        return decodeNonNullStructure(structureID);
     }
 
     LValue weakPointer(JSCell* pointer)
@@ -20996,7 +21000,7 @@ IGNORE_CLANG_WARNINGS_END
 
     LValue weakStructureID(RegisteredStructure structure)
     {
-        return m_out.constInt32(structure->id());
+        return m_out.constInt32(structure->id().bits());
     }
     
     LValue weakStructure(RegisteredStructure structure)

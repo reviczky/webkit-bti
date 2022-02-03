@@ -5,7 +5,7 @@
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) 2010 Igalia, S.L.
  * Copyright (C) Research In Motion Limited 2010. All rights reserved.
- * Copyright (C) 2015-2021 Apple, Inc. All rights reserved.
+ * Copyright (C) 2015-2022 Apple, Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -91,6 +91,7 @@ IntSize FEGaussianBlur::calculateUnscaledKernelSize(FloatSize stdDeviation)
 
 IntSize FEGaussianBlur::calculateKernelSize(const Filter& filter, FloatSize stdDeviation)
 {
+    stdDeviation = filter.resolvedSize(stdDeviation);
     return calculateUnscaledKernelSize(filter.scaledByFilterScale(stdDeviation));
 }
 
@@ -102,48 +103,47 @@ IntSize FEGaussianBlur::calculateOutsetSize(FloatSize stdDeviation)
     return { 3 * kernelSize.width() / 2, 3 * kernelSize.height() / 2 };
 }
 
-void FEGaussianBlur::determineAbsolutePaintRect(const Filter& filter)
+FloatRect FEGaussianBlur::calculateImageRect(const Filter& filter, const FilterImageVector& inputs, const FloatRect& primitiveSubregion) const
 {
-    IntSize kernelSize = calculateKernelSize(filter, { m_stdX, m_stdY });
+    auto imageRect = inputs[0]->imageRect();
 
-    FloatRect absolutePaintRect = inputEffect(0)->absolutePaintRect();
     // Edge modes other than 'none' do not inflate the affected paint rect.
-    if (m_edgeMode != EdgeModeType::None) {
-        setAbsolutePaintRect(enclosingIntRect(absolutePaintRect));
-        return;
-    }
+    if (m_edgeMode != EdgeModeType::None)
+        return enclosingIntRect(imageRect);
+
+    auto kernelSize = calculateUnscaledKernelSize(filter.resolvedSize({ m_stdX, m_stdY }));
 
     // We take the half kernel size and multiply it with three, because we run box blur three times.
-    absolutePaintRect.inflateX(3 * kernelSize.width() * 0.5f);
-    absolutePaintRect.inflateY(3 * kernelSize.height() * 0.5f);
+    imageRect.inflateX(3 * kernelSize.width() * 0.5f);
+    imageRect.inflateY(3 * kernelSize.height() * 0.5f);
 
-    if (clipsToBounds())
-        absolutePaintRect.intersect(maxEffectRect());
-    else
-        absolutePaintRect.unite(maxEffectRect());
-
-    setAbsolutePaintRect(enclosingIntRect(absolutePaintRect));
+    return filter.clipToMaxEffectRect(imageRect, primitiveSubregion);
 }
 
-bool FEGaussianBlur::platformApplySoftware(const Filter& filter)
+IntOutsets FEGaussianBlur::outsets(const Filter& filter) const
 {
-    return FEGaussianBlurSoftwareApplier(*this).apply(filter, inputEffects());
-}
-
-IntOutsets FEGaussianBlur::outsets() const
-{
-    IntSize outsetSize = calculateOutsetSize({ m_stdX, m_stdY });
+    IntSize outsetSize = calculateOutsetSize(filter.resolvedSize({ m_stdX, m_stdY }));
     return { outsetSize.height(), outsetSize.width(), outsetSize.height(), outsetSize.width() };
 }
 
-TextStream& FEGaussianBlur::externalRepresentation(TextStream& ts, RepresentationType representation) const
+bool FEGaussianBlur::resultIsAlphaImage(const FilterImageVector& inputs) const
+{
+    return inputs[0]->isAlphaImage();
+}
+
+std::unique_ptr<FilterEffectApplier> FEGaussianBlur::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FEGaussianBlurSoftwareApplier>(*this);
+}
+
+TextStream& FEGaussianBlur::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feGaussianBlur";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " stdDeviation=\"" << m_stdX << ", " << m_stdY << "\"]\n";
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
+    ts << " stdDeviation=\"" << m_stdX << ", " << m_stdY << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

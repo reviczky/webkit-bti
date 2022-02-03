@@ -28,7 +28,6 @@
 #include "Internals.h"
 
 #include "AXObjectCache.h"
-#include "ActivityState.h"
 #include "AddEventListenerOptions.h"
 #include "AnimationTimeline.h"
 #include "ApplicationCacheStorage.h"
@@ -79,6 +78,7 @@
 #include "EventNames.h"
 #include "ExtendableEvent.h"
 #include "ExtensionStyleSheets.h"
+#include "FetchRequest.h"
 #include "FetchResponse.h"
 #include "File.h"
 #include "FloatQuad.h"
@@ -112,6 +112,7 @@
 #include "IDBRequest.h"
 #include "IDBTransaction.h"
 #include "ImageOverlay.h"
+#include "ImageOverlayController.h"
 #include "InspectorClient.h"
 #include "InspectorController.h"
 #include "InspectorDebuggableType.h"
@@ -149,6 +150,7 @@
 #include "MockLibWebRTCPeerConnection.h"
 #include "MockPageOverlay.h"
 #include "MockPageOverlayClient.h"
+#include "ModalContainerObserver.h"
 #include "NavigatorBeacon.h"
 #include "NavigatorMediaDevices.h"
 #include "NetworkLoadInformation.h"
@@ -545,10 +547,8 @@ void Internals::resetToConsistentState(Page& page)
     page.mainFrame().loader().clearTestingOverrides();
     page.applicationCacheStorage().setDefaultOriginQuota(ApplicationCacheStorage::noQuota());
 #if ENABLE(VIDEO)
-    page.group().ensureCaptionPreferences().setTestingMode(true);
     page.group().ensureCaptionPreferences().setCaptionDisplayMode(CaptionUserPreferences::ForcedOnly);
     page.group().ensureCaptionPreferences().setCaptionsStyleSheetOverride(emptyString());
-    page.group().ensureCaptionPreferences().setTestingMode(false);
     PlatformMediaSessionManager::sharedManager().resetHaveEverRegisteredAsNowPlayingApplicationForTesting();
     PlatformMediaSessionManager::sharedManager().resetRestrictions();
     PlatformMediaSessionManager::sharedManager().setWillIgnoreSystemInterruptions(true);
@@ -624,14 +624,14 @@ Internals::Internals(Document& document)
     , m_orientationNotifier(0)
 #endif
 {
-#if ENABLE(VIDEO)
-    if (document.page())
-        document.page()->group().ensureCaptionPreferences().setTestingMode(true);
-#endif
-
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     if (document.page())
         document.page()->setMockMediaPlaybackTargetPickerEnabled(true);
+#endif
+
+#if ENABLE(VIDEO)
+    if (document.page())
+        m_testingModeToken = document.page()->group().ensureCaptionPreferences().createTestingModeToken().moveToUniquePtr();
 #endif
 
     if (contextDocument() && contextDocument()->frame()) {
@@ -920,6 +920,15 @@ void Internals::setStrictRawResourceValidationPolicyDisabled(bool disabled)
     frame()->loader().setStrictRawResourceValidationPolicyDisabledForTesting(disabled);
 }
 
+bool Internals::isFetchObjectContextStopped(const FetchObject& object)
+{
+    return switchOn(object, [](const RefPtr<FetchRequest>& request) {
+        return request->isContextStopped();
+    }, [](auto& response) {
+        return response->isContextStopped();
+    });
+}
+
 void Internals::clearMemoryCache()
 {
     MemoryCache::singleton().evictResources();
@@ -949,15 +958,13 @@ static Image* imageFromImageElement(HTMLImageElement& element)
 
 static BitmapImage* bitmapImageFromImageElement(HTMLImageElement& element)
 {
-    auto* image = imageFromImageElement(element);
-    return image && is<BitmapImage>(image) ? &downcast<BitmapImage>(*image) : nullptr;
+    return dynamicDowncast<BitmapImage>(imageFromImageElement(element));
 }
 
 #if USE(CG)
 static PDFDocumentImage* pdfDocumentImageFromImageElement(HTMLImageElement& element)
 {
-    auto* image = imageFromImageElement(element);
-    return image && is<PDFDocumentImage>(image) ? &downcast<PDFDocumentImage>(*image) : nullptr;
+    return dynamicDowncast<PDFDocumentImage>(imageFromImageElement(element));
 }
 #endif
 
@@ -1852,7 +1859,7 @@ ExceptionOr<void> Internals::setMarkedTextMatchesAreHighlighted(bool flag)
 
 void Internals::invalidateFontCache()
 {
-    FontCache::singleton().invalidate();
+    FontCache::invalidateAllFontCaches();
 }
 
 void Internals::setFontSmoothingEnabled(bool enabled)
@@ -2754,14 +2761,16 @@ unsigned Internals::numberOfResizeObservers(const Document& document) const
     return document.numberOfResizeObservers();
 }
 
-uint64_t Internals::documentIdentifier(const Document& document) const
+String Internals::documentIdentifier(const Document& document) const
 {
-    return document.identifier().object().toUInt64();
+    return document.identifier().object().toString();
 }
 
-bool Internals::isDocumentAlive(uint64_t documentIdentifier) const
+bool Internals::isDocumentAlive(const String& documentIdentifier) const
 {
-    return Document::allDocumentsMap().contains({ makeObjectIdentifier<ScriptExecutionContextIdentifierType>(documentIdentifier), Process::identifier() });
+    auto uuid = UUID::parseVersion4(documentIdentifier);
+    ASSERT(uuid);
+    return uuid ? Document::allDocumentsMap().contains({ *uuid, Process::identifier() }) : false;
 }
 
 uint64_t Internals::storageAreaMapCount() const
@@ -2786,13 +2795,13 @@ bool Internals::isElementAlive(Document& document, uint64_t elementIdentifier) c
 uint64_t Internals::frameIdentifier(const Document& document) const
 {
     if (auto* page = document.page())
-        return page->mainFrame().loader().frameID().value_or(FrameIdentifier { }).toUInt64();
+        return valueOrDefault(page->mainFrame().loader().frameID()).toUInt64();
     return 0;
 }
 
 uint64_t Internals::pageIdentifier(const Document& document) const
 {
-    return document.pageID().value_or(PageIdentifier { }).toUInt64();
+    return valueOrDefault(document.pageID()).toUInt64();
 }
 
 bool Internals::isAnyWorkletGlobalScopeAlive() const
@@ -2800,7 +2809,7 @@ bool Internals::isAnyWorkletGlobalScopeAlive() const
     return WorkletGlobalScope::numberOfWorkletGlobalScopes();
 }
 
-String Internals::serviceWorkerClientIdentifier(const Document& document) const
+String Internals::serviceWorkerClientInternalIdentifier(const Document& document) const
 {
     return document.identifier().toString();
 }
@@ -3923,7 +3932,17 @@ String Internals::getImageSourceURL(Element& element)
 
 unsigned Internals::mediaElementCount()
 {
-    return HTMLMediaElement::allMediaElements().size();
+    Document* document = contextDocument();
+    if (!document)
+        return 0;
+
+    unsigned number = 0;
+    for (auto* mediaElement : HTMLMediaElement::allMediaElements()) {
+        if (&mediaElement->document() == document)
+            ++number;
+    }
+
+    return number;
 }
 
 Vector<String> Internals::mediaResponseSources(HTMLMediaElement& media)
@@ -4532,7 +4551,7 @@ RefPtr<HTMLMediaElement> Internals::bestMediaElementForRemoteControls(Internals:
 
 Internals::MediaSessionState Internals::mediaSessionState(HTMLMediaElement& element)
 {
-    return element.mediaSession().state();
+    return static_cast<Internals::MediaSessionState>(element.mediaSession().state());
 }
 #endif
 
@@ -4717,20 +4736,42 @@ String Internals::pageMediaState()
         string.append("HasPlaybackTargetAvailabilityListener,");
     if (state.containsAny(MediaProducerMediaState::HasAudioOrVideo))
         string.append("HasAudioOrVideo,");
+
     if (state.containsAny(MediaProducerMediaState::HasActiveAudioCaptureDevice))
         string.append("HasActiveAudioCaptureDevice,");
-    if (state.containsAny(MediaProducerMediaState::HasActiveVideoCaptureDevice))
-        string.append("HasActiveVideoCaptureDevice,");
     if (state.containsAny(MediaProducerMediaState::HasMutedAudioCaptureDevice))
         string.append("HasMutedAudioCaptureDevice,");
+    if (state.containsAny(MediaProducerMediaState::HasInterruptedAudioCaptureDevice))
+        string.append("HasInterruptedAudioCaptureDevice,");
+
+    if (state.containsAny(MediaProducerMediaState::HasActiveVideoCaptureDevice))
+        string.append("HasActiveVideoCaptureDevice,");
     if (state.containsAny(MediaProducerMediaState::HasMutedVideoCaptureDevice))
         string.append("HasMutedVideoCaptureDevice,");
+    if (state.containsAny(MediaProducerMediaState::HasInterruptedVideoCaptureDevice))
+        string.append("HasInterruptedVideoCaptureDevice,");
+
     if (state.containsAny(MediaProducerMediaState::HasUserInteractedWithMediaElement))
         string.append("HasUserInteractedWithMediaElement,");
-    if (state.containsAny(MediaProducerMediaState::HasActiveDisplayCaptureDevice))
-        string.append("HasActiveDisplayCaptureDevice,");
-    if (state.containsAny(MediaProducerMediaState::HasMutedDisplayCaptureDevice))
-        string.append("HasMutedDisplayCaptureDevice,");
+
+    if (state.containsAny(MediaProducerMediaState::HasActiveScreenCaptureDevice))
+        string.append("HasActiveScreenCaptureDevice,");
+    if (state.containsAny(MediaProducerMediaState::HasMutedScreenCaptureDevice))
+        string.append("HasMutedScreenCaptureDevice,");
+
+    if (state.containsAny(MediaProducerMediaState::HasActiveWindowCaptureDevice))
+        string.append("HasActiveWindowCaptureDevice,");
+    if (state.containsAny(MediaProducerMediaState::HasMutedWindowCaptureDevice))
+        string.append("HasMutedWindowCaptureDevice,");
+    if (state.containsAny(MediaProducerMediaState::HasInterruptedWindowCaptureDevice))
+        string.append("HasInterruptedWindowCaptureDevice,");
+
+    if (state.containsAny(MediaProducerMediaState::HasActiveSystemAudioCaptureDevice))
+        string.append("HasActiveSystemAudioCaptureDevice,");
+    if (state.containsAny(MediaProducerMediaState::HasMutedSystemAudioCaptureDevice))
+        string.append("HasMutedSystemAudioCaptureDevice,");
+    if (state.containsAny(MediaProducerMediaState::HasInterruptedSystemAudioCaptureDevice))
+        string.append("HasInterruptedSystemAudioCaptureDevice,");
 
     if (string.isEmpty())
         string.append("IsNotPlaying");
@@ -5349,50 +5390,37 @@ bool Internals::requestedMetal(WebGLRenderingContext& context)
 
 void Internals::setPageVisibility(bool isVisible)
 {
-    auto* document = contextDocument();
-    if (!document || !document->page())
-        return;
-    auto& page = *document->page();
-    auto state = page.activityState();
+    updatePageActivityState(ActivityState::IsVisible, isVisible);
+}
 
-    if (!isVisible)
-        state.remove(ActivityState::IsVisible);
-    else
-        state.add(ActivityState::IsVisible);
-
-    page.setActivityState(state);
+void Internals::setPageIsFocused(bool isFocused)
+{
+    updatePageActivityState(ActivityState::IsFocused, isFocused);
 }
 
 void Internals::setPageIsFocusedAndActive(bool isFocusedAndActive)
 {
-    auto* document = contextDocument();
-    if (!document || !document->page())
-        return;
-    auto& page = *document->page();
-    auto state = page.activityState();
-
-    if (!isFocusedAndActive)
-        state.remove({ ActivityState::IsFocused, ActivityState::WindowIsActive });
-    else
-        state.add({ ActivityState::IsFocused, ActivityState::WindowIsActive });
-
-    page.setActivityState(state);
+    updatePageActivityState({ ActivityState::IsFocused, ActivityState::WindowIsActive }, isFocusedAndActive);
 }
 
 void Internals::setPageIsInWindow(bool isInWindow)
 {
-    auto* document = contextDocument();
-    if (!document || !document->page())
+    updatePageActivityState(ActivityState::IsInWindow, isInWindow);
+}
+
+void Internals::updatePageActivityState(OptionSet<ActivityState::Flag> statesToChange, bool newValue)
+{
+    auto* page = contextDocument() ? contextDocument()->page() : nullptr;
+    if (!page)
         return;
-    auto& page = *document->page();
-    auto state = page.activityState();
+    auto state = page->activityState();
 
-    if (!isInWindow)
-        state.remove({ ActivityState::IsInWindow });
+    if (!newValue)
+        state.remove(statesToChange);
     else
-        state.add({ ActivityState::IsInWindow });
+        state.add(statesToChange);
 
-    page.setActivityState(state);
+    page->setActivityState(state);
 }
 
 bool Internals::isPageActive() const
@@ -5436,9 +5464,12 @@ void Internals::stopObservingRealtimeMediaSource()
 
     switch (m_trackSource->type()) {
     case RealtimeMediaSource::Type::Audio:
+    case RealtimeMediaSource::Type::SystemAudio:
         m_trackSource->removeAudioSampleObserver(*this);
         break;
     case RealtimeMediaSource::Type::Video:
+    case RealtimeMediaSource::Type::Screen:
+    case RealtimeMediaSource::Type::Window:
         m_trackSource->removeVideoSampleObserver(*this);
         break;
     case RealtimeMediaSource::Type::None:
@@ -5459,9 +5490,12 @@ void Internals::observeMediaStreamTrack(MediaStreamTrack& track)
     m_trackSource->addObserver(*this);
     switch (m_trackSource->type()) {
     case RealtimeMediaSource::Type::Audio:
+    case RealtimeMediaSource::Type::SystemAudio:
         m_trackSource->addAudioSampleObserver(*this);
         break;
     case RealtimeMediaSource::Type::Video:
+    case RealtimeMediaSource::Type::Screen:
+    case RealtimeMediaSource::Type::Window:
         m_trackSource->addVideoSampleObserver(*this);
         break;
     case RealtimeMediaSource::Type::None:
@@ -5716,6 +5750,11 @@ uint64_t Internals::responseSizeWithPadding(FetchResponse& response) const
     return response.bodySizeWithPadding();
 }
 
+const String& Internals::responseNetworkLoadMetricsProtocol(const FetchResponse& response)
+{
+    return response.networkLoadMetrics().protocol;
+}
+
 #if ENABLE(SERVICE_WORKER)
 void Internals::hasServiceWorkerRegistration(const String& clientURL, HasRegistrationPromise&& promise)
 {
@@ -5753,6 +5792,8 @@ MockPaymentCoordinator& Internals::mockPaymentCoordinator(Document& document)
 
 Internals::ImageOverlayLine::~ImageOverlayLine() = default;
 Internals::ImageOverlayText::~ImageOverlayText() = default;
+Internals::ImageOverlayBlock::~ImageOverlayBlock() = default;
+Internals::ImageOverlayDataDetector::~ImageOverlayDataDetector() = default;
 
 #if ENABLE(IMAGE_ANALYSIS)
 
@@ -5772,8 +5813,9 @@ static TextRecognitionLineData makeDataForLine(const Internals::ImageOverlayLine
     return {
         getQuad<Internals::ImageOverlayLine>(line),
         line.children.map([](auto& textChild) -> TextRecognitionWordData {
-            return { textChild.text, getQuad<Internals::ImageOverlayText>(textChild), textChild.hasLeadingWhitespace };
-        })
+            return { textChild.text, getQuad(textChild), textChild.hasLeadingWhitespace };
+        }),
+        line.hasTrailingNewline
     };
 }
 
@@ -5801,7 +5843,7 @@ RefPtr<Element> Internals::textRecognitionCandidate() const
 
 #endif // ENABLE(IMAGE_ANALYSIS)
 
-void Internals::installImageOverlay(Element& element, Vector<ImageOverlayLine>&& lines)
+void Internals::installImageOverlay(Element& element, Vector<ImageOverlayLine>&& lines, Vector<ImageOverlayBlock>&& blocks, Vector<ImageOverlayDataDetector>&& dataDetectors)
 {
     if (!is<HTMLElement>(element))
         return;
@@ -5812,13 +5854,28 @@ void Internals::installImageOverlay(Element& element, Vector<ImageOverlayLine>&&
             return makeDataForLine(line);
         })
 #if ENABLE(DATA_DETECTION)
-        , Vector<TextRecognitionDataDetector>()
-#endif
-        , Vector<TextRecognitionBlockData>()
+        , dataDetectors.map([](auto& dataDetector) -> TextRecognitionDataDetector {
+            return { fakeDataDetectorResultForTesting(), { getQuad(dataDetector) } };
+        })
+#endif // ENABLE(DATA_DETECTION)
+        , blocks.map([] (auto& block) {
+            return TextRecognitionBlockData { block.text, getQuad(block) };
+        })
     });
 #else
+    UNUSED_PARAM(blocks);
+    UNUSED_PARAM(dataDetectors);
     UNUSED_PARAM(lines);
 #endif
+}
+
+bool Internals::hasActiveDataDetectorHighlight() const
+{
+#if ENABLE(DATA_DETECTION) && ENABLE(IMAGE_ANALYSIS)
+    if (auto* controller = contextDocument()->page()->imageOverlayControllerIfExists())
+        return controller->hasActiveDataDetectorHighlightForTesting();
+#endif
+    return false;
 }
 
 bool Internals::isSystemPreviewLink(Element& element) const
@@ -5935,6 +5992,11 @@ auto Internals::parseHEVCCodecParameters(StringView string) -> std::optional<HEV
     return WebCore::parseHEVCCodecParameters(string);
 }
 
+String Internals::createHEVCCodecParametersString(const HEVCParameterSet& parameters)
+{
+    return WebCore::createHEVCCodecParametersString(parameters);
+}
+
 auto Internals::parseDoViCodecParameters(StringView string) -> std::optional<DoViParameterSet>
 {
     auto parseResult = WebCore::parseDoViCodecParameters(string);
@@ -5958,6 +6020,23 @@ auto Internals::parseDoViCodecParameters(StringView string) -> std::optional<DoV
     convertedResult.bitstreamProfileID = parseResult->bitstreamProfileID;
     convertedResult.bitstreamLevelID = parseResult->bitstreamLevelID;
     return convertedResult;
+}
+
+String Internals::createDoViCodecParametersString(const DoViParameterSet& parameterSet)
+{
+    DoViParameters::Codec codec;
+    if (parameterSet.codecName == "avc1"_s)
+        codec = DoViParameters::Codec::AVC1;
+    else if (parameterSet.codecName == "avc3"_s)
+        codec = DoViParameters::Codec::AVC3;
+    else if (parameterSet.codecName == "hev1"_s)
+        codec = DoViParameters::Codec::HEV1;
+    else if (parameterSet.codecName == "hvc1"_s)
+        codec = DoViParameters::Codec::HVC1;
+    else
+        return emptyString();
+
+    return WebCore::createDoViCodecParametersString({ codec, parameterSet.bitstreamProfileID, parameterSet.bitstreamLevelID });
 }
 
 std::optional<VPCodecConfigurationRecord> Internals::parseVPCodecParameters(StringView string)
@@ -6373,7 +6452,14 @@ ExceptionOr<Internals::AttachmentThumbnailInfo> Internals::attachmentThumbnailIn
 #endif
 }
 
+#if ENABLE(SERVICE_CONTROLS)
+bool Internals::hasImageControls(const HTMLImageElement& element) const
+{
+    return element.hasImageControls();
+}
 #endif
+
+#endif // ENABLE(ATTACHMENT_ELEMENT)
 
 #if ENABLE(MEDIA_SESSION)
 ExceptionOr<double> Internals::currentMediaSessionPosition(const MediaSession& session)
@@ -6596,8 +6682,14 @@ RefPtr<PushSubscription> Internals::createPushSubscription(const String& endpoin
     Vector<uint8_t> myClientECDHPublicKey { static_cast<const uint8_t*>(clientECDHPublicKey.data()), clientECDHPublicKey.byteLength() };
     Vector<uint8_t> myAuth { static_cast<const uint8_t*>(auth.data()), auth.byteLength() };
 
-    return PushSubscription::create(PushSubscriptionData { WTFMove(myEndpoint), expirationTime, WTFMove(myServerVAPIDPublicKey), WTFMove(myClientECDHPublicKey), WTFMove(myAuth) });
+    return PushSubscription::create(PushSubscriptionData { { }, WTFMove(myEndpoint), expirationTime, WTFMove(myServerVAPIDPublicKey), WTFMove(myClientECDHPublicKey), WTFMove(myAuth) });
 }
 #endif
+
+void Internals::overrideModalContainerSearchTermForTesting(const String& term)
+{
+    if (auto observer = contextDocument()->modalContainerObserver())
+        observer->overrideSearchTermForTesting(term);
+}
 
 } // namespace WebCore

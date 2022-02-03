@@ -52,6 +52,7 @@
 #include "MixedContentChecker.h"
 #include "NodeRareData.h"
 #include "Page.h"
+#include "PseudoClassChangeInvalidation.h"
 #include "RadioNodeList.h"
 #include "RenderTextControl.h"
 #include "ScriptDisallowedScope.h"
@@ -666,17 +667,23 @@ void HTMLFormElement::registerInvalidAssociatedFormControl(const HTMLFormControl
     ASSERT_WITH_MESSAGE(!is<HTMLFieldSetElement>(formControlElement), "FieldSet are never candidates for constraint validation.");
     ASSERT(static_cast<const Element&>(formControlElement).matchesInvalidPseudoClass());
 
+    std::optional<Style::PseudoClassChangeInvalidation> styleInvalidation;
     if (m_invalidAssociatedFormControls.computesEmpty())
-        invalidateStyleForSubtree();
+        emplace(styleInvalidation, *this, { { CSSSelector::PseudoClassValid, false }, { CSSSelector::PseudoClassInvalid, true } });
+
     m_invalidAssociatedFormControls.add(const_cast<HTMLFormControlElement&>(formControlElement));
 }
 
 void HTMLFormElement::removeInvalidAssociatedFormControlIfNeeded(const HTMLFormControlElement& formControlElement)
 {
-    if (m_invalidAssociatedFormControls.remove(formControlElement)) {
-        if (m_invalidAssociatedFormControls.computesEmpty())
-            invalidateStyleForSubtree();
-    }
+    if (!m_invalidAssociatedFormControls.contains(formControlElement))
+        return;
+
+    std::optional<Style::PseudoClassChangeInvalidation> styleInvalidation;
+    if (m_invalidAssociatedFormControls.computeSize() == 1)
+        emplace(styleInvalidation, *this, { { CSSSelector::PseudoClassValid, true }, { CSSSelector::PseudoClassInvalid, false } });
+
+    m_invalidAssociatedFormControls.remove(formControlElement);
 }
 
 bool HTMLFormElement::isURLAttribute(const Attribute& attribute) const
@@ -1008,7 +1015,7 @@ const AtomString& HTMLFormElement::autocomplete() const
     return equalIgnoringASCIICase(attributeWithoutSynchronization(autocompleteAttr), "off") ? off : on;
 }
 
-RefPtr<DOMFormData> HTMLFormElement::constructEntryList(Ref<DOMFormData>&& domFormData, StringPairVector* formValues, IsMultipartForm isMultipartForm)
+RefPtr<DOMFormData> HTMLFormElement::constructEntryList(Ref<DOMFormData>&& domFormData, StringPairVector* formValues)
 {
     // https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#constructing-form-data-set
     ASSERT(isMainThread());
@@ -1021,7 +1028,7 @@ RefPtr<DOMFormData> HTMLFormElement::constructEntryList(Ref<DOMFormData>&& domFo
     for (auto& control : this->copyAssociatedElementsVector()) {
         auto& element = control->asHTMLElement();
         if (!element.isDisabledFormControl())
-            control->appendFormData(domFormData.get(), isMultipartForm == IsMultipartForm::Yes);
+            control->appendFormData(domFormData.get());
         if (formValues && is<HTMLInputElement>(element)) {
             auto& input = downcast<HTMLInputElement>(element);
             if (input.isTextField()) {

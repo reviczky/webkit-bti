@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2022 Apple Inc. All rights reserved.
  * Copyright (C) 2011 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,7 +80,6 @@
 #include "PolicyChecker.h"
 #include "ProgressTracker.h"
 #include "Quirks.h"
-#include "ReportingEndpointsCache.h"
 #include "ResourceHandle.h"
 #include "ResourceLoadObserver.h"
 #include "RuntimeEnabledFeatures.h"
@@ -128,8 +127,8 @@
 #include "NetworkStorageSession.h"
 #endif
 
-#define PAGE_ID ((m_frame ? m_frame->pageID().value_or(PageIdentifier()) : PageIdentifier()).toUInt64())
-#define FRAME_ID ((m_frame ? m_frame->frameID().value_or(FrameIdentifier()) : FrameIdentifier()).toUInt64())
+#define PAGE_ID ((m_frame ? valueOrDefault(m_frame->pageID()) : PageIdentifier()).toUInt64())
+#define FRAME_ID ((m_frame ? valueOrDefault(m_frame->frameID()) : FrameIdentifier()).toUInt64())
 #define IS_MAIN_FRAME (m_frame ? m_frame->isMainFrame() : false)
 #define DOCUMENTLOADER_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] DocumentLoader::" fmt, this, PAGE_ID, FRAME_ID, IS_MAIN_FRAME, ##__VA_ARGS__)
 
@@ -151,15 +150,15 @@ static void setAllDefersLoading(const ResourceLoaderMap& loaders, bool defers)
         loader->setDefersLoading(defers);
 }
 
-static HashMap<ScriptExecutionContextIdentifier, DocumentLoader*>& temporaryIdentifierToLoaderMap()
+static HashMap<ScriptExecutionContextIdentifier, DocumentLoader*>& scriptExecutionContextIdentifierToLoaderMap()
 {
     static NeverDestroyed<HashMap<ScriptExecutionContextIdentifier, DocumentLoader*>> map;
     return map.get();
 }
 
-DocumentLoader* DocumentLoader::fromTemporaryDocumentIdentifier(ScriptExecutionContextIdentifier identifier)
+DocumentLoader* DocumentLoader::fromScriptExecutionContextIdentifier(ScriptExecutionContextIdentifier identifier)
 {
-    return temporaryIdentifierToLoaderMap().get(identifier);
+    return scriptExecutionContextIdentifierToLoaderMap().get(identifier);
 }
 
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(DocumentLoader);
@@ -174,10 +173,7 @@ DocumentLoader::DocumentLoader(const ResourceRequest& request, const SubstituteD
     , m_originalSubstituteDataWasValid(substituteData.isValid())
     , m_substituteResourceDeliveryTimer(*this, &DocumentLoader::substituteResourceDeliveryTimerFired)
     , m_applicationCacheHost(makeUnique<ApplicationCacheHost>(*this))
-    , m_activeContentRuleListActionPatterns(Vector<UserContentURLPattern>())
 {
-    // FIXME: Vector default constructor shouldn't need to know the size of the elements,
-    // so m_activeContentRuleListActionPatterns ought to be able to be initialized with an initializer list in the header without including UserContentURLPattern.h.
 }
 
 FrameLoader* DocumentLoader::frameLoader() const
@@ -204,14 +200,14 @@ DocumentLoader::~DocumentLoader()
     clearMainResource();
 
 #if ENABLE(SERVICE_WORKER)
-    if (m_temporaryServiceWorkerClient) {
-        ASSERT(temporaryIdentifierToLoaderMap().contains(*m_temporaryServiceWorkerClient));
-        temporaryIdentifierToLoaderMap().remove(*m_temporaryServiceWorkerClient);
+    if (m_resultingClientId) {
+        ASSERT(scriptExecutionContextIdentifierToLoaderMap().contains(m_resultingClientId));
+        scriptExecutionContextIdentifierToLoaderMap().remove(m_resultingClientId);
     }
 #endif
 }
 
-RefPtr<SharedBuffer> DocumentLoader::mainResourceData() const
+RefPtr<FragmentedSharedBuffer> DocumentLoader::mainResourceData() const
 {
     if (m_substituteData.isValid())
         return m_substituteData.content()->copy();
@@ -486,8 +482,8 @@ void DocumentLoader::finishedLoading()
         // If this is an empty document, it will not have actually been created yet. Commit dummy data so that
         // DocumentWriter::begin() gets called and creates the Document.
         if (!m_gotFirstByte)
-            commitData(0, 0);
-        
+            commitData(SharedBuffer::create());
+
         if (!frameLoader())
             return;
         frameLoader()->client().finishedLoading(this);
@@ -559,6 +555,11 @@ bool DocumentLoader::setControllingServiceWorkerRegistration(ServiceWorkerRegist
     return true;
 }
 
+ScriptExecutionContextIdentifier DocumentLoader::resultingClientId() const
+{
+    return m_resultingClientId;
+}
+
 void DocumentLoader::matchRegistration(const URL& url, SWClientConnection::RegistrationCallback&& callback)
 {
     auto shouldTryLoadingThroughServiceWorker = !frameLoader()->isReloadingFromOrigin() && m_frame->page() && RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && url.protocolIsInHTTPFamily();
@@ -593,8 +594,9 @@ void DocumentLoader::redirectReceived(CachedResource& resource, ResourceRequest&
 #if ENABLE(SERVICE_WORKER)
     if (m_serviceWorkerRegistrationData) {
         m_serviceWorkerRegistrationData = { };
-        unregisterTemporaryServiceWorkerClient();
+        unregisterReservedServiceWorkerClient();
     }
+
     willSendRequest(WTFMove(request), redirectResponse, [completionHandler = WTFMove(completionHandler), protectedThis = Ref { *this }, this] (auto&& request) mutable {
         ASSERT(!m_substituteData.isValid());
         if (request.isNull() || !m_mainDocumentError.isNull() || !m_frame) {
@@ -638,11 +640,6 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
         DOCUMENTLOADER_RELEASE_LOG("willSendRequest: With no provisional document loader");
 
     bool didReceiveRedirectResponse = !redirectResponse.isNull();
-    if (didReceiveRedirectResponse && m_frame->isMainFrame()) {
-        if (auto reportingEndpointsCache = m_frame->page() ? m_frame->page()->reportingEndpointsCache() : nullptr)
-            reportingEndpointsCache->addEndpointsFromResponse(redirectResponse);
-    }
-
     if (!frameLoader()->checkIfFormActionAllowedByCSP(newRequest.url(), didReceiveRedirectResponse, redirectResponse.url())) {
         DOCUMENTLOADER_RELEASE_LOG("willSendRequest: canceling - form action not allowed by CSP");
         cancelMainResourceLoad(frameLoader()->cancelledError(newRequest));
@@ -762,13 +759,7 @@ std::optional<CrossOriginOpenerPolicyEnforcementResult> DocumentLoader::doCrossO
 
     auto currentCoopEnforcementResult = CrossOriginOpenerPolicyEnforcementResult::from(m_frame->document()->url(), m_frame->document()->securityOrigin(), m_frame->document()->crossOriginOpenerPolicy(), m_triggeringAction.requester(), openerURL);
 
-    auto newCoopEnforcementResult = WebCore::doCrossOriginOpenerHandlingOfResponse(response, m_triggeringAction.requester(), m_contentSecurityPolicy.get(), frameLoader()->effectiveSandboxFlags(), frameLoader()->stateMachine().isDisplayingInitialEmptyDocument(), currentCoopEnforcementResult, [&](COOPDisposition disposition, const CrossOriginOpenerPolicy& responseCOOP, const SecurityOrigin& responseOrigin) {
-        // FIXME: Add the concept of browsing context group like in the specification instead of treating the whole process as a group.
-        if (Page::nonUtilityPageCount() > 1) {
-            sendViolationReportWhenNavigatingToCOOPResponse(*m_frame, responseCOOP, disposition, response.url(), currentCoopEnforcementResult.url, responseOrigin, currentCoopEnforcementResult.currentOrigin, m_request.httpReferrer(), m_request.httpUserAgent());
-            sendViolationReportWhenNavigatingAwayFromCOOPResponse(*m_frame, currentCoopEnforcementResult.crossOriginOpenerPolicy, disposition, currentCoopEnforcementResult.url, response.url(), currentCoopEnforcementResult.currentOrigin, responseOrigin, currentCoopEnforcementResult.isCurrentContextNavigationSource, m_request.httpUserAgent());
-        }
-    });
+    auto newCoopEnforcementResult = WebCore::doCrossOriginOpenerHandlingOfResponse(response, m_triggeringAction.requester(), m_contentSecurityPolicy.get(), frameLoader()->effectiveSandboxFlags(), frameLoader()->stateMachine().isDisplayingInitialEmptyDocument(), currentCoopEnforcementResult);
     if (!newCoopEnforcementResult) {
         cancelMainResourceLoad(frameLoader()->cancelledError(m_request));
         return std::nullopt;
@@ -926,11 +917,6 @@ void DocumentLoader::responseReceived(const ResourceResponse& response, Completi
 
     if (willLoadFallback)
         return;
-
-    if (m_frame->isMainFrame()) {
-        if (auto reportingEndpointsCache = m_frame->page() ? m_frame->page()->reportingEndpointsCache() : nullptr)
-            reportingEndpointsCache->addEndpointsFromResponse(response);
-    }
 
     ASSERT(m_identifierForLoadWithoutResourceLoader || m_mainResource);
     ResourceLoaderIdentifier identifier = m_identifierForLoadWithoutResourceLoader ? m_identifierForLoadWithoutResourceLoader : m_mainResource->identifier();
@@ -1160,8 +1146,8 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
     if (!isStopping() && m_substituteData.isValid() && isLoadingMainResource()) {
         auto content = m_substituteData.content();
         if (content && content->size()) {
-            content->forEachSegment([&](auto& segment) {
-                dataReceived(segment.data(), segment.size());
+            content->forEachSegmentAsSharedBuffer([&](auto&& buffer) {
+                dataReceived(buffer);
             });
         }
         if (isLoadingMainResource())
@@ -1174,7 +1160,7 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
     }
 }
 
-void DocumentLoader::commitLoad(const uint8_t* data, int length)
+void DocumentLoader::commitLoad(const SharedBuffer& data)
 {
     // Both unloading the old page and parsing the new page may execute JavaScript which destroys the datasource
     // by starting a new load, so retain temporarily.
@@ -1189,7 +1175,7 @@ void DocumentLoader::commitLoad(const uint8_t* data, int length)
     if (ArchiveFactory::isArchiveMIMEType(response().mimeType()))
         return;
 #endif
-    frameLoader->client().committedLoad(this, data, length);
+    frameLoader->client().committedLoad(this, data);
 
     if (isMultipartReplacingLoad())
         frameLoader->client().didReplaceMultipartContent();
@@ -1218,11 +1204,11 @@ static inline bool shouldUseActiveServiceWorkerFromParent(const Document& docume
 }
 #endif
 
-void DocumentLoader::commitData(const uint8_t* bytes, size_t length)
+void DocumentLoader::commitData(const SharedBuffer& data)
 {
     if (!m_gotFirstByte) {
         m_gotFirstByte = true;
-        bool hasBegun = m_writer.begin(documentURL(), false);
+        bool hasBegun = m_writer.begin(documentURL(), false, nullptr, m_resultingClientId);
         if (!hasBegun)
             return;
 
@@ -1250,20 +1236,29 @@ void DocumentLoader::commitData(const uint8_t* bytes, size_t length)
 #endif
 #if ENABLE(SERVICE_WORKER)
         if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled()) {
-            if (m_serviceWorkerRegistrationData && m_serviceWorkerRegistrationData->activeWorker) {
-                document.setActiveServiceWorker(ServiceWorker::getOrCreate(document, WTFMove(m_serviceWorkerRegistrationData->activeWorker.value())));
-                m_serviceWorkerRegistrationData = { };
-            } else if (auto* parent = document.parentDocument()) {
-                if (shouldUseActiveServiceWorkerFromParent(document, *parent))
-                    document.setActiveServiceWorker(parent->activeServiceWorker());
+            if (!document.securityOrigin().isUnique()) {
+                if (m_serviceWorkerRegistrationData && m_serviceWorkerRegistrationData->activeWorker) {
+                    document.setActiveServiceWorker(ServiceWorker::getOrCreate(document, WTFMove(m_serviceWorkerRegistrationData->activeWorker.value())));
+                    m_serviceWorkerRegistrationData = { };
+                } else if (auto* parent = document.parentDocument()) {
+                    if (shouldUseActiveServiceWorkerFromParent(document, *parent))
+                        document.setActiveServiceWorker(parent->activeServiceWorker());
+                }
+            } else if (m_resultingClientId) {
+                // In case document has a unique origin, say due to sandboxing, we should have created a new context, let's create a new identifier instead.
+                if (document.securityOrigin().isUnique())
+                    document.createNewIdentifier();
             }
 
             if (m_frame->document()->activeServiceWorker() || document.url().protocolIsInHTTPFamily() || (document.page() && document.page()->isServiceWorkerPage()))
                 document.setServiceWorkerConnection(&ServiceWorkerProvider::singleton().serviceWorkerConnection());
 
-            // We currently unregister the temporary service worker client since we now registered the real document.
-            // FIXME: We should make the real document use the temporary client identifier.
-            unregisterTemporaryServiceWorkerClient();
+            if (m_resultingClientId) {
+                if (m_resultingClientId != document.identifier())
+                    unregisterReservedServiceWorkerClient();
+                scriptExecutionContextIdentifierToLoaderMap().remove(m_resultingClientId);
+                m_resultingClientId = { };
+            }
         }
 #endif
         // Call receivedFirstData() exactly once per load. We should only reach this point multiple times
@@ -1316,24 +1311,24 @@ void DocumentLoader::commitData(const uint8_t* bytes, size_t length)
 #endif
 
     ASSERT(m_frame->document()->parsing());
-    m_writer.addData(bytes, length);
+    m_writer.addData(data);
 }
 
-void DocumentLoader::dataReceived(CachedResource& resource, const uint8_t* data, int length)
+void DocumentLoader::dataReceived(CachedResource& resource, const SharedBuffer& buffer)
 {
     ASSERT_UNUSED(resource, &resource == m_mainResource);
-    dataReceived(data, length);
+    dataReceived(buffer);
 }
 
-void DocumentLoader::dataReceived(const uint8_t* data, int length)
+void DocumentLoader::dataReceived(const SharedBuffer& buffer)
 {
 #if ENABLE(CONTENT_FILTERING)
-    if (m_contentFilter && !m_contentFilter->continueAfterDataReceived(data, length))
+    if (m_contentFilter && !m_contentFilter->continueAfterDataReceived(buffer))
         return;
 #endif
 
-    ASSERT(data);
-    ASSERT(length);
+    ASSERT(buffer.data());
+    ASSERT(buffer.size());
     ASSERT(!m_response.isNull());
 
     // There is a bug in CFNetwork where callbacks can be dispatched even when loads are deferred.
@@ -1343,12 +1338,12 @@ void DocumentLoader::dataReceived(const uint8_t* data, int length)
 #endif
 
     if (m_identifierForLoadWithoutResourceLoader)
-        frameLoader()->notifier().dispatchDidReceiveData(this, m_identifierForLoadWithoutResourceLoader, data, length, -1);
+        frameLoader()->notifier().dispatchDidReceiveData(this, m_identifierForLoadWithoutResourceLoader, &buffer, buffer.size(), -1);
 
-    m_applicationCacheHost->mainResourceDataReceived(data, length, -1, false);
+    m_applicationCacheHost->mainResourceDataReceived(buffer, -1, false);
 
     if (!isMultipartReplacingLoad())
-        commitLoad(data, length);
+        commitLoad(buffer);
 }
 
 void DocumentLoader::setupForReplace()
@@ -1412,6 +1407,11 @@ MouseEventPolicy DocumentLoader::mouseEventPolicy() const
     }
 #endif
     return m_mouseEventPolicy;
+}
+
+ColorSchemePreference DocumentLoader::colorSchemePreference() const
+{
+    return m_colorSchemePreference;
 }
 
 void DocumentLoader::attachToFrame(Frame& frame)
@@ -1608,11 +1608,11 @@ bool DocumentLoader::maybeCreateArchive()
     addAllArchiveResources(*m_archive);
     ASSERT(m_archive->mainResource());
     auto& mainResource = *m_archive->mainResource();
-    m_parsedArchiveData = &mainResource.data();
+    m_parsedArchiveData = mainResource.data().makeContiguous();
     m_writer.setMIMEType(mainResource.mimeType());
 
     ASSERT(m_frame->document());
-    commitData(mainResource.data().data(), mainResource.data().size());
+    commitData(*m_parsedArchiveData);
     return true;
 #endif
 }
@@ -1671,7 +1671,7 @@ ArchiveResource* DocumentLoader::archiveResourceForURL(const URL& url) const
 
 RefPtr<ArchiveResource> DocumentLoader::mainResource() const
 {
-    RefPtr<SharedBuffer> data = mainResourceData();
+    RefPtr<FragmentedSharedBuffer> data = mainResourceData();
     if (!data)
         data = SharedBuffer::create();
     auto& response = this->response();
@@ -2081,14 +2081,14 @@ void DocumentLoader::startLoadingMainResource()
     });
 }
 
-void DocumentLoader::unregisterTemporaryServiceWorkerClient()
+void DocumentLoader::unregisterReservedServiceWorkerClient()
 {
 #if ENABLE(SERVICE_WORKER)
-    if (!m_temporaryServiceWorkerClient || !RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled())
+    if (!m_resultingClientId || !RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled())
         return;
 
     auto& serviceWorkerConnection = ServiceWorkerProvider::singleton().serviceWorkerConnection();
-    serviceWorkerConnection.unregisterServiceWorkerClient(*m_temporaryServiceWorkerClient);
+    serviceWorkerConnection.unregisterServiceWorkerClient(m_resultingClientId);
 #endif
 }
 
@@ -2107,15 +2107,16 @@ void DocumentLoader::loadMainResource(ResourceRequest&& request)
         ContentSecurityPolicyImposition::SkipPolicyCheck,
         DefersLoadingPolicy::AllowDefersLoading,
         CachingPolicy::AllowCaching);
+
 #if ENABLE(SERVICE_WORKER)
-    if (!m_temporaryServiceWorkerClient) {
-        // The main navigation load will trigger the registration of the temp client.
-        m_temporaryServiceWorkerClient = ScriptExecutionContextIdentifier::generateThreadSafe();
-        ASSERT(!temporaryIdentifierToLoaderMap().contains(*m_temporaryServiceWorkerClient));
-        temporaryIdentifierToLoaderMap().add(*m_temporaryServiceWorkerClient, this);
-    }
-    mainResourceLoadOptions.clientIdentifier = m_temporaryServiceWorkerClient;
+    // The main navigation load will trigger the registration of the client.
+    if (m_resultingClientId)
+        scriptExecutionContextIdentifierToLoaderMap().remove(m_resultingClientId);
+    m_resultingClientId = ScriptExecutionContextIdentifier::generate();
+    ASSERT(!scriptExecutionContextIdentifierToLoaderMap().contains(m_resultingClientId));
+    scriptExecutionContextIdentifierToLoaderMap().add(m_resultingClientId, this);
 #endif
+
     CachedResourceRequest mainResourceRequest(WTFMove(request), mainResourceLoadOptions);
     if (!m_frame->isMainFrame() && m_frame->document()) {
         // If we are loading the main resource of a subframe, use the cache partition of the main document.
@@ -2227,7 +2228,7 @@ void DocumentLoader::clearMainResource()
     m_mainResource = nullptr;
     m_isContinuingLoadAfterProvisionalLoadStarted = false;
 
-    unregisterTemporaryServiceWorkerClient();
+    unregisterReservedServiceWorkerClient();
 }
 
 void DocumentLoader::subresourceLoaderFinishedLoadingOnePart(ResourceLoader& loader)
@@ -2255,8 +2256,7 @@ void DocumentLoader::maybeFinishLoadingMultipartContent()
 
     frameLoader()->setupForReplace();
     m_committed = false;
-    RefPtr<SharedBuffer> resourceData = mainResourceData();
-    commitLoad(resourceData->data(), resourceData->size());
+    commitLoad(mainResourceData()->makeContiguous());
 }
 
 void DocumentLoader::startIconLoading()
@@ -2275,7 +2275,7 @@ void DocumentLoader::startIconLoading()
 
     m_linkIcons = LinkIconCollector { *document }.iconsOfTypes({ LinkIconType::Favicon, LinkIconType::TouchIcon, LinkIconType::TouchPrecomposedIcon });
 
-    auto findResult = m_linkIcons.findMatching([](auto& icon) { return icon.type == LinkIconType::Favicon; });
+    auto findResult = m_linkIcons.findIf([](auto& icon) { return icon.type == LinkIconType::Favicon; });
     if (findResult == notFound)
         m_linkIcons.append({ document->completeURL("/favicon.ico"_s), LinkIconType::Favicon, String(), std::nullopt, { } });
 
@@ -2292,7 +2292,7 @@ void DocumentLoader::startIconLoading()
     m_frame->loader().client().getLoadDecisionForIcons(iconDecisions);
 }
 
-void DocumentLoader::didGetLoadDecisionForIcon(bool decision, uint64_t loadIdentifier, CompletionHandler<void(SharedBuffer*)>&& completionHandler)
+void DocumentLoader::didGetLoadDecisionForIcon(bool decision, uint64_t loadIdentifier, CompletionHandler<void(FragmentedSharedBuffer*)>&& completionHandler)
 {
     auto icon = m_iconsPendingLoadDecision.take(loadIdentifier);
 
@@ -2313,7 +2313,7 @@ void DocumentLoader::didGetLoadDecisionForIcon(bool decision, uint64_t loadIdent
     rawIconLoader->startLoading();
 }
 
-void DocumentLoader::finishedLoadingIcon(IconLoader& loader, SharedBuffer* buffer)
+void DocumentLoader::finishedLoadingIcon(IconLoader& loader, FragmentedSharedBuffer* buffer)
 {
     // If the DocumentLoader has detached from its frame, all icon loads should have already been cancelled.
     ASSERT(m_frame);
@@ -2408,9 +2408,9 @@ void DocumentLoader::enqueueSecurityPolicyViolationEvent(SecurityPolicyViolation
 }
 
 #if ENABLE(CONTENT_FILTERING)
-void DocumentLoader::dataReceivedThroughContentFilter(const uint8_t* data, int size)
+void DocumentLoader::dataReceivedThroughContentFilter(const SharedBuffer& buffer)
 {
-    dataReceived(data, size);
+    dataReceived(buffer);
 }
 
 void DocumentLoader::cancelMainResourceLoadForContentFilter(const ResourceError& error)
@@ -2437,28 +2437,27 @@ ResourceError DocumentLoader::contentFilterDidBlock(ContentFilterUnblockHandler 
 }
 #endif // ENABLE(CONTENT_FILTERING)
 
-void DocumentLoader::setActiveContentRuleListActionPatterns(const std::optional<HashSet<String>>& patterns)
+void DocumentLoader::setActiveContentRuleListActionPatterns(const HashMap<String, Vector<String>>& patterns)
 {
-    if (!patterns) {
-        m_activeContentRuleListActionPatterns = std::nullopt;
-        return;
-    }
-    Vector<WebCore::UserContentURLPattern> patternVector;
-    patternVector.reserveInitialCapacity(patterns->size());
-    for (auto& patternString : *patterns) {
-        WebCore::UserContentURLPattern parsedPattern(patternString);
-        if (parsedPattern.isValid())
-            patternVector.uncheckedAppend(WTFMove(parsedPattern));
+    HashMap<String, Vector<UserContentURLPattern>> parsedPatternMap;
+
+    for (auto& pair : patterns) {
+        Vector<UserContentURLPattern> patternVector;
+        patternVector.reserveInitialCapacity(pair.value.size());
+        for (auto& patternString : pair.value) {
+            UserContentURLPattern parsedPattern(patternString);
+            if (parsedPattern.isValid())
+                patternVector.uncheckedAppend(WTFMove(parsedPattern));
+        }
+        parsedPatternMap.set(pair.key, WTFMove(patternVector));
     }
 
-    m_activeContentRuleListActionPatterns = WTFMove(patternVector);
+    m_activeContentRuleListActionPatterns = WTFMove(parsedPatternMap);
 }
 
-bool DocumentLoader::allowsActiveContentRuleListActionsForURL(const URL& url) const
+bool DocumentLoader::allowsActiveContentRuleListActionsForURL(const String& contentRuleListIdentifier, const URL& url) const
 {
-    if (!m_activeContentRuleListActionPatterns)
-        return true;
-    for (const auto& pattern : *m_activeContentRuleListActionPatterns) {
+    for (const auto& pattern : m_activeContentRuleListActionPatterns.get(contentRuleListIdentifier)) {
         if (pattern.matches(url))
             return true;
     }

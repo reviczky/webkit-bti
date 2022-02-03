@@ -28,7 +28,7 @@
 
 #pragma once
 
-#if ENABLE(WEBGL) && USE(NICOSIA) && USE(TEXTURE_MAPPER)
+#if ENABLE(WEBGL) && USE(NICOSIA) && USE(TEXTURE_MAPPER) && !USE(ANGLE)
 
 #include "GraphicsContextGLOpenGL.h"
 #include "NicosiaContentLayerTextureMapperImpl.h"

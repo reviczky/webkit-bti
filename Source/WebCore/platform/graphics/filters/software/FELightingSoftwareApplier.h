@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2010 University of Szeged
  * Copyright (C) 2010 Zoltan Herczeg
- * Copyright (C) 2018-2021 Apple, Inc. All rights reserved.
+ * Copyright (C) 2018-2022 Apple, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,22 +28,25 @@
 #pragma once
 
 #include "Color.h"
+#include "FilterEffect.h"
 #include "FilterEffectApplier.h"
+#include "FilterImageVector.h"
 #include "LightSource.h"
 
 namespace WebCore {
 
 class FELighting;
 
-class FELightingSoftwareApplier : public FilterEffectConcreteApplier<FELighting> {
+class FELightingSoftwareApplier final : public FilterEffectConcreteApplier<FELighting> {
+    WTF_MAKE_FAST_ALLOCATED;
     using Base = FilterEffectConcreteApplier<FELighting>;
 
 public:
     using Base::Base;
 
-    bool apply(const Filter&, const FilterEffectVector& inputEffects) override;
-
 private:
+    bool apply(const Filter&, const FilterImageVector& inputs, FilterImage& result) const final;
+
     static constexpr int cPixelSize = 4;
     static constexpr int cAlphaChannelOffset = 3;
     static constexpr uint8_t cOpaqueAlpha = static_cast<uint8_t>(0xFF);
@@ -90,7 +93,8 @@ private:
 
     struct LightingData {
         // This structure contains only read-only (SMP safe) data
-        FELighting* effect;
+        const Filter* filter;
+        const FilterImage* result;
         FilterEffect::Type filterType;
         Color lightingColor;
         float surfaceScale;

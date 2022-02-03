@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,36 +21,29 @@
 #include "config.h"
 #include "SourceAlpha.h"
 
-#include "Filter.h"
+#include "ImageBuffer.h"
 #include "SourceAlphaSoftwareApplier.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-Ref<SourceAlpha> SourceAlpha::create(FilterEffect& sourceEffect)
+Ref<SourceAlpha> SourceAlpha::create(const DestinationColorSpace& colorSpace)
 {
-    return adoptRef(*new SourceAlpha(sourceEffect));
+    return adoptRef(*new SourceAlpha(colorSpace));
 }
 
-SourceAlpha::SourceAlpha(FilterEffect& sourceEffect)
+SourceAlpha::SourceAlpha(const DestinationColorSpace& colorSpace)
     : FilterEffect(FilterEffect::Type::SourceAlpha)
 {
-    setOperatingColorSpace(sourceEffect.operatingColorSpace());
-    inputEffects().append(&sourceEffect);
+    setOperatingColorSpace(colorSpace);
 }
 
-void SourceAlpha::determineAbsolutePaintRect(const Filter& filter)
+std::unique_ptr<FilterEffectApplier> SourceAlpha::createSoftwareApplier() const
 {
-    inputEffect(0)->determineAbsolutePaintRect(filter);
-    setAbsolutePaintRect(inputEffect(0)->absolutePaintRect());
+    return FilterEffectApplier::create<SourceAlphaSoftwareApplier>(*this);
 }
 
-bool SourceAlpha::platformApplySoftware(const Filter& filter)
-{
-    return SourceAlphaSoftwareApplier(*this).apply(filter, inputEffects());
-}
-
-TextStream& SourceAlpha::externalRepresentation(TextStream& ts, RepresentationType) const
+TextStream& SourceAlpha::externalRepresentation(TextStream& ts, FilterRepresentation) const
 {
     ts << indent << "[SourceAlpha]\n";
     return ts;

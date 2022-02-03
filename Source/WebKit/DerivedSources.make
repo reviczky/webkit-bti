@@ -38,8 +38,6 @@ VPATH = \
     $(WebKit2)/NetworkProcess/ServiceWorker \
     $(WebKit2)/NetworkProcess/WebStorage \
     $(WebKit2)/NetworkProcess/storage \
-    $(WebKit2)/PluginProcess \
-    $(WebKit2)/PluginProcess/mac \
     $(WebKit2)/Resources/SandboxProfiles/ios \
     $(WebKit2)/Shared/Plugins \
     $(WebKit2)/Shared \
@@ -132,6 +130,7 @@ MESSAGE_RECEIVERS = \
 	NetworkProcess/CustomProtocols/LegacyCustomProtocolManager \
 	NetworkProcess/NetworkSocketChannel \
 	NetworkProcess/ServiceWorker/WebSWServerConnection \
+	NetworkProcess/ServiceWorker/ServiceWorkerDownloadTask \
 	NetworkProcess/ServiceWorker/ServiceWorkerFetchTask \
 	NetworkProcess/ServiceWorker/WebSWServerToContextConnection \
 	NetworkProcess/NetworkSocketStream \
@@ -149,6 +148,7 @@ MESSAGE_RECEIVERS = \
 	Shared/Authentication/AuthenticationManager \
 	Shared/Notifications/NotificationManagerMessageHandler \
 	Shared/WebConnection \
+	Shared/IPCTester \
 	UIProcess/WebFullScreenManagerProxy \
 	UIProcess/RemoteLayerTree/RemoteLayerTreeDrawingAreaProxy \
 	UIProcess/GPU/GPUProcessProxy \
@@ -168,6 +168,7 @@ MESSAGE_RECEIVERS = \
 	UIProcess/ios/SmartMagnificationController \
 	UIProcess/mac/SecItemShimProxy \
 	UIProcess/WebGeolocationManagerProxy \
+	UIProcess/WebLockRegistryProxy \
 	UIProcess/Cocoa/PlaybackSessionManagerProxy \
 	UIProcess/Cocoa/UserMediaCaptureManagerProxy \
 	UIProcess/Cocoa/VideoFullscreenManagerProxy \
@@ -186,6 +187,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/GPU/GPUProcessConnection \
 	WebProcess/GPU/graphics/RemoteRenderingBackendProxy \
 	WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy \
+	WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy \
 	WebProcess/GPU/webrtc/LibWebRTCCodecs \
 	WebProcess/GPU/webrtc/SampleBufferDisplayLayer \
 	WebProcess/GPU/media/MediaPlayerPrivateRemote \
@@ -217,8 +219,10 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Network/webrtc/WebRTCMonitor \
 	WebProcess/Network/webrtc/WebMDNSRegister \
 	WebProcess/Network/webrtc/WebRTCResolver \
+	WebProcess/WebCoreSupport/RemoteWebLockRegistry \
 	WebProcess/WebCoreSupport/WebBroadcastChannelRegistry \
 	WebProcess/WebCoreSupport/WebDeviceOrientationUpdateProvider \
+	WebProcess/WebCoreSupport/WebFileSystemStorageConnection \
 	WebProcess/WebCoreSupport/WebSpeechRecognitionConnection \
 	WebProcess/Speech/SpeechRecognitionRealtimeMediaSourceManager \
 	WebProcess/Storage/WebSWContextManagerConnection \

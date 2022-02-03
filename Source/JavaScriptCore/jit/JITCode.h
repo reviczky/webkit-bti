@@ -30,6 +30,7 @@
 #include "CodeOrigin.h"
 #include "JSCJSValue.h"
 #include "MacroAssemblerCodeRef.h"
+#include "RegisterAtOffsetList.h"
 #include "RegisterSet.h"
 
 
@@ -228,9 +229,11 @@ public:
 
     virtual PCToCodeOriginMap* pcToCodeOriginMap() { return nullptr; }
 
+    const RegisterAtOffsetList* calleeSaveRegisters() const;
+
 private:
-    JITType m_jitType;
-    ShareAttribute m_shareAttribute;
+    const JITType m_jitType;
+    const ShareAttribute m_shareAttribute;
 protected:
     Intrinsic m_intrinsic { NoIntrinsic }; // Effective only in NativeExecutable.
 };

@@ -147,15 +147,13 @@ public:
     StorageAccessResult requestStorageAccessAndHandleClick(CompletionHandler<void(ShouldDispatchClick)>&&) const;
 #endif
 
-#if ENABLE(WEB_AUTHN)
-    WEBCORE_EXPORT bool shouldBypassUserGestureRequirementForWebAuthn() const;
-#endif
-
     static bool shouldOmitHTMLDocumentSupportedPropertyNames();
 
 #if ENABLE(IMAGE_ANALYSIS)
-    bool needsToForceUserSelectWhenInstallingImageOverlay() const;
+    bool needsToForceUserSelectAndUserDragWhenInstallingImageOverlay() const;
 #endif
+
+    bool shouldDisableWebSharePolicy() const;
 
 private:
     bool needsQuirks() const;
@@ -201,6 +199,7 @@ private:
 #endif
     mutable std::optional<bool> m_blocksReturnToFullscreenFromPictureInPictureQuirk;
     mutable std::optional<bool> m_shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFullscreenQuirk;
+    mutable std::optional<bool> m_shouldDisableWebSharePolicy;
 };
 
 } // namespace WebCore

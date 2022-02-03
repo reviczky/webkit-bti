@@ -28,10 +28,16 @@
 #include "Connection.h"
 #include "FileSystemStorageError.h"
 #include "OriginStorageManager.h"
+#include "StorageAreaIdentifier.h"
+#include "StorageAreaImplIdentifier.h"
+#include "StorageAreaMapIdentifier.h"
+#include "StorageNamespaceIdentifier.h"
+#include "WebsiteData.h"
 #include <WebCore/ClientOrigin.h>
 #include <WebCore/FileSystemHandleIdentifier.h>
 #include <WebCore/FileSystemSyncAccessHandleIdentifier.h>
 #include <pal/SessionID.h>
+#include <wtf/Forward.h>
 
 namespace IPC {
 class SharedFileHandle;
@@ -39,15 +45,18 @@ class SharedFileHandle;
 
 namespace WebCore {
 struct ClientOrigin;
+enum class StorageType : uint8_t;
 }
 
 namespace WebKit {
 
 class FileSystemStorageHandleRegistry;
+class StorageAreaRegistry;
 
 class NetworkStorageManager final : public IPC::Connection::WorkQueueMessageReceiver {
 public:
-    static Ref<NetworkStorageManager> create(PAL::SessionID, const String& path);
+    static Ref<NetworkStorageManager> create(PAL::SessionID, const String& path, const String& customLocalStoragePath);
+    static bool canHandleTypes(OptionSet<WebsiteDataType>);
 
     void startReceivingMessageFromConnection(IPC::Connection&);
     void stopReceivingMessageFromConnection(IPC::Connection&);
@@ -55,17 +64,34 @@ public:
     PAL::SessionID sessionID() const { return m_sessionID; }
     void close();
     void clearStorageForTesting(CompletionHandler<void()>&&);
+    void fetchData(OptionSet<WebsiteDataType>, CompletionHandler<void(Vector<WebsiteData::Entry>&&)>&&);
+    void deleteData(OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>&, CompletionHandler<void()>&&);
+    void deleteDataModifiedSince(OptionSet<WebsiteDataType>, WallTime, CompletionHandler<void()>&&);
+    void deleteDataForRegistrableDomains(OptionSet<WebsiteDataType>, const Vector<WebCore::RegistrableDomain>&, CompletionHandler<void(HashSet<WebCore::RegistrableDomain>&&)>&&);
+    void moveData(const WebCore::SecurityOriginData& source, const WebCore::SecurityOriginData& target, CompletionHandler<void()>&&);
+    void suspend(CompletionHandler<void()>&&);
+    void resume();
+    void handleLowMemoryWarning();
+    void syncLocalStorage(CompletionHandler<void()>&&);
 
 private:
-    NetworkStorageManager(PAL::SessionID, const String& path);
+    NetworkStorageManager(PAL::SessionID, const String& path, const String& customLocalStoragePath);
     ~NetworkStorageManager();
     OriginStorageManager& localOriginStorageManager(const WebCore::ClientOrigin&);
+    bool removeOriginStorageManagerIfPossible(const WebCore::ClientOrigin&);
+    void deleteOriginDirectoryIfPossible(const WebCore::ClientOrigin&);
     FileSystemStorageHandleRegistry& fileSystemStorageHandleRegistry();
+
+    void forEachOriginDirectory(const Function<void(const String&)>&);
+    HashSet<WebCore::ClientOrigin> getAllOrigins();
+    Vector<WebsiteData::Entry> fetchDataFromDisk(OptionSet<WebsiteDataType>);
+    HashSet<WebCore::ClientOrigin> deleteDataOnDisk(OptionSet<WebsiteDataType>, WallTime, const Function<bool(const WebCore::ClientOrigin&)>&);
 
     // IPC::MessageReceiver (implemented by generated code)
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
+    bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>& replyEncoder);
 
-    // Message handlers
+    // Message handlers for FileSystem.
     void persisted(const WebCore::ClientOrigin&, CompletionHandler<void(bool)>&&);
     void persist(const WebCore::ClientOrigin&, CompletionHandler<void(bool)>&&);
     void fileSystemGetDirectory(IPC::Connection&, const WebCore::ClientOrigin&, CompletionHandler<void(Expected<WebCore::FileSystemHandleIdentifier, FileSystemStorageError>)>&&);
@@ -77,22 +103,31 @@ private:
     void removeEntry(WebCore::FileSystemHandleIdentifier, const String& name, bool deleteRecursively, CompletionHandler<void(std::optional<FileSystemStorageError>)>&&);
     void resolve(WebCore::FileSystemHandleIdentifier, WebCore::FileSystemHandleIdentifier, CompletionHandler<void(Expected<Vector<String>, FileSystemStorageError>)>&&);
     void getFile(WebCore::FileSystemHandleIdentifier, CompletionHandler<void(Expected<String, FileSystemStorageError>)>&&);
-
     using AccessHandleInfo = std::pair<WebCore::FileSystemSyncAccessHandleIdentifier, IPC::SharedFileHandle>;
     void createSyncAccessHandle(WebCore::FileSystemHandleIdentifier, CompletionHandler<void(Expected<AccessHandleInfo, FileSystemStorageError>)>&&);
-    void closeAccessHandle(WebCore::FileSystemHandleIdentifier, WebCore::FileSystemSyncAccessHandleIdentifier, CompletionHandler<void(std::optional<FileSystemStorageError>)>&&);
+    void closeSyncAccessHandle(WebCore::FileSystemHandleIdentifier, WebCore::FileSystemSyncAccessHandleIdentifier, CompletionHandler<void(std::optional<FileSystemStorageError>)>&&);
     void getHandleNames(WebCore::FileSystemHandleIdentifier, CompletionHandler<void(Expected<Vector<String>, FileSystemStorageError>)>&&);
     void getHandle(IPC::Connection&, WebCore::FileSystemHandleIdentifier, String&& name, CompletionHandler<void(Expected<std::pair<WebCore::FileSystemHandleIdentifier, bool>, FileSystemStorageError>)>&&);
+    
+    // Message handlers for WebStorage.
+    void connectToStorageArea(IPC::Connection&, WebCore::StorageType, StorageAreaMapIdentifier, StorageNamespaceIdentifier, const WebCore::ClientOrigin&, CompletionHandler<void(StorageAreaIdentifier, HashMap<String, String>, uint64_t)>&&);
+    void connectToStorageAreaSync(IPC::Connection&, WebCore::StorageType, StorageAreaMapIdentifier, StorageNamespaceIdentifier, const WebCore::ClientOrigin&, CompletionHandler<void(StorageAreaIdentifier, HashMap<String, String>, uint64_t)>&&);
+    void disconnectFromStorageArea(IPC::Connection&, StorageAreaIdentifier);
+    void cloneSessionStorageNamespace(IPC::Connection&, StorageNamespaceIdentifier, StorageNamespaceIdentifier);
+    void setItem(IPC::Connection&, StorageAreaIdentifier, StorageAreaImplIdentifier, String&& key, String&& value, String&& urlString, CompletionHandler<void(bool)>&&);
+    void removeItem(IPC::Connection&, StorageAreaIdentifier, StorageAreaImplIdentifier, String&& key, String&& urlString, CompletionHandler<void()>&&);
+    void clear(IPC::Connection&, StorageAreaIdentifier, StorageAreaImplIdentifier, String&& urlString, CompletionHandler<void()>&&);
 
     PAL::SessionID m_sessionID;
-    Ref<WorkQueue> m_queue;
+    Ref<SuspendableWorkQueue> m_queue;
     String m_path;
     FileSystem::Salt m_salt;
     bool m_closed { false };
     HashMap<WebCore::ClientOrigin, std::unique_ptr<OriginStorageManager>> m_localOriginStorageManagers;
-    HashMap<WebCore::ClientOrigin, std::unique_ptr<OriginStorageManager>> m_sessionOriginStorageManagers;
     WeakHashSet<IPC::Connection> m_connections; // Main thread only.
     std::unique_ptr<FileSystemStorageHandleRegistry> m_fileSystemStorageHandleRegistry;
+    std::unique_ptr<StorageAreaRegistry> m_storageAreaRegistry;
+    String m_customLocalStoragePath;
 };
 
 } // namespace WebKit

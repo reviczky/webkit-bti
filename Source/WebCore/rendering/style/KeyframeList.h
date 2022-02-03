@@ -91,16 +91,19 @@ public:
     void addProperty(CSSPropertyID prop) { m_properties.add(prop); }
     bool containsProperty(CSSPropertyID prop) const { return m_properties.contains(prop); }
     const HashSet<CSSPropertyID>& properties() const { return m_properties; }
-    
+    bool containsAnimatableProperty() const;
+
     void clear();
     bool isEmpty() const { return m_keyframes.isEmpty(); }
     size_t size() const { return m_keyframes.size(); }
     const KeyframeValue& operator[](size_t index) const { return m_keyframes[index]; }
-    const Vector<KeyframeValue>& keyframes() const { return m_keyframes; }
 
     void copyKeyframes(KeyframeList&);
     bool hasImplicitKeyframes() const;
-    void fillImplicitKeyframes(const Element&, Style::Resolver&, const RenderStyle* elementStyle, const RenderStyle* parentElementStyle);
+    void fillImplicitKeyframes(const Element&, Style::Resolver&, const RenderStyle& elementStyle, const RenderStyle* parentElementStyle);
+
+    auto begin() const { return m_keyframes.begin(); }
+    auto end() const { return m_keyframes.end(); }
 
 private:
     AtomString m_animationName;

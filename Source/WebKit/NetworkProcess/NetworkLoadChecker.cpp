@@ -165,17 +165,9 @@ static std::optional<ResourceError> performCORPCheck(const CrossOriginEmbedderPo
     if (auto error = validateCrossOriginResourcePolicy(CrossOriginEmbedderPolicyValue::UnsafeNone, embedderOrigin, url, response, forNavigation))
         return error;
 
-    if (embedderCOEP.reportOnlyValue == CrossOriginEmbedderPolicyValue::RequireCORP && !embedderCOEP.reportOnlyReportingEndpoint.isEmpty() && loader) {
-        if (auto error = validateCrossOriginResourcePolicy(embedderCOEP.reportOnlyValue, embedderOrigin, url, response, forNavigation))
-            loader->send(Messages::WebPage::SendCOEPCORPViolation { loader->frameID(), embedderOrigin.data(), embedderCOEP.reportOnlyReportingEndpoint, COEPDisposition::Reporting, loader->parameters().options.destination, loader->firstResponseURL() }, loader->pageID());
-    }
-
     if (embedderCOEP.value == CrossOriginEmbedderPolicyValue::RequireCORP) {
-        if (auto error = validateCrossOriginResourcePolicy(embedderCOEP.value, embedderOrigin, url, response, forNavigation)) {
-            if (loader && !embedderCOEP.reportingEndpoint.isEmpty())
-                loader->send(Messages::WebPage::SendCOEPCORPViolation { loader->frameID(), embedderOrigin.data(), embedderCOEP.reportingEndpoint, COEPDisposition::Enforce, loader->parameters().options.destination, loader->firstResponseURL() }, loader->pageID());
+        if (auto error = validateCrossOriginResourcePolicy(embedderCOEP.value, embedderOrigin, url, response, forNavigation))
             return error;
-        }
     }
     return std::nullopt;
 }
@@ -290,7 +282,7 @@ bool NetworkLoadChecker::isAllowedByContentSecurityPolicy(const ResourceRequest&
     case FetchOptions::Destination::Worker:
     case FetchOptions::Destination::Serviceworker:
     case FetchOptions::Destination::Sharedworker:
-        return contentSecurityPolicy->allowChildContextFromSource(request.url(), redirectResponseReceived, preRedirectURL);
+        return contentSecurityPolicy->allowWorkerFromSource(request.url(), redirectResponseReceived, preRedirectURL);
     case FetchOptions::Destination::Script:
         if (request.requester() == ResourceRequest::Requester::ImportScripts && !contentSecurityPolicy->allowScriptFromSource(request.url(), redirectResponseReceived, preRedirectURL))
             return false;
@@ -474,7 +466,7 @@ void NetworkLoadChecker::processContentRuleListsForLoad(ResourceRequest&& reques
             return;
         }
 
-        auto results = backend.processContentRuleListsForPingLoad(request.url(), m_mainDocumentURL);
+        auto results = backend.processContentRuleListsForPingLoad(request.url(), m_mainDocumentURL, m_frameURL);
         WebCore::ContentExtensions::applyResultsToRequest(ContentRuleListResults { results }, nullptr, request);
         callback(ContentExtensionResult { WTFMove(request), results });
     });

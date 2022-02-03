@@ -27,7 +27,7 @@ set(JavaScriptCore_PRIVATE_INCLUDE_DIRECTORIES
     "${JAVASCRIPTCORE_DIR}/dfg"
     "${JAVASCRIPTCORE_DIR}/disassembler"
     "${JAVASCRIPTCORE_DIR}/disassembler/ARM64"
-    "${JAVASCRIPTCORE_DIR}/disassembler/udis86"
+    "${JAVASCRIPTCORE_DIR}/disassembler/zydis/Zydis"
     "${JAVASCRIPTCORE_DIR}/domjit"
     "${JAVASCRIPTCORE_DIR}/ftl"
     "${JAVASCRIPTCORE_DIR}/heap"
@@ -187,23 +187,6 @@ foreach (_file ${JavaScriptCore_SCRIPTS_SOURCES})
         VERBATIM)
     list(APPEND JavaScriptCore_SCRIPTS ${JavaScriptCore_SCRIPTS_DIR}/${_script})
 endforeach ()
-
-set(UDIS_GEN_DEP
-    disassembler/udis86/optable.xml
-    disassembler/udis86/ud_itab.py
-    disassembler/udis86/ud_opcode.py
-)
-
-add_custom_command(
-    OUTPUT ${JavaScriptCore_DERIVED_SOURCES_DIR}/udis86_itab.c ${JavaScriptCore_DERIVED_SOURCES_DIR}/udis86_itab.h
-    DEPENDS ${UDIS_GEN_DEP}
-    WORKING_DIRECTORY ${JavaScriptCore_DERIVED_SOURCES_DIR}
-    COMMAND ${PYTHON_EXECUTABLE} ${JAVASCRIPTCORE_DIR}/disassembler/udis86/ud_itab.py ${JAVASCRIPTCORE_DIR}/disassembler/udis86/optable.xml ${JavaScriptCore_DERIVED_SOURCES_DIR}
-    VERBATIM)
-
-list(APPEND JavaScriptCore_HEADERS
-    ${JavaScriptCore_DERIVED_SOURCES_DIR}/udis86_itab.h
-)
 
 # This is the default build variant for Xcode builds.
 set(BUILD_VARIANTS
@@ -610,6 +593,8 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     assembler/RISCV64Assembler.h
     assembler/RISCV64Registers.h
     assembler/RegisterInfo.h
+    assembler/SecureARM64EHashPins.h
+    assembler/SecureARM64EHashPinsInlines.h
     assembler/X86Assembler.h
     assembler/X86Registers.h
     assembler/X86_64Registers.h
@@ -760,9 +745,13 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     heap/HeapInlines.h
     heap/HeapObserver.h
     heap/HeapSnapshotBuilder.h
+    heap/HeapSubspaceTypes.h
     heap/IncrementalSweeper.h
     heap/IsoCellSet.h
     heap/IsoHeapCellType.h
+    heap/IsoInlinedHeapCellType.h
+    heap/IsoInlinedHeapCellTypeInlines.h
+    heap/IsoMemoryAllocatorBase.h
     heap/IsoSubspace.h
     heap/IsoSubspaceInlines.h
     heap/IsoSubspacePerVM.h
@@ -789,6 +778,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     heap/Strong.h
     heap/StrongForward.h
     heap/StrongInlines.h
+    heap/StructureAlignedMemoryAllocator.h
     heap/Subspace.h
     heap/SubspaceInlines.h
     heap/Synchronousness.h
@@ -873,6 +863,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     jit/JITOperations.h
     jit/JITStubRoutine.h
     jit/JITThunks.h
+    jit/PCToCodeOriginMap.h
     jit/PolymorphicCallStubRoutine.h
     jit/Reg.h
     jit/RegisterAtOffset.h
@@ -1035,7 +1026,6 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/InternalFunction.h
     runtime/Intrinsic.h
     runtime/IterationKind.h
-    runtime/IterationStatus.h
     runtime/IteratorOperations.h
     runtime/IteratorPrototype.h
     runtime/JSArray.h
@@ -1180,8 +1170,8 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/Structure.h
     runtime/StructureCache.h
     runtime/StructureChain.h
+    runtime/StructureID.h
     runtime/StructureIDBlob.h
-    runtime/StructureIDTable.h
     runtime/StructureInlines.h
     runtime/StructureRareData.h
     runtime/StructureRareDataInlines.h
@@ -1231,15 +1221,15 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     tools/VMInspectorInlines.h
 
     wasm/WasmCallee.h
+    wasm/WasmCalleeGroup.h
     wasm/WasmCapabilities.h
-    wasm/WasmCodeBlock.h
     wasm/WasmCompilationMode.h
     wasm/WasmContext.h
     wasm/WasmEmbedder.h
     wasm/WasmExceptionType.h
     wasm/WasmFaultSignalHandler.h
     wasm/WasmFormat.h
-    wasm/WasmFunctionCodeBlock.h
+    wasm/WasmFunctionCodeBlockGenerator.h
     wasm/WasmHandlerInfo.h
     wasm/WasmIndexOrName.h
     wasm/WasmLLIntTierUpCounter.h
@@ -1453,6 +1443,12 @@ if (COMPILER_IS_GCC_OR_CLANG)
     # Avoid using fused multiply-add instructions since this could give different results
     # for e.g. parseInt depending on the platform and compilation flags.
     WEBKIT_ADD_TARGET_CXX_FLAGS(JavaScriptCore -ffp-contract=off -fno-slp-vectorize)
+
+    # On MIPS we have to explicitly disable madd4, since some versions of gcc still generate
+    # such instructions despite -ffp-contract=off
+    if (WTF_CPU_MIPS)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(JavaScriptCore -mno-madd4)
+    endif ()
 endif ()
 
 WEBKIT_COPY_FILES(JavaScriptCore_CopyHeaders
@@ -1511,6 +1507,29 @@ else ()
 endif ()
 
 WEBKIT_COMPUTE_SOURCES(JavaScriptCore)
+list(APPEND JavaScriptCore_SOURCES
+    disassembler/zydis/Zydis/Zycore.c
+    disassembler/zydis/Zydis/ZycoreAllocator.c
+    disassembler/zydis/Zydis/ZycoreBitset.c
+    disassembler/zydis/Zydis/ZycoreFormat.c
+    disassembler/zydis/Zydis/ZycoreList.c
+    disassembler/zydis/Zydis/ZycoreString.c
+    disassembler/zydis/Zydis/ZycoreVector.c
+    disassembler/zydis/Zydis/Zydis.c
+    disassembler/zydis/Zydis/ZydisDecoder.c
+    disassembler/zydis/Zydis/ZydisDecoderData.c
+    disassembler/zydis/Zydis/ZydisFormatter.c
+    disassembler/zydis/Zydis/ZydisFormatterATT.c
+    disassembler/zydis/Zydis/ZydisFormatterBase.c
+    disassembler/zydis/Zydis/ZydisFormatterBuffer.c
+    disassembler/zydis/Zydis/ZydisFormatterIntel.c
+    disassembler/zydis/Zydis/ZydisMetaInfo.c
+    disassembler/zydis/Zydis/ZydisMnemonic.c
+    disassembler/zydis/Zydis/ZydisRegister.c
+    disassembler/zydis/Zydis/ZydisSharedData.c
+    disassembler/zydis/Zydis/ZydisString.c
+    disassembler/zydis/Zydis/ZydisUtils.c
+)
 WEBKIT_FRAMEWORK(JavaScriptCore)
 WEBKIT_FRAMEWORK_TARGET(JavaScriptCore)
 

@@ -23,9 +23,8 @@
  */
 
 [
-    EnabledAtRuntime=WebLocksAPIEnabled,
+    EnabledBySetting=WebLocksAPIEnabled,
     Exposed=(Window,Worker),
-    ImplementationLacksVTable,
     InterfaceName=Lock,
     SecureContext
 ] interface WebLock {

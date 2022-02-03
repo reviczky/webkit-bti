@@ -75,6 +75,7 @@ namespace WebCore {
 class CertificateInfo;
 class RegistrableDomain;
 class SecurityOrigin;
+class LocalWebLockRegistry;
 
 struct MockWebAuthenticationConfiguration;
 }
@@ -166,7 +167,6 @@ public:
     void removeData(OptionSet<WebsiteDataType>, WallTime modifiedSince, Function<void()>&& completionHandler);
     void removeData(OptionSet<WebsiteDataType>, const Vector<WebsiteDataRecord>&, Function<void()>&& completionHandler);
 
-    void getLocalStorageDetails(Function<void(Vector<LocalStorageDatabaseTracker::OriginDetails>&&)>&&);
     void setCacheModelSynchronouslyForTesting(CacheModel);
     void setServiceWorkerTimeoutForTesting(Seconds);
     void resetServiceWorkerTimeoutForTesting();
@@ -237,6 +237,7 @@ public:
     bool isItpStateExplicitlySet() const { return m_isItpStateExplicitlySet; }
     void useExplicitITPState() { m_isItpStateExplicitlySet = true; }
 #endif
+    void closeDatabases(CompletionHandler<void()>&&);
     void syncLocalStorage(CompletionHandler<void()>&&);
     void setCacheMaxAgeCapForPrevalentResources(Seconds, CompletionHandler<void()>&&);
     void resetCacheMaxAgeCapForPrevalentResources(CompletionHandler<void()>&&);
@@ -277,9 +278,6 @@ public:
     void dispatchOnQueue(Function<void()>&&);
 
 #if PLATFORM(COCOA)
-    bool sendNetworkProcessXPCEndpointToProcess(AuxiliaryProcessProxy&) const;
-    void sendNetworkProcessXPCEndpointToAllProcesses();
-    
     static bool useNetworkLoader();
 #endif
 
@@ -317,6 +315,7 @@ public:
     void setClient(UniqueRef<WebsiteDataStoreClient>&& client) { m_client = WTFMove(client); }
 
     API::HTTPCookieStore& cookieStore();
+    WebCore::LocalWebLockRegistry& webLockRegistry() { return m_webLockRegistry.get(); }
 
     void renameOriginInWebsiteData(URL&&, URL&&, OptionSet<WebsiteDataType>, CompletionHandler<void()>&&);
 
@@ -471,6 +470,7 @@ private:
 #if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
     mutable std::optional<WebCore::ThirdPartyCookieBlockingMode> m_thirdPartyCookieBlockingMode; // Lazily computed.
 #endif
+    Ref<WebCore::LocalWebLockRegistry> m_webLockRegistry;
 };
 
 }

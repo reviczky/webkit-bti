@@ -91,6 +91,7 @@ namespace IDBClient {
 class IDBConnectionToServer;
 }
 
+class AccessibilityRootAtspi;
 class ApplePayAMSUIPaymentHandler;
 class ActivityStateChangeObserver;
 class AlternativeTextClient;
@@ -144,7 +145,6 @@ class PointerCaptureController;
 class PointerLockController;
 class ProgressTracker;
 class RenderObject;
-class ReportingEndpointsCache;
 class ResourceUsageOverlay;
 class RenderingUpdateScheduler;
 class ScrollLatchingController;
@@ -167,6 +167,7 @@ class ValidationMessageClient;
 class VisibleSelection;
 class VisitedLinkStore;
 class WebGLStateTracker;
+class WebLockRegistry;
 class WheelEventDeltaFilter;
 class WheelEventTestMonitor;
 
@@ -298,6 +299,8 @@ public:
     BroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry; }
     WEBCORE_EXPORT void setBroadcastChannelRegistry(Ref<BroadcastChannelRegistry>&&); // Only used by WebKitLegacy.
 
+    WebLockRegistry& webLockRegistry() { return m_webLockRegistry; }
+
     WEBCORE_EXPORT static void forEachPage(const Function<void(Page&)>&);
     WEBCORE_EXPORT static unsigned nonUtilityPageCount();
 
@@ -315,8 +318,6 @@ public:
     WEBCORE_EXPORT void setRemoteInspectionNameOverride(const String&);
     void remoteInspectorInformationDidChange() const;
 #endif
-
-    ReportingEndpointsCache* reportingEndpointsCache() { return m_reportingEndpointsCache.get(); }
 
     Chrome& chrome() const { return *m_chrome; }
     DragCaretController& dragCaretController() const { return *m_dragCaretController; }
@@ -360,6 +361,8 @@ public:
 
     Settings& settings() const { return *m_settings; }
     ProgressTracker& progress() const { return *m_progress; }
+    void progressEstimateChanged(Frame&) const;
+    void progressFinished(Frame&) const;
     BackForwardController& backForward() const { return *m_backForwardController; }
 
     Seconds domTimerAlignmentInterval() const { return m_domTimerAlignmentInterval; }
@@ -393,7 +396,7 @@ public:
         int indexForSelection { 0 }; // FIXME: Consider std::optional<unsigned> or unsigned for this instead.
     };
     static constexpr int NoMatchAfterUserSelection = -1;
-    WEBCORE_EXPORT MatchingRanges findTextMatches(const String&, FindOptions, unsigned maxCount);
+    WEBCORE_EXPORT MatchingRanges findTextMatches(const String&, FindOptions, unsigned maxCount, bool markMatches = true);
 
 #if PLATFORM(COCOA)
     void platformInitialize();
@@ -488,6 +491,8 @@ public:
     void setTextAutosizingWidth(float textAutosizingWidth) { m_textAutosizingWidth = textAutosizingWidth; }
     WEBCORE_EXPORT void recomputeTextAutoSizingInAllFrames();
 #endif
+
+    bool acceleratedFiltersEnabled() const;
 
     const FloatBoxExtent& fullscreenInsets() const { return m_fullscreenInsets; }
     WEBCORE_EXPORT void setFullscreenInsets(const FloatBoxExtent&);
@@ -610,11 +615,17 @@ public:
 
     // Schedule a rendering update that coordinates with display refresh.
     WEBCORE_EXPORT void scheduleRenderingUpdate(OptionSet<RenderingUpdateStep> requestedSteps);
+    void didScheduleRenderingUpdate();
     // Trigger a rendering update in the current runloop. Only used for testing.
     void triggerRenderingUpdateForTesting();
 
     WEBCORE_EXPORT void startTrackingRenderingUpdates();
     WEBCORE_EXPORT unsigned renderingUpdateCount() const;
+
+    // A "platform rendering update" here describes the work done by the system graphics framework before work is submitted to the system compositor.
+    // On macOS, this is a CoreAnimation commit.
+    WEBCORE_EXPORT void willStartPlatformRenderingUpdate();
+    WEBCORE_EXPORT void didCompletePlatformRenderingUpdate();
 
     WEBCORE_EXPORT void suspendScriptedAnimations();
     WEBCORE_EXPORT void resumeScriptedAnimations();
@@ -883,6 +894,8 @@ public:
 
     WEBCORE_EXPORT void forEachDocument(const Function<void(Document&)>&) const;
     void forEachMediaElement(const Function<void(HTMLMediaElement&)>&);
+    static void forEachDocumentFromMainFrame(const Frame&, const Function<void(Document&)>&);
+    void forEachFrame(const Function<void(Frame&)>&);
 
     bool shouldDisableCorsForRequestTo(const URL&) const;
 
@@ -906,12 +919,23 @@ public:
     WEBCORE_EXPORT bool hasCachedTextRecognitionResult(const HTMLElement&) const;
     void cacheTextRecognitionResult(const HTMLElement&, const IntRect& containerRect, const TextRecognitionResult&);
     void resetTextRecognitionResult(const HTMLElement&);
+    void resetImageAnalysisQueue();
 #endif
 
     WEBCORE_EXPORT PermissionController& permissionController();
     WEBCORE_EXPORT StorageConnection& storageConnection();
 
     ModelPlayerProvider& modelPlayerProvider();
+
+#if USE(ATSPI)
+    AccessibilityRootAtspi* accessibilityRootObject() const { return m_accessibilityRootObject; }
+    void setAccessibilityRootObject(AccessibilityRootAtspi* rootObject) { m_accessibilityRootObject = rootObject; }
+#endif
+
+#if PLATFORM(COCOA)
+    void setIsAwaitingLayerTreeTransactionFlush(bool isAwaiting) { m_isAwaitingLayerTreeTransactionFlush = isAwaiting; }
+    bool isAwaitingLayerTreeTransactionFlush() const { return m_isAwaitingLayerTreeTransactionFlush; }
+#endif
 
 private:
     struct Navigation {
@@ -1132,6 +1156,7 @@ private:
     Ref<UserContentProvider> m_userContentProvider;
     Ref<VisitedLinkStore> m_visitedLinkStore;
     Ref<BroadcastChannelRegistry> m_broadcastChannelRegistry;
+    Ref<WebLockRegistry> m_webLockRegistry;
     RefPtr<WheelEventTestMonitor> m_wheelEventTestMonitor;
     WeakHashSet<ActivityStateChangeObserver> m_activityStateChangeObservers;
 
@@ -1171,6 +1196,10 @@ private:
 
 #if ENABLE(EDITABLE_REGION)
     bool m_isEditableRegionEnabled { false };
+#endif
+
+#if PLATFORM(COCOA)
+    bool m_isAwaitingLayerTreeTransactionFlush { false };
 #endif
 
     Vector<OptionSet<RenderingUpdateStep>, 2> m_renderingUpdateRemainingSteps;
@@ -1251,13 +1280,16 @@ private:
     mutable MediaSessionGroupIdentifier m_mediaSessionGroupIdentifier;
 
     Ref<PermissionController> m_permissionController;
-    RefPtr<ReportingEndpointsCache> m_reportingEndpointsCache;
     UniqueRef<StorageProvider> m_storageProvider;
     UniqueRef<ModelPlayerProvider> m_modelPlayerProvider;
 
 #if ENABLE(IMAGE_ANALYSIS)
     using CachedTextRecognitionResult = std::pair<TextRecognitionResult, IntRect>;
     WeakHashMap<HTMLElement, CachedTextRecognitionResult> m_textRecognitionResults;
+#endif
+
+#if USE(ATSPI)
+    AccessibilityRootAtspi* m_accessibilityRootObject { nullptr };
 #endif
 };
 

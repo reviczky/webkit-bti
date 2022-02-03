@@ -228,8 +228,11 @@ void InspectorInstrumentation::frameWindowDiscardedImpl(InstrumentingAgents& ins
     if (LIKELY(!instrumentingAgents.inspectorEnvironment().developerExtrasEnabled()))
         return;
 
+    if (!window)
+        return;
+
     if (auto* consoleAgent = instrumentingAgents.webConsoleAgent())
-        consoleAgent->frameWindowDiscarded(window);
+        consoleAgent->frameWindowDiscarded(*window);
 }
 
 void InspectorInstrumentation::mediaQueryResultChangedImpl(InstrumentingAgents& instrumentingAgents)
@@ -613,10 +616,10 @@ void InspectorInstrumentation::didReceiveThreadableLoaderResponseImpl(Instrument
         networkAgent->didReceiveThreadableLoaderResponse(identifier, documentThreadableLoader);
 }
 
-void InspectorInstrumentation::didReceiveDataImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, const uint8_t* data, int dataLength, int encodedDataLength)
+void InspectorInstrumentation::didReceiveDataImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, const SharedBuffer& buffer, int encodedDataLength)
 {
     if (auto* networkAgent = instrumentingAgents.enabledNetworkAgent())
-        networkAgent->didReceiveData(identifier, data, dataLength, encodedDataLength);
+        networkAgent->didReceiveData(identifier, &buffer, buffer.size(), encodedDataLength);
 }
 
 void InspectorInstrumentation::didFinishLoadingImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, DocumentLoader* loader, const NetworkLoadMetrics& networkLoadMetrics, ResourceLoader* resourceLoader)
@@ -850,7 +853,7 @@ void InspectorInstrumentation::interceptRequestImpl(InstrumentingAgents& instrum
         networkAgent->interceptRequest(loader, WTFMove(handler));
 }
 
-void InspectorInstrumentation::interceptResponseImpl(InstrumentingAgents& instrumentingAgents, const ResourceResponse& response, ResourceLoaderIdentifier identifier, CompletionHandler<void(const ResourceResponse&, RefPtr<SharedBuffer>)>&& handler)
+void InspectorInstrumentation::interceptResponseImpl(InstrumentingAgents& instrumentingAgents, const ResourceResponse& response, ResourceLoaderIdentifier identifier, CompletionHandler<void(const ResourceResponse&, RefPtr<FragmentedSharedBuffer>)>&& handler)
 {
     if (auto* networkAgent = instrumentingAgents.enabledNetworkAgent())
         networkAgent->interceptResponse(response, identifier, WTFMove(handler));
@@ -1117,7 +1120,7 @@ bool InspectorInstrumentation::isWebGLProgramHighlightedImpl(InstrumentingAgents
 }
 #endif
 
-void InspectorInstrumentation::willApplyKeyframeEffectImpl(InstrumentingAgents& instrumentingAgents, Element& target, KeyframeEffect& effect, ComputedEffectTiming computedTiming)
+void InspectorInstrumentation::willApplyKeyframeEffectImpl(InstrumentingAgents& instrumentingAgents, const Styleable& target, KeyframeEffect& effect, ComputedEffectTiming computedTiming)
 {
     if (auto* animationAgent = instrumentingAgents.trackingAnimationAgent())
         animationAgent->willApplyKeyframeEffect(target, effect, computedTiming);

@@ -218,6 +218,7 @@ $(PROJECT_DIR)/Modules/applepay/ApplePayShippingMethodSelectedEvent.idl
 $(PROJECT_DIR)/Modules/applepay/ApplePayShippingMethodUpdate.idl
 $(PROJECT_DIR)/Modules/applepay/ApplePayValidateMerchantEvent.idl
 $(PROJECT_DIR)/Modules/applepay/paymentrequest/ApplePayModifier.idl
+$(PROJECT_DIR)/Modules/applepay/paymentrequest/ApplePayPaymentCompleteDetails.idl
 $(PROJECT_DIR)/Modules/applepay/paymentrequest/ApplePayRequest.idl
 $(PROJECT_DIR)/Modules/async-clipboard/Clipboard.idl
 $(PROJECT_DIR)/Modules/async-clipboard/ClipboardItem.idl
@@ -232,6 +233,8 @@ $(PROJECT_DIR)/Modules/contact-picker/ContactProperty.idl
 $(PROJECT_DIR)/Modules/contact-picker/ContactsManager.idl
 $(PROJECT_DIR)/Modules/contact-picker/ContactsSelectOptions.idl
 $(PROJECT_DIR)/Modules/contact-picker/Navigator+Contacts.idl
+$(PROJECT_DIR)/Modules/cookie-consent/Navigator+CookieConsent.idl
+$(PROJECT_DIR)/Modules/cookie-consent/RequestCookieConsentOptions.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/BasicCredential.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/CredentialCreationOptions.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/CredentialRequestOptions.idl
@@ -539,6 +542,9 @@ $(PROJECT_DIR)/Modules/modern-media-controls/media/tracks-support.js
 $(PROJECT_DIR)/Modules/modern-media-controls/media/volume-support.js
 $(PROJECT_DIR)/Modules/modern-media-controls/media/watchos-media-controls-support.js
 $(PROJECT_DIR)/Modules/notifications/Notification.idl
+$(PROJECT_DIR)/Modules/notifications/NotificationDirection.idl
+$(PROJECT_DIR)/Modules/notifications/NotificationEvent.idl
+$(PROJECT_DIR)/Modules/notifications/NotificationOptions.idl
 $(PROJECT_DIR)/Modules/notifications/NotificationPermission.idl
 $(PROJECT_DIR)/Modules/notifications/NotificationPermissionCallback.idl
 $(PROJECT_DIR)/Modules/paymentrequest/AddressErrors.idl
@@ -546,6 +552,7 @@ $(PROJECT_DIR)/Modules/paymentrequest/MerchantValidationEvent.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PayerErrorFields.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentAddress.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentComplete.idl
+$(PROJECT_DIR)/Modules/paymentrequest/PaymentCompleteDetails.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentCurrencyAmount.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentDetailsBase.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentDetailsInit.idl
@@ -640,6 +647,7 @@ $(PROJECT_DIR)/Modules/web-locks/NavigatorLocks.idl
 $(PROJECT_DIR)/Modules/web-locks/WebLock.idl
 $(PROJECT_DIR)/Modules/web-locks/WebLockGrantedCallback.idl
 $(PROJECT_DIR)/Modules/web-locks/WebLockManager.idl
+$(PROJECT_DIR)/Modules/web-locks/WebLockManagerSnapshot.idl
 $(PROJECT_DIR)/Modules/web-locks/WebLockMode.idl
 $(PROJECT_DIR)/Modules/webaudio/AnalyserNode.idl
 $(PROJECT_DIR)/Modules/webaudio/AnalyserOptions.idl
@@ -738,6 +746,11 @@ $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialDescriptor.idl
 $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialRequestOptions.idl
 $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialType.idl
 $(PROJECT_DIR)/Modules/webauthn/UserVerificationRequirement.idl
+$(PROJECT_DIR)/Modules/webcodecs/VideoColorPrimaries.idl
+$(PROJECT_DIR)/Modules/webcodecs/VideoColorSpace.idl
+$(PROJECT_DIR)/Modules/webcodecs/VideoColorSpaceInit.idl
+$(PROJECT_DIR)/Modules/webcodecs/VideoMatrixCoefficients.idl
+$(PROJECT_DIR)/Modules/webcodecs/VideoTransferCharacteristics.idl
 $(PROJECT_DIR)/Modules/webdatabase/DOMWindow+WebDatabase.idl
 $(PROJECT_DIR)/Modules/webdatabase/Database.idl
 $(PROJECT_DIR)/Modules/webdatabase/DatabaseCallback.idl
@@ -805,6 +818,7 @@ $(PROJECT_DIR)/accessibility/AriaAttributes.idl
 $(PROJECT_DIR)/animation/Animatable.idl
 $(PROJECT_DIR)/animation/AnimationEffect.idl
 $(PROJECT_DIR)/animation/AnimationFrameProvider.idl
+$(PROJECT_DIR)/animation/AnimationFrameRatePreset.idl
 $(PROJECT_DIR)/animation/AnimationPlaybackEvent.idl
 $(PROJECT_DIR)/animation/AnimationPlaybackEventInit.idl
 $(PROJECT_DIR)/animation/AnimationTimeline.idl
@@ -813,6 +827,9 @@ $(PROJECT_DIR)/animation/CSSTransition.idl
 $(PROJECT_DIR)/animation/CompositeOperation.idl
 $(PROJECT_DIR)/animation/CompositeOperationOrAuto.idl
 $(PROJECT_DIR)/animation/ComputedEffectTiming.idl
+$(PROJECT_DIR)/animation/CustomAnimationOptions.idl
+$(PROJECT_DIR)/animation/CustomEffect.idl
+$(PROJECT_DIR)/animation/CustomEffectCallback.idl
 $(PROJECT_DIR)/animation/Document+WebAnimations.idl
 $(PROJECT_DIR)/animation/DocumentOrShadowRoot+WebAnimations.idl
 $(PROJECT_DIR)/animation/DocumentTimeline.idl
@@ -872,10 +889,12 @@ $(PROJECT_DIR)/css/CSSCounterStyleRule.idl
 $(PROJECT_DIR)/css/CSSFontFaceRule.idl
 $(PROJECT_DIR)/css/CSSFontPaletteValuesRule.idl
 $(PROJECT_DIR)/css/CSSGroupingRule.idl
+$(PROJECT_DIR)/css/CSSImportRule+Layer.idl
 $(PROJECT_DIR)/css/CSSImportRule.idl
 $(PROJECT_DIR)/css/CSSKeyframeRule.idl
 $(PROJECT_DIR)/css/CSSKeyframesRule.idl
-$(PROJECT_DIR)/css/CSSLayerRule.idl
+$(PROJECT_DIR)/css/CSSLayerBlockRule.idl
+$(PROJECT_DIR)/css/CSSLayerStatementRule.idl
 $(PROJECT_DIR)/css/CSSMediaRule.idl
 $(PROJECT_DIR)/css/CSSNamespaceRule.idl
 $(PROJECT_DIR)/css/CSSPageRule.idl
@@ -973,7 +992,6 @@ $(PROJECT_DIR)/dom/AbstractRange.idl
 $(PROJECT_DIR)/dom/AddEventListenerOptions.idl
 $(PROJECT_DIR)/dom/AnimationEvent.idl
 $(PROJECT_DIR)/dom/Attr.idl
-$(PROJECT_DIR)/dom/BeforeLoadEvent.idl
 $(PROJECT_DIR)/dom/BeforeUnloadEvent.idl
 $(PROJECT_DIR)/dom/BroadcastChannel.idl
 $(PROJECT_DIR)/dom/CDATASection.idl
@@ -1104,8 +1122,6 @@ $(PROJECT_DIR)/dom/TreeWalker.idl
 $(PROJECT_DIR)/dom/UIEvent.idl
 $(PROJECT_DIR)/dom/UIEventInit.idl
 $(PROJECT_DIR)/dom/VisibilityState.idl
-$(PROJECT_DIR)/dom/WebKitAnimationEvent.idl
-$(PROJECT_DIR)/dom/WebKitTransitionEvent.idl
 $(PROJECT_DIR)/dom/WheelEvent.idl
 $(PROJECT_DIR)/dom/XMLDocument.idl
 $(PROJECT_DIR)/dom/make_event_factory.pl
@@ -1162,7 +1178,6 @@ $(PROJECT_DIR)/html/HTMLIFrameElement.idl
 $(PROJECT_DIR)/html/HTMLImageElement+CSSOMView.idl
 $(PROJECT_DIR)/html/HTMLImageElement.idl
 $(PROJECT_DIR)/html/HTMLInputElement.idl
-$(PROJECT_DIR)/html/HTMLKeygenElement.idl
 $(PROJECT_DIR)/html/HTMLLIElement.idl
 $(PROJECT_DIR)/html/HTMLLabelElement.idl
 $(PROJECT_DIR)/html/HTMLLegendElement.idl
@@ -1319,8 +1334,10 @@ $(PROJECT_DIR)/html/canvas/WebGLVertexArrayObjectOES.idl
 $(PROJECT_DIR)/html/parser/HTMLEntityNames.in
 $(PROJECT_DIR)/html/parser/create-html-entity-table
 $(PROJECT_DIR)/html/shadow/imageOverlay.css
+$(PROJECT_DIR)/html/shadow/mac/imageControlsMac.css
 $(PROJECT_DIR)/html/shadow/meterElementShadow.css
 $(PROJECT_DIR)/html/track/AudioTrack.idl
+$(PROJECT_DIR)/html/track/AudioTrackConfiguration.idl
 $(PROJECT_DIR)/html/track/AudioTrackList.idl
 $(PROJECT_DIR)/html/track/DataCue.idl
 $(PROJECT_DIR)/html/track/TextTrack.idl
@@ -1333,6 +1350,7 @@ $(PROJECT_DIR)/html/track/VTTCue.idl
 $(PROJECT_DIR)/html/track/VTTRegion.idl
 $(PROJECT_DIR)/html/track/VTTRegionList.idl
 $(PROJECT_DIR)/html/track/VideoTrack.idl
+$(PROJECT_DIR)/html/track/VideoTrackConfiguration.idl
 $(PROJECT_DIR)/html/track/VideoTrackList.idl
 $(PROJECT_DIR)/inspector/CommandLineAPIHost.idl
 $(PROJECT_DIR)/inspector/CommandLineAPIModuleSource.js
@@ -1409,6 +1427,7 @@ $(PROJECT_DIR)/page/ScrollLogicalPosition.idl
 $(PROJECT_DIR)/page/ScrollOptions.idl
 $(PROJECT_DIR)/page/ScrollToOptions.idl
 $(PROJECT_DIR)/page/Settings.yaml
+$(PROJECT_DIR)/page/ShadowRealmGlobalScope.idl
 $(PROJECT_DIR)/page/ShareData.idl
 $(PROJECT_DIR)/page/StructuredSerializeOptions.idl
 $(PROJECT_DIR)/page/UndoItem.idl
@@ -1623,6 +1642,8 @@ $(PROJECT_DIR)/workers/service/ExtendableEvent.idl
 $(PROJECT_DIR)/workers/service/ExtendableEventInit.idl
 $(PROJECT_DIR)/workers/service/ExtendableMessageEvent.idl
 $(PROJECT_DIR)/workers/service/FetchEvent.idl
+$(PROJECT_DIR)/workers/service/NavigationPreloadManager.idl
+$(PROJECT_DIR)/workers/service/NavigationPreloadState.idl
 $(PROJECT_DIR)/workers/service/PushEvent.idl
 $(PROJECT_DIR)/workers/service/PushEventInit.idl
 $(PROJECT_DIR)/workers/service/PushMessageData.idl
@@ -1635,6 +1656,8 @@ $(PROJECT_DIR)/workers/service/ServiceWorkerGlobalScope.idl
 $(PROJECT_DIR)/workers/service/ServiceWorkerRegistration.idl
 $(PROJECT_DIR)/workers/service/ServiceWorkerUpdateViaCache.idl
 $(PROJECT_DIR)/workers/service/ServiceWorkerWindowClient.idl
+$(PROJECT_DIR)/workers/shared/SharedWorker.idl
+$(PROJECT_DIR)/workers/shared/SharedWorkerGlobalScope.idl
 $(PROJECT_DIR)/worklets/PaintWorkletGlobalScope.idl
 $(PROJECT_DIR)/worklets/Worklet.idl
 $(PROJECT_DIR)/worklets/WorkletGlobalScope.idl

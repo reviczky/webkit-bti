@@ -143,6 +143,7 @@ enum class PostTarget { Element, ObservableParent };
 
 class AXObjectCache {
     WTF_MAKE_NONCOPYABLE(AXObjectCache); WTF_MAKE_FAST_ALLOCATED;
+    friend class AXIsolatedTree;
     friend WTF::TextStream& operator<<(WTF::TextStream&, AXObjectCache&);
 public:
     explicit AXObjectCache(Document&);
@@ -186,6 +187,9 @@ public:
     void checkedStateChanged(Node*);
     // Called when a node has just been attached, so we can make sure we have the right subclass of AccessibilityObject.
     void updateCacheAfterNodeIsAttached(Node*);
+    void updateLoadingProgress(double);
+    void loadingFinished() { updateLoadingProgress(1); }
+    double loadingProgress() const { return m_loadingProgress; }
 
     void deferFocusedUIElementChangeIfNeeded(Node* oldFocusedNode, Node* newFocusedNode);
     void deferModalChange(Element*);
@@ -267,7 +271,6 @@ public:
 
     enum AXNotification {
         AXActiveDescendantChanged,
-        AXAriaAttributeChanged,
         AXAriaRoleChanged,
         AXAutocorrectionOccured,
         AXCheckedStateChanged,
@@ -429,7 +432,6 @@ protected:
     CharacterOffset characterOffsetForPoint(const IntPoint&);
     LayoutRect localCaretRectForCharacterOffset(RenderObject*&, const CharacterOffset&);
     bool shouldSkipBoundary(const CharacterOffset&, const CharacterOffset&);
-
 private:
     AccessibilityObject* rootWebArea();
     static AccessibilityObject* focusedImageMapUIElement(HTMLAreaElement*);
@@ -449,6 +451,7 @@ private:
     bool enqueuePasswordValueChangeNotification(AccessibilityObject*);
     void passwordNotificationPostTimerFired();
 
+    void processDeferredChildrenChangedList();
     void handleChildrenChanged(AccessibilityObject&);
     void handleMenuOpened(Node*);
     void handleLiveRegionCreated(Node*);
@@ -471,7 +474,7 @@ private:
     Element* currentModalNode();
     bool isNodeVisible(Node*) const;
     void handleModalChange(Element&);
-    
+
     Document& m_document;
     const std::optional<PageIdentifier> m_pageID; // constant for object's lifetime.
     HashMap<AXID, RefPtr<AccessibilityObject>> m_objects;
@@ -523,10 +526,14 @@ private:
     Vector<std::pair<Node*, Node*>> m_deferredFocusedNodeChange;
     bool m_isSynchronizingSelection { false };
     bool m_performingDeferredCacheUpdate { false };
+    double m_loadingProgress { 0 };
 
 #if USE(ATK)
     ListHashSet<RefPtr<AccessibilityObject>> m_deferredAttachedWrapperObjectList;
     ListHashSet<GRefPtr<AccessibilityObjectWrapper>> m_deferredDetachedWrapperList;
+#endif
+#if USE(ATSPI)
+    ListHashSet<RefPtr<AXCoreObject>> m_deferredParentChangedList;
 #endif
 };
 
@@ -618,6 +625,7 @@ inline void AXObjectCache::recomputeIsIgnored(RenderObject*) { }
 inline void AXObjectCache::textChanged(AccessibilityObject*) { }
 inline void AXObjectCache::textChanged(Node*) { }
 inline void AXObjectCache::updateCacheAfterNodeIsAttached(Node*) { }
+inline void AXObjectCache::updateLoadingProgress(double) { }
 inline SimpleRange AXObjectCache::rangeForNodeContents(Node& node) { return makeRangeSelectingNodeContents(node); }
 inline void AXObjectCache::remove(AXID) { }
 inline void AXObjectCache::remove(RenderObject*) { }

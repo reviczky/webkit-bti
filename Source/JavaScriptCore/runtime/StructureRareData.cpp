@@ -60,11 +60,10 @@ void StructureRareData::destroy(JSCell* cell)
 
 StructureRareData::StructureRareData(VM& vm, Structure* previous)
     : JSCell(vm, vm.structureRareDataStructure.get())
+    , m_previous(vm, this, previous, WriteBarrierStructureID::MayBeNull)
     , m_maxOffset(invalidOffset)
     , m_transitionOffset(invalidOffset)
 {
-    if (previous)
-        m_previous.set(vm, this, previous);
 }
 
 template<typename Visitor>
@@ -135,6 +134,9 @@ void StructureRareData::cacheSpecialPropertySlow(JSGlobalObject* globalObject, V
         break;
     case CachedSpecialPropertyKey::ToPrimitive:
         uid = vm.propertyNames->toPrimitiveSymbol.impl();
+        break;
+    case CachedSpecialPropertyKey::ToJSON:
+        uid = vm.propertyNames->toJSON.impl();
         break;
     }
 
@@ -268,6 +270,8 @@ void CachedSpecialPropertyAdaptiveInferredPropertyValueWatchpoint::handleFire(VM
         key = CachedSpecialPropertyKey::ToString;
     else if (this->key().uid() == vm.propertyNames->valueOf.impl())
         key = CachedSpecialPropertyKey::ValueOf;
+    else if (this->key().uid() == vm.propertyNames->toJSON.impl())
+        key = CachedSpecialPropertyKey::ToJSON;
     else {
         ASSERT(this->key().uid() == vm.propertyNames->toPrimitiveSymbol.impl());
         key = CachedSpecialPropertyKey::ToPrimitive;

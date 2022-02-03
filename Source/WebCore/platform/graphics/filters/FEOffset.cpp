@@ -4,7 +4,7 @@
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) Research In Motion Limited 2010. All rights reserved.
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -53,30 +53,48 @@ void FEOffset::setDy(float dy)
     m_dy = dy;
 }
 
-void FEOffset::determineAbsolutePaintRect(const Filter& filter)
+FloatRect FEOffset::calculateImageRect(const Filter& filter, const FilterImageVector& inputs, const FloatRect& primitiveSubregion) const
 {
-    FloatRect paintRect = inputEffect(0)->absolutePaintRect();
-    paintRect.move(filter.scaledByFilterScale({ m_dx, m_dy }));
-    if (clipsToBounds())
-        paintRect.intersect(maxEffectRect());
+    auto imageRect = inputs[0]->imageRect();
+    imageRect.move(filter.resolvedSize({ m_dx, m_dy }));
+    return filter.clipToMaxEffectRect(imageRect, primitiveSubregion);
+}
+
+IntOutsets FEOffset::outsets(const Filter& filter) const
+{
+    auto offset = expandedIntSize(filter.resolvedSize({ m_dx, m_dy }));
+
+    IntOutsets outsets;
+    if (offset.height() < 0)
+        outsets.setTop(-offset.height());
     else
-        paintRect.unite(maxEffectRect());
-    setAbsolutePaintRect(enclosingIntRect(paintRect));
+        outsets.setBottom(offset.height());
+    if (offset.width() < 0)
+        outsets.setLeft(-offset.width());
+    else
+        outsets.setRight(offset.width());
+
+    return outsets;
 }
 
-bool FEOffset::platformApplySoftware(const Filter& filter)
+bool FEOffset::resultIsAlphaImage(const FilterImageVector& inputs) const
 {
-    return FEOffsetSoftwareApplier(*this).apply(filter, inputEffects());
+    return inputs[0]->isAlphaImage();
 }
 
-TextStream& FEOffset::externalRepresentation(TextStream& ts, RepresentationType representation) const
+std::unique_ptr<FilterEffectApplier> FEOffset::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FEOffsetSoftwareApplier>(*this);
+}
+
+TextStream& FEOffset::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feOffset";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " dx=\"" << dx() << "\" dy=\"" << dy() << "\"]\n";
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
+    ts << " dx=\"" << dx() << "\" dy=\"" << dy() << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

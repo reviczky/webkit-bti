@@ -4,7 +4,7 @@
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) Research In Motion Limited 2010. All rights reserved.
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,7 +26,12 @@
 #include "FEComponentTransfer.h"
 
 #include "FEComponentTransferSoftwareApplier.h"
+#include "Filter.h"
 #include <wtf/text/TextStream.h>
+
+#if USE(CORE_IMAGE)
+#include "FEComponentTransferCoreImageApplier.h"
+#endif
 
 namespace WebCore {
 
@@ -44,9 +49,27 @@ FEComponentTransfer::FEComponentTransfer(const ComponentTransferFunction& redFun
 {
 }
 
-bool FEComponentTransfer::platformApplySoftware(const Filter& filter)
+bool FEComponentTransfer::supportsAcceleratedRendering() const
 {
-    return FEComponentTransferSoftwareApplier(*this).apply(filter, inputEffects());
+#if USE(CORE_IMAGE)
+    return FEComponentTransferCoreImageApplier::supportsCoreImageRendering(*this);
+#else
+    return false;
+#endif
+}
+
+std::unique_ptr<FilterEffectApplier> FEComponentTransfer::createAcceleratedApplier() const
+{
+#if USE(CORE_IMAGE)
+    return FilterEffectApplier::create<FEComponentTransferCoreImageApplier>(*this);
+#else
+    return nullptr;
+#endif
+}
+
+std::unique_ptr<FilterEffectApplier> FEComponentTransfer::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FEComponentTransferSoftwareApplier>(*this);
 }
 
 static TextStream& operator<<(TextStream& ts, ComponentTransferType type)
@@ -100,21 +123,21 @@ static TextStream& operator<<(TextStream& ts, const ComponentTransferFunction& f
     return ts;
 }
 
-TextStream& FEComponentTransfer::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FEComponentTransfer::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feComponentTransfer";
     FilterEffect::externalRepresentation(ts, representation);
     ts << "\n";
+
     {
         TextStream::IndentScope indentScope(ts, 2);
         ts << indent << "{red: " << m_redFunction << "}\n";
         ts << indent << "{green: " << m_greenFunction << "}\n";
         ts << indent << "{blue: " << m_blueFunction << "}\n";
-        ts << indent << "{alpha: " << m_alphaFunction << "}]\n";
+        ts << indent << "{alpha: " << m_alphaFunction << "}";
     }
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
+    ts << "]\n";
     return ts;
 }
 

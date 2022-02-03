@@ -5,8 +5,34 @@ set(PAL_PUBLIC_HEADERS
     HysteresisActivity.h
     Logging.h
     SessionID.h
+    ThreadGlobalData.h
 
     crypto/CryptoDigest.h
+
+    graphics/WebGPU/Impl/WebGPUAdapterImpl.h
+    graphics/WebGPU/Impl/WebGPUBindGroupImpl.h
+    graphics/WebGPU/Impl/WebGPUBindGroupLayoutImpl.h
+    graphics/WebGPU/Impl/WebGPUBufferImpl.h
+    graphics/WebGPU/Impl/WebGPUCommandBufferImpl.h
+    graphics/WebGPU/Impl/WebGPUCommandEncoderImpl.h
+    graphics/WebGPU/Impl/WebGPUComputePassEncoderImpl.h
+    graphics/WebGPU/Impl/WebGPUComputePipelineImpl.h
+    graphics/WebGPU/Impl/WebGPUConvertToBackingContext.h
+    graphics/WebGPU/Impl/WebGPUDeviceImpl.h
+    graphics/WebGPU/Impl/WebGPUDowncastConvertToBackingContext.h
+    graphics/WebGPU/Impl/WebGPUExternalTextureImpl.h
+    graphics/WebGPU/Impl/WebGPUImpl.h
+    graphics/WebGPU/Impl/WebGPUPipelineLayoutImpl.h
+    graphics/WebGPU/Impl/WebGPUQuerySetImpl.h
+    graphics/WebGPU/Impl/WebGPUQueueImpl.h
+    graphics/WebGPU/Impl/WebGPURenderBundleEncoderImpl.h
+    graphics/WebGPU/Impl/WebGPURenderBundleImpl.h
+    graphics/WebGPU/Impl/WebGPURenderPassEncoderImpl.h
+    graphics/WebGPU/Impl/WebGPURenderPipelineImpl.h
+    graphics/WebGPU/Impl/WebGPUSamplerImpl.h
+    graphics/WebGPU/Impl/WebGPUShaderModuleImpl.h
+    graphics/WebGPU/Impl/WebGPUTextureImpl.h
+    graphics/WebGPU/Impl/WebGPUTextureViewImpl.h
 
     graphics/WebGPU/WebGPU.h
     graphics/WebGPU/WebGPUAdapter.h
@@ -143,7 +169,22 @@ set(PAL_PUBLIC_HEADERS
     system/Sound.h
     system/SystemSleepListener.h
 
+    text/DecodeEscapeSequences.h
+    text/EncodingTables.h
     text/KillRing.h
+    text/TextCodec.h
+    text/TextCodecASCIIFastPath.h
+    text/TextCodecCJK.h
+    text/TextCodecICU.h
+    text/TextCodecLatin1.h
+    text/TextCodecReplacement.h
+    text/TextCodecSingleByte.h
+    text/TextCodecUTF16.h
+    text/TextCodecUTF8.h
+    text/TextCodecUserDefined.h
+    text/TextEncoding.h
+    text/TextEncodingDetector.h
+    text/TextEncodingRegistry.h
     text/UnencodableHandling.h
 )
 
@@ -151,9 +192,49 @@ set(PAL_SOURCES
     FileSizeFormatter.cpp
     Logging.cpp
     SessionID.cpp
+    ThreadGlobalData.cpp
+
+    graphics/WebGPU/Impl/WebGPUAdapterImpl.cpp
+    graphics/WebGPU/Impl/WebGPUBindGroupImpl.cpp
+    graphics/WebGPU/Impl/WebGPUBindGroupLayoutImpl.cpp
+    graphics/WebGPU/Impl/WebGPUBufferImpl.cpp
+    graphics/WebGPU/Impl/WebGPUCommandBufferImpl.cpp
+    graphics/WebGPU/Impl/WebGPUCommandEncoderImpl.cpp
+    graphics/WebGPU/Impl/WebGPUComputePassEncoderImpl.cpp
+    graphics/WebGPU/Impl/WebGPUComputePipelineImpl.cpp
+    graphics/WebGPU/Impl/WebGPUConvertToBackingContext.cpp
+    graphics/WebGPU/Impl/WebGPUDeviceImpl.cpp
+    graphics/WebGPU/Impl/WebGPUDowncastConvertToBackingContext.cpp
+    graphics/WebGPU/Impl/WebGPUExternalTextureImpl.cpp
+    graphics/WebGPU/Impl/WebGPUImpl.cpp
+    graphics/WebGPU/Impl/WebGPUPipelineLayoutImpl.cpp
+    graphics/WebGPU/Impl/WebGPUQuerySetImpl.cpp
+    graphics/WebGPU/Impl/WebGPUQueueImpl.cpp
+    graphics/WebGPU/Impl/WebGPURenderBundleEncoderImpl.cpp
+    graphics/WebGPU/Impl/WebGPURenderBundleImpl.cpp
+    graphics/WebGPU/Impl/WebGPURenderPassEncoderImpl.cpp
+    graphics/WebGPU/Impl/WebGPURenderPipelineImpl.cpp
+    graphics/WebGPU/Impl/WebGPUSamplerImpl.cpp
+    graphics/WebGPU/Impl/WebGPUShaderModuleImpl.cpp
+    graphics/WebGPU/Impl/WebGPUTextureImpl.cpp
+    graphics/WebGPU/Impl/WebGPUTextureViewImpl.cpp
 
     system/SleepDisabler.cpp
     system/SystemSleepListener.cpp
+
+    text/EncodingTables.cpp
+    text/TextCodec.cpp
+    text/TextCodecCJK.cpp
+    text/TextCodecICU.cpp
+    text/TextCodecLatin1.cpp
+    text/TextCodecReplacement.cpp
+    text/TextCodecSingleByte.cpp
+    text/TextCodecUTF16.cpp
+    text/TextCodecUTF8.cpp
+    text/TextCodecUserDefined.cpp
+    text/TextEncoding.cpp
+    text/TextEncodingDetectorICU.cpp
+    text/TextEncodingRegistry.cpp
 )
 
 set(PAL_PRIVATE_INCLUDE_DIRECTORIES

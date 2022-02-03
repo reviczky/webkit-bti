@@ -235,7 +235,7 @@ bool CachedImage::willPaintBrokenImage() const
     return errorOccurred() && m_shouldPaintBrokenImage;
 }
 
-Image* CachedImage::image()
+Image* CachedImage::image() const
 {
     if (errorOccurred() && m_shouldPaintBrokenImage) {
         // Returning the 1x broken image is non-ideal, but we cannot reliably access the appropriate
@@ -272,7 +272,7 @@ Image* CachedImage::imageForRenderer(const RenderObject* renderer)
 
 bool CachedImage::hasSVGImage() const
 {
-    return m_image && m_image->drawsSVGImage();
+    return image() && image()->isSVGImage();
 }
 
 void CachedImage::setContainerContextForClient(const CachedImageClient& client, const LayoutSize& containerSize, float containerZoom, const URL& imageURL)
@@ -468,9 +468,9 @@ inline void CachedImage::clearImage()
     m_updateImageDataCount = 0;
 }
 
-void CachedImage::updateBufferInternal(SharedBuffer& data)
+void CachedImage::updateBufferInternal(const SharedBuffer& data)
 {
-    m_data = &data;
+    m_data = data.makeContiguous();
     setEncodedSize(m_data->size());
     createImage();
 
@@ -523,17 +523,11 @@ bool CachedImage::shouldDeferUpdateImageData() const
     return (MonotonicTime::now() - m_lastUpdateImageDataTime).seconds() < updateImageDataBackoffIntervals[interval];
 }
 
-RefPtr<SharedBuffer> CachedImage::convertedDataIfNeeded(SharedBuffer* data) const
+RefPtr<SharedBuffer> CachedImage::convertedDataIfNeeded(const FragmentedSharedBuffer* data) const
 {
-    if (!data || !isPostScriptResource())
-        return data;
-#if PLATFORM(MAC) && !USE(WEBKIT_IMAGE_DECODERS)
-    return SharedBuffer::create(PDFDocumentImage::convertPostScriptDataToPDF(data->createCFData()).get());
-#else
-    // Loading the image should have been canceled if the system does not support converting PostScript to PDF.
-    ASSERT_NOT_REACHED();
-    return nullptr;
-#endif
+    if (!data)
+        return nullptr;
+    return data->makeContiguous();
 }
 
 void CachedImage::didUpdateImageData()
@@ -553,21 +547,21 @@ EncodedDataStatus CachedImage::updateImageData(bool allDataReceived)
     return result;
 }
 
-void CachedImage::updateBuffer(SharedBuffer& data)
+void CachedImage::updateBuffer(const FragmentedSharedBuffer& buffer)
 {
     ASSERT(dataBufferingPolicy() == DataBufferingPolicy::BufferData);
-    updateBufferInternal(data);
-    CachedResource::updateBuffer(data);
+    updateBufferInternal(buffer.makeContiguous());
+    CachedResource::updateBuffer(buffer);
 }
 
-void CachedImage::updateData(const uint8_t* data, unsigned length)
+void CachedImage::updateData(const SharedBuffer& data)
 {
     ASSERT(dataBufferingPolicy() == DataBufferingPolicy::DoNotBufferData);
-    updateBufferInternal(SharedBuffer::create(data, length));
-    CachedResource::updateData(data, length);
+    updateBufferInternal(data);
+    CachedResource::updateData(data);
 }
 
-void CachedImage::finishLoading(SharedBuffer* data, const NetworkLoadMetrics& metrics)
+void CachedImage::finishLoading(const FragmentedSharedBuffer* data, const NetworkLoadMetrics& metrics)
 {
     m_data = convertedDataIfNeeded(data);
     if (m_data) {
@@ -593,7 +587,7 @@ void CachedImage::finishLoading(SharedBuffer* data, const NetworkLoadMetrics& me
 void CachedImage::didReplaceSharedBufferContents()
 {
     if (m_image) {
-        // Let the Image know that the SharedBuffer has been rejigged, so it can let go of any references to the heap-allocated resource buffer.
+        // Let the Image know that the FragmentedSharedBuffer has been rejigged, so it can let go of any references to the heap-allocated resource buffer.
         // FIXME(rdar://problem/24275617): It would be better if we could somehow tell the Image's decoder to swap in the new contents without destroying anything.
         m_image->destroyDecodedData(true);
     }

@@ -140,11 +140,13 @@ private:
     LayoutUnit flowAwareMarginEndForChild(const RenderBox& child) const;
     LayoutUnit flowAwareMarginBeforeForChild(const RenderBox& child) const;
     LayoutUnit crossAxisMarginExtentForChild(const RenderBox& child) const;
+    LayoutUnit mainAxisMarginExtentForChild(const RenderBox& child) const;
     LayoutUnit crossAxisScrollbarExtent() const;
     LayoutUnit crossAxisScrollbarExtentForChild(const RenderBox& child) const;
     LayoutPoint flowAwareLocationForChild(const RenderBox& child) const;
     bool childHasComputableAspectRatio(const RenderBox&) const;
     bool childHasComputableAspectRatioAndCrossSizeIsConsideredDefinite(const RenderBox&);
+    bool crossAxisIsPhysicalWidth() const;
     bool childCrossSizeShouldUseContainerCrossSize(const RenderBox& child) const;
     LayoutUnit computeCrossSizeForChildUsingContainerCrossSize(const RenderBox& child) const;
     void computeChildIntrinsicLogicalWidths(RenderObject&, LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const override;
@@ -189,7 +191,7 @@ private:
     void setOverridingMainSizeForChild(RenderBox&, LayoutUnit);
     void prepareChildForPositionedLayout(RenderBox& child);
     void layoutAndPlaceChildren(LayoutUnit& crossAxisOffset, Vector<FlexItem>&, LayoutUnit availableFreeSpace, bool relayoutChildren, Vector<LineContext>&, LayoutUnit gapBetweenItems);
-    void layoutColumnReverse(const Vector<FlexItem>&, LayoutUnit crossAxisOffset, LayoutUnit availableFreeSpace);
+    void layoutColumnReverse(const Vector<FlexItem>&, LayoutUnit crossAxisOffset, LayoutUnit availableFreeSpace, LayoutUnit gapBetweenItems);
     void alignFlexLines(Vector<LineContext>&, LayoutUnit gapBetweenLines);
     void alignChildren(const Vector<LineContext>&);
     void applyStretchAlignmentToChild(RenderBox& child, LayoutUnit lineCrossAxisExtent);
@@ -200,6 +202,8 @@ private:
     void repaintChildrenDuringLayoutIfMoved(const ChildFrameRects&);
 
     bool childHasPercentHeightDescendants(const RenderBox&) const;
+
+    void resetHasDefiniteHeight() { m_hasDefiniteHeight = SizeDefiniteness::Unknown; }
 
     enum class GapType { BetweenLines, BetweenItems };
     LayoutUnit computeGap(GapType) const;

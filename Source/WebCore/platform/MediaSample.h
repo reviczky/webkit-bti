@@ -26,6 +26,7 @@
 #pragma once
 
 #include "FloatSize.h"
+#include "MediaSampleVideoFrame.h"
 #include <JavaScriptCore/TypedArrays.h>
 #include <wtf/EnumTraits.h>
 #include <wtf/MediaTime.h>
@@ -106,6 +107,9 @@ public:
     virtual VideoRotation videoRotation() const { return VideoRotation::None; }
     virtual bool videoMirrored() const { return false; }
     virtual uint32_t videoPixelFormat() const { return 0; }
+#if defined(ENABLE_VIDEO) && ENABLE_VIDEO
+    virtual std::optional<MediaSampleVideoFrame> videoFrame() const { return std::nullopt; };
+#endif
 
     bool isSync() const { return flags() & IsSync; }
     bool isNonDisplaying() const { return flags() & IsNonDisplaying; }

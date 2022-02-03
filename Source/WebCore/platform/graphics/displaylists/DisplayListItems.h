@@ -249,27 +249,17 @@ public:
     WEBCORE_EXPORT SetState(const GraphicsContextState&, GraphicsContextState::StateChangeFlags);
 
     const GraphicsContextStateChange& stateChange() const { return m_stateChange; }
-    const Pattern::Parameters& strokePatternParameters() const { return m_strokePattern.parameters; }
-    const Pattern::Parameters& fillPatternParameters() const { return m_fillPattern.parameters; }
-    RenderingResourceIdentifier strokePatternImageIdentifier() const { return m_strokePattern.tileImageIdentifier; }
-    RenderingResourceIdentifier fillPatternImageIdentifier() const { return m_fillPattern.tileImageIdentifier; }
+    GraphicsContextStateChange& stateChange() { return m_stateChange; }
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static std::optional<SetState> decode(Decoder&);
 
-    WEBCORE_EXPORT void apply(GraphicsContext&, NativeImage* strokePatternImage, NativeImage* fillPatternImage);
+    WEBCORE_EXPORT void apply(GraphicsContext&);
 
 private:
-    struct PatternData {
-        RenderingResourceIdentifier tileImageIdentifier;
-        Pattern::Parameters parameters;
-    };
-
-    WEBCORE_EXPORT SetState(const GraphicsContextStateChange&, const PatternData& strokePattern, const PatternData& fillPattern);
+    WEBCORE_EXPORT SetState(const GraphicsContextStateChange&);
 
     GraphicsContextStateChange m_stateChange;
-    PatternData m_strokePattern;
-    PatternData m_fillPattern;
 };
 
 template<class Encoder>
@@ -287,8 +277,7 @@ void SetState::encode(Encoder& encoder) const
 
     if (changeFlags.contains(GraphicsContextState::StrokePatternChange)) {
         ASSERT(state.strokePattern);
-        encoder << state.strokePattern->tileImage().renderingResourceIdentifier();
-        encoder << state.strokePattern->parameters();
+        encoder << *state.strokePattern;
     }
 
     if (changeFlags.contains(GraphicsContextState::FillGradientChange)) {
@@ -298,8 +287,7 @@ void SetState::encode(Encoder& encoder) const
 
     if (changeFlags.contains(GraphicsContextState::FillPatternChange)) {
         ASSERT(state.fillPattern);
-        encoder << state.fillPattern->tileImage().renderingResourceIdentifier();
-        encoder << state.fillPattern->parameters();
+        encoder << *state.fillPattern;
     }
 
     if (changeFlags.contains(GraphicsContextState::ShadowChange)) {
@@ -363,9 +351,6 @@ std::optional<SetState> SetState::decode(Decoder& decoder)
     GraphicsContextStateChange stateChange;
     stateChange.m_changeFlags = *changeFlags;
 
-    PatternData strokePattern;
-    PatternData fillPattern;
-
     if (stateChange.m_changeFlags.contains(GraphicsContextState::StrokeGradientChange)) {
         auto strokeGradient = Gradient::decode(decoder);
         if (!strokeGradient)
@@ -375,17 +360,11 @@ std::optional<SetState> SetState::decode(Decoder& decoder)
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::StrokePatternChange)) {
-        std::optional<RenderingResourceIdentifier> renderingResourceIdentifier;
-        decoder >> renderingResourceIdentifier;
-        if (!renderingResourceIdentifier)
+        auto strokePattern = Pattern::decode(decoder);
+        if (!strokePattern)
             return std::nullopt;
 
-        std::optional<Pattern::Parameters> parameters;
-        decoder >> parameters;
-        if (!parameters)
-            return std::nullopt;
-
-        strokePattern = { *renderingResourceIdentifier, *parameters };
+        stateChange.m_state.strokePattern = WTFMove(*strokePattern);
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::FillGradientChange)) {
@@ -397,17 +376,11 @@ std::optional<SetState> SetState::decode(Decoder& decoder)
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::FillPatternChange)) {
-        std::optional<RenderingResourceIdentifier> renderingResourceIdentifier;
-        decoder >> renderingResourceIdentifier;
-        if (!renderingResourceIdentifier)
+        auto fillPattern = Pattern::decode(decoder);
+        if (!fillPattern)
             return std::nullopt;
 
-        std::optional<Pattern::Parameters> parameters;
-        decoder >> parameters;
-        if (!parameters)
-            return std::nullopt;
-
-        fillPattern = { *renderingResourceIdentifier, *parameters };
+        stateChange.m_state.fillPattern = WTFMove(*fillPattern);
     }
 
     if (stateChange.m_changeFlags.contains(GraphicsContextState::ShadowChange)) {
@@ -565,7 +538,7 @@ std::optional<SetState> SetState::decode(Decoder& decoder)
         stateChange.m_state.shadowsIgnoreTransforms = *shadowsIgnoreTransforms;
     }
 
-    return {{ stateChange, strokePattern, fillPattern }};
+    return { { stateChange } };
 }
 
 class SetLineCap {
@@ -737,7 +710,7 @@ public:
     FloatRect destinationRect() const { return m_destinationRect; }
     bool isValid() const { return m_imageBufferIdentifier.isValid(); }
 
-    WEBCORE_EXPORT void apply(GraphicsContext&, WebCore::ImageBuffer&) const;
+    WEBCORE_EXPORT void apply(GraphicsContext&, ImageBuffer&) const;
 
     NO_RETURN_DUE_TO_ASSERT void apply(GraphicsContext&) const;
 
@@ -912,6 +885,29 @@ private:
     FloatRect m_destination;
 };
 
+class DrawFilteredImageBuffer {
+public:
+    static constexpr ItemType itemType = ItemType::DrawFilteredImageBuffer;
+    static constexpr bool isInlineItem = false;
+    static constexpr bool isDrawingItem = true;
+
+    WEBCORE_EXPORT DrawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Filter&);
+
+    std::optional<RenderingResourceIdentifier> sourceImageIdentifier() const { return m_sourceImageIdentifier; }
+    FloatRect sourceImageRect() const { return m_sourceImageRect; }
+
+    NO_RETURN_DUE_TO_ASSERT void apply(GraphicsContext&) const;
+    WEBCORE_EXPORT void apply(GraphicsContext&, ImageBuffer* sourceImage, FilterResults&);
+
+    std::optional<FloatRect> globalBounds() const { return std::nullopt; }
+    std::optional<FloatRect> localBounds(const GraphicsContext&) const { return m_sourceImageRect; }
+
+private:
+    std::optional<RenderingResourceIdentifier> m_sourceImageIdentifier;
+    FloatRect m_sourceImageRect;
+    Ref<Filter> m_filter;
+};
+
 class DrawGlyphs {
 public:
     static constexpr ItemType itemType = ItemType::DrawGlyphs;
@@ -1016,7 +1012,7 @@ public:
     // FIXME: We might want to validate ImagePaintingOptions.
     bool isValid() const { return m_imageBufferIdentifier.isValid(); }
 
-    WEBCORE_EXPORT void apply(GraphicsContext&, WebCore::ImageBuffer&) const;
+    WEBCORE_EXPORT void apply(GraphicsContext&, ImageBuffer&) const;
 
     NO_RETURN_DUE_TO_ASSERT void apply(GraphicsContext&) const;
 
@@ -2405,6 +2401,7 @@ using DisplayListItem = std::variant
     , ConcatenateCTM
     , DrawDotsForDocumentMarker
     , DrawEllipse
+    , DrawFilteredImageBuffer
     , DrawFocusRingPath
     , DrawFocusRingRects
     , DrawGlyphs

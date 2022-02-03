@@ -67,6 +67,7 @@ class WebFileSystemStorageConnection final : public WebCore::FileSystemStorageCo
 public:
     static Ref<WebFileSystemStorageConnection> create(IPC::Connection&);
     void connectionClosed();
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
 
 private:
     explicit WebFileSystemStorageConnection(IPC::Connection&);
@@ -80,12 +81,16 @@ private:
     void removeEntry(WebCore::FileSystemHandleIdentifier, const String& name, bool deleteRecursively, WebCore::FileSystemStorageConnection::VoidCallback&&) final;
     void resolve(WebCore::FileSystemHandleIdentifier, WebCore::FileSystemHandleIdentifier, WebCore::FileSystemStorageConnection::ResolveCallback&&) final;
     void getHandleNames(WebCore::FileSystemHandleIdentifier, FileSystemStorageConnection::GetHandleNamesCallback&&) final;
-    void getHandle(WebCore::FileSystemHandleIdentifier, const String& name, FileSystemStorageConnection::GetHandleWithTypeCallback&&) final;
+    void getHandle(WebCore::FileSystemHandleIdentifier, const String& name, FileSystemStorageConnection::GetHandleCallback&&) final;
     void getFile(WebCore::FileSystemHandleIdentifier, StringCallback&&) final;
 
     void createSyncAccessHandle(WebCore::FileSystemHandleIdentifier, WebCore::FileSystemStorageConnection::GetAccessHandleCallback&&) final;
-    void close(WebCore::FileSystemHandleIdentifier, WebCore::FileSystemSyncAccessHandleIdentifier, WebCore::FileSystemStorageConnection::VoidCallback&&) final;
+    void closeSyncAccessHandle(WebCore::FileSystemHandleIdentifier, WebCore::FileSystemSyncAccessHandleIdentifier, WebCore::FileSystemStorageConnection::VoidCallback&&) final;
+    void registerSyncAccessHandle(WebCore::FileSystemSyncAccessHandleIdentifier, WebCore::ScriptExecutionContextIdentifier) final;
+    void unregisterSyncAccessHandle(WebCore::FileSystemSyncAccessHandleIdentifier) final;
+    void invalidateAccessHandle(WebCore::FileSystemSyncAccessHandleIdentifier) final;
 
+    HashMap<WebCore::FileSystemSyncAccessHandleIdentifier, WebCore::ScriptExecutionContextIdentifier> m_syncAccessHandles;
     RefPtr<IPC::Connection> m_connection;
 };
 

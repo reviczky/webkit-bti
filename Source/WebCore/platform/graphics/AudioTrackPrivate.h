@@ -26,6 +26,7 @@
 #pragma once
 
 #include "AudioTrackPrivateClient.h"
+#include "PlatformAudioTrackConfiguration.h"
 #include "TrackPrivateBase.h"
 #include <wtf/Function.h>
 
@@ -65,6 +66,16 @@ public:
     using EnabledChangedCallback = Function<void(AudioTrackPrivate&, bool enabled)>;
     void setEnabledChangedCallback(EnabledChangedCallback&& callback) { m_enabledChangedCallback = WTFMove(callback); }
 
+    const PlatformAudioTrackConfiguration& configuration() const { return m_configuration; }
+    void setConfiguration(PlatformAudioTrackConfiguration&& configuration)
+    {
+        if (configuration == m_configuration)
+            return;
+        m_configuration = WTFMove(configuration);
+        if (m_client)
+            m_client->configurationChanged(m_configuration);
+    }
+
 #if !RELEASE_LOG_DISABLED
     const char* logClassName() const override { return "AudioTrackPrivate"; }
 #endif
@@ -75,6 +86,7 @@ protected:
 private:
     WeakPtr<AudioTrackPrivateClient> m_client;
     bool m_enabled { false };
+    PlatformAudioTrackConfiguration m_configuration;
     EnabledChangedCallback m_enabledChangedCallback;
 };
 

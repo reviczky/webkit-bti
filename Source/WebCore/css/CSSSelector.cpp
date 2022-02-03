@@ -56,6 +56,7 @@ CSSSelector::CSSSelector(const QualifiedName& tagQName, bool tagIsForNamespaceRu
     , m_match(Tag)
     , m_pseudoType(0)
     , m_isLastInSelectorList(false)
+    , m_isFirstInTagHistory(true)
     , m_isLastInTagHistory(true)
     , m_hasRareData(false)
     , m_hasNameWithCase(false)
@@ -123,6 +124,7 @@ static unsigned simpleSelectorSpecificityInternal(const CSSSelector& simpleSelec
         case CSSSelector::PseudoClassIs:
         case CSSSelector::PseudoClassMatches:
         case CSSSelector::PseudoClassNot:
+        case CSSSelector::PseudoClassHas:
             return maxSpecificity(*simpleSelector.selectorList());
         case CSSSelector::PseudoClassWhere:
             return 0;
@@ -288,6 +290,18 @@ CSSSelector::PseudoElementType CSSSelector::parsePseudoElementType(StringView na
     return type;
 }
 
+const CSSSelector* CSSSelector::firstInCompound() const
+{
+    auto* selector = this;
+    while (!selector->isFirstInTagHistory()) {
+        auto* previousSelector = selector - 1;
+        if (previousSelector->relation() != Subselector)
+            break;
+        selector = previousSelector;
+    }
+    return selector;
+}
+
 bool CSSSelector::operator==(const CSSSelector& other) const
 {
     const CSSSelector* sel1 = this;
@@ -430,9 +444,6 @@ String CSSSelector::selectorText(const String& rightSide) const
                 break;
             case CSSSelector::PseudoClassAutofillStrongPasswordViewable:
                 builder.append(":-webkit-autofill-strong-password-viewable");
-                break;
-            case CSSSelector::PseudoClassDirectFocus:
-                builder.append(":-internal-direct-focus");
                 break;
             case CSSSelector::PseudoClassDrag:
                 builder.append(":-webkit-drag");

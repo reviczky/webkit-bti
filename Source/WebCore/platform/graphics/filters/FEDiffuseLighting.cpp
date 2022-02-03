@@ -29,6 +29,11 @@
 
 namespace WebCore {
 
+Ref<FEDiffuseLighting> FEDiffuseLighting::create(const Color& lightingColor, float surfaceScale, float diffuseConstant, float, float, float kernelUnitLengthX, float kernelUnitLengthY, Ref<LightSource>&& lightSource)
+{
+    return create(lightingColor, surfaceScale, diffuseConstant, kernelUnitLengthX, kernelUnitLengthY, WTFMove(lightSource));
+}
+
 Ref<FEDiffuseLighting> FEDiffuseLighting::create(const Color& lightingColor, float surfaceScale, float diffuseConstant, float kernelUnitLengthX, float kernelUnitLengthY, Ref<LightSource>&& lightSource)
 {
     return adoptRef(*new FEDiffuseLighting(lightingColor, surfaceScale, diffuseConstant, kernelUnitLengthX, kernelUnitLengthY, WTFMove(lightSource)));
@@ -47,16 +52,16 @@ bool FEDiffuseLighting::setDiffuseConstant(float diffuseConstant)
     return true;
 }
 
-TextStream& FEDiffuseLighting::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FEDiffuseLighting::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feDiffuseLighting";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " surfaceScale=\"" << m_surfaceScale << "\" "
-       << "diffuseConstant=\"" << m_diffuseConstant << "\" "
-       << "kernelUnitLength=\"" << m_kernelUnitLengthX << ", " << m_kernelUnitLengthY << "\"]\n";
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
+    ts << " surfaceScale=\"" << m_surfaceScale << "\"";
+    ts << " diffuseConstant=\"" << m_diffuseConstant << "\"";
+    ts << " kernelUnitLength=\"" << m_kernelUnitLengthX << ", " << m_kernelUnitLengthY << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

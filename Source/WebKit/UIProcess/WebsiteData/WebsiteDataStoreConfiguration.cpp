@@ -26,6 +26,7 @@
 #include "config.h"
 #include "WebsiteDataStoreConfiguration.h"
 
+#include "WebPushDaemonConnectionConfiguration.h"
 #include "WebsiteDataStore.h"
 
 namespace WebKit {
@@ -90,6 +91,7 @@ Ref<WebsiteDataStoreConfiguration> WebsiteDataStoreConfiguration::copy() const
     copy->m_httpsProxy = this->m_httpsProxy;
     copy->m_deviceManagementRestrictionsEnabled = this->m_deviceManagementRestrictionsEnabled;
     copy->m_allLoadsBlockedByDeviceManagementRestrictionsForTesting = this->m_allLoadsBlockedByDeviceManagementRestrictionsForTesting;
+    copy->m_webPushDaemonUsesMockBundlesForTesting = this->m_webPushDaemonUsesMockBundlesForTesting;
     copy->m_boundInterfaceIdentifier = this->m_boundInterfaceIdentifier;
     copy->m_allowsCellularAccess = this->m_allowsCellularAccess;
     copy->m_legacyTLSEnabled = this->m_legacyTLSEnabled;
@@ -113,8 +115,16 @@ Ref<WebsiteDataStoreConfiguration> WebsiteDataStoreConfiguration::copy() const
 #if ENABLE(ARKIT_INLINE_PREVIEW)
     copy->m_modelElementCacheDirectory = this->m_modelElementCacheDirectory;
 #endif
+#if !HAVE(NSURLSESSION_WEBSOCKET)
+    copy->m_shouldAcceptInsecureCertificatesForWebSockets = this->m_shouldAcceptInsecureCertificatesForWebSockets;
+#endif
 
     return copy;
+}
+
+WebPushD::WebPushDaemonConnectionConfiguration WebsiteDataStoreConfiguration::webPushDaemonConnectionConfiguration() const
+{
+    return { m_webPushDaemonUsesMockBundlesForTesting, { } };
 }
 
 } // namespace WebKit

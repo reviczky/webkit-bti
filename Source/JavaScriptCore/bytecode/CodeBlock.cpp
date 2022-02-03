@@ -445,11 +445,11 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
 #if ENABLE(JIT)
         if constexpr (decltype(bytecode)::opcodeID == op_tail_call) {
             CallFrameShuffleData shuffleData = CallFrameShuffleData::createForBaselineOrLLIntTailCall(bytecode, numParameters());
-            metadata.m_callLinkInfo.initializeDataIC(vm, CallLinkInfo::callTypeFor(decltype(bytecode)::opcodeID), instruction.index(), &shuffleData);
+            metadata.m_callLinkInfo.initialize(vm, CallLinkInfo::callTypeFor(decltype(bytecode)::opcodeID), instruction.index(), &shuffleData);
             return;
         }
 #endif
-        metadata.m_callLinkInfo.initializeDataIC(vm, CallLinkInfo::callTypeFor(decltype(bytecode)::opcodeID), instruction.index(), nullptr);
+        metadata.m_callLinkInfo.initialize(vm, CallLinkInfo::callTypeFor(decltype(bytecode)::opcodeID), instruction.index(), nullptr);
     };
 
 #define LINK_FIELD(__field) \
@@ -784,39 +784,37 @@ void CodeBlock::setupWithUnlinkedBaselineCode(Ref<BaselineJITCode> jitCode)
 
     {
         ConcurrentJSLocker locker(m_lock);
-        auto& jitData = ensureJITData(locker);
-
-        RELEASE_ASSERT(jitData.m_jitConstantPool.isEmpty());
-        jitData.m_jitConstantPool = FixedVector<void*>(jitCode->m_constantPool.size());
-        jitData.m_stubInfos = FixedVector<StructureStubInfo>(jitCode->m_unlinkedStubInfos.size());
+        ASSERT(!m_baselineJITData);
+        m_baselineJITData = BaselineJITData::create(jitCode->m_constantPool.size());
+        m_baselineJITData->m_stubInfos = FixedVector<StructureStubInfo>(jitCode->m_unlinkedStubInfos.size());
         for (auto& unlinkedCallLinkInfo : jitCode->m_unlinkedCalls) {
             CallLinkInfo* callLinkInfo = getCallLinkInfoForBytecodeIndex(locker, unlinkedCallLinkInfo.bytecodeIndex);
             ASSERT(callLinkInfo);
-            callLinkInfo->setCodeLocations({ }, unlinkedCallLinkInfo.doneLocation);
+            static_cast<BaselineCallLinkInfo*>(callLinkInfo)->setCodeLocations(unlinkedCallLinkInfo.doneLocation);
         }
 
         for (size_t i = 0; i < jitCode->m_constantPool.size(); ++i) {
             auto entry = jitCode->m_constantPool.at(i);
             switch (entry.type()) {
             case JITConstantPool::Type::GlobalObject:
-                jitData.m_jitConstantPool[i] = m_globalObject.get();
+                m_baselineJITData->at(i) = m_globalObject.get();
                 break;
             case JITConstantPool::Type::StructureStubInfo: {
                 unsigned index = bitwise_cast<uintptr_t>(entry.pointer());
                 UnlinkedStructureStubInfo& unlinkedStubInfo = jitCode->m_unlinkedStubInfos[index];
-                StructureStubInfo& stubInfo = jitData.m_stubInfos[index];
+                StructureStubInfo& stubInfo = m_baselineJITData->m_stubInfos[index];
                 stubInfo.initializeFromUnlinkedStructureStubInfo(this, unlinkedStubInfo);
-                jitData.m_jitConstantPool[i] = &stubInfo;
+                m_baselineJITData->at(i) = &stubInfo;
                 break;
             }
             case JITConstantPool::Type::FunctionDecl: {
                 unsigned index = bitwise_cast<uintptr_t>(entry.pointer());
-                jitData.m_jitConstantPool[i] = functionDecl(index);
+                m_baselineJITData->at(i) = functionDecl(index);
                 break;
             }
             case JITConstantPool::Type::FunctionExpr: {
                 unsigned index = bitwise_cast<uintptr_t>(entry.pointer());
-                jitData.m_jitConstantPool[i] = functionExpr(index);
+                m_baselineJITData->at(i) = functionExpr(index);
                 break;
             }
             }
@@ -905,7 +903,7 @@ CodeBlock::~CodeBlock()
     // destructors.
 
 #if ENABLE(JIT)
-    if (auto* jitData = m_jitData.get()) {
+    if (auto* jitData = m_baselineJITData.get()) {
         for (auto& stubInfo : jitData->m_stubInfos) {
             stubInfo.aboutToDie();
             stubInfo.deref();
@@ -1192,7 +1190,6 @@ template<typename Visitor>
 void CodeBlock::propagateTransitions(const ConcurrentJSLocker&, Visitor& visitor)
 {
     typename Visitor::SuppressGCVerifierScope suppressScope(visitor);
-    VM& vm = *m_vm;
 
     if (jitType() == JITType::InterpreterThunk) {
         if (m_metadata) {
@@ -1202,9 +1199,9 @@ void CodeBlock::propagateTransitions(const ConcurrentJSLocker&, Visitor& visitor
                 if (!oldStructureID || !newStructureID)
                     return;
 
-                Structure* oldStructure = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* oldStructure = oldStructureID.decode();
                 if (visitor.isMarked(oldStructure)) {
-                    Structure* newStructure = vm.heap.structureIDTable().get(newStructureID);
+                    Structure* newStructure = newStructureID.decode();
                     visitor.appendUnbarriered(newStructure);
                 }
             });
@@ -1220,9 +1217,9 @@ void CodeBlock::propagateTransitions(const ConcurrentJSLocker&, Visitor& visitor
                 if (!visitor.isMarked(property))
                     return;
 
-                Structure* oldStructure = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* oldStructure = oldStructureID.decode();
                 if (visitor.isMarked(oldStructure)) {
-                    Structure* newStructure = vm.heap.structureIDTable().get(newStructureID);
+                    Structure* newStructure = newStructureID.decode();
                     visitor.appendUnbarriered(newStructure);
                 }
             });
@@ -1238,9 +1235,9 @@ void CodeBlock::propagateTransitions(const ConcurrentJSLocker&, Visitor& visitor
                 if (!visitor.isMarked(brand))
                     return;
 
-                Structure* oldStructure = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* oldStructure = oldStructureID.decode();
                 if (visitor.isMarked(oldStructure)) {
-                    Structure* newStructure = vm.heap.structureIDTable().get(newStructureID);
+                    Structure* newStructure = newStructureID.decode();
                     visitor.appendUnbarriered(newStructure);
                 }
             });
@@ -1249,7 +1246,7 @@ void CodeBlock::propagateTransitions(const ConcurrentJSLocker&, Visitor& visitor
 
 #if ENABLE(JIT)
     if (JITCode::isJIT(jitType())) {
-        if (auto* jitData = m_jitData.get()) {
+        if (auto* jitData = m_baselineJITData.get()) {
             for (auto& stubInfo : jitData->m_stubInfos)
                 stubInfo.propagateTransitions(visitor);
         }
@@ -1269,7 +1266,7 @@ void CodeBlock::propagateTransitions(const ConcurrentJSLocker&, Visitor& visitor
         dfgCommon->recordedStatuses.markIfCheap(visitor);
         
         for (StructureID structureID : dfgCommon->m_weakStructureReferences)
-            vm.getStructure(structureID)->markIfCheap(visitor);
+            structureID.decode()->markIfCheap(visitor);
 
         for (auto& transition : dfgCommon->m_transitions) {
             if (shouldMarkTransition(visitor, transition)) {
@@ -1309,6 +1306,7 @@ void CodeBlock::determineLiveness(const ConcurrentJSLocker&, Visitor& visitor)
     
 #if ENABLE(DFG_JIT)
     VM& vm = *m_vm;
+    UNUSED_VARIABLE(vm);
     if (visitor.isMarked(this))
         return;
     
@@ -1333,7 +1331,7 @@ void CodeBlock::determineLiveness(const ConcurrentJSLocker&, Visitor& visitor)
     }
     if (allAreLiveSoFar) {
         for (StructureID structureID : dfgCommon->m_weakStructureReferences) {
-            Structure* structure = vm.getStructure(structureID);
+            Structure* structure = structureID.decode();
             if (!visitor.isMarked(structure)) {
                 allAreLiveSoFar = false;
                 break;
@@ -1367,7 +1365,7 @@ void CodeBlock::finalizeLLIntInlineCaches()
             if (modeMetadata.mode != GetByIdMode::Default)
                 return;
             StructureID oldStructureID = modeMetadata.defaultMode.structureID;
-            if (!oldStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(oldStructureID)))
+            if (!oldStructureID || vm.heap.isMarked(oldStructureID.decode()))
                 return;
             dataLogLnIf(Options::verboseOSR(), "Clearing ", opName, " LLInt property access.");
             LLIntPrototypeLoadAdaptiveStructureWatchpoint::clearLLIntGetByIdCache(modeMetadata);
@@ -1386,12 +1384,21 @@ void CodeBlock::finalizeLLIntInlineCaches()
             clearIfNeeded(metadata.m_modeMetadata, "get by id"_s);
         });
 
+        m_metadata->forEach<OpTryGetById>([&] (auto& metadata) {
+            StructureID oldStructureID = metadata.m_structureID;
+            if (!oldStructureID || vm.heap.isMarked(oldStructureID.decode()))
+                return;
+            dataLogLnIf(Options::verboseOSR(), "Clearing try_get_by_id LLInt property access.");
+            metadata.m_structureID = StructureID();
+            metadata.m_offset = 0;
+        });
+
         m_metadata->forEach<OpGetByIdDirect>([&] (auto& metadata) {
             StructureID oldStructureID = metadata.m_structureID;
-            if (!oldStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(oldStructureID)))
+            if (!oldStructureID || vm.heap.isMarked(oldStructureID.decode()))
                 return;
-            dataLogLnIf(Options::verboseOSR(), "Clearing LLInt property access.");
-            metadata.m_structureID = 0;
+            dataLogLnIf(Options::verboseOSR(), "Clearing get_by_id_direct LLInt property access.");
+            metadata.m_structureID = StructureID();
             metadata.m_offset = 0;
         });
 
@@ -1399,11 +1406,11 @@ void CodeBlock::finalizeLLIntInlineCaches()
             JSCell* property = metadata.m_property.get();
             StructureID structureID = metadata.m_structureID;
 
-            if ((!property || vm.heap.isMarked(property)) && (!structureID || vm.heap.isMarked(vm.heap.structureIDTable().get(structureID))))
+            if ((!property || vm.heap.isMarked(property)) && (!structureID || vm.heap.isMarked(structureID.decode())))
                 return;
 
             dataLogLnIf(Options::verboseOSR(), "Clearing LLInt private property access.");
-            metadata.m_structureID = 0;
+            metadata.m_structureID = StructureID();
             metadata.m_offset = 0;
             metadata.m_property.clear();
         });
@@ -1412,14 +1419,14 @@ void CodeBlock::finalizeLLIntInlineCaches()
             StructureID oldStructureID = metadata.m_oldStructureID;
             StructureID newStructureID = metadata.m_newStructureID;
             StructureChain* chain = metadata.m_structureChain.get();
-            if ((!oldStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(oldStructureID)))
-                && (!newStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(newStructureID)))
+            if ((!oldStructureID || vm.heap.isMarked(oldStructureID.decode()))
+                && (!newStructureID || vm.heap.isMarked(newStructureID.decode()))
                 && (!chain || vm.heap.isMarked(chain)))
                 return;
             dataLogLnIf(Options::verboseOSR(), "Clearing LLInt put transition.");
-            metadata.m_oldStructureID = 0;
+            metadata.m_oldStructureID = StructureID();
             metadata.m_offset = 0;
-            metadata.m_newStructureID = 0;
+            metadata.m_newStructureID = StructureID();
             metadata.m_structureChain.clear();
         });
 
@@ -1427,15 +1434,15 @@ void CodeBlock::finalizeLLIntInlineCaches()
             StructureID oldStructureID = metadata.m_oldStructureID;
             StructureID newStructureID = metadata.m_newStructureID;
             JSCell* property = metadata.m_property.get();
-            if ((!oldStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(oldStructureID)))
+            if ((!oldStructureID || vm.heap.isMarked(oldStructureID.decode()))
                 && (!property || vm.heap.isMarked(property))
-                && (!newStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(newStructureID))))
+                && (!newStructureID || vm.heap.isMarked(newStructureID.decode())))
                 return;
 
             dataLogLnIf(Options::verboseOSR(), "Clearing LLInt put_private_name transition.");
-            metadata.m_oldStructureID = 0;
+            metadata.m_oldStructureID = StructureID();
             metadata.m_offset = 0;
-            metadata.m_newStructureID = 0;
+            metadata.m_newStructureID = StructureID();
             metadata.m_property.clear();
         });
 
@@ -1443,37 +1450,37 @@ void CodeBlock::finalizeLLIntInlineCaches()
             StructureID oldStructureID = metadata.m_oldStructureID;
             StructureID newStructureID = metadata.m_newStructureID;
             JSCell* brand = metadata.m_brand.get();
-            if ((!oldStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(oldStructureID)))
+            if ((!oldStructureID || vm.heap.isMarked(oldStructureID.decode()))
                 && (!brand || vm.heap.isMarked(brand))
-                && (!newStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(newStructureID))))
+                && (!newStructureID || vm.heap.isMarked(newStructureID.decode())))
                 return;
 
             dataLogLnIf(Options::verboseOSR(), "Clearing LLInt set_private_brand transition.");
-            metadata.m_oldStructureID = 0;
-            metadata.m_newStructureID = 0;
+            metadata.m_oldStructureID = StructureID();
+            metadata.m_newStructureID = StructureID();
             metadata.m_brand.clear();
         });
 
         m_metadata->forEach<OpCheckPrivateBrand>([&] (auto& metadata) {
             StructureID structureID = metadata.m_structureID;
             JSCell* brand = metadata.m_brand.get();
-            if ((!structureID || vm.heap.isMarked(vm.heap.structureIDTable().get(structureID)))
+            if ((!structureID || vm.heap.isMarked(structureID.decode()))
                 && (!brand || vm.heap.isMarked(brand)))
                 return;
 
-            dataLogLnIf(Options::verboseOSR(), "Clearing LLInt set_private_brand transition.");
-            metadata.m_structureID = 0;
+            dataLogLnIf(Options::verboseOSR(), "Clearing LLInt check_private_brand transition.");
+            metadata.m_structureID = StructureID();
             metadata.m_brand.clear();
         });
 
         m_metadata->forEach<OpToThis>([&] (auto& metadata) {
-            if (!metadata.m_cachedStructureID || vm.heap.isMarked(vm.heap.structureIDTable().get(metadata.m_cachedStructureID)))
+            if (!metadata.m_cachedStructureID || vm.heap.isMarked(metadata.m_cachedStructureID.decode()))
                 return;
             if (Options::verboseOSR()) {
-                Structure* structure = vm.heap.structureIDTable().get(metadata.m_cachedStructureID);
+                Structure* structure = metadata.m_cachedStructureID.decode();
                 dataLogF("Clearing LLInt to_this with structure %p.\n", structure);
             }
-            metadata.m_cachedStructureID = 0;
+            metadata.m_cachedStructureID = StructureID();
             metadata.m_toThisStatus = merge(metadata.m_toThisStatus, ToThisClearedByGC);
         });
 
@@ -1560,7 +1567,7 @@ void CodeBlock::finalizeLLIntInlineCaches()
             return true;
         };
 
-        if (!vm.heap.isMarked(vm.heap.structureIDTable().get(std::get<0>(pair.key))))
+        if (!vm.heap.isMarked(std::get<0>(pair.key).decode()))
             return clear();
 
         for (const LLIntPrototypeLoadAdaptiveStructureWatchpoint& watchpoint : pair.value) {
@@ -1573,20 +1580,9 @@ void CodeBlock::finalizeLLIntInlineCaches()
 }
 
 #if ENABLE(JIT)
-CodeBlock::JITData& CodeBlock::ensureJITDataSlow(const ConcurrentJSLocker&)
-{
-    ASSERT(!m_jitData);
-    auto jitData = makeUnique<JITData>();
-    // calleeSaveRegisters() can access m_jitData without taking a lock from Baseline JIT. This is OK since JITData::m_calleeSaveRegisters is filled in DFG and FTL CodeBlocks.
-    // But we should not see garbage pointer in that case. We ensure JITData::m_calleeSaveRegisters is initialized as nullptr before exposing it to BaselineJIT by store-store-fence.
-    WTF::storeStoreFence();
-    m_jitData = WTFMove(jitData);
-    return *m_jitData;
-}
-
 void CodeBlock::finalizeJITInlineCaches()
 {
-    if (auto* jitData = m_jitData.get()) {
+    if (auto* jitData = m_baselineJITData.get()) {
         for (auto& stubInfo : jitData->m_stubInfos) {
             ConcurrentJSLockerBase locker(NoLockingNecessary);
             stubInfo.visitWeakReferences(locker, this);
@@ -1616,7 +1612,7 @@ void CodeBlock::finalizeUnconditionally(VM& vm)
     if (JITCode::couldBeInterpreted(jitType())) {
         finalizeLLIntInlineCaches();
         // If the CodeBlock is DFG or FTL, CallLinkInfo in metadata is not related.
-        forEachLLIntOrBaselineCallLinkInfo([&](CallLinkInfo& callLinkInfo) {
+        forEachLLIntOrBaselineCallLinkInfo([&](BaselineCallLinkInfo& callLinkInfo) {
             callLinkInfo.visitWeak(vm);
         });
     }
@@ -1684,13 +1680,13 @@ void CodeBlock::destroy(JSCell* cell)
 void CodeBlock::getICStatusMap(const ConcurrentJSLocker&, ICStatusMap& result)
 {
     if (JITCode::couldBeInterpreted(jitType())) {
-        forEachLLIntOrBaselineCallLinkInfo([&](CallLinkInfo& callLinkInfo) {
+        forEachLLIntOrBaselineCallLinkInfo([&](BaselineCallLinkInfo& callLinkInfo) {
             result.add(callLinkInfo.codeOrigin(), ICStatus()).iterator->value.callLinkInfo = &callLinkInfo;
         });
     }
 #if ENABLE(JIT)
     if (JITCode::isJIT(jitType())) {
-        if (auto* jitData = m_jitData.get()) {
+        if (auto* jitData = m_baselineJITData.get()) {
             for (auto& stubInfo : jitData->m_stubInfos)
                 result.add(stubInfo.codeOrigin, ICStatus()).iterator->value.stubInfo = &stubInfo;
         }
@@ -1729,7 +1725,7 @@ void CodeBlock::getICStatusMap(ICStatusMap& result)
 StructureStubInfo* CodeBlock::findStubInfo(CodeOrigin codeOrigin)
 {
     ConcurrentJSLocker locker(m_lock);
-    if (auto* jitData = m_jitData.get()) {
+    if (auto* jitData = m_baselineJITData.get()) {
         for (auto& stubInfo : jitData->m_stubInfos) {
             if (stubInfo.codeOrigin == codeOrigin)
                 return &stubInfo;
@@ -1777,32 +1773,12 @@ CallLinkInfo* CodeBlock::getCallLinkInfoForBytecodeIndex(const ConcurrentJSLocke
     return nullptr;
 }
 
-void CodeBlock::setCalleeSaveRegisters(RegisterSet registerSet)
-{
-    auto calleeSaveRegisters = RegisterAtOffsetList(registerSet);
-
-    ConcurrentJSLocker locker(m_lock);
-    auto& jitData = ensureJITData(locker);
-    jitData.m_calleeSaveRegisters = WTFMove(calleeSaveRegisters);
-    WTF::storeStoreFence();
-    jitData.m_hasCalleeSaveRegisters = true;
-}
-
-void CodeBlock::setCalleeSaveRegisters(RegisterAtOffsetList&& registerAtOffsetList)
-{
-    ConcurrentJSLocker locker(m_lock);
-    auto& jitData = ensureJITData(locker);
-    jitData.m_calleeSaveRegisters = WTFMove(registerAtOffsetList);
-    WTF::storeStoreFence();
-    jitData.m_hasCalleeSaveRegisters = true;
-}
-
-void CodeBlock::resetJITData()
+void CodeBlock::resetBaselineJITData()
 {
     RELEASE_ASSERT(!JITCode::isJIT(jitType()));
     ConcurrentJSLocker locker(m_lock);
     
-    if (auto* jitData = m_jitData.get()) {
+    if (auto* jitData = m_baselineJITData.get()) {
         // We can clear these because no other thread will have references to any stub infos, call
         // link infos, or by val infos if we don't have JIT code. Attempts to query these data
         // structures using the concurrent API (getICStatusMap and friends) will return nothing if we
@@ -1823,7 +1799,7 @@ void CodeBlock::resetJITData()
         // We can clear this because the DFG's queries to these data structures are guarded by whether
         // there is JIT code.
 
-        m_jitData = nullptr;
+        m_baselineJITData = nullptr;
     }
 }
 #endif
@@ -1869,7 +1845,7 @@ void CodeBlock::stronglyVisitStrongReferences(const ConcurrentJSLocker& locker, 
     });
 
 #if ENABLE(JIT)
-    if (auto* jitData = m_jitData.get()) {
+    if (auto* jitData = m_baselineJITData.get()) {
         for (auto& stubInfo : jitData->m_stubInfos)
             stubInfo.visitAggregate(visitor);
     }
@@ -1908,7 +1884,7 @@ void CodeBlock::stronglyVisitWeakReferences(const ConcurrentJSLocker&, Visitor& 
         visitor.append(weakReference);
 
     for (StructureID structureID : dfgCommon->m_weakStructureReferences)
-        visitor.appendUnbarriered(visitor.vm().getStructure(structureID));
+        visitor.appendUnbarriered(structureID.decode());
 #endif    
 }
 
@@ -2134,10 +2110,7 @@ void CodeBlock::shrinkToFit(const ConcurrentJSLocker&, ShrinkMode shrinkMode)
 void CodeBlock::linkIncomingPolymorphicCall(CallFrame* callerFrame, PolymorphicCallNode* incoming)
 {
     noticeIncomingCall(callerFrame);
-    {
-        ConcurrentJSLocker locker(m_lock);
-        ensureJITData(locker).m_incomingPolymorphicCalls.push(incoming);
-    }
+    m_incomingPolymorphicCalls.push(incoming);
 }
 #endif // ENABLE(JIT)
 
@@ -2149,19 +2122,12 @@ void CodeBlock::linkIncomingCall(CallFrame* callerFrame, CallLinkInfo* incoming)
 
 void CodeBlock::unlinkIncomingCalls()
 {
-    while (m_incomingCalls.begin() != m_incomingCalls.end())
+    while (!m_incomingCalls.isEmpty())
         m_incomingCalls.begin()->unlink(vm());
 #if ENABLE(JIT)
-    JITData* jitData = nullptr;
-    {
-        ConcurrentJSLocker locker(m_lock);
-        jitData = m_jitData.get();
-    }
-    if (jitData) {
-        while (jitData->m_incomingPolymorphicCalls.begin() != jitData->m_incomingPolymorphicCalls.end())
-            jitData->m_incomingPolymorphicCalls.begin()->unlink(vm());
-    }
-#endif // ENABLE(JIT)
+    while (!m_incomingPolymorphicCalls.isEmpty())
+        m_incomingPolymorphicCalls.begin()->unlink(vm());
+#endif
 }
 
 CodeBlock* CodeBlock::newReplacement()
@@ -2325,7 +2291,7 @@ void CodeBlock::jettison(Profiler::JettisonReason reason, ReoptimizationMode mod
                 callLinkInfo->setClearedByJettison();
 #endif
         } else {
-            forEachLLIntOrBaselineCallLinkInfo([&](CallLinkInfo& callLinkInfo) {
+            forEachLLIntOrBaselineCallLinkInfo([&](BaselineCallLinkInfo& callLinkInfo) {
                 callLinkInfo.setClearedByJettison();
             });
         }
@@ -2479,18 +2445,6 @@ unsigned CodeBlock::reoptimizationRetryCounter() const
 }
 
 #if !ENABLE(C_LOOP)
-const RegisterAtOffsetList* CodeBlock::calleeSaveRegisters() const
-{
-#if ENABLE(JIT)
-    if (auto* jitData = m_jitData.get()) {
-        if (jitData->m_hasCalleeSaveRegisters)
-            return &jitData->m_calleeSaveRegisters;
-    }
-#endif
-    return &RegisterAtOffsetList::llintBaselineCalleeSaveRegisters();
-}
-
-    
 static size_t roundCalleeSaveSpaceAsVirtualRegisters(size_t calleeSaveRegisters)
 {
 
@@ -2503,9 +2457,9 @@ size_t CodeBlock::llintBaselineCalleeSaveSpaceAsVirtualRegisters()
     return roundCalleeSaveSpaceAsVirtualRegisters(numberOfLLIntBaselineCalleeSaveRegisters());
 }
 
-size_t CodeBlock::calleeSaveSpaceAsVirtualRegisters()
+size_t CodeBlock::calleeSaveSpaceAsVirtualRegisters(const RegisterAtOffsetList& calleeSaveRegisters)
 {
-    return roundCalleeSaveSpaceAsVirtualRegisters(calleeSaveRegisters()->size());
+    return roundCalleeSaveSpaceAsVirtualRegisters(calleeSaveRegisters.size());
 }
 #endif
 
@@ -3516,7 +3470,7 @@ std::optional<CodeOrigin> CodeBlock::findPC(void* pc)
 
     {
         ConcurrentJSLocker locker(m_lock);
-        if (auto* jitData = m_jitData.get()) {
+        if (auto* jitData = m_baselineJITData.get()) {
             for (auto& stubInfo : jitData->m_stubInfos) {
                 if (stubInfo.containsPC(pc))
                     return stubInfo.codeOrigin;

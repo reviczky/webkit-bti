@@ -35,34 +35,20 @@ class RecorderImpl : public Recorder {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(RecorderImpl);
 public:
-    class Delegate;
-    WEBCORE_EXPORT RecorderImpl(DisplayList&, const GraphicsContextState&, const FloatRect& initialClip, const AffineTransform&, Delegate* = nullptr, DrawGlyphsRecorder::DeconstructDrawGlyphs = DrawGlyphsRecorder::DeconstructDrawGlyphs::Yes);
+    WEBCORE_EXPORT RecorderImpl(DisplayList&, const GraphicsContextState&, const FloatRect& initialClip, const AffineTransform&, DrawGlyphsRecorder::DeconstructDrawGlyphs = DrawGlyphsRecorder::DeconstructDrawGlyphs::Yes);
     RecorderImpl(RecorderImpl& parent, const GraphicsContextState&, const FloatRect& initialClip, const AffineTransform& initialCTM);
 
     WEBCORE_EXPORT virtual ~RecorderImpl();
 
     bool isEmpty() const { return m_displayList.isEmpty(); }
 
-    class Delegate {
-    public:
-        virtual ~Delegate() { }
-        virtual bool canAppendItemOfType(ItemType) { return false; }
-        virtual void recordNativeImageUse(NativeImage&) { }
-        virtual bool isCachedImageBuffer(const ImageBuffer&) const { return false; }
-        virtual void recordFontUse(Font&) { }
-        virtual void recordImageBufferUse(ImageBuffer&) { }
-        virtual RenderingMode renderingMode() const { return RenderingMode::Unaccelerated; }
-    };
-
-    WEBCORE_EXPORT void getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& sourceRect) final;
-    WEBCORE_EXPORT void putPixelBuffer(const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat) final;
+    void getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& sourceRect) final;
+    void putPixelBuffer(const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat) final;
+    void convertToLuminanceMask() final { }
+    void transformToColorSpace(const DestinationColorSpace&) final { }
     void flushContext(GraphicsContextFlushIdentifier identifier) final { append<FlushContext>(identifier); }
 
 private:
-    // FIXME: Maybe remove this?
-    bool canDrawImageBuffer(const ImageBuffer&) const final;
-    RenderingMode renderingMode() const final;
-
     void recordSave() final;
     void recordRestore() final;
     void recordTranslate(float x, float y) final;
@@ -86,6 +72,7 @@ private:
     void recordClipPath(const Path&, WindRule) final;
     void recordBeginClipToDrawingCommands(const FloatRect& destination, DestinationColorSpace) final;
     void recordEndClipToDrawingCommands(const FloatRect& destination) final;
+    void recordDrawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Filter&) final;
     void recordDrawGlyphs(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode) final;
     void recordDrawImageBuffer(RenderingResourceIdentifier imageBufferIdentifier, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions&) final;
     void recordDrawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions&) final;
@@ -133,18 +120,16 @@ private:
 #endif
     void recordApplyDeviceScaleFactor(float) final;
 
-    void recordResourceUse(NativeImage&) final;
-    void recordResourceUse(Font&) final;
-    void recordResourceUse(ImageBuffer&) final;
+    bool recordResourceUse(NativeImage&) final;
+    bool recordResourceUse(ImageBuffer&) final;
+    bool recordResourceUse(const SourceImage&) final;
+    bool recordResourceUse(Font&) final;
 
     std::unique_ptr<GraphicsContext> createNestedContext(const FloatRect& initialClip, const AffineTransform& initialCTM) final;
 
     template<typename T, class... Args>
     void append(Args&&... args)
     {
-        if (UNLIKELY(!canAppendItemOfType(T::itemType)))
-            return;
-
         m_displayList.append<T>(std::forward<Args>(args)...);
 
         if constexpr (T::isDrawingItem) {
@@ -162,10 +147,8 @@ private:
     }
 
     FloatRect extentFromLocalBounds(const FloatRect&) const;
-    WEBCORE_EXPORT bool canAppendItemOfType(ItemType) const;
 
     DisplayList& m_displayList;
-    Delegate* m_delegate { nullptr };
     bool m_isNested { false };
 };
 

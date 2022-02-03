@@ -73,6 +73,10 @@
 #include <wtf/WallTime.h>
 #include <wtf/unicode/CharacterNames.h>
 
+#if ENABLE(SERVICE_CONTROLS)
+#include "ImageControlsMac.h"
+#endif
+
 
 namespace WebCore {
 
@@ -161,7 +165,7 @@ std::unique_ptr<ContextMenu> ContextMenuController::maybeCreateContextMenu(Event
         return nullptr;
 
     m_context = ContextMenuContext(contextType, result);
-
+    
     return makeUnique<ContextMenu>();
 }
 
@@ -1532,6 +1536,17 @@ void ContextMenuController::showContextMenuAt(Frame& frame, const IntPoint& clic
     bool handled = frame.eventHandler().sendContextMenuEvent(mouseEvent);
     if (handled)
         m_client.showContextMenu();
+}
+
+#endif
+
+#if ENABLE(SERVICE_CONTROLS)
+
+void ContextMenuController::showImageControlsMenu(Event& event)
+{
+    clearContextMenu();
+    handleContextMenuEvent(event);
+    m_client.showContextMenu();
 }
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,61 +27,48 @@
 
 #include "Filter.h"
 #include "IntRectExtent.h"
-#include "LayoutRect.h"
-#include <wtf/TypeCasts.h>
 
 namespace WebCore {
 
-class FilterEffect;
-class FilterEffectRenderer;
 class FilterOperations;
-class GraphicsContext;
-class ReferenceFilterOperation;
 class RenderElement;
 class SourceGraphic;
-
-enum class FilterConsumer { FilterProperty, FilterFunction };
 
 class CSSFilter final : public Filter {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static RefPtr<CSSFilter> create(const FilterOperations&, RenderingMode, float scaleFactor = 1);
+    static RefPtr<CSSFilter> create(RenderElement&, const FilterOperations&, RenderingMode, const FloatSize& filterScale, ClipOperation, const FloatRect& targetBoundingBox);
+    WEBCORE_EXPORT static RefPtr<CSSFilter> create(Vector<Ref<FilterFunction>>&&);
 
-    void setSourceImageRect(const FloatRect&);
-    bool buildFilterFunctions(RenderElement&, const FilterOperations&, FilterConsumer);
-    void determineFilterPrimitiveSubregion();
+    const Vector<Ref<FilterFunction>>& functions() const { return m_functions; }
+
+    void setFilterRegion(const FloatRect&);
 
     bool hasFilterThatMovesPixels() const { return m_hasFilterThatMovesPixels; }
     bool hasFilterThatShouldBeRestrictedBySecurityOrigin() const { return m_hasFilterThatShouldBeRestrictedBySecurityOrigin; }
 
-    RefPtr<FilterEffect> lastEffect();
-    GraphicsContext* inputContext();
-    IntOutsets outsets() const override;
+    FilterEffectVector effectsOfType(FilterFunction::Type) const final;
 
-    void clearIntermediateResults();
-    bool apply() override;
+    IntOutsets outsets() const final;
 
-    ImageBuffer* output();
-
-    bool updateBackingStoreRect(const FloatRect& filterRect);
-    void allocateBackingStoreIfNeeded(const GraphicsContext&);
-
-    IntRect outputRect();
-
-    LayoutRect computeSourceImageRectForDirtyRect(const LayoutRect& filterBoxRect, const LayoutRect& dirtyRect);
+    RefPtr<FilterImage> apply(FilterImage* sourceImage, FilterResults&) final;
 
 private:
-    CSSFilter(bool hasFilterThatMovesPixels, bool hasFilterThatShouldBeRestrictedBySecurityOrigin, float scaleFactor);
+    CSSFilter(RenderingMode, const FloatSize& filterScale, ClipOperation, bool hasFilterThatMovesPixels, bool hasFilterThatShouldBeRestrictedBySecurityOrigin);
+    CSSFilter(Vector<Ref<FilterFunction>>&&);
+    
+    bool buildFilterFunctions(RenderElement&, const FilterOperations&, const FloatRect& targetBoundingBox);
 
-    bool m_graphicsBufferAttached { false };
+    bool supportsAcceleratedRendering() const final;
+
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, FilterRepresentation) const final;
+
     bool m_hasFilterThatMovesPixels { false };
     bool m_hasFilterThatShouldBeRestrictedBySecurityOrigin { false };
 
     Vector<Ref<FilterFunction>> m_functions;
 
     mutable IntOutsets m_outsets;
-
-    std::unique_ptr<FilterEffectRenderer> m_filterRenderer;
 };
 
 } // namespace WebCore

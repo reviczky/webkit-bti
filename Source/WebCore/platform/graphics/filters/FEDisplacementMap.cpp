@@ -4,7 +4,7 @@
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) Research In Motion Limited 2010. All rights reserved.
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,6 +26,7 @@
 #include "FEDisplacementMap.h"
 
 #include "FEDisplacementMapSoftwareApplier.h"
+#include "Filter.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
@@ -67,25 +68,30 @@ bool FEDisplacementMap::setScale(float scale)
     return true;
 }
 
-const DestinationColorSpace& FEDisplacementMap::resultColorSpace() const
+FloatRect FEDisplacementMap::calculateImageRect(const Filter& filter, const FilterImageVector&, const FloatRect& primitiveSubregion) const
+{
+    return filter.maxEffectRect(primitiveSubregion);
+}
+
+const DestinationColorSpace& FEDisplacementMap::resultColorSpace(const FilterImageVector& inputs) const
 {
     // Spec: The 'color-interpolation-filters' property only applies to the 'in2' source image
     // and does not apply to the 'in' source image. The 'in' source image must remain in its
     // current color space.
     // The result is in that same color space because it is a displacement of the 'in' image.
-    return inputEffect(0)->resultColorSpace();
+    return inputs[0]->colorSpace();
 }
 
-void FEDisplacementMap::transformResultColorSpace(FilterEffect* in, const int index)
+void FEDisplacementMap::transformInputsColorSpace(const FilterImageVector& inputs) const
 {
     // Do not transform the first primitive input, as per the spec.
-    if (index)
-        in->transformResultColorSpace(operatingColorSpace());
+    ASSERT(inputs.size() == 2);
+    inputs[1]->transformToColorSpace(operatingColorSpace());
 }
 
-bool FEDisplacementMap::platformApplySoftware(const Filter& filter)
+std::unique_ptr<FilterEffectApplier> FEDisplacementMap::createSoftwareApplier() const
 {
-    return FEDisplacementMapSoftwareApplier(*this).apply(filter, inputEffects());
+    return FilterEffectApplier::create<FEDisplacementMapSoftwareApplier>(*this);
 }
 
 static TextStream& operator<<(TextStream& ts, const ChannelSelectorType& type)
@@ -110,17 +116,16 @@ static TextStream& operator<<(TextStream& ts, const ChannelSelectorType& type)
     return ts;
 }
 
-TextStream& FEDisplacementMap::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FEDisplacementMap::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feDisplacementMap";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " scale=\"" << m_scale << "\" "
-       << "xChannelSelector=\"" << m_xChannelSelector << "\" "
-       << "yChannelSelector=\"" << m_yChannelSelector << "\"]\n";
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
-    inputEffect(1)->externalRepresentation(ts, representation);
+    ts << " scale=\"" << m_scale << "\"";
+    ts << " xChannelSelector=\"" << m_xChannelSelector << "\"";
+    ts << " yChannelSelector=\"" << m_yChannelSelector << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

@@ -69,8 +69,10 @@
 #include "InspectorClient.h"
 #include "InspectorController.h"
 #include "InspectorInstrumentation.h"
+#include "LegacyRenderSVGRoot.h"
 #include "Logging.h"
 #include "MemoryCache.h"
+#include "ModalContainerObserver.h"
 #include "NullGraphicsContext.h"
 #include "OverflowEvent.h"
 #include "Page.h"
@@ -138,8 +140,8 @@
 #include "LayoutContext.h"
 #endif
 
-#define PAGE_ID frame().pageID().value_or(PageIdentifier()).toUInt64()
-#define FRAME_ID frame().frameID().value_or(FrameIdentifier()).toUInt64()
+#define PAGE_ID valueOrDefault(frame().pageID()).toUInt64()
+#define FRAME_ID valueOrDefault(frame().frameID()).toUInt64()
 #define FRAMEVIEW_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] FrameView::" fmt, this, PAGE_ID, FRAME_ID, frame().isMainFrame(), ##__VA_ARGS__)
 
 namespace WebCore {
@@ -647,10 +649,21 @@ void FrameView::applyOverflowToViewport(const RenderElement& renderer, Scrollbar
     Overflow overflowX = renderer.effectiveOverflowX();
     Overflow overflowY = renderer.effectiveOverflowY();
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGRoot>(renderer)) {
         // FIXME: evaluate if we can allow overflow for these cases too.
         // Overflow is always hidden when stand-alone SVG documents are embedded.
         if (downcast<RenderSVGRoot>(renderer).isEmbeddedThroughFrameContainingSVGDocument()) {
+            overflowX = Overflow::Hidden;
+            overflowY = Overflow::Hidden;
+        }
+    }
+#endif
+
+    if (is<LegacyRenderSVGRoot>(renderer)) {
+        // FIXME: evaluate if we can allow overflow for these cases too.
+        // Overflow is always hidden when stand-alone SVG documents are embedded.
+        if (downcast<LegacyRenderSVGRoot>(renderer).isEmbeddedThroughFrameContainingSVGDocument()) {
             overflowX = Overflow::Hidden;
             overflowY = Overflow::Hidden;
         }
@@ -1217,7 +1230,7 @@ void FrameView::forceLayoutParentViewIfNeeded()
     if (!contentBox)
         return;
 
-    auto& svgRoot = downcast<RenderSVGRoot>(*contentBox);
+    auto& svgRoot = downcast<LegacyRenderSVGRoot>(*contentBox);
     if (svgRoot.everHadLayout() && !svgRoot.needsLayout())
         return;
 
@@ -1228,8 +1241,8 @@ void FrameView::forceLayoutParentViewIfNeeded()
     // embeddedContentBox() returns nullptr, as long as the embedded document isn't loaded yet. Before
     // bothering to lay out the SVG document, mark the ownerRenderer needing layout and ask its
     // FrameView for a layout. After that the RenderEmbeddedObject (ownerRenderer) carries the
-    // correct size, which RenderSVGRoot::computeReplacedLogicalWidth/Height rely on, when laying
-    // out for the first time, or when the RenderSVGRoot size has changed dynamically (eg. via <script>).
+    // correct size, which LegacyRenderSVGRoot::computeReplacedLogicalWidth/Height rely on, when laying
+    // out for the first time, or when the LegacyRenderSVGRoot size has changed dynamically (eg. via <script>).
 
     ownerRenderer->setNeedsLayoutAndPrefWidthsRecalc();
     ownerRenderer->view().frameView().layoutContext().scheduleLayout();
@@ -1344,8 +1357,8 @@ RenderBox* FrameView::embeddedContentBox() const
     RenderObject* firstChild = renderView->firstChild();
 
     // Curently only embedded SVG documents participate in the size-negotiation logic.
-    if (is<RenderSVGRoot>(firstChild))
-        return downcast<RenderSVGRoot>(firstChild);
+    if (is<LegacyRenderSVGRoot>(firstChild))
+        return downcast<LegacyRenderSVGRoot>(firstChild);
 
     return nullptr;
 }
@@ -1454,12 +1467,12 @@ bool FrameView::usesAsyncScrolling() const
     return false;
 }
 
-bool FrameView::mockScrollAnimatorEnabled() const
+bool FrameView::mockScrollbarsControllerEnabled() const
 {
-    return frame().settings().mockScrollAnimatorEnabled();
+    return frame().settings().mockScrollbarsControllerEnabled();
 }
 
-void FrameView::logMockScrollAnimatorMessage(const String& message) const
+void FrameView::logMockScrollbarsControllerMessage(const String& message) const
 {
     auto document = frame().document();
     if (!document)
@@ -1703,7 +1716,7 @@ void FrameView::setLayoutViewportOverrideRect(std::optional<LayoutRect> rect, Tr
     if (oldRect.height() != layoutViewportRect().height())
         layoutTriggering = TriggerLayoutOrNot::Yes;
 
-    LOG_WITH_STREAM(Scrolling, stream << "\nFrameView " << this << " setLayoutViewportOverrideRect() - changing override layout viewport from " << oldRect << " to " << m_layoutViewportOverrideRect.value_or(LayoutRect()) << " layoutTriggering " << (layoutTriggering == TriggerLayoutOrNot::Yes ? "yes" : "no"));
+    LOG_WITH_STREAM(Scrolling, stream << "\nFrameView " << this << " setLayoutViewportOverrideRect() - changing override layout viewport from " << oldRect << " to " << valueOrDefault(m_layoutViewportOverrideRect) << " layoutTriggering " << (layoutTriggering == TriggerLayoutOrNot::Yes ? "yes" : "no"));
 
     if (oldRect != layoutViewportRect() && layoutTriggering == TriggerLayoutOrNot::Yes)
         setViewportConstrainedObjectsNeedLayout();
@@ -2239,7 +2252,7 @@ bool FrameView::scrollToFragment(const URL& url)
     if (scrollToFragmentInternal(fragmentIdentifier))
         return true;
 
-    if (scrollToFragmentInternal(decodeURLEscapeSequences(fragmentIdentifier)))
+    if (scrollToFragmentInternal(PAL::decodeURLEscapeSequences(fragmentIdentifier)))
         return true;
 
     resetScrollAnchor();
@@ -2615,10 +2628,9 @@ void FrameView::updateLayerPositionsAfterScrolling()
         return;
 
     if (!layoutContext().isLayoutNested() && hasViewportConstrainedObjects()) {
-        if (RenderView* renderView = this->renderView()) {
+        if (auto* renderView = this->renderView()) {
             updateWidgetPositions();
-            if (auto* scrollableArea = renderView->layer()->scrollableArea())
-                scrollableArea->updateLayerPositionsAfterDocumentScroll();
+            renderView->layer()->updateLayerPositionsAfterDocumentScroll();
         }
     }
 }
@@ -2792,7 +2804,7 @@ void FrameView::availableContentSizeChanged(AvailableSizeChangeReason reason)
         // FIXME: Merge this logic with m_setNeedsLayoutWasDeferred and find a more appropriate
         // way of handling potential recursive layouts when the viewport is resized to accomodate
         // the content but the content always overflows the viewport. See webkit.org/b/165781.
-        if (!(layoutContext().layoutPhase() == FrameViewLayoutContext::LayoutPhase::InViewSizeAdjust && useFixedLayout()))
+        if (layoutContext().layoutPhase() == FrameViewLayoutContext::LayoutPhase::InViewSizeAdjust)
             document->updateViewportUnitsOnResize();
     }
 
@@ -2896,14 +2908,21 @@ void FrameView::updateTiledBackingAdaptiveSizing()
 // FIXME: This shouldn't be called from outside; FrameView should call it when the relevant viewports change.
 void FrameView::layoutOrVisualViewportChanged()
 {
-    if (!frame().settings().visualViewportAPIEnabled())
-        return;
+    if (frame().settings().visualViewportAPIEnabled()) {
+        if (auto* window = frame().window())
+            window->visualViewport().update();
 
-    if (auto* window = frame().window())
-        window->visualViewport().update();
+        if (auto scrollingCoordinator = this->scrollingCoordinator())
+            scrollingCoordinator->frameViewVisualViewportChanged(*this);
+    }
 
-    if (auto scrollingCoordinator = this->scrollingCoordinator())
-        scrollingCoordinator->frameViewVisualViewportChanged(*this);
+    auto layoutViewportSize = layoutViewportRect().size();
+    if (layoutViewportSize != m_lastLayoutViewportSize) {
+        if (auto* document = frame().document())
+            document->updateViewportUnitsOnResize();
+
+        m_lastLayoutViewportSize = layoutViewportSize;
+    }
 }
 
 void FrameView::unobscuredContentSizeChanged()
@@ -2911,9 +2930,6 @@ void FrameView::unobscuredContentSizeChanged()
 #if PLATFORM(IOS_FAMILY)
     updateTiledBackingAdaptiveSizing();
 #endif
-
-    if (auto* document = frame().document())
-        document->updateViewportUnitsOnResize();
 }
 
 void FrameView::loadProgressingStatusChanged()
@@ -3417,6 +3433,9 @@ void FrameView::performPostLayoutTasks()
 
     if (AXObjectCache* cache = frame().document()->existingAXObjectCache())
         cache->performDeferredCacheUpdate();
+
+    if (auto* observer = frame().document()->modalContainerObserver())
+        observer->updateModalContainerIfNeeded(*this);
 }
 
 IntSize FrameView::sizeForResizeEvent() const
@@ -5674,7 +5693,7 @@ FloatSize FrameView::calculateSizeForCSSViewportUnitsOverride(std::optional<Over
 
 FloatSize FrameView::sizeForCSSDynamicViewportUnits() const
 {
-    return unobscuredContentRectIncludingScrollbars().size();
+    return rectForFixedPositionLayout().size();
 }
 
 FloatSize FrameView::sizeForCSSDefaultViewportUnits() const

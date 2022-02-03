@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,6 +25,9 @@
 
 #pragma once
 
+#include "FilterEffectGeometry.h"
+#include "FilterImage.h"
+#include "FilterImageVector.h"
 #include "FloatRect.h"
 #include "IntRectExtent.h"
 #include <wtf/RefCounted.h>
@@ -37,6 +40,12 @@ class TextStream;
 namespace WebCore {
 
 class Filter;
+class FilterResults;
+
+enum class FilterRepresentation : uint8_t {
+    TestOutput,
+    Debugging
+};
 
 class FilterFunction : public RefCounted<FilterFunction> {
 public:
@@ -84,9 +93,11 @@ public:
     static AtomString sourceGraphicName() { return filterName(Type::SourceGraphic); }
     AtomString filterName() const { return filterName(m_filterType); }
 
-    virtual bool apply(const Filter&) { return false; }
-    virtual IntOutsets outsets() const { return { }; }
-    virtual void clearResult() { }
+    virtual bool supportsAcceleratedRendering() const { return false; }
+    virtual RefPtr<FilterImage> apply(const Filter&, FilterImage&, FilterResults&) { return nullptr; }
+    virtual IntOutsets outsets(const Filter&) const { return { }; }
+
+    virtual WTF::TextStream& externalRepresentation(WTF::TextStream&, FilterRepresentation = FilterRepresentation::TestOutput) const = 0;
 
 private:
     Type m_filterType;

@@ -37,10 +37,12 @@
 #include "HTMLDivElement.h"
 #include "HTMLMediaElement.h"
 #include "HTMLStyleElement.h"
+#include "ImageOverlayController.h"
 #include "MediaControlsHost.h"
 #include "Page.h"
 #include "Quirks.h"
 #include "RenderImage.h"
+#include "RenderText.h"
 #include "ShadowRoot.h"
 #include "SimpleRange.h"
 #include "Text.h"
@@ -191,6 +193,7 @@ IntRect containerRect(HTMLElement& element)
 struct LineElements {
     Ref<HTMLDivElement> line;
     Vector<Ref<HTMLElement>> children;
+    RefPtr<HTMLBRElement> lineBreak;
 };
 
 struct Elements {
@@ -205,20 +208,30 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
     bool hadExistingElements = false;
     Elements elements;
     RefPtr<HTMLElement> mediaControlsContainer;
-    if (RefPtr shadowRoot = element.shadowRoot()) {
 #if ENABLE(MODERN_MEDIA_CONTROLS)
-        if (is<HTMLMediaElement>(element)) {
-            if (RefPtr controlsHost = downcast<HTMLMediaElement>(element).mediaControlsHost()) {
-                auto& containerClass = controlsHost->mediaControlsContainerClassName();
-                for (auto& child : childrenOfType<HTMLDivElement>(*shadowRoot)) {
-                    if (child.hasClass() && child.classNames().contains(containerClass)) {
-                        mediaControlsContainer = &child;
-                        break;
-                    }
-                }
-            }
+    mediaControlsContainer = ([&]() -> RefPtr<HTMLElement> {
+        RefPtr mediaElement = dynamicDowncast<HTMLMediaElement>(element);
+        if (!mediaElement)
+            return nullptr;
+
+        Ref shadowRoot = mediaElement->ensureUserAgentShadowRoot();
+        RefPtr controlsHost = mediaElement->mediaControlsHost();
+        if (!controlsHost) {
+            ASSERT_NOT_REACHED();
+            return nullptr;
         }
-#endif
+
+        auto& containerClass = controlsHost->mediaControlsContainerClassName();
+        for (auto& child : childrenOfType<HTMLDivElement>(shadowRoot.get())) {
+            if (child.hasClass() && child.classNames().contains(containerClass))
+                return &child;
+        }
+        ASSERT_NOT_REACHED();
+        return nullptr;
+    })();
+#endif // ENABLE(MODERN_MEDIA_CONTROLS)
+
+    if (RefPtr shadowRoot = element.shadowRoot()) {
         if (hasOverlay(element)) {
             RefPtr<ContainerNode> containerForImageOverlay;
             if (mediaControlsContainer)
@@ -252,10 +265,10 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
             }
 
             ASSERT(classes.contains(imageOverlayLineClass()));
-            LineElements lineElements { childElement, { } };
+            Vector<Ref<HTMLElement>> lineChildren;
             for (auto& text : childrenOfType<HTMLDivElement>(childElement))
-                lineElements.children.append(text);
-            elements.lines.append(WTFMove(lineElements));
+                lineChildren.append(text);
+            elements.lines.append({ childElement, WTFMove(lineChildren), childrenOfType<HTMLBRElement>(childElement).first() });
         }
 
         bool canUseExistingElements = ([&] {
@@ -269,8 +282,14 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
                 return false;
 
             for (size_t lineIndex = 0; lineIndex < result.lines.size(); ++lineIndex) {
-                auto& childResults = result.lines[lineIndex].children;
-                auto& childTextElements = elements.lines[lineIndex].children;
+                auto& lineResult = result.lines[lineIndex];
+                auto& childResults = lineResult.children;
+
+                auto& lineElements = elements.lines[lineIndex];
+                auto& childTextElements = lineElements.children;
+                if (lineResult.hasTrailingNewline != static_cast<bool>(lineElements.lineBreak))
+                    return false;
+
                 if (childResults.size() != childTextElements.size())
                     return false;
 
@@ -302,6 +321,7 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
     if (!elements.root) {
         auto rootContainer = HTMLDivElement::create(document.get());
         rootContainer->setIdAttribute(imageOverlayElementIdentifier());
+        rootContainer->setTranslate(false);
         if (document->isImageDocument())
             rootContainer->setInlineStyleProperty(CSSPropertyWebkitUserSelect, CSSValueText);
 
@@ -315,7 +335,7 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
             auto lineContainer = HTMLDivElement::create(document.get());
             lineContainer->classList().add(imageOverlayLineClass());
             rootContainer->appendChild(lineContainer);
-            LineElements lineElements { lineContainer, { } };
+            LineElements lineElements { lineContainer, { }, { } };
             lineElements.children.reserveInitialCapacity(line.children.size());
             for (size_t childIndex = 0; childIndex < line.children.size(); ++childIndex) {
                 auto& child = line.children[childIndex];
@@ -326,7 +346,11 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
                 lineElements.children.uncheckedAppend(WTFMove(textContainer));
             }
 
-            lineContainer->appendChild(HTMLBRElement::create(document.get()));
+            if (line.hasTrailingNewline) {
+                lineElements.lineBreak = HTMLBRElement::create(document.get());
+                lineContainer->appendChild(*lineElements.lineBreak);
+            }
+
             elements.lines.uncheckedAppend(WTFMove(lineElements));
         }
 
@@ -349,8 +373,10 @@ static Elements updateSubtree(HTMLElement& element, const TextRecognitionResult&
             elements.blocks.uncheckedAppend(WTFMove(blockContainer));
         }
 
-        if (document->quirks().needsToForceUserSelectWhenInstallingImageOverlay())
+        if (document->quirks().needsToForceUserSelectAndUserDragWhenInstallingImageOverlay()) {
             element.setInlineStyleProperty(CSSPropertyWebkitUserSelect, CSSValueText);
+            element.setInlineStyleProperty(CSSPropertyWebkitUserDrag, CSSValueAuto);
+        }
     }
 
     if (!hadExistingElements) {
@@ -496,7 +522,32 @@ void updateWithTextRecognitionResult(HTMLElement& element, const TextRecognition
         // FIXME: We should come up with a way to coalesce the bounding quads into one or more rotated rects with the same angle of rotation.
         fitElementToQuad(dataDetectorContainer.get(), convertToContainerCoordinates(firstQuad));
     }
+
+    if (!result.dataDetectors.isEmpty()) {
+        auto* page = document->page();
+        if (auto* overlayController = page ? page->imageOverlayControllerIfExists() : nullptr)
+            overlayController->textRecognitionResultsChanged(element);
+    }
 #endif // ENABLE(DATA_DETECTION)
+
+    constexpr float minScaleForFontSize = 0;
+    constexpr float initialScaleForFontSize = 0.8;
+    constexpr float maxScaleForFontSize = 1;
+    constexpr unsigned iterationLimit = 10;
+    constexpr float minTargetScore = 0.9;
+    constexpr float maxTargetScore = 1.02;
+
+    struct FontSizeAdjustmentState {
+        Ref<HTMLElement> container;
+        FloatSize targetSize;
+        float scale { initialScaleForFontSize };
+        float minScale { minScaleForFontSize };
+        float maxScale { maxScaleForFontSize };
+        bool mayRequireAdjustment { true };
+    };
+
+    Vector<FontSizeAdjustmentState> elementsToAdjust;
+    elementsToAdjust.reserveInitialCapacity(result.blocks.size());
 
     ASSERT(result.blocks.size() == elements.blocks.size());
     for (size_t index = 0; index < result.blocks.size(); ++index) {
@@ -506,9 +557,53 @@ void updateWithTextRecognitionResult(HTMLElement& element, const TextRecognition
 
         auto blockContainer = elements.blocks[index];
         auto bounds = fitElementToQuad(blockContainer.get(), convertToContainerCoordinates(block.normalizedQuad));
-        // FIXME: We'll need a smarter algorithm here that chooses the largest font size for the container without
-        // vertically overflowing the container.
-        blockContainer->setInlineStyleProperty(CSSPropertyFontSize, std::round(0.8 * bounds.size.height()), CSSUnitType::CSS_PX);
+        blockContainer->setInlineStyleProperty(CSSPropertyFontSize, initialScaleForFontSize * bounds.size.height(), CSSUnitType::CSS_PX);
+        elementsToAdjust.uncheckedAppend({ WTFMove(blockContainer), bounds.size });
+    }
+
+    unsigned currentIteration = 0;
+    while (!elementsToAdjust.isEmpty()) {
+        document->updateLayoutIgnorePendingStylesheets();
+
+        for (auto& state : elementsToAdjust) {
+            RefPtr textNode = state.container->firstChild();
+            if (!is<Text>(textNode)) {
+                ASSERT_NOT_REACHED();
+                state.mayRequireAdjustment = false;
+                continue;
+            }
+
+            auto* textRenderer = downcast<Text>(*textNode).renderer();
+            if (!textRenderer) {
+                ASSERT_NOT_REACHED();
+                state.mayRequireAdjustment = false;
+                continue;
+            }
+
+            auto currentScore = (textRenderer->linesBoundingBox().size() / state.targetSize).maxDimension();
+            if (currentScore < minTargetScore)
+                state.minScale = state.scale;
+            else if (currentScore > maxTargetScore)
+                state.maxScale = state.scale;
+            else {
+                state.mayRequireAdjustment = false;
+                continue;
+            }
+
+            state.scale = (state.minScale + state.maxScale) / 2;
+            state.container->setInlineStyleProperty(CSSPropertyFontSize, state.targetSize.height() * state.scale, CSSUnitType::CSS_PX);
+        }
+
+        elementsToAdjust.removeAllMatching([](auto& state) {
+            return !state.mayRequireAdjustment;
+        });
+
+        if (++currentIteration > iterationLimit) {
+            // Fall back to the largest font size that still vertically fits within the container.
+            for (auto& state : elementsToAdjust)
+                state.container->setInlineStyleProperty(CSSPropertyFontSize, state.targetSize.height() * state.minScale, CSSUnitType::CSS_PX);
+            break;
+        }
     }
 
     if (RefPtr frame = document->frame())

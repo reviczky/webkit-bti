@@ -99,6 +99,7 @@ public:
     DECLARE_PROPERTY_CUSTOM_HANDLERS(OutlineStyle);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(Size);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(Stroke);
+    DECLARE_PROPERTY_CUSTOM_HANDLERS(TextEmphasisStyle);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(TextIndent);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(TextShadow);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(WebkitBoxShadow);
@@ -112,7 +113,6 @@ public:
     DECLARE_PROPERTY_CUSTOM_HANDLERS(WebkitMaskBoxImageRepeat);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(WebkitMaskBoxImageSlice);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(WebkitMaskBoxImageWidth);
-    DECLARE_PROPERTY_CUSTOM_HANDLERS(WebkitTextEmphasisStyle);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(Zoom);
 
     // Custom handling of initial + inherit value setting only.
@@ -1187,14 +1187,14 @@ inline void BuilderCustom::applyValueBaselineShift(BuilderState& builderState, C
     }
 }
 
-inline void BuilderCustom::applyInitialWebkitTextEmphasisStyle(BuilderState& builderState)
+inline void BuilderCustom::applyInitialTextEmphasisStyle(BuilderState& builderState)
 {
     builderState.style().setTextEmphasisFill(RenderStyle::initialTextEmphasisFill());
     builderState.style().setTextEmphasisMark(RenderStyle::initialTextEmphasisMark());
     builderState.style().setTextEmphasisCustomMark(RenderStyle::initialTextEmphasisCustomMark());
 }
 
-inline void BuilderCustom::applyInheritWebkitTextEmphasisStyle(BuilderState& builderState)
+inline void BuilderCustom::applyInheritTextEmphasisStyle(BuilderState& builderState)
 {
     builderState.style().setTextEmphasisFill(builderState.parentStyle().textEmphasisFill());
     builderState.style().setTextEmphasisMark(builderState.parentStyle().textEmphasisMark());
@@ -1287,7 +1287,7 @@ inline void BuilderCustom::applyValueContain(BuilderState& builderState, CSSValu
     return builderState.style().setContain(containment);
 }
 
-inline void BuilderCustom::applyValueWebkitTextEmphasisStyle(BuilderState& builderState, CSSValue& value)
+inline void BuilderCustom::applyValueTextEmphasisStyle(BuilderState& builderState, CSSValue& value)
 {
     if (is<CSSValueList>(value)) {
         auto& list = downcast<CSSValueList>(value);
@@ -1520,13 +1520,11 @@ inline void BuilderCustom::applyValueStroke(BuilderState& builderState, CSSValue
 inline void BuilderCustom::applyInitialContent(BuilderState& builderState)
 {
     builderState.style().clearContent();
-    builderState.style().setHasExplicitlyClearedContent(true);
+    builderState.style().setHasContentNone(false);
 }
 
 inline void BuilderCustom::applyInheritContent(BuilderState&)
 {
-    // FIXME: In CSS3, it will be possible to inherit content. In CSS2 it is not. This
-    // note is a reminder that eventually "inherit" needs to be supported.
 }
 
 inline void BuilderCustom::applyValueContent(BuilderState& builderState, CSSValue& value)
@@ -1535,7 +1533,7 @@ inline void BuilderCustom::applyValueContent(BuilderState& builderState, CSSValu
         const auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
         ASSERT_UNUSED(primitiveValue, primitiveValue.valueID() == CSSValueNormal || primitiveValue.valueID() == CSSValueNone);
         builderState.style().clearContent();
-        builderState.style().setHasExplicitlyClearedContent(true);
+        builderState.style().setHasContentNone(primitiveValue.valueID() == CSSValueNone);
         return;
     }
 

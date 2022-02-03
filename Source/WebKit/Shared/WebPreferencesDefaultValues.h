@@ -47,6 +47,7 @@ bool defaultTextAutosizingUsesIdempotentMode();
 #endif
 
 #if PLATFORM(MAC)
+bool defaultScrollAnimatorEnabled();
 bool defaultPassiveWheelListenersAsDefaultOnDocument();
 bool defaultWheelEventGesturesBecomeNonBlocking();
 #endif
@@ -88,10 +89,6 @@ bool defaultWebRTCCodecsInGPUProcess();
 bool defaultIncrementalPDFEnabled();
 #endif
 
-#if ENABLE(WEBXR)
-bool defaultWebXREnabled();
-#endif
-
 #if ENABLE(WEBM_FORMAT_READER)
 bool defaultWebMFormatReaderEnabled();
 #endif
@@ -112,6 +109,15 @@ bool defaultMediaSourceEnabled();
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
 bool defaultMediaSessionCoordinatorEnabled();
+#endif
+
+#if HAVE(SCREEN_CAPTURE_KIT)
+bool defaultScreenCaptureKitEnabled();
+#endif
+
+#if ENABLE(IMAGE_ANALYSIS)
+bool defaultTextRecognitionEnhancementsEnabled();
+bool defaultImageAnalysisQueueEnabled();
 #endif
 
 } // namespace WebKit

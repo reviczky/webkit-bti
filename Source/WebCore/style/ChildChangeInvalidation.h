@@ -26,6 +26,9 @@
 #pragma once
 
 #include "Element.h"
+#include "StyleInvalidator.h"
+#include "StyleScope.h"
+#include <wtf/HashSet.h>
 
 namespace WebCore {
 namespace Style {
@@ -38,16 +41,48 @@ public:
     static void invalidateAfterFinishedParsingChildren(Element&);
 
 private:
+    void invalidateForHasBeforeMutation();
+    void invalidateForHasAfterMutation();
     void invalidateAfterChange();
     void checkForSiblingStyleChanges();
+    using MatchingHasSelectors = HashSet<const CSSSelector*>;
+    void invalidateForChangedElement(Element&, MatchingHasSelectors&);
+
+    template<typename Function> void traverseRemovedElements(Function&&);
+    template<typename Function> void traverseAddedElements(Function&&);
 
     Element& parentElement() { return *m_parentElement; }
 
     Element* m_parentElement { nullptr };
-    const bool m_isEnabled;
-
     const ContainerNode::ChildChange& m_childChange;
+
+    const bool m_isEnabled;
+    const bool m_needsHasInvalidation;
 };
+
+inline ChildChangeInvalidation::ChildChangeInvalidation(ContainerNode& container, const ContainerNode::ChildChange& childChange)
+    : m_parentElement(dynamicDowncast<Element>(container))
+    , m_childChange(childChange)
+    , m_isEnabled(m_parentElement ? m_parentElement->needsStyleInvalidation() : false)
+    , m_needsHasInvalidation(m_isEnabled && Scope::forNode(*m_parentElement).usesHasPseudoClass())
+{
+    if (!m_isEnabled)
+        return;
+
+    if (m_needsHasInvalidation)
+        invalidateForHasBeforeMutation();
+}
+
+inline ChildChangeInvalidation::~ChildChangeInvalidation()
+{
+    if (!m_isEnabled)
+        return;
+
+    if (m_needsHasInvalidation)
+        invalidateForHasAfterMutation();
+
+    invalidateAfterChange();
+}
 
 }
 }

@@ -35,6 +35,7 @@
 #include "ScopedArguments.h"
 #include "SlowPathFunction.h"
 #include "StackAlignment.h"
+#include "TypeError.h"
 #include "VMInlines.h"
 #include <wtf/StdLibExtras.h>
 
@@ -186,18 +187,28 @@ ALWAYS_INLINE Structure* originalStructureBeforePut(VM& vm, JSValue value)
     return value.asCell()->structure(vm);
 }
 
-
 static ALWAYS_INLINE void putDirectWithReify(VM& vm, JSGlobalObject* globalObject, JSObject* baseObject, PropertyName propertyName, JSValue value, PutPropertySlot& slot, Structure** result = nullptr)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
-    if (baseObject->inherits<JSFunction>(vm)) {
+    bool isJSFunction = baseObject->inherits<JSFunction>(vm);
+    if (isJSFunction) {
         jsCast<JSFunction*>(baseObject)->reifyLazyPropertyIfNeeded(vm, globalObject, propertyName);
         RETURN_IF_EXCEPTION(scope, void());
     }
     if (result)
         *result = originalStructureBeforePut(vm, baseObject);
-    scope.release();
-    baseObject->putDirect(vm, propertyName, value, slot);
+
+    Structure* structure = baseObject->structure(vm);
+    if (LIKELY(propertyName != vm.propertyNames->underscoreProto && !structure->hasReadOnlyOrGetterSetterPropertiesExcludingProto() && (isJSFunction || structure->classInfo()->methodTable.defineOwnProperty == &JSObject::defineOwnProperty))) {
+        auto error = baseObject->putDirectRespectingExtensibility(vm, propertyName, value, 0, slot);
+        if (!error.isNull())
+            typeError(globalObject, scope, slot.isStrictMode(), error);
+    } else {
+        slot.disableCaching();
+        scope.release();
+        PropertyDescriptor descriptor(value, 0);
+        baseObject->methodTable(vm)->defineOwnProperty(baseObject, globalObject, propertyName, descriptor, slot.isStrictMode());
+    }
 }
 
 static ALWAYS_INLINE void putDirectAccessorWithReify(VM& vm, JSGlobalObject* globalObject, JSObject* baseObject, PropertyName propertyName, GetterSetter* accessor, unsigned attribute)
@@ -289,6 +300,7 @@ JSC_DECLARE_COMMON_SLOW_PATH(slow_path_bitxor);
 JSC_DECLARE_COMMON_SLOW_PATH(slow_path_typeof);
 JSC_DECLARE_COMMON_SLOW_PATH(slow_path_typeof_is_object);
 JSC_DECLARE_COMMON_SLOW_PATH(slow_path_typeof_is_function);
+JSC_DECLARE_COMMON_SLOW_PATH(slow_path_instanceof_custom);
 JSC_DECLARE_COMMON_SLOW_PATH(slow_path_is_callable);
 JSC_DECLARE_COMMON_SLOW_PATH(slow_path_is_constructor);
 JSC_DECLARE_COMMON_SLOW_PATH(slow_path_strcat);

@@ -42,6 +42,7 @@
 #include "ResourceResponse.h"
 #include "ScriptExecutionContext.h"
 #include "SecurityOrigin.h"
+#include "SharedBuffer.h"
 #include "TextResourceDecoder.h"
 #include "ThreadableLoader.h"
 #include <wtf/IsoMallocInlines.h>
@@ -210,17 +211,17 @@ void EventSource::dispatchErrorEvent()
     dispatchEvent(Event::create(eventNames().errorEvent, Event::CanBubble::No, Event::IsCancelable::No));
 }
 
-void EventSource::didReceiveData(const uint8_t* data, int length)
+void EventSource::didReceiveData(const SharedBuffer& buffer)
 {
     ASSERT(m_state == OPEN);
     ASSERT(m_requestInFlight);
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(!m_isSuspendedForBackForwardCache);
 
-    append(m_receiveBuffer, m_decoder->decode(data, length));
+    append(m_receiveBuffer, m_decoder->decode(buffer.data(), buffer.size()));
     parseEventStream();
 }
 
-void EventSource::didFinishLoading(ResourceLoaderIdentifier)
+void EventSource::didFinishLoading(ResourceLoaderIdentifier, const NetworkLoadMetrics&)
 {
     ASSERT(m_state == OPEN);
     ASSERT(m_requestInFlight);

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2022 Apple Inc. All rights reserved.
  * Copyright (C) 2013 Nokia Corporation and/or its subsidiary(-ies).
  * Copyright (C) 2015 Ericsson AB. All rights reserved.
  *
@@ -55,7 +55,7 @@ RealtimeMediaSource::RealtimeMediaSource(Type type, String&& name, String&& devi
     , m_name(WTFMove(name))
 {
     if (m_persistentID.isEmpty())
-        m_persistentID = createCanonicalUUIDString();
+        m_persistentID = createVersion4UUIDString();
 
     m_hashedID = RealtimeMediaSourceCenter::singleton().hashStringWithSalt(m_persistentID, m_idHashSalt);
 }
@@ -489,6 +489,7 @@ double RealtimeMediaSource::fitnessDistance(const MediaConstraint& constraint)
     }
 
     case MediaConstraintType::DeviceId:
+        ASSERT(constraint.isString());
         ASSERT(!m_hashedID.isEmpty());
         return downcast<StringConstraint>(constraint).fitnessDistance(m_hashedID);
         break;
@@ -1103,9 +1104,7 @@ void RealtimeMediaSource::scheduleDeferredTask(Function<void()>&& function)
 const String& RealtimeMediaSource::hashedId() const
 {
 #ifndef NDEBUG
-    auto deviceType = this->deviceType();
-    if (deviceType != CaptureDevice::DeviceType::Screen && deviceType != CaptureDevice::DeviceType::Window)
-        ASSERT(!m_hashedID.isEmpty());
+    ASSERT(!m_hashedID.isEmpty());
 #endif
     return m_hashedID;
 }

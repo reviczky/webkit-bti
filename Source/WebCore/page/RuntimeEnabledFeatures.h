@@ -101,9 +101,6 @@ public:
     void setServerTimingEnabled(bool isEnabled) { m_isServerTimingEnabled = isEnabled; }
     bool serverTimingEnabled() const { return m_isServerTimingEnabled; }
 
-    void setExperimentalPlugInSandboxProfilesEnabled(bool isEnabled) { m_experimentalPlugInSandboxProfilesEnabled = isEnabled; }
-    bool experimentalPlugInSandboxProfilesEnabled() const { return m_experimentalPlugInSandboxProfilesEnabled; }
-
     void setAttrStyleEnabled(bool isEnabled) { m_attrStyleEnabled = isEnabled; }
     bool attrStyleEnabled() const { return m_attrStyleEnabled; }
 
@@ -130,9 +127,6 @@ public:
 
     void setWebSQLEnabled(bool isEnabled) { m_webSQLEnabled = isEnabled; }
     bool webSQLEnabled() const { return m_webSQLEnabled; }
-
-    void setKeygenElementEnabled(bool isEnabled) { m_keygenElementEnabled = isEnabled; }
-    bool keygenElementEnabled() const { return m_keygenElementEnabled; }
 
     void setHighlightAPIEnabled(bool isEnabled) { m_highlightAPIEnabled = isEnabled; }
     bool highlightAPIEnabled() const { return m_highlightAPIEnabled; }
@@ -167,8 +161,6 @@ public:
 
     void setReadableByteStreamAPIEnabled(bool isEnabled) { m_isReadableByteStreamAPIEnabled = isEnabled; }
     bool readableByteStreamAPIEnabled() const { return m_isReadableByteStreamAPIEnabled; }
-    void setTransformStreamAPIEnabled(bool isEnabled) { m_isTransformStreamAPIEnabled = isEnabled; }
-    bool transformStreamAPIEnabled() const { return m_isTransformStreamAPIEnabled; }
 
 #if ENABLE(SERVICE_WORKER)
     bool pushAPIEnabled() const { return m_pushAPIEnabled; }
@@ -248,7 +240,7 @@ public:
     bool webAuthenticationModernEnabled() const { return m_areWebAuthenticationModernEnabled; }
 #endif
 
-#if ENABLE(MEDIA_SOURCE) && HAVE(AVSAMPLEBUFFERVIDEOOUTPUT)
+#if ENABLE(MEDIA_SOURCE) && (HAVE(AVSAMPLEBUFFERVIDEOOUTPUT) || USE(GSTREAMER))
     WEBCORE_EXPORT void setMediaSourceInlinePaintingEnabled(bool);
     bool mediaSourceInlinePaintingEnabled() const { return m_mediaSourceInlinePaintingEnabled; }
 #endif
@@ -258,13 +250,15 @@ public:
     bool builtInNotificationsEnabled() const { return m_builtInNotificationsEnabled; }
 #endif
 
+#if ENABLE(NOTIFICATION_EVENT)
+    void setNotificationEventEnabled(bool isEnabled) { m_notificationEventEnabled = isEnabled; }
+    bool notificationEventEnabled() const { return m_notificationEventEnabled; }
+#endif
+
 #if ENABLE(MODEL_ELEMENT)
     void setModelDocumentEnabled(bool isEnabled) { m_modelDocumentEnabled = isEnabled; }
     bool modelDocumentEnabled() const { return m_modelDocumentEnabled; }
 #endif
-
-    void setWebLocksAPIEnabled(bool isEnabled) { m_webLocksAPIEnabled = isEnabled; }
-    bool webLocksAPIEnabled() const { return m_webLocksAPIEnabled; }
 
 private:
     // Never instantiate.
@@ -293,7 +287,6 @@ private:
     bool m_itpDebugMode { false };
     bool m_isRestrictedHTTPResponseAccess { true };
     bool m_isServerTimingEnabled { false };
-    bool m_experimentalPlugInSandboxProfilesEnabled { false };
     bool m_attrStyleEnabled { false };
     bool m_webAPIStatisticsEnabled { false };
     bool m_syntheticEditingCommandsEnabled { true };
@@ -335,7 +328,6 @@ private:
 #endif
 
     bool m_isReadableByteStreamAPIEnabled { false };
-    bool m_isTransformStreamAPIEnabled { false };
 
 #if ENABLE(SERVICE_WORKER)
     bool m_pushAPIEnabled { false };
@@ -398,7 +390,7 @@ private:
     bool m_areWebAuthenticationModernEnabled { false };
 #endif
 
-#if ENABLE(MEDIA_SOURCE) && HAVE(AVSAMPLEBUFFERVIDEOOUTPUT)
+#if ENABLE(MEDIA_SOURCE) && (HAVE(AVSAMPLEBUFFERVIDEOOUTPUT) || USE(GSTREAMER))
     bool m_mediaSourceInlinePaintingEnabled { false };
 #endif
 
@@ -406,11 +398,13 @@ private:
     bool m_builtInNotificationsEnabled { false };
 #endif
 
+#if ENABLE(NOTIFICATION_EVENT)
+    bool m_notificationEventEnabled { false };
+#endif
+
 #if ENABLE(MODEL_ELEMENT)
     bool m_modelDocumentEnabled { false };
 #endif
-
-    bool m_webLocksAPIEnabled { false };
 
     friend class NeverDestroyed<RuntimeEnabledFeatures>;
 };

@@ -43,10 +43,10 @@
 #include "ImageObserver.h"
 #include "IntRect.h"
 #include "JSDOMWindowBase.h"
+#include "LegacyRenderSVGRoot.h"
 #include "LibWebRTCProvider.h"
 #include "Page.h"
 #include "PageConfiguration.h"
-#include "RenderSVGRoot.h"
 #include "RenderStyle.h"
 #include "RenderView.h"
 #include "SVGElementTypeHelpers.h"
@@ -64,15 +64,6 @@
 
 #if PLATFORM(MAC)
 #include "LocalDefaultSystemAppearance.h"
-#endif
-
-#if USE(DIRECT2D)
-#include "COMPtr.h"
-#include "Direct2DUtilities.h"
-#include "GraphicsContext.h"
-#include "ImageDecoderDirect2D.h"
-#include "PlatformContextDirect2D.h"
-#include <d2d1.h>
 #endif
 
 namespace WebCore {
@@ -136,7 +127,7 @@ void SVGImage::setContainerSize(const FloatSize& size)
     auto rootElement = this->rootElement();
     if (!rootElement)
         return;
-    auto* renderer = downcast<RenderSVGRoot>(rootElement->renderer());
+    auto* renderer = downcast<LegacyRenderSVGRoot>(rootElement->renderer());
     if (!renderer)
         return;
 
@@ -152,7 +143,7 @@ IntSize SVGImage::containerSize() const
     if (!rootElement)
         return IntSize();
 
-    auto* renderer = downcast<RenderSVGRoot>(rootElement->renderer());
+    auto* renderer = downcast<LegacyRenderSVGRoot>(rootElement->renderer());
     if (!renderer)
         return IntSize();
 
@@ -217,12 +208,7 @@ ImageDrawResult SVGImage::drawForContainerInternal(GraphicsContext& context, con
     return result;
 }
 
-RefPtr<NativeImage> SVGImage::nativeImageForCurrentFrame(const GraphicsContext* targetContext)
-{
-    return nativeImage(targetContext);
-}
-
-RefPtr<NativeImage> SVGImage::nativeImage(const GraphicsContext*)
+RefPtr<NativeImage> SVGImage::nativeImage()
 {
     return nativeImage(size(), FloatRect(FloatPoint(), size()), DestinationColorSpace::SRGB());
 }
@@ -546,8 +532,8 @@ EncodedDataStatus SVGImage::dataChanged(bool allDataReceived)
         ASSERT(loader.activeDocumentLoader()); // DocumentLoader should have been created by frame->init().
         loader.activeDocumentLoader()->writer().setMIMEType("image/svg+xml");
         loader.activeDocumentLoader()->writer().begin(URL()); // create the empty document
-        data()->forEachSegment([&](auto& segment) {
-            loader.activeDocumentLoader()->writer().addData(segment.data(), segment.size());
+        data()->forEachSegmentAsSharedBuffer([&](auto&& buffer) {
+            loader.activeDocumentLoader()->writer().addData(buffer);
         });
         loader.activeDocumentLoader()->writer().end();
 

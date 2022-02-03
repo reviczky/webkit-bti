@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2022 Apple Inc. All rights reserved.
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -40,6 +40,7 @@
 #include "HTMLLegendElement.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLTextAreaElement.h"
+#include "PseudoClassChangeInvalidation.h"
 #include "Quirks.h"
 #include "RenderBox.h"
 #include "RenderTheme.h"
@@ -143,10 +144,13 @@ bool HTMLFormControlElement::computeIsDisabledByFieldsetAncestor() const
 void HTMLFormControlElement::setAncestorDisabled(bool isDisabled)
 {
     ASSERT(computeIsDisabledByFieldsetAncestor() == isDisabled);
-    bool oldValue = m_disabledByAncestorFieldset;
+    if (m_disabledByAncestorFieldset == isDisabled)
+        return;
+
+    Style::PseudoClassChangeInvalidation disabledInvalidation(*this, { { CSSSelector::PseudoClassDisabled, isDisabled }, { CSSSelector::PseudoClassEnabled, !isDisabled } });
+
     m_disabledByAncestorFieldset = isDisabled;
-    if (oldValue != m_disabledByAncestorFieldset)
-        disabledStateChanged();
+    disabledStateChanged();
 }
 
 void HTMLFormControlElement::parseAttribute(const QualifiedName& name, const AtomString& value)
@@ -155,10 +159,12 @@ void HTMLFormControlElement::parseAttribute(const QualifiedName& name, const Ato
         formAttributeChanged();
     else if (name == disabledAttr) {
         if (canBeActuallyDisabled()) {
-            bool oldDisabled = m_disabled;
-            m_disabled = !value.isNull();
-            if (oldDisabled != m_disabled)
+            bool newDisabled = !value.isNull();
+            if (m_disabled != newDisabled) {
+                Style::PseudoClassChangeInvalidation disabledInvalidation(*this, { { CSSSelector::PseudoClassDisabled, newDisabled }, { CSSSelector::PseudoClassEnabled, !newDisabled } });
+                m_disabled = newDisabled;
                 disabledAttributeChanged();
+            }
         }
     } else if (name == readonlyAttr) {
         bool wasReadOnly = m_isReadOnly;
@@ -182,7 +188,6 @@ void HTMLFormControlElement::disabledAttributeChanged()
 void HTMLFormControlElement::disabledStateChanged()
 {
     updateWillValidateAndValidity();
-    invalidateStyleForSubtree();
     if (renderer() && renderer()->style().hasEffectiveAppearance())
         renderer()->theme().stateChanged(*renderer(), ControlStates::States::Enabled);
 }
@@ -301,11 +306,6 @@ void HTMLFormControlElement::dispatchFormControlInputEvent()
     dispatchInputEvent();
 }
 
-bool HTMLFormControlElement::isRequired() const
-{
-    return m_isRequired;
-}
-
 void HTMLFormControlElement::didRecalcStyle(Style::Change)
 {
     // updateFromElement() can cause the selection to change, and in turn
@@ -405,7 +405,6 @@ void HTMLFormControlElement::updateWillValidateAndValidity()
     m_willValidate = newWillValidate;
 
     updateValidity();
-    invalidateStyleForSubtree();
 
     if (!m_willValidate && !wasValid) {
         removeInvalidElementToAncestorFromInsertionPoint(*this, parentNode());
@@ -474,6 +473,7 @@ bool HTMLFormControlElement::reportValidity()
     document().updateLayoutIgnorePendingStylesheets();
 
     if (isConnected() && isFocusable()) {
+        Ref protectedThis { *this };
         focusAndShowValidationMessage();
         return false;
     }
@@ -503,9 +503,6 @@ void HTMLFormControlElement::focusAndShowValidationMessage()
 
 inline bool HTMLFormControlElement::isValidFormControlElement() const
 {
-    // If the following assertion fails, updateValidity() is not called
-    // correctly when something which changes validity is updated.
-    ASSERT(m_isValid == isValid());
     return m_isValid;
 }
 
@@ -533,28 +530,29 @@ void HTMLFormControlElement::updateValidity()
         return;
 
     bool willValidate = this->willValidate();
-    bool wasValid = m_isValid;
+    bool newIsValid = this->computeValidity();
 
-    m_isValid = isValid();
+    if (newIsValid != m_isValid) {
+        Style::PseudoClassChangeInvalidation styleInvalidation(*this, { { CSSSelector::PseudoClassValid, newIsValid }, { CSSSelector::PseudoClassInvalid, !newIsValid } });
 
-    if (willValidate && m_isValid != wasValid) {
-        // Update style for pseudo classes such as :valid :invalid.
-        invalidateStyleForSubtree();
+        m_isValid = newIsValid;
 
-        if (!m_isValid) {
-            if (isConnected())
-                addInvalidElementToAncestorFromInsertionPoint(*this, parentNode());
-            if (HTMLFormElement* form = this->form())
-                form->registerInvalidAssociatedFormControl(*this);
-        } else {
-            if (isConnected())
-                removeInvalidElementToAncestorFromInsertionPoint(*this, parentNode());
-            if (HTMLFormElement* form = this->form())
-                form->removeInvalidAssociatedFormControlIfNeeded(*this);
+        if (willValidate) {
+            if (!m_isValid) {
+                if (isConnected())
+                    addInvalidElementToAncestorFromInsertionPoint(*this, parentNode());
+                if (HTMLFormElement* form = this->form())
+                    form->registerInvalidAssociatedFormControl(*this);
+            } else {
+                if (isConnected())
+                    removeInvalidElementToAncestorFromInsertionPoint(*this, parentNode());
+                if (HTMLFormElement* form = this->form())
+                    form->removeInvalidAssociatedFormControlIfNeeded(*this);
+            }
         }
     }
 
-    // Updates only if this control already has a validtion message.
+    // Updates only if this control already has a validation message.
     if (m_validationMessage && m_validationMessage->isVisible()) {
         // Calls updateVisibleValidationMessage() even if m_isValid is not
         // changed because a validation message can be chagned.

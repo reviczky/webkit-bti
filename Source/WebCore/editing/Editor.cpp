@@ -139,9 +139,6 @@ namespace WebCore {
 
 static bool dispatchBeforeInputEvent(Element& element, const AtomString& inputType, const String& data = { }, RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<RefPtr<StaticRange>>& targetRanges = { }, Event::IsCancelable cancelable = Event::IsCancelable::Yes)
 {
-    if (!element.document().settings().inputEventsEnabled())
-        return true;
-
     auto event = InputEvent::create(eventNames().beforeinputEvent, inputType, cancelable, element.document().windowProxy(), data, WTFMove(dataTransfer), targetRanges, 0);
     element.dispatchEvent(event);
     return !event->defaultPrevented();
@@ -149,15 +146,12 @@ static bool dispatchBeforeInputEvent(Element& element, const AtomString& inputTy
 
 static void dispatchInputEvent(Element& element, const AtomString& inputType, const String& data = { }, RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<RefPtr<StaticRange>>& targetRanges = { })
 {
-    if (element.document().settings().inputEventsEnabled()) {
-        // FIXME: We should not be dispatching to the scoped queue here. Normally, input events are dispatched in CompositeEditCommand::apply after the end of the scope,
-        // but TypingCommands are special in that existing TypingCommands that are applied again fire input events *from within* the scope by calling typingAddedToOpenCommand.
-        // Instead, TypingCommands should always dispatch events synchronously after the end of the scoped queue in CompositeEditCommand::apply. To work around this for the
-        // time being, just revert back to calling dispatchScopedEvent.
-        element.dispatchScopedEvent(InputEvent::create(eventNames().inputEvent, inputType, Event::IsCancelable::No,
-            element.document().windowProxy(), data, WTFMove(dataTransfer), targetRanges, 0));
-    } else
-        element.dispatchInputEvent();
+    // FIXME: We should not be dispatching to the scoped queue here. Normally, input events are dispatched in CompositeEditCommand::apply after the end of the scope,
+    // but TypingCommands are special in that existing TypingCommands that are applied again fire input events *from within* the scope by calling typingAddedToOpenCommand.
+    // Instead, TypingCommands should always dispatch events synchronously after the end of the scoped queue in CompositeEditCommand::apply. To work around this for the
+    // time being, just revert back to calling dispatchScopedEvent.
+    element.dispatchScopedEvent(InputEvent::create(eventNames().inputEvent, inputType, Event::IsCancelable::No,
+        element.document().windowProxy(), data, WTFMove(dataTransfer), targetRanges, 0));
 }
 
 static String inputEventDataForEditingStyleAndAction(const StyleProperties* style, EditAction action)
@@ -372,8 +366,10 @@ bool Editor::canEditRichly() const
 
 enum class ClipboardEventKind {
     Copy,
+    CopyFont,
     Cut,
     Paste,
+    PasteFont,
     PasteAsPlainText,
     PasteAsQuotation,
     BeforeCopy,
@@ -385,12 +381,14 @@ static AtomString eventNameForClipboardEvent(ClipboardEventKind kind)
 {
     switch (kind) {
     case ClipboardEventKind::Copy:
+    case ClipboardEventKind::CopyFont:
         return eventNames().copyEvent;
     case ClipboardEventKind::Cut:
         return eventNames().cutEvent;
     case ClipboardEventKind::Paste:
     case ClipboardEventKind::PasteAsPlainText:
     case ClipboardEventKind::PasteAsQuotation:
+    case ClipboardEventKind::PasteFont:
         return eventNames().pasteEvent;
     case ClipboardEventKind::BeforeCopy:
         return eventNames().beforecopyEvent;
@@ -407,6 +405,7 @@ static Ref<DataTransfer> createDataTransferForClipboardEvent(Document& document,
 {
     switch (kind) {
     case ClipboardEventKind::Copy:
+    case ClipboardEventKind::CopyFont:
     case ClipboardEventKind::Cut:
         return DataTransfer::createForCopyAndPaste(document, DataTransfer::StoreMode::ReadWrite, makeUnique<StaticPasteboard>());
     case ClipboardEventKind::PasteAsPlainText:
@@ -420,6 +419,7 @@ static Ref<DataTransfer> createDataTransferForClipboardEvent(Document& document,
         FALLTHROUGH;
     case ClipboardEventKind::Paste:
     case ClipboardEventKind::PasteAsQuotation:
+    case ClipboardEventKind::PasteFont:
         return DataTransfer::createForCopyAndPaste(document, DataTransfer::StoreMode::Readonly, Pasteboard::createForCopyAndPaste(PagePasteboardContext::create(document.pageID())));
     case ClipboardEventKind::BeforeCopy:
     case ClipboardEventKind::BeforeCut:
@@ -1404,6 +1404,21 @@ void Editor::copy(FromMenuOrKeyBinding fromMenuOrKeyBinding)
     performCutOrCopy(CopyAction);
 }
 
+void Editor::copyFont(FromMenuOrKeyBinding fromMenuOrKeyBinding)
+{
+    SetForScope<bool> copyScope { m_copyingFromMenuOrKeyBinding, fromMenuOrKeyBinding == FromMenuOrKeyBinding::Yes };
+    if (tryDHTMLCopy())
+        return; // DHTML did the whole operation
+    if (!canCopy()) {
+        SystemSoundManager::singleton().systemBeep();
+        return;
+    }
+
+    willWriteSelectionToPasteboard(selectedRange());
+    platformCopyFont();
+    didWriteSelectionToPasteboard();
+}
+
 void Editor::postTextStateChangeNotificationForCut(const String& text, const VisibleSelection& selection)
 {
     if (!AXObjectCache::accessibilityEnabled())
@@ -1510,6 +1525,19 @@ void Editor::pasteAsQuotation(FromMenuOrKeyBinding fromMenuOrKeyBinding)
         pasteWithPasteboard(pasteboard.get(), { PasteOption::AllowPlainText, PasteOption::AsQuotation });
     else
         pasteAsPlainTextWithPasteboard(*pasteboard);
+}
+
+void Editor::pasteFont(FromMenuOrKeyBinding fromMenuOrKeyBinding)
+{
+    SetForScope<bool> pasteScope { m_pastingFromMenuOrKeyBinding, fromMenuOrKeyBinding == FromMenuOrKeyBinding::Yes };
+
+    if (!dispatchClipboardEvent(findEventTargetFromSelection(), ClipboardEventKind::PasteFont))
+        return;
+    if (!canPaste())
+        return;
+    updateMarkersForWordsAffectedByEditing(false);
+    ResourceCacheValidationSuppressor validationSuppressor(document().cachedResourceLoader());
+    platformPasteFont();
 }
 
 void Editor::quoteFragmentForPasting(DocumentFragment& fragment)
@@ -3963,10 +3991,6 @@ void Editor::scheduleEditorUIUpdate()
 
 #if !PLATFORM(COCOA)
 
-void Editor::platformFontAttributesAtSelectionStart(FontAttributes&, const RenderStyle&) const
-{
-}
-
 String Editor::platformContentTypeForBlobType(const String& type) const
 {
     return type;
@@ -4010,6 +4034,9 @@ static Vector<TextList> editableTextListsAtPositionInDescendingOrder(const Posit
 
 FontAttributes Editor::fontAttributesAtSelectionStart()
 {
+    FontAttributes attributes;
+    attributes.font = fontForSelection(attributes.hasMultipleFonts);
+
     RefPtr<Node> nodeToRemove;
     auto nodeRemovalScope = makeScopeExit([&nodeToRemove]() {
         if (nodeToRemove)
@@ -4021,9 +4048,6 @@ FontAttributes Editor::fontAttributesAtSelectionStart()
         return { };
 
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
-
-    FontAttributes attributes;
-    platformFontAttributesAtSelectionStart(attributes, *style);
 
     // FIXME: for now, always report the colors after applying -apple-color-filter. In future not all clients
     // may want this, so we may have to add a setting to control it. See also editingAttributedStringFromRange().
@@ -4133,7 +4157,7 @@ PromisedAttachmentInfo Editor::promisedAttachmentInfo(Element& element)
     return { attachment->uniqueIdentifier(), WTFMove(additionalTypes), WTFMove(additionalData) };
 }
 
-void Editor::registerAttachmentIdentifier(const String& identifier, const String& contentType, const String& preferredFileName, Ref<SharedBuffer>&& data)
+void Editor::registerAttachmentIdentifier(const String& identifier, const String& contentType, const String& preferredFileName, Ref<FragmentedSharedBuffer>&& data)
 {
     if (auto* client = this->client())
         client->registerAttachmentIdentifier(identifier, contentType, preferredFileName, WTFMove(data));
@@ -4197,7 +4221,7 @@ void Editor::notifyClientOfAttachmentUpdates()
 
     for (auto& identifier : insertedAttachmentIdentifiers) {
         if (auto attachment = m_document.attachmentForIdentifier(identifier))
-            client()->didInsertAttachmentWithIdentifier(identifier, attachment->attributeWithoutSynchronization(HTMLNames::srcAttr), attachment->hasEnclosingImage());
+            client()->didInsertAttachmentWithIdentifier(identifier, attachment->attributeWithoutSynchronization(HTMLNames::srcAttr), attachment->enclosingImageElement());
         else
             ASSERT_NOT_REACHED();
     }

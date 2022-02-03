@@ -301,7 +301,7 @@ ExceptionOr<Ref<PaymentRequest>> PaymentRequest::create(Document& document, Vect
         return canCreateSession.releaseException();
 
     if (details.id.isNull())
-        details.id = createCanonicalUUIDString();
+        details.id = createVersion4UUIDString();
 
     if (methodData.isEmpty())
         return Exception { TypeError, "At least one payment method is required."_s };
@@ -344,7 +344,9 @@ ExceptionOr<Ref<PaymentRequest>> PaymentRequest::create(Document& document, Vect
         return detailsResult.releaseException();
 
     auto shippingOptionAndModifierData = detailsResult.releaseReturnValue();
-    return adoptRef(*new PaymentRequest(document, WTFMove(options), WTFMove(details), WTFMove(std::get<1>(shippingOptionAndModifierData)), WTFMove(serializedMethodData), WTFMove(std::get<0>(shippingOptionAndModifierData))));
+    auto request = adoptRef(*new PaymentRequest(document, WTFMove(options), WTFMove(details), WTFMove(std::get<1>(shippingOptionAndModifierData)), WTFMove(serializedMethodData), WTFMove(std::get<0>(shippingOptionAndModifierData))));
+    request->suspendIfNeeded();
+    return request;
 }
 
 bool PaymentRequest::enabledForContext(ScriptExecutionContext& context)
@@ -360,7 +362,6 @@ PaymentRequest::PaymentRequest(Document& document, PaymentOptions&& options, Pay
     , m_serializedMethodData { WTFMove(serializedMethodData) }
     , m_shippingOption { WTFMove(selectedShippingOption) }
 {
-    suspendIfNeeded();
 }
 
 PaymentRequest::~PaymentRequest()
@@ -410,7 +411,7 @@ void PaymentRequest::show(Document& document, RefPtr<DOMPromise>&& detailsPromis
         if (!handler)
             continue;
 
-        auto result = handler->convertData(data.releaseReturnValue());
+        auto result = handler->convertData(document, data.releaseReturnValue());
         if (result.hasException()) {
             settleShowPromise(result.releaseException());
             return;
@@ -771,13 +772,16 @@ void PaymentRequest::reject(Exception&& exception)
     abortWithException(WTFMove(exception));
 }
 
-ExceptionOr<void> PaymentRequest::complete(std::optional<PaymentComplete>&& result)
+ExceptionOr<void> PaymentRequest::complete(Document& document, std::optional<PaymentComplete>&& result, String&& serializedData)
 {
     ASSERT(m_state == State::Closed);
     if (!m_activePaymentHandler)
         return Exception { AbortError };
 
-    activePaymentHandler()->complete(WTFMove(result));
+    auto exception = activePaymentHandler()->complete(document, WTFMove(result), WTFMove(serializedData));
+    if (exception.hasException())
+        return exception.releaseException();
+
     m_activePaymentHandler = std::nullopt;
     return { };
 }

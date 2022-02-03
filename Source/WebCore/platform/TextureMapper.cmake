@@ -10,6 +10,7 @@ list(APPEND WebCore_SOURCES
     platform/graphics/texmap/BitmapTexture.cpp
     platform/graphics/texmap/BitmapTexturePool.cpp
     platform/graphics/texmap/GraphicsContextGLTextureMapper.cpp
+    platform/graphics/texmap/GraphicsContextGLTextureMapperANGLE.cpp
     platform/graphics/texmap/TextureMapper.cpp
     platform/graphics/texmap/TextureMapperBackingStore.cpp
     platform/graphics/texmap/TextureMapperFPSCounter.cpp
@@ -24,6 +25,7 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/texmap/ANGLEContext.h
     platform/graphics/texmap/BitmapTexture.h
     platform/graphics/texmap/ClipStack.h
+    platform/graphics/texmap/GraphicsContextGLTextureMapper.h
     platform/graphics/texmap/GraphicsLayerTextureMapper.h
     platform/graphics/texmap/TextureMapper.h
     platform/graphics/texmap/TextureMapperBackingStore.h
@@ -124,6 +126,15 @@ endif ()
 
 if (USE_ANGLE_WEBGL)
     list(APPEND WebCore_SOURCES
-        platform/graphics/nicosia/texmap/NicosiaGCGLANGLELayer.cpp
+        platform/graphics/nicosia/texmap/NicosiaGCGLANGLEPipe.cpp
+    )
+endif ()
+
+if (USE_GRAPHICS_LAYER_WC)
+    list(APPEND WebCore_SOURCES
+        platform/graphics/texmap/TextureMapperSparseBackingStore.cpp
+    )
+    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+        platform/graphics/texmap/TextureMapperSparseBackingStore.h
     )
 endif ()

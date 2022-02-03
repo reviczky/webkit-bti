@@ -38,6 +38,10 @@
 #include "ApplicationManifest.h"
 #endif
 
+#if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
+#include "DeviceOrientationUpdateProvider.h"
+#endif
+
 namespace WebCore {
 
 class AlternativeTextClient;
@@ -63,7 +67,6 @@ class PerformanceLoggingClient;
 class PermissionController;
 class PluginInfoProvider;
 class ProgressTrackerClient;
-class ReportingEndpointsCache;
 class SocketProvider;
 class SpeechRecognitionProvider;
 class SpeechSynthesisClient;
@@ -74,11 +77,12 @@ class UserContentURLPattern;
 class ValidationMessageClient;
 class VisitedLinkStore;
 class WebGLStateTracker;
+class WebLockRegistry;
 
 class PageConfiguration {
     WTF_MAKE_NONCOPYABLE(PageConfiguration); WTF_MAKE_FAST_ALLOCATED;
 public:
-    WEBCORE_EXPORT PageConfiguration(PAL::SessionID, UniqueRef<EditorClient>&&, Ref<SocketProvider>&&, UniqueRef<LibWebRTCProvider>&&, Ref<CacheStorageProvider>&&, Ref<UserContentProvider>&&, Ref<BackForwardClient>&&, Ref<CookieJar>&&, UniqueRef<ProgressTrackerClient>&&, UniqueRef<FrameLoaderClient>&&, UniqueRef<SpeechRecognitionProvider>&&, UniqueRef<MediaRecorderProvider>&&, Ref<BroadcastChannelRegistry>&&, Ref<PermissionController>&&, UniqueRef<StorageProvider>&&, UniqueRef<ModelPlayerProvider>&&);
+    WEBCORE_EXPORT PageConfiguration(PAL::SessionID, UniqueRef<EditorClient>&&, Ref<SocketProvider>&&, UniqueRef<LibWebRTCProvider>&&, Ref<CacheStorageProvider>&&, Ref<UserContentProvider>&&, Ref<BackForwardClient>&&, Ref<CookieJar>&&, UniqueRef<ProgressTrackerClient>&&, UniqueRef<FrameLoaderClient>&&, UniqueRef<SpeechRecognitionProvider>&&, UniqueRef<MediaRecorderProvider>&&, Ref<BroadcastChannelRegistry>&&, Ref<WebLockRegistry>&&, Ref<PermissionController>&&, UniqueRef<StorageProvider>&&, UniqueRef<ModelPlayerProvider>&&);
     WEBCORE_EXPORT ~PageConfiguration();
     PageConfiguration(PageConfiguration&&);
 
@@ -128,6 +132,7 @@ public:
     Ref<UserContentProvider> userContentProvider;
     RefPtr<VisitedLinkStore> visitedLinkStore;
     Ref<BroadcastChannelRegistry> broadcastChannelRegistry;
+    Ref<WebLockRegistry> webLockRegistry;
     
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
     RefPtr<DeviceOrientationUpdateProvider> deviceOrientationUpdateProvider;
@@ -135,7 +140,6 @@ public:
     Vector<UserContentURLPattern> corsDisablingPatterns;
     UniqueRef<SpeechRecognitionProvider> speechRecognitionProvider;
     UniqueRef<MediaRecorderProvider> mediaRecorderProvider;
-    RefPtr<ReportingEndpointsCache> reportingEndpointsCache;
 
     // FIXME: These should be all be Settings.
     bool loadsSubresources { true };

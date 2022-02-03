@@ -163,6 +163,7 @@ Shared/EntryPointUtilities/Cocoa/Daemon/PCMDaemonEntryPoint.mm
 
 Shared/Cocoa/APIDataCocoa.mm
 Shared/Cocoa/APIObject.mm
+Shared/Cocoa/ARKitSoftLink.mm
 Shared/Cocoa/ArgumentCodersCocoa.mm
 Shared/Cocoa/AuxiliaryProcessCocoa.mm
 Shared/Cocoa/CodeSigning.mm
@@ -220,6 +221,7 @@ Shared/mac/NativeWebWheelEventMac.mm
 Shared/mac/ObjCObjectGraph.mm
 Shared/mac/PasteboardTypes.mm
 Shared/mac/PrintInfoMac.mm
+Shared/mac/ScrollingAccelerationCurveMac.mm
 Shared/mac/SecItemRequestData.cpp
 Shared/mac/SecItemResponseData.cpp
 Shared/mac/SecItemShim.cpp
@@ -241,6 +243,8 @@ Shared/RemoteLayerTree/RemoteLayerTreePropertyApplier.mm
 Shared/RemoteLayerTree/RemoteLayerTreeTransaction.mm
 Shared/RemoteLayerTree/RemoteScrollingCoordinatorTransaction.cpp
 Shared/RemoteLayerTree/RemoteScrollingUIState.cpp
+
+WebProcess/GPU/webrtc/SharedVideoFrame.cpp
 
 UIProcess/_WKWebViewPrintFormatter.mm
 UIProcess/ApplicationStateTracker.mm
@@ -286,6 +290,7 @@ UIProcess/API/Cocoa/_WKInspectorExtension.mm
 UIProcess/API/Cocoa/_WKInspectorWindow.mm
 UIProcess/API/Cocoa/_WKInternalDebugFeature.mm
 UIProcess/API/Cocoa/_WKLinkIconParameters.mm
+UIProcess/API/Cocoa/_WKModalContainerInfo.mm
 UIProcess/API/Cocoa/_WKProcessPoolConfiguration.mm
 UIProcess/API/Cocoa/_WKRemoteWebInspectorViewController.mm
 UIProcess/API/Cocoa/_WKResourceLoadInfo.mm
@@ -402,6 +407,7 @@ UIProcess/Cocoa/IconLoadingDelegate.mm
 UIProcess/Cocoa/LegacyCustomProtocolManagerClient.mm
 UIProcess/Cocoa/MediaUtilities.mm
 UIProcess/Cocoa/MediaPermissionUtilities.mm
+UIProcess/Cocoa/ModalContainerControlClassifier.mm
 UIProcess/Cocoa/ModelElementControllerCocoa.mm
 UIProcess/Cocoa/NavigationState.mm
 UIProcess/Cocoa/PageClientImplCocoa.mm
@@ -514,6 +520,7 @@ UIProcess/ios/WKWebEvent.mm
 UIProcess/Launcher/cocoa/ProcessLauncherCocoa.mm
 
 UIProcess/mac/CorrectionPanel.mm
+UIProcess/mac/DisplayCaptureSessionManager.mm
 UIProcess/mac/DisplayLink.cpp
 UIProcess/mac/HighPerformanceGPUManager.mm
 UIProcess/mac/LegacySessionStateCoding.cpp
@@ -522,6 +529,7 @@ UIProcess/mac/SecItemShimProxy.cpp
 UIProcess/mac/ServicesController.mm
 UIProcess/mac/TextCheckerMac.mm
 UIProcess/mac/TiledCoreAnimationDrawingAreaProxy.mm
+UIProcess/mac/UserMediaPermissionRequestProxyMac.mm
 UIProcess/mac/ViewGestureControllerMac.mm
 UIProcess/mac/ViewSnapshotStoreMac.mm
 UIProcess/mac/WebColorPickerMac.mm
@@ -632,6 +640,7 @@ WebProcess/InjectedBundle/API/c/mac/WKBundleMac.mm
 WebProcess/InjectedBundle/API/c/mac/WKBundlePageBannerMac.mm
 
 WebProcess/InjectedBundle/API/Cocoa/WKWebProcessBundleParameters.mm
+WebProcess/InjectedBundle/API/Cocoa/WKWebProcessPlugInCSSStyleDeclarationHandle.mm
 WebProcess/InjectedBundle/API/Cocoa/WKWebProcessPlugInFrame.mm
 WebProcess/InjectedBundle/API/Cocoa/WKWebProcessPlugInHitTestResult.mm
 WebProcess/InjectedBundle/API/Cocoa/WKWebProcessPlugInNodeHandle.mm

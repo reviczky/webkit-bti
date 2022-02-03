@@ -217,7 +217,7 @@ public:
     LayoutRect applyVisualEffectOverflow(const LayoutRect&) const;
     void addOverflowFromChild(const RenderBox* child) { addOverflowFromChild(child, child->locationOffset()); }
     void addOverflowFromChild(const RenderBox* child, const LayoutSize& delta);
-    
+
     void updateLayerTransform();
 
     LayoutSize contentSize() const { return { contentWidth(), contentHeight() }; }
@@ -669,8 +669,6 @@ override;
 
     virtual void adjustBorderBoxRectForPainting(LayoutRect&) { };
 
-    LayoutRect absoluteAnchorRectWithScrollMargin(bool* insideFixed = nullptr) const override;
-
     bool shouldComputeLogicalHeightFromAspectRatio() const;
 
 protected:
@@ -710,7 +708,7 @@ protected:
     LayoutUnit computeIntrinsicLogicalWidthUsing(Length logicalWidthLength, LayoutUnit availableLogicalWidth, LayoutUnit borderAndPadding) const;
     virtual std::optional<LayoutUnit> computeIntrinsicLogicalContentHeightUsing(Length logicalHeightLength, std::optional<LayoutUnit> intrinsicContentHeight, LayoutUnit borderAndPadding) const;
     
-    virtual bool shouldComputeSizeAsReplaced() const { return isReplaced() && !isInlineBlockOrInlineTable(); }
+    virtual bool shouldComputeSizeAsReplaced() const { return isReplacedOrInlineBlock() && !isInlineBlockOrInlineTable(); }
 
     void mapLocalToContainer(const RenderLayerModelObject* ancestorContainer, TransformState&, OptionSet<MapCoordinatesMode>, bool* wasFixed) const override;
     const RenderObject* pushMappingToContainer(const RenderLayerModelObject*, RenderGeometryMap&) const override;
@@ -783,7 +781,7 @@ private:
     // These include tables, positioned objects, floats and flexible boxes.
     virtual void computePreferredLogicalWidths();
 
-    LayoutRect frameRectForStickyPositioning() const final { return frameRect(); }
+    LayoutRect frameRectForStickyPositioning() const override { return frameRect(); }
 
     LayoutRect computeVisibleRectUsingPaintOffset(const LayoutRect&) const;
     

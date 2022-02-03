@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "ActivityState.h"
 #include "CSSComputedStyleDeclaration.h"
 #include "ContextDestructionObserver.h"
 #include "Cookie.h"
@@ -46,6 +47,8 @@
 #include "MediaUniqueIdentifier.h"
 #endif
 
+OBJC_CLASS DDScannerResult;
+
 namespace WebCore {
 
 class AbstractRange;
@@ -56,6 +59,7 @@ class AudioTrack;
 class BaseAudioContext;
 class Blob;
 class CacheStorageConnection;
+class CaptionUserPreferencesTestingModeToken;
 class DOMPointReadOnly;
 class DOMRect;
 class DOMRectList;
@@ -66,6 +70,7 @@ class Document;
 class Element;
 class EventListener;
 class ExtendableEvent;
+class FetchRequest;
 class FetchResponse;
 class File;
 class Frame;
@@ -187,6 +192,9 @@ public:
     enum class ResourceLoadPriority { ResourceLoadPriorityVeryLow, ResourceLoadPriorityLow, ResourceLoadPriorityMedium, ResourceLoadPriorityHigh, ResourceLoadPriorityVeryHigh };
     void setOverrideResourceLoadPriority(ResourceLoadPriority);
     void setStrictRawResourceValidationPolicyDisabled(bool);
+
+    using FetchObject = std::variant<RefPtr<FetchRequest>, RefPtr<FetchResponse>>;
+    bool isFetchObjectContextStopped(const FetchObject&);
 
     void clearMemoryCache();
     void pruneMemoryCacheToSize(unsigned size);
@@ -484,8 +492,8 @@ public:
 
     unsigned numberOfResizeObservers(const Document&) const;
 
-    uint64_t documentIdentifier(const Document&) const;
-    bool isDocumentAlive(uint64_t documentIdentifier) const;
+    String documentIdentifier(const Document&) const;
+    bool isDocumentAlive(const String& documentIdentifier) const;
 
     uint64_t storageAreaMapCount() const;
 
@@ -497,7 +505,7 @@ public:
 
     bool isAnyWorkletGlobalScopeAlive() const;
 
-    String serviceWorkerClientIdentifier(const Document&) const;
+    String serviceWorkerClientInternalIdentifier(const Document&) const;
 
     RefPtr<WindowProxy> openDummyInspectorFrontend(const String& url);
     void closeDummyInspectorFrontend();
@@ -839,6 +847,7 @@ public:
 #endif
 
     void setPageVisibility(bool isVisible);
+    void setPageIsFocused(bool);
     void setPageIsFocusedAndActive(bool);
     void setPageIsInWindow(bool);
     bool isPageActive() const;
@@ -882,6 +891,7 @@ public:
     void cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString>&&);
     void setResponseSizeWithPadding(FetchResponse&, uint64_t size);
     uint64_t responseSizeWithPadding(FetchResponse&) const;
+    const String& responseNetworkLoadMetricsProtocol(const FetchResponse&);
 
     void updateQuotaBasedOnSpaceUsage();
 
@@ -915,10 +925,32 @@ public:
         RefPtr<DOMPointReadOnly> bottomRight;
         RefPtr<DOMPointReadOnly> bottomLeft;
         Vector<ImageOverlayText> children;
+        bool hasTrailingNewline { true };
 
         ~ImageOverlayLine();
     };
-    void installImageOverlay(Element&, Vector<ImageOverlayLine>&&);
+
+    struct ImageOverlayBlock {
+        String text;
+        RefPtr<DOMPointReadOnly> topLeft;
+        RefPtr<DOMPointReadOnly> topRight;
+        RefPtr<DOMPointReadOnly> bottomRight;
+        RefPtr<DOMPointReadOnly> bottomLeft;
+
+        ~ImageOverlayBlock();
+    };
+
+    struct ImageOverlayDataDetector {
+        RefPtr<DOMPointReadOnly> topLeft;
+        RefPtr<DOMPointReadOnly> topRight;
+        RefPtr<DOMPointReadOnly> bottomRight;
+        RefPtr<DOMPointReadOnly> bottomLeft;
+
+        ~ImageOverlayDataDetector();
+    };
+
+    void installImageOverlay(Element&, Vector<ImageOverlayLine>&&, Vector<ImageOverlayBlock>&& = { }, Vector<ImageOverlayDataDetector>&& = { });
+    bool hasActiveDataDetectorHighlight() const;
 
 #if ENABLE(IMAGE_ANALYSIS)
     void requestTextRecognition(Element&, RefPtr<VoidCallback>&&);
@@ -990,7 +1022,15 @@ public:
     using PlaybackControlsPurpose = MediaElementSession::PlaybackControlsPurpose;
     RefPtr<HTMLMediaElement> bestMediaElementForRemoteControls(PlaybackControlsPurpose);
 
-    using MediaSessionState = PlatformMediaSession::State;
+    // Same values as PlatformMediaSession::State, but re-declared to avoid redefinitions when linking
+    // directly with libWebCore (e.g. with non-unified builds)
+    enum MediaSessionState {
+        Idle,
+        Autoplaying,
+        Playing,
+        Paused,
+        Interrupted,
+    };
     MediaSessionState mediaSessionState(HTMLMediaElement&);
 
     size_t mediaElementCount() const;
@@ -1014,7 +1054,9 @@ public:
     bool capsLockIsOn();
         
     using HEVCParameterSet = WebCore::HEVCParameters;
+    using HEVCParameterCodec = WebCore::HEVCParameters::Codec;
     std::optional<HEVCParameterSet> parseHEVCCodecParameters(StringView);
+    String createHEVCCodecParametersString(const HEVCParameterSet& parameters);
 
     struct DoViParameterSet {
         String codecName;
@@ -1022,6 +1064,7 @@ public:
         uint16_t bitstreamLevelID;
     };
     std::optional<DoViParameterSet> parseDoViCodecParameters(StringView);
+    String createDoViCodecParametersString(const DoViParameterSet& parameters);
 
     using VPCodecConfigurationRecord = WebCore::VPCodecConfigurationRecord;
     std::optional<VPCodecConfigurationRecord> parseVPCodecParameters(StringView);
@@ -1169,7 +1212,10 @@ public:
     };
 
     ExceptionOr<AttachmentThumbnailInfo> attachmentThumbnailInfo(const HTMLAttachmentElement&);
+#if ENABLE(SERVICE_CONTROLS)
+    bool hasImageControls(const HTMLImageElement&) const;
 #endif
+#endif // ENABLE(ATTACHMENT_ELEMENT)
 
 #if ENABLE(MEDIA_SESSION)
     ExceptionOr<double> currentMediaSessionPosition(const MediaSession&);
@@ -1213,13 +1259,21 @@ public:
     RefPtr<PushSubscription> createPushSubscription(const String& endpoint, std::optional<EpochTimeStamp> expirationTime, const ArrayBuffer& serverVAPIDPublicKey, const ArrayBuffer& clientECDHPublicKey, const ArrayBuffer& auth);
 #endif
 
+    void overrideModalContainerSearchTermForTesting(const String& term);
+
 private:
     explicit Internals(Document&);
     Document* contextDocument() const;
     Frame* frame() const;
 
+    void updatePageActivityState(OptionSet<ActivityState::Flag> statesToChange, bool newValue);
+
     ExceptionOr<RenderedDocumentMarker*> markerAt(Node&, const String& markerType, unsigned index);
     ExceptionOr<ScrollableArea*> scrollableAreaForNode(Node*) const;
+
+#if ENABLE(DATA_DETECTION)
+    static DDScannerResult *fakeDataDetectorResultForTesting();
+#endif
 
 #if ENABLE(MEDIA_STREAM)
     // RealtimeMediaSource::Observer API
@@ -1250,6 +1304,9 @@ private:
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
     RefPtr<MockMediaSessionCoordinator> m_mockMediaSessionCoordinator;
+#endif
+#if ENABLE(VIDEO)
+    std::unique_ptr<CaptionUserPreferencesTestingModeToken> m_testingModeToken;
 #endif
 };
 

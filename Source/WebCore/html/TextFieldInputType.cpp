@@ -120,7 +120,7 @@ bool TextFieldInputType::isEmptyValue() const
 bool TextFieldInputType::valueMissing(const String& value) const
 {
     ASSERT(element());
-    return element()->isRequired() && value.isEmpty();
+    return !element()->isDisabledOrReadOnly() && element()->isRequired() && value.isEmpty();
 }
 
 void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChanged, TextFieldEventBehavior eventBehavior)
@@ -619,7 +619,7 @@ void TextFieldInputType::updatePlaceholderText()
     if (!supportsPlaceholder())
         return;
     ASSERT(element());
-    String placeholderText = element()->strippedPlaceholder();
+    String placeholderText = element()->placeholder();
     if (placeholderText.isEmpty()) {
         if (m_placeholder) {
             m_placeholder->parentNode()->removeChild(*m_placeholder);
@@ -634,9 +634,9 @@ void TextFieldInputType::updatePlaceholderText()
     m_placeholder->setInnerText(placeholderText);
 }
 
-bool TextFieldInputType::appendFormData(DOMFormData& formData, bool multipart) const
+bool TextFieldInputType::appendFormData(DOMFormData& formData) const
 {
-    InputType::appendFormData(formData, multipart);
+    InputType::appendFormData(formData);
     ASSERT(element());
     auto& dirnameAttrValue = element()->attributeWithoutSynchronization(dirnameAttr);
     if (!dirnameAttrValue.isNull())

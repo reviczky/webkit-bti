@@ -75,6 +75,11 @@ OBJC_CLASS WKWebInspectorPreferenceObserver;
 #include <pal/system/SystemSleepListener.h>
 #endif
 
+
+#if ENABLE(IPC_TESTING_API)
+#include "IPCTester.h"
+#endif
+
 namespace API {
 class AutomationClient;
 class DownloadClient;
@@ -97,12 +102,13 @@ class PowerSourceNotifier;
 
 namespace WebKit {
 
-class WebBackForwardCache;
+class CaptivePortalModeObserver;
 class HighPerformanceGraphicsUsageSampler;
 class UIGamepad;
 class PerActivityStateCPUUsageSampler;
 class SuspendedPageProxy;
 class WebAutomationSession;
+class WebBackForwardCache;
 class WebContextSupplement;
 class WebPageGroup;
 class WebPageProxy;
@@ -119,7 +125,10 @@ int networkProcessThroughputQOS();
 int webProcessLatencyQOS();
 int webProcessThroughputQOS();
 #endif
+void addCaptivePortalModeObserver(CaptivePortalModeObserver&);
+void removeCaptivePortalModeObserver(CaptivePortalModeObserver&);
 bool captivePortalModeEnabledBySystem();
+void setCaptivePortalModeEnabledGloballyForTesting(std::optional<bool>);
 
 enum class CallDownloadDidStart : bool;
 enum class ProcessSwapRequestedByClient : bool;
@@ -366,7 +375,7 @@ public:
 
     bool isServiceWorkerPageID(WebPageProxyIdentifier) const;
 #if ENABLE(SERVICE_WORKER)
-    static void establishWorkerContextConnectionToNetworkProcess(NetworkProcessProxy&, WebCore::RegistrableDomain&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID, CompletionHandler<void()>&&);
+    static void establishServiceWorkerContextConnectionToNetworkProcess(NetworkProcessProxy&, WebCore::RegistrableDomain&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID, CompletionHandler<void()>&&);
     void removeFromServiceWorkerProcesses(WebProcessProxy&);
     size_t serviceWorkerProxiesCount() const { return serviceWorkerProcesses().computeSize(); }
     void updateServiceWorkerUserAgent(const String& userAgent);
@@ -432,6 +441,8 @@ public:
     void setCookieStoragePartitioningEnabled(bool);
 
     void clearPermanentCredentialsForProtectionSpace(WebCore::ProtectionSpace&&);
+
+    void captivePortalModeStateChanged();
 #endif
 
     ForegroundWebProcessToken foregroundWebProcessToken() const { return ForegroundWebProcessToken(m_foregroundWebProcessCounter.count()); }
@@ -709,7 +720,6 @@ private:
 
 #if PLATFORM(COCOA)
     RetainPtr<NSMutableDictionary> m_bundleParameters;
-    ProcessSuppressionDisabledToken m_pluginProcessManagerProcessSuppressionDisabledToken;
     mutable RetainPtr<NSSet> m_classesForParameterCoder;
 #endif
 
@@ -797,6 +807,9 @@ private:
 #if PLATFORM(MAC)
     std::unique_ptr<WebCore::PowerObserver> m_powerObserver;
     std::unique_ptr<PAL::SystemSleepListener> m_systemSleepListener;
+#endif
+#if ENABLE(IPC_TESTING_API)
+    IPCTester m_ipcTester;
 #endif
 };
 

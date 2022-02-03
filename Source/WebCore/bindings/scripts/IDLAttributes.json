@@ -51,7 +51,11 @@
         },
         "CallWith": {
             "contextsAllowed": ["attribute", "operation"],
-            "values": ["Document", "ExecState", "ScriptExecutionContext", "GlobalObject", "ActiveWindow", "FirstWindow", "EntryDocument", "World", "PropertyName"],
+            "values": ["Document", "RelevantDocument", "ScriptExecutionContext", "RelevantScriptExecutionContext", "GlobalObject", "RelevantGlobalObject", "ActiveWindow", "FirstWindow", "EntryDocument", "World", "PropertyName"],
+            "standard": {
+                "url": "https://html.spec.whatwg.org/multipage/webappapis.html#concept-current-everything",
+                "note": "Currently, Document / ScriptExecutionContext / GlobalObject values denote current realm, which is a [[Realm]] of the currently-running function object."
+            },
             "supportsConjunction": true
         },
         "CheckSecurity": {
@@ -82,6 +86,10 @@
             "supportsConjunction": true
         },
         "ConstantsScope": {
+            "contextsAllowed": ["interface"],
+            "values": ["*"]
+        },
+        "ConstantsEnum": {
             "contextsAllowed": ["interface"],
             "values": ["*"]
         },
@@ -136,9 +144,6 @@
         "CustomToJSObject": {
             "contextsAllowed": ["interface"]
         },
-        "CustomEnabled": {
-            "contextsAllowed": ["interface", "dictionary", "enum", "attribute", "operation", "constant", "iterable"]
-        },
         "DOMJIT": {
             "contextsAllowed": ["interface", "attribute", "operation"],
             "values": ["", "ReadDOM", "Getter"],
@@ -165,9 +170,6 @@
             "contextsAllowed": ["attribute"]
         },
         "DoNotCheckSecurityOnSetter": {
-            "contextsAllowed": ["attribute"]
-        },
-        "DocumentEventHandler": {
             "contextsAllowed": ["attribute"]
         },
         "EnabledByQuirk": {
@@ -219,13 +221,21 @@
                 "url": "https://webidl.spec.whatwg.org/#Exposed"
             }
         },
-        "GenerateIsReachable": {
-            "contextsAllowed": ["interface"],
-            "values": ["", "Impl", "ImplWebGLRenderingContext", "ImplCanvasBase", "ImplDocument", "ImplElementRoot", "ImplOwnerNodeRoot", "ImplScriptExecutionContext", "ReachableFromDOMWindow", "ReachableFromNavigator"]
-        },
         "GenerateAddOpaqueRoot": {
             "contextsAllowed": ["interface"],
             "values": ["*"]
+        },
+        "GenerateForEachEventHandlerContentAttribute": {
+            "contextsAllowed": ["interface"],
+            "values": ["*"]
+        },
+        "GenerateForEachWindowEventHandlerContentAttribute": {
+            "contextsAllowed": ["interface"],
+            "values": ["*"]
+        },
+        "GenerateIsReachable": {
+            "contextsAllowed": ["interface"],
+            "values": ["", "Impl", "ImplWebGLRenderingContext", "ImplCanvasBase", "ImplDocument", "ImplElementRoot", "ImplOwnerNodeRoot", "ImplScriptExecutionContext", "ReachableFromDOMWindow", "ReachableFromNavigator"]
         },
         "Global": {
             "contextsAllowed": ["interface"],
@@ -248,9 +258,6 @@
         "ImplementedBy": {
             "contextsAllowed": ["interface", "namespace", "dictionary", "dictionary-member", "attribute", "operation", "constant"],
             "values": ["*"]
-        },
-        "ImplementationLacksVTable": {
-            "contextsAllowed": ["interface"]
         },
         "InterfaceName": {
             "contextsAllowed": ["interface", "namespace"],
@@ -299,7 +306,7 @@
         },
         "LegacyFactoryFunctionCallWith": {
             "contextsAllowed": ["interface"],
-            "values": ["Document", "ExecState", "RuntimeFlags", "ScriptExecutionContext"],
+            "values": ["Document", "RuntimeFlags", "ScriptExecutionContext"],
             "supportsConjunction": true
         },
         "LegacyFactoryFunctionEnabledBySetting": {
@@ -469,16 +476,13 @@
         },
         "SetterCallWith": {
             "contextsAllowed": ["attribute"],
-            "values": ["ExecState", "ScriptExecutionContext", "GlobalObject", "ActiveWindow", "FirstWindow", "PropertyName"],
+            "values": ["ScriptExecutionContext", "GlobalObject", "ActiveWindow", "FirstWindow", "PropertyName"],
             "supportsConjunction": true
         },
         "SettingsConditionallyReadWrite": {
             "contextsAllowed": ["attribute"],
             "values": ["*"],
             "supportsConjunction": true
-        },
-        "SkipCallbackInvokeCheck": {
-            "contextsAllowed": ["operation", "callback-function"]
         },
         "SkipVTableValidation": {
             "contextsAllowed": ["interface"]

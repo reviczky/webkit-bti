@@ -28,6 +28,7 @@
 
 #include "DisplayListItemBufferIdentifier.h"
 #include "DisplayListItems.h"
+#include "Filter.h"
 #include <wtf/FastMalloc.h>
 
 namespace WebCore {
@@ -113,6 +114,9 @@ void ItemHandle::apply(GraphicsContext& context)
         return;
     case ItemType::EndClipToDrawingCommands:
         ASSERT_NOT_REACHED();
+        return;
+    case ItemType::DrawFilteredImageBuffer:
+        get<DrawFilteredImageBuffer>().apply(context);
         return;
     case ItemType::DrawGlyphs:
         ASSERT_NOT_REACHED();
@@ -255,6 +259,9 @@ void ItemHandle::destroy()
         return;
     case ItemType::ClipPath:
         get<ClipPath>().~ClipPath();
+        return;
+    case ItemType::DrawFilteredImageBuffer:
+        get<DrawFilteredImageBuffer>().~DrawFilteredImageBuffer();
         return;
     case ItemType::DrawFocusRingPath:
         get<DrawFocusRingPath>().~DrawFocusRingPath();
@@ -491,6 +498,8 @@ bool ItemHandle::safeCopy(ItemType itemType, ItemHandle destination) const
         return copyInto<ClipOutToPath>(itemOffset, *this);
     case ItemType::ClipPath:
         return copyInto<ClipPath>(itemOffset, *this);
+    case ItemType::DrawFilteredImageBuffer:
+        return copyInto<DrawFilteredImageBuffer>(itemOffset, *this);
     case ItemType::DrawFocusRingPath:
         return copyInto<DrawFocusRingPath>(itemOffset, *this);
     case ItemType::DrawFocusRingRects:
@@ -729,7 +738,7 @@ DidChangeItemBuffer ItemBuffer::swapWritableBufferIfNeeded(size_t numberOfBytes)
 void ItemBuffer::append(const DisplayListItem& temporaryItem)
 {
     auto requiredSizeForItem = m_writingClient->requiredSizeForItem(temporaryItem);
-    RefPtr<SharedBuffer> outOfLineItem;
+    RefPtr<FragmentedSharedBuffer> outOfLineItem;
     if (!requiredSizeForItem) {
         outOfLineItem = m_writingClient->encodeItemOutOfLine(temporaryItem);
         if (!outOfLineItem)

@@ -53,7 +53,7 @@ WorkerParameters WorkerParameters::isolatedCopy() const
         inspectorIdentifier.isolatedCopy(),
         userAgent.isolatedCopy(),
         isOnline,
-        contentSecurityPolicyResponseHeaders,
+        contentSecurityPolicyResponseHeaders.isolatedCopy(),
         shouldBypassMainWorldContentSecurityPolicy,
         crossOriginEmbedderPolicy.isolatedCopy(),
         timeOrigin,
@@ -116,7 +116,7 @@ Ref<Thread> WorkerThread::createThread()
         return Thread::current();
     }
 
-    return Thread::create(isServiceWorkerThread() ? "WebCore: Service Worker" : "WebCore: Worker", [this] {
+    return Thread::create(threadName(), [this] {
         workerOrWorkletThread();
     }, ThreadType::JavaScript);
 }

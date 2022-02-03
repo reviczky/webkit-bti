@@ -24,12 +24,34 @@
 
 #pragma once
 
+#include "HasSelectorFilter.h"
 #include "SelectorFilter.h"
+#include <wtf/HashMap.h>
 
 namespace WebCore::Style {
 
+using HasPseudoClassCacheKey = std::pair<const Element*, const CSSSelector*>;
+using HasPseudoClassFilterKey = std::pair<const Element*, uint8_t>;
+
+enum class HasPseudoClassMatch : uint8_t { None, Matches, Fails, FailsSubtree };
+
 struct SelectorMatchingState {
     SelectorFilter selectorFilter;
+
+    Vector<Ref<const Element>> queryContainers;
+
+    HashMap<HasPseudoClassCacheKey, HasPseudoClassMatch> hasPseudoClassMatchCache;
+    HashMap<HasPseudoClassFilterKey, std::unique_ptr<HasSelectorFilter>> hasPseudoClassSelectorFilters;
 };
+
+inline HasPseudoClassCacheKey makeHasPseudoClassCacheKey(const Element& element, const CSSSelector& selector)
+{
+    return { &element, &selector };
+}
+
+inline HasPseudoClassFilterKey makeHasPseudoClassFilterKey(const Element& element, HasSelectorFilter::Type type)
+{
+    return { &element, static_cast<uint8_t>(type) };
+}
 
 }

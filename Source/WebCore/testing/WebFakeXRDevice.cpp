@@ -91,6 +91,12 @@ void SimulatedXRDevice::setViewerOrigin(const std::optional<FrameData::Pose>& or
     m_frameData.isTrackingValid = false;
 }
 
+void SimulatedXRDevice::setVisibilityState(XRVisibilityState visibilityState)
+{
+    if (m_trackingAndRenderingClient)
+        m_trackingAndRenderingClient->updateSessionVisibilityState(visibilityState);
+}
+
 void SimulatedXRDevice::simulateShutdownCompleted()
 {
     if (m_trackingAndRenderingClient)
@@ -109,7 +115,7 @@ void SimulatedXRDevice::initializeTrackingAndRendering(PlatformXR::SessionMode)
     attributes.depth = false;
     attributes.stencil = false;
     attributes.antialias = false;
-    m_gl = GraphicsContextGL::create(attributes, nullptr);
+    m_gl = createWebProcessGraphicsContextGL(attributes);
 
     if (m_trackingAndRenderingClient) {
         // WebXR FakeDevice waits for simulateInputConnection calls to add input sources-
@@ -250,8 +256,9 @@ void WebFakeXRDevice::setViewerOrigin(FakeXRRigidTransformInit origin, bool emul
     m_device.setEmulatedPosition(emulatedPosition);
 }
 
-void WebFakeXRDevice::simulateVisibilityChange(XRVisibilityState)
+void WebFakeXRDevice::simulateVisibilityChange(XRVisibilityState visibilityState)
 {
+    m_device.setVisibilityState(visibilityState);
 }
 
 void WebFakeXRDevice::setFloorOrigin(FakeXRRigidTransformInit origin)

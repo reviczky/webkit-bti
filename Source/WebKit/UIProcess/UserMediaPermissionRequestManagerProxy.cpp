@@ -45,6 +45,10 @@
 #include "GPUProcessProxy.h"
 #endif
 
+#if HAVE(SCREEN_CAPTURE_KIT)
+#include <WebCore/ScreenCaptureKitCaptureSource.h>
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -95,7 +99,7 @@ UserMediaPermissionRequestManagerProxy::UserMediaPermissionRequestManagerProxy(W
 
 UserMediaPermissionRequestManagerProxy::~UserMediaPermissionRequestManagerProxy()
 {
-    m_page.sendWithAsyncReply(Messages::WebPage::StopMediaCapture { MediaProducerMediaCaptureKind::AudioVideo }, [] { });
+    m_page.sendWithAsyncReply(Messages::WebPage::StopMediaCapture { MediaProducerMediaCaptureKind::EveryKind }, [] { });
 #if ENABLE(MEDIA_STREAM)
     UserMediaProcessManager::singleton().revokeSandboxExtensionsIfNeeded(page().process());
     proxies().remove(this);
@@ -129,7 +133,7 @@ void UserMediaPermissionRequestManagerProxy::stopCapture()
 {
     ALWAYS_LOG(LOGIDENTIFIER);
     invalidatePendingRequests();
-    m_page.stopMediaCapture(MediaProducerMediaCaptureKind::AudioVideo);
+    m_page.stopMediaCapture(MediaProducerMediaCaptureKind::EveryKind);
 }
 
 void UserMediaPermissionRequestManagerProxy::captureDevicesChanged()
@@ -421,7 +425,7 @@ void UserMediaPermissionRequestManagerProxy::scheduleNextRejection()
 #if ENABLE(MEDIA_STREAM)
 UserMediaPermissionRequestManagerProxy::RequestAction UserMediaPermissionRequestManagerProxy::getRequestAction(const UserMediaPermissionRequestProxy& request)
 {
-    bool requestingScreenCapture = request.requestType() == MediaStreamRequest::Type::DisplayMedia;
+    bool requestingScreenCapture = request.requestType() == MediaStreamRequest::Type::DisplayMedia || request.requestType() == MediaStreamRequest::Type::DisplayMediaWithAudio;
     bool requestingCamera = !requestingScreenCapture && request.hasVideoDevice();
     bool requestingMicrophone = request.hasAudioDevice();
 
@@ -431,7 +435,7 @@ UserMediaPermissionRequestManagerProxy::RequestAction UserMediaPermissionRequest
     if (!request.isUserGesturePriviledged() && wasRequestDenied(request, requestingMicrophone, requestingCamera, requestingScreenCapture))
         return RequestAction::Deny;
 
-    if (request.requestType() == MediaStreamRequest::Type::DisplayMedia)
+    if (requestingScreenCapture)
         return RequestAction::Prompt;
 
     return searchForGrantedRequest(request.frameID(), request.userMediaDocumentSecurityOrigin(), request.topLevelDocumentSecurityOrigin(), requestingMicrophone, requestingCamera) ? RequestAction::Grant : RequestAction::Prompt;
@@ -580,7 +584,7 @@ void UserMediaPermissionRequestManagerProxy::processUserMediaPermissionValidRequ
     }
 
     if (action == RequestAction::Grant) {
-        ASSERT(m_currentUserMediaRequest->requestType() != MediaStreamRequest::Type::DisplayMedia);
+        ASSERT(m_currentUserMediaRequest->requestType() != MediaStreamRequest::Type::DisplayMedia && m_currentUserMediaRequest->requestType() != MediaStreamRequest::Type::DisplayMediaWithAudio);
 
         if (m_page.isViewVisible())
             grantRequest(*m_currentUserMediaRequest);
@@ -737,7 +741,7 @@ void UserMediaPermissionRequestManagerProxy::computeFilteredDeviceList(bool reve
     static const unsigned defaultMaximumCameraCount = 1;
     static const unsigned defaultMaximumMicrophoneCount = 1;
 
-    platformGetMediaStreamDevices([this, weakThis = WeakPtr { *this }, revealIdsAndLabels, completion = WTFMove(completion)](auto&& devices) mutable {
+    platformGetMediaStreamDevices([logIdentifier = LOGIDENTIFIER, this, weakThis = WeakPtr { *this }, revealIdsAndLabels, completion = WTFMove(completion)](auto&& devices) mutable {
 
         if (!weakThis) {
             completion({ });
@@ -747,11 +751,15 @@ void UserMediaPermissionRequestManagerProxy::computeFilteredDeviceList(bool reve
         unsigned cameraCount = 0;
         unsigned microphoneCount = 0;
 
+        bool hasCamera = false;
+        bool hasMicrophone = false;
+
         Vector<CaptureDevice> filteredDevices;
         for (const auto& device : devices) {
             if (!device.enabled() || (device.type() != WebCore::CaptureDevice::DeviceType::Camera && device.type() != WebCore::CaptureDevice::DeviceType::Microphone && device.type() != WebCore::CaptureDevice::DeviceType::Speaker))
                 continue;
-
+            hasCamera |= device.type() == WebCore::CaptureDevice::DeviceType::Camera;
+            hasMicrophone |= device.type() == WebCore::CaptureDevice::DeviceType::Microphone;
             if (!revealIdsAndLabels) {
                 if (device.type() == WebCore::CaptureDevice::DeviceType::Camera && ++cameraCount > defaultMaximumCameraCount)
                     continue;
@@ -769,7 +777,7 @@ void UserMediaPermissionRequestManagerProxy::computeFilteredDeviceList(bool reve
         }
 
         m_hasFilteredDeviceList = !revealIdsAndLabels;
-        ALWAYS_LOG(LOGIDENTIFIER, filteredDevices.size(), " devices revealed");
+        ALWAYS_LOG(logIdentifier, filteredDevices.size(), " devices revealed, has filtering = ", !revealIdsAndLabels, " has camera = ", hasCamera, ", has microphone = ", hasMicrophone, " ");
 
         completion(WTFMove(filteredDevices));
     });
@@ -855,6 +863,10 @@ void UserMediaPermissionRequestManagerProxy::syncWithWebCorePrefs() const
 #if ENABLE(GPU_PROCESS)
     if (m_page.preferences().captureAudioInGPUProcessEnabled() || m_page.preferences().captureVideoInGPUProcessEnabled())
         m_page.process().processPool().ensureGPUProcess().setUseMockCaptureDevices(mockDevicesEnabled);
+#endif
+
+#if HAVE(SCREEN_CAPTURE_KIT)
+    WebCore::ScreenCaptureKitCaptureSource::setEnabled(m_page.preferences().useScreenCaptureKit());
 #endif
 
     if (MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled() == mockDevicesEnabled)

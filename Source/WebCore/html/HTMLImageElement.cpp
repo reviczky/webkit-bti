@@ -30,6 +30,7 @@
 #include "ChromeClient.h"
 #include "Editor.h"
 #include "ElementIterator.h"
+#include "EventLoop.h"
 #include "EventNames.h"
 #include "FrameView.h"
 #include "HTMLAnchorElement.h"
@@ -59,6 +60,10 @@
 #include "SizesAttributeParser.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/text/StringBuilder.h>
+
+#if ENABLE(SERVICE_CONTROLS)
+#include "ImageControlsMac.h"
+#endif
 
 namespace WebCore {
 
@@ -308,6 +313,10 @@ void HTMLImageElement::parseAttribute(const QualifiedName& name, const AtomStrin
         BlendMode blendOp = BlendMode::Normal;
         if (!parseCompositeAndBlendOperator(value, m_compositeOperator, blendOp))
             m_compositeOperator = CompositeOperator::SourceOver;
+#if ENABLE(SERVICE_CONTROLS)
+    } else if (m_imageMenuEnabled) {
+        updateImageControls();
+#endif
     } else if (name == loadingAttr) {
         // No action needed for eager to lazy transition.
         if (!hasLazyLoadableAttributeValue(value))
@@ -375,6 +384,10 @@ void HTMLImageElement::didAttachRenderers()
         return;
     if (m_imageLoader->hasPendingBeforeLoadEvent())
         return;
+
+#if ENABLE(SERVICE_CONTROLS)
+    updateImageControls();
+#endif
 
     auto& renderImage = downcast<RenderImage>(*renderer());
     RenderImageResource& renderImageResource = renderImage.imageResource();
@@ -730,6 +743,9 @@ void HTMLImageElement::setAttachmentElement(Ref<HTMLAttachmentElement>&& attachm
 
     attachment->setInlineStyleProperty(CSSPropertyDisplay, CSSValueNone, true);
     ensureUserAgentShadowRoot().appendChild(WTFMove(attachment));
+#if ENABLE(SERVICE_CONTROLS)
+    m_imageMenuEnabled = true;
+#endif
 }
 
 RefPtr<HTMLAttachmentElement> HTMLImageElement::attachmentElement() const
@@ -752,6 +768,56 @@ const String& HTMLImageElement::attachmentIdentifier() const
 }
 
 #endif // ENABLE(ATTACHMENT_ELEMENT)
+
+#if ENABLE(SERVICE_CONTROLS)
+void HTMLImageElement::updateImageControls()
+{
+    // If this image element is inside a shadow tree then it is part of an image control.
+    if (isInShadowTree())
+        return;
+    if (!document().settings().imageControlsEnabled())
+        return;
+    document().eventLoop().queueTask(TaskSource::InternalAsyncTask, [this, protectedThis = Ref { *this }] {
+        bool hasControls = hasImageControls();
+        if (!m_imageMenuEnabled && hasControls)
+            destroyImageControls();
+        else if (m_imageMenuEnabled && !hasControls)
+            tryCreateImageControls();
+    });
+}
+
+void HTMLImageElement::tryCreateImageControls()
+{
+    ASSERT(m_imageMenuEnabled);
+    ASSERT(!hasImageControls());
+    ImageControlsMac::createImageControls(*this);
+}
+
+void HTMLImageElement::destroyImageControls()
+{
+    auto shadowRoot = userAgentShadowRoot();
+    if (!shadowRoot)
+        return;
+    if (RefPtr<Node> node = shadowRoot->firstChild()) {
+        RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(ImageControlsMac::hasControls(downcast<HTMLElement>(*node)));
+        shadowRoot->removeChild(*node);
+    }
+    auto* renderObject = renderer();
+    if (!renderObject)
+        return;
+    downcast<RenderImage>(*renderObject).setHasShadowControls(false);
+}
+
+bool HTMLImageElement::hasImageControls() const
+{
+    return ImageControlsMac::hasControls(*this);
+}
+
+bool HTMLImageElement::childShouldCreateRenderer(const Node& child) const
+{
+    return hasShadowRootParent(child) && HTMLElement::childShouldCreateRenderer(child);
+}
+#endif // ENABLE(SERVICE_CONTROLS)
 
 #if PLATFORM(IOS_FAMILY)
 // FIXME: We should find a better place for the touch callout logic. See rdar://problem/48937767.

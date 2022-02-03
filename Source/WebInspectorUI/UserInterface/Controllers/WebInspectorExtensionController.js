@@ -34,7 +34,17 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
         this._tabIDsForExtensionIDMap = new Multimap;
         this._nextExtensionTabID = 1;
 
+        this._extensionTabPositions = null;
+        this._saveTabPositionsDebouncer = null;
+
         WI.Frame.addEventListener(WI.Frame.Event.MainResourceDidChange, this._handleMainResourceDidChange, this);
+    }
+
+    // Static
+
+    static get extensionTabPositionsObjectStoreKey()
+    {
+        return "extension-tab-positions";
     }
 
     // Public
@@ -44,14 +54,20 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
         return new Set(this._extensionForExtensionIDMap.keys());
     }
 
-    registerExtension(extensionID, displayName)
+    registerExtension(extensionID, extensionBundleIdentifier, displayName)
     {
         if (this._extensionForExtensionIDMap.has(extensionID)) {
             WI.reportInternalError("Unable to register extension, it's already registered: " + extensionID);
             return WI.WebInspectorExtension.ErrorCode.RegistrationFailed;
         }
 
-        let extension = new WI.WebInspectorExtension(extensionID, displayName);
+        if (!this._extensionForExtensionIDMap.size) {
+            WI.tabBrowser.tabBar.addEventListener(WI.TabBar.Event.TabBarItemAdded, this._saveExtensionTabPositions, this);
+            WI.tabBrowser.tabBar.addEventListener(WI.TabBar.Event.TabBarItemRemoved, this._saveExtensionTabPositions, this);
+            WI.tabBrowser.tabBar.addEventListener(WI.TabBar.Event.TabBarItemsReordered, this._saveExtensionTabPositions, this);
+        }
+
+        let extension = new WI.WebInspectorExtension(extensionID, extensionBundleIdentifier, displayName);
         this._extensionForExtensionIDMap.set(extensionID, extension);
 
         this.dispatchEventToListeners(WI.WebInspectorExtensionController.Event.ExtensionAdded, {extension});
@@ -63,6 +79,12 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
         if (!extension) {
             WI.reportInternalError("Unable to unregister extension with unknown ID: " + extensionID);
             return WI.WebInspectorExtension.ErrorCode.InvalidRequest;
+        }
+
+        if (!this._extensionForExtensionIDMap.size) {
+            WI.tabBrowser.tabBar.removeEventListener(WI.TabBar.Event.TabBarItemAdded, this._saveExtensionTabPositions, this);
+            WI.tabBrowser.tabBar.removeEventListener(WI.TabBar.Event.TabBarItemRemoved, this._saveExtensionTabPositions, this);
+            WI.tabBrowser.tabBar.removeEventListener(WI.TabBar.Event.TabBarItemsReordered, this._saveExtensionTabPositions, this);
         }
 
         let extensionTabIDsToRemove = this._tabIDsForExtensionIDMap.take(extensionID) || [];
@@ -77,7 +99,7 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
         this.dispatchEventToListeners(WI.WebInspectorExtensionController.Event.ExtensionRemoved, {extension});
     }
 
-    createTabForExtension(extensionID, tabName, tabIconURL, sourceURL)
+    async createTabForExtension(extensionID, tabName, tabIconURL, sourceURL)
     {
         let extension = this._extensionForExtensionIDMap.get(extensionID);
         if (!extension) {
@@ -90,10 +112,17 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
 
         this._tabIDsForExtensionIDMap.add(extensionID, extensionTabID);
         this._extensionTabContentViewForExtensionTabIDMap.set(extensionTabID, tabContentView);
-        WI.tabBrowser.addTabForContentView(tabContentView, {suppressAnimations: true});
+
+        if (!this._extensionTabPositions)
+            await this._loadExtensionTabPositions();
+
+        WI.tabBrowser.addTabForContentView(tabContentView, {
+            suppressAnimations: true,
+            insertionIndex: this._insertionIndexForExtensionTab(tabContentView),
+        });
 
         // The calling convention is to return an error string or a result object.
-        return {extensionTabID};
+        return {"result": extensionTabID};
     }
 
     evaluateScriptForExtension(extensionID, scriptSource, {frameURL, contextSecurityOrigin, useContentScriptContext} = {})
@@ -104,10 +133,10 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
             return WI.WebInspectorExtension.ErrorCode.InvalidRequest;
         }
 
-        // FIXME: <rdar://problem/74180355> implement execution context selection options
-        if (frameURL) {
-            WI.reportInternalError("evaluateScriptForExtension: the 'frameURL' option is not yet implemented.");
-            return WI.WebInspectorExtension.ErrorCode.NotImplemented;
+        let frame = this._frameForFrameURL(frameURL);
+        if (!frame) {
+            WI.reportInternalError("evaluateScriptForExtension: No frame matched provided frameURL: " + frameURL);
+            return WI.WebInspectorExtension.ErrorCode.InvalidRequest;
         }
 
         if (contextSecurityOrigin) {
@@ -120,7 +149,12 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
             return WI.WebInspectorExtension.ErrorCode.NotImplemented;
         }
 
-        let evaluationContext = WI.runtimeManager.activeExecutionContext;
+        let evaluationContext = frame.pageExecutionContext;
+        if (!evaluationContext) {
+            WI.reportInternalError("evaluateScriptForExtension: No 'pageExecutionContext' was present for frame with URL: " + frame.url);
+            return WI.WebInspectorExtension.ErrorCode.ContextDestroyed;
+        }
+
         return evaluationContext.target.RuntimeAgent.evaluate.invoke({
             expression: scriptSource,
             objectGroup: "extension-evaluation",
@@ -136,7 +170,7 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
             return wasThrown ? {"error": resultOrError.description} : {"result": value};
         }).catch((error) => error.description);
     }
-    
+
     reloadForExtension(extensionID, {ignoreCache, userAgent, injectedScript} = {})
     {
         let extension = this._extensionForExtensionIDMap.get(extensionID);
@@ -155,14 +189,14 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
             WI.reportInternalError("reloadForExtension: the 'injectedScript' option is not yet implemented.");
             return WI.WebInspectorExtension.ErrorCode.NotImplemented;
         }
-        
+
         let target = WI.assumingMainTarget();
         if (!target.hasCommand("Page.reload"))
             return WI.WebInspectorExtension.ErrorCode.InvalidRequest;
-        
+
         return target.PageAgent.reload.invoke({ignoreCache});
     }
-    
+
     showExtensionTab(extensionTabID, options = {})
     {
         let tabContentView = this._extensionTabContentViewForExtensionTabIDMap.get(extensionTabID);
@@ -174,6 +208,7 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
         tabContentView.visible = true;
         let success = WI.tabBrowser.showTabForContentView(tabContentView, {
             ...options,
+            insertionIndex: this._insertionIndexForExtensionTab(tabContentView),
             initiatorHint: WI.TabBrowser.TabNavigationInitiator.FrontendAPI,
         });
 
@@ -183,6 +218,10 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
         }
 
         tabContentView.visible = true;
+
+        // Clients expect to be able to use evaluateScriptInExtensionTab() when this method
+        // returns, so wait for the extension tab to finish its loading sequence. Wrap the result.
+        return tabContentView.whenPageAvailable().then((sourceURL) => { return {"result": sourceURL}; });
     }
 
     hideExtensionTab(extensionTabID, options = {})
@@ -232,6 +271,11 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
         }
     }
 
+    activeExtensionTabContentViews()
+    {
+        return Array.from(this._extensionTabContentViewForExtensionTabIDMap.values()).filter((tab) => tab.visible || tab.tabBarItem.parentTabBar);
+    }
+
     evaluateScriptInExtensionTab(extensionTabID, scriptSource)
     {
         let tabContentView = this._extensionTabContentViewForExtensionTabIDMap.get(extensionTabID);
@@ -274,6 +318,121 @@ WI.WebInspectorExtensionController = class WebInspectorExtensionController exten
     }
 
     // Private
+
+    async _loadExtensionTabPositions()
+    {
+        let savedTabPositions = await WI.objectStores.general.get(WebInspectorExtensionController.extensionTabPositionsObjectStoreKey);
+        this._extensionTabPositions = savedTabPositions || {};
+    }
+
+    _saveExtensionTabPositions()
+    {
+        if (!this._extensionTabPositions)
+            return;
+
+        this._saveTabPositionsDebouncer ||= new Debouncer(() => {
+            for (let tabBarItem of WI.tabBrowser.tabBar.visibleTabBarItemsFromLeftToRight) {
+                if (!(tabBarItem.representedObject instanceof WI.WebInspectorExtensionTabContentView))
+                    continue;
+
+                let {anchorTabType, anchorTabIndex, distanceFromAnchorTab} = this._computeIndicesForExtensionTab(tabBarItem.representedObject, {recomputePositions: true});
+                this._extensionTabPositions[tabBarItem.representedObject.savedTabPositionKey] = {anchorTabType, distanceFromAnchorTab};
+            }
+
+            WI.objectStores.general.put(this._extensionTabPositions, WebInspectorExtensionController.extensionTabPositionsObjectStoreKey);
+        });
+        this._saveTabPositionsDebouncer.delayForTime(5000);
+    }
+
+    _insertionIndexForExtensionTab(tabContentView, options = {})
+    {
+        let {anchorTabType, anchorTabIndex, distanceFromAnchorTab} = this._computeIndicesForExtensionTab(tabContentView, options);
+        return anchorTabIndex + distanceFromAnchorTab + 1;
+    }
+
+    _computeIndicesForExtensionTab(tabContentView, {recomputePositions} = {})
+    {
+        // Note: pinned tabs always appear on the trailing edge, so we can ignore them
+        // for the purposes of computing an `insertionIndex`` for `tabContentView`.
+        let anchorTabIndex = 0;
+        let savedPositions = this._extensionTabPositions[tabContentView.savedTabPositionKey] || {};
+        let anchorTabType = (recomputePositions && savedPositions.anchorTabType) || null;
+        let distanceFromAnchorTab = (recomputePositions && savedPositions.distanceFromAnchorTab) || 0;
+
+        let visibleTabBarItems = WI.tabBrowser.tabBar.visibleTabBarItemsFromLeftToRight;
+        for (let i = 0; i < visibleTabBarItems.length; ++i) {
+            let visibleTab = visibleTabBarItems[i].representedObject;
+            if (!visibleTab)
+                continue;
+
+            if (visibleTab === tabContentView)
+                break;
+
+            if (visibleTab instanceof WI.WebInspectorExtensionTabContentView)
+                continue;
+
+            if (recomputePositions) {
+                anchorTabType = visibleTab.type || null;
+                continue;
+            }
+
+            if (visibleTab.type !== anchorTabType)
+                continue;
+
+            anchorTabIndex = i;
+            break;
+        }
+
+        // Find the count of extension tabs after the anchor tab to compute the real distanceFromAnchorTab.
+        // Adding `distanceFromAnchorTab` to `anchorTabIndex` should not insert the tab after a different anchor tab.
+        for (let i = 1; i < visibleTabBarItems.length - anchorTabIndex; ++i) {
+            if (visibleTabBarItems[anchorTabIndex + i].representedObject?.constructor?.shouldSaveTab?.()) {
+                distanceFromAnchorTab = Number.constrain(distanceFromAnchorTab, 0, Math.max(0, i - 1));
+                return {anchorTabType, anchorTabIndex, distanceFromAnchorTab};
+            }
+        }
+
+        // If the anchor tab is now hidden upon restoring, place the extension at the end.
+        // This could happen if a smaller set of tabs are enabled for the inspection target.
+        anchorTabIndex = visibleTabBarItems.length - 1;
+        return {anchorTabType, anchorTabIndex, distanceFromAnchorTab};
+    }
+
+    _frameForFrameURL(frameURL)
+    {
+        if (!frameURL)
+            return WI.networkManager.mainFrame;
+
+        function findFrame(frameURL, adjustKnownFrameURL) {
+            return WI.networkManager.frames.find((knownFrame) => {
+                let knownFrameURL = new URL(knownFrame.url);
+                adjustKnownFrameURL?.(knownFrameURL);
+                return knownFrameURL.toString() === frameURL;
+            });
+        }
+
+        let frame = findFrame(frameURL);
+        if (frame)
+            return frame;
+
+        let frameURLParts = new URL(frameURL);
+        if (frameURLParts.hash.length)
+            return null;
+
+        frame = findFrame(frameURL, (knownFrameURL) => {
+            knownFrameURL.hash = "";
+        });
+        if (frame)
+            return frame;
+
+        if (frameURLParts.search.length)
+            return null;
+
+        return findFrame(frameURL, (knownFrameURL) => {
+            knownFrameURL.hash = "";
+            knownFrameURL.search = "";
+        });
+    }
 
     _handleMainResourceDidChange(event)
     {

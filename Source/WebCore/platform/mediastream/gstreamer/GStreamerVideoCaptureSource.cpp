@@ -25,6 +25,7 @@
 #if ENABLE(MEDIA_STREAM) && USE(GSTREAMER)
 #include "GStreamerVideoCaptureSource.h"
 
+#include "DisplayCaptureManager.h"
 #include "GStreamerCaptureDeviceManager.h"
 #include "MediaSampleGStreamer.h"
 
@@ -71,13 +72,13 @@ private:
 
 class GStreamerDisplayCaptureSourceFactory final : public DisplayCaptureFactory {
 public:
-    CaptureSourceOrError createDisplayCaptureSource(const CaptureDevice& device, const MediaConstraints* constraints) final
+    CaptureSourceOrError createDisplayCaptureSource(const CaptureDevice& device, String&& hashSalt, const MediaConstraints* constraints) final
     {
         auto& manager = GStreamerDisplayCaptureDeviceManager::singleton();
-        return manager.createDisplayCaptureSource(device, constraints);
+        return manager.createDisplayCaptureSource(device, WTFMove(hashSalt), constraints);
     }
 private:
-    CaptureDeviceManager& displayCaptureDeviceManager() final { return GStreamerDisplayCaptureDeviceManager::singleton(); }
+    DisplayCaptureManager& displayCaptureDeviceManager() final { return GStreamerDisplayCaptureDeviceManager::singleton(); }
 };
 
 CaptureSourceOrError GStreamerVideoCaptureSource::create(String&& deviceID, String&& hashSalt, const MediaConstraints* constraints)

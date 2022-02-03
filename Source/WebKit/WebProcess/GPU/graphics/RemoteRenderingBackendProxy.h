@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,6 +47,7 @@
 namespace WebCore {
 
 class DestinationColorSpace;
+class Filter;
 class FloatSize;
 class PixelBuffer;
 
@@ -60,8 +61,7 @@ namespace WebKit {
 class WebPage;
 
 class RemoteRenderingBackendProxy
-    : public IPC::MessageSender
-    , private IPC::MessageReceiver
+    : private IPC::MessageReceiver
     , public GPUProcessConnection::Client {
 public:
     static std::unique_ptr<RemoteRenderingBackendProxy> create(WebPage&);
@@ -79,10 +79,6 @@ public:
 
     void createRemoteImageBuffer(WebCore::ImageBuffer&);
     bool isCached(const WebCore::ImageBuffer&) const;
-        
-    // IPC::MessageSender.
-    IPC::Connection* messageSenderConnection() const override;
-    uint64_t messageSenderDestinationID() const override;
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
@@ -92,10 +88,11 @@ public:
     String getDataURLForImageBuffer(const String& mimeType, std::optional<double> quality, WebCore::PreserveResolution, WebCore::RenderingResourceIdentifier);
     Vector<uint8_t> getDataForImageBuffer(const String& mimeType, std::optional<double> quality, WebCore::RenderingResourceIdentifier);
     RefPtr<ShareableBitmap> getShareableBitmap(WebCore::RenderingResourceIdentifier, WebCore::PreserveResolution);
+    RefPtr<WebCore::Image> getFilteredImage(WebCore::RenderingResourceIdentifier, WebCore::Filter&);
     void cacheNativeImage(const ShareableBitmap::Handle&, WebCore::RenderingResourceIdentifier);
     void cacheFont(Ref<WebCore::Font>&&);
     void deleteAllFonts();
-    void releaseRemoteResource(WebCore::RenderingResourceIdentifier, uint64_t useCount);
+    void releaseRemoteResource(WebCore::RenderingResourceIdentifier);
 
     void finalizeRenderingUpdate();
     RenderingUpdateID renderingUpdateID() const { return m_renderingUpdateID; }
@@ -129,10 +126,6 @@ public:
         sendToStream(WTFMove(message), renderingBackendIdentifier());
     }
 
-    void recordNativeImageUse(WebCore::NativeImage&);
-    void recordFontUse(WebCore::Font&);
-    void recordImageBufferUse(WebCore::ImageBuffer&);
-
 private:
     explicit RemoteRenderingBackendProxy(WebPage&);
 
@@ -148,6 +141,7 @@ private:
     void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
 
     GPUProcessConnection& ensureGPUProcessConnection();
+    IPC::Connection& gpuProcessConnection();
 
     // Messages to be received.
     void didCreateImageBufferBackend(ImageBufferBackendHandle, WebCore::RenderingResourceIdentifier);

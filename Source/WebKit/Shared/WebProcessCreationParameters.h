@@ -26,6 +26,7 @@
 #pragma once
 
 #include "AccessibilityPreferences.h"
+#include "AuxiliaryProcessCreationParameters.h"
 #include "CacheModel.h"
 #include "SandboxExtension.h"
 #include "TextCheckerState.h"
@@ -73,6 +74,7 @@ struct WebProcessCreationParameters {
     void encode(IPC::Encoder&) const;
     static WARN_UNUSED_RETURN bool decode(IPC::Decoder&, WebProcessCreationParameters&);
 
+    AuxiliaryProcessCreationParameters auxiliaryProcessParameters;
     String injectedBundlePath;
     SandboxExtension::Handle injectedBundlePathExtensionHandle;
     Vector<SandboxExtension::Handle> additionalSandboxExtensionHandles;
@@ -90,10 +92,6 @@ struct WebProcessCreationParameters {
 #if ENABLE(MEDIA_STREAM)
     SandboxExtension::Handle audioCaptureExtensionHandle;
 #endif
-
-    String wtfLoggingChannels;
-    String webCoreLoggingChannels;
-    String webKitLoggingChannels;
 
     Vector<String> urlSchemesRegisteredAsEmptyDocument;
     Vector<String> urlSchemesRegisteredAsSecure;
@@ -203,15 +201,16 @@ struct WebProcessCreationParameters {
     Vector<SandboxExtension::Handle> compilerServiceExtensionHandles;
 #endif
 
-    std::optional<SandboxExtension::Handle> containerManagerExtensionHandle;
     std::optional<SandboxExtension::Handle> mobileGestaltExtensionHandle;
     std::optional<SandboxExtension::Handle> launchServicesExtensionHandle;
 #if HAVE(VIDEO_RESTRICTED_DECODING)
+#if PLATFORM(MAC)
     Vector<SandboxExtension::Handle> videoDecoderExtensionHandles;
+#endif
+    bool restrictImageAndVideoDecoders { false };
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    Vector<SandboxExtension::Handle> dynamicMachExtensionHandles;
     Vector<SandboxExtension::Handle> dynamicIOKitExtensionHandles;
 #endif
 
@@ -245,6 +244,7 @@ struct WebProcessCreationParameters {
 
 #if HAVE(IOSURFACE)
     WebCore::IntSize maximumIOSurfaceSize;
+    size_t bytesPerRowIOSurfaceAlignment;
 #endif
     
     AccessibilityPreferences accessibilityPreferences;

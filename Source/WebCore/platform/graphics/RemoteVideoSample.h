@@ -37,6 +37,8 @@ typedef struct __CVBuffer* CVPixelBufferRef;
 
 namespace WebCore {
 
+class ProcessIdentity;
+
 class RemoteVideoSample {
 public:
     RemoteVideoSample() = default;
@@ -44,13 +46,14 @@ public:
     RemoteVideoSample& operator=(RemoteVideoSample&&) = default;
     ~RemoteVideoSample() = default;
 
-    WEBCORE_EXPORT static std::unique_ptr<RemoteVideoSample> create(MediaSample&);
-    WEBCORE_EXPORT static std::unique_ptr<RemoteVideoSample> create(RetainPtr<CVPixelBufferRef>&&, MediaTime&& presentationTime, MediaSample::VideoRotation = MediaSample::VideoRotation::None);
-    WEBCORE_EXPORT IOSurfaceRef surface() const;
+    enum class ShouldCheckForIOSurface { No, Yes };
+    WEBCORE_EXPORT static std::unique_ptr<RemoteVideoSample> create(MediaSample&, ShouldCheckForIOSurface = ShouldCheckForIOSurface::Yes);
+    WEBCORE_EXPORT static std::unique_ptr<RemoteVideoSample> create(RetainPtr<CVPixelBufferRef>&&, MediaTime&& presentationTime, MediaSample::VideoRotation = MediaSample::VideoRotation::None, ShouldCheckForIOSurface = ShouldCheckForIOSurface::Yes);
 
-#if HAVE(IOSURFACE_SET_OWNERSHIP_IDENTITY)
-    void setOwnershipIdentity(task_id_token_t newOwner);
-#endif
+    WEBCORE_EXPORT IOSurfaceRef surface() const;
+    CVPixelBufferRef imageBuffer() const { return m_imageBuffer.get(); }
+
+    void setOwnershipIdentity(const ProcessIdentity&);
 
     const MediaTime& time() const { return m_time; }
     uint32_t videoFormat() const { return m_videoFormat; }
@@ -119,13 +122,11 @@ private:
     bool m_mirrored { false };
 };
 
-#if HAVE(IOSURFACE_SET_OWNERSHIP_IDENTITY)
-inline void RemoteVideoSample::setOwnershipIdentity(task_id_token_t newOwner)
+inline void RemoteVideoSample::setOwnershipIdentity(const ProcessIdentity& resourceOwner)
 {
     if (m_ioSurface)
-        m_ioSurface->setOwnershipIdentity(newOwner);
+        m_ioSurface->setOwnershipIdentity(resourceOwner);
 }
-#endif
 
 }
 

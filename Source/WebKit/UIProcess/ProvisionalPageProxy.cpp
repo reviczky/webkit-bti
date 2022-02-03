@@ -58,7 +58,7 @@ using namespace WebCore;
 #define PROVISIONALPAGEPROXY_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", PID=%i, navigationID=%" PRIu64 "] ProvisionalPageProxy::" fmt, this, m_page.identifier().toUInt64(), m_webPageID.toUInt64(), m_process->processIdentifier(), m_navigationID, ##__VA_ARGS__)
 #define PROVISIONALPAGEPROXY_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", PID=%i, navigationID=%" PRIu64 "] ProvisionalPageProxy::" fmt, this, m_page.identifier().toUInt64(), m_webPageID.toUInt64(), m_process->processIdentifier(), m_navigationID, ##__VA_ARGS__)
 
-ProvisionalPageProxy::ProvisionalPageProxy(WebPageProxy& page, Ref<WebProcessProxy>&& process, std::unique_ptr<SuspendedPageProxy> suspendedPage, uint64_t navigationID, bool isServerRedirect, const WebCore::ResourceRequest& request, ProcessSwapRequestedByClient processSwapRequestedByClient, bool shouldClosePreviousPageAfterCommit, API::WebsitePolicies* websitePolicies)
+ProvisionalPageProxy::ProvisionalPageProxy(WebPageProxy& page, Ref<WebProcessProxy>&& process, std::unique_ptr<SuspendedPageProxy> suspendedPage, uint64_t navigationID, bool isServerRedirect, const WebCore::ResourceRequest& request, ProcessSwapRequestedByClient processSwapRequestedByClient, bool isProcessSwappingOnNavigationResponse, API::WebsitePolicies* websitePolicies)
     : m_page(page)
     , m_webPageID(suspendedPage ? suspendedPage->webPageID() : PageIdentifier::generate())
     , m_process(WTFMove(process))
@@ -66,7 +66,8 @@ ProvisionalPageProxy::ProvisionalPageProxy(WebPageProxy& page, Ref<WebProcessPro
     , m_isServerRedirect(isServerRedirect)
     , m_request(request)
     , m_processSwapRequestedByClient(processSwapRequestedByClient)
-    , m_shouldClosePreviousPageAfterCommit(shouldClosePreviousPageAfterCommit)
+    , m_isProcessSwappingOnNavigationResponse(isProcessSwappingOnNavigationResponse)
+    , m_provisionalLoadURL(isProcessSwappingOnNavigationResponse ? request.url() : URL())
 #if PLATFORM(IOS_FAMILY)
     , m_provisionalLoadActivity(m_process->throttler().foregroundActivity("Provisional Load"_s))
 #endif
@@ -117,6 +118,12 @@ ProvisionalPageProxy::~ProvisionalPageProxy()
         m_process->removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_webPageID);
         send(Messages::WebPage::Close());
         m_process->removeVisitedLinkStoreUser(m_page.visitedLinkStore(), m_page.identifier());
+
+        // If we were process-swapping on navigation response then there is still a provisional load going on in the previous process
+        // and its layer tree is frozen. Since we didn't end up committing the provisional process, we need to stop the load in the
+        // previous process so that it cancels its navigation and unfreezes its layer tree.
+        if (isProcessSwappingOnNavigationResponse())
+            m_page.send(Messages::WebPage::StopLoading());
     }
 
     m_process->removeProvisionalPageProxy(*this);
@@ -136,9 +143,9 @@ std::unique_ptr<DrawingAreaProxy> ProvisionalPageProxy::takeDrawingArea()
 void ProvisionalPageProxy::cancel()
 {
     // If the provisional load started, then indicate that it failed due to cancellation by calling didFailProvisionalLoadForFrame().
-    if (m_provisionalLoadURL.isEmpty())
+    if (m_provisionalLoadURL.isEmpty() || m_isProcessSwappingOnNavigationResponse)
         return;
-        
+
     ASSERT(m_process->state() == WebProcessProxy::State::Running);
 
     PROVISIONALPAGEPROXY_RELEASE_LOG(ProcessSwapping, "cancel: Simulating a didFailProvisionalLoadForFrame");
@@ -179,7 +186,7 @@ void ProvisionalPageProxy::loadData(API::Navigation& navigation, const IPC::Data
 
 void ProvisionalPageProxy::loadRequest(API::Navigation& navigation, WebCore::ResourceRequest&& request, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, std::optional<WebsitePoliciesData>&& websitePolicies, std::optional<NetworkResourceLoadIdentifier> existingNetworkResourceLoadIdentifierToResume)
 {
-    PROVISIONALPAGEPROXY_RELEASE_LOG(ProcessSwapping, "loadRequest: existingNetworkResourceLoadIdentifierToResume=%" PRIu64, existingNetworkResourceLoadIdentifierToResume.value_or(NetworkResourceLoadIdentifier { }).toUInt64());
+    PROVISIONALPAGEPROXY_RELEASE_LOG(ProcessSwapping, "loadRequest: existingNetworkResourceLoadIdentifierToResume=%" PRIu64, valueOrDefault(existingNetworkResourceLoadIdentifierToResume).toUInt64());
     ASSERT(shouldTreatAsContinuingLoad != WebCore::ShouldTreatAsContinuingLoad::No);
 
     // If this is a client-side redirect continuing in a new process, then the new process will overwrite the fromItem's URL. In this case,
@@ -191,9 +198,9 @@ void ProvisionalPageProxy::loadRequest(API::Navigation& navigation, WebCore::Res
     m_page.loadRequestWithNavigationShared(m_process.copyRef(), m_webPageID, navigation, WTFMove(request), navigation.lastNavigationAction().shouldOpenExternalURLsPolicy, userData, shouldTreatAsContinuingLoad, isNavigatingToAppBoundDomain, WTFMove(websitePolicies), existingNetworkResourceLoadIdentifierToResume);
 }
 
-void ProvisionalPageProxy::goToBackForwardItem(API::Navigation& navigation, WebBackForwardListItem& item, RefPtr<API::WebsitePolicies>&& websitePolicies)
+void ProvisionalPageProxy::goToBackForwardItem(API::Navigation& navigation, WebBackForwardListItem& item, RefPtr<API::WebsitePolicies>&& websitePolicies, WebCore::ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, std::optional<NetworkResourceLoadIdentifier> existingNetworkResourceLoadIdentifierToResume)
 {
-    PROVISIONALPAGEPROXY_RELEASE_LOG(ProcessSwapping, "goToBackForwardItem:");
+    PROVISIONALPAGEPROXY_RELEASE_LOG(ProcessSwapping, "goToBackForwardItem: existingNetworkResourceLoadIdentifierToResume=%" PRIu64, valueOrDefault(existingNetworkResourceLoadIdentifierToResume).toUInt64());
 
     auto itemStates = m_page.backForwardList().filteredItemStates([this, targetItem = &item](auto& item) {
         if (auto* backForwardCacheEntry = item.backForwardCacheEntry()) {
@@ -208,7 +215,7 @@ void ProvisionalPageProxy::goToBackForwardItem(API::Navigation& navigation, WebB
         websitePoliciesData = websitePolicies->data();
     
     send(Messages::WebPage::UpdateBackForwardListForReattach(WTFMove(itemStates)));
-    send(Messages::WebPage::GoToBackForwardItem(navigation.navigationID(), item.itemID(), *navigation.backForwardFrameLoadType(), WebCore::ShouldTreatAsContinuingLoad::YesAfterNavigationPolicyDecision, WTFMove(websitePoliciesData), m_page.lastNavigationWasAppInitiated()));
+    send(Messages::WebPage::GoToBackForwardItem(navigation.navigationID(), item.itemID(), *navigation.backForwardFrameLoadType(), shouldTreatAsContinuingLoad, WTFMove(websitePoliciesData), m_page.lastNavigationWasAppInitiated(), existingNetworkResourceLoadIdentifierToResume));
     m_process->startResponsivenessTimer();
 }
 
@@ -289,6 +296,15 @@ void ProvisionalPageProxy::didFailProvisionalLoadForFrame(FrameIdentifier frameI
     PROVISIONALPAGEPROXY_RELEASE_LOG_ERROR(ProcessSwapping, "didFailProvisionalLoadForFrame: frameID=%" PRIu64, frameID.toUInt64());
     ASSERT(!m_provisionalLoadURL.isNull());
     m_provisionalLoadURL = { };
+
+    if (m_isProcessSwappingOnNavigationResponse) {
+        // If the provisional load fails and we were process-swapping on navigation response, then we simply destroy ourselves.
+        // In this case, the provisional load is still ongoing in the committed process and the ProvisionalPageProxy destructor
+        // will stop it and cause the committed process to send its own DidFailProvisionalLoadForFrame IPC.
+        ASSERT(m_page.provisionalPageProxy() == this);
+        m_page.destroyProvisionalPage();
+        return;
+    }
 
     // Make sure the Page's main frame's expectedURL gets cleared since we updated it in didStartProvisionalLoad.
     if (auto* pageMainFrame = m_page.mainFrame())
@@ -423,15 +439,14 @@ void ProvisionalPageProxy::requestPasswordForQuickLookDocumentInMainFrame(const 
 #if PLATFORM(COCOA)
 void ProvisionalPageProxy::registerWebProcessAccessibilityToken(const IPC::DataReference& data)
 {
-    m_accessibilityToken = data.vector();
+    m_accessibilityToken = Vector(data);
 }
 #endif
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
-void ProvisionalPageProxy::bindAccessibilityTree(const String& plugID, CompletionHandler<void(String&&)>&& completionHandler)
+void ProvisionalPageProxy::bindAccessibilityTree(const String& plugID)
 {
     m_accessibilityPlugID = plugID;
-    m_accessibilityBindCompletionHandler = WTFMove(completionHandler);
 }
 #endif
 
@@ -496,7 +511,7 @@ void ProvisionalPageProxy::didReceiveMessage(IPC::Connection& connection, IPC::D
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     if (decoder.messageName() == Messages::WebPageProxy::BindAccessibilityTree::name()) {
-        IPC::handleMessageAsync<Messages::WebPageProxy::BindAccessibilityTree>(connection, decoder, this, &ProvisionalPageProxy::bindAccessibilityTree);
+        IPC::handleMessage<Messages::WebPageProxy::BindAccessibilityTree>(connection, decoder, this, &ProvisionalPageProxy::bindAccessibilityTree);
         return;
     }
 #endif

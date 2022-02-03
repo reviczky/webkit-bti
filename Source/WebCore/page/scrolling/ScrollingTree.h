@@ -87,6 +87,7 @@ public:
     WEBCORE_EXPORT virtual ~ScrollingTree();
 
     virtual bool isThreadedScrollingTree() const { return false; }
+    virtual bool isScrollingTreeMac() const { return false; }
     virtual bool isRemoteScrollingTree() const { return false; }
     virtual bool isScrollingTreeIOS() const { return false; }
 
@@ -99,9 +100,6 @@ public:
 
     bool scrollingPerformanceTestingEnabled() const { return m_scrollingPerformanceTestingEnabled; }
     void setScrollingPerformanceTestingEnabled(bool value) { m_scrollingPerformanceTestingEnabled = value; }
-
-    bool momentumScrollingAnimatorEnabled() const { return m_momentumScrollingAnimatorEnabled; }
-    void setMomentumScrollingAnimatorEnabled(bool value) { m_momentumScrollingAnimatorEnabled = value; }
 
     WEBCORE_EXPORT bool isUserScrollInProgressAtEventLocation(const PlatformWheelEvent&);
     WEBCORE_EXPORT OptionSet<WheelEventProcessingSteps> determineWheelEventProcessing(const PlatformWheelEvent&);
@@ -223,6 +221,8 @@ public:
     virtual void lockLayersForHitTesting() { }
     virtual void unlockLayersForHitTesting() { }
 
+    virtual bool isScrollingSynchronizedWithMainThread() WTF_REQUIRES_LOCK(m_treeLock) { return true; }
+
     virtual void willSendEventToMainThread(const PlatformWheelEvent&) { }
     virtual void waitForEventToBeProcessedByMainThread(const PlatformWheelEvent&) { };
 
@@ -248,7 +248,7 @@ protected:
 
     std::optional<FramesPerSecond> nominalFramesPerSecond();
 
-    void applyLayerPositionsInternal() WTF_REQUIRES_LOCK(m_treeLock);
+    WEBCORE_EXPORT virtual void applyLayerPositionsInternal() WTF_REQUIRES_LOCK(m_treeLock);
     void removeAllNodes() WTF_REQUIRES_LOCK(m_treeLock);
     
     virtual void hasNodeWithAnimatedScrollChanged(bool /* hasNodeWithAnimatedScroll */) { }
@@ -336,7 +336,6 @@ private:
     bool m_scrollingPerformanceTestingEnabled { false };
     bool m_asyncFrameOrOverflowScrollingEnabled { false };
     bool m_wheelEventGesturesBecomeNonBlocking { false };
-    bool m_momentumScrollingAnimatorEnabled { false };
     bool m_needsApplyLayerPositionsAfterCommit { false };
     bool m_inCommitTreeState { false };
 };

@@ -251,12 +251,6 @@ enum class UsedFloat : uint8_t {
     Right,
 };
 
-enum class MarginCollapse : uint8_t {
-    Collapse,
-    Separate,
-    Discard
-};
-
 // Box decoration attributes. Not inherited.
 
 enum class BoxDecorationBreak : uint8_t {
@@ -319,7 +313,7 @@ enum class TableLayoutType : uint8_t {
 
 enum class TextCombine : uint8_t {
     None,
-    Horizontal
+    All
 };
 
 enum class FillAttachment : uint8_t {
@@ -332,7 +326,8 @@ enum class FillBox : uint8_t {
     Border,
     Padding,
     Content,
-    Text
+    Text,
+    NoClip
 };
 
 enum class FillRepeat : uint8_t {
@@ -1078,12 +1073,9 @@ static const size_t ColorSchemeBits = 2;
 #endif
 
 static const size_t GridAutoFlowBits = 4;
-enum InternalGridAutoFlowAlgorithm {
+enum InternalGridAutoFlow {
     InternalAutoFlowAlgorithmSparse = 1 << 0,
     InternalAutoFlowAlgorithmDense  = 1 << 1,
-};
-
-enum InternalGridAutoFlowDirection {
     InternalAutoFlowDirectionRow    = 1 << 2,
     InternalAutoFlowDirectionColumn = 1 << 3
 };
@@ -1239,6 +1231,12 @@ enum class Containment : uint8_t {
     Style    = 1 << 3,
 };
 
+enum class ContainerType : uint8_t {
+    None,
+    Size,
+    InlineSize,
+};
+
 CSSBoxType transformBoxToCSSBoxType(TransformBox);
 
 extern const float defaultMiterLimit;
@@ -1305,7 +1303,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, LineBreak);
 WTF::TextStream& operator<<(WTF::TextStream&, LineSnap);
 WTF::TextStream& operator<<(WTF::TextStream&, ListStylePosition);
 WTF::TextStream& operator<<(WTF::TextStream&, ListStyleType);
-WTF::TextStream& operator<<(WTF::TextStream&, MarginCollapse);
 WTF::TextStream& operator<<(WTF::TextStream&, MarqueeBehavior);
 WTF::TextStream& operator<<(WTF::TextStream&, MarqueeDirection);
 WTF::TextStream& operator<<(WTF::TextStream&, MaskMode);
@@ -1366,4 +1363,107 @@ template<> struct EnumTraits<WebCore::ScrollSnapStop> {
         WebCore::ScrollSnapStop::Always
     >;
 };
+
+template<> struct EnumTraits<WebCore::ListStyleType> {
+    using values = EnumValues<
+        WebCore::ListStyleType,
+        WebCore::ListStyleType::Disc,
+        WebCore::ListStyleType::Circle,
+        WebCore::ListStyleType::Square,
+        WebCore::ListStyleType::Decimal,
+        WebCore::ListStyleType::DecimalLeadingZero,
+        WebCore::ListStyleType::ArabicIndic,
+        WebCore::ListStyleType::Binary,
+        WebCore::ListStyleType::Bengali,
+        WebCore::ListStyleType::Cambodian,
+        WebCore::ListStyleType::Khmer,
+        WebCore::ListStyleType::Devanagari,
+        WebCore::ListStyleType::Gujarati,
+        WebCore::ListStyleType::Gurmukhi,
+        WebCore::ListStyleType::Kannada,
+        WebCore::ListStyleType::LowerHexadecimal,
+        WebCore::ListStyleType::Lao,
+        WebCore::ListStyleType::Malayalam,
+        WebCore::ListStyleType::Mongolian,
+        WebCore::ListStyleType::Myanmar,
+        WebCore::ListStyleType::Octal,
+        WebCore::ListStyleType::Oriya,
+        WebCore::ListStyleType::Persian,
+        WebCore::ListStyleType::Urdu,
+        WebCore::ListStyleType::Telugu,
+        WebCore::ListStyleType::Tibetan,
+        WebCore::ListStyleType::Thai,
+        WebCore::ListStyleType::UpperHexadecimal,
+        WebCore::ListStyleType::LowerRoman,
+        WebCore::ListStyleType::UpperRoman,
+        WebCore::ListStyleType::LowerGreek,
+        WebCore::ListStyleType::LowerAlpha,
+        WebCore::ListStyleType::LowerLatin,
+        WebCore::ListStyleType::UpperAlpha,
+        WebCore::ListStyleType::UpperLatin,
+        WebCore::ListStyleType::Afar,
+        WebCore::ListStyleType::EthiopicHalehameAaEt,
+        WebCore::ListStyleType::EthiopicHalehameAaEr,
+        WebCore::ListStyleType::Amharic,
+        WebCore::ListStyleType::EthiopicHalehameAmEt,
+        WebCore::ListStyleType::AmharicAbegede,
+        WebCore::ListStyleType::EthiopicAbegedeAmEt,
+        WebCore::ListStyleType::CJKEarthlyBranch,
+        WebCore::ListStyleType::CJKHeavenlyStem,
+        WebCore::ListStyleType::Ethiopic,
+        WebCore::ListStyleType::EthiopicHalehameGez,
+        WebCore::ListStyleType::EthiopicAbegede,
+        WebCore::ListStyleType::EthiopicAbegedeGez,
+        WebCore::ListStyleType::HangulConsonant,
+        WebCore::ListStyleType::Hangul,
+        WebCore::ListStyleType::LowerNorwegian,
+        WebCore::ListStyleType::Oromo,
+        WebCore::ListStyleType::EthiopicHalehameOmEt,
+        WebCore::ListStyleType::Sidama,
+        WebCore::ListStyleType::EthiopicHalehameSidEt,
+        WebCore::ListStyleType::Somali,
+        WebCore::ListStyleType::EthiopicHalehameSoEt,
+        WebCore::ListStyleType::Tigre,
+        WebCore::ListStyleType::EthiopicHalehameTig,
+        WebCore::ListStyleType::TigrinyaEr,
+        WebCore::ListStyleType::EthiopicHalehameTiEr,
+        WebCore::ListStyleType::TigrinyaErAbegede,
+        WebCore::ListStyleType::EthiopicAbegedeTiEr,
+        WebCore::ListStyleType::TigrinyaEt,
+        WebCore::ListStyleType::EthiopicHalehameTiEt,
+        WebCore::ListStyleType::TigrinyaEtAbegede,
+        WebCore::ListStyleType::EthiopicAbegedeTiEt,
+        WebCore::ListStyleType::UpperGreek,
+        WebCore::ListStyleType::UpperNorwegian,
+        WebCore::ListStyleType::Asterisks,
+        WebCore::ListStyleType::Footnotes,
+        WebCore::ListStyleType::Hebrew,
+        WebCore::ListStyleType::Armenian,
+        WebCore::ListStyleType::LowerArmenian,
+        WebCore::ListStyleType::UpperArmenian,
+        WebCore::ListStyleType::Georgian,
+        WebCore::ListStyleType::CJKIdeographic,
+        WebCore::ListStyleType::Hiragana,
+        WebCore::ListStyleType::Katakana,
+        WebCore::ListStyleType::HiraganaIroha,
+        WebCore::ListStyleType::KatakanaIroha,
+        WebCore::ListStyleType::CJKDecimal,
+        WebCore::ListStyleType::Tamil,
+        WebCore::ListStyleType::DisclosureOpen,
+        WebCore::ListStyleType::DisclosureClosed,
+        WebCore::ListStyleType::JapaneseInformal,
+        WebCore::ListStyleType::JapaneseFormal,
+        WebCore::ListStyleType::KoreanHangulFormal,
+        WebCore::ListStyleType::KoreanHanjaInformal,
+        WebCore::ListStyleType::KoreanHanjaFormal,
+        WebCore::ListStyleType::SimplifiedChineseInformal,
+        WebCore::ListStyleType::SimplifiedChineseFormal,
+        WebCore::ListStyleType::TraditionalChineseInformal,
+        WebCore::ListStyleType::TraditionalChineseFormal,
+        WebCore::ListStyleType::EthiopicNumeric,
+        WebCore::ListStyleType::String,
+        WebCore::ListStyleType::None
+    >;
+};
+
 }

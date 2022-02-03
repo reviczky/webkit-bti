@@ -276,14 +276,11 @@ void HTMLObjectElement::updateWidget(CreatePlugins createPlugins)
 
     setNeedsWidgetUpdate(false);
 
-    Ref<HTMLObjectElement> protectedThis(*this); // beforeload and plugin loading can make arbitrary DOM mutations.
-    bool beforeLoadAllowedLoad = guardedDispatchBeforeLoadEvent(url);
-    if (!renderer()) // Do not load the plugin if beforeload removed this element or its renderer.
-        return;
+    Ref protectedThis = *this; // Plugin loading can make arbitrary DOM mutations.
 
     // Dispatching a beforeLoad event could have executed code that changed the document.
     // Make sure the URL is still safe to load.
-    bool success = beforeLoadAllowedLoad && hasValidClassId() && canLoadURL(url);
+    bool success = hasValidClassId() && canLoadURL(url);
     if (success)
         success = requestObject(url, serviceType, paramNames, paramValues);
     if (!success && hasFallbackContent())
@@ -356,9 +353,10 @@ void HTMLObjectElement::renderFallbackContent()
 
 static inline bool preventsParentObjectFromExposure(const Element& child)
 {
-    static const auto mostKnownTags = makeNeverDestroyed([] {
+    static NeverDestroyed mostKnownTags = [] {
         MemoryCompactLookupOnlyRobinHoodHashSet<QualifiedName> set;
         auto* tags = HTMLNames::getHTMLTags();
+        set.reserveInitialCapacity(HTMLNames::HTMLTagsCount);
         for (size_t i = 0; i < HTMLNames::HTMLTagsCount; i++) {
             auto& tag = *tags[i];
             // Only the param element was explicitly mentioned in the HTML specification rule
@@ -377,7 +375,7 @@ static inline bool preventsParentObjectFromExposure(const Element& child)
             set.add(tag);
         }
         return set;
-    }());
+    }();
     return mostKnownTags.get().contains(child.tagQName());
 }
 
@@ -460,23 +458,6 @@ void HTMLObjectElement::didMoveToNewDocument(Document& oldDocument, Document& ne
 {
     FormAssociatedElement::didMoveToNewDocument(oldDocument);
     HTMLPlugInImageElement::didMoveToNewDocument(oldDocument, newDocument);
-}
-
-bool HTMLObjectElement::appendFormData(DOMFormData& formData, bool)
-{
-    if (name().isEmpty())
-        return false;
-
-    // Use PluginLoadingPolicy::DoNotLoad here or it would fire JS events synchronously
-    // which would not be safe here.
-    RefPtr widget = pluginWidget(PluginLoadingPolicy::DoNotLoad);
-    if (!is<PluginViewBase>(widget))
-        return false;
-    String value;
-    if (!downcast<PluginViewBase>(*widget).getFormValue(value))
-        return false;
-    formData.append(name(), value);
-    return true;
 }
 
 bool HTMLObjectElement::canContainRangeEndPoint() const

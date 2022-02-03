@@ -35,7 +35,6 @@
 #include "EventNames.h"
 #include "KeyframeEffect.h"
 #include "Logging.h"
-#include "PseudoElement.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/text/TextStream.h>
 
@@ -107,6 +106,8 @@ void DeclarativeAnimation::setBackingAnimation(const Animation& backingAnimation
 
 void DeclarativeAnimation::initialize(const RenderStyle* oldStyle, const RenderStyle& newStyle, const Style::ResolutionContext& resolutionContext)
 {
+    WebAnimation::initialize();
+
     // We need to suspend invalidation of the animation's keyframe effect during its creation
     // as it would otherwise trigger invalidation of the document's style and this would be
     // incorrect since it would happen during style invalidation.
@@ -136,22 +137,10 @@ std::optional<double> DeclarativeAnimation::bindingsStartTime() const
     return WebAnimation::bindingsStartTime();
 }
 
-void DeclarativeAnimation::setBindingsStartTime(std::optional<double> startTime)
-{
-    flushPendingStyleChanges();
-    return WebAnimation::setBindingsStartTime(startTime);
-}
-
 std::optional<double> DeclarativeAnimation::bindingsCurrentTime() const
 {
     flushPendingStyleChanges();
     return WebAnimation::bindingsCurrentTime();
-}
-
-ExceptionOr<void> DeclarativeAnimation::setBindingsCurrentTime(std::optional<double> currentTime)
-{
-    flushPendingStyleChanges();
-    return WebAnimation::setBindingsCurrentTime(currentTime);
 }
 
 WebAnimation::PlayState DeclarativeAnimation::bindingsPlayState() const

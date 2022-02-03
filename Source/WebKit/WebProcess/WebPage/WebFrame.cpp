@@ -29,6 +29,7 @@
 #include "APIArray.h"
 #include "DownloadManager.h"
 #include "FrameInfoData.h"
+#include "InjectedBundleCSSStyleDeclarationHandle.h"
 #include "InjectedBundleHitTestResult.h"
 #include "InjectedBundleNodeHandle.h"
 #include "InjectedBundleRangeHandle.h"
@@ -340,10 +341,10 @@ String WebFrame::source() const
     DocumentLoader* documentLoader = m_coreFrame->loader().activeDocumentLoader();
     if (!documentLoader)
         return String();
-    RefPtr<SharedBuffer> mainResourceData = documentLoader->mainResourceData();
+    RefPtr<FragmentedSharedBuffer> mainResourceData = documentLoader->mainResourceData();
     if (!mainResourceData)
         return String();
-    return decoder->encoding().decode(mainResourceData->data(), mainResourceData->size());
+    return decoder->encoding().decode(mainResourceData->makeContiguous()->data(), mainResourceData->size());
 }
 
 String WebFrame::contentsAsString() const 
@@ -671,7 +672,7 @@ bool WebFrame::getDocumentBackgroundColor(double* red, double* green, double* bl
     if (!bgColor.isValid())
         return false;
 
-    auto [r, g, b, a] = bgColor.toSRGBALossy<float>();
+    auto [r, g, b, a] = bgColor.toColorTypeLossy<SRGBA<float>>().resolved();
     *red = r;
     *green = g;
     *blue = b;
@@ -716,6 +717,17 @@ WebFrame* WebFrame::frameForContext(JSContextRef context)
 {
     auto* coreFrame = Frame::fromJSContext(context);
     return coreFrame ? WebFrame::fromCoreFrame(*coreFrame) : nullptr;
+}
+
+JSValueRef WebFrame::jsWrapperForWorld(InjectedBundleCSSStyleDeclarationHandle* cssStyleDeclarationHandle, InjectedBundleScriptWorld* world)
+{
+    if (!m_coreFrame)
+        return nullptr;
+
+    JSDOMWindow* globalObject = m_coreFrame->script().globalObject(world->coreWorld());
+
+    JSLockHolder lock(globalObject);
+    return toRef(globalObject, toJS(globalObject, globalObject, cssStyleDeclarationHandle->coreCSSStyleDeclaration()));
 }
 
 JSValueRef WebFrame::jsWrapperForWorld(InjectedBundleNodeHandle* nodeHandle, InjectedBundleScriptWorld* world)

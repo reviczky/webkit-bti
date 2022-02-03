@@ -32,13 +32,16 @@
 #include "MessageReceiverMap.h"
 #include "RemoteAudioHardwareListenerIdentifier.h"
 #include "RemoteAudioSessionIdentifier.h"
+#include "RemoteGPU.h"
 #include "RemoteRemoteCommandListenerIdentifier.h"
 #include "RenderingBackendIdentifier.h"
 #include "ScopedActiveMessageReceiveQueue.h"
+#include "WebGPUIdentifier.h"
 #include <WebCore/LibWebRTCEnumTraits.h>
 #include <WebCore/NowPlayingManager.h>
 #include <WebCore/PageIdentifier.h>
 #include <WebCore/ProcessIdentifier.h>
+#include <WebCore/ProcessIdentity.h>
 #include <pal/SessionID.h>
 #include <wtf/Logger.h>
 #include <wtf/MachSendRight.h>
@@ -59,6 +62,10 @@
 
 #if USE(GRAPHICS_LAYER_WC)
 #include "WCLayerTreeHostIdentifier.h"
+#endif
+
+#if ENABLE(IPC_TESTING_API)
+#include "IPCTester.h"
 #endif
 
 namespace WebCore {
@@ -136,6 +143,12 @@ public:
     bool allowsDisplayCapture() const { return m_allowsDisplayCapture; }
 #endif
 
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+    void startCapturingAudio();
+    void processIsStartingToCaptureAudio(GPUConnectionToWebProcess&);
+    bool isLastToCaptureAudio() const { return m_isLastToCaptureAudio; }
+#endif
+
 #if ENABLE(APP_PRIVACY_REPORT)
     void setTCCIdentity();
 #endif
@@ -147,10 +160,7 @@ public:
     void dispatchDisplayWasReconfiguredForTesting() { dispatchDisplayWasReconfigured(); };
 #endif
 
-#if HAVE(TASK_IDENTITY_TOKEN)
-    task_id_token_t webProcessIdentityToken() const { return static_cast<task_id_token_t>(m_webProcessIdentityToken.sendRight()); }
-#endif
-
+    const WebCore::ProcessIdentity& webProcessIdentity() const { return m_webProcessIdentity; }
 #if ENABLE(ENCRYPTED_MEDIA)
     RemoteCDMFactoryProxy& cdmFactoryProxy();
 #endif
@@ -167,10 +177,6 @@ public:
 
 #if HAVE(AVASSETREADER)
     RemoteImageDecoderAVFProxy& imageDecoderAVFProxy();
-#endif
-
-#if USE(GRAPHICS_LAYER_WC)
-    RefPtr<RemoteGraphicsContextGL> findRemoteGraphicsContextGL(GraphicsContextGLIdentifier);
 #endif
 
     void updateSupportedRemoteCommands();
@@ -213,6 +219,8 @@ private:
     void releaseGraphicsContextGL(GraphicsContextGLIdentifier);
 #endif
 
+    void createRemoteGPU(WebGPUIdentifier, RenderingBackendIdentifier, IPC::StreamConnectionBuffer&&);
+
     void clearNowPlayingInfo();
     void setNowPlayingInfo(WebCore::NowPlayingInfo&&);
 
@@ -245,7 +253,7 @@ private:
     void configureLoggingChannel(const String&, WTFLogChannelState, WTFLogLevel);
 
 #if USE(GRAPHICS_LAYER_WC)
-    void createWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier, uint64_t nativeWindow);
+    void createWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier, uint64_t nativeWindow, bool usesOffscreenRendering);
     void releaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier);
 #endif
 
@@ -273,9 +281,7 @@ private:
     IPC::MessageReceiverMap m_messageReceiverMap;
     Ref<GPUProcess> m_gpuProcess;
     const WebCore::ProcessIdentifier m_webProcessIdentifier;
-#if HAVE(TASK_IDENTITY_TOKEN)
-    MachSendRight m_webProcessIdentityToken;
-#endif
+    const WebCore::ProcessIdentity m_webProcessIdentity;
 #if ENABLE(WEB_AUDIO)
     std::unique_ptr<RemoteAudioDestinationManager> m_remoteAudioDestinationManager;
 #endif
@@ -288,9 +294,10 @@ private:
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     std::unique_ptr<UserMediaCaptureManagerProxy> m_userMediaCaptureManagerProxy;
     std::unique_ptr<RemoteAudioMediaStreamTrackRendererInternalUnitManager> m_audioMediaStreamTrackRendererInternalUnitManager;
+    bool m_isLastToCaptureAudio { false };
+
     Ref<RemoteSampleBufferDisplayLayerManager> m_sampleBufferDisplayLayerManager;
-#endif
-#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+
     std::unique_ptr<RemoteMediaRecorderManager> m_remoteMediaRecorderManager;
 #endif
 #if ENABLE(MEDIA_STREAM)
@@ -308,6 +315,8 @@ private:
     using RemoteGraphicsContextGLMap = HashMap<GraphicsContextGLIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGraphicsContextGL>>;
     RemoteGraphicsContextGLMap m_remoteGraphicsContextGLMap;
 #endif
+    using RemoteGPUMap = HashMap<WebGPUIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGPU>>;
+    RemoteGPUMap m_remoteGPUMap;
 #if ENABLE(ENCRYPTED_MEDIA)
     std::unique_ptr<RemoteCDMFactoryProxy> m_cdmFactoryProxy;
 #endif
@@ -343,6 +352,9 @@ private:
 
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     UniqueRef<LocalAudioSessionRoutingArbitrator> m_routingArbitrator;
+#endif
+#if ENABLE(IPC_TESTING_API)
+    IPCTester m_ipcTester;
 #endif
 };
 

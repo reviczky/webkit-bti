@@ -42,6 +42,8 @@ class DrawingContext;
 struct ItemBufferHandle;
 }
 
+class Filter;
+
 class ImageBuffer : public ThreadSafeRefCounted<ImageBuffer, WTF::DestructionThread::Main>, public CanMakeWeakPtr<ImageBuffer> {
 public:
     // Will return a null pointer on allocation failure.
@@ -50,6 +52,11 @@ public:
 
     // Create an image buffer compatible with the context, with suitable resolution for drawing into the buffer and then into this context.
     static RefPtr<ImageBuffer> createCompatibleBuffer(const FloatSize&, const GraphicsContext&);
+    struct CompatibleBufferDescription {
+        Ref<ImageBuffer> imageBuffer;
+        FloatRect inflatedRectInUserCoordinates;
+    };
+    static std::optional<CompatibleBufferDescription> createCompatibleBuffer(const FloatRect& rectInUserCoordinates, const GraphicsContext&);
     WEBCORE_EXPORT static RefPtr<ImageBuffer> createCompatibleBuffer(const FloatSize&, const DestinationColorSpace&, const GraphicsContext&);
     static RefPtr<ImageBuffer> createCompatibleBuffer(const FloatSize&, float resolutionScale, const DestinationColorSpace&, const GraphicsContext&);
 
@@ -61,6 +68,12 @@ public:
     static FloatRect clampedRect(const FloatRect&);
 
     static IntSize compatibleBufferSize(const FloatSize&, const GraphicsContext&);
+    struct CompatibleBufferInfo {
+        IntSize physicalSizeInDeviceCoordinates;
+        FloatRect inflatedRectInUserCoordinates;
+        FloatSize scale;
+    };
+    static CompatibleBufferInfo compatibleBufferInfo(const FloatRect&, const GraphicsContext&);
     
     WEBCORE_EXPORT virtual ~ImageBuffer() = default;
 
@@ -81,9 +94,6 @@ public:
     virtual void flushDrawingContext() { }
     virtual void flushDrawingContextAsync() { }
     virtual void didFlush(GraphicsContextFlushIdentifier) { }
-
-    virtual void changeDestinationImageBuffer(RenderingResourceIdentifier) { }
-    virtual void prepareToAppendDisplayListItems(DisplayList::ItemBufferHandle&&) { }
 
     virtual FloatSize logicalSize() const = 0;
     virtual IntSize truncatedLogicalSize() const = 0; // This truncates the real size. You probably should be calling logicalSize() instead.
@@ -107,6 +117,7 @@ public:
 
     virtual RefPtr<NativeImage> copyNativeImage(BackingStoreCopy = CopyBackingStore) const = 0;
     virtual RefPtr<Image> copyImage(BackingStoreCopy = CopyBackingStore, PreserveResolution = PreserveResolution::No) const = 0;
+    virtual RefPtr<Image> filteredImage(Filter&) = 0;
 
     // Create an image buffer compatible with the context and copy rect from this buffer into this new one.
     RefPtr<ImageBuffer> copyRectToBuffer(const FloatRect&, const DestinationColorSpace&, const GraphicsContext&);

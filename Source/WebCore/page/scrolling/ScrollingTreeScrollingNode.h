@@ -75,7 +75,7 @@ public:
     bool isScrollSnapInProgress() const;
     void setScrollSnapInProgress(bool);
 
-    virtual void serviceScrollAnimation() { }
+    virtual void serviceScrollAnimation(MonotonicTime) { }
 
     // These are imperative; they adjust the scrolling layers.
     void scrollTo(const FloatPoint&, ScrollType = ScrollType::User, ScrollClamping = ScrollClamping::Clamped);
@@ -133,8 +133,6 @@ protected:
     void willStartAnimatedScroll();
     void didStopAnimatedScroll();
 
-    bool momentumScrollingAnimatorEnabled() const;
-    
     void setScrollAnimationInProgress(bool);
 
     virtual void currentScrollPositionChanged(ScrollType, ScrollingLayerPositionAction = ScrollingLayerPositionAction::Sync);
@@ -161,7 +159,14 @@ protected:
 
     bool allowsHorizontalScrolling() const { return m_scrollableAreaParameters.allowsHorizontalScrolling; }
     bool allowsVerticalScrolling() const { return m_scrollableAreaParameters.allowsVerticalScrolling; }
-
+    OverscrollBehavior horizontalOverscrollBehavior() const { return m_scrollableAreaParameters.horizontalOverscrollBehavior; }
+    OverscrollBehavior verticalOverscrollBehavior() const { return m_scrollableAreaParameters.verticalOverscrollBehavior; }
+    bool horizontalOverscrollBehaviorPreventsPropagation() const { return m_scrollableAreaParameters.horizontalOverscrollBehavior != OverscrollBehavior::Auto; }
+    bool verticalOverscrollBehaviorPreventsPropagation() const { return m_scrollableAreaParameters.verticalOverscrollBehavior != OverscrollBehavior::Auto; }
+    PlatformWheelEvent eventForPropagation(const PlatformWheelEvent&) const;
+    bool shouldBlockScrollPropagation(const FloatSize&) const;
+    bool overscrollBehaviorAllowRubberBand() const { return m_scrollableAreaParameters.horizontalOverscrollBehavior != OverscrollBehavior::None ||  m_scrollableAreaParameters.verticalOverscrollBehavior != OverscrollBehavior::None; }
+    bool shouldRubberBand(const PlatformWheelEvent&, EventTargeting) const;
     void dumpProperties(WTF::TextStream&, OptionSet<ScrollingStateTreeAsTextBehavior>) const override;
 
 private:

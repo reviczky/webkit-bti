@@ -94,6 +94,7 @@ namespace WebCore {
     M(Plugins) \
     M(PopupBlocking) \
     M(PrivateClickMeasurement) \
+    M(Process) \
     M(Progress) \
     M(RemoteInspector) \
     M(RequestAnimationFrame) \
@@ -108,6 +109,7 @@ namespace WebCore {
     M(Selection) \
     M(Services) \
     M(ServiceWorker) \
+    M(SharedWorker) \
     M(SpellingAndGrammar) \
     M(SQLDatabase) \
     M(Storage) \

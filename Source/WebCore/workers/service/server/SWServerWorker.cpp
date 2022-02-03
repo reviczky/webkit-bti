@@ -88,7 +88,7 @@ ServiceWorkerContextData SWServerWorker::contextData() const
 {
     ASSERT(m_registration);
 
-    return { std::nullopt, m_registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_crossOriginEmbedderPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppInitiated, m_scriptResourceMap, m_registration->serviceWorkerPageIdentifier() };
+    return { std::nullopt, m_registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_crossOriginEmbedderPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppInitiated, m_scriptResourceMap, m_registration->serviceWorkerPageIdentifier(), m_registration->navigationPreloadState() };
 }
 
 void SWServerWorker::updateAppInitiatedValue(LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
@@ -229,6 +229,22 @@ std::optional<ServiceWorkerClientData> SWServerWorker::findClientByIdentifier(co
     if (!m_server)
         return { };
     return m_server->serviceWorkerClientWithOriginByID(origin(), clientId);
+}
+
+void SWServerWorker::findClientByVisibleIdentifier(const String& clientIdentifier, CompletionHandler<void(std::optional<WebCore::ServiceWorkerClientData>&&)>&& callback)
+{
+    if (!m_server) {
+        callback({ });
+        return;
+    }
+
+    auto internalIdentifier = m_server->clientIdFromVisibleClientId(clientIdentifier);
+    if (!internalIdentifier) {
+        callback({ });
+        return;
+    }
+
+    callback(findClientByIdentifier(internalIdentifier));
 }
 
 void SWServerWorker::matchAll(const ServiceWorkerClientQueryOptions& options, ServiceWorkerClientsMatchAllCallback&& callback)

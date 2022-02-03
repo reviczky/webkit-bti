@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -332,7 +332,7 @@ MediaPlayerPrivateInterface* MediaPlayer::playerPrivate()
 const MediaPlayerFactory* MediaPlayer::mediaEngine(MediaPlayerEnums::MediaEngineIdentifier identifier)
 {
     auto& engines = installedMediaEngines();
-    auto currentIndex = engines.findMatching([identifier] (auto& engine) {
+    auto currentIndex = engines.findIf([identifier] (auto& engine) {
         return engine->identifier() == identifier;
     });
 
@@ -393,7 +393,7 @@ const MediaPlayerFactory* MediaPlayer::nextMediaEngine(const MediaPlayerFactory*
     if (!current) 
         return engines.first().get();
 
-    auto currentIndex = engines.findMatching([current] (auto& engine) {
+    auto currentIndex = engines.findIf([current] (auto& engine) {
         return engine.get() == current;
     });
     if (currentIndex == notFound) {
@@ -1062,14 +1062,12 @@ bool MediaPlayer::copyVideoTextureToPlatformTexture(GraphicsContextGL* context, 
     return m_private->copyVideoTextureToPlatformTexture(context, texture, target, level, internalFormat, format, type, premultiplyAlpha, flipY);
 }
 
-#else
-
-RetainPtr<CVPixelBufferRef> MediaPlayer::pixelBufferForCurrentTime()
-{
-    return m_private->pixelBufferForCurrentTime();
-}
-
 #endif
+
+std::optional<MediaSampleVideoFrame> MediaPlayer::videoFrameForCurrentTime()
+{
+    return m_private->videoFrameForCurrentTime();
+}
 
 RefPtr<NativeImage> MediaPlayer::nativeImageForCurrentTime()
 {
@@ -1528,8 +1526,6 @@ void MediaPlayer::tracksChanged()
     m_private->tracksChanged();
 }
 
-#if ENABLE(AVF_CAPTIONS)
-
 void MediaPlayer::notifyTrackModeChanged()
 {
     if (m_private)
@@ -1540,8 +1536,6 @@ Vector<RefPtr<PlatformTextTrack>> MediaPlayer::outOfBandTrackSources()
 {
     return client().outOfBandTrackSources();
 }
-
-#endif
 
 void MediaPlayer::resetMediaEngines()
 {

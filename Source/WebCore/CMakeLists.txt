@@ -27,6 +27,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/beacon"
     "${WEBCORE_DIR}/Modules/cache"
     "${WEBCORE_DIR}/Modules/contact-picker"
+    "${WEBCORE_DIR}/Modules/cookie-consent"
     "${WEBCORE_DIR}/Modules/credentialmanagement"
     "${WEBCORE_DIR}/Modules/encryptedmedia"
     "${WEBCORE_DIR}/Modules/encryptedmedia/legacy"
@@ -64,6 +65,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/webauthn"
     "${WEBCORE_DIR}/Modules/webauthn/cbor"
     "${WEBCORE_DIR}/Modules/webauthn/fido"
+    "${WEBCORE_DIR}/Modules/webcodecs"
     "${WEBCORE_DIR}/Modules/webdatabase"
     "${WEBCORE_DIR}/Modules/webdriver"
     "${WEBCORE_DIR}/Modules/websockets"
@@ -176,6 +178,8 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/workers/service"
     "${WEBCORE_DIR}/workers/service/context"
     "${WEBCORE_DIR}/workers/service/server"
+    "${WEBCORE_DIR}/workers/shared"
+    "${WEBCORE_DIR}/workers/shared/context"
     "${WEBCORE_DIR}/worklets"
     "${WEBCORE_DIR}/xml"
     "${WEBCORE_DIR}/xml/parser"
@@ -254,6 +258,9 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/contact-picker/ContactsManager.idl
     Modules/contact-picker/ContactsSelectOptions.idl
     Modules/contact-picker/Navigator+Contacts.idl
+
+    Modules/cookie-consent/Navigator+CookieConsent.idl
+    Modules/cookie-consent/RequestCookieConsentOptions.idl
 
     Modules/credentialmanagement/BasicCredential.idl
     Modules/credentialmanagement/CredentialCreationOptions.idl
@@ -467,6 +474,9 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/model-element/HTMLModelElementCamera.idl
 
     Modules/notifications/Notification.idl
+    Modules/notifications/NotificationDirection.idl
+    Modules/notifications/NotificationEvent.idl
+    Modules/notifications/NotificationOptions.idl
     Modules/notifications/NotificationPermission.idl
     Modules/notifications/NotificationPermissionCallback.idl
 
@@ -475,6 +485,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/paymentrequest/PayerErrorFields.idl
     Modules/paymentrequest/PaymentAddress.idl
     Modules/paymentrequest/PaymentComplete.idl
+    Modules/paymentrequest/PaymentCompleteDetails.idl
     Modules/paymentrequest/PaymentCurrencyAmount.idl
     Modules/paymentrequest/PaymentDetailsBase.idl
     Modules/paymentrequest/PaymentDetailsInit.idl
@@ -560,6 +571,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/web-locks/WebLock.idl
     Modules/web-locks/WebLockGrantedCallback.idl
     Modules/web-locks/WebLockManager.idl
+    Modules/web-locks/WebLockManagerSnapshot.idl
     Modules/web-locks/WebLockMode.idl
 
     Modules/webaudio/AnalyserNode.idl
@@ -654,6 +666,12 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webauthn/PublicKeyCredentialType.idl
     Modules/webauthn/UserVerificationRequirement.idl
 
+    Modules/webcodecs/VideoColorPrimaries.idl
+    Modules/webcodecs/VideoColorSpace.idl
+    Modules/webcodecs/VideoColorSpaceInit.idl
+    Modules/webcodecs/VideoMatrixCoefficients.idl
+    Modules/webcodecs/VideoTransferCharacteristics.idl
+
     Modules/webdatabase/DOMWindow+WebDatabase.idl
     Modules/webdatabase/Database.idl
     Modules/webdatabase/DatabaseCallback.idl
@@ -677,7 +695,7 @@ set(WebCore_NON_SVG_IDL_FILES
     animation/Animatable.idl
     animation/AnimationEffect.idl
     animation/AnimationFrameProvider.idl
-    animation/EffectTiming.idl
+    animation/AnimationFrameRatePreset.idl
     animation/AnimationPlaybackEvent.idl
     animation/AnimationPlaybackEventInit.idl
     animation/AnimationTimeline.idl
@@ -686,10 +704,14 @@ set(WebCore_NON_SVG_IDL_FILES
     animation/CompositeOperation.idl
     animation/CompositeOperationOrAuto.idl
     animation/ComputedEffectTiming.idl
+    animation/CustomAnimationOptions.idl
+    animation/CustomEffect.idl
+    animation/CustomEffectCallback.idl
     animation/Document+WebAnimations.idl
     animation/DocumentOrShadowRoot+WebAnimations.idl
     animation/DocumentTimeline.idl
     animation/DocumentTimelineOptions.idl
+    animation/EffectTiming.idl
     animation/FillMode.idl
     animation/GetAnimationsOptions.idl
     animation/GlobalEventHandlers+CSSAnimations.idl
@@ -738,10 +760,12 @@ set(WebCore_NON_SVG_IDL_FILES
     css/CSSFontFaceRule.idl
     css/CSSFontPaletteValuesRule.idl
     css/CSSGroupingRule.idl
+    css/CSSImportRule+Layer.idl
     css/CSSImportRule.idl
     css/CSSKeyframeRule.idl
     css/CSSKeyframesRule.idl
-    css/CSSLayerRule.idl
+    css/CSSLayerBlockRule.idl
+    css/CSSLayerStatementRule.idl
     css/CSSMediaRule.idl
     css/CSSNamespaceRule.idl
     css/CSSPaintCallback.idl
@@ -822,7 +846,6 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/AddEventListenerOptions.idl
     dom/AnimationEvent.idl
     dom/Attr.idl
-    dom/BeforeLoadEvent.idl
     dom/BeforeUnloadEvent.idl
     dom/BroadcastChannel.idl
     dom/CDATASection.idl
@@ -947,8 +970,6 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/UIEvent.idl
     dom/UIEventInit.idl
     dom/VisibilityState.idl
-    dom/WebKitAnimationEvent.idl
-    dom/WebKitTransitionEvent.idl
     dom/WheelEvent.idl
     dom/XMLDocument.idl
 
@@ -1002,7 +1023,6 @@ set(WebCore_NON_SVG_IDL_FILES
     html/HTMLImageElement+CSSOMView.idl
     html/HTMLImageElement.idl
     html/HTMLInputElement.idl
-    html/HTMLKeygenElement.idl
     html/HTMLLIElement.idl
     html/HTMLLabelElement.idl
     html/HTMLLegendElement.idl
@@ -1103,6 +1123,7 @@ set(WebCore_NON_SVG_IDL_FILES
     html/canvas/PredefinedColorSpace.idl
 
     html/track/AudioTrack.idl
+    html/track/AudioTrackConfiguration.idl
     html/track/AudioTrackList.idl
     html/track/DataCue.idl
     html/track/TextTrack.idl
@@ -1115,6 +1136,7 @@ set(WebCore_NON_SVG_IDL_FILES
     html/track/VTTRegion.idl
     html/track/VTTRegionList.idl
     html/track/VideoTrack.idl
+    html/track/VideoTrackConfiguration.idl
     html/track/VideoTrackList.idl
 
     inspector/CommandLineAPIHost.idl
@@ -1187,6 +1209,7 @@ set(WebCore_NON_SVG_IDL_FILES
     page/ScrollLogicalPosition.idl
     page/ScrollOptions.idl
     page/ScrollToOptions.idl
+    page/ShadowRealmGlobalScope.idl
     page/ShareData.idl
     page/StructuredSerializeOptions.idl
     page/UndoItem.idl
@@ -1211,8 +1234,6 @@ set(WebCore_NON_SVG_IDL_FILES
 
     workers/AbstractWorker.idl
     workers/DedicatedWorkerGlobalScope.idl
-    workers/SharedWorker.idl
-    workers/SharedWorkerGlobalScope.idl
     workers/Worker.idl
     workers/WorkerGlobalScope.idl
     workers/WorkerLocation.idl
@@ -1223,6 +1244,8 @@ set(WebCore_NON_SVG_IDL_FILES
     workers/service/ExtendableEventInit.idl
     workers/service/ExtendableMessageEvent.idl
     workers/service/FetchEvent.idl
+    workers/service/NavigationPreloadManager.idl
+    workers/service/NavigationPreloadState.idl
     workers/service/ServiceWorker.idl
     workers/service/ServiceWorkerClient.idl
     workers/service/ServiceWorkerClientType.idl
@@ -1232,6 +1255,9 @@ set(WebCore_NON_SVG_IDL_FILES
     workers/service/ServiceWorkerRegistration.idl
     workers/service/ServiceWorkerUpdateViaCache.idl
     workers/service/ServiceWorkerWindowClient.idl
+
+    workers/shared/SharedWorker.idl
+    workers/shared/SharedWorkerGlobalScope.idl
 
     worklets/PaintWorkletGlobalScope.idl
     worklets/Worklet.idl
@@ -1893,7 +1919,7 @@ if (ENABLE_WEBGL)
             platform/graphics/ANGLEWebKitBridge.cpp
 
             platform/graphics/opengl/ExtensionsGLOpenGLCommon.cpp
-            platform/graphics/opengl/GraphicsContextGLOpenGLCommon.cpp
+            platform/graphics/opengl/GraphicsContextGLOpenGL.cpp
             platform/graphics/opengl/TemporaryOpenGLSetting.cpp
         )
 
@@ -1940,6 +1966,14 @@ if (ENABLE_USER_MESSAGE_HANDLERS)
 endif ()
 
 if (USE_LCMS)
+    list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
+        "${WEBCORE_DIR}/platform/graphics/lcms"
+    )
+
+    list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+        platform/graphics/lcms/LCMSUniquePtr.h
+    )
+
     list(APPEND WebCore_LIBRARIES LCMS2::LCMS2)
 endif ()
 
@@ -2056,6 +2090,7 @@ set(ISO_SUBSPACES_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMIsoSubspaces.h)
 set(CONSTRUCTORS_HEADER_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMConstructors.h)
 set(WINDOW_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DOMWindowConstructors.idl)
 set(WORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/WorkerGlobalScopeConstructors.idl)
+set(SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/ShadowRealmGlobalScopeConstructors.idl)
 set(DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/DedicatedWorkerGlobalScopeConstructors.idl)
 set(SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/ServiceWorkerGlobalScopeConstructors.idl)
 set(SHAREDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE ${WebCore_DERIVED_SOURCES_DIR}/SharedWorkerGlobalScopeConstructors.idl)
@@ -2240,12 +2275,13 @@ GENERATE_BINDINGS(WebCoreBindings
     GENERATOR JS
     SUPPLEMENTAL_DEPFILE ${SUPPLEMENTAL_DEPENDENCY_FILE}
     PP_EXTRA_OUTPUT
-        ${ISO_SUBSPACES_HEADER_FILE} ${CONSTRUCTORS_HEADER_FILE} ${WINDOW_CONSTRUCTORS_FILE} ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE} ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
+    ${ISO_SUBSPACES_HEADER_FILE} ${CONSTRUCTORS_HEADER_FILE} ${WINDOW_CONSTRUCTORS_FILE} ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE} ${SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE} ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
     PP_EXTRA_ARGS
         --isoSubspacesHeaderFile ${ISO_SUBSPACES_HEADER_FILE}
         --constructorsHeaderFile ${CONSTRUCTORS_HEADER_FILE}
         --windowConstructorsFile ${WINDOW_CONSTRUCTORS_FILE}
         --workerGlobalScopeConstructorsFile ${WORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
+        --shadowRealmGlobalScopeConstructorsFile ${SHADOWREALMGLOBALSCOPE_CONSTRUCTORS_FILE}
         --dedicatedWorkerGlobalScopeConstructorsFile ${DEDICATEDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
         --serviceWorkerGlobalScopeConstructorsFile ${SERVICEWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}
         --sharedWorkerGlobalScopeConstructorsFile ${SHAREDWORKERGLOBALSCOPE_CONSTRUCTORS_FILE}

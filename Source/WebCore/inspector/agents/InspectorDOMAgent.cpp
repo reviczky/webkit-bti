@@ -85,6 +85,7 @@
 #include "InstrumentingAgents.h"
 #include "IntRect.h"
 #include "JSDOMBindingSecurity.h"
+#include "JSDOMWindowCustom.h"
 #include "JSEventListener.h"
 #include "JSNode.h"
 #include "MutationEvent.h"
@@ -96,13 +97,14 @@
 #include "RenderGrid.h"
 #include "RenderStyle.h"
 #include "RenderStyleConstants.h"
-#include "ScriptState.h"
+#include "ScriptController.h"
 #include "SelectorChecker.h"
 #include "ShadowRoot.h"
 #include "StaticNodeList.h"
 #include "StyleProperties.h"
 #include "StyleResolver.h"
 #include "StyleSheetList.h"
+#include "Styleable.h"
 #include "Text.h"
 #include "TextNodeTraversal.h"
 #include "Timer.h"
@@ -537,6 +539,25 @@ void InspectorDOMAgent::discardBindings()
     m_childrenRequested.clear();
 }
 
+static Element* elementToPushForStyleable(const Styleable& styleable)
+{
+    // FIXME: We want to get rid of PseudoElement.
+    auto* element = &styleable.element;
+
+    if (styleable.pseudoId == PseudoId::Before)
+        element = element->beforePseudoElement();
+    else if (styleable.pseudoId == PseudoId::After)
+        element = element->afterPseudoElement();
+
+    return element;
+}
+
+Protocol::DOM::NodeId InspectorDOMAgent::pushStyleableElementToFrontend(const Styleable& styleable)
+{
+    auto* element = elementToPushForStyleable(styleable);
+    return pushNodeToFrontend(element ? element : &styleable.element);
+}
+
 Protocol::DOM::NodeId InspectorDOMAgent::pushNodeToFrontend(Node* nodeToPush)
 {
     if (!nodeToPush)
@@ -634,6 +655,23 @@ Protocol::DOM::NodeId InspectorDOMAgent::pushNodePathToFrontend(Node* nodeToPush
 {
     Protocol::ErrorString ignored;
     return pushNodePathToFrontend(ignored, nodeToPush);
+}
+
+Ref<Protocol::DOM::Styleable> InspectorDOMAgent::pushStyleablePathToFrontend(Protocol::ErrorString errorString, const Styleable& styleable)
+{
+    auto* element = elementToPushForStyleable(styleable);
+    auto nodeId = pushNodePathToFrontend(errorString, element ? element : &styleable.element);
+
+    auto protocolStyleable = Protocol::DOM::Styleable::create()
+        .setNodeId(nodeId)
+        .release();
+
+    if (styleable.pseudoId != PseudoId::None) {
+        if (auto pseudoId = InspectorCSSAgent::protocolValueForPseudoId(styleable.pseudoId))
+            protocolStyleable->setPseudoId(*pseudoId);
+    }
+
+    return protocolStyleable;
 }
 
 Protocol::DOM::NodeId InspectorDOMAgent::pushNodePathToFrontend(Protocol::ErrorString errorString, Node* nodeToPush)
@@ -1163,20 +1201,17 @@ void InspectorDOMAgent::focusNode()
         return;
 
     ASSERT(m_nodeToFocus);
-
-    RefPtr<Node> node = m_nodeToFocus.get();
-    m_nodeToFocus = nullptr;
-
-    Frame* frame = node->document().frame();
+    auto node = std::exchange(m_nodeToFocus, nullptr);
+    auto frame = node->document().frame();
     if (!frame)
         return;
 
-    JSC::JSGlobalObject* scriptState = mainWorldExecState(frame);
-    InjectedScript injectedScript = m_injectedScriptManager.injectedScriptFor(scriptState);
+    auto& globalObject = mainWorldGlobalObject(*frame);
+    auto injectedScript = m_injectedScriptManager.injectedScriptFor(&globalObject);
     if (injectedScript.hasNoValue())
         return;
 
-    injectedScript.inspectObject(nodeAsScriptValue(*scriptState, node.get()));
+    injectedScript.inspectObject(nodeAsScriptValue(globalObject, node.get()));
 }
 
 void InspectorDOMAgent::mouseDidMoveOverElement(const HitTestResult& result, unsigned)
@@ -1692,9 +1727,9 @@ static String computeContentSecurityPolicySHA256Hash(const Element& element)
 {
     // FIXME: Compute the digest with respect to the raw bytes received from the page.
     // See <https://bugs.webkit.org/show_bug.cgi?id=155184>.
-    TextEncoding documentEncoding = element.document().textEncoding();
-    const TextEncoding& encodingToUse = documentEncoding.isValid() ? documentEncoding : UTF8Encoding();
-    auto content = encodingToUse.encode(TextNodeTraversal::contentsAsString(element), UnencodableHandling::Entities);
+    PAL::TextEncoding documentEncoding = element.document().textEncoding();
+    const PAL::TextEncoding& encodingToUse = documentEncoding.isValid() ? documentEncoding : PAL::UTF8Encoding();
+    auto content = encodingToUse.encode(TextNodeTraversal::contentsAsString(element), PAL::UnencodableHandling::Entities);
     auto cryptoDigest = PAL::CryptoDigest::create(PAL::CryptoDigest::Algorithm::SHA_256);
     cryptoDigest->addBytes(content.data(), content.size());
     auto digest = cryptoDigest->computeHash();
@@ -1892,7 +1927,11 @@ Ref<Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEventListener
 
         if (document) {
             handlerObject = scriptListener.ensureJSFunction(*document);
-            globalObject = WebCore::globalObject(scriptListener.isolatedWorld(), document);
+            if (auto frame = document->frame()) {
+                // FIXME: Why do we need the canExecuteScripts check here?
+                if (frame->script().canExecuteScripts(NotAboutToExecuteScript))
+                    globalObject = frame->script().globalObject(scriptListener.isolatedWorld());
+            }
         }
 
         if (handlerObject && globalObject) {
@@ -2846,12 +2885,12 @@ RefPtr<Protocol::Runtime::RemoteObject> InspectorDOMAgent::resolveNode(Node* nod
     if (!frame)
         return nullptr;
 
-    auto& state = *mainWorldExecState(frame);
-    auto injectedScript = m_injectedScriptManager.injectedScriptFor(&state);
+    auto& globalObject = mainWorldGlobalObject(*frame);
+    auto injectedScript = m_injectedScriptManager.injectedScriptFor(&globalObject);
     if (injectedScript.hasNoValue())
         return nullptr;
 
-    return injectedScript.wrapObject(nodeAsScriptValue(state, node), objectGroup);
+    return injectedScript.wrapObject(nodeAsScriptValue(globalObject, node), objectGroup);
 }
 
 Node* InspectorDOMAgent::scriptValueAsNode(JSC::JSValue value)

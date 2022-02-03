@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc.  All rights reserved.
+ * Copyright (C) 2017-2022 Apple Inc.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -1032,7 +1032,7 @@ void InspectorCanvas::appendActionSnapshotIfNeeded()
 
 int InspectorCanvas::indexForData(DuplicateDataVariant data)
 {
-    size_t index = m_indexedDuplicateData.findMatching([&] (auto item) {
+    size_t index = m_indexedDuplicateData.findIf([&] (auto item) {
         if (data == item)
             return true;
 
@@ -1336,10 +1336,7 @@ Ref<JSON::ArrayOf<JSON::Value>> InspectorCanvas::buildArrayForCanvasGradient(con
 
 Ref<JSON::ArrayOf<JSON::Value>> InspectorCanvas::buildArrayForCanvasPattern(const CanvasPattern& canvasPattern)
 {
-    auto& tileImage = canvasPattern.pattern().tileImage();
-    FloatRect rect = { { }, tileImage.size() };
-    auto imageBuffer = ImageBuffer::create(tileImage.size(), RenderingMode::Unaccelerated, 1, DestinationColorSpace::SRGB(), PixelFormat::BGRA8);
-    imageBuffer->context().drawNativeImage(tileImage, tileImage.size(), rect, rect);
+    auto imageBuffer = canvasPattern.pattern().tileImageBuffer();
 
     String repeat;
     bool repeatX = canvasPattern.pattern().repeatX();

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,6 +58,7 @@
 #include "ServiceWorkerFetchTaskMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
+#include "WebIDBServer.h"
 #include "WebProcessMessages.h"
 #include "WebProcessPoolMessages.h"
 #include "WebResourceLoadStatisticsStore.h"
@@ -82,6 +83,10 @@
 
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
 #include "LegacyCustomProtocolManager.h"
+#endif
+
+#if ENABLE(IPC_TESTING_API)
+#include "IPCTesterMessages.h"
 #endif
 
 #define CONNECTION_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
@@ -140,6 +145,10 @@ NetworkConnectionToWebProcess::~NetworkConnectionToWebProcess()
 
     for (auto& port : m_processEntangledPorts)
         networkProcess().messagePortChannelRegistry().didCloseMessagePort(port);
+
+    auto completionHandlers = std::exchange(m_messageBatchDeliveryCompletionHandlers, { });
+    for (auto& completionHandler : completionHandlers.values())
+        completionHandler();
 
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
     if (auto* networkStorageSession = storageSession())
@@ -271,6 +280,19 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
         return paymentCoordinator().didReceiveMessage(connection, decoder);
 #endif
 
+#if ENABLE(IPC_TESTING_API)
+    if (decoder.messageReceiverName() == Messages::IPCTester::messageReceiverName()) {
+        m_ipcTester.didReceiveMessage(connection, decoder);
+        return;
+    }
+#endif
+
+    // Add new receiver name tests above this.
+#if ENABLE(IPC_TESTING_API)
+    if (connection.ignoreInvalidMessageForTesting())
+        return;
+#endif
+
     WTFLogAlways("Unhandled network process message '%s'", description(decoder.messageName()));
     ASSERT_NOT_REACHED();
 }
@@ -346,6 +368,19 @@ bool NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& conne
 #if ENABLE(APPLE_PAY_REMOTE_UI)
     if (decoder.messageReceiverName() == Messages::WebPaymentCoordinatorProxy::messageReceiverName())
         return paymentCoordinator().didReceiveSyncMessage(connection, decoder, reply);
+#endif
+
+#if ENABLE(IPC_TESTING_API)
+    if (decoder.messageReceiverName() == Messages::IPCTester::messageReceiverName()) {
+        m_ipcTester.didReceiveSyncMessage(connection, decoder, reply);
+        return true;
+    }
+#endif
+
+    // Add new receiver name tests above this.
+#if ENABLE(IPC_TESTING_API)
+    if (connection.ignoreInvalidMessageForTesting())
+        return true;
 #endif
 
     WTFLogAlways("Unhandled network process message '%s'", description(decoder.messageName()));
@@ -425,13 +460,18 @@ void NetworkConnectionToWebProcess::createSocketStream(URL&& url, String cachePa
 #if PLATFORM(COCOA)
     token = { m_networkProcess->sourceApplicationAuditData() };
 #endif
-    m_networkSocketStreams.add(identifier, NetworkSocketStream::create(m_networkProcess.get(), WTFMove(url), m_sessionID, cachePartition, identifier, m_connection, WTFMove(token)));
+    auto acceptInsecureCertificates = false;
+#if !HAVE(NSURLSESSION_WEBSOCKET)
+    if (auto* session = networkSession())
+        acceptInsecureCertificates = session->shouldAcceptInsecureCertificatesForWebSockets();
+#endif
+    m_networkSocketStreams.add(identifier, NetworkSocketStream::create(m_networkProcess.get(), WTFMove(url), m_sessionID, cachePartition, identifier, m_connection, WTFMove(token), acceptInsecureCertificates));
 }
 
-void NetworkConnectionToWebProcess::createSocketChannel(const ResourceRequest& request, const String& protocol, WebSocketIdentifier identifier,  WebPageProxyIdentifier webPageProxyID)
+void NetworkConnectionToWebProcess::createSocketChannel(const ResourceRequest& request, const String& protocol, WebSocketIdentifier identifier,  WebPageProxyIdentifier webPageProxyID, const ClientOrigin& clientOrigin)
 {
     ASSERT(!m_networkSocketChannels.contains(identifier));
-    if (auto channel = NetworkSocketChannel::create(*this, m_sessionID, request, protocol, identifier, webPageProxyID))
+    if (auto channel = NetworkSocketChannel::create(*this, m_sessionID, request, protocol, identifier, webPageProxyID, clientOrigin))
         m_networkSocketChannels.add(identifier, WTFMove(channel));
 }
 
@@ -490,24 +530,31 @@ Vector<RefPtr<WebCore::BlobDataFileReference>> NetworkConnectionToWebProcess::re
 #if ENABLE(SERVICE_WORKER)
 std::unique_ptr<ServiceWorkerFetchTask> NetworkConnectionToWebProcess::createFetchTask(NetworkResourceLoader& loader, const ResourceRequest& request)
 {
-    return swConnection().createFetchTask(loader, request);
+    auto* swConnection = this->swConnection();
+    if (!swConnection)
+        return nullptr;
+    return swConnection->createFetchTask(loader, request);
 }
 #endif
 
 void NetworkConnectionToWebProcess::scheduleResourceLoad(NetworkResourceLoadParameters&& loadParameters, std::optional<NetworkResourceLoadIdentifier> existingLoaderToResume)
 {
-    CONNECTION_RELEASE_LOG(Loading, "scheduleResourceLoad: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ", existingLoaderToResume=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier.toUInt64(), existingLoaderToResume.value_or(NetworkResourceLoadIdentifier { }).toUInt64());
+    CONNECTION_RELEASE_LOG(Loading, "scheduleResourceLoad: (parentPID=%d, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", frameID=%" PRIu64 ", resourceID=%" PRIu64 ", existingLoaderToResume=%" PRIu64 ")", loadParameters.parentPID, loadParameters.webPageProxyID.toUInt64(), loadParameters.webPageID.toUInt64(), loadParameters.webFrameID.toUInt64(), loadParameters.identifier.toUInt64(), valueOrDefault(existingLoaderToResume).toUInt64());
 
 #if ENABLE(SERVICE_WORKER)
-    auto& server = m_networkProcess->swServerForSession(m_sessionID);
-    if (!server.isImportCompleted()) {
-        server.whenImportIsCompleted([this, protectedThis = Ref { *this }, loadParameters = WTFMove(loadParameters), existingLoaderToResume]() mutable {
-            if (!m_networkProcess->webProcessConnection(webProcessIdentifier()))
-                return;
-            ASSERT(m_networkProcess->swServerForSession(m_sessionID).isImportCompleted());
-            scheduleResourceLoad(WTFMove(loadParameters), existingLoaderToResume);
-        });
-        return;
+    if (auto* session = networkSession()) {
+        if (auto& server = session->ensureSWServer(); !server.isImportCompleted()) {
+            server.whenImportIsCompleted([this, protectedThis = Ref { *this }, loadParameters = WTFMove(loadParameters), existingLoaderToResume]() mutable {
+                if (!m_networkProcess->webProcessConnection(webProcessIdentifier()))
+                    return;
+
+                ASSERT(networkSession());
+                ASSERT(networkSession()->swServer());
+                ASSERT(networkSession()->swServer()->isImportCompleted());
+                scheduleResourceLoad(WTFMove(loadParameters), existingLoaderToResume);
+            });
+            return;
+        }
     }
 #endif
 
@@ -695,8 +742,7 @@ void NetworkConnectionToWebProcess::convertMainResourceLoadToDownload(std::optio
 {
     RELEASE_ASSERT(RunLoop::isMain());
 
-    // In case a response is served from service worker, we do not have yet the ability to convert the load.
-    if (!mainResourceLoadIdentifier || response.source() == ResourceResponse::Source::ServiceWorker) {
+    if (!mainResourceLoadIdentifier) {
         m_networkProcess->downloadManager().startDownload(m_sessionID, downloadID, request, isNavigatingToAppBoundDomain);
         return;
     }
@@ -937,7 +983,8 @@ void NetworkConnectionToWebProcess::writeBlobsToTemporaryFilesForIndexedDB(const
         for (auto& file : fileReferences)
             file->revokeFileAccess();
 
-        m_networkProcess->webIDBServer(m_sessionID).registerTemporaryBlobFilePaths(m_connection, filePaths);
+        if (auto* session = networkSession())
+            session->ensureWebIDBServer().registerTemporaryBlobFilePaths(m_connection, filePaths);
         completionHandler(WTFMove(filePaths));
     });
 }
@@ -1128,14 +1175,14 @@ void NetworkConnectionToWebProcess::stopAllNetworkActivityTrackingForPage(PageId
 
 size_t NetworkConnectionToWebProcess::findRootNetworkActivity(PageIdentifier pageID)
 {
-    return m_networkActivityTrackers.findMatching([&](const auto& item) {
+    return m_networkActivityTrackers.findIf([&](const auto& item) {
         return item.isRootActivity && item.pageID == pageID;
     });
 }
 
 size_t NetworkConnectionToWebProcess::findNetworkActivityTracker(WebCore::ResourceLoaderIdentifier resourceID)
 {
-    return m_networkActivityTrackers.findMatching([&](const auto& item) {
+    return m_networkActivityTrackers.findIf([&](const auto& item) {
         return item.resourceID == resourceID;
     });
 }
@@ -1152,7 +1199,11 @@ void NetworkConnectionToWebProcess::establishSWServerConnection()
     if (m_swConnection)
         return;
 
-    auto& server = m_networkProcess->swServerForSession(m_sessionID);
+    auto* session = networkSession();
+    if (!session)
+        return;
+
+    auto& server = session->ensureSWServer();
     auto connection = makeUnique<WebSWServerConnection>(m_networkProcess, server, m_connection.get(), m_webProcessIdentifier);
 
     m_swConnection = *connection;
@@ -1161,8 +1212,9 @@ void NetworkConnectionToWebProcess::establishSWServerConnection()
 
 void NetworkConnectionToWebProcess::establishSWContextConnection(WebPageProxyIdentifier webPageProxyID, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, CompletionHandler<void()>&& completionHandler)
 {
-    if (auto* server = m_networkProcess->swServerForSessionIfExists(m_sessionID))
-        m_swContextConnection = makeUnique<WebSWServerToContextConnection>(*this, webPageProxyID, WTFMove(registrableDomain), serviceWorkerPageIdentifier, *server);
+    auto* session = networkSession();
+    if (auto* swServer = session ? session->swServer() : nullptr)
+        m_swContextConnection = makeUnique<WebSWServerToContextConnection>(*this, webPageProxyID, WTFMove(registrableDomain), serviceWorkerPageIdentifier, *swServer);
     completionHandler();
 }
 
@@ -1174,16 +1226,16 @@ void NetworkConnectionToWebProcess::closeSWContextConnection()
 void NetworkConnectionToWebProcess::serverToContextConnectionNoLongerNeeded()
 {
     CONNECTION_RELEASE_LOG(ServiceWorker, "serverToContextConnectionNoLongerNeeded: WebProcess no longer useful for running service workers");
-    m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::WorkerContextConnectionNoLongerNeeded { webProcessIdentifier() }, 0);
+    m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::ServiceWorkerContextConnectionNoLongerNeeded { webProcessIdentifier() }, 0);
 
     m_swContextConnection = nullptr;
 }
 
-WebSWServerConnection& NetworkConnectionToWebProcess::swConnection()
+WebSWServerConnection* NetworkConnectionToWebProcess::swConnection()
 {
     if (!m_swConnection)
         establishSWServerConnection();
-    return *m_swConnection;
+    return m_swConnection.get();
 }
 #endif
 
@@ -1217,7 +1269,7 @@ void NetworkConnectionToWebProcess::messagePortClosed(const MessagePortIdentifie
     networkProcess().messagePortChannelRegistry().didCloseMessagePort(port);
 }
 
-uint64_t NetworkConnectionToWebProcess::nextMessageBatchIdentifier(Function<void()>&& deliveryCallback)
+uint64_t NetworkConnectionToWebProcess::nextMessageBatchIdentifier(CompletionHandler<void()>&& deliveryCallback)
 {
     static uint64_t currentMessageBatchIdentifier;
     ASSERT(!m_messageBatchDeliveryCompletionHandlers.contains(currentMessageBatchIdentifier + 1));
@@ -1227,7 +1279,7 @@ uint64_t NetworkConnectionToWebProcess::nextMessageBatchIdentifier(Function<void
 
 void NetworkConnectionToWebProcess::takeAllMessagesForPort(const MessagePortIdentifier& port, CompletionHandler<void(Vector<MessageWithMessagePorts>&&, uint64_t)>&& callback)
 {
-    networkProcess().messagePortChannelRegistry().takeAllMessagesForPort(port, [this, protectedThis = Ref { *this }, callback = WTFMove(callback)](auto&& messages, Function<void()>&& deliveryCallback) mutable {
+    networkProcess().messagePortChannelRegistry().takeAllMessagesForPort(port, [this, protectedThis = Ref { *this }, callback = WTFMove(callback)](auto&& messages, auto&& deliveryCallback) mutable {
         callback(WTFMove(messages), nextMessageBatchIdentifier(WTFMove(deliveryCallback)));
     });
 }

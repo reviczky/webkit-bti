@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "FilterReference.h"
 #include "RemoteDisplayListRecorderMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include <WebCore/DisplayList.h>
@@ -69,9 +70,14 @@ void RemoteDisplayListRecorderProxy::putPixelBuffer(const PixelBuffer& pixelBuff
     send(Messages::RemoteDisplayListRecorder::PutPixelBuffer(srcRect, destPoint, pixelBuffer, destFormat));
 }
 
-bool RemoteDisplayListRecorderProxy::canDrawImageBuffer(const ImageBuffer& imageBuffer) const
+void RemoteDisplayListRecorderProxy::convertToLuminanceMask()
 {
-    return m_renderingBackend && m_renderingBackend->isCached(imageBuffer);
+    send(Messages::RemoteDisplayListRecorder::ConvertToLuminanceMask());
+}
+
+void RemoteDisplayListRecorderProxy::transformToColorSpace(const WebCore::DestinationColorSpace& colorSpace)
+{
+    send(Messages::RemoteDisplayListRecorder::TransformToColorSpace(colorSpace));
 }
 
 RenderingMode RemoteDisplayListRecorderProxy::renderingMode() const
@@ -192,6 +198,11 @@ void RemoteDisplayListRecorderProxy::recordBeginClipToDrawingCommands(const Floa
 void RemoteDisplayListRecorderProxy::recordEndClipToDrawingCommands(const FloatRect& destination)
 {
     send(Messages::RemoteDisplayListRecorder::EndClipToDrawingCommands(destination));
+}
+
+void RemoteDisplayListRecorderProxy::recordDrawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Filter& filter)
+{
+    send(Messages::RemoteDisplayListRecorder::DrawFilteredImageBuffer(sourceImageIdentifier, sourceImageRect, IPC::FilterReference(Ref<Filter> { filter })));
 }
 
 void RemoteDisplayListRecorderProxy::recordDrawGlyphs(const Font& font, const GlyphBufferGlyph* glyphs, const GlyphBufferAdvance* advances, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode mode)
@@ -396,34 +407,51 @@ void RemoteDisplayListRecorderProxy::recordApplyDeviceScaleFactor(float scaleFac
     send(Messages::RemoteDisplayListRecorder::ApplyDeviceScaleFactor(scaleFactor));
 }
 
-void RemoteDisplayListRecorderProxy::recordResourceUse(NativeImage& image)
+bool RemoteDisplayListRecorderProxy::recordResourceUse(NativeImage& image)
 {
     if (UNLIKELY(!m_renderingBackend)) {
         ASSERT_NOT_REACHED();
-        return;
+        return false;
     }
 
-    m_renderingBackend->recordNativeImageUse(image);
+    m_renderingBackend->remoteResourceCacheProxy().recordNativeImageUse(image);
+    return true;
 }
 
-void RemoteDisplayListRecorderProxy::recordResourceUse(Font& font)
+bool RemoteDisplayListRecorderProxy::recordResourceUse(ImageBuffer& imageBuffer)
 {
     if (UNLIKELY(!m_renderingBackend)) {
         ASSERT_NOT_REACHED();
-        return;
+        return false;
     }
 
-    m_renderingBackend->recordFontUse(font);
+    if (!m_renderingBackend->isCached(imageBuffer))
+        return false;
+
+    m_renderingBackend->remoteResourceCacheProxy().recordImageBufferUse(imageBuffer);
+    return true;
 }
 
-void RemoteDisplayListRecorderProxy::recordResourceUse(ImageBuffer& imageBuffer)
+bool RemoteDisplayListRecorderProxy::recordResourceUse(const SourceImage& image)
+{
+    if (auto imageBuffer = image.imageBufferIfExists())
+        return recordResourceUse(*imageBuffer);
+
+    if (auto nativeImage = image.nativeImageIfExists())
+        return recordResourceUse(*nativeImage);
+
+    return true;
+}
+
+bool RemoteDisplayListRecorderProxy::recordResourceUse(Font& font)
 {
     if (UNLIKELY(!m_renderingBackend)) {
         ASSERT_NOT_REACHED();
-        return;
+        return false;
     }
 
-    m_renderingBackend->recordImageBufferUse(imageBuffer);
+    m_renderingBackend->remoteResourceCacheProxy().recordFontUse(font);
+    return true;
 }
 
 void RemoteDisplayListRecorderProxy::flushContext(GraphicsContextFlushIdentifier identifier)

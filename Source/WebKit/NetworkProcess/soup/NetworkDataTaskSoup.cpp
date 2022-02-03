@@ -33,6 +33,7 @@
 #include "NetworkLoad.h"
 #include "NetworkProcess.h"
 #include "NetworkSessionSoup.h"
+#include "PrivateRelayed.h"
 #include "WebErrors.h"
 #include "WebKitDirectoryInputStream.h"
 #include <WebCore/AuthenticationChallenge.h>
@@ -44,8 +45,8 @@
 #include <WebCore/ShouldRelaxThirdPartyCookieBlocking.h>
 #include <WebCore/SoupNetworkSession.h>
 #include <WebCore/SoupVersioning.h>
-#include <WebCore/TextEncoding.h>
 #include <WebCore/TimingAllowOrigin.h>
+#include <pal/text/TextEncoding.h>
 #include <wtf/MainThread.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
 
@@ -103,7 +104,7 @@ String NetworkDataTaskSoup::suggestedFilename() const
     if (!suggestedFilename.isEmpty())
         return suggestedFilename;
 
-    return decodeURLEscapeSequences(m_response.url().lastPathComponent());
+    return PAL::decodeURLEscapeSequences(m_response.url().lastPathComponent());
 }
 
 void NetworkDataTaskSoup::setPriority(ResourceLoadPriority priority)
@@ -151,7 +152,7 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
         return;
 
     if (!m_currentRequest.url().protocolIsInHTTPFamily()) {
-        scheduleFailure(InvalidURLFailure);
+        scheduleFailure(FailureType::InvalidURL);
         return;
     }
 
@@ -159,7 +160,7 @@ void NetworkDataTaskSoup::createRequest(ResourceRequest&& request, WasBlockingCo
 
     m_soupMessage = m_currentRequest.createSoupMessage(m_session->blobRegistry());
     if (!m_soupMessage) {
-        scheduleFailure(InvalidURLFailure);
+        scheduleFailure(FailureType::InvalidURL);
         return;
     }
 
@@ -503,7 +504,7 @@ void NetworkDataTaskSoup::dispatchDidReceiveResponse()
     // FIXME: This cannot be eliminated until other code no longer relies on ResourceResponse's NetworkLoadMetrics.
     m_response.setDeprecatedNetworkLoadMetrics(Box<NetworkLoadMetrics>::create(m_networkLoadMetrics));
 
-    didReceiveResponse(ResourceResponse(m_response), NegotiatedLegacyTLS::No, [this, protectedThis = Ref { *this }](PolicyAction policyAction) {
+    didReceiveResponse(ResourceResponse(m_response), NegotiatedLegacyTLS::No, PrivateRelayed::No, [this, protectedThis = Ref { *this }](PolicyAction policyAction) {
         if (m_state == State::Canceling || m_state == State::Completed) {
             clearRequest();
             return;
@@ -688,16 +689,16 @@ static inline bool isAuthenticationFailureStatusCode(int httpStatusCode)
 void NetworkDataTaskSoup::completeAuthentication(const AuthenticationChallenge& challenge, const Credential& credential)
 {
     switch (challenge.protectionSpace().authenticationScheme()) {
-    case ProtectionSpaceAuthenticationSchemeDefault:
-    case ProtectionSpaceAuthenticationSchemeHTTPBasic:
-    case ProtectionSpaceAuthenticationSchemeHTTPDigest:
-    case ProtectionSpaceAuthenticationSchemeHTMLForm:
-    case ProtectionSpaceAuthenticationSchemeNTLM:
-    case ProtectionSpaceAuthenticationSchemeNegotiate:
-    case ProtectionSpaceAuthenticationSchemeOAuth:
+    case ProtectionSpace::AuthenticationScheme::Default:
+    case ProtectionSpace::AuthenticationScheme::HTTPBasic:
+    case ProtectionSpace::AuthenticationScheme::HTTPDigest:
+    case ProtectionSpace::AuthenticationScheme::HTMLForm:
+    case ProtectionSpace::AuthenticationScheme::NTLM:
+    case ProtectionSpace::AuthenticationScheme::Negotiate:
+    case ProtectionSpace::AuthenticationScheme::OAuth:
         soup_auth_authenticate(challenge.soupAuth(), credential.user().utf8().data(), credential.password().utf8().data());
         break;
-    case ProtectionSpaceAuthenticationSchemeClientCertificatePINRequested: {
+    case ProtectionSpace::AuthenticationScheme::ClientCertificatePINRequested: {
 #if USE(SOUP2)
         ASSERT_NOT_REACHED();
 #else
@@ -707,15 +708,15 @@ void NetworkDataTaskSoup::completeAuthentication(const AuthenticationChallenge& 
 #endif
         break;
     }
-    case ProtectionSpaceAuthenticationSchemeClientCertificateRequested:
+    case ProtectionSpace::AuthenticationScheme::ClientCertificateRequested:
 #if USE(SOUP2)
         ASSERT_NOT_REACHED();
 #else
         soup_message_set_tls_client_certificate(m_soupMessage.get(), credential.certificate());
 #endif
         break;
-    case ProtectionSpaceAuthenticationSchemeServerTrustEvaluationRequested:
-    case ProtectionSpaceAuthenticationSchemeUnknown:
+    case ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested:
+    case ProtectionSpace::AuthenticationScheme::Unknown:
         break;
     }
 }
@@ -723,31 +724,31 @@ void NetworkDataTaskSoup::completeAuthentication(const AuthenticationChallenge& 
 void NetworkDataTaskSoup::cancelAuthentication(const AuthenticationChallenge& challenge)
 {
     switch (challenge.protectionSpace().authenticationScheme()) {
-    case ProtectionSpaceAuthenticationSchemeDefault:
-    case ProtectionSpaceAuthenticationSchemeHTTPBasic:
-    case ProtectionSpaceAuthenticationSchemeHTTPDigest:
-    case ProtectionSpaceAuthenticationSchemeHTMLForm:
-    case ProtectionSpaceAuthenticationSchemeNTLM:
-    case ProtectionSpaceAuthenticationSchemeNegotiate:
-    case ProtectionSpaceAuthenticationSchemeOAuth:
+    case ProtectionSpace::AuthenticationScheme::Default:
+    case ProtectionSpace::AuthenticationScheme::HTTPBasic:
+    case ProtectionSpace::AuthenticationScheme::HTTPDigest:
+    case ProtectionSpace::AuthenticationScheme::HTMLForm:
+    case ProtectionSpace::AuthenticationScheme::NTLM:
+    case ProtectionSpace::AuthenticationScheme::Negotiate:
+    case ProtectionSpace::AuthenticationScheme::OAuth:
         soup_auth_cancel(challenge.soupAuth());
         break;
-    case ProtectionSpaceAuthenticationSchemeClientCertificatePINRequested:
+    case ProtectionSpace::AuthenticationScheme::ClientCertificatePINRequested:
 #if USE(SOUP2)
         ASSERT_NOT_REACHED();
 #else
         soup_message_tls_client_certificate_password_request_complete(m_soupMessage.get());
 #endif
         break;
-    case ProtectionSpaceAuthenticationSchemeClientCertificateRequested:
+    case ProtectionSpace::AuthenticationScheme::ClientCertificateRequested:
 #if USE(SOUP2)
         ASSERT_NOT_REACHED();
 #else
         soup_message_set_tls_client_certificate(m_soupMessage.get(), nullptr);
 #endif
         break;
-    case ProtectionSpaceAuthenticationSchemeServerTrustEvaluationRequested:
-    case ProtectionSpaceAuthenticationSchemeUnknown:
+    case ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested:
+    case ProtectionSpace::AuthenticationScheme::Unknown:
         break;
     }
 }

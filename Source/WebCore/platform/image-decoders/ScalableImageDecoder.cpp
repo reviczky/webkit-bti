@@ -51,7 +51,7 @@ namespace WebCore {
 
 namespace {
 
-static unsigned copyFromSharedBuffer(char* buffer, unsigned bufferLength, const SharedBuffer& sharedBuffer)
+static unsigned copyFromSharedBuffer(char* buffer, unsigned bufferLength, const FragmentedSharedBuffer& sharedBuffer)
 {
     unsigned bytesExtracted = 0;
     for (const auto& element : sharedBuffer) {
@@ -135,7 +135,7 @@ bool matchesCURSignature(char* contents)
 
 }
 
-RefPtr<ScalableImageDecoder> ScalableImageDecoder::create(SharedBuffer& data, AlphaOption alphaOption, GammaAndColorProfileOption gammaAndColorProfileOption)
+RefPtr<ScalableImageDecoder> ScalableImageDecoder::create(FragmentedSharedBuffer& data, AlphaOption alphaOption, GammaAndColorProfileOption gammaAndColorProfileOption)
 {
     static const unsigned lengthOfLongestSignature = 14; // To wit: "RIFF????WEBPVP"
     char contents[lengthOfLongestSignature];
@@ -250,12 +250,5 @@ PlatformImagePtr ScalableImageDecoder::createFrameImageAtIndex(size_t index, Sub
     // is already in a native container, and this just increments its refcount.
     return buffer->backingStore()->image();
 }
-
-#if USE(DIRECT2D)
-void ScalableImageDecoder::setTargetContext(ID2D1RenderTarget*)
-{
-    notImplemented();
-}
-#endif
 
 }

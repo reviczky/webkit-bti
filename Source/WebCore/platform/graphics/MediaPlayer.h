@@ -33,7 +33,9 @@
 #include "LayoutRect.h"
 #include "MediaPlayerEnums.h"
 #include "MediaPlayerIdentifier.h"
+#include "MediaSampleVideoFrame.h"
 #include "PlatformLayer.h"
+#include "PlatformTextTrack.h"
 #include "SecurityOriginData.h"
 #include "Timer.h"
 #include "VideoFrameMetadata.h"
@@ -82,7 +84,6 @@ class MediaSourcePrivateClient;
 class MediaStreamPrivate;
 class NativeImage;
 class PlatformMediaResourceLoader;
-class PlatformTextTrack;
 class PlatformTimeRanges;
 class TextTrackRepresentation;
 class VideoTrackPrivate;
@@ -246,9 +247,7 @@ public:
 
     virtual void textTrackRepresentationBoundsChanged(const IntRect&) { }
 
-#if ENABLE(AVF_CAPTIONS)
     virtual Vector<RefPtr<PlatformTextTrack>> outOfBandTrackSources() { return { }; }
-#endif
 
 #if PLATFORM(IOS_FAMILY)
     virtual String mediaPlayerNetworkInterfaceName() const { return String(); }
@@ -469,10 +468,8 @@ public:
     // The current restrictions require that format shoud be RGB or RGBA, type should be UNSIGNED_BYTE and level should be 0. It may be lifted in the future.
 #if !USE(AVFOUNDATION)
     bool copyVideoTextureToPlatformTexture(GraphicsContextGL*, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY);
-#else
-    RetainPtr<CVPixelBufferRef> pixelBufferForCurrentTime();
 #endif
-
+    std::optional<MediaSampleVideoFrame> videoFrameForCurrentTime();
     RefPtr<NativeImage> nativeImageForCurrentTime();
     DestinationColorSpace colorSpace();
 
@@ -597,10 +594,8 @@ public:
     void syncTextTrackBounds();
     void tracksChanged();
 
-#if ENABLE(AVF_CAPTIONS)
     void notifyTrackModeChanged();
     Vector<RefPtr<PlatformTextTrack>> outOfBandTrackSources();
-#endif
 
 #if PLATFORM(IOS_FAMILY)
     String mediaPlayerNetworkInterfaceName() const;

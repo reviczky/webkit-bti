@@ -142,7 +142,7 @@ static void revertCall(VM& vm, CallLinkInfo& callLinkInfo, MacroAssemblerCodeRef
 #if ENABLE(JIT)
         callLinkInfo.clearCodeBlock();
         if (!callLinkInfo.clearedByJettison())
-            callLinkInfo.initializeDirectCall();
+            static_cast<OptimizingCallLinkInfo&>(callLinkInfo).initializeDirectCall();
 #endif
     } else {
         if (!callLinkInfo.clearedByJettison()) {
@@ -1550,7 +1550,7 @@ void repatchInstanceOf(
 }
 
 void linkDirectCall(
-    CallFrame* callFrame, CallLinkInfo& callLinkInfo, CodeBlock* calleeCodeBlock,
+    CallFrame* callFrame, OptimizingCallLinkInfo& callLinkInfo, CodeBlock* calleeCodeBlock,
     MacroAssemblerCodePtr<JSEntryPtrTag> codePtr)
 {
     ASSERT(!callLinkInfo.stub());
@@ -1758,8 +1758,8 @@ void linkPolymorphicCall(JSGlobalObject* globalObject, CallFrame* callFrame, Cal
 
     if (!frameShuffler && callLinkInfo.isTailCall()) {
         // We strongly assume that calleeGPR is not a callee save register in the slow path.
-        ASSERT(!callerCodeBlock->calleeSaveRegisters()->find(calleeGPR));
-        stubJit.emitRestoreCalleeSaves();
+        ASSERT(!callerCodeBlock->jitCode()->calleeSaveRegisters()->find(calleeGPR));
+        stubJit.emitRestoreCalleeSavesFor(callerCodeBlock->jitCode()->calleeSaveRegisters());
     }
 
     CCallHelpers::JumpList slowPath;

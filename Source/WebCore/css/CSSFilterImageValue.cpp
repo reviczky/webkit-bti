@@ -115,29 +115,24 @@ RefPtr<Image> CSSFilterImageValue::image(RenderElement& renderer, const FloatSiz
         return &Image::nullImage();
 
     // Transform Image into ImageBuffer.
-    // FIXME (149424): This buffer should not be unconditionally unaccelerated.
-    auto renderingMode = RenderingMode::Unaccelerated;
-    auto sourceImage = ImageBuffer::create(size, renderingMode, 1, DestinationColorSpace::SRGB(), PixelFormat::BGRA8);
+    auto renderingMode = renderer.page().acceleratedFiltersEnabled() ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
+    auto sourceImage = ImageBuffer::create(size, renderingMode, ShouldUseDisplayList::No, RenderingPurpose::DOM, 1, DestinationColorSpace::SRGB(), PixelFormat::BGRA8, renderer.hostWindow());
     if (!sourceImage)
         return &Image::nullImage();
 
     auto sourceImageRect = FloatRect { { }, size };
     sourceImage->context().drawImage(*image, sourceImageRect);
 
-    auto cssFilter = CSSFilter::create(m_filterOperations, renderingMode);
-
-    cssFilter->setSourceImageRect(sourceImageRect);
-    if (!cssFilter->buildFilterFunctions(renderer, m_filterOperations, FilterConsumer::FilterFunction))
+    auto cssFilter = CSSFilter::create(renderer, m_filterOperations, renderingMode, FloatSize { 1, 1 }, Filter::ClipOperation::Intersect, sourceImageRect);
+    if (!cssFilter)
         return &Image::nullImage();
 
-    cssFilter->setSourceImage(WTFMove(sourceImage));
-    cssFilter->apply();
+    cssFilter->setFilterRegion(sourceImageRect);
 
-    auto* output = cssFilter->output();
-    if (!output)
-        return &Image::nullImage();
+    if (auto image = sourceImage->filteredImage(*cssFilter))
+        return image;
 
-    return output->copyImage();
+    return &Image::nullImage();
 }
 
 void CSSFilterImageValue::filterImageChanged(const IntRect&)

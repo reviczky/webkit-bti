@@ -27,6 +27,7 @@
 
 #include "HTMLFormControlElementWithState.h"
 #include "TypeAhead.h"
+#include <wtf/CompletionHandler.h>
 
 namespace WebCore {
 
@@ -73,7 +74,6 @@ public:
 
     WEBCORE_EXPORT const Vector<HTMLElement*>& listItems() const;
 
-    bool accessKeyAction(bool sendMouseEvents) final;
     void accessKeySetSelectedIndex(int);
 
     WEBCORE_EXPORT void setMultiple(bool);
@@ -106,6 +106,8 @@ public:
     void optionSelectionStateChanged(HTMLOptionElement&, bool optionIsSelected);
     bool allowsNonContiguousSelection() const { return m_allowsNonContiguousSelection; };
 
+    CompletionHandlerCallingScope optionToSelectFromChildChangeScope(const ChildChange&, HTMLOptGroupElement* parentOptGroup = nullptr);
+
 protected:
     HTMLSelectElement(const QualifiedName&, Document&, HTMLFormElement*);
 
@@ -134,7 +136,7 @@ private:
 
     bool childShouldCreateRenderer(const Node&) const final;
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
-    bool appendFormData(DOMFormData&, bool) final;
+    bool appendFormData(DOMFormData&) final;
 
     void reset() final;
 

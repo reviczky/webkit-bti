@@ -31,9 +31,12 @@
 
 #include "ColorSerialization.h"
 #include "GraphicsTypes.h"
+#include "LegacyRenderSVGRoot.h"
+#include "LegacyRenderSVGShapeInlines.h"
 #include "NodeRenderStyle.h"
 #include "RenderImage.h"
 #include "RenderIterator.h"
+#include "RenderSVGContainer.h"
 #include "RenderSVGGradientStopInlines.h"
 #include "RenderSVGImage.h"
 #include "RenderSVGInlineText.h"
@@ -60,6 +63,7 @@
 #include "SVGRectElement.h"
 #include "SVGRootInlineBox.h"
 #include "SVGStopElement.h"
+#include "StyleCachedImage.h"
 
 #include <math.h>
 
@@ -149,25 +153,71 @@ static TextStream& operator<<(TextStream& ts, const SVGSpreadMethodType& type)
     return ts;
 }
 
-static void writeSVGPaintingResource(TextStream& ts, RenderSVGResource* resource)
+static void writeSVGPaintingResource(TextStream& ts, const RenderSVGResource& resource)
 {
-    if (resource->resourceType() == SolidColorResourceType) {
-        ts << "[type=SOLID] [color=" << static_cast<RenderSVGResourceSolidColor*>(resource)->color() << "]";
+    auto resourceType = resource.resourceType();
+    if (resourceType == SolidColorResourceType) {
+        ts << "[type=SOLID] [color=" << downcast<RenderSVGResourceSolidColor>(resource).color() << "]";
         return;
     }
 
-    // All other resources derive from RenderSVGResourceContainer
-    RenderSVGResourceContainer* container = static_cast<RenderSVGResourceContainer*>(resource);
-    SVGElement& element = container->element();
-
-    if (resource->resourceType() == PatternResourceType)
+    if (resourceType == PatternResourceType)
         ts << "[type=PATTERN]";
-    else if (resource->resourceType() == LinearGradientResourceType)
+    else if (resourceType == LinearGradientResourceType)
         ts << "[type=LINEAR-GRADIENT]";
-    else if (resource->resourceType() == RadialGradientResourceType)
+    else if (resourceType == RadialGradientResourceType)
         ts << "[type=RADIAL-GRADIENT]";
 
-    ts << " [id=\"" << element.getIdAttribute() << "\"]";
+    // All other resources derive from RenderSVGResourceContainer
+    const auto& container = static_cast<const RenderSVGResourceContainer&>(resource);
+    ts << " [id=\"" << container.element().getIdAttribute() << "\"]";
+}
+
+static void writeSVGFillPaintingResource(TextStream& ts, const RenderElement& renderer, const RenderSVGResource& fillPaintingResource)
+{
+    TextStreamSeparator s(" ");
+    ts << " [fill={" << s;
+    writeSVGPaintingResource(ts, fillPaintingResource);
+
+    const auto& svgStyle = renderer.style().svgStyle();
+    writeIfNotDefault(ts, "opacity", svgStyle.fillOpacity(), 1.0f);
+    writeIfNotDefault(ts, "fill rule", svgStyle.fillRule(), WindRule::NonZero);
+    ts << "}]";
+}
+
+static void writeSVGStrokePaintingResource(TextStream& ts, const RenderElement& renderer, const RenderSVGResource& strokePaintingResource, const SVGGraphicsElement& shape)
+{
+    TextStreamSeparator s(" ");
+    ts << " [stroke={" << s;
+    writeSVGPaintingResource(ts, strokePaintingResource);
+
+    const auto& style = renderer.style();
+    const auto& svgStyle = style.svgStyle();
+
+    SVGLengthContext lengthContext(&shape);
+    double dashOffset = lengthContext.valueForLength(svgStyle.strokeDashOffset());
+    double strokeWidth = lengthContext.valueForLength(style.strokeWidth());
+    const auto& dashes = svgStyle.strokeDashArray();
+
+    DashArray dashArray;
+    for (auto& length : dashes)
+        dashArray.append(length.value(lengthContext));
+
+    writeIfNotDefault(ts, "opacity", svgStyle.strokeOpacity(), 1.0f);
+    writeIfNotDefault(ts, "stroke width", strokeWidth, 1.0);
+    writeIfNotDefault(ts, "miter limit", style.strokeMiterLimit(), 4.0f);
+    writeIfNotDefault(ts, "line cap", style.capStyle(), LineCap::Butt);
+    writeIfNotDefault(ts, "line join", style.joinStyle(), LineJoin::Miter);
+    writeIfNotDefault(ts, "dash offset", dashOffset, 0.0);
+    if (!dashArray.isEmpty())
+        writeNameValuePair(ts, "dash array", dashArray);
+
+    if (is<SVGGeometryElement>(shape)) {
+        double pathLength = downcast<SVGGeometryElement>(shape).pathLength();
+        writeIfNotDefault(ts, "path length", pathLength, 0.0);
+    }
+
+    ts << "}]";
 }
 
 static void writeStyle(TextStream& ts, const RenderElement& renderer)
@@ -179,52 +229,34 @@ static void writeStyle(TextStream& ts, const RenderElement& renderer)
         writeNameValuePair(ts, "transform", renderer.localTransform());
     writeIfNotDefault(ts, "image rendering", style.imageRendering(), RenderStyle::initialImageRendering());
     writeIfNotDefault(ts, "opacity", style.opacity(), RenderStyle::initialOpacity());
-    if (is<RenderSVGShape>(renderer)) {
+
+    if (is<LegacyRenderSVGShape>(renderer)) {
+        const auto& shape = downcast<LegacyRenderSVGShape>(renderer);
+
+        Color fallbackColor;
+        if (auto* strokePaintingResource = RenderSVGResource::strokePaintingResource(const_cast<LegacyRenderSVGShape&>(shape), shape.style(), fallbackColor))
+            writeSVGStrokePaintingResource(ts, renderer, *strokePaintingResource, shape.graphicsElement());
+
+        if (auto* fillPaintingResource = RenderSVGResource::fillPaintingResource(const_cast<LegacyRenderSVGShape&>(shape), shape.style(), fallbackColor))
+            writeSVGFillPaintingResource(ts, renderer, *fillPaintingResource);
+
+        writeIfNotDefault(ts, "clip rule", svgStyle.clipRule(), WindRule::NonZero);
+    }
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    else if (is<LegacyRenderSVGShape>(renderer)) {
         const auto& shape = downcast<RenderSVGShape>(renderer);
 
         Color fallbackColor;
-        if (RenderSVGResource* strokePaintingResource = RenderSVGResource::strokePaintingResource(const_cast<RenderSVGShape&>(shape), shape.style(), fallbackColor)) {
-            TextStreamSeparator s(" ");
-            ts << " [stroke={" << s;
-            writeSVGPaintingResource(ts, strokePaintingResource);
+        if (auto* strokePaintingResource = RenderSVGResource::strokePaintingResource(const_cast<RenderSVGShape&>(shape), shape.style(), fallbackColor))
+            writeSVGStrokePaintingResource(ts, renderer, *strokePaintingResource, shape.graphicsElement());
 
-            SVGLengthContext lengthContext(&shape.graphicsElement());
-            double dashOffset = lengthContext.valueForLength(svgStyle.strokeDashOffset());
-            double strokeWidth = lengthContext.valueForLength(style.strokeWidth());
-            const auto& dashes = svgStyle.strokeDashArray();
+        if (auto* fillPaintingResource = RenderSVGResource::fillPaintingResource(const_cast<RenderSVGShape&>(shape), shape.style(), fallbackColor))
+            writeSVGFillPaintingResource(ts, renderer, *fillPaintingResource);
 
-            DashArray dashArray;
-            for (auto& length : dashes)
-                dashArray.append(length.value(lengthContext));
-
-            writeIfNotDefault(ts, "opacity", svgStyle.strokeOpacity(), 1.0f);
-            writeIfNotDefault(ts, "stroke width", strokeWidth, 1.0);
-            writeIfNotDefault(ts, "miter limit", style.strokeMiterLimit(), 4.0f);
-            writeIfNotDefault(ts, "line cap", style.capStyle(), LineCap::Butt);
-            writeIfNotDefault(ts, "line join", style.joinStyle(), LineJoin::Miter);
-            writeIfNotDefault(ts, "dash offset", dashOffset, 0.0);
-            if (!dashArray.isEmpty())
-                writeNameValuePair(ts, "dash array", dashArray);
-
-            if (is<SVGGeometryElement>(shape.graphicsElement())) {
-                double pathLength = downcast<SVGGeometryElement>(shape.graphicsElement()).pathLength();
-                writeIfNotDefault(ts, "path length", pathLength, 0.0);
-            }
-
-            ts << "}]";
-        }
-
-        if (RenderSVGResource* fillPaintingResource = RenderSVGResource::fillPaintingResource(const_cast<RenderSVGShape&>(shape), shape.style(), fallbackColor)) {
-            TextStreamSeparator s(" ");
-            ts << " [fill={" << s;
-            writeSVGPaintingResource(ts, fillPaintingResource);
-
-            writeIfNotDefault(ts, "opacity", svgStyle.fillOpacity(), 1.0f);
-            writeIfNotDefault(ts, "fill rule", svgStyle.fillRule(), WindRule::NonZero);
-            ts << "}]";
-        }
         writeIfNotDefault(ts, "clip rule", svgStyle.clipRule(), WindRule::NonZero);
     }
+#endif
 
     writeIfNotEmpty(ts, "start marker", svgStyle.markerStartResource());
     writeIfNotEmpty(ts, "middle marker", svgStyle.markerMidResource());
@@ -248,11 +280,8 @@ static TextStream& writePositionAndStyle(TextStream& ts, const RenderElement& re
     return ts;
 }
 
-static TextStream& operator<<(TextStream& ts, const RenderSVGShape& shape)
+static void writeSVGGraphicsElement(TextStream& ts, SVGGraphicsElement& svgElement)
 {
-    writePositionAndStyle(ts, shape);
-
-    SVGGraphicsElement& svgElement = shape.graphicsElement();
     SVGLengthContext lengthContext(&svgElement);
 
     if (is<SVGRectElement>(svgElement)) {
@@ -289,8 +318,23 @@ static TextStream& operator<<(TextStream& ts, const RenderSVGShape& shape)
         writeNameAndQuotedValue(ts, "data", pathString);
     } else
         ASSERT_NOT_REACHED();
+}
+
+static TextStream& operator<<(TextStream& ts, const LegacyRenderSVGShape& shape)
+{
+    writePositionAndStyle(ts, shape);
+    writeSVGGraphicsElement(ts, shape.graphicsElement());
     return ts;
 }
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+static TextStream& operator<<(TextStream& ts, const RenderSVGShape& shape)
+{
+    writePositionAndStyle(ts, shape);
+    writeSVGGraphicsElement(ts, shape.graphicsElement());
+    return ts;
+}
+#endif
 
 static void writeRenderSVGTextBox(TextStream& ts, const RenderSVGText& text)
 {
@@ -431,12 +475,10 @@ void writeSVGResourceContainer(TextStream& ts, const RenderSVGResourceContainer&
         FloatRect dummyRect;
         FloatSize dummyScale(1, 1);
         SVGFilterBuilder builder;
-        auto dummyFilter = SVGFilter::create(filter.filterElement(), builder, dummyScale, dummyRect, dummyRect, dummyRect);
+        auto dummyFilter = SVGFilter::create(filter.filterElement(), builder, RenderingMode::Unaccelerated, dummyScale, Filter::ClipOperation::Intersect, dummyRect, dummyRect);
         if (dummyFilter) {
             TextStream::IndentScope indentScope(ts);
-
-            if (auto lastEffect = dummyFilter->lastEffect())
-                lastEffect->externalRepresentation(ts);
+            dummyFilter->externalRepresentation(ts, FilterRepresentation::TestOutput);
         }
     } else if (resource.resourceType() == ClipperResourceType) {
         const auto& clipper = static_cast<const RenderSVGResourceClipper&>(resource);
@@ -496,7 +538,18 @@ void writeSVGResourceContainer(TextStream& ts, const RenderSVGResourceContainer&
     writeChildren(ts, resource, behavior);
 }
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
 void writeSVGContainer(TextStream& ts, const RenderSVGContainer& container, OptionSet<RenderAsTextFlag> behavior)
+{
+    writeStandardPrefix(ts, container, behavior);
+    writePositionAndStyle(ts, container, behavior);
+    ts << "\n";
+    writeResources(ts, container, behavior);
+    writeChildren(ts, container, behavior);
+}
+#endif
+
+void writeSVGContainer(TextStream& ts, const LegacyRenderSVGContainer& container, OptionSet<RenderAsTextFlag> behavior)
 {
     // Currently RenderSVGResourceFilterPrimitive has no meaningful output.
     if (container.isSVGResourceFilterPrimitive())
@@ -508,7 +561,17 @@ void writeSVGContainer(TextStream& ts, const RenderSVGContainer& container, Opti
     writeChildren(ts, container, behavior);
 }
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
 void write(TextStream& ts, const RenderSVGRoot& root, OptionSet<RenderAsTextFlag> behavior)
+{
+    writeStandardPrefix(ts, root, behavior);
+    writePositionAndStyle(ts, root, behavior);
+    ts << "\n";
+    writeChildren(ts, root, behavior);
+}
+#endif
+
+void write(TextStream& ts, const LegacyRenderSVGRoot& root, OptionSet<RenderAsTextFlag> behavior)
 {
     writeStandardPrefix(ts, root, behavior);
     writePositionAndStyle(ts, root, behavior);
@@ -541,7 +604,16 @@ void writeSVGImage(TextStream& ts, const RenderSVGImage& image, OptionSet<Render
     writeResources(ts, image, behavior);
 }
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
 void write(TextStream& ts, const RenderSVGShape& shape, OptionSet<RenderAsTextFlag> behavior)
+{
+    writeStandardPrefix(ts, shape, behavior);
+    ts << shape << "\n";
+    writeResources(ts, shape, behavior);
+}
+#endif
+
+void write(TextStream& ts, const LegacyRenderSVGShape& shape, OptionSet<RenderAsTextFlag> behavior)
 {
     writeStandardPrefix(ts, shape, behavior);
     ts << shape << "\n";
@@ -558,17 +630,20 @@ void writeSVGGradientStop(TextStream& ts, const RenderSVGGradientStop& stop, Opt
 void writeResources(TextStream& ts, const RenderObject& renderer, OptionSet<RenderAsTextFlag> behavior)
 {
     const RenderStyle& style = renderer.style();
-    const SVGRenderStyle& svgStyle = style.svgStyle();
 
     // FIXME: We want to use SVGResourcesCache to determine which resources are present, instead of quering the resource <-> id cache.
     // For now leave the DRT output as is, but later on we should change this so cycles are properly ignored in the DRT output.
-    if (!svgStyle.maskerResource().isEmpty()) {
-        if (RenderSVGResourceMasker* masker = getRenderSVGResourceById<RenderSVGResourceMasker>(renderer.document(), svgStyle.maskerResource())) {
-            ts << indent << " ";
-            writeNameAndQuotedValue(ts, "masker", svgStyle.maskerResource());
-            ts << " ";
-            writeStandardPrefix(ts, *masker, behavior, WriteIndentOrNot::No);
-            ts << " " << masker->resourceBoundingBox(renderer) << "\n";
+    if (style.hasPositionedMask()) {
+        auto* maskImage = style.maskImage();
+        if (is<StyleCachedImage>(maskImage)) {
+            auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(downcast<StyleCachedImage>(*maskImage).reresolvedURL(renderer.document()).string(), renderer.document());
+            if (auto* masker = getRenderSVGResourceById<RenderSVGResourceMasker>(renderer.document(), resourceID)) {
+                ts << indent << " ";
+                writeNameAndQuotedValue(ts, "masker", resourceID);
+                ts << " ";
+                writeStandardPrefix(ts, *masker, behavior, WriteIndentOrNot::No);
+                ts << " " << masker->resourceBoundingBox(renderer) << "\n";
+            }
         }
     }
     if (style.clipPath() && is<ReferencePathOperation>(style.clipPath())) {

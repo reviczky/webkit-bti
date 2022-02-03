@@ -29,17 +29,15 @@
 #include "Base64Utilities.h"
 #include "CacheStorageConnection.h"
 #include "ImageBitmap.h"
-#include "ScriptBufferSourceProvider.h"
 #include "ScriptExecutionContext.h"
 #include "Supplementable.h"
 #include "WindowOrWorkerGlobalScope.h"
 #include "WorkerOrWorkletGlobalScope.h"
 #include "WorkerOrWorkletScriptController.h"
-#include "WorkerCacheStorageConnection.h"
-#include "WorkerMessagePortChannelProvider.h"
-#include "WorkerThread.h"
+#include "WorkerType.h"
 #include <JavaScriptCore/ConsoleMessage.h>
 #include <memory>
+#include <wtf/FixedVector.h>
 #include <wtf/HashMap.h>
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/URL.h>
@@ -54,14 +52,20 @@ class ContentSecurityPolicyResponseHeaders;
 class Crypto;
 class FileSystemStorageConnection;
 class FontFaceSet;
+class MessagePortChannelProvider;
 class Performance;
 class ScheduledAction;
+class ScriptBuffer;
+class ScriptBufferSourceProvider;
+class WorkerCacheStorageConnection;
 class WorkerFileSystemStorageConnection;
 class WorkerLocation;
+class WorkerMessagePortChannelProvider;
 class WorkerNavigator;
 class WorkerSWClientConnection;
 class WorkerStorageConnection;
 class WorkerStorageConnection;
+class WorkerThread;
 struct WorkerParameters;
 
 namespace IDBClient {
@@ -73,9 +77,8 @@ class WorkerGlobalScope : public Supplementable<WorkerGlobalScope>, public Base6
 public:
     virtual ~WorkerGlobalScope();
 
-    virtual bool isDedicatedWorkerGlobalScope() const { return false; }
-    virtual bool isSharedWorkerGlobalScope() const { return false; }
-    virtual bool isServiceWorkerGlobalScope() const { return false; }
+    enum class Type : uint8_t { DedicatedWorker, ServiceWorker, SharedWorker };
+    virtual Type type() const = 0;
 
     const URL& url() const final { return m_url; }
     String origin() const;
@@ -90,7 +93,7 @@ public:
     WorkerStorageConnection& storageConnection();
     static void postFileSystemStorageTask(Function<void()>&&);
     WorkerFileSystemStorageConnection& getFileSystemStorageConnection(Ref<FileSystemStorageConnection>&&);
-    WorkerFileSystemStorageConnection* fileSystemStorageConnection();
+    WEBCORE_EXPORT WorkerFileSystemStorageConnection* fileSystemStorageConnection();
     WorkerCacheStorageConnection& cacheStorageConnection();
     MessagePortChannelProvider& messagePortChannelProvider();
 #if ENABLE(SERVICE_WORKER)
@@ -105,14 +108,14 @@ public:
     WorkerLocation& location() const;
     void close();
 
-    virtual ExceptionOr<void> importScripts(const Vector<String>& urls);
+    virtual ExceptionOr<void> importScripts(const FixedVector<String>& urls);
     WorkerNavigator& navigator();
 
     void setIsOnline(bool);
 
-    ExceptionOr<int> setTimeout(JSC::JSGlobalObject&, std::unique_ptr<ScheduledAction>, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
+    ExceptionOr<int> setTimeout(std::unique_ptr<ScheduledAction>, int timeout, FixedVector<JSC::Strong<JSC::Unknown>>&& arguments);
     void clearTimeout(int timeoutId);
-    ExceptionOr<int> setInterval(JSC::JSGlobalObject&, std::unique_ptr<ScheduledAction>, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
+    ExceptionOr<int> setInterval(std::unique_ptr<ScheduledAction>, int timeout, FixedVector<JSC::Strong<JSC::Unknown>>&& arguments);
     void clearInterval(int timeoutId);
 
     bool isSecureContext() const final;
@@ -137,7 +140,6 @@ public:
 
     CSSValuePool& cssValuePool() final;
     CSSFontSelector* cssFontSelector() final;
-    FontCache& fontCache() final;
     Ref<FontFaceSet> fonts();
     std::unique_ptr<FontLoadRequest> fontLoadRequest(String& url, bool isSVG, bool isInitiatingElementInUserAgentShadowTree, LoadedFromOpaqueSource) final;
     void beginLoadingFontSoon(FontLoadRequest&) final;
@@ -219,7 +221,6 @@ private:
 #endif
     std::unique_ptr<CSSValuePool> m_cssValuePool;
     RefPtr<CSSFontSelector> m_cssFontSelector;
-    RefPtr<FontCache> m_fontCache;
     ReferrerPolicy m_referrerPolicy;
     Settings::Values m_settingsValues;
     WorkerType m_workerType;

@@ -39,9 +39,7 @@ namespace StructureStubInfoInternal {
 static constexpr bool verbose = false;
 }
 
-StructureStubInfo::~StructureStubInfo()
-{
-}
+StructureStubInfo::~StructureStubInfo() = default;
 
 void StructureStubInfo::initGetByIdSelf(const ConcurrentJSLockerBase& locker, CodeBlock* codeBlock, Structure* inlineAccessBaseStructure, PropertyOffset offset, CacheableIdentifier identifier)
 {
@@ -49,8 +47,7 @@ void StructureStubInfo::initGetByIdSelf(const ConcurrentJSLockerBase& locker, Co
     ASSERT(hasConstantIdentifier);
     setCacheType(locker, CacheType::GetByIdSelf);
     m_identifier = identifier;
-    m_inlineAccessBaseStructure = inlineAccessBaseStructure->id();
-    codeBlock->vm().writeBarrier(codeBlock);
+    m_inlineAccessBaseStructureID.set(codeBlock->vm(), codeBlock, inlineAccessBaseStructure);
     byIdSelfOffset = offset;
 }
 
@@ -71,8 +68,7 @@ void StructureStubInfo::initPutByIdReplace(const ConcurrentJSLockerBase& locker,
     ASSERT(m_cacheType == CacheType::Unset);
     setCacheType(locker, CacheType::PutByIdReplace);
     m_identifier = identifier;
-    m_inlineAccessBaseStructure = inlineAccessBaseStructure->id();
-    codeBlock->vm().writeBarrier(codeBlock);
+    m_inlineAccessBaseStructureID.set(codeBlock->vm(), codeBlock, inlineAccessBaseStructure);
     byIdSelfOffset = offset;
 }
 
@@ -81,8 +77,7 @@ void StructureStubInfo::initInByIdSelf(const ConcurrentJSLockerBase& locker, Cod
     ASSERT(m_cacheType == CacheType::Unset);
     setCacheType(locker, CacheType::InByIdSelf);
     m_identifier = identifier;
-    m_inlineAccessBaseStructure = inlineAccessBaseStructure->id();
-    codeBlock->vm().writeBarrier(codeBlock);
+    m_inlineAccessBaseStructureID.set(codeBlock->vm(), codeBlock, inlineAccessBaseStructure);
     byIdSelfOffset = offset;
 }
 
@@ -90,7 +85,7 @@ void StructureStubInfo::deref()
 {
     switch (m_cacheType) {
     case CacheType::Stub:
-        delete u.stub;
+        m_stub.reset();
         return;
     case CacheType::Unset:
     case CacheType::GetByIdSelf:
@@ -108,7 +103,7 @@ void StructureStubInfo::aboutToDie()
 {
     switch (m_cacheType) {
     case CacheType::Stub:
-        u.stub->aboutToDie();
+        m_stub->aboutToDie();
         return;
     case CacheType::Unset:
     case CacheType::GetByIdSelf:
@@ -139,7 +134,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         AccessGenerationResult result;
         
         if (m_cacheType == CacheType::Stub) {
-            result = u.stub->addCase(locker, vm, codeBlock, *this, accessCase.releaseNonNull());
+            result = m_stub->addCase(locker, vm, codeBlock, *this, accessCase.releaseNonNull());
             
             if (StructureStubInfoInternal::verbose)
                 dataLog("Had stub, result: ", result, "\n");
@@ -176,7 +171,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
             }
             
             setCacheType(locker, CacheType::Stub);
-            u.stub = access.release();
+            m_stub = WTFMove(access);
         }
         
         ASSERT(m_cacheType == CacheType::Stub);
@@ -202,7 +197,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         // PolymorphicAccess.
         clearBufferedStructures();
         
-        result = u.stub->regenerate(locker, vm, globalObject, codeBlock, ecmaMode, *this);
+        result = m_stub->regenerate(locker, vm, globalObject, codeBlock, ecmaMode, *this);
         
         if (StructureStubInfoInternal::verbose)
             dataLog("Regeneration result: ", result, "\n");
@@ -216,11 +211,11 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         // access code. That's because when we first transition to becoming a Stub, we may
         // be buffered, and we have not yet generated any code. Once the Stub finally generates
         // code, we're no longer running the inline access code, so we can then clear out
-        // m_inlineAccessBaseStructure. The reason we don't clear m_inlineAccessBaseStructure while
-        // we're buffered is because we rely on it to reset during GC if m_inlineAccessBaseStructure
+        // m_inlineAccessBaseStructureID. The reason we don't clear m_inlineAccessBaseStructureID while
+        // we're buffered is because we rely on it to reset during GC if m_inlineAccessBaseStructureID
         // is collected.
         m_identifier = nullptr;
-        m_inlineAccessBaseStructure = 0;
+        m_inlineAccessBaseStructureID.clear();
         
         // If we generated some code then we don't want to attempt to repatch in the future until we
         // gather enough cases.
@@ -235,7 +230,7 @@ void StructureStubInfo::reset(const ConcurrentJSLockerBase& locker, CodeBlock* c
 {
     clearBufferedStructures();
     m_identifier = nullptr;
-    m_inlineAccessBaseStructure = 0;
+    m_inlineAccessBaseStructureID.clear();
 
     if (m_cacheType == CacheType::Unset)
         return;
@@ -323,7 +318,7 @@ void StructureStubInfo::visitAggregateImpl(Visitor& visitor)
     case CacheType::GetByIdSelf:
         return;
     case CacheType::Stub:
-        u.stub->visitAggregate(visitor);
+        m_stub->visitAggregate(visitor);
         return;
     }
     
@@ -348,7 +343,7 @@ void StructureStubInfo::visitWeakReferences(const ConcurrentJSLockerBase& locker
     if (Structure* structure = inlineAccessBaseStructure(vm))
         isValid &= vm.heap.isMarked(structure);
     if (m_cacheType == CacheType::Stub)
-        isValid &= u.stub->visitWeak(vm);
+        isValid &= m_stub->visitWeak(vm);
 
     if (isValid)
         return;
@@ -364,7 +359,7 @@ void StructureStubInfo::propagateTransitions(Visitor& visitor)
         structure->markIfCheap(visitor);
 
     if (m_cacheType == CacheType::Stub)
-        u.stub->propagateTransitions(visitor);
+        m_stub->propagateTransitions(visitor);
 }
 
 template void StructureStubInfo::propagateTransitions(AbstractSlotVisitor&);
@@ -375,7 +370,7 @@ StubInfoSummary StructureStubInfo::summary(VM& vm) const
     StubInfoSummary takesSlowPath = StubInfoSummary::TakesSlowPath;
     StubInfoSummary simple = StubInfoSummary::Simple;
     if (m_cacheType == CacheType::Stub) {
-        PolymorphicAccess* list = u.stub;
+        PolymorphicAccess* list = m_stub.get();
         for (unsigned i = 0; i < list->size(); ++i) {
             const AccessCase& access = list->at(i);
             if (access.doesCalls(vm)) {
@@ -407,7 +402,7 @@ bool StructureStubInfo::containsPC(void* pc) const
 {
     if (m_cacheType != CacheType::Stub)
         return false;
-    return u.stub->containsPC(pc);
+    return m_stub->containsPC(pc);
 }
 
 ALWAYS_INLINE void StructureStubInfo::setCacheType(const ConcurrentJSLockerBase&, CacheType newCacheType)
@@ -564,19 +559,14 @@ void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(CodeBlock*, Unli
     case AccessType::InstanceOf:
         hasConstantIdentifier = false;
         prototypeIsKnownObject = false;
-#if USE(JSVALUE64)
-        baseGPR = BaselineInstanceofRegisters::value;
-        valueGPR = BaselineInstanceofRegisters::result;
-        regs.prototypeGPR = BaselineInstanceofRegisters::proto;
-        m_stubInfoGPR = BaselineInstanceofRegisters::stubInfo;
-#elif USE(JSVALUE32_64)
         baseGPR = BaselineInstanceofRegisters::valueJSR.payloadGPR();
-        valueGPR = BaselineInstanceofRegisters::resultGPR;
+        valueGPR = BaselineInstanceofRegisters::resultJSR.payloadGPR();
         regs.prototypeGPR = BaselineInstanceofRegisters::protoJSR.payloadGPR();
         m_stubInfoGPR = BaselineInstanceofRegisters::stubInfoGPR;
-        baseTagGPR = InvalidGPRReg;
+#if USE(JSVALUE32_64)
+        baseTagGPR = BaselineInstanceofRegisters::valueJSR.tagGPR();
         valueTagGPR = InvalidGPRReg;
-        v.propertyTagGPR = InvalidGPRReg;
+        v.propertyTagGPR = BaselineInstanceofRegisters::protoJSR.tagGPR();
 #endif
         break;
     case AccessType::InByVal:

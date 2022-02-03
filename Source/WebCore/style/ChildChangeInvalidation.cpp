@@ -28,25 +28,161 @@
 
 #include "ElementTraversal.h"
 #include "NodeRenderStyle.h"
+#include "PseudoClassChangeInvalidation.h"
 #include "ShadowRoot.h"
 #include "SlotAssignment.h"
+#include "StyleResolver.h"
+#include "StyleScopeRuleSets.h"
+#include "TypedElementDescendantIterator.h"
 
 namespace WebCore::Style {
 
-ChildChangeInvalidation::ChildChangeInvalidation(ContainerNode& container, const ContainerNode::ChildChange& childChange)
-    : m_parentElement(is<Element>(container) ? downcast<Element>(&container) : nullptr)
-    , m_isEnabled(m_parentElement ? m_parentElement->needsStyleInvalidation() : false)
-    , m_childChange(childChange)
+void ChildChangeInvalidation::invalidateForChangedElement(Element& changedElement, MatchingHasSelectors& matchingHasSelectors)
 {
-    // FIXME: Do smarter invalidation similar to ClassChangeInvalidation.
+    auto& ruleSets = parentElement().styleResolver().ruleSets();
+
+    Invalidator::MatchElementRuleSets matchElementRuleSets;
+
+    bool isChild = changedElement.parentElement() == &parentElement();
+
+    auto canAffectElementsWithStyle = [&](MatchElement matchElement) {
+        switch (matchElement) {
+        case MatchElement::HasSibling:
+        case MatchElement::HasChild:
+            return isChild;
+        case MatchElement::HasDescendant:
+        case MatchElement::HasSiblingDescendant:
+        case MatchElement::HasNonSubject:
+            return true;
+        default:
+            ASSERT_NOT_REACHED();
+            return false;
+        }
+    };
+
+    bool isFirst = isChild && m_childChange.previousSiblingElement == changedElement.previousElementSibling();
+
+    auto hasMatchingInvalidationSelector = [&](auto& invalidationRuleSet) {
+        SelectorChecker selectorChecker(changedElement.document());
+        SelectorChecker::CheckingContext checkingContext(SelectorChecker::Mode::CollectingRulesIgnoringVirtualPseudoElements);
+        checkingContext.matchesAllScopes = true;
+
+        for (auto* selector : invalidationRuleSet.invalidationSelectors) {
+            if (isFirst) {
+                // If this :has() matches ignoring this mutation, nothing actually changes and we don't need to invalidate.
+                // FIXME: We could cache this state across invalidations instead of just testing a single sibling.
+                auto* sibling = m_childChange.previousSiblingElement ? m_childChange.previousSiblingElement : m_childChange.nextSiblingElement;
+                if (sibling && selectorChecker.match(*selector, *sibling, checkingContext)) {
+                    matchingHasSelectors.add(selector);
+                    continue;
+                }
+            }
+
+            if (matchingHasSelectors.contains(selector))
+                continue;
+
+            if (selectorChecker.match(*selector, changedElement, checkingContext)) {
+                matchingHasSelectors.add(selector);
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto addHasInvalidation = [&](const Vector<InvalidationRuleSet>* invalidationRuleSets)  {
+        if (!invalidationRuleSets)
+            return;
+        for (auto& invalidationRuleSet : *invalidationRuleSets) {
+            if (!canAffectElementsWithStyle(invalidationRuleSet.matchElement))
+                continue;
+            if (!hasMatchingInvalidationSelector(invalidationRuleSet))
+                continue;
+            Invalidator::addToMatchElementRuleSets(matchElementRuleSets, invalidationRuleSet);
+        }
+    };
+
+    for (auto key : makePseudoClassInvalidationKeys(CSSSelector::PseudoClassHas, changedElement))
+        addHasInvalidation(ruleSets.hasPseudoClassInvalidationRuleSets(key));
+
+    Invalidator::invalidateWithMatchElementRuleSets(changedElement, matchElementRuleSets);
 }
 
-ChildChangeInvalidation::~ChildChangeInvalidation()
+void ChildChangeInvalidation::invalidateForHasBeforeMutation()
 {
-    if (!m_isEnabled)
+    ASSERT(m_needsHasInvalidation);
+
+    if (m_childChange.isInsertion() && m_childChange.type != ContainerNode::ChildChange::Type::AllChildrenReplaced)
         return;
 
-    invalidateAfterChange();
+    MatchingHasSelectors matchingHasSelectors;
+
+    traverseRemovedElements([&](auto& changedElement) {
+        invalidateForChangedElement(changedElement, matchingHasSelectors);
+    });
+}
+
+void ChildChangeInvalidation::invalidateForHasAfterMutation()
+{
+    ASSERT(m_needsHasInvalidation);
+
+    if (!m_childChange.isInsertion())
+        return;
+
+    MatchingHasSelectors matchingHasSelectors;
+
+    traverseAddedElements([&](auto& changedElement) {
+        invalidateForChangedElement(changedElement, matchingHasSelectors);
+    });
+}
+
+static bool needsDescendantTraversal(const RuleFeatureSet& features)
+{
+    if (features.usesMatchElement(MatchElement::HasNonSubject))
+        return true;
+    return features.usesMatchElement(MatchElement::HasDescendant) || features.usesMatchElement(MatchElement::HasSiblingDescendant);
+};
+
+template<typename Function>
+void ChildChangeInvalidation::traverseRemovedElements(Function&& function)
+{
+    auto& features = parentElement().styleResolver().ruleSets().features();
+    bool needsDescendantTraversal = Style::needsDescendantTraversal(features);
+
+    auto* firstToRemove = m_childChange.previousSiblingElement ? m_childChange.previousSiblingElement->nextElementSibling() : parentElement().firstElementChild();
+
+    for (auto* toRemove = firstToRemove; toRemove != m_childChange.nextSiblingElement; toRemove = toRemove->nextElementSibling()) {
+        function(*toRemove);
+
+        if (!needsDescendantTraversal)
+            continue;
+
+        for (auto& descendant : descendantsOfType<Element>(*toRemove))
+            function(descendant);
+    }
+}
+
+template<typename Function>
+void ChildChangeInvalidation::traverseAddedElements(Function&& function)
+{
+    auto* newElement = [&] {
+        auto* previous = m_childChange.previousSiblingElement;
+        auto* candidate = previous ? ElementTraversal::nextSibling(*previous) : ElementTraversal::firstChild(parentElement());
+        if (candidate == m_childChange.nextSiblingElement)
+            candidate = nullptr;
+        return candidate;
+    }();
+
+    if (!newElement)
+        return;
+
+    function(*newElement);
+
+    auto& features = parentElement().styleResolver().ruleSets().features();
+    if (!needsDescendantTraversal(features))
+        return;
+
+    for (auto& descendant : descendantsOfType<Element>(*newElement))
+        function(descendant);
 }
 
 static void checkForEmptyStyleChange(Element& element)

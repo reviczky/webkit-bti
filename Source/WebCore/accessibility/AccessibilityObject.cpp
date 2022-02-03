@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2009, 2011, 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -56,6 +56,7 @@
 #include "HTMLFormControlElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLMediaElement.h"
+#include "HTMLModelElement.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLTextAreaElement.h"
@@ -86,7 +87,6 @@
 #include "VisibleUnits.h"
 #include <pal/SessionID.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/RobinHoodHashSet.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringView.h>
@@ -143,6 +143,19 @@ OptionSet<AXAncestorFlag> AccessibilityObject::computeAncestorFlags() const
     if (hasAncestorFlag(AXAncestorFlag::IsInCell) || matchesAncestorFlag(AXAncestorFlag::IsInCell))
         computedFlags.set(AXAncestorFlag::IsInCell, 1);
 
+    return computedFlags;
+}
+
+OptionSet<AXAncestorFlag> AccessibilityObject::computeAncestorFlagsWithTraversal() const
+{
+    // If this object's flags are initialized, this traversal is unnecessary. Use AccessibilityObject::ancestorFlags() instead.
+    ASSERT(!ancestorFlagsAreInitialized());
+
+    OptionSet<AXAncestorFlag> computedFlags;
+    computedFlags.set(AXAncestorFlag::FlagsInitialized, true);
+    Accessibility::enumerateAncestors<AccessibilityObject>(*this, false, [&] (const AccessibilityObject& ancestor) {
+        computedFlags.add(ancestor.computeAncestorFlags());
+    });
     return computedFlags;
 }
 
@@ -532,7 +545,7 @@ bool AccessibilityObject::isDescendantOfRole(AccessibilityRole role) const
     }) != nullptr;
 }
 
-static void appendAccessibilityObject(AXCoreObject* object, AccessibilityObject::AccessibilityChildrenVector& results)
+static void appendAccessibilityObject(RefPtr<AXCoreObject> object, AccessibilityObject::AccessibilityChildrenVector& results)
 {
     // Find the next descendant of this attachment object so search can continue through frames.
     if (object->isAttachment()) {
@@ -916,6 +929,7 @@ bool AccessibilityObject::isARIAControl(AccessibilityRole ariaRole)
     case AccessibilityRole::PopUpButton:
     case AccessibilityRole::Slider:
     case AccessibilityRole::TextArea:
+    case AccessibilityRole::ToggleButton:
         return true;
     default:
         return false;
@@ -1015,6 +1029,7 @@ bool AccessibilityObject::press()
         dispatchedEvent = dispatchTouchEvent();
 #endif
     
+    Ref protectedPressElement { *pressElement };
     return dispatchedEvent || pressElement->accessKeyAction(true) || pressElement->dispatchSimulatedClick(nullptr, SendMouseUpDownEvents);
 }
     
@@ -1315,6 +1330,17 @@ bool AccessibilityObject::replacedNodeNeedsCharacter(Node* replacedNode)
 
     return true;
 }
+
+#if PLATFORM(COCOA) && ENABLE(MODEL_ELEMENT)
+Vector<RetainPtr<id>> AccessibilityObject::modelElementChildren()
+{
+    Node* node = this->node();
+    if (!is<HTMLModelElement>(node))
+        return { };
+    
+    return downcast<HTMLModelElement>(node)->accessibilityChildren();
+}
+#endif
 
 // Finds a RenderListItem parent give a node.
 static RenderListItem* renderListItemContainerForNode(Node* node)
@@ -1868,24 +1894,67 @@ AccessibilityObject* AccessibilityObject::headingElementForNode(Node* node)
     });
 }
 
-void AccessibilityObject::ariaTreeRows(AccessibilityChildrenVector& result)
+void AccessibilityObject::ariaTreeRows(AccessibilityChildrenVector& rows, AccessibilityChildrenVector& ancestors)
 {
-    // If the element specifies its tree rows through aria-owns, return that first.
     AccessibilityChildrenVector ariaOwns;
     ariaOwnsElements(ariaOwns);
-    if (ariaOwns.size()) {
-        result.appendVector(ariaOwns);
-        return;
-    }
     
+    ancestors.append(this);
+
+    // The ordering of rows is first DOM children *not* in aria-owns, followed by all specified
+    // in aria-owns.
     for (const auto& child : children()) {
         // Add tree items as the rows.
-        if (child->roleValue() == AccessibilityRole::TreeItem)
-            result.append(child);
+        if (child->roleValue() == AccessibilityRole::TreeItem) {
+            // Child appears both as a direct child and aria-owns, we should use the ordering as
+            // described in aria-owns for this child.
+            if (ariaOwns.contains(child))
+                continue;
+            
+            // The result set may already contain the child through aria-owns. For example,
+            // a treeitem sitting under the tree root, which is owned elsewhere in the tree.
+            if (rows.contains(child))
+                continue;
+
+            rows.append(child);
+        }
 
         // Now see if this item also has rows hiding inside of it.
-        child->ariaTreeRows(result);
+        if (is<AccessibilityObject>(*child))
+            downcast<AccessibilityObject>(*child).ariaTreeRows(rows, ancestors);
     }
+
+    // Now go through the aria-owns elements.
+    for (const auto& child : ariaOwns) {
+        // Avoid a circular reference via aria-owns by checking if our parent
+        // path includes this child. Currently, looking up the aria-owns parent
+        // path itself could be expensive, so we track it separately.
+        if (ancestors.contains(child))
+            continue;
+        
+        // Add tree items as the rows.
+        if (child->roleValue() == AccessibilityRole::TreeItem) {
+            // Hopefully a flow that does not occur often in practice, but if someone were to include
+            // the owned child ealier in the top level of the tree, then reference via aria-owns later,
+            // move it to the right place.
+            if (rows.contains(child))
+                rows.removeFirst(child);
+            
+            rows.append(child);
+        }
+
+        // Now see if this item also has rows hiding inside of it.
+        if (is<AccessibilityObject>(*child))
+            downcast<AccessibilityObject>(*child).ariaTreeRows(rows, ancestors);
+    }
+    
+    ancestors.removeLast();
+}
+
+void AccessibilityObject::ariaTreeRows(AccessibilityChildrenVector& rows    )
+{
+    AccessibilityChildrenVector ancestors;
+    ariaTreeRows(rows, ancestors);
 }
     
 void AccessibilityObject::ariaTreeItemContent(AccessibilityChildrenVector& result)
@@ -2486,6 +2555,11 @@ String AccessibilityObject::rolePlatformDescription() const
     // FIXME: implement in other platforms.
     return String();
 }
+
+String AccessibilityObject::subrolePlatformString() const
+{
+    return String();
+}
 #endif
 
 String AccessibilityObject::embeddedImageDescription() const
@@ -2760,20 +2834,34 @@ void AccessibilityObject::setFocused(bool focus)
 {
     if (focus) {
         // Ensure that the view is focused and active, otherwise, any attempt to set focus to an object inside it will fail.
-        auto* document = this->document();
-        if (!document)
-            return;
-
-        auto* frame = document->frame();
+        auto* frame = document() ? document()->frame() : nullptr;
         if (frame && frame->selection().isFocusedAndActive())
             return; // Nothing to do, already focused and active.
 
-        auto* page = document->page();
+        auto* page = document() ? document()->page() : nullptr;
         if (!page)
             return;
 
-        ChromeClient& chromeClient = page->chrome().client();
-        chromeClient.focus();
+        page->chrome().client().focus();
+        // Reset the page pointer in case ChromeClient::focus() caused a side effect that invalidated our old one.
+        page = document() ? document()->page() : nullptr;
+        if (!page)
+            return;
+
+#if PLATFORM(IOS_FAMILY)
+        // Mark the page as focused so the focus ring can be drawn immediately. The page is also marked
+        // as focused as part assistiveTechnologyMakeFirstResponder, but that requires some back-and-forth
+        // IPC between the web and UI processes, during which we can miss the drawing of the focus ring for the
+        // first focused element. Making the page focused is a requirement for making the page selection focused.
+        // This is iOS only until there's a demonstrated need for this preemptive focus on other platforms.
+        if (!page->focusController().isFocused())
+            page->focusController().setFocused(true);
+
+        // Reset the page pointer in case FocusController::setFocused(true) caused a side effect that invalidated our old one.
+        page = document() ? document()->page() : nullptr;
+        if (!page)
+            return;
+#endif
 
 #if PLATFORM(COCOA)
         auto* frameView = documentFrameView();
@@ -2782,9 +2870,9 @@ void AccessibilityObject::setFocused(bool focus)
 
         // Legacy WebKit1 case.
         if (frameView->platformWidget())
-            chromeClient.makeFirstResponder((NSResponder *)frameView->platformWidget());
+            page->chrome().client().makeFirstResponder((NSResponder *)frameView->platformWidget());
         else
-            chromeClient.assistiveTechnologyMakeFirstResponder();
+            page->chrome().client().assistiveTechnologyMakeFirstResponder();
 #endif
     }
 }
@@ -2830,29 +2918,28 @@ bool AccessibilityObject::supportsHasPopup() const
 
 String AccessibilityObject::popupValue() const
 {
-    static const NeverDestroyed<MemoryCompactLookupOnlyRobinHoodHashSet<String>> allowedPopupValues(std::initializer_list<String> {
-        "menu"_s, "listbox"_s, "tree"_s, "grid"_s, "dialog"_s,
-    });
-
-    auto hasPopup = getAttribute(aria_haspopupAttr).convertToASCIILowercase();
-    if (hasPopup.isNull() || hasPopup.isEmpty()) {
+    auto& hasPopup = getAttribute(aria_haspopupAttr);
+    if (hasPopup.isEmpty()) {
         // In ARIA 1.1, the implicit value for combobox became "listbox."
         if (isComboBox() || hasDatalist())
-            return "listbox";
-        return "false";
+            return "listbox"_s;
+        return "false"_s;
     }
 
-    if (allowedPopupValues->contains(hasPopup))
-        return hasPopup;
+    for (auto& value : { "menu"_s, "listbox"_s, "tree"_s, "grid"_s, "dialog"_s }) {
+        // FIXME: Should fix ambiguity so we don't have to write "characters", but also don't create/destroy a String when passing an ASCIILiteral to equalIgnoringASCIICase.
+        if (equalIgnoringASCIICase(hasPopup, value.characters()))
+            return value;
+    }
 
     // aria-haspopup specification states that true must be treated as menu.
-    if (hasPopup == "true")
-        return "menu";
+    if (equalLettersIgnoringASCIICase(hasPopup, "true"))
+        return "menu"_s;
 
     // The spec states that "User agents must treat any value of aria-haspopup that is not
     // included in the list of allowed values, including an empty string, as if the value
     // false had been provided."
-    return "false";
+    return "false"_s;
 }
 
 bool AccessibilityObject::hasDatalist() const
@@ -3895,7 +3982,7 @@ String roleToPlatformString(AccessibilityRole role)
 
 // This function determines if the given `axObject` is a radio button part of a different ad-hoc radio group
 // than `referenceObject`, where ad-hoc radio group membership is determined by comparing `name` attributes.
-static bool isRadioButtonInDifferentAdhocGroup(AXCoreObject* axObject, AXCoreObject* referenceObject)
+static bool isRadioButtonInDifferentAdhocGroup(RefPtr<AXCoreObject> axObject, AXCoreObject* referenceObject)
 {
     if (!axObject || !axObject->isRadioButton())
         return false;
@@ -3908,7 +3995,7 @@ static bool isRadioButtonInDifferentAdhocGroup(AXCoreObject* axObject, AXCoreObj
     return axObject->attributeValue("name") != referenceObject->attributeValue("name");
 }
 
-static bool isAccessibilityObjectSearchMatchAtIndex(AXCoreObject* axObject, AccessibilitySearchCriteria const& criteria, size_t index)
+static bool isAccessibilityObjectSearchMatchAtIndex(RefPtr<AXCoreObject> axObject, AccessibilitySearchCriteria const& criteria, size_t index)
 {
     switch (criteria.searchKeys[index]) {
     case AccessibilitySearchKey::AnyType:
@@ -4016,7 +4103,7 @@ static bool isAccessibilityObjectSearchMatchAtIndex(AXCoreObject* axObject, Acce
     }
 }
 
-static bool isAccessibilityObjectSearchMatch(AXCoreObject* axObject, AccessibilitySearchCriteria const& criteria)
+static bool isAccessibilityObjectSearchMatch(RefPtr<AXCoreObject> axObject, AccessibilitySearchCriteria const& criteria)
 {
     if (!axObject)
         return false;
@@ -4032,7 +4119,7 @@ static bool isAccessibilityObjectSearchMatch(AXCoreObject* axObject, Accessibili
     return false;
 }
 
-static bool isAccessibilityTextSearchMatch(AXCoreObject* axObject, AccessibilitySearchCriteria const& criteria)
+static bool isAccessibilityTextSearchMatch(RefPtr<AXCoreObject> axObject, AccessibilitySearchCriteria const& criteria)
 {
     if (!axObject)
         return false;
@@ -4046,7 +4133,7 @@ static bool isAccessibilityTextSearchMatch(AXCoreObject* axObject, Accessibility
         || containsPlainText(axObject->stringValue(), criteria.searchText, CaseInsensitive);
 }
 
-static bool objectMatchesSearchCriteriaWithResultLimit(AXCoreObject* object, AccessibilitySearchCriteria const& criteria, AXCoreObject::AccessibilityChildrenVector& results)
+static bool objectMatchesSearchCriteriaWithResultLimit(RefPtr<AXCoreObject> object, AccessibilitySearchCriteria const& criteria, AXCoreObject::AccessibilityChildrenVector& results)
 {
     if (isAccessibilityObjectSearchMatch(object, criteria) && isAccessibilityTextSearchMatch(object, criteria)) {
         results.append(object);
@@ -4059,7 +4146,7 @@ static bool objectMatchesSearchCriteriaWithResultLimit(AXCoreObject* object, Acc
     return false;
 }
 
-static void appendChildrenToArray(AXCoreObject* object, bool isForward, AXCoreObject* startObject, AccessibilityObject::AccessibilityChildrenVector& results)
+static void appendChildrenToArray(RefPtr<AXCoreObject> object, bool isForward, RefPtr<AXCoreObject> startObject, AccessibilityObject::AccessibilityChildrenVector& results)
 {
     // A table's children includes elements whose own children are also the table's children (due to the way the Mac exposes tables).
     // The rows from the table should be queried, since those are direct descendants of the table, and they contain content.
@@ -4071,8 +4158,8 @@ static void appendChildrenToArray(AXCoreObject* object, bool isForward, AXCoreOb
     size_t endIndex = isForward ? 0 : childrenSize;
 
     // If the startObject is ignored, we should use an accessible sibling as a start element instead.
-    if (startObject && startObject->accessibilityIsIgnored() && startObject->isDescendantOfObject(object)) {
-        AXCoreObject* parentObject = startObject->parentObject();
+    if (startObject && startObject->accessibilityIsIgnored() && startObject->isDescendantOfObject(object.get())) {
+        RefPtr<AXCoreObject> parentObject = startObject->parentObject();
         // Go up the parent chain to find the highest ancestor that's also being ignored.
         while (parentObject && parentObject->accessibilityIsIgnored()) {
             if (parentObject == object)
@@ -4097,10 +4184,10 @@ static void appendChildrenToArray(AXCoreObject* object, bool isForward, AXCoreOb
     // This is broken into two statements so that it's easier read.
     if (isForward) {
         for (size_t i = startIndex; i > endIndex; i--)
-            appendAccessibilityObject(searchChildren.at(i - 1).get(), results);
+            appendAccessibilityObject(searchChildren.at(i - 1), results);
     } else {
         for (size_t i = startIndex; i < endIndex; i++)
-            appendAccessibilityObject(searchChildren.at(i).get(), results);
+            appendAccessibilityObject(searchChildren.at(i), results);
     }
 }
 
@@ -4113,7 +4200,7 @@ void findMatchingObjects(AccessibilitySearchCriteria const& criteria, AXCoreObje
     // It does this by stepping up the parent chain and at each level doing a DFS.
 
     // If there's no start object, it means we want to search everything.
-    AXCoreObject* startObject = criteria.startObject;
+    RefPtr<AXCoreObject> startObject = criteria.startObject;
     if (!startObject)
         startObject = criteria.anchorObject;
 
@@ -4122,7 +4209,7 @@ void findMatchingObjects(AccessibilitySearchCriteria const& criteria, AXCoreObje
     // The first iteration of the outer loop will examine the children of the start object for matches. However, when
     // iterating backwards, the start object children should not be considered, so the loop is skipped ahead. We make an
     // exception when no start object was specified because we want to search everything regardless of search direction.
-    AXCoreObject* previousObject = nullptr;
+    RefPtr<AXCoreObject> previousObject;
     if (!isForward && startObject != criteria.anchorObject) {
         previousObject = startObject;
         startObject = startObject->parentObjectUnignored();
@@ -4138,14 +4225,14 @@ void findMatchingObjects(AccessibilitySearchCriteria const& criteria, AXCoreObje
 
         // This now does a DFS at the current level of the parent.
         while (!searchStack.isEmpty()) {
-            AXCoreObject* searchObject = searchStack.last().get();
+            auto searchObject = searchStack.last();
             searchStack.removeLast();
 
             if (objectMatchesSearchCriteriaWithResultLimit(searchObject, criteria, results))
                 break;
 
             if (!criteria.immediateDescendantsOnly)
-                appendChildrenToArray(searchObject, isForward, 0, searchStack);
+                appendChildrenToArray(searchObject, isForward, nullptr, searchStack);
         }
 
         if (results.size() >= criteria.resultsLimit)

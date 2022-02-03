@@ -38,8 +38,8 @@ namespace LLInt {
 
 extern "C" SlowPathReturnType llint_trace_operand(CallFrame*, const Instruction*, int fromWhere, int operand) REFERENCED_FROM_ASM;
 extern "C" SlowPathReturnType llint_trace_value(CallFrame*, const Instruction*, int fromWhere, VirtualRegister operand) REFERENCED_FROM_ASM;
-extern "C" SlowPathReturnType llint_link_call(CallFrame*, JSCell*, CallLinkInfo*, JSCell*);
-extern "C" SlowPathReturnType llint_virtual_call(CallFrame*, JSCell*, CallLinkInfo*, JSCell*);
+extern "C" SlowPathReturnType llint_link_call(CallFrame*, JSCell*, CallLinkInfo*) REFERENCED_FROM_ASM;
+extern "C" SlowPathReturnType llint_virtual_call(CallFrame*, JSCell*, CallLinkInfo*) REFERENCED_FROM_ASM;
 extern "C" void llint_write_barrier_slow(CallFrame*, JSCell*) REFERENCED_FROM_ASM WTF_INTERNAL;
 
 #define LLINT_SLOW_PATH_DECL(name) \
@@ -67,7 +67,6 @@ LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_new_array);
 LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_new_array_with_size);
 LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_new_regexp);
 LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_instanceof);
-LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_instanceof_custom);
 LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_try_get_by_id);
 LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_get_by_id_direct);
 LLINT_SLOW_PATH_HIDDEN_DECL(slow_path_get_by_id);
