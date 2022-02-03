@@ -74,6 +74,7 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
 
     encoder << deviceManagementRestrictionsEnabled;
     encoder << allLoadsBlockedByDeviceManagementRestrictionsForTesting;
+    encoder << webPushDaemonConnectionConfiguration;
     encoder << dataConnectionServiceType;
     encoder << fastServerTrustEvaluationEnabled;
     encoder << networkCacheSpeculativeValidationEnabled;
@@ -91,6 +92,9 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << pcmMachServiceName;
     encoder << webPushMachServiceName;
     encoder << enablePrivateClickMeasurementDebugMode;
+#if !HAVE(NSURLSESSION_WEBSOCKET)
+    encoder << shouldAcceptInsecureCertificatesForWebSockets;
+#endif
     encoder << resourceLoadStatisticsParameters;
 }
 
@@ -233,6 +237,11 @@ std::optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters
     if (!allLoadsBlockedByDeviceManagementRestrictionsForTesting)
         return std::nullopt;
 
+    std::optional<WebPushD::WebPushDaemonConnectionConfiguration> webPushDaemonConnectionConfiguration;
+    decoder >> webPushDaemonConnectionConfiguration;
+    if (!webPushDaemonConnectionConfiguration)
+        return std::nullopt;
+
     std::optional<String> dataConnectionServiceType;
     decoder >> dataConnectionServiceType;
     if (!dataConnectionServiceType)
@@ -318,6 +327,13 @@ std::optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters
     if (!enablePrivateClickMeasurementDebugMode)
         return std::nullopt;
 
+#if !HAVE(NSURLSESSION_WEBSOCKET)
+    std::optional<bool> shouldAcceptInsecureCertificatesForWebSockets;
+    decoder >> shouldAcceptInsecureCertificatesForWebSockets;
+    if (!shouldAcceptInsecureCertificatesForWebSockets)
+        return std::nullopt;
+#endif
+
     std::optional<ResourceLoadStatisticsParameters> resourceLoadStatisticsParameters;
     decoder >> resourceLoadStatisticsParameters;
     if (!resourceLoadStatisticsParameters)
@@ -356,6 +372,7 @@ std::optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters
 #endif
         , WTFMove(*deviceManagementRestrictionsEnabled)
         , WTFMove(*allLoadsBlockedByDeviceManagementRestrictionsForTesting)
+        , WTFMove(*webPushDaemonConnectionConfiguration)
         , WTFMove(*networkCacheDirectory)
         , WTFMove(*networkCacheDirectoryExtensionHandle)
         , WTFMove(*dataConnectionServiceType)
@@ -375,6 +392,9 @@ std::optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters
         , WTFMove(*pcmMachServiceName)
         , WTFMove(*webPushMachServiceName)
         , WTFMove(*enablePrivateClickMeasurementDebugMode)
+#if !HAVE(NSURLSESSION_WEBSOCKET)
+        , WTFMove(*shouldAcceptInsecureCertificatesForWebSockets)
+#endif
         , WTFMove(*resourceLoadStatisticsParameters)
     }};
 }

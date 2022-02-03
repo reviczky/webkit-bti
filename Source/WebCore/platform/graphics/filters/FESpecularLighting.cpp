@@ -29,6 +29,11 @@
 
 namespace WebCore {
 
+Ref<FESpecularLighting> FESpecularLighting::create(const Color& lightingColor, float surfaceScale, float, float specularConstant, float specularExponent, float kernelUnitLengthX, float kernelUnitLengthY, Ref<LightSource>&& lightSource)
+{
+    return create(lightingColor, surfaceScale, specularConstant, specularExponent, kernelUnitLengthX, kernelUnitLengthY, WTFMove(lightSource));
+}
+
 Ref<FESpecularLighting> FESpecularLighting::create(const Color& lightingColor, float surfaceScale, float specularConstant, float specularExponent, float kernelUnitLengthX, float kernelUnitLengthY, Ref<LightSource>&& lightSource)
 {
     return adoptRef(*new FESpecularLighting(lightingColor, surfaceScale, specularConstant, specularExponent, kernelUnitLengthX, kernelUnitLengthY, WTFMove(lightSource)));
@@ -55,16 +60,16 @@ bool FESpecularLighting::setSpecularExponent(float specularExponent)
     return true;
 }
 
-TextStream& FESpecularLighting::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FESpecularLighting::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feSpecularLighting";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " surfaceScale=\"" << m_surfaceScale << "\" "
-       << "specualConstant=\"" << m_specularConstant << "\" "
-       << "specularExponent=\"" << m_specularExponent << "\"]\n";
+    
+    ts << " surfaceScale=\"" << m_surfaceScale << "\"";
+    ts << " specualConstant=\"" << m_specularConstant << "\"";
+    ts << " specularExponent=\"" << m_specularExponent << "\"";
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
+    ts << "]\n";
     return ts;
 }
 

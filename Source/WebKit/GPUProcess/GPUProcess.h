@@ -28,7 +28,6 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "AuxiliaryProcess.h"
-#include "DataReference.h"
 #include "SandboxExtension.h"
 #include "WebPageProxyIdentifier.h"
 #include <WebCore/LibWebRTCEnumTraits.h>
@@ -110,11 +109,11 @@ public:
 
     const String& applicationVisibleName() const { return m_applicationVisibleName; }
 
-#if PLATFORM(COCOA)
-    void consumeAudioComponentRegistrations(const IPC::DataReference&);
-#endif
-
     void webProcessConnectionCountForTesting(CompletionHandler<void(uint64_t)>&&);
+
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+    void processIsStartingToCaptureAudio(GPUConnectionToWebProcess&);
+#endif
 
 private:
     void lowMemoryHandler(Critical, Synchronous);

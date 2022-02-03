@@ -49,6 +49,8 @@ CSSParserContext::CSSParserContext(CSSParserMode mode, const URL& baseURL)
     // FIXME: We should turn all of the features on from their WebCore Settings defaults.
     if (mode == UASheetMode) {
         individualTransformPropertiesEnabled = true;
+        focusVisibleEnabled = true;
+        inputSecurityEnabled = true;
 #if ENABLE(CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
         transformStyleOptimized3DEnabled = true;
 #endif
@@ -104,10 +106,14 @@ CSSParserContext::CSSParserContext(const Document& document, const URL& sheetBas
     , focusVisibleEnabled { document.settings().focusVisibleEnabled() }
     , hasPseudoClassEnabled { document.settings().hasPseudoClassEnabled() }
     , cascadeLayersEnabled { document.settings().cssCascadeLayersEnabled() }
+    , containerQueriesEnabled { document.settings().cssContainerQueriesEnabled() }
+    , overflowClipEnabled { document.settings().overflowClipEnabled() }
+    , gradientPremultipliedAlphaInterpolationEnabled { document.settings().cssGradientPremultipliedAlphaInterpolationEnabled() }
+    , gradientInterpolationColorSpacesEnabled { document.settings().cssGradientInterpolationColorSpacesEnabled() }
+    , inputSecurityEnabled { document.settings().cssInputSecurityEnabled() }
 #if ENABLE(ATTACHMENT_ELEMENT)
     , attachmentEnabled { RuntimeEnabledFeatures::sharedFeatures().attachmentElementEnabled() }
 #endif
-    , overflowClipEnabled { document.settings().overflowClipEnabled() }
 {
 }
 
@@ -150,16 +156,20 @@ bool operator==(const CSSParserContext& a, const CSSParserContext& b)
         && a.focusVisibleEnabled == b.focusVisibleEnabled
         && a.hasPseudoClassEnabled == b.hasPseudoClassEnabled
         && a.cascadeLayersEnabled == b.cascadeLayersEnabled
+        && a.containerQueriesEnabled == b.containerQueriesEnabled
+        && a.overflowClipEnabled == b.overflowClipEnabled
+        && a.gradientPremultipliedAlphaInterpolationEnabled == b.gradientPremultipliedAlphaInterpolationEnabled
+        && a.gradientInterpolationColorSpacesEnabled == b.gradientInterpolationColorSpacesEnabled
+        && a.inputSecurityEnabled == b.inputSecurityEnabled
 #if ENABLE(ATTACHMENT_ELEMENT)
         && a.attachmentEnabled == b.attachmentEnabled
 #endif
-        && a.overflowClipEnabled == b.overflowClipEnabled
     ;
 }
 
 void add(Hasher& hasher, const CSSParserContext& context)
 {
-    unsigned bits = context.isHTMLDocument                  << 0
+    uint64_t bits = context.isHTMLDocument                  << 0
         | context.hasDocumentSecurityOrigin                 << 1
         | context.isContentOpaque                           << 2
         | context.useSystemAppearance                       << 3
@@ -189,12 +199,16 @@ void add(Hasher& hasher, const CSSParserContext& context)
         | context.focusVisibleEnabled                       << 21
         | context.hasPseudoClassEnabled                     << 22
         | context.cascadeLayersEnabled                      << 23
-#if ENABLE(ATTACHMENT_ELEMENT)
-        | context.attachmentEnabled                         << 24
-#endif
+        | context.containerQueriesEnabled                   << 24
         | context.overflowClipEnabled                       << 25
-        | context.accentColorEnabled                        << 26
-        | context.mode                                      << 27; // This is multiple bits, so keep it last.
+        | context.gradientPremultipliedAlphaInterpolationEnabled << 26
+        | context.gradientInterpolationColorSpacesEnabled   << 27
+#if ENABLE(ATTACHMENT_ELEMENT)
+        | context.attachmentEnabled                         << 28
+#endif
+        | context.accentColorEnabled                        << 29
+        | context.inputSecurityEnabled                      << 30
+        | context.mode                                      << 31; // This is multiple bits, so keep it last.
     add(hasher, context.baseURL, context.charset, bits);
 }
 
@@ -219,6 +233,8 @@ bool CSSParserContext::isPropertyRuntimeDisabled(CSSPropertyID property) const
         return !containmentEnabled;
     case CSSPropertyAppleColorFilter:
         return !colorFilterEnabled;
+    case CSSPropertyInputSecurity:
+        return !inputSecurityEnabled;
     case CSSPropertyTranslate:
     case CSSPropertyRotate:
     case CSSPropertyScale:
@@ -254,8 +270,8 @@ ResolvedURL CSSParserContext::completeURL(const String& string) const
 
         if (charset.isEmpty())
             return { string, { baseURL, string } };
-        auto encodingForURLParsing = TextEncoding { charset }.encodingForFormSubmissionOrURLParsing();
-        return { string, { baseURL, string, encodingForURLParsing == UTF8Encoding() ? nullptr : &encodingForURLParsing } };
+        auto encodingForURLParsing = PAL::TextEncoding { charset }.encodingForFormSubmissionOrURLParsing();
+        return { string, { baseURL, string, encodingForURLParsing == PAL::UTF8Encoding() ? nullptr : &encodingForURLParsing } };
     }();
 
     if (mode == WebVTTMode && !result.resolvedURL.protocolIsData())

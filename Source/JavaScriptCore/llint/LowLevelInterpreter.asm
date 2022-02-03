@@ -212,11 +212,6 @@ else
     const LowestTag = constexpr JSValue::LowestTag
 end
 
-if JSVALUE64
-    const NumberOfStructureIDEntropyBits = constexpr StructureIDTable::s_numberOfEntropyBits
-    const StructureEntropyBitsShift = constexpr StructureIDTable::s_entropyBitsShiftForStructurePointer
-end
-
 if LARGE_TYPED_ARRAYS
     const SmallTypedArrayMaxLength = constexpr ArrayProfile::s_smallTypedArrayMaxLength
 end
@@ -627,8 +622,6 @@ const BlackThreshold = constexpr blackThreshold
 
 const VectorBufferOffset = Vector::m_buffer
 const VectorSizeOffset = Vector::m_size
-
-const RefCountedArrayStorageNonNullSizeOffset = -(constexpr (RefCountedArray::Header::size())) + RefCountedArray::Header::length
 
 # Some common utilities.
 macro crash()
@@ -1682,10 +1675,11 @@ macro functionInitialization(profileArgSkip)
     addp -profileArgSkip, t0
     assert(macro (ok) bpgteq t0, 0, ok end)
     btpz t0, .argumentProfileDone
-    loadp CodeBlock::m_argumentValueProfiles + FixedVector::m_storage + RefCountedArray::m_data[t1], t3
+    loadp CodeBlock::m_argumentValueProfiles + ValueProfileFixedVector::m_storage[t1], t3
     btpz t3, .argumentProfileDone # When we can't JIT, we don't allocate any argument value profiles.
     mulp sizeof ValueProfile, t0, t2 # Aaaaahhhh! Need strength reduction!
     lshiftp 3, t0 # offset of last JSValue arguments on the stack.
+    addp (constexpr (ValueProfileFixedVector::Storage::offsetOfData())), t3
     addp t2, t3 # pointer to end of ValueProfile array in the value profile array.
 .argumentProfileLoop:
     if JSVALUE64
@@ -2130,11 +2124,11 @@ if not JSVALUE64
     slowPathOp(get_prototype_of)
 end
 
+slowPathOp(instanceof_custom)
 slowPathOp(is_callable)
 slowPathOp(is_constructor)
 slowPathOp(new_array_buffer)
 slowPathOp(new_array_with_spread)
-slowPathOp(pow)
 slowPathOp(push_with_scope)
 slowPathOp(put_by_id_with_this)
 slowPathOp(put_by_val_with_this)
@@ -2163,7 +2157,6 @@ llintSlowPathOp(has_private_brand)
 llintSlowPathOp(del_by_id)
 llintSlowPathOp(del_by_val)
 llintSlowPathOp(instanceof)
-llintSlowPathOp(instanceof_custom)
 llintSlowPathOp(new_array)
 llintSlowPathOp(new_array_with_size)
 llintSlowPathOp(new_async_func)
@@ -2185,7 +2178,6 @@ llintSlowPathOp(set_function_name)
 llintSlowPathOp(super_sampler_begin)
 llintSlowPathOp(super_sampler_end)
 llintSlowPathOp(throw)
-llintSlowPathOp(try_get_by_id)
 llintSlowPathOp(get_by_id_with_this)
 
 llintOp(op_switch_string, unused, macro (unused, unused, unused)
@@ -2536,7 +2528,7 @@ macro linkSlowPathFor(function)
     move t2, a2
     move t3, a1
     move cfr, a0
-    cCall4(function)
+    cCall3(function)
     functionEpilogue()
     untagReturnAddress sp
     btpz r1, .doNotTrash
@@ -2615,8 +2607,7 @@ if JIT
     macro loadBaselineJITConstantPool()
         # Baseline uses LLInt's PB register for its JIT constant pool.
         loadp CodeBlock[cfr], PB
-        loadp CodeBlock::m_jitData[PB], PB
-        loadp CodeBlock::JITData::m_jitConstantPool[PB], PB
+        loadp CodeBlock::m_baselineJITData[PB], PB
     end
 
     macro setupReturnToBaselineAfterCheckpointExitIfNeeded()
@@ -2731,16 +2722,16 @@ macro updateUnaryArithProfile(size, opcodeStruct, type, scratch1, scratch2)
     getu(size, opcodeStruct, m_profileIndex, scratch1)
     loadp CodeBlock[cfr], scratch2
     loadp CodeBlock::m_unlinkedCode[scratch2], scratch2
-    loadp UnlinkedCodeBlock::m_unaryArithProfiles + FixedVector::m_storage + RefCountedArray::m_data[scratch2], scratch2
-    orh type, UnaryArithProfile::m_bits[scratch2, scratch1, 2]
+    loadp UnlinkedCodeBlock::m_unaryArithProfiles + UnaryArithProfileFixedVector::m_storage[scratch2], scratch2
+    orh type, (constexpr (UnaryArithProfileFixedVector::Storage::offsetOfData())) + UnaryArithProfile::m_bits[scratch2, scratch1, 2]
 end
 
 macro updateBinaryArithProfile(size, opcodeStruct, type, scratch1, scratch2)
     getu(size, opcodeStruct, m_profileIndex, scratch1)
     loadp CodeBlock[cfr], scratch2
     loadp CodeBlock::m_unlinkedCode[scratch2], scratch2
-    loadp UnlinkedCodeBlock::m_binaryArithProfiles + FixedVector::m_storage + RefCountedArray::m_data[scratch2], scratch2
-    orh type, BinaryArithProfile::m_bits[scratch2, scratch1, 2]
+    loadp UnlinkedCodeBlock::m_binaryArithProfiles + BinaryArithProfileFixedVector::m_storage[scratch2], scratch2
+    orh type, (constexpr (BinaryArithProfileFixedVector::Storage::offsetOfData())) + BinaryArithProfile::m_bits[scratch2, scratch1, 2]
 end
 
 // FIXME: We should not need the X86_64_WIN condition here, since WEBASSEMBLY should already be false on Windows

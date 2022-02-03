@@ -61,6 +61,7 @@ assembler/PerfLog.cpp
 assembler/Printer.cpp
 assembler/ProbeContext.cpp
 assembler/ProbeStack.cpp
+assembler/SecureARM64EHashPins.cpp
 
 b3/air/AirAllocateRegistersAndStackAndGenerateCode.cpp
 b3/air/AirAllocateRegistersAndStackByLinearScan.cpp
@@ -133,6 +134,7 @@ b3/B3Effects.cpp
 b3/B3EliminateCommonSubexpressions.cpp
 b3/B3EliminateDeadCode.cpp
 b3/B3EnsureLoopPreHeaders.cpp
+b3/B3EstimateStaticExecutionCounts.cpp
 b3/B3ExtractValue.cpp
 b3/B3FenceValue.cpp
 b3/B3FixSSA.cpp
@@ -450,17 +452,9 @@ disassembler/ARM64Disassembler.cpp
 disassembler/CapstoneDisassembler.cpp
 disassembler/Disassembler.cpp
 disassembler/RISCV64Disassembler.cpp
-disassembler/UDis86Disassembler.cpp
 disassembler/X86Disassembler.cpp
 
 disassembler/ARM64/A64DOpcode.cpp
-
-disassembler/udis86/udis86.c
-disassembler/udis86/udis86_decode.c
-disassembler/udis86/udis86_itab_holder.c
-disassembler/udis86/udis86_syn-att.c
-disassembler/udis86/udis86_syn-intel.c
-disassembler/udis86/udis86_syn.c
 
 domjit/DOMJITAbstractHeap.cpp
 domjit/DOMJITHeapRange.cpp
@@ -537,6 +531,7 @@ heap/IncrementalSweeper.cpp
 heap/IsoAlignedMemoryAllocator.cpp
 heap/IsoCellSet.cpp
 heap/IsoHeapCellType.cpp
+heap/IsoMemoryAllocatorBase.cpp
 heap/IsoSubspace.cpp
 heap/IsoSubspacePerVM.cpp
 heap/JITStubRoutineSet.cpp
@@ -558,6 +553,7 @@ heap/SlotVisitor.cpp
 heap/SpaceTimeMutatorScheduler.cpp
 heap/StochasticSpaceTimeMutatorScheduler.cpp
 heap/StopIfNecessaryTimer.cpp
+heap/StructureAlignedMemoryAllocator.cpp
 heap/Subspace.cpp
 heap/SynchronousStopTheWorldMutatorScheduler.cpp
 heap/Synchronousness.cpp
@@ -639,7 +635,6 @@ jit/IntrinsicEmitter.cpp
 jit/JIT.cpp
 jit/JITAddGenerator.cpp
 jit/JITArithmetic.cpp
-jit/JITArithmetic32_64.cpp
 jit/JITBitAndGenerator.cpp
 jit/JITBitOrGenerator.cpp
 jit/JITBitXorGenerator.cpp
@@ -1006,7 +1001,6 @@ runtime/StringRecursionChecker.cpp
 runtime/Structure.cpp
 runtime/StructureCache.cpp
 runtime/StructureChain.cpp
-runtime/StructureIDTable.cpp
 runtime/StructureRareData.cpp
 runtime/Symbol.cpp
 runtime/SymbolConstructor.cpp
@@ -1072,17 +1066,18 @@ wasm/WasmAirIRGenerator.cpp @no-unify
 wasm/WasmB3IRGenerator.cpp
 wasm/WasmBBQPlan.cpp
 wasm/WasmBinding.cpp
+wasm/WasmBranchHintsSectionParser.cpp
 wasm/WasmCallee.cpp
+wasm/WasmCalleeGroup.cpp
 wasm/WasmCalleeRegistry.cpp
 wasm/WasmCallingConvention.cpp
-wasm/WasmCodeBlock.cpp
 wasm/WasmCompilationMode.cpp
 wasm/WasmContext.cpp
 wasm/WasmEmbedder.h
 wasm/WasmEntryPlan.cpp
 wasm/WasmFaultSignalHandler.cpp
 wasm/WasmFormat.cpp
-wasm/WasmFunctionCodeBlock.cpp
+wasm/WasmFunctionCodeBlockGenerator.cpp
 wasm/WasmGlobal.cpp
 wasm/WasmHandlerInfo.cpp
 wasm/WasmIndexOrName.cpp
@@ -1098,8 +1093,8 @@ wasm/WasmMemoryMode.cpp
 wasm/WasmModule.cpp
 wasm/WasmModuleInformation.cpp
 wasm/WasmNameSectionParser.cpp
-wasm/WasmOMGForOSREntryPlan.cpp
 wasm/WasmOMGPlan.cpp
+wasm/WasmOSREntryPlan.cpp
 wasm/WasmOpcodeOrigin.cpp
 wasm/WasmOperations.cpp
 wasm/WasmPageCount.cpp
@@ -1121,7 +1116,6 @@ wasm/js/JSToWasm.cpp
 wasm/js/JSToWasm.h
 wasm/js/JSToWasmICCallee.cpp
 wasm/js/JSWebAssembly.cpp
-wasm/js/JSWebAssemblyCodeBlock.cpp
 wasm/js/JSWebAssemblyCompileError.cpp
 wasm/js/JSWebAssemblyException.cpp
 wasm/js/JSWebAssemblyGlobal.cpp

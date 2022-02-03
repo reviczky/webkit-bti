@@ -35,6 +35,7 @@
 #include "CacheStorageProvider.h"
 #include "ColorChooser.h"
 #include "ContextMenuClient.h"
+#include "CookieConsentDecisionResult.h"
 #include "CookieJar.h"
 #include "DOMPasteAccess.h"
 #include "DataListSuggestionPicker.h"
@@ -62,6 +63,7 @@
 #include "LibWebRTCProvider.h"
 #include "MediaRecorderPrivate.h"
 #include "MediaRecorderProvider.h"
+#include "ModalContainerTypes.h"
 #include "NetworkStorageSession.h"
 #include "Page.h"
 #include "PageConfiguration.h"
@@ -79,6 +81,7 @@
 #include "ThreadableWebSocketChannel.h"
 #include "UserContentProvider.h"
 #include "VisitedLinkStore.h"
+#include "WebLockRegistry.h"
 #include <JavaScriptCore/HeapInlines.h>
 #include <pal/SessionID.h>
 #include <wtf/NeverDestroyed.h>
@@ -284,7 +287,7 @@ private:
     void registerRedoStep(UndoStep&) final;
     void clearUndoRedoOperations() final { }
 
-    DOMPasteAccessResponse requestDOMPasteAccess(const String&) final { return DOMPasteAccessResponse::DeniedForGesture; }
+    DOMPasteAccessResponse requestDOMPasteAccess(DOMPasteAccessCategory, const String&) final { return DOMPasteAccessResponse::DeniedForGesture; }
 
     bool canCopyCut(Frame*, bool defaultValue) const final { return defaultValue; }
     bool canPaste(Frame*, bool defaultValue) const final { return defaultValue; }
@@ -423,7 +426,7 @@ class EmptyPaymentCoordinatorClient final : public PaymentCoordinatorClient {
 #if ENABLE(APPLE_PAY_COUPON_CODE)
     void completeCouponCodeChange(std::optional<ApplePayCouponCodeUpdate>&&) final { }
 #endif
-    void completePaymentSession(std::optional<PaymentAuthorizationResult>&&) final { }
+    void completePaymentSession(ApplePayPaymentAuthorizationResult&&) final { }
     void cancelPaymentSession() final { }
     void abortPaymentSession() final { }
     void paymentCoordinatorDestroyed() final { }
@@ -581,6 +584,21 @@ void EmptyChromeClient::runOpenPanel(Frame&, FileChooser&)
     
 void EmptyChromeClient::showShareSheet(ShareDataWithParsedURL&, CompletionHandler<void(bool)>&&)
 {
+}
+
+void EmptyChromeClient::requestCookieConsent(CompletionHandler<void(CookieConsentDecisionResult)>&& completion)
+{
+    completion(CookieConsentDecisionResult::NotSupported);
+}
+
+void EmptyChromeClient::classifyModalContainerControls(Vector<String>&&, CompletionHandler<void(Vector<ModalContainerControlType>&&)>&& completion)
+{
+    completion({ });
+}
+
+void EmptyChromeClient::decidePolicyForModalContainer(OptionSet<ModalContainerControlType>, CompletionHandler<void(ModalContainerDecision)>&& completion)
+{
+    completion(ModalContainerDecision::Show);
 }
 
 void EmptyFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const NavigationAction&, const ResourceRequest&, FormState*, const String&, PolicyCheckIdentifier, FramePolicyFunction&&)
@@ -852,7 +870,7 @@ void EmptyFrameLoaderClient::didReplaceMultipartContent()
 {
 }
 
-void EmptyFrameLoaderClient::committedLoad(DocumentLoader*, const uint8_t*, int)
+void EmptyFrameLoaderClient::committedLoad(DocumentLoader*, const SharedBuffer&)
 {
 }
 
@@ -1170,6 +1188,20 @@ private:
     void postMessage(const ClientOrigin&, const String&, BroadcastChannelIdentifier, Ref<SerializedScriptValue>&&, CompletionHandler<void()>&&) final { }
 };
 
+class EmptyWebLockRegistry final : public WebLockRegistry {
+public:
+    static Ref<EmptyWebLockRegistry> create()
+    {
+        return adoptRef(*new EmptyWebLockRegistry);
+    }
+private:
+    void requestLock(const ClientOrigin&, WebLockIdentifier, ScriptExecutionContextIdentifier, const String&, WebLockMode, bool, bool, Function<void(bool)>&&, Function<void()>&&) { }
+    void releaseLock(const ClientOrigin&, WebLockIdentifier, ScriptExecutionContextIdentifier, const String&) final { }
+    void abortLockRequest(const ClientOrigin&, WebLockIdentifier, ScriptExecutionContextIdentifier, const String&, CompletionHandler<void(bool)>&&) final { }
+    void snapshot(const ClientOrigin&, CompletionHandler<void(WebLockManagerSnapshot&&)>&&) { }
+    void clientIsGoingAway(const ClientOrigin&, ScriptExecutionContextIdentifier) { }
+};
+
 PageConfiguration pageConfigurationWithEmptyClients(PAL::SessionID sessionID)
 {
     PageConfiguration pageConfiguration {
@@ -1186,6 +1218,7 @@ PageConfiguration pageConfigurationWithEmptyClients(PAL::SessionID sessionID)
         makeUniqueRef<DummySpeechRecognitionProvider>(),
         makeUniqueRef<EmptyMediaRecorderProvider>(),
         EmptyBroadcastChannelRegistry::create(),
+        EmptyWebLockRegistry::create(),
         DummyPermissionController::create(),
         makeUniqueRef<DummyStorageProvider>(),
         makeUniqueRef<DummyModelPlayerProvider>()

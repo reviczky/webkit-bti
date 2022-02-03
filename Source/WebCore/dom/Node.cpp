@@ -27,7 +27,6 @@
 
 #include "AXObjectCache.h"
 #include "Attr.h"
-#include "BeforeLoadEvent.h"
 #include "ChildListMutationScope.h"
 #include "CommonVM.h"
 #include "ComposedTreeAncestorIterator.h"
@@ -42,6 +41,7 @@
 #include "ElementTraversal.h"
 #include "EventDispatcher.h"
 #include "EventHandler.h"
+#include "EventNames.h"
 #include "FrameView.h"
 #include "HTMLAreaElement.h"
 #include "HTMLBodyElement.h"
@@ -513,7 +513,7 @@ ExceptionOr<void> Node::appendChild(Node& newChild)
     return downcast<ContainerNode>(*this).appendChild(newChild);
 }
 
-static HashSet<RefPtr<Node>> nodeSetPreTransformedFromNodeOrStringVector(const Vector<NodeOrString>& vector)
+static HashSet<RefPtr<Node>> nodeSetPreTransformedFromNodeOrStringVector(const FixedVector<NodeOrString>& vector)
 {
     HashSet<RefPtr<Node>> nodeSet;
     for (const auto& variant : vector) {
@@ -543,7 +543,7 @@ static RefPtr<Node> firstFollowingSiblingNotInNodeSet(Node& context, const HashS
     return nullptr;
 }
 
-ExceptionOr<RefPtr<Node>> Node::convertNodesOrStringsIntoNode(Vector<NodeOrString>&& nodeOrStringVector)
+ExceptionOr<RefPtr<Node>> Node::convertNodesOrStringsIntoNode(FixedVector<NodeOrString>&& nodeOrStringVector)
 {
     if (nodeOrStringVector.isEmpty())
         return nullptr;
@@ -569,7 +569,7 @@ ExceptionOr<RefPtr<Node>> Node::convertNodesOrStringsIntoNode(Vector<NodeOrStrin
     return RefPtr<Node> { WTFMove(nodeToReturn) };
 }
 
-ExceptionOr<void> Node::before(Vector<NodeOrString>&& nodeOrStringVector)
+ExceptionOr<void> Node::before(FixedVector<NodeOrString>&& nodeOrStringVector)
 {
     RefPtr<ContainerNode> parent = parentNode();
     if (!parent)
@@ -593,7 +593,7 @@ ExceptionOr<void> Node::before(Vector<NodeOrString>&& nodeOrStringVector)
     return parent->insertBefore(*node, viablePreviousSibling.get());
 }
 
-ExceptionOr<void> Node::after(Vector<NodeOrString>&& nodeOrStringVector)
+ExceptionOr<void> Node::after(FixedVector<NodeOrString>&& nodeOrStringVector)
 {
     RefPtr<ContainerNode> parent = parentNode();
     if (!parent)
@@ -612,7 +612,7 @@ ExceptionOr<void> Node::after(Vector<NodeOrString>&& nodeOrStringVector)
     return parent->insertBefore(*node, viableNextSibling.get());
 }
 
-ExceptionOr<void> Node::replaceWith(Vector<NodeOrString>&& nodeOrStringVector)
+ExceptionOr<void> Node::replaceWith(FixedVector<NodeOrString>&& nodeOrStringVector)
 {
     RefPtr<ContainerNode> parent = parentNode();
     if (!parent)
@@ -801,14 +801,12 @@ Node::Editability Node::computeEditability(UserSelectAllTreatment treatment, Sho
 
 RenderBox* Node::renderBox() const
 {
-    RenderObject* renderer = this->renderer();
-    return is<RenderBox>(renderer) ? downcast<RenderBox>(renderer) : nullptr;
+    return dynamicDowncast<RenderBox>(renderer());
 }
 
 RenderBoxModelObject* Node::renderBoxModelObject() const
 {
-    RenderObject* renderer = this->renderer();
-    return is<RenderBoxModelObject>(renderer) ? downcast<RenderBoxModelObject>(renderer) : nullptr;
+    return dynamicDowncast<RenderBoxModelObject>(renderer());
 }
     
 LayoutRect Node::renderRect(bool* isReplaced)
@@ -821,8 +819,9 @@ LayoutRect Node::renderRect(bool* isReplaced)
     }
     RenderObject* renderer = hitRenderer;
     while (renderer && !renderer->isBody() && !renderer->isDocumentElementRenderer()) {
-        if (renderer->isRenderBlock() || renderer->isInlineBlockOrInlineTable() || renderer->isReplaced()) {
-            *isReplaced = renderer->isReplaced();
+        if (renderer->isRenderBlock() || renderer->isInlineBlockOrInlineTable() || renderer->isReplacedOrInlineBlock()) {
+            // FIXME: Is this really what callers want for the "isReplaced" flag?
+            *isReplaced = renderer->isReplacedOrInlineBlock();
             return renderer->absoluteBoundingBoxRect();
         }
         renderer = renderer->parent();
@@ -1148,8 +1147,7 @@ Element* Node::shadowHost() const
 
 ShadowRoot* Node::containingShadowRoot() const
 {
-    ContainerNode& root = treeScope().rootNode();
-    return is<ShadowRoot>(root) ? downcast<ShadowRoot>(&root) : nullptr;
+    return dynamicDowncast<ShadowRoot>(treeScope().rootNode());
 }
 
 #if ASSERT_ENABLED
@@ -1643,8 +1641,8 @@ unsigned short Node::compareDocumentPosition(Node& otherNode)
     if (&otherNode == this)
         return DOCUMENT_POSITION_EQUIVALENT;
     
-    Attr* attr1 = is<Attr>(*this) ? downcast<Attr>(this) : nullptr;
-    Attr* attr2 = is<Attr>(otherNode) ? &downcast<Attr>(otherNode) : nullptr;
+    auto* attr1 = dynamicDowncast<Attr>(*this);
+    auto* attr2 = dynamicDowncast<Attr>(otherNode);
     
     Node* start1 = attr1 ? attr1->ownerElement() : this;
     Node* start2 = attr2 ? attr2->ownerElement() : &otherNode;
@@ -2409,20 +2407,6 @@ void Node::dispatchDOMActivateEvent(Event& underlyingClickEvent)
     dispatchScopedEvent(event);
     if (event->defaultHandled())
         underlyingClickEvent.setDefaultHandled();
-}
-
-bool Node::dispatchBeforeLoadEvent(const String& sourceURL)
-{
-    if (!document().settings().legacyBeforeLoadEventEnabled())
-        return true;
-
-    if (!document().hasListenerType(Document::BEFORELOAD_LISTENER))
-        return true;
-
-    Ref<Node> protectedThis(*this);
-    auto event = BeforeLoadEvent::create(sourceURL);
-    dispatchEvent(event);
-    return !event->defaultPrevented();
 }
 
 void Node::dispatchInputEvent()

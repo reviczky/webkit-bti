@@ -63,7 +63,7 @@
 #include "UserScriptTypes.h"
 
 #if PLATFORM(COCOA)
-#include "VersionChecks.h"
+#include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
 namespace WebCore {
@@ -84,6 +84,11 @@ static inline bool isYahooMail(Document& document)
     return startsWithLettersIgnoringASCIICase(host, "mail.") && topPrivatelyControlledDomain(host.toString()).startsWith("yahoo.");
 }
 #endif
+
+static bool isTwitterDocument(Document& document)
+{
+    return RegistrableDomain(document.url()).string() == "twitter.com";
+}
 
 Quirks::Quirks(Document& document)
     : m_document(document)
@@ -179,14 +184,8 @@ bool Quirks::hasBrokenEncryptedMediaAPISupportQuirk() const
     if (m_hasBrokenEncryptedMediaAPISupportQuirk)
         return m_hasBrokenEncryptedMediaAPISupportQuirk.value();
 
-    auto domain = m_document->securityOrigin().domain().convertToASCIILowercase();
-
-    m_hasBrokenEncryptedMediaAPISupportQuirk = domain == "starz.com"
-        || domain.endsWith(".starz.com")
-        || domain == "youtube.com"
-        || domain.endsWith(".youtube.com")
-        || domain == "hulu.com"
-        || domain.endsWith("hulu.com");
+    auto domain = RegistrableDomain(m_document->url()).string();
+    m_hasBrokenEncryptedMediaAPISupportQuirk = domain == "starz.com"_s || domain == "youtube.com"_s || domain == "hulu.com"_s;
 
     return m_hasBrokenEncryptedMediaAPISupportQuirk.value();
 }
@@ -822,9 +821,8 @@ bool Quirks::needsPreloadAutoQuirk() const
     if (m_needsPreloadAutoQuirk)
         return m_needsPreloadAutoQuirk.value();
 
-    auto domain = m_document->securityOrigin().domain().convertToASCIILowercase();
-
-    m_needsPreloadAutoQuirk = domain == "vimeo.com" || domain.endsWith("vimeo.com");
+    auto domain = RegistrableDomain(m_document->url()).string();
+    m_needsPreloadAutoQuirk = domain == "vimeo.com"_s;
 
     return m_needsPreloadAutoQuirk.value();
 #else
@@ -1366,10 +1364,8 @@ bool Quirks::requiresUserGestureToLoadInPictureInPicture() const
     if (!needsQuirks())
         return false;
 
-    if (!m_requiresUserGestureToLoadInPictureInPicture) {
-        auto domain = RegistrableDomain(m_document->topDocument().url());
-        m_requiresUserGestureToLoadInPictureInPicture = domain.string() == "twitter.com"_s;
-    }
+    if (!m_requiresUserGestureToLoadInPictureInPicture)
+        m_requiresUserGestureToLoadInPictureInPicture = isTwitterDocument(m_document->topDocument());
 
     return *m_requiresUserGestureToLoadInPictureInPicture;
 #else
@@ -1420,35 +1416,9 @@ bool Quirks::shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFull
 #endif
 }
 
-#if ENABLE(WEB_AUTHN)
-bool Quirks::shouldBypassUserGestureRequirementForWebAuthn() const
-{
-    if (!needsQuirks())
-        return false;
-
-    auto host = m_document->topDocument().url().host();
-    if (equalLettersIgnoringASCIICase(host, "dropbox.com") || host.endsWithIgnoringASCIICase(".dropbox.com"))
-        return true;
-
-    if (equalLettersIgnoringASCIICase(host, "microsoft.com") || host.endsWithIgnoringASCIICase(".microsoft.com"))
-        return true;
-
-    if (equalLettersIgnoringASCIICase(host, "google.com") || host.endsWithIgnoringASCIICase(".google.com"))
-        return true;
-
-    if (equalLettersIgnoringASCIICase(host, "twitter.com") || host.endsWithIgnoringASCIICase(".twitter.com"))
-        return true;
-
-    if (equalLettersIgnoringASCIICase(host, "facebook.com") || host.endsWithIgnoringASCIICase(".facebook.com"))
-        return true;
-
-    return false;
-}
-#endif
-
 #if ENABLE(IMAGE_ANALYSIS)
 
-bool Quirks::needsToForceUserSelectWhenInstallingImageOverlay() const
+bool Quirks::needsToForceUserSelectAndUserDragWhenInstallingImageOverlay() const
 {
     if (!needsQuirks())
         return false;
@@ -1457,9 +1427,24 @@ bool Quirks::needsToForceUserSelectWhenInstallingImageOverlay() const
     if (topPrivatelyControlledDomain(url.host().toString()).startsWith("google.") && url.path() == "/search")
         return true;
 
+    auto host = url.host();
+    if (equalLettersIgnoringASCIICase(host, "youtube.com") || host.endsWithIgnoringASCIICase(".youtube.com"))
+        return true;
+
     return false;
 }
 
 #endif // ENABLE(IMAGE_ANALYSIS)
+
+bool Quirks::shouldDisableWebSharePolicy() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldDisableWebSharePolicy)
+        m_shouldDisableWebSharePolicy = isTwitterDocument(*m_document);
+
+    return *m_shouldDisableWebSharePolicy;
+}
 
 }

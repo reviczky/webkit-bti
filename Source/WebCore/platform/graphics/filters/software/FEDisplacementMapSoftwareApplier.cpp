@@ -32,7 +32,7 @@
 
 namespace WebCore {
 
-FEDisplacementMapSoftwareApplier::FEDisplacementMapSoftwareApplier(FEDisplacementMap& effect)
+FEDisplacementMapSoftwareApplier::FEDisplacementMapSoftwareApplier(const FEDisplacementMap& effect)
     : Base(effect)
 {
     ASSERT(m_effect.xChannelSelector() != CHANNEL_UNKNOWN);
@@ -49,38 +49,39 @@ int FEDisplacementMapSoftwareApplier::yChannelIndex() const
     return m_effect.yChannelSelector() - 1;
 }
 
-bool FEDisplacementMapSoftwareApplier::apply(const Filter& filter, const FilterEffectVector& inputEffects)
+bool FEDisplacementMapSoftwareApplier::apply(const Filter& filter, const FilterImageVector& inputs, FilterImage& result) const
 {
-    FilterEffect* in = inputEffects[0].get();
-    FilterEffect* in2 = inputEffects[1].get();
+    auto& input = inputs[0].get();
+    auto& input2 = inputs[1].get();
 
-    auto destinationPixelBuffer = m_effect.pixelBufferResult(AlphaPremultiplication::Premultiplied);
+    auto destinationPixelBuffer = result.pixelBuffer(AlphaPremultiplication::Premultiplied);
     if (!destinationPixelBuffer)
         return false;
 
     auto& destinationPixelArray = destinationPixelBuffer->data();
 
-    auto effectADrawingRect = m_effect.requestedRegionOfInputPixelBuffer(in->absolutePaintRect());
-    auto inputPixelBuffer = in->getPixelBufferResult(AlphaPremultiplication::Premultiplied, effectADrawingRect);
+    auto effectADrawingRect = result.absoluteImageRectRelativeTo(input);
+    auto inputPixelBuffer = input.getPixelBuffer(AlphaPremultiplication::Premultiplied, effectADrawingRect);
 
-    auto effectBDrawingRect = m_effect.requestedRegionOfInputPixelBuffer(in2->absolutePaintRect());
+    auto effectBDrawingRect = result.absoluteImageRectRelativeTo(input2);
     // The calculations using the pixel values from ‘in2’ are performed using non-premultiplied color values.
-    auto displacementPixelBuffer = in2->getPixelBufferResult(AlphaPremultiplication::Unpremultiplied, effectBDrawingRect);
+    auto displacementPixelBuffer = input2.getPixelBuffer(AlphaPremultiplication::Unpremultiplied, effectBDrawingRect);
     
     if (!inputPixelBuffer || !displacementPixelBuffer)
         return false;
 
-    auto& inputImage = inputPixelBuffer->data();
-    auto& displacementImage = displacementPixelBuffer->data();
-    ASSERT(inputImage.length() == displacementImage.length());
+    auto& inputPixelArray = inputPixelBuffer->data();
+    auto& displacementPixelArray = displacementPixelBuffer->data();
+    ASSERT(inputPixelArray.length() == displacementPixelArray.length());
 
-    IntSize paintSize = m_effect.absolutePaintRect().size();
+    auto paintSize = result.absoluteImageRect().size();
+    auto scale = filter.resolvedSize({ m_effect.scale(), m_effect.scale() });
+    auto absoluteScale = filter.scaledByFilterScale(scale);
 
-    FloatSize scale = filter.scaledByFilterScale({ m_effect.scale(), m_effect.scale() });
-    float scaleForColorX = scale.width() / 255.0;
-    float scaleForColorY = scale.height() / 255.0;
-    float scaledOffsetX = 0.5 - scale.width() * 0.5;
-    float scaledOffsetY = 0.5 - scale.height() * 0.5;
+    float scaleForColorX = absoluteScale.width() / 255.0;
+    float scaleForColorY = absoluteScale.height() / 255.0;
+    float scaledOffsetX = 0.5 - absoluteScale.width() * 0.5;
+    float scaledOffsetY = 0.5 - absoluteScale.height() * 0.5;
     
     int displacementChannelX = xChannelIndex();
     int displacementChannelY = yChannelIndex();
@@ -93,8 +94,8 @@ bool FEDisplacementMapSoftwareApplier::apply(const Filter& filter, const FilterE
         for (int x = 0; x < paintSize.width(); ++x) {
             int destinationIndex = lineStartOffset + x * 4;
             
-            int srcX = x + static_cast<int>(scaleForColorX * displacementImage.item(destinationIndex + displacementChannelX) + scaledOffsetX);
-            int srcY = y + static_cast<int>(scaleForColorY * displacementImage.item(destinationIndex + displacementChannelY) + scaledOffsetY);
+            int srcX = x + static_cast<int>(scaleForColorX * displacementPixelArray.item(destinationIndex + displacementChannelX) + scaledOffsetX);
+            int srcY = y + static_cast<int>(scaleForColorY * displacementPixelArray.item(destinationIndex + displacementChannelY) + scaledOffsetY);
 
             unsigned* destinationPixelPtr = reinterpret_cast<unsigned*>(destinationPixelArray.data() + destinationIndex);
             if (srcX < 0 || srcX >= paintSize.width() || srcY < 0 || srcY >= paintSize.height()) {
@@ -102,7 +103,7 @@ bool FEDisplacementMapSoftwareApplier::apply(const Filter& filter, const FilterE
                 continue;
             }
 
-            *destinationPixelPtr = *reinterpret_cast<unsigned*>(inputImage.data() + byteOffsetOfPixel(srcX, srcY, rowBytes));
+            *destinationPixelPtr = *reinterpret_cast<unsigned*>(inputPixelArray.data() + byteOffsetOfPixel(srcX, srcY, rowBytes));
         }
     }
 

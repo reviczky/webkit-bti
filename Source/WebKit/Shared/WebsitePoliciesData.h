@@ -53,7 +53,7 @@ struct WebsitePoliciesData {
     static void applyToDocumentLoader(WebsitePoliciesData&&, WebCore::DocumentLoader&);
 
     bool contentBlockersEnabled { true };
-    std::optional<HashSet<String>> activeContentRuleListActionPatterns { HashSet<String>() };
+    HashMap<WTF::String, Vector<WTF::String>> activeContentRuleListActionPatterns;
     OptionSet<WebsiteAutoplayQuirk> allowedAutoplayQuirks;
     WebsiteAutoplayPolicy autoplayPolicy { WebsiteAutoplayPolicy::Default };
 #if ENABLE(DEVICE_ORIENTATION)
@@ -71,6 +71,8 @@ struct WebsitePoliciesData {
     bool allowContentChangeObserverQuirk { false };
     WebCore::AllowsContentJavaScript allowsContentJavaScript { WebCore::AllowsContentJavaScript::Yes };
     WebCore::MouseEventPolicy mouseEventPolicy { WebCore::MouseEventPolicy::Default };
+    WebCore::ModalContainerObservationPolicy modalContainerObservationPolicy { WebCore::ModalContainerObservationPolicy::Disabled };
+    WebCore::ColorSchemePreference colorSchemePreference { WebCore::ColorSchemePreference::NoPreference };
     bool idempotentModeAutosizingOnlyHonorsPercentages { false };
 
     void encode(IPC::Encoder&) const;

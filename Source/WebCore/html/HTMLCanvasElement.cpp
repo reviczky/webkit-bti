@@ -202,7 +202,7 @@ void HTMLCanvasElement::setSize(const IntSize& newSize)
     reset();
 }
 
-static inline size_t maxActivePixelMemory()
+size_t HTMLCanvasElement::maxActivePixelMemory()
 {
     if (maxActivePixelMemoryForTesting)
         return *maxActivePixelMemoryForTesting;
@@ -245,7 +245,7 @@ void HTMLCanvasElement::setMaxCanvasAreaForTesting(std::optional<size_t> size)
     maxCanvasAreaForTesting = size;
 }
 
-ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::JSGlobalObject& state, const String& contextId, Vector<JSC::Strong<JSC::Unknown>>&& arguments)
+ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::JSGlobalObject& state, const String& contextId, FixedVector<JSC::Strong<JSC::Unknown>>&& arguments)
 {
     if (m_context) {
         if (m_context->isPlaceholder())
@@ -601,6 +601,18 @@ bool HTMLCanvasElement::paintsIntoCanvasBuffer() const
     return true;
 }
 
+#if PLATFORM(COCOA)
+static bool imageDrawingRequiresGuardAgainstUseByPendingLayerTransaction(GraphicsContext& context, const ImageBuffer& imageBuffer)
+{
+    if (context.renderingMode() != RenderingMode::Accelerated || !context.hasPlatformContext())
+        return false;
+
+    if (imageBuffer.renderingMode() != RenderingMode::Accelerated || imageBuffer.context().hasPlatformContext())
+        return false;
+
+    return true;
+}
+#endif
 
 void HTMLCanvasElement::paint(GraphicsContext& context, const LayoutRect& r)
 {
@@ -620,8 +632,12 @@ void HTMLCanvasElement::paint(GraphicsContext& context, const LayoutRect& r)
 
         if (shouldPaint) {
             if (hasCreatedImageBuffer()) {
-                if (ImageBuffer* imageBuffer = buffer())
+                if (ImageBuffer* imageBuffer = buffer()) {
                     context.drawImageBuffer(*imageBuffer, snappedIntRect(r));
+#if PLATFORM(COCOA)
+                    m_mustGuardAgainstUseByPendingLayerTransaction |= imageDrawingRequiresGuardAgainstUseByPendingLayerTransaction(context, *imageBuffer);
+#endif
+                }
             }
         }
     }
@@ -692,13 +708,13 @@ ExceptionOr<UncachedString> HTMLCanvasElement::toDataURL(const String& mimeType)
     return toDataURL(mimeType, { });
 }
 
-ExceptionOr<void> HTMLCanvasElement::toBlob(ScriptExecutionContext& context, Ref<BlobCallback>&& callback, const String& mimeType, JSC::JSValue qualityValue)
+ExceptionOr<void> HTMLCanvasElement::toBlob(Ref<BlobCallback>&& callback, const String& mimeType, JSC::JSValue qualityValue)
 {
     if (!originClean())
         return Exception { SecurityError };
 
     if (size().isEmpty() || !buffer()) {
-        callback->scheduleCallback(context, nullptr);
+        callback->scheduleCallback(document(), nullptr);
         return { };
     }
     if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
@@ -713,7 +729,7 @@ ExceptionOr<void> HTMLCanvasElement::toBlob(ScriptExecutionContext& context, Ref
         Vector<uint8_t> blobData = data(imageData->pixelBuffer(), encodingMIMEType, quality);
         if (!blobData.isEmpty())
             blob = Blob::create(&document(), WTFMove(blobData), encodingMIMEType);
-        callback->scheduleCallback(context, WTFMove(blob));
+        callback->scheduleCallback(document(), WTFMove(blob));
         return { };
     }
 #endif
@@ -724,12 +740,12 @@ ExceptionOr<void> HTMLCanvasElement::toBlob(ScriptExecutionContext& context, Ref
     Vector<uint8_t> blobData = buffer()->toData(encodingMIMEType, quality);
     if (!blobData.isEmpty())
         blob = Blob::create(&document(), WTFMove(blobData), encodingMIMEType);
-    callback->scheduleCallback(context, WTFMove(blob));
+    callback->scheduleCallback(document(), WTFMove(blob));
     return { };
 }
 
 #if ENABLE(OFFSCREEN_CANVAS)
-ExceptionOr<Ref<OffscreenCanvas>> HTMLCanvasElement::transferControlToOffscreen(ScriptExecutionContext& context)
+ExceptionOr<Ref<OffscreenCanvas>> HTMLCanvasElement::transferControlToOffscreen()
 {
     if (m_context)
         return Exception { InvalidStateError };
@@ -738,7 +754,7 @@ ExceptionOr<Ref<OffscreenCanvas>> HTMLCanvasElement::transferControlToOffscreen(
     if (m_context->isAccelerated())
         invalidateStyleAndLayerComposition();
 
-    return OffscreenCanvas::create(context, *this);
+    return OffscreenCanvas::create(document(), *this);
 }
 #endif
 
@@ -791,7 +807,7 @@ RefPtr<MediaSample> HTMLCanvasElement::toMediaSample()
 #endif
 }
 
-ExceptionOr<Ref<MediaStream>> HTMLCanvasElement::captureStream(Document& document, std::optional<double>&& frameRequestRate)
+ExceptionOr<Ref<MediaStream>> HTMLCanvasElement::captureStream(std::optional<double>&& frameRequestRate)
 {
     if (!originClean())
         return Exception(SecurityError, "Canvas is tainted"_s);
@@ -801,8 +817,8 @@ ExceptionOr<Ref<MediaStream>> HTMLCanvasElement::captureStream(Document& documen
     if (frameRequestRate && frameRequestRate.value() < 0)
         return Exception(NotSupportedError, "frameRequestRate is negative"_s);
 
-    auto track = CanvasCaptureMediaStreamTrack::create(document, *this, WTFMove(frameRequestRate));
-    auto stream =  MediaStream::create(document);
+    auto track = CanvasCaptureMediaStreamTrack::create(document(), *this, WTFMove(frameRequestRate));
+    auto stream = MediaStream::create(document());
     stream->addTrack(track);
     return stream;
 }
@@ -1039,5 +1055,26 @@ bool HTMLCanvasElement::isControlledByOffscreen() const
 {
     return m_context && m_context->isPlaceholder();
 }
+
+#if PLATFORM(COCOA)
+GraphicsContext* HTMLCanvasElement::drawingContext() const
+{
+    auto context = CanvasBase::drawingContext();
+    if (!context)
+        return nullptr;
+
+    if (m_mustGuardAgainstUseByPendingLayerTransaction) {
+        if (auto page = document().page()) {
+            if (page->isAwaitingLayerTreeTransactionFlush()) {
+                if (auto backend = buffer()->backend())
+                    backend->ensureNativeImagesHaveCopiedBackingStore();
+            }
+        }
+        m_mustGuardAgainstUseByPendingLayerTransaction = false;
+    }
+
+    return context;
+}
+#endif
 
 }

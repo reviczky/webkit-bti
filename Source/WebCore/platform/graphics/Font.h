@@ -49,17 +49,12 @@
 #include <usp10.h>
 #endif
 
-#if USE(DIRECT2D)
-interface IDWriteFactory5;
-interface IDWriteGdiInterop;
-#endif
-
 namespace WebCore {
 
 class FontCache;
 class FontDescription;
 class GlyphPage;
-class SharedBuffer;
+class FragmentedSharedBuffer;
 
 struct GlyphData;
 
@@ -81,11 +76,8 @@ public:
     enum class Interstitial : bool { No, Yes };
     enum class Visibility : bool { Visible, Invisible };
     enum class OrientationFallback : bool { No, Yes };
-    WEBCORE_EXPORT static Ref<Font> create(const FontPlatformData&, Origin = Origin::Local, Interstitial = Interstitial::No,
-        Visibility = Visibility::Visible, OrientationFallback = OrientationFallback::No, std::optional<RenderingResourceIdentifier> = std::nullopt);
-    static Ref<Font> create(const FontPlatformData&, Origin, FontCache* fontCacheForVerticalData, Interstitial = Interstitial::No,
-        Visibility = Visibility::Visible, OrientationFallback = OrientationFallback::No, std::optional<RenderingResourceIdentifier> = std::nullopt);
-    WEBCORE_EXPORT static Ref<Font> create(Ref<SharedBuffer>&& fontFaceData, Font::Origin, float fontSize, bool syntheticBold, bool syntheticItalic, FontCache* = nullptr);
+    WEBCORE_EXPORT static Ref<Font> create(const FontPlatformData&, Origin = Origin::Local, Interstitial = Interstitial::No, Visibility = Visibility::Visible, OrientationFallback = OrientationFallback::No, std::optional<RenderingResourceIdentifier> = std::nullopt);
+    WEBCORE_EXPORT static Ref<Font> create(Ref<SharedBuffer>&& fontFaceData, Font::Origin, float fontSize, bool syntheticBold, bool syntheticItalic);
 
     WEBCORE_EXPORT ~Font();
 
@@ -145,12 +137,22 @@ public:
     void setAvgCharWidth(float avgCharWidth) { m_avgCharWidth = avgCharWidth; }
 
     FloatRect boundsForGlyph(Glyph) const;
+
+    // If you're calling this, you need to care about synthetic bold.
+    // This function returns the width before adding in the synthetic bold offset.
+    // This is because these widths are fed as an input to shaping, which needs to consume the true widths.
+    // Then, the synthetic bold offset is applied after shaping.
+    // If you're not going through WidthIterator or ComplexTextController (and thus potentially executing shaping yourself),
+    // then you need to decide whether or not you need to add syntheticBoldOffset() to the result of your widthForGlyph() call.
     float widthForGlyph(Glyph) const;
+
     const Path& pathForGlyph(Glyph) const; // Don't store the result of this! The hash map is free to rehash at any point, leaving this reference dangling.
     FloatRect platformBoundsForGlyph(Glyph) const;
     float platformWidthForGlyph(Glyph) const;
     Path platformPathForGlyph(Glyph) const;
 
+    // If you're calling this, you need to care about synthetic bold.
+    // See the comment just above widthForGlyph().
     float spaceWidth() const { return m_spaceWidth; }
 
     float syntheticBoldOffset() const { return m_syntheticBoldOffset; }
@@ -164,7 +166,7 @@ public:
     bool supportsCodePoint(UChar32) const;
     bool platformSupportsCodePoint(UChar32, std::optional<UChar32> variation = std::nullopt) const;
 
-    RefPtr<Font> systemFallbackFontForCharacter(UChar32, const FontDescription&, IsForPlatformFont, FontCache&) const;
+    RefPtr<Font> systemFallbackFontForCharacter(UChar32, const FontDescription&, IsForPlatformFont) const;
 
     const GlyphPage* glyphPage(unsigned pageNumber) const;
 
@@ -209,7 +211,7 @@ public:
 #endif
 
 private:
-    WEBCORE_EXPORT Font(const FontPlatformData&, Origin, Interstitial, Visibility, OrientationFallback, std::optional<RenderingResourceIdentifier>, FontCache*);
+    WEBCORE_EXPORT Font(const FontPlatformData&, Origin, Interstitial, Visibility, OrientationFallback, std::optional<RenderingResourceIdentifier>);
 
     void platformInit();
     void platformGlyphInit();

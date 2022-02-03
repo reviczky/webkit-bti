@@ -30,16 +30,25 @@ class LightSource;
 
 class FEDiffuseLighting : public FELighting {
 public:
+    WEBCORE_EXPORT static Ref<FEDiffuseLighting> create(const Color& lightingColor, float surfaceScale, float diffuseConstant, float, float, float kernelUnitLengthX, float kernelUnitLengthY, Ref<LightSource>&&);
     static Ref<FEDiffuseLighting> create(const Color& lightingColor, float surfaceScale, float diffuseConstant, float kernelUnitLengthX, float kernelUnitLengthY, Ref<LightSource>&&);
 
     float diffuseConstant() const { return m_diffuseConstant; }
     bool setDiffuseConstant(float);
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, FilterRepresentation) const override;
+
+    template<class Decoder> static std::optional<Ref<FEDiffuseLighting>> decode(Decoder&);
 
 private:
     FEDiffuseLighting(const Color& lightingColor, float surfaceScale, float diffuseConstant, float kernelUnitLengthX, float kernelUnitLengthY, Ref<LightSource>&&);
 };
+
+template<class Decoder>
+std::optional<Ref<FEDiffuseLighting>> FEDiffuseLighting::decode(Decoder& decoder)
+{
+    return FELighting::decode<Decoder, FEDiffuseLighting>(decoder);
+}
 
 } // namespace WebCore
 

@@ -107,6 +107,9 @@ std::unique_ptr<RenderStyle> SharingResolver::resolve(const Styleable& searchSty
         if (keyframeEffectStack->hasEffectWithImplicitKeyframes())
             return nullptr;
     }
+    // FIXME: Do something smarter here, for example RuleSet based matching like with attribute/sibling selectors.
+    if (Scope::forNode(element).usesHasPseudoClass())
+        return nullptr;
 
     Context context {
         update,
@@ -327,7 +330,7 @@ bool SharingResolver::styleSharingCandidateMatchesRuleSet(const StyledElement& e
         return false;
 
     ElementRuleCollector collector(element, m_ruleSets, &m_selectorMatchingState);
-    return collector.hasAnyMatchingRules(ruleSet);
+    return collector.hasAnyMatchingRules(*ruleSet);
 }
 
 bool SharingResolver::sharingCandidateHasIdenticalStyleAffectingAttributes(const Context& context, const StyledElement& sharingCandidate) const

@@ -69,11 +69,12 @@ bool isValidMarkerStyleProperty(CSSPropertyID id)
     case CSSPropertyListStyle:
     case CSSPropertyOverflowWrap:
     case CSSPropertyTabSize:
+    case CSSPropertyTextCombineUpright:
     case CSSPropertyTextDecorationSkipInk:
-    case CSSPropertyWebkitTextEmphasis:
-    case CSSPropertyWebkitTextEmphasisColor:
-    case CSSPropertyWebkitTextEmphasisPosition:
-    case CSSPropertyWebkitTextEmphasisStyle:
+    case CSSPropertyTextEmphasis:
+    case CSSPropertyTextEmphasisColor:
+    case CSSPropertyTextEmphasisPosition:
+    case CSSPropertyTextEmphasisStyle:
     case CSSPropertyTextShadow:
     case CSSPropertyTextTransform:
     case CSSPropertyUnicodeBidi:
@@ -87,6 +88,7 @@ bool isValidMarkerStyleProperty(CSSPropertyID id)
     case CSSPropertyAnimationDirection:
     case CSSPropertyAnimationFillMode:
     case CSSPropertyAnimationPlayState:
+    case CSSPropertyAnimationComposition:
     case CSSPropertyAnimationName:
     case CSSPropertyTransitionDuration:
     case CSSPropertyTransitionTimingFunction:

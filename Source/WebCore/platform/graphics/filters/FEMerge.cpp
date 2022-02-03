@@ -2,7 +2,7 @@
  * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
- * Copyright (C) Apple Inc. 2021 All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,36 +24,35 @@
 #include "FEMerge.h"
 
 #include "FEMergeSoftwareApplier.h"
+#include "ImageBuffer.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-Ref<FEMerge> FEMerge::create()
+Ref<FEMerge> FEMerge::create(unsigned numberOfEffectInputs)
 {
-    return adoptRef(*new FEMerge());
+    return adoptRef(*new FEMerge(numberOfEffectInputs));
 }
 
-FEMerge::FEMerge()
+FEMerge::FEMerge(unsigned numberOfEffectInputs)
     : FilterEffect(FilterEffect::Type::FEMerge)
+    , m_numberOfEffectInputs(numberOfEffectInputs)
 {
 }
 
-bool FEMerge::platformApplySoftware(const Filter& filter)
+std::unique_ptr<FilterEffectApplier> FEMerge::createSoftwareApplier() const
 {
-    return FEMergeSoftwareApplier(*this).apply(filter, inputEffects());
+    return FilterEffectApplier::create<FEMergeSoftwareApplier>(*this);
 }
 
-TextStream& FEMerge::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FEMerge::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feMerge";
     FilterEffect::externalRepresentation(ts, representation);
-    unsigned size = numberOfEffectInputs();
-    ASSERT(size > 0);
-    ts << " mergeNodes=\"" << size << "\"]\n";
 
-    TextStream::IndentScope indentScope(ts);
-    for (unsigned i = 0; i < size; ++i)
-        inputEffect(i)->externalRepresentation(ts, representation);
+    ts << " mergeNodes=\"" << m_numberOfEffectInputs << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

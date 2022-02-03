@@ -1074,8 +1074,7 @@ bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAnces
             pluginViewBase->attachPluginLayer();
         }
 #else
-        if (!pluginViewBase->shouldNotAddLayer())
-            m_graphicsLayer->setContentsToPlatformLayer(pluginViewBase->platformLayer(), GraphicsLayer::ContentsLayerPurpose::Plugin);
+        m_graphicsLayer->setContentsToPlatformLayer(pluginViewBase->platformLayer(), GraphicsLayer::ContentsLayerPurpose::Plugin);
 #endif
     }
 #if ENABLE(VIDEO)
@@ -1089,7 +1088,7 @@ bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAnces
     else if (renderer().isCanvas() && canvasCompositingStrategy(renderer()) == CanvasAsLayerContents) {
         const HTMLCanvasElement* canvas = downcast<HTMLCanvasElement>(renderer().element());
         if (auto* context = canvas->renderingContext())
-            m_graphicsLayer->setContentsToPlatformLayer(context->platformLayer(), GraphicsLayer::ContentsLayerPurpose::Canvas);
+            m_graphicsLayer->setContentsDisplayDelegate(context->layerContentsDisplayDelegate(), GraphicsLayer::ContentsLayerPurpose::Canvas);
 
         layerConfigChanged = true;
     }
@@ -1324,7 +1323,7 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
     auto primaryLayerPosition = primaryGraphicsLayerRect.location();
 
     // FIXME: reflections should force transform-style to be flat in the style: https://bugs.webkit.org/show_bug.cgi?id=106959
-    bool preserves3D = style.transformStyle3D() == TransformStyle3D::Preserve3D && !renderer().hasReflection();
+    bool preserves3D = style.preserves3D() && !renderer().hasReflection();
     if (m_contentsContainmentLayer) {
         m_contentsContainmentLayer->setPreserves3D(preserves3D);
         m_contentsContainmentLayer->setPosition(primaryLayerPosition);
@@ -1348,7 +1347,7 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
 
 #if ENABLE(CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
     // FIXME: Take ancestry into account and remove unnecessary structural layers.
-    m_graphicsLayer->setIsSeparated(style.transformStyle3D() == TransformStyle3D::Optimized3D);
+    m_graphicsLayer->setIsSeparated(style.usedTransformStyle3D() == TransformStyle3D::Optimized3D);
 #endif
 
     // Compute renderer offset from primary graphics layer. Note that primaryGraphicsLayerRect is in parentGraphicsLayer's coordinate system which is not necessarily
@@ -2035,9 +2034,12 @@ bool RenderLayerBacking::needsRepaintOnCompositedScroll() const
     if (!hasScrollingLayer())
         return false;
 
+    if (renderer().style().hasAnyLocalBackground())
+        return true;
+
     if (auto scrollingCoordinator = m_owningLayer.page().scrollingCoordinator())
         return scrollingCoordinator->hasSynchronousScrollingReasons(m_scrollingNodeID);
-    
+
     return false;
 }
 
@@ -2664,10 +2666,6 @@ static bool supportsDirectlyCompositedBoxDecorations(const RenderLayerModelObjec
     if (hasPerspectiveOrPreserves3D(style))
         return false;
 
-    // FIXME: we should be able to allow backgroundComposite; However since this is not a common use case it has been deferred for now.
-    if (style.backgroundComposite() != CompositeOperator::SourceOver)
-        return false;
-
     return true;
 }
 
@@ -2792,12 +2790,34 @@ static LayerTraversal traverseVisibleNonCompositedDescendantLayers(RenderLayer& 
     return LayerTraversal::Continue;
 }
 
+static std::optional<bool> intersectsWithAncestor(const RenderLayer& child, const RenderLayer& ancestor, const LayoutRect& ancestorCompositedBounds)
+{
+    // If any layers between child and ancestor are transformed, then adjusting the offset is
+    // insufficient to convert coordinates into ancestor's coordinate space.
+    for (auto* layer = &child; layer != &ancestor; layer = layer->parent()) {
+        if (!layer->canUseOffsetFromAncestor())
+            return std::nullopt;
+    }
+
+    auto offset = child.convertToLayerCoords(&ancestor, { }, RenderLayer::AdjustForColumns);
+    auto overlap = child.overlapBounds();
+    overlap.moveBy(offset);
+    return overlap.intersects(ancestorCompositedBounds);
+}
+
 // Conservative test for having no rendered children.
 bool RenderLayerBacking::isPaintDestinationForDescendantLayers(RenderLayer::PaintedContentRequest& request) const
 {
     bool hasPaintingDescendant = false;
-    traverseVisibleNonCompositedDescendantLayers(m_owningLayer, [&hasPaintingDescendant, &request](const RenderLayer& layer) {
-        hasPaintingDescendant |= layer.isVisuallyNonEmpty(&request);
+    traverseVisibleNonCompositedDescendantLayers(m_owningLayer, [&hasPaintingDescendant, &request, this](const RenderLayer& layer) {
+        RenderLayer::PaintedContentRequest localRequest;
+        if (layer.isVisuallyNonEmpty(&localRequest)) {
+            bool mayIntersect = intersectsWithAncestor(layer, m_owningLayer, compositedBounds()).value_or(true);
+            if (mayIntersect) {
+                hasPaintingDescendant = true;
+                request.setHasPaintedContent();
+            }
+        }
         return (hasPaintingDescendant && request.isSatisfied()) ? LayerTraversal::Stop : LayerTraversal::Continue;
     });
 
@@ -3315,13 +3335,11 @@ static RefPtr<Pattern> patternForDescription(PatternDescription description, Flo
         imageContext.drawText(font, textRun, { textGap, yOffset }, 0);
     }
 
-    auto tileImage = ImageBuffer::sinkIntoNativeImage(WTFMove(imageBuffer));
-
     AffineTransform patternOffsetTransform;
     patternOffsetTransform.translate(contentOffset + description.phase);
     patternOffsetTransform.scale(1 / destContext.scaleFactor());
 
-    return Pattern::create(tileImage.releaseNonNull(), { true, true, patternOffsetTransform});
+    return Pattern::create({ imageBuffer.releaseNonNull() }, { true, true, patternOffsetTransform });
 };
 #endif
 
@@ -3663,9 +3681,7 @@ bool RenderLayerBacking::startAnimation(double timeOffset, const Animation& anim
     KeyframeValueList backdropFilterVector(AnimatedPropertyWebkitBackdropFilter);
 #endif
 
-    size_t numKeyframes = keyframes.size();
-    for (size_t i = 0; i < numKeyframes; ++i) {
-        const KeyframeValue& currentKeyframe = keyframes[i];
+    for (auto& currentKeyframe : keyframes) {
         const RenderStyle* keyframeStyle = currentKeyframe.style();
         double key = currentKeyframe.key();
 

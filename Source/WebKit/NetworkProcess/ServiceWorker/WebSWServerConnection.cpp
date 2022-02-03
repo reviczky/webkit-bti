@@ -32,9 +32,11 @@
 #include "FormDataReference.h"
 #include "Logging.h"
 #include "NetworkConnectionToWebProcessMessages.h"
+#include "NetworkNotificationManager.h"
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
 #include "NetworkResourceLoader.h"
+#include "NetworkSession.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebProcess.h"
 #include "WebProcessMessages.h"
@@ -69,12 +71,14 @@ WebSWServerConnection::WebSWServerConnection(NetworkProcess& networkProcess, SWS
     , m_contentConnection(connection)
     , m_networkProcess(networkProcess)
 {
-    networkProcess.registerSWServerConnection(*this);
+    if (auto* session = this->session())
+        session->registerSWServerConnection(*this);
 }
 
 WebSWServerConnection::~WebSWServerConnection()
 {
-    m_networkProcess->unregisterSWServerConnection(*this);
+    if (auto* session = this->session())
+        session->unregisterSWServerConnection(*this);
     for (const auto& keyValue : m_clientOrigins)
         server().unregisterServiceWorkerClient(keyValue.value, keyValue.key);
     for (auto& completionHandler : m_unregisterJobs.values())
@@ -152,8 +156,13 @@ void WebSWServerConnection::controlClient(ScriptExecutionContextIdentifier clien
 
 std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(NetworkResourceLoader& loader, const ResourceRequest& request)
 {
-    if (loader.parameters().serviceWorkersMode == ServiceWorkersMode::None)
+    if (loader.parameters().serviceWorkersMode == ServiceWorkersMode::None) {
+        if (loader.parameters().request.requester() == ResourceRequest::Requester::Fetch && isNavigationRequest(loader.parameters().options.destination)) {
+            if (auto task = ServiceWorkerFetchTask::fromNavigationPreloader(*this, loader, request, session()))
+                return task;
+        }
         return nullptr;
+    }
 
     if (!server().canHandleScheme(loader.originalRequest().url().protocol()))
         return nullptr;
@@ -167,6 +176,7 @@ std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(N
 
         serviceWorkerRegistrationIdentifier = registration->identifier();
         controlClient(*loader.parameters().options.clientIdentifier, *registration, request);
+        loader.setResultingClientIdentifier(loader.parameters().options.clientIdentifier->toString());
     } else {
         if (!loader.parameters().serviceWorkerRegistrationIdentifier)
             return nullptr;
@@ -177,16 +187,15 @@ std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(N
         serviceWorkerRegistrationIdentifier = *loader.parameters().serviceWorkerRegistrationIdentifier;
     }
 
-    auto* worker = server().activeWorkerFromRegistrationID(*serviceWorkerRegistrationIdentifier);
+    auto* registration = server().getRegistration(*serviceWorkerRegistrationIdentifier);
+    auto* worker = registration ? registration->activeWorker() : nullptr;
     if (!worker) {
         SWSERVERCONNECTION_RELEASE_LOG_ERROR("startFetch: DidNotHandle because no active worker for registration %" PRIu64, serviceWorkerRegistrationIdentifier->toUInt64());
         return nullptr;
     }
 
-    auto* registration = server().getRegistration(*serviceWorkerRegistrationIdentifier);
-    bool shouldSoftUpdate = registration && registration->shouldSoftUpdate(loader.parameters().options);
     if (worker->shouldSkipFetchEvent()) {
-        if (shouldSoftUpdate)
+        if (registration->shouldSoftUpdate(loader.parameters().options))
             registration->scheduleSoftUpdate(loader.isAppInitiated() ? WebCore::IsAppInitiated::Yes : WebCore::IsAppInitiated::No);
 
         return nullptr;
@@ -197,7 +206,8 @@ std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(N
         return nullptr;
     }
 
-    auto task = makeUnique<ServiceWorkerFetchTask>(*this, loader, ResourceRequest { request }, identifier(), worker->identifier(), *serviceWorkerRegistrationIdentifier, shouldSoftUpdate);
+    bool isWorkerReady = worker->isRunning() && worker->state() == ServiceWorkerState::Activated;
+    auto task = makeUnique<ServiceWorkerFetchTask>(*this, loader, ResourceRequest { request }, identifier(), worker->identifier(), *registration, session(), isWorkerReady);
     startFetch(*task, *worker);
     return task;
 }
@@ -337,24 +347,18 @@ void WebSWServerConnection::postMessageToServiceWorkerClient(ScriptExecutionCont
     send(Messages::WebSWClientConnection::PostMessageToServiceWorkerClient { destinationContextIdentifier, message, sourceServiceWorker->data(), sourceOrigin });
 }
 
-void WebSWServerConnection::matchRegistration(uint64_t registrationMatchRequestIdentifier, const SecurityOriginData& topOrigin, const URL& clientURL)
+void WebSWServerConnection::matchRegistration(const SecurityOriginData& topOrigin, const URL& clientURL, CompletionHandler<void(std::optional<ServiceWorkerRegistrationData>&&)>&& callback)
 {
     if (auto* registration = doRegistrationMatching(topOrigin, clientURL)) {
-        send(Messages::WebSWClientConnection::DidMatchRegistration { registrationMatchRequestIdentifier, registration->data() });
+        callback(registration->data());
         return;
     }
-    send(Messages::WebSWClientConnection::DidMatchRegistration { registrationMatchRequestIdentifier, std::nullopt });
+    callback({ });
 }
 
-void WebSWServerConnection::registrationReady(uint64_t registrationReadyRequestIdentifier, ServiceWorkerRegistrationData&& registrationData)
+void WebSWServerConnection::getRegistrations(const SecurityOriginData& topOrigin, const URL& clientURL, CompletionHandler<void(const Vector<ServiceWorkerRegistrationData>&)>&& callback)
 {
-    send(Messages::WebSWClientConnection::RegistrationReady { registrationReadyRequestIdentifier, WTFMove(registrationData) });
-}
-
-void WebSWServerConnection::getRegistrations(uint64_t registrationMatchRequestIdentifier, const SecurityOriginData& topOrigin, const URL& clientURL)
-{
-    auto registrations = server().getRegistrations(topOrigin, clientURL);
-    send(Messages::WebSWClientConnection::DidGetRegistrations { registrationMatchRequestIdentifier, registrations });
+    callback(server().getRegistrations(topOrigin, clientURL));
 }
 
 void WebSWServerConnection::registerServiceWorkerClient(SecurityOriginData&& topOrigin, ServiceWorkerClientData&& data, const std::optional<ServiceWorkerRegistrationIdentifier>& controllingServiceWorkerRegistrationIdentifier, String&& userAgent)
@@ -447,31 +451,91 @@ void WebSWServerConnection::updateThrottleState()
 
 void WebSWServerConnection::subscribeToPushService(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, Vector<uint8_t>&& applicationServerKey, CompletionHandler<void(Expected<PushSubscriptionData, ExceptionData>&&)>&& completionHandler)
 {
+#if !ENABLE(BUILT_IN_NOTIFICATIONS)
     UNUSED_PARAM(registrationIdentifier);
     UNUSED_PARAM(applicationServerKey);
-    
-    completionHandler(makeUnexpected(ExceptionData { NotAllowedError, "Push permission was denied"_s }));
+    completionHandler(makeUnexpected(ExceptionData { AbortError, "Push service not implemented"_s }));
+#else
+    auto registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "Subscribing for push requires an active service worker"_s }));
+        return;
+    }
+
+    if (!session()) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "No active network session"_s }));
+        return;
+    }
+
+    session()->notificationManager().subscribeToPushService(registration->scopeURLWithoutFragment(), WTFMove(applicationServerKey), WTFMove(completionHandler));
+#endif
 }
 
-void WebSWServerConnection::unsubscribeFromPushService(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, CompletionHandler<void(Expected<bool, ExceptionData>&&)>&& completionHandler)
+void WebSWServerConnection::unsubscribeFromPushService(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, WebCore::PushSubscriptionIdentifier subscriptionIdentifier, CompletionHandler<void(Expected<bool, ExceptionData>&&)>&& completionHandler)
 {
+#if !ENABLE(BUILT_IN_NOTIFICATIONS)
     UNUSED_PARAM(registrationIdentifier);
-    
+    UNUSED_PARAM(subscriptionIdentifier);
+
     completionHandler(false);
+#else
+    auto registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "Unsubscribing from push requires a service worker"_s }));
+        return;
+    }
+
+    if (!session()) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "No active network session"_s }));
+        return;
+    }
+
+    session()->notificationManager().unsubscribeFromPushService(registration->scopeURLWithoutFragment(), subscriptionIdentifier, WTFMove(completionHandler));
+#endif
 }
 
 void WebSWServerConnection::getPushSubscription(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, CompletionHandler<void(Expected<std::optional<PushSubscriptionData>, ExceptionData>&&)>&& completionHandler)
 {
+#if !ENABLE(BUILT_IN_NOTIFICATIONS)
     UNUSED_PARAM(registrationIdentifier);
-    
+
     completionHandler(std::optional<PushSubscriptionData>(std::nullopt));
+#else
+    auto registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "Getting push subscription requires a service worker"_s }));
+        return;
+    }
+
+    if (!session()) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "No active network session"_s }));
+        return;
+    }
+
+    session()->notificationManager().getPushSubscription(registration->scopeURLWithoutFragment(), WTFMove(completionHandler));
+#endif
 }
 
 void WebSWServerConnection::getPushPermissionState(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, CompletionHandler<void(Expected<uint8_t, ExceptionData>&&)>&& completionHandler)
 {
+#if !ENABLE(BUILT_IN_NOTIFICATIONS)
     UNUSED_PARAM(registrationIdentifier);
-    
+
     completionHandler(static_cast<uint8_t>(PushPermissionState::Denied));
+#else
+    auto registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "Getting push permission state requires a service worker"_s }));
+        return;
+    }
+
+    if (!session()) {
+        completionHandler(makeUnexpected(ExceptionData { InvalidStateError, "No active network session"_s }));
+        return;
+    }
+
+    session()->notificationManager().getPushPermissionState(registration->scopeURLWithoutFragment(), WTFMove(completionHandler));
+#endif
 }
 
 void WebSWServerConnection::contextConnectionCreated(SWServerToContextConnection& contextConnection)
@@ -503,7 +567,12 @@ PAL::SessionID WebSWServerConnection::sessionID() const
 {
     return server().sessionID();
 }
-    
+
+NetworkSession* WebSWServerConnection::session()
+{
+    return m_networkProcess->networkSession(sessionID());
+}
+
 template<typename U> void WebSWServerConnection::sendToContextProcess(WebCore::SWServerToContextConnection& connection, U&& message)
 {
     static_cast<WebSWServerToContextConnection&>(connection).send(WTFMove(message));
@@ -517,6 +586,46 @@ void WebSWServerConnection::fetchTaskTimedOut(ServiceWorkerIdentifier serviceWor
 
     worker->setHasTimedOutAnyFetchTasks();
     worker->terminate();
+}
+
+void WebSWServerConnection::enableNavigationPreload(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, ExceptionOrVoidCallback&& callback)
+{
+    auto* registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        callback(ExceptionData { InvalidStateError, "No registration"_s });
+        return;
+    }
+    callback(registration->enableNavigationPreload());
+}
+
+void WebSWServerConnection::disableNavigationPreload(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, ExceptionOrVoidCallback&& callback)
+{
+    auto* registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        callback(ExceptionData { InvalidStateError, "No registration"_s });
+        return;
+    }
+    callback(registration->disableNavigationPreload());
+}
+
+void WebSWServerConnection::setNavigationPreloadHeaderValue(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, String&& headerValue, ExceptionOrVoidCallback&& callback)
+{
+    auto* registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        callback(ExceptionData { InvalidStateError, "No registration"_s });
+        return;
+    }
+    callback(registration->setNavigationPreloadHeaderValue(WTFMove(headerValue)));
+}
+
+void WebSWServerConnection::getNavigationPreloadState(WebCore::ServiceWorkerRegistrationIdentifier registrationIdentifier, ExceptionOrNavigationPreloadStateCallback&& callback)
+{
+    auto* registration = server().getRegistration(registrationIdentifier);
+    if (!registration) {
+        callback(makeUnexpected(ExceptionData { InvalidStateError, { } }));
+        return;
+    }
+    callback(registration->navigationPreloadState());
 }
 
 } // namespace WebKit

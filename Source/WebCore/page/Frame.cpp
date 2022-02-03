@@ -362,15 +362,9 @@ void Frame::invalidateContentEventRegionsIfNeeded(InvalidateContentEventRegionsR
 #if ENABLE(ORIENTATION_EVENTS)
 void Frame::orientationChanged()
 {
-    Vector<Ref<Frame>> frames;
-    for (Frame* frame = this; frame; frame = frame->tree().traverseNext())
-        frames.append(*frame);
-
-    auto newOrientation = orientation();
-    for (auto& frame : frames) {
-        if (Document* document = frame->document())
-            document->orientationChanged(newOrientation);
-    }
+    Page::forEachDocumentFromMainFrame(*this, [newOrientation = orientation()] (Document& document) {
+        document.orientationChanged(newOrientation);
+    });
 }
 
 int Frame::orientation() const
@@ -561,7 +555,7 @@ bool Frame::selectionChangeCallbacksDisabled() const
 }
 #endif // PLATFORM(IOS_FAMILY)
 
-bool Frame::requestDOMPasteAccess()
+bool Frame::requestDOMPasteAccess(DOMPasteAccessCategory pasteAccessCategory)
 {
     if (m_settings->javaScriptCanAccessClipboard() && m_settings->domPasteAllowed())
         return true;
@@ -589,7 +583,7 @@ bool Frame::requestDOMPasteAccess()
         if (!client)
             return false;
 
-        auto response = client->requestDOMPasteAccess(m_doc->originIdentifierForPasteboard());
+        auto response = client->requestDOMPasteAccess(pasteAccessCategory, m_doc->originIdentifierForPasteboard());
         gestureToken->didRequestDOMPasteAccess(response);
         switch (response) {
         case DOMPasteAccessResponse::GrantedForCommand:
@@ -1061,19 +1055,6 @@ void Frame::dropChildren()
     ASSERT(isMainFrame());
     while (Frame* child = tree().firstChild())
         tree().removeChild(*child);
-}
-
-void Frame::didPrewarmLocalStorage()
-{
-    ASSERT(isMainFrame());
-    ASSERT(m_localStoragePrewarmingCount < maxlocalStoragePrewarmingCount);
-    ++m_localStoragePrewarmingCount;
-}
-
-bool Frame::mayPrewarmLocalStorage() const
-{
-    ASSERT(isMainFrame());
-    return m_localStoragePrewarmingCount < maxlocalStoragePrewarmingCount;
 }
 
 FloatSize Frame::screenSize() const

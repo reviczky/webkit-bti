@@ -37,6 +37,7 @@
 #include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/NumberOfCores.h>
+#include <wtf/UniqueRef.h>
 #include <wtf/text/WTFString.h>
 
 #if OS(LINUX)
@@ -153,7 +154,7 @@ StorageManager& NavigatorBase::storage()
 WebLockManager& NavigatorBase::locks()
 {
     if (!m_webLockManager)
-        m_webLockManager = WebLockManager::create();
+        m_webLockManager = WebLockManager::create(*this);
 
     return *m_webLockManager;
 }
@@ -163,7 +164,7 @@ ServiceWorkerContainer& NavigatorBase::serviceWorker()
 {
     ASSERT(RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled());
     if (!m_serviceWorkerContainer)
-        m_serviceWorkerContainer = makeUnique<ServiceWorkerContainer>(scriptExecutionContext(), *this);
+        m_serviceWorkerContainer = ServiceWorkerContainer::create(scriptExecutionContext(), *this).moveToUniquePtr();
     return *m_serviceWorkerContainer;
 }
 
@@ -174,5 +175,25 @@ ExceptionOr<ServiceWorkerContainer&> NavigatorBase::serviceWorker(ScriptExecutio
     return serviceWorker();
 }
 #endif
+
+int NavigatorBase::hardwareConcurrency()
+{
+    static int numberOfCores;
+
+    static std::once_flag once;
+    std::call_once(once, [] {
+        // Enforce a maximum for the number of cores reported to mitigate
+        // fingerprinting for the minority of machines with large numbers of cores.
+        // If machines with more than 8 cores become commonplace, we should bump this number.
+        // see https://bugs.webkit.org/show_bug.cgi?id=132588 for the
+        // rationale behind this decision.
+        if (WTF::numberOfProcessorCores() < 8)
+            numberOfCores = 4;
+        else
+            numberOfCores = 8;
+    });
+
+    return numberOfCores;
+}
 
 } // namespace WebCore

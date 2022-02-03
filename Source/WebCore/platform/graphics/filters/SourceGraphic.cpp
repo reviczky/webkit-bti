@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -25,6 +25,10 @@
 #include "SourceGraphicSoftwareApplier.h"
 #include <wtf/text/TextStream.h>
 
+#if USE(CORE_IMAGE)
+#include "SourceGraphicCoreImageApplier.h"
+#endif
+
 namespace WebCore {
 
 Ref<SourceGraphic> SourceGraphic::create()
@@ -37,18 +41,30 @@ SourceGraphic::SourceGraphic()
 {
 }
 
-void SourceGraphic::determineAbsolutePaintRect(const Filter& filter)
+bool SourceGraphic::supportsAcceleratedRendering() const
 {
-    FloatRect paintRect = filter.sourceImageRect();
-    setAbsolutePaintRect(enclosingIntRect(paintRect));
+#if USE(CORE_IMAGE)
+    return true;
+#else
+    return false;
+#endif
 }
 
-bool SourceGraphic::platformApplySoftware(const Filter& filter)
+std::unique_ptr<FilterEffectApplier> SourceGraphic::createAcceleratedApplier() const
 {
-    return SourceGraphicSoftwareApplier(*this).apply(filter, inputEffects());
+#if USE(CORE_IMAGE)
+    return FilterEffectApplier::create<SourceGraphicCoreImageApplier>(*this);
+#else
+    return nullptr;
+#endif
 }
 
-TextStream& SourceGraphic::externalRepresentation(TextStream& ts, RepresentationType) const
+std::unique_ptr<FilterEffectApplier> SourceGraphic::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<SourceGraphicSoftwareApplier>(*this);
+}
+
+TextStream& SourceGraphic::externalRepresentation(TextStream& ts, FilterRepresentation) const
 {
     ts << indent << "[SourceGraphic]\n";
     return ts;

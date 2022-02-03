@@ -141,8 +141,9 @@ public:
 
     bool supportsWebExtensions();
 #if ENABLE(INSPECTOR_EXTENSIONS)
-    void didShowExtensionTab(const String& extensionID, const String& extensionTabID);
+    void didShowExtensionTab(const String& extensionID, const String& extensionTabID, HTMLIFrameElement& extensionFrame);
     void didHideExtensionTab(const String& extensionID, const String& extensionTabID);
+    void didNavigateExtensionTab(const String& extensionID, const String& extensionTabID, const String& url);
     void inspectedPageDidNavigate(const String& url);
     ExceptionOr<JSC::JSValue> evaluateScriptInExtensionTab(HTMLIFrameElement& extensionFrame, const String& scriptSource);
 #endif

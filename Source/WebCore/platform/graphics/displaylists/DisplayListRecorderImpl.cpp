@@ -29,21 +29,22 @@
 #include "DisplayList.h"
 #include "DisplayListDrawingContext.h"
 #include "DisplayListItems.h"
+#include "Filter.h"
 #include "GraphicsContext.h"
 #include "ImageBuffer.h"
 #include "Logging.h"
 #include "MediaPlayer.h"
 #include "NotImplemented.h"
+#include "SourceImage.h"
 #include <wtf/MathExtras.h>
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 namespace DisplayList {
 
-RecorderImpl::RecorderImpl(DisplayList& displayList, const GraphicsContextState& state, const FloatRect& initialClip, const AffineTransform& initialCTM, Delegate* delegate, DrawGlyphsRecorder::DeconstructDrawGlyphs deconstructDrawGlyphs)
+RecorderImpl::RecorderImpl(DisplayList& displayList, const GraphicsContextState& state, const FloatRect& initialClip, const AffineTransform& initialCTM, DrawGlyphsRecorder::DeconstructDrawGlyphs deconstructDrawGlyphs)
     : Recorder(state, initialClip, initialCTM, deconstructDrawGlyphs)
     , m_displayList(displayList)
-    , m_delegate(delegate)
 {
     LOG_WITH_STREAM(DisplayLists, stream << "\nRecording with clip " << initialClip);
 }
@@ -51,7 +52,6 @@ RecorderImpl::RecorderImpl(DisplayList& displayList, const GraphicsContextState&
 RecorderImpl::RecorderImpl(RecorderImpl& parent, const GraphicsContextState& state, const FloatRect& initialClip, const AffineTransform& initialCTM)
     : Recorder(parent, state, initialClip, initialCTM)
     , m_displayList(parent.m_displayList)
-    , m_delegate(parent.m_delegate)
     , m_isNested(true)
 {
 }
@@ -71,21 +71,6 @@ void RecorderImpl::getPixelBuffer(const PixelBufferFormat& outputFormat, const I
 void RecorderImpl::putPixelBuffer(const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
 {
     append<PutPixelBuffer>(pixelBuffer, srcRect, destPoint, destFormat);
-}
-
-bool RecorderImpl::canAppendItemOfType(ItemType type) const
-{
-    return !m_delegate || m_delegate->canAppendItemOfType(type);
-}
-
-bool RecorderImpl::canDrawImageBuffer(const ImageBuffer& imageBuffer) const
-{
-    return !m_delegate || m_delegate->isCachedImageBuffer(imageBuffer);
-}
-
-RenderingMode RecorderImpl::renderingMode() const
-{
-    return m_delegate ? m_delegate->renderingMode() : RenderingMode::Unaccelerated;
 }
 
 std::unique_ptr<GraphicsContext> RecorderImpl::createNestedContext(const FloatRect& initialClip, const AffineTransform& initialCTM)
@@ -206,6 +191,11 @@ void RecorderImpl::recordBeginClipToDrawingCommands(const FloatRect& destination
 void RecorderImpl::recordEndClipToDrawingCommands(const FloatRect& destination)
 {
     append<EndClipToDrawingCommands>(destination);
+}
+
+void RecorderImpl::recordDrawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Filter& filter)
+{
+    append<DrawFilteredImageBuffer>(sourceImageIdentifier, sourceImageRect, filter);
 }
 
 void RecorderImpl::recordDrawGlyphs(const Font& font, const GlyphBufferGlyph* glyphs, const GlyphBufferAdvance* advances, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode mode)
@@ -412,25 +402,33 @@ void RecorderImpl::recordApplyDeviceScaleFactor(float scaleFactor)
     append<ApplyDeviceScaleFactor>(scaleFactor);
 }
 
-void RecorderImpl::recordResourceUse(NativeImage& image)
+bool RecorderImpl::recordResourceUse(NativeImage& nativeImage)
 {
-    if (m_delegate)
-        m_delegate->recordNativeImageUse(image);
-    m_displayList.cacheNativeImage(image);
+    m_displayList.cacheNativeImage(nativeImage);
+    return true;
 }
 
-void RecorderImpl::recordResourceUse(Font& font)
+bool RecorderImpl::recordResourceUse(ImageBuffer& imageBuffer)
 {
-    if (m_delegate)
-        m_delegate->recordFontUse(font);
-    m_displayList.cacheFont(font);
-}
-
-void RecorderImpl::recordResourceUse(ImageBuffer& imageBuffer)
-{
-    if (m_delegate)
-        m_delegate->recordImageBufferUse(imageBuffer);
     m_displayList.cacheImageBuffer(imageBuffer);
+    return true;
+}
+
+bool RecorderImpl::recordResourceUse(const SourceImage& image)
+{
+    if (auto imageBuffer = image.imageBufferIfExists())
+        return recordResourceUse(*imageBuffer);
+
+    if (auto nativeImage = image.nativeImageIfExists())
+        return recordResourceUse(*nativeImage);
+
+    return true;
+}
+
+bool RecorderImpl::recordResourceUse(Font& font)
+{
+    m_displayList.cacheFont(font);
+    return true;
 }
 
 // FIXME: share with ShadowData

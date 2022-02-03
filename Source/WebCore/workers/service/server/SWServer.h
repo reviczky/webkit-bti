@@ -57,15 +57,15 @@ class SWOriginStore;
 class SWServerJobQueue;
 class SWServerRegistration;
 class SWServerToContextConnection;
+class Timer;
 enum class ServiceWorkerRegistrationState : uint8_t;
 enum class ServiceWorkerState : uint8_t;
 struct ExceptionData;
 struct MessageWithMessagePorts;
 struct ServiceWorkerClientQueryOptions;
 struct ServiceWorkerContextData;
-struct ServiceWorkerFetchResult;
 struct ServiceWorkerRegistrationData;
-class Timer;
+struct WorkerFetchResult;
 
 class SWServer : public CanMakeWeakPtr<SWServer> {
     WTF_MAKE_FAST_ALLOCATED;
@@ -74,7 +74,7 @@ public:
         WTF_MAKE_FAST_ALLOCATED;
         friend class SWServer;
     public:
-        virtual ~Connection() = default;
+        WEBCORE_EXPORT virtual ~Connection();
 
         using Identifier = SWServerConnectionIdentifier;
         Identifier identifier() const { return m_identifier; }
@@ -90,7 +90,6 @@ public:
         virtual void setRegistrationLastUpdateTime(ServiceWorkerRegistrationIdentifier, WallTime) = 0;
         virtual void setRegistrationUpdateViaCache(ServiceWorkerRegistrationIdentifier, ServiceWorkerUpdateViaCache) = 0;
         virtual void notifyClientsOfControllerChange(const HashSet<ScriptExecutionContextIdentifier>& contextIdentifiers, const ServiceWorkerData& newController) = 0;
-        virtual void registrationReady(uint64_t registrationReadyRequestIdentifier, ServiceWorkerRegistrationData&&) = 0;
         virtual void postMessageToServiceWorkerClient(ScriptExecutionContextIdentifier, const MessageWithMessagePorts&, ServiceWorkerIdentifier, const String& sourceOrigin) = 0;
 
         virtual void contextConnectionCreated(SWServerToContextConnection&) = 0;
@@ -101,10 +100,10 @@ public:
     protected:
         WEBCORE_EXPORT Connection(SWServer&, Identifier);
 
-        WEBCORE_EXPORT void finishFetchingScriptInServer(const ServiceWorkerFetchResult&);
+        WEBCORE_EXPORT void finishFetchingScriptInServer(const ServiceWorkerJobDataIdentifier&, const ServiceWorkerRegistrationKey&, const WorkerFetchResult&);
         WEBCORE_EXPORT void addServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier);
         WEBCORE_EXPORT void removeServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier);
-        WEBCORE_EXPORT void whenRegistrationReady(uint64_t registrationReadyRequestIdentifier, const SecurityOriginData& topOrigin, const URL& clientURL);
+        WEBCORE_EXPORT void whenRegistrationReady(const SecurityOriginData& topOrigin, const URL& clientURL, CompletionHandler<void(std::optional<ServiceWorkerRegistrationData>&&)>&&);
 
         WEBCORE_EXPORT void storeRegistrationsOnDisk(CompletionHandler<void()>&&);
 
@@ -118,7 +117,7 @@ public:
         struct RegistrationReadyRequest {
             SecurityOriginData topOrigin;
             URL clientURL;
-            uint64_t identifier;
+            CompletionHandler<void(std::optional<ServiceWorkerRegistrationData>&&)> callback;
         };
 
         SWServer& m_server;
@@ -126,7 +125,7 @@ public:
         Vector<RegistrationReadyRequest> m_registrationReadyRequests;
     };
 
-    using SoftUpdateCallback = Function<void(ServiceWorkerJobData&& jobData, bool shouldRefreshCache, ResourceRequest&&, CompletionHandler<void(const ServiceWorkerFetchResult&)>&&)>;
+    using SoftUpdateCallback = Function<void(ServiceWorkerJobData&& jobData, bool shouldRefreshCache, ResourceRequest&&, CompletionHandler<void(const WorkerFetchResult&)>&&)>;
     using CreateContextConnectionCallback = Function<void(const WebCore::RegistrableDomain&, std::optional<ScriptExecutionContextIdentifier>, CompletionHandler<void()>&&)>;
     using AppBoundDomainsCallback = Function<void(CompletionHandler<void(HashSet<WebCore::RegistrableDomain>&&)>&&)>;
     WEBCORE_EXPORT SWServer(UniqueRef<SWOriginStore>&&, bool processTerminationDelayEnabled, String&& registrationDatabaseDirectory, PAL::SessionID, bool shouldRunServiceWorkersOnMainThreadForTesting, bool hasServiceWorkerEntitlement, SoftUpdateCallback&&, CreateContextConnectionCallback&&, AppBoundDomainsCallback&&);
@@ -195,6 +194,7 @@ public:
     void didSaveWorkerScriptsToDisk(ServiceWorkerIdentifier, ScriptBuffer&& mainScript, HashMap<URL, ScriptBuffer>&& importedScripts);
     void registrationStoreImportComplete();
     void registrationStoreDatabaseFailedToOpen();
+    void storeRegistrationForWorker(SWServerWorker&);
 
     WEBCORE_EXPORT void getOriginsWithRegistrations(Function<void(const HashSet<SecurityOriginData>&)>&&);
 
@@ -226,10 +226,12 @@ public:
     enum class ShouldSkipEvent : bool { No, Yes };
     void fireFunctionalEvent(SWServerRegistration&, CompletionHandler<void(Expected<SWServerToContextConnection*, ShouldSkipEvent>)>&&);
 
+    ScriptExecutionContextIdentifier clientIdFromVisibleClientId(const String& visibleIdentifier) const { return m_visibleClientIdToInternalClientIdMap.get(visibleIdentifier); }
+
 private:
     void validateRegistrationDomain(WebCore::RegistrableDomain, ServiceWorkerJobType, CompletionHandler<void(bool)>&&);
 
-    void scriptFetchFinished(const ServiceWorkerFetchResult&);
+    void scriptFetchFinished(const ServiceWorkerJobDataIdentifier&, const ServiceWorkerRegistrationKey&, const WorkerFetchResult&);
 
     void didResolveRegistrationPromise(Connection*, const ServiceWorkerRegistrationKey&);
 
@@ -271,6 +273,7 @@ private:
     HashMap<ScriptExecutionContextIdentifier, WeakPtr<SWServerRegistration>> m_serviceWorkerPageIdentifierToRegistrationMap;
     HashMap<ScriptExecutionContextIdentifier, ServiceWorkerClientData> m_clientsById;
     HashMap<ScriptExecutionContextIdentifier, ServiceWorkerRegistrationIdentifier> m_clientToControllingRegistration;
+    HashMap<String, ScriptExecutionContextIdentifier> m_visibleClientIdToInternalClientIdMap;
 
     UniqueRef<SWOriginStore> m_originStore;
     std::unique_ptr<RegistrationStore> m_registrationStore;

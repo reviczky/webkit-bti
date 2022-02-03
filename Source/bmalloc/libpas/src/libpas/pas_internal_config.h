@@ -27,7 +27,6 @@
 #define PAS_INTERNAL_CONFIG_H
 
 #include "pas_config.h"
-#include "pas_platform.h"
 
 #define PAS_SUBPAGE_SIZE                 4096
 
@@ -86,9 +85,6 @@
 #define PAS_MIN_MARGE_ALIGN              ((size_t)1 << PAS_MIN_MARGE_ALIGN_SHIFT)
 
 #define PAS_MEDIUM_SHARING_SHIFT         3
-
-#define PAS_SMALL_SIZE_AWARE_LOGGING     false
-#define PAS_MEDIUM_SIZE_AWARE_LOGGING    true
 
 #define PAS_MIN_OBJECTS_PER_PAGE         6
 
@@ -150,6 +146,8 @@
 #define PAS_SMALL_SHARED_PAGE_LOG_SHIFT     0
 #define PAS_MEDIUM_SHARED_PAGE_LOG_SHIFT    1
 
+/* Must be zero; utility doesn't support partials right now (though it could if we hacked deallocation and
+   added a shared page directory). */
 #define PAS_UTILITY_BOUND_FOR_PARTIAL_VIEWS                     0
 #define PAS_UTILITY_BOUND_FOR_BASELINE_ALLOCATORS               0
 #define PAS_UTILITY_BOUND_FOR_NO_VIEW_CACHE                     UINT_MAX

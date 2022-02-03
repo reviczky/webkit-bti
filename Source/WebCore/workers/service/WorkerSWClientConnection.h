@@ -53,14 +53,19 @@ private:
     bool mayHaveServiceWorkerRegisteredForOrigin(const SecurityOriginData&) const final;
     void registerServiceWorkerClient(const SecurityOrigin& topOrigin, const ServiceWorkerClientData&, const std::optional<ServiceWorkerRegistrationIdentifier>&, const String& userAgent) final;
     void unregisterServiceWorkerClient(ScriptExecutionContextIdentifier) final;
-    void finishFetchingScriptInServer(const ServiceWorkerFetchResult&) final;
+    void finishFetchingScriptInServer(const ServiceWorkerJobDataIdentifier&, const ServiceWorkerRegistrationKey&, const WorkerFetchResult&) final;
     void scheduleJobInServer(const ServiceWorkerJobData&) final;
     void scheduleJob(ServiceWorkerOrClientIdentifier, const ServiceWorkerJobData&) final;
     void scheduleUnregisterJobInServer(ServiceWorkerRegistrationIdentifier, ServiceWorkerOrClientIdentifier, CompletionHandler<void(ExceptionOr<bool>&&)>&&) final;
     void subscribeToPushService(ServiceWorkerRegistrationIdentifier, const Vector<uint8_t>& applicationServerKey, SubscribeToPushServiceCallback&&) final;
-    void unsubscribeFromPushService(ServiceWorkerRegistrationIdentifier, UnsubscribeFromPushServiceCallback&&) final;
+    void unsubscribeFromPushService(ServiceWorkerRegistrationIdentifier, PushSubscriptionIdentifier, UnsubscribeFromPushServiceCallback&&) final;
     void getPushSubscription(ServiceWorkerRegistrationIdentifier, GetPushSubscriptionCallback&&) final;
     void getPushPermissionState(ServiceWorkerRegistrationIdentifier, GetPushPermissionStateCallback&&) final;
+
+    void enableNavigationPreload(ServiceWorkerRegistrationIdentifier, ExceptionOrVoidCallback&&) final;
+    void disableNavigationPreload(ServiceWorkerRegistrationIdentifier, ExceptionOrVoidCallback&&) final;
+    void setNavigationPreloadHeaderValue(ServiceWorkerRegistrationIdentifier, String&&, ExceptionOrVoidCallback&&) final;
+    void getNavigationPreloadState(ServiceWorkerRegistrationIdentifier, ExceptionOrNavigationPreloadStateCallback&&) final;
 
     Ref<WorkerThread> m_thread;
 
@@ -73,6 +78,8 @@ private:
     HashMap<uint64_t, UnsubscribeFromPushServiceCallback> m_unsubscribeFromPushServiceRequests;
     HashMap<uint64_t, GetPushSubscriptionCallback> m_getPushSubscriptionRequests;
     HashMap<uint64_t, GetPushPermissionStateCallback> m_getPushPermissionStateCallbacks;
+    HashMap<uint64_t, ExceptionOrVoidCallback> m_voidCallbacks;
+    HashMap<uint64_t, ExceptionOrNavigationPreloadStateCallback> m_navigationPreloadStateCallbacks;
 };
 
 } // namespace WebCore

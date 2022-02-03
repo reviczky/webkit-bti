@@ -29,6 +29,7 @@
 
 #include "CSSRegisteredCustomProperty.h"
 #include "CanvasBase.h"
+#include "ClientOrigin.h"
 #include "Color.h"
 #include "ContainerNode.h"
 #include "CrossOriginOpenerPolicy.h"
@@ -49,6 +50,7 @@
 #include "RegistrableDomain.h"
 #include "RenderPtr.h"
 #include "ScriptExecutionContext.h"
+#include "SecurityOrigin.h"
 #include "StringWithDirection.h"
 #include "Supplementable.h"
 #include "Timer.h"
@@ -57,6 +59,7 @@
 #include "ViewportArguments.h"
 #include "VisibilityState.h"
 #include <wtf/Deque.h>
+#include <wtf/FixedVector.h>
 #include <wtf/Forward.h>
 #include <wtf/HashCountedSet.h>
 #include <wtf/HashSet.h>
@@ -87,6 +90,7 @@ class TextStream;
 
 namespace PAL {
 class SessionID;
+class TextEncoding;
 }
 
 namespace WebCore {
@@ -182,6 +186,7 @@ class MediaProducer;
 class MediaQueryList;
 class MediaQueryMatcher;
 class MessagePortChannelProvider;
+class ModalContainerObserver;
 class MouseEventWithHitTestResults;
 class NodeFilter;
 class NodeIterator;
@@ -221,7 +226,6 @@ class StyleSheetContents;
 class StyleSheetList;
 class Text;
 class TextAutoSizing;
-class TextEncoding;
 class TextManipulationController;
 class TextResourceDecoder;
 class TransformSource;
@@ -425,6 +429,7 @@ public:
 
     WEBCORE_EXPORT Element* activeElement();
     WEBCORE_EXPORT bool hasFocus() const;
+    void whenVisible(Function<void()>&&);
 
     bool hasManifest() const;
     
@@ -455,7 +460,7 @@ public:
 
     inline String charset() const;
     WEBCORE_EXPORT String characterSetWithUTF8Fallback() const;
-    inline TextEncoding textEncoding() const;
+    inline PAL::TextEncoding textEncoding() const;
 
     inline AtomString encoding() const;
 
@@ -529,6 +534,7 @@ public:
 #if ENABLE(MODEL_ELEMENT)
         Model = 1 << 8,
 #endif
+        PDF = 1 << 9,
     };
 
     using DocumentClasses = OptionSet<DocumentClass>;
@@ -544,6 +550,7 @@ public:
 #if ENABLE(MODEL_ELEMENT)
     bool isModelDocument() const { return m_documentClasses.contains(DocumentClass::Model); }
 #endif
+    bool isPDFDocument() const { return m_documentClasses.contains(DocumentClass::PDF); }
     bool hasSVGRootNode() const;
     virtual bool isFrameSet() const { return false; }
 
@@ -692,8 +699,8 @@ public:
     void cancelParsing();
 
     ExceptionOr<void> write(Document* entryDocument, SegmentedString&&);
-    WEBCORE_EXPORT ExceptionOr<void> write(Document* entryDocument, Vector<String>&&);
-    WEBCORE_EXPORT ExceptionOr<void> writeln(Document* entryDocument, Vector<String>&&);
+    WEBCORE_EXPORT ExceptionOr<void> write(Document* entryDocument, FixedVector<String>&&);
+    WEBCORE_EXPORT ExceptionOr<void> writeln(Document* entryDocument, FixedVector<String>&&);
 
     bool wellFormed() const { return m_wellFormed; }
 
@@ -877,8 +884,6 @@ public:
 
     // Helper functions for forwarding DOMWindow event related tasks to the DOMWindow if it exists.
     void setWindowAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& value, DOMWrapperWorld&);
-    void setWindowAttributeEventListener(const AtomString& eventType, RefPtr<EventListener>&&, DOMWrapperWorld&);
-    EventListener* getWindowAttributeEventListener(const AtomString& eventType, DOMWrapperWorld&);
     WEBCORE_EXPORT void dispatchWindowEvent(Event&, EventTarget* = nullptr);
     void dispatchWindowLoadEvent();
 
@@ -886,25 +891,23 @@ public:
 
     // keep track of what types of event listeners are registered, so we don't
     // dispatch events unnecessarily
+    // FIXME: Consider using OptionSet.
     enum ListenerType {
-        DOMSUBTREEMODIFIED_LISTENER          = 1,
+        DOMSUBTREEMODIFIED_LISTENER          = 1 << 0,
         DOMNODEINSERTED_LISTENER             = 1 << 1,
         DOMNODEREMOVED_LISTENER              = 1 << 2,
         DOMNODEREMOVEDFROMDOCUMENT_LISTENER  = 1 << 3,
         DOMNODEINSERTEDINTODOCUMENT_LISTENER = 1 << 4,
         DOMCHARACTERDATAMODIFIED_LISTENER    = 1 << 5,
         OVERFLOWCHANGED_LISTENER             = 1 << 6,
-        ANIMATIONEND_LISTENER                = 1 << 7,
-        ANIMATIONSTART_LISTENER              = 1 << 8,
-        ANIMATIONITERATION_LISTENER          = 1 << 9,
-        TRANSITIONEND_LISTENER               = 1 << 10,
-        BEFORELOAD_LISTENER                  = 1 << 11,
-        SCROLL_LISTENER                      = 1 << 12,
-        FORCEWILLBEGIN_LISTENER              = 1 << 13,
-        FORCECHANGED_LISTENER                = 1 << 14,
-        FORCEDOWN_LISTENER                   = 1 << 15,
-        FORCEUP_LISTENER                     = 1 << 16,
-        RESIZE_LISTENER                      = 1 << 17
+        TRANSITIONEND_LISTENER               = 1 << 7,
+        SCROLL_LISTENER                      = 1 << 8,
+        FORCEWILLBEGIN_LISTENER              = 1 << 9,
+        FORCECHANGED_LISTENER                = 1 << 10,
+        FORCEDOWN_LISTENER                   = 1 << 11,
+        FORCEUP_LISTENER                     = 1 << 12,
+        FOCUSIN_LISTENER                     = 1 << 13,
+        FOCUSOUT_LISTENER                    = 1 << 14,
     };
 
     bool hasListenerType(ListenerType listenerType) const { return (m_listenerTypes & listenerType); }
@@ -1344,6 +1347,7 @@ public:
 
     bool inStyleRecalc() const { return m_inStyleRecalc; }
     bool inRenderTreeUpdate() const { return m_inRenderTreeUpdate; }
+    bool isResolvingContainerQueries() const { return m_isResolvingContainerQueries; }
     bool isResolvingTreeStyle() const { return m_isResolvingTreeStyle; }
     void setIsResolvingTreeStyle(bool);
 
@@ -1382,6 +1386,7 @@ public:
 
     SecurityOrigin& securityOrigin() const { return *SecurityContext::securityOrigin(); }
     SecurityOrigin& topOrigin() const final { return topDocument().securityOrigin(); }
+    ClientOrigin clientOrigin() const { return { topOrigin().data(), securityOrigin().data() }; }
 
     inline bool isSameOriginAsTopDocument() const;
     bool shouldForceNoOpenerBasedOnCOOP() const;
@@ -1538,10 +1543,12 @@ public:
     Vector<RefPtr<WebAnimation>> matchingAnimations(const Function<bool(Element&)>&);
     DocumentTimelinesController* timelinesController() const { return m_timelinesController.get(); }
     WEBCORE_EXPORT DocumentTimelinesController& ensureTimelinesController();
+    void keyframesRuleDidChange(const String& name);
 
     void addTopLayerElement(Element&);
     void removeTopLayerElement(Element&);
     const ListHashSet<Ref<Element>>& topLayerElements() const { return m_topLayerElements; }
+    bool hasTopLayerElement() const { return !m_topLayerElements.isEmpty(); }
 
     HTMLDialogElement* activeModalDialog() const;
 
@@ -1663,9 +1670,14 @@ public:
 
     URL fallbackBaseURL() const;
 
+    WEBCORE_EXPORT ModalContainerObserver* modalContainerObserver();
+    ModalContainerObserver* modalContainerObserverIfExists() const;
+
+    void createNewIdentifier();
+
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
-    WEBCORE_EXPORT Document(Frame*, const Settings&, const URL&, DocumentClasses = { }, unsigned constructionFlags = 0);
+    WEBCORE_EXPORT Document(Frame*, const Settings&, const URL&, DocumentClasses = { }, unsigned constructionFlags = 0, ScriptExecutionContextIdentifier = { });
 
     void clearXMLVersion() { m_xmlVersion = String(); }
 
@@ -2127,6 +2139,7 @@ private:
     bool m_inStyleRecalc { false };
     bool m_inRenderTreeUpdate { false };
     bool m_isResolvingTreeStyle { false };
+    bool m_isResolvingContainerQueries { false };
 
     bool m_gotoAnchorNeededAfterStylesheetsLoad { false };
     bool m_isDNSPrefetchEnabled { false };
@@ -2249,6 +2262,10 @@ private:
 #if ENABLE(WEB_RTC)
     RefPtr<RTCNetworkManager> m_rtcNetworkManager;
 #endif
+
+    std::unique_ptr<ModalContainerObserver> m_modalContainerObserver;
+
+    Vector<Function<void()>> m_whenIsVisibleHandlers;
 };
 
 Element* eventTargetElementForDocument(Document*);

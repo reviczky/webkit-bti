@@ -4,7 +4,7 @@
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) 2010 Zoltan Herczeg <zherczeg@webkit.org>
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,6 +26,7 @@
 #include "FEConvolveMatrix.h"
 
 #include "FEConvolveMatrixSoftwareApplier.h"
+#include "Filter.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
@@ -113,9 +114,14 @@ bool FEConvolveMatrix::setPreserveAlpha(bool preserveAlpha)
     return true;
 }
 
-bool FEConvolveMatrix::platformApplySoftware(const Filter& filter)
+FloatRect FEConvolveMatrix::calculateImageRect(const Filter& filter, const FilterImageVector&, const FloatRect& primitiveSubregion) const
 {
-    return FEConvolveMatrixSoftwareApplier(*this).apply(filter, inputEffects());
+    return filter.maxEffectRect(primitiveSubregion);
+}
+
+std::unique_ptr<FilterEffectApplier> FEConvolveMatrix::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FEConvolveMatrixSoftwareApplier>(*this);
 }
 
 static TextStream& operator<<(TextStream& ts, const EdgeModeType& type)
@@ -137,21 +143,21 @@ static TextStream& operator<<(TextStream& ts, const EdgeModeType& type)
     return ts;
 }
 
-TextStream& FEConvolveMatrix::externalRepresentation(TextStream& ts, RepresentationType representation) const
+TextStream& FEConvolveMatrix::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feConvolveMatrix";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " order=\"" << m_kernelSize << "\" "
-       << "kernelMatrix=\"" << m_kernelMatrix  << "\" "
-       << "divisor=\"" << m_divisor << "\" "
-       << "bias=\"" << m_bias << "\" "
-       << "target=\"" << m_targetOffset << "\" "
-       << "edgeMode=\"" << m_edgeMode << "\" "
-       << "kernelUnitLength=\"" << m_kernelUnitLength << "\" "
-       << "preserveAlpha=\"" << m_preserveAlpha << "\"]\n";
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
+    ts << " order=\"" << m_kernelSize << "\"";
+    ts << " kernelMatrix=\"" << m_kernelMatrix  << "\"";
+    ts << " divisor=\"" << m_divisor << "\"";
+    ts << " bias=\"" << m_bias << "\"";
+    ts << " target=\"" << m_targetOffset << "\"";
+    ts << " edgeMode=\"" << m_edgeMode << "\"";
+    ts << " kernelUnitLength=\"" << m_kernelUnitLength << "\"";
+    ts << " preserveAlpha=\"" << m_preserveAlpha << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

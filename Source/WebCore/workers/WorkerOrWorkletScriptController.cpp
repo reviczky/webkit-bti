@@ -37,12 +37,15 @@
 #include "JSExecState.h"
 #include "JSPaintWorkletGlobalScope.h"
 #include "JSServiceWorkerGlobalScope.h"
+#include "JSSharedWorkerGlobalScope.h"
 #include "ModuleFetchFailureKind.h"
 #include "ModuleFetchParameters.h"
 #include "ScriptSourceCode.h"
 #include "WebCoreJSClientData.h"
 #include "WorkerConsoleClient.h"
 #include "WorkerModuleScriptLoader.h"
+#include "WorkerOrWorkletThread.h"
+#include "WorkerRunLoop.h"
 #include "WorkerScriptFetcher.h"
 #include <JavaScriptCore/Completion.h>
 #include <JavaScriptCore/DeferTermination.h>
@@ -74,15 +77,11 @@ WorkerOrWorkletScriptController::WorkerOrWorkletScriptController(WorkerThreadTyp
         {
             JSLockHolder lock(m_vm.get());
             m_vm->ensureTerminationException();
+            m_vm->forbidExecutionOnTermination();
         }
 
         JSVMClientData::initNormalWorld(m_vm.get(), type);
     }
-}
-
-WorkerOrWorkletScriptController::WorkerOrWorkletScriptController(WorkerThreadType type, WorkerOrWorkletGlobalScope* globalScope)
-    : WorkerOrWorkletScriptController(type, JSC::VM::create(), globalScope)
-{
 }
 
 WorkerOrWorkletScriptController::~WorkerOrWorkletScriptController()
@@ -300,14 +299,30 @@ bool WorkerOrWorkletScriptController::loadModuleSynchronously(WorkerScriptFetche
             VM& vm = globalObject->vm();
             JSLockHolder lock { vm };
             JSValue errorValue = callFrame->argument(0);
+            auto scope = DECLARE_CATCH_SCOPE(vm);
             if (errorValue.isObject()) {
                 auto* object = JSC::asObject(errorValue);
                 if (JSValue failureKindValue = object->getDirect(vm, static_cast<JSVMClientData&>(*vm.clientData).builtinNames().failureKindPrivateName())) {
                     // This is host propagated error in the module loader pipeline.
                     switch (static_cast<ModuleFetchFailureKind>(failureKindValue.asInt32())) {
-                    case ModuleFetchFailureKind::WasErrored:
+                    case ModuleFetchFailureKind::WasPropagatedError:
                         protector->notifyLoadFailed(LoadableScript::Error {
                             LoadableScript::ErrorType::CachedScript,
+                            std::nullopt,
+                            std::nullopt
+                        });
+                        break;
+                    // For a fetch error that was not propagated from further in the
+                    // pipeline, we include the console error message but do not
+                    // include an error value as it should not be reported.
+                    case ModuleFetchFailureKind::WasFetchError:
+                        protector->notifyLoadFailed(LoadableScript::Error {
+                            LoadableScript::ErrorType::CachedScript,
+                            LoadableScript::ConsoleMessage {
+                                MessageSource::JS,
+                                MessageLevel::Error,
+                                retrieveErrorMessage(*globalObject, vm, errorValue, scope),
+                            },
                             std::nullopt
                         });
                         break;
@@ -319,14 +334,16 @@ bool WorkerOrWorkletScriptController::loadModuleSynchronously(WorkerScriptFetche
                 }
             }
 
-            auto scope = DECLARE_CATCH_SCOPE(vm);
             protector->notifyLoadFailed(LoadableScript::Error {
                 LoadableScript::ErrorType::CachedScript,
                 LoadableScript::ConsoleMessage {
                     MessageSource::JS,
                     MessageLevel::Error,
                     retrieveErrorMessage(*globalObject, vm, errorValue, scope),
-                }
+                },
+                // The error value may need to be propagated here as it is in
+                // ScriptController in the future.
+                std::nullopt
             });
             return JSValue::encode(jsUndefined());
         });
@@ -453,10 +470,18 @@ void WorkerOrWorkletScriptController::loadAndEvaluateModule(const URL& moduleURL
             JSValue errorValue = callFrame->argument(0);
             if (errorValue.isObject()) {
                 auto* object = JSC::asObject(errorValue);
-                if (object->getDirect(vm, static_cast<JSVMClientData&>(*vm.clientData).builtinNames().failureKindPrivateName())) {
+                if (JSValue failureKindValue = object->getDirect(vm, static_cast<JSVMClientData&>(*vm.clientData).builtinNames().failureKindPrivateName())) {
                     auto catchScope = DECLARE_CATCH_SCOPE(vm);
                     String message = retrieveErrorMessageWithoutName(*globalObject, vm, object, catchScope);
-                    task->run(Exception { AbortError, message });
+                    switch (static_cast<ModuleFetchFailureKind>(failureKindValue.asInt32())) {
+                    case ModuleFetchFailureKind::WasFetchError:
+                        task->run(Exception { TypeError, message });
+                        break;
+                    case ModuleFetchFailureKind::WasPropagatedError:
+                    case ModuleFetchFailureKind::WasCanceled:
+                        task->run(Exception { AbortError, message });
+                        break;
+                    }
                     return JSValue::encode(jsUndefined());
                 }
                 if (object->inherits<ErrorInstance>(vm)) {
@@ -533,6 +558,11 @@ void WorkerOrWorkletScriptController::initScript()
 
     if (is<DedicatedWorkerGlobalScope>(m_globalScope)) {
         initScriptWithSubclass<JSDedicatedWorkerGlobalScopePrototype, JSDedicatedWorkerGlobalScope, DedicatedWorkerGlobalScope>();
+        return;
+    }
+
+    if (is<SharedWorkerGlobalScope>(m_globalScope)) {
+        initScriptWithSubclass<JSSharedWorkerGlobalScopePrototype, JSSharedWorkerGlobalScope, SharedWorkerGlobalScope>();
         return;
     }
 

@@ -56,7 +56,7 @@ JSArray* JSArray::tryCreateUninitializedRestricted(ObjectInitializationScope& sc
             || hasContiguous(indexingType));
 
         unsigned vectorLength = Butterfly::optimalContiguousVectorLength(structure, initialLength);
-        void* temp = vm.jsValueGigacageAuxiliarySpace.allocateNonVirtual(
+        void* temp = vm.jsValueGigacageAuxiliarySpace().allocate(
             vm,
             Butterfly::totalSize(0, outOfLineStorage, true, vectorLength * sizeof(EncodedJSValue)),
             deferralContext, AllocationFailureMode::ReturnNull);
@@ -78,7 +78,7 @@ JSArray* JSArray::tryCreateUninitializedRestricted(ObjectInitializationScope& sc
             || indexingType == ArrayWithArrayStorage);
         static constexpr unsigned indexBias = 0;
         unsigned vectorLength = ArrayStorage::optimalVectorLength(indexBias, structure, initialLength);
-        void* temp = vm.jsValueGigacageAuxiliarySpace.allocateNonVirtual(
+        void* temp = vm.jsValueGigacageAuxiliarySpace().allocate(
             vm,
             Butterfly::totalSize(indexBias, outOfLineStorage, true, ArrayStorage::sizeFor(vectorLength)),
             deferralContext, AllocationFailureMode::ReturnNull);
@@ -725,18 +725,23 @@ NEVER_INLINE void JSArray::push(JSGlobalObject* globalObject, JSValue value)
     pushInline(globalObject, value);
 }
 
-JSArray* JSArray::fastSlice(JSGlobalObject* globalObject, unsigned startIndex, unsigned count)
+JSArray* JSArray::fastSlice(JSGlobalObject* globalObject, JSObject* source, uint64_t startIndex, uint64_t count)
 {
     VM& vm = globalObject->vm();
 
-    ensureWritable(vm);
+    Structure* sourceStructure = source->structure(vm);
+    if (sourceStructure->typeInfo().interceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero())
+        return nullptr;
 
-    auto arrayType = indexingMode();
+    auto arrayType = source->indexingType() | IsArray;
     switch (arrayType) {
     case ArrayWithDouble:
     case ArrayWithInt32:
     case ArrayWithContiguous: {
-        if (count >= MIN_SPARSE_ARRAY_INDEX || structure(vm)->holesMustForwardToPrototype(vm, this))
+        if (count >= MIN_SPARSE_ARRAY_INDEX || sourceStructure->holesMustForwardToPrototype(vm, source))
+            return nullptr;
+
+        if (startIndex + count > source->butterfly()->vectorLength())
             return nullptr;
 
         Structure* resultStructure = globalObject->arrayStructureForIndexingTypeDuringAllocation(arrayType);
@@ -745,15 +750,15 @@ JSArray* JSArray::fastSlice(JSGlobalObject* globalObject, unsigned startIndex, u
 
         ASSERT(!globalObject->isHavingABadTime());
         ObjectInitializationScope scope(vm);
-        JSArray* resultArray = JSArray::tryCreateUninitializedRestricted(scope, resultStructure, count);
+        JSArray* resultArray = JSArray::tryCreateUninitializedRestricted(scope, resultStructure, static_cast<uint32_t>(count));
         if (UNLIKELY(!resultArray))
             return nullptr;
 
         auto& resultButterfly = *resultArray->butterfly();
         if (arrayType == ArrayWithDouble)
-            gcSafeMemcpy(resultButterfly.contiguousDouble().data(), butterfly()->contiguousDouble().data() + startIndex, sizeof(JSValue) * count);
+            gcSafeMemcpy(resultButterfly.contiguousDouble().data(), source->butterfly()->contiguousDouble().data() + startIndex, sizeof(JSValue) * static_cast<uint32_t>(count));
         else
-            gcSafeMemcpy(resultButterfly.contiguous().data(), butterfly()->contiguous().data() + startIndex, sizeof(JSValue) * count);
+            gcSafeMemcpy(resultButterfly.contiguous().data(), source->butterfly()->contiguous().data() + startIndex, sizeof(JSValue) * static_cast<uint32_t>(count));
 
         ASSERT(resultButterfly.publicLength() == count);
         return resultArray;

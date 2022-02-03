@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021 Apple Inc. All rights reserved.
+ * Copyright (c) 2018-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,6 +26,9 @@
 #include "TestHarness.h"
 
 #include "Verifier.h"
+#include <atomic>
+#include "bmalloc_heap_config.h"
+#include "hotbit_heap_config.h"
 #include "iso_heap_config.h"
 #include "iso_test_heap_config.h"
 #include "jit_heap.h"
@@ -102,6 +105,8 @@ RuntimeConfigTestScope::RuntimeConfigTestScope(
             FOR_EACH_RUNTIME_CONFIG(iso_test, setUp);
             FOR_EACH_RUNTIME_CONFIG(minalign32, setUp);
             FOR_EACH_RUNTIME_CONFIG(pagesize64k, setUp);
+            FOR_EACH_RUNTIME_CONFIG(bmalloc, setUp);
+            FOR_EACH_RUNTIME_CONFIG(hotbit, setUp);
             setUp(pas_utility_heap_runtime_config);
             setUp(jit_heap_runtime_config);
         })
@@ -335,6 +340,7 @@ int resultPipe[2];
 } // anonymous namespace
 
 void addBitfieldVectorTests();
+void addBitfitTests();
 void addBitvectorTests();
 void addCartesianTreeTests();
 void addCoalignTests();
@@ -351,7 +357,9 @@ void addJITHeapTests();
 void addLargeFreeHeapTests();
 void addLargeSharingPoolTests();
 void addLockFreeReadPtrPtrHashtableTests();
+void addLotsOfHeapsAndThreadsTests();
 void addMinHeapTests();
+void addPGMTests();
 void addRaceTests();
 void addRedBlackTreeTests();
 void addTSDTests();
@@ -697,6 +705,7 @@ int main(int argc, char** argv)
 
     // Run the rest of the tests in alphabetical order.
     ADD_SUITE(BitfieldVector);
+    ADD_SUITE(Bitfit);
     ADD_SUITE(Bitvector);
     ADD_SUITE(CartesianTree);
     ADD_SUITE(Coalign);
@@ -713,7 +722,9 @@ int main(int argc, char** argv)
     ADD_SUITE(LargeFreeHeap);
     ADD_SUITE(LargeSharingPool);
     ADD_SUITE(LockFreeReadPtrPtrHashtable);
+    ADD_SUITE(LotsOfHeapsAndThreads);
     ADD_SUITE(MinHeap);
+    ADD_SUITE(PGM);
     ADD_SUITE(Race);
     ADD_SUITE(RedBlackTree);
     ADD_SUITE(TSD);

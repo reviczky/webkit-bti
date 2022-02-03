@@ -21,16 +21,18 @@
 #include "config.h"
 #include "SourceGraphicSoftwareApplier.h"
 
-#include "Filter.h"
+#include "FilterImage.h"
 #include "GraphicsContext.h"
-#include "SourceGraphic.h"
+#include "ImageBuffer.h"
 
 namespace WebCore {
 
-bool SourceGraphicSoftwareApplier::apply(const Filter& filter, const FilterEffectVector&)
+bool SourceGraphicSoftwareApplier::apply(const Filter&, const FilterImageVector& inputs, FilterImage& result) const
 {
-    auto resultImage = m_effect.imageBufferResult();
-    auto sourceImage = filter.sourceImage();
+    auto& input = inputs[0].get();
+
+    auto resultImage = result.imageBuffer();
+    auto sourceImage = input.imageBuffer();
     if (!resultImage || !sourceImage)
         return false;
 

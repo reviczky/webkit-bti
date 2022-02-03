@@ -205,7 +205,7 @@ static AppHighlightRangeData createAppHighlightRangeData(const StaticRange& rang
 {
     auto text = plainText(range);
     text.truncate(textPreviewLength);
-    auto identifier = createCanonicalUUIDString();
+    auto identifier = createVersion4UUIDString();
 
     return {
         identifier,
@@ -237,7 +237,7 @@ void AppHighlightStorage::storeAppHighlight(Ref<StaticRange>&& range)
     m_document->page()->chrome().storeAppHighlight(WTFMove(highlight));
 }
 
-void AppHighlightStorage::restoreAndScrollToAppHighlight(Ref<SharedBuffer>&& buffer, ScrollToHighlight scroll)
+void AppHighlightStorage::restoreAndScrollToAppHighlight(Ref<FragmentedSharedBuffer>&& buffer, ScrollToHighlight scroll)
 {
     auto appHighlightRangeData = AppHighlightRangeData::create(buffer);
     if (!appHighlightRangeData)

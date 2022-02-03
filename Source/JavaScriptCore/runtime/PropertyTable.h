@@ -91,12 +91,12 @@ class PropertyTable final : public JSCell {
             return *this;
         }
 
-        bool operator==(const ordered_iterator<T>& other)
+        bool operator==(const ordered_iterator<T>& other) const
         {
             return m_valuePtr == other.m_valuePtr;
         }
 
-        bool operator!=(const ordered_iterator<T>& other)
+        bool operator!=(const ordered_iterator<T>& other) const
         {
             return m_valuePtr != other.m_valuePtr;
         }
@@ -129,7 +129,7 @@ public:
     template<typename CellType, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM& vm)
     {
-        return &vm.propertyTableSpace;
+        return &vm.propertyTableSpace();
     }
 
     static constexpr bool needsDestruction = true;

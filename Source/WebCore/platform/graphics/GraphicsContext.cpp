@@ -28,6 +28,8 @@
 
 #include "BidiResolver.h"
 #include "BitmapImage.h"
+#include "Filter.h"
+#include "FilterImage.h"
 #include "FloatRoundedRect.h"
 #include "Gradient.h"
 #include "ImageBuffer.h"
@@ -61,12 +63,12 @@ public:
     UChar current() const { return (*m_textRun)[m_offset]; }
     UCharDirection direction() const { return atEnd() ? U_OTHER_NEUTRAL : u_charDirection(current()); }
 
-    bool operator==(const TextBoxIterator& other)
+    bool operator==(const TextBoxIterator& other) const
     {
         return m_offset == other.m_offset && m_textRun == other.m_textRun;
     }
 
-    bool operator!=(const TextBoxIterator& other) { return !operator==(other); }
+    bool operator!=(const TextBoxIterator& other) const { return !operator==(other); }
 
 private:
     const TextRun* m_textRun;
@@ -305,6 +307,7 @@ void GraphicsContextStateChange::dump(TextStream& ts) const
     if (m_changeFlags.contains(GraphicsContextState::ShadowChange)) {
         ts.dumpProperty("shadow-blur", m_state.shadowBlur);
         ts.dumpProperty("shadow-offset", m_state.shadowOffset);
+        ts.dumpProperty("shadow-color", m_state.shadowColor);
         ts.dumpProperty("shadows-use-legacy-radius", m_state.shadowRadiusMode == ShadowRadiusMode::Legacy);
     }
 
@@ -627,6 +630,21 @@ void GraphicsContext::drawConsumingImageBuffer(RefPtr<ImageBuffer> image, const 
         return;
     InterpolationQualityMaintainer interpolationQualityForThisScope(*this, options.interpolationQuality());
     ImageBuffer::drawConsuming(WTFMove(image), *this, destination, source, options);
+}
+
+void GraphicsContext::drawFilteredImageBuffer(ImageBuffer* sourceImage, const FloatRect& sourceImageRect, Filter& filter, FilterResults& results)
+{
+    auto result = filter.apply(sourceImage, sourceImageRect, results);
+    if (!result)
+        return;
+    
+    auto imageBuffer = result->imageBuffer();
+    if (!imageBuffer)
+        return;
+
+    scale({ 1 / filter.filterScale().width(), 1 / filter.filterScale().height() });
+    drawImageBuffer(*imageBuffer, result->absoluteImageRect());
+    scale(filter.filterScale());
 }
 
 void GraphicsContext::clipRoundedRect(const FloatRoundedRect& rect)

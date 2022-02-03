@@ -46,7 +46,12 @@ class TextUtil {
 public:
     static InlineLayoutUnit width(const InlineTextItem&, const FontCascade&, InlineLayoutUnit contentLogicalLeft);
     static InlineLayoutUnit width(const InlineTextItem&, const FontCascade&, unsigned from, unsigned to, InlineLayoutUnit contentLogicalLeft);
-    static InlineLayoutUnit width(const InlineTextBox&, const FontCascade&, unsigned from, unsigned to, InlineLayoutUnit contentLogicalLeft);
+
+    enum class UseTrailingWhitespaceMeasuringOptimization : uint8_t { Yes, No };
+    static InlineLayoutUnit width(const InlineTextBox&, const FontCascade&, unsigned from, unsigned to, InlineLayoutUnit contentLogicalLeft, UseTrailingWhitespaceMeasuringOptimization = UseTrailingWhitespaceMeasuringOptimization::Yes);
+    static InlineLayoutUnit spaceWidth(const FontCascade&);
+
+    static InlineLayoutUnit trailingWhitespaceWidth(const InlineTextBox&, const FontCascade&, size_t startPosition, size_t endPosition);
 
     using FallbackFontList = HashSet<const Font*>;
     static FallbackFontList fallbackFontsForRun(const Line::Run&, const RenderStyle&);
@@ -55,6 +60,7 @@ public:
         size_t length { 0 };
         InlineLayoutUnit logicalWidth { 0 };
     };
+    static WordBreakLeft breakWord(const InlineTextBox&, size_t start, size_t length, InlineLayoutUnit width, InlineLayoutUnit availableWidth, InlineLayoutUnit contentLogicalLeft, const FontCascade&);
     static WordBreakLeft breakWord(const InlineTextItem&, const FontCascade&, InlineLayoutUnit textWidth, InlineLayoutUnit availableWidth, InlineLayoutUnit contentLogicalLeft);
 
     static unsigned findNextBreakablePosition(LazyLineBreakIterator&, unsigned startPosition, const RenderStyle&);
@@ -63,7 +69,10 @@ public:
     static bool shouldPreserveSpacesAndTabs(const Box&);
     static bool shouldPreserveNewline(const Box&);
     static bool isWrappingAllowed(const RenderStyle&);
-    static bool containsBidiText(StringView);
+    static bool containsStrongDirectionalityText(StringView);
+
+    static size_t firstUserPerceivedCharacterLength(const InlineTextItem&);
+    static TextDirection directionForTextContent(StringView);
 };
 
 }

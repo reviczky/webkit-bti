@@ -179,6 +179,7 @@ void NetworkProcessProxy::sendCreationParametersToNewProcess()
     }
 
     NetworkProcessCreationParameters parameters;
+    parameters.auxiliaryProcessParameters = auxiliaryProcessParameters();
     parameters.urlSchemesRegisteredAsSecure = copyToVector(LegacyGlobalSettings::singleton().schemesToRegisterAsSecure());
     parameters.urlSchemesRegisteredAsBypassingContentSecurityPolicy = copyToVector(LegacyGlobalSettings::singleton().schemesToRegisterAsBypassingContentSecurityPolicy());
     parameters.urlSchemesRegisteredAsLocal = copyToVector(LegacyGlobalSettings::singleton().schemesToRegisterAsLocal());
@@ -334,6 +335,14 @@ DownloadProxy& NetworkProcessProxy::createDownloadProxy(WebsiteDataStore& dataSt
     return m_downloadProxyMap->createDownloadProxy(dataStore, processPool, resourceRequest, frameInfo, originatingPage);
 }
 
+void NetworkProcessProxy::requestResource(WebPageProxyIdentifier pageID, PAL::SessionID sessionID, WebCore::ResourceRequest&& request, CompletionHandler<void(Ref<WebCore::SharedBuffer>&&, WebCore::ResourceResponse&&, WebCore::ResourceError&&)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::NetworkProcess::RequestResource(pageID, sessionID, request, IPC::FormDataReference(request.httpBody())), [completionHandler = WTFMove(completionHandler)] (IPC::DataReference&& data, WebCore::ResourceResponse&& response, WebCore::ResourceError&& error) mutable {
+        auto buffer = SharedBuffer::create(data.data(), data.size());
+        completionHandler(WTFMove(buffer), WTFMove(response), WTFMove(error));
+    });
+}
+
 void NetworkProcessProxy::fetchWebsiteData(PAL::SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, OptionSet<WebsiteDataFetchOption> fetchOptions, CompletionHandler<void(WebsiteData)>&& completionHandler)
 {
     sendWithAsyncReply(Messages::NetworkProcess::FetchWebsiteData(sessionID, dataTypes, fetchOptions), WTFMove(completionHandler));
@@ -412,7 +421,7 @@ void NetworkProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, 
 void NetworkProcessProxy::processAuthenticationChallenge(PAL::SessionID sessionID, Ref<AuthenticationChallengeProxy>&& authenticationChallenge)
 {
     auto* store = websiteDataStoreFromSessionID(sessionID);
-    if (!store || authenticationChallenge->core().protectionSpace().authenticationScheme() != ProtectionSpaceAuthenticationSchemeServerTrustEvaluationRequested) {
+    if (!store || authenticationChallenge->core().protectionSpace().authenticationScheme() != ProtectionSpace::AuthenticationScheme::ServerTrustEvaluationRequested) {
         authenticationChallenge->listener().completeChallenge(AuthenticationChallengeDisposition::PerformDefaultHandling);
         return;
     }
@@ -423,7 +432,7 @@ void NetworkProcessProxy::didReceiveAuthenticationChallenge(PAL::SessionID sessi
 {
 #if HAVE(SEC_KEY_PROXY)
     WeakPtr<SecKeyProxyStore> secKeyProxyStore;
-    if (coreChallenge.protectionSpace().authenticationScheme() == ProtectionSpaceAuthenticationSchemeClientCertificateRequested) {
+    if (coreChallenge.protectionSpace().authenticationScheme() == ProtectionSpace::AuthenticationScheme::ClientCertificateRequested) {
         if (auto* store = websiteDataStoreFromSessionID(sessionID)) {
             auto newSecKeyProxyStore = SecKeyProxyStore::create();
             secKeyProxyStore = newSecKeyProxyStore;
@@ -1338,8 +1347,11 @@ void NetworkProcessProxy::addSession(WebsiteDataStore& store, SendParametersToNe
     if (!addResult.isNewEntry)
         return;
 
+    // DispatchMessageEvenWhenWaitingForSyncReply is needed because session needs to be
+    // added in network process before CreateNetworkConnectionToWebProcess, which has
+    // DispatchMessageEvenWhenWaitingForSyncReply flag.
     if (canSendMessage() && sendParametersToNetworkProcess == SendParametersToNetworkProcess::Yes)
-        send(Messages::NetworkProcess::AddWebsiteDataStore { store.parameters() }, 0);
+        send(Messages::NetworkProcess::AddWebsiteDataStore { store.parameters() }, 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
     auto sessionID = store.sessionID();
     if (!sessionID.isEphemeral())
         createSymLinkForFileUpgrade(store.resolvedIndexedDatabaseDirectory());
@@ -1361,13 +1373,12 @@ WebsiteDataStore* NetworkProcessProxy::websiteDataStoreFromSessionID(PAL::Sessio
     return WebsiteDataStore::existingDataStoreForSessionID(sessionID);
 }
 
-void NetworkProcessProxy::retrieveCacheStorageParameters(PAL::SessionID sessionID)
+void NetworkProcessProxy::retrieveCacheStorageParameters(PAL::SessionID sessionID, CompletionHandler<void(const String& cacheStorageDirectory, const WebKit::SandboxExtension::Handle& handle)>&& completionHandler)
 {
     auto* store = websiteDataStoreFromSessionID(sessionID);
-
     if (!store) {
         RELEASE_LOG_ERROR(CacheStorage, "%p - NetworkProcessProxy is unable to retrieve CacheStorage parameters from the given session ID %" PRIu64, this, sessionID.toUInt64());
-        send(Messages::NetworkProcess::SetCacheStorageParameters { sessionID, { }, { } }, 0);
+        completionHandler({ }, { });
         return;
     }
 
@@ -1378,7 +1389,7 @@ void NetworkProcessProxy::retrieveCacheStorageParameters(PAL::SessionID sessionI
             cacheStorageDirectoryExtensionHandle = WTFMove(*handle);
     }
 
-    send(Messages::NetworkProcess::SetCacheStorageParameters { sessionID, cacheStorageDirectory, cacheStorageDirectoryExtensionHandle }, 0);
+    completionHandler(cacheStorageDirectory, cacheStorageDirectoryExtensionHandle);
 }
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -1405,12 +1416,12 @@ void NetworkProcessProxy::didDestroyWebUserContentControllerProxy(WebUserContent
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-void NetworkProcessProxy::establishWorkerContextConnectionToNetworkProcess(RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+void NetworkProcessProxy::establishServiceWorkerContextConnectionToNetworkProcess(RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
 {
-    WebProcessPool::establishWorkerContextConnectionToNetworkProcess(*this, WTFMove(registrableDomain), serviceWorkerPageIdentifier, sessionID, WTFMove(completionHandler));
+    WebProcessPool::establishServiceWorkerContextConnectionToNetworkProcess(*this, WTFMove(registrableDomain), serviceWorkerPageIdentifier, sessionID, WTFMove(completionHandler));
 }
 
-void NetworkProcessProxy::workerContextConnectionNoLongerNeeded(WebCore::ProcessIdentifier identifier)
+void NetworkProcessProxy::serviceWorkerContextConnectionNoLongerNeeded(WebCore::ProcessIdentifier identifier)
 {
     if (auto* process = WebProcessProxy::processForIdentifier(identifier))
         process->disableServiceWorkers();
@@ -1563,16 +1574,6 @@ void NetworkProcessProxy::createSymLinkForFileUpgrade(const String& indexedDatab
         FileSystem::createSymbolicLink(indexedDatabaseDirectory, oldVersionDirectory);
 }
 
-void NetworkProcessProxy::getLocalStorageDetails(PAL::SessionID sessionID, CompletionHandler<void(Vector<LocalStorageDatabaseTracker::OriginDetails>&&)>&& completionHandler)
-{
-    if (!canSendMessage()) {
-        completionHandler({ });
-        return;
-    }
-
-    sendWithAsyncReply(Messages::NetworkProcess::GetLocalStorageOriginDetails(sessionID), WTFMove(completionHandler));
-}
-
 void NetworkProcessProxy::preconnectTo(PAL::SessionID sessionID, WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier webPageID, const URL& url, const String& userAgent, WebCore::StoredCredentialsPolicy storedCredentialsPolicy, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
 {
     if (!url.isValid() || !url.protocolIsInHTTPFamily())
@@ -1683,12 +1684,14 @@ void NetworkProcessProxy::didExceedMemoryLimit()
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-void NetworkProcessProxy::processPushMessage(PAL::SessionID sessionID, std::optional<Span<const uint8_t>> data, const URL& registrationURL, CompletionHandler<void(bool wasProcessed)>&& callback)
+void NetworkProcessProxy::getPendingPushMessages(PAL::SessionID sessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&& completionHandler)
 {
-    std::optional<IPC::DataReference> ipcData;
-    if (data)
-        ipcData = IPC::DataReference { data->data(), data->size() };
-    sendWithAsyncReply(Messages::NetworkProcess::ProcessPushMessage { sessionID, ipcData, registrationURL }, WTFMove(callback));
+    sendWithAsyncReply(Messages::NetworkProcess::GetPendingPushMessages { sessionID }, WTFMove(completionHandler));
+}
+
+void NetworkProcessProxy::processPushMessage(PAL::SessionID sessionID, const WebPushMessage& pushMessage, CompletionHandler<void(bool wasProcessed)>&& callback)
+{
+    sendWithAsyncReply(Messages::NetworkProcess::ProcessPushMessage { sessionID, pushMessage }, WTFMove(callback));
 }
 #endif // ENABLE(SERVICE_WORKER)
 

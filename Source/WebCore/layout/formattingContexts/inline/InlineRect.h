@@ -54,6 +54,7 @@ public:
     void setTop(InlineLayoutUnit);
     void setBottom(InlineLayoutUnit);
     void setLeft(InlineLayoutUnit);
+    void setRight(InlineLayoutUnit);
     void setTopLeft(const InlineLayoutPoint&);
     void setWidth(InlineLayoutUnit);
     void setHeight(InlineLayoutUnit);
@@ -69,6 +70,8 @@ public:
     void expandVerticallyToContain(const InlineRect&);
     void inflate(InlineLayoutUnit);
     void inflate(InlineLayoutUnit top, InlineLayoutUnit right, InlineLayoutUnit bottom, InlineLayoutUnit left);
+
+    bool isEmpty() const;
 
     operator InlineLayoutRect() const;
 
@@ -222,6 +225,15 @@ inline void InlineRect::setLeft(InlineLayoutUnit left)
     m_rect.setX(left);
 }
 
+inline void InlineRect::setRight(InlineLayoutUnit right)
+{
+#if ASSERT_ENABLED
+    m_hasValidLeft = true;
+    m_hasValidWidth = true;
+#endif
+    m_rect.shiftMaxXEdgeTo(right);
+}
+
 inline void InlineRect::setWidth(InlineLayoutUnit width)
 {
 #if ASSERT_ENABLED
@@ -296,6 +308,12 @@ inline void InlineRect::inflate(InlineLayoutUnit top, InlineLayoutUnit right, In
     m_rect.setY(m_rect.y() - top);
     m_rect.setWidth(m_rect.width() + left + right);
     m_rect.setHeight(m_rect.height() + top + bottom);
+}
+
+inline bool InlineRect::isEmpty() const
+{
+    ASSERT(hasValidGeometry());
+    return m_rect.isEmpty();
 }
 
 inline InlineRect::operator InlineLayoutRect() const

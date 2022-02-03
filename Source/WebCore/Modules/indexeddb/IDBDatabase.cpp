@@ -28,7 +28,6 @@
 
 #include "DOMStringList.h"
 #include "EventNames.h"
-#include "EventQueue.h"
 #include "IDBConnectionProxy.h"
 #include "IDBConnectionToServer.h"
 #include "IDBIndex.h"
@@ -48,7 +47,9 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(IDBDatabase);
 
 Ref<IDBDatabase> IDBDatabase::create(ScriptExecutionContext& context, IDBClient::IDBConnectionProxy& connectionProxy, const IDBResultData& resultData)
 {
-    return adoptRef(*new IDBDatabase(context, connectionProxy, resultData));
+    auto database = adoptRef(*new IDBDatabase(context, connectionProxy, resultData));
+    database->suspendIfNeeded();
+    return database;
 }
 
 IDBDatabase::IDBDatabase(ScriptExecutionContext& context, IDBClient::IDBConnectionProxy& connectionProxy, const IDBResultData& resultData)
@@ -59,7 +60,6 @@ IDBDatabase::IDBDatabase(ScriptExecutionContext& context, IDBClient::IDBConnecti
     , m_eventNames(eventNames())
 {
     LOG(IndexedDB, "IDBDatabase::IDBDatabase - Creating database %s with version %" PRIu64 " connection %" PRIu64 " (%p)", m_info.name().utf8().data(), m_info.version(), m_databaseConnectionIdentifier, this);
-    suspendIfNeeded();
     m_connectionProxy->registerDatabaseConnection(*this);
 }
 

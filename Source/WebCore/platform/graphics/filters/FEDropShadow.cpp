@@ -1,6 +1,6 @@
 /*
  * Copyright (C) Research In Motion Limited 2011. All rights reserved.
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -45,33 +45,23 @@ FEDropShadow::FEDropShadow(float stdX, float stdY, float dx, float dy, const Col
 {
 }
 
-void FEDropShadow::determineAbsolutePaintRect(const Filter& filter)
+FloatRect FEDropShadow::calculateImageRect(const Filter& filter, const FilterImageVector& inputs, const FloatRect& primitiveSubregion) const
 {
-    FloatRect absolutePaintRect = inputEffect(0)->absolutePaintRect();
-    FloatRect absoluteOffsetPaintRect(absolutePaintRect);
-    absoluteOffsetPaintRect.move(filter.scaledByFilterScale({ m_dx, m_dy }));
-    absolutePaintRect.unite(absoluteOffsetPaintRect);
+    auto imageRect = inputs[0]->imageRect();
+    auto imageRectWithOffset(imageRect);
+    imageRectWithOffset.move(filter.resolvedSize({ m_dx, m_dy }));
+    imageRect.unite(imageRectWithOffset);
 
-    IntSize kernelSize = FEGaussianBlur::calculateKernelSize(filter, { m_stdX, m_stdY });
+    auto kernelSize = FEGaussianBlur::calculateUnscaledKernelSize(filter.resolvedSize({ m_stdX, m_stdY }));
 
     // We take the half kernel size and multiply it with three, because we run box blur three times.
-    absolutePaintRect.inflateX(3 * kernelSize.width() * 0.5f);
-    absolutePaintRect.inflateY(3 * kernelSize.height() * 0.5f);
+    imageRect.inflateX(3 * kernelSize.width() * 0.5f);
+    imageRect.inflateY(3 * kernelSize.height() * 0.5f);
 
-    if (clipsToBounds())
-        absolutePaintRect.intersect(maxEffectRect());
-    else
-        absolutePaintRect.unite(maxEffectRect());
-
-    setAbsolutePaintRect(enclosingIntRect(absolutePaintRect));
+    return filter.clipToMaxEffectRect(imageRect, primitiveSubregion);
 }
 
-bool FEDropShadow::platformApplySoftware(const Filter& filter)
-{
-    return FEDropShadowSoftwareApplier(*this).apply(filter, inputEffects());
-}
-    
-IntOutsets FEDropShadow::outsets() const
+IntOutsets FEDropShadow::outsets(const Filter&) const
 {
     IntSize outsetSize = FEGaussianBlur::calculateOutsetSize({ m_stdX, m_stdY });
     return {
@@ -82,14 +72,22 @@ IntOutsets FEDropShadow::outsets() const
     };
 }
 
-TextStream& FEDropShadow::externalRepresentation(TextStream& ts, RepresentationType representation) const
+std::unique_ptr<FilterEffectApplier> FEDropShadow::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FEDropShadowSoftwareApplier>(*this);
+}
+    
+TextStream& FEDropShadow::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent <<"[feDropShadow";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " stdDeviation=\"" << m_stdX << ", " << m_stdY << "\" dx=\"" << m_dx << "\" dy=\"" << m_dy << "\" flood-color=\"" << serializationForRenderTreeAsText(m_shadowColor) <<"\" flood-opacity=\"" << m_shadowOpacity << "]\n";
 
-    TextStream::IndentScope indentScope(ts);
-    inputEffect(0)->externalRepresentation(ts, representation);
+    ts << " stdDeviation=\"" << m_stdX << ", " << m_stdY << "\"";
+    ts << " dx=\"" << m_dx << "\" dy=\"" << m_dy << "\"";
+    ts << " flood-color=\"" << serializationForRenderTreeAsText(m_shadowColor) << "\"";
+    ts << " flood-opacity=\"" << m_shadowOpacity << "\"";
+
+    ts << "]\n";
     return ts;
 }
     

@@ -522,7 +522,7 @@ const GlobalObjectMethodTable JSGlobalObject::s_globalObjectMethodTable = {
     &supportsRichSourceInfo,
     &shouldInterruptScript,
     &javaScriptRuntimeFlags,
-    nullptr, // queueTaskToEventLoop
+    nullptr, // queueMicrotaskToEventLoop
     &shouldInterruptScriptBeforeTimeout,
     nullptr, // moduleLoaderImportModule
     nullptr, // moduleLoaderResolve
@@ -537,6 +537,7 @@ const GlobalObjectMethodTable JSGlobalObject::s_globalObjectMethodTable = {
     nullptr, // defaultLanguage
     nullptr, // compileStreaming
     nullptr, // instantiateStreaming
+    &deriveShadowRealmGlobalObject
 };
 
 /* Source for JSGlobalObject.lut.h
@@ -1349,6 +1350,9 @@ capitalName ## Constructor* lowerName ## Constructor = featureFlag ? capitalName
     // Map and Set helpers.
     m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::Set)].initLater([] (const Initializer<JSCell>& init) {
             init.set(jsCast<JSGlobalObject*>(init.owner)->setConstructor());
+        });
+    m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::Map)].initLater([] (const Initializer<JSCell>& init) {
+            init.set(jsCast<JSGlobalObject*>(init.owner)->mapConstructor());
         });
     m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::mapBucketHead)].initLater([] (const Initializer<JSCell>& init) {
             init.set(JSFunction::create(init.vm, jsCast<JSGlobalObject*>(init.owner), 0, String(), mapPrivateFuncMapBucketHead, JSMapBucketHeadIntrinsic));
@@ -2281,13 +2285,16 @@ void JSGlobalObject::visitChildrenImpl(JSCell* cell, Visitor& visitor)
     for (auto& property : thisObject->m_linkTimeConstants)
         property.visit(visitor);
 
-#define VISIT_SIMPLE_TYPE(CapitalName, lowerName, properName, instanceType, jsName, prototypeBase, featureFlag) if (featureFlag) { \
+#define VISIT_SIMPLE_TYPE_PROTOTYPE(CapitalName, lowerName, properName, instanceType, jsName, prototypeBase, featureFlag) if (featureFlag) \
         visitor.append(thisObject->m_ ## lowerName ## Prototype); \
-        visitor.append(thisObject->m_ ## properName ## Structure); \
-    }
 
-    FOR_EACH_SIMPLE_BUILTIN_TYPE(VISIT_SIMPLE_TYPE)
-    FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(VISIT_SIMPLE_TYPE)
+#define VISIT_SIMPLE_TYPE_STRUCTURE(CapitalName, lowerName, properName, instanceType, jsName, prototypeBase, featureFlag) if (featureFlag) \
+        visitor.append(thisObject->m_ ## properName ## Structure); \
+
+    FOR_EACH_SIMPLE_BUILTIN_TYPE(VISIT_SIMPLE_TYPE_STRUCTURE)
+    FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(VISIT_SIMPLE_TYPE_STRUCTURE)
+    FOR_EACH_SIMPLE_BUILTIN_TYPE(VISIT_SIMPLE_TYPE_PROTOTYPE)
+    FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(VISIT_SIMPLE_TYPE_PROTOTYPE)
 
 #define VISIT_LAZY_TYPE(CapitalName, lowerName, properName, instanceType, jsName, prototypeBase, featureFlag) if (featureFlag) \
         thisObject->m_ ## properName ## Structure.visit(visitor);
@@ -2554,8 +2561,8 @@ void JSGlobalObject::bumpGlobalLexicalBindingEpoch(VM& vm)
 
 void JSGlobalObject::queueMicrotask(Ref<Microtask>&& task)
 {
-    if (globalObjectMethodTable()->queueTaskToEventLoop) {
-        globalObjectMethodTable()->queueTaskToEventLoop(*this, WTFMove(task));
+    if (globalObjectMethodTable()->queueMicrotaskToEventLoop) {
+        globalObjectMethodTable()->queueMicrotaskToEventLoop(*this, WTFMove(task));
         return;
     }
 
@@ -2577,11 +2584,6 @@ void JSGlobalObject::setDebugger(Debugger* debugger)
     m_debugger = debugger;
     if (debugger)
         vm().ensureShadowChicken();
-}
-
-bool JSGlobalObject::hasDebugger() const
-{ 
-    return m_debugger;
 }
 
 bool JSGlobalObject::hasInteractiveDebugger() const 

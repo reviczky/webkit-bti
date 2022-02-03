@@ -141,38 +141,37 @@ void FEMorphologySoftwareApplier::applyPlatform(const PaintingData& paintingData
     applyPlatformGeneric(paintingData, 0, paintingData.height);
 }
 
-bool FEMorphologySoftwareApplier::apply(const Filter& filter, const FilterEffectVector& inputEffects)
+bool FEMorphologySoftwareApplier::apply(const Filter& filter, const FilterImageVector& inputs, FilterImage& result) const
 {
-    FilterEffect* in = inputEffects[0].get();
+    auto& input = inputs[0].get();
 
-    auto destinationPixelBuffer = m_effect.pixelBufferResult(AlphaPremultiplication::Premultiplied);
+    auto destinationPixelBuffer = result.pixelBuffer(AlphaPremultiplication::Premultiplied);
     if (!destinationPixelBuffer)
         return false;
 
-    m_effect.setIsAlphaImage(in->isAlphaImage());
-
-    auto isDegenerate = [](int radiusX, int radiusY) -> bool {
-        return radiusX < 0 || radiusY < 0 || (!radiusX && !radiusY);
+    auto isDegenerate = [](const IntSize& absoluteRadius) -> bool {
+        return absoluteRadius.width() < 0 || absoluteRadius.height() < 0 || absoluteRadius.isZero();
     };
 
-    IntRect effectDrawingRect = m_effect.requestedRegionOfInputPixelBuffer(in->absolutePaintRect());
-    IntSize radius = flooredIntSize(FloatSize(m_effect.radiusX(), m_effect.radiusY()));
+    auto effectDrawingRect = result.absoluteImageRectRelativeTo(input);
 
-    if (isDegenerate(radius.width(), radius.height())) {
-        in->copyPixelBufferResult(*destinationPixelBuffer, effectDrawingRect);
+    auto radius = filter.resolvedSize({ m_effect.radiusX(), m_effect.radiusY() });
+    auto absoluteRadius = flooredIntSize(filter.scaledByFilterScale(radius));
+
+    if (isDegenerate(absoluteRadius)) {
+        input.copyPixelBuffer(*destinationPixelBuffer, effectDrawingRect);
         return true;
     }
 
-    radius = flooredIntSize(filter.scaledByFilterScale({ m_effect.radiusX(), m_effect.radiusY() }));
-    int radiusX = std::min(effectDrawingRect.width() - 1, radius.width());
-    int radiusY = std::min(effectDrawingRect.height() - 1, radius.height());
+    int radiusX = std::min(effectDrawingRect.width() - 1, absoluteRadius.width());
+    int radiusY = std::min(effectDrawingRect.height() - 1, absoluteRadius.height());
 
-    if (isDegenerate(radiusX, radiusY)) {
-        in->copyPixelBufferResult(*destinationPixelBuffer, effectDrawingRect);
+    if (isDegenerate({ radiusX, radiusY })) {
+        input.copyPixelBuffer(*destinationPixelBuffer, effectDrawingRect);
         return true;
     }
 
-    auto sourcePixelBuffer = in->getPixelBufferResult(AlphaPremultiplication::Premultiplied, effectDrawingRect, m_effect.operatingColorSpace());
+    auto sourcePixelBuffer = input.getPixelBuffer(AlphaPremultiplication::Premultiplied, effectDrawingRect, m_effect.operatingColorSpace());
     if (!sourcePixelBuffer)
         return false;
 
@@ -183,10 +182,10 @@ bool FEMorphologySoftwareApplier::apply(const Filter& filter, const FilterEffect
     paintingData.type = m_effect.morphologyOperator();
     paintingData.srcPixelArray = &sourcePixelArray;
     paintingData.dstPixelArray = &destinationPixelArray;
-    paintingData.width = ceilf(effectDrawingRect.width());
-    paintingData.height = ceilf(effectDrawingRect.height());
-    paintingData.radiusX = ceilf(radiusX);
-    paintingData.radiusY = ceilf(radiusY);
+    paintingData.width = effectDrawingRect.width();
+    paintingData.height = effectDrawingRect.height();
+    paintingData.radiusX = radiusX;
+    paintingData.radiusY = radiusY;
 
     applyPlatform(paintingData);
     return true;

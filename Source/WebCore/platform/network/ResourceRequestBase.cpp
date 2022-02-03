@@ -610,6 +610,15 @@ void ResourceRequestBase::removeHTTPHeaderField(const String& name)
     m_platformRequestUpdated = false;
 }
 
+void ResourceRequestBase::removeHTTPHeaderField(HTTPHeaderName name)
+{
+    updateResourceRequest();
+
+    m_httpHeaderFields.remove(name);
+
+    m_platformRequestUpdated = false;
+}
+
 #if USE(SYSTEM_PREVIEW)
 
 bool ResourceRequestBase::isSystemPreview() const
@@ -619,7 +628,7 @@ bool ResourceRequestBase::isSystemPreview() const
 
 SystemPreviewInfo ResourceRequestBase::systemPreviewInfo() const
 {
-    return m_systemPreviewInfo.value_or(SystemPreviewInfo { });
+    return valueOrDefault(m_systemPreviewInfo);
 }
 
 void ResourceRequestBase::setSystemPreviewInfo(const SystemPreviewInfo& info)

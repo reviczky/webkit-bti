@@ -58,8 +58,9 @@ public:
 
     WEBCORE_EXPORT void displayDidRefresh(PlatformDisplayID);
 
+    void didScheduleRenderingUpdate();
     void willStartRenderingUpdate();
-    void didCompleteRenderingUpdate();
+    virtual void didCompleteRenderingUpdate();
 
     Lock& treeLock() WTF_RETURNS_LOCK(m_treeLock) { return m_treeLock; }
 
@@ -81,6 +82,8 @@ protected:
 #if PLATFORM(COCOA)
     void currentSnapPointIndicesDidChange(ScrollingNodeID, std::optional<unsigned> horizontal, std::optional<unsigned> vertical) override;
 #endif
+
+    void renderingUpdateComplete();
 
     void reportExposedUnfilledArea(MonotonicTime, unsigned unfilledArea) override;
     void reportSynchronousScrollingReasonsChanged(MonotonicTime, OptionSet<SynchronousScrollingReason>) override;
@@ -104,8 +107,11 @@ private:
 
     void hasNodeWithAnimatedScrollChanged(bool) final;
     
-    void serviceScrollAnimations() WTF_REQUIRES_LOCK(m_treeLock);
+    bool isScrollingSynchronizedWithMainThread() final WTF_REQUIRES_LOCK(m_treeLock);
 
+    void serviceScrollAnimations(MonotonicTime) WTF_REQUIRES_LOCK(m_treeLock);
+
+    Seconds frameDuration();
     Seconds maxAllowableRenderingUpdateDurationForSynchronization();
     
     bool scrollingThreadIsActive();
@@ -122,6 +128,8 @@ private:
 
     bool m_receivedBeganEventFromMainThread WTF_GUARDED_BY_LOCK(m_treeLock) { false };
     Condition m_waitingForBeganEventCondition;
+    
+    MonotonicTime m_lastDisplayDidRefreshTime;
 
     // Dynamically allocated because it has to use the ScrollingThread's runloop.
     std::unique_ptr<RunLoop::Timer<ThreadedScrollingTree>> m_delayedRenderingUpdateDetectionTimer WTF_GUARDED_BY_LOCK(m_treeLock);
@@ -129,6 +137,7 @@ private:
     HashMap<ScrollingNodeID, RequestedScrollData> m_nodesWithPendingScrollAnimations WTF_GUARDED_BY_LOCK(m_treeLock);
     const bool m_scrollAnimatorEnabled { false };
     bool m_hasNodesWithSynchronousScrollingReasons WTF_GUARDED_BY_LOCK(m_treeLock) { false };
+    std::atomic<bool> m_renderingUpdateWasScheduled;
 };
 
 } // namespace WebCore

@@ -26,6 +26,7 @@
 #include "FloatSize.h"
 #include "GStreamerCommon.h"
 #include "MediaSample.h"
+#include "VideoSampleMetadata.h"
 #include <wtf/text/AtomString.h>
 
 namespace WebCore {
@@ -34,13 +35,18 @@ class PixelBuffer;
 
 class MediaSampleGStreamer : public MediaSample {
 public:
-    static Ref<MediaSampleGStreamer> create(GRefPtr<GstSample>&& sample, const FloatSize& presentationSize, const AtomString& trackId, VideoRotation videoRotation = VideoRotation::None, bool videoMirrored = false)
+    static Ref<MediaSampleGStreamer> create(GRefPtr<GstSample>&& sample, const FloatSize& presentationSize, const AtomString& trackId, VideoRotation videoRotation = VideoRotation::None, bool videoMirrored = false, std::optional<VideoSampleMetadata>&& metadata = std::nullopt)
     {
-        return adoptRef(*new MediaSampleGStreamer(WTFMove(sample), presentationSize, trackId, videoRotation, videoMirrored));
+        return adoptRef(*new MediaSampleGStreamer(WTFMove(sample), presentationSize, trackId, videoRotation, videoMirrored, WTFMove(metadata)));
+    }
+
+    static Ref<MediaSampleGStreamer> createWrappedSample(const GRefPtr<GstSample>& sample, VideoRotation videoRotation = VideoRotation::None)
+    {
+        return adoptRef(*new MediaSampleGStreamer(sample, videoRotation));
     }
 
     static Ref<MediaSampleGStreamer> createFakeSample(GstCaps*, MediaTime pts, MediaTime dts, MediaTime duration, const FloatSize& presentationSize, const AtomString& trackId);
-    static Ref<MediaSampleGStreamer> createImageSample(PixelBuffer&&, const IntSize& destinationSize = { }, double frameRate = 1, VideoRotation videoRotation = VideoRotation::None, bool videoMirrored = false);
+    static Ref<MediaSampleGStreamer> createImageSample(PixelBuffer&&, const IntSize& destinationSize = { }, double frameRate = 1, VideoRotation videoRotation = VideoRotation::None, bool videoMirrored = false, std::optional<VideoSampleMetadata>&& metadata = std::nullopt);
 
     void extendToTheBeginning();
     MediaTime presentationTime() const override { return m_pts; }
@@ -64,11 +70,14 @@ public:
     bool videoMirrored() const override { return m_videoMirrored; }
 
 protected:
-    MediaSampleGStreamer(GRefPtr<GstSample>&&, const FloatSize& presentationSize, const AtomString& trackId, VideoRotation = VideoRotation::None, bool videoMirrored = false);
+    MediaSampleGStreamer(GRefPtr<GstSample>&&, const FloatSize& presentationSize, const AtomString& trackId, VideoRotation = VideoRotation::None, bool videoMirrored = false, std::optional<VideoSampleMetadata>&& = std::nullopt);
+    MediaSampleGStreamer(const GRefPtr<GstSample>&, VideoRotation = VideoRotation::None);
     virtual ~MediaSampleGStreamer() = default;
 
 private:
     MediaSampleGStreamer(const FloatSize& presentationSize, const AtomString& trackId);
+
+    void initializeFromBuffer();
 
     MediaTime m_pts;
     MediaTime m_dts;

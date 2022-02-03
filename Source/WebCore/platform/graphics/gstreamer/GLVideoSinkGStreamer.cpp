@@ -64,6 +64,9 @@ static void webKitGLVideoSinkConstructed(GObject* object)
 
     WebKitGLVideoSink* sink = WEBKIT_GL_VIDEO_SINK(object);
 
+    GST_OBJECT_FLAG_SET(GST_OBJECT_CAST(sink), GST_ELEMENT_FLAG_SINK);
+    gst_bin_set_suppressed_flags(GST_BIN_CAST(sink), static_cast<GstElementFlags>(GST_ELEMENT_FLAG_SOURCE | GST_ELEMENT_FLAG_SINK));
+
     sink->priv->appSink = makeGStreamerElement("appsink", "webkit-gl-video-appsink");
     ASSERT(sink->priv->appSink);
     g_object_set(sink->priv->appSink.get(), "enable-last-sample", FALSE, "emit-signals", TRUE, "max-buffers", 1, nullptr);
@@ -258,7 +261,9 @@ void webKitGLVideoSinkSetMediaPlayerPrivate(WebKitGLVideoSink* sink, MediaPlayer
     gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_PUSH | GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM | GST_PAD_PROBE_TYPE_EVENT_FLUSH | GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM), [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
         auto* player = static_cast<MediaPlayerPrivateGStreamer*>(userData);
 
-        if (info->type & GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM && GST_EVENT_TYPE(GST_PAD_PROBE_INFO_EVENT(info)) == GST_EVENT_TAG) {
+        if (info->type & GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM) {
+            if (GST_EVENT_TYPE(GST_PAD_PROBE_INFO_EVENT(info)) != GST_EVENT_TAG)
+                return GST_PAD_PROBE_OK;
             GstTagList* tagList;
             gst_event_parse_tag(GST_PAD_PROBE_INFO_EVENT(info), &tagList);
             player->updateVideoOrientation(tagList);

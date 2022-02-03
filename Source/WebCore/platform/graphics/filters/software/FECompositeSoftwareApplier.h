@@ -2,7 +2,7 @@
  * Copyright (C) 2004, 2005, 2006, 2007 Nikolas Zimmermann <zimmermann@kde.org>
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -28,15 +28,16 @@ namespace WebCore {
 
 class FEComposite;
 
-class FECompositeSoftwareApplier : public FilterEffectConcreteApplier<FEComposite> {
+class FECompositeSoftwareApplier final : public FilterEffectConcreteApplier<FEComposite> {
+    WTF_MAKE_FAST_ALLOCATED;
     using Base = FilterEffectConcreteApplier<FEComposite>;
 
 public:
     using Base::Base;
 
-    bool apply(const Filter&, const FilterEffectVector& inputEffects) override;
-
 private:
+    bool apply(const Filter&, const FilterImageVector& inputs, FilterImage& result) const final;
+
     static uint8_t clampByte(int);
 
     template <int b1, int b4>
@@ -47,8 +48,8 @@ private:
 
     static inline void applyPlatformArithmetic(unsigned char* source, unsigned char* destination, int pixelArrayLength, float k1, float k2, float k3, float k4);
 
-    bool applyArithmetic(FilterEffect* in, FilterEffect* in2);
-    bool applyNonArithmetic(FilterEffect* in, FilterEffect* in2);
+    bool applyArithmetic(FilterImage& input, FilterImage& input2, FilterImage& result) const;
+    bool applyNonArithmetic(FilterImage& input, FilterImage& input2, FilterImage& result) const;
 };
 
 } // namespace WebCore

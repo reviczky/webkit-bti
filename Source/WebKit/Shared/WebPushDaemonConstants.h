@@ -40,8 +40,14 @@ enum class MessageType : uint8_t {
     RequestSystemNotificationPermission,
     DeletePushAndNotificationRegistration,
     GetOriginsWithPushAndNotificationPermissions,
-    SetHostAppAuditToken,
     SetDebugModeIsEnabled,
+    UpdateConnectionConfiguration,
+    InjectPushMessageForTesting,
+    GetPendingPushMessages,
+    SubscribeToPushService,
+    UnsubscribeFromPushService,
+    GetPushSubscription,
+    GetPushPermissionState
 };
 
 inline bool messageTypeSendsReply(MessageType messageType)
@@ -51,9 +57,15 @@ inline bool messageTypeSendsReply(MessageType messageType)
     case MessageType::GetOriginsWithPushAndNotificationPermissions:
     case MessageType::DeletePushAndNotificationRegistration:
     case MessageType::RequestSystemNotificationPermission:
+    case MessageType::GetPendingPushMessages:
+    case MessageType::InjectPushMessageForTesting:
+    case MessageType::SubscribeToPushService:
+    case MessageType::UnsubscribeFromPushService:
+    case MessageType::GetPushSubscription:
+    case MessageType::GetPushPermissionState:
         return true;
-    case MessageType::SetHostAppAuditToken:
     case MessageType::SetDebugModeIsEnabled:
+    case MessageType::UpdateConnectionConfiguration:
         return false;
     }
     ASSERT_NOT_REACHED();

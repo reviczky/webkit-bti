@@ -30,7 +30,7 @@
 #include "CacheModel.h"
 #include "IdentifierTypes.h"
 #include "SandboxExtension.h"
-#include "StorageAreaIdentifier.h"
+#include "StorageAreaMapIdentifier.h"
 #include "TextCheckerState.h"
 #include "UserContentControllerIdentifier.h"
 #include "ViewUpdateDispatcher.h"
@@ -75,16 +75,12 @@
 #include <WebCore/CaptionUserPreferences.h>
 #endif
 
-#if USE(ATSPI)
-#include <WebCore/AccessibilityAtspi.h>
-#endif
-
 namespace API {
 class Object;
 }
 
 namespace IPC {
-class SharedBufferDataReference;
+class SharedBufferCopy;
 }
 
 namespace PAL {
@@ -97,7 +93,6 @@ class CPUMonitor;
 class CertificateInfo;
 class PageGroup;
 class RegistrableDomain;
-class ReportingEndpointsCache;
 class ResourceRequest;
 class UserGestureToken;
 
@@ -132,6 +127,7 @@ class ProcessAssertion;
 class RemoteCDMFactory;
 class RemoteLegacyCDMFactory;
 class RemoteMediaEngineConfigurationFactory;
+class RemoteWebLockRegistry;
 struct ServiceWorkerInitializationData;
 class StorageAreaMap;
 class UserData;
@@ -288,11 +284,13 @@ public:
 
     void registerStorageAreaMap(StorageAreaMap&);
     void unregisterStorageAreaMap(StorageAreaMap&);
-    StorageAreaMap* storageAreaMap(StorageAreaIdentifier) const;
+    WeakPtr<StorageAreaMap> storageAreaMap(StorageAreaMapIdentifier) const;
 
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> sourceApplicationAuditData() const;
     void destroyRenderingResources();
+    void getProcessDisplayName(CompletionHandler<void(String&&)>&&);
+    std::optional<audit_token_t> auditTokenForSelf();
 #endif
 
     const String& uiProcessBundleIdentifier() const { return m_uiProcessBundleIdentifier; }
@@ -340,9 +338,9 @@ public:
 
     WebCacheStorageProvider& cacheStorageProvider() { return m_cacheStorageProvider.get(); }
     WebBroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry.get(); }
+    RemoteWebLockRegistry& webLockRegistry() { return m_webLockRegistry.get(); }
     WebCookieJar& cookieJar() { return m_cookieJar.get(); }
     WebSocketChannelManager& webSocketChannelManager() { return m_webSocketChannelManager; }
-    WebCore::ReportingEndpointsCache& reportingEndpointsCache() { return m_reportingEndpointsCache.get(); }
 
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
     float backlightLevel() const { return m_backlightLevel; }
@@ -397,10 +395,6 @@ public:
 
 #if ENABLE(MEDIA_STREAM)
     SpeechRecognitionRealtimeMediaSourceManager& ensureSpeechRecognitionRealtimeMediaSourceManager();
-#endif
-
-#if USE(ATSPI)
-    WebCore::AccessibilityAtspi& accessibilityAtspi() const { return *m_accessibility; }
 #endif
 
     bool isCaptivePortalModeEnabled() const { return m_isCaptivePortalModeEnabled; }
@@ -476,7 +470,7 @@ private:
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-    void establishWorkerContextConnectionToNetworkProcess(PageGroupIdentifier, WebPageProxyIdentifier, WebCore::PageIdentifier, const WebPreferencesStore&, WebCore::RegistrableDomain&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, ServiceWorkerInitializationData&&, CompletionHandler<void()>&&);
+    void establishServiceWorkerContextConnectionToNetworkProcess(PageGroupIdentifier, WebPageProxyIdentifier, WebCore::PageIdentifier, const WebPreferencesStore&, WebCore::RegistrableDomain&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, ServiceWorkerInitializationData&&, CompletionHandler<void()>&&);
 #endif
 
     void fetchWebsiteData(OptionSet<WebsiteDataType>, CompletionHandler<void(WebsiteData&&)>&&);
@@ -549,7 +543,7 @@ private:
 #endif
 
 #if PLATFORM(COCOA)
-    void consumeAudioComponentRegistrations(const IPC::DataReference&);
+    void consumeAudioComponentRegistrations(const IPC::SharedBufferCopy&);
 #endif
     
     void platformInitializeProcess(const AuxiliaryProcessInitializationParameters&);
@@ -676,8 +670,8 @@ private:
 
     Ref<WebCacheStorageProvider> m_cacheStorageProvider;
     Ref<WebBroadcastChannelRegistry> m_broadcastChannelRegistry;
+    Ref<RemoteWebLockRegistry> m_webLockRegistry;
     Ref<WebCookieJar> m_cookieJar;
-    Ref<WebCore::ReportingEndpointsCache> m_reportingEndpointsCache;
     WebSocketChannelManager m_webSocketChannelManager;
 
     RefPtr<LibWebRTCNetwork> m_libWebRTCNetwork;
@@ -750,7 +744,7 @@ private:
     HashCountedSet<WebCore::ServiceWorkerRegistrationIdentifier> m_swRegistrationCounts;
 #endif
 
-    HashMap<StorageAreaIdentifier, StorageAreaMap*> m_storageAreaMaps;
+    HashMap<StorageAreaMapIdentifier, WeakPtr<StorageAreaMap>> m_storageAreaMaps;
     
     // Prewarmed WebProcesses do not have an associated sessionID yet, which is why this is an optional.
     // By the time the WebProcess gets a WebPage, it is guaranteed to have a sessionID.
@@ -777,10 +771,6 @@ private:
 
 #if ENABLE(MEDIA_STREAM)
     std::unique_ptr<SpeechRecognitionRealtimeMediaSourceManager> m_speechRecognitionRealtimeMediaSourceManager;
-#endif
-
-#if USE(ATSPI)
-    std::unique_ptr<WebCore::AccessibilityAtspi> m_accessibility;
 #endif
 };
 

@@ -29,7 +29,10 @@
 
 #include "NotificationManagerMessageHandler.h"
 #include "WebPushDaemonConnection.h"
+#include "WebPushMessage.h"
+#include <WebCore/ExceptionData.h>
 #include <WebCore/NotificationDirection.h>
+#include <WebCore/PushSubscriptionData.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -52,21 +55,27 @@ public:
 
     void deletePushAndNotificationRegistration(const WebCore::SecurityOriginData&, CompletionHandler<void(const String&)>&&);
     void getOriginsWithPushAndNotificationPermissions(CompletionHandler<void(const Vector<WebCore::SecurityOriginData>&)>&&);
+    void getPendingPushMessages(CompletionHandler<void(const Vector<WebPushMessage>&)>&&);
+
+    void subscribeToPushService(URL&& scopeURL, Vector<uint8_t>&& applicationServerKey, CompletionHandler<void(Expected<WebCore::PushSubscriptionData, WebCore::ExceptionData>&&)>&&);
+    void unsubscribeFromPushService(URL&& scopeURL, WebCore::PushSubscriptionIdentifier, CompletionHandler<void(Expected<bool, WebCore::ExceptionData>&&)>&&);
+    void getPushSubscription(URL&& scopeURL, CompletionHandler<void(Expected<std::optional<WebCore::PushSubscriptionData>, WebCore::ExceptionData>&&)>&&);
+    void getPushPermissionState(URL&& scopeURL, CompletionHandler<void(Expected<uint8_t, WebCore::ExceptionData>&&)>&&);
 
 private:
     NetworkNotificationManager(NetworkSession&, const String& webPushMachServiceName);
 
     void requestSystemNotificationPermission(const String& originString, CompletionHandler<void(bool)>&&) final;
-    void showNotification(const String& title, const String& body, const String& iconURL, const String& tag, const String& lang, WebCore::NotificationDirection, const String& originString, uint64_t notificationID) final;
-    void cancelNotification(uint64_t notificationID) final;
-    void clearNotifications(const Vector<uint64_t>& notificationIDs) final;
-    void didDestroyNotification(uint64_t notificationID) final;
+    void showNotification(const WebCore::NotificationData&) final;
+    void cancelNotification(const UUID& notificationID) final;
+    void clearNotifications(const Vector<UUID>& notificationIDs) final;
+    void didDestroyNotification(const UUID& notificationID) final;
 
-    void maybeSendHostAppAuditToken() const;
+    void maybeSendConnectionConfiguration() const;
 
     NetworkSession& m_networkSession;
     std::unique_ptr<WebPushD::Connection> m_connection;
-    mutable bool m_sentHostAppAuditToken { false };
+    mutable bool m_sentConnectionConfiguration { false };
 
     template<WebPushD::MessageType messageType, typename... Args>
     void sendMessage(Args&&...) const;

@@ -19,14 +19,12 @@
 
 #pragma once
 
-#if ENABLE(ACCESSIBILITY) && USE(ATSPI)
+#if USE(ATSPI)
 #include "AccessibilityAtspi.h"
 #include "AccessibilityObjectInterface.h"
 #include "IntRect.h"
-#include <wtf/Atomics.h>
-#include <wtf/Lock.h>
 #include <wtf/OptionSet.h>
-#include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/RefCounted.h>
 #include <wtf/text/CString.h>
 
 typedef struct _GDBusInterfaceVTable GDBusInterfaceVTable;
@@ -37,10 +35,13 @@ namespace WebCore {
 class AXCoreObject;
 class AccessibilityRootAtspi;
 
-class AccessibilityObjectAtspi final : public ThreadSafeRefCounted<AccessibilityObjectAtspi> {
+class AccessibilityObjectAtspi final : public RefCounted<AccessibilityObjectAtspi> {
 public:
-    static Ref<AccessibilityObjectAtspi> create(AXCoreObject*);
+    static Ref<AccessibilityObjectAtspi> create(AXCoreObject*, AccessibilityRootAtspi*);
     ~AccessibilityObjectAtspi() = default;
+
+    bool registerObject();
+    void didUnregisterObject();
 
     enum class Interface : uint16_t {
         Accessible = 1 << 0,
@@ -51,15 +52,18 @@ public:
         Hypertext = 1 << 5,
         Action = 1 << 6,
         Document = 1 << 7,
-        Image = 1 << 8
+        Image = 1 << 8,
+        Selection = 1 << 9,
+        Table = 1 << 10,
+        TableCell = 1 << 11
     };
     const OptionSet<Interface>& interfaces() const { return m_interfaces; }
 
-    void setRoot(AccessibilityRootAtspi*);
-    WEBCORE_EXPORT AccessibilityRootAtspi* root() const;
     void setParent(std::optional<AccessibilityObjectAtspi*>);
     WEBCORE_EXPORT std::optional<AccessibilityObjectAtspi*> parent() const;
+    GVariant* parentReference() const;
     WEBCORE_EXPORT void updateBackingStore();
+    WEBCORE_EXPORT bool isIgnored() const;
 
     void attach(AXCoreObject*);
     void detach();
@@ -82,6 +86,7 @@ public:
     WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> children() const;
     WEBCORE_EXPORT AccessibilityObjectAtspi* childAt(unsigned) const;
     WEBCORE_EXPORT uint64_t state() const;
+    bool isDefunct() const;
     void stateChanged(const char*, bool);
     WEBCORE_EXPORT HashMap<String, String> attributes() const;
     WEBCORE_EXPORT HashMap<uint32_t, Vector<RefPtr<AccessibilityObjectAtspi>>> relationMap() const;
@@ -130,16 +135,40 @@ public:
     WEBCORE_EXPORT bool doAction() const;
 
     WEBCORE_EXPORT String documentAttribute(const String&) const;
+    void loadEvent(const char*);
+
+    WEBCORE_EXPORT unsigned selectionCount() const;
+    WEBCORE_EXPORT AccessibilityObjectAtspi* selectedChild(unsigned) const;
+    WEBCORE_EXPORT bool setChildSelected(unsigned, bool) const;
+    WEBCORE_EXPORT bool clearSelection() const;
+    void selectionChanged();
+
+    WEBCORE_EXPORT AccessibilityObjectAtspi* cell(unsigned row, unsigned column) const;
+    WEBCORE_EXPORT unsigned rowCount() const;
+    WEBCORE_EXPORT unsigned columnCount() const;
+    WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> cells() const;
+    WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> rows() const;
+    WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> rowHeaders() const;
+    WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> columnHeaders() const;
+
+    WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> cellRowHeaders() const;
+    WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> cellColumnHeaders() const;
+    WEBCORE_EXPORT unsigned rowSpan() const;
+    WEBCORE_EXPORT unsigned columnSpan() const;
+    WEBCORE_EXPORT std::pair<std::optional<unsigned>, std::optional<unsigned>> cellPosition() const;
 
 private:
-    explicit AccessibilityObjectAtspi(AXCoreObject*);
+    AccessibilityObjectAtspi(AXCoreObject*, AccessibilityRootAtspi*);
 
+    Vector<RefPtr<AccessibilityObjectAtspi>> wrapperVector(const Vector<RefPtr<AXCoreObject>>&) const;
     int indexInParent() const;
-    GVariant* parentReference() const;
     void childAdded(AccessibilityObjectAtspi&);
     void childRemoved(AccessibilityObjectAtspi&);
 
+    std::optional<unsigned> effectiveRole() const;
+    String effectiveRoleName() const;
     String roleName() const;
+    const char* effectiveLocalizedRoleName() const;
     const char* localizedRoleName() const;
     void buildAttributes(GVariantBuilder*) const;
     void buildRelationSet(GVariantBuilder*) const;
@@ -178,6 +207,22 @@ private:
 
     String imageDescription() const;
 
+    bool deselectSelectedChild(unsigned) const;
+    bool isChildSelected(unsigned) const;
+    bool selectAll() const;
+
+    AccessibilityObjectAtspi* rowHeader(unsigned) const;
+    AccessibilityObjectAtspi* columnHeader(unsigned) const;
+    unsigned rowExtent(unsigned row, unsigned column) const;
+    unsigned columnExtent(unsigned row, unsigned column) const;
+
+    AccessibilityObjectAtspi* tableCaption() const;
+    std::optional<unsigned> cellIndex(unsigned row, unsigned column) const;
+    std::optional<unsigned> rowAtIndex(unsigned) const;
+    std::optional<unsigned> columnAtIndex(unsigned) const;
+    String rowDescription(unsigned) const;
+    String columnDescription(unsigned) const;
+
     static OptionSet<Interface> interfacesForObject(AXCoreObject&);
 
     static GDBusInterfaceVTable s_accessibleFunctions;
@@ -189,19 +234,22 @@ private:
     static GDBusInterfaceVTable s_actionFunctions;
     static GDBusInterfaceVTable s_documentFunctions;
     static GDBusInterfaceVTable s_imageFunctions;
+    static GDBusInterfaceVTable s_selectionFunctions;
+    static GDBusInterfaceVTable s_tableFunctions;
+    static GDBusInterfaceVTable s_tableCellFunctions;
 
-    AXCoreObject* m_axObject { nullptr };
     AXCoreObject* m_coreObject { nullptr };
     OptionSet<Interface> m_interfaces;
-    AccessibilityRootAtspi* m_root WTF_GUARDED_BY_LOCK(m_rootLock) { nullptr };
-    std::optional<AccessibilityObjectAtspi*> m_parent;
-    Atomic<bool> m_isRegistered { false };
+    AccessibilityRootAtspi* m_root { nullptr };
+    std::optional<RefPtr<AccessibilityObjectAtspi>> m_parent;
+    bool m_isRegistered { false };
     String m_path;
     String m_hyperlinkPath;
+    int64_t m_lastSelectionChangedTime { -1 };
+    mutable bool m_hasListMarkerAtStart;
     mutable int m_indexInParent { -1 };
-    mutable Lock m_rootLock;
 };
 
 } // namespace WebCore
 
-#endif // ENABLE(ACCESSIBILITY) && USE(ATSPI)
+#endif // USE(ATSPI)

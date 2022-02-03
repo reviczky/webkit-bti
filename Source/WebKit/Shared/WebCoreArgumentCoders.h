@@ -114,6 +114,7 @@ class AuthenticationChallenge;
 class BlobPart;
 class CertificateInfo;
 class Color;
+class SharedBuffer;
 class Credential;
 class CubicBezierTimingFunction;
 class Cursor;
@@ -138,7 +139,7 @@ class ResourceRequest;
 class ResourceResponse;
 class ScriptBuffer;
 class SecurityOrigin;
-class SharedBuffer;
+class FragmentedSharedBuffer;
 class SpringTimingFunction;
 class StepsTimingFunction;
 class StickyPositionViewportConstraints;
@@ -391,6 +392,11 @@ template<> struct ArgumentCoder<WebCore::Cursor> {
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::Cursor&);
 };
 
+template<> struct ArgumentCoder<RefPtr<WebCore::Font>> {
+    static void encode(Encoder&, const RefPtr<WebCore::Font>&);
+    static std::optional<RefPtr<WebCore::Font>> decode(Decoder&);
+};
+
 template<> struct ArgumentCoder<Ref<WebCore::Font>> {
     static void encode(Encoder&, const Ref<WebCore::Font>&);
     static std::optional<Ref<WebCore::Font>> decode(Decoder&);
@@ -639,11 +645,6 @@ template<> struct ArgumentCoder<WebCore::Payment> {
     static std::optional<WebCore::Payment> decode(Decoder&);
 };
 
-template<> struct ArgumentCoder<WebCore::PaymentAuthorizationResult> {
-    static void encode(Encoder&, const WebCore::PaymentAuthorizationResult&);
-    static std::optional<WebCore::PaymentAuthorizationResult> decode(Decoder&);
-};
-
 template<> struct ArgumentCoder<WebCore::PaymentContact> {
     static void encode(Encoder&, const WebCore::PaymentContact&);
     static std::optional<WebCore::PaymentContact> decode(Decoder&);
@@ -729,8 +730,6 @@ template<> struct ArgumentCoder<RefPtr<WebCore::SecurityOrigin>> {
 template<> struct ArgumentCoder<WebCore::FontAttributes> {
     static void encode(Encoder&, const WebCore::FontAttributes&);
     static std::optional<WebCore::FontAttributes> decode(Decoder&);
-    static void encodePlatformData(Encoder&, const WebCore::FontAttributes&);
-    static std::optional<WebCore::FontAttributes> decodePlatformData(Decoder&, WebCore::FontAttributes&);
 };
 
 #if ENABLE(ATTACHMENT_ELEMENT)
@@ -750,6 +749,16 @@ template<> struct ArgumentCoder<WebCore::SerializedPlatformDataCueValue> {
     static std::optional<WebCore::SerializedPlatformDataCueValue> decodePlatformData(Decoder&, WebCore::SerializedPlatformDataCueValue::PlatformType);
 };
 #endif
+
+template<> struct ArgumentCoder<RefPtr<WebCore::FragmentedSharedBuffer>> {
+    static void encode(Encoder&, const RefPtr<WebCore::FragmentedSharedBuffer>&);
+    static std::optional<RefPtr<WebCore::FragmentedSharedBuffer>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<Ref<WebCore::FragmentedSharedBuffer>> {
+    static void encode(Encoder&, const Ref<WebCore::FragmentedSharedBuffer>&);
+    static std::optional<Ref<WebCore::FragmentedSharedBuffer>> decode(Decoder&);
+};
 
 template<> struct ArgumentCoder<RefPtr<WebCore::SharedBuffer>> {
     static void encode(Encoder&, const RefPtr<WebCore::SharedBuffer>&);

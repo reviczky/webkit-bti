@@ -29,6 +29,7 @@ messages -> GPUConnectionToWebProcess WantsDispatchMessage {
     void CreateGraphicsContextGL(struct WebCore::GraphicsContextGLAttributes attributes, WebKit::GraphicsContextGLIdentifier graphicsContextGLIdentifier, WebKit::RenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamConnectionBuffer stream)
     void ReleaseGraphicsContextGL(WebKit::GraphicsContextGLIdentifier graphicsContextGLIdentifier)
 #endif
+    void CreateRemoteGPU(WebKit::WebGPUIdentifier identifier, WebKit::RenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamConnectionBuffer stream)
     void ClearNowPlayingInfo()
     void SetNowPlayingInfo(struct WebCore::NowPlayingInfo nowPlayingInfo)
 #if USE(AUDIO_SESSION)
@@ -52,7 +53,7 @@ messages -> GPUConnectionToWebProcess WantsDispatchMessage {
     SetUserPreferredLanguages(Vector<String> languages)
     ConfigureLoggingChannel(String channelName, enum:uint8_t WTFLogChannelState state, enum:uint8_t WTFLogLevel level)
 #if USE(GRAPHICS_LAYER_WC)
-    CreateWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow)
+    CreateWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow, bool usesOffscreenRendering)
     ReleaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier)
 #endif
 }

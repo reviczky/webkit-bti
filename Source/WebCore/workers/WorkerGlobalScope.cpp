@@ -34,7 +34,6 @@
 #include "CommonVM.h"
 #include "ContentSecurityPolicy.h"
 #include "Crypto.h"
-#include "FontCache.h"
 #include "FontCustomPlatformData.h"
 #include "FontFaceSet.h"
 #include "IDBConnectionProxy.h"
@@ -50,20 +49,25 @@
 #include "SecurityOriginPolicy.h"
 #include "ServiceWorkerGlobalScope.h"
 #include "SocketProvider.h"
+#include "WorkerCacheStorageConnection.h"
 #include "WorkerFileSystemStorageConnection.h"
 #include "WorkerFontLoadRequest.h"
 #include "WorkerLoaderProxy.h"
 #include "WorkerLocation.h"
+#include "WorkerMessagePortChannelProvider.h"
 #include "WorkerMessagingProxy.h"
 #include "WorkerNavigator.h"
+#include "WorkerOrWorkletGlobalScope.h"
 #include "WorkerReportingProxy.h"
 #include "WorkerSWClientConnection.h"
 #include "WorkerScriptLoader.h"
 #include "WorkerStorageConnection.h"
+#include "WorkerThread.h"
 #include <JavaScriptCore/ScriptArguments.h>
 #include <JavaScriptCore/ScriptCallStack.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/Lock.h>
+#include <wtf/WorkQueue.h>
 #include <wtf/threads/BinarySemaphore.h>
 
 namespace WebCore {
@@ -298,11 +302,11 @@ void WorkerGlobalScope::setIsOnline(bool isOnline)
         m_navigator->setIsOnline(isOnline);
 }
 
-ExceptionOr<int> WorkerGlobalScope::setTimeout(JSC::JSGlobalObject& state, std::unique_ptr<ScheduledAction> action, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments)
+ExceptionOr<int> WorkerGlobalScope::setTimeout(std::unique_ptr<ScheduledAction> action, int timeout, FixedVector<JSC::Strong<JSC::Unknown>>&& arguments)
 {
     // FIXME: Should this check really happen here? Or should it happen when code is about to eval?
     if (action->type() == ScheduledAction::Type::Code) {
-        if (!contentSecurityPolicy()->allowEval(&state, LogToConsole::Yes))
+        if (!contentSecurityPolicy()->allowEval(globalObject(), LogToConsole::Yes, action->code()))
             return 0;
     }
 
@@ -316,11 +320,11 @@ void WorkerGlobalScope::clearTimeout(int timeoutId)
     DOMTimer::removeById(*this, timeoutId);
 }
 
-ExceptionOr<int> WorkerGlobalScope::setInterval(JSC::JSGlobalObject& state, std::unique_ptr<ScheduledAction> action, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments)
+ExceptionOr<int> WorkerGlobalScope::setInterval(std::unique_ptr<ScheduledAction> action, int timeout, FixedVector<JSC::Strong<JSC::Unknown>>&& arguments)
 {
     // FIXME: Should this check really happen here? Or should it happen when code is about to eval?
     if (action->type() == ScheduledAction::Type::Code) {
-        if (!contentSecurityPolicy()->allowEval(&state, LogToConsole::Yes))
+        if (!contentSecurityPolicy()->allowEval(globalObject(), LogToConsole::Yes, action->code()))
             return 0;
     }
 
@@ -334,7 +338,7 @@ void WorkerGlobalScope::clearInterval(int timeoutId)
     DOMTimer::removeById(*this, timeoutId);
 }
 
-ExceptionOr<void> WorkerGlobalScope::importScripts(const Vector<String>& urls)
+ExceptionOr<void> WorkerGlobalScope::importScripts(const FixedVector<String>& urls)
 {
     ASSERT(contentSecurityPolicy());
 
@@ -524,13 +528,6 @@ CSSFontSelector* WorkerGlobalScope::cssFontSelector()
     if (!m_cssFontSelector)
         m_cssFontSelector = CSSFontSelector::create(*this);
     return m_cssFontSelector.get();
-}
-
-FontCache& WorkerGlobalScope::fontCache()
-{
-    if (!m_fontCache)
-        m_fontCache = FontCache::create();
-    return *m_fontCache;
 }
 
 Ref<FontFaceSet> WorkerGlobalScope::fonts()

@@ -48,7 +48,6 @@ namespace WebCore {
 
 ScrollingEffectsController::ScrollingEffectsController(ScrollingEffectsControllerClient& client)
     : m_client(client)
-    , m_momentumScrollingAnimatorEnabled(client.momentumScrollingAnimatorEnabled())
 {
 }
 
@@ -521,6 +520,20 @@ void ScrollingEffectsController::scrollAnimationDidEnd(ScrollAnimation& animatio
 ScrollExtents ScrollingEffectsController::scrollExtentsForAnimation(ScrollAnimation&)
 {
     return m_client.scrollExtents();
+}
+
+FloatSize ScrollingEffectsController::overscrollAmount(ScrollAnimation&)
+{
+#if HAVE(RUBBER_BANDING)
+    return m_client.stretchAmount();
+#else
+    return { };
+#endif
+}
+
+FloatPoint ScrollingEffectsController::scrollOffset(ScrollAnimation&)
+{
+    return m_client.scrollOffset();
 }
 
 void ScrollingEffectsController::startDeferringWheelEventTestCompletion(WheelEventTestMonitor::DeferReason reason)

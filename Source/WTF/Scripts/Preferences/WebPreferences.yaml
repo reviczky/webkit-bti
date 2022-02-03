@@ -312,30 +312,6 @@ ApplePayEnabled:
       "ENABLE(APPLE_PAY_REMOTE_UI)": true
       default: false
 
-ArtificialPluginInitializationDelayEnabled:
-  type: bool
-  webcoreBinding: none
-  exposed: [ WebKit ]
-  defaultValue:
-    WebKit:
-      default: false
-
-AsynchronousPluginInitializationEnabled:
-  type: bool
-  webcoreBinding: none
-  exposed: [ WebKit ]
-  defaultValue:
-    WebKit:
-      default: false
-
-AsynchronousPluginInitializationEnabledForAllPlugins:
-  type: bool
-  webcoreBinding: none
-  exposed: [ WebKit ]
-  defaultValue:
-    WebKit:
-      default: false
-
 AsynchronousSpellCheckingEnabled:
   type: bool
   defaultValue:
@@ -368,17 +344,6 @@ AuthorAndUserStylesEnabled:
       default: true
     WebCore:
       default: true
-
-BackForwardCacheSupportsPlugins:
-  type: bool
-  webKitLegacyPreferenceKey: WebKitPageCacheSupportsPluginsPreferenceKey
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: false
 
 BackspaceKeyNavigationEnabled:
   type: bool
@@ -631,7 +596,7 @@ DefaultTextEncodingName:
     WebKitLegacy:
       default: '"ISO-8859-1"'
     WebKit:
-      default: WebCore::defaultTextEncodingNameForSystemLanguage()
+      default: PAL::defaultTextEncodingNameForSystemLanguage()
     WebCore:
       default: '{ }'
 
@@ -934,6 +899,17 @@ HyperlinkAuditingEnabled:
     WebCore:
       default: false
 
+ImageControlsEnabled:
+  type: bool
+  condition: ENABLE(SERVICE_CONTROLS)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 InactiveMediaCaptureSteamRepromptIntervalInMinutes:
   type: double
   webcoreBinding: none
@@ -977,18 +953,6 @@ InlineMediaPlaybackRequiresPlaysInlineAttribute:
     WebCore:
       "PLATFORM(IOS_FAMILY)": true
       default: false
-
-InputEventsEnabled:
-  type: bool
-  humanReadableName: "Input Events"
-  humanReadableDescription: "Enable InputEvents support"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 InspectorAdditionsEnabled:
   type: bool
@@ -1544,7 +1508,7 @@ MockCaptureDevicesPromptEnabled:
     WebKit:
       default: true
 
-MockScrollAnimatorEnabled:
+MockScrollbarsControllerEnabled:
   type: bool
   defaultValue:
     WebKitLegacy:
@@ -1794,16 +1758,6 @@ PunchOutWhiteBackgroundsInDarkMode:
     WebCore:
       default: false
 
-RequestAnimationFrameEnabled:
-  type: bool
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 RequiresPageVisibilityToPlayAudio:
   type: bool
   defaultValue:
@@ -1913,13 +1867,14 @@ ScrollAnimatorEnabled:
   type: bool
   defaultValue:
     WebKitLegacy:
-      "PLATFORM(MAC)": true
+      "PLATFORM(MAC)": WebKit::defaultScrollAnimatorEnabled()
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebKit:
-      "PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(WPE)": true
+      "PLATFORM(MAC)": WebKit::defaultScrollAnimatorEnabled()
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
-      "PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 # FIXME: This is handled via WebView SPI rather than WebPreferences for WebKitLegacy. We should change the SPI to lookup the WebPreferences value instead.
@@ -2238,16 +2193,6 @@ StorageBlockingPolicy:
       default: WebAllowAllStorage
     WebKit:
       default: WebCore::StorageBlockingPolicy::BlockThirdParty
-
-SubresourceIntegrityEnabled:
-  type: bool
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 SuppressesIncrementalRendering:
   type: bool

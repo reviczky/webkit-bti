@@ -27,6 +27,7 @@
 
 #if ENABLE(VIDEO)
 
+#include "PlatformVideoTrackConfiguration.h"
 #include "TrackPrivateBase.h"
 #include "VideoTrackPrivateClient.h"
 #include <wtf/Function.h>
@@ -61,12 +62,24 @@ public:
     using SelectedChangedCallback = Function<void(VideoTrackPrivate&, bool selected)>;
     void setSelectedChangedCallback(SelectedChangedCallback&& callback) { m_selectedChangedCallback = WTFMove(callback); }
 
+    const PlatformVideoTrackConfiguration& configuration() const { return m_configuration; }
+    void setConfiguration(PlatformVideoTrackConfiguration&& configuration)
+    {
+        if (configuration == m_configuration)
+            return;
+        m_configuration = WTFMove(configuration);
+        if (m_client)
+            m_client->configurationChanged(m_configuration);
+    }
+
 protected:
     VideoTrackPrivate() = default;
 
 private:
     WeakPtr<VideoTrackPrivateClient> m_client { nullptr };
     bool m_selected { false };
+    PlatformVideoTrackConfiguration m_configuration;
+
     SelectedChangedCallback m_selectedChangedCallback;
 };
 

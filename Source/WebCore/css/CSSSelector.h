@@ -114,7 +114,6 @@ namespace WebCore {
             PseudoClassAutofillStrongPassword,
             PseudoClassAutofillStrongPasswordViewable,
             PseudoClassHover,
-            PseudoClassDirectFocus,
             PseudoClassDrag,
             PseudoClassFocus,
             PseudoClassFocusVisible,
@@ -253,7 +252,8 @@ namespace WebCore {
 
         // Selectors are kept in an array by CSSSelectorList. The next component of the selector is
         // the next item in the array.
-        const CSSSelector* tagHistory() const { return m_isLastInTagHistory ? 0 : const_cast<CSSSelector*>(this + 1); }
+        const CSSSelector* tagHistory() const { return m_isLastInTagHistory ? nullptr : this + 1; }
+        const CSSSelector* firstInCompound() const;
 
         const QualifiedName& tagQName() const;
         const AtomString& tagLowercaseLocalName() const;
@@ -339,7 +339,9 @@ namespace WebCore {
 
         bool isLastInSelectorList() const { return m_isLastInSelectorList; }
         void setLastInSelectorList() { m_isLastInSelectorList = true; }
+        bool isFirstInTagHistory() const { return m_isFirstInTagHistory; }
         bool isLastInTagHistory() const { return m_isLastInTagHistory; }
+        void setNotFirstInTagHistory() { m_isFirstInTagHistory = false; }
         void setNotLastInTagHistory() { m_isLastInTagHistory = false; }
 
         bool isForPage() const { return m_isForPage; }
@@ -350,6 +352,7 @@ namespace WebCore {
         mutable unsigned m_match         : 4; // enum Match.
         mutable unsigned m_pseudoType    : 8; // PseudoType.
         unsigned m_isLastInSelectorList  : 1;
+        unsigned m_isFirstInTagHistory   : 1;
         unsigned m_isLastInTagHistory    : 1;
         unsigned m_hasRareData           : 1;
         unsigned m_hasNameWithCase       : 1;
@@ -468,6 +471,21 @@ static inline bool isTreeStructuralPseudoClass(CSSSelector::PseudoClassType type
     return pseudoClassIsRelativeToSiblings(type) || type == CSSSelector::PseudoClassRoot;
 }
 
+inline bool isLogicalCombinationPseudoClass(CSSSelector::PseudoClassType pseudoClassType)
+{
+    switch (pseudoClassType) {
+    case CSSSelector::PseudoClassIs:
+    case CSSSelector::PseudoClassWhere:
+    case CSSSelector::PseudoClassNot:
+    case CSSSelector::PseudoClassAny:
+    case CSSSelector::PseudoClassMatches:
+    case CSSSelector::PseudoClassHas:
+        return true;
+    default:
+        return false;
+    }
+}
+
 inline bool CSSSelector::isSiblingSelector() const
 {
     return relation() == DirectAdjacent
@@ -511,6 +529,7 @@ inline CSSSelector::CSSSelector()
     , m_match(Unknown)
     , m_pseudoType(0)
     , m_isLastInSelectorList(false)
+    , m_isFirstInTagHistory(true)
     , m_isLastInTagHistory(true)
     , m_hasRareData(false)
     , m_hasNameWithCase(false)
@@ -528,6 +547,7 @@ inline CSSSelector::CSSSelector(const CSSSelector& o)
     , m_match(o.m_match)
     , m_pseudoType(o.m_pseudoType)
     , m_isLastInSelectorList(o.m_isLastInSelectorList)
+    , m_isFirstInTagHistory(o.m_isFirstInTagHistory)
     , m_isLastInTagHistory(o.m_isLastInTagHistory)
     , m_hasRareData(o.m_hasRareData)
     , m_hasNameWithCase(o.m_hasNameWithCase)

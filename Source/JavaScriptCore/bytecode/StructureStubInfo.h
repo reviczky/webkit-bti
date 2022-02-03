@@ -32,6 +32,7 @@
 #include "JITStubRoutine.h"
 #include "MacroAssembler.h"
 #include "Options.h"
+#include "PolymorphicAccess.h"
 #include "PutKind.h"
 #include "RegisterSet.h"
 #include "Structure.h"
@@ -211,6 +212,10 @@ public:
         return considerCaching(vm, codeBlock, structure, impl);
     }
 
+    Structure* inlineAccessBaseStructure(VM&)
+    {
+        return m_inlineAccessBaseStructureID.get();
+    }
 private:
     ALWAYS_INLINE bool considerCaching(VM& vm, CodeBlock* codeBlock, Structure* structure, CacheableIdentifier impl)
     {
@@ -350,20 +355,18 @@ private:
     };
 
 public:
+    static ptrdiff_t offsetOfByIdSelfOffset() { return OBJECT_OFFSETOF(StructureStubInfo, byIdSelfOffset); }
+    static ptrdiff_t offsetOfInlineAccessBaseStructureID() { return OBJECT_OFFSETOF(StructureStubInfo, m_inlineAccessBaseStructureID); }
+    static ptrdiff_t offsetOfCodePtr() { return OBJECT_OFFSETOF(StructureStubInfo, m_codePtr); }
+    static ptrdiff_t offsetOfDoneLocation() { return OBJECT_OFFSETOF(StructureStubInfo, doneLocation); }
+    static ptrdiff_t offsetOfSlowPathStartLocation() { return OBJECT_OFFSETOF(StructureStubInfo, slowPathStartLocation); }
+    static ptrdiff_t offsetOfSlowOperation() { return OBJECT_OFFSETOF(StructureStubInfo, m_slowOperation); }
+    static ptrdiff_t offsetOfCountdown() { return OBJECT_OFFSETOF(StructureStubInfo, countdown); }
+
     CodeOrigin codeOrigin;
     PropertyOffset byIdSelfOffset;
-    static ptrdiff_t offsetOfByIdSelfOffset() { return OBJECT_OFFSETOF(StructureStubInfo, byIdSelfOffset); }
-    static ptrdiff_t offsetOfInlineAccessBaseStructure() { return OBJECT_OFFSETOF(StructureStubInfo, m_inlineAccessBaseStructure); }
-    union {
-        PolymorphicAccess* stub;
-    } u;
-    Structure* inlineAccessBaseStructure(VM& vm)
-    {
-        if (!m_inlineAccessBaseStructure)
-            return nullptr;
-        return vm.getStructure(m_inlineAccessBaseStructure);
-    }
-    StructureID m_inlineAccessBaseStructure { 0 };
+    std::unique_ptr<PolymorphicAccess> m_stub;
+    WriteBarrierStructureID m_inlineAccessBaseStructureID;
 private:
     CacheableIdentifier m_identifier;
     // Represents those structures that already have buffered AccessCases in the PolymorphicAccess.
@@ -382,12 +385,6 @@ public:
     };
 
     MacroAssemblerCodePtr<JITStubRoutinePtrTag> m_codePtr;
-
-    static ptrdiff_t offsetOfCodePtr() { return OBJECT_OFFSETOF(StructureStubInfo, m_codePtr); }
-    static ptrdiff_t offsetOfDoneLocation() { return OBJECT_OFFSETOF(StructureStubInfo, doneLocation); }
-    static ptrdiff_t offsetOfSlowPathStartLocation() { return OBJECT_OFFSETOF(StructureStubInfo, slowPathStartLocation); }
-    static ptrdiff_t offsetOfSlowOperation() { return OBJECT_OFFSETOF(StructureStubInfo, m_slowOperation); }
-    static ptrdiff_t offsetOfCountdown() { return OBJECT_OFFSETOF(StructureStubInfo, countdown); }
 
     RegisterSet usedRegisters;
 
@@ -422,10 +419,11 @@ public:
     uint8_t countdown { 1 };
     uint8_t repatchCount { 0 };
     uint8_t numberOfCoolDowns { 0 };
-
-    CallSiteIndex callSiteIndex;
-
     uint8_t bufferingCountdown;
+private:
+    Lock m_bufferedStructuresLock;
+public:
+    CallSiteIndex callSiteIndex;
     bool resetByGC : 1;
     bool tookSlowPath : 1;
     bool everConsidered : 1;
@@ -435,8 +433,6 @@ public:
     bool propertyIsString : 1;
     bool propertyIsInt32 : 1;
     bool propertyIsSymbol : 1;
-private:
-    Lock m_bufferedStructuresLock;
 };
 
 inline CodeOrigin getStructureStubInfoCodeOrigin(StructureStubInfo& structureStubInfo)

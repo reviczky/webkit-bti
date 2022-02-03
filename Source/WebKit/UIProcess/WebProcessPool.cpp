@@ -37,6 +37,7 @@
 #include "APIPageConfiguration.h"
 #include "APIProcessPoolConfiguration.h"
 #include "AuxiliaryProcessMessages.h"
+#include "AuxiliaryProcessProxy.h"
 #include "DownloadProxy.h"
 #include "DownloadProxyMessages.h"
 #include "GPUProcessConnectionInfo.h"
@@ -130,13 +131,12 @@
 #endif
 
 #if PLATFORM(COCOA)
-#include "AudioComponentRegistration.h"
 #include "DefaultWebBrowserChecks.h"
 #include <WebCore/GameControllerGamepadProvider.h>
 #include <WebCore/HIDGamepadProvider.h>
 #include <WebCore/MultiGamepadProvider.h>
 #include <WebCore/PowerSourceNotifier.h>
-#include <WebCore/VersionChecks.h>
+#include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
 #if PLATFORM(MAC)
@@ -145,6 +145,10 @@
 
 #ifndef NDEBUG
 #include <wtf/RefCountedLeakCounter.h>
+#endif
+
+#if ENABLE(IPC_TESTING_API)
+#include "IPCTesterMessages.h"
 #endif
 
 #define WEBPROCESSPOOL_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - WebProcessPool::" fmt, this, ##__VA_ARGS__)
@@ -226,6 +230,15 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
         Process::setIdentifier(WebCore::ProcessIdentifier::generate());
 #if PLATFORM(COCOA)
         determineITPState();
+
+        // This can be removed once Safari calls _setLinkedOnOrAfterEverything everywhere that WebKit deploys.
+#if PLATFORM(IOS_FAMILY)
+        bool isSafari = WebCore::IOSApplication::isMobileSafari();
+#elif PLATFORM(MAC)
+        bool isSafari = WebCore::MacApplication::isSafari();
+#endif
+        if (isSafari)
+            setLinkedOnOrAfterOverride(LinkedOnOrAfterOverride::AfterEverything);
 #endif
     });
 
@@ -242,6 +255,9 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
 #endif
 
     addMessageReceiver(Messages::WebProcessPool::messageReceiverName(), *this);
+#if ENABLE(IPC_TESTING_API)
+    addMessageReceiver(Messages::IPCTester::messageReceiverName(), m_ipcTester);
+#endif
 
     // NOTE: These sub-objects must be initialized after m_messageReceiverMap..
     addSupplement<WebGeolocationManagerProxy>();
@@ -266,7 +282,7 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
     updateBackForwardCacheCapacity();
 
 #if PLATFORM(IOS)
-    if (WebCore::IOSApplication::isLutron() && !WebCore::linkedOnOrAfter(WebCore::SDKVersion::FirstWithSharedNetworkProcess)) {
+    if (WebCore::IOSApplication::isLutron() && !linkedOnOrAfter(SDKVersion::FirstWithSharedNetworkProcess)) {
         callOnMainRunLoop([] {
             if (WebsiteDataStore::defaultDataStoreExists())
                 WebsiteDataStore::defaultDataStore()->terminateNetworkProcess();
@@ -513,7 +529,7 @@ void WebProcessPool::getWebAuthnProcessConnection(WebProcessProxy& webProcessPro
 bool WebProcessPool::s_useSeparateServiceWorkerProcess = false;
 
 #if ENABLE(SERVICE_WORKER)
-void WebProcessPool::establishWorkerContextConnectionToNetworkProcess(NetworkProcessProxy& proxy, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+void WebProcessPool::establishServiceWorkerContextConnectionToNetworkProcess(NetworkProcessProxy& proxy, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
 {
     auto* websiteDataStore = WebsiteDataStore::existingDataStoreForSessionID(sessionID);
     if (!websiteDataStore)
@@ -555,7 +571,7 @@ void WebProcessPool::establishWorkerContextConnectionToNetworkProcess(NetworkPro
                 ASSERT(!serviceWorkerProcessProxy->isInProcessCache());
             }
 
-            WEBPROCESSPOOL_RELEASE_LOG_STATIC(ServiceWorker, "establishWorkerContextConnectionToNetworkProcess reusing an existing web process (process=%p, PID=%d)", serviceWorkerProcessProxy, serviceWorkerProcessProxy->processIdentifier());
+            WEBPROCESSPOOL_RELEASE_LOG_STATIC(ServiceWorker, "establishServiceWorkerContextConnectionToNetworkProcess reusing an existing web process (process=%p, PID=%d)", serviceWorkerProcessProxy, serviceWorkerProcessProxy->processIdentifier());
             break;
         }
     }
@@ -564,7 +580,7 @@ void WebProcessPool::establishWorkerContextConnectionToNetworkProcess(NetworkPro
         auto newProcessProxy = WebProcessProxy::createForServiceWorkers(*processPool, RegistrableDomain  { registrableDomain }, *websiteDataStore);
         serviceWorkerProcessProxy = newProcessProxy.ptr();
 
-        WEBPROCESSPOOL_RELEASE_LOG_STATIC(ServiceWorker, "establishWorkerContextConnectionToNetworkProcess creating a new service worker process (proces=%p, PID=%d)", serviceWorkerProcessProxy, serviceWorkerProcessProxy->processIdentifier());
+        WEBPROCESSPOOL_RELEASE_LOG_STATIC(ServiceWorker, "establishServiceWorkerContextConnectionToNetworkProcess creating a new service worker process (proces=%p, PID=%d)", serviceWorkerProcessProxy, serviceWorkerProcessProxy->processIdentifier());
 
         processPool->initializeNewWebProcess(newProcessProxy, websiteDataStore);
         processPool->m_processes.append(WTFMove(newProcessProxy));
@@ -777,6 +793,7 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
     });
 
     WebProcessCreationParameters parameters;
+    parameters.auxiliaryProcessParameters = AuxiliaryProcessProxy::auxiliaryProcessParameters();
 
     parameters.injectedBundlePath = m_resolvedPaths.injectedBundlePath;
     if (!parameters.injectedBundlePath.isEmpty()) {
@@ -879,7 +896,7 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
 #endif
 
 #if PLATFORM(COCOA)
-    sendAudioComponentRegistrations<Messages::WebProcess::ConsumeAudioComponentRegistrations>(process);
+    process.sendAudioComponentRegistrations();
 #endif
 
 #if PLATFORM(MAC)
@@ -1114,7 +1131,7 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
 
     bool enableProcessSwapOnCrossSiteNavigation = page->preferences().processSwapOnCrossSiteNavigationEnabled();
 #if PLATFORM(IOS_FAMILY)
-    if (WebCore::IOSApplication::isFirefox() && !linkedOnOrAfter(WebCore::SDKVersion::FirstWithProcessSwapOnCrossSiteNavigation))
+    if (WebCore::IOSApplication::isFirefox() && !linkedOnOrAfter(SDKVersion::FirstWithProcessSwapOnCrossSiteNavigation))
         enableProcessSwapOnCrossSiteNavigation = false;
 #endif
 
@@ -2122,10 +2139,19 @@ bool WebProcessPool::hasServiceWorkerBackgroundActivityForTesting() const
 }
 #endif
 
-#if !PLATFORM(IOS_FAMILY)
+#if !PLATFORM(COCOA)
+void addCaptivePortalModeObserver(CaptivePortalModeObserver&)
+{
+}
+void removeCaptivePortalModeObserver(CaptivePortalModeObserver&)
+{
+}
 bool captivePortalModeEnabledBySystem()
 {
     return false;
+}
+void setCaptivePortalModeEnabledGloballyForTesting(std::optional<bool>)
+{
 }
 #endif
 

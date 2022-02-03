@@ -27,6 +27,7 @@
 #include "DisplayListItems.h"
 
 #include "DisplayListReplayer.h"
+#include "Filter.h"
 #include "FontCascade.h"
 #include "ImageBuffer.h"
 #include "MediaPlayer.h"
@@ -152,19 +153,13 @@ SetState::SetState(const GraphicsContextState& state, GraphicsContextState::Stat
 {
 }
 
-SetState::SetState(const GraphicsContextStateChange& stateChange, const PatternData& strokePattern, const PatternData& fillPattern)
+SetState::SetState(const GraphicsContextStateChange& stateChange)
     : m_stateChange(stateChange)
-    , m_strokePattern(strokePattern)
-    , m_fillPattern(fillPattern)
 {
 }
 
-void SetState::apply(GraphicsContext& context, NativeImage* strokePatternImage, NativeImage* fillPatternImage)
+void SetState::apply(GraphicsContext& context)
 {
-    if (m_stateChange.m_changeFlags.contains(GraphicsContextState::StrokePatternChange) && strokePatternImage)
-        m_stateChange.m_state.strokePattern = Pattern::create(*strokePatternImage, m_strokePattern.parameters);
-    if (m_stateChange.m_changeFlags.contains(GraphicsContextState::FillPatternChange) && fillPatternImage)
-        m_stateChange.m_state.fillPattern = Pattern::create(*fillPatternImage, m_fillPattern.parameters);
     m_stateChange.apply(context);
 }
 
@@ -296,6 +291,30 @@ static TextStream& operator<<(TextStream& ts, const BeginClipToDrawingCommands& 
 static TextStream& operator<<(TextStream& ts, const EndClipToDrawingCommands& item)
 {
     ts.dumpProperty("destination", item.destination());
+    return ts;
+}
+
+DrawFilteredImageBuffer::DrawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Filter& filter)
+    : m_sourceImageIdentifier(sourceImageIdentifier)
+    , m_sourceImageRect(sourceImageRect)
+    , m_filter(filter)
+{
+}
+
+NO_RETURN_DUE_TO_ASSERT void DrawFilteredImageBuffer::apply(GraphicsContext&) const
+{
+    ASSERT_NOT_REACHED();
+}
+
+void DrawFilteredImageBuffer::apply(GraphicsContext& context, ImageBuffer* sourceImage, FilterResults& results)
+{
+    context.drawFilteredImageBuffer(sourceImage, m_sourceImageRect, m_filter, results);
+}
+
+static TextStream& operator<<(TextStream& ts, const DrawFilteredImageBuffer& item)
+{
+    ts.dumpProperty("source-image-identifier", item.sourceImageIdentifier());
+    ts.dumpProperty("source-image-rect", item.sourceImageRect());
     return ts;
 }
 
@@ -1059,6 +1078,7 @@ static TextStream& operator<<(TextStream& ts, ItemType type)
     case ItemType::ClipPath: ts << "clip-path"; break;
     case ItemType::BeginClipToDrawingCommands: ts << "begin-clip-to-drawing-commands:"; break;
     case ItemType::EndClipToDrawingCommands: ts << "end-clip-to-drawing-commands"; break;
+    case ItemType::DrawFilteredImageBuffer: ts << "draw-filtered-image-buffer"; break;
     case ItemType::DrawGlyphs: ts << "draw-glyphs"; break;
     case ItemType::DrawImageBuffer: ts << "draw-image-buffer"; break;
     case ItemType::DrawNativeImage: ts << "draw-native-image"; break;
@@ -1177,6 +1197,9 @@ TextStream& operator<<(TextStream& ts, ItemHandle item)
         break;
     case ItemType::EndClipToDrawingCommands:
         ts << item.get<EndClipToDrawingCommands>();
+        break;
+    case ItemType::DrawFilteredImageBuffer:
+        ts << item.get<DrawFilteredImageBuffer>();
         break;
     case ItemType::DrawGlyphs:
         ts << item.get<DrawGlyphs>();

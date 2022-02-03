@@ -320,21 +320,6 @@ static bool isUserActionPseudoClass(CSSSelector::PseudoClassType pseudo)
     }
 }
 
-static bool isLogicalCombinationPseudoClass(CSSSelector::PseudoClassType pseudo)
-{
-    switch (pseudo) {
-    case CSSSelector::PseudoClassIs:
-    case CSSSelector::PseudoClassWhere:
-    case CSSSelector::PseudoClassNot:
-    case CSSSelector::PseudoClassAny:
-    case CSSSelector::PseudoClassMatches:
-    case CSSSelector::PseudoClassHas:
-        return true;
-    default:
-        return false;
-    }
-}
-
 static bool isPseudoClassValidAfterPseudoElement(CSSSelector::PseudoClassType pseudoClass, CSSSelector::PseudoElementType compoundPseudoElement)
 {
     // Validity of these is determined by their content.
@@ -657,8 +642,6 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::consumePseudo(CSSParserTok
         if (!selector)
             return nullptr;
         if (selector->match() == CSSSelector::PseudoClass) {
-            if (m_context.mode != UASheetMode && selector->pseudoClassType() == CSSSelector::PseudoClassDirectFocus)
-                return nullptr;
             if (m_context.mode != UASheetMode && selector->pseudoClassType() == CSSSelector::PseudoClassModalDialog)
                 return nullptr;
             if (!m_context.focusVisibleEnabled && selector->pseudoClassType() == CSSSelector::PseudoClassFocusVisible)
@@ -703,7 +686,7 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::consumePseudo(CSSParserTok
     if (selector->match() == CSSSelector::PseudoClass) {
         switch (selector->pseudoClassType()) {
         case CSSSelector::PseudoClassNot: {
-            SetForScope<bool> resistDefaultNamespace(m_resistDefaultNamespace, true);
+            SetForScope resistDefaultNamespace(m_resistDefaultNamespace, true);
             auto selectorList = makeUnique<CSSSelectorList>();
             *selectorList = consumeComplexSelectorList(block);
             if (!selectorList->first() || !block.atEnd())
@@ -751,7 +734,7 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::consumePseudo(CSSParserTok
         case CSSSelector::PseudoClassWhere:
         case CSSSelector::PseudoClassMatches:
         case CSSSelector::PseudoClassAny: {
-            SetForScope<bool> resistDefaultNamespace(m_resistDefaultNamespace, true);
+            SetForScope resistDefaultNamespace(m_resistDefaultNamespace, true);
             auto selectorList = makeUnique<CSSSelectorList>();
             *selectorList = consumeForgivingComplexSelectorList(block);
             if (!block.atEnd())
@@ -768,6 +751,10 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::consumePseudo(CSSParserTok
             return selector;
         }
         case CSSSelector::PseudoClassHas: {
+            if (m_disallowHasPseudoClass)
+                return nullptr;
+            SetForScope resistDefaultNamespace(m_resistDefaultNamespace, true);
+            SetForScope disallowNestedHas(m_disallowHasPseudoClass, true);
             auto selectorList = makeUnique<CSSSelectorList>();
             *selectorList = consumeForgivingRelativeSelectorList(block);
             if (selectorList->isEmpty() || !block.atEnd())

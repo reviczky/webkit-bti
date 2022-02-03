@@ -35,8 +35,8 @@
 #include "ShareableResource.h"
 #include "UserContentControllerIdentifier.h"
 #include "WebPageProxyIdentifier.h"
+#include "WebPreferencesStore.h"
 #include "WebSWContextManagerConnectionMessagesReplies.h"
-#include <WebCore/EmptyFrameLoaderClient.h>
 #include <WebCore/SWContextManager.h>
 #include <WebCore/ServiceWorkerClientData.h>
 #include <WebCore/ServiceWorkerTypes.h>
@@ -55,10 +55,9 @@ enum class WorkerThreadMode : bool;
 
 namespace WebKit {
 
-class ServiceWorkerFrameLoaderClient;
-struct ServiceWorkerInitializationData;
-struct WebPreferencesStore;
+class RemoteWorkerFrameLoaderClient;
 class WebUserContentController;
+struct ServiceWorkerInitializationData;
 
 class WebSWContextManagerConnection final : public WebCore::SWContextManager::Connection, public IPC::MessageReceiver {
 public:
@@ -77,7 +76,7 @@ private:
     void didFinishActivation(WebCore::ServiceWorkerIdentifier) final;
     void setServiceWorkerHasPendingEvents(WebCore::ServiceWorkerIdentifier, bool) final;
     void workerTerminated(WebCore::ServiceWorkerIdentifier) final;
-    void findClientByIdentifier(WebCore::ServiceWorkerIdentifier, WebCore::ScriptExecutionContextIdentifier, FindClientByIdentifierCallback&&) final;
+    void findClientByVisibleIdentifier(WebCore::ServiceWorkerIdentifier, const String&, FindClientByIdentifierCallback&&) final;
     void matchAll(WebCore::ServiceWorkerIdentifier, const WebCore::ServiceWorkerClientQueryOptions&, WebCore::ServiceWorkerClientsMatchAllCallback&&) final;
     void claim(WebCore::ServiceWorkerIdentifier, CompletionHandler<void(WebCore::ExceptionOr<void>&&)>&&) final;
     void skipWaiting(WebCore::ServiceWorkerIdentifier, CompletionHandler<void()>&&) final;
@@ -90,7 +89,7 @@ private:
     void serviceWorkerFailedToStart(std::optional<WebCore::ServiceWorkerJobDataIdentifier>, WebCore::ServiceWorkerIdentifier, const String& exceptionMessage) final;
     void installServiceWorker(WebCore::ServiceWorkerContextData&&, WebCore::ServiceWorkerData&&, String&& userAgent, WebCore::WorkerThreadMode);
     void updateAppInitiatedValue(WebCore::ServiceWorkerIdentifier, WebCore::LastNavigationWasAppInitiated);
-    void startFetch(WebCore::SWServerConnectionIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier, WebCore::ResourceRequest&&, WebCore::FetchOptions&&, IPC::FormDataReference&&, String&& referrer);
+    void startFetch(WebCore::SWServerConnectionIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier, WebCore::ResourceRequest&&, WebCore::FetchOptions&&, IPC::FormDataReference&&, String&& referrer, bool isServiceWorkerNavigationPreloadEnabled, String&& clientIdentifier, String&& resultingClientIdentifier);
     void cancelFetch(WebCore::SWServerConnectionIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier);
     void continueDidReceiveFetchResponse(WebCore::SWServerConnectionIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier);
     void postMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destinationIdentifier, WebCore::MessageWithMessagePorts&&, WebCore::ServiceWorkerOrClientData&& sourceData);
@@ -101,11 +100,12 @@ private:
 #if ENABLE(SHAREABLE_RESOURCE) && PLATFORM(COCOA)
     void didSaveScriptsToDisk(WebCore::ServiceWorkerIdentifier, WebCore::ScriptBuffer&&, HashMap<URL, WebCore::ScriptBuffer>&& importedScripts);
 #endif
-    void findClientByIdentifierCompleted(uint64_t requestIdentifier, std::optional<WebCore::ServiceWorkerClientData>&&, bool hasSecurityError);
     void matchAllCompleted(uint64_t matchAllRequestIdentifier, Vector<WebCore::ServiceWorkerClientData>&&);
     void setUserAgent(String&& userAgent);
     void close();
     void setThrottleState(bool isThrottleable);
+    void convertFetchToDownload(WebCore::SWServerConnectionIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier);
+    void cancelFetchDownload(WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier);
 
     Ref<IPC::Connection> m_connectionToNetworkProcess;
     WebCore::RegistrableDomain m_registrableDomain;
@@ -114,46 +114,15 @@ private:
     WebPageProxyIdentifier m_webPageProxyID;
     WebCore::PageIdentifier m_pageID;
 
-    WebCore::StorageBlockingPolicy m_storageBlockingPolicy { WebCore::StorageBlockingPolicy::AllowAll };
-
-    HashSet<std::unique_ptr<ServiceWorkerFrameLoaderClient>> m_loaders;
-    HashMap<uint64_t, FindClientByIdentifierCallback> m_findClientByIdentifierRequests;
+    HashSet<std::unique_ptr<RemoteWorkerFrameLoaderClient>> m_loaders;
     HashMap<uint64_t, WebCore::ServiceWorkerClientsMatchAllCallback> m_matchAllRequests;
     uint64_t m_previousRequestIdentifier { 0 };
     String m_userAgent;
     bool m_isThrottleable { true };
     Ref<WebUserContentController> m_userContentController;
-};
-
-class ServiceWorkerFrameLoaderClient final : public WebCore::EmptyFrameLoaderClient {
-public:
-    ServiceWorkerFrameLoaderClient(WebPageProxyIdentifier, WebCore::PageIdentifier, WebCore::FrameIdentifier, const String& userAgent);
-
-    WebPageProxyIdentifier webPageProxyID() const { return m_webPageProxyID; }
-
-    void setUserAgent(String&& userAgent) { m_userAgent = WTFMove(userAgent); }
-
-private:
-    Ref<WebCore::DocumentLoader> createDocumentLoader(const WebCore::ResourceRequest&, const WebCore::SubstituteData&) final;
-
-    std::optional<WebCore::PageIdentifier> pageID() const final { return m_pageID; }
-    std::optional<WebCore::FrameIdentifier> frameID() const final { return m_frameID; }
-
-    bool shouldUseCredentialStorage(WebCore::DocumentLoader*, WebCore::ResourceLoaderIdentifier) final { return true; }
-    bool isServiceWorkerFrameLoaderClient() const final { return true; }
-
-    String userAgent(const URL&) const final { return m_userAgent; }
-
-    WebPageProxyIdentifier m_webPageProxyID;
-    WebCore::PageIdentifier m_pageID;
-    WebCore::FrameIdentifier m_frameID;
-    String m_userAgent;
+    std::optional<WebPreferencesStore> m_preferencesStore;
 };
 
 } // namespace WebKit
-
-SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::ServiceWorkerFrameLoaderClient)
-    static bool isType(const WebCore::FrameLoaderClient& frameLoaderClient) { return frameLoaderClient.isServiceWorkerFrameLoaderClient(); }
-SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // ENABLE(SERVICE_WORKER)

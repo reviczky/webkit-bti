@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2009-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +27,6 @@
 #include "WebProcess.h"
 
 #include "APIFrameHandle.h"
-#include "APIPageGroupHandle.h"
 #include "APIPageHandle.h"
 #include "AudioMediaStreamTrackRendererInternalUnitManager.h"
 #include "AuthenticationManager.h"
@@ -49,6 +48,7 @@
 #include "RemoteLegacyCDMFactory.h"
 #include "RemoteMediaEngineConfigurationFactory.h"
 #include "RemoteRemoteCommandListener.h"
+#include "RemoteWebLockRegistry.h"
 #include "SpeechRecognitionRealtimeMediaSourceManager.h"
 #include "StorageAreaMap.h"
 #include "UserData.h"
@@ -126,7 +126,6 @@
 #include <WebCore/ProcessWarming.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/RemoteCommandListener.h>
-#include <WebCore/ReportingEndpointsCache.h>
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
@@ -279,8 +278,8 @@ WebProcess::WebProcess()
     , m_webLoaderStrategy(*new WebLoaderStrategy)
     , m_cacheStorageProvider(WebCacheStorageProvider::create())
     , m_broadcastChannelRegistry(WebBroadcastChannelRegistry::create())
+    , m_webLockRegistry(RemoteWebLockRegistry::create(*this))
     , m_cookieJar(WebCookieJar::create())
-    , m_reportingEndpointsCache(ReportingEndpointsCache::create())
     , m_dnsPrefetchHystereris([this](PAL::HysteresisState state) { if (state == PAL::HysteresisState::Stopped) m_dnsPrefetchedHosts.clear(); })
     , m_nonVisibleProcessGraphicsCleanupTimer(*this, &WebProcess::nonVisibleProcessGraphicsCleanupTimerFired)
 #if ENABLE(NON_VISIBLE_WEBPROCESS_MEMORY_CLEANUP_TIMER)
@@ -866,8 +865,9 @@ bool WebProcess::shouldTerminate()
 void WebProcess::terminate()
 {
 #ifndef NDEBUG
+    // These are done in an attempt to reduce LEAK output.
     GCController::singleton().garbageCollectNow();
-    FontCache::singleton().invalidate();
+    FontCache::forCurrentThread().invalidate();
     MemoryCache::singleton().setDisabled(true);
 #endif
 
@@ -1189,8 +1189,10 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
     ASSERT(m_networkProcessConnection);
     ASSERT_UNUSED(connection, m_networkProcessConnection == connection);
 
-    for (auto* storageAreaMap : copyToVector(m_storageAreaMaps.values()))
-        storageAreaMap->disconnect();
+    for (auto key : copyToVector(m_storageAreaMaps.keys())) {
+        if (auto map = m_storageAreaMaps.get(key))
+            map->disconnect();
+    }
 
     for (auto& page : m_pageMap.values()) {
         auto idbConnection = page->corePage()->optionalIDBConnection();
@@ -1697,20 +1699,20 @@ void WebProcess::nonVisibleProcessMemoryCleanupTimerFired()
 
 void WebProcess::registerStorageAreaMap(StorageAreaMap& storageAreaMap)
 {
-    ASSERT(storageAreaMap.identifier());
-    ASSERT(!m_storageAreaMaps.contains(*storageAreaMap.identifier()));
-    m_storageAreaMaps.set(*storageAreaMap.identifier(), &storageAreaMap);
+    auto identifier = storageAreaMap.identifier();
+    ASSERT(!m_storageAreaMaps.contains(identifier));
+    m_storageAreaMaps.add(identifier, storageAreaMap);
 }
 
 void WebProcess::unregisterStorageAreaMap(StorageAreaMap& storageAreaMap)
 {
-    ASSERT(storageAreaMap.identifier());
-    ASSERT(m_storageAreaMaps.contains(*storageAreaMap.identifier()));
-    ASSERT(m_storageAreaMaps.get(*storageAreaMap.identifier()) == &storageAreaMap);
-    m_storageAreaMaps.remove(*storageAreaMap.identifier());
+    auto identifier = storageAreaMap.identifier();
+    ASSERT(m_storageAreaMaps.contains(identifier));
+    ASSERT(m_storageAreaMaps.get(identifier).get() == &storageAreaMap);
+    m_storageAreaMaps.remove(identifier);
 }
 
-StorageAreaMap* WebProcess::storageAreaMap(StorageAreaIdentifier identifier) const
+WeakPtr<StorageAreaMap> WebProcess::storageAreaMap(StorageAreaMapIdentifier identifier) const
 {
     return m_storageAreaMaps.get(identifier);
 }
@@ -1770,7 +1772,6 @@ RefPtr<API::Object> WebProcess::transformHandlesToObjects(API::Object* object)
             case API::Object::Type::PageHandle:
                 return static_cast<const API::PageHandle&>(object).isAutoconverting();
 
-            case API::Object::Type::PageGroupHandle:
 #if PLATFORM(COCOA)
             case API::Object::Type::ObjCObjectGraph:
 #endif
@@ -1786,9 +1787,6 @@ RefPtr<API::Object> WebProcess::transformHandlesToObjects(API::Object* object)
             switch (object.type()) {
             case API::Object::Type::FrameHandle:
                 return m_webProcess.webFrame(static_cast<const API::FrameHandle&>(object).frameID());
-
-            case API::Object::Type::PageGroupHandle:
-                return m_webProcess.webPageGroup(static_cast<const API::PageGroupHandle&>(object).webPageGroupData());
 
             case API::Object::Type::PageHandle:
                 return m_webProcess.webPage(static_cast<const API::PageHandle&>(object).webPageID());
@@ -1816,7 +1814,6 @@ RefPtr<API::Object> WebProcess::transformObjectsToHandles(API::Object* object)
             switch (object.type()) {
             case API::Object::Type::BundleFrame:
             case API::Object::Type::BundlePage:
-            case API::Object::Type::BundlePageGroup:
 #if PLATFORM(COCOA)
             case API::Object::Type::ObjCObjectGraph:
 #endif
@@ -1835,13 +1832,6 @@ RefPtr<API::Object> WebProcess::transformObjectsToHandles(API::Object* object)
 
             case API::Object::Type::BundlePage:
                 return API::PageHandle::createAutoconverting(static_cast<const WebPage&>(object).webPageProxyIdentifier(), static_cast<const WebPage&>(object).identifier());
-
-            case API::Object::Type::BundlePageGroup: {
-                WebPageGroupData pageGroupData;
-                pageGroupData.pageGroupID = static_cast<const WebPageGroupProxy&>(object).pageGroupID();
-
-                return API::PageGroupHandle::create(WTFMove(pageGroupData));
-            }
 
 #if PLATFORM(COCOA)
             case API::Object::Type::ObjCObjectGraph:
@@ -1928,7 +1918,7 @@ LibWebRTCNetwork& WebProcess::libWebRTCNetwork()
 }
 
 #if ENABLE(SERVICE_WORKER)
-void WebProcess::establishWorkerContextConnectionToNetworkProcess(PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, ServiceWorkerInitializationData&& initializationData, CompletionHandler<void()>&& completionHandler)
+void WebProcess::establishServiceWorkerContextConnectionToNetworkProcess(PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, ServiceWorkerInitializationData&& initializationData, CompletionHandler<void()>&& completionHandler)
 {
     // We are in the Service Worker context process and the call below establishes our connection to the Network Process
     // by calling ensureNetworkProcessConnection. SWContextManager needs to use the same underlying IPC::Connection as the
@@ -1986,16 +1976,16 @@ static inline void checkDocumentsCaptureStateConsistency(const Vector<String>& e
 {
 #if ASSERT_ENABLED
     bool isCapturingAudio = WTF::anyOf(Document::allDocumentsMap().values(), [](auto* document) {
-        return document->mediaState() & MediaProducer::AudioCaptureMask;
+        return document->mediaState() & MediaProducer::MicrophoneCaptureMask;
     });
     bool isCapturingVideo = WTF::anyOf(Document::allDocumentsMap().values(), [](auto* document) {
         return document->mediaState() & MediaProducer::VideoCaptureMask;
     });
 
     if (isCapturingAudio)
-        ASSERT(extensionIDs.findMatching([](auto& id) { return id.contains("microphone"); }) == notFound);
+        ASSERT(extensionIDs.findIf([](auto& id) { return id.contains("microphone"); }) == notFound);
     if (isCapturingVideo)
-        ASSERT(extensionIDs.findMatching([](auto& id) { return id.contains("camera"); }) == notFound);
+        ASSERT(extensionIDs.findIf([](auto& id) { return id.contains("camera"); }) == notFound);
 #endif // ASSERT_ENABLED
 }
 

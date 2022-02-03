@@ -39,6 +39,7 @@ public:
     FileSystemStorageManager(String&& path, FileSystemStorageHandleRegistry&);
     ~FileSystemStorageManager();
 
+    bool isActive() const;
     Expected<WebCore::FileSystemHandleIdentifier, FileSystemStorageError> createHandle(IPC::Connection::UniqueID, FileSystemStorageHandle::Type, String&& path, String&& name, bool createIfNecessary);
     const String& getPath(WebCore::FileSystemHandleIdentifier);
     FileSystemStorageHandle::Type getType(WebCore::FileSystemHandleIdentifier);
@@ -49,6 +50,8 @@ public:
     bool releaseLockForFile(const String& path, WebCore::FileSystemHandleIdentifier);
 
 private:
+    void close();
+
     String m_path;
     FileSystemStorageHandleRegistry& m_registry;
     HashMap<IPC::Connection::UniqueID, HashSet<WebCore::FileSystemHandleIdentifier>> m_handlesByConnection;

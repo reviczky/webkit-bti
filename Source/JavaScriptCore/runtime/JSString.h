@@ -111,7 +111,7 @@ public:
     template<typename, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM& vm)
     {
-        return &vm.stringSpace;
+        return &vm.stringSpace();
     }
     
     // We employ overflow checks in many places with the assumption that MaxLength
@@ -270,7 +270,7 @@ public:
     template<typename, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM& vm)
     {
-        return &vm.ropeStringSpace;
+        return &vm.ropeStringSpace();
     }
 
     // We use lower 3bits of fiber0 for flags. These bits are usable due to alignment, and it is OK even in 32bit architecture.
@@ -1033,46 +1033,6 @@ ALWAYS_INLINE StringViewWithUnderlyingString JSString::viewWithUnderlyingString(
 inline bool JSString::isSubstring() const
 {
     return m_fiber & JSRopeString::isSubstringInPointer;
-}
-
-// --- JSValue inlines ----------------------------
-
-inline bool JSValue::toBoolean(JSGlobalObject* globalObject) const
-{
-    if (isInt32())
-        return asInt32();
-    if (isDouble())
-        return asDouble() > 0.0 || asDouble() < 0.0; // false for NaN
-    if (isCell())
-        return asCell()->toBoolean(globalObject);
-#if USE(BIGINT32)
-    if (isBigInt32())
-        return !!bigInt32AsInt32();
-#endif
-    return isTrue(); // false, null, and undefined all convert to false.
-}
-
-inline JSString* JSValue::toString(JSGlobalObject* globalObject) const
-{
-    if (isString())
-        return asString(asCell());
-    bool returnEmptyStringOnError = true;
-    return toStringSlowCase(globalObject, returnEmptyStringOnError);
-}
-
-inline JSString* JSValue::toStringOrNull(JSGlobalObject* globalObject) const
-{
-    if (isString())
-        return asString(asCell());
-    bool returnEmptyStringOnError = false;
-    return toStringSlowCase(globalObject, returnEmptyStringOnError);
-}
-
-inline String JSValue::toWTFString(JSGlobalObject* globalObject) const
-{
-    if (isString())
-        return static_cast<JSString*>(asCell())->value(globalObject);
-    return toWTFStringSlowCase(globalObject);
 }
 
 } // namespace JSC

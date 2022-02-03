@@ -54,6 +54,7 @@ Tests/WebKitCocoa/AudioBufferSize.mm
 Tests/WebKitCocoa/AudioRoutingArbitration.mm
 Tests/WebKitCocoa/AutoFillAvailable.mm
 Tests/WebKitCocoa/AutoLayoutIntegration.mm
+Tests/WebKitCocoa/BundleCSSStyleDeclarationHandle.mm
 Tests/WebKitCocoa/BundleEditingDelegate.mm
 Tests/WebKitCocoa/BundleFormDelegate.mm
 Tests/WebKitCocoa/BundlePageConsoleMessage.mm
@@ -115,6 +116,7 @@ Tests/WebKitCocoa/FullscreenRemoveNodeBeforeEnter.mm
 Tests/WebKitCocoa/GPUProcess.mm
 Tests/WebKitCocoa/Geolocation.mm
 Tests/WebKitCocoa/GetDisplayMedia.mm
+Tests/WebKitCocoa/GetDisplayMediaWindowAndScreen.mm
 Tests/WebKitCocoa/GetResourceData.mm
 Tests/WebKitCocoa/HSTS.mm
 Tests/WebKitCocoa/IDBCheckpointWAL.mm
@@ -159,6 +161,7 @@ Tests/WebKitCocoa/MediaSession.mm
 Tests/WebKitCocoa/MediaType.mm
 Tests/WebKitCocoa/MessagePortProviders.mm
 Tests/WebKitCocoa/ModalAlerts.mm
+Tests/WebKitCocoa/ModalContainerObservation.mm
 Tests/WebKitCocoa/NSAttributedStringWebKitAdditions.mm
 Tests/WebKitCocoa/NSFileManagerExtras.mm
 Tests/WebKitCocoa/Navigation.mm
@@ -293,6 +296,7 @@ Tests/WebKitCocoa/WKWebsiteDatastore.mm
 Tests/WebKitCocoa/WebContentProcessDidTerminate.mm
 Tests/WebKitCocoa/WebCryptoMasterKey.mm
 Tests/WebKitCocoa/WebGLPolicy.mm
+Tests/WebKitCocoa/WebLocks.mm
 Tests/WebKitCocoa/WebProcessKillIDBCleanup.mm
 Tests/WebKitCocoa/WebProcessTerminate.mm
 Tests/WebKitCocoa/WebPushDaemon.mm

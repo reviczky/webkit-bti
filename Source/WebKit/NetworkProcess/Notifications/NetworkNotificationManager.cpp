@@ -30,7 +30,10 @@
 
 #include "DaemonDecoder.h"
 #include "DaemonEncoder.h"
+#include "Logging.h"
 #include "NetworkSession.h"
+#include "WebPushDaemonConnectionConfiguration.h"
+#include "WebPushMessage.h"
 #include <WebCore/SecurityOriginData.h>
 
 namespace WebKit {
@@ -43,23 +46,26 @@ NetworkNotificationManager::NetworkNotificationManager(NetworkSession& networkSe
         m_connection = makeUnique<WebPushD::Connection>(webPushMachServiceName.utf8(), *this);
 }
 
-void NetworkNotificationManager::maybeSendHostAppAuditToken() const
+void NetworkNotificationManager::maybeSendConnectionConfiguration() const
 {
-    if (m_sentHostAppAuditToken)
+    if (m_sentConnectionConfiguration)
         return;
-    m_sentHostAppAuditToken = true;
+    m_sentConnectionConfiguration = true;
+
+    WebPushD::WebPushDaemonConnectionConfiguration configuration;
+    configuration.useMockBundlesForTesting = m_networkSession.webPushDaemonUsesMockBundlesForTesting();
 
 #if PLATFORM(COCOA)
-        auto token = m_networkSession.networkProcess().parentProcessConnection()->getAuditToken();
-        if (!token)
-            return;
-
+    auto token = m_networkSession.networkProcess().parentProcessConnection()->getAuditToken();
+    if (token) {
         Vector<uint8_t> auditTokenData;
         auditTokenData.resize(sizeof(*token));
         memcpy(auditTokenData.data(), &(*token), sizeof(*token));
-
-        sendMessage<WebPushD::MessageType::SetHostAppAuditToken>(auditTokenData);
+        configuration.hostAppAuditTokenData = WTFMove(auditTokenData);
+    }
 #endif
+
+    sendMessage<WebPushD::MessageType::UpdateConnectionConfiguration>(configuration);
 }
 
 void NetworkNotificationManager::requestSystemNotificationPermission(const String& originString, CompletionHandler<void(bool)>&& completionHandler)
@@ -84,7 +90,16 @@ void NetworkNotificationManager::getOriginsWithPushAndNotificationPermissions(Co
     sendMessageWithReply<WebPushD::MessageType::GetOriginsWithPushAndNotificationPermissions>(WTFMove(replyHandler));
 }
 
-void NetworkNotificationManager::showNotification(const String&, const String&, const String&, const String&, const String&, WebCore::NotificationDirection, const String&, uint64_t)
+void NetworkNotificationManager::getPendingPushMessages(CompletionHandler<void(const Vector<WebPushMessage>&)>&& completionHandler)
+{
+    CompletionHandler<void(Vector<WebPushMessage>&&)> replyHandler = [completionHandler = WTFMove(completionHandler)] (Vector<WebPushMessage>&& messages) mutable {
+        completionHandler(WTFMove(messages));
+    };
+
+    sendMessageWithReply<WebPushD::MessageType::GetPendingPushMessages>(WTFMove(replyHandler));
+}
+
+void NetworkNotificationManager::showNotification(const WebCore::NotificationData&)
 {
     if (!m_connection)
         return;
@@ -100,22 +115,62 @@ void NetworkNotificationManager::showNotification(const String&, const String&, 
 //    sendMessageWithReply<WebPushD::MessageType::EchoTwice>(WTFMove(completionHandler), String("FIXME: Do useful work here"));
 }
 
-void NetworkNotificationManager::cancelNotification(uint64_t)
+void NetworkNotificationManager::cancelNotification(const UUID&)
 {
     if (!m_connection)
         return;
 }
 
-void NetworkNotificationManager::clearNotifications(const Vector<uint64_t>&)
+void NetworkNotificationManager::clearNotifications(const Vector<UUID>&)
 {
     if (!m_connection)
         return;
 }
 
-void NetworkNotificationManager::didDestroyNotification(uint64_t)
+void NetworkNotificationManager::didDestroyNotification(const UUID&)
 {
     if (!m_connection)
         return;
+}
+
+void NetworkNotificationManager::subscribeToPushService(URL&& scopeURL, Vector<uint8_t>&& applicationServerKey, CompletionHandler<void(Expected<WebCore::PushSubscriptionData, WebCore::ExceptionData>&&)>&& completionHandler)
+{
+    if (!m_connection) {
+        completionHandler(makeUnexpected(ExceptionData { AbortError, "No connection to push daemon"_s }));
+        return;
+    }
+
+    sendMessageWithReply<WebPushD::MessageType::SubscribeToPushService>(WTFMove(completionHandler), WTFMove(scopeURL), WTFMove(applicationServerKey));
+}
+
+void NetworkNotificationManager::unsubscribeFromPushService(URL&& scopeURL, PushSubscriptionIdentifier pushSubscriptionIdentifier, CompletionHandler<void(Expected<bool, WebCore::ExceptionData>&&)>&& completionHandler)
+{
+    if (!m_connection) {
+        completionHandler(makeUnexpected(ExceptionData { AbortError, "No connection to push daemon"_s }));
+        return;
+    }
+
+    sendMessageWithReply<WebPushD::MessageType::UnsubscribeFromPushService>(WTFMove(completionHandler), WTFMove(scopeURL), pushSubscriptionIdentifier);
+}
+
+void NetworkNotificationManager::getPushSubscription(URL&& scopeURL, CompletionHandler<void(Expected<std::optional<WebCore::PushSubscriptionData>, WebCore::ExceptionData>&&)>&& completionHandler)
+{
+    if (!m_connection) {
+        completionHandler(makeUnexpected(ExceptionData { AbortError, "No connection to push daemon"_s }));
+        return;
+    }
+
+    sendMessageWithReply<WebPushD::MessageType::GetPushSubscription>(WTFMove(completionHandler), WTFMove(scopeURL));
+}
+
+void NetworkNotificationManager::getPushPermissionState(URL&& scopeURL, CompletionHandler<void(Expected<uint8_t, WebCore::ExceptionData>&&)>&& completionHandler)
+{
+    if (!m_connection) {
+        completionHandler(makeUnexpected(ExceptionData { AbortError, "No connection to push daemon"_s }));
+        return;
+    }
+
+    sendMessageWithReply<WebPushD::MessageType::GetPushPermissionState>(WTFMove(completionHandler), WTFMove(scopeURL));
 }
 
 template<WebPushD::MessageType messageType, typename... Args>
@@ -123,7 +178,7 @@ void NetworkNotificationManager::sendMessage(Args&&... args) const
 {
     RELEASE_ASSERT(m_connection);
 
-    maybeSendHostAppAuditToken();
+    maybeSendConnectionConfiguration();
 
     Daemon::Encoder encoder;
     encoder.encode(std::forward<Args>(args)...);
@@ -182,12 +237,75 @@ template<> struct ReplyCaller<Vector<String>&&> {
     }
 };
 
+template<> struct ReplyCaller<Vector<WebPushMessage>&&> {
+    static void callReply(Daemon::Decoder&& decoder, CompletionHandler<void(Vector<WebPushMessage>&&)>&& completionHandler)
+    {
+        std::optional<Vector<WebPushMessage>> messages;
+        decoder >> messages;
+        if (!messages)
+            return completionHandler({ });
+        completionHandler(WTFMove(*messages));
+    }
+};
+
+template<> struct ReplyCaller<Expected<WebCore::PushSubscriptionData, WebCore::ExceptionData>&&> {
+    static void callReply(Daemon::Decoder&& decoder, CompletionHandler<void(Expected<WebCore::PushSubscriptionData, WebCore::ExceptionData>&&)>&& completionHandler)
+    {
+        std::optional<Expected<WebCore::PushSubscriptionData, WebCore::ExceptionData>> data;
+        decoder >> data;
+
+        if (!data)
+            completionHandler(makeUnexpected(ExceptionData { AbortError, "Couldn't decode message"_s }));
+        else
+            completionHandler(WTFMove(*data));
+    }
+};
+
+template<> struct ReplyCaller<Expected<bool, WebCore::ExceptionData>&&> {
+    static void callReply(Daemon::Decoder&& decoder, CompletionHandler<void(Expected<bool, WebCore::ExceptionData>&&)>&& completionHandler)
+    {
+        std::optional<Expected<bool, WebCore::ExceptionData>> data;
+        decoder >> data;
+
+        if (!data)
+            completionHandler(makeUnexpected(ExceptionData { AbortError, "Couldn't decode message"_s }));
+        else
+            completionHandler(WTFMove(*data));
+    }
+};
+
+template<> struct ReplyCaller<Expected<std::optional<WebCore::PushSubscriptionData>, WebCore::ExceptionData>&&> {
+    static void callReply(Daemon::Decoder&& decoder, CompletionHandler<void(Expected<std::optional<WebCore::PushSubscriptionData>, WebCore::ExceptionData>&&)>&& completionHandler)
+    {
+        std::optional<Expected<std::optional<WebCore::PushSubscriptionData>, WebCore::ExceptionData>> data;
+        decoder >> data;
+
+        if (!data)
+            completionHandler(makeUnexpected(ExceptionData { AbortError, "Couldn't decode message"_s }));
+        else
+            completionHandler(WTFMove(*data));
+    }
+};
+
+template<> struct ReplyCaller<Expected<uint8_t, WebCore::ExceptionData>&&> {
+    static void callReply(Daemon::Decoder&& decoder, CompletionHandler<void(Expected<uint8_t, WebCore::ExceptionData>&&)>&& completionHandler)
+    {
+        std::optional<Expected<uint8_t, WebCore::ExceptionData>> data;
+        decoder >> data;
+
+        if (!data)
+            completionHandler(makeUnexpected(ExceptionData { AbortError, "Couldn't decode message"_s }));
+        else
+            completionHandler(WTFMove(*data));
+    }
+};
+
 template<WebPushD::MessageType messageType, typename... Args, typename... ReplyArgs>
 void NetworkNotificationManager::sendMessageWithReply(CompletionHandler<void(ReplyArgs...)>&& completionHandler, Args&&... args) const
 {
     RELEASE_ASSERT(m_connection);
 
-    maybeSendHostAppAuditToken();
+    maybeSendConnectionConfiguration();
 
     Daemon::Encoder encoder;
     encoder.encode(std::forward<Args>(args)...);

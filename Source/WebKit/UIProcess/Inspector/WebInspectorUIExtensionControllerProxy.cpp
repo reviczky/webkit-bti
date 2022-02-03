@@ -86,21 +86,28 @@ void WebInspectorUIExtensionControllerProxy::inspectorFrontendWillClose()
 
     m_inspectorPage->process().removeMessageReceiver(Messages::WebInspectorUIExtensionControllerProxy::messageReceiverName(), m_inspectorPage->webPageID());
     m_inspectorPage = nullptr;
+
+    m_extensionAPIObjectMap.clear();
 }
 
 // API
 
-void WebInspectorUIExtensionControllerProxy::registerExtension(const Inspector::ExtensionID& extensionID, const String& displayName, WTF::CompletionHandler<void(Expected<RefPtr<API::InspectorExtension>, Inspector::ExtensionError>)>&& completionHandler)
+void WebInspectorUIExtensionControllerProxy::registerExtension(const Inspector::ExtensionID& extensionID, const String& extensionBundleIdentifier, const String& displayName, WTF::CompletionHandler<void(Expected<RefPtr<API::InspectorExtension>, Inspector::ExtensionError>)>&& completionHandler)
 {
-    whenFrontendHasLoaded([weakThis = WeakPtr { *this }, extensionID, displayName, completionHandler = WTFMove(completionHandler)] () mutable {
+    whenFrontendHasLoaded([weakThis = WeakPtr { *this }, extensionID, extensionBundleIdentifier, displayName, completionHandler = WTFMove(completionHandler)] () mutable {
         if (!weakThis || !weakThis->m_inspectorPage) {
             completionHandler(makeUnexpected(Inspector::ExtensionError::InvalidRequest));
             return;
         }
 
-        weakThis->m_inspectorPage->sendWithAsyncReply(Messages::WebInspectorUIExtensionController::RegisterExtension { extensionID, displayName }, [strongThis = Ref { *weakThis.get() }, extensionID, completionHandler = WTFMove(completionHandler)](Expected<void, Inspector::ExtensionError> result) mutable {
+        weakThis->m_inspectorPage->sendWithAsyncReply(Messages::WebInspectorUIExtensionController::RegisterExtension { extensionID, extensionBundleIdentifier, displayName }, [strongThis = Ref { *weakThis.get() }, extensionID, completionHandler = WTFMove(completionHandler)](Expected<void, Inspector::ExtensionError> result) mutable {
             if (!result) {
                 completionHandler(makeUnexpected(Inspector::ExtensionError::RegistrationFailed));
+                return;
+            }
+
+            if (!strongThis->m_inspectorPage) {
+                completionHandler(makeUnexpected(Inspector::ExtensionError::ContextDestroyed));
                 return;
             }
 
@@ -123,6 +130,11 @@ void WebInspectorUIExtensionControllerProxy::unregisterExtension(const Inspector
         weakThis->m_inspectorPage->sendWithAsyncReply(Messages::WebInspectorUIExtensionController::UnregisterExtension { extensionID }, [strongThis = Ref { *weakThis.get() }, extensionID, completionHandler = WTFMove(completionHandler)](Expected<void, Inspector::ExtensionError> result) mutable {
             if (!result) {
                 completionHandler(makeUnexpected(Inspector::ExtensionError::InvalidRequest));
+                return;
+            }
+
+            if (!strongThis->m_inspectorPage) {
+                completionHandler(makeUnexpected(Inspector::ExtensionError::ContextDestroyed));
                 return;
             }
 
@@ -228,7 +240,7 @@ void WebInspectorUIExtensionControllerProxy::evaluateScriptInExtensionTab(const 
 
 // WebInspectorUIExtensionControllerProxy IPC messages.
 
-void WebInspectorUIExtensionControllerProxy::didShowExtensionTab(const Inspector::ExtensionID& extensionID, const Inspector::ExtensionTabID& extensionTabID)
+void WebInspectorUIExtensionControllerProxy::didShowExtensionTab(const Inspector::ExtensionID& extensionID, const Inspector::ExtensionTabID& extensionTabID, WebCore::FrameIdentifier frameID)
 {
     auto it = m_extensionAPIObjectMap.find(extensionID);
     if (it == m_extensionAPIObjectMap.end())
@@ -239,7 +251,7 @@ void WebInspectorUIExtensionControllerProxy::didShowExtensionTab(const Inspector
     if (!extensionClient)
         return;
 
-    extensionClient->didShowExtensionTab(extensionTabID);
+    extensionClient->didShowExtensionTab(extensionTabID, frameID);
 }
 
 void WebInspectorUIExtensionControllerProxy::didHideExtensionTab(const Inspector::ExtensionID& extensionID, const Inspector::ExtensionTabID& extensionTabID)
@@ -254,6 +266,20 @@ void WebInspectorUIExtensionControllerProxy::didHideExtensionTab(const Inspector
         return;
 
     extensionClient->didHideExtensionTab(extensionTabID);
+}
+
+void WebInspectorUIExtensionControllerProxy::didNavigateExtensionTab(const Inspector::ExtensionID& extensionID, const Inspector::ExtensionTabID& extensionTabID, const WTF::URL& newURL)
+{
+    auto it = m_extensionAPIObjectMap.find(extensionID);
+    if (it == m_extensionAPIObjectMap.end())
+        return;
+
+    RefPtr<API::InspectorExtension> extension = it->value;
+    auto extensionClient = extension->client();
+    if (!extensionClient)
+        return;
+
+    extensionClient->didNavigateExtensionTab(extensionTabID, newURL);
 }
 
 void WebInspectorUIExtensionControllerProxy::inspectedPageDidNavigate(const URL& newURL)

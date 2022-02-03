@@ -120,8 +120,6 @@ public:
     virtual float pageScaleFactor() const = 0;
     virtual ScrollExtents scrollExtents() const = 0;
     virtual bool scrollAnimationEnabled() const { return true; }
-
-    virtual bool momentumScrollingAnimatorEnabled() const { return false; }
 };
 
 class ScrollingEffectsController : public ScrollAnimationClient {
@@ -207,7 +205,7 @@ private:
 
     void startRubberBandAnimationIfNecessary();
 
-    bool startRubberBandAnimation(const FloatPoint& targetOffset, const FloatSize& initialVelocity, const FloatSize& initialOverscroll);
+    bool startRubberBandAnimation(const FloatSize& initialVelocity, const FloatSize& initialOverscroll);
     void stopRubberBandAnimation();
 
     void willStartRubberBandAnimation();
@@ -221,8 +219,6 @@ private:
 
     void startOrStopAnimationCallbacks();
 
-    bool momentumScrollingAnimatorEnabled() const { return m_momentumScrollingAnimatorEnabled; }
-
     void startDeferringWheelEventTestCompletion(WheelEventTestMonitor::DeferReason);
     void stopDeferringWheelEventTestCompletion(WheelEventTestMonitor::DeferReason);
 
@@ -231,6 +227,8 @@ private:
     void scrollAnimationWillStart(ScrollAnimation&) final;
     void scrollAnimationDidEnd(ScrollAnimation&) final;
     ScrollExtents scrollExtentsForAnimation(ScrollAnimation&) final;
+    FloatSize overscrollAmount(ScrollAnimation&) final;
+    FloatPoint scrollOffset(ScrollAnimation&) final;
 
     void adjustDeltaForSnappingIfNeeded(float& deltaX, float& deltaY);
 
@@ -253,7 +251,6 @@ private:
     bool m_isAnimatingScrollSnap { false };
     bool m_isAnimatingKeyboardScrolling { false };
     bool m_inScrollGesture { false };
-    bool m_momentumScrollingAnimatorEnabled { false };
 
 #if PLATFORM(MAC)
     WallTime m_lastMomentumScrollTimestamp;
@@ -262,11 +259,6 @@ private:
     FloatSize m_momentumVelocity;
 
     FloatSize m_scrollingVelocityForScrollSnap;
-#if !LOG_DISABLED
-    FloatPoint m_eventDrivenScrollMomentumStartOffset;
-    FloatPoint m_eventDrivenScrollOffset;
-    WallTime m_momentumBeganEventTime;
-#endif
 
     bool m_momentumScrollInProgress { false };
     bool m_ignoreMomentumScrolls { false };

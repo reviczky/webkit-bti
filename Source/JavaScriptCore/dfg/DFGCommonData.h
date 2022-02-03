@@ -111,7 +111,7 @@ public:
     
     void clearWatchpoints();
 
-    CallLinkInfo* addCallLinkInfo(CodeOrigin codeOrigin)
+    OptimizingCallLinkInfo* addCallLinkInfo(CodeOrigin codeOrigin)
     {
         return m_callLinkInfos.add(codeOrigin);
     }
@@ -131,7 +131,7 @@ public:
     RecordedStatuses recordedStatuses;
     Vector<JumpReplacement> m_jumpReplacements;
     Bag<StructureStubInfo> m_stubInfos;
-    Bag<CallLinkInfo> m_callLinkInfos;
+    Bag<OptimizingCallLinkInfo> m_callLinkInfos;
     Yarr::YarrBoyerMoyerData m_boyerMooreData;
     
     ScratchBuffer* catchOSREntryBuffer;
@@ -140,7 +140,7 @@ public:
     bool hasVMTrapsBreakpointsInstalled { false };
     
 #if USE(JSVALUE32_64)
-    std::unique_ptr<Bag<double>> doubleConstants;
+    Bag<double> doubleConstants;
 #endif
     
     unsigned frameRegisterCount { std::numeric_limits<unsigned>::max() };

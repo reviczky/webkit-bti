@@ -26,54 +26,45 @@
 #include "FETile.h"
 #include "Filter.h"
 #include "GraphicsContext.h"
+#include "ImageBuffer.h"
 #include "Pattern.h"
-#include "SVGRenderingContext.h"
 
 namespace WebCore {
 
-bool FETileSoftwareApplier::apply(const Filter& filter, const FilterEffectVector& inputEffects)
+bool FETileSoftwareApplier::apply(const Filter& filter, const FilterImageVector& inputs, FilterImage& result) const
 {
-    FilterEffect* in = inputEffects[0].get();
+    auto& input = inputs[0].get();
 
-    auto resultImage = m_effect.imageBufferResult();
-    auto inBuffer = in->imageBufferResult();
-    if (!resultImage || !inBuffer)
+    auto resultImage = result.imageBuffer();
+    auto inputImage = input.imageBuffer();
+    if (!resultImage || !inputImage)
         return false;
 
-    m_effect.setIsAlphaImage(in->isAlphaImage());
+    auto inputImageRect = input.absoluteImageRect();
+    auto resultImageRect = result.absoluteImageRect();
 
-    // Source input needs more attention. It has the size of the filterRegion but gives the
-    // size of the cutted sourceImage back. This is part of the specification and optimization.
-    FloatRect tileRect = in->maxEffectRect();
-    FloatPoint inMaxEffectLocation = tileRect.location();
-    FloatPoint maxEffectLocation = m_effect.maxEffectRect().location();
-    if (in->filterType() == FilterEffect::Type::SourceGraphic || in->filterType() == FilterEffect::Type::SourceAlpha) {
-        tileRect = filter.filterRegion();
-        tileRect.scale(filter.filterScale());
-    }
+    auto tileRect = input.maxEffectRect(filter);
+    tileRect.scale(filter.filterScale());
 
-    // FIXME: remove this non-paltform call.
-    auto tileImage = SVGRenderingContext::createImageBuffer(tileRect, tileRect, DestinationColorSpace::SRGB(), filter.renderingMode());
+    auto maxResultRect = result.maxEffectRect(filter);
+    maxResultRect.scale(filter.filterScale());
+
+    auto tileImage = ImageBuffer::create(tileRect.size(), filter.renderingMode(), 1, DestinationColorSpace::SRGB(), PixelFormat::BGRA8);
     if (!tileImage)
         return false;
 
-    GraphicsContext& tileImageContext = tileImage->context();
-    tileImageContext.translate(-inMaxEffectLocation.x(), -inMaxEffectLocation.y());
-    tileImageContext.drawImageBuffer(*inBuffer, in->absolutePaintRect().location());
-
-    auto tileImageCopy = ImageBuffer::sinkIntoNativeImage(WTFMove(tileImage));
-    if (!tileImageCopy)
-        return false;
+    auto& tileImageContext = tileImage->context();
+    tileImageContext.translate(-tileRect.location());
+    tileImageContext.drawImageBuffer(*inputImage, inputImageRect.location());
 
     AffineTransform patternTransform;
-    patternTransform.translate(inMaxEffectLocation - maxEffectLocation);
+    patternTransform.translate(tileRect.location() - maxResultRect.location());
 
-    auto pattern = Pattern::create(tileImageCopy.releaseNonNull(), { true, true, patternTransform });
+    auto pattern = Pattern::create({ tileImage.releaseNonNull() }, { true, true, patternTransform });
 
-    GraphicsContext& filterContext = resultImage->context();
-    filterContext.setFillPattern(WTFMove(pattern));
-    filterContext.fillRect(FloatRect(FloatPoint(), m_effect.absolutePaintRect().size()));
-
+    auto& resultContext = resultImage->context();
+    resultContext.setFillPattern(WTFMove(pattern));
+    resultContext.fillRect(FloatRect(FloatPoint(), resultImageRect.size()));
     return true;
 }
 

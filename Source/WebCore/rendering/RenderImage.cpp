@@ -145,6 +145,10 @@ RenderImage::RenderImage(Element& element, RenderStyle&& style, StyleImage* styl
     , m_imageDevicePixelRatio(imageDevicePixelRatio)
 {
     updateAltText();
+#if ENABLE(SERVICE_CONTROLS)
+    if (is<HTMLImageElement>(element))
+        m_hasShadowControls = downcast<HTMLImageElement>(element).imageMenuEnabled();
+#endif
 }
 
 RenderImage::RenderImage(Document& document, RenderStyle&& style, StyleImage* styleImage)
@@ -206,7 +210,7 @@ ImageSizeChangeType RenderImage::setImageSizeForAltText(CachedImage* newImage /*
     // we have an alt and the user meant it (its not a text we invented)
     if (!m_altText.isEmpty()) {
         const FontCascade& font = style().fontCascade();
-        IntSize paddedTextSize(paddingWidth + std::min(ceilf(font.width(RenderBlock::constructTextRun(m_altText, style()))), maxAltTextWidth), paddingHeight + std::min(font.fontMetrics().height(), maxAltTextHeight));
+        IntSize paddedTextSize(paddingWidth + std::min(ceilf(font.width(RenderBlock::constructTextRun(m_altText, style()))), maxAltTextWidth), paddingHeight + std::min(font.metricsOfPrimaryFont().height(), maxAltTextHeight));
         imageSize = imageSize.expandedTo(paddedTextSize);
     }
 
@@ -327,7 +331,7 @@ void RenderImage::updateInnerContentRect()
     IntSize containerSize(replacedContentRect().size());
     if (!containerSize.isEmpty()) {
         URL imageSourceURL;
-        if (HTMLImageElement* imageElement = is<HTMLImageElement>(element()) ? downcast<HTMLImageElement>(element()) : nullptr)
+        if (auto* imageElement = dynamicDowncast<HTMLImageElement>(element()))
             imageSourceURL = document().completeURL(imageElement->imageSourceURL());
         imageResource().setContainerContext(containerSize, imageSourceURL);
     }
@@ -528,7 +532,7 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
                 String text = document().displayStringModifiedByEncoding(m_altText);
                 context.setFillColor(style().visitedDependentColorWithColorFilter(CSSPropertyColor));
                 const FontCascade& font = style().fontCascade();
-                const FontMetrics& fontMetrics = font.fontMetrics();
+                const FontMetrics& fontMetrics = font.metricsOfPrimaryFont();
                 LayoutUnit ascent = fontMetrics.ascent();
                 LayoutPoint altTextOffset = paintOffset;
                 altTextOffset.move(leftBorder + leftPad + (paddingWidth / 2) - missingImageBorderWidth, topBorder + topPad + ascent + (paddingHeight / 2) - missingImageBorderWidth);
@@ -662,7 +666,7 @@ ImageDrawResult RenderImage::paintIntoRect(PaintInfo& paintInfo, const FloatRect
     if (!img || img->isNull())
         return ImageDrawResult::DidNothing;
 
-    HTMLImageElement* imageElement = is<HTMLImageElement>(element()) ? downcast<HTMLImageElement>(element()) : nullptr;
+    auto* imageElement = dynamicDowncast<HTMLImageElement>(element());
 
     // FIXME: Document when image != img.get().
     Image* image = imageResource().image().get();

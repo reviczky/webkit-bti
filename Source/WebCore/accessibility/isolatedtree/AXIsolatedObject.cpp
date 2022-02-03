@@ -75,15 +75,11 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& coreObject, bool is
     setProperty(AXPropertyName::ARIALandmarkRoleDescription, object.ariaLandmarkRoleDescription().isolatedCopy());
     setProperty(AXPropertyName::AccessibilityDescription, object.accessibilityDescription().isolatedCopy());
 
-    // For all objects besides the root, the ancestry flags should've been set by now.
-    ASSERT(isRoot ? true : object.ancestorFlagsAreInitialized());
-    auto ancestorFlags = object.ancestorFlags();
-    // Only store the object's ancestor flags if any are set (excluding the "is initialized" flag).
-    if (ancestorFlags ^ AXAncestorFlag::FlagsInitialized)
+    if (object.ancestorFlagsAreInitialized())
         setProperty(AXPropertyName::AncestorFlags, object.ancestorFlags());
+    else
+        setProperty(AXPropertyName::AncestorFlags, object.computeAncestorFlagsWithTraversal());
 
-    setProperty(AXPropertyName::BoundingBoxRect, object.boundingBoxRect());
-    setProperty(AXPropertyName::ElementRect, object.elementRect());
     setProperty(AXPropertyName::HasARIAValueNow, object.hasARIAValueNow());
     setProperty(AXPropertyName::IsAccessibilityIgnored, object.accessibilityIsIgnored());
     setProperty(AXPropertyName::IsActiveDescendantOfFocusedContainer, object.isActiveDescendantOfFocusedContainer());
@@ -110,7 +106,6 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& coreObject, bool is
     setProperty(AXPropertyName::IsLink, object.isLink());
     setProperty(AXPropertyName::IsLinked, object.isLinked());
     setProperty(AXPropertyName::IsList, object.isList());
-    setProperty(AXPropertyName::IsLoaded, object.isLoaded());
     setProperty(AXPropertyName::IsMediaTimeline, object.isMediaTimeline());
     setProperty(AXPropertyName::IsMenu, object.isMenu());
     setProperty(AXPropertyName::IsMenuBar, object.isMenuBar());
@@ -146,6 +141,7 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& coreObject, bool is
     setProperty(AXPropertyName::RoleDescription, object.roleDescription().isolatedCopy());
     setProperty(AXPropertyName::RolePlatformString, object.rolePlatformString().isolatedCopy());
     setProperty(AXPropertyName::RoleValue, static_cast<int>(object.roleValue()));
+    setProperty(AXPropertyName::SubrolePlatformString, object.subrolePlatformString().isolatedCopy());
     setProperty(AXPropertyName::SupportsDatetimeAttribute, object.supportsDatetimeAttribute());
     setProperty(AXPropertyName::SupportsRowCountChange, object.supportsRowCountChange());
     setProperty(AXPropertyName::Title, object.title().isolatedCopy());
@@ -170,7 +166,6 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& coreObject, bool is
     setObjectProperty(AXPropertyName::SelectedRadioButton, object.selectedRadioButton());
     setObjectProperty(AXPropertyName::SelectedTabItem, object.selectedTabItem());
     setProperty(AXPropertyName::LayoutCount, object.layoutCount());
-    setProperty(AXPropertyName::EstimatedLoadingProgress, object.estimatedLoadingProgress());
     setProperty(AXPropertyName::SupportsARIAOwns, object.supportsARIAOwns());
     setProperty(AXPropertyName::HasPopup, object.hasPopup());
     setProperty(AXPropertyName::PopupValue, object.popupValue().isolatedCopy());
@@ -200,7 +195,6 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& coreObject, bool is
     setObjectProperty(AXPropertyName::VerticalScrollBar, object.scrollBar(AccessibilityOrientation::Vertical));
     setObjectProperty(AXPropertyName::HorizontalScrollBar, object.scrollBar(AccessibilityOrientation::Horizontal));
     setProperty(AXPropertyName::ARIARoleAttribute, static_cast<int>(object.ariaRoleAttribute()));
-    setProperty(AXPropertyName::ComputedLabel, object.computedLabel().isolatedCopy());
     setProperty(AXPropertyName::PlaceholderValue, object.placeholderValue().isolatedCopy());
     setProperty(AXPropertyName::ExpandedTextValue, object.expandedTextValue().isolatedCopy());
     setProperty(AXPropertyName::SupportsExpandedTextValue, object.supportsExpandedTextValue());
@@ -425,8 +419,11 @@ void AXIsolatedObject::initializeAttributeData(AXCoreObject& coreObject, bool is
         setProperty(AXPropertyName::SessionID, object.sessionID().isolatedCopy());
         setProperty(AXPropertyName::DocumentURI, object.documentURI().isolatedCopy());
         setProperty(AXPropertyName::DocumentEncoding, object.documentEncoding().isolatedCopy());
-        setObjectVectorProperty(AXPropertyName::DocumentLinks, object.documentLinks());
     }
+
+    // We only expose document links in web area objects.
+    if (object.isWebArea())
+        setObjectVectorProperty(AXPropertyName::DocumentLinks, object.documentLinks());
 
     if (object.isWidget())
         setProperty(AXPropertyName::IsWidget, true);
@@ -532,7 +529,7 @@ void AXIsolatedObject::detachFromParent()
     m_parentID = { };
 }
 
-const AXCoreObject::AccessibilityChildrenVector& AXIsolatedObject::children(bool)
+const AXCoreObject::AccessibilityChildrenVector& AXIsolatedObject::children(bool updateChildrenIfNeeded)
 {
 #if USE(APPLE_INTERNAL_SDK)
     ASSERT(_AXSIsolatedTreeModeFunctionIsAvailable() && ((_AXSIsolatedTreeMode_Soft() == AXSIsolatedTreeModeSecondaryThread && !isMainThread())
@@ -540,12 +537,14 @@ const AXCoreObject::AccessibilityChildrenVector& AXIsolatedObject::children(bool
 #elif USE(ATSPI)
     ASSERT(!isMainThread());
 #endif
-    updateBackingStore();
-    m_children.clear();
-    m_children.reserveInitialCapacity(m_childrenIDs.size());
-    for (const auto& childID : m_childrenIDs) {
-        if (auto child = tree()->nodeForID(childID))
-            m_children.uncheckedAppend(child);
+    if (updateChildrenIfNeeded) {
+        updateBackingStore();
+        m_children.clear();
+        m_children.reserveInitialCapacity(m_childrenIDs.size());
+        for (const auto& childID : m_childrenIDs) {
+            if (auto child = tree()->nodeForID(childID))
+                m_children.uncheckedAppend(child);
+        }
     }
     return m_children;
 }
@@ -796,9 +795,16 @@ void AXIsolatedObject::setCaretBrowsingEnabled(bool value)
 }
 #endif
 
+String AXIsolatedObject::computedLabel()
+{
+    // This is only used by the web inspector that calls AccessibilityObject::computedLabel().
+    ASSERT_NOT_REACHED();
+    return { };
+}
+
 SRGBA<uint8_t> AXIsolatedObject::colorValue() const
 {
-    return colorAttributeValue(AXPropertyName::ColorValue).toSRGBALossy<uint8_t>();
+    return colorAttributeValue(AXPropertyName::ColorValue).toColorTypeLossy<SRGBA<uint8_t>>();
 }
 
 AXCoreObject* AXIsolatedObject::accessibilityHitTest(const IntPoint& point) const
@@ -1182,6 +1188,24 @@ std::optional<SimpleRange> AXIsolatedObject::misspellingRange(const SimpleRange&
     return axObject ? axObject->misspellingRange(range, direction) : std::nullopt;
 }
 
+LayoutRect AXIsolatedObject::boundingBoxRect() const
+{
+    return Accessibility::retrieveValueFromMainThread<LayoutRect>([this] () -> LayoutRect {
+        if (auto* axObject = associatedAXObject())
+            return axObject->boundingBoxRect();
+        return { };
+    });
+}
+
+LayoutRect AXIsolatedObject::elementRect() const
+{
+    return Accessibility::retrieveValueFromMainThread<LayoutRect>([this] () -> LayoutRect {
+        if (auto* axObject = associatedAXObject())
+            return axObject->elementRect();
+        return { };
+    });
+}
+
 FloatRect AXIsolatedObject::relativeFrame() const
 {
     // Retrieve this on the main thread because we require the scroll ancestor to convert to the right scroll offset.
@@ -1476,6 +1500,17 @@ void AXIsolatedObject::setSelectedVisiblePositionRange(const VisiblePositionRang
     if (auto* object = associatedAXObject())
         object->setSelectedVisiblePositionRange(visiblePositionRange);
 }
+
+#if PLATFORM(COCOA) && ENABLE(MODEL_ELEMENT)
+Vector<RetainPtr<id>> AXIsolatedObject::modelElementChildren()
+{
+    return Accessibility::retrieveValueFromMainThread<Vector<RetainPtr<id>>>([this] () -> Vector<RetainPtr<id>> {
+        if (auto* object = associatedAXObject())
+            return object->modelElementChildren();
+        return { };
+    });
+}
+#endif
 
 FloatRect AXIsolatedObject::unobscuredContentRect() const
 {

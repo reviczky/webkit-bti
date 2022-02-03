@@ -45,12 +45,14 @@ public:
 
     bool matches(const URL&, bool didReceiveRedirectResponse) const;
     bool matches(const Vector<ContentSecurityPolicyHash>&) const;
+    bool matchesAll(const Vector<ContentSecurityPolicyHash>&) const;
     bool matches(const String& nonce) const;
 
     OptionSet<ContentSecurityPolicyHashAlgorithm> hashAlgorithmsUsed() const { return m_hashAlgorithmsUsed; }
 
     bool allowInline() const { return m_allowInline && m_hashes.isEmpty() && m_nonces.isEmpty(); }
     bool allowEval() const { return m_allowEval; }
+    bool allowWasmEval() const { return m_allowWasmEval; }
     bool allowSelf() const { return m_allowSelf; }
     bool isNone() const { return m_isNone; }
     bool allowNonParserInsertedScripts() const { return m_allowNonParserInsertedScripts; }
@@ -94,6 +96,7 @@ private:
     bool m_allowStar { false };
     bool m_allowInline { false };
     bool m_allowEval { false };
+    bool m_allowWasmEval { false };
     bool m_isNone { false };
     bool m_allowNonParserInsertedScripts { false };
     bool m_allowUnsafeHashes { false };

@@ -143,8 +143,8 @@ static void buildRendererHighlight(RenderObject* renderer, const InspectorOverla
     FrameView* containingView = containingFrame->view();
     FrameView* mainView = containingFrame->page()->mainFrame().view();
 
-    // RenderSVGRoot should be highlighted through the isBox() code path, all other SVG elements should just dump their absoluteQuads().
-    bool isSVGRenderer = renderer->node() && renderer->node()->isSVGElement() && !renderer->isSVGRoot();
+    // (Legacy)RenderSVGRoot should be highlighted through the isBox() code path, all other SVG elements should just dump their absoluteQuads().
+    bool isSVGRenderer = renderer->node() && renderer->node()->isSVGElement() && !renderer->isSVGRootOrLegacySVGRoot();
 
     if (isSVGRenderer) {
         highlight.type = InspectorOverlay::Highlight::Type::Rects;
@@ -869,7 +869,7 @@ void InspectorOverlay::drawRulers(GraphicsContext& context, const InspectorOverl
 
                 GraphicsContextStateSaver verticalLabelStateSaver(context);
                 context.translate(zoom(x) + 0.5f, scrollY);
-                context.drawText(font, TextRun(String::number(x)), { 2, drawTopEdge ? rulerLabelSize : rulerLabelSize - rulerSize + font.fontMetrics().height() - 1.0f });
+                context.drawText(font, TextRun(String::number(x)), { 2, drawTopEdge ? rulerLabelSize : rulerLabelSize - rulerSize + font.metricsOfPrimaryFont().height() - 1.0f });
             }
         }
 
@@ -928,7 +928,7 @@ void InspectorOverlay::drawRulers(GraphicsContext& context, const InspectorOverl
         const float padding = 2;
         const float radius = 4;
         float fontWidth = font.width(viewportTextRun);
-        float fontHeight = font.fontMetrics().floatHeight();
+        float fontHeight = font.metricsOfPrimaryFont().floatHeight();
         FloatRect viewportTextRect(margin, margin, (padding * 2.0f) + fontWidth, (padding * 2.0f) + fontHeight);
         const auto viewportTextRectCenter = viewportTextRect.center();
 
@@ -966,7 +966,7 @@ void InspectorOverlay::drawRulers(GraphicsContext& context, const InspectorOverl
         context.fillRoundedRect(FloatRoundedRect(viewportTextRect, FloatRoundedRect::Radii(radius)), rulerBackgroundColor);
 
         context.setFillColor(Color::black);
-        context.drawText(font, viewportTextRun, {margin +  padding, margin + padding + fontHeight - font.fontMetrics().descent() });
+        context.drawText(font, viewportTextRun, { margin +  padding, margin + padding + fontHeight - font.metricsOfPrimaryFont().descent() });
     }
 }
 
@@ -1040,7 +1040,7 @@ Path InspectorOverlay::drawElementTitle(GraphicsContext& context, Node& node, co
     FontCascade font(WTFMove(fontDescription), 0, 0);
     font.update(nullptr);
 
-    int fontHeight = font.fontMetrics().height();
+    int fontHeight = font.metricsOfPrimaryFont().height();
 
     float elementDataWidth;
     float elementDataHeight = fontHeight;
@@ -1170,7 +1170,7 @@ Path InspectorOverlay::drawElementTitle(GraphicsContext& context, Node& node, co
     return path;
 }
 
-void InspectorOverlay::drawLayoutHatching(GraphicsContext& context, FloatQuad quad)
+static void drawLayoutHatching(GraphicsContext& context, FloatQuad quad)
 {
     GraphicsContextStateSaver saver(context);
     context.clipPath(quadToPath(quad));
@@ -1204,7 +1204,7 @@ void InspectorOverlay::drawLayoutHatching(GraphicsContext& context, FloatQuad qu
     context.strokePath(hatchPath);
 }
 
-FontCascade InspectorOverlay::fontForLayoutLabel()
+static FontCascade fontForLayoutLabel()
 {
     FontCascadeDescription fontDescription;
     fontDescription.setFamilies({ "system-ui" });
@@ -1216,7 +1216,7 @@ FontCascade InspectorOverlay::fontForLayoutLabel()
     return font;
 }
 
-Path InspectorOverlay::backgroundPathForLayoutLabel(float width, float height, InspectorOverlay::LabelArrowDirection arrowDirection, InspectorOverlay::LabelArrowEdgePosition arrowEdgePosition, float arrowSize)
+static Path backgroundPathForLayoutLabel(float width, float height, InspectorOverlay::LabelArrowDirection arrowDirection, InspectorOverlay::LabelArrowEdgePosition arrowEdgePosition, float arrowSize)
 {
     Path path;
     FloatSize offsetForArrowEdgePosition;
@@ -1346,9 +1346,9 @@ Path InspectorOverlay::backgroundPathForLayoutLabel(float width, float height, I
 
 static FloatSize expectedSizeForLayoutLabel(String label, InspectorOverlay::LabelArrowDirection direction, float maximumWidth = 0)
 {
-    auto font = InspectorOverlay::fontForLayoutLabel();
+    auto font = fontForLayoutLabel();
 
-    float textHeight = font.fontMetrics().floatHeight();
+    float textHeight = font.metricsOfPrimaryFont().floatHeight();
     float textWidth = font.width(TextRun(label));
     if (maximumWidth && textWidth + (layoutLabelPadding * 2) > maximumWidth)
         textWidth = maximumWidth;
@@ -1367,17 +1367,17 @@ static FloatSize expectedSizeForLayoutLabel(String label, InspectorOverlay::Labe
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-void InspectorOverlay::drawLayoutLabel(GraphicsContext& context, String label, FloatPoint point, InspectorOverlay::LabelArrowDirection arrowDirection, InspectorOverlay::LabelArrowEdgePosition arrowEdgePosition, Color backgroundColor, float maximumWidth)
+static void drawLayoutLabel(GraphicsContext& context, String label, FloatPoint point, InspectorOverlay::LabelArrowDirection arrowDirection, InspectorOverlay::LabelArrowEdgePosition arrowEdgePosition, Color backgroundColor, float maximumWidth = 0)
 {
-    ASSERT(arrowEdgePosition != LabelArrowEdgePosition::None || arrowDirection == LabelArrowDirection::None);
+    ASSERT(arrowEdgePosition != InspectorOverlay::LabelArrowEdgePosition::None || arrowDirection == InspectorOverlay::LabelArrowDirection::None);
 
     GraphicsContextStateSaver saver(context);
     
     context.translate(point);
 
     auto font = fontForLayoutLabel();
-    float textHeight = font.fontMetrics().floatHeight();
-    float textDescent = font.fontMetrics().floatDescent();
+    float textHeight = font.metricsOfPrimaryFont().floatHeight();
+    float textDescent = font.metricsOfPrimaryFont().floatDescent();
     
     float textWidth = font.width(TextRun(label));
     if (maximumWidth && textWidth + (layoutLabelPadding * 2) > maximumWidth) {

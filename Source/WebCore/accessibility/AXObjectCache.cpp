@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -89,6 +89,7 @@
 #include "InlineRunAndOffset.h"
 #include "MathMLElement.h"
 #include "Page.h"
+#include "ProgressTracker.h"
 #include "Range.h"
 #include "RenderAttachment.h"
 #include "RenderImage.h"
@@ -99,7 +100,6 @@
 #include "RenderMenuList.h"
 #include "RenderMeter.h"
 #include "RenderProgress.h"
-#include "RenderSVGRoot.h"
 #include "RenderSlider.h"
 #include "RenderTable.h"
 #include "RenderTableCell.h"
@@ -112,6 +112,7 @@
 #include "TextBoundaries.h"
 #include "TextControlInnerElements.h"
 #include "TextIterator.h"
+#include <utility>
 #include <wtf/DataLog.h>
 #include <wtf/SetForScope.h>
 
@@ -224,6 +225,13 @@ AXObjectCache::AXObjectCache(Document& document)
     , m_performCacheUpdateTimer(*this, &AXObjectCache::performCacheUpdateTimerFired)
 {
     ASSERT(isMainThread());
+
+    // If loading completed before the cache was created, loading progress will have been reset to zero.
+    // Consider loading progress to be 100% in this case.
+    double loadingProgress = document.page() ? document.page()->progress().estimatedProgress() : 1;
+    if (loadingProgress <= 0)
+        loadingProgress = 1;
+    m_loadingProgress = loadingProgress;
 }
 
 AXObjectCache::~AXObjectCache()
@@ -547,7 +555,7 @@ static Ref<AccessibilityObject> createFromRenderer(RenderObject* renderer)
         return AccessibilityMediaObject::create(renderer);
 #endif
 
-    if (is<RenderSVGRoot>(*renderer))
+    if (renderer->isSVGRootOrLegacySVGRoot())
         return AccessibilitySVGRoot::create(renderer);
     
     if (is<SVGElement>(node))
@@ -863,6 +871,10 @@ void AXObjectCache::remove(Node& node)
         m_deferredTextFormControlValue.remove(downcast<Element>(&node));
         m_deferredAttributeChange.remove(downcast<Element>(&node));
         m_modalElementsSet.remove(downcast<Element>(&node));
+        m_deferredRecomputeIsIgnoredList.remove(downcast<Element>(node));
+        m_deferredSelectedChildredChangedList.remove(downcast<Element>(node));
+        m_deferredModalChangedList.remove(downcast<Element>(node));
+        m_deferredMenuListChange.remove(downcast<Element>(node));
     }
     m_deferredChildrenChangedNodeList.remove(&node);
     m_deferredTextChangedList.remove(&node);
@@ -965,6 +977,22 @@ void AXObjectCache::updateCacheAfterNodeIsAttached(Node* node)
     // Calling get() will update the AX object if we had an AccessibilityNodeObject but now we need
     // an AccessibilityRenderObject, because it was reparented to a location outside of a canvas.
     get(node);
+}
+
+void AXObjectCache::updateLoadingProgress(double newProgressValue)
+{
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    ASSERT_WITH_MESSAGE(newProgressValue >= 0 && newProgressValue <= 1, "unexpected loading progress value: %f", newProgressValue);
+    if (m_pageID) {
+        // Sometimes the isolated tree hasn't been created by the time we get loading progress updates,
+        // so cache this value in the AXObjectCache too so we can give it to the tree upon creation.
+        m_loadingProgress = newProgressValue;
+        if (auto tree = AXIsolatedTree::treeForPageID(*m_pageID))
+            tree->updateLoadingProgress(newProgressValue);
+    }
+#else
+    UNUSED_PARAM(newProgressValue);
+#endif
 }
 
 void AXObjectCache::handleChildrenChanged(AccessibilityObject& object)
@@ -1082,7 +1110,7 @@ void AXObjectCache::notificationPostTimerFired()
 
     // In tests, posting notifications has a tendency to immediately queue up other notifications, which can lead to unexpected behavior
     // when the notification list is cleared at the end. Instead copy this list at the start.
-    auto notifications = WTFMove(m_notificationsToPost);
+    auto notifications = std::exchange(m_notificationsToPost, { });
 
     // Filter out the notifications that are not going to be posted to platform clients.
     Vector<std::pair<RefPtr<AXCoreObject>, AXNotification>> notificationsToPost;
@@ -1133,7 +1161,7 @@ void AXObjectCache::passwordNotificationPostTimerFired()
 
     // In tests, posting notifications has a tendency to immediately queue up other notifications, which can lead to unexpected behavior
     // when the notification list is cleared at the end. Instead copy this list at the start.
-    auto notifications = WTFMove(m_passwordNotificationsToPost);
+    auto notifications = std::exchange(m_passwordNotificationsToPost, { });
 
     for (auto& notification : notifications)
         postTextStateChangePlatformNotification(notification.get(), AXTextEditTypeInsert, " ", VisiblePosition());
@@ -1418,7 +1446,7 @@ void AXObjectCache::setIsSynchronizingSelection(bool isSynchronizing)
     m_isSynchronizingSelection = isSynchronizing;
 }
 
-#if PLATFORM(COCOA) || USE(ATSPI)
+#if PLATFORM(COCOA)
 static bool isPasswordFieldOrContainedByPasswordField(AccessibilityObject* object)
 {
     return object && (object->isPasswordField() || object->isContainedByPasswordField());
@@ -1482,9 +1510,10 @@ void AXObjectCache::postTextStateChangeNotification(AccessibilityObject* object,
 
 #if PLATFORM(COCOA) || USE(ATSPI)
     if (object) {
+#if PLATFORM(COCOA)
         if (isPasswordFieldOrContainedByPasswordField(object))
             return;
-
+#endif
         if (auto observableObject = object->observableObject())
             object = observableObject;
     }
@@ -1493,10 +1522,6 @@ void AXObjectCache::postTextStateChangeNotification(AccessibilityObject* object,
         object = rootWebArea();
 
     if (object) {
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-        updateIsolatedTree(*object, AXSelectedTextChanged);
-#endif
-
         const AXTextStateChangeIntent& newIntent = (intent.type == AXTextStateChangeTypeUnknown || (m_isSynchronizingSelection && m_textSelectionIntent.type != AXTextStateChangeTypeUnknown)) ? m_textSelectionIntent : intent;
         postTextStateChangePlatformNotification(object, newIntent, selection);
     }
@@ -1787,6 +1812,8 @@ void AXObjectCache::handleAttributeChange(const QualifiedName& attrName, Element
         handleAriaRoleChanged(element);
     else if (attrName == altAttr || attrName == titleAttr)
         textChanged(element);
+    else if (attrName == disabledAttr)
+        postNotification(element, AXObjectCache::AXDisabledStateChanged);
     else if (attrName == forAttr && is<HTMLLabelElement>(*element))
         labelChanged(element);
     else if (attrName == tabindexAttr)
@@ -1843,8 +1870,6 @@ void AXObjectCache::handleAttributeChange(const QualifiedName& attrName, Element
         postNotification(element, AXObjectCache::AXRequiredStatusChanged);
     else if (attrName == aria_sortAttr)
         postNotification(element, AXObjectCache::AXSortDirectionChanged);
-    else
-        postNotification(element, AXObjectCache::AXAriaAttributeChanged);
 }
 
 void AXObjectCache::handleModalChange(Element& element)
@@ -3161,6 +3186,13 @@ static void filterListForRemoval(const ListHashSet<T>& list, const Document& doc
         conditionallyAddNodeToFilterList(node, document, nodesToRemove);
 }
 
+static void filterWeakHashSetForRemoval(WeakHashSet<Element>& weakHashSet, const Document& document, HashSet<Ref<Node>>& nodesToRemove)
+{
+    weakHashSet.forEach([&] (auto& element) {
+        conditionallyAddNodeToFilterList(&element, document, nodesToRemove);
+    });
+}
+
 void AXObjectCache::prepareForDocumentDestruction(const Document& document)
 {
     HashSet<Ref<Node>> nodesToRemove;
@@ -3168,6 +3200,10 @@ void AXObjectCache::prepareForDocumentDestruction(const Document& document)
     filterListForRemoval(m_modalElementsSet, document, nodesToRemove);
     filterListForRemoval(m_deferredTextChangedList, document, nodesToRemove);
     filterListForRemoval(m_deferredChildrenChangedNodeList, document, nodesToRemove);
+    filterWeakHashSetForRemoval(m_deferredRecomputeIsIgnoredList, document, nodesToRemove);
+    filterWeakHashSetForRemoval(m_deferredSelectedChildredChangedList, document, nodesToRemove);
+    filterWeakHashSetForRemoval(m_deferredModalChangedList, document, nodesToRemove);
+    filterWeakHashSetForRemoval(m_deferredMenuListChange, document, nodesToRemove);
     filterMapForRemoval(m_deferredTextFormControlValue, document, nodesToRemove);
     filterMapForRemoval(m_deferredAttributeChange, document, nodesToRemove);
     filterVectorPairForRemoval(m_deferredFocusedNodeChange, document, nodesToRemove);
@@ -3196,12 +3232,18 @@ void AXObjectCache::performCacheUpdateTimerFired()
     // This is most likely the cause of problems with the isolated tree updates..
 }
 
+void AXObjectCache::processDeferredChildrenChangedList()
+{
+    for (auto& child : m_deferredChildrenChangedList)
+        handleChildrenChanged(*child);
+    m_deferredChildrenChangedList.clear();
+}
+
 void AXObjectCache::performDeferredCacheUpdate()
 {
     AXTRACE("AXObjectCache::performDeferredCacheUpdate");
     if (m_performingDeferredCacheUpdate)
         return;
-
     SetForScope<bool> performingDeferredCacheUpdate(m_performingDeferredCacheUpdate, true);
 
     for (auto* nodeChild : m_deferredChildrenChangedNodeList) {
@@ -3210,22 +3252,21 @@ void AXObjectCache::performDeferredCacheUpdate()
     }
     m_deferredChildrenChangedNodeList.clear();
 
-    for (auto& child : m_deferredChildrenChangedList)
-        handleChildrenChanged(*child);
-    m_deferredChildrenChangedList.clear();
+    processDeferredChildrenChangedList();
 
     for (auto* node : m_deferredTextChangedList)
         textChanged(node);
     m_deferredTextChangedList.clear();
 
-    for (auto& element : m_deferredRecomputeIsIgnoredList) {
+    m_deferredRecomputeIsIgnoredList.forEach([this] (auto& element) {
         if (auto* renderer = element.renderer())
             recomputeIsIgnored(renderer);
-    }
+    });
     m_deferredRecomputeIsIgnoredList.clear();
-    
-    for (auto& selectElement : m_deferredSelectedChildredChangedList)
+
+    m_deferredSelectedChildredChangedList.forEach([this] (auto& selectElement) {
         selectedChildrenChanged(&selectElement);
+    });
     m_deferredSelectedChildredChangedList.clear();
 
     for (auto& deferredFormControlContext : m_deferredTextFormControlValue) {
@@ -3246,65 +3287,28 @@ void AXObjectCache::performDeferredCacheUpdate()
     }
     m_deferredFocusedNodeChange.clear();
 
-    for (auto& deferredModalChangedElement : m_deferredModalChangedList)
+    m_deferredModalChangedList.forEach([this] (auto& deferredModalChangedElement) {
         handleModalChange(deferredModalChangedElement);
+    });
     m_deferredModalChangedList.clear();
 
-    for (auto& deferredMenuListChangeElement : m_deferredMenuListChange)
+    m_deferredMenuListChange.forEach([this] (auto& deferredMenuListChangeElement) {
         postNotification(&deferredMenuListChangeElement, AXObjectCache::AXMenuListValueChanged);
+    });
     m_deferredMenuListChange.clear();
     
     platformPerformDeferredCacheUpdate();
 }
     
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-void AXObjectCache::updateIsolatedTree(AXCoreObject& object, AXNotification notification)
+// FIXME: should be added to WTF::Vector.
+template<typename T, typename F>
+static bool appendIfNotContainsMatching(Vector<T>& vector, const T& value, F matches)
 {
-    AXTRACE("AXObjectCache::updateIsolatedTree");
-    AXLOG(std::make_pair(&object, notification));
-    AXLOG(*this);
-
-    if (!m_pageID || !object.objectID().isValid()) {
-        AXLOG("No pageID or objectID");
-        return;
-    }
-
-    auto tree = AXIsolatedTree::treeForPageID(*m_pageID);
-    if (!tree) {
-        AXLOG("No isolated tree for m_pageID.");
-        return;
-    }
-
-    switch (notification) {
-    case AXAriaRoleChanged:
-        tree->updateNode(object);
-        break;
-    case AXCheckedStateChanged:
-        tree->updateNodeProperty(object, AXPropertyName::IsChecked);
-        break;
-    case AXSortDirectionChanged:
-        tree->updateNodeProperty(object, AXPropertyName::SortDirection);
-        break;
-    case AXIdAttributeChanged:
-        tree->updateNodeProperty(object, AXPropertyName::IdentifierAttribute);
-        break;
-    case AXActiveDescendantChanged:
-    case AXSelectedChildrenChanged:
-    case AXSelectedTextChanged:
-    case AXValueChanged:
-        tree->updateNode(object);
-        break;
-    case AXChildrenChanged:
-    case AXLanguageChanged:
-    case AXRowCountChanged:
-    case AXRowCollapsed:
-    case AXRowExpanded:
-    case AXExpandedChanged:
-        tree->updateChildren(object);
-        break;
-    default:
-        break;
-    }
+    if (vector.findIf(matches) != notFound)
+        return false;
+    vector.append(value);
+    return true;
 }
 
 void AXObjectCache::updateIsolatedTree(AXCoreObject* object, AXNotification notification)
@@ -3313,14 +3317,9 @@ void AXObjectCache::updateIsolatedTree(AXCoreObject* object, AXNotification noti
         updateIsolatedTree(*object, notification);
 }
 
-// FIXME: should be added to WTF::Vector.
-template<typename T, typename F>
-static bool appendIfNotContainsMatching(Vector<T>& vector, const T& value, F matches)
+void AXObjectCache::updateIsolatedTree(AXCoreObject& object, AXNotification notification)
 {
-    if (vector.findMatching(matches) != notFound)
-        return false;
-    vector.append(value);
-    return true;
+    updateIsolatedTree({ std::make_pair(&object, notification) });
 }
 
 void AXObjectCache::updateIsolatedTree(const Vector<std::pair<RefPtr<AXCoreObject>, AXNotification>>& notifications)
@@ -3348,11 +3347,12 @@ void AXObjectCache::updateIsolatedTree(const Vector<std::pair<RefPtr<AXCoreObjec
             continue;
 
         switch (notification.second) {
-        case AXAriaRoleChanged:
-            tree->updateNode(*notification.first);
-            break;
         case AXCheckedStateChanged:
             tree->updateNodeProperty(*notification.first, AXPropertyName::IsChecked);
+            break;
+        case AXDisabledStateChanged:
+            tree->updateNodeProperty(*notification.first, AXPropertyName::CanSetFocusAttribute);
+            tree->updateNodeProperty(*notification.first, AXPropertyName::IsEnabled);
             break;
         case AXSortDirectionChanged:
             tree->updateNodeProperty(*notification.first, AXPropertyName::SortDirection);
@@ -3361,8 +3361,8 @@ void AXObjectCache::updateIsolatedTree(const Vector<std::pair<RefPtr<AXCoreObjec
             tree->updateNodeProperty(*notification.first, AXPropertyName::IdentifierAttribute);
             break;
         case AXActiveDescendantChanged:
+        case AXAriaRoleChanged:
         case AXSelectedChildrenChanged:
-        case AXSelectedTextChanged:
         case AXValueChanged: {
             bool needsUpdate = appendIfNotContainsMatching(filteredNotifications, notification, [&notification] (const std::pair<RefPtr<AXCoreObject>, AXNotification>& note) {
                 return note.second == notification.second && note.first.get() == notification.first.get();
@@ -3432,6 +3432,8 @@ void AXObjectCache::deferSelectedChildrenChangedIfNeeded(Element& selectElement)
 
     if (rendererNeedsDeferredUpdate(*selectElement.renderer())) {
         m_deferredSelectedChildredChangedList.add(selectElement);
+        if (!m_performCacheUpdateTimer.isActive())
+            m_performCacheUpdateTimer.startOneShot(0_s);
         return;
     }
     selectedChildrenChanged(&selectElement);

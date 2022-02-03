@@ -3,7 +3,7 @@
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
  *           (C) 2006 Alexey Proskuryakov (ap@webkit.org)
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2022 Apple Inc. All rights reserved.
  * Copyright (C) 2008, 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  * Copyright (C) 2008, 2009, 2011, 2012 Google Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
@@ -33,6 +33,7 @@
 #include "Attr.h"
 #include "BeforeUnloadEvent.h"
 #include "CDATASection.h"
+#include "CSSAnimation.h"
 #include "CSSFontSelector.h"
 #include "CSSParser.h"
 #include "CSSStyleDeclaration.h"
@@ -133,6 +134,7 @@
 #include "InspectorInstrumentation.h"
 #include "IntersectionObserver.h"
 #include "JSCustomElementInterface.h"
+#include "JSDOMWindowCustom.h"
 #include "JSLazyEventListener.h"
 #include "KeyboardEvent.h"
 #include "KeyframeEffect.h"
@@ -148,6 +150,7 @@
 #include "MediaQueryMatcher.h"
 #include "MediaStream.h"
 #include "MessageEvent.h"
+#include "ModalContainerObserver.h"
 #include "MouseEventWithHitTestResults.h"
 #include "MutationEvent.h"
 #include "NameNodeList.h"
@@ -209,7 +212,6 @@
 #include "ScriptModuleLoader.h"
 #include "ScriptRunner.h"
 #include "ScriptSourceCode.h"
-#include "ScriptState.h"
 #include "ScriptedAnimationController.h"
 #include "ScrollAnimator.h"
 #include "ScrollbarTheme.h"
@@ -351,8 +353,8 @@
 #include "HTMLVideoElement.h"
 #endif
 
-#define DOCUMENT_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, pageID().value_or(PageIdentifier { }).toUInt64(), frameID().value_or(FrameIdentifier { }).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
-#define DOCUMENT_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, pageID().value_or(PageIdentifier { }).toUInt64(), frameID().value_or(FrameIdentifier { }).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
+#define DOCUMENT_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, valueOrDefault(pageID()).toUInt64(), valueOrDefault(frameID()).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
+#define DOCUMENT_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", main=%d] Document::" fmt, this, valueOrDefault(pageID()).toUInt64(), valueOrDefault(frameID()).toUInt64(), this == &topDocument(), ##__VA_ARGS__)
 
 namespace WebCore {
 
@@ -395,85 +397,28 @@ public:
 
 static const Seconds intersectionObserversInitialUpdateDelay { 2000_ms };
 
-// DOM Level 2 says (letters added):
-//
-// a) Name start characters must have one of the categories Ll, Lu, Lo, Lt, Nl.
-// b) Name characters other than Name-start characters must have one of the categories Mc, Me, Mn, Lm, or Nd.
-// c) Characters in the compatibility area (i.e. with character code greater than #xF900 and less than #xFFFE) are not allowed in XML names.
-// d) Characters which have a font or compatibility decomposition (i.e. those with a "compatibility formatting tag" in field 5 of the database -- marked by field 5 beginning with a "<") are not allowed.
-// e) The following characters are treated as name-start characters rather than name characters, because the property file classifies them as Alphabetic: [#x02BB-#x02C1], #x0559, #x06E5, #x06E6.
-// f) Characters #x20DD-#x20E0 are excluded (in accordance with Unicode, section 5.14).
-// g) Character #x00B7 is classified as an extender, because the property list so identifies it.
-// h) Character #x0387 is added as a name character, because #x00B7 is its canonical equivalent.
-// i) Characters ':' and '_' are allowed as name-start characters.
-// j) Characters '-' and '.' are allowed as name characters.
-//
-// It also contains complete tables. If we decide it's better, we could include those instead of the following code.
-
+// https://www.w3.org/TR/xml/#NT-NameStartChar
+// NameStartChar       ::=       ":" | [A-Z] | "_" | [a-z] | [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#x2FF] | [#x370-#x37D] | [#x37F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
 static inline bool isValidNameStart(UChar32 c)
 {
-    // rule (e) above
-    if ((c >= 0x02BB && c <= 0x02C1) || c == 0x559 || c == 0x6E5 || c == 0x6E6)
-        return true;
-
-    // rule (i) above
-    if (c == ':' || c == '_')
-        return true;
-
-    // rules (a) and (f) above
-    if (!(U_GET_GC_MASK(c) & (U_GC_LL_MASK | U_GC_LU_MASK | U_GC_LO_MASK | U_GC_LT_MASK | U_GC_NL_MASK)))
-        return false;
-
-    // rule (c) above
-    if (c >= 0xF900 && c < 0xFFFE)
-        return false;
-
-    // rule (d) above
-    int type = u_getIntPropertyValue(c, UCHAR_DECOMPOSITION_TYPE);
-    if (type == U_DT_FONT || type == U_DT_COMPAT)
-        return false;
-
-    return true;
+    return c == ':' || (c >= 'A' && c <= 'Z') || c == '_' || (c >= 'a' && c <= 'z') || (c >= 0x00C0 && c <= 0x00D6)
+        || (c >= 0x00D8 && c <= 0x00F6) || (c >= 0x00F8 && c <= 0x02FF) || (c >= 0x0370 && c <= 0x037D) || (c >= 0x037F && c <= 0x1FFF)
+        || (c >= 0x200C && c <= 0x200D) || (c >= 0x2070 && c <= 0x218F) || (c >= 0x2C00 && c <= 0x2FeF) || (c >= 0x3001 && c <= 0xD7FF)
+        || (c >= 0xF900 && c <= 0xFDCF) || (c >= 0xFDF0 && c <= 0xFFFD) || (c >= 0x10000 && c <= 0xEFFFF);
 }
 
+// https://www.w3.org/TR/xml/#NT-NameChar
+// NameChar       ::=       NameStartChar | "-" | "." | [0-9] | #xB7 | [#x0300-#x036F] | [#x203F-#x2040]
 static inline bool isValidNamePart(UChar32 c)
 {
-    // rules (a), (e), and (i) above
-    if (isValidNameStart(c))
-        return true;
-
-    // rules (g) and (h) above
-    if (c == 0x00B7 || c == 0x0387)
-        return true;
-
-    // rule (j) above
-    if (c == '-' || c == '.')
-        return true;
-
-    // rules (b) and (f) above
-    if (!(U_GET_GC_MASK(c) & (U_GC_M_MASK | U_GC_LM_MASK | U_GC_ND_MASK)))
-        return false;
-
-    // rule (c) above
-    if (c >= 0xF900 && c < 0xFFFE)
-        return false;
-
-    // rule (d) above
-    int type = u_getIntPropertyValue(c, UCHAR_DECOMPOSITION_TYPE);
-    if (type == U_DT_FONT || type == U_DT_COMPAT)
-        return false;
-
-    return true;
+    return isValidNameStart(c) || c == '-' || c == '.' || (c >= '0' && c <= '9') || c == 0x00B7
+        || (c >= 0x0300 && c <= 0x036F) || (c >= 0x203F && c <= 0x2040);
 }
 
 static Widget* widgetForElement(Element* focusedElement)
 {
-    if (!focusedElement)
-        return nullptr;
-    auto* renderer = focusedElement->renderer();
-    if (!is<RenderWidget>(renderer))
-        return nullptr;
-    return downcast<RenderWidget>(*renderer).widget();
+    auto* renderer = focusedElement ? dynamicDowncast<RenderWidget>(focusedElement->renderer()) : nullptr;
+    return renderer ? renderer->widget() : nullptr;
 }
 
 static bool acceptsEditingFocus(const Element& element)
@@ -607,9 +552,10 @@ static Ref<CachedResourceLoader> createCachedResourceLoader(Frame* frame)
     return CachedResourceLoader::create(nullptr);
 }
 
-Document::Document(Frame* frame, const Settings& settings, const URL& url, DocumentClasses documentClasses, unsigned constructionFlags)
+Document::Document(Frame* frame, const Settings& settings, const URL& url, DocumentClasses documentClasses, unsigned constructionFlags, ScriptExecutionContextIdentifier identifier)
     : ContainerNode(*this, CreateDocument)
     , TreeScope(*this)
+    , ScriptExecutionContext(identifier)
     , FrameDestructionObserver(frame)
     , m_settings(settings)
     , m_quirks(makeUniqueRef<Quirks>(*this))
@@ -683,6 +629,13 @@ Document::Document(Frame* frame, const Settings& settings, const URL& url, Docum
         nodeListAndCollectionCount = 0;
 
     InspectorInstrumentation::addEventListenersToNode(*this);
+}
+
+void Document::createNewIdentifier()
+{
+    removeFromDocumentsMap();
+    regenerateIdentifier();
+    addToDocumentsMap();
 }
 
 Ref<Document> Document::create(Document& contextDocument)
@@ -893,13 +846,13 @@ void Document::buildAccessKeyCache()
     m_accessKeyCache = makeUnique<HashMap<String, WeakPtr<Element>, ASCIICaseInsensitiveHash>>([this] {
         HashMap<String, WeakPtr<Element>, ASCIICaseInsensitiveHash> map;
         for (auto& node : composedTreeDescendants(*this)) {
-            if (!is<Element>(node))
+            auto element = dynamicDowncast<Element>(node);
+            if (!element)
                 continue;
-            auto& element = downcast<Element>(node);
-            auto& key = element.attributeWithoutSynchronization(accesskeyAttr);
+            auto& key = element->attributeWithoutSynchronization(accesskeyAttr);
             if (key.isEmpty())
                 continue;
-            map.add(key, element);
+            map.add(key, *element);
         }
         return map;
     }());
@@ -1521,13 +1474,13 @@ String Document::characterSetWithUTF8Fallback() const
     AtomString name = encoding();
     if (!name.isNull())
         return name;
-    return UTF8Encoding().domName();
+    return PAL::UTF8Encoding().domName();
 }
 
 String Document::defaultCharsetForLegacyBindings() const
 {
     if (!frame())
-        UTF8Encoding().domName();
+        PAL::UTF8Encoding().domName();
     return settings().defaultTextEncodingName();
 }
 
@@ -1874,6 +1827,12 @@ void Document::visibilityStateChanged()
             MediaStreamTrack::updateCaptureAccordingToMutedState(*this);
     }
 #endif
+
+    if (!hidden()) {
+        auto callbacks = std::exchange(m_whenIsVisibleHandlers, { });
+        for (auto& callback : callbacks)
+            callback();
+    }
 }
 
 VisibilityState Document::visibilityState() const
@@ -2095,6 +2054,17 @@ void Document::resolveStyle(ResolveStyleType type)
 
         Style::TreeResolver resolver(*this, WTFMove(m_pendingRenderTreeTextUpdate));
         auto styleUpdate = resolver.resolve();
+
+        while (resolver.hasUnresolvedQueryContainers() && styleUpdate) {
+            SetForScope resolvingContainerQueriesScope(m_isResolvingContainerQueries, true);
+
+            updateRenderTree(WTFMove(styleUpdate));
+
+            if (frameView.layoutContext().needsLayout())
+                frameView.layoutContext().layout();
+
+            styleUpdate = resolver.resolve();
+        }
 
         m_lastStyleUpdateSizeForTesting = styleUpdate ? styleUpdate->size() : 0;
 
@@ -3336,7 +3306,7 @@ ExceptionOr<void> Document::write(Document* entryDocument, SegmentedString&& tex
     return { };
 }
 
-ExceptionOr<void> Document::write(Document* entryDocument, Vector<String>&& strings)
+ExceptionOr<void> Document::write(Document* entryDocument, FixedVector<String>&& strings)
 {
     if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
         return Exception { InvalidStateError };
@@ -3348,7 +3318,7 @@ ExceptionOr<void> Document::write(Document* entryDocument, Vector<String>&& stri
     return write(entryDocument, WTFMove(text));
 }
 
-ExceptionOr<void> Document::writeln(Document* entryDocument, Vector<String>&& strings)
+ExceptionOr<void> Document::writeln(Document* entryDocument, FixedVector<String>&& strings)
 {
     if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
         return Exception { InvalidStateError };
@@ -3744,7 +3714,7 @@ void Document::didRemoveAllPendingStylesheet()
     if (RefPtr parser = scriptableDocumentParser())
         parser->executeScriptsWaitingForStylesheetsSoon();
 
-    if (m_gotoAnchorNeededAfterStylesheetsLoad) {
+    if (m_gotoAnchorNeededAfterStylesheetsLoad && view()) {
         // https://html.spec.whatwg.org/multipage/browsing-the-web.html#try-to-scroll-to-the-fragment
         eventLoop().queueTask(TaskSource::Networking, [protectedThis = Ref { *this }, this] {
             RefPtr frameView = view();
@@ -4331,7 +4301,7 @@ void Document::addPendingScrollEventTarget(ContainerNode& target)
         m_pendingScrollEventTargetList = makeUnique<PendingScrollEventTargetList>();
 
     auto& targets = m_pendingScrollEventTargetList->targets;
-    if (targets.findMatching([&] (auto& entry) { return entry.ptr() == &target; }) != notFound)
+    if (targets.findIf([&] (auto& entry) { return entry.ptr() == &target; }) != notFound)
         return;
 
     if (targets.isEmpty())
@@ -4497,7 +4467,7 @@ void Document::adjustFocusedNodeOnNodeRemoval(Node& node, NodeRemoval nodeRemova
     if (isNodeInSubtree(*focusedElement, node, nodeRemoval)) {
         // FIXME: We should avoid synchronously updating the style inside setFocusedElement.
         // FIXME: Object elements should avoid loading a frame synchronously in a post style recalc callback.
-        SubframeLoadingDisabler disabler(is<ContainerNode>(node) ? &downcast<ContainerNode>(node) : nullptr);
+        SubframeLoadingDisabler disabler(dynamicDowncast<ContainerNode>(node));
         setFocusedElement(nullptr, { { }, { }, FocusRemovalEventsMode::DoNotDispatch, { }, { } });
         // Set the focus navigation starting node to the previous focused element so that
         // we can fallback to the siblings or parent node for the next search.
@@ -4656,10 +4626,7 @@ bool Document::setFocusedElement(Element* element, const FocusOptions& options)
                 newFocusedElement = nullptr;
             }
 
-            oldFocusedElement->dispatchFocusOutEvent(eventNames().focusoutEvent, newFocusedElement.copyRef()); // DOM level 3 name for the bubbling blur event.
-            // FIXME: We should remove firing DOMFocusOutEvent event when we are sure no content depends
-            // on it, probably when <rdar://problem/8503958> is resolved.
-            oldFocusedElement->dispatchFocusOutEvent(eventNames().DOMFocusOutEvent, newFocusedElement.copyRef()); // DOM level 2 name for compatibility.
+            oldFocusedElement->dispatchFocusOutEventIfNeeded(newFocusedElement.copyRef()); // DOM level 3 bubbling blur event.
 
             if (m_focusedElement) {
                 // handler shifted focus
@@ -4724,16 +4691,7 @@ bool Document::setFocusedElement(Element* element, const FocusOptions& options)
             return false;
         }
 
-        m_focusedElement->dispatchFocusInEvent(eventNames().focusinEvent, oldFocusedElement.copyRef()); // DOM level 3 bubbling focus event.
-
-        if (m_focusedElement != newFocusedElement) {
-            // handler shifted focus
-            return false;
-        }
-
-        // FIXME: We should remove firing DOMFocusInEvent event when we are sure no content depends
-        // on it, probably when <rdar://problem/8503958> is m.
-        m_focusedElement->dispatchFocusInEvent(eventNames().DOMFocusInEvent, oldFocusedElement.copyRef()); // DOM level 2 for compatibility.
+        m_focusedElement->dispatchFocusInEventIfNeeded(oldFocusedElement.copyRef()); // DOM level 3 bubbling focus event.
 
         if (m_focusedElement != newFocusedElement) {
             // handler shifted focus
@@ -4842,7 +4800,7 @@ void Document::setCSSTarget(Element* targetNode)
 void Document::registerNodeListForInvalidation(LiveNodeList& list)
 {
     m_nodeListAndCollectionCounts[list.invalidationType()]++;
-    if (!list.isRootedAtDocument())
+    if (!list.isRootedAtTreeScope())
         return;
     ASSERT(!list.isRegisteredForInvalidationAtDocument());
     list.setRegisteredForInvalidationAtDocument(true);
@@ -4863,7 +4821,7 @@ void Document::unregisterNodeListForInvalidation(LiveNodeList& list)
 void Document::registerCollection(HTMLCollection& collection)
 {
     m_nodeListAndCollectionCounts[collection.invalidationType()]++;
-    if (collection.isRootedAtDocument())
+    if (collection.isRootedAtTreeScope())
         m_collectionsInvalidatedAtDocument.add(&collection);
 }
 
@@ -4871,7 +4829,7 @@ void Document::unregisterCollection(HTMLCollection& collection)
 {
     ASSERT(m_nodeListAndCollectionCounts[collection.invalidationType()]);
     m_nodeListAndCollectionCounts[collection.invalidationType()]--;
-    if (!collection.isRootedAtDocument())
+    if (!collection.isRootedAtTreeScope())
         return;
 
     m_collectionsInvalidatedAtDocument.remove(&collection);
@@ -5103,27 +5061,13 @@ void Document::setAttributeEventListener(const AtomString& eventType, const Qual
     setAttributeEventListener(eventType, JSLazyEventListener::create(*this, attributeName, attributeValue), isolatedWorld);
 }
 
-void Document::setWindowAttributeEventListener(const AtomString& eventType, RefPtr<EventListener>&& listener, DOMWrapperWorld& isolatedWorld)
-{
-    if (!m_domWindow)
-        return;
-    m_domWindow->setAttributeEventListener(eventType, WTFMove(listener), isolatedWorld);
-}
-
 void Document::setWindowAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& attributeValue, DOMWrapperWorld& isolatedWorld)
 {
     if (!m_domWindow)
         return;
     if (!m_domWindow->frame())
         return;
-    setWindowAttributeEventListener(eventType, JSLazyEventListener::create(*m_domWindow, attributeName, attributeValue), isolatedWorld);
-}
-
-EventListener* Document::getWindowAttributeEventListener(const AtomString& eventType, DOMWrapperWorld& isolatedWorld)
-{
-    if (!m_domWindow)
-        return nullptr;
-    return m_domWindow->attributeEventListener(eventType, isolatedWorld);
+    m_domWindow->setAttributeEventListener(eventType, JSLazyEventListener::create(*m_domWindow, attributeName, attributeValue), isolatedWorld);
 }
 
 void Document::dispatchWindowEvent(Event& event, EventTarget* target)
@@ -5287,16 +5231,6 @@ void Document::addListenerTypeIfNeeded(const AtomString& eventType)
         addListenerType(DOMCHARACTERDATAMODIFIED_LISTENER);
     else if (eventType == eventNames().overflowchangedEvent)
         addListenerType(OVERFLOWCHANGED_LISTENER);
-    else if (eventType == eventNames().webkitAnimationStartEvent || eventType == eventNames().animationstartEvent)
-        addListenerType(ANIMATIONSTART_LISTENER);
-    else if (eventType == eventNames().webkitAnimationEndEvent || eventType == eventNames().animationendEvent)
-        addListenerType(ANIMATIONEND_LISTENER);
-    else if (eventType == eventNames().webkitAnimationIterationEvent || eventType == eventNames().animationiterationEvent)
-        addListenerType(ANIMATIONITERATION_LISTENER);
-    else if (eventType == eventNames().webkitTransitionEndEvent || eventType == eventNames().transitionendEvent)
-        addListenerType(TRANSITIONEND_LISTENER);
-    else if (eventType == eventNames().beforeloadEvent)
-        addListenerType(BEFORELOAD_LISTENER);
     else if (eventType == eventNames().scrollEvent)
         addListenerType(SCROLL_LISTENER);
     else if (eventType == eventNames().webkitmouseforcewillbeginEvent)
@@ -5307,8 +5241,10 @@ void Document::addListenerTypeIfNeeded(const AtomString& eventType)
         addListenerType(FORCEDOWN_LISTENER);
     else if (eventType == eventNames().webkitmouseforceupEvent)
         addListenerType(FORCEUP_LISTENER);
-    else if (eventType == eventNames().resizeEvent)
-        addListenerType(RESIZE_LISTENER);
+    else if (eventType == eventNames().focusinEvent)
+        addListenerType(FOCUSIN_LISTENER);
+    else if (eventType == eventNames().focusoutEvent)
+        addListenerType(FOCUSOUT_LISTENER);
 }
 
 HTMLFrameOwnerElement* Document::ownerElement() const
@@ -6261,7 +6197,7 @@ String Document::originIdentifierForPasteboard() const
     if (origin != "null")
         return origin;
     if (!m_uniqueIdentifier)
-        m_uniqueIdentifier = "null:" + createCanonicalUUIDString();
+        m_uniqueIdentifier = "null:" + createVersion4UUIDString();
     return m_uniqueIdentifier;
 }
 
@@ -7477,33 +7413,33 @@ void Document::updateHoverActiveState(const HitTestRequest& request, Element* in
             elementsToSetHover.append(element);
     }
 
-    auto changeState = [](auto& elements, auto pseudoClassType, auto&& setter) {
+    auto changeState = [](auto& elements, auto pseudoClassType, auto value, auto&& setter) {
         if (elements.isEmpty())
             return;
 
-        Style::PseudoClassChangeInvalidation styleInvalidation { *elements.last(), pseudoClassType, Style::InvalidationScope::Descendants };
+        Style::PseudoClassChangeInvalidation styleInvalidation { *elements.last(), pseudoClassType, value, Style::InvalidationScope::Descendants };
 
         // We need to do descendant invalidation for each shadow tree separately as the style is per-scope.
         Vector<Style::PseudoClassChangeInvalidation> shadowDescendantStyleInvalidations;
         for (auto& element : elements) {
             if (hasShadowRootParent(*element))
-                shadowDescendantStyleInvalidations.append({ *element, pseudoClassType, Style::InvalidationScope::Descendants });
+                shadowDescendantStyleInvalidations.append({ *element, pseudoClassType, value, Style::InvalidationScope::Descendants });
         }
 
         for (auto& element : elements)
             setter(*element);
     };
 
-    changeState(elementsToClearActive, CSSSelector::PseudoClassActive, [](auto& element) {
+    changeState(elementsToClearActive, CSSSelector::PseudoClassActive, false, [](auto& element) {
         element.setActive(false, false, Style::InvalidationScope::SelfChildrenAndSiblings);
     });
-    changeState(elementsToSetActive, CSSSelector::PseudoClassActive, [](auto& element) {
+    changeState(elementsToSetActive, CSSSelector::PseudoClassActive, true, [](auto& element) {
         element.setActive(true, false, Style::InvalidationScope::SelfChildrenAndSiblings);
     });
-    changeState(elementsToClearHover, CSSSelector::PseudoClassHover, [](auto& element) {
+    changeState(elementsToClearHover, CSSSelector::PseudoClassHover, false, [](auto& element) {
         element.setHovered(false, Style::InvalidationScope::SelfChildrenAndSiblings);
     });
-    changeState(elementsToSetHover, CSSSelector::PseudoClassHover, [](auto& element) {
+    changeState(elementsToSetHover, CSSSelector::PseudoClassHover, true, [](auto& element) {
         element.setHovered(true, Style::InvalidationScope::SelfChildrenAndSiblings);
     });
 }
@@ -7530,7 +7466,7 @@ Document& Document::ensureTemplateDocument()
         return const_cast<Document&>(*document);
 
     if (isHTMLDocument())
-        m_templateDocument = HTMLDocument::create(nullptr, m_settings, aboutBlankURL());
+        m_templateDocument = HTMLDocument::create(nullptr, m_settings, aboutBlankURL(), { });
     else
         m_templateDocument = create(m_settings, aboutBlankURL());
 
@@ -7593,6 +7529,12 @@ bool Document::useDarkAppearance(const RenderStyle* style) const
 #else
     UNUSED_PARAM(style);
 #endif
+
+    if (DocumentLoader* documentLoader = loader()) {
+        auto colorSchemePreference = documentLoader->colorSchemePreference();
+        if (colorSchemePreference != ColorSchemePreference::NoPreference)
+            return colorSchemePreference == ColorSchemePreference::Dark;
+    }
 
     bool pageUsesDarkAppearance = false;
     if (Page* documentPage = page())
@@ -8097,7 +8039,7 @@ void Document::updateIntersectionObservations()
             continue;
         for (auto& target : observer->observationTargets()) {
             auto& targetRegistrations = target->intersectionObserverDataIfExists()->registrations;
-            auto index = targetRegistrations.findMatching([observer](auto& registration) {
+            auto index = targetRegistrations.findIf([observer](auto& registration) {
                 return registration.observer.get() == observer;
             });
             ASSERT(index != notFound);
@@ -8561,10 +8503,10 @@ Vector<RefPtr<WebAnimation>> Document::matchingAnimations(const Function<bool(El
 
     Vector<RefPtr<WebAnimation>> animations;
     for (auto* animation : WebAnimation::instances()) {
-        if (!animation || !animation->isRelevant() || !is<KeyframeEffect>(animation->effect()))
+        if (!animation->isRelevant() || !is<KeyframeEffect>(animation->effect()))
             continue;
 
-        auto* target = downcast<KeyframeEffect>(*animation->effect()).targetElementOrPseudoElement();
+        auto* target = downcast<KeyframeEffect>(*animation->effect()).target();
         if (target && target->isConnected() && &target->document() == this && function(*target))
             animations.append(animation);
     }
@@ -8574,6 +8516,24 @@ Vector<RefPtr<WebAnimation>> Document::matchingAnimations(const Function<bool(El
     });
 
     return animations;
+}
+
+void Document::keyframesRuleDidChange(const String& name)
+{
+    for (auto* animation : WebAnimation::instances()) {
+        if (!is<CSSAnimation>(*animation) || !animation->isRelevant())
+            continue;
+
+        auto& cssAnimation = downcast<CSSAnimation>(*animation);
+        if (cssAnimation.animationName() != name)
+            continue;
+
+        auto owningElement = cssAnimation.owningElement();
+        if (!owningElement || !owningElement->element.isConnected() || &owningElement->element.document() != this)
+            continue;
+
+        cssAnimation.keyframesRuleDidChange();
+    }
 }
 
 void Document::addTopLayerElement(Element& element)
@@ -8617,7 +8577,7 @@ void Document::didInsertAttachmentElement(HTMLAttachmentElement& attachment)
     bool previousIdentifierIsNotUnique = !previousIdentifier.isEmpty() && m_attachmentIdentifierToElementMap.contains(previousIdentifier);
     if (identifier.isEmpty() || previousIdentifierIsNotUnique) {
         previousIdentifier = identifier;
-        identifier = createCanonicalUUIDString();
+        identifier = createVersion4UUIDString();
         attachment.setUniqueIdentifier(identifier);
     }
 
@@ -8723,8 +8683,8 @@ void Document::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, Ve
             return;
 
         auto messageLevel = messageLevelFromWTFLogLevel(level);
-        auto message = makeUnique<Inspector::ConsoleMessage>(messageSource, MessageType::Log, messageLevel, WTFMove(logMessages), mainWorldExecState(weakThis->frame()));
-
+        auto* globalObject = mainWorldGlobalObject(weakThis->frame());
+        auto message = makeUnique<Inspector::ConsoleMessage>(messageSource, MessageType::Log, messageLevel, WTFMove(logMessages), globalObject);
         weakThis->addConsoleMessage(WTFMove(message));
     });
 }
@@ -9077,10 +9037,31 @@ String Document::debugDescription() const
     return builder.toString();
 }
 
+ModalContainerObserver* Document::modalContainerObserver()
+{
+    if (!m_modalContainerObserver && ModalContainerObserver::isNeededFor(*this))
+        m_modalContainerObserver = makeUnique<ModalContainerObserver>();
+    return m_modalContainerObserver.get();
+}
+
+ModalContainerObserver* Document::modalContainerObserverIfExists() const
+{
+    return m_modalContainerObserver.get();
+}
+
 TextStream& operator<<(TextStream& ts, const Document& document)
 {
     ts << document.debugDescription();
     return ts;
+}
+
+void Document::whenVisible(Function<void()>&& callback)
+{
+    if (hidden()) {
+        m_whenIsVisibleHandlers.append(WTFMove(callback));
+        return;
+    }
+    callback();
 }
 
 } // namespace WebCore

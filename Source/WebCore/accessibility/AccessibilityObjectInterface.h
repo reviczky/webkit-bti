@@ -200,6 +200,7 @@ enum class AccessibilityRole {
     MenuListPopup,
     MenuListOption,
     Meter,
+    Model,
     Outline,
     Paragraph,
     PopUpButton,
@@ -447,6 +448,8 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "MenuListOption";
     case AccessibilityRole::Meter:
         return "Meter";
+    case AccessibilityRole::Model:
+        return "Model";
     case AccessibilityRole::Outline:
         return "Outline";
     case AccessibilityRole::Paragraph:
@@ -956,6 +959,9 @@ public:
     bool isToolbar() const { return roleValue() == AccessibilityRole::Toolbar; }
     bool isSummary() const { return roleValue() == AccessibilityRole::Summary; }
     bool isBlockquote() const { return roleValue() == AccessibilityRole::Blockquote; }
+#if ENABLE(MODEL_ELEMENT)
+    bool isModel() const { return roleValue() == AccessibilityRole::Model; }
+#endif
 
     virtual bool isLandmark() const = 0;
     virtual bool isRangeControl() const = 0;
@@ -1041,7 +1047,7 @@ public:
     virtual AXCoreObject* selectedTabItem() = 0;
     virtual AXCoreObject* selectedListItem() = 0;
     virtual int layoutCount() const = 0;
-    virtual double estimatedLoadingProgress() const = 0;
+    virtual double loadingProgress() const = 0;
     virtual String brailleLabel() const = 0;
     virtual String brailleRoleDescription() const = 0;
     virtual String embeddedImageDescription() const = 0;
@@ -1189,6 +1195,8 @@ public:
     virtual String roleDescription() const = 0;
     // Localized string that describes ARIA landmark roles.
     virtual String ariaLandmarkRoleDescription() const = 0;
+    // Non-localized string associated with the object's subrole.
+    virtual String subrolePlatformString() const = 0;
 
     virtual AXObjectCache* axObjectCache() const = 0;
 
@@ -1266,7 +1274,7 @@ public:
     virtual void addChildren() = 0;
     virtual void addChild(AXCoreObject*, DescendIfIgnored = DescendIfIgnored::Yes) = 0;
     virtual void insertChild(AXCoreObject*, unsigned, DescendIfIgnored = DescendIfIgnored::Yes) = 0;
-    Vector<AXID> childrenIDs();
+    Vector<AXID> childrenIDs(bool updateChildrenIfNecessary = true);
 
     virtual bool canHaveChildren() const = 0;
     virtual void updateChildrenIfNecessary() = 0;
@@ -1533,6 +1541,11 @@ public:
     virtual String innerHTML() const = 0;
     virtual String outerHTML() const = 0;
 
+    
+#if PLATFORM(COCOA) && ENABLE(MODEL_ELEMENT)
+    virtual Vector<RetainPtr<id>> modelElementChildren() = 0;
+#endif
+    
 private:
     // Detaches this object from the objects it references and it is referenced by.
     virtual void detachRemoteParts(AccessibilityDetachmentType) = 0;
@@ -1574,7 +1587,7 @@ inline AXCoreObject::AXValue AXCoreObject::value()
         return isSelected();
 
     if (isColorWell()) {
-        auto color = convertColor<SRGBA<float>>(colorValue());
+        auto color = convertColor<SRGBA<float>>(colorValue()).resolved();
         return makeString("rgb ", String::numberToStringFixedPrecision(color.red, 6, KeepTrailingZeros), " ", String::numberToStringFixedPrecision(color.green, 6, KeepTrailingZeros), " ", String::numberToStringFixedPrecision(color.blue, 6, KeepTrailingZeros), " 1");
     }
 
@@ -1596,12 +1609,11 @@ inline void AXCoreObject::detachWrapper(AccessibilityDetachmentType detachmentTy
 }
 #endif
 
-inline Vector<AXID> AXCoreObject::childrenIDs()
+inline Vector<AXID> AXCoreObject::childrenIDs(bool updateChildrenIfNecessary)
 {
-    Vector<AXID> childrenIDs;
-    for (const auto& child : children())
-        childrenIDs.append(child->objectID());
-    return childrenIDs;
+    return children(updateChildrenIfNecessary).map([] (auto& axObject) -> AXID {
+        return axObject->objectID();
+    });
 }
 
 namespace Accessibility {
@@ -1628,6 +1640,16 @@ T* findAncestor(const T& object, bool includeSelf, const F& matches)
 }
 
 void findMatchingObjects(AccessibilitySearchCriteria const&, AXCoreObject::AccessibilityChildrenVector&);
+
+template<typename T, typename F>
+void enumerateAncestors(const T& object, bool includeSelf, const F& lambda)
+{
+    if (includeSelf)
+        lambda(object);
+
+    if (auto* parent = object.parentObject())
+        enumerateAncestors(*parent, true, lambda);
+}
 
 template<typename T, typename F>
 void enumerateDescendants(T& object, bool includeSelf, const F& lambda)
@@ -1671,8 +1693,8 @@ template<typename T, typename U> inline T retrieveAutoreleasedValueFromMainThrea
 inline bool AXCoreObject::isDescendantOfObject(const AXCoreObject* axObject) const
 {
     return axObject && Accessibility::findAncestor<AXCoreObject>(*this, false, [axObject] (const AXCoreObject& object) {
-            return &object == axObject;
-        }) != nullptr;
+        return &object == axObject;
+    }) != nullptr;
 }
 
 inline bool AXCoreObject::isAncestorOfObject(const AXCoreObject* axObject) const

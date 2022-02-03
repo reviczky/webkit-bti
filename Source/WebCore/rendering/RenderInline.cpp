@@ -28,6 +28,8 @@
 #include "FrameSelection.h"
 #include "GraphicsContext.h"
 #include "HitTestResult.h"
+#include "InlineIteratorInlineBox.h"
+#include "InlineIteratorLine.h"
 #include "LayoutIntegrationLineLayout.h"
 #include "LegacyInlineElementBox.h"
 #include "LegacyInlineTextBox.h"
@@ -158,7 +160,7 @@ void RenderInline::styleWillChange(StyleDifference diff, const RenderStyle& newS
     // RenderInlines forward their absolute positioned descendants to their (non-anonymous) containing block.
     // Check if this non-anonymous containing block can hold the absolute positioned elements when the inline is no longer positioned.
     if (canContainAbsolutelyPositionedObjects() && newStyle.position() == PositionType::Static) {
-        auto* container = containingBlockForAbsolutePosition();
+        auto* container = RenderObject::containingBlockForPositionType(PositionType::Absolute, *this);
         if (container && !container->canContainAbsolutelyPositionedObjects())
             container->removePositionedObjects(nullptr, NewContainingBlock);
     }
@@ -202,14 +204,14 @@ void RenderInline::styleDidChange(StyleDifference diff, const RenderStyle* oldSt
 bool RenderInline::mayAffectLayout() const
 {
     auto* parentStyle = &parent()->style();
-    RenderInline* parentRenderInline = is<RenderInline>(*parent()) ? downcast<RenderInline>(parent()) : nullptr;
+    auto* parentRenderInline = dynamicDowncast<RenderInline>(*parent());
     auto hasHardLineBreakChildOnly = firstChild() && firstChild() == lastChild() && firstChild()->isBR();
     bool checkFonts = document().inNoQuirksMode();
     auto mayAffectLayout = (parentRenderInline && parentRenderInline->mayAffectLayout())
         || (parentRenderInline && parentStyle->verticalAlign() != VerticalAlign::Baseline)
         || style().verticalAlign() != VerticalAlign::Baseline
         || style().textEmphasisMark() != TextEmphasisMark::None
-        || (checkFonts && (!parentStyle->fontCascade().fontMetrics().hasIdenticalAscentDescentAndLineGap(style().fontCascade().fontMetrics())
+        || (checkFonts && (!parentStyle->fontCascade().metricsOfPrimaryFont().hasIdenticalAscentDescentAndLineGap(style().fontCascade().metricsOfPrimaryFont())
         || parentStyle->lineHeight() != style().lineHeight()))
         || hasHardLineBreakChildOnly;
 
@@ -217,7 +219,7 @@ bool RenderInline::mayAffectLayout() const
         // Have to check the first line style as well.
         parentStyle = &parent()->firstLineStyle();
         auto& childStyle = firstLineStyle();
-        mayAffectLayout = !parentStyle->fontCascade().fontMetrics().hasIdenticalAscentDescentAndLineGap(childStyle.fontCascade().fontMetrics())
+        mayAffectLayout = !parentStyle->fontCascade().metricsOfPrimaryFont().hasIdenticalAscentDescentAndLineGap(childStyle.fontCascade().metricsOfPrimaryFont())
             || childStyle.verticalAlign() != VerticalAlign::Baseline
             || parentStyle->lineHeight() != childStyle.lineHeight();
     }
@@ -854,7 +856,7 @@ LayoutUnit RenderInline::lineHeight(bool firstLine, LineDirectionMode /*directio
 LayoutUnit RenderInline::baselinePosition(FontBaseline baselineType, bool firstLine, LineDirectionMode direction, LinePositionMode linePositionMode) const
 {
     const RenderStyle& style = firstLine ? firstLineStyle() : this->style();
-    const FontMetrics& fontMetrics = style.fontMetrics();
+    const FontMetrics& fontMetrics = style.metricsOfPrimaryFont();
     return LayoutUnit { (fontMetrics.ascent(baselineType) + (lineHeight(firstLine, direction, linePositionMode) - fontMetrics.height()) / 2).toInt() };
 }
 
@@ -957,11 +959,13 @@ void RenderInline::paintOutline(PaintInfo& paintInfo, const LayoutPoint& paintOf
 
     Vector<LayoutRect> rects;
     rects.append(LayoutRect());
-    for (auto* curr = firstLineBox(); curr; curr = curr->nextLineBox()) {
-        const LegacyRootInlineBox& rootBox = curr->root();
-        LayoutUnit top = std::max(rootBox.lineTop(), LayoutUnit(curr->logicalTop()));
-        LayoutUnit bottom = std::min(rootBox.lineBottom(), LayoutUnit(curr->logicalBottom()));
-        rects.append({ LayoutUnit(curr->x()), top, LayoutUnit(curr->logicalWidth()), bottom - top });
+
+    for (auto box = InlineIterator::firstInlineBoxFor(*this); box; box.traverseNextInlineBox()) {
+        auto line = box->line();
+        LayoutUnit top = std::max(line->top(), LayoutUnit(box->logicalTop()));
+        LayoutUnit bottom = std::min(line->bottom(), LayoutUnit(box->logicalBottom()));
+        // FIXME: This is mixing physical and logical coordinates.
+        rects.append({ LayoutUnit(box->rect().x()), top, LayoutUnit(box->logicalWidth()), bottom - top });
     }
     rects.append(LayoutRect());
 

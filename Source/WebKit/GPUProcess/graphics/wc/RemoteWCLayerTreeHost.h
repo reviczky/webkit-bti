@@ -32,20 +32,22 @@
 #include "MessageSender.h"
 #include "WCLayerTreeHostIdentifier.h"
 #include "WCSharedSceneContextHolder.h"
+#include <WebCore/ProcessIdentifier.h>
 
 namespace WebKit {
 class GPUConnectionToWebProcess;
+class UpdateInfo;
 class WCScene;
 struct WCUpateInfo;
 
 class RemoteWCLayerTreeHost : public IPC::MessageReceiver, private IPC::MessageSender {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static std::unique_ptr<RemoteWCLayerTreeHost> create(GPUConnectionToWebProcess&, WebKit::WCLayerTreeHostIdentifier, uint64_t nativeWindow);
-    RemoteWCLayerTreeHost(GPUConnectionToWebProcess&, WebKit::WCLayerTreeHostIdentifier, uint64_t nativeWindow);
+    static std::unique_ptr<RemoteWCLayerTreeHost> create(GPUConnectionToWebProcess&, WebKit::WCLayerTreeHostIdentifier, uint64_t nativeWindow, bool usesOffscreenRendering);
+    RemoteWCLayerTreeHost(GPUConnectionToWebProcess&, WebKit::WCLayerTreeHostIdentifier, uint64_t nativeWindow, bool usesOffscreenRendering);
     ~RemoteWCLayerTreeHost();
     // message handlers
-    void update(WCUpateInfo&&);
+    void update(WCUpateInfo&&, CompletionHandler<void(std::optional<WebKit::UpdateInfo>)>&&);
 
 private:
     // IPC::MessageReceiver
@@ -55,6 +57,7 @@ private:
     uint64_t messageSenderDestinationID() const override;
 
     WeakPtr<GPUConnectionToWebProcess> m_connectionToWebProcess;
+    WebCore::ProcessIdentifier m_webProcessIdentifier;
     WCLayerTreeHostIdentifier m_identifier;
     RefPtr<WCSharedSceneContextHolder::Holder> m_sharedSceneContextHolder;
     std::unique_ptr<WCScene> m_scene;

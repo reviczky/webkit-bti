@@ -31,6 +31,7 @@
 #include "DataReference.h"
 #include "InspectorExtensionTypes.h"
 #include "MessageReceiver.h"
+#include <WebCore/FrameIdentifier.h>
 #include <WebCore/InspectorFrontendAPIDispatcher.h>
 #include <WebCore/PageIdentifier.h>
 #include <wtf/Forward.h>
@@ -63,7 +64,7 @@ public:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
     // WebInspectorUIExtensionController IPC messages.
-    void registerExtension(const Inspector::ExtensionID&, const String& displayName, CompletionHandler<void(Expected<void, Inspector::ExtensionError>)>&&);
+    void registerExtension(const Inspector::ExtensionID&, const String& extensionBundleIdentifier, const String& displayName, CompletionHandler<void(Expected<void, Inspector::ExtensionError>)>&&);
     void unregisterExtension(const Inspector::ExtensionID&, CompletionHandler<void(Expected<void, Inspector::ExtensionError>)>&&);
     void createTabForExtension(const Inspector::ExtensionID&, const String& tabName, const URL& tabIconURL, const URL& sourceURL, CompletionHandler<void(Expected<Inspector::ExtensionTabID, Inspector::ExtensionError>)>&&);
     void evaluateScriptForExtension(const Inspector::ExtensionID&, const String& scriptSource, const std::optional<URL>& frameURL, const std::optional<URL>& contextSecurityOrigin, const std::optional<bool>& useContentScriptContext, CompletionHandler<void(const IPC::DataReference&, const std::optional<WebCore::ExceptionDetails>&, const std::optional<Inspector::ExtensionError>&)>&&);
@@ -74,8 +75,9 @@ public:
     void evaluateScriptInExtensionTab(const Inspector::ExtensionTabID&, const String& scriptSource, CompletionHandler<void(const IPC::DataReference&, const std::optional<WebCore::ExceptionDetails>&, const std::optional<Inspector::ExtensionError>&)>&&);
 
     // Callbacks from the frontend.
-    void didShowExtensionTab(const Inspector::ExtensionID&, const Inspector::ExtensionTabID&);
+    void didShowExtensionTab(const Inspector::ExtensionID&, const Inspector::ExtensionTabID&, WebCore::FrameIdentifier);
     void didHideExtensionTab(const Inspector::ExtensionID&, const Inspector::ExtensionTabID&);
+    void didNavigateExtensionTab(const Inspector::ExtensionID&, const Inspector::ExtensionTabID&, const URL&);
     void inspectedPageDidNavigate(const URL&);
 
 private:

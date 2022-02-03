@@ -177,6 +177,14 @@ struct ImmediateBase {
     static_assert(immediateSize <= sizeof(uint32_t) * 8);
 
     template<typename T>
+    static constexpr T immediateMask()
+    {
+        if constexpr(immediateSize < sizeof(uint32_t) * 8)
+            return ((T(1) << immediateSize) - 1);
+        return T(~0);
+    }
+
+    template<typename T>
     static auto isValid(T immValue)
         -> std::enable_if_t<(std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>), bool>
     {
@@ -189,7 +197,7 @@ struct ImmediateBase {
     {
         static_assert((-(1 << (immediateSize - 1)) <= immValue) && (immValue <= ((1 << (immediateSize - 1)) - 1)));
         int32_t value = immValue;
-        return ImmediateType((*reinterpret_cast<uint32_t*>(&value)) & ((1 << immediateSize) - 1));
+        return ImmediateType((*reinterpret_cast<uint32_t*>(&value)) & immediateMask<uint32_t>());
     }
 
     template<typename ImmediateType>
@@ -197,7 +205,7 @@ struct ImmediateBase {
     {
         ASSERT(isValid(immValue));
         uint32_t value = *reinterpret_cast<uint32_t*>(&immValue);
-        return ImmediateType(value & ((1 << immediateSize) - 1));
+        return ImmediateType(value & immediateMask<uint32_t>());
     }
 
     template<typename ImmediateType>
@@ -205,7 +213,7 @@ struct ImmediateBase {
     {
         ASSERT(isValid(immValue));
         uint64_t value = *reinterpret_cast<uint64_t*>(&immValue);
-        return ImmediateType(uint32_t(value & ((uint64_t(1) << immediateSize) - 1)));
+        return ImmediateType(uint32_t(value & immediateMask<uint64_t>()));
     }
 
     explicit ImmediateBase(uint32_t immValue)
@@ -299,6 +307,25 @@ struct JImmediate : ImmediateBase<21> {
         int32_t imm = *reinterpret_cast<int32_t*>(&base);
         return ((imm << 11) >> 11);
     }
+};
+
+struct ImmediateDecomposition {
+    template<typename T, typename = std::enable_if_t<(std::is_same_v<T, int32_t> || std::is_same_v<T, int64_t>)>>
+    explicit ImmediateDecomposition(T immediate)
+        : upper(UImmediate(0))
+        , lower(IImmediate(0))
+    {
+        ASSERT(ImmediateBase<32>::isValid(immediate));
+        int32_t value = int32_t(immediate);
+        if (value & (1 << 11))
+            value += (1 << 12);
+
+        upper = UImmediate::v<UImmediate>(value);
+        lower = IImmediate::v<IImmediate>((value << 20) >> 20);
+    }
+
+    UImmediate upper;
+    IImmediate lower;
 };
 
 // Instruction types
@@ -596,8 +623,10 @@ struct BTypeBase {
     static_assert(unsigned(opcode) < (1 << 7));
     static_assert(funct3 < (1 << 3));
 
-    using Base = STypeBase<opcode, funct3, RegisterTypes>;
-    using Registers = STypeRegisters<RegisterTypes>;
+    using Base = BTypeBase<opcode, funct3, RegisterTypes>;
+    using Registers = BTypeRegisters<RegisterTypes>;
+
+    static constexpr unsigned funct3Value = funct3;
 
     template<typename RS1Type, typename RS2Type>
     static uint32_t construct(RS1Type rs1, RS2Type rs2, BImmediate imm)
@@ -1497,77 +1526,1003 @@ public:
 
     AssemblerBuffer& buffer() { return m_buffer; }
 
-    typedef enum {
-        ConditionEQ,
-        ConditionNE,
-        ConditionHS, ConditionCS = ConditionHS,
-        ConditionLO, ConditionCC = ConditionLO,
-        ConditionMI,
-        ConditionPL,
-        ConditionVS,
-        ConditionVC,
-        ConditionHI,
-        ConditionLS,
-        ConditionGE,
-        ConditionLT,
-        ConditionGT,
-        ConditionLE,
-        ConditionAL,
-        ConditionInvalid
-    } Condition;
-
-    static Condition invert(Condition cond)
-    {
-        return static_cast<Condition>(cond ^ 1);
-    }
-
     static void* getRelocatedAddress(void* code, AssemblerLabel label)
     {
         ASSERT(label.isSet());
         return reinterpret_cast<void*>(reinterpret_cast<ptrdiff_t>(code) + label.offset());
     }
 
+    static int getDifferenceBetweenLabels(AssemblerLabel a, AssemblerLabel b)
+    {
+        return b.offset() - a.offset();
+    }
+
     size_t codeSize() const { return m_buffer.codeSize(); }
 
-    static unsigned getCallReturnOffset(AssemblerLabel) { return 0; }
+    static unsigned getCallReturnOffset(AssemblerLabel call)
+    {
+        ASSERT(call.isSet());
+        return call.offset();
+    }
 
-    AssemblerLabel labelIgnoringWatchpoints() { return { }; }
-    AssemblerLabel labelForWatchpoint() { return { }; }
-    AssemblerLabel label() { return { }; }
+    AssemblerLabel labelIgnoringWatchpoints()
+    {
+        return m_buffer.label();
+    }
 
-    static void linkJump(void*, AssemblerLabel, void*) { }
+    AssemblerLabel labelForWatchpoint()
+    {
+        AssemblerLabel result = m_buffer.label();
+        if (static_cast<int>(result.offset()) != m_indexOfLastWatchpoint)
+            result = label();
+        m_indexOfLastWatchpoint = result.offset();
+        m_indexOfTailOfLastWatchpoint = result.offset() + maxJumpReplacementSize();
+        return result;
+    }
 
-    static void linkJump(AssemblerLabel, AssemblerLabel) { }
+    AssemblerLabel label()
+    {
+        AssemblerLabel result = m_buffer.label();
+        while (UNLIKELY(static_cast<int>(result.offset()) < m_indexOfTailOfLastWatchpoint)) {
+            nop();
+            result = m_buffer.label();
+        }
+        return result;
+    }
 
-    static void linkCall(void*, AssemblerLabel, void*) { }
+    static void linkJump(void* code, AssemblerLabel from, void* to)
+    {
+        ASSERT(from.isSet());
+        if (!from.isSet())
+            return;
 
-    static void linkPointer(void*, AssemblerLabel, void*) { }
+        uint32_t* location = reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(code) + from.offset());
+        if (location[0] == LinkJumpImpl::placeholderInsn()) {
+            LinkJumpImpl::apply(location, to);
+            return;
+        }
+
+        if (location[0] == LinkBranchImpl::placeholderInsn()) {
+            LinkBranchImpl::apply(location, to);
+            return;
+        }
+    }
+
+    static void linkCall(void* code, AssemblerLabel from, void* to)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(code) + from.offset());
+        RELEASE_ASSERT(location[0] == LinkCallImpl::placeholderInsn());
+        LinkCallImpl::apply(location, to);
+    }
+
+    static void linkPointer(void* code, AssemblerLabel where, void* valuePtr)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(code) + where.offset());
+        PatchPointerImpl::apply(location, valuePtr);
+    }
+
+    void linkJump(AssemblerLabel from, AssemblerLabel to)
+    {
+        RELEASE_ASSERT(from.isSet() && to.isSet());
+        if (!from.isSet() || !to.isSet())
+            return;
+
+        uint32_t* location = reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(m_buffer.data()) + to.offset());
+        linkJump(m_buffer.data(), from, location);
+    }
 
     static ptrdiff_t maxJumpReplacementSize()
     {
-        return 4;
+        return sizeof(uint32_t) * 8;
     }
 
     static constexpr ptrdiff_t patchableJumpSize()
     {
-        return 4;
+        return sizeof(uint32_t) * 8;
     }
 
-    static void repatchPointer(void*, void*) { }
+    static void repatchPointer(void* where, void* valuePtr)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(where);
+        PatchPointerImpl::apply(location, valuePtr);
+        cacheFlush(location, sizeof(uint32_t) * 8);
+    }
 
-    static void relinkJump(void*, void*) { }
-    static void relinkJumpToNop(void*) { }
-    static void relinkCall(void*, void*) { }
+    static void relinkJump(void* from, void* to)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(from);
+        LinkJumpImpl::apply(location, to);
+        cacheFlush(location, sizeof(uint32_t) * 2);
+    }
+
+    static void relinkCall(void* from, void* to)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(from);
+        LinkCallImpl::apply(location, to);
+        cacheFlush(location, sizeof(uint32_t) * 2);
+    }
+
+    static void replaceWithVMHalt(void* where)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(where);
+        location[0] = RISCV64Instructions::SD::construct(RISCV64Registers::zero, RISCV64Registers::zero, SImmediate::v<SImmediate, 0>());
+        cacheFlush(location, sizeof(uint32_t));
+    }
+
+    static void replaceWithJump(void* from, void* to)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(from);
+        intptr_t offset = uintptr_t(to) - uintptr_t(from);
+
+        if (JImmediate::isValid(offset)) {
+            location[0] = RISCV64Instructions::JAL::construct(RISCV64Registers::zero, JImmediate::v<JImmediate>(offset));
+            cacheFlush(from, sizeof(uint32_t));
+            return;
+        }
+
+        RELEASE_ASSERT(ImmediateBase<32>::isValid(offset));
+        RISCV64Instructions::ImmediateDecomposition immediate(offset);
+
+        location[0] = RISCV64Instructions::AUIPC::construct(RISCV64Registers::x30, immediate.upper);
+        location[1] = RISCV64Instructions::JALR::construct(RISCV64Registers::zero, RISCV64Registers::x30, immediate.lower);
+        cacheFlush(from, sizeof(uint32_t) * 2);
+    }
+
+    static void revertJumpReplacementToPatch(void* from, void* valuePtr)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(from);
+        PatchPointerImpl::apply(location, RISCV64Registers::x30, valuePtr);
+        cacheFlush(location, sizeof(uint32_t) * 8);
+    }
+
+    static void* readCallTarget(void* from)
+    {
+        uint32_t* location = reinterpret_cast<uint32_t*>(from);
+        return PatchPointerImpl::read(location);
+    }
 
     unsigned debugOffset() { return m_buffer.debugOffset(); }
 
-    static void cacheFlush(void*, size_t) { }
+    static void cacheFlush(void* code, size_t size)
+    {
+        intptr_t end = reinterpret_cast<intptr_t>(code) + size;
+        __builtin___clear_cache(reinterpret_cast<char*>(code), reinterpret_cast<char*>(end));
+    }
 
     using CopyFunction = void*(&)(void*, const void*, size_t);
     template <CopyFunction copy>
-    static void fillNops(void*, size_t) { }
+    static void fillNops(void* base, size_t size)
+    {
+        uint32_t* ptr = reinterpret_cast<uint32_t*>(base);
+        RELEASE_ASSERT(roundUpToMultipleOf<sizeof(uint32_t)>(ptr) == ptr);
+        RELEASE_ASSERT(!(size % sizeof(uint32_t)));
+
+        uint32_t nop = RISCV64Instructions::ADDI::construct(RISCV64Registers::zero, RISCV64Registers::zero, IImmediate::v<IImmediate, 0>());
+        for (size_t i = 0, n = size / sizeof(uint32_t); i < n; ++i)
+            copy(&ptr[i], &nop, sizeof(uint32_t));
+    }
+
+    typedef enum {
+        ConditionEQ,
+        ConditionNE,
+        ConditionGTU,
+        ConditionLEU,
+        ConditionGEU,
+        ConditionLTU,
+        ConditionGT,
+        ConditionLE,
+        ConditionGE,
+        ConditionLT,
+    } Condition;
+
+    static constexpr Condition invert(Condition cond)
+    {
+        return static_cast<Condition>(cond ^ 1);
+    }
+
+    template<unsigned immediateSize> using ImmediateBase = RISCV64Instructions::ImmediateBase<immediateSize>;
+    using IImmediate = RISCV64Instructions::IImmediate;
+    using SImmediate = RISCV64Instructions::SImmediate;
+    using BImmediate = RISCV64Instructions::BImmediate;
+    using UImmediate = RISCV64Instructions::UImmediate;
+    using JImmediate = RISCV64Instructions::JImmediate;
+
+    void luiInsn(RegisterID rd, UImmediate imm) { insn(RISCV64Instructions::LUI::construct(rd, imm)); }
+    void auipcInsn(RegisterID rd, UImmediate imm) { insn(RISCV64Instructions::AUIPC::construct(rd, imm)); }
+    void jalInsn(RegisterID rd, JImmediate imm) { insn(RISCV64Instructions::JAL::construct(rd, imm)); }
+    void jalrInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::JALR::construct(rd, rs1, imm)); }
+    void beqInsn(RegisterID rs1, RegisterID rs2, BImmediate imm) { insn(RISCV64Instructions::BEQ::construct(rs1, rs2, imm)); }
+    void bneInsn(RegisterID rs1, RegisterID rs2, BImmediate imm) { insn(RISCV64Instructions::BNE::construct(rs1, rs2, imm)); }
+    void bltInsn(RegisterID rs1, RegisterID rs2, BImmediate imm) { insn(RISCV64Instructions::BLT::construct(rs1, rs2, imm)); }
+    void bgeInsn(RegisterID rs1, RegisterID rs2, BImmediate imm) { insn(RISCV64Instructions::BGE::construct(rs1, rs2, imm)); }
+    void bltuInsn(RegisterID rs1, RegisterID rs2, BImmediate imm) { insn(RISCV64Instructions::BLTU::construct(rs1, rs2, imm)); }
+    void bgeuInsn(RegisterID rs1, RegisterID rs2, BImmediate imm) { insn(RISCV64Instructions::BGEU::construct(rs1, rs2, imm)); }
+    void lbInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::LB::construct(rd, rs1, imm)); }
+    void lhInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::LH::construct(rd, rs1, imm)); }
+    void lwInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::LW::construct(rd, rs1, imm)); }
+    void ldInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::LD::construct(rd, rs1, imm)); }
+    void lbuInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::LBU::construct(rd, rs1, imm)); }
+    void lhuInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::LHU::construct(rd, rs1, imm)); }
+    void lwuInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::LWU::construct(rd, rs1, imm)); }
+    void sbInsn(RegisterID rs1, RegisterID rs2, SImmediate imm) { insn(RISCV64Instructions::SB::construct(rs1, rs2, imm)); }
+    void shInsn(RegisterID rs1, RegisterID rs2, SImmediate imm) { insn(RISCV64Instructions::SH::construct(rs1, rs2, imm)); }
+    void swInsn(RegisterID rs1, RegisterID rs2, SImmediate imm) { insn(RISCV64Instructions::SW::construct(rs1, rs2, imm)); }
+    void sdInsn(RegisterID rs1, RegisterID rs2, SImmediate imm) { insn(RISCV64Instructions::SD::construct(rs1, rs2, imm)); }
+    void addiInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::ADDI::construct(rd, rs1, imm)); }
+    void sltiInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::SLTI::construct(rd, rs1, imm)); }
+    void sltiuInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::SLTIU::construct(rd, rs1, imm)); }
+    void xoriInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::XORI::construct(rd, rs1, imm)); }
+    void oriInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::ORI::construct(rd, rs1, imm)); }
+    void andiInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::ANDI::construct(rd, rs1, imm)); }
+    void slliInsn(RegisterID rd, RegisterID rs1, uint32_t shamt)
+    {
+        ASSERT(isValidShiftAmount<6>(shamt));
+        insn(RISCV64Instructions::SLLI::construct(rd, rs1, IImmediate((0b000000 << 6) | shamt)));
+    }
+    void srliInsn(RegisterID rd, RegisterID rs1, uint32_t shamt)
+    {
+        ASSERT(isValidShiftAmount<6>(shamt));
+        insn(RISCV64Instructions::SRLI::construct(rd, rs1, IImmediate((0b000000 << 6) | shamt)));
+    }
+    void sraiInsn(RegisterID rd, RegisterID rs1, uint32_t shamt)
+    {
+        ASSERT(isValidShiftAmount<6>(shamt));
+        insn(RISCV64Instructions::SRAI::construct(rd, rs1, IImmediate((0b010000 << 6) | shamt)));
+    }
+    void addInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::ADD::construct(rd, rs1, rs2)); }
+    void subInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SUB::construct(rd, rs1, rs2)); }
+    void sllInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SLL::construct(rd, rs1, rs2)); }
+    void sltInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SLT::construct(rd, rs1, rs2)); }
+    void sltuInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SLTU::construct(rd, rs1, rs2)); }
+    void xorInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::XOR::construct(rd, rs1, rs2)); }
+    void srlInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SRL::construct(rd, rs1, rs2)); }
+    void sraInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SRA::construct(rd, rs1, rs2)); }
+    void orInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::OR::construct(rd, rs1, rs2)); }
+    void andInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::AND::construct(rd, rs1, rs2)); }
+    void ecallInsn() { insn(RISCV64Instructions::ECALL::construct(RegisterID::zero, RegisterID::zero, IImmediate::v<IImmediate, 0>())); }
+    void ebreakInsn() { insn(RISCV64Instructions::EBREAK::construct(RegisterID::zero, RegisterID::zero, IImmediate::v<IImmediate, 1>())); }
+    void addiwInsn(RegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::ADDIW::construct(rd, rs1, imm)); }
+    void slliwInsn(RegisterID rd, RegisterID rs1, uint32_t shamt)
+    {
+        ASSERT(isValidShiftAmount<5>(shamt));
+        insn(RISCV64Instructions::SLLIW::construct(rd, rs1, IImmediate((0b0000000 << 5) | shamt)));
+    }
+    void srliwInsn(RegisterID rd, RegisterID rs1, uint32_t shamt)
+    {
+        ASSERT(isValidShiftAmount<5>(shamt));
+        insn(RISCV64Instructions::SRLIW::construct(rd, rs1, IImmediate((0b0000000 << 5) | shamt)));
+    }
+    void sraiwInsn(RegisterID rd, RegisterID rs1, uint32_t shamt)
+    {
+        ASSERT(isValidShiftAmount<5>(shamt));
+        insn(RISCV64Instructions::SRAIW::construct(rd, rs1, IImmediate((0b0100000 << 5) | shamt)));
+    }
+    void addwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::ADDW::construct(rd, rs1, rs2)); }
+    void subwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SUBW::construct(rd, rs1, rs2)); }
+    void sllwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SLLW::construct(rd, rs1, rs2)); }
+    void srlwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SRLW::construct(rd, rs1, rs2)); }
+    void srawInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::SRAW::construct(rd, rs1, rs2)); }
+
+    void mulInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::MUL::construct(rd, rs1, rs2)); }
+    void mulhInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::MULH::construct(rd, rs1, rs2)); }
+    void mulhsuInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::MULHSU::construct(rd, rs1, rs2)); }
+    void mulhuInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::MULHU::construct(rd, rs1, rs2)); }
+
+    void divInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::DIV::construct(rd, rs1, rs2)); }
+    void divuInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::DIVU::construct(rd, rs1, rs2)); }
+    void remInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::REM::construct(rd, rs1, rs2)); }
+    void remuInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::REMU::construct(rd, rs1, rs2)); }
+
+    void mulwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::MULW::construct(rd, rs1, rs2)); }
+    void divwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::DIVW::construct(rd, rs1, rs2)); }
+    void divuwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::DIVUW::construct(rd, rs1, rs2)); }
+    void remwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::REMW::construct(rd, rs1, rs2)); }
+    void remuwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2) { insn(RISCV64Instructions::REMUW::construct(rd, rs1, rs2)); }
+
+    using FCVTType = RISCV64Instructions::FCVTType;
+    using FMVType = RISCV64Instructions::FMVType;
+
+    using FPRoundingMode = RISCV64Instructions::FPRoundingMode;
+
+    void flwInsn(FPRegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::FLW::construct(rd, rs1, imm)); }
+    void fldInsn(FPRegisterID rd, RegisterID rs1, IImmediate imm) { insn(RISCV64Instructions::FLD::construct(rd, rs1, imm)); }
+    void fswInsn(RegisterID rs1, FPRegisterID rs2, SImmediate imm) { insn(RISCV64Instructions::FSW::construct(rs1, rs2, imm)); }
+    void fsdInsn(RegisterID rs1, FPRegisterID rs2, SImmediate imm) { insn(RISCV64Instructions::FSD::construct(rs1, rs2, imm)); }
+
+    template<unsigned fpSize>
+    void fmaddInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2, FPRegisterID rs3)
+    {
+        insnFP<fpSize, RISCV64Instructions::FMADD_S, RISCV64Instructions::FMADD_D>(rd, rs1, rs2, rs3, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fmsubInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2, FPRegisterID rs3)
+    {
+        insnFP<fpSize, RISCV64Instructions::FMSUB_S, RISCV64Instructions::FMSUB_D>(rd, rs1, rs2, rs3, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fnmsubInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2, FPRegisterID rs3)
+    {
+        insnFP<fpSize, RISCV64Instructions::FNMSUB_S, RISCV64Instructions::FNMSUB_D>(rd, rs1, rs2, rs3, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fnmaddInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2, FPRegisterID rs3)
+    {
+        insnFP<fpSize, RISCV64Instructions::FNMADD_S, RISCV64Instructions::FNMADD_D>(rd, rs1, rs2, rs3, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void faddInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FADD_S, RISCV64Instructions::FADD_D>(rd, rs1, rs2, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fsubInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FSUB_S, RISCV64Instructions::FSUB_D>(rd, rs1, rs2, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fmulInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FMUL_S, RISCV64Instructions::FMUL_D>(rd, rs1, rs2, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fdivInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FDIV_S, RISCV64Instructions::FDIV_D>(rd, rs1, rs2, FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fsqrtInsn(FPRegisterID rd, FPRegisterID rs1)
+    {
+        insnFP<fpSize, RISCV64Instructions::FSQRT_S, RISCV64Instructions::FSQRT_D>(rd, rs1, FPRegisterID(0), FPRoundingMode::DYN);
+    }
+
+    template<unsigned fpSize>
+    void fsgnjInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FSGNJ_S, RISCV64Instructions::FSGNJ_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void fsgnjnInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FSGNJN_S, RISCV64Instructions::FSGNJN_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void fsgnjxInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FSGNJX_S, RISCV64Instructions::FSGNJX_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void fminInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FMIN_S, RISCV64Instructions::FMIN_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void fmaxInsn(FPRegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FMAX_S, RISCV64Instructions::FMAX_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void feqInsn(RegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FEQ_S, RISCV64Instructions::FEQ_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void fltInsn(RegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FLT_S, RISCV64Instructions::FLT_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void fleInsn(RegisterID rd, FPRegisterID rs1, FPRegisterID rs2)
+    {
+        insnFP<fpSize, RISCV64Instructions::FLE_S, RISCV64Instructions::FLE_D>(rd, rs1, rs2);
+    }
+
+    template<unsigned fpSize>
+    void fclassInsn(RegisterID rd, FPRegisterID rs1)
+    {
+        insnFP<fpSize, RISCV64Instructions::FCLASS_S, RISCV64Instructions::FCLASS_D>(rd, rs1, FPRegisterID(0));
+    }
+
+    template<FPRoundingMode RM, FCVTType ToType, FCVTType FromType, typename RDType, typename RS1Type>
+    void fcvtInsn(RDType rd, RS1Type rs1)
+    {
+        using FCVTType = RISCV64Instructions::FCVTBase<ToType, FromType>;
+        static_assert(FCVTType::valid);
+        static_assert(std::is_same_v<std::decay_t<RDType>, typename FCVTType::RDType>);
+        static_assert(std::is_same_v<std::decay_t<RS1Type>, typename FCVTType::RS1Type>);
+
+        insn(FCVTType::construct(rd, rs1, RM));
+    }
+
+    template<FCVTType ToType, FCVTType FromType, typename RDType, typename RS1Type>
+    void fcvtInsn(RDType rd, RS1Type rs1)
+    {
+        fcvtInsn<FPRoundingMode::DYN, ToType, FromType, RDType, RS1Type>(rd, rs1);
+    }
+
+    template<FMVType ToType, FMVType FromType, typename RDType, typename RS1Type>
+    void fmvInsn(RDType rd, RS1Type rs1)
+    {
+        using FMVType = RISCV64Instructions::FMVBase<ToType, FromType>;
+        static_assert(FMVType::valid);
+        static_assert(std::is_same_v<std::decay_t<RDType>, typename FMVType::RDType>);
+        static_assert(std::is_same_v<std::decay_t<RS1Type>, typename FMVType::RS1Type>);
+
+        insn(FMVType::construct(rd, rs1));
+    }
+
+    using MemoryOperation = RISCV64Instructions::MemoryOperation;
+    using MemoryAccess = RISCV64Instructions::MemoryAccess;
+
+    void fenceInsn(std::initializer_list<MemoryOperation> predecessor, std::initializer_list<MemoryOperation> successor)
+    {
+        unsigned predecessorValue = 0;
+        for (auto& op : predecessor)
+            predecessorValue |= unsigned(op);
+        unsigned successorValue = 0;
+        for (auto& op : successor)
+            successorValue |= unsigned(op);
+
+        uint32_t immediate = 0
+            | (0b0000 << 8)
+            | ((predecessorValue & ((1 << 4) - 1)) << 4)
+            | ((successorValue & ((1 << 4) - 1)) << 0);
+        insn(RISCV64Instructions::FENCE::construct(RISCV64Registers::zero, RISCV64Registers::zero, IImmediate(immediate)));
+    }
+
+    void lrwInsn(RegisterID rd, RegisterID rs1, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::LR_W::construct(rd, rs1, RISCV64Registers::zero, access));
+    }
+
+    void scwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::SC_W::construct(rd, rs1, rs2, access));
+    }
+
+    void lrdInsn(RegisterID rd, RegisterID rs1, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::LR_D::construct(rd, rs1, RISCV64Registers::zero, access));
+    }
+
+    void scdInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::SC_D::construct(rd, rs1, rs2, access));
+    }
+
+    void amoswapwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOSWAP_W::construct(rd, rs1, rs2, access));
+    }
+
+    void amoaddwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOADD_W::construct(rd, rs1, rs2, access));
+    }
+
+    void amoxorwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOXOR_W::construct(rd, rs1, rs2, access));
+    }
+
+    void amoandwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOAND_W::construct(rd, rs1, rs2, access));
+    }
+
+    void amoorwInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOOR_W::construct(rd, rs1, rs2, access));
+    }
+
+    void amoswapdInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOSWAP_D::construct(rd, rs1, rs2, access));
+    }
+
+    void amoadddInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOADD_D::construct(rd, rs1, rs2, access));
+    }
+
+    void amoxordInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOXOR_D::construct(rd, rs1, rs2, access));
+    }
+
+    void amoanddInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOAND_D::construct(rd, rs1, rs2, access));
+    }
+
+    void amoordInsn(RegisterID rd, RegisterID rs1, RegisterID rs2, std::initializer_list<MemoryAccess> access)
+    {
+        insn(RISCV64Instructions::AMOOR_D::construct(rd, rs1, rs2, access));
+    }
+
+    template<unsigned shiftAmount>
+    void slliInsn(RegisterID rd, RegisterID rs1)
+    {
+        insn(RISCV64Instructions::SLLI::construct<shiftAmount>(rd, rs1));
+    }
+
+    template<unsigned shiftAmount>
+    void srliInsn(RegisterID rd, RegisterID rs1)
+    {
+        insn(RISCV64Instructions::SRLI::construct<shiftAmount>(rd, rs1));
+    }
+
+    template<unsigned shiftAmount>
+    void sraiInsn(RegisterID rd, RegisterID rs1)
+    {
+        insn(RISCV64Instructions::SRAI::construct<shiftAmount>(rd, rs1));
+    }
+
+    template<unsigned shiftAmount>
+    void slliwInsn(RegisterID rd, RegisterID rs1)
+    {
+        insn(RISCV64Instructions::SLLIW::construct<shiftAmount>(rd, rs1));
+    }
+
+    template<unsigned shiftAmount>
+    void srliwInsn(RegisterID rd, RegisterID rs1)
+    {
+        insn(RISCV64Instructions::SRLIW::construct<shiftAmount>(rd, rs1));
+    }
+
+    template<unsigned shiftAmount>
+    void sraiwInsn(RegisterID rd, RegisterID rs1)
+    {
+        insn(RISCV64Instructions::SRAIW::construct<shiftAmount>(rd, rs1));
+    }
+
+    void nop()
+    {
+        addiInsn(RISCV64Registers::zero, RISCV64Registers::zero, IImmediate::v<IImmediate, 0>());
+    }
+
+    template<unsigned maskSize>
+    void maskRegister(RegisterID rd, RegisterID rs)
+    {
+        static_assert(maskSize < 64);
+        slliInsn<64 - maskSize>(rd, rs);
+        srliInsn<64 - maskSize>(rd, rd);
+    }
+
+    template<unsigned maskSize>
+    void maskRegister(RegisterID rd)
+    {
+        maskRegister<maskSize>(rd, rd);
+    }
+
+    template<unsigned bitSize>
+    void signExtend(RegisterID rd)
+    {
+        signExtend<bitSize>(rd, rd);
+    }
+
+    template<unsigned bitSize, typename = std::enable_if_t<bitSize == 8 || bitSize == 16 || bitSize == 32 || bitSize == 64>>
+    void signExtend(RegisterID rd, RegisterID rs)
+    {
+        if constexpr (bitSize == 64)
+            return;
+
+        if constexpr (bitSize == 32) {
+            addiwInsn(rd, rs, IImmediate::v<IImmediate, 0>());
+            return;
+        }
+
+        slliInsn<64 - bitSize>(rd, rs);
+        sraiInsn<64 - bitSize>(rd, rd);
+    }
+
+    template<unsigned bitSize>
+    void zeroExtend(RegisterID rd)
+    {
+        zeroExtend<bitSize>(rd, rd);
+    }
+
+    template<unsigned bitSize, typename = std::enable_if_t<bitSize == 8 || bitSize == 16 || bitSize == 32 || bitSize == 64>>
+    void zeroExtend(RegisterID rd, RegisterID rs)
+    {
+        if constexpr (bitSize == 64)
+            return;
+
+        slliInsn<64 - bitSize>(rd, rs);
+        srliInsn<64 - bitSize>(rd, rd);
+    }
+
+    template<typename F>
+    void jumpPlaceholder(const F& functor)
+    {
+        LinkJumpImpl::generatePlaceholder(*this, functor);
+    }
+
+    template<typename F>
+    void branchPlaceholder(const F& functor)
+    {
+        LinkBranchImpl::generatePlaceholder(*this, functor);
+    }
+
+    template<typename F>
+    void pointerCallPlaceholder(const F& functor)
+    {
+        PatchPointerImpl::generatePlaceholder(*this, functor);
+    }
+
+    template<typename F>
+    void nearCallPlaceholder(const F& functor)
+    {
+        LinkCallImpl::generatePlaceholder(*this, functor);
+    }
+
+    struct ImmediateLoader {
+        enum PlaceholderTag { Placeholder };
+
+        ImmediateLoader(int32_t imm)
+            : ImmediateLoader(int64_t(imm))
+        { }
+
+        ImmediateLoader(PlaceholderTag, int32_t imm)
+            : ImmediateLoader(Placeholder, int64_t(imm))
+        { }
+
+        ImmediateLoader(int64_t imm)
+        {
+            // If the immediate value fits into the IImmediate mold, we can short-cut to just generating that through a single ADDI.
+            if (IImmediate::isValid(imm)) {
+                m_ops[m_opCount++] = { Op::Type::IImmediate, IImmediate::v<IImmediate>(imm).imm };
+                return;
+            }
+
+            // The immediate is larger than 12 bits, so it has to be loaded through the initial LUI and then additional shift-and-addi pairs.
+            // This sequence is generated in reverse. moveInto() or other users traverse the sequence accordingly.
+            int64_t value = imm;
+
+            while (true) {
+                uint32_t addiImm = value & ((1 << 12) - 1);
+                // The addi will be sign-extending the 12-bit value and adding it to the register-contained value. If the addi-immediate
+                // is negative, the remaining immediate has to be increased by 2^12 to offset the subsequent subtraction.
+                if (addiImm & (1 << 11))
+                    value += (1 << 12);
+                m_ops[m_opCount++] = { Op::Type::ADDI, addiImm };
+
+                // Shift out the bits incorporated into the just-added addi.
+                value = value >> 12;
+
+                // If the remainder of the immediate can fit into a 20-bit immediate, we can generate the LUI instruction that will end up
+                // loading the initial higher bits of the desired immediate.
+                if (ImmediateBase<20>::isValid(value)) {
+                    m_ops[m_opCount++] = { Op::Type::LUI, uint32_t((value & ((1 << 20) - 1)) << 12) };
+                    return;
+                }
+
+                // Otherwise, generate the lshift operation that will make room for lower parts of the immediate value.
+                m_ops[m_opCount++] = { Op::Type::LSHIFT12, 0 };
+            }
+        }
+
+        ImmediateLoader(PlaceholderTag, int64_t imm)
+            : ImmediateLoader(imm)
+        {
+            // The non-placeholder constructor already generated the necessary operations to load this immediate.
+            // This constructor still fills out the remaining potential operations as nops. This enables future patching
+            // of these instructions with other immediate-load sequences.
+
+            for (unsigned i = m_opCount; i < m_ops.size(); ++i)
+                m_ops[i] = { Op::Type::NOP, 0 };
+            m_opCount = m_ops.size();
+        }
+
+        void moveInto(RISCV64Assembler& assembler, RegisterID dest)
+        {
+            // This is a helper method that generates the necessary instructions through the RISCV64Assembler infrastructure.
+            // Operations are traversed in reverse in order to match the generation process.
+
+            for (unsigned i = 0; i < m_opCount; ++i) {
+                auto& op = m_ops[m_opCount - (i + 1)];
+                switch (op.type) {
+                case Op::Type::IImmediate:
+                    assembler.addiInsn(dest, RISCV64Registers::zero, IImmediate(op.value));
+                    break;
+                case Op::Type::LUI:
+                    assembler.luiInsn(dest, UImmediate(op.value));
+                    break;
+                case Op::Type::ADDI:
+                    assembler.addiInsn(dest, dest, IImmediate(op.value));
+                    break;
+                case Op::Type::LSHIFT12:
+                    assembler.slliInsn<12>(dest, dest);
+                    break;
+                case Op::Type::NOP:
+                    assembler.addiInsn(RISCV64Registers::zero, RISCV64Registers::zero, IImmediate::v<IImmediate, 0>());
+                    break;
+                }
+            }
+        }
+
+        struct Op {
+            enum class Type {
+                IImmediate,
+                LUI,
+                ADDI,
+                LSHIFT12,
+                NOP,
+            };
+
+            Type type;
+            uint32_t value;
+        };
+        std::array<Op, 8> m_ops;
+        unsigned m_opCount { 0 };
+    };
+
+protected:
+    void insn(uint32_t instruction)
+    {
+        m_buffer.putInt(instruction);
+    }
+
+    template<unsigned fpSize, typename FP32Type, typename FP64Type, typename... Args>
+    void insnFP(Args&&... args)
+    {
+        static_assert(fpSize == 32 || fpSize == 64);
+        using InstructionType = std::conditional_t<(fpSize == 32), FP32Type, FP64Type>;
+        insn(InstructionType::construct(std::forward<Args>(args)...));
+    }
+
+    template<unsigned shiftBitsize>
+    static constexpr bool isValidShiftAmount(unsigned amount)
+    {
+        return amount < (1 << shiftBitsize);
+    }
+
+    struct LinkJumpOrCallImpl {
+        static void apply(uint32_t* location, void* target)
+        {
+            RISCV64Instructions::InstructionValue instruction(location[1]);
+            RELEASE_ASSERT(instruction.opcode() == unsigned(RISCV64Instructions::Opcode::JALR) || instruction.opcode() == unsigned(RISCV64Instructions::Opcode::JAL));
+            auto destination = RegisterID(instruction.field<7, 5>());
+
+            intptr_t offset = uintptr_t(target) - uintptr_t(&location[1]);
+            if (JImmediate::isValid(offset)) {
+                location[0] = RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, 0>());
+                location[1] = RISCV64Instructions::JAL::construct(destination, JImmediate::v<JImmediate>(offset));
+                return;
+            }
+
+            offset += sizeof(uint32_t);
+            RELEASE_ASSERT(ImmediateBase<32>::isValid(offset));
+            RISCV64Instructions::ImmediateDecomposition immediate(offset);
+
+            location[0] = RISCV64Instructions::AUIPC::construct(RISCV64Registers::x30, immediate.upper);
+            location[1] = RISCV64Instructions::JALR::construct(destination, RISCV64Registers::x30, immediate.lower);
+        }
+    };
+
+    struct LinkJumpImpl : LinkJumpOrCallImpl {
+        static constexpr unsigned PlaceholderValue = 1;
+        static uint32_t placeholderInsn()
+        {
+            return RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, PlaceholderValue>());
+        }
+
+        template<typename F>
+        static void generatePlaceholder(RISCV64Assembler& assembler, const F& functor)
+        {
+            assembler.insn(placeholderInsn());
+            functor();
+        }
+    };
+
+    struct LinkCallImpl : LinkJumpOrCallImpl {
+        static constexpr unsigned PlaceholderValue = 2;
+        static uint32_t placeholderInsn()
+        {
+            return RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, PlaceholderValue>());
+        }
+
+        template<typename F>
+        static void generatePlaceholder(RISCV64Assembler& assembler, const F& functor)
+        {
+            assembler.insn(placeholderInsn());
+            functor();
+        }
+    };
+
+    struct LinkBranchImpl {
+        static constexpr unsigned PlaceholderValue = 3;
+        static uint32_t placeholderInsn()
+        {
+            return RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, PlaceholderValue>());
+        }
+
+        template<typename F>
+        static void generatePlaceholder(RISCV64Assembler& assembler, const F& functor)
+        {
+            auto insnValue = placeholderInsn();
+            for (unsigned i = 0; i < 2; ++i)
+                assembler.insn(insnValue);
+            functor();
+        }
+
+        static void apply(uint32_t* location, void* target)
+        {
+            RISCV64Instructions::InstructionValue instruction(location[2]);
+            RELEASE_ASSERT(instruction.opcode() == unsigned(RISCV64Instructions::Opcode::BRANCH));
+
+            auto branchInstructionForFunct3 =
+                [](uint32_t funct3, RegisterID rs1, RegisterID rs2, BImmediate imm)
+                {
+                    switch (funct3) {
+                    case RISCV64Instructions::BEQ::funct3Value:
+                        return RISCV64Instructions::BEQ::construct(rs1, rs2, imm);
+                    case RISCV64Instructions::BNE::funct3Value:
+                        return RISCV64Instructions::BNE::construct(rs1, rs2, imm);
+                    case RISCV64Instructions::BLT::funct3Value:
+                        return RISCV64Instructions::BLT::construct(rs1, rs2, imm);
+                    case RISCV64Instructions::BGE::funct3Value:
+                        return RISCV64Instructions::BGE::construct(rs1, rs2, imm);
+                    case RISCV64Instructions::BLTU::funct3Value:
+                        return RISCV64Instructions::BLTU::construct(rs1, rs2, imm);
+                    case RISCV64Instructions::BGEU::funct3Value:
+                        return RISCV64Instructions::BGEU::construct(rs1, rs2, imm);
+                    default:
+                        break;
+                    }
+
+                    RELEASE_ASSERT_NOT_REACHED();
+                    return RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, 0>());
+                };
+            auto lhs = RegisterID(instruction.field<15, 5>());
+            auto rhs = RegisterID(instruction.field<20, 5>());
+
+            intptr_t offset = uintptr_t(target) - uintptr_t(&location[2]);
+            if (BImmediate::isValid(offset)) {
+                location[0] = RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, 0>());
+                location[1] = RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, 0>());
+                location[2] = branchInstructionForFunct3(instruction.field<12, 3>(), lhs, rhs, BImmediate::v<BImmediate>(offset));
+                return;
+            }
+
+            if (JImmediate::isValid(offset)) {
+                location[0] = RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, 0>());
+                location[1] = branchInstructionForFunct3(instruction.field<12, 3>() ^ 0b001, lhs, rhs, BImmediate::v<BImmediate, 8>());
+                location[2] = RISCV64Instructions::JAL::construct(RISCV64Registers::x0, JImmediate::v<JImmediate>(offset));
+                return;
+            }
+
+            offset += sizeof(uint32_t);
+            RELEASE_ASSERT(ImmediateBase<32>::isValid(offset));
+            RISCV64Instructions::ImmediateDecomposition immediate(offset);
+
+            location[0] = branchInstructionForFunct3(instruction.field<12, 3>() ^ 0b001, lhs, rhs, BImmediate::v<BImmediate, 12>());
+            location[1] = RISCV64Instructions::AUIPC::construct(RISCV64Registers::x31, immediate.upper);
+            location[2] = RISCV64Instructions::JALR::construct(RISCV64Registers::x0, RISCV64Registers::x31, immediate.lower);
+        }
+    };
+
+    struct PatchPointerImpl {
+        static constexpr unsigned PlaceholderValue = 4;
+        static uint32_t placeholderInsn()
+        {
+            return RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, PlaceholderValue>());
+        }
+
+        template<typename F>
+        static void generatePlaceholder(RISCV64Assembler& assembler, const F& functor)
+        {
+            auto insnValue = placeholderInsn();
+            for (unsigned i = 0; i < 7; ++i)
+                assembler.insn(insnValue);
+            functor();
+        }
+
+        static void apply(uint32_t* location, void* value)
+        {
+            RISCV64Instructions::InstructionValue instruction(location[7]);
+            // RELEASE_ASSERT, being a macro, gets confused by the comma-separated template parameters.
+            bool validLocation = instruction.opcode() == unsigned(RISCV64Instructions::Opcode::OP_IMM) && instruction.field<12, 3>() == 0b000;
+            RELEASE_ASSERT(validLocation);
+
+            apply(location, RegisterID(instruction.field<7, 5>()), value);
+        }
+
+        static void apply(uint32_t* location, RegisterID destination, void* value)
+        {
+            using ImmediateLoader = RISCV64Assembler::ImmediateLoader;
+            ImmediateLoader imml(ImmediateLoader::Placeholder, reinterpret_cast<intptr_t>(value));
+            RELEASE_ASSERT(imml.m_opCount == 8);
+
+            for (unsigned i = 0; i < imml.m_opCount; ++i) {
+                auto& op = imml.m_ops[imml.m_opCount - (i + 1)];
+                switch (op.type) {
+                case ImmediateLoader::Op::Type::IImmediate:
+                    location[i] = RISCV64Instructions::ADDI::construct(destination, RISCV64Registers::zero, IImmediate(op.value));
+                    break;
+                case ImmediateLoader::Op::Type::LUI:
+                    location[i] = RISCV64Instructions::LUI::construct(destination, UImmediate(op.value));
+                    break;
+                case ImmediateLoader::Op::Type::ADDI:
+                    location[i] = RISCV64Instructions::ADDI::construct(destination, destination, IImmediate(op.value));
+                    break;
+                case ImmediateLoader::Op::Type::LSHIFT12:
+                    location[i] = RISCV64Instructions::SLLI::construct<12>(destination, destination);
+                    break;
+                case ImmediateLoader::Op::Type::NOP:
+                    location[i] = RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, 0>());
+                    break;
+                }
+            }
+        }
+
+        static void* read(uint32_t* location)
+        {
+            RISCV64Instructions::InstructionValue instruction(location[7]);
+            // RELEASE_ASSERT, being a macro, gets confused by the comma-separated template parameters.
+            bool validLocation = instruction.opcode() == unsigned(RISCV64Instructions::Opcode::OP_IMM) && instruction.field<12, 3>() == 0b000;
+            RELEASE_ASSERT(validLocation);
+
+            auto dest = RegisterID(instruction.field<7, 5>());
+
+            unsigned i = 0;
+            {
+                // Iterate through all ImmediateLoader::Op::Type::NOP instructions generated for the purposes of the placeholder.
+                uint32_t nopInsn = RISCV64Instructions::ADDI::construct(RISCV64Registers::x0, RISCV64Registers::x0, IImmediate::v<IImmediate, 0>());
+                for (; i < 8; ++i) {
+                    if (location[i] != nopInsn)
+                        break;
+                }
+            }
+
+            intptr_t target = 0;
+            for (; i < 8; ++i) {
+                RISCV64Instructions::InstructionValue insn(location[i]);
+
+                // Counterpart to ImmediateLoader::Op::Type::LUI.
+                if (insn.opcode() == unsigned(RISCV64Instructions::Opcode::LUI) && insn.field<7, 5>() == unsigned(dest)) {
+                    target = int32_t(UImmediate::value(insn));
+                    continue;
+                }
+
+                // Counterpart to ImmediateLoader::Op::Type::{IImmediate, ADDI}.
+                if (insn.opcode() == unsigned(RISCV64Instructions::Opcode::OP_IMM) && insn.field<12, 3>() == 0b000
+                    && insn.field<7, 5>() == unsigned(dest) && insn.field<15, 5>() == unsigned(dest)) {
+                    target += IImmediate::value(insn);
+                    continue;
+                }
+
+                // Counterpart to ImmediateLoader::Op::Type::LSHIFT12.
+                if (insn.value == RISCV64Instructions::SLLI::construct<12>(dest, dest)) {
+                    target <<= 12;
+                    continue;
+                }
+
+                RELEASE_ASSERT_NOT_REACHED();
+                return nullptr;
+            }
+
+            return reinterpret_cast<void*>(target);
+        }
+    };
 
     AssemblerBuffer m_buffer;
+    int m_indexOfLastWatchpoint { INT_MIN };
+    int m_indexOfTailOfLastWatchpoint { INT_MIN };
 };
 
 } // namespace JSC

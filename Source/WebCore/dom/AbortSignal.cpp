@@ -32,13 +32,14 @@
 #include "EventNames.h"
 #include "JSDOMException.h"
 #include "ScriptExecutionContext.h"
+#include <JavaScriptCore/Exception.h>
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(AbortSignal);
 
-Ref<AbortSignal> AbortSignal::create(ScriptExecutionContext& context)
+Ref<AbortSignal> AbortSignal::create(ScriptExecutionContext* context)
 {
     return adoptRef(*new AbortSignal(context));
 }
@@ -49,11 +50,11 @@ Ref<AbortSignal> AbortSignal::abort(JSDOMGlobalObject& globalObject, ScriptExecu
     ASSERT(reason);
     if (reason.isUndefined())
         reason = toJS(&globalObject, &globalObject, DOMException::create(AbortError));
-    return adoptRef(*new AbortSignal(context, Aborted::Yes, reason));
+    return adoptRef(*new AbortSignal(&context, Aborted::Yes, reason));
 }
 
-AbortSignal::AbortSignal(ScriptExecutionContext& context, Aborted aborted, JSC::JSValue reason)
-    : ContextDestructionObserver(&context)
+AbortSignal::AbortSignal(ScriptExecutionContext* context, Aborted aborted, JSC::JSValue reason)
+    : ContextDestructionObserver(context)
     , m_aborted(aborted == Aborted::Yes)
     , m_reason(reason)
 {
@@ -113,4 +114,14 @@ bool AbortSignal::whenSignalAborted(AbortSignal& signal, Ref<AbortAlgorithm>&& a
     return false;
 }
 
+void AbortSignal::throwIfAborted(JSC::JSGlobalObject& lexicalGlobalObject)
+{
+    if (!aborted())
+        return;
+
+    auto& vm = lexicalGlobalObject.vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    throwException(&lexicalGlobalObject, scope, m_reason);
 }
+
+} // namespace WebCore

@@ -626,7 +626,7 @@ class GPRInfo {
 public:
     typedef GPRReg RegisterType;
     static constexpr unsigned numberOfRegisters = 16;
-    static constexpr unsigned numberOfArgumentRegisters = 8;
+    static constexpr unsigned numberOfArgumentRegisters = NUMBER_OF_ARGUMENT_REGISTERS;
 
     // These registers match the baseline JIT.
     static constexpr GPRReg callFrameRegister = ARM64Registers::fp;
@@ -825,7 +825,7 @@ class GPRInfo {
 public:
     typedef GPRReg RegisterType;
     static constexpr unsigned numberOfRegisters = 13;
-    static constexpr unsigned numberOfArgumentRegisters = 8;
+    static constexpr unsigned numberOfArgumentRegisters = NUMBER_OF_ARGUMENT_REGISTERS;
 
     static constexpr GPRReg callFrameRegister = RISCV64Registers::fp;
     static constexpr GPRReg numberTagRegister = RISCV64Registers::x25;
@@ -878,6 +878,8 @@ public:
 
     static constexpr GPRReg wasmScratchGPR0 = RISCV64Registers::x6; // regT9
     static constexpr GPRReg wasmScratchGPR1 = RISCV64Registers::x7; // regT10
+
+    static constexpr GPRReg patchpointScratchRegister = RISCV64Registers::x30; // Should match dataTempRegister
 
     static GPRReg toRegister(unsigned index)
     {
@@ -939,9 +941,11 @@ public:
 #if USE(JSVALUE64)
     static constexpr JSValueRegs jsRegT10 { GPRInfo::regT0 };
     static constexpr JSValueRegs jsRegT32 { GPRInfo::regT2 };
+    static constexpr JSValueRegs jsRegT54 { GPRInfo::regT4 };
 #elif USE(JSVALUE32_64)
     static constexpr JSValueRegs jsRegT10 { GPRInfo::regT1, GPRInfo::regT0 };
     static constexpr JSValueRegs jsRegT32 { GPRInfo::regT3, GPRInfo::regT2 };
+    static constexpr JSValueRegs jsRegT54 { GPRInfo::regT5, GPRInfo::regT4 };
 #endif
 
     // Return value register

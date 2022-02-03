@@ -24,7 +24,7 @@
 #include "ElementIterator.h"
 #include "FrameView.h"
 #include "GraphicsContext.h"
-#include "RenderSVGRoot.h"
+#include "LegacyRenderSVGRoot.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGFitToViewBox.h"
 #include "SVGRenderingContext.h"
@@ -113,10 +113,6 @@ PatternData* RenderSVGResourcePattern::buildPattern(RenderElement& renderer, Opt
 
     auto tileImageSize = tileImage->logicalSize();
 
-    auto copiedImage = ImageBuffer::sinkIntoNativeImage(WTFMove(tileImage));
-    if (!copiedImage)
-        return nullptr;
-
     // Compute pattern space transformation.
     auto patternData = makeUnique<PatternData>();
     patternData->transform.translate(tileBoundaries.location());
@@ -134,7 +130,7 @@ PatternData* RenderSVGResourcePattern::buildPattern(RenderElement& renderer, Opt
     }
 
     // Build pattern.
-    patternData->pattern = Pattern::create(copiedImage.releaseNonNull(), { true, true, patternData->transform });
+    patternData->pattern = Pattern::create({ tileImage.releaseNonNull() }, { true, true, patternData->transform });
 
     // Various calls above may trigger invalidations in some fringe cases (ImageBuffer allocation
     // failures in the SVG image cache for example). To avoid having our PatternData deleted by
@@ -201,24 +197,11 @@ bool RenderSVGResourcePattern::applyResource(RenderElement& renderer, const Rend
     return true;
 }
 
-void RenderSVGResourcePattern::postApplyResource(RenderElement&, GraphicsContext*& context, OptionSet<RenderSVGResourceMode> resourceMode, const Path* path, const RenderSVGShape* shape)
+void RenderSVGResourcePattern::postApplyResource(RenderElement&, GraphicsContext*& context, OptionSet<RenderSVGResourceMode> resourceMode, const Path* path, const RenderElement* shape)
 {
     ASSERT(context);
     ASSERT(!resourceMode.isEmpty());
-
-    if (resourceMode.contains(RenderSVGResourceMode::ApplyToFill)) {
-        if (path)
-            context->fillPath(*path);
-        else if (shape)
-            shape->fillShape(*context);
-    }
-    if (resourceMode.contains(RenderSVGResourceMode::ApplyToStroke)) {
-        if (path)
-            context->strokePath(*path);
-        else if (shape)
-            shape->strokeShape(*context);
-    }
-
+    fillAndStrokePathOrShape(*context, resourceMode, path, shape);
     context->restore();
 }
 
@@ -254,7 +237,7 @@ bool RenderSVGResourcePattern::buildTileImageTransform(RenderElement& renderer,
 RefPtr<ImageBuffer> RenderSVGResourcePattern::createTileImage(const PatternAttributes& attributes, const FloatRect& tileBoundaries, const FloatRect& absoluteTileBoundaries, const AffineTransform& tileImageTransform, FloatRect& clampedAbsoluteTileBoundaries, RenderingMode renderingMode) const
 {
     clampedAbsoluteTileBoundaries = ImageBuffer::clampedRect(absoluteTileBoundaries);
-    auto tileImage = SVGRenderingContext::createImageBuffer(absoluteTileBoundaries, clampedAbsoluteTileBoundaries, DestinationColorSpace::SRGB(), renderingMode);
+    auto tileImage = SVGRenderingContext::createImageBuffer(absoluteTileBoundaries, clampedAbsoluteTileBoundaries, DestinationColorSpace::SRGB(), renderingMode, hostWindow());
     if (!tileImage)
         return nullptr;
 

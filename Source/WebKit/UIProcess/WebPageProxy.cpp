@@ -85,7 +85,6 @@
 #include "ProcessThrottler.h"
 #include "ProvisionalPageProxy.h"
 #include "SafeBrowsingWarning.h"
-#include "SharedBufferDataReference.h"
 #include "SpeechRecognitionPermissionManager.h"
 #include "SpeechRecognitionRemoteRealtimeMediaSource.h"
 #include "SpeechRecognitionRemoteRealtimeMediaSourceManager.h"
@@ -109,6 +108,7 @@
 #include "WebCoreArgumentCoders.h"
 #include "WebEditCommandProxy.h"
 #include "WebEventConversion.h"
+#include "WebFoundTextRange.h"
 #include "WebFrame.h"
 #include "WebFramePolicyListenerProxy.h"
 #include "WebFullScreenManagerProxy.h"
@@ -169,11 +169,13 @@
 #include <WebCore/LengthBox.h>
 #include <WebCore/MIMETypeRegistry.h>
 #include <WebCore/MediaStreamRequest.h>
+#include <WebCore/ModalContainerTypes.h>
 #include <WebCore/PerformanceLoggingClient.h>
 #include <WebCore/PermissionState.h>
 #include <WebCore/PlatformEvent.h>
 #include <WebCore/PrivateClickMeasurement.h>
 #include <WebCore/PublicSuffix.h>
+#include <WebCore/RealtimeMediaSourceCenter.h>
 #include <WebCore/RenderEmbeddedObject.h>
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/RuntimeApplicationChecks.h>
@@ -221,11 +223,12 @@
 #include "VideoFullscreenManagerProxy.h"
 #include "VideoFullscreenManagerProxyMessages.h"
 #include <WebCore/AttributedString.h>
+#include <WebCore/CoreAudioCaptureDeviceManager.h>
 #include <WebCore/RunLoopObserver.h>
 #include <WebCore/SystemBattery.h>
-#include <WebCore/VersionChecks.h>
 #include <wtf/MachSendRight.h>
 #include <wtf/cocoa/Entitlements.h>
+#include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
 #if PLATFORM(MAC)
@@ -277,10 +280,6 @@
 #include "SOAuthorizationCoordinator.h"
 #endif
 
-#if USE(DIRECT2D)
-#include <d3d11_1.h>
-#endif
-
 #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
 #include "WebDeviceOrientationUpdateProviderProxy.h"
 #endif
@@ -314,8 +313,9 @@
 #include <WebCore/HighlightVisibility.h>
 #endif
 
-// This controls what strategy we use for mouse wheel coalescing.
-#define MERGE_WHEEL_EVENTS 1
+#if HAVE(SCREEN_CAPTURE_KIT)
+#import "DisplayCaptureSessionManager.h"
+#endif
 
 #define MESSAGE_CHECK(process, assertion) MESSAGE_CHECK_BASE(assertion, process->connection())
 #define MESSAGE_CHECK_URL(process, url) MESSAGE_CHECK_BASE(checkURLReceivedFromCurrentOrPreviousWebProcess(process, url), process->connection())
@@ -612,7 +612,8 @@ WebPageProxy::~WebPageProxy()
     for (auto& callback : m_nextActivityStateChangeCallbacks)
         callback();
 
-    websiteDataStore().networkProcess().send(Messages::NetworkProcess::RemoveWebPageNetworkParameters(sessionID(), m_identifier), 0);
+    if (auto* networkProcess = websiteDataStore().networkProcessIfExists())
+        networkProcess->send(Messages::NetworkProcess::RemoveWebPageNetworkParameters(sessionID(), m_identifier), 0);
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR) && HAVE(GROUP_ACTIVITIES)
     if (m_preferences->mediaSessionCoordinatorEnabled())
@@ -862,7 +863,9 @@ void WebPageProxy::launchProcess(const RegistrableDomain& registrableDomain, Pro
         m_process = relatedPage->ensureRunningProcess();
     else
         m_process = processPool.processForRegistrableDomain(m_websiteDataStore.get(), registrableDomain, shouldEnableCaptivePortalMode() ? WebProcessProxy::CaptivePortalMode::Enabled : WebProcessProxy::CaptivePortalMode::Disabled);
+
     m_hasRunningProcess = true;
+    m_isCaptivePortalModeExplicitlySet = m_configuration->isCaptivePortalModeExplicitlySet();
 
     m_process->addExistingWebPage(*this, WebProcessProxy::BeginsUsingDataStore::Yes);
     addAllMessageReceivers();
@@ -986,8 +989,9 @@ void WebPageProxy::swapToProvisionalPage(std::unique_ptr<ProvisionalPageProxy> p
         registerWebProcessAccessibilityToken({ accessibilityToken.data(), accessibilityToken.size() });
 #endif
 #if PLATFORM(GTK) || PLATFORM(WPE)
-    if (auto completionHandler = provisionalPage->takeAccessibilityBindCompletionHandler())
-        bindAccessibilityTree(provisionalPage->accessibilityPlugID(), WTFMove(completionHandler));
+    auto accessibilityPlugID = provisionalPage->accessibilityPlugID();
+    if (!accessibilityPlugID.isEmpty())
+        bindAccessibilityTree(accessibilityPlugID);
 #endif
 }
 
@@ -1095,7 +1099,7 @@ RefPtr<API::Navigation> WebPageProxy::launchProcessForReload()
     }
 
     // We allow stale content when reloading a WebProcess that's been killed or crashed.
-    send(Messages::WebPage::GoToBackForwardItem(navigation->navigationID(), m_backForwardList->currentItem()->itemID(), FrameLoadType::IndexedBackForward, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated));
+    send(Messages::WebPage::GoToBackForwardItem(navigation->navigationID(), m_backForwardList->currentItem()->itemID(), FrameLoadType::IndexedBackForward, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated, std::nullopt));
     m_process->startResponsivenessTimer();
 
     return navigation;
@@ -1325,7 +1329,7 @@ void WebPageProxy::maybeInitializeSandboxExtensionHandle(WebProcessProxy& proces
     }
 
 #if PLATFORM(COCOA)
-    if (!linkedOnOrAfter(WebCore::SDKVersion::FirstWithoutUnconditionalUniversalSandboxExtension))
+    if (!linkedOnOrAfter(SDKVersion::FirstWithoutUnconditionalUniversalSandboxExtension))
         willAcquireUniversalFileReadSandboxExtension(process);
 #endif
 
@@ -1520,7 +1524,7 @@ RefPtr<API::Navigation> WebPageProxy::loadData(const IPC::DataReference& data, c
     if (!hasRunningProcess())
         launchProcess({ }, ProcessLaunchReason::InitialProcess);
 
-    auto navigation = m_navigationState->createLoadDataNavigation(makeUnique<API::SubstituteData>(data.vector(), MIMEType, encoding, baseURL, userData));
+    auto navigation = m_navigationState->createLoadDataNavigation(makeUnique<API::SubstituteData>(Vector(data), MIMEType, encoding, baseURL, userData));
 
     if (shouldForceForegroundPriorityForClientNavigation())
         navigation->setClientNavigationActivity(process().throttler().foregroundActivity("Client navigation"_s));
@@ -1581,7 +1585,7 @@ RefPtr<API::Navigation> WebPageProxy::loadSimulatedRequest(WebCore::ResourceRequ
     if (!hasRunningProcess())
         launchProcess(RegistrableDomain { simulatedRequest.url() }, ProcessLaunchReason::InitialProcess);
 
-    auto navigation = m_navigationState->createSimulatedLoadWithDataNavigation(ResourceRequest(simulatedRequest), makeUnique<API::SubstituteData>(data.vector(), ResourceResponse(simulatedResponse), WebCore::SubstituteData::SessionHistoryVisibility::Visible), m_backForwardList->currentItem());
+    auto navigation = m_navigationState->createSimulatedLoadWithDataNavigation(ResourceRequest(simulatedRequest), makeUnique<API::SubstituteData>(Vector(data), ResourceResponse(simulatedResponse), WebCore::SubstituteData::SessionHistoryVisibility::Visible), m_backForwardList->currentItem());
 
     if (shouldForceForegroundPriorityForClientNavigation())
         navigation->setClientNavigationActivity(process().throttler().foregroundActivity("Client navigation"_s));
@@ -1843,7 +1847,7 @@ RefPtr<API::Navigation> WebPageProxy::goToBackForwardItem(WebBackForwardListItem
     m_pageLoadState.setPendingAPIRequest(transaction, { navigation ? navigation->navigationID() : 0, item.url() });
 
     m_process->markProcessAsRecentlyUsed();
-    send(Messages::WebPage::GoToBackForwardItem(navigation ? navigation->navigationID() : 0, item.itemID(), frameLoadType, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated));
+    send(Messages::WebPage::GoToBackForwardItem(navigation ? navigation->navigationID() : 0, item.itemID(), frameLoadType, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated, std::nullopt));
     m_process->startResponsivenessTimer();
 
     return navigation;
@@ -2508,15 +2512,21 @@ void WebPageProxy::selectAll()
     send(Messages::WebPage::SelectAll());
 }
 
-static bool isPasteCommandName(const String& commandName)
+static std::optional<DOMPasteAccessCategory> pasteAccessCategoryForCommand(const String& commandName)
 {
-    static NeverDestroyed<HashSet<String, ASCIICaseInsensitiveHash>> pasteCommandNames = HashSet<String, ASCIICaseInsensitiveHash> {
-        "Paste",
-        "PasteAndMatchStyle",
-        "PasteAsQuotation",
-        "PasteAsPlainText"
+    static NeverDestroyed<HashMap<String, DOMPasteAccessCategory, ASCIICaseInsensitiveHash>> pasteCommandNames = HashMap<String, DOMPasteAccessCategory, ASCIICaseInsensitiveHash> {
+        { "Paste", DOMPasteAccessCategory::General },
+        { "PasteAndMatchStyle", DOMPasteAccessCategory::General },
+        { "PasteAsQuotation", DOMPasteAccessCategory::General },
+        { "PasteAsPlainText", DOMPasteAccessCategory::General },
+        { "PasteFont", DOMPasteAccessCategory::Fonts },
     };
-    return pasteCommandNames->contains(commandName);
+
+    auto it = pasteCommandNames->find(commandName);
+    if (it != pasteCommandNames->end())
+        return it->value;
+
+    return std::nullopt;
 }
 
 void WebPageProxy::executeEditCommand(const String& commandName, const String& argument, CompletionHandler<void()>&& callbackFunction)
@@ -2526,8 +2536,8 @@ void WebPageProxy::executeEditCommand(const String& commandName, const String& a
         return;
     }
 
-    if (isPasteCommandName(commandName))
-        willPerformPasteCommand();
+    if (auto pasteAccessCategory = pasteAccessCategoryForCommand(commandName))
+        willPerformPasteCommand(*pasteAccessCategory);
 
     sendWithAsyncReply(Messages::WebPage::ExecuteEditCommandWithCallback(commandName, argument), [callbackFunction = WTFMove(callbackFunction), backgroundActivity = m_process->throttler().backgroundActivity("WebPageProxy::executeEditCommand"_s)] () mutable {
         callbackFunction();
@@ -2541,8 +2551,8 @@ void WebPageProxy::executeEditCommand(const String& commandName, const String& a
     if (!hasRunningProcess())
         return;
 
-    if (isPasteCommandName(commandName))
-        willPerformPasteCommand();
+    if (auto pasteAccessCategory = pasteAccessCategoryForCommand(commandName))
+        willPerformPasteCommand(*pasteAccessCategory);
 
     if (commandName == ignoreSpellingCommandName)
         ++m_pendingLearnOrIgnoreWordMessageCount;
@@ -2554,6 +2564,11 @@ void WebPageProxy::requestFontAttributesAtSelectionStart(CompletionHandler<void(
 {
     if (!hasRunningProcess())
         return callback({ });
+
+    if (auto attributes = m_cachedFontAttributesAtSelectionStart) {
+        callback(*attributes);
+        return;
+    }
 
     sendWithAsyncReply(Messages::WebPage::RequestFontAttributesAtSelectionStart(), [this, protectedThis = Ref { *this }, callback = WTFMove(callback)] (const WebCore::FontAttributes& attributes) mutable {
         m_cachedFontAttributesAtSelectionStart = attributes;
@@ -2629,7 +2644,7 @@ void WebPageProxy::makeViewBlankIfUnpaintedSinceLastLoadCommit()
 {
     if (!m_hasUpdatedRenderingAfterDidCommitLoad) {
 #if PLATFORM(COCOA)
-        static bool shouldMakeViewBlank = linkedOnOrAfter(WebCore::SDKVersion::FirstWithBlankViewOnJSPrompt);
+        static bool shouldMakeViewBlank = linkedOnOrAfter(SDKVersion::FirstWithBlankViewOnJSPrompt);
 #else
         static bool shouldMakeViewBlank = true;
 #endif
@@ -2894,6 +2909,12 @@ void WebPageProxy::handleWheelEvent(const NativeWebWheelEvent& event)
 
     closeOverlayedViews();
 
+#if ENABLE(MOMENTUM_EVENT_DISPATCHER)
+    // FIXME: We should not have to look this up repeatedly, but it can also change occasionally.
+    if (event.momentumPhase() == WebWheelEvent::PhaseBegan && preferences().momentumScrollingAnimatorEnabled())
+        m_scrollingAccelerationCurve = ScrollingAccelerationCurve::fromNativeWheelEvent(event);
+#endif
+
     if (wheelEventCoalescer().shouldDispatchEvent(event)) {
         auto event = wheelEventCoalescer().nextEventToDispatch();
         sendWheelEvent(*event);
@@ -2941,6 +2962,14 @@ void WebPageProxy::sendWheelEvent(const WebWheelEvent& event)
         rubberBandableEdges.setLeft(!m_backForwardList->backItem());
         rubberBandableEdges.setRight(!m_backForwardList->forwardItem());
     }
+
+#if ENABLE(MOMENTUM_EVENT_DISPATCHER)
+    if (event.momentumPhase() == WebWheelEvent::PhaseBegan && m_scrollingAccelerationCurve != m_lastSentScrollingAccelerationCurve) {
+        connection->send(Messages::EventDispatcher::SetScrollingAccelerationCurve(m_webPageID, m_scrollingAccelerationCurve), 0, { }, Thread::QOS::UserInteractive);
+        m_lastSentScrollingAccelerationCurve = m_scrollingAccelerationCurve;
+    }
+#endif
+
     connection->send(Messages::EventDispatcher::WheelEvent(m_webPageID, event, rubberBandableEdges), 0, { }, Thread::QOS::UserInteractive);
 
     // Manually ping the web process to check for responsiveness since our wheel
@@ -3436,6 +3465,7 @@ void WebPageProxy::receivedNavigationPolicyDecision(PolicyAction policyAction, A
         }
     }
 
+    m_isCaptivePortalModeExplicitlySet = (policies && policies->isCaptivePortalModeExplicitlySet()) || m_configuration->isCaptivePortalModeExplicitlySet();
     auto captivePortalMode = (policies ? policies->captivePortalModeEnabled() : shouldEnableCaptivePortalMode()) ? WebProcessProxy::CaptivePortalMode::Enabled : WebProcessProxy::CaptivePortalMode::Disabled;
     process().processPool().processForNavigation(*this, *navigation, sourceProcess.copyRef(), sourceURL, processSwapRequestedByClient, captivePortalMode, frameInfo, WTFMove(websiteDataStore), [this, protectedThis = Ref { *this }, policyAction, navigation = Ref { *navigation }, navigationAction = WTFMove(navigationAction), sourceProcess = sourceProcess.copyRef(),
         policies = WTFMove(policies), sender = WTFMove(sender), processSwapRequestedByClient] (Ref<WebProcessProxy>&& processForNavigation, SuspendedPageProxy* destinationSuspendedPage, const String& reason) mutable {
@@ -3558,7 +3588,7 @@ void WebPageProxy::commitProvisionalPage(FrameIdentifier frameID, FrameInfoData&
 
     removeAllMessageReceivers();
     auto* navigation = navigationState().navigation(m_provisionalPage->navigationID());
-    bool didSuspendPreviousPage = navigation && !m_provisionalPage->shouldClosePreviousPageAfterCommit() ? suspendCurrentPageIfPossible(*navigation, mainFrameIDInPreviousProcess, m_provisionalPage->processSwapRequestedByClient(), shouldDelayClosingUntilFirstLayerFlush) : false;
+    bool didSuspendPreviousPage = navigation && !m_provisionalPage->isProcessSwappingOnNavigationResponse() ? suspendCurrentPageIfPossible(*navigation, mainFrameIDInPreviousProcess, m_provisionalPage->processSwapRequestedByClient(), shouldDelayClosingUntilFirstLayerFlush) : false;
     m_process->removeWebPage(*this, m_websiteDataStore.ptr() == &m_provisionalPage->process().websiteDataStore() ? WebProcessProxy::EndsUsingDataStore::No : WebProcessProxy::EndsUsingDataStore::Yes);
 
     // There is no way we'll be able to return to the page in the previous page so close it.
@@ -3571,6 +3601,11 @@ void WebPageProxy::commitProvisionalPage(FrameIdentifier frameID, FrameInfoData&
     didCommitLoadForFrame(frameID, WTFMove(frameInfo), WTFMove(request), navigationID, mimeType, frameHasCustomContentProvider, frameLoadType, certificateInfo, usedLegacyTLS, containsPluginDocument, forcedHasInsecureContent, mouseEventPolicy, userData);
 
     m_inspectorController->didCommitProvisionalPage(oldWebPageID, m_webPageID);
+}
+
+void WebPageProxy::destroyProvisionalPage()
+{
+    m_provisionalPage = nullptr;
 }
 
 void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, std::unique_ptr<SuspendedPageProxy>&& suspendedPage, Ref<WebProcessProxy>&& newProcess, ProcessSwapRequestedByClient processSwapRequestedByClient, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, RefPtr<API::WebsitePolicies>&& websitePolicies, std::optional<NetworkResourceLoadIdentifier> existingNetworkResourceLoadIdentifierToResume)
@@ -3588,8 +3623,8 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, s
     }
 
     bool isServerSideRedirect = shouldTreatAsContinuingLoad == ShouldTreatAsContinuingLoad::YesAfterNavigationPolicyDecision && navigation.currentRequestIsRedirect();
-    bool shouldClosePreviousPageAfterCommit = shouldTreatAsContinuingLoad == ShouldTreatAsContinuingLoad::YesAfterProvisionalLoadStarted;
-    m_provisionalPage = makeUnique<ProvisionalPageProxy>(*this, WTFMove(newProcess), WTFMove(suspendedPage), navigation.navigationID(), isServerSideRedirect, navigation.currentRequest(), processSwapRequestedByClient, shouldClosePreviousPageAfterCommit, websitePolicies.get());
+    bool isProcessSwappingOnNavigationResponse = shouldTreatAsContinuingLoad == ShouldTreatAsContinuingLoad::YesAfterProvisionalLoadStarted;
+    m_provisionalPage = makeUnique<ProvisionalPageProxy>(*this, WTFMove(newProcess), WTFMove(suspendedPage), navigation.navigationID(), isServerSideRedirect, navigation.currentRequest(), processSwapRequestedByClient, isProcessSwappingOnNavigationResponse, websitePolicies.get());
     auto continuation = [this, protectedThis = Ref { *this }, navigation = Ref { navigation }, shouldTreatAsContinuingLoad, websitePolicies = WTFMove(websitePolicies), existingNetworkResourceLoadIdentifierToResume]() mutable {
         if (auto* item = navigation->targetItem()) {
             LOG(Loading, "WebPageProxy %p continueNavigationInNewProcess to back item URL %s", this, item->url().utf8().data());
@@ -3597,7 +3632,7 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, s
             auto transaction = m_pageLoadState.transaction();
             m_pageLoadState.setPendingAPIRequest(transaction, { navigation->navigationID(), item->url() });
 
-            m_provisionalPage->goToBackForwardItem(navigation, *item, WTFMove(websitePolicies));
+            m_provisionalPage->goToBackForwardItem(navigation, *item, WTFMove(websitePolicies), shouldTreatAsContinuingLoad, existingNetworkResourceLoadIdentifierToResume);
             return;
         }
 
@@ -3936,12 +3971,23 @@ void WebPageProxy::setIntrinsicDeviceScaleFactor(float scaleFactor)
 
 void WebPageProxy::windowScreenDidChange(PlatformDisplayID displayID, std::optional<unsigned> nominalFramesPerSecond)
 {
+#if HAVE(CVDISPLAYLINK)
+    if (hasRunningProcess() && m_displayID && m_registeredForFullSpeedUpdates)
+        process().processPool().setDisplayLinkForDisplayWantsFullSpeedUpdates(*m_process->connection(), *m_displayID, false);
+
+    m_registeredForFullSpeedUpdates = false;
+#endif
+
     m_displayID = displayID;
 
     if (!hasRunningProcess())
         return;
 
+    send(Messages::EventDispatcher::PageScreenDidChange(m_webPageID, displayID, nominalFramesPerSecond));
     send(Messages::WebPage::WindowScreenDidChange(displayID, nominalFramesPerSecond));
+#if HAVE(CVDISPLAYLINK)
+    updateDisplayLinkFrequency();
+#endif
 }
 
 float WebPageProxy::deviceScaleFactor() const
@@ -4235,6 +4281,46 @@ void WebPageProxy::findString(const String& string, OptionSet<FindOptions> optio
     sendWithAsyncReply(Messages::WebPage::FindString(string, options, maxMatchCount), WTFMove(callbackFunction));
 }
 
+void WebPageProxy::findRectsForStringMatches(const String& string, OptionSet<WebKit::FindOptions> options, unsigned maxMatchCount, CompletionHandler<void(Vector<WebCore::FloatRect>&&)>&& callbackFunction)
+{
+    sendWithAsyncReply(Messages::WebPage::FindRectsForStringMatches(string, options, maxMatchCount), WTFMove(callbackFunction));
+}
+
+void WebPageProxy::findTextRangesForStringMatches(const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount, CompletionHandler<void(Vector<WebFoundTextRange>&&)>&& callbackFunction)
+{
+    sendWithAsyncReply(Messages::WebPage::FindTextRangesForStringMatches(string, options, maxMatchCount), WTFMove(callbackFunction));
+}
+
+void WebPageProxy::decorateTextRangeWithStyle(const WebFoundTextRange& range, FindDecorationStyle style)
+{
+    send(Messages::WebPage::DecorateTextRangeWithStyle(range, style));
+}
+
+void WebPageProxy::scrollTextRangeToVisible(const WebFoundTextRange& range)
+{
+    send(Messages::WebPage::ScrollTextRangeToVisible(range));
+}
+
+void WebPageProxy::clearAllDecoratedFoundText()
+{
+    send(Messages::WebPage::ClearAllDecoratedFoundText());
+}
+
+void WebPageProxy::didBeginTextSearchOperation()
+{
+    send(Messages::WebPage::DidBeginTextSearchOperation());
+}
+
+void WebPageProxy::didEndTextSearchOperation()
+{
+    send(Messages::WebPage::DidEndTextSearchOperation());
+}
+
+void WebPageProxy::requestRectForFoundTextRange(const WebFoundTextRange& range, CompletionHandler<void(WebCore::FloatRect)>&& callbackFunction)
+{
+    sendWithAsyncReply(Messages::WebPage::RequestRectForFoundTextRange(range), WTFMove(callbackFunction));
+}
+
 void WebPageProxy::getImageForFindMatch(int32_t matchIndex)
 {
     send(Messages::WebPage::GetImageForFindMatch(matchIndex));
@@ -4253,6 +4339,11 @@ void WebPageProxy::indicateFindMatch(int32_t matchIndex)
 void WebPageProxy::hideFindUI()
 {
     send(Messages::WebPage::HideFindUI());
+}
+
+void WebPageProxy::hideFindIndicator()
+{
+    send(Messages::WebPage::HideFindIndicator());
 }
 
 void WebPageProxy::countStringMatches(const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount)
@@ -4296,7 +4387,7 @@ void WebPageProxy::runJavaScriptInFrameInScriptWorld(RunJavaScriptParameters&& p
     sendWithAsyncReply(Messages::WebPage::RunJavaScriptInFrameInScriptWorld(parameters, frameID, world.worldData()), [activity = WTFMove(activity), callbackFunction = WTFMove(callbackFunction)] (const IPC::DataReference& dataReference, std::optional<ExceptionDetails>&& details) mutable {
         if (details)
             return callbackFunction(makeUnexpected(WTFMove(*details)));
-        if (dataReference.isEmpty())
+        if (dataReference.empty())
             return callbackFunction({ nullptr });
         Vector<uint8_t> data;
         data.reserveInitialCapacity(dataReference.size());
@@ -4347,10 +4438,14 @@ void WebPageProxy::getSamplingProfilerOutput(CompletionHandler<void(const String
     sendWithAsyncReply(Messages::WebPage::GetSamplingProfilerOutput(), WTFMove(callback));
 }
 
-static CompletionHandler<void(const std::optional<IPC::DataReference>& data)> toAPIDataCallback(CompletionHandler<void(API::Data*)>&& callback)
+static CompletionHandler<void(const std::optional<IPC::SharedBufferCopy>& data)> toAPIDataCallback(CompletionHandler<void(API::Data*)>&& callback)
 {
-    return [callback = WTFMove(callback)] (const std::optional<IPC::DataReference>& data) mutable {
-        callback(data ? API::Data::create(data->data(), data->size()).ptr() : nullptr);
+    return [callback = WTFMove(callback)] (const std::optional<IPC::SharedBufferCopy>& data) mutable {
+        if (!data) {
+            callback(nullptr);
+            return;
+        }
+        callback(API::Data::create(data->data(), data->size()).ptr());
     };
 }
 
@@ -4972,23 +5067,26 @@ void WebPageProxy::didFinishLoadForFrame(FrameIdentifier frameID, FrameInfoData&
 
     // FIXME: We should message check that navigationID is not zero here, but it's currently zero for some navigations through the back/forward cache.
     RefPtr<API::Navigation> navigation;
-    if (frame->isMainFrame() && navigationID)
+    if (frame->isMainFrame() && navigationID && navigationState().hasNavigation(navigationID))
         navigation = navigationState().navigation(navigationID);
 
-    auto transaction = m_pageLoadState.transaction();
-
     bool isMainFrame = frame->isMainFrame();
-    if (isMainFrame)
-        m_pageLoadState.didFinishLoad(transaction);
+    if (!isMainFrame || !navigationID || navigation) {
+        auto transaction = m_pageLoadState.transaction();
 
-    if (m_controlledByAutomation) {
-        if (auto* automationSession = process().processPool().automationSession())
-            automationSession->navigationOccurredForFrame(*frame);
+        if (isMainFrame)
+            m_pageLoadState.didFinishLoad(transaction);
+
+        if (m_controlledByAutomation) {
+            if (auto* automationSession = process().processPool().automationSession())
+                automationSession->navigationOccurredForFrame(*frame);
+        }
+
+        frame->didFinishLoad();
+
+        m_pageLoadState.commitChanges();
     }
 
-    frame->didFinishLoad();
-
-    m_pageLoadState.commitChanges();
     if (m_loaderClient)
         m_loaderClient->didFinishLoadForFrame(*this, *frame, navigation.get(), m_process->transformHandlesToObjects(userData.object()).get());
     else {
@@ -5636,7 +5734,7 @@ void WebPageProxy::triggerBrowsingContextGroupSwitchForNavigation(uint64_t navig
 {
     ASSERT(browsingContextGroupSwitchDecision != BrowsingContextGroupSwitchDecision::StayInGroup);
     RefPtr<API::Navigation> navigation = navigationID ? m_navigationState->navigation(navigationID) : nullptr;
-    WEBPAGEPROXY_RELEASE_LOG(ProcessSwapping, "triggerBrowsingContextGroupSwitchForNavigation: Process-swapping due to Cross-Origin-Opener-Policy, newProcessIsCrossOriginIsolated=%d, navigation=%p", browsingContextGroupSwitchDecision == BrowsingContextGroupSwitchDecision::NewIsolatedGroup, navigation.get());
+    WEBPAGEPROXY_RELEASE_LOG(ProcessSwapping, "triggerBrowsingContextGroupSwitchForNavigation: Process-swapping due to Cross-Origin-Opener-Policy, newProcessIsCrossOriginIsolated=%d, navigation=%p existingNetworkResourceLoadIdentifierToResume=%" PRIu64, browsingContextGroupSwitchDecision == BrowsingContextGroupSwitchDecision::NewIsolatedGroup, navigation.get(), existingNetworkResourceLoadIdentifierToResume.toUInt64());
     if (!navigation)
         return completionHandler(false);
 
@@ -5796,13 +5894,21 @@ void WebPageProxy::createNewPage(FrameInfoData&& originatingFrameInfoData, WebPa
     auto* originatingPage = m_process->webPage(originatingPageID);
     auto originatingFrameInfo = API::FrameInfo::create(WTFMove(originatingFrameInfoData), originatingPage);
     auto mainFrameURL = m_mainFrame ? m_mainFrame->url() : URL();
-    auto completionHandler = [this, protectedThis = Ref { *this }, mainFrameURL, request, reply = WTFMove(reply), privateClickMeasurement = navigationActionData.privateClickMeasurement] (RefPtr<WebPageProxy> newPage) mutable {
+
+    std::optional<bool> openerAppInitiatedState;
+    if (originatingPage)
+        openerAppInitiatedState = originatingPage->lastNavigationWasAppInitiated();
+
+    auto completionHandler = [this, protectedThis = Ref { *this }, mainFrameURL, request, reply = WTFMove(reply), privateClickMeasurement = navigationActionData.privateClickMeasurement, openerAppInitiatedState = WTFMove(openerAppInitiatedState)] (RefPtr<WebPageProxy> newPage) mutable {
         if (!newPage) {
             reply(std::nullopt, std::nullopt);
             return;
         }
 
         newPage->setOpenedByDOM();
+
+        if (openerAppInitiatedState)
+            newPage->m_lastNavigationWasAppInitiated = *openerAppInitiatedState;
 
         reply(newPage->webPageID(), newPage->creationParameters(m_process, *newPage->drawingArea()));
 
@@ -6329,6 +6435,11 @@ void WebPageProxy::downloadRequest(WebCore::ResourceRequest&& request, Completio
     download.setDidStartCallback(WTFMove(completionHandler));
 }
 
+void WebPageProxy::requestResource(WebCore::ResourceRequest&& request, CompletionHandler<void(Ref<WebCore::SharedBuffer>&&, WebCore::ResourceResponse&&, WebCore::ResourceError&&)>&& completionHandler)
+{
+    websiteDataStore().networkProcess().requestResource(identifier(), sessionID(), WTFMove(request), WTFMove(completionHandler));
+}
+
 void WebPageProxy::didChangeContentSize(const IntSize& size)
 {
     pageClient().didChangeContentSize(size);
@@ -6568,9 +6679,9 @@ void WebPageProxy::setIsNeverRichlyEditableForTouchBar(bool isNeverRichlyEditabl
 
 #endif
 
-void WebPageProxy::requestDOMPasteAccess(const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&& completionHandler)
+void WebPageProxy::requestDOMPasteAccess(WebCore::DOMPasteAccessCategory pasteAccessCategory, const WebCore::IntRect& elementRect, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&& completionHandler)
 {
-    m_pageClient->requestDOMPasteAccess(elementRect, originIdentifier, WTFMove(completionHandler));
+    m_pageClient->requestDOMPasteAccess(pasteAccessCategory, elementRect, originIdentifier, WTFMove(completionHandler));
 }
 
 // BackForwardList
@@ -6882,6 +6993,10 @@ void WebPageProxy::contextMenuItemSelected(const WebContextMenuItemData& item)
         String suggestedFilename;
     };
     std::optional<DownloadInfo> downloadInfo;
+    
+    ASSERT(m_activeContextMenuContextData.webHitTestResultData());
+    
+    auto hitTestData = m_activeContextMenuContextData.webHitTestResultData().value();
 
     switch (item.action()) {
 #if PLATFORM(COCOA)
@@ -6920,17 +7035,16 @@ void WebPageProxy::contextMenuItemSelected(const WebContextMenuItemData& item)
 #endif
 
     case ContextMenuItemTagDownloadImageToDisk:
-        downloadInfo = {{ m_activeContextMenuContextData.webHitTestResultData().absoluteImageURL, { } }};
+        downloadInfo = { { hitTestData.absoluteImageURL, { } } };
         break;
 
     case ContextMenuItemTagDownloadLinkToDisk: {
-        auto& hitTestResult = m_activeContextMenuContextData.webHitTestResultData();
-        downloadInfo = {{ hitTestResult.absoluteLinkURL, hitTestResult.linkSuggestedFilename }};
+        downloadInfo = { { hitTestData.absoluteLinkURL, hitTestData.linkSuggestedFilename } };
         break;
     }
 
     case ContextMenuItemTagDownloadMediaToDisk:
-        downloadInfo = {{ m_activeContextMenuContextData.webHitTestResultData().absoluteMediaURL, { } }};
+        downloadInfo = { { hitTestData.absoluteMediaURL, { } } };
         break;
 
     case ContextMenuItemTagCheckSpellingWhileTyping:
@@ -7899,6 +8013,10 @@ void WebPageProxy::resetState(ResetStateReason resetStateReason)
         m_xrSystem = nullptr;
     }
 #endif
+
+#if ENABLE(MOMENTUM_EVENT_DISPATCHER)
+    m_lastSentScrollingAccelerationCurve = std::nullopt;
+#endif
 }
 
 void WebPageProxy::resetStateAfterProcessExited(ProcessTerminationReason terminationReason)
@@ -7988,26 +8106,25 @@ void WebPageProxy::resetStateAfterProcessExited(ProcessTerminationReason termina
 }
 
 #if ENABLE(ATTACHMENT_ELEMENT) && PLATFORM(COCOA)
-static const Vector<ASCIILiteral>& attachmentElementServices()
+
+static Span<const ASCIILiteral> attachmentElementServices()
 {
-    static const auto services = makeNeverDestroyed(Vector<ASCIILiteral> {
-#if PLATFORM(IOS_FAMILY)
-        "com.apple.frontboard.systemappservices"_s,
-#endif
+    static constexpr std::array services {
         "com.apple.iconservices"_s,
 #if PLATFORM(MAC)
         "com.apple.iconservices.store"_s,
 #endif
-    });
+    };
     return services;
 }
+
 #endif
 
 #if PLATFORM(COCOA)
-static const Vector<ASCIILiteral>& gpuIOKitClasses()
+
+static Span<const ASCIILiteral> gpuIOKitClasses()
 {
-    ASSERT(isMainRunLoop());
-    static const auto services = makeNeverDestroyed(Vector<ASCIILiteral> {
+    static constexpr std::array services {
 #if PLATFORM(IOS_FAMILY)
         "AGXDeviceUserClient"_s,
         "IOGPU"_s,
@@ -8028,31 +8145,32 @@ static const Vector<ASCIILiteral>& gpuIOKitClasses()
         "IOAudioEngineUserClient"_s,
         "IOSurfaceRootUserClient"_s,
 #endif
-#if (PLATFORM(MAC) && CPU(ARM64)) || PLATFORM(IOS_FAMILY)
+        // FIXME: Is this also needed in PLATFORM(MACCATALYST)?
+#if PLATFORM(MAC) && CPU(ARM64)
         "IOMobileFramebufferUserClient"_s,
+#endif
+#if (PLATFORM(MAC) && CPU(ARM64)) || PLATFORM(IOS_FAMILY)
         "IOSurfaceAcceleratorClient"_s,
 #endif
-    });
+    };
     return services;
 }
 
-static const Vector<ASCIILiteral>& gpuMachServices()
+static Span<const ASCIILiteral> gpuMachServices()
 {
-    ASSERT(isMainRunLoop());
-    static const auto services = makeNeverDestroyed(Vector<ASCIILiteral> {
+    static constexpr std::array services {
         "com.apple.MTLCompilerService"_s,
 #if PLATFORM(MAC) || PLATFORM(MACCATALYST)
         "com.apple.cvmsServ"_s,
 #endif
-    });
+    };
     return services;
 }
 
 // FIXME(207716): The following should be removed when the GPU process is complete.
-static const Vector<ASCIILiteral>& mediaRelatedMachServices()
+static Span<const ASCIILiteral> mediaRelatedMachServices()
 {
-    ASSERT(isMainRunLoop());
-    static const auto services = makeNeverDestroyed(Vector<ASCIILiteral> {
+    static constexpr std::array services {
         "com.apple.audio.AudioComponentPrefs"_s, "com.apple.audio.AudioComponentRegistrar"_s,
         "com.apple.audio.AudioQueueServer"_s, "com.apple.coremedia.endpoint.xpc"_s,
         "com.apple.coremedia.routediscoverer.xpc"_s, "com.apple.coremedia.routingcontext.xpc"_s,
@@ -8080,26 +8198,30 @@ static const Vector<ASCIILiteral>& mediaRelatedMachServices()
         "com.apple.audio.audiohald"_s, "com.apple.audio.SandboxHelper"_s, "com.apple.coremedia.endpointstream.xpc"_s, "com.apple.coremedia.endpointplaybacksession.xpc"_s,
         "com.apple.coremedia.endpointremotecontrolsession.xpc"_s, "com.apple.coremedia.videodecoder"_s,
         "com.apple.coremedia.videoencoder"_s, "com.apple.lskdd"_s, "com.apple.trustd.agent"_s,
-#if __MAC_OS_X_VERSION_MIN_REQUIRED > 120000
+#endif
+        // FIXME: Is this also needed in PLATFORM(MACCATALYST)?
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED > 120000
         "com.apple.coremedia.samplebufferconsumer.xpc"_s,
 #endif
-#endif
-    });
+    };
     return services;
 }
 
-static const Vector<ASCIILiteral>& mediaRelatedIOKitClasses()
+static Span<const ASCIILiteral> mediaRelatedIOKitClasses()
 {
-    static const auto services = makeNeverDestroyed(Vector<ASCIILiteral> {
-#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
+#if !(PLATFORM(MAC) || PLATFORM(MACCATALYST))
+    return { };
+#else
+    static constexpr std::array services {
 #if CPU(ARM64)
         "AppleAVDUserClient"_s,
 #endif
         "RootDomainUserClient"_s,
-#endif
-    });
+    };
     return services;
+#endif
 }
+
 #endif
 
 WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& process, DrawingAreaProxy& drawingArea, RefPtr<API::WebsitePolicies>&& websitePolicies)
@@ -8228,6 +8350,9 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
 
 #if PLATFORM(WIN)
     parameters.nativeWindowHandle = reinterpret_cast<uint64_t>(viewWidget());
+#endif
+#if USE(GRAPHICS_LAYER_WC)
+    parameters.usesOffscreenRendering = pageClient().usesOffscreenRendering();
 #endif
 
     for (auto& iterator : m_urlSchemeHandlersByScheme)
@@ -8504,6 +8629,7 @@ UserMediaPermissionRequestManagerProxy& WebPageProxy::userMediaPermissionRequest
         return *m_userMediaPermissionRequestManager;
 
     m_userMediaPermissionRequestManager = makeUnique<UserMediaPermissionRequestManagerProxy>(*this);
+
     return *m_userMediaPermissionRequestManager;
 }
 
@@ -8535,7 +8661,9 @@ void WebPageProxy::requestUserMediaPermissionForFrame(UserMediaRequestIdentifier
 {
 #if ENABLE(MEDIA_STREAM)
     MESSAGE_CHECK(m_process, m_process->webFrame(frameID));
-
+#if PLATFORM(MAC)
+    CoreAudioCaptureDeviceManager::singleton().setFilterTapEnabledDevices(!preferences().captureAudioInGPUProcessEnabled());
+#endif
     userMediaPermissionRequestManager().requestUserMediaPermissionForFrame(userMediaID, frameID, userMediaDocumentOriginData.securityOrigin(), topLevelDocumentOriginData.securityOrigin(), WTFMove(request));
 #else
     UNUSED_PARAM(userMediaID);
@@ -8673,22 +8801,22 @@ void WebPageProxy::requestNotificationPermission(const String& originString, Com
     m_uiClient->decidePolicyForNotificationPermissionRequest(*this, origin.get(), WTFMove(completionHandler));
 }
 
-void WebPageProxy::showNotification(const String& title, const String& body, const String& iconURL, const String& tag, const String& lang, WebCore::NotificationDirection dir, const String& originString, uint64_t notificationID)
+void WebPageProxy::showNotification(const WebCore::NotificationData& notificationData)
 {
-    m_process->processPool().supplement<WebNotificationManagerProxy>()->show(this, title, body, iconURL, tag, lang, dir, originString, notificationID);
+    m_process->processPool().supplement<WebNotificationManagerProxy>()->show(this, notificationData);
 }
 
-void WebPageProxy::cancelNotification(uint64_t notificationID)
+void WebPageProxy::cancelNotification(const UUID& notificationID)
 {
     m_process->processPool().supplement<WebNotificationManagerProxy>()->cancel(this, notificationID);
 }
 
-void WebPageProxy::clearNotifications(const Vector<uint64_t>& notificationIDs)
+void WebPageProxy::clearNotifications(const Vector<UUID>& notificationIDs)
 {
     m_process->processPool().supplement<WebNotificationManagerProxy>()->clearNotifications(this, notificationIDs);
 }
 
-void WebPageProxy::didDestroyNotification(uint64_t notificationID)
+void WebPageProxy::didDestroyNotification(const UUID& notificationID)
 {
     m_process->processPool().supplement<WebNotificationManagerProxy>()->didDestroyNotification(this, notificationID);
 }
@@ -8918,7 +9046,7 @@ void WebPageProxy::drawPagesForPrinting(WebFrameProxy* frame, const PrintInfo& p
 #endif
 
 #if PLATFORM(COCOA)
-void WebPageProxy::drawToPDF(FrameIdentifier frameID, const std::optional<FloatRect>& rect, CompletionHandler<void(const IPC::DataReference&)>&& callback)
+void WebPageProxy::drawToPDF(FrameIdentifier frameID, const std::optional<FloatRect>& rect, CompletionHandler<void(const IPC::SharedBufferCopy&)>&& callback)
 {
     if (!hasRunningProcess()) {
         callback({ });
@@ -9196,7 +9324,7 @@ void WebPageProxy::wrapCryptoKey(const Vector<uint8_t>& key, CompletionHandler<v
     Vector<uint8_t> masterKey;
 
     if (auto keyData = m_navigationClient->webCryptoMasterKey(*this))
-        masterKey = keyData->dataReference().vector();
+        masterKey = Vector(keyData->dataReference());
 
     Vector<uint8_t> wrappedKey;
     bool succeeded = wrapSerializedCryptoKey(masterKey, key, wrappedKey);
@@ -9210,7 +9338,7 @@ void WebPageProxy::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Completion
     Vector<uint8_t> masterKey;
 
     if (auto keyData = m_navigationClient->webCryptoMasterKey(*this))
-        masterKey = keyData->dataReference().vector();
+        masterKey = Vector(keyData->dataReference());
 
     Vector<uint8_t> key;
     bool succeeded = unwrapSerializedCryptoKey(masterKey, wrappedKey, key);
@@ -9508,13 +9636,25 @@ void WebPageProxy::updateReportedMediaCaptureState()
 
     WEBPAGEPROXY_RELEASE_LOG(WebRTC, "updateReportedMediaCaptureState: from %d to %d", m_reportedMediaCaptureState.toRaw(), activeCaptureState.toRaw());
 
-    bool microphoneCaptureChanged = (m_reportedMediaCaptureState & MediaProducer::AudioCaptureMask) != (activeCaptureState & MediaProducer::AudioCaptureMask);
+    bool microphoneCaptureChanged = (m_reportedMediaCaptureState & MediaProducer::MicrophoneCaptureMask) != (activeCaptureState & MediaProducer::MicrophoneCaptureMask);
     bool cameraCaptureChanged = (m_reportedMediaCaptureState & MediaProducer::VideoCaptureMask) != (activeCaptureState & MediaProducer::VideoCaptureMask);
+    bool displayCaptureChanged = (m_reportedMediaCaptureState & MediaProducer::DisplayCaptureMask) != (activeCaptureState & MediaProducer::DisplayCaptureMask);
+    bool systemAudioCaptureChanged = (m_reportedMediaCaptureState & MediaProducer::SystemAudioCaptureMask) != (activeCaptureState & MediaProducer::SystemAudioCaptureMask);
+
+    auto reportedDisplayCaptureSurfaces = m_reportedMediaCaptureState & (MediaProducer::ScreenCaptureMask | MediaProducer::WindowCaptureMask);
+    auto activeDisplayCaptureSurfaces = activeCaptureState & (MediaProducer::ScreenCaptureMask | MediaProducer::WindowCaptureMask);
+    auto displayCaptureSurfacesChanged = reportedDisplayCaptureSurfaces != activeDisplayCaptureSurfaces;
 
     if (microphoneCaptureChanged)
         pageClient().microphoneCaptureWillChange();
     if (cameraCaptureChanged)
         pageClient().cameraCaptureWillChange();
+    if (displayCaptureChanged)
+        pageClient().displayCaptureWillChange();
+    if (displayCaptureSurfacesChanged)
+        pageClient().displayCaptureSurfacesWillChange();
+    if (systemAudioCaptureChanged)
+        pageClient().systemAudioCaptureWillChange();
 
     m_reportedMediaCaptureState = activeCaptureState;
     m_uiClient->mediaCaptureStateDidChange(m_mediaState);
@@ -9523,6 +9663,12 @@ void WebPageProxy::updateReportedMediaCaptureState()
         pageClient().microphoneCaptureChanged();
     if (cameraCaptureChanged)
         pageClient().cameraCaptureChanged();
+    if (displayCaptureChanged)
+        pageClient().displayCaptureChanged();
+    if (displayCaptureSurfacesChanged)
+        pageClient().displayCaptureSurfacesChanged();
+    if (systemAudioCaptureChanged)
+        pageClient().systemAudioCaptureChanged();
 }
 
 void WebPageProxy::videoControlsManagerDidChange()
@@ -9809,8 +9955,8 @@ void WebPageProxy::getLoadDecisionForIcon(const WebCore::LinkIcon& icon, Callbac
             sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(false, loadIdentifier), [](auto) { });
             return;
         }
-        sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(true, loadIdentifier), [callback = WTFMove(callback)](const IPC::DataReference& iconData) mutable {
-            callback(API::Data::create(iconData).get());
+        sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(true, loadIdentifier), [callback = WTFMove(callback)](const IPC::SharedBufferCopy& iconData) mutable {
+            callback(API::Data::create(iconData.data(), iconData.size()).ptr());
         });
     });
 }
@@ -9830,7 +9976,7 @@ void WebPageProxy::setUserInterfaceLayoutDirection(WebCore::UserInterfaceLayoutD
 
 void WebPageProxy::hideValidationMessage()
 {
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || PLATFORM(GTK)
     m_validationBubble = nullptr;
 #endif
 }
@@ -10043,11 +10189,7 @@ void WebPageProxy::insertAttachment(Ref<API::Attachment>&& attachment, Completio
 
 void WebPageProxy::updateAttachmentAttributes(const API::Attachment& attachment, CompletionHandler<void()>&& callback)
 {
-    IPC::SharedBufferDataReference dataReference;
-    if (auto data = attachment.enclosingImageData())
-        dataReference = { *data };
-
-    sendWithAsyncReply(Messages::WebPage::UpdateAttachmentAttributes(attachment.identifier(), attachment.fileSizeForDisplay(), attachment.contentType(), attachment.fileName(), WTFMove(dataReference)), WTFMove(callback));
+    sendWithAsyncReply(Messages::WebPage::UpdateAttachmentAttributes(attachment.identifier(), attachment.fileSizeForDisplay(), attachment.contentType(), attachment.fileName(), IPC::SharedBufferCopy(attachment.enclosingImageData())), WTFMove(callback));
 }
 
 #if HAVE(QUICKLOOK_THUMBNAILING)
@@ -10421,9 +10563,9 @@ void WebPageProxy::setPrivateClickMeasurementEphemeralMeasurementForTesting(bool
     websiteDataStore().networkProcess().sendWithAsyncReply(Messages::NetworkProcess::SetPrivateClickMeasurementEphemeralMeasurementForTesting(m_websiteDataStore->sessionID(), value), WTFMove(completionHandler));
 }
 
-void WebPageProxy::simulateResourceLoadStatisticsSessionRestart(CompletionHandler<void()>&& completionHandler)
+void WebPageProxy::simulatePrivateClickMeasurementSessionRestart(CompletionHandler<void()>&& completionHandler)
 {
-    websiteDataStore().networkProcess().sendWithAsyncReply(Messages::NetworkProcess::SimulateResourceLoadStatisticsSessionRestart(m_websiteDataStore->sessionID()), WTFMove(completionHandler));
+    websiteDataStore().networkProcess().sendWithAsyncReply(Messages::NetworkProcess::SimulatePrivateClickMeasurementSessionRestart(m_websiteDataStore->sessionID()), WTFMove(completionHandler));
 }
 
 void WebPageProxy::setPrivateClickMeasurementTokenPublicKeyURLForTesting(const URL& url, CompletionHandler<void()>&& completionHandler)
@@ -10513,6 +10655,11 @@ void WebPageProxy::speechSynthesisSpeak(const String& text, const String& lang, 
 void WebPageProxy::speechSynthesisCancel()
 {
     speechSynthesisData().synthesizer->cancel();
+}
+
+void WebPageProxy::speechSynthesisResetState()
+{
+    speechSynthesisData().synthesizer->resetState();
 }
 
 void WebPageProxy::speechSynthesisPause(CompletionHandler<void()>&& completionHandler)
@@ -10763,7 +10910,7 @@ void WebPageProxy::platformDidSelectItemFromActiveContextMenu(const WebContextMe
 
 #if !PLATFORM(COCOA)
 
-void WebPageProxy::willPerformPasteCommand()
+void WebPageProxy::willPerformPasteCommand(DOMPasteAccessCategory)
 {
 }
 
@@ -10774,6 +10921,11 @@ void WebPageProxy::dispatchActivityStateUpdateForTesting()
     RunLoop::current().dispatch([protectedThis = Ref { *this }] {
         protectedThis->dispatchActivityStateChange();
     });
+}
+
+void WebPageProxy::isLayerTreeFrozen(CompletionHandler<void(bool)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::WebPage::IsLayerTreeFrozen(), WTFMove(completionHandler));
 }
 
 void WebPageProxy::requestSpeechRecognitionPermission(WebCore::SpeechRecognitionRequest& request, CompletionHandler<void(std::optional<SpeechRecognitionError>&&)>&& completionHandler)
@@ -10798,8 +10950,10 @@ void WebPageProxy::requestUserMediaPermissionForSpeechRecognition(FrameIdentifie
 {
 #if ENABLE(MEDIA_STREAM)
     auto captureDevice = SpeechRecognitionCaptureSource::findCaptureDevice();
-    if (!captureDevice)
+    if (!captureDevice) {
         completionHandler(false);
+        return;
+    }
 
     userMediaPermissionRequestManager().checkUserMediaPermissionForSpeechRecognition(frameIdentifier, requestingOrigin, topOrigin, *captureDevice, WTFMove(completionHandler));
 #else
@@ -10830,6 +10984,13 @@ WebCore::CaptureSourceOrError WebPageProxy::createRealtimeMediaSourceForSpeechRe
 #endif
 }
 
+#endif
+
+#if HAVE(SCREEN_CAPTURE_KIT)
+void WebPageProxy::setIndexOfGetDisplayMediaDeviceSelectedForTesting(std::optional<unsigned> index)
+{
+    DisplayCaptureSessionManager::singleton().setIndexOfDeviceSelectedForTesting(index);
+}
 #endif
 
 #if ENABLE(ARKIT_INLINE_PREVIEW)
@@ -10899,6 +11060,11 @@ void WebPageProxy::takeModelElementFullscreen(ModelIdentifier modelIdentifier)
 {
     modelElementController()->takeModelElementFullscreen(modelIdentifier);
 }
+
+void WebPageProxy::modelElementSetInteractionEnabled(ModelIdentifier modelIdentifier, bool isInteractionEnabled)
+{
+    modelElementController()->setInteractionEnabledForModelElement(modelIdentifier, isInteractionEnabled);
+}
 #endif
 
 #if ENABLE(ARKIT_INLINE_PREVIEW_MAC)
@@ -10907,19 +11073,19 @@ void WebPageProxy::modelElementDidCreatePreview(const URL& url, const String& uu
     modelElementController()->modelElementDidCreatePreview(url, uuid, size, WTFMove(completionHandler));
 }
 
-void WebPageProxy::handleMouseDownForModelElement(const String& uuid, const WebCore::LayoutPoint& locationInPageCoordinates, MonotonicTime timestamp)
+void WebPageProxy::handleMouseDownForModelElement(const String& uuid, const WebCore::LayoutPoint& flippedLocationInElement, MonotonicTime timestamp)
 {
-    modelElementController()->handleMouseDownForModelElement(uuid, locationInPageCoordinates, timestamp);
+    modelElementController()->handleMouseDownForModelElement(uuid, flippedLocationInElement, timestamp);
 }
 
-void WebPageProxy::handleMouseMoveForModelElement(const String& uuid, const WebCore::LayoutPoint& locationInPageCoordinates, MonotonicTime timestamp)
+void WebPageProxy::handleMouseMoveForModelElement(const String& uuid, const WebCore::LayoutPoint& flippedLocationInElement, MonotonicTime timestamp)
 {
-    modelElementController()->handleMouseMoveForModelElement(uuid, locationInPageCoordinates, timestamp);
+    modelElementController()->handleMouseMoveForModelElement(uuid, flippedLocationInElement, timestamp);
 }
 
-void WebPageProxy::handleMouseUpForModelElement(const String& uuid, const WebCore::LayoutPoint& locationInPageCoordinates, MonotonicTime timestamp)
+void WebPageProxy::handleMouseUpForModelElement(const String& uuid, const WebCore::LayoutPoint& flippedLocationInElement, MonotonicTime timestamp)
 {
-    modelElementController()->handleMouseUpForModelElement(uuid, locationInPageCoordinates, timestamp);
+    modelElementController()->handleMouseUpForModelElement(uuid, flippedLocationInElement, timestamp);
 }
 #endif
 
@@ -10927,6 +11093,11 @@ void WebPageProxy::handleMouseUpForModelElement(const String& uuid, const WebCor
 Vector<SandboxExtension::Handle> WebPageProxy::createNetworkExtensionsSandboxExtensions(WebProcessProxy& process)
 {
     return { };
+}
+
+void WebPageProxy::classifyModalContainerControls(Vector<String>&&, CompletionHandler<void(Vector<ModalContainerControlType>&&)>&& completion)
+{
+    completion({ });
 }
 #endif
 
@@ -10973,6 +11144,16 @@ void WebPageProxy::clearAppPrivacyReportTestingData(CompletionHandler<void()>&& 
 }
 #endif
 
+void WebPageProxy::requestCookieConsent(CompletionHandler<void(CookieConsentDecisionResult)>&& completion)
+{
+    m_uiClient->requestCookieConsent(WTFMove(completion));
+}
+
+void WebPageProxy::decidePolicyForModalContainer(OptionSet<ModalContainerControlType> types, CompletionHandler<void(ModalContainerDecision)>&& completion)
+{
+    m_uiClient->decidePolicyForModalContainer(types, WTFMove(completion));
+}
+
 } // namespace WebKit
 
 #undef WEBPAGEPROXY_RELEASE_LOG
@@ -10980,4 +11161,3 @@ void WebPageProxy::clearAppPrivacyReportTestingData(CompletionHandler<void()>&& 
 #undef MESSAGE_CHECK_COMPLETION
 #undef MESSAGE_CHECK_URL
 #undef MESSAGE_CHECK
-#undef MERGE_WHEEL_EVENTS

@@ -49,7 +49,7 @@
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "ScriptDisallowedScope.h"
-#include "TextEncoding.h"
+#include <pal/text/TextEncoding.h>
 #include <wtf/WallTime.h>
 
 namespace WebCore {
@@ -70,7 +70,7 @@ static void appendMailtoPostFormDataToURL(URL& url, const FormData& data, const 
 
     if (equalLettersIgnoringASCIICase(encodingType, "text/plain")) {
         // Convention seems to be to decode, and s/&/\r\n/. Also, spaces are encoded as %20.
-        body = decodeURLEscapeSequences(makeString(body.replaceWithLiteral('&', "\r\n").replace('+', ' '), "\r\n"));
+        body = PAL::decodeURLEscapeSequences(body.replaceWithLiteral('&', "\r\n").replace('+', ' '));
     }
 
     Vector<char> bodyData;
@@ -153,13 +153,13 @@ inline FormSubmission::FormSubmission(Method method, const URL& action, const St
 {
 }
 
-static TextEncoding encodingFromAcceptCharset(const String& acceptCharset, Document& document)
+static PAL::TextEncoding encodingFromAcceptCharset(const String& acceptCharset, Document& document)
 {
     String normalizedAcceptCharset = acceptCharset;
     normalizedAcceptCharset.replace(',', ' ');
 
     for (auto& charset : normalizedAcceptCharset.split(' ')) {
-        TextEncoding encoding(charset);
+        PAL::TextEncoding encoding(charset);
         if (encoding.isValid())
             return encoding;
     }
@@ -208,11 +208,11 @@ Ref<FormSubmission> FormSubmission::create(HTMLFormElement& form, HTMLFormContro
         }
     }
 
-    auto dataEncoding = isMailtoForm ? UTF8Encoding() : encodingFromAcceptCharset(copiedAttributes.acceptCharset(), document);
+    auto dataEncoding = isMailtoForm ? PAL::UTF8Encoding() : encodingFromAcceptCharset(copiedAttributes.acceptCharset(), document);
     auto domFormData = DOMFormData::create(dataEncoding.encodingForFormSubmissionOrURLParsing());
     StringPairVector formValues;
 
-    auto result = form.constructEntryList(WTFMove(domFormData), &formValues, isMultiPartForm ? HTMLFormElement::IsMultipartForm::Yes : HTMLFormElement::IsMultipartForm::No);
+    auto result = form.constructEntryList(WTFMove(domFormData), &formValues);
     RELEASE_ASSERT(result);
     domFormData = result.releaseNonNull();
 

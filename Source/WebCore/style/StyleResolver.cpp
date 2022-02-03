@@ -40,6 +40,7 @@
 #include "CSSStyleRule.h"
 #include "CSSStyleSheet.h"
 #include "CachedResourceLoader.h"
+#include "CompositeOperation.h"
 #include "ElementRuleCollector.h"
 #include "Frame.h"
 #include "FrameSelection.h"
@@ -194,8 +195,9 @@ void Resolver::appendAuthorStyleSheets(const Vector<RefPtr<CSSStyleSheet>>& styl
 // This is a simplified style setting function for keyframe styles
 void Resolver::addKeyframeStyle(Ref<StyleRuleKeyframes>&& rule)
 {
-    AtomString s(rule->name());
-    m_keyframesRuleMap.set(s.impl(), WTFMove(rule));
+    auto& animationName = rule->name();
+    m_keyframesRuleMap.set(animationName, WTFMove(rule));
+    m_document.keyframesRuleDidChange(animationName);
 }
 
 Resolver::~Resolver()
@@ -273,15 +275,15 @@ ElementStyle Resolver::styleForElement(const Element& element, const ResolutionC
     return { state.takeStyle(), WTFMove(elementStyleRelations) };
 }
 
-std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, const RenderStyle* elementStyle, const ResolutionContext& context, const StyleRuleKeyframe* keyframe, KeyframeValue& keyframeValue)
+std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, const RenderStyle& elementStyle, const ResolutionContext& context, const StyleRuleKeyframe& keyframe, KeyframeValue& keyframeValue)
 {
     MatchResult result;
-    result.authorDeclarations.append({ &keyframe->properties(), SelectorChecker::MatchAll, propertyAllowlistForPseudoId(elementStyle->styleType()) });
+    result.authorDeclarations.append({ &keyframe.properties(), SelectorChecker::MatchAll, propertyAllowlistForPseudoId(elementStyle.styleType()) });
 
     auto state = State(element, nullptr, context.documentElementStyle);
 
-    state.setStyle(RenderStyle::clonePtr(*elementStyle));
-    state.setParentStyle(RenderStyle::clonePtr(context.parentStyle ? *context.parentStyle : *elementStyle));
+    state.setStyle(RenderStyle::clonePtr(elementStyle));
+    state.setParentStyle(RenderStyle::clonePtr(context.parentStyle ? *context.parentStyle : elementStyle));
 
     Builder builder(*state.style(), builderContext(state), result, CascadeLevel::Author);
     builder.applyAllProperties();
@@ -290,12 +292,13 @@ std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, 
     adjuster.adjust(*state.style(), state.userAgentAppearanceStyle());
 
     // Add all the animating properties to the keyframe.
-    unsigned propertyCount = keyframe->properties().propertyCount();
+    unsigned propertyCount = keyframe.properties().propertyCount();
     for (unsigned i = 0; i < propertyCount; ++i) {
-        CSSPropertyID property = keyframe->properties().propertyAt(i).id();
-        // Timing-function within keyframes is special, because it is not animated; it just
-        // describes the timing function between this keyframe and the next.
-        if (property != CSSPropertyAnimationTimingFunction)
+        CSSPropertyID property = keyframe.properties().propertyAt(i).id();
+        // The animation-composition and animation-timing-function within keyframes are special
+        // because they are not animated; they just describe the composite operation and timing
+        // function between this keyframe and the next.
+        if (property != CSSPropertyAnimationTimingFunction && property != CSSPropertyAnimationComposition)
             keyframeValue.addProperty(property);
     }
 
@@ -304,80 +307,116 @@ std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, 
 
 bool Resolver::isAnimationNameValid(const String& name)
 {
-    return m_keyframesRuleMap.find(AtomString(name).impl()) != m_keyframesRuleMap.end();
+    return m_keyframesRuleMap.find(AtomString(name)) != m_keyframesRuleMap.end();
 }
 
-void Resolver::keyframeStylesForAnimation(const Element& element, const RenderStyle* elementStyle, const ResolutionContext& context, KeyframeList& list)
+Vector<Ref<StyleRuleKeyframe>> Resolver::keyframeRulesForName(const AtomString& animationName) const
 {
-    list.clear();
-
-    // Get the keyframesRule for this name.
-    if (list.animationName().isEmpty())
-        return;
+    if (animationName.isEmpty())
+        return { };
 
     m_keyframesRuleMap.checkConsistency();
 
-    KeyframesRuleMap::iterator it = m_keyframesRuleMap.find(list.animationName().impl());
+    auto it = m_keyframesRuleMap.find(animationName);
     if (it == m_keyframesRuleMap.end())
-        return;
+        return { };
 
-    const StyleRuleKeyframes* keyframesRule = it->value.get();
+    auto compositeOperationForKeyframe = [](Ref<StyleRuleKeyframe> keyframe) -> CompositeOperation {
+        if (auto compositeOperationCSSValue = keyframe->properties().getPropertyCSSValue(CSSPropertyAnimationComposition)) {
+            if (auto compositeOperation = toCompositeOperation(*compositeOperationCSSValue))
+                return *compositeOperation;
+        }
+        return Animation::initialCompositeOperation();
+    };
 
+    auto timingFunctionForKeyframe = [](Ref<StyleRuleKeyframe> keyframe) -> RefPtr<const TimingFunction> {
+        if (auto timingFunctionCSSValue = keyframe->properties().getPropertyCSSValue(CSSPropertyAnimationTimingFunction)) {
+            if (auto timingFunction = TimingFunction::createFromCSSValue(*timingFunctionCSSValue))
+                return timingFunction;
+        }
+        return &CubicBezierTimingFunction::defaultTimingFunction();
+    };
+
+    HashSet<RefPtr<const TimingFunction>> timingFunctions;
+    auto uniqueTimingFunctionForKeyframe = [&](Ref<StyleRuleKeyframe> keyframe) -> RefPtr<const TimingFunction> {
+        auto timingFunction = timingFunctionForKeyframe(keyframe);
+        for (auto existingTimingFunction : timingFunctions) {
+            if (arePointingToEqualData(timingFunction, existingTimingFunction))
+                return existingTimingFunction;
+        }
+        timingFunctions.add(timingFunction);
+        return timingFunction;
+    };
+
+    auto* keyframesRule = it->value.get();
     auto* keyframes = &keyframesRule->keyframes();
-    Vector<Ref<StyleRuleKeyframe>> newKeyframesIfNecessary;
 
-    bool hasDuplicateKeys = false;
-    HashSet<double> keyframeKeys;
-    for (auto& keyframe : *keyframes) {
-        for (auto key : keyframe->keys()) {
-            if (!keyframeKeys.add(key)) {
-                hasDuplicateKeys = true;
-                break;
+    using KeyframeUniqueKey = std::tuple<double, RefPtr<const TimingFunction>, CompositeOperation>;
+    auto hasDuplicateKeys = [&]() -> bool {
+        HashSet<KeyframeUniqueKey> uniqueKeyframeKeys;
+        for (auto& keyframe : *keyframes) {
+            auto compositeOperation = compositeOperationForKeyframe(keyframe);
+            auto timingFunction = uniqueTimingFunctionForKeyframe(keyframe);
+            for (auto key : keyframe->keys()) {
+                if (!uniqueKeyframeKeys.add({ key, timingFunction, compositeOperation }))
+                    return true;
             }
         }
-        if (hasDuplicateKeys)
-            break;
-    }
+        return false;
+    }();
+
+    if (!hasDuplicateKeys)
+        return *keyframes;
 
     // FIXME: If HashMaps could have Ref<> as value types, we wouldn't need
     // to copy the HashMap into a Vector.
-    if (hasDuplicateKeys) {
-        // Merge duplicate key times.
-        HashMap<double, RefPtr<StyleRuleKeyframe>> keyframesMap;
-
-        for (auto& originalKeyframe : keyframesRule->keyframes()) {
-            for (auto key : originalKeyframe->keys()) {
-                if (auto keyframe = keyframesMap.get(key))
-                    keyframe->mutableProperties().mergeAndOverrideOnConflict(originalKeyframe->properties());
-                else {
-                    auto StyleRuleKeyframe = StyleRuleKeyframe::create(MutableStyleProperties::create());
-                    StyleRuleKeyframe.ptr()->setKey(key);
-                    StyleRuleKeyframe.ptr()->mutableProperties().mergeAndOverrideOnConflict(originalKeyframe->properties());
-                    keyframesMap.set(key, StyleRuleKeyframe.ptr());
-                }
+    // Merge keyframes with a similar offset and timing function.
+    Vector<Ref<StyleRuleKeyframe>> deduplicatedKeyframes;
+    HashMap<KeyframeUniqueKey, RefPtr<StyleRuleKeyframe>> keyframesMap;
+    for (auto& originalKeyframe : *keyframes) {
+        auto compositeOperation = compositeOperationForKeyframe(originalKeyframe);
+        auto timingFunction = uniqueTimingFunctionForKeyframe(originalKeyframe);
+        for (auto key : originalKeyframe->keys()) {
+            KeyframeUniqueKey uniqueKey { key, timingFunction, compositeOperation };
+            if (auto keyframe = keyframesMap.get(uniqueKey))
+                keyframe->mutableProperties().mergeAndOverrideOnConflict(originalKeyframe->properties());
+            else {
+                auto styleRuleKeyframe = StyleRuleKeyframe::create(MutableStyleProperties::create());
+                styleRuleKeyframe.ptr()->setKey(key);
+                styleRuleKeyframe.ptr()->mutableProperties().mergeAndOverrideOnConflict(originalKeyframe->properties());
+                keyframesMap.set(uniqueKey, styleRuleKeyframe.ptr());
+                deduplicatedKeyframes.append(styleRuleKeyframe);
             }
         }
-
-        for (auto& keyframe : keyframesMap.values())
-            newKeyframesIfNecessary.append(*keyframe.get());
-
-        keyframes = &newKeyframesIfNecessary;
     }
 
+    return deduplicatedKeyframes;
+}
+
+void Resolver::keyframeStylesForAnimation(const Element& element, const RenderStyle& elementStyle, const ResolutionContext& context, KeyframeList& list)
+{
+    list.clear();
+
+    auto keyframeRules = keyframeRulesForName(list.animationName());
+    if (keyframeRules.isEmpty())
+        return;
+
     // Construct and populate the style for each keyframe.
-    for (auto& keyframe : *keyframes) {
+    for (auto& keyframeRule : keyframeRules) {
         // Add this keyframe style to all the indicated key times
-        for (auto key : keyframe->keys()) {
+        for (auto key : keyframeRule->keys()) {
             KeyframeValue keyframeValue(0, nullptr);
-            keyframeValue.setStyle(styleForKeyframe(element, elementStyle, context, keyframe.ptr(), keyframeValue));
+            keyframeValue.setStyle(styleForKeyframe(element, elementStyle, context, keyframeRule.get(), keyframeValue));
             keyframeValue.setKey(key);
-            if (auto timingFunctionCSSValue = keyframe->properties().getPropertyCSSValue(CSSPropertyAnimationTimingFunction))
+            if (auto timingFunctionCSSValue = keyframeRule->properties().getPropertyCSSValue(CSSPropertyAnimationTimingFunction))
                 keyframeValue.setTimingFunction(TimingFunction::createFromCSSValue(*timingFunctionCSSValue.get()));
+            if (auto compositeOperationCSSValue = keyframeRule->properties().getPropertyCSSValue(CSSPropertyAnimationComposition)) {
+                if (auto compositeOperation = toCompositeOperation(*compositeOperationCSSValue))
+                    keyframeValue.setCompositeOperation(*compositeOperation);
+            }
             list.insert(WTFMove(keyframeValue));
         }
     }
-
-    list.fillImplicitKeyframes(element, *this, elementStyle, context.parentStyle);
 }
 
 std::unique_ptr<RenderStyle> Resolver::pseudoStyleForElement(const Element& element, const PseudoElementRequest& pseudoElementRequest, const ResolutionContext& context)

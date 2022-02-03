@@ -43,8 +43,10 @@
 #include "InspectorInstrumentation.h"
 #include "Page.h"
 #include "RenderElement.h"
+#include "RuleFeature.h"
 #include "SelectorCheckerTestFunctions.h"
 #include "ShadowRoot.h"
+#include "StyleRule.h"
 #include "StyleScope.h"
 #include "Text.h"
 #include "TypedElementDescendantIterator.h"
@@ -861,28 +863,9 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
                 return hasMatchedAnything;
             }
         case CSSSelector::PseudoClassHas: {
-            // FIXME: This is the worst possible implementation in terms of performance.
-            auto checkRelative = [&](auto& elementToCheck) {
-                for (auto* subselector = selector.selectorList()->first(); subselector; subselector = CSSSelectorList::next(subselector)) {
-                    SelectorChecker selectorChecker(element.document());
-                    CheckingContext selectorCheckingContext(SelectorChecker::Mode::ResolvingStyle);
-                    selectorCheckingContext.scope = &element;
-                    if (selectorChecker.match(*subselector, elementToCheck, selectorCheckingContext))
-                        return true;
-                }
-                return false;
-            };
-            for (auto& descendant : descendantsOfType<Element>(element)) {
-                if (checkRelative(descendant))
+            for (auto* hasSelector = selector.selectorList()->first(); hasSelector; hasSelector = CSSSelectorList::next(hasSelector)) {
+                if (matchHasPseudoClass(checkingContext, element, *hasSelector))
                     return true;
-            }
-            for (auto* sibling = element.nextElementSibling(); sibling; sibling = sibling->nextElementSibling()) {
-                if (checkRelative(*sibling))
-                    return true;
-                for (auto& descendant : descendantsOfType<Element>(*sibling)) {
-                    if (checkRelative(descendant))
-                        return true;
-                }
             }
             return false;
         }
@@ -999,8 +982,6 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
             if (context.inFunctionalPseudoClass)
                 return false;
             return element.isLink() && context.visitedMatchType == VisitedMatchType::Enabled;
-        case CSSSelector::PseudoClassDirectFocus:
-            return matchesDirectFocusPseudoClass(element);
         case CSSSelector::PseudoClassDrag:
             return element.isBeingDragged();
         case CSSSelector::PseudoClassFocus:
@@ -1102,9 +1083,15 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
         case CSSSelector::PseudoClassScope:
         case CSSSelector::PseudoClassRelativeScope: {
             const Node* contextualReferenceNode = !checkingContext.scope ? element.document().documentElement() : checkingContext.scope;
-            if (&element == contextualReferenceNode)
-                return true;
-            break;
+
+            bool matches = &element == contextualReferenceNode || checkingContext.matchesAllScopes;
+
+            if (!matches && checkingContext.scope) {
+                if (element.isDescendantOf(*checkingContext.scope))
+                    checkingContext.matchedInsideScope = true;
+            }
+
+            return matches;
         }
         case CSSSelector::PseudoClassHost: {
             if (!context.mustMatchHostPseudoClass)
@@ -1256,6 +1243,175 @@ bool SelectorChecker::matchSelectorList(CheckingContext& checkingContext, const 
         }
     }
     return hasMatchedAnything;
+}
+
+bool SelectorChecker::matchHasPseudoClass(CheckingContext& checkingContext, const Element& element, const CSSSelector& hasSelector) const
+{
+    auto matchElement = Style::computeHasPseudoClassMatchElement(hasSelector);
+
+    auto canMatch = [&] {
+        switch (matchElement) {
+        case Style::MatchElement::HasChild:
+        case Style::MatchElement::HasDescendant:
+            return !!element.firstElementChild();
+        case Style::MatchElement::HasSibling:
+        case Style::MatchElement::HasSiblingDescendant:
+            return !!element.nextElementSibling();
+        default:
+            return true;
+        };
+    };
+
+    // See if there are any elements that this :has() selector could match.
+    if (!canMatch())
+        return false;
+
+    auto* cache = checkingContext.selectorMatchingState ? &checkingContext.selectorMatchingState->hasPseudoClassMatchCache : nullptr;
+
+    auto checkForCachedMatch = [&]() -> std::optional<bool> {
+        if (!cache)
+            return { };
+        switch (cache->get(Style::makeHasPseudoClassCacheKey(element, hasSelector))) {
+        case Style::HasPseudoClassMatch::Matches:
+            return true;
+        case Style::HasPseudoClassMatch::Fails:
+        case Style::HasPseudoClassMatch::FailsSubtree:
+            return false;
+        case Style::HasPseudoClassMatch::None:
+            break;
+        }
+        return { };
+    };
+
+    // See if we know the result already.
+    if (auto match = checkForCachedMatch())
+        return *match;
+
+    auto filterForElement = [&]() -> Style::HasSelectorFilter* {
+        if (!checkingContext.selectorMatchingState)
+            return nullptr;
+        auto type = Style::HasSelectorFilter::typeForMatchElement(matchElement);
+        if (!type)
+            return nullptr;
+        auto& filtersMap = checkingContext.selectorMatchingState->hasPseudoClassSelectorFilters;
+        auto addResult = filtersMap.add(Style::makeHasPseudoClassFilterKey(element, *type), std::unique_ptr<Style::HasSelectorFilter>());
+        // Only build a filter if the same element gets checked second time with a different selector (misses the match cache).
+        if (addResult.isNewEntry)
+            return nullptr;
+
+        if (!addResult.iterator->value)
+            addResult.iterator->value = makeUnique<Style::HasSelectorFilter>(element, *type);
+        return addResult.iterator->value.get();
+    };
+
+    // Check if the bloom filter rejects this selector
+    if (auto* filter = filterForElement()) {
+        if (filter->reject(hasSelector))
+            return false;
+    }
+
+    CheckingContext hasCheckingContext(SelectorChecker::Mode::ResolvingStyle);
+    hasCheckingContext.scope = &element;
+
+    bool matchedInsideScope = false;
+
+    auto checkRelative = [&](auto& elementToCheck) {
+        LocalContext hasContext(hasSelector, elementToCheck, VisitedMatchType::Disabled, PseudoId::None);
+        hasContext.inFunctionalPseudoClass = true;
+        hasContext.pseudoElementEffective = false;
+
+        PseudoIdSet ignorePseudoElements;
+        auto result = matchRecursively(hasCheckingContext, hasContext, ignorePseudoElements).match == Match::SelectorMatches;
+
+        if (hasCheckingContext.matchedInsideScope)
+            matchedInsideScope = true;
+
+        return result;
+    };
+
+    auto checkDescendants = [&](const Element& descendantRoot) {
+        for (auto it = descendantsOfType<Element>(descendantRoot).begin(); it;) {
+            auto& descendant = *it;
+            if (cache && descendant.firstElementChild()) {
+                auto key = Style::makeHasPseudoClassCacheKey(descendant, hasSelector);
+                if (cache->get(key) == Style::HasPseudoClassMatch::FailsSubtree) {
+                    it.traverseNextSkippingChildren();
+                    continue;
+                }
+            }
+            if (checkRelative(descendant))
+                return true;
+
+            it.traverseNext();
+        }
+
+        return false;
+    };
+
+    auto match = [&] {
+        switch (matchElement) {
+        // :has(> .child)
+        case Style::MatchElement::HasChild:
+            for (auto& child : childrenOfType<Element>(element)) {
+                if (checkRelative(child))
+                    return true;
+            }
+            break;
+        // :has(.descendant)
+        case Style::MatchElement::HasDescendant: {
+            if (cache) {
+                // See if we already know this descendant selector doesn't match in this subtree.
+                for (auto* ancestor = element.parentElement(); ancestor; ancestor = ancestor->parentElement()) {
+                    auto key = Style::makeHasPseudoClassCacheKey(*ancestor, hasSelector);
+                    if (cache->get(key) == Style::HasPseudoClassMatch::FailsSubtree)
+                        return false;
+                }
+            }
+            if (checkDescendants(element))
+                return true;
+
+            break;
+        }
+        // FIXME: Add a separate case for adjacent combinator.
+        // :has(+ .sibling)
+        // :has(~ .sibling)
+        case Style::MatchElement::HasSibling:
+            for (auto* sibling = element.nextElementSibling(); sibling; sibling = sibling->nextElementSibling()) {
+                if (checkRelative(*sibling))
+                    return true;
+            }
+            break;
+        // FIXME: Add a separate case for adjacent combinator.
+        // :has(+ .sibling .descendant)
+        // :has(~ .sibling .descendant)
+        case Style::MatchElement::HasSiblingDescendant:
+            for (auto* sibling = element.nextElementSibling(); sibling; sibling = sibling->nextElementSibling()) {
+                if (checkDescendants(*sibling))
+                    return true;
+            }
+            break;
+
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+        return false;
+    };
+
+    auto result = match();
+
+    auto matchTypeForCache = [&] {
+        if (result)
+            return Style::HasPseudoClassMatch::Matches;
+        if (matchedInsideScope)
+            return Style::HasPseudoClassMatch::Fails;
+        return Style::HasPseudoClassMatch::FailsSubtree;
+    };
+
+    if (cache)
+        cache->add(Style::makeHasPseudoClassCacheKey(element, hasSelector), matchTypeForCache());
+
+    return result;
 }
 
 bool SelectorChecker::checkScrollbarPseudoClass(const CheckingContext& checkingContext, const Element& element, const CSSSelector& selector) const

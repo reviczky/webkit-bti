@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "FilterReference.h"
 #include "GPUConnectionToWebProcess.h"
 #include "Logging.h"
 #include "PlatformRemoteImageBuffer.h"
@@ -39,6 +40,7 @@
 #include "RemoteRenderingBackendMessages.h"
 #include "RemoteRenderingBackendProxyMessages.h"
 #include "WebCoreArgumentCoders.h"
+#include <WebCore/HTMLCanvasElement.h>
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/SystemTracing.h>
@@ -84,6 +86,7 @@ RemoteRenderingBackend::RemoteRenderingBackend(GPUConnectionToWebProcess& gpuCon
     , m_streamConnection(IPC::StreamServerConnection::create(gpuConnectionToWebProcess.connection(), WTFMove(streamBuffer), m_workQueue.get()))
     , m_remoteResourceCache(gpuConnectionToWebProcess.webProcessIdentifier())
     , m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
+    , m_resourceOwner(gpuConnectionToWebProcess.webProcessIdentity())
     , m_renderingBackendIdentifier(creationParameters.identifier)
 {
     ASSERT(RunLoop::isMain());
@@ -173,10 +176,9 @@ void RemoteRenderingBackend::createImageBufferWithQualifiedIdentifier(const Floa
 
     if (renderingMode == RenderingMode::Accelerated) {
         if (auto acceleratedImageBuffer = AcceleratedRemoteImageBuffer::create(logicalSize, resolutionScale, colorSpace, pixelFormat, *this, imageBufferResourceIdentifier)) {
-#if HAVE(IOSURFACE_SET_OWNERSHIP_IDENTITY)
             // Mark the IOSurface as being owned by the WebProcess even though it was constructed by the GPUProcess so that Jetsam knows which process to kill.
-            acceleratedImageBuffer->setProcessOwnership(m_gpuConnectionToWebProcess->webProcessIdentityToken());
-#endif
+            if (m_resourceOwner)
+                acceleratedImageBuffer->setOwnershipIdentity(m_resourceOwner);
             imageBuffer = WTFMove(acceleratedImageBuffer);
         }
     }
@@ -197,8 +199,8 @@ std::optional<SharedMemory::IPCHandle> RemoteRenderingBackend::updateSharedMemor
 {
     MESSAGE_CHECK_WITH_RETURN_VALUE(!m_getPixelBufferSharedMemory || byteCount > m_getPixelBufferSharedMemory->size(), std::nullopt, "The existing Shmem for getPixelBuffer() is already big enough to handle the request");
 
-    if (byteCount > 64 * MB) {
-        // Just a sanity check. A 4K image is 36MB.
+    if (byteCount > HTMLCanvasElement::maxActivePixelMemory()) {
+        // Just a sanity check.
         return std::nullopt;
     }
 
@@ -318,6 +320,33 @@ void RemoteRenderingBackend::getShareableBitmapForImageBufferWithQualifiedIdenti
     completionHandler(WTFMove(handle));
 }
 
+void RemoteRenderingBackend::getFilteredImageForImageBuffer(RenderingResourceIdentifier identifier, IPC::FilterReference&& filterReference, CompletionHandler<void(ShareableBitmap::Handle&&)>&& completionHandler)
+{
+    ASSERT(!RunLoop::isMain());
+
+    auto filter = filterReference.takeFilter();
+
+    ShareableBitmap::Handle handle;
+    [&]() {
+        auto imageBuffer = m_remoteResourceCache.cachedImageBuffer({ identifier, m_gpuConnectionToWebProcess->webProcessIdentifier() });
+        if (!imageBuffer)
+            return;
+        auto image = imageBuffer->filteredImage(filter);
+        if (!image)
+            return;
+        auto imageSize = image->size();
+        auto bitmap = ShareableBitmap::createShareable(IntSize(imageSize), { imageBuffer->colorSpace() });
+        if (!bitmap)
+            return;
+        auto context = bitmap->createGraphicsContext();
+        if (!context)
+            return;
+        context->drawImage(*image, FloatPoint());
+        bitmap->createHandle(handle);
+    }();
+    completionHandler(WTFMove(handle));
+}
+
 void RemoteRenderingBackend::cacheNativeImage(const ShareableBitmap::Handle& handle, RenderingResourceIdentifier nativeImageResourceIdentifier)
 {
     // Immediately turn the RenderingResourceIdentifier (which is error-prone) to a QualifiedRenderingResourceIdentifier,
@@ -361,17 +390,17 @@ void RemoteRenderingBackend::deleteAllFonts()
     m_remoteResourceCache.deleteAllFonts();
 }
 
-void RemoteRenderingBackend::releaseRemoteResource(RenderingResourceIdentifier renderingResourceIdentifier, uint64_t useCount)
+void RemoteRenderingBackend::releaseRemoteResource(RenderingResourceIdentifier renderingResourceIdentifier)
 {
     // Immediately turn the RenderingResourceIdentifier (which is error-prone) to a QualifiedRenderingResourceIdentifier,
     // and use a helper function to make sure that don't accidentally use the RenderingResourceIdentifier (because the helper function can't see it).
-    releaseRemoteResourceWithQualifiedIdentifier({ renderingResourceIdentifier, m_gpuConnectionToWebProcess->webProcessIdentifier() }, useCount);
+    releaseRemoteResourceWithQualifiedIdentifier({ renderingResourceIdentifier, m_gpuConnectionToWebProcess->webProcessIdentifier() });
 }
 
-void RemoteRenderingBackend::releaseRemoteResourceWithQualifiedIdentifier(QualifiedRenderingResourceIdentifier renderingResourceIdentifier, uint64_t useCount)
+void RemoteRenderingBackend::releaseRemoteResourceWithQualifiedIdentifier(QualifiedRenderingResourceIdentifier renderingResourceIdentifier)
 {
     ASSERT(!RunLoop::isMain());
-    auto success = m_remoteResourceCache.releaseRemoteResource(renderingResourceIdentifier, useCount);
+    auto success = m_remoteResourceCache.releaseRemoteResource(renderingResourceIdentifier);
     MESSAGE_CHECK(success, "Resource is being released before being cached.");
     updateRenderingResourceRequest();
 

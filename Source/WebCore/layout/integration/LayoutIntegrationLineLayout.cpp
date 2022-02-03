@@ -148,6 +148,39 @@ void LineLayout::updateInlineBlockDimensions(const RenderBlock& inlineBlock)
     updateLayoutBoxDimensions(inlineBlock);
 }
 
+static inline Layout::BoxGeometry::HorizontalMargin logicalMargin(const RenderBoxModelObject& renderer, bool isLeftToRightDirection, bool retainMarginStart = true, bool retainMarginEnd = true)
+{
+    auto marginStart = LayoutUnit { 0_lu };
+    auto marginEnd = LayoutUnit { 0_lu };
+    if (retainMarginStart)
+        marginStart = isLeftToRightDirection ? renderer.marginLeft() : renderer.marginRight();
+    if (retainMarginEnd)
+        marginEnd = isLeftToRightDirection ? renderer.marginRight() : renderer.marginLeft();
+    return { marginStart, marginEnd };
+}
+
+static inline Layout::Edges logicalBorder(const RenderBoxModelObject& renderer, bool isLeftToRightDirection, bool retainBorderStart = true, bool retainBorderEnd = true)
+{
+    auto borderStart = LayoutUnit { 0_lu };
+    auto borderEnd = LayoutUnit { 0_lu };
+    if (retainBorderStart)
+        borderStart = isLeftToRightDirection ? renderer.borderLeft() : renderer.borderRight();
+    if (retainBorderEnd)
+        borderEnd = isLeftToRightDirection ? renderer.borderRight() : renderer.borderLeft();
+    return { { borderStart, borderEnd }, { renderer.borderTop(), renderer.borderBottom() } };
+}
+
+static inline Layout::Edges logicalPadding(const RenderBoxModelObject& renderer, bool isLeftToRightDirection, bool retainPaddingStart = true, bool retainPaddingEnd = true)
+{
+    auto paddingStart = LayoutUnit { 0_lu };
+    auto paddingEnd = LayoutUnit { 0_lu };
+    if (retainPaddingStart)
+        paddingStart = isLeftToRightDirection ? renderer.paddingLeft() : renderer.paddingRight();
+    if (retainPaddingEnd)
+        paddingEnd = isLeftToRightDirection ? renderer.paddingRight() : renderer.paddingLeft();
+    return Layout::Edges { { paddingStart, paddingEnd }, { renderer.paddingTop(), renderer.paddingBottom() } };
+}
+
 void LineLayout::updateLayoutBoxDimensions(const RenderBox& replacedOrInlineBlock)
 {
     auto& layoutBox = m_boxTree.layoutBoxForRenderer(replacedOrInlineBlock);
@@ -169,11 +202,11 @@ void LineLayout::updateLayoutBoxDimensions(const RenderBox& replacedOrInlineBloc
     replacedBoxGeometry.setContentBoxWidth(replacedOrInlineBlock.contentWidth());
     replacedBoxGeometry.setContentBoxHeight(replacedOrInlineBlock.contentHeight());
 
-    replacedBoxGeometry.setBorder({ { replacedOrInlineBlock.borderLeft(), replacedOrInlineBlock.borderRight() }, { replacedOrInlineBlock.borderTop(), replacedOrInlineBlock.borderBottom() } });
-    replacedBoxGeometry.setPadding(Layout::Edges { { replacedOrInlineBlock.paddingLeft(), replacedOrInlineBlock.paddingRight() }, { replacedOrInlineBlock.paddingTop(), replacedOrInlineBlock.paddingBottom() } });
-
-    replacedBoxGeometry.setHorizontalMargin({ replacedOrInlineBlock.marginLeft(), replacedOrInlineBlock.marginRight() });
     replacedBoxGeometry.setVerticalMargin({ replacedOrInlineBlock.marginTop(), replacedOrInlineBlock.marginBottom() });
+    auto isLeftToRightDirection = replacedOrInlineBlock.parent()->style().isLeftToRightDirection();
+    replacedBoxGeometry.setHorizontalMargin(logicalMargin(replacedOrInlineBlock, isLeftToRightDirection));
+    replacedBoxGeometry.setBorder(logicalBorder(replacedOrInlineBlock, isLeftToRightDirection));
+    replacedBoxGeometry.setPadding(logicalPadding(replacedOrInlineBlock, isLeftToRightDirection));
 
     auto baseline = replacedOrInlineBlock.baselinePosition(AlphabeticBaseline, false /* firstLine */, HorizontalLine, PositionOnContainingLine);
     replacedBox.setBaseline(roundToInt(baseline));
@@ -196,17 +229,14 @@ void LineLayout::updateInlineBoxDimensions(const RenderInline& renderInline)
     auto& boxGeometry = m_layoutState.ensureGeometryForBox(m_boxTree.layoutBoxForRenderer(renderInline));
 
     // Check if this renderer is part of a continuation and adjust horizontal margin/border/padding accordingly.
-    auto shouldNotRetainBorderPaddingAndMarginStart = renderInline.parent()->isAnonymousBlock() && renderInline.isContinuation();
-    auto shouldNotRetainBorderPaddingAndMarginEnd = renderInline.parent()->isAnonymousBlock() && !renderInline.isContinuation() && renderInline.inlineContinuation();
-    
-    auto horizontalMargin = Layout::BoxGeometry::HorizontalMargin { shouldNotRetainBorderPaddingAndMarginStart ? 0_lu : renderInline.marginLeft(), shouldNotRetainBorderPaddingAndMarginEnd ? 0_lu : renderInline.marginRight() };
-    auto horizontalBorder = Layout::HorizontalEdges { shouldNotRetainBorderPaddingAndMarginStart ? 0_lu : renderInline.borderLeft(), shouldNotRetainBorderPaddingAndMarginEnd ? 0_lu : renderInline.borderRight() };
-    auto horizontalPadding = Layout::HorizontalEdges { shouldNotRetainBorderPaddingAndMarginStart ? 0_lu : renderInline.paddingLeft(), shouldNotRetainBorderPaddingAndMarginEnd ? 0_lu : renderInline.paddingRight() };
-    
-    boxGeometry.setPadding(Layout::Edges { horizontalPadding, { renderInline.paddingTop(), renderInline.paddingBottom() } });
-    boxGeometry.setBorder({ horizontalBorder, { renderInline.borderTop(), renderInline.borderBottom() } });
-    boxGeometry.setHorizontalMargin(horizontalMargin);
+    auto shouldNotRetainBorderPaddingAndMarginStart = renderInline.isContinuation();
+    auto shouldNotRetainBorderPaddingAndMarginEnd = !renderInline.isContinuation() && renderInline.inlineContinuation();
+
     boxGeometry.setVerticalMargin({ });
+    auto isLeftToRightDirection = renderInline.style().isLeftToRightDirection();
+    boxGeometry.setHorizontalMargin(logicalMargin(renderInline, isLeftToRightDirection, !shouldNotRetainBorderPaddingAndMarginStart, !shouldNotRetainBorderPaddingAndMarginEnd));
+    boxGeometry.setBorder(logicalBorder(renderInline, isLeftToRightDirection, !shouldNotRetainBorderPaddingAndMarginStart, !shouldNotRetainBorderPaddingAndMarginEnd));
+    boxGeometry.setPadding(logicalPadding(renderInline, isLeftToRightDirection, !shouldNotRetainBorderPaddingAndMarginStart, !shouldNotRetainBorderPaddingAndMarginEnd));
 }
 
 void LineLayout::updateStyle(const RenderBoxModelObject& renderer, const RenderStyle& oldStyle)
@@ -329,13 +359,14 @@ void LineLayout::prepareFloatingState()
 
 LayoutUnit LineLayout::contentLogicalHeight() const
 {
-    if (m_paginatedHeight)
-        return *m_paginatedHeight;
     if (!m_inlineContent)
         return { };
 
     auto& lines = m_inlineContent->lines;
-    return LayoutUnit { lines.last().lineBoxBottom() - lines.first().lineBoxTop() + m_inlineContent->clearGapAfterLastLine };
+    auto flippedContentHeightForWritingMode = rootLayoutBox().style().isHorizontalWritingMode()
+        ? lines.last().lineBoxBottom() - lines.first().lineBoxTop()
+        : lines.last().lineBoxRight() - lines.first().lineBoxLeft();
+    return LayoutUnit { flippedContentHeightForWritingMode + m_inlineContent->clearGapAfterLastLine };
 }
 
 size_t LineLayout::lineCount() const
@@ -372,21 +403,24 @@ LayoutUnit LineLayout::lastLineBaseline() const
 
 void LineLayout::adjustForPagination()
 {
+    if (!m_inlineContent)
+        return;
+
     auto paginedInlineContent = adjustLinePositionsForPagination(*m_inlineContent, flow());
     if (paginedInlineContent.ptr() == m_inlineContent) {
-        m_paginatedHeight = { };
+        m_isPaginatedContent = false;
         return;
     }
-
-    auto& lines = paginedInlineContent->lines;
-    m_paginatedHeight = LayoutUnit { lines.last().lineBoxBottom() - lines.first().lineBoxTop() };
-
+    m_isPaginatedContent = true;
     m_inlineContent = WTFMove(paginedInlineContent);
 }
 
 void LineLayout::collectOverflow()
 {
-    for (auto& line : inlineContent()->lines) {
+    if (!m_inlineContent)
+        return;
+
+    for (auto& line : m_inlineContent->lines) {
         flow().addLayoutOverflow(Layout::toLayoutRect(line.scrollableOverflow()));
         if (!flow().hasNonVisibleOverflow())
             flow().addVisualOverflow(Layout::toLayoutRect(line.inkOverflow()));
@@ -426,6 +460,27 @@ InlineIterator::LeafBoxIterator LineLayout::boxFor(const RenderElement& renderEl
     return InlineIterator::boxFor(*m_inlineContent, *firstIndex);
 }
 
+InlineIterator::InlineBoxIterator LineLayout::firstInlineBoxFor(const RenderInline& renderInline) const
+{
+    if (!m_inlineContent)
+        return { };
+
+    auto& layoutBox = m_boxTree.layoutBoxForRenderer(renderInline);
+    auto* box = m_inlineContent->firstBoxForLayoutBox(layoutBox);
+    if (!box)
+        return { };
+
+    return InlineIterator::inlineBoxFor(*m_inlineContent, *box);
+}
+
+InlineIterator::InlineBoxIterator LineLayout::firstRootInlineBox() const
+{
+    if (!m_inlineContent || !m_inlineContent->hasContent())
+        return { };
+
+    return InlineIterator::inlineBoxFor(*m_inlineContent, m_inlineContent->boxes[0]);
+}
+
 InlineIterator::LineIterator LineLayout::firstLine() const
 {
     if (!m_inlineContent)
@@ -447,7 +502,7 @@ LayoutRect LineLayout::firstInlineBoxRect(const RenderInline& renderInline) cons
     auto& layoutBox = m_boxTree.layoutBoxForRenderer(renderInline);
 
     if (auto* box = m_inlineContent->firstBoxForLayoutBox(layoutBox))
-        return Layout::toLayoutRect(box->logicalRect());
+        return Layout::toLayoutRect(box->rect());
 
     return { };
 }
@@ -466,6 +521,9 @@ LayoutRect LineLayout::enclosingBorderBoxRectFor(const RenderInline& renderInlin
 
 LayoutRect LineLayout::visualOverflowBoundingBoxRectFor(const RenderInline& renderInline) const
 {
+    if (!m_inlineContent)
+        return { };
+
     auto& layoutBox = m_boxTree.layoutBoxForRenderer(renderInline);
 
     LayoutRect result;
@@ -485,7 +543,7 @@ Vector<FloatRect> LineLayout::collectInlineBoxRects(const RenderInline& renderIn
 
     Vector<FloatRect> result;
     m_inlineContent->traverseNonRootInlineBoxes(layoutBox, [&](auto& inlineBox) {
-        result.append(inlineBox.logicalRect());
+        result.append(inlineBox.rect());
     });
 
     return result;
@@ -511,7 +569,24 @@ void LineLayout::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     if (!m_inlineContent)
         return;
 
-    if (paintInfo.phase != PaintPhase::Foreground && paintInfo.phase != PaintPhase::EventRegion && paintInfo.phase != PaintPhase::TextClip && paintInfo.phase != PaintPhase::Selection)
+    auto paintPhase = paintInfo.phase;
+
+    auto shouldPaintForPhase = [&] {
+        switch (paintPhase) {
+        case PaintPhase::Foreground:
+        case PaintPhase::EventRegion:
+        case PaintPhase::TextClip:
+        case PaintPhase::Selection:
+        case PaintPhase::Outline:
+        case PaintPhase::ChildOutlines:
+        case PaintPhase::SelfOutline:
+            return true;
+        default:
+            return false;
+        }
+    };
+
+    if (!shouldPaintForPhase())
         return;
 
     auto damageRect = paintInfo.rect;
@@ -526,7 +601,21 @@ void LineLayout::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         return damageRect.maxY() > rect.y() && damageRect.y() < rect.maxY();
     };
 
+    auto shouldPaintBoxForPhase = [&](auto& box) {
+        switch (paintPhase) {
+        case PaintPhase::ChildOutlines: return box.isNonRootInlineBox();
+        case PaintPhase::SelfOutline: return box.isRootInlineBox();
+        case PaintPhase::Outline: return box.isInlineBox();
+        default: return true;
+        }
+    };
+
+    ListHashSet<RenderInline*> outlineObjects;
+
     for (auto& box : m_inlineContent->boxesForRect(damageRect)) {
+        if (!shouldPaintBoxForPhase(box))
+            continue;
+
         if (box.isLineBreak())
             continue;
 
@@ -534,7 +623,11 @@ void LineLayout::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
             if (!hasDamage(box))
                 continue;
 
-            InlineBoxPainter painter(*m_inlineContent, box, paintInfo, paintOffset);
+            PaintInfo inlineBoxPaintInfo(paintInfo);
+            inlineBoxPaintInfo.phase = paintPhase == PaintPhase::ChildOutlines ? PaintPhase::Outline : paintPhase;
+            inlineBoxPaintInfo.outlineObjects = &outlineObjects;
+
+            InlineBoxPainter painter(*m_inlineContent, box, inlineBoxPaintInfo, paintOffset);
             painter.paint();
             continue;
         }
@@ -548,12 +641,15 @@ void LineLayout::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
             continue;
         }
 
-        if (auto& renderer = m_boxTree.rendererForLayoutBox(box.layoutBox()); is<RenderBox>(renderer) && renderer.isReplaced()) {
+        if (auto& renderer = m_boxTree.rendererForLayoutBox(box.layoutBox()); is<RenderBox>(renderer) && renderer.isReplacedOrInlineBlock()) {
             auto& renderBox = downcast<RenderBox>(renderer);
             if (!renderBox.hasSelfPaintingLayer() && paintInfo.shouldPaintWithinRoot(renderBox))
                 renderBox.paintAsInlineBlock(paintInfo, paintOffset);
         }
     }
+
+    for (auto* renderInline : outlineObjects)
+        renderInline->paintOutline(paintInfo, paintOffset);
 }
 
 bool LineLayout::hitTest(const HitTestRequest& request, HitTestResult& result, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction hitTestAction)
@@ -580,7 +676,7 @@ bool LineLayout::hitTest(const HitTestRequest& request, HitTestResult& result, c
             continue;
         }
 
-        auto boxRect = Layout::toLayoutRect(box.logicalRect());
+        auto boxRect = Layout::toLayoutRect(box.rect());
         boxRect.moveBy(accumulatedOffset);
 
         if (!locationInContainer.intersects(boxRect))

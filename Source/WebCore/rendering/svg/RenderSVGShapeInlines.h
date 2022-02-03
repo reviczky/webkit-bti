@@ -25,6 +25,7 @@
 
 #pragma once
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "RenderSVGShape.h"
 #include "SVGGraphicsElement.h"
 
@@ -36,3 +37,5 @@ inline SVGGraphicsElement& RenderSVGShape::graphicsElement() const
 }
 
 } // namespace WebCore
+
+#endif // LAYER_BASED_SVG_ENGINE

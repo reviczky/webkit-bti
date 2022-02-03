@@ -45,6 +45,7 @@ class Font;
 class GlyphBuffer;
 class Image;
 class PixelBuffer;
+class SourceImage;
 
 struct GraphicsContextState;
 struct ImagePaintingOptions;
@@ -60,6 +61,8 @@ public:
 
     virtual void getPixelBuffer(const PixelBufferFormat& outputFormat, const IntRect& sourceRect) = 0;
     virtual void putPixelBuffer(const PixelBuffer&, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat) = 0;
+    virtual void convertToLuminanceMask() = 0;
+    virtual void transformToColorSpace(const DestinationColorSpace&) = 0;
     virtual void flushContext(GraphicsContextFlushIdentifier) = 0;
 
 protected:
@@ -88,6 +91,7 @@ protected:
     virtual void recordClipPath(const Path&, WindRule) = 0;
     virtual void recordBeginClipToDrawingCommands(const FloatRect& destination, DestinationColorSpace) = 0;
     virtual void recordEndClipToDrawingCommands(const FloatRect& destination) = 0;
+    virtual void recordDrawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Filter&) = 0;
     virtual void recordDrawGlyphs(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode) = 0;
     virtual void recordDrawImageBuffer(RenderingResourceIdentifier imageBufferIdentifier, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions&) = 0;
     virtual void recordDrawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions&) = 0;
@@ -135,13 +139,10 @@ protected:
 #endif
     virtual void recordApplyDeviceScaleFactor(float) = 0;
 
-    virtual void recordResourceUse(NativeImage&) = 0;
-    virtual void recordResourceUse(Font&) = 0;
-    virtual void recordResourceUse(ImageBuffer&) = 0;
-
-    // FIXME: Maybe remove this?
-    virtual bool canDrawImageBuffer(const ImageBuffer&) const = 0;
-    virtual RenderingMode renderingMode() const = 0;
+    virtual bool recordResourceUse(NativeImage&) = 0;
+    virtual bool recordResourceUse(ImageBuffer&) = 0;
+    virtual bool recordResourceUse(const SourceImage&) = 0;
+    virtual bool recordResourceUse(Font&) = 0;
 
     virtual std::unique_ptr<GraphicsContext> createNestedContext(const FloatRect& initialClip, const AffineTransform& initialCTM) = 0;
 
@@ -188,7 +189,7 @@ private:
     bool hasPlatformContext() const final { return false; }
     PlatformGraphicsContext* platformContext() const final { return nullptr; }
 
-#if USE(CG) || USE(DIRECT2D)
+#if USE(CG)
     void setIsCALayerContext(bool) final { }
     bool isCALayerContext() const final { return false; }
     void setIsAcceleratedContext(bool) final { }
@@ -219,10 +220,12 @@ private:
     WEBCORE_EXPORT void strokeEllipse(const FloatRect&) final;
     WEBCORE_EXPORT void clearRect(const FloatRect&) final;
 
-#if USE(CG) || USE(DIRECT2D)
+#if USE(CG)
     WEBCORE_EXPORT void applyStrokePattern() final;
     WEBCORE_EXPORT void applyFillPattern() final;
 #endif
+
+    WEBCORE_EXPORT void drawFilteredImageBuffer(ImageBuffer* sourceImage, const FloatRect& sourceImageRect, Filter&, FilterResults&) final;
 
     WEBCORE_EXPORT void drawGlyphs(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned numGlyphs, const FloatPoint& anchorPoint, FontSmoothingMode) final;
     WEBCORE_EXPORT void drawGlyphsAndCacheFont(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode) final;

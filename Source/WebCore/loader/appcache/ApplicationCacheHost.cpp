@@ -149,7 +149,7 @@ bool ApplicationCacheHost::maybeLoadFallbackForMainError(const ResourceRequest& 
     return false;
 }
 
-void ApplicationCacheHost::mainResourceDataReceived(const uint8_t*, int, long long, bool)
+void ApplicationCacheHost::mainResourceDataReceived(const SharedBuffer&, long long, bool)
 {
 }
 
@@ -255,10 +255,8 @@ URL ApplicationCacheHost::createFileURL(const String& path)
 
 static inline RefPtr<SharedBuffer> bufferFromResource(ApplicationCacheResource& resource)
 {
-    // FIXME: Clients probably do not need a copy of the SharedBuffer.
-    // Remove the call to copy() once we ensure SharedBuffer will not be modified.
     if (resource.path().isEmpty())
-        return resource.data().copy();
+        return resource.data().makeContiguous();
     return SharedBuffer::createWithContentsOfFile(resource.path());
 }
 
@@ -290,9 +288,7 @@ void ApplicationCacheHost::maybeLoadFallbackSynchronously(const ResourceRequest&
         ApplicationCacheResource* resource;
         if (getApplicationCacheFallbackResource(request, resource)) {
             response = resource->response();
-            // FIXME: Clients proably do not need a copy of the SharedBuffer.
-            // Remove the call to copy() once we ensure SharedBuffer will not be modified.
-            data = resource->data().copy();
+            data = resource->data().makeContiguous();
         }
     }
 }

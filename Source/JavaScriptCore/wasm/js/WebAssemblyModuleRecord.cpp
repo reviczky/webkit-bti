@@ -113,15 +113,14 @@ Synchronousness WebAssemblyModuleRecord::link(JSGlobalObject* globalObject, JSVa
     return Synchronousness::Sync;
 }
 
-void WebAssemblyModuleRecord::initializeImportsAndExports(JSGlobalObject* globalObject, JSObject* importObject, Wasm::CreationMode creationMode)
+// https://webassembly.github.io/spec/js-api/#read-the-imports
+void WebAssemblyModuleRecord::initializeImports(JSGlobalObject* globalObject, JSObject* importObject, Wasm::CreationMode creationMode)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-    UNUSED_PARAM(scope);
 
     RELEASE_ASSERT(m_instance);
 
-    Wasm::CodeBlock* codeBlock = m_instance->instance().codeBlock();
     JSWebAssemblyModule* module = m_instance->module();
     const Wasm::ModuleInformation& moduleInformation = module->moduleInformation();
 
@@ -134,18 +133,6 @@ void WebAssemblyModuleRecord::initializeImportsAndExports(JSGlobalObject* global
     };
 
     for (const auto& import : moduleInformation.imports) {
-        // Validation and linking other than Wasm::ExternalKind::Function is already done in JSWebAssemblyInstance.
-        // Eventually we will move all the linking code in JSWebAssemblyInstance here and remove this switch statement.
-        switch (import.kind) {
-        case Wasm::ExternalKind::Function:
-        case Wasm::ExternalKind::Global:
-        case Wasm::ExternalKind::Table:
-        case Wasm::ExternalKind::Exception:
-            break;
-        case Wasm::ExternalKind::Memory:
-            continue;
-        }
-
         Identifier moduleName = Identifier::fromString(vm, String::fromUTF8(import.module));
         Identifier fieldName = Identifier::fromString(vm, String::fromUTF8(import.field));
         JSValue value;
@@ -404,13 +391,69 @@ void WebAssemblyModuleRecord::initializeImportsAndExports(JSGlobalObject* global
             if (expectedSignatureIndex != tag->tag().signature().index())
                 return exception(createJSWebAssemblyLinkError(globalObject, vm, importFailMessage(import, "imported Tag", "signature doesn't match the imported WebAssembly Tag's signature")));
 
-            m_instance->instance().addTag(tag->tag());
+            m_instance->instance().setTag(import.kindIndex, tag->tag());
             break;
         }
 
         case Wasm::ExternalKind::Memory:
+            JSWebAssemblyMemory* memory = jsDynamicCast<JSWebAssemblyMemory*>(vm, value);
+            // i. If v is not a WebAssembly.Memory object, throw a WebAssembly.LinkError.
+            if (!memory)
+                return exception(createJSWebAssemblyLinkError(globalObject, vm, importFailMessage(import, "Memory import", "is not an instance of WebAssembly.Memory")));
+
+            Wasm::PageCount declaredInitial = moduleInformation.memory.initial();
+            Wasm::PageCount importedInitial = memory->memory().initial();
+            if (importedInitial < declaredInitial)
+                return exception(createJSWebAssemblyLinkError(globalObject, vm, importFailMessage(import, "Memory import", "provided an 'initial' that is smaller than the module's declared 'initial' import memory size")));
+
+            if (Wasm::PageCount declaredMaximum = moduleInformation.memory.maximum()) {
+                Wasm::PageCount importedMaximum = memory->memory().maximum();
+                if (!importedMaximum)
+                    return exception(createJSWebAssemblyLinkError(globalObject, vm, importFailMessage(import, "Memory import", "did not have a 'maximum' but the module requires that it does")));
+
+                if (importedMaximum > declaredMaximum)
+                    return exception(createJSWebAssemblyLinkError(globalObject, vm, importFailMessage(import, "Memory import", "provided a 'maximum' that is larger than the module's declared 'maximum' import memory size")));
+            }
+
+            if ((memory->memory().sharingMode() == Wasm::MemorySharingMode::Shared) != moduleInformation.memory.isShared())
+                return exception(createJSWebAssemblyLinkError(globalObject, vm, importFailMessage(import, "Memory import", "provided a 'shared' that is different from the module's declared 'shared' import memory attribute")));
+
+            // ii. Append v to memories.
+            // iii. Append v.[[Memory]] to imports.
+            m_instance->setMemory(vm, memory);
+            RETURN_IF_EXCEPTION(scope, void());
             break;
         }
+    }
+}
+
+// https://webassembly.github.io/spec/js-api/#create-an-exports-object
+void WebAssemblyModuleRecord::initializeExports(JSGlobalObject* globalObject)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    RELEASE_ASSERT(m_instance);
+
+    JSWebAssemblyModule* module = m_instance->module();
+    const Wasm::ModuleInformation& moduleInformation = module->moduleInformation();
+
+    auto exception = [&] (JSObject* error) {
+        throwException(globalObject, scope, error);
+    };
+
+    if (moduleInformation.hasMemoryImport()) {
+        // Usually at this point the module's code block in any memory mode should be
+        // runnable due to the LLint tier code being shared among all modes. However,
+        // if LLInt is disabled, it is possible that the code needs to be compiled at
+        // this point when we know which memory mode to use.
+        Wasm::CalleeGroup* calleeGroup = m_instance->instance().calleeGroup();
+        if (!calleeGroup || !calleeGroup->runnable()) {
+            calleeGroup = m_instance->module()->module().compileSync(&vm.wasmContext, m_instance->instance().memory()->mode()).ptr();
+            if (!calleeGroup->runnable())
+                return exception(createJSWebAssemblyLinkError(globalObject, vm, calleeGroup->errorMessage()));
+        }
+        RELEASE_ASSERT(calleeGroup->isSafeToRun(m_instance->instance().memory()->mode()));
     }
 
     for (unsigned i = 0; i < moduleInformation.tableCount(); ++i) {
@@ -435,10 +478,15 @@ void WebAssemblyModuleRecord::initializeImportsAndExports(JSGlobalObject* global
         }
     }
 
-    for (Wasm::SignatureIndex signatureIndex : moduleInformation.internalExceptionSignatureIndices)
-        m_instance->instance().addTag(Wasm::Tag::create(Wasm::SignatureInformation::get(signatureIndex)));
+    // This needs to be looked up after the memory is initialized, as the codeBlock depends on the memory mode.
+    Wasm::CalleeGroup* calleeGroup = m_instance->instance().calleeGroup();
 
-    unsigned functionImportCount = codeBlock->functionImportCount();
+    for (unsigned index = 0; index < moduleInformation.internalExceptionSignatureIndices.size(); ++index) {
+        Wasm::SignatureIndex signatureIndex = moduleInformation.internalExceptionSignatureIndices[index];
+        m_instance->instance().setTag(moduleInformation.importExceptionCount() + index, Wasm::Tag::create(Wasm::SignatureInformation::get(signatureIndex)));
+    }
+
+    unsigned functionImportCount = calleeGroup->functionImportCount();
     auto makeFunctionWrapper = [&] (uint32_t index) -> JSValue {
         // If we already made a wrapper, do not make a new one.
         JSValue wrapper = m_instance->instance().getFunctionWrapper(index);
@@ -462,8 +510,8 @@ void WebAssemblyModuleRecord::initializeImportsAndExports(JSGlobalObject* global
             //     a. Let func be an Exported Function Exotic Object created from c.
             //     b. Append func to funcs.
             //     c. Return func.
-            Wasm::Callee& embedderEntrypointCallee = codeBlock->embedderEntrypointCalleeFromFunctionIndexSpace(index);
-            Wasm::WasmToWasmImportableFunction::LoadLocation entrypointLoadLocation = codeBlock->entrypointLoadLocationFromFunctionIndexSpace(index);
+            Wasm::Callee& embedderEntrypointCallee = calleeGroup->embedderEntrypointCalleeFromFunctionIndexSpace(index);
+            Wasm::WasmToWasmImportableFunction::LoadLocation entrypointLoadLocation = calleeGroup->entrypointLoadLocationFromFunctionIndexSpace(index);
             Wasm::SignatureIndex signatureIndex = module->signatureIndexFromFunctionIndexSpace(index);
             const Wasm::Signature& signature = Wasm::SignatureInformation::get(signatureIndex);
             WebAssemblyFunction* function = WebAssemblyFunction::create(vm, globalObject, globalObject->webAssemblyFunctionStructure(), signature.argumentCount(), makeString(index), m_instance.get(), embedderEntrypointCallee, entrypointLoadLocation, signatureIndex);
@@ -607,12 +655,12 @@ void WebAssemblyModuleRecord::initializeImportsAndExports(JSGlobalObject* global
         // The start function must not take any arguments or return anything. This is enforced by the parser.
         ASSERT(!signature.argumentCount());
         ASSERT(signature.returnsVoid());
-        if (startFunctionIndexSpace < codeBlock->functionImportCount()) {
+        if (startFunctionIndexSpace < calleeGroup->functionImportCount()) {
             JSObject* startFunction = m_instance->instance().importFunction<WriteBarrier<JSObject>>(startFunctionIndexSpace)->get();
             m_startFunction.set(vm, this, startFunction);
         } else {
-            Wasm::Callee& embedderEntrypointCallee = codeBlock->embedderEntrypointCalleeFromFunctionIndexSpace(startFunctionIndexSpace);
-            Wasm::WasmToWasmImportableFunction::LoadLocation entrypointLoadLocation = codeBlock->entrypointLoadLocationFromFunctionIndexSpace(startFunctionIndexSpace);
+            Wasm::Callee& embedderEntrypointCallee = calleeGroup->embedderEntrypointCalleeFromFunctionIndexSpace(startFunctionIndexSpace);
+            Wasm::WasmToWasmImportableFunction::LoadLocation entrypointLoadLocation = calleeGroup->entrypointLoadLocationFromFunctionIndexSpace(startFunctionIndexSpace);
             WebAssemblyFunction* function = WebAssemblyFunction::create(vm, globalObject, globalObject->webAssemblyFunctionStructure(), signature.argumentCount(), "start", m_instance.get(), embedderEntrypointCallee, entrypointLoadLocation, signatureIndex);
             m_startFunction.set(vm, this, function);
         }

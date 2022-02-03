@@ -59,6 +59,7 @@
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/StorageQuotaManager.h>
+#include <WebCore/WebLockRegistry.h>
 #include <wtf/CallbackAggregator.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/CrossThreadCopier.h>
@@ -130,6 +131,7 @@ WebsiteDataStore::WebsiteDataStore(Ref<WebsiteDataStoreConfiguration>&& configur
 #if HAVE(APP_SSO)
     , m_soAuthorizationCoordinator(makeUniqueRef<SOAuthorizationCoordinator>())
 #endif
+    , m_webLockRegistry(WebCore::LocalWebLockRegistry::create())
 {
     WTF::setProcessPrivileges(allPrivileges());
     registerWithSessionIDMap();
@@ -285,34 +287,22 @@ void WebsiteDataStore::resolveDirectoriesIfNecessary()
     }
 }
 
-enum class ProcessAccessType {
-    None,
-    OnlyIfLaunched,
-    Launch,
-};
+enum class ProcessAccessType : uint8_t { None, OnlyIfLaunched, Launch };
 
 static ProcessAccessType computeNetworkProcessAccessTypeForDataFetch(OptionSet<WebsiteDataType> dataTypes, bool isNonPersistentStore)
 {
     for (auto dataType : dataTypes) {
-        if (WebsiteData::ownerProcess(dataType) == WebsiteDataProcessType::Network) {
-            if (isNonPersistentStore)
-                return ProcessAccessType::OnlyIfLaunched;
-            return ProcessAccessType::Launch;
-        }
+        if (WebsiteData::ownerProcess(dataType) == WebsiteDataProcessType::Network)
+            return isNonPersistentStore ? ProcessAccessType::OnlyIfLaunched : ProcessAccessType::Launch;
     }
     return ProcessAccessType::None;
 }
 
-static ProcessAccessType computeWebProcessAccessTypeForDataFetch(OptionSet<WebsiteDataType> dataTypes, bool isNonPersistentStore)
+static ProcessAccessType computeWebProcessAccessTypeForDataFetch(OptionSet<WebsiteDataType> dataTypes, bool /* isNonPersistentStore */)
 {
-    UNUSED_PARAM(isNonPersistentStore);
-
-    ProcessAccessType processAccessType = ProcessAccessType::None;
-
     if (dataTypes.contains(WebsiteDataType::MemoryCache))
         return ProcessAccessType::OnlyIfLaunched;
-
-    return processAccessType;
+    return ProcessAccessType::None;
 }
 
 void WebsiteDataStore::fetchData(OptionSet<WebsiteDataType> dataTypes, OptionSet<WebsiteDataFetchOption> fetchOptions, Function<void(Vector<WebsiteDataRecord>)>&& completionHandler)
@@ -469,21 +459,8 @@ private:
     auto webProcessAccessType = computeWebProcessAccessTypeForDataFetch(dataTypes, !isPersistent());
     if (webProcessAccessType != ProcessAccessType::None) {
         for (auto& process : processes()) {
-            switch (webProcessAccessType) {
-            case ProcessAccessType::OnlyIfLaunched:
-                if (process.state() != WebProcessProxy::State::Running)
-                    continue;
-                break;
-
-            case ProcessAccessType::Launch:
-                // FIXME: Handle this.
-                ASSERT_NOT_REACHED();
-                break;
-
-            case ProcessAccessType::None:
-                ASSERT_NOT_REACHED();
-            }
-
+            if (webProcessAccessType == ProcessAccessType::OnlyIfLaunched && process.state() != WebProcessProxy::State::Running)
+                continue;
             process.fetchWebsiteData(m_sessionID, dataTypes, [callbackAggregator](WebsiteData websiteData) {
                 callbackAggregator->addWebsiteData(WTFMove(websiteData));
             });
@@ -557,30 +534,21 @@ void WebsiteDataStore::fetchDataForRegistrableDomains(OptionSet<WebsiteDataType>
 static ProcessAccessType computeNetworkProcessAccessTypeForDataRemoval(OptionSet<WebsiteDataType> dataTypes, bool isNonPersistentStore)
 {
     ProcessAccessType processAccessType = ProcessAccessType::None;
-
     for (auto dataType : dataTypes) {
-        if (dataType == WebsiteDataType::Cookies) {
-            if (isNonPersistentStore)
-                processAccessType = std::max(processAccessType, ProcessAccessType::OnlyIfLaunched);
-            else
-                processAccessType = std::max(processAccessType, ProcessAccessType::Launch);
-        } else if (WebsiteData::ownerProcess(dataType) == WebsiteDataProcessType::Network)
+        if (WebsiteData::ownerProcess(dataType) != WebsiteDataProcessType::Network)
+            continue;
+        if (dataType != WebsiteDataType::Cookies || !isNonPersistentStore)
             return ProcessAccessType::Launch;
+        processAccessType = ProcessAccessType::OnlyIfLaunched;
     }
-    
     return processAccessType;
 }
 
-static ProcessAccessType computeWebProcessAccessTypeForDataRemoval(OptionSet<WebsiteDataType> dataTypes, bool isNonPersistentStore)
+static ProcessAccessType computeWebProcessAccessTypeForDataRemoval(OptionSet<WebsiteDataType> dataTypes, bool /* isNonPersistentStore */)
 {
-    UNUSED_PARAM(isNonPersistentStore);
-
-    ProcessAccessType processAccessType = ProcessAccessType::None;
-
     if (dataTypes.contains(WebsiteDataType::MemoryCache))
-        processAccessType = std::max(processAccessType, ProcessAccessType::OnlyIfLaunched);
-
-    return processAccessType;
+        return ProcessAccessType::OnlyIfLaunched;
+    return ProcessAccessType::None;
 }
 
 class RemovalCallbackAggregator : public ThreadSafeRefCounted<RemovalCallbackAggregator, WTF::DestructionThread::MainRunLoop> {
@@ -651,21 +619,8 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, WallTime
         }
 
         for (auto& process : processes()) {
-            switch (webProcessAccessType) {
-            case ProcessAccessType::OnlyIfLaunched:
-                if (process.state() != WebProcessProxy::State::Running)
-                    continue;
-                break;
-
-            case ProcessAccessType::Launch:
-                // FIXME: Handle this.
-                ASSERT_NOT_REACHED();
-                break;
-
-            case ProcessAccessType::None:
-                ASSERT_NOT_REACHED();
-            }
-
+            if (webProcessAccessType == ProcessAccessType::OnlyIfLaunched && process.state() != WebProcessProxy::State::Running)
+                continue;
             process.deleteWebsiteData(m_sessionID, dataTypes, modifiedSince, [callbackAggregator] { });
         }
     }
@@ -770,21 +725,8 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
     auto webProcessAccessType = computeWebProcessAccessTypeForDataRemoval(dataTypes, !isPersistent());
     if (webProcessAccessType != ProcessAccessType::None) {
         for (auto& process : processes()) {
-            switch (webProcessAccessType) {
-            case ProcessAccessType::OnlyIfLaunched:
-                if (process.state() != WebProcessProxy::State::Running)
-                    continue;
-                break;
-
-            case ProcessAccessType::Launch:
-                // FIXME: Handle this.
-                ASSERT_NOT_REACHED();
-                break;
-
-            case ProcessAccessType::None:
-                ASSERT_NOT_REACHED();
-            }
-
+            if (webProcessAccessType == ProcessAccessType::OnlyIfLaunched && process.state() != WebProcessProxy::State::Running)
+                continue;
             process.deleteWebsiteDataForOrigins(m_sessionID, dataTypes, origins, [callbackAggregator] { });
         }
     }
@@ -1721,6 +1663,17 @@ void WebsiteDataStore::setPrivateClickMeasurementDebugMode(bool enabled)
     networkProcess().setPrivateClickMeasurementDebugMode(sessionID(), enabled);
 }
 
+void WebsiteDataStore::closeDatabases(CompletionHandler<void()>&& completionHandler)
+{
+    auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
+
+    networkProcess().sendWithAsyncReply(Messages::NetworkProcess::ClosePCMDatabase(m_sessionID), [callbackAggregator] { });
+
+#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+    networkProcess().sendWithAsyncReply(Messages::NetworkProcess::CloseITPDatabase(m_sessionID), [callbackAggregator] { });
+#endif
+}
+
 #if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
 void WebsiteDataStore::logTestingEvent(const String& event)
 {
@@ -1824,7 +1777,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     HashSet<WebCore::RegistrableDomain> appBoundDomains;
 #if ENABLE(APP_BOUND_DOMAINS)
     if (isAppBoundITPRelaxationEnabled)
-        appBoundDomains = appBoundDomainsIfInitialized().value_or(HashSet<WebCore::RegistrableDomain> { });
+        appBoundDomains = valueOrDefault(appBoundDomainsIfInitialized());
 #endif
     WebCore::RegistrableDomain resourceLoadStatisticsManualPrevalentResource;
     ResourceLoadStatisticsParameters resourceLoadStatisticsParameters = {
@@ -1858,6 +1811,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     networkSessionParameters.allowsCellularAccess = configuration().allowsCellularAccess() ? AllowsCellularAccess::Yes : AllowsCellularAccess::No;
     networkSessionParameters.deviceManagementRestrictionsEnabled = m_configuration->deviceManagementRestrictionsEnabled();
     networkSessionParameters.allLoadsBlockedByDeviceManagementRestrictionsForTesting = m_configuration->allLoadsBlockedByDeviceManagementRestrictionsForTesting();
+    networkSessionParameters.webPushDaemonConnectionConfiguration = m_configuration->webPushDaemonConnectionConfiguration();
     networkSessionParameters.networkCacheDirectory = WTFMove(networkCacheDirectory);
     networkSessionParameters.networkCacheDirectoryExtensionHandle = WTFMove(networkCacheDirectoryExtensionHandle);
     networkSessionParameters.hstsStorageDirectory = WTFMove(hstsStorageDirectory);
@@ -1877,6 +1831,9 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
     networkSessionParameters.allowsHSTSWithUntrustedRootCertificate = m_configuration->allowsHSTSWithUntrustedRootCertificate();
     networkSessionParameters.pcmMachServiceName = m_configuration->pcmMachServiceName();
     networkSessionParameters.webPushMachServiceName = m_configuration->webPushMachServiceName();
+#if !HAVE(NSURLSESSION_WEBSOCKET)
+    networkSessionParameters.shouldAcceptInsecureCertificatesForWebSockets = m_configuration->shouldAcceptInsecureCertificatesForWebSockets();
+#endif
 
     parameters.networkSessionParameters = WTFMove(networkSessionParameters);
 
@@ -1903,6 +1860,10 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
         // FIXME: SandboxExtension::createHandleForReadWriteDirectory resolves the directory, but that has already been done. Remove this duplicate work.
         if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory))
             parameters.localStorageDirectoryExtensionHandle = WTFMove(*handle);
+#if PLATFORM(IOS_FAMILY)
+        FileSystem::makeAllDirectories(localStorageDirectory);
+        FileSystem::excludeFromBackup(localStorageDirectory);
+#endif
     }
 
     auto cacheStorageDirectory = this->cacheStorageDirectory();
@@ -1964,18 +1925,6 @@ API::HTTPCookieStore& WebsiteDataStore::cookieStore()
         m_cookieStore = API::HTTPCookieStore::create(*this);
 
     return *m_cookieStore;
-}
-
-void WebsiteDataStore::getLocalStorageDetails(Function<void(Vector<LocalStorageDatabaseTracker::OriginDetails>&&)>&& completionHandler)
-{
-    if (!isPersistent()) {
-        completionHandler({ });
-        return;
-    }
-
-    networkProcess().getLocalStorageDetails(m_sessionID, [completionHandler = WTFMove(completionHandler)](auto&& details) {
-        completionHandler(WTFMove(details));
-    });
 }
 
 void WebsiteDataStore::resetQuota(CompletionHandler<void()>&& completionHandler)

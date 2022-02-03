@@ -32,6 +32,7 @@
 #include "TreeScope.h"
 #include <wtf/CompactPointerTuple.h>
 #include <wtf/CompactUniquePtrTuple.h>
+#include <wtf/FixedVector.h>
 #include <wtf/Forward.h>
 #include <wtf/IsoMalloc.h>
 #include <wtf/ListHashSet.h>
@@ -184,9 +185,9 @@ public:
     WEBCORE_EXPORT Element* nextElementSibling() const;
 
     // From the ChildNode - https://dom.spec.whatwg.org/#childnode
-    ExceptionOr<void> before(Vector<NodeOrString>&&);
-    ExceptionOr<void> after(Vector<NodeOrString>&&);
-    ExceptionOr<void> replaceWith(Vector<NodeOrString>&&);
+    ExceptionOr<void> before(FixedVector<NodeOrString>&&);
+    ExceptionOr<void> after(FixedVector<NodeOrString>&&);
+    ExceptionOr<void> replaceWith(FixedVector<NodeOrString>&&);
     WEBCORE_EXPORT ExceptionOr<void> remove();
 
     // Other methods (not part of DOM)
@@ -477,8 +478,6 @@ public:
     virtual bool allowsDoubleTapGesture() const { return true; }
 #endif
 
-    bool dispatchBeforeLoadEvent(const String& sourceURL);
-
     WEBCORE_EXPORT void dispatchInputEvent();
 
     // Perform the default action for an event.
@@ -691,7 +690,7 @@ protected:
     void invalidateStyle(Style::Validity, Style::InvalidationMode = Style::InvalidationMode::Normal);
     void updateAncestorsForStyleRecalc();
 
-    ExceptionOr<RefPtr<Node>> convertNodesOrStringsIntoNode(Vector<NodeOrString>&&);
+    ExceptionOr<RefPtr<Node>> convertNodesOrStringsIntoNode(FixedVector<NodeOrString>&&);
 
 private:
     virtual PseudoId customPseudoId() const

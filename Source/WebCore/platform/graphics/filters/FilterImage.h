@@ -25,27 +25,44 @@
 
 #pragma once
 
-#include "ImageBuffer.h"
+#include "FloatRect.h"
+#include "IntRect.h"
 #include "PixelBuffer.h"
+#include "RenderingMode.h"
 #include <JavaScriptCore/Forward.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
 
+#if USE(CORE_IMAGE)
+OBJC_CLASS CIImage;
+#endif
+
 namespace WebCore {
 
+class Filter;
+class FloatRect;
 class ImageBuffer;
-class PixelBuffer;
 
 class FilterImage : public RefCounted<FilterImage> {
 public:
-    static RefPtr<FilterImage> create(const IntRect& absoluteImageRect, RenderingMode, const DestinationColorSpace&);
+    static RefPtr<FilterImage> create(const FloatRect& primitiveSubregion, const FloatRect& imageRect, const IntRect& absoluteImageRect, bool isAlphaImage, bool isValidPremultiplied, RenderingMode, const DestinationColorSpace&);
+    static RefPtr<FilterImage> create(const FloatRect& primitiveSubregion, const FloatRect& imageRect, const IntRect& absoluteImageRect, Ref<ImageBuffer>&&);
 
+    // The return values are in filter coordinates.
+    FloatRect primitiveSubregion() const { return m_primitiveSubregion; }
+    FloatRect maxEffectRect(const Filter&) const;
+    FloatRect imageRect() const { return m_imageRect; }
+
+    // The return values are in user-space coordinates.
     IntRect absoluteImageRect() const { return m_absoluteImageRect; }
+    IntRect absoluteImageRectRelativeTo(const FilterImage& origin) const;
+    FloatPoint mappedAbsolutePoint(const FloatPoint&) const;
 
+    bool isAlphaImage() const { return m_isAlphaImage; }
     RenderingMode renderingMode() const { return m_renderingMode; }
     const DestinationColorSpace& colorSpace() const { return m_colorSpace; }
 
-    ImageBuffer* imageBuffer();
+    WEBCORE_EXPORT ImageBuffer* imageBuffer();
     PixelBuffer* pixelBuffer(AlphaPremultiplication);
 
     std::optional<PixelBuffer> getPixelBuffer(AlphaPremultiplication, const IntRect& sourceRect, std::optional<DestinationColorSpace> = std::nullopt);
@@ -54,21 +71,41 @@ public:
     void correctPremultipliedPixelBuffer();
     void transformToColorSpace(const DestinationColorSpace&);
 
+#if USE(CORE_IMAGE)
+    RetainPtr<CIImage> ciImage() const { return m_ciImage; }
+    void setCIImage(RetainPtr<CIImage>&&);
+#endif
+
 private:
-    FilterImage(const IntRect& absoluteImageRect, RenderingMode, const DestinationColorSpace&);
+    FilterImage(const FloatRect& primitiveSubregion, const FloatRect& imageRect, const IntRect& absoluteImageRect, bool isAlphaImage, bool isValidPremultiplied, RenderingMode, const DestinationColorSpace&);
+    FilterImage(const FloatRect& primitiveSubregion, const FloatRect& imageRect, const IntRect& absoluteImageRect, Ref<ImageBuffer>&&);
 
     std::optional<PixelBuffer>& pixelBufferSlot(AlphaPremultiplication);
 
+    ImageBuffer* imageBufferFromPixelBuffer();
+
+#if USE(CORE_IMAGE)
+    ImageBuffer* imageBufferFromCIImage();
+#endif
+
     bool requiresPixelBufferColorSpaceConversion(std::optional<DestinationColorSpace>) const;
 
+    FloatRect m_primitiveSubregion;
+    FloatRect m_imageRect;
     IntRect m_absoluteImageRect;
 
+    bool m_isAlphaImage { false };
+    bool m_isValidPremultiplied { true };
     RenderingMode m_renderingMode;
     DestinationColorSpace m_colorSpace;
 
     RefPtr<ImageBuffer> m_imageBuffer;
     std::optional<PixelBuffer> m_unpremultipliedPixelBuffer;
     std::optional<PixelBuffer> m_premultipliedPixelBuffer;
+
+#if USE(CORE_IMAGE)
+    RetainPtr<CIImage> m_ciImage;
+#endif
 };
 
 } // namespace WebCore

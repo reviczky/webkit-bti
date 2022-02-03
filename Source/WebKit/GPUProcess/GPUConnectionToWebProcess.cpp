@@ -63,6 +63,7 @@
 #include "RemoteScrollingCoordinatorTransaction.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
+#include "WebGPUObjectHeap.h"
 #include "WebProcessMessages.h"
 #include <WebCore/LogInitialization.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
@@ -145,6 +146,11 @@
 
 #if USE(GRAPHICS_LAYER_WC)
 #include "RemoteWCLayerTreeHost.h"
+#include "WCContentBufferManager.h"
+#endif
+
+#if ENABLE(IPC_TESTING_API)
+#include "IPCTesterMessages.h"
 #endif
 
 namespace WebKit {
@@ -167,6 +173,7 @@ private:
     bool willStartCapture(CaptureDevice::DeviceType type) const final
     {
         switch (type) {
+        case CaptureDevice::DeviceType::SystemAudio:
         case CaptureDevice::DeviceType::Unknown:
         case CaptureDevice::DeviceType::Speaker:
             return false;
@@ -198,13 +205,19 @@ private:
         m_process.setTCCIdentity();
     }
 #endif
-
-#if HAVE(IOSURFACE_SET_OWNERSHIP_IDENTITY)
-    std::optional<task_id_token_t> webProcessIdentityToken() const final
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+    void startProducingData(RealtimeMediaSource::Type type) final
     {
-        return m_process.webProcessIdentityToken();
+        if (type != RealtimeMediaSource::Type::Audio)
+            return;
+        m_process.startCapturingAudio();
     }
 #endif
+
+    const ProcessIdentity& resourceOwner() const final
+    {
+        return m_process.webProcessIdentity();
+    }
 
     GPUConnectionToWebProcess& m_process;
 };
@@ -220,9 +233,7 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
     : m_connection(IPC::Connection::createServerConnection(connectionIdentifier, *this))
     , m_gpuProcess(gpuProcess)
     , m_webProcessIdentifier(webProcessIdentifier)
-#if HAVE(TASK_IDENTITY_TOKEN)
-    , m_webProcessIdentityToken(WTFMove(parameters.webProcessIdentityToken))
-#endif
+    , m_webProcessIdentity(WTFMove(parameters.webProcessIdentity))
     , m_remoteMediaPlayerManagerProxy(makeUniqueRef<RemoteMediaPlayerManagerProxy>(*this))
     , m_sessionID(sessionID)
 #if PLATFORM(COCOA) && USE(LIBWEBRTC)
@@ -298,6 +309,11 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
     // RemoteGraphicsContextsGL objects are unneeded after connection closes.
     m_remoteGraphicsContextGLMap.clear();
 #endif
+#if USE(GRAPHICS_LAYER_WC)
+    remoteGraphicsContextGLStreamWorkQueue().dispatch([webProcessIdentifier = m_webProcessIdentifier] {
+        WCContentBufferManager::singleton().removeAllContentBuffersForProcess(webProcessIdentifier);
+    });
+#endif
 
     gpuProcess().connectionToWebProcessClosed(connection);
     gpuProcess().removeGPUConnectionToWebProcess(*this); // May destroy |this|.
@@ -344,21 +360,15 @@ void GPUConnectionToWebProcess::configureLoggingChannel(const String& channelNam
 }
 
 #if USE(GRAPHICS_LAYER_WC)
-void GPUConnectionToWebProcess::createWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow)
+void GPUConnectionToWebProcess::createWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier, uint64_t nativeWindow, bool usesOffscreenRendering)
 {
-    auto addResult = m_remoteWCLayerTreeHostMap.add(identifier, RemoteWCLayerTreeHost::create(*this, WTFMove(identifier), nativeWindow));
+    auto addResult = m_remoteWCLayerTreeHostMap.add(identifier, RemoteWCLayerTreeHost::create(*this, WTFMove(identifier), nativeWindow, usesOffscreenRendering));
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
 }
 
 void GPUConnectionToWebProcess::releaseWCLayerTreeHost(WebKit::WCLayerTreeHostIdentifier identifier)
 {
     m_remoteWCLayerTreeHostMap.remove(identifier);
-}
-
-RefPtr<RemoteGraphicsContextGL> GPUConnectionToWebProcess::findRemoteGraphicsContextGL(GraphicsContextGLIdentifier identifier)
-{
-    ASSERT(RunLoop::isMain());
-    return m_remoteGraphicsContextGLMap.get(identifier);
 }
 #endif
 
@@ -554,6 +564,19 @@ void GPUConnectionToWebProcess::releaseGraphicsContextGLForTesting(GraphicsConte
     releaseGraphicsContextGL(identifier);
 }
 #endif
+
+void GPUConnectionToWebProcess::createRemoteGPU(WebGPUIdentifier identifier, RenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamConnectionBuffer&& stream)
+{
+    auto it = m_remoteRenderingBackendMap.find(renderingBackendIdentifier);
+    if (it == m_remoteRenderingBackendMap.end())
+        return;
+    auto* renderingBackend = it->value.get();
+
+    auto addResult = m_remoteGPUMap.ensure(identifier, [&]() {
+        return IPC::ScopedActiveMessageReceiveQueue { RemoteGPU::create(identifier, *this, *renderingBackend, WTFMove(stream)) };
+    });
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+}
 
 void GPUConnectionToWebProcess::clearNowPlayingInfo()
 {
@@ -777,6 +800,12 @@ bool GPUConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC
             m_remoteRemoteCommandListener->didReceiveMessage(connection, decoder);
         return true;
     }
+#if ENABLE(IPC_TESTING_API)
+    if (decoder.messageReceiverName() == Messages::IPCTester::messageReceiverName()) {
+        m_ipcTester.didReceiveMessage(connection, decoder);
+        return true;
+    }
+#endif
 
     return messageReceiverMap().dispatchMessage(connection, decoder);
 }
@@ -851,6 +880,12 @@ bool GPUConnectionToWebProcess::dispatchSyncMessage(IPC::Connection& connection,
         // Skip messages for already removed receivers.
         return true;
 #endif
+#if ENABLE(IPC_TESTING_API)
+    if (decoder.messageReceiverName() == Messages::IPCTester::messageReceiverName()) {
+        m_ipcTester.didReceiveSyncMessage(connection, decoder, replyEncoder);
+        return true;
+    }
+#endif
     return messageReceiverMap().dispatchSyncMessage(connection, decoder, replyEncoder);
 }
 
@@ -886,6 +921,20 @@ void GPUConnectionToWebProcess::updateCaptureOrigin(const WebCore::SecurityOrigi
 {
     m_captureOrigin = originData.securityOrigin();
 }
+
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+void GPUConnectionToWebProcess::startCapturingAudio()
+{
+    gpuProcess().processIsStartingToCaptureAudio(*this);
+}
+
+void GPUConnectionToWebProcess::processIsStartingToCaptureAudio(GPUConnectionToWebProcess& process)
+{
+    m_isLastToCaptureAudio = this == &process;
+    if (m_audioMediaStreamTrackRendererInternalUnitManager)
+        m_audioMediaStreamTrackRendererInternalUnitManager->notifyLastToCaptureAudioChanged();
+}
+#endif
 
 #if !PLATFORM(COCOA)
 bool GPUConnectionToWebProcess::setCaptureAttributionString() const

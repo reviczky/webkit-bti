@@ -35,6 +35,7 @@
 #include "CSSSelectorList.h"
 #include "HTMLNames.h"
 #include "MediaQueryEvaluator.h"
+#include "RuleSetBuilder.h"
 #include "SecurityOrigin.h"
 #include "SelectorChecker.h"
 #include "SelectorFilter.h"
@@ -87,10 +88,10 @@ static bool isHostSelectorMatchingInShadowTree(const CSSSelector& startSelector)
 void RuleSet::addRule(const StyleRule& rule, unsigned selectorIndex, unsigned selectorListIndex)
 {
     RuleData ruleData(rule, selectorIndex, selectorListIndex, m_ruleCount);
-    addRule(WTFMove(ruleData), 0);
+    addRule(WTFMove(ruleData), 0, 0);
 }
 
-void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerIdentifier)
+void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerIdentifier, ContainerQueryIdentifier containerQueryIdentifier)
 {
     ASSERT(ruleData.position() == m_ruleCount);
 
@@ -101,6 +102,13 @@ void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerId
         m_cascadeLayerIdentifierForRulePosition.grow(m_ruleCount);
         std::fill(m_cascadeLayerIdentifierForRulePosition.begin() + oldSize, m_cascadeLayerIdentifierForRulePosition.end(), 0);
         m_cascadeLayerIdentifierForRulePosition.last() = cascadeLayerIdentifier;
+    }
+
+    if (containerQueryIdentifier) {
+        auto oldSize = m_containerQueryIdentifierForRulePosition.size();
+        m_containerQueryIdentifierForRulePosition.grow(m_ruleCount);
+        std::fill(m_containerQueryIdentifierForRulePosition.begin() + oldSize, m_containerQueryIdentifierForRulePosition.end(), 0);
+        m_containerQueryIdentifierForRulePosition.last() = containerQueryIdentifier;
     }
 
     m_features.collectFeatures(ruleData);
@@ -171,7 +179,6 @@ void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerId
             case CSSSelector::PseudoClassAnyLinkDeprecated:
                 linkSelector = selector;
                 break;
-            case CSSSelector::PseudoClassDirectFocus:
             case CSSSelector::PseudoClassFocus:
             case CSSSelector::PseudoClassFocusVisible:
                 focusSelector = selector;
@@ -319,11 +326,11 @@ std::optional<DynamicMediaQueryEvaluationChanges> RuleSet::evaluateDynamicMediaQ
 
     auto& ruleSet = m_mediaQueryInvalidationRuleSetCache.ensure(collectedChanges.changedQueryIndexes, [&] {
         auto ruleSet = RuleSet::create();
-        for (auto* featureVector : collectedChanges.ruleFeatures) {
-            for (auto& feature : *featureVector)
-                ruleSet->addRule(*feature.styleRule, feature.selectorIndex, feature.selectorListIndex);
+        RuleSetBuilder builder(ruleSet, MediaQueryEvaluator(true));
+        for (auto* rules : collectedChanges.affectedRules) {
+            for (auto& rule : *rules)
+                builder.addStyleRule(rule);
         }
-        ruleSet->shrinkToFit();
         return ruleSet;
     }).iterator->value;
 
@@ -358,7 +365,7 @@ RuleSet::CollectedMediaQueryChanges RuleSet::evaluateDynamicMediaQueryRules(cons
                 affectedRulePositionsAndResults.add(position, result);
 
             collectedChanges.changedQueryIndexes.append(i);
-            collectedChanges.ruleFeatures.append(&dynamicRules.ruleFeatures);
+            collectedChanges.affectedRules.append(&dynamicRules.affectedRules);
         }
     }
 
@@ -408,6 +415,8 @@ void RuleSet::shrinkToFit()
 
     m_cascadeLayers.shrinkToFit();
     m_cascadeLayerIdentifierForRulePosition.shrinkToFit();
+    m_containerQueries.shrinkToFit();
+    m_containerQueryIdentifierForRulePosition.shrinkToFit();
     m_resolverMutatingRulesInLayers.shrinkToFit();
 }
 

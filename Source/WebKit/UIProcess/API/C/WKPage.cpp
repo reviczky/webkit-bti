@@ -98,7 +98,7 @@
 #endif
 
 #if PLATFORM(COCOA)
-#include <WebCore/VersionChecks.h>
+#include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
 namespace API {
@@ -118,7 +118,7 @@ template<> struct ClientTraits<WKPagePolicyClientBase> {
 };
 
 template<> struct ClientTraits<WKPageUIClientBase> {
-    typedef std::tuple<WKPageUIClientV0, WKPageUIClientV1, WKPageUIClientV2, WKPageUIClientV3, WKPageUIClientV4, WKPageUIClientV5, WKPageUIClientV6, WKPageUIClientV7, WKPageUIClientV8, WKPageUIClientV9, WKPageUIClientV10, WKPageUIClientV11, WKPageUIClientV12, WKPageUIClientV13, WKPageUIClientV14, WKPageUIClientV15, WKPageUIClientV16> Versions;
+    typedef std::tuple<WKPageUIClientV0, WKPageUIClientV1, WKPageUIClientV2, WKPageUIClientV3, WKPageUIClientV4, WKPageUIClientV5, WKPageUIClientV6, WKPageUIClientV7, WKPageUIClientV8, WKPageUIClientV9, WKPageUIClientV10, WKPageUIClientV11, WKPageUIClientV12, WKPageUIClientV13, WKPageUIClientV14, WKPageUIClientV15, WKPageUIClientV16, WKPageUIClientV17> Versions;
 };
 
 #if ENABLE(CONTEXT_MENUS)
@@ -309,7 +309,7 @@ void WKPageReload(WKPageRef pageRef)
     CRASH_IF_SUSPENDED;
     OptionSet<WebCore::ReloadOption> reloadOptions;
 #if PLATFORM(COCOA)
-    if (linkedOnOrAfter(WebCore::SDKVersion::FirstWithExpiredOnlyReloadBehavior))
+    if (linkedOnOrAfter(SDKVersion::FirstWithExpiredOnlyReloadBehavior))
         reloadOptions.add(WebCore::ReloadOption::ExpiredOnly);
 #endif
 
@@ -2162,6 +2162,16 @@ void WKPageSetPageUIClient(WKPageRef pageRef, const WKPageUIClientBase* wkClient
             panel.setClient(WTF::makeUniqueRef<PanelClient>());
             completionHandler(WebKit::WebAuthenticationPanelResult::Presented);
         }
+
+        void requestWebAuthenticationNoGesture(API::SecurityOrigin&, CompletionHandler<void(bool)>&& completionHandler) final
+        {
+            if (!m_client.requestWebAuthenticationNoGesture) {
+                completionHandler(true);
+                return;
+            }
+
+            completionHandler(true);
+        }
 #endif
         void decidePolicyForSpeechRecognitionPermissionRequest(WebPageProxy& page, API::SecurityOrigin& origin, CompletionHandler<void(bool)>&& completionHandler) final
         {
@@ -2956,10 +2966,14 @@ WKMediaState WKPageGetMediaState(WKPageRef page)
         state |= kWKMediaHasMutedAudioCaptureDevice;
     if (coreState & WebCore::MediaProducerMediaState::HasMutedVideoCaptureDevice)
         state |= kWKMediaHasMutedVideoCaptureDevice;
-    if (coreState & WebCore::MediaProducerMediaState::HasActiveDisplayCaptureDevice)
-        state |= kWKMediaHasActiveDisplayCaptureDevice;
-    if (coreState & WebCore::MediaProducerMediaState::HasMutedDisplayCaptureDevice)
-        state |= kWKMediaHasMutedDisplayCaptureDevice;
+    if (coreState & WebCore::MediaProducerMediaState::HasActiveScreenCaptureDevice)
+        state |= kWKMediaHasActiveScreenCaptureDevice;
+    if (coreState & WebCore::MediaProducerMediaState::HasMutedScreenCaptureDevice)
+        state |= kWKMediaHasMutedScreenCaptureDevice;
+    if (coreState & WebCore::MediaProducerMediaState::HasActiveWindowCaptureDevice)
+        state |= kWKMediaHasActiveWindowCaptureDevice;
+    if (coreState & WebCore::MediaProducerMediaState::HasMutedWindowCaptureDevice)
+        state |= kWKMediaHasMutedWindowCaptureDevice;
 
     return state;
 }
@@ -3058,10 +3072,10 @@ void WKPageSetPrivateClickMeasurementEphemeralMeasurementForTesting(WKPageRef pa
     });
 }
 
-void WKPageSimulateResourceLoadStatisticsSessionRestart(WKPageRef pageRef, WKPageSimulateResourceLoadStatisticsSessionRestartFunction callback, void* callbackContext)
+void WKPageSimulatePrivateClickMeasurementSessionRestart(WKPageRef pageRef, WKPageSimulatePrivateClickMeasurementSessionRestartFunction callback, void* callbackContext)
 {
     CRASH_IF_SUSPENDED;
-    toImpl(pageRef)->simulateResourceLoadStatisticsSessionRestart([callbackContext, callback] () {
+    toImpl(pageRef)->simulatePrivateClickMeasurementSessionRestart([callbackContext, callback] () {
         callback(callbackContext);
     });
 }

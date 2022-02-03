@@ -27,6 +27,8 @@
 
 #include "FileSystemHandleIdentifier.h"
 #include "FileSystemSyncAccessHandleIdentifier.h"
+#include "ProcessQualified.h"
+#include "ScriptExecutionContextIdentifier.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/FileSystem.h>
 #include <wtf/ThreadSafeRefCounted.h>
@@ -35,6 +37,9 @@ namespace WebCore {
 
 class FileSystemDirectoryHandle;
 class FileSystemFileHandle;
+class FileHandle;
+class FileSystemHandleCloseScope;
+class FileSystemSyncAccessHandle;
 template<typename> class ExceptionOr;
 
 class FileSystemStorageConnection : public ThreadSafeRefCounted<FileSystemStorageConnection> {
@@ -42,14 +47,14 @@ public:
     virtual ~FileSystemStorageConnection() { }
 
     using SameEntryCallback = CompletionHandler<void(ExceptionOr<bool>&&)>;
-    using GetHandleCallback = CompletionHandler<void(ExceptionOr<FileSystemHandleIdentifier>&&)>;
+    using GetHandleCallback = CompletionHandler<void(ExceptionOr<Ref<FileSystemHandleCloseScope>>&&)>;
     using ResolveCallback = CompletionHandler<void(ExceptionOr<Vector<String>>&&)>;
-    using GetAccessHandleCallback = CompletionHandler<void(ExceptionOr<std::pair<FileSystemSyncAccessHandleIdentifier, FileSystem::PlatformFileHandle>>&&)>;
+    using GetAccessHandleCallback = CompletionHandler<void(ExceptionOr<std::pair<FileSystemSyncAccessHandleIdentifier, FileHandle>>&&)>;
     using VoidCallback = CompletionHandler<void(ExceptionOr<void>&&)>;
     using GetHandleNamesCallback = CompletionHandler<void(ExceptionOr<Vector<String>>&&)>;
-    using GetHandleWithTypeCallback = CompletionHandler<void(ExceptionOr<std::pair<FileSystemHandleIdentifier, bool>>&&)>;
     using StringCallback = CompletionHandler<void(ExceptionOr<String>&&)>;
 
+    virtual bool isWorker() const { return false; }
     virtual void closeHandle(FileSystemHandleIdentifier) = 0;
     virtual void isSameEntry(FileSystemHandleIdentifier, FileSystemHandleIdentifier, SameEntryCallback&&) = 0;
     virtual void move(FileSystemHandleIdentifier, FileSystemHandleIdentifier, const String& newName, VoidCallback&&) = 0;
@@ -59,9 +64,12 @@ public:
     virtual void resolve(FileSystemHandleIdentifier, FileSystemHandleIdentifier, ResolveCallback&&) = 0;
     virtual void getFile(FileSystemHandleIdentifier, StringCallback&&) = 0;
     virtual void createSyncAccessHandle(FileSystemHandleIdentifier, GetAccessHandleCallback&&) = 0;
-    virtual void close(FileSystemHandleIdentifier, FileSystemSyncAccessHandleIdentifier, VoidCallback&&) = 0;
+    virtual void closeSyncAccessHandle(FileSystemHandleIdentifier, FileSystemSyncAccessHandleIdentifier, VoidCallback&&) = 0;
+    virtual void registerSyncAccessHandle(FileSystemSyncAccessHandleIdentifier, ScriptExecutionContextIdentifier) = 0;
+    virtual void unregisterSyncAccessHandle(FileSystemSyncAccessHandleIdentifier) = 0;
+    virtual void invalidateAccessHandle(WebCore::FileSystemSyncAccessHandleIdentifier) = 0;
     virtual void getHandleNames(FileSystemHandleIdentifier, GetHandleNamesCallback&&) = 0;
-    virtual void getHandle(FileSystemHandleIdentifier, const String& name, GetHandleWithTypeCallback&&) = 0;
+    virtual void getHandle(FileSystemHandleIdentifier, const String& name, GetHandleCallback&&) = 0;
 };
 
 } // namespace WebCore

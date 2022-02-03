@@ -31,6 +31,7 @@
 #include "EventNames.h"
 #include "Logging.h"
 #include "PlatformWheelEvent.h"
+#include "ScrollingEffectsController.h"
 #include "ScrollingStateFrameScrollingNode.h"
 #include "ScrollingStateTree.h"
 #include "ScrollingTreeFrameScrollingNode.h"
@@ -201,19 +202,27 @@ WheelEventHandlingResult ScrollingTree::handleWheelEvent(const PlatformWheelEven
 
 WheelEventHandlingResult ScrollingTree::handleWheelEventWithNode(const PlatformWheelEvent& wheelEvent, OptionSet<WheelEventProcessingSteps> processingSteps, ScrollingTreeNode* node, EventTargeting eventTargeting)
 {
+    auto adjustedWheelEvent = wheelEvent;
     while (node) {
         if (is<ScrollingTreeScrollingNode>(*node)) {
             auto& scrollingNode = downcast<ScrollingTreeScrollingNode>(*node);
-            auto result = scrollingNode.handleWheelEvent(wheelEvent, eventTargeting);
+            auto result = scrollingNode.handleWheelEvent(adjustedWheelEvent, eventTargeting);
 
             if (result.wasHandled) {
-                m_latchingController.nodeDidHandleEvent(scrollingNode.scrollingNodeID(), processingSteps, wheelEvent, m_allowLatching);
-                m_gestureState.nodeDidHandleEvent(scrollingNode.scrollingNodeID(), wheelEvent);
+                m_latchingController.nodeDidHandleEvent(scrollingNode.scrollingNodeID(), processingSteps, adjustedWheelEvent, m_allowLatching);
+                m_gestureState.nodeDidHandleEvent(scrollingNode.scrollingNodeID(), adjustedWheelEvent);
                 return result;
             }
 
             if (result.needsMainThreadProcessing() || eventTargeting != EventTargeting::Propagate)
                 return result;
+            
+            if (scrollingNode.shouldBlockScrollPropagation(adjustedWheelEvent.delta())) {
+                m_latchingController.nodeDidHandleEvent(scrollingNode.scrollingNodeID(), processingSteps, adjustedWheelEvent, m_allowLatching);
+                m_gestureState.nodeDidHandleEvent(scrollingNode.scrollingNodeID(), adjustedWheelEvent);
+                return WheelEventHandlingResult::handled();
+            }
+            adjustedWheelEvent = scrollingNode.eventForPropagation(adjustedWheelEvent);
         }
 
         if (is<ScrollingTreeOverflowScrollProxyNode>(*node)) {
@@ -298,8 +307,7 @@ void ScrollingTree::commitTreeState(std::unique_ptr<ScrollingStateTree>&& scroll
             || rootNode->hasChangedProperty(ScrollingStateNode::Property::AsyncFrameOrOverflowScrollingEnabled)
             || rootNode->hasChangedProperty(ScrollingStateNode::Property::WheelEventGesturesBecomeNonBlocking)
             || rootNode->hasChangedProperty(ScrollingStateNode::Property::ScrollingPerformanceTestingEnabled)
-            || rootNode->hasChangedProperty(ScrollingStateNode::Property::IsMonitoringWheelEvents)
-            || rootNode->hasChangedProperty(ScrollingStateNode::Property::MomentumScrollingAnimatorEnabled))) {
+            || rootNode->hasChangedProperty(ScrollingStateNode::Property::IsMonitoringWheelEvents))) {
         Locker locker { m_treeStateLock };
 
         if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::ScrolledContentsLayer))
@@ -319,9 +327,6 @@ void ScrollingTree::commitTreeState(std::unique_ptr<ScrollingStateTree>&& scroll
 
         if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::IsMonitoringWheelEvents))
             m_isMonitoringWheelEvents = scrollingStateTree->rootStateNode()->isMonitoringWheelEvents();
-
-        if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::MomentumScrollingAnimatorEnabled))
-            m_momentumScrollingAnimatorEnabled = scrollingStateTree->rootStateNode()->momentumScrollingAnimatorEnabled();
     }
 
     m_overflowRelatedNodesMap.clear();
@@ -344,9 +349,6 @@ void ScrollingTree::commitTreeState(std::unique_ptr<ScrollingStateTree>&& scroll
             node->willBeDestroyed();
     }
 
-    if (rootNode && (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::Property::MomentumScrollingAnimatorEnabled)))
-        RELEASE_LOG(Scrolling, "ScrollingTree momentum scrolling animator enabled: %d", rootNode->momentumScrollingAnimatorEnabled());
-    
     didCommitTree();
 
     LOG_WITH_STREAM(ScrollingTree, stream << "committed ScrollingTree" << scrollingTreeAsText(debugScrollingStateTreeAsTextBehaviors));
@@ -444,7 +446,6 @@ void ScrollingTree::applyLayerPositionsAfterCommit()
 
 void ScrollingTree::applyLayerPositions()
 {
-    ASSERT(isMainThread());
     Locker locker { m_treeLock };
 
     applyLayerPositionsInternal();
@@ -760,7 +761,7 @@ void ScrollingTree::willProcessWheelEvent()
     m_lastWheelEventTime = MonotonicTime::now();
 }
 
-std::optional<unsigned> ScrollingTree::nominalFramesPerSecond()
+std::optional<FramesPerSecond> ScrollingTree::nominalFramesPerSecond()
 {
     Locker locker { m_treeStateLock };
     return m_treeState.nominalFramesPerSecond;

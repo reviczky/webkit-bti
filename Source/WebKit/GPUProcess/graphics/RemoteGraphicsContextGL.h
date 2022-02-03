@@ -29,19 +29,29 @@
 
 #include "Connection.h"
 #include "GPUConnectionToWebProcess.h"
-#include "GPUProcessGraphicsContextGL.h"
 #include "GraphicsContextGLIdentifier.h"
 #include "QualifiedRenderingResourceIdentifier.h"
 #include "RemoteRenderingBackend.h"
 #include "ScopedWebGLRenderingResourcesRequest.h"
 #include "StreamMessageReceiver.h"
 #include "StreamServerConnection.h"
+#include <WebCore/ExtensionsGL.h>
 #include <WebCore/NotImplemented.h>
 #include <wtf/ThreadAssertions.h>
 #include <wtf/WeakPtr.h>
 
+#if PLATFORM(COCOA)
+#include <WebCore/GraphicsContextGLCocoa.h>
+#else
+#include <WebCore/GraphicsContextGLTextureMapper.h>
+#endif
+
 #if PLATFORM(MAC)
 #include <CoreGraphics/CGDisplayConfiguration.h>
+#endif
+
+#if USE(GRAPHICS_LAYER_WC)
+#include "WCContentBufferIdentifier.h"
 #endif
 
 #if PLATFORM(COCOA)
@@ -67,10 +77,6 @@ public:
     void displayWasReconfigured();
 #endif
 
-#if USE(GRAPHICS_LAYER_WC)
-    PlatformLayer* platformLayer() const { return m_context->platformLayer(); }
-#endif
-
 protected:
     RemoteGraphicsContextGL(GPUConnectionToWebProcess&, GraphicsContextGLIdentifier, RemoteRenderingBackend&, IPC::StreamConnectionBuffer&&);
     void initialize(WebCore::GraphicsContextGLAttributes&&);
@@ -93,6 +99,8 @@ protected:
     void notifyMarkContextChanged();
 #if PLATFORM(COCOA)
     virtual void prepareForDisplay(CompletionHandler<void(WTF::MachSendRight&&)>&&) = 0;
+#elif USE(GRAPHICS_LAYER_WC)
+    virtual void prepareForDisplay(CompletionHandler<void(std::optional<WCContentBufferIdentifier>)>&&) = 0;
 #else
     void prepareForDisplay(CompletionHandler<void()>&&);
 #endif
@@ -113,7 +121,13 @@ private:
 protected:
     WeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     RefPtr<IPC::StreamServerConnection> m_streamConnection;
-    RefPtr<GPUProcessGraphicsContextGLOpenGL> m_context WTF_GUARDED_BY_LOCK(m_streamThread);
+#if PLATFORM(COCOA)
+    using PlatformGraphicsContextGL = WebCore::GraphicsContextGLCocoa;
+#else
+    using PlatformGraphicsContextGL = WebCore::GraphicsContextGLTextureMapper;
+#endif
+    
+    RefPtr<PlatformGraphicsContextGL> m_context WTF_GUARDED_BY_LOCK(m_streamThread);
     GraphicsContextGLIdentifier m_graphicsContextGLIdentifier;
     Ref<RemoteRenderingBackend> m_renderingBackend;
     ScopedWebGLRenderingResourcesRequest m_renderingResourcesRequest;

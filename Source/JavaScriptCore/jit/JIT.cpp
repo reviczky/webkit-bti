@@ -126,16 +126,6 @@ void JIT::emitEnterOptimizationCheck()
 }
 #endif
 
-void JIT::emitNotifyWrite(WatchpointSet* set)
-{
-    if (!set || set->state() == IsInvalidated) {
-        addSlowCase(Jump());
-        return;
-    }
-    
-    addSlowCase(branch8(NotEqual, AbsoluteAddress(set->addressOfState()), TrustedImm32(IsInvalidated)));
-}
-
 void JIT::emitNotifyWriteWatchpoint(GPRReg pointerToSet)
 {
     auto ok = branchTestPtr(Zero, pointerToSet);
@@ -169,14 +159,11 @@ void JIT::resetSP()
     checkStackPointerAlignment();
 }
 
-#define NEXT_OPCODE(name) \
-    m_bytecodeIndex = BytecodeIndex(m_bytecodeIndex.offset() + currentInstruction->size()); \
-    break;
-
 #define NEXT_OPCODE_IN_MAIN(name) \
     if (previousSlowCasesSize != m_slowCases.size()) \
         ++m_bytecodeCountHavingSlowCase; \
-    NEXT_OPCODE(name)
+    m_bytecodeIndex = BytecodeIndex(m_bytecodeIndex.offset() + currentInstruction->size()); \
+    break;
 
 #define DEFINE_SLOW_OP(name) \
     case op_##name: { \
@@ -198,13 +185,13 @@ void JIT::resetSP()
 #define DEFINE_SLOWCASE_OP(name) \
     case name: { \
         emitSlow_##name(currentInstruction, iter); \
-        NEXT_OPCODE(name); \
+        break; \
     }
 
 #define DEFINE_SLOWCASE_SLOW_OP(name) \
     case op_##name: { \
         emitSlowCaseCall(currentInstruction, iter, slow_path_##name); \
-        NEXT_OPCODE(op_##name); \
+        break; \
     }
 
 void JIT::emitSlowCaseCall(const Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter, SlowPathFunction stub)
@@ -287,8 +274,7 @@ void JIT::privateCompileMainPass()
         if (opcodeID != op_catch) {
             loadPtr(addressFor(CallFrameSlot::codeBlock), regT0);
             loadPtr(Address(regT0, CodeBlock::offsetOfMetadataTable()), regT1);
-            loadPtr(Address(regT0, CodeBlock::offsetOfJITData()), regT0);
-            loadPtr(Address(regT0, CodeBlock::JITData::offsetOfJITConstantPool()), regT2);
+            loadPtr(Address(regT0, CodeBlock::offsetOfBaselineJITData()), regT2);
 
             auto metadataOK = branchPtr(Equal, regT1, s_metadataGPR);
             breakpoint();
@@ -326,6 +312,7 @@ void JIT::privateCompileMainPass()
         DEFINE_SLOW_OP(lesseq)
         DEFINE_SLOW_OP(greater)
         DEFINE_SLOW_OP(greatereq)
+        DEFINE_SLOW_OP(instanceof_custom)
         DEFINE_SLOW_OP(is_callable)
         DEFINE_SLOW_OP(is_constructor)
         DEFINE_SLOW_OP(typeof)
@@ -355,7 +342,6 @@ void JIT::privateCompileMainPass()
         DEFINE_SLOW_OP(create_generator)
         DEFINE_SLOW_OP(create_async_generator)
         DEFINE_SLOW_OP(new_generator)
-        DEFINE_SLOW_OP(pow)
 
         DEFINE_OP(op_add)
         DEFINE_OP(op_bitnot)
@@ -409,7 +395,6 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_get_prototype_of)
         DEFINE_OP(op_overrides_has_instance)
         DEFINE_OP(op_instanceof)
-        DEFINE_OP(op_instanceof_custom)
         DEFINE_OP(op_is_empty)
         DEFINE_OP(op_typeof_is_undefined)
         DEFINE_OP(op_is_undefined_or_null)
@@ -448,6 +433,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_super_sampler_end)
         DEFINE_OP(op_lshift)
         DEFINE_OP(op_mod)
+        DEFINE_OP(op_pow)
         DEFINE_OP(op_mov)
         DEFINE_OP(op_mul)
         DEFINE_OP(op_negate)
@@ -614,7 +600,6 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_set_private_brand)
         DEFINE_SLOWCASE_OP(op_check_private_brand)
         DEFINE_SLOWCASE_OP(op_instanceof)
-        DEFINE_SLOWCASE_OP(op_instanceof_custom)
         DEFINE_SLOWCASE_OP(op_jless)
         DEFINE_SLOWCASE_OP(op_jlesseq)
         DEFINE_SLOWCASE_OP(op_jgreater)
@@ -630,6 +615,7 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_loop_hint)
         DEFINE_SLOWCASE_OP(op_check_traps)
         DEFINE_SLOWCASE_OP(op_mod)
+        DEFINE_SLOWCASE_OP(op_pow)
         DEFINE_SLOWCASE_OP(op_mul)
         DEFINE_SLOWCASE_OP(op_negate)
         DEFINE_SLOWCASE_OP(op_neq)
@@ -685,12 +671,14 @@ void JIT::privateCompileSlowCases()
 
         RELEASE_ASSERT_WITH_MESSAGE(iter == m_slowCases.end() || firstTo.offset() != iter->to.offset(), "Not enough jumps linked in slow case codegen.");
         RELEASE_ASSERT_WITH_MESSAGE(firstTo.offset() == (iter - 1)->to.offset(), "Too many jumps linked in slow case codegen.");
-        
-        emitJumpSlowToHot(jump(), 0);
+
+        jump().linkTo(fastPathResumePoint(), this);
         ++bytecodeCountHavingSlowCase;
 
-        if (UNLIKELY(sizeMarker))
+        if (UNLIKELY(sizeMarker)) {
+            m_bytecodeIndex = BytecodeIndex(m_bytecodeIndex.offset() + currentInstruction->size());
             m_vm->jitSizeStatistics->markEnd(WTFMove(*sizeMarker), *this);
+        }
     }
 
     RELEASE_ASSERT(bytecodeCountHavingSlowCase == m_bytecodeCountHavingSlowCase);
@@ -713,8 +701,12 @@ void JIT::emitMaterializeMetadataAndConstantPoolRegisters()
 {
     loadPtr(addressFor(CallFrameSlot::codeBlock), regT0);
     loadPtr(Address(regT0, CodeBlock::offsetOfMetadataTable()), s_metadataGPR);
-    loadPtr(Address(regT0, CodeBlock::offsetOfJITData()), regT0);
-    loadPtr(Address(regT0, CodeBlock::JITData::offsetOfJITConstantPool()), s_constantsGPR);
+    loadPtr(Address(regT0, CodeBlock::offsetOfBaselineJITData()), s_constantsGPR);
+}
+
+void JIT::emitSaveCalleeSaves()
+{
+    Base::emitSaveCalleeSavesFor(&RegisterAtOffsetList::llintBaselineCalleeSaveRegisters());
 }
 
 void JIT::emitRestoreCalleeSaves()
@@ -793,7 +785,7 @@ void JIT::compileAndLinkWithoutFinalizing(JITCompilationEffort effort)
     move(regT1, stackPointerRegister);
     checkStackPointerAlignment();
 
-    emitSaveCalleeSavesFor(&RegisterAtOffsetList::llintBaselineCalleeSaveRegisters());
+    emitSaveCalleeSaves();
     emitMaterializeTagCheckRegisters();
     emitMaterializeMetadataAndConstantPoolRegisters();
 
@@ -810,7 +802,7 @@ void JIT::compileAndLinkWithoutFinalizing(JITCompilationEffort effort)
                     continue;
                 int offset = CallFrame::argumentOffsetIncludingThis(argument) * static_cast<int>(sizeof(Register));
                 loadValue(Address(callFrameRegister, offset), jsRegT10);
-                storeValue(jsRegT10, Address(regT2, argument * sizeof(ValueProfile) + ValueProfile::offsetOfFirstBucket()));
+                storeValue(jsRegT10, Address(regT2, FixedVector<ValueProfile>::Storage::offsetOfData() + argument * sizeof(ValueProfile) + ValueProfile::offsetOfFirstBucket()));
             }
         }
     }

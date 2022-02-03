@@ -100,10 +100,10 @@ private:
 
     // InputType functions:
     String visibleValue() const final;
-    String sanitizeValue(const String&) const final;
+    String sanitizeValue(const String&) const override;
     void setValue(const String&, bool valueChanged, TextFieldEventBehavior) final;
-    double valueAsDate() const override;
-    ExceptionOr<void> setValueAsDate(double) const override;
+    WallTime valueAsDate() const override;
+    ExceptionOr<void> setValueAsDate(WallTime) const override;
     double valueAsDouble() const final;
     ExceptionOr<void> setValueAsDecimal(const Decimal&, TextFieldEventBehavior) const final;
     Decimal defaultValueForStepUp() const override;

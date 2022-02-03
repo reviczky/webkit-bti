@@ -47,6 +47,7 @@ WebProcessCreationParameters::~WebProcessCreationParameters()
 
 void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 {
+    encoder << auxiliaryProcessParameters;
     encoder << injectedBundlePath;
     encoder << injectedBundlePathExtensionHandle;
     encoder << additionalSandboxExtensionHandles;
@@ -59,9 +60,6 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #if PLATFORM(COCOA) && ENABLE(REMOTE_INSPECTOR)
     encoder << enableRemoteWebInspectorExtensionHandle;
 #endif
-    encoder << wtfLoggingChannels;
-    encoder << webCoreLoggingChannels;
-    encoder << webKitLoggingChannels;
 #if ENABLE(MEDIA_STREAM)
     encoder << audioCaptureExtensionHandle;
 #endif
@@ -164,16 +162,17 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << compilerServiceExtensionHandles;
 #endif
 
-    encoder << containerManagerExtensionHandle;
     encoder << mobileGestaltExtensionHandle;
     encoder << launchServicesExtensionHandle;
 
 #if HAVE(VIDEO_RESTRICTED_DECODING)
+#if PLATFORM(MAC)
     encoder << videoDecoderExtensionHandles;
+#endif
+    encoder << restrictImageAndVideoDecoders;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    encoder << dynamicMachExtensionHandles;
     encoder << dynamicIOKitExtensionHandles;
 #endif
 
@@ -207,6 +206,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 
 #if HAVE(IOSURFACE)
     encoder << maximumIOSurfaceSize;
+    encoder << bytesPerRowIOSurfaceAlignment;
 #endif
 
     encoder << accessibilityPreferences;
@@ -227,6 +227,8 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 
 bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreationParameters& parameters)
 {
+    if (!decoder.decode(parameters.auxiliaryProcessParameters))
+        return false;
     if (!decoder.decode(parameters.injectedBundlePath))
         return false;
     
@@ -272,16 +274,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     parameters.enableRemoteWebInspectorExtensionHandle = WTFMove(*enableRemoteWebInspectorExtensionHandle);
 #endif
-
-    if (!decoder.decode(parameters.wtfLoggingChannels))
-        return false;
-    if (!decoder.decode(parameters.webCoreLoggingChannels))
-        return false;
-    if (!decoder.decode(parameters.webKitLoggingChannels))
-        return false;
-
 #if ENABLE(MEDIA_STREAM)
-
     std::optional<SandboxExtension::Handle> audioCaptureExtensionHandle;
     decoder >> audioCaptureExtensionHandle;
     if (!audioCaptureExtensionHandle)
@@ -467,12 +460,6 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     parameters.compilerServiceExtensionHandles = WTFMove(*compilerServiceExtensionHandles);
 #endif
 
-    std::optional<std::optional<SandboxExtension::Handle>> containerManagerExtensionHandle;
-    decoder >> containerManagerExtensionHandle;
-    if (!containerManagerExtensionHandle)
-        return false;
-    parameters.containerManagerExtensionHandle = WTFMove(*containerManagerExtensionHandle);
-
     std::optional<std::optional<SandboxExtension::Handle>> mobileGestaltExtensionHandle;
     decoder >> mobileGestaltExtensionHandle;
     if (!mobileGestaltExtensionHandle)
@@ -486,20 +473,21 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     parameters.launchServicesExtensionHandle = WTFMove(*launchServicesExtensionHandle);
 
 #if HAVE(VIDEO_RESTRICTED_DECODING)
+#if PLATFORM(MAC)
     std::optional<Vector<SandboxExtension::Handle>> videoDecoderExtensionHandles;
     decoder >> videoDecoderExtensionHandles;
     if (!videoDecoderExtensionHandles)
         return false;
     parameters.videoDecoderExtensionHandles = WTFMove(*videoDecoderExtensionHandles);
 #endif
+    std::optional<bool> restrictImageAndVideoDecoders;
+    decoder >> restrictImageAndVideoDecoders;
+    if (!restrictImageAndVideoDecoders)
+        return false;
+    parameters.restrictImageAndVideoDecoders = *restrictImageAndVideoDecoders;
+#endif
 
 #if PLATFORM(IOS_FAMILY)
-    std::optional<Vector<SandboxExtension::Handle>> dynamicMachExtensionHandles;
-    decoder >> dynamicMachExtensionHandles;
-    if (!dynamicMachExtensionHandles)
-        return false;
-    parameters.dynamicMachExtensionHandles = WTFMove(*dynamicMachExtensionHandles);
-
     std::optional<Vector<SandboxExtension::Handle>> dynamicIOKitExtensionHandles;
     decoder >> dynamicIOKitExtensionHandles;
     if (!dynamicIOKitExtensionHandles)
@@ -575,6 +563,8 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
 
 #if HAVE(IOSURFACE)
     if (!decoder.decode(parameters.maximumIOSurfaceSize))
+        return false;
+    if (!decoder.decode(parameters.bytesPerRowIOSurfaceAlignment))
         return false;
 #endif
 

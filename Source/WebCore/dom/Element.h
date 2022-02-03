@@ -213,7 +213,7 @@ public:
     // This does not update layout, and uses absoluteBoundingBoxRect().
     WEBCORE_EXPORT IntRect boundingBoxInRootViewCoordinates() const;
 
-    std::optional<std::pair<RenderObject*, FloatRect>> boundingAbsoluteRectWithoutLayout();
+    std::optional<std::pair<RenderObject*, FloatRect>> boundingAbsoluteRectWithoutLayout() const;
 
     WEBCORE_EXPORT FloatRect boundingClientRect();
 
@@ -426,6 +426,7 @@ public:
 
     static AXTextStateChangeIntent defaultFocusTextStateChangeIntent() { return AXTextStateChangeIntent(AXTextStateChangeTypeSelectionMove, AXTextSelection { AXTextSelectionDirectionDiscontiguous, AXTextSelectionGranularityUnknown, true }); }
     virtual void focus(const FocusOptions& = { });
+    virtual void focusForBindings(FocusOptions&&);
     void findTargetAndUpdateFocusAppearance(SelectionRestorationMode, SelectionRevealMode = SelectionRevealMode::Reveal);
     virtual RefPtr<Element> focusAppearanceUpdateTarget();
     virtual void updateFocusAppearance(SelectionRestorationMode, SelectionRevealMode = SelectionRevealMode::Reveal);
@@ -531,6 +532,10 @@ public:
     const RenderStyle* lastStyleChangeEventStyle(PseudoId) const;
     void setLastStyleChangeEventStyle(PseudoId, std::unique_ptr<const RenderStyle>&&);
 
+    void cssAnimationsDidUpdate(PseudoId);
+    void keyframesRuleDidChange(PseudoId);
+    bool hasPendingKeyframesUpdate(PseudoId) const;
+
     bool isInTopLayer() const { return hasNodeFlag(NodeFlag::IsInTopLayer); }
     void addToTopLayer();
     void removeFromTopLayer();
@@ -564,8 +569,10 @@ public:
     bool dispatchWheelEvent(const PlatformWheelEvent&, OptionSet<EventHandling>&, EventIsCancelable = EventIsCancelable::Yes);
     bool dispatchKeyEvent(const PlatformKeyboardEvent&);
     bool dispatchSimulatedClick(Event* underlyingEvent, SimulatedClickMouseEventOptions = SendNoEvents, SimulatedClickVisualOptions = ShowPressedLook);
-    void dispatchFocusInEvent(const AtomString& eventType, RefPtr<Element>&& oldFocusedElement);
-    void dispatchFocusOutEvent(const AtomString& eventType, RefPtr<Element>&& newFocusedElement);
+
+    // FIXME: Consider changing signature to accept Element* because all callers perform copyRef().
+    void dispatchFocusInEventIfNeeded(RefPtr<Element>&& oldFocusedElement);
+    void dispatchFocusOutEventIfNeeded(RefPtr<Element>&& newFocusedElement);
     virtual void dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, FocusDirection);
     virtual void dispatchBlurEvent(RefPtr<Element>&& newFocusedElement);
     void dispatchWebKitImageReadyEventForTesting();
@@ -652,6 +659,9 @@ public:
     String description() const override;
     String debugDescription() const override;
 
+    bool hasDuplicateAttribute() const { return m_hasDuplicateAttribute; };
+    void setHasDuplicateAttribute(bool hasDuplicateAttribute) { m_hasDuplicateAttribute = hasDuplicateAttribute; };
+
 protected:
     Element(const QualifiedName&, Document&, ConstructionType);
 
@@ -687,6 +697,8 @@ private:
     bool isUserActionElementDragged() const;
     bool isUserActionElementHasFocusVisible() const;
     bool isUserActionElementHasFocusWithin() const;
+
+    bool isNonceable() const;
 
     virtual void didAddUserAgentShadowRoot(ShadowRoot&) { }
 
@@ -765,6 +777,8 @@ private:
 
     QualifiedName m_tagName;
     RefPtr<ElementData> m_elementData;
+
+    bool m_hasDuplicateAttribute { false };
 };
 
 void invalidateForSiblingCombinators(Element* sibling);

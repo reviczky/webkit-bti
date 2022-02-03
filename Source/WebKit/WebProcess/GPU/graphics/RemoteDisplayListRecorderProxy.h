@@ -49,6 +49,8 @@ public:
 
     void getPixelBuffer(const WebCore::PixelBufferFormat& outputFormat, const WebCore::IntRect& sourceRect) final;
     void putPixelBuffer(const WebCore::PixelBuffer&, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat) final;
+    void convertToLuminanceMask() final;
+    void transformToColorSpace(const WebCore::DestinationColorSpace&) final;
     void flushContext(WebCore::GraphicsContextFlushIdentifier) final;
 
 private:
@@ -64,7 +66,6 @@ private:
 
     friend class WebCore::DrawGlyphsRecorder;
 
-    bool canDrawImageBuffer(const WebCore::ImageBuffer&) const final;
     WebCore::RenderingMode renderingMode() const final;
 
     void recordSave() final;
@@ -90,6 +91,7 @@ private:
     void recordClipPath(const WebCore::Path&, WebCore::WindRule) final;
     void recordBeginClipToDrawingCommands(const WebCore::FloatRect& destination, WebCore::DestinationColorSpace) final;
     void recordEndClipToDrawingCommands(const WebCore::FloatRect& destination) final;
+    void recordDrawFilteredImageBuffer(std::optional<WebCore::RenderingResourceIdentifier> sourceImageIdentifier, const WebCore::FloatRect& sourceImageRect, WebCore::Filter&) final;
     void recordDrawGlyphs(const WebCore::Font&, const WebCore::GlyphBufferGlyph*, const WebCore::GlyphBufferAdvance*, unsigned count, const WebCore::FloatPoint& localAnchor, WebCore::FontSmoothingMode) final;
     void recordDrawImageBuffer(WebCore::RenderingResourceIdentifier imageBufferIdentifier, const WebCore::FloatRect& destRect, const WebCore::FloatRect& srcRect, const WebCore::ImagePaintingOptions&) final;
     void recordDrawNativeImage(WebCore::RenderingResourceIdentifier imageIdentifier, const WebCore::FloatSize& imageSize, const WebCore::FloatRect& destRect, const WebCore::FloatRect& srcRect, const WebCore::ImagePaintingOptions&) final;
@@ -135,9 +137,10 @@ private:
 #endif
     void recordApplyDeviceScaleFactor(float) final;
 
-    void recordResourceUse(WebCore::NativeImage&) final;
-    void recordResourceUse(WebCore::Font&) final;
-    void recordResourceUse(WebCore::ImageBuffer&) final;
+    bool recordResourceUse(WebCore::NativeImage&) final;
+    bool recordResourceUse(WebCore::ImageBuffer&) final;
+    bool recordResourceUse(const WebCore::SourceImage&) final;
+    bool recordResourceUse(WebCore::Font&) final;
 
     std::unique_ptr<WebCore::GraphicsContext> createNestedContext(const WebCore::FloatRect& initialClip, const WebCore::AffineTransform& initialCTM) final;
 

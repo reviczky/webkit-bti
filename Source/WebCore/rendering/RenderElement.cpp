@@ -634,51 +634,67 @@ RenderPtr<RenderObject> RenderElement::detachRendererInternal(RenderObject& rend
     return RenderPtr<RenderObject>(&renderer);
 }
 
-static inline RenderBlock* nearestNonAnonymousContainingBlockIncludingSelf(RenderElement* renderer)
+static RenderLayer* findNextLayer(const RenderElement& currRenderer, RenderLayer& parentLayer, const RenderObject* siblingToTraverseFrom, bool checkParent = true)
 {
-    while (renderer && (!is<RenderBlock>(*renderer) || renderer->isAnonymousBlock()))
-        renderer = renderer->containingBlock();
-    return downcast<RenderBlock>(renderer);
-}
+    // Step 1: If our layer is a child of the desired parent, then return our layer.
+    auto* ourLayer = currRenderer.hasLayer() ? downcast<RenderLayerModelObject>(currRenderer).layer() : nullptr;
+    if (ourLayer && ourLayer->parent() == &parentLayer)
+        return ourLayer;
 
-RenderBlock* RenderElement::containingBlockForFixedPosition() const
-{
-    auto* ancestor = parent();
-    while (ancestor && !ancestor->canContainFixedPositionObjects())
-        ancestor = ancestor->parent();
-    return nearestNonAnonymousContainingBlockIncludingSelf(ancestor);
-}
-
-RenderBlock* RenderElement::containingBlockForAbsolutePosition() const
-{
-    if (is<RenderInline>(*this) && style().position() == PositionType::Relative) {
-        // A relatively positioned RenderInline forwards its absolute positioned descendants to
-        // its nearest non-anonymous containing block (to avoid having positioned objects list in RenderInlines).
-        return nearestNonAnonymousContainingBlockIncludingSelf(parent());
-    }
-    auto* ancestor = parent();
-    while (ancestor && !ancestor->canContainAbsolutelyPositionedObjects())
-        ancestor = ancestor->parent();
-    // Make sure we only return non-anonymous RenderBlock as containing block.
-    return nearestNonAnonymousContainingBlockIncludingSelf(ancestor);
-}
-
-static void addLayers(RenderElement& renderer, RenderLayer* parentLayer, RenderElement*& newObject, RenderLayer*& beforeChild)
-{
-    if (renderer.hasLayer()) {
-        if (!beforeChild && newObject) {
-            // We need to figure out the layer that follows newObject. We only do
-            // this the first time we find a child layer, and then we update the
-            // pointer values for newObject and beforeChild used by everyone else.
-            beforeChild = newObject->parent()->findNextLayer(parentLayer, newObject);
-            newObject = nullptr;
+    // Step 2: If we don't have a layer, or our layer is the desired parent, then descend
+    // into our siblings trying to find the next layer whose parent is the desired parent.
+    if (!ourLayer || ourLayer == &parentLayer) {
+        for (auto* child = siblingToTraverseFrom ? siblingToTraverseFrom->nextSibling() : currRenderer.firstChild(); child; child = child->nextSibling()) {
+            if (!is<RenderElement>(*child))
+                continue;
+            if (auto* nextLayer = findNextLayer(downcast<RenderElement>(*child), parentLayer, nullptr, false))
+                return nextLayer;
         }
-        parentLayer->addChild(*downcast<RenderLayerModelObject>(renderer).layer(), beforeChild);
+    }
+
+    // Step 3: If our layer is the desired parent layer, then we're finished. We didn't
+    // find anything.
+    if (ourLayer == &parentLayer)
+        return nullptr;
+
+    // Step 4: If |checkParent| is set, climb up to our parent and check its siblings that
+    // follow us to see if we can locate a layer.
+    if (checkParent && currRenderer.parent())
+        return findNextLayer(*currRenderer.parent(), parentLayer, &currRenderer, true);
+
+    return nullptr;
+}
+
+static RenderLayer* layerNextSiblingRespectingTopLayer(const RenderElement& renderer, RenderLayer& parentLayer)
+{
+    ASSERT_IMPLIES(isInTopLayerOrBackdrop(renderer.style(), renderer.element()), renderer.hasLayer());
+
+    if (is<RenderLayerModelObject>(renderer) && isInTopLayerOrBackdrop(renderer.style(), renderer.element())) {
+        auto& layerModelObject = downcast<RenderLayerModelObject>(renderer);
+        ASSERT(layerModelObject.hasLayer());
+        auto topLayerLayers = RenderLayer::topLayerRenderLayers(renderer.view());
+        auto layerIndex = topLayerLayers.find(layerModelObject.layer());
+        if (layerIndex != notFound && layerIndex < topLayerLayers.size() - 1)
+            return topLayerLayers[layerIndex + 1];
+
+        return nullptr;
+    }
+
+    return findNextLayer(*renderer.parent(), parentLayer, &renderer);
+}
+
+static void addLayers(const RenderElement& addedRenderer, RenderElement& currentRenderer, RenderLayer& parentLayer, std::optional<RenderLayer*>& beforeChild)
+{
+    if (currentRenderer.hasLayer()) {
+        if (!beforeChild.has_value())
+            beforeChild = layerNextSiblingRespectingTopLayer(addedRenderer, parentLayer);
+
+        parentLayer.addChild(*downcast<RenderLayerModelObject>(currentRenderer).layer(), beforeChild.value());
         return;
     }
 
-    for (auto& child : childrenOfType<RenderElement>(renderer))
-        addLayers(child, parentLayer, newObject, beforeChild);
+    for (auto& child : childrenOfType<RenderElement>(currentRenderer))
+        addLayers(addedRenderer, child, parentLayer, beforeChild);
 }
 
 void RenderElement::addLayers(RenderLayer* parentLayer)
@@ -686,9 +702,8 @@ void RenderElement::addLayers(RenderLayer* parentLayer)
     if (!parentLayer)
         return;
 
-    RenderElement* renderer = this;
-    RenderLayer* beforeChild = nullptr;
-    WebCore::addLayers(*this, parentLayer, renderer, beforeChild);
+    std::optional<RenderLayer*> beforeChild;
+    WebCore::addLayers(*this, *this, *parentLayer, beforeChild);
 }
 
 void RenderElement::removeLayers(RenderLayer* parentLayer)
@@ -720,40 +735,20 @@ void RenderElement::moveLayers(RenderLayer* oldParent, RenderLayer& newParent)
         child.moveLayers(oldParent, newParent);
 }
 
-RenderLayer* RenderElement::findNextLayer(RenderLayer* parentLayer, RenderObject* startPoint, bool checkParent)
+RenderLayer* RenderElement::layerParent() const
 {
-    // Error check the parent layer passed in. If it's null, we can't find anything.
-    if (!parentLayer)
-        return nullptr;
+    ASSERT_IMPLIES(isInTopLayerOrBackdrop(style(), element()), hasLayer());
 
-    // Step 1: If our layer is a child of the desired parent, then return our layer.
-    RenderLayer* ourLayer = hasLayer() ? downcast<RenderLayerModelObject>(*this).layer() : nullptr;
-    if (ourLayer && ourLayer->parent() == parentLayer)
-        return ourLayer;
+    if (hasLayer() && isInTopLayerOrBackdrop(style(), element()))
+        return view().layer();
 
-    // Step 2: If we don't have a layer, or our layer is the desired parent, then descend
-    // into our siblings trying to find the next layer whose parent is the desired parent.
-    if (!ourLayer || ourLayer == parentLayer) {
-        for (RenderObject* child = startPoint ? startPoint->nextSibling() : firstChild(); child; child = child->nextSibling()) {
-            if (!is<RenderElement>(*child))
-                continue;
-            RenderLayer* nextLayer = downcast<RenderElement>(*child).findNextLayer(parentLayer, nullptr, false);
-            if (nextLayer)
-                return nextLayer;
-        }
-    }
+    return parent()->enclosingLayer();
+}
 
-    // Step 3: If our layer is the desired parent layer, then we're finished. We didn't
-    // find anything.
-    if (parentLayer == ourLayer)
-        return nullptr;
-
-    // Step 4: If |checkParent| is set, climb up to our parent and check its siblings that
-    // follow us to see if we can locate a layer.
-    if (checkParent && parent())
-        return parent()->findNextLayer(parentLayer, this, true);
-
-    return nullptr;
+// This answers the question "if this renderer had a layer, what would its next sibling layer be".
+RenderLayer* RenderElement::layerNextSibling(RenderLayer& parentLayer) const
+{
+    return WebCore::layerNextSiblingRespectingTopLayer(*this, parentLayer);
 }
 
 bool RenderElement::layerCreationAllowedForSubtree() const
@@ -1000,19 +995,19 @@ void RenderElement::insertedIntoTree(IsInternalMove isInternalMove)
 {
     // Keep our layer hierarchy updated. Optimize for the common case where we don't have any children
     // and don't have a layer attached to ourselves.
-    RenderLayer* layer = nullptr;
+    RenderLayer* parentLayer = nullptr;
     if (firstChild() || hasLayer()) {
-        layer = parent()->enclosingLayer();
-        addLayers(layer);
+        auto* parentLayer = layerParent();
+        addLayers(parentLayer);
     }
 
     // If |this| is visible but this object was not, tell the layer it has some visible content
     // that needs to be drawn and layer visibility optimization can't be used
     if (parent()->style().visibility() != Visibility::Visible && style().visibility() == Visibility::Visible && !hasLayer()) {
-        if (!layer)
-            layer = parent()->enclosingLayer();
-        if (layer)
-            layer->dirtyVisibleContentStatus();
+        if (!parentLayer)
+            parentLayer = layerParent();
+        if (parentLayer)
+            parentLayer->dirtyVisibleContentStatus();
     }
 
     RenderObject::insertedIntoTree(isInternalMove);
@@ -1021,16 +1016,15 @@ void RenderElement::insertedIntoTree(IsInternalMove isInternalMove)
 void RenderElement::willBeRemovedFromTree(IsInternalMove isInternalMove)
 {
     // If we remove a visible child from an invisible parent, we don't know the layer visibility any more.
-    RenderLayer* layer = nullptr;
     if (parent()->style().visibility() != Visibility::Visible && style().visibility() == Visibility::Visible && !hasLayer()) {
-        if ((layer = parent()->enclosingLayer()))
-            layer->dirtyVisibleContentStatus();
+        // FIXME: should get parent layer. Necessary?
+        if (auto* enclosingLayer = parent()->enclosingLayer())
+            enclosingLayer->dirtyVisibleContentStatus();
     }
     // Keep our layer hierarchy updated.
     if (firstChild() || hasLayer()) {
-        if (!layer)
-            layer = parent()->enclosingLayer();
-        removeLayers(layer);
+        auto* parentLayer = layerParent();
+        removeLayers(parentLayer);
     }
 
     if (isOutOfFlowPositioned() && parent()->childrenInline())
@@ -1395,6 +1389,11 @@ bool RenderElement::isVisibleInDocumentRect(const IntRect& documentRect) const
     return true;
 }
 
+bool RenderElement::isInsideEntirelyHiddenLayer() const
+{
+    return style().visibility() != Visibility::Visible && !enclosingLayer()->hasVisibleContent();
+}
+
 void RenderElement::registerForVisibleInViewportCallback()
 {
     if (m_isRegisteredForVisibleInViewportCallback)
@@ -1590,7 +1589,7 @@ Color RenderElement::selectionForegroundColor() const
 
 Color RenderElement::selectionEmphasisMarkColor() const
 {
-    return selectionColor(CSSPropertyWebkitTextEmphasisColor);
+    return selectionColor(CSSPropertyTextEmphasisColor);
 }
 
 Color RenderElement::selectionBackgroundColor() const
@@ -1612,12 +1611,8 @@ Color RenderElement::selectionBackgroundColor() const
 
 bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
 {
-    // When scrolling elements into view, ignore sticky offsets and scroll to the static
-    // position of the element. See: https://drafts.csswg.org/css-position/#stickypos-scroll.
-    OptionSet<MapCoordinatesMode> localToAbsoluteMode { UseTransforms, IgnoreStickyOffsets };
-
-    if (!isInline() || isReplaced()) {
-        point = localToAbsolute(FloatPoint(), localToAbsoluteMode, &insideFixed);
+    if (!isInline() || isReplacedOrInlineBlock()) {
+        point = localToAbsolute(FloatPoint(), UseTransforms, &insideFixed);
         return true;
     }
 
@@ -1642,14 +1637,14 @@ bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
         }
         ASSERT(o);
 
-        if (!o->isInline() || o->isReplaced()) {
-            point = o->localToAbsolute(FloatPoint(), localToAbsoluteMode, &insideFixed);
+        if (!o->isInline() || o->isReplacedOrInlineBlock()) {
+            point = o->localToAbsolute(FloatPoint(), UseTransforms, &insideFixed);
             return true;
         }
 
         if (p->node() && p->node() == element() && is<RenderText>(*o) && !InlineIterator::firstTextBoxFor(downcast<RenderText>(*o))) {
             // do nothing - skip unrendered whitespace that is a child or next sibling of the anchor
-        } else if (is<RenderText>(*o) || o->isReplaced()) {
+        } else if (is<RenderText>(*o) || o->isReplacedOrInlineBlock()) {
             point = FloatPoint();
             if (is<RenderText>(*o)) {
                 auto& textRenderer = downcast<RenderText>(*o);
@@ -1657,7 +1652,7 @@ bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
                     point.move(textRenderer.linesBoundingBox().x(), run->line()->top());
             } else if (is<RenderBox>(*o))
                 point.moveBy(downcast<RenderBox>(*o).location());
-            point = o->container()->localToAbsolute(point, localToAbsoluteMode, &insideFixed);
+            point = o->container()->localToAbsolute(point, UseTransforms, &insideFixed);
             return true;
         }
     }
@@ -1673,12 +1668,8 @@ bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
 
 bool RenderElement::getTrailingCorner(FloatPoint& point, bool& insideFixed) const
 {
-    // When scrolling elements into view, ignore sticky offsets and scroll to the static
-    // position of the element. See: https://drafts.csswg.org/css-position/#stickypos-scroll.
-    OptionSet<MapCoordinatesMode> localToAbsoluteMode { UseTransforms, IgnoreStickyOffsets };
-
-    if (!isInline() || isReplaced()) {
-        point = localToAbsolute(LayoutPoint(downcast<RenderBox>(*this).size()), localToAbsoluteMode, &insideFixed);
+    if (!isInline() || isReplacedOrInlineBlock()) {
+        point = localToAbsolute(LayoutPoint(downcast<RenderBox>(*this).size()), UseTransforms, &insideFixed);
         return true;
     }
 
@@ -1700,7 +1691,7 @@ bool RenderElement::getTrailingCorner(FloatPoint& point, bool& insideFixed) cons
             o = prev;
         }
         ASSERT(o);
-        if (is<RenderText>(*o) || o->isReplaced()) {
+        if (is<RenderText>(*o) || o->isReplacedOrInlineBlock()) {
             point = FloatPoint();
             if (is<RenderText>(*o)) {
                 LayoutRect linesBox = downcast<RenderText>(*o).linesBoundingBox();
@@ -1709,7 +1700,7 @@ bool RenderElement::getTrailingCorner(FloatPoint& point, bool& insideFixed) cons
                 point.moveBy(linesBox.maxXMaxYCorner());
             } else
                 point.moveBy(downcast<RenderBox>(*o).frameRect().maxXMaxYCorner());
-            point = o->container()->localToAbsolute(point, localToAbsoluteMode, &insideFixed);
+            point = o->container()->localToAbsolute(point, UseTransforms, &insideFixed);
             return true;
         }
     }
@@ -1728,7 +1719,7 @@ LayoutRect RenderElement::absoluteAnchorRect(bool* insideFixed) const
     FloatPoint lowerRight = trailing;
 
     // Vertical writing modes might mean the leading point is not in the top left
-    if (!isInline() || isReplaced()) {
+    if (!isInline() || isReplacedOrInlineBlock()) {
         upperLeft = FloatPoint(std::min(leading.x(), trailing.x()), std::min(leading.y(), trailing.y()));
         lowerRight = FloatPoint(std::max(leading.x(), trailing.x()), std::max(leading.y(), trailing.y()));
     } // Otherwise, it's not obvious what to do.
@@ -1743,7 +1734,22 @@ LayoutRect RenderElement::absoluteAnchorRect(bool* insideFixed) const
 
 LayoutRect RenderElement::absoluteAnchorRectWithScrollMargin(bool* insideFixed) const
 {
-    return absoluteAnchorRect(insideFixed);
+    LayoutRect anchorRect = absoluteAnchorRect(insideFixed);
+    const LengthBox& scrollMargin = style().scrollMargin();
+    if (scrollMargin.isZero())
+        return anchorRect;
+
+    // The scroll snap specification says that the scroll-margin should be applied in the
+    // coordinate system of the scroll container and applied to the rectangular bounding
+    // box of the transformed border box of the target element.
+    // See https://www.w3.org/TR/css-scroll-snap-1/#scroll-margin.
+    const LayoutBoxExtent margin(
+        valueForLength(scrollMargin.top(), anchorRect.height()),
+        valueForLength(scrollMargin.right(), anchorRect.width()),
+        valueForLength(scrollMargin.bottom(), anchorRect.height()),
+        valueForLength(scrollMargin.left(), anchorRect.width()));
+    anchorRect.expand(margin);
+    return anchorRect;
 }
 
 void RenderElement::drawLineForBoxSide(GraphicsContext& graphicsContext, const FloatRect& rect, BoxSide side, Color color, BorderStyle borderStyle, float adjacentWidth1, float adjacentWidth2, bool antialias) const
@@ -2204,7 +2210,7 @@ bool RenderElement::checkForRepaintDuringLayout() const
 
 ImageOrientation RenderElement::imageOrientation() const
 {
-    auto* imageElement = is<HTMLImageElement>(element()) ? downcast<HTMLImageElement>(element()) : nullptr;
+    auto* imageElement = dynamicDowncast<HTMLImageElement>(element());
     return (imageElement && !imageElement->allowsOrientationOverride()) ? ImageOrientation(ImageOrientation::FromImage) : style().imageOrientation();
 }
 

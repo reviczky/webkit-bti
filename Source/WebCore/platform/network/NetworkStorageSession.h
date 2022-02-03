@@ -120,7 +120,8 @@ public:
 #endif
 
 #if PLATFORM(COCOA) || USE(CFURLCONNECTION)
-    WEBCORE_EXPORT static RetainPtr<CFURLStorageSessionRef> createCFStorageSessionForIdentifier(CFStringRef identifier);
+    enum class ShouldDisableCFURLCache : bool { No, Yes };
+    WEBCORE_EXPORT static RetainPtr<CFURLStorageSessionRef> createCFStorageSessionForIdentifier(CFStringRef identifier, ShouldDisableCFURLCache = ShouldDisableCFURLCache::No);
     enum class IsInMemoryCookieStore : bool { No, Yes };
     WEBCORE_EXPORT NetworkStorageSession(PAL::SessionID, RetainPtr<CFURLStorageSessionRef>&&, RetainPtr<CFHTTPCookieStorageRef>&&, IsInMemoryCookieStore = IsInMemoryCookieStore::No);
     WEBCORE_EXPORT explicit NetworkStorageSession(PAL::SessionID);
@@ -146,7 +147,7 @@ public:
     WEBCORE_EXPORT void setCookieDatabase(UniqueRef<CookieJarDB>&&);
     WEBCORE_EXPORT void setCookiesFromHTTPResponse(const URL& firstParty, const URL&, const String&) const;
     WEBCORE_EXPORT void setCookieAcceptPolicy(CookieAcceptPolicy) const;
-    WEBCORE_EXPORT void setProxySettings(CurlProxySettings&&);
+    WEBCORE_EXPORT void setProxySettings(const CurlProxySettings&);
 #else
     WEBCORE_EXPORT NetworkStorageSession(PAL::SessionID, NetworkingContext*);
     ~NetworkStorageSession();
@@ -301,7 +302,7 @@ private:
 };
 
 #if PLATFORM(COCOA) || USE(CFURLCONNECTION)
-WEBCORE_EXPORT RetainPtr<CFURLStorageSessionRef> createPrivateStorageSession(CFStringRef identifier, std::optional<HTTPCookieAcceptPolicy> = std::nullopt);
+WEBCORE_EXPORT RetainPtr<CFURLStorageSessionRef> createPrivateStorageSession(CFStringRef identifier, std::optional<HTTPCookieAcceptPolicy> = std::nullopt, NetworkStorageSession::ShouldDisableCFURLCache = NetworkStorageSession::ShouldDisableCFURLCache::No);
 #endif
 
 }

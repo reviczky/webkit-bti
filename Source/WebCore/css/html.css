@@ -299,7 +299,7 @@ ol {
 
 li {
     display: list-item;
-    text-align: -webkit-match-parent;
+    text-align: match-parent;
 }
 
 /* FIXME: this should also match ::before::marker and ::after::marker but we don't support
@@ -377,11 +377,11 @@ button {
 }
 
 /* Form controls don't go vertical. */
-input, textarea, keygen, select, button, meter, progress {
+input, textarea, select, button, meter, progress {
     -webkit-writing-mode: horizontal-tb !important;
 }
 
-input, textarea, keygen, select, button {
+input, textarea, select, button {
     margin: 0__qem;
 #if !(defined(WTF_PLATFORM_IOS_FAMILY) && WTF_PLATFORM_IOS_FAMILY)
     font: -webkit-small-control;
@@ -708,12 +708,8 @@ input::-webkit-list-button {
 }
 #endif
 
-keygen, select {
+select {
     border-radius: 5px;
-}
-
-keygen::-webkit-keygen-select {
-    margin: 0px;
 }
 
 textarea {
@@ -774,9 +770,6 @@ input[type="file"] {
 
 input:-webkit-autofill-and-obscured {
     -webkit-text-security: disc !important;
-    -webkit-user-select: none !important;
-    pointer-events: none !important;
-    cursor: default !important;
 }
 
 input:-webkit-autofill-strong-password {
@@ -914,7 +907,7 @@ input[readonly], textarea[readonly] {
 
 input:is([type="button"], [type="submit"], [type="reset"]):disabled,
 input[type="file"]:disabled::file-selector-button, button:disabled,
-select:disabled, keygen:disabled, optgroup:disabled, option:disabled,
+select:disabled, optgroup:disabled, option:disabled,
 select[disabled]>option {
     color: GrayText;
 }
@@ -1261,7 +1254,7 @@ nobr {
 
 /* states */
 
-:-internal-direct-focus {
+:focus-visible {
 #if defined(WTF_PLATFORM_IOS_FAMILY) && WTF_PLATFORM_IOS_FAMILY
     outline: auto 3px -webkit-focus-ring-color;
 #else
@@ -1275,7 +1268,7 @@ html:focus, body:focus, input[readonly]:focus, applet:focus, embed:focus, iframe
 }
 
 #if !defined(WTF_PLATFORM_IOS_FAMILY) || !WTF_PLATFORM_IOS_FAMILY
-input:focus, textarea:focus, keygen:focus, select:focus {
+input:focus, textarea:focus, select:focus {
     outline-offset: -2px;
 }
 #endif
@@ -1303,7 +1296,7 @@ ruby, rt {
 
 rt {
     line-height: normal;
-    -webkit-text-emphasis: none;
+    text-emphasis: none;
 }
 
 ruby > rt {

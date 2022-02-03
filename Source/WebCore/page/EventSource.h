@@ -84,8 +84,8 @@ private:
 
     // ThreadableLoaderClient
     void didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse&) final;
-    void didReceiveData(const uint8_t*, int) final;
-    void didFinishLoading(ResourceLoaderIdentifier) final;
+    void didReceiveData(const SharedBuffer&) final;
+    void didFinishLoading(ResourceLoaderIdentifier, const NetworkLoadMetrics&) final;
     void didFail(const ResourceError&) final;
 
     // ActiveDOMObject

@@ -34,9 +34,9 @@
 #include "SWServerRegistration.h"
 #include "SWServerWorker.h"
 #include "SecurityOrigin.h"
-#include "ServiceWorkerFetchResult.h"
 #include "ServiceWorkerRegistrationData.h"
 #include "ServiceWorkerUpdateViaCache.h"
+#include "WorkerFetchResult.h"
 #include "WorkerType.h"
 
 namespace WebCore {
@@ -69,9 +69,9 @@ static bool doCertificatesMatch(const CertificateInfo& first, const CertificateI
 #endif
 }
 
-void SWServerJobQueue::scriptFetchFinished(const ServiceWorkerFetchResult& result)
+void SWServerJobQueue::scriptFetchFinished(const ServiceWorkerJobDataIdentifier& jobDataIdentifier, const WorkerFetchResult& result)
 {
-    if (!isCurrentlyProcessingJob(result.jobDataIdentifier))
+    if (!isCurrentlyProcessingJob(jobDataIdentifier))
         return;
 
     auto& job = firstJob();
@@ -82,9 +82,9 @@ void SWServerJobQueue::scriptFetchFinished(const ServiceWorkerFetchResult& resul
 
     auto* newestWorker = registration->getNewestWorker();
 
-    if (!result.scriptError.isNull()) {
+    if (!result.error.isNull()) {
         // Invoke Reject Job Promise with job and TypeError.
-        m_server.rejectJob(job, ExceptionData { TypeError, makeString("Script URL ", job.scriptURL.string(), " fetch resulted in error: ", result.scriptError.localizedDescription()) });
+        m_server.rejectJob(job, ExceptionData { TypeError, makeString("Script URL ", job.scriptURL.string(), " fetch resulted in error: ", result.error.localizedDescription()) });
 
         // If newestWorker is null, invoke Clear Registration algorithm passing registration as its argument.
         if (!newestWorker)
@@ -297,7 +297,7 @@ void SWServerJobQueue::runRegisterJob(const ServiceWorkerJobData& job)
             registration->setUpdateViaCache(job.registrationOptions.updateViaCache);
         RELEASE_LOG(ServiceWorker, "%p - SWServerJobQueue::runRegisterJob: Found registration %llu for job %s but it needs updating", this, registration->identifier().toUInt64(), job.identifier().loggingString().utf8().data());
     } else {
-        auto newRegistration = makeUnique<SWServerRegistration>(m_server, m_registrationKey, job.registrationOptions.updateViaCache, job.scopeURL, job.scriptURL, job.serviceWorkerPageIdentifier());
+        auto newRegistration = makeUnique<SWServerRegistration>(m_server, m_registrationKey, job.registrationOptions.updateViaCache, job.scopeURL, job.scriptURL, job.serviceWorkerPageIdentifier(), NavigationPreloadState::defaultValue());
         m_server.addRegistration(WTFMove(newRegistration));
 
         RELEASE_LOG(ServiceWorker, "%p - SWServerJobQueue::runRegisterJob: No existing registration for job %s, constructing a new one.", this, job.identifier().loggingString().utf8().data());

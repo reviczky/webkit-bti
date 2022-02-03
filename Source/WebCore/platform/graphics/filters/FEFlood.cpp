@@ -3,7 +3,7 @@
  * Copyright (C) 2004, 2005 Rob Buis <buis@kde.org>
  * Copyright (C) 2005 Eric Seidel <eric@webkit.org>
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
- * Copyright (C) 2021 Apple Inc.  All rights reserved.
+ * Copyright (C) 2021-2022 Apple Inc.  All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,6 +26,7 @@
 
 #include "ColorSerialization.h"
 #include "FEFloodSoftwareApplier.h"
+#include "Filter.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
@@ -58,17 +59,25 @@ bool FEFlood::setFloodOpacity(float floodOpacity)
     return true;
 }
 
-bool FEFlood::platformApplySoftware(const Filter& filter)
+FloatRect FEFlood::calculateImageRect(const Filter& filter, const FilterImageVector&, const FloatRect& primitiveSubregion) const
 {
-    return FEFloodSoftwareApplier(*this).apply(filter, inputEffects());
+    return filter.maxEffectRect(primitiveSubregion);
 }
 
-TextStream& FEFlood::externalRepresentation(TextStream& ts, RepresentationType representation) const
+std::unique_ptr<FilterEffectApplier> FEFlood::createSoftwareApplier() const
+{
+    return FilterEffectApplier::create<FEFloodSoftwareApplier>(*this);
+}
+
+TextStream& FEFlood::externalRepresentation(TextStream& ts, FilterRepresentation representation) const
 {
     ts << indent << "[feFlood";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " flood-color=\"" << serializationForRenderTreeAsText(floodColor()) << "\" "
-       << "flood-opacity=\"" << floodOpacity() << "\"]\n";
+
+    ts << " flood-color=\"" << serializationForRenderTreeAsText(floodColor()) << "\"";
+    ts << " flood-opacity=\"" << floodOpacity() << "\"";
+
+    ts << "]\n";
     return ts;
 }
 

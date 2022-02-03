@@ -80,7 +80,7 @@ LayoutUnit RenderLineBreak::lineHeight(bool firstLine, LineDirectionMode /*direc
 LayoutUnit RenderLineBreak::baselinePosition(FontBaseline baselineType, bool firstLine, LineDirectionMode direction, LinePositionMode linePositionMode) const
 {
     const RenderStyle& style = firstLine ? firstLineStyle() : this->style();
-    const FontMetrics& fontMetrics = style.fontMetrics();
+    const FontMetrics& fontMetrics = style.metricsOfPrimaryFont();
     return LayoutUnit { (fontMetrics.ascent(baselineType) + (lineHeight(firstLine, direction, linePositionMode) - fontMetrics.height()) / 2).toInt() };
 }
 
@@ -199,7 +199,8 @@ void RenderLineBreak::collectSelectionGeometries(Vector<SelectionGeometry>& rect
             rect.shiftXEdgeTo(line->lineBoxTop());
     }
 
-    auto* containingBlock = containingBlockForObjectInFlow();
+    // FIXME: Out-of-flow positioned line breaks do not follow normal containing block chain.
+    auto* containingBlock = RenderObject::containingBlockForPositionType(PositionType::Static, *this);
     // Map rect, extended left to leftOffset, and right to rightOffset, through transforms to get minX and maxX.
     LogicalSelectionOffsetCaches cache(*containingBlock);
     LayoutUnit leftOffset = containingBlock->logicalLeftSelectionOffset(*containingBlock, LayoutUnit(run->logicalTop()), cache);

@@ -29,9 +29,6 @@
 #include "Mutex.h"
 
 #if BUSE(LIBPAS)
-#ifndef PAS_BMALLOC
-#define PAS_BMALLOC 1
-#endif
 #include "bmalloc_heap_ref.h"
 #endif
 
@@ -91,7 +88,7 @@ struct IsoHeap {
 
     static pas_heap_ref& provideHeap()
     {
-        static bmalloc_type type = BMALLOC_TYPE_INITIALIZER(sizeof(LibPasBmallocHeapType), alignof(LibPasBmallocHeapType), __PRETTY_FUNCTION__);
+        static const bmalloc_type type = BMALLOC_TYPE_INITIALIZER(sizeof(LibPasBmallocHeapType), alignof(LibPasBmallocHeapType), __PRETTY_FUNCTION__);
         static pas_heap_ref heap = BMALLOC_HEAP_REF_INITIALIZER(&type);
         return heap;
     }

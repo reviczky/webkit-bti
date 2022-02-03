@@ -146,8 +146,12 @@ enum {
     kWKMediaHasActiveVideoCaptureDevice = 1 << 3,
     kWKMediaHasMutedAudioCaptureDevice = 1 << 4,
     kWKMediaHasMutedVideoCaptureDevice = 1 << 5,
-    kWKMediaHasActiveDisplayCaptureDevice = 1 << 6,
-    kWKMediaHasMutedDisplayCaptureDevice = 1 << 7,
+    kWKMediaHasActiveScreenCaptureDevice = 1 << 6,
+    kWKMediaHasActiveDisplayCaptureDevice = kWKMediaHasActiveScreenCaptureDevice,
+    kWKMediaHasMutedScreenCaptureDevice = 1 << 7,
+    kWKMediaHasMutedDisplayCaptureDevice = kWKMediaHasMutedScreenCaptureDevice,
+    kWKMediaHasActiveWindowCaptureDevice = 1 << 8,
+    kWKMediaHasMutedWindowCaptureDevice = 1 << 9,
 };
 typedef uint32_t WKMediaState;
 
@@ -180,8 +184,8 @@ typedef void (*WKPageMarkAttributedPrivateClickMeasurementsAsExpiredForTestingFu
 WK_EXPORT void WKPageMarkAttributedPrivateClickMeasurementsAsExpiredForTesting(WKPageRef page, WKPageMarkAttributedPrivateClickMeasurementsAsExpiredForTestingFunction callback, void* callbackContext);
 typedef void (*WKPageSetPrivateClickMeasurementEphemeralMeasurementForTestingFunction)(void* functionContext);
 WK_EXPORT void WKPageSetPrivateClickMeasurementEphemeralMeasurementForTesting(WKPageRef page, bool value, WKPageSetPrivateClickMeasurementEphemeralMeasurementForTestingFunction callback, void* callbackContext);
-typedef void (*WKPageSimulateResourceLoadStatisticsSessionRestartFunction)(void* functionContext);
-WK_EXPORT void WKPageSimulateResourceLoadStatisticsSessionRestart(WKPageRef page, WKPageSimulateResourceLoadStatisticsSessionRestartFunction callback, void* callbackContext);
+typedef void (*WKPageSimulatePrivateClickMeasurementSessionRestartFunction)(void* functionContext);
+WK_EXPORT void WKPageSimulatePrivateClickMeasurementSessionRestart(WKPageRef page, WKPageSimulatePrivateClickMeasurementSessionRestartFunction callback, void* callbackContext);
 typedef void (*WKPageSetPrivateClickMeasurementTokenPublicKeyURLForTestingFunction)(void* functionContext);
 WK_EXPORT void WKPageSetPrivateClickMeasurementTokenPublicKeyURLForTesting(WKPageRef page, WKURLRef urlString, WKPageSetPrivateClickMeasurementTokenPublicKeyURLForTestingFunction callback, void* callbackContext);
 typedef void (*WKPageSetPrivateClickMeasurementTokenSignatureURLForTestingFunction)(void* functionContext);

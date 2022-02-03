@@ -132,9 +132,9 @@ std::unique_ptr<Box> TreeBuilder::createReplacedBox(std::optional<Box::ElementAt
     return makeUnique<ReplacedBox>(elementAttributes, WTFMove(style));
 }
 
-std::unique_ptr<Box> TreeBuilder::createTextBox(String text, bool canUseSimplifiedTextMeasuring, RenderStyle&& style)
+std::unique_ptr<Box> TreeBuilder::createTextBox(String text, bool canUseSimplifiedTextMeasuring, bool canUseSimpleFontCodePath,  RenderStyle&& style)
 {
-    return makeUnique<InlineTextBox>(text, canUseSimplifiedTextMeasuring, TextUtil::containsBidiText(text), WTFMove(style));
+    return makeUnique<InlineTextBox>(text, canUseSimplifiedTextMeasuring, canUseSimpleFontCodePath, WTFMove(style));
 }
 
 std::unique_ptr<Box> TreeBuilder::createLineBreakBox(bool isOptional, RenderStyle&& style)
@@ -171,9 +171,9 @@ std::unique_ptr<Box> TreeBuilder::createLayoutBox(const ContainerBox& parentCont
         String text = textRenderer.text();
         auto useSimplifiedTextMeasuring = canUseSimplifiedTextMeasuring(text, parentContainer.style().fontCascade(), parentContainer.style().collapseWhiteSpace());
         if (parentContainer.style().display() == DisplayType::Inline)
-            childLayoutBox = createTextBox(text, useSimplifiedTextMeasuring, RenderStyle::clone(parentContainer.style()));
+            childLayoutBox = createTextBox(text, useSimplifiedTextMeasuring, textRenderer.canUseSimpleFontCodePath(), RenderStyle::clone(parentContainer.style()));
         else
-            childLayoutBox = createTextBox(text, useSimplifiedTextMeasuring, RenderStyle::createAnonymousStyleWithDisplay(parentContainer.style(), DisplayType::Inline));
+            childLayoutBox = createTextBox(text, useSimplifiedTextMeasuring, textRenderer.canUseSimpleFontCodePath(), RenderStyle::createAnonymousStyleWithDisplay(parentContainer.style(), DisplayType::Inline));
     } else {
         auto& renderer = downcast<RenderElement>(childRenderer);
         auto displayType = renderer.style().display();
@@ -374,9 +374,9 @@ void showInlineTreeAndRuns(TextStream& stream, const LayoutState& layoutState, c
         };
         addSpacing();
         auto& line = lines[lineIndex];
-        auto& lineBoxLogicalRect = line.lineBoxLogicalRect();
+        auto& lineBoxRect = line.lineBoxRect();
         auto enclosingTopAndBottom = line.enclosingTopAndBottom();
-        stream << "line at (" << lineBoxLogicalRect.left() << "," << lineBoxLogicalRect.top() << ") size (" << lineBoxLogicalRect.width() << "x" << lineBoxLogicalRect.height() << ") baseline (" << line.baseline() << ") enclosing top (" << enclosingTopAndBottom.top << ") bottom (" << enclosingTopAndBottom.bottom << ")";
+        stream << "line at (" << lineBoxRect.x() << "," << lineBoxRect.y() << ") size (" << lineBoxRect.width() << "x" << lineBoxRect.height() << ") baseline (" << line.baseline() << ") enclosing top (" << enclosingTopAndBottom.top << ") bottom (" << enclosingTopAndBottom.bottom << ")";
         stream.nextLine();
 
         addSpacing();
@@ -386,7 +386,7 @@ void showInlineTreeAndRuns(TextStream& stream, const LayoutState& layoutState, c
         auto outputInlineLevelBox = [&](const auto& inlineLevelBox) {
             addSpacing();
             stream << "    ";
-            auto logicalRect = inlineLevelBox.logicalRect();
+            auto rect = inlineLevelBox.rect();
             auto& layoutBox = inlineLevelBox.layoutBox();
             if (layoutBox.isAtomicInlineLevelBox())
                 stream << "Atomic inline level box";
@@ -397,8 +397,8 @@ void showInlineTreeAndRuns(TextStream& stream, const LayoutState& layoutState, c
             else
                 stream << "Generic inline level box";
             stream
-                << " at (" << logicalRect.left() << "," << logicalRect.top() << ")"
-                << " size (" << logicalRect.width() << "x" << logicalRect.height() << ")";
+                << " at (" << rect.x() << "," << rect.y() << ")"
+                << " size (" << rect.width() << "x" << rect.height() << ")";
             stream.nextLine();
         };
         for (auto& box : boxes) {
@@ -421,7 +421,7 @@ void showInlineTreeAndRuns(TextStream& stream, const LayoutState& layoutState, c
                 stream << "text box";
             else
                 stream << "box box";
-            stream << " at (" << box.logicalLeft() << "," << box.logicalTop() << ") size " << box.logicalWidth() << "x" << box.logicalHeight();
+            stream << " at (" << box.left() << "," << box.top() << ") size " << box.width() << "x" << box.height();
             if (box.text())
                 stream << " box(" << box.text()->start() << ", " << box.text()->end() << ")";
             stream.nextLine();

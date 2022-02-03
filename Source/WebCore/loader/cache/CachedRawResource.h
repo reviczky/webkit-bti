@@ -28,6 +28,7 @@ namespace WebCore {
 
 class CachedResourceClient;
 class ResourceTiming;
+class SharedBuffer;
 class SharedBufferDataView;
 
 class CachedRawResource final : public CachedResource {
@@ -51,9 +52,9 @@ public:
 
 private:
     void didAddClient(CachedResourceClient&) final;
-    void updateBuffer(SharedBuffer&) final;
-    void updateData(const uint8_t* data, unsigned length) final;
-    void finishLoading(SharedBuffer*, const NetworkLoadMetrics&) final;
+    void updateBuffer(const FragmentedSharedBuffer&) final;
+    void updateData(const SharedBuffer&) final;
+    void finishLoading(const FragmentedSharedBuffer*, const NetworkLoadMetrics&) final;
 
     bool shouldIgnoreHTTPStatusCodeErrors() const override { return true; }
     void allClientsRemoved() override;
@@ -66,8 +67,8 @@ private:
     void switchClientsToRevalidatedResource() override;
     bool mayTryReplaceEncodedData() const override { return m_allowEncodedDataReplacement; }
 
-    std::optional<SharedBufferDataView> calculateIncrementalDataChunk(const SharedBuffer*) const;
-    void notifyClientsDataWasReceived(const uint8_t* data, unsigned length);
+    std::optional<SharedBufferDataView> calculateIncrementalDataChunk(const SharedBuffer&) const;
+    void notifyClientsDataWasReceived(const SharedBuffer&);
     
 #if USE(QUICK_LOOK)
     void previewResponseReceived(const ResourceResponse&) final;
@@ -92,7 +93,7 @@ private:
     Vector<RedirectPair, 0, CrashOnOverflow, 0> m_redirectChain;
 
     struct DelayedFinishLoading {
-        RefPtr<SharedBuffer> buffer;
+        RefPtr<const FragmentedSharedBuffer> buffer;
     };
     std::optional<DelayedFinishLoading> m_delayedFinishLoading;
 };

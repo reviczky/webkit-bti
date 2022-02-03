@@ -536,7 +536,17 @@ void DragCaretController::nodeWillBeRemoved(Node& node)
     if (RenderView* view = node.document().renderView())
         view->selection().clear();
 
-    clear();
+    // It's important to avoid updating style or layout here, since we're in the middle of removing the node from the document.
+    clearCaretPositionWithoutUpdatingStyle();
+}
+
+void DragCaretController::clearCaretPositionWithoutUpdatingStyle()
+{
+    if (RefPtr node = m_position.deepEquivalent().anchorNode())
+        invalidateCaretRect(node.get(), true);
+
+    m_position = { };
+    clearCaretRect();
 }
 
 void FrameSelection::nodeWillBeRemoved(Node& node)
@@ -2182,10 +2192,6 @@ void FrameSelection::updateAppearance()
     }
 #endif
 
-    RenderView* view = m_document->renderView();
-    if (!view)
-        return;
-
     // Construct a new VisibleSolution, since m_selection is not necessarily valid, and the following steps
     // assume a valid selection. See <https://bugs.webkit.org/show_bug.cgi?id=69563> and <rdar://problem/10232866>.
 #if ENABLE(TEXT_CARET)
@@ -2195,9 +2201,15 @@ void FrameSelection::updateAppearance()
     VisibleSelection selection(oldSelection.visibleStart(), oldSelection.visibleEnd());
 #endif
 
-    if (!selection.isRange()) {
-        view->selection().clear();
-        return;
+    {
+        ScriptDisallowedScope scriptDisallowedScope;
+        auto* view = m_document->renderView();
+        if (!view)
+            return;
+        if (!selection.isRange()) {
+            view->selection().clear();
+            return;
+        }
     }
 
     // Use the rightmost candidate for the start of the selection, and the leftmost candidate for the end of the selection.
@@ -2215,7 +2227,7 @@ void FrameSelection::updateAppearance()
 
     // We can get into a state where the selection endpoints map to the same VisiblePosition when a selection is deleted
     // because we don't yet notify the FrameSelection of text removal.
-    if (startPos.isNotNull() && endPos.isNotNull() && selection.visibleStart() != selection.visibleEnd()) {
+    if (auto* view = m_document->renderView(); startPos.isNotNull() && endPos.isNotNull() && selection.visibleStart() != selection.visibleEnd()) {
         RenderObject* startRenderer = startPos.deprecatedNode()->renderer();
         int startOffset = startPos.deprecatedEditingOffset();
         RenderObject* endRenderer = endPos.deprecatedNode()->renderer();

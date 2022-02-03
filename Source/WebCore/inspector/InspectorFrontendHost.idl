@@ -31,7 +31,6 @@
  */
 
 [
-    ImplementationLacksVTable,
     LegacyNoInterfaceObject,
 ] interface InspectorFrontendHost {
     undefined loaded();
@@ -98,8 +97,9 @@
     [Conditional=INSPECTOR_TELEMETRY] undefined logDiagnosticEvent(DOMString eventName, DOMString content);
 
     readonly attribute boolean supportsWebExtensions;
-    [Conditional=INSPECTOR_EXTENSIONS] undefined didShowExtensionTab(DOMString extensionID, DOMString extensionTabID);
+    [Conditional=INSPECTOR_EXTENSIONS] undefined didShowExtensionTab(DOMString extensionID, DOMString extensionTabID, HTMLIFrameElement extensionFrame);
     [Conditional=INSPECTOR_EXTENSIONS] undefined didHideExtensionTab(DOMString extensionID, DOMString extensionTabID);
+    [Conditional=INSPECTOR_EXTENSIONS] undefined didNavigateExtensionTab(DOMString extensionID, DOMString extensionTabID, DOMString newURL);
     [Conditional=INSPECTOR_EXTENSIONS] undefined inspectedPageDidNavigate(DOMString newURL);
     [Conditional=INSPECTOR_EXTENSIONS] any evaluateScriptInExtensionTab(HTMLIFrameElement extensionFrame, DOMString scriptSource);
 };

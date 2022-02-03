@@ -52,8 +52,9 @@ enum class CachedSpecialPropertyKey : uint8_t {
     ToString,
     ValueOf,
     ToPrimitive,
+    ToJSON,
 };
-static constexpr unsigned numberOfCachedSpecialPropertyKeys = 4;
+static constexpr unsigned numberOfCachedSpecialPropertyKeys = 5;
 
 class StructureRareData;
 class StructureChainInvalidationWatchpoint;
@@ -66,7 +67,7 @@ public:
     template<typename CellType, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM& vm)
     {
-        return &vm.structureRareDataSpace;
+        return &vm.structureRareDataSpace();
     }
 
     static StructureRareData* create(VM&, Structure*);
@@ -140,7 +141,6 @@ private:
 
     bool tryCachePropertyNameEnumeratorViaWatchpoint(VM&, Structure*, StructureChain*);
 
-    WriteBarrier<Structure> m_previous;
     // FIXME: We should have some story for clearing these property names caches in GC.
     // https://bugs.webkit.org/show_bug.cgi?id=192659
     uintptr_t m_cachedPropertyNameEnumeratorAndFlag { 0 };
@@ -156,6 +156,7 @@ private:
     std::unique_ptr<SpecialPropertyCache> m_specialPropertyCache;
     Box<InlineWatchpointSet> m_polyProtoWatchpoint;
 
+    WriteBarrierStructureID m_previous;
     PropertyOffset m_maxOffset;
     PropertyOffset m_transitionOffset;
 };

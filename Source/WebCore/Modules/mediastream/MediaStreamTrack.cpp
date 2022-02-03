@@ -203,11 +203,6 @@ bool MediaStreamTrack::mutedForBindings() const
     return m_muted;
 }
 
-auto MediaStreamTrack::readyState() const -> State
-{
-    return ended() ? State::Ended : State::Live;
-}
-
 bool MediaStreamTrack::ended() const
 {
     return m_ended || m_private->ended();
@@ -220,7 +215,13 @@ RefPtr<MediaStreamTrack> MediaStreamTrack::clone()
 
     ALWAYS_LOG(LOGIDENTIFIER);
 
-    return MediaStreamTrack::create(*scriptExecutionContext(), m_private->clone());
+    auto clone = MediaStreamTrack::create(*scriptExecutionContext(), m_private->clone());
+
+    clone->m_readyState = m_readyState;
+    if (clone->ended() && clone->m_readyState == State::Live)
+        trackEnded(clone->m_private);
+
+    return clone;
 }
 
 void MediaStreamTrack::stopTrack(StopMode mode)
@@ -235,8 +236,10 @@ void MediaStreamTrack::stopTrack(StopMode mode)
 
     // An 'ended' event is not posted if m_ended is true when trackEnded is called, so set it now if we are
     // not supposed to post the event.
-    if (mode == StopMode::Silently)
+    if (mode == StopMode::Silently) {
         m_ended = true;
+        m_readyState = State::Ended;
+    }
 
     m_private->endTrack();
     m_ended = true;
@@ -386,7 +389,7 @@ void MediaStreamTrack::applyConstraints(const std::optional<MediaTrackConstraint
             return;
         }
         m_promise->resolve();
-        m_constraints = constraints.value_or(MediaTrackConstraints { });
+        m_constraints = valueOrDefault(constraints);
     };
     m_private->applyConstraints(createMediaConstraints(constraints), WTFMove(completionHandler));
 }
@@ -433,14 +436,22 @@ MediaProducerMediaStateFlags sourceCaptureState(RealtimeMediaSource& source)
             return MediaProducerMediaState::HasActiveVideoCaptureDevice;
         break;
     case CaptureDevice::DeviceType::Screen:
+        if (source.muted())
+            return MediaProducerMediaState::HasMutedScreenCaptureDevice;
+        if (source.interrupted())
+            return MediaProducerMediaState::HasInterruptedScreenCaptureDevice;
+        if (source.isProducingData())
+            return MediaProducerMediaState::HasActiveScreenCaptureDevice;
+        break;
     case CaptureDevice::DeviceType::Window:
         if (source.muted())
-            return MediaProducerMediaState::HasMutedDisplayCaptureDevice;
+            return MediaProducerMediaState::HasMutedWindowCaptureDevice;
         if (source.interrupted())
-            return MediaProducerMediaState::HasInterruptedDisplayCaptureDevice;
+            return MediaProducerMediaState::HasInterruptedWindowCaptureDevice;
         if (source.isProducingData())
-            return MediaProducerMediaState::HasActiveDisplayCaptureDevice;
+            return MediaProducerMediaState::HasActiveWindowCaptureDevice;
         break;
+    case CaptureDevice::DeviceType::SystemAudio:
     case CaptureDevice::DeviceType::Speaker:
     case CaptureDevice::DeviceType::Unknown:
         ASSERT_NOT_REACHED();
@@ -518,6 +529,7 @@ void MediaStreamTrack::updateToPageMutedState()
     case CaptureDevice::DeviceType::Window:
         m_private->setMuted(page->mutedState().contains(MediaProducerMutedState::ScreenCaptureIsMuted));
         break;
+    case CaptureDevice::DeviceType::SystemAudio:
     case CaptureDevice::DeviceType::Speaker:
     case CaptureDevice::DeviceType::Unknown:
         ASSERT_NOT_REACHED();
@@ -525,15 +537,20 @@ void MediaStreamTrack::updateToPageMutedState()
     }
 }
 
-static inline bool trackMatchesKind(RealtimeMediaSource::Type type, MediaProducerMediaCaptureKind kind)
+static MediaProducerMediaCaptureKind trackTypeForMediaProducerCaptureKind(RealtimeMediaSource::Type type)
 {
-    switch (kind) {
-    case MediaProducerMediaCaptureKind::Audio:
-        return type == RealtimeMediaSource::Type::Audio;
-    case MediaProducerMediaCaptureKind::AudioVideo:
-        return type != RealtimeMediaSource::Type::None;
-    case MediaProducerMediaCaptureKind::Video:
-        return type == RealtimeMediaSource::Type::Video;
+    switch (type) {
+    case RealtimeMediaSource::Type::Audio:
+        return MediaProducerMediaCaptureKind::Microphone;
+    case RealtimeMediaSource::Type::SystemAudio:
+        return MediaProducerMediaCaptureKind::SystemAudio;
+    case RealtimeMediaSource::Type::Video:
+        return MediaProducerMediaCaptureKind::Camera;
+    case RealtimeMediaSource::Type::Screen:
+    case RealtimeMediaSource::Type::Window:
+        return MediaProducerMediaCaptureKind::Display;
+    case RealtimeMediaSource::Type::None:
+        break;
     }
     RELEASE_ASSERT_NOT_REACHED();
 }
@@ -542,7 +559,9 @@ void MediaStreamTrack::endCapture(Document& document, MediaProducerMediaCaptureK
 {
     bool didEndCapture = false;
     for (auto* captureTrack : allCaptureTracks()) {
-        if (captureTrack->document() != &document || !trackMatchesKind(captureTrack->privateTrack().type(), kind))
+        if (captureTrack->document() != &document)
+            continue;
+        if (kind != MediaProducerMediaCaptureKind::EveryKind && kind != trackTypeForMediaProducerCaptureKind(captureTrack->privateTrack().type()))
             continue;
         captureTrack->stopTrack(MediaStreamTrack::StopMode::PostEvent);
         didEndCapture = true;
@@ -562,28 +581,30 @@ void MediaStreamTrack::trackEnded(MediaStreamTrackPrivate&)
     if (m_isCaptureTrack && m_private->type() == RealtimeMediaSource::Type::Audio)
         PlatformMediaSessionManager::sharedManager().removeAudioCaptureSource(*this);
 
-    // http://w3c.github.io/mediacapture-main/#life-cycle
-    // When a MediaStreamTrack track ends for any reason other than the stop() method being invoked, the User Agent must queue a task that runs the following steps:
-    // 1. If the track's readyState attribute has the value ended already, then abort these steps.
-    if (m_ended)
-        return;
-
     ALWAYS_LOG(LOGIDENTIFIER);
 
     if (m_isCaptureTrack && m_private->source().captureDidFail())
         scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Error, "A MediaStreamTrack ended due to a capture failure"_s);
 
-    // 2. Set track's readyState attribute to ended.
-    m_ended = true;
+    // http://w3c.github.io/mediacapture-main/#life-cycle
+    // When a MediaStreamTrack track ends for any reason other than the stop() method being invoked, the User Agent must queue a task that runs the following steps:
+    queueTaskKeepingObjectAlive(*this, TaskSource::Networking, [this, muted = m_private->muted()] {
+        // 1. If the track's readyState attribute has the value ended already, then abort these steps.
+        if (!isAllowedToRunScript() || m_readyState == State::Ended)
+            return;
 
-    if (scriptExecutionContext()->activeDOMObjectsAreSuspended() || scriptExecutionContext()->activeDOMObjectsAreStopped())
+        // 2. Set track's readyState attribute to ended.
+        m_readyState = State::Ended;
+
+        ALWAYS_LOG(LOGIDENTIFIER, "firing 'ended' event");
+
+        // 3. Notify track's source that track is ended so that the source may be stopped, unless other MediaStreamTrack objects depend on it.
+        // 4. Fire a simple event named ended at the object.
+        dispatchEvent(Event::create(eventNames().endedEvent, Event::CanBubble::No, Event::IsCancelable::No));
+    });
+
+    if (m_ended)
         return;
-
-    ALWAYS_LOG(LOGIDENTIFIER, "firing 'ended' event");
-
-    // 3. Notify track's source that track is ended so that the source may be stopped, unless other MediaStreamTrack objects depend on it.
-    // 4. Fire a simple event named ended at the object.
-    dispatchEvent(Event::create(eventNames().endedEvent, Event::CanBubble::No, Event::IsCancelable::No));
 
     for (auto& observer : m_observers)
         observer->trackDidEnd();

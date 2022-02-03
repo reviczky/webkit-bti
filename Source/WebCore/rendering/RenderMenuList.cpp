@@ -138,10 +138,10 @@ void RenderMenuList::adjustInnerStyle()
     } else if (document().page()->chrome().selectItemAlignmentFollowsMenuWritingDirection()) {
         innerStyle.setTextAlign(style().direction() == TextDirection::LTR ? TextAlignMode::Left : TextAlignMode::Right);
         TextDirection direction;
-        EUnicodeBidi unicodeBidi;
+        UnicodeBidi unicodeBidi;
         if (multiple() && selectedOptionCount(*this) != 1) {
             direction = (m_buttonText && m_buttonText->text().defaultWritingDirection() == U_RIGHT_TO_LEFT) ? TextDirection::RTL : TextDirection::LTR;
-            unicodeBidi = UBNormal;
+            unicodeBidi = UnicodeBidi::Normal;
         } else if (m_optionStyle) {
             direction = m_optionStyle->direction();
             unicodeBidi = m_optionStyle->unicodeBidi();
@@ -549,7 +549,7 @@ PopupMenuStyle RenderMenuList::menuStyle() const
 
 HostWindow* RenderMenuList::hostWindow() const
 {
-    return view().frameView().hostWindow();
+    return RenderFlexibleBox::hostWindow();
 }
 
 Ref<Scrollbar> RenderMenuList::createScrollbar(ScrollableArea& scrollableArea, ScrollbarOrientation orientation, ScrollbarControlSize controlSize)

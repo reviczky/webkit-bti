@@ -86,15 +86,13 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , touchActions(RenderStyle::initialTouchActions())
     , pageSizeType(PAGE_SIZE_AUTO)
     , transformStyle3D(static_cast<unsigned>(RenderStyle::initialTransformStyle3D()))
+    , transformStyleForcedToFlat(false)
     , backfaceVisibility(static_cast<unsigned>(RenderStyle::initialBackfaceVisibility()))
     , userDrag(static_cast<unsigned>(RenderStyle::initialUserDrag()))
     , textOverflow(static_cast<unsigned>(RenderStyle::initialTextOverflow()))
     , useSmoothScrolling(static_cast<unsigned>(RenderStyle::initialUseSmoothScrolling()))
-    , marginBeforeCollapse(static_cast<unsigned>(MarginCollapse::Collapse))
-    , marginAfterCollapse(static_cast<unsigned>(MarginCollapse::Collapse))
     , appearance(static_cast<unsigned>(RenderStyle::initialAppearance()))
     , effectiveAppearance(static_cast<unsigned>(RenderStyle::initialAppearance()))
-    , textCombine(static_cast<unsigned>(RenderStyle::initialTextCombine()))
     , textDecorationStyle(static_cast<unsigned>(RenderStyle::initialTextDecorationStyle()))
     , aspectRatioType(static_cast<unsigned>(RenderStyle::initialAspectRatioType()))
 #if ENABLE(CSS_COMPOSITING)
@@ -113,6 +111,7 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , inputSecurity(static_cast<unsigned>(RenderStyle::initialInputSecurity()))
     , hasAttrContent(false)
     , isNotFinal(false)
+    , containerType(static_cast<unsigned>(RenderStyle::initialContainerType()))
     , columnGap(RenderStyle::initialColumnGap())
     , rowGap(RenderStyle::initialRowGap())
     , offsetDistance(RenderStyle::initialOffsetDistance())
@@ -191,16 +190,13 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , touchActions(o.touchActions)
     , pageSizeType(o.pageSizeType)
     , transformStyle3D(o.transformStyle3D)
+    , transformStyleForcedToFlat(o.transformStyleForcedToFlat)
     , backfaceVisibility(o.backfaceVisibility)
     , userDrag(o.userDrag)
     , textOverflow(o.textOverflow)
     , useSmoothScrolling(o.useSmoothScrolling)
-    , marginBeforeCollapse(o.marginBeforeCollapse)
-    , marginAfterCollapse(o.marginAfterCollapse)
     , appearance(o.appearance)
     , effectiveAppearance(o.effectiveAppearance)
-    , borderFit(o.borderFit)
-    , textCombine(o.textCombine)
     , textDecorationStyle(o.textDecorationStyle)
     , aspectRatioType(o.aspectRatioType)
 #if ENABLE(CSS_COMPOSITING)
@@ -219,6 +215,8 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , inputSecurity(o.inputSecurity)
     , hasAttrContent(o.hasAttrContent)
     , isNotFinal(o.isNotFinal)
+    , containerType(o.containerType)
+    , containerNames(o.containerNames)
     , columnGap(o.columnGap)
     , rowGap(o.rowGap)
     , offsetDistance(o.offsetDistance)
@@ -300,16 +298,13 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
             || (!customPaintWatchedProperties && !o.customPaintWatchedProperties))
         && pageSizeType == o.pageSizeType
         && transformStyle3D == o.transformStyle3D
+        && transformStyleForcedToFlat == o.transformStyleForcedToFlat
         && backfaceVisibility == o.backfaceVisibility
         && userDrag == o.userDrag
         && textOverflow == o.textOverflow
         && useSmoothScrolling == o.useSmoothScrolling
-        && marginBeforeCollapse == o.marginBeforeCollapse
-        && marginAfterCollapse == o.marginAfterCollapse
         && appearance == o.appearance
         && effectiveAppearance == o.effectiveAppearance
-        && borderFit == o.borderFit
-        && textCombine == o.textCombine
         && textDecorationStyle == o.textDecorationStyle
         && arePointingToEqualData(rotate, o.rotate)
         && arePointingToEqualData(scale, o.scale)
@@ -333,6 +328,8 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && inputSecurity == o.inputSecurity
         && hasAttrContent == o.hasAttrContent
         && isNotFinal == o.isNotFinal
+        && containerType == o.containerType
+        && containerNames == o.containerNames
         && columnGap == o.columnGap
         && rowGap == o.rowGap
         && offsetDistance == o.offsetDistance

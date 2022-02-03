@@ -7,7 +7,7 @@ Events interfaceName=Event
 HTMLEvents interfaceName=Event
 AnimationEvent
 AnimationPlaybackEvent
-BeforeLoadEvent
+BeforeLoadEvent interfaceName=Event
 BeforeUnloadEvent
 ClipboardEvent
 CloseEvent
@@ -43,8 +43,6 @@ TextEvent
 TransitionEvent
 UIEvent
 UIEvents interfaceName=UIEvent
-WebKitAnimationEvent
-WebKitTransitionEvent
 WheelEvent
 XMLHttpRequestProgressEvent
 ApplePayCancelEvent conditional=APPLE_PAY
@@ -99,3 +97,4 @@ XRInputSourceEvent conditional=WEBXR
 XRInputSourcesChangeEvent conditional=WEBXR
 XRReferenceSpaceEvent conditional=WEBXR
 XRSessionEvent conditional=WEBXR
+NotificationEvent conditional=NOTIFICATION_EVENT

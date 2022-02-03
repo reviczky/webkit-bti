@@ -201,7 +201,7 @@ void DocumentThreadableLoader::makeCrossOriginAccessRequest(ResourceRequest&& re
     ASSERT(m_options.mode == FetchOptions::Mode::Cors);
 
 #if PLATFORM(IOS_FAMILY)
-    bool needsPreflightQuirk = IOSApplication::isMoviStarPlus() && applicationSDKVersion() < DYLD_IOS_VERSION_12_0 && (m_options.preflightPolicy == PreflightPolicy::Consider || m_options.preflightPolicy == PreflightPolicy::Force);
+    bool needsPreflightQuirk = IOSApplication::isMoviStarPlus() && !linkedOnOrAfter(SDKVersion::FirstWithoutMoviStarPlusCORSPreflightQuirk) && (m_options.preflightPolicy == PreflightPolicy::Consider || m_options.preflightPolicy == PreflightPolicy::Force);
 #else
     bool needsPreflightQuirk = false;
 #endif
@@ -404,6 +404,16 @@ void DocumentThreadableLoader::didReceiveResponse(ResourceLoaderIdentifier ident
     ASSERT(m_client);
     ASSERT(response.type() != ResourceResponse::Type::Error);
 
+#if ENABLE(SERVICE_WORKER)
+    // https://fetch.spec.whatwg.org/commit-snapshots/6257e220d70f560a037e46f1b4206325400db8dc/#main-fetch step 17.
+    if (response.source() == ResourceResponse::Source::ServiceWorker && response.url() != m_resource->url()) {
+        if (!isResponseAllowedByContentSecurityPolicy(response)) {
+            reportContentSecurityPolicyError(response.url());
+            return;
+        }
+    }
+#endif
+
     InspectorInstrumentation::didReceiveThreadableLoaderResponse(*this, identifier);
 
     if (m_delayCallbacksForIntegrityCheck)
@@ -419,7 +429,7 @@ void DocumentThreadableLoader::didReceiveResponse(ResourceLoaderIdentifier ident
         if (response.tainting() == ResourceResponse::Tainting::Opaque) {
             clearResource();
             if (m_client)
-                m_client->didFinishLoading(identifier);
+                m_client->didFinishLoading(identifier, { });
         }
         return;
     }
@@ -427,20 +437,20 @@ void DocumentThreadableLoader::didReceiveResponse(ResourceLoaderIdentifier ident
     m_client->didReceiveResponse(identifier, response);
 }
 
-void DocumentThreadableLoader::dataReceived(CachedResource& resource, const uint8_t* data, int dataLength)
+void DocumentThreadableLoader::dataReceived(CachedResource& resource, const SharedBuffer& buffer)
 {
     ASSERT_UNUSED(resource, &resource == m_resource);
-    didReceiveData(m_resource->identifier(), data, dataLength);
+    didReceiveData(m_resource->identifier(), buffer);
 }
 
-void DocumentThreadableLoader::didReceiveData(ResourceLoaderIdentifier, const uint8_t* data, int dataLength)
+void DocumentThreadableLoader::didReceiveData(ResourceLoaderIdentifier, const SharedBuffer& buffer)
 {
     ASSERT(m_client);
 
     if (m_delayCallbacksForIntegrityCheck)
         return;
 
-    m_client->didReceiveData(data, dataLength);
+    m_client->didReceiveData(buffer);
 }
 
 void DocumentThreadableLoader::finishedTimingForWorkerLoad(CachedResource& resource, const ResourceTiming& resourceTiming)
@@ -458,7 +468,7 @@ void DocumentThreadableLoader::finishedTimingForWorkerLoad(const ResourceTiming&
     m_client->didFinishTiming(resourceTiming);
 }
 
-void DocumentThreadableLoader::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void DocumentThreadableLoader::notifyFinished(CachedResource& resource, const NetworkLoadMetrics& metrics)
 {
     ASSERT(m_client);
     ASSERT_UNUSED(resource, &resource == m_resource);
@@ -466,10 +476,10 @@ void DocumentThreadableLoader::notifyFinished(CachedResource& resource, const Ne
     if (m_resource->errorOccurred())
         didFail(m_resource->identifier(), m_resource->resourceError());
     else
-        didFinishLoading(m_resource->identifier());
+        didFinishLoading(m_resource->identifier(), metrics);
 }
 
-void DocumentThreadableLoader::didFinishLoading(ResourceLoaderIdentifier identifier)
+void DocumentThreadableLoader::didFinishLoading(ResourceLoaderIdentifier identifier, const NetworkLoadMetrics& metrics)
 {
     ASSERT(m_client);
 
@@ -483,24 +493,18 @@ void DocumentThreadableLoader::didFinishLoading(ResourceLoaderIdentifier identif
 
         if (options().filteringPolicy == ResponseFilteringPolicy::Disable) {
             m_client->didReceiveResponse(identifier, response);
-            if (auto* buffer = m_resource->resourceBuffer()) {
-                buffer->forEachSegment([&](auto& segment) {
-                    m_client->didReceiveData(segment.data(), segment.size());
-                });
-            }
+            if (auto* buffer = m_resource->resourceBuffer())
+                m_client->didReceiveData(*buffer);
         } else {
             ASSERT(response.type() == ResourceResponse::Type::Default);
 
             m_client->didReceiveResponse(identifier, ResourceResponse::filter(response, m_options.credentials == FetchOptions::Credentials::Include ? ResourceResponse::PerformExposeAllHeadersCheck::No : ResourceResponse::PerformExposeAllHeadersCheck::Yes));
-            if (auto* buffer = m_resource->resourceBuffer()) {
-                buffer->forEachSegment([&](auto& segment) {
-                    m_client->didReceiveData(segment.data(), segment.size());
-                });
-            }
+            if (auto* buffer = m_resource->resourceBuffer())
+                m_client->didReceiveData(*buffer);
         }
     }
 
-    m_client->didFinishLoading(identifier);
+    m_client->didFinishLoading(identifier, metrics);
 }
 
 void DocumentThreadableLoader::didFail(ResourceLoaderIdentifier, const ResourceError& error)
@@ -613,7 +617,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
             // We don't want XMLHttpRequest to raise an exception for file:// resources, see <rdar://problem/4962298>.
             // FIXME: XMLHttpRequest quirks should be in XMLHttpRequest code, not in DocumentThreadableLoader.cpp.
             didReceiveResponse(identifier, response);
-            didFinishLoading(identifier);
+            didFinishLoading(identifier, { });
             return;
         }
         logErrorAndFail(error);
@@ -657,11 +661,8 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
     }
     didReceiveResponse(identifier, response);
 
-    if (data) {
-        data->forEachSegment([&](auto& segment) {
-            didReceiveData(identifier, segment.data(), segment.size());
-        });
-    }
+    if (data)
+        didReceiveData(identifier, *data);
 
     const auto* timing = response.deprecatedNetworkLoadMetricsOrNull();
     auto resourceTiming = ResourceTiming::fromSynchronousLoad(requestURL, m_options.initiator, loadTiming, timing ? *timing : NetworkLoadMetrics::emptyMetrics(), response, securityOrigin());
@@ -672,7 +673,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
             window->performance().addResourceTiming(WTFMove(resourceTiming));
     }
 
-    didFinishLoading(identifier);
+    didFinishLoading(identifier, { });
 }
 
 bool DocumentThreadableLoader::isAllowedByContentSecurityPolicy(const URL& url, ContentSecurityPolicy::RedirectResponseReceived redirectResponseReceived, const URL& preRedirectURL)
@@ -680,15 +681,20 @@ bool DocumentThreadableLoader::isAllowedByContentSecurityPolicy(const URL& url, 
     switch (m_options.contentSecurityPolicyEnforcement) {
     case ContentSecurityPolicyEnforcement::DoNotEnforce:
         return true;
-    case ContentSecurityPolicyEnforcement::EnforceChildSrcDirective:
-        return contentSecurityPolicy().allowChildContextFromSource(url, redirectResponseReceived, preRedirectURL);
+    case ContentSecurityPolicyEnforcement::EnforceWorkerSrcDirective:
+        return contentSecurityPolicy().allowWorkerFromSource(url, redirectResponseReceived, preRedirectURL);
     case ContentSecurityPolicyEnforcement::EnforceConnectSrcDirective:
         return contentSecurityPolicy().allowConnectToSource(url, redirectResponseReceived, preRedirectURL);
     case ContentSecurityPolicyEnforcement::EnforceScriptSrcDirective:
-        return contentSecurityPolicy().allowScriptFromSource(url, redirectResponseReceived, preRedirectURL);
+        return contentSecurityPolicy().allowScriptFromSource(url, redirectResponseReceived, preRedirectURL, m_options.integrity, m_options.nonce);
     }
     ASSERT_NOT_REACHED();
     return false;
+}
+
+bool DocumentThreadableLoader::isResponseAllowedByContentSecurityPolicy(const ResourceResponse& response)
+{
+    return isAllowedByContentSecurityPolicy(response.url(), ContentSecurityPolicy::RedirectResponseReceived::Yes, { });
 }
 
 bool DocumentThreadableLoader::isAllowedRedirect(const URL& url)

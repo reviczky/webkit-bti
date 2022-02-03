@@ -29,10 +29,12 @@
 
 #include "HeapLocker.h"
 #include "LargeSharingPoolDump.h"
+#include <condition_variable>
 #include <functional>
 #include "iso_heap.h"
 #include "iso_heap_config.h"
 #include "iso_heap_innards.h"
+#include <mutex>
 #include "pas_all_heaps.h"
 #include "pas_baseline_allocator_table.h"
 #include "pas_heap.h"
@@ -4519,22 +4521,18 @@ void addAllTests()
         ADD_TEST(testScavengerEventuallyReturnsMemory(128, 1));
         ADD_TEST(testScavengerEventuallyReturnsMemory(128, 10000));
         ADD_TEST(testScavengerEventuallyReturnsMemory(8, 10000));
-        if (pas_thread_local_cache_is_guaranteed_to_destruct()) {
-            ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 1));
-            ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 10000));
-            ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(8, 10000));
-        }
+        ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 1));
+        ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 10000));
+        ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(8, 10000));
         ADD_TEST(testScavengerShutsDownEventually(64, 10000, 1, 1));
     }
     
     ADD_TEST(testScavengerEventuallyReturnsMemory(128, 1));
     ADD_TEST(testScavengerEventuallyReturnsMemory(128, 10000));
     ADD_TEST(testScavengerEventuallyReturnsMemory(8, 10000));
-    if (pas_thread_local_cache_is_guaranteed_to_destruct()) {
-        ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 1));
-        ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 10000));
-        ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(8, 10000));
-    }
+    ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 1));
+    ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(128, 10000));
+    ADD_TEST(testScavengerEventuallyReturnsMemoryEvenWithoutManualShrink(8, 10000));
     ADD_TEST(testScavengerShutsDownEventually(64, 10000, 1, 1));
 }
 

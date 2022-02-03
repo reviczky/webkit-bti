@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -97,11 +97,8 @@ void BoxTree::buildTree()
             auto& textRenderer = downcast<RenderText>(childRenderer);
             auto style = RenderStyle::createAnonymousStyleWithDisplay(textRenderer.style(), DisplayType::Inline);
             auto text = style.textSecurity() == TextSecurity::None ? textRenderer.text() : RenderBlock::updateSecurityDiscCharacters(style, textRenderer.text());
-            auto containsBidiText = Layout::TextUtil::containsBidiText(text);
-            if (containsBidiText)
-                textRenderer.setContainsBidiText();
             auto useSimplifiedTextMeasuring = textRenderer.canUseSimplifiedTextMeasuring() && (!firstLineStyle || firstLineStyle->fontCascade() == style.fontCascade());
-            return makeUnique<Layout::InlineTextBox>(text, useSimplifiedTextMeasuring, containsBidiText, WTFMove(style), WTFMove(firstLineStyle));
+            return makeUnique<Layout::InlineTextBox>(text, useSimplifiedTextMeasuring, textRenderer.canUseSimpleFontCodePath(), WTFMove(style), WTFMove(firstLineStyle));
         }
 
         auto style = RenderStyle::clone(childRenderer.style());
@@ -125,27 +122,25 @@ void BoxTree::buildTree()
             return makeUnique<Layout::ReplacedBox>(Layout::Box::ElementAttributes { Layout::Box::ElementType::GenericElement }, WTFMove(style), WTFMove(firstLineStyle));
 
         if (is<RenderInline>(childRenderer)) {
-            if (childRenderer.parent()->isAnonymousBlock()) {
-                // This looks like continuation renderer.
-                auto& renderInline = downcast<RenderInline>(childRenderer);
-                auto shouldNotRetainBorderPaddingAndMarginStart = renderInline.isContinuation();
-                auto shouldNotRetainBorderPaddingAndMarginEnd = !renderInline.isContinuation() && renderInline.inlineContinuation();
-                auto adjustStyleForContinuation = [&] (auto& styleToAdjust) {
-                    if (shouldNotRetainBorderPaddingAndMarginStart) {
-                        styleToAdjust.setMarginStart(RenderStyle::initialMargin());
-                        styleToAdjust.resetBorderLeft();
-                        styleToAdjust.setPaddingLeft(RenderStyle::initialPadding());
-                    }
-                    if (shouldNotRetainBorderPaddingAndMarginEnd) {
-                        styleToAdjust.setMarginEnd(RenderStyle::initialMargin());
-                        styleToAdjust.resetBorderRight();
-                        styleToAdjust.setPaddingRight(RenderStyle::initialPadding());
-                    }
-                };
-                adjustStyleForContinuation(style);
-                if (firstLineStyle)
-                    adjustStyleForContinuation(*firstLineStyle);
-            }
+            // This looks like continuation renderer.
+            auto& renderInline = downcast<RenderInline>(childRenderer);
+            auto shouldNotRetainBorderPaddingAndMarginStart = renderInline.isContinuation();
+            auto shouldNotRetainBorderPaddingAndMarginEnd = !renderInline.isContinuation() && renderInline.inlineContinuation();
+            auto adjustStyleForContinuation = [&] (auto& styleToAdjust) {
+                if (shouldNotRetainBorderPaddingAndMarginStart) {
+                    styleToAdjust.setMarginStart(RenderStyle::initialMargin());
+                    styleToAdjust.resetBorderLeft();
+                    styleToAdjust.setPaddingLeft(RenderStyle::initialPadding());
+                }
+                if (shouldNotRetainBorderPaddingAndMarginEnd) {
+                    styleToAdjust.setMarginEnd(RenderStyle::initialMargin());
+                    styleToAdjust.resetBorderRight();
+                    styleToAdjust.setPaddingRight(RenderStyle::initialPadding());
+                }
+            };
+            adjustStyleForContinuation(style);
+            if (firstLineStyle)
+                adjustStyleForContinuation(*firstLineStyle);
             return makeUnique<Layout::ContainerBox>(Layout::Box::ElementAttributes { Layout::Box::ElementType::GenericElement }, WTFMove(style), WTFMove(firstLineStyle));
         }
 
@@ -210,7 +205,7 @@ Layout::Box& BoxTree::layoutBoxForRenderer(const RenderObject& renderer)
         return m_root;
 
     if (m_boxes.size() <= smallTreeThreshold) {
-        auto index = m_boxes.findMatching([&](auto& entry) {
+        auto index = m_boxes.findIf([&](auto& entry) {
             return entry.renderer == &renderer;
         });
         RELEASE_ASSERT(index != notFound);
@@ -231,7 +226,7 @@ RenderObject& BoxTree::rendererForLayoutBox(const Layout::Box& box)
         return m_flow;
 
     if (m_boxes.size() <= smallTreeThreshold) {
-        auto index = m_boxes.findMatching([&](auto& entry) {
+        auto index = m_boxes.findIf([&](auto& entry) {
             return entry.box.ptr() == &box;
         });
         RELEASE_ASSERT(index != notFound);
@@ -276,7 +271,7 @@ void showInlineContent(TextStream& stream, const InlineContent& inlineContent, s
         auto outputInlineLevelBox = [&](const auto& inlineLevelBox) {
             addSpacing();
             stream << "    ";
-            auto logicalRect = inlineLevelBox.logicalRect();
+            auto rect = inlineLevelBox.rect();
             auto& layoutBox = inlineLevelBox.layoutBox();
             if (layoutBox.isAtomicInlineLevelBox())
                 stream << "Atomic inline level box";
@@ -287,8 +282,8 @@ void showInlineContent(TextStream& stream, const InlineContent& inlineContent, s
             else
                 stream << "Generic inline level box";
             stream
-                << " at (" << logicalRect.left() << "," << logicalRect.top() << ")"
-                << " size (" << logicalRect.width() << "x" << logicalRect.height() << ")";
+                << " at (" << rect.x() << "," << rect.y() << ")"
+                << " size (" << rect.width() << "x" << rect.height() << ")";
             stream.nextLine();
         };
         for (auto& box : boxes) {
@@ -311,7 +306,7 @@ void showInlineContent(TextStream& stream, const InlineContent& inlineContent, s
                 stream << "text box";
             else
                 stream << "box box";
-            stream << " at (" << box.logicalLeft() << "," << box.logicalTop() << ") size " << box.logicalWidth() << "x" << box.logicalHeight();
+            stream << " at (" << box.left() << "," << box.top() << ") size " << box.width() << "x" << box.height();
             if (box.text())
                 stream << " box(" << box.text()->start() << ", " << box.text()->end() << ")";
             stream.nextLine();

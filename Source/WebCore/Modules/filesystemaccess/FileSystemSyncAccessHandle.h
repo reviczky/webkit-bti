@@ -28,6 +28,7 @@
 #include "ActiveDOMObject.h"
 #include "BufferSource.h"
 #include "ExceptionOr.h"
+#include "FileHandle.h"
 #include "FileSystemSyncAccessHandleIdentifier.h"
 #include "IDLTypes.h"
 #include <wtf/Deque.h>
@@ -45,26 +46,29 @@ public:
         unsigned long long at;
     };
 
-    static Ref<FileSystemSyncAccessHandle> create(ScriptExecutionContext&, FileSystemFileHandle&, FileSystemSyncAccessHandleIdentifier, FileSystem::PlatformFileHandle);
+    static Ref<FileSystemSyncAccessHandle> create(ScriptExecutionContext&, FileSystemFileHandle&, FileSystemSyncAccessHandleIdentifier, FileHandle&&);
     ~FileSystemSyncAccessHandle();
 
     void truncate(unsigned long long size, DOMPromiseDeferred<void>&&);
     void getSize(DOMPromiseDeferred<IDLUnsignedLongLong>&&);
     void flush(DOMPromiseDeferred<void>&&);
     void close(DOMPromiseDeferred<void>&&);
-    void didClose(ExceptionOr<void>&&);
     ExceptionOr<unsigned long long> read(BufferSource&&, FilesystemReadWriteOptions);
     ExceptionOr<unsigned long long> write(BufferSource&&, FilesystemReadWriteOptions);
     using Result = std::variant<ExceptionOr<void>, ExceptionOr<uint64_t>>;
     void completePromise(Result&&);
+    void invalidate();
 
 private:
-    FileSystemSyncAccessHandle(ScriptExecutionContext&, FileSystemFileHandle&, FileSystemSyncAccessHandleIdentifier, FileSystem::PlatformFileHandle);
+    FileSystemSyncAccessHandle(ScriptExecutionContext&, FileSystemFileHandle&, FileSystemSyncAccessHandleIdentifier, FileHandle&&);
     bool isClosingOrClosed() const;
     using CloseCallback = CompletionHandler<void(ExceptionOr<void>&&)>;
     void closeInternal(CloseCallback&&);
+    void closeFile();
+    void didCloseFile();
     enum class CloseMode : bool { Async, Sync };
     void closeBackend(CloseMode);
+    void didCloseBackend(ExceptionOr<void>&&);
 
     // ActiveDOMObject
     const char* activeDOMObjectName() const final;
@@ -72,7 +76,7 @@ private:
 
     Ref<FileSystemFileHandle> m_source;
     FileSystemSyncAccessHandleIdentifier m_identifier;
-    FileSystem::PlatformFileHandle m_file;
+    FileHandle m_file;
     std::optional<ExceptionOr<void>> m_closeResult;
     Vector<CloseCallback> m_closeCallbacks;
     using Promise = std::variant<DOMPromiseDeferred<void>, DOMPromiseDeferred<IDLUnsignedLongLong>>;

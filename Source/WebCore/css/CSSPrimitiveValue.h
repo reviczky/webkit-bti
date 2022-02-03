@@ -90,6 +90,8 @@ public:
     bool isQuirkyEms() const { return primitiveType() == CSSUnitType::CSS_QUIRKY_EMS; }
     bool isLength() const { return isLength(static_cast<CSSUnitType>(primitiveType())); }
     bool isNumber() const { return primitiveType() == CSSUnitType::CSS_NUMBER; }
+    bool isInteger() const { return primitiveType() == CSSUnitType::CSS_INTEGER; }
+    bool isNumberOrInteger() const { return isNumber() || isInteger(); }
     bool isPercentage() const { return primitiveType() == CSSUnitType::CSS_PERCENTAGE; }
     bool isPx() const { return primitiveType() == CSSUnitType::CSS_PX; }
     bool isRect() const { return primitiveUnitType() == CSSUnitType::CSS_RECT; }
@@ -132,6 +134,7 @@ public:
     static Ref<CSSPrimitiveValue> create(const LengthSize& value, const RenderStyle& style) { return adoptRef(*new CSSPrimitiveValue(value, style)); }
 
     template<typename T> static Ref<CSSPrimitiveValue> create(T&&);
+    template<typename T> static Ref<CSSPrimitiveValue> create(T&&, CSSPropertyID);
 
     ~CSSPrimitiveValue();
 
@@ -191,7 +194,7 @@ public:
 
     bool equals(const CSSPrimitiveValue&) const;
 
-    static double conversionToCanonicalUnitsScaleFactor(CSSUnitType);
+    static std::optional<double> conversionToCanonicalUnitsScaleFactor(CSSUnitType);
     static String unitTypeString(CSSUnitType);
 
     static double computeUnzoomedNonCalcLengthDouble(CSSUnitType, double value, CSSPropertyID, const FontMetrics* = nullptr, const FontCascadeDescription* = nullptr, const FontCascadeDescription* rootFontDescription = nullptr, const RenderView* = nullptr);
@@ -225,6 +228,7 @@ private:
     CSSPrimitiveValue(StaticCSSValueTag, ImplicitInitialValueTag);
 
     template<typename T> CSSPrimitiveValue(T); // Defined in CSSPrimitiveValueMappings.h
+    template<typename T> CSSPrimitiveValue(T, CSSPropertyID); // Defined in CSSPrimitiveValueMappings.h
     template<typename T> CSSPrimitiveValue(RefPtr<T>&&);
     template<typename T> CSSPrimitiveValue(Ref<T>&&);
 
@@ -250,6 +254,7 @@ private:
 
     ALWAYS_INLINE String formatNumberForCustomCSSText() const;
     NEVER_INLINE String formatNumberValue(StringView) const;
+    NEVER_INLINE String formatIntegerValue(StringView) const;
     static constexpr bool isFontIndependentLength(CSSUnitType);
     static constexpr bool isFontRelativeLength(CSSUnitType);
     static constexpr bool isResolution(CSSUnitType);
@@ -322,12 +327,17 @@ constexpr bool CSSPrimitiveValue::isResolution(CSSUnitType type)
 
 constexpr bool CSSPrimitiveValue::isViewportPercentageLength(CSSUnitType type)
 {
-    return type >= CSSUnitType::CSS_VW && type <= CSSUnitType::CSS_DVMAX;
+    return type >= CSSUnitType::FirstViewportCSSUnitType && type <= CSSUnitType::LastViewporCSSUnitType;
 }
 
 template<typename T> inline Ref<CSSPrimitiveValue> CSSPrimitiveValue::create(T&& value)
 {
     return adoptRef(*new CSSPrimitiveValue(std::forward<T>(value)));
+}
+
+template<typename T> inline Ref<CSSPrimitiveValue> CSSPrimitiveValue::create(T&& value, CSSPropertyID propertyID)
+{
+    return adoptRef(*new CSSPrimitiveValue(std::forward<T>(value), propertyID));
 }
 
 template<typename T, CSSPrimitiveValue::TimeUnit timeUnit> inline T CSSPrimitiveValue::computeTime() const

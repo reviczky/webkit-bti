@@ -378,7 +378,7 @@ static LayoutSize itemOffsetForAlignment(TextRun textRun, const RenderStyle* ite
     if (actualAlignment == TextAlignMode::Start || actualAlignment == TextAlignMode::Justify)
         actualAlignment = itemStyle->isLeftToRightDirection() ? TextAlignMode::Left : TextAlignMode::Right;
 
-    LayoutSize offset = LayoutSize(0, itemFont.fontMetrics().ascent());
+    LayoutSize offset = LayoutSize(0, itemFont.metricsOfPrimaryFont().ascent());
     if (actualAlignment == TextAlignMode::Right || actualAlignment == TextAlignMode::WebKitRight) {
         float textWidth = itemFont.width(textRun);
         offset.setWidth(itemBoudingBox.width() - textWidth - optionsSpacingHorizontal);
@@ -704,7 +704,7 @@ void RenderListBox::scrollTo(int newOffset)
 
 LayoutUnit RenderListBox::itemHeight() const
 {
-    return style().fontMetrics().height() + rowSpacing;
+    return style().metricsOfPrimaryFont().height() + rowSpacing;
 }
 
 int RenderListBox::verticalScrollbarWidth() const
@@ -893,12 +893,12 @@ IntRect RenderListBox::scrollableAreaBoundingBox(bool*) const
     return absoluteBoundingBoxRect();
 }
 
-bool RenderListBox::mockScrollAnimatorEnabled() const
+bool RenderListBox::mockScrollbarsControllerEnabled() const
 {
-    return settings().mockScrollAnimatorEnabled();
+    return settings().mockScrollbarsControllerEnabled();
 }
 
-void RenderListBox::logMockScrollAnimatorMessage(const String& message) const
+void RenderListBox::logMockScrollbarsControllerMessage(const String& message) const
 {
     document().addConsoleMessage(MessageSource::Other, MessageLevel::Debug, "RenderListBox: " + message);
 }

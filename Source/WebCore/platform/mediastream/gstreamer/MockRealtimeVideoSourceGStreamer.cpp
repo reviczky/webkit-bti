@@ -50,21 +50,21 @@ CaptureSourceOrError MockRealtimeVideoSource::create(String&& deviceID, String&&
     return CaptureSourceOrError(RealtimeVideoSource::create(WTFMove(source)));
 }
 
-CaptureSourceOrError MockDisplayCaptureSourceGStreamer::create(const CaptureDevice& device, const MediaConstraints* constraints)
+CaptureSourceOrError MockDisplayCaptureSourceGStreamer::create(const CaptureDevice& device, String&& hashSalt, const MediaConstraints* constraints)
 {
-    auto mockSource = adoptRef(*new MockRealtimeVideoSourceGStreamer(String { device.persistentId() }, String { device.label() }, { }));
+    auto mockSource = adoptRef(*new MockRealtimeVideoSourceGStreamer(String { device.persistentId() }, String { device.label() }, String { hashSalt }));
 
     if (constraints) {
         if (auto error = mockSource->applyConstraints(*constraints))
             return WTFMove(error.value().badConstraint);
     }
 
-    auto source = adoptRef(*new MockDisplayCaptureSourceGStreamer(WTFMove(mockSource), device.type()));
+    auto source = adoptRef(*new MockDisplayCaptureSourceGStreamer(WTFMove(mockSource), WTFMove(hashSalt), device.type()));
     return CaptureSourceOrError(WTFMove(source));
 }
 
-MockDisplayCaptureSourceGStreamer::MockDisplayCaptureSourceGStreamer(Ref<MockRealtimeVideoSourceGStreamer>&& source, CaptureDevice::DeviceType type)
-    : RealtimeMediaSource(Type::Video, source->name().isolatedCopy())
+MockDisplayCaptureSourceGStreamer::MockDisplayCaptureSourceGStreamer(Ref<MockRealtimeVideoSourceGStreamer>&& source, String&& hashSalt, CaptureDevice::DeviceType type)
+    : RealtimeMediaSource(Type::Video, source->name().isolatedCopy(), source->persistentID().isolatedCopy(), WTFMove(hashSalt))
     , m_source(WTFMove(source))
     , m_type(type)
 {
@@ -119,6 +119,7 @@ const RealtimeMediaSourceSettings& MockDisplayCaptureSourceGStreamer::settings()
         auto size = m_source->size();
         settings.setWidth(size.width());
         settings.setHeight(size.height());
+        settings.setDeviceId(hashedId());
 
         settings.setLogicalSurface(false);
 
@@ -128,6 +129,7 @@ const RealtimeMediaSourceSettings& MockDisplayCaptureSourceGStreamer::settings()
         supportedConstraints.setSupportsHeight(true);
         supportedConstraints.setSupportsDisplaySurface(true);
         supportedConstraints.setSupportsLogicalSurface(true);
+        supportedConstraints.setSupportsDeviceId(true);
 
         settings.setSupportedConstraints(supportedConstraints);
 
@@ -152,7 +154,9 @@ void MockRealtimeVideoSourceGStreamer::updateSampleBuffer()
     if (!pixelBuffer)
         return;
 
-    auto sample = MediaSampleGStreamer::createImageSample(WTFMove(*pixelBuffer), size(), frameRate(), sampleRotation());
+    std::optional<VideoSampleMetadata> metadata;
+    metadata->captureTime = MonotonicTime::now().secondsSinceEpoch();
+    auto sample = MediaSampleGStreamer::createImageSample(WTFMove(*pixelBuffer), size(), frameRate(), sampleRotation(), false, WTFMove(metadata));
     sample->offsetTimestampsBy(MediaTime::createWithDouble((elapsedTime() + 100_ms).seconds()));
     dispatchMediaSampleToObservers(sample.get(), { });
 }

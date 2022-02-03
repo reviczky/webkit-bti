@@ -55,7 +55,7 @@ struct PacketOptions;
 
 namespace WebCore {
 class RegistrableDomain;
-class SharedBuffer;
+class FragmentedSharedBuffer;
 }
 
 namespace WebKit {
@@ -149,6 +149,7 @@ private:
 #if PLATFORM(COCOA)
     const String& attributedBundleIdentifierFromPageIdentifier(WebPageProxyIdentifier);
 #endif
+    void signalSocketIsClosed(WebCore::LibWebRTCSocketIdentifier);
 
     static constexpr size_t maxSockets { 256 };
 

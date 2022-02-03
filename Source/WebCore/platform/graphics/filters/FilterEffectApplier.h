@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "FilterEffectVector.h"
+#include "FilterImageVector.h"
 
 namespace WebCore {
 
@@ -33,22 +33,28 @@ class Filter;
 
 class FilterEffectApplier {
 public:
+    template<typename FilterEffectApplierType, typename FilterEffectType>
+    static std::unique_ptr<FilterEffectApplierType> create(const FilterEffectType& effect)
+    {
+        return makeUnique<FilterEffectApplierType>(effect);
+    }
+    
     FilterEffectApplier() = default;
     virtual ~FilterEffectApplier() = default;
     
-    virtual bool apply(const Filter&, const FilterEffectVector& inputs) = 0;
+    virtual bool apply(const Filter&, const FilterImageVector& inputs, FilterImage& result) const = 0;
 };
 
 template<typename FilterEffectType>
 class FilterEffectConcreteApplier : public FilterEffectApplier {
 public:
-    FilterEffectConcreteApplier(FilterEffectType& effect)
+    FilterEffectConcreteApplier(const FilterEffectType& effect)
         : m_effect(effect)
     {
     }
     
 protected:
-    FilterEffectType& m_effect;
+    const FilterEffectType& m_effect;
 };
 
 } // namespace WebCore

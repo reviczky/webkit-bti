@@ -30,6 +30,8 @@
 #include "DocumentInlines.h"
 #include "Frame.h"
 #include "FrameSelection.h"
+#include "LegacyRenderSVGContainer.h"
+#include "LegacyRenderSVGRoot.h"
 #include "RenderButton.h"
 #include "RenderCounter.h"
 #include "RenderDescendantIterator.h"
@@ -280,8 +282,15 @@ void RenderTreeBuilder::attachInternal(RenderElement& parent, RenderPtr<RenderOb
         return;
     }
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGContainer>(parent)) {
         svgBuilder().attach(downcast<RenderSVGContainer>(parent), WTFMove(child), beforeChild);
+        return;
+    }
+#endif
+
+    if (is<LegacyRenderSVGContainer>(parent)) {
+        svgBuilder().attach(downcast<LegacyRenderSVGContainer>(parent), WTFMove(child), beforeChild);
         return;
     }
 
@@ -290,8 +299,15 @@ void RenderTreeBuilder::attachInternal(RenderElement& parent, RenderPtr<RenderOb
         return;
     }
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGRoot>(parent)) {
         svgBuilder().attach(downcast<RenderSVGRoot>(parent), WTFMove(child), beforeChild);
+        return;
+    }
+#endif
+
+    if (is<LegacyRenderSVGRoot>(parent)) {
+        svgBuilder().attach(downcast<LegacyRenderSVGRoot>(parent), WTFMove(child), beforeChild);
         return;
     }
 
@@ -371,11 +387,21 @@ RenderPtr<RenderObject> RenderTreeBuilder::detach(RenderElement& parent, RenderO
     if (is<RenderSVGInline>(parent))
         return svgBuilder().detach(downcast<RenderSVGInline>(parent), child);
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGContainer>(parent))
         return svgBuilder().detach(downcast<RenderSVGContainer>(parent), child);
+#endif
 
+    if (is<LegacyRenderSVGContainer>(parent))
+        return svgBuilder().detach(downcast<LegacyRenderSVGContainer>(parent), child);
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGRoot>(parent))
         return svgBuilder().detach(downcast<RenderSVGRoot>(parent), child);
+#endif
+
+    if (is<LegacyRenderSVGRoot>(parent))
+        return svgBuilder().detach(downcast<LegacyRenderSVGRoot>(parent), child);
 
     if (is<RenderBlockFlow>(parent))
         return blockBuilder().detach(downcast<RenderBlockFlow>(parent), child, canCollapseAnonymousBlock);
@@ -599,7 +625,7 @@ void RenderTreeBuilder::normalizeTreeAfterStyleChange(RenderElement& renderer, R
                     ASSERT(is<RenderBox>(renderer) && downcast<RenderBlockFlow>(*newParent).multiColumnFlow()->spannerMap().contains(&downcast<RenderBox>(renderer)));
                     newEnclosingFragmentedFlow = downcast<RenderBlockFlow>(*newParent).multiColumnFlow();
                 }
-                return newEnclosingFragmentedFlow != currentEnclosingFragment && is<RenderMultiColumnFlow>(newEnclosingFragmentedFlow) ? downcast<RenderMultiColumnFlow>(newEnclosingFragmentedFlow) : nullptr;
+                return newEnclosingFragmentedFlow != currentEnclosingFragment ? dynamicDowncast<RenderMultiColumnFlow>(newEnclosingFragmentedFlow) : nullptr;
             };
             if (auto* newEnclosingMultiColumn = newMultiColumnForRenderer()) {
                 // Let the fragmented flow know that it has a new in-flow descendant.
@@ -995,7 +1021,7 @@ void RenderTreeBuilder::reportVisuallyNonEmptyContent(const RenderElement& paren
         m_view.frameView().incrementVisuallyNonEmptyPixelCount(roundedIntSize(replacedRenderer.intrinsicSize()));
         return;
     }
-    if (is<RenderSVGRoot>(child)) {
+    if (child.isSVGRootOrLegacySVGRoot()) {
         auto fixedSize = [] (const auto& renderer) -> std::optional<IntSize> {
             auto& style = renderer.style();
             if (!style.width().isFixed() || !style.height().isFixed())

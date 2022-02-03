@@ -28,6 +28,7 @@
 
 #include "FontLoadRequest.h"
 #include "ResourceLoaderOptions.h"
+#include "SharedBuffer.h"
 #include "ThreadableLoaderClient.h"
 #include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
@@ -36,7 +37,6 @@ namespace WebCore {
 
 class FontCreationContext;
 class ScriptExecutionContext;
-class SharedBuffer;
 class WorkerGlobalScope;
 
 struct FontCustomPlatformData;
@@ -63,8 +63,8 @@ private:
     bool isWorkerFontLoadRequest() const final { return true; }
 
     void didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse&) final;
-    void didReceiveData(const uint8_t* data, int dataLength) final;
-    void didFinishLoading(ResourceLoaderIdentifier) final;
+    void didReceiveData(const SharedBuffer&) final;
+    void didFinishLoading(ResourceLoaderIdentifier, const NetworkLoadMetrics&) final;
     void didFail(const ResourceError&) final;
 
     URL m_url;
@@ -76,7 +76,7 @@ private:
     FontLoadRequestClient* m_fontLoadRequestClient { nullptr };
 
     WeakPtr<ScriptExecutionContext> m_context;
-    RefPtr<SharedBuffer> m_data;
+    SharedBufferBuilder m_data;
     std::unique_ptr<FontCustomPlatformData> m_fontCustomPlatformData;
 };
 

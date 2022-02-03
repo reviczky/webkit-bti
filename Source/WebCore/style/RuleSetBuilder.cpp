@@ -109,9 +109,20 @@ void RuleSetBuilder::addChildRules(const Vector<RefPtr<StyleRuleBase>>& rules)
             m_mediaQueryCollector.pop(&mediaRule.mediaQueries());
             continue;
         }
+        if (is<StyleRuleContainer>(*rule)) {
+            auto& containerRule = downcast<StyleRuleContainer>(*rule);
+            auto previousContainerQueryIdentifier = m_currentContainerQueryIdentifier;
+            if (m_ruleSet) {
+                m_ruleSet->m_containerQueries.append({ containerRule.query(), previousContainerQueryIdentifier });
+                m_currentContainerQueryIdentifier = m_ruleSet->m_containerQueries.size();
+            }
+            addChildRules(containerRule.childRules());
+            if (m_ruleSet)
+                m_currentContainerQueryIdentifier = previousContainerQueryIdentifier;
+            continue;
+        }
         if (is<StyleRuleLayer>(*rule)) {
-            if (!m_ruleSet && !m_mediaQueryCollector.dynamicContextStack.isEmpty())
-                requiresStaticMediaQueryEvaluation = true;
+            disallowDynamicMediaQueryEvaluationIfNeeded();
 
             auto& layerRule = downcast<StyleRuleLayer>(*rule);
             if (layerRule.isStatement()) {
@@ -126,8 +137,7 @@ void RuleSetBuilder::addChildRules(const Vector<RefPtr<StyleRuleBase>>& rules)
             continue;
         }
         if (is<StyleRuleFontFace>(*rule) || is<StyleRuleFontPaletteValues>(*rule) || is<StyleRuleKeyframes>(*rule)) {
-            if (!m_ruleSet && !m_mediaQueryCollector.dynamicContextStack.isEmpty())
-                requiresStaticMediaQueryEvaluation = true;
+            disallowDynamicMediaQueryEvaluationIfNeeded();
 
             if (m_resolver)
                 m_collectedResolverMutatingRules.append({ *rule, m_currentCascadeLayerIdentifier });
@@ -151,8 +161,10 @@ void RuleSetBuilder::addRulesFromSheetContents(const StyleSheetContents& sheet)
 
         if (m_mediaQueryCollector.pushAndEvaluate(rule->mediaQueries())) {
             auto& cascadeLayerName = rule->cascadeLayerName();
-            if (cascadeLayerName)
+            if (cascadeLayerName) {
+                disallowDynamicMediaQueryEvaluationIfNeeded();
                 pushCascadeLayer(*cascadeLayerName);
+            }
 
             addRulesFromSheetContents(*rule->styleSheet());
 
@@ -175,10 +187,17 @@ void RuleSetBuilder::addStyleRule(const StyleRule& rule)
         RuleData ruleData(rule, selectorIndex, selectorListIndex, m_ruleSet->ruleCount());
         m_mediaQueryCollector.addRuleIfNeeded(ruleData);
 
-        m_ruleSet->addRule(WTFMove(ruleData), m_currentCascadeLayerIdentifier);
+        m_ruleSet->addRule(WTFMove(ruleData), m_currentCascadeLayerIdentifier, m_currentContainerQueryIdentifier);
 
         ++selectorListIndex;
     }
+}
+
+void RuleSetBuilder::disallowDynamicMediaQueryEvaluationIfNeeded()
+{
+    bool isScanningForDynamicEvaluation = !m_ruleSet;
+    if (isScanningForDynamicEvaluation && !m_mediaQueryCollector.dynamicContextStack.isEmpty())
+        requiresStaticMediaQueryEvaluation = true;
 }
 
 void RuleSetBuilder::registerLayers(const Vector<CascadeLayerName>& names)
@@ -364,8 +383,7 @@ void RuleSetBuilder::MediaQueryCollector::pop(const MediaQuerySet* set)
 
         if (collectDynamic) {
             rules.affectedRulePositions.appendVector(dynamicContextStack.last().affectedRulePositions);
-            rules.ruleFeatures = WTFMove(dynamicContextStack.last().ruleFeatures);
-            rules.ruleFeatures.shrinkToFit();
+            rules.affectedRules = copyToVector(dynamicContextStack.last().affectedRules);
         } else
             rules.requiresFullReset = true;
 
@@ -382,7 +400,7 @@ void RuleSetBuilder::MediaQueryCollector::addRuleIfNeeded(const RuleData& ruleDa
 
     auto& context = dynamicContextStack.last();
     context.affectedRulePositions.append(ruleData.position());
-    context.ruleFeatures.append({ ruleData });
+    context.affectedRules.add(ruleData.styleRule());
 }
 
 }

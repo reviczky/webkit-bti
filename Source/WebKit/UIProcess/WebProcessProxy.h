@@ -93,6 +93,7 @@ class VisitedLinkStore;
 class WebBackForwardListItem;
 class WebCompiledContentRuleListData;
 class WebFrameProxy;
+class WebLockRegistryProxy;
 class WebPageGroup;
 class WebPageProxy;
 class WebProcessPool;
@@ -153,9 +154,11 @@ public:
     WebProcessPool& processPool() const;
 
     bool isMatchingRegistrableDomain(const WebCore::RegistrableDomain& domain) const { return m_registrableDomain ? *m_registrableDomain == domain : false; }
-    WebCore::RegistrableDomain registrableDomain() const { return m_registrableDomain.value_or(WebCore::RegistrableDomain { }); }
+    WebCore::RegistrableDomain registrableDomain() const { return valueOrDefault(m_registrableDomain); }
     const std::optional<WebCore::RegistrableDomain>& optionalRegistrableDomain() const { return m_registrableDomain; }
-    void setIsInProcessCache(bool);
+
+    enum class WillShutDown : bool { No, Yes };
+    void setIsInProcessCache(bool, WillShutDown = WillShutDown::No);
     bool isInProcessCache() const { return m_isInProcessCache; }
 
     void enableServiceWorkers(const UserContentControllerIdentifier&);
@@ -339,6 +342,8 @@ public:
     bool hasAudioCaptureExtension() const { return m_mediaCaptureSandboxExtensions & Audio; }
     void grantAudioCaptureExtension() { m_mediaCaptureSandboxExtensions |= Audio; }
     void revokeAudioCaptureExtension() { m_mediaCaptureSandboxExtensions &= ~Audio; }
+
+    void sendAudioComponentRegistrations();
 #endif
 
 #if ENABLE(REMOTE_INSPECTOR) && PLATFORM(COCOA)
@@ -672,6 +677,7 @@ private:
 #if ENABLE(MEDIA_STREAM)
     std::unique_ptr<SpeechRecognitionRemoteRealtimeMediaSourceManager> m_speechRecognitionRemoteRealtimeMediaSourceManager;
 #endif
+    std::unique_ptr<WebLockRegistryProxy> m_webLockRegistry;
 };
 
 } // namespace WebKit

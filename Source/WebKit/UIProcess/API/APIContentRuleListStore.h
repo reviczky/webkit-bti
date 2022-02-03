@@ -30,7 +30,7 @@
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
-class SharedBuffer;
+class FragmentedSharedBuffer;
 }
 
 namespace WTF {
@@ -54,10 +54,7 @@ public:
 #if ENABLE(CONTENT_EXTENSIONS)
     // This should be incremented every time a functional change is made to the bytecode, file format, etc.
     // to prevent crashing while loading old data.
-    // Also update ContentRuleListStore::getContentRuleListSource to be able to find the original JSON
-    // source from old versions.
-    // Update getContentRuleListSourceFromMappedFile with this.
-    static constexpr uint32_t CurrentContentRuleListFileVersion = 11;
+    static constexpr uint32_t CurrentContentRuleListFileVersion = 14;
 
     static ContentRuleListStore& defaultStore();
     static Ref<ContentRuleListStore> storeWithPath(const WTF::String& storePath);

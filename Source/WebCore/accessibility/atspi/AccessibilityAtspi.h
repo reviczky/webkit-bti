@@ -19,17 +19,20 @@
 
 #pragma once
 
-#if ENABLE(ACCESSIBILITY) && USE(ATSPI)
+#if USE(ATSPI)
 #include <wtf/CompletionHandler.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/HashMap.h>
+#include <wtf/ListHashSet.h>
+#include <wtf/RunLoop.h>
 #include <wtf/Vector.h>
-#include <wtf/WorkQueue.h>
 #include <wtf/glib/GRefPtr.h>
+#include <wtf/glib/GUniquePtr.h>
 
 typedef struct _GDBusConnection GDBusConnection;
 typedef struct _GDBusInterfaceInfo GDBusInterfaceInfo;
 typedef struct _GDBusInterfaceVTable GDBusInterfaceVTable;
+typedef struct _GDBusProxy GDBusProxy;
 typedef struct _GVariant GVariant;
 
 namespace WebCore {
@@ -38,15 +41,17 @@ class AccessibilityRootAtspi;
 enum class AccessibilityRole;
 
 class AccessibilityAtspi {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_NONCOPYABLE(AccessibilityAtspi); WTF_MAKE_FAST_ALLOCATED;
+    friend NeverDestroyed<AccessibilityAtspi>;
 public:
-    AccessibilityAtspi(const String&);
-    ~AccessibilityAtspi() = default;
+    WEBCORE_EXPORT static AccessibilityAtspi& singleton();
 
-    WEBCORE_EXPORT RunLoop& runLoop() const;
+    void connect(const String&);
 
     const char* uniqueName() const;
     GVariant* nullReference() const;
+    GVariant* applicationReference() const;
+    bool hasClients() const { return !m_clients.isEmpty(); }
 
     void registerRoot(AccessibilityRootAtspi&, Vector<std::pair<GDBusInterfaceInfo*, GDBusInterfaceVTable*>>&&, CompletionHandler<void(const String&)>&&);
     void unregisterRoot(AccessibilityRootAtspi&);
@@ -54,8 +59,11 @@ public:
     void unregisterObject(AccessibilityObjectAtspi&);
     String registerHyperlink(AccessibilityObjectAtspi&, Vector<std::pair<GDBusInterfaceInfo*, GDBusInterfaceVTable*>>&&);
 
+    void parentChanged(AccessibilityObjectAtspi&);
+    void parentChanged(AccessibilityRootAtspi&);
     enum class ChildrenChanged { Added, Removed };
     void childrenChanged(AccessibilityObjectAtspi&, AccessibilityObjectAtspi&, ChildrenChanged);
+    void childrenChanged(AccessibilityRootAtspi&, AccessibilityObjectAtspi&, ChildrenChanged);
 
     void stateChanged(AccessibilityObjectAtspi&, const char*, bool);
 
@@ -66,24 +74,74 @@ public:
 
     void valueChanged(AccessibilityObjectAtspi&, double);
 
+    void selectionChanged(AccessibilityObjectAtspi&);
+
+    void loadEvent(AccessibilityObjectAtspi&, CString&&);
+
     static const char* localizedRoleName(AccessibilityRole);
 
+#if ENABLE(DEVELOPER_MODE)
+    using NotificationObserverParameter = std::variant<std::nullptr_t, String, bool, unsigned, Ref<AccessibilityObjectAtspi>>;
+    using NotificationObserver = Function<void(AccessibilityObjectAtspi&, const char*, NotificationObserverParameter)>;
+    WEBCORE_EXPORT void addNotificationObserver(void*, NotificationObserver&&);
+    WEBCORE_EXPORT void removeNotificationObserver(void*);
+#endif
+
 private:
+    AccessibilityAtspi();
+
+    struct PendingRootRegistration {
+        Ref<AccessibilityRootAtspi> root;
+        Vector<std::pair<GDBusInterfaceInfo*, GDBusInterfaceVTable*>> interfaces;
+        CompletionHandler<void(const String&)> completionHandler;
+    };
+
+    void didConnect(GRefPtr<GDBusConnection>&&);
+    void initializeRegistry();
+    void addEventListener(const char* dbusName, const char* eventName);
+    void removeEventListener(const char* dbusName, const char* eventName);
+    void addClient(const char* dbusName);
+    void removeClient(const char* dbusName);
+
     void ensureCache();
-    void addAccessible(AccessibilityObjectAtspi&, const String&);
-    void removeAccessible(AccessibilityObjectAtspi&);
+    void addToCacheIfNeeded(AccessibilityObjectAtspi&);
+    void cacheUpdateTimerFired();
+    void cacheClearTimerFired();
+
+    bool shouldEmitSignal(const char* interface, const char* name, const char* detail = "");
+
+#if ENABLE(DEVELOPER_MODE)
+    void notifyStateChanged(AccessibilityObjectAtspi&, const char*, bool) const;
+    void notifySelectionChanged(AccessibilityObjectAtspi&) const;
+    void notifyMenuSelectionChanged(AccessibilityObjectAtspi&) const;
+    void notifyTextChanged(AccessibilityObjectAtspi&) const;
+    void notifyTextCaretMoved(AccessibilityObjectAtspi&, unsigned) const;
+    void notifyChildrenChanged(AccessibilityObjectAtspi&, AccessibilityObjectAtspi&, ChildrenChanged) const;
+    void notifyValueChanged(AccessibilityObjectAtspi&) const;
+    void notifyLoadEvent(AccessibilityObjectAtspi&, const CString&) const;
+#endif
 
     static GDBusInterfaceVTable s_cacheFunctions;
 
-    Ref<WorkQueue> m_queue;
+    bool m_isConnecting { false };
     GRefPtr<GDBusConnection> m_connection;
+    GRefPtr<GDBusProxy> m_registry;
+    Vector<PendingRootRegistration> m_pendingRootRegistrations;
+    HashMap<CString, Vector<GUniquePtr<char*>>> m_eventListeners;
     HashMap<AccessibilityRootAtspi*, Vector<unsigned, 2>> m_rootObjects;
     HashMap<AccessibilityObjectAtspi*, Vector<unsigned, 20>> m_atspiObjects;
     HashMap<AccessibilityObjectAtspi*, Vector<unsigned, 20>> m_atspiHyperlinks;
+    HashMap<CString, unsigned> m_clients;
     unsigned m_cacheID { 0 };
     HashMap<String, AccessibilityObjectAtspi*> m_cache;
+    ListHashSet<RefPtr<AccessibilityObjectAtspi>> m_cacheUpdateList;
+    RunLoop::Timer<AccessibilityAtspi> m_cacheUpdateTimer;
+    RunLoop::Timer<AccessibilityAtspi> m_cacheClearTimer;
+#if ENABLE(DEVELOPER_MODE)
+    HashMap<void*, NotificationObserver> m_notificationObservers;
+#endif
 };
 
 } // namespace WebCore
 
-#endif // ENABLE(ACCESSIBILITY) && USE(ATSPI)
+#endif // USE(ATSPI)

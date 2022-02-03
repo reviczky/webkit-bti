@@ -187,7 +187,7 @@ void FELightingSoftwareApplier::setPixelInternal(int offset, const LightingData&
     float lightStrength;
     if (normal2DVector.isZero()) {
         // Normal vector is (0, 0, 1). This is a quite frequent case.
-        if (data.effect->filterType() == FilterEffect::Type::FEDiffuseLighting)
+        if (data.filterType == FilterEffect::Type::FEDiffuseLighting)
             lightStrength = data.diffuseConstant * lightingData.lightVector.z() / lightingData.lightVectorLength;
         else {
             FloatPoint3D halfwayVector = {
@@ -209,7 +209,7 @@ void FELightingSoftwareApplier::setPixelInternal(int offset, const LightingData&
         };
         float normalVectorLength = normalVector.length();
 
-        if (data.effect->filterType() == FilterEffect::Type::FEDiffuseLighting)
+        if (data.filterType == FilterEffect::Type::FEDiffuseLighting)
             lightStrength = data.diffuseConstant * (normalVector * lightingData.lightVector) / (normalVectorLength * lightingData.lightVectorLength);
         else {
             FloatPoint3D halfwayVector = {
@@ -326,10 +326,10 @@ void FELightingSoftwareApplier::applyPlatform(const LightingData& data)
 {
     LightSource::PaintingData paintingData;
 
-    auto [r, g, b, a] = data.lightingColor.toColorComponentsInColorSpace(*data.operatingColorSpace);
+    auto [r, g, b, a] = data.lightingColor.toResolvedColorComponentsInColorSpace(*data.operatingColorSpace);
     paintingData.initialLightingData.colorVector = FloatPoint3D(r, g, b);
 
-    data.lightSource->initPaintingData(*data.effect, paintingData);
+    data.lightSource->initPaintingData(*data.filter, *data.result, paintingData);
 
     // Top left.
     int offset = 0;
@@ -377,7 +377,7 @@ void FELightingSoftwareApplier::applyPlatform(const LightingData& data)
     }
 
     int lastPixel = data.widthMultipliedByPixelSize * data.height;
-    if (data.effect->filterType() == FilterEffect::Type::FEDiffuseLighting) {
+    if (data.filterType == FilterEffect::Type::FEDiffuseLighting) {
         for (int i = cAlphaChannelOffset; i < lastPixel; i += cPixelSize)
             data.pixels->set(i, cOpaqueAlpha);
     } else {
@@ -391,27 +391,25 @@ void FELightingSoftwareApplier::applyPlatform(const LightingData& data)
     }
 }
 
-bool FELightingSoftwareApplier::apply(const Filter&, const FilterEffectVector& inputEffects)
+bool FELightingSoftwareApplier::apply(const Filter& filter, const FilterImageVector& inputs, FilterImage& result) const
 {
-    FilterEffect* in = inputEffects[0].get();
+    auto& input = inputs[0].get();
 
-    auto destinationPixelBuffer = m_effect.pixelBufferResult(AlphaPremultiplication::Premultiplied);
+    auto destinationPixelBuffer = result.pixelBuffer(AlphaPremultiplication::Premultiplied);
     if (!destinationPixelBuffer)
         return false;
 
     auto& destinationPixelArray = destinationPixelBuffer->data();
 
-    m_effect.setIsAlphaImage(false);
-
-    auto effectDrawingRect = m_effect.requestedRegionOfInputPixelBuffer(in->absolutePaintRect());
-    in->copyPixelBufferResult(*destinationPixelBuffer, effectDrawingRect);
+    auto effectDrawingRect = result.absoluteImageRectRelativeTo(input);
+    input.copyPixelBuffer(*destinationPixelBuffer, effectDrawingRect);
 
     // FIXME: support kernelUnitLengths other than (1,1). The issue here is that the W3
     // standard has no test case for them, and other browsers (like Firefox) has strange
     // output for various kernelUnitLengths, and I am not sure they are reliable.
     // Anyway, feConvolveMatrix should also use the implementation
 
-    IntSize size = IntSize(m_effect.absolutePaintRect().size());
+    auto size = IntSize(result.absoluteImageRect().size());
 
     // FIXME: do something if width or height (or both) is 1 pixel.
     // The W3 spec does not define this case. Now the filter just returns.
@@ -419,7 +417,8 @@ bool FELightingSoftwareApplier::apply(const Filter&, const FilterEffectVector& i
         return true;
 
     LightingData data;
-    data.effect = &m_effect;
+    data.filter = &filter;
+    data.result = &result;
     data.filterType = m_effect.filterType();
     data.lightingColor = m_effect.lightingColor();
     data.surfaceScale = m_effect.surfaceScale() / 255.0f;

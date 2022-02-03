@@ -214,6 +214,7 @@ public:
     bool hasFixedBackgroundImage() const { return m_backgroundData->background->hasFixedImage(); }
 
     bool hasEntirelyFixedBackground() const;
+    bool hasAnyLocalBackground() const;
 
     bool hasAppearance() const { return appearance() != NoControlPart; }
     bool hasEffectiveAppearance() const { return effectiveAppearance() != NoControlPart; }
@@ -348,14 +349,14 @@ public:
     const LengthBox& clip() const { return m_visualData->clip; }
     bool hasClip() const { return m_visualData->hasClip; }
 
-    EUnicodeBidi unicodeBidi() const { return static_cast<EUnicodeBidi>(m_nonInheritedFlags.unicodeBidi); }
+    UnicodeBidi unicodeBidi() const { return static_cast<UnicodeBidi>(m_nonInheritedFlags.unicodeBidi); }
 
     Clear clear() const { return static_cast<Clear>(m_nonInheritedFlags.clear); }
     static UsedClear usedClear(const RenderObject&);
     TableLayoutType tableLayout() const { return static_cast<TableLayoutType>(m_nonInheritedFlags.tableLayout); }
 
     WEBCORE_EXPORT const FontCascade& fontCascade() const;
-    WEBCORE_EXPORT const FontMetrics& fontMetrics() const;
+    WEBCORE_EXPORT const FontMetrics& metricsOfPrimaryFont() const;
     WEBCORE_EXPORT const FontCascadeDescription& fontDescription() const;
     float specifiedFontSize() const;
     float computedFontSize() const;
@@ -416,7 +417,6 @@ public:
 
     FillRepeat backgroundRepeatX() const { return static_cast<FillRepeat>(m_backgroundData->background->repeatX()); }
     FillRepeat backgroundRepeatY() const { return static_cast<FillRepeat>(m_backgroundData->background->repeatY()); }
-    CompositeOperator backgroundComposite() const { return static_cast<CompositeOperator>(m_backgroundData->background->composite()); }
     FillAttachment backgroundAttachment() const { return static_cast<FillAttachment>(m_backgroundData->background->attachment()); }
     FillBox backgroundClip() const { return static_cast<FillBox>(m_backgroundData->background->clip()); }
     FillBox backgroundOrigin() const { return static_cast<FillBox>(m_backgroundData->background->origin()); }
@@ -528,10 +528,13 @@ public:
     }
     bool hasAspectRatio() const { return aspectRatioType() == AspectRatioType::Ratio || aspectRatioType() == AspectRatioType::AutoAndRatio; }
     OptionSet<Containment> contain() const { return m_rareNonInheritedData->contain; }
-    bool containsLayout() const { return m_rareNonInheritedData->contain.contains(Containment::Layout); }
-    bool containsSize() const { return m_rareNonInheritedData->contain.contains(Containment::Size); }
-    bool containsStyle() const { return m_rareNonInheritedData->contain.contains(Containment::Style); }
-    bool containsPaint() const { return m_rareNonInheritedData->contain.contains(Containment::Paint); }
+    OptionSet<Containment> effectiveContainment() const;
+    bool containsLayout() const { return effectiveContainment().contains(Containment::Layout); }
+    bool containsSize() const { return effectiveContainment().contains(Containment::Size); }
+    bool containsStyle() const { return effectiveContainment().contains(Containment::Style); }
+    bool containsPaint() const { return effectiveContainment().contains(Containment::Paint); }
+    ContainerType containerType() const { return static_cast<ContainerType>(m_rareNonInheritedData->containerType); }
+    const Vector<AtomString>& containerNames() const { return m_rareNonInheritedData->containerNames; }
     BoxAlignment boxAlign() const { return static_cast<BoxAlignment>(m_rareNonInheritedData->deprecatedFlexibleBox->align); }
     BoxDirection boxDirection() const { return static_cast<BoxDirection>(m_inheritedFlags.boxDirection); }
     float boxFlex() const { return m_rareNonInheritedData->deprecatedFlexibleBox->flex; }
@@ -614,8 +617,6 @@ public:
     UserSelect userSelectIncludingInert() const { return effectiveInert() ? UserSelect::None : userSelect(); }
     UserSelect userSelect() const { return static_cast<UserSelect>(m_rareInheritedData->userSelect); }
     TextOverflow textOverflow() const { return static_cast<TextOverflow>(m_rareNonInheritedData->textOverflow); }
-    MarginCollapse marginBeforeCollapse() const { return static_cast<MarginCollapse>(m_rareNonInheritedData->marginBeforeCollapse); }
-    MarginCollapse marginAfterCollapse() const { return static_cast<MarginCollapse>(m_rareNonInheritedData->marginAfterCollapse); }
     WordBreak wordBreak() const { return static_cast<WordBreak>(m_rareInheritedData->wordBreak); }
     OverflowWrap overflowWrap() const { return static_cast<OverflowWrap>(m_rareInheritedData->overflowWrap); }
     NBSPMode nbspMode() const { return static_cast<NBSPMode>(m_rareInheritedData->nbspMode); }
@@ -677,8 +678,9 @@ public:
     LengthPoint objectPosition() const { return m_rareNonInheritedData->objectPosition; }
 
     // Return true if any transform related property (currently transform, translate, scale, rotate, transformStyle3D or perspective)
-    // indicates that we are transforming.
-    bool hasTransformRelatedProperty() const { return hasTransform() || translate() || scale() || rotate() || preserves3D() || hasPerspective(); }
+    // indicates that we are transforming. The usedTransformStyle3D is not used here because in many cases (such as for deciding
+    // whether or not to establish a containing block), the computed value is what matters.
+    bool hasTransformRelatedProperty() const { return hasTransform() || translate() || scale() || rotate() || transformStyle3D() == TransformStyle3D::Preserve3D || hasPerspective(); }
 
     enum class TransformOperationOption : uint8_t {
         TransformOrigin = 1 << 0,
@@ -694,9 +696,10 @@ public:
     void applyMotionPathTransform(TransformationMatrix&, const FloatRect& boundingBox) const;
     void setPageScaleTransform(float);
 
+    bool hasPositionedMask() const { return m_rareNonInheritedData->mask->hasImage(); }
     bool hasMask() const { return m_rareNonInheritedData->mask->hasImage() || m_rareNonInheritedData->maskBoxImage.hasImage(); }
 
-    TextCombine textCombine() const { return static_cast<TextCombine>(m_rareNonInheritedData->textCombine); }
+    TextCombine textCombine() const { return static_cast<TextCombine>(m_rareInheritedData->textCombine); }
     bool hasTextCombine() const { return textCombine() != TextCombine::None; }
 
     const TabSize& tabSize() const { return m_rareInheritedData->tabSize; }
@@ -722,14 +725,13 @@ public:
     bool hasAnimations() const { return m_rareNonInheritedData->animations && m_rareNonInheritedData->animations->size() > 0; }
     bool hasTransitions() const { return m_rareNonInheritedData->transitions && m_rareNonInheritedData->transitions->size() > 0; }
 
-    // Return the first found Animation (including 'all' transitions).
-    const Animation* transitionForProperty(CSSPropertyID) const;
-
     TransformStyle3D transformStyle3D() const { return static_cast<TransformStyle3D>(m_rareNonInheritedData->transformStyle3D); }
-    bool preserves3D() const { return transformStyle3D() == TransformStyle3D::Preserve3D; }
+    TransformStyle3D usedTransformStyle3D() const { return static_cast<bool>(m_rareNonInheritedData->transformStyleForcedToFlat) ? TransformStyle3D::Flat : transformStyle3D(); }
+    bool preserves3D() const { return usedTransformStyle3D() == TransformStyle3D::Preserve3D; }
 
     BackfaceVisibility backfaceVisibility() const { return static_cast<BackfaceVisibility>(m_rareNonInheritedData->backfaceVisibility); }
     float perspective() const { return m_rareNonInheritedData->perspective; }
+    float usedPerspective(const RenderObject&) const;
     bool hasPerspective() const { return m_rareNonInheritedData->perspective != initialPerspective(); }
     const Length& perspectiveOriginX() const { return m_rareNonInheritedData->perspectiveOriginX; }
     const Length& perspectiveOriginY() const { return m_rareNonInheritedData->perspectiveOriginY; }
@@ -966,7 +968,7 @@ public:
     void setClip(Length&& top, Length&& right, Length&& bottom, Length&& left);
     void setClip(LengthBox&& box) { SET_VAR(m_visualData, clip, WTFMove(box)); }
 
-    void setUnicodeBidi(EUnicodeBidi v) { m_nonInheritedFlags.unicodeBidi = v; }
+    void setUnicodeBidi(UnicodeBidi v) { m_nonInheritedFlags.unicodeBidi = static_cast<unsigned>(v); }
 
     void setClear(Clear v) { m_nonInheritedFlags.clear = static_cast<unsigned>(v); }
     void setTableLayout(TableLayoutType v) { m_nonInheritedFlags.tableLayout = static_cast<unsigned>(v); }
@@ -1058,6 +1060,8 @@ public:
     void setAspectRatio(double width, double height) { SET_VAR(m_rareNonInheritedData, aspectRatioWidth, width); SET_VAR(m_rareNonInheritedData, aspectRatioHeight, height); }
 
     void setContain(OptionSet<Containment> containment) { SET_VAR(m_rareNonInheritedData, contain, containment); }
+    void setContainerType(ContainerType containerType) { SET_VAR(m_rareNonInheritedData, containerType, static_cast<unsigned>(containerType)); }
+    void setContainerNames(const Vector<AtomString>& names) { SET_VAR(m_rareNonInheritedData, containerNames, names); }
 
     void setListStyleStringValue(const AtomString& value) { SET_VAR(m_rareInheritedData, listStyleStringValue, value); }
     void setListStyleType(ListStyleType v) { m_inheritedFlags.listStyleType = static_cast<unsigned>(v); }
@@ -1139,6 +1143,7 @@ public:
     void setAccentColor(const Color& c) { SET_VAR(m_rareInheritedData, accentColor, c); SET_VAR(m_rareInheritedData, hasAutoAccentColor, false);  }
     void setHasAutoAccentColor() { SET_VAR(m_rareInheritedData, hasAutoAccentColor, true); SET_VAR(m_rareInheritedData, accentColor, currentColor()); }
     void setOpacity(float f) { float v = clampTo<float>(f, 0.f, 1.f); SET_VAR(m_rareNonInheritedData, opacity, v); }
+    static_assert(largestControlPart < 1 << appearanceBitWidth, "Control part must fit in storage bits");
     void setAppearance(ControlPart a) { SET_VAR(m_rareNonInheritedData, appearance, a); SET_VAR(m_rareNonInheritedData, effectiveAppearance, a); }
     void setEffectiveAppearance(ControlPart a) { SET_VAR(m_rareNonInheritedData, effectiveAppearance, a); }
     // For valid values of box-align see http://www.w3.org/TR/2009/WD-css3-flexbox-20090723/#alignment
@@ -1212,8 +1217,6 @@ public:
     void setUserDrag(UserDrag d) { SET_VAR(m_rareNonInheritedData, userDrag, static_cast<unsigned>(d)); }
     void setUserSelect(UserSelect s) { SET_VAR(m_rareInheritedData, userSelect, static_cast<unsigned>(s)); }
     void setTextOverflow(TextOverflow overflow) { SET_VAR(m_rareNonInheritedData, textOverflow, static_cast<unsigned>(overflow)); }
-    void setMarginBeforeCollapse(MarginCollapse c) { SET_VAR(m_rareNonInheritedData, marginBeforeCollapse, static_cast<unsigned>(c)); }
-    void setMarginAfterCollapse(MarginCollapse c) { SET_VAR(m_rareNonInheritedData, marginAfterCollapse, static_cast<unsigned>(c)); }
     void setWordBreak(WordBreak b) { SET_VAR(m_rareInheritedData, wordBreak, static_cast<unsigned>(b)); }
     void setOverflowWrap(OverflowWrap b) { SET_VAR(m_rareInheritedData, overflowWrap, static_cast<unsigned>(b)); }
     void setNBSPMode(NBSPMode b) { SET_VAR(m_rareInheritedData, nbspMode, static_cast<unsigned>(b)); }
@@ -1251,7 +1254,7 @@ public:
     void setTranslate(RefPtr<TranslateTransformOperation>&&);
 
     void setSpeakAs(OptionSet<SpeakAs> s) { SET_VAR(m_rareInheritedData, speakAs, s.toRaw()); }
-    void setTextCombine(TextCombine v) { SET_VAR(m_rareNonInheritedData, textCombine, static_cast<unsigned>(v)); }
+    void setTextCombine(TextCombine v) { SET_VAR(m_rareInheritedData, textCombine, static_cast<unsigned>(v)); }
     void setTextDecorationColor(const Color& c) { SET_VAR(m_rareNonInheritedData, textDecorationColor, c); }
     void setTextEmphasisColor(const Color& c) { SET_VAR(m_rareInheritedData, textEmphasisColor, c); }
     void setTextEmphasisFill(TextEmphasisFill fill) { SET_VAR(m_rareInheritedData, textEmphasisFill, static_cast<unsigned>(fill)); }
@@ -1299,6 +1302,7 @@ public:
     void adjustTransitions();
 
     void setTransformStyle3D(TransformStyle3D b) { SET_VAR(m_rareNonInheritedData, transformStyle3D, static_cast<unsigned>(b)); }
+    void setTransformStyleForcedToFlat(bool b) { SET_VAR(m_rareNonInheritedData, transformStyleForcedToFlat, static_cast<unsigned>(b)); }
     void setBackfaceVisibility(BackfaceVisibility b) { SET_VAR(m_rareNonInheritedData, backfaceVisibility, static_cast<unsigned>(b)); }
     void setPerspective(float p) { SET_VAR(m_rareNonInheritedData, perspective, p); }
     void setPerspectiveOriginX(Length&& length) { SET_VAR(m_rareNonInheritedData, perspectiveOriginX, WTFMove(length)); }
@@ -1472,13 +1476,13 @@ public:
     PathOperation* clipPath() const { return m_rareNonInheritedData->clipPath.get(); }
     static PathOperation* initialClipPath() { return nullptr; }
 
+    bool hasEffectiveContentNone() const { return !contentData() && (m_nonInheritedFlags.hasContentNone || styleType() == PseudoId::Before || styleType() == PseudoId::After); }
     bool hasContent() const { return contentData(); }
     const ContentData* contentData() const { return m_rareNonInheritedData->content.get(); }
     void setContent(std::unique_ptr<ContentData>, bool add);
     bool contentDataEquivalent(const RenderStyle* otherStyle) const { return const_cast<RenderStyle*>(this)->m_rareNonInheritedData->contentDataEquivalent(*const_cast<RenderStyle*>(otherStyle)->m_rareNonInheritedData); }
     void clearContent();
-    void setHasExplicitlyClearedContent(bool v) { m_nonInheritedFlags.hasExplicitlyClearedContent = v; }
-    bool hasExplicitlyClearedContent() const { return m_nonInheritedFlags.hasExplicitlyClearedContent; };
+    void setHasContentNone(bool v) { m_nonInheritedFlags.hasContentNone = v; }
     void setContent(const String&, bool add = false);
     void setContent(RefPtr<StyleImage>&&, bool add = false);
     void setContent(std::unique_ptr<CounterContent>, bool add = false);
@@ -1515,6 +1519,7 @@ public:
     bool isDisplayInlineType() const { return isDisplayInlineType(display()); }
     bool isOriginalDisplayInlineType() const { return isDisplayInlineType(originalDisplay()); }
     bool isDisplayFlexibleOrGridBox() const { return isDisplayFlexibleOrGridBox(display()); }
+    bool isDisplayFlexibleBoxIncludingDeprecatedOrGridBox() const { return isDisplayFlexibleOrGridBox() || isDisplayDeprecatedFlexibleBox(display()); }
     bool isDisplayRegionType() const;
     bool isDisplayTableOrTablePart() const { return isDisplayTableOrTablePart(display()); }
     bool isOriginalDisplayListItemType() const { return isDisplayListItemType(originalDisplay()); }
@@ -1561,7 +1566,7 @@ public:
 
     static Clear initialClear() { return Clear::None; }
     static DisplayType initialDisplay() { return DisplayType::Inline; }
-    static EUnicodeBidi initialUnicodeBidi() { return UBNormal; }
+    static UnicodeBidi initialUnicodeBidi() { return UnicodeBidi::Normal; }
     static PositionType initialPosition() { return PositionType::Static; }
     static VerticalAlign initialVerticalAlign() { return VerticalAlign::Baseline; }
     static Float initialFloating() { return Float::None; }
@@ -1655,8 +1660,6 @@ public:
     static UserDrag initialUserDrag() { return UserDrag::Auto; }
     static UserSelect initialUserSelect() { return UserSelect::Text; }
     static TextOverflow initialTextOverflow() { return TextOverflow::Clip; }
-    static MarginCollapse initialMarginBeforeCollapse() { return MarginCollapse::Collapse; }
-    static MarginCollapse initialMarginAfterCollapse() { return MarginCollapse::Collapse; }
     static WordBreak initialWordBreak() { return WordBreak::Normal; }
     static OverflowWrap initialOverflowWrap() { return OverflowWrap::Normal; }
     static NBSPMode initialNBSPMode() { return NBSPMode::Normal; }
@@ -1673,6 +1676,8 @@ public:
     static OptionSet<Containment> initialContainment() { return OptionSet<Containment> { }; }
     static OptionSet<Containment> strictContainment() { return OptionSet<Containment> { Containment::Size, Containment::Layout, Containment::Paint, Containment::Style }; }
     static OptionSet<Containment> contentContainment() { return OptionSet<Containment> { Containment::Layout, Containment::Paint, Containment::Style }; }
+    static ContainerType initialContainerType() { return ContainerType::None; }
+    static Vector<AtomString> initialContainerNames() { return { }; }
     static double initialAspectRatioWidth() { return 1.0; }
     static double initialAspectRatioHeight() { return 1.0; }
     static Order initialRTLOrdering() { return Order::Logical; }
@@ -1925,7 +1930,7 @@ private:
         unsigned verticalAlign : 4; // VerticalAlign
         unsigned clear : 3; // Clear
         unsigned position : 3; // PositionType
-        unsigned unicodeBidi : 3; // EUnicodeBidi
+        unsigned unicodeBidi : 3; // UnicodeBidi
         unsigned floating : 3; // Float
         unsigned tableLayout : 1; // TableLayoutType
 
@@ -1943,7 +1948,7 @@ private:
         unsigned firstChildState : 1;
         unsigned lastChildState : 1;
         unsigned isLink : 1;
-        unsigned hasExplicitlyClearedContent : 1;
+        unsigned hasContentNone : 1;
 
         unsigned styleType : 4; // PseudoId
         unsigned pseudoBits : (static_cast<unsigned>(PseudoId::FirstInternalPseudoId) - static_cast<unsigned>(PseudoId::FirstPublicPseudoId));
@@ -1999,11 +2004,11 @@ private:
     bool hasAutoLeftAndRight() const { return left().isAuto() && right().isAuto(); }
     bool hasAutoTopAndBottom() const { return top().isAuto() && bottom().isAuto(); }
 
-    static bool isDisplayReplacedType(DisplayType);
     static bool isDisplayInlineType(DisplayType);
     static bool isDisplayFlexibleBox(DisplayType);
     static bool isDisplayGridBox(DisplayType);
     static bool isDisplayFlexibleOrGridBox(DisplayType);
+    static bool isDisplayDeprecatedFlexibleBox(DisplayType);
     static bool isDisplayListItemType(DisplayType);
     static bool isDisplayTableOrTablePart(DisplayType);
 
@@ -2080,7 +2085,7 @@ inline bool RenderStyle::NonInheritedFlags::operator==(const NonInheritedFlags& 
         && firstChildState == other.firstChildState
         && lastChildState == other.lastChildState
         && isLink == other.isLink
-        && hasExplicitlyClearedContent == other.hasExplicitlyClearedContent
+        && hasContentNone == other.hasContentNone
         && styleType == other.styleType
         && pseudoBits == other.pseudoBits;
 }
@@ -2396,15 +2401,14 @@ inline void RenderStyle::getShadowBlockDirectionExtent(const ShadowData* shadow,
     return isHorizontalWritingMode() ? getShadowVerticalExtent(shadow, logicalTop, logicalBottom) : getShadowHorizontalExtent(shadow, logicalTop, logicalBottom);
 }
 
-inline bool RenderStyle::isDisplayReplacedType(DisplayType display)
-{
-    return display == DisplayType::InlineBlock || display == DisplayType::InlineBox || display == DisplayType::InlineFlex
-        || display == DisplayType::InlineGrid || display == DisplayType::InlineTable;
-}
-
 inline bool RenderStyle::isDisplayInlineType(DisplayType display)
 {
-    return display == DisplayType::Inline || isDisplayReplacedType(display);
+    return display == DisplayType::Inline
+        || display == DisplayType::InlineBlock
+        || display == DisplayType::InlineBox
+        || display == DisplayType::InlineFlex
+        || display == DisplayType::InlineGrid
+        || display == DisplayType::InlineTable;
 }
 
 inline bool RenderStyle::isDisplayFlexibleBox(DisplayType display)
@@ -2420,6 +2424,11 @@ inline bool RenderStyle::isDisplayGridBox(DisplayType display)
 inline bool RenderStyle::isDisplayFlexibleOrGridBox(DisplayType display)
 {
     return isDisplayFlexibleBox(display) || isDisplayGridBox(display);
+}
+
+inline bool RenderStyle::isDisplayDeprecatedFlexibleBox(DisplayType display)
+{
+    return display == DisplayType::Box || display == DisplayType::InlineBox;
 }
 
 inline bool RenderStyle::isDisplayListItemType(DisplayType display)

@@ -61,21 +61,21 @@ RenderReplaced::RenderReplaced(Element& element, RenderStyle&& style)
     : RenderBox(element, WTFMove(style), RenderReplacedFlag)
     , m_intrinsicSize(cDefaultWidth, cDefaultHeight)
 {
-    setReplaced(true);
+    setReplacedOrInlineBlock(true);
 }
 
 RenderReplaced::RenderReplaced(Element& element, RenderStyle&& style, const LayoutSize& intrinsicSize)
     : RenderBox(element, WTFMove(style), RenderReplacedFlag)
     , m_intrinsicSize(intrinsicSize)
 {
-    setReplaced(true);
+    setReplacedOrInlineBlock(true);
 }
 
 RenderReplaced::RenderReplaced(Document& document, RenderStyle&& style, const LayoutSize& intrinsicSize)
     : RenderBox(document, WTFMove(style), RenderReplacedFlag)
     , m_intrinsicSize(intrinsicSize)
 {
-    setReplaced(true);
+    setReplacedOrInlineBlock(true);
 }
 
 RenderReplaced::~RenderReplaced() = default;
@@ -475,6 +475,14 @@ LayoutRect RenderReplaced::replacedContentRect(const LayoutSize& intrinsicSize) 
     return finalRect;
 }
 
+double RenderReplaced::computeIntrinsicAspectRatio() const
+{
+    double intrinsicRatio;
+    FloatSize intrinsicSize;
+    computeAspectRatioInformationForRenderBox(embeddedContentBox(), intrinsicSize, intrinsicRatio);
+    return intrinsicRatio;
+}
+
 RoundedRect RenderReplaced::roundedContentBoxRect() const
 {
     return style().getRoundedInnerBorderFor(borderBoxRect(),
@@ -536,7 +544,7 @@ static inline bool hasIntrinsicSize(RenderBox*contentRenderer, bool hasIntrinsic
     if (hasIntrinsicWidth && hasIntrinsicHeight)
         return true;
     if (hasIntrinsicWidth || hasIntrinsicHeight)
-        return contentRenderer && contentRenderer->isSVGRoot();
+        return contentRenderer && contentRenderer->isSVGRootOrLegacySVGRoot();
     return false;
 }
 
@@ -780,8 +788,8 @@ bool RenderReplaced::isHighlighted(HighlightState state, const HighlightData& ra
 
 LayoutRect RenderReplaced::clippedOverflowRect(const RenderLayerModelObject* repaintContainer, VisibleRectContext context) const
 {
-    if (style().visibility() != Visibility::Visible && !enclosingLayer()->hasVisibleContent())
-        return LayoutRect();
+    if (isInsideEntirelyHiddenLayer())
+        return { };
 
     // The selectionRect can project outside of the overflowRect, so take their union
     // for repainting to avoid selection painting glitches.

@@ -140,14 +140,6 @@ def function_parameter_type(type, kind):
     return 'const %s&' % type
 
 
-def reply_type(type):
-    if type == 'IPC::SharedBufferDataReference':
-        return 'IPC::DataReference'
-    if type == 'std::optional<IPC::SharedBufferDataReference>':
-        return 'std::optional<IPC::DataReference>'
-    return type
-
-
 def reply_parameter_type(type):
     return '%s&' % type
 
@@ -165,7 +157,7 @@ def reply_tuple(message):
 
 
 def reply_arguments_type(message):
-    return 'std::tuple<%s>' % (', '.join(reply_type(parameter.type) for parameter in message.reply_parameters))
+    return 'std::tuple<%s>' % (', '.join(parameter.type for parameter in message.reply_parameters))
 
 
 def message_to_reply_forward_declaration(message):
@@ -207,7 +199,7 @@ def message_to_struct_declaration(receiver, message):
         send_parameters = [(function_parameter_type(x.type, x.kind), x.name) for x in message.reply_parameters]
         completion_handler_parameters = '%s' % ', '.join([' '.join(x) for x in send_parameters])
         if message.has_attribute(ASYNC_ATTRIBUTE):
-            move_parameters = ', '.join([move_type(reply_type(x.type)) for x in message.reply_parameters])
+            move_parameters = ', '.join([move_type(x.type) for x in message.reply_parameters])
             result.append('    static void callReply(IPC::Decoder&, CompletionHandler<void(%s)>&&);\n' % move_parameters)
             result.append('    static void cancelReply(CompletionHandler<void(%s)>&&);\n' % move_parameters)
             result.append('    static IPC::MessageName asyncMessageReplyName() { return IPC::MessageName::%s_%sReply; }\n' % (receiver.name, message.name))
@@ -266,10 +258,13 @@ def types_that_cannot_be_forward_declared():
     return frozenset([
         'CVPixelBufferRef',
         'IPC::DataReference',
+        'IPC::FilterReference',
         'IPC::FontReference',
         'IPC::Semaphore',
         'MachSendRight',
         'MediaTime',
+        'PlatformXR::ReferenceSpaceType',
+        'PlatformXR::SessionMode',
         'String',
         'WebCore::BroadcastChannelIdentifier',
         'WebCore::DestinationColorSpace',
@@ -288,11 +283,13 @@ def types_that_cannot_be_forward_declared():
         'WebCore::MediaKeySystemRequestIdentifier',
         'WebCore::MediaPlayerIdentifier',
         'WebCore::MediaSessionIdentifier',
+        'WebCore::ModalContainerControlType',
         'WebCore::NativeImageReference',
         'WebCore::PageIdentifier',
         'WebCore::PlaybackTargetClientContextIdentifier',
         'WebCore::PluginLoadClientPolicy',
         'WebCore::PointerID',
+        'WebCore::PushSubscriptionIdentifier',
         'WebCore::ProcessIdentifier',
         'WebCore::RealtimeMediaSourceIdentifier',
         'WebCore::RenderingMode',
@@ -309,7 +306,9 @@ def types_that_cannot_be_forward_declared():
         'WebCore::SleepDisablerIdentifier',
         'WebCore::SourceBufferAppendMode',
         'WebCore::SpeechRecognitionConnectionClientIdentifier',
+        'WebCore::StorageType',
         'WebCore::UserMediaRequestIdentifier',
+        'WebCore::WebLockIdentifier',
         'WebCore::WebSocketIdentifier',
         'WebKit::ActivityStateChangeID',
         'WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier',
@@ -350,6 +349,7 @@ def types_that_cannot_be_forward_declared():
         'WebKit::SampleBufferDisplayLayerIdentifier',
         'WebKit::StorageAreaIdentifier',
         'WebKit::StorageAreaImplIdentifier',
+        'WebKit::StorageAreaMapIdentifier',
         'WebKit::StorageNamespaceIdentifier',
         'WebKit::TapIdentifier',
         'WebKit::TextCheckerRequestID',
@@ -357,6 +357,7 @@ def types_that_cannot_be_forward_declared():
         'WebKit::TransactionID',
         'WebKit::UserContentControllerIdentifier',
         'WebKit::WCLayerTreeHostIdentifier',
+        'WebKit::WCContentBufferIdentifier',
         'WebKit::WebGPUIdentifier',
         'WebKit::WebPageProxyIdentifier',
         'WebKit::WebURLSchemeHandlerIdentifier',
@@ -369,6 +370,7 @@ def conditions_for_header(header):
         '"InputMethodState.h"': ["PLATFORM(GTK)", "PLATFORM(WPE)"],
         '"LayerHostingContext.h"': ["PLATFORM(COCOA)", ],
         '"GestureTypes.h"': ["PLATFORM(IOS_FAMILY)"],
+        '"WCContentBufferIdentifier.h"': ["USE(GRAPHICS_LAYER_WC)"],
         '"WCLayerTreeHostIdentifier.h"': ["USE(GRAPHICS_LAYER_WC)"],
         '<WebCore/CVUtilities.h>': ["PLATFORM(COCOA)", ],
         '<WebCore/DataDetectorType.h>': ["ENABLE(DATA_DETECTION)"],
@@ -450,6 +452,7 @@ def forward_declarations_and_headers_for_replies(receiver):
         'MachSendRight',
         'MediaTime',
         'String',
+        'UUID',
     ])
 
     no_forward_declaration_types = types_that_cannot_be_forward_declared()
@@ -739,9 +742,12 @@ def headers_for_type(type):
         'PAL::WebGPU::VertexFormat': ['<pal/graphics/WebGPU/WebGPUVertexFormat.h>'],
         'PAL::WebGPU::VertexStepMode': ['<pal/graphics/WebGPU/WebGPUVertexStepMode.h>'],
         'PlatformXR::Device::FrameData': ['<WebCore/PlatformXR.h>'],
+        'PlatformXR::ReferenceSpaceType': ['<WebCore/PlatformXR.h>'],
+        'PlatformXR::SessionMode': ['<WebCore/PlatformXR.h>'],
         'Seconds': ['<wtf/Seconds.h>'],
         'String': ['<wtf/text/WTFString.h>'],
         'URL': ['<wtf/URLHash.h>'],
+        'UUID': ['<wtf/UUID.h>'],
         'WallTime': ['<wtf/WallTime.h>'],
         'WebCore::ArcData': ['<WebCore/InlinePathData.h>'],
         'WebCore::AutoplayEventFlags': ['<WebCore/AutoplayEvent.h>'],
@@ -750,8 +756,10 @@ def headers_for_type(type):
         'WebCore::BrowsingContextGroupSwitchDecision': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::COEPDisposition': ['<WebCore/CrossOriginEmbedderPolicy.h>'],
         'WebCore::COOPDisposition': ['<WebCore/CrossOriginOpenerPolicy.h>'],
+        'WebCore::ColorSchemePreference': ['<WebCore/DocumentLoader.h>'],
         'WebCore::CompositeOperator': ['<WebCore/GraphicsTypes.h>'],
         'WebCore::CreateNewGroupForHighlight': ['<WebCore/AppHighlight.h>'],
+        'WebCore::DOMPasteAccessCategory': ['<WebCore/DOMPasteAccess.h>'],
         'WebCore::DOMPasteAccessResponse': ['<WebCore/DOMPasteAccess.h>'],
         'WebCore::DestinationColorSpace': ['<WebCore/ColorSpace.h>'],
         'WebCore::DisplayList::ItemBufferIdentifier': ['<WebCore/DisplayList.h>'],
@@ -791,6 +799,8 @@ def headers_for_type(type):
         'WebCore::MediaProducerMediaState': ['<WebCore/MediaProducer.h>'],
         'WebCore::MediaProducerMutedState': ['<WebCore/MediaProducer.h>'],
         'WebCore::MessagePortChannelProvider::HasActivity': ['<WebCore/MessagePortChannelProvider.h>'],
+        'WebCore::ModalContainerControlType': ['<WebCore/ModalContainerTypes.h>'],
+        'WebCore::ModalContainerDecision': ['<WebCore/ModalContainerTypes.h>'],
         'WebCore::MouseEventPolicy': ['<WebCore/DocumentLoader.h>'],
         'WebCore::MoveData': ['<WebCore/InlinePathData.h>'],
         'WebCore::NetworkTransactionInformation': ['<WebCore/NetworkLoadInformation.h>'],
@@ -798,7 +808,6 @@ def headers_for_type(type):
         'WebCore::PasteboardImage': ['<WebCore/Pasteboard.h>'],
         'WebCore::PasteboardURL': ['<WebCore/Pasteboard.h>'],
         'WebCore::PasteboardWebContent': ['<WebCore/Pasteboard.h>'],
-        'WebCore::PaymentAuthorizationResult': ['<WebCore/ApplePaySessionPaymentRequest.h>'],
         'WebCore::PixelFormat': ['<WebCore/ImageBufferBackend.h>'],
         'WebCore::PlatformTextTrackData': ['<WebCore/PlatformTextTrack.h>'],
         'WebCore::PlaybackSessionModel::PlaybackState': ['<WebCore/PlaybackSessionModel.h>'],
@@ -808,6 +817,7 @@ def headers_for_type(type):
         'WebCore::PolicyCheckIdentifier': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::PreserveResolution': ['<WebCore/ImageBufferBackend.h>'],
         'WebCore::ProcessIdentifier': ['<WebCore/ProcessIdentifier.h>'],
+        'WebCore::PushSubscriptionIdentifier': ['<WebCore/PushSubscriptionIdentifier.h>'],
         'WebCore::QuadCurveData': ['<WebCore/InlinePathData.h>'],
         'WebCore::RecentSearch': ['<WebCore/SearchPopupMenu.h>'],
         'WebCore::RequestStorageAccessResult': ['<WebCore/DocumentStorageAccess.h>'],
@@ -854,6 +864,7 @@ def headers_for_type(type):
         'WebKit::CallDownloadDidStart': ['"DownloadManager.h"'],
         'WebKit::ContentWorldIdentifier': ['"ContentWorldShared.h"'],
         'WebKit::DocumentEditingContextRequest': ['"DocumentEditingContext.h"'],
+        'WebKit::FindDecorationStyle': ['"WebFindOptions.h"'],
         'WebKit::FindOptions': ['"WebFindOptions.h"'],
         'WebKit::FormSubmitListenerIdentifier': ['"IdentifierTypes.h"'],
         'WebKit::GestureRecognizerState': ['"GestureTypes.h"'],
@@ -1062,10 +1073,10 @@ def generate_message_handler(receiver):
                 result.append('#if %s\n\n' % message.condition)
 
             if message.has_attribute(ASYNC_ATTRIBUTE):
-                move_parameters = message.name, ', '.join([move_type(reply_type(x.type)) for x in message.reply_parameters])
+                move_parameters = message.name, ', '.join([move_type(x.type) for x in message.reply_parameters])
                 result.append('void %s::callReply(IPC::Decoder& decoder, CompletionHandler<void(%s)>&& completionHandler)\n{\n' % move_parameters)
                 for x in message.reply_parameters:
-                    result.append('    std::optional<%s> %s;\n' % (reply_type(x.type), x.name))
+                    result.append('    std::optional<%s> %s;\n' % (x.type, x.name))
                     result.append('    decoder >> %s;\n' % x.name)
                     result.append('    if (!%s) {\n        ASSERT_NOT_REACHED();\n        cancelReply(WTFMove(completionHandler));\n        return;\n    }\n' % x.name)
                 result.append('    completionHandler(')
@@ -1073,7 +1084,7 @@ def generate_message_handler(receiver):
                     result.append('WTFMove(*%s)' % ('), WTFMove(*'.join(x.name for x in message.reply_parameters)))
                 result.append(');\n}\n\n')
                 result.append('void %s::cancelReply(CompletionHandler<void(%s)>&& completionHandler)\n{\n    completionHandler(' % move_parameters)
-                result.append(', '.join(['IPC::AsyncReplyError<' + reply_type(x.type) + '>::create()' for x in message.reply_parameters]))
+                result.append(', '.join(['IPC::AsyncReplyError<' + x.type + '>::create()' for x in message.reply_parameters]))
                 result.append(');\n}\n\n')
 
             result.append('void %s::send(UniqueRef<IPC::Encoder>&& encoder, IPC::Connection& connection' % (message.name))
@@ -1119,7 +1130,7 @@ def generate_message_handler(receiver):
             result.append('    if (connection.connection().ignoreInvalidMessageForTesting())\n')
             result.append('        return;\n')
             result.append('#endif // ENABLE(IPC_TESTING_API)\n')
-            result.append('    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled stream message %s to %" PRIu64, description(decoder.messageName()), decoder.destinationID());\n')
+            result.append('    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled stream message %s to %" PRIu64, IPC::description(decoder.messageName()), decoder.destinationID());\n')
         result.append('}\n')
     elif async_messages or receiver.has_attribute(WANTS_DISPATCH_MESSAGE_ATTRIBUTE) or receiver.has_attribute(WANTS_ASYNC_DISPATCH_MESSAGE_ATTRIBUTE):
         receive_variant = receiver.name if receiver.has_attribute(LEGACY_RECEIVER_ATTRIBUTE) else ''
@@ -1142,7 +1153,7 @@ def generate_message_handler(receiver):
             result.append('    if (connection.ignoreInvalidMessageForTesting())\n')
             result.append('        return;\n')
             result.append('#endif // ENABLE(IPC_TESTING_API)\n')
-            result.append('    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, description(decoder.messageName()), decoder.destinationID());\n')
+            result.append('    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, IPC::description(decoder.messageName()), decoder.destinationID());\n')
         result.append('}\n')
 
     if not receiver.has_attribute(STREAM_ATTRIBUTE) and (sync_messages or receiver.has_attribute(WANTS_DISPATCH_MESSAGE_ATTRIBUTE)):

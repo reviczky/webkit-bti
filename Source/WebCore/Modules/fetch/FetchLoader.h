@@ -39,16 +39,16 @@ class FetchBodyConsumer;
 class FetchLoaderClient;
 class FetchRequest;
 class ScriptExecutionContext;
-class SharedBuffer;
+class FragmentedSharedBuffer;
 
 class FetchLoader final : public ThreadableLoaderClient {
 public:
     FetchLoader(FetchLoaderClient&, FetchBodyConsumer*);
     WEBCORE_EXPORT ~FetchLoader();
 
-    RefPtr<SharedBuffer> startStreaming();
+    RefPtr<FragmentedSharedBuffer> startStreaming();
 
-    void start(ScriptExecutionContext&, const FetchRequest&);
+    void start(ScriptExecutionContext&, const FetchRequest&, const String&);
     void start(ScriptExecutionContext&, const Blob&);
     void startLoadingBlobURL(ScriptExecutionContext&, const URL& blobURL);
     void stop();
@@ -58,8 +58,8 @@ public:
 private:
     // ThreadableLoaderClient API.
     void didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse&) final;
-    void didReceiveData(const uint8_t*, int) final;
-    void didFinishLoading(ResourceLoaderIdentifier) final;
+    void didReceiveData(const SharedBuffer&) final;
+    void didFinishLoading(ResourceLoaderIdentifier, const NetworkLoadMetrics&) final;
     void didFail(const ResourceError&) final;
 
 private:

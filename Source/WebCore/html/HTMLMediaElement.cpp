@@ -1111,11 +1111,12 @@ String HTMLMediaElement::canPlayType(const String& mimeType) const
     return canPlay;
 }
 
-double HTMLMediaElement::getStartDate() const
+WallTime HTMLMediaElement::getStartDate() const
 {
     if (!m_player)
-        return std::numeric_limits<double>::quiet_NaN();
-    return m_player->getStartDate().toDouble();
+        return WallTime::nan();
+
+    return WallTime::fromRawSeconds(m_player->getStartDate().toDouble());
 }
 
 void HTMLMediaElement::load()
@@ -1405,7 +1406,7 @@ void HTMLMediaElement::selectMediaResource()
                 return;
             }
 
-            if (!isSafeToLoadURL(absoluteURL, Complain) || !dispatchBeforeLoadEvent(absoluteURL.string())) {
+            if (!isSafeToLoadURL(absoluteURL, Complain)) {
                 mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
                 return;
             }
@@ -2938,7 +2939,7 @@ void HTMLMediaElement::cdmClientAttemptToResumePlaybackIfNecessary()
     attemptToResumePlaybackIfNecessary();
 }
 
-void HTMLMediaElement::cdmClientUnrequestedInitializationDataReceived(const String& initDataType, Ref<SharedBuffer>&& initData)
+void HTMLMediaElement::cdmClientUnrequestedInitializationDataReceived(const String& initDataType, Ref<FragmentedSharedBuffer>&& initData)
 {
     mediaPlayerInitializationDataEncountered(initDataType, initData->tryCreateArrayBuffer());
 }
@@ -3550,7 +3551,7 @@ void HTMLMediaElement::setPlaybackRate(double rate)
 void HTMLMediaElement::updatePlaybackRate()
 {
     double requestedRate = requestedPlaybackRate();
-    if (m_player && potentiallyPlaying() && m_player->rate() != requestedRate)
+    if (m_player && potentiallyPlaying() && m_player->effectiveRate() != requestedRate)
         m_player->setRate(requestedRate);
 }
 
@@ -4583,7 +4584,8 @@ bool HTMLMediaElement::setupAndCallJS(const JSSetupFunction& task)
 
     auto pendingActivity = makePendingActivity(*this);
     auto& world = ensureIsolatedWorld();
-    auto& scriptController = document().frame()->script();
+    Ref protectedFrame = *document().frame();
+    auto& scriptController = protectedFrame->script();
     auto* globalObject = JSC::jsCast<JSDOMGlobalObject*>(scriptController.globalObject(world));
     auto& vm = globalObject->vm();
     JSC::JSLockHolder lock(vm);
@@ -4882,7 +4884,7 @@ URL HTMLMediaElement::selectNextSourceChild(ContentType* contentType, String* ke
         }
 
         // Is it safe to load this url?
-        if (!isSafeToLoadURL(mediaURL, actionIfInvalid) || !dispatchBeforeLoadEvent(mediaURL.string()))
+        if (!isSafeToLoadURL(mediaURL, actionIfInvalid))
             goto CheckAgain;
 
         // A 'beforeload' event handler can mutate the DOM, so check to see if the source element is still a child node.
@@ -6301,7 +6303,7 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
     if (document().settings().fullScreenEnabled() && mode == VideoFullscreenModeStandard) {
         m_temporarilyAllowingInlinePlaybackAfterFullscreen = false;
         m_waitingToEnterFullscreen = true;
-        document().fullscreenManager().requestFullscreenForElement(this, FullscreenManager::ExemptIFrameAllowFullscreenRequirement);
+        document().fullscreenManager().requestFullscreenForElement(*this, FullscreenManager::ExemptIFrameAllowFullscreenRequirement);
         return;
     }
 #endif
@@ -7185,8 +7187,6 @@ String HTMLMediaElement::mediaPlayerUserAgent() const
     return frame->loader().userAgent(m_currentSrc);
 }
 
-#if ENABLE(AVF_CAPTIONS)
-
 static inline PlatformTextTrackData::TrackKind toPlatform(TextTrack::Kind kind)
 {
     switch (kind) {
@@ -7253,8 +7253,6 @@ Vector<RefPtr<PlatformTextTrack>> HTMLMediaElement::outOfBandTrackSources()
 
     return outOfBandTrackSources;
 }
-
-#endif
 
 bool HTMLMediaElement::mediaPlayerIsFullscreen() const
 {

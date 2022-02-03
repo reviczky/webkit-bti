@@ -92,6 +92,7 @@ set(WebKit_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/WebProcess/Geolocation"
     "${WEBKIT_DIR}/WebProcess/GPU"
     "${WEBKIT_DIR}/WebProcess/GPU/graphics"
+    "${WEBKIT_DIR}/WebProcess/GPU/graphics/WebGPU"
     "${WEBKIT_DIR}/WebProcess/GPU/media"
     "${WEBKIT_DIR}/WebProcess/GPU/webrtc"
     "${WEBKIT_DIR}/WebProcess/IconDatabase"
@@ -196,6 +197,7 @@ set(WebKit_MESSAGES_IN_FILES
     NetworkProcess/NetworkSocketChannel
     NetworkProcess/NetworkSocketStream
 
+    NetworkProcess/ServiceWorker/ServiceWorkerDownloadTask
     NetworkProcess/ServiceWorker/ServiceWorkerFetchTask
     NetworkProcess/ServiceWorker/WebSWServerConnection
     NetworkProcess/ServiceWorker/WebSWServerToContextConnection
@@ -212,6 +214,7 @@ set(WebKit_MESSAGES_IN_FILES
     NetworkProcess/webrtc/RTCDataChannelRemoteManagerProxy
 
     Shared/AuxiliaryProcess
+    Shared/IPCTester
     Shared/WebConnection
 
     Shared/Authentication/AuthenticationManager
@@ -228,6 +231,7 @@ set(WebKit_MESSAGES_IN_FILES
     UIProcess/WebCookieManagerProxy
     UIProcess/WebFullScreenManagerProxy
     UIProcess/WebGeolocationManagerProxy
+    UIProcess/WebLockRegistryProxy
     UIProcess/WebPageProxy
     UIProcess/WebPasteboardProxy
     UIProcess/WebProcessPool
@@ -260,6 +264,8 @@ set(WebKit_MESSAGES_IN_FILES
 
     WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy
     WebProcess/GPU/graphics/RemoteRenderingBackendProxy
+
+    WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy
 
     WebProcess/GPU/media/RemoteAudioHardwareListener
     WebProcess/GPU/media/MediaPlayerPrivateRemote
@@ -304,7 +310,9 @@ set(WebKit_MESSAGES_IN_FILES
 
     WebProcess/UserContent/WebUserContentController
 
+    WebProcess/WebCoreSupport/RemoteWebLockRegistry
     WebProcess/WebCoreSupport/WebBroadcastChannelRegistry
+    WebProcess/WebCoreSupport/WebFileSystemStorageConnection
     WebProcess/WebCoreSupport/WebSpeechRecognitionConnection
 
     WebProcess/WebPage/DrawingArea

@@ -355,11 +355,11 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_to_this)
             if (otherStructureID)
                 metadata.m_toThisStatus = ToThisConflicted;
             metadata.m_cachedStructureID = myStructureID;
-            vm.writeBarrier(codeBlock, vm.getStructure(myStructureID));
+            vm.writeBarrier(codeBlock, myStructureID.decode());
         }
     } else {
         metadata.m_toThisStatus = ToThisConflicted;
-        metadata.m_cachedStructureID = 0;
+        metadata.m_cachedStructureID = StructureID();
     }
     // Note: We only need to do this value profiling here on the slow path. The fast path
     // just returns the input to to_this if the structure check succeeds. If the structure
@@ -814,6 +814,21 @@ JSC_DEFINE_COMMON_SLOW_PATH(slow_path_typeof_is_function)
     BEGIN();
     auto bytecode = pc->as<OpTypeofIsFunction>();
     RETURN(jsBoolean(jsTypeofIsFunction(globalObject, GET_C(bytecode.m_operand).jsValue())));
+}
+
+JSC_DEFINE_COMMON_SLOW_PATH(slow_path_instanceof_custom)
+{
+    BEGIN();
+
+    auto bytecode = pc->as<OpInstanceofCustom>();
+    auto value = GET_C(bytecode.m_value).jsValue();
+    auto constructor = GET_C(bytecode.m_constructor).jsValue();
+    auto hasInstanceValue = GET_C(bytecode.m_hasInstanceValue).jsValue();
+
+    ASSERT(constructor.isObject());
+    ASSERT(hasInstanceValue != globalObject->functionProtoHasInstanceSymbolFunction() || !constructor.getObject()->structure(vm)->typeInfo().implementsDefaultHasInstance());
+
+    RETURN(jsBoolean(constructor.getObject()->hasInstance(globalObject, value, hasInstanceValue)));
 }
 
 JSC_DEFINE_COMMON_SLOW_PATH(slow_path_is_callable)

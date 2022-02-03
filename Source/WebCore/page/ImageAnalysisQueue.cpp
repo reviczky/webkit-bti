@@ -30,10 +30,12 @@
 
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "FrameView.h"
 #include "HTMLCollection.h"
-#include "HTMLElement.h"
+#include "HTMLImageElement.h"
 #include "ImageOverlay.h"
 #include "RenderImage.h"
+#include "RenderView.h"
 #include "Timer.h"
 
 namespace WebCore {
@@ -51,33 +53,51 @@ ImageAnalysisQueue::ImageAnalysisQueue(Page& page)
 
 ImageAnalysisQueue::~ImageAnalysisQueue() = default;
 
+void ImageAnalysisQueue::enqueueIfNeeded(HTMLImageElement& element)
+{
+    if (!is<RenderImage>(element.renderer()))
+        return;
+
+    auto& renderer = downcast<RenderImage>(*element.renderer());
+    auto* cachedImage = renderer.cachedImage();
+    if (!cachedImage || cachedImage->errorOccurred())
+        return;
+
+    if (renderer.size().width() < minimumWidthForAnalysis || renderer.size().height() < minimumHeightForAnalysis)
+        return;
+
+    if (!m_queuedElements.add(element).isNewEntry)
+        return;
+
+    Ref view = renderer.view().frameView();
+    m_queue.enqueue({
+        element,
+        renderer.isVisibleInDocumentRect(view->windowToContents(view->windowClipRect())) ? Priority::High : Priority::Low,
+        nextTaskNumber()
+    });
+    resumeProcessingSoon();
+}
+
+void ImageAnalysisQueue::resumeProcessingSoon()
+{
+    if (m_queue.isEmpty() || m_resumeProcessingTimer.isActive())
+        return;
+
+    m_resumeProcessingTimer.startOneShot(resumeProcessingDelay);
+}
+
 void ImageAnalysisQueue::enqueueAllImages(Document& document, const String& identifier)
 {
     if (!m_page)
         return;
 
-    // FIXME (233266): Analyze image elements that are loaded after we've enqueued all images in the document.
-    auto imageIterator = document.images()->createIterator();
-    for (RefPtr node = imageIterator.next(); node; node = imageIterator.next()) {
-        if (!is<HTMLElement>(*node))
-            continue;
-
-        auto& element = downcast<HTMLElement>(*node);
-        if (!is<RenderImage>(element.renderer()))
-            continue;
-
-        auto& renderImage = downcast<RenderImage>(*element.renderer());
-        auto* cachedImage = renderImage.cachedImage();
-        if (!cachedImage || cachedImage->errorOccurred())
-            continue;
-
-        if (renderImage.size().width() < minimumWidthForAnalysis || renderImage.size().height() < minimumHeightForAnalysis)
-            continue;
-
-        m_queue.append({ WeakPtr { element }, identifier });
+    if (m_identifier != identifier) {
+        clear();
+        m_identifier = identifier;
     }
 
-    resumeProcessing();
+    for (auto& image : descendantsOfType<HTMLImageElement>(document))
+        enqueueIfNeeded(image);
 }
 
 void ImageAnalysisQueue::resumeProcessing()
@@ -86,22 +106,20 @@ void ImageAnalysisQueue::resumeProcessing()
         return;
 
     while (!m_queue.isEmpty() && m_pendingRequestCount < maximumPendingImageAnalysisCount) {
-        auto [weakElement, identifier] = m_queue.takeFirst();
-        RefPtr element = weakElement.get();
+        RefPtr element = m_queue.dequeue().element.get();
         if (!element || !element->isConnected())
             continue;
 
         m_pendingRequestCount++;
         m_page->resetTextRecognitionResult(*element);
-        m_page->chrome().client().requestTextRecognition(*element, identifier, [this, page = m_page] (auto&&) {
-            if (!page)
+        m_page->chrome().client().requestTextRecognition(*element, m_identifier, [this, page = m_page] (auto&&) {
+            if (!page || page->imageAnalysisQueueIfExists() != this)
                 return;
 
             if (m_pendingRequestCount)
                 m_pendingRequestCount--;
 
-            if (!m_queue.isEmpty() && !m_resumeProcessingTimer.isActive())
-                m_resumeProcessingTimer.startOneShot(resumeProcessingDelay);
+            resumeProcessingSoon();
         });
     }
 }
@@ -111,7 +129,10 @@ void ImageAnalysisQueue::clear()
     // FIXME: This should cancel pending requests in addition to emptying the task queue.
     m_pendingRequestCount = 0;
     m_resumeProcessingTimer.stop();
-    m_queue.clear();
+    m_queue = { };
+    m_queuedElements.clear();
+    m_identifier = { };
+    m_currentTaskNumber = 0;
 }
 
 } // namespace WebCore

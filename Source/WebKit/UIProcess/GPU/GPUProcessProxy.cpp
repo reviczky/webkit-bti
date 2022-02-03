@@ -63,10 +63,6 @@
 #include <wtf/FileSystem.h>
 #endif
 
-#if PLATFORM(COCOA)
-#include "AudioComponentRegistration.h"
-#endif
-
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, this->connection())
 
 namespace WebKit {
@@ -89,11 +85,11 @@ static bool shouldCreateAppleCameraServiceSandboxExtension()
 static const Vector<ASCIILiteral>& nonBrowserServices()
 {
     ASSERT(isMainRunLoop());
-    static const auto services = makeNeverDestroyed(Vector<ASCIILiteral> {
+    static NeverDestroyed services = Vector<ASCIILiteral> {
         "com.apple.iconservices"_s,
         "com.apple.PowerManagement.control"_s,
         "com.apple.frontboard.systemappservices"_s
-    });
+    };
     return services;
 }
 #endif
@@ -142,6 +138,8 @@ GPUProcessProxy::GPUProcessProxy()
     connect();
 
     GPUProcessCreationParameters parameters;
+    parameters.auxiliaryProcessParameters = auxiliaryProcessParameters();
+
 #if ENABLE(MEDIA_STREAM)
     parameters.useMockCaptureDevices = m_useMockCaptureDevices;
 #if PLATFORM(MAC)
@@ -443,17 +441,8 @@ void GPUProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
 #endif
 
 #if PLATFORM(COCOA)
-    sendAudioComponentRegistrations<Messages::GPUProcess::ConsumeAudioComponentRegistrations>(*this);
-
-    // Use any session ID to get any Website data store. It is OK to use any Website data store,
-    // since we are using it to access any Networking process, which all have the XPC endpoint.
-    // The XPC endpoint is used to receive the Launch Services database from the Network process.
-    if (m_sessionIDs.isEmpty())
-        return;
-    auto store = WebsiteDataStore::existingDataStoreForSessionID(*m_sessionIDs.begin());
-    if (!store)
-        return;
-    m_hasSentNetworkProcessXPCEndpoint = store->sendNetworkProcessXPCEndpointToProcess(*this);
+    if (auto networkProcess = NetworkProcessProxy::defaultNetworkProcess())
+        networkProcess->sendXPCEndpointToProcess(*this);
 #endif
 }
 
@@ -519,11 +508,6 @@ void GPUProcessProxy::addSession(const WebsiteDataStore& store)
 
     send(Messages::GPUProcess::AddSession { store.sessionID(), gpuProcessSessionParameters(store) }, 0);
     m_sessionIDs.add(store.sessionID());
-
-#if PLATFORM(COCOA)
-    if (!m_hasSentNetworkProcessXPCEndpoint)
-        m_hasSentNetworkProcessXPCEndpoint = store.sendNetworkProcessXPCEndpointToProcess(*this);
-#endif
 }
 
 void GPUProcessProxy::removeSession(PAL::SessionID sessionID)
@@ -661,11 +645,6 @@ void GPUProcessProxy::didBecomeUnresponsive()
 #if !PLATFORM(COCOA)
 void GPUProcessProxy::platformInitializeGPUProcessParameters(GPUProcessCreationParameters& parameters)
 {
-#if !LOG_DISABLED || !RELEASE_LOG_DISABLED
-    parameters.wtfLoggingChannels = WTF::logLevelString();
-    parameters.webCoreLoggingChannels = WebCore::logLevelString();
-    parameters.webKitLoggingChannels = WebKit::logLevelString();
-#endif
 }
 #endif
 

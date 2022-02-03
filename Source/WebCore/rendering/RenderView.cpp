@@ -169,7 +169,7 @@ void RenderView::layout()
                 || box.style().logicalHeight().isPercentOrCalculated()
                 || box.style().logicalMinHeight().isPercentOrCalculated()
                 || box.style().logicalMaxHeight().isPercentOrCalculated()
-                || box.isSVGRoot()
+                || box.isSVGRootOrLegacySVGRoot()
                 )
                 box.setChildNeedsLayout(MarkOnlyThis);
         }
@@ -179,7 +179,7 @@ void RenderView::layout()
     if (!needsLayout())
         return;
 
-    LayoutStateMaintainer statePusher(*this, { }, false, m_pageLogicalSize.value_or(LayoutSize()).height(), m_pageLogicalHeightChanged);
+    LayoutStateMaintainer statePusher(*this, { }, false, valueOrDefault(m_pageLogicalSize).height(), m_pageLogicalHeightChanged);
 
     m_pageLogicalHeightChanged = false;
 
@@ -329,9 +329,14 @@ RenderElement* RenderView::rendererForRootBackground() const
     if (!is<HTMLHtmlElement>(documentRenderer.element()))
         return &documentRenderer;
 
+    if (shouldApplyAnyContainment(documentRenderer))
+        return nullptr;
+
     if (auto* body = document().body()) {
-        if (auto* renderer = body->renderer())
-            return renderer;
+        if (auto* renderer = body->renderer()) {
+            if (!shouldApplyAnyContainment(*renderer))
+                return renderer;
+        }
     }
     return &documentRenderer;
 }
@@ -394,7 +399,7 @@ void RenderView::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint&)
     Element* documentElement = document().documentElement();
     if (RenderElement* rootRenderer = documentElement ? documentElement->renderer() : nullptr) {
         // The document element's renderer is currently forced to be a block, but may not always be.
-        RenderBox* rootBox = is<RenderBox>(*rootRenderer) ? downcast<RenderBox>(rootRenderer) : nullptr;
+        auto* rootBox = dynamicDowncast<RenderBox>(*rootRenderer);
         rootFillsViewport = rootBox && !rootBox->x() && !rootBox->y() && rootBox->width() >= width() && rootBox->height() >= height();
         rootObscuresBackground = rendererObscuresBackground(*rootRenderer);
     }

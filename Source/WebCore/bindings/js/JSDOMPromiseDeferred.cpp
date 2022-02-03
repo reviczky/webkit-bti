@@ -44,6 +44,9 @@ using namespace JSC;
 
 JSC::JSValue DeferredPromise::promise() const
 {
+    if (isEmpty())
+        return jsUndefined();
+
     ASSERT(deferred());
     return deferred();
 }
@@ -55,6 +58,7 @@ void DeferredPromise::callFunction(JSGlobalObject& lexicalGlobalObject, ResolveM
 
     if (activeDOMObjectsAreSuspended()) {
         JSC::Strong<JSC::Unknown, ShouldStrongDestructorGrabLock::Yes> strongResolution(lexicalGlobalObject.vm(), resolution);
+        ASSERT(scriptExecutionContext()->eventLoop().isSuspended());
         scriptExecutionContext()->eventLoop().queueTask(TaskSource::Networking, [this, protectedThis = Ref { *this }, mode, strongResolution = WTFMove(strongResolution)]() mutable {
             if (shouldIgnoreRequestToFulfill())
                 return;
@@ -274,10 +278,10 @@ bool DeferredPromise::handleTerminationExceptionIfNeeded(CatchScope& scope, JSDO
 
     auto& scriptExecutionContext = *lexicalGlobalObject.scriptExecutionContext();
     if (is<WorkerGlobalScope>(scriptExecutionContext)) {
-        auto& scriptController = *downcast<WorkerGlobalScope>(scriptExecutionContext).script();
+        auto* scriptController = downcast<WorkerGlobalScope>(scriptExecutionContext).script();
         bool terminatorCausedException = vm.isTerminationException(exception);
-        if (terminatorCausedException || scriptController.isTerminatingExecution()) {
-            scriptController.forbidExecution();
+        if (terminatorCausedException || (scriptController && scriptController->isTerminatingExecution())) {
+            scriptController->forbidExecution();
             return true;
         }
     }

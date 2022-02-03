@@ -32,6 +32,7 @@
 #include "WebCoreArgumentCoders.h"
 #include "WebProcess.h"
 #include <WebCore/Blob.h>
+#include <WebCore/ClientOrigin.h>
 #include <WebCore/Document.h>
 #include <WebCore/ExceptionCode.h>
 #include <WebCore/Page.h>
@@ -117,7 +118,7 @@ WebSocketChannel::ConnectStatus WebSocketChannel::connect(const URL& url, const 
 
     m_inspector.didCreateWebSocket(m_document.get(), url);
     m_url = request->url();
-    MessageSender::send(Messages::NetworkConnectionToWebProcess::CreateSocketChannel { *request, protocol, m_identifier, m_webPageProxyID });
+    MessageSender::send(Messages::NetworkConnectionToWebProcess::CreateSocketChannel { *request, protocol, m_identifier, m_webPageProxyID, m_document->clientOrigin() });
     return ConnectStatus::OK;
 }
 
@@ -294,7 +295,7 @@ void WebSocketChannel::didReceiveBinaryData(IPC::DataReference&& data)
 
     m_inspector.didReceiveWebSocketFrame(m_document.get(), createWebSocketFrameForWebInspector(data.data(), data.size(), WebSocketFrame::OpCode::OpCodeBinary));
 
-    m_client->didReceiveBinaryData(data.vector());
+    m_client->didReceiveBinaryData({ data });
 }
 
 void WebSocketChannel::didClose(unsigned short code, String&& reason)

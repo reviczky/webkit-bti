@@ -131,26 +131,6 @@ void HTMLTextFormControlElement::forwardEvent(Event& event)
     innerTextElement()->defaultEventHandler(event);
 }
 
-String HTMLTextFormControlElement::strippedPlaceholder() const
-{
-    // According to the HTML5 specification, we need to remove CR and LF from
-    // the attribute value.
-    const AtomString& attributeValue = attributeWithoutSynchronization(placeholderAttr);
-    if (!attributeValue.contains(newlineCharacter) && !attributeValue.contains(carriageReturn))
-        return attributeValue;
-
-    StringBuilder stripped;
-    unsigned length = attributeValue.length();
-    stripped.reserveCapacity(length);
-    for (unsigned i = 0; i < length; ++i) {
-        UChar character = attributeValue[i];
-        if (character == newlineCharacter || character == carriageReturn)
-            continue;
-        stripped.append(character);
-    }
-    return stripped.toString();
-}
-
 static bool isNotLineBreak(UChar ch) { return ch != newlineCharacter && ch != carriageReturn; }
 
 bool HTMLTextFormControlElement::isPlaceholderEmpty() const
@@ -588,6 +568,16 @@ void HTMLTextFormControlElement::setInnerTextValue(const String& value)
     if (textIsChanged || !innerText->hasChildNodes()) {
 #if ENABLE(ACCESSIBILITY) && !PLATFORM(COCOA)
         if (textIsChanged && renderer()) {
+#if USE(ATSPI)
+            if (is<HTMLInputElement>(*this) && downcast<HTMLInputElement>(*this).isPasswordField()) {
+                // Get the rendered text instead to not expose actual value to accessibility.
+                RenderObject* renderer = this->renderer();
+                while (renderer && !is<RenderText>(renderer))
+                    renderer = downcast<RenderElement>(*renderer).firstChild();
+                if (is<RenderText>(renderer))
+                    previousValue = downcast<RenderText>(renderer)->textWithoutConvertingBackslashToYenSymbol();
+            }
+#endif
             if (AXObjectCache* cache = document().existingAXObjectCache())
                 cache->postNotification(this, AXObjectCache::AXValueChanged, PostTarget::ObservableParent);
         }
@@ -707,7 +697,7 @@ String HTMLTextFormControlElement::valueWithHardLineBreaks() const
 
     auto skipToNextSoftLineBreakPosition = [&] {
         for (; currentLine; currentLine.traverseNext()) {
-            auto lastRun = currentLine->lastRun();
+            auto lastRun = currentLine->lastLeafBox();
             ASSERT(lastRun);
             auto& renderer = lastRun->renderer();
             auto lineEndsWithBR = is<RenderLineBreak>(renderer) && !downcast<RenderLineBreak>(renderer).isWBR();

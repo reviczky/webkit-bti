@@ -791,8 +791,8 @@ private:
 #endif
 
     bool usesCompositedScrolling() const final;
-    bool mockScrollAnimatorEnabled() const final;
-    void logMockScrollAnimatorMessage(const String&) const final;
+    bool mockScrollbarsControllerEnabled() const final;
+    void logMockScrollbarsControllerMessage(const String&) const final;
 
     bool styleHidesScrollbarWithOrientation(ScrollbarOrientation) const;
     bool horizontalScrollbarHiddenByStyle() const final;
@@ -922,6 +922,7 @@ private:
     Vector<Function<void()>> m_postLayoutCallbackQueue;
 
     LayoutPoint m_layoutViewportOrigin;
+    LayoutSize m_lastLayoutViewportSize;
     std::optional<LayoutRect> m_layoutViewportOverrideRect;
     std::optional<LayoutRect> m_visualViewportOverrideRect; // Used when the iOS keyboard is showing.
 

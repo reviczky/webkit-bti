@@ -57,7 +57,7 @@ messages -> WebPageProxy {
     AccessibilityScreenToRootView(WebCore::IntPoint screenPoint) -> (WebCore::IntPoint windowPoint) Synchronous
     RootViewToAccessibilityScreen(WebCore::IntRect rect) -> (WebCore::IntRect screenFrame) Synchronous
 
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || PLATFORM(GTK)
     ShowValidationMessage(WebCore::IntRect anchorRect, String message)
     HideValidationMessage()
 #endif
@@ -179,7 +179,7 @@ messages -> WebPageProxy {
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     # Support for connecting the Accessibility worlds of the UI and the Web processes
-    BindAccessibilityTree(String plugID) -> (String socketPath) Async
+    BindAccessibilityTree(String plugID)
 
     SetInputMethodState(std::optional<WebKit::InputMethodState> state);
 #endif
@@ -232,7 +232,7 @@ messages -> WebPageProxy {
     SetIsNeverRichlyEditableForTouchBar(bool isNeverRichlyEditable)
 #endif
 
-    RequestDOMPasteAccess(WebCore::IntRect elementRect, String originIdentifier) -> (enum:uint8_t WebCore::DOMPasteAccessResponse response) Synchronous
+    RequestDOMPasteAccess(enum:uint8_t WebCore::DOMPasteAccessCategory pasteAccessCategory, WebCore::IntRect elementRect, String originIdentifier) -> (enum:uint8_t WebCore::DOMPasteAccessResponse response) Synchronous
 
     # Find messages
     DidCountStringMatches(String string, uint32_t matchCount)
@@ -326,9 +326,6 @@ messages -> WebPageProxy {
 
     # Remote accessibility messages
     RegisterWebProcessAccessibilityToken(IPC::DataReference data)
-
-    # Plug-in complex text input support messages
-    PluginFocusOrWindowFocusChanged(uint64_t pluginComplexTextInputIdentifier, bool pluginHasFocusAndWindowHasFocus)
 
     # Speech messages
     GetIsSpeaking() -> (bool isSpeaking) Synchronous
@@ -437,7 +434,7 @@ messages -> WebPageProxy {
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION)
 #if PLATFORM(MAC)
-    ShowTelephoneNumberMenu(String telephoneNumber, WebCore::IntPoint point)
+    ShowTelephoneNumberMenu(String telephoneNumber, WebCore::IntPoint point, WebCore::IntRect rect)
 #endif
 #endif
 
@@ -544,6 +541,7 @@ messages -> WebPageProxy {
     SpeechSynthesisCancel()
     SpeechSynthesisPause() -> () Async
     SpeechSynthesisResume() -> () Async
+    SpeechSynthesisResetState()
 #endif
 
 #if ENABLE(UI_PROCESS_PDF_HUD)
@@ -587,12 +585,13 @@ messages -> WebPageProxy {
 
 #if ENABLE(ARKIT_INLINE_PREVIEW_IOS)
     TakeModelElementFullscreen(struct WebKit::ModelIdentifier modelIdentifier)
+    ModelElementSetInteractionEnabled(struct WebKit::ModelIdentifier modelIdentifier, bool isInteractionEnabled)
 #endif
 #if ENABLE(ARKIT_INLINE_PREVIEW_MAC)
     ModelElementDidCreatePreview(URL url, String uuid, WebCore::FloatSize size) -> (Expected<std::pair<String, uint32_t>, WebCore::ResourceError> result) Async
-    HandleMouseDownForModelElement(String uuid, WebCore::LayoutPoint locationInPageCoordinates, MonotonicTime timestamp)
-    HandleMouseMoveForModelElement(String uuid, WebCore::LayoutPoint locationInPageCoordinates, MonotonicTime timestamp)
-    HandleMouseUpForModelElement(String uuid, WebCore::LayoutPoint locationInPageCoordinates, MonotonicTime timestamp)
+    HandleMouseDownForModelElement(String uuid, WebCore::LayoutPoint flippedLocationInElement, MonotonicTime timestamp)
+    HandleMouseMoveForModelElement(String uuid, WebCore::LayoutPoint flippedLocationInElement, MonotonicTime timestamp)
+    HandleMouseUpForModelElement(String uuid, WebCore::LayoutPoint flippedLocationInElement, MonotonicTime timestamp)
 #endif
 #if ENABLE(ARKIT_INLINE_PREVIEW)
     ModelElementGetCamera(struct WebKit::ModelIdentifier modelIdentifier) -> (Expected<WebCore::HTMLModelElementCamera, WebCore::ResourceError> result) Async
@@ -615,4 +614,8 @@ messages -> WebPageProxy {
     StartApplePayAMSUISession(URL originatingURL, struct WebCore::ApplePayAMSUIRequest request) -> (std::optional<bool> result) Async
     AbortApplePayAMSUISession()
 #endif
+
+    RequestCookieConsent() -> (enum:uint8_t WebCore::CookieConsentDecisionResult result) Async
+    ClassifyModalContainerControls(Vector<String> texts) -> (Vector<WebCore::ModalContainerControlType> types) Async
+    DecidePolicyForModalContainer(OptionSet<WebCore::ModalContainerControlType> types) -> (enum:uint8_t WebCore::ModalContainerDecision decision) Async
 }

@@ -29,6 +29,7 @@
 #include "AuthenticationManager.h"
 #include "NetworkDataTaskBlob.h"
 #include "NetworkLoadParameters.h"
+#include "NetworkProcess.h"
 #include "NetworkSession.h"
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/ResourceError.h>
@@ -76,12 +77,18 @@ NetworkDataTask::NetworkDataTask(NetworkSession& session, NetworkDataTaskClient&
     ASSERT(RunLoop::isMain());
 
     if (!requestWithCredentials.url().isValid()) {
-        scheduleFailure(InvalidURLFailure);
+        scheduleFailure(FailureType::InvalidURL);
         return;
     }
 
     if (!portAllowed(requestWithCredentials.url())) {
-        scheduleFailure(BlockedFailure);
+        scheduleFailure(FailureType::Blocked);
+        return;
+    }
+
+    if (!session.networkProcess().ftpEnabled()
+        && requestWithCredentials.url().protocolIsInFTPFamily()) {
+        scheduleFailure(FailureType::FTPDisabled);
         return;
     }
 }
@@ -94,25 +101,28 @@ NetworkDataTask::~NetworkDataTask()
 
 void NetworkDataTask::scheduleFailure(FailureType type)
 {
+    m_failureScheduled = true;
     RunLoop::main().dispatch([this, weakThis = WeakPtr { *this }, type] {
         if (!weakThis || !m_client)
             return;
 
         switch (type) {
-        case BlockedFailure:
+        case FailureType::Blocked:
             m_client->wasBlocked();
             return;
-        case InvalidURLFailure:
+        case FailureType::InvalidURL:
             m_client->cannotShowURL();
             return;
-        case RestrictedURLFailure:
+        case FailureType::RestrictedURL:
             m_client->wasBlockedByRestrictions();
             return;
+        case FailureType::FTPDisabled:
+            m_client->wasBlockedByDisabledFTP();
         }
     });
 }
 
-void NetworkDataTask::didReceiveResponse(ResourceResponse&& response, NegotiatedLegacyTLS negotiatedLegacyTLS, ResponseCompletionHandler&& completionHandler)
+void NetworkDataTask::didReceiveResponse(ResourceResponse&& response, NegotiatedLegacyTLS negotiatedLegacyTLS, PrivateRelayed privateRelayed, ResponseCompletionHandler&& completionHandler)
 {
     if (response.isHTTP09()) {
         auto url = response.url();
@@ -131,7 +141,7 @@ void NetworkDataTask::didReceiveResponse(ResourceResponse&& response, Negotiated
         response.setUsedLegacyTLS(UsedLegacyTLS::Yes);
 
     if (m_client)
-        m_client->didReceiveResponse(WTFMove(response), negotiatedLegacyTLS, WTFMove(completionHandler));
+        m_client->didReceiveResponse(WTFMove(response), negotiatedLegacyTLS, privateRelayed, WTFMove(completionHandler));
     else
         completionHandler(PolicyAction::Ignore);
 }

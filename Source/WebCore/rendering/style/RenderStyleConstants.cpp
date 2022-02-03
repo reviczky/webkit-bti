@@ -498,6 +498,7 @@ TextStream& operator<<(TextStream& ts, FillBox fill)
     case FillBox::Padding: ts << "padding"; break;
     case FillBox::Content: ts << "content"; break;
     case FillBox::Text: ts << "text"; break;
+    case FillBox::NoClip: ts << "no-clip"; break;
     }
     return ts;
 }
@@ -707,16 +708,6 @@ TextStream& operator<<(TextStream& ts, ListStylePosition position)
 TextStream& operator<<(TextStream& ts, ListStyleType styleType)
 {
     return ts << getValueName(toCSSValueID(styleType));
-}
-
-TextStream& operator<<(TextStream& ts, MarginCollapse collapse)
-{
-    switch (collapse) {
-    case MarginCollapse::Collapse: ts << "collapse"; break;
-    case MarginCollapse::Separate: ts << "separate"; break;
-    case MarginCollapse::Discard: ts << "discard"; break;
-    }
-    return ts;
 }
 
 TextStream& operator<<(TextStream& ts, MarqueeBehavior marqueeBehavior)
@@ -1041,7 +1032,7 @@ TextStream& operator<<(TextStream& ts, TextCombine textCombine)
 {
     switch (textCombine) {
     case TextCombine::None: ts << "none"; break;
-    case TextCombine::Horizontal: ts << "horizontal"; break;
+    case TextCombine::All: ts << "all"; break;
     }
     return ts;
 }

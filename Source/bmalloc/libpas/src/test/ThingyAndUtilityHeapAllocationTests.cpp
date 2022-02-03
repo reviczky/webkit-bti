@@ -379,7 +379,7 @@ private:
 pas_heap_ref* createIsolatedHeapRef(size_t size, size_t alignment)
 {
     pas_heap_ref* heapRef = new pas_heap_ref;
-    heapRef->type = reinterpret_cast<pas_heap_type*>(PAS_SIMPLE_TYPE_CREATE(size, alignment));
+    heapRef->type = reinterpret_cast<const pas_heap_type*>(PAS_SIMPLE_TYPE_CREATE(size, alignment));
     heapRef->heap = nullptr;
 #if TLC
     heapRef->allocator_index = 0;
@@ -752,7 +752,8 @@ void testFreeListRefillSpans(unsigned prewarmObjectSize,
         objectSize,
         *pas_heap_config_segregated_page_config_ptr_for_variant(
             &thingy_heap_config,
-            variant));
+            variant),
+        pas_segregated_page_exclusive_role);
     unsigned numberOfObjectsPerSpan = numberOfObjects / numberOfSpans;
     CHECK(numberOfObjectsPerSpan >= 1);
     unsigned numberOfObjectsInLastSpan = numberOfObjects - numberOfObjectsPerSpan * (numberOfSpans - 1);
@@ -1180,7 +1181,8 @@ void testSpuriousEligibility()
     unsigned objectSize = 16;
     unsigned numberOfObjects =
         pas_segregated_page_number_of_objects(objectSize,
-                                              THINGY_HEAP_CONFIG.small_segregated_config);
+                                              THINGY_HEAP_CONFIG.small_segregated_config,
+                                              pas_segregated_page_exclusive_role);
     unsigned numberOfObjectsInFirstSpan = numberOfObjects / 2;
     unsigned numberOfObjectsInSecondSpan = numberOfObjects - numberOfObjectsInFirstSpan;
 
@@ -3131,12 +3133,12 @@ void addMargeBitfitTests()
                  SIZE_CLASS_PROGRAM(
                      PrimitiveAllocator(20000), 21504, pas_medium_segregated_object_kind, 5, 2),
                  SIZE_CLASS_PROGRAM(
-                     PrimitiveAllocator(30000), 32768, pas_marge_bitfit_object_kind, 5, 2),
+                     PrimitiveAllocator(30000), 32768, pas_marge_bitfit_object_kind, 5, 1),
                  SIZE_CLASS_PROGRAM(
                      PrimitiveAllocator(29000), 32768, pas_marge_bitfit_object_kind, 5, 1)));
     ADD_TEST(testSizeClassCreation(
                  SIZE_CLASS_PROGRAM(
-                     PrimitiveAllocator(300000), 303104, pas_marge_bitfit_object_kind, 5, 2),
+                     PrimitiveAllocator(300000), 303104, pas_marge_bitfit_object_kind, 5, 1),
                  SIZE_CLASS_PROGRAM(
                      PrimitiveAllocator(290000), 290816, pas_marge_bitfit_object_kind, 5, 1)));
 }

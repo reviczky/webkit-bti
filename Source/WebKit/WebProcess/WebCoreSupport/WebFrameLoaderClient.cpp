@@ -42,7 +42,6 @@
 #include "NetworkProcessConnection.h"
 #include "NetworkResourceLoadParameters.h"
 #include "PluginView.h"
-#include "SharedBufferDataReference.h"
 #include "UserData.h"
 #include "WKBundleAPICast.h"
 #include "WebAutomationSessionProxy.h"
@@ -672,14 +671,14 @@ void WebFrameLoaderClient::dispatchDidFinishLoad()
 
     RefPtr<API::Object> userData;
 
-    auto& documentLoader = static_cast<WebDocumentLoader&>(*m_frame->coreFrame()->loader().documentLoader());
-    auto navigationID = documentLoader.navigationID();
+    Ref documentLoader = static_cast<WebDocumentLoader&>(*m_frame->coreFrame()->loader().documentLoader());
+    auto navigationID = documentLoader->navigationID();
 
     // Notify the bundle client.
     webPage->injectedBundleLoaderClient().didFinishLoadForFrame(*webPage, m_frame, userData);
 
     // Notify the UIProcess.
-    webPage->send(Messages::WebPageProxy::DidFinishLoadForFrame(m_frame->frameID(), m_frame->info(), documentLoader.request(), navigationID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
+    webPage->send(Messages::WebPageProxy::DidFinishLoadForFrame(m_frame->frameID(), m_frame->info(), documentLoader->request(), navigationID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
 
     // If we have a load listener, notify it.
     if (WebFrame::LoadListener* loadListener = m_frame->loadListener())
@@ -1152,10 +1151,10 @@ void WebFrameLoaderClient::didReplaceMultipartContent()
     webPage->didReplaceMultipartContent(m_frame);
 }
 
-void WebFrameLoaderClient::committedLoad(DocumentLoader* loader, const uint8_t* data, int length)
+void WebFrameLoaderClient::committedLoad(DocumentLoader* loader, const SharedBuffer& data)
 {
     if (!m_pluginView)
-        loader->commitData(data, length);
+        loader->commitData(data);
 
     // If the document is a stand-alone media document, now is the right time to cancel the WebKit load.
     // FIXME: This code should be shared across all ports. <http://webkit.org/b/48762>.
@@ -1177,7 +1176,7 @@ void WebFrameLoaderClient::committedLoad(DocumentLoader* loader, const uint8_t* 
             return;
         m_hasSentResponseToPluginView = true;
     }
-    m_pluginView->manualLoadDidReceiveData(data, length);
+    m_pluginView->manualLoadDidReceiveData(data);
 }
 
 void WebFrameLoaderClient::finishedLoading(DocumentLoader* loader)
@@ -1188,8 +1187,8 @@ void WebFrameLoaderClient::finishedLoading(DocumentLoader* loader)
             if (!webPage)
                 return;
 
-            RefPtr<SharedBuffer> mainResourceData = loader->mainResourceData();
-            IPC::DataReference dataReference(mainResourceData ? mainResourceData->data() : nullptr, mainResourceData ? mainResourceData->size() : 0);
+            RefPtr<FragmentedSharedBuffer> mainResourceData = loader->mainResourceData();
+            IPC::DataReference dataReference(mainResourceData ? mainResourceData->makeContiguous()->data() : nullptr, mainResourceData ? mainResourceData->size() : 0);
             webPage->send(Messages::WebPageProxy::DidFinishLoadingDataForCustomContentProvider(loader->response().suggestedFilename(), dataReference));
         }
 
