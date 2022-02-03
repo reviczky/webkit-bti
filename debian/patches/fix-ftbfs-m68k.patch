@@ -69,7 +69,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -60,10 +60,14 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -61,10 +61,14 @@ struct SameSizeAsShadowRoot : public Doc
      std::optional<HashMap<AtomString, AtomString>> partMappings;
  };
  
@@ -143,7 +143,7 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +#endif
  
  FontCascadeDescription::FontCascadeDescription()
-     : m_isAbsoluteSize(false)
+     : m_families(RefCountedFixedVector<AtomString>::create(1))
 Index: webkitgtk/Source/WebCore/style/RuleData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/style/RuleData.cpp
