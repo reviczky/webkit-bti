@@ -35,9 +35,9 @@
 #include "NetworkProcessMessages.h"
 #include "RemoteWebLockRegistry.h"
 #include "RemoteWorkerFrameLoaderClient.h"
+#include "RemoteWorkerInitializationData.h"
 #include "RemoteWorkerLibWebRTCProvider.h"
 #include "ServiceWorkerFetchTaskMessages.h"
-#include "ServiceWorkerInitializationData.h"
 #include "WebBroadcastChannelRegistry.h"
 #include "WebCacheStorageProvider.h"
 #include "WebCompiledContentRuleListData.h"
@@ -45,6 +45,7 @@
 #include "WebDatabaseProvider.h"
 #include "WebDocumentLoader.h"
 #include "WebFrameLoaderClient.h"
+#include "WebNotificationClient.h"
 #include "WebPage.h"
 #include "WebPreferencesKeys.h"
 #include "WebPreferencesStore.h"
@@ -76,7 +77,7 @@ namespace WebKit {
 using namespace PAL;
 using namespace WebCore;
 
-WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection>&& connection, WebCore::RegistrableDomain&& registrableDomain, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, ServiceWorkerInitializationData&& initializationData)
+WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection>&& connection, WebCore::RegistrableDomain&& registrableDomain, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, RemoteWorkerInitializationData&& initializationData)
     : m_connectionToNetworkProcess(WTFMove(connection))
     , m_registrableDomain(WTFMove(registrableDomain))
     , m_serviceWorkerPageIdentifier(serviceWorkerPageIdentifier)
@@ -146,8 +147,14 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
         WebPage::updateSettingsGenerated(*m_preferencesStore, page->settings());
         page->settings().setStorageBlockingPolicy(static_cast<StorageBlockingPolicy>(m_preferencesStore->getUInt32ValueForKey(WebPreferencesKey::storageBlockingPolicyKey())));
     }
-    ServiceWorkerThreadProxy::setupPageForServiceWorker(page.get(), contextData);
-    auto serviceWorkerThreadProxy = ServiceWorkerThreadProxy::create(WTFMove(page), WTFMove(contextData), WTFMove(workerData), WTFMove(effectiveUserAgent), workerThreadMode, WebProcess::singleton().cacheStorageProvider());
+    page->setupForRemoteWorker(contextData.scriptURL, contextData.registration.key.topOrigin(), contextData.referrerPolicy);
+
+    std::unique_ptr<WebCore::NotificationClient> notificationClient;
+#if ENABLE(NOTIFICATIONS)
+    notificationClient = makeUnique<WebNotificationClient>(nullptr);
+#endif
+
+    auto serviceWorkerThreadProxy = ServiceWorkerThreadProxy::create(WTFMove(page), WTFMove(contextData), WTFMove(workerData), WTFMove(effectiveUserAgent), workerThreadMode, WebProcess::singleton().cacheStorageProvider(), WTFMove(notificationClient));
 
     if (lastNavigationWasAppInitiated)
         serviceWorkerThreadProxy->setLastNavigationWasAppInitiated(lastNavigationWasAppInitiated == WebCore::LastNavigationWasAppInitiated::Yes);

@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2010 Adam Barth. All Rights Reserved.
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (c) 2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,36 +23,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef PAS_THREAD_SUSPEND_LOCK_H
+#define PAS_THREAD_SUSPEND_LOCK_H
 
-#include "SegmentedString.h"
+#include "pas_lock.h"
 
-namespace WebCore {
+PAS_BEGIN_EXTERN_C;
 
-class HTMLToken;
-class HTMLTokenizer;
+PAS_DECLARE_LOCK(pas_thread_suspend);
 
-class HTMLSourceTracker {
-    WTF_MAKE_NONCOPYABLE(HTMLSourceTracker);
-public:
-    HTMLSourceTracker() = default;
+PAS_END_EXTERN_C;
 
-    void startToken(SegmentedString&, HTMLTokenizer&);
-    void endToken(SegmentedString&, HTMLTokenizer&);
-
-    String source(const HTMLToken&);
-    String source(const HTMLToken&, unsigned attributeStart, unsigned attributeEnd);
-
-private:
-    bool m_started { false };
-
-    unsigned m_tokenStart;
-    unsigned m_tokenEnd;
-
-    SegmentedString m_previousSource;
-    SegmentedString m_currentSource;
-
-    String m_cachedSourceForToken;
-};
-
-} // namespace WebCore
+#endif /* PAS_THREAD_SUSPEND_LOCK_H */

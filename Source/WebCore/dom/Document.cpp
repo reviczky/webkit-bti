@@ -160,6 +160,7 @@
 #include "NodeIterator.h"
 #include "NodeRareData.h"
 #include "NodeWithIndex.h"
+#include "NotificationController.h"
 #include "OverflowEvent.h"
 #include "PageConsoleClient.h"
 #include "PageGroup.h"
@@ -2197,9 +2198,15 @@ void Document::updateLayout()
 
     StackStats::LayoutCheckPoint layoutCheckPoint;
 
-    // Only do a layout if changes have occurred that make it necessary.      
-    if (frameView && renderView() && (frameView->layoutContext().isLayoutPending() || renderView()->needsLayout()))
-        frameView->layoutContext().layout();
+    if (!frameView || !renderView())
+        return;
+    if (!frameView->layoutContext().isLayoutPending() && !renderView()->needsLayout())
+        return;
+
+    frameView->layoutContext().layout();
+
+    if (styleScope().updateQueryContainerState())
+        updateLayout();
 }
 
 void Document::updateLayoutIgnorePendingStylesheets(Document::RunPostLayoutTasks runPostLayoutTasks)
@@ -7436,11 +7443,11 @@ void Document::updateHoverActiveState(const HitTestRequest& request, Element* in
     changeState(elementsToSetActive, CSSSelector::PseudoClassActive, true, [](auto& element) {
         element.setActive(true, false, Style::InvalidationScope::SelfChildrenAndSiblings);
     });
-    changeState(elementsToClearHover, CSSSelector::PseudoClassHover, false, [](auto& element) {
-        element.setHovered(false, Style::InvalidationScope::SelfChildrenAndSiblings);
+    changeState(elementsToClearHover, CSSSelector::PseudoClassHover, false, [request](auto& element) {
+        element.setHovered(false, Style::InvalidationScope::SelfChildrenAndSiblings, request);
     });
-    changeState(elementsToSetHover, CSSSelector::PseudoClassHover, true, [](auto& element) {
-        element.setHovered(true, Style::InvalidationScope::SelfChildrenAndSiblings);
+    changeState(elementsToSetHover, CSSSelector::PseudoClassHover, true, [request](auto& element) {
+        element.setHovered(true, Style::InvalidationScope::SelfChildrenAndSiblings, request);
     });
 }
 
@@ -9062,6 +9069,27 @@ void Document::whenVisible(Function<void()>&& callback)
         return;
     }
     callback();
+}
+
+NotificationClient* Document::notificationClient()
+{
+#if ENABLE(NOTIFICATIONS)
+    auto* page = this->page();
+    if (!page)
+        return nullptr;
+
+    return &NotificationController::from(page)->client();
+#else
+    return nullptr;
+#endif
+}
+
+std::optional<PAL::SessionID> Document::sessionID() const
+{
+    if (auto* page = this->page())
+        return page->sessionID();
+
+    return std::nullopt;
 }
 
 } // namespace WebCore

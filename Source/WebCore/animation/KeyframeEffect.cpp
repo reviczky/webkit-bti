@@ -227,10 +227,11 @@ static inline ExceptionOr<KeyframeEffect::KeyframeLikeObject> processKeyframeLik
     // 4. Make up a new list animation properties that consists of all of the properties that are in both input properties and animatable
     //    properties, or which are in input properties and conform to the <custom-property-name> production.
     Vector<JSC::Identifier> animationProperties;
-    size_t numberOfProperties = inputProperties.size();
-    for (size_t i = 0; i < numberOfProperties; ++i) {
-        if (CSSPropertyAnimation::isPropertyAnimatable(IDLAttributeNameToAnimationPropertyName(inputProperties[i].string())))
-            animationProperties.append(inputProperties[i]);
+    for (auto& inputProperty : inputProperties) {
+        auto cssProperty = IDLAttributeNameToAnimationPropertyName(inputProperty.string());
+        auto resolvedCSSProperty = CSSProperty::resolveDirectionAwareProperty(cssProperty, RenderStyle::initialDirection(), RenderStyle::initialWritingMode());
+        if (CSSPropertyAnimation::isPropertyAnimatable(resolvedCSSProperty))
+            animationProperties.append(inputProperty);
     }
 
     // 5. Sort animation properties in ascending order by the Unicode codepoints that define each property name.
@@ -398,10 +399,10 @@ static inline ExceptionOr<void> processPropertyIndexedKeyframes(JSGlobalObject& 
         // property in cssPropertiesAndValues, so just set this on the previous keyframe.
         // In case an invalid or null value was originally provided, then the property
         // was not set and the property count is 0, in which case there is nothing to merge.
-        if (keyframe.style->propertyCount()) {
-            auto property = keyframe.style->propertyAt(0);
-            previousKeyframe.style->setProperty(property.id(), property.value());
-            previousKeyframe.styleStrings.set(property.id(), keyframe.styleStrings.get(property.id()));
+        if (keyframe.styleStrings.size()) {
+            previousKeyframe.style->mergeAndOverrideOnConflict(keyframe.style);
+            for (auto& [property, value] : keyframe.styleStrings)
+                previousKeyframe.styleStrings.set(property, value);
         }
         // Since we've processed this keyframe, we can remove it and keep i the same
         // so that we process the next keyframe in the next loop iteration.
@@ -1467,10 +1468,13 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, doub
         if (propertySpecificKeyframes.isEmpty())
             continue;
 
+        auto hasImplicitZeroKeyframe = !numberOfKeyframesWithZeroOffset;
+        auto hasImplicitOneKeyframe = !numberOfKeyframesWithOneOffset;
+
         // 8. If there is no keyframe in property-specific keyframes with a computed keyframe offset of 0, create a new keyframe with a computed keyframe
         //    offset of 0, a property value set to the neutral value for composition, and a composite operation of add, and prepend it to the beginning of
         //    property-specific keyframes.
-        if (!numberOfKeyframesWithZeroOffset) {
+        if (hasImplicitZeroKeyframe) {
             propertySpecificKeyframes.insert(0, &propertySpecificKeyframeWithZeroOffset);
             numberOfKeyframesWithZeroOffset = 1;
         }
@@ -1478,7 +1482,7 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, doub
         // 9. Similarly, if there is no keyframe in property-specific keyframes with a computed keyframe offset of 1, create a new keyframe with a computed
         //    keyframe offset of 1, a property value set to the neutral value for composition, and a composite operation of add, and append it to the end of
         //    property-specific keyframes.
-        if (!numberOfKeyframesWithOneOffset) {
+        if (hasImplicitOneKeyframe) {
             propertySpecificKeyframes.append(&propertySpecificKeyframeWithOneOffset);
             numberOfKeyframesWithOneOffset = 1;
         }
@@ -1539,13 +1543,23 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, doub
         //            (Va) and value to combine (Vb) using the procedure for the composite operation to use corresponding to the
         //            target property’s animation type.
         if (CSSPropertyAnimation::isPropertyAdditiveOrCumulative(cssPropertyId)) {
-            auto startKeyframeCompositeOperation = startKeyframe.compositeOperation().value_or(m_compositeOperation);
-            if (startKeyframeCompositeOperation != CompositeOperation::Replace)
-                CSSPropertyAnimation::blendProperties(this, cssPropertyId, startKeyframeStyle, targetStyle, *startKeyframe.style(), 1, startKeyframeCompositeOperation);
+            // Only do this for the 0 keyframe if it was provided explicitly, since otherwise we want to use the "neutral value
+            // for composition" which really means we don't want to do anything but rather just use the underlying style which
+            // is already set on startKeyframe.
+            if (!startKeyframe.key() && !hasImplicitZeroKeyframe) {
+                auto startKeyframeCompositeOperation = startKeyframe.compositeOperation().value_or(m_compositeOperation);
+                if (startKeyframeCompositeOperation != CompositeOperation::Replace)
+                    CSSPropertyAnimation::blendProperties(this, cssPropertyId, startKeyframeStyle, targetStyle, *startKeyframe.style(), 1, startKeyframeCompositeOperation);
+            }
 
-            auto endKeyframeCompositeOperation = endKeyframe.compositeOperation().value_or(m_compositeOperation);
-            if (endKeyframeCompositeOperation != CompositeOperation::Replace)
-                CSSPropertyAnimation::blendProperties(this, cssPropertyId, endKeyframeStyle, targetStyle, *endKeyframe.style(), 1, endKeyframeCompositeOperation);
+            // Only do this for the 1 keyframe if it was provided explicitly, since otherwise we want to use the "neutral value
+            // for composition" which really means we don't want to do anything but rather just use the underlying style which
+            // is already set on endKeyframe.
+            if (endKeyframe.key() == 1 && !hasImplicitOneKeyframe) {
+                auto endKeyframeCompositeOperation = endKeyframe.compositeOperation().value_or(m_compositeOperation);
+                if (endKeyframeCompositeOperation != CompositeOperation::Replace)
+                    CSSPropertyAnimation::blendProperties(this, cssPropertyId, endKeyframeStyle, targetStyle, *endKeyframe.style(), 1, endKeyframeCompositeOperation);
+            }
         }
 
         // 13. If there is only one keyframe in interval endpoints return the property value of target property on that keyframe.
@@ -1616,6 +1630,10 @@ bool KeyframeEffect::canBeAccelerated() const
 
 void KeyframeEffect::updateAcceleratedActions()
 {
+    auto* renderer = this->renderer();
+    if (!renderer || !renderer->isComposited())
+        return;
+
     if (!canBeAccelerated()) {
         // In the case where this animation is actively targeting a transform-related property and yet
         // cannot be accelerated, we must notify the effect stack such that any running accelerated
@@ -1680,12 +1698,6 @@ void KeyframeEffect::animationDidTick()
     updateAcceleratedActions();
 }
 
-void KeyframeEffect::animationDidPlay()
-{
-    if (m_acceleratedPropertiesState != AcceleratedProperties::None)
-        addPendingAcceleratedAction(AcceleratedAction::Play);
-}
-
 void KeyframeEffect::animationDidChangeTimingProperties()
 {
     computeSomeKeyframesUseStepsTimingFunction();
@@ -1700,6 +1712,20 @@ void KeyframeEffect::transformRelatedPropertyDidChange()
 {
     ASSERT(isRunningAcceleratedTransformRelatedAnimation());
     addPendingAcceleratedAction(AcceleratedAction::TransformChange);
+}
+
+void KeyframeEffect::propertyAffectingLogicalPropertiesDidChange(RenderStyle& unanimatedStyle, const Style::ResolutionContext& resolutionContext)
+{
+    switch (m_blendingKeyframesSource) {
+    case BlendingKeyframesSource::CSSTransition:
+        return;
+    case BlendingKeyframesSource::CSSAnimation:
+        computeCSSAnimationBlendingKeyframes(unanimatedStyle, resolutionContext);
+        return;
+    case BlendingKeyframesSource::WebAnimation:
+        clearBlendingKeyframes();
+        return;
+    }
 }
 
 void KeyframeEffect::animationWasCanceled()

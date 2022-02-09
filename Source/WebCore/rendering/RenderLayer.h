@@ -51,6 +51,7 @@
 #include "PaintInfo.h"
 #include "RenderBox.h"
 #include "RenderPtr.h"
+#include "RenderSVGModelObject.h"
 #include "ScrollBehavior.h"
 #include <memory>
 #include <wtf/Markable.h>
@@ -914,6 +915,11 @@ private:
         EventRegionContext* eventRegionContext { nullptr };
     };
 
+    LayoutPoint paintOffsetForRenderer(const LayerFragment& fragment, const LayerPaintingInfo& paintingInfo) const
+    {
+        return toLayoutPoint(fragment.layerBounds.location() - rendererLocation() + paintingInfo.subpixelOffset);
+    }
+
     // Compute, cache and return clip rects computed with the given layer as the root.
     Ref<ClipRects> updateClipRects(const ClipRectsContext&);
     // Compute and return the clip rects. If useCached is true, will used previously computed clip rects on ancestors
@@ -967,7 +973,16 @@ private:
 
     RenderLayer* enclosingPaginationLayerInSubtree(const RenderLayer* rootLayer, PaginationInclusionMode) const;
 
-    LayoutPoint renderBoxLocation() const { return is<RenderBox>(renderer()) ? downcast<RenderBox>(renderer()).location() : LayoutPoint(); }
+    LayoutPoint rendererLocation() const
+    {
+        if (is<RenderBox>(renderer()))
+            return downcast<RenderBox>(renderer()).location();
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+        if (is<RenderSVGModelObject>(renderer()))
+            return downcast<RenderSVGModelObject>(renderer()).layoutLocation();
+#endif
+        return LayoutPoint();
+    }
 
     bool setupFontSubpixelQuantization(GraphicsContext&, bool& didQuantizeFonts);
 

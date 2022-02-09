@@ -173,8 +173,12 @@ void RenderBox::willBeDestroyed()
     view().unscheduleLazyRepaint(*this);
     removeControlStatesForRenderer(*this);
 
-    if (hasInitializedStyle() && style().hasSnapPosition())
-        view().unregisterBoxWithScrollSnapPositions(*this);
+    if (hasInitializedStyle()) {
+        if (style().hasSnapPosition())
+            view().unregisterBoxWithScrollSnapPositions(*this);
+        if (style().containerType() != ContainerType::None)
+            view().unregisterContainerQueryBox(*this);
+    }
 
     RenderBoxModelObject::willBeDestroyed();
 }
@@ -292,6 +296,11 @@ void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyl
         else
             view().unregisterBoxWithScrollSnapPositions(*this);
     }
+
+    if (newStyle.containerType() != ContainerType::None)
+        view().registerContainerQueryBox(*this);
+    else if (oldStyle && oldStyle->containerType() != ContainerType::None)
+        view().unregisterContainerQueryBox(*this);
 
     RenderBoxModelObject::styleWillChange(diff, newStyle);
 }
@@ -4986,8 +4995,6 @@ LayoutRect RenderBox::applyVisualEffectOverflow(const LayoutRect& borderBox) con
 
 void RenderBox::addOverflowFromChild(const RenderBox* child, const LayoutSize& delta)
 {
-    if (paintContainmentApplies())
-        return;
     // Never allow flow threads to propagate overflow up to a parent.
     if (child->isRenderFragmentedFlow())
         return;
@@ -5002,6 +5009,9 @@ void RenderBox::addOverflowFromChild(const RenderBox* child, const LayoutSize& d
     LayoutRect childLayoutOverflowRect = child->layoutOverflowRectForPropagation(&style());
     childLayoutOverflowRect.move(delta);
     addLayoutOverflow(childLayoutOverflowRect);
+
+    if (paintContainmentApplies())
+        return;
 
     // Add in visual overflow from the child.  Even if the child clips its overflow, it may still
     // have visual overflow of its own set from box shadows or reflections. It is unnecessary to propagate this

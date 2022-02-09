@@ -313,7 +313,6 @@
 #endif
 
 #if PLATFORM(GTK)
-#include "GtkSettingsManagerProxy.h"
 #include "WebPrintOperationGtk.h"
 #include <WebCore/SelectionData.h>
 #include <gtk/gtk.h>
@@ -759,10 +758,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     setGapBetweenPages(parameters.gapBetweenPages);
     setPaginationLineGridEnabled(parameters.paginationLineGridEnabled);
 
-#if PLATFORM(GTK)
-    GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
-#endif
-
     effectiveAppearanceDidChange(parameters.useDarkAppearance, parameters.useElevatedUserInterfaceLevel);
 
     if (parameters.isEditable)
@@ -1003,10 +998,6 @@ void WebPage::reinitializeWebPage(WebPageCreationParameters&& parameters)
 
 #if HAVE(APP_ACCENT_COLORS)
     setAccentColor(parameters.accentColor);
-#endif
-
-#if PLATFORM(GTK)
-    GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
 #endif
 
     effectiveAppearanceDidChange(parameters.useDarkAppearance, parameters.useElevatedUserInterfaceLevel);
@@ -2819,9 +2810,14 @@ void WebPage::updateDrawingAreaLayerTreeFreezeState()
     m_drawingArea->setLayerTreeStateIsFrozen(!!m_layerTreeFreezeReasons);
 }
 
-bool WebPage::markLayersVolatileImmediatelyIfPossible()
+void WebPage::tryMarkLayersVolatile(CompletionHandler<void(bool)>&& completionHandler)
 {
-    return !drawingArea() || drawingArea()->markLayersVolatileImmediatelyIfPossible();
+    if (!drawingArea()) {
+        completionHandler(false);
+        return;
+    }
+    
+    drawingArea()->tryMarkLayersVolatile(WTFMove(completionHandler));
 }
 
 void WebPage::callVolatilityCompletionHandlers(bool succeeded)
@@ -2833,8 +2829,8 @@ void WebPage::callVolatilityCompletionHandlers(bool succeeded)
 
 void WebPage::layerVolatilityTimerFired()
 {
-    Seconds newInterval = m_layerVolatilityTimer.repeatInterval() * 2.;
-    markLayersVolatileOrRetry(newInterval > maximumLayerVolatilityTimerInterval ? MarkLayersVolatileDontRetryReason::TimedOut : MarkLayersVolatileDontRetryReason::None, newInterval);
+    m_layerVolatilityTimerInterval *= 2;
+    markLayersVolatileOrRetry(m_layerVolatilityTimerInterval > maximumLayerVolatilityTimerInterval ? MarkLayersVolatileDontRetryReason::TimedOut : MarkLayersVolatileDontRetryReason::None);
 }
 
 void WebPage::markLayersVolatile(CompletionHandler<void(bool)>&& completionHandler)
@@ -2847,12 +2843,22 @@ void WebPage::markLayersVolatile(CompletionHandler<void(bool)>&& completionHandl
     if (completionHandler)
         m_markLayersAsVolatileCompletionHandlers.append(WTFMove(completionHandler));
 
-    markLayersVolatileOrRetry(m_isSuspendedUnderLock ? MarkLayersVolatileDontRetryReason::SuspendedUnderLock : MarkLayersVolatileDontRetryReason::None, initialLayerVolatilityTimerInterval);
+    m_layerVolatilityTimerInterval = initialLayerVolatilityTimerInterval;
+    markLayersVolatileOrRetry(m_isSuspendedUnderLock ? MarkLayersVolatileDontRetryReason::SuspendedUnderLock : MarkLayersVolatileDontRetryReason::None);
 }
 
-void WebPage::markLayersVolatileOrRetry(MarkLayersVolatileDontRetryReason dontRetryReason, Seconds timerInterval)
+void WebPage::markLayersVolatileOrRetry(MarkLayersVolatileDontRetryReason dontRetryReason)
 {
-    bool didSucceed = markLayersVolatileImmediatelyIfPossible();
+    tryMarkLayersVolatile([dontRetryReason, strongThis = Ref { *this }](bool didSucceed) {
+        strongThis->tryMarkLayersVolatileCompletionHandler(dontRetryReason, didSucceed);
+    });
+}
+
+void WebPage::tryMarkLayersVolatileCompletionHandler(MarkLayersVolatileDontRetryReason dontRetryReason, bool didSucceed)
+{
+    if (m_isClosed)
+        return;
+
     if (didSucceed || dontRetryReason != MarkLayersVolatileDontRetryReason::None) {
         m_layerVolatilityTimer.stop();
         if (didSucceed)
@@ -2873,8 +2879,8 @@ void WebPage::markLayersVolatileOrRetry(MarkLayersVolatileDontRetryReason dontRe
         return;
     }
 
-    WEBPAGE_RELEASE_LOG(Layers, "markLayersVolatile: Failed to mark all layers as volatile, will retry in %g ms", timerInterval.milliseconds());
-    m_layerVolatilityTimer.startRepeating(timerInterval);
+    WEBPAGE_RELEASE_LOG(Layers, "markLayersVolatile: Failed to mark all layers as volatile, will retry in %g ms", m_layerVolatilityTimerInterval.milliseconds());
+    m_layerVolatilityTimer.startOneShot(m_layerVolatilityTimerInterval);
 }
 
 void WebPage::cancelMarkLayersVolatile()
