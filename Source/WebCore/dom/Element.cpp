@@ -46,7 +46,6 @@
 #include "DOMWindow.h"
 #include "DocumentInlines.h"
 #include "DocumentSharedObjectPool.h"
-#include "DocumentTimeline.h"
 #include "Editing.h"
 #include "ElementAnimationRareData.h"
 #include "ElementInlines.h"
@@ -889,7 +888,7 @@ void Element::setHasFocusWithin(bool value)
     }
 }
 
-void Element::setHovered(bool value, Style::InvalidationScope invalidationScope)
+void Element::setHovered(bool value, Style::InvalidationScope invalidationScope, HitTestRequest)
 {
     if (value == hovered())
         return;
@@ -2129,6 +2128,12 @@ void Element::invalidateStyleInternal()
 void Element::invalidateStyleForSubtreeInternal()
 {
     Node::invalidateStyle(Style::Validity::SubtreeInvalid);
+}
+
+void Element::invalidateForQueryContainerChange()
+{
+    // FIXME: This doesn't really need to recompute the element style.
+    Node::invalidateStyle(Style::Validity::ElementInvalid);
 }
 
 void Element::invalidateEventListenerRegions()

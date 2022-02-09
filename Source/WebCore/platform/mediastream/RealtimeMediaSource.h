@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2011 Ericsson AB. All rights reserved.
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2022 Apple Inc. All rights reserved.
  * Copyright (C) 2013 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
@@ -117,17 +117,19 @@ public:
 
     enum class Type { None, Audio, Video, Screen, Window, SystemAudio };
     Type type() const { return m_type; }
+    bool hasVideo() const { return m_type == Type::Video || m_type == Type::Window || m_type == Type::Screen; }
+    bool hasAudio() const { return m_type == Type::Audio || m_type == Type::SystemAudio; }
 
     virtual void whenReady(CompletionHandler<void(String)>&&);
 
-    bool isProducingData() const { return m_isProducingData; }
+    virtual bool isProducingData() const;
     void start();
     void stop();
     virtual void requestToEnd(Observer& callingObserver);
     bool isEnded() const { return m_isEnded; }
 
     bool muted() const { return m_muted; }
-    void setMuted(bool);
+    virtual void setMuted(bool);
 
     bool captureDidFail() const { return m_captureDidFailed; }
 
@@ -252,6 +254,8 @@ protected:
 
     void end(Observer* = nullptr);
 
+    void setType(Type);
+
 private:
     virtual void startProducingData() { }
     virtual void stopProducingData() { }
@@ -326,6 +330,11 @@ inline void RealtimeMediaSource::whenReady(CompletionHandler<void(String)>&& cal
 inline bool RealtimeMediaSource::isVideoSource() const
 {
     return false;
+}
+
+inline bool RealtimeMediaSource::isProducingData() const
+{
+    return m_isProducingData;
 }
 
 } // namespace WebCore

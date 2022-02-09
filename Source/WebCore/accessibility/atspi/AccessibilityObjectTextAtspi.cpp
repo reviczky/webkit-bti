@@ -187,6 +187,7 @@ GDBusInterfaceVTable AccessibilityObjectAtspi::s_textFunctions = {
                 g_dbus_method_invocation_return_value(invocation, g_variant_new("(b)", atspiObject->selectRange(start, end)));
         } else if (!g_strcmp0(methodName, "RemoveSelection")) {
             int selectionNumber;
+            g_variant_get(parameters, "(i)", &selectionNumber);
             int caretOffset = -1;
             if (!selectionNumber) {
                 int start, end;
@@ -225,7 +226,7 @@ GDBusInterfaceVTable AccessibilityObjectAtspi::s_textFunctions = {
     // set_property,
     nullptr,
     // padding
-    nullptr
+    { nullptr }
 };
 
 static Vector<unsigned, 128> offsetMapping(const String& text)

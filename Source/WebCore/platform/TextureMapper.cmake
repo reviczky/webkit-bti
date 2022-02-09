@@ -59,6 +59,7 @@ if (USE_COORDINATED_GRAPHICS)
     )
     list(APPEND WebCore_SOURCES
         platform/graphics/texmap/TextureMapperPlatformLayerBuffer.cpp
+        platform/graphics/texmap/TextureMapperPlatformLayerDmabuf.cpp
         platform/graphics/texmap/TextureMapperPlatformLayerProxy.cpp
 
         platform/graphics/texmap/coordinated/CoordinatedBackingStore.cpp
@@ -126,7 +127,7 @@ endif ()
 
 if (USE_ANGLE_WEBGL)
     list(APPEND WebCore_SOURCES
-        platform/graphics/nicosia/texmap/NicosiaGCGLANGLEPipe.cpp
+        platform/graphics/nicosia/texmap/NicosiaGCGLANGLELayer.cpp
     )
 endif ()
 

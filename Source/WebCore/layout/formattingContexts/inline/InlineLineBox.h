@@ -80,6 +80,9 @@ public:
     const InlineLevelBoxList& nonRootInlineLevelBoxes() const { return m_nonRootInlineLevelBoxList; }
 
     InlineLayoutUnit rootInlineBoxAlignmentOffset() const { return m_rootInlineBoxAlignmentOffset; }
+    FontBaseline baselineType() const { return m_baselineType; }
+
+    const InlineRect& logicalRect() const { return m_logicalRect; }
 
 private:
     friend class LineBoxBuilder;
@@ -93,13 +96,17 @@ private:
     InlineLevelBox& inlineLevelBoxForLayoutBox(const Box& layoutBox) { return &layoutBox == &m_rootInlineBox.layoutBox() ? m_rootInlineBox : m_nonRootInlineLevelBoxList[m_nonRootInlineLevelBoxMap.get(&layoutBox)]; }
     InlineRect logicalRectForInlineLevelBox(const Box& layoutBox) const;
 
+    void setLogicalRect(const InlineRect& logicalRect) { m_logicalRect = logicalRect; }
     void setHasContent(bool hasContent) { m_hasContent = hasContent; }
+    void setBaselineType(FontBaseline baselineType) { m_baselineType = baselineType; }
 
 private:
     bool m_hasContent { false };
+    InlineRect m_logicalRect;
     OptionSet<InlineLevelBox::Type> m_boxTypes;
 
     InlineLayoutUnit m_rootInlineBoxAlignmentOffset { 0 };
+    FontBaseline m_baselineType { AlphabeticBaseline };
     InlineLevelBox m_rootInlineBox;
     InlineLevelBoxList m_nonRootInlineLevelBoxList;
 

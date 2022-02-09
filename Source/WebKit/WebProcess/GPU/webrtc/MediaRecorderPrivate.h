@@ -29,9 +29,9 @@
 
 #include "MediaRecorderIdentifier.h"
 #include "SharedRingBufferStorage.h"
+#include "SharedVideoFrame.h"
 
 #include <WebCore/MediaRecorderPrivate.h>
-#include <WebCore/PixelBufferConformerCV.h>
 #include <wtf/MediaTime.h>
 #include <wtf/WeakPtr.h>
 
@@ -48,7 +48,7 @@ namespace WebKit {
 
 class MediaRecorderPrivate final
     : public WebCore::MediaRecorderPrivate
-    , public CanMakeWeakPtr<MediaRecorderPrivate> {
+    , public GPUProcessConnection::Client {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     MediaRecorderPrivate(WebCore::MediaStreamPrivate&, const WebCore::MediaRecorderPrivateOptions&);
@@ -65,8 +65,11 @@ private:
     void pauseRecording(CompletionHandler<void()>&&) final;
     void resumeRecording(CompletionHandler<void()>&&) final;
 
+    // GPUProcessConnection::Client
+    void gpuProcessConnectionDidClose(GPUProcessConnection&) final;
+
     void storageChanged(SharedMemory*, const WebCore::CAAudioStreamDescription& format, size_t frameCount);
-    RetainPtr<CVPixelBufferRef> convertToBGRA(CVPixelBufferRef);
+    bool copySharedVideoFrame(CVPixelBufferRef);
 
     MediaRecorderIdentifier m_identifier;
     Ref<WebCore::MediaStreamPrivate> m_stream;
@@ -81,7 +84,7 @@ private:
     bool m_hasVideo { false };
     bool m_isStopped { false };
 
-    std::unique_ptr<WebCore::PixelBufferConformerCV> m_pixelBufferConformer;
+    SharedVideoFrameWriter m_sharedVideoFrameWriter;
 };
 
 }

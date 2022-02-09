@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2022 Metrological Group B.V.
+ * Copyright (C) 2022 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,44 +25,57 @@
  */
 
 #include "config.h"
-#include "ServiceWorkerInitializationData.h"
+#include "GBMDevice.h"
 
-#include "ArgumentCoders.h"
-#include "Decoder.h"
-#include "Encoder.h"
-#include "WebCompiledContentRuleListData.h"
-#include <wtf/URL.h>
+#if USE(ANGLE) && USE(NICOSIA)
 
-namespace WebKit {
+#include <fcntl.h>
+#include <gbm.h>
+#include <mutex>
+#include <wtf/ThreadSpecific.h>
 
-void ServiceWorkerInitializationData::encode(IPC::Encoder& encoder) const
+namespace WebCore {
+
+static ThreadSpecific<GBMDevice>& threadSpecificDevice()
 {
-    encoder << userContentControllerIdentifier;
-#if ENABLE(CONTENT_EXTENSIONS)
-    encoder << contentRuleLists;
-#endif
+    static ThreadSpecific<GBMDevice>* s_gbmDevice;
+    static std::once_flag s_onceFlag;
+    std::call_once(s_onceFlag,
+        [] {
+            s_gbmDevice = new ThreadSpecific<GBMDevice>;
+        });
+    return *s_gbmDevice;
 }
 
-std::optional<ServiceWorkerInitializationData> ServiceWorkerInitializationData::decode(IPC::Decoder& decoder)
+const GBMDevice& GBMDevice::get()
 {
-    std::optional<UserContentControllerIdentifier> userContentControllerIdentifier;
-    decoder >> userContentControllerIdentifier;
-    if (!userContentControllerIdentifier)
-        return std::nullopt;
-    
-#if ENABLE(CONTENT_EXTENSIONS)
-    std::optional<Vector<std::pair<WebCompiledContentRuleListData, URL>>> contentRuleLists;
-    decoder >> contentRuleLists;
-    if (!contentRuleLists)
-        return std::nullopt;
-#endif
-    
-    return {{
-        WTFMove(*userContentControllerIdentifier),
-#if ENABLE(CONTENT_EXTENSIONS)
-        WTFMove(*contentRuleLists),
-#endif
-    }};
+    return *threadSpecificDevice();
 }
 
+GBMDevice::GBMDevice()
+{
+    int fd;
+    char deviceName[30];
+    for (int i = 128; i < 192; ++i) {
+        snprintf(deviceName, sizeof(deviceName), "/dev/dri/renderD%d", i);
+        fd = open(deviceName, O_RDWR | O_CLOEXEC);
+        if (fd >= 0) {
+            m_device = gbm_create_device(fd);
+            if (m_device)
+                break;
+            close(fd);
+        }
+    }
 }
+
+GBMDevice::~GBMDevice()
+{
+    if (m_device) {
+        gbm_device_destroy(m_device);
+        m_device = nullptr;
+    }
+}
+
+} // namespace WebCore
+
+#endif // USE(ANGLE) && USE(NICOSIA)

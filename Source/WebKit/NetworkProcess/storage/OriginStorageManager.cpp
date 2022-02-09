@@ -246,7 +246,7 @@ private:
 
     void deleteLocalStorageData(WallTime time)
     {
-        if (auto modificationTime = FileSystem::fileModificationTime(m_localStoragePath); *modificationTime >= time) {
+        if (FileSystem::fileModificationTime(m_localStoragePath) >= time) {
             if (m_localStorageManager)
                 m_localStorageManager->clearDataOnDisk();
             WebCore::SQLiteFileSystem::deleteDatabaseFile(m_localStoragePath);
@@ -279,19 +279,14 @@ private:
     std::unique_ptr<SessionStorageManager> m_sessionStorageManager;
 };
 
-OriginStorageManager::OriginStorageManager(Function<void()>&& writeOriginFileFunction, String&& path, String&& localStoragePath)
-    : m_writeOriginFileFunction(WTFMove(writeOriginFileFunction))
-    , m_path(WTFMove(path))
+OriginStorageManager::OriginStorageManager(String&& path, String&& localStoragePath)
+    : m_path(WTFMove(path))
     , m_localStoragePath(WTFMove(localStoragePath))
 {
     ASSERT(!RunLoop::isMain());
 }
 
-OriginStorageManager::~OriginStorageManager()
-{
-    if (m_writeOriginFileFunction)
-        m_writeOriginFileFunction();
-}
+OriginStorageManager::~OriginStorageManager() = default;
 
 void OriginStorageManager::connectionClosed(IPC::Connection::UniqueID connection)
 {

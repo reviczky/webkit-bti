@@ -30,7 +30,6 @@
 #include "ContentData.h"
 #include "CursorList.h"
 #include "DocumentInlines.h"
-#include "DocumentTimeline.h"
 #include "ElementChildIterator.h"
 #include "EventHandler.h"
 #include "FocusController.h"
@@ -84,6 +83,7 @@
 #include "ShadowRoot.h"
 #include "StylePendingResources.h"
 #include "StyleResolver.h"
+#include "Styleable.h"
 #include "TextAutoSizing.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
@@ -532,10 +532,7 @@ void RenderElement::setStyle(RenderStyle&& style, StyleDifference minimalStyleDi
     auto oldStyle = m_style.replace(WTFMove(style));
     bool detachedFromParent = !parent();
 
-    // Make sure we invalidate the containing block cache for flows when the contianing block context changes
-    // so that styleDidChange can safely use RenderBlock::locateEnclosingFragmentedFlow()
-    if (oldStyle.position() != m_style.position())
-        adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded();
+    adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded(oldStyle, m_style);
 
     styleDidChange(diff, &oldStyle);
 
@@ -2214,9 +2211,20 @@ ImageOrientation RenderElement::imageOrientation() const
     return (imageElement && !imageElement->allowsOrientationOverride()) ? ImageOrientation(ImageOrientation::FromImage) : style().imageOrientation();
 }
 
-void RenderElement::adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded()
+void RenderElement::adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded(const RenderStyle& oldStyle, const RenderStyle& newStyle)
 {
     if (fragmentedFlowState() == NotInsideFragmentedFlow)
+        return;
+
+    // Make sure we invalidate the containing block cache for flows when the contianing block context changes
+    // so that styleDidChange can safely use RenderBlock::locateEnclosingFragmentedFlow()
+    // FIXME: Share some code with RenderElement::canContain*.
+    auto mayNotBeContainingBlockForDescendantsAnymore = oldStyle.position() != m_style.position()
+        || oldStyle.hasTransformRelatedProperty() != m_style.hasTransformRelatedProperty()
+        || oldStyle.willChange() != newStyle.willChange()
+        || oldStyle.containsLayout() != newStyle.containsLayout()
+        || oldStyle.containsSize() != newStyle.containsSize();
+    if (!mayNotBeContainingBlockForDescendantsAnymore)
         return;
 
     // Invalidate the containing block caches.
@@ -2394,8 +2402,8 @@ std::unique_ptr<RenderStyle> RenderElement::animatedStyle()
 {
     std::unique_ptr<RenderStyle> result;
 
-    if (auto* timeline = documentTimeline())
-        result = timeline->animatedStyleForRenderer(*this);
+    if (auto styleable = Styleable::fromRenderer(*this))
+        result = styleable->computeAnimatedStyle();
 
     if (!result)
         result = RenderStyle::clonePtr(style());

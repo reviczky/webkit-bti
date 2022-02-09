@@ -224,6 +224,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/indexeddb/server/IDBConnectionToClient.h
     Modules/indexeddb/server/IDBConnectionToClientDelegate.h
     Modules/indexeddb/server/IDBServer.h
+    Modules/indexeddb/server/MemoryIDBBackingStore.h
+    Modules/indexeddb/server/SQLiteIDBBackingStore.h
     Modules/indexeddb/server/ServerOpenDBRequest.h
     Modules/indexeddb/server/UniqueIDBDatabase.h
     Modules/indexeddb/server/UniqueIDBDatabaseConnection.h
@@ -292,6 +294,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/permissions/PermissionState.h
 
     Modules/push-api/PushCrypto.h
+    Modules/push-api/PushDatabase.h
     Modules/push-api/PushMessageCrypto.h
     Modules/push-api/PushPermissionState.h
     Modules/push-api/PushSubscriptionData.h
@@ -1909,6 +1912,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/TextUnderlineOffset.h
     rendering/style/WillChangeData.h
 
+    rendering/svg/RenderSVGModelObject.h
+    rendering/svg/SVGBoundingBoxComputation.h
+    rendering/svg/SVGRenderSupport.h
+
     replay/UserInputBridge.h
 
     storage/Storage.h
@@ -1957,9 +1964,12 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     workers/WorkerFontLoadRequest.h
     workers/WorkerGlobalScope.h
     workers/WorkerLoaderProxy.h
+    workers/WorkerObjectProxy.h
+    workers/WorkerOptions.h
     workers/WorkerOrWorkletGlobalScope.h
     workers/WorkerOrWorkletScriptController.h
     workers/WorkerOrWorkletThread.h
+    workers/WorkerReportingProxy.h
     workers/WorkerRunLoop.h
     workers/WorkerScriptLoader.h
     workers/WorkerScriptLoaderClient.h
@@ -2003,6 +2013,12 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     workers/service/server/SWServerWorker.h
 
     workers/shared/SharedWorkerIdentifier.h
+    workers/shared/SharedWorkerKey.h
+    workers/shared/SharedWorkerObjectConnection.h
+    workers/shared/SharedWorkerObjectIdentifier.h
+    workers/shared/SharedWorkerProvider.h
+
+    workers/shared/context/SharedWorkerContextManager.h
     workers/shared/context/SharedWorkerThread.h
     workers/shared/context/SharedWorkerThreadProxy.h
 

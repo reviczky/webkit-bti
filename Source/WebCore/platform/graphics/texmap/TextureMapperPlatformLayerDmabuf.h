@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2022 Metrological Group B.V.
+ * Copyright (C) 2022 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,27 +26,31 @@
 
 #pragma once
 
-#include "UserContentControllerIdentifier.h"
-#include <wtf/Forward.h>
+#if USE(ANGLE) && USE(NICOSIA)
 
-namespace IPC {
-class Decoder;
-class Encoder;
-}
+#include "TextureMapperPlatformLayerBuffer.h"
 
-namespace WebKit {
+namespace WebCore {
 
-class WebCompiledContentRuleListData;
+class TextureMapperPlatformLayerDmabuf : public TextureMapperPlatformLayerBuffer {
+    WTF_MAKE_NONCOPYABLE(TextureMapperPlatformLayerDmabuf);
+    WTF_MAKE_FAST_ALLOCATED();
+public:
+    TextureMapperPlatformLayerDmabuf(const IntSize&, uint32_t format, uint32_t stride, int fd);
 
-struct ServiceWorkerInitializationData {
+    virtual ~TextureMapperPlatformLayerDmabuf();
 
-    void encode(IPC::Encoder&) const;
-    static std::optional<ServiceWorkerInitializationData> decode(IPC::Decoder&);
+private:
+    void validateTexture();
 
-    UserContentControllerIdentifier userContentControllerIdentifier;
-#if ENABLE(CONTENT_EXTENSIONS)
-    Vector<std::pair<WebCompiledContentRuleListData, URL>> contentRuleLists;
-#endif
+    void paintToTextureMapper(TextureMapper&, const FloatRect&, const TransformationMatrix& modelViewMatrix, float opacity) final;
+    std::unique_ptr<TextureMapperPlatformLayerBuffer> clone() final;
+
+    uint32_t m_format;
+    uint32_t m_stride;
+    int m_fd;
 };
 
-} // namespace WebKit
+} // namespace WebCore
+
+#endif // USE(ANGLE) && USE(NICOSIA)

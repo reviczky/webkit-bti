@@ -261,6 +261,7 @@ Modules/pictureinpicture/EnterPictureInPictureEvent.cpp
 Modules/pictureinpicture/HTMLVideoElementPictureInPicture.cpp
 Modules/pictureinpicture/PictureInPictureWindow.cpp
 Modules/push-api/PushCrypto.cpp
+Modules/push-api/PushDatabase.cpp
 Modules/push-api/PushEvent.cpp
 Modules/push-api/PushMessageCrypto.cpp
 Modules/push-api/PushMessageData.cpp
@@ -1420,7 +1421,6 @@ html/parser/HTMLParserScheduler.cpp
 html/parser/HTMLPreloadScanner.cpp
 html/parser/HTMLResourcePreloader.cpp
 html/parser/HTMLScriptRunner.cpp
-html/parser/HTMLSourceTracker.cpp
 html/parser/HTMLSrcsetParser.cpp
 html/parser/HTMLTokenizer.cpp
 html/parser/HTMLTreeBuilder.cpp
@@ -2554,6 +2554,7 @@ storage/StorageQuotaManager.cpp
 style/AttributeChangeInvalidation.cpp
 style/ChildChangeInvalidation.cpp
 style/ClassChangeInvalidation.cpp
+style/ContainerQueryEvaluator.cpp
 style/ElementRuleCollector.cpp
 style/HasSelectorFilter.cpp
 style/IdChangeInvalidation.cpp
@@ -2785,8 +2786,10 @@ workers/service/server/SWServerToContextConnection.cpp
 workers/service/server/SWServerWorker.cpp
 workers/shared/SharedWorker.cpp
 workers/shared/SharedWorkerGlobalScope.cpp
-workers/shared/SharedWorkerManager.cpp
+workers/shared/SharedWorkerObjectConnection.cpp
+workers/shared/SharedWorkerProvider.cpp
 workers/shared/SharedWorkerScriptLoader.cpp
+workers/shared/context/SharedWorkerContextManager.cpp
 workers/shared/context/SharedWorkerThread.cpp
 workers/shared/context/SharedWorkerThreadProxy.cpp
 worklets/PaintWorkletGlobalScope.cpp

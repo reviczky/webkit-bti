@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2022 Metrological Group B.V.
+ * Copyright (C) 2022 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,26 +26,27 @@
 
 #pragma once
 
-#include "MessagePortIdentifier.h"
-#include "SharedWorkerScriptLoader.h"
+#if USE(ANGLE) && USE(NICOSIA)
+
+struct gbm_device;
 
 namespace WebCore {
 
-class SharedWorker;
-class ScriptBuffer;
-struct WorkerOptions;
-using TransferredMessagePort = std::pair<WebCore::MessagePortIdentifier, WebCore::MessagePortIdentifier>;
-
-class SharedWorkerManager {
+class GBMDevice {
+    WTF_MAKE_NONCOPYABLE(GBMDevice);
+    WTF_MAKE_FAST_ALLOCATED();
 public:
-    static SharedWorkerManager& singleton();
-    void connect(const URL&, SharedWorker&, TransferredMessagePort&&, WorkerOptions&&);
+    static const GBMDevice& get();
 
-    void scriptLoadFailed(SharedWorkerScriptLoader&);
-    void scriptLoadedSuccessfully(SharedWorkerScriptLoader&, const ScriptBuffer&, ScriptExecutionContext&, SharedWorker&, TransferredMessagePort&&);
+    GBMDevice();
+    ~GBMDevice();
+
+    struct gbm_device* device() const { return m_device; }
 
 private:
-    HashMap<SharedWorkerScriptLoaderIdentifier, UniqueRef<SharedWorkerScriptLoader>> m_loaders;
+    struct gbm_device* m_device { nullptr };
 };
 
 } // namespace WebCore
+
+#endif // USE(ANGLE) && USE(NICOSIA)

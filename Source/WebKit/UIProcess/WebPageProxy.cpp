@@ -516,6 +516,9 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, Ref
     , m_limitsNavigationsToAppBoundDomains(m_configuration->limitsNavigationsToAppBoundDomains())
 #endif
     , m_notificationManagerMessageHandler(*this)
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+    , m_fullscreenVideoExtractionTimer(RunLoop::main(), this, &WebPageProxy::fullscreenVideoExtractionTimerFired)
+#endif
 {
     WEBPAGEPROXY_RELEASE_LOG(Loading, "constructor:");
 
@@ -3691,11 +3694,9 @@ void WebPageProxy::setUserAgent(String&& userAgent)
         return;
     m_userAgent = WTFMove(userAgent);
 
-#if ENABLE(SERVICE_WORKER)
     // We update the service worker there at the moment to be sure we use values used by actual web pages.
     // FIXME: Refactor this when we have a better User-Agent story.
-    process().processPool().updateServiceWorkerUserAgent(m_userAgent);
-#endif
+    process().processPool().updateWorkerUserAgent(m_userAgent);
 
     if (!hasRunningProcess())
         return;
@@ -5975,6 +5976,28 @@ void WebPageProxy::didExitFullscreen()
     m_uiClient->didExitFullscreen(this);
 }
 
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+
+void WebPageProxy::didEnterFullscreen(PlaybackSessionContextIdentifier identifier)
+{
+    didEnterFullscreen();
+
+    m_currentFullscreenVideoSessionIdentifier = identifier;
+    updateFullscreenVideoExtraction();
+}
+
+void WebPageProxy::didExitFullscreen(PlaybackSessionContextIdentifier identifier)
+{
+    didExitFullscreen();
+
+    if (m_currentFullscreenVideoSessionIdentifier == identifier) {
+        m_currentFullscreenVideoSessionIdentifier = std::nullopt;
+        updateFullscreenVideoExtraction();
+    }
+}
+
+#endif // ENABLE(VIDEO_PRESENTATION_MODE)
+
 void WebPageProxy::closePage()
 {
     if (isClosed())
@@ -8101,6 +8124,11 @@ void WebPageProxy::resetStateAfterProcessExited(ProcessTerminationReason termina
 
     updatePlayingMediaDidChange(MediaProducer::IsNotPlaying);
 
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+    m_fullscreenVideoExtractionTimer.stop();
+    m_currentFullscreenVideoSessionIdentifier = std::nullopt;
+#endif
+
     // FIXME: <rdar://problem/38676604> In case of process swaps, the old process should gracefully suspend instead of terminating.
     m_process->processTerminated();
 }
@@ -8423,10 +8451,6 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     parameters.lastNavigationWasAppInitiated = m_lastNavigationWasAppInitiated;
     parameters.shouldRelaxThirdPartyCookieBlocking = m_configuration->shouldRelaxThirdPartyCookieBlocking();
     parameters.canUseCredentialStorage = m_canUseCredentialStorage;
-
-#if PLATFORM(GTK)
-    parameters.gtkSettings = GtkSettingsManager::singleton().settingsState();
-#endif
 
 #if ENABLE(ATTACHMENT_ELEMENT) && PLATFORM(COCOA)
     if (m_preferences->attachmentElementEnabled() && !process.hasIssuedAttachmentElementRelatedSandboxExtensions()) {
