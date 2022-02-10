@@ -91,6 +91,11 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
 endif
 
+# Lower max parallel jobs on Ubuntu's arm64 builder
+ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes) $(DEB_HOST_ARCH), yes arm64)
+	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
+endif
+
 # set the distributor agent for Ubuntu
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSER_AGENT_BRANDING="Ubuntu"
@@ -121,6 +126,9 @@ override_dh_auto_configure:
 	   -DENABLE_MINIBROWSER=ON \
 	   -DUSE_SOUP2=ON \
 	   $(EXTRA_CMAKE_ARGUMENTS)
+
+override_dh_auto_build:
+	dh_auto_build $(EXTRA_BUILD_ARGUMENTS)
 
 # Create a dummy doc directory in case the "nodoc" build option is set
 override_dh_install:
