@@ -1,3 +1,10 @@
+webkit2gtk (2.34.6-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+    + Fixes CVE-2022-22620.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 17 Feb 2022 18:22:15 +0100
+
 webkit2gtk (2.34.5-1) unstable; urgency=high
 
   * New upstream release.
