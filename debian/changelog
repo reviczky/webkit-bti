@@ -1,3 +1,26 @@
+webkit2gtk (2.34.6-1~deb10u1) buster-security; urgency=high
+
+  * Rebuild for buster-security.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/control:
+    + Remove Breaks for Evolution < 3.34.1.
+    + Remove build dependency on libwpebackend-fdo-1.0-dev,
+      libmanette-0.2-dev and liblcms2-dev.
+    + Switch build dependency from libenchant-2-dev to libenchant-dev.
+    + Switch build dependencies on libgl-dev and libgles-dev with
+      libgl1-mesa-dev and libgles2-mesa-dev.
+  * Downgrade xdg-desktop-portal-gtk from a recommendation to a
+    suggestion (See #989307)
+  * debian/rules:
+    + Build with -DENABLE_GAMEPAD=OFF -DUSE_LCMS=OFF.
+  * Set the debhelper compatibility level back to 10. This fixes a dh_dwz
+    error ".debug_info section not present"
+    - Add debian/compat file.
+    - Update build dependency on debhelper.
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 19 Feb 2022 14:14:06 +0100
+
 webkit2gtk (2.34.6-1) unstable; urgency=high
 
   [ Alberto Garcia ]
