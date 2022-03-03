@@ -86,6 +86,7 @@ Architecture: any
 Multi-Arch: same
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          gir1.2-javascriptcoregtk-4.0 (= ${binary:Version}),
+         libglib2.0-dev,
          ${misc:Depends}
 Description: JavaScript engine library from WebKitGTK - development files
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
