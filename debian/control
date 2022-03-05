@@ -157,13 +157,10 @@ Description: Web content engine library for GTK
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
- This build comes from the GTK port of WebKit (API version 4.0).
- .
- This is the library for embedding in GTK applications.
+ This package contains the shared libraries.
 
 Package: libwebkit2gtk-4.0-dev
 Section: libdevel
@@ -183,11 +180,8 @@ Description: Web content engine library for GTK - development files
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
- .
- This build comes from the GTK port of WebKit (API version 4.0).
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
  This package contains the development files.
 
@@ -206,11 +200,8 @@ Description: Web content engine library for GTK - documentation
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
- .
- This build comes from the GTK port of WebKit (API version 4.0).
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
  This package contains the documentation.
 
@@ -230,11 +221,8 @@ Description: Web content engine library for GTK - GObject introspection data
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
- .
- This build comes from the GTK port of WebKit (API version 4.0).
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
@@ -253,11 +241,8 @@ Description: WebKitGTK WebDriver support
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
- .
- This build comes from the GTK port of WebKit (API version 4.0).
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
  This package provides the WebDriver service implementation for
  WebKitGTK.
