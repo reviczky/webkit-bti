@@ -56,7 +56,6 @@ Build-Depends-Indep: gtk-doc-tools,
                libglib2.0-doc,
                libgtk-3-doc,
                libsoup2.4-doc
-Build-Conflicts: gir-repository-dev
 Standards-Version: 4.6.0.1
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
@@ -103,7 +102,6 @@ Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
-Conflicts: libjavascriptcoregtk-3.0-bin
 Description: JavaScript engine library from WebKitGTK - command-line interpreter
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
@@ -121,7 +119,6 @@ Multi-Arch: same
 Depends: ${gir:Depends},
          libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${misc:Depends}
-Conflicts: gobject-introspection-repository
 Description: JavaScript engine library from WebKitGTK - GObject introspection data
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
