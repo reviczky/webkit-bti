@@ -1,3 +1,6 @@
+webkit2gtk source: source-is-missing Source/ThirdParty/pdfjs/build/pdf.js
+webkit2gtk source: source-is-missing Source/ThirdParty/pdfjs/build/pdf.sandbox.js
+webkit2gtk source: source-is-missing Source/ThirdParty/pdfjs/build/pdf.worker.js
 webkit2gtk source: source-is-missing Source/WebCore/Modules/mediacontrols/mediaControlsApple.js
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CSSDocumentation/CSSDocumentation.js
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CodeMirror/codemirror.js

@@ -2,6 +2,8 @@ webkit2gtk (2.35.90-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
   * debian/rules:
     + USE_SYSTEMD was renamed to ENABLE_JOURNALD_LOG.
   * debian/control:
