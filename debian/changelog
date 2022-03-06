@@ -11,6 +11,20 @@ webkit2gtk (2.35.90-1) UNRELEASED; urgency=medium
     + Make libjavascriptcoregtk-4.0-dev depend on libglib2.0-dev.
     + Simplify descriptions and remove references to the WebKit2 API
       layer.
+  * Build the 4.1 API version of the packages. These use libsoup 3 instead
+    of libsoup 2 but are otherwise identical to the 4.0 API packages.
+    + debian/control:
+      - Add build dependency on libsoup-3.0-dev and libsysprof-4-dev (the
+        latter should be pulled by libsoup).
+      - Add entries for the new packages. The 4.1 versions of the
+        WebDriver, JSC command-line interpreter and documentation are
+        currently not being generated.
+    + debian/rules:
+      - Add commands to build both sets of packages.
+    + debian/libwebkit2gtk-4.0-37.install:
+      - Update path of locale files to select only the exact API version.
+    + debian/not-installed:
+      - Don't install the 4.1 build of the JSC command-line interpreter.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 10 Feb 2022 10:13:30 +0100
 
