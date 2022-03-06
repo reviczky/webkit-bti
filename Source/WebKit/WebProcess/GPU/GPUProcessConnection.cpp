@@ -76,6 +76,11 @@
 #include "UserMediaCaptureManagerMessages.h"
 #endif
 
+#if ENABLE(VIDEO)
+#include "RemoteVideoFrameObjectHeapProxy.h"
+#include "RemoteVideoFrameProxy.h"
+#endif
+
 #if ENABLE(WEBGL)
 #include "RemoteGraphicsContextGLProxy.h"
 #include "RemoteGraphicsContextGLProxyMessages.h"
@@ -161,6 +166,15 @@ void GPUProcessConnection::resetAudioMediaStreamTrackRendererInternalUnit(AudioM
 }
 #endif
 
+#if ENABLE(VIDEO)
+RemoteVideoFrameObjectHeapProxy& GPUProcessConnection::videoFrameObjectHeapProxy()
+{
+    if (!m_videoFrameObjectHeapProxy)
+        m_videoFrameObjectHeapProxy = RemoteVideoFrameObjectHeapProxy::create(*this);
+    return *m_videoFrameObjectHeapProxy;
+}
+#endif
+
 RemoteMediaPlayerManager& GPUProcessConnection::mediaPlayerManager()
 {
     return *WebProcess::singleton().supplement<RemoteMediaPlayerManager>();
@@ -207,6 +221,10 @@ bool GPUProcessConnection::dispatchMessage(IPC::Connection& connection, IPC::Dec
 #if ENABLE(WEBGL)
     if (decoder.messageReceiverName() == Messages::RemoteGraphicsContextGLProxy::messageReceiverName())
         return RemoteGraphicsContextGLProxy::handleMessageToRemovedDestination(connection, decoder);
+#endif
+#if ENABLE(MEDIA_STREAMS)
+    if (decoder.messageReceiverName() == Messages::RemoteVideoFrameProxy::messageReceiverName())
+        return RemoteVideoFrameProxy::handleMessageToRemovedDestination(connection, decoder);
 #endif
 
 #if USE(AUDIO_SESSION)

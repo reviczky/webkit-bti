@@ -199,7 +199,7 @@ void CustomPaintImage::drawPattern(GraphicsContext& destContext, const FloatRect
     adjustedPatternCTM.scale(1.0 / xScale, 1.0 / yScale);
     adjustedSrcRect.scale(xScale, yScale);
 
-    auto buffer = ImageBuffer::createCompatibleBuffer(adjustedSize, DestinationColorSpace::SRGB(), destContext);
+    auto buffer = destContext.createCompatibleImageBuffer(adjustedSize);
     if (!buffer)
         return;
     doCustomPaint(buffer->context(), adjustedSize);
@@ -207,7 +207,7 @@ void CustomPaintImage::drawPattern(GraphicsContext& destContext, const FloatRect
     if (destContext.drawLuminanceMask())
         buffer->convertToLuminanceMask();
 
-    buffer->drawPattern(destContext, destRect, adjustedSrcRect, adjustedPatternCTM, phase, spacing, options);
+    destContext.drawPattern(*buffer, destRect, adjustedSrcRect, adjustedPatternCTM, phase, spacing, options);
     destContext.setDrawLuminanceMask(false);
 }
 

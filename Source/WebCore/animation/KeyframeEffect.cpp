@@ -85,7 +85,8 @@ String KeyframeEffect::CSSPropertyIDToIDLAttributeName(CSSPropertyID cssProperty
         return "cssFloat";
 
     // 3. If property refers to the CSS offset property, return the string "cssOffset".
-    // FIXME: we don't support the CSS "offset" property
+    if (cssPropertyId == CSSPropertyOffset)
+        return "cssOffset";
 
     // 4. Otherwise, return the result of applying the CSS property to IDL attribute algorithm [CSSOM] to property.
     return getJSPropertyName(cssPropertyId);
@@ -102,7 +103,8 @@ static inline CSSPropertyID IDLAttributeNameToAnimationPropertyName(const String
         return CSSPropertyFloat;
 
     // 3. If attribute is the string "cssOffset", then return an animation property representing the CSS offset property.
-    // FIXME: We don't support the CSS "offset" property.
+    if (idlAttributeName == "cssOffset")
+        return CSSPropertyOffset;
 
     // 4. Otherwise, return the result of applying the IDL attribute to CSS property algorithm [CSSOM] to attribute.
     auto cssPropertyId = CSSStyleDeclaration::getCSSPropertyIDFromJavaScriptPropertyName(idlAttributeName);
@@ -609,7 +611,7 @@ auto KeyframeEffect::getKeyframes(Document& document) -> Vector<ComputedKeyframe
 
     KeyframeList computedKeyframeList(m_blendingKeyframes.animationName());
     computedKeyframeList.copyKeyframes(m_blendingKeyframes);
-    computedKeyframeList.fillImplicitKeyframes(*m_target, m_target->styleResolver(), elementStyle, nullptr);
+    computedKeyframeList.fillImplicitKeyframes(*this, elementStyle);
 
     auto keyframeRules = [&]() -> const Vector<Ref<StyleRuleKeyframe>> {
         if (!is<CSSAnimation>(animation()))
@@ -641,21 +643,6 @@ auto KeyframeEffect::getKeyframes(Document& document) -> Vector<ComputedKeyframe
         if (is<StyledElement>(m_target) && m_pseudoId == PseudoId::None) {
             if (auto* inlineProperties = downcast<StyledElement>(*m_target).inlineStyle())
                 styleProperties->mergeAndOverrideOnConflict(*inlineProperties);
-        }
-    }
-
-    // We need to establish which properties are implicit for 0% and 100%.
-    auto zeroKeyframeProperties = computedKeyframeList.properties();
-    auto oneKeyframeProperties = computedKeyframeList.properties();
-    zeroKeyframeProperties.remove(CSSPropertyCustom);
-    oneKeyframeProperties.remove(CSSPropertyCustom);
-    for (auto& keyframe : computedKeyframeList) {
-        if (!keyframe.key()) {
-            for (auto cssPropertyId : keyframe.properties())
-                zeroKeyframeProperties.remove(cssPropertyId);
-        } else if (keyframe.key() == 1) {
-            for (auto cssPropertyId : keyframe.properties())
-                oneKeyframeProperties.remove(cssPropertyId);
         }
     }
 
@@ -699,19 +686,6 @@ auto KeyframeEffect::getKeyframes(Document& document) -> Vector<ComputedKeyframe
             if (cssPropertyId == CSSPropertyCustom)
                 continue;
             addPropertyToKeyframe(cssPropertyId);
-        }
-
-        // Now add the implicit properties in case there are any and we're dealing with a 0% or 100% keyframe.
-        if (lastStyleChangeEventStyle) {
-            if (!keyframe.key()) {
-                for (auto cssPropertyId : zeroKeyframeProperties)
-                    addPropertyToKeyframe(cssPropertyId);
-                zeroKeyframeProperties.clear();
-            } else if (keyframe.key() == 1) {
-                for (auto cssPropertyId : oneKeyframeProperties)
-                    addPropertyToKeyframe(cssPropertyId);
-                oneKeyframeProperties.clear();
-            }
         }
 
         computedKeyframes.append(WTFMove(computedKeyframe));
@@ -920,6 +894,8 @@ void KeyframeEffect::setBlendingKeyframes(KeyframeList& blendingKeyframes)
     computeStackingContextImpact();
     computeAcceleratedPropertiesState();
     computeSomeKeyframesUseStepsTimingFunction();
+    computeHasImplicitKeyframeForAcceleratedProperty();
+    computeHasKeyframeComposingAcceleratedProperty();
 
     checkForMatchingTransformFunctionLists();
     checkForMatchingFilterFunctionLists();
@@ -936,34 +912,11 @@ void KeyframeEffect::checkForMatchingTransformFunctionLists()
     if (m_blendingKeyframes.size() < 2 || !m_blendingKeyframes.containsProperty(CSSPropertyTransform))
         return;
 
-    // Empty transforms match anything, so find the first non-empty entry as the reference.
-    size_t numKeyframes = m_blendingKeyframes.size();
-    size_t firstNonEmptyTransformKeyframeIndex = numKeyframes;
+    Vector<TransformOperation::OperationType> sharedPrimitives;
+    sharedPrimitives.reserveInitialCapacity(m_blendingKeyframes[0].style()->transform().operations().size());
 
-    for (size_t i = 0; i < numKeyframes; ++i) {
-        const KeyframeValue& currentKeyframe = m_blendingKeyframes[i];
-        if (currentKeyframe.style()->transform().operations().size()) {
-            firstNonEmptyTransformKeyframeIndex = i;
-            break;
-        }
-    }
-
-    // All of the frames have an empty list of transform operations, so they match.
-    if (firstNonEmptyTransformKeyframeIndex == numKeyframes) {
-        m_transformFunctionListsMatch = true;
-        return;
-    }
-
-    const TransformOperations* firstVal = &m_blendingKeyframes[firstNonEmptyTransformKeyframeIndex].style()->transform();
-    for (size_t i = firstNonEmptyTransformKeyframeIndex + 1; i < numKeyframes; ++i) {
-        const KeyframeValue& currentKeyframe = m_blendingKeyframes[i];
-        const TransformOperations* val = &currentKeyframe.style()->transform();
-
-        // An empty transform list matches anything.
-        if (val->operations().isEmpty())
-            continue;
-
-        if (!firstVal->operationsMatch(*val))
+    for (const auto& keyframe : m_blendingKeyframes) {
+        if (!keyframe.style()->transform().updateSharedPrimitives(sharedPrimitives))
             return;
     }
 
@@ -1451,12 +1404,8 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, doub
         Vector<const KeyframeValue*> propertySpecificKeyframes;
         for (auto& keyframe : m_blendingKeyframes) {
             auto offset = keyframe.key();
-            if (!keyframe.containsProperty(cssPropertyId)) {
-                // If we're dealing with a CSS animation, we consider the first and last keyframes to always have the property listed
-                // since the underlying style was provided and should be captured.
-                if (m_blendingKeyframesSource == BlendingKeyframesSource::WebAnimation || (offset && offset < 1))
-                    continue;
-            }
+            if (!keyframe.containsProperty(cssPropertyId))
+                continue;
             if (!offset)
                 numberOfKeyframesWithZeroOffset++;
             if (offset == 1)
@@ -1625,7 +1574,24 @@ TimingFunction* KeyframeEffect::timingFunctionForKeyframeAtIndex(size_t index) c
 
 bool KeyframeEffect::canBeAccelerated() const
 {
-    return m_acceleratedPropertiesState != AcceleratedProperties::None && !m_someKeyframesUseStepsTimingFunction && !is<StepsTimingFunction>(timingFunction());
+    if (m_acceleratedPropertiesState == AcceleratedProperties::None)
+        return false;
+
+    if (m_someKeyframesUseStepsTimingFunction || is<StepsTimingFunction>(timingFunction()))
+        return false;
+
+    if (m_compositeOperation != CompositeOperation::Replace)
+        return false;
+
+    if (m_hasKeyframeComposingAcceleratedProperty)
+        return false;
+
+    return true;
+}
+
+bool KeyframeEffect::preventsAcceleration() const
+{
+    return m_acceleratedPropertiesState != AcceleratedProperties::None && !canBeAccelerated();
 }
 
 void KeyframeEffect::updateAcceleratedActions()
@@ -1779,16 +1745,18 @@ OptionSet<AcceleratedActionApplicationResult> KeyframeEffect::applyPendingAccele
         if (m_runningAccelerated == RunningAccelerated::Yes)
             renderer->animationFinished(m_blendingKeyframes.animationName());
 
-        if (!m_blendingKeyframes.hasImplicitKeyframes())
+        if (!m_hasImplicitKeyframeForAcceleratedProperty)
             return renderer->startAnimation(timeOffset, backingAnimationForCompositedRenderer(), m_blendingKeyframes) ? RunningAccelerated::Yes : RunningAccelerated::No;
 
         ASSERT(m_target);
-
-        // We need to resolve all animations up to this point to ensure any forward-filling
-        // effect is accounted for when computing the "from" value for the accelerated animation.
         auto* effectStack = m_target->keyframeEffectStack(m_pseudoId);
         ASSERT(effectStack);
 
+        if (effectStack->containsEffectThatPreventsAccelerationOfEffect(*this))
+            return RunningAccelerated::No;
+
+        // We need to resolve all animations up to this point to ensure any forward-filling
+        // effect is accounted for when computing the "from" value for the accelerated animation.
         auto underlyingStyle = [&]() {
             if (auto* lastStyleChangeEventStyle = m_target->lastStyleChangeEventStyle(m_pseudoId))
                 return RenderStyle::clonePtr(*lastStyleChangeEventStyle);
@@ -1804,7 +1772,7 @@ OptionSet<AcceleratedActionApplicationResult> KeyframeEffect::applyPendingAccele
 
         KeyframeList explicitKeyframes(m_blendingKeyframes.animationName());
         explicitKeyframes.copyKeyframes(m_blendingKeyframes);
-        explicitKeyframes.fillImplicitKeyframes(*m_target, m_target->styleResolver(), *underlyingStyle, nullptr);
+        explicitKeyframes.fillImplicitKeyframes(*this, *underlyingStyle);
         return renderer->startAnimation(timeOffset, backingAnimationForCompositedRenderer(), explicitKeyframes) ? RunningAccelerated::Yes : RunningAccelerated::No;
     };
 
@@ -2167,6 +2135,117 @@ void KeyframeEffect::setBindingsComposite(CompositeOperation compositeOperation)
     setComposite(compositeOperation);
     if (is<CSSAnimation>(animation()))
         downcast<CSSAnimation>(*animation()).effectCompositeOperationWasSetUsingBindings();
+}
+
+void KeyframeEffect::computeHasImplicitKeyframeForAcceleratedProperty()
+{
+    m_hasImplicitKeyframeForAcceleratedProperty = [&]() {
+        if (m_acceleratedPropertiesState == AcceleratedProperties::None)
+            return false;
+
+        if (!m_blendingKeyframes.isEmpty()) {
+            // We make a list of all animated properties and consider them all
+            // implicit until proven otherwise as we iterate through all keyframes.
+            auto implicitZeroProperties = m_blendingKeyframes.properties();
+            auto implicitOneProperties = m_blendingKeyframes.properties();
+            implicitZeroProperties.remove(CSSPropertyCustom);
+            implicitOneProperties.remove(CSSPropertyCustom);
+            for (auto& keyframe : m_blendingKeyframes) {
+                // If the keyframe is for 0% or 100%, let's remove all of its properties from
+                // our list of implicit properties.
+                if (!implicitZeroProperties.isEmpty() && !keyframe.key()) {
+                    for (auto property : keyframe.properties())
+                        implicitZeroProperties.remove(property);
+                }
+                if (!implicitOneProperties.isEmpty() && keyframe.key() == 1) {
+                    for (auto property : keyframe.properties())
+                        implicitOneProperties.remove(property);
+                }
+            }
+            // The only properties left are known to be implicit properties, so we must
+            // check them for any accelerated property.
+            for (auto implicitProperty : implicitZeroProperties) {
+                if (CSSPropertyAnimation::animationOfPropertyIsAccelerated(implicitProperty))
+                    return true;
+            }
+            for (auto implicitProperty : implicitOneProperties) {
+                if (CSSPropertyAnimation::animationOfPropertyIsAccelerated(implicitProperty))
+                    return true;
+            }
+            return false;
+        }
+
+        // We may not have computed keyframes yet, so we should check our parsed keyframes in the
+        // same way we checked computed keyframes.
+        for (auto& keyframe : m_parsedKeyframes) {
+            // We keep three property lists, one which contains all properties seen across keyframes
+            // which will be filtered eventually to only contain implicit properties, one containing
+            // properties seen on the 0% keyframe and one containing properties seen on the 100% keyframe.
+            HashSet<CSSPropertyID> implicitProperties;
+            HashSet<CSSPropertyID> explicitZeroProperties;
+            HashSet<CSSPropertyID> explicitOneProperties;
+            auto styleProperties = keyframe.style;
+            for (unsigned i = 0; i < styleProperties->propertyCount(); ++i) {
+                auto property = styleProperties->propertyAt(i).id();
+                // All properties may end up being implicit.
+                implicitProperties.add(property);
+                if (!keyframe.computedOffset)
+                    explicitZeroProperties.add(property);
+                else if (keyframe.computedOffset == 1)
+                    explicitOneProperties.add(property);
+            }
+            // Let's remove all properties found on the 0% and 100% keyframes from the list of potential implicit properties.
+            for (auto explicitProperty : explicitZeroProperties)
+                implicitProperties.remove(explicitProperty);
+            for (auto explicitProperty : explicitOneProperties)
+                implicitProperties.remove(explicitProperty);
+            // At this point all properties left in implicitProperties are known to be implicit,
+            // so we must check them for any accelerated property.
+            for (auto implicitProperty : implicitProperties) {
+                if (CSSPropertyAnimation::animationOfPropertyIsAccelerated(implicitProperty))
+                    return true;
+            }
+        }
+        return false;
+    }();
+}
+
+void KeyframeEffect::computeHasKeyframeComposingAcceleratedProperty()
+{
+    m_hasKeyframeComposingAcceleratedProperty = [&]() {
+        if (m_acceleratedPropertiesState == AcceleratedProperties::None)
+            return false;
+
+        if (!m_blendingKeyframes.isEmpty()) {
+            for (auto& keyframe : m_blendingKeyframes) {
+                // If we find a keyframe with a composite operation, we check whether one
+                // of its properties is accelerated.
+                if (auto keyframeComposite = keyframe.compositeOperation()) {
+                    if (*keyframeComposite != CompositeOperation::Replace) {
+                        for (auto property : keyframe.properties()) {
+                            if (CSSPropertyAnimation::animationOfPropertyIsAccelerated(property))
+                                return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // We may not have computed keyframes yet, so we should check our parsed keyframes in the
+        // same way we checked computed keyframes.
+        for (auto& keyframe : m_parsedKeyframes) {
+            if (keyframe.composite != CompositeOperationOrAuto::Add && keyframe.composite != CompositeOperationOrAuto::Accumulate)
+                continue;
+            auto styleProperties = keyframe.style;
+            for (unsigned i = 0; i < styleProperties->propertyCount(); ++i) {
+                auto property = styleProperties->propertyAt(i).id();
+                if (CSSPropertyAnimation::animationOfPropertyIsAccelerated(property))
+                    return true;
+            }
+        }
+        return false;
+    }();
 }
 
 } // namespace WebCore

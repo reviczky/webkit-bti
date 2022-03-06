@@ -63,7 +63,7 @@ private:
 
     void drawNativeImage(NativeImage&, const FloatSize&, const FloatRect&, const FloatRect&, const ImagePaintingOptions&) final { }
 
-    void drawPattern(NativeImage&, const FloatSize&, const FloatRect&, const FloatRect&, const AffineTransform&, const FloatPoint&, const FloatSize&, const ImagePaintingOptions&) final { }
+    void drawPattern(NativeImage&, const FloatRect&, const FloatRect&, const AffineTransform&, const FloatPoint&, const FloatSize&, const ImagePaintingOptions&) final { }
 
     IntRect clipBounds() const final { return { }; }
 
@@ -84,7 +84,6 @@ private:
     void strokeRect(const FloatRect&, float) final { }
     void clipPath(const Path&, WindRule = WindRule::EvenOdd) final { }
     FloatRect roundToDevicePixels(const FloatRect& rect, RoundingMode = RoundAllSides) final { return rect; }
-    void drawLineForText(const FloatRect&, bool, bool = false, StrokeStyle = SolidStroke) final { }
     void drawLinesForText(const FloatPoint&, float, const DashArray&, bool, bool = false, StrokeStyle = SolidStroke) final { }
     void setLineCap(LineCap) final { }
     void setLineDash(const DashArray&, float) final { }
@@ -131,8 +130,6 @@ private:
 
     void clipRoundedRect(const FloatRoundedRect&) final { }
     void clipOutRoundedRect(const FloatRoundedRect&) final { }
-
-    ClipToDrawingCommandsResult clipToDrawingCommands(const FloatRect&, const DestinationColorSpace&, Function<void(GraphicsContext&)>&&) final { return ClipToDrawingCommandsResult::Success; }
     void clipToImageBuffer(ImageBuffer&, const FloatRect&) final { }
 
     void fillRect(const FloatRect&, Gradient&) final { }

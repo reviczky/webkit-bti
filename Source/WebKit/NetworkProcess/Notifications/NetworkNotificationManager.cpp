@@ -70,6 +70,7 @@ void NetworkNotificationManager::maybeSendConnectionConfiguration() const
 
 void NetworkNotificationManager::requestSystemNotificationPermission(const String& originString, CompletionHandler<void(bool)>&& completionHandler)
 {
+    LOG(Push, "Network process passing permission request to webpushd");
     sendMessageWithReply<WebPushD::MessageType::RequestSystemNotificationPermission>(WTFMove(completionHandler), originString);
 }
 
@@ -93,13 +94,14 @@ void NetworkNotificationManager::getOriginsWithPushAndNotificationPermissions(Co
 void NetworkNotificationManager::getPendingPushMessages(CompletionHandler<void(const Vector<WebPushMessage>&)>&& completionHandler)
 {
     CompletionHandler<void(Vector<WebPushMessage>&&)> replyHandler = [completionHandler = WTFMove(completionHandler)] (Vector<WebPushMessage>&& messages) mutable {
+        LOG(Push, "Done getting push messages");
         completionHandler(WTFMove(messages));
     };
 
     sendMessageWithReply<WebPushD::MessageType::GetPendingPushMessages>(WTFMove(replyHandler));
 }
 
-void NetworkNotificationManager::showNotification(const WebCore::NotificationData&)
+void NetworkNotificationManager::showNotification(IPC::Connection&, const WebCore::NotificationData&)
 {
     if (!m_connection)
         return;

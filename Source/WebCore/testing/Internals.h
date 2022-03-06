@@ -48,6 +48,7 @@
 #endif
 
 OBJC_CLASS DDScannerResult;
+OBJC_CLASS VKCImageAnalysis;
 
 namespace WebCore {
 
@@ -106,6 +107,7 @@ class RenderedDocumentMarker;
 class SVGSVGElement;
 class ScrollableArea;
 class SerializedScriptValue;
+class SharedBuffer;
 class SourceBuffer;
 class StringCallback;
 class StyleSheet;
@@ -150,6 +152,10 @@ class MediaSessionCoordinator;
 class MockMediaSessionCoordinator;
 #endif
 #endif
+
+namespace ImageOverlay {
+class CroppedImage;
+}
 
 template<typename IDLType> class DOMPromiseDeferred;
 
@@ -636,6 +642,8 @@ public:
 
 #if ENABLE(MEDIA_STREAM)
     void setShouldInterruptAudioOnPageVisibilityChange(bool);
+#endif
+#if ENABLE(MEDIA_RECORDER)
     void setCustomPrivateRecorderCreator();
 #endif
 
@@ -824,9 +832,6 @@ public:
     void setQuickLookPassword(const String&);
 
     void setAsRunningUserScripts(Document&);
-#if ENABLE(APPLE_PAY)
-    void setApplePayIsActive(Document&);
-#endif
 
 #if ENABLE(WEBGL)
     enum class SimulatedWebGLContextEvent {
@@ -951,6 +956,8 @@ public:
     };
 
     void installImageOverlay(Element&, Vector<ImageOverlayLine>&&, Vector<ImageOverlayBlock>&& = { }, Vector<ImageOverlayDataDetector>&& = { });
+    void installCroppedImageOverlay(Element&, Ref<DOMRectReadOnly>&&);
+    void uninstallCroppedImageOverlay();
     bool hasActiveDataDetectorHighlight() const;
 
 #if ENABLE(IMAGE_ANALYSIS)
@@ -1272,9 +1279,15 @@ private:
     ExceptionOr<RenderedDocumentMarker*> markerAt(Node&, const String& markerType, unsigned index);
     ExceptionOr<ScrollableArea*> scrollableAreaForNode(Node*) const;
 
+#if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
+    static RetainPtr<VKCImageAnalysis> fakeImageAnalysisResultForTesting(const Vector<ImageOverlayLine>&);
+#endif
+
 #if ENABLE(DATA_DETECTION)
     static DDScannerResult *fakeDataDetectorResultForTesting();
 #endif
+
+    static RefPtr<SharedBuffer> pngDataForTesting();
 
 #if ENABLE(MEDIA_STREAM)
     // RealtimeMediaSource::Observer API
@@ -1309,6 +1322,8 @@ private:
 #if ENABLE(VIDEO)
     std::unique_ptr<CaptionUserPreferencesTestingModeToken> m_testingModeToken;
 #endif
+
+    std::unique_ptr<ImageOverlay::CroppedImage> m_croppedImageOverlay;
 };
 
 } // namespace WebCore

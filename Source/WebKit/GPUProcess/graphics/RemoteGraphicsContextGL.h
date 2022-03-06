@@ -35,7 +35,6 @@
 #include "ScopedWebGLRenderingResourcesRequest.h"
 #include "StreamMessageReceiver.h"
 #include "StreamServerConnection.h"
-#include <WebCore/ExtensionsGL.h>
 #include <WebCore/NotImplemented.h>
 #include <wtf/ThreadAssertions.h>
 #include <wtf/WeakPtr.h>
@@ -54,6 +53,11 @@
 #include "WCContentBufferIdentifier.h"
 #endif
 
+#if ENABLE(VIDEO)
+#include "RemoteVideoFrameIdentifier.h"
+#include "RemoteVideoFrameProxy.h"
+#endif
+
 #if PLATFORM(COCOA)
 namespace WTF {
 class MachSendRight;
@@ -61,6 +65,9 @@ class MachSendRight;
 #endif
 
 namespace WebKit {
+#if ENABLE(VIDEO)
+class RemoteVideoFrameObjectHeap;
+#endif
 
 // GPU process side implementation of that receives messages about GraphicsContextGL calls
 // and issues real GraphicsContextGL calls based on the received messages.
@@ -94,9 +101,9 @@ protected:
     void dispatchContextChangedNotification() final;
 
     // Messages to be received.
-    void reshape(int32_t width, int32_t height);
     void ensureExtensionEnabled(String&&);
-    void notifyMarkContextChanged();
+    void markContextChanged();
+    void reshape(int32_t width, int32_t height);
 #if PLATFORM(COCOA)
     virtual void prepareForDisplay(CompletionHandler<void(WTF::MachSendRight&&)>&&) = 0;
 #elif USE(GRAPHICS_LAYER_WC)
@@ -108,7 +115,12 @@ protected:
     void synthesizeGLError(uint32_t error);
     void paintRenderingResultsToCanvas(WebCore::RenderingResourceIdentifier, CompletionHandler<void()>&&);
     void paintCompositedResultsToCanvas(WebCore::RenderingResourceIdentifier, CompletionHandler<void()>&&);
-    void copyTextureFromMedia(WebCore::MediaPlayerIdentifier, uint32_t texture, uint32_t target, int32_t level, uint32_t internalFormat, uint32_t format, uint32_t type, bool premultiplyAlpha, bool flipY, CompletionHandler<void(bool)>&&);
+#if ENABLE(MEDIA_STREAM)
+    void paintCompositedResultsToMediaSample(CompletionHandler<void(std::optional<WebKit::RemoteVideoFrameProxy::Properties>&&)>&&);
+#endif
+#if ENABLE(VIDEO)
+    void copyTextureFromVideoFrame(RemoteVideoFrameReadReference, uint32_t texture, uint32_t target, int32_t level, uint32_t internalFormat, uint32_t format, uint32_t type, bool premultiplyAlpha, bool flipY, CompletionHandler<void(bool)>&&);
+#endif
     void simulateEventForTesting(WebCore::GraphicsContextGL::SimulatedEventForTesting);
 
 #include "RemoteGraphicsContextGLFunctionsGenerated.h" // NOLINT
@@ -121,15 +133,19 @@ private:
 protected:
     WeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     RefPtr<IPC::StreamServerConnection> m_streamConnection;
+    static constexpr Seconds defaultTimeout = 10_s;
 #if PLATFORM(COCOA)
-    using PlatformGraphicsContextGL = WebCore::GraphicsContextGLCocoa;
+    using GCGLContext = WebCore::GraphicsContextGLCocoa;
 #else
-    using PlatformGraphicsContextGL = WebCore::GraphicsContextGLTextureMapper;
+    using GCGLContext = WebCore::GraphicsContextGLTextureMapper;
 #endif
     
-    RefPtr<PlatformGraphicsContextGL> m_context WTF_GUARDED_BY_LOCK(m_streamThread);
+    RefPtr<GCGLContext> m_context WTF_GUARDED_BY_LOCK(m_streamThread);
     GraphicsContextGLIdentifier m_graphicsContextGLIdentifier;
     Ref<RemoteRenderingBackend> m_renderingBackend;
+#if ENABLE(VIDEO)
+    Ref<RemoteVideoFrameObjectHeap> m_videoFrameObjectHeap;
+#endif
     ScopedWebGLRenderingResourcesRequest m_renderingResourcesRequest;
     NO_UNIQUE_ADDRESS ThreadAssertion m_streamThread;
     WebCore::ProcessIdentifier m_webProcessIdentifier;

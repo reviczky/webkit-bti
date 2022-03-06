@@ -106,6 +106,10 @@ struct RemoteRenderingBackendCreationParameters;
 class RemoteWCLayerTreeHost;
 #endif
 
+#if ENABLE(VIDEO)
+class RemoteVideoFrameObjectHeap;
+#endif
+
 class GPUConnectionToWebProcess
     : public ThreadSafeRefCounted<GPUConnectionToWebProcess, WTF::DestructionThread::Main>
     , public WebCore::NowPlayingManager::Client
@@ -142,7 +146,9 @@ public:
     bool allowsVideoCapture() const { return m_allowsVideoCapture; }
     bool allowsDisplayCapture() const { return m_allowsDisplayCapture; }
 #endif
-
+#if ENABLE(VIDEO)
+    RemoteVideoFrameObjectHeap& videoFrameObjectHeap() const;
+#endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     void startCapturingAudio();
     void processIsStartingToCaptureAudio(GPUConnectionToWebProcess&);
@@ -288,9 +294,6 @@ private:
     std::unique_ptr<RemoteMediaResourceManager> m_remoteMediaResourceManager;
     UniqueRef<RemoteMediaPlayerManagerProxy> m_remoteMediaPlayerManagerProxy;
     PAL::SessionID m_sessionID;
-#if PLATFORM(COCOA) && USE(LIBWEBRTC)
-    Ref<LibWebRTCCodecsProxy> m_libWebRTCCodecsProxy;
-#endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     std::unique_ptr<UserMediaCaptureManagerProxy> m_userMediaCaptureManagerProxy;
     std::unique_ptr<RemoteAudioMediaStreamTrackRendererInternalUnitManager> m_audioMediaStreamTrackRendererInternalUnitManager;
@@ -305,6 +308,12 @@ private:
     bool m_allowsAudioCapture { false };
     bool m_allowsVideoCapture { false };
     bool m_allowsDisplayCapture { false };
+#endif
+#if ENABLE(VIDEO)
+    IPC::ScopedActiveMessageReceiveQueue<RemoteVideoFrameObjectHeap> m_videoFrameObjectHeap;
+#endif
+#if PLATFORM(COCOA) && USE(LIBWEBRTC)
+    Ref<LibWebRTCCodecsProxy> m_libWebRTCCodecsProxy;
 #endif
 #if HAVE(AUDIT_TOKEN)
     std::optional<audit_token_t> m_presentingApplicationAuditToken;

@@ -80,7 +80,7 @@
 #include <wtf/NeverDestroyed.h>
 #endif
 
-#if USE(ATSPI)
+#if USE(ATSPI) || USE(ATK)
 #include <wtf/glib/GUniquePtr.h>
 #endif
 
@@ -278,6 +278,7 @@ void PlatformDisplay::terminateEGLDisplay()
     ASSERT(m_eglDisplayInitialized);
     if (m_eglDisplay == EGL_NO_DISPLAY)
         return;
+    eglMakeCurrent(m_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
     eglTerminate(m_eglDisplay);
     m_eglDisplay = EGL_NO_DISPLAY;
 }
@@ -293,7 +294,7 @@ cmsHPROFILE PlatformDisplay::colorProfile() const
 }
 #endif
 
-#if USE(ATSPI)
+#if USE(ATSPI) || USE(ATK)
 const String& PlatformDisplay::accessibilityBusAddress() const
 {
     if (m_accessibilityBusAddress)

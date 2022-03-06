@@ -33,12 +33,14 @@
 #include "FloatLine.h"
 #include "FloatQuad.h"
 #include "FloatRect.h"
+#include "InspectorOverlayLabel.h"
 #include "Path.h"
 #include "Timer.h"
 #include <wtf/Deque.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
+#include <wtf/WeakHashMap.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
@@ -65,21 +67,6 @@ public:
     InspectorOverlay(Page&, InspectorClient*);
     ~InspectorOverlay();
 
-    enum class LabelArrowDirection {
-        None,
-        Down,
-        Up,
-        Left,
-        Right,
-    };
-
-    enum class LabelArrowEdgePosition {
-        None,
-        Leading, // Positioned at the left/top side of edge.
-        Middle, // Positioned at the center on the edge.
-        Trailing, // Positioned at the right/bottom side of the edge.
-    };
-
     struct Highlight {
         WTF_MAKE_STRUCT_FAST_ALLOCATED;
 
@@ -104,20 +91,6 @@ public:
         struct GridHighlightOverlay {
             WTF_MAKE_STRUCT_FAST_ALLOCATED;
 
-            struct Label {
-                WTF_MAKE_STRUCT_FAST_ALLOCATED;
-                String text;
-                FloatPoint location;
-                Color backgroundColor;
-                LabelArrowDirection arrowDirection;
-                LabelArrowEdgePosition arrowEdgePosition;
-
-#if PLATFORM(IOS_FAMILY)
-                template<class Encoder> void encode(Encoder&) const;
-                template<class Decoder> static std::optional<InspectorOverlay::Highlight::GridHighlightOverlay::Label> decode(Decoder&);
-#endif
-            };
-
             struct Area {
                 WTF_MAKE_STRUCT_FAST_ALLOCATED;
                 String name;
@@ -133,7 +106,7 @@ public:
             Vector<FloatLine> gridLines;
             Vector<FloatQuad> gaps;
             Vector<Area> areas;
-            Vector<Label> labels;
+            Vector<InspectorOverlayLabel> labels;
 
 #if PLATFORM(IOS_FAMILY)
             template<class Encoder> void encode(Encoder&) const;
@@ -146,6 +119,11 @@ public:
 
             Color color;
             FloatQuad containerBounds;
+            Vector<FloatQuad> itemBounds;
+            Vector<FloatQuad> mainAxisGaps;
+            Vector<FloatQuad> mainAxisSpaceBetweenItemsAndGaps;
+            Vector<FloatQuad> spaceBetweenItemsAndCrossAxisSpace;
+            Vector<FloatQuad> crossAxisGaps;
 
 #if PLATFORM(IOS_FAMILY)
             template<class Encoder> void encode(Encoder&) const;
@@ -303,6 +281,11 @@ template<class Encoder> void InspectorOverlay::Highlight::FlexHighlightOverlay::
 {
     encoder << color;
     encoder << containerBounds;
+    encoder << itemBounds;
+    encoder << mainAxisGaps;
+    encoder << mainAxisSpaceBetweenItemsAndGaps;
+    encoder << spaceBetweenItemsAndCrossAxisSpace;
+    encoder << crossAxisGaps;
 }
 
 template<class Decoder> std::optional<InspectorOverlay::Highlight::FlexHighlightOverlay> InspectorOverlay::Highlight::FlexHighlightOverlay::decode(Decoder& decoder)
@@ -311,6 +294,16 @@ template<class Decoder> std::optional<InspectorOverlay::Highlight::FlexHighlight
     if (!decoder.decode(flexHighlightOverlay.color))
         return { };
     if (!decoder.decode(flexHighlightOverlay.containerBounds))
+        return { };
+    if (!decoder.decode(flexHighlightOverlay.itemBounds))
+        return { };
+    if (!decoder.decode(flexHighlightOverlay.mainAxisGaps))
+        return { };
+    if (!decoder.decode(flexHighlightOverlay.mainAxisSpaceBetweenItemsAndGaps))
+        return { };
+    if (!decoder.decode(flexHighlightOverlay.spaceBetweenItemsAndCrossAxisSpace))
+        return { };
+    if (!decoder.decode(flexHighlightOverlay.crossAxisGaps))
         return { };
     return { flexHighlightOverlay };
 }
@@ -338,38 +331,6 @@ template<class Decoder> std::optional<InspectorOverlay::Highlight::GridHighlight
     if (!decoder.decode(gridHighlightOverlay.labels))
         return { };
     return { gridHighlightOverlay };
-}
-
-template<class Encoder> void InspectorOverlay::Highlight::GridHighlightOverlay::Label::encode(Encoder& encoder) const
-{
-    encoder << text;
-    encoder << location;
-    encoder << backgroundColor;
-    encoder << static_cast<uint32_t>(arrowDirection);
-    encoder << static_cast<uint32_t>(arrowEdgePosition);
-}
-
-template<class Decoder> std::optional<InspectorOverlay::Highlight::GridHighlightOverlay::Label> InspectorOverlay::Highlight::GridHighlightOverlay::Label::decode(Decoder& decoder)
-{
-    InspectorOverlay::Highlight::GridHighlightOverlay::Label label;
-    if (!decoder.decode(label.text))
-        return { };
-    if (!decoder.decode(label.location))
-        return { };
-    if (!decoder.decode(label.backgroundColor))
-        return { };
-
-    uint32_t arrowDirection;
-    if (!decoder.decode(arrowDirection))
-        return { };
-    label.arrowDirection = (InspectorOverlay::LabelArrowDirection)arrowDirection;
-
-    uint32_t arrowEdgePosition;
-    if (!decoder.decode(arrowEdgePosition))
-        return { };
-    label.arrowEdgePosition = (InspectorOverlay::LabelArrowEdgePosition)arrowEdgePosition;
-
-    return { label };
 }
 
 template<class Encoder> void InspectorOverlay::Highlight::GridHighlightOverlay::Area::encode(Encoder& encoder) const

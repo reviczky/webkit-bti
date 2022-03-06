@@ -104,6 +104,7 @@ VPATH = \
     $(WebKit2)/UIProcess/WebAuthentication \
     $(WebKit2)/UIProcess/mac \
     $(WebKit2)/UIProcess/ios \
+    $(WebKit2)/webpushd/mac \
     $(WEBKITADDITIONS_HEADER_SEARCH_PATHS) \
 #
 
@@ -204,6 +205,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/GPU/media/RemoteRemoteCommandListener \
 	WebProcess/GPU/media/SourceBufferPrivateRemote \
 	WebProcess/GPU/media/ios/RemoteMediaSessionHelper \
+	WebProcess/GPU/webrtc/RemoteVideoFrameObjectHeapProxyProcessor \
 	WebProcess/WebStorage/StorageAreaMap \
 	WebProcess/UserContent/WebUserContentController \
 	WebProcess/Inspector/WebInspectorInterruptDispatcher \
@@ -299,6 +301,7 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/media/RemoteMediaPlayerManagerProxy \
 	GPUProcess/media/RemoteMediaPlayerProxy \
 	GPUProcess/media/RemoteMediaResourceManager \
+	GPUProcess/media/RemoteVideoFrameObjectHeap \
 	GPUProcess/media/RemoteMediaSourceProxy \
 	GPUProcess/media/RemoteRemoteCommandListenerProxy \
 	GPUProcess/media/RemoteSourceBufferProxy \
@@ -349,7 +352,8 @@ SANDBOX_PROFILES = \
 	com.apple.WebProcess.sb \
 	com.apple.WebKit.NetworkProcess.sb \
 	com.apple.WebKit.GPUProcess.sb \
-	com.apple.WebKit.WebAuthnProcess.sb
+	com.apple.WebKit.WebAuthnProcess.sb \
+	com.apple.WebKit.webpushd.sb
 	
 SANDBOX_PROFILES_IOS = \
 	com.apple.WebKit.WebContent.sb \

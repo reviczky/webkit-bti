@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
  * Copyright (C) 2019 Adobe. All rights reserved.
- * Copyright (c) 2020 Igalia S.L.
+ * Copyright (c) 2020, 2021, 2022 Igalia S.L.
  *
  * Portions are Copyright (C) 1998 Netscape Communications Corporation.
  *
@@ -1330,9 +1330,14 @@ void RenderLayer::updateTransform()
     }
     
     if (hasTransform) {
-        auto& renderBox = downcast<RenderBox>(renderer());
         m_transform->makeIdentity();
-        renderBox.style().applyTransform(*m_transform, snapRectToDevicePixels(renderBox.referenceBox(transformBoxToCSSBoxType(renderBox.style().transformBox())), renderBox.document().deviceScaleFactor()));
+
+        // FIXME: [LBSE] Upstream reference box computation for RenderSVGModelObject derived renderers
+        FloatRect referenceBox;
+        if (is<RenderBox>(renderer()))
+            referenceBox = snapRectToDevicePixels(downcast<RenderBox>(renderer()).referenceBox(transformBoxToCSSBoxType(renderer().style().transformBox())), renderer().document().deviceScaleFactor());
+
+        renderer().applyTransform(*m_transform, referenceBox);
         makeMatrixRenderable(*m_transform, canRender3DTransforms());
     }
 
@@ -1348,6 +1353,7 @@ TransformationMatrix RenderLayer::currentTransform(OptionSet<RenderStyle::Transf
     if (!m_transform)
         return { };
 
+    // FIXME: [LBSE] Upstream transform support for RenderSVGModelObject derived renderers
     if (!is<RenderBox>(renderer()))
         return { };
 
@@ -1787,6 +1793,7 @@ bool RenderLayer::updateLayerPosition(OptionSet<UpdateLayerPositionsFlag>* flags
 
 TransformationMatrix RenderLayer::perspectiveTransform(const LayoutRect& layerRect) const
 {
+    // FIXME: [LBSE] Upstream transform support for RenderSVGModelObject derived renderers
     if (!is<RenderBox>(renderer()))
         return { };
 
@@ -1821,9 +1828,7 @@ FloatPoint RenderLayer::perspectiveOrigin() const
 {
     if (!renderer().hasTransformRelatedProperty())
         return { };
-
-    auto borderBox = downcast<RenderBox>(renderer()).borderBoxRect();
-    return floatPointForLengthPoint(renderer().style().perspectiveOrigin(), borderBox.size());
+    return floatPointForLengthPoint(renderer().style().perspectiveOrigin(), rendererBorderBoxRect().size());
 }
 
 static inline bool isContainerForPositioned(RenderLayer& layer, PositionType position, bool establishesTopLayer)
@@ -1935,6 +1940,15 @@ RenderLayer* RenderLayer::enclosingTransformedAncestor() const
 
 inline bool RenderLayer::shouldRepaintAfterLayout() const
 {
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    // The SVG containers themselves never trigger repaints, only their contents are allowed to.
+    // SVG container sizes/positions are only ever determined by their children, so they will
+    // change as a reaction on a re-position/re-sizing of the children - which already properly
+    // trigger repaints.
+    if (is<RenderSVGContainer>(renderer()) && !paintsWithFilters())
+        return false;
+#endif
+
     if (m_repaintStatus == NeedsNormalRepaint)
         return true;
 
@@ -3121,6 +3135,23 @@ void RenderLayer::paintLayerWithEffects(GraphicsContext& context, const LayerPai
             if (paintFlags.contains(PaintLayerFlag::PaintingOverflowContents))
                 paintBehavior.add(PaintBehavior::CompositedOverflowScrollContent);
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+            // Always apply SVG viewport clipping in coordinate system before the SVG viewBox transformation is applied.
+            if (is<RenderSVGRoot>(renderer())) {
+                auto& svgRoot = downcast<RenderSVGRoot>(renderer());
+                if (svgRoot.shouldApplyViewportClip()) {
+                    auto newRect = svgRoot.borderBoxRect();
+
+                    auto offsetFromParent = offsetFromAncestor(clipRectsContext.rootLayer);
+                    auto offsetForThisLayer = offsetFromParent + paintingInfo.subpixelOffset;
+                    auto devicePixelSnappedOffsetForThisLayer = toFloatSize(roundPointToDevicePixels(toLayoutPoint(offsetForThisLayer), renderer().document().deviceScaleFactor()));
+                    newRect.move(devicePixelSnappedOffsetForThisLayer.width(), devicePixelSnappedOffsetForThisLayer.height());
+
+                    clipRect.intersect(newRect);
+                }
+            }
+#endif
+
             // Push the parent coordinate space's clip.
             parent()->clipToRect(context, stateSaver, eventRegionStateSaver, paintingInfo, paintBehavior, clipRect);
         }
@@ -3185,6 +3216,10 @@ std::pair<Path, WindRule> RenderLayer::computeClipPath(const LayoutSize& offsetF
         if (is<RenderBox>(renderer())) {
             referenceBox = downcast<RenderBox>(renderer()).referenceBox(clipPath.referenceBox());
             referenceBox.move(offsetFromRoot);
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+        } else if (is<RenderSVGModelObject>(renderer())) {
+            // FIXME: [LBSE] Upstream clipping support for RenderSVGModelObject derived renderers
+#endif
         } else {
             // Reference box for inlines is not well defined: https://github.com/w3c/csswg-drafts/issues/6383
             referenceBox = rootRelativeBoundsForNonBoxes;
@@ -3276,7 +3311,7 @@ GraphicsContext* RenderLayer::setupFilters(GraphicsContext& destinationContext, 
 
     auto rootRelativeBounds = calculateLayerBounds(paintingInfo.rootLayer, offsetFromRoot, { });
 
-    GraphicsContext* filterContext = paintingFilters->beginFilterEffect(renderer(), enclosingIntRect(rootRelativeBounds), enclosingIntRect(paintingInfo.paintDirtyRect), enclosingIntRect(filterRepaintRect));
+    GraphicsContext* filterContext = paintingFilters->beginFilterEffect(renderer(), destinationContext, enclosingIntRect(rootRelativeBounds), enclosingIntRect(paintingInfo.paintDirtyRect), enclosingIntRect(filterRepaintRect));
     if (!filterContext)
         return nullptr;
 

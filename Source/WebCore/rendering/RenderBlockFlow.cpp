@@ -2157,7 +2157,7 @@ void RenderBlockFlow::paintColumnRules(PaintInfo& paintInfo, const LayoutPoint& 
 
     // Iterate over our children and paint the column rules as needed.
     for (auto& columnSet : childrenOfType<RenderMultiColumnSet>(*this)) {
-        LayoutPoint childPoint = columnSet.location() + flipForWritingModeForChild(&columnSet, point);
+        LayoutPoint childPoint = columnSet.location() + flipForWritingModeForChild(columnSet, point);
         columnSet.paintColumnRules(paintInfo, childPoint);
     }
 }
@@ -2959,7 +2959,7 @@ std::optional<LayoutUnit> RenderBlockFlow::firstLineBaseline() const
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     if (modernLineLayout())
-        return LayoutUnit { floorToInt(modernLineLayout()->firstLineBaseline()) };
+        return LayoutUnit { floorToInt(modernLineLayout()->firstLinePhysicalBaseline()) };
 #endif
 
     ASSERT(firstRootBox());
@@ -3010,7 +3010,7 @@ std::optional<LayoutUnit> RenderBlockFlow::inlineBlockBaseline(LineDirectionMode
         }
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
         else if (modernLineLayout())
-            lastBaseline = floorToInt(modernLineLayout()->lastLineBaseline());
+            lastBaseline = floorToInt(modernLineLayout()->lastLineLogicalBaseline());
 #endif
     }
     // According to the CSS spec http://www.w3.org/TR/CSS21/visudet.html, we shouldn't be performing this min, but should
@@ -4081,6 +4081,11 @@ static inline LayoutUnit preferredWidth(LayoutUnit preferredWidth, float result)
 
 void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const
 {
+    // "The inline-axis intrinsic sizes of the principal box are determined as if the element had no content."
+    // https://drafts.csswg.org/css-contain-3/#containment-inline-size
+    if (style().effectiveContainment().contains(Containment::InlineSize))
+        return;
+
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     if (const_cast<RenderBlockFlow&>(*this).tryComputePreferredWidthsUsingModernPath(minLogicalWidth, maxLogicalWidth))
         return;

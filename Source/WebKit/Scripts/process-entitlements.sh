@@ -105,6 +105,9 @@ function mac_process_gpu_entitlements()
         if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 130000 ))
         then
             plistbuddy Add :com.apple.private.gpu-restricted bool YES
+            plistbuddy Add :com.apple.private.screencapturekit.sharingsession bool YES
+            plistbuddy Add :com.apple.private.tcc.allow array
+            plistbuddy Add :com.apple.private.tcc.allow:0 string kTCCServiceScreenCapture
         fi
 
         plistbuddy Add :com.apple.private.memory.ownership_transfer bool YES
@@ -507,7 +510,7 @@ function ios_family_process_webauthn_entitlements()
 function ios_family_process_adattributiond_entitlements()
 {
     plistbuddy Add :seatbelt-profiles array
-    plistbuddy Add :seatbelt-profiles:0 string com.apple.webkit.adattributiond
+    plistbuddy Add :seatbelt-profiles:0 string com.apple.WebKit.adattributiond
 }
 
 function ios_family_process_webpushd_entitlements()

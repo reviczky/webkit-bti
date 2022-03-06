@@ -67,6 +67,7 @@ $(PROJECT_DIR)/GPUProcess/media/RemoteMediaSourceProxy.messages.in
 $(PROJECT_DIR)/GPUProcess/media/RemoteRemoteCommandListenerProxy.messages.in
 $(PROJECT_DIR)/GPUProcess/media/RemoteSourceBufferProxy.messages.in
 $(PROJECT_DIR)/GPUProcess/media/RemoteTextTrackProxy.messages.in
+$(PROJECT_DIR)/GPUProcess/media/RemoteVideoFrameObjectHeap.messages.in
 $(PROJECT_DIR)/GPUProcess/media/RemoteVideoTrackProxy.messages.in
 $(PROJECT_DIR)/GPUProcess/media/ios/RemoteMediaSessionHelperProxy.messages.in
 $(PROJECT_DIR)/GPUProcess/webrtc/LibWebRTCCodecsProxy.messages.in
@@ -195,6 +196,8 @@ $(PROJECT_DIR)/WebProcess/GPU/media/SourceBufferPrivateRemote.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/media/ios/RemoteMediaSessionHelper.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/webrtc/LibWebRTCCodecs.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/webrtc/LibWebRTCRemoteCodecs.messages.in
+$(PROJECT_DIR)/WebProcess/GPU/webrtc/RemoteVideoFrameObjectHeapProxy.messages.in
+$(PROJECT_DIR)/WebProcess/GPU/webrtc/RemoteVideoFrameObjectHeapProxyProcessor.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/webrtc/SampleBufferDisplayLayer.messages.in
 $(PROJECT_DIR)/WebProcess/Geolocation/WebGeolocationManager.messages.in
 $(PROJECT_DIR)/WebProcess/Inspector/RemoteWebInspectorUI.messages.in
@@ -246,3 +249,4 @@ $(PROJECT_DIR)/WebProcess/cocoa/RemoteCaptureSampleManager.messages.in
 $(PROJECT_DIR)/WebProcess/cocoa/UserMediaCaptureManager.messages.in
 $(PROJECT_DIR)/WebProcess/cocoa/VideoFullscreenManager.messages.in
 $(PROJECT_DIR)/WebProcess/com.apple.WebProcess.sb.in
+$(PROJECT_DIR)/webpushd/mac/com.apple.WebKit.webpushd.sb.in

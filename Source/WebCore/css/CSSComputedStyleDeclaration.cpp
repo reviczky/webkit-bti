@@ -857,6 +857,8 @@ public:
     bool isEmpty() const { return m_orderedNamedGridLines.isEmpty() && m_orderedNamedAutoRepeatGridLines.isEmpty(); }
     virtual void collectLineNamesForIndex(CSSGridLineNamesValue&, unsigned index) const;
 
+    virtual int namedGridLineCount() const { return m_orderedNamedGridLines.size(); }
+
 protected:
 
     enum NamedLinesType { NamedLines, AutoRepeatNamedLines };
@@ -874,6 +876,8 @@ public:
     }
 
     void collectLineNamesForIndex(CSSGridLineNamesValue&, unsigned index) const override;
+
+    int namedGridLineCount() const override { return m_orderedNamedAutoRepeatGridLines.size(); }
 };
 
 class OrderedNamedLinesCollectorInGridLayout : public OrderedNamedLinesCollector {
@@ -892,6 +896,37 @@ private:
     unsigned m_insertionPoint;
     unsigned m_autoRepeatTotalTracks;
     unsigned m_autoRepeatTrackListLength;
+};
+
+class OrderedNamedLinesCollectorInSubgridLayout : public OrderedNamedLinesCollector {
+public:
+    OrderedNamedLinesCollectorInSubgridLayout(const RenderStyle& style, bool isRowAxis, unsigned totalTracksCount)
+        : OrderedNamedLinesCollector(style, isRowAxis)
+        , m_insertionPoint(isRowAxis ? style.gridAutoRepeatColumnsInsertionPoint() : style.gridAutoRepeatRowsInsertionPoint())
+        , m_autoRepeatLineSetListLength((isRowAxis ? style.autoRepeatOrderedNamedGridColumnLines() : style.autoRepeatOrderedNamedGridRowLines()).size())
+        , m_totalLines(totalTracksCount + 1)
+    {
+        if (!m_autoRepeatLineSetListLength) {
+            m_autoRepeatTotalLineSets = 0;
+            return;
+        }
+        unsigned named = (isRowAxis ? style.orderedNamedGridColumnLines() : style.orderedNamedGridRowLines()).size();
+        if (named >= m_totalLines) {
+            m_autoRepeatTotalLineSets = 0;
+            return;
+        }
+        m_autoRepeatTotalLineSets = (m_totalLines - named) / m_autoRepeatLineSetListLength;
+        m_autoRepeatTotalLineSets *= m_autoRepeatLineSetListLength;
+    }
+
+    void collectLineNamesForIndex(CSSGridLineNamesValue&, unsigned index) const override;
+
+    int namedGridLineCount() const override { return m_totalLines; }
+private:
+    unsigned m_insertionPoint;
+    unsigned m_autoRepeatTotalLineSets;
+    unsigned m_autoRepeatLineSetListLength;
+    unsigned m_totalLines;
 };
 
 void OrderedNamedLinesCollector::appendLines(CSSGridLineNamesValue& lineNamesValue, unsigned index, NamedLinesType type) const
@@ -951,14 +986,30 @@ void OrderedNamedLinesCollectorInGridLayout::collectLineNamesForIndex(CSSGridLin
     appendLines(lineNamesValue, autoRepeatIndexInFirstRepetition, AutoRepeatNamedLines);
 }
 
-static void addValuesForNamedGridLinesAtIndex(OrderedNamedLinesCollector& collector, unsigned i, CSSValueList& list)
+void OrderedNamedLinesCollectorInSubgridLayout::collectLineNamesForIndex(CSSGridLineNamesValue& lineNamesValue, unsigned i) const
 {
-    if (collector.isEmpty())
+    if (!m_autoRepeatLineSetListLength || i < m_insertionPoint) {
+        appendLines(lineNamesValue, i, NamedLines);
+        return;
+    }
+
+    if (i >= m_insertionPoint + m_autoRepeatTotalLineSets) {
+        appendLines(lineNamesValue, i - m_autoRepeatTotalLineSets, NamedLines);
+        return;
+    }
+
+    unsigned autoRepeatIndexInFirstRepetition = (i - m_insertionPoint) % m_autoRepeatLineSetListLength;
+    appendLines(lineNamesValue, autoRepeatIndexInFirstRepetition, AutoRepeatNamedLines);
+}
+
+static void addValuesForNamedGridLinesAtIndex(OrderedNamedLinesCollector& collector, unsigned i, CSSValueList& list, bool renderEmpty = false)
+{
+    if (collector.isEmpty() && !renderEmpty)
         return;
 
     auto lineNames = CSSGridLineNamesValue::create();
     collector.collectLineNamesForIndex(lineNames.get(), i);
-    if (lineNames->length())
+    if (lineNames->length() || renderEmpty)
         list.append(WTFMove(lineNames));
 }
 
@@ -993,10 +1044,22 @@ void populateGridTrackList(CSSValueList& list, OrderedNamedLinesCollector& colle
     populateGridTrackList<T>(list, collector, tracks, getTrackSize, 0, tracks.size(), offset);
 }
 
+static void populateSubgridLineNameList(CSSValueList& list, OrderedNamedLinesCollector& collector, int start, int end)
+{
+    for (int i = start; i < end; i++)
+        addValuesForNamedGridLinesAtIndex(collector, i, list, true);
+}
+
+static void populateSubgridLineNameList(CSSValueList& list, OrderedNamedLinesCollector& collector)
+{
+    populateSubgridLineNameList(list, collector, 0, collector.namedGridLineCount());
+}
+
 static Ref<CSSValue> valueForGridTrackList(GridTrackSizingDirection direction, RenderObject* renderer, const RenderStyle& style)
 {
     bool isRowAxis = direction == ForColumns;
     bool isRenderGrid = is<RenderGrid>(renderer);
+    bool isSubgrid = isRowAxis ? style.gridSubgridColumns() : style.gridSubgridRows();
     auto& trackSizes = isRowAxis ? style.gridColumns() : style.gridRows();
     auto& autoRepeatTrackSizes = isRowAxis ? style.gridAutoRepeatColumns() : style.gridAutoRepeatRows();
 
@@ -1010,15 +1073,24 @@ static Ref<CSSValue> valueForGridTrackList(GridTrackSizingDirection direction, R
         trackListIsEmpty = positions.size() == 1;
     }
 
-    if (trackListIsEmpty)
+    if (trackListIsEmpty && !isSubgrid)
         return CSSValuePool::singleton().createIdentifierValue(CSSValueNone);
 
     auto list = CSSValueList::createSpaceSeparated();
+    if (isSubgrid)
+        list->append(CSSValuePool::singleton().createIdentifierValue(CSSValueSubgrid));
 
     // If the element is a grid container, the resolved value is the used value,
     // specifying track sizes in pixels and expanding the repeat() notation.
-    if (isRenderGrid) {
+    // If subgrid was specified, but the element isn't a subgrid (due to not having
+    // an appropriate grid parent), then we fall back to using the specified value.
+    if (isRenderGrid && (!isSubgrid || downcast<RenderGrid>(renderer)->isSubgrid(direction))) {
         auto* grid = downcast<RenderGrid>(renderer);
+        if (isSubgrid) {
+            OrderedNamedLinesCollectorInSubgridLayout collector(style, isRowAxis, grid->numTracks(direction));
+            populateSubgridLineNameList(list.get(), collector);
+            return list;
+        }
         OrderedNamedLinesCollectorInGridLayout collector(style, isRowAxis, grid->autoRepeatCountForDirection(direction), autoRepeatTrackSizes.size());
         // Named grid line indices are relative to the explicit grid, but we are including all tracks.
         // So we need to subtract the number of leading implicit tracks in order to get the proper line index.
@@ -1035,6 +1107,29 @@ static Ref<CSSValue> valueForGridTrackList(GridTrackSizingDirection direction, R
         return specifiedValueForGridTrackSize(v, style);
     };
 
+    OrderedNamedLinesCollectorInsideRepeat repeatCollector(style, isRowAxis);
+    if (isSubgrid) {
+        if (!repeatCollector.namedGridLineCount()) {
+            populateSubgridLineNameList(list.get(), collector);
+            return list;
+        }
+
+        // Add the line names that precede the auto repeat().
+        int autoRepeatInsertionPoint = isRowAxis ? style.gridAutoRepeatColumnsInsertionPoint() : style.gridAutoRepeatRowsInsertionPoint();
+        autoRepeatInsertionPoint = std::clamp<int>(autoRepeatInsertionPoint, 0, collector.namedGridLineCount());
+        populateSubgridLineNameList(list.get(), collector, 0, autoRepeatInsertionPoint);
+
+        // Add a CSSGridAutoRepeatValue with the contents of the auto repeat().
+        ASSERT((isRowAxis ? style.gridAutoRepeatColumnsType() : style.gridAutoRepeatRowsType()) == AutoRepeatType::Fill);
+        auto repeatedValues = CSSGridAutoRepeatValue::create(CSSValueAutoFill);
+        populateSubgridLineNameList(repeatedValues.get(), repeatCollector);
+        list->append(repeatedValues.get());
+
+        // Add the line names that follow the auto repeat().
+        populateSubgridLineNameList(list.get(), collector, autoRepeatInsertionPoint, collector.namedGridLineCount());
+        return list;
+    }
+
     if (autoRepeatTrackSizes.isEmpty()) {
         // If there's no auto repeat(), just add all the line names and track sizes.
         populateGridTrackList(list.get(), collector, trackSizes, getTrackSize);
@@ -1042,13 +1137,14 @@ static Ref<CSSValue> valueForGridTrackList(GridTrackSizingDirection direction, R
     }
 
     // Add the line names and track sizes that precede the auto repeat().
-    int autoRepeatInsertionPoint = std::clamp<int>(isRowAxis ? style.gridAutoRepeatColumnsInsertionPoint() : style.gridAutoRepeatRowsInsertionPoint(), 0, trackSizes.size());
+    int autoRepeatInsertionPoint = isRowAxis ? style.gridAutoRepeatColumnsInsertionPoint() : style.gridAutoRepeatRowsInsertionPoint();
+    autoRepeatInsertionPoint = std::clamp<int>(autoRepeatInsertionPoint, 0, trackSizes.size());
     populateGridTrackList(list.get(), collector, trackSizes, getTrackSize, 0, autoRepeatInsertionPoint);
 
     // Add a CSSGridAutoRepeatValue with the contents of the auto repeat().
     AutoRepeatType autoRepeatType = isRowAxis ? style.gridAutoRepeatColumnsType() : style.gridAutoRepeatRowsType();
     auto repeatedValues = CSSGridAutoRepeatValue::create(autoRepeatType == AutoRepeatType::Fill ? CSSValueAutoFill : CSSValueAutoFit);
-    OrderedNamedLinesCollectorInsideRepeat repeatCollector(style, isRowAxis);
+
     populateGridTrackList(repeatedValues.get(), repeatCollector, autoRepeatTrackSizes, getTrackSize);
     list->append(repeatedValues.get());
 
@@ -2620,6 +2716,24 @@ static Ref<CSSValueList> valueForOffsetRotate(const OffsetRotation& rotation)
     return result;
 }
 
+static Ref<CSSValue> valueForOffsetShorthand(const RenderStyle& style)
+{
+    // offset is serialized as follow:
+    // [offset-position] [offset-path] [offset-distance] [offset-rotate] / [offset-anchor]
+    // The first four elements are serialized in a space separated CSSValueList.
+    // This is then combined with offset-anchor in a slash separated CSSValueList.
+
+    auto outerList = CSSValueList::createSlashSeparated();
+    auto innerList = CSSValueList::createSpaceSeparated();
+    innerList->append(valueForPositionOrAuto(style, style.offsetPosition()));
+    innerList->append(valueForPathOperation(style, style.offsetPath(), SVGPathConversion::ForceAbsolute));
+    innerList->append(CSSValuePool::singleton().createValue(style.offsetDistance(), style));
+    innerList->append(valueForOffsetRotate(style.offsetRotate()));
+    outerList->append(WTFMove(innerList));
+    outerList->append(valueForPositionOrAuto(style, style.offsetAnchor()));
+    return outerList;
+}
+
 static Ref<CSSValue> paintOrder(PaintOrder paintOrder)
 {
     if (paintOrder == PaintOrder::Normal)
@@ -3324,6 +3438,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
             return valueForPositionOrAuto(style, style.offsetAnchor());
         case CSSPropertyOffsetRotate:
             return valueForOffsetRotate(style.offsetRotate());
+        case CSSPropertyOffset:
+            return valueForOffsetShorthand(style);
         case CSSPropertyOpacity:
             return cssValuePool.createValue(style.opacity(), CSSUnitType::CSS_NUMBER);
         case CSSPropertyOrphans:
@@ -4321,8 +4437,9 @@ Ref<MutableStyleProperties> ComputedStyleExtractor::copyPropertiesInSet(const CS
     list.reserveInitialCapacity(length);
     for (unsigned i = 0; i < length; ++i) {
         if (auto value = propertyValue(set[i]))
-            list.append(CSSProperty(set[i], WTFMove(value), false));
+            list.uncheckedAppend(CSSProperty(set[i], WTFMove(value), false));
     }
+    list.shrinkToFit();
     return MutableStyleProperties::create(WTFMove(list));
 }
 
@@ -4335,6 +4452,7 @@ Ref<MutableStyleProperties> ComputedStyleExtractor::copyProperties()
         if (auto value = propertyValue(propertyID))
             list.append(CSSProperty(propertyID, WTFMove(value)));
     }
+    list.shrinkToFit();
     return MutableStyleProperties::create(WTFMove(list));
 }
 
@@ -4434,7 +4552,7 @@ size_t ComputedStyleExtractor::getLayerCount(CSSPropertyID property)
     return layerCount;
 }
 
-RefPtr<CSSValue> ComputedStyleExtractor::getFillLayerPropertyShorthandValue(CSSPropertyID property, const StylePropertyShorthand& propertiesBeforeSlashSeparator, const StylePropertyShorthand& propertiesAfterSlashSeparator, CSSPropertyID lastLayerProperty)
+Ref<CSSValue> ComputedStyleExtractor::getFillLayerPropertyShorthandValue(CSSPropertyID property, const StylePropertyShorthand& propertiesBeforeSlashSeparator, const StylePropertyShorthand& propertiesAfterSlashSeparator, CSSPropertyID lastLayerProperty)
 {
     ASSERT(property == CSSPropertyBackground || property == CSSPropertyMask);
     size_t layerCount = getLayerCount(property);
@@ -4482,7 +4600,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::getFillLayerPropertyShorthandValue(CSSP
 }
 
 
-RefPtr<CSSValue> ComputedStyleExtractor::getBackgroundShorthandValue()
+Ref<CSSValue> ComputedStyleExtractor::getBackgroundShorthandValue()
 {
     static const CSSPropertyID propertiesBeforeSlashSeparator[] = { CSSPropertyBackgroundImage, CSSPropertyBackgroundRepeat, CSSPropertyBackgroundAttachment, CSSPropertyBackgroundPosition };
     static const CSSPropertyID propertiesAfterSlashSeparator[] = { CSSPropertyBackgroundSize, CSSPropertyBackgroundOrigin, CSSPropertyBackgroundClip };
@@ -4490,7 +4608,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::getBackgroundShorthandValue()
     return getFillLayerPropertyShorthandValue(CSSPropertyBackground, StylePropertyShorthand(CSSPropertyBackground, propertiesBeforeSlashSeparator), StylePropertyShorthand(CSSPropertyBackground, propertiesAfterSlashSeparator), CSSPropertyBackgroundColor);
 }
 
-RefPtr<CSSValue> ComputedStyleExtractor::getMaskShorthandValue()
+Ref<CSSValue> ComputedStyleExtractor::getMaskShorthandValue()
 {
     static const CSSPropertyID propertiesBeforeSlashSeperator[2] = { CSSPropertyMaskImage, CSSPropertyMaskPosition };
     static const CSSPropertyID propertiesAfterSlashSeperator[6] = { CSSPropertyMaskSize, CSSPropertyMaskRepeat, CSSPropertyMaskOrigin, CSSPropertyMaskClip, CSSPropertyMaskComposite, CSSPropertyMaskMode };

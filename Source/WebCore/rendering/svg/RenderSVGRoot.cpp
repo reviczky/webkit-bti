@@ -87,8 +87,6 @@ void RenderSVGRoot::computeIntrinsicRatioInformation(FloatSize& intrinsicSize, d
     // - If the ‘width’ and ‘height’ of the rootmost ‘svg’ element are both specified with unit identifiers (in, mm, cm, pt, pc,
     //   px, em, ex) or in user units, then the aspect ratio is calculated from the ‘width’ and ‘height’ attributes after
     //   resolving both values to user units.
-    intrinsicSize.hasIntrinsicWidth = svgSVGElement().hasIntrinsicWidth();
-    intrinsicSize.hasIntrinsicHeight = svgSVGElement().hasIntrinsicHeight();
     intrinsicSize.setWidth(floatValueForLength(svgSVGElement().intrinsicWidth(), 0));
     intrinsicSize.setHeight(floatValueForLength(svgSVGElement().intrinsicHeight(), 0));
 
@@ -608,12 +606,10 @@ LayoutRect RenderSVGRoot::overflowClipRect(const LayoutPoint& location, RenderFr
     return clipRect;
 }
 
-void RenderSVGRoot::applyTransform(TransformationMatrix& transform, const RenderStyle& style, const FloatRect& boundingBox, OptionSet<RenderStyle::TransformOperationOption> options) const
+void RenderSVGRoot::applyTransform(TransformationMatrix& transform, const FloatRect& boundingBox, OptionSet<RenderStyle::TransformOperationOption> options) const
 {
-    UNUSED_PARAM(transform);
-    UNUSED_PARAM(style);
-    UNUSED_PARAM(boundingBox);
-    UNUSED_PARAM(options);
+    RenderReplaced::applyTransform(transform, boundingBox, options);
+
     // FIXME: [LBSE] Upstream SVGRenderSupport changes
     // SVGRenderSupport::applyTransform(*this, transform, style, boundingBox, std::nullopt, std::nullopt, options);
 }

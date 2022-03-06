@@ -27,6 +27,7 @@
 
 #include "APIObject.h"
 #include "APISecurityOrigin.h"
+#include "Connection.h"
 #include "WebPageProxyIdentifier.h"
 #include <wtf/Identified.h>
 #include <wtf/RefPtr.h>
@@ -41,9 +42,9 @@ namespace WebKit {
 
 class WebNotification : public API::ObjectImpl<API::Object::Type::Notification>, public Identified<WebNotification> {
 public:
-    static Ref<WebNotification> create(const WebCore::NotificationData& data, WebPageProxyIdentifier pageIdentifier)
+    static Ref<WebNotification> create(const WebCore::NotificationData& data, WebPageProxyIdentifier pageIdentifier, IPC::Connection& sourceConnection)
     {
-        return adoptRef(*new WebNotification(data, pageIdentifier));
+        return adoptRef(*new WebNotification(data, pageIdentifier, sourceConnection));
     }
 
     const String& title() const { return m_title; }
@@ -52,15 +53,17 @@ public:
     const String& tag() const { return m_tag; }
     const String& lang() const { return m_lang; }
     WebCore::NotificationDirection dir() const { return m_dir; }
-    API::SecurityOrigin* origin() const { return m_origin.get(); }
-    
+    const API::SecurityOrigin* origin() const { return m_origin.get(); }
+    API::SecurityOrigin* origin() { return m_origin.get(); }
+
     uint64_t notificationID() const { return identifier(); }
     const UUID& coreNotificationID() const { return m_coreNotificationID; }
 
     WebPageProxyIdentifier pageIdentifier() const { return m_pageIdentifier; }
+    IPC::Connection* sourceConnection() const { return m_sourceConnection.get(); }
 
 private:
-    WebNotification(const WebCore::NotificationData&, WebPageProxyIdentifier);
+    WebNotification(const WebCore::NotificationData&, WebPageProxyIdentifier, IPC::Connection&);
 
     String m_title;
     String m_body;
@@ -72,6 +75,7 @@ private:
     UUID m_coreNotificationID;
 
     WebPageProxyIdentifier m_pageIdentifier;
+    WeakPtr<IPC::Connection> m_sourceConnection;
 };
 
 inline bool isNotificationIDValid(uint64_t id)

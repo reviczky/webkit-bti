@@ -345,7 +345,7 @@ bool RenderFlexibleBox::hitTestChildren(const HitTestRequest& request, HitTestRe
     for (auto* child : reversedOrderIteratorForHitTesting) {
         if (child->hasSelfPaintingLayer())
             continue;
-        auto childPoint = flipForWritingModeForChild(child, scrolledOffset);
+        auto childPoint = flipForWritingModeForChild(*child, scrolledOffset);
         if (child->hitTest(request, result, locationInContainer, childPoint)) {
             updateHitTestResult(result, flipForWritingMode(toLayoutPoint(locationInContainer.point() - adjustedLocation)));
             return true;
@@ -1153,8 +1153,11 @@ void RenderFlexibleBox::layoutFlexItems(bool relayoutChildren)
     Vector<FlexItem> lineItems;
     size_t nextIndex = 0;
     size_t numLines = 0;
+    InspectorInstrumentation::flexibleBoxRendererBeganLayout(*this);
     while (flexAlgorithm.computeNextFlexLine(nextIndex, lineItems, sumFlexBaseSize, totalFlexGrow, totalFlexShrink, totalWeightedFlexShrink, sumHypotheticalMainSize)) {
         ++numLines;
+        InspectorInstrumentation::flexibleBoxRendererWrappedToNextLine(*this, nextIndex);
+
         LayoutUnit containerMainInnerSize = mainAxisContentExtent(sumHypotheticalMainSize);
         // availableFreeSpace is the initial amount of free space in this flexbox.
         // remainingFreeSpace starts out at the same value but as we place and lay
@@ -1913,15 +1916,15 @@ bool RenderFlexibleBox::childHasIntrinsicMainAxisSize(const RenderBox& child)
 Overflow RenderFlexibleBox::mainAxisOverflowForChild(const RenderBox& child) const
 {
     if (isHorizontalFlow())
-        return child.effectiveOverflowX();
-    return child.effectiveOverflowY();
+        return child.style().overflowX();
+    return child.style().overflowY();
 }
 
 Overflow RenderFlexibleBox::crossAxisOverflowForChild(const RenderBox& child) const
 {
     if (isHorizontalFlow())
-        return child.effectiveOverflowY();
-    return child.effectiveOverflowX();
+        return child.style().overflowY();
+    return child.style().overflowX();
 }
 
 bool RenderFlexibleBox::childHasPercentHeightDescendants(const RenderBox& renderer) const

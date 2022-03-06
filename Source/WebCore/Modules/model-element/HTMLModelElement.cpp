@@ -45,6 +45,8 @@
 #include "JSEventTarget.h"
 #include "JSHTMLModelElement.h"
 #include "JSHTMLModelElementCamera.h"
+#include "LayoutRect.h"
+#include "LayoutSize.h"
 #include "Model.h"
 #include "ModelPlayer.h"
 #include "ModelPlayerProvider.h"
@@ -55,6 +57,7 @@
 #include "RenderLayerBacking.h"
 #include "RenderLayerModelObject.h"
 #include "RenderModel.h"
+#include "RenderReplaced.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/Seconds.h>
 #include <wtf/URL.h>
@@ -261,9 +264,7 @@ void HTMLModelElement::createModelPlayer()
 
     // FIXME: We need to tell the player if the size changes as well, so passing this
     // in with load probably doesn't make sense.
-    ASSERT(renderer());
-    auto size = renderer()->absoluteBoundingBoxRect(false).size();
-    m_modelPlayer->load(*m_model, size);
+    m_modelPlayer->load(*m_model, contentSize());
 }
 
 bool HTMLModelElement::usesPlatformLayer() const
@@ -273,7 +274,14 @@ bool HTMLModelElement::usesPlatformLayer() const
 
 PlatformLayer* HTMLModelElement::platformLayer() const
 {
-    return m_modelPlayer->layer();
+    if (m_modelPlayer)
+        return m_modelPlayer->layer();
+    return nullptr;
+}
+
+void HTMLModelElement::sizeMayHaveChanged()
+{
+    m_modelPlayer->sizeDidChange(contentSize());
 }
 
 void HTMLModelElement::didFinishLoading(ModelPlayer& modelPlayer)
@@ -316,7 +324,8 @@ GraphicsLayer::PlatformLayerID HTMLModelElement::platformLayerID()
 
 void HTMLModelElement::enterFullscreen()
 {
-    m_modelPlayer->enterFullscreen();
+    if (m_modelPlayer)
+        m_modelPlayer->enterFullscreen();
 }
 
 // MARK: - Interaction support.
@@ -637,6 +646,12 @@ Vector<RetainPtr<id>> HTMLModelElement::accessibilityChildren()
     return m_modelPlayer->accessibilityChildren();
 }
 #endif
+
+LayoutSize HTMLModelElement::contentSize() const
+{
+    ASSERT(renderer());
+    return downcast<RenderReplaced>(*renderer()).replacedContentRect().size();
+}
 
 }
 

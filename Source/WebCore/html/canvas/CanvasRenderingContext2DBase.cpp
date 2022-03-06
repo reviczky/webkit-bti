@@ -1554,17 +1554,17 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, Ca
 
     bool repaintEntireCanvas = false;
     if (rectContainsCanvas(normalizedDstRect)) {
-        c->drawImageForCanvas(*image, normalizedDstRect, normalizedSrcRect, options, colorSpace());
+        c->drawImage(*image, normalizedDstRect, normalizedSrcRect, options);
         repaintEntireCanvas = true;
     } else if (isFullCanvasCompositeMode(op)) {
         fullCanvasCompositedDrawImage(*image, normalizedDstRect, normalizedSrcRect, op);
         repaintEntireCanvas = true;
     } else if (op == CompositeOperator::Copy) {
         clearCanvas();
-        c->drawImageForCanvas(*image, normalizedDstRect, normalizedSrcRect, options, colorSpace());
+        c->drawImage(*image, normalizedDstRect, normalizedSrcRect, options);
         repaintEntireCanvas = true;
     } else
-        c->drawImageForCanvas(*image, normalizedDstRect, normalizedSrcRect, options, colorSpace());
+        c->drawImage(*image, normalizedDstRect, normalizedSrcRect, options);
 
     didDraw(repaintEntireCanvas, normalizedDstRect);
 
@@ -1611,7 +1611,8 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CanvasBase& sourceCanv
         repaintEntireCanvas = true;
     } else if (state().globalComposite == CompositeOperator::Copy) {
         if (&sourceCanvas == &canvasBase()) {
-            if (auto copy = buffer->copyRectToBuffer(srcRect, colorSpace(), *c)) {
+            if (auto copy = c->createCompatibleImageBuffer(srcRect.size(), colorSpace())) {
+                copy->context().drawImageBuffer(*buffer, -srcRect.location());
                 clearCanvas();
                 c->drawImageBuffer(*copy, dstRect, { { }, srcRect.size() }, { state().globalComposite, state().globalBlend });
             }
@@ -1807,12 +1808,12 @@ void CanvasRenderingContext2DBase::compositeBuffer(ImageBuffer& buffer, const In
     c->restore();
 }
 
-static void drawImageToContext(Image& image, GraphicsContext& context, const FloatRect& dest, const FloatRect& src, const ImagePaintingOptions& options, DestinationColorSpace colorSpace)
+static void drawImageToContext(Image& image, GraphicsContext& context, const FloatRect& dest, const FloatRect& src, const ImagePaintingOptions& options)
 {
-    context.drawImageForCanvas(image, dest, src, options, colorSpace);
+    context.drawImage(image, dest, src, options);
 }
 
-static void drawImageToContext(ImageBuffer& imageBuffer, GraphicsContext& context, const FloatRect& dest, const FloatRect& src, const ImagePaintingOptions& options, DestinationColorSpace)
+static void drawImageToContext(ImageBuffer& imageBuffer, GraphicsContext& context, const FloatRect& dest, const FloatRect& src, const ImagePaintingOptions& options)
 {
     context.drawImageBuffer(imageBuffer, dest, src, options);
 }
@@ -1843,7 +1844,7 @@ template<class T> void CanvasRenderingContext2DBase::fullCanvasCompositedDrawIma
     buffer->context().translate(-transformedAdjustedRect.location());
     buffer->context().translate(croppedOffset);
     buffer->context().concatCTM(effectiveTransform);
-    drawImageToContext(image, buffer->context(), adjustedDest, src, { CompositeOperator::SourceOver }, colorSpace());
+    drawImageToContext(image, buffer->context(), adjustedDest, src, { CompositeOperator::SourceOver });
 
     compositeBuffer(*buffer, bufferRect, op);
 }
@@ -2458,33 +2459,33 @@ void CanvasRenderingContext2DBase::drawTextUnchecked(const TextRun& textRun, dou
             fontProxy.drawBidiText(*c, textRun, location + offset, FontCascade::UseFallbackIfFontNotReady);
         }
 
-        GraphicsContextStateSaver stateSaver(*c);
-
-        auto paintMaskImage = [&] (GraphicsContext& maskImageContext) {
-            if (fill)
-                maskImageContext.setFillColor(Color::black);
-            else {
-                maskImageContext.setStrokeColor(Color::black);
-                maskImageContext.setStrokeThickness(c->strokeThickness());
-            }
-
-            maskImageContext.setTextDrawingMode(fill ? TextDrawingMode::Fill : TextDrawingMode::Stroke);
-
-            if (useMaxWidth) {
-                maskImageContext.translate(location - maskRect.location());
-                // We draw when fontWidth is 0 so compositing operations (eg, a "copy" op) still work.
-                maskImageContext.scale(FloatSize((fontWidth > 0 ? (width / fontWidth) : 0), 1));
-                fontProxy.drawBidiText(maskImageContext, textRun, FloatPoint(0, 0), FontCascade::UseFallbackIfFontNotReady);
-            } else {
-                maskImageContext.translate(-maskRect.location());
-                fontProxy.drawBidiText(maskImageContext, textRun, location, FontCascade::UseFallbackIfFontNotReady);
-            }
-        };
-
-        // FIXME: Handling gradients and patterns by painting the text into a mask is probably the wrong thing to do in the presence of color glyphs.
-        if (c->clipToDrawingCommands(maskRect, colorSpace(), WTFMove(paintMaskImage)) == GraphicsContext::ClipToDrawingCommandsResult::FailedToCreateImageBuffer)
+        auto maskImage = c->createCompatibleImageBuffer(maskRect.size());
+        if (!maskImage)
             return;
 
+        auto& maskImageContext = maskImage->context();
+
+        if (fill)
+            maskImageContext.setFillColor(Color::black);
+        else {
+            maskImageContext.setStrokeColor(Color::black);
+            maskImageContext.setStrokeThickness(c->strokeThickness());
+        }
+
+        maskImageContext.setTextDrawingMode(fill ? TextDrawingMode::Fill : TextDrawingMode::Stroke);
+
+        if (useMaxWidth) {
+            maskImageContext.translate(location - maskRect.location());
+            // We draw when fontWidth is 0 so compositing operations (eg, a "copy" op) still work.
+            maskImageContext.scale(FloatSize((fontWidth > 0 ? (width / fontWidth) : 0), 1));
+            fontProxy.drawBidiText(maskImageContext, textRun, FloatPoint(0, 0), FontCascade::UseFallbackIfFontNotReady);
+        } else {
+            maskImageContext.translate(-maskRect.location());
+            fontProxy.drawBidiText(maskImageContext, textRun, location, FontCascade::UseFallbackIfFontNotReady);
+        }
+
+        GraphicsContextStateSaver stateSaver(*c);
+        c->clipToImageBuffer(*maskImage, maskRect);
         drawStyle.applyFillColor(*c);
         c->fillRect(maskRect);
         return;

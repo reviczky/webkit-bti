@@ -80,6 +80,7 @@ extern "C" {
     M(NetworkCacheStorage) \
     M(NetworkScheduling) \
     M(NetworkSession) \
+    M(Notifications) \
     M(PerformanceLogging) \
     M(Plugins) \
     M(Printing) \
@@ -88,6 +89,7 @@ extern "C" {
     M(ProcessSwapping) \
     M(ProximityNetworking) \
     M(Push) \
+    M(RemoteRenderingBufferVolatility) \
     M(RemoteLayerTree) \
     M(Resize) \
     M(ResourceLoadStatistics) \

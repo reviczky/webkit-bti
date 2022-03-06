@@ -136,8 +136,9 @@ static Ref<InlineContent> makeAdjustedContent(const InlineContent& inlineContent
             moveVertically(line.inkOverflow(), offset),
             line.baseline(),
             line.baselineType(),
-            line.contentLeft(),
-            line.contentLogicalWidth()
+            line.contentLogicalOffset(),
+            line.contentLogicalWidth(),
+            line.isHorizontal()
         };
     };
 

@@ -153,6 +153,10 @@
 #include "IPCTesterMessages.h"
 #endif
 
+#if ENABLE(VIDEO)
+#include "RemoteVideoFrameObjectHeap.h"
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -205,19 +209,20 @@ private:
         m_process.setTCCIdentity();
     }
 #endif
-#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+
     void startProducingData(RealtimeMediaSource::Type type) final
     {
         if (type != RealtimeMediaSource::Type::Audio)
             return;
         m_process.startCapturingAudio();
     }
-#endif
 
     const ProcessIdentity& resourceOwner() const final
     {
         return m_process.webProcessIdentity();
     }
+
+    RemoteVideoFrameObjectHeap* remoteVideoFrameObjectHeap() final { return &m_process.videoFrameObjectHeap(); }
 
     GPUConnectionToWebProcess& m_process;
 };
@@ -236,14 +241,17 @@ GPUConnectionToWebProcess::GPUConnectionToWebProcess(GPUProcess& gpuProcess, Web
     , m_webProcessIdentity(WTFMove(parameters.webProcessIdentity))
     , m_remoteMediaPlayerManagerProxy(makeUniqueRef<RemoteMediaPlayerManagerProxy>(*this))
     , m_sessionID(sessionID)
-#if PLATFORM(COCOA) && USE(LIBWEBRTC)
-    , m_libWebRTCCodecsProxy(LibWebRTCCodecsProxy::create(*this))
-#endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     , m_sampleBufferDisplayLayerManager(RemoteSampleBufferDisplayLayerManager::create(*this))
 #endif
 #if ENABLE(MEDIA_STREAM)
     , m_captureOrigin(SecurityOrigin::createUnique())
+#endif
+#if ENABLE(VIDEO)
+    , m_videoFrameObjectHeap(RemoteVideoFrameObjectHeap::create(*this))
+#endif
+#if PLATFORM(COCOA) && USE(LIBWEBRTC)
+    , m_libWebRTCCodecsProxy(LibWebRTCCodecsProxy::create(*this))
 #endif
 #if HAVE(AUDIT_TOKEN)
     , m_presentingApplicationAuditToken(WTFMove(parameters.presentingApplicationAuditToken))
@@ -300,7 +308,9 @@ void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
         m_audioSessionProxy = nullptr;
     }
 #endif
-
+#if ENABLE(VIDEO)
+    m_videoFrameObjectHeap.reset();
+#endif
     // RemoteRenderingBackend objects ref their GPUConnectionToWebProcess so we need to make sure
     // to break the reference cycle by destroying them.
     m_remoteRenderingBackendMap.clear();
@@ -942,6 +952,13 @@ bool GPUConnectionToWebProcess::setCaptureAttributionString() const
 }
 #endif
 #endif // ENABLE(MEDIA_STREAM)
+
+#if ENABLE(VIDEO)
+RemoteVideoFrameObjectHeap& GPUConnectionToWebProcess::videoFrameObjectHeap() const
+{
+    return *m_videoFrameObjectHeap.get();
+}
+#endif
 
 #if PLATFORM(MAC)
 void GPUConnectionToWebProcess::displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags flags)

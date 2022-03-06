@@ -121,7 +121,8 @@ static void fallbackFontsForRunWithIterator(HashSet<const Font*>& fallbackFonts,
             auto glyphData = fontCascade.glyphDataForCharacter(character, isRTL);
             if (glyphData.glyph && glyphData.font && glyphData.font != &primaryFont) {
                 auto isNonSpacingMark = U_MASK(u_charType(character)) & U_GC_MN_MASK;
-                if (isNonSpacingMark || glyphData.font->widthForGlyph(glyphData.glyph))
+                // If we include the synthetic bold expansion, then even zero-width glyphs will have their fonts added.
+                if (isNonSpacingMark || glyphData.font->widthForGlyph(glyphData.glyph, Font::SyntheticBoldInclusion::Exclude))
                     fallbackFonts.add(glyphData.font);
             }
         };
@@ -130,15 +131,8 @@ static void fallbackFontsForRunWithIterator(HashSet<const Font*>& fallbackFonts,
     }
 }
 
-TextUtil::FallbackFontList TextUtil::fallbackFontsForRun(const Line::Run& run, const RenderStyle& style)
+TextUtil::FallbackFontList TextUtil::fallbackFontsForText(StringView textContent, const RenderStyle& style, IncludeHyphen includeHyphen)
 {
-    ASSERT(run.isText());
-    auto& inlineTextBox = downcast<InlineTextBox>(run.layoutBox());
-    if (inlineTextBox.canUseSimplifiedContentMeasuring()) {
-        // Simplified text measuring works with primary font only.
-        return { };
-    }
-
     TextUtil::FallbackFontList fallbackFonts;
 
     auto collectFallbackFonts = [&](const auto& textRun) {
@@ -154,10 +148,9 @@ TextUtil::FallbackFontList TextUtil::fallbackFontsForRun(const Line::Run& run, c
         fallbackFontsForRunWithIterator(fallbackFonts, style.fontCascade(), textRun, textIterator);
     };
 
-    auto text = *run.textContent();
-    if (text.needsHyphen)
+    if (includeHyphen == IncludeHyphen::Yes)
         collectFallbackFonts(TextRun { StringView(style.hyphenString().string()), { }, { }, DefaultExpansion, style.direction() });
-    collectFallbackFonts(TextRun { StringView(inlineTextBox.content()).substring(text.start, text.length), { }, { }, DefaultExpansion, style.direction() });
+    collectFallbackFonts(TextRun { textContent, { }, { }, DefaultExpansion, style.direction() });
     return fallbackFonts;
 }
 

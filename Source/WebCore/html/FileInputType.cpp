@@ -175,7 +175,6 @@ bool FileInputType::appendFormData(DOMFormData& formData) const
         return true;
     }
 
-
     for (auto& file : fileList->files())
         formData.append(name, file.get());
     return true;
@@ -263,18 +262,20 @@ void FileInputType::setValue(const String&, bool, TextFieldEventBehavior)
     element()->invalidateStyleForSubtree();
 }
 
-void FileInputType::createShadowSubtreeAndUpdateInnerTextElementEditability(ContainerNode::ChildChange::Source source, bool)
+void FileInputType::createShadowSubtree()
 {
     ASSERT(needsShadowSubtree());
     ASSERT(element());
     ASSERT(element()->shadowRoot());
-    element()->userAgentShadowRoot()->appendChild(source, element()->multiple() ? UploadButtonElement::createForMultiple(element()->document()): UploadButtonElement::create(element()->document()));
+
+    auto button = element()->multiple() ? UploadButtonElement::createForMultiple(element()->document()) : UploadButtonElement::create(element()->document());
+    element()->userAgentShadowRoot()->appendChild(ContainerNode::ChildChange::Source::Parser, button);
+    disabledStateChanged();
 }
 
 void FileInputType::disabledStateChanged()
 {
     ASSERT(element());
-    ASSERT(element()->shadowRoot());
 
     auto root = element()->userAgentShadowRoot();
     if (!root)
@@ -288,7 +289,6 @@ void FileInputType::attributeChanged(const QualifiedName& name)
 {
     if (name == multipleAttr) {
         if (auto* element = this->element()) {
-            ASSERT(element->shadowRoot());
             if (auto root = element->userAgentShadowRoot()) {
                 if (RefPtr button = childrenOfType<UploadButtonElement>(*root).first())
                     button->setValue(element->multiple() ? fileButtonChooseMultipleFilesLabel() : fileButtonChooseFileLabel());
@@ -385,13 +385,8 @@ void FileInputType::setFiles(RefPtr<FileList>&& files, RequestIcon shouldRequest
     protectedInputElement->setFormControlValueMatchesRenderer(true);
     protectedInputElement->updateValidity();
 
-    if (shouldRequestIcon == RequestIcon::Yes) {
-        Vector<String> paths;
-        paths.reserveInitialCapacity(length);
-        for (auto& file : m_fileList->files())
-            paths.uncheckedAppend(file->path());
-        requestIcon(paths);
-    }
+    if (shouldRequestIcon == RequestIcon::Yes)
+        requestIcon(m_fileList->paths());
 
     if (protectedInputElement->renderer())
         protectedInputElement->renderer()->repaint();
@@ -447,7 +442,7 @@ void FileInputType::filesChosen(const Vector<String>& paths, const Vector<String
     for (size_t i = 0; i < size; ++i)
         files.uncheckedAppend({ paths[i], i < replacementPaths.size() ? replacementPaths[i] : nullString(), { } });
 
-    filesChosen(files);
+    filesChosen(WTFMove(files));
 }
 
 void FileInputType::didCreateFileList(Ref<FileList>&& fileList, RefPtr<Icon>&& icon)

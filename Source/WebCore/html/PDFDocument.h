@@ -28,6 +28,9 @@
 
 namespace WebCore {
 
+class HTMLIFrameElement;
+class PDFDocumentEventListener;
+
 class PDFDocument final : public HTMLDocument {
     WTF_MAKE_ISO_ALLOCATED(PDFDocument);
 public:
@@ -38,6 +41,11 @@ public:
 
     void updateDuringParsing();
     void finishedParsing();
+    void injectContentScript();
+
+    void sendPDFArrayBuffer();
+    bool isFinishedParsing() const { return m_isFinishedParsing; }
+    void setContentScriptLoaded(bool loaded) { m_isContentScriptLoaded = loaded; }
 
 private:
     PDFDocument(Frame&, const URL&);
@@ -45,7 +53,10 @@ private:
     Ref<DocumentParser> createParser() override;
 
     void createDocumentStructure();
-    bool m_viewerRendered = false;
+    bool m_isFinishedParsing { false };
+    bool m_isContentScriptLoaded { false };
+    RefPtr<HTMLIFrameElement> m_iframe;
+    RefPtr<PDFDocumentEventListener> m_listener;
 };
 
 } // namespace WebCore

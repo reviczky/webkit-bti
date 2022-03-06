@@ -28,6 +28,7 @@
 
 #include "APIContentRuleList.h"
 #include "APICustomProtocolManagerClient.h"
+#include "APINavigation.h"
 #include "AuthenticationChallengeProxy.h"
 #include "AuthenticationManager.h"
 #include "DownloadProxyMap.h"
@@ -118,11 +119,9 @@ static bool shouldTerminateNetworkProcessBySendingMessage()
 
 Vector<Ref<NetworkProcessProxy>> NetworkProcessProxy::allNetworkProcesses()
 {
-    Vector<Ref<NetworkProcessProxy>> processes;
-    processes.reserveInitialCapacity(networkProcessesSet().size());
-    for (auto* networkProcess : networkProcessesSet())
-        processes.uncheckedAppend(*networkProcess);
-    return processes;
+    return WTF::map(networkProcessesSet(), [](auto* networkProcess) {
+        return Ref { *networkProcess };
+    });
 }
 
 RefPtr<NetworkProcessProxy>& NetworkProcessProxy::defaultNetworkProcess()
@@ -529,7 +528,7 @@ void NetworkProcessProxy::terminateWebProcess(WebCore::ProcessIdentifier webProc
 void NetworkProcessProxy::terminateUnresponsiveServiceWorkerProcesses(WebCore::ProcessIdentifier processIdentifier)
 {
     if (RefPtr process = WebProcessProxy::processForIdentifier(processIdentifier)) {
-        process->disableWorkers(WebProcessProxy::WorkerType::ServiceWorker);
+        process->disableRemoteWorkers(RemoteWorkerType::ServiceWorker);
         process->requestTermination(ProcessTerminationReason::ExceededCPULimit);
     }
 }
@@ -606,6 +605,14 @@ void NetworkProcessProxy::resourceLoadDidCompleteWithError(WebPageProxyIdentifie
     page->resourceLoadDidCompleteWithError(WTFMove(loadInfo), WTFMove(response), WTFMove(error));
 }
 
+#if ENABLE(CONTENT_FILTERING_IN_NETWORKING_PROCESS)
+void NetworkProcessProxy::reloadAfterUnblockedContentFilter(WebPageProxyIdentifier pageID)
+{
+    if (auto* page = WebProcessProxy::webPage(pageID))
+        page->reload({ });
+}
+#endif
+
 #if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
 void NetworkProcessProxy::dumpResourceLoadStatistics(PAL::SessionID sessionID, CompletionHandler<void(String)>&& completionHandler)
 {
@@ -623,13 +630,7 @@ void NetworkProcessProxy::updatePrevalentDomainsToBlockCookiesFor(PAL::SessionID
         completionHandler();
         return;
     }
-
-    Vector<RegistrableDomain> registrableDomainsToBlock;
-    registrableDomainsToBlock.reserveInitialCapacity(domainsToBlock.size());
-    for (auto& domain : domainsToBlock)
-        registrableDomainsToBlock.uncheckedAppend(domain);
-
-    sendWithAsyncReply(Messages::NetworkProcess::UpdatePrevalentDomainsToBlockCookiesFor(sessionID, registrableDomainsToBlock), WTFMove(completionHandler));
+    sendWithAsyncReply(Messages::NetworkProcess::UpdatePrevalentDomainsToBlockCookiesFor(sessionID, domainsToBlock), WTFMove(completionHandler));
 }
 
 void NetworkProcessProxy::isPrevalentResource(PAL::SessionID sessionID, const RegistrableDomain& resourceDomain, CompletionHandler<void(bool)>&& completionHandler)
@@ -1420,36 +1421,36 @@ void NetworkProcessProxy::establishSharedWorkerContextConnectionToNetworkProcess
     WebProcessPool::establishSharedWorkerContextConnectionToNetworkProcess(WTFMove(registrableDomain), sessionID, WTFMove(completionHandler));
 }
 
+void NetworkProcessProxy::registerRemoteWorkerClientProcess(RemoteWorkerType workerType, WebCore::ProcessIdentifier webProcessIdentifier, WebCore::ProcessIdentifier sharedWorkerProcessIdentifier)
+{
+    auto* webProcess = WebProcessProxy::processForIdentifier(webProcessIdentifier);
+    auto* sharedWorkerProcess = WebProcessProxy::processForIdentifier(sharedWorkerProcessIdentifier);
+    if (!webProcess || !sharedWorkerProcess)
+        return;
+
+    sharedWorkerProcess->registerRemoteWorkerClientProcess(workerType, *webProcess);
+}
+
+void NetworkProcessProxy::unregisterRemoteWorkerClientProcess(RemoteWorkerType workerType, WebCore::ProcessIdentifier webProcessIdentifier, WebCore::ProcessIdentifier sharedWorkerProcessIdentifier)
+{
+    auto* webProcess = WebProcessProxy::processForIdentifier(webProcessIdentifier);
+    auto* sharedWorkerProcess = WebProcessProxy::processForIdentifier(sharedWorkerProcessIdentifier);
+    if (!webProcess || !sharedWorkerProcess)
+        return;
+
+    sharedWorkerProcess->unregisterRemoteWorkerClientProcess(workerType, *webProcess);
+}
+
+void NetworkProcessProxy::remoteWorkerContextConnectionNoLongerNeeded(RemoteWorkerType workerType, WebCore::ProcessIdentifier identifier)
+{
+    if (auto* process = WebProcessProxy::processForIdentifier(identifier))
+        process->disableRemoteWorkers(workerType);
+}
+
 #if ENABLE(SERVICE_WORKER)
 void NetworkProcessProxy::establishServiceWorkerContextConnectionToNetworkProcess(RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
 {
     WebProcessPool::establishServiceWorkerContextConnectionToNetworkProcess(WTFMove(registrableDomain), serviceWorkerPageIdentifier, sessionID, WTFMove(completionHandler));
-}
-
-void NetworkProcessProxy::serviceWorkerContextConnectionNoLongerNeeded(WebCore::ProcessIdentifier identifier)
-{
-    if (auto* process = WebProcessProxy::processForIdentifier(identifier))
-        process->disableWorkers(WebProcessProxy::WorkerType::ServiceWorker);
-}
-
-void NetworkProcessProxy::registerServiceWorkerClientProcess(WebCore::ProcessIdentifier webProcessIdentifier, WebCore::ProcessIdentifier serviceWorkerProcessIdentifier)
-{
-    auto* webProcess = WebProcessProxy::processForIdentifier(webProcessIdentifier);
-    auto* serviceWorkerProcess = WebProcessProxy::processForIdentifier(serviceWorkerProcessIdentifier);
-    if (!webProcess || !serviceWorkerProcess)
-        return;
-
-    serviceWorkerProcess->registerServiceWorkerClientProcess(*webProcess);
-}
-
-void NetworkProcessProxy::unregisterServiceWorkerClientProcess(WebCore::ProcessIdentifier webProcessIdentifier, WebCore::ProcessIdentifier serviceWorkerProcessIdentifier)
-{
-    auto* webProcess = WebProcessProxy::processForIdentifier(webProcessIdentifier);
-    auto* serviceWorkerProcess = WebProcessProxy::processForIdentifier(webProcessIdentifier);
-    if (!webProcess || !serviceWorkerProcess)
-        return;
-
-    serviceWorkerProcess->unregisterServiceWorkerClientProcess(*webProcess);
 }
 
 void NetworkProcessProxy::startServiceWorkerBackgroundProcessing(WebCore::ProcessIdentifier serviceWorkerProcessIdentifier)
@@ -1464,12 +1465,6 @@ void NetworkProcessProxy::endServiceWorkerBackgroundProcessing(WebCore::ProcessI
         serviceWorkerProcess->endServiceWorkerBackgroundProcessing();
 }
 #endif
-
-void NetworkProcessProxy::sharedWorkerContextConnectionNoLongerNeeded(WebCore::ProcessIdentifier identifier)
-{
-    if (auto* process = WebProcessProxy::processForIdentifier(identifier))
-        process->disableWorkers(WebProcessProxy::WorkerType::SharedWorker);
-}
 
 void NetworkProcessProxy::requestStorageSpace(PAL::SessionID sessionID, const WebCore::ClientOrigin& origin, uint64_t currentQuota, uint64_t currentSize, uint64_t spaceRequired, CompletionHandler<void(std::optional<uint64_t> quota)>&& completionHandler)
 {
@@ -1503,6 +1498,16 @@ void NetworkProcessProxy::requestStorageSpace(PAL::SessionID sessionID, const We
                 completionHandler(quota);
             });
         });
+    });
+}
+
+void NetworkProcessProxy::increaseQuota(PAL::SessionID sessionID, const WebCore::ClientOrigin& origin, QuotaIncreaseRequestIdentifier identifier, uint64_t currentQuota, uint64_t currentUsage, uint64_t spaceRequested)
+{
+    requestStorageSpace(sessionID, origin, currentQuota, currentUsage, spaceRequested, [this, weakThis = WeakPtr { *this }, sessionID, origin, identifier](auto result) mutable {
+        if (!weakThis)
+            return;
+
+        send(Messages::NetworkProcess::DidIncreaseQuota(sessionID, origin, identifier, result), 0);
     });
 }
 

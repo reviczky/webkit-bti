@@ -67,6 +67,7 @@ namespace WebKit {
 
 class GPUConnectionToWebProcess;
 class RemoteDisplayListRecorder;
+struct BufferIdentifierSet;
 struct RemoteRenderingBackendCreationParameters;
 
 class RemoteRenderingBackend : private IPC::MessageSender, public IPC::StreamMessageReceiver {
@@ -82,8 +83,6 @@ public:
     // Messages to be sent.
     void didCreateImageBufferBackend(ImageBufferBackendHandle, QualifiedRenderingResourceIdentifier, RemoteDisplayListRecorder&);
     void didFlush(WebCore::GraphicsContextFlushIdentifier, QualifiedRenderingResourceIdentifier);
-
-    void populateGetPixelBufferSharedMemory(std::optional<WebCore::PixelBuffer>&&);
 
     bool allowsExitUnderMemoryPressure() const;
 
@@ -106,10 +105,10 @@ private:
 
     // Messages to be received.
     void createImageBuffer(const WebCore::FloatSize& logicalSize, WebCore::RenderingMode, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::PixelFormat, WebCore::RenderingResourceIdentifier);
-    void updateSharedMemoryForGetPixelBuffer(uint32_t byteCount, CompletionHandler<void(const SharedMemory::IPCHandle&)>&&);
-    void semaphoreForGetPixelBuffer(CompletionHandler<void(const IPC::Semaphore&)>&&);
-    void updateSharedMemoryAndSemaphoreForGetPixelBuffer(uint32_t byteCount, CompletionHandler<void(const SharedMemory::IPCHandle&, const IPC::Semaphore&)>&&);
+    void getPixelBufferForImageBuffer(WebCore::RenderingResourceIdentifier, WebCore::PixelBufferFormat&&, WebCore::IntRect&& srcRect, CompletionHandler<void()>&&);
+    void getPixelBufferForImageBufferWithNewMemory(WebCore::RenderingResourceIdentifier, SharedMemory::IPCHandle&&, WebCore::PixelBufferFormat&& destinationFormat, WebCore::IntRect&& srcRect, CompletionHandler<void()>&&);
     void destroyGetPixelBufferSharedMemory();
+    void putPixelBufferForImageBuffer(WebCore::RenderingResourceIdentifier, WebCore::PixelBuffer&&, WebCore::IntRect&& srcRect, WebCore::IntPoint&& destPoint, WebCore::AlphaPremultiplication destFormat);
     void getDataURLForImageBuffer(const String& mimeType, std::optional<double> quality, WebCore::PreserveResolution, WebCore::RenderingResourceIdentifier, CompletionHandler<void(String&&)>&&);
     void getDataForImageBuffer(const String& mimeType, std::optional<double> quality, WebCore::RenderingResourceIdentifier, CompletionHandler<void(Vector<uint8_t>&&)>&&);
     void getShareableBitmapForImageBuffer(WebCore::RenderingResourceIdentifier, WebCore::PreserveResolution, CompletionHandler<void(ShareableBitmap::Handle&&)>&&);
@@ -119,6 +118,10 @@ private:
     void deleteAllFonts();
     void releaseRemoteResource(WebCore::RenderingResourceIdentifier);
     void finalizeRenderingUpdate(RenderingUpdateID);
+    void markSurfacesVolatile(const Vector<WebCore::RenderingResourceIdentifier>&, CompletionHandler<void(const Vector<WebCore::RenderingResourceIdentifier>& inUseBufferIdentifiers)>&&);
+
+    void markSurfaceNonVolatile(WebCore::RenderingResourceIdentifier, CompletionHandler<void(std::optional<ImageBufferBackendHandle>, bool bufferWasEmpty)>&&);
+    void swapToValidFrontBuffer(const BufferIdentifierSet& bufferSet, CompletionHandler<void(const BufferIdentifierSet& swappedBufferSet, std::optional<ImageBufferBackendHandle>&& frontBufferHandle, bool frontBufferWasEmpty)>&&);
 
     // Received messages translated to use QualifiedRenderingResourceIdentifier.
     void createImageBufferWithQualifiedIdentifier(const WebCore::FloatSize& logicalSize, WebCore::RenderingMode, float resolutionScale, const WebCore::DestinationColorSpace&, WebCore::PixelFormat, QualifiedRenderingResourceIdentifier);
@@ -136,7 +139,6 @@ private:
     Ref<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     WebCore::ProcessIdentity m_resourceOwner;
     RenderingBackendIdentifier m_renderingBackendIdentifier;
-    IPC::Semaphore m_getPixelBufferSemaphore;
     RefPtr<SharedMemory> m_getPixelBufferSharedMemory;
     ScopedRenderingResourcesRequest m_renderingResourcesRequest;
 

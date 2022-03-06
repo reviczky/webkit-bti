@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Apple Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,11 +25,12 @@
 
 #pragma once
 
-#import "WebGPU.h"
+#import <Foundation/Foundation.h>
 #import <wtf/FastMalloc.h>
 #import <wtf/Function.h>
 #import <wtf/Ref.h>
 #import <wtf/RefCounted.h>
+#import <wtf/RefPtr.h>
 
 namespace WebGPU {
 
@@ -39,19 +40,20 @@ class Surface;
 class Instance : public RefCounted<Instance> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static Ref<Instance> create()
-    {
-        return adoptRef(*new Instance());
-    }
+    static RefPtr<Instance> create(const WGPUInstanceDescriptor*);
 
     ~Instance();
 
-    Ref<Surface> createSurface(const WGPUSurfaceDescriptor*);
+    RefPtr<Surface> createSurface(const WGPUSurfaceDescriptor*);
     void processEvents();
-    void requestAdapter(const WGPURequestAdapterOptions*, WTF::Function<void(WGPURequestAdapterStatus, Ref<Adapter>&&, const char*)>&& callback);
+    void requestAdapter(const WGPURequestAdapterOptions*, WTF::Function<void(WGPURequestAdapterStatus, RefPtr<Adapter>&&, const char*)>&& callback);
+
+    NSRunLoop *runLoop() const { return m_runLoop; }
 
 private:
-    Instance();
+    Instance(NSRunLoop *);
+
+    NSRunLoop *m_runLoop;
 };
 
 } // namespace WebGPU
