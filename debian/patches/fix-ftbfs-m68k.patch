@@ -203,7 +203,7 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
 +++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -80,7 +80,11 @@ struct SameSizeAsCSSValue {
+@@ -81,7 +81,11 @@ struct SameSizeAsCSSValue {
      uint32_t bitfields;
  };
  
