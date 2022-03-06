@@ -57,6 +57,10 @@ struct GPUProcessConnectionInitializationParameters;
 struct OverrideScreenDataForTesting;
 struct WebPageCreationParameters;
 
+#if ENABLE(VIDEO)
+class RemoteVideoFrameObjectHeapProxy;
+#endif
+
 class GPUProcessConnection : public RefCounted<GPUProcessConnection>, public IPC::Connection::Client {
 public:
     static Ref<GPUProcessConnection> create(IPC::Connection::Identifier connectionIdentifier, const GPUProcessConnectionInitializationParameters& parameters)
@@ -77,6 +81,9 @@ public:
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     SampleBufferDisplayLayerManager& sampleBufferDisplayLayerManager();
     void resetAudioMediaStreamTrackRendererInternalUnit(AudioMediaStreamTrackRendererInternalUnitIdentifier);
+#endif
+#if ENABLE(VIDEO)
+    RemoteVideoFrameObjectHeapProxy& videoFrameObjectHeapProxy();
 #endif
 
     RemoteMediaPlayerManager& mediaPlayerManager();
@@ -140,6 +147,9 @@ private:
 #endif
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     std::unique_ptr<SampleBufferDisplayLayerManager> m_sampleBufferDisplayLayerManager;
+#endif
+#if ENABLE(VIDEO)
+    RefPtr<RemoteVideoFrameObjectHeapProxy> m_videoFrameObjectHeapProxy;
 #endif
 #if PLATFORM(COCOA) && ENABLE(WEB_AUDIO)
     RefPtr<RemoteAudioSourceProviderManager> m_audioSourceProviderManager;

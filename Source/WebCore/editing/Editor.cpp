@@ -1442,11 +1442,12 @@ void Editor::performCutOrCopy(EditorActionSpecifier action)
         updateMarkersForWordsAffectedByEditing(true);
     }
 
-    if (enclosingTextFormControl(m_document.selection().selection().start()) || (selection && ImageOverlay::isInsideOverlay(*selection)))
+    if (enclosingTextFormControl(m_document.selection().selection().start()))
         Pasteboard::createForCopyAndPaste(PagePasteboardContext::create(m_document.pageID()))->writePlainText(selectedTextForDataTransfer(), canSmartCopyOrDelete() ? Pasteboard::CanSmartReplace : Pasteboard::CannotSmartReplace);
     else {
         RefPtr<HTMLImageElement> imageElement;
-        if (action == CopyAction)
+        bool isSelectionInImageOverlay = selection && !selection->collapsed() && ImageOverlay::isInsideOverlay(*selection);
+        if (action == CopyAction && !isSelectionInImageOverlay)
             imageElement = imageElementFromImageDocument(document());
 
         if (imageElement) {
@@ -2522,7 +2523,23 @@ void Editor::markMisspellingsAfterTypingToWord(const VisiblePosition& wordStart,
 
     auto adjacentWords = VisibleSelection(startOfWord(wordStart, LeftWordIfOnBoundary), endOfWord(wordStart, RightWordIfOnBoundary));
     auto adjacentWordRange = adjacentWords.toNormalizedRange();
-    markAllMisspellingsAndBadGrammarInRanges(textCheckingOptions, adjacentWordRange, adjacentWordRange, adjacentWordRange);
+
+#if ENABLE(MAC_CATALYST_GRAMMAR_CHECKING)
+    if (isGrammarCheckingEnabled()) {
+        textCheckingOptions.add(TextCheckingType::Grammar);
+        auto sentenceStart = startOfSentence(wordStart);
+        auto sentenceEnd = endOfSentence(wordStart);
+        VisibleSelection fullSentence(sentenceStart, sentenceEnd);
+        auto fullSentenceRange = fullSentence.toNormalizedRange();
+        if (!fullSentenceRange)
+            return;
+
+        markAllMisspellingsAndBadGrammarInRanges(textCheckingOptions, adjacentWordRange, adjacentWordRange, fullSentenceRange);
+    } else
+#endif
+    {
+        markAllMisspellingsAndBadGrammarInRanges(textCheckingOptions, adjacentWordRange, adjacentWordRange, adjacentWordRange);
+    }
 #else
 #if !USE(AUTOMATIC_TEXT_REPLACEMENT)
     UNUSED_PARAM(doReplacement);
@@ -4016,7 +4033,7 @@ static Vector<TextList> editableTextListsAtPositionInDescendingOrder(const Posit
     }
 
     Vector<TextList> textLists;
-    textLists.reserveCapacity(enclosingLists.size());
+    textLists.reserveInitialCapacity(enclosingLists.size());
     for (auto iterator = enclosingLists.rbegin(); iterator != enclosingLists.rend(); ++iterator) {
         auto& list = iterator->get();
         bool ordered = is<HTMLOListElement>(list);

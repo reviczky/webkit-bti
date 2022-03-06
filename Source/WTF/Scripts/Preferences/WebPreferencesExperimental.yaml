@@ -230,11 +230,11 @@ CSSContainerQueriesEnabled:
   humanReadableDescription: "Enable CSS Container Queries"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSContainmentEnabled:
   type: bool
@@ -339,11 +339,11 @@ CSSMotionPathEnabled:
   humanReadableDescription: "Enable CSS Motion Path support"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSOMViewSmoothScrollingEnabled:
   type: bool
@@ -856,7 +856,7 @@ MediaRecorderEnabled:
   type: bool
   humanReadableName: "MediaRecorder"
   humanReadableDescription: "MediaRecorder"
-  condition: ENABLE(MEDIA_STREAM)
+  condition: ENABLE(MEDIA_RECORDER)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -976,9 +976,11 @@ OverscrollBehaviorEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      "PLATFORM(WIN) || PLATFORM(GTK) || PLATFORM(WPE)": false
+      default: true
     WebCore:
-      default: false
+      "PLATFORM(WIN) || PLATFORM(GTK) || PLATFORM(WPE)": false
+      default: true
 
 PageAtRuleSupportEnabled:
   type: bool
@@ -1294,7 +1296,7 @@ SharedWorkerEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
 
 ShouldDeferAsynchronousScriptsUntilAfterDocumentLoadOrFirstPaint:
   type: bool
@@ -1348,6 +1350,18 @@ StorageAPIEnabled:
     WebCore:
       "PLATFORM(COCOA)" : true
       default: false
+
+SubgridEnabled:
+  type: bool
+  humanReadableName: "CSS subgrid support"
+  humanReadableDescription: "Enable CSS subgrid support"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
 
 SyntheticEditingCommandsEnabled:
   type: bool
@@ -1407,6 +1421,17 @@ UseGPUProcessForDOMRenderingEnabled:
   defaultValue:
     WebKit:
       default: defaultUseGPUProcessForDOMRenderingEnabled()
+
+UseGPUProcessForDisplayCapture:
+  type: bool
+  humanReadableName: "GPU Process: Screen and Window capture"
+  humanReadableDescription: "Display capture in GPU Process"
+  webcoreBinding: none
+  condition: HAVE(SC_CONTENT_SHARING_SESSION)
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: false
 
 UseGPUProcessForWebGLEnabled:
   type: bool
@@ -1506,19 +1531,17 @@ VorbisDecoderEnabled:
     WebKit:
       default: true
 
-# FIXME: This is enabled when ENABLE(EXPERIMENTAL_FEATURES) is true in WebKit2. Perhaps we should consider using that for WebKitLegacy as well.
 WebAnimationsCompositeOperationsEnabled:
   type: bool
   humanReadableName: "Web Animations composite operations"
   humanReadableDescription: "Support for the CompositeOperation enum and properties consuming it"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      "ENABLE(EXPERIMENTAL_FEATURES)" : true
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 WebAnimationsCustomEffectsEnabled:
   type: bool

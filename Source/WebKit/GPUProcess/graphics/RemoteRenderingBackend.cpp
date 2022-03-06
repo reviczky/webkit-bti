@@ -28,6 +28,7 @@
 
 #if ENABLE(GPU_PROCESS)
 
+#include "BufferIdentifierSet.h"
 #include "FilterReference.h"
 #include "GPUConnectionToWebProcess.h"
 #include "Logging.h"
@@ -195,47 +196,29 @@ void RemoteRenderingBackend::createImageBufferWithQualifiedIdentifier(const Floa
     updateRenderingResourceRequest();
 }
 
-std::optional<SharedMemory::IPCHandle> RemoteRenderingBackend::updateSharedMemoryForGetPixelBufferHelper(size_t byteCount)
+void RemoteRenderingBackend::getPixelBufferForImageBuffer(RenderingResourceIdentifier imageBuffer, WebCore::PixelBufferFormat&& destinationFormat, WebCore::IntRect&& srcRect, CompletionHandler<void()>&& completionHandler)
 {
-    MESSAGE_CHECK_WITH_RETURN_VALUE(!m_getPixelBufferSharedMemory || byteCount > m_getPixelBufferSharedMemory->size(), std::nullopt, "The existing Shmem for getPixelBuffer() is already big enough to handle the request");
-
-    if (byteCount > HTMLCanvasElement::maxActivePixelMemory()) {
-        // Just a sanity check.
-        return std::nullopt;
+    MESSAGE_CHECK(m_getPixelBufferSharedMemory, "No shared memory for getPixelBufferForImageBuffer");
+    QualifiedRenderingResourceIdentifier qualifiedImageBuffer { imageBuffer, m_gpuConnectionToWebProcess->webProcessIdentifier() };
+    if (auto imageBuffer = m_remoteResourceCache.cachedImageBuffer(qualifiedImageBuffer)) {
+        auto pixelBuffer = imageBuffer->getPixelBuffer(destinationFormat, srcRect);
+        if (pixelBuffer) {
+            MESSAGE_CHECK(pixelBuffer->data().byteLength() <= m_getPixelBufferSharedMemory->size(), "Shmem for return of getPixelBuffer is too small");
+            memcpy(m_getPixelBufferSharedMemory->data(), pixelBuffer->data().data(), pixelBuffer->data().byteLength());
+        } else
+            memset(m_getPixelBufferSharedMemory->data(), 0, m_getPixelBufferSharedMemory->size());
     }
-
-    destroyGetPixelBufferSharedMemory();
-    m_getPixelBufferSharedMemory = SharedMemory::allocate(byteCount);
-    SharedMemory::Handle handle;
-    if (m_getPixelBufferSharedMemory)
-        m_getPixelBufferSharedMemory->createHandle(handle, SharedMemory::Protection::ReadOnly);
-    return SharedMemory::IPCHandle { WTFMove(handle), m_getPixelBufferSharedMemory ? m_getPixelBufferSharedMemory->size() : 0 };
+    completionHandler();
 }
 
-void RemoteRenderingBackend::updateSharedMemoryForGetPixelBuffer(uint32_t byteCount, CompletionHandler<void(const SharedMemory::IPCHandle&)>&& completionHandler)
+void RemoteRenderingBackend::getPixelBufferForImageBufferWithNewMemory(RenderingResourceIdentifier imageBuffer, SharedMemory::IPCHandle&& handle, WebCore::PixelBufferFormat&& destinationFormat, WebCore::IntRect&& srcRect, CompletionHandler<void()>&& completionHandler)
 {
-    ASSERT(!RunLoop::isMain());
-
-    if (auto handle = updateSharedMemoryForGetPixelBufferHelper(byteCount))
-        completionHandler(WTFMove(handle.value()));
-    else
-        completionHandler({ });
-}
-
-void RemoteRenderingBackend::semaphoreForGetPixelBuffer(CompletionHandler<void(const IPC::Semaphore&)>&& completionHandler)
-{
-    ASSERT(!RunLoop::isMain());
-    completionHandler(m_getPixelBufferSemaphore);
-}
-
-void RemoteRenderingBackend::updateSharedMemoryAndSemaphoreForGetPixelBuffer(uint32_t byteCount, CompletionHandler<void(const SharedMemory::IPCHandle&, const IPC::Semaphore&)>&& completionHandler)
-{
-    ASSERT(!RunLoop::isMain());
-
-    if (auto handle = updateSharedMemoryForGetPixelBufferHelper(byteCount))
-        completionHandler(WTFMove(handle.value()), m_getPixelBufferSemaphore);
-    else
-        completionHandler({ }, m_getPixelBufferSemaphore);
+    m_getPixelBufferSharedMemory = nullptr;
+    auto sharedMemory = WebKit::SharedMemory::map(handle.handle, WebKit::SharedMemory::Protection::ReadWrite);
+    MESSAGE_CHECK(sharedMemory, "Shared memory could not be mapped.");
+    MESSAGE_CHECK(sharedMemory->size() <= HTMLCanvasElement::maxActivePixelMemory(), "Shared memory too big.");
+    m_getPixelBufferSharedMemory = WTFMove(sharedMemory);
+    getPixelBufferForImageBuffer(imageBuffer, WTFMove(destinationFormat), WTFMove(srcRect), WTFMove(completionHandler));
 }
 
 void RemoteRenderingBackend::destroyGetPixelBufferSharedMemory()
@@ -243,17 +226,11 @@ void RemoteRenderingBackend::destroyGetPixelBufferSharedMemory()
     m_getPixelBufferSharedMemory = nullptr;
 }
 
-void RemoteRenderingBackend::populateGetPixelBufferSharedMemory(std::optional<WebCore::PixelBuffer>&& pixelBuffer)
+void RemoteRenderingBackend::putPixelBufferForImageBuffer(WebCore::RenderingResourceIdentifier imageBuffer, WebCore::PixelBuffer&& pixelBuffer, WebCore::IntRect&& srcRect, WebCore::IntPoint&& destPoint, WebCore::AlphaPremultiplication destFormat)
 {
-    MESSAGE_CHECK(m_getPixelBufferSharedMemory, "We can't run getPixelBuffer without a buffer to write into");
-
-    if (pixelBuffer) {
-        MESSAGE_CHECK(pixelBuffer->data().byteLength() <= m_getPixelBufferSharedMemory->size(), "Shmem for return of getPixelBuffer is too small");
-        memcpy(m_getPixelBufferSharedMemory->data(), pixelBuffer->data().data(), pixelBuffer->data().byteLength());
-    } else
-        memset(m_getPixelBufferSharedMemory->data(), 0, m_getPixelBufferSharedMemory->size());
-
-    m_getPixelBufferSemaphore.signal();
+    QualifiedRenderingResourceIdentifier qualifiedImageBuffer { imageBuffer, m_gpuConnectionToWebProcess->webProcessIdentifier() };
+    if (auto imageBuffer = m_remoteResourceCache.cachedImageBuffer(qualifiedImageBuffer))
+        imageBuffer->putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
 }
 
 void RemoteRenderingBackend::getDataURLForImageBuffer(const String& mimeType, std::optional<double> quality, WebCore::PreserveResolution preserveResolution, WebCore::RenderingResourceIdentifier renderingResourceIdentifier, CompletionHandler<void(String&&)>&& completionHandler)
@@ -406,6 +383,96 @@ void RemoteRenderingBackend::releaseRemoteResourceWithQualifiedIdentifier(Qualif
 
     Locker locker { m_remoteDisplayListsLock };
     m_remoteDisplayLists.remove(renderingResourceIdentifier);
+}
+
+static std::optional<ImageBufferBackendHandle> handleFromBuffer(WebCore::ImageBuffer& buffer)
+{
+    auto* backend = buffer.ensureBackendCreated();
+    if (!backend)
+        return std::nullopt;
+
+    auto* sharing = backend->toBackendSharing();
+    if (is<ImageBufferBackendHandleSharing>(sharing))
+        return downcast<ImageBufferBackendHandleSharing>(*sharing).createBackendHandle();
+
+    return std::nullopt;
+}
+
+void RemoteRenderingBackend::markSurfaceNonVolatile(WebCore::RenderingResourceIdentifier identifier, CompletionHandler<void(std::optional<ImageBufferBackendHandle> backendHandle, bool bufferWasEmpty)>&& completionHandler)
+{
+    auto imageBuffer = m_remoteResourceCache.cachedImageBuffer({ identifier, m_gpuConnectionToWebProcess->webProcessIdentifier() });
+    if (!imageBuffer) {
+        completionHandler({ }, false);
+        return;
+    }
+
+    auto backendHandle = handleFromBuffer(*imageBuffer);
+    auto previousState = imageBuffer->setNonVolatile();
+    completionHandler(WTFMove(backendHandle), previousState == VolatilityState::Empty);
+}
+
+// This is the GPU Process version of RemoteLayerBackingStore::swapToValidFrontBuffer().
+void RemoteRenderingBackend::swapToValidFrontBuffer(const BufferIdentifierSet& bufferSet, CompletionHandler<void(const BufferIdentifierSet& swappedBufferSet, std::optional<ImageBufferBackendHandle>&& frontBufferHandle, bool frontBufferWasEmpty)>&& completionHandler)
+{
+    auto fetchBuffer = [&](std::optional<RenderingResourceIdentifier> identifier) -> ImageBuffer* {
+        return identifier ? m_remoteResourceCache.cachedImageBuffer({ *identifier, m_gpuConnectionToWebProcess->webProcessIdentifier() }) : nullptr;
+    };
+
+    auto frontBuffer = fetchBuffer(bufferSet.front);
+    auto backBuffer = fetchBuffer(bufferSet.back);
+    auto secondaryBackBuffer = fetchBuffer(bufferSet.secondaryBack);
+
+    if (!backBuffer || backBuffer->isInUse()) {
+        std::swap(backBuffer, secondaryBackBuffer);
+
+        // When pulling the secondary back buffer out of hibernation (to become
+        // the new front buffer), if it is somehow still in use (e.g. we got
+        // three swaps ahead of the render server), just give up and discard it.
+        if (backBuffer && backBuffer->isInUse())
+            backBuffer = nullptr;
+    }
+
+    std::swap(frontBuffer, backBuffer);
+
+    std::optional<ImageBufferBackendHandle> frontBufferHandle;
+    bool frontBufferWasEmpty = false;
+    if (frontBuffer) {
+        auto previousState = frontBuffer->setNonVolatile();
+        frontBufferWasEmpty = previousState == VolatilityState::Empty;
+        frontBufferHandle = handleFromBuffer(*frontBuffer);
+    }
+
+    auto bufferIdentifer = [](ImageBuffer* buffer) -> std::optional<RenderingResourceIdentifier> {
+        if (!buffer)
+            return std::nullopt;
+        return buffer->renderingResourceIdentifier();
+    };
+
+    completionHandler({ bufferIdentifer(frontBuffer), bufferIdentifer(backBuffer), bufferIdentifer(secondaryBackBuffer) }, WTFMove(frontBufferHandle), frontBufferWasEmpty);
+}
+
+void RemoteRenderingBackend::markSurfacesVolatile(const Vector<WebCore::RenderingResourceIdentifier>& identifiers, CompletionHandler<void(const Vector<WebCore::RenderingResourceIdentifier>& inUseBufferIdentifiers)>&& completionHandler)
+{
+    LOG_WITH_STREAM(RemoteRenderingBufferVolatility, stream << "GPU Process: RemoteRenderingBackend::markSurfacesVolatile " << identifiers);
+
+    auto makeVolatile = [](ImageBuffer& imageBuffer) {
+        imageBuffer.releaseGraphicsContext();
+        return imageBuffer.setVolatile();
+    };
+
+    Vector<WebCore::RenderingResourceIdentifier> inUseBufferIdentifiers;
+    for (auto identifier : identifiers) {
+        auto imageBuffer = m_remoteResourceCache.cachedImageBuffer({ identifier, m_gpuConnectionToWebProcess->webProcessIdentifier() });
+        if (imageBuffer) {
+            if (!makeVolatile(*imageBuffer))
+                inUseBufferIdentifiers.append(identifier);
+        } else
+            LOG_WITH_STREAM(RemoteRenderingBufferVolatility, stream << " failed to find ImageBuffer for identifier " << identifier);
+    }
+
+    LOG_WITH_STREAM(RemoteRenderingBufferVolatility, stream << "GPU Process: markSurfacesVolatile - in-use surfaces " << inUseBufferIdentifiers);
+
+    completionHandler(inUseBufferIdentifiers);
 }
 
 void RemoteRenderingBackend::finalizeRenderingUpdate(RenderingUpdateID renderingUpdateID)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Apple Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,10 +25,10 @@
 
 #pragma once
 
-#import "WebGPU.h"
 #import <wtf/FastMalloc.h>
 #import <wtf/Ref.h>
 #import <wtf/RefCounted.h>
+#import <wtf/RefPtr.h>
 
 namespace WebGPU {
 
@@ -40,9 +40,9 @@ class RenderPipeline;
 class RenderBundleEncoder : public RefCounted<RenderBundleEncoder> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static Ref<RenderBundleEncoder> create()
+    static Ref<RenderBundleEncoder> create(id <MTLIndirectCommandBuffer> indirectCommandBuffer)
     {
-        return adoptRef(*new RenderBundleEncoder());
+        return adoptRef(*new RenderBundleEncoder(indirectCommandBuffer));
     }
 
     ~RenderBundleEncoder();
@@ -51,7 +51,7 @@ public:
     void drawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t baseVertex, uint32_t firstInstance);
     void drawIndexedIndirect(const Buffer& indirectBuffer, uint64_t indirectOffset);
     void drawIndirect(const Buffer& indirectBuffer, uint64_t indirectOffset);
-    Ref<RenderBundle> finish(const WGPURenderBundleDescriptor*);
+    RefPtr<RenderBundle> finish(const WGPURenderBundleDescriptor*);
     void insertDebugMarker(const char* markerLabel);
     void popDebugGroup();
     void pushDebugGroup(const char* groupLabel);
@@ -62,7 +62,9 @@ public:
     void setLabel(const char*);
 
 private:
-    RenderBundleEncoder();
+    RenderBundleEncoder(id <MTLIndirectCommandBuffer>);
+
+    id <MTLIndirectCommandBuffer> m_indirectCommandBuffer { nil };
 };
 
 } // namespace WebGPU

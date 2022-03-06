@@ -39,6 +39,7 @@
 #include "Chrome.h"
 #include "Color.h"
 #include "ColorSerialization.h"
+#include "ElementChildIterator.h"
 #include "Event.h"
 #include "HTMLDataListElement.h"
 #include "HTMLDivElement.h"
@@ -135,7 +136,7 @@ Color ColorInputType::valueAsColor() const
     return parseSimpleColorValue(element()->value()).value();
 }
 
-void ColorInputType::createShadowSubtreeAndUpdateInnerTextElementEditability(ContainerNode::ChildChange::Source source, bool)
+void ColorInputType::createShadowSubtree()
 {
     ASSERT(needsShadowSubtree());
     ASSERT(element());
@@ -146,8 +147,8 @@ void ColorInputType::createShadowSubtreeAndUpdateInnerTextElementEditability(Con
     wrapperElement->setPseudo(ShadowPseudoIds::webkitColorSwatchWrapper());
     auto colorSwatch = HTMLDivElement::create(document);
     colorSwatch->setPseudo(ShadowPseudoIds::webkitColorSwatch());
-    wrapperElement->appendChild(source, colorSwatch);
-    element()->userAgentShadowRoot()->appendChild(source, wrapperElement);
+    wrapperElement->appendChild(ContainerNode::ChildChange::Source::Parser, colorSwatch);
+    element()->userAgentShadowRoot()->appendChild(ContainerNode::ChildChange::Source::Parser, wrapperElement);
 
     updateColorSwatch();
 }

@@ -70,6 +70,7 @@ set(bmalloc_SOURCES
     libpas/src/libpas/pas_bootstrap_heap_page_provider.c
     libpas/src/libpas/pas_coalign.c
     libpas/src/libpas/pas_commit_span.c
+    libpas/src/libpas/pas_committed_pages_vector.c
     libpas/src/libpas/pas_compact_bootstrap_free_heap.c
     libpas/src/libpas/pas_compact_expendable_memory.c
     libpas/src/libpas/pas_compact_heap_reservation.c
@@ -125,7 +126,6 @@ set(bmalloc_SOURCES
     libpas/src/libpas/pas_local_allocator.c
     libpas/src/libpas/pas_local_allocator_scavenger_data.c
     libpas/src/libpas/pas_local_view_cache.c
-    libpas/src/libpas/pas_local_view_cache_node.c
     libpas/src/libpas/pas_lock.c
     libpas/src/libpas/pas_lock_free_read_ptr_ptr_hashtable.c
     libpas/src/libpas/pas_log.c
@@ -359,6 +359,7 @@ set(bmalloc_PUBLIC_HEADERS
     libpas/src/libpas/pas_coalign.h
     libpas/src/libpas/pas_commit_mode.h
     libpas/src/libpas/pas_commit_span.h
+    libpas/src/libpas/pas_committed_pages_vector.h
     libpas/src/libpas/pas_compact_atomic_allocator_index_ptr.h
     libpas/src/libpas/pas_compact_atomic_biasing_directory_ptr.h
     libpas/src/libpas/pas_compact_atomic_bitfit_biasing_directory_ptr.h
@@ -399,6 +400,7 @@ set(bmalloc_PUBLIC_HEADERS
     libpas/src/libpas/pas_compact_tagged_page_granule_use_count_ptr.h
     libpas/src/libpas/pas_compact_tagged_ptr.h
     libpas/src/libpas/pas_compact_tagged_unsigned_ptr.h
+    libpas/src/libpas/pas_compact_thread_local_cache_layout_node.h
     libpas/src/libpas/pas_compact_unsigned_ptr.h
     libpas/src/libpas/pas_compute_summary_object_callbacks.h
     libpas/src/libpas/pas_config.h
@@ -408,6 +410,7 @@ set(bmalloc_PUBLIC_HEADERS
     libpas/src/libpas/pas_deallocation_mode.h
     libpas/src/libpas/pas_deallocator.h
     libpas/src/libpas/pas_deallocator_scavenge_action.h
+    libpas/src/libpas/pas_decommit_exclusion_range.h
     libpas/src/libpas/pas_debug_heap.h
     libpas/src/libpas/pas_debug_spectrum.h
     libpas/src/libpas/pas_deferred_decommit_log.h
@@ -494,6 +497,8 @@ set(bmalloc_PUBLIC_HEADERS
     libpas/src/libpas/pas_large_sharing_pool_epoch_update_mode.h
     libpas/src/libpas/pas_large_sharing_pool.h
     libpas/src/libpas/pas_large_utility_free_heap.h
+    libpas/src/libpas/pas_large_virtual_range.h
+    libpas/src/libpas/pas_large_virtual_range_min_heap.h
     libpas/src/libpas/pas_lenient_compact_ptr.h
     libpas/src/libpas/pas_lenient_compact_ptr_inlines.h
     libpas/src/libpas/pas_lenient_compact_unsigned_ptr.h
@@ -507,13 +512,13 @@ set(bmalloc_PUBLIC_HEADERS
     libpas/src/libpas/pas_local_allocator_result.h
     libpas/src/libpas/pas_local_allocator_scavenger_data.h
     libpas/src/libpas/pas_local_view_cache.h
-    libpas/src/libpas/pas_local_view_cache_node.h
     libpas/src/libpas/pas_lock_free_read_ptr_ptr_hashtable.h
     libpas/src/libpas/pas_lock.h
     libpas/src/libpas/pas_log.h
     libpas/src/libpas/pas_medium_megapage_cache.h
     libpas/src/libpas/pas_megapage_cache.h
     libpas/src/libpas/pas_min_heap.h
+    libpas/src/libpas/pas_mmap_capability.h
     libpas/src/libpas/pas_monotonic_time.h
     libpas/src/libpas/pas_mutation_count.h
     libpas/src/libpas/pas_object_kind.h
@@ -619,6 +624,7 @@ set(bmalloc_PUBLIC_HEADERS
     libpas/src/libpas/pas_thread_suspend_lock.h
     libpas/src/libpas/pas_thread_local_cache.h
     libpas/src/libpas/pas_thread_local_cache_layout.h
+    libpas/src/libpas/pas_thread_local_cache_layout_entry.h
     libpas/src/libpas/pas_thread_local_cache_layout_node.h
     libpas/src/libpas/pas_thread_local_cache_layout_node_kind.h
     libpas/src/libpas/pas_thread_local_cache_node.h

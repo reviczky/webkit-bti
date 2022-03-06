@@ -178,6 +178,7 @@ set(WebKit_MESSAGES_IN_FILES
     GPUProcess/media/RemoteMediaSourceProxy
     GPUProcess/media/RemoteRemoteCommandListenerProxy
     GPUProcess/media/RemoteSourceBufferProxy
+    GPUProcess/media/RemoteVideoFrameObjectHeap
 
     GPUProcess/webrtc/LibWebRTCCodecsProxy
     GPUProcess/webrtc/RemoteAudioMediaStreamTrackRendererInternalUnitManager
@@ -283,6 +284,7 @@ set(WebKit_MESSAGES_IN_FILES
     WebProcess/GPU/media/SourceBufferPrivateRemote
 
     WebProcess/GPU/webrtc/LibWebRTCCodecs
+    WebProcess/GPU/webrtc/RemoteVideoFrameObjectHeapProxyProcessor
     WebProcess/GPU/webrtc/SampleBufferDisplayLayer
 
     WebProcess/Geolocation/WebGeolocationManager
@@ -371,18 +373,6 @@ elseif (USE_ANGLE_EGL)
         ANGLE::EGL
     )
 else ()
-    if (USE_OPENGL)
-        list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
-            ${OPENGL_INCLUDE_DIRS}
-        )
-        list(APPEND WebKit_PRIVATE_LIBRARIES
-            ${OPENGL_LIBRARIES}
-        )
-        add_definitions(${OPENGL_DEFINITIONS})
-    elseif (USE_OPENGL_ES)
-        list(APPEND WebKit_PRIVATE_LIBRARIES OpenGL::GLES)
-    endif ()
-
     if (USE_EGL)
         list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
             ${EGL_INCLUDE_DIRS}

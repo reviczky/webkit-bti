@@ -303,6 +303,15 @@ void AccessibilityAtspi::registerRoot(AccessibilityRootAtspi& rootObject, Vector
 
 void AccessibilityAtspi::unregisterRoot(AccessibilityRootAtspi& rootObject)
 {
+    for (unsigned i = 0; i < m_pendingRootRegistrations.size(); ++i) {
+        auto& pendingRootRegistration = m_pendingRootRegistrations[i];
+        if (pendingRootRegistration.root.ptr() == &rootObject) {
+            pendingRootRegistration.completionHandler({ });
+            m_pendingRootRegistrations.remove(i);
+            return;
+        }
+    }
+
     if (!m_connection)
         return;
 
@@ -324,7 +333,7 @@ String AccessibilityAtspi::registerObject(AccessibilityObjectAtspi& atspiObject,
 
     ensureCache();
     String path = makeString("/org/a11y/atspi/accessible/", createVersion4UUIDString().replace('-', '_'));
-    Vector<unsigned, 20> registeredObjects;
+    Vector<unsigned, 7> registeredObjects;
     registeredObjects.reserveInitialCapacity(interfaces.size());
     for (const auto& interface : interfaces) {
         auto id = g_dbus_connection_register_object(m_connection.get(), path.utf8().data(), interface.first, interface.second, &atspiObject, nullptr, nullptr);

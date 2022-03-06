@@ -1089,6 +1089,12 @@ String HTMLMediaElement::canPlayType(const String& mimeType) const
     ContentType contentType(mimeType);
     parameters.type = contentType;
     parameters.contentTypesRequiringHardwareSupport = mediaContentTypesRequiringHardwareSupport();
+    parameters.allowedMediaContainerTypes = allowedMediaContainerTypes();
+    parameters.allowedMediaCodecTypes = allowedMediaCodecTypes();
+    parameters.allowedMediaVideoCodecIDs = allowedMediaVideoCodecIDs();
+    parameters.allowedMediaAudioCodecIDs = allowedMediaAudioCodecIDs();
+    parameters.allowedMediaCaptionFormatTypes = allowedMediaCaptionFormatTypes();
+
     MediaPlayer::SupportsType support = MediaPlayer::supportsType(parameters);
     String canPlay;
 
@@ -2638,7 +2644,7 @@ RefPtr<ArrayBuffer> HTMLMediaElement::mediaPlayerCachedKeyForKeyId(const String&
     return m_webKitMediaKeys ? m_webKitMediaKeys->cachedKeyForKeyId(keyId) : nullptr;
 }
 
-void HTMLMediaElement::mediaPlayerKeyNeeded(Uint8Array* initData)
+void HTMLMediaElement::mediaPlayerKeyNeeded(const SharedBuffer& initData)
 {
     if (!document().settings().legacyEncryptedMediaAPIEnabled())
         return;
@@ -2655,7 +2661,14 @@ void HTMLMediaElement::mediaPlayerKeyNeeded(Uint8Array* initData)
         return;
     }
 
-    auto event = WebKitMediaKeyNeededEvent::create(eventNames().webkitneedkeyEvent, initData);
+    WebKitMediaKeyNeededEvent::Init init;
+
+    if (auto initDataBuffer = initData.tryCreateArrayBuffer()) {
+        auto byteLength = initDataBuffer->byteLength();
+        init.initData = Uint8Array::tryCreate(initDataBuffer.releaseNonNull(), 0, byteLength);
+    }
+
+    auto event = WebKitMediaKeyNeededEvent::create(eventNames().webkitneedkeyEvent, init);
     scheduleEvent(WTFMove(event));
 }
 
@@ -7405,6 +7418,31 @@ bool HTMLMediaElement::mediaPlayerShouldCheckHardwareSupport() const
         return false;
 
     return true;
+}
+
+const std::optional<Vector<String>>& HTMLMediaElement::allowedMediaContainerTypes() const
+{
+    return document().settings().allowedMediaContainerTypes();
+}
+
+const std::optional<Vector<String>>& HTMLMediaElement::allowedMediaCodecTypes() const
+{
+    return document().settings().allowedMediaCodecTypes();
+}
+
+const std::optional<Vector<FourCC>>& HTMLMediaElement::allowedMediaVideoCodecIDs() const
+{
+    return document().settings().allowedMediaVideoCodecIDs();
+}
+
+const std::optional<Vector<FourCC>>& HTMLMediaElement::allowedMediaAudioCodecIDs() const
+{
+    return document().settings().allowedMediaAudioCodecIDs();
+}
+
+const std::optional<Vector<FourCC>>& HTMLMediaElement::allowedMediaCaptionFormatTypes() const
+{
+    return document().settings().allowedMediaCaptionFormatTypes();
 }
 
 void HTMLMediaElement::mediaPlayerBufferedTimeRangesChanged()

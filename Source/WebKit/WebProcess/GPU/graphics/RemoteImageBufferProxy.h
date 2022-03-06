@@ -73,13 +73,6 @@ public:
         m_remoteRenderingBackendProxy->remoteResourceCacheProxy().releaseImageBuffer(m_renderingResourceIdentifier);
     }
 
-    ImageBufferBackendHandle createImageBufferBackendHandle()
-    {
-        if (ensureBackendCreated())
-            return m_backend->createImageBufferBackendHandle();
-        return { };
-    }
-
     WebCore::GraphicsContextFlushIdentifier lastSentFlushIdentifier() const { return m_sentFlushIdentifier; }
 
     void waitForDidFlushOnSecondaryThread(WebCore::GraphicsContextFlushIdentifier targetFlushIdentifier)
@@ -198,7 +191,17 @@ protected:
         return bitmap->createImage();
     }
 
-    RefPtr<WebCore::Image> filteredImage(WebCore::Filter& filter) override
+    RefPtr<WebCore::NativeImage> sinkIntoNativeImage() final
+    {
+        return copyNativeImage();
+    }
+
+    RefPtr<WebCore::Image> sinkIntoImage(WebCore::PreserveResolution preserveResolution = WebCore::PreserveResolution::No) final
+    {
+        return copyImage(WebCore::BackingStoreCopy::CopyBackingStore, preserveResolution);
+    }
+
+    RefPtr<WebCore::Image> filteredImage(WebCore::Filter& filter) final
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return { };
@@ -210,24 +213,14 @@ protected:
     {
         if (UNLIKELY(!m_remoteRenderingBackendProxy))
             return std::nullopt;
-
+        auto& mutableThis = const_cast<RemoteImageBufferProxy&>(*this);
+        mutableThis.flushDrawingContextAsync();
         auto pixelBuffer = WebCore::PixelBuffer::tryCreate(destinationFormat, srcRect.size());
         if (!pixelBuffer)
             return std::nullopt;
-        size_t dataSize = pixelBuffer->data().byteLength();
-
-        SharedMemory* sharedMemory = m_remoteRenderingBackendProxy->sharedMemoryForGetPixelBuffer(dataSize);
-        if (!sharedMemory)
+        auto& data = pixelBuffer->data();
+        if (!m_remoteRenderingBackendProxy->getPixelBufferForImageBuffer(m_renderingResourceIdentifier, destinationFormat, srcRect, { data.data(), data.byteLength() }))
             return std::nullopt;
-
-        auto& mutableThis = const_cast<RemoteImageBufferProxy&>(*this);
-        mutableThis.m_remoteDisplayList.getPixelBuffer(destinationFormat, srcRect);
-        mutableThis.flushDrawingContextAsync();
-
-        if (m_remoteRenderingBackendProxy->waitForGetPixelBufferToComplete())
-            memcpy(pixelBuffer->data().data(), sharedMemory->data(), dataSize);
-        else
-            memset(pixelBuffer->data().data(), 0, dataSize);
         return pixelBuffer;
     }
 
@@ -249,12 +242,16 @@ protected:
 
     void putPixelBuffer(const WebCore::PixelBuffer& pixelBuffer, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint = { }, WebCore::AlphaPremultiplication destFormat = WebCore::AlphaPremultiplication::Premultiplied) final
     {
+        if (UNLIKELY(!m_remoteRenderingBackendProxy))
+            return;
         // The math inside PixelBuffer::create() doesn't agree with the math inside ImageBufferBackend::putPixelBuffer() about how m_resolutionScale interacts with the data in the ImageBuffer.
         // This means that putPixelBuffer() is only called when resolutionScale() == 1.
         ASSERT(resolutionScale() == 1);
-        m_remoteDisplayList.putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
+        auto& mutableThis = const_cast<RemoteImageBufferProxy&>(*this);
+        mutableThis.flushDrawingContextAsync();
+        m_remoteRenderingBackendProxy->putPixelBufferForImageBuffer(m_renderingResourceIdentifier, pixelBuffer, srcRect, destPoint, destFormat);
     }
-    
+
     void convertToLuminanceMask() final
     {
         m_remoteDisplayList.convertToLuminanceMask();

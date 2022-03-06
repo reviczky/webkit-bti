@@ -1905,7 +1905,8 @@ inline void BuilderCustom::applyValueGridTemplateAreas(BuilderState& builderStat
     style.setGridAutoRepeat##TrackType##sInsertionPoint(tracksData ? tracksData->m_autoRepeatInsertionPoint : parentStyle->gridAutoRepeat##TrackType##sInsertionPoint()); \
     style.setAutoRepeatNamedGrid##TrackType##Lines(tracksData ? tracksData->m_autoRepeatNamedGridLines : parentStyle->autoRepeatNamedGrid##TrackType##Lines()); \
     style.setAutoRepeatOrderedNamedGrid##TrackType##Lines(tracksData ? tracksData->m_autoRepeatOrderedNamedGridLines : parentStyle->autoRepeatOrderedNamedGrid##TrackType##Lines()); \
-    style.setGridAutoRepeat##TrackType##sType(tracksData ? tracksData->m_autoRepeatType : parentStyle->gridAutoRepeat##TrackType##sType());
+    style.setGridAutoRepeat##TrackType##sType(tracksData ? tracksData->m_autoRepeatType : parentStyle->gridAutoRepeat##TrackType##sType()); \
+    style.setGridSubgrid##TrackType##s(tracksData ? tracksData->isSubgrid : parentStyle->gridSubgrid##TrackType##s());
 
 #define SET_INHERIT_TRACKS_DATA(style, parentStyle, TrackType) \
     BuilderConverter::TracksData* tracksData = nullptr; \
@@ -1933,10 +1934,6 @@ inline void BuilderCustom::applyValueGridTemplateColumns(BuilderState& builderSt
     BuilderConverter::TracksData tracksData;
     if (!BuilderConverter::createGridTrackList(value, tracksData, builderState))
         return;
-    const NamedGridAreaMap& namedGridAreas = builderState.style().namedGridArea();
-    if (!namedGridAreas.isEmpty())
-        BuilderConverter::createImplicitNamedGridLinesFromGridArea(namedGridAreas, tracksData.m_namedGridLines, ForColumns);
-
     SET_TRACKS_DATA(tracksData, builderState.style(), Column);
 }
 
@@ -1956,9 +1953,6 @@ inline void BuilderCustom::applyValueGridTemplateRows(BuilderState& builderState
     BuilderConverter::TracksData tracksData;
     if (!BuilderConverter::createGridTrackList(value, tracksData, builderState))
         return;
-    const NamedGridAreaMap& namedGridAreas = builderState.style().namedGridArea();
-    if (!namedGridAreas.isEmpty())
-        BuilderConverter::createImplicitNamedGridLinesFromGridArea(namedGridAreas, tracksData.m_namedGridLines, ForRows);
 
     SET_TRACKS_DATA(tracksData, builderState.style(), Row);
 }

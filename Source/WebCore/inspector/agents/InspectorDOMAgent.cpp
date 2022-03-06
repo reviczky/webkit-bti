@@ -95,6 +95,7 @@
 #include "Pasteboard.h"
 #include "PseudoElement.h"
 #include "RenderGrid.h"
+#include "RenderObject.h"
 #include "RenderStyle.h"
 #include "RenderStyleConstants.h"
 #include "ScriptController.h"
@@ -307,6 +308,9 @@ void InspectorDOMAgent::didCreateFrontendAndBackend(Inspector::FrontendRouter*, 
     m_instrumentingAgents.setPersistentDOMAgent(this);
     m_document = m_inspectedPage.mainFrame().document();
 
+    // Force a layout so that we can collect additional information from the layout process.
+    relayoutDocument();
+
 #if ENABLE(VIDEO)
     if (m_document)
         addEventListenersToNode(*m_document);
@@ -329,6 +333,7 @@ void InspectorDOMAgent::willDestroyFrontendAndBackend(Inspector::DisconnectReaso
     hideHighlight();
 
     m_overlay->clearAllGridOverlays();
+    m_overlay->clearAllFlexOverlays();
 
     m_instrumentingAgents.setPersistentDOMAgent(nullptr);
     m_documentRequested = false;
@@ -372,12 +377,25 @@ void InspectorDOMAgent::setDocument(Document* document)
 
     m_document = document;
 
+    // Force a layout so that we can collect additional information from the layout process.
+    relayoutDocument();
+
     if (!m_documentRequested)
         return;
 
     // Immediately communicate null document or document that has finished loading.
     if (!document || !document->parsing())
         m_frontendDispatcher->documentUpdated();
+}
+
+void InspectorDOMAgent::relayoutDocument()
+{
+    if (!m_document)
+        return;
+
+    m_flexibleBoxRendererCachedItemsAtStartOfLine.clear();
+    
+    m_document->updateLayout();
 }
 
 Protocol::DOM::NodeId InspectorDOMAgent::bind(Node& node)
@@ -2788,6 +2806,23 @@ bool InspectorDOMAgent::isEventListenerDisabled(EventTarget& target, const AtomS
 void InspectorDOMAgent::eventDidResetAfterDispatch(const Event& event)
 {
     m_dispatchedEvents.remove(&event);
+}
+
+void InspectorDOMAgent::flexibleBoxRendererBeganLayout(const RenderObject& renderer)
+{
+    m_flexibleBoxRendererCachedItemsAtStartOfLine.remove(renderer);
+}
+
+void InspectorDOMAgent::flexibleBoxRendererWrappedToNextLine(const RenderObject& renderer, size_t lineStartItemIndex)
+{
+    m_flexibleBoxRendererCachedItemsAtStartOfLine.ensure(renderer, [] {
+        return Vector<size_t>();
+    }).iterator->value.append(lineStartItemIndex);
+}
+
+Vector<size_t> InspectorDOMAgent::flexibleBoxRendererCachedItemsAtStartOfLine(const RenderObject& renderer)
+{
+    return m_flexibleBoxRendererCachedItemsAtStartOfLine.get(renderer);
 }
 
 RefPtr<JSC::Breakpoint> InspectorDOMAgent::breakpointForEventListener(EventTarget& target, const AtomString& eventType, EventListener& listener, bool capture)

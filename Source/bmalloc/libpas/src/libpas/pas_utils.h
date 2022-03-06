@@ -84,6 +84,9 @@ PAS_BEGIN_EXTERN_C;
 
 #define PAS_ARM __PAS_ARM
 
+#define PAS_X86 __PAS_X86
+#define PAS_X86_64 __PAS_X86_64
+
 #define PAS_RISCV __PAS_RISCV
 
 #if PAS_ARM64 && !PAS_ARM64E && !PAS_OS(MAC) && !defined(__ARM_FEATURE_ATOMICS)
@@ -922,6 +925,10 @@ static inline bool pas_is_divisible_by(unsigned value, uint64_t magic_constant)
 #ifdef __cplusplus
 enum cpp_initialization_t { cpp_initialization };
 #endif
+
+#define PAS_SYSCALL(x) do { \
+    while ((x) == -1 && errno == EAGAIN) { } \
+} while (0)
 
 PAS_END_EXTERN_C;
 

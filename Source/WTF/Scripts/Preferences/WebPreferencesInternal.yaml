@@ -369,6 +369,20 @@ IPCTestingAPIEnabled:
     WebKit:
       default: false
 
+ImageAnalysisMarkupEnabled:
+  type: bool
+  humanReadableName: "Image analysis markup"
+  humanReadableDescription: "Enable image analysis markup"
+  condition: ENABLE(IMAGE_ANALYSIS)
+  exposed: [ WebKit ]
+  defaultValue:
+    WebCore:
+      default: false
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: defaultImageAnalysisMarkupEnabled()
+
 ImageAnalysisQueueEnabled:
   type: bool
   humanReadableName: "Image analysis queue"
@@ -644,8 +658,10 @@ NotificationEventEnabled:
   condition: ENABLE(NOTIFICATION_EVENT)
   defaultValue:
     WebCore:
+      "ENABLE(NOTIFICATION_EVENT)": true
       default: false
     WebKit:
+      "ENABLE(NOTIFICATION_EVENT)": true
       default: false
 
 OffscreenCanvasEnabled:
@@ -705,10 +721,13 @@ PreferInlineTextSelectionInImages:
   condition: ENABLE(IMAGE_ANALYSIS)
   defaultValue:
     WebCore:
+      "HAVE(UIKIT_WEBKIT_INTERNALS)": false
       default: true
     WebKitLegacy:
+      "HAVE(UIKIT_WEBKIT_INTERNALS)": false
       default: true
     WebKit:
+      "HAVE(UIKIT_WEBKIT_INTERNALS)": false
       default: true
 
 ReplayCGDisplayListsIntoBackingStore:
@@ -1015,6 +1034,19 @@ WebRTCPlatformCodecsInGPUProcessEnabled:
       default: false
     WebKit:
       default: WebKit::defaultWebRTCCodecsInGPUProcess()
+    WebCore:
+      default: false
+
+WebRTCRemoteVideoFrameEnabled:
+  type: bool
+  humanReadableName: "WebRTC Remote Video Frame"
+  humanReadableDescription: "Enable WebRTC Remote Video Frame"
+  condition: ENABLE(WEB_RTC)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
     WebCore:
       default: false
 

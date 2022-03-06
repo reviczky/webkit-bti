@@ -81,6 +81,10 @@ messages -> WebPage LegacyReceiver {
     UpdateSelectionWithExtentPoint(WebCore::IntPoint point, bool isInteractingWithFocusedElement, enum:bool WebKit::RespectSelectionAnchor respectSelectionAnchor) -> (bool endIsMoving) Async
     UpdateSelectionWithExtentPointAndBoundary(WebCore::IntPoint point, enum:uint8_t WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement) -> (bool endIsMoving) Async
     RequestDictationContext() -> (String selectedText, String textBefore, String textAfter) Async
+#if ENABLE(REVEAL)
+    RequestRVItemInCurrentSelectedRange() -> (WebKit::RevealItem item) Async
+    PrepareSelectionForContextMenuWithLocationInView(WebCore::IntPoint point) -> (bool shouldShowMenu, WebKit::RevealItem item) Async
+#endif
     ReplaceDictatedText(String oldText, String newText)
     ReplaceSelectedText(String oldText, String newText)
     RequestAutocorrectionData(String textForAutocorrection) -> (struct WebKit::WebAutocorrectionData data) Async
@@ -126,6 +130,13 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     TextInputContextsInRect(WebCore::FloatRect rect) -> (Vector<struct WebCore::ElementContext> contexts) Async
     FocusTextInputContextAndPlaceCaret(struct WebCore::ElementContext context, WebCore::IntPoint point) -> (bool success) Async
     ClearServiceWorkerEntitlementOverride() -> () Async
+#endif
+
+    RequestImageBitmap(struct WebCore::ElementContext elementContext) -> (WebKit::ShareableBitmap::Handle image, String sourceMIMEType) Async
+
+#if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
+    InstallCroppedImageOverlay(struct WebCore::ElementContext elementContext, WebKit::SharedMemory::IPCHandle imageData, String mimeType, WebCore::FloatRect normalizedCropRect)
+    SetCroppedImageOverlayVisibility(bool visible)
 #endif
 
     SetControlledByAutomation(bool controlled)
@@ -420,7 +431,9 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     DrawRectToImage(WebCore::FrameIdentifier frameID, struct WebKit::PrintInfo printInfo, WebCore::IntRect rect, WebCore::IntSize imageSize) -> (WebKit::ShareableBitmap::Handle image) Async
     DrawPagesToPDF(WebCore::FrameIdentifier frameID, struct WebKit::PrintInfo printInfo, uint32_t first, uint32_t count) -> (IPC::SharedBufferCopy data) Async
 #if PLATFORM(IOS_FAMILY)
+#if !HAVE(UIKIT_BACKGROUND_THREAD_PRINTING)
     ComputePagesForPrintingiOS(WebCore::FrameIdentifier frameID, struct WebKit::PrintInfo printInfo) -> (size_t pageCount) Synchronous
+#endif
     DrawToPDFiOS(WebCore::FrameIdentifier frameID, struct WebKit::PrintInfo printInfo, size_t pageCount) -> (IPC::SharedBufferCopy data) Async
 #endif
     DrawToPDF(WebCore::FrameIdentifier frameID, std::optional<WebCore::FloatRect> rect) -> (IPC::SharedBufferCopy data) Async
@@ -454,10 +467,8 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     GetStringSelectionForPasteboard() -> (String stringValue) Synchronous
     GetDataSelectionForPasteboard(String pasteboardType) -> (WebKit::SharedMemory::IPCHandle ipcHandle) Synchronous
     ReadSelectionFromPasteboard(String pasteboardName) -> (bool result) Synchronous
-
-#if ENABLE(SERVICE_CONTROLS)
+    ReplaceWithPasteboardData(struct WebCore::ElementContext context, Vector<String> types, IPC::DataReference data)
     ReplaceSelectionWithPasteboardData(Vector<String> types, IPC::DataReference data)
-#endif
 
     ShouldDelayWindowOrderingEvent(WebKit::WebMouseEvent event) -> (bool result) Synchronous
 
@@ -580,7 +591,8 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
 #if ENABLE(ATTACHMENT_ELEMENT)
     InsertAttachment(String identifier, std::optional<uint64_t> fileSize, String fileName, String contentType) -> () Async
     UpdateAttachmentAttributes(String identifier, std::optional<uint64_t> fileSize, String contentType, String fileName, IPC::SharedBufferCopy enclosingImageData) -> () Async
-    UpdateAttachmentIcon(String identifier, WebKit::ShareableBitmap::Handle qlThumbnailHandle)
+    UpdateAttachmentThumbnail(String identifier, WebKit::ShareableBitmap::Handle qlThumbnailHandle)
+    UpdateAttachmentIcon(String identifier, WebKit::ShareableBitmap::Handle icon, WebCore::FloatSize size)
 #endif
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -657,4 +669,6 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
 #endif
 
     ScrollToRect(WebCore::FloatRect targetRect, WebCore::FloatPoint origin)
+
+    InteractableRegionsInRootViewCoordinates(WebCore::FloatRect rect) -> (Vector<WebCore::FloatRect> rects) Async
 }

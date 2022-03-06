@@ -203,6 +203,8 @@ public:
     template<typename T> void sendToAllProcesses(const T& message);
     template<typename T> void sendToAllProcessesForSession(const T& message, PAL::SessionID);
 
+    template<typename T> static void sendToAllRemoteWorkerProcesses(const T& message);
+
     void processDidFinishLaunching(WebProcessProxy&);
 
     WebProcessCache& webProcessCache() { return m_webProcessCache.get(); }
@@ -374,7 +376,7 @@ public:
     void networkProcessDidTerminate(NetworkProcessProxy&, NetworkProcessProxy::TerminationReason);
 
     bool isServiceWorkerPageID(WebPageProxyIdentifier) const;
-    void removeFromWorkerProcesses(WebProcessProxy&);
+    void removeFromRemoteWorkerProcesses(WebProcessProxy&);
 
 #if ENABLE(SERVICE_WORKER)
     static void establishServiceWorkerContextConnectionToNetworkProcess(WebCore::RegistrableDomain&&, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PAL::SessionID, CompletionHandler<void()>&&);
@@ -384,8 +386,8 @@ public:
 #endif
     void serviceWorkerProcessCrashed(WebProcessProxy&);
 
-    void updateWorkerUserAgent(const String& userAgent);
-    UserContentControllerIdentifier userContentControllerIdentifierForWorkers();
+    void updateRemoteWorkerUserAgent(const String& userAgent);
+    UserContentControllerIdentifier userContentControllerIdentifierForRemoteWorkers();
     static void establishSharedWorkerContextConnectionToNetworkProcess(WebCore::RegistrableDomain&&, PAL::SessionID, CompletionHandler<void()>&&);
 
 #if PLATFORM(COCOA)
@@ -584,6 +586,10 @@ private:
 #endif
 #endif
 
+#if PLATFORM(IOS_FAMILY)
+    static void captivePortalModeConfigUpdateCallback(CFNotificationCenterRef, void* observer, CFStringRef name, const void* postingObject, CFDictionaryRef userInfo);
+#endif
+    
 #if PLATFORM(COCOA)
     static void accessibilityPreferencesChangedCallback(CFNotificationCenterRef, void* observer, CFStringRef name, const void* postingObject, CFDictionaryRef userInfo);
 #endif
@@ -621,11 +627,11 @@ private:
 
     HashMap<PAL::SessionID, WeakPtr<WebProcessProxy>> m_dummyProcessProxies; // Lightweight WebProcessProxy objects without backing process.
 
-    static WeakHashSet<WebProcessProxy>& workerProcesses();
+    static WeakHashSet<WebProcessProxy>& remoteWorkerProcesses();
 
-    std::optional<WebPreferencesStore> m_workerPreferences;
-    RefPtr<WebUserContentControllerProxy> m_userContentControllerForWorkers;
-    String m_workerUserAgent;
+    std::optional<WebPreferencesStore> m_remoteWorkerPreferences;
+    RefPtr<WebUserContentControllerProxy> m_userContentControllerForRemoteWorkers;
+    String m_remoteWorkerUserAgent;
 
 #if ENABLE(GPU_PROCESS)
     RefPtr<GPUProcessProxy> m_gpuProcess;
@@ -829,6 +835,15 @@ void WebProcessPool::sendToAllProcessesForSession(const T& message, PAL::Session
     for (auto& process : m_processes) {
         if (process->canSendMessage() && !process->isPrewarmed() && process->sessionID() == sessionID)
             process->send(T(message), 0);
+    }
+}
+
+template<typename T>
+void WebProcessPool::sendToAllRemoteWorkerProcesses(const T& message)
+{
+    for (auto& process : remoteWorkerProcesses()) {
+        if (process.canSendMessage())
+            process.send(T(message), 0);
     }
 }
 

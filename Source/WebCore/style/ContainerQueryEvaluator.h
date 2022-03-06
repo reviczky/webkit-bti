@@ -24,24 +24,63 @@
 
 #pragma once
 
+#include "ContainerQuery.h"
+#include "SelectorMatchingState.h"
 #include <wtf/Ref.h>
 
 namespace WebCore {
 
-struct ContainerQuery;
 class Element;
 
 namespace Style {
 
+enum class EvaluationResult : uint8_t { False, True, Unknown };
+
 class ContainerQueryEvaluator {
 public:
-    ContainerQueryEvaluator(const Vector<Ref<const Element>>& containers);
+    ContainerQueryEvaluator(const Element&, PseudoId, SelectorMatchingState*);
 
-    bool evaluate(const ContainerQuery&) const;
+    bool evaluate(const FilteredContainerQuery&) const;
 
 private:
-    const Vector<Ref<const Element>>& m_containers;
+    struct ResolvedContainer;
+    std::optional<ResolvedContainer> resolveContainer(const FilteredContainerQuery&) const;
+
+    EvaluationResult evaluateQuery(const CQ::ContainerQuery&, const ResolvedContainer&) const;
+    EvaluationResult evaluateQuery(const CQ::SizeQuery&, const ResolvedContainer&) const;
+    template<typename ConditionType> EvaluationResult evaluateCondition(const ConditionType&, const ResolvedContainer&) const;
+    EvaluationResult evaluateSizeFeature(const CQ::SizeFeature&, const ResolvedContainer&) const;
+
+    const Ref<const Element> m_element;
+    const PseudoId m_pseudoId;
+    SelectorMatchingState* m_selectorMatchingState;
 };
+
+inline EvaluationResult toEvaluationResult(bool boolean)
+{
+    return boolean ? EvaluationResult::True : EvaluationResult::False;
+};
+
+inline EvaluationResult operator&(EvaluationResult left, EvaluationResult right)
+{
+    if (left == EvaluationResult::Unknown || right == EvaluationResult::Unknown)
+        return EvaluationResult::Unknown;
+    if (left == EvaluationResult::True && right == EvaluationResult::True)
+        return EvaluationResult::True;
+    return EvaluationResult::False;
+}
+
+inline EvaluationResult operator!(EvaluationResult result)
+{
+    switch (result) {
+    case EvaluationResult::True:
+        return EvaluationResult::False;
+    case EvaluationResult::False:
+        return EvaluationResult::True;
+    case EvaluationResult::Unknown:
+        return EvaluationResult::Unknown;
+    }
+}
 
 }
 }

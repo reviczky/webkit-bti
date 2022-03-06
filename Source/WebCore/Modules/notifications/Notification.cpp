@@ -40,7 +40,9 @@
 #include "JSDOMPromiseDeferred.h"
 #include "NotificationClient.h"
 #include "NotificationData.h"
+#include "NotificationEvent.h"
 #include "NotificationPermissionCallback.h"
+#include "ServiceWorkerGlobalScope.h"
 #include "WindowEventLoop.h"
 #include "WindowFocusAllowedIndicator.h"
 #include <wtf/CompletionHandler.h>
@@ -66,12 +68,14 @@ Notification::Notification(ScriptExecutionContext& context, const String& title,
     , m_body(options.body.isolatedCopy())
     , m_tag(options.tag.isolatedCopy())
     , m_state(Idle)
+    , m_contextIdentifier(context.identifier())
 {
     if (context.isDocument())
         m_notificationSource = NotificationSource::Document;
-    else if (context.isServiceWorkerGlobalScope())
+    else if (context.isServiceWorkerGlobalScope()) {
         m_notificationSource = NotificationSource::ServiceWorker;
-    else
+        downcast<ServiceWorkerGlobalScope>(context).registration().addNotificationToList(*this);
+    } else
         RELEASE_ASSERT_NOT_REACHED();
 
     if (!options.icon.isEmpty()) {
@@ -81,7 +85,43 @@ Notification::Notification(ScriptExecutionContext& context, const String& title,
     }
 }
 
-Notification::~Notification() = default;
+Notification::Notification(const Notification& other)
+    : ActiveDOMObject(other.scriptExecutionContext())
+    , m_title(other.m_title.isolatedCopy())
+    , m_direction(other.m_direction)
+    , m_lang(other.m_lang.isolatedCopy())
+    , m_body(other.m_body.isolatedCopy())
+    , m_tag(other.m_tag.isolatedCopy())
+    , m_icon(other.m_icon.isolatedCopy())
+    , m_state(other.m_state)
+    , m_notificationSource(other.m_notificationSource)
+    , m_contextIdentifier(other.m_contextIdentifier)
+{
+    suspendIfNeeded();
+}
+
+Notification::~Notification()
+{
+    if (auto* context = scriptExecutionContext()) {
+        if (context->isServiceWorkerGlobalScope())
+            downcast<ServiceWorkerGlobalScope>(context)->registration().removeNotificationFromList(*this);
+    }
+}
+
+Ref<Notification> Notification::copyForGetNotifications() const
+{
+    return adoptRef(*new Notification(*this));
+}
+
+void Notification::contextDestroyed()
+{
+    auto* context = scriptExecutionContext();
+    RELEASE_ASSERT(context);
+    if (context->isServiceWorkerGlobalScope())
+        downcast<ServiceWorkerGlobalScope>(context)->registration().removeNotificationFromList(*this);
+
+    ActiveDOMObject::contextDestroyed();
+}
 
 
 void Notification::showSoon()
@@ -102,9 +142,19 @@ void Notification::show()
         return;
 
     if (client->checkPermission(scriptExecutionContext()) != Permission::Granted) {
-        dispatchErrorEvent();
+        switch (m_notificationSource) {
+        case NotificationSource::Document:
+            dispatchErrorEvent();
+            break;
+        case NotificationSource::ServiceWorker:
+            // We did a permission check when ServiceWorkerRegistration::showNotification() was called.
+            // If permission has since been revoked, then silently failing here is expected behavior.
+            break;
+        }
+
         return;
     }
+
     if (client->show(*this))
         m_state = Showing;
 }
@@ -117,6 +167,10 @@ void Notification::close()
     case Showing: {
         if (auto* client = clientFromContext())
             client->cancel(*this);
+        if (auto* context = scriptExecutionContext()) {
+            if (context->isServiceWorkerGlobalScope())
+                downcast<ServiceWorkerGlobalScope>(context)->registration().removeNotificationFromList(*this);
+        }
         break;
     }
     case Closed:
@@ -158,20 +212,48 @@ void Notification::finalize()
 
 void Notification::dispatchShowEvent()
 {
+    ASSERT(isMainThread());
+
+    if (m_notificationSource != NotificationSource::Document)
+        return;
+
     queueTaskToDispatchEvent(*this, TaskSource::UserInteraction, Event::create(eventNames().showEvent, Event::CanBubble::No, Event::IsCancelable::No));
 }
 
 void Notification::dispatchClickEvent()
 {
-    queueTaskKeepingObjectAlive(*this, TaskSource::UserInteraction, [this] {
-        WindowFocusAllowedIndicator windowFocusAllowed;
-        dispatchEvent(Event::create(eventNames().clickEvent, Event::CanBubble::No, Event::IsCancelable::No));
-    });
+    ASSERT(isMainThread());
+
+    switch (m_notificationSource) {
+    case NotificationSource::Document:
+        queueTaskKeepingObjectAlive(*this, TaskSource::UserInteraction, [this] {
+            WindowFocusAllowedIndicator windowFocusAllowed;
+            dispatchEvent(Event::create(eventNames().clickEvent, Event::CanBubble::No, Event::IsCancelable::No));
+        });
+        break;
+    case NotificationSource::ServiceWorker:
+        ServiceWorkerGlobalScope::ensureOnContextThread(m_contextIdentifier, [this, protectedThis = Ref { *this }](auto& context) {
+            downcast<ServiceWorkerGlobalScope>(context).postTaskToFireNotificationEvent(NotificationEventType::Click, *this, { });
+        });
+        break;
+    }
 }
 
 void Notification::dispatchCloseEvent()
 {
-    queueTaskToDispatchEvent(*this, TaskSource::UserInteraction, Event::create(eventNames().closeEvent, Event::CanBubble::No, Event::IsCancelable::No));
+    ASSERT(isMainThread());
+
+    switch (m_notificationSource) {
+    case NotificationSource::Document:
+        queueTaskToDispatchEvent(*this, TaskSource::UserInteraction, Event::create(eventNames().closeEvent, Event::CanBubble::No, Event::IsCancelable::No));
+        break;
+    case NotificationSource::ServiceWorker:
+        ServiceWorkerGlobalScope::ensureOnContextThread(m_contextIdentifier, [this, protectedThis = Ref { *this }](auto& context) {
+            downcast<ServiceWorkerGlobalScope>(context).postTaskToFireNotificationEvent(NotificationEventType::Close, *this, { });
+        });
+        break;
+    }
+
     finalize();
 }
 

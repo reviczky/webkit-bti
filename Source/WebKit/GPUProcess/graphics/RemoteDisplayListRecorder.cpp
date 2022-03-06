@@ -50,7 +50,7 @@ RemoteResourceCache& RemoteDisplayListRecorder::resourceCache()
 
 GraphicsContext& RemoteDisplayListRecorder::drawingContext()
 {
-    return m_maskImageBuffer ? m_maskImageBuffer->context() : m_imageBuffer->context();
+    return m_imageBuffer->context();
 }
 
 void RemoteDisplayListRecorder::startListeningForIPC()
@@ -200,22 +200,6 @@ void RemoteDisplayListRecorder::clipPath(const Path& path, WindRule rule)
     handleItem(DisplayList::ClipPath(path, rule));
 }
 
-void RemoteDisplayListRecorder::beginClipToDrawingCommands(const FloatRect& destination, const DestinationColorSpace& colorSpace)
-{
-    m_maskImageBuffer = ImageBuffer::createCompatibleBuffer(destination.size(), colorSpace, drawingContext());
-}
-
-void RemoteDisplayListRecorder::endClipToDrawingCommands(const FloatRect& destination)
-{
-    auto maskImageBuffer = std::exchange(m_maskImageBuffer, { });
-    if (!maskImageBuffer) {
-        ASSERT_NOT_REACHED();
-        return;
-    }
-
-    drawingContext().clipToImageBuffer(*maskImageBuffer, destination);
-}
-
 void RemoteDisplayListRecorder::drawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, IPC::FilterReference filterReference)
 {
     RefPtr<ImageBuffer> sourceImage;
@@ -299,22 +283,22 @@ void RemoteDisplayListRecorder::drawNativeImageWithQualifiedIdentifier(Qualified
     handleItem(DisplayList::DrawNativeImage(imageIdentifier.object(), imageSize, destRect, srcRect, options), *image);
 }
 
-void RemoteDisplayListRecorder::drawPattern(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorder::drawPattern(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
 {
     // Immediately turn the RenderingResourceIdentifier (which is error-prone) to a QualifiedRenderingResourceIdentifier,
     // and use a helper function to make sure that don't accidentally use the RenderingResourceIdentifier (because the helper function can't see it).
-    drawPatternWithQualifiedIdentifier({ imageIdentifier, m_webProcessIdentifier }, imageSize, destRect, tileRect, transform, phase, spacing, options);
+    drawPatternWithQualifiedIdentifier({ imageIdentifier, m_webProcessIdentifier }, destRect, tileRect, transform, phase, spacing, options);
 }
 
-void RemoteDisplayListRecorder::drawPatternWithQualifiedIdentifier(QualifiedRenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorder::drawPatternWithQualifiedIdentifier(QualifiedRenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
 {
-    RefPtr image = resourceCache().cachedNativeImage(imageIdentifier);
-    if (!image) {
+    auto sourceImage = resourceCache().cachedSourceImage(imageIdentifier);
+    if (!sourceImage) {
         ASSERT_NOT_REACHED();
         return;
     }
 
-    handleItem(DisplayList::DrawPattern(imageIdentifier.object(), imageSize, destRect, tileRect, transform, phase, spacing, options), *image);
+    handleItem(DisplayList::DrawPattern(imageIdentifier.object(), destRect, tileRect, transform, phase, spacing, options), *sourceImage);
 }
 
 void RemoteDisplayListRecorder::beginTransparencyLayer(float opacity)
@@ -429,16 +413,6 @@ void RemoteDisplayListRecorder::fillPath(const Path& path)
 void RemoteDisplayListRecorder::fillEllipse(const FloatRect& rect)
 {
     handleItem(DisplayList::FillEllipse(rect));
-}
-
-void RemoteDisplayListRecorder::getPixelBuffer(const IntRect& srcRect, const PixelBufferFormat& outputFormat)
-{
-    m_renderingBackend->populateGetPixelBufferSharedMemory(m_imageBuffer->getPixelBuffer(outputFormat, srcRect));
-}
-
-void RemoteDisplayListRecorder::putPixelBuffer(const IntRect& srcRect, const IntPoint& destPoint, const PixelBuffer& pixelBuffer, AlphaPremultiplication destFormat)
-{
-    m_imageBuffer->putPixelBuffer(pixelBuffer, srcRect, destPoint, destFormat);
 }
 
 void RemoteDisplayListRecorder::convertToLuminanceMask()

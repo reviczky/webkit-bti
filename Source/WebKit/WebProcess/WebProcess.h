@@ -310,10 +310,6 @@ public:
 
     void isJITEnabled(CompletionHandler<void(bool)>&&);
 
-#if PLATFORM(IOS_FAMILY)
-    void resetAllGeolocationPermissions();
-#endif
-
 #if PLATFORM(WAYLAND)
     WaylandCompositorDisplay* waylandCompositorDisplay() const { return m_waylandCompositorDisplay.get(); }
 #endif
@@ -515,7 +511,7 @@ private:
     bool shouldTerminate() override;
     void terminate() override;
 
-#if USE(APPKIT)
+#if USE(APPKIT) || PLATFORM(GTK) || PLATFORM(WPE)
     void stopRunLoop() override;
 #endif
 

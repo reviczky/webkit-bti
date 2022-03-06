@@ -314,6 +314,9 @@ void DocumentThreadableLoader::redirectReceived(CachedResource& resource, Resour
     Ref<DocumentThreadableLoader> protectedThis(*this);
     --m_options.maxRedirectCount;
 
+    if (m_client)
+        m_client->redirectReceived(request.url());
+
     // FIXME: We restrict this check to Fetch API for the moment, as this might disrupt WorkerScriptLoader.
     // Reassess this check based on https://github.com/whatwg/fetch/issues/393 discussions.
     // We should also disable that check in navigation mode.
@@ -491,15 +494,18 @@ void DocumentThreadableLoader::didFinishLoading(ResourceLoaderIdentifier identif
 
         auto response = m_resource->response();
 
+        RefPtr<SharedBuffer> buffer;
+        if (m_resource->resourceBuffer())
+            buffer = m_resource->resourceBuffer()->makeContiguous();
         if (options().filteringPolicy == ResponseFilteringPolicy::Disable) {
             m_client->didReceiveResponse(identifier, response);
-            if (auto* buffer = m_resource->resourceBuffer())
+            if (buffer)
                 m_client->didReceiveData(*buffer);
         } else {
             ASSERT(response.type() == ResourceResponse::Type::Default);
 
             m_client->didReceiveResponse(identifier, ResourceResponse::filter(response, m_options.credentials == FetchOptions::Credentials::Include ? ResourceResponse::PerformExposeAllHeadersCheck::No : ResourceResponse::PerformExposeAllHeadersCheck::Yes));
-            if (auto* buffer = m_resource->resourceBuffer())
+            if (buffer)
                 m_client->didReceiveData(*buffer);
         }
     }

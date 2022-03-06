@@ -37,6 +37,7 @@
 #include "EventTarget.h"
 #include "NotificationDirection.h"
 #include "NotificationPermission.h"
+#include "ScriptExecutionContextIdentifier.h"
 #include <wtf/Identified.h>
 #include <wtf/URL.h>
 #include "WritingMode.h"
@@ -93,11 +94,16 @@ public:
 
     WEBCORE_EXPORT NotificationData data() const;
 
+    Ref<Notification> copyForGetNotifications() const;
+
     using ThreadSafeRefCounted::ref;
     using ThreadSafeRefCounted::deref;
 
 private:
     Notification(ScriptExecutionContext&, const String& title, const Options&);
+    Notification(const Notification&);
+
+    void contextDestroyed() final;
 
     NotificationClient* clientFromContext();
     EventTargetInterface eventTargetInterface() const final { return NotificationEventTargetInterfaceType; }
@@ -131,6 +137,7 @@ private:
         ServiceWorker,
     };
     NotificationSource m_notificationSource;
+    ScriptExecutionContextIdentifier m_contextIdentifier;
 };
 
 } // namespace WebCore

@@ -41,6 +41,7 @@
 #include "WebBackForwardCache.h"
 #include "WebCookieManagerProxy.h"
 #include "WebKit2Initialize.h"
+#include "WebNotificationManagerProxy.h"
 #include "WebPageProxy.h"
 #include "WebProcessCache.h"
 #include "WebProcessMessages.h"
@@ -323,11 +324,9 @@ void WebsiteDataStore::fetchDataAndApply(OptionSet<WebsiteDataType> dataTypes, O
         {
             ASSERT(RunLoop::isMain());
 
-            Vector<WebsiteDataRecord> records;
-            records.reserveInitialCapacity(m_websiteDataRecords.size());
-            for (auto& record : m_websiteDataRecords.values())
-                records.uncheckedAppend(m_queue.ptr() != &WorkQueue::main() ? crossThreadCopy(record) : WTFMove(record));
-
+            auto records = WTF::map(WTFMove(m_websiteDataRecords), [this](auto&& entry) {
+                return m_queue.ptr() != &WorkQueue::main() ? crossThreadCopy(WTFMove(entry.value)) : WTFMove(entry.value);
+            });
             m_queue->dispatch([apply = WTFMove(m_apply), records = WTFMove(records)] () mutable {
                 apply(WTFMove(records));
             });
@@ -1716,7 +1715,7 @@ void WebsiteDataStore::dispatchOnQueue(Function<void()>&& function)
 uint64_t WebsiteDataStore::perThirdPartyOriginStorageQuota() const
 {
     // FIXME: Consider whether allowing to set a perThirdPartyOriginStorageQuota from a WebsiteDataStore.
-    return WebCore::StorageQuotaManager::defaultThirdPartyQuotaFromPerOriginQuota(perOriginStorageQuota());
+    return perOriginStorageQuota() / 10;
 }
 
 void WebsiteDataStore::setCacheModelSynchronouslyForTesting(CacheModel cacheModel)
@@ -1727,11 +1726,9 @@ void WebsiteDataStore::setCacheModelSynchronouslyForTesting(CacheModel cacheMode
 
 Vector<WebsiteDataStoreParameters> WebsiteDataStore::parametersFromEachWebsiteDataStore()
 {
-    Vector<WebsiteDataStoreParameters> parameters;
-    parameters.reserveInitialCapacity(allDataStores().size());
-    for (auto* dataStore : allDataStores().values())
-        parameters.uncheckedAppend(dataStore->parameters());
-    return parameters;
+    return WTF::map(allDataStores(), [](auto& entry) {
+        return entry.value->parameters();
+    });
 }
 
 WebsiteDataStoreParameters WebsiteDataStore::parameters()
@@ -1878,6 +1875,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
         if (auto handle = SandboxExtension::createHandleForReadWriteDirectory(directory))
             parameters.generalStorageDirectoryHandle = WTFMove(*handle);
     }
+    parameters.shouldUseCustomStoragePaths = configuration().shouldUseCustomStoragePaths();
 
     parameters.perOriginStorageQuota = perOriginStorageQuota();
     parameters.perThirdPartyOriginStorageQuota = perThirdPartyOriginStorageQuota();
@@ -2052,6 +2050,27 @@ void WebsiteDataStore::makeNextNetworkProcessLaunchFailForTesting()
 bool WebsiteDataStore::shouldMakeNextNetworkProcessLaunchFailForTesting()
 {
     return std::exchange(nextNetworkProcessLaunchShouldFailForTesting, false);
+}
+
+void WebsiteDataStore::showServiceWorkerNotification(IPC::Connection& connection, const WebCore::NotificationData& notificationData)
+{
+    WebNotificationManagerProxy::sharedServiceWorkerManager().show(nullptr, connection, notificationData);
+}
+
+void WebsiteDataStore::cancelServiceWorkerNotification(const UUID& notificationID)
+{
+    WebNotificationManagerProxy::sharedServiceWorkerManager().cancel(nullptr, notificationID);
+}
+
+void WebsiteDataStore::clearServiceWorkerNotification(const UUID& notificationID)
+{
+    Vector<UUID> notifications = { notificationID };
+    WebNotificationManagerProxy::sharedServiceWorkerManager().clearNotifications(nullptr, notifications);
+}
+
+void WebsiteDataStore::didDestroyServiceWorkerNotification(const UUID& notificationID)
+{
+    WebNotificationManagerProxy::sharedServiceWorkerManager().didDestroyNotification(nullptr, notificationID);
 }
 
 }

@@ -52,13 +52,14 @@
 #include "NetworkSocketChannelMessages.h"
 #include "NetworkSocketStream.h"
 #include "NetworkSocketStreamMessages.h"
+#include "NetworkStorageManager.h"
 #include "PingLoad.h"
 #include "PreconnectTask.h"
 #include "RTCDataChannelRemoteManagerProxy.h"
+#include "RemoteWorkerType.h"
 #include "ServiceWorkerFetchTaskMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
-#include "WebIDBServer.h"
 #include "WebProcessMessages.h"
 #include "WebProcessPoolMessages.h"
 #include "WebResourceLoadStatisticsStore.h"
@@ -408,8 +409,12 @@ bool NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& conne
 
 void NetworkConnectionToWebProcess::updateQuotaBasedOnSpaceUsageForTesting(const ClientOrigin& origin)
 {
-    auto storageQuotaManager = m_networkProcess->storageQuotaManager(sessionID(), origin);
-    storageQuotaManager->resetQuotaUpdatedBasedOnUsageForTesting();
+    auto* session = m_networkProcess->networkSession(sessionID());
+    if (!session)
+        return;
+
+    if (auto* storageManager = session->storageManager())
+        storageManager->resetQuotaUpdatedBasedOnUsageForTesting(origin);
 }
 
 void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
@@ -745,10 +750,7 @@ void NetworkConnectionToWebProcess::didFinishPreconnection(WebCore::ResourceLoad
 
 NetworkStorageSession* NetworkConnectionToWebProcess::storageSession()
 {
-    auto* session = networkProcess().storageSession(m_sessionID);
-    if (!session)
-        LOG_ERROR("Non-default storage session was requested, but there was no session for it. Please file a bug unless you just disabled private browsing, in which case it's an expected race.");
-    return session;
+    return networkProcess().storageSession(m_sessionID);
 }
 
 void NetworkConnectionToWebProcess::startDownload(DownloadID downloadID, const ResourceRequest& request, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, const String& suggestedName)
@@ -1001,8 +1003,10 @@ void NetworkConnectionToWebProcess::writeBlobsToTemporaryFilesForIndexedDB(const
         for (auto& file : fileReferences)
             file->revokeFileAccess();
 
-        if (auto* session = networkSession())
-            session->ensureWebIDBServer().registerTemporaryBlobFilePaths(m_connection, filePaths);
+        if (auto* session = networkSession()) {
+            if (auto* storageManager = session->storageManager())
+                storageManager->registerTemporaryBlobFilePaths(m_connection, filePaths);
+        }
         completionHandler(WTFMove(filePaths));
     });
 }
@@ -1248,7 +1252,7 @@ void NetworkConnectionToWebProcess::unregisterSharedWorkerConnection()
 void NetworkConnectionToWebProcess::sharedWorkerServerToContextConnectionIsNoLongerNeeded()
 {
     CONNECTION_RELEASE_LOG(SharedWorker, "sharedWorkerServerToContextConnectionIsNoLongerNeeded:");
-    m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::SharedWorkerContextConnectionNoLongerNeeded { webProcessIdentifier() }, 0);
+    m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::RemoteWorkerContextConnectionNoLongerNeeded { RemoteWorkerType::SharedWorker, webProcessIdentifier() }, 0);
 
     m_sharedWorkerContextConnection = nullptr;
 }
@@ -1299,7 +1303,7 @@ void NetworkConnectionToWebProcess::closeSWContextConnection()
 void NetworkConnectionToWebProcess::serviceWorkerServerToContextConnectionNoLongerNeeded()
 {
     CONNECTION_RELEASE_LOG(ServiceWorker, "serviceWorkerServerToContextConnectionNoLongerNeeded: WebProcess no longer useful for running service workers");
-    m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::ServiceWorkerContextConnectionNoLongerNeeded { webProcessIdentifier() }, 0);
+    m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::RemoteWorkerContextConnectionNoLongerNeeded { RemoteWorkerType::ServiceWorker, webProcessIdentifier() }, 0);
 
     m_swContextConnection = nullptr;
 }

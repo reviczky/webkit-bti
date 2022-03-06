@@ -213,7 +213,7 @@ public:
 
     void clearLoader();
 
-    SharedBuffer* resourceBuffer() const { return m_data.get(); }
+    FragmentedSharedBuffer* resourceBuffer() const { return m_data.get(); }
 
     virtual void redirectReceived(ResourceRequest&&, const ResourceResponse&, CompletionHandler<void(ResourceRequest&&)>&&);
     virtual void responseReceived(const ResourceResponse&);
@@ -229,7 +229,8 @@ public:
 
     void loadFrom(const CachedResource&);
 
-    SecurityOrigin* origin() const { return m_origin.get(); }
+    const SecurityOrigin* origin() const { return m_origin.get(); }
+    SecurityOrigin* origin() { return m_origin.get(); }
     AtomString initiatorName() const { return m_initiatorName; }
 
     bool canDelete() const { return !hasClients() && !m_loader && !m_preloadCount && !m_handleCount && !m_resourceToRevalidate && !m_proxyResource; }
@@ -336,7 +337,7 @@ protected:
     HashCountedSet<CachedResourceClient*> m_clients;
     std::unique_ptr<ResourceRequest> m_originalRequest; // Needed by Ping loads.
     RefPtr<SubresourceLoader> m_loader;
-    RefPtr<SharedBuffer> m_data;
+    RefPtr<FragmentedSharedBuffer> m_data;
 
 private:
     MonotonicTime m_lastDecodedAccessTime; // Used as a "thrash guard" in the cache

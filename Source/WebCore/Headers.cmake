@@ -71,7 +71,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/WebGPU/GPUPipelineDescriptorBase.h
     Modules/WebGPU/GPUPipelineLayout.h
     Modules/WebGPU/GPUPipelineLayoutDescriptor.h
-    Modules/WebGPU/GPUPipelineStatisticName.h
     Modules/WebGPU/GPUPowerPreference.h
     Modules/WebGPU/GPUPredefinedColorSpace.h
     Modules/WebGPU/GPUPrimitiveState.h
@@ -100,6 +99,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/WebGPU/GPUSamplerBindingType.h
     Modules/WebGPU/GPUSamplerDescriptor.h
     Modules/WebGPU/GPUShaderModule.h
+    Modules/WebGPU/GPUShaderModuleCompilationHint.h
     Modules/WebGPU/GPUShaderModuleDescriptor.h
     Modules/WebGPU/GPUShaderStage.h
     Modules/WebGPU/GPUStencilFaceState.h
@@ -224,11 +224,16 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/indexeddb/server/IDBConnectionToClient.h
     Modules/indexeddb/server/IDBConnectionToClientDelegate.h
     Modules/indexeddb/server/IDBServer.h
+    Modules/indexeddb/server/IndexValueEntry.h
+    Modules/indexeddb/server/IndexValueStore.h
+    Modules/indexeddb/server/MemoryBackingStoreTransaction.h
     Modules/indexeddb/server/MemoryIDBBackingStore.h
     Modules/indexeddb/server/SQLiteIDBBackingStore.h
+    Modules/indexeddb/server/SQLiteIDBTransaction.h
     Modules/indexeddb/server/ServerOpenDBRequest.h
     Modules/indexeddb/server/UniqueIDBDatabase.h
     Modules/indexeddb/server/UniqueIDBDatabaseConnection.h
+    Modules/indexeddb/server/UniqueIDBDatabaseManager.h
     Modules/indexeddb/server/UniqueIDBDatabaseTransaction.h
 
     Modules/indexeddb/shared/IndexKey.h
@@ -399,6 +404,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     animation/DocumentTimelinesController.h
     animation/EffectTiming.h
     animation/FillMode.h
+    animation/FrameRateAligner.h
     animation/GetAnimationsOptions.h
     animation/IterationCompositeOperation.h
     animation/KeyframeAnimationOptions.h
@@ -541,6 +547,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/CSSStyleDeclaration.h
     css/CSSStyleRule.h
     css/CSSStyleSheet.h
+    css/CSSSubgridValue.h
     css/CSSToLengthConversionData.h
     css/CSSUnits.h
     css/CSSUnknownRule.h
@@ -548,6 +555,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/CSSValueList.h
     css/CSSVariableData.h
     css/CSSVariableReferenceValue.h
+    css/ContainerQuery.h
     css/Counter.h
     css/DeprecatedCSSOMCounter.h
     css/DeprecatedCSSOMPrimitiveValue.h
@@ -946,6 +954,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     inspector/InspectorInstrumentationPublic.h
     inspector/InspectorInstrumentationWebKit.h
     inspector/InspectorOverlay.h
+    inspector/InspectorOverlayLabel.h
     inspector/InspectorWebAgentBase.h
     inspector/PageDebugger.h
 
@@ -1061,6 +1070,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/ActivityStateChangeObserver.h
     page/AdjustViewSizeOrNot.h
     page/AlternativeTextClient.h
+    page/AttachmentElementClient.h
     page/AutoplayEvent.h
     page/Base64Utilities.h
     page/CacheStorageProvider.h
@@ -1344,6 +1354,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/UserAgent.h
     platform/UserInterfaceLayoutDirection.h
     platform/ValidationBubble.h
+    platform/VideoFrame.h
     platform/VideoFrameMetadata.h
     platform/VideoSampleMetadata.h
     platform/WebGLStateTracker.h
@@ -1421,6 +1432,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/ColorUtilities.h
     platform/graphics/ComplexTextController.h
     platform/graphics/ConcreteImageBuffer.h
+    platform/graphics/ContentTypeUtilities.h
     platform/graphics/DashArray.h
     platform/graphics/DecodingOptions.h
     platform/graphics/DestinationColorSpace.h
@@ -1430,7 +1442,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/DisplayRefreshMonitorManager.h
     platform/graphics/DisplayUpdate.h
     platform/graphics/DrawGlyphsRecorder.h
-    platform/graphics/ExtensionsGL.h
     platform/graphics/FloatLine.h
     platform/graphics/FloatPoint.h
     platform/graphics/FloatPoint3D.h
@@ -1517,7 +1528,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/MediaPlayerEnums.h
     platform/graphics/MediaPlayerIdentifier.h
     platform/graphics/MediaPlayerPrivate.h
-    platform/graphics/MediaSampleVideoFrame.h
     platform/graphics/MediaSourcePrivate.h
     platform/graphics/MediaSourcePrivateClient.h
     platform/graphics/MediaUsageInfo.h
@@ -1548,7 +1558,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/PlatformVideoTrackConfiguration.h
     platform/graphics/PlatformVideoTransferCharacteristics.h
     platform/graphics/Region.h
-    platform/graphics/RemoteGraphicsContextGLProxyBase.h
     platform/graphics/RemoteVideoSample.h
     platform/graphics/RenderingResourceIdentifier.h
     platform/graphics/RenderingMode.h
@@ -1576,7 +1585,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/angle/ANGLEHeaders.h
     platform/graphics/angle/ANGLEUtilities.h
     platform/graphics/angle/GraphicsContextGLANGLE.h
-    platform/graphics/angle/ExtensionsGLANGLE.h
 
     platform/graphics/displaylists/DisplayList.h
     platform/graphics/displaylists/DisplayListDrawingContext.h

@@ -25,7 +25,10 @@
 #include "config.h"
 #include "ContainerQueryEvaluator.h"
 
+#include "CSSPrimitiveValue.h"
 #include "CSSToLengthConversionData.h"
+#include "CSSValueList.h"
+#include "ComposedTreeAncestorIterator.h"
 #include "Document.h"
 #include "MediaFeatureNames.h"
 #include "MediaList.h"
@@ -35,17 +38,132 @@
 
 namespace WebCore::Style {
 
-ContainerQueryEvaluator::ContainerQueryEvaluator(const Vector<Ref<const Element>>& containers)
-    : m_containers(containers)
+struct ContainerQueryEvaluator::ResolvedContainer {
+    const RenderBox* renderer { nullptr };
+    CSSToLengthConversionData conversionData;
+};
+
+ContainerQueryEvaluator::ContainerQueryEvaluator(const Element& element, PseudoId pseudoId, SelectorMatchingState* selectorMatchingState)
+    : m_element(element)
+    , m_pseudoId(pseudoId)
+    , m_selectorMatchingState(selectorMatchingState)
 {
 }
 
-static std::optional<LayoutUnit> computeSize(CSSValue* value, const CSSToLengthConversionData& conversionData)
+bool ContainerQueryEvaluator::evaluate(const FilteredContainerQuery& filteredContainerQuery) const
+{
+    auto container = resolveContainer(filteredContainerQuery);
+    if (!container)
+        return false;
+
+    return evaluateQuery(filteredContainerQuery.query, *container) == EvaluationResult::True;
+}
+
+auto ContainerQueryEvaluator::resolveContainer(const FilteredContainerQuery& filteredContainerQuery) const -> std::optional<ResolvedContainer>
+{
+    auto makeResolvedContainer = [](const Element& element) -> ResolvedContainer {
+        auto* renderer = dynamicDowncast<RenderBox>(element.renderer());
+        if (!renderer)
+            return { };
+        auto& view = renderer->view();
+        return ResolvedContainer {
+            renderer,
+            CSSToLengthConversionData { &renderer->style(), &view.style(), nullptr, &view, 1 }
+        };
+    };
+
+    auto isContainerForQuery = [&](const Element& element) {
+        auto* style = element.existingComputedStyle();
+        if (!style)
+            return false;
+        if (style->containerType() == ContainerType::None)
+            return false;
+        if (filteredContainerQuery.nameFilter.isEmpty())
+            return true;
+        return style->containerNames().contains(filteredContainerQuery.nameFilter);
+    };
+
+    if (m_selectorMatchingState) {
+        for (auto& container : makeReversedRange(m_selectorMatchingState->queryContainers)) {
+            if (isContainerForQuery(container))
+                return makeResolvedContainer(container);
+        }
+        return { };
+    }
+
+    if (m_pseudoId != PseudoId::None) {
+        if (isContainerForQuery(m_element))
+            return makeResolvedContainer(m_element);
+    }
+
+    for (auto& ancestor : composedTreeAncestors(const_cast<Element&>(m_element.get()))) {
+        if (isContainerForQuery(ancestor))
+            return makeResolvedContainer(ancestor);
+    }
+    return { };
+}
+
+
+auto ContainerQueryEvaluator::evaluateQuery(const CQ::ContainerQuery& containerQuery, const ResolvedContainer& container) const -> EvaluationResult
+{
+    return WTF::switchOn(containerQuery, [&](const CQ::ContainerCondition& containerCondition) {
+        return evaluateCondition(containerCondition, container);
+    }, [&](const CQ::SizeQuery& sizeQuery) {
+        return evaluateQuery(sizeQuery, container);
+    }, [&](const CQ::UnknownQuery&) {
+        return EvaluationResult::Unknown;
+    });
+}
+
+auto ContainerQueryEvaluator::evaluateQuery(const CQ::SizeQuery& sizeQuery, const ResolvedContainer& container) const -> EvaluationResult
+{
+    return WTF::switchOn(sizeQuery, [&](const CQ::SizeCondition& sizeCondition) {
+        return evaluateCondition(sizeCondition, container);
+    }, [&](const CQ::SizeFeature& sizeFeature) {
+        return evaluateSizeFeature(sizeFeature, container);
+    });
+}
+
+template<typename ConditionType>
+auto ContainerQueryEvaluator::evaluateCondition(const ConditionType& condition, const ResolvedContainer& container) const -> EvaluationResult
+{
+    if (condition.queries.isEmpty())
+        return EvaluationResult::Unknown;
+
+    switch (condition.logicalOperator) {
+    case CQ::LogicalOperator::Not:
+        return !evaluateQuery(condition.queries.first(), container);
+    case CQ::LogicalOperator::And: {
+        auto result = EvaluationResult::True;
+        for (auto query : condition.queries) {
+            auto queryResult = evaluateQuery(query, container);
+            if (queryResult == EvaluationResult::False)
+                return EvaluationResult::False;
+            if (queryResult == EvaluationResult::Unknown)
+                result = EvaluationResult::Unknown;
+        }
+        return result;
+    }
+    case CQ::LogicalOperator::Or: {
+        auto result = EvaluationResult::False;
+        for (auto query : condition.queries) {
+            auto queryResult = evaluateQuery(query, container);
+            if (queryResult == EvaluationResult::True)
+                return EvaluationResult::True;
+            if (queryResult == EvaluationResult::Unknown)
+                result = EvaluationResult::Unknown;
+        }
+        return result;
+    }
+    }
+}
+
+static std::optional<LayoutUnit> computeSize(const CSSValue* value, const CSSToLengthConversionData& conversionData)
 {
     if (!is<CSSPrimitiveValue>(value))
         return { };
-
     auto& primitiveValue = downcast<CSSPrimitiveValue>(*value);
+
     if (primitiveValue.isNumberOrInteger()) {
         if (primitiveValue.doubleValue())
             return { };
@@ -57,106 +175,162 @@ static std::optional<LayoutUnit> computeSize(CSSValue* value, const CSSToLengthC
     return primitiveValue.computeLength<LayoutUnit>(conversionData);
 }
 
-enum class Comparator { Lesser, Greater, LesserOrEqual, GreaterOrEqual, Equal, True };
-
-bool ContainerQueryEvaluator::evaluate(const ContainerQuery& containerQuery) const
+auto ContainerQueryEvaluator::evaluateSizeFeature(const CQ::SizeFeature& sizeFeature, const ResolvedContainer& container) const -> EvaluationResult
 {
-    if (m_containers.isEmpty())
-        return false;
+    // "If the query container does not have a principal box ... then the result of evaluating the size feature is unknown."
+    // https://drafts.csswg.org/css-contain-3/#size-container
+    if (!container.renderer)
+        return EvaluationResult::Unknown;
 
-    // FIXME: Match the container selector.
-    auto* renderer = m_containers.last()->renderer();
-    if (!renderer)
-        return false;
+    auto& renderer = *container.renderer;
 
-    auto& view = renderer->view();
-    CSSToLengthConversionData conversionData { &renderer->style(), &view.style(), nullptr, &view, 1 };
+    auto compare = [](CQ::ComparisonOperator op, auto left, auto right) {
+        switch (op) {
+        case CQ::ComparisonOperator::LessThan:
+            return left < right;
+        case CQ::ComparisonOperator::GreaterThan:
+            return left > right;
+        case CQ::ComparisonOperator::LessThanOrEqual:
+            return left <= right;
+        case CQ::ComparisonOperator::GreaterThanOrEqual:
+            return left >= right;
+        case CQ::ComparisonOperator::Equal:
+            return left == right;
+        }
+    };
 
-    auto evaluateSize = [&](const MediaQueryExpression& expression, Comparator comparator, auto&& sizeGetter)
-    {
-        if (!is<RenderBox>(renderer))
+    enum class Side : uint8_t { Left, Right };
+    auto evaluateSizeComparison = [&](LayoutUnit size, const std::optional<CQ::Comparison>& comparison, Side side) {
+        if (!comparison)
+            return EvaluationResult::True;
+        auto expressionSize = computeSize(comparison->value.get(), container.conversionData);
+        if (!expressionSize)
+            return EvaluationResult::Unknown;
+        auto left = side == Side::Left ? *expressionSize : size;
+        auto right = side == Side::Left ? size : *expressionSize;
+
+        return toEvaluationResult(compare(comparison->op, left, right));
+    };
+
+    auto evaluateSize = [&](LayoutUnit size) {
+        if (!sizeFeature.leftComparison && !sizeFeature.rightComparison)
+            return toEvaluationResult(!!size);
+
+        auto leftResult = evaluateSizeComparison(size, sizeFeature.leftComparison, Side::Left);
+        auto rightResult = evaluateSizeComparison(size, sizeFeature.rightComparison, Side::Right);
+
+        return leftResult & rightResult;
+    };
+
+    auto evaluateAspectRatioComparison = [&](double aspectRatio, const std::optional<CQ::Comparison>& comparison, Side side) {
+        if (!comparison)
+            return EvaluationResult::True;
+
+        if (!is<CSSValueList>(comparison->value))
+            return EvaluationResult::Unknown;
+
+        auto& ratioList = downcast<CSSValueList>(*comparison->value);
+        if (ratioList.length() != 2)
+            return EvaluationResult::Unknown;
+
+        auto first = dynamicDowncast<CSSPrimitiveValue>(ratioList.item(0));
+        auto second = dynamicDowncast<CSSPrimitiveValue>(ratioList.item(1));
+
+        if (!first || !second || !first->isNumberOrInteger() || !second->isNumberOrInteger())
+            return EvaluationResult::Unknown;
+
+        auto expressionRatio = first->doubleValue() / second->doubleValue();
+
+        auto left = side == Side::Left ? expressionRatio : aspectRatio;
+        auto right = side == Side::Left ? aspectRatio : expressionRatio;
+
+        return toEvaluationResult(compare(comparison->op, left, right));
+    };
+
+    enum class Axis : uint8_t { Both, Block, Inline, Width, Height };
+    auto containerSupportsRequiredAxis = [&](Axis axis) {
+        switch (renderer.style().containerType()) {
+        case ContainerType::Size:
+            return true;
+        case ContainerType::InlineSize:
+            if (axis == Axis::Width)
+                return renderer.isHorizontalWritingMode();
+            if (axis == Axis::Height)
+                return !renderer.isHorizontalWritingMode();
+            return axis == Axis::Inline;
+        case ContainerType::None:
+            ASSERT_NOT_REACHED();
             return false;
-
-        std::optional<LayoutUnit> expressionSize;
-
-        if (comparator != Comparator::True) {
-            expressionSize = computeSize(expression.value(), conversionData);
-            if (!expressionSize)
-                return false;
-        }
-
-        auto size = sizeGetter(downcast<RenderBox>(*renderer));
-
-        switch (comparator) {
-        case Comparator::Lesser:
-            return size < *expressionSize;
-        case Comparator::Greater:
-            return size > *expressionSize;
-        case Comparator::LesserOrEqual:
-            return size <= *expressionSize;
-        case Comparator::GreaterOrEqual:
-            return size >= *expressionSize;
-        case Comparator::Equal:
-            return size == *expressionSize;
-        case Comparator::True:
-            return !!size;
         }
     };
 
-    auto evaluateWidth = [&](const MediaQueryExpression& expression, Comparator comparator)
-    {
-        return evaluateSize(expression, comparator, [&](const RenderBox& renderer) {
-            return renderer.width();
-        });
-    };
+    if (sizeFeature.name == CQ::FeatureNames::width()) {
+        if (!containerSupportsRequiredAxis(Axis::Width))
+            return EvaluationResult::Unknown;
 
-    auto evaluateHeight = [&](const MediaQueryExpression& expression, Comparator comparator)
-    {
-        return evaluateSize(expression, comparator, [&](const RenderBox& renderer) {
-            return renderer.height();
-        });
-    };
-
-    bool result = false;
-
-    // FIXME: This is very rudimentary.
-    auto& queries = containerQuery.query->queryVector();
-    for (auto& query : queries) {
-        for (auto& expression : query.expressions()) {
-            if (expression.mediaFeature() == MediaFeatureNames::minWidth) {
-                if (evaluateWidth(expression, Comparator::GreaterOrEqual))
-                    result = true;
-                continue;
-            }
-            if (expression.mediaFeature() == MediaFeatureNames::maxWidth) {
-                if (evaluateWidth(expression, Comparator::LesserOrEqual))
-                    result = true;
-                continue;
-            }
-            if (expression.mediaFeature() == MediaFeatureNames::width) {
-                if (evaluateWidth(expression, expression.value() ? Comparator::Equal : Comparator::True))
-                    result = true;
-                continue;
-            }
-            if (expression.mediaFeature() == MediaFeatureNames::minHeight) {
-                if (evaluateHeight(expression, Comparator::GreaterOrEqual))
-                    result = true;
-                continue;
-            }
-            if (expression.mediaFeature() == MediaFeatureNames::maxHeight) {
-                if (evaluateHeight(expression, Comparator::LesserOrEqual))
-                    result = true;
-                continue;
-            }
-            if (expression.mediaFeature() == MediaFeatureNames::height) {
-                if (evaluateHeight(expression, expression.value() ? Comparator::Equal : Comparator::True))
-                    result = true;
-                continue;
-            }
-        }
+        return evaluateSize(renderer.contentWidth());
     }
 
-    return result;
+    if (sizeFeature.name == CQ::FeatureNames::height()) {
+        if (!containerSupportsRequiredAxis(Axis::Height))
+            return EvaluationResult::Unknown;
+
+        return evaluateSize(renderer.contentHeight());
+    }
+
+    if (sizeFeature.name == CQ::FeatureNames::inlineSize()) {
+        if (!containerSupportsRequiredAxis(Axis::Inline))
+            return EvaluationResult::Unknown;
+
+        return evaluateSize(renderer.contentLogicalWidth());
+    }
+
+    if (sizeFeature.name == CQ::FeatureNames::blockSize()) {
+        if (!containerSupportsRequiredAxis(Axis::Block))
+            return EvaluationResult::Unknown;
+
+        return evaluateSize(renderer.contentLogicalHeight());
+    }
+
+    if (sizeFeature.name == CQ::FeatureNames::aspectRatio()) {
+        if (!containerSupportsRequiredAxis(Axis::Both))
+            return EvaluationResult::Unknown;
+
+        auto boxRatio = renderer.contentWidth().toDouble() / renderer.contentHeight().toDouble();
+        
+        if (!sizeFeature.leftComparison && !sizeFeature.rightComparison)
+            return toEvaluationResult(!!boxRatio);
+
+        auto leftResult = evaluateAspectRatioComparison(boxRatio, sizeFeature.leftComparison, Side::Left);
+        auto rightResult = evaluateAspectRatioComparison(boxRatio, sizeFeature.rightComparison, Side::Right);
+
+        return leftResult & rightResult;
+    }
+
+    if (sizeFeature.name == CQ::FeatureNames::orientation()) {
+        if (!containerSupportsRequiredAxis(Axis::Both))
+            return EvaluationResult::Unknown;
+
+        if (!sizeFeature.rightComparison)
+            return EvaluationResult::Unknown;
+
+        auto& comparison = *sizeFeature.rightComparison;
+
+        if (!is<CSSPrimitiveValue>(comparison.value) || comparison.op != CQ::ComparisonOperator::Equal)
+            return EvaluationResult::Unknown;
+
+        auto& value = downcast<CSSPrimitiveValue>(*sizeFeature.rightComparison->value);
+
+        bool isPortrait = renderer.contentHeight() >= renderer.contentWidth();
+        if (value.valueID() == CSSValuePortrait)
+            return toEvaluationResult(isPortrait);
+        if (value.valueID() == CSSValueLandscape)
+            return toEvaluationResult(!isPortrait);
+
+        return EvaluationResult::Unknown;
+    }
+
+    return EvaluationResult::Unknown;
 }
 
 }

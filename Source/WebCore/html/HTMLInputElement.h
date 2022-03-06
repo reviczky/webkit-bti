@@ -137,6 +137,7 @@ public:
     HTMLElement* containerElement() const;
     
     RefPtr<TextControlInnerTextElement> innerTextElement() const final;
+    RefPtr<TextControlInnerTextElement> innerTextElementCreatingShadowSubtreeIfNeeded() final;
     RenderStyle createInnerTextStyle(const RenderStyle&) final;
 
     HTMLElement* innerBlockElement() const;
@@ -343,11 +344,11 @@ public:
     bool shouldTruncateText(const RenderStyle&) const;
     void invalidateStyleOnFocusChangeIfNeeded();
 
-    ExceptionOr<int> selectionStartForBindings() const;
-    ExceptionOr<void> setSelectionStartForBindings(int);
+    std::optional<int> selectionStartForBindings() const;
+    ExceptionOr<void> setSelectionStartForBindings(std::optional<int>);
 
-    ExceptionOr<int> selectionEndForBindings() const;
-    ExceptionOr<void> setSelectionEndForBindings(int);
+    std::optional<int> selectionEndForBindings() const;
+    ExceptionOr<void> setSelectionEndForBindings(std::optional<int>);
 
     ExceptionOr<String> selectionDirectionForBindings() const;
     ExceptionOr<void> setSelectionDirectionForBindings(const String&);
@@ -355,6 +356,8 @@ public:
     ExceptionOr<void> setSelectionRangeForBindings(int start, int end, const String& direction);
 
     String resultForDialogSubmit() const final;
+
+    bool isInnerTextElementEditable() const final { return !hasAutoFillStrongPasswordButton() && HTMLTextFormControlElement::isInnerTextElementEditable(); }
 
 protected:
     HTMLInputElement(const QualifiedName&, Document&, HTMLFormElement*, bool createdByParser);
@@ -371,8 +374,6 @@ private:
     void removedFromAncestor(RemovalType, ContainerNode&) final;
     void didMoveToNewDocument(Document& oldDocument, Document& newDocument) final;
 
-    void createShadowSubtreeAndUpdateInnerTextElementEditability();
-
     int defaultTabIndex() const final;
     bool hasCustomFocusLogic() const final;
     bool isKeyboardFocusable(KeyboardEvent*) const final;
@@ -383,8 +384,6 @@ private:
     bool shouldUseInputMethod() final;
 
     bool isInteractiveContent() const final;
-
-    bool isInnerTextElementEditable() const final { return !hasAutoFillStrongPasswordButton() && HTMLTextFormControlElement::isInnerTextElementEditable(); }
 
     bool canTriggerImplicitSubmission() const final { return isTextField(); }
 
