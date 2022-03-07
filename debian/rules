@@ -25,6 +25,7 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON
+EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
 # Sacrifice speed in order to make it more likely resource limits
@@ -108,6 +109,11 @@ else ifeq ($(shell pkg-config --exists wpebackend-fdo-1.0 && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=ON
 else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
+endif
+
+# Lower max parallel jobs on Ubuntu's arm64 builder
+ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes) $(DEB_HOST_ARCH), yes arm64)
+	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
 endif
 
 # set the distributor agent for Ubuntu
@@ -194,8 +200,8 @@ override_dh_auto_configure:
 		-DENABLE_WEBDRIVER=OFF -DENABLE_GTKDOC=OFF
 
 override_dh_auto_build:
-	$(SOUP2_BUILD) dh_auto_build -Bbuild-soup2
-	$(SOUP3_BUILD) dh_auto_build -Bbuild-soup3
+	$(SOUP2_BUILD) dh_auto_build -Bbuild-soup2 $(EXTRA_BUILD_ARGUMENTS)
+	$(SOUP3_BUILD) dh_auto_build -Bbuild-soup3 $(EXTRA_BUILD_ARGUMENTS)
 
 override_dh_auto_install:
 	$(SOUP2_BUILD) dh_auto_install -Bbuild-soup2
