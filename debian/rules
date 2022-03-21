@@ -173,10 +173,10 @@ WEBKIT_DH_FILES = \
 	libwebkit2gtk-4.0-dev.lintian-overrides
 
 # This converts debhelper file names and contents to the soup3 versions
-WEBKIT_DH_RENAME = sed -e s/4.0-18/4.1-0/g \
-		       -e s/4.0-37/4.1-0/g \
-		       -e s/4.0.so.37/4.1.so.0/g \
-		       -e s/4.0/4.1/g
+WEBKIT_DH_RENAME = sed -e 's/4\.0-18/4.1-0/g' \
+		       -e 's/4\.0-37/4.1-0/g' \
+		       -e 's/4\.0\.so\.37/4.1.so.0/g' \
+		       -e 's/4\.0/4.1/g'
 
 %:
 	dh $@ --with gir --buildsystem=cmake+ninja $(EXTRA_DH_ARGUMENTS)
