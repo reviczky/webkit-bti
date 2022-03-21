@@ -201,9 +201,6 @@ auto RangeInputType::handleKeydownEvent(KeyboardEvent& event) -> ShouldCallBaseE
 {
     ASSERT(element());
 
-    if (!hasCreatedShadowSubtree())
-        return ShouldCallBaseEventHandler::Yes;
-
     if (element()->isDisabledFormControl())
         return ShouldCallBaseEventHandler::Yes;
 
