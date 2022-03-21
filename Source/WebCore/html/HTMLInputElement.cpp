@@ -135,6 +135,7 @@ HTMLInputElement::HTMLInputElement(const QualifiedName& tagName, Document& docum
     , m_hasTouchEventHandler(false)
 #endif
     , m_isSpellcheckDisabledExceptTextReplacement(false)
+    , m_hasPendingUserAgentShadowTreeUpdate(false)
 {
     // m_inputType is lazily created when constructed by the parser to avoid constructing unnecessarily a text inputType,
     // just to destroy them when the |type| attribute gets set by the parser to something else than 'text'.
@@ -1573,7 +1574,19 @@ Node::InsertedIntoAncestorResult HTMLInputElement::insertedIntoAncestor(Insertio
 #endif
     if (isRadioButton())
         updateValidity();
+    if (insertionType.connectedToDocument && !m_hasPendingUserAgentShadowTreeUpdate) {
+        document().addElementWithPendingUserAgentShadowTreeUpdate(*this);
+        m_hasPendingUserAgentShadowTreeUpdate = true;
+    }
     return InsertedIntoAncestorResult::NeedsPostInsertionCallback;
+}
+
+void HTMLInputElement::updateUserAgentShadowTree()
+{
+    ASSERT(m_hasPendingUserAgentShadowTreeUpdate);
+    document().removeElementWithPendingUserAgentShadowTreeUpdate(*this);
+    m_hasPendingUserAgentShadowTreeUpdate = false;
+    m_inputType->createShadowSubtreeIfNeeded();
 }
 
 void HTMLInputElement::didFinishInsertingNode()
@@ -1581,8 +1594,6 @@ void HTMLInputElement::didFinishInsertingNode()
     HTMLTextFormControlElement::didFinishInsertingNode();
     if (isInTreeScope() && !form())
         addToRadioButtonGroup();
-    if (isConnected())
-        m_inputType->createShadowSubtreeIfNeeded();
 }
 
 void HTMLInputElement::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
