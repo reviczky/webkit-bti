@@ -1,4 +1,4 @@
-webkit2gtk (2.36.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.36.0-1) unstable; urgency=medium
 
   * New upstream release.
   * Refresh all patches.
@@ -37,7 +37,7 @@ webkit2gtk (2.36.0-1) UNRELEASED; urgency=medium
     + debian/not-installed:
       - Don't install the 4.1 build of the JSC command-line interpreter.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 03 Mar 2022 19:05:47 +0100
+ -- Alberto Garcia <berto@igalia.com>  Mon, 21 Mar 2022 23:10:15 +0100
 
 webkit2gtk (2.34.6-1) unstable; urgency=high
 
