@@ -27,6 +27,7 @@ Build-Depends: debhelper-compat (= 12),
                libxslt1-dev (>= 1.1.7),
                libxml2-dev (>= 2.8),
                libsoup2.4-dev (>= 2.54.0),
+               libsoup-3.0-dev,
                libsqlite3-dev (>= 3.0),
                libsystemd-dev [linux-any],
                libgudev-1.0-dev [linux-any],
@@ -56,7 +57,6 @@ Build-Depends-Indep: gtk-doc-tools,
                libglib2.0-doc,
                libgtk-3-doc,
                libsoup2.4-doc
-Build-Conflicts: gir-repository-dev
 Standards-Version: 4.6.0.1
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
@@ -80,6 +80,23 @@ Description: JavaScript engine library from WebKitGTK
  .
  This package contains the shared libraries.
 
+Package: libjavascriptcoregtk-4.1-0
+Section: libs
+Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Description: JavaScript engine library from WebKitGTK
+ JavaScriptCore is the JavaScript engine used in WebKit. It consists
+ of the following building blocks: lexer, parser, start-up interpreter
+ (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
+ high-throughput optimizing JIT (FTL).
+ .
+ This build comes from the GTK port of WebKit (API version 4.1).
+ .
+ This package contains the shared libraries.
+
 Package: libjavascriptcoregtk-4.0-dev
 Section: libdevel
 Architecture: any
@@ -98,13 +115,30 @@ Description: JavaScript engine library from WebKitGTK - development files
  .
  This package contains the development files.
 
+Package: libjavascriptcoregtk-4.1-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: libjavascriptcoregtk-4.1-0 (= ${binary:Version}),
+         gir1.2-javascriptcoregtk-4.1 (= ${binary:Version}),
+         libglib2.0-dev,
+         ${misc:Depends}
+Description: JavaScript engine library from WebKitGTK - development files
+ JavaScriptCore is the JavaScript engine used in WebKit. It consists
+ of the following building blocks: lexer, parser, start-up interpreter
+ (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
+ high-throughput optimizing JIT (FTL).
+ .
+ This build comes from the GTK port of WebKit (API version 4.1).
+ .
+ This package contains the development files.
+
 Package: libjavascriptcoregtk-4.0-bin
 Section: interpreters
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
-Conflicts: libjavascriptcoregtk-3.0-bin
 Description: JavaScript engine library from WebKitGTK - command-line interpreter
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
@@ -122,7 +156,6 @@ Multi-Arch: same
 Depends: ${gir:Depends},
          libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${misc:Depends}
-Conflicts: gobject-introspection-repository
 Description: JavaScript engine library from WebKitGTK - GObject introspection data
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
@@ -130,6 +163,24 @@ Description: JavaScript engine library from WebKitGTK - GObject introspection da
  high-throughput optimizing JIT (FTL).
  .
  This build comes from the GTK port of WebKit (API version 4.0).
+ .
+ This package contains the introspection data, which can be used by
+ packages using the GIRepository format to generate dynamic bindings.
+
+Package: gir1.2-javascriptcoregtk-4.1
+Section: introspection
+Architecture: any
+Multi-Arch: same
+Depends: ${gir:Depends},
+         libjavascriptcoregtk-4.1-0 (= ${binary:Version}),
+         ${misc:Depends}
+Description: JavaScript engine library from WebKitGTK - GObject introspection data
+ JavaScriptCore is the JavaScript engine used in WebKit. It consists
+ of the following building blocks: lexer, parser, start-up interpreter
+ (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
+ high-throughput optimizing JIT (FTL).
+ .
+ This build comes from the GTK port of WebKit (API version 4.1).
  .
  This package contains the introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
@@ -160,13 +211,40 @@ Description: Web content engine library for GTK
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
- This build comes from the GTK port of WebKit (API version 4.0).
+ This package contains the shared libraries.
+
+Package: libwebkit2gtk-4.1-0
+Section: libs
+Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: libjavascriptcoregtk-4.1-0 (= ${binary:Version}),
+         gstreamer1.0-plugins-base,
+         gstreamer1.0-plugins-good,
+         ${bwrap:Depends},
+         ${shlibs:Depends},
+         ${misc:Depends}
+Recommends: gstreamer1.0-gl,
+            libgl1-mesa-dri,
+            ${bwrap:Recommends},
+            ${gst:Recommends}
+Suggests: ${gst:Suggests},
+         gstreamer1.0-alsa
+Description: Web content engine library for GTK
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
  .
- This is the library for embedding in GTK applications.
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.1 of the API.
+ .
+ This package contains the shared libraries.
 
 Package: libwebkit2gtk-4.0-dev
 Section: libdevel
@@ -175,7 +253,7 @@ Multi-Arch: same
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          gir1.2-webkit2-4.0 (= ${binary:Version}),
          libgtk-3-dev,
-         libsoup2.4-dev (>= 2.40),
+         libsoup2.4-dev,
          libjavascriptcoregtk-4.0-dev (= ${binary:Version}),
          ${misc:Depends}
 Description: Web content engine library for GTK - development files
@@ -186,11 +264,31 @@ Description: Web content engine library for GTK - development files
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
- This build comes from the GTK port of WebKit (API version 4.0).
+ This package contains the development files.
+
+Package: libwebkit2gtk-4.1-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: libwebkit2gtk-4.1-0 (= ${binary:Version}),
+         gir1.2-webkit2-4.1 (= ${binary:Version}),
+         libgtk-3-dev,
+         libsoup-3.0-dev,
+         libjavascriptcoregtk-4.1-dev (= ${binary:Version}),
+         ${misc:Depends}
+Description: Web content engine library for GTK - development files
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
+ .
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.1 of the API.
  .
  This package contains the development files.
 
@@ -209,11 +307,8 @@ Description: Web content engine library for GTK - documentation
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
- .
- This build comes from the GTK port of WebKit (API version 4.0).
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
  This package contains the documentation.
 
@@ -233,11 +328,30 @@ Description: Web content engine library for GTK - GObject introspection data
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
- This build comes from the GTK port of WebKit (API version 4.0).
+ This package contains introspection data, which can be used by
+ packages using the GIRepository format to generate dynamic bindings.
+
+Package: gir1.2-webkit2-4.1
+Section: introspection
+Architecture: any
+Multi-Arch: same
+Depends: gir1.2-javascriptcoregtk-4.1 (= ${binary:Version}),
+         libwebkit2gtk-4.1-0 (= ${binary:Version}),
+         ${gir:Depends},
+         ${misc:Depends}
+Description: Web content engine library for GTK - GObject introspection data
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
+ .
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.1 of the API.
  .
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
@@ -256,11 +370,8 @@ Description: WebKitGTK WebDriver support
  It is able to display content such as HTML, SVG, XML, and others. It also
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
- WebKit2 is an API layer for WebKit designed from the ground up to
- support a split process model, where the web content lives in a
- separate process from the application UI.
- .
- This build comes from the GTK port of WebKit (API version 4.0).
+ WebKitGTK is a WebKit port designed to be used in GTK applications,
+ and this build provides version 4.0 of the API.
  .
  This package provides the WebDriver service implementation for
  WebKitGTK.

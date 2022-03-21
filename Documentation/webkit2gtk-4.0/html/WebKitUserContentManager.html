@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitUserContentManager: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitUserContentFilterStore.html" title="WebKitUserContentFilterStore">
 <link rel="next" href="webkit2gtk-4.0-WebKitUserContent.html" title="User content">
-<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -99,7 +99,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">gboolean</span>
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-register-script-message-handler" title="webkit_user_content_manager_register_script_message_handler ()">webkit_user_content_manager_register_script_message_handler</a> <span class="c_punctuation">()</span>
@@ -115,7 +115,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">gboolean</span>
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-register-script-message-handler-in-world" title="webkit_user_content_manager_register_script_message_handler_in_world ()">webkit_user_content_manager_register_script_message_handler_in_world</a> <span class="c_punctuation">()</span>
@@ -175,7 +175,7 @@
 <tbody><tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitUserContentManager.html#WebKitUserContentManager-script-message-received" title="The “script-message-received” signal">script-message-received</a></td>
-<td class="signal_flags">Has Details</td>
+<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-DETAILED:CAPS">Has Details</a></td>
 </tr></tbody>
 </table></div>
 </div>
@@ -194,7 +194,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitUserContentManager.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    GObject
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitUserContentManager
 </pre>
 </div>
@@ -409,10 +409,10 @@ webkit_user_content_manager_remove_all_scripts
 <hr>
 <div class="refsect2">
 <a name="webkit-user-content-manager-register-script-message-handler"></a><h3>webkit_user_content_manager_register_script_message_handler ()</h3>
-<pre class="programlisting"><span class="returnvalue">gboolean</span>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_user_content_manager_register_script_message_handler
                                (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *name</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *name</code></em>);</pre>
 <p>Registers a new user script message handler. After it is registered,
 scripts can use <code class="literal">window.webkit.messageHandlers.&amp;lt;name&amp;gt;.postMessage(value)</code>
 to send messages. Those messages are received by connecting handlers
@@ -466,7 +466,7 @@ name has been already registered before.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-user-content-manager-register-script-message-handler.returns"></a><h4>Returns</h4>
-<p> <code class="literal">TRUE</code> if message handler was registered successfully, or <code class="literal">FALSE</code> otherwise.</p>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if message handler was registered successfully, or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
 </div>
@@ -476,7 +476,7 @@ name has been already registered before.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_user_content_manager_unregister_script_message_handler
                                (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *name</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *name</code></em>);</pre>
 <p>Unregisters a previously registered message handler.</p>
 <p>Note that this does *not* disconnect handlers for the
 <a class="link" href="WebKitUserContentManager.html#WebKitUserContentManager-script-message-received" title="The “script-message-received” signal"><span class="type">“script-message-received”</span></a> signal;
@@ -510,11 +510,11 @@ unless the handler name is registered again.</p>
 <hr>
 <div class="refsect2">
 <a name="webkit-user-content-manager-register-script-message-handler-in-world"></a><h3>webkit_user_content_manager_register_script_message_handler_in_world ()</h3>
-<pre class="programlisting"><span class="returnvalue">gboolean</span>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_user_content_manager_register_script_message_handler_in_world
                                (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *name</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *world_name</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *name</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *world_name</code></em>);</pre>
 <p>Registers a new user script message handler in script world with name <em class="parameter"><code>world_name</code></em>
 .
 See <a class="link" href="WebKitUserContentManager.html#webkit-user-content-manager-register-script-message-handler" title="webkit_user_content_manager_register_script_message_handler ()"><code class="function">webkit_user_content_manager_register_script_message_handler()</code></a> for full description.</p>
@@ -549,7 +549,7 @@ name has been already registered before.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-user-content-manager-register-script-message-handler-in-world.returns"></a><h4>Returns</h4>
-<p> <code class="literal">TRUE</code> if message handler was registered successfully, or <code class="literal">FALSE</code> otherwise.</p>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if message handler was registered successfully, or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
 </div>
@@ -559,8 +559,8 @@ name has been already registered before.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_user_content_manager_unregister_script_message_handler_in_world
                                (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *name</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *world_name</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *name</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *world_name</code></em>);</pre>
 <p>Unregisters a previously registered message handler in script world with name <em class="parameter"><code>world_name</code></em>
 .</p>
 <p>Note that this does *not* disconnect handlers for the
@@ -737,7 +737,7 @@ webkit_user_content_manager_remove_all_filters
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *manager,
                <a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="type">WebKitJavascriptResult</span></a>   *js_result,
-               <span class="type">gpointer</span>                  user_data)</pre>
+               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                  user_data)</pre>
 <p>This signal is emitted when JavaScript in a web view calls</p>
 <code class="code">window.webkit.messageHandlers.&lt;name&gt;.postMessage()</code>, after registering
 <code class="code">&lt;name&gt;</code> using
@@ -769,12 +769,12 @@ user_function (<a class="link" href="WebKitUserContentManager.html" title="WebKi
 </tbody>
 </table></div>
 </div>
-<p>Flags: Has Details</p>
+<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-DETAILED:CAPS">Has Details</a></p>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.1</div>
+<hr>Generated by GTK-Doc V1.33.0</div>
 </body>
 </html>

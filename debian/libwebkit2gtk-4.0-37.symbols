@@ -4,11 +4,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (c++)"WebKit::WebProcessMain(int, char**)@Base" 2.27.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
- (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE15s_didInitializeE@Base 2.33.90
- (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE5s_keyE@Base 2.33.90
- (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.33.90
- webkit_accessible_get_type@Base 2.33.90
- webkit_accessible_hyperlink_get_type@Base 2.33.90
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
  webkit_application_info_get_version@Base 2.17.90
@@ -17,8 +12,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_application_info_set_name@Base 2.17.90
  webkit_application_info_set_version@Base 2.17.90
  webkit_application_info_unref@Base 2.17.90
- webkit_audio_sink_get_type@Base 2.33.90
- webkit_authentication_dialog_get_type@Base 2.33.90
  webkit_authentication_request_authenticate@Base 2.5.3
  webkit_authentication_request_can_save_credentials@Base 2.5.3
  webkit_authentication_request_cancel@Base 2.5.3
@@ -56,7 +49,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_back_forward_list_item_get_type@Base 2.5.3
  webkit_back_forward_list_item_get_uri@Base 2.5.3
  webkit_cache_model_get_type@Base 2.5.3
- webkit_cached_resolver_get_type@Base 2.33.90
  webkit_color_chooser_request_cancel@Base 2.8.1
  webkit_color_chooser_request_finish@Base 2.8.1
  webkit_color_chooser_request_get_element_rectangle@Base 2.8.1
@@ -1524,8 +1516,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_get_major_version@Base 2.5.3
  webkit_get_micro_version@Base 2.5.3
  webkit_get_minor_version@Base 2.5.3
- webkit_gl_video_sink_get_type@Base 2.33.90
- webkit_gst_common_debug@Base 2.33.90
  webkit_hardware_acceleration_policy_get_type@Base 2.15.4
  webkit_hit_test_result_context_get_type@Base 2.5.3
  webkit_hit_test_result_context_is_editable@Base 2.5.3
@@ -1547,7 +1537,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_input_method_context_get_input_purpose@Base 2.27.4
  webkit_input_method_context_get_preedit@Base 2.27.4
  webkit_input_method_context_get_type@Base 2.27.4
- webkit_input_method_context_impl_gtk_get_type@Base 2.33.90
  webkit_input_method_context_notify_cursor_area@Base 2.27.4
  webkit_input_method_context_notify_focus_in@Base 2.27.4
  webkit_input_method_context_notify_focus_out@Base 2.27.4
@@ -1563,7 +1552,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_input_method_underline_set_color@Base 2.27.4
  webkit_input_purpose_get_type@Base 2.27.4
  webkit_insecure_content_event_get_type@Base 2.5.3
- webkit_inspector_window_get_type@Base 2.33.90
  webkit_install_missing_media_plugins_permission_request_get_description@Base 2.10.0
  webkit_install_missing_media_plugins_permission_request_get_type@Base 2.10.0
  webkit_itp_first_party_get_domain@Base 2.29.4
@@ -1589,8 +1577,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_media_capture_state_get_type@Base 2.33.3
  webkit_media_key_system_permission_get_name@Base 2.31.90
  webkit_media_key_system_permission_request_get_type@Base 2.31.90
- webkit_media_player_debug@Base 2.33.90
- webkit_media_src_get_type@Base 2.33.90
  webkit_memory_pressure_settings_copy@Base 2.33.3
  webkit_memory_pressure_settings_free@Base 2.33.3
  webkit_memory_pressure_settings_get_conservative_threshold@Base 2.33.3
@@ -1611,7 +1597,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_mime_info_get_type@Base 2.5.3
  webkit_mime_info_ref@Base 2.5.3
  webkit_mime_info_unref@Base 2.5.3
- webkit_mse_debug@Base 2.33.90
  webkit_navigation_action_copy@Base 2.5.3
  webkit_navigation_action_free@Base 2.5.3
  webkit_navigation_action_get_modifiers@Base 2.5.3
@@ -1705,7 +1690,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_script_dialog_get_dialog_type@Base 2.5.3
  webkit_script_dialog_get_message@Base 2.5.3
  webkit_script_dialog_get_type@Base 2.5.3
- webkit_script_dialog_impl_get_type@Base 2.33.90
  webkit_script_dialog_prompt_get_default_text@Base 2.5.3
  webkit_script_dialog_prompt_set_text@Base 2.5.3
  webkit_script_dialog_ref@Base 2.23.1
@@ -1867,7 +1851,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_error_quark@Base 2.5.3
  webkit_snapshot_options_get_type@Base 2.5.3
  webkit_snapshot_region_get_type@Base 2.5.3
- webkit_text_sink_get_type@Base 2.33.90
  webkit_tls_errors_policy_get_type@Base 2.5.3
  webkit_uri_for_display@Base 2.23.90
  webkit_uri_request_get_http_headers@Base 2.5.3
@@ -1885,11 +1868,19 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_uri_response_get_uri@Base 2.5.3
  webkit_uri_scheme_request_finish@Base 2.5.3
  webkit_uri_scheme_request_finish_error@Base 2.5.3
+ webkit_uri_scheme_request_finish_with_response@Base 2.35.1
+ webkit_uri_scheme_request_get_http_headers@Base 2.35.1
+ webkit_uri_scheme_request_get_http_method@Base 2.35.1
  webkit_uri_scheme_request_get_path@Base 2.5.3
  webkit_uri_scheme_request_get_scheme@Base 2.5.3
  webkit_uri_scheme_request_get_type@Base 2.5.3
  webkit_uri_scheme_request_get_uri@Base 2.5.3
  webkit_uri_scheme_request_get_web_view@Base 2.5.3
+ webkit_uri_scheme_response_get_type@Base 2.35.1
+ webkit_uri_scheme_response_new@Base 2.35.1
+ webkit_uri_scheme_response_set_content_type@Base 2.35.1
+ webkit_uri_scheme_response_set_http_headers@Base 2.35.1
+ webkit_uri_scheme_response_set_status@Base 2.35.1
  webkit_user_content_filter_error_get_type@Base 2.23.91
  webkit_user_content_filter_error_quark@Base 2.23.91
  webkit_user_content_filter_get_identifier@Base 2.23.91
@@ -2016,7 +2007,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_inspector_get_web_view@Base 2.5.3
  webkit_web_inspector_is_attached@Base 2.5.3
  webkit_web_inspector_show@Base 2.5.3
- webkit_web_page_accessibility_object_get_type@Base 2.33.90
  webkit_web_page_get_dom_document@Base 2.5.3
  webkit_web_page_get_editor@Base 2.10.0
  webkit_web_page_get_id@Base 2.5.3
@@ -2031,15 +2021,12 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_resource_get_response@Base 2.5.3
  webkit_web_resource_get_type@Base 2.5.3
  webkit_web_resource_get_uri@Base 2.5.3
- webkit_web_src_get_type@Base 2.33.90
- webkit_web_view_accessible_get_type@Base 2.33.90
  webkit_web_view_base_get_type@Base 2.5.3
  webkit_web_view_can_execute_editing_command@Base 2.5.3
  webkit_web_view_can_execute_editing_command_finish@Base 2.5.3
  webkit_web_view_can_go_back@Base 2.5.3
  webkit_web_view_can_go_forward@Base 2.5.3
  webkit_web_view_can_show_mime_type@Base 2.5.3
- webkit_web_view_dialog_get_type@Base 2.33.90
  webkit_web_view_download_uri@Base 2.5.3
  webkit_web_view_execute_editing_command@Base 2.5.3
  webkit_web_view_execute_editing_command_with_argument@Base 2.10.0

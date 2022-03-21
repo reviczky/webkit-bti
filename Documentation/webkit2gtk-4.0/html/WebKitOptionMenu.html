@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitOptionMenu: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem">
 <link rel="next" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem">
-<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -43,7 +43,7 @@
 <tbody>
 <tr>
 <td class="function_type">
-<span class="returnvalue">guint</span>
+<a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitOptionMenu.html#webkit-option-menu-get-n-items" title="webkit_option_menu_get_n_items ()">webkit_option_menu_get_n_items</a> <span class="c_punctuation">()</span>
@@ -95,7 +95,7 @@
 <tbody><tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitOptionMenu.html#WebKitOptionMenu-close" title="The “close” signal">close</a></td>
-<td class="signal_flags">Run Last</td>
+<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
 </tr></tbody>
 </table></div>
 </div>
@@ -114,7 +114,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitOptionMenu.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    GObject
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitOptionMenu
 </pre>
 </div>
@@ -129,7 +129,7 @@
 <a name="WebKitOptionMenu.functions_details"></a><h2>Functions</h2>
 <div class="refsect2">
 <a name="webkit-option-menu-get-n-items"></a><h3>webkit_option_menu_get_n_items ()</h3>
-<pre class="programlisting"><span class="returnvalue">guint</span>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
 webkit_option_menu_get_n_items (<em class="parameter"><code><a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu</code></em>);</pre>
 <p>Gets the length of the <em class="parameter"><code>menu</code></em>
 .</p>
@@ -160,7 +160,7 @@ webkit_option_menu_get_n_items (<em class="parameter"><code><a class="link" href
 <a name="webkit-option-menu-get-item"></a><h3>webkit_option_menu_get_item ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="returnvalue">WebKitOptionMenuItem</span></a> *
 webkit_option_menu_get_item (<em class="parameter"><code><a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu</code></em>,
-                             <em class="parameter"><code><span class="type">guint</span> index</code></em>);</pre>
+                             <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> index</code></em>);</pre>
 <p>Returns the <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> at <em class="parameter"><code>index</code></em>
  in <em class="parameter"><code>menu</code></em>
 .</p>
@@ -190,7 +190,7 @@ webkit_option_menu_get_item (<em class="parameter"><code><a class="link" href="W
 <a name="webkit-option-menu-get-item.returns"></a><h4>Returns</h4>
 <p>a <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> of <em class="parameter"><code>menu</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
@@ -199,7 +199,7 @@ webkit_option_menu_get_item (<em class="parameter"><code><a class="link" href="W
 <a name="webkit-option-menu-select-item"></a><h3>webkit_option_menu_select_item ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_option_menu_select_item (<em class="parameter"><code><a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu</code></em>,
-                                <em class="parameter"><code><span class="type">guint</span> index</code></em>);</pre>
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> index</code></em>);</pre>
 <p>Selects the <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> at <em class="parameter"><code>index</code></em>
  in <em class="parameter"><code>menu</code></em>
 . Selecting an item changes the
@@ -235,7 +235,7 @@ explicitly activate the item with <a class="link" href="WebKitOptionMenu.html#we
 <a name="webkit-option-menu-activate-item"></a><h3>webkit_option_menu_activate_item ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_option_menu_activate_item (<em class="parameter"><code><a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu</code></em>,
-                                  <em class="parameter"><code><span class="type">guint</span> index</code></em>);</pre>
+                                  <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> index</code></em>);</pre>
 <p>Activates the <a class="link" href="WebKitOptionMenuItem.html" title="WebKitOptionMenuItem"><span class="type">WebKitOptionMenuItem</span></a> at <em class="parameter"><code>index</code></em>
  in <em class="parameter"><code>menu</code></em>
 . Activating an item changes the value
@@ -307,7 +307,7 @@ unchanged.</p>
 <a name="WebKitOptionMenu-close"></a><h3>The <code class="literal">“close”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu,
-               <span class="type">gpointer</span>          user_data)</pre>
+               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>          user_data)</pre>
 <p>Emitted when closing a <a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> is requested. This can happen
 when the user explicitly calls <a class="link" href="WebKitOptionMenu.html#webkit-option-menu-close" title="webkit_option_menu_close ()"><code class="function">webkit_option_menu_close()</code></a> or when the
 element is detached from the current page.</p>
@@ -333,12 +333,12 @@ element is detached from the current page.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: Run Last</p>
+<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
 <p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.1</div>
+<hr>Generated by GTK-Doc V1.33.0</div>
 </body>
 </html>

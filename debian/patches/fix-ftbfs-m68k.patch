@@ -38,8 +38,8 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -50,6 +50,10 @@ struct SameSizeAsElementRareData : NodeR
- 
+@@ -45,6 +45,10 @@ struct SameSizeAsElementRareData : NodeR
+     void* resizeObserverData;
  };
  
 +#if defined(__m68k__)
@@ -69,7 +69,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -59,10 +59,14 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -61,10 +61,14 @@ struct SameSizeAsShadowRoot : public Doc
      std::optional<HashMap<AtomString, AtomString>> partMappings;
  };
  
@@ -88,7 +88,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/RenderStyle.cpp
 +++ webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
-@@ -66,7 +66,11 @@ struct SameSizeAsBorderValue {
+@@ -68,7 +68,11 @@ struct SameSizeAsBorderValue {
      int m_restBits;
  };
  
@@ -100,7 +100,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  
  struct SameSizeAsRenderStyle {
      void* dataRefs[7];
-@@ -84,7 +88,11 @@ struct SameSizeAsRenderStyle {
+@@ -86,7 +90,11 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -132,7 +132,7 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-@@ -48,7 +48,11 @@ struct SameSizeAsFontCascadeDescription
+@@ -49,7 +49,11 @@ struct SameSizeAsFontCascadeDescription
      unsigned bitfields3 : 10;
  };
  
@@ -143,12 +143,12 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +#endif
  
  FontCascadeDescription::FontCascadeDescription()
-     : m_isAbsoluteSize(false)
+     : m_families(RefCountedFixedVector<AtomString>::create(1))
 Index: webkitgtk/Source/WebCore/style/RuleData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/style/RuleData.cpp
 +++ webkitgtk/Source/WebCore/style/RuleData.cpp
-@@ -59,7 +59,11 @@ struct SameSizeAsRuleData {
+@@ -56,7 +56,11 @@ struct SameSizeAsRuleData {
      unsigned d[4];
  };
  
@@ -176,7 +176,7 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5455,3 +5460,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5468,3 +5473,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  
@@ -187,7 +187,7 @@ Index: webkitgtk/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
 +++ webkitgtk/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
-@@ -53,7 +53,11 @@ struct SameSizeAsLegacyInlineFlowBox : p
+@@ -55,7 +55,11 @@ struct SameSizeAsLegacyInlineFlowBox : p
      void* pointers[5];
  };
  
@@ -203,7 +203,7 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
 +++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -79,7 +79,11 @@ struct SameSizeAsCSSValue {
+@@ -81,7 +81,11 @@ struct SameSizeAsCSSValue {
      uint32_t bitfields;
  };
  
@@ -213,5 +213,5 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
  COMPILE_ASSERT(sizeof(CSSValue) == sizeof(SameSizeAsCSSValue), CSS_value_should_stay_small);
 +#endif
  
- bool CSSValue::isImplicitInitialValue() const
- {
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CSSValue);
+ 

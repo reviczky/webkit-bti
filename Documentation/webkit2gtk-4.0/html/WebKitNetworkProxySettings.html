@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitNetworkProxySettings: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitWebsiteData.html" title="WebKitWebsiteData">
 <link rel="next" href="WebKitAutomationSession.html" title="WebKitAutomationSession">
-<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -96,7 +96,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitNetworkProxySettings.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    GBoxed
+<pre class="screen">    <a href="../gobject/gobject-Boxed-Types.html">GBoxed</a>
     <span class="lineart">╰──</span> WebKitNetworkProxySettings
 </pre>
 </div>
@@ -111,8 +111,8 @@ with <a class="link" href="WebKitNetworkProxySettings.html#WEBKIT-NETWORK-PROXY-
 <div class="refsect2">
 <a name="webkit-network-proxy-settings-new"></a><h3>webkit_network_proxy_settings_new ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="returnvalue">WebKitNetworkProxySettings</span></a> *
-webkit_network_proxy_settings_new (<em class="parameter"><code>const <span class="type">gchar</span> *default_proxy_uri</code></em>,
-                                   <em class="parameter"><code>const <span class="type">gchar</span> * const *ignore_hosts</code></em>);</pre>
+webkit_network_proxy_settings_new (<em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *default_proxy_uri</code></em>,
+                                   <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *ignore_hosts</code></em>);</pre>
 <p>Create a new <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a> with the given <em class="parameter"><code>default_proxy_uri</code></em>
  and <em class="parameter"><code>ignore_hosts</code></em>
 .</p>
@@ -158,7 +158,7 @@ contains only "192.168.1.1", then a connection to "example.com" will use the pro
 <tbody>
 <tr>
 <td class="parameter_name"><p>default_proxy_uri</p></td>
-<td class="parameter_description"><p>the default proxy URI to use, or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>the default proxy URI to use, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
@@ -172,7 +172,7 @@ contains only "192.168.1.1", then a connection to "example.com" will use the pro
 <div class="refsect3">
 <a name="webkit-network-proxy-settings-new.returns"></a><h4>Returns</h4>
 <p>A new <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a>. </p>
-<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
@@ -200,7 +200,7 @@ webkit_network_proxy_settings_copy (<em class="parameter"><code><a class="link" 
 <div class="refsect3">
 <a name="webkit-network-proxy-settings-copy.returns"></a><h4>Returns</h4>
 <p>A copy of passed in <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a>. </p>
-<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
@@ -233,8 +233,8 @@ webkit_network_proxy_settings_free (<em class="parameter"><code><a class="link" 
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_network_proxy_settings_add_proxy_for_scheme
                                (<em class="parameter"><code><a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a> *proxy_settings</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *scheme</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *proxy_uri</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *scheme</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *proxy_uri</code></em>);</pre>
 <p>Adds a URI-scheme-specific proxy. URIs whose scheme matches <em class="parameter"><code>uri_scheme</code></em>
  will be proxied via <em class="parameter"><code>proxy_uri</code></em>
 .
@@ -324,6 +324,6 @@ all three of the socks5, socks4a, and socks4 proxy types.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.1</div>
+<hr>Generated by GTK-Doc V1.33.0</div>
 </body>
 </html>

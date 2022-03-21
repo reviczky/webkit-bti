@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>User content: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitUserContentManager.html" title="WebKitUserContentManager">
 <link rel="next" href="webkit2gtk-4.0-The-title-for-the-notification..html" title="The title for the notification.">
-<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -167,7 +167,7 @@
 </div>
 <div class="refsect1">
 <a name="webkit2gtk-4.0-WebKitUserContent.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    GBoxed
+<pre class="screen">    <a href="../gobject/gobject-Boxed-Types.html">GBoxed</a>
     <span class="lineart">├──</span> WebKitUserContentFilter
     <span class="lineart">├──</span> WebKitUserScript
     <span class="lineart">╰──</span> WebKitUserStyleSheet
@@ -238,16 +238,16 @@ called from any thread.</p>
 <div class="refsect2">
 <a name="webkit-user-style-sheet-new"></a><h3>webkit_user_style_sheet_new ()</h3>
 <pre class="programlisting"><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleSheet"><span class="returnvalue">WebKitUserStyleSheet</span></a> *
-webkit_user_style_sheet_new (<em class="parameter"><code>const <span class="type">gchar</span> *source</code></em>,
+webkit_user_style_sheet_new (<em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *source</code></em>,
                              <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentInjectedFrames" title="enum WebKitUserContentInjectedFrames"><span class="type">WebKitUserContentInjectedFrames</span></a> injected_frames</code></em>,
                              <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleLevel" title="enum WebKitUserStyleLevel"><span class="type">WebKitUserStyleLevel</span></a> level</code></em>,
-                             <em class="parameter"><code>const <span class="type">gchar</span> * const *allow_list</code></em>,
-                             <em class="parameter"><code>const <span class="type">gchar</span> * const *block_list</code></em>);</pre>
+                             <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *allow_list</code></em>,
+                             <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *block_list</code></em>);</pre>
 <p>Creates a new user style sheet. Style sheets can be applied to some URIs
 only by passing non-null values for <em class="parameter"><code>allow_list</code></em>
  or <em class="parameter"><code>block_list</code></em>
 . Passing a
-<code class="literal">NULL</code> allow_list implies that all URIs are on the allow_list. The style
+<a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> allow_list implies that all URIs are on the allow_list. The style
 sheet is applied if an URI matches the allow_list and not the block_list.
 URI patterns must be of the form <code class="literal">[protocol]://[host]/[path]</code>, where the
 *host* and *path* components can contain the wildcard character (<code class="literal">*</code>) to
@@ -278,12 +278,12 @@ represent zero or more other characters.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>allow_list</p></td>
-<td class="parameter_description"><p>An allow_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>An allow_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>block_list</p></td>
-<td class="parameter_description"><p>A block_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>A block_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -299,12 +299,12 @@ represent zero or more other characters.</p>
 <div class="refsect2">
 <a name="webkit-user-style-sheet-new-for-world"></a><h3>webkit_user_style_sheet_new_for_world ()</h3>
 <pre class="programlisting"><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleSheet"><span class="returnvalue">WebKitUserStyleSheet</span></a> *
-webkit_user_style_sheet_new_for_world (<em class="parameter"><code>const <span class="type">gchar</span> *source</code></em>,
+webkit_user_style_sheet_new_for_world (<em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *source</code></em>,
                                        <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentInjectedFrames" title="enum WebKitUserContentInjectedFrames"><span class="type">WebKitUserContentInjectedFrames</span></a> injected_frames</code></em>,
                                        <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleLevel" title="enum WebKitUserStyleLevel"><span class="type">WebKitUserStyleLevel</span></a> level</code></em>,
-                                       <em class="parameter"><code>const <span class="type">gchar</span> *world_name</code></em>,
-                                       <em class="parameter"><code>const <span class="type">gchar</span> * const *allow_list</code></em>,
-                                       <em class="parameter"><code>const <span class="type">gchar</span> * const *block_list</code></em>);</pre>
+                                       <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *world_name</code></em>,
+                                       <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *allow_list</code></em>,
+                                       <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *block_list</code></em>);</pre>
 <p>Creates a new user style sheet for script world with name <em class="parameter"><code>world_name</code></em>
 .
 See <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-style-sheet-new" title="webkit_user_style_sheet_new ()"><code class="function">webkit_user_style_sheet_new()</code></a> for a full description.</p>
@@ -339,12 +339,12 @@ See <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-styl
 </tr>
 <tr>
 <td class="parameter_name"><p>allow_list</p></td>
-<td class="parameter_description"><p>An allow_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>An allow_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>block_list</p></td>
-<td class="parameter_description"><p>A block_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>A block_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -416,16 +416,16 @@ from any thread.</p>
 <div class="refsect2">
 <a name="webkit-user-script-new"></a><h3>webkit_user_script_new ()</h3>
 <pre class="programlisting"><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScript"><span class="returnvalue">WebKitUserScript</span></a> *
-webkit_user_script_new (<em class="parameter"><code>const <span class="type">gchar</span> *source</code></em>,
+webkit_user_script_new (<em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *source</code></em>,
                         <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentInjectedFrames" title="enum WebKitUserContentInjectedFrames"><span class="type">WebKitUserContentInjectedFrames</span></a> injected_frames</code></em>,
                         <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScriptInjectionTime" title="enum WebKitUserScriptInjectionTime"><span class="type">WebKitUserScriptInjectionTime</span></a> injection_time</code></em>,
-                        <em class="parameter"><code>const <span class="type">gchar</span> * const *allow_list</code></em>,
-                        <em class="parameter"><code>const <span class="type">gchar</span> * const *block_list</code></em>);</pre>
+                        <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *allow_list</code></em>,
+                        <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *block_list</code></em>);</pre>
 <p>Creates a new user script. Scripts can be applied to some URIs
 only by passing non-null values for <em class="parameter"><code>allow_list</code></em>
  or <em class="parameter"><code>block_list</code></em>
 . Passing a
-<code class="literal">NULL</code> allow_list implies that all URIs are on the allow_list. The script
+<a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> allow_list implies that all URIs are on the allow_list. The script
 is applied if an URI matches the allow_list and not the block_list.
 URI patterns must be of the form <code class="literal">[protocol]://[host]/[path]</code>, where the
 *host* and *path* components can contain the wildcard character (<code class="literal">*</code>) to
@@ -456,12 +456,12 @@ represent zero or more other characters.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>allow_list</p></td>
-<td class="parameter_description"><p>An allow_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>An allow_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>block_list</p></td>
-<td class="parameter_description"><p>A block_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>A block_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -477,12 +477,12 @@ represent zero or more other characters.</p>
 <div class="refsect2">
 <a name="webkit-user-script-new-for-world"></a><h3>webkit_user_script_new_for_world ()</h3>
 <pre class="programlisting"><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScript"><span class="returnvalue">WebKitUserScript</span></a> *
-webkit_user_script_new_for_world (<em class="parameter"><code>const <span class="type">gchar</span> *source</code></em>,
+webkit_user_script_new_for_world (<em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *source</code></em>,
                                   <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentInjectedFrames" title="enum WebKitUserContentInjectedFrames"><span class="type">WebKitUserContentInjectedFrames</span></a> injected_frames</code></em>,
                                   <em class="parameter"><code><a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScriptInjectionTime" title="enum WebKitUserScriptInjectionTime"><span class="type">WebKitUserScriptInjectionTime</span></a> injection_time</code></em>,
-                                  <em class="parameter"><code>const <span class="type">gchar</span> *world_name</code></em>,
-                                  <em class="parameter"><code>const <span class="type">gchar</span> * const *allow_list</code></em>,
-                                  <em class="parameter"><code>const <span class="type">gchar</span> * const *block_list</code></em>);</pre>
+                                  <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *world_name</code></em>,
+                                  <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *allow_list</code></em>,
+                                  <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> * const *block_list</code></em>);</pre>
 <p>Creates a new user script for script world with name <em class="parameter"><code>world_name</code></em>
 .
 See <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-new" title="webkit_user_script_new ()"><code class="function">webkit_user_script_new()</code></a> for a full description.</p>
@@ -517,12 +517,12 @@ See <a class="link" href="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-scri
 </tr>
 <tr>
 <td class="parameter_name"><p>allow_list</p></td>
-<td class="parameter_description"><p>An allow_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>An allow_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>block_list</p></td>
-<td class="parameter_description"><p>A block_list of URI patterns or <code class="literal">NULL</code>. </p></td>
+<td class="parameter_description"><p>A block_list of URI patterns or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -613,7 +613,7 @@ webkit_user_content_filter_get_identifier
 <div class="refsect3">
 <a name="webkit-user-content-filter-get-identifier.returns"></a><h4>Returns</h4>
 <p>the identifier for the filter. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-24.html#api-index-2.24">2.24</a></p>
 </div>
@@ -742,6 +742,6 @@ script at the end of the loaded documents.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.1</div>
+<hr>Generated by GTK-Doc V1.33.0</div>
 </body>
 </html>

@@ -6,7 +6,7 @@ Index: webkitgtk/Source/cmake/OptionsCommon.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/OptionsCommon.cmake
 +++ webkitgtk/Source/cmake/OptionsCommon.cmake
-@@ -102,6 +102,12 @@ option(GCC_OFFLINEASM_SOURCE_MAP
+@@ -164,6 +164,12 @@ option(GCC_OFFLINEASM_SOURCE_MAP
  
  option(USE_APPLE_ICU "Use Apple's internal ICU" ${APPLE})
  

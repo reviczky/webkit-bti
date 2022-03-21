@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitDOMNamedNodeMap: WebKitDOMGTK+ Reference Manual</title>
-<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitDOMGTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitDOMMouseEvent.html" title="WebKitDOMMouseEvent">
 <link rel="next" href="WebKitDOMNode.html" title="WebKitDOMNode">
-<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -99,7 +99,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">gulong</span>
+<a href="../glib/glib-Basic-Types.html#gulong"><span class="returnvalue">gulong</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitDOMNamedNodeMap.html#webkit-dom-named-node-map-get-length" title="webkit_dom_named_node_map_get_length ()">webkit_dom_named_node_map_get_length</a> <span class="c_punctuation">()</span>
@@ -117,7 +117,7 @@
 <col width="200px" class="properties_flags">
 </colgroup>
 <tbody><tr>
-<td class="property_type"><span class="type">gulong</span></td>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></td>
 <td class="property_name"><a class="link" href="WebKitDOMNamedNodeMap.html#WebKitDOMNamedNodeMap--length" title="The “length” property">length</a></td>
 <td class="property_flags">Read</td>
 </tr></tbody>
@@ -138,7 +138,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDOMNamedNodeMap.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    GObject
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> <a class="link" href="WebKitDOMObject.html" title="WebKitDOMObject">WebKitDOMObject</a>
         <span class="lineart">╰──</span> WebKitDOMNamedNodeMap
 </pre>
@@ -153,7 +153,7 @@
 <pre class="programlisting"><a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="returnvalue">WebKitDOMNode</span></a> *
 webkit_dom_named_node_map_get_named_item
                                (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *name</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *name</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_get_named_item</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -174,7 +174,7 @@ webkit_dom_named_node_map_get_named_item
 </tr>
 <tr>
 <td class="parameter_name"><p>name</p></td>
-<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -183,7 +183,7 @@ webkit_dom_named_node_map_get_named_item
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-get-named-item.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a>. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -193,7 +193,7 @@ webkit_dom_named_node_map_get_named_item
 webkit_dom_named_node_map_set_named_item
                                (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>,
                                 <em class="parameter"><code><a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a> *node</code></em>,
-                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
+                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_set_named_item</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -219,7 +219,7 @@ webkit_dom_named_node_map_set_named_item
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><span class="type">GError</span></p></td>
+<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -228,7 +228,7 @@ webkit_dom_named_node_map_set_named_item
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-set-named-item.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a>. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -237,8 +237,8 @@ webkit_dom_named_node_map_set_named_item
 <pre class="programlisting"><a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="returnvalue">WebKitDOMNode</span></a> *
 webkit_dom_named_node_map_remove_named_item
                                (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *name</code></em>,
-                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *name</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_remove_named_item</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -259,12 +259,12 @@ webkit_dom_named_node_map_remove_named_item
 </tr>
 <tr>
 <td class="parameter_name"><p>name</p></td>
-<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><span class="type">GError</span></p></td>
+<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -273,7 +273,7 @@ webkit_dom_named_node_map_remove_named_item
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-remove-named-item.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a>. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -281,7 +281,7 @@ webkit_dom_named_node_map_remove_named_item
 <a name="webkit-dom-named-node-map-item"></a><h3>webkit_dom_named_node_map_item ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="returnvalue">WebKitDOMNode</span></a> *
 webkit_dom_named_node_map_item (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>,
-                                <em class="parameter"><code><span class="type">gulong</span> index</code></em>);</pre>
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a> index</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_item</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -302,7 +302,7 @@ webkit_dom_named_node_map_item (<em class="parameter"><code><a class="link" href
 </tr>
 <tr>
 <td class="parameter_name"><p>index</p></td>
-<td class="parameter_description"><p>A <span class="type">gulong</span></p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -311,7 +311,7 @@ webkit_dom_named_node_map_item (<em class="parameter"><code><a class="link" href
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-item.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a>. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -320,8 +320,8 @@ webkit_dom_named_node_map_item (<em class="parameter"><code><a class="link" href
 <pre class="programlisting"><a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="returnvalue">WebKitDOMNode</span></a> *
 webkit_dom_named_node_map_get_named_item_ns
                                (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *namespaceURI</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *localName</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *namespaceURI</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *localName</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_get_named_item_ns</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -342,12 +342,12 @@ webkit_dom_named_node_map_get_named_item_ns
 </tr>
 <tr>
 <td class="parameter_name"><p>namespaceURI</p></td>
-<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>localName</p></td>
-<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -356,7 +356,7 @@ webkit_dom_named_node_map_get_named_item_ns
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-get-named-item-ns.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a>. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -366,7 +366,7 @@ webkit_dom_named_node_map_get_named_item_ns
 webkit_dom_named_node_map_set_named_item_ns
                                (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>,
                                 <em class="parameter"><code><a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a> *node</code></em>,
-                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
+                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_set_named_item_ns</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -392,7 +392,7 @@ webkit_dom_named_node_map_set_named_item_ns
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><span class="type">GError</span></p></td>
+<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -401,7 +401,7 @@ webkit_dom_named_node_map_set_named_item_ns
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-set-named-item-ns.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a>. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -410,9 +410,9 @@ webkit_dom_named_node_map_set_named_item_ns
 <pre class="programlisting"><a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="returnvalue">WebKitDOMNode</span></a> *
 webkit_dom_named_node_map_remove_named_item_ns
                                (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *namespaceURI</code></em>,
-                                <em class="parameter"><code>const <span class="type">gchar</span> *localName</code></em>,
-                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *namespaceURI</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *localName</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_remove_named_item_ns</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -433,17 +433,17 @@ webkit_dom_named_node_map_remove_named_item_ns
 </tr>
 <tr>
 <td class="parameter_name"><p>namespaceURI</p></td>
-<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>localName</p></td>
-<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><span class="type">GError</span></p></td>
+<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -452,13 +452,13 @@ webkit_dom_named_node_map_remove_named_item_ns
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-remove-named-item-ns.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMNode.html" title="WebKitDOMNode"><span class="type">WebKitDOMNode</span></a>. </p>
-<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-dom-named-node-map-get-length"></a><h3>webkit_dom_named_node_map_get_length ()</h3>
-<pre class="programlisting"><span class="returnvalue">gulong</span>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gulong"><span class="returnvalue">gulong</span></a>
 webkit_dom_named_node_map_get_length (<em class="parameter"><code><a class="link" href="WebKitDOMNamedNodeMap.html" title="WebKitDOMNamedNodeMap"><span class="type">WebKitDOMNamedNodeMap</span></a> *self</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_named_node_map_get_length</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
@@ -481,7 +481,7 @@ webkit_dom_named_node_map_get_length (<em class="parameter"><code><a class="link
 </div>
 <div class="refsect3">
 <a name="webkit-dom-named-node-map-get-length.returns"></a><h4>Returns</h4>
-<p> A <span class="type">gulong</span></p>
+<p> A <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></p>
 </div>
 </div>
 </div>
@@ -496,7 +496,7 @@ webkit_dom_named_node_map_get_length (<em class="parameter"><code><a class="link
 <a name="WebKitDOMNamedNodeMap.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="WebKitDOMNamedNodeMap--length"></a><h3>The <code class="literal">“length”</code> property</h3>
-<pre class="programlisting">  “length”                   <span class="type">gulong</span></pre>
+<pre class="programlisting">  “length”                   <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></pre>
 <p>read-only gulong NamedNodeMap:length.</p>
 <p>Owner: WebKitDOMNamedNodeMap</p>
 <p>Flags: Read</p>
@@ -504,6 +504,6 @@ webkit_dom_named_node_map_get_length (<em class="parameter"><code><a class="link
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.1</div>
+<hr>Generated by GTK-Doc V1.33.0</div>
 </body>
 </html>

@@ -5,7 +5,27 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all optimize=-lto
 include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/buildflags.mk
 
-EXTRA_CMAKE_ARGUMENTS =
+# soup2 build -> 4.0 API packages, soup3 build -> 4.1 API packages
+ENABLE_SOUP2=YES
+ENABLE_SOUP3=YES
+
+# We can also disable the soup2/soup3 builds by removing the build deps
+ifeq ($(shell pkg-config --exists libsoup-2.4 || echo no),no)
+	ENABLE_SOUP2=NO
+endif
+ifeq ($(shell pkg-config --exists libsoup-3.0 || echo no),no)
+	ENABLE_SOUP3=NO
+endif
+
+EXTRA_DH_ARGUMENTS =
+EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
+	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
+	   -DCMAKE_C_FLAGS_RELEASE="" \
+	   -DCMAKE_C_FLAGS_DEBUG="" \
+	   -DCMAKE_CXX_FLAGS_RELEASE="" \
+	   -DCMAKE_CXX_FLAGS_DEBUG="" \
+	   -DENABLE_MINIBROWSER=ON
+EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
 
 # Sacrifice speed in order to make it more likely resource limits
@@ -25,9 +45,9 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON
 endif
 
-# Systemd and libmanette are Linux-only
+# Systemd/elogind and libmanette are Linux-only
 ifneq ($(DEB_HOST_ARCH_OS),linux)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEMD=OFF -DENABLE_GAMEPAD=OFF
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JOURNALD_LOG=OFF -DENABLE_GAMEPAD=OFF
 endif
 
 # See https://bugs.webkit.org/show_bug.cgi?id=197192
@@ -108,38 +128,103 @@ else
 	DH_GENCONTROL_ARGS += -Vgst:Recommends="gstreamer1.0-libav, gstreamer1.0-plugins-bad"
 endif
 
+CXXFLAGS=$(CFLAGS)
+
+# Disable commands and binary packages of the builds that we don't want
+ifneq ($(ENABLE_SOUP2),YES)
+	SOUP2_BUILD = @:
+	EXTRA_DH_ARGUMENTS += \
+		-Ngir1.2-javascriptcoregtk-4.0 \
+		-Ngir1.2-webkit2-4.0 \
+		-Nlibjavascriptcoregtk-4.0-18 \
+		-Nlibjavascriptcoregtk-4.0-bin \
+		-Nlibjavascriptcoregtk-4.0-dev \
+		-Nlibwebkit2gtk-4.0-37 \
+		-Nlibwebkit2gtk-4.0-dev \
+		-Nlibwebkit2gtk-4.0-doc \
+		-Nwebkit2gtk-driver
+endif
+ifneq ($(ENABLE_SOUP3),YES)
+	SOUP3_BUILD = @:
+	EXTRA_DH_ARGUMENTS += \
+		-Ngir1.2-javascriptcoregtk-4.1 \
+		-Ngir1.2-webkit2-4.1 \
+		-Nlibjavascriptcoregtk-4.1-0 \
+		-Nlibjavascriptcoregtk-4.1-dev \
+		-Nlibwebkit2gtk-4.1-0 \
+		-Nlibwebkit2gtk-4.1-dev
+endif
+
+# The debhelper files for the soup2 and soup3 builds are identical
+# (apart from the API version) so we generate the latter from the former.
+WEBKIT_DH_FILES = \
+	gir1.2-javascriptcoregtk-4.0.install \
+	gir1.2-javascriptcoregtk-4.0.lintian-overrides \
+	gir1.2-webkit2-4.0.install \
+	gir1.2-webkit2-4.0.lintian-overrides \
+	libjavascriptcoregtk-4.0-18.install \
+	libjavascriptcoregtk-4.0-dev.install \
+	libjavascriptcoregtk-4.0-dev.lintian-overrides \
+	libwebkit2gtk-4.0-37.docs \
+	libwebkit2gtk-4.0-37.install \
+	libwebkit2gtk-4.0-37.lintian-overrides \
+	libwebkit2gtk-4.0-37.symbols \
+	libwebkit2gtk-4.0-dev.install \
+	libwebkit2gtk-4.0-dev.lintian-overrides
+
+# This converts debhelper file names and contents to the soup3 versions
+WEBKIT_DH_RENAME = sed -e s/4.0-18/4.1-0/g \
+		       -e s/4.0-37/4.1-0/g \
+		       -e s/4.0.so.37/4.1.so.0/g \
+		       -e s/4.0/4.1/g
+
 %:
-	dh $@ --with gir --buildsystem=cmake+ninja
+	dh $@ --with gir --buildsystem=cmake+ninja $(EXTRA_DH_ARGUMENTS)
 
 override_dh_gencontrol:
 	dh_gencontrol -- $(DH_GENCONTROL_ARGS)
 
 override_dh_auto_configure:
-	CXXFLAGS="$(CFLAGS)" \
-	dh_auto_configure -- \
-	   -DPORT=GTK \
-	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
-	   -DCMAKE_C_FLAGS_RELEASE="" \
-	   -DCMAKE_C_FLAGS_DEBUG="" \
-	   -DCMAKE_CXX_FLAGS_RELEASE="" \
-	   -DCMAKE_CXX_FLAGS_DEBUG="" \
-	   -DENABLE_MINIBROWSER=ON \
-	   -DUSE_SOUP2=ON \
-	   $(EXTRA_CMAKE_ARGUMENTS)
+	if [ "$(ENABLE_SOUP3)" = "YES" ]; then \
+		echo debian/clean > debian/clean ; \
+		for src in $(WEBKIT_DH_FILES); do \
+			dst=`echo $$src | $(WEBKIT_DH_RENAME)` ; \
+			$(WEBKIT_DH_RENAME) debian/$$src > debian/$$dst ; \
+			echo debian/$$dst >> debian/clean ; \
+		done ; \
+	fi
+	$(SOUP2_BUILD) dh_auto_configure -Bbuild-soup2 -- \
+		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=ON
+	$(SOUP3_BUILD) dh_auto_configure -Bbuild-soup3 -- \
+		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=OFF \
+		-DENABLE_WEBDRIVER=OFF -DENABLE_GTKDOC=OFF
 
 override_dh_auto_build:
-	dh_auto_build $(EXTRA_BUILD_ARGUMENTS)
+	$(SOUP2_BUILD) dh_auto_build -Bbuild-soup2 $(EXTRA_BUILD_ARGUMENTS)
+	$(SOUP3_BUILD) dh_auto_build -Bbuild-soup3 $(EXTRA_BUILD_ARGUMENTS)
+
+override_dh_auto_install:
+	$(SOUP2_BUILD) dh_auto_install -Bbuild-soup2
+	$(SOUP3_BUILD) dh_auto_install -Bbuild-soup3
+
+override_dh_auto_clean:
+	$(SOUP2_BUILD) dh_auto_clean -Bbuild-soup2
+	$(SOUP3_BUILD) dh_auto_clean -Bbuild-soup3
+	find Source Tools -type f -name "*.pyc" -exec rm {} \;
+	find Source Tools -depth -type d -name __pycache__ -exec rmdir {} \;
 
 # Create a dummy doc directory in case the "nodoc" build option is set
 override_dh_install:
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
-	touch $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
+	mkdir -p debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
+	touch debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
 	dh_install
-	jdupes -rl $(CURDIR)/debian/libwebkit2gtk-4.0-doc/usr
+	jdupes -rl debian/libwebkit2gtk-4.0-doc/usr
 
 override_dh_makeshlibs:
-	dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle
-	dh_makeshlibs -plibjavascriptcoregtk-4.0-18
+	$(SOUP2_BUILD) dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle
+	$(SOUP2_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.0-18
+	$(SOUP3_BUILD) dh_makeshlibs -plibwebkit2gtk-4.1-0 -Xinjected-bundle
+	$(SOUP3_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.1-0
 
 override_dh_missing:
 	dh_missing --fail-missing

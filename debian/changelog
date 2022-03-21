@@ -1,7 +1,36 @@
-webkit2gtk (2.34.6-2) UNRELEASED; urgency=medium
+webkit2gtk (2.35.90-2) UNRELEASED; urgency=medium
 
+  * Bring all changes from the 2.35 (experimental) branch.
   * debian/control:
     + Make libjavascriptcoregtk-4.0-dev depend on libglib2.0-dev.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+  * debian/copyright:
+    + Update copyright information of all files.
+  * debian/gbp.conf:
+    + Update upstream branch name.
+  * debian/rules:
+    + USE_SYSTEMD was renamed to ENABLE_JOURNALD_LOG.
+  * debian/control:
+    + Remove all Conflicts: lines, they are obsolete.
+    + Make libjavascriptcoregtk-4.0-dev depend on libglib2.0-dev.
+    + Simplify descriptions and remove references to the WebKit2 API
+      layer.
+  * Build the 4.1 API version of the packages. These use libsoup 3 instead
+    of libsoup 2 but are otherwise identical to the 4.0 API packages.
+    + debian/control:
+      - Add build dependency on libsoup-3.0-dev.
+      - Add entries for the new packages. The 4.1 versions of the
+        WebDriver, JSC command-line interpreter and documentation are
+        currently not being generated.
+    + debian/rules:
+      - Add commands to build both sets of packages.
+    + debian/libwebkit2gtk-4.0-37.install:
+      - Update path of locale files to select only the exact API version.
+    + debian/not-installed:
+      - Don't install the 4.1 build of the JSC command-line interpreter.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 03 Mar 2022 19:05:47 +0100
 
