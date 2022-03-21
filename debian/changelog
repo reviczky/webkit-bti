@@ -1,6 +1,7 @@
 webkit2gtk (2.36.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Refresh all patches.
   * Bring all changes from the 2.35 (experimental) branch.
   * debian/control:
     + Make libjavascriptcoregtk-4.0-dev depend on libglib2.0-dev.

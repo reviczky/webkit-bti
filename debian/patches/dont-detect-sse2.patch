@@ -6,7 +6,7 @@ Index: webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/WebKitCompilerFlags.cmake
 +++ webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
-@@ -156,15 +156,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
+@@ -162,15 +162,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
          WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wno-expansion-to-defined)
      endif ()
  
