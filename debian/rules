@@ -117,6 +117,12 @@ ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes) $(DEB_HOST_ARCH), yes arm64)
 	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
 endif
 
+# Lower memory requirements on Debian's mipsel builder
+ifeq ($(shell dpkg-vendor --is Debian && echo yes) $(DEB_HOST_ARCH), yes mipsel)
+	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_UNIFIED_BUILDS=OFF
+endif
+
 # set the distributor agent for Ubuntu
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSER_AGENT_BRANDING="Ubuntu"
