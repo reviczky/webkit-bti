@@ -119,9 +119,11 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
 endif
 
-# Lower max parallel jobs on Ubuntu's arm64 builder
-ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes) $(DEB_HOST_ARCH), yes arm64)
+# Lower max parallel jobs on some of Ubuntu's builders
+ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
+ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64))
 	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
+endif
 endif
 
 # set the distributor agent for Ubuntu

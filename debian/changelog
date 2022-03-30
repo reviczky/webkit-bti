@@ -1,3 +1,9 @@
+webkit2gtk (2.36.0-4) UNRELEASED; urgency=medium
+
+  * Reduce the number of parallel build jobs on Ubuntu's amd64
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Mon, 04 Apr 2022 10:24:48 -0400
+
 webkit2gtk (2.36.0-3) unstable; urgency=medium
 
   * debian/rules:
