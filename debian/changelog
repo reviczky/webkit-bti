@@ -1,11 +1,11 @@
-webkit2gtk (2.36.0-3) UNRELEASED; urgency=medium
+webkit2gtk (2.36.0-3) unstable; urgency=medium
 
   * debian/rules:
     - Build with -Os, -g0 and ggc-min-expand=10 in mips / mipsel in order
       to lower the memory requirements and revert the changes from
       2.36.0-2 (thanks, Adrian Bunk).
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 04 Apr 2022 11:09:50 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 04 Apr 2022 12:58:57 +0200
 
 webkit2gtk (2.36.0-2) unstable; urgency=medium
 
