@@ -7,7 +7,7 @@ include /usr/share/dpkg/buildflags.mk
 
 # soup2 build -> 4.0 API packages, soup3 build -> 4.1 API packages
 ENABLE_SOUP2=YES
-ENABLE_SOUP3=YES
+ENABLE_SOUP3=NO
 
 # We can also disable the soup2/soup3 builds by removing the build deps
 ifeq ($(shell pkg-config --exists libsoup-2.4 || echo no),no)
@@ -20,6 +20,8 @@ endif
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
+	   -DCMAKE_C_COMPILER=clang \
+	   -DCMAKE_CXX_COMPILER=clang++ \
 	   -DCMAKE_C_FLAGS_RELEASE="" \
 	   -DCMAKE_C_FLAGS_DEBUG="" \
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
@@ -154,13 +156,6 @@ ifneq ($(ENABLE_SOUP2),YES)
 endif
 ifneq ($(ENABLE_SOUP3),YES)
 	SOUP3_BUILD = @:
-	EXTRA_DH_ARGUMENTS += \
-		-Ngir1.2-javascriptcoregtk-4.1 \
-		-Ngir1.2-webkit2-4.1 \
-		-Nlibjavascriptcoregtk-4.1-0 \
-		-Nlibjavascriptcoregtk-4.1-dev \
-		-Nlibwebkit2gtk-4.1-0 \
-		-Nlibwebkit2gtk-4.1-dev
 endif
 
 # The debhelper files for the soup2 and soup3 builds are identical

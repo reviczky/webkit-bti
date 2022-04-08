@@ -1,3 +1,17 @@
+webkit2gtk (2.36.0-3~deb11u1) bullseye-security; urgency=high
+
+  * Rebuild for bullseye-security.
+    - This fixes CVE-2022-22624, CVE-2022-22628 and CVE-2022-22629.
+  * gcc 10 segfaults when building webkit (see #1008098) so use clang instead.
+    - debian/rules: Tell CMake to use clang.
+    - debian/control: Build depend on clang.
+  * Build libsoup2 packages only.
+    - debian/rules: Set ENABLE_SOUP3=NO.
+    - debian/control: Remove build dependency on libsoup3 and remove the
+      entries for all 4.1 API packages (soup3 build).
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 08 Apr 2022 16:21:53 +0200
+
 webkit2gtk (2.36.0-3) unstable; urgency=medium
 
   * debian/rules:
