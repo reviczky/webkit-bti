@@ -7,6 +7,7 @@ Build-Depends: debhelper-compat (= 12),
                bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
                xdg-dbus-proxy [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
                libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
+               clang,
                cmake (>= 3.10),
                gperf,
                jdupes,
@@ -23,7 +24,7 @@ Build-Depends: debhelper-compat (= 12),
                libjpeg-dev,
                liblcms2-dev,
                libopenjp2-7-dev (>= 2.2.0),
-               libsoup-3.0-dev,
+               libsoup2.4-dev,
                libsqlite3-dev,
                libsystemd-dev,
                libtasn1-6-dev,
@@ -38,7 +39,7 @@ Build-Depends: debhelper-compat (= 12),
                wayland-protocols
 Build-Depends-Indep: gtk-doc-tools,
                libglib2.0-doc,
-               libsoup-3.0-doc
+               libsoup2.4-doc
 Standards-Version: 4.6.0.1
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
@@ -70,31 +71,6 @@ Description: Web content engine for embedded devices - development files
  .
  This package contains the development files.
 
-Package: libwpewebkit-1.1-dev
-Section: libdevel
-Architecture: linux-any
-Multi-Arch: same
-Depends: libwpewebkit-1.1-0 (= ${binary:Version}),
-         libglib2.0-dev,
-         libsoup-3.0-dev,
-         libwpe-1.0-dev,
-         ${misc:Depends}
-Description: Web content engine for embedded devices - development files
- WebKit is a modern web engine that is able to display content such as
- HTML, SVG, XML, and others. It also supports DOM, XMLHttpRequest,
- XSLT, CSS, JavaScript/ECMAScript and more.
- .
- WPE WebKit is a WebKit port optimized for embedded devices and,
- unlike the GTK port, it does not depend on any particular UI toolkit
- and can be adapted to different use cases. It is designed with
- hardware acceleration in mind, leveraging common 3D graphics APIs for
- best performance.
- .
- This build provides version 1.1 of the API and uses libsoup v3 for
- the networking stack.
- .
- This package contains the development files.
-
 Package: libwpewebkit-1.0-3
 Architecture: linux-any
 Multi-Arch: same
@@ -113,28 +89,6 @@ Description: Web content engine for embedded devices
  best performance.
  .
  This build provides version 1.0 of the API and uses libsoup v2 for
- the networking stack.
- .
- This package contains the shared libraries.
-
-Package: libwpewebkit-1.1-0
-Architecture: linux-any
-Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends},
-         ${bwrap:Depends}
-Suggests: libwpebackend-fdo-1.0-1
-Description: Web content engine for embedded devices
- WebKit is a modern web engine that is able to display content such as
- HTML, SVG, XML, and others. It also supports DOM, XMLHttpRequest,
- XSLT, CSS, JavaScript/ECMAScript and more.
- .
- WPE WebKit is a WebKit port optimized for embedded devices and,
- unlike the GTK port, it does not depend on any particular UI toolkit
- and can be adapted to different use cases. It is designed with
- hardware acceleration in mind, leveraging common 3D graphics APIs for
- best performance.
- .
- This build provides version 1.1 of the API and uses libsoup v3 for
  the networking stack.
  .
  This package contains the shared libraries.

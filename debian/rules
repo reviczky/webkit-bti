@@ -6,7 +6,7 @@ include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/buildflags.mk
 
 # soup2 build -> 1.0 API packages, soup3 build -> 1.1 API packages
-USE_SOUP_VERSION=3
+USE_SOUP_VERSION=2
 
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS =
@@ -14,9 +14,6 @@ DH_GENCONTROL_ARGS =
 
 ifeq ($(USE_SOUP_VERSION),2)
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SOUP2=ON
-	EXTRA_DH_ARGUMENTS += \
-		-Nlibwpewebkit-1.1-0 \
-		-Nlibwpewebkit-1.1-dev
 	DH_GENCONTROL_ARGS += -Vdriver:Depends="libwpewebkit-1.0-3 (= \$${binary:Version})"
 else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SOUP2=OFF
@@ -128,6 +125,8 @@ override_dh_auto_configure:
 	dh_auto_configure -- \
 	   -DPORT=WPE \
 	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
+	   -DCMAKE_C_COMPILER=clang \
+	   -DCMAKE_CXX_COMPILER=clang++ \
 	   -DCMAKE_C_FLAGS_RELEASE="" \
 	   -DCMAKE_C_FLAGS_DEBUG="" \
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
