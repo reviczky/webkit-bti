@@ -2158,36 +2158,36 @@ when the data of the request is available or
 28
 29
 30</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span>
-<span class="n">about_uri_scheme_request_cb</span> <span class="p">(</span><span class="n">WebKitURISchemeRequest</span> <span class="o">*</span><span class="n">request</span><span class="p">,</span>
-                             <span class="n">gpointer</span>                <span class="n">user_data</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">GInputStream</span> <span class="o">*</span><span class="n">stream</span><span class="p">;</span>
-    <span class="n">gsize</span>         <span class="n">stream_length</span><span class="p">;</span>
-    <span class="k">const</span> <span class="n">gchar</span>  <span class="o">*</span><span class="n">path</span><span class="p">;</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
+<span class="nf">about_uri_scheme_request_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitURISchemeRequest</span><span class="w"> </span><span class="o">*</span><span class="n">request</span><span class="p">,</span><span class="w"></span>
+<span class="w">                             </span><span class="n">gpointer</span><span class="w">                </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">GInputStream</span><span class="w"> </span><span class="o">*</span><span class="n">stream</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="n">gsize</span><span class="w">         </span><span class="n">stream_length</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">gchar</span><span class="w">  </span><span class="o">*</span><span class="n">path</span><span class="p">;</span><span class="w"></span>
 
-    <span class="n">path</span> <span class="o">=</span> <span class="n">webkit_uri_scheme_request_get_path</span> <span class="p">(</span><span class="n">request</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&quot;memory&quot;</span><span class="p">))</span> <span class="p">{</span>
-        <span class="cm">/* Create a GInputStream with the contents of memory about page, and set its length to stream_length */</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&quot;applications&quot;</span><span class="p">))</span> <span class="p">{</span>
-        <span class="cm">/* Create a GInputStream with the contents of applications about page, and set its length to stream_length */</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span> <span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s">&quot;example&quot;</span><span class="p">))</span> <span class="p">{</span>
-        <span class="n">gchar</span> <span class="o">*</span><span class="n">contents</span><span class="p">;</span>
+<span class="w">    </span><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_uri_scheme_request_get_path</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span><span class="w"> </span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;memory&quot;</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Create a GInputStream with the contents of memory about page, and set its length to stream_length */</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span><span class="w"> </span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;applications&quot;</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Create a GInputStream with the contents of applications about page, and set its length to stream_length */</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">g_strcmp0</span><span class="w"> </span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;example&quot;</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">gchar</span><span class="w"> </span><span class="o">*</span><span class="n">contents</span><span class="p">;</span><span class="w"></span>
 
-        <span class="n">contents</span> <span class="o">=</span> <span class="n">g_strdup_printf</span> <span class="p">(</span><span class="s">&quot;&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;</span><span class="p">);</span>
-        <span class="n">stream_length</span> <span class="o">=</span> <span class="n">strlen</span> <span class="p">(</span><span class="n">contents</span><span class="p">);</span>
-        <span class="n">stream</span> <span class="o">=</span> <span class="n">g_memory_input_stream_new_from_data</span> <span class="p">(</span><span class="n">contents</span><span class="p">,</span> <span class="n">stream_length</span><span class="p">,</span> <span class="n">g_free</span><span class="p">);</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="n">GError</span> <span class="o">*</span><span class="n">error</span><span class="p">;</span>
+<span class="w">        </span><span class="n">contents</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_strdup_printf</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">stream_length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">strlen</span><span class="w"> </span><span class="p">(</span><span class="n">contents</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">stream</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_memory_input_stream_new_from_data</span><span class="w"> </span><span class="p">(</span><span class="n">contents</span><span class="p">,</span><span class="w"> </span><span class="n">stream_length</span><span class="p">,</span><span class="w"> </span><span class="n">g_free</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">GError</span><span class="w"> </span><span class="o">*</span><span class="n">error</span><span class="p">;</span><span class="w"></span>
 
-        <span class="n">error</span> <span class="o">=</span> <span class="n">g_error_new</span> <span class="p">(</span><span class="n">ABOUT_HANDLER_ERROR</span><span class="p">,</span> <span class="n">ABOUT_HANDLER_ERROR_INVALID</span><span class="p">,</span> <span class="s">&quot;Invalid about:%s page.&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">);</span>
-        <span class="n">webkit_uri_scheme_request_finish_error</span> <span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">error</span><span class="p">);</span>
-        <span class="n">g_error_free</span> <span class="p">(</span><span class="n">error</span><span class="p">);</span>
-        <span class="k">return</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="n">webkit_uri_scheme_request_finish</span> <span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">stream</span><span class="p">,</span> <span class="n">stream_length</span><span class="p">,</span> <span class="s">&quot;text/html&quot;</span><span class="p">);</span>
-    <span class="n">g_object_unref</span> <span class="p">(</span><span class="n">stream</span><span class="p">);</span>
-<span class="p">}</span></pre></td>
+<span class="w">        </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_error_new</span><span class="w"> </span><span class="p">(</span><span class="n">ABOUT_HANDLER_ERROR</span><span class="p">,</span><span class="w"> </span><span class="n">ABOUT_HANDLER_ERROR_INVALID</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Invalid about:%s page.&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">path</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">webkit_uri_scheme_request_finish_error</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">g_error_free</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">return</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="n">webkit_uri_scheme_request_finish</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">stream</span><span class="p">,</span><span class="w"> </span><span class="n">stream_length</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;text/html&quot;</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">g_object_unref</span><span class="w"> </span><span class="p">(</span><span class="n">stream</span><span class="p">);</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>

@@ -430,11 +430,11 @@ receive the signals, it is recommended to connect to the signal
 3
 4
 5</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">view</span> <span class="o">=</span> <span class="n">webkit_web_view_new</span> <span class="p">();</span>
-<span class="n">WebKitUserContentManager</span> <span class="o">*</span><span class="n">manager</span> <span class="o">=</span> <span class="n">webkit_web_view_get_user_content_manager</span> <span class="p">();</span>
-<span class="n">g_signal_connect</span> <span class="p">(</span><span class="n">manager</span><span class="p">,</span> <span class="s">&quot;script-message-received::foobar&quot;</span><span class="p">,</span>
-                  <span class="n">G_CALLBACK</span> <span class="p">(</span><span class="n">handle_script_message</span><span class="p">),</span> <span class="nb">NULL</span><span class="p">);</span>
-<span class="n">webkit_user_content_manager_register_script_message_handler</span> <span class="p">(</span><span class="n">manager</span><span class="p">,</span> <span class="s">&quot;foobar&quot;</span><span class="p">);</span></pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_new</span><span class="w"> </span><span class="p">();</span><span class="w"></span>
+<span class="n">WebKitUserContentManager</span><span class="w"> </span><span class="o">*</span><span class="n">manager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_user_content_manager</span><span class="w"> </span><span class="p">();</span><span class="w"></span>
+<span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">manager</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;script-message-received::foobar&quot;</span><span class="p">,</span><span class="w"></span>
+<span class="w">                  </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">handle_script_message</span><span class="p">),</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span><span class="w"></span>
+<span class="n">webkit_user_content_manager_register_script_message_handler</span><span class="w"> </span><span class="p">(</span><span class="n">manager</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;foobar&quot;</span><span class="p">);</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>
