@@ -236,48 +236,48 @@ to apply the initial window properties. Then you can monitor the
 40
 41
 42</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span> <span class="n">ready_to_show_cb</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span> <span class="n">gpointer</span> <span class="n">user_data</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">GtkWidget</span> <span class="o">*</span><span class="n">window</span><span class="p">;</span>
-    <span class="n">WebKitWindowProperties</span> <span class="o">*</span><span class="n">window_properties</span><span class="p">;</span>
-    <span class="n">gboolean</span> <span class="n">visible</span><span class="p">;</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">ready_to_show_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"> </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">window</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="n">WebKitWindowProperties</span><span class="w"> </span><span class="o">*</span><span class="n">window_properties</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="n">gboolean</span><span class="w"> </span><span class="n">visible</span><span class="p">;</span><span class="w"></span>
 
-    <span class="cm">/* Create the window to contain the WebKitWebView */</span>
-    <span class="n">window</span> <span class="o">=</span> <span class="n">browser_window_new</span> <span class="p">();</span>
-    <span class="n">gtk_container_add</span> <span class="p">(</span><span class="n">GTK_CONTAINER</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="n">GTK_WIDGET</span> <span class="p">(</span><span class="n">web_view</span><span class="p">));</span>
-    <span class="n">gtk_widget_show</span> <span class="p">(</span><span class="n">GTK_WIDGET</span> <span class="p">(</span><span class="n">web_view</span><span class="p">));</span>
+<span class="w">    </span><span class="cm">/* Create the window to contain the WebKitWebView */</span><span class="w"></span>
+<span class="w">    </span><span class="n">window</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">browser_window_new</span><span class="w"> </span><span class="p">();</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_container_add</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_CONTAINER</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">));</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">));</span><span class="w"></span>
 
-    <span class="cm">/* Get the WebKitWindowProperties of the web view and monitor it */</span>
-    <span class="n">window_properties</span> <span class="o">=</span> <span class="n">webkit_web_view_get_window_properties</span> <span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
-    <span class="n">g_signal_connect</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">,</span> <span class="s">&quot;notify::geometry&quot;</span><span class="p">,</span>
-                      <span class="n">G_CALLBACK</span> <span class="p">(</span><span class="n">window_geometry_changed</span><span class="p">),</span> <span class="n">window</span><span class="p">);</span>
-    <span class="n">g_signal_connect</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">,</span> <span class="s">&quot;notify::toolbar-visible&quot;</span><span class="p">,</span>
-                      <span class="n">G_CALLBACK</span> <span class="p">(</span><span class="n">window_toolbar_visibility_changed</span><span class="p">),</span> <span class="n">window</span><span class="p">);</span>
-    <span class="n">g_signal_connect</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">,</span> <span class="s">&quot;notify::menubar-visible&quot;</span><span class="p">,</span>
-                      <span class="n">G_CALLBACK</span> <span class="p">(</span><span class="n">window_menubar_visibility_changed</span><span class="p">),</span> <span class="n">window</span><span class="p">);</span>
-    <span class="p">....</span>
+<span class="w">    </span><span class="cm">/* Get the WebKitWindowProperties of the web view and monitor it */</span><span class="w"></span>
+<span class="w">    </span><span class="n">window_properties</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_window_properties</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::geometry&quot;</span><span class="p">,</span><span class="w"></span>
+<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_geometry_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::toolbar-visible&quot;</span><span class="p">,</span><span class="w"></span>
+<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_toolbar_visibility_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::menubar-visible&quot;</span><span class="p">,</span><span class="w"></span>
+<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_menubar_visibility_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="p">....</span><span class="w"></span>
 
-    <span class="cm">/* Apply the window properties before showing the window */</span>
-    <span class="n">visible</span> <span class="o">=</span> <span class="n">webkit_window_properties_get_toolbar_visible</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">);</span>
-    <span class="n">browser_window_set_toolbar_visible</span> <span class="p">(</span><span class="n">BROWSER_WINDOW</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="n">visible</span><span class="p">);</span>
-    <span class="n">visible</span> <span class="o">=</span> <span class="n">webkit_window_properties_get_menubar_visible</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">);</span>
-    <span class="n">browser_window_set_menubar_visible</span> <span class="p">(</span><span class="n">BROWSER_WINDOW</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="n">visible</span><span class="p">);</span>
-    <span class="p">....</span>
+<span class="w">    </span><span class="cm">/* Apply the window properties before showing the window */</span><span class="w"></span>
+<span class="w">    </span><span class="n">visible</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_window_properties_get_toolbar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">browser_window_set_toolbar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">BROWSER_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">visible</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">visible</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_window_properties_get_menubar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">browser_window_set_menubar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">BROWSER_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">visible</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="p">....</span><span class="w"></span>
 
-    <span class="k">if</span> <span class="p">(</span><span class="n">webkit_window_properties_get_fullscreen</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">))</span> <span class="p">{</span>
-        <span class="n">gtk_window_fullscreen</span> <span class="p">(</span><span class="n">GTK_WINDOW</span> <span class="p">(</span><span class="n">window</span><span class="p">));</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="n">GdkRectangle</span> <span class="n">geometry</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">webkit_window_properties_get_fullscreen</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">gtk_window_fullscreen</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">));</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">GdkRectangle</span><span class="w"> </span><span class="n">geometry</span><span class="p">;</span><span class="w"></span>
 
-        <span class="n">gtk_window_set_resizable</span> <span class="p">(</span><span class="n">GTK_WINDOW</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span>
-                                  <span class="n">webkit_window_properties_get_resizable</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">));</span>
-        <span class="n">webkit_window_properties_get_geometry</span> <span class="p">(</span><span class="n">window_properties</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">geometry</span><span class="p">);</span>
-        <span class="n">gtk_window_move</span> <span class="p">(</span><span class="n">GTK_WINDOW</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="n">geometry</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="n">geometry</span><span class="p">.</span><span class="n">y</span><span class="p">);</span>
-        <span class="n">gtk_window_resize</span> <span class="p">(</span><span class="n">GTK_WINDOW</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="n">geometry</span><span class="p">.</span><span class="n">width</span><span class="p">,</span> <span class="n">geometry</span><span class="p">.</span><span class="n">height</span><span class="p">);</span>
-    <span class="p">}</span>
+<span class="w">        </span><span class="n">gtk_window_set_resizable</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"></span>
+<span class="w">                                  </span><span class="n">webkit_window_properties_get_resizable</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">));</span><span class="w"></span>
+<span class="w">        </span><span class="n">webkit_window_properties_get_geometry</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">geometry</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">gtk_window_move</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">y</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">gtk_window_resize</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">width</span><span class="p">,</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">height</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
 
-    <span class="n">gtk_widget_show</span> <span class="p">(</span><span class="n">window</span><span class="p">);</span>
-<span class="p">}</span></pre></td>
+<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">);</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>

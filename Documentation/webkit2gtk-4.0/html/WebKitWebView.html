@@ -3092,50 +3092,50 @@ a string:</p>
 42
 43
 44</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span>
-<span class="n">web_view_javascript_finished</span> <span class="p">(</span><span class="n">GObject</span>      <span class="o">*</span><span class="n">object</span><span class="p">,</span>
-                              <span class="n">GAsyncResult</span> <span class="o">*</span><span class="n">result</span><span class="p">,</span>
-                              <span class="n">gpointer</span>      <span class="n">user_data</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">WebKitJavascriptResult</span> <span class="o">*</span><span class="n">js_result</span><span class="p">;</span>
-    <span class="n">JSCValue</span>               <span class="o">*</span><span class="n">value</span><span class="p">;</span>
-    <span class="n">GError</span>                 <span class="o">*</span><span class="n">error</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
+<span class="nf">web_view_javascript_finished</span><span class="w"> </span><span class="p">(</span><span class="n">GObject</span><span class="w">      </span><span class="o">*</span><span class="n">object</span><span class="p">,</span><span class="w"></span>
+<span class="w">                              </span><span class="n">GAsyncResult</span><span class="w"> </span><span class="o">*</span><span class="n">result</span><span class="p">,</span><span class="w"></span>
+<span class="w">                              </span><span class="n">gpointer</span><span class="w">      </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">WebKitJavascriptResult</span><span class="w"> </span><span class="o">*</span><span class="n">js_result</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="n">JSCValue</span><span class="w">               </span><span class="o">*</span><span class="n">value</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="n">GError</span><span class="w">                 </span><span class="o">*</span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span><span class="w"></span>
 
-    <span class="n">js_result</span> <span class="o">=</span> <span class="n">webkit_web_view_run_javascript_finish</span> <span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span> <span class="p">(</span><span class="n">object</span><span class="p">),</span> <span class="n">result</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">error</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">js_result</span><span class="p">)</span> <span class="p">{</span>
-        <span class="n">g_warning</span> <span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span> <span class="n">error</span><span class="o">-&gt;</span><span class="n">message</span><span class="p">);</span>
-        <span class="n">g_error_free</span> <span class="p">(</span><span class="n">error</span><span class="p">);</span>
-        <span class="k">return</span><span class="p">;</span>
-    <span class="p">}</span>
+<span class="w">    </span><span class="n">js_result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_run_javascript_finish</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="w"> </span><span class="p">(</span><span class="n">object</span><span class="p">),</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">error</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">js_result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="o">-&gt;</span><span class="n">message</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">g_error_free</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">return</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
 
-    <span class="n">value</span> <span class="o">=</span> <span class="n">webkit_javascript_result_get_js_value</span> <span class="p">(</span><span class="n">js_result</span><span class="p">);</span>
-    <span class="k">if</span> <span class="p">(</span><span class="n">jsc_value_is_string</span> <span class="p">(</span><span class="n">value</span><span class="p">))</span> <span class="p">{</span>
-        <span class="n">JSCException</span> <span class="o">*</span><span class="n">exception</span><span class="p">;</span>
-        <span class="n">gchar</span>        <span class="o">*</span><span class="n">str_value</span><span class="p">;</span>
+<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_javascript_result_get_js_value</span><span class="w"> </span><span class="p">(</span><span class="n">js_result</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_is_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">JSCException</span><span class="w"> </span><span class="o">*</span><span class="n">exception</span><span class="p">;</span><span class="w"></span>
+<span class="w">        </span><span class="n">gchar</span><span class="w">        </span><span class="o">*</span><span class="n">str_value</span><span class="p">;</span><span class="w"></span>
 
-        <span class="n">str_value</span> <span class="o">=</span> <span class="n">jsc_value_to_string</span> <span class="p">(</span><span class="n">value</span><span class="p">);</span>
-        <span class="n">exception</span> <span class="o">=</span> <span class="n">jsc_context_get_exception</span> <span class="p">(</span><span class="n">jsc_value_get_context</span> <span class="p">(</span><span class="n">value</span><span class="p">));</span>
-        <span class="k">if</span> <span class="p">(</span><span class="n">exception</span><span class="p">)</span>
-            <span class="n">g_warning</span> <span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span> <span class="n">jsc_exception_get_message</span> <span class="p">(</span><span class="n">exception</span><span class="p">));</span>
-        <span class="k">else</span>
-            <span class="nf">g_print</span> <span class="p">(</span><span class="s">&quot;Script result: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">str_value</span><span class="p">);</span>
-        <span class="n">g_free</span> <span class="p">(</span><span class="n">str_value</span><span class="p">);</span>
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-        <span class="n">g_warning</span> <span class="p">(</span><span class="s">&quot;Error running javascript: unexpected return value&quot;</span><span class="p">);</span>
-    <span class="p">}</span>
-    <span class="n">webkit_javascript_result_unref</span> <span class="p">(</span><span class="n">js_result</span><span class="p">);</span>
-<span class="p">}</span>
+<span class="w">        </span><span class="n">str_value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_value_to_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">exception</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_context_get_exception</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_get_context</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">));</span><span class="w"></span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">exception</span><span class="p">)</span><span class="w"></span>
+<span class="w">            </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">jsc_exception_get_message</span><span class="w"> </span><span class="p">(</span><span class="n">exception</span><span class="p">));</span><span class="w"></span>
+<span class="w">        </span><span class="k">else</span><span class="w"></span>
+<span class="w">            </span><span class="n">g_print</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Script result: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">str_value</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">g_free</span><span class="w"> </span><span class="p">(</span><span class="n">str_value</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: unexpected return value&quot;</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="n">webkit_javascript_result_unref</span><span class="w"> </span><span class="p">(</span><span class="n">js_result</span><span class="p">);</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
 
-<span class="k">static</span> <span class="kt">void</span>
-<span class="n">web_view_get_link_url</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
-                       <span class="k">const</span> <span class="n">gchar</span>   <span class="o">*</span><span class="n">link_id</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">gchar</span> <span class="o">*</span><span class="n">script</span><span class="p">;</span>
+<span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
+<span class="nf">web_view_get_link_url</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
+<span class="w">                       </span><span class="k">const</span><span class="w"> </span><span class="n">gchar</span><span class="w">   </span><span class="o">*</span><span class="n">link_id</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">gchar</span><span class="w"> </span><span class="o">*</span><span class="n">script</span><span class="p">;</span><span class="w"></span>
 
-    <span class="n">script</span> <span class="o">=</span> <span class="n">g_strdup_printf</span> <span class="p">(</span><span class="s">&quot;window.document.getElementById(&#39;%s&#39;).href;&quot;</span><span class="p">,</span> <span class="n">link_id</span><span class="p">);</span>
-    <span class="n">webkit_web_view_run_javascript</span> <span class="p">(</span><span class="n">web_view</span><span class="p">,</span> <span class="n">script</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">web_view_javascript_finished</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
-    <span class="n">g_free</span> <span class="p">(</span><span class="n">script</span><span class="p">);</span>
-<span class="p">}</span></pre></td>
+<span class="w">    </span><span class="n">script</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_strdup_printf</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;window.document.getElementById(&#39;%s&#39;).href;&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">link_id</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">webkit_web_view_run_javascript</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">,</span><span class="w"> </span><span class="n">script</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">,</span><span class="w"> </span><span class="n">web_view_javascript_finished</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">g_free</span><span class="w"> </span><span class="p">(</span><span class="n">script</span><span class="p">);</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -3849,22 +3849,22 @@ Note that the parent window must have a RGBA visual and
 14
 15
 16</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span> <span class="n">browser_window_set_background_color</span> <span class="p">(</span><span class="n">BrowserWindow</span> <span class="o">*</span><span class="n">window</span><span class="p">,</span>
-                                                 <span class="k">const</span> <span class="n">GdkRGBA</span> <span class="o">*</span><span class="n">rgba</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">;</span>
-    <span class="n">GdkScreen</span> <span class="o">*</span><span class="n">screen</span> <span class="o">=</span> <span class="n">gtk_window_get_screen</span> <span class="p">(</span><span class="n">GTK_WINDOW</span> <span class="p">(</span><span class="n">window</span><span class="p">));</span>
-    <span class="n">GdkVisual</span> <span class="o">*</span><span class="n">rgba_visual</span> <span class="o">=</span> <span class="n">gdk_screen_get_rgba_visual</span> <span class="p">(</span><span class="n">screen</span><span class="p">);</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">browser_window_set_background_color</span><span class="w"> </span><span class="p">(</span><span class="n">BrowserWindow</span><span class="w"> </span><span class="o">*</span><span class="n">window</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                 </span><span class="k">const</span><span class="w"> </span><span class="n">GdkRGBA</span><span class="w"> </span><span class="o">*</span><span class="n">rgba</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="n">GdkScreen</span><span class="w"> </span><span class="o">*</span><span class="n">screen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_window_get_screen</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">));</span><span class="w"></span>
+<span class="w">    </span><span class="n">GdkVisual</span><span class="w"> </span><span class="o">*</span><span class="n">rgba_visual</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gdk_screen_get_rgba_visual</span><span class="w"> </span><span class="p">(</span><span class="n">screen</span><span class="p">);</span><span class="w"></span>
 
-    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">rgba_visual</span><span class="p">)</span>
-         <span class="k">return</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">rgba_visual</span><span class="p">)</span><span class="w"></span>
+<span class="w">         </span><span class="k">return</span><span class="p">;</span><span class="w"></span>
 
-    <span class="n">gtk_widget_set_visual</span> <span class="p">(</span><span class="n">GTK_WIDGET</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="n">rgba_visual</span><span class="p">);</span>
-    <span class="n">gtk_widget_set_app_paintable</span> <span class="p">(</span><span class="n">GTK_WIDGET</span> <span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="n">TRUE</span><span class="p">);</span>
+<span class="w">    </span><span class="n">gtk_widget_set_visual</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">rgba_visual</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_widget_set_app_paintable</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">TRUE</span><span class="p">);</span><span class="w"></span>
 
-    <span class="n">web_view</span> <span class="o">=</span> <span class="n">browser_window_get_web_view</span> <span class="p">(</span><span class="n">window</span><span class="p">);</span>
-    <span class="n">webkit_web_view_set_background_color</span> <span class="p">(</span><span class="n">web_view</span><span class="p">,</span> <span class="n">rgba</span><span class="p">);</span>
-<span class="p">}</span></pre></td>
+<span class="w">    </span><span class="n">web_view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">browser_window_get_web_view</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">webkit_web_view_set_background_color</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">,</span><span class="w"> </span><span class="n">rgba</span><span class="p">);</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -6197,32 +6197,32 @@ specific type when making the decision. For example:</p>
 24
 25
 26</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="n">gboolean</span>
-<span class="n">decide_policy_cb</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
-                  <span class="n">WebKitPolicyDecision</span> <span class="o">*</span><span class="n">decision</span><span class="p">,</span>
-                  <span class="n">WebKitPolicyDecisionType</span> <span class="n">type</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="k">switch</span> <span class="p">(</span><span class="n">type</span><span class="p">)</span> <span class="p">{</span>
-    <span class="k">case</span> <span class="nl">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</span><span class="p">:</span> <span class="p">{</span>
-        <span class="n">WebKitNavigationPolicyDecision</span> <span class="o">*</span><span class="n">navigation_decision</span> <span class="o">=</span> <span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span> <span class="p">(</span><span class="n">decision</span><span class="p">);</span>
-        <span class="cm">/* Make a policy decision here. */</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="k">case</span> <span class="nl">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</span><span class="p">:</span> <span class="p">{</span>
-        <span class="n">WebKitNavigationPolicyDecision</span> <span class="o">*</span><span class="n">navigation_decision</span> <span class="o">=</span> <span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span> <span class="p">(</span><span class="n">decision</span><span class="p">);</span>
-        <span class="cm">/* Make a policy decision here. */</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="k">case</span> <span class="nl">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</span><span class="p">:</span>
-        <span class="n">WebKitResponsePolicyDecision</span> <span class="o">*</span><span class="n">response</span> <span class="o">=</span> <span class="n">WEBKIT_RESPONSE_POLICY_DECISION</span> <span class="p">(</span><span class="n">decision</span><span class="p">);</span>
-        <span class="cm">/* Make a policy decision here. */</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="k">default</span><span class="o">:</span>
-        <span class="cm">/* Making no decision results in webkit_policy_decision_use(). */</span>
-        <span class="k">return</span> <span class="n">FALSE</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="k">return</span> <span class="n">TRUE</span><span class="p">;</span>
-<span class="p">}</span></pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span><span class="w"> </span><span class="n">gboolean</span><span class="w"></span>
+<span class="nf">decide_policy_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
+<span class="w">                  </span><span class="n">WebKitPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">decision</span><span class="p">,</span><span class="w"></span>
+<span class="w">                  </span><span class="n">WebKitPolicyDecisionType</span><span class="w"> </span><span class="n">type</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Make a policy decision here. */</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Make a policy decision here. */</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="n">WebKitResponsePolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_RESPONSE_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Make a policy decision here. */</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Making no decision results in webkit_policy_decision_use(). */</span><span class="w"></span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">FALSE</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TRUE</span><span class="p">;</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -6453,32 +6453,32 @@ load operation.</p>
 24
 25
 26</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="kt">void</span> <span class="n">web_view_load_changed</span> <span class="p">(</span><span class="n">WebKitWebView</span>  <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
-                                   <span class="n">WebKitLoadEvent</span> <span class="n">load_event</span><span class="p">,</span>
-                                   <span class="n">gpointer</span>        <span class="n">user_data</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="k">switch</span> <span class="p">(</span><span class="n">load_event</span><span class="p">)</span> <span class="p">{</span>
-    <span class="k">case</span> <span class="nl">WEBKIT_LOAD_STARTED</span><span class="p">:</span>
-        <span class="cm">/* New load, we have now a provisional URI */</span>
-        <span class="n">provisional_uri</span> <span class="o">=</span> <span class="n">webkit_web_view_get_uri</span> <span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
-        <span class="cm">/* Here we could start a spinner or update the</span>
-<span class="cm">         * location bar with the provisional URI */</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="k">case</span> <span class="nl">WEBKIT_LOAD_REDIRECTED</span><span class="p">:</span>
-        <span class="n">redirected_uri</span> <span class="o">=</span> <span class="n">webkit_web_view_get_uri</span> <span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="k">case</span> <span class="nl">WEBKIT_LOAD_COMMITTED</span><span class="p">:</span>
-        <span class="cm">/* The load is being performed. Current URI is</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">web_view_load_changed</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w">  </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                   </span><span class="n">WebKitLoadEvent</span><span class="w"> </span><span class="n">load_event</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                   </span><span class="n">gpointer</span><span class="w">        </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">load_event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_STARTED</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* New load, we have now a provisional URI */</span><span class="w"></span>
+<span class="w">        </span><span class="n">provisional_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Here we could start a spinner or update the</span>
+<span class="cm">         * location bar with the provisional URI */</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_REDIRECTED</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="n">redirected_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_COMMITTED</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* The load is being performed. Current URI is</span>
 <span class="cm">         * the final one and it won&#39;t change unless a new</span>
 <span class="cm">         * load is requested or a navigation within the</span>
-<span class="cm">         * same page is performed */</span>
-        <span class="n">uri</span> <span class="o">=</span> <span class="n">webkit_web_view_get_uri</span> <span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="k">case</span> <span class="nl">WEBKIT_LOAD_FINISHED</span><span class="p">:</span>
-        <span class="cm">/* Load finished, we can now stop the spinner */</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="p">}</span>
-<span class="p">}</span></pre></td>
+<span class="cm">         * same page is performed */</span><span class="w"></span>
+<span class="w">        </span><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_FINISHED</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="cm">/* Load finished, we can now stop the spinner */</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -6736,30 +6736,30 @@ allowing the user decide what to do with the request:</p>
 22
 23
 24</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="k">static</span> <span class="n">gboolean</span> <span class="n">permission_request_cb</span> <span class="p">(</span><span class="n">WebKitWebView</span> <span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
-                                       <span class="n">WebKitPermissionRequest</span> <span class="o">*</span><span class="n">request</span><span class="p">,</span>
-                                       <span class="n">GtkWindow</span> <span class="o">*</span><span class="n">parent_window</span><span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">GtkWidget</span> <span class="o">*</span><span class="n">dialog</span> <span class="o">=</span> <span class="n">gtk_message_dialog_new</span> <span class="p">(</span><span class="n">parent_window</span><span class="p">,</span>
-                                                <span class="n">GTK_DIALOG_MODAL</span><span class="p">,</span>
-                                                <span class="n">GTK_MESSAGE_QUESTION</span><span class="p">,</span>
-                                                <span class="n">GTK_BUTTONS_YES_NO</span><span class="p">,</span>
-                                                <span class="s">&quot;Allow Permission Request?&quot;</span><span class="p">);</span>
-    <span class="n">gtk_widget_show</span> <span class="p">(</span><span class="n">dialog</span><span class="p">);</span>
-    <span class="n">gint</span> <span class="n">result</span> <span class="o">=</span> <span class="n">gtk_dialog_run</span> <span class="p">(</span><span class="n">GTK_DIALOG</span> <span class="p">(</span><span class="n">dialog</span><span class="p">));</span>
+        <td class="listing_code"><pre class="programlisting"><span class="k">static</span><span class="w"> </span><span class="n">gboolean</span><span class="w"> </span><span class="nf">permission_request_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                       </span><span class="n">WebKitPermissionRequest</span><span class="w"> </span><span class="o">*</span><span class="n">request</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                       </span><span class="n">GtkWindow</span><span class="w"> </span><span class="o">*</span><span class="n">parent_window</span><span class="p">)</span><span class="w"></span>
+<span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">dialog</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_message_dialog_new</span><span class="w"> </span><span class="p">(</span><span class="n">parent_window</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="n">GTK_DIALOG_MODAL</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="n">GTK_MESSAGE_QUESTION</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="n">GTK_BUTTONS_YES_NO</span><span class="p">,</span><span class="w"></span>
+<span class="w">                                                </span><span class="s">&quot;Allow Permission Request?&quot;</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">gint</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_dialog_run</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_DIALOG</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">));</span><span class="w"></span>
 
-    <span class="k">switch</span> <span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="p">{</span>
-    <span class="k">case</span> <span class="nl">GTK_RESPONSE_YES</span><span class="p">:</span>
-        <span class="n">webkit_permission_request_allow</span> <span class="p">(</span><span class="n">request</span><span class="p">);</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="k">default</span><span class="o">:</span>
-        <span class="n">webkit_permission_request_deny</span> <span class="p">(</span><span class="n">request</span><span class="p">);</span>
-        <span class="k">break</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="n">gtk_widget_destroy</span> <span class="p">(</span><span class="n">dialog</span><span class="p">);</span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">GTK_RESPONSE_YES</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="n">webkit_permission_request_allow</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"></span>
+<span class="w">        </span><span class="n">webkit_permission_request_deny</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_widget_destroy</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">);</span><span class="w"></span>
 
-    <span class="k">return</span> <span class="n">TRUE</span><span class="p">;</span>
-<span class="p">}</span></pre></td>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TRUE</span><span class="p">;</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span></pre></td>
       </tr>
     </tbody>
   </table>
