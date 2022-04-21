@@ -1,8 +1,12 @@
-webkit2gtk (2.36.0-4) UNRELEASED; urgency=medium
+webkit2gtk (2.36.1-1) UNRELEASED; urgency=medium
 
+  [ Alberto Garcia ]
+  * New upstream release.
+
+  [ Jeremy Bicha ]
   * Reduce the number of parallel build jobs on Ubuntu's amd64
 
- -- Jeremy Bicha <jbicha@ubuntu.com>  Mon, 04 Apr 2022 10:24:48 -0400
+ -- Alberto Garcia <berto@igalia.com>  Thu, 21 Apr 2022 16:47:44 +0200
 
 webkit2gtk (2.36.0-3) unstable; urgency=medium
 
