@@ -61,8 +61,8 @@ ifneq (,$(filter $(DEB_HOST_ARCH),powerpc))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_LD_GOLD=OFF
 endif
 
-# Lower memory requirements on mips/mipsel with only 2 GB address space
-ifneq (,$(filter $(DEB_HOST_ARCH),mips mipsel))
+# Lower memory requirements on architectures with only 2 GB address space
+ifneq (,$(filter $(DEB_HOST_ARCH),mips mipsel sh4))
 	CFLAGS := $(CFLAGS:-g1=-g0)
 	CFLAGS := $(CFLAGS:-O2=-Os)
 	CPPFLAGS += --param ggc-min-expand=10
