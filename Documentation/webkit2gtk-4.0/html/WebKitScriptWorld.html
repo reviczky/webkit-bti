@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitScriptWorld: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch02.html" title="Web Extensions">
 <link rel="prev" href="WebKitFrame.html" title="WebKitFrame">
 <link rel="next" href="WebKitWebHitTestResult.html" title="WebKitWebHitTestResult">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -86,7 +86,7 @@
 <tbody><tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitScriptWorld.html#WebKitScriptWorld-window-object-cleared" title="The “window-object-cleared” signal">window-object-cleared</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr></tbody>
 </table></div>
 </div>
@@ -105,7 +105,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitScriptWorld.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> WebKitScriptWorld
 </pre>
 </div>
@@ -125,7 +125,7 @@ for a given <a class="link" href="WebKitFrame.html" title="WebKitFrame"><span cl
 <div class="refsect3">
 <a name="webkit-script-world-get-default.returns"></a><h4>Returns</h4>
 <p>the default <a class="link" href="WebKitScriptWorld.html" title="WebKitScriptWorld"><span class="type">WebKitScriptWorld</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
@@ -145,7 +145,7 @@ for a given <a class="link" href="WebKitFrame.html" title="WebKitFrame"><span cl
 <div class="refsect3">
 <a name="webkit-script-world-new.returns"></a><h4>Returns</h4>
 <p>a new isolated <a class="link" href="WebKitScriptWorld.html" title="WebKitScriptWorld"><span class="type">WebKitScriptWorld</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
@@ -177,7 +177,7 @@ for a given <a class="link" href="WebKitFrame.html" title="WebKitFrame"><span cl
 <div class="refsect3">
 <a name="webkit-script-world-new-with-name.returns"></a><h4>Returns</h4>
 <p>a new isolated <a class="link" href="WebKitScriptWorld.html" title="WebKitScriptWorld"><span class="type">WebKitScriptWorld</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
 </div>
@@ -225,7 +225,7 @@ webkit_script_world_get_name (<em class="parameter"><code><a class="link" href="
 user_function (<a class="link" href="WebKitScriptWorld.html" title="WebKitScriptWorld"><span class="type">WebKitScriptWorld</span></a> *world,
                <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a>     *page,
                <a class="link" href="WebKitFrame.html" title="WebKitFrame"><span class="type">WebKitFrame</span></a>       *frame,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)</pre>
+               <span class="type">gpointer</span>           user_data)</pre>
 <p>Emitted when the JavaScript window object in a <a class="link" href="WebKitScriptWorld.html" title="WebKitScriptWorld"><span class="type">WebKitScriptWorld</span></a> has been
 cleared. This is the preferred place to set custom properties on the window
 object using the JavaScriptCore API. You can get the window object of <em class="parameter"><code>frame</code></em>
@@ -266,12 +266,12 @@ belongs</p></td>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitFrame: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch02.html" title="Web Extensions">
 <link rel="prev" href="WebKitWebPage.html" title="WebKitWebPage">
 <link rel="next" href="WebKitScriptWorld.html" title="WebKitScriptWorld">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -42,7 +42,7 @@
 <tbody>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#guint64"><span class="returnvalue">guint64</span></a>
+<span class="returnvalue">guint64</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitFrame.html#webkit-frame-get-id" title="webkit_frame_get_id ()">webkit_frame_get_id</a> <span class="c_punctuation">()</span>
@@ -50,14 +50,14 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitFrame.html#webkit-frame-is-main-frame" title="webkit_frame_is_main_frame ()">webkit_frame_is_main_frame</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
-<td class="function_type">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<td class="function_type">const <span class="returnvalue">gchar</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitFrame.html#webkit-frame-get-uri" title="webkit_frame_get_uri ()">webkit_frame_get_uri</a> <span class="c_punctuation">()</span>
@@ -129,7 +129,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitFrame.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> WebKitFrame
 </pre>
 </div>
@@ -140,7 +140,7 @@
 <a name="WebKitFrame.functions_details"></a><h2>Functions</h2>
 <div class="refsect2">
 <a name="webkit-frame-get-id"></a><h3>webkit_frame_get_id ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guint64"><span class="returnvalue">guint64</span></a>
+<pre class="programlisting"><span class="returnvalue">guint64</span>
 webkit_frame_get_id (<em class="parameter"><code><a class="link" href="WebKitFrame.html" title="WebKitFrame"><span class="type">WebKitFrame</span></a> *frame</code></em>);</pre>
 <p>Gets the process-unique identifier of this <a class="link" href="WebKitFrame.html" title="WebKitFrame"><span class="type">WebKitFrame</span></a>. No other
 frame in the same web process will have the same ID; however, frames
@@ -170,7 +170,7 @@ in other web processes may.</p>
 <hr>
 <div class="refsect2">
 <a name="webkit-frame-is-main-frame"></a><h3>webkit_frame_is_main_frame ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 webkit_frame_is_main_frame (<em class="parameter"><code><a class="link" href="WebKitFrame.html" title="WebKitFrame"><span class="type">WebKitFrame</span></a> *frame</code></em>);</pre>
 <p>Gets whether <em class="parameter"><code>frame</code></em>
  is the main frame of a <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a></p>
@@ -191,15 +191,15 @@ webkit_frame_is_main_frame (<em class="parameter"><code><a class="link" href="We
 </div>
 <div class="refsect3">
 <a name="webkit-frame-is-main-frame.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>frame</code></em>
-is a main frame or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
+<p> <code class="literal">TRUE</code> if <em class="parameter"><code>frame</code></em>
+is a main frame or <code class="literal">FALSE</code> otherwise</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-frame-get-uri"></a><h3>webkit_frame_get_uri ()</h3>
-<pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<pre class="programlisting">const <span class="returnvalue">gchar</span> *
 webkit_frame_get_uri (<em class="parameter"><code><a class="link" href="WebKitFrame.html" title="WebKitFrame"><span class="type">WebKitFrame</span></a> *frame</code></em>);</pre>
 <p>Gets the current active URI of <em class="parameter"><code>frame</code></em>
 .</p>
@@ -221,7 +221,7 @@ webkit_frame_get_uri (<em class="parameter"><code><a class="link" href="WebKitFr
 <div class="refsect3">
 <a name="webkit-frame-get-uri.returns"></a><h4>Returns</h4>
 <p> the current active URI of <em class="parameter"><code>frame</code></em>
-or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if nothing has been
+or <code class="literal">NULL</code> if nothing has been
 loaded yet.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
@@ -258,7 +258,7 @@ between the WebKit and JavaScriptCore APIs.</p>
 <a name="webkit-frame-get-javascript-global-context.returns"></a><h4>Returns</h4>
 <p>the global JavaScript context of <em class="parameter"><code>frame</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
@@ -303,7 +303,7 @@ webkit_frame_get_javascript_context_for_script_world
 <p>the JavaScript context of <em class="parameter"><code>frame</code></em>
 for <em class="parameter"><code>world</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
@@ -334,7 +334,7 @@ between the WebKit and JavaScriptCore APIs.</p>
 <a name="webkit-frame-get-js-context.returns"></a><h4>Returns</h4>
 <p>the <a href="../jsc-glib-4.0/JSCContext.html#JSCContext-struct"><span class="type">JSCContext</span></a> for the JavaScript execution context of <em class="parameter"><code>frame</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
 </div>
@@ -374,7 +374,7 @@ webkit_frame_get_js_context_for_script_world
 <p>the <a href="../jsc-glib-4.0/JSCContext.html#JSCContext-struct"><span class="type">JSCContext</span></a> for the JavaScript execution context of <em class="parameter"><code>frame</code></em>
 for <em class="parameter"><code>world</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
 </div>
@@ -414,7 +414,7 @@ context of <em class="parameter"><code>frame</code></em>
 <a name="webkit-frame-get-js-value-for-dom-object.returns"></a><h4>Returns</h4>
 <p>the <a href="../jsc-glib-4.0/JSCValue.html#JSCValue-struct"><span class="type">JSCValue</span></a> referencing <em class="parameter"><code>dom_object</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
 </div>
@@ -460,7 +460,7 @@ context of <em class="parameter"><code>frame</code></em>
 <a name="webkit-frame-get-js-value-for-dom-object-in-script-world.returns"></a><h4>Returns</h4>
 <p>the <a href="../jsc-glib-4.0/JSCValue.html#JSCValue-struct"><span class="type">JSCValue</span></a> referencing <em class="parameter"><code>dom_object</code></em>
 . </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
 </div>
@@ -474,6 +474,6 @@ context of <em class="parameter"><code>frame</code></em>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitWebResource: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitPrintOperation.html" title="WebKitPrintOperation">
 <link rel="next" href="webkit2gtk-4.0-WebKitError.html" title="WebKitError">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -43,7 +43,7 @@
 </colgroup>
 <tbody>
 <tr>
-<td class="function_type">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<td class="function_type">const <span class="returnvalue">gchar</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebResource.html#webkit-web-resource-get-uri" title="webkit_web_resource_get_uri ()">webkit_web_resource_get_uri</a> <span class="c_punctuation">()</span>
@@ -67,7 +67,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#guchar"><span class="returnvalue">guchar</span></a> *
+<span class="returnvalue">guchar</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebResource.html#webkit-web-resource-get-data-finish" title="webkit_web_resource_get_data_finish ()">webkit_web_resource_get_data_finish</a> <span class="c_punctuation">()</span>
@@ -112,27 +112,27 @@
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebResource.html#WebKitWebResource-failed" title="The “failed” signal">failed</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebResource.html#WebKitWebResource-failed-with-tls-errors" title="The “failed-with-tls-errors” signal">failed-with-tls-errors</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebResource.html#WebKitWebResource-finished" title="The “finished” signal">finished</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebResource.html#WebKitWebResource-received-data" title="The “received-data” signal">received-data</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebResource.html#WebKitWebResource-sent-request" title="The “sent-request” signal">sent-request</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 </tbody>
 </table></div>
@@ -152,7 +152,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> WebKitWebResource
 </pre>
 </div>
@@ -171,7 +171,7 @@ loaded.</p>
 <a name="WebKitWebResource.functions_details"></a><h2>Functions</h2>
 <div class="refsect2">
 <a name="webkit-web-resource-get-uri"></a><h3>webkit_web_resource_get_uri ()</h3>
-<pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+<pre class="programlisting">const <span class="returnvalue">gchar</span> *
 webkit_web_resource_get_uri (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource</code></em>);</pre>
 <p>Returns the current active URI of <em class="parameter"><code>resource</code></em>
 . The active URI might change during
@@ -225,7 +225,7 @@ signal of <em class="parameter"><code>resource</code></em>
 <pre class="programlisting"><a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="returnvalue">WebKitURIResponse</span></a> *
 webkit_web_resource_get_response (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource</code></em>);</pre>
 <p>Retrieves the <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a> of the resource load operation.
-This method returns <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if called before the response
+This method returns <code class="literal">NULL</code> if called before the response
 is received from the server. You can connect to notify::response
 signal to be notified when the response is received.</p>
 <div class="refsect3">
@@ -245,9 +245,9 @@ signal to be notified when the response is received.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-web-resource-get-response.returns"></a><h4>Returns</h4>
-<p>the <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if
+<p>the <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a>, or <code class="literal">NULL</code> if
 the response hasn't been received yet. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -255,9 +255,9 @@ the response hasn't been received yet. </p>
 <a name="webkit-web-resource-get-data"></a><h3>webkit_web_resource_get_data ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource</code></em>,
-                              <em class="parameter"><code><a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> *cancellable</code></em>,
-                              <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncReadyCallback"><span class="type">GAsyncReadyCallback</span></a> callback</code></em>,
-                              <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
+                              <em class="parameter"><code><span class="type">GCancellable</span> *cancellable</code></em>,
+                              <em class="parameter"><code><span class="type">GAsyncReadyCallback</span> callback</code></em>,
+                              <em class="parameter"><code><span class="type">gpointer</span> user_data</code></em>);</pre>
 <p>Asynchronously get the raw data for <em class="parameter"><code>resource</code></em>
 .</p>
 <p>When the operation is finished, <em class="parameter"><code>callback</code></em>
@@ -279,12 +279,12 @@ webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="
 </tr>
 <tr>
 <td class="parameter_name"><p>cancellable</p></td>
-<td class="parameter_description"><p>a <a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to ignore. </p></td>
+<td class="parameter_description"><p>a <span class="type">GCancellable</span> or <code class="literal">NULL</code> to ignore. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>callback</p></td>
-<td class="parameter_description"><p>a <a href="../gio/GAsyncResult.html#GAsyncReadyCallback"><span class="type">GAsyncReadyCallback</span></a> to call when the request is satisfied. </p></td>
+<td class="parameter_description"><p>a <span class="type">GAsyncReadyCallback</span> to call when the request is satisfied. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="The callback is valid until first called."><span class="acronym">scope async</span></acronym>]</span></td>
 </tr>
 <tr>
@@ -299,11 +299,11 @@ webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="
 <hr>
 <div class="refsect2">
 <a name="webkit-web-resource-get-data-finish"></a><h3>webkit_web_resource_get_data_finish ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guchar"><span class="returnvalue">guchar</span></a> *
+<pre class="programlisting"><span class="returnvalue">guchar</span> *
 webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource</code></em>,
-                                     <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncResult-struct"><span class="type">GAsyncResult</span></a> *result</code></em>,
-                                     <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gsize"><span class="type">gsize</span></a> *length</code></em>,
-                                     <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+                                     <em class="parameter"><code><span class="type">GAsyncResult</span> *result</code></em>,
+                                     <em class="parameter"><code><span class="type">gsize</span> *length</code></em>,
+                                     <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
 <p>Finish an asynchronous operation started with <a class="link" href="WebKitWebResource.html#webkit-web-resource-get-data" title="webkit_web_resource_get_data ()"><code class="function">webkit_web_resource_get_data()</code></a>.</p>
 <div class="refsect3">
 <a name="webkit-web-resource-get-data-finish.parameters"></a><h4>Parameters</h4>
@@ -321,7 +321,7 @@ webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link"
 </tr>
 <tr>
 <td class="parameter_name"><p>result</p></td>
-<td class="parameter_description"><p>a <a href="../gio/GAsyncResult.html#GAsyncResult-struct"><span class="type">GAsyncResult</span></a></p></td>
+<td class="parameter_description"><p>a <span class="type">GAsyncResult</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -331,7 +331,7 @@ webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link"
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p>return location for error or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to ignore</p></td>
+<td class="parameter_description"><p>return location for error or <code class="literal">NULL</code> to ignore</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -341,9 +341,9 @@ webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link"
 <a name="webkit-web-resource-get-data-finish.returns"></a><h4>Returns</h4>
 <p>a
 string with the data of <em class="parameter"><code>resource</code></em>
-, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> in case of error. if <em class="parameter"><code>length</code></em>
-is not <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>, the size of the data will be assigned to it. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>][<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> length=length][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> guint8]</span></p>
+, or <code class="literal">NULL</code> in case of error. if <em class="parameter"><code>length</code></em>
+is not <code class="literal">NULL</code>, the size of the data will be assigned to it. </p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>][<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> length=length][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> guint8]</span></p>
 </div>
 </div>
 </div>
@@ -380,8 +380,8 @@ See <a class="link" href="WebKitWebResource.html#webkit-web-resource-get-uri" ti
 <a name="WebKitWebResource-failed"></a><h3>The <code class="literal">“failed”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource,
-               <a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a>            *error,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)</pre>
+               <span class="type">GError</span>            *error,
+               <span class="type">gpointer</span>           user_data)</pre>
 <p>This signal is emitted when an error occurs during the resource
 load operation.</p>
 <div class="refsect3">
@@ -400,7 +400,7 @@ load operation.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p>the <a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> that was triggered</p></td>
+<td class="parameter_description"><p>the <span class="type">GError</span> that was triggered</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -411,16 +411,16 @@ load operation.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="WebKitWebResource-failed-with-tls-errors"></a><h3>The <code class="literal">“failed-with-tls-errors”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a>   *resource,
-               <a href="../gio/GTlsCertificate.html#GTlsCertificate-struct"><span class="type">GTlsCertificate</span></a>     *certificate,
-               <a href="../gio/gio-TLS-Overview.html#GTlsCertificateFlags"><span class="type">GTlsCertificateFlags</span></a> errors,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>             user_data)</pre>
+               <span class="type">GTlsCertificate</span>     *certificate,
+               <span class="type">GTlsCertificateFlags</span> errors,
+               <span class="type">gpointer</span>             user_data)</pre>
 <p>This signal is emitted when a TLS error occurs during the resource load operation.</p>
 <div class="refsect3">
 <a name="WebKitWebResource-failed-with-tls-errors.parameters"></a><h4>Parameters</h4>
@@ -438,12 +438,12 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 </tr>
 <tr>
 <td class="parameter_name"><p>certificate</p></td>
-<td class="parameter_description"><p>a <a href="../gio/GTlsCertificate.html#GTlsCertificate-struct"><span class="type">GTlsCertificate</span></a></p></td>
+<td class="parameter_description"><p>a <span class="type">GTlsCertificate</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>errors</p></td>
-<td class="parameter_description"><p>a <a href="../gio/gio-TLS-Overview.html#GTlsCertificateFlags"><span class="type">GTlsCertificateFlags</span></a> with the verification status of <em class="parameter"><code>certificate</code></em>
+<td class="parameter_description"><p>a <span class="type">GTlsCertificateFlags</span> with the verification status of <em class="parameter"><code>certificate</code></em>
 </p></td>
 <td class="parameter_annotations"> </td>
 </tr>
@@ -455,7 +455,7 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
 </div>
 <hr>
@@ -463,7 +463,7 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 <a name="WebKitWebResource-finished"></a><h3>The <code class="literal">“finished”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)</pre>
+               <span class="type">gpointer</span>           user_data)</pre>
 <p>This signal is emitted when the resource load finishes successfully
 or due to an error. In case of errors <a class="link" href="WebKitWebResource.html#WebKitWebResource-failed" title="The “failed” signal"><span class="type">“failed”</span></a> signal
 is emitted before this one.</p>
@@ -489,15 +489,15 @@ is emitted before this one.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="WebKitWebResource-received-data"></a><h3>The <code class="literal">“received-data”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource,
-               <a href="../glib/glib-Basic-Types.html#guint64"><span class="type">guint64</span></a>            data_length,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)</pre>
+               <span class="type">guint64</span>            data_length,
+               <span class="type">gpointer</span>           user_data)</pre>
 <p>This signal is emitted after response is received,
 every time new data has been received. It's
 useful to know the progress of the resource load operation.</p>
@@ -528,7 +528,7 @@ useful to know the progress of the resource load operation.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -537,7 +537,7 @@ useful to know the progress of the resource load operation.</p>
 user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource,
                <a class="link" href="WebKitURIRequest.html" title="WebKitURIRequest"><span class="type">WebKitURIRequest</span></a>  *request,
                <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a> *redirected_response,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)</pre>
+               <span class="type">gpointer</span>           user_data)</pre>
 <p>This signal is emitted when <em class="parameter"><code>request</code></em>
  has been sent to the
 server. In case of a server redirection this signal is
@@ -568,7 +568,7 @@ received by the server for the initial request.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>redirected_response</p></td>
-<td class="parameter_description"><p>a <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a></p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a>, or <code class="literal">NULL</code></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -579,11 +579,11 @@ received by the server for the initial request.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

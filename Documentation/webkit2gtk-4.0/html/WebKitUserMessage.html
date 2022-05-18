@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitUserMessage: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="webkit2gtk-4.0-Geolocation-manager.html" title="Geolocation manager">
 <link rel="next" href="WebKitPointerLockPermissionRequest.html" title="WebKitPointerLockPermissionRequest">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -66,7 +66,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-GVariant.html#GVariant"><span class="returnvalue">GVariant</span></a> *
+<span class="returnvalue">GVariant</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitUserMessage.html#webkit-user-message-get-parameters" title="webkit_user_message_get_parameters ()">webkit_user_message_get_parameters</a> <span class="c_punctuation">()</span>
@@ -74,7 +74,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gio/GUnixFDList.html#GUnixFDList-struct"><span class="returnvalue">GUnixFDList</span></a> *
+<span class="returnvalue">GUnixFDList</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitUserMessage.html#webkit-user-message-get-fd-list" title="webkit_user_message_get_fd_list ()">webkit_user_message_get_fd_list</a> <span class="c_punctuation">()</span>
@@ -90,7 +90,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Quarks.html#GQuark"><span class="returnvalue">GQuark</span></a>
+<span class="returnvalue">GQuark</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitUserMessage.html#webkit-user-message-error-quark" title="webkit_user_message_error_quark ()">webkit_user_message_error_quark</a> <span class="c_punctuation">()</span>
@@ -110,7 +110,7 @@
 <tbody>
 <tr>
 <td class="property_type">
-<a href="../gio/GUnixFDList.html#GUnixFDList-struct"><span class="type">GUnixFDList</span></a> *</td>
+<span class="type">GUnixFDList</span> *</td>
 <td class="property_name"><a class="link" href="WebKitUserMessage.html#WebKitUserMessage--fd-list" title="The “fd-list” property">fd-list</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
@@ -122,7 +122,7 @@
 </tr>
 <tr>
 <td class="property_type">
-<a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a> *</td>
+<span class="type">GVariant</span> *</td>
 <td class="property_name"><a class="link" href="WebKitUserMessage.html#WebKitUserMessage--parameters" title="The “parameters” property">parameters</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
@@ -154,8 +154,8 @@
 </div>
 <div class="refsect1">
 <a name="WebKitUserMessage.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
-    <span class="lineart">╰──</span> <a href="../gobject/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
+<pre class="screen">    GObject
+    <span class="lineart">╰──</span> GInitiallyUnowned
         <span class="lineart">╰──</span> WebKitUserMessage
 </pre>
 </div>
@@ -174,7 +174,7 @@ corresponding <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><s
 <a name="webkit-user-message-new"></a><h3>webkit_user_message_new ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitUserMessage.html" title="WebKitUserMessage"><span class="returnvalue">WebKitUserMessage</span></a> *
 webkit_user_message_new (<em class="parameter"><code>const <span class="type">char</span> *name</code></em>,
-                         <em class="parameter"><code><a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a> *parameters</code></em>);</pre>
+                         <em class="parameter"><code><span class="type">GVariant</span> *parameters</code></em>);</pre>
 <p>Create a new <a class="link" href="WebKitUserMessage.html" title="WebKitUserMessage"><span class="type">WebKitUserMessage</span></a> with <em class="parameter"><code>name</code></em>
 .</p>
 <div class="refsect3">
@@ -193,7 +193,7 @@ webkit_user_message_new (<em class="parameter"><code>const <span class="type">ch
 </tr>
 <tr>
 <td class="parameter_name"><p>parameters</p></td>
-<td class="parameter_description"><p>the message parameters as a <a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_description"><p>the message parameters as a <span class="type">GVariant</span>, or <code class="literal">NULL</code>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -210,8 +210,8 @@ webkit_user_message_new (<em class="parameter"><code>const <span class="type">ch
 <a name="webkit-user-message-new-with-fd-list"></a><h3>webkit_user_message_new_with_fd_list ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitUserMessage.html" title="WebKitUserMessage"><span class="returnvalue">WebKitUserMessage</span></a> *
 webkit_user_message_new_with_fd_list (<em class="parameter"><code>const <span class="type">char</span> *name</code></em>,
-                                      <em class="parameter"><code><a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a> *parameters</code></em>,
-                                      <em class="parameter"><code><a href="../gio/GUnixFDList.html#GUnixFDList-struct"><span class="type">GUnixFDList</span></a> *fd_list</code></em>);</pre>
+                                      <em class="parameter"><code><span class="type">GVariant</span> *parameters</code></em>,
+                                      <em class="parameter"><code><span class="type">GUnixFDList</span> *fd_list</code></em>);</pre>
 <p>Create a new <a class="link" href="WebKitUserMessage.html" title="WebKitUserMessage"><span class="type">WebKitUserMessage</span></a> including also a list of UNIX file descriptors to be sent.</p>
 <div class="refsect3">
 <a name="webkit-user-message-new-with-fd-list.parameters"></a><h4>Parameters</h4>
@@ -229,7 +229,7 @@ webkit_user_message_new_with_fd_list (<em class="parameter"><code>const <span cl
 </tr>
 <tr>
 <td class="parameter_name"><p>parameters</p></td>
-<td class="parameter_description"><p>the message parameters as a <a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a>. </p></td>
+<td class="parameter_description"><p>the message parameters as a <span class="type">GVariant</span>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
 </tr>
 <tr>
@@ -277,7 +277,7 @@ webkit_user_message_get_name (<em class="parameter"><code><a class="link" href="
 <hr>
 <div class="refsect2">
 <a name="webkit-user-message-get-parameters"></a><h3>webkit_user_message_get_parameters ()</h3>
-<pre class="programlisting"><a href="../glib/glib-GVariant.html#GVariant"><span class="returnvalue">GVariant</span></a> *
+<pre class="programlisting"><span class="returnvalue">GVariant</span> *
 webkit_user_message_get_parameters (<em class="parameter"><code><a class="link" href="WebKitUserMessage.html" title="WebKitUserMessage"><span class="type">WebKitUserMessage</span></a> *message</code></em>);</pre>
 <p>Get the <em class="parameter"><code>message</code></em>
  parameters</p>
@@ -299,14 +299,14 @@ webkit_user_message_get_parameters (<em class="parameter"><code><a class="link" 
 <div class="refsect3">
 <a name="webkit-user-message-get-parameters.returns"></a><h4>Returns</h4>
 <p>the message parameters. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-user-message-get-fd-list"></a><h3>webkit_user_message_get_fd_list ()</h3>
-<pre class="programlisting"><a href="../gio/GUnixFDList.html#GUnixFDList-struct"><span class="returnvalue">GUnixFDList</span></a> *
+<pre class="programlisting"><span class="returnvalue">GUnixFDList</span> *
 webkit_user_message_get_fd_list (<em class="parameter"><code><a class="link" href="WebKitUserMessage.html" title="WebKitUserMessage"><span class="type">WebKitUserMessage</span></a> *message</code></em>);</pre>
 <p>Get the <em class="parameter"><code>message</code></em>
  list of file descritpor</p>
@@ -328,7 +328,7 @@ webkit_user_message_get_fd_list (<em class="parameter"><code><a class="link" hre
 <div class="refsect3">
 <a name="webkit-user-message-get-fd-list.returns"></a><h4>Returns</h4>
 <p>the message list of file descriptors. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
@@ -370,7 +370,7 @@ received.</p>
 <hr>
 <div class="refsect2">
 <a name="webkit-user-message-error-quark"></a><h3>webkit_user_message_error_quark ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Quarks.html#GQuark"><span class="returnvalue">GQuark</span></a>
+<pre class="programlisting"><span class="returnvalue">GQuark</span>
 webkit_user_message_error_quark (<em class="parameter"><code><span class="type">void</span></code></em>);</pre>
 </div>
 </div>
@@ -414,7 +414,7 @@ webkit_user_message_error_quark (<em class="parameter"><code><span class="type">
 <a name="WebKitUserMessage.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="WebKitUserMessage--fd-list"></a><h3>The <code class="literal">“fd-list”</code> property</h3>
-<pre class="programlisting">  “fd-list”                  <a href="../gio/GUnixFDList.html#GUnixFDList-struct"><span class="type">GUnixFDList</span></a> *</pre>
+<pre class="programlisting">  “fd-list”                  <span class="type">GUnixFDList</span> *</pre>
 <p>The UNIX file descriptors of the user message.</p>
 <p>Owner: WebKitUserMessage</p>
 <p>Flags: Read / Write / Construct Only</p>
@@ -433,8 +433,8 @@ webkit_user_message_error_quark (<em class="parameter"><code><span class="type">
 <hr>
 <div class="refsect2">
 <a name="WebKitUserMessage--parameters"></a><h3>The <code class="literal">“parameters”</code> property</h3>
-<pre class="programlisting">  “parameters”               <a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a> *</pre>
-<p>The parameters of the user message as a <a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>
+<pre class="programlisting">  “parameters”               <span class="type">GVariant</span> *</pre>
+<p>The parameters of the user message as a <span class="type">GVariant</span>, or <code class="literal">NULL</code>
 if the message doesn't include parameters. Note that only complete types are
 allowed.</p>
 <p>Owner: WebKitUserMessage</p>
@@ -450,6 +450,6 @@ allowed.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>
