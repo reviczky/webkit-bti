@@ -1,4 +1,7 @@
-webkit2gtk (2.36.1-2) UNRELEASED; urgency=medium
+webkit2gtk (2.36.2-1) UNRELEASED; urgency=high
+
+  [ Alberto Garcia ]
+  * New upstream release.
 
   [ Adrian Bunk ]
   * debian/rules: lower memory requirements on sh4.
