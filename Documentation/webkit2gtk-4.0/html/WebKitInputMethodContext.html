@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitInputMethodContext: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitPointerLockPermissionRequest.html" title="WebKitPointerLockPermissionRequest">
 <link rel="next" href="WebKitWebsiteDataAccessPermissionRequest.html" title="WebKitWebsiteDataAccessPermissionRequest">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -60,7 +60,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitInputMethodContext.html#webkit-input-method-context-filter-key-event" title="webkit_input_method_context_filter_key_event ()">webkit_input_method_context_filter_key_event</a> <span class="c_punctuation">()</span>
@@ -207,27 +207,27 @@
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodContext-committed" title="The “committed” signal">committed</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodContext-delete-surrounding" title="The “delete-surrounding” signal">delete-surrounding</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-changed" title="The “preedit-changed” signal">preedit-changed</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-finished" title="The “preedit-finished” signal">preedit-finished</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-started" title="The “preedit-started” signal">preedit-started</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 </tbody>
 </table></div>
@@ -261,11 +261,11 @@
 </div>
 <div class="refsect1">
 <a name="WebKitInputMethodContext.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-Boxed-Types.html">GBoxed</a>
+<pre class="screen">    GBoxed
     <span class="lineart">╰──</span> WebKitInputMethodUnderline
-    <a href="../gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
+    GEnum
     <span class="lineart">╰──</span> WebKitInputPurpose
-    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+    GObject
     <span class="lineart">╰──</span> WebKitInputMethodContext
 </pre>
 </div>
@@ -286,7 +286,7 @@ composition states as preedit text.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_input_method_context_set_enable_preedit
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> enabled</code></em>);</pre>
+                                <em class="parameter"><code><span class="type">gboolean</span> enabled</code></em>);</pre>
 <p>Set whether <em class="parameter"><code>context</code></em>
  should enable preedit to display feedback.</p>
 <div class="refsect3">
@@ -320,8 +320,8 @@ webkit_input_method_context_set_enable_preedit
 webkit_input_method_context_get_preedit
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context</code></em>,
                                 <em class="parameter"><code><span class="type">char</span> **text</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> **underlines</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> *cursor_offset</code></em>);</pre>
+                                <em class="parameter"><code><span class="type">GList</span> **underlines</code></em>,
+                                <em class="parameter"><code><span class="type">guint</span> *cursor_offset</code></em>);</pre>
 <p>Get the current preedit string for the <em class="parameter"><code>context</code></em>
 , and a list of WebKitInputMethodUnderline to apply to the string.
 The string will be displayed inserted at <em class="parameter"><code>cursor_offset</code></em>
@@ -343,12 +343,12 @@ The string will be displayed inserted at <em class="parameter"><code>cursor_offs
 <tr>
 <td class="parameter_name"><p>text</p></td>
 <td class="parameter_description"><p>location to store the preedit string. </p></td>
-<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>underlines</p></td>
-<td class="parameter_description"><p>location to store the underlines as a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of <a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="type">WebKitInputMethodUnderline</span></a>. </p></td>
-<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKit2.InputMethodUnderline]</span></td>
+<td class="parameter_description"><p>location to store the underlines as a <span class="type">GList</span> of <a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="type">WebKitInputMethodUnderline</span></a>. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>][<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKit2.InputMethodUnderline]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>cursor_offset</p></td>
@@ -363,12 +363,12 @@ The string will be displayed inserted at <em class="parameter"><code>cursor_offs
 <hr>
 <div class="refsect2">
 <a name="webkit-input-method-context-filter-key-event"></a><h3>webkit_input_method_context_filter_key_event ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 webkit_input_method_context_filter_key_event
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context</code></em>,
-                                <em class="parameter"><code><a href="../gdk3/gdk3-Event-Structures.html#GdkEventKey"><span class="type">GdkEventKey</span></a> *key_event</code></em>);</pre>
+                                <em class="parameter"><code><span class="type">GdkEventKey</span> *key_event</code></em>);</pre>
 <p>Allow <em class="parameter"><code>key_event</code></em>
- to be handled by the input method. If <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> is returned, then no further processing should be
+ to be handled by the input method. If <code class="literal">TRUE</code> is returned, then no further processing should be
 done for the key event.</p>
 <div class="refsect3">
 <a name="webkit-input-method-context-filter-key-event.parameters"></a><h4>Parameters</h4>
@@ -394,7 +394,7 @@ done for the key event.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-input-method-context-filter-key-event.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the key event was handled, or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
+<p> <code class="literal">TRUE</code> if the key event was handled, or <code class="literal">FALSE</code> otherwise</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
@@ -505,10 +505,10 @@ webkit_input_method_context_notify_cursor_area
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_input_method_context_notify_surrounding
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *text</code></em>,
+                                <em class="parameter"><code>const <span class="type">gchar</span> *text</code></em>,
                                 <em class="parameter"><code><span class="type">int</span> length</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> cursor_index</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> selection_index</code></em>);</pre>
+                                <em class="parameter"><code><span class="type">guint</span> cursor_index</code></em>,
+                                <em class="parameter"><code><span class="type">guint</span> selection_index</code></em>);</pre>
 <p>Notify <em class="parameter"><code>context</code></em>
  that the context surrounding the cursor has changed.
 If there's no selection <em class="parameter"><code>selection_index</code></em>
@@ -683,8 +683,8 @@ webkit_input_method_context_set_input_hints
 <div class="refsect2">
 <a name="webkit-input-method-underline-new"></a><h3>webkit_input_method_underline_new ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="returnvalue">WebKitInputMethodUnderline</span></a> *
-webkit_input_method_underline_new (<em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> start_offset</code></em>,
-                                   <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> end_offset</code></em>);</pre>
+webkit_input_method_underline_new (<em class="parameter"><code><span class="type">guint</span> start_offset</code></em>,
+                                   <em class="parameter"><code><span class="type">guint</span> end_offset</code></em>);</pre>
 <p>Create a new <a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="type">WebKitInputMethodUnderline</span></a> for the given range in preedit string</p>
 <div class="refsect3">
 <a name="webkit-input-method-underline-new.parameters"></a><h4>Parameters</h4>
@@ -711,7 +711,7 @@ webkit_input_method_underline_new (<em class="parameter"><code><a href="../glib/
 <div class="refsect3">
 <a name="webkit-input-method-underline-new.returns"></a><h4>Returns</h4>
 <p>A newly created <a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="type">WebKitInputMethodUnderline</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
@@ -739,7 +739,7 @@ webkit_input_method_underline_copy (<em class="parameter"><code><a class="link" 
 <div class="refsect3">
 <a name="webkit-input-method-underline-copy.returns"></a><h4>Returns</h4>
 <p>A copy of passed in <a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="type">WebKitInputMethodUnderline</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
@@ -772,9 +772,9 @@ webkit_input_method_underline_free (<em class="parameter"><code><a class="link" 
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_input_method_underline_set_color
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="type">WebKitInputMethodUnderline</span></a> *underline</code></em>,
-                                <em class="parameter"><code>const <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *rgba</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">GdkRGBA</span> *rgba</code></em>);</pre>
 <p>Set the color of the underline. If <em class="parameter"><code>rgba</code></em>
- is <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> the foreground text color will be used
+ is <code class="literal">NULL</code> the foreground text color will be used
 for the underline too.</p>
 <div class="refsect3">
 <a name="webkit-input-method-underline-set-color.parameters"></a><h4>Parameters</h4>
@@ -792,7 +792,7 @@ for the underline too.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>rgba</p></td>
-<td class="parameter_description"><p>a <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_description"><p>a <span class="type">GdkRGBA</span> or <code class="literal">NULL</code>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -973,7 +973,7 @@ for the underline too.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context,
                <span class="type">char</span>                     *text,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                  user_data)</pre>
+               <span class="type">gpointer</span>                  user_data)</pre>
 <p>Emitted when a complete input sequence has been entered by the user.
 This can be a single character immediately after a key press or the
 final result of preediting.</p>
@@ -1004,7 +1004,7 @@ final result of preediting.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
@@ -1013,8 +1013,8 @@ final result of preediting.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context,
                <span class="type">int</span>                       offset,
-               <a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                     n_chars,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                  user_data)</pre>
+               <span class="type">guint</span>                     n_chars,
+               <span class="type">gpointer</span>                  user_data)</pre>
 <p>Emitted when the input method wants to delete the context surrounding the cursor.
 If <em class="parameter"><code>offset</code></em>
  is a negative value, it means a position before the cursor.</p>
@@ -1050,7 +1050,7 @@ If <em class="parameter"><code>offset</code></em>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
@@ -1058,7 +1058,7 @@ If <em class="parameter"><code>offset</code></em>
 <a name="WebKitInputMethodContext-preedit-changed"></a><h3>The <code class="literal">“preedit-changed”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                  user_data)</pre>
+               <span class="type">gpointer</span>                  user_data)</pre>
 <p>Emitted whenever the preedit sequence currently being entered has changed.
 It is also emitted at the end of a preedit sequence, in which case
 <a class="link" href="WebKitInputMethodContext.html#webkit-input-method-context-get-preedit" title="webkit_input_method_context_get_preedit ()"><code class="function">webkit_input_method_context_get_preedit()</code></a> returns the empty string.</p>
@@ -1084,7 +1084,7 @@ It is also emitted at the end of a preedit sequence, in which case
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
@@ -1092,7 +1092,7 @@ It is also emitted at the end of a preedit sequence, in which case
 <a name="WebKitInputMethodContext-preedit-finished"></a><h3>The <code class="literal">“preedit-finished”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                  user_data)</pre>
+               <span class="type">gpointer</span>                  user_data)</pre>
 <p>Emitted when a preediting sequence has been completed or canceled.</p>
 <div class="refsect3">
 <a name="WebKitInputMethodContext-preedit-finished.parameters"></a><h4>Parameters</h4>
@@ -1116,7 +1116,7 @@ user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKi
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
@@ -1124,7 +1124,7 @@ user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKi
 <a name="WebKitInputMethodContext-preedit-started"></a><h3>The <code class="literal">“preedit-started”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context,
-               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                  user_data)</pre>
+               <span class="type">gpointer</span>                  user_data)</pre>
 <p>Emitted when a new preediting sequence starts.</p>
 <div class="refsect3">
 <a name="WebKitInputMethodContext-preedit-started.parameters"></a><h4>Parameters</h4>
@@ -1148,7 +1148,7 @@ user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKi
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 </div>
@@ -1158,6 +1158,6 @@ user_function (<a class="link" href="WebKitInputMethodContext.html" title="WebKi
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>

@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitDOMDOMImplementation: WebKitDOMGTK+ Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL-NS Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitDOMGTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitDOMComment.html" title="WebKitDOMComment">
 <link rel="next" href="WebKitDOMDocument.html" title="WebKitDOMDocument">
-<meta name="generator" content="GTK-Doc V1.33.0 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.33.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -42,7 +42,7 @@
 <tbody>
 <tr>
 <td class="function_type">
-<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="WebKitDOMDOMImplementation.html#webkit-dom-dom-implementation-has-feature" title="webkit_dom_dom_implementation_has_feature ()">webkit_dom_dom_implementation_has_feature</a> <span class="c_punctuation">()</span>
@@ -98,7 +98,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDOMDOMImplementation.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> <a class="link" href="WebKitDOMObject.html" title="WebKitDOMObject">WebKitDOMObject</a>
         <span class="lineart">╰──</span> WebKitDOMDOMImplementation
 </pre>
@@ -110,11 +110,11 @@
 <a name="WebKitDOMDOMImplementation.functions_details"></a><h2>Functions</h2>
 <div class="refsect2">
 <a name="webkit-dom-dom-implementation-has-feature"></a><h3>webkit_dom_dom_implementation_has_feature ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 webkit_dom_dom_implementation_has_feature
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDOMImplementation.html" title="WebKitDOMDOMImplementation"><span class="type">WebKitDOMDOMImplementation</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *feature</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *version</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">gchar</span> *feature</code></em>,
+                                <em class="parameter"><code>const <span class="type">gchar</span> *version</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_dom_implementation_has_feature</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -135,12 +135,12 @@ webkit_dom_dom_implementation_has_feature
 </tr>
 <tr>
 <td class="parameter_name"><p>feature</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>version</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -148,7 +148,7 @@ webkit_dom_dom_implementation_has_feature
 </div>
 <div class="refsect3">
 <a name="webkit-dom-dom-implementation-has-feature.returns"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
+<p> A <span class="type">gboolean</span></p>
 </div>
 </div>
 <hr>
@@ -157,10 +157,10 @@ webkit_dom_dom_implementation_has_feature
 <pre class="programlisting"><a class="link" href="WebKitDOMDocumentType.html" title="WebKitDOMDocumentType"><span class="returnvalue">WebKitDOMDocumentType</span></a> *
 webkit_dom_dom_implementation_create_document_type
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDOMImplementation.html" title="WebKitDOMDOMImplementation"><span class="type">WebKitDOMDOMImplementation</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *qualifiedName</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *publicId</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *systemId</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">gchar</span> *qualifiedName</code></em>,
+                                <em class="parameter"><code>const <span class="type">gchar</span> *publicId</code></em>,
+                                <em class="parameter"><code>const <span class="type">gchar</span> *systemId</code></em>,
+                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_dom_implementation_create_document_type</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -181,22 +181,22 @@ webkit_dom_dom_implementation_create_document_type
 </tr>
 <tr>
 <td class="parameter_name"><p>qualifiedName</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>publicId</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>systemId</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
+<td class="parameter_description"><p><span class="type">GError</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -205,7 +205,7 @@ webkit_dom_dom_implementation_create_document_type
 <div class="refsect3">
 <a name="webkit-dom-dom-implementation-create-document-type.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMDocumentType.html" title="WebKitDOMDocumentType"><span class="type">WebKitDOMDocumentType</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -214,10 +214,10 @@ webkit_dom_dom_implementation_create_document_type
 <pre class="programlisting"><a class="link" href="WebKitDOMDocument.html" title="WebKitDOMDocument"><span class="returnvalue">WebKitDOMDocument</span></a> *
 webkit_dom_dom_implementation_create_document
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDOMImplementation.html" title="WebKitDOMDOMImplementation"><span class="type">WebKitDOMDOMImplementation</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *namespaceURI</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *qualifiedName</code></em>,
+                                <em class="parameter"><code>const <span class="type">gchar</span> *namespaceURI</code></em>,
+                                <em class="parameter"><code>const <span class="type">gchar</span> *qualifiedName</code></em>,
                                 <em class="parameter"><code><a class="link" href="WebKitDOMDocumentType.html" title="WebKitDOMDocumentType"><span class="type">WebKitDOMDocumentType</span></a> *doctype</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_dom_implementation_create_document</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -238,12 +238,12 @@ webkit_dom_dom_implementation_create_document
 </tr>
 <tr>
 <td class="parameter_name"><p>namespaceURI</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>. </p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>qualifiedName</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -253,7 +253,7 @@ webkit_dom_dom_implementation_create_document
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
+<td class="parameter_description"><p><span class="type">GError</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -262,7 +262,7 @@ webkit_dom_dom_implementation_create_document
 <div class="refsect3">
 <a name="webkit-dom-dom-implementation-create-document.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMDocument.html" title="WebKitDOMDocument"><span class="type">WebKitDOMDocument</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -271,9 +271,9 @@ webkit_dom_dom_implementation_create_document
 <pre class="programlisting"><a class="link" href="WebKitDOMCSSStyleSheet.html" title="WebKitDOMCSSStyleSheet"><span class="returnvalue">WebKitDOMCSSStyleSheet</span></a> *
 webkit_dom_dom_implementation_create_css_style_sheet
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDOMImplementation.html" title="WebKitDOMDOMImplementation"><span class="type">WebKitDOMDOMImplementation</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *title</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *media</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">gchar</span> *title</code></em>,
+                                <em class="parameter"><code>const <span class="type">gchar</span> *media</code></em>,
+                                <em class="parameter"><code><span class="type">GError</span> **error</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_dom_implementation_create_css_style_sheet</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -294,17 +294,17 @@ webkit_dom_dom_implementation_create_css_style_sheet
 </tr>
 <tr>
 <td class="parameter_name"><p>title</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>media</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
-<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
+<td class="parameter_description"><p><span class="type">GError</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -313,7 +313,7 @@ webkit_dom_dom_implementation_create_css_style_sheet
 <div class="refsect3">
 <a name="webkit-dom-dom-implementation-create-css-style-sheet.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMCSSStyleSheet.html" title="WebKitDOMCSSStyleSheet"><span class="type">WebKitDOMCSSStyleSheet</span></a>. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The caller owns the data, and is responsible for free it."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
@@ -322,7 +322,7 @@ webkit_dom_dom_implementation_create_css_style_sheet
 <pre class="programlisting"><a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="returnvalue">WebKitDOMHTMLDocument</span></a> *
 webkit_dom_dom_implementation_create_html_document
                                (<em class="parameter"><code><a class="link" href="WebKitDOMDOMImplementation.html" title="WebKitDOMDOMImplementation"><span class="type">WebKitDOMDOMImplementation</span></a> *self</code></em>,
-                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *title</code></em>);</pre>
+                                <em class="parameter"><code>const <span class="type">gchar</span> *title</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_dom_dom_implementation_create_html_document</code> has been deprecated since version 2.22 and should not be used in newly-written code.</p>
 <p>Use JavaScriptCore API instead</p>
@@ -343,7 +343,7 @@ webkit_dom_dom_implementation_create_html_document
 </tr>
 <tr>
 <td class="parameter_name"><p>title</p></td>
-<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_description"><p>A <span class="type">gchar</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -352,7 +352,7 @@ webkit_dom_dom_implementation_create_html_document
 <div class="refsect3">
 <a name="webkit-dom-dom-implementation-create-html-document.returns"></a><h4>Returns</h4>
 <p>A <a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="The data is owned by the callee, which is responsible of freeing it."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 </div>
@@ -365,6 +365,6 @@ webkit_dom_dom_implementation_create_html_document
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.33.0</div>
+<hr>Generated by GTK-Doc V1.33.1</div>
 </body>
 </html>
