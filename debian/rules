@@ -210,8 +210,10 @@ override_dh_auto_configure:
 		-DENABLE_WEBDRIVER=OFF -DENABLE_GTKDOC=OFF
 
 override_dh_auto_build:
-	$(SOUP2_BUILD) dh_auto_build -Bbuild-soup2 $(EXTRA_BUILD_ARGUMENTS)
-	$(SOUP3_BUILD) dh_auto_build -Bbuild-soup3 $(EXTRA_BUILD_ARGUMENTS)
+	$(SOUP2_BUILD) CCACHE_NOHASHDIR=1 CCACHE_BASEDIR=$(CURDIR)/build-soup2 \
+		dh_auto_build -Bbuild-soup2 $(EXTRA_BUILD_ARGUMENTS)
+	$(SOUP3_BUILD) CCACHE_NOHASHDIR=1 CCACHE_BASEDIR=$(CURDIR)/build-soup3 \
+		dh_auto_build -Bbuild-soup3 $(EXTRA_BUILD_ARGUMENTS)
 
 override_dh_auto_install:
 	$(SOUP2_BUILD) dh_auto_install -Bbuild-soup2
