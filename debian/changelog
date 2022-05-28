@@ -1,5 +1,6 @@
-webkit2gtk (2.36.2-2) UNRELEASED; urgency=medium
+webkit2gtk (2.36.3-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * Use ccache to speed-up the compilation since the majority of the files
     are identical in both the soup2 and soup3 builds.
     - debian/control: Add build dependency on ccache.
