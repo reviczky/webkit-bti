@@ -6203,17 +6203,17 @@ specific type when making the decision. For example:</p>
 <span class="w">                  </span><span class="n">WebKitPolicyDecisionType</span><span class="w"> </span><span class="n">type</span><span class="p">)</span><span class="w"></span>
 <span class="p">{</span><span class="w"></span>
 <span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
 <span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="cm">/* Make a policy decision here. */</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
 <span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
 <span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="cm">/* Make a policy decision here. */</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
 <span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="n">WebKitResponsePolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_RESPONSE_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="cm">/* Make a policy decision here. */</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
@@ -6458,23 +6458,23 @@ load operation.</p>
 <span class="w">                                   </span><span class="n">gpointer</span><span class="w">        </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
 <span class="p">{</span><span class="w"></span>
 <span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">load_event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_STARTED</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_STARTED</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="cm">/* New load, we have now a provisional URI */</span><span class="w"></span>
 <span class="w">        </span><span class="n">provisional_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="cm">/* Here we could start a spinner or update the</span>
 <span class="cm">         * location bar with the provisional URI */</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_REDIRECTED</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_REDIRECTED</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="n">redirected_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_COMMITTED</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_COMMITTED</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="cm">/* The load is being performed. Current URI is</span>
 <span class="cm">         * the final one and it won&#39;t change unless a new</span>
 <span class="cm">         * load is requested or a navigation within the</span>
 <span class="cm">         * same page is performed */</span><span class="w"></span>
 <span class="w">        </span><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">WEBKIT_LOAD_FINISHED</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_FINISHED</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="cm">/* Load finished, we can now stop the spinner */</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
 <span class="w">    </span><span class="p">}</span><span class="w"></span>
@@ -6749,7 +6749,7 @@ allowing the user decide what to do with the request:</p>
 <span class="w">    </span><span class="n">gint</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_dialog_run</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_DIALOG</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">));</span><span class="w"></span>
 
 <span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">GTK_RESPONSE_YES</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">GTK_RESPONSE_YES</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="n">webkit_permission_request_allow</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
 <span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"></span>
