@@ -6,6 +6,9 @@ webkit2gtk (2.36.3-1) UNRELEASED; urgency=medium
     - debian/control: Add build dependency on ccache.
     - debian/rules: Set CCACHE_NOHASHDIR and CCACHE_BASEDIR so ccache
       actually works with different build directories.
+    - debian/rules: Set CCACHE_DIR inside the source directory, otherwise
+      ccache would try to write to the home directory, which is forbidden
+      by the Debian policy.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 23 May 2022 17:45:54 +0200
 
