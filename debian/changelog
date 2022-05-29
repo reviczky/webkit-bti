@@ -1,4 +1,4 @@
-webkit2gtk (2.36.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.36.3-1) unstable; urgency=high
 
   * New upstream release.
   * Use ccache to speed-up the compilation since the majority of the files
@@ -10,7 +10,7 @@ webkit2gtk (2.36.3-1) UNRELEASED; urgency=medium
       ccache would try to write to the home directory, which is forbidden
       by the Debian policy.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 23 May 2022 17:45:54 +0200
+ -- Alberto Garcia <berto@igalia.com>  Sun, 29 May 2022 13:07:27 +0200
 
 webkit2gtk (2.36.2-1) unstable; urgency=high
 
