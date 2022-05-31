@@ -1,3 +1,17 @@
+wpewebkit (2.36.3-1~deb11u1) bullseye-security; urgency=medium
+
+  * Rebuild for bullseye-security.
+    - This fixes CVE-2022-26700, CVE-2022-26709, CVE-2022-26716,
+      CVE-2022-26717, CVE-2022-26719, CVE-2022-30293 and CVE-2022-30294.
+  * gcc 10 segfaults when building webkit (see #1008098) so use clang instead.
+    - debian/rules: tell CMake to user clang in all arches except i386 and
+      mipsel (see ##1010329)
+    - debian/control.in: Build depend on clang.
+  * Use libsoup2 instead of libsoup3:
+    - debian/rules: Set USE_SOUP_VERSION=2.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 31 May 2022 11:16:18 +0200
+
 wpewebkit (2.36.3-1) unstable; urgency=high
 
   * New upstream release.

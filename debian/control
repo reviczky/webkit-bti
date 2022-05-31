@@ -8,6 +8,7 @@ Build-Depends: debhelper-compat (= 12),
                bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
                xdg-dbus-proxy [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
                libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64],
+               clang [!i386 !mipsel],,
                cmake (>= 3.10),
                gperf,
                jdupes,
@@ -24,7 +25,7 @@ Build-Depends: debhelper-compat (= 12),
                libjpeg-dev,
                liblcms2-dev,
                libopenjp2-7-dev (>= 2.2.0),
-               libsoup-3.0-dev,
+               libsoup2.4-dev,
                libsqlite3-dev,
                libsystemd-dev,
                libtasn1-6-dev,
@@ -39,20 +40,20 @@ Build-Depends: debhelper-compat (= 12),
                wayland-protocols
 Build-Depends-Indep: gtk-doc-tools,
                libglib2.0-doc,
-               libsoup-3.0-doc
+               libsoup2.4-doc
 Standards-Version: 4.6.0.1
 Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
 Vcs-Git: https://salsa.debian.org/webkit-team/webkit.git -b wpe/unstable
 Homepage: https://wpewebkit.org/
 
-Package: libwpewebkit-1.1-dev
+Package: libwpewebkit-1.0-dev
 Section: libdevel
 Architecture: linux-any
 Multi-Arch: same
-Depends: libwpewebkit-1.1-0 (= ${binary:Version}),
+Depends: libwpewebkit-1.0-3 (= ${binary:Version}),
          libglib2.0-dev,
-         libsoup-3.0-dev,
+         libsoup2.4-dev,
          libwpe-1.0-dev,
          ${misc:Depends}
 Suggests: libwpewebkit-1.0-doc
@@ -67,12 +68,12 @@ Description: Web content engine for embedded devices - development files
  hardware acceleration in mind, leveraging common 3D graphics APIs for
  best performance.
  .
- This build provides version 1.1 of the API and uses libsoup v3 for
+ This build provides version 1.0 of the API and uses libsoup v2 for
  the networking stack.
  .
  This package contains the development files.
 
-Package: libwpewebkit-1.1-0
+Package: libwpewebkit-1.0-3
 Architecture: linux-any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends},
@@ -89,7 +90,7 @@ Description: Web content engine for embedded devices
  hardware acceleration in mind, leveraging common 3D graphics APIs for
  best performance.
  .
- This build provides version 1.1 of the API and uses libsoup v3 for
+ This build provides version 1.0 of the API and uses libsoup v2 for
  the networking stack.
  .
  This package contains the shared libraries.
