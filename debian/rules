@@ -7,7 +7,7 @@ include /usr/share/dpkg/buildflags.mk
 
 # soup2 build -> 4.0 API packages, soup3 build -> 4.1 API packages
 ENABLE_SOUP2=YES
-ENABLE_SOUP3=YES
+ENABLE_SOUP3=NO
 
 # We can also disable the soup2/soup3 builds by removing the build deps
 ifeq ($(shell pkg-config --exists libsoup-2.4 || echo no),no)
@@ -25,6 +25,8 @@ EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+	   -DENABLE_GAMEPAD=OFF \
+	   -DUSE_LCMS=OFF \
 	   -DENABLE_MINIBROWSER=ON
 EXTRA_BUILD_ARGUMENTS =
 DH_GENCONTROL_ARGS =
@@ -48,7 +50,7 @@ endif
 
 # Systemd/elogind and libmanette are Linux-only
 ifneq ($(DEB_HOST_ARCH_OS),linux)
-	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JOURNALD_LOG=OFF -DENABLE_GAMEPAD=OFF
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JOURNALD_LOG=OFF
 endif
 
 # See https://bugs.webkit.org/show_bug.cgi?id=197192
@@ -104,7 +106,7 @@ else ifeq ($(shell pkg-config --exists libseccomp && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=ON
 	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), \
 					xdg-dbus-proxy"
-	DH_GENCONTROL_ARGS += -Vbwrap:Recommends="xdg-desktop-portal-gtk"
+	DH_GENCONTROL_ARGS += -Vbwrap:Suggests="xdg-desktop-portal-gtk"
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
@@ -156,13 +158,6 @@ ifneq ($(ENABLE_SOUP2),YES)
 endif
 ifneq ($(ENABLE_SOUP3),YES)
 	SOUP3_BUILD = @:
-	EXTRA_DH_ARGUMENTS += \
-		-Ngir1.2-javascriptcoregtk-4.1 \
-		-Ngir1.2-webkit2-4.1 \
-		-Nlibjavascriptcoregtk-4.1-0 \
-		-Nlibjavascriptcoregtk-4.1-dev \
-		-Nlibwebkit2gtk-4.1-0 \
-		-Nlibwebkit2gtk-4.1-dev
 endif
 
 # The debhelper files for the soup2 and soup3 builds are identical
