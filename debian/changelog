@@ -1,5 +1,6 @@
-webkit2gtk (2.36.3-2) UNRELEASED; urgency=medium
+webkit2gtk (2.36.4-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/control:
     - Don't use ccache in i386 because Ubuntu doesn't have it and Debian
       can live without it.
