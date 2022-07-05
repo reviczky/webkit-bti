@@ -5,6 +5,8 @@ webkit2gtk (2.36.4-1) UNRELEASED; urgency=medium
     - Don't use ccache in i386 because Ubuntu doesn't have it and Debian
       can live without it.
   * Update format of lintian overrides (see #1007002).
+  * debian/control:
+    - Update Standards-Version to 4.6.1.0 (no changes).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 16 Jun 2022 15:49:11 +0200
 
