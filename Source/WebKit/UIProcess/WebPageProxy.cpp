@@ -4494,10 +4494,13 @@ void WebPageProxy::forceRepaint(CompletionHandler<void()>&& callback)
 
     m_drawingArea->waitForBackingStoreUpdateOnNextPaint();
 
-    sendWithAsyncReply(Messages::WebPage::ForceRepaint(), [this, protectedThis = Ref { *this }, callback = WTFMove(callback)] () mutable {
-        callAfterNextPresentationUpdate([callback = WTFMove(callback)] (auto) mutable {
+    sendWithAsyncReply(Messages::WebPage::ForceRepaint(), [weakThis = WeakPtr { *this }, callback = WTFMove(callback)] () mutable {
+        if (weakThis) {
+            weakThis->callAfterNextPresentationUpdate([callback = WTFMove(callback)] (auto) mutable {
+                callback();
+            });
+        } else
             callback();
-        });
     });
 }
 
@@ -10874,9 +10877,9 @@ void WebPageProxy::setOrientationForMediaCapture(uint64_t orientation)
 }
 
 #if ENABLE(MEDIA_STREAM) && USE(GSTREAMER)
-void WebPageProxy::setMockCameraIsInterrupted(bool isInterrupted)
+void WebPageProxy::setMockCaptureDevicesInterrupted(bool isCameraInterrupted, bool isMicrophoneInterrupted)
 {
-    send(Messages::WebPage::SetMockCameraIsInterrupted(isInterrupted));
+    send(Messages::WebPage::SetMockCaptureDevicesInterrupted(isCameraInterrupted, isMicrophoneInterrupted));
 }
 #endif
 
