@@ -1,14 +1,18 @@
-webkit2gtk (2.36.4-1) UNRELEASED; urgency=medium
+webkit2gtk (2.36.4-1) unstable; urgency=high
 
   * New upstream release.
+  * The WebKitGTK security advisory WSA-2022-0006 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    - CVE-2022-22662 (fixed in 2.36.0).
+    - CVE-2022-22677 and CVE-2022-26710 (fixed in 2.36.4).
   * debian/control:
     - Don't use ccache in i386 because Ubuntu doesn't have it and Debian
-      can live without it.
+      can live without it (webkit-team/webkit!14).
   * Update format of lintian overrides (see #1007002).
   * debian/control:
     - Update Standards-Version to 4.6.1.0 (no changes).
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 16 Jun 2022 15:49:11 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 06 Jul 2022 13:54:15 +0200
 
 webkit2gtk (2.36.3-1) unstable; urgency=high
 
