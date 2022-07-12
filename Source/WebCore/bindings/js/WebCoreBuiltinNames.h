@@ -39,6 +39,25 @@ namespace WebCore {
 #define WEBCORE_ADDITIONAL_PRIVATE_IDENTIFIERS(macro)
 #endif
 
+#if !defined(WEBCORE_COMMON_PRIVATE_IDENTIFIERS_FOR_SHADOWREALM_EACH_PROPERTY_NAME)
+// Dom APIs exposed to ShadowRealm are temporarily enabled via the WebAPIsInShadowRealmEnabled
+// experimental feature. When this is resolved, these can be deleted.
+#define WEBCORE_COMMON_PRIVATE_IDENTIFIERS_FOR_SHADOWREALM_EACH_PROPERTY_NAME(macro) \
+    macro(AbortController) \
+    macro(ByteLengthQueuingStrategy) \
+    macro(CountQueuingStrategy) \
+    macro(CustomEvent) \
+    macro(ErrorEvent) \
+    macro(Event) \
+    macro(EventTarget) \
+    macro(Performance) \
+    macro(PromiseRejectionEvent) \
+    macro(TextDecoder) \
+    macro(TextEncoder) \
+    macro(URL) \
+    macro(URLSearchParams)
+#endif
+
 #define WEBCORE_COMMON_PRIVATE_IDENTIFIERS_EACH_PROPERTY_NAME(macro) \
     macro(AbortSignal) \
     macro(AbstractRange) \
@@ -50,6 +69,7 @@ namespace WebCore {
     macro(ApplePaySession) \
     macro(ApplePaySetup) \
     macro(ApplePaySetupFeature) \
+    macro(ApplicationCache) \
     macro(AttachmentElement) \
     macro(Audio) \
     macro(AudioBuffer) \
@@ -81,6 +101,7 @@ namespace WebCore {
     macro(Clients) \
     macro(Clipboard) \
     macro(ClipboardItem) \
+    macro(CompressionStream) \
     macro(ConstantSourceNode) \
     macro(ContactsManager) \
     macro(ConvolverNode) \
@@ -89,8 +110,14 @@ namespace WebCore {
     macro(CryptoKey) \
     macro(CSSAnimation) \
     macro(CSSCounterStyleRule) \
+    macro(CSSColor) \
+    macro(CSSColorValue) \
+    macro(CSSHSL) \
+    macro(CSSHWB) \
     macro(CSSImageValue) \
     macro(CSSKeywordValue) \
+    macro(CSSLCH) \
+    macro(CSSLab) \
     macro(CSSMathInvert) \
     macro(CSSMathMax) \
     macro(CSSMathMin) \
@@ -101,8 +128,11 @@ namespace WebCore {
     macro(CSSMatrixComponent) \
     macro(CSSNumericArray) \
     macro(CSSNumericValue) \
+    macro(CSSOKLCH) \
+    macro(CSSOKLab) \
     macro(CSSPaintSize) \
     macro(CSSPerspective) \
+    macro(CSSRGB) \
     macro(CSSRotate) \
     macro(CSSScale) \
     macro(CSSSkew) \
@@ -121,10 +151,10 @@ namespace WebCore {
     macro(Database) \
     macro(DataTransferItem) \
     macro(DataTransferItemList) \
+    macro(DecompressionStream) \
     macro(DelayNode) \
     macro(DocumentTimeline) \
     macro(DynamicsCompressorNode) \
-    macro(EnterPictureInPictureEvent) \
     macro(ExtendableEvent) \
     macro(ExtendableMessageEvent) \
     macro(FakeXRDevice) \
@@ -253,6 +283,7 @@ namespace WebCore {
     macro(PaymentRequestUpdateEvent) \
     macro(PaymentResponse) \
     macro(PerformanceNavigationTiming) \
+    macro(PictureInPictureEvent) \
     macro(PictureInPictureWindow) \
     macro(PaintWorkletGlobalScope) \
     macro(PerformanceEntry) \
@@ -412,6 +443,7 @@ namespace WebCore {
     macro(abortAlgorithm) \
     macro(abortSteps) \
     macro(appendFromJS) \
+    macro(applicationCache) \
     macro(associatedReadableByteStreamController) \
     macro(autoAllocateChunkSize) \
     macro(backingMap) \
@@ -421,6 +453,7 @@ namespace WebCore {
     macro(blur) \
     macro(body) \
     macro(byobRequest) \
+    macro(cachedAttrAssociatedElements) \
     macro(caches) \
     macro(cancel) \
     macro(cancelAlgorithm) \
@@ -464,6 +497,7 @@ namespace WebCore {
     macro(getTracks) \
     macro(getUserMedia) \
     macro(gpu) \
+    macro(handleEvent) \
     macro(header) \
     macro(highWaterMark) \
     macro(href) \
@@ -541,7 +575,6 @@ namespace WebCore {
     macro(setBodyFromInputRequest) \
     macro(setStatus) \
     macro(showModalDialog) \
-    macro(size) \
     macro(start) \
     macro(startConsumingStream) \
     macro(started) \
@@ -595,6 +628,7 @@ namespace WebCore {
     macro(pendingAbortRequest) \
     macro(writeRequests) \
     WEBCORE_ADDITIONAL_PRIVATE_IDENTIFIERS(macro) \
+    WEBCORE_COMMON_PRIVATE_IDENTIFIERS_FOR_SHADOWREALM_EACH_PROPERTY_NAME(macro) \
 
 class WebCoreBuiltinNames {
 public:

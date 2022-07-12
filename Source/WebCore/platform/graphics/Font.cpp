@@ -44,6 +44,7 @@
 #include <wtf/MathExtras.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/AtomStringHash.h>
+#include <wtf/text/TextStream.h>
 
 #if ENABLE(OPENTYPE_VERTICAL)
 #include "OpenTypeVerticalData.h"
@@ -523,7 +524,7 @@ bool Font::isProbablyOnlyUsedToRenderIcons() const
 String Font::description() const
 {
     if (origin() == Origin::Remote)
-        return "[custom font]";
+        return "[custom font]"_s;
 
     return platformData().description();
 }
@@ -559,13 +560,18 @@ struct CharacterFallbackMapKey {
     bool isForPlatformFont { false };
 };
 
+inline void add(Hasher& hasher, const CharacterFallbackMapKey& key)
+{
+    add(hasher, key.locale, key.character, key.isForPlatformFont);
+}
+
 inline bool operator==(const CharacterFallbackMapKey& a, const CharacterFallbackMapKey& b)
 {
     return a.locale == b.locale && a.character == b.character && a.isForPlatformFont == b.isForPlatformFont;
 }
 
 struct CharacterFallbackMapKeyHash {
-    static unsigned hash(const CharacterFallbackMapKey& key) { return computeHash(key.locale, key.character, key.isForPlatformFont); }
+    static unsigned hash(const CharacterFallbackMapKey& key) { return computeHash(key); }
     static bool equal(const CharacterFallbackMapKey& a, const CharacterFallbackMapKey& b) { return a == b; }
     static const bool safeToCompareToEmptyOrDeleted = true;
 };
@@ -588,11 +594,12 @@ static SystemFallbackCache& systemFallbackCache()
 
 RefPtr<Font> Font::systemFallbackFontForCharacter(UChar32 character, const FontDescription& description, IsForPlatformFont isForPlatformFont) const
 {
+    // FIXME: https://github.com/w3c/csswg-drafts/issues/7449 This function should never return a web font.
     auto fontAddResult = systemFallbackCache().add(this, CharacterFallbackMap());
 
     if (!character) {
         UChar codeUnit = 0;
-        return FontCache::forCurrentThread().systemFallbackForCharacters(description, this, isForPlatformFont, FontCache::PreferColoredFont::No, &codeUnit, 1);
+        return FontCache::forCurrentThread().systemFallbackForCharacters(description, *this, isForPlatformFont, FontCache::PreferColoredFont::No, &codeUnit, 1);
     }
 
     auto key = CharacterFallbackMapKey { description.computedLocale(), character, isForPlatformFont != IsForPlatformFont::No };
@@ -607,7 +614,7 @@ RefPtr<Font> Font::systemFallbackFontForCharacter(UChar32 character, const FontD
             codeUnits[1] = U16_TRAIL(character);
             codeUnitsLength = 2;
         }
-        auto font = FontCache::forCurrentThread().systemFallbackForCharacters(description, this, isForPlatformFont, FontCache::PreferColoredFont::No, codeUnits, codeUnitsLength).get();
+        auto font = FontCache::forCurrentThread().systemFallbackForCharacters(description, *this, isForPlatformFont, FontCache::PreferColoredFont::No, codeUnits, codeUnitsLength).get();
         if (font)
             font->m_isUsedInSystemFallbackCache = true;
         return font;
@@ -704,5 +711,13 @@ const Path& Font::pathForGlyph(Glyph glyph) const
     m_glyphPathMap.setMetricsForGlyph(glyph, path);
     return *m_glyphPathMap.existingMetricsForGlyph(glyph);
 }
+
+#if !LOG_DISABLED
+TextStream& operator<<(TextStream& ts, const Font& font)
+{
+    ts << font.description();
+    return ts;
+}
+#endif
 
 } // namespace WebCore

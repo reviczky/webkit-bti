@@ -29,11 +29,13 @@
 #include "config.h"
 #include "ElementRuleCollector.h"
 
+#include "CSSKeyframeRule.h"
 #include "CSSRuleList.h"
 #include "CSSSelector.h"
 #include "CSSValueKeywords.h"
 #include "ContainerQueryEvaluator.h"
 #include "ElementInlines.h"
+#include "ElementRareData.h"
 #include "HTMLElement.h"
 #include "HTMLSlotElement.h"
 #include "SVGElement.h"
@@ -125,7 +127,7 @@ void ElementRuleCollector::clearMatchedRules()
     m_matchedRuleTransferIndex = 0;
 }
 
-inline void ElementRuleCollector::addElementStyleProperties(const StyleProperties* propertySet, bool isCacheable, FromStyleAttribute fromStyleAttribute)
+inline void ElementRuleCollector::addElementStyleProperties(const StyleProperties* propertySet, CascadeLayerPriority priority, bool isCacheable, FromStyleAttribute fromStyleAttribute)
 {
     if (!propertySet || propertySet->isEmpty())
         return;
@@ -134,6 +136,7 @@ inline void ElementRuleCollector::addElementStyleProperties(const StylePropertie
         m_result.isCacheable = false;
 
     auto matchedProperty = MatchedProperties { propertySet };
+    matchedProperty.cascadeLayerPriority = priority;
     matchedProperty.fromStyleAttribute = fromStyleAttribute;
     addMatchedProperties(WTFMove(matchedProperty), DeclarationOrigin::Author);
 }
@@ -142,25 +145,36 @@ void ElementRuleCollector::collectMatchingRules(const MatchRequest& matchRequest
 {
     ASSERT_WITH_MESSAGE(!(m_mode == SelectorChecker::Mode::CollectingRulesIgnoringVirtualPseudoElements && m_pseudoElementRequest.pseudoId != PseudoId::None), "When in StyleInvalidation or SharingRules, SelectorChecker does not try to match the pseudo ID. While ElementRuleCollector supports matching a particular pseudoId in this case, this would indicate a error at the call site since matching a particular element should be unnecessary.");
 
-    auto* shadowRoot = element().containingShadowRoot();
+    auto& element = this->element();
+    auto* shadowRoot = element.containingShadowRoot();
     if (shadowRoot && shadowRoot->mode() == ShadowRootMode::UserAgent)
         collectMatchingShadowPseudoElementRules(matchRequest);
 
+    bool isHTML = element.isHTMLElement() && element.document().isHTMLDocument();
+
     // We need to collect the rules for id, class, tag, and everything else into a buffer and
     // then sort the buffer.
-    auto& id = element().idForStyleResolution();
+    auto& id = element.idForStyleResolution();
     if (!id.isNull())
         collectMatchingRulesForList(matchRequest.ruleSet.idRules(id), matchRequest);
-    if (element().hasClass()) {
-        for (size_t i = 0; i < element().classNames().size(); ++i)
-            collectMatchingRulesForList(matchRequest.ruleSet.classRules(element().classNames()[i]), matchRequest);
+    if (element.hasClass()) {
+        for (size_t i = 0; i < element.classNames().size(); ++i)
+            collectMatchingRulesForList(matchRequest.ruleSet.classRules(element.classNames()[i]), matchRequest);
     }
-
-    if (element().isLink())
+    if (element.hasAttributesWithoutUpdate() && matchRequest.ruleSet.hasAttributeRules()) {
+        Vector<const RuleSet::RuleDataVector*, 4> ruleVectors;
+        for (auto& attribute : element.attributesIterator()) {
+            if (auto* rules = matchRequest.ruleSet.attributeRules(attribute.localName(), isHTML))
+                ruleVectors.append(rules);
+        }
+        for (auto* rules : ruleVectors)
+            collectMatchingRulesForList(rules, matchRequest);
+    }
+    if (element.isLink())
         collectMatchingRulesForList(matchRequest.ruleSet.linkPseudoClassRules(), matchRequest);
-    if (matchesFocusPseudoClass(element()))
+    if (matchesFocusPseudoClass(element))
         collectMatchingRulesForList(matchRequest.ruleSet.focusPseudoClassRules(), matchRequest);
-    collectMatchingRulesForList(matchRequest.ruleSet.tagRules(element().localName(), element().isHTMLElement() && element().document().isHTMLDocument()), matchRequest);
+    collectMatchingRulesForList(matchRequest.ruleSet.tagRules(element.localName(), isHTML), matchRequest);
     collectMatchingRulesForList(matchRequest.ruleSet.universalRules(), matchRequest);
 }
 
@@ -485,7 +499,7 @@ void ElementRuleCollector::collectMatchingRulesForList(const RuleSet::RuleDataVe
         if (m_selectorMatchingState && m_selectorMatchingState->selectorFilter.fastRejectSelector(ruleData.descendantSelectorIdentifierHashes()))
             continue;
 
-        if (matchRequest.ruleSet.hasContainerQueries() && !containerQueriesMatch(matchRequest.ruleSet.containerQueriesFor(ruleData)))
+        if (matchRequest.ruleSet.hasContainerQueries() && !containerQueriesMatch(ruleData, matchRequest))
             continue;
 
         auto& rule = ruleData.styleRule();
@@ -493,8 +507,7 @@ void ElementRuleCollector::collectMatchingRulesForList(const RuleSet::RuleDataVe
         // If the rule has no properties to apply, then ignore it in the non-debug mode.
         // Note that if we get null back here, it means we have a rule with deferred properties,
         // and that means we always have to consider it.
-        const StyleProperties* properties = rule.propertiesWithoutDeferredParsing();
-        if (properties && properties->isEmpty() && !m_shouldIncludeEmptyRules)
+        if (rule.properties().isEmpty() && !m_shouldIncludeEmptyRules)
             continue;
 
         unsigned specificity;
@@ -503,13 +516,18 @@ void ElementRuleCollector::collectMatchingRulesForList(const RuleSet::RuleDataVe
     }
 }
 
-bool ElementRuleCollector::containerQueriesMatch(const Vector<const FilteredContainerQuery*>& queries)
+bool ElementRuleCollector::containerQueriesMatch(const RuleData& ruleData, const MatchRequest& matchRequest)
 {
+    auto queries = matchRequest.ruleSet.containerQueriesFor(ruleData);
+
     if (queries.isEmpty())
         return true;
 
+    // Style bits indicating which pseudo-elements match are set during regular element matching. Container queries need to be evaluate in the right mode.
+    auto selectionMode = ruleData.canMatchPseudoElement() ? ContainerQueryEvaluator::SelectionMode::PseudoElement : ContainerQueryEvaluator::SelectionMode::Element;
+
     // "Style rules defined on an element inside multiple nested container queries apply when all of the wrapping container queries are true for that element."
-    ContainerQueryEvaluator evaluator(element(), m_pseudoElementRequest.pseudoId, m_selectorMatchingState);
+    ContainerQueryEvaluator evaluator(element(), selectionMode, matchRequest.styleScopeOrdinal, m_selectorMatchingState);
     for (auto* query : queries) {
         if (!evaluator.evaluate(*query))
             return false;
@@ -548,11 +566,11 @@ void ElementRuleCollector::matchAllRules(bool matchAuthorAndUserStyles, bool inc
     if (is<StyledElement>(element())) {
         auto& styledElement = downcast<StyledElement>(element());
         // https://html.spec.whatwg.org/#presentational-hints
-        addElementStyleProperties(styledElement.presentationalHintStyle());
+        addElementStyleProperties(styledElement.presentationalHintStyle(), RuleSet::cascadeLayerPriorityForPresentationalHints);
 
         // Tables and table cells share an additional presentation style that must be applied
         // after all attributes, since their style depends on the values of multiple attributes.
-        addElementStyleProperties(styledElement.additionalPresentationalHintStyle());
+        addElementStyleProperties(styledElement.additionalPresentationalHintStyle(), RuleSet::cascadeLayerPriorityForPresentationalHints);
 
         if (is<HTMLElement>(styledElement)) {
             bool isAuto;
@@ -587,11 +605,11 @@ void ElementRuleCollector::addElementInlineStyleProperties(bool includeSMILPrope
     if (auto* inlineStyle = downcast<StyledElement>(element()).inlineStyle()) {
         // FIXME: Media control shadow trees seem to have problems with caching.
         bool isInlineStyleCacheable = !inlineStyle->isMutable() && !element().isInShadowTree();
-        addElementStyleProperties(inlineStyle, isInlineStyleCacheable, FromStyleAttribute::Yes);
+        addElementStyleProperties(inlineStyle, RuleSet::cascadeLayerPriorityForUnlayered, isInlineStyleCacheable, FromStyleAttribute::Yes);
     }
 
     if (includeSMILProperties && is<SVGElement>(element()))
-        addElementStyleProperties(downcast<SVGElement>(element()).animatedSMILStyleProperties(), false /* isCacheable */);
+        addElementStyleProperties(downcast<SVGElement>(element()).animatedSMILStyleProperties(), RuleSet::cascadeLayerPriorityForUnlayered, false /* isCacheable */);
 }
 
 bool ElementRuleCollector::hasAnyMatchingRules(const RuleSet& ruleSet)
@@ -647,6 +665,12 @@ void ElementRuleCollector::addMatchedProperties(MatchedProperties&& matchedPrope
     m_result.isCacheable = computeIsCacheable();
 
     declarationsForOrigin(m_result, declarationOrigin).append(WTFMove(matchedProperties));
+}
+
+void ElementRuleCollector::addAuthorKeyframeRules(const StyleRuleKeyframe& keyframe)
+{
+    ASSERT(m_result.authorDeclarations.isEmpty());
+    m_result.authorDeclarations.append({ &keyframe.properties(), SelectorChecker::MatchAll, propertyAllowlistForPseudoId(m_pseudoElementRequest.pseudoId) });
 }
 
 }

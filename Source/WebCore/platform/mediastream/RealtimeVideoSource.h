@@ -36,7 +36,7 @@ class ImageTransferSessionVT;
 class RealtimeVideoSource final
     : public RealtimeMediaSource
     , public RealtimeMediaSource::Observer
-    , public RealtimeMediaSource::VideoSampleObserver {
+    , public RealtimeMediaSource::VideoFrameObserver {
 public:
     static Ref<RealtimeVideoSource> create(Ref<RealtimeVideoCaptureSource>&& source, bool shouldUseIOSurface = true) { return adoptRef(*new RealtimeVideoSource(WTFMove(source), shouldUseIOSurface)); }
 
@@ -52,7 +52,7 @@ private:
     bool supportsSizeAndFrameRate(std::optional<int> width, std::optional<int> height, std::optional<double> frameRate) final;
     void setSizeAndFrameRate(std::optional<int> width, std::optional<int> height, std::optional<double> frameRate) final;
     Ref<RealtimeMediaSource> clone() final;
-    void requestToEnd(RealtimeMediaSource::Observer& callingObserver) final;
+    void endProducingData() final;
     void stopBeingObserved() final;
 
     const RealtimeMediaSourceCapabilities& capabilities() final { return m_source->capabilities(); }
@@ -71,11 +71,11 @@ private:
     void sourceStopped() final;
     bool preventSourceFromStopping() final;
 
-    // RealtimeMediaSource::VideoSampleObserver
-    void videoSampleAvailable(MediaSample&, VideoSampleMetadata) final;
+    // RealtimeMediaSource::VideoFrameObserver
+    void videoFrameAvailable(VideoFrame&, VideoFrameTimeMetadata) final;
 
 #if PLATFORM(COCOA)
-    RefPtr<MediaSample> adaptVideoSample(MediaSample&);
+    RefPtr<VideoFrame> adaptVideoFrame(VideoFrame&);
 #endif
 
 #if !RELEASE_LOG_DISABLED

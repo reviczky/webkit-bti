@@ -53,8 +53,8 @@ public:
 
     WEBCORE_EXPORT String title() const final;
 
-    WEBCORE_EXPORT ExceptionOr<void> setInnerText(const String&);
-    WEBCORE_EXPORT ExceptionOr<void> setOuterText(const String&);
+    WEBCORE_EXPORT ExceptionOr<void> setInnerText(String&&);
+    WEBCORE_EXPORT ExceptionOr<void> setOuterText(String&&);
 
     virtual bool hasCustomFocusLogic() const;
     bool supportsFocus() const override;
@@ -94,9 +94,9 @@ public:
     virtual bool isTextControlInnerTextElement() const { return false; }
     virtual bool isSearchFieldResultsButtonElement() const { return false; }
 
-    bool willRespondToMouseMoveEvents() override;
-    bool willRespondToMouseWheelEvents() override;
-    bool willRespondToMouseClickEvents() override;
+    bool willRespondToMouseMoveEvents() const override;
+    bool willRespondToMouseWheelEvents() const override;
+    bool willRespondToMouseClickEventsWithEditability(Editability) const override;
 
     virtual bool isLabelable() const { return false; }
     virtual FormNamedItem* asFormNamedItem();
@@ -130,7 +130,7 @@ public:
 
     WEBCORE_EXPORT EnterKeyHint canonicalEnterKeyHint() const;
     String enterKeyHint() const;
-    void setEnterKeyHint(const String& value);
+    void setEnterKeyHint(const AtomString& value);
 
     WEBCORE_EXPORT static bool shouldExtendSelectionToTargetNode(const Node& targetNode, const VisibleSelection& selectionBeforeUpdate);
 
@@ -150,6 +150,9 @@ protected:
     void addHTMLColorToStyle(MutableStyleProperties&, CSSPropertyID, const String& color);
 
     void applyAspectRatioFromWidthAndHeightAttributesToStyle(StringView widthAttribute, StringView heightAttribute, MutableStyleProperties&);
+    void applyAspectRatioWithoutDimensionalRulesFromWidthAndHeightAttributesToStyle(StringView widthAttribute, StringView heightAttribute, MutableStyleProperties&);
+    void addParsedWidthAndHeightToAspectRatioList(double width, double height, MutableStyleProperties&);
+    
     void applyAlignmentAttributeToStyle(const AtomString&, MutableStyleProperties&);
     void applyBorderAttributeToStyle(const AtomString&, MutableStyleProperties&);
 

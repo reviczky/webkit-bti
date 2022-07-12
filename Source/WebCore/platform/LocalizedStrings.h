@@ -195,7 +195,7 @@ namespace WebCore {
     String AXMonthFieldText();
     String AXNumberFieldText();
     String AXWeekFieldText();
-    String AXARIAContentGroupText(const String& ariaType);
+    String AXARIAContentGroupText(StringView ariaType);
     String AXHorizontalRuleDescriptionText();
     String AXMarkText();
 
@@ -238,6 +238,7 @@ namespace WebCore {
     String AXAutoFillContactsLabel();
     String AXAutoFillStrongPasswordLabel();
     String AXAutoFillCreditCardLabel();
+    String AXAutoFillLoadingLabel();
     String autoFillStrongPasswordLabel();
 
     String missingPluginText();
@@ -372,14 +373,11 @@ namespace WebCore {
 
 #if ENABLE(IMAGE_ANALYSIS)
     WEBCORE_EXPORT String contextMenuItemTagLookUpImage();
-    WEBCORE_EXPORT String contextMenuItemTagQuickLookImage();
-    WEBCORE_EXPORT String contextMenuItemTagQuickLookImageForTextSelection();
-    WEBCORE_EXPORT String contextMenuItemTagQuickLookImageForVisualSearch();
-#endif // ENABLE(IMAGE_ANALYSIS)
+#endif
 
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
-    WEBCORE_EXPORT String contextMenuItemTagCopyCroppedImage();
-    WEBCORE_EXPORT String contextMenuItemTitleMarkupImage();
+    WEBCORE_EXPORT String contextMenuItemTagCopySubject();
+    WEBCORE_EXPORT String contextMenuItemTitleRemoveBackground();
 #endif
 
 #if HAVE(TRANSLATION_UI_SERVICES)

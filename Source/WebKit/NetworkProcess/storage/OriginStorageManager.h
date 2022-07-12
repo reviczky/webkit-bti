@@ -51,6 +51,7 @@ public:
     void connectionClosed(IPC::Connection::UniqueID);
     bool persisted() const { return m_persisted; }
     void setPersisted(bool value);
+    const String& path() const { return m_path; }
     QuotaManager& quotaManager();
     FileSystemStorageManager& fileSystemStorageManager(FileSystemStorageHandleRegistry&);
     LocalStorageManager& localStorageManager(StorageAreaRegistry&);
@@ -59,13 +60,15 @@ public:
     SessionStorageManager* existingSessionStorageManager();
     IDBStorageManager& idbStorageManager(IDBStorageRegistry&);
     IDBStorageManager* existingIDBStorageManager();
-    String resolvedLocalStoragePath();
-    String resolvedIDBStoragePath();
+    String resolvedPath(WebsiteDataType);
     bool isActive();
     bool isEmpty();
     OptionSet<WebsiteDataType> fetchDataTypesInList(OptionSet<WebsiteDataType>);
     void deleteData(OptionSet<WebsiteDataType>, WallTime);
     void moveData(OptionSet<WebsiteDataType>, const String& localStoragePath, const String& idbStoragePath);
+    bool didWriteOriginToFile() const { return m_didWriteOriginToFile; }
+    void markDidWriteOriginToFile() { m_didWriteOriginToFile = true; }
+    void deleteEmptyDirectory();
 
 private:
     enum class StorageBucketMode : bool;
@@ -82,6 +85,7 @@ private:
     RefPtr<QuotaManager> m_quotaManager;
     bool m_persisted { false };
     bool m_shouldUseCustomPaths;
+    bool m_didWriteOriginToFile { false };
 };
 
 } // namespace WebKit

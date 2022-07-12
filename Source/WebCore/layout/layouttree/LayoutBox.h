@@ -52,6 +52,8 @@ public:
         TableBox, // The table box is a block-level box that contains the table's internal table boxes.
         Image,
         IFrame,
+        InsideListMarker,
+        OutsideListMarker,
         IntegrationBlockContainer,
         IntegrationInlineBlock, // Integration sets up inline-block boxes as replaced boxes.
         GenericElement
@@ -135,10 +137,13 @@ public:
     bool isTableColumn() const { return style().display() == DisplayType::TableColumn; }
     bool isTableCell() const { return style().display() == DisplayType::TableCell; }
     bool isInternalTableBox() const;
-    bool isFlexBox() const { return style().display() == DisplayType::Flex; }
+    bool isFlexBox() const { return style().display() == DisplayType::Flex || style().display() == DisplayType::InlineFlex; }
     bool isFlexItem() const;
     bool isIFrame() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::IFrame; }
     bool isImage() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::Image; }
+    bool isListMarker() const { return m_elementAttributes && (m_elementAttributes.value().elementType == ElementType::InsideListMarker || m_elementAttributes.value().elementType == ElementType::OutsideListMarker); }
+    bool isInsideListMarker() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::InsideListMarker; }
+    bool isOutsideListMarker() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::OutsideListMarker; }
     bool isInternalRubyBox() const { return false; }
     bool isIntegrationBlockContainer() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::IntegrationBlockContainer; }
     bool isIntegrationRoot() const { return isIntegrationBlockContainer() && !m_parent; }

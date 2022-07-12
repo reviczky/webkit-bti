@@ -30,6 +30,7 @@
 #include "ElementAncestorIterator.h"
 #include "LegacyRenderSVGRoot.h"
 #include "LegacyRenderSVGShape.h"
+#include "LegacyRenderSVGTransformableContainer.h"
 #include "NodeRenderStyle.h"
 #include "RenderChildIterator.h"
 #include "RenderElement.h"
@@ -44,7 +45,6 @@
 #include "RenderSVGRoot.h"
 #include "RenderSVGShape.h"
 #include "RenderSVGText.h"
-#include "RenderSVGTransformableContainer.h"
 #include "RenderSVGViewportContainer.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGGeometryElement.h"
@@ -224,8 +224,8 @@ static inline bool layoutSizeOfNearestViewportChanged(const RenderElement& rende
 bool SVGRenderSupport::transformToRootChanged(RenderElement* ancestor)
 {
     while (ancestor && !ancestor->isSVGRootOrLegacySVGRoot()) {
-        if (is<RenderSVGTransformableContainer>(*ancestor))
-            return downcast<RenderSVGTransformableContainer>(*ancestor).didTransformToRootUpdate();
+        if (is<LegacyRenderSVGTransformableContainer>(*ancestor))
+            return downcast<LegacyRenderSVGTransformableContainer>(*ancestor).didTransformToRootUpdate();
         if (is<RenderSVGViewportContainer>(*ancestor))
             return downcast<RenderSVGViewportContainer>(*ancestor).didTransformToRootUpdate();
         ancestor = ancestor->parent();
@@ -343,26 +343,6 @@ bool SVGRenderSupport::filtersForceContainerLayout(const RenderElement& renderer
     return true;
 }
 
-FloatRect SVGRenderSupport::transformReferenceBox(const RenderElement& renderer, const SVGElement& element, const RenderStyle& style)
-{
-    switch (style.transformBox()) {
-    case TransformBox::BorderBox:
-        // For SVG elements without an associated CSS layout box, the used value for border-box is stroke-box.
-    case TransformBox::StrokeBox:
-        return renderer.strokeBoundingBox();
-    case TransformBox::ContentBox:
-        // For SVG elements without an associated CSS layout box, the used value for content-box is fill-box.
-    case TransformBox::FillBox:
-        return renderer.objectBoundingBox();
-    case TransformBox::ViewBox: {
-        FloatSize viewportSize;
-        SVGLengthContext(&element).determineViewport(viewportSize);
-        return FloatRect { { }, viewportSize };
-        }
-    }
-    return { };
-}
-
 inline FloatRect clipPathReferenceBox(const RenderElement& renderer, CSSBoxType boxType)
 {
     FloatRect referenceBox;
@@ -375,9 +355,9 @@ inline FloatRect clipPathReferenceBox(const RenderElement& renderer, CSSBoxType 
         break;
     case CSSBoxType::ViewBox:
         if (renderer.element()) {
-            FloatSize viewportSize;
-            SVGLengthContext(downcast<SVGElement>(renderer.element())).determineViewport(viewportSize);
-            referenceBox.setSize(viewportSize);
+            auto viewportSize = SVGLengthContext(downcast<SVGElement>(renderer.element())).viewportSize();
+            if (viewportSize)
+                referenceBox.setSize(*viewportSize);
             break;
         }
         FALLTHROUGH;

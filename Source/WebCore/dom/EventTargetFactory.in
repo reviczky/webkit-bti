@@ -9,6 +9,8 @@ AudioTrackList conditional=VIDEO
 BaseAudioContext conditional=WEB_AUDIO
 BroadcastChannel
 Clipboard
+CompressionStream
+DecompressionStream
 DedicatedWorkerGlobalScope
 DOMApplicationCache
 DOMWindow
@@ -56,6 +58,7 @@ SharedWorkerGlobalScope
 SourceBuffer conditional=MEDIA_SOURCE
 SourceBufferList conditional=MEDIA_SOURCE
 SpeechRecognition
+SpeechSynthesis conditional=SPEECH_SYNTHESIS
 SpeechSynthesisUtterance conditional=SPEECH_SYNTHESIS
 TextTrack conditional=VIDEO
 TextTrackCue conditional=VIDEO
