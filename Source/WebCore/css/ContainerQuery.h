@@ -24,11 +24,14 @@
 
 #pragma once
 
+#include <wtf/Forward.h>
+#include <wtf/OptionSet.h>
 #include <wtf/text/AtomString.h>
 
 namespace WebCore {
 
 class CSSValue;
+class Element;
 
 namespace CQ {
 
@@ -36,22 +39,20 @@ struct ContainerCondition;
 struct SizeCondition;
 struct SizeFeature;
 
-struct UnknownQuery { };
+struct UnknownQuery {
+    String name;
+    String text;
+};
 
-using SizeQuery = std::variant<SizeCondition, SizeFeature>;
-using ContainerQuery = std::variant<ContainerCondition, SizeQuery, UnknownQuery>;
+using ContainerQuery = std::variant<ContainerCondition, SizeFeature, UnknownQuery>;
 
 enum class LogicalOperator : uint8_t { And, Or, Not };
 enum class ComparisonOperator : uint8_t { LessThan, LessThanOrEqual, Equal, GreaterThan, GreaterThanOrEqual };
+enum class Syntax : uint8_t { Boolean, Colon, Range };
 
 struct ContainerCondition {
     LogicalOperator logicalOperator { LogicalOperator::And };
     Vector<ContainerQuery> queries;
-};
-
-struct SizeCondition {
-    LogicalOperator logicalOperator { LogicalOperator::And };
-    Vector<SizeQuery> queries;
 };
 
 struct Comparison {
@@ -61,6 +62,7 @@ struct Comparison {
 
 struct SizeFeature {
     AtomString name;
+    Syntax syntax;
     std::optional<Comparison> leftComparison;
     std::optional<Comparison> rightComparison;
 };
@@ -74,13 +76,26 @@ const AtomString& aspectRatio();
 const AtomString& orientation();
 };
 
+enum class Axis : uint8_t {
+    Block   = 1 << 0,
+    Inline  = 1 << 1,
+    Width   = 1 << 2,
+    Height  = 1 << 3,
+};
+OptionSet<Axis> requiredAxesForFeature(const AtomString&);
+
 }
 
 using ContainerQuery = CQ::ContainerQuery;
 
 struct FilteredContainerQuery {
     AtomString nameFilter;
+    OptionSet<CQ::Axis> axisFilter;
     ContainerQuery query;
 };
+
+using CachedQueryContainers = Vector<Ref<const Element>>;
+
+void serialize(StringBuilder&, const ContainerQuery&);
 
 }

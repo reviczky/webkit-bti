@@ -419,22 +419,22 @@ void InspectorInstrumentation::willDispatchEventImpl(InstrumentingAgents& instru
         timelineAgent->willDispatchEvent(event, document.frame());
 }
 
-void InspectorInstrumentation::willHandleEventImpl(InstrumentingAgents& instrumentingAgents, Event& event, const RegisteredEventListener& listener)
+void InspectorInstrumentation::willHandleEventImpl(InstrumentingAgents& instrumentingAgents, ScriptExecutionContext& context, Event& event, const RegisteredEventListener& listener)
 {
     if (auto* webDebuggerAgent = instrumentingAgents.enabledWebDebuggerAgent())
         webDebuggerAgent->willHandleEvent(listener);
 
     if (auto* domDebuggerAgent = instrumentingAgents.enabledDOMDebuggerAgent())
-        domDebuggerAgent->willHandleEvent(event, listener);
+        domDebuggerAgent->willHandleEvent(context, event, listener);
 }
 
-void InspectorInstrumentation::didHandleEventImpl(InstrumentingAgents& instrumentingAgents, Event& event, const RegisteredEventListener& listener)
+void InspectorInstrumentation::didHandleEventImpl(InstrumentingAgents& instrumentingAgents, ScriptExecutionContext& context, Event& event, const RegisteredEventListener& listener)
 {
     if (auto* webDebuggerAgent = instrumentingAgents.enabledWebDebuggerAgent())
         webDebuggerAgent->didDispatchAsyncCall();
 
     if (auto* domDebuggerAgent = instrumentingAgents.enabledDOMDebuggerAgent())
-        domDebuggerAgent->didHandleEvent(event, listener);
+        domDebuggerAgent->didHandleEvent(context, event, listener);
 }
 
 void InspectorInstrumentation::didDispatchEventImpl(InstrumentingAgents& instrumentingAgents, const Event& event)
@@ -590,10 +590,10 @@ void InspectorInstrumentation::flexibleBoxRendererWrappedToNextLineImpl(Instrume
         domAgent->flexibleBoxRendererWrappedToNextLine(renderer, lineStartItemIndex);
 }
 
-void InspectorInstrumentation::willSendRequestImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& redirectResponse, const CachedResource* cachedResource)
+void InspectorInstrumentation::willSendRequestImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& redirectResponse, const CachedResource* cachedResource, ResourceLoader* resourceLoader)
 {
     if (auto* networkAgent = instrumentingAgents.enabledNetworkAgent())
-        networkAgent->willSendRequest(identifier, loader, request, redirectResponse, cachedResource);
+        networkAgent->willSendRequest(identifier, loader, request, redirectResponse, cachedResource, resourceLoader);
 }
 
 void InspectorInstrumentation::willSendRequestOfTypeImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, DocumentLoader* loader, ResourceRequest& request, LoadType loadType)
@@ -628,10 +628,10 @@ void InspectorInstrumentation::didReceiveThreadableLoaderResponseImpl(Instrument
         networkAgent->didReceiveThreadableLoaderResponse(identifier, documentThreadableLoader);
 }
 
-void InspectorInstrumentation::didReceiveDataImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, const SharedBuffer& buffer, int encodedDataLength)
+void InspectorInstrumentation::didReceiveDataImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, const SharedBuffer* buffer, int encodedDataLength)
 {
     if (auto* networkAgent = instrumentingAgents.enabledNetworkAgent())
-        networkAgent->didReceiveData(identifier, &buffer, buffer.size(), encodedDataLength);
+        networkAgent->didReceiveData(identifier, buffer, buffer ? buffer->size() : 0, encodedDataLength);
 }
 
 void InspectorInstrumentation::didFinishLoadingImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, DocumentLoader* loader, const NetworkLoadMetrics& networkLoadMetrics, ResourceLoader* resourceLoader)
@@ -845,10 +845,10 @@ bool InspectorInstrumentation::willInterceptImpl(InstrumentingAgents& instrument
     return false;
 }
 
-bool InspectorInstrumentation::shouldInterceptRequestImpl(InstrumentingAgents& instrumentingAgents, const ResourceRequest& request)
+bool InspectorInstrumentation::shouldInterceptRequestImpl(InstrumentingAgents& instrumentingAgents, const ResourceLoader& loader)
 {
     if (auto* networkAgent = instrumentingAgents.enabledNetworkAgent())
-        return networkAgent->shouldInterceptRequest(request);
+        return networkAgent->shouldInterceptRequest(loader);
     return false;
 }
 

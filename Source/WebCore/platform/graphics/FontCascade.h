@@ -29,6 +29,7 @@
 #include "FontCascadeDescription.h"
 #include "FontCascadeFonts.h"
 #include "Path.h"
+#include <optional>
 #include <wtf/HashSet.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/unicode/CharacterNames.h>
@@ -91,7 +92,9 @@ struct GlyphOverflow {
 };
 
 #if USE(CORE_TEXT)
+AffineTransform computeBaseOverallTextMatrix(const std::optional<AffineTransform>& syntheticOblique);
 AffineTransform computeOverallTextMatrix(const Font&);
+AffineTransform computeBaseVerticalTextMatrix(const AffineTransform& previousTextMatrix);
 AffineTransform computeVerticalTextMatrix(const Font&, const AffineTransform& previousTextMatrix);
 #endif
 
@@ -209,6 +212,8 @@ public:
     static float syntheticObliqueAngle() { return 14; }
 
     std::unique_ptr<DisplayList::InMemoryDisplayList> displayListForTextRun(GraphicsContext&, const TextRun&, unsigned from = 0, std::optional<unsigned> to = { }, CustomFontNotReadyAction = CustomFontNotReadyAction::DoNotPaintIfFontNotReady) const;
+
+    unsigned generation() const { return m_generation; }
 
 #if PLATFORM(WIN) && USE(CG)
     static void setFontSmoothingLevel(int);
@@ -344,9 +349,10 @@ private:
     mutable RefPtr<FontCascadeFonts> m_fonts;
     float m_letterSpacing { 0 };
     float m_wordSpacing { 0 };
-    mutable bool m_useBackslashAsYenSymbol { false };
-    mutable bool m_enableKerning { false }; // Computed from m_fontDescription.
-    mutable bool m_requiresShaping { false }; // Computed from m_fontDescription.
+    mutable unsigned m_generation { 0 };
+    bool m_useBackslashAsYenSymbol { false };
+    bool m_enableKerning { false }; // Computed from m_fontDescription.
+    bool m_requiresShaping { false }; // Computed from m_fontDescription.
 };
 
 inline const Font& FontCascade::primaryFont() const

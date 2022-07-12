@@ -32,6 +32,7 @@
 #include "CSSStyleSheet.h"
 #include "Element.h"
 #include "ElementChildIterator.h"
+#include "ElementRareData.h"
 #include "ExtensionStyleSheets.h"
 #include "HTMLHeadElement.h"
 #include "HTMLIFrameElement.h"
@@ -98,7 +99,7 @@ void Scope::createDocumentResolver()
     ASSERT(!m_resolver);
     ASSERT(!m_shadowRoot);
 
-    SetForScope<bool> isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
+    SetForScope isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
 
     m_resolver = Resolver::create(m_document);
 
@@ -119,7 +120,7 @@ void Scope::createOrFindSharedShadowTreeResolver()
     auto key = makeResolverSharingKey();
 
     auto result = documentScope().m_sharedShadowTreeResolvers.ensure(WTFMove(key), [&] {
-        SetForScope<bool> isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
+        SetForScope isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
 
         m_resolver = Resolver::create(m_document);
 
@@ -185,6 +186,11 @@ Scope& Scope::forNode(Node& node)
     if (shadowRoot)
         return shadowRoot->styleScope();
     return node.document().styleScope();
+}
+
+const Scope& Scope::forNode(const Node& node)
+{
+    return forNode(const_cast<Node&>(node));
 }
 
 Scope* Scope::forOrdinal(Element& element, ScopeOrdinal ordinal)
@@ -360,7 +366,7 @@ void Scope::collectActiveStyleSheets(Vector<RefPtr<StyleSheet>>& sheets)
                 if (linkElement.styleSheetIsLoading()) {
                     // it is loading but we should still decide which style sheet set to use
                     if (!enabledViaScript && !title.isEmpty() && m_preferredStylesheetSetName.isEmpty()) {
-                        if (!linkElement.attributeWithoutSynchronization(relAttr).contains("alternate"))
+                        if (!linkElement.attributeWithoutSynchronization(relAttr).contains("alternate"_s))
                             m_preferredStylesheetSetName = title;
                     }
                     continue;
@@ -388,14 +394,14 @@ void Scope::collectActiveStyleSheets(Vector<RefPtr<StyleSheet>>& sheets)
                     // we are NOT an alternate sheet, then establish
                     // us as the preferred set. Otherwise, just ignore
                     // this sheet.
-                    if (is<HTMLStyleElement>(element) || !rel.contains("alternate"))
+                    if (is<HTMLStyleElement>(element) || !rel.contains("alternate"_s))
                         m_preferredStylesheetSetName = title;
                 }
                 if (title != m_preferredStylesheetSetName)
                     sheet = nullptr;
             }
 
-            if (rel.contains("alternate") && title.isEmpty())
+            if (rel.contains("alternate"_s) && title.isEmpty())
                 sheet = nullptr;
 
             if (sheet)
@@ -499,7 +505,7 @@ void Scope::updateActiveStyleSheets(UpdateType updateType)
 
     updateResolver(activeCSSStyleSheets, styleSheetChange.resolverUpdateType);
 
-    m_weakCopyOfActiveStyleSheetListForFastLookup = nullptr;
+    m_weakCopyOfActiveStyleSheetListForFastLookup.clear();
     m_activeStyleSheets.swap(activeCSSStyleSheets);
     m_styleSheetsForStyleSheetList.swap(activeStyleSheets);
 
@@ -543,7 +549,7 @@ void Scope::updateResolver(Vector<RefPtr<CSSStyleSheet>>& activeStyleSheets, Res
     if (m_shadowRoot)
         unshareShadowTreeResolverBeforeMutation();
 
-    SetForScope<bool> isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
+    SetForScope isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
 
     if (updateType == ResolverUpdateType::Reset) {
         m_resolver->ruleSets().resetAuthorStyle();
@@ -587,12 +593,14 @@ const Vector<RefPtr<CSSStyleSheet>> Scope::activeStyleSheetsForInspector()
 
 bool Scope::activeStyleSheetsContains(const CSSStyleSheet* sheet) const
 {
-    if (!m_weakCopyOfActiveStyleSheetListForFastLookup) {
-        m_weakCopyOfActiveStyleSheetListForFastLookup = makeUnique<HashSet<const CSSStyleSheet*>>();
+    if (m_activeStyleSheets.isEmpty())
+        return false;
+
+    if (m_weakCopyOfActiveStyleSheetListForFastLookup.isEmpty()) {
         for (auto& activeStyleSheet : m_activeStyleSheets)
-            m_weakCopyOfActiveStyleSheetListForFastLookup->add(activeStyleSheet.get());
+            m_weakCopyOfActiveStyleSheetListForFastLookup.add(activeStyleSheet.get());
     }
-    return m_weakCopyOfActiveStyleSheetListForFastLookup->contains(sheet);
+    return m_weakCopyOfActiveStyleSheetListForFastLookup.contains(sheet);
 }
 
 void Scope::flushPendingSelfUpdate()
@@ -684,14 +692,14 @@ auto Scope::collectResolverScopes() -> ResolverScopes
 
     ResolverScopes resolverScopes;
 
-    resolverScopes.add(*resolverIfExists(), Vector<CheckedPtr<Scope>> { this });
+    resolverScopes.add(*resolverIfExists(), Vector<WeakPtr<Scope>> { this });
 
     for (auto* shadowRoot : m_document.inDocumentShadowRoots()) {
         auto& scope = shadowRoot->styleScope();
         auto* resolver = scope.resolverIfExists();
         if (!resolver)
             continue;
-        resolverScopes.add(*resolver, Vector<CheckedPtr<Scope>> { }).iterator->value.append(&scope);
+        resolverScopes.add(*resolver, Vector<WeakPtr<Scope>> { }).iterator->value.append(&scope);
     }
     return resolverScopes;
 }
@@ -750,6 +758,35 @@ void Scope::didChangeStyleSheetEnvironment()
     scheduleUpdate(UpdateType::ContentsOrInterpretation);
 }
 
+void Scope::didChangeViewportSize()
+{
+    Ref<ContainerNode> rootNode = m_document;
+    if (m_shadowRoot)
+        rootNode = *m_shadowRoot;
+    else {
+        if (!m_document.hasStyleWithViewportUnits())
+            return;
+
+        for (auto* descendantShadowRoot : m_document.inDocumentShadowRoots()) {
+            if (descendantShadowRoot->mode() == ShadowRootMode::UserAgent)
+                continue;
+            descendantShadowRoot->styleScope().didChangeViewportSize();
+        }
+    }
+
+    auto* resolver = resolverIfExists();
+    if (!resolver)
+        return;
+    resolver->clearCachedDeclarationsAffectedByViewportUnits();
+
+    // FIXME: Ideally, we should save the list of elements that have viewport units and only iterate over those.
+    for (RefPtr element = ElementTraversal::firstWithin(rootNode); element; element = ElementTraversal::nextIncludingPseudo(*element)) {
+        auto* renderer = element->renderer();
+        if (renderer && renderer->style().usesViewportUnits())
+            element->invalidateStyle();
+    }
+}
+
 void Scope::invalidateMatchedDeclarationsCache()
 {
     if (!m_shadowRoot) {
@@ -783,15 +820,17 @@ bool Scope::isForUserAgentShadowTree() const
     return m_shadowRoot && m_shadowRoot->mode() == ShadowRootMode::UserAgent;
 }
 
-bool Scope::updateQueryContainerState()
+bool Scope::updateQueryContainerState(QueryContainerUpdateContext& context)
 {
     ASSERT(!m_shadowRoot);
-    ASSERT(m_document.renderView());
+
+    if (!m_document.renderView())
+        return false;
 
     auto previousStates = WTFMove(m_queryContainerStates);
     m_queryContainerStates.clear();
 
-    Vector<Element*> changedContainers;
+    Vector<Element*> containersToInvalidate;
 
     for (auto& containerRenderer : m_document.renderView()->containerQueryBoxes()) {
         auto* containerElement = containerRenderer.element();
@@ -806,7 +845,7 @@ bool Scope::updateQueryContainerState()
                 return size.width() != oldSize.width();
             case ContainerType::Size:
                 return size != oldSize;
-            case ContainerType::None:
+            case ContainerType::Normal:
                 RELEASE_ASSERT_NOT_REACHED();
             }
             RELEASE_ASSERT_NOT_REACHED();
@@ -814,15 +853,16 @@ bool Scope::updateQueryContainerState()
 
         auto it = previousStates.find(*containerElement);
         bool changed = it == previousStates.end() || sizeChanged(it->value);
-        if (changed)
-            changedContainers.append(containerElement);
+        // Protect against unstable layout by invalidating only once per container.
+        if (changed && context.invalidatedContainers.add(containerElement).isNewEntry)
+            containersToInvalidate.append(containerElement);
         m_queryContainerStates.add(*containerElement, size);
     }
 
-    for (auto* toInvalidate : changedContainers)
-        toInvalidate->invalidateForQueryContainerChange();
+    for (auto* toInvalidate : containersToInvalidate)
+        toInvalidate->invalidateForQueryContainerSizeChange();
 
-    return !changedContainers.isEmpty();
+    return !containersToInvalidate.isEmpty();
 }
 
 HTMLSlotElement* assignedSlotForScopeOrdinal(const Element& element, ScopeOrdinal scopeOrdinal)

@@ -36,11 +36,12 @@
 namespace WebCore {
 namespace Layout {
 
-static std::optional<InlineLayoutUnit> horizontalAlignmentOffset(TextAlignMode textAlign, const LineBuilder::LineContent& lineContent, bool isLeftToRightDirection)
+static std::optional<InlineLayoutUnit> horizontalAlignmentOffset(TextAlignMode textAlign, TextAlignLast textAlignLast, const LineBuilder::LineContent& lineContent, bool isLeftToRightDirection)
 {
     // Depending on the line’s alignment/justification, the hanging glyph can be placed outside the line box.
     auto& runs = lineContent.runs;
-    auto contentLogicalWidth = lineContent.contentLogicalWidth;
+    auto contentLogicalRight = lineContent.contentLogicalRight;
+    auto lineLogicalRight = lineContent.lineLogicalWidth;
     if (lineContent.hangingContentWidth) {
         ASSERT(!runs.isEmpty());
         // If white-space is set to pre-wrap, the UA must (unconditionally) hang this sequence, unless the sequence is followed
@@ -50,23 +51,43 @@ static std::optional<InlineLayoutUnit> horizontalAlignmentOffset(TextAlignMode t
         // In some cases, a glyph at the end of a line can conditionally hang: it hangs only if it does not otherwise fit in the line prior to justification.
         if (isConditionalHanging) {
             // FIXME: Conditional hanging needs partial overflow trimming at glyph boundary, one by one until they fit.
-            contentLogicalWidth = std::min(contentLogicalWidth, lineContent.lineLogicalWidth);
+            contentLogicalRight = std::min(contentLogicalRight, lineLogicalRight);
         } else
-            contentLogicalWidth -= lineContent.hangingContentWidth;
+            contentLogicalRight -= lineContent.hangingContentWidth;
     }
-    auto extraHorizontalSpace = lineContent.lineLogicalWidth - contentLogicalWidth;
+    auto extraHorizontalSpace = lineLogicalRight - contentLogicalRight;
     if (extraHorizontalSpace <= 0)
         return { };
 
     auto computedHorizontalAlignment = [&] {
-        if (textAlign != TextAlignMode::Justify)
-            return textAlign;
-        // Text is justified according to the method specified by the text-justify property,
-        // in order to exactly fill the line box. Unless otherwise specified by text-align-last,
-        // the last line before a forced break or the end of the block is start-aligned.
-        if (lineContent.isLastLineWithInlineContent || (!runs.isEmpty() && runs.last().isLineBreak()))
-            return TextAlignMode::Start;
-        return TextAlignMode::Justify;
+        // The last line before a forced break or the end of the block is aligned according to
+        // text-align-last.
+        if (lineContent.isLastLineWithInlineContent || (!runs.isEmpty() && runs.last().isLineBreak())) {
+            switch (textAlignLast) {
+            case TextAlignLast::Auto:
+                if (textAlign == TextAlignMode::Justify)
+                    return TextAlignMode::Start;
+                return textAlign;
+            case TextAlignLast::Start:
+                return TextAlignMode::Start;
+            case TextAlignLast::End:
+                return TextAlignMode::End;
+            case TextAlignLast::Left:
+                return TextAlignMode::Left;
+            case TextAlignLast::Right:
+                return TextAlignMode::Right;
+            case TextAlignLast::Center:
+                return TextAlignMode::Center;
+            case TextAlignLast::Justify:
+                return TextAlignMode::Justify;
+            default:
+                ASSERT_NOT_REACHED();
+                return TextAlignMode::Start;
+            }
+        }
+
+        // All other lines are aligned according to text-align.
+        return textAlign;
     };
 
     switch (computedHorizontalAlignment()) {
@@ -106,7 +127,7 @@ LineBoxBuilder::LineBoxBuilder(const InlineFormattingContext& inlineFormattingCo
 LineBox LineBoxBuilder::build(const LineBuilder::LineContent& lineContent, size_t lineIndex)
 {
     auto& rootStyle = lineIndex ? rootBox().firstLineStyle() : rootBox().style();
-    auto rootInlineBoxAlignmentOffset = valueOrDefault(Layout::horizontalAlignmentOffset(rootStyle.textAlign(), lineContent, lineContent.inlineBaseDirection == TextDirection::LTR));
+    auto rootInlineBoxAlignmentOffset = valueOrDefault(Layout::horizontalAlignmentOffset(rootStyle.textAlign(), rootStyle.textAlignLast(), lineContent, lineContent.inlineBaseDirection == TextDirection::LTR));
     // FIXME: The overflowing hanging content should be part of the ink overflow.  
     auto lineBox = LineBox { rootBox(), rootInlineBoxAlignmentOffset, lineContent.contentLogicalWidth - lineContent.hangingContentWidth, lineIndex, lineContent.nonSpanningInlineLevelBoxCount };
     constructInlineLevelBoxes(lineBox, lineContent, lineIndex);
@@ -191,9 +212,9 @@ static LayoutBoundsMetrics layoutBoundsPrimaryMetricsForInlineBox(const InlineLe
     return { ascent, descent, lineSpacing, inlineBox.isPreferredLineHeightFontMetricsBased() ? std::nullopt : std::make_optional(inlineBox.preferredLineHeight()) };
 }
 
-void LineBoxBuilder::setBaselineAndLayoutBounds(InlineLevelBox& inlineLevelBox, const LayoutBoundsMetrics& layoutBoundsMetrics) const
+void LineBoxBuilder::setBaselineAndLayoutBounds(InlineLevelBox& inlineLevelBox, const LayoutBoundsMetrics& layoutBoundsMetrics, BehavesAsText behavesAsText) const
 {
-    if (inlineLevelBox.isInlineBox() || inlineLevelBox.isLineBreakBox()) {
+    if (inlineLevelBox.isInlineBox() || inlineLevelBox.isLineBreakBox() || behavesAsText == BehavesAsText::Yes) {
         auto logicalHeight = layoutBoundsMetrics.ascent + layoutBoundsMetrics.descent;
         auto halfLeading = InlineLayoutUnit { };
         if (layoutBoundsMetrics.preferredLineHeight) {
@@ -237,7 +258,7 @@ void LineBoxBuilder::constructInlineLevelBoxes(LineBox& lineBox, const LineBuild
         auto& style = styleToUse(layoutBox);
         auto runHasContent = [&] () -> bool {
             ASSERT(!lineHasContent);
-            if (run.isText() || run.isBox() || run.isSoftLineBreak() || run.isHardLineBreak())
+            if (run.isText() || run.isBox() || run.isSoftLineBreak() || run.isHardLineBreak() || run.isListMarker())
                 return true;
             if (run.isLineSpanningInlineBoxStart())
                 return false;
@@ -261,7 +282,7 @@ void LineBoxBuilder::constructInlineLevelBoxes(LineBox& lineBox, const LineBuild
             if (layoutState().shouldNotSynthesizeInlineBlockBaseline()) {
                 // Integration codepath constructs replaced boxes for inline-block content.
                 ASSERT(layoutBox.isReplacedBox());
-                ascent = *downcast<ReplacedBox>(layoutBox).baseline();
+                ascent = downcast<ReplacedBox>(layoutBox).baseline().value_or(marginBoxHeight);
             } else if (layoutBox.isInlineBlockBox()) {
                 // The baseline of an 'inline-block' is the baseline of its last line box in the normal flow, unless it has either no in-flow line boxes or
                 // if its 'overflow' property has a computed value other than 'visible', in which case the baseline is the bottom margin edge.
@@ -282,6 +303,19 @@ void LineBoxBuilder::constructInlineLevelBoxes(LineBox& lineBox, const LineBuild
             auto atomicInlineLevelBox = InlineLevelBox::createAtomicInlineLevelBox(layoutBox, style, logicalLeft, { inlineLevelBoxGeometry.borderBoxWidth(), marginBoxHeight });
             setBaselineAndLayoutBounds(atomicInlineLevelBox, { ascent, marginBoxHeight - ascent });
             lineBox.addInlineLevelBox(WTFMove(atomicInlineLevelBox));
+            continue;
+        }
+        if (run.isListMarker()) {
+            auto& ListMarkerBoxGeometry = formattingContext().geometryForBox(layoutBox);
+            auto marginBoxHeight = ListMarkerBoxGeometry.marginBoxHeight();
+            // Integration codepath constructs ReplacedBoxes for list markers.
+            auto baseline = downcast<ReplacedBox>(layoutBox).baseline();
+            auto ascent = baseline.value_or(marginBoxHeight);
+
+            logicalLeft += std::max(0_lu, ListMarkerBoxGeometry.marginStart());
+            auto listMarkerInlineLevelBox = InlineLevelBox::createAtomicInlineLevelBox(layoutBox, style, logicalLeft, { ListMarkerBoxGeometry.borderBoxWidth(), marginBoxHeight });
+            setBaselineAndLayoutBounds(listMarkerInlineLevelBox, { ascent, marginBoxHeight - ascent }, baseline.has_value() ? BehavesAsText::Yes : BehavesAsText::No);
+            lineBox.addInlineLevelBox(WTFMove(listMarkerInlineLevelBox));
             continue;
         }
         if (run.isLineSpanningInlineBoxStart()) {
@@ -415,8 +449,19 @@ void LineBoxBuilder::adjustIdeographicBaselineIfApplicable(LineBox& lineBox, siz
     };
 
     adjustLayoutBoundsWithIdeographicBaseline(rootInlineBox);
-    for (auto& inlineLevelBox : lineBox.nonRootInlineLevelBoxes())
+    for (auto& inlineLevelBox : lineBox.nonRootInlineLevelBoxes()) {
+        if (inlineLevelBox.isAtomicInlineLevelBox()) {
+            auto& layoutBox = inlineLevelBox.layoutBox();
+            auto isInlineBlockWithNonSyntheticBaseline = layoutBox.isIntegrationInlineBlock() && downcast<ReplacedBox>(layoutBox).baseline().has_value();
+            // FIXME: While the layoutBox.isIntegrationInlineBlock check may seem redundant here, it's really just because currently
+            // the integration codepath turns inline-blocks into replaced type boxes.
+            auto isOrthogonalBlockFormattingRoot = (layoutBox.establishesBlockFormattingContext() || layoutBox.isIntegrationInlineBlock()) 
+                && layoutBox.style().isHorizontalWritingMode();
+            if (isInlineBlockWithNonSyntheticBaseline && !isOrthogonalBlockFormattingRoot)
+                continue;
+        }
         adjustLayoutBoundsWithIdeographicBaseline(inlineLevelBox);
+    }
 }
 
 }

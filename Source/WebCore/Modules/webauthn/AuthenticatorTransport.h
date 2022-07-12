@@ -27,6 +27,7 @@
 
 #if ENABLE(WEB_AUTHN)
 
+#include <optional>
 #include <wtf/Forward.h>
 
 namespace WebCore {
@@ -35,8 +36,14 @@ enum class AuthenticatorTransport {
     Usb,
     Nfc,
     Ble,
-    Internal
+    Internal,
+    Cable,
+    Hybrid
 };
+
+WEBCORE_EXPORT std::optional<AuthenticatorTransport> toAuthenticatorTransport(const String& transport);
+
+WEBCORE_EXPORT String toString(AuthenticatorTransport);
 
 } // namespace WebCore
 
@@ -48,7 +55,9 @@ template<> struct EnumTraits<WebCore::AuthenticatorTransport> {
         WebCore::AuthenticatorTransport::Usb,
         WebCore::AuthenticatorTransport::Nfc,
         WebCore::AuthenticatorTransport::Ble,
-        WebCore::AuthenticatorTransport::Internal
+        WebCore::AuthenticatorTransport::Internal,
+        WebCore::AuthenticatorTransport::Cable,
+        WebCore::AuthenticatorTransport::Hybrid
     >;
 };
 

@@ -193,6 +193,7 @@ public:
     bool isRubberBandInProgress() const final;
     bool forceUpdateScrollbarsOnMainThreadForPerformanceTesting() const final;
     bool isScrollSnapInProgress() const final;
+    bool scrollAnimatorEnabled() const final;
     bool mockScrollbarsControllerEnabled() const final;
     void logMockScrollbarsControllerMessage(const String&) const final;
 
@@ -237,6 +238,7 @@ public:
     IntSize scrollbarOffset(const Scrollbar&) const;
 
     std::optional<LayoutRect> updateScrollPosition(const ScrollPositionChangeOptions&, const LayoutRect& revealRect, const LayoutRect& localExposeRect);
+    bool isVisibleToHitTesting() const final;
 
 private:
     bool hasHorizontalOverflow() const;
@@ -263,6 +265,7 @@ private:
     void clearResizer();
 
     void updateScrollbarPresenceAndState(std::optional<bool> hasHorizontalOverflow = std::nullopt, std::optional<bool> hasVerticalOverflow = std::nullopt);
+    void registerScrollableArea();
 
 private:
     bool m_scrollDimensionsDirty { true };

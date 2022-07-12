@@ -36,6 +36,7 @@
 #include "RenderGeometryMap.h"
 #include "RenderLayer.h"
 #include "RenderLayerModelObject.h"
+#include "RenderSVGModelObjectInlines.h"
 #include "RenderSVGResource.h"
 #include "RenderView.h"
 #include "SVGElementInlines.h"
@@ -59,15 +60,9 @@ RenderSVGModelObject::RenderSVGModelObject(SVGElement& element, RenderStyle&& st
 void RenderSVGModelObject::updateFromStyle()
 {
     RenderLayerModelObject::updateFromStyle();
-    setHasTransformRelatedProperty(style().hasTransformRelatedProperty());
 
-    AffineTransform transform;
-    if (is<SVGGraphicsElement>(nodeForNonAnonymous()))
-        transform = downcast<SVGGraphicsElement>(nodeForNonAnonymous()).animatedLocalTransform();
-
-    // FIXME: [LBSE] Upstream RenderObject changes
-    // if (!transform.isIdentity())
-    //     setHasSVGTransform();
+    if (is<SVGGraphicsElement>(element()))
+        updateHasSVGTransformFlags(downcast<SVGGraphicsElement>(element()));
 }
 
 FloatRect RenderSVGModelObject::borderBoxRectInFragmentEquivalent(RenderFragmentContainer*, RenderBox::RenderBoxFragmentInfoFlags) const
@@ -142,7 +137,7 @@ LayoutRect RenderSVGModelObject::outlineBoundsForRepaint(const RenderLayerModelO
 
 void RenderSVGModelObject::absoluteRects(Vector<IntRect>& rects, const LayoutPoint& accumulatedOffset) const
 {
-    rects.append(snappedIntRect(LayoutRect(accumulatedOffset + layoutLocation(), layoutSize())));
+    rects.append(snappedIntRect(LayoutRect(accumulatedOffset + m_layoutRect.location(), m_layoutRect.size())));
 }
 
 void RenderSVGModelObject::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed) const
@@ -254,7 +249,7 @@ static bool isGraphicsElement(const RenderElement& renderer)
 
 bool RenderSVGModelObject::checkIntersection(RenderElement* renderer, const FloatRect& rect)
 {
-    if (!renderer || renderer->style().pointerEvents() == PointerEvents::None)
+    if (!renderer || renderer->style().effectivePointerEvents() == PointerEvents::None)
         return false;
     if (!isGraphicsElement(*renderer))
         return false;
@@ -266,7 +261,7 @@ bool RenderSVGModelObject::checkIntersection(RenderElement* renderer, const Floa
 
 bool RenderSVGModelObject::checkEnclosure(RenderElement* renderer, const FloatRect& rect)
 {
-    if (!renderer || renderer->style().pointerEvents() == PointerEvents::None)
+    if (!renderer || renderer->style().effectivePointerEvents() == PointerEvents::None)
         return false;
     if (!isGraphicsElement(*renderer))
         return false;
@@ -274,15 +269,6 @@ bool RenderSVGModelObject::checkEnclosure(RenderElement* renderer, const FloatRe
     ASSERT(is<SVGGraphicsElement>(svgElement));
     auto ctm = downcast<SVGGraphicsElement>(*svgElement).getCTM(SVGLocatable::DisallowStyleUpdate);
     return rect.contains(ctm.mapRect(renderer->repaintRectInLocalCoordinates()));
-}
-
-void RenderSVGModelObject::applyTransform(TransformationMatrix& transform, const FloatRect& boundingBox, OptionSet<RenderStyle::TransformOperationOption> options) const
-{
-    UNUSED_PARAM(transform);
-    UNUSED_PARAM(boundingBox);
-    UNUSED_PARAM(options);
-    // FIXME: [LBSE] Upstream SVGRenderSupport changes
-    // SVGRenderSupport::applyTransform(*this, transform, style, boundingBox, std::nullopt, std::nullopt, options);
 }
 
 } // namespace WebCore

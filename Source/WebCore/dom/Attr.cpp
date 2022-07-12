@@ -24,6 +24,7 @@
 #include "Attr.h"
 
 #include "AttributeChangeInvalidation.h"
+#include "CommonAtomStrings.h"
 #include "Document.h"
 #include "ElementInlines.h"
 #include "Event.h"
@@ -70,6 +71,8 @@ Attr::~Attr()
 {
     ASSERT_WITH_SECURITY_IMPLICATION(!isInShadowTree());
     ASSERT_WITH_SECURITY_IMPLICATION(treeScope().rootNode().isDocumentNode());
+
+    willBeDeletedFrom(document());
 }
 
 ExceptionOr<void> Attr::setPrefix(const AtomString& prefix)
@@ -97,10 +100,9 @@ void Attr::setValue(const AtomString& value)
         m_standaloneValue = value;
 }
 
-ExceptionOr<void> Attr::setNodeValue(const String& value)
+void Attr::setNodeValue(const String& value)
 {
-    setValue(value);
-    return { };
+    setValue(AtomString { value });
 }
 
 Ref<Node> Attr::cloneNodeInternal(Document& targetDocument, CloningOperation)
@@ -120,10 +122,10 @@ CSSStyleDeclaration* Attr::style()
     return &m_style->ensureCSSStyleDeclaration();
 }
 
-const AtomString& Attr::value() const
+AtomString Attr::value() const
 {
     if (m_element)
-        return m_element->getAttribute(qualifiedName());
+        return m_element->getAttributeForBindings(qualifiedName());
     return m_standaloneValue;
 }
 

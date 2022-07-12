@@ -64,6 +64,10 @@ WorkerParameters WorkerParameters::isolatedCopy() const
         settingsValues.isolatedCopy(),
         workerThreadMode,
         sessionID,
+#if ENABLE(SERVICE_WORKER)
+        crossThreadCopy(serviceWorkerData),
+#endif
+        clientIdentifier
     };
 }
 
@@ -135,7 +139,7 @@ bool WorkerThread::shouldWaitForWebInspectorOnStartup() const
 
 void WorkerThread::evaluateScriptIfNecessary(String& exceptionMessage)
 {
-    SetForScope<bool> isInStaticScriptEvaluation(m_isInStaticScriptEvaluation, true);
+    SetForScope isInStaticScriptEvaluation(m_isInStaticScriptEvaluation, true);
 
     // We are currently holding only the initial script code. If the WorkerType is Module, we should fetch the entire graph before executing the rest of this.
     // We invoke module loader as if we are executing inline module script tag in Document.

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2022 Apple Inc. All rights reserved.
  * Copyright (C) 2015 Canon Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -286,16 +286,13 @@ bool appendFileContentsToFileHandle(const String& path, PlatformFileHandle& targ
 
 bool filesHaveSameVolume(const String& fileA, const String& fileB)
 {
-    auto fsRepFileA = fileSystemRepresentation(fileA);
-    auto fsRepFileB = fileSystemRepresentation(fileB);
-
-    if (fsRepFileA.isNull() || fsRepFileB.isNull())
+    if (fileA.isNull() || fileB.isNull())
         return false;
 
     bool result = false;
 
-    auto fileADev = getFileDeviceId(fsRepFileA);
-    auto fileBDev = getFileDeviceId(fsRepFileB);
+    auto fileADev = getFileDeviceId(fileA);
+    auto fileBDev = getFileDeviceId(fileB);
 
     if (fileADev && fileBDev)
         result = (fileADev == fileBDev);
@@ -414,8 +411,9 @@ bool isSafeToUseMemoryMapForPath(const String&)
     return true;
 }
 
-void makeSafeToUseMemoryMapForPath(const String&)
+bool makeSafeToUseMemoryMapForPath(const String&)
 {
+    return true;
 }
 #endif
 
@@ -442,7 +440,11 @@ MappedFileData mapToFile(const String& path, size_t bytesSize, Function<void(con
         return { };
     }
 
-    FileSystem::makeSafeToUseMemoryMapForPath(path);
+    if (!FileSystem::makeSafeToUseMemoryMapForPath(path)) {
+        FileSystem::closeFile(handle);
+        return { };
+    }
+
     bool success;
     FileSystem::MappedFileData mappedFile(handle, FileSystem::FileOpenMode::ReadWrite, FileSystem::MappedFileMode::Shared, success);
     if (!success) {
@@ -816,7 +818,7 @@ bool makeAllDirectories(const String& path)
     return !ec;
 }
 
-String pathByAppendingComponent(const String& path, const String& component)
+String pathByAppendingComponent(StringView path, StringView component)
 {
     return fromStdFileSystemPath(toStdFileSystemPath(path) / toStdFileSystemPath(component));
 }

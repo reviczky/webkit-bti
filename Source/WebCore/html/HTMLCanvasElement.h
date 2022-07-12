@@ -48,18 +48,15 @@ class GraphicsContext;
 class Image;
 class ImageBuffer;
 class ImageData;
-class MediaSample;
 class MediaStream;
 class OffscreenCanvas;
+class VideoFrame;
 class WebGLRenderingContextBase;
 class GPUCanvasContext;
+class WebCoreOpaqueRoot;
 struct CanvasRenderingContext2DSettings;
 struct ImageBitmapRenderingContextSettings;
 struct UncachedString;
-
-namespace DisplayList {
-using AsTextFlags = unsigned;
-}
 
 class HTMLCanvasElement final : public HTMLElement, public CanvasBase, public ActiveDOMObject {
     WTF_MAKE_ISO_ALLOCATED(HTMLCanvasElement);
@@ -107,7 +104,7 @@ public:
     void paint(GraphicsContext&, const LayoutRect&);
 
 #if ENABLE(MEDIA_STREAM)
-    RefPtr<MediaSample> toMediaSample();
+    RefPtr<VideoFrame> toVideoFrame();
     ExceptionOr<Ref<MediaStream>> captureStream(std::optional<double>&& frameRequestRate);
 #endif
 
@@ -156,6 +153,8 @@ private:
     void eventListenersDidChange() final;
 
     void parseAttribute(const QualifiedName&, const AtomString&) final;
+    bool hasPresentationalHintsForAttribute(const QualifiedName&) const final;
+    void collectPresentationalHintsForAttribute(const QualifiedName&, const AtomString&, MutableStyleProperties&) final;
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
 
     bool canContainRangeEndPoint() const final;
@@ -200,6 +199,8 @@ private:
     mutable bool m_mustGuardAgainstUseByPendingLayerTransaction { false };
 #endif
 };
+
+WebCoreOpaqueRoot root(HTMLCanvasElement*);
 
 } // namespace WebCore
 
