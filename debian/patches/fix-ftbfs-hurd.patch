@@ -6,10 +6,10 @@ Index: webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
 +++ webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
-@@ -71,11 +71,21 @@ static void scanDirectoryForDictionaries
+@@ -72,11 +72,21 @@ static void scanDirectoryForDictionaries
              continue;
  
-         auto filePath = FileSystem::pathByAppendingComponent(directoryPath, fileName);
+         auto filePath = FileSystem::pathByAppendingComponent(directoryPathString, fileName);
 +#if OS(HURD)
 +        char *normalizedPath;
 +        normalizedPath = realpath(FileSystem::fileSystemRepresentation(filePath).data(), NULL);
@@ -27,4 +27,4 @@ Index: webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
 +#endif
          availableLocales.add(locale, Vector<String>()).iterator->value.append(filePath);
  
-         String localeReplacingUnderscores = String(locale);
+         String localeReplacingUnderscores = makeStringByReplacingAll(locale, '_', '-');
