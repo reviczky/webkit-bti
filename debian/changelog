@@ -14,6 +14,8 @@ webkit2gtk (2.37.1-1) UNRELEASED; urgency=medium
     - ENABLE_GTKDOC is now ENABLE_DOCUMENTATION.
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Jul 2022 13:11:14 +0200
 
