@@ -16,6 +16,10 @@ webkit2gtk (2.37.1-1) UNRELEASED; urgency=medium
     - Update source-is-missing overrides.
   * debian/copyright:
     - Update copyright information of all files.
+  * The documentation has been renamed from webkitdomgtk to
+    webkit2gtk-web-extension and from jsc-glib to javascriptcoregtk.
+    - Update debian/libwebkit2gtk-4.0-doc.doc-base.* and
+      debian/libwebkit2gtk-4.0-doc.links.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Jul 2022 13:11:14 +0200
 
