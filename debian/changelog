@@ -4,6 +4,8 @@ webkit2gtk (2.37.1-1) UNRELEASED; urgency=medium
   * debian/watch, debian/gbp.conf:
     - Update for 2.37.x packages in experimental.
   * Refresh all patches.
+  * debian/patches/fix-ftbfs-cloop.patch:
+    - Fix FTBFS in i386 and other architectures.
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
   * debian/control:
