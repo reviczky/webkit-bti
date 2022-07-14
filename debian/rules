@@ -5,6 +5,9 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all optimize=-lto
 include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/buildflags.mk
 
+export CCACHE_NOHASHDIR=1
+export CCACHE_DIR=$(CURDIR)/ccache
+
 # soup2 build -> 4.0 API packages, soup3 build -> 4.1 API packages
 ENABLE_SOUP2=YES
 ENABLE_SOUP3=YES
@@ -210,11 +213,9 @@ override_dh_auto_configure:
 		-DENABLE_WEBDRIVER=OFF -DENABLE_DOCUMENTATION=OFF
 
 override_dh_auto_build:
-	$(SOUP2_BUILD) CCACHE_NOHASHDIR=1 CCACHE_DIR=$(CURDIR)/ccache \
-		CCACHE_BASEDIR=$(CURDIR)/build-soup2 \
+	$(SOUP2_BUILD) CCACHE_BASEDIR=$(CURDIR)/build-soup2 \
 		dh_auto_build -Bbuild-soup2 $(EXTRA_BUILD_ARGUMENTS)
-	$(SOUP3_BUILD) CCACHE_NOHASHDIR=1 CCACHE_DIR=$(CURDIR)/ccache \
-		CCACHE_BASEDIR=$(CURDIR)/build-soup3 \
+	$(SOUP3_BUILD) CCACHE_BASEDIR=$(CURDIR)/build-soup3 \
 		dh_auto_build -Bbuild-soup3 $(EXTRA_BUILD_ARGUMENTS)
 
 override_dh_auto_install:

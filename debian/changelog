@@ -1,3 +1,12 @@
+webkit2gtk (2.37.1-2) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    - Make CCACHE_DIR and CCACHE_NOHASHDIR global variables so they also
+      apply to the install target. This fixes a FTBFS if the home dir is not
+      writable (as is the case with buildds)
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 14 Jul 2022 11:27:03 +0200
+
 webkit2gtk (2.37.1-1) experimental; urgency=medium
 
   * New upstream development release.
