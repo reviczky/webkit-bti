@@ -5,6 +5,9 @@ webkit2gtk (2.36.6-1) UNRELEASED; urgency=high
     security fixes in the latest versions of WebKitGTK:
     - CVE identifiers: CVE-2022-32792, CVE-2022-32816 and CVE-2022-2294
       (fixed in 2.36.5).
+  * debian/rules:
+    - Enable wpe on Ubuntu now that the MIR has been accepted (thanks,
+      Sebastien Bacher) (Closes: #1016585).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 10 Aug 2022 11:56:16 +0200
 
