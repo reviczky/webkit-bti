@@ -1,4 +1,4 @@
-webkit2gtk (2.36.6-1) UNRELEASED; urgency=high
+webkit2gtk (2.36.6-1) unstable; urgency=high
 
   * New upstream release.
   * The WebKitGTK security advisory WSA-2022-0007 lists the following
@@ -9,7 +9,7 @@ webkit2gtk (2.36.6-1) UNRELEASED; urgency=high
     - Enable wpe on Ubuntu now that the MIR has been accepted (thanks,
       Sebastien Bacher) (Closes: #1016585).
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 10 Aug 2022 11:56:16 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 10 Aug 2022 14:56:32 +0200
 
 webkit2gtk (2.36.4-1) unstable; urgency=high
 
