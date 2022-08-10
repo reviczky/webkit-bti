@@ -1,3 +1,13 @@
+webkit2gtk (2.36.6-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+  * The WebKitGTK security advisory WSA-2022-0007 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    - CVE identifiers: CVE-2022-32792, CVE-2022-32816 and CVE-2022-2294
+      (fixed in 2.36.5).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 10 Aug 2022 11:56:16 +0200
+
 webkit2gtk (2.36.4-1) unstable; urgency=high
 
   * New upstream release.
