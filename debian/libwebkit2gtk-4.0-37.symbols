@@ -74,13 +74,13 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_context_menu_get_type@Base 2.5.3
  webkit_context_menu_get_user_data@Base 2.8.1
  webkit_context_menu_insert@Base 2.5.3
- webkit_context_menu_item_get_action@Base 2.5.3
+ (gtk3-only)webkit_context_menu_item_get_action@Base 2.5.3
  webkit_context_menu_item_get_gaction@Base 2.17.3
  webkit_context_menu_item_get_stock_action@Base 2.5.3
  webkit_context_menu_item_get_submenu@Base 2.5.3
  webkit_context_menu_item_get_type@Base 2.5.3
  webkit_context_menu_item_is_separator@Base 2.5.3
- webkit_context_menu_item_new@Base 2.5.3
+ (gtk3-only)webkit_context_menu_item_new@Base 2.5.3
  webkit_context_menu_item_new_from_gaction@Base 2.17.3
  webkit_context_menu_item_new_from_stock_action@Base 2.5.3
  webkit_context_menu_item_new_from_stock_action_with_label@Base 2.5.3
@@ -1964,7 +1964,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_time_zone_override@Base 2.37.1
  webkit_web_context_get_tls_errors_policy@Base 2.5.3
  webkit_web_context_get_type@Base 2.5.3
- webkit_web_context_get_use_system_appearance_for_scrollbars@Base 2.29.1
+ (gtk3-only)webkit_web_context_get_use_system_appearance_for_scrollbars@Base 2.29.1
  webkit_web_context_get_web_process_count_limit@Base 2.10.0
  webkit_web_context_get_website_data_manager@Base 2.10.0
  webkit_web_context_initialize_notification_permissions@Base 2.15.3
@@ -1988,7 +1988,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  webkit_web_context_set_tls_errors_policy@Base 2.5.3
- webkit_web_context_set_use_system_appearance_for_scrollbars@Base 2.29.1
+ (gtk3-only)webkit_web_context_set_use_system_appearance_for_scrollbars@Base 2.29.1
  webkit_web_context_set_web_extensions_directory@Base 2.5.3
  webkit_web_context_set_web_extensions_initialization_user_data@Base 2.5.3
  webkit_web_context_set_web_process_count_limit@Base 2.10.0

@@ -78,7 +78,7 @@ Description: Web content engine library for GTK
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  This build provides version @WK_API_VERSION@ of the API and uses libsoup v@SOUP_VERSION@ for
- the networking stack.
+ the networking stack and the GTK @GTK_VERSION@ widget toolkit.
  .
  This package contains the shared libraries.
 
@@ -88,7 +88,7 @@ Architecture: any
 Multi-Arch: same
 Depends: @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
          gir1.2-webkit2-@WK_API_VERSION@ (= ${binary:Version}),
-         libgtk-3-dev,
+         libgtk-@GTK_VERSION@-dev,
          @SOUPDEV_PKG@,
          libjavascriptcoregtk-@WK_API_VERSION@-dev (= ${binary:Version}),
          ${misc:Depends}
@@ -102,7 +102,7 @@ Description: Web content engine library for GTK - development files
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  This build provides version @WK_API_VERSION@ of the API and uses libsoup v@SOUP_VERSION@ for
- the networking stack.
+ the networking stack and the GTK @GTK_VERSION@ widget toolkit.
  .
  This package contains the development files.
 
@@ -124,7 +124,7 @@ Description: Web content engine library for GTK - GObject introspection data
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  This build provides version @WK_API_VERSION@ of the API and uses libsoup v@SOUP_VERSION@ for
- the networking stack.
+ the networking stack and the GTK @GTK_VERSION@ widget toolkit.
  .
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.

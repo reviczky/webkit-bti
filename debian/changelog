@@ -1,12 +1,13 @@
 webkit2gtk (2.37.1-3) UNRELEASED; urgency=medium
 
   * Generate debian/control from debian/control.in and control-common.in
-    depending on whether we're making the soup2 (4.0 API) and/or soup3
-    (4.1 API) builds.
+    depending on whether we're making the soup2 (4.0 API), soup3 (4.1 API)
+    and/or gtk4 (5.0 API) builds.
     - debian/rules: Add new target to generate debian/control.
   * debian/rules:
     - Enable wpe on Ubuntu now that the MIR has been accepted (thanks,
       Sebastien Bacher) (#1016585).
+    - Enable the GTK4 build (Closes: #1016765).
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 16 Aug 2022 00:20:34 +0200
 
