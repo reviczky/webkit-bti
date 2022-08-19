@@ -141,16 +141,13 @@ static void revertCall(VM& vm, CallLinkInfo& callLinkInfo, MacroAssemblerCodeRef
     if (callLinkInfo.isDirect()) {
 #if ENABLE(JIT)
         callLinkInfo.clearCodeBlock();
-        if (!callLinkInfo.clearedByJettison())
-            static_cast<OptimizingCallLinkInfo&>(callLinkInfo).initializeDirectCall();
+        static_cast<OptimizingCallLinkInfo&>(callLinkInfo).initializeDirectCall();
 #endif
     } else {
-        if (!callLinkInfo.clearedByJettison()) {
-            linkSlowPathTo(vm, callLinkInfo, codeRef);
+        linkSlowPathTo(vm, callLinkInfo, codeRef);
 
-            if (callLinkInfo.stub())
-                callLinkInfo.revertCallToStub();
-        }
+        if (callLinkInfo.stub())
+            callLinkInfo.revertCallToStub();
         callLinkInfo.clearCallee(); // This also clears the inline cache both for data and code-based caches.
     }
     callLinkInfo.clearSeen();
@@ -609,46 +606,47 @@ static InlineCacheAction tryCacheArrayGetByVal(JSGlobalObject* globalObject, Cod
 
         JSCell* base = baseValue.asCell();
 
-        AccessCase::AccessType accessType;
+        RefPtr<AccessCase> newCase;
+        AccessCase::AccessType accessType = AccessCase::IndexedInt32Load;
         if (base->type() == DirectArgumentsType)
             accessType = AccessCase::IndexedDirectArgumentsLoad;
         else if (base->type() == ScopedArgumentsType)
             accessType = AccessCase::IndexedScopedArgumentsLoad;
         else if (base->type() == StringType)
             accessType = AccessCase::IndexedStringLoad;
-        else if (isTypedView(base->classInfo()->typedArrayStorageType)) {
-            switch (base->classInfo()->typedArrayStorageType) {
-            case TypeInt8:
+        else if (isTypedView(base->type())) {
+            switch (base->type()) {
+            case Int8ArrayType:
                 accessType = AccessCase::IndexedTypedArrayInt8Load;
                 break;
-            case TypeUint8:
+            case Uint8ArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint8Load;
                 break;
-            case TypeUint8Clamped:
+            case Uint8ClampedArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint8ClampedLoad;
                 break;
-            case TypeInt16:
+            case Int16ArrayType:
                 accessType = AccessCase::IndexedTypedArrayInt16Load;
                 break;
-            case TypeUint16:
+            case Uint16ArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint16Load;
                 break;
-            case TypeInt32:
+            case Int32ArrayType:
                 accessType = AccessCase::IndexedTypedArrayInt32Load;
                 break;
-            case TypeUint32:
+            case Uint32ArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint32Load;
                 break;
-            case TypeFloat32:
+            case Float32ArrayType:
                 accessType = AccessCase::IndexedTypedArrayFloat32Load;
                 break;
-            case TypeFloat64:
+            case Float64ArrayType:
                 accessType = AccessCase::IndexedTypedArrayFloat64Load;
                 break;
             // FIXME: Optimize BigInt64Array / BigUint64Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
-            case TypeBigInt64:
-            case TypeBigUint64:
+            case BigInt64ArrayType:
+            case BigUint64ArrayType:
                 return GiveUpOnCache;
             default:
                 RELEASE_ASSERT_NOT_REACHED();
@@ -668,12 +666,38 @@ static InlineCacheAction tryCacheArrayGetByVal(JSGlobalObject* globalObject, Cod
             case ArrayStorageShape:
                 accessType = AccessCase::IndexedArrayStorageLoad;
                 break;
+            case NoIndexingShape: {
+                if (!base->isObject())
+                    return GiveUpOnCache;
+
+                if (base->structure()->mayInterceptIndexedAccesses() || base->structure()->typeInfo().interceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero())
+                    return GiveUpOnCache;
+
+                // FIXME: prepareChainForCaching is conservative. We should have another function which only cares about information related to this IC.
+                auto cacheStatus = prepareChainForCaching(globalObject, base, nullptr);
+                if (!cacheStatus)
+                    return GiveUpOnCache;
+
+                if (cacheStatus->usesPolyProto)
+                    return GiveUpOnCache;
+
+                Structure* headStructure = base->structure();
+                ObjectPropertyConditionSet conditionSet = generateConditionsForIndexedMiss(vm, codeBlock, globalObject, headStructure);
+                if (!conditionSet.isValid())
+                    return GiveUpOnCache;
+
+                newCase = AccessCase::create(vm, codeBlock, AccessCase::IndexedNoIndexingMiss, nullptr, invalidOffset, headStructure, conditionSet);
+                break;
+            }
             default:
                 return GiveUpOnCache;
             }
         }
 
-        result = stubInfo.addAccessCase(locker, globalObject, codeBlock, ECMAMode::strict(), nullptr, AccessCase::create(vm, codeBlock, accessType, nullptr));
+        if (!newCase)
+            newCase = AccessCase::create(vm, codeBlock, accessType, nullptr);
+
+        result = stubInfo.addAccessCase(locker, globalObject, codeBlock, ECMAMode::strict(), nullptr, newCase.releaseNonNull());
 
         if (result.generatedSomeCode()) {
             LOG_IC((ICEvent::GetByReplaceWithJump, baseValue.classInfoOrNull(), Identifier()));
@@ -1029,39 +1053,39 @@ static InlineCacheAction tryCacheArrayPutByVal(JSGlobalObject* globalObject, Cod
         JSCell* base = baseValue.asCell();
 
         AccessCase::AccessType accessType;
-        if (isTypedView(base->classInfo()->typedArrayStorageType)) {
-            switch (base->classInfo()->typedArrayStorageType) {
-            case TypeInt8:
+        if (isTypedView(base->type())) {
+            switch (base->type()) {
+            case Int8ArrayType:
                 accessType = AccessCase::IndexedTypedArrayInt8Store;
                 break;
-            case TypeUint8:
+            case Uint8ArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint8Store;
                 break;
-            case TypeUint8Clamped:
+            case Uint8ClampedArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint8ClampedStore;
                 break;
-            case TypeInt16:
+            case Int16ArrayType:
                 accessType = AccessCase::IndexedTypedArrayInt16Store;
                 break;
-            case TypeUint16:
+            case Uint16ArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint16Store;
                 break;
-            case TypeInt32:
+            case Int32ArrayType:
                 accessType = AccessCase::IndexedTypedArrayInt32Store;
                 break;
-            case TypeUint32:
+            case Uint32ArrayType:
                 accessType = AccessCase::IndexedTypedArrayUint32Store;
                 break;
-            case TypeFloat32:
+            case Float32ArrayType:
                 accessType = AccessCase::IndexedTypedArrayFloat32Store;
                 break;
-            case TypeFloat64:
+            case Float64ArrayType:
                 accessType = AccessCase::IndexedTypedArrayFloat64Store;
                 break;
             // FIXME: Optimize BigInt64Array / BigUint64Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
-            case TypeBigInt64:
-            case TypeBigUint64:
+            case BigInt64ArrayType:
+            case BigUint64ArrayType:
                 return GiveUpOnCache;
             default:
                 RELEASE_ASSERT_NOT_REACHED();

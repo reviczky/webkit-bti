@@ -23,6 +23,7 @@
 #include "config.h"
 #include "Completion.h"
 
+#include "BuiltinNames.h"
 #include "BytecodeCacheError.h"
 #include "CatchScope.h"
 #include "CodeCache.h"
@@ -43,7 +44,7 @@ namespace JSC {
 static inline bool checkSyntaxInternal(VM& vm, const SourceCode& source, ParserError& error)
 {
     return !!parse<ProgramNode>(
-        vm, source, Identifier(), JSParserBuiltinMode::NotBuiltin,
+        vm, source, Identifier(), ImplementationVisibility::Public, JSParserBuiltinMode::NotBuiltin,
         JSParserStrictMode::NotStrict, JSParserScriptMode::Classic, SourceParseMode::ProgramMode, SuperBinding::NotNeeded, error);
 }
 
@@ -75,7 +76,7 @@ bool checkModuleSyntax(JSGlobalObject* globalObject, const SourceCode& source, P
     JSLockHolder lock(vm);
     RELEASE_ASSERT(vm.atomStringTable() == Thread::current().atomStringTable());
     std::unique_ptr<ModuleProgramNode> moduleProgramNode = parse<ModuleProgramNode>(
-        vm, source, Identifier(), JSParserBuiltinMode::NotBuiltin,
+        vm, source, Identifier(), ImplementationVisibility::Public, JSParserBuiltinMode::NotBuiltin,
         JSParserStrictMode::Strict, JSParserScriptMode::Module, SourceParseMode::ModuleAnalyzeMode, SuperBinding::NotNeeded, error);
     if (!moduleProgramNode)
         return false;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -723,7 +723,7 @@ void SpeculativeJIT::emitCall(Node* node)
     unsigned numAllocatedArgs = 0;
 
     auto* callLinkInfo = m_jit.jitCode()->common.addCallLinkInfo(m_currentNode->origin.semantic, m_graph.m_plan.isUnlinked() ? CallLinkInfo::UseDataIC::Yes : CallLinkInfo::UseDataIC::No);
-    
+
     // Gotta load the arguments somehow. Varargs is trickier.
     if (isVarargs || isForwardVarargs) {
         RELEASE_ASSERT(!isDirect);
@@ -792,7 +792,7 @@ void SpeculativeJIT::emitCall(Node* node)
             loadArgumentsGPR(GPRInfo::returnValueGPR);
             m_jit.move(TrustedImm32(numUsedStackSlots), scratchGPR1);
             emitSetVarargsFrame(m_jit, GPRInfo::returnValueGPR, false, scratchGPR1, scratchGPR1);
-            m_jit.addPtr(TrustedImm32(-(sizeof(CallerFrameAndPC) + WTF::roundUpToMultipleOf(stackAlignmentBytes(), 5 * sizeof(void*)))), scratchGPR1, JITCompiler::stackPointerRegister);
+            m_jit.addPtr(TrustedImm32(-static_cast<int32_t>(sizeof(CallerFrameAndPC) + WTF::roundUpToMultipleOf(stackAlignmentBytes(), 5 * sizeof(void*)))), scratchGPR1, JITCompiler::stackPointerRegister);
             
             callOperation(operationSetupVarargsFrame, GPRInfo::returnValueGPR, JITCompiler::LinkableConstant(m_jit, m_graph.globalObjectFor(node->origin.semantic)), scratchGPR1, argumentsGPR, data->firstVarArgOffset, GPRInfo::returnValueGPR);
             m_jit.exceptionCheck();
@@ -5000,8 +5000,11 @@ void SpeculativeJIT::compile(Node* node)
         if (node->child2().useKind() != UntypedUse)
             speculate(node, node->child2());
 
-        m_jit.load32(MacroAssembler::Address(mapGPR, HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::offsetOfCapacity()), maskGPR);
+        CCallHelpers::JumpList notPresentInTable;
+
         m_jit.loadPtr(MacroAssembler::Address(mapGPR, HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::offsetOfBuffer()), bufferGPR);
+        notPresentInTable.append(m_jit.branchTestPtr(CCallHelpers::Zero, bufferGPR));
+        m_jit.load32(MacroAssembler::Address(mapGPR, HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::offsetOfCapacity()), maskGPR);
         m_jit.sub32(TrustedImm32(1), maskGPR);
         m_jit.move(hashGPR, indexGPR);
 
@@ -5013,8 +5016,9 @@ void SpeculativeJIT::compile(Node* node)
         m_jit.and32(maskGPR, indexGPR);
         m_jit.loadPtr(MacroAssembler::BaseIndex(bufferGPR, indexGPR, MacroAssembler::TimesEight), bucketGPR);
         m_jit.move(bucketGPR, resultGPR);
-        auto notPresentInTable = m_jit.branchPtr(MacroAssembler::Equal, 
-            bucketGPR, TrustedImmPtr(bitwise_cast<size_t>(HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::emptyValue())));
+
+        notPresentInTable.append(m_jit.branchPtr(MacroAssembler::Equal,
+            bucketGPR, TrustedImmPtr(bitwise_cast<size_t>(HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::emptyValue()))));
         loopAround.append(m_jit.branchPtr(MacroAssembler::Equal, 
             bucketGPR, TrustedImmPtr(bitwise_cast<size_t>(HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::deletedValue()))));
 

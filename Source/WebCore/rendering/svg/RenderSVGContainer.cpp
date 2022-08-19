@@ -35,15 +35,22 @@
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
 #include "SVGContainerLayout.h"
+#include "SVGLayerTransformUpdater.h"
 #include "SVGRenderingContext.h"
 #include "SVGResources.h"
 #include "SVGResourcesCache.h"
 #include <wtf/IsoMallocInlines.h>
+#include <wtf/SetForScope.h>
 #include <wtf/StackStats.h>
 
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderSVGContainer);
+
+RenderSVGContainer::RenderSVGContainer(Document& document, RenderStyle&& style)
+    : RenderSVGModelObject(document, WTFMove(style))
+{
+}
 
 RenderSVGContainer::RenderSVGContainer(SVGElement& element, RenderStyle&& style)
     : RenderSVGModelObject(element, WTFMove(style))
@@ -52,36 +59,6 @@ RenderSVGContainer::RenderSVGContainer(SVGElement& element, RenderStyle&& style)
 
 RenderSVGContainer::~RenderSVGContainer() = default;
 
-// Helper class, move to its own file once utilized in more than one place.
-class SVGLayerTransformUpdater {
-    WTF_MAKE_NONCOPYABLE(SVGLayerTransformUpdater);
-public:
-    SVGLayerTransformUpdater(RenderLayerModelObject& renderer)
-        : m_renderer(renderer)
-    {
-        if (!m_renderer.hasLayer())
-            return;
-
-        m_transformReferenceBox = m_renderer.transformReferenceBoxRect();
-        m_renderer.updateLayerTransform();
-    }
-
-
-    ~SVGLayerTransformUpdater()
-    {
-        if (!m_renderer.hasLayer())
-            return;
-        if (m_renderer.transformReferenceBoxRect() == m_transformReferenceBox)
-            return;
-
-        m_renderer.updateLayerTransform();
-    }
-
-private:
-    RenderLayerModelObject& m_renderer;
-    FloatRect m_transformReferenceBox;
-};
-
 void RenderSVGContainer::layout()
 {
     StackStats::LayoutCheckPoint layoutCheckPoint;
@@ -89,12 +66,17 @@ void RenderSVGContainer::layout()
 
     LayoutRepainter repainter(*this, checkForRepaintDuringLayout(), RepaintOutlineBounds::No);
 
-    calculateViewport();
-
     // Update layer transform before laying out children (SVG needs access to the transform matrices during layout for on-screen text font-size calculations).
     // Eventually re-update if the transform reference box, relevant for transform-origin, has changed during layout.
+    //
+    // FIXME: LBSE should not repeat the same mistake -- remove the on-screen text font-size hacks that predate the modern solutions to this.
     {
-        SVGLayerTransformUpdater updateTransform(*this);
+        ASSERT(!m_isLayoutSizeChanged);
+        SetForScope trackLayoutSizeChanges(m_isLayoutSizeChanged, updateLayoutSizeIfNeeded());
+
+        ASSERT(!m_didTransformToRootUpdate);
+        SVGLayerTransformUpdater transformUpdater(*this);
+        SetForScope trackTransformChanges(m_didTransformToRootUpdate, transformUpdater.layerTransformChanged() || SVGContainerLayout::transformToRootChanged(parent()));
         layoutChildren();
     }
 
@@ -106,12 +88,6 @@ void RenderSVGContainer::layout()
     clearNeedsLayout();
 }
 
-void RenderSVGContainer::calculateViewport()
-{
-    // FIXME: [LBSE] Upstream SVGLengthContext changes
-    // element().updateLengthContext();
-}
-
 void RenderSVGContainer::layoutChildren()
 {
     SVGContainerLayout containerLayout(*this);
@@ -120,8 +96,12 @@ void RenderSVGContainer::layoutChildren()
     SVGBoundingBoxComputation boundingBoxComputation(*this);
     m_objectBoundingBox = boundingBoxComputation.computeDecoratedBoundingBox(SVGBoundingBoxComputation::objectBoundingBoxDecoration, &m_objectBoundingBoxValid);
 
-    constexpr auto objectBoundingBoxDecorationWithoutTransformations = SVGBoundingBoxComputation::objectBoundingBoxDecoration | SVGBoundingBoxComputation::DecorationOption::IgnoreTransformations;
-    m_objectBoundingBoxWithoutTransformations = boundingBoxComputation.computeDecoratedBoundingBox(objectBoundingBoxDecorationWithoutTransformations);
+    if (auto objectBoundingBoxWithoutTransformations = overridenObjectBoundingBoxWithoutTransformations())
+        m_objectBoundingBoxWithoutTransformations = objectBoundingBoxWithoutTransformations.value();
+    else {
+        constexpr auto objectBoundingBoxDecorationWithoutTransformations = SVGBoundingBoxComputation::objectBoundingBoxDecoration | SVGBoundingBoxComputation::DecorationOption::IgnoreTransformations;
+        m_objectBoundingBoxWithoutTransformations = boundingBoxComputation.computeDecoratedBoundingBox(objectBoundingBoxDecorationWithoutTransformations);
+    }
 
     m_strokeBoundingBox = boundingBoxComputation.computeDecoratedBoundingBox(SVGBoundingBoxComputation::strokeBoundingBoxDecoration);
     setCurrentSVGLayoutRect(enclosingLayoutRect(m_objectBoundingBoxWithoutTransformations));

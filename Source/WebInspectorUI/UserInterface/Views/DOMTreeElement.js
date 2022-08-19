@@ -444,22 +444,19 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
             this.listItemElement.addEventListener("dragstart", this);
         }
 
-        if (this.representedObject.layoutContextType) {
-            this.representedObject.addEventListener(WI.DOMNode.Event.LayoutOverlayShown, this._updateLayoutBadgeStatus, this);
-            this.representedObject.addEventListener(WI.DOMNode.Event.LayoutOverlayHidden, this._updateLayoutBadgeStatus, this);
-        }
-        this.representedObject.addEventListener(WI.DOMNode.Event.LayoutContextTypeChanged, this._handleLayoutContextTypeChanged, this);
+        this.representedObject.addEventListener(WI.DOMNode.Event.LayoutFlagsChanged, this._handleLayoutFlagsChanged, this);
+        this._handleLayoutFlagsChanged();
 
         this._updateLayoutBadge();
     }
 
     ondetach()
     {
-        if (this.representedObject.layoutContextType === WI.DOMNode.LayoutContextType.Grid) {
+        if (this.representedObject.layoutContextType && !this._elementCloseTag) {
             this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutOverlayShown, this._updateLayoutBadgeStatus, this);
             this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutOverlayHidden, this._updateLayoutBadgeStatus, this);
         }
-        this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutContextTypeChanged, this._handleLayoutContextTypeChanged, this);
+        this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutFlagsChanged, this._handleLayoutFlagsChanged, this);
     }
 
     onpopulate()
@@ -2015,23 +2012,35 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
         if (!this.listItemElement || this._elementCloseTag)
             return;
 
+        let hadLayoutBadge = !!this._layoutBadgeElement;
+
         if (this._layoutBadgeElement) {
             this._layoutBadgeElement.remove();
             this._layoutBadgeElement = null;
         }
 
-        if (!this.representedObject.layoutContextType)
+        if (!this.representedObject.layoutContextType) {
+            if (hadLayoutBadge) {
+                this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutOverlayShown, this._updateLayoutBadgeStatus, this);
+                this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutOverlayHidden, this._updateLayoutBadgeStatus, this);
+            }
             return;
+        }
+
+        if (!hadLayoutBadge) {
+            this.representedObject.addEventListener(WI.DOMNode.Event.LayoutOverlayShown, this._updateLayoutBadgeStatus, this);
+            this.representedObject.addEventListener(WI.DOMNode.Event.LayoutOverlayHidden, this._updateLayoutBadgeStatus, this);
+        }
 
         this._layoutBadgeElement = this.title.appendChild(document.createElement("span"));
         this._layoutBadgeElement.className = "layout-badge";
 
         switch (this.representedObject.layoutContextType) {
-        case WI.DOMNode.LayoutContextType.Grid:
+        case WI.DOMNode.LayoutFlag.Grid:
             this._layoutBadgeElement.textContent = WI.unlocalizedString("grid");
             break;
 
-        case WI.DOMNode.LayoutContextType.Flex:
+        case WI.DOMNode.LayoutFlag.Flex:
             this._layoutBadgeElement.textContent = WI.unlocalizedString("flex");
             break;
 
@@ -2056,11 +2065,8 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
 
         if (this.representedObject.layoutOverlayShowing)
             this.representedObject.hideLayoutOverlay();
-        else {
-            this.representedObject.showLayoutOverlay({
-                initiator: this.representedObject.layoutContextType === WI.DOMNode.LayoutContextType.Grid ? WI.GridOverlayDiagnosticEventRecorder.Initiator.Badge : null,
-            });
-        }
+        else
+            this.representedObject.showLayoutOverlay();
     }
 
     _layoutBadgeDoubleClicked(event)
@@ -2086,16 +2092,9 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
             this._layoutBadgeElement.removeAttribute("style");
     }
 
-    _handleLayoutContextTypeChanged(event)
+    _handleLayoutFlagsChanged(event)
     {
-        let domNode = event.target;
-        if (domNode.layoutContextType && !this._layoutBadgeElement) {
-            this.representedObject.addEventListener(WI.DOMNode.Event.LayoutOverlayShown, this._updateLayoutBadgeStatus, this);
-            this.representedObject.addEventListener(WI.DOMNode.Event.LayoutOverlayHidden, this._updateLayoutBadgeStatus, this);
-        } else if (!domNode.layoutContextType && this._layoutBadgeElement) {
-            this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutOverlayShown, this._updateLayoutBadgeStatus, this);
-            this.representedObject.removeEventListener(WI.DOMNode.Event.LayoutOverlayHidden, this._updateLayoutBadgeStatus, this);
-        }
+        this.listItemElement?.classList.toggle("rendered", this.representedObject.layoutFlags.includes(WI.DOMNode.LayoutFlag.Rendered));
 
         this._updateLayoutBadge();
     }

@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -242,10 +242,7 @@ form with&nbsp;webkit_form_submission_request_submit().</p>
         <div class="deprecated">
           <h6><a href="method.FormSubmissionRequest.get_text_fields.html">webkit_form_submission_request_get_text_fields</a></h6>
           <div class="docblock">
-            <p>Get a <code>GHashTable</code> with the values of the text fields contained in the form
-associated to <code>request</code>. Note that fields will be missing if the form
-contains multiple text input elements with the same name, so this
-function does not reliably return all text&nbsp;fields.</p>
+            <p>Get the values of the text fields contained in the form associated to <code>request</code>.</p>
           </div>
           <div class="docblock"><p>Deprecated since: 2.20.</p></div>
         </div>
@@ -253,9 +250,7 @@ function does not reliably return all text&nbsp;fields.</p>
         <div class="">
           <h6><a href="method.FormSubmissionRequest.list_text_fields.html">webkit_form_submission_request_list_text_fields</a></h6>
           <div class="docblock">
-            <p>Get lists with the names and values of the text fields contained in
-the form associated to <code>request</code>. Note that names and values may be
-<code>NULL</code>.</p>
+            <p>Get lists of the text fields contained in the form associated to <code>request</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.20</p></div>
         </div>

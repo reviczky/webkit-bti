@@ -54,6 +54,7 @@
 #include "InspectorInstrumentation.h"
 #include "JSDOMConvertDictionary.h"
 #include "JSNodeCustom.h"
+#include "Logging.h"
 #include "MIMETypeRegistry.h"
 #include "OffscreenCanvas.h"
 #include "PlaceholderRenderingContext.h"
@@ -100,6 +101,7 @@
 #endif
 
 #if PLATFORM(COCOA)
+#include "GPUAvailability.h"
 #include "VideoFrameCV.h"
 #include <pal/cf/CoreMediaSoftLink.h>
 #endif
@@ -453,6 +455,13 @@ WebGLRenderingContextBase* HTMLCanvasElement::createContextWebGL(WebGLVersion ty
     if (!shouldEnableWebGL(document().settings()))
         return nullptr;
 
+#if HAVE(GPU_AVAILABILITY_CHECK)
+    if (!document().settings().useGPUProcessForWebGLEnabled() && !isGPUAvailable()) {
+        RELEASE_LOG_FAULT(WebGL, "GPU is not available.");
+        return nullptr;
+    }
+#endif
+
 #if ENABLE(WEBXR)
     // https://immersive-web.github.io/webxr/#xr-compatible
     if (attrs.xrCompatible) {
@@ -473,6 +482,8 @@ WebGLRenderingContextBase* HTMLCanvasElement::createContextWebGL(WebGLVersion ty
 
         // Need to make sure a RenderLayer and compositing layer get created for the Canvas.
         invalidateStyleAndLayerComposition();
+        if (renderBox())
+            renderBox()->contentChanged(CanvasChanged);
 #if ENABLE(WEBXR)
         ASSERT(!attrs.xrCompatible || downcast<WebGLRenderingContextBase>(m_context.get())->isXRCompatible());
 #endif
@@ -676,6 +687,11 @@ void HTMLCanvasElement::setSurfaceSize(const IntSize& size)
     m_hasCreatedImageBuffer = false;
     setImageBuffer(nullptr);
     clearCopiedImage();
+
+    if (!needsPreparationForDisplay()) {
+        document().clearCanvasPreparation(*this);
+        removeObserver(document());
+    }
 }
 
 static String toEncodingMimeType(const String& mimeType)
@@ -884,6 +900,11 @@ void HTMLCanvasElement::setUsesDisplayListDrawing(bool usesDisplayListDrawing)
     m_usesDisplayListDrawing = usesDisplayListDrawing;
 }
 
+void HTMLCanvasElement::setAvoidIOSurfaceSizeCheckInWebProcessForTesting()
+{
+    m_avoidBackendSizeCheckForTesting = true;
+}
+
 void HTMLCanvasElement::createImageBuffer() const
 {
     ASSERT(!hasCreatedImageBuffer());
@@ -925,8 +946,10 @@ void HTMLCanvasElement::createImageBuffer() const
             return std::pair { m_context->colorSpace(), m_context->pixelFormat() };
         return std::pair { DestinationColorSpace::SRGB(), PixelFormat::BGRA8 };
     }();
-
-    setImageBuffer(ImageBuffer::create(size(), RenderingPurpose::Canvas, 1, colorSpace, pixelFormat, bufferOptions, { hostWindow }));
+    ImageBuffer::CreationContext context = { };
+    context.hostWindow = hostWindow;
+    context.avoidIOSurfaceSizeCheckInWebProcessForTesting = m_avoidBackendSizeCheckForTesting;
+    setImageBuffer(ImageBuffer::create(size(), RenderingPurpose::Canvas, 1, colorSpace, pixelFormat, bufferOptions, context));
 
 #if USE(IOSURFACE_CANVAS_BACKING_STORE)
     if (m_context && m_context->is2d()) {

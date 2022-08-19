@@ -1511,6 +1511,11 @@ void HTMLMediaElement::loadResource(const URL& initialURL, ContentType& contentT
         mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
         return;
     }
+#elif USE(GSTREAMER)
+    if (!url.isEmpty() && !frame->loader().willLoadMediaElementURL(url, *this)) {
+        mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
+        return;
+    }
 #endif
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -2246,21 +2251,18 @@ void HTMLMediaElement::mediaLoadingFailedFatally(MediaPlayer::NetworkState error
     // https://html.spec.whatwg.org/#loading-the-media-resource:dom-media-have_nothing-2
     // 17 March 2021
 
-    // 1 - The user agent should cancel the fetching process.
-    stopPeriodicTimers();
-    m_loadState = WaitingForSource;
+    const String playerErrMsg = m_player ? m_player->lastErrorMessage() : ""_s;
 
     const auto getErrorMessage = [&] (String&& defaultMessage) {
-        String message = WTFMove(defaultMessage);
-        if (!m_player)
-            return message;
-
-        auto lastErrorMessage = m_player->lastErrorMessage();
-        if (!lastErrorMessage)
-            return message;
-
-        return makeString(message, ": ", lastErrorMessage);
+        if (playerErrMsg.isEmpty())
+            return WTFMove(defaultMessage);
+        return makeString(WTFMove(defaultMessage), ": ", playerErrMsg);
     };
+
+    ERROR_LOG(LOGIDENTIFIER, "error = ", static_cast<int>(error));
+
+    // 1 - The user agent should cancel the fetching process.
+    clearMediaPlayer();
 
     // 2 - Set the error attribute to a new MediaError object whose code attribute is
     // set to MEDIA_ERR_NETWORK/MEDIA_ERR_DECODE.
@@ -2270,10 +2272,6 @@ void HTMLMediaElement::mediaLoadingFailedFatally(MediaPlayer::NetworkState error
         m_error = MediaError::create(MediaError::MEDIA_ERR_DECODE, getErrorMessage("Media failed to decode"_s));
     else
         ASSERT_NOT_REACHED();
-
-#if ENABLE(MEDIA_SOURCE)
-    detachMediaSource();
-#endif
 
     // 3 - Set the element's networkState attribute to the NETWORK_IDLE value.
     m_networkState = NETWORK_IDLE;
@@ -3228,7 +3226,10 @@ void HTMLMediaElement::seekTask()
     MediaTime positiveTolerance = m_pendingSeek->positiveTolerance;
     m_pendingSeek = nullptr;
 
+    ASSERT(negativeTolerance.isValid());
     ASSERT(negativeTolerance >= MediaTime::zeroTime());
+    ASSERT(positiveTolerance.isValid());
+    ASSERT(positiveTolerance >= MediaTime::zeroTime());
 
     // 6 - If the new playback position is later than the end of the media resource, then let it be the end
     // of the media resource instead.
@@ -6094,7 +6095,7 @@ bool HTMLMediaElement::elementIsHidden() const
     if (m_videoFullscreenMode != VideoFullscreenModeNone)
         return false;
 
-    return document().hidden();
+    return document().hidden() && (!m_player || !m_player->isVisibleForCanvas());
 }
 
 void HTMLMediaElement::visibilityStateChanged()
@@ -6402,7 +6403,9 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
         if (is<HTMLVideoElement>(*this)) {
             HTMLVideoElement& asVideo = downcast<HTMLVideoElement>(*this);
             auto& client = document().page()->chrome().client();
-            if (client.supportsVideoFullscreen(mode) && client.canEnterVideoFullscreen()) {
+            auto supportsFullscreen = client.supportsVideoFullscreen(mode);
+            auto canEnterFullscreen = client.canEnterVideoFullscreen(mode);
+            if (supportsFullscreen && canEnterFullscreen) {
                 ALWAYS_LOG(logIdentifier, "Entering fullscreen mode ", mode, ", m_videoFullscreenStandby = ", m_videoFullscreenStandby);
 
                 m_temporarilyAllowingInlinePlaybackAfterFullscreen = false;
@@ -6424,6 +6427,7 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
 
                 return;
             }
+            ALWAYS_LOG(logIdentifier, "Could not enter fullscreen mode ", mode, ", support = ", supportsFullscreen, ", canEnter = ", canEnterFullscreen);
         }
 
         m_changingVideoFullscreenMode = false;
@@ -7448,8 +7452,10 @@ String HTMLMediaElement::mediaPlayerNetworkInterfaceName() const
 void HTMLMediaElement::mediaPlayerGetRawCookies(const URL& url, MediaPlayerClient::GetRawCookiesCallback&& completionHandler) const
 {
     auto* page = document().page();
-    if (!page)
+    if (!page) {
         completionHandler({ });
+        return;
+    }
 
     Vector<Cookie> cookies;
     page->cookieJar().getRawCookies(document(), url, cookies);

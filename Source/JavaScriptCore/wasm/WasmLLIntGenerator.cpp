@@ -304,7 +304,9 @@ public:
     PartialResult WARN_UNUSED_RETURN truncSaturated(Ext1OpType, ExpressionType operand, ExpressionType& result, Type, Type);
 
     // GC
-    PartialResult WARN_UNUSED_RETURN addRttCanon(uint32_t index, ExpressionType& result);
+    PartialResult WARN_UNUSED_RETURN addI31New(ExpressionType value, ExpressionType& result);
+    PartialResult WARN_UNUSED_RETURN addI31GetS(ExpressionType ref, ExpressionType& result);
+    PartialResult WARN_UNUSED_RETURN addI31GetU(ExpressionType ref, ExpressionType& result);
 
     // Basic operators
     template<OpType>
@@ -643,7 +645,6 @@ auto LLIntGenerator::callInformationForCaller(const FunctionSignature& signature
         case TypeKind::Funcref:
         case TypeKind::RefNull:
         case TypeKind::Ref:
-        case TypeKind::Rtt:
             if (gprIndex < gprCount)
                 ++gprIndex;
             else if (stackIndex++ >= stackCount)
@@ -659,6 +660,7 @@ auto LLIntGenerator::callInformationForCaller(const FunctionSignature& signature
         case TypeKind::Void:
         case TypeKind::Func:
         case TypeKind::Struct:
+        case TypeKind::I31ref:
             RELEASE_ASSERT_NOT_REACHED();
         }
     };
@@ -702,7 +704,6 @@ auto LLIntGenerator::callInformationForCaller(const FunctionSignature& signature
         case TypeKind::Funcref:
         case TypeKind::RefNull:
         case TypeKind::Ref:
-        case TypeKind::Rtt:
             if (gprIndex > gprLimit)
                 arguments[i] = virtualRegisterForLocal(--gprIndex);
             else
@@ -718,6 +719,7 @@ auto LLIntGenerator::callInformationForCaller(const FunctionSignature& signature
         case TypeKind::Void:
         case TypeKind::Func:
         case TypeKind::Struct:
+        case TypeKind::I31ref:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -748,7 +750,7 @@ auto LLIntGenerator::callInformationForCaller(const FunctionSignature& signature
         case TypeKind::Void:
         case TypeKind::Func:
         case TypeKind::Struct:
-        case TypeKind::Rtt:
+        case TypeKind::I31ref:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -807,7 +809,7 @@ auto LLIntGenerator::callInformationForCallee(const FunctionSignature& signature
         case TypeKind::Void:
         case TypeKind::Func:
         case TypeKind::Struct:
-        case TypeKind::Rtt:
+        case TypeKind::I31ref:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -850,7 +852,6 @@ auto LLIntGenerator::addArguments(const TypeDefinition& signature) -> PartialRes
         case TypeKind::Funcref:
         case TypeKind::RefNull:
         case TypeKind::Ref:
-        case TypeKind::Rtt:
             addArgument(i, gprIndex, maxGPRIndex);
             break;
         case TypeKind::F32:
@@ -860,6 +861,7 @@ auto LLIntGenerator::addArguments(const TypeDefinition& signature) -> PartialRes
         case TypeKind::Void:
         case TypeKind::Func:
         case TypeKind::Struct:
+        case TypeKind::I31ref:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
@@ -1860,10 +1862,26 @@ auto LLIntGenerator::truncSaturated(Ext1OpType op, ExpressionType operand, Expre
     return { };
 }
 
-auto LLIntGenerator::addRttCanon(uint32_t index, ExpressionType& result) -> PartialResult
+auto LLIntGenerator::addI31New(ExpressionType value, ExpressionType& result) -> PartialResult
 {
     result = push();
-    WasmRttCanon::emit(this, result, index);
+    WasmI31New::emit(this, result, value);
+
+    return { };
+}
+
+auto LLIntGenerator::addI31GetS(ExpressionType ref, ExpressionType& result) -> PartialResult
+{
+    result = push();
+    WasmI31GetS::emit(this, result, ref);
+
+    return { };
+}
+
+auto LLIntGenerator::addI31GetU(ExpressionType ref, ExpressionType& result) -> PartialResult
+{
+    result = push();
+    WasmI31GetU::emit(this, result, ref);
 
     return { };
 }

@@ -3,7 +3,7 @@ include(VersioningUtils)
 
 WEBKIT_OPTION_BEGIN()
 
-SET_PROJECT_VERSION(2 37 1)
+SET_PROJECT_VERSION(2 37 90)
 
 # This is required because we use the DEPFILE argument to add_custom_command().
 # Remove after upgrading cmake_minimum_required() to 3.20.
@@ -64,13 +64,11 @@ WEBKIT_OPTION_DEFINE(ENABLE_JOURNALD_LOG "Whether to enable journald logging" PU
 WEBKIT_OPTION_DEFINE(ENABLE_QUARTZ_TARGET "Whether to enable support for the Quartz windowing target." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(ENABLE_WAYLAND_TARGET "Whether to enable support for the Wayland windowing target." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(ENABLE_X11_TARGET "Whether to enable support for the X11 windowing target." PUBLIC ON)
-WEBKIT_OPTION_DEFINE(USE_ANGLE_WEBGL "Whether to use ANGLE as WebGL backend." PUBLIC OFF)
 WEBKIT_OPTION_DEFINE(USE_AVIF "Whether to enable support for AVIF images." PUBLIC ${ENABLE_EXPERIMENTAL_FEATURES})
 WEBKIT_OPTION_DEFINE(USE_GTK4 "Whether to enable usage of GTK4 instead of GTK3." PUBLIC OFF)
 WEBKIT_OPTION_DEFINE(USE_JPEGXL "Whether to enable support for JPEG-XL images." PUBLIC ${ENABLE_EXPERIMENTAL_FEATURES})
 WEBKIT_OPTION_DEFINE(USE_LCMS "Whether to enable support for image color management using libcms2." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_LIBHYPHEN "Whether to enable the default automatic hyphenation implementation." PUBLIC ON)
-WEBKIT_OPTION_DEFINE(USE_LIBNOTIFY "Whether to enable the default web notification implementation." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_LIBSECRET "Whether to enable the persistent credential storage using libsecret." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_OPENGL_OR_ES "Whether to use OpenGL or ES." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_OPENJPEG "Whether to enable support for JPEG2000 images." PUBLIC ON)
@@ -86,9 +84,6 @@ WEBKIT_OPTION_DEPEND(ENABLE_3D_TRANSFORMS USE_OPENGL_OR_ES)
 WEBKIT_OPTION_DEPEND(ENABLE_ASYNC_SCROLLING USE_OPENGL_OR_ES)
 WEBKIT_OPTION_DEPEND(ENABLE_GLES2 USE_OPENGL_OR_ES)
 WEBKIT_OPTION_DEPEND(ENABLE_WEBGL USE_OPENGL_OR_ES)
-WEBKIT_OPTION_DEPEND(USE_ANGLE_WEBGL ENABLE_WEBGL)
-WEBKIT_OPTION_DEPEND(ENABLE_WEBGL2 USE_ANGLE_WEBGL)
-WEBKIT_OPTION_DEPEND(ENABLE_GPU_PROCESS USE_ANGLE_WEBGL)
 WEBKIT_OPTION_DEPEND(USE_GSTREAMER_GL USE_OPENGL_OR_ES)
 WEBKIT_OPTION_DEPEND(USE_WPE_RENDERER USE_OPENGL_OR_ES)
 WEBKIT_OPTION_DEPEND(USE_WPE_RENDERER ENABLE_WAYLAND_TARGET)
@@ -231,11 +226,11 @@ else ()
 endif ()
 
 if (WEBKITGTK_API_VERSION VERSION_EQUAL "4.0")
-    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 94 0 57)
-    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(JAVASCRIPTCORE 39 0 21)
+    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 94 1 57)
+    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(JAVASCRIPTCORE 39 1 21)
 elseif (WEBKITGTK_API_VERSION VERSION_EQUAL "4.1")
-    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 2 0 2)
-    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(JAVASCRIPTCORE 2 0 2)
+    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 2 1 2)
+    CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(JAVASCRIPTCORE 2 1 2)
 elseif (WEBKITGTK_API_VERSION VERSION_EQUAL "5.0")
     CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 0 0 0)
     CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(JAVASCRIPTCORE 0 0 0)
@@ -329,7 +324,7 @@ endif ()
 
 find_package(GIDocgen)
 if (ENABLE_DOCUMENTATION AND NOT GIDocgen_FOUND)
-    message(FATAL_ERROR "gi-docgen is needed for ENABLE_INTROSPECTION.")
+    message(FATAL_ERROR "ENABLE_INTROSPECTION is needed for gi-docgen.")
 endif ()
 
 if (ENABLE_WEB_CRYPTO)
@@ -383,22 +378,6 @@ if (USE_OPENGL_OR_ES)
 
     SET_AND_EXPOSE_TO_BUILD(USE_COORDINATED_GRAPHICS TRUE)
     SET_AND_EXPOSE_TO_BUILD(USE_NICOSIA TRUE)
-    SET_AND_EXPOSE_TO_BUILD(USE_ANGLE ${USE_ANGLE_WEBGL})
-
-    if (USE_ANGLE_WEBGL)
-        # ANGLE-backed WebGL depends on DMABuf support, which at the moment is leveraged
-        # through libgbm and libdrm dependencies. USE_LIBGBM and USE_TEXTURE_MAPPER_DMABUF
-        # also have to be defined in that case.
-        # TODO: There should be a more generic configuration option on which USE_ANGLE_WEBGL
-        # should depend. These dependencies and defines would be applied when that option
-        # is enabled.
-
-        find_package(GBM REQUIRED)
-        find_package(LibDRM REQUIRED)
-
-        SET_AND_EXPOSE_TO_BUILD(USE_LIBGBM TRUE)
-        SET_AND_EXPOSE_TO_BUILD(USE_TEXTURE_MAPPER_DMABUF TRUE)
-    endif ()
 endif ()
 
 if (ENABLE_SPELLCHECK)
@@ -448,13 +427,6 @@ if (USE_JPEGXL)
     find_package(JPEGXL)
     if (NOT JPEGXL_FOUND)
         message(FATAL_ERROR "libjxl is required for USE_JPEGXL")
-    endif ()
-endif ()
-
-if (USE_LIBNOTIFY)
-    find_package(LibNotify)
-    if (NOT LIBNOTIFY_FOUND)
-       message(FATAL_ERROR "libnotify is needed for USE_LIBNOTIFY.")
     endif ()
 endif ()
 

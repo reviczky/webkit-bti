@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -416,12 +416,7 @@ not appropriate for Internet&nbsp;applications.</p>
           <h6><a href="ctor.WebContext.new_ephemeral.html">webkit_web_context_new_ephemeral</a></h6>
 
           <div class="docblock">
-            <p>Create a new ephemeral <code>WebKitWebContext</code>. An ephemeral <code>WebKitWebContext</code> is a context
-created with an ephemeral <code>WebKitWebsiteDataManager</code>. This is just a convenient method
-to create ephemeral contexts without having to create your own <code>WebKitWebsiteDataManager</code>.
-All <code>WebKitWebView</code><!-- -->s associated with this context will also be ephemeral. Websites will
-not store any data in the client storage.
-This is normally used to implement private&nbsp;instances.</p>
+            <p>Create a new ephemeral <code>WebKitWebContext</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>
@@ -476,9 +471,7 @@ This is normally used to implement private&nbsp;instances.</p>
         <div class="">
           <h6><a href="method.WebContext.add_path_to_sandbox.html">webkit_web_context_add_path_to_sandbox</a></h6>
           <div class="docblock">
-            <p>Adds a path to be mounted in the sandbox. <code>path</code> must exist before any web process
-has been created otherwise it will be silently ignored. It is a fatal error to
-add paths after a web process has been&nbsp;spawned.</p>
+            <p>Adds a path to be mounted in the&nbsp;sandbox.</p>
           </div>
           <div class="docblock"><p>Available since: 2.26</p></div>
         </div>
@@ -494,8 +487,7 @@ add paths after a web process has been&nbsp;spawned.</p>
         <div class="">
           <h6><a href="method.WebContext.clear_cache.html">webkit_web_context_clear_cache</a></h6>
           <div class="docblock">
-            <p>Clears all resources currently cached.
-See also&nbsp;webkit_web_context_set_cache_model().</p>
+            <p>Clears all resources currently&nbsp;cached.</p>
           </div>
           
         </div>
@@ -503,10 +495,7 @@ See also&nbsp;webkit_web_context_set_cache_model().</p>
         <div class="">
           <h6><a href="method.WebContext.download_uri.html">webkit_web_context_download_uri</a></h6>
           <div class="docblock">
-            <p>Requests downloading of the specified <span class="caps">URI</span> string. The download operation
-will not be associated to any <code>WebKitWebView</code>, if you are interested in
-starting a download from a particular <code>WebKitWebView</code> use
-<code>webkit_web_view_download_uri()</code> instead.</p>
+            <p>Requests downloading of the specified <span class="caps">URI</span>&nbsp;string.</p>
           </div>
           
         </div>
@@ -514,8 +503,7 @@ starting a download from a particular <code>WebKitWebView</code> use
         <div class="">
           <h6><a href="method.WebContext.get_cache_model.html">webkit_web_context_get_cache_model</a></h6>
           <div class="docblock">
-            <p>Returns the current cache model. For more information about this
-value check the documentation of the function&nbsp;webkit_web_context_set_cache_model().</p>
+            <p>Returns the current cache&nbsp;model.</p>
           </div>
           
         </div>
@@ -539,10 +527,7 @@ value check the documentation of the function&nbsp;webkit_web_context_set_cache_
         <div class="">
           <h6><a href="method.WebContext.get_favicon_database_directory.html">webkit_web_context_get_favicon_database_directory</a></h6>
           <div class="docblock">
-            <p>Get the directory path being used to store the favicons database
-for <code>context</code>, or <code>NULL</code> if
-<code>webkit_web_context_set_favicon_database_directory()</code> hasn&#8217;t been
-called&nbsp;yet.</p>
+            <p>Get the directory path to store the favicons&nbsp;database.</p>
           </div>
           
         </div>
@@ -574,8 +559,7 @@ called&nbsp;yet.</p>
         <div class="">
           <h6><a href="method.WebContext.get_process_model.html">webkit_web_context_get_process_model</a></h6>
           <div class="docblock">
-            <p>Returns the current process model. For more information about this value
-see&nbsp;webkit_web_context_set_process_model().</p>
+            <p>Returns the current process&nbsp;model.</p>
           </div>
           <div class="docblock"><p>Available since: 2.4</p></div>
         </div>
@@ -607,8 +591,7 @@ see&nbsp;webkit_web_context_set_process_model().</p>
         <div class="">
           <h6><a href="method.WebContext.get_spell_checking_languages.html">webkit_web_context_get_spell_checking_languages</a></h6>
           <div class="docblock">
-            <p>Get the the list of spell checking languages associated with
-<code>context</code>, or <code>NULL</code> if no languages have been previously&nbsp;set.</p>
+            <p>Get the the list of spell checking&nbsp;languages.</p>
           </div>
           
         </div>
@@ -656,15 +639,7 @@ see&nbsp;webkit_web_context_set_process_model().</p>
         <div class="">
           <h6><a href="method.WebContext.initialize_notification_permissions.html">webkit_web_context_initialize_notification_permissions</a></h6>
           <div class="docblock">
-            <p>Sets initial desktop notification permissions for the <code>context</code>.
-<code>allowed_origins</code> and <code>disallowed_origins</code> must each be <code>GList</code> of
-<code>WebKitSecurityOrigin</code> objects representing origins that will,
-respectively, either always or never have permission to show desktop
-notifications. No <code>WebKitNotificationPermissionRequest</code> will ever be
-generated for any of the security origins represented in
-<code>allowed_origins</code> or <code>disallowed_origins</code>. This function is necessary
-because some webpages proactively check whether they have permission
-to display notifications without ever creating a permission&nbsp;request.</p>
+            <p>Sets initial desktop notification permissions for the <code>context</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
@@ -672,8 +647,7 @@ to display notifications without ever creating a permission&nbsp;request.</p>
         <div class="">
           <h6><a href="method.WebContext.is_automation_allowed.html">webkit_web_context_is_automation_allowed</a></h6>
           <div class="docblock">
-            <p>Get whether automation is allowed in <code>context</code>.
-See also&nbsp;webkit_web_context_set_automation_allowed().</p>
+            <p>Get whether automation is allowed in <code>context</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.18</p></div>
         </div>
@@ -689,8 +663,7 @@ See also&nbsp;webkit_web_context_set_automation_allowed().</p>
         <div class="">
           <h6><a href="method.WebContext.prefetch_dns.html">webkit_web_context_prefetch_dns</a></h6>
           <div class="docblock">
-            <p>Resolve the domain name of the given <code>hostname</code> in advance, so that if a <span class="caps">URI</span>
-of <code>hostname</code> is requested the load will be performed more&nbsp;quickly.</p>
+            <p>Resolve the domain name of the given <code>hostname</code> in&nbsp;advance.</p>
           </div>
           
         </div>
@@ -698,13 +671,7 @@ of <code>hostname</code> is requested the load will be performed more&nbsp;quick
         <div class="">
           <h6><a href="method.WebContext.register_uri_scheme.html">webkit_web_context_register_uri_scheme</a></h6>
           <div class="docblock">
-            <p>Register <code>scheme</code> in <code>context</code>, so that when an <span class="caps">URI</span> request with <code>scheme</code> is made in the
-<code>WebKitWebContext</code>, the <code>WebKitURISchemeRequestCallback</code> registered will be called with a
-<code>WebKitURISchemeRequest</code>.
-It is possible to handle <span class="caps">URI</span> scheme requests asynchronously, by calling <code>g_object_ref()</code> on the
-<code>WebKitURISchemeRequest</code> and calling <code>webkit_uri_scheme_request_finish()</code> later
-when the data of the request is available or
-<code>webkit_uri_scheme_request_finish_error()</code> in case of&nbsp;error.</p>
+            <p>Register <code>scheme</code> in <code>context</code>.</p>
           </div>
           
         </div>
@@ -712,8 +679,7 @@ when the data of the request is available or
         <div class="">
           <h6><a href="method.WebContext.send_message_to_all_extensions.html">webkit_web_context_send_message_to_all_extensions</a></h6>
           <div class="docblock">
-            <p>Send <code>message</code> to all <code>WebKitWebExtension</code><!-- -->s associated to <code>context</code>.
-If <code>message</code> is floating, it&#8217;s&nbsp;consumed.</p>
+            <p>Send <code>message</code> to all <code>WebKitWebExtension</code><!-- -->s associated to <code>context</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.28</p></div>
         </div>
@@ -729,11 +695,7 @@ If <code>message</code> is floating, it&#8217;s&nbsp;consumed.</p>
         <div class="">
           <h6><a href="method.WebContext.set_automation_allowed.html">webkit_web_context_set_automation_allowed</a></h6>
           <div class="docblock">
-            <p>Set whether automation is allowed in <code>context</code>. When automation is enabled the browser could
-be controlled by another process by requesting an automation session. When a new automation
-session is requested the signal <code>WebKitWebContext::automation-started</code> is emitted.
-Automation is disabled by default, so you need to explicitly call this method passing <code>TRUE</code>
-to enable&nbsp;it.</p>
+            <p>Set whether automation is allowed in <code>context</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.18</p></div>
         </div>
@@ -741,10 +703,7 @@ to enable&nbsp;it.</p>
         <div class="">
           <h6><a href="method.WebContext.set_cache_model.html">webkit_web_context_set_cache_model</a></h6>
           <div class="docblock">
-            <p>Specifies a usage model for WebViews, which WebKit will use to
-determine its caching behavior. All web views follow the cache
-model. This cache model determines the <span class="caps">RAM</span> and disk space to use
-for caching previously viewed content&nbsp;.</p>
+            <p>Specifies a usage model for&nbsp;WebViews.</p>
           </div>
           
         </div>
@@ -752,9 +711,7 @@ for caching previously viewed content&nbsp;.</p>
         <div class="deprecated">
           <h6><a href="method.WebContext.set_disk_cache_directory.html">webkit_web_context_set_disk_cache_directory</a></h6>
           <div class="docblock">
-            <p>Set the directory where disk cache files will be stored
-This method must be called before loading anything in this context, otherwise
-it will not have any&nbsp;effect.</p>
+            <p>Set the directory where disk cache files will be&nbsp;stored.</p>
           </div>
           <div class="docblock"><p>Deprecated since: 2.10.</p></div>
         </div>
@@ -762,9 +719,7 @@ it will not have any&nbsp;effect.</p>
         <div class="">
           <h6><a href="method.WebContext.set_favicon_database_directory.html">webkit_web_context_set_favicon_database_directory</a></h6>
           <div class="docblock">
-            <p>Set the directory path to be used to store the favicons database
-for <code>context</code> on disk. Passing <code>NULL</code> as <code>path</code> means using the
-default directory for the platform (see&nbsp;g_get_user_cache_dir()).</p>
+            <p>Set the directory path to store the favicons&nbsp;database.</p>
           </div>
           
         </div>
@@ -772,14 +727,7 @@ default directory for the platform (see&nbsp;g_get_user_cache_dir()).</p>
         <div class="deprecated">
           <h6><a href="method.WebContext.set_network_proxy_settings.html">webkit_web_context_set_network_proxy_settings</a></h6>
           <div class="docblock">
-            <p>Set the network proxy settings to be used by connections started in <code>context</code>.
-By default <code>WEBKIT_NETWORK_PROXY_MODE_DEFAULT</code> is used, which means that the
-system settings will be used (g_proxy_resolver_get_default()).
-If you want to override the system default settings, you can either use
-<code>WEBKIT_NETWORK_PROXY_MODE_NO_PROXY</code> to make sure no proxies are used at all,
-or <code>WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code> to provide your own proxy settings.
-When <code>proxy_mode</code> is <code>WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code> <code>proxy_settings</code> must be
-a valid <code>WebKitNetworkProxySettings</code>; otherwise, <code>proxy_settings</code> must be <code>NULL</code>.</p>
+            <p>Set the network proxy settings to be used by connections started in <code>context</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.32.</p></div>
         </div>
@@ -787,8 +735,7 @@ a valid <code>WebKitNetworkProxySettings</code>; otherwise, <code>proxy_settings
         <div class="">
           <h6><a href="method.WebContext.set_preferred_languages.html">webkit_web_context_set_preferred_languages</a></h6>
           <div class="docblock">
-            <p>Set the list of preferred languages, sorted from most desirable
-to least desirable. The list will be used in the following&nbsp;ways:</p>
+            <p>Set the list of preferred&nbsp;languages.</p>
           </div>
           
         </div>
@@ -796,8 +743,7 @@ to least desirable. The list will be used in the following&nbsp;ways:</p>
         <div class="">
           <h6><a href="method.WebContext.set_process_model.html">webkit_web_context_set_process_model</a></h6>
           <div class="docblock">
-            <p>Specifies a process model for WebViews, which WebKit will use to
-determine how auxiliary processes are&nbsp;handled.</p>
+            <p>Specifies a process model for&nbsp;WebViews.</p>
           </div>
           <div class="docblock"><p>Available since: 2.4</p></div>
         </div>
@@ -805,7 +751,7 @@ determine how auxiliary processes are&nbsp;handled.</p>
         <div class="">
           <h6><a href="method.WebContext.set_sandbox_enabled.html">webkit_web_context_set_sandbox_enabled</a></h6>
           <div class="docblock">
-            <p>Set whether WebKit subprocesses will be sandboxed, limiting access to the&nbsp;system.</p>
+            <p>Set whether WebKit subprocesses will be&nbsp;sandboxed.</p>
           </div>
           <div class="docblock"><p>Available since: 2.26</p></div>
         </div>
@@ -845,11 +791,7 @@ determine how auxiliary processes are&nbsp;handled.</p>
         <div class="">
           <h6><a href="method.WebContext.set_web_extensions_directory.html">webkit_web_context_set_web_extensions_directory</a></h6>
           <div class="docblock">
-            <p>Set the directory where WebKit will look for Web Extensions.
-This method must be called before loading anything in this context,
-otherwise it will not have any effect. You can connect to
-<code>WebKitWebContext::initialize-web-extensions</code> to call this method
-before anything is&nbsp;loaded.</p>
+            <p>Set the directory where WebKit will look for Web&nbsp;Extensions.</p>
           </div>
           
         </div>
@@ -857,13 +799,7 @@ before anything is&nbsp;loaded.</p>
         <div class="">
           <h6><a href="method.WebContext.set_web_extensions_initialization_user_data.html">webkit_web_context_set_web_extensions_initialization_user_data</a></h6>
           <div class="docblock">
-            <p>Set user data to be passed to Web Extensions on initialization.
-The data will be passed to the
-<code>WebKitWebExtensionInitializeWithUserDataFunction</code>.
-This method must be called before loading anything in this context,
-otherwise it will not have any effect. You can connect to
-<code>WebKitWebContext::initialize-web-extensions</code> to call this method
-before anything is&nbsp;loaded.</p>
+            <p>Set user data to be passed to Web Extensions on&nbsp;initialization.</p>
           </div>
           <div class="docblock"><p>Available since: 2.4</p></div>
         </div>
@@ -871,8 +807,7 @@ before anything is&nbsp;loaded.</p>
         <div class="deprecated">
           <h6><a href="method.WebContext.set_web_process_count_limit.html">webkit_web_context_set_web_process_count_limit</a></h6>
           <div class="docblock">
-            <p>Sets the maximum number of web processes that can be created at the same time for the <code>context</code>.
-The default value is 0 and means no&nbsp;limit.</p>
+            <p>Sets the maximum number of web&nbsp;processes.</p>
           </div>
           <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.26</p></div>
         </div>

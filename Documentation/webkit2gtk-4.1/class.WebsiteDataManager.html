@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -363,8 +363,7 @@ period of&nbsp;time.</p>
           <h6><a href="ctor.WebsiteDataManager.new.html">webkit_website_data_manager_new</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitWebsiteDataManager</code> with the given options. It must
-be passed as construction parameter of a <code>WebKitWebContext</code>.</p>
+            <p>Creates a new <code>WebKitWebsiteDataManager</code> with the given&nbsp;options.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.10</p></div>
@@ -374,7 +373,7 @@ be passed as construction parameter of a <code>WebKitWebContext</code>.</p>
           <h6><a href="ctor.WebsiteDataManager.new_ephemeral.html">webkit_website_data_manager_new_ephemeral</a></h6>
 
           <div class="docblock">
-            <p>Creates an ephemeral <code>WebKitWebsiteDataManager</code>. See <code>WebKitWebsiteDataManager:is-ephemeral</code> for more&nbsp;details.</p>
+            <p>Creates an ephemeral <code>WebKitWebsiteDataManager</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>
@@ -397,9 +396,7 @@ be passed as construction parameter of a <code>WebKitWebContext</code>.</p>
         <h6><a href="type_func.WebsiteDataManager.set_memory_pressure_settings.html">webkit_website_data_manager_set_memory_pressure_settings</a></h6>
 
         <div class="docblock">
-          <p>Sets <code>settings</code> as the <code>WebKitMemoryPressureSettings</code> to be used by all the network
-processes created by any instance of <code>WebKitWebsiteDataManager</code> after this function
-is&nbsp;called.</p>
+          <p>Sets <code>settings</code> as the <code>WebKitMemoryPressureSettings</code>.</p>
         </div>
 
         <div class="docblock"><p>Available since: 2.34</p></div>
@@ -421,8 +418,7 @@ is&nbsp;called.</p>
         <div class="">
           <h6><a href="method.WebsiteDataManager.clear.html">webkit_website_data_manager_clear</a></h6>
           <div class="docblock">
-            <p>Asynchronously clear the website data of the given <code>types</code> modified in the past <code>timespan</code>.
-If <code>timespan</code> is 0, all website data will be&nbsp;removed.</p>
+            <p>Asynchronously clear the website data of the given <code>types</code> modified in the past <code>timespan</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
@@ -526,8 +522,7 @@ If <code>timespan</code> is 0, all website data will be&nbsp;removed.</p>
         <div class="">
           <h6><a href="method.WebsiteDataManager.get_itp_summary.html">webkit_website_data_manager_get_itp_summary</a></h6>
           <div class="docblock">
-            <p>Asynchronously get the list of <code>WebKitITPThirdParty</code> seen for <code>manager</code>. Every <code>WebKitITPThirdParty</code>
-contains the list of <code>WebKitITPFirstParty</code> under which it has been&nbsp;seen.</p>
+            <p>Asynchronously get the list of <code>WebKitITPThirdParty</code> seen for <code>manager</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>
@@ -559,8 +554,7 @@ contains the list of <code>WebKitITPFirstParty</code> under which it has been&nb
         <div class="">
           <h6><a href="method.WebsiteDataManager.get_persistent_credential_storage_enabled.html">webkit_website_data_manager_get_persistent_credential_storage_enabled</a></h6>
           <div class="docblock">
-            <p>Get whether persistent credential storage is enabled or not.
-See also&nbsp;webkit_website_data_manager_set_persistent_credential_storage_enabled().</p>
+            <p>Get whether persistent credential storage is enabled or&nbsp;not.</p>
           </div>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>
@@ -592,7 +586,7 @@ See also&nbsp;webkit_website_data_manager_set_persistent_credential_storage_enab
         <div class="">
           <h6><a href="method.WebsiteDataManager.is_ephemeral.html">webkit_website_data_manager_is_ephemeral</a></h6>
           <div class="docblock">
-            <p>Get whether a <code>WebKitWebsiteDataManager</code> is ephemeral. See <code>WebKitWebsiteDataManager:is-ephemeral</code> for more&nbsp;details.</p>
+            <p>Get whether a <code>WebKitWebsiteDataManager</code> is&nbsp;ephemeral.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
@@ -600,8 +594,7 @@ See also&nbsp;webkit_website_data_manager_set_persistent_credential_storage_enab
         <div class="">
           <h6><a href="method.WebsiteDataManager.remove.html">webkit_website_data_manager_remove</a></h6>
           <div class="docblock">
-            <p>Asynchronously removes the website data of the for the given <code>types</code> for websites in the given <code>website_data</code> list.
-Use <code>webkit_website_data_manager_clear()</code> if you want to remove the website data for all&nbsp;sites.</p>
+            <p>Asynchronously removes the website data in the given <code>website_data</code> list.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
@@ -617,10 +610,7 @@ Use <code>webkit_website_data_manager_clear()</code> if you want to remove the w
         <div class="">
           <h6><a href="method.WebsiteDataManager.set_itp_enabled.html">webkit_website_data_manager_set_itp_enabled</a></h6>
           <div class="docblock">
-            <p>Enable or disable Intelligent Tracking Prevention (<span class="caps">ITP</span>). When <span class="caps">ITP</span> is enabled resource load statistics
-are collected and used to decide whether to allow or block third-party cookies and prevent user tracking.
-Note that while <span class="caps">ITP</span> is enabled the accept policy <code>WEBKIT_COOKIE_POLICY_ACCEPT_NO_THIRD_PARTY</code> is ignored and
-<code>WEBKIT_COOKIE_POLICY_ACCEPT_ALWAYS</code> is used instead. See also&nbsp;webkit_cookie_manager_set_accept_policy().</p>
+            <p>Enable or disable Intelligent Tracking Prevention (<span class="caps">ITP</span>).</p>
           </div>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>
@@ -628,14 +618,7 @@ Note that while <span class="caps">ITP</span> is enabled the accept policy <code
         <div class="">
           <h6><a href="method.WebsiteDataManager.set_network_proxy_settings.html">webkit_website_data_manager_set_network_proxy_settings</a></h6>
           <div class="docblock">
-            <p>Set the network proxy settings to be used by connections started in <code>manager</code> session.
-By default <code>WEBKIT_NETWORK_PROXY_MODE_DEFAULT</code> is used, which means that the
-system settings will be used (g_proxy_resolver_get_default()).
-If you want to override the system default settings, you can either use
-<code>WEBKIT_NETWORK_PROXY_MODE_NO_PROXY</code> to make sure no proxies are used at all,
-or <code>WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code> to provide your own proxy settings.
-When <code>proxy_mode</code> is <code>WEBKIT_NETWORK_PROXY_MODE_CUSTOM</code> <code>proxy_settings</code> must be
-a valid <code>WebKitNetworkProxySettings</code>; otherwise, <code>proxy_settings</code> must be <code>NULL</code>.</p>
+            <p>Set the network proxy settings to be used by connections started in <code>manager</code> session.</p>
           </div>
           <div class="docblock"><p>Available since: 2.32</p></div>
         </div>
@@ -643,9 +626,7 @@ a valid <code>WebKitNetworkProxySettings</code>; otherwise, <code>proxy_settings
         <div class="">
           <h6><a href="method.WebsiteDataManager.set_persistent_credential_storage_enabled.html">webkit_website_data_manager_set_persistent_credential_storage_enabled</a></h6>
           <div class="docblock">
-            <p>Enable or disable persistent credential storage. When enabled, which is the default for
-non-ephemeral sessions, the network process will try to read and write <span class="caps">HTTP</span> authentiacation
-credentials from persistent&nbsp;storage.</p>
+            <p>Enable or disable persistent credential&nbsp;storage.</p>
           </div>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>

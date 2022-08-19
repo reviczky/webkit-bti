@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -292,12 +292,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L3107">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L3131">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Tries to close the <code>web_view</code>. This will fire the onbeforeunload event
+        <p>Tries to close the <code>web_view</code>.</p>
+<p>This will fire the onbeforeunload event
 to ask the user for confirmation to close the page. If there isn&#8217;t an
 onbeforeunload event handler or the user confirms to close the page,
 the <code>WebKitWebView::close</code> signal is emitted, otherwise nothing&nbsp;happens.</p>

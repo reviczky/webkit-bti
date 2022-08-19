@@ -136,6 +136,10 @@
         "corresponding \"StylePropertyShorthand propertyIdShorthand()\" function will be",
         "generated in StylePropertyShorthandFunctions.h header.",
         "",
+        "* top-priority:",
+        "Whether the property needs to be applied before high-priority properties",
+        "in CSS cascading order. Please justify usage with a comment field.",
+        "",
         "* high-priority:",
         "Whether the property needs to be applied before non-high-priority properties",
         "in CSS cascading order. High priority properties must not accept <length>",
@@ -738,7 +742,8 @@
             "codegen-properties": {
                 "custom": "Value",
                 "high-priority": true,
-                "enable-if": "ENABLE_TEXT_AUTOSIZING"
+                "enable-if": "ENABLE_TEXT_AUTOSIZING",
+                "settings-flag": "textAutosizingEnabled"
             },
             "status": "experimental",
             "specification": {
@@ -794,7 +799,8 @@
                     "-epub-writing-mode"
                 ],
                 "custom": "Value",
-                "high-priority": true
+                "comment": "This is top priority because vi/vb units (depending on writing-mode) may be used by other properties",
+                "top-priority": true
             },
             "specification": {
                 "category": "css-writing-modes",
@@ -849,7 +855,8 @@
                 }
             ],
             "codegen-properties": {
-                "comment": "This is the highest priority property and 'is resolved before all other properties, to ensure that its value can be checked when determining a smart default font size', (<https://trac.webkit.org/browser/trunk/Source/WebCore/ChangeLog?rev=172861>)."
+                "top-priority": true,
+                "comment": "This is a top priority property to ensure that its value can be checked when determining a smart default font size', (<https://trac.webkit.org/browser/trunk/Source/WebCore/ChangeLog?rev=172861>)."
             },
             "specification": {
                 "category": "css-ruby",
@@ -3831,6 +3838,19 @@
                 "url": "https://www.w3.org/TR/css-overflow-3/#propdef-overflow"
             }
         },
+        "overflow-anchor": {
+            "codegen-properties": {
+                "settings-flag": "cssScrollAnchoringEnabled"
+            },
+            "values": [
+                "none",
+                "auto"
+            ],
+            "specification": {
+                "category": "css-scroll-anchoring",
+                "url": "https://www.w3.org/TR/css-scroll-anchoring-1/#propdef-overflow-anchor"
+            }
+        },
         "overflow-wrap": {
             "codegen-properties": {
                 "aliases": [
@@ -5864,6 +5884,7 @@
         "-apple-color-filter": {
             "inherited": true,
             "codegen-properties": {
+                "settings-flag": "colorFilterEnabled",
                 "conditional-converter": "FilterOperations"
             },
             "status": {
@@ -6677,10 +6698,10 @@
                     "supported-color-schemes"
                 ],
                 "converter": "ColorScheme",
-                "comment": "This is the second highest priority property, to ensure that its value can be checked when resolving colors.",
+                "comment": "This is a top priority property, to ensure that its value can be checked when resolving colors.",
                 "custom": "Value",
                 "enable-if": "ENABLE_DARK_MODE_CSS",
-                "high-priority": true
+                "top-priority": true
             },
             "specification": {
                 "category": "css-color-adjust",
@@ -6999,7 +7020,8 @@
             "inherited": true,
             "codegen-properties": {
                 "skip-builder": true,
-                "enable-if": "ENABLE_TEXT_AUTOSIZING"
+                "enable-if": "ENABLE_TEXT_AUTOSIZING",
+                "internal-only": true
             },
             "status": "non-standard"
         },
@@ -7708,7 +7730,8 @@
             "codegen-properties": {
                 "name-for-methods": "UseTouchOverflowScrolling",
                 "converter": "OverflowScrolling",
-                "enable-if": "ENABLE_OVERFLOW_SCROLLING_TOUCH"
+                "enable-if": "ENABLE_OVERFLOW_SCROLLING_TOUCH",
+                "settings-flag": "legacyOverflowScrollingTouchEnabled"
             },
             "status": "non-standard"
         },
@@ -7965,6 +7988,11 @@
             "shortname": "CSS Ruby",
             "longname": "CSS Ruby Layout Module",
             "url": "https://www.w3.org/TR/css-ruby-1/"
+        },
+        "css-scroll-anchoring": {
+            "shortname": "CSS Scroll Anchoring",
+            "longname": "CSS Scroll Anchoring Module",
+            "url": "https://www.w3.org/TR/css-scroll-anchoring-1/"
         },
         "css-scroll-snap": {
             "shortname": "CSS Scroll Snap",

@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -298,10 +298,7 @@ and handle the download process&nbsp;itself.</p>
         <div class="">
           <h6><a href="method.Download.cancel.html">webkit_download_cancel</a></h6>
           <div class="docblock">
-            <p>Cancels the download. When the ongoing download
-operation is effectively cancelled the signal
-<code>WebKitDownload::failed</code> is emitted with
-<code>WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER</code> error.</p>
+            <p>Cancels the&nbsp;download.</p>
           </div>
           
         </div>
@@ -309,9 +306,7 @@ operation is effectively cancelled the signal
         <div class="">
           <h6><a href="method.Download.get_allow_overwrite.html">webkit_download_get_allow_overwrite</a></h6>
           <div class="docblock">
-            <p>Returns the current value of the <code>WebKitDownload:allow-overwrite</code> property,
-which determines whether the download will overwrite an existing file on
-disk, or if it will fail if the destination already&nbsp;exists.</p>
+            <p>Returns the current value of the <code>WebKitDownload:allow-overwrite</code> property.</p>
           </div>
           <div class="docblock"><p>Available since: 2.6</p></div>
         </div>
@@ -319,9 +314,7 @@ disk, or if it will fail if the destination already&nbsp;exists.</p>
         <div class="">
           <h6><a href="method.Download.get_destination.html">webkit_download_get_destination</a></h6>
           <div class="docblock">
-            <p>Obtains the <span class="caps">URI</span> to which the downloaded file will be written. You
-can connect to <code>WebKitDownload::created-destination</code> to make
-sure this method returns a valid&nbsp;destination.</p>
+            <p>Obtains the <span class="caps">URI</span> to which the downloaded file will be&nbsp;written.</p>
           </div>
           
         </div>
@@ -329,9 +322,7 @@ sure this method returns a valid&nbsp;destination.</p>
         <div class="">
           <h6><a href="method.Download.get_elapsed_time.html">webkit_download_get_elapsed_time</a></h6>
           <div class="docblock">
-            <p>Gets the elapsed time in seconds, including any fractional part.
-If the download finished, had an error or was cancelled this is
-the time between its start and the&nbsp;event.</p>
+            <p>Gets the elapsed time in seconds, including any fractional&nbsp;part.</p>
           </div>
           
         </div>
@@ -340,6 +331,7 @@ the time between its start and the&nbsp;event.</p>
           <h6><a href="method.Download.get_estimated_progress.html">webkit_download_get_estimated_progress</a></h6>
           <div class="docblock">
             <p>Gets the value of the <code>WebKitDownload:estimated-progress</code> property.
+Gets the value of the <code>WebKitDownload:estimated-progress</code> property.
 You can monitor the estimated progress of the download operation by
 connecting to the notify::estimated-progress signal of <code>download</code>.</p>
           </div>
@@ -349,8 +341,7 @@ connecting to the notify::estimated-progress signal of <code>download</code>.</p
         <div class="">
           <h6><a href="method.Download.get_received_data_length.html">webkit_download_get_received_data_length</a></h6>
           <div class="docblock">
-            <p>Gets the length of the data already downloaded for <code>download</code>
-in&nbsp;bytes.</p>
+            <p>Gets the length of the data already downloaded for <code>download</code>.</p>
           </div>
           
         </div>
@@ -366,10 +357,7 @@ in&nbsp;bytes.</p>
         <div class="">
           <h6><a href="method.Download.get_response.html">webkit_download_get_response</a></h6>
           <div class="docblock">
-            <p>Retrieves the <code>WebKitURIResponse</code> object that backs the download
-process. This method returns <code>NULL</code> if called before the response
-is received from the server. You can connect to notify::response
-signal to be notified when the response is&nbsp;received.</p>
+            <p>Retrieves the <code>WebKitURIResponse</code> object that backs the download&nbsp;process.</p>
           </div>
           
         </div>
@@ -385,9 +373,7 @@ signal to be notified when the response is&nbsp;received.</p>
         <div class="">
           <h6><a href="method.Download.set_allow_overwrite.html">webkit_download_set_allow_overwrite</a></h6>
           <div class="docblock">
-            <p>Sets the <code>WebKitDownload:allow-overwrite</code> property, which determines whether
-the download may overwrite an existing file on disk, or if it will fail if
-the destination already&nbsp;exists.</p>
+            <p>Sets the <code>WebKitDownload:allow-overwrite</code> property.</p>
           </div>
           <div class="docblock"><p>Available since: 2.6</p></div>
         </div>
@@ -395,19 +381,7 @@ the destination already&nbsp;exists.</p>
         <div class="">
           <h6><a href="method.Download.set_destination.html">webkit_download_set_destination</a></h6>
           <div class="docblock">
-            <p>Sets the <span class="caps">URI</span> to which the downloaded file will be written.
-This method should be called before the download transfer
-starts or it will not have any effect on the ongoing download
-operation. To set the destination using the filename suggested
-by the server connect to <code>WebKitDownload::decide-destination</code>
-signal and call webkit_download_set_destination(). If you want to
-set a fixed destination <span class="caps">URI</span> that doesn&#8217;t depend on the suggested
-filename you can connect to notify::response signal and call
-webkit_download_set_destination().
-If <code>WebKitDownload::decide-destination</code> signal is not handled
-and destination <span class="caps">URI</span> is not set when the download transfer starts,
-the file will be saved with the filename suggested by the server in
-<code>G_USER_DIRECTORY_DOWNLOAD</code> directory.</p>
+            <p>Sets the <span class="caps">URI</span> to which the downloaded file will be&nbsp;written.</p>
           </div>
           
         </div>

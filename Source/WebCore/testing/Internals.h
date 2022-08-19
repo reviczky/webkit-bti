@@ -83,6 +83,7 @@ class Frame;
 class GCObservation;
 class HTMLAnchorElement;
 class HTMLAttachmentElement;
+class HTMLCanvasElement;
 class HTMLImageElement;
 class HTMLInputElement;
 class HTMLLinkElement;
@@ -754,6 +755,7 @@ public:
     bool isPlayerVisibleInViewport(const HTMLMediaElement&) const;
     bool isPlayerMuted(const HTMLMediaElement&) const;
     void beginAudioSessionInterruption();
+    void endAudioSessionInterruption();
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -1181,6 +1183,7 @@ public:
         bool useBoundingRectAndPaintAllContentForComplexRanges { false };
         bool computeEstimatedBackgroundColor { false };
         bool respectTextColor { false };
+        bool useUserSelectAllCommonAncestor { false };
 
         OptionSet<WebCore::TextIndicatorOption> coreOptions()
         {
@@ -1191,6 +1194,8 @@ public:
                 options.add(TextIndicatorOption::ComputeEstimatedBackgroundColor);
             if (respectTextColor)
                 options.add(TextIndicatorOption::RespectTextColor);
+            if (useUserSelectAllCommonAncestor)
+                options.add(TextIndicatorOption::UseUserSelectAllCommonAncestor);
             return options;
         }
     };
@@ -1318,6 +1323,8 @@ public:
     void modelInlinePreviewUUIDs(ModelInlinePreviewUUIDsPromise&&) const;
     String modelInlinePreviewUUIDForModelElement(const HTMLModelElement&) const;
 #endif
+
+    void avoidIOSurfaceSizeCheckInWebProcess(HTMLCanvasElement&);
 
 private:
     explicit Internals(Document&);

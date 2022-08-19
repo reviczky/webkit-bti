@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -157,7 +157,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 
         <div class="docblock">
           <p>A request to open a file&nbsp;chooser.</p>
-<p>Whenever the user interacts with an &lt;input type=&#8217;file&#8217; /&gt;
+<p>Whenever the user interacts with an <input type='file' />
 <span class="caps">HTML</span> element, WebKit will need to show a dialog to choose one or
 more files to be uploaded to the server along with the rest of the
 form data. For that to happen in a general way, instead of just
@@ -271,10 +271,7 @@ a regular <code>GtkFileChooserDialog</code> for the user to interact&nbsp;with.<
         <div class="">
           <h6><a href="method.FileChooserRequest.cancel.html">webkit_file_chooser_request_cancel</a></h6>
           <div class="docblock">
-            <p>Ask WebKit to cancel the request. It&#8217;s important to do this in case
-no selection has been made in the client, otherwise the request
-won&#8217;t be properly completed and the browser will keep the request
-pending forever, which might cause the browser to&nbsp;hang.</p>
+            <p>Ask WebKit to cancel the&nbsp;request.</p>
           </div>
           
         </div>
@@ -282,12 +279,7 @@ pending forever, which might cause the browser to&nbsp;hang.</p>
         <div class="">
           <h6><a href="method.FileChooserRequest.get_mime_types.html">webkit_file_chooser_request_get_mime_types</a></h6>
           <div class="docblock">
-            <p>Get the list of <span class="caps">MIME</span> types the file chooser dialog should handle,
-in the format specified in <span class="caps">RFC</span> 2046 for &#8220;media types&#8221;. Its contents
-depend on the value of the &#8216;accept&#8217; attribute for <span class="caps">HTML</span> input
-elements. This function should normally be called before presenting
-the file chooser dialog to the user, to decide whether to allow the
-user to select multiple files at once or only&nbsp;one.</p>
+            <p>Get the list of <span class="caps">MIME</span> types the file chooser dialog should&nbsp;handle.</p>
           </div>
           
         </div>
@@ -295,11 +287,7 @@ user to select multiple files at once or only&nbsp;one.</p>
         <div class="">
           <h6><a href="method.FileChooserRequest.get_mime_types_filter.html">webkit_file_chooser_request_get_mime_types_filter</a></h6>
           <div class="docblock">
-            <p>Get the filter currently associated with the request, ready to be
-used by <code>GtkFileChooser</code>. This function should normally be called
-before presenting the file chooser dialog to the user, to decide
-whether to apply a filter so the user would not be allowed to
-select files with other <span class="caps">MIME</span>&nbsp;types.</p>
+            <p>Get the filter currently associated with the&nbsp;request.</p>
           </div>
           
         </div>
@@ -307,10 +295,7 @@ select files with other <span class="caps">MIME</span>&nbsp;types.</p>
         <div class="">
           <h6><a href="method.FileChooserRequest.get_select_multiple.html">webkit_file_chooser_request_get_select_multiple</a></h6>
           <div class="docblock">
-            <p>Determine whether the file chooser associated to this
-<code>WebKitFileChooserRequest</code> should allow selecting multiple files,
-which depends on the <span class="caps">HTML</span> input element having a &#8216;multiple&#8217;
-attribute&nbsp;defined.</p>
+            <p>Whether the file chooser should allow selecting multiple&nbsp;files.</p>
           </div>
           
         </div>
@@ -318,11 +303,7 @@ attribute&nbsp;defined.</p>
         <div class="">
           <h6><a href="method.FileChooserRequest.get_selected_files.html">webkit_file_chooser_request_get_selected_files</a></h6>
           <div class="docblock">
-            <p>Get the list of selected files currently associated to the
-request. Initially, the return value of this method contains any
-files selected in previous file chooser requests for this <span class="caps">HTML</span>
-input element. Once webkit_file_chooser_request_select_files, the
-value will reflect whatever files are&nbsp;given.</p>
+            <p>Get the list of selected files associated to the&nbsp;request.</p>
           </div>
           
         </div>

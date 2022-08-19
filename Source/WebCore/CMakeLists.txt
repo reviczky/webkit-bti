@@ -261,7 +261,9 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/cache/WindowOrWorkerGlobalScope+Caches.idl
 
     Modules/compression/CompressionStream.idl
+    Modules/compression/CompressionStreamEncoder.idl
     Modules/compression/DecompressionStream.idl
+    Modules/compression/DecompressionStreamDecoder.idl
 
     Modules/contact-picker/ContactInfo.idl
     Modules/contact-picker/ContactProperty.idl
@@ -814,6 +816,7 @@ set(WebCore_NON_SVG_IDL_FILES
     css/FontFace.idl
     css/FontFaceSet.idl
     css/FontFaceSource.idl
+    css/LinkStyle.idl
     css/MediaList.idl
     css/MediaQueryList.idl
     css/MediaQueryListEvent.idl
@@ -2451,6 +2454,8 @@ add_dependencies(WebCoreTestSupportBindings WebCoreBindings)
 # WebCore JS Builtins
 
 set(WebCore_BUILTINS_SOURCES
+    ${WEBCORE_DIR}/Modules/compression/CompressionStream.js
+    ${WEBCORE_DIR}/Modules/compression/DecompressionStream.js
     ${WEBCORE_DIR}/Modules/streams/ByteLengthQueuingStrategy.js
     ${WEBCORE_DIR}/Modules/streams/CountQueuingStrategy.js
     ${WEBCORE_DIR}/Modules/streams/ReadableByteStreamController.js

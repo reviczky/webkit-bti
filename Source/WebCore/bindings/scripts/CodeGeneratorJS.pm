@@ -401,7 +401,6 @@ sub AddSetLikeAttributesAndOperationIfNeeded
     push(@{$forEachOperation->arguments}, ($forEachArgument));
     $forEachOperation->type(IDLParser::makeSimpleType("any"));
     IDLParser::copyExtendedAttributes($forEachOperation->extendedAttributes, $interface->setLike->extendedAttributes);
-    # FIXME: The WebIDL spec says that the forEach operation should be enumerable.
     $forEachOperation->extendedAttributes->{NotEnumerable} = 1;
     push(@{$interface->operations}, $forEachOperation);
 
@@ -4650,14 +4649,16 @@ sub GenerateImplementation
             AddToImplIncludes("WebCoreJSClientData.h");
             my $conditionalString = $codeGenerator->GenerateConditionalString($operation);
             push(@implContent, "#if ${conditionalString}\n") if $conditionalString;
-            push(@implContent, "    putDirect(vm, builtinNames(vm)." . $operation->name . "PrivateName(), JSFunction::create(vm, globalObject(), 0, String(), " . GetFunctionName($interface, $className, $operation) . "), JSC::PropertyAttribute::ReadOnly | JSC::PropertyAttribute::DontEnum);\n");
+            push(@implContent, "    putDirect(vm, builtinNames(vm)." . $operation->name . "PrivateName(), JSFunction::create(vm, globalObject(), 0, String(), " . GetFunctionName($interface, $className, $operation) . ", ImplementationVisibility::Public), JSC::PropertyAttribute::ReadOnly | JSC::PropertyAttribute::DontEnum);\n");
             push(@implContent, "#endif\n") if $conditionalString;
         }
 
         if (InterfaceNeedsIterator($interface)) {
             AddToImplIncludes("<JavaScriptCore/BuiltinNames.h>");
-            if (IsKeyValueIterableInterface($interface) or $interface->mapLike or $interface->setLike) {
+            if (IsKeyValueIterableInterface($interface) or $interface->mapLike) {
                 push(@implContent, "    putDirect(vm, vm.propertyNames->iteratorSymbol, getDirect(vm, vm.propertyNames->builtinNames().entriesPublicName()), static_cast<unsigned>(JSC::PropertyAttribute::DontEnum));\n");
+            } elsif ($interface->setLike) {
+                push(@implContent, "    putDirect(vm, vm.propertyNames->iteratorSymbol, getDirect(vm, vm.propertyNames->builtinNames().valuesPublicName()), static_cast<unsigned>(JSC::PropertyAttribute::DontEnum));\n");
             } else {
                 AddToImplIncludes("<JavaScriptCore/ArrayPrototype.h>");
                 push(@implContent, "    putDirect(vm, vm.propertyNames->iteratorSymbol, globalObject()->arrayPrototype()->getDirect(vm, vm.propertyNames->builtinNames().valuesPrivateName()), static_cast<unsigned>(JSC::PropertyAttribute::DontEnum));\n");
@@ -4816,7 +4817,7 @@ sub GenerateImplementation
         if (IsJSBuiltin($interface, $operation)) {
             push(@implContent, "        putDirectBuiltinFunction(vm, this, $propertyName, $implementationFunction(vm), attributesForStructure($jsAttributes));\n");
         } else {
-            push(@implContent, "        putDirectNativeFunction(vm, this, $propertyName, $functionLength, $implementationFunction, NoIntrinsic, attributesForStructure($jsAttributes));\n");
+            push(@implContent, "        putDirectNativeFunction(vm, this, $propertyName, $functionLength, $implementationFunction, ImplementationVisibility::Public, NoIntrinsic, attributesForStructure($jsAttributes));\n");
         }
         push(@implContent, "#endif\n") if $conditionalString;
     }

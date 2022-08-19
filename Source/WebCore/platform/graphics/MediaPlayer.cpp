@@ -1071,6 +1071,10 @@ void MediaPlayer::setPageIsVisible(bool visible)
 
 void MediaPlayer::setVisibleForCanvas(bool visible)
 {
+    if (visible == m_visibleForCanvas)
+        return;
+
+    m_visibleForCanvas = visible;
     m_private->setVisibleForCanvas(visible);
 }
 
@@ -1811,6 +1815,11 @@ void MediaPlayer::stopVideoFrameMetadataGathering()
 {
     m_isGatheringVideoFrameMetadata = false;
     m_private->stopVideoFrameMetadataGathering();
+}
+
+void MediaPlayer::renderVideoWillBeDestroyed()
+{
+    m_private->renderVideoWillBeDestroyed();
 }
 
 void MediaPlayer::playerContentBoxRectChanged(const LayoutRect& rect)

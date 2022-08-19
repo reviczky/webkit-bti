@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -199,8 +199,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           <h6><a href="method.ApplicationInfo.get_name.html">webkit_application_info_get_name</a></h6>
 
           <div class="docblock">
-            <p>Get the name of the application. If <code>webkit_application_info_set_name()</code> hasn&#8217;t been
-called with a valid name, this returns&nbsp;g_get_prgname().</p>
+            <p>Get the name of the&nbsp;application.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.18</p></div>
@@ -220,8 +219,7 @@ called with a valid name, this returns&nbsp;g_get_prgname().</p>
           <h6><a href="method.ApplicationInfo.ref.html">webkit_application_info_ref</a></h6>
 
           <div class="docblock">
-            <p>Atomically increments the reference count of <code>info</code> by one. This
-function is <span class="caps">MT</span>-safe and may be called from any&nbsp;thread.</p>
+            <p>Atomically increments the reference count of <code>info</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.18</p></div>
@@ -231,8 +229,7 @@ function is <span class="caps">MT</span>-safe and may be called from any&nbsp;th
           <h6><a href="method.ApplicationInfo.set_name.html">webkit_application_info_set_name</a></h6>
 
           <div class="docblock">
-            <p>Set the name of the application. If not provided, or <code>NULL</code> is passed,
-<code>g_get_prgname()</code> will be&nbsp;used.</p>
+            <p>Set the name of the&nbsp;application.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.18</p></div>
@@ -242,10 +239,7 @@ function is <span class="caps">MT</span>-safe and may be called from any&nbsp;th
           <h6><a href="method.ApplicationInfo.set_version.html">webkit_application_info_set_version</a></h6>
 
           <div class="docblock">
-            <p>Set the application version. If the application doesn&#8217;t use the format
-major.minor.micro you can pass 0 as the micro to use major.minor, or pass
-0 as both micro and minor to use only major number. Any other format must
-be converted to major.minor.micro so that it can be used in version&nbsp;comparisons.</p>
+            <p>Set the application&nbsp;version.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.18</p></div>
@@ -255,9 +249,7 @@ be converted to major.minor.micro so that it can be used in version&nbsp;compari
           <h6><a href="method.ApplicationInfo.unref.html">webkit_application_info_unref</a></h6>
 
           <div class="docblock">
-            <p>Atomically decrements the reference count of <code>info</code> by one. If the
-reference count drops to 0, all memory allocated by the <code>WebKitApplicationInfo</code> is
-released. This function is <span class="caps">MT</span>-safe and may be called from any&nbsp;thread.</p>
+            <p>Atomically decrements the reference count of <code>info</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.18</p></div>

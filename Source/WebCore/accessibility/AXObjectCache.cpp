@@ -577,7 +577,7 @@ static Ref<AccessibilityObject> createFromRenderer(RenderObject* renderer)
     // If the node is aria role="list" or the aria role is empty and its a
     // ul/ol/dl type (it shouldn't be a list if aria says otherwise).
     if (node && ((nodeHasRole(node, "list"_s) || nodeHasRole(node, "directory"_s))
-                      || (nodeHasRole(node, nullAtom()) && (node->hasTagName(ulTag) || node->hasTagName(olTag) || node->hasTagName(dlTag)))))
+        || (nodeHasRole(node, nullAtom()) && (node->hasTagName(ulTag) || node->hasTagName(olTag) || node->hasTagName(dlTag)))))
         return AccessibilityList::create(renderer);
 
     // aria tables
@@ -1174,6 +1174,11 @@ void AXObjectCache::childrenChanged(AccessibilityObject* object)
 
     if (!m_performCacheUpdateTimer.isActive())
         m_performCacheUpdateTimer.startOneShot(0_s);
+}
+
+void AXObjectCache::valueChanged(Element* element)
+{
+    postNotification(element, AXNotification::AXValueChanged);
 }
 
 void AXObjectCache::notificationPostTimerFired()
@@ -1876,14 +1881,34 @@ void AXObjectCache::handleActiveDescendantChanged(Element& element)
     }
 }
 
-void AXObjectCache::handleRoleChange(AccessibilityObject* axObject)
+void AXObjectCache::handleRoleChanged(Element* element)
+{
+    auto* object = get(element);
+    if (!object)
+        return;
+
+    if (is<AccessibilityARIAGrid>(object)
+        || is<AccessibilityARIAGridRow>(object)
+        || is<AccessibilityARIAGridCell>(object)) {
+        // These classes instances are created based on the role attribute of the underlying Element.
+        // Thus when the role changes, remove the object and force a ChildrenChanged on the parent so that the object is re-created.
+        auto* parent = object->parentObject();
+        remove(*element);
+        childrenChanged(parent);
+        return;
+    }
+
+    object->updateRole();
+}
+
+void AXObjectCache::handleRoleChanged(AccessibilityObject* axObject)
 {
     stopCachingComputedObjectAttributes();
     if (axObject->hasIgnoredValueChanged())
         childrenChanged(axObject->parentObject());
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-        updateIsolatedTree(axObject, AXObjectCache::AXAriaRoleChanged);
+    updateIsolatedTree(axObject, AXNotification::AXAriaRoleChanged);
 #endif
 }
 
@@ -1900,23 +1925,20 @@ void AXObjectCache::deferAttributeChangeIfNeeded(const QualifiedName& attrName, 
     }
     handleAttributeChange(element, attrName);
 }
-    
-bool AXObjectCache::shouldProcessAttributeChange(const QualifiedName& attrName, Element* element)
+
+bool AXObjectCache::shouldProcessAttributeChange(Element* element, const QualifiedName& attrName)
 {
     if (!element)
         return false;
-    
+
     // aria-modal ends up affecting sub-trees that are being shown/hidden so it's likely that
     // an AT would not have accessed this node yet.
     if (attrName == aria_modalAttr)
         return true;
-    
+
     // If an AXObject has yet to be created, then there's no need to process attribute changes.
     // Some of these notifications are processed on the parent, so allow that to proceed as well
-    if (get(element) || get(element->parentNode()))
-        return true;
-
-    return false;
+    return get(element) || get(element->parentNode());
 }
 
 void AXObjectCache::handleAttributeChange(Element* element, const QualifiedName& attrName)
@@ -1924,21 +1946,22 @@ void AXObjectCache::handleAttributeChange(Element* element, const QualifiedName&
     AXTRACE(makeString("AXObjectCache::handleAttributeChange 0x"_s, hex(reinterpret_cast<uintptr_t>(this))));
     AXLOG(makeString("attribute ", attrName.localName().string(), " for element ", element->debugDescription()));
 
-    if (!shouldProcessAttributeChange(attrName, element))
+    if (!shouldProcessAttributeChange(element, attrName))
         return;
 
     if (relationAttributes().contains(attrName))
         relationsNeedUpdate(true);
 
-    if (attrName == roleAttr) {
-        if (auto* axObject = get(element))
-            axObject->updateRole();
-    } else if (attrName == altAttr || attrName == titleAttr)
+    if (attrName == roleAttr)
+        handleRoleChanged(element);
+    else if (attrName == altAttr || attrName == titleAttr)
         handleTextChanged(getOrCreate(element));
     else if (attrName == disabledAttr)
         postNotification(element, AXObjectCache::AXDisabledStateChanged);
     else if (attrName == forAttr && is<HTMLLabelElement>(*element))
         labelChanged(element);
+    else if (attrName == requiredAttr)
+        postNotification(element, AXRequiredStatusChanged);
     else if (attrName == tabindexAttr)
         childrenChanged(element->parentNode(), element);
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)

@@ -121,6 +121,7 @@ public:
     virtual void finalizeDrawIntoContext(GraphicsContext&) { }
     virtual RefPtr<NativeImage> copyNativeImage(BackingStoreCopy) const = 0;
 
+    WEBCORE_EXPORT virtual RefPtr<NativeImage> copyNativeImageForDrawing(BackingStoreCopy copyBehavior) const;
     WEBCORE_EXPORT virtual RefPtr<NativeImage> sinkIntoNativeImage();
 
     virtual void clipToMask(GraphicsContext&, const FloatRect&) { }
@@ -162,6 +163,8 @@ public:
     virtual ImageBufferBackendSharing* toBackendSharing() { return nullptr; }
 
     virtual void setOwnershipIdentity(const ProcessIdentity&) { }
+
+    virtual void clearContents() { ASSERT_NOT_REACHED(); }
 
 protected:
     WEBCORE_EXPORT ImageBufferBackend(const Parameters&);

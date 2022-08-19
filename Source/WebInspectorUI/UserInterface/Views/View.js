@@ -171,9 +171,6 @@ WI.View = class View extends WI.Object
     {
         this._setLayoutReason(layoutReason);
 
-        if (this._dirty)
-            return;
-
         WI.View._scheduleLayoutForView(this);
     }
 
@@ -242,8 +239,6 @@ WI.View = class View extends WI.Object
     {
         if (this._parentView === parentView)
             return;
-
-        console.assert(this._parentView || !(this._isDirty || this._dirtyDescendantsCount));
 
         let dirtyDescendantsCount = this._dirtyDescendantsCount;
         if (this._dirty)
@@ -354,10 +349,10 @@ WI.View = class View extends WI.Object
 
     static _scheduleLayoutForView(view)
     {
+        view._setDirty(true);
+
         if (!view._isAttachedToRoot)
             return;
-
-        view._setDirty(true);
 
         if (WI.View._scheduledLayoutUpdateIdentifier)
             return;

@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -175,7 +175,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a href="#description" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L1850">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L1857">[src]</a>
         
       </h4>
 
@@ -198,7 +198,7 @@ allowing the user decide what to do with the&nbsp;request:</p>
 <span class="w">    </span><span class="n">gint</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gtk_dialog_run</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_DIALOG</span><span class="w"> </span><span class="p">(</span><span class="n">dialog</span><span class="p">));</span><span class="w"></span>
 
 <span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="nl">GTK_RESPONSE_YES</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">GTK_RESPONSE_YES</span><span class="p">:</span><span class="w"></span>
 <span class="w">        </span><span class="n">webkit_permission_request_allow</span><span class="w"> </span><span class="p">(</span><span class="n">request</span><span class="p">);</span><span class="w"></span>
 <span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
 <span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"></span>

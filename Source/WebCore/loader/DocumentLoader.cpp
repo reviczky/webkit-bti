@@ -1042,7 +1042,7 @@ bool DocumentLoader::disallowWebArchive() const
     if (!LegacySchemeRegistry::shouldTreatURLSchemeAsLocal(m_request.url().protocol()))
         return true;
 
-    if (!frame() || (frame()->isMainFrame() && m_allowsWebArchiveForMainFrame))
+    if (!frame() || (frame()->isMainFrame() && allowsWebArchiveForMainFrame()))
         return false;
 
     // On purpose of maintaining existing tests.
@@ -1057,7 +1057,7 @@ bool DocumentLoader::disallowDataRequest() const
     if (!m_response.url().protocolIsData())
         return false;
 
-    if (!frame() || !frame()->isMainFrame() || m_allowsDataURLsForMainFrame || frame()->settings().allowTopNavigationToDataURLs())
+    if (!frame() || !frame()->isMainFrame() || allowsDataURLsForMainFrame() || frame()->settings().allowTopNavigationToDataURLs())
         return false;
 
     if (auto* currentDocument = frame()->document()) {
@@ -1423,6 +1423,10 @@ void DocumentLoader::applyPoliciesToSettings()
 #if ENABLE(MEDIA_SOURCE)
     m_frame->settings().setMediaSourceEnabled(m_mediaSourcePolicy == MediaSourcePolicy::Default ? Settings::platformDefaultMediaSourceEnabled() : m_mediaSourcePolicy == MediaSourcePolicy::Enable);
 #endif
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
+    if (m_legacyOverflowScrollingTouchPolicy == LegacyOverflowScrollingTouchPolicy::Disable)
+        m_frame->settings().setLegacyOverflowScrollingTouchEnabled(false);
+#endif
 #if ENABLE(TEXT_AUTOSIZING)
     m_frame->settings().setIdempotentModeAutosizingOnlyHonorsPercentages(m_idempotentModeAutosizingOnlyHonorsPercentages);
 #endif
@@ -1514,6 +1518,7 @@ void DocumentLoader::detachFromFrame()
 void DocumentLoader::clearMainResourceLoader()
 {
     m_loadingMainResource = false;
+    m_isContinuingLoadAfterProvisionalLoadStarted = false;
 
     auto* frameLoader = this->frameLoader();
 

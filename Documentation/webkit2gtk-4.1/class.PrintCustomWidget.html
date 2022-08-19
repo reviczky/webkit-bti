@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -280,10 +280,7 @@ use <code>webkit_print_operation_run_dialog()</code> to display the&nbsp;dialog.
           <h6><a href="ctor.PrintCustomWidget.new.html">webkit_print_custom_widget_new</a></h6>
 
           <div class="docblock">
-            <p>Create a new <code>WebKitPrintCustomWidget</code> with given <code>widget</code> and <code>title</code>. The <code>widget</code>
-ownership is taken and it is destroyed together with the dialog even if this
-object could still be alive at that point. You typically want to pass a container
-widget with multiple widgets in&nbsp;it.</p>
+            <p>Create a new <code>WebKitPrintCustomWidget</code> with given <code>widget</code> and <code>title</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>
@@ -307,8 +304,7 @@ widget with multiple widgets in&nbsp;it.</p>
         <div class="">
           <h6><a href="method.PrintCustomWidget.get_title.html">webkit_print_custom_widget_get_title</a></h6>
           <div class="docblock">
-            <p>Return the value of <code>WebKitPrintCustomWidget:title</code> property for the given
-<code>print_custom_widget</code> object.</p>
+            <p>Return the value of <code>WebKitPrintCustomWidget:title</code> property.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
@@ -316,11 +312,7 @@ widget with multiple widgets in&nbsp;it.</p>
         <div class="">
           <h6><a href="method.PrintCustomWidget.get_widget.html">webkit_print_custom_widget_get_widget</a></h6>
           <div class="docblock">
-            <p>Return the value of <code>WebKitPrintCustomWidget:widget</code> property for the given
-<code>print_custom_widget</code> object. The returned value will always be valid if called
-from <code>WebKitPrintCustomWidget::apply</code> or <code>WebKitPrintCustomWidget::update</code>
-callbacks, but it will be <code>NULL</code> if called after the
-<code>WebKitPrintCustomWidget::apply</code> signal is&nbsp;emitted.</p>
+            <p>Return the value of <code>WebKitPrintCustomWidget:widget</code> property.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>

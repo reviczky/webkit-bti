@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -254,9 +254,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <div class="">
           <h6><a href="method.OptionMenu.activate_item.html">webkit_option_menu_activate_item</a></h6>
           <div class="docblock">
-            <p>Activates the <code>WebKitOptionMenuItem</code> at <code>index</code> in <code>menu</code>. Activating an item changes the value
-of the element making the item the active one. You are expected to close the menu with
-<code>webkit_option_menu_close()</code> after activating an item, calling this function again will have no&nbsp;effect.</p>
+            <p>Activates the <code>WebKitOptionMenuItem</code> at <code>index</code> in <code>menu</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.18</p></div>
         </div>
@@ -264,10 +262,7 @@ of the element making the item the active one. You are expected to close the men
         <div class="">
           <h6><a href="method.OptionMenu.close.html">webkit_option_menu_close</a></h6>
           <div class="docblock">
-            <p>Request to close a <code>WebKitOptionMenu</code>. This emits WebKitOptionMenu::close signal.
-This function should always be called to notify WebKit that the associated
-menu has been closed. If the menu is closed and neither <code>webkit_option_menu_select_item()</code>
-nor <code>webkit_option_menu_activate_item()</code> have been called, the element value remains&nbsp;unchanged.</p>
+            <p>Request to close a <code>WebKitOptionMenu</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.18</p></div>
         </div>
@@ -291,10 +286,7 @@ nor <code>webkit_option_menu_activate_item()</code> have been called, the elemen
         <div class="">
           <h6><a href="method.OptionMenu.select_item.html">webkit_option_menu_select_item</a></h6>
           <div class="docblock">
-            <p>Selects the <code>WebKitOptionMenuItem</code> at <code>index</code> in <code>menu</code>. Selecting an item changes the
-text shown by the combo button, but it doesn&#8217;t change the value of the element. You need to
-explicitly activate the item with <code>webkit_option_menu_select_item()</code> or close the menu with
-<code>webkit_option_menu_close()</code> in which case the currently selected item will be&nbsp;activated.</p>
+            <p>Selects the <code>WebKitOptionMenuItem</code> at <code>index</code> in <code>menu</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.18</p></div>
         </div>

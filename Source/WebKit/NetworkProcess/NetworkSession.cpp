@@ -145,7 +145,7 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
     , m_overrideServiceWorkerRegistrationCountTestingValue(parameters.overrideServiceWorkerRegistrationCountTestingValue)
     , m_storageManager(createNetworkStorageManager(networkProcess.parentProcessConnection(), parameters))
 #if ENABLE(BUILT_IN_NOTIFICATIONS)
-, m_notificationManager(*this, parameters.webPushMachServiceName, WebPushD::WebPushDaemonConnectionConfiguration { parameters.webPushDaemonConnectionConfiguration })
+    , m_notificationManager(*this, parameters.webPushMachServiceName, WebPushD::WebPushDaemonConnectionConfiguration { parameters.webPushDaemonConnectionConfiguration })
 #endif
 #if !HAVE(NSURLSESSION_WEBSOCKET)
     , m_shouldAcceptInsecureCertificatesForWebSockets(parameters.shouldAcceptInsecureCertificatesForWebSockets)
@@ -174,6 +174,10 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
             SandboxExtension::consumePermanently(parameters.resourceLoadStatisticsParameters.directoryExtensionHandle);
         if (!parameters.resourceLoadStatisticsParameters.privateClickMeasurementStorageDirectory.isEmpty())
             SandboxExtension::consumePermanently(parameters.resourceLoadStatisticsParameters.privateClickMeasurementStorageDirectoryExtensionHandle);
+        if (!parameters.cacheStorageDirectory.isEmpty()) {
+            m_cacheStorageDirectory = parameters.cacheStorageDirectory;
+            SandboxExtension::consumePermanently(parameters.cacheStorageDirectoryExtensionHandle);
+        }
     }
 
     m_isStaleWhileRevalidateEnabled = parameters.staleWhileRevalidateEnabled;
@@ -565,6 +569,10 @@ std::unique_ptr<WebSocketTask> NetworkSession::createWebSocketTask(WebPageProxyI
 void NetworkSession::registerNetworkDataTask(NetworkDataTask& task)
 {
     m_dataTaskSet.add(task);
+
+#if ENABLE(INSPECTOR_NETWORK_THROTTLING)
+    task.setEmulatedConditions(m_bytesPerSecondLimit);
+#endif
 }
 
 void NetworkSession::unregisterNetworkDataTask(NetworkDataTask& task)
@@ -672,30 +680,29 @@ WebSharedWorkerServer& NetworkSession::ensureSharedWorkerServer()
     return *m_sharedWorkerServer;
 }
 
-void NetworkSession::ensureCacheEngine(Function<void(CacheStorage::Engine&)>&& callback)
+CacheStorage::Engine& NetworkSession::ensureCacheEngine()
 {
-    if (m_cacheEngine)
-        return callback(*m_cacheEngine);
+    if (!m_cacheEngine)
+        m_cacheEngine = CacheStorage::Engine::create(*this, m_cacheStorageDirectory);
 
-    m_cacheStorageParametersCallbacks.append(WTFMove(callback));
-    if (m_cacheStorageParametersCallbacks.size() > 1)
-        return;
-
-    m_networkProcess->parentProcessConnection()->sendWithAsyncReply(Messages::NetworkProcessProxy::RetrieveCacheStorageParameters { sessionID() }, [this, weakThis = WeakPtr { *this }](String&& cacheStorageDirectory, SandboxExtension::Handle&& cacheStorageDirectoryHandle) {
-        if (!weakThis)
-            return;
-
-        SandboxExtension::consumePermanently(cacheStorageDirectoryHandle);
-        ASSERT(!m_cacheEngine);
-        m_cacheEngine = CacheStorage::Engine::create(*this, WTFMove(cacheStorageDirectory));
-        for (auto& callback : std::exchange(m_cacheStorageParametersCallbacks, { }))
-            callback(*m_cacheEngine);
-    }, 0);
+    return *m_cacheEngine;
 }
 
 void NetworkSession::clearCacheEngine()
 {
     m_cacheEngine = nullptr;
 }
+
+#if ENABLE(INSPECTOR_NETWORK_THROTTLING)
+
+void NetworkSession::setEmulatedConditions(std::optional<int64_t>&& bytesPerSecondLimit)
+{
+    m_bytesPerSecondLimit = WTFMove(bytesPerSecondLimit);
+
+    for (auto& task : m_dataTaskSet)
+        task.setEmulatedConditions(m_bytesPerSecondLimit);
+}
+
+#endif // ENABLE(INSPECTOR_NETWORK_THROTTLING)
 
 } // namespace WebKit

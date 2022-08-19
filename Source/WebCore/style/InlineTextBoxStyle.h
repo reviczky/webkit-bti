@@ -54,22 +54,17 @@ struct WavyStrokeParameters {
 };
 WavyStrokeParameters getWavyStrokeParameters(float fontSize);
 
-GlyphOverflow visualOverflowForDecorations(const RenderStyle& lineStyle);
-GlyphOverflow visualOverflowForDecorations(const RenderStyle& lineStyle, const InlineIterator::TextBoxIterator&);
-GlyphOverflow visualOverflowForDecorations(const RenderStyle& lineStyle, std::optional<float> underlineOffset);
-
-struct UnderlineOffsetArguments {
-    const RenderStyle& lineStyle;
-    float defaultGap { 0 };
-    struct TextUnderlinePositionUnder {
-        FontBaseline baselineType { AlphabeticBaseline };
-        float textRunLogicalHeight { 0 };
-        float textRunOffsetFromLineBottom { 0 };
-    };
-    std::optional<TextUnderlinePositionUnder> textUnderlinePositionUnder { };
+struct TextUnderlinePositionUnder {
+    FontBaseline baselineType { AlphabeticBaseline };
+    float textRunLogicalHeight { 0 };
+    // This offset value is the distance between the current text run's logical bottom and the lowest position of all the text runs
+    // on line that belong to the same decoration box.
+    float textRunOffsetFromBottomMost { 0 };
 };
-float computeUnderlineOffset(const UnderlineOffsetArguments&);
-float textRunLogicalOffsetFromLineBottom(const InlineIterator::TextBoxIterator&);
-float defaultGap(const RenderStyle& lineStyle);
+GlyphOverflow visualOverflowForDecorations(const RenderStyle&);
+GlyphOverflow visualOverflowForDecorations(const RenderStyle&, TextUnderlinePositionUnder);
+GlyphOverflow visualOverflowForDecorations(const InlineIterator::LineBoxIterator&, const RenderText&, float textBoxLogicalTop, float textBoxLogicalBottom);
+
+float underlineOffsetForTextBoxPainting(const RenderStyle&, const InlineIterator::TextBoxIterator&);
 
 } // namespace WebCore

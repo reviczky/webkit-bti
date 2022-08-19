@@ -40,6 +40,7 @@
 #include "TrackBuffer.h"
 #include "VideoTrackPrivate.h"
 #include <wtf/CheckedArithmetic.h>
+#include <wtf/MainThread.h>
 #include <wtf/MediaTime.h>
 #include <wtf/StringPrintStream.h>
 
@@ -195,8 +196,10 @@ void SourceBufferPrivate::clearTrackBuffers()
 void SourceBufferPrivate::bufferedSamplesForTrackId(const AtomString& trackId, CompletionHandler<void(Vector<String>&&)>&& completionHandler)
 {
     auto* trackBuffer = m_trackBufferMap.get(trackId);
-    if (!trackBuffer)
+    if (!trackBuffer) {
         completionHandler({ });
+        return;
+    }
 
     auto sampleDescriptions = WTF::map(trackBuffer->samples().decodeOrder(), [](auto& entry) {
         return toString(*entry.second);
@@ -551,21 +554,28 @@ void SourceBufferPrivate::updateTrackIds(Vector<std::pair<AtomString, AtomString
     }
 }
 
+void SourceBufferPrivate::setClient(SourceBufferPrivateClient* client)
+{
+    ASSERT(isMainThread());
+    m_client = client;
+}
+
 void SourceBufferPrivate::setAllTrackBuffersNeedRandomAccess()
 {
     for (auto& trackBuffer : m_trackBufferMap.values())
         trackBuffer.get().setNeedRandomAccessFlag(true);
 }
 
-void SourceBufferPrivate::didReceiveInitializationSegment(SourceBufferPrivateClient::InitializationSegment&& segment, CompletionHandler<void()>&& completionHandler)
+void SourceBufferPrivate::didReceiveInitializationSegment(SourceBufferPrivateClient::InitializationSegment&& segment, CompletionHandler<void(SourceBufferPrivateClient::ReceiveResult)>&& completionHandler)
 {
     if (!m_client) {
-        completionHandler();
+        completionHandler(SourceBufferPrivateClient::ReceiveResult::ClientDisconnected);
         return;
     }
 
     if (m_receivedFirstInitializationSegment && !validateInitializationSegment(segment)) {
         m_client->sourceBufferPrivateAppendError(true);
+        completionHandler(SourceBufferPrivateClient::ReceiveResult::AppendError);
         return;
     }
 

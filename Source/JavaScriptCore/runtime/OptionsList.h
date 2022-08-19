@@ -198,7 +198,7 @@ bool canUseWebAssemblyFastMemory();
     v(Double, smallHeapGrowthFactor, 2, Normal, nullptr) \
     v(Double, mediumHeapRAMFraction, 0.5, Normal, nullptr) \
     v(Double, mediumHeapGrowthFactor, 1.5, Normal, nullptr) \
-    v(Double, largeHeapGrowthFactor, 1.20, Normal, nullptr) \
+    v(Double, largeHeapGrowthFactor, 1.24, Normal, nullptr) \
     v(Double, miniVMHeapGrowthFactor, 1.20, Normal, nullptr) \
     v(Double, criticalGCMemoryThreshold, 0.80, Normal, "percent memory in use the GC considers critical.  The collector is much more aggressive above this threshold") \
     v(Double, customFullGCCallbackBailThreshold, -1.0, Normal, "percent of memory paged out before we bail out of timer based Full GCs. -1.0 means use (maxHeapGrowthFactor - 1)") \
@@ -271,9 +271,9 @@ bool canUseWebAssemblyFastMemory();
     \
     v(Unsigned, maximumOptimizationCandidateBytecodeCost, 100000, Normal, nullptr) \
     \
-    v(Unsigned, maximumFunctionForCallInlineCandidateBytecodeCost, 100, Normal, nullptr) \
-    v(Unsigned, maximumFunctionForClosureCallInlineCandidateBytecodeCost, 80, Normal, nullptr) \
-    v(Unsigned, maximumFunctionForConstructInlineCandidateBytecoodeCost, 80, Normal, nullptr) \
+    v(Unsigned, maximumFunctionForCallInlineCandidateBytecodeCost, 120, Normal, nullptr) \
+    v(Unsigned, maximumFunctionForClosureCallInlineCandidateBytecodeCost, 100, Normal, nullptr) \
+    v(Unsigned, maximumFunctionForConstructInlineCandidateBytecoodeCost, 100, Normal, nullptr) \
     \
     v(Unsigned, maximumFTLCandidateBytecodeCost, 20000, Normal, nullptr) \
     \
@@ -541,7 +541,7 @@ bool canUseWebAssemblyFastMemory();
     /* Feature Flags */\
     \
     v(Bool, useArrayFindLastMethod, true, Normal, "Expose the findLast() and findLastIndex() methods on Array and %TypedArray%.") \
-    v(Bool, useArrayGroupByMethod, false, Normal, "Expose the groupBy() and groupByToMap() methods on Array.") \
+    v(Bool, useArrayGroupMethod, true, Normal, "Expose the group() and groupToMap() methods on Array.") \
     v(Bool, useAtMethod, true, Normal, "Expose the at() method on Array, %TypedArray%, and String.") \
     v(Bool, useChangeArrayByCopyMethods, true, Normal, "Expose the withAt(), withReversed(), withSorted() and withSpliced() methods on Array and %TypedArray%.") \
     v(Bool, useHasOwn, true, Normal, "Expose the Object.hasOwn method") \

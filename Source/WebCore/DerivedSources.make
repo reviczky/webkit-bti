@@ -256,7 +256,9 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/cache/DOMCacheStorage.idl \
     $(WebCore)/Modules/cache/WindowOrWorkerGlobalScope+Caches.idl \
     $(WebCore)/Modules/compression/CompressionStream.idl \
+    $(WebCore)/Modules/compression/CompressionStreamEncoder.idl \
     $(WebCore)/Modules/compression/DecompressionStream.idl \
+    $(WebCore)/Modules/compression/DecompressionStreamDecoder.idl \
     $(WebCore)/Modules/contact-picker/ContactInfo.idl \
     $(WebCore)/Modules/contact-picker/ContactProperty.idl \
     $(WebCore)/Modules/contact-picker/ContactsManager.idl \
@@ -821,6 +823,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/css/FontFace.idl \
     $(WebCore)/css/FontFaceSet.idl \
     $(WebCore)/css/FontFaceSource.idl \
+    $(WebCore)/css/LinkStyle.idl \
     $(WebCore)/css/MediaList.idl \
     $(WebCore)/css/MediaQueryList.idl \
     $(WebCore)/css/MediaQueryListEvent.idl \
@@ -2231,6 +2234,8 @@ endif
 # WebCore JS Builtins
 
 WebCore_BUILTINS_SOURCES = \
+    $(WebCore)/Modules/compression/CompressionStream.js \
+    $(WebCore)/Modules/compression/DecompressionStream.js \
     $(WebCore)/Modules/streams/ByteLengthQueuingStrategy.js \
     $(WebCore)/Modules/streams/CountQueuingStrategy.js \
     $(WebCore)/Modules/streams/ReadableByteStreamController.js \

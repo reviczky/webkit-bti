@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -320,10 +320,7 @@ or to set the acceptance policy, with&nbsp;webkit_cookie_manager_get_accept_poli
         <div class="">
           <h6><a href="method.CookieManager.get_accept_policy.html">webkit_cookie_manager_get_accept_policy</a></h6>
           <div class="docblock">
-            <p>Asynchronously get the cookie acceptance policy of <code>cookie_manager</code>.
-Note that when policy was set to <code>WEBKIT_COOKIE_POLICY_ACCEPT_NO_THIRD_PARTY</code> and
-<span class="caps">ITP</span> is enabled, this will return <code>WEBKIT_COOKIE_POLICY_ACCEPT_ALWAYS</code>.
-See also&nbsp;webkit_website_data_manager_set_itp_enabled().</p>
+            <p>Asynchronously get the cookie acceptance policy of <code>cookie_manager</code>.</p>
           </div>
           
         </div>
@@ -339,8 +336,7 @@ See also&nbsp;webkit_website_data_manager_set_itp_enabled().</p>
         <div class="">
           <h6><a href="method.CookieManager.get_cookies.html">webkit_cookie_manager_get_cookies</a></h6>
           <div class="docblock">
-            <p>Asynchronously get a list of <code>SoupCookie</code> from <code>cookie_manager</code> associated with <code>uri</code>, which
-must be either an <span class="caps">HTTP</span> or an <span class="caps">HTTPS</span> <span class="caps">URL</span>.</p>
+            <p>Asynchronously get a list of <code>SoupCookie</code> from <code>cookie_manager</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.20</p></div>
         </div>
@@ -348,9 +344,7 @@ must be either an <span class="caps">HTTP</span> or an <span class="caps">HTTPS<
         <div class="">
           <h6><a href="method.CookieManager.get_cookies_finish.html">webkit_cookie_manager_get_cookies_finish</a></h6>
           <div class="docblock">
-            <p>Finish an asynchronous operation started with webkit_cookie_manager_get_cookies().
-The return value is a <code>GSList</code> of <code>SoupCookie</code> instances which should be released
-with <code>g_list_free_full()</code> and&nbsp;soup_cookie_free().</p>
+            <p>Finish an asynchronous operation started with&nbsp;webkit_cookie_manager_get_cookies().</p>
           </div>
           <div class="docblock"><p>Available since: 2.20</p></div>
         </div>
@@ -366,9 +360,7 @@ with <code>g_list_free_full()</code> and&nbsp;soup_cookie_free().</p>
         <div class="deprecated">
           <h6><a href="method.CookieManager.get_domains_with_cookies_finish.html">webkit_cookie_manager_get_domains_with_cookies_finish</a></h6>
           <div class="docblock">
-            <p>Finish an asynchronous operation started with webkit_cookie_manager_get_domains_with_cookies().
-The return value is a <code>NULL</code> terminated list of strings which should
-be released with&nbsp;g_strfreev().</p>
+            <p>Finish an asynchronous operation started with&nbsp;webkit_cookie_manager_get_domains_with_cookies().</p>
           </div>
           <div class="docblock"><p>Deprecated since: 2.16</p></div>
         </div>
@@ -376,11 +368,7 @@ be released with&nbsp;g_strfreev().</p>
         <div class="">
           <h6><a href="method.CookieManager.set_accept_policy.html">webkit_cookie_manager_set_accept_policy</a></h6>
           <div class="docblock">
-            <p>Set the cookie acceptance policy of <code>cookie_manager</code> as <code>policy</code>.
-Note that <span class="caps">ITP</span> has its own way to handle third-party cookies, so when it&#8217;s enabled,
-and <code>policy</code> is set to <code>WEBKIT_COOKIE_POLICY_ACCEPT_NO_THIRD_PARTY</code>, <code>WEBKIT_COOKIE_POLICY_ACCEPT_ALWAYS</code>
-will be used instead. Once disabled, the policy will be set back to <code>WEBKIT_COOKIE_POLICY_ACCEPT_NO_THIRD_PARTY</code>.
-See also&nbsp;webkit_website_data_manager_set_itp_enabled().</p>
+            <p>Set the cookie acceptance policy of <code>cookie_manager</code> as <code>policy</code>.</p>
           </div>
           
         </div>
@@ -388,13 +376,7 @@ See also&nbsp;webkit_website_data_manager_set_itp_enabled().</p>
         <div class="">
           <h6><a href="method.CookieManager.set_persistent_storage.html">webkit_cookie_manager_set_persistent_storage</a></h6>
           <div class="docblock">
-            <p>Set the <code>filename</code> where non-session cookies are stored persistently using
-<code>storage</code> as the format to read/write the cookies.
-Cookies are initially read from <code>filename</code> to create an initial set of cookies.
-Then, non-session cookies will be written to <code>filename</code> when the WebKitCookieManager::changed
-signal is emitted.
-By default, <code>cookie_manager</code> doesn&#8217;t store the cookies persistently, so you need to call this
-method to keep cookies saved across&nbsp;sessions.</p>
+            <p>Set non-session&nbsp;cookies.</p>
           </div>
           
         </div>

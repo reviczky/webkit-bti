@@ -808,7 +808,9 @@ public:
     void activateMediaStreamCaptureInPage();
     bool isMediaStreamCaptureMuted() const { return m_mutedState.containsAny(WebCore::MediaProducer::MediaStreamCaptureIsMuted); }
     void setMediaStreamCaptureMuted(bool);
+#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     void isConnectedToHardwareConsoleDidChange();
+#endif
     bool isAllowedToChangeMuteState() const;
 
     void requestFontAttributesAtSelectionStart(CompletionHandler<void(const WebCore::FontAttributes&)>&&);
@@ -1927,6 +1929,7 @@ public:
 #endif
 
     bool isHandlingPreventableTouchStart() const { return m_handlingPreventableTouchStartCount; }
+    bool isHandlingPreventableTouchMove() const { return m_touchMovePreventionState == TouchMovePreventionState::Waiting; }
     bool isHandlingPreventableTouchEnd() const { return m_handlingPreventableTouchEndCount; }
 
     bool hasQueuedKeyEvent() const;
@@ -2087,7 +2090,7 @@ public:
     void setCocoaView(WKWebView *);
 #endif
 
-    bool isRunningModalJavaScriptDialog() const { return m_isRunningModalJavaScriptDialog; }
+    bool shouldAvoidSynchronouslyWaitingToPreventDeadlock() const;
 
 #if ENABLE(IMAGE_ANALYSIS) && PLATFORM(MAC)
     WKQuickLookPreviewController *quickLookPreviewController() const { return m_quickLookPreviewController.get(); }
@@ -2099,7 +2102,7 @@ public:
     bool isQuarantinedAndNotUserApproved(const String&);
 #endif
 
-    void showNotification(IPC::Connection&, const WebCore::NotificationData&);
+    void showNotification(IPC::Connection&, const WebCore::NotificationData&, RefPtr<WebCore::NotificationResources>&&);
     void cancelNotification(const UUID& notificationID);
     void clearNotifications(const Vector<UUID>& notificationIDs);
     void didDestroyNotification(const UUID& notificationID);
@@ -2130,6 +2133,10 @@ public:
 
 #if PLATFORM(MAC)
     void updateIconForDirectory(NSFileWrapper *, const String&);
+#endif
+
+#if ENABLE(NOTIFICATIONS)
+    void clearNotificationPermissionState();
 #endif
 
 private:
@@ -2363,6 +2370,7 @@ private:
     // Back/Forward list management
     void backForwardAddItem(BackForwardListItemState&&);
     void backForwardGoToItem(const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
+    void backForwardListContainsItem(const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(bool)>&&);
     void backForwardItemAtIndex(int32_t index, CompletionHandler<void(std::optional<WebCore::BackForwardItemIdentifier>&&)>&&);
     void backForwardListCounts(Messages::WebPageProxy::BackForwardListCountsDelayedReply&&);
     void backForwardClear();
@@ -2817,6 +2825,10 @@ private:
 
     HashSet<WebEditCommandProxy*> m_editCommandSet;
 
+#if ENABLE(NOTIFICATIONS)
+    HashSet<WebCore::SecurityOriginData> m_notificationPermissionRequesters;
+#endif
+
 #if PLATFORM(COCOA)
     HashSet<String> m_knownKeypressCommandNames;
 #endif
@@ -2979,9 +2991,10 @@ private:
     Deque<QueuedTouchEvents> m_touchEventQueue;
 #endif
 
-    bool m_handledSynchronousTouchEventWhileDispatchingPreventableTouchStart { false };
     uint64_t m_handlingPreventableTouchStartCount { 0 };
     uint64_t m_handlingPreventableTouchEndCount { 0 };
+    enum class TouchMovePreventionState : uint8_t { NotWaiting, Waiting, ReceivedReply };
+    TouchMovePreventionState m_touchMovePreventionState { TouchMovePreventionState::NotWaiting };
 
 #if ENABLE(INPUT_TYPE_COLOR)
     RefPtr<WebColorPicker> m_colorPicker;
@@ -3075,8 +3088,10 @@ private:
     bool m_mayStartMediaWhenInWindow { true };
     bool m_mediaPlaybackIsSuspended { false };
     bool m_mediaCaptureEnabled { true };
+#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
     bool m_isProcessingIsConnectedToHardwareConsoleDidChangeNotification { false };
-    bool m_captureWasMutedWhenHardwareConsoleDisconnected { false };
+    bool m_captureWasMutedDueToDisconnectedHardwareConsole { false };
+#endif
 
     bool m_waitingForDidUpdateActivityState { false };
 

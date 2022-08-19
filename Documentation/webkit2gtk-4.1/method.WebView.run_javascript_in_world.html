@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -297,12 +297,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L4023">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L4088">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Asynchronously run <code>script</code> in the script world with name <code>world_name</code> of the current page context in <code>web_view</code>.
+        <p>Asynchronously run <code>script</code> in the script&nbsp;world.</p>
+<p>Asynchronously run <code>script</code> in the script world with name <code>world_name</code> of the current page context in <code>web_view</code>.
 If WebKitSettings:enable-javascript is <span class="caps">FALSE</span>, this method will do&nbsp;nothing.</p>
 <p>When the operation is finished, <code>callback</code> will be called. You can then call
 <code>webkit_web_view_run_javascript_in_world_finish()</code> to get the result of the&nbsp;operation.</p>

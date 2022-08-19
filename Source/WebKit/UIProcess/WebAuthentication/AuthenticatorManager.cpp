@@ -56,7 +56,7 @@ const unsigned maxTimeOutValue = 120000;
 static AuthenticatorManager::TransportSet collectTransports(const std::optional<PublicKeyCredentialCreationOptions::AuthenticatorSelectionCriteria>& authenticatorSelection)
 {
     AuthenticatorManager::TransportSet result;
-    if (!authenticatorSelection || !authenticatorSelection->authenticatorAttachment()) {
+    if (!authenticatorSelection || !authenticatorSelection->authenticatorAttachment) {
         auto addResult = result.add(AuthenticatorTransport::Internal);
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
         addResult = result.add(AuthenticatorTransport::Usb);
@@ -65,20 +65,24 @@ static AuthenticatorManager::TransportSet collectTransports(const std::optional<
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
         addResult = result.add(AuthenticatorTransport::Ble);
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
+        addResult = result.add(AuthenticatorTransport::SmartCard);
+        ASSERT_UNUSED(addResult, addResult.isNewEntry);
         return result;
     }
 
-    if (authenticatorSelection->authenticatorAttachment() == AuthenticatorAttachment::Platform) {
+    if (authenticatorSelection->authenticatorAttachment == AuthenticatorAttachment::Platform) {
         auto addResult = result.add(AuthenticatorTransport::Internal);
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
         return result;
     }
-    if (authenticatorSelection->authenticatorAttachment() == AuthenticatorAttachment::CrossPlatform) {
+    if (authenticatorSelection->authenticatorAttachment == AuthenticatorAttachment::CrossPlatform) {
         auto addResult = result.add(AuthenticatorTransport::Usb);
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
         addResult = result.add(AuthenticatorTransport::Nfc);
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
         addResult = result.add(AuthenticatorTransport::Ble);
+        ASSERT_UNUSED(addResult, addResult.isNewEntry);
+        addResult = result.add(AuthenticatorTransport::SmartCard);
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
         return result;
     }
@@ -104,6 +108,8 @@ static AuthenticatorManager::TransportSet collectTransports(const Vector<PublicK
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
         addResult = result.add(AuthenticatorTransport::Ble);
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
+        addResult = result.add(AuthenticatorTransport::SmartCard);
+        ASSERT_UNUSED(addResult, addResult.isNewEntry);
     }
 
     for (auto& allowCredential : allowCredentials) {
@@ -112,16 +118,16 @@ static AuthenticatorManager::TransportSet collectTransports(const Vector<PublicK
             result.add(AuthenticatorTransport::Usb);
             result.add(AuthenticatorTransport::Nfc);
             result.add(AuthenticatorTransport::Ble);
+            result.add(AuthenticatorTransport::SmartCard);
 
             break;
         }
 
-        for (const auto& unparsedTransport : allowCredential.transports) {
-            auto transport = toAuthenticatorTransport(unparsedTransport);
-            if (!transport || *transport == AuthenticatorTransport::Ble)
+        for (const auto& transport : allowCredential.transports) {
+            if (transport == AuthenticatorTransport::Ble)
                 continue;
 
-            result.add(*transport);
+            result.add(transport);
 
             if (result.size() >= AuthenticatorManager::maxTransportNumber)
                 break;
@@ -133,6 +139,7 @@ static AuthenticatorManager::TransportSet collectTransports(const Vector<PublicK
             result.remove(AuthenticatorTransport::Usb);
             result.remove(AuthenticatorTransport::Nfc);
             result.remove(AuthenticatorTransport::Ble);
+            result.remove(AuthenticatorTransport::SmartCard);
         }
 
         if (authenticatorAttachment == AuthenticatorAttachment::CrossPlatform)
@@ -175,7 +182,7 @@ static String getUserName(const std::variant<PublicKeyCredentialCreationOptions,
 
 } // namespace
 
-const size_t AuthenticatorManager::maxTransportNumber = 4;
+const size_t AuthenticatorManager::maxTransportNumber = 5;
 
 AuthenticatorManager::AuthenticatorManager()
     : m_requestTimeOutTimer(RunLoop::main(), this, &AuthenticatorManager::timeOutTimerFired)
@@ -534,7 +541,7 @@ auto AuthenticatorManager::getTransports() const -> TransportSet
         transports = collectTransports(options.authenticatorSelection);
         processGoogleLegacyAppIdSupportExtension(options.extensions, transports);
     }, [&](const PublicKeyCredentialRequestOptions& options) {
-        transports = collectTransports(options.allowCredentials, options.authenticatorAttachment());
+        transports = collectTransports(options.allowCredentials, options.authenticatorAttachment);
     });
     filterTransports(transports);
     return transports;

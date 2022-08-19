@@ -66,7 +66,7 @@ RefPtr<ImageBuffer> ImageBuffer::create(const FloatSize& size, RenderingPurpose 
 
     if (creationContext.hostWindow && !imageBuffer) {
         auto renderingMode = options.contains(ImageBufferOptions::Accelerated) ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
-        imageBuffer = creationContext.hostWindow->createImageBuffer(size, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat);
+        imageBuffer = creationContext.hostWindow->createImageBuffer(size, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, creationContext.avoidIOSurfaceSizeCheckInWebProcessForTesting);
     }
 
     if (imageBuffer)
@@ -222,6 +222,15 @@ RefPtr<NativeImage> ImageBuffer::copyNativeImage(BackingStoreCopy copyBehavior) 
     return nullptr;
 }
 
+RefPtr<NativeImage> ImageBuffer::copyNativeImageForDrawing(BackingStoreCopy copyBehavior) const
+{
+    if (auto* backend = ensureBackendCreated()) {
+        const_cast<ImageBuffer&>(*this).flushDrawingContext();
+        return backend->copyNativeImageForDrawing(copyBehavior);
+    }
+    return nullptr;
+}
+
 RefPtr<NativeImage> ImageBuffer::sinkIntoNativeImage()
 {
     if (auto* backend = ensureBackendCreated()) {
@@ -311,7 +320,7 @@ void ImageBuffer::draw(GraphicsContext& destContext, const FloatRect& destRect, 
     srcRectScaled.scale(resolutionScale());
 
     if (auto* backend = ensureBackendCreated()) {
-        if (auto image = copyNativeImage(&destContext == &context() ? CopyBackingStore : DontCopyBackingStore))
+        if (auto image = copyNativeImageForDrawing(&destContext == &context() ? CopyBackingStore : DontCopyBackingStore))
             destContext.drawNativeImage(*image, backendSize(), destRect, srcRectScaled, options);
         backend->finalizeDrawIntoContext(destContext);
     }
@@ -322,7 +331,7 @@ void ImageBuffer::drawPattern(GraphicsContext& destContext, const FloatRect& des
     FloatRect adjustedSrcRect = srcRect;
     adjustedSrcRect.scale(resolutionScale());
 
-    if (auto* backend = ensureBackendCreated()) {
+    if (ensureBackendCreated()) {
         if (auto image = copyImage(&destContext == &context() ? CopyBackingStore : DontCopyBackingStore))
             image->drawPattern(destContext, destRect, adjustedSrcRect, patternTransform, phase, spacing, options);
     }
@@ -467,6 +476,12 @@ void ImageBuffer::setVolatilityState(VolatilityState volatilityState)
 {
     if (auto* backend = ensureBackendCreated())
         backend->setVolatilityState(volatilityState);
+}
+
+void ImageBuffer::clearContents()
+{
+    if (auto* backend = ensureBackendCreated())
+        backend->clearContents();
 }
 
 std::unique_ptr<ThreadSafeImageBufferFlusher> ImageBuffer::createFlusher()
