@@ -293,6 +293,10 @@ void Line::appendInlineBoxEnd(const InlineItem& inlineItem, const RenderStyle& s
 void Line::appendTextContent(const InlineTextItem& inlineTextItem, const RenderStyle& style, InlineLayoutUnit logicalWidth)
 {
     auto willCollapseCompletely = [&] {
+        if (m_runs.isEmpty() && inlineTextItem.isEmpty()) {
+            // Some generated content initiates empty text items. They are truly collapsible.
+            return true;
+        }
         if (!inlineTextItem.isWhitespace()) {
             auto isLeadingCollapsibleNonBreakingSpace = [&] {
                 // Let's check for leading non-breaking space collapsing to match legacy line layout quirk.
@@ -578,7 +582,7 @@ inline static Line::Run::Type toLineRunType(const InlineItem& inlineItem)
     case InlineItem::Type::WordBreakOpportunity:
         return Line::Run::Type::WordBreakOpportunity;
     case InlineItem::Type::Box:
-        return inlineItem.layoutBox().isListMarker() ? Line::Run::Type::ListMarker : Line::Run::Type::GenericInlineLevelBox;
+        return inlineItem.layoutBox().isListMarkerBox() ? Line::Run::Type::ListMarker : Line::Run::Type::GenericInlineLevelBox;
     case InlineItem::Type::InlineBoxStart:
         return Line::Run::Type::InlineBoxStart;
     case InlineItem::Type::InlineBoxEnd:

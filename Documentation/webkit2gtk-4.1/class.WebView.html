@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -484,7 +484,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L110">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L107">[src]</a>
           
         </h4>
 
@@ -719,10 +719,7 @@ you don&#8217;t need to embed it in a <code>GtkScrolledWindow</code>.</p>
           <h6><a href="ctor.WebView.new.html">webkit_web_view_new</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitWebView</code> with the default <code>WebKitWebContext</code> and
-no <code>WebKitUserContentManager</code> associated with it.
-See also webkit_web_view_new_with_context(),
-webkit_web_view_new_with_user_content_manager(), and&nbsp;webkit_web_view_new_with_settings().</p>
+            <p>Creates a new <code>WebKitWebView</code> with the default <code>WebKitWebContext</code>.</p>
           </div>
 
           
@@ -732,9 +729,7 @@ webkit_web_view_new_with_user_content_manager(), and&nbsp;webkit_web_view_new_wi
           <h6><a href="ctor.WebView.new_with_context.html">webkit_web_view_new_with_context</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitWebView</code> with the given <code>WebKitWebContext</code> and
-no <code>WebKitUserContentManager</code> associated with it.
-See also <code>webkit_web_view_new_with_user_content_manager()</code> and&nbsp;webkit_web_view_new_with_settings().</p>
+            <p>Creates a new <code>WebKitWebView</code> with the given <code>WebKitWebContext</code>.</p>
           </div>
 
           
@@ -744,13 +739,7 @@ See also <code>webkit_web_view_new_with_user_content_manager()</code> and&nbsp;w
           <h6><a href="ctor.WebView.new_with_related_view.html">webkit_web_view_new_with_related_view</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitWebView</code> sharing the same web process with <code>web_view</code>.
-This method doesn&#8217;t have any effect when <code>WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS</code>
-process model is used, because a single web process is shared for all the web views in the
-same <code>WebKitWebContext</code>. When using <code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code> process model,
-this method should always be used when creating the <code>WebKitWebView</code> in the <code>WebKitWebView::create</code> signal.
-You can also use this method to implement other process models based on <code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>,
-like for example, sharing the same web process for all the views in the same security&nbsp;domain.</p>
+            <p>Creates a new <code>WebKitWebView</code> sharing the same web process with <code>web_view</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.4</p></div>
@@ -760,8 +749,7 @@ like for example, sharing the same web process for all the views in the same sec
           <h6><a href="ctor.WebView.new_with_settings.html">webkit_web_view_new_with_settings</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitWebView</code> with the given <code>WebKitSettings</code>.
-See also webkit_web_view_new_with_context(), and&nbsp;webkit_web_view_new_with_user_content_manager().</p>
+            <p>Creates a new <code>WebKitWebView</code> with the given <code>WebKitSettings</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>
@@ -771,9 +759,7 @@ See also webkit_web_view_new_with_context(), and&nbsp;webkit_web_view_new_with_u
           <h6><a href="ctor.WebView.new_with_user_content_manager.html">webkit_web_view_new_with_user_content_manager</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitWebView</code> with the given <code>WebKitUserContentManager</code>.
-The content loaded in the view may be affected by the content injected
-in the view by the user content&nbsp;manager.</p>
+            <p>Creates a new <code>WebKitWebView</code> with the given <code>WebKitUserContentManager</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>
@@ -845,9 +831,7 @@ in the view by the user content&nbsp;manager.</p>
         <div class="">
           <h6><a href="method.WebView.execute_editing_command.html">webkit_web_view_execute_editing_command</a></h6>
           <div class="docblock">
-            <p>Request to execute the given <code>command</code> for <code>web_view</code>. You can use
-<code>webkit_web_view_can_execute_editing_command()</code> to check whether
-it&#8217;s possible to execute the&nbsp;command.</p>
+            <p>Request to execute the given <code>command</code> for <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -855,9 +839,7 @@ it&#8217;s possible to execute the&nbsp;command.</p>
         <div class="">
           <h6><a href="method.WebView.execute_editing_command_with_argument.html">webkit_web_view_execute_editing_command_with_argument</a></h6>
           <div class="docblock">
-            <p>Request to execute the given <code>command</code> with <code>argument</code> for <code>web_view</code>. You can use
-<code>webkit_web_view_can_execute_editing_command()</code> to check whether
-it&#8217;s possible to execute the&nbsp;command.</p>
+            <p>Request to execute the given <code>command</code> with <code>argument</code> for <code>web_view</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.10</p></div>
         </div>
@@ -873,8 +855,7 @@ it&#8217;s possible to execute the&nbsp;command.</p>
         <div class="">
           <h6><a href="method.WebView.get_back_forward_list.html">webkit_web_view_get_back_forward_list</a></h6>
           <div class="docblock">
-            <p>Obtains the <code>WebKitBackForwardList</code> associated with the given <code>WebKitWebView</code>. The
-<code>WebKitBackForwardList</code> is owned by the <code>WebKitWebView</code>.</p>
+            <p>Obtains the <code>WebKitBackForwardList</code> associated with the given <code>WebKitWebView</code>.</p>
           </div>
           
         </div>
@@ -882,9 +863,7 @@ it&#8217;s possible to execute the&nbsp;command.</p>
         <div class="">
           <h6><a href="method.WebView.get_background_color.html">webkit_web_view_get_background_color</a></h6>
           <div class="docblock">
-            <p>Gets the color that is used to draw the <code>web_view</code> background before
-the actual contents are rendered.
-For more information see also <code>webkit_web_view_set_background_color()</code></p>
+            <p>Gets the color that is used to draw the <code>web_view</code> background.</p>
           </div>
           <div class="docblock"><p>Available since: 2.8</p></div>
         </div>
@@ -940,9 +919,7 @@ For more information see also <code>webkit_web_view_set_background_color()</code
         <div class="">
           <h6><a href="method.WebView.get_estimated_load_progress.html">webkit_web_view_get_estimated_load_progress</a></h6>
           <div class="docblock">
-            <p>Gets the value of the <code>WebKitWebView:estimated-load-progress</code> property.
-You can monitor the estimated progress of a load operation by
-connecting to the notify::estimated-load-progress signal of <code>web_view</code>.</p>
+            <p>Gets the value of the <code>WebKitWebView:estimated-load-progress</code> property.</p>
           </div>
           
         </div>
@@ -950,9 +927,7 @@ connecting to the notify::estimated-load-progress signal of <code>web_view</code
         <div class="">
           <h6><a href="method.WebView.get_favicon.html">webkit_web_view_get_favicon</a></h6>
           <div class="docblock">
-            <p>Returns favicon currently associated to <code>web_view</code>, if any. You can
-connect to notify::favicon signal of <code>web_view</code> to be notified when
-the favicon is&nbsp;available.</p>
+            <p>Returns favicon currently associated to <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -960,8 +935,7 @@ the favicon is&nbsp;available.</p>
         <div class="">
           <h6><a href="method.WebView.get_find_controller.html">webkit_web_view_get_find_controller</a></h6>
           <div class="docblock">
-            <p>Gets the <code>WebKitFindController</code> that will allow the caller to query
-the <code>WebKitWebView</code> for the text to look&nbsp;for.</p>
+            <p>Gets the <code>WebKitFindController</code>.</p>
           </div>
           
         </div>
@@ -969,7 +943,7 @@ the <code>WebKitWebView</code> for the text to look&nbsp;for.</p>
         <div class="">
           <h6><a href="method.WebView.get_input_method_context.html">webkit_web_view_get_input_method_context</a></h6>
           <div class="docblock">
-            <p>Get the <code>WebKitInputMethodContext</code> currently in use by <code>web_view</code>, or <code>NULL</code> if no input method is being&nbsp;used.</p>
+            <p>Get the <code>WebKitInputMethodContext</code> currently in use by <code>web_view</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.28</p></div>
         </div>
@@ -1001,8 +975,7 @@ the <code>WebKitWebView</code> for the text to look&nbsp;for.</p>
         <div class="deprecated">
           <h6><a href="method.WebView.get_javascript_global_context.html">webkit_web_view_get_javascript_global_context</a></h6>
           <div class="docblock">
-            <p>Get the global JavaScript context used by <code>web_view</code> to deserialize the
-result values of scripts executed with&nbsp;webkit_web_view_run_javascript().</p>
+            <p>Get the global JavaScript&nbsp;context.</p>
           </div>
           <div class="docblock"><p>Deprecated since: 2.22</p></div>
         </div>
@@ -1043,19 +1016,7 @@ the <code>WebKitWebView</code>.</p>
         <div class="">
           <h6><a href="method.WebView.get_settings.html">webkit_web_view_get_settings</a></h6>
           <div class="docblock">
-            <p>Gets the <code>WebKitSettings</code> currently applied to <code>web_view</code>.
-If no other <code>WebKitSettings</code> have been explicitly applied to
-<code>web_view</code> with webkit_web_view_set_settings(), the default
-<code>WebKitSettings</code> will be returned. This method always returns
-a valid <code>WebKitSettings</code> object.
-To modify any of the <code>web_view</code> settings, you can either create
-a new <code>WebKitSettings</code> object with webkit_settings_new(), setting
-the desired preferences, and then replace the existing <code>web_view</code>
-settings with <code>webkit_web_view_set_settings()</code> or get the existing
-<code>web_view</code> settings and update it directly. <code>WebKitSettings</code> objects
-can be shared by multiple <code>WebKitWebView</code><!-- -->s, so modifying
-the settings of a <code>WebKitWebView</code> would affect other
-<code>WebKitWebView</code><!-- -->s using the same <code>WebKitSettings</code>.</p>
+            <p>Gets the <code>WebKitSettings</code> currently applied to <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1063,8 +1024,7 @@ the settings of a <code>WebKitWebView</code> would affect other
         <div class="">
           <h6><a href="method.WebView.get_snapshot.html">webkit_web_view_get_snapshot</a></h6>
           <div class="docblock">
-            <p>Asynchronously retrieves a snapshot of <code>web_view</code> for <code>region</code>.
-<code>options</code> specifies how the snapshot should be&nbsp;rendered.</p>
+            <p>Asynchronously retrieves a snapshot of <code>web_view</code> for <code>region</code>.</p>
           </div>
           
         </div>
@@ -1080,9 +1040,7 @@ the settings of a <code>WebKitWebView</code> would affect other
         <div class="">
           <h6><a href="method.WebView.get_title.html">webkit_web_view_get_title</a></h6>
           <div class="docblock">
-            <p>Gets the value of the <code>WebKitWebView:title</code> property.
-You can connect to notify::title signal of <code>web_view</code> to
-be notified when the title has been&nbsp;received.</p>
+            <p>Gets the value of the <code>WebKitWebView:title</code> property.</p>
           </div>
           
         </div>
@@ -1090,13 +1048,7 @@ be notified when the title has been&nbsp;received.</p>
         <div class="">
           <h6><a href="method.WebView.get_tls_info.html">webkit_web_view_get_tls_info</a></h6>
           <div class="docblock">
-            <p>Retrieves the <code>GTlsCertificate</code> associated with the main resource of <code>web_view</code>,
-and the <code>GTlsCertificateFlags</code> showing what problems, if any, have been found
-with that certificate.
-If the connection is not <span class="caps">HTTPS</span>, this function returns <code>FALSE</code>.
-This function should be called after a response has been received from the
-server, so you can connect to <code>WebKitWebView::load-changed</code> and call this function
-when it&#8217;s emitted with <code>WEBKIT_LOAD_COMMITTED</code> event.</p>
+            <p>Retrieves the <code>GTlsCertificate</code> associated with the main resource of <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1104,8 +1056,7 @@ when it&#8217;s emitted with <code>WEBKIT_LOAD_COMMITTED</code> event.</p>
         <div class="">
           <h6><a href="method.WebView.get_uri.html">webkit_web_view_get_uri</a></h6>
           <div class="docblock">
-            <p>Returns the current active <span class="caps">URI</span> of <code>web_view</code>. The active <span class="caps">URI</span> might change during
-a load&nbsp;operation:</p>
+            <p>Returns the current active <span class="caps">URI</span> of <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1129,9 +1080,7 @@ a load&nbsp;operation:</p>
         <div class="">
           <h6><a href="method.WebView.get_website_data_manager.html">webkit_web_view_get_website_data_manager</a></h6>
           <div class="docblock">
-            <p>Get the <code>WebKitWebsiteDataManager</code> associated to <code>web_view</code>. If <code>web_view</code> is not ephemeral,
-the returned <code>WebKitWebsiteDataManager</code> will be the same as the <code>WebKitWebsiteDataManager</code>
-of <code>web_view</code><span class="quo">&#8216;</span>s <code>WebKitWebContext</code>.</p>
+            <p>Get the <code>WebKitWebsiteDataManager</code> associated to <code>web_view</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
@@ -1139,9 +1088,7 @@ of <code>web_view</code><span class="quo">&#8216;</span>s <code>WebKitWebContext
         <div class="">
           <h6><a href="method.WebView.get_website_policies.html">webkit_web_view_get_website_policies</a></h6>
           <div class="docblock">
-            <p>Gets the default website policies set on construction in the
-<code>web_view</code>. These can be overridden on a per-origin basis via the
-<code>WebKitWebView::decide-policy</code> signal&nbsp;handler.</p>
+            <p>Gets the default website&nbsp;policies.</p>
           </div>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>
@@ -1149,8 +1096,7 @@ of <code>web_view</code><span class="quo">&#8216;</span>s <code>WebKitWebContext
         <div class="">
           <h6><a href="method.WebView.get_window_properties.html">webkit_web_view_get_window_properties</a></h6>
           <div class="docblock">
-            <p>Get the <code>WebKitWindowProperties</code> object containing the properties
-that the window containing <code>web_view</code> should&nbsp;have.</p>
+            <p>Get the <code>WebKitWindowProperties</code> object.</p>
           </div>
           
         </div>
@@ -1158,8 +1104,7 @@ that the window containing <code>web_view</code> should&nbsp;have.</p>
         <div class="">
           <h6><a href="method.WebView.get_zoom_level.html">webkit_web_view_get_zoom_level</a></h6>
           <div class="docblock">
-            <p>Get the zoom level of <code>web_view</code>, i.e. the factor by which the
-view contents are scaled with respect to their original&nbsp;size.</p>
+            <p>Set the zoom level of <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1167,9 +1112,7 @@ view contents are scaled with respect to their original&nbsp;size.</p>
         <div class="">
           <h6><a href="method.WebView.go_back.html">webkit_web_view_go_back</a></h6>
           <div class="docblock">
-            <p>Loads the previous history item.
-You can monitor the load operation by connecting to
-<code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Loads the previous history&nbsp;item.</p>
           </div>
           
         </div>
@@ -1177,9 +1120,7 @@ You can monitor the load operation by connecting to
         <div class="">
           <h6><a href="method.WebView.go_forward.html">webkit_web_view_go_forward</a></h6>
           <div class="docblock">
-            <p>Loads the next history item.
-You can monitor the load operation by connecting to
-<code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Loads the next history&nbsp;item.</p>
           </div>
           
         </div>
@@ -1187,9 +1128,7 @@ You can monitor the load operation by connecting to
         <div class="">
           <h6><a href="method.WebView.go_to_back_forward_list_item.html">webkit_web_view_go_to_back_forward_list_item</a></h6>
           <div class="docblock">
-            <p>Loads the specific history item <code>list_item</code>.
-You can monitor the load operation by connecting to
-<code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Loads the specific history item <code>list_item</code>.</p>
           </div>
           
         </div>
@@ -1198,8 +1137,7 @@ You can monitor the load operation by connecting to
           <h6><a href="method.WebView.is_controlled_by_automation.html">webkit_web_view_is_controlled_by_automation</a></h6>
           <div class="docblock">
             <p>Get whether a <code>WebKitWebView</code> was created with <code>WebKitWebView:is-controlled-by-automation</code>
-property enabled. Only <code>WebKitWebView</code><!-- -->s controlled by automation can be used in an
-automation&nbsp;session.</p>
+property&nbsp;enabled.</p>
           </div>
           <div class="docblock"><p>Available since: 2.18</p></div>
         </div>
@@ -1207,10 +1145,7 @@ automation&nbsp;session.</p>
         <div class="">
           <h6><a href="method.WebView.is_editable.html">webkit_web_view_is_editable</a></h6>
           <div class="docblock">
-            <p>Gets whether the user is allowed to edit the <span class="caps">HTML</span> document. When <code>web_view</code>
-is not editable an element in the <span class="caps">HTML</span> document can only be edited if the
-<span class="caps">CONTENTEDITABLE</span> attribute has been set on the element or one of its parent
-elements. By default a <code>WebKitWebView</code> is not&nbsp;editable.</p>
+            <p>Gets whether the user is allowed to edit the <span class="caps">HTML</span>&nbsp;document.</p>
           </div>
           <div class="docblock"><p>Available since: 2.8</p></div>
         </div>
@@ -1218,11 +1153,7 @@ elements. By default a <code>WebKitWebView</code> is not&nbsp;editable.</p>
         <div class="">
           <h6><a href="method.WebView.is_ephemeral.html">webkit_web_view_is_ephemeral</a></h6>
           <div class="docblock">
-            <p>Get whether a <code>WebKitWebView</code> is ephemeral. To create an ephemeral <code>WebKitWebView</code> you need to
-use <code>g_object_new()</code> and pass is-ephemeral property with <code>TRUE</code> value. See
-<code>WebKitWebView:is-ephemeral</code> for more details.
-If <code>web_view</code> was created with a ephemeral <code>WebKitWebView:related-view</code> or an
-ephemeral <code>WebKitWebView:web-context</code> it will also be&nbsp;ephemeral.</p>
+            <p>Get whether a <code>WebKitWebView</code> is&nbsp;ephemeral.</p>
           </div>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
@@ -1230,12 +1161,7 @@ ephemeral <code>WebKitWebView:web-context</code> it will also be&nbsp;ephemeral.
         <div class="">
           <h6><a href="method.WebView.is_loading.html">webkit_web_view_is_loading</a></h6>
           <div class="docblock">
-            <p>Gets the value of the <code>WebKitWebView:is-loading</code> property.
-You can monitor when a <code>WebKitWebView</code> is loading a page by connecting to
-notify::is-loading signal of <code>web_view</code>. This is useful when you are
-interesting in knowing when the view is loading something but not in the
-details about the status of the load operation, for example to start a spinner
-when the view is loading a page and stop it when it&nbsp;finishes.</p>
+            <p>Gets the value of the <code>WebKitWebView:is-loading</code> property.</p>
           </div>
           
         </div>
@@ -1243,11 +1169,7 @@ when the view is loading a page and stop it when it&nbsp;finishes.</p>
         <div class="">
           <h6><a href="method.WebView.is_playing_audio.html">webkit_web_view_is_playing_audio</a></h6>
           <div class="docblock">
-            <p>Gets the value of the <code>WebKitWebView:is-playing-audio</code> property.
-You can monitor when a page in a <code>WebKitWebView</code> is playing audio by
-connecting to the notify::is-playing-audio signal of <code>web_view</code>. This
-is useful when the application wants to provide visual feedback when a
-page is producing&nbsp;sound.</p>
+            <p>Gets the value of the <code>WebKitWebView:is-playing-audio</code> property.</p>
           </div>
           <div class="docblock"><p>Available since: 2.8</p></div>
         </div>
@@ -1255,11 +1177,7 @@ page is producing&nbsp;sound.</p>
         <div class="">
           <h6><a href="method.WebView.load_alternate_html.html">webkit_web_view_load_alternate_html</a></h6>
           <div class="docblock">
-            <p>Load the given <code>content</code> string for the <span class="caps">URI</span> <code>content_uri</code>.
-This allows clients to display page-loading errors in the <code>WebKitWebView</code> itself.
-When this method is called from <code>WebKitWebView::load-failed</code> signal to show an
-error page, then the back-forward list is maintained appropriately.
-For everything else this method works the same way as&nbsp;webkit_web_view_load_html().</p>
+            <p>Load the given <code>content</code> string for the <span class="caps">URI</span> <code>content_uri</code>.</p>
           </div>
           
         </div>
@@ -1267,11 +1185,7 @@ For everything else this method works the same way as&nbsp;webkit_web_view_load_
         <div class="">
           <h6><a href="method.WebView.load_bytes.html">webkit_web_view_load_bytes</a></h6>
           <div class="docblock">
-            <p>Load the specified <code>bytes</code> into <code>web_view</code> using the given <code>mime_type</code> and <code>encoding</code>.
-When <code>mime_type</code> is <code>NULL</code>, it defaults to &#8220;text/html&#8221;.
-When <code>encoding</code> is <code>NULL</code>, it defaults to &#8220;<span class="caps">UTF</span>-8&#8221;.
-When <code>base_uri</code> is <code>NULL</code>, it defaults to &#8220;about:blank&#8221;.
-You can monitor the load operation by connecting to <code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Load the specified <code>bytes</code> into <code>web_view</code> using the given <code>mime_type</code> and <code>encoding</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.6</p></div>
         </div>
@@ -1279,15 +1193,7 @@ You can monitor the load operation by connecting to <code>WebKitWebView::load-ch
         <div class="">
           <h6><a href="method.WebView.load_html.html">webkit_web_view_load_html</a></h6>
           <div class="docblock">
-            <p>Load the given <code>content</code> string with the specified <code>base_uri</code>.
-If <code>base_uri</code> is not <code>NULL</code>, relative URLs in the <code>content</code> will be
-resolved against <code>base_uri</code> and absolute local paths must be children of the <code>base_uri</code>.
-For security reasons absolute local paths that are not children of <code>base_uri</code>
-will cause the web process to terminate.
-If you need to include URLs in <code>content</code> that are local paths in a different
-directory than <code>base_uri</code> you can build a data <span class="caps">URI</span> for them. When <code>base_uri</code> is <code>NULL</code>,
-it defaults to &#8220;about:blank&#8221;. The mime type of the document will be &#8220;text/html&#8221;.
-You can monitor the load operation by connecting to <code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Load the given <code>content</code> string with the specified <code>base_uri</code>.</p>
           </div>
           
         </div>
@@ -1295,9 +1201,7 @@ You can monitor the load operation by connecting to <code>WebKitWebView::load-ch
         <div class="">
           <h6><a href="method.WebView.load_plain_text.html">webkit_web_view_load_plain_text</a></h6>
           <div class="docblock">
-            <p>Load the specified <code>plain_text</code> string into <code>web_view</code>. The mime type of
-document will be &#8220;text/plain&#8221;. You can monitor the load
-operation by connecting to <code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Load the specified <code>plain_text</code> string into <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1305,9 +1209,7 @@ operation by connecting to <code>WebKitWebView::load-changed</code> signal.</p>
         <div class="">
           <h6><a href="method.WebView.load_request.html">webkit_web_view_load_request</a></h6>
           <div class="docblock">
-            <p>Requests loading of the specified <code>WebKitURIRequest</code>.
-You can monitor the load operation by connecting to
-<code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Requests loading of the specified <code>WebKitURIRequest</code>.</p>
           </div>
           
         </div>
@@ -1315,9 +1217,7 @@ You can monitor the load operation by connecting to
         <div class="">
           <h6><a href="method.WebView.load_uri.html">webkit_web_view_load_uri</a></h6>
           <div class="docblock">
-            <p>Requests loading of the specified <span class="caps">URI</span> string.
-You can monitor the load operation by connecting to
-<code>WebKitWebView::load-changed</code> signal.</p>
+            <p>Requests loading of the specified <span class="caps">URI</span>&nbsp;string.</p>
           </div>
           
         </div>
@@ -1325,8 +1225,7 @@ You can monitor the load operation by connecting to
         <div class="">
           <h6><a href="method.WebView.reload.html">webkit_web_view_reload</a></h6>
           <div class="docblock">
-            <p>Reloads the current contents of <code>web_view</code>.
-See also&nbsp;webkit_web_view_reload_bypass_cache().</p>
+            <p>Reloads the current contents of <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1359,8 +1258,7 @@ using any cached&nbsp;data.</p>
         <div class="">
           <h6><a href="method.WebView.run_javascript.html">webkit_web_view_run_javascript</a></h6>
           <div class="docblock">
-            <p>Asynchronously run <code>script</code> in the context of the current page in <code>web_view</code>. If
-WebKitSettings:enable-javascript is <span class="caps">FALSE</span>, this method will do&nbsp;nothing.</p>
+            <p>Asynchronously run <code>script</code> in the context of the current page in <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1376,8 +1274,7 @@ WebKitSettings:enable-javascript is <span class="caps">FALSE</span>, this method
         <div class="">
           <h6><a href="method.WebView.run_javascript_from_gresource.html">webkit_web_view_run_javascript_from_gresource</a></h6>
           <div class="docblock">
-            <p>Asynchronously run the script from <code>resource</code> in the context of the
-current page in <code>web_view</code>.</p>
+            <p>Asynchronously run the script from <code>resource</code>.</p>
           </div>
           
         </div>
@@ -1393,8 +1290,7 @@ current page in <code>web_view</code>.</p>
         <div class="">
           <h6><a href="method.WebView.run_javascript_in_world.html">webkit_web_view_run_javascript_in_world</a></h6>
           <div class="docblock">
-            <p>Asynchronously run <code>script</code> in the script world with name <code>world_name</code> of the current page context in <code>web_view</code>.
-If WebKitSettings:enable-javascript is <span class="caps">FALSE</span>, this method will do&nbsp;nothing.</p>
+            <p>Asynchronously run <code>script</code> in the script&nbsp;world.</p>
           </div>
           <div class="docblock"><p>Available since: 2.22</p></div>
         </div>
@@ -1410,9 +1306,7 @@ If WebKitSettings:enable-javascript is <span class="caps">FALSE</span>, this met
         <div class="">
           <h6><a href="method.WebView.save.html">webkit_web_view_save</a></h6>
           <div class="docblock">
-            <p>Asynchronously save the current web page associated to the
-<code>WebKitWebView</code> into a self-contained format using the mode
-specified in <code>save_mode</code>.</p>
+            <p>Asynchronously save the current web&nbsp;page.</p>
           </div>
           
         </div>
@@ -1428,9 +1322,7 @@ specified in <code>save_mode</code>.</p>
         <div class="">
           <h6><a href="method.WebView.save_to_file.html">webkit_web_view_save_to_file</a></h6>
           <div class="docblock">
-            <p>Asynchronously save the current web page associated to the
-<code>WebKitWebView</code> into a self-contained format using the mode
-specified in <code>save_mode</code> and writing it to <code>file</code>.</p>
+            <p>Asynchronously save the current web&nbsp;page.</p>
           </div>
           
         </div>
@@ -1446,7 +1338,7 @@ specified in <code>save_mode</code> and writing it to <code>file</code>.</p>
         <div class="">
           <h6><a href="method.WebView.send_message_to_page.html">webkit_web_view_send_message_to_page</a></h6>
           <div class="docblock">
-            <p>Send <code>message</code> to the <code>WebKitWebPage</code> corresponding to <code>web_view</code>. If <code>message</code> is floating, it&#8217;s&nbsp;consumed.</p>
+            <p>Send <code>message</code> to the <code>WebKitWebPage</code> corresponding to <code>web_view</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.28</p></div>
         </div>
@@ -1462,12 +1354,7 @@ specified in <code>save_mode</code> and writing it to <code>file</code>.</p>
         <div class="">
           <h6><a href="method.WebView.set_background_color.html">webkit_web_view_set_background_color</a></h6>
           <div class="docblock">
-            <p>Sets the color that will be used to draw the <code>web_view</code> background before
-the actual contents are rendered. Note that if the web page loaded in <code>web_view</code>
-specifies a background color, it will take precedence over the <code>rgba</code> color.
-By default the <code>web_view</code> background color is opaque white.
-Note that the parent window must have a <span class="caps">RGBA</span> visual and
-<code>GtkWidget:app-paintable</code> property set to <code>TRUE</code> for backgrounds colors to&nbsp;work.</p>
+            <p>Sets the color that will be used to draw the <code>web_view</code> background.</p>
           </div>
           <div class="docblock"><p>Available since: 2.8</p></div>
         </div>
@@ -1483,12 +1370,7 @@ Note that the parent window must have a <span class="caps">RGBA</span> visual an
         <div class="">
           <h6><a href="method.WebView.set_cors_allowlist.html">webkit_web_view_set_cors_allowlist</a></h6>
           <div class="docblock">
-            <p>Sets the <code>allowlist</code> for which
-<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">Cross-Origin Resource Sharing</a>
-checks are disabled in <code>web_view</code>. <span class="caps">URI</span> patterns must be of the form
-<code>[protocol]://[host]/[path]</code>, each component may contain the wildcard
-character (<code>*</code>) to represent zero or more other characters. All three
-components are required and must not be omitted from the <span class="caps">URI</span>&nbsp;patterns.</p>
+            <p>Sets the <code>allowlist</code> for <span class="caps">CORS</span>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.34</p></div>
         </div>
@@ -1496,11 +1378,7 @@ components are required and must not be omitted from the <span class="caps">URI<
         <div class="">
           <h6><a href="method.WebView.set_custom_charset.html">webkit_web_view_set_custom_charset</a></h6>
           <div class="docblock">
-            <p>Sets the current custom character encoding override of <code>web_view</code>. The custom
-character encoding will override any text encoding detected via <span class="caps">HTTP</span> headers or
-<span class="caps">META</span> tags. Calling this method will stop any current load operation and reload the
-current page. Setting the custom character encoding to <code>NULL</code> removes the character
-encoding&nbsp;override.</p>
+            <p>Sets the current custom character encoding override of <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1524,8 +1402,7 @@ encoding&nbsp;override.</p>
         <div class="">
           <h6><a href="method.WebView.set_input_method_context.html">webkit_web_view_set_input_method_context</a></h6>
           <div class="docblock">
-            <p>Set the <code>WebKitInputMethodContext</code> to be used by <code>web_view</code>, or <code>NULL</code> to not use any input method.
-Note that the same <code>WebKitInputMethodContext</code> can&#8217;t be set on more than one <code>WebKitWebView</code> at the same&nbsp;time.</p>
+            <p>Set the <code>WebKitInputMethodContext</code> to be used by <code>web_view</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.28</p></div>
         </div>
@@ -1549,11 +1426,7 @@ Note that the same <code>WebKitInputMethodContext</code> can&#8217;t be set on m
         <div class="">
           <h6><a href="method.WebView.set_settings.html">webkit_web_view_set_settings</a></h6>
           <div class="docblock">
-            <p>Sets the <code>WebKitSettings</code> to be applied to <code>web_view</code>. The
-existing <code>WebKitSettings</code> of <code>web_view</code> will be replaced by
-<code>settings</code>. New settings are applied immediately on <code>web_view</code>.
-The same <code>WebKitSettings</code> object can be shared
-by multiple <code>WebKitWebView</code><!-- -->s.</p>
+            <p>Sets the <code>WebKitSettings</code> to be applied to <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1561,8 +1434,7 @@ by multiple <code>WebKitWebView</code><!-- -->s.</p>
         <div class="">
           <h6><a href="method.WebView.set_zoom_level.html">webkit_web_view_set_zoom_level</a></h6>
           <div class="docblock">
-            <p>Set the zoom level of <code>web_view</code>, i.e. the factor by which the
-view contents are scaled with respect to their original&nbsp;size.</p>
+            <p>Set the zoom level of <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1570,11 +1442,7 @@ view contents are scaled with respect to their original&nbsp;size.</p>
         <div class="">
           <h6><a href="method.WebView.stop_loading.html">webkit_web_view_stop_loading</a></h6>
           <div class="docblock">
-            <p>Stops any ongoing loading operation in <code>web_view</code>.
-This method does nothing if no content is being loaded.
-If there is a loading operation in progress, it will be cancelled and
-<code>WebKitWebView::load-failed</code> signal will be emitted with
-<code>WEBKIT_NETWORK_ERROR_CANCELLED</code> error.</p>
+            <p>Stops any ongoing loading operation in <code>web_view</code>.</p>
           </div>
           
         </div>
@@ -1582,9 +1450,7 @@ If there is a loading operation in progress, it will be cancelled and
         <div class="">
           <h6><a href="method.WebView.terminate_web_process.html">webkit_web_view_terminate_web_process</a></h6>
           <div class="docblock">
-            <p>Terminates the web process associated to <code>web_view</code>. When the web process gets terminated
-using this method, the <code>WebKitWebView::web-process-terminated</code> signal is emitted with
-<code>WEBKIT_WEB_PROCESS_TERMINATED_BY_API</code> as the reason for&nbsp;termination.</p>
+            <p>Terminates the web process associated to <code>web_view</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.34</p></div>
         </div>
@@ -1592,10 +1458,7 @@ using this method, the <code>WebKitWebView::web-process-terminated</code> signal
         <div class="">
           <h6><a href="method.WebView.try_close.html">webkit_web_view_try_close</a></h6>
           <div class="docblock">
-            <p>Tries to close the <code>web_view</code>. This will fire the onbeforeunload event
-to ask the user for confirmation to close the page. If there isn&#8217;t an
-onbeforeunload event handler or the user confirms to close the page,
-the <code>WebKitWebView::close</code> signal is emitted, otherwise nothing&nbsp;happens.</p>
+            <p>Tries to close the <code>web_view</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.12</p></div>
         </div>
@@ -2529,8 +2392,8 @@ main loop will be run to block user interaction in the parent
         <div class="">
           <h6><a href="signal.WebView.run-color-chooser.html">WebKit2.WebView::run-color-chooser</a></h6>
           <div class="docblock">
-            <p>This signal is emitted when the user interacts with a &lt;input
-type=&#8217;color&#8217; /&gt; <span class="caps">HTML</span> element, requesting from WebKit to show
+            <p>This signal is emitted when the user interacts with a <input
+type='color' /> <span class="caps">HTML</span> element, requesting from WebKit to show
 a dialog to select a color. To let the application know the details of
 the color chooser, as well as to allow the client application to either
 cancel the request or perform an actual color selection, the signal will
@@ -2543,8 +2406,8 @@ argument.</p>
         <div class="">
           <h6><a href="signal.WebView.run-file-chooser.html">WebKit2.WebView::run-file-chooser</a></h6>
           <div class="docblock">
-            <p>This signal is emitted when the user interacts with a &lt;input
-type=&#8217;file&#8217; /&gt; <span class="caps">HTML</span> element, requesting from WebKit to show
+            <p>This signal is emitted when the user interacts with a <input
+type='file' /> <span class="caps">HTML</span> element, requesting from WebKit to show
 a dialog to select one or more files to be uploaded. To let the
 application know the details of the file chooser, as well as to
 allow the client application to either cancel the request or

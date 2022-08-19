@@ -50,7 +50,6 @@ static FloatRect calculateDocumentMarkerBounds(const InlineIterator::TextBoxIter
 LegacyTextBoxPainter::LegacyTextBoxPainter(const LegacyInlineTextBox& textBox, PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     : TextBoxPainter(InlineIterator::BoxLegacyPath { &textBox }, paintInfo, paintOffset)
 {
-    m_emphasisMarkExistsAndIsAbove = textBox.emphasisMarkExistsAndIsAbove(m_style);
 }
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
@@ -77,6 +76,7 @@ TextBoxPainter<TextBoxPath>::TextBoxPainter(TextBoxPath&& textBox, PaintInfo& pa
     , m_haveSelection(computeHaveSelection())
     , m_containsComposition(m_renderer.textNode() && m_renderer.frame().editor().compositionNode() == m_renderer.textNode())
     , m_useCustomUnderlines(m_containsComposition && m_renderer.frame().editor().compositionUsesCustomUnderlines())
+    , m_emphasisMarkExistsAndIsAbove(RenderText::emphasisMarkExistsAndIsAbove(m_renderer, m_style))
 {
     ASSERT(paintInfo.phase == PaintPhase::Foreground || paintInfo.phase == PaintPhase::Selection || paintInfo.phase == PaintPhase::TextClip || paintInfo.phase == PaintPhase::EventRegion);
 }
@@ -433,20 +433,11 @@ TextDecorationPainter TextBoxPainter<TextBoxPath>::createDecorationPainter(const
     }
 
     // Create painter
-    const FontCascade& font = fontCascade();
     auto textDecorations = m_style.textDecorationsInEffect();
     textDecorations.add(TextDecorationPainter::textDecorationsInEffectForStyle(markedText.style.textDecorationStyles));
-    TextDecorationPainter decorationPainter { context, textDecorations, m_renderer, m_isFirstLine, font, markedText.style.textDecorationStyles };
-    decorationPainter.setTextBox(makeIterator());
-    decorationPainter.setWidth(snappedSelectionRect.width());
-    decorationPainter.setIsHorizontal(textBox().isHorizontal());
-    if (markedText.style.textShadow) {
-        decorationPainter.setTextShadow(&markedText.style.textShadow.value());
-        if (m_style.hasAppleColorFilter())
-            decorationPainter.setShadowColorFilter(&m_style.appleColorFilter());
-    }
-
-    return decorationPainter;
+    auto* shadow = markedText.style.textShadow ? &markedText.style.textShadow.value() : nullptr;
+    auto* colorFilter = markedText.style.textShadow && m_style.hasAppleColorFilter() ? &m_style.appleColorFilter() : nullptr;
+    return { context, textDecorations, m_renderer, m_isFirstLine, fontCascade(), makeIterator(), snappedSelectionRect.width(), shadow, colorFilter, markedText.style.textDecorationStyles };
 }
 
 template<typename TextBoxPath>

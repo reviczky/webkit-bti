@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -285,10 +285,7 @@ operations are asynchronous and trigger signals when ready, such as
         <div class="">
           <h6><a href="method.FindController.count_matches.html">webkit_find_controller_count_matches</a></h6>
           <div class="docblock">
-            <p>Counts the number of matches for <code>search_text</code> found in the
-<code>WebKitWebView</code> with the provided <code>find_options</code>. The number of
-matches will be provided by the
-<code>WebKitFindController::counted-matches</code> signal.</p>
+            <p>Counts the number of matches for <code>search_text</code>.</p>
           </div>
           
         </div>
@@ -296,9 +293,7 @@ matches will be provided by the
         <div class="">
           <h6><a href="method.FindController.get_max_match_count.html">webkit_find_controller_get_max_match_count</a></h6>
           <div class="docblock">
-            <p>Gets the maximum number of matches to report during a text
-lookup. This number is passed as the last argument of
-<code>webkit_find_controller_search()</code> or&nbsp;webkit_find_controller_count_matches().</p>
+            <p>Gets the maximum number of matches to&nbsp;report.</p>
           </div>
           
         </div>
@@ -306,8 +301,7 @@ lookup. This number is passed as the last argument of
         <div class="">
           <h6><a href="method.FindController.get_options.html">webkit_find_controller_get_options</a></h6>
           <div class="docblock">
-            <p>Gets a bitmask containing the <code>WebKitFindOptions</code> associated with
-the current&nbsp;search.</p>
+            <p>Gets the <code>WebKitFindOptions</code> for the current&nbsp;search.</p>
           </div>
           
         </div>
@@ -315,9 +309,7 @@ the current&nbsp;search.</p>
         <div class="">
           <h6><a href="method.FindController.get_search_text.html">webkit_find_controller_get_search_text</a></h6>
           <div class="docblock">
-            <p>Gets the text that <code>find_controller</code> is currently searching
-for. This text is passed to either
-<code>webkit_find_controller_search()</code> or&nbsp;webkit_find_controller_count_matches().</p>
+            <p>Gets the text that <code>find_controller</code> is searching&nbsp;for.</p>
           </div>
           
         </div>
@@ -325,9 +317,7 @@ for. This text is passed to either
         <div class="">
           <h6><a href="method.FindController.get_web_view.html">webkit_find_controller_get_web_view</a></h6>
           <div class="docblock">
-            <p>Gets the <code>WebKitWebView</code> this find controller is associated to. Do
-not dereference the returned instance as it belongs to the
-<code>WebKitFindController</code>.</p>
+            <p>Gets the <code>WebKitWebView</code> this find controller is associated&nbsp;to.</p>
           </div>
           
         </div>
@@ -335,11 +325,7 @@ not dereference the returned instance as it belongs to the
         <div class="">
           <h6><a href="method.FindController.search.html">webkit_find_controller_search</a></h6>
           <div class="docblock">
-            <p>Looks for <code>search_text</code> in the <code>WebKitWebView</code> associated with
-<code>find_controller</code> since the beginning of the document highlighting
-up to <code>max_match_count</code> matches. The outcome of the search will be
-asynchronously provided by the <code>WebKitFindController::found-text</code>
-and <code>WebKitFindController::failed-to-find-text</code> signals.</p>
+            <p>Looks for <code>search_text</code> associated with <code>find_controller</code>.</p>
           </div>
           
         </div>
@@ -347,9 +333,7 @@ and <code>WebKitFindController::failed-to-find-text</code> signals.</p>
         <div class="">
           <h6><a href="method.FindController.search_finish.html">webkit_find_controller_search_finish</a></h6>
           <div class="docblock">
-            <p>Finishes a find operation started by
-webkit_find_controller_search(). It will basically unhighlight
-every text match&nbsp;found.</p>
+            <p>Finishes a find&nbsp;operation.</p>
           </div>
           
         </div>

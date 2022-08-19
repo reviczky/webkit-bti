@@ -2619,8 +2619,7 @@ std::optional<LayoutRect> RenderBox::computeVisibleRectInContainer(const LayoutR
     // its controlClipRect will be wrong. For overflow clip we use the values cached by the layer.
     adjustedRect.setLocation(topLeft);
     if (localContainer->hasNonVisibleOverflow()) {
-        RenderBox& containerBox = downcast<RenderBox>(*localContainer);
-        bool isEmpty = !containerBox.applyCachedClipAndScrollPosition(adjustedRect, container, context);
+        bool isEmpty = !downcast<RenderLayerModelObject>(*localContainer).applyCachedClipAndScrollPosition(adjustedRect, container, context);
         if (isEmpty) {
             if (context.options.contains(VisibleRectContextOption::UseEdgeInclusiveIntersection))
                 return std::nullopt;
@@ -2670,7 +2669,7 @@ void RenderBox::updateLogicalWidth()
 static LayoutUnit inlineSizeFromAspectRatio(LayoutUnit borderPaddingInlineSum, LayoutUnit borderPaddingBlockSum, double aspectRatio, BoxSizing boxSizing, LayoutUnit blockSize)
 {
     if (boxSizing == BoxSizing::BorderBox)
-        return LayoutUnit(blockSize * aspectRatio);
+        return std::max(borderPaddingInlineSum, LayoutUnit(blockSize * aspectRatio));
 
     return LayoutUnit((blockSize - borderPaddingBlockSum) * aspectRatio) + borderPaddingInlineSum;
 }
@@ -3189,8 +3188,8 @@ RenderBox::LogicalExtentComputedValues RenderBox::computeLogicalHeight(LayoutUni
             if (computedValues.m_extent != LayoutUnit::max())
                 intrinsicHeight = computedValues.m_extent;
             if (shouldComputeLogicalHeightFromAspectRatio()) {
-                if (intrinsicHeight && style().boxSizingForAspectRatio() == BoxSizing::ContentBox)
-                    *intrinsicHeight -= borderAndPaddingLogicalHeight();
+                if (intrinsicHeight && style().boxSizing() == BoxSizing::ContentBox)
+                    *intrinsicHeight -= RenderBox::borderBefore() + RenderBox::paddingBefore() + RenderBox::borderAfter() + RenderBox::paddingAfter();
                 heightResult = blockSizeFromAspectRatio(horizontalBorderAndPaddingExtent(), verticalBorderAndPaddingExtent(), style().logicalAspectRatio(), style().boxSizingForAspectRatio(), logicalWidth());
             } else {
                 if (intrinsicHeight)
@@ -3276,40 +3275,8 @@ std::optional<LayoutUnit> RenderBox::computeIntrinsicLogicalContentHeightUsing(L
             return adjustIntrinsicLogicalHeightForBoxSizing(intrinsicContentHeight.value());
         return { };
     }
-    if (logicalHeightLength.isFillAvailable()) {
-        auto canResolveAvailableSpace = [&] {
-            // FIXME: We need to find a way to say: yes, the constraint value is set and we can resolve height against it.
-            // Until then, this is mostly just guesswork.
-            auto inQuirksMode = document().inQuirksMode();
-            auto containingBlockHasSpecifiedSpace = [&](auto& containingBlock) {
-                auto isOrthogonal = WebCore::isOrthogonal(*this, containingBlock);
-                auto& style = containingBlock.style();
-                auto& logicalHeight = isOrthogonal ? style.width() : style.height();
-                if (logicalHeight.isSpecified())
-                    return true;
-                if (containingBlock.isOutOfFlowPositioned()) {
-                    if ((!isOrthogonal && !style.top().isAuto() && !style.bottom().isAuto()) || (isOrthogonal && !style.left().isAuto() && !style.right().isAuto()))
-                        return true;
-                }
-                return false;
-            };
-
-            for (auto* ancestor = this->containingBlock(); ancestor; ancestor = ancestor->containingBlock()) {
-                if (ancestor->hasOverridingLogicalHeight() || containingBlockHasSpecifiedSpace(*ancestor))
-                    return true;
-                if (is<RenderView>(ancestor) || (inQuirksMode && (ancestor->isBody() || ancestor->isDocumentElementRenderer())))
-                    return true;
-                // Flexing containers don't need to have specified height in order to provide a resolvable value.
-                if (!ancestor->isFlexItem() && !ancestor->isGridItem() && !is<RenderTableCell>(ancestor))
-                    return false;
-            }
-            ASSERT_NOT_REACHED();
-            return false;
-        };
-        if (canResolveAvailableSpace())
-            return containingBlock()->availableLogicalHeight(ExcludeMarginBorderPadding) - borderAndPadding;
-        return { };
-    }
+    if (logicalHeightLength.isFillAvailable())
+        return containingBlock()->availableLogicalHeight(ExcludeMarginBorderPadding) - borderAndPadding;
     ASSERT_NOT_REACHED();
     return 0_lu;
 }
@@ -5482,6 +5449,8 @@ bool RenderBox::shouldComputeLogicalWidthFromAspectRatio() const
             if (hasStretchedLogicalWidth() && hasStretchedLogicalHeight())
                 return false;
         } else if (hasStretchedLogicalWidth(StretchingMode::Explicit))
+            return false;
+        if (style().logicalWidth().isPercentOrCalculated() && parent()->style().logicalWidth().isFixed())
             return false;
     }
 

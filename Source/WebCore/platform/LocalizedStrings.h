@@ -161,6 +161,13 @@ namespace WebCore {
     WEBCORE_EXPORT String contextMenuItemTagInspectElement();
 #endif // ENABLE(CONTEXT_MENUS)
 
+#if ENABLE(PDFJS)
+WEBCORE_EXPORT String contextMenuItemPDFSinglePage();
+WEBCORE_EXPORT String contextMenuItemPDFSinglePageContinuous();
+WEBCORE_EXPORT String contextMenuItemPDFTwoPages();
+WEBCORE_EXPORT String contextMenuItemPDFTwoPagesContinuous();
+#endif
+
 #if !PLATFORM(IOS_FAMILY)
     String searchMenuNoRecentSearchesText();
     String searchMenuRecentSearchesText();
@@ -178,6 +185,7 @@ namespace WebCore {
     String AXDescriptionListTermText();
     String AXDescriptionListDetailText();
     String AXFooterRoleDescriptionText();
+    String AXSuggestionRoleDescriptionText();
     String AXFileUploadButtonText();
     String AXOutputText();
     String AXSearchFieldCancelButtonText();

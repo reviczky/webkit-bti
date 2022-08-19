@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -193,8 +193,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           <h6><a href="method.NavigationAction.get_modifiers.html">webkit_navigation_action_get_modifiers</a></h6>
 
           <div class="docblock">
-            <p>Return a bitmask of <code>GdkModifierType</code> values describing the modifier keys that were in effect
-when the navigation was&nbsp;requested.</p>
+            <p>Return the modifier&nbsp;keys.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>
@@ -204,8 +203,7 @@ when the navigation was&nbsp;requested.</p>
           <h6><a href="method.NavigationAction.get_mouse_button.html">webkit_navigation_action_get_mouse_button</a></h6>
 
           <div class="docblock">
-            <p>Return the number of the mouse button that triggered the navigation, or 0 if
-the navigation was not started by a mouse&nbsp;event.</p>
+            <p>Return the number of the mouse button that triggered the&nbsp;navigation.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>
@@ -225,12 +223,7 @@ the navigation was not started by a mouse&nbsp;event.</p>
           <h6><a href="method.NavigationAction.get_request.html">webkit_navigation_action_get_request</a></h6>
 
           <div class="docblock">
-            <p>Return the <code>WebKitURIRequest</code> associated with the navigation action.
-Modifications to the returned object are <emphasis>not</emphasis> taken
-into account when the request is sent over the network, and is intended
-only to aid in evaluating whether a navigation action should be taken or
-not. To modify requests before they are sent over the network the
-<code>WebKitPage::send-request</code> signal can be used&nbsp;instead.</p>
+            <p>Return the <code>WebKitURIRequest</code> associated with the navigation&nbsp;action.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>

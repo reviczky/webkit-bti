@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -302,9 +302,7 @@ display the print dialog with&nbsp;webkit_print_operation_run_dialog().</p>
         <div class="">
           <h6><a href="method.PrintOperation.get_page_setup.html">webkit_print_operation_get_page_setup</a></h6>
           <div class="docblock">
-            <p>Return the current page setup of <code>print_operation</code>. It returns <code>NULL</code> until
-either <code>webkit_print_operation_set_page_setup()</code> or <code>webkit_print_operation_run_dialog()</code>
-have been&nbsp;called.</p>
+            <p>Return the current page setup of <code>print_operation</code>.</p>
           </div>
           
         </div>
@@ -312,9 +310,7 @@ have been&nbsp;called.</p>
         <div class="">
           <h6><a href="method.PrintOperation.get_print_settings.html">webkit_print_operation_get_print_settings</a></h6>
           <div class="docblock">
-            <p>Return the current print settings of <code>print_operation</code>. It returns <code>NULL</code> until
-either <code>webkit_print_operation_set_print_settings()</code> or <code>webkit_print_operation_run_dialog()</code>
-have been&nbsp;called.</p>
+            <p>Return the current print settings of <code>print_operation</code>.</p>
           </div>
           
         </div>
@@ -322,14 +318,7 @@ have been&nbsp;called.</p>
         <div class="">
           <h6><a href="method.PrintOperation.print.html">webkit_print_operation_print</a></h6>
           <div class="docblock">
-            <p>Start a print operation using current print settings and page setup
-without showing the print dialog. If either print settings or page setup
-are not set with <code>webkit_print_operation_set_print_settings()</code> and
-webkit_print_operation_set_page_setup(), the default options will be used
-and the print job will be sent to the default printer.
-The <code>WebKitPrintOperation::finished</code> signal is emitted when the printing
-operation finishes. If an error occurs while printing the signal
-<code>WebKitPrintOperation::failed</code> is emitted before <code>WebKitPrintOperation::finished</code>.</p>
+            <p>Start a print operation using current print settings and page&nbsp;setup.</p>
           </div>
           
         </div>
@@ -337,18 +326,7 @@ operation finishes. If an error occurs while printing the signal
         <div class="">
           <h6><a href="method.PrintOperation.run_dialog.html">webkit_print_operation_run_dialog</a></h6>
           <div class="docblock">
-            <p>Run the print dialog and start printing using the options selected by
-the user. This method returns when the print dialog is closed.
-If the print dialog is cancelled <code>WEBKIT_PRINT_OPERATION_RESPONSE_CANCEL</code>
-is returned. If the user clicks on the print button, <code>WEBKIT_PRINT_OPERATION_RESPONSE_PRINT</code>
-is returned and the print operation starts. In this case, the <code>WebKitPrintOperation::finished</code>
-signal is emitted when the operation finishes. If an error occurs while printing, the signal
-<code>WebKitPrintOperation::failed</code> is emitted before <code>WebKitPrintOperation::finished</code>.
-If the print dialog is not cancelled current print settings and page setup of <code>print_operation</code>
-are updated with options selected by the user when Print button is pressed in print dialog.
-You can get the updated print settings and page setup by calling
-<code>webkit_print_operation_get_print_settings()</code> and <code>webkit_print_operation_get_page_setup()</code>
-after this&nbsp;method.</p>
+            <p>Run the print dialog and start&nbsp;printing.</p>
           </div>
           
         </div>
@@ -356,8 +334,7 @@ after this&nbsp;method.</p>
         <div class="">
           <h6><a href="method.PrintOperation.set_page_setup.html">webkit_print_operation_set_page_setup</a></h6>
           <div class="docblock">
-            <p>Set the current page setup of <code>print_operation</code>. Current page setup is used for the
-initial values of the print dialog when <code>webkit_print_operation_run_dialog()</code> is&nbsp;called.</p>
+            <p>Set the current page setup of <code>print_operation</code>.</p>
           </div>
           
         </div>
@@ -365,8 +342,7 @@ initial values of the print dialog when <code>webkit_print_operation_run_dialog(
         <div class="">
           <h6><a href="method.PrintOperation.set_print_settings.html">webkit_print_operation_set_print_settings</a></h6>
           <div class="docblock">
-            <p>Set the current print settings of <code>print_operation</code>. Current print settings are used for
-the initial values of the print dialog when <code>webkit_print_operation_run_dialog()</code> is&nbsp;called.</p>
+            <p>Set the current print settings of <code>print_operation</code>.</p>
           </div>
           
         </div>

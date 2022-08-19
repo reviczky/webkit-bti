@@ -66,6 +66,7 @@
 #include <WebCore/Length.h>
 #include <WebCore/LengthBox.h>
 #include <WebCore/MediaSelectionOption.h>
+#include <WebCore/NotificationResources.h>
 #include <WebCore/Pasteboard.h>
 #include <WebCore/PluginData.h>
 #include <WebCore/PromisedAttachmentInfo.h>
@@ -1017,7 +1018,6 @@ std::optional<Ref<Font>> ArgumentCoder<Font>::decode(Decoder& decoder)
 void ArgumentCoder<DecomposedGlyphs>::encode(Encoder& encoder, const DecomposedGlyphs& decomposedGlyphs)
 {
     encoder << decomposedGlyphs.positionedGlyphs();
-    encoder << decomposedGlyphs.bounds();
     encoder << decomposedGlyphs.renderingResourceIdentifier();
 }
 
@@ -1028,17 +1028,12 @@ std::optional<Ref<DecomposedGlyphs>> ArgumentCoder<DecomposedGlyphs>::decode(Dec
     if (!positionedGlyphs)
         return std::nullopt;
 
-    std::optional<FloatRect> bounds;
-    decoder >> bounds;
-    if (!bounds)
-        return std::nullopt;
-
     std::optional<RenderingResourceIdentifier> renderingResourceIdentifier;
     decoder >> renderingResourceIdentifier;
     if (!renderingResourceIdentifier)
         return std::nullopt;
 
-    return DecomposedGlyphs::create(WTFMove(*positionedGlyphs), *bounds, *renderingResourceIdentifier);
+    return DecomposedGlyphs::create(WTFMove(*positionedGlyphs), *renderingResourceIdentifier);
 }
 
 void ArgumentCoder<Cursor>::encode(Encoder& encoder, const Cursor& cursor)
@@ -3085,6 +3080,25 @@ std::optional<Ref<SystemImage>> ArgumentCoder<SystemImage>::decode(Decoder& deco
 
     ASSERT_NOT_REACHED();
     return std::nullopt;
+}
+
+void ArgumentCoder<WebCore::NotificationResources>::encode(Encoder& encoder, const WebCore::NotificationResources& resources)
+{
+    encodeOptionalImage(encoder, resources.icon().get());
+}
+
+std::optional<RefPtr<WebCore::NotificationResources>> ArgumentCoder<WebCore::NotificationResources>::decode(Decoder& decoder)
+{
+    RefPtr<Image> icon;
+    if (!decodeOptionalImage(decoder, icon))
+        return std::nullopt;
+
+    if (!icon)
+        return nullptr;
+
+    auto resources = WebCore::NotificationResources::create();
+    resources->setIcon(WTFMove(icon));
+    return resources;
 }
 
 #if ENABLE(ENCRYPTED_MEDIA)

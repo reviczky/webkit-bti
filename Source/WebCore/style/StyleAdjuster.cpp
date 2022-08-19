@@ -55,6 +55,7 @@
 #include "SVGElement.h"
 #include "SVGGraphicsElement.h"
 #include "SVGNames.h"
+#include "SVGSVGElement.h"
 #include "SVGURIReference.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
@@ -361,21 +362,47 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
         }
     }
 
-    // Make sure our z-index value is only applied if the object is positioned.
-    if (style.hasAutoSpecifiedZIndex() || (style.position() == PositionType::Static && !m_parentBoxStyle.isDisplayFlexibleOrGridBox()))
+    auto hasAutoZIndex = [](const RenderStyle& style, const RenderStyle& parentBoxStyle, const Element* element) {
+        if (style.hasAutoSpecifiedZIndex())
+            return true;
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+        // SVG2: Contrary to the rules in CSS 2.1, the z-index property applies to all SVG elements regardless
+        // of the value of the position property, with one exception: as for boxes in CSS 2.1, outer ‘svg’ elements
+        // must be positioned for z-index to apply to them.
+        if (element && element->document().settings().layerBasedSVGEngineEnabled()) {
+            if (auto* svgElement = dynamicDowncast<SVGElement>(element); svgElement && svgElement->isOutermostSVGSVGElement())
+                return element->renderer() && element->renderer()->style().position() == PositionType::Static;
+
+            return false;
+        }
+#else
+        UNUSED_PARAM(element);
+#endif
+
+        // Make sure our z-index value is only applied if the object is positioned.
+        return style.position() == PositionType::Static && !parentBoxStyle.isDisplayFlexibleOrGridBox();
+    };
+
+    if (hasAutoZIndex(style, m_parentBoxStyle, m_element))
         style.setHasAutoUsedZIndex();
     else
         style.setUsedZIndex(style.specifiedZIndex());
 
     // For SVG compatibility purposes we have to consider the 'animatedLocalTransform' besides the RenderStyle to query
     // if an element has a transform. SVG transforms are not stored on the RenderStyle, and thus we need a special case here.
+    // Same for the additional translation component present in RenderSVGTransformableContainer (that stems from <use> x/y
+    // properties, that are transferred to the internal RenderSVGTransformableContainer), or for the viewBox-induced transformation
+    // in RenderSVGViewportContainer. They all need to return true for 'hasTransformRelatedProperty'.
     auto hasTransformRelatedProperty = [](const RenderStyle& style, const Element* element) {
         if (style.hasTransformRelatedProperty())
             return true;
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
-        if (element && element->document().settings().layerBasedSVGEngineEnabled() && is<SVGGraphicsElement>(element))
-            return !downcast<SVGGraphicsElement>(*element).animatedLocalTransform().isIdentity();
+        if (element && element->document().settings().layerBasedSVGEngineEnabled()) {
+            if (auto* graphicsElement = dynamicDowncast<SVGGraphicsElement>(element); graphicsElement && graphicsElement->hasTransformRelatedAttributes())
+                return true;
+        }
 #else
         UNUSED_PARAM(element);
 #endif
@@ -640,8 +667,7 @@ void Adjuster::adjustDisplayContentsStyle(RenderStyle& style) const
 void Adjuster::adjustSVGElementStyle(RenderStyle& style, const SVGElement& svgElement)
 {
     // Only the root <svg> element in an SVG document fragment tree honors css position
-    auto isPositioningAllowed = svgElement.hasTagName(SVGNames::svgTag) && svgElement.parentNode() && !svgElement.parentNode()->isSVGElement() && !svgElement.correspondingElement();
-    if (!isPositioningAllowed)
+    if (!svgElement.isOutermostSVGSVGElement())
         style.setPosition(RenderStyle::initialPosition());
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
@@ -663,11 +689,6 @@ void Adjuster::adjustSVGElementStyle(RenderStyle& style, const SVGElement& svgEl
         ASSERT(!style.hasClip());
         ASSERT(!style.clipPath());
         ASSERT(!style.hasFilter());
-        ASSERT(!svgElement.isOutermostSVGSVGElement());
-
-        auto isInnerSVGElement = [] (const SVGElement& svgElement) -> bool {
-            return svgElement.hasTagName(SVGNames::svgTag) && svgElement.parentNode() && is<SVGElement>(svgElement.parentNode());
-        };
 
         if (svgElement.hasTagName(SVGNames::foreignObjectTag)
             || svgElement.hasTagName(SVGNames::imageTag)
@@ -676,7 +697,7 @@ void Adjuster::adjustSVGElementStyle(RenderStyle& style, const SVGElement& svgEl
             || svgElement.hasTagName(SVGNames::patternTag)
             || svgElement.hasTagName(SVGNames::symbolTag)
             || svgElement.hasTagName(SVGNames::useTag)
-            || (isInnerSVGElement(svgElement) && (style.overflowX() != Overflow::Visible || style.overflowY() != Overflow::Visible))
+            || (svgElement.isInnerSVGSVGElement() && (style.overflowX() != Overflow::Visible || style.overflowY() != Overflow::Visible))
             || style.hasPositionedMask())
         style.setUsedZIndex(0);
     }

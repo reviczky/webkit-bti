@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -212,12 +212,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1239">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1259">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Register <code>scheme</code> in <code>context</code>, so that when an <span class="caps">URI</span> request with <code>scheme</code> is made in the
+        <p>Register <code>scheme</code> in <code>context</code>.</p>
+<p>Register <code>scheme</code> in <code>context</code>, so that when an <span class="caps">URI</span> request with <code>scheme</code> is made in the
 <code>WebKitWebContext</code>, the <code>WebKitURISchemeRequestCallback</code> registered will be called with a
 <code>WebKitURISchemeRequest</code>.
 It is possible to handle <span class="caps">URI</span> scheme requests asynchronously, by calling <code>g_object_ref()</code> on the

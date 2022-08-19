@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -122,7 +122,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebsiteDataManager.cpp#L1182">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebsiteDataManager.cpp#L1196">[src]</a>
           
         </h4>
 
@@ -179,9 +179,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           <h6><a href="method.ITPFirstParty.get_last_update_time.html">webkit_itp_first_party_get_last_update_time</a></h6>
 
           <div class="docblock">
-            <p>Get the last time a <code>WebKitITPThirdParty</code> has been seen under <code>itp_first_party</code>.
-Each <code>WebKitITPFirstParty</code> is created by <code>webkit_itp_third_party_get_first_parties()</code> and
-therefore corresponds to exactly one <code>WebKitITPThirdParty</code>.</p>
+            <p>Get the last time a <code>WebKitITPThirdParty</code> has been seen under <code>itp_first_party</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.30</p></div>
@@ -191,9 +189,7 @@ therefore corresponds to exactly one <code>WebKitITPThirdParty</code>.</p>
           <h6><a href="method.ITPFirstParty.get_website_data_access_allowed.html">webkit_itp_first_party_get_website_data_access_allowed</a></h6>
 
           <div class="docblock">
-            <p>Get whether <code>itp_first_party</code> has granted website data access to its <code>WebKitITPThirdParty</code>.
-Each <code>WebKitITPFirstParty</code> is created by <code>webkit_itp_third_party_get_first_parties()</code> and
-therefore corresponds to exactly one <code>WebKitITPThirdParty</code>.</p>
+            <p>Get whether <code>itp_first_party</code> has granted website data access to its <code>WebKitITPThirdParty</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.30</p></div>
@@ -203,8 +199,7 @@ therefore corresponds to exactly one <code>WebKitITPThirdParty</code>.</p>
           <h6><a href="method.ITPFirstParty.ref.html">webkit_itp_first_party_ref</a></h6>
 
           <div class="docblock">
-            <p>Atomically increments the reference count of <code>itp_first_party</code> by one.
-This function is <span class="caps">MT</span>-safe and may be called from any&nbsp;thread.</p>
+            <p>Atomically increments the reference count of <code>itp_first_party</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.30</p></div>
@@ -214,10 +209,7 @@ This function is <span class="caps">MT</span>-safe and may be called from any&nb
           <h6><a href="method.ITPFirstParty.unref.html">webkit_itp_first_party_unref</a></h6>
 
           <div class="docblock">
-            <p>Atomically decrements the reference count of <code>itp_first_party</code> by one.
-If the reference count drops to 0, all memory allocated by
-<code>WebKitITPFirstParty</code> is released. This function is <span class="caps">MT</span>-safe and may be
-called from any&nbsp;thread.</p>
+            <p>Atomically decrements the reference count of <code>itp_first_party</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.30</p></div>

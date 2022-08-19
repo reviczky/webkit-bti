@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -168,7 +168,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 }</pre></code>
 
         <div class="docblock">
-          <p>Represents an authentication&nbsp;request</p>
+          <p>Represents an authentication&nbsp;request.</p>
 <p>Whenever a client attempts to load a page protected by <span class="caps">HTTP</span>
 authentication, credentials will need to be provided to authorize access.
 To allow the client to decide how it wishes to handle authentication,
@@ -280,8 +280,7 @@ WebKitAuthenticationRequest&nbsp;object.</p>
         <div class="">
           <h6><a href="method.AuthenticationRequest.authenticate.html">webkit_authentication_request_authenticate</a></h6>
           <div class="docblock">
-            <p>Authenticate the <code>WebKitAuthenticationRequest</code> using the <code>WebKitCredential</code>
-supplied. To continue without credentials, pass <code>NULL</code> as <code>credential</code>.</p>
+            <p>Authenticate the <code>WebKitAuthenticationRequest</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.2</p></div>
         </div>
@@ -289,12 +288,7 @@ supplied. To continue without credentials, pass <code>NULL</code> as <code>crede
         <div class="">
           <h6><a href="method.AuthenticationRequest.can_save_credentials.html">webkit_authentication_request_can_save_credentials</a></h6>
           <div class="docblock">
-            <p>Determine whether the authentication method associated with this
-<code>WebKitAuthenticationRequest</code> should allow the storage of credentials.
-This will return <code>FALSE</code> if WebKit doesn&#8217;t support credential storing,
-if private browsing is enabled, or if persistent credential storage has been
-disabled in <code>WebKitWebsiteDataManager</code>, unless credentials saving has been
-explicitly enabled with&nbsp;webkit_authentication_request_set_can_save_credentials().</p>
+            <p>Determine whether this <code>WebKitAuthenticationRequest</code> should allow the storage of&nbsp;credentials.</p>
           </div>
           <div class="docblock"><p>Available since: 2.2</p></div>
         </div>
@@ -302,8 +296,7 @@ explicitly enabled with&nbsp;webkit_authentication_request_set_can_save_credenti
         <div class="">
           <h6><a href="method.AuthenticationRequest.cancel.html">webkit_authentication_request_cancel</a></h6>
           <div class="docblock">
-            <p>Cancel the authentication challenge. This will also cancel the page loading and result in a
-<code>WebKitWebView::load-failed</code> signal with a <code>WebKitNetworkError</code> of type <code>WEBKIT_NETWORK_ERROR_CANCELLED</code> being&nbsp;emitted.</p>
+            <p>Cancel the authentication&nbsp;challenge.</p>
           </div>
           <div class="docblock"><p>Available since: 2.2</p></div>
         </div>
@@ -335,9 +328,7 @@ explicitly enabled with&nbsp;webkit_authentication_request_set_can_save_credenti
         <div class="">
           <h6><a href="method.AuthenticationRequest.get_proposed_credential.html">webkit_authentication_request_get_proposed_credential</a></h6>
           <div class="docblock">
-            <p>Get the <code>WebKitCredential</code> of the proposed authentication challenge that was
-stored from a previous session. The client can use this directly for
-authentication or construct their own <code>WebKitCredential</code>.</p>
+            <p>Get the <code>WebKitCredential</code> of the proposed authentication&nbsp;challenge.</p>
           </div>
           <div class="docblock"><p>Available since: 2.2</p></div>
         </div>
@@ -369,7 +360,7 @@ authentication or construct their own <code>WebKitCredential</code>.</p>
         <div class="">
           <h6><a href="method.AuthenticationRequest.is_for_proxy.html">webkit_authentication_request_is_for_proxy</a></h6>
           <div class="docblock">
-            <p>Determine whether the authentication challenge is associated with a proxy server rather than an &#8220;origin&#8221;&nbsp;server.</p>
+            <p>Determine whether the authentication challenge is associated with a proxy&nbsp;server.</p>
           </div>
           <div class="docblock"><p>Available since: 2.2</p></div>
         </div>
@@ -386,12 +377,7 @@ authentication or construct their own <code>WebKitCredential</code>.</p>
           <h6><a href="method.AuthenticationRequest.set_can_save_credentials.html">webkit_authentication_request_set_can_save_credentials</a></h6>
           <div class="docblock">
             <p>Set whether the authentication method associated with <code>request</code>
-should allow the storage of credentials.
-This should be used by applications handling their own credentials
-storage to indicate that it should be supported even when internal
-credential storage is disabled or unsupported.
-Note that storing of credentials will not be allowed on ephemeral
-sessions in any&nbsp;case.</p>
+should allow the storage of&nbsp;credentials.</p>
           </div>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>
@@ -399,12 +385,7 @@ sessions in any&nbsp;case.</p>
         <div class="">
           <h6><a href="method.AuthenticationRequest.set_proposed_credential.html">webkit_authentication_request_set_proposed_credential</a></h6>
           <div class="docblock">
-            <p>Set the <code>WebKitCredential</code> of the proposed authentication challenge that was
-stored from a previous session. This should only be used by applications handling
-their own credential storage. (When using the default WebKit credential storage,
-<code>webkit_authentication_request_get_proposed_credential()</code> already contains previously-stored
-credentials.)
-Passing a <code>NULL</code> <code>credential</code> will clear the proposed&nbsp;credential.</p>
+            <p>Set the <code>WebKitCredential</code> of the proposed authentication&nbsp;challenge.</p>
           </div>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>

@@ -57,14 +57,29 @@ public:
 #if HAVE(IOSURFACE)
         IOSurfacePool* surfacePool;
 #endif
+        bool avoidIOSurfaceSizeCheckInWebProcessForTesting = false;
+
+        enum class UseOutOfLineSurfaces : bool { No, Yes };
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
+        UseOutOfLineSurfaces useOutOfLineSurfacesForCGDisplayLists;
+#endif
+
         CreationContext(HostWindow* window = nullptr
 #if HAVE(IOSURFACE)
             , IOSurfacePool* pool = nullptr
+#endif
+            , bool avoidCheck = false
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
+            , UseOutOfLineSurfaces useOutOfLineSurfacesForCGDisplayLists = UseOutOfLineSurfaces::No
 #endif
         )
             : hostWindow(window)
 #if HAVE(IOSURFACE)
             , surfacePool(pool)
+#endif
+            , avoidIOSurfaceSizeCheckInWebProcessForTesting(avoidCheck)
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
+            , useOutOfLineSurfacesForCGDisplayLists(useOutOfLineSurfacesForCGDisplayLists)
 #endif
         { }
     };
@@ -155,8 +170,10 @@ public:
     AffineTransform baseTransform() const { return m_backendInfo.baseTransform; }
     size_t memoryCost() const { return m_backendInfo.memoryCost; }
     size_t externalMemoryCost() const { return m_backendInfo.externalMemoryCost; }
+    void setBackendInfo(ImageBufferBackend::Info&& parameters) { m_backendInfo = WTFMove(parameters); }
 
     WEBCORE_EXPORT virtual RefPtr<NativeImage> copyNativeImage(BackingStoreCopy = CopyBackingStore) const;
+    WEBCORE_EXPORT virtual RefPtr<NativeImage> copyNativeImageForDrawing(BackingStoreCopy = CopyBackingStore) const;
     WEBCORE_EXPORT virtual RefPtr<NativeImage> sinkIntoNativeImage();
     WEBCORE_EXPORT RefPtr<Image> copyImage(BackingStoreCopy = CopyBackingStore, PreserveResolution = PreserveResolution::No) const;
     WEBCORE_EXPORT virtual RefPtr<Image> filteredImage(Filter&);
@@ -197,6 +214,8 @@ public:
     WEBCORE_EXPORT SetNonVolatileResult setNonVolatile();
     WEBCORE_EXPORT VolatilityState volatilityState() const;
     WEBCORE_EXPORT void setVolatilityState(VolatilityState);
+
+    WEBCORE_EXPORT void clearContents();
 
     WEBCORE_EXPORT virtual std::unique_ptr<ThreadSafeImageBufferFlusher> createFlusher();
 

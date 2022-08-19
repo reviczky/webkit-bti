@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -127,7 +127,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitUserContent.cpp#L208">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitUserContent.cpp#L214">[src]</a>
           
         </h4>
 
@@ -170,13 +170,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           <h6><a href="ctor.UserScript.new.html">webkit_user_script_new</a></h6>
 
           <div class="docblock">
-            <p>Creates a new user script. Scripts can be applied to some URIs
-only by passing non-null values for <code>allow_list</code> or <code>block_list</code>. Passing a
-<code>NULL</code> allow_list implies that all URIs are on the allow_list. The script
-is applied if an <span class="caps">URI</span> matches the allow_list and not the block_list.
-<span class="caps">URI</span> patterns must be of the form <code>[protocol]://[host]/[path]</code>, where the
-<em>host</em> and <em>path</em> components can contain the wildcard character (<code>*</code>) to
-represent zero or more other&nbsp;characters.</p>
+            <p>Creates a new user&nbsp;script.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>
@@ -186,8 +180,7 @@ represent zero or more other&nbsp;characters.</p>
           <h6><a href="ctor.UserScript.new_for_world.html">webkit_user_script_new_for_world</a></h6>
 
           <div class="docblock">
-            <p>Creates a new user script for script world with name <code>world_name</code>.
-See <code>webkit_user_script_new()</code> for a full&nbsp;description.</p>
+            <p>Creates a new user script for script world with name <code>world_name</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.22</p></div>
@@ -212,8 +205,7 @@ See <code>webkit_user_script_new()</code> for a full&nbsp;description.</p>
           <h6><a href="method.UserScript.ref.html">webkit_user_script_ref</a></h6>
 
           <div class="docblock">
-            <p>Atomically increments the reference count of <code>user_script</code> by one.
-This function is <span class="caps">MT</span>-safe and may be called from any&nbsp;thread.</p>
+            <p>Atomically increments the reference count of <code>user_script</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>
@@ -223,10 +215,7 @@ This function is <span class="caps">MT</span>-safe and may be called from any&nb
           <h6><a href="method.UserScript.unref.html">webkit_user_script_unref</a></h6>
 
           <div class="docblock">
-            <p>Atomically decrements the reference count of <code>user_script</code> by one.
-If the reference count drops to 0, all memory allocated by
-<code>WebKitUserScript</code> is released. This function is <span class="caps">MT</span>-safe and may be called
-from any&nbsp;thread.</p>
+            <p>Atomically decrements the reference count of <code>user_script</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>

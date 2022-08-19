@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -179,9 +179,7 @@ for more&nbsp;information.</p>
           <h6><a href="method.WebsiteData.get_name.html">webkit_website_data_get_name</a></h6>
 
           <div class="docblock">
-            <p>Gets the name of <code>WebKitWebsiteData</code>. This is the website name, normally represented by
-a domain or host name. All local documents are grouped in the same <code>WebKitWebsiteData</code> using
-the name &#8220;Local&nbsp;files&#8221;.</p>
+            <p>Gets the name of <code>WebKitWebsiteData</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>
@@ -191,9 +189,7 @@ the name &#8220;Local&nbsp;files&#8221;.</p>
           <h6><a href="method.WebsiteData.get_size.html">webkit_website_data_get_size</a></h6>
 
           <div class="docblock">
-            <p>Gets the size of the data of types <code>types</code> in a <code>WebKitWebsiteData</code>.
-Note that currently the data size is only known for <code>WEBKIT_WEBSITE_DATA_DISK_CACHE</code> data type
-so for all other types 0 will be&nbsp;returned.</p>
+            <p>Gets the size of the data of types <code>types</code> in a <code>WebKitWebsiteData</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>
@@ -203,8 +199,7 @@ so for all other types 0 will be&nbsp;returned.</p>
           <h6><a href="method.WebsiteData.get_types.html">webkit_website_data_get_types</a></h6>
 
           <div class="docblock">
-            <p>Gets the types of data stored in the client for a <code>WebKitWebsiteData</code>. These are the
-types actually present, not the types queried with&nbsp;webkit_website_data_manager_fetch().</p>
+            <p>Gets the types of data stored in the client for a <code>WebKitWebsiteData</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>
@@ -214,8 +209,7 @@ types actually present, not the types queried with&nbsp;webkit_website_data_mana
           <h6><a href="method.WebsiteData.ref.html">webkit_website_data_ref</a></h6>
 
           <div class="docblock">
-            <p>Atomically increments the reference count of <code>website_data</code> by one.
-This function is <span class="caps">MT</span>-safe and may be called from any&nbsp;thread.</p>
+            <p>Atomically increments the reference count of <code>website_data</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>
@@ -225,10 +219,7 @@ This function is <span class="caps">MT</span>-safe and may be called from any&nb
           <h6><a href="method.WebsiteData.unref.html">webkit_website_data_unref</a></h6>
 
           <div class="docblock">
-            <p>Atomically decrements the reference count of <code>website_data</code> by one.
-If the reference count drops to 0, all memory allocated by
-<code>WebKitWebsiteData</code> is released. This function is <span class="caps">MT</span>-safe and may be
-called from any&nbsp;thread.</p>
+            <p>Atomically decrements the reference count of <code>website_data</code> by&nbsp;one.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>

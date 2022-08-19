@@ -525,8 +525,10 @@ void HTMLInputElement::updateType()
     bool didRespectHeightAndWidth = m_inputType->shouldRespectHeightAndWidthAttributes();
     bool wasSuccessfulSubmitButtonCandidate = m_inputType->canBeSuccessfulSubmitButton();
 
-    if (didStoreValue && !willStoreValue && hasDirtyValue())
-        setAttributeWithoutSynchronization(valueAttr, AtomString { std::exchange(m_valueIfDirty, { }) });
+    if (didStoreValue && !willStoreValue) {
+        if (auto dirtyValue = std::exchange(m_valueIfDirty, { }); !dirtyValue.isEmpty())
+            setAttributeWithoutSynchronization(valueAttr, AtomString { WTFMove(dirtyValue) });
+    }
 
     m_inputType->destroyShadowSubtree();
     m_inputType->detachFromElement();
@@ -882,7 +884,7 @@ bool HTMLInputElement::isSuccessfulSubmitButton() const
 {
     // HTML spec says that buttons must have names to be considered successful.
     // However, other browsers do not impose this constraint. So we do not.
-    return !isDisabledFormControl() && m_inputType->canBeSuccessfulSubmitButton();
+    return m_inputType->canBeSuccessfulSubmitButton();
 }
 
 bool HTMLInputElement::matchesDefaultPseudoClass() const

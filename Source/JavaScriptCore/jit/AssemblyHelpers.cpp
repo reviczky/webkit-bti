@@ -37,6 +37,7 @@
 #include "MaxFrameExtentForSlowPathCall.h"
 #include "SuperSampler.h"
 #include "ThunkGenerators.h"
+#include "UnlinkedCodeBlock.h"
 
 #if ENABLE(WEBASSEMBLY)
 #include "WasmMemoryInformation.h"
@@ -213,10 +214,33 @@ void AssemblyHelpers::jitAssertArgumentCountSane()
 
 void AssemblyHelpers::jitAssertCodeBlockOnCallFrameWithType(GPRReg scratchGPR, JITType type)
 {
+    comment("jitAssertCodeBlockOnCallFrameWithType | ", scratchGPR, " = callFrame->codeBlock->jitCode->jitType == ", type);
     emitGetFromCallFrameHeaderPtr(CallFrameSlot::codeBlock, scratchGPR);
     loadPtr(Address(scratchGPR, CodeBlock::jitCodeOffset()), scratchGPR);
     load8(Address(scratchGPR, JITCode::offsetOfJITType()), scratchGPR);
     Jump ok = branch32(Equal, scratchGPR, TrustedImm32(static_cast<unsigned>(type)));
+    abortWithReason(AHInvalidCodeBlock);
+    ok.link(this);
+}
+
+void AssemblyHelpers::jitAssertCodeBlockMatchesCurrentCalleeCodeBlockOnCallFrame(GPRReg scratchGPR, GPRReg scratchGPR2, UnlinkedCodeBlock& block)
+{
+    if (block.codeType() != FunctionCode)
+        return;
+    auto kind = block.isConstructor() ? CodeForConstruct : CodeForCall;
+    comment("jitAssertCodeBlockMatchesCurrentCalleeCodeBlockOnCallFrame with code block type: ", kind, " | ", scratchGPR, " = callFrame->callee->executableOrRareData");
+
+    emitGetFromCallFrameHeaderPtr(CallFrameSlot::callee, scratchGPR);
+    loadPtr(Address(scratchGPR, JSFunction::offsetOfExecutableOrRareData()), scratchGPR);
+    auto hasExecutable = branchTestPtr(Zero, scratchGPR, TrustedImm32(JSFunction::rareDataTag));
+    loadPtr(Address(scratchGPR, FunctionRareData::offsetOfExecutable() - JSFunction::rareDataTag), scratchGPR);
+    hasExecutable.link(this);
+    comment(scratchGPR, " = (", scratchGPR, ": Executable)->codeBlock");
+    loadPtr(Address(scratchGPR, FunctionExecutable::offsetOfCodeBlockFor(kind)), scratchGPR);
+
+    comment(scratchGPR2, " = callFrame->codeBlock");
+    emitGetFromCallFrameHeaderPtr(CallFrameSlot::codeBlock, scratchGPR2);
+    Jump ok = branch32(Equal, scratchGPR, scratchGPR2);
     abortWithReason(AHInvalidCodeBlock);
     ok.link(this);
 }

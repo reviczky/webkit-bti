@@ -47,6 +47,7 @@
 #include "LineSelection.h"
 #include "Logging.h"
 #include "RenderCombineText.h"
+#include "RenderCounter.h"
 #include "RenderDeprecatedFlexibleBox.h"
 #include "RenderFlexibleBox.h"
 #include "RenderInline.h"
@@ -428,7 +429,7 @@ bool RenderBlockFlow::willCreateColumns(std::optional<unsigned> desiredColumnCou
     // The following types are not supposed to create multicol context.
     if (isFileUploadControl() || isTextControl() || isListBox())
         return false;
-    if (isRenderSVGBlock() || isRubyRun())
+    if (isRenderSVGBlock() || isRubyRun() || isRubyBlock() || isRubyInline() || isRubyBase())
         return false;
 #if ENABLE(MATHML)
     if (isRenderMathMLBlock())
@@ -3597,7 +3598,6 @@ void RenderBlockFlow::layoutModernLines(bool relayoutChildren, LayoutUnit& repai
         if (is<RenderBlock>(renderer)) {
             auto& block = downcast<RenderBlock>(renderer);
             block.layoutIfNeeded();
-            ASSERT(block.style().display() == DisplayType::InlineBlock);
             layoutFormattingContextLineLayout.updateInlineBlockDimensions(block);
             continue;
         }
@@ -3610,6 +3610,15 @@ void RenderBlockFlow::layoutModernLines(bool relayoutChildren, LayoutUnit& repai
 
         if (is<RenderInline>(renderer)) {
             layoutFormattingContextLineLayout.updateInlineBoxDimensions(downcast<RenderInline>(renderer));
+            renderer.clearNeedsLayout();
+            continue;
+        }
+
+        if (is<RenderCounter>(renderer)) {
+            // The counter content gets updated unconventionally by involving computePreferredLogicalWidths() (see RenderCounter::updateCounter())
+            // Here we assume that every time the content of a counter changes, we already handled the update by re-constructing the associated InlineTextBox (see BoxTree::buildTreeForInlineContent).
+            if (renderer.preferredLogicalWidthsDirty())
+                downcast<RenderCounter>(renderer).updateCounter();
             renderer.clearNeedsLayout();
             continue;
         }
@@ -3628,7 +3637,7 @@ void RenderBlockFlow::layoutModernLines(bool relayoutChildren, LayoutUnit& repai
 
     auto computeBorderBoxBottom = [&] {
         auto contentBoxBottom = contentBoxTop + computeContentHeight();
-        return contentBoxBottom + borderAndPaddingAfter();
+        return contentBoxBottom + borderAndPaddingAfter() + scrollbarLogicalHeight();
     };
 
     auto oldBorderBoxBottom = computeBorderBoxBottom();

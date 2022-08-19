@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -209,13 +209,14 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1309">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1331">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Set whether WebKit subprocesses will be sandboxed, limiting access to the&nbsp;system.</p>
-<p>This method <strong>must be called before any web process has been created</strong>,
+        <p>Set whether WebKit subprocesses will be&nbsp;sandboxed.</p>
+<p>Set whether WebKit subprocesses will be sandboxed, limiting access to the system.
+This method <strong>must be called before any web process has been created</strong>,
 as early as possible in your application. Calling it later is a fatal&nbsp;error.</p>
 <p>This is only implemented on Linux and is a no-op&nbsp;otherwise.</p>
       </div>

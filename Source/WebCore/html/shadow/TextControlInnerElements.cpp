@@ -42,6 +42,7 @@
 #include "RenderTextControl.h"
 #include "RenderView.h"
 #include "ScriptController.h"
+#include "ScriptDisallowedScope.h"
 #include "ShadowPseudoIds.h"
 #include "ShadowRoot.h"
 #include "StyleResolver.h"
@@ -145,6 +146,7 @@ Ref<TextControlInnerTextElement> TextControlInnerTextElement::create(Document& d
 {
     auto result = adoptRef(*new TextControlInnerTextElement(document));
     constexpr bool initialization = true;
+    ScriptDisallowedScope::EventAllowedScope eventAllowedScope { result };
     result->updateInnerTextElementEditabilityImpl(isEditable, initialization);
     return result;
 }
@@ -204,6 +206,7 @@ inline TextControlPlaceholderElement::TextControlPlaceholderElement(Document& do
 Ref<TextControlPlaceholderElement> TextControlPlaceholderElement::create(Document& document)
 {
     auto element = adoptRef(*new TextControlPlaceholderElement(document));
+    ScriptDisallowedScope::EventAllowedScope eventAllowedScope { element };
     element->setPseudo(ShadowPseudoIds::placeholder());
     return element;
 }
@@ -218,6 +221,8 @@ std::optional<Style::ElementStyle> TextControlPlaceholderElement::resolveCustomS
     if (is<HTMLInputElement>(controlElement)) {
         auto& inputElement = downcast<HTMLInputElement>(controlElement);
         style.renderStyle->setTextOverflow(inputElement.shouldTruncateText(*shadowHostStyle) ? TextOverflow::Ellipsis : TextOverflow::Clip);
+        style.renderStyle->setPaddingTop(Length { 0, LengthType::Fixed });
+        style.renderStyle->setPaddingBottom(Length { 0, LengthType::Fixed });
     }
     return style;
 }
@@ -296,6 +301,7 @@ Ref<SearchFieldCancelButtonElement> SearchFieldCancelButtonElement::create(Docum
 {
     auto element = adoptRef(*new SearchFieldCancelButtonElement(document));
 
+    ScriptDisallowedScope::EventAllowedScope eventAllowedScope { element };
     element->setPseudo(ShadowPseudoIds::webkitSearchCancelButton());
 #if !PLATFORM(IOS_FAMILY)
     element->setAttributeWithoutSynchronization(aria_labelAttr, AtomString { AXSearchFieldCancelButtonText() });

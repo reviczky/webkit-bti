@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -147,12 +147,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitMemoryPressureSettings.cpp#L187">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitMemoryPressureSettings.cpp#L189">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Sets <code>value</code> as the fraction of the defined memory limit where the strict
+        <p>Sets the memory limit for the strict policy to start&nbsp;working.</p>
+<p>Sets <code>value</code> as the fraction of the defined memory limit where the strict
 policy starts working. This policy will try to reduce the memory footprint by
 releasing critical&nbsp;memory.</p>
 <p>The threshold must be bigger than 0 and smaller than 1. Also, it must be bigger

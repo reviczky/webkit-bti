@@ -385,7 +385,6 @@ public:
         , m_owner(owner)
         , m_results(results)
         , m_framesToSkip(framesToSkip)
-        , m_remainingCapacityForFrameCapture(capacity)
     {
         m_results.reserveInitialCapacity(capacity);
     }
@@ -397,18 +396,19 @@ public:
             return IterationStatus::Continue;
         }
 
-        if (m_remainingCapacityForFrameCapture) {
+        if (visitor->isImplementationVisibilityPrivate())
+            return IterationStatus::Continue;
+
+        if (m_results.size() < m_results.capacity()) {
             if (visitor->isWasmFrame()) {
-                m_results.append(StackFrame(visitor->wasmFunctionIndexOrName()));
+                m_results.uncheckedAppend(StackFrame(visitor->wasmFunctionIndexOrName()));
             } else if (!!visitor->codeBlock() && !visitor->codeBlock()->unlinkedCodeBlock()->isBuiltinFunction()) {
-                m_results.append(
+                m_results.uncheckedAppend(
                     StackFrame(m_vm, m_owner, visitor->callee().asCell(), visitor->codeBlock(), visitor->bytecodeIndex()));
             } else {
-                m_results.append(
+                m_results.uncheckedAppend(
                     StackFrame(m_vm, m_owner, visitor->callee().asCell()));
             }
-    
-            m_remainingCapacityForFrameCapture--;
             return IterationStatus::Continue;
         }
         return IterationStatus::Done;
@@ -419,7 +419,6 @@ private:
     JSCell* m_owner;
     Vector<StackFrame>& m_results;
     mutable size_t m_framesToSkip;
-    mutable size_t m_remainingCapacityForFrameCapture;
 };
 
 void Interpreter::getStackTrace(JSCell* owner, Vector<StackFrame>& results, size_t framesToSkip, size_t maxStackSize)
@@ -430,20 +429,24 @@ void Interpreter::getStackTrace(JSCell* owner, Vector<StackFrame>& results, size
     if (!callFrame || !maxStackSize)
         return;
 
-    size_t framesCount = 0;
-    size_t maxFramesCountNeeded = maxStackSize + framesToSkip;
-    StackVisitor::visit(callFrame, vm, [&] (StackVisitor&) -> IterationStatus {
-        if (++framesCount < maxFramesCountNeeded)
+    size_t skippedFrames = 0;
+    size_t visitedFrames = 0;
+    StackVisitor::visit(callFrame, vm, [&] (StackVisitor& visitor) -> IterationStatus {
+        if (++skippedFrames <= framesToSkip)
             return IterationStatus::Continue;
+
+        if (visitor->isImplementationVisibilityPrivate())
+            return IterationStatus::Continue;
+
+        if (++visitedFrames < maxStackSize)
+            return IterationStatus::Continue;
+
         return IterationStatus::Done;
     });
-    if (framesCount <= framesToSkip)
+    if (!visitedFrames)
         return;
 
-    framesCount -= framesToSkip;
-    framesCount = std::min(maxStackSize, framesCount);
-
-    GetStackTraceFunctor functor(vm, owner, results, framesToSkip, framesCount);
+    GetStackTraceFunctor functor(vm, owner, results, framesToSkip, visitedFrames);
     StackVisitor::visit(callFrame, vm, functor);
     ASSERT(results.size() == results.capacity());
 }
@@ -828,6 +831,8 @@ JSValue Interpreter::executeProgram(const SourceCode& source, JSGlobalObject*, J
         parseResult = literalParser.tryJSONPParse(JSONPData, globalObject->globalObjectMethodTable()->supportsRichSourceInfo(globalObject));
     }
 
+    // FIXME: The patterns to trigger JSONP fast path should be more idiomatic.
+    // https://bugs.webkit.org/show_bug.cgi?id=243578
     RETURN_IF_EXCEPTION(throwScope, { });
     if (parseResult) {
         JSValue result;
@@ -893,18 +898,25 @@ JSValue Interpreter::executeProgram(const SourceCode& source, JSGlobalObject*, J
                 }
             }
 
+            const Identifier& ident = JSONPPath.last().m_pathEntryName;
             if (JSONPPath.size() == 1 && JSONPPath.last().m_type != JSONPPathEntryTypeLookup) {
                 RELEASE_ASSERT(baseObject == globalObject);
                 JSGlobalLexicalEnvironment* scope = globalObject->globalLexicalEnvironment();
-                if (scope->hasProperty(globalObject, JSONPPath.last().m_pathEntryName))
-                    baseObject = scope;
+                bool hasProperty = scope->hasProperty(globalObject, ident);
                 RETURN_IF_EXCEPTION(throwScope, JSValue());
+                if (hasProperty) {
+                    PropertySlot slot(scope, PropertySlot::InternalMethodType::Get);
+                    JSGlobalLexicalEnvironment::getOwnPropertySlot(scope, globalObject, ident, slot);
+                    if (slot.getValue(globalObject, ident) == jsTDZValue())
+                        return throwException(globalObject, throwScope, createTDZError(globalObject));
+                    baseObject = scope;
+                }
             }
 
             PutPropertySlot slot(baseObject);
             switch (JSONPPath.last().m_type) {
             case JSONPPathEntryTypeCall: {
-                JSValue function = baseObject.get(globalObject, JSONPPath.last().m_pathEntryName);
+                JSValue function = baseObject.get(globalObject, ident);
                 RETURN_IF_EXCEPTION(throwScope, JSValue());
                 auto callData = JSC::getCallData(function);
                 if (callData.type == CallData::Type::None)
@@ -918,7 +930,7 @@ JSValue Interpreter::executeProgram(const SourceCode& source, JSGlobalObject*, J
                 break;
             }
             case JSONPPathEntryTypeDot: {
-                baseObject.put(globalObject, JSONPPath.last().m_pathEntryName, JSONPValue, slot);
+                baseObject.put(globalObject, ident, JSONPValue, slot);
                 RETURN_IF_EXCEPTION(throwScope, JSValue());
                 break;
             }

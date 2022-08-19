@@ -80,7 +80,6 @@ public:
 
     String accessKeyLabel() const;
 
-    RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) override;
     bool rendererIsEverNeeded() final;
 
     WEBCORE_EXPORT virtual HTMLFormElement* form() const;
@@ -88,6 +87,7 @@ public:
     WEBCORE_EXPORT const AtomString& dir() const;
     WEBCORE_EXPORT void setDir(const AtomString&);
 
+    TextDirection computeDirectionality() const;
     bool hasDirectionAuto() const;
     TextDirection directionalityIfhasDirAutoAttribute(bool& isAuto) const;
 
@@ -147,7 +147,8 @@ protected:
     void addHTMLPixelsToStyle(MutableStyleProperties&, CSSPropertyID, StringView value);
     void addHTMLNumberToStyle(MutableStyleProperties&, CSSPropertyID, StringView value);
 
-    void addHTMLColorToStyle(MutableStyleProperties&, CSSPropertyID, const String& color);
+    static std::optional<SRGBA<uint8_t>> parseLegacyColorValue(StringView);
+    void addHTMLColorToStyle(MutableStyleProperties&, CSSPropertyID, const AtomString& color);
 
     void applyAspectRatioFromWidthAndHeightAttributesToStyle(StringView widthAttribute, StringView heightAttribute, MutableStyleProperties&);
     void applyAspectRatioWithoutDimensionalRulesFromWidthAndHeightAttributesToStyle(StringView widthAttribute, StringView heightAttribute, MutableStyleProperties&);

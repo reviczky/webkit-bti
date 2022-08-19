@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -158,7 +158,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 
         <div class="docblock">
           <p>A request to open a color&nbsp;chooser.</p>
-<p>Whenever the user interacts with an &lt;input type=&#8217;color&#8217; /&gt;
+<p>Whenever the user interacts with an <input type='color' />
 <span class="caps">HTML</span> element, WebKit will need to show a dialog to choose a color. For that
 to happen in a general way, instead of just opening a <code>GtkColorChooser</code>
 (which might be not desirable in some cases, which could prefer to use their
@@ -270,10 +270,7 @@ a regular <code>GtkColorChooserDialog</code> for the user to interact&nbsp;with.
         <div class="">
           <h6><a href="method.ColorChooserRequest.cancel.html">webkit_color_chooser_request_cancel</a></h6>
           <div class="docblock">
-            <p>Cancels <code>request</code> and the input element changes to use the initial color
-it has before the request started.
-The signal <code>WebKitColorChooserRequest::finished</code>
-is emitted to notify that the request has&nbsp;finished.</p>
+            <p>Cancels <code>request</code> and the input element changes to use the initial&nbsp;color.</p>
           </div>
           <div class="docblock"><p>Available since: 2.8</p></div>
         </div>
@@ -282,9 +279,7 @@ is emitted to notify that the request has&nbsp;finished.</p>
           <h6><a href="method.ColorChooserRequest.finish.html">webkit_color_chooser_request_finish</a></h6>
           <div class="docblock">
             <p>Finishes <code>request</code> and the input element keeps the current value of
-<code>WebKitColorChooserRequest:rgba</code>.
-The signal <code>WebKitColorChooserRequest::finished</code>
-is emitted to notify that the request has&nbsp;finished.</p>
+<code>WebKitColorChooserRequest:rgba</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.8</p></div>
         </div>

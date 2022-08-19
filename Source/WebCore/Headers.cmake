@@ -150,8 +150,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/cache/DOMCacheEngine.h
     Modules/cache/RetrieveRecordsOptions.h
 
-    Modules/compression/CompressionStream.h
-    Modules/compression/DecompressionStream.h
+    Modules/compression/CompressionStreamEncoder.h
+    Modules/compression/DecompressionStreamDecoder.h
     Modules/compression/Formats.h
 
     Modules/contact-picker/ContactInfo.h
@@ -298,6 +298,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/notifications/NotificationEventType.h
     Modules/notifications/NotificationPermission.h
     Modules/notifications/NotificationPermissionCallback.h
+    Modules/notifications/NotificationResources.h
 
     Modules/permissions/PermissionController.h
     Modules/permissions/PermissionDescriptor.h
@@ -1231,6 +1232,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/csp/ContentSecurityPolicyResponseHeaders.h
 
     page/scrolling/AsyncScrollingCoordinator.h
+    page/scrolling/ScrollAnchoringController.h
     page/scrolling/ScrollSnapOffsetsInfo.h
     page/scrolling/ScrollingConstraints.h
     page/scrolling/ScrollingCoordinator.h
@@ -1359,6 +1361,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/SSLKeyGenerator.h
     platform/ScreenProperties.h
     platform/ScriptExecutionContextIdentifier.h
+    platform/ScrollAlignment.h
     platform/ScrollAnimation.h
     platform/ScrollAnimationMomentum.h
     platform/ScrollAnimator.h
@@ -1495,6 +1498,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/FontBaseline.h
     platform/graphics/FontCache.h
     platform/graphics/FontCascade.h
+    platform/graphics/FontCascadeCache.h
     platform/graphics/FontCascadeDescription.h
     platform/graphics/FontCascadeFonts.h
     platform/graphics/FontCreationContext.h
@@ -1613,6 +1617,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/SourceBufferPrivateClient.h
     platform/graphics/SourceImage.h
     platform/graphics/StringTruncator.h
+    platform/graphics/SystemFallbackFontCache.h
     platform/graphics/SystemImage.h
     platform/graphics/TabSize.h
     platform/graphics/TextRun.h
@@ -1756,6 +1761,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/mediastream/RealtimeVideoSource.h
     platform/mediastream/VideoPreset.h
     platform/mediastream/WebAudioSourceProvider.h
+    platform/mediastream/WebRTCProvider.h
+
+    platform/mediastream/gstreamer/GStreamerWebRTCProvider.h
 
     platform/mediastream/libwebrtc/LibWebRTCEnumTraits.h
     platform/mediastream/libwebrtc/LibWebRTCMacros.h
@@ -1910,7 +1918,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/RenderVideo.h
     rendering/RenderView.h
     rendering/RenderWidget.h
-    rendering/ScrollAlignment.h
     rendering/SelectionRangeData.h
     rendering/TextBoxSelectableRange.h
 

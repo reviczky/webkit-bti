@@ -90,7 +90,6 @@
 #include "InspectorInstrumentation.h"
 #include "LayoutDisallowedScope.h"
 #include "LegacySchemeRegistry.h"
-#include "LibWebRTCProvider.h"
 #include "LoaderStrategy.h"
 #include "LogInitialization.h"
 #include "Logging.h"
@@ -164,6 +163,7 @@
 #include "VisitedLinkStore.h"
 #include "VoidCallback.h"
 #include "WebCoreJSClientData.h"
+#include "WebRTCProvider.h"
 #include "WheelEventDeltaFilter.h"
 #include "WheelEventTestMonitor.h"
 #include "Widget.h"
@@ -292,7 +292,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
 #endif
     , m_speechRecognitionProvider((WTFMove(pageConfiguration.speechRecognitionProvider)))
     , m_mediaRecorderProvider((WTFMove(pageConfiguration.mediaRecorderProvider)))
-    , m_libWebRTCProvider(WTFMove(pageConfiguration.libWebRTCProvider))
+    , m_webRTCProvider(WTFMove(pageConfiguration.webRTCProvider))
     , m_domTimerAlignmentInterval(DOMTimer::defaultAlignmentInterval())
     , m_domTimerAlignmentIntervalIncreaseTimer(*this, &Page::domTimerAlignmentIntervalIncreaseTimerFired)
     , m_activityState(pageInitialActivityState())
@@ -594,8 +594,8 @@ Ref<DOMRectList> Page::passiveTouchEventListenerRectsForTesting()
 void Page::settingsDidChange()
 {
 #if USE(LIBWEBRTC)
-    m_libWebRTCProvider->setH265Support(settings().webRTCH265CodecEnabled());
-    m_libWebRTCProvider->setVP9Support(settings().webRTCVP9Profile0CodecEnabled(), settings().webRTCVP9Profile2CodecEnabled());
+    m_webRTCProvider->setH265Support(settings().webRTCH265CodecEnabled());
+    m_webRTCProvider->setVP9Support(settings().webRTCVP9Profile0CodecEnabled(), settings().webRTCVP9Profile2CodecEnabled());
 #endif
 }
 
@@ -807,6 +807,16 @@ bool Page::findString(const String& target, FindOptions options, DidWrap* didWra
 
     return false;
 }
+
+#if ENABLE(IMAGE_ANALYSIS)
+void Page::analyzeImagesForFindInPage()
+{
+    if (settings().imageAnalysisDuringFindInPageEnabled()) {
+        if (RefPtr mainDocument = m_mainFrame->document(); mainDocument && !m_imageAnalysisQueue)
+            imageAnalysisQueue().enqueueAllImages(*mainDocument, { }, { });
+    }
+}
+#endif
 
 auto Page::findTextMatches(const String& target, FindOptions options, unsigned limit, bool markMatches) -> MatchingRanges
 {
@@ -1198,6 +1208,7 @@ void Page::setPageScaleFactor(float scale, const IntPoint& origin, bool inStable
         if (view && !delegatesScaling()) {
             view->setNeedsLayoutAfterViewConfigurationChange();
             view->setNeedsCompositingGeometryUpdate();
+            view->setDescendantsNeedUpdateBackingAndHierarchyTraversal();
 
             document->resolveStyle(Document::ResolveStyleType::Rebuild);
 
@@ -3544,12 +3555,12 @@ void Page::applicationWillResignActive()
 
 void Page::applicationDidEnterBackground()
 {
-    m_libWebRTCProvider->setActive(false);
+    m_webRTCProvider->setActive(false);
 }
 
 void Page::applicationWillEnterForeground()
 {
-    m_libWebRTCProvider->setActive(true);
+    m_webRTCProvider->setActive(true);
 }
 
 void Page::applicationDidBecomeActive()
@@ -3683,7 +3694,7 @@ void Page::configureLoggingChannel(const String& channelName, WTFLogChannelState
 
 #if USE(LIBWEBRTC)
         if (channel == &LogWebRTC && m_mainFrame->document() && !sessionID().isEphemeral())
-            libWebRTCProvider().setLoggingLevel(LogWebRTC.level);
+            webRTCProvider().setLoggingLevel(LogWebRTC.level);
 #endif
     }
 
@@ -3755,13 +3766,6 @@ bool Page::shouldDisableCorsForRequestTo(const URL& url) const
     return WTF::anyOf(m_corsDisablingPatterns, [&] (const auto& pattern) {
         return pattern.matches(url);
     });
-}
-
-bool Page::shouldMaskURLForBindings(const URL& url) const
-{
-    if (m_maskedURLSchemes.isEmpty())
-        return false;
-    return m_maskedURLSchemes.contains<StringViewHashTranslator>(url.protocol());
 }
 
 void Page::revealCurrentSelection()
@@ -3859,6 +3863,12 @@ ImageOverlayController& Page::imageOverlayController()
     if (!m_imageOverlayController)
         m_imageOverlayController = makeUnique<ImageOverlayController>(*this);
     return *m_imageOverlayController;
+}
+
+Page* Page::serviceWorkerPage(ScriptExecutionContextIdentifier serviceWorkerPageIdentifier)
+{
+    auto* serviceWorkerPageDocument = Document::allDocumentsMap().get(serviceWorkerPageIdentifier);
+    return serviceWorkerPageDocument ? serviceWorkerPageDocument->page() : nullptr;
 }
 
 #if ENABLE(IMAGE_ANALYSIS)

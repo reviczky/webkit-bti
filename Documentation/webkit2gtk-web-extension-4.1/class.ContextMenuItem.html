@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2WebExtension</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.37.1</p>
+        <p>Library Version: 2.37.90</p>
         
       </div>
       
@@ -291,8 +291,7 @@ for the items. You can also create separators and&nbsp;submenus.</p>
           <h6><a href="ctor.ContextMenuItem.new_from_gaction.html">webkit_context_menu_item_new_from_gaction</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitContextMenuItem</code> for the given <code>action</code> and <code>label</code>. On activation
-<code>target</code> will be passed as parameter to the&nbsp;callback.</p>
+            <p>Creates a new <code>WebKitContextMenuItem</code> for the given <code>action</code> and <code>label</code>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.18</p></div>
@@ -302,15 +301,7 @@ for the items. You can also create separators and&nbsp;submenus.</p>
           <h6><a href="ctor.ContextMenuItem.new_from_stock_action.html">webkit_context_menu_item_new_from_stock_action</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitContextMenuItem</code> for the given stock action.
-Stock actions are handled automatically by WebKit so that, for example,
-when a menu item created with a <code>WEBKIT_CONTEXT_MENU_ACTION_STOP</code> is
-activated the action associated will be handled by WebKit and the current
-load operation will be stopped. You can get the <code>GAction</code> of a
-<code>WebKitContextMenuItem</code> created with a <code>WebKitContextMenuAction</code> with
-<code>webkit_context_menu_item_get_gaction()</code> and connect to the <code>GSimpleAction::activate</code> signal
-to be notified when the item is activated, but you can&#8217;t prevent the associated
-action from being&nbsp;performed.</p>
+            <p>Creates a new <code>WebKitContextMenuItem</code> for the given stock&nbsp;action.</p>
           </div>
 
           
@@ -320,9 +311,7 @@ action from being&nbsp;performed.</p>
           <h6><a href="ctor.ContextMenuItem.new_from_stock_action_with_label.html">webkit_context_menu_item_new_from_stock_action_with_label</a></h6>
 
           <div class="docblock">
-            <p>Creates a new <code>WebKitContextMenuItem</code> for the given stock action using the given <code>label</code>.
-Stock actions have a predefined label, this method can be used to create a
-<code>WebKitContextMenuItem</code> for a <code>WebKitContextMenuAction</code> but using a custom&nbsp;label.</p>
+            <p>Creates a new <code>WebKitContextMenuItem</code> for the given stock action using the given <code>label</code>.</p>
           </div>
 
           
@@ -382,10 +371,7 @@ Stock actions have a predefined label, this method can be used to create a
         <div class="">
           <h6><a href="method.ContextMenuItem.get_stock_action.html">webkit_context_menu_item_get_stock_action</a></h6>
           <div class="docblock">
-            <p>Gets the <code>WebKitContextMenuAction</code> of <code>item</code>. If the <code>WebKitContextMenuItem</code> was not
-created for a stock action <code>WEBKIT_CONTEXT_MENU_ACTION_CUSTOM</code> will be
-returned. If the <code>WebKitContextMenuItem</code> is a separator <code>WEBKIT_CONTEXT_MENU_ACTION_NO_ACTION</code>
-will be&nbsp;returned.</p>
+            <p>Gets the <code>WebKitContextMenuAction</code> of <code>item</code>.</p>
           </div>
           
         </div>
@@ -409,8 +395,7 @@ will be&nbsp;returned.</p>
         <div class="">
           <h6><a href="method.ContextMenuItem.set_submenu.html">webkit_context_menu_item_set_submenu</a></h6>
           <div class="docblock">
-            <p>Sets or replaces the <code>item</code> submenu. If <code>submenu</code> is <code>NULL</code> the current
-submenu of <code>item</code> is&nbsp;removed.</p>
+            <p>Sets or replaces the <code>item</code> submenu.</p>
           </div>
           
         </div>

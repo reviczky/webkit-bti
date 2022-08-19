@@ -358,6 +358,11 @@ Ref<GraphicsLayer> RenderLayerBacking::createGraphicsLayer(const String& name, G
     graphicsLayer->setAcceleratesDrawing(compositor().acceleratedDrawingEnabled());
     graphicsLayer->setUsesDisplayListDrawing(compositor().displayListDrawingEnabled());
 #endif
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    if (renderer().isSVGLayerAwareRenderer() && renderer().document().settings().layerBasedSVGEngineEnabled())
+        graphicsLayer->setShouldUpdateRootRelativeScaleFactor(true);
+#endif
     
     return graphicsLayer;
 }
@@ -2688,6 +2693,17 @@ bool RenderLayerBacking::paintsContent(RenderLayer::PaintedContentRequest& reque
     if (request.isSatisfied())
         return paintsContent;
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    // FIXME: [LBSE] Eventually refine the logic to end up with a narrower set of conditions (webkit.org/b/243417).
+    if (is<RenderSVGModelObject>(m_owningLayer.renderer())) {
+        paintsContent = true;
+        request.setHasPaintedContent();
+    }
+
+    if (request.isSatisfied())
+        return paintsContent;
+#endif
+
     if (request.hasPaintedContent == RequestState::Unknown)
         request.hasPaintedContent = RequestState::False;
 
@@ -2898,6 +2914,9 @@ bool RenderLayerBacking::isUnscaledBitmapOnly() const
         return false;
 
     if (m_owningLayer.hasVisibleBoxDecorationsOrBackground())
+        return false;
+
+    if (pageScaleFactor() < 1.0f)
         return false;
 
     auto contents = contentsBox();

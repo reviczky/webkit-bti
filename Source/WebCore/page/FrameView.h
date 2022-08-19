@@ -74,14 +74,13 @@ class RenderStyle;
 class RenderView;
 class RenderWidget;
 class ScrollingCoordinator;
+class ScrollAnchoringController;
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 namespace Display {
 class View;
 }
 #endif
-
-enum class FrameFlattening : uint8_t;
 
 Pagination::Mode paginationModeForRenderStyle(const RenderStyle&);
 
@@ -121,8 +120,6 @@ public:
 
     Ref<Scrollbar> createScrollbar(ScrollbarOrientation) final;
 
-    bool avoidScrollbarCreation() const final;
-
     void setContentsSize(const IntSize&) final;
     void updateContentsSize() final;
 
@@ -137,6 +134,7 @@ public:
 
     void setNeedsCompositingConfigurationUpdate();
     void setNeedsCompositingGeometryUpdate();
+    void setDescendantsNeedUpdateBackingAndHierarchyTraversal();
 
     WEBCORE_EXPORT void setViewportConstrainedObjectsNeedLayout();
 
@@ -272,6 +270,7 @@ public:
     void scrollToFocusedElementImmediatelyIfNeeded();
     void updateLayerPositionsAfterScrolling() final;
     void updateCompositingLayersAfterScrolling() final;
+    static WEBCORE_EXPORT bool scrollRectToVisible(const LayoutRect& absoluteRect, const RenderObject&, bool insideFixed, const ScrollRectToVisibleOptions&);
 
     bool requestScrollPositionUpdate(const ScrollPosition&, ScrollType = ScrollType::User, ScrollClamping = ScrollClamping::Clamped) final;
     bool requestAnimatedScrollToPosition(const ScrollPosition&, ScrollClamping = ScrollClamping::Clamped) final;
@@ -431,8 +430,6 @@ public:
     void paintScrollbar(GraphicsContext&, Scrollbar&, const IntRect&) final;
 
     WEBCORE_EXPORT Color documentBackgroundColor() const;
-
-    bool isInChildFrameWithFrameFlattening() const;
 
     void startDisallowingLayout() { layoutContext().startDisallowingLayout(); }
     void endDisallowingLayout() { layoutContext().endDisallowingLayout(); }
@@ -695,8 +692,6 @@ public:
 
     void setSpeculativeTilingDelayDisabledForTesting(bool disabled) { m_speculativeTilingDelayDisabledForTesting = disabled; }
 
-    FrameFlattening effectiveFrameFlattening() const;
-
     WEBCORE_EXPORT void invalidateControlTints();
     void invalidateImagesWithAsyncDecodes();
 
@@ -812,6 +807,8 @@ private:
     bool mockScrollbarsControllerEnabled() const final;
     void logMockScrollbarsControllerMessage(const String&) const final;
 
+    bool canShowNonOverlayScrollbars() const final;
+
     bool styleHidesScrollbarWithOrientation(ScrollbarOrientation) const;
     bool horizontalScrollbarHiddenByStyle() const final;
     bool verticalScrollbarHiddenByStyle() const final;
@@ -857,9 +854,6 @@ private:
 
     FrameView* parentFrameView() const;
 
-    bool frameFlatteningEnabled() const;
-    bool isFrameFlatteningValidForThisFrame() const;
-
     void markRootOrBodyRendererDirty() const;
 
     bool qualifiesAsSignificantRenderedText() const;
@@ -896,6 +890,10 @@ private:
 
     static MonotonicTime sCurrentPaintTimeStamp; // used for detecting decoded resource thrash in the cache
 
+    void scrollRectToVisibleInChildView(const LayoutRect& absoluteRect, bool insideFixed, const ScrollRectToVisibleOptions&, const HTMLFrameOwnerElement*);
+    void scrollRectToVisibleInTopLevelView(const LayoutRect& absoluteRect, bool insideFixed, const ScrollRectToVisibleOptions&);
+    LayoutRect getPossiblyFixedRectToExpose(const LayoutRect& visibleRect, const LayoutRect& exposeRect, bool insideFixed, const ScrollAlignment& alignX, const ScrollAlignment& alignY) const;
+
     const Ref<Frame> m_frame;
     FrameViewLayoutContext m_layoutContext;
 
@@ -921,7 +919,7 @@ private:
 
     MonotonicTime m_lastPaintTime;
 
-    LayoutSize m_size;
+    LayoutSize m_lastUsedSizeForLayout;
 
     Color m_baseBackgroundColor { Color::white };
     IntSize m_lastViewportSize;
@@ -981,6 +979,7 @@ private:
     ViewportRendererType m_viewportRendererType { ViewportRendererType::None };
     ScrollPinningBehavior m_scrollPinningBehavior { DoNotPin };
     SelectionRevealMode m_selectionRevealModeForFocusedElement { SelectionRevealMode::DoNotReveal };
+    std::unique_ptr<ScrollAnchoringController> m_scrollAnchoringController;
 
     bool m_shouldUpdateWhileOffscreen { true };
     bool m_overflowStatusDirty { true };
