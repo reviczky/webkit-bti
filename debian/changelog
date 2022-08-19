@@ -11,6 +11,8 @@ webkit2gtk (2.37.90-1) UNRELEASED; urgency=medium
     - Enable the GTK4 build (Closes: #1016765).
   * debian/control.in:
     - Remove build dependency on libnotify-dev (no longer used by WebKit).
+  * debian/patches/fix-ftbfs-cloop.patch:
+     - Drop this patch.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 16 Aug 2022 00:20:34 +0200
 
