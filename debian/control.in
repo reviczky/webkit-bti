@@ -23,7 +23,6 @@ Build-Depends: debhelper-compat (= 12),
                libhyphen-dev,
                liblcms2-dev,
                libmanette-0.2-dev (>= 0.2.4) [linux-any],
-               libnotify-dev,
                libxslt1-dev (>= 1.1.7),
                libxml2-dev (>= 2.8),
                @EXTRA_BUILD_DEPS@

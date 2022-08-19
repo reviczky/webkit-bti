@@ -9,6 +9,8 @@ webkit2gtk (2.37.90-1) UNRELEASED; urgency=medium
     - Enable wpe on Ubuntu now that the MIR has been accepted (thanks,
       Sebastien Bacher) (#1016585).
     - Enable the GTK4 build (Closes: #1016765).
+  * debian/control.in:
+    - Remove build dependency on libnotify-dev (no longer used by WebKit).
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 16 Aug 2022 00:20:34 +0200
 
