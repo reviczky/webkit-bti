@@ -13,6 +13,8 @@ webkit2gtk (2.37.90-1) UNRELEASED; urgency=medium
     - Remove build dependency on libnotify-dev (no longer used by WebKit).
   * debian/patches/fix-ftbfs-cloop.patch:
      - Drop this patch.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 16 Aug 2022 00:20:34 +0200
 
