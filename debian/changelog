@@ -15,6 +15,8 @@ webkit2gtk (2.37.90-1) UNRELEASED; urgency=medium
      - Drop this patch.
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
+  * debian/copyright:
+    - Remove obsolete entries.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 16 Aug 2022 00:20:34 +0200
 

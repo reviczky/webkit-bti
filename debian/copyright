@@ -2820,8 +2820,6 @@ Files: Source/WebCore/platform/image-decoders/jpeg/JPEGImageDecoder.cpp
        Source/WebCore/rendering/RenderLayerScrollableArea.h
        Source/WebCore/rendering/RenderMarquee.cpp
        Source/WebCore/rendering/RenderMarquee.h
-       Source/WebCore/rendering/ScrollAlignment.cpp
-       Source/WebCore/rendering/ScrollAlignment.h
 Copyright: 1998 Netscape Communications Corporation
            2001-2006 mozilla.org
            2003, 2006-2020 Apple Inc
