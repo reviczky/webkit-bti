@@ -1,4 +1,4 @@
-webkit2gtk (2.37.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.37.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * Generate debian/control from debian/control.in and control-common.in
@@ -18,7 +18,7 @@ webkit2gtk (2.37.90-1) UNRELEASED; urgency=medium
   * debian/copyright:
     - Remove obsolete entries.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 16 Aug 2022 00:20:34 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 19 Aug 2022 14:42:19 +0200
 
 webkit2gtk (2.37.1-2) experimental; urgency=medium
 
