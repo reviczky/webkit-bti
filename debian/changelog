@@ -1,8 +1,8 @@
-webkit2gtk (2.36.7-1) UNRELEASED; urgency=high
+webkit2gtk (2.36.7-1) unstable; urgency=high
 
   * New upstream release.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 25 Aug 2022 00:54:11 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 25 Aug 2022 01:49:31 +0200
 
 webkit2gtk (2.36.6-1) unstable; urgency=high
 
