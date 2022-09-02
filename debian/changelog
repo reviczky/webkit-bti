@@ -1,4 +1,4 @@
-webkit2gtk (2.37.91-1) UNRELEASED; urgency=medium
+webkit2gtk (2.37.91-1) experimental; urgency=medium
 
   * New upstream development release (Closes: #986218).
 
