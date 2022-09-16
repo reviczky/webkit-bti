@@ -1,4 +1,4 @@
-webkit2gtk (2.38.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.38.0-1) unstable; urgency=high
 
   * New upstream release (Closes: #986218).
   * debian/rules:
@@ -33,7 +33,7 @@ webkit2gtk (2.38.0-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 16 Sep 2022 14:26:08 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 16 Sep 2022 16:59:49 +0200
 
 webkit2gtk (2.36.7-1) unstable; urgency=high
 
