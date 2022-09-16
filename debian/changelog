@@ -1,5 +1,6 @@
-webkit2gtk (2.37.91-2) UNRELEASED; urgency=medium
+webkit2gtk (2.38.0-1) UNRELEASED; urgency=medium
 
+  * New upstream release (Closes: #986218).
   * Bring all changes from the 2.37 (experimental) branch.
   * debian/gbp.conf:
     - Update upstream branch name.
