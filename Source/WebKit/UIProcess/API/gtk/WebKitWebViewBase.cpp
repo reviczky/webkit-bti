@@ -273,7 +273,9 @@ struct _WebKitWebViewBasePrivate {
     CString tooltipText;
     IntRect tooltipArea;
     WebHitTestResultData::IsScrollbar mouseIsOverScrollbar;
+#if !USE(GTK4)
     GRefPtr<AtkObject> accessible;
+#endif
     GtkWidget* dialog { nullptr };
     GtkWidget* inspectorView { nullptr };
     AttachmentSide inspectorAttachmentSide { AttachmentSide::Bottom };
@@ -335,6 +337,12 @@ struct _WebKitWebViewBasePrivate {
 
     std::unique_ptr<PointerLockManager> pointerLockManager;
 };
+
+/**
+ * WebKitWebViewBase:
+ *
+ * Internal base class.
+ */
 
 #if USE(GTK4)
 WEBKIT_DEFINE_TYPE(WebKitWebViewBase, webkit_web_view_base, GTK_TYPE_WIDGET)
@@ -2321,13 +2329,13 @@ void webkitWebViewBaseSetMouseIsOverScrollbar(WebKitWebViewBase* webViewBase, We
 }
 
 #if ENABLE(DRAG_SUPPORT)
-void webkitWebViewBaseStartDrag(WebKitWebViewBase* webViewBase, SelectionData&& selectionData, OptionSet<DragOperation> dragOperationMask, RefPtr<ShareableBitmap>&& image)
+void webkitWebViewBaseStartDrag(WebKitWebViewBase* webViewBase, SelectionData&& selectionData, OptionSet<DragOperation> dragOperationMask, RefPtr<ShareableBitmap>&& image, IntPoint&& dragImageHotspot)
 {
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
     if (!priv->dragSource)
         priv->dragSource = makeUnique<DragSource>(GTK_WIDGET(webViewBase));
 
-    priv->dragSource->begin(WTFMove(selectionData), dragOperationMask, WTFMove(image));
+    priv->dragSource->begin(WTFMove(selectionData), dragOperationMask, WTFMove(image), WTFMove(dragImageHotspot));
 
 #if !USE(GTK4)
     // A drag starting should prevent a double-click from happening. This might
@@ -2366,7 +2374,7 @@ void webkitWebViewBaseEnterFullScreen(WebKitWebViewBase* webkitWebViewBase)
         gtk_window_fullscreen(GTK_WINDOW(topLevelWindow));
     fullScreenManagerProxy->didEnterFullScreen();
     priv->fullScreenModeActive = true;
-    priv->sleepDisabler = PAL::SleepDisabler::create(_("Website running in fullscreen mode"), PAL::SleepDisabler::Type::Display);
+    priv->sleepDisabler = PAL::SleepDisabler::create(String::fromUTF8(_("Website running in fullscreen mode")), PAL::SleepDisabler::Type::Display);
 #endif
 }
 

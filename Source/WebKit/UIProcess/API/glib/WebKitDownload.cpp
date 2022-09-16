@@ -38,16 +38,15 @@ using namespace WebKit;
 using namespace WebCore;
 
 /**
- * SECTION: WebKitDownload
- * @Short_description: Object used to communicate with the application when downloading
- * @Title: WebKitDownload
+ * WebKitDownload:
+ *
+ * Object used to communicate with the application when downloading.
  *
  * #WebKitDownload carries information about a download request and
  * response, including a #WebKitURIRequest and a #WebKitURIResponse
  * objects. The application may use this object to control the
  * download process, or to simply figure out what is to be downloaded,
  * and handle the download process itself.
- *
  */
 
 enum {
@@ -463,7 +462,9 @@ WebKitURIRequest* webkit_download_get_request(WebKitDownload* download)
  * webkit_download_get_destination:
  * @download: a #WebKitDownload
  *
- * Obtains the URI to which the downloaded file will be written. You
+ * Obtains the URI to which the downloaded file will be written.
+ *
+ * You
  * can connect to #WebKitDownload::created-destination to make
  * sure this method returns a valid destination.
  *
@@ -482,6 +483,7 @@ const gchar* webkit_download_get_destination(WebKitDownload* download)
  * @uri: the destination URI
  *
  * Sets the URI to which the downloaded file will be written.
+ *
  * This method should be called before the download transfer
  * starts or it will not have any effect on the ongoing download
  * operation. To set the destination using the filename suggested
@@ -512,6 +514,8 @@ void webkit_download_set_destination(WebKitDownload* download, const gchar* uri)
  * webkit_download_get_response:
  * @download: a #WebKitDownload
  *
+ * Retrieves the #WebKitURIResponse object that backs the download process.
+ *
  * Retrieves the #WebKitURIResponse object that backs the download
  * process. This method returns %NULL if called before the response
  * is received from the server. You can connect to notify::response
@@ -531,7 +535,9 @@ WebKitURIResponse* webkit_download_get_response(WebKitDownload* download)
  * webkit_download_cancel:
  * @download: a #WebKitDownload
  *
- * Cancels the download. When the ongoing download
+ * Cancels the download.
+ *
+ * When the ongoing download
  * operation is effectively cancelled the signal
  * #WebKitDownload::failed is emitted with
  * %WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER error.
@@ -550,6 +556,7 @@ void webkit_download_cancel(WebKitDownload* download)
  * webkit_download_get_estimated_progress:
  * @download: a #WebKitDownload
  *
+ * Gets the value of the #WebKitDownload:estimated-progress property.
  * Gets the value of the #WebKitDownload:estimated-progress property.
  * You can monitor the estimated progress of the download operation by
  * connecting to the notify::estimated-progress signal of @download.
@@ -577,6 +584,7 @@ gdouble webkit_download_get_estimated_progress(WebKitDownload* download)
  * @download: a #WebKitDownload
  *
  * Gets the elapsed time in seconds, including any fractional part.
+ *
  * If the download finished, had an error or was cancelled this is
  * the time between its start and the event.
  *
@@ -596,6 +604,8 @@ gdouble webkit_download_get_elapsed_time(WebKitDownload* download)
 /**
  * webkit_download_get_received_data_length:
  * @download: a #WebKitDownload
+ *
+ * Gets the length of the data already downloaded for @download.
  *
  * Gets the length of the data already downloaded for @download
  * in bytes.
@@ -629,6 +639,8 @@ WebKitWebView* webkit_download_get_web_view(WebKitDownload* download)
  * webkit_download_get_allow_overwrite:
  * @download: a #WebKitDownload
  *
+ * Returns the current value of the #WebKitDownload:allow-overwrite property.
+ *
  * Returns the current value of the #WebKitDownload:allow-overwrite property,
  * which determines whether the download will overwrite an existing file on
  * disk, or if it will fail if the destination already exists.
@@ -648,6 +660,8 @@ gboolean webkit_download_get_allow_overwrite(WebKitDownload* download)
  * webkit_download_set_allow_overwrite:
  * @download: a #WebKitDownload
  * @allowed: the new value for the #WebKitDownload:allow-overwrite property
+ *
+ * Sets the #WebKitDownload:allow-overwrite property.
  *
  * Sets the #WebKitDownload:allow-overwrite property, which determines whether
  * the download may overwrite an existing file on disk, or if it will fail if

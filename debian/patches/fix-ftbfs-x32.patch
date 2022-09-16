@@ -26,7 +26,7 @@ Index: webkitgtk/Source/cmake/WebKitCommon.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/WebKitCommon.cmake
 +++ webkitgtk/Source/cmake/WebKitCommon.cmake
-@@ -94,6 +94,8 @@ if (NOT HAS_RUN_WEBKIT_COMMON)
+@@ -99,6 +99,8 @@ if (NOT HAS_RUN_WEBKIT_COMMON)
          set(WTF_CPU_MIPS64 1)
      elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "^mips")
          set(WTF_CPU_MIPS 1)

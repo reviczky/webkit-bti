@@ -40,6 +40,7 @@
 namespace WebCore {
 class SecurityOrigin;
 class StorageMap;
+struct ClientOrigin;
 }
 
 namespace WebKit {
@@ -58,9 +59,9 @@ public:
     unsigned length();
     String key(unsigned index);
     String item(const String& key);
-    void setItem(WebCore::Frame* sourceFrame, StorageAreaImpl* sourceArea, const String& key, const String& value, bool& quotaException);
-    void removeItem(WebCore::Frame* sourceFrame, StorageAreaImpl* sourceArea, const String& key);
-    void clear(WebCore::Frame* sourceFrame, StorageAreaImpl* sourceArea);
+    void setItem(WebCore::Frame& sourceFrame, StorageAreaImpl* sourceArea, const String& key, const String& value, bool& quotaException);
+    void removeItem(WebCore::Frame& sourceFrame, StorageAreaImpl* sourceArea, const String& key);
+    void clear(WebCore::Frame& sourceFrame, StorageAreaImpl* sourceArea);
     bool contains(const String& key);
 
     // IPC::MessageReceiver
@@ -85,6 +86,8 @@ private:
 
     void resetValues();
     WebCore::StorageMap& ensureMap();
+    WebCore::StorageType computeStorageType() const;
+    WebCore::ClientOrigin clientOrigin() const;
 
     bool shouldApplyChangeForKey(const String& key) const;
     void applyChange(const String& key, const String& newValue);
@@ -109,6 +112,7 @@ private:
     WebCore::StorageType m_type;
     uint64_t m_useCount { 0 };
     bool m_hasPendingClear { false };
+    bool m_isWaitingForConnectReply { false };
 };
 
 } // namespace WebKit

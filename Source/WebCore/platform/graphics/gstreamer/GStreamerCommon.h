@@ -55,6 +55,15 @@ inline bool webkitGstCheckVersion(guint major, guint minor, guint micro)
     return true;
 }
 
+// gst_video_format_info_component() is GStreamer 1.18 API, so for older versions we use a local
+// vendored copy of the function.
+#if !GST_CHECK_VERSION(1, 18, 0)
+#define GST_VIDEO_MAX_COMPONENTS 4
+void webkitGstVideoFormatInfoComponent(const GstVideoFormatInfo*, guint, gint components[GST_VIDEO_MAX_COMPONENTS]);
+
+#define gst_video_format_info_component webkitGstVideoFormatInfoComponent
+#endif
+
 #define GST_VIDEO_CAPS_TYPE_PREFIX  "video/"
 #define GST_AUDIO_CAPS_TYPE_PREFIX  "audio/"
 #define GST_TEXT_CAPS_TYPE_PREFIX   "text/"
@@ -78,9 +87,14 @@ uint64_t toGstUnsigned64Time(const MediaTime&);
 bool isThunderRanked();
 #endif
 
-inline GstClockTime toGstClockTime(const MediaTime &mediaTime)
+inline GstClockTime toGstClockTime(const MediaTime& mediaTime)
 {
     return static_cast<GstClockTime>(toGstUnsigned64Time(mediaTime));
+}
+
+inline GstClockTime toGstClockTime(const Seconds& seconds)
+{
+    return toGstClockTime(MediaTime::createWithDouble(seconds.seconds()));
 }
 
 inline MediaTime fromGstClockTime(GstClockTime time)
@@ -300,7 +314,7 @@ void disconnectSimpleBusMessageCallback(GstElement*);
 enum class GstVideoDecoderPlatform { ImxVPU, Video4Linux, OpenMAX };
 
 bool isGStreamerPluginAvailable(const char* name);
-bool gstElementFactoryEquals(GstElement*, const char* name);
+bool gstElementFactoryEquals(GstElement*, ASCIILiteral name);
 
 GstElement* createAutoAudioSink(const String& role);
 GstElement* createPlatformAudioSink(const String& role);
@@ -342,9 +356,12 @@ inline void gstObjectLock(void* object) { GST_OBJECT_LOCK(object); }
 inline void gstObjectUnlock(void* object) { GST_OBJECT_UNLOCK(object); }
 inline void gstPadStreamLock(GstPad* pad) { GST_PAD_STREAM_LOCK(pad); }
 inline void gstPadStreamUnlock(GstPad* pad) { GST_PAD_STREAM_UNLOCK(pad); }
+inline void gstStateLock(void* object) { GST_STATE_LOCK(object); }
+inline void gstStateUnlock(void* object) { GST_STATE_UNLOCK(object); }
 
 using GstObjectLocker = ExternalLocker<void, gstObjectLock, gstObjectUnlock>;
 using GstPadStreamLocker = ExternalLocker<GstPad, gstPadStreamLock, gstPadStreamUnlock>;
+using GstStateLocker = ExternalLocker<void, gstStateLock, gstStateUnlock>;
 
 template <typename T>
 class GstIteratorAdaptor {

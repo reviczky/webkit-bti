@@ -55,6 +55,7 @@
 #include <wtf/Compiler.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
+#include <wtf/unix/UnixFileDescriptor.h>
 
 #if ENABLE(DATE_AND_TIME_INPUT_TYPES)
 #include "WebDateTimePickerGtk.h"
@@ -344,9 +345,9 @@ void PageClientImpl::didChangeContentSize(const IntSize& size)
 }
 
 #if ENABLE(DRAG_SUPPORT)
-void PageClientImpl::startDrag(SelectionData&& selection, OptionSet<DragOperation> dragOperationMask, RefPtr<ShareableBitmap>&& dragImage)
+void PageClientImpl::startDrag(SelectionData&& selection, OptionSet<DragOperation> dragOperationMask, RefPtr<ShareableBitmap>&& dragImage, IntPoint&& dragImageHotspot)
 {
-    webkitWebViewBaseStartDrag(WEBKIT_WEB_VIEW_BASE(m_viewWidget), WTFMove(selection), dragOperationMask, WTFMove(dragImage));
+    webkitWebViewBaseStartDrag(WEBKIT_WEB_VIEW_BASE(m_viewWidget), WTFMove(selection), dragOperationMask, WTFMove(dragImage), WTFMove(dragImageHotspot));
 }
 
 void PageClientImpl::didPerformDragControllerAction()
@@ -592,7 +593,7 @@ bool PageClientImpl::effectiveAppearanceIsDark() const
 #if USE(WPE_RENDERER)
 IPC::Attachment PageClientImpl::hostFileDescriptor()
 {
-    return webkitWebViewBaseRenderHostFileDescriptor(WEBKIT_WEB_VIEW_BASE(m_viewWidget));
+    return IPC::Attachment({ webkitWebViewBaseRenderHostFileDescriptor(WEBKIT_WEB_VIEW_BASE(m_viewWidget)), UnixFileDescriptor::Adopt });
 }
 #endif
 

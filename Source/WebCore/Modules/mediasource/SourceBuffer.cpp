@@ -55,6 +55,7 @@
 #include "VideoTrack.h"
 #include "VideoTrackList.h"
 #include "VideoTrackPrivate.h"
+#include "WebCoreOpaqueRoot.h"
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/VM.h>
@@ -681,10 +682,10 @@ void SourceBuffer::setActive(bool active)
         m_source->sourceBufferDidChangeActiveState(*this, active);
 }
 
-void SourceBuffer::sourceBufferPrivateDidReceiveInitializationSegment(InitializationSegment&& segment, CompletionHandler<void()>&& completionHandler)
+void SourceBuffer::sourceBufferPrivateDidReceiveInitializationSegment(InitializationSegment&& segment, CompletionHandler<void(ReceiveResult)>&& completionHandler)
 {
     if (isRemoved()) {
-        completionHandler();
+        completionHandler(ReceiveResult::BufferRemoved);
         return;
     }
 
@@ -709,7 +710,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveInitializationSegment(Initializa
     // with the decode error parameter set to true and abort these steps.
     if (segment.audioTracks.isEmpty() && segment.videoTracks.isEmpty() && segment.textTracks.isEmpty()) {
         appendError(true);
-        completionHandler();
+        completionHandler(ReceiveResult::AppendError);
         return;
     }
 
@@ -719,7 +720,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveInitializationSegment(Initializa
         // with the decode error parameter set to true and abort these steps.
         if (!validateInitializationSegment(segment)) {
             appendError(true);
-            completionHandler();
+            completionHandler(ReceiveResult::AppendError);
             return;
         }
 
@@ -797,7 +798,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveInitializationSegment(Initializa
                 if (audioTrackInfo.description && allowedMediaAudioCodecIDs->contains(FourCC::fromString(audioTrackInfo.description->codec())))
                     continue;
                 appendError(true);
-                completionHandler();
+                completionHandler(ReceiveResult::AppendError);
                 return;
             }
         }
@@ -807,7 +808,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveInitializationSegment(Initializa
                 if (videoTrackInfo.description && allowedMediaVideoCodecIDs->contains(FourCC::fromString(videoTrackInfo.description->codec())))
                     continue;
                 appendError(true);
-                completionHandler();
+                completionHandler(ReceiveResult::AppendError);
                 return;
             }
         }
@@ -931,7 +932,7 @@ void SourceBuffer::sourceBufferPrivateDidReceiveInitializationSegment(Initializa
     // (Note: Issue #155 adds this step after step 5:)
     // 6. Set  pending initialization segment for changeType flag  to false.
     m_pendingInitializationSegmentForChangeType = false;
-    completionHandler();
+    completionHandler(ReceiveResult::RecieveSucceeded);
 
     // 6. If the HTMLMediaElement.readyState attribute is HAVE_NOTHING, then run the following steps:
     if (m_private->readyState() == MediaPlayer::ReadyState::HaveNothing) {
@@ -1246,6 +1247,8 @@ void SourceBuffer::reportExtraMemoryAllocated(uint64_t extraMemory)
     if (m_pendingAppendData)
         extraMemoryCost += m_pendingAppendData->size();
 
+    m_extraMemoryCost = extraMemoryCost;
+
     if (extraMemoryCost <= m_reportedExtraMemoryCost)
         return;
 
@@ -1353,6 +1356,16 @@ void SourceBuffer::setBufferedDirty(bool flag)
 void SourceBuffer::setMediaSourceEnded(bool isEnded)
 {
     m_private->setMediaSourceEnded(isEnded);
+}
+
+size_t SourceBuffer::memoryCost() const
+{
+    return sizeof(SourceBuffer) + m_extraMemoryCost;
+}
+
+WebCoreOpaqueRoot SourceBuffer::opaqueRoot()
+{
+    return WebCoreOpaqueRoot { this };
 }
 
 #if !RELEASE_LOG_DISABLED

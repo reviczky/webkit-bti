@@ -1,0 +1,131 @@
+Package: @LIBJSC_PKG@
+Section: libs
+Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Description: JavaScript engine library from WebKitGTK
+ JavaScriptCore is the JavaScript engine used in WebKit. It consists
+ of the following building blocks: lexer, parser, start-up interpreter
+ (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
+ high-throughput optimizing JIT (FTL).
+ .
+ This build comes from the GTK port of WebKit (API version @WK_API_VERSION@).
+ .
+ This package contains the shared libraries.
+
+Package: libjavascriptcoregtk-@WK_API_VERSION@-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: @LIBJSC_PKG@ (= ${binary:Version}),
+         gir1.2-javascriptcoregtk-@WK_API_VERSION@ (= ${binary:Version}),
+         libglib2.0-dev,
+         ${misc:Depends}
+Description: JavaScript engine library from WebKitGTK - development files
+ JavaScriptCore is the JavaScript engine used in WebKit. It consists
+ of the following building blocks: lexer, parser, start-up interpreter
+ (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
+ high-throughput optimizing JIT (FTL).
+ .
+ This build comes from the GTK port of WebKit (API version @WK_API_VERSION@).
+ .
+ This package contains the development files.
+
+Package: gir1.2-javascriptcoregtk-@WK_API_VERSION@
+Section: introspection
+Architecture: any
+Multi-Arch: same
+Depends: ${gir:Depends},
+         @LIBJSC_PKG@ (= ${binary:Version}),
+         ${misc:Depends}
+Description: JavaScript engine library from WebKitGTK - GObject introspection data
+ JavaScriptCore is the JavaScript engine used in WebKit. It consists
+ of the following building blocks: lexer, parser, start-up interpreter
+ (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
+ high-throughput optimizing JIT (FTL).
+ .
+ This build comes from the GTK port of WebKit (API version @WK_API_VERSION@).
+ .
+ This package contains the introspection data, which can be used by
+ packages using the GIRepository format to generate dynamic bindings.
+
+Package: @LIBWEBKITGTK_PKG@
+Section: libs
+Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
+Depends: @LIBJSC_PKG@ (= ${binary:Version}),
+         gstreamer1.0-plugins-base,
+         gstreamer1.0-plugins-good,
+         ${bwrap:Depends},
+         ${shlibs:Depends},
+         ${misc:Depends}
+Recommends: gstreamer1.0-gl,
+            libgl1-mesa-dri,
+            ${bwrap:Recommends},
+            ${gst:Recommends}
+Suggests: ${gst:Suggests},
+         gstreamer1.0-alsa
+Description: Web content engine library for GTK
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
+ .
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ WebKitGTK is a WebKit port designed to be used in GTK applications.
+ This build provides version @WK_API_VERSION@ of the API and uses libsoup v@SOUP_VERSION@ for
+ the networking stack and the GTK @GTK_VERSION@ widget toolkit.
+ .
+ This package contains the shared libraries.
+
+Package: libwebkit2gtk-@WK_API_VERSION@-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
+         gir1.2-webkit2-@WK_API_VERSION@ (= ${binary:Version}),
+         libgtk-@GTK_VERSION@-dev,
+         @SOUPDEV_PKG@,
+         libjavascriptcoregtk-@WK_API_VERSION@-dev (= ${binary:Version}),
+         ${misc:Depends}
+Description: Web content engine library for GTK - development files
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
+ .
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ WebKitGTK is a WebKit port designed to be used in GTK applications.
+ This build provides version @WK_API_VERSION@ of the API and uses libsoup v@SOUP_VERSION@ for
+ the networking stack and the GTK @GTK_VERSION@ widget toolkit.
+ .
+ This package contains the development files.
+
+Package: gir1.2-webkit2-@WK_API_VERSION@
+Section: introspection
+Architecture: any
+Multi-Arch: same
+Depends: gir1.2-javascriptcoregtk-@WK_API_VERSION@ (= ${binary:Version}),
+         @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
+         ${gir:Depends},
+         ${misc:Depends}
+Description: Web content engine library for GTK - GObject introspection data
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
+ .
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ WebKitGTK is a WebKit port designed to be used in GTK applications.
+ This build provides version @WK_API_VERSION@ of the API and uses libsoup v@SOUP_VERSION@ for
+ the networking stack and the GTK @GTK_VERSION@ widget toolkit.
+ .
+ This package contains introspection data, which can be used by
+ packages using the GIRepository format to generate dynamic bindings.
+

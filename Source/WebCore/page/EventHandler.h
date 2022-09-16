@@ -74,6 +74,7 @@ class FrameView;
 class HTMLFrameSetElement;
 class HitTestResult;
 class KeyboardEvent;
+class KeyboardScrollingAnimator;
 class MouseEventWithHitTestResults;
 class Node;
 class Pasteboard;
@@ -362,6 +363,9 @@ public:
     
     WEBCORE_EXPORT void selectClosestContextualWordOrLinkFromHitTestResult(const HitTestResult&, AppendTrailingWhitespace);
 
+    bool keyboardScrollRecursively(std::optional<ScrollDirection>, std::optional<ScrollGranularity>, Node*);
+    WEBCORE_EXPORT bool shouldUseSmoothKeyboardScrollingForFocusedScrollableArea();
+
 private:
 #if ENABLE(DRAG_SUPPORT)
     static DragState& dragState();
@@ -382,8 +386,13 @@ private:
     bool handleMousePressEventDoubleClick(const MouseEventWithHitTestResults&);
     bool handleMousePressEventTripleClick(const MouseEventWithHitTestResults&);
 
-    bool startKeyboardScrolling(KeyboardEvent&);
+    bool beginKeyboardScrollGesture(KeyboardScrollingAnimator*, ScrollDirection, ScrollGranularity);
     void stopKeyboardScrolling();
+    bool startKeyboardScrollAnimationOnDocument(ScrollDirection, ScrollGranularity);
+    bool startKeyboardScrollAnimationOnRenderBoxLayer(ScrollDirection, ScrollGranularity, RenderBox*);
+    bool startKeyboardScrollAnimationOnRenderBoxAndItsAncestors(ScrollDirection, ScrollGranularity, RenderBox*);
+    bool startKeyboardScrollAnimationOnEnclosingScrollableContainer(ScrollDirection, ScrollGranularity, Node*);
+    bool focusedScrollableAreaUsesScrollSnap();
 
 #if ENABLE(DRAG_SUPPORT)
     bool handleMouseDraggedEvent(const MouseEventWithHitTestResults&, CheckDragHysteresis = ShouldCheckDragHysteresis);
@@ -542,7 +551,7 @@ private:
     DeferrableOneShotTimer m_textRecognitionHoverTimer;
 #endif
     std::unique_ptr<AutoscrollController> m_autoscrollController;
-    RenderLayer* m_resizeLayer { nullptr };
+    WeakPtr<RenderLayer> m_resizeLayer;
 
     double m_maxMouseMovedDuration { 0 };
 

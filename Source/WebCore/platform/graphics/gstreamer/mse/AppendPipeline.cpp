@@ -113,7 +113,7 @@ AppendPipeline::AppendPipeline(SourceBufferPrivateGStreamer& sourceBufferPrivate
     // The track name is still unknown at this time, though.
     static size_t appendPipelineCount = 0;
     String pipelineName = makeString("append-pipeline-",
-        m_sourceBufferPrivate.type().containerType().replace("/", "-"), '-', appendPipelineCount++);
+        makeStringByReplacingAll(m_sourceBufferPrivate.type().containerType(), '/', '-'), '-', appendPipelineCount++);
     m_pipeline = gst_pipeline_new(pipelineName.utf8().data());
 
     m_bus = adoptGRef(gst_pipeline_get_bus(GST_PIPELINE(m_pipeline.get())));
@@ -142,13 +142,13 @@ AppendPipeline::AppendPipeline(SourceBufferPrivateGStreamer& sourceBufferPrivate
     const String& type = m_sourceBufferPrivate.type().containerType();
     GST_DEBUG("SourceBuffer containerType: %s", type.utf8().data());
     bool hasDemuxer = true;
-    if (type.endsWith("mp4") || type.endsWith("aac")) {
+    if (type.endsWith("mp4"_s) || type.endsWith("aac"_s)) {
         m_demux = makeGStreamerElement("qtdemux", nullptr);
         m_typefind = makeGStreamerElement("identity", nullptr);
-    } else if (type.endsWith("webm")) {
+    } else if (type.endsWith("webm"_s)) {
         m_demux = makeGStreamerElement("matroskademux", nullptr);
         m_typefind = makeGStreamerElement("identity", nullptr);
-    } else if (type == "audio/mpeg") {
+    } else if (type == "audio/mpeg"_s) {
         m_demux = makeGStreamerElement("identity", nullptr);
         m_typefind = makeGStreamerElement("typefind", nullptr);
         hasDemuxer = false;
@@ -300,9 +300,11 @@ void AppendPipeline::handleStateChangeMessage(GstMessage* message)
     if (GST_MESSAGE_SRC(message) == reinterpret_cast<GstObject*>(m_pipeline.get())) {
         GstState currentState, newState;
         gst_message_parse_state_changed(message, &currentState, &newState, nullptr);
-        CString sourceBufferType = String(m_sourceBufferPrivate.type().raw())
-            .replace("/", "_").replace(" ", "_")
-            .replace("\"", "").replace("\'", "").utf8();
+        String sourceBufferTypeString = makeStringByReplacingAll(m_sourceBufferPrivate.type().raw(), '/', '_');
+        sourceBufferTypeString = makeStringByReplacingAll(sourceBufferTypeString, ' ', '_');
+        sourceBufferTypeString = makeStringByReplacingAll(sourceBufferTypeString, '"', ""_s);
+        sourceBufferTypeString = makeStringByReplacingAll(sourceBufferTypeString, '\'', ""_s);
+        CString sourceBufferType = sourceBufferTypeString.utf8();
         CString dotFileName = makeString("webkit-append-",
             sourceBufferType.data(), '-',
             gst_element_state_get_name(currentState), '_',
@@ -321,7 +323,7 @@ std::tuple<GRefPtr<GstCaps>, AppendPipeline::StreamType, FloatSize> AppendPipeli
 
     const char* originalMediaType = capsMediaType(demuxerSrcPadCaps);
     auto& gstRegistryScanner = GStreamerRegistryScannerMSE::singleton();
-    if (!gstRegistryScanner.isCodecSupported(GStreamerRegistryScanner::Configuration::Decoding, originalMediaType)) {
+    if (!gstRegistryScanner.isCodecSupported(GStreamerRegistryScanner::Configuration::Decoding, String::fromLatin1(originalMediaType))) {
         streamType = StreamType::Invalid;
     } else if (doCapsHaveType(demuxerSrcPadCaps, GST_VIDEO_CAPS_TYPE_PREFIX)) {
         presentationSize = getVideoResolutionFromCaps(demuxerSrcPadCaps).value_or(FloatSize());
@@ -537,7 +539,7 @@ void AppendPipeline::didReceiveInitializationSegment()
     m_hasReceivedFirstInitializationSegment = true;
     GST_DEBUG("Notifying SourceBuffer of initialization segment.");
     GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(m_pipeline.get()), GST_DEBUG_GRAPH_SHOW_ALL, "append-pipeline-received-init-segment");
-    m_sourceBufferPrivate.didReceiveInitializationSegment(WTFMove(initializationSegment), []() { });
+    m_sourceBufferPrivate.didReceiveInitializationSegment(WTFMove(initializationSegment), [](SourceBufferPrivateClient::ReceiveResult) { });
 }
 
 void AppendPipeline::consumeAppsinksAvailableSamples()
@@ -698,13 +700,13 @@ AtomString AppendPipeline::generateTrackId(StreamType streamType, int padIndex)
 {
     switch (streamType) {
     case Audio:
-        return makeString("A", padIndex);
+        return makeAtomString('A', padIndex);
     case Video:
-        return makeString("V", padIndex);
+        return makeAtomString('V', padIndex);
     case Text:
-        return makeString("T", padIndex);
+        return makeAtomString('T', padIndex);
     default:
-        return makeString("O", padIndex);
+        return makeAtomString('O', padIndex);
     }
 }
 
@@ -715,7 +717,7 @@ std::pair<AppendPipeline::CreateTrackResult, AppendPipeline::Track*> AppendPipel
     GST_DEBUG_OBJECT(pipeline(), "Creating Track object for pad %" GST_PTR_FORMAT, demuxerSrcPad);
 
     const String& type = m_sourceBufferPrivate.type().containerType();
-    if (type.endsWith("webm"))
+    if (type.endsWith("webm"_s))
         gst_pad_add_probe(demuxerSrcPad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, matroskademuxForceSegmentStartToEqualZero, nullptr, nullptr);
 
     auto [parsedCaps, streamType, presentationSize] = parseDemuxerSrcPadCaps(adoptGRef(gst_pad_get_current_caps(demuxerSrcPad)).get());
@@ -754,7 +756,7 @@ bool AppendPipeline::recycleTrackForPad(GstPad* demuxerSrcPad)
 {
     ASSERT(isMainThread());
     ASSERT(m_hasReceivedFirstInitializationSegment);
-    AtomString trackId = GST_PAD_NAME(demuxerSrcPad);
+    auto trackId = AtomString::fromLatin1(GST_PAD_NAME(demuxerSrcPad));
     auto [parsedCaps, streamType, presentationSize] = parseDemuxerSrcPadCaps(adoptGRef(gst_pad_get_current_caps(demuxerSrcPad)).get());
 
     GST_DEBUG_OBJECT(demuxerSrcPad, "Caps: %" GST_PTR_FORMAT, parsedCaps.get());

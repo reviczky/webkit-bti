@@ -74,13 +74,13 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_context_menu_get_type@Base 2.5.3
  webkit_context_menu_get_user_data@Base 2.8.1
  webkit_context_menu_insert@Base 2.5.3
- webkit_context_menu_item_get_action@Base 2.5.3
+ (gtk3-only)webkit_context_menu_item_get_action@Base 2.5.3
  webkit_context_menu_item_get_gaction@Base 2.17.3
  webkit_context_menu_item_get_stock_action@Base 2.5.3
  webkit_context_menu_item_get_submenu@Base 2.5.3
  webkit_context_menu_item_get_type@Base 2.5.3
  webkit_context_menu_item_is_separator@Base 2.5.3
- webkit_context_menu_item_new@Base 2.5.3
+ (gtk3-only)webkit_context_menu_item_new@Base 2.5.3
  webkit_context_menu_item_new_from_gaction@Base 2.17.3
  webkit_context_menu_item_new_from_stock_action@Base 2.5.3
  webkit_context_menu_item_new_from_stock_action_with_label@Base 2.5.3
@@ -1766,6 +1766,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_enable_tabs_to_links@Base 2.5.3
  webkit_settings_get_enable_webaudio@Base 2.5.3
  webkit_settings_get_enable_webgl@Base 2.5.3
+ webkit_settings_get_enable_webrtc@Base 2.37.1
  webkit_settings_get_enable_write_console_messages_to_stdout@Base 2.5.3
  webkit_settings_get_enable_xss_auditor@Base 2.5.3
  webkit_settings_get_fantasy_font_family@Base 2.5.3
@@ -1828,6 +1829,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_enable_tabs_to_links@Base 2.5.3
  webkit_settings_set_enable_webaudio@Base 2.5.3
  webkit_settings_set_enable_webgl@Base 2.5.3
+ webkit_settings_set_enable_webrtc@Base 2.37.1
  webkit_settings_set_enable_write_console_messages_to_stdout@Base 2.5.3
  webkit_settings_set_enable_xss_auditor@Base 2.5.3
  webkit_settings_set_fantasy_font_family@Base 2.5.3
@@ -1959,9 +1961,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_security_manager@Base 2.5.3
  webkit_web_context_get_spell_checking_enabled@Base 2.5.3
  webkit_web_context_get_spell_checking_languages@Base 2.5.3
+ webkit_web_context_get_time_zone_override@Base 2.37.1
  webkit_web_context_get_tls_errors_policy@Base 2.5.3
  webkit_web_context_get_type@Base 2.5.3
- webkit_web_context_get_use_system_appearance_for_scrollbars@Base 2.29.1
+ (gtk3-only)webkit_web_context_get_use_system_appearance_for_scrollbars@Base 2.29.1
  webkit_web_context_get_web_process_count_limit@Base 2.10.0
  webkit_web_context_get_website_data_manager@Base 2.10.0
  webkit_web_context_initialize_notification_permissions@Base 2.15.3
@@ -1985,7 +1988,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  webkit_web_context_set_tls_errors_policy@Base 2.5.3
- webkit_web_context_set_use_system_appearance_for_scrollbars@Base 2.29.1
+ (gtk3-only)webkit_web_context_set_use_system_appearance_for_scrollbars@Base 2.29.1
  webkit_web_context_set_web_extensions_directory@Base 2.5.3
  webkit_web_context_set_web_extensions_initialization_user_data@Base 2.5.3
  webkit_web_context_set_web_process_count_limit@Base 2.10.0
@@ -1993,6 +1996,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_editor_get_type@Base 2.10.0
  webkit_web_extension_get_page@Base 2.5.3
  webkit_web_extension_get_type@Base 2.5.3
+ webkit_web_extension_mode_get_type@Base 2.37.1
  webkit_web_extension_send_message_to_context@Base 2.27.2
  webkit_web_extension_send_message_to_context_finish@Base 2.27.2
  webkit_web_hit_test_result_get_node@Base 2.8.1
@@ -2036,6 +2040,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_get_camera_capture_state@Base 2.33.3
  webkit_web_view_get_context@Base 2.5.3
  webkit_web_view_get_custom_charset@Base 2.5.3
+ webkit_web_view_get_default_content_security_policy@Base 2.37.1
  webkit_web_view_get_display_capture_state@Base 2.33.3
  webkit_web_view_get_editor_state@Base 2.10.0
  webkit_web_view_get_estimated_load_progress@Base 2.5.3
@@ -2058,6 +2063,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_get_type@Base 2.5.3
  webkit_web_view_get_uri@Base 2.5.3
  webkit_web_view_get_user_content_manager@Base 2.5.3
+ webkit_web_view_get_web_extension_mode@Base 2.37.1
  webkit_web_view_get_website_data_manager@Base 2.15.90
  webkit_web_view_get_website_policies@Base 2.29.2
  webkit_web_view_get_window_properties@Base 2.5.3
@@ -2084,6 +2090,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_reload@Base 2.5.3
  webkit_web_view_reload_bypass_cache@Base 2.5.3
  webkit_web_view_restore_session_state@Base 2.12.0
+ webkit_web_view_run_async_javascript_function_in_world@Base 2.37.1
  webkit_web_view_run_javascript@Base 2.5.3
  webkit_web_view_run_javascript_finish@Base 2.5.3
  webkit_web_view_run_javascript_from_gresource@Base 2.5.3

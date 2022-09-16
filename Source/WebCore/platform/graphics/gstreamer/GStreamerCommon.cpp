@@ -24,6 +24,7 @@
 #if USE(GSTREAMER)
 
 #include "ApplicationGLib.h"
+#include "DMABufVideoSinkGStreamer.h"
 #include "GLVideoSinkGStreamer.h"
 #include "GStreamerAudioMixer.h"
 #include "GUniquePtrGStreamer.h"
@@ -36,13 +37,10 @@
 #include <gst/gst.h>
 #include <mutex>
 #include <wtf/FileSystem.h>
+#include <wtf/PrintStream.h>
 #include <wtf/Scope.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
-
-#if USE(GSTREAMER_FULL)
-#include <gst/gstinitstaticplugins.h>
-#endif
 
 #if USE(GSTREAMER_MPEGTS)
 #define GST_USE_UNSTABLE_API
@@ -68,6 +66,10 @@
 #include "WebKitWebSourceGStreamer.h"
 #endif
 
+#if USE(GSTREAMER_WEBRTC)
+#include <gst/webrtc/webrtc-enumtypes.h>
+#endif
+
 GST_DEBUG_CATEGORY(webkit_gst_common_debug);
 #define GST_CAT_DEFAULT webkit_gst_common_debug
 
@@ -88,6 +90,24 @@ GstPad* webkitGstGhostPadFromStaticTemplate(GstStaticPadTemplate* staticPadTempl
     return pad;
 }
 
+#if !GST_CHECK_VERSION(1, 18, 0)
+void webkitGstVideoFormatInfoComponent(const GstVideoFormatInfo* info, guint plane, gint components[GST_VIDEO_MAX_COMPONENTS])
+{
+    guint c, i = 0;
+
+    /* Reverse mapping of info->plane. */
+    for (c = 0; c < GST_VIDEO_FORMAT_INFO_N_COMPONENTS(info); c++) {
+        if (GST_VIDEO_FORMAT_INFO_PLANE(info, c) == plane) {
+            components[i] = c;
+            i++;
+        }
+    }
+
+    for (c = i; c < GST_VIDEO_MAX_COMPONENTS; c++)
+        components[c] = -1;
+}
+#endif
+
 #if ENABLE(VIDEO)
 bool getVideoSizeAndFormatFromCaps(const GstCaps* caps, WebCore::IntSize& size, GstVideoFormat& format, int& pixelAspectRatioNumerator, int& pixelAspectRatioDenominator, int& stride)
 {
@@ -96,21 +116,8 @@ bool getVideoSizeAndFormatFromCaps(const GstCaps* caps, WebCore::IntSize& size, 
         return false;
     }
 
-    if (areEncryptedCaps(caps)) {
-        GstStructure* structure = gst_caps_get_structure(caps, 0);
-        format = GST_VIDEO_FORMAT_ENCODED;
-        stride = 0;
-        int width = 0, height = 0;
-        gst_structure_get_int(structure, "width", &width);
-        gst_structure_get_int(structure, "height", &height);
-        if (!gst_structure_get_fraction(structure, "pixel-aspect-ratio", &pixelAspectRatioNumerator, &pixelAspectRatioDenominator)) {
-            pixelAspectRatioNumerator = 1;
-            pixelAspectRatioDenominator = 1;
-        }
-
-        size.setWidth(width);
-        size.setHeight(height);
-    } else {
+    GstStructure* structure = gst_caps_get_structure(caps, 0);
+    if (!areEncryptedCaps(caps) && (!gst_structure_has_name(structure, "video/x-raw") || gst_structure_has_field(structure, "format"))) {
         GstVideoInfo info;
         gst_video_info_init(&info);
         if (!gst_video_info_from_caps(&info, caps))
@@ -122,6 +129,22 @@ bool getVideoSizeAndFormatFromCaps(const GstCaps* caps, WebCore::IntSize& size, 
         pixelAspectRatioNumerator = GST_VIDEO_INFO_PAR_N(&info);
         pixelAspectRatioDenominator = GST_VIDEO_INFO_PAR_D(&info);
         stride = GST_VIDEO_INFO_PLANE_STRIDE(&info, 0);
+    } else {
+        if (areEncryptedCaps(caps))
+            format = GST_VIDEO_FORMAT_ENCODED;
+        else
+            format = GST_VIDEO_FORMAT_UNKNOWN;
+        stride = 0;
+        int width = 0, height = 0;
+        gst_structure_get_int(structure, "width", &width);
+        gst_structure_get_int(structure, "height", &height);
+        if (!gst_structure_get_fraction(structure, "pixel-aspect-ratio", &pixelAspectRatioNumerator, &pixelAspectRatioDenominator)) {
+            pixelAspectRatioNumerator = 1;
+            pixelAspectRatioDenominator = 1;
+        }
+
+        size.setWidth(width);
+        size.setHeight(height);
     }
 
     return true;
@@ -137,12 +160,8 @@ std::optional<FloatSize> getVideoResolutionFromCaps(const GstCaps* caps)
     int width = 0, height = 0;
     int pixelAspectRatioNumerator = 1, pixelAspectRatioDenominator = 1;
 
-    if (areEncryptedCaps(caps)) {
-        GstStructure* structure = gst_caps_get_structure(caps, 0);
-        gst_structure_get_int(structure, "width", &width);
-        gst_structure_get_int(structure, "height", &height);
-        gst_structure_get_fraction(structure, "pixel-aspect-ratio", &pixelAspectRatioNumerator, &pixelAspectRatioDenominator);
-    } else {
+    GstStructure* structure = gst_caps_get_structure(caps, 0);
+    if (!areEncryptedCaps(caps) && (!gst_structure_has_name(structure, "video/x-raw") || gst_structure_has_field(structure, "format"))) {
         GstVideoInfo info;
         gst_video_info_init(&info);
         if (!gst_video_info_from_caps(&info, caps))
@@ -152,6 +171,10 @@ std::optional<FloatSize> getVideoResolutionFromCaps(const GstCaps* caps)
         height = GST_VIDEO_INFO_HEIGHT(&info);
         pixelAspectRatioNumerator = GST_VIDEO_INFO_PAR_N(&info);
         pixelAspectRatioDenominator = GST_VIDEO_INFO_PAR_D(&info);
+    } else {
+        gst_structure_get_int(structure, "width", &width);
+        gst_structure_get_int(structure, "height", &height);
+        gst_structure_get_fraction(structure, "pixel-aspect-ratio", &pixelAspectRatioNumerator, &pixelAspectRatioDenominator);
     }
 
     return std::make_optional(FloatSize(width, height * (static_cast<float>(pixelAspectRatioDenominator) / static_cast<float>(pixelAspectRatioNumerator))));
@@ -187,6 +210,9 @@ const char* capsMediaType(const GstCaps* caps)
     if (gst_structure_has_name(structure, "application/x-cenc") || gst_structure_has_name(structure, "application/x-cbcs") || gst_structure_has_name(structure, "application/x-webm-enc"))
         return gst_structure_get_string(structure, "original-media-type");
 #endif
+    if (gst_structure_has_name(structure, "application/x-rtp"))
+        return gst_structure_get_string(structure, "media");
+
     return gst_structure_get_name(structure);
 }
 
@@ -232,7 +258,7 @@ Vector<String> extractGStreamerOptionsFromCommandLine()
     Vector<String> options;
     auto optionsString = String::fromUTF8(contents.get(), length);
     optionsString.split('\0', [&options](StringView item) {
-        if (item.startsWith("--gst"))
+        if (item.startsWith("--gst"_s))
             options.append(item.toString());
     });
     return options;
@@ -298,7 +324,7 @@ bool ensureGStreamerInitialized()
 bool isThunderRanked()
 {
     const char* value = g_getenv("WEBKIT_GST_EME_RANK_PRIORITY");
-    return value && equalIgnoringASCIICase(value, "Thunder");
+    return value && equalIgnoringASCIICase(value, "Thunder"_s);
 }
 #endif
 
@@ -306,9 +332,6 @@ void registerWebKitGStreamerElements()
 {
     static std::once_flag onceFlag;
     std::call_once(onceFlag, [] {
-#if USE(GSTREAMER_FULL)
-        gst_init_static_plugins();
-#endif
 
 #if ENABLE(ENCRYPTED_MEDIA) && ENABLE(THUNDER)
         if (!CDMFactoryThunder::singleton().supportedKeySystems().isEmpty()) {
@@ -335,6 +358,7 @@ void registerWebKitGStreamerElements()
 
 #if ENABLE(VIDEO)
         gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
+        gst_element_register(0, "webkitdmabufvideosink", GST_RANK_NONE, WEBKIT_TYPE_DMABUF_VIDEO_SINK);
 #if USE(GSTREAMER_GL)
         gst_element_register(0, "webkitglvideosink", GST_RANK_NONE, WEBKIT_TYPE_GL_VIDEO_SINK);
 #endif
@@ -484,9 +508,9 @@ bool isGStreamerPluginAvailable(const char* name)
     return plugin;
 }
 
-bool gstElementFactoryEquals(GstElement* element, const char* name)
+bool gstElementFactoryEquals(GstElement* element, ASCIILiteral name)
 {
-    return equal(GST_OBJECT_NAME(gst_element_get_factory(element)), name);
+    return name == GST_OBJECT_NAME(gst_element_get_factory(element));
 }
 
 GstElement* createAutoAudioSink(const String& role)
@@ -500,8 +524,10 @@ GstElement* createAutoAudioSink(const String& role)
             g_object_set(object, "stream-properties", properties.get(), nullptr);
             GST_DEBUG("Set media.role as %s on %" GST_PTR_FORMAT, role->utf8().data(), GST_ELEMENT_CAST(object));
         }
-        if (g_object_class_find_property(objectClass, "client-name"))
-            g_object_set(object, "client-name", getApplicationName(), nullptr);
+        if (g_object_class_find_property(objectClass, "client-name")) {
+            auto& clientName = getApplicationName();
+            g_object_set(object, "client-name", clientName.ascii().data(), nullptr);
+        }
     }), role.isolatedCopy().releaseImpl().leakRef(), static_cast<GClosureNotify>([](gpointer userData, GClosure*) {
         reinterpret_cast<StringImpl*>(userData)->deref();
     }), static_cast<GConnectFlags>(0));
@@ -626,6 +652,13 @@ static std::optional<RefPtr<JSON::Value>> gstStructureValueToJSON(const GValue* 
     if (valueType == G_TYPE_STRING)
         return JSON::Value::create(makeString(g_value_get_string(value)))->asValue();
 
+#if USE(GSTREAMER_WEBRTC)
+    if (valueType == GST_TYPE_WEBRTC_STATS_TYPE) {
+        GUniquePtr<char> statsType(g_enum_to_string(GST_TYPE_WEBRTC_STATS_TYPE, g_value_get_enum(value)));
+        return JSON::Value::create(makeString(statsType.get()))->asValue();
+    }
+#endif
+
     GST_WARNING("Unhandled GValue type: %s", G_VALUE_TYPE_NAME(value));
     return { };
 }
@@ -634,7 +667,7 @@ static gboolean parseGstStructureValue(GQuark fieldId, const GValue* value, gpoi
 {
     if (auto jsonValue = gstStructureValueToJSON(value)) {
         auto* object = reinterpret_cast<JSON::Object*>(userData);
-        object->setValue(g_quark_to_string(fieldId), jsonValue->releaseNonNull());
+        object->setValue(String::fromLatin1(g_quark_to_string(fieldId)), jsonValue->releaseNonNull());
     }
     return TRUE;
 }

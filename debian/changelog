@@ -1,3 +1,35 @@
+webkit2gtk (2.37.91-2) UNRELEASED; urgency=medium
+
+  * Bring all changes from the 2.37 (experimental) branch.
+  * debian/gbp.conf:
+    - Update upstream branch name.
+  * Generate debian/control from debian/control.in and control-common.in
+    depending on whether we're making the soup2 (4.0 API), soup3 (4.1 API)
+    and/or gtk4 (5.0 API) builds.
+  * debian/rules:
+    - Add new target to generate debian/control.
+    - Enable the GTK4 build (Closes: #1016765).
+    - ENABLE_GTKDOC is now ENABLE_DOCUMENTATION.
+    - Make CCACHE_DIR and CCACHE_NOHASHDIR global variables so they also
+      apply to the install target. This fixes a FTBFS if the home dir is not
+      writable (as is the case with buildds)
+  * debian/control.in:
+    - Remove build dependency on libnotify-dev (no longer used by WebKit).
+    - Replace build dependency on gtk-doc-tools with gi-docgen.
+  * The documentation has been renamed from webkitdomgtk to
+    webkit2gtk-web-extension and from jsc-glib to javascriptcoregtk.
+    - Update debian/libwebkit2gtk-4.0-doc.doc-base.* and
+      debian/libwebkit2gtk-4.0-doc.links.
+  * Refresh all patches.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
+  * debian/copyright:
+    - Update copyright information of all files.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    - Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 16 Sep 2022 14:26:08 +0200
+
 webkit2gtk (2.36.7-1) unstable; urgency=high
 
   * New upstream release.

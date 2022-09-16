@@ -273,7 +273,7 @@ void UserMediaPermissionRequestManagerProxy::finishGrantingRequest(UserMediaPerm
     updateStoredRequests(request);
 
     if (!UserMediaProcessManager::singleton().willCreateMediaStream(*this, request.hasAudioDevice(), request.hasVideoDevice())) {
-        denyRequest(request, UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::OtherFailure, "Unable to extend sandbox.");
+        denyRequest(request, UserMediaPermissionRequestProxy::UserMediaAccessDenialReason::OtherFailure, "Unable to extend sandbox."_s);
         return;
     }
 
@@ -291,7 +291,7 @@ void UserMediaPermissionRequestManagerProxy::finishGrantingRequest(UserMediaPerm
         SandboxExtension::Handle handle;
 #if PLATFORM(COCOA)
         if (!m_hasCreatedSandboxExtensionForTCCD && doesPageNeedTCCD(m_page)) {
-            if (auto createdHandle = SandboxExtension::createHandleForMachLookup("com.apple.tccd"_s, m_page.process().connection()->getAuditToken()))
+            if (auto createdHandle = SandboxExtension::createHandleForMachLookup("com.apple.tccd"_s, m_page.process().auditToken(), SandboxExtension::MachBootstrapOptions::EnableMachBootstrap))
                 handle = WTFMove(*createdHandle);
             m_hasCreatedSandboxExtensionForTCCD = true;
         }
@@ -883,6 +883,21 @@ void UserMediaPermissionRequestManagerProxy::setMockCaptureDevicesEnabledOverrid
     syncWithWebCorePrefs();
 }
 
+bool UserMediaPermissionRequestManagerProxy::mockCaptureDevicesEnabled() const
+{
+    return m_mockDevicesEnabledOverride ? *m_mockDevicesEnabledOverride : m_page.preferences().mockCaptureDevicesEnabled();
+}
+
+bool UserMediaPermissionRequestManagerProxy::canAudioCaptureSucceed() const
+{
+    return mockCaptureDevicesEnabled() || permittedToCaptureAudio();
+}
+
+bool UserMediaPermissionRequestManagerProxy::canVideoCaptureSucceed() const
+{
+    return mockCaptureDevicesEnabled() || permittedToCaptureVideo();
+}
+
 void UserMediaPermissionRequestManagerProxy::syncWithWebCorePrefs() const
 {
 #if ENABLE(MEDIA_STREAM)
@@ -893,10 +908,6 @@ void UserMediaPermissionRequestManagerProxy::syncWithWebCorePrefs() const
 #if ENABLE(GPU_PROCESS)
     if (m_page.preferences().captureAudioInGPUProcessEnabled() || m_page.preferences().captureVideoInGPUProcessEnabled())
         m_page.process().processPool().ensureGPUProcess().setUseMockCaptureDevices(mockDevicesEnabled);
-#endif
-
-#if HAVE(SCREEN_CAPTURE_KIT)
-    WebCore::ScreenCaptureKitCaptureSource::setEnabled(m_page.preferences().useScreenCaptureKit());
 #endif
 
     if (MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled() == mockDevicesEnabled)

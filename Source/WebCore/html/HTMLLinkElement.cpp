@@ -92,7 +92,6 @@ inline HTMLLinkElement::HTMLLinkElement(const QualifiedName& tagName, Document& 
     , m_disabledState(Unset)
     , m_loading(false)
     , m_createdByParser(createdByParser)
-    , m_firedLoad(false)
     , m_loadedResource(false)
     , m_isHandlingBeforeLoad(false)
     , m_allowPrefetchLoadAndErrorForTesting(false)
@@ -167,10 +166,13 @@ void HTMLLinkElement::setDisabledState(bool disabled)
 void HTMLLinkElement::parseAttribute(const QualifiedName& name, const AtomString& value)
 {
     if (name == relAttr) {
-        m_relAttribute = LinkRelAttribute(document(), value);
+        auto parsedRel = LinkRelAttribute(document(), value);
+        auto didMutateRel = parsedRel != m_relAttribute;
+        m_relAttribute = parsedRel;
         if (m_relList)
             m_relList->associatedAttributeValueChanged(value);
-        process();
+        if (didMutateRel)
+            process();
         return;
     }
     if (name == hrefAttr) {
@@ -230,13 +232,13 @@ void HTMLLinkElement::setAs(const AtomString& value)
 String HTMLLinkElement::as() const
 {
     String as = attributeWithoutSynchronization(asAttr);
-    if (equalLettersIgnoringASCIICase(as, "fetch")
-        || equalLettersIgnoringASCIICase(as, "image")
-        || equalLettersIgnoringASCIICase(as, "script")
-        || equalLettersIgnoringASCIICase(as, "style")
-        || (document().settings().mediaPreloadingEnabled() && (equalLettersIgnoringASCIICase(as, "video") || equalLettersIgnoringASCIICase(as, "audio")))
-        || equalLettersIgnoringASCIICase(as, "track")
-        || equalLettersIgnoringASCIICase(as, "font"))
+    if (equalLettersIgnoringASCIICase(as, "fetch"_s)
+        || equalLettersIgnoringASCIICase(as, "image"_s)
+        || equalLettersIgnoringASCIICase(as, "script"_s)
+        || equalLettersIgnoringASCIICase(as, "style"_s)
+        || (document().settings().mediaPreloadingEnabled() && (equalLettersIgnoringASCIICase(as, "video"_s) || equalLettersIgnoringASCIICase(as, "audio"_s)))
+        || equalLettersIgnoringASCIICase(as, "track"_s)
+        || equalLettersIgnoringASCIICase(as, "font"_s))
         return as.convertToASCIILowercase();
     return String();
 }
@@ -263,6 +265,7 @@ void HTMLLinkElement::process()
         attributeWithoutSynchronization(crossoriginAttr),
         attributeWithoutSynchronization(imagesrcsetAttr),
         attributeWithoutSynchronization(imagesizesAttr),
+        nonce(),
         referrerPolicy(),
     };
 
@@ -273,10 +276,10 @@ void HTMLLinkElement::process()
         if (m_type.isNull())
             treatAsStyleSheet = true;
         else if (auto parsedContentType = ParsedContentType::create(m_type))
-            treatAsStyleSheet = equalLettersIgnoringASCIICase(parsedContentType->mimeType(), "text/css");
+            treatAsStyleSheet = equalLettersIgnoringASCIICase(parsedContentType->mimeType(), "text/css"_s);
     }
     if (!treatAsStyleSheet)
-        treatAsStyleSheet = document().settings().treatsAnyTextCSSLinkAsStylesheet() && m_type.containsIgnoringASCIICase("text/css");
+        treatAsStyleSheet = document().settings().treatsAnyTextCSSLinkAsStylesheet() && m_type.containsIgnoringASCIICase("text/css"_s);
 
     LOG_WITH_STREAM(StyleSheets, stream << "HTMLLinkElement " << this << " process() - treatAsStyleSheet " << treatAsStyleSheet);
 
@@ -314,7 +317,7 @@ void HTMLLinkElement::process()
         m_integrityMetadataForPendingSheetRequest = attributeWithoutSynchronization(HTMLNames::integrityAttr);
 
         ResourceLoaderOptions options = CachedResourceLoader::defaultCachedResourceOptions();
-        options.nonce = attributeWithoutSynchronization(HTMLNames::nonceAttr);
+        options.nonce = nonce();
         options.sameOriginDataURLFlag = SameOriginDataURLFlag::Set;
         if (document().contentSecurityPolicy()->allowStyleWithNonce(options.nonce))
             options.contentSecurityPolicyImposition = ContentSecurityPolicyImposition::SkipPolicyCheck;
@@ -558,11 +561,8 @@ DOMTokenList& HTMLLinkElement::relList()
 
 void HTMLLinkElement::notifyLoadedSheetAndAllCriticalSubresources(bool errorOccurred)
 {
-    if (m_firedLoad)
-        return;
     m_loadedResource = !errorOccurred;
     linkLoadEventSender().dispatchEventSoon(*this);
-    m_firedLoad = true;
 }
 
 void HTMLLinkElement::startLoadingDynamicSheet()
@@ -587,7 +587,7 @@ const AtomString& HTMLLinkElement::rel() const
     return attributeWithoutSynchronization(relAttr);
 }
 
-String HTMLLinkElement::target() const
+AtomString HTMLLinkElement::target() const
 {
     return attributeWithoutSynchronization(targetAttr);
 }
