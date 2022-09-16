@@ -14,6 +14,9 @@ export CCACHE_DIR=$(CURDIR)/ccache
 ENABLE_SOUP2=YES
 ENABLE_SOUP3=YES
 ENABLE_GTK4=YES
+# Set to YES to use the docs from the tarball instead of generating them.
+# Use only if gi-docgen is not available.
+USE_PREBUILT_DOCS=NO
 
 EXTRA_DH_ARGUMENTS =
 EXTRA_CMAKE_ARGUMENTS = -DPORT=GTK \
@@ -79,7 +82,11 @@ endif
 
 ifeq (,$(filter %-doc,$(shell dh_listpackages)))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=OFF
+	USE_PREBUILT_DOCS=NO
 else ifneq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=OFF
+	USE_PREBUILT_DOCS=NO
+else ifeq ($(USE_PREBUILT_DOCS),YES)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=OFF
 else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_DOCUMENTATION=ON
@@ -197,6 +204,9 @@ debian/control: debian/control.in debian/control-common.in debian/rules
 	cat debian/control.in | \
 		sed -e 's/@EXTRA_BUILD_DEPS@/$(SOUP2_BUILD_DEP)$(SOUP3_BUILD_DEP)$(GTK3_BUILD_DEP)$(GTK4_BUILD_DEP)/' \
 		>> debian/control
+ifeq ($(USE_PREBUILT_DOCS),YES)
+	sed -i -e 's/^\(Build-Depends-Indep:\)/# \1/' debian/control
+endif
 	$(SOUP2_BUILD) cat debian/control-common.in | \
 		sed -e 's/@SOUPDEV_PKG@/libsoup2.4-dev/g' \
 		    -e 's/@WK_API_VERSION@/4.0/g' \
@@ -267,10 +277,23 @@ override_dh_auto_clean: debian/control
 	find Source Tools -depth -type d -name __pycache__ -exec rmdir {} \;
 	rm -rf ccache
 
-# Create a dummy doc directory in case the "nodoc" build option is set
+# If USE_PREBUILT_DOCS=YES then install them (they are from the 4.1 API build
+# but they're equally valid for the 4.0-doc package once we rename them).
+# Otherwise create a dummy doc directory in case the "nodoc" build option is set.
 override_dh_install:
+ifeq ($(USE_PREBUILT_DOCS),YES)
+	mkdir -p debian/tmp/usr/share/gtk-doc/html
+	cp -r Documentation/webkit2gtk-4.1 debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
+	cp -r Documentation/jsc-glib-4.1 debian/tmp/usr/share/gtk-doc/html/javascriptcoregtk-4.0
+	cp -r Documentation/webkit2gtk-web-extension-4.1 debian/tmp/usr/share/gtk-doc/html/webkit2gtk-web-extension-4.0
+	for f in webkit2gtk javascriptcoregtk webkit2gtk-web-extension; do \
+		mv debian/tmp/usr/share/gtk-doc/html/$$f-4.0/$$f-4.1.devhelp2 \
+			debian/tmp/usr/share/gtk-doc/html/$$f-4.0/$$f-4.0.devhelp2 ; \
+	done
+else
 	mkdir -p debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
 	touch debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
+endif
 	dh_install
 	jdupes -rl debian/libwebkit2gtk-4.0-doc/usr
 

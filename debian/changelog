@@ -1,6 +1,10 @@
 webkit2gtk (2.38.0-1) UNRELEASED; urgency=medium
 
   * New upstream release (Closes: #986218).
+  * debian/rules:
+    - Add USE_PREBUILT_DOCS variable to allow using the prebuilt
+      documentation included in the upstream tarball when gi-docgen is
+      missing.
   * Bring all changes from the 2.37 (experimental) branch.
   * debian/gbp.conf:
     - Update upstream branch name.
