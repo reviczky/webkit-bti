@@ -145,6 +145,7 @@ private:
     String m_type;
     String m_media;
     String m_integrityMetadataForPendingSheetRequest;
+    URL m_url;
     std::unique_ptr<DOMTokenList> m_sizes;
     std::unique_ptr<DOMTokenList> m_relList;
     DisabledState m_disabledState;
