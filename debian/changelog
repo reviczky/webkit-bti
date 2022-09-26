@@ -1,3 +1,11 @@
+webkit2gtk (2.38.0-2) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    - Build with -DENABLE_UNIFIED_BUILDS=OFF on mips, mipsel and sh4, we
+      are having problems to build webkit due to lack of memory (#1020642).
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 26 Sep 2022 11:25:41 +0200
+
 webkit2gtk (2.38.0-1) unstable; urgency=high
 
   * New upstream release (Closes: #986218).
