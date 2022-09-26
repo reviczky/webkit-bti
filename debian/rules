@@ -121,13 +121,9 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
 endif
 
-# Lower max parallel jobs on some builders
+# Lower max parallel jobs on some of Ubuntu's builders
 ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes),yes)
 ifneq (,$(filter $(DEB_HOST_ARCH),amd64 arm64))
-	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
-endif
-else ifeq ($(shell dpkg-vendor --is Debian && echo yes),yes)
-ifneq (,$(filter $(DEB_HOST_ARCH),mipsel))
 	EXTRA_BUILD_ARGUMENTS += --max-parallel=2
 endif
 endif
