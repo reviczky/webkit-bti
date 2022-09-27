@@ -6,7 +6,7 @@ include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/buildflags.mk
 
 # soup2 build -> 1.0 API packages, soup3 build -> 1.1 API packages
-USE_SOUP_VERSION=3
+USE_SOUP_VERSION=2
 
 # Set to YES to use the docs from the tarball instead of generating them.
 # Use only if gi-docgen is not available.
@@ -27,6 +27,14 @@ else
 	WK_API_VERSION = 1.1
 	LIBWPEWEBKIT_PKG = libwpewebkit-1.1-0
 	SOUPDEV_PKG = libsoup-3.0-dev
+endif
+
+# gcc 10 segfaults when building webkit (#1008098) so use clang
+# However in i386 and mipsel clang is the buggy one (#1010329)
+ifeq (,$(filter $(DEB_HOST_ARCH),i386 mipsel))
+	EXTRA_CMAKE_ARGUMENTS += \
+	   -DCMAKE_C_COMPILER=clang \
+	   -DCMAKE_CXX_COMPILER=clang++
 endif
 
 # Sacrifice speed in order to make it more likely resource limits
