@@ -1,0 +1,15 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Fix non-unified GTK4 build
+Bug: https://bugs.webkit.org/show_bug.cgi?id=245723
+Index: webkitgtk/Source/WebKit/Shared/gtk/NativeWebMouseEventGtk.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/Shared/gtk/NativeWebMouseEventGtk.cpp
++++ webkitgtk/Source/WebKit/Shared/gtk/NativeWebMouseEventGtk.cpp
+@@ -27,6 +27,7 @@
+ #include "NativeWebMouseEvent.h"
+ 
+ #include "WebEventFactory.h"
++#include <WebCore/GtkVersioning.h>
+ #include <gdk/gdk.h>
+ 
+ namespace WebKit {

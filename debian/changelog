@@ -1,3 +1,10 @@
+webkit2gtk (2.38.0-3) UNRELEASED; urgency=medium
+
+  * debian/patches/fix-nonunified-build.patch:
+    - Fix non-unified GTK4 build.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 27 Sep 2022 13:03:10 +0200
+
 webkit2gtk (2.38.0-2) unstable; urgency=high
 
   * The WebKitGTK security advisory WSA-2022-0009 lists the following
