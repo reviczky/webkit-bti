@@ -1,3 +1,9 @@
+webkit2gtk (2.38.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 20 Oct 2022 11:03:30 +0200
+
 webkit2gtk (2.38.0-3) unstable; urgency=high
 
   * debian/patches/fix-nonunified-build.patch:
