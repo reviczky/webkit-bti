@@ -1509,4 +1509,29 @@ bool Quirks::shouldEnableApplicationCacheQuirk() const
 #endif
 }
 
+bool Quirks::needsVideoShouldMaintainAspectRatioQuirk() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (m_needsVideoShouldMaintainAspectRatioQuirk)
+        return m_needsVideoShouldMaintainAspectRatioQuirk.value();
+
+    auto domain = RegistrableDomain(m_document->url()).string();
+    m_needsVideoShouldMaintainAspectRatioQuirk = domain == "hulu.com"_s;
+
+    return m_needsVideoShouldMaintainAspectRatioQuirk.value();
+}
+
+bool Quirks::shouldExposeShowModalDialog() const
+{
+    if (!needsQuirks())
+        return false;
+    if (!m_shouldExposeShowModalDialog) {
+        auto domain = RegistrableDomain(m_document->url()).string();
+        m_shouldExposeShowModalDialog = domain == "pandora.com"_s;
+    }
+    return *m_shouldExposeShowModalDialog;
+}
+
 }
