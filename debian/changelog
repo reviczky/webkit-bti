@@ -1,6 +1,7 @@
 webkit2gtk (2.38.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Refresh all patches.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 20 Oct 2022 11:03:30 +0200
 
