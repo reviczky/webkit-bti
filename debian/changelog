@@ -1,10 +1,14 @@
-webkit2gtk (2.38.2-1) UNRELEASED; urgency=high
+webkit2gtk (2.38.2-1) unstable; urgency=high
 
   * New upstream release.
+  * The WebKitGTK security advisory WSA-2022-0010 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    - CVE-2022-32888 and CVE-2022-32923 (fixed in 2.38.0).
+    - CVE-2022-42799, CVE-2022-42823 and CVE-2022-42824 (fixed in 2.38.2).
   * debian/patches/fix-nonunified-build.patch:
     - Drop this patch.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 04 Nov 2022 10:45:40 +0100
+ -- Alberto Garcia <berto@igalia.com>  Fri, 04 Nov 2022 17:37:25 +0100
 
 webkit2gtk (2.38.1-1) unstable; urgency=medium
 
