@@ -447,6 +447,8 @@ private:
     GstElement* createAudioSink();
     GstElement* audioSink() const;
 
+    bool isMediaStreamPlayer() const;
+
     friend class MediaPlayerFactoryGStreamer;
     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
@@ -487,6 +489,7 @@ private:
 
     void configureDepayloader(GstElement*);
     void configureVideoDecoder(GstElement*);
+    void configureElement(GstElement*);
 
     void setPlaybinURL(const URL& urlString);
 
