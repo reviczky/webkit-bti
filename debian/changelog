@@ -1,6 +1,8 @@
 webkit2gtk (2.38.2-1) UNRELEASED; urgency=high
 
   * New upstream release.
+  * debian/patches/fix-nonunified-build.patch:
+    - Drop this patch.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 04 Nov 2022 10:45:40 +0100
 
