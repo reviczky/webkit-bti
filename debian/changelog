@@ -1,3 +1,19 @@
+webkit2gtk (2.38.2-1~deb11u1) bullseye-security; urgency=medium
+
+  * Rebuild for bullseye-security.
+  * gcc 10 segfaults when building webkit in amd64 (see #1008098) so use
+    clang instead. Keep using gcc in other architectures because clang has
+    problems in at least i386, arm64 and mipsel (see #1010329 and
+    #1016811).
+    - debian/rules: Tell CMake to use clang.
+    - debian/control.in: Build depend on clang.
+  * Build libsoup2 packages only.
+    - debian/rules: Set ENABLE_SOUP3=NO, ENABLE_GTK4=NO and
+      USE_PREBUILT_DOCS=YES.
+    - debian/control.in: Remove build dependency on ccache.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 08 Nov 2022 10:53:46 +0100
+
 webkit2gtk (2.38.2-1) unstable; urgency=high
 
   * New upstream release.
