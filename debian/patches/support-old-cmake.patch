@@ -1,0 +1,16 @@
+From: Emilio Pozuelo Monfort <pochu@debian.org>
+Subject: Don't use TARGET_FILE_BASE_NAME, it needs cmake 3.15
+Forwarded: not-needed
+Index: webkitgtk/Source/cmake/FindGI.cmake
+===================================================================
+--- webkitgtk.orig/Source/cmake/FindGI.cmake
++++ webkitgtk/Source/cmake/FindGI.cmake
+@@ -340,7 +340,7 @@ function(GI_INTROSPECT namespace nsversi
+         COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+             "${GI_SCANNER_EXE}" --quiet --warn-all --warn-error --no-libtool
+             "--output=${gir_path}"
+-            "--library=$<TARGET_FILE_BASE_NAME:${opt_TARGET}>"
++            "--library=$<IF:$<STREQUAL:${namespace},WebKit2>,webkit2gtk-${nsversion},$<IF:$<STREQUAL:${namespace},JavaScriptCore>,javascriptcoregtk-${nsversion},$<IF:$<STREQUAL:${namespace},WebKit2WebExtension>,webkit2gtk-${nsversion},ERROR>>>"
+             "--library-path=$<TARGET_FILE_DIR:${opt_TARGET}>"
+             "--namespace=${namespace}"
+             "--nsversion=${nsversion}"
