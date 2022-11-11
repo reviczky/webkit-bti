@@ -149,7 +149,7 @@ static inline bool isMediaStreamCorrectlyStarted(const MediaStream& stream)
     });
 }
 
-void UserMediaRequest::allow(CaptureDevice&& audioDevice, CaptureDevice&& videoDevice, String&& deviceIdentifierHashSalt, CompletionHandler<void()>&& completionHandler)
+void UserMediaRequest::allow(CaptureDevice&& audioDevice, CaptureDevice&& videoDevice, MediaDeviceHashSalts&& deviceIdentifierHashSalt, CompletionHandler<void()>&& completionHandler)
 {
     RELEASE_LOG(MediaStream, "UserMediaRequest::allow %s %s", audioDevice ? audioDevice.persistentId().utf8().data() : "", videoDevice ? videoDevice.persistentId().utf8().data() : "");
     m_allowCompletionHandler = WTFMove(completionHandler);
@@ -190,7 +190,7 @@ void UserMediaRequest::allow(CaptureDevice&& audioDevice, CaptureDevice&& videoD
             }
 
             ASSERT(document.isCapturing());
-            stream->document()->setHasCaptureMediaStreamTrack();
+            document.setHasCaptureMediaStreamTrack();
             m_promise->resolve(WTFMove(stream));
         };
 

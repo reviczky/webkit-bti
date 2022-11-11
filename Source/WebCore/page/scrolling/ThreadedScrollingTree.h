@@ -56,7 +56,7 @@ public:
 
     void invalidate() override;
 
-    WEBCORE_EXPORT void displayDidRefresh(PlatformDisplayID);
+    void displayDidRefresh(PlatformDisplayID) override;
 
     void didScheduleRenderingUpdate();
     void willStartRenderingUpdate();
@@ -76,8 +76,9 @@ protected:
 
 #if PLATFORM(MAC)
     void handleWheelEventPhase(ScrollingNodeID, PlatformWheelEventPhase) override;
-    void setActiveScrollSnapIndices(ScrollingNodeID, std::optional<unsigned> horizontalIndex, std::optional<unsigned> verticalIndex) override;
 #endif
+
+    void setActiveScrollSnapIndices(ScrollingNodeID, std::optional<unsigned> horizontalIndex, std::optional<unsigned> verticalIndex) override;
 
 #if PLATFORM(COCOA)
     void currentSnapPointIndicesDidChange(ScrollingNodeID, std::optional<unsigned> horizontal, std::optional<unsigned> vertical) override;
@@ -109,8 +110,6 @@ private:
     void hasNodeWithAnimatedScrollChanged(bool) final;
     
     bool isScrollingSynchronizedWithMainThread() final WTF_REQUIRES_LOCK(m_treeLock);
-
-    void serviceScrollAnimations(MonotonicTime) WTF_REQUIRES_LOCK(m_treeLock);
 
     Seconds frameDuration();
     Seconds maxAllowableRenderingUpdateDurationForSynchronization();

@@ -26,16 +26,15 @@
 #include "config.h"
 #include "InlineLineBox.h"
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "LayoutBoxGeometry.h"
-#include "LayoutContainerBox.h"
+#include "LayoutElementBox.h"
 
 namespace WebCore {
 namespace Layout {
 
 LineBox::LineBox(const Box& rootLayoutBox, InlineLayoutUnit rootInlineBoxAlignmentOffset, InlineLayoutUnit contentLogicalWidth, size_t lineIndex, size_t nonSpanningInlineLevelBoxCount)
-    : m_rootInlineBoxAlignmentOffset(rootInlineBoxAlignmentOffset)
+    : m_lineIndex(lineIndex)
+    , m_rootInlineBoxAlignmentOffset(rootInlineBoxAlignmentOffset)
     , m_rootInlineBox({ rootLayoutBox, !lineIndex ? rootLayoutBox.firstLineStyle() : rootLayoutBox.style(), { }, InlineLayoutSize { contentLogicalWidth, { } }, InlineLevelBox::Type::RootInlineBox })
 {
     m_nonRootInlineLevelBoxList.reserveInitialCapacity(nonSpanningInlineLevelBoxCount);
@@ -124,4 +123,3 @@ InlineRect LineBox::logicalBorderBoxForInlineBox(const Box& layoutBox, const Box
 } // namespace Layout
 } // namespace WebCore
 
-#endif

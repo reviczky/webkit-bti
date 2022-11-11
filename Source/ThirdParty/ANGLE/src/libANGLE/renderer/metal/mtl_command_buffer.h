@@ -91,8 +91,7 @@ class CommandQueue final : public WrappedObject<id<MTLCommandQueue>>, angle::Non
     };
     std::deque<CmdBufferQueueEntry> mMetalCmdBuffers;
 
-    uint64_t mQueueSerialCounter  = 1;
-    uint64_t mLastCommittedSerial = 0;
+    uint64_t mQueueSerialCounter = 1;
     std::atomic<uint64_t> mCommittedBufferSerial{0};
     std::atomic<uint64_t> mCompletedBufferSerial{0};
 
@@ -497,7 +496,7 @@ class RenderCommandEncoder final : public CommandEncoder
 
     const RenderPassDesc &renderPassDesc() const { return mRenderPassDesc; }
     bool hasDrawCalls() const { return mHasDrawCalls; }
-
+    bool hasPipelineState() const { return mPipelineStateSet; }
   private:
     // Override CommandEncoder
     id<MTLRenderCommandEncoder> get()

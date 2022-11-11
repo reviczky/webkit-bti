@@ -37,20 +37,17 @@
 #include <wtf/Threading.h>
 
 #if PLATFORM(COCOA)
-#include "SharedRingBufferStorage.h"
+#include "SharedCARingBuffer.h"
 #include <WebCore/AudioDestinationCocoa.h>
 #else
 #include <WebCore/AudioDestinationGStreamer.h>
 #endif
 
 namespace WebCore {
-class CARingBuffer;
 class WebAudioBufferList;
 }
 
 namespace WebKit {
-
-class SharedRingBufferFrameBounds;
 
 class RemoteAudioDestinationProxy final
 #if PLATFORM(COCOA)
@@ -91,16 +88,12 @@ private:
     unsigned numberOfOutputChannels() const { return m_numberOfOutputChannels; }
 #endif
 
-#if PLATFORM(COCOA)
-    void storageChanged(SharedMemory*, const WebCore::CAAudioStreamDescription& format, size_t frameCount);
-#endif
-
     RemoteAudioDestinationIdentifier m_destinationID; // Call destinationID() getter to make sure the destinationID is valid.
 
     WeakPtr<GPUProcessConnection> m_gpuProcessConnection;
 #if PLATFORM(COCOA)
     uint64_t m_numberOfFrames { 0 };
-    std::unique_ptr<WebCore::CARingBuffer> m_ringBuffer;
+    std::unique_ptr<ProducerSharedCARingBuffer> m_ringBuffer;
     std::unique_ptr<WebCore::WebAudioBufferList> m_audioBufferList;
     uint64_t m_currentFrame { 0 };
     float m_sampleRate;

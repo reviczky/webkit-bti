@@ -25,8 +25,7 @@
 
 #pragma once
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
+#include "FloatingContext.h"
 #include "FormattingGeometry.h"
 #include "InlineLineBuilder.h"
 
@@ -40,7 +39,7 @@ class InlineFormattingGeometry : public FormattingGeometry {
 public:
     InlineFormattingGeometry(const InlineFormattingContext&);
 
-    InlineLayoutUnit logicalTopForNextLine(const LineBuilder::LineContent&, InlineLayoutUnit previousLineLogicalBottom, const FloatingContext&) const;
+    InlineLayoutUnit logicalTopForNextLine(const LineBuilder::LineContent&, const InlineRect& lineLogicalRect, const FloatingContext&) const;
 
     ContentHeightAndMargin inlineBlockContentHeightAndMargin(const Box&, const HorizontalConstraints&, const OverriddenVerticalValues&) const;
     ContentWidthAndMargin inlineBlockContentWidthAndMargin(const Box&, const HorizontalConstraints&, const OverriddenHorizontalValues&) const;
@@ -50,7 +49,14 @@ public:
 
     bool inlineLevelBoxAffectsLineBox(const InlineLevelBox&, const LineBox&) const;
 
+    InlineLayoutUnit initialLineHeight(bool isFirstLine) const;
+
+    FloatingContext::Constraints floatConstraintsForLine(InlineLayoutUnit lineLogicalTop, InlineLayoutUnit contentLogicalHeight, const FloatingContext&) const;
+
     static InlineRect flipVisualRectToLogicalForWritingMode(const InlineRect& visualRect, WritingMode);
+
+    LayoutPoint staticPositionForOutOfFlowInlineLevelBox(const Box&, LayoutPoint contentBoxTopLeft) const;
+    LayoutPoint staticPositionForOutOfFlowBlockLevelBox(const Box&, LayoutPoint contentBoxTopLeft) const;
 
 private:
     const InlineFormattingContext& formattingContext() const { return downcast<InlineFormattingContext>(FormattingGeometry::formattingContext()); }
@@ -62,4 +68,3 @@ private:
 
 SPECIALIZE_TYPE_TRAITS_LAYOUT_FORMATTING_GEOMETRY(InlineFormattingGeometry, isInlineFormattingGeometry())
 
-#endif

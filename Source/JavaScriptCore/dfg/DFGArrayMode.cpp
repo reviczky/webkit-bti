@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -252,20 +252,11 @@ ArrayMode ArrayMode::refine(
 
         // If we have an OriginalArray and the JSArray prototype chain is sane,
         // any indexed access always return undefined. We have a fast path for that.
-        JSGlobalObject* globalObject = graph.globalObjectFor(node->origin.semantic);
-        Structure* arrayPrototypeStructure = globalObject->arrayPrototype()->structure();
-        Structure* objectPrototypeStructure = globalObject->objectPrototype()->structure();
         if (node->op() == GetByVal
             && isJSArrayWithOriginalStructure()
             && !graph.hasExitSite(node->origin.semantic, OutOfBounds)
-            && arrayPrototypeStructure->transitionWatchpointSetIsStillValid()
-            && objectPrototypeStructure->transitionWatchpointSetIsStillValid()
-            && globalObject->arrayPrototypeChainIsSaneConcurrently(arrayPrototypeStructure, objectPrototypeStructure)) {
-            graph.registerAndWatchStructureTransition(arrayPrototypeStructure);
-            graph.registerAndWatchStructureTransition(objectPrototypeStructure);
-            if (globalObject->arrayPrototypeChainIsSaneConcurrently(arrayPrototypeStructure, objectPrototypeStructure))
-                return withSpeculation(Array::InBoundsSaneChain);
-        }
+            && graph.isWatchingArrayPrototypeChainIsSaneWatchpoint(node))
+            return withSpeculation(Array::InBoundsSaneChain);
         return ArrayMode(Array::Generic, action());
     }
     case Array::Int32:
@@ -771,6 +762,7 @@ IndexingType toIndexingShape(Array::Type type)
     case Array::Int32:
         return Int32Shape;
     case Array::Double:
+        ASSERT(Options::allowDoubleShape());
         return DoubleShape;
     case Array::Contiguous:
         return ContiguousShape;

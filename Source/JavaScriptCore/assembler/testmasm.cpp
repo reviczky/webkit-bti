@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -238,7 +238,7 @@ MacroAssemblerCodeRef<JSEntryPtrTag> compile(Generator&& generate)
 template<typename T, typename... Arguments>
 T invoke(const MacroAssemblerCodeRef<JSEntryPtrTag>& code, Arguments... arguments)
 {
-    void* executableAddress = untagCFunctionPtr<JSEntryPtrTag>(code.code().executableAddress());
+    void* executableAddress = untagCFunctionPtr<JSEntryPtrTag>(code.code().taggedPtr());
     T (*function)(Arguments...) = bitwise_cast<T(*)(Arguments...)>(executableAddress);
 
 #if CPU(RISCV64)
@@ -1302,7 +1302,7 @@ void testExtractUnsignedBitfield32()
     Vector<uint32_t> imms = { 0, 1, 5, 7, 30, 31, 32, 42, 56, 62, 63, 64 };
     for (auto lsb : imms) {
         for (auto width : imms) {
-            if (lsb >= 0 && width > 0 && lsb + width < 32) {
+            if (width > 0 && lsb + width < 32) {
                 auto ubfx32 = compile([=] (CCallHelpers& jit) {
                     emitFunctionPrologue(jit);
 
@@ -4920,7 +4920,7 @@ void testProbeModifiesProgramCounter()
         // Write expected values into the registers.
         jit.probeDebug([&] (Probe::Context& context) {
             probeCallCount++;
-            context.cpu.pc() = retagCodePtr<JSEntryPtrTag, JITProbePCPtrTag>(continuation.code().executableAddress());
+            context.cpu.pc() = retagCodePtr<JSEntryPtrTag, JITProbePCPtrTag>(continuation.code().taggedPtr());
         });
 
         jit.breakpoint(); // We should never get here.

@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "MediaPlayerPrivateGStreamer.h"
+#include "VideoFrameGStreamer.h"
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
 
@@ -2642,9 +2643,8 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const MediaE
     auto& gstRegistryScanner = GStreamerRegistryScanner::singleton();
     result = gstRegistryScanner.isContentTypeSupported(GStreamerRegistryScanner::Configuration::Decoding, parameters.type, parameters.contentTypesRequiringHardwareSupport);
 
-    auto finalResult = extendedSupportsType(parameters, result);
-    GST_DEBUG("Supported: %s", convertEnumerationToString(finalResult).utf8().data());
-    return finalResult;
+    GST_DEBUG("Supported: %s", convertEnumerationToString(result).utf8().data());
+    return result;
 }
 
 bool isMediaDiskCacheDisabled()
@@ -2894,6 +2894,28 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
         g_object_set(decoder, "output-corrupt", FALSE, nullptr);
     if (decoderHasProperty("max-errors"))
         g_object_set(decoder, "max-errors", -1, nullptr);
+
+
+    auto pad = adoptGRef(gst_element_get_static_pad(decoder, "src"));
+    gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM | GST_PAD_PROBE_TYPE_BUFFER), [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
+        auto* player = static_cast<MediaPlayerPrivateGStreamer*>(userData);
+        if (GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_BUFFER) {
+            player->incrementDecodedVideoFramesCount();
+            return GST_PAD_PROBE_OK;
+        }
+
+        if (GST_QUERY_TYPE(GST_PAD_PROBE_INFO_QUERY(info)) == GST_QUERY_CUSTOM) {
+            auto* query = GST_QUERY_CAST(GST_PAD_PROBE_INFO_DATA(info));
+            auto* structure = gst_query_writable_structure(query);
+            if (gst_structure_has_name(structure, "webkit-video-decoder-stats")) {
+                gst_structure_set(structure, "decoded-frames", G_TYPE_UINT64, player->decodedVideoFramesCount(), nullptr);
+                GST_PAD_PROBE_INFO_DATA(info) = query;
+                return GST_PAD_PROBE_HANDLED;
+            }
+        }
+
+        return GST_PAD_PROBE_OK;
+    }, this, nullptr);
 }
 
 bool MediaPlayerPrivateGStreamer::didPassCORSAccessCheck() const
@@ -3610,7 +3632,7 @@ void MediaPlayerPrivateGStreamer::flushCurrentBuffer()
 }
 #endif
 
-void MediaPlayerPrivateGStreamer::setSize(const IntSize& size)
+void MediaPlayerPrivateGStreamer::setPresentationSize(const IntSize& size)
 {
     m_size = size;
 }
@@ -3627,63 +3649,9 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
     if (!GST_IS_SAMPLE(m_sample.get()))
         return;
 
-#if USE(GSTREAMER_GL)
-    // Ensure the input is RGBA. We handle YUV video natively, so we need to do
-    // this conversion on-demand here.
-    GstBuffer* buffer = gst_sample_get_buffer(m_sample.get());
-    if (UNLIKELY(!GST_IS_BUFFER(buffer)))
-        return;
-
-    GstCaps* caps = gst_sample_get_caps(m_sample.get());
-
-    GstVideoInfo videoInfo;
-    gst_video_info_init(&videoInfo);
-    if (!gst_video_info_from_caps(&videoInfo, caps))
-        return;
-
-    GstMemory* memory = gst_buffer_peek_memory(buffer, 0);
-    bool hasExternalOESTexture = false;
-    if (gst_is_gl_memory(memory))
-        hasExternalOESTexture = gst_gl_memory_get_texture_target(GST_GL_MEMORY_CAST(memory)) == GST_GL_TEXTURE_TARGET_EXTERNAL_OES;
-
-    if (!GST_VIDEO_INFO_IS_RGB(&videoInfo) || hasExternalOESTexture) {
-        if (!m_colorConvert)
-            m_colorConvert = adoptGRef(gst_gl_color_convert_new(GST_GL_BASE_MEMORY_CAST(memory)->context));
-
-        if (!m_colorConvertInputCaps || !gst_caps_is_equal(m_colorConvertInputCaps.get(), caps)) {
-            m_colorConvertInputCaps = caps;
-            m_colorConvertOutputCaps = adoptGRef(gst_caps_copy(caps));
-
-            // These caps must match the internal format of a cairo surface with CAIRO_FORMAT_ARGB32,
-            // so we don't need to perform color conversions when painting the video frame.
-#if G_BYTE_ORDER == G_LITTLE_ENDIAN
-            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "BGRA" : "BGRx";
-#else
-            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "ARGB" : "xRGB";
-#endif
-            gst_caps_set_simple(m_colorConvertOutputCaps.get(), "format", G_TYPE_STRING, formatString,
-                "texture-target", G_TYPE_STRING, GST_GL_TEXTURE_TARGET_2D_STR, nullptr);
-            if (!gst_gl_color_convert_set_caps(m_colorConvert.get(), caps, m_colorConvertOutputCaps.get()))
-                return;
-        }
-
-        GRefPtr<GstBuffer> rgbBuffer = adoptGRef(gst_gl_color_convert_perform(m_colorConvert.get(), buffer));
-        if (UNLIKELY(!GST_IS_BUFFER(rgbBuffer.get())))
-            return;
-
-        const GstStructure* info = gst_sample_get_info(m_sample.get());
-        m_sample = adoptGRef(gst_sample_new(rgbBuffer.get(), m_colorConvertOutputCaps.get(),
-            gst_sample_get_segment(m_sample.get()), info ? gst_structure_copy(info) : nullptr));
-    }
-#endif
-
-    auto gstImage = ImageGStreamer::createImage(m_sample.get());
-    if (!gstImage)
-        return;
-
-    FloatRect imageRect = m_videoSourceOrientation.usesWidthAsHeight() ? FloatRect(gstImage->rect().location(), gstImage->rect().size().transposedSize()) : gstImage->rect();
-
-    context.drawImage(gstImage->image(), rect, imageRect, { gstImage->hasAlpha() ? CompositeOperator::SourceOver : CompositeOperator::Copy, m_videoSourceOrientation });
+    auto* buffer = gst_sample_get_buffer(m_sample.get());
+    auto frame = VideoFrameGStreamer::createWrappedSample(m_sample, fromGstClockTime(GST_BUFFER_PTS(buffer)));
+    frame->paintInContext(context, rect, m_videoSourceOrientation, false);
 }
 
 DestinationColorSpace MediaPlayerPrivateGStreamer::colorSpace()
@@ -4165,12 +4133,6 @@ bool MediaPlayerPrivateGStreamer::supportsKeySystem(const String& keySystem, con
 #endif
 
     GST_DEBUG("checking for KeySystem support with %s and type %s: %s", keySystem.utf8().data(), mimeType.utf8().data(), boolForPrinting(result));
-    return result;
-}
-
-MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::extendedSupportsType(const MediaEngineSupportParameters& parameters, MediaPlayer::SupportsType result)
-{
-    UNUSED_PARAM(parameters);
     return result;
 }
 

@@ -125,6 +125,10 @@
         "Indicates that this CSS property is a FillLayer property. It must have",
         "corresponding methods on the FillLayer class.",
         "",
+        "* separator:",
+        "Indicates separator for list-valued CSS property (populates",
+        "CSSProperty::listPropertySeparator().",
+        "",
         "* skip-builder:",
         "Ignore this property in the StyleBuilder.",
         "",
@@ -262,6 +266,7 @@
             "codegen-properties": {
                 "visited-link-color-support": true,
                 "color-property": true,
+                "custom": "Value",
                 "high-priority": true,
                 "fast-path-inherited": true
             },
@@ -376,6 +381,18 @@
             "specification": {
                 "category": "css-fonts",
                 "url": "https://www.w3.org/TR/css-fonts-3/#font-size-prop"
+            }
+        },
+        "font-size-adjust": {
+            "inherited": true,
+            "codegen-properties": {
+                "custom": "Value",
+                "font-property": true,
+                "high-priority": true
+            },
+            "specification": {
+                "category": "css-fonts",
+                "url": "https://www.w3.org/TR/css-fonts-4/#font-size-adjust-prop"
             }
         },
         "font-style": {
@@ -596,12 +613,9 @@
         },
         "font-variant-alternates": {
             "inherited": true,
-            "values": [
-                "normal",
-                "historical-forms"
-            ],
             "codegen-properties": {
                 "name-for-methods": "VariantAlternates",
+                "custom": "All",
                 "font-property": true,
                 "high-priority": true
             },
@@ -626,13 +640,60 @@
         "font-synthesis": {
             "inherited": true,
             "codegen-properties": {
-                "converter": "FontSynthesis",
+                "longhands": [
+                    "font-synthesis-weight",
+                    "font-synthesis-style",
+                    "font-synthesis-small-caps"
+                ]
+            },
+            "specification": {
+                "category": "css-fonts",
+                "url": "https://drafts.csswg.org/css-fonts-3/#font-synthesis-prop"
+            }
+        },
+        "font-synthesis-weight": {
+            "inherited": true,
+            "values": [
+                "auto",
+                "none"
+            ],
+            "codegen-properties": {
                 "font-property": true,
                 "high-priority": true
             },
             "specification": {
                 "category": "css-fonts",
-                "url": "https://drafts.csswg.org/css-fonts-3/#font-synthesis-prop"
+                "url": "https://drafts.csswg.org/css-fonts-4/#font-synthesis-weight"
+            }
+        },
+        "font-synthesis-style": {
+            "inherited": true,
+            "values": [
+                "auto",
+                "none"
+            ],
+            "codegen-properties": {
+                "font-property": true,
+                "high-priority": true
+            },
+            "specification": {
+                "category": "css-fonts",
+                "url": "https://drafts.csswg.org/css-fonts-4/#font-synthesis-style"
+            }
+        },
+        "font-synthesis-small-caps": {
+            "inherited": true,
+            "values": [
+                "auto",
+                "none"
+            ],
+            "codegen-properties": {
+                "font-property": true,
+                "high-priority": true
+            },
+            "specification": {
+                "category": "css-fonts",
+                "url": "https://drafts.csswg.org/css-fonts-4/#font-synthesis-small-caps"
             }
         },
         "font-optical-sizing": {
@@ -656,14 +717,31 @@
             "inherited": true,
             "codegen-properties": {
                 "longhands": [
-                              "font-family",
-                              "font-size",
-                              "font-style",
-                              "font-variant-caps",
-                              "font-weight",
-                              "font-stretch",
-                              "line-height"
-                              ]
+                    "font-style",
+                    "font-variant-caps",
+                    "font-weight",
+                    "font-stretch",
+                    "font-size",
+                    "line-height",
+                    "font-family",
+                    "font-size-adjust",
+                    "font-kerning",
+                    "font-variant-alternates",
+                    "font-variant-ligatures",
+                    "font-variant-numeric",
+                    "font-variant-east-asian",
+                    "font-variant-position",
+                    "font-feature-settings",
+                    {
+                        "value": "font-optical-sizing",
+                        "enable-if": "ENABLE_VARIATION_FONTS"
+                    },
+                    {
+                        "value": "font-variation-settings",
+                        "enable-if": "ENABLE_VARIATION_FONTS"
+                    },
+                    "font-palette"
+                ]
             },
             "specification": {
                 "category": "css-fonts",
@@ -956,7 +1034,8 @@
                 "aliases": [
                     "-webkit-animation-delay"
                 ],
-                "name-for-methods": "Delay"
+                "name-for-methods": "Delay",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -975,7 +1054,8 @@
                 "aliases": [
                     "-webkit-animation-direction"
                 ],
-                "name-for-methods": "Direction"
+                "name-for-methods": "Direction",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -988,7 +1068,8 @@
                 "aliases": [
                     "-webkit-animation-duration"
                 ],
-                "name-for-methods": "Duration"
+                "name-for-methods": "Duration",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -1007,7 +1088,8 @@
                 "aliases": [
                     "-webkit-animation-fill-mode"
                 ],
-                "name-for-methods": "FillMode"
+                "name-for-methods": "FillMode",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -1020,7 +1102,8 @@
                 "aliases": [
                     "-webkit-animation-iteration-count"
                 ],
-                "name-for-methods": "IterationCount"
+                "name-for-methods": "IterationCount",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -1033,7 +1116,8 @@
                 "aliases": [
                     "-webkit-animation-name"
                 ],
-                "name-for-methods": "Name"
+                "name-for-methods": "Name",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -1050,7 +1134,8 @@
                 "aliases": [
                     "-webkit-animation-play-state"
                 ],
-                "name-for-methods": "PlayState"
+                "name-for-methods": "PlayState",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -1063,7 +1148,8 @@
                 "aliases": [
                     "-webkit-animation-timing-function"
                 ],
-                "name-for-methods": "TimingFunction"
+                "name-for-methods": "TimingFunction",
+                "separator": ","
             },
             "specification": {
                 "category": "css-animations",
@@ -1077,8 +1163,7 @@
                     "background-position-x",
                     "background-position-y",
                     "background-size",
-                    "background-repeat-x",
-                    "background-repeat-y",
+                    "background-repeat",
                     "background-attachment",
                     "background-origin",
                     "background-clip",
@@ -1098,7 +1183,8 @@
             ],
             "codegen-properties": {
                 "name-for-methods": "Attachment",
-                "fill-layer-property": true
+                "fill-layer-property": true,
+                "separator": ","
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1126,7 +1212,8 @@
             ],
             "codegen-properties": {
                 "name-for-methods": "BlendMode",
-                "fill-layer-property": true
+                "fill-layer-property": true,
+                "separator": ","
             },
             "specification": {
                 "category": "css-compositing",
@@ -1147,7 +1234,8 @@
             "codegen-properties": {
                 "related-property": "-webkit-background-clip",
                 "name-for-methods": "Clip",
-                "fill-layer-property": true
+                "fill-layer-property": true,
+                "separator": " "
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1167,7 +1255,8 @@
         "background-image": {
             "codegen-properties": {
                 "name-for-methods": "Image",
-                "fill-layer-property": true
+                "fill-layer-property": true,
+                "separator": " "
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1178,7 +1267,8 @@
             "codegen-properties": {
                 "related-property": "-webkit-background-origin",
                 "name-for-methods": "Origin",
-                "fill-layer-property": true
+                "fill-layer-property": true,
+                "separator": " "
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -1205,10 +1295,6 @@
             "specification": {
                 "category": "css-backgrounds",
                 "url": "https://drafts.csswg.org/css-backgrounds-4/#propdef-background-position-x"
-            },
-            "status": {
-                "status": "experimental",
-                "enabled-by-default": true
             }
         },
         "background-position-y": {
@@ -1219,57 +1305,23 @@
             "specification": {
                 "category": "css-backgrounds",
                 "url": "https://drafts.csswg.org/css-backgrounds-4/#propdef-background-position-y"
-            },
-            "status": {
-                "status": "experimental",
-                "enabled-by-default": true
             }
         },
         "background-repeat": {
             "codegen-properties": {
-                "longhands": [
-                    "background-repeat-x",
-                    "background-repeat-y"
-                ]
+                "name-for-methods": "Repeat",
+                "fill-layer-property": true
             },
             "specification": {
                 "category": "css-backgrounds",
                 "url": "https://www.w3.org/TR/css3-background/#background-repeat"
             }
         },
-        "background-repeat-x": {
-            "codegen-properties": {
-                "name-for-methods": "RepeatX",
-                "fill-layer-property": true,
-                "internal-only": true
-            },
-            "specification": {
-                "category": "css-backgrounds"
-            },
-            "status": {
-                "status": "experimental",
-                "enabled-by-default": true
-            }
-        },
-        "background-repeat-y": {
-            "codegen-properties": {
-                "name-for-methods": "RepeatY",
-                "fill-layer-property": true,
-                "internal-only": true
-            },
-            "specification": {
-                "category": "css-backgrounds"
-            },
-            "status": {
-                "status": "experimental",
-                "enabled-by-default": true
-            }
-        },
         "background-size": {
             "codegen-properties": {
-                "related-property": "-webkit-background-size",
                 "name-for-methods": "Size",
-                "fill-layer-property": true
+                "fill-layer-property": true,
+                "separator": " "
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -2466,7 +2518,8 @@
         },
         "content": {
             "codegen-properties": {
-                "custom": "All"
+                "custom": "All",
+                "separator": ","
             },
             "specification": {
                 "category": "css-content",
@@ -3335,8 +3388,7 @@
                     "-webkit-mask-position-x",
                     "-webkit-mask-position-y",
                     "mask-size",
-                    "mask-repeat-x",
-                    "mask-repeat-y",
+                    "mask-repeat",
                     "mask-origin",
                     "mask-clip",
                     "mask-composite",
@@ -3450,9 +3502,6 @@
         },
         "-webkit-mask-position-y": {
             "codegen-properties": {
-                "aliases":[
-                    "-webkit-mask-position-y"
-                ],
                 "name-for-methods": "YPosition",
                 "fill-layer-property": true
             },
@@ -3470,28 +3519,12 @@
                 "aliases":[
                     "-webkit-mask-repeat"
                 ],
-                "longhands": [
-                    "mask-repeat-x",
-                    "mask-repeat-y"
-                ]
+                "name-for-methods": "Repeat",
+                "fill-layer-property": true
             },
             "specification": {
                 "category": "css-masking",
                 "url": "https://www.w3.org/TR/css-masking-1/#propdef-mask-repeat"
-            }
-        },
-        "mask-repeat-x": {
-            "codegen-properties": {
-                "name-for-methods": "RepeatX",
-                "fill-layer-property": true,
-                "internal-only": true
-            }
-        },
-        "mask-repeat-y": {
-            "codegen-properties": {
-                "name-for-methods": "RepeatY",
-                "fill-layer-property": true,
-                "internal-only": true
             }
         },
         "mask-size": {
@@ -4948,7 +4981,8 @@
                 "aliases": [
                     "-webkit-transition-delay"
                 ],
-                "name-for-methods": "Delay"
+                "name-for-methods": "Delay",
+                "separator": ","
             },
             "specification": {
                 "category": "css-transitions",
@@ -4961,7 +4995,8 @@
                 "aliases": [
                     "-webkit-transition-duration"
                 ],
-                "name-for-methods": "Duration"
+                "name-for-methods": "Duration",
+                "separator": ","
             },
             "specification": {
                 "category": "css-transitions",
@@ -5396,6 +5431,23 @@
                 "url": "https://drafts.csswg.org/css-contain-3/#container-queries"
             }
         },
+        "content-visibility": {
+            "codegen-properties": {
+                "settings-flag": "cssContentVisibilityEnabled"
+            },
+            "values": [
+                "visible",
+                "hidden",
+                "auto"
+            ],
+            "status": {
+                "status": "experimental"
+            },
+            "specification": {
+                "category": "css-content-visibility",
+                "url": "https://www.w3.org/TR/css-contain-2/#content-visibility"
+            }
+        },
         "backface-visibility": {
             "codegen-properties": {
                 "aliases": [
@@ -5427,9 +5479,9 @@
         },
         "-webkit-background-size": {
             "codegen-properties": {
-                "related-property": "background-size",
-                "name-for-methods": "Size",
-                "fill-layer-property": true
+                "longhands": [
+                    "background-size"
+                ]
             },
             "status": {
                 "comment": "Differs from background-size only in the interpretation of a single value: '-webkit-background-size: l;' is equivalent to 'background-size: l l;' whereas 'background-size: l;' is equivalent to 'background-size: l auto;'"
@@ -6182,7 +6234,8 @@
         },
         "grid-auto-columns": {
             "codegen-properties": {
-                "converter": "GridTrackSizeList"
+                "converter": "GridTrackSizeList",
+                "separator": " "
             },
             "specification": {
                 "category": "css-grid",
@@ -6191,7 +6244,8 @@
         },
         "grid-auto-rows": {
             "codegen-properties": {
-                "converter": "GridTrackSizeList"
+                "converter": "GridTrackSizeList",
+                "separator": " "
             },
             "specification": {
                 "category": "css-grid",
@@ -6556,8 +6610,7 @@
                     "-webkit-mask-position-x",
                     "-webkit-mask-position-y",
                     "mask-size",
-                    "mask-repeat-x",
-                    "mask-repeat-y",
+                    "mask-repeat",
                     "mask-origin",
                     "-webkit-mask-clip"
                 ],
@@ -6688,7 +6741,7 @@
         "color-scheme": {
             "inherited": true,
             "values": [
-                "auto",
+                "normal",
                 "light",
                 "dark",
                 "only"
@@ -7000,7 +7053,6 @@
             }
         },
         "text-decoration-thickness": {
-            "inherited": true,
             "codegen-properties": {
                 "converter": "TextDecorationThickness"
             },
@@ -7884,6 +7936,11 @@
             "shortname": "CSS Generated Content",
             "longname": "CSS Generated Content Module",
             "url": "https://www.w3.org/TR/css-content-3/"
+        },
+        "css-content-visibility": {
+            "shortname": "CSS Content Visibility",
+            "longname": "CSS Content Visibility Module",
+            "url": "https://www.w3.org/TR/css-contain-2/#content-visibility"
         },
         "css-counter-styles": {
             "shortname": "CSS Counter Styles",

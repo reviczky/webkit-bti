@@ -258,7 +258,8 @@ inline bool Structure::hasIndexingHeader(const JSCell* cell) const
     if (!isTypedView(m_blob.type()))
         return false;
 
-    return jsCast<const JSArrayBufferView*>(cell)->mode() == WastefulTypedArray;
+    TypedArrayMode mode = jsCast<const JSArrayBufferView*>(cell)->mode();
+    return mode == WastefulTypedArray || mode == ResizableWastefulTypedArray;
 }
 
 inline bool Structure::masqueradesAsUndefined(JSGlobalObject* lexicalGlobalObject)
@@ -429,10 +430,12 @@ ALWAYS_INLINE void Structure::checkOffsetConsistency() const
         ASSERT(!isPinnedPropertyTable());
 }
 
+#if ASSERT_ENABLED
 inline void Structure::checkConsistency()
 {
     checkOffsetConsistency();
 }
+#endif
 
 inline size_t nextOutOfLineStorageCapacity(size_t currentCapacity)
 {

@@ -25,6 +25,7 @@
 #include "config.h"
 #include "RenderLayerModelObject.h"
 
+#include "InspectorInstrumentation.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
 #include "RenderLayerCompositor.h"
@@ -89,6 +90,9 @@ void RenderLayerModelObject::destroyLayer()
 {
     ASSERT(!hasLayer());
     ASSERT(m_layer);
+#if PLATFORM(IOS_FAMILY)
+    m_layer->willBeDestroyed();
+#endif
     m_layer = nullptr;
 }
 
@@ -124,8 +128,10 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
     RenderElement::styleDidChange(diff, oldStyle);
     updateFromStyle();
 
+    bool gainedOrLostLayer = false;
     if (requiresLayer()) {
         if (!layer() && layerCreationAllowedForSubtree()) {
+            gainedOrLostLayer = true;
             if (s_wasFloating && isFloating())
                 setChildNeedsLayout();
             createLayer();
@@ -133,6 +139,7 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
                 layer()->setRepaintStatus(NeedsFullRepaint);
         }
     } else if (layer() && layer()->parent()) {
+        gainedOrLostLayer = true;
 #if ENABLE(CSS_COMPOSITING)
         if (oldStyle && oldStyle->hasBlendMode())
             layer()->willRemoveChildWithBlendMode();
@@ -153,6 +160,9 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
         if (s_hadTransform)
             setNeedsLayoutAndPrefWidthsRecalc();
     }
+
+    if (gainedOrLostLayer)
+        InspectorInstrumentation::didAddOrRemoveScrollbars(*this);
 
     if (layer()) {
         layer()->styleChanged(diff, oldStyle);
@@ -259,6 +269,23 @@ void RenderLayerModelObject::updateLayerTransform()
 }
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
+bool RenderLayerModelObject::shouldPaintSVGRenderer(const PaintInfo& paintInfo, const OptionSet<PaintPhase> relevantPaintPhases) const
+{
+    if (paintInfo.context().paintingDisabled())
+        return false;
+
+    if (!relevantPaintPhases.isEmpty() && !relevantPaintPhases.contains(paintInfo.phase))
+        return false;
+
+    if (!paintInfo.shouldPaintWithinRoot(*this))
+        return false;
+
+    if (style().visibility() == Visibility::Hidden || style().display() == DisplayType::None)
+        return false;
+
+    return true;
+}
+
 std::optional<LayoutRect> RenderLayerModelObject::computeVisibleRectInSVGContainer(const LayoutRect& rect, const RenderLayerModelObject* container, RenderObject::VisibleRectContext context) const
 {
     ASSERT(is<RenderSVGModelObject>(this) || is<RenderSVGBlock>(this));
@@ -353,12 +380,13 @@ void RenderLayerModelObject::mapLocalToSVGContainer(const RenderLayerModelObject
 
 void RenderLayerModelObject::applySVGTransform(TransformationMatrix& transform, SVGGraphicsElement& graphicsElement, const RenderStyle& style, const FloatRect& boundingBox, const std::optional<AffineTransform>& preApplySVGTransformMatrix, const std::optional<AffineTransform>& postApplySVGTransformMatrix, OptionSet<RenderStyle::TransformOperationOption> options) const
 {
-    auto svgTransform = graphicsElement.animatedLocalTransform();
+    auto svgTransform = graphicsElement.transform().concatenate();
+    auto* supplementalTransform = graphicsElement.supplementalTransform(); // SMIL <animateMotion>
 
     // This check does not use style.hasTransformRelatedProperty() on purpose -- we only want to know if either the 'transform' property, an
     // offset path, or the individual transform operations are set (perspective / transform-style: preserve-3d are not relevant here).
     bool hasCSSTransform = style.hasTransform() || style.rotate() || style.translate() || style.scale();
-    bool hasSVGTransform = !svgTransform.isIdentity() || preApplySVGTransformMatrix || postApplySVGTransformMatrix;
+    bool hasSVGTransform = !svgTransform.isIdentity() || preApplySVGTransformMatrix || postApplySVGTransformMatrix || supplementalTransform;
 
     // Common case: 'viewBox' set on outermost <svg> element -> 'preApplySVGTransformMatrix'
     // passed by RenderSVGViewportContainer::applyTransform(), the anonymous single child
@@ -372,10 +400,16 @@ void RenderLayerModelObject::applySVGTransform(TransformationMatrix& transform, 
             return true;
         if (postApplySVGTransformMatrix && !postApplySVGTransformMatrix->isIdentityOrTranslation())
             return true;
+        if (supplementalTransform && !supplementalTransform->isIdentityOrTranslation())
+            return true;
         if (hasCSSTransform)
             return style.affectedByTransformOrigin();
         return !svgTransform.isIdentityOrTranslation();
     };
+
+    // SMIL <animateMotion> is pre-multiplied.
+    if (supplementalTransform)
+        transform.multiplyAffineTransform(*supplementalTransform);
 
     FloatPoint3D originTranslate;
     if (options.contains(RenderStyle::TransformOperationOption::TransformOrigin) && affectedByTransformOrigin())
@@ -400,7 +434,7 @@ void RenderLayerModelObject::applySVGTransform(TransformationMatrix& transform, 
 
 void RenderLayerModelObject::updateHasSVGTransformFlags(const SVGGraphicsElement& graphicsElement)
 {
-    bool hasSVGTransform = !graphicsElement.animatedLocalTransform().isIdentity();
+    bool hasSVGTransform = graphicsElement.hasTransformRelatedAttributes();
     setHasTransformRelatedProperty(style().hasTransformRelatedProperty() || hasSVGTransform);
     setHasSVGTransform(hasSVGTransform);
 }

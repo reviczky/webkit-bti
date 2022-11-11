@@ -30,7 +30,7 @@
 #include "CallLinkInfo.h"
 #include "JSDestructibleObject.h"
 #include "JSObject.h"
-#include "WasmMemoryMode.h"
+#include "MemoryMode.h"
 #include "WasmOps.h"
 #include <wtf/Bag.h>
 #include <wtf/Expected.h>
@@ -73,7 +73,7 @@ public:
     Wasm::TypeIndex typeIndexFromFunctionIndexSpace(unsigned functionIndexSpace) const;
 
     Expected<void, Wasm::BindingFailure> generateWasmToJSStubs(VM&);
-    MacroAssemblerCodePtr<WasmEntryPtrTag> wasmToEmbedderStub(size_t importFunctionNum) { return m_wasmToJSExitStubs[importFunctionNum].code(); }
+    CodePtr<WasmEntryPtrTag> wasmToEmbedderStub(size_t importFunctionNum) { return m_wasmToJSExitStubs[importFunctionNum].code(); }
 
     void clearJSCallICs(VM&);
     void finalizeUnconditionally(VM&);

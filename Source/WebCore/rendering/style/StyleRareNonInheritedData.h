@@ -36,9 +36,11 @@
 #include "RotateTransformOperation.h"
 #include "ScaleTransformOperation.h"
 #include "ShapeValue.h"
+#include "StyleColor.h"
 #include "StyleContentAlignmentData.h"
 #include "StyleScrollSnapPoints.h"
 #include "StyleSelfAlignmentData.h"
+#include "TextDecorationThickness.h"
 #include "TouchAction.h"
 #include "TranslateTransformOperation.h"
 #include "WillChangeData.h"
@@ -174,14 +176,14 @@ public:
 
     RefPtr<PathOperation> clipPath;
 
-    Color textDecorationColor;
-    Color visitedLinkTextDecorationColor;
-    Color visitedLinkBackgroundColor;
-    Color visitedLinkOutlineColor;
-    Color visitedLinkBorderLeftColor;
-    Color visitedLinkBorderRightColor;
-    Color visitedLinkBorderTopColor;
-    Color visitedLinkBorderBottomColor;
+    StyleColor textDecorationColor;
+    StyleColor visitedLinkTextDecorationColor;
+    StyleColor visitedLinkBackgroundColor;
+    StyleColor visitedLinkOutlineColor;
+    StyleColor visitedLinkBorderLeftColor;
+    StyleColor visitedLinkBorderRightColor;
+    StyleColor visitedLinkBorderTopColor;
+    StyleColor visitedLinkBorderBottomColor;
 
     StyleContentAlignmentData alignContent;
     StyleSelfAlignmentData alignItems;
@@ -212,8 +214,10 @@ public:
     unsigned effectiveAppearance : appearanceBitWidth; // EAppearance
 
     unsigned textDecorationStyle : 3; // TextDecorationStyle
+    TextDecorationThickness textDecorationThickness;
 
-    unsigned aspectRatioType : 3;
+    unsigned aspectRatioType : 2; // AspectRatioType
+    unsigned contentVisibility : 2; // ContentVisibility
 
 #if ENABLE(CSS_COMPOSITING)
     unsigned effectiveBlendMode: 5; // EBlendMode

@@ -70,7 +70,7 @@
 #include "SearchInputType.h"
 #include "Settings.h"
 #include "StepRange.h"
-#include "StyleGeneratedImage.h"
+#include "StyleGradientImage.h"
 #include "TextControlInnerElements.h"
 #include "TypedElementDescendantIterator.h"
 #include <wtf/IsoMallocInlines.h>
@@ -98,7 +98,7 @@ public:
     void idTargetChanged() override;
 
 private:
-    WeakPtr<HTMLInputElement> m_element;
+    WeakPtr<HTMLInputElement, WeakPtrImplWithEventTargetData> m_element;
 };
 #endif
 
@@ -156,7 +156,8 @@ const AtomString& HTMLInputElement::name() const
 
 Vector<FileChooserFileInfo> HTMLInputElement::filesFromFileInputFormControlState(const FormControlState& state)
 {
-    return FileInputType::filesFromFormControlState(state);
+    auto [files, _] = FileInputType::filesFromFormControlState(state);
+    return files;
 }
 
 HTMLElement* HTMLInputElement::containerElement() const
@@ -511,13 +512,18 @@ void HTMLInputElement::resignStrongPasswordAppearance()
 void HTMLInputElement::updateType()
 {
     ASSERT(m_inputType);
-    auto newType = InputType::create(*this, attributeWithoutSynchronization(typeAttr));
+    auto newType = InputType::createIfDifferent(*this, attributeWithoutSynchronization(typeAttr), m_inputType.get());
     m_hasType = true;
-    if (m_inputType->formControlType() == newType->formControlType())
+    if (!newType)
         return;
+    ASSERT(m_inputType->formControlType() != newType->formControlType());
 
     removeFromRadioButtonGroup();
     resignStrongPasswordAppearance();
+
+    bool didSupportReadOnly = m_inputType->supportsReadOnly();
+    bool willSupportReadOnly = newType->supportsReadOnly();
+    std::optional<Style::PseudoClassChangeInvalidation> readWriteInvalidation;
 
     bool didStoreValue = m_inputType->storesValueSeparateFromAttribute();
     bool willStoreValue = newType->storesValueSeparateFromAttribute();
@@ -537,6 +543,11 @@ void HTMLInputElement::updateType()
 
     m_inputType = WTFMove(newType);
     m_inputType->createShadowSubtreeIfNeeded();
+
+    if (UNLIKELY(didSupportReadOnly != willSupportReadOnly && hasAttributeWithoutSynchronization(readonlyAttr))) {
+        emplace(readWriteInvalidation, *this, { { CSSSelector::PseudoClassReadWrite, !willSupportReadOnly }, { CSSSelector::PseudoClassReadOnly, willSupportReadOnly } });
+        readOnlyStateChanged();
+    }
 
     updateWillValidateAndValidity();
 
@@ -616,7 +627,8 @@ void HTMLInputElement::subtreeHasChanged()
 {
     m_inputType->subtreeHasChanged();
     // When typing in an input field, childrenChanged is not called, so we need to force the directionality check.
-    calculateAndAdjustDirectionality();
+    if (selfOrPrecedingNodesAffectDirAuto())
+        updateEffectiveDirectionalityOfDirAuto();
 }
 
 const AtomString& HTMLInputElement::formControlType() const
@@ -706,7 +718,7 @@ inline void HTMLInputElement::initializeInputType()
     }
 
     m_hasType = true;
-    m_inputType = InputType::create(*this, type);
+    m_inputType = InputType::createIfDifferent(*this, type);
     updateWillValidateAndValidity();
     registerForSuspensionCallbackIfNeeded();
     runPostTypeUpdateTasks();
@@ -807,6 +819,11 @@ void HTMLInputElement::readOnlyStateChanged()
 {
     HTMLTextFormControlElement::readOnlyStateChanged();
     m_inputType->readOnlyStateChanged();
+}
+
+bool HTMLInputElement::supportsReadOnly() const
+{
+    return m_inputType->supportsReadOnly();
 }
 
 void HTMLInputElement::parserDidSetAttributes()
@@ -1037,6 +1054,8 @@ ExceptionOr<void> HTMLInputElement::setValue(const String& value, TextFieldEvent
     setLastChangeWasNotUserEdit();
     setFormControlValueMatchesRenderer(false);
     m_inputType->setValue(WTFMove(sanitizedValue), valueChanged, eventBehavior, selection);
+    if (selfOrPrecedingNodesAffectDirAuto())
+        updateEffectiveDirectionalityOfDirAuto();
 
     bool wasModifiedProgrammatically = eventBehavior == DispatchNoEvent;
     if (wasModifiedProgrammatically) {
@@ -1245,14 +1264,14 @@ ExceptionOr<void> HTMLInputElement::showPicker()
     if (!frame)
         return { };
 
-    if (isDisabledOrReadOnly())
+    if (!isMutable())
         return Exception { InvalidStateError, "Input showPicker() cannot be used on immutable controls."_s };
 
     // In cross-origin iframes it should throw a "SecurityError" DOMException except on file and color. In same-origin iframes it should work fine.
     // https://github.com/whatwg/html/issues/6909#issuecomment-917138991
     if (!m_inputType->allowsShowPickerAcrossFrames()) {
-        Frame& topFrame = frame->tree().top();
-        if (!frame->document()->securityOrigin().isSameOriginAs(topFrame.document()->securityOrigin()))
+        auto* localTopFrame = dynamicDowncast<LocalFrame>(frame->tree().top());
+        if (!localTopFrame || !frame->document()->securityOrigin().isSameOriginAs(localTopFrame->document()->securityOrigin()))
             return Exception { SecurityError, "Input showPicker() called from cross-origin iframe."_s };
     }
 
@@ -1504,7 +1523,7 @@ bool HTMLInputElement::isRequiredFormControl() const
 
 bool HTMLInputElement::matchesReadWritePseudoClass() const
 {
-    return m_inputType->supportsReadOnly() && !isDisabledOrReadOnly();
+    return supportsReadOnly() && isMutable();
 }
 
 void HTMLInputElement::addSearchResult()
@@ -1921,16 +1940,16 @@ bool HTMLInputElement::shouldAppearIndeterminate() const
 MediaCaptureType HTMLInputElement::mediaCaptureType() const
 {
     if (!isFileUpload())
-        return MediaCaptureTypeNone;
+        return MediaCaptureType::MediaCaptureTypeNone;
     
     auto& captureAttribute = attributeWithoutSynchronization(captureAttr);
     if (captureAttribute.isNull())
-        return MediaCaptureTypeNone;
+        return MediaCaptureType::MediaCaptureTypeNone;
     
     if (equalLettersIgnoringASCIICase(captureAttribute, "user"_s))
-        return MediaCaptureTypeUser;
+        return MediaCaptureType::MediaCaptureTypeUser;
     
-    return MediaCaptureTypeEnvironment;
+    return MediaCaptureType::MediaCaptureTypeEnvironment;
 }
 #endif
 
@@ -2126,18 +2145,23 @@ ExceptionOr<void> HTMLInputElement::setSelectionRangeForBindings(unsigned start,
     return { };
 }
 
-static Ref<CSSLinearGradientValue> autoFillStrongPasswordMaskImage()
+static Ref<StyleGradientImage> autoFillStrongPasswordMaskImage()
 {
-    CSSGradientColorStopList stops {
-        { CSSValuePool::singleton().createColorValue(Color::black), CSSValuePool::singleton().createValue(50, CSSUnitType::CSS_PERCENTAGE), { } },
-        { CSSValuePool::singleton().createColorValue(Color::transparentBlack), CSSValuePool::singleton().createValue(100, CSSUnitType::CSS_PERCENTAGE), { } }
+    Vector<StyleGradientImage::Stop> stops {
+        { Color::black, CSSValuePool::singleton().createValue(50, CSSUnitType::CSS_PERCENTAGE) },
+        { Color::transparentBlack, CSSValuePool::singleton().createValue(100, CSSUnitType::CSS_PERCENTAGE) }
     };
 
-    auto colorInterpolationMethod = CSSGradientColorInterpolationMethod::legacyMethod(AlphaPremultiplication::Unpremultiplied);
-    auto gradient = CSSLinearGradientValue::create(CSSGradientRepeat::NonRepeating, CSSGradientType::CSSLinearGradient, colorInterpolationMethod, WTFMove(stops));
-    gradient->setAngle(CSSValuePool::singleton().createValue(90, CSSUnitType::CSS_DEG));
-    gradient->resolveRGBColors();
-    return gradient;
+    return StyleGradientImage::create(
+        StyleGradientImage::LinearData {
+            {
+                CSSLinearGradientValue::Angle { CSSValuePool::singleton().createValue(90, CSSUnitType::CSS_DEG) }
+            },
+            CSSGradientRepeat::NonRepeating
+        },
+        CSSGradientColorInterpolationMethod::legacyMethod(AlphaPremultiplication::Unpremultiplied),
+        WTFMove(stops)
+    );
 }
 
 RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style)
@@ -2154,12 +2178,12 @@ RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style)
 
     textBlockStyle.setDisplay(DisplayType::Block);
 
-    if (hasAutoFillStrongPasswordButton() && !isDisabledOrReadOnly()) {
+    if (hasAutoFillStrongPasswordButton() && isMutable()) {
         textBlockStyle.setDisplay(DisplayType::InlineBlock);
         textBlockStyle.setMaxWidth(Length { 100, LengthType::Percent });
         textBlockStyle.setColor(Color::black.colorWithAlphaByte(153));
         textBlockStyle.setTextOverflow(TextOverflow::Clip);
-        textBlockStyle.setMaskImage(StyleGeneratedImage::create(autoFillStrongPasswordMaskImage()));
+        textBlockStyle.setMaskImage(autoFillStrongPasswordMaskImage());
         // A stacking context is needed for the mask.
         if (textBlockStyle.hasAutoUsedZIndex())
             textBlockStyle.setUsedZIndex(0);

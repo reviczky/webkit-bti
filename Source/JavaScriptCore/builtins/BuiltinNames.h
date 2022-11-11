@@ -48,7 +48,6 @@ namespace JSC {
     JSC_COMMON_BYTECODE_INTRINSIC_CONSTANTS_EACH_NAME(macro) \
     macro(add) \
     macro(applyFunction) \
-    macro(arraySpeciesCreate) \
     macro(assert) \
     macro(callFunction) \
     macro(charCodeAt) \
@@ -93,6 +92,7 @@ namespace JSC {
     macro(get) \
     macro(set) \
     macro(clear) \
+    macro(context) \
     macro(delete) \
     macro(size) \
     macro(shift) \
@@ -120,6 +120,7 @@ namespace JSC {
     macro(asyncGeneratorQueueItemNext) \
     macro(dateTimeFormat) \
     macro(this) \
+    macro(importMapStatus) \
     macro(importInRealm) \
     macro(evalInRealm) \
     macro(moveFunctionToRealm) \
@@ -176,9 +177,10 @@ namespace JSC {
     macro(stringIncludesInternal) \
     macro(stringIndexOfInternal) \
     macro(stringSplitFast) \
-    macro(stringSubstringInternal) \
+    macro(stringSubstring) \
     macro(makeBoundFunction) \
     macro(hasOwnLengthProperty) \
+    macro(handleProxyGetTrapResult) \
     macro(importModule) \
     macro(copyDataProperties) \
     macro(meta) \

@@ -58,6 +58,7 @@ struct Renderer11DeviceCaps
                                                  // when multisampled.  Textures will need to be
                                                  // resolved before reading. crbug.com/656989
     bool supportsTypedUAVLoadAdditionalFormats;  //
+    bool supportsRasterizerOrderViews;
     bool allowES3OnFL10_0;
     UINT B5G6R5support;     // Bitfield of D3D11_FORMAT_SUPPORT values for DXGI_FORMAT_B5G6R5_UNORM
     UINT B5G6R5maxSamples;  // Maximum number of samples supported by DXGI_FORMAT_B5G6R5_UNORM
@@ -244,27 +245,27 @@ class Renderer11 : public RendererD3D
                                                  const egl::Stream::GLTextureDescription &desc,
                                                  const std::string &label) override;
     TextureStorage *createTextureStorage2D(GLenum internalformat,
-                                           bool renderTarget,
+                                           BindFlags bindFlags,
                                            GLsizei width,
                                            GLsizei height,
                                            int levels,
                                            const std::string &label,
                                            bool hintLevelZeroOnly) override;
     TextureStorage *createTextureStorageCube(GLenum internalformat,
-                                             bool renderTarget,
+                                             BindFlags bindFlags,
                                              int size,
                                              int levels,
                                              bool hintLevelZeroOnly,
                                              const std::string &label) override;
     TextureStorage *createTextureStorage3D(GLenum internalformat,
-                                           bool renderTarget,
+                                           BindFlags bindFlags,
                                            GLsizei width,
                                            GLsizei height,
                                            GLsizei depth,
                                            int levels,
                                            const std::string &label) override;
     TextureStorage *createTextureStorage2DArray(GLenum internalformat,
-                                                bool renderTarget,
+                                                BindFlags bindFlags,
                                                 GLsizei width,
                                                 GLsizei height,
                                                 GLsizei depth,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -50,7 +50,6 @@
 #include "B3MoveConstants.h"
 #include "B3NativeTraits.h"
 #include "B3Procedure.h"
-#include "B3ReduceLoopStrength.h"
 #include "B3ReduceStrength.h"
 #include "B3SlotBaseValue.h"
 #include "B3StackmapGenerationParams.h"
@@ -197,9 +196,9 @@ inline std::unique_ptr<Compilation> compileProc(Procedure& procedure, unsigned o
 }
 
 template<typename T, typename... Arguments>
-T invoke(MacroAssemblerCodePtr<JITCompilationPtrTag> ptr, Arguments... arguments)
+T invoke(CodePtr<JITCompilationPtrTag> ptr, Arguments... arguments)
 {
-    void* executableAddress = untagCFunctionPtr<JITCompilationPtrTag>(ptr.executableAddress());
+    void* executableAddress = untagCFunctionPtr<JITCompilationPtrTag>(ptr.taggedPtr());
     T (*function)(Arguments...) = bitwise_cast<T(*)(Arguments...)>(executableAddress);
     return function(arguments...);
 }
@@ -1154,13 +1153,6 @@ void addShrTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 void addAtomicTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 void addLoadTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 void addTupleTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
-
-void testFastForwardCopy32();
-void testByteCopyLoop();
-void testByteCopyLoopStartIsLoopDependent();
-void testByteCopyLoopBoundIsLoopDependent();
-
-void addCopyTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 
 bool shouldRun(const char* filter, const char* testName);
 

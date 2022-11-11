@@ -591,9 +591,9 @@ bool PageClientImpl::effectiveAppearanceIsDark() const
 }
 
 #if USE(WPE_RENDERER)
-IPC::Attachment PageClientImpl::hostFileDescriptor()
+UnixFileDescriptor PageClientImpl::hostFileDescriptor()
 {
-    return IPC::Attachment({ webkitWebViewBaseRenderHostFileDescriptor(WEBKIT_WEB_VIEW_BASE(m_viewWidget)), UnixFileDescriptor::Adopt });
+    return { webkitWebViewBaseRenderHostFileDescriptor(WEBKIT_WEB_VIEW_BASE(m_viewWidget)), UnixFileDescriptor::Adopt };
 }
 #endif
 
@@ -630,6 +630,11 @@ WebCore::Color PageClientImpl::accentColor()
         return WebCore::Color(accentColor);
 
     return SRGBA<uint8_t> { 52, 132, 228 };
+}
+
+WebKitWebResourceLoadManager* PageClientImpl::webResourceLoadManager()
+{
+    return WEBKIT_IS_WEB_VIEW(m_viewWidget) ? webkitWebViewGetWebResourceLoadManager(WEBKIT_WEB_VIEW(m_viewWidget)) : nullptr;
 }
 
 } // namespace WebKit

@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "LayoutUnits.h"
 
 namespace WebCore {
@@ -62,6 +60,8 @@ public:
     void moveHorizontally(InlineLayoutUnit);
     void moveVertically(InlineLayoutUnit);
     void moveBy(InlineLayoutPoint);
+
+    void shiftLeftTo(InlineLayoutUnit);
 
     void expand(std::optional<InlineLayoutUnit>, std::optional<InlineLayoutUnit>);
     void expandToContain(const InlineRect&);
@@ -269,6 +269,12 @@ inline void InlineRect::moveBy(InlineLayoutPoint offset)
     m_rect.moveBy(offset);
 }
 
+inline void InlineRect::shiftLeftTo(InlineLayoutUnit left)
+{
+    ASSERT(m_hasValidLeft);
+    m_rect.shiftXEdgeTo(left);
+}
+
 inline void InlineRect::expand(std::optional<InlineLayoutUnit> width, std::optional<InlineLayoutUnit> height)
 {
     ASSERT(!width || m_hasValidWidth);
@@ -324,4 +330,3 @@ inline InlineRect::operator InlineLayoutRect() const
 
 }
 }
-#endif

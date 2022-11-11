@@ -485,6 +485,7 @@ void ShaderConstants11::setMultiviewWriteToViewportIndex(GLfloat index)
 
 void ShaderConstants11::onViewportChange(const gl::Rectangle &glViewport,
                                          const D3D11_VIEWPORT &dxViewport,
+                                         const gl::Offset &glFragCoordOffset,
                                          bool is9_3,
                                          bool presentPathFast)
 {
@@ -538,6 +539,9 @@ void ShaderConstants11::onViewportChange(const gl::Rectangle &glViewport,
 
     mVertex.viewScale[0] = mPixel.viewScale[0];
     mVertex.viewScale[1] = mPixel.viewScale[1];
+
+    mPixel.fragCoordOffset[0] = static_cast<float>(glFragCoordOffset.x);
+    mPixel.fragCoordOffset[1] = static_cast<float>(glFragCoordOffset.y);
 }
 
 // Update the ShaderConstants with a new first vertex and return whether the update dirties them.
@@ -1526,7 +1530,8 @@ void StateManager11::syncViewport(const gl::Context *context)
                                            static_cast<FLOAT>(dxViewportHeight),
                                            actualZNear,
                                            actualZFar};
-    mShaderConstants.onViewportChange(viewport, adjustViewport, is9_3, mCurPresentPathFastEnabled);
+    mShaderConstants.onViewportChange(viewport, adjustViewport, mCurViewportOffset, is9_3,
+                                      mCurPresentPathFastEnabled);
 }
 
 void StateManager11::invalidateRenderTarget()
@@ -2305,10 +2310,10 @@ angle::Result StateManager11::updateState(const gl::Context *context,
     }
 
     auto dirtyBitsCopy = mInternalDirtyBits & mGraphicsDirtyBitsMask;
-    mInternalDirtyBits &= ~mGraphicsDirtyBitsMask;
 
     for (auto iter = dirtyBitsCopy.begin(), end = dirtyBitsCopy.end(); iter != end; ++iter)
     {
+        mInternalDirtyBits.reset(*iter);
         switch (*iter)
         {
             case DIRTY_BIT_RENDER_TARGET:
@@ -2332,7 +2337,6 @@ angle::Result StateManager11::updateState(const gl::Context *context,
                 ANGLE_TRY(syncDepthStencilState(context));
                 break;
             case DIRTY_BIT_GRAPHICS_SRV_STATE:
-                iter.resetLaterBit(DIRTY_BIT_TEXTURE_AND_SAMPLER_STATE);
                 ANGLE_TRY(syncTextures(context));
                 break;
             case DIRTY_BIT_GRAPHICS_UAV_STATE:
@@ -2879,7 +2883,11 @@ angle::Result StateManager11::setTextureForImage(const gl::Context *context,
         return angle::Result::Continue;
     }
 
-    textureImpl                = GetImplAs<TextureD3D>(imageUnit.texture.get());
+    textureImpl = GetImplAs<TextureD3D>(imageUnit.texture.get());
+
+    // Ensure that texture has unordered access; convert it if not.
+    ANGLE_TRY(textureImpl->ensureUnorderedAccess(context));
+
     TextureStorage *texStorage = nullptr;
     ANGLE_TRY(textureImpl->getNativeTexture(context, &texStorage));
     // Texture should be complete and have a storage
@@ -2912,7 +2920,11 @@ angle::Result StateManager11::getUAVForRWImage(const gl::Context *context,
         return angle::Result::Continue;
     }
 
-    textureImpl                = GetImplAs<TextureD3D>(imageUnit.texture.get());
+    textureImpl = GetImplAs<TextureD3D>(imageUnit.texture.get());
+
+    // Ensure that texture has unordered access; convert it if not.
+    ANGLE_TRY(textureImpl->ensureUnorderedAccess(context));
+
     TextureStorage *texStorage = nullptr;
     ANGLE_TRY(textureImpl->getNativeTexture(context, &texStorage));
     // Texture should be complete and have a storage
@@ -3005,8 +3017,8 @@ angle::Result StateManager11::syncProgramForCompute(const gl::Context *context)
     ASSERT(mProgramD3D->hasComputeExecutableForCachedImage2DBindLayout());
 
     ShaderExecutableD3D *computeExe = nullptr;
-    ANGLE_TRY(
-        mProgramD3D->getComputeExecutableForImage2DBindLayout(context11, &computeExe, nullptr));
+    ANGLE_TRY(mProgramD3D->getComputeExecutableForImage2DBindLayout(context, context11, &computeExe,
+                                                                    nullptr));
 
     const d3d11::ComputeShader *computeShader =
         (computeExe ? &GetAs<ShaderExecutable11>(computeExe)->getComputeShader() : nullptr);

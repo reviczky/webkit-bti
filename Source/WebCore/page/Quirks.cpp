@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -230,7 +230,52 @@ bool Quirks::shouldDisableResolutionMediaQuery() const
     if (!needsQuirks())
         return false;
     auto host = m_document->url().host();
-    return equalLettersIgnoringASCIICase(host, "www.hotels.com"_s);
+
+    if (equalLettersIgnoringASCIICase(host, "www.carrentals.com"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.cheaptickets.com"_s))
+        return true;
+
+#if ENABLE(PUBLIC_SUFFIX_LIST)
+    if (topPrivatelyControlledDomain(host.toString()).startsWith("ebookers."_s))
+        return true;
+
+    if (topPrivatelyControlledDomain(host.toString()).startsWith("expedia."_s))
+        return true;
+#endif
+
+    if (host.endsWithIgnoringASCIICase(".hoteis.com"_s))
+        return true;
+
+    if (host.endsWithIgnoringASCIICase(".hoteles.com"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.hotels.cn"_s))
+        return true;
+
+    if (host.endsWithIgnoringASCIICase(".hotels.com"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.mrjet.se"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.orbitz.com"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.travelocity.ca"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.travelocity.com"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.wotif.com"_s))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.wotif.co.nz"_s))
+        return true;
+
+    return false;
 }
 
 bool Quirks::needsMillisecondResolutionForHighResTimeStamp() const
@@ -292,7 +337,7 @@ bool Quirks::isNeverRichlyEditableForTouchBar() const
     return false;
 }
 
-static bool shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreasForHost(StringView host)
+static bool shouldSuppressAutocorrectionAndAutocapitalizationInHiddenEditableAreasForHost(StringView host)
 {
 #if PLATFORM(IOS_FAMILY)
     return equalLettersIgnoringASCIICase(host, "docs.google.com"_s);
@@ -348,12 +393,12 @@ bool Quirks::shouldAvoidUsingIOS13ForGmail() const
 #endif
 }
 
-bool Quirks::shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreas() const
+bool Quirks::shouldSuppressAutocorrectionAndAutocapitalizationInHiddenEditableAreas() const
 {
     if (!needsQuirks())
         return false;
 
-    return shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreasForHost(m_document->topDocument().url().host());
+    return shouldSuppressAutocorrectionAndAutocapitalizationInHiddenEditableAreasForHost(m_document->topDocument().url().host());
 }
 
 #if ENABLE(TOUCH_EVENTS)
@@ -394,8 +439,6 @@ bool Quirks::shouldDispatchSimulatedMouseEvents(const EventTarget* target) const
             return startsWithLettersIgnoringASCIICase(url.path(), "/website/templates/"_s) ? ShouldDispatchSimulatedMouseEvents::No : ShouldDispatchSimulatedMouseEvents::Yes;
         }
 
-        if ((host == "desmos.com"_s || host.endsWith(".desmos.com"_s)) && startsWithLettersIgnoringASCIICase(url.path(), "/calculator/"_s))
-            return ShouldDispatchSimulatedMouseEvents::Yes;
         if (host == "trello.com"_s || host.endsWith(".trello.com"_s))
             return ShouldDispatchSimulatedMouseEvents::Yes;
         if (host == "airtable.com"_s || host.endsWith(".airtable.com"_s))
@@ -1016,7 +1059,7 @@ bool Quirks::shouldAvoidPastingImagesAsWebContent() const
 #endif
 }
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
 static bool isKinjaLoginAvatarElement(const Element& element)
 {
     // The click event handler has been found to trigger on a div or
@@ -1152,10 +1195,10 @@ Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(Completio
 
 Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& element, const PlatformMouseEvent& platformEvent, const AtomString& eventType, int detail, Element* relatedTarget, bool isParentProcessAFullWebBrowser, IsSyntheticClick isSyntheticClick) const
 {
-    if (!DeprecatedGlobalSettings::resourceLoadStatisticsEnabled() || !isParentProcessAFullWebBrowser)
+    if (!DeprecatedGlobalSettings::trackingPreventionEnabled() || !isParentProcessAFullWebBrowser)
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
     if (!needsQuirks())
         return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 
@@ -1475,19 +1518,6 @@ bool Quirks::allowLayeredFullscreenVideos() const
 }
 #endif
 
-bool Quirks::hasBrokenPermissionsAPISupportQuirk() const
-{
-    if (!needsQuirks())
-        return false;
-
-    if (!m_hasBrokenPermissionsAPISupportQuirk) {
-        auto domain = m_document->securityOrigin().domain().convertToASCIILowercase();
-        m_hasBrokenPermissionsAPISupportQuirk = domain.endsWith(".nfl.com"_s);
-    }
-
-    return m_hasBrokenPermissionsAPISupportQuirk.value();
-}
-
 bool Quirks::shouldEnableApplicationCacheQuirk() const
 {
     bool shouldEnableBySetting = m_document && m_document->settings().offlineWebApplicationCacheEnabled();
@@ -1507,6 +1537,17 @@ bool Quirks::shouldEnableApplicationCacheQuirk() const
 #else
     return shouldEnableBySetting;
 #endif
+}
+
+bool Quirks::shouldEnableFontLoadingAPIQuirk() const
+{
+    if (!needsQuirks() || m_document->settings().downloadableBinaryFontsEnabled())
+        return false;
+
+    if (!m_shouldEnableFontLoadingAPIQuirk)
+        m_shouldEnableFontLoadingAPIQuirk = equalLettersIgnoringASCIICase(m_document->url().host(), "play.hbomax.com"_s);
+
+    return m_shouldEnableFontLoadingAPIQuirk.value();
 }
 
 bool Quirks::needsVideoShouldMaintainAspectRatioQuirk() const
@@ -1529,7 +1570,7 @@ bool Quirks::shouldExposeShowModalDialog() const
         return false;
     if (!m_shouldExposeShowModalDialog) {
         auto domain = RegistrableDomain(m_document->url()).string();
-        m_shouldExposeShowModalDialog = domain == "pandora.com"_s;
+        m_shouldExposeShowModalDialog = domain == "pandora.com"_s || domain == "marcus.com"_s;
     }
     return *m_shouldExposeShowModalDialog;
 }

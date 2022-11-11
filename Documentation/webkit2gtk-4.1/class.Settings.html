@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.2</p>
+        <p>Library Version: 2.39.1</p>
         
       </div>
       
@@ -827,9 +827,9 @@ contains default&nbsp;settings.</p>
         <div class="deprecated">
           <h6><a href="method.Settings.get_enable_frame_flattening.html">webkit_settings_get_enable_frame_flattening</a></h6>
           <div class="docblock">
-            <p>Get the <code>WebKitSettings:enable-frame-flattening</code> property.</p>
+            <p>Frame flattening is no longer supported. This function returns <code>FALSE</code>.</p>
           </div>
-          <div class="docblock"><p>Deprecated since: 2.38.</p></div>
+          <div class="docblock"><p>Deprecated since: 2.38</p></div>
         </div>
       
         <div class="">
@@ -1307,9 +1307,9 @@ contains default&nbsp;settings.</p>
         <div class="deprecated">
           <h6><a href="method.Settings.set_enable_frame_flattening.html">webkit_settings_set_enable_frame_flattening</a></h6>
           <div class="docblock">
-            <p>Set the <code>WebKitSettings:enable-frame-flattening</code> property.</p>
+            <p>Frame flattening is no longer supported. This function does&nbsp;nothing.</p>
           </div>
-          <div class="docblock"><p>Deprecated since: 2.38.</p></div>
+          <div class="docblock"><p>Deprecated since: 2.38</p></div>
         </div>
       
         <div class="">
@@ -1890,9 +1890,7 @@ with the ENABLE_ENCRYPTED_MEDIA&nbsp;flag.</p>
           <h6><a href="property.Settings.enable-frame-flattening.html">WebKit2.Settings:enable-frame-flattening</a></h6>
 
           <div class="docblock">
-            <p>Whether to enable the frame flattening. With this setting each subframe is expanded
-to its contents, which will flatten all the frames to become one scrollable page.
-On touch devices scrollable subframes on a page can result in a confusing user&nbsp;experience.</p>
+            <p>Frame flattening is no longer supported. This property does&nbsp;nothing.</p>
           </div>
 
           <div class="docblock"><p>Deprecated since: 2.38</p></div>

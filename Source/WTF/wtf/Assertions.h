@@ -69,7 +69,7 @@ extern "C" void _ReadWriteBarrier(void);
 #endif
 #endif
 
-/* ASSERT_ENABLED is defined in Platform.h. */
+/* ASSERT_ENABLED is defined in PlatformEnable.h. */
 
 #ifndef BACKTRACE_DISABLED
 #define BACKTRACE_DISABLED !ASSERT_ENABLED
@@ -228,12 +228,12 @@ WTF_EXPORT_PRIVATE void WTFLogWithLevel(WTFLogChannel*, WTFLogLevel, const char*
 WTF_EXPORT_PRIVATE void WTFSetLogChannelLevel(WTFLogChannel*, WTFLogLevel);
 WTF_EXPORT_PRIVATE bool WTFWillLogWithLevel(WTFLogChannel*, WTFLogLevel);
 
-WTF_EXPORT_PRIVATE void WTFGetBacktrace(void** stack, int* size);
+WTF_EXPORT_PRIVATE NEVER_INLINE void WTFGetBacktrace(void** stack, int* size);
 WTF_EXPORT_PRIVATE void WTFReportBacktraceWithPrefix(const char*);
 WTF_EXPORT_PRIVATE void WTFReportBacktrace(void);
 #ifdef __cplusplus
 WTF_EXPORT_PRIVATE void WTFReportBacktraceWithPrefixAndPrintStream(WTF::PrintStream&, const char*);
-void WTFPrintBacktraceWithPrefixAndPrintStream(WTF::PrintStream&, void** stack, int size, const char* prefix);
+WTF_EXPORT_PRIVATE void WTFPrintBacktraceWithPrefixAndPrintStream(WTF::PrintStream&, void** stack, int size, const char* prefix);
 #endif
 WTF_EXPORT_PRIVATE void WTFPrintBacktrace(void** stack, int size);
 #if !RELEASE_LOG_DISABLED

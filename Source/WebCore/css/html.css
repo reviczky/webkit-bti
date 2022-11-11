@@ -30,8 +30,9 @@ html {
 #endif
 }
 
-/* children of the <head> element all have display:none */
-head, link, meta, script, style, title {
+/* children of the <head> element all have display:none as below */
+area, base, basefont, datalist, head, link, meta, noembed, noframes,
+param, rp, script, style, template, title {
     display: none;
 }
 
@@ -56,6 +57,7 @@ address, article, aside, div, footer, header, hgroup, main, nav, section {
 
 marquee {
     display: inline-block;
+    text-align: initial;
 }
 
 blockquote {
@@ -127,6 +129,10 @@ video {
 audio {
     width: 200px;
     height: 25px;
+}
+
+audio:not([controls]) {
+    display: none !important;
 }
 
 /* heading elements */
@@ -228,6 +234,7 @@ table {
     border-spacing: 2px;
     border-color: gray;
     text-indent: initial;
+    box-sizing: border-box;
 }
 
 thead {
@@ -376,7 +383,7 @@ fieldset {
     padding-inline-end: 0.75em;
     padding-block-end: 0.625em;
     border: 2px groove ThreeDFace;
-    min-width: min-content;
+    min-inline-size: min-content;
 }
 
 button {
@@ -765,7 +772,10 @@ textarea {
 ::placeholder {
     -webkit-text-security: none;
     color: darkGray;
+    direction: inherit !important;
     pointer-events: none !important;
+    text-orientation: inherit !important;
+    writing-mode: inherit !important;
 }
 
 input::placeholder {
@@ -955,10 +965,6 @@ select:disabled {
 }
 
 #endif
-
-area, param {
-    display: none;
-}
 
 input[type="checkbox"] {
 #if !(defined(WTF_PLATFORM_IOS_FAMILY) && WTF_PLATFORM_IOS_FAMILY)
@@ -1234,8 +1240,8 @@ pre, xmp, plaintext, listing {
 }
 
 mark {
-    background-color: yellow;
-    color: black;
+    background-color: Mark;
+    color: MarkText;
 }
 
 big {
@@ -1323,10 +1329,6 @@ ruby > rp {
 
 /* other elements */
 
-noframes {
-    display: none;
-}
-
 frameset, frame {
     display: block;
 }
@@ -1352,10 +1354,6 @@ summary::-webkit-details-marker {
     width: 0.66em;
     height: 0.66em;
     margin-right: 0.4em;
-}
-
-template {
-    display: none;
 }
 
 bdi, output {

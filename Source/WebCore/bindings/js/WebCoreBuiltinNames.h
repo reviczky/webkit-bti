@@ -1,6 +1,6 @@
 /*
  *  Copyright (c) 2015, Canon Inc. All rights reserved.
- *  Copyright (C) 2018-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2018-2022 Apple Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions
@@ -110,6 +110,7 @@ namespace WebCore {
     macro(Credential) \
     macro(CredentialsContainer) \
     macro(CryptoKey) \
+    macro(CSPViolationReportBody) \
     macro(CSSAnimation) \
     macro(CSSCounterStyleRule) \
     macro(CSSColor) \
@@ -120,6 +121,7 @@ namespace WebCore {
     macro(CSSKeywordValue) \
     macro(CSSLCH) \
     macro(CSSLab) \
+    macro(CSSMathClamp) \
     macro(CSSMathInvert) \
     macro(CSSMathMax) \
     macro(CSSMathMin) \
@@ -157,8 +159,11 @@ namespace WebCore {
     macro(DecompressionStreamDecoder) \
     macro(DecompressionStreamTransform) \
     macro(DelayNode) \
+    macro(DeprecationReportBody) \
     macro(DocumentTimeline) \
     macro(DynamicsCompressorNode) \
+    macro(ElementInternals) \
+    macro(EncodedVideoChunk) \
     macro(ExtendableEvent) \
     macro(ExtendableMessageEvent) \
     macro(FakeXRDevice) \
@@ -311,6 +316,9 @@ namespace WebCore {
     macro(PushSubscription) \
     macro(PushSubscriptionChangeEvent) \
     macro(PushSubscriptionOptions) \
+    macro(Report) \
+    macro(ReportBody) \
+    macro(ReportingObserver) \
     macro(ResizeObserver) \
     macro(ResizeObserverEntry) \
     macro(RTCCertificate) \
@@ -356,6 +364,7 @@ namespace WebCore {
     macro(SQLResultSetRowList) \
     macro(SQLTransaction) \
     macro(ScreenLuminance) \
+    macro(ScreenOrientation) \
     macro(ServiceWorker) \
     macro(ServiceWorkerContainer) \
     macro(ServiceWorkerGlobalScope) \
@@ -378,6 +387,7 @@ namespace WebCore {
     macro(StorageManager) \
     macro(StorageManagerFileSystemAccess) \
     macro(SubtleCrypto) \
+    macro(TestReportBody) \
     macro(TextDecoderStream) \
     macro(TextDecoderStreamDecoder) \
     macro(TextEncoderStream) \
@@ -388,7 +398,12 @@ namespace WebCore {
     macro(TransformStreamDefaultController) \
     macro(UndoItem) \
     macro(UndoManager) \
+    macro(VideoDecoder) \
+    macro(VideoEncoder) \
+    macro(VideoFrame) \
     macro(VisualViewport) \
+    macro(WakeLock) \
+    macro(WakeLockSentinel) \
     macro(WaveShaperNode) \
     macro(WebGL2RenderingContext) \
     macro(WebGLActiveInfo) \
@@ -491,6 +506,8 @@ namespace WebCore {
     macro(fatal) \
     macro(fetch) \
     macro(fetchRequest) \
+    macro(FileReader) \
+    macro(FileReaderSync) \
     macro(fillFromJS) \
     macro(finishConsumingStream) \
     macro(flush) \
@@ -580,6 +597,11 @@ namespace WebCore {
     macro(setBodyFromInputRequest) \
     macro(setStatus) \
     macro(showModalDialog) \
+    macro(SpeechSynthesis) \
+    macro(SpeechSynthesisErrorEvent) \
+    macro(SpeechSynthesisEvent) \
+    macro(SpeechSynthesisUtterance) \
+    macro(SpeechSynthesisVoice) \
     macro(start) \
     macro(startConsumingStream) \
     macro(started) \

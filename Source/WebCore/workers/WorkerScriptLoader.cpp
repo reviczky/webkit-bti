@@ -60,10 +60,9 @@ WorkerScriptLoader::WorkerScriptLoader()
 
 WorkerScriptLoader::~WorkerScriptLoader()
 {
-    if (!m_clientIdentifier)
-        return;
+    if (m_didAddToWorkerScriptLoaderMap)
+        scriptExecutionContextIdentifierToWorkerScriptLoaderMap().remove(m_clientIdentifier);
 
-    scriptExecutionContextIdentifierToWorkerScriptLoaderMap().remove(m_clientIdentifier);
 #if ENABLE(SERVICE_WORKER)
     if (m_activeServiceWorkerData) {
         if (auto* serviceWorkerConnection = ServiceWorkerProvider::singleton().existingServiceWorkerConnection())
@@ -78,7 +77,6 @@ std::optional<Exception> WorkerScriptLoader::loadSynchronously(ScriptExecutionCo
     auto& workerGlobalScope = downcast<WorkerGlobalScope>(*scriptExecutionContext);
 
     m_url = url;
-    m_lastRequestURL = url;
     m_source = source;
     m_destination = FetchOptions::Destination::Script;
     m_isCOEPEnabled = scriptExecutionContext->settingsValues().crossOriginEmbedderPolicyEnabled;
@@ -106,7 +104,7 @@ std::optional<Exception> WorkerScriptLoader::loadSynchronously(ScriptExecutionCo
 
     // Only used for importScripts that prescribes NoCors mode.
     ASSERT(mode == FetchOptions::Mode::NoCors);
-    request->setRequester(ResourceRequest::Requester::ImportScripts);
+    request->setRequester(ResourceRequestRequester::ImportScripts);
 
     ThreadableLoaderOptions options;
     options.credentials = FetchOptions::Credentials::Include;
@@ -137,10 +135,10 @@ void WorkerScriptLoader::loadAsynchronously(ScriptExecutionContext& scriptExecut
 {
     m_client = &client;
     m_url = scriptRequest.url();
-    m_lastRequestURL = scriptRequest.url();
     m_source = source;
     m_destination = fetchOptions.destination;
     m_isCOEPEnabled = scriptExecutionContext.settingsValues().crossOriginEmbedderPolicyEnabled;
+    m_clientIdentifier = clientIdentifier;
 
     ASSERT(scriptRequest.httpMethod() == "GET"_s);
 
@@ -160,14 +158,17 @@ void WorkerScriptLoader::loadAsynchronously(ScriptExecutionContext& scriptExecut
     // A service worker job can be executed from a worker context or a document context.
     options.serviceWorkersMode = serviceWorkerMode;
 #if ENABLE(SERVICE_WORKER)
-    if ((m_destination == FetchOptions::Destination::Worker || m_destination == FetchOptions::Destination::Sharedworker) && is<Document>(scriptExecutionContext)) {
+    if ((m_destination == FetchOptions::Destination::Worker || m_destination == FetchOptions::Destination::Sharedworker) && is<Document>(scriptExecutionContext) && downcast<Document>(scriptExecutionContext).settings().serviceWorkersEnabled()) {
+        m_topOriginForServiceWorkerRegistration = SecurityOriginData { scriptExecutionContext.topOrigin().data() };
         ASSERT(clientIdentifier);
-        options.clientIdentifier = m_clientIdentifier = clientIdentifier;
+        options.clientIdentifier = clientIdentifier;
         // In case of blob URLs, we reuse the document controlling service worker.
         if (request->url().protocolIsBlob() && scriptExecutionContext.activeServiceWorker())
             setControllingServiceWorker(ServiceWorkerData { scriptExecutionContext.activeServiceWorker()->data() });
-        else
+        else {
             scriptExecutionContextIdentifierToWorkerScriptLoaderMap().add(m_clientIdentifier, this);
+            m_didAddToWorkerScriptLoaderMap = true;
+        }
     } else if (auto* activeServiceWorker = scriptExecutionContext.activeServiceWorker())
         options.serviceWorkerRegistrationIdentifier = activeServiceWorker->registrationIdentifier();
 #endif
@@ -232,11 +233,6 @@ ResourceError WorkerScriptLoader::validateWorkerResponse(const ResourceResponse&
     return { };
 }
 
-void WorkerScriptLoader::redirectReceived(const URL& redirectURL)
-{
-    m_lastRequestURL = redirectURL;
-}
-
 void WorkerScriptLoader::didReceiveResponse(ResourceLoaderIdentifier identifier, const ResourceResponse& response)
 {
     m_error = validateWorkerResponse(response, m_source, m_destination);
@@ -255,6 +251,26 @@ void WorkerScriptLoader::didReceiveResponse(ResourceLoaderIdentifier identifier,
     if (m_isCOEPEnabled)
         m_crossOriginEmbedderPolicy = obtainCrossOriginEmbedderPolicy(response, nullptr);
     m_referrerPolicy = response.httpHeaderField(HTTPHeaderName::ReferrerPolicy);
+
+#if ENABLE(SERVICE_WORKER)
+    if (m_topOriginForServiceWorkerRegistration && response.source() == ResourceResponse::Source::MemoryCache) {
+        m_isMatchingServiceWorkerRegistration = true;
+        ServiceWorkerProvider::singleton().serviceWorkerConnection().matchRegistration(WTFMove(*m_topOriginForServiceWorkerRegistration), response.url(), [this, protectedThis = Ref { *this }, response, identifier](auto&& registrationData) mutable {
+            m_isMatchingServiceWorkerRegistration = false;
+            if (registrationData && registrationData->activeWorker)
+                setControllingServiceWorker(WTFMove(*registrationData->activeWorker));
+
+            if (!m_client)
+                return;
+
+            m_client->didReceiveResponse(identifier, response);
+            if (m_client && m_finishing)
+                m_client->notifyFinished();
+        });
+        return;
+    }
+#endif
+
     if (m_client)
         m_client->didReceiveResponse(identifier, response);
 }
@@ -315,6 +331,11 @@ void WorkerScriptLoader::notifyFinished()
         return;
 
     m_finishing = true;
+#if ENABLE(SERVICE_WORKER)
+    if (m_isMatchingServiceWorkerRegistration)
+        return;
+#endif
+
     m_client->notifyFinished();
 }
 
@@ -332,7 +353,7 @@ WorkerFetchResult WorkerScriptLoader::fetchResult() const
 {
     if (m_failed)
         return workerFetchError(error());
-    return { script(), lastRequestURL(), certificateInfo(), contentSecurityPolicy(), crossOriginEmbedderPolicy(), referrerPolicy(), { } };
+    return { script(), responseURL(), certificateInfo(), contentSecurityPolicy(), crossOriginEmbedderPolicy(), referrerPolicy(), { } };
 }
 
 WorkerScriptLoader* WorkerScriptLoader::fromScriptExecutionContextIdentifier(ScriptExecutionContextIdentifier identifier)

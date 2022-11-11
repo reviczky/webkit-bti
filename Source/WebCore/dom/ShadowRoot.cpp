@@ -55,21 +55,23 @@ struct SameSizeAsShadowRoot : public DocumentFragment, public TreeScope {
     uint8_t mode;
     void* styleScope;
     void* styleSheetList;
-    WeakPtr<Element> host;
+    WeakPtr<Element, WeakPtrImplWithEventTargetData> host;
     void* slotAssignment;
     std::optional<HashMap<AtomString, AtomString>> partMappings;
 };
 
 static_assert(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), "shadowroot should stay small");
 #if !ASSERT_ENABLED
-static_assert(sizeof(WeakPtr<Element>) == sizeof(void*), "WeakPtr should be same size as raw pointer");
+static_assert(sizeof(WeakPtr<Element, WeakPtrImplWithEventTargetData>) == sizeof(void*), "WeakPtr should be same size as raw pointer");
 #endif
 
-ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type, DelegatesFocus delegatesFocus)
+ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type, SlotAssignmentMode assignmentMode, DelegatesFocus delegatesFocus, AvailableToElementInternals availableToElementInternals)
     : DocumentFragment(document, CreateShadowRoot)
     , TreeScope(*this, document)
     , m_delegatesFocus(delegatesFocus == DelegatesFocus::Yes)
+    , m_availableToElementInternals(availableToElementInternals == AvailableToElementInternals::Yes)
     , m_type(type)
+    , m_slotAssignmentMode(assignmentMode)
     , m_styleScope(makeUnique<Style::Scope>(*this))
 {
     if (type == ShadowRootMode::UserAgent)
@@ -116,6 +118,8 @@ Node::InsertedIntoAncestorResult ShadowRoot::insertedIntoAncestor(InsertionType 
     DocumentFragment::insertedIntoAncestor(insertionType, parentOfInsertedTree);
     if (insertionType.connectedToDocument)
         document().didInsertInDocumentShadowRoot(*this);
+    if (!adoptedStyleSheets().isEmpty() && document().frame())
+        styleScope().didChangeActiveStyleSheetCandidates();
     return InsertedIntoAncestorResult::Done;
 }
 
@@ -152,12 +156,16 @@ void ShadowRoot::childrenChanged(const ChildChange& childChange)
 
 void ShadowRoot::moveShadowRootToNewParentScope(TreeScope& newScope, Document& newDocument)
 {
+    auto& oldDocument = documentScope();
     setParentTreeScope(newScope);
-    moveShadowRootToNewDocument(newDocument);
+    moveShadowRootToNewDocument(oldDocument, newDocument);
 }
 
-void ShadowRoot::moveShadowRootToNewDocument(Document& newDocument)
+void ShadowRoot::moveShadowRootToNewDocument(Document& oldDocument, Document& newDocument)
 {
+    if (oldDocument.templateDocumentHost() != &newDocument && newDocument.templateDocumentHost() != &oldDocument)
+        setAdoptedStyleSheets({ });
+
     setDocumentScope(newDocument);
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(!parentTreeScope() || &parentTreeScope()->documentScope() == &newDocument);
 
@@ -191,7 +199,7 @@ ExceptionOr<void> ShadowRoot::setInnerHTML(const String& markup)
         return { };
     }
 
-    auto fragment = createFragmentForInnerOuterHTML(*host(), markup, AllowScriptingContent);
+    auto fragment = createFragmentForInnerOuterHTML(*host(), markup, { ParserContentPolicy::AllowScriptingContent, ParserContentPolicy::AllowPluginContent });
     if (fragment.hasException())
         return fragment.releaseException();
     return replaceChildrenWithFragment(*this, fragment.releaseReturnValue());
@@ -248,8 +256,12 @@ void ShadowRoot::renameSlotElement(HTMLSlotElement& slot, const AtomString& oldN
 void ShadowRoot::addSlotElementByName(const AtomString& name, HTMLSlotElement& slot)
 {
     ASSERT(&slot.rootNode() == this);
-    if (!m_slotAssignment)
-        m_slotAssignment = makeUnique<SlotAssignment>();
+    if (!m_slotAssignment) {
+        if (m_slotAssignmentMode == SlotAssignmentMode::Named)
+            m_slotAssignment = makeUnique<NamedSlotAssignment>();
+        else
+            m_slotAssignment = makeUnique<ManualSlotAssignment>();
+    }
 
     return m_slotAssignment->addSlotElementByName(name, slot, *this);
 }
@@ -260,13 +272,25 @@ void ShadowRoot::removeSlotElementByName(const AtomString& name, HTMLSlotElement
     return m_slotAssignment->removeSlotElementByName(name, slot, &oldParentOfRemovedTree, *this);
 }
 
+void ShadowRoot::slotManualAssignmentDidChange(HTMLSlotElement& slot, Vector<WeakPtr<Node, WeakPtrImplWithEventTargetData>>& previous, Vector<WeakPtr<Node, WeakPtrImplWithEventTargetData>>& current)
+{
+    ASSERT(m_slotAssignment);
+    m_slotAssignment->slotManualAssignmentDidChange(slot, previous, current, *this);
+}
+
+void ShadowRoot::didRemoveManuallyAssignedNode(HTMLSlotElement& slot, const Node& node)
+{
+    ASSERT(m_slotAssignment);
+    m_slotAssignment->didRemoveManuallyAssignedNode(slot, node, *this);
+}
+
 void ShadowRoot::slotFallbackDidChange(HTMLSlotElement& slot)
 {
     ASSERT(&slot.rootNode() == this);
     return m_slotAssignment->slotFallbackDidChange(slot, *this);
 }
 
-const Vector<WeakPtr<Node>>* ShadowRoot::assignedNodesForSlot(const HTMLSlotElement& slot)
+const Vector<WeakPtr<Node, WeakPtrImplWithEventTargetData>>* ShadowRoot::assignedNodesForSlot(const HTMLSlotElement& slot)
 {
     if (!m_slotAssignment)
         return nullptr;

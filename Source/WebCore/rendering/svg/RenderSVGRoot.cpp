@@ -37,7 +37,6 @@
 #include "RenderIterator.h"
 #include "RenderLayerScrollableArea.h"
 #include "RenderLayoutState.h"
-#include "RenderSVGForeignObject.h"
 #include "RenderSVGResource.h"
 #include "RenderSVGResourceContainer.h"
 #include "RenderSVGResourceFilter.h"
@@ -146,8 +145,15 @@ LayoutUnit RenderSVGRoot::computeReplacedLogicalWidth(ShouldComputePreferred sho
     if (isEmbeddedThroughFrameContainingSVGDocument())
         return containingBlock()->availableLogicalWidth();
 
-    // SVG embedded via SVGImage (background-image/border-image/etc) / Inline SVG.
-    return RenderReplaced::computeReplacedLogicalWidth(shouldComputePreferred);
+    // Standalone SVG / SVG embedded via SVGImage (background-image/border-image/etc) / Inline SVG.
+    auto result = RenderReplaced::computeReplacedLogicalWidth(shouldComputePreferred);
+    if (svgSVGElement().hasIntrinsicWidth())
+        return result;
+
+    // Percentage units are not scaled, Length(100, %) resolves to 100% of the unzoomed RenderView content size.
+    // However for SVGs purposes we need to always include zoom in the RenderSVGRoot boundaries.
+    result *= style().effectiveZoom();
+    return result;
 }
 
 LayoutUnit RenderSVGRoot::computeReplacedLogicalHeight(std::optional<LayoutUnit> estimatedUsedWidth) const
@@ -160,7 +166,14 @@ LayoutUnit RenderSVGRoot::computeReplacedLogicalHeight(std::optional<LayoutUnit>
         return containingBlock()->availableLogicalHeight(IncludeMarginBorderPadding);
 
     // Standalone SVG / SVG embedded via SVGImage (background-image/border-image/etc) / Inline SVG.
-    return RenderReplaced::computeReplacedLogicalHeight(estimatedUsedWidth);
+    auto result = RenderReplaced::computeReplacedLogicalHeight(estimatedUsedWidth);
+    if (svgSVGElement().hasIntrinsicHeight())
+        return result;
+
+    // Percentage units are not scaled, Length(100, %) resolves to 100% of the unzoomed RenderView content size.
+    // However for SVGs purposes we need to always include zoom in the RenderSVGRoot boundaries.
+    result *= style().effectiveZoom();
+    return result;
 }
 
 bool RenderSVGRoot::updateLayoutSizeIfNeeded()
@@ -168,7 +181,7 @@ bool RenderSVGRoot::updateLayoutSizeIfNeeded()
     auto previousSize = size();
     updateLogicalWidth();
     updateLogicalHeight();
-    return selfNeedsLayout() || (svgSVGElement().hasRelativeLengths() && previousSize != size());
+    return selfNeedsLayout() || previousSize != size();
 }
 
 void RenderSVGRoot::layout()
@@ -241,10 +254,7 @@ bool RenderSVGRoot::shouldApplyViewportClip() const
     // the outermost svg is clipped if auto, and svg document roots are always clipped
     // When the svg is stand-alone (isDocumentElement() == true) the viewport clipping should always
     // be applied, noting that the window scrollbars should be hidden if overflow=hidden.
-    return effectiveOverflowX() == Overflow::Hidden
-        || style().overflowX() == Overflow::Auto
-        || style().overflowX() == Overflow::Scroll
-        || this->isDocumentElementRenderer();
+    return isNonVisibleOverflow(effectiveOverflowX()) || style().overflowX() == Overflow::Auto || this->isDocumentElementRenderer();
 }
 
 // FIXME: Basically a copy of RenderBlock::paint() - ideally one would share this code.
@@ -392,12 +402,57 @@ void RenderSVGRoot::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     SVGResourcesCache::clientStyleChanged(*this, diff, oldStyle, style());
 }
 
+bool RenderSVGRoot::paintingAffectedByExternalOffset() const
+{
+    // Standalone SVGs have no parent above the outermost <svg> that could affect the positioning.
+    if (isDocumentElementRenderer())
+        return false;
+
+    // SVGs embedded via 'SVGImage' paint at (0, 0) by construction.
+    if (isEmbeddedThroughSVGImage())
+        return false;
+
+    // <object> / <embed> might receive a non-zero paintOffset.
+    if (isEmbeddedThroughFrameContainingSVGDocument())
+        return true;
+
+    // Inline SVG. A non-SVG ancestor might induce a non-zero paintOffset.
+    if (auto* parentNode = svgSVGElement().parentNode())
+        return !is<SVGElement>(parentNode);
+
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
+void RenderSVGRoot::updateFromElement()
+{
+    RenderReplaced::updateFromElement();
+
+    // Changing SVG zoom / pan properties (or page scale) triggers an updateFromElement() call
+    // from SVGSVGElement. Forward to the anonymous viewport container, as it is responsible
+    // to update the layer transform to reflect the new scale/translation.
+    if (auto* viewportContainer = this->viewportContainer())
+        viewportContainer->updateFromElement();
+}
+
 void RenderSVGRoot::updateFromStyle()
 {
     RenderReplaced::updateFromStyle();
 
     if (shouldApplyViewportClip())
         setHasNonVisibleOverflow();
+
+    // Only mark us as transformed if really needed. Whenver a non-zero paintOffset could reach
+    // RenderSVGRoot from an ancestor, the pixel snapping logic needs to be applied. Since the rest
+    // of the SVG subtree doesn't know anything about subpixel offsets, we'll have to stop use/set
+    // 'adjustedSubpixelOffset' starting at the RenderSVGRoot boundary. This mostly affects inline
+    // SVG documents and SVGs embedded via <object> / <embed>.
+    if (!hasSVGTransform() && paintingAffectedByExternalOffset()) {
+        setHasTransformRelatedProperty();
+        setHasSVGTransform();
+    }
+
+    updateFromElement();
 }
 
 void RenderSVGRoot::updateLayerTransform()
@@ -475,13 +530,6 @@ FloatSize RenderSVGRoot::computeViewportSize() const
     FloatSize result = contentBoxRect().size();
     result.setWidth(result.width() + verticalScrollbarWidth());
     result.setHeight(result.height() + horizontalScrollbarHeight());
-
-    if (!isEmbeddedThroughFrameContainingSVGDocument()) {
-        auto zoom = style().effectiveZoom();
-        if (zoom != 1)
-            result.scale(svgSVGElement().hasIntrinsicWidth() ? 1 : zoom, svgSVGElement().hasIntrinsicHeight() ? 1 : zoom);
-    }
-
     return result;
 }
 
@@ -584,15 +632,6 @@ LayoutRect RenderSVGRoot::overflowClipRect(const LayoutPoint& location, RenderFr
     auto clipRect = borderBoxRectInFragment(fragment);
     clipRect.setLocation(location + clipRect.location() + toLayoutSize(contentBoxLocation()));
     clipRect.setSize(clipRect.size() - LayoutSize(horizontalBorderAndPaddingExtent(), verticalBorderAndPaddingExtent()));
-
-    if (!isEmbeddedThroughFrameContainingSVGDocument()) {
-        auto zoom = style().effectiveZoom();
-        if (zoom != 1) {
-            const auto& svgSVGElement = downcast<RenderSVGRoot>(*this).svgSVGElement();
-            clipRect.scale(svgSVGElement.hasIntrinsicWidth() ? 1 : zoom, svgSVGElement.hasIntrinsicHeight() ? 1 : zoom);
-        }
-    }
-
     return clipRect;
 }
 

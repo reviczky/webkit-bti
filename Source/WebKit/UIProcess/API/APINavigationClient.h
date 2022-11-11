@@ -115,8 +115,6 @@ public:
 
     virtual RefPtr<Data> webCryptoMasterKey(WebKit::WebPageProxy&) { return nullptr; }
 
-    virtual RefPtr<String> signedPublicKeyAndChallengeString(WebKit::WebPageProxy&, unsigned keySizeIndex, const RefPtr<String>& challengeString, const WTF::URL&) { return nullptr; }
-
 #if USE(QUICK_LOOK)
     virtual void didStartLoadForQuickLookDocumentInMainFrame(const WTF::String& fileName, const WTF::String& uti) { }
     virtual void didFinishLoadForQuickLookDocumentInMainFrame(const WebCore::FragmentedSharedBuffer&) { }
@@ -134,11 +132,6 @@ public:
     
     virtual void contentRuleListNotification(WebKit::WebPageProxy&, WTF::URL&&, WebCore::ContentRuleListResults&&) { };
 
-#if ENABLE(WEBGL)
-    virtual void webGLLoadPolicy(WebKit::WebPageProxy&, const WTF::URL&, CompletionHandler<void(WebCore::WebGLLoadPolicy)>&& completionHandler) const { completionHandler(WebCore::WebGLLoadPolicy::WebGLAllowCreation); }
-    virtual void resolveWebGLLoadPolicy(WebKit::WebPageProxy&, const WTF::URL&, CompletionHandler<void(WebCore::WebGLLoadPolicy)>&& completionHandler) const { completionHandler(WebCore::WebGLLoadPolicy::WebGLAllowCreation); }
-#endif
-    
     virtual bool willGoToBackForwardListItem(WebKit::WebPageProxy&, WebKit::WebBackForwardListItem&, bool inBackForwardCache) { return false; }
 
     virtual void didBeginNavigationGesture(WebKit::WebPageProxy&) { }

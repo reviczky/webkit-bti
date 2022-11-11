@@ -553,7 +553,8 @@ void ANGLETestBase::initOSWindow()
         case GLESDriverType::SystemEGL:
         {
             mFixture->eglWindow =
-                EGLWindow::New(mCurrentParams->majorVersion, mCurrentParams->minorVersion);
+                EGLWindow::New(mCurrentParams->clientType, mCurrentParams->majorVersion,
+                               mCurrentParams->minorVersion, mCurrentParams->profileMask);
             break;
         }
 
@@ -672,8 +673,8 @@ void ANGLETestBase::ANGLETestSetUp()
     int osWindowWidth  = mFixture->osWindow->getWidth();
     int osWindowHeight = mFixture->osWindow->getHeight();
 
-    const bool isRotated = mCurrentParams->isEnabled(Feature::EmulatedPrerotation90) ||
-                           mCurrentParams->isEnabled(Feature::EmulatedPrerotation270);
+    const bool isRotated = mCurrentParams->isEnableRequested(Feature::EmulatedPrerotation90) ||
+                           mCurrentParams->isEnableRequested(Feature::EmulatedPrerotation270);
     if (isRotated)
     {
         std::swap(osWindowWidth, osWindowHeight);
@@ -1500,15 +1501,6 @@ void ANGLETestBase::ignoreD3D11SDKLayersWarnings()
 {
     // Some tests may need to disable the D3D11 SDK Layers Warnings checks
     mIgnoreD3D11SDKLayersWarnings = true;
-}
-
-void ANGLETestBase::treatPlatformWarningsAsErrors()
-{
-#if defined(ANGLE_PLATFORM_WINDOWS)
-    // Only do warnings-as-errors on 8 and above. We may fall back to the old
-    // compiler DLL on Windows 7.
-    gPlatformContext.warningsAsErrors = IsWindows8OrGreater();
-#endif  // defined(ANGLE_PLATFORM_WINDOWS)
 }
 
 ANGLETestBase::ScopedIgnorePlatformMessages::ScopedIgnorePlatformMessages()

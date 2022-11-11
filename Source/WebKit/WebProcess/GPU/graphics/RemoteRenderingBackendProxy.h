@@ -73,7 +73,8 @@ public:
     ~RemoteRenderingBackendProxy();
 
     using GPUProcessConnection::Client::weakPtrFactory;
-    using WeakValueType = GPUProcessConnection::Client::WeakValueType;
+    using GPUProcessConnection::Client::WeakValueType;
+    using GPUProcessConnection::Client::WeakPtrImplType;
 
     RemoteResourceCacheProxy& remoteResourceCacheProxy() { return m_remoteResourceCacheProxy; }
 
@@ -89,7 +90,7 @@ public:
     void putPixelBufferForImageBuffer(WebCore::RenderingResourceIdentifier, const WebCore::PixelBuffer&, const WebCore::IntRect& srcRect, const WebCore::IntPoint& destPoint, WebCore::AlphaPremultiplication destFormat);
     RefPtr<ShareableBitmap> getShareableBitmap(WebCore::RenderingResourceIdentifier, WebCore::PreserveResolution);
     RefPtr<WebCore::Image> getFilteredImage(WebCore::RenderingResourceIdentifier, WebCore::Filter&);
-    void cacheNativeImage(const ShareableBitmap::Handle&, WebCore::RenderingResourceIdentifier);
+    void cacheNativeImage(const ShareableBitmapHandle&, WebCore::RenderingResourceIdentifier);
     void cacheFont(Ref<WebCore::Font>&&);
     void cacheDecomposedGlyphs(Ref<WebCore::DecomposedGlyphs>&&);
     void releaseAllRemoteResources();
@@ -155,9 +156,9 @@ private:
     IPC::StreamClientConnection& streamConnection();
 
     template<typename T>
-    auto sendSyncToStream(T&& message, typename T::Reply&& reply, IPC::Timeout timeout = { Seconds::infinity() })
+    auto sendSyncToStream(T&& message, IPC::Timeout timeout = { Seconds::infinity() })
     {
-        return streamConnection().sendSync(WTFMove(message), WTFMove(reply), renderingBackendIdentifier(), timeout);
+        return streamConnection().sendSync(WTFMove(message), renderingBackendIdentifier(), timeout);
     }
 
     // GPUProcessConnection::Client
@@ -171,8 +172,8 @@ private:
     void destroyGetPixelBufferSharedMemory();
 
     // Messages to be received.
-    void didCreateImageBufferBackend(ImageBufferBackendHandle, WebCore::RenderingResourceIdentifier);
-    void didFlush(WebCore::GraphicsContextFlushIdentifier, WebCore::RenderingResourceIdentifier);
+    void didCreateImageBufferBackend(ImageBufferBackendHandle&&, WebCore::RenderingResourceIdentifier);
+    void didFlush(DisplayListRecorderFlushIdentifier, WebCore::RenderingResourceIdentifier);
     void didFinalizeRenderingUpdate(RenderingUpdateID didRenderingUpdateID);
     void didMarkLayersAsVolatile(MarkSurfacesAsVolatileRequestIdentifier, const Vector<WebCore::RenderingResourceIdentifier>& markedVolatileBufferIdentifiers, bool didMarkAllLayerAsVolatile);
 

@@ -54,19 +54,6 @@ AllowViewportShrinkToFitContent:
     WebCore:
       default: true
 
-AlternateWebMPlayerEnabled:
-  type: bool
-  humanReadableName: "Alternate WebM Player"
-  humanReadableDescription: "Enable Alternate WebM Player"
-  condition: ENABLE(ALTERNATE_WEBM_PLAYER)
-  defaultValue:
-    WebKitLegacy:
-     default: false
-    WebKit:
-      default: false
-    WebCore:
-      default: false
-
 AlwaysZoomOnDoubleTap:
   type: bool
   humanReadableName: "DTTZ always"
@@ -121,6 +108,20 @@ AutomaticLiveResizeEnabled:
       "HAVE(UIKIT_WEBKIT_INTERNALS)": true
       default: false
 
+BackgroundWebContentRunningBoardThrottlingEnabled:
+  type: bool
+  humanReadableName: "Enable background web content throttling via RunningBoard"
+  humanReadableDescription: "Enable background web content throttling via RunningBoard"
+  exposed: [ WebKit ]
+  condition: PLATFORM(MAC) && USE(RUNNINGBOARD)
+  defaultValue:
+    WebCore:
+      default: false
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+
 BlockIOKitInWebContentSandbox:
   type: bool
   humanReadableName: "IOKit blocking in the WebContent sandbox"
@@ -154,6 +155,18 @@ CSSOMViewScrollingAPIEnabled:
       default: true
     WebCore:
       default: false
+
+# FIXME: This is not relevent for WebKitLegacy, so should be excluded from WebKitLegacy entirely (though we should still set the default value to false when initializing settings).
+CacheAPIEnabled:
+  type: bool
+  humanReadableName: "Cache API"
+  humanReadableDescription: "Cache API"
+  webcoreBinding: DeprecatedGlobalSettings
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: true
 
 CaptureAudioInGPUProcessEnabled:
   type: bool
@@ -269,16 +282,27 @@ EnterKeyHintEnabled:
       default: false
 
 EventHandlerDrivenSmoothKeyboardScrollingEnabled:
- type: bool
- humanReadableName: "EventHandler driven smooth keyboard scrolling"
- humanReadableDescription: "Enable EventHandler driven smooth keyboard scrolling"
- defaultValue:
-  WebKitLegacy:
-   default: false
-  WebKit:
-   default: false
-  WebCore:
-   default: false
+  type: bool
+  humanReadableName: "EventHandler driven smooth keyboard scrolling"
+  humanReadableDescription: "Enable EventHandler driven smooth keyboard scrolling"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      "PLATFORM(COCOA)": true
+      default: false
+    WebCore:
+      default: false
+
+ExperimentalSandboxEnabled:
+  type: bool
+  humanReadableName: "Enable experimental sandbox features"
+  humanReadableDescription: "Enable experimental sandbox features"
+  webcoreBinding: none
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: false
 
 FasterClicksEnabled:
   type: bool
@@ -291,11 +315,34 @@ FasterClicksEnabled:
     WebKit:
       default: true
 
+FetchAPIEnabled:
+  type: bool
+  humanReadableName: "Fetch API"
+  humanReadableDescription: "Fetch API"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
+FileReaderAPIEnabled:
+  type: bool
+  humanReadableName: "FileReader API"
+  humanReadableDescription: "FileReader API"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 FlexFormattingContextIntegrationEnabled:
   type: bool
   humanReadableName: "Next-generation flex layout integration (FFC)"
   humanReadableDescription: "Enable next-generation flex layout integration (FFC)"
-  condition: ENABLE(LAYOUT_FORMATTING_CONTEXT)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -329,6 +376,18 @@ FullScreenEnabled:
       default: false
     WebCore:
       default: false
+
+FullscreenRequirementForScreenOrientationLockingEnabled:
+  type: bool
+  humanReadableName: "Require being in Fullscreen to lock screen orientation"
+  humanReadableDescription: "Require being in Fullscreen to lock screen orientation"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
 
 GetUserMediaRequiresFocus:
   type: bool
@@ -393,12 +452,23 @@ ImageAnalysisDuringFindInPageEnabled:
     WebCore:
       default: false
 
+IndexedDBAPIEnabled:
+  type: bool
+  humanReadableName: "IndexedDB API"
+  humanReadableDescription: "IndexedDB API"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 InlineFormattingContextIntegrationEnabled:
   type: bool
   humanReadableName: "Next-generation inline layout integration (IFC)"
   humanReadableDescription: "Enable next-generation inline layout integration (IFC)"
   webcoreBinding: DeprecatedGlobalSettings
-  condition: ENABLE(LAYOUT_FORMATTING_CONTEXT)
   defaultValue:
     WebKitLegacy:
       default: true
@@ -551,7 +621,6 @@ LayoutFormattingContextEnabled:
   humanReadableName: "Full next-generation layout (LFC)"
   humanReadableDescription: "Enable full next-generation layout (LFC)"
   webcoreBinding: DeprecatedGlobalSettings
-  condition: ENABLE(LAYOUT_FORMATTING_CONTEXT)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -575,13 +644,15 @@ LegacyOverflowScrollingTouchEnabled:
 LineHeightUnitsEnabled:
   type: bool
   humanReadableName: "lh / rlh units"
-  humanReadableDescription: "Enable the lh and lhr units"
+  humanReadableDescription: "Enable the lh and rlh units"
   webcoreBinding: DeprecatedGlobalSettings
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
+    WebCore:
+      default: true
 
 LiveRangeSelectionEnabled:
   type: bool
@@ -591,6 +662,19 @@ LiveRangeSelectionEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      default: false
+    WebCore:
+      default: false
+
+ManageCaptureStatusBarInGPUProcessEnabled:
+  type: bool
+  humanReadableName: "GPU Process: Capture Status Bar management"
+  humanReadableDescription: "Enable Capture Status Bar management in GPU Process"
+  condition: ENABLE(MEDIA_STREAM) && PLATFORM(IOS_FAMILY)
+  defaultValue:
+    WebKit:
+      default: WebKit::defaultManageCaptureStatusBarInGPUProcessEnabled()
+    WebKitLegacy:
       default: false
     WebCore:
       default: false
@@ -804,6 +888,16 @@ SampleBufferContentKeySessionSupportEnabled:
     WebCore:
       default: false
 
+SanitizeLookalikeCharactersInLinksEnabled:
+  type: bool
+  humanReadableName: "Sanitize Lookalike Characters in Links"
+  humanReadableDescription: "Enable Sanitization for Lookalike Characters in Links"
+  webcoreBinding: none
+  condition: ENABLE(NETWORK_CONNECTION_INTEGRITY)
+  defaultValue:
+    WebKit:
+      default: true
+
 ScrollingPerformanceTestingEnabled:
   type: bool
   humanReadableName: "Scroll Performance Testing Enabled"
@@ -866,6 +960,18 @@ ServiceWorkersUserGestureEnabled:
     WebCore:
       default: true
 
+ShouldTakeSuspendedAssertions:
+  type: bool
+  humanReadableName: "Take WebKit:Suspended assertions on background web content processes"
+  humanReadableDescription: "Take WebKit:Suspended assertions on background web content processes"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 ShowModalDialogEnabled:
   type: bool
   humanReadableName: "Legacy showModalDialog() API"
@@ -892,6 +998,30 @@ SpeakerSelectionRequiresUserGesture:
       default: true
     WebCore:
       default: true
+
+SpeechSynthesisAPIEnabled:
+  type: bool
+  humanReadableName: "SpeechSynthesis API"
+  humanReadableDescription: "SpeechSynthesis API"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
+StreamingDeclarativeShadowDOMEnabled:
+  type: bool
+  humanReadableName: "Streaming for Declarative Shadow DOM"
+  humanReadableDescription: "Enable Streaming for Declarative Shadow DOM"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 # FIXME: Is this implemented for WebKitLegacy? If not, this should be excluded from WebKitLegacy entirely.
 TextAutosizingUsesIdempotentMode:
@@ -957,10 +1087,10 @@ UseARKitForModel:
     WebKit:
       default: true
 
-UseCGDisplayListOutOfLineSurfaces:
+UseCGDisplayListImageCache:
   type: bool
-  humanReadableName: "CG Display Lists: Out-of-line Surfaces"
-  humanReadableDescription: "Encode surfaces out-of-line for CG Display List image buffers."
+  humanReadableName: "CG Display Lists: Image Cache"
+  humanReadableDescription: "Cache and transmit surfaces out-of-line for CG Display List image buffers."
   webcoreBinding: none
   condition: ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
   exposed: [ WebKit ]

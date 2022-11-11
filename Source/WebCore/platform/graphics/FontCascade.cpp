@@ -438,25 +438,18 @@ String FontCascade::normalizeSpaces(const UChar* characters, unsigned length)
     return normalizeSpacesInternal(characters, length);
 }
 
-static bool shouldUseFontSmoothing = true;
+static std::atomic<bool> shouldUseFontSmoothingForTesting = true;
 
-void FontCascade::setShouldUseSmoothing(bool shouldUseSmoothing)
+void FontCascade::setShouldUseSmoothingForTesting(bool shouldUseSmoothing)
 {
     ASSERT(isMainThread());
-    shouldUseFontSmoothing = shouldUseSmoothing;
+    shouldUseFontSmoothingForTesting = shouldUseSmoothing;
 }
 
-bool FontCascade::shouldUseSmoothing()
+bool FontCascade::shouldUseSmoothingForTesting()
 {
-    return shouldUseFontSmoothing;
+    return shouldUseFontSmoothingForTesting;
 }
-
-#if !USE(CORE_TEXT) || PLATFORM(WIN)
-bool FontCascade::isSubpixelAntialiasingAvailable()
-{
-    return false;
-}
-#endif
 
 void FontCascade::setCodePath(CodePath p)
 {
@@ -1661,7 +1654,7 @@ DashArray FontCascade::dashesForIntersectionsWithRect(const TextRun& run, const 
     FloatPoint origin = textOrigin + WebCore::size(glyphBuffer.initialAdvance());
     GlyphToPathTranslator translator(run, glyphBuffer, origin);
     DashArray result;
-    for (unsigned index = 0; translator.containsMorePaths(); ++index, translator.advance()) {
+    for (; translator.containsMorePaths(); translator.advance()) {
         GlyphIterationState info = { FloatPoint(0, 0), FloatPoint(0, 0), lineExtents.y(), lineExtents.y() + lineExtents.height(), lineExtents.x() + lineExtents.width(), lineExtents.x() };
         switch (translator.underlineType()) {
         case GlyphUnderlineType::SkipDescenders: {

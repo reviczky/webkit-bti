@@ -27,7 +27,6 @@
 
 #include "config.h"
 #include "GraphicsContextGL.h"
-#include "GraphicsContextGLOpenGL.h"
 
 #if ENABLE(WEBGL)
 
@@ -576,7 +575,7 @@ bool GraphicsContextGL::extractPixelBuffer(const PixelBuffer& pixelBuffer, DataF
     return true;
 }
 
-bool GraphicsContextGL::extractTextureData(unsigned width, unsigned height, GCGLenum format, GCGLenum type, const PixelStoreParams& unpackParams, bool flipY, bool premultiplyAlpha, const void* pixels, Vector<uint8_t>& data)
+bool GraphicsContextGL::extractTextureData(unsigned width, unsigned height, GCGLenum format, GCGLenum type, const PixelStoreParams& unpackParams, bool flipY, bool premultiplyAlpha, GCGLSpan<const GCGLvoid> pixels, Vector<uint8_t>& data)
 {
     // Assumes format, type, etc. have already been validated.
     DataFormat sourceDataFormat = getDataFormat(format, type);
@@ -591,7 +590,7 @@ bool GraphicsContextGL::extractTextureData(unsigned width, unsigned height, GCGL
 
     unsigned imageSizeInBytes, skipSizeInBytes;
     computeImageSizeInBytes(format, type, width, height, 1, unpackParams, &imageSizeInBytes, nullptr, &skipSizeInBytes);
-    const uint8_t* srcData = static_cast<const uint8_t*>(pixels);
+    const uint8_t* srcData = static_cast<const uint8_t*>(pixels.data());
     if (skipSizeInBytes)
         srcData += skipSizeInBytes;
 
@@ -599,6 +598,10 @@ bool GraphicsContextGL::extractTextureData(unsigned width, unsigned height, GCGL
         return false;
 
     return true;
+}
+
+void GraphicsContextGL::setDrawingBufferColorSpace(const DestinationColorSpace&)
+{
 }
 
 void GraphicsContextGL::markContextChanged()

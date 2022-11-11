@@ -575,7 +575,7 @@ private:
                 patchpoint->numGPScratchRegisters = 2;
                 // Technically, we don't have to clobber macro registers on X86_64. This is probably
                 // OK though.
-                patchpoint->clobber(RegisterSet::macroScratchRegisters());
+                patchpoint->clobber(RegisterSetBuilder::macroClobberedRegisters());
                 
                 BitVector handledIndices;
                 for (unsigned i = start; i < end; ++i) {
@@ -602,7 +602,7 @@ private:
                     [=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
                         AllowMacroScratchRegisterUsage allowScratch(jit);
 
-                        using JumpTableCodePtr = MacroAssemblerCodePtr<JSSwitchPtrTag>;
+                        using JumpTableCodePtr = CodePtr<JSSwitchPtrTag>;
                         JumpTableCodePtr* jumpTable = static_cast<JumpTableCodePtr*>(
                             params.proc().addDataSection(sizeof(JumpTableCodePtr) * tableSize));
 

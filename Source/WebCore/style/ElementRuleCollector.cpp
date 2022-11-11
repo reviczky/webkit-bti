@@ -283,12 +283,12 @@ bool ElementRuleCollector::matchesAnyAuthorRules()
 void ElementRuleCollector::matchShadowPseudoElementRules(CascadeLevel level)
 {
     ASSERT(element().isInShadowTree());
-    auto& shadowRoot = *element().containingShadowRoot();
-    if (shadowRoot.mode() != ShadowRootMode::UserAgent)
+    auto* shadowRoot = element().containingShadowRoot();
+    if (!shadowRoot || shadowRoot->mode() != ShadowRootMode::UserAgent)
         return;
 
     // Look up shadow pseudo elements also from the host scope style as they are web-exposed.
-    auto* hostRules = Scope::forNode(*shadowRoot.host()).resolver().ruleSets().styleForCascadeLevel(level);
+    auto* hostRules = Scope::forNode(*shadowRoot->host()).resolver().ruleSets().styleForCascadeLevel(level);
     if (!hostRules)
         return;
 
@@ -337,6 +337,8 @@ void ElementRuleCollector::matchSlottedPseudoElementRules(CascadeLevel level)
 void ElementRuleCollector::matchPartPseudoElementRules(CascadeLevel level)
 {
     ASSERT(element().isInShadowTree());
+    if (!element().containingShadowRoot())
+        return;
 
     bool isUAShadowPseudoElement = element().containingShadowRoot()->mode() == ShadowRootMode::UserAgent && !element().shadowPseudoId().isNull();
 
@@ -595,10 +597,9 @@ void ElementRuleCollector::matchAllRules(bool matchAuthorAndUserStyles, bool inc
         addElementStyleProperties(styledElement.additionalPresentationalHintStyle(), RuleSet::cascadeLayerPriorityForPresentationalHints);
 
         if (is<HTMLElement>(styledElement)) {
-            bool isAuto;
-            auto textDirection = downcast<HTMLElement>(styledElement).directionalityIfhasDirAutoAttribute(isAuto);
-            auto& properties = textDirection == TextDirection::LTR ? leftToRightDeclaration() : rightToLeftDeclaration();
-            if (isAuto)
+            auto result = downcast<HTMLElement>(styledElement).directionalityIfDirIsAuto();
+            auto& properties = result.value_or(TextDirection::LTR) == TextDirection::LTR ? leftToRightDeclaration() : rightToLeftDeclaration();
+            if (result)
                 addMatchedProperties({ &properties }, DeclarationOrigin::Author);
         }
     }
@@ -674,7 +675,7 @@ void ElementRuleCollector::addMatchedProperties(MatchedProperties&& matchedPrope
 
             // The value currentColor has implicitely the same side effect. It depends on the value of color,
             // which is an inherited value, making the non-inherited property implicitly inherited.
-            if (is<CSSPrimitiveValue>(value) && downcast<CSSPrimitiveValue>(value).valueID() == CSSValueCurrentcolor)
+            if (is<CSSPrimitiveValue>(value) && StyleColor::isCurrentColor(downcast<CSSPrimitiveValue>(value)))
                 return false;
 
             if (value.hasVariableReferences())

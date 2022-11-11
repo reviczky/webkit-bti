@@ -74,7 +74,7 @@ CalleeGroup::CalleeGroup(VM& vm, MemoryMode mode, ModuleInformation& moduleInfor
                 return;
             }
 
-            m_wasmIndirectCallEntryPoints = FixedVector<MacroAssemblerCodePtr<WasmEntryPtrTag>>(m_calleeCount);
+            m_wasmIndirectCallEntryPoints = FixedVector<CodePtr<WasmEntryPtrTag>>(m_calleeCount);
 
             for (unsigned i = 0; i < m_calleeCount; ++i)
                 m_wasmIndirectCallEntryPoints[i] = m_llintCallees->at(i)->entrypoint();
@@ -96,7 +96,7 @@ CalleeGroup::CalleeGroup(VM& vm, MemoryMode mode, ModuleInformation& moduleInfor
                 return;
             }
 
-            m_wasmIndirectCallEntryPoints = FixedVector<MacroAssemblerCodePtr<WasmEntryPtrTag>>(m_calleeCount);
+            m_wasmIndirectCallEntryPoints = FixedVector<CodePtr<WasmEntryPtrTag>>(m_calleeCount);
 
             BBQPlan* bbqPlan = static_cast<BBQPlan*>(m_plan.get());
             bbqPlan->initializeCallees([&] (unsigned calleeIndex, RefPtr<EmbedderEntrypointCallee>&& embedderEntrypointCallee, RefPtr<BBQCallee>&& wasmEntrypoint) {
@@ -166,14 +166,14 @@ bool CalleeGroup::isSafeToRun(MemoryMode memoryMode)
         return false;
 
     switch (m_mode) {
-    case Wasm::MemoryMode::BoundsChecking:
+    case MemoryMode::BoundsChecking:
         return true;
 #if ENABLE(WEBASSEMBLY_SIGNALING_MEMORY)
-    case Wasm::MemoryMode::Signaling:
+    case MemoryMode::Signaling:
         // Code being in Signaling mode means that it performs no bounds checks.
         // Its memory, even if empty, absolutely must also be in Signaling mode
         // because the page protection detects out-of-bounds accesses.
-        return memoryMode == Wasm::MemoryMode::Signaling;
+        return memoryMode == MemoryMode::Signaling;
 #endif
     }
     RELEASE_ASSERT_NOT_REACHED();

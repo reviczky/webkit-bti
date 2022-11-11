@@ -192,7 +192,7 @@ void WebSWServerConnection::controlClient(const NetworkResourceLoadParameters& p
 std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(NetworkResourceLoader& loader, const ResourceRequest& request)
 {
     if (loader.parameters().serviceWorkersMode == ServiceWorkersMode::None) {
-        if (loader.parameters().request.requester() == ResourceRequest::Requester::Fetch && isNavigationRequest(loader.parameters().options.destination)) {
+        if (loader.parameters().request.requester() == ResourceRequestRequester::Fetch && isNavigationRequest(loader.parameters().options.destination)) {
             if (auto task = ServiceWorkerFetchTask::fromNavigationPreloader(*this, loader, request, session()))
                 return task;
         }
@@ -400,7 +400,7 @@ void WebSWServerConnection::getRegistrations(const SecurityOriginData& topOrigin
 void WebSWServerConnection::registerServiceWorkerClient(WebCore::ClientOrigin&& clientOrigin, ServiceWorkerClientData&& data, const std::optional<ServiceWorkerRegistrationIdentifier>& controllingServiceWorkerRegistrationIdentifier, String&& userAgent)
 {
     CONNECTION_MESSAGE_CHECK(data.identifier.processIdentifier() == identifier());
-    CONNECTION_MESSAGE_CHECK(!clientOrigin.topOrigin.isEmpty());
+    CONNECTION_MESSAGE_CHECK(!clientOrigin.topOrigin.isNull());
 
     auto& contextOrigin = clientOrigin.clientOrigin;
     if (data.url.protocolIsInHTTPFamily()) {
@@ -409,7 +409,7 @@ void WebSWServerConnection::registerServiceWorkerClient(WebCore::ClientOrigin&& 
             return;
     }
 
-    CONNECTION_MESSAGE_CHECK(!contextOrigin.isEmpty());
+    CONNECTION_MESSAGE_CHECK(!contextOrigin.isNull());
 
     bool isNewOrigin = WTF::allOf(m_clientOrigins.values(), [&contextOrigin](auto& origin) {
         return contextOrigin != origin.clientOrigin;
@@ -514,7 +514,14 @@ void WebSWServerConnection::subscribeToPushService(WebCore::ServiceWorkerRegistr
         return;
     }
 
-    session()->notificationManager().subscribeToPushService(registration->scopeURLWithoutFragment(), WTFMove(applicationServerKey), WTFMove(completionHandler));
+    session()->notificationManager().subscribeToPushService(registration->scopeURLWithoutFragment(), WTFMove(applicationServerKey), [weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler), registrableDomain = RegistrableDomain(registration->data().scopeURL)] (Expected<PushSubscriptionData, ExceptionData>&& result) mutable {
+        if (auto resourceLoadStatistics = weakThis && weakThis->session() ? weakThis->session()->resourceLoadStatistics() : nullptr; result && resourceLoadStatistics) {
+            return resourceLoadStatistics->setMostRecentWebPushInteractionTime(WTFMove(registrableDomain), [result = WTFMove(result), completionHandler = WTFMove(completionHandler)] () mutable {
+                completionHandler(WTFMove(result));
+            });
+        }
+        completionHandler(WTFMove(result));
+    });
 #endif
 }
 

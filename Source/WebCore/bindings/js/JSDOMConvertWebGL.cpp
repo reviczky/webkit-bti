@@ -70,6 +70,7 @@
 #include "JSWebGLMultiDraw.h"
 #include "JSWebGLMultiDrawInstancedBaseVertexBaseInstance.h"
 #include "JSWebGLProgram.h"
+#include "JSWebGLProvokingVertex.h"
 #include "JSWebGLRenderbuffer.h"
 #include "JSWebGLSampler.h"
 #include "JSWebGLTexture.h"
@@ -207,6 +208,7 @@ JSValue convertToJSValue(JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject&
         TO_JS(WebGLLoseContext)
         TO_JS(WebGLMultiDraw)
         TO_JS(WebGLMultiDrawInstancedBaseVertexBaseInstance)
+        TO_JS(WebGLProvokingVertex)
     }
     ASSERT_NOT_REACHED();
     return jsNull();

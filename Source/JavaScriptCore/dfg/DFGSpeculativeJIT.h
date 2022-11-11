@@ -323,15 +323,11 @@ public:
         use(nodeUse.node());
     }
     
-    RegisterSet usedRegisters();
+    RegisterSetBuilder usedRegisters();
     
-    bool masqueradesAsUndefinedWatchpointIsStillValid(const CodeOrigin& codeOrigin)
+    bool masqueradesAsUndefinedWatchpointSetIsStillValid()
     {
-        return m_graph.masqueradesAsUndefinedWatchpointIsStillValid(codeOrigin);
-    }
-    bool masqueradesAsUndefinedWatchpointIsStillValid()
-    {
-        return masqueradesAsUndefinedWatchpointIsStillValid(m_currentNode->origin.semantic);
+        return m_graph.isWatchingMasqueradesAsUndefinedWatchpointSet(m_currentNode);
     }
 
     void compileStoreBarrier(Node*);
@@ -718,16 +714,15 @@ public:
 
     void compileCheckDetached(Node*);
 
-    void cachedGetById(CodeOrigin, JSValueRegs base, JSValueRegs result, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
-    void cachedPutById(CodeOrigin, GPRReg baseGPR, JSValueRegs valueRegs, GPRReg stubInfoGPR, GPRReg scratchGPR, GPRReg scratch2GPR, CacheableIdentifier, PutKind, ECMAMode, JITCompiler::Jump slowPathTarget = JITCompiler::Jump(), SpillRegistersMode = NeedToSpill);
-    void cachedGetByVal(CodeOrigin, JSValueRegs base, JSValueRegs property, JSValueRegs result, JITCompiler::Jump slowPathTarget);
+    void cachedGetById(Node*, CodeOrigin, JSValueRegs base, JSValueRegs result, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
+    void cachedPutById(Node*, CodeOrigin, GPRReg baseGPR, JSValueRegs valueRegs, GPRReg stubInfoGPR, GPRReg scratchGPR, GPRReg scratch2GPR, CacheableIdentifier, PutKind, ECMAMode, JITCompiler::Jump slowPathTarget = JITCompiler::Jump(), SpillRegistersMode = NeedToSpill);
 
 #if USE(JSVALUE64)
-    void cachedGetById(CodeOrigin, GPRReg baseGPR, GPRReg resultGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
-    void cachedGetByIdWithThis(CodeOrigin, GPRReg baseGPR, GPRReg thisGPR, GPRReg resultGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, const JITCompiler::JumpList& slowPathTarget = JITCompiler::JumpList());
+    void cachedGetById(Node*, CodeOrigin, GPRReg baseGPR, GPRReg resultGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
+    void cachedGetByIdWithThis(Node*, CodeOrigin, GPRReg baseGPR, GPRReg thisGPR, GPRReg resultGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, const JITCompiler::JumpList& slowPathTarget = JITCompiler::JumpList());
 #elif USE(JSVALUE32_64)
-    void cachedGetById(CodeOrigin, GPRReg baseTagGPROrNone, GPRReg basePayloadGPR, GPRReg resultTagGPR, GPRReg resultPayloadGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
-    void cachedGetByIdWithThis(CodeOrigin, GPRReg baseTagGPROrNone, GPRReg basePayloadGPR, GPRReg thisTagGPROrNone, GPRReg thisPayloadGPR, GPRReg resultTagGPR, GPRReg resultPayloadGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, const JITCompiler::JumpList& slowPathTarget = JITCompiler::JumpList());
+    void cachedGetById(Node*, CodeOrigin, GPRReg baseTagGPROrNone, GPRReg basePayloadGPR, GPRReg resultTagGPR, GPRReg resultPayloadGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
+    void cachedGetByIdWithThis(Node*, CodeOrigin, GPRReg baseTagGPROrNone, GPRReg basePayloadGPR, GPRReg thisTagGPROrNone, GPRReg thisPayloadGPR, GPRReg resultTagGPR, GPRReg resultPayloadGPR, GPRReg stubInfoGPR, GPRReg scratchGPR, CacheableIdentifier, const JITCompiler::JumpList& slowPathTarget = JITCompiler::JumpList());
 #endif
 
     void compileDeleteById(Node*);
@@ -763,7 +758,7 @@ public:
 
     void emitAllocateButterfly(GPRReg storageGPR, GPRReg sizeGPR, GPRReg scratch1, GPRReg scratch2, GPRReg scratch3, MacroAssembler::JumpList& slowCases);
     void emitInitializeButterfly(GPRReg storageGPR, GPRReg sizeGPR, JSValueRegs emptyValueRegs, GPRReg scratchGPR);
-    void compileAllocateNewArrayWithSize(JSGlobalObject*, GPRReg resultGPR, GPRReg sizeGPR, IndexingType, bool shouldConvertLargeSizeToArrayStorage = true);
+    void compileAllocateNewArrayWithSize(Node*, GPRReg resultGPR, GPRReg sizeGPR, IndexingType, bool shouldConvertLargeSizeToArrayStorage = true);
     
     // Called once a node has completed code generation but prior to setting
     // its result, to free up its children. (This must happen prior to setting
@@ -969,18 +964,14 @@ public:
         appendCall(CCallHelpers::Address(GPRInfo::nonArgGPR0, address.offset));
     }
 
-    JITCompiler::Call callOperationWithCallFrameRollbackOnException(V_JITOperation_Cb operation, GPRReg codeBlockGPR)
+    JITCompiler::Call callThrowOperationWithCallFrameRollback(V_JITOperation_Cb operation, GPRReg codeBlockGPR)
     {
         m_jit.setupArguments<V_JITOperation_Cb>(codeBlockGPR);
-        return appendCallWithCallFrameRollbackOnException(operation);
+        JITCompiler::Call call = appendCall(operation);
+        m_jit.exceptionJumpWithCallFrameRollback();
+        return call;
     }
 
-    JITCompiler::Call callOperationWithCallFrameRollbackOnException(Z_JITOperation_G operation, GPRReg result, GPRReg globalObjectGPR)
-    {
-        m_jit.setupArguments<Z_JITOperation_G>(globalObjectGPR);
-        return appendCallWithCallFrameRollbackOnExceptionSetResult(operation, result);
-    }
-    
     void prepareForExternalCall()
     {
 #if !defined(NDEBUG) && !CPU(ARM_THUMB2) && !CPU(MIPS)
@@ -1000,7 +991,7 @@ public:
     }
 
     // These methods add call instructions, optionally setting results, and optionally rolling back the call frame on an exception.
-    JITCompiler::Call appendCall(const FunctionPtr<CFunctionPtrTag> function)
+    JITCompiler::Call appendCall(const CodePtr<CFunctionPtrTag> function)
     {
         prepareForExternalCall();
         m_jit.emitStoreCodeOrigin(m_currentNode->origin.semantic);
@@ -1014,26 +1005,11 @@ public:
         m_jit.appendCall(address);
     }
 
-    JITCompiler::Call appendOperationCall(const FunctionPtr<OperationPtrTag> function)
+    JITCompiler::Call appendOperationCall(const CodePtr<OperationPtrTag> function)
     {
         prepareForExternalCall();
         m_jit.emitStoreCodeOrigin(m_currentNode->origin.semantic);
         return m_jit.appendOperationCall(function);
-    }
-
-    JITCompiler::Call appendCallWithCallFrameRollbackOnException(const FunctionPtr<CFunctionPtrTag> function)
-    {
-        JITCompiler::Call call = appendCall(function);
-        m_jit.exceptionCheckWithCallFrameRollback();
-        return call;
-    }
-
-    JITCompiler::Call appendCallWithCallFrameRollbackOnExceptionSetResult(const FunctionPtr<CFunctionPtrTag> function, GPRReg result)
-    {
-        JITCompiler::Call call = appendCallWithCallFrameRollbackOnException(function);
-        if ((result != InvalidGPRReg) && (result != GPRInfo::returnValueGPR))
-            m_jit.move(GPRInfo::returnValueGPR, result);
-        return call;
     }
 
     void appendCallSetResult(CCallHelpers::Address address, GPRReg result)
@@ -1058,7 +1034,7 @@ public:
 #endif
     }
 
-    JITCompiler::Call appendCallSetResult(const FunctionPtr<CFunctionPtrTag> function, GPRReg result)
+    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, GPRReg result)
     {
         JITCompiler::Call call = appendCall(function);
         if (result != InvalidGPRReg)
@@ -1066,14 +1042,14 @@ public:
         return call;
     }
 
-    JITCompiler::Call appendCallSetResult(const FunctionPtr<CFunctionPtrTag> function, GPRReg result1, GPRReg result2)
+    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, GPRReg result1, GPRReg result2)
     {
         JITCompiler::Call call = appendCall(function);
         m_jit.setupResults(result1, result2);
         return call;
     }
 
-    JITCompiler::Call appendCallSetResult(const FunctionPtr<CFunctionPtrTag> function, JSValueRegs resultRegs)
+    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, JSValueRegs resultRegs)
     {
 #if USE(JSVALUE64)
         return appendCallSetResult(function, resultRegs.gpr());
@@ -1082,7 +1058,7 @@ public:
 #endif
     }
 
-    JITCompiler::Call appendCallSetResult(const FunctionPtr<CFunctionPtrTag> function, FPRReg result)
+    JITCompiler::Call appendCallSetResult(const CodePtr<CFunctionPtrTag> function, FPRReg result)
     {
         JITCompiler::Call call = appendCall(function);
         if (result != InvalidFPRReg)
@@ -1502,6 +1478,7 @@ public:
     void compileRegExpTest(Node*);
     void compileRegExpTestInline(Node*);
     void compileStringReplace(Node*);
+    void compileStringReplaceString(Node*);
     void compileIsObject(Node*);
     void compileTypeOfIsObject(Node*);
     void compileIsCallable(Node*, S_JITOperation_GC);
@@ -1534,6 +1511,7 @@ public:
     void compileDefineDataProperty(Node*);
     void compileDefineAccessorProperty(Node*);
     void compileStringSlice(Node*);
+    void compileStringSubstring(Node*);
     void compileToLowerCase(Node*);
     void compileThrow(Node*);
     void compileThrowStaticError(Node*);
@@ -1563,11 +1541,13 @@ public:
     void compileStrCat(Node*);
     void compileNewArrayBuffer(Node*);
     void compileNewArrayWithSize(Node*);
+    void compileNewArrayWithSpecies(Node*);
     void compileNewTypedArray(Node*);
     void compileToThis(Node*);
     void compileObjectKeysOrObjectGetOwnPropertyNames(Node*);
     void compileObjectAssign(Node*);
     void compileObjectCreate(Node*);
+    void compileObjectToString(Node*);
     void compileCreateThis(Node*);
     void compileCreatePromise(Node*);
     void compileCreateGenerator(Node*);
@@ -1587,6 +1567,7 @@ public:
     void compileClearCatchLocals(Node*);
     void compileProfileType(Node*);
     void compileStringCodePointAt(Node*);
+    void compileStringLocaleCompare(Node*);
     void compileDateGet(Node*);
 
     template<typename JSClass, typename Operation>

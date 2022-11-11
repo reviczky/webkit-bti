@@ -49,11 +49,13 @@ namespace WebCore {
 class Attr;
 class Attribute;
 class AttributeIteratorAccessor;
+class CustomElementDefaultARIA;
 class CustomElementReactionQueue;
 class DatasetDOMStringMap;
 class DOMRect;
 class DOMRectList;
 class DOMTokenList;
+class DeferredPromise;
 class Document;
 class ElementAnimationRareData;
 class ElementData;
@@ -81,10 +83,12 @@ class WebAnimation;
 enum class AnimationImpact;
 enum class EventHandling : uint8_t;
 enum class EventProcessing : uint8_t;
+enum class FullscreenNavigationUI : uint8_t;
 enum class IsSyntheticClick : bool { No, Yes };
 enum class ResolveURLs : uint8_t { No, NoExcludingURLsForPrivacy, Yes, YesExcludingURLsForPrivacy };
 enum class SelectionRestorationMode : uint8_t;
 
+struct FullscreenOptions;
 struct GetAnimationsOptions;
 struct IntersectionObserverData;
 struct KeyframeAnimationOptions;
@@ -94,7 +98,7 @@ struct ScrollToOptions;
 struct SecurityPolicyViolationEventInit;
 struct ShadowRootInit;
 
-using ExplicitlySetAttrElementsMap = HashMap<QualifiedName, Vector<WeakPtr<Element>>>;
+using ExplicitlySetAttrElementsMap = HashMap<QualifiedName, Vector<WeakPtr<Element, WeakPtrImplWithEventTargetData>>>;
 
 namespace Style {
 class Resolver;
@@ -115,6 +119,7 @@ public:
     template<typename... QualifiedNames>
     inline const AtomString& getAttribute(const QualifiedName&, const QualifiedNames&...) const;
     WEBCORE_EXPORT void setAttribute(const QualifiedName&, const AtomString& value);
+    void setAttributeWithoutOverwriting(const QualifiedName&, const AtomString& value);
     WEBCORE_EXPORT void setAttributeWithoutSynchronization(const QualifiedName&, const AtomString& value);
     void setSynchronizedLazyAttribute(const QualifiedName&, const AtomString& value);
     bool removeAttribute(const QualifiedName&);
@@ -129,6 +134,8 @@ public:
     WEBCORE_EXPORT void setElementAttribute(const QualifiedName& attributeName, Element* value);
     WEBCORE_EXPORT std::optional<Vector<RefPtr<Element>>> getElementsArrayAttribute(const QualifiedName& attributeName) const;
     WEBCORE_EXPORT void setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<RefPtr<Element>>>&& value);
+    static bool isElementReflectionAttribute(const QualifiedName&);
+    static bool isElementsArrayReflectionAttribute(const QualifiedName&);
 
     // Call this to get the value of an attribute that is known not to be the style
     // attribute or one of the SVG animatable attributes.
@@ -270,6 +277,9 @@ public:
     const AtomString& prefix() const final { return m_tagName.prefix(); }
     const AtomString& namespaceURI() const final { return m_tagName.namespaceURI(); }
 
+    ElementName elementName() const { return m_tagName.elementName(); }
+    Namespace nodeNamespace() const { return m_tagName.nodeNamespace(); }
+
     ExceptionOr<void> setPrefix(const AtomString&) final;
 
     String nodeName() const override;
@@ -329,6 +339,7 @@ public:
     ShadowRoot* shadowRootForBindings(JSC::JSGlobalObject&) const;
 
     WEBCORE_EXPORT ExceptionOr<ShadowRoot&> attachShadow(const ShadowRootInit&);
+    ExceptionOr<ShadowRoot&> attachDeclarativeShadow(ShadowRootMode, bool delegatesFocus);
 
     RefPtr<ShadowRoot> userAgentShadowRoot() const;
     WEBCORE_EXPORT ShadowRoot& ensureUserAgentShadowRoot();
@@ -336,11 +347,14 @@ public:
 
     void setIsDefinedCustomElement(JSCustomElementInterface&);
     void setIsFailedCustomElement();
-    void setIsFailedCustomElementWithoutClearingReactionQueue();
+    void setIsFailedOrPrecustomizedCustomElementWithoutClearingReactionQueue();
     void clearReactionQueueFromFailedCustomElement();
     void setIsCustomElementUpgradeCandidate();
     void enqueueToUpgrade(JSCustomElementInterface&);
     CustomElementReactionQueue* reactionQueue() const;
+
+    CustomElementDefaultARIA& customElementDefaultARIA();
+    CustomElementDefaultARIA* customElementDefaultARIAIfExists();
 
     // FIXME: This should not be virtual. Please do not add additional overrides of this function.
     virtual const AtomString& shadowPseudoId() const;
@@ -419,7 +433,8 @@ public:
     void setStyleIsAffectedByPreviousSibling() { setStyleFlag(NodeStyleFlag::StyleIsAffectedByPreviousSibling); }
     void setChildIndex(unsigned);
 
-    WEBCORE_EXPORT AtomString computeInheritedLanguage() const;
+    AtomString effectiveLang() const;
+    AtomString langFromAttribute() const;
     Locale& locale() const;
 
     virtual bool accessKeyAction(bool /*sendToAnyEvent*/) { return false; }
@@ -523,11 +538,6 @@ public:
 
     virtual bool childShouldCreateRenderer(const Node&) const;
 
-    bool hasPendingResources() const { return hasNodeFlag(NodeFlag::HasPendingResources); }
-    void setHasPendingResources() { setNodeFlag(NodeFlag::HasPendingResources); }
-    void clearHasPendingResources() { clearNodeFlag(NodeFlag::HasPendingResources); }
-    virtual void buildPendingResource() { };
-
     KeyframeEffectStack* keyframeEffectStack(PseudoId) const;
     KeyframeEffectStack& ensureKeyframeEffectStack(PseudoId);
     bool hasKeyframeEffects(PseudoId) const;
@@ -558,7 +568,8 @@ public:
     bool containsFullScreenElement() const { return hasNodeFlag(NodeFlag::ContainsFullScreenElement); }
     void setContainsFullScreenElement(bool);
     void setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(bool);
-    WEBCORE_EXPORT virtual void webkitRequestFullscreen();
+    WEBCORE_EXPORT void webkitRequestFullscreen();
+    virtual void requestFullscreen(FullscreenOptions&&, RefPtr<DeferredPromise>&&);
 #endif
 
     ExceptionOr<void> setPointerCapture(int32_t);
@@ -649,6 +660,7 @@ public:
     void invalidateStyleInternal();
     void invalidateStyleForSubtreeInternal();
     void invalidateForQueryContainerSizeChange();
+    void invalidateForResumingQueryContainerResolution();
 
     bool needsUpdateQueryContainerDependentStyle() const;
     void clearNeedsUpdateQueryContainerDependentStyle();
@@ -683,12 +695,13 @@ public:
 
     virtual void updateUserAgentShadowTree() { }
 
-#if ENABLE(CSS_TYPED_OM)
     StylePropertyMapReadOnly* computedStyleMap();
-#endif
 
     ExplicitlySetAttrElementsMap& explicitlySetAttrElementsMap();
     ExplicitlySetAttrElementsMap* explicitlySetAttrElementsMapIfExists() const;
+
+    bool displayContentsChanged() const { return m_displayContentsChanged; }
+    void setDisplayContentsChanged(bool changed = true) { m_displayContentsChanged = changed; }
 
 protected:
     Element(const QualifiedName&, Document&, ConstructionType);
@@ -708,10 +721,8 @@ protected:
 
     static ExceptionOr<void> mergeWithNextTextNode(Text&);
 
-#if ENABLE(CSS_TYPED_OM)
     StylePropertyMap* attributeStyleMap();
     void setAttributeStyleMap(Ref<StylePropertyMap>&&);
-#endif
 
     void updateLabel(TreeScope&, const AtomString& oldForAttributeValue, const AtomString& newForAttributeValue);
 
@@ -814,7 +825,10 @@ private:
     QualifiedName m_tagName;
     RefPtr<ElementData> m_elementData;
 
+    // FIXME: these flags should move somewhere else and then we should have a static assert on
+    // Element size and ideally stick to that size.
     bool m_hasDuplicateAttribute { false };
+    bool m_displayContentsChanged { false };
 };
 
 inline void Element::setSavedLayerScrollPosition(const IntPoint& position)

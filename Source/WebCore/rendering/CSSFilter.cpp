@@ -27,6 +27,7 @@
 #include "config.h"
 #include "CSSFilter.h"
 
+#include "ColorMatrix.h"
 #include "FEColorMatrix.h"
 #include "FEComponentTransfer.h"
 #include "FEDropShadow.h"
@@ -75,12 +76,6 @@ CSSFilter::CSSFilter(Vector<Ref<FilterFunction>>&& functions)
 {
 }
 
-static IntOutsets calculateBlurEffectOutsets(const BlurFilterOperation& blurOperation)
-{
-    float stdDeviation = floatValueForLength(blurOperation.stdDeviation(), 0);
-    return FEGaussianBlur::calculateOutsets({ stdDeviation, stdDeviation });
-}
-
 static RefPtr<FilterEffect> createBlurEffect(const BlurFilterOperation& blurOperation, Filter::ClipOperation clipOperation)
 {
     float stdDeviation = floatValueForLength(blurOperation.stdDeviation(), 0);
@@ -110,12 +105,6 @@ static RefPtr<FilterEffect> createContrastEffect(const BasicComponentTransferFil
     return FEComponentTransfer::create(transferFunction, transferFunction, transferFunction, nullFunction);
 }
 
-static IntOutsets calculateDropShadowEffectOutsets(const DropShadowFilterOperation& dropShadowOperation)
-{
-    float stdDeviation = dropShadowOperation.stdDeviation();
-    return FEDropShadow::calculateOutsets(FloatSize(dropShadowOperation.x(), dropShadowOperation.y()), { stdDeviation, stdDeviation });
-}
-
 static RefPtr<FilterEffect> createDropShadowEffect(const DropShadowFilterOperation& dropShadowOperation)
 {
     float std = dropShadowOperation.stdDeviation();
@@ -124,35 +113,12 @@ static RefPtr<FilterEffect> createDropShadowEffect(const DropShadowFilterOperati
 
 static RefPtr<FilterEffect> createGrayScaleEffect(const BasicColorMatrixFilterOperation& colorMatrixOperation)
 {
-    double oneMinusAmount = clampTo(1 - colorMatrixOperation.amount(), 0.0, 1.0);
-
-    // See https://dvcs.w3.org/hg/FXTF/raw-file/tip/filters/index.html#grayscaleEquivalent
-    // for information on parameters.
-
+    auto grayscaleMatrix = grayscaleColorMatrix(colorMatrixOperation.amount());
     Vector<float> inputParameters {
-        narrowPrecisionToFloat(0.2126 + 0.7874 * oneMinusAmount),
-        narrowPrecisionToFloat(0.7152 - 0.7152 * oneMinusAmount),
-        narrowPrecisionToFloat(0.0722 - 0.0722 * oneMinusAmount),
-        0,
-        0,
-
-        narrowPrecisionToFloat(0.2126 - 0.2126 * oneMinusAmount),
-        narrowPrecisionToFloat(0.7152 + 0.2848 * oneMinusAmount),
-        narrowPrecisionToFloat(0.0722 - 0.0722 * oneMinusAmount),
-        0,
-        0,
-
-        narrowPrecisionToFloat(0.2126 - 0.2126 * oneMinusAmount),
-        narrowPrecisionToFloat(0.7152 - 0.7152 * oneMinusAmount),
-        narrowPrecisionToFloat(0.0722 + 0.9278 * oneMinusAmount),
-        0,
-        0,
-
-        0,
-        0,
-        0,
-        1,
-        0,
+        grayscaleMatrix.at(0, 0), grayscaleMatrix.at(0, 1), grayscaleMatrix.at(0, 2), 0, 0,
+        grayscaleMatrix.at(1, 0), grayscaleMatrix.at(1, 1), grayscaleMatrix.at(1, 2), 0, 0,
+        grayscaleMatrix.at(2, 0), grayscaleMatrix.at(2, 1), grayscaleMatrix.at(2, 2), 0, 0,
+        0, 0, 0, 1, 0,
     };
 
     return FEColorMatrix::create(FECOLORMATRIX_TYPE_MATRIX, WTFMove(inputParameters));
@@ -196,35 +162,12 @@ static RefPtr<FilterEffect> createSaturateEffect(const BasicColorMatrixFilterOpe
 
 static RefPtr<FilterEffect> createSepiaEffect(const BasicColorMatrixFilterOperation& colorMatrixOperation)
 {
-    double oneMinusAmount = clampTo(1 - colorMatrixOperation.amount(), 0.0, 1.0);
-
-    // See https://dvcs.w3.org/hg/FXTF/raw-file/tip/filters/index.html#sepiaEquivalent
-    // for information on parameters.
-
+    auto sepiaMatrix = sepiaColorMatrix(colorMatrixOperation.amount());
     Vector<float> inputParameters {
-        narrowPrecisionToFloat(0.393 + 0.607 * oneMinusAmount),
-        narrowPrecisionToFloat(0.769 - 0.769 * oneMinusAmount),
-        narrowPrecisionToFloat(0.189 - 0.189 * oneMinusAmount),
-        0,
-        0,
-
-        narrowPrecisionToFloat(0.349 - 0.349 * oneMinusAmount),
-        narrowPrecisionToFloat(0.686 + 0.314 * oneMinusAmount),
-        narrowPrecisionToFloat(0.168 - 0.168 * oneMinusAmount),
-        0,
-        0,
-
-        narrowPrecisionToFloat(0.272 - 0.272 * oneMinusAmount),
-        narrowPrecisionToFloat(0.534 - 0.534 * oneMinusAmount),
-        narrowPrecisionToFloat(0.131 + 0.869 * oneMinusAmount),
-        0,
-        0,
-
-        0,
-        0,
-        0,
-        1,
-        0,
+        sepiaMatrix.at(0, 0), sepiaMatrix.at(0, 1), sepiaMatrix.at(0, 2), 0, 0,
+        sepiaMatrix.at(1, 0), sepiaMatrix.at(1, 1), sepiaMatrix.at(1, 2), 0, 0,
+        sepiaMatrix.at(2, 0), sepiaMatrix.at(2, 1), sepiaMatrix.at(2, 2), 0, 0,
+        0, 0, 0, 1, 0,
     };
 
     return FEColorMatrix::create(FECOLORMATRIX_TYPE_MATRIX, WTFMove(inputParameters));
@@ -428,22 +371,12 @@ IntOutsets CSSFilter::calculateOutsets(RenderElement& renderer, const FilterOper
     IntOutsets outsets;
 
     for (auto& operation : operations.operations()) {
-        switch (operation->type()) {
-        case FilterOperation::BLUR:
-            outsets += calculateBlurEffectOutsets(downcast<BlurFilterOperation>(*operation));
-            break;
-
-        case FilterOperation::DROP_SHADOW:
-            outsets += calculateDropShadowEffectOutsets(downcast<DropShadowFilterOperation>(*operation));
-            break;
-
-        case FilterOperation::REFERENCE:
+        if (operation->type() == FilterOperation::REFERENCE) {
             outsets += calculateReferenceFilterOutsets(downcast<ReferenceFilterOperation>(*operation), renderer, targetBoundingBox);
-            break;
-
-        default:
-            break;
+            continue;
         }
+
+        outsets += operation->outsets();
     }
 
     return outsets;

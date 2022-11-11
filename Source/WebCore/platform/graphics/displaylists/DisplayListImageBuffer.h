@@ -76,18 +76,10 @@ public:
         return m_drawingContext.context();
     }
 
-    GraphicsContext* drawingContext() override { return &m_drawingContext.context(); }
-
     void flushDrawingContext() final
     {
         if (!m_drawingContext.displayList().isEmpty())
             m_drawingContext.replayDisplayList(WebCore::ImageBuffer::context());
-    }
-
-    void clearBackend() final
-    {
-        m_drawingContext.displayList().clear();
-        WebCore::ImageBuffer::clearBackend();
     }
 
 protected:

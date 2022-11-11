@@ -50,6 +50,7 @@ enum class TokenType: uint32_t {
     Identifier,
 
     ReservedWord,
+    KeywordArray,
     KeywordFn,
     KeywordFunction,
     KeywordPrivate,
@@ -81,6 +82,8 @@ enum class TokenType: uint32_t {
     Equal,
     GT,
     LT,
+    Minus,
+    MinusMinus,
     Period,
     ParenLeft,
     ParenRight,

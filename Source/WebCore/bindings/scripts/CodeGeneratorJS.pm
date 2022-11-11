@@ -2399,9 +2399,8 @@ sub GenerateEnumerationImplementationContent
     # FIXME: Change to take VM& instead of JSGlobalObject&.
     # FIXME: Consider using toStringOrNull to make exception checking faster.
     # FIXME: Consider finding a more efficient way to match against all the strings quickly.
-    $result .= "template<> std::optional<$className> parseEnumeration<$className>(JSGlobalObject& lexicalGlobalObject, JSValue value)\n";
+    $result .= "template<> std::optional<$className> parseEnumerationFromString<${className}>(const String& stringValue)\n";
     $result .= "{\n";
-    $result .= "    auto stringValue = value.toWTFString(&lexicalGlobalObject);\n";
     my @sortedEnumerationValues = sort @{$enumeration->values};
     if ($sortedEnumerationValues[0] eq "") {
         $result .= "    if (stringValue.isEmpty())\n";
@@ -2418,6 +2417,11 @@ sub GenerateEnumerationImplementationContent
     $result .= "    if (auto* enumerationValue = enumerationMapping.tryGet(stringValue); LIKELY(enumerationValue))\n";
     $result .= "        return *enumerationValue;\n";
     $result .= "    return std::nullopt;\n";
+    $result .= "}\n\n";
+
+    $result .= "template<> std::optional<$className> parseEnumeration<$className>(JSGlobalObject& lexicalGlobalObject, JSValue value)\n";
+    $result .= "{\n";
+    $result .= "    return parseEnumerationFromString<${className}>(value.toWTFString(&lexicalGlobalObject));\n";
     $result .= "}\n\n";
 
     $result .= "template<> const char* expectedEnumerationValues<$className>()\n";
@@ -2458,6 +2462,7 @@ sub GenerateEnumerationHeaderContent
 
     $result .= "${exportMacro}String convertEnumerationToString($className);\n";
     $result .= "template<> ${exportMacro}JSC::JSString* convertEnumerationToJS(JSC::JSGlobalObject&, $className);\n\n";
+    $result .= "template<> ${exportMacro}std::optional<$className> parseEnumerationFromString<${className}>(const String&);\n";
     $result .= "template<> ${exportMacro}std::optional<$className> parseEnumeration<$className>(JSC::JSGlobalObject&, JSC::JSValue);\n";
     $result .= "template<> ${exportMacro}const char* expectedEnumerationValues<$className>();\n\n";
     $result .= "#endif\n\n" if $conditionalString;
@@ -2855,7 +2860,6 @@ sub GenerateHeader
     my $interfaceName = $interface->type->name;
     my $className = "JS$interfaceName";
     my %structureFlags = ();
-
     my $hasParent = $interface->parentType || $interface->extendedAttributes->{JSLegacyParent};
     my $parentClassName = GetParentClassName($interface);
     my $needsVisitChildren = InstanceNeedsVisitChildren($interface);
@@ -2928,7 +2932,7 @@ sub GenerateHeader
         AddIncludesForImplementationTypeInHeader($implType);
         push(@headerContent, "    static $className* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, Ref<$implType>&& impl)\n");
         push(@headerContent, "    {\n");
-        push(@headerContent, "        globalObject->masqueradesAsUndefinedWatchpoint()->fireAll(globalObject->vm(), \"Allocated masquerading object\");\n");
+        push(@headerContent, "        globalObject->masqueradesAsUndefinedWatchpointSet().fireAll(globalObject->vm(), \"Allocated masquerading object\");\n");
         push(@headerContent, "        $className* ptr = new (NotNull, JSC::allocateCell<$className>(globalObject->vm())) $className(structure, *globalObject, WTFMove(impl));\n");
         push(@headerContent, "        ptr->finishCreation(globalObject->vm());\n");
         push(@headerContent, "        return ptr;\n");
@@ -4189,7 +4193,7 @@ sub GetCastingHelperForThisObject
     return "jsDynamicCast<JS$interfaceName*>";
 }
 
-# http://heycam.github.io/webidl/#Unscopable
+# https://webidl.spec.whatwg.org/#Unscopable
 sub addUnscopableProperties
 {
     my $interface = shift;
@@ -5451,6 +5455,7 @@ sub GenerateAttributeSetterBodyDefinition
     push(@$outputArray, "{\n");
 
     push(@$outputArray, "    auto& vm = JSC::getVM(&lexicalGlobalObject);\n");
+    push(@$outputArray, "    UNUSED_PARAM(vm);\n");
     push(@$outputArray, "    auto throwScope = DECLARE_THROW_SCOPE(vm);\n") if $needThrowScope;
 
     GenerateCustomElementReactionsStackIfNeeded($outputArray, $attribute, "lexicalGlobalObject");
@@ -5488,11 +5493,7 @@ sub GenerateAttributeSetterBodyDefinition
         push(@$outputArray, "    ensureStillAliveHere(value);\n\n");
         push(@$outputArray, "    return true;\n");
     } elsif ($isReplaceable) {
-        if ($needThrowScope) {
-            push(@$outputArray, "    throwScope.release();\n");
-        } else {
-            push(@$outputArray, "    UNUSED_PARAM(vm);\n");
-        }
+        push(@$outputArray, "    throwScope.release();\n") if $needThrowScope;
         push(@$outputArray, "    bool shouldThrow = true;\n");
         push(@$outputArray, "    thisObject.createDataProperty(&lexicalGlobalObject, propertyName, value, shouldThrow);\n");
         push(@$outputArray, "    return true;\n");
@@ -7324,8 +7325,8 @@ sub GenerateHashTableValueArray
 
     my $i = 0;
     foreach my $key (@{$keys}) {
-        my $firstTargetType;
-        my $secondTargetType = "";
+        my $typeTag;
+        my $hasSecondValue = 1;
         my $conditional;
 
         if ($conditionals) {
@@ -7337,47 +7338,47 @@ sub GenerateHashTableValueArray
         }
 
         if ("@$specials[$i]" =~ m/DOMJITFunction/) {
-            $firstTargetType = "static_cast<RawNativeFunction>";
-            $secondTargetType = "static_cast<const JSC::DOMJIT::Signature*>";
+            $typeTag = "DOMJITFunction";
         } elsif ("@$specials[$i]" =~ m/Function/) {
-            $firstTargetType = "static_cast<RawNativeFunction>";
+            $typeTag = "NativeFunction";
         } elsif ("@$specials[$i]" =~ m/Builtin/) {
-            $firstTargetType = "static_cast<BuiltinGenerator>";
+            $typeTag = ("@$specials[$i]" =~ m/Accessor/) ? "BuiltinAccessor" : "BuiltinGenerator";
         } elsif ("@$specials[$i]" =~ m/ConstantInteger/) {
-            $firstTargetType = "";
+            $typeTag = "Constant";
+            $hasSecondValue = 0;
         } elsif ("@$specials[$i]" =~ m/DOMJITAttribute/) {
-            $firstTargetType = "static_cast<const JSC::DOMJIT::GetterSetter*>";
+            $typeTag = "DOMJITAttribute";
         } else {
-            $firstTargetType = "static_cast<PropertySlot::GetValueFunc>";
-            $secondTargetType = "static_cast<PutPropertySlot::PutValueFunc>";
+            $typeTag = "GetterSetter";
             $hasSetter = "true";
         }
         if ("@$specials[$i]" =~ m/ConstantInteger/) {
-            push(@implContent, "    { \"$key\"_s, @$specials[$i], NoIntrinsic, { (long long)" . $firstTargetType . "(@$value1[$i]) } },\n");
+            push(@implContent, "    { \"$key\"_s, @$specials[$i], NoIntrinsic, { HashTableValue::" . $typeTag . "Type, @$value1[$i] } },\n");
         } else {
             my $readWriteConditional = $readWriteConditionals ? $readWriteConditionals->{$key} : undef;
             if ($readWriteConditional) {
                 my $readWriteConditionalString = $codeGenerator->GenerateConditionalStringFromAttributeValue($readWriteConditional);
                 push(@implContent, "#if ${readWriteConditionalString}\n");
             }
-
-            push(@implContent, "    { \"$key\"_s, @$specials[$i], NoIntrinsic, { (intptr_t)" . $firstTargetType . "(@$value1[$i]), (intptr_t) " . $secondTargetType . "(@$value2[$i]) } },\n");
+            my $secondValue = $hasSecondValue ? ", @$value2[$i]" : "";
+            push(@implContent, "    { \"$key\"_s, @$specials[$i], NoIntrinsic, { HashTableValue::" . $typeTag . "Type, @$value1[$i]$secondValue } },\n");
 
             if ($readWriteConditional) {
                 push(@implContent, "#else\n") ;
-                push(@implContent, "    { \"$key\"_s, JSC::PropertyAttribute::ReadOnly | @$specials[$i], NoIntrinsic, { (intptr_t)" . $firstTargetType . "(@$value1[$i]), (intptr_t) static_cast<PutPropertySlot::PutValueFunc>(0) } },\n");
+                my $secondValue = $hasSecondValue ? ", 0" : "";
+                push(@implContent, "    { \"$key\"_s, JSC::PropertyAttribute::ReadOnly | @$specials[$i], NoIntrinsic, { HashTableValue::" . $typeTag . "Type, @$value1[$i]$secondValue } },\n");
                 push(@implContent, "#endif\n");
             }
         }
         if ($conditional) {
             push(@implContent, "#else\n");
-            push(@implContent, "    { { }, 0, NoIntrinsic, { 0, 0 } },\n");
+            push(@implContent, "    { { }, 0, NoIntrinsic, { HashTableValue::End } },\n");
             push(@implContent, "#endif\n");
         }
         ++$i;
     }
 
-    push(@implContent, "    { { }, 0, NoIntrinsic, { 0, 0 } }\n") if (!$packedSize);
+    push(@implContent, "    { { }, 0, NoIntrinsic, { HashTableValue::End } }\n") if (!$packedSize);
     push(@implContent, "};\n\n");
 
     return $hasSetter;

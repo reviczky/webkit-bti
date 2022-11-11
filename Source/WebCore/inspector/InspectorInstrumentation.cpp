@@ -185,6 +185,23 @@ void InspectorInstrumentation::didChangeRendererForDOMNodeImpl(InstrumentingAgen
         cssAgent->didChangeRendererForDOMNode(node);
 }
 
+void InspectorInstrumentation::didAddOrRemoveScrollbarsImpl(InstrumentingAgents& instrumentingAgents, FrameView& frameView)
+{
+    if (auto* cssAgent = instrumentingAgents.enabledCSSAgent()) {
+        auto* document = frameView.frame().document();
+        if (auto* documentElement = document ? document->documentElement() : nullptr)
+            cssAgent->didChangeRendererForDOMNode(*documentElement);
+    }
+}
+
+void InspectorInstrumentation::didAddOrRemoveScrollbarsImpl(InstrumentingAgents& instrumentingAgents, RenderObject& renderer)
+{
+    if (auto* cssAgent = instrumentingAgents.enabledCSSAgent()) {
+        if (auto* node = renderer.node())
+            cssAgent->didChangeRendererForDOMNode(*node);
+    }
+}
+
 void InspectorInstrumentation::willModifyDOMAttrImpl(InstrumentingAgents& instrumentingAgents, Element& element, const AtomString& oldValue, const AtomString& newValue)
 {
     if (auto* pageDOMDebuggerAgent = instrumentingAgents.enabledPageDOMDebuggerAgent())
@@ -353,6 +370,8 @@ void InspectorInstrumentation::didAddEventListenerImpl(InstrumentingAgents& inst
         webDebuggerAgent->didAddEventListener(target, eventType, listener, capture);
     if (auto* domAgent = instrumentingAgents.persistentDOMAgent())
         domAgent->didAddEventListener(target);
+    if (auto* cssAgent = instrumentingAgents.enabledCSSAgent())
+        cssAgent->didAddEventListener(target);
 }
 
 void InspectorInstrumentation::willRemoveEventListenerImpl(InstrumentingAgents& instrumentingAgents, EventTarget& target, const AtomString& eventType, EventListener& listener, bool capture)
@@ -361,6 +380,8 @@ void InspectorInstrumentation::willRemoveEventListenerImpl(InstrumentingAgents& 
         webDebuggerAgent->willRemoveEventListener(target, eventType, listener, capture);
     if (auto* domAgent = instrumentingAgents.persistentDOMAgent())
         domAgent->willRemoveEventListener(target, eventType, listener, capture);
+    if (auto* cssAgent = instrumentingAgents.enabledCSSAgent())
+        cssAgent->willRemoveEventListener(target);
 }
 
 bool InspectorInstrumentation::isEventListenerDisabledImpl(InstrumentingAgents& instrumentingAgents, EventTarget& target, const AtomString& eventType, EventListener& listener, bool capture)
@@ -594,12 +615,16 @@ void InspectorInstrumentation::willSendRequestImpl(InstrumentingAgents& instrume
 {
     if (auto* networkAgent = instrumentingAgents.enabledNetworkAgent())
         networkAgent->willSendRequest(identifier, loader, request, redirectResponse, cachedResource, resourceLoader);
+    if (auto* domDebuggerAgent = instrumentingAgents.enabledDOMDebuggerAgent())
+        domDebuggerAgent->willSendRequest(request);
 }
 
 void InspectorInstrumentation::willSendRequestOfTypeImpl(InstrumentingAgents& instrumentingAgents, ResourceLoaderIdentifier identifier, DocumentLoader* loader, ResourceRequest& request, LoadType loadType)
 {
     if (auto* networkAgent = instrumentingAgents.enabledNetworkAgent())
         networkAgent->willSendRequestOfType(identifier, loader, request, loadType);
+    if (auto* domDebuggerAgent = instrumentingAgents.enabledDOMDebuggerAgent())
+        domDebuggerAgent->willSendRequestOfType(request);
 }
 
 void InspectorInstrumentation::didLoadResourceFromMemoryCacheImpl(InstrumentingAgents& instrumentingAgents, DocumentLoader* loader, CachedResource* cachedResource)

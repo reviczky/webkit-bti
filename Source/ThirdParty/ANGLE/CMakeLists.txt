@@ -126,7 +126,7 @@ add_subdirectory(include)
 add_library(ANGLEFramework INTERFACE)
 add_dependencies(ANGLEFramework GLSLANGHeaders ANGLEHeaders)
 
-if (USE_ANGLE_EGL OR USE_ANGLE_WEBGL)
+if (USE_ANGLE_EGL OR ENABLE_WEBGL)
     add_library(ANGLE ${ANGLE_LIBRARY_TYPE}
         ${ANGLE_SOURCES}
         ${libangle_sources}
@@ -142,7 +142,7 @@ if (USE_ANGLE_EGL OR USE_ANGLE_WEBGL)
         LIBANGLE_IMPLEMENTATION
     )
     target_compile_definitions(ANGLE PUBLIC ${ANGLE_DEFINITIONS})
-    target_link_libraries(ANGLE PRIVATE ZLIB::ZLIB)
+    target_link_libraries(ANGLE PRIVATE ZLIB::ZLIB ${CMAKE_DL_LIBS})
 
     target_compile_definitions(ANGLEFramework INTERFACE ${gl_prototypes})
 
@@ -206,7 +206,7 @@ else ()
     )
 endif ()
 
-if (USE_ANGLE_WEBGL)
+if (ENABLE_WEBGL)
     set(libglesv2_entry_points_headers
         src/libGLESv2/entry_points_egl_autogen.h
         src/libGLESv2/entry_points_egl_ext_autogen.h
@@ -242,15 +242,8 @@ endif ()
 if (COMPILER_IS_GCC_OR_CLANG)
     foreach (angle_target ANGLE EGL GLESv2)
         if (TARGET ${angle_target})
-            WEBKIT_ADD_TARGET_CXX_FLAGS(${angle_target}
-                -Wno-cast-align
-                -Wno-dangling-pointer
-                -Wno-extra
-                -Wno-suggest-attribute=format
-                -Wno-undef
-                -Wno-unused-parameter
-                -Wno-return-type
-                -Wno-comment)
+            WEBKIT_ADD_TARGET_C_FLAGS(${angle_target} -w)
+            WEBKIT_ADD_TARGET_CXX_FLAGS(${angle_target} -w)
         endif ()
     endforeach ()
 endif ()

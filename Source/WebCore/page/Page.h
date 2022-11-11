@@ -86,6 +86,10 @@ namespace JSC {
 class Debugger;
 }
 
+namespace PAL {
+class HysteresisActivity;
+}
+
 namespace WTF {
 class TextStream;
 }
@@ -143,7 +147,6 @@ class PaymentCoordinator;
 class PerformanceLogging;
 class PerformanceLoggingClient;
 class PerformanceMonitor;
-class PermissionController;
 class PluginData;
 class PluginInfoProvider;
 class PointerCaptureController;
@@ -152,6 +155,7 @@ class ProgressTracker;
 class RenderObject;
 class ResourceUsageOverlay;
 class RenderingUpdateScheduler;
+class ScreenOrientationManager;
 class ScrollLatchingController;
 class ScrollingCoordinator;
 class ServicesOverlayController;
@@ -325,8 +329,8 @@ public:
 
 
 #if ENABLE(REMOTE_INSPECTOR)
-    WEBCORE_EXPORT bool remoteInspectionAllowed() const;
-    WEBCORE_EXPORT void setRemoteInspectionAllowed(bool);
+    WEBCORE_EXPORT bool inspectable() const;
+    WEBCORE_EXPORT void setInspectable(bool);
     WEBCORE_EXPORT String remoteInspectionNameOverride() const;
     WEBCORE_EXPORT void setRemoteInspectionNameOverride(const String&);
     void remoteInspectorInformationDidChange() const;
@@ -651,6 +655,9 @@ public:
     WEBCORE_EXPORT void resumeScriptedAnimations();
     bool scriptedAnimationsSuspended() const { return m_scriptedAnimationsSuspended; }
 
+    WEBCORE_EXPORT void setImageAnimationEnabled(bool);
+    bool imageAnimationEnabled() const { return m_imageAnimationEnabled; }
+
     void userStyleSheetLocationChanged();
     const String& userStyleSheet() const;
 
@@ -671,13 +678,11 @@ public:
 
     void invalidateInjectedStyleSheetCacheInAllFrames();
 
-    StorageNamespace* sessionStorage(bool optionalCreate = true);
-    void setSessionStorage(RefPtr<StorageNamespace>&&);
-
     bool hasCustomHTMLTokenizerTimeDelay() const;
     double customHTMLTokenizerTimeDelay() const;
 
     WEBCORE_EXPORT void setCORSDisablingPatterns(Vector<UserContentURLPattern>&&);
+    const Vector<UserContentURLPattern>& corsDisablingPatterns() const { return m_corsDisablingPatterns; }
 
     WEBCORE_EXPORT void setMemoryCacheClientCallsEnabled(bool);
     bool areMemoryCacheClientCallsEnabled() const { return m_areMemoryCacheClientCallsEnabled; }
@@ -693,6 +698,7 @@ public:
 
     WEBCORE_EXPORT VisibilityState visibilityState() const;
     WEBCORE_EXPORT void resumeAnimatingImages();
+    void updatePlayStateForAllAnimations();
 
     void didFinishLoadingImageForElement(HTMLImageElement&);
 
@@ -778,6 +784,8 @@ public:
 
     WEBCORE_EXPORT UserContentProvider& userContentProvider();
     WEBCORE_EXPORT void setUserContentProvider(Ref<UserContentProvider>&&);
+
+    ScreenOrientationManager* screenOrientationManager() const;
 
     VisitedLinkStore& visitedLinkStore();
     WEBCORE_EXPORT void setVisitedLinkStore(Ref<VisitedLinkStore>&&);
@@ -910,6 +918,7 @@ public:
 
 #if ENABLE(INTERACTION_REGIONS_IN_EVENT_REGION)
     bool shouldBuildInteractionRegions() const;
+    WEBCORE_EXPORT void setInteractionRegionsEnabled(bool);
 #endif
 
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
@@ -937,6 +946,9 @@ public:
 
     bool httpsUpgradeEnabled() const { return m_httpsUpgradeEnabled; }
 
+    URL sanitizeForCopyOrShare(const URL&) const;
+    String sanitizeForCopyOrShare(const String&) const;
+
     LoadSchedulingMode loadSchedulingMode() const { return m_loadSchedulingMode; }
     void setLoadSchedulingMode(LoadSchedulingMode);
 
@@ -948,7 +960,6 @@ public:
     void resetImageAnalysisQueue();
 #endif
 
-    WEBCORE_EXPORT PermissionController& permissionController();
     WEBCORE_EXPORT StorageConnection& storageConnection();
 
     ModelPlayerProvider& modelPlayerProvider();
@@ -975,7 +986,7 @@ public:
     WEBCORE_EXPORT void forceRepaintAllFrames();
 
 #if ENABLE(IMAGE_ANALYSIS)
-    WEBCORE_EXPORT void analyzeImagesForFindInPage();
+    WEBCORE_EXPORT void analyzeImagesForFindInPage(Function<void()>&& callback);
 #endif
 private:
     struct Navigation {
@@ -1140,8 +1151,7 @@ private:
     JSC::Debugger* m_debugger { nullptr };
 
     bool m_canStartMedia { true };
-
-    RefPtr<StorageNamespace> m_sessionStorage;
+    bool m_imageAnimationEnabled { true };
 
     TimerThrottlingState m_timerThrottlingState { TimerThrottlingState::Disabled };
     MonotonicTime m_timerThrottlingStateLastChangedTime;
@@ -1194,13 +1204,14 @@ private:
     Ref<PluginInfoProvider> m_pluginInfoProvider;
     Ref<StorageNamespaceProvider> m_storageNamespaceProvider;
     Ref<UserContentProvider> m_userContentProvider;
+    WeakPtr<ScreenOrientationManager> m_screenOrientationManager;
     Ref<VisitedLinkStore> m_visitedLinkStore;
     Ref<BroadcastChannelRegistry> m_broadcastChannelRegistry;
     RefPtr<WheelEventTestMonitor> m_wheelEventTestMonitor;
     WeakHashSet<ActivityStateChangeObserver> m_activityStateChangeObservers;
 
 #if ENABLE(SERVICE_WORKER)
-    WeakPtr<ServiceWorkerGlobalScope> m_serviceWorkerGlobalScope;
+    WeakPtr<ServiceWorkerGlobalScope, WeakPtrImplWithEventTargetData> m_serviceWorkerGlobalScope;
 #endif
 
 #if ENABLE(RESOURCE_USAGE)
@@ -1319,7 +1330,6 @@ private:
     const bool m_httpsUpgradeEnabled { true };
     mutable MediaSessionGroupIdentifier m_mediaSessionGroupIdentifier;
 
-    Ref<PermissionController> m_permissionController;
     UniqueRef<StorageProvider> m_storageProvider;
     UniqueRef<ModelPlayerProvider> m_modelPlayerProvider;
 
@@ -1331,7 +1341,7 @@ private:
 
 #if ENABLE(IMAGE_ANALYSIS)
     using CachedTextRecognitionResult = std::pair<TextRecognitionResult, IntRect>;
-    WeakHashMap<HTMLElement, CachedTextRecognitionResult> m_textRecognitionResults;
+    WeakHashMap<HTMLElement, CachedTextRecognitionResult, WeakPtrImplWithEventTargetData> m_textRecognitionResults;
 #endif
 
 #if USE(ATSPI)

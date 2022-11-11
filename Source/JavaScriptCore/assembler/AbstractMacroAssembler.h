@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2022 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,7 +36,6 @@
 #include "MacroAssemblerCodeRef.h"
 #include "MacroAssemblerHelpers.h"
 #include "Options.h"
-#include <wtf/CryptographicallyRandomNumber.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/SharedTask.h>
 #include <wtf/StringPrintStream.h>
@@ -56,6 +55,8 @@ template<typename T> class DisallowMacroScratchRegisterUsage;
 namespace DFG {
 struct OSRExit;
 }
+
+#define JIT_COMMENT(jit, ...) do { if (UNLIKELY(Options::dumpDisassembly())) { (jit).comment(__VA_ARGS__); } else { (void) jit; } } while (0);
 
 class AbstractMacroAssemblerBase {
     WTF_MAKE_FAST_ALLOCATED;
@@ -97,7 +98,6 @@ public:
     typedef AbstractMacroAssembler<AssemblerType> AbstractMacroAssemblerType;
     typedef AssemblerType AssemblerType_T;
 
-    template<PtrTag tag> using CodePtr = MacroAssemblerCodePtr<tag>;
     template<PtrTag tag> using CodeRef = MacroAssemblerCodeRef<tag>;
 
     enum class CPUIDCheckState {
@@ -868,7 +868,7 @@ public:
     }
 
     template<PtrTag aTag, PtrTag bTag>
-    static ptrdiff_t differenceBetweenCodePtr(const MacroAssemblerCodePtr<aTag>& a, const MacroAssemblerCodePtr<bTag>& b)
+    static ptrdiff_t differenceBetweenCodePtr(const CodePtr<aTag>& a, const CodePtr<bTag>& b)
     {
         return b.template dataLocation<ptrdiff_t>() - a.template dataLocation<ptrdiff_t>();
     }
@@ -892,9 +892,9 @@ public:
     }
 
     template<PtrTag tag>
-    static void linkPointer(void* code, AssemblerLabel label, MacroAssemblerCodePtr<tag> value)
+    static void linkPointer(void* code, AssemblerLabel label, CodePtr<tag> value)
     {
-        AssemblerType::linkPointer(code, label, value.executableAddress());
+        AssemblerType::linkPointer(code, label, value.taggedPtr());
     }
 
     template<PtrTag tag>
@@ -922,7 +922,7 @@ public:
             AssemblerType::relinkTailCall(nearCall.dataLocation(), destination.dataLocation());
             return;
         case NearCallMode::Regular:
-            AssemblerType::relinkCall(nearCall.dataLocation(), destination.untaggedExecutableAddress());
+            AssemblerType::relinkCall(nearCall.dataLocation(), destination.untaggedPtr());
             return;
         }
         RELEASE_ASSERT_NOT_REACHED();
@@ -936,7 +936,7 @@ public:
         case NearCallMode::Tail:
             return CodeLocationLabel<destTag>(tagCodePtr<destTag>(AssemblerType::prepareForAtomicRelinkJumpConcurrently(nearCall.dataLocation(), destination.dataLocation())));
         case NearCallMode::Regular:
-            return CodeLocationLabel<destTag>(tagCodePtr<destTag>(AssemblerType::prepareForAtomicRelinkCallConcurrently(nearCall.dataLocation(), destination.untaggedExecutableAddress())));
+            return CodeLocationLabel<destTag>(tagCodePtr<destTag>(AssemblerType::prepareForAtomicRelinkCallConcurrently(nearCall.dataLocation(), destination.untaggedPtr())));
         }
         RELEASE_ASSERT_NOT_REACHED();
 #else

@@ -15,7 +15,6 @@
 #include <mutex>
 #include <queue>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -183,6 +182,7 @@ class ANGLERenderTest : public ANGLEPerfTest
     ~ANGLERenderTest() override;
 
     void addExtensionPrerequisite(const char *extensionName);
+    void addIntegerPrerequisite(GLenum target, int min);
 
     virtual void initializeBenchmark() {}
     virtual void destroyBenchmark() {}
@@ -232,12 +232,19 @@ class ANGLERenderTest : public ANGLEPerfTest
     void computeGPUTime() override;
 
     void skipTestIfMissingExtensionPrerequisites();
+    void skipTestIfFailsIntegerPrerequisite();
 
     void initPerfCounters();
 
     GLWindowBase *mGLWindow;
     OSWindow *mOSWindow;
     std::vector<const char *> mExtensionPrerequisites;
+    struct IntegerPrerequisite
+    {
+        GLenum target;
+        int min;
+    };
+    std::vector<IntegerPrerequisite> mIntegerPrerequisites;
     angle::PlatformMethods mPlatformMethods;
     ConfigParameters mConfigParams;
     bool mSwapEnabled;
@@ -257,7 +264,7 @@ class ANGLERenderTest : public ANGLEPerfTest
     // Handle to the entry point binding library.
     std::unique_ptr<angle::Library> mEntryPointsLib;
 
-    std::vector<std::thread::id> mThreadIDs;
+    std::vector<uint64_t> mThreadIDs;
     std::mutex mTraceEventMutex;
 };
 

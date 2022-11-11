@@ -33,6 +33,7 @@ class SurfaceVk : public SurfaceImpl, public angle::ObserverInterface
     SurfaceVk(const egl::SurfaceState &surfaceState);
     ~SurfaceVk() override;
 
+    void destroy(const egl::Display *display) override;
     // We monitor the staging buffer for changes. This handles staged data from outside this class.
     void onSubjectStateChange(angle::SubjectIndex index, angle::SubjectMessage message) override;
 
@@ -49,8 +50,6 @@ class OffscreenSurfaceVk : public SurfaceVk
     egl::Error initialize(const egl::Display *display) override;
     void destroy(const egl::Display *display) override;
 
-    FramebufferImpl *createDefaultFramebuffer(const gl::Context *context,
-                                              const gl::FramebufferState &state) override;
     egl::Error swap(const gl::Context *context) override;
     egl::Error postSubBuffer(const gl::Context *context,
                              EGLint x,
@@ -86,6 +85,11 @@ class OffscreenSurfaceVk : public SurfaceVk
                            EGLint *bufferPitchOut) override;
     egl::Error unlockSurface(const egl::Display *display, bool preservePixels) override;
     EGLint origin() const override;
+
+    egl::Error attachToFramebuffer(const gl::Context *context,
+                                   gl::Framebuffer *framebuffer) override;
+    egl::Error detachFromFramebuffer(const gl::Context *context,
+                                     gl::Framebuffer *framebuffer) override;
 
   protected:
     struct AttachmentImage final : angle::NonCopyable
@@ -206,8 +210,6 @@ class WindowSurfaceVk : public SurfaceVk
                                             const gl::ImageIndex &imageIndex,
                                             GLsizei samples,
                                             FramebufferAttachmentRenderTarget **rtOut) override;
-    FramebufferImpl *createDefaultFramebuffer(const gl::Context *context,
-                                              const gl::FramebufferState &state) override;
     egl::Error prepareSwap(const gl::Context *context) override;
     egl::Error swap(const gl::Context *context) override;
     egl::Error swapWithDamage(const gl::Context *context,
@@ -270,13 +272,22 @@ class WindowSurfaceVk : public SurfaceVk
         return mPreTransform;
     }
 
+    egl::Error setAutoRefreshEnabled(bool enabled) override;
+
     egl::Error getBufferAge(const gl::Context *context, EGLint *age) override;
 
     egl::Error setRenderBuffer(EGLint renderBuffer) override;
 
     bool isSharedPresentMode() const
     {
-        return (mSwapchainPresentMode == vk::PresentMode::SharedDemandRefreshKHR);
+        return (mSwapchainPresentMode == vk::PresentMode::SharedDemandRefreshKHR ||
+                mSwapchainPresentMode == vk::PresentMode::SharedContinuousRefreshKHR);
+    }
+
+    bool isSharedPresentModeDesired() const
+    {
+        return (mDesiredSwapchainPresentMode == vk::PresentMode::SharedDemandRefreshKHR ||
+                mDesiredSwapchainPresentMode == vk::PresentMode::SharedContinuousRefreshKHR);
     }
 
     egl::Error lockSurface(const egl::Display *display,
@@ -287,7 +298,16 @@ class WindowSurfaceVk : public SurfaceVk
     egl::Error unlockSurface(const egl::Display *display, bool preservePixels) override;
     EGLint origin() const override;
 
+    egl::Error attachToFramebuffer(const gl::Context *context,
+                                   gl::Framebuffer *framebuffer) override;
+    egl::Error detachFromFramebuffer(const gl::Context *context,
+                                     gl::Framebuffer *framebuffer) override;
+
     angle::Result onSharedPresentContextFlush(const gl::Context *context);
+
+    bool hasStagedUpdates() const;
+
+    void setTimestampsEnabled(bool enabled) override;
 
   protected:
     angle::Result prepareSwapImpl(const gl::Context *context);
@@ -295,6 +315,9 @@ class WindowSurfaceVk : public SurfaceVk
                            const EGLint *rects,
                            EGLint n_rects,
                            const void *pNextChain);
+    // Called when a swapchain image whose acquisition was deferred must be acquired.  This method
+    // will recreate the swapchain (if needed) and call the acquireNextSwapchainImage() method.
+    angle::Result doDeferredAcquireNextImage(const gl::Context *context, bool presentOutOfDate);
 
     EGLNativeWindowType mNativeWindowType;
     VkSurfaceKHR mSurface;
@@ -322,10 +345,8 @@ class WindowSurfaceVk : public SurfaceVk
     VkResult acquireNextSwapchainImage(vk::Context *context);
     // This method is called when a swapchain image is presented.  It schedules
     // acquireNextSwapchainImage() to be called later.
-    void deferAcquireNextImage(const gl::Context *context);
-    // Called when a swapchain image whose acquisition was deferred must be acquired.  This method
-    // will recreate the swapchain (if needed) and call the acquireNextSwapchainImage() method.
-    angle::Result doDeferredAcquireNextImage(const gl::Context *context, bool presentOutOfDate);
+    void deferAcquireNextImage();
+
     angle::Result computePresentOutOfDate(vk::Context *context,
                                           VkResult result,
                                           bool *presentOutOfDate);

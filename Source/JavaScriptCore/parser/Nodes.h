@@ -736,8 +736,9 @@ namespace JSC {
     enum class ClassElementTag : uint8_t { No, Instance, Static, LastTag };
     class PropertyNode final : public ParserArenaFreeable {
     public:
-        enum Type : uint16_t { Constant = 1, Getter = 2, Setter = 4, Computed = 8, Shorthand = 16, Spread = 32, PrivateField = 64, PrivateMethod = 128, PrivateSetter = 256, PrivateGetter = 512 };
+        enum Type : uint16_t { Constant = 1, Getter = 2, Setter = 4, Computed = 8, Shorthand = 16, Spread = 32, PrivateField = 64, PrivateMethod = 128, PrivateSetter = 256, PrivateGetter = 512, Block = 1024 };
 
+        PropertyNode(const Identifier&, Type, SuperBinding, ClassElementTag);
         PropertyNode(const Identifier&, ExpressionNode*, Type, SuperBinding, ClassElementTag);
         PropertyNode(ExpressionNode*, Type, SuperBinding, ClassElementTag);
         PropertyNode(ExpressionNode* propertyName, ExpressionNode*, Type, SuperBinding, ClassElementTag);
@@ -754,6 +755,8 @@ namespace JSC {
         bool isClassField() const { return isClassProperty() && !needsSuperBinding(); }
         bool isInstanceClassField() const { return isInstanceClassProperty() && !needsSuperBinding(); }
         bool isStaticClassField() const { return isStaticClassProperty() && !needsSuperBinding(); }
+        bool isStaticClassBlock() const { return m_type & Block; }
+        bool isStaticClassElement() const { return isStaticClassBlock() || isStaticClassField(); }
         bool isOverriddenByDuplicate() const { return m_isOverriddenByDuplicate; }
         bool isPrivate() const { return m_type & (PrivateField | PrivateMethod | PrivateGetter | PrivateSetter); }
         bool hasComputedName() const { return m_expression; }
@@ -772,14 +775,14 @@ namespace JSC {
 
     private:
         friend class PropertyListNode;
-        const Identifier* m_name;
-        ExpressionNode* m_expression;
-        ExpressionNode* m_assign;
-        unsigned m_type : 10;
+        const Identifier* m_name { nullptr };
+        ExpressionNode* m_expression { nullptr };
+        ExpressionNode* m_assign { nullptr };
+        unsigned m_type : 11;
         unsigned m_needsSuperBinding : 1;
         static_assert(1 << 2 > static_cast<unsigned>(ClassElementTag::LastTag), "ClassElementTag shouldn't use more than two bits");
         unsigned m_classElementTag : 2;
-        unsigned m_isOverriddenByDuplicate : 1;
+        unsigned m_isOverriddenByDuplicate : 1 { false };
     };
 
     class PropertyListNode final : public ExpressionNode {
@@ -801,6 +804,16 @@ namespace JSC {
         bool isStaticClassField() const
         {
             return m_node->isStaticClassField();
+        }
+
+        bool isStaticClassBlock() const
+        {
+            return m_node->isStaticClassBlock();
+        }
+
+        bool isStaticClassElement() const
+        {
+            return m_node->isStaticClassElement();
         }
 
         void setHasPrivateAccessors(bool hasPrivateAccessors)
@@ -984,6 +997,18 @@ namespace JSC {
 
         ExpressionNode* m_expr;
         ArgumentsNode* m_args;
+    };
+
+    class StaticBlockFunctionCallNode final : public ExpressionNode, public ThrowableExpressionData {
+    public:
+        StaticBlockFunctionCallNode(const JSTokenLocation&, ExpressionNode*, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd);
+
+    private:
+        RegisterID* emitBytecode(BytecodeGenerator&, RegisterID* = nullptr) final;
+
+        bool isFunctionCall() const final { return true; }
+
+        ExpressionNode* m_expr { nullptr };
     };
 
     class FunctionCallResolveNode final : public ExpressionNode, public ThrowableExpressionData {
@@ -1611,7 +1636,7 @@ namespace JSC {
         bool hasEarlyBreakOrContinue() const;
 
         void emitBytecode(BytecodeGenerator&, RegisterID* destination);
-        void analyzeModule(ModuleAnalyzer&);
+        bool analyzeModule(ModuleAnalyzer&);
 
     private:
         StatementNode* m_head { nullptr };
@@ -1951,7 +1976,7 @@ namespace JSC {
 
         void emitStatementsBytecode(BytecodeGenerator&, RegisterID* destination);
         
-        void analyzeModule(ModuleAnalyzer&);
+        bool analyzeModule(ModuleAnalyzer&);
 
     protected:
         int m_startLineNumber;
@@ -2076,7 +2101,7 @@ namespace JSC {
 
     class ModuleDeclarationNode : public StatementNode {
     public:
-        virtual void analyzeModule(ModuleAnalyzer&) = 0;
+        virtual bool analyzeModule(ModuleAnalyzer&) = 0;
         bool hasCompletionValue() const override { return false; }
         bool isModuleDeclarationNode() const override { return true; }
 
@@ -2094,7 +2119,7 @@ namespace JSC {
 
     private:
         void emitBytecode(BytecodeGenerator&, RegisterID* = nullptr) final;
-        void analyzeModule(ModuleAnalyzer&) final;
+        bool analyzeModule(ModuleAnalyzer&) final;
 
         ImportSpecifierListNode* m_specifierList;
         ModuleNameNode* m_moduleName;
@@ -2110,7 +2135,7 @@ namespace JSC {
 
     private:
         void emitBytecode(BytecodeGenerator&, RegisterID* = nullptr) final;
-        void analyzeModule(ModuleAnalyzer&) final;
+        bool analyzeModule(ModuleAnalyzer&) final;
 
         ModuleNameNode* m_moduleName;
         ImportAssertionListNode* m_assertionList;
@@ -2125,7 +2150,7 @@ namespace JSC {
 
     private:
         void emitBytecode(BytecodeGenerator&, RegisterID* = nullptr) final;
-        void analyzeModule(ModuleAnalyzer&) final;
+        bool analyzeModule(ModuleAnalyzer&) final;
         StatementNode* m_declaration;
         const Identifier& m_localName;
     };
@@ -2138,7 +2163,7 @@ namespace JSC {
 
     private:
         void emitBytecode(BytecodeGenerator&, RegisterID* = nullptr) final;
-        void analyzeModule(ModuleAnalyzer&) final;
+        bool analyzeModule(ModuleAnalyzer&) final;
         StatementNode* m_declaration;
     };
 
@@ -2179,7 +2204,7 @@ namespace JSC {
 
     private:
         void emitBytecode(BytecodeGenerator&, RegisterID* = nullptr) final;
-        void analyzeModule(ModuleAnalyzer&) final;
+        bool analyzeModule(ModuleAnalyzer&) final;
         ExportSpecifierListNode* m_specifierList;
         ModuleNameNode* m_moduleName { nullptr };
         ImportAssertionListNode* m_assertionList { nullptr };

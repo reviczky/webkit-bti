@@ -32,12 +32,12 @@
 
 #include "AsyncScrollingCoordinator.h"
 #include "NicosiaPlatformLayer.h"
-#include "ScrollingTreeFixedNode.h"
+#include "ScrollingTreeFixedNodeNicosia.h"
 #include "ScrollingTreeFrameHostingNode.h"
 #include "ScrollingTreeFrameScrollingNodeNicosia.h"
-#include "ScrollingTreeOverflowScrollProxyNode.h"
+#include "ScrollingTreeOverflowScrollProxyNodeNicosia.h"
 #include "ScrollingTreeOverflowScrollingNodeNicosia.h"
-#include "ScrollingTreePositionedNode.h"
+#include "ScrollingTreePositionedNodeNicosia.h"
 #include "ScrollingTreeStickyNodeNicosia.h"
 
 namespace WebCore {
@@ -63,13 +63,13 @@ Ref<ScrollingTreeNode> ScrollingTreeNicosia::createScrollingTreeNode(ScrollingNo
     case ScrollingNodeType::Overflow:
         return ScrollingTreeOverflowScrollingNodeNicosia::create(*this, nodeID);
     case ScrollingNodeType::OverflowProxy:
-        return ScrollingTreeOverflowScrollProxyNode::create(*this, nodeID);
+        return ScrollingTreeOverflowScrollProxyNodeNicosia::create(*this, nodeID);
     case ScrollingNodeType::Fixed:
-        return ScrollingTreeFixedNode::create(*this, nodeID);
+        return ScrollingTreeFixedNodeNicosia::create(*this, nodeID);
     case ScrollingNodeType::Sticky:
         return ScrollingTreeStickyNodeNicosia::create(*this, nodeID);
     case ScrollingNodeType::Positioned:
-        return ScrollingTreePositionedNode::create(*this, nodeID);
+        return ScrollingTreePositionedNodeNicosia::create(*this, nodeID);
     }
 
     RELEASE_ASSERT_NOT_REACHED();

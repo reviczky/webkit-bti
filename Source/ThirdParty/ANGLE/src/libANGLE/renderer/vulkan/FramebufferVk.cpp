@@ -312,41 +312,27 @@ bool IsAnyAttachment3DWithoutAllLayers(const RenderTargetCache<RenderTargetVk> &
 }
 }  // anonymous namespace
 
-// static
-FramebufferVk *FramebufferVk::CreateUserFBO(RendererVk *renderer, const gl::FramebufferState &state)
-{
-    return new FramebufferVk(renderer, state, nullptr);
-}
-
-// static
-FramebufferVk *FramebufferVk::CreateDefaultFBO(RendererVk *renderer,
-                                               const gl::FramebufferState &state,
-                                               WindowSurfaceVk *backbuffer)
-{
-    return new FramebufferVk(renderer, state, backbuffer);
-}
-
-FramebufferVk::FramebufferVk(RendererVk *renderer,
-                             const gl::FramebufferState &state,
-                             WindowSurfaceVk *backbuffer)
+FramebufferVk::FramebufferVk(RendererVk *renderer, const gl::FramebufferState &state)
     : FramebufferImpl(state),
-      mBackbuffer(backbuffer),
+      mBackbuffer(nullptr),
       mActiveColorComponentMasksForClear(0),
-      mReadOnlyDepthFeedbackLoopMode(false)
-{}
+      mReadOnlyDepthFeedbackLoopMode(false),
+      mIsCurrentFramebufferCached(false)
+{
+    if (mState.isDefault())
+    {
+        // These are immutable for system default framebuffer.
+        mCurrentFramebufferDesc.updateLayerCount(1);
+        mCurrentFramebufferDesc.updateIsMultiview(false);
+    }
+}
 
 FramebufferVk::~FramebufferVk() = default;
 
 void FramebufferVk::destroy(const gl::Context *context)
 {
     ContextVk *contextVk = vk::GetImpl(context);
-    resetCache(contextVk);
-}
-
-void FramebufferVk::resetCache(ContextVk *contextVk)
-{
-    mFramebufferCacheManager.releaseKeys(contextVk);
-    mCurrentFramebuffer.release();
+    releaseCurrentFramebuffer(contextVk);
 }
 
 void FramebufferVk::insertCache(ContextVk *contextVk,
@@ -360,7 +346,6 @@ void FramebufferVk::insertCache(ContextVk *contextVk,
     // it can be destroyed promptly if those attachments change.
     const vk::SharedFramebufferCacheKey sharedFramebufferCacheKey =
         vk::CreateSharedFramebufferCacheKey(desc);
-    mFramebufferCacheManager.addKey(sharedFramebufferCacheKey);
 
     // Ask each attachment to hold a reference to the cache so that when any attachment is
     // released, the cache can be destroyed.
@@ -581,6 +566,10 @@ angle::Result FramebufferVk::clearImpl(const gl::Context *context,
         const bool clearAnyWithDraw =
             clearColorWithDraw || clearDepthWithDraw || clearStencilWithDraw;
 
+        bool isAnyAttachment3DWithoutAllLayers =
+            IsAnyAttachment3DWithoutAllLayers(mRenderTargetCache, mState.getColorAttachmentsMask(),
+                                              mCurrentFramebufferDesc.getLayerCount());
+
         // If we are in an active renderpass that has recorded commands and the framebuffer hasn't
         // changed, inline the clear.
         if (isMidRenderPassClear)
@@ -606,7 +595,16 @@ angle::Result FramebufferVk::clearImpl(const gl::Context *context,
         }
         else
         {
-            ASSERT(!contextVk->hasStartedRenderPass());
+            if (contextVk->hasStartedRenderPass())
+            {
+                // Typically, clears are deferred such that it's impossible to have a render pass
+                // opened without any additional commands recorded on it.  This is not true for some
+                // corner cases, such as with 3D or AHB attachments.  In those cases, a clear can
+                // open a render pass that's otherwise empty, and additional clears can continue to
+                // be accumulated in the render pass loadOps.
+                ASSERT(isAnyAttachment3DWithoutAllLayers || mIsAHBColorAttachments.any());
+                clearWithLoadOp(contextVk);
+            }
 
             // This path will defer the current clears along with deferred clears.  This won't work
             // if any attachment needs to be subsequently cleared with a draw call.  In that case,
@@ -617,10 +615,9 @@ angle::Result FramebufferVk::clearImpl(const gl::Context *context,
             // depth than the framebuffer layers, clears cannot be deferred.  This is because the
             // clear may later need to be flushed with vkCmdClearColorImage, which cannot partially
             // clear the 3D texture.  In that case, the clears are flushed immediately too.
-            bool isAnyAttachment3DWithoutAllLayers = IsAnyAttachment3DWithoutAllLayers(
-                mRenderTargetCache, mState.getColorAttachmentsMask(),
-                mCurrentFramebufferDesc.getLayerCount());
-
+            //
+            // For imported images such as from AHBs, the clears are not deferred so that they are
+            // definitely applied before the application uses them outside of the control of ANGLE.
             if (clearAnyWithDraw || isAnyAttachment3DWithoutAllLayers ||
                 mIsAHBColorAttachments.any())
             {
@@ -850,6 +847,7 @@ RenderTargetVk *FramebufferVk::getReadPixelsRenderTarget(GLenum format) const
     {
         case GL_DEPTH_COMPONENT:
         case GL_STENCIL_INDEX_OES:
+        case GL_DEPTH_STENCIL_OES:
             return getDepthStencilRenderTarget();
         default:
             return getColorReadRenderTarget();
@@ -864,6 +862,8 @@ VkImageAspectFlagBits FramebufferVk::getReadPixelsAspectFlags(GLenum format) con
             return VK_IMAGE_ASPECT_DEPTH_BIT;
         case GL_STENCIL_INDEX_OES:
             return VK_IMAGE_ASPECT_STENCIL_BIT;
+        case GL_DEPTH_STENCIL_OES:
+            return vk::IMAGE_ASPECT_DEPTH_STENCIL;
         default:
             return VK_IMAGE_ASPECT_COLOR_BIT;
     }
@@ -1328,7 +1328,7 @@ angle::Result FramebufferVk::blit(const gl::Context *context,
                 ANGLE_TRY(depthStencilImage->initLayerImageView(
                     contextVk, textureType, VK_IMAGE_ASPECT_DEPTH_BIT, gl::SwizzleState(),
                     &depthView.get(), levelIndex, 1, layerIndex, 1,
-                    gl::SrgbWriteControlMode::Default));
+                    gl::SrgbWriteControlMode::Default, gl::YuvSamplingMode::Default));
             }
 
             if (blitStencilBuffer)
@@ -1336,7 +1336,7 @@ angle::Result FramebufferVk::blit(const gl::Context *context,
                 ANGLE_TRY(depthStencilImage->initLayerImageView(
                     contextVk, textureType, VK_IMAGE_ASPECT_STENCIL_BIT, gl::SwizzleState(),
                     &stencilView.get(), levelIndex, 1, layerIndex, 1,
-                    gl::SrgbWriteControlMode::Default));
+                    gl::SrgbWriteControlMode::Default, gl::YuvSamplingMode::Default));
             }
 
             // If shader stencil export is not possible, defer stencil blit/stencil to another pass.
@@ -1380,7 +1380,6 @@ void FramebufferVk::updateColorResolveAttachment(
     vk::ImageOrBufferViewSubresourceSerial resolveImageViewSerial)
 {
     mCurrentFramebufferDesc.updateColorResolve(colorIndexGL, resolveImageViewSerial);
-    mCurrentFramebuffer.release();
     mRenderPassDesc.packColorResolveAttachment(colorIndexGL);
 }
 
@@ -1388,8 +1387,19 @@ void FramebufferVk::removeColorResolveAttachment(uint32_t colorIndexGL)
 {
     mCurrentFramebufferDesc.updateColorResolve(colorIndexGL,
                                                vk::kInvalidImageOrBufferViewSubresourceSerial);
-    mCurrentFramebuffer.release();
     mRenderPassDesc.removeColorResolveAttachment(colorIndexGL);
+}
+
+void FramebufferVk::releaseCurrentFramebuffer(ContextVk *contextVk)
+{
+    if (mIsCurrentFramebufferCached)
+    {
+        mCurrentFramebuffer.release();
+    }
+    else
+    {
+        contextVk->addGarbage(&mCurrentFramebuffer);
+    }
 }
 
 void FramebufferVk::updateLayerCount()
@@ -1452,6 +1462,7 @@ angle::Result FramebufferVk::resolveColorWithSubpass(ContextVk *contextVk,
         mCurrentFramebufferDesc.getColorImageViewSerial(drawColorIndexGL);
     ASSERT(resolveImageViewSerial.viewSerial.valid());
     srcFramebufferVk->updateColorResolveAttachment(readColorIndexGL, resolveImageViewSerial);
+    srcFramebufferVk->releaseCurrentFramebuffer(contextVk);
 
     // Since the source FBO was updated with a resolve attachment it didn't have when the render
     // pass was started, we need to:
@@ -1478,6 +1489,7 @@ angle::Result FramebufferVk::resolveColorWithSubpass(ContextVk *contextVk,
 
     // Remove the resolve attachment from the source framebuffer.
     srcFramebufferVk->removeColorResolveAttachment(readColorIndexGL);
+    srcFramebufferVk->releaseCurrentFramebuffer(contextVk);
 
     return angle::Result::Continue;
 }
@@ -1919,7 +1931,7 @@ angle::Result FramebufferVk::syncState(const gl::Context *context,
             case gl::Framebuffer::DIRTY_BIT_DEFAULT_FIXED_SAMPLE_LOCATIONS:
                 // Invalidate the cache. If we have performance critical code hitting this path we
                 // can add related data (such as width/height) to the cache
-                resetCache(contextVk);
+                releaseCurrentFramebuffer(contextVk);
                 break;
             case gl::Framebuffer::DIRTY_BIT_FRAMEBUFFER_SRGB_WRITE_CONTROL_MODE:
                 shouldUpdateSrgbWriteControlMode = true;
@@ -1946,8 +1958,13 @@ angle::Result FramebufferVk::syncState(const gl::Context *context,
 
                 ANGLE_TRY(updateColorAttachment(context, colorIndexGL));
 
-                shouldUpdateColorMaskAndBlend = true;
-                shouldUpdateLayerCount        = true;
+                // Window system framebuffer only have one color attachment and its property should
+                // never change unless via DIRTY_BIT_DRAW_BUFFERS bit.
+                if (!mState.isDefault())
+                {
+                    shouldUpdateColorMaskAndBlend = true;
+                    shouldUpdateLayerCount        = true;
+                }
                 dirtyColorAttachments.set(colorIndexGL);
 
                 break;
@@ -2017,7 +2034,7 @@ angle::Result FramebufferVk::syncState(const gl::Context *context,
     updateRenderPassDesc(contextVk);
 
     // Deactivate Framebuffer
-    mCurrentFramebuffer.release();
+    releaseCurrentFramebuffer(contextVk);
 
     // Notify the ContextVk to update the pipeline desc.
     return contextVk->onFramebufferChange(this, command);
@@ -2119,7 +2136,8 @@ angle::Result FramebufferVk::getFramebuffer(ContextVk *contextVk,
                                                               mCurrentFramebuffer))
     {
         ASSERT(mCurrentFramebuffer.valid());
-        *framebufferOut = &mCurrentFramebuffer;
+        *framebufferOut             = &mCurrentFramebuffer;
+        mIsCurrentFramebufferCached = true;
         return angle::Result::Continue;
     }
 
@@ -2222,13 +2240,26 @@ angle::Result FramebufferVk::getFramebuffer(ContextVk *contextVk,
     // Check that our description matches our attachments. Can catch implementation bugs.
     ASSERT(static_cast<uint32_t>(attachments.size()) == mCurrentFramebufferDesc.attachmentCount());
 
-    insertCache(contextVk, mCurrentFramebufferDesc, std::move(newFramebuffer));
-
-    bool result = contextVk->getShareGroup()->getFramebufferCache().get(
-        contextVk, mCurrentFramebufferDesc, mCurrentFramebuffer);
-    ASSERT(result);
+    // Since the cache key FramebufferDesc can't distinguish between
+    // two FramebufferHelper, if they both have 0 attachment, but their sizes
+    // are different, we could have wrong cache hit(new framebufferHelper has
+    // a bigger height and width, but get cache hit with framebufferHelper of
+    // lower height and width). As a workaround, do not cache the
+    // FramebufferHelper if it doesn't have any attachment.
+    if (attachments.size() > 0)
+    {
+        insertCache(contextVk, mCurrentFramebufferDesc, std::move(newFramebuffer));
+        bool result = contextVk->getShareGroup()->getFramebufferCache().get(
+            contextVk, mCurrentFramebufferDesc, mCurrentFramebuffer);
+        ASSERT(result);
+        mIsCurrentFramebufferCached = true;
+    }
+    else
+    {
+        mCurrentFramebuffer         = std::move(newFramebuffer.getFramebuffer());
+        mIsCurrentFramebufferCached = false;
+    }
     ASSERT(mCurrentFramebuffer.valid());
-
     *framebufferOut = &mCurrentFramebuffer;
     return angle::Result::Continue;
 }
@@ -2781,7 +2812,7 @@ angle::Result FramebufferVk::startNewRenderPass(ContextVk *contextVk,
     if (unresolveChanged)
     {
         // Make sure framebuffer is recreated.
-        mCurrentFramebuffer.release();
+        releaseCurrentFramebuffer(contextVk);
 
         mCurrentFramebufferDesc.updateUnresolveMask(MakeUnresolveAttachmentMask(mRenderPassDesc));
     }
@@ -2920,7 +2951,7 @@ GLint FramebufferVk::getSamples() const
 {
     const gl::FramebufferAttachment *lastAttachment = nullptr;
 
-    for (size_t colorIndexGL : mState.getEnabledDrawBuffers())
+    for (size_t colorIndexGL : mState.getEnabledDrawBuffers() & mState.getColorAttachmentsMask())
     {
         const gl::FramebufferAttachment *color = mState.getColorAttachment(colorIndexGL);
         ASSERT(color);
@@ -2982,7 +3013,7 @@ void FramebufferVk::switchToFramebufferFetchMode(ContextVk *contextVk, bool hasF
     }
 
     // Make sure framebuffer is recreated.
-    mCurrentFramebuffer.release();
+    releaseCurrentFramebuffer(contextVk);
     mCurrentFramebufferDesc.setFramebufferFetchMode(hasFramebufferFetch);
 
     mRenderPassDesc.setFramebufferFetchMode(hasFramebufferFetch);
@@ -2992,7 +3023,7 @@ void FramebufferVk::switchToFramebufferFetchMode(ContextVk *contextVk, bool hasF
     if (contextVk->getFeatures().permanentlySwitchToFramebufferFetchMode.enabled)
     {
         ASSERT(hasFramebufferFetch);
-        resetCache(contextVk);
+        releaseCurrentFramebuffer(contextVk);
     }
 }
 }  // namespace rx

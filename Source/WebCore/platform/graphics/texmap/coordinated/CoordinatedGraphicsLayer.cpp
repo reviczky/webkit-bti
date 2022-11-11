@@ -259,6 +259,7 @@ void CoordinatedGraphicsLayer::setEventRegion(EventRegion&& eventRegion)
     notifyFlushRequired();
 }
 
+#if ENABLE(SCROLLING_THREAD)
 void CoordinatedGraphicsLayer::setScrollingNodeID(ScrollingNodeID nodeID)
 {
     if (scrollingNodeID() == nodeID)
@@ -267,6 +268,7 @@ void CoordinatedGraphicsLayer::setScrollingNodeID(ScrollingNodeID nodeID)
     GraphicsLayer::setScrollingNodeID(nodeID);
     m_nicosia.delta.scrollingNodeChanged = true;
 }
+#endif // ENABLE(SCROLLING_THREAD)
 
 void CoordinatedGraphicsLayer::setPosition(const FloatPoint& p)
 {
@@ -941,7 +943,7 @@ void CoordinatedGraphicsLayer::flushCompositingStateForThisLayerOnly()
     }
 
     {
-        m_nicosia.layer->updateState(
+        m_nicosia.layer->accessPending(
             [this](Nicosia::CompositionLayer::LayerState& state)
             {
                 // OR the local delta value into the layer's pending state delta. After that,
@@ -1052,8 +1054,10 @@ void CoordinatedGraphicsLayer::flushCompositingStateForThisLayerOnly()
                     state.imageBacking = m_nicosia.imageBacking;
                 if (localDelta.animatedBackingStoreClientChanged)
                     state.animatedBackingStoreClient = m_nicosia.animatedBackingStoreClient;
+#if ENABLE(SCROLLING_THREAD)
                 if (localDelta.scrollingNodeChanged)
                     state.scrollingNodeID = scrollingNodeID();
+#endif
                 if (localDelta.eventRegionChanged)
                     state.eventRegion = eventRegion();
             });

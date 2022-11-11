@@ -37,16 +37,23 @@
 #include <wtf/SentinelLinkedList.h>
 
 namespace JSC {
+namespace DFG {
+struct UnlinkedCallLinkInfo;
+}
 
 class CCallHelpers;
 class ExecutableBase;
 class FunctionCodeBlock;
 class JSFunction;
+class OptimizingCallLinkInfo;
 class PolymorphicCallStubRoutine;
 enum OpcodeID : unsigned;
 
 struct CallFrameShuffleData;
 struct UnlinkedCallLinkInfo;
+struct BaselineUnlinkedCallLinkInfo;
+
+using CompileTimeCallLinkInfo = std::variant<OptimizingCallLinkInfo*, BaselineUnlinkedCallLinkInfo*, DFG::UnlinkedCallLinkInfo*>;
 
 class CallLinkInfo : public PackedRawSentinelNode<CallLinkInfo> {
 public:
@@ -179,10 +186,14 @@ public:
 #if ENABLE(JIT)
 protected:
     static MacroAssembler::JumpList emitFastPathImpl(CallLinkInfo*, CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR, UseDataIC, bool isTailCall, ScopedLambda<void()>&& prepareForTailCall) WARN_UNUSED_RETURN;
-public:
     static MacroAssembler::JumpList emitDataICFastPath(CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR) WARN_UNUSED_RETURN;
-    static MacroAssembler::JumpList emitTailCallDataICFastPath(CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR, ScopedLambda<void()>&& prepareForTailCall) WARN_UNUSED_RETURN;
     static void emitDataICSlowPath(VM&, CCallHelpers&, GPRReg callLinkInfoGPR);
+    static MacroAssembler::JumpList emitTailCallDataICFastPath(CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR, ScopedLambda<void()>&& prepareForTailCall) WARN_UNUSED_RETURN;
+
+public:
+    static MacroAssembler::JumpList emitFastPath(CCallHelpers&, CompileTimeCallLinkInfo, GPRReg calleeGPR, GPRReg callLinkInfoGPR) WARN_UNUSED_RETURN;
+    static MacroAssembler::JumpList emitTailCallFastPath(CCallHelpers&, CompileTimeCallLinkInfo, GPRReg calleeGPR, GPRReg callLinkInfoGPR, ScopedLambda<void()>&& prepareForTailCall) WARN_UNUSED_RETURN;
+    static void emitSlowPath(VM&, CCallHelpers&, CompileTimeCallLinkInfo, GPRReg callLinkInfoGPR);
 #endif
 
     void revertCallToStub();
@@ -199,8 +210,8 @@ public:
 
     CodeLocationLabel<JSInternalPtrTag> doneLocation();
 
-    void setMonomorphicCallee(VM&, JSCell*, JSObject* callee, CodeBlock*, MacroAssemblerCodePtr<JSEntryPtrTag>);
-    void setSlowPathCallDestination(MacroAssemblerCodePtr<JSEntryPtrTag>);
+    void setMonomorphicCallee(VM&, JSCell*, JSObject* callee, CodeBlock*, CodePtr<JSEntryPtrTag>);
+    void setSlowPathCallDestination(CodePtr<JSEntryPtrTag>);
     void clearCallee();
     JSObject* callee();
 
@@ -383,7 +394,7 @@ protected:
 
     uint32_t m_maxArgumentCountIncludingThis { 0 }; // For varargs: the profiled maximum number of arguments. For direct: the number of stack slots allocated for arguments.
     CodeLocationLabel<JSInternalPtrTag> m_doneLocation;
-    MacroAssemblerCodePtr<JSEntryPtrTag> m_slowPathCallDestination;
+    CodePtr<JSEntryPtrTag> m_slowPathCallDestination;
     union UnionType {
         UnionType()
             : dataIC { nullptr, nullptr }
@@ -391,7 +402,7 @@ protected:
 
         struct DataIC {
             CodeBlock* m_codeBlock; // This is weekly held. And cleared whenever m_monomorphicCallDestination is changed.
-            MacroAssemblerCodePtr<JSEntryPtrTag> m_monomorphicCallDestination;
+            CodePtr<JSEntryPtrTag> m_monomorphicCallDestination;
         } dataIC;
 
         struct {
@@ -448,8 +459,21 @@ inline CodeOrigin getCallLinkInfoCodeOrigin(CallLinkInfo& callLinkInfo)
 }
 
 struct UnlinkedCallLinkInfo {
-    BytecodeIndex bytecodeIndex; // Currently, only used by baseline, so this can trivially produce a CodeOrigin.
     CodeLocationLabel<JSInternalPtrTag> doneLocation;
+
+    void setCodeLocations(CodeLocationLabel<JSInternalPtrTag>, CodeLocationLabel<JSInternalPtrTag> doneLocation)
+    {
+        this->doneLocation = doneLocation;
+    }
+};
+
+struct BaselineUnlinkedCallLinkInfo : public UnlinkedCallLinkInfo {
+    BytecodeIndex bytecodeIndex; // Currently, only used by baseline, so this can trivially produce a CodeOrigin.
+
+#if ENABLE(JIT)
+    void setUpCall(CallLinkInfo::CallType, GPRReg) { }
+#endif
+    void setFrameShuffleData(const CallFrameShuffleData&) { }
 };
 
 #if ENABLE(JIT)
@@ -457,6 +481,11 @@ struct UnlinkedCallLinkInfo {
 class OptimizingCallLinkInfo final : public CallLinkInfo {
 public:
     friend class CallLinkInfo;
+
+    OptimizingCallLinkInfo()
+        : CallLinkInfo(Type::Optimizing, { }, UseDataIC::Yes)
+    {
+    }
 
     OptimizingCallLinkInfo(CodeOrigin codeOrigin, UseDataIC useDataIC)
         : CallLinkInfo(Type::Optimizing, codeOrigin, useDataIC)
@@ -491,9 +520,6 @@ public:
     void setDirectCallTarget(CodeBlock*, CodeLocationLabel<JSEntryPtrTag>);
     void emitSlowPath(VM&, CCallHelpers&);
 
-    MacroAssembler::JumpList emitFastPath(CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR) WARN_UNUSED_RETURN;
-    MacroAssembler::JumpList emitTailCallFastPath(CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR, ScopedLambda<void()>&& prepareForTailCall) WARN_UNUSED_RETURN;
-
     void setFrameShuffleData(const CallFrameShuffleData&);
 
     const CallFrameShuffleData* frameShuffleData()
@@ -501,7 +527,12 @@ public:
         return m_frameShuffleData.get();
     }
 
+    void initializeFromDFGUnlinkedCallLinkInfo(VM&, const DFG::UnlinkedCallLinkInfo&);
+
 private:
+    MacroAssembler::JumpList emitFastPath(CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR) WARN_UNUSED_RETURN;
+    MacroAssembler::JumpList emitTailCallFastPath(CCallHelpers&, GPRReg calleeGPR, GPRReg callLinkInfoGPR, ScopedLambda<void()>&& prepareForTailCall) WARN_UNUSED_RETURN;
+
     CodeLocationNearCall<JSInternalPtrTag> m_callLocation;
     CodeLocationLabel<JSInternalPtrTag> m_slowPathStart;
     CodeLocationLabel<JSInternalPtrTag> m_fastPathStart;

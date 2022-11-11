@@ -940,14 +940,6 @@ TracePerfTest::TracePerfTest(std::unique_ptr<const TracePerfParams> params)
         addExtensionPrerequisite("GL_KHR_texture_compression_astc_ldr");
     }
 
-    if (traceNameIs("real_cricket_20"))
-    {
-        if (IsAndroid() && IsARM())
-        {
-            skipTest("TODO: http://anglebug.com/5777 ARM doesn't have enough VS storage blocks");
-        }
-    }
-
     if (traceNameIs("league_of_legends_wild_rift"))
     {
         addExtensionPrerequisite("GL_OES_EGL_image_external");
@@ -1045,16 +1037,16 @@ TracePerfTest::TracePerfTest(std::unique_ptr<const TracePerfParams> params)
     {
         addExtensionPrerequisite("GL_EXT_texture_cube_map_array");
         addExtensionPrerequisite("GL_OES_EGL_image_external");
-
-        if (IsAndroid() && IsARM())
-        {
-            skipTest("TODO: http://anglebug.com/6017 ARM doesn't have enough VS storage blocks");
-        }
     }
 
     if (traceNameIs("genshin_impact"))
     {
         addExtensionPrerequisite("GL_KHR_texture_compression_astc_ldr");
+
+        if (IsNVIDIA() && mParams->isVulkan())
+        {
+            skipTest("http://anglebug.com/7496 Nondeterministic noise between runs");
+        }
 
         if ((IsLinux() && IsIntel()) && mParams->isVulkan())
         {
@@ -1171,6 +1163,14 @@ TracePerfTest::TracePerfTest(std::unique_ptr<const TracePerfParams> params)
         }
     }
 
+    if (traceNameIs("star_wars_kotor"))
+    {
+        if (IsLinux() && mParams->isSwiftshader())
+        {
+            skipTest("TODO: http://anglebug.com/7565 Flaky on Swiftshader");
+        }
+    }
+
     if (traceNameIs("dead_by_daylight"))
     {
         addExtensionPrerequisite("GL_EXT_shader_framebuffer_fetch");
@@ -1221,6 +1221,16 @@ TracePerfTest::TracePerfTest(std::unique_ptr<const TracePerfParams> params)
             skipTest("http://anglebug.com/7173 Fails on Intel HD 630 Mobile");
         }
 
+        if (IsLinux() && IsIntel())
+        {
+            skipTest("http://anglebug.com/7125#c8 Flaky hang on UHD630 Mesa 20.0.8");
+        }
+
+        if (IsNVIDIA() && mParams->isVulkan())
+        {
+            skipTest("http://anglebug.com/7125 Renders incorrectly on NVIDIA");
+        }
+
         addExtensionPrerequisite("GL_EXT_geometry_shader");
         addExtensionPrerequisite("GL_EXT_primitive_bounding_box");
         addExtensionPrerequisite("GL_EXT_tessellation_shader");
@@ -1255,9 +1265,40 @@ TracePerfTest::TracePerfTest(std::unique_ptr<const TracePerfParams> params)
     {
         addExtensionPrerequisite("GL_KHR_texture_compression_astc_ldr");
     }
+
     if (traceNameIs("mortal_kombat"))
     {
         addExtensionPrerequisite("GL_EXT_texture_buffer");
+    }
+
+    if (traceNameIs("ni_no_kuni"))
+    {
+        addExtensionPrerequisite("GL_EXT_shader_framebuffer_fetch");
+        addExtensionPrerequisite("GL_KHR_texture_compression_astc_ldr");
+    }
+
+    if (traceNameIs("octopath_traveler"))
+    {
+        addExtensionPrerequisite("GL_EXT_shader_framebuffer_fetch");
+        addExtensionPrerequisite("GL_KHR_texture_compression_astc_ldr");
+    }
+
+    if (traceNameIs("antutu_refinery"))
+    {
+        addExtensionPrerequisite("GL_ANDROID_extension_pack_es31a");
+    }
+
+    if (traceNameIs("botworld_adventure"))
+    {
+        addExtensionPrerequisite("GL_KHR_texture_compression_astc_ldr");
+    }
+
+    if (traceNameIs("eve_echoes"))
+    {
+        if (IsQualcomm() && mParams->isVulkan())
+        {
+            skipTest("TODO: http://anglebug.com/7690 Test crashes in LLVM on Qualcomm (Pixel 4)");
+        }
     }
 
     // glDebugMessageControlKHR and glDebugMessageCallbackKHR crash on ARM GLES1.
@@ -1301,7 +1342,7 @@ void TracePerfTest::initializeBenchmark()
 
     mStartFrame = traceInfo.frameStart;
     mEndFrame   = traceInfo.frameEnd;
-    mTraceLibrary->setBinaryDataDecompressCallback(DecompressBinaryData);
+    mTraceLibrary->setBinaryDataDecompressCallback(DecompressBinaryData, DeleteBinaryData);
 
     mTraceLibrary->setValidateSerializedStateCallback(ValidateSerializedState);
 
@@ -1798,27 +1839,29 @@ void TracePerfTest::validateSerializedState(const char *expectedCapturedSerializ
 
     GTEST_NONFATAL_FAILURE_("Serialization mismatch!");
 
-    char aFilePath[kMaxPath] = {};
-    if (CreateTemporaryFile(aFilePath, kMaxPath))
+    const Optional<std::string> aFilePath = CreateTemporaryFile();
+    const char *aFilePathCStr             = aFilePath.value().c_str();
+    if (aFilePath.valid())
     {
-        printf("Saving \"expected\" capture serialization to \"%s\".\n", aFilePath);
-        FILE *fpA = fopen(aFilePath, "wt");
+        printf("Saving \"expected\" capture serialization to \"%s\".\n", aFilePathCStr);
+        FILE *fpA = fopen(aFilePathCStr, "wt");
         ASSERT(fpA);
         fprintf(fpA, "%s", expectedCapturedSerializedState);
         fclose(fpA);
     }
 
-    char bFilePath[kMaxPath] = {};
-    if (CreateTemporaryFile(bFilePath, kMaxPath))
+    const Optional<std::string> bFilePath = CreateTemporaryFile();
+    const char *bFilePathCStr             = bFilePath.value().c_str();
+    if (bFilePath.valid())
     {
-        printf("Saving \"actual\" replay serialization to \"%s\".\n", bFilePath);
-        FILE *fpB = fopen(bFilePath, "wt");
+        printf("Saving \"actual\" replay serialization to \"%s\".\n", bFilePathCStr);
+        FILE *fpB = fopen(bFilePathCStr, "wt");
         ASSERT(fpB);
         fprintf(fpB, "%s", actualReplayedSerializedState);
         fclose(fpB);
     }
 
-    PrintFileDiff(aFilePath, bFilePath);
+    PrintFileDiff(aFilePathCStr, bFilePathCStr);
 }
 
 bool TracePerfTest::isDefaultFramebuffer(GLenum target) const
@@ -1956,7 +1999,7 @@ void TracePerfTest::onReplayDiscardFramebufferEXT(GLenum target,
 void TracePerfTest::swap()
 {
     // Capture a screenshot if enabled.
-    if (gScreenShotDir != nullptr && !mScreenshotSaved &&
+    if (gScreenShotDir != nullptr && gSaveScreenshots && !mScreenshotSaved &&
         static_cast<uint32_t>(gScreenShotFrame) == mCurrentIteration)
     {
         std::stringstream screenshotNameStr;

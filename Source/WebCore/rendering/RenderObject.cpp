@@ -42,6 +42,7 @@
 #include "HTMLTableCellElement.h"
 #include "HTMLTableElement.h"
 #include "HitTestResult.h"
+#include "LayoutBox.h"
 #include "LayoutIntegrationLineLayout.h"
 #include "LegacyRenderSVGModelObject.h"
 #include "LegacyRenderSVGRoot.h"
@@ -119,9 +120,12 @@ struct SameSizeAsRenderObject {
     unsigned m_debugBitfields : 2;
 #endif
     unsigned m_bitfields;
+    WeakPtr<Node> m_node;
 };
 
+#if CPU(ADDRESS64)
 static_assert(sizeof(RenderObject) == sizeof(SameSizeAsRenderObject), "RenderObject should stay small");
+#endif
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, renderObjectCounter, ("RenderObject"));
 
@@ -157,6 +161,16 @@ RenderObject::~RenderObject()
     renderObjectCounter.decrement();
 #endif
     ASSERT(!hasRareData());
+}
+
+void RenderObject::setLayoutBox(Layout::Box& box)
+{
+    m_layoutBox = &box;
+}
+
+void RenderObject::clearLayoutBox()
+{
+    m_layoutBox = nullptr;
 }
 
 RenderTheme& RenderObject::theme() const
@@ -724,7 +738,7 @@ RenderBlock* RenderObject::containingBlock() const
     return containingBlockForRenderer(downcast<RenderElement>(*this));
 }
 
-void RenderObject::addPDFURLRect(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
+void RenderObject::addPDFURLRect(const PaintInfo& paintInfo, const LayoutPoint& paintOffset) const
 {
     Vector<LayoutRect> focusRingRects;
     addFocusRingRects(focusRingRects, paintOffset, paintInfo.paintContainer);
@@ -750,7 +764,6 @@ void RenderObject::addPDFURLRect(PaintInfo& paintInfo, const LayoutPoint& paintO
     }
 
     paintInfo.context().setURLForRect(element.document().completeURL(href), urlRect);
-
 }
 
 #if PLATFORM(IOS_FAMILY)
@@ -1273,9 +1286,10 @@ void RenderObject::outputRenderObject(TextStream& stream, bool mark, int depth) 
         stream << "  (" << inlineOffset.width() << ", " << inlineOffset.height() << ")";
     }
 
-    stream << " renderer->(" << this << ")";
+    stream << " renderer (" << this << ")";
+    stream << " layout box (" << layoutBox() << ")";
     if (node()) {
-        stream << " node->(" << node() << ")";
+        stream << " node (" << node() << ")";
         if (node()->isTextNode()) {
             String value = node()->nodeValue();
             stream << " length->(" << value.length() << ")";
@@ -1459,7 +1473,7 @@ void RenderObject::getTransformFromContainer(const RenderObject* containerObject
         FloatPoint perspectiveOrigin = downcast<RenderLayerModelObject>(*containerObject).layer()->perspectiveOrigin();
 
         TransformationMatrix perspectiveMatrix;
-        perspectiveMatrix.applyPerspective(containerObject->style().usedPerspective(*this));
+        perspectiveMatrix.applyPerspective(containerObject->style().usedPerspective());
         
         transform.translateRight3d(-perspectiveOrigin.x(), -perspectiveOrigin.y(), 0);
         transform = perspectiveMatrix * transform;
@@ -1613,10 +1627,8 @@ void RenderObject::willBeDestroyed()
 
 void RenderObject::insertedIntoTree(IsInternalMove)
 {
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     if (auto* container = LayoutIntegration::LineLayout::blockContainer(*this))
         container->invalidateLineLayoutPath();
-#endif
 
     // FIXME: We should ASSERT(isRooted()) here but generated content makes some out-of-order insertion.
     if (!isFloating() && parent()->childrenInline())
@@ -1625,10 +1637,8 @@ void RenderObject::insertedIntoTree(IsInternalMove)
 
 void RenderObject::willBeRemovedFromTree(IsInternalMove)
 {
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     if (auto* container = LayoutIntegration::LineLayout::blockContainer(*this))
         container->invalidateLineLayoutPath();
-#endif
 
     // FIXME: We should ASSERT(isRooted()) but we have some out-of-order removals which would need to be fixed first.
     // Update cached boundaries in SVG renderers, if a child is removed.
@@ -1643,11 +1653,6 @@ void RenderObject::destroy()
     RELEASE_ASSERT(!m_bitfields.beingDestroyed());
 
     m_bitfields.setBeingDestroyed(true);
-
-#if PLATFORM(IOS_FAMILY)
-    if (hasLayer())
-        downcast<RenderBoxModelObject>(*this).layer()->willBeDestroyed();
-#endif
 
     willBeDestroyed();
 
@@ -1968,28 +1973,6 @@ RenderFragmentedFlow* RenderObject::locateEnclosingFragmentedFlow() const
 {
     RenderBlock* containingBlock = this->containingBlock();
     return containingBlock ? containingBlock->enclosingFragmentedFlow() : nullptr;
-}
-
-void RenderObject::calculateBorderStyleColor(const BorderStyle& style, const BoxSide& side, Color& color)
-{
-    ASSERT(style == BorderStyle::Inset || style == BorderStyle::Outset);
-
-    // This values were derived empirically.
-    constexpr float baseDarkColorLuminance { 0.014443844f }; // Luminance of SRGBA<uint8_t> { 32, 32, 32 }
-    constexpr float baseLightColorLuminance { 0.83077f }; // Luminance of SRGBA<uint8_t> { 235, 235, 235 }
-
-    enum Operation { Darken, Lighten };
-
-    Operation operation = (side == BoxSide::Top || side == BoxSide::Left) == (style == BorderStyle::Inset) ? Darken : Lighten;
-
-    // Here we will darken the border decoration color when needed. This will yield a similar behavior as in FF.
-    if (operation == Darken) {
-        if (color.luminance() > baseDarkColorLuminance)
-            color = color.darkened();
-    } else {
-        if (color.luminance() < baseLightColorLuminance)
-            color = color.lightened();
-    }
 }
 
 void RenderObject::setHasReflection(bool hasReflection)
@@ -2564,6 +2547,16 @@ String RenderObject::debugDescription() const
         builder.append(' ', node()->debugDescription());
     
     return builder.toString();
+}
+
+bool RenderObject::isSkippedContent() const
+{
+    return parent() && parent()->style().effectiveSkipsContent();
+}
+
+bool RenderObject::shouldSkipContent() const
+{
+    return style().contentVisibility() == ContentVisibility::Hidden;
 }
 
 TextStream& operator<<(TextStream& ts, const RenderObject& renderer)

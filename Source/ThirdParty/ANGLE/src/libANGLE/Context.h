@@ -31,6 +31,7 @@
 #include "libANGLE/Context_gles_3_2_autogen.h"
 #include "libANGLE/Context_gles_ext_autogen.h"
 #include "libANGLE/Error.h"
+#include "libANGLE/Framebuffer.h"
 #include "libANGLE/HandleAllocator.h"
 #include "libANGLE/RefCountObject.h"
 #include "libANGLE/ResourceManager.h"
@@ -66,9 +67,9 @@ namespace gl
 class Buffer;
 class Compiler;
 class FenceNV;
-class Framebuffer;
 class GLES1Renderer;
 class MemoryProgramCache;
+class MemoryShaderCache;
 class MemoryObject;
 class Program;
 class ProgramPipeline;
@@ -185,6 +186,18 @@ class StateCache final : angle::NonCopyable
         return getBasicDrawStatesErrorImpl(context);
     }
 
+    // Places that can trigger updateProgramPipelineError:
+    // 1. onProgramExecutableChange.
+    intptr_t getProgramPipelineError(const Context *context) const
+    {
+        if (mCachedProgramPipelineError != kInvalidPointer)
+        {
+            return mCachedProgramPipelineError;
+        }
+
+        return getProgramPipelineErrorImpl(context);
+    }
+
     // Places that can trigger updateBasicDrawElementsError:
     // 1. onActiveTransformFeedbackChange.
     // 2. onVertexArrayBufferStateChange.
@@ -286,6 +299,7 @@ class StateCache final : angle::NonCopyable
     void updateValidBindTextureTypes(Context *context);
     void updateValidDrawElementsTypes(Context *context);
     void updateBasicDrawStatesError();
+    void updateProgramPipelineError();
     void updateBasicDrawElementsError();
     void updateTransformFeedbackActiveUnpaused(Context *context);
     void updateVertexAttribTypesValidation(Context *context);
@@ -301,6 +315,7 @@ class StateCache final : angle::NonCopyable
                            bool patchOK);
 
     intptr_t getBasicDrawStatesErrorImpl(const Context *context) const;
+    intptr_t getProgramPipelineErrorImpl(const Context *context) const;
     intptr_t getBasicDrawElementsErrorImpl(const Context *context) const;
 
     static constexpr intptr_t kInvalidPointer = 1;
@@ -313,6 +328,15 @@ class StateCache final : angle::NonCopyable
     GLint64 mCachedInstancedVertexElementLimit;
     mutable intptr_t mCachedBasicDrawStatesError;
     mutable intptr_t mCachedBasicDrawElementsError;
+    // mCachedProgramPipelineError checks only the
+    // current-program-exists subset of mCachedBasicDrawStatesError.
+    // Therefore, mCachedProgramPipelineError follows
+    // mCachedBasicDrawStatesError in that if mCachedBasicDrawStatesError is
+    // no-error, so is mCachedProgramPipelineError.  Otherwise, if
+    // mCachedBasicDrawStatesError is in error, the state of
+    // mCachedProgramPipelineError can be no-error or also in error, or
+    // unknown due to early exiting.
+    mutable intptr_t mCachedProgramPipelineError;
     bool mCachedTransformFeedbackActiveUnpaused;
     StorageBuffersMask mCachedActiveShaderStorageBufferIndices;
     ImageUnitMask mCachedActiveImageUnitIndices;
@@ -349,6 +373,7 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
             TextureManager *shareTextures,
             SemaphoreManager *shareSemaphores,
             MemoryProgramCache *memoryProgramCache,
+            MemoryShaderCache *memoryShaderCache,
             const EGLenum clientType,
             const egl::AttributeMap &attribs,
             const egl::DisplayExtensions &displayExtensions,
@@ -470,6 +495,8 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
     GLenum getGraphicsResetStrategy() const { return mResetStrategy; }
     bool isResetNotificationEnabled() const;
 
+    bool isRobustnessEnabled() const;
+
     const egl::Config *getConfig() const;
     EGLenum getClientType() const;
     EGLenum getRenderBuffer() const;
@@ -499,6 +526,8 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
     angle::Result prepareForInvalidate(GLenum target);
 
     MemoryProgramCache *getMemoryProgramCache() const { return mMemoryProgramCache; }
+    MemoryShaderCache *getMemoryShaderCache() const { return mMemoryShaderCache; }
+
     std::mutex &getProgramCacheMutex() const;
 
     bool hasBeenCurrent() const { return mHasBeenCurrent; }
@@ -647,6 +676,9 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
     bool isDestroyed() const { return mIsDestroyed; }
     void setIsDestroyed() { mIsDestroyed = true; }
 
+    void setLogicOpEnabled(bool enabled) { mState.setLogicOpEnabled(enabled); }
+    void setLogicOp(LogicalOperation opcode) { mState.setLogicOp(opcode); }
+
     // Needed by capture serialization logic that works with a "const" Context pointer.
     void finishImmutable() const;
 
@@ -774,6 +806,7 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
     bool mBufferAccessValidationEnabled;
     const bool mExtensionsEnabled;
     MemoryProgramCache *mMemoryProgramCache;
+    MemoryShaderCache *mMemoryShaderCache;
 
     State::DirtyObjects mDrawDirtyObjects;
 
@@ -830,6 +863,8 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
     const bool mSaveAndRestoreState;
 
     bool mIsDestroyed;
+
+    std::unique_ptr<Framebuffer> mDefaultFramebuffer;
 };
 
 class [[nodiscard]] ScopedContextRef

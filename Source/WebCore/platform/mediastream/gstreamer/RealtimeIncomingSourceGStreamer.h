@@ -34,12 +34,7 @@ public:
     void handleUpstreamEvent(GRefPtr<GstEvent>&&);
 
 protected:
-    RealtimeIncomingSourceGStreamer(Type, AtomString&& name);
-
-    void closeValve() const;
-    void openValve() const;
-
-    GRefPtr<GstElement> m_valve;
+    RealtimeIncomingSourceGStreamer(const CaptureDevice&);
 
 private:
     // RealtimeMediaSource API
@@ -51,6 +46,7 @@ private:
     void handleDownstreamEvent(GRefPtr<GstEvent>&&);
 
     GRefPtr<GstElement> m_bin;
+    GRefPtr<GstElement> m_valve;
     GRefPtr<GstElement> m_tee;
 };
 

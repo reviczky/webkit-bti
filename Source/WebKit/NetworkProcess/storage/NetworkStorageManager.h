@@ -34,6 +34,7 @@
 #include "StorageNamespaceIdentifier.h"
 #include "WebPageProxyIdentifier.h"
 #include "WebsiteData.h"
+#include "WorkQueueMessageReceiver.h"
 #include <WebCore/ClientOrigin.h>
 #include <WebCore/FileSystemHandleIdentifier.h>
 #include <WebCore/FileSystemSyncAccessHandleIdentifier.h>
@@ -70,7 +71,7 @@ class IDBStorageRegistry;
 class StorageAreaBase;
 class StorageAreaRegistry;
 
-class NetworkStorageManager final : public IPC::Connection::WorkQueueMessageReceiver {
+class NetworkStorageManager final : public IPC::WorkQueueMessageReceiver {
 public:
     static Ref<NetworkStorageManager> create(PAL::SessionID, IPC::Connection::UniqueID, const String& path, const String& customLocalStoragePath, const String& customIDBStoragePath, const String& customCacheStoragePath, uint64_t defaultOriginQuota, uint64_t defaultThirdPartyOriginQuota, bool shouldUseCustomPaths);
     static bool canHandleTypes(OptionSet<WebsiteDataType>);
@@ -106,7 +107,7 @@ private:
     ~NetworkStorageManager();
     void writeOriginToFileIfNecessary(const WebCore::ClientOrigin&, StorageAreaBase* = nullptr);
     enum class ShouldWriteOriginFile : bool { No, Yes };
-    OriginStorageManager& localOriginStorageManager(const WebCore::ClientOrigin&, ShouldWriteOriginFile = ShouldWriteOriginFile::Yes);
+    OriginStorageManager& originStorageManager(const WebCore::ClientOrigin&, ShouldWriteOriginFile = ShouldWriteOriginFile::Yes);
     bool removeOriginStorageManagerIfPossible(const WebCore::ClientOrigin&);
 
     void forEachOriginDirectory(const Function<void(const String&)>&);
@@ -156,7 +157,7 @@ private:
     void establishTransaction(uint64_t databaseConnectionIdentifier, const WebCore::IDBTransactionInfo&);
     void databaseConnectionPendingClose(uint64_t databaseConnectionIdentifier);
     void databaseConnectionClosed(uint64_t databaseConnectionIdentifier);
-    void abortOpenAndUpgradeNeeded(uint64_t databaseConnectionIdentifier, const WebCore::IDBResourceIdentifier& transactionIdentifier);
+    void abortOpenAndUpgradeNeeded(uint64_t databaseConnectionIdentifier, const std::optional<WebCore::IDBResourceIdentifier>& transactionIdentifier);
     void didFireVersionChangeEvent(uint64_t databaseConnectionIdentifier, const WebCore::IDBResourceIdentifier& requestIdentifier, const WebCore::IndexedDB::ConnectionClosedOnBehalfOfServer);
     void abortTransaction(const WebCore::IDBResourceIdentifier&);
     void commitTransaction(const WebCore::IDBResourceIdentifier&, uint64_t pendingRequestCount);
@@ -184,7 +185,7 @@ private:
     String m_path;
     FileSystem::Salt m_salt;
     bool m_closed { false };
-    HashMap<WebCore::ClientOrigin, std::unique_ptr<OriginStorageManager>> m_localOriginStorageManagers;
+    HashMap<WebCore::ClientOrigin, std::unique_ptr<OriginStorageManager>> m_originStorageManagers;
     WeakHashSet<IPC::Connection> m_connections; // Main thread only.
     std::unique_ptr<FileSystemStorageHandleRegistry> m_fileSystemStorageHandleRegistry;
     std::unique_ptr<StorageAreaRegistry> m_storageAreaRegistry;

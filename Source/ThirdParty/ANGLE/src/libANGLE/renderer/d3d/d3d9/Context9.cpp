@@ -52,7 +52,7 @@ CompilerImpl *Context9::createCompiler()
 
 ShaderImpl *Context9::createShader(const gl::ShaderState &data)
 {
-    return new ShaderD3D(data, mRenderer->getFeatures(), mRenderer->getNativeExtensions());
+    return new ShaderD3D(data, mRenderer);
 }
 
 ProgramImpl *Context9::createProgram(const gl::ProgramState &data)
@@ -464,6 +464,11 @@ const gl::Extensions &Context9::getNativeExtensions() const
 const gl::Limitations &Context9::getNativeLimitations() const
 {
     return mRenderer->getNativeLimitations();
+}
+
+ShPixelLocalStorageType Context9::getNativePixelLocalStorageType() const
+{
+    return mRenderer->getNativePixelLocalStorageType();
 }
 
 angle::Result Context9::dispatchCompute(const gl::Context *context,

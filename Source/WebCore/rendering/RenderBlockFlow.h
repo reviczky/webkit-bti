@@ -36,11 +36,9 @@ class LineBreaker;
 class RenderMultiColumnFlow;
 class RenderRubyRun;
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 namespace LayoutIntegration {
 class LineLayout;
 }
-#endif
 
 #if ENABLE(TEXT_AUTOSIZING)
 enum LineCount {
@@ -70,6 +68,8 @@ protected:
     // When the children are all inline (e.g., lines), we call layoutInlineChildren.
     void layoutBlockChildren(bool relayoutChildren, LayoutUnit& maxFloatLogicalBottom);
     void layoutInlineChildren(bool relayoutChildren, LayoutUnit& repaintLogicalTop, LayoutUnit& repaintLogicalBottom);
+
+    void simplifiedNormalFlowLayout() override;
 
     // RenderBlockFlows override these methods, since they are the only class that supports margin collapsing.
     LayoutUnit collapsedMarginBefore() const final { return maxPositiveMarginBefore() - maxNegativeMarginBefore(); }
@@ -283,6 +283,8 @@ public:
 
     const FloatingObjectSet* floatingObjectSet() const { return m_floatingObjects ? &m_floatingObjects->set() : nullptr; }
 
+    FloatingObject& insertFloatingObjectForIFC(RenderBox&);
+
     LayoutUnit logicalTopForFloat(const FloatingObject& floatingObject) const { return isHorizontalWritingMode() ? floatingObject.y() : floatingObject.x(); }
     LayoutUnit logicalBottomForFloat(const FloatingObject& floatingObject) const { return isHorizontalWritingMode() ? floatingObject.maxY() : floatingObject.maxX(); }
     LayoutUnit logicalLeftForFloat(const FloatingObject& floatingObject) const { return isHorizontalWritingMode() ? floatingObject.x() : floatingObject.y(); }
@@ -350,10 +352,8 @@ public:
 
     const LegacyLineLayout* legacyLineLayout() const;
     LegacyLineLayout* legacyLineLayout();
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     const LayoutIntegration::LineLayout* modernLineLayout() const;
     LayoutIntegration::LineLayout* modernLineLayout();
-#endif
 
 #if ENABLE(TREE_DEBUGGING)
     void outputFloatingObjects(WTF::TextStream&, int depth) const;
@@ -430,6 +430,7 @@ protected:
     void createFloatingObjects();
 
     std::optional<LayoutUnit> firstLineBaseline() const override;
+    std::optional<LayoutUnit> lastLineBaseline() const override;
     std::optional<LayoutUnit> inlineBlockBaseline(LineDirectionMode) const override;
 
     bool isMultiColumnBlockFlow() const override { return multiColumnFlow(); }
@@ -507,7 +508,7 @@ private:
         LayoutUnit& lastLogicalTop, LayoutUnit& lastLogicalLeft, LayoutUnit& lastLogicalRight, const LogicalSelectionOffsetCaches&, const PaintInfo*) override;
     
     VisiblePosition positionForPointWithInlineChildren(const LayoutPoint& pointInLogicalContents, const RenderFragmentContainer*) override;
-    void addFocusRingRectsForInlineChildren(Vector<LayoutRect>& rects, const LayoutPoint& additionalOffset, const RenderLayerModelObject*) override;
+    void addFocusRingRectsForInlineChildren(Vector<LayoutRect>& rects, const LayoutPoint& additionalOffset, const RenderLayerModelObject*) const override;
 
 public:
     virtual std::optional<TextAlignMode> overrideTextAlignmentForLine(bool /* endsWithSoftBreak */) const { return { }; }
@@ -517,11 +518,9 @@ private:
     bool hasLineLayout() const;
     bool hasLegacyLineLayout() const;
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     bool hasModernLineLayout() const;
     void layoutModernLines(bool relayoutChildren, LayoutUnit& repaintLogicalTop, LayoutUnit& repaintLogicalBottom);
     bool tryComputePreferredWidthsUsingModernPath(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth);
-#endif
 
     void adjustIntrinsicLogicalWidthsForColumns(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const;
     void computeInlinePreferredLogicalWidths(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const;
@@ -560,9 +559,7 @@ protected:
 private:
     std::variant<
         std::monostate,
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
         std::unique_ptr<LayoutIntegration::LineLayout>,
-#endif
         std::unique_ptr<LegacyLineLayout>
     > m_lineLayout;
 
@@ -591,7 +588,6 @@ inline LegacyLineLayout* RenderBlockFlow::legacyLineLayout()
     return hasLegacyLineLayout() ? std::get<std::unique_ptr<LegacyLineLayout>>(m_lineLayout).get() : nullptr;
 }
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 inline bool RenderBlockFlow::hasModernLineLayout() const
 {
     return std::holds_alternative<std::unique_ptr<LayoutIntegration::LineLayout>>(m_lineLayout);
@@ -606,7 +602,6 @@ inline LayoutIntegration::LineLayout* RenderBlockFlow::modernLineLayout()
 {
     return hasModernLineLayout() ? std::get<std::unique_ptr<LayoutIntegration::LineLayout>>(m_lineLayout).get() : nullptr;
 }
-#endif
 
 inline LayoutUnit RenderBlockFlow::endPaddingWidthForCaret() const
 {

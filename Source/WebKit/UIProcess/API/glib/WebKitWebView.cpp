@@ -30,7 +30,6 @@
 #include "ImageOptions.h"
 #include "NotificationService.h"
 #include "ProvisionalPageProxy.h"
-#include "WebCertificateInfo.h"
 #include "WebContextMenuItem.h"
 #include "WebContextMenuItemData.h"
 #include "WebKitAuthenticationRequestPrivate.h"
@@ -61,6 +60,7 @@
 #include "WebKitURIResponsePrivate.h"
 #include "WebKitUserMessagePrivate.h"
 #include "WebKitWebContextPrivate.h"
+#include "WebKitWebResourceLoadManager.h"
 #include "WebKitWebResourcePrivate.h"
 #include "WebKitWebViewInternal.h"
 #include "WebKitWebViewPrivate.h"
@@ -216,9 +216,6 @@ enum {
 
 static GParamSpec* sObjProperties[N_PROPERTIES] = { nullptr, };
 
-typedef HashMap<uint64_t, GRefPtr<WebKitWebResource> > LoadingResourcesMap;
-typedef HashMap<uint64_t, GRefPtr<GTask> > SnapshotResultsMap;
-
 class PageLoadStateObserver;
 
 #if PLATFORM(WPE)
@@ -289,12 +286,12 @@ struct _WebKitWebViewPrivate {
     GRefPtr<GMainLoop> modalLoop;
 
     GRefPtr<WebKitHitTestResult> mouseTargetHitTestResult;
-    OptionSet<WebEvent::Modifier> mouseTargetModifiers;
+    OptionSet<WebEventModifier> mouseTargetModifiers;
 
     GRefPtr<WebKitFindController> findController;
 
     GRefPtr<WebKitWebResource> mainResource;
-    LoadingResourcesMap loadingResourcesMap;
+    std::unique_ptr<WebKitWebResourceLoadManager> resourceLoadManager;
 
     WebKitScriptDialog* currentScriptDialog;
 
@@ -308,8 +305,6 @@ struct _WebKitWebViewPrivate {
 
     CString faviconURI;
     unsigned long faviconChangedHandlerID;
-
-    SnapshotResultsMap snapshotResultsMap;
 #endif
 
     GRefPtr<WebKitAuthenticationRequest> authenticationRequest;
@@ -497,6 +492,11 @@ void WebKitWebViewClient::didChangePageID(WKWPE::View&)
 void WebKitWebViewClient::didReceiveUserMessage(WKWPE::View&, UserMessage&& message, CompletionHandler<void(UserMessage&&)>&& completionHandler)
 {
     webkitWebViewDidReceiveUserMessage(m_webView, WTFMove(message), WTFMove(completionHandler));
+}
+
+WebKitWebResourceLoadManager* WebKitWebViewClient::webResourceLoadManager()
+{
+    return webkitWebViewGetWebResourceLoadManager(m_webView);
 }
 #endif
 
@@ -748,6 +748,8 @@ static void webkitWebViewConstructed(GObject* object)
 
     priv->loadObserver = makeUnique<PageLoadStateObserver>(webView);
     getPage(webView).pageLoadState().addObserver(*priv->loadObserver);
+
+    priv->resourceLoadManager = makeUnique<WebKitWebResourceLoadManager>(webView);
 
     // The related view is only valid during the construction.
     priv->relatedView = nullptr;
@@ -2465,7 +2467,6 @@ void webkitWebViewLoadChanged(WebKitWebView* webView, WebKitLoadEvent loadEvent)
         webkitWebViewWatchForChangesInFavicon(webView);
 #endif
         webkitWebViewCompleteAuthenticationRequest(webView);
-        priv->loadingResourcesMap.clear();
         priv->mainResource = nullptr;
         webView->priv->isActiveURIChangeBlocked = false;
         break;
@@ -2713,7 +2714,7 @@ void webkitWebViewMakePermissionRequest(WebKitWebView* webView, WebKitPermission
     g_signal_emit(webView, signals[PERMISSION_REQUEST], 0, request, &returnValue);
 }
 
-void webkitWebViewMouseTargetChanged(WebKitWebView* webView, const WebHitTestResultData& hitTestResult, OptionSet<WebEvent::Modifier> modifiers)
+void webkitWebViewMouseTargetChanged(WebKitWebView* webView, const WebHitTestResultData& hitTestResult, OptionSet<WebEventModifier> modifiers)
 {
 #if PLATFORM(GTK)
     webkitWebViewBaseSetTooltipArea(WEBKIT_WEB_VIEW_BASE(webView), hitTestResult.elementBoundingBox);
@@ -2755,28 +2756,17 @@ void webkitWebViewPrintFrame(WebKitWebView* webView, WebFrameProxy* frame)
 }
 #endif
 
-void webkitWebViewResourceLoadStarted(WebKitWebView* webView, WebFrameProxy& frame, uint64_t resourceIdentifier, WebKitURIRequest* request)
+WebKitWebResourceLoadManager* webkitWebViewGetWebResourceLoadManager(WebKitWebView* webView)
 {
-    WebKitWebViewPrivate* priv = webView->priv;
-    bool isMainResource = frame.isMainFrame() && !priv->mainResource;
-    WebKitWebResource* resource = webkitWebResourceCreate(frame, request, isMainResource);
-    if (isMainResource)
-        priv->mainResource = resource;
-    priv->loadingResourcesMap.set(resourceIdentifier, adoptGRef(resource));
-    g_signal_emit(webView, signals[RESOURCE_LOAD_STARTED], 0, resource, request);
+    return webView->priv->resourceLoadManager.get();
 }
 
-WebKitWebResource* webkitWebViewGetLoadingWebResource(WebKitWebView* webView, uint64_t resourceIdentifier)
+void webkitWebViewResourceLoadStarted(WebKitWebView* webView, WebKitWebResource* resource, ResourceRequest&& request)
 {
-    GRefPtr<WebKitWebResource> resource = webView->priv->loadingResourcesMap.get(resourceIdentifier);
-    return resource.get();
-}
-
-void webkitWebViewRemoveLoadingWebResource(WebKitWebView* webView, uint64_t resourceIdentifier)
-{
-    WebKitWebViewPrivate* priv = webView->priv;
-    ASSERT(priv->loadingResourcesMap.contains(resourceIdentifier));
-    priv->loadingResourcesMap.remove(resourceIdentifier);
+    if (webkitWebResourceIsMainResource(resource))
+        webView->priv->mainResource = resource;
+    GRefPtr<WebKitURIRequest> uriRequest = adoptGRef(webkitURIRequestCreateForResourceRequest(request));
+    g_signal_emit(webView, signals[RESOURCE_LOAD_STARTED], 0, resource, uriRequest.get());
 }
 
 void webkitWebViewEnterFullScreen(WebKitWebView* webView)
@@ -3942,7 +3932,7 @@ JSGlobalContextRef webkit_web_view_get_javascript_global_context(WebKitWebView* 
     // We keep a reference to the js context in the view only when this method is called
     // for backwards compatibility.
     if (!webView->priv->jsContext)
-        webView->priv->jsContext = SharedJavascriptContext::singleton().getOrCreateContext();
+        webView->priv->jsContext = API::SerializedScriptValue::sharedJSCContext();
     return jscContextGetJSContext(webView->priv->jsContext.get());
 }
 #endif
@@ -4604,10 +4594,7 @@ gboolean webkit_web_view_get_tls_info(WebKitWebView* webView, GTlsCertificate** 
     if (!mainFrame)
         return FALSE;
 
-    auto* wkCertificateInfo = mainFrame->certificateInfo();
-    g_return_val_if_fail(wkCertificateInfo, FALSE);
-
-    const auto& certificateInfo = wkCertificateInfo->certificateInfo();
+    const auto& certificateInfo = mainFrame->certificateInfo();
     if (certificate)
         *certificate = certificateInfo.certificate();
     if (errors)
@@ -4617,50 +4604,6 @@ gboolean webkit_web_view_get_tls_info(WebKitWebView* webView, GTlsCertificate** 
 }
 
 #if PLATFORM(GTK)
-void webKitWebViewDidReceiveSnapshot(WebKitWebView* webView, uint64_t callbackID, WebImage* webImage)
-{
-    GRefPtr<GTask> task = webView->priv->snapshotResultsMap.take(callbackID);
-    if (g_task_return_error_if_cancelled(task.get()))
-        return;
-
-    if (!webImage) {
-        g_task_return_new_error(task.get(), WEBKIT_SNAPSHOT_ERROR, WEBKIT_SNAPSHOT_ERROR_FAILED_TO_CREATE,
-            _("There was an error creating the snapshot"));
-        return;
-    }
-
-    g_task_return_pointer(task.get(), webImage->createCairoSurface().leakRef(), reinterpret_cast<GDestroyNotify>(cairo_surface_destroy));
-}
-
-static inline unsigned webKitSnapshotOptionsToSnapshotOptions(WebKitSnapshotOptions options)
-{
-    SnapshotOptions snapshotOptions = 0;
-
-    if (!(options & WEBKIT_SNAPSHOT_OPTIONS_INCLUDE_SELECTION_HIGHLIGHTING))
-        snapshotOptions |= SnapshotOptionsExcludeSelectionHighlighting;
-
-    return snapshotOptions;
-}
-
-static inline SnapshotRegion toSnapshotRegion(WebKitSnapshotRegion region)
-{
-    switch (region) {
-    case WEBKIT_SNAPSHOT_REGION_VISIBLE:
-        return SnapshotRegionVisible;
-    case WEBKIT_SNAPSHOT_REGION_FULL_DOCUMENT:
-        return SnapshotRegionFullDocument;
-    default:
-        ASSERT_NOT_REACHED();
-        return SnapshotRegionVisible;
-    }
-}
-
-static inline uint64_t generateSnapshotCallbackID()
-{
-    static uint64_t uniqueCallbackID = 1;
-    return uniqueCallbackID++;
-}
-
 /**
  * webkit_web_view_get_snapshot:
  * @web_view: a #WebKitWebView
@@ -4682,15 +4625,33 @@ void webkit_web_view_get_snapshot(WebKitWebView* webView, WebKitSnapshotRegion r
 {
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
 
-    API::Dictionary::MapType message;
-    uint64_t callbackID = generateSnapshotCallbackID();
-    message.set(String::fromUTF8("SnapshotOptions"), API::UInt64::create(static_cast<uint64_t>(webKitSnapshotOptionsToSnapshotOptions(options))));
-    message.set(String::fromUTF8("SnapshotRegion"), API::UInt64::create(static_cast<uint64_t>(toSnapshotRegion(region))));
-    message.set(String::fromUTF8("CallbackID"), API::UInt64::create(callbackID));
-    message.set(String::fromUTF8("TransparentBackground"), API::Boolean::create(options & WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND));
+    SnapshotOptions snapshotOptions = 0;
+    switch (region) {
+    case WEBKIT_SNAPSHOT_REGION_VISIBLE:
+        snapshotOptions |= SnapshotOptionsVisibleContentRect;
+        break;
+    case WEBKIT_SNAPSHOT_REGION_FULL_DOCUMENT:
+        snapshotOptions |= SnapshotOptionsFullContentRect;
+        break;
+    }
 
-    webView->priv->snapshotResultsMap.set(callbackID, adoptGRef(g_task_new(webView, cancellable, callback, userData)));
-    getPage(webView).postMessageToInjectedBundle(String::fromUTF8("GetSnapshot"), API::Dictionary::create(WTFMove(message)).ptr());
+    if (!(options & WEBKIT_SNAPSHOT_OPTIONS_INCLUDE_SELECTION_HIGHLIGHTING))
+        snapshotOptions |= SnapshotOptionsExcludeSelectionHighlighting;
+    if (options & WEBKIT_SNAPSHOT_OPTIONS_TRANSPARENT_BACKGROUND)
+        snapshotOptions |= SnapshotOptionsTransparentBackground;
+
+    GRefPtr<GTask> task = adoptGRef(g_task_new(webView, cancellable, callback, userData));
+    getPage(webView).takeSnapshot({ }, { }, snapshotOptions, [task = WTFMove(task)](const ShareableBitmapHandle& handle) {
+        if (!handle.isNull()) {
+            if (auto bitmap = ShareableBitmap::create(handle, SharedMemory::Protection::ReadOnly)) {
+                if (auto surface = bitmap->createCairoSurface()) {
+                    g_task_return_pointer(task.get(), surface.leakRef(), reinterpret_cast<GDestroyNotify>(cairo_surface_destroy));
+                    return;
+                }
+            }
+        }
+        g_task_return_new_error(task.get(), WEBKIT_SNAPSHOT_ERROR, WEBKIT_SNAPSHOT_ERROR_FAILED_TO_CREATE, _("There was an error creating the snapshot"));
+    });
 }
 
 /**

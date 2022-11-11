@@ -29,7 +29,7 @@
 #include "GraphicsLayer.h"
 #include "GraphicsTypes.h"
 #include "HTMLElement.h"
-#include "MediaQueryEvaluator.h"
+#include "LegacyMediaQueryEvaluator.h"
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -111,6 +111,7 @@ public:
     void setAttachmentElement(Ref<HTMLAttachmentElement>&&);
     RefPtr<HTMLAttachmentElement> attachmentElement() const;
     const String& attachmentIdentifier() const;
+    void didUpdateAttachmentIdentifier();
 #endif
 
     WEBCORE_EXPORT size_t pendingDecodePromisesCountForTesting() const;
@@ -140,7 +141,7 @@ public:
     void setLoadingForBindings(const AtomString&);
 
     bool isLazyLoadable() const;
-    static bool hasLazyLoadableAttributeValue(const AtomString&);
+    static bool hasLazyLoadableAttributeValue(StringView);
 
     bool isDeferred() const;
 
@@ -154,6 +155,9 @@ public:
     ReferrerPolicy referrerPolicy() const;
 
     bool allowsOrientationOverride() const;
+
+    bool allowsAnimation() const;
+    WEBCORE_EXPORT void setAllowsAnimation(bool);
 
 protected:
     HTMLImageElement(const QualifiedName&, Document&, HTMLFormElement* = nullptr);
@@ -214,8 +218,8 @@ private:
     void setSourceElement(HTMLSourceElement*);
 
     std::unique_ptr<HTMLImageLoader> m_imageLoader;
-    WeakPtr<HTMLFormElement> m_form;
-    WeakPtr<HTMLFormElement> m_formSetByParser;
+    WeakPtr<HTMLFormElement, WeakPtrImplWithEventTargetData> m_form;
+    WeakPtr<HTMLFormElement, WeakPtrImplWithEventTargetData> m_formSetByParser;
 
     CompositeOperator m_compositeOperator;
     AtomString m_bestFitImageURL;
@@ -228,14 +232,16 @@ private:
     bool m_hadNameBeforeAttributeChanged { false }; // FIXME: We only need this because parseAttribute() can't see the old value.
     bool m_isDroppedImagePlaceholder { false };
 
-    WeakPtr<HTMLPictureElement> m_pictureElement;
+    WeakPtr<HTMLPictureElement, WeakPtrImplWithEventTargetData> m_pictureElement;
     // The source element that was selected to provide the source URL.
-    WeakPtr<HTMLSourceElement> m_sourceElement;
-    MediaQueryDynamicResults m_mediaQueryDynamicResults;
+    WeakPtr<HTMLSourceElement, WeakPtrImplWithEventTargetData> m_sourceElement;
+    Vector<MediaQueryResult> m_dynamicMediaQueryResults;
 
 #if ENABLE(ATTACHMENT_ELEMENT)
     String m_pendingClonedAttachmentID;
 #endif
+
+    Image* image() const;
 
     friend class HTMLPictureElement;
 };

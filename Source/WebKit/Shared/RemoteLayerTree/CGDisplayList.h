@@ -27,7 +27,14 @@
 
 #if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
 
+#include "WebCoreArgumentCoders.h"
 #include <WebCore/SharedBuffer.h>
+#include <wtf/MachSendRight.h>
+
+namespace IPC {
+class Encoder;
+class Decoder;
+}
 
 namespace WebKit {
 

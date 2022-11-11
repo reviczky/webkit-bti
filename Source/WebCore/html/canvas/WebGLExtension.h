@@ -95,6 +95,7 @@ public:
         WebGLLoseContextName,
         WebGLMultiDrawName,
         WebGLMultiDrawInstancedBaseVertexBaseInstanceName,
+        WebGLProvokingVertexName,
     };
 
     WebGLRenderingContextBase* context() { return m_context; }

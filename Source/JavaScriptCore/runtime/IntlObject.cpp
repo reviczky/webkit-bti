@@ -39,6 +39,9 @@
 #include "IntlDisplayNames.h"
 #include "IntlDisplayNamesConstructor.h"
 #include "IntlDisplayNamesPrototype.h"
+#include "IntlDurationFormat.h"
+#include "IntlDurationFormatConstructor.h"
+#include "IntlDurationFormatPrototype.h"
 #include "IntlListFormat.h"
 #include "IntlListFormatConstructor.h"
 #include "IntlListFormatPrototype.h"
@@ -98,6 +101,13 @@ static JSValue createDisplayNamesConstructor(VM& vm, JSObject* object)
     IntlObject* intlObject = jsCast<IntlObject*>(object);
     JSGlobalObject* globalObject = intlObject->globalObject();
     return IntlDisplayNamesConstructor::create(vm, IntlDisplayNamesConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlDisplayNamesPrototype*>(globalObject->displayNamesStructure()->storedPrototypeObject()));
+}
+
+static JSValue createDurationFormatConstructor(VM& vm, JSObject* object)
+{
+    IntlObject* intlObject = jsCast<IntlObject*>(object);
+    JSGlobalObject* globalObject = intlObject->globalObject();
+    return IntlDurationFormatConstructor::create(vm, IntlDurationFormatConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), jsCast<IntlDurationFormatPrototype*>(globalObject->durationFormatStructure()->storedPrototypeObject()));
 }
 
 static JSValue createListFormatConstructor(VM& vm, JSObject* object)
@@ -176,7 +186,7 @@ void UFieldPositionIteratorDeleter::operator()(UFieldPositionIterator* iterator)
         ufieldpositer_close(iterator);
 }
 
-const MeasureUnit simpleUnits[43] = {
+const MeasureUnit simpleUnits[45] = {
     { "area"_s, "acre"_s },
     { "digital"_s, "bit"_s },
     { "digital"_s, "byte"_s },
@@ -202,6 +212,7 @@ const MeasureUnit simpleUnits[43] = {
     { "digital"_s, "megabit"_s },
     { "digital"_s, "megabyte"_s },
     { "length"_s, "meter"_s },
+    { "duration"_s, "microsecond"_s },
     { "length"_s, "mile"_s },
     { "length"_s, "mile-scandinavian"_s },
     { "volume"_s, "milliliter"_s },
@@ -209,6 +220,7 @@ const MeasureUnit simpleUnits[43] = {
     { "duration"_s, "millisecond"_s },
     { "duration"_s, "minute"_s },
     { "duration"_s, "month"_s },
+    { "duration"_s, "nanosecond"_s },
     { "mass"_s, "ounce"_s },
     { "concentr"_s, "percent"_s },
     { "digital"_s, "petabyte"_s },
@@ -240,8 +252,11 @@ void IntlObject::finishCreation(VM& vm, JSGlobalObject* globalObject)
     ASSERT(inherits(info()));
     JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 #if HAVE(ICU_U_LIST_FORMATTER)
+    if (Options::useIntlDurationFormat())
+        putDirectWithoutTransition(vm, vm.propertyNames->DurationFormat, createDurationFormatConstructor(vm, this), static_cast<unsigned>(PropertyAttribute::DontEnum));
     putDirectWithoutTransition(vm, vm.propertyNames->ListFormat, createListFormatConstructor(vm, this), static_cast<unsigned>(PropertyAttribute::DontEnum));
 #else
+    UNUSED_PARAM(&createDurationFormatConstructor);
     UNUSED_PARAM(&createListFormatConstructor);
 #endif
     if (Options::useIntlEnumeration())
@@ -489,7 +504,7 @@ const LocaleSet& intlAvailableLocales()
 //
 //  Based on the above observation, our fast path handles ASCII strings excluding control characters. We first compare strings with level-1 weights. And then,
 //  if we found they are the same and if we found they are not binary-equal strings, then we perform comparison with level-3 and level-4 weights.
-const uint8_t ducetLevel1Weights[128] = {
+const uint8_t ducetLevel1Weights[256] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 1, 2, 3, 4, 5, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
@@ -506,11 +521,28 @@ const uint8_t ducetLevel1Weights[128] = {
     56, 57, 58, 59, 60, 61, 62, 63,
     64, 65, 66, 67, 68, 69, 70, 71,
     72, 73, 74, 21, 36, 22, 37, 0,
+
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
 };
 
 // Level 2 are all zeros.
 
-const uint8_t ducetLevel3Weights[128] = {
+const uint8_t ducetLevel3Weights[256] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
@@ -523,6 +555,23 @@ const uint8_t ducetLevel3Weights[128] = {
     1, 1, 1, 1, 1, 1, 1, 1,
     1, 1, 1, 1, 1, 1, 1, 1,
     1, 1, 1, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
@@ -721,7 +770,7 @@ Vector<String> canonicalizeLocaleList(JSGlobalObject* globalObject, JSValue loca
     JSValue lengthProperty = localesObject->get(globalObject, vm.propertyNames->length);
     RETURN_IF_EXCEPTION(scope, Vector<String>());
 
-    uint64_t length = static_cast<uint64_t>(lengthProperty.toLength(globalObject));
+    uint64_t length = lengthProperty.toLength(globalObject);
     RETURN_IF_EXCEPTION(scope, Vector<String>());
 
     HashSet<String> seenSet;

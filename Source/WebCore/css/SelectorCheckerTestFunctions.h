@@ -95,9 +95,10 @@ ALWAYS_INLINE bool matchesEnabledPseudoClass(const Element& element)
     return is<HTMLElement>(element) && downcast<HTMLElement>(element).canBeActuallyDisabled() && !element.isDisabledFormControl();
 }
 
+// https://dom.spec.whatwg.org/#concept-element-defined
 ALWAYS_INLINE bool isDefinedElement(const Element& element)
 {
-    return !element.isUndefinedCustomElement();
+    return element.isDefinedCustomElement() || element.isUncustomizedCustomElement();
 }
 
 ALWAYS_INLINE bool isMediaDocument(const Element& element)
@@ -203,7 +204,7 @@ ALWAYS_INLINE bool matchesLangPseudoClass(const Element& element, const Vector<A
         language = downcast<WebVTTElement>(element).language();
     else
 #endif
-        language = element.computeInheritedLanguage();
+        language = element.effectiveLang();
 
     if (language.isEmpty())
         return false;
@@ -250,14 +251,14 @@ ALWAYS_INLINE bool matchesLangPseudoClass(const Element& element, const Vector<A
 
 ALWAYS_INLINE bool matchesDirPseudoClass(const Element& element, const AtomString& argument)
 {
+    // FIXME: Add support for non-HTML elements.
     if (!is<HTMLElement>(element))
         return false;
 
     if (!element.document().settings().dirPseudoEnabled())
         return false;
 
-    // FIXME: Add support for non-HTML elements.
-    switch (downcast<HTMLElement>(element).computeDirectionality()) {
+    switch (element.effectiveTextDirection()) {
     case TextDirection::LTR:
         return equalIgnoringASCIICase(argument, "ltr"_s);
     case TextDirection::RTL:
@@ -422,6 +423,14 @@ ALWAYS_INLINE bool matchesFullScreenAnimatingFullScreenTransitionPseudoClass(con
     if (&element != element.document().fullscreenManager().currentFullscreenElement())
         return false;
     return element.document().fullscreenManager().isAnimatingFullscreen();
+}
+
+/* FIXME: Remove when we use top layer, since this won't be needed (webkit.org/b/84798). */
+ALWAYS_INLINE bool matchesFullScreenParentPseudoClass(const Element& element)
+{
+    if (!element.document().fullscreenManager().isFullscreen())
+        return false;
+    return &element == element.document().fullscreenManager().currentFullscreenElement()->parentElement();
 }
 
 ALWAYS_INLINE bool matchesFullScreenAncestorPseudoClass(const Element& element)
