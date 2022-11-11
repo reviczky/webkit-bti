@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.2</p>
+        <p>Library Version: 2.39.1</p>
         
       </div>
       
@@ -237,31 +237,21 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 
         <div class="docblock">
           <p>Manages data stored locally by web&nbsp;sites.</p>
-<p>WebKitWebsiteDataManager allows you to manage the data that websites
-can store in the client file system like databases or caches.
-You can use WebKitWebsiteDataManager to configure the local directories
-where the Website data will be stored, by creating a new manager with
-<code>webkit_website_data_manager_new()</code> passing the values you want to set.
-You can set all the possible configuration values or only some of them,
-a default value will be used automatically for the configuration options
-not provided. <code>WebKitWebsiteDataManager:base-data-directory</code> and
-<code>WebKitWebsiteDataManager:base-cache-directory</code> are two special properties
-that can be used to set a common base directory for all Website data and
-caches. It&#8217;s possible to provide both, a base directory and a specific value,
-but in that case, the specific value takes precedence over the base directory.
-The newly created WebKitWebsiteDataManager must be passed as a construct property
-to a <code>WebKitWebContext</code>, you can use <code>webkit_web_context_new_with_website_data_manager()</code>
+<p>You can use WebKitWebsiteDataManager to configure the local directories
+where website data will be stored. Use <code>WebKitWebsiteDataManager:base-data-directory</code>
+and <code>WebKitWebsiteDataManager:base-cache-directory</code> set a common base directory for all
+website data and caches. The newly created WebKitWebsiteDataManager must be passed as
+a construct property to a <code>WebKitWebContext</code>; you can use <code>webkit_web_context_new_with_website_data_manager()</code>
 to create a new <code>WebKitWebContext</code> with a WebKitWebsiteDataManager.
-In case you don&#8217;t want to set any specific configuration, you don&#8217;t need to create
-a WebKitWebsiteDataManager, the <code>WebKitWebContext</code> will create a WebKitWebsiteDataManager
-with the default configuration. To get the WebKitWebsiteDataManager of a <code>WebKitWebContext</code>
+If you don&#8217;t want to set any specific configuration, you don&#8217;t need to create
+a WebKitWebsiteDataManager: the <code>WebKitWebContext</code> will create a WebKitWebsiteDataManager
+with the default configuration. To get the WebKitWebsiteDataManager of a <code>WebKitWebContext</code>,
 you can use&nbsp;webkit_web_context_get_website_data_manager().</p>
-<p>A WebKitWebsiteDataManager can also be ephemeral and then all the directories configuration
+<p>A WebKitWebsiteDataManager can also be ephemeral, in which case all the directory configuration
 is not needed because website data will never persist. You can create an ephemeral WebKitWebsiteDataManager
-with webkit_website_data_manager_new_ephemeral(). Then you can pass an ephemeral WebKitWebsiteDataManager to
-a <code>WebKitWebContext</code> to make it ephemeral or use <code>webkit_web_context_new_ephemeral()</code> and the WebKitWebsiteDataManager
-will be automatically created by the <code>WebKitWebContext</code>.</p>
-<p>WebKitWebsiteDataManager can also be used to fetch websites data, remove data
+with <code>webkit_website_data_manager_new_ephemeral()</code> and pass the ephemeral WebKitWebsiteDataManager to
+a <code>WebKitWebContext</code>, or simply use&nbsp;webkit_web_context_new_ephemeral().</p>
+<p>WebKitWebsiteDataManager can also be used to fetch website data, remove data
 stored by particular websites, or clear data for all websites modified since a given
 period of&nbsp;time.</p>
         </div>
@@ -471,44 +461,44 @@ period of&nbsp;time.</p>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_disk_cache_directory.html">webkit_website_data_manager_get_disk_cache_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:disk-cache-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_dom_cache_directory.html">webkit_website_data_manager_get_dom_cache_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:dom-cache-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.30</p></div>
+          <div class="docblock"><p>Available since: 2.30</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_hsts_cache_directory.html">webkit_website_data_manager_get_hsts_cache_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:hsts-cache-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.26</p></div>
+          <div class="docblock"><p>Available since: 2.26</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_indexeddb_directory.html">webkit_website_data_manager_get_indexeddb_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:indexeddb-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_itp_directory.html">webkit_website_data_manager_get_itp_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:itp-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.30</p></div>
+          <div class="docblock"><p>Available since: 2.30</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -535,20 +525,20 @@ period of&nbsp;time.</p>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_local_storage_directory.html">webkit_website_data_manager_get_local_storage_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:local-storage-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_offline_application_cache_directory.html">webkit_website_data_manager_get_offline_application_cache_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:offline-application-cache-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -559,12 +549,12 @@ period of&nbsp;time.</p>
           <div class="docblock"><p>Available since: 2.30</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebsiteDataManager.get_service_worker_registrations_directory.html">webkit_website_data_manager_get_service_worker_registrations_directory</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitWebsiteDataManager:service-worker-registrations-directory</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.30</p></div>
+          <div class="docblock"><p>Available since: 2.30</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -673,8 +663,7 @@ period of&nbsp;time.</p>
           <h6><a href="property.WebsiteDataManager.base-cache-directory.html">WebKit2.WebsiteDataManager:base-cache-directory</a></h6>
 
           <div class="docblock">
-            <p>The base directory for Website cache. This is used as a base directory
-for any Website cache when no specific cache directory has been&nbsp;provided.</p>
+            <p>The base directory for caches. If <code>NULL</code>, a default location will be&nbsp;used.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.10</p></div>
@@ -684,51 +673,50 @@ for any Website cache when no specific cache directory has been&nbsp;provided.</
           <h6><a href="property.WebsiteDataManager.base-data-directory.html">WebKit2.WebsiteDataManager:base-data-directory</a></h6>
 
           <div class="docblock">
-            <p>The base directory for Website data. This is used as a base directory
-for any Website data when no specific data directory has been&nbsp;provided.</p>
+            <p>The base directory for website data. If <code>NULL</code>, a default location will be&nbsp;used.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.10</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.disk-cache-directory.html">WebKit2.WebsiteDataManager:disk-cache-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where <span class="caps">HTTP</span> disk cache will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.dom-cache-directory.html">WebKit2.WebsiteDataManager:dom-cache-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where <span class="caps">DOM</span> cache will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.30</p></div>
+          <div class="docblock"><p>Available since: 2.30</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.hsts-cache-directory.html">WebKit2.WebsiteDataManager:hsts-cache-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where the <span class="caps">HTTP</span> Strict-Transport-Security (<span class="caps">HSTS</span>) cache will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.26</p></div>
+          <div class="docblock"><p>Available since: 2.26</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.indexeddb-directory.html">WebKit2.WebsiteDataManager:indexeddb-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where IndexedDB databases will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
         <div class="">
@@ -744,44 +732,44 @@ parameters to configure data directories will be&nbsp;ignored.</p>
           <div class="docblock"><p>Available since: 2.16</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.itp-directory.html">WebKit2.WebsiteDataManager:itp-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where Intelligent Tracking Prevention (<span class="caps">ITP</span>) data will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.30</p></div>
+          <div class="docblock"><p>Available since: 2.30</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.local-storage-directory.html">WebKit2.WebsiteDataManager:local-storage-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where local storage data will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.offline-application-cache-directory.html">WebKit2.WebsiteDataManager:offline-application-cache-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where offline web application cache will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebsiteDataManager.service-worker-registrations-directory.html">WebKit2.WebsiteDataManager:service-worker-registrations-directory</a></h6>
 
           <div class="docblock">
             <p>The directory where service workers registrations will be&nbsp;stored.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.30</p></div>
+          <div class="docblock"><p>Available since: 2.30</p><p>Deprecated since: 2.40.</p></div>
         </div>
       
         <div class="deprecated">

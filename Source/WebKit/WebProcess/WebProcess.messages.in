@@ -44,8 +44,8 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
 
     SetDefaultRequestTimeoutInterval(double timeoutInterval)
     SetAlwaysUsesComplexTextCodePath(bool alwaysUseComplexText)
-    SetShouldUseFontSmoothing(bool useFontSmoothing)
-    SetResourceLoadStatisticsEnabled(bool resourceLoadStatisticsEnabled);
+    SetShouldUseFontSmoothingForTesting(bool useFontSmoothing)
+    SetTrackingPreventionEnabled(bool enabled);
     ClearResourceLoadStatistics();
     UserPreferredLanguagesChanged(Vector<String> languages)
     FullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled)
@@ -138,6 +138,7 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
     AddMockMediaDevice(struct WebCore::MockMediaDevice device);
     ClearMockMediaDevices();
     RemoveMockMediaDevice(String persistentId);
+    SetMockMediaDeviceIsEphemeral(String persistentId, bool isEphemeral);
     ResetMockMediaDevices();
 
 #if ENABLE(SANDBOX_EXTENSIONS)
@@ -149,13 +150,13 @@ messages -> WebProcess LegacyReceiver NotRefCounted {
     ClearCurrentModifierStateForTesting()
 
     SetBackForwardCacheCapacity(unsigned capacity);
-    ClearCachedPage(struct WebCore::BackForwardItemIdentifier backForwardItemID) -> ()
+    ClearCachedPage(WebCore::BackForwardItemIdentifier backForwardItemID) -> ()
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     SendMessageToWebExtension(struct WebKit::UserMessage userMessage)
 #endif
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
     SeedResourceLoadStatisticsForTesting(WebCore::RegistrableDomain firstPartyDomain, WebCore::RegistrableDomain thirdPartyDomain, bool shouldScheduleNotification) -> ()
     SetThirdPartyCookieBlockingMode(enum:uint8_t WebCore::ThirdPartyCookieBlockingMode blockingMode) -> ()
     SetDomainsWithUserInteraction(HashSet<WebCore::RegistrableDomain> domains)

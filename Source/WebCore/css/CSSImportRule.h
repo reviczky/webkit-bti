@@ -22,14 +22,13 @@
 #pragma once
 
 #include "CSSRule.h"
-#include "StyleRule.h"
 
 namespace WebCore {
 
 class MediaList;
 class StyleRuleImport;
 
-class CSSImportRule final : public CSSRule {
+class CSSImportRule final : public CSSRule, public CanMakeWeakPtr<CSSImportRule> {
 public:
     static Ref<CSSImportRule> create(StyleRuleImport& rule, CSSStyleSheet* sheet) { return adoptRef(*new CSSImportRule(rule, sheet)); }
 

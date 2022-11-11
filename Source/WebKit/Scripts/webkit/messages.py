@@ -153,10 +153,6 @@ def arguments_type(message):
     return 'std::tuple<%s>' % ', '.join(function_parameter_type(parameter.type, parameter.kind) for parameter in message.parameters)
 
 
-def reply_tuple(message):
-    return 'std::tuple<%s>' % (', '.join(reply_parameter_type(parameter.type) for parameter in message.reply_parameters))
-
-
 def reply_arguments_type(message):
     return 'std::tuple<%s>' % (', '.join(parameter.type for parameter in message.reply_parameters))
 
@@ -215,7 +211,6 @@ def message_to_struct_declaration(receiver, message):
             result.append('    static constexpr auto callbackThread = WTF::CompletionHandlerCallThread::MainThread;\n')
         else:
             result.append('    static constexpr auto callbackThread = WTF::CompletionHandlerCallThread::ConstructionThread;\n')
-        result.append('    using Reply = %s;\n' % reply_tuple(message))
         result.append('    using ReplyArguments = %s;\n' % reply_arguments_type(message))
 
     if len(function_parameters):
@@ -254,86 +249,47 @@ def forward_declarations_for_namespace(namespace, kind_and_types):
     return ''.join(result)
 
 
-def types_that_cannot_be_forward_declared():
-    return frozenset([
-        'CVPixelBufferRef',
-        'IPC::DataReference',
-        'IPC::FilterReference',
-        'IPC::FontReference',
-        'IPC::PixelBufferReference',
-        'IPC::Semaphore',
-        'MachSendRight',
-        'MediaTime',
-        'PlatformXR::ReferenceSpaceType',
-        'PlatformXR::SessionFeature',
-        'PlatformXR::SessionMode',
-        'PlatformXR::VisibilityState',
-        'String',
+# When updating this list, run "make -C Source/WebKit/Scripts/webkit/tests" to keep the webkitpy tests passing.
+def serialized_identifiers():
+    return [
         'WebCore::BroadcastChannelIdentifier',
-        'WebCore::DestinationColorSpace',
-        'WebCore::DiagnosticLoggingDomain',
+        'WebCore::DOMCacheIdentifier',
         'WebCore::DictationContext',
         'WebCore::DisplayList::ItemBufferIdentifier',
-        'WebCore::DragApplicationFlags',
+        'WebCore::ElementIdentifier',
         'WebCore::FetchIdentifier',
         'WebCore::FileSystemHandleIdentifier',
         'WebCore::FileSystemSyncAccessHandleIdentifier',
-        'WebCore::FrameIdentifier',
-        'WebCore::GraphicsContextFlushIdentifier',
-        'WebCore::GraphicsContextGLAttributes',
         'WebCore::ImageDecoderIdentifier',
         'WebCore::LibWebRTCSocketIdentifier',
         'WebCore::MediaKeySystemRequestIdentifier',
         'WebCore::MediaPlayerIdentifier',
         'WebCore::MediaSessionIdentifier',
-        'WebCore::ModalContainerControlType',
-        'WebCore::NativeImageReference',
         'WebCore::PageIdentifier',
         'WebCore::PlaybackTargetClientContextIdentifier',
-        'WebKit::QuotaIncreaseRequestIdentifier',
-        'WebCore::PluginLoadClientPolicy',
-        'WebCore::PointerID',
         'WebCore::PushSubscriptionIdentifier',
         'WebCore::ProcessIdentifier',
         'WebCore::RealtimeMediaSourceIdentifier',
-        'WebCore::RenderingMode',
-        'WebCore::RenderingPurpose',
         'WebCore::RenderingResourceIdentifier',
         'WebCore::ResourceLoaderIdentifier',
         'WebCore::SWServerConnectionIdentifier',
-        'WebCore::ScriptExecutionContextIdentifier',
         'WebCore::ServiceWorkerIdentifier',
         'WebCore::ServiceWorkerJobIdentifier',
-        'WebCore::ServiceWorkerOrClientData',
-        'WebCore::ServiceWorkerOrClientIdentifier',
         'WebCore::ServiceWorkerRegistrationIdentifier',
-        'WebCore::SharedStringHash',
         'WebCore::SharedWorkerIdentifier',
-        'WebCore::SharedWorkerObjectIdentifier',
         'WebCore::SleepDisablerIdentifier',
-        'WebCore::SourceBufferAppendMode',
         'WebCore::SpeechRecognitionConnectionClientIdentifier',
-        'WebCore::StorageType',
-        'WebCore::TransferredMessagePort',
         'WebCore::UserMediaRequestIdentifier',
-        'WebCore::WebLockIdentifier',
         'WebCore::WebSocketIdentifier',
-        'WebKit::ActivityStateChangeID',
         'WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier',
         'WebKit::AuthenticationChallengeIdentifier',
         'WebKit::ContentWorldIdentifier',
         'WebKit::DataTaskIdentifier',
-        'WebKit::DisplayLinkObserverID',
-        'WebKit::DownloadID',
-        'WebKit::FileSystemStorageError',
         'WebKit::FormSubmitListenerIdentifier',
         'WebKit::GeolocationIdentifier',
         'WebKit::GraphicsContextGLIdentifier',
-        'WebKit::ImageBufferBackendHandle',
         'WebKit::IPCConnectionTesterIdentifier',
         'WebKit::IPCStreamTesterIdentifier',
-        'WebKit::LayerHostingContextID',
-        'WebKit::LegacyCustomProtocolID',
         'WebKit::LibWebRTCResolverIdentifier',
         'WebKit::MDNSRegisterIdentifier',
         'WebKit::MarkSurfacesAsVolatileRequestIdentifier',
@@ -342,8 +298,7 @@ def types_that_cannot_be_forward_declared():
         'WebKit::PDFPluginIdentifier',
         'WebKit::PageGroupIdentifier',
         'WebKit::PlaybackSessionContextIdentifier',
-        'WebKit::RTCDecoderIdentifier',
-        'WebKit::RTCEncoderIdentifier',
+        'WebKit::QuotaIncreaseRequestIdentifier',
         'WebKit::RemoteAudioDestinationIdentifier',
         'WebKit::RemoteAudioHardwareListenerIdentifier',
         'WebKit::RemoteAudioSessionIdentifier',
@@ -353,37 +308,89 @@ def types_that_cannot_be_forward_declared():
         'WebKit::RemoteLegacyCDMIdentifier',
         'WebKit::RemoteLegacyCDMSessionIdentifier',
         'WebKit::RemoteMediaResourceIdentifier',
-        'WebKit::RemoteMediaSourceIdentifier',
         'WebKit::RemoteVideoFrameIdentifier',
-        'WebKit::RemoteVideoFrameWriteReference',
-        'WebKit::RemoteVideoFrameReadReference',
         'WebKit::RemoteRemoteCommandListenerIdentifier',
-        'WebKit::RemoteSourceBufferIdentifier',
         'WebKit::RenderingBackendIdentifier',
-        'WebKit::RenderingUpdateID',
         'WebKit::SampleBufferDisplayLayerIdentifier',
         'WebKit::StorageAreaIdentifier',
         'WebKit::StorageAreaImplIdentifier',
         'WebKit::StorageAreaMapIdentifier',
         'WebKit::StorageNamespaceIdentifier',
         'WebKit::TapIdentifier',
-        'WebKit::TextCheckerRequestID',
         'WebKit::TrackPrivateRemoteIdentifier',
-        'WebKit::TransactionID',
         'WebKit::UserContentControllerIdentifier',
-        'WebKit::WCLayerTreeHostIdentifier',
-        'WebKit::WCContentBufferIdentifier',
+        'WebKit::VideoDecoderIdentifier',
+        'WebKit::VideoEncoderIdentifier',
         'WebKit::WebGPUIdentifier',
         'WebKit::WebPageProxyIdentifier',
         'WebKit::WebURLSchemeHandlerIdentifier',
+    ]
+
+
+def types_that_cannot_be_forward_declared():
+    return frozenset([
+        'CVPixelBufferRef',
+        'GCGLint',
+        'IPC::DataReference',
+        'IPC::FilterReference',
+        'IPC::FontReference',
+        'IPC::Semaphore',
+        'MachSendRight',
+        'MediaTime',
+        'PlatformXR::ReferenceSpaceType',
+        'PlatformXR::SessionFeature',
+        'PlatformXR::SessionMode',
+        'PlatformXR::VisibilityState',
+        'String',
+        'WebCore::BackForwardItemIdentifier',
+        'WebCore::DestinationColorSpace',
+        'WebCore::DiagnosticLoggingDomain',
+        'WebCore::DictationContext',
+        'WebCore::DragApplicationFlags',
+        'WebCore::FrameIdentifier',
+        'WebCore::GraphicsContextGLAttributes',
+        'WebCore::ModalContainerControlType',
+        'WebCore::NativeImageReference',
+        'WebCore::PluginLoadClientPolicy',
+        'WebCore::PointerID',
+        'WebCore::PolicyCheckIdentifier',
+        'WebCore::RenderingMode',
+        'WebCore::RenderingPurpose',
+        'WebCore::ScriptExecutionContextIdentifier',
+        'WebCore::ServiceWorkerOrClientData',
+        'WebCore::ServiceWorkerOrClientIdentifier',
+        'WebCore::SharedStringHash',
+        'WebCore::SharedWorkerObjectIdentifier',
+        'WebCore::SourceBufferAppendMode',
+        'WebCore::StorageType',
+        'WebCore::TransferredMessagePort',
+        'WebCore::WebLockIdentifier',
+        'WebKit::ActivityStateChangeID',
+        'WebKit::DisplayLinkObserverID',
+        'WebKit::DisplayListRecorderFlushIdentifier',
+        'WebKit::DownloadID',
+        'WebKit::FileSystemStorageError',
+        'WebKit::ImageBufferBackendHandle',
+        'WebKit::LayerHostingContextID',
+        'WebKit::LegacyCustomProtocolID',
+        'WebKit::RemoteMediaSourceIdentifier',
+        'WebKit::RemoteSourceBufferIdentifier',
+        'WebKit::RemoteVideoFrameWriteReference',
+        'WebKit::RemoteVideoFrameReadReference',
+        'WebKit::RenderingUpdateID',
+        'WebKit::TextCheckerRequestID',
+        'WebKit::TransactionID',
+        'WebKit::WCLayerTreeHostIdentifier',
+        'WebKit::WCContentBufferIdentifier',
         'WebKit::XRDeviceIdentifier',
-    ])
+    ] + serialized_identifiers())
 
 
 def conditions_for_header(header):
     conditions = {
         '"InputMethodState.h"': ["PLATFORM(GTK)", "PLATFORM(WPE)"],
         '"GestureTypes.h"': ["PLATFORM(IOS_FAMILY)"],
+        '"SharedCARingBuffer.h"': ["PLATFORM(COCOA)"],
         '"WCContentBufferIdentifier.h"': ["USE(GRAPHICS_LAYER_WC)"],
         '"WCLayerTreeHostIdentifier.h"': ["USE(GRAPHICS_LAYER_WC)"],
         '<WebCore/CVUtilities.h>': ["PLATFORM(COCOA)", ],
@@ -673,7 +680,9 @@ def argument_coder_headers_for_type(type):
     header_infos_and_types = class_template_headers(type)
 
     special_cases = {
+        'IPC::Connection::Handle': '"Connection.h"',
         'String': '"ArgumentCoders.h"',
+        'MachSendRight': '"ArgumentCodersDarwin.h"',
         'WebKit::ScriptMessageHandlerHandle': '"WebScriptMessageHandler.h"',
     }
 
@@ -700,6 +709,7 @@ def headers_for_type(type):
 
     special_cases = {
         'CVPixelBufferRef': ['<WebCore/CVUtilities.h>'],
+        'GCGLint': ['<WebCore/GraphicsTypesGL.h>'],
         'IPC::Semaphore': ['"IPCSemaphore.h"'],
         'Inspector::ExtensionError': ['"InspectorExtensionTypes.h"'],
         'Inspector::FrontendChannel::ConnectionType': ['<JavaScriptCore/InspectorFrontendChannel.h>'],
@@ -768,8 +778,10 @@ def headers_for_type(type):
         'URL': ['<wtf/URLHash.h>'],
         'UUID': ['<wtf/UUID.h>'],
         'WallTime': ['<wtf/WallTime.h>'],
+        'WebCore::ApplyTrackingPrevention': ['<WebCore/NetworkStorageSession.h>'],
         'WebCore::ArcData': ['<WebCore/InlinePathData.h>'],
         'WebCore::AutoplayEventFlags': ['<WebCore/AutoplayEvent.h>'],
+        'WebCore::BackForwardItemIdentifier': ['<WebCore/ProcessQualified.h>', '<WebCore/BackForwardItemIdentifier.h>', '<wtf/ObjectIdentifier.h>'],
         'WebCore::BezierCurveData': ['<WebCore/InlinePathData.h>'],
         'WebCore::BlendMode': ['<WebCore/GraphicsTypes.h>'],
         'WebCore::BrowsingContextGroupSwitchDecision': ['<WebCore/FrameLoaderTypes.h>'],
@@ -797,6 +809,7 @@ def headers_for_type(type):
         'WebCore::FrameLoadType': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::GenericCueData': ['<WebCore/InbandGenericCue.h>'],
         'WebCore::GrammarDetail': ['<WebCore/TextCheckerClient.h>'],
+        'WebCore::GraphicsContextGLActiveInfo': ['<WebCore/GraphicsContextGL.h>'],
         'WebCore::HasInsecureContent': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::HighlightRequestOriginatedInApp': ['<WebCore/AppHighlight.h>'],
         'WebCore::HighlightVisibility': ['<WebCore/HighlightVisibility.h>'],
@@ -839,6 +852,7 @@ def headers_for_type(type):
         'WebCore::PushSubscriptionIdentifier': ['<WebCore/PushSubscriptionIdentifier.h>'],
         'WebCore::QuadCurveData': ['<WebCore/InlinePathData.h>'],
         'WebCore::RecentSearch': ['<WebCore/SearchPopupMenu.h>'],
+        'WebCore::ReloadOption': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::RenderingPurpose': ['<WebCore/RenderingMode.h>'],
         'WebCore::RequestStorageAccessResult': ['<WebCore/DocumentStorageAccess.h>'],
         'WebCore::RouteSharingPolicy': ['<WebCore/AudioSession.h>'],
@@ -856,7 +870,6 @@ def headers_for_type(type):
         'WebCore::ServiceWorkerRegistrationState': ['<WebCore/ServiceWorkerTypes.h>'],
         'WebCore::ServiceWorkerState': ['<WebCore/ServiceWorkerTypes.h>'],
         'WebCore::ShareDataWithParsedURL': ['<WebCore/ShareData.h>'],
-        'WebCore::ShouldAskITP': ['<WebCore/NetworkStorageSession.h>'],
         'WebCore::ShouldContinuePolicyCheck': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::ShouldNotifyWhenResolved': ['<WebCore/ServiceWorkerTypes.h>'],
         'WebCore::ShouldSample': ['<WebCore/DiagnosticLoggingClient.h>'],
@@ -874,7 +887,6 @@ def headers_for_type(type):
         'WebCore::UsedLegacyTLS': ['<WebCore/ResourceResponseBase.h>'],
         'WebCore::VideoPresetData': ['<WebCore/VideoPreset.h>'],
         'WebCore::ViewportAttributes': ['<WebCore/ViewportArguments.h>'],
-        'WebCore::WebGLLoadPolicy': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::WillContinueLoading': ['<WebCore/FrameLoaderTypes.h>'],
         'WebKit::ActivityStateChangeID': ['"DrawingAreaInfo.h"'],
         'WebKit::AllowOverwrite': ['"DownloadID.h"'],
@@ -882,6 +894,7 @@ def headers_for_type(type):
         'WebKit::AuthenticationChallengeIdentifier': ['"IdentifierTypes.h"'],
         'WebKit::BackForwardListItemState': ['"SessionState.h"'],
         'WebKit::CallDownloadDidStart': ['"DownloadManager.h"'],
+        'WebKit::ConsumerSharedCARingBuffer::Handle': ['"SharedCARingBuffer.h"'],
         'WebKit::ContentWorldIdentifier': ['"ContentWorldShared.h"'],
         'WebKit::DocumentEditingContextRequest': ['"DocumentEditingContext.h"'],
         'WebKit::FindDecorationStyle': ['"WebFindOptions.h"'],
@@ -971,13 +984,13 @@ def headers_for_type(type):
         'WebKit::WebGPU::VertexAttribute': ['"WebGPUVertexAttribute.h"'],
         'WebKit::WebGPU::VertexBufferLayout': ['"WebGPUVertexBufferLayout.h"'],
         'WebKit::WebGPU::VertexState': ['"WebGPUVertexState.h"'],
-        'struct WebCore::Cookie': ['<WebCore/Cookie.h>'],
-        'struct WebCore::ElementContext': ['<WebCore/ElementContext.h>'],
-        'struct WebCore::VideoPlaybackQualityMetrics': ['<WebCore/VideoPlaybackQualityMetrics.h>'],
-        'struct WebKit::WebScriptMessageHandlerData': ['"WebUserContentControllerDataTypes.h"'],
-        'struct WebKit::WebUserScriptData': ['"WebUserContentControllerDataTypes.h"'],
-        'struct WebKit::WebUserStyleSheetData': ['"WebUserContentControllerDataTypes.h"'],
-        'webrtc::WebKitEncodedFrameInfo': ['<webrtc/sdk/WebKit/WebKitEncoder.h>', '<WebCore/LibWebRTCEnumTraits.h>'],
+        'WebCore::Cookie': ['<WebCore/Cookie.h>'],
+        'WebCore::ElementContext': ['<WebCore/ElementContext.h>'],
+        'WebCore::VideoPlaybackQualityMetrics': ['<WebCore/VideoPlaybackQualityMetrics.h>'],
+        'WebKit::WebScriptMessageHandlerData': ['"WebUserContentControllerDataTypes.h"'],
+        'WebKit::WebUserScriptData': ['"WebUserContentControllerDataTypes.h"'],
+        'WebKit::WebUserStyleSheetData': ['"WebUserContentControllerDataTypes.h"'],
+        'webrtc::WebKitEncodedFrameInfo': ['"RTCWebKitEncodedFrameInfo.h"', '<WebCore/LibWebRTCEnumTraits.h>'],
     }
 
     headers = []
@@ -1259,7 +1272,6 @@ def generate_message_names_header(receivers):
     result.append('\n')
     result.append('ReceiverName receiverName(MessageName);\n')
     result.append('const char* description(MessageName);\n')
-    result.append('bool isValidMessageName(MessageName);\n')
     result.append('constexpr bool messageIsSync(MessageName name)\n')
     result.append('{\n')
     first_synchronous = next((e for e in message_enumerators if e.messages[0].has_attribute(SYNCHRONOUS_ATTRIBUTE)), None)
@@ -1274,16 +1286,7 @@ def generate_message_names_header(receivers):
     result.append('\n')
     result.append('namespace WTF {\n')
     result.append('\n')
-    result.append('template<>\n')
-    result.append('struct EnumTraits<IPC::MessageName> {\n')
-    result.append('    template<typename T>\n')
-    result.append('    static std::enable_if_t<sizeof(T) == sizeof(IPC::MessageName) && std::is_unsigned_v<T>, bool> isValidEnum(T messageName)\n')
-    result.append('    {\n')
-    result.append('        if (messageName > WTF::enumToUnderlyingType(IPC::MessageName::Last))\n')
-    result.append('            return false;\n')
-    result.append('        return IPC::isValidMessageName(static_cast<IPC::MessageName>(messageName));\n')
-    result.append('    }\n')
-    result.append('};\n')
+    result.append('template<> bool isValidEnum<IPC::MessageName, void>(std::underlying_type_t<IPC::MessageName>);\n')
     result.append('\n')
     result.append('} // namespace WTF\n')
     return ''.join(result)
@@ -1326,8 +1329,12 @@ def generate_message_names_implementation(receivers):
     result.append('    return ReceiverName::Invalid;\n')
     result.append('}\n')
     result.append('\n')
-    result.append('bool isValidMessageName(MessageName messageName)\n')
+    result.append('} // namespace IPC\n')
+    result.append('\n')
+    result.append('namespace WTF {\n')
+    result.append('template<> bool isValidEnum<IPC::MessageName, void>(std::underlying_type_t<IPC::MessageName> underlyingType)\n')
     result.append('{\n')
+    result.append('    auto messageName = static_cast<IPC::MessageName>(underlyingType);\n')
     for enumerator in message_enumerators:
         for message in enumerator.messages:
             if message.condition:
@@ -1339,7 +1346,7 @@ def generate_message_names_implementation(receivers):
     result.append('    return false;\n')
     result.append('};\n')
     result.append('\n')
-    result.append('} // namespace IPC\n')
+    result.append('} // namespace WTF\n')
     return ''.join(result)
 
 
@@ -1437,7 +1444,19 @@ def generate_message_argument_description_implementation(receivers, receiver_hea
     result.append('\n')
     result.append('#if ENABLE(IPC_TESTING_API) || !LOG_DISABLED\n')
     result.append('\n')
-    result.append('#include "JSIPCBinding.h"\n')
+    all_headers = ['"JSIPCBinding.h"']
+    for identifier in serialized_identifiers():
+        for header in headers_for_type(identifier):
+            all_headers.append(header)
+    all_headers = sorted(list(dict.fromkeys(all_headers)))
+    for header in all_headers:
+        conditions = conditions_for_header(header)
+        if conditions and None not in conditions:
+            result.append('#if %s\n' % ' || '.join(sorted(set(conditions))))
+            result.append('#include %s\n' % header)
+            result.append('#endif\n')
+        else:
+            result.append('#include %s\n' % header)
 
     for receiver in receivers:
         if receiver.has_attribute(BUILTIN_ATTRIBUTE):
@@ -1463,6 +1482,17 @@ def generate_message_argument_description_implementation(receivers, receiver_hea
     result.append('\n')
 
     generate_js_value_conversion_function(result, receivers, 'jsValueForReplyArguments', 'jsValueForDecodedMessageReply', 'ReplyArguments', lambda message: message.reply_parameters is not None)
+
+    result.append('\n')
+    result.append('Vector<ASCIILiteral> serializedIdentifiers()\n')
+    result.append('{\n')
+    for identifier in serialized_identifiers():
+        result.append('    static_assert(sizeof(uint64_t) == sizeof(' + identifier + '));\n')
+    result.append('    return {\n')
+    for identifier in serialized_identifiers():
+        result.append('        "' + identifier + '"_s,\n')
+    result.append('    };\n')
+    result.append('}\n')
 
     result.append('\n')
     result.append('#endif // ENABLE(IPC_TESTING_API)\n')

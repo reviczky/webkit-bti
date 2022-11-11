@@ -442,6 +442,13 @@ bool RenderImage::hasNonBitmapImage() const
     return image && !is<BitmapImage>(image);
 }
 
+bool RenderImage::hasAnimatedImage() const
+{
+    if (auto* image = cachedImage() ? cachedImage()->image() : nullptr)
+        return image->isAnimated();
+    return false;
+}
+
 void RenderImage::paintIncompleteImageOutline(PaintInfo& paintInfo, LayoutPoint paintOffset, LayoutUnit borderWidth) const
 {
     auto contentSize = this->contentSize();
@@ -479,14 +486,17 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
     float deviceScaleFactor = document().deviceScaleFactor();
     LayoutUnit missingImageBorderWidth(1 / deviceScaleFactor);
 
+    if (isDeferredImage(element()))
+        return;
+
     if (context.detectingContentfulPaint()) {
-        if (!context.contenfulPaintDetected() && !isDeferredImage(element()) && cachedImage() && cachedImage()->canRender(this, deviceScaleFactor) && !contentSize.isEmpty())
+        if (!context.contentfulPaintDetected() && cachedImage() && cachedImage()->canRender(this, deviceScaleFactor) && !contentSize.isEmpty())
             context.setContentfulPaintDetected();
 
         return;
     }
 
-    if (!imageResource().cachedImage() || isDeferredImage(element()) || shouldDisplayBrokenImageIcon()) {
+    if (!imageResource().cachedImage() || shouldDisplayBrokenImageIcon()) {
         if (paintInfo.phase == PaintPhase::Selection)
             return;
 
@@ -532,7 +542,8 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
             if (!m_altText.isEmpty()) {
                 auto& font = style().fontCascade();
                 auto& fontMetrics = font.metricsOfPrimaryFont();
-                auto textRun = RenderBlock::constructTextRun(document().displayStringModifiedByEncoding(m_altText), style(), ExpansionBehavior::defaultBehavior(), RespectDirection | RespectDirectionOverride);
+                auto encodedDisplayString = document().displayStringModifiedByEncoding(m_altText);
+                auto textRun = RenderBlock::constructTextRun(encodedDisplayString, style(), ExpansionBehavior::defaultBehavior(), RespectDirection | RespectDirectionOverride);
                 auto textWidth = LayoutUnit { font.width(textRun) };
 
                 auto hasRoomForAltText = [&] {
@@ -703,14 +714,6 @@ ImageDrawResult RenderImage::paintIntoRect(PaintInfo& paintInfo, const FloatRect
 #endif
 
     return drawResult;
-}
-
-bool RenderImage::boxShadowShouldBeAppliedToBackground(const LayoutPoint& paintOffset, BackgroundBleedAvoidance bleedAvoidance, const InlineIterator::InlineBoxIterator&) const
-{
-    if (!RenderBoxModelObject::boxShadowShouldBeAppliedToBackground(paintOffset, bleedAvoidance, { }))
-        return false;
-
-    return !const_cast<RenderImage*>(this)->backgroundIsKnownToBeObscured(paintOffset);
 }
 
 bool RenderImage::foregroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect, unsigned maxDepthToTest) const
@@ -895,6 +898,13 @@ RenderBox* RenderImage::embeddedContentBox() const
         return downcast<SVGImage>(*cachedImage->image()).embeddedContentBox();
 
     return nullptr;
+}
+
+bool RenderImage::allowsAnimation() const
+{
+    if (auto* imageElement = dynamicDowncast<HTMLImageElement>(element()))
+        return imageElement->allowsAnimation();
+    return RenderReplaced::allowsAnimation();
 }
 
 } // namespace WebCore

@@ -39,6 +39,7 @@
 #include "HTMLTextAreaElement.h"
 #include "HTMLVideoElement.h"
 #include "ImageOverlay.h"
+#include "Page.h"
 #include "PseudoElement.h"
 #include "Range.h"
 #include "RenderBlockFlow.h"
@@ -192,7 +193,7 @@ Frame* HitTestResult::targetFrame() const
     if (!frame)
         return nullptr;
 
-    return frame->tree().find(m_innerURLElement->target(), *frame);
+    return dynamicDowncast<LocalFrame>(frame->tree().find(m_innerURLElement->target(), *frame));
 }
 
 bool HitTestResult::isSelected() const
@@ -389,8 +390,12 @@ URL HitTestResult::absoluteImageURL() const
         || is<HTMLImageElement>(*imageNode)
         || is<HTMLInputElement>(*imageNode)
         || is<HTMLObjectElement>(*imageNode)
-        || is<SVGImageElement>(*imageNode))
-        return imageNode->document().completeURL(downcast<Element>(*imageNode).imageSourceURL());
+        || is<SVGImageElement>(*imageNode)) {
+        auto imageURL = imageNode->document().completeURL(downcast<Element>(*imageNode).imageSourceURL());
+        if (auto* page = imageNode->document().page())
+            return page->sanitizeForCopyOrShare(imageURL);
+        return imageURL;
+    }
 
     return { };
 }
@@ -416,12 +421,14 @@ URL HitTestResult::absolutePDFURL() const
 URL HitTestResult::absoluteMediaURL() const
 {
 #if ENABLE(VIDEO)
-    if (HTMLMediaElement* mediaElt = mediaElement())
-        return mediaElt->currentSrc();
-    return URL();
-#else
-    return URL();
+    if (auto* element = mediaElement()) {
+        auto sourceURL = element->currentSrc();
+        if (auto* page = element->document().page())
+            return page->sanitizeForCopyOrShare(sourceURL);
+        return sourceURL;
+    }
 #endif
+    return { };
 }
 
 bool HitTestResult::mediaSupportsFullscreen() const
@@ -462,6 +469,14 @@ void HitTestResult::toggleMediaLoopPlayback() const
 #if ENABLE(VIDEO)
     if (HTMLMediaElement* mediaElt = mediaElement())
         mediaElt->setLoop(!mediaElt->loop());
+#endif
+}
+
+void HitTestResult::toggleShowMediaStats() const
+{
+#if ENABLE(VIDEO)
+    if (HTMLMediaElement* mediaElt = mediaElement())
+        mediaElt->setShowingStats(!mediaElt->showingStats());
 #endif
 }
 
@@ -514,6 +529,15 @@ bool HitTestResult::mediaLoopEnabled() const
 #if ENABLE(VIDEO)
     if (HTMLMediaElement* mediaElt = mediaElement())
         return mediaElt->loop();
+#endif
+    return false;
+}
+
+bool HitTestResult::mediaStatsShowing() const
+{
+#if ENABLE(VIDEO)
+    if (HTMLMediaElement* mediaElt = mediaElement())
+        return mediaElt->showingStats();
 #endif
     return false;
 }
@@ -607,9 +631,14 @@ bool HitTestResult::isOverTextInsideFormControlElement() const
 
 URL HitTestResult::absoluteLinkURL() const
 {
-    if (m_innerURLElement)
-        return m_innerURLElement->absoluteLinkURL();
-    return URL();
+    if (!m_innerURLElement)
+        return { };
+
+    auto url = m_innerURLElement->absoluteLinkURL();
+    if (auto* page = m_innerURLElement->document().page())
+        return page->sanitizeForCopyOrShare(url);
+
+    return url;
 }
 
 bool HitTestResult::isOverLink() const

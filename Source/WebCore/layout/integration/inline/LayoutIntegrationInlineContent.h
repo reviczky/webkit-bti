@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "InlineDisplayBox.h"
 #include "LayoutIntegrationLine.h"
 #include <wtf/HashMap.h>
@@ -79,7 +77,7 @@ struct InlineContent : public CanMakeWeakPtr<InlineContent> {
 
     const LineLayout& lineLayout() const { return *m_lineLayout; }
     const RenderObject& rendererForLayoutBox(const Layout::Box&) const;
-    const RenderBlockFlow& containingBlock() const;
+    const RenderBlockFlow& formattingContextRoot() const;
 
     size_t indexForBox(const InlineDisplay::Box&) const;
 
@@ -111,4 +109,3 @@ template<typename Function> void InlineContent::traverseNonRootInlineBoxes(const
 }
 }
 
-#endif

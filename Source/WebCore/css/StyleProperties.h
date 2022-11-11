@@ -90,7 +90,7 @@ public:
     PropertyReference propertyAt(unsigned) const;
 
     WEBCORE_EXPORT RefPtr<CSSValue> getPropertyCSSValue(CSSPropertyID) const;
-    WEBCORE_EXPORT String getPropertyValue(CSSPropertyID, Document* = nullptr) const;
+    WEBCORE_EXPORT String getPropertyValue(CSSPropertyID) const;
 
     WEBCORE_EXPORT std::optional<Color> propertyAsColor(CSSPropertyID) const;
     WEBCORE_EXPORT CSSValueID propertyAsValueID(CSSPropertyID) const;
@@ -150,6 +150,8 @@ protected:
 
 private:
     String getGridShorthandValue(const StylePropertyShorthand&) const;
+    String getGridRowColumnShorthandValue(const StylePropertyShorthand&) const;
+    String getGridAreaShorthandValue() const;
     String getGridTemplateValue() const;
     String getGridValue() const;
     String getShorthandValue(const StylePropertyShorthand&, const char* separator = " ") const;
@@ -164,6 +166,7 @@ private:
     String borderSpacingValue(const StylePropertyShorthand&) const;
     String fontValue() const;
     String fontVariantValue() const;
+    String fontSynthesisValue() const;
     String textDecorationSkipValue() const;
     String offsetValue() const;
     void appendFontLonghandValueIfExplicit(CSSPropertyID, StringBuilder& result, String& value) const;
@@ -225,8 +228,8 @@ public:
     bool addParsedProperty(const CSSProperty&);
 
     // These expand shorthand properties into multiple properties.
-    bool setProperty(CSSPropertyID, const String& value, bool important, CSSParserContext);
-    bool setProperty(CSSPropertyID, const String& value, bool important = false);
+    bool setProperty(CSSPropertyID, const String& value, bool important, CSSParserContext, bool* didFailParsing = nullptr);
+    bool setProperty(CSSPropertyID, const String& value, bool important = false, bool* didFailParsing = nullptr);
     void setProperty(CSSPropertyID, RefPtr<CSSValue>&&, bool important = false);
 
     // These do not. FIXME: This is too messy, we can do better.

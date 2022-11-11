@@ -158,7 +158,7 @@ WebCore::PrivateClickMeasurement DatabaseUtilities::buildPrivateClickMeasurement
     if (bundleID.isEmpty())
         bundleID = safariBundleID;
 
-    WebCore::PrivateClickMeasurement attribution(WebCore::PrivateClickMeasurement::SourceID(sourceID), WebCore::PrivateClickMeasurement::SourceSite(WebCore::RegistrableDomain::uncheckedCreateFromRegistrableDomainString(sourceSiteDomain)), WebCore::PrivateClickMeasurement::AttributionDestinationSite(WebCore::RegistrableDomain::uncheckedCreateFromRegistrableDomainString(destinationSiteDomain)), bundleID, WallTime::fromRawSeconds(timeOfAdClick), WebCore::PrivateClickMeasurement::AttributionEphemeral::No);
+    WebCore::PrivateClickMeasurement attribution(WebCore::PrivateClickMeasurement::SourceID(sourceID), WebCore::PCM::SourceSite(WebCore::RegistrableDomain::uncheckedCreateFromRegistrableDomainString(sourceSiteDomain)), WebCore::PCM::AttributionDestinationSite(WebCore::RegistrableDomain::uncheckedCreateFromRegistrableDomainString(destinationSiteDomain)), bundleID, WallTime::fromRawSeconds(timeOfAdClick), WebCore::PCM::AttributionEphemeral::No);
 
     // These indices are zero-based: https://www.sqlite.org/c3ref/column_blob.html "The leftmost column of the result set has the index 0".
     if (attributionType == PrivateClickMeasurementAttributionType::Attributed) {
@@ -171,9 +171,9 @@ WebCore::PrivateClickMeasurement DatabaseUtilities::buildPrivateClickMeasurement
         auto destinationKeyID = statement.columnText(14);
 
         if (attributionTriggerData != -1)
-            attribution.setAttribution(WebCore::PrivateClickMeasurement::AttributionTriggerData { static_cast<uint8_t>(attributionTriggerData), WebCore::PrivateClickMeasurement::Priority(priority) });
+            attribution.setAttribution(WebCore::PCM::AttributionTriggerData { static_cast<uint8_t>(attributionTriggerData), WebCore::PCM::AttributionTriggerData::Priority::PriorityValue(priority), { }, { }, { }, { }, { }, { } });
 
-        WebCore::PrivateClickMeasurement::DestinationSecretToken destinationSecretToken;
+        WebCore::PCM::DestinationSecretToken destinationSecretToken;
         destinationSecretToken.tokenBase64URL = destinationToken;
         destinationSecretToken.signatureBase64URL = destinationSignature;
         destinationSecretToken.keyIDBase64URL = destinationKeyID;
@@ -193,7 +193,7 @@ WebCore::PrivateClickMeasurement DatabaseUtilities::buildPrivateClickMeasurement
         attribution.setTimesToSend({ sourceEarliestTimeToSend, destinationEarliestTimeToSend });
     }
 
-    WebCore::PrivateClickMeasurement::SourceSecretToken sourceSecretToken;
+    WebCore::PCM::SourceSecretToken sourceSecretToken;
     sourceSecretToken.tokenBase64URL = token;
     sourceSecretToken.signatureBase64URL = signature;
     sourceSecretToken.keyIDBase64URL = keyID;
@@ -326,6 +326,41 @@ void DatabaseUtilities::migrateDataToNewTablesIfNecessary()
     }
 
     transaction.commit();
+}
+
+Vector<String> DatabaseUtilities::columnsForTable(ASCIILiteral tableName)
+{
+    auto statement = m_database.prepareStatementSlow(makeString("PRAGMA table_info(", tableName, ")"));
+
+    if (!statement) {
+        RELEASE_LOG_ERROR(PrivateClickMeasurement, "%p - Database::columnsForTable Unable to prepare statement to fetch schema for table, error message: %" PRIVATE_LOG_STRING, this, m_database.lastErrorMsg());
+        ASSERT_NOT_REACHED();
+        return { };
+    }
+
+    Vector<String> columns;
+    while (statement->step() == SQLITE_ROW) {
+        auto name = statement->columnText(1);
+        columns.append(name);
+    }
+
+    return columns;
+}
+
+bool DatabaseUtilities::addMissingColumnToTable(ASCIILiteral tableName, ASCIILiteral columnName)
+{
+    auto statement = m_database.prepareStatementSlow(makeString("ALTER TABLE ", tableName, " ADD COLUMN ", columnName));
+    if (!statement) {
+        RELEASE_LOG_ERROR(PrivateClickMeasurement, "%p - Database::addMissingColumnToTable Unable to prepare statement to add missing columns to table, error message: %" PRIVATE_LOG_STRING, this, m_database.lastErrorMsg());
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+    if (statement->step() != SQLITE_DONE) {
+        RELEASE_LOG_ERROR(PrivateClickMeasurement, "%p - Database::addMissingColumnToTable error executing statement to add missing columns to table, error message: %" PRIVATE_LOG_STRING, this, m_database.lastErrorMsg());
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+    return true;
 }
 
 } // namespace WebKit

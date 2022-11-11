@@ -66,6 +66,7 @@
 #include <WebCore/ServiceWorkerClientQueryOptions.h>
 #include <WebCore/ServiceWorkerJobDataIdentifier.h>
 #include <WebCore/UserAgent.h>
+#include <WebCore/UserContentURLPattern.h>
 #include <wtf/ProcessID.h>
 
 #if USE(QUICK_LOOK)
@@ -76,7 +77,7 @@ namespace WebKit {
 using namespace PAL;
 using namespace WebCore;
 
-WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection>&& connection, WebCore::RegistrableDomain&& registrableDomain, std::optional<WebCore::ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, RemoteWorkerInitializationData&& initializationData)
+WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection>&& connection, RegistrableDomain&& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, PageGroupIdentifier pageGroupID, WebPageProxyIdentifier webPageProxyID, PageIdentifier pageID, const WebPreferencesStore& store, RemoteWorkerInitializationData&& initializationData)
     : m_connectionToNetworkProcess(WTFMove(connection))
     , m_registrableDomain(WTFMove(registrableDomain))
     , m_serviceWorkerPageIdentifier(serviceWorkerPageIdentifier)
@@ -155,12 +156,14 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
 #if ENABLE(WEB_RTC)
         pageConfiguration.webRTCProvider = makeUniqueRef<RemoteWorkerLibWebRTCProvider>();
 #endif
+        if (auto* serviceWorkerPage = m_serviceWorkerPageIdentifier ? Page::serviceWorkerPage(*m_serviceWorkerPageIdentifier) : nullptr)
+            pageConfiguration.corsDisablingPatterns = serviceWorkerPage->corsDisablingPatterns();
 
         auto effectiveUserAgent =  WTFMove(userAgent);
         if (effectiveUserAgent.isNull())
             effectiveUserAgent = m_userAgent;
 
-        auto loaderClientForMainFrame = makeUniqueRef<RemoteWorkerFrameLoaderClient>(m_webPageProxyID, m_pageID, FrameIdentifier::generate(), effectiveUserAgent);
+        auto loaderClientForMainFrame = makeUniqueRef<RemoteWorkerFrameLoaderClient>(m_webPageProxyID, m_pageID, effectiveUserAgent);
         if (contextData.serviceWorkerPageIdentifier)
             loaderClientForMainFrame->setServiceWorkerPageIdentifier(*contextData.serviceWorkerPageIdentifier);
         pageConfiguration.loaderClientForMainFrame = WTFMove(loaderClientForMainFrame);
@@ -244,7 +247,7 @@ void WebSWContextManagerConnection::startFetch(SWServerConnectionIdentifier serv
         serviceWorkerThreadProxy->setLastNavigationWasAppInitiated(isAppInitiated);
     });
 
-    auto client = WebServiceWorkerFetchTaskClient::create(m_connectionToNetworkProcess.copyRef(), serviceWorkerIdentifier, serverConnectionIdentifier, fetchIdentifier, request.requester() == ResourceRequest::Requester::Main);
+    auto client = WebServiceWorkerFetchTaskClient::create(m_connectionToNetworkProcess.copyRef(), serviceWorkerIdentifier, serverConnectionIdentifier, fetchIdentifier, request.requester() == ResourceRequestRequester::Main);
 
     request.setHTTPBody(formData.takeData());
     serviceWorkerThreadProxy->startFetch(serverConnectionIdentifier, fetchIdentifier, WTFMove(client), WTFMove(request), WTFMove(referrer), WTFMove(options), isServiceWorkerNavigationPreloadEnabled, WTFMove(clientIdentifier), WTFMove(resultingClientIdentifier));

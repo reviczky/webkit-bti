@@ -178,6 +178,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         case AtomicsStore:
         case AtomicsSub:
         case AtomicsXor:
+        case NewArrayWithSpecies:
             return clobberTop();
         default:
             DFG_CRASH(graph, node, "Unhandled ArrayMode opcode.");
@@ -218,8 +219,6 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         return;
         
     case ArithIMul:
-    case ArithMin:
-    case ArithMax:
     case ArithPow:
     case GetScope:
     case SkipScope:
@@ -253,6 +252,17 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case BottomValue:
     case TypeOf:
         def(PureValue(node));
+        return;
+
+    case StringLocaleCompare:
+        read(World);
+        write(SideState);
+        def(PureValue(node));
+        return;
+
+    case ArithMin:
+    case ArithMax:
+        def(PureValue(graph, node));
         return;
 
     case GetGlobalThis:
@@ -731,6 +741,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case TailCallForwardVarargsInlinedCaller:
     case ConstructVarargs:
     case ConstructForwardVarargs:
+    case CallDirectEval:
     case ToPrimitive:
     case ToPropertyKey:
     case InByVal:
@@ -760,6 +771,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case StringValueOf:
     case ObjectKeys:
     case ObjectGetOwnPropertyNames:
+    case ObjectToString:
         clobberTop();
         return;
 
@@ -834,13 +846,6 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         write(TypedArrayProperties);
         return;
     }
-
-    case CallEval:
-        ASSERT(!node->origin.semantic.inlineCallFrame());
-        read(AbstractHeap(Stack, graph.m_codeBlock->scopeRegister()));
-        read(AbstractHeap(Stack, virtualRegisterForArgumentIncludingThis(0)));
-        clobberTop();
-        return;
 
     case Throw:
     case ThrowStaticError:
@@ -1563,6 +1568,10 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         def(HeapLocation(GlobalVariableLoc, AbstractHeap(Absolute, node->variablePointer())), LazyNode(node->child2().node()));
         return;
 
+    case NewArrayWithSpecies:
+        clobberTop();
+        return;
+
     case NewArrayWithSize:
         read(HeapObjectCount);
         write(HeapObjectCount);
@@ -1825,6 +1834,12 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         clobberTop();
         return;
 
+    case StringReplaceString:
+        if (node->child3().useKind() == StringUse)
+            return;
+        clobberTop();
+        return;
+
     case StringCharAt:
         if (node->arrayMode().isOutOfBounds()) {
             clobberTop();
@@ -2004,6 +2019,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         return;
 
     case StringSlice:
+    case StringSubstring:
         def(PureValue(node));
         return;
 

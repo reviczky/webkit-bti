@@ -921,6 +921,23 @@ public:
         }
     }
 
+    void loadPair64(RegisterID src, RegisterID dest1, RegisterID dest2)
+    {
+        loadPair64(src, TrustedImm32(0), dest1, dest2);
+    }
+
+    void loadPair64(RegisterID src, TrustedImm32 offset, RegisterID dest1, RegisterID dest2)
+    {
+        ASSERT(dest1 != dest2);
+        if (src == dest1) {
+            load64(Address(src, offset.m_value + 8), dest2);
+            load64(Address(src, offset.m_value), dest1);
+        } else {
+            load64(Address(src, offset.m_value), dest1);
+            load64(Address(src, offset.m_value + 8), dest2);
+        }
+    }
+
     void store8(RegisterID src, Address address)
     {
         auto resolution = resolveAddress(address, lazyTemp<Memory>());
@@ -1203,6 +1220,17 @@ public:
     {
         store32(src1, Address(dest, offset.m_value));
         store32(src2, Address(dest, offset.m_value + 4));
+    }
+
+    void storePair64(RegisterID src1, RegisterID src2, RegisterID dest)
+    {
+        storePair64(src1, src2, dest, TrustedImm32(0));
+    }
+
+    void storePair64(RegisterID src1, RegisterID src2, RegisterID dest, TrustedImm32 offset)
+    {
+        store64(src1, Address(dest, offset.m_value));
+        store64(src2, Address(dest, offset.m_value + 8));
     }
 
     void zeroExtend8To32(RegisterID src, RegisterID dest)
@@ -1725,9 +1753,9 @@ public:
     }
 
     template<PtrTag resultTag, PtrTag locationTag>
-    static FunctionPtr<resultTag> readCallTarget(CodeLocationCall<locationTag> call)
+    static CodePtr<resultTag> readCallTarget(CodeLocationCall<locationTag> call)
     {
-        return FunctionPtr<resultTag>(MacroAssemblerCodePtr<resultTag>(Assembler::readCallTarget(call.dataLocation())));
+        return CodePtr<resultTag>(Assembler::readCallTarget(call.dataLocation()));
     }
 
     template<PtrTag tag>
@@ -1765,24 +1793,24 @@ public:
     }
 
     template<PtrTag tag>
-    static void linkCall(void* code, Call call, FunctionPtr<tag> function)
+    static void linkCall(void* code, Call call, CodePtr<tag> function)
     {
         if (!call.isFlagSet(Call::Near))
-            Assembler::linkPointer(code, call.m_label, function.executableAddress());
+            Assembler::linkPointer(code, call.m_label, function.taggedPtr());
         else
-            Assembler::linkCall(code, call.m_label, function.template retaggedExecutableAddress<NoPtrTag>());
+            Assembler::linkCall(code, call.m_label, function.untaggedPtr());
     }
 
     template<PtrTag callTag, PtrTag destTag>
     static void repatchCall(CodeLocationCall<callTag> call, CodeLocationLabel<destTag> destination)
     {
-        Assembler::repatchPointer(call.dataLocation(), destination.executableAddress());
+        Assembler::repatchPointer(call.dataLocation(), destination.taggedPtr());
     }
 
     template<PtrTag callTag, PtrTag destTag>
-    static void repatchCall(CodeLocationCall<callTag> call, FunctionPtr<destTag> destination)
+    static void repatchCall(CodeLocationCall<callTag> call, CodePtr<destTag> destination)
     {
-        Assembler::repatchPointer(call.dataLocation(), destination.executableAddress());
+        Assembler::repatchPointer(call.dataLocation(), destination.taggedPtr());
     }
 
     Jump jump()
@@ -2835,10 +2863,10 @@ public:
     Call call(RegisterID target, RegisterID callTag) { UNUSED_PARAM(callTag); return call(target, NoPtrTag); }
     Call call(Address address, RegisterID callTag) { UNUSED_PARAM(callTag); return call(address, NoPtrTag); }
 
-    void callOperation(const FunctionPtr<OperationPtrTag> operation)
+    void callOperation(const CodePtr<OperationPtrTag> operation)
     {
         auto temp = temps<Data>();
-        loadImmediate(TrustedImmPtr(operation.executableAddress()), temp.data());
+        loadImmediate(TrustedImmPtr(operation.taggedPtr()), temp.data());
         m_assembler.jalrInsn(RISCV64Registers::x1, temp.data(), Imm::I<0>());
     }
 

@@ -9,8 +9,10 @@
 #include "libANGLE/renderer/gl/RendererGL.h"
 
 #include <EGL/eglext.h>
+#include <thread>
 
 #include "common/debug.h"
+#include "common/system_utils.h"
 #include "libANGLE/AttributeMap.h"
 #include "libANGLE/Context.h"
 #include "libANGLE/Display.h"
@@ -61,6 +63,11 @@ const char *kIgnoredErrors[] = {
     "FreeAllocationOnTimestamp - Reference to buffer created from "
     "different context without a share list. Application failed to pass "
     "share_context to eglCreateContext. Results are undefined.",
+    // http://crbug.com/1348684
+    "UpdateTimestamp - Reference to buffer created from different context without a share list. "
+    "Application failed to pass share_context to eglCreateContext. Results are undefined.",
+    "Attempt to use resource over contexts without enabling context sharing. App must pass a "
+    "share_context to eglCreateContext() to share resources.",
 };
 #endif  // defined(ANGLE_PLATFORM_ANDROID)
 
@@ -324,6 +331,18 @@ const gl::Limitations &RendererGL::getNativeLimitations() const
     return mNativeLimitations;
 }
 
+ShPixelLocalStorageType RendererGL::getNativePixelLocalStorageType() const
+{
+    if (!getNativeExtensions().shaderPixelLocalStorageANGLE)
+    {
+        return ShPixelLocalStorageType::NotSupported;
+    }
+    // OpenGL ES only allows read/write access to "r32*" images.
+    return getFunctions()->standard == StandardGL::STANDARD_GL_ES
+               ? ShPixelLocalStorageType::ImageStoreR32PackedFormats
+               : ShPixelLocalStorageType::ImageStoreNativeFormats;
+}
+
 MultiviewImplementationTypeGL RendererGL::getMultiviewImplementationType() const
 {
     ensureCapsInitialized();
@@ -373,7 +392,6 @@ bool RendererGL::bindWorkerContext(std::string *infoLog)
         return false;
     }
 
-    std::thread::id threadID = std::this_thread::get_id();
     std::lock_guard<std::mutex> lock(mWorkerMutex);
     std::unique_ptr<WorkerContext> workerContext;
     if (!mWorkerContextPool.empty())
@@ -397,16 +415,15 @@ bool RendererGL::bindWorkerContext(std::string *infoLog)
         mWorkerContextPool.push_back(std::move(workerContext));
         return false;
     }
-    mCurrentWorkerContexts[threadID] = std::move(workerContext);
+    mCurrentWorkerContexts[angle::GetCurrentThreadUniqueId()] = std::move(workerContext);
     return true;
 }
 
 void RendererGL::unbindWorkerContext()
 {
-    std::thread::id threadID = std::this_thread::get_id();
     std::lock_guard<std::mutex> lock(mWorkerMutex);
 
-    auto it = mCurrentWorkerContexts.find(threadID);
+    auto it = mCurrentWorkerContexts.find(angle::GetCurrentThreadUniqueId());
     ASSERT(it != mCurrentWorkerContexts.end());
     (*it).second->unmakeCurrent();
     mWorkerContextPool.push_back(std::move((*it).second));

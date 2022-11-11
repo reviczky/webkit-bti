@@ -134,6 +134,23 @@
       },
     },
 
+    'angle_deqp_gles2_gl_with_retry_gtests': {
+      'angle_deqp_gles2_gl_tests': {
+        'args': [
+          'angle_deqp_gles2_tests',
+          '--use-angle=gl',
+          '--bot-mode',
+          # Flaky crashes. See http://anglebug.com/6570
+          '--flaky-retries=2',
+        ],
+        'merge': {
+          'script': '//scripts/angle_deqp_test_merge.py',
+        },
+        'test': 'angle_deqp_gles2_tests',
+        'use_isolated_scripts_api': True,
+      },
+    },
+
     'angle_deqp_gles2_gles_gtests': {
       'angle_deqp_gles2_gles_tests': {
         'args': [
@@ -343,6 +360,26 @@
           'angle_deqp_gles3_tests',
           '--use-angle=gl',
           '--bot-mode',
+        ],
+        'merge': {
+          'script': '//scripts/angle_deqp_test_merge.py',
+        },
+        'swarming': {
+          'shards': 2,
+        },
+        'test': 'angle_deqp_gles3_tests',
+        'use_isolated_scripts_api': True,
+      },
+    },
+
+    'angle_deqp_gles3_gl_with_retry_gtests': {
+      'angle_deqp_gles3_gl_tests': {
+        'args': [
+          'angle_deqp_gles3_tests',
+          '--use-angle=gl',
+          '--bot-mode',
+          # Flaky crashes. See http://anglebug.com/6570
+          '--flaky-retries=2',
         ],
         'merge': {
           'script': '//scripts/angle_deqp_test_merge.py',
@@ -649,12 +686,30 @@
     'angle_gles1_conformance_gtests': {
       'angle_gles1_conformance_tests': {
         'android_args': [
-          '--shard-timeout=180',
+          '--shard-timeout=600',
           '-v',
         ],
         'args': [
           'angle_gles1_conformance_tests',
           '--test-timeout=300',
+        ],
+        'desktop_args': [
+          '--bot-mode',
+        ],
+        'use_isolated_scripts_api': True,
+      },
+    },
+
+    'angle_gles1_conformance_vulkan_gtests': {
+      'angle_gles1_conformance_tests': {
+        'android_args': [
+          '--shard-timeout=600',
+          '-v',
+        ],
+        'args': [
+          'angle_gles1_conformance_tests',
+          '--test-timeout=300',
+          '--gtest_filter=*Vulkan*',
         ],
         'desktop_args': [
           '--bot-mode',
@@ -760,6 +815,8 @@
           '--use-angle=swiftshader',
           '--bot-mode',
           '--batch-timeout=600',
+          # Mitigate flaky crashes in TSAN. http://crbug.com/1275223
+          '--flaky-retries=2',
         ],
         'linux_args': [
           '--xvfb',
@@ -772,6 +829,20 @@
       'angle_deqp_egl_tests': {
         'args': [
           'angle_deqp_egl_tests',
+          '--use-angle=swiftshader',
+          '--bot-mode',
+        ],
+        'linux_args': [
+          '--xvfb',
+        ],
+        'use_isolated_scripts_api': True,
+      },
+    },
+
+    'swangle_deqp_gl46_tests': {
+      'angle_deqp_gl46_tests': {
+        'args': [
+          'angle_deqp_gl46_tests',
           '--use-angle=swiftshader',
           '--bot-mode',
         ],
@@ -1071,6 +1142,7 @@
       'angle_deqp_khr_gles32_vulkan_gtests',
       'angle_deqp_khr_gles3_vulkan_gtests',
       'angle_end2end_gtests',
+      'angle_gles1_conformance_vulkan_gtests',
       'angle_unit_gtests',
     ],
 
@@ -1095,6 +1167,7 @@
     'linux_intel_gtests': [
       'angle_deqp_gles2_gl_gtests',
       'angle_end2end_gtests',
+      'angle_gles1_conformance_gtests',
       'angle_unit_gtests',
       'angle_white_box_gtests',
     ],
@@ -1119,6 +1192,7 @@
       'angle_deqp_khr_gles32_vulkan_gtests',
       'angle_deqp_khr_gles3_vulkan_gtests',
       'angle_end2end_gtests',
+      'angle_gles1_conformance_gtests',
       'angle_unit_gtests',
       'angle_white_box_gtests',
     ],
@@ -1126,9 +1200,9 @@
     'mac_amd_and_intel_gtests': [
       'angle_deqp_egl_gl_gtests',
       'angle_deqp_egl_metal_gtests',
-      'angle_deqp_gles2_gl_gtests',
+      'angle_deqp_gles2_gl_with_retry_gtests',
       'angle_deqp_gles2_metal_gtests',
-      'angle_deqp_gles3_gl_gtests',
+      'angle_deqp_gles3_gl_with_retry_gtests',
       'angle_deqp_gles3_metal_gtests',
       'angle_end2end_with_retry_gtests',
       'angle_unit_gtests',
@@ -1141,6 +1215,7 @@
 
     'swangle_gtests': [
       'swangle_deqp_egl_tests',
+      'swangle_deqp_gl46_tests',
       'swangle_deqp_gles2_tests',
       'swangle_deqp_gles31_rotate180_tests',
       'swangle_deqp_gles31_rotate270_tests',

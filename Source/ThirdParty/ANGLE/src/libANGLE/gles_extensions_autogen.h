@@ -140,6 +140,9 @@ struct Extensions
     // GL_OES_compressed_ETC2_sRGB8_texture
     bool compressedETC2SRGB8TextureOES = false;
 
+    // GL_OES_compressed_paletted_texture
+    bool compressedPalettedTextureOES = false;
+
     // GL_EXT_copy_image
     bool copyImageEXT = false;
 
@@ -602,6 +605,9 @@ struct Extensions
     // GL_ANGLE_get_tex_level_parameter
     bool getTexLevelParameterANGLE = false;
 
+    // GL_ANGLE_logic_op
+    bool logicOpANGLE = false;
+
     // GL_CHROMIUM_lose_context
     bool loseContextCHROMIUM = false;
 
@@ -655,6 +661,12 @@ struct Extensions
 
     // GL_ANGLE_semaphore_fuchsia
     bool semaphoreFuchsiaANGLE = false;
+
+    // GL_ANGLE_shader_pixel_local_storage
+    bool shaderPixelLocalStorageANGLE = false;
+
+    // GL_ANGLE_shader_pixel_local_storage_coherent
+    bool shaderPixelLocalStorageCoherentANGLE = false;
 
     // GL_CHROMIUM_sync_query
     bool syncQueryCHROMIUM = false;

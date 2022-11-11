@@ -21,8 +21,8 @@
 
 #include "ActiveDOMObject.h"
 #include "EventTarget.h"
+#include "LegacyMediaQueryEvaluator.h"
 #include "MediaList.h"
-#include "MediaQueryEvaluator.h"
 #include "MediaQueryMatcher.h"
 
 namespace WebCore {
@@ -32,7 +32,7 @@ namespace WebCore {
 // retrieve the current value of the given media query and to add/remove listeners that
 // will be called whenever the value of the query changes.
 
-class MediaQueryList final : public RefCounted<MediaQueryList>, public EventTargetWithInlineData, public ActiveDOMObject {
+class MediaQueryList final : public RefCounted<MediaQueryList>, public EventTarget, public ActiveDOMObject {
     WTF_MAKE_ISO_ALLOCATED(MediaQueryList);
 public:
     static Ref<MediaQueryList> create(Document&, MediaQueryMatcher&, Ref<MediaQuerySet>&&, bool matches);
@@ -44,7 +44,7 @@ public:
     void addListener(RefPtr<EventListener>&&);
     void removeListener(RefPtr<EventListener>&&);
 
-    void evaluate(MediaQueryEvaluator&, MediaQueryMatcher::EventMode);
+    void evaluate(LegacyMediaQueryEvaluator&, MediaQueryMatcher::EventMode);
 
     void detachFromMatcher();
 

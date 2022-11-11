@@ -32,7 +32,12 @@
 #include <errno.h>
 #include <gtk/gtk.h>
 #include <string.h>
+
+#if GTK_CHECK_VERSION(3, 98, 0)
+#include <webkit/webkit.h>
+#else
 #include <webkit2/webkit2.h>
+#endif
 
 #if !USE_GSTREAMER_FULL && (ENABLE_WEB_AUDIO || ENABLE_VIDEO)
 #include <gst/gst.h>
@@ -447,6 +452,7 @@ static void gotWebsiteDataCallback(WebKitWebsiteDataManager *manager, GAsyncResu
         "</script></head><body>\n");
 
     guint64 pageID = webkit_web_view_get_page_id(webkit_uri_scheme_request_get_web_view(dataRequest->request));
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     aboutDataFillTable(result, dataRequest, dataList, "Cookies", WEBKIT_WEBSITE_DATA_COOKIES, NULL, pageID);
     aboutDataFillTable(result, dataRequest, dataList, "Device Id Hash Salt", WEBKIT_WEBSITE_DATA_DEVICE_ID_HASH_SALT, NULL, pageID);
     aboutDataFillTable(result, dataRequest, dataList, "Memory Cache", WEBKIT_WEBSITE_DATA_MEMORY_CACHE, NULL, pageID);
@@ -461,6 +467,7 @@ static void gotWebsiteDataCallback(WebKitWebsiteDataManager *manager, GAsyncResu
     aboutDataFillTable(result, dataRequest, dataList, "Service Worker Registratations", WEBKIT_WEBSITE_DATA_SERVICE_WORKER_REGISTRATIONS,
         webkit_website_data_manager_get_service_worker_registrations_directory(manager), pageID);
     aboutDataFillTable(result, dataRequest, dataList, "DOM Cache", WEBKIT_WEBSITE_DATA_DOM_CACHE, webkit_website_data_manager_get_dom_cache_directory(manager), pageID);
+    G_GNUC_END_IGNORE_DEPRECATIONS
 
     result = g_string_append(result, "</body></html>");
     gsize streamLength = result->len;
@@ -658,8 +665,8 @@ static void activate(GApplication *application, WebKitSettings *webkitSettings)
     if (privateMode || automationMode)
         manager = webkit_website_data_manager_new_ephemeral();
     else {
-        char *dataDirectory = g_build_filename(g_get_user_data_dir(), "webkitgtk-" WEBKITGTK_API_VERSION_STRING, "MiniBrowser", NULL);
-        char *cacheDirectory = g_build_filename(g_get_user_cache_dir(), "webkitgtk-" WEBKITGTK_API_VERSION_STRING, "MiniBrowser", NULL);
+        char *dataDirectory = g_build_filename(g_get_user_data_dir(), "webkitgtk-" WEBKITGTK_API_VERSION, "MiniBrowser", NULL);
+        char *cacheDirectory = g_build_filename(g_get_user_cache_dir(), "webkitgtk-" WEBKITGTK_API_VERSION, "MiniBrowser", NULL);
         manager = webkit_website_data_manager_new("base-data-directory", dataDirectory, "base-cache-directory", cacheDirectory, NULL);
         g_free(dataDirectory);
         g_free(cacheDirectory);
@@ -676,8 +683,9 @@ static void activate(GApplication *application, WebKitSettings *webkitSettings)
     if (ignoreTLSErrors)
         webkit_website_data_manager_set_tls_errors_policy(manager, WEBKIT_TLS_ERRORS_POLICY_IGNORE);
 
-    WebKitWebContext *webContext = g_object_new(WEBKIT_TYPE_WEB_CONTEXT, "website-data-manager", manager, "process-swap-on-cross-site-navigation-enabled", TRUE,
+    WebKitWebContext *webContext = g_object_new(WEBKIT_TYPE_WEB_CONTEXT, "website-data-manager", manager,
 #if !GTK_CHECK_VERSION(3, 98, 0)
+        "process-swap-on-cross-site-navigation-enabled", TRUE,
         "use-system-appearance-for-scrollbars", FALSE,
 #endif
         "time-zone-override", timeZone,

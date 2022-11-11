@@ -29,6 +29,7 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "Logging.h"
+#include "PlatformImageBufferShareableBackend.h"
 #include "RemoteRenderingBackendProxy.h"
 #include "ThreadSafeRemoteImageBufferFlusher.h"
 #include <wtf/SystemTracing.h>
@@ -53,10 +54,10 @@ RemoteImageBufferProxy::~RemoteImageBufferProxy()
     }
 
     flushDrawingContextAsync();
-    m_remoteRenderingBackendProxy->remoteResourceCacheProxy().releaseImageBuffer(m_renderingResourceIdentifier);
+    m_remoteRenderingBackendProxy->remoteResourceCacheProxy().releaseImageBuffer(*this);
 }
 
-void RemoteImageBufferProxy::waitForDidFlushOnSecondaryThread(GraphicsContextFlushIdentifier targetFlushIdentifier)
+void RemoteImageBufferProxy::waitForDidFlushOnSecondaryThread(DisplayListRecorderFlushIdentifier targetFlushIdentifier)
 {
     ASSERT(!isMainRunLoop());
     Locker locker { m_receivedFlushIdentifierLock };
@@ -78,7 +79,7 @@ bool RemoteImageBufferProxy::hasPendingFlush() const
     return m_sentFlushIdentifier != m_receivedFlushIdentifier;
 }
 
-void RemoteImageBufferProxy::didFlush(GraphicsContextFlushIdentifier flushIdentifier)
+void RemoteImageBufferProxy::didFlush(DisplayListRecorderFlushIdentifier flushIdentifier)
 {
     ASSERT(isMainRunLoop());
     Locker locker { m_receivedFlushIdentifierLock };
@@ -103,6 +104,20 @@ void RemoteImageBufferProxy::backingStoreWillChange()
         return;
 
     prepareForBackingStoreChange();
+}
+
+void RemoteImageBufferProxy::didCreateImageBufferBackend(ImageBufferBackendHandle&& handle)
+{
+    ASSERT(!m_backend);
+    if (renderingMode() == RenderingMode::Accelerated && std::holds_alternative<ShareableBitmapHandle>(handle))
+        m_backendInfo = ImageBuffer::populateBackendInfo<UnacceleratedImageBufferShareableBackend>(parameters());
+    
+    if (renderingMode() == RenderingMode::Unaccelerated)
+        m_backend = UnacceleratedImageBufferShareableBackend::create(parameters(), WTFMove(handle));
+    else if (canMapBackingStore())
+        m_backend = AcceleratedImageBufferShareableMappedBackend::create(parameters(), WTFMove(handle));
+    else
+        m_backend = AcceleratedImageBufferRemoteBackend::create(parameters(), WTFMove(handle));
 }
 
 void RemoteImageBufferProxy::waitForDidFlushWithTimeout()
@@ -193,7 +208,9 @@ RefPtr<PixelBuffer> RemoteImageBufferProxy::getPixelBuffer(const PixelBufferForm
         return nullptr;
     auto& mutableThis = const_cast<RemoteImageBufferProxy&>(*this);
     mutableThis.flushDrawingContextAsync();
-    auto pixelBuffer = allocator.createPixelBuffer(destinationFormat, srcRect.size());
+    IntRect sourceRectScaled = srcRect;
+    sourceRectScaled.scale(resolutionScale());
+    auto pixelBuffer = allocator.createPixelBuffer(destinationFormat, sourceRectScaled.size());
     if (!pixelBuffer)
         return nullptr;
     if (!m_remoteRenderingBackendProxy->getPixelBufferForImageBuffer(m_renderingResourceIdentifier, destinationFormat, srcRect, { pixelBuffer->bytes(), pixelBuffer->sizeInBytes() }))
@@ -206,17 +223,12 @@ void RemoteImageBufferProxy::clearBackend()
     m_needsFlush = false;
     didFlush(m_sentFlushIdentifier);
     prepareForBackingStoreChange();
-    ImageBuffer::clearBackend();
+    m_backend = nullptr;
 }
 
 GraphicsContext& RemoteImageBufferProxy::context() const
 {
     return const_cast<RemoteImageBufferProxy*>(this)->m_remoteDisplayList;
-}
-
-GraphicsContext* RemoteImageBufferProxy::drawingContext()
-{
-    return &m_remoteDisplayList;
 }
 
 void RemoteImageBufferProxy::putPixelBuffer(const PixelBuffer& pixelBuffer, const IntRect& srcRect, const IntPoint& destPoint, AlphaPremultiplication destFormat)
@@ -269,7 +281,7 @@ bool RemoteImageBufferProxy::flushDrawingContextAsync()
     if (!m_needsFlush)
         return hasPendingFlush();
 
-    m_sentFlushIdentifier = GraphicsContextFlushIdentifier::generate();
+    m_sentFlushIdentifier = DisplayListRecorderFlushIdentifier::generate();
     LOG_WITH_STREAM(SharedDisplayLists, stream << "RemoteImageBufferProxy " << m_renderingResourceIdentifier << " flushDrawingContextAsync - flush " << m_sentFlushIdentifier);
     m_remoteDisplayList.flushContext(m_sentFlushIdentifier);
     m_needsFlush = false;

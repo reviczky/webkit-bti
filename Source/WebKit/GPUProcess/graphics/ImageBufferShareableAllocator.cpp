@@ -28,6 +28,7 @@
 
 #include "ImageBufferShareableBitmapBackend.h"
 #include "ShareablePixelBuffer.h"
+#include <WebCore/GraphicsContext.h>
 #include <WebCore/ImageBuffer.h>
 
 #if ENABLE(GPU_PROCESS)
@@ -57,7 +58,7 @@ RefPtr<ImageBuffer> ImageBufferShareableAllocator::createImageBuffer(const Float
     if (!bitmap)
         return nullptr;
 
-    ShareableBitmap::Handle handle;
+    ShareableBitmapHandle handle;
     if (!bitmap->createHandle(handle))
         return nullptr;
 

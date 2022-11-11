@@ -68,23 +68,6 @@ using namespace HTMLNames;
 
 static Position positionForIndex(TextControlInnerTextElement*, unsigned);
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/HTMLTextFormControlElementAdditions.mm>
-#else
-
-static String pointerTypeFromHitTestRequest(HitTestRequest)
-{
-    return WebCore::mousePointerEventType();
-}
-
-static bool showPlaceholderForPointer(bool, String)
-{
-    return true;
-}
-
-#endif
-
-
 HTMLTextFormControlElement::HTMLTextFormControlElement(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
     : HTMLFormControlElementWithState(tagName, document, form)
     , m_cachedSelectionDirection(document.frame() && document.frame()->editor().behavior().shouldConsiderSelectionAsDirectional() ? SelectionHasForwardDirection : SelectionHasNoDirection)
@@ -115,6 +98,19 @@ Node::InsertedIntoAncestorResult HTMLTextFormControlElement::insertedIntoAncesto
         setTextAsOfLastFormControlChangeEvent(initialValue.isNull() ? emptyString() : initialValue);
     }
     return InsertedIntoAncestorResult;
+}
+
+static String pointerTypeFromHitTestRequest(HitTestRequest request)
+{
+#if ENABLE(PENCIL_HOVER)
+    if (request.penEvent())
+        return WebCore::penPointerEventType();
+    if (request.touchEvent())
+        return WebCore::touchPointerEventType();
+#else
+    UNUSED_PARAM(request);
+#endif
+    return WebCore::mousePointerEventType();
 }
 
 void HTMLTextFormControlElement::setHovered(bool over, Style::InvalidationScope invalidationScope, HitTestRequest request)
@@ -179,7 +175,7 @@ bool HTMLTextFormControlElement::placeholderShouldBeVisible() const
 {
     // This function is used by the style resolver to match the :placeholder-shown pseudo class.
     // Since it is used for styling, it must not use any value depending on the style.
-    return supportsPlaceholder() && isEmptyValue() && !isPlaceholderEmpty() && m_canShowPlaceholder && showPlaceholderForPointer(hovered(), m_pointerType);
+    return supportsPlaceholder() && isEmptyValue() && !isPlaceholderEmpty() && m_canShowPlaceholder && !(hovered() && m_pointerType == penPointerEventType());
 }
 
 void HTMLTextFormControlElement::updatePlaceholderVisibility()
@@ -322,9 +318,8 @@ bool HTMLTextFormControlElement::setSelectionRange(unsigned start, unsigned end,
         direction = SelectionHasForwardDirection;
 
     if (!hasFocus && innerText) {
-        if (!isConnected()) {
+        if (!isConnected())
             return cacheSelection(start, end, direction);
-        }
 
         // FIXME: Removing this synchronous layout requires fixing setSelectionWithoutUpdatingAppearance not needing up-to-date style.
         document().updateLayoutIgnorePendingStylesheets();
@@ -333,22 +328,22 @@ bool HTMLTextFormControlElement::setSelectionRange(unsigned start, unsigned end,
             return false;
 
         // Double-check our connected state after the layout update.
-        if (!isConnected()) {
+        if (!isConnected())
             return cacheSelection(start, end, direction);
-        }
 
         // Double-check the state of innerTextElement after the layout.
         innerText = innerTextElement();
         auto* rendererTextControl = renderer();
 
-        if (innerText && rendererTextControl) {
-            if (rendererTextControl->style().visibility() == Visibility::Hidden || !innerText->renderBox() || !innerText->renderBox()->height()) {
-                return cacheSelection(start, end, direction);
-            }
-        }
+        if (innerText && rendererTextControl && (rendererTextControl->style().visibility() == Visibility::Hidden || !innerText->renderBox() || !innerText->renderBox()->height()))
+            return cacheSelection(start, end, direction);
     }
 
-    bool didChange = cacheSelection(start, end, direction);
+    auto previousSelectionStart = m_cachedSelectionStart;
+    auto previousSelectionEnd = m_cachedSelectionEnd;
+    auto previousSelectionDirection = m_cachedSelectionDirection;
+
+    cacheSelection(start, end, direction);
     Position startPosition = positionForIndex(innerText.get(), start);
     Position endPosition;
     if (start == end)
@@ -364,7 +359,7 @@ bool HTMLTextFormControlElement::setSelectionRange(unsigned start, unsigned end,
     if (RefPtr<Frame> frame = document().frame())
         frame->selection().moveWithoutValidationTo(startPosition, endPosition, direction != SelectionHasNoDirection, !hasFocus, revealMode, intent);
 
-    return didChange;
+    return m_cachedSelectionStart != previousSelectionStart || m_cachedSelectionEnd != previousSelectionEnd || m_cachedSelectionDirection != previousSelectionDirection;
 }
 
 bool HTMLTextFormControlElement::cacheSelection(unsigned start, unsigned end, TextFieldSelectionDirection direction)
@@ -573,7 +568,7 @@ void HTMLTextFormControlElement::readOnlyStateChanged()
 
 bool HTMLTextFormControlElement::isInnerTextElementEditable() const
 {
-    return !isDisabledOrReadOnly();
+    return isMutable();
 }
 
 void HTMLTextFormControlElement::updateInnerTextElementEditability()
@@ -817,10 +812,8 @@ String HTMLTextFormControlElement::directionForFormData() const
                 return TextDirection::RTL;
             if (equalLettersIgnoringASCIICase(value, "ltr"_s))
                 return TextDirection::LTR;
-            if (equalLettersIgnoringASCIICase(value, "auto"_s)) {
-                bool isAuto;
-                return element.directionalityIfhasDirAutoAttribute(isAuto);
-            }
+            if (equalLettersIgnoringASCIICase(value, "auto"_s))
+                return element.directionalityIfDirIsAuto().value_or(TextDirection::LTR);
         }
         return TextDirection::LTR;
     }();

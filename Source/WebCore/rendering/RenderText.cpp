@@ -85,7 +85,9 @@ struct SameSizeAsRenderText : public RenderObject {
 #if ENABLE(TEXT_AUTOSIZING)
     float candidateTextSize;
 #endif
-    float widths[4];
+    float widths[2];
+    std::optional<float> minWidth;
+    std::optional<float> maxWidth;
     String text;
 };
 
@@ -400,32 +402,25 @@ static FloatRect boundariesForTextRun(const InlineIterator::TextBox& run)
     return run.visualRectIgnoringBlockDirection();
 }
 
-static IntRect ellipsisRectForTextRun(const InlineIterator::TextBox& run, unsigned start, unsigned end)
+static std::optional<IntRect> ellipsisRectForTextRun(const InlineIterator::TextBox& run, unsigned start, unsigned end)
 {
-    // FIXME: No ellipsis support in modern path yet.
-    if (!run.legacyInlineBox())
+    auto lineBox = run.lineBox();
+    if (!lineBox->hasEllipsis())
         return { };
 
-    auto& box = *run.legacyInlineBox();
-
-    auto truncation = box.truncation();
-    if (!truncation)
+    auto selectableRange = run.selectableRange();
+    if (!selectableRange.truncation)
         return { };
 
-    auto ellipsis = box.root().ellipsisBox();
-    if (!ellipsis)
-        return { };
-
-    int ellipsisStartPosition = std::max<int>(start - box.start(), 0);
-    int ellipsisEndPosition = std::min<int>(end - box.start(), box.len());
-
+    auto ellipsisStartPosition = std::max<unsigned>(start - selectableRange.start, 0);
+    auto ellipsisEndPosition = std::min<unsigned>(end - selectableRange.start, selectableRange.length);
     // The ellipsis should be considered to be selected if the end of
     // the selection is past the beginning of the truncation and the
     // beginning of the selection is before or at the beginning of the truncation.
-    if (ellipsisEndPosition < *truncation && ellipsisStartPosition > *truncation)
+    if (ellipsisEndPosition < *selectableRange.truncation && ellipsisStartPosition > *selectableRange.truncation)
         return { };
 
-    return ellipsis->selectionRect();
+    return IntRect { lineBox->ellipsisVisualRect(InlineIterator::LineBox::AdjustedForSelection::Yes) };
 }
 
 enum class ClippingOption { NoClipping, ClipToEllipsis };
@@ -439,12 +434,11 @@ static Vector<FloatQuad> collectAbsoluteQuads(const RenderText& textRenderer, bo
 
         // Shorten the width of this text box if it ends in an ellipsis.
         if (clipping == ClippingOption::ClipToEllipsis) {
-            auto ellipsisRect = ellipsisRectForTextRun(run, 0, textRenderer.text().length());
-            if (!ellipsisRect.isEmpty()) {
+            if (auto ellipsisRect = ellipsisRectForTextRun(run, 0, textRenderer.text().length())) {
                 if (textRenderer.style().isHorizontalWritingMode())
-                    boundaries.setWidth(ellipsisRect.maxX() - boundaries.x());
+                    boundaries.setWidth(ellipsisRect->maxX() - boundaries.x());
                 else
-                    boundaries.setHeight(ellipsisRect.maxY() - boundaries.y());
+                    boundaries.setHeight(ellipsisRect->maxY() - boundaries.y());
             }
         }
         
@@ -465,8 +459,7 @@ void RenderText::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed) const
 
 static FloatRect localQuadForTextRun(const InlineIterator::TextBox& run, unsigned start, unsigned end, bool useSelectionHeight)
 {
-    unsigned realEnd = std::min(run.end(), end);
-    LayoutRect boxSelectionRect = run.selectionRect(start, realEnd);
+    LayoutRect boxSelectionRect = run.selectionRect(start, end);
     if (!boxSelectionRect.height())
         return { };
     if (useSelectionHeight)
@@ -825,8 +818,8 @@ RenderText::Widths RenderText::trimmedPreferredWidths(float leadWidth, bool& str
     if (!length || (stripFrontSpaces && text().isAllSpecialCharacters<isHTMLSpace>()))
         return widths;
 
-    widths.min = m_minWidth;
-    widths.max = m_maxWidth;
+    widths.min = m_minWidth.value_or(-1);
+    widths.max = m_maxWidth.value_or(-1);
 
     widths.beginMin = m_beginMinWidth;
     widths.endMin = m_endMinWidth;
@@ -891,18 +884,18 @@ static inline bool isSpaceAccordingToStyle(UChar c, const RenderStyle& style)
 
 float RenderText::minLogicalWidth() const
 {
-    if (preferredLogicalWidthsDirty())
+    if (preferredLogicalWidthsDirty() || !m_minWidth)
         const_cast<RenderText*>(this)->computePreferredLogicalWidths(0);
-        
-    return m_minWidth;
+
+    return *m_minWidth;
 }
 
 float RenderText::maxLogicalWidth() const
 {
-    if (preferredLogicalWidthsDirty())
+    if (preferredLogicalWidthsDirty() || !m_maxWidth)
         const_cast<RenderText*>(this)->computePreferredLogicalWidths(0);
-        
-    return m_maxWidth;
+
+    return *m_maxWidth;
 }
 
 LineBreakIteratorMode mapLineBreakToIteratorMode(LineBreak lineBreak)
@@ -1165,7 +1158,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Fo
             }
             m_endMinWidth = currMinWidth;
 
-            m_minWidth = std::max(currMinWidth, m_minWidth);
+            m_minWidth = std::max(currMinWidth, *m_minWidth);
 
             i += wordLen - 1;
         } else {
@@ -1182,7 +1175,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Fo
                         m_beginMinWidth = currMaxWidth;
                 }
 
-                if (currMaxWidth > m_maxWidth)
+                if (currMaxWidth > *m_maxWidth)
                     m_maxWidth = currMaxWidth;
                 currMaxWidth = 0;
             } else {
@@ -1204,14 +1197,14 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Fo
     if ((needsWordSpacing && length > 1) || (ignoringSpaces && !firstWord))
         currMaxWidth += wordSpacing;
 
-    m_maxWidth = std::max(currMaxWidth, m_maxWidth);
+    m_maxWidth = std::max(currMaxWidth, *m_maxWidth);
 
     if (!style.autoWrap())
         m_minWidth = m_maxWidth;
 
     if (style.whiteSpace() == WhiteSpace::Pre) {
         if (firstLine)
-            m_beginMinWidth = m_maxWidth;
+            m_beginMinWidth = *m_maxWidth;
         m_endMinWidth = currMaxWidth;
     }
 
@@ -1484,10 +1477,8 @@ void RenderText::setText(const String& text, bool force)
     setNeedsLayoutAndPrefWidthsRecalc();
     m_knownToHaveNoOverflowAndNoFallbackFonts = false;
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     if (auto* container = LayoutIntegration::LineLayout::blockContainer(*this))
         container->invalidateLineLayoutPath();
-#endif
 
     if (AXObjectCache* cache = document().existingAXObjectCache())
         cache->deferTextChangedIfNeeded(textNode());
@@ -1532,11 +1523,7 @@ void RenderText::positionLineBox(LegacyInlineTextBox& textBox)
 
 bool RenderText::usesLegacyLineLayoutPath() const
 {
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     return !LayoutIntegration::LineLayout::containing(*this);
-#else
-    return true;
-#endif
 }
 
 float RenderText::width(unsigned from, unsigned len, float xPos, bool firstLine, HashSet<const Font*>* fallbackFonts, GlyphOverflow* glyphOverflow) const
@@ -1574,7 +1561,7 @@ float RenderText::width(unsigned from, unsigned length, const FontCascade& fontC
                     if (fallbackFonts->isEmpty() && !glyphOverflow->left && !glyphOverflow->right && !glyphOverflow->top && !glyphOverflow->bottom)
                         m_knownToHaveNoOverflowAndNoFallbackFonts = true;
                 }
-                width = m_maxWidth;
+                width = *m_maxWidth;
             } else
                 width = maxLogicalWidth();
         } else
@@ -1654,7 +1641,7 @@ LayoutRect RenderText::collectSelectionGeometriesForLineBoxes(const RenderLayerM
     for (auto& run : InlineIterator::textBoxesFor(*this)) {
         LayoutRect rect;
         rect.unite(run.selectionRect(startOffset, endOffset));
-        rect.unite(ellipsisRectForTextRun(run, startOffset, endOffset));
+        rect.unite(ellipsisRectForTextRun(run, startOffset, endOffset).value_or(IntRect { }));
         if (rect.isEmpty())
             continue;
 

@@ -95,6 +95,7 @@ AudioSourceProviderGStreamer::AudioSourceProviderGStreamer(MediaStreamTrackPriva
     initializeDebugCategory();
     auto pipelineName = makeString("WebAudioProvider_MediaStreamTrack_", source.id());
     m_pipeline = gst_element_factory_make("pipeline", pipelineName.utf8().data());
+    GST_DEBUG_OBJECT(m_pipeline.get(), "MediaStream WebAudio provider created");
     auto src = webkitMediaStreamSrcNew();
     webkitMediaStreamSrcAddTrack(WEBKIT_MEDIA_STREAM_SRC(src), &source, true);
 
@@ -247,14 +248,16 @@ GstFlowReturn AudioSourceProviderGStreamer::handleSample(GstAppSink* sink, bool 
     return GST_FLOW_OK;
 }
 
-void AudioSourceProviderGStreamer::setClient(AudioSourceProviderClient* newClient)
+void AudioSourceProviderGStreamer::setClient(WeakPtr<AudioSourceProviderClient>&& newClient)
 {
-    if (client() == newClient)
+    if (client() == newClient.get())
         return;
 
-    GST_DEBUG("Setting up client %p (previous: %p)", newClient, client());
+#if ENABLE(MEDIA_STREAM)
+    GST_DEBUG_OBJECT(m_pipeline.get(), "Setting up client %p (previous: %p)", newClient.get(), client());
+#endif
     bool previousClientWasValid = !!m_client;
-    m_client = newClient;
+    m_client = WTFMove(newClient);
 
     // The volume element is used to mute audio playback towards the
     // autoaudiosink. This is needed to avoid double playback of audio
@@ -340,7 +343,9 @@ void AudioSourceProviderGStreamer::setClient(AudioSourceProviderClient* newClien
 
 void AudioSourceProviderGStreamer::handleNewDeinterleavePad(GstPad* pad)
 {
-    GST_DEBUG("New pad %" GST_PTR_FORMAT, pad);
+#if ENABLE(MEDIA_STREAM)
+    GST_DEBUG_OBJECT(m_pipeline.get(), "New pad %" GST_PTR_FORMAT, pad);
+#endif
 
     // A new pad for a planar channel was added in deinterleave. Plug
     // in an appsink so we can pull the data from each

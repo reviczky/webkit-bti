@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "FormattingQuirks.h"
 #include "InlineLineBox.h"
 
@@ -39,8 +37,9 @@ class InlineFormattingQuirks : public FormattingQuirks {
 public:
     InlineFormattingQuirks(const InlineFormattingContext&);
 
+    bool shouldPreserveTrailingWhitespace(bool isInIntrinsicWidthMode, bool lineHasBidiContent, bool lineHasOverflow, bool lineEndWithLineBreak) const;
+    bool trailingNonBreakingSpaceNeedsAdjustment(bool isInIntrinsicWidthMode, bool lineHasOverflow) const;
     InlineLayoutUnit initialLineHeight() const;
-    bool hasSoftWrapOpportunityAtImage() const;
     bool inlineLevelBoxAffectsLineBox(const InlineLevelBox&, const LineBox&) const;
 };
 
@@ -49,4 +48,3 @@ public:
 
 SPECIALIZE_TYPE_TRAITS_LAYOUT_FORMATTING_QUIRKS(InlineFormattingQuirks, isInlineFormattingQuirks())
 
-#endif

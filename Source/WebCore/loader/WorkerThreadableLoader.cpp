@@ -123,7 +123,12 @@ WorkerThreadableLoader::MainThreadBridge::MainThreadBridge(ThreadableLoaderClien
     ASSERT(contentSecurityPolicy);
 
     auto securityOriginCopy = securityOrigin->isolatedCopy();
-    auto contentSecurityPolicyIsolatedCopy = makeUnique<ContentSecurityPolicy>(globalScope.url().isolatedCopy());
+    ReportingClient* reportingClient = nullptr;
+    if (auto* client = m_loaderProxy.reportingClient())
+        reportingClient = client;
+    else if (auto* workerScope = dynamicDowncast<WorkerGlobalScope>(globalScope))
+        reportingClient = workerScope;
+    auto contentSecurityPolicyIsolatedCopy = makeUnique<ContentSecurityPolicy>(globalScope.url().isolatedCopy(), nullptr, reportingClient);
     contentSecurityPolicyIsolatedCopy->copyStateFrom(contentSecurityPolicy, ContentSecurityPolicy::ShouldMakeIsolatedCopy::Yes);
     contentSecurityPolicyIsolatedCopy->copyUpgradeInsecureRequestStateFrom(*contentSecurityPolicy, ContentSecurityPolicy::ShouldMakeIsolatedCopy::Yes);
     auto crossOriginEmbedderPolicyCopy = globalScope.crossOriginEmbedderPolicy().isolatedCopy();
@@ -221,14 +226,6 @@ void WorkerThreadableLoader::MainThreadBridge::notifyIsDone(bool isDone)
 void WorkerThreadableLoader::MainThreadBridge::clearClientWrapper()
 {
     m_workerClientWrapper->clearClient();
-}
-
-void WorkerThreadableLoader::MainThreadBridge::redirectReceived(const URL& redirectURL)
-{
-    ScriptExecutionContext::postTaskForModeToWorkerOrWorklet(m_contextIdentifier, [protectedWorkerClientWrapper = Ref { *m_workerClientWrapper }, redirectURL = redirectURL.isolatedCopy()] (ScriptExecutionContext& context) mutable {
-        ASSERT_UNUSED(context, context.isWorkerGlobalScope() || context.isWorkletGlobalScope());
-        protectedWorkerClientWrapper->redirectReceived(redirectURL);
-    }, m_taskMode);
 }
 
 void WorkerThreadableLoader::MainThreadBridge::didSendData(unsigned long long bytesSent, unsigned long long totalBytesToBeSent)

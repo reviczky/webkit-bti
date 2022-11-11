@@ -75,7 +75,6 @@ public:
     const String& referrerPolicy() const { return m_referrerPolicy; }
     const CrossOriginEmbedderPolicy& crossOriginEmbedderPolicy() const { return m_crossOriginEmbedderPolicy; }
     const URL& url() const { return m_url; }
-    const URL& lastRequestURL() const { return m_lastRequestURL; }
     const URL& responseURL() const;
     ResourceResponse::Source responseSource() const { return m_responseSource; }
     bool isRedirected() const { return m_isRedirected; }
@@ -88,7 +87,6 @@ public:
 
     WorkerFetchResult fetchResult() const;
 
-    void redirectReceived(const URL& redirectURL) override;
     void didReceiveResponse(ResourceLoaderIdentifier, const ResourceResponse&) override;
     void didReceiveData(const SharedBuffer&) override;
     void didFinishLoading(ResourceLoaderIdentifier, const NetworkLoadMetrics&) override;
@@ -123,7 +121,6 @@ private:
     RefPtr<TextResourceDecoder> m_decoder;
     ScriptBuffer m_script;
     URL m_url;
-    URL m_lastRequestURL;
     URL m_responseURL;
     CertificateInfo m_certificateInfo;
     String m_responseMIMEType;
@@ -137,11 +134,14 @@ private:
     bool m_finishing { false };
     bool m_isRedirected { false };
     bool m_isCOEPEnabled { false };
+    bool m_didAddToWorkerScriptLoaderMap { false };
     ResourceResponse::Source m_responseSource { ResourceResponse::Source::Unknown };
     ResourceResponse::Tainting m_responseTainting { ResourceResponse::Tainting::Basic };
     ResourceError m_error;
     ScriptExecutionContextIdentifier m_clientIdentifier;
 #if ENABLE(SERVICE_WORKER)
+    bool m_isMatchingServiceWorkerRegistration { false };
+    std::optional<SecurityOriginData> m_topOriginForServiceWorkerRegistration;
     std::optional<ServiceWorkerData> m_activeServiceWorkerData;
 #endif
     String m_userAgentForSharedWorker;

@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "FormattingContext.h"
 #include "LayoutState.h"
 #include <wtf/IsoMalloc.h>
@@ -87,7 +85,7 @@ private:
 inline void FormattingState::setIntrinsicWidthConstraintsForBox(const Box& layoutBox, IntrinsicWidthConstraints intrinsicWidthConstraints)
 {
     ASSERT(!m_intrinsicWidthConstraintsForBoxes.contains(&layoutBox));
-    ASSERT(&m_layoutState.formattingStateForBox(layoutBox) == this);
+    ASSERT(&m_layoutState.formattingStateForFormattingContext(FormattingContext::formattingContextRoot(layoutBox)) == this);
     m_intrinsicWidthConstraintsForBoxes.set(&layoutBox, intrinsicWidthConstraints);
 }
 
@@ -99,7 +97,7 @@ inline void FormattingState::clearIntrinsicWidthConstraints(const Box& layoutBox
 
 inline std::optional<IntrinsicWidthConstraints> FormattingState::intrinsicWidthConstraintsForBox(const Box& layoutBox) const
 {
-    ASSERT(&m_layoutState.formattingStateForBox(layoutBox) == this);
+    ASSERT(&m_layoutState.formattingStateForFormattingContext(FormattingContext::formattingContextRoot(layoutBox)) == this);
     auto iterator = m_intrinsicWidthConstraintsForBoxes.find(&layoutBox);
     if (iterator == m_intrinsicWidthConstraintsForBoxes.end())
         return { };
@@ -114,4 +112,3 @@ SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::Layout::ToValueTypeName) \
     static bool isType(const WebCore::Layout::FormattingState& formattingState) { return formattingState.predicate; } \
 SPECIALIZE_TYPE_TRAITS_END()
 
-#endif

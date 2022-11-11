@@ -46,10 +46,10 @@
 #include "HTMLSourceElement.h"
 #include "HTMLSrcsetParser.h"
 #include "LazyLoadImageObserver.h"
+#include "LegacyMediaQueryEvaluator.h"
 #include "Logging.h"
 #include "MIMETypeRegistry.h"
 #include "MediaList.h"
-#include "MediaQueryEvaluator.h"
 #include "MouseEvent.h"
 #include "NodeTraversal.h"
 #include "PlatformMouseEvent.h"
@@ -225,15 +225,22 @@ ImageCandidate HTMLImageElement::bestFitSourceFromPictureElement()
         }
 
         RefPtr documentElement = document().documentElement();
-        MediaQueryEvaluator evaluator { document().printing() ? "print"_s : "screen"_s, document(), documentElement ? documentElement->computedStyle() : nullptr };
+        LegacyMediaQueryEvaluator evaluator { document().printing() ? "print"_s : "screen"_s, document(), documentElement ? documentElement->computedStyle() : nullptr };
         auto* queries = source.parsedMediaAttribute(document());
         LOG(MediaQueries, "HTMLImageElement %p bestFitSourceFromPictureElement evaluating media queries", this);
 
-        auto evaluation = !queries || evaluator.evaluate(*queries, &m_mediaQueryDynamicResults);
-        if (!evaluation)
+        auto result = !queries || evaluator.evaluate(*queries);
+
+        if (queries && !mediaQueryDynamicDependencies(*queries, evaluator).isEmpty())
+            m_dynamicMediaQueryResults.append({ *queries, result });
+
+        if (!result)
             continue;
 
-        SizesAttributeParser sizesParser(source.attributeWithoutSynchronization(sizesAttr).string(), document(), &m_mediaQueryDynamicResults);
+        SizesAttributeParser sizesParser(source.attributeWithoutSynchronization(sizesAttr).string(), document());
+
+        m_dynamicMediaQueryResults.appendVector(sizesParser.dynamicMediaConditionResults());
+
         auto sourceSize = sizesParser.length();
 
         candidate = bestFitSourceForImageAttributes(document().deviceScaleFactor(), nullAtom(), srcset, sourceSize);
@@ -249,9 +256,17 @@ ImageCandidate HTMLImageElement::bestFitSourceFromPictureElement()
 void HTMLImageElement::evaluateDynamicMediaQueryDependencies()
 {
     RefPtr documentElement = document().documentElement();
-    MediaQueryEvaluator evaluator { document().printing() ? "print"_s : "screen"_s, document(), documentElement ? documentElement->computedStyle() : nullptr };
+    LegacyMediaQueryEvaluator evaluator { document().printing() ? "print"_s : "screen"_s, document(), documentElement ? documentElement->computedStyle() : nullptr };
 
-    if (!evaluator.evaluateForChanges(m_mediaQueryDynamicResults))
+    auto hasChanges = [&] {
+        for (auto& condition : m_dynamicMediaQueryResults) {
+            if (condition.result != evaluator.evaluate(condition.query.get()))
+                return true;
+        }
+        return false;
+    }();
+
+    if (!hasChanges)
         return;
 
     selectImageSource(RelevantMutation::No);
@@ -259,7 +274,7 @@ void HTMLImageElement::evaluateDynamicMediaQueryDependencies()
 
 void HTMLImageElement::selectImageSource(RelevantMutation relevantMutation)
 {
-    m_mediaQueryDynamicResults = { };
+    m_dynamicMediaQueryResults = { };
     document().removeDynamicMediaQueryDependentImage(*this);
 
     // First look for the best fit source from our <picture> parent if we have one.
@@ -267,18 +282,19 @@ void HTMLImageElement::selectImageSource(RelevantMutation relevantMutation)
     if (candidate.isEmpty()) {
         setSourceElement(nullptr);
         // If we don't have a <picture> or didn't find a source, then we use our own attributes.
-        SizesAttributeParser sizesParser(attributeWithoutSynchronization(sizesAttr).string(), document(), &m_mediaQueryDynamicResults);
+        SizesAttributeParser sizesParser(attributeWithoutSynchronization(sizesAttr).string(), document());
+        m_dynamicMediaQueryResults.appendVector(sizesParser.dynamicMediaConditionResults());
         auto sourceSize = sizesParser.length();
         candidate = bestFitSourceForImageAttributes(document().deviceScaleFactor(), attributeWithoutSynchronization(srcAttr), attributeWithoutSynchronization(srcsetAttr), sourceSize);
     }
     setBestFitURLAndDPRFromImageCandidate(candidate);
     m_imageLoader->updateFromElementIgnoringPreviousError(relevantMutation);
 
-    if (!m_mediaQueryDynamicResults.isEmpty())
+    if (!m_dynamicMediaQueryResults.isEmpty())
         document().addDynamicMediaQueryDependentImage(*this);
 }
 
-bool HTMLImageElement::hasLazyLoadableAttributeValue(const AtomString& attributeValue)
+bool HTMLImageElement::hasLazyLoadableAttributeValue(StringView attributeValue)
 {
     return equalLettersIgnoringASCIICase(attributeValue, "lazy"_s);
 }
@@ -767,7 +783,32 @@ bool HTMLImageElement::allowsOrientationOverride() const
     return !image || image->sourceURL().protocolIsData() || cachedImage->isCORSSameOrigin();
 }
 
+Image* HTMLImageElement::image() const
+{
+    if (auto* cachedImage = this->cachedImage())
+        return cachedImage->image();
+    return nullptr;
+}
+
+bool HTMLImageElement::allowsAnimation() const
+{
+    if (auto* image = this->image())
+        return image->allowsAnimation().value_or(document().page() ? document().page()->imageAnimationEnabled() : false);
+    return false;
+}
+
+void HTMLImageElement::setAllowsAnimation(bool allowsAnimation)
+{
+    if (auto* image = this->image())
+        return image->setAllowsAnimation(allowsAnimation);
+}
+
 #if ENABLE(ATTACHMENT_ELEMENT)
+
+void HTMLImageElement::didUpdateAttachmentIdentifier()
+{
+    m_pendingClonedAttachmentID = { };
+}
 
 void HTMLImageElement::setAttachmentElement(Ref<HTMLAttachmentElement>&& attachment)
 {

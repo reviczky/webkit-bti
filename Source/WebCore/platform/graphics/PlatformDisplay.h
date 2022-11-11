@@ -137,7 +137,7 @@ protected:
 #endif
 
 #if USE(ATSPI)
-    virtual String plartformAccessibilityBusAddress() const { return { }; }
+    virtual String platformAccessibilityBusAddress() const { return { }; }
 
     mutable std::optional<String> m_accessibilityBusAddress;
 #endif

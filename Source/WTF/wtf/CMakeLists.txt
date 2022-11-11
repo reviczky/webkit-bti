@@ -4,6 +4,7 @@ set(WTF_PUBLIC_HEADERS
     Algorithms.h
     AnsiColors.h
     ApproximateTime.h
+    ArgumentCoder.h
     Assertions.h
     Atomics.h
     AutodrainedPool.h
@@ -33,6 +34,7 @@ set(WTF_PUBLIC_HEADERS
     CheckedPtr.h
     CheckedRef.h
     ClockType.h
+    CodePtr.h
     CommaPrinter.h
     CompactPointerTuple.h
     CompactPtr.h
@@ -84,6 +86,7 @@ set(WTF_PUBLIC_HEADERS
     Forward.h
     Function.h
     FunctionDispatcher.h
+    FunctionPtr.h
     FunctionTraits.h
     GenerateProfiles.h
     GenericHashKey.h
@@ -157,7 +160,6 @@ set(WTF_PUBLIC_HEADERS
     MessageQueue.h
     MetaAllocator.h
     MetaAllocatorHandle.h
-    MetaAllocatorPtr.h
     MonotonicTime.h
     NakedPtr.h
     NakedRef.h
@@ -214,8 +216,6 @@ set(WTF_PUBLIC_HEADERS
     PtrTag.h
     RAMSize.h
     RandomDevice.h
-    RandomNumber.h
-    RandomNumberSeed.h
     Range.h
     RangeSet.h
     RawHex.h
@@ -315,6 +315,7 @@ set(WTF_PUBLIC_HEADERS
     UnionFind.h
     UniqueArray.h
     UniqueRef.h
+    UniqueRefVector.h
     UnsafePointer.h
     VMTags.h
     ValueCheck.h
@@ -329,6 +330,7 @@ set(WTF_PUBLIC_HEADERS
     WeakHashSet.h
     WeakPtr.h
     WeakRandom.h
+    WeakRandomNumber.h
     WindowsExtras.h
     WordLock.h
     WorkQueue.h
@@ -346,7 +348,6 @@ set(WTF_PUBLIC_HEADERS
     dtoa/strtod.h
     dtoa/utils.h
 
-    persistence/PersistentCoder.h
     persistence/PersistentCoders.h
     persistence/PersistentDecoder.h
     persistence/PersistentEncoder.h
@@ -380,6 +381,7 @@ set(WTF_PUBLIC_HEADERS
     text/StringImpl.h
     text/StringOperators.h
     text/StringParsingBuffer.h
+    text/StringSearch.h
     text/StringToIntegerConversion.h
     text/StringView.h
     text/SymbolImpl.h
@@ -416,6 +418,7 @@ set(WTF_SOURCES
     BitVector.cpp
     CPUTime.cpp
     ClockType.cpp
+    CodePtr.cpp
     CompilationThread.cpp
     ConcurrentBuffer.cpp
     ConcurrentPtrHashSet.cpp
@@ -466,7 +469,6 @@ set(WTF_SOURCES
     ProcessPrivilege.cpp
     RAMSize.cpp
     RandomDevice.cpp
-    RandomNumber.cpp
     ReadWriteLock.cpp
     RefCounted.cpp
     RefCountedLeakCounter.cpp
@@ -498,6 +500,7 @@ set(WTF_SOURCES
     WTFAssertions.cpp
     WTFConfig.cpp
     WallTime.cpp
+    WeakRandomNumber.cpp
     WordLock.cpp
     WorkQueue.cpp
     WorkerPool.cpp

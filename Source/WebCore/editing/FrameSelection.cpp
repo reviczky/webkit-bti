@@ -466,7 +466,7 @@ void FrameSelection::setSelection(const VisibleSelection& selection, OptionSet<S
         return;
     }
 
-    updateAndRevealSelection(intent, options.contains(SmoothScroll) ? ScrollBehavior::Smooth : ScrollBehavior::Instant, options.contains(RevealSelectionBounds) ? RevealExtentOption::DoNotRevealExtent : RevealExtentOption::RevealExtent);
+    updateAndRevealSelection(intent, options.contains(SmoothScroll) ? ScrollBehavior::Smooth : ScrollBehavior::Instant, options.contains(RevealSelectionBounds) ? RevealExtentOption::DoNotRevealExtent : RevealExtentOption::RevealExtent, options.contains(ForceCenterScroll) ? ForceCenterScrollOption::ForceCenterScroll : ForceCenterScrollOption::DoNotForceCenterScroll);
 
     if (options & IsUserTriggered) {
         if (auto* client = protectedDocument->editor().client())
@@ -499,7 +499,7 @@ void FrameSelection::setNeedsSelectionUpdate(RevealSelectionAfterUpdate revealMo
         view->selection().clear();
 }
 
-void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& intent, ScrollBehavior scrollBehavior, RevealExtentOption revealExtent)
+void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& intent, ScrollBehavior scrollBehavior, RevealExtentOption revealExtent, ForceCenterScrollOption forceCenterScroll)
 {
     if (!m_pendingSelectionUpdate)
         return;
@@ -515,6 +515,9 @@ void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& int
             alignment = m_alwaysAlignCursorOnScrollWhenRevealingSelection ? ScrollAlignment::alignCenterAlways : ScrollAlignment::alignCenterIfNeeded;
         else
             alignment = m_alwaysAlignCursorOnScrollWhenRevealingSelection ? ScrollAlignment::alignTopAlways : ScrollAlignment::alignToEdgeIfNeeded;
+        
+        if (forceCenterScroll == ForceCenterScrollOption::ForceCenterScroll)
+            alignment = ScrollAlignment::alignCenterAlways;
 
         revealSelection(m_selectionRevealMode, alignment, revealExtent, scrollBehavior);
     }
@@ -1845,10 +1848,13 @@ Color CaretBase::computeCaretColor(const RenderStyle& elementStyle, const Node* 
     // On iOS, we want to fall back to the tintColor, and only override if CSS has explicitly specified a custom color.
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
     UNUSED_PARAM(node);
-    return elementStyle.caretColor();
+    if (elementStyle.hasAutoCaretColor())
+        return { };
+    return elementStyle.colorResolvingCurrentColor(elementStyle.caretColor());
 #else
     RefPtr parentElement = node ? node->parentElement() : nullptr;
     auto* parentStyle = parentElement && parentElement->renderer() ? &parentElement->renderer()->style() : nullptr;
+    // CSS value "auto" is treated as an invalid color.
     if (elementStyle.hasAutoCaretColor() && parentStyle) {
         auto parentBackgroundColor = parentStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
         auto elementBackgroundColor = elementStyle.visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
@@ -1998,7 +2004,7 @@ void FrameSelection::selectFrameElementInParentIfFullySelected()
     RefPtr frame { document->frame() };
     if (!frame)
         return;
-    RefPtr parent { frame->tree().parent() };
+    RefPtr parent { dynamicDowncast<LocalFrame>(frame->tree().parent()) };
     if (!parent)
         return;
     Page* page = m_document->page();
@@ -2089,8 +2095,7 @@ void FrameSelection::selectAll()
     }
 
     VisibleSelection newSelection(VisibleSelection::selectionFromContentsOfNode(root.get()));
-
-    if (shouldChangeSelection(newSelection)) {
+    if (!newSelection.isOrphan() && shouldChangeSelection(newSelection)) {
         AXTextStateChangeIntent intent(AXTextStateChangeTypeSelectionExtend, AXTextSelection { AXTextSelectionDirectionDiscontiguous, AXTextSelectionGranularityAll, false });
         setSelection(newSelection, defaultSetSelectionOptions() | FireSelectEvent, intent);
     }
@@ -2249,7 +2254,7 @@ void FrameSelection::updateAppearance()
 #endif
 
     {
-        ScriptDisallowedScope scriptDisallowedScope;
+        ScriptDisallowedScope::InMainThread scriptDisallowedScope;
         auto* view = m_document->renderView();
         if (!view)
             return;
@@ -2893,12 +2898,12 @@ void FrameSelection::setCaretColor(const Color& caretColor)
 
 #endif // PLATFORM(IOS_FAMILY)
 
-static bool containsEndpoints(const WeakPtr<Document>& document, const std::optional<SimpleRange>& range)
+static bool containsEndpoints(const WeakPtr<Document, WeakPtrImplWithEventTargetData>& document, const std::optional<SimpleRange>& range)
 {
     return document && range && document->contains(range->start.container) && document->contains(range->end.container);
 }
 
-static bool containsEndpoints(const WeakPtr<Document>& document, const Range& liveRange)
+static bool containsEndpoints(const WeakPtr<Document, WeakPtrImplWithEventTargetData>& document, const Range& liveRange)
 {
     // Only need to check the start container because live ranges enforce the invariant that start and end have a common ancestor.
     return document && document->contains(liveRange.startContainer());

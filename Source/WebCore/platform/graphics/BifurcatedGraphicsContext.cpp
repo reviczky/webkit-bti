@@ -441,13 +441,6 @@ AffineTransform BifurcatedGraphicsContext::getCTM(IncludeDeviceScale includeDevi
     return m_primaryContext.getCTM(includeDeviceScale);
 }
 
-FloatRect BifurcatedGraphicsContext::roundToDevicePixels(const FloatRect& rect, RoundingMode roundingMode)
-{
-    auto roundedRect = m_primaryContext.roundToDevicePixels(rect, roundingMode);
-    VERIFY_STATE_SYNCHRONIZATION();
-    return roundedRect;
-}
-
 void BifurcatedGraphicsContext::drawFocusRing(const Vector<FloatRect>& rects, float width, float offset, const Color& color)
 {
     m_primaryContext.drawFocusRing(rects, width, offset, color);
@@ -571,11 +564,11 @@ bool BifurcatedGraphicsContext::supportsInternalLinks() const
 
 void BifurcatedGraphicsContext::didUpdateState(GraphicsContextState& state)
 {
-    // This calls updateState() instead of didUpdateState() so that changes
+    // This calls mergeLastChanges() instead of didUpdateState() so that changes
     // are also applied to each context's GraphicsContextState, so that code
     // internal to the child contexts that reads from the state gets the right values.
-    m_primaryContext.updateState(state);
-    m_secondaryContext.updateState(state);
+    m_primaryContext.mergeLastChanges(state);
+    m_secondaryContext.mergeLastChanges(state);
     state.didApplyChanges();
 
     VERIFY_STATE_SYNCHRONIZATION();
@@ -588,14 +581,8 @@ void BifurcatedGraphicsContext::verifyStateSynchronization()
     // The two contexts' CTMs must begin and remain in sync, otherwise `setCTM(getCTM())`
     // will cause further painting to the secondary context to be mistransformed.
     auto secondaryContextCTM = m_secondaryContext.getCTM();
-    if (!m_hasLoggedAboutDesynchronizedState && !primaryContextCTM.isEssentiallyEqualTo(secondaryContextCTM)) {
-        TextStream message;
-        message << "BifurcatedGraphicsContext(" << this << ") CTM is out of sync: " << primaryContextCTM << " != " << secondaryContextCTM;
-#if ASSERT_ENABLED
-        ASSERT_NOT_REACHED_WITH_MESSAGE("%s", message.release().utf8().data());
-#else
-        WTFLogAlways("%s", message.release().utf8().data());
-#endif
+    if (!m_hasLoggedAboutDesynchronizedState && !primaryContextCTM.isEssentiallyEqualToAsFloats(secondaryContextCTM)) {
+        ALWAYS_LOG_WITH_STREAM(stream << "BifurcatedGraphicsContext(" << this << ") CTM is out of sync: " << primaryContextCTM << " != " << secondaryContextCTM);
         m_hasLoggedAboutDesynchronizedState = true;
     }
 }

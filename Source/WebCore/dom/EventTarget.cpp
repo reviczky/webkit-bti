@@ -57,18 +57,20 @@
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(EventTarget);
-WTF_MAKE_ISO_ALLOCATED_IMPL(EventTargetWithInlineData);
 
 Ref<EventTarget> EventTarget::create(ScriptExecutionContext& context)
 {
     return EventTargetConcrete::create(context);
 }
 
-EventTarget::~EventTarget() = default;
-
-bool EventTarget::isNode() const
+EventTarget::~EventTarget()
 {
-    return false;
+    // Explicitly tearing down since WeakPtrImpl can be alive longer than EventTarget.
+    if (hasEventTargetData()) {
+        auto* eventTargetData = this->eventTargetData();
+        ASSERT(eventTargetData);
+        eventTargetData->clear();
+    }
 }
 
 bool EventTarget::isPaymentRequest() const
@@ -283,7 +285,12 @@ static const AtomString& legacyType(const Event& event)
 // https://dom.spec.whatwg.org/#concept-event-listener-invoke
 void EventTarget::fireEventListeners(Event& event, EventInvokePhase phase)
 {
-    ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::isEventAllowedInMainThread());
+#if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
+    if (auto* node = dynamicDowncast<Node>(*this))
+        ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isEventDispatchAllowedInSubtree(*node));
+    else
+        ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::isScriptAllowedInMainThread());
+#endif
     ASSERT(event.isInitialized());
 
     auto* data = eventTargetData();

@@ -24,6 +24,7 @@
 #include "config.h"
 #include "RenderReplaced.h"
 
+#include "BackgroundPainter.h"
 #include "DeprecatedGlobalSettings.h"
 #include "DocumentMarkerController.h"
 #include "ElementRuleCollector.h"
@@ -44,13 +45,14 @@
 #include "RenderImage.h"
 #include "RenderLayer.h"
 #include "RenderTheme.h"
+#include "RenderVideo.h"
 #include "RenderView.h"
 #include "RenderedDocumentMarker.h"
 #include "Settings.h"
 #include "VisiblePosition.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/StackStats.h>
-
+#include <wtf/TypeCasts.h>
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderReplaced);
@@ -179,7 +181,7 @@ Color RenderReplaced::calculateHighlightColor() const
                         continue;
 
                     if (auto highlightStyle = getUncachedPseudoStyle({ PseudoId::Highlight, highlight.key }, &style()))
-                        return highlightStyle->backgroundColor();
+                        return highlightStyle->colorResolvingCurrentColor(highlightStyle->backgroundColor());
                 }
             }
         }
@@ -272,12 +274,13 @@ void RenderReplaced::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
             paintInfo.context().save();
             auto pixelSnappedRoundedRect = style().getRoundedInnerBorderFor(paintRect,
                 paddingTop() + borderTop(), paddingBottom() + borderBottom(), paddingLeft() + borderLeft(), paddingRight() + borderRight(), true, true).pixelSnappedRoundedRectForPainting(document().deviceScaleFactor());
-            clipRoundedInnerRect(paintInfo.context(), paintRect, pixelSnappedRoundedRect);
+            BackgroundPainter::clipRoundedInnerRect(paintInfo.context(), paintRect, pixelSnappedRoundedRect);
         }
     }
 
     if (!completelyClippedOut) {
-        paintReplaced(paintInfo, adjustedPaintOffset);
+        if (!shouldSkipContent())
+            paintReplaced(paintInfo, adjustedPaintOffset);
 
         if (style().hasBorderRadius())
             paintInfo.context().restore();
@@ -318,11 +321,12 @@ bool RenderReplaced::shouldPaint(PaintInfo& paintInfo, const LayoutPoint& paintO
     if (style().visibility() != Visibility::Visible)
         return false;
     
-    LayoutPoint adjustedPaintOffset = paintOffset + location();
+    LayoutRect paintRect(visualOverflowRect());
+    paintRect.moveBy(paintOffset + location());
 
     // Early exit if the element touches the edges.
-    LayoutUnit top = adjustedPaintOffset.y() + visualOverflowRect().y();
-    LayoutUnit bottom = adjustedPaintOffset.y() + visualOverflowRect().maxY();
+    LayoutUnit top = paintRect.y();
+    LayoutUnit bottom = paintRect.maxY();
     if (isSelected() && m_inlineBoxWrapper) {
         const LegacyRootInlineBox& rootBox = m_inlineBoxWrapper->root();
         LayoutUnit selTop = paintOffset.y() + rootBox.selectionTop();
@@ -332,41 +336,13 @@ bool RenderReplaced::shouldPaint(PaintInfo& paintInfo, const LayoutPoint& paintO
     }
     
     LayoutRect localRepaintRect = paintInfo.rect;
-    if (adjustedPaintOffset.x() + visualOverflowRect().x() >= localRepaintRect.maxX() || adjustedPaintOffset.x() + visualOverflowRect().maxX() <= localRepaintRect.x())
+    if (paintRect.x() >= localRepaintRect.maxX() || paintRect.maxX() <= localRepaintRect.x())
         return false;
 
     if (top >= localRepaintRect.maxY() || bottom <= localRepaintRect.y())
         return false;
 
     return true;
-}
-
-static inline RenderBlock* firstContainingBlockWithLogicalWidth(const RenderReplaced* replaced)
-{
-    // We have to lookup the containing block, which has an explicit width, which must not be equal to our direct containing block.
-    // If the embedded document appears _after_ we performed the initial layout, our intrinsic size is 300x150. If our containing
-    // block doesn't provide an explicit width, it's set to the 300 default, coming from the initial layout run.
-    RenderBlock* containingBlock = replaced->containingBlock();
-    if (!containingBlock)
-        return 0;
-
-    for (; containingBlock && !is<RenderView>(*containingBlock) && !containingBlock->isBody(); containingBlock = containingBlock->containingBlock()) {
-        if (containingBlock->style().logicalWidth().isSpecified())
-            return containingBlock;
-    }
-
-    return 0;
-}
-
-bool RenderReplaced::hasReplacedLogicalWidth() const
-{
-    if (style().logicalWidth().isSpecified())
-        return true;
-
-    if (style().logicalWidth().isAuto())
-        return false;
-
-    return firstContainingBlockWithLogicalWidth(this);
 }
 
 bool RenderReplaced::hasReplacedLogicalHeight() const
@@ -409,7 +385,16 @@ bool RenderReplaced::setNeedsLayoutIfNeededAfterIntrinsicSizeChange()
 
     return false;
 }
-    
+
+static bool isVideoWithDefaultObjectSize(const RenderReplaced* maybeVideo)
+{
+#if ENABLE(VIDEO)
+    if (auto* video = dynamicDowncast<RenderVideo>(maybeVideo))
+        return video->hasDefaultObjectSize();
+#endif
+    return false;
+} 
+
 void RenderReplaced::computeAspectRatioInformationForRenderBox(RenderBox* contentRenderer, FloatSize& constrainedSize, double& intrinsicRatio) const
 {
     FloatSize intrinsicSize;
@@ -452,10 +437,17 @@ void RenderReplaced::computeAspectRatioInformationForRenderBox(RenderBox* conten
     // function was added, since all it has done is make the code more unclear.
     constrainedSize = intrinsicSize;
     if (intrinsicRatio && !intrinsicSize.isEmpty() && style().logicalWidth().isAuto() && style().logicalHeight().isAuto()) {
-        // We can't multiply or divide by 'intrinsicRatio' here, it breaks tests, like fast/images/zoomed-img-size.html, which
-        // can only be fixed once subpixel precision is available for things like intrinsicWidth/Height - which include zoom!
-        constrainedSize.setWidth(RenderBox::computeReplacedLogicalHeight() * intrinsicSize.width() / intrinsicSize.height());
-        constrainedSize.setHeight(RenderBox::computeReplacedLogicalWidth() * intrinsicSize.height() / intrinsicSize.width());
+        if (isVideoWithDefaultObjectSize(this)) {
+            LayoutUnit width = RenderBox::computeReplacedLogicalWidth();
+            constrainedSize.setWidth(width);
+            LayoutUnit height = blockSizeFromAspectRatio(horizontalBorderAndPaddingExtent(), verticalBorderAndPaddingExtent(), intrinsicRatio, BoxSizing::ContentBox, adjustBorderBoxLogicalWidthForBoxSizing(width, LengthType::Fixed));
+            constrainedSize.setHeight(height.round() - verticalBorderAndPaddingExtent());
+        } else {
+            // We can't multiply or divide by 'intrinsicRatio' here, it breaks tests, like fast/images/zoomed-img-size.html, which
+            // can only be fixed once subpixel precision is available for things like intrinsicWidth/Height - which include zoom!
+            constrainedSize.setWidth(RenderBox::computeReplacedLogicalHeight() * intrinsicSize.width() / intrinsicSize.height());
+            constrainedSize.setHeight(RenderBox::computeReplacedLogicalWidth() * intrinsicSize.height() / intrinsicSize.width());
+        }
     }
 }
 
@@ -516,14 +508,15 @@ void RenderReplaced::computeIntrinsicRatioInformation(FloatSize& intrinsicSize, 
 
     if (style().hasAspectRatio()) {
         intrinsicRatio = style().logicalAspectRatio();
-        if (style().aspectRatioType() == AspectRatioType::Ratio)
+        if (style().aspectRatioType() == AspectRatioType::Ratio || isVideoWithDefaultObjectSize(this))
             return;
     }
     // Figure out if we need to compute an intrinsic ratio.
     if (!hasIntrinsicAspectRatio())
         return;
 
-    if (intrinsicSize.isEmpty())
+    // After supporting contain-intrinsic-size, the intrinsicSize of size containment is not always empty.
+    if (intrinsicSize.isEmpty() || shouldApplySizeContainment())
         return;
 
     intrinsicRatio = intrinsicSize.width() / intrinsicSize.height();
@@ -568,7 +561,11 @@ static inline bool hasIntrinsicSize(RenderBox*contentRenderer, bool hasIntrinsic
 
 LayoutUnit RenderReplaced::computeReplacedLogicalWidth(ShouldComputePreferred shouldComputePreferred) const
 {
-    if (style().logicalWidth().isSpecified() || style().logicalWidth().isIntrinsic())
+    if (style().logicalWidth().isSpecified())
+        return computeReplacedLogicalWidthRespectingMinMaxWidth(computeReplacedLogicalWidthUsing(MainOrPreferredSize, style().logicalWidth()), shouldComputePreferred);
+    if (shouldApplyInlineSizeContainment())
+        return LayoutUnit();
+    if (style().logicalWidth().isIntrinsic())
         return computeReplacedLogicalWidthRespectingMinMaxWidth(computeReplacedLogicalWidthUsing(MainOrPreferredSize, style().logicalWidth()), shouldComputePreferred);
 
     RenderBox* contentRenderer = embeddedContentBox();
@@ -696,16 +693,17 @@ void RenderReplaced::computePreferredLogicalWidths()
     else
         m_minPreferredLogicalWidth = m_maxPreferredLogicalWidth = computeReplacedLogicalWidth(ComputePreferred);
 
+    bool ignoreMinMaxSizes = shouldIgnoreMinMaxSizes();
     const RenderStyle& styleToUse = style();
     if (styleToUse.logicalWidth().isPercentOrCalculated() || styleToUse.logicalMaxWidth().isPercentOrCalculated())
         m_minPreferredLogicalWidth = 0;
 
-    if (styleToUse.logicalMinWidth().isFixed() && styleToUse.logicalMinWidth().value() > 0) {
+    if (!ignoreMinMaxSizes && styleToUse.logicalMinWidth().isFixed() && styleToUse.logicalMinWidth().value() > 0) {
         m_maxPreferredLogicalWidth = std::max(m_maxPreferredLogicalWidth, adjustContentBoxLogicalWidthForBoxSizing(styleToUse.logicalMinWidth()));
         m_minPreferredLogicalWidth = std::max(m_minPreferredLogicalWidth, adjustContentBoxLogicalWidthForBoxSizing(styleToUse.logicalMinWidth()));
     }
     
-    if (styleToUse.logicalMaxWidth().isFixed()) {
+    if (!ignoreMinMaxSizes && styleToUse.logicalMaxWidth().isFixed()) {
         m_maxPreferredLogicalWidth = std::min(m_maxPreferredLogicalWidth, adjustContentBoxLogicalWidthForBoxSizing(styleToUse.logicalMaxWidth()));
         m_minPreferredLogicalWidth = std::min(m_minPreferredLogicalWidth, adjustContentBoxLogicalWidthForBoxSizing(styleToUse.logicalMaxWidth()));
     }

@@ -27,18 +27,16 @@
 
 #pragma once
 
-#include "BlobURL.h"
 #include "CSSPropertyNames.h"
 #include "CSSRegisteredCustomProperty.h"
 #include "CanvasBase.h"
 #include "ClientOrigin.h"
-#include "Color.h"
 #include "ContainerNode.h"
-#include "CrossOriginOpenerPolicy.h"
 #include "DisabledAdaptations.h"
 #include "DocumentEventTiming.h"
 #include "FocusOptions.h"
 #include "FontSelectorClient.h"
+#include "FragmentScriptingPermission.h"
 #include "FrameDestructionObserver.h"
 #include "FrameIdentifier.h"
 #include "FrameLoaderTypes.h"
@@ -50,12 +48,15 @@
 #include "ReferrerPolicy.h"
 #include "RegistrableDomain.h"
 #include "RenderPtr.h"
+#include "ReportingClient.h"
 #include "ScriptExecutionContext.h"
 #include "SecurityOrigin.h"
 #include "StringWithDirection.h"
+#include "StyleColor.h"
 #include "Supplementable.h"
 #include "Timer.h"
 #include "TreeScope.h"
+#include "URLKeepingBlobAlive.h"
 #include "UserActionElementSet.h"
 #include "ViewportArguments.h"
 #include "VisibilityState.h"
@@ -147,7 +148,6 @@ class Frame;
 class FrameSelection;
 class FrameView;
 class FullscreenManager;
-class GPUCanvasContext;
 class HTMLAllCollection;
 class HTMLAttachmentElement;
 class HTMLBodyElement;
@@ -203,6 +203,7 @@ class Range;
 class Region;
 class RenderTreeBuilder;
 class RenderView;
+class ReportingScope;
 class RequestAnimationFrameCallback;
 class ResizeObserver;
 class SVGDocumentExtensions;
@@ -220,6 +221,7 @@ class SelectorQuery;
 class SelectorQueryCache;
 class SerializedScriptValue;
 class Settings;
+class SleepDisabler;
 class SpeechRecognition;
 class StorageConnection;
 class StringCallback;
@@ -235,6 +237,7 @@ class TreeWalker;
 class UndoManager;
 class VisibilityChangeClient;
 class VisitedLinkState;
+class WakeLockManager;
 class WebAnimation;
 class WebGL2RenderingContext;
 class WebGLRenderingContext;
@@ -249,6 +252,10 @@ class XPathResult;
 #if ENABLE(CONTENT_CHANGE_OBSERVER)
 class ContentChangeObserver;
 class DOMTimerHoldingTank;
+#endif
+
+#if ENABLE(WEBGPU)
+class GPUCanvasContext;
 #endif
 
 struct ApplicationManifest;
@@ -269,6 +276,7 @@ enum class ShouldOpenExternalURLsPolicy : uint8_t;
 enum class RenderingUpdateStep : uint32_t;
 enum class StyleColorOptions : uint8_t;
 enum class MutationObserverOptionType : uint8_t;
+enum class ViolationReportType : uint8_t;
 
 using MediaProducerMediaStateFlags = OptionSet<MediaProducerMediaState>;
 using MediaProducerMutedStateFlags = OptionSet<MediaProducerMutedState>;
@@ -327,6 +335,9 @@ using RenderingContext = std::variant<
 #if ENABLE(WEBGL2)
     RefPtr<WebGL2RenderingContext>,
 #endif
+#if ENABLE(WEBGPU)
+    RefPtr<GPUCanvasContext>,
+#endif
     RefPtr<ImageBitmapRenderingContext>,
     RefPtr<CanvasRenderingContext2D>
 >;
@@ -338,7 +349,7 @@ public:
     WEBCORE_EXPORT ~DocumentParserYieldToken();
 
 private:
-    WeakPtr<Document> m_document;
+    WeakPtr<Document, WeakPtrImplWithEventTargetData> m_document;
 };
 
 class Document
@@ -349,11 +360,13 @@ class Document
     , public FrameDestructionObserver
     , public Supplementable<Document>
     , public Logger::Observer
-    , public CanvasObserver {
+    , public CanvasObserver
+    , public ReportingClient {
     WTF_MAKE_ISO_ALLOCATED_EXPORT(Document, WEBCORE_EXPORT);
 public:
-    using WeakValueType = EventTarget::WeakValueType;
     using EventTarget::weakPtrFactory;
+    using EventTarget::WeakValueType;
+    using EventTarget::WeakPtrImplType;
 
     inline static Ref<Document> create(const Settings&, const URL&);
     static Ref<Document> createNonRenderedPlaceholder(Frame&, const URL&);
@@ -415,9 +428,6 @@ public:
     bool didDispatchViewportPropertiesChanged() const { return m_didDispatchViewportPropertiesChanged; }
 #endif
 
-    void setReferrerPolicy(ReferrerPolicy);
-    ReferrerPolicy referrerPolicy() const final { return m_referrerPolicy.value_or(ReferrerPolicy::Default); }
-
     WEBCORE_EXPORT DocumentType* doctype() const;
 
     WEBCORE_EXPORT DOMImplementation& implementation();
@@ -474,6 +484,11 @@ public:
     const AtomString& contentLanguage() const { return m_contentLanguage; }
     void setContentLanguage(const AtomString&);
 
+    const AtomString& effectiveDocumentElementLanguage() const;
+    void setDocumentElementLanguage(const AtomString&);
+    TextDirection documentElementTextDirection() const { return m_documentElementTextDirection; }
+    void setDocumentElementTextDirection(TextDirection textDirection) { m_documentElementTextDirection = textDirection; }
+
     String xmlEncoding() const { return m_xmlEncoding; }
     String xmlVersion() const { return m_xmlVersion; }
     enum class StandaloneStatus : uint8_t { Unspecified, Standalone, NotStandalone };
@@ -516,6 +531,8 @@ public:
 
     Ref<HTMLCollection> windowNamedItems(const AtomString&);
     Ref<HTMLCollection> documentNamedItems(const AtomString&);
+
+    WakeLockManager& wakeLockManager();
 
     // Other methods (not part of DOM)
     bool isSynthesized() const { return m_isSynthesized; }
@@ -656,6 +673,7 @@ public:
     void suspendFontLoading();
 
     RenderView* renderView() const { return m_renderView.get(); }
+    const RenderStyle* initialContainingBlockStyle() const { return m_initialContainingBlockStyle.get(); } // This may end up differing from renderView()->style() due to adjustments.
 
     bool renderTreeBeingDestroyed() const { return m_renderTreeBeingDestroyed; }
     bool hasLivingRenderTree() const { return renderView() && !renderTreeBeingDestroyed(); }
@@ -704,7 +722,7 @@ public:
 
     const URL& url() const final { return m_url; }
     void setURL(const URL&);
-    const URL& urlForBindings() const { return m_url.isEmpty() ? aboutBlankURL() : m_url; }
+    const URL& urlForBindings() const { return m_url.url().isEmpty() ? aboutBlankURL() : m_url.url(); }
 
     const URL& creationURL() const { return m_creationURL; }
 
@@ -717,6 +735,7 @@ public:
     const AtomString& baseTarget() const { return m_baseTarget; }
     void processBaseElement();
 
+    URL baseURLForComplete(const URL& baseURLOverride) const;
     WEBCORE_EXPORT URL completeURL(const String&, ForceUTF8 = ForceUTF8::No) const final;
     URL completeURL(const String&, const URL& baseURLOverride, ForceUTF8 = ForceUTF8::No) const;
 
@@ -731,7 +750,6 @@ public:
     void disableWebAssembly(const String& errorMessage) final;
 
     IDBClient::IDBConnectionProxy* idbConnectionProxy() final;
-    RefPtr<PermissionController> permissionController() final;
     StorageConnection* storageConnection();
     SocketProvider* socketProvider() final;
     RefPtr<RTCDataChannelRemoteHandlerConnection> createRTCDataChannelRemoteHandlerConnection() final;
@@ -886,6 +904,9 @@ public:
 
     Document& contextDocument() const;
     void setContextDocument(Document& document) { m_contextDocument = document; }
+    
+    OptionSet<ParserContentPolicy> parserContentPolicy() const { return m_parserContentPolicy; }
+    void setParserContentPolicy(OptionSet<ParserContentPolicy> policy) { m_parserContentPolicy = policy; }
 
     // Helper functions for forwarding DOMWindow event related tasks to the DOMWindow if it exists.
     void setWindowAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& value, DOMWrapperWorld&);
@@ -980,6 +1001,7 @@ public:
     WEBCORE_EXPORT ExceptionOr<void> setCookie(const String&);
 
     WEBCORE_EXPORT String referrer();
+    String referrerForBindings();
 
     WEBCORE_EXPORT String domain() const;
     ExceptionOr<void> setDomain(const String& newDomain);
@@ -1193,6 +1215,8 @@ public:
     void initSecurityContext();
     void initContentSecurityPolicy();
 
+    void inheritPolicyContainerFrom(const PolicyContainer&) final;
+
     void updateURLForPushOrReplaceState(const URL&);
     void statePopped(Ref<SerializedScriptValue>&&);
 
@@ -1298,6 +1322,9 @@ public:
     void setMayHaveEditableElements() { m_mayHaveEditableElements = true; }
 #endif
 
+    bool mayHaveRenderedSVGRootElements() const { return m_mayHaveRenderedSVGRootElements; }
+    void setMayHaveRenderedSVGRootElements() { m_mayHaveRenderedSVGRootElements = true; }
+
     bool mayHaveRenderedSVGForeignObjects() const { return m_mayHaveRenderedSVGForeignObjects; }
     void setMayHaveRenderedSVGForeignObjects() { m_mayHaveRenderedSVGForeignObjects = true; }
 
@@ -1401,7 +1428,6 @@ public:
     bool shouldForceNoOpenerBasedOnCOOP() const;
 
     WEBCORE_EXPORT const CrossOriginOpenerPolicy& crossOriginOpenerPolicy() const final;
-    void setCrossOriginOpenerPolicy(const CrossOriginOpenerPolicy&);
 
     void willLoadScriptElement(const URL&);
     void willLoadFrameElement(const URL&);
@@ -1537,9 +1563,6 @@ public:
     TextAutoSizing& textAutoSizing();
 #endif
 
-    // For debugging rdar://problem/49877867.
-    void setMayBeDetachedFromFrame(bool mayBeDetachedFromFrame) { m_mayBeDetachedFromFrame = mayBeDetachedFromFrame; }
-
     Logger& logger();
     WEBCORE_EXPORT static const Logger& sharedLogger();
 
@@ -1585,14 +1608,12 @@ public:
     bool handlingTouchEvent() const { return m_handlingTouchEvent; }
 #endif
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
     WEBCORE_EXPORT bool hasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
     WEBCORE_EXPORT void setHasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
     WEBCORE_EXPORT void wasLoadedWithDataTransferFromPrevalentResource();
     void downgradeReferrerToRegistrableDomain();
 #endif
-
-    String signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const URL&);
 
     void registerArticleElement(Element&);
     void unregisterArticleElement(Element&);
@@ -1693,6 +1714,15 @@ public:
 
     std::optional<PAL::SessionID> sessionID() const final;
 
+    ReportingScope& reportingScope() const { return m_reportingScope.get(); }
+    WEBCORE_EXPORT String endpointURIForToken(const String&) const final;
+
+    bool hasSleepDisabler() const { return !!m_sleepDisabler; }
+
+    void notifyReportObservers(Ref<Report>&&) final;
+    void sendReportToEndpoints(const URL& baseURL, const Vector<String>& endpointURIs, const Vector<String>& endpointTokens, Ref<FormData>&& report, ViolationReportType) final;
+    String httpUserAgent() const final;
+
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
     WEBCORE_EXPORT Document(Frame*, const Settings&, const URL&, DocumentClasses = { }, unsigned constructionFlags = 0, ScriptExecutionContextIdentifier = { });
@@ -1724,7 +1754,7 @@ private:
 
     // ScriptExecutionContext
     CSSFontSelector* cssFontSelector() final { return m_fontSelector.ptr(); }
-    std::unique_ptr<FontLoadRequest> fontLoadRequest(String&, bool, bool, LoadedFromOpaqueSource) final;
+    std::unique_ptr<FontLoadRequest> fontLoadRequest(const String&, bool, bool, LoadedFromOpaqueSource) final;
     void beginLoadingFontSoon(FontLoadRequest&) final;
 
     // FontSelectorClient
@@ -1751,7 +1781,7 @@ private:
     void updateTitle(const StringWithDirection&);
     void updateBaseURL();
 
-    WeakPtr<HTMLMetaElement> determineActiveThemeColorMetaElement();
+    WeakPtr<HTMLMetaElement, WeakPtrImplWithEventTargetData> determineActiveThemeColorMetaElement();
     void themeColorChanged();
 
     void invalidateAccessKeyCacheSlowCase();
@@ -1820,12 +1850,15 @@ private:
 
     NotificationClient* notificationClient() final;
 
+    void updateSleepDisablerIfNeeded();
+
     const Ref<const Settings> m_settings;
 
     UniqueRef<Quirks> m_quirks;
 
     RefPtr<DOMWindow> m_domWindow;
-    WeakPtr<Document> m_contextDocument;
+    WeakPtr<Document, WeakPtrImplWithEventTargetData> m_contextDocument;
+    OptionSet<ParserContentPolicy> m_parserContentPolicy;
 
     Ref<CachedResourceLoader> m_cachedResourceLoader;
     RefPtr<DocumentParser> m_parser;
@@ -1833,8 +1866,7 @@ private:
     unsigned m_parserYieldTokenCount { 0 };
 
     // Document URLs.
-    URL m_url; // Document.URL: The URL from which this document was retrieved.
-    BlobURLHandle m_blobURLLifetimeExtension; // Keep the Document's blob alive so it can be reloaded.
+    URLKeepingBlobAlive m_url; // Document.URL: The URL from which this document was retrieved.
     URL m_creationURL; // https://html.spec.whatwg.org/multipage/webappapis.html#concept-environment-creation-url.
     URL m_baseURL; // Node.baseURI: The URL to use when resolving relative URLs.
     URL m_baseURLOverride; // An alternative base URL that takes precedence over m_baseURL (but not m_baseElementURL).
@@ -1860,7 +1892,7 @@ private:
     std::unique_ptr<DOMImplementation> m_implementation;
 
     RefPtr<Node> m_focusNavigationStartingNode;
-    Deque<WeakPtr<Element>> m_autofocusCandidates;
+    Deque<WeakPtr<Element, WeakPtrImplWithEventTargetData>> m_autofocusCandidates;
     RefPtr<Element> m_focusedElement;
     RefPtr<Element> m_hoveredElement;
     RefPtr<Element> m_activeElement;
@@ -1882,8 +1914,8 @@ private:
     std::unique_ptr<FormController> m_formController;
 
     Color m_cachedThemeColor;
-    std::optional<Vector<WeakPtr<HTMLMetaElement>>> m_metaThemeColorElements;
-    WeakPtr<HTMLMetaElement> m_activeThemeColorMetaElement;
+    std::optional<Vector<WeakPtr<HTMLMetaElement, WeakPtrImplWithEventTargetData>>> m_metaThemeColorElements;
+    WeakPtr<HTMLMetaElement, WeakPtrImplWithEventTargetData> m_activeThemeColorMetaElement;
     Color m_applicationManifestThemeColor;
 
     Color m_textColor { Color::black };
@@ -1930,6 +1962,8 @@ private:
     bool m_hasXMLDeclaration { false };
 
     AtomString m_contentLanguage;
+    AtomString m_documentElementLanguage;
+    TextDirection m_documentElementTextDirection;
 
     RefPtr<TextResourceDecoder> m_decoder;
 
@@ -1944,7 +1978,7 @@ private:
     // Collection of canvas objects that need to do work after they've
     // rendered but before compositing, for the next frame. The set is
     // cleared after they've been called.
-    WeakHashSet<HTMLCanvasElement> m_canvasesNeedingDisplayPreparation;
+    WeakHashSet<HTMLCanvasElement, WeakPtrImplWithEventTargetData> m_canvasesNeedingDisplayPreparation;
 
 #if ENABLE(DARK_MODE_CSS)
     OptionSet<ColorScheme> m_colorScheme;
@@ -1953,23 +1987,23 @@ private:
 
     HashMap<String, RefPtr<HTMLCanvasElement>> m_cssCanvasElements;
 
-    WeakHashSet<Element> m_documentSuspensionCallbackElements;
+    WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_documentSuspensionCallbackElements;
 
 #if ENABLE(VIDEO)
-    WeakHashSet<HTMLMediaElement> m_mediaElements;
+    WeakHashSet<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_mediaElements;
 #endif
 
 #if ENABLE(VIDEO)
-    WeakHashSet<HTMLMediaElement> m_captionPreferencesChangedElements;
-    WeakPtr<HTMLMediaElement> m_mediaElementShowingTextTrack;
+    WeakHashSet<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_captionPreferencesChangedElements;
+    WeakPtr<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_mediaElementShowingTextTrack;
 #endif
 
-    WeakPtr<Element> m_mainArticleElement;
-    WeakHashSet<Element> m_articleElements;
+    WeakPtr<Element, WeakPtrImplWithEventTargetData> m_mainArticleElement;
+    WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_articleElements;
 
     WeakHashSet<VisibilityChangeClient> m_visibilityStateCallbackClients;
 
-    std::unique_ptr<HashMap<String, WeakPtr<Element>, ASCIICaseInsensitiveHash>> m_accessKeyCache;
+    std::unique_ptr<HashMap<String, WeakPtr<Element, WeakPtrImplWithEventTargetData>, ASCIICaseInsensitiveHash>> m_accessKeyCache;
 
     std::unique_ptr<ConstantPropertyMap> m_constantPropertyMap;
 
@@ -1978,6 +2012,7 @@ private:
     DocumentClasses m_documentClasses;
 
     RenderPtr<RenderView> m_renderView;
+    std::unique_ptr<RenderStyle> m_initialContainingBlockStyle;
 
     WeakHashSet<MediaCanStartListener> m_mediaCanStartListeners;
     WeakHashSet<DisplayChangedObserver> m_displayChangedObservers;
@@ -1986,7 +2021,7 @@ private:
     UniqueRef<FullscreenManager> m_fullscreenManager;
 #endif
 
-    WeakHashSet<HTMLImageElement> m_dynamicMediaQueryDependentImages;
+    WeakHashSet<HTMLImageElement, WeakPtrImplWithEventTargetData> m_dynamicMediaQueryDependentImages;
 
     Vector<WeakPtr<IntersectionObserver>> m_intersectionObservers;
     Timer m_intersectionObserversInitialUpdateTimer;
@@ -2015,6 +2050,7 @@ private:
 #endif
 
     bool m_mayHaveRenderedSVGForeignObjects { false };
+    bool m_mayHaveRenderedSVGRootElements { false };
 
     std::unique_ptr<EventTargetSet> m_wheelEventTargets;
 
@@ -2062,7 +2098,7 @@ private:
     LocaleIdentifierToLocaleMap m_localeCache;
 
     RefPtr<Document> m_templateDocument;
-    WeakPtr<Document> m_templateDocumentHost; // Manually managed weakref (backpointer from m_templateDocument).
+    WeakPtr<Document, WeakPtrImplWithEventTargetData> m_templateDocumentHost; // Manually managed weakref (backpointer from m_templateDocument).
 
     RefPtr<DocumentFragment> m_documentFragmentForInnerOuterHTML;
 
@@ -2096,7 +2132,7 @@ private:
 
     std::optional<WallTime> m_overrideLastModified;
 
-    WeakHashSet<Element> m_associatedFormControls;
+    WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_associatedFormControls;
     unsigned m_disabledFieldsetElementsCount { 0 };
 
     unsigned m_dataListElementCount { 0 };
@@ -2124,9 +2160,7 @@ private:
     MediaProducerMediaStateFlags m_mediaState;
     bool m_userHasInteractedWithMediaElement { false };
     BackForwardCacheState m_backForwardCacheState { NotInBackForwardCache };
-    std::optional<ReferrerPolicy> m_referrerPolicy;
     ReadyState m_readyState { Complete };
-    CrossOriginOpenerPolicy m_crossOriginOpenerPolicy;
 
     MutationObserverOptions m_mutationObserverTypes;
 
@@ -2237,7 +2271,7 @@ private:
     RefPtr<SWClientConnection> m_serviceWorkerConnection;
 #endif
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
     RegistrableDomain m_registrableDomainRequestedPageSpecificStorageAccessWithUserInteraction { };
     String m_referrerOverride;
 #endif
@@ -2252,7 +2286,6 @@ private:
 #endif
     unsigned m_numberOfRejectedSyncXHRs { 0 };
     bool m_isRunningUserScripts { false };
-    bool m_mayBeDetachedFromFrame { true };
     bool m_shouldPreventEnteringBackForwardCacheForTesting { false };
     bool m_hasLoadedThirdPartyScript { false };
     bool m_hasLoadedThirdPartyFrame { false };
@@ -2267,7 +2300,7 @@ private:
 #endif
 
 #if ENABLE(PICTURE_IN_PICTURE_API)
-    WeakPtr<HTMLVideoElement> m_pictureInPictureElement;
+    WeakPtr<HTMLVideoElement, WeakPtrImplWithEventTargetData> m_pictureInPictureElement;
 #endif
 
     std::unique_ptr<TextManipulationController> m_textManipulationController;
@@ -2288,7 +2321,12 @@ private:
 
     Vector<Function<void()>> m_whenIsVisibleHandlers;
 
-    WeakHashSet<Element> m_elementsWithPendingUserAgentShadowTreeUpdates;
+    WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_elementsWithPendingUserAgentShadowTreeUpdates;
+
+    Ref<ReportingScope> m_reportingScope;
+    std::unique_ptr<WakeLockManager> m_wakeLockManager;
+
+    std::unique_ptr<SleepDisabler> m_sleepDisabler;
 };
 
 Element* eventTargetElementForDocument(Document*);

@@ -364,7 +364,7 @@ void GStreamerMediaEndpoint::doSetLocalDescription(const RTCSessionDescription* 
 
         GRefPtr<GstWebRTCSCTPTransport> transport;
         g_object_get(m_webrtcBin.get(), "sctp-transport", &transport.outPtr(), nullptr);
-        m_peerConnectionBackend.setLocalDescriptionSucceeded(WTFMove(descriptions), transport ? makeUnique<GStreamerSctpTransportBackend>(WTFMove(transport)) : nullptr);
+        m_peerConnectionBackend.setLocalDescriptionSucceeded(WTFMove(descriptions), { }, transport ? makeUnique<GStreamerSctpTransportBackend>(WTFMove(transport)) : nullptr);
     }, [protectedThis = Ref(*this), this](const GError* error) {
         if (protectedThis->isStopped())
             return;
@@ -434,7 +434,7 @@ void GStreamerMediaEndpoint::doSetRemoteDescription(const RTCSessionDescription&
 
         GRefPtr<GstWebRTCSCTPTransport> transport;
         g_object_get(m_webrtcBin.get(), "sctp-transport", &transport.outPtr(), nullptr);
-        m_peerConnectionBackend.setRemoteDescriptionSucceeded(WTFMove(descriptions), transport ? makeUnique<GStreamerSctpTransportBackend>(WTFMove(transport)) : nullptr);
+        m_peerConnectionBackend.setRemoteDescriptionSucceeded(WTFMove(descriptions), { }, transport ? makeUnique<GStreamerSctpTransportBackend>(WTFMove(transport)) : nullptr);
     }, [protectedThis = Ref(*this), this](const GError* error) {
         if (protectedThis->isStopped())
             return;
@@ -705,7 +705,7 @@ void GStreamerMediaEndpoint::initiate(bool isInitiator, GstStructure* rawOptions
     }, holder, reinterpret_cast<GDestroyNotify>(destroyGStreamerMediaEndpointHolder)));
 }
 
-void GStreamerMediaEndpoint::getStats(GstPad* pad, Ref<DeferredPromise>&& promise)
+void GStreamerMediaEndpoint::getStats(GstPad* pad, const GstStructure* additionalStats, Ref<DeferredPromise>&& promise)
 {
     m_statsCollector->getStats([promise = WTFMove(promise), protectedThis = Ref(*this)](auto&& report) mutable {
         ASSERT(isMainThread());
@@ -715,7 +715,7 @@ void GStreamerMediaEndpoint::getStats(GstPad* pad, Ref<DeferredPromise>&& promis
         }
 
         promise->resolve<IDLInterface<RTCStatsReport>>(report.releaseNonNull());
-    }, pad);
+    }, pad, additionalStats);
 }
 
 MediaStream& GStreamerMediaEndpoint::mediaStreamFromRTCStream(String mediaStreamId)

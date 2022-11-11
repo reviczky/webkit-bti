@@ -47,9 +47,9 @@
 #include "FrameView.h"
 #include "InspectorInstrumentation.h"
 #include "KeyframeList.h"
+#include "LegacyMediaQueryEvaluator.h"
 #include "Logging.h"
 #include "MediaList.h"
-#include "MediaQueryEvaluator.h"
 #include "NodeRenderStyle.h"
 #include "PageRuleCollector.h"
 #include "Pair.h"
@@ -102,7 +102,7 @@ public:
         auto& document = element.document();
         auto* documentElement = document.documentElement();
         if (!documentElement || documentElement == &element)
-            m_rootElementStyle = document.renderStyle();
+            m_rootElementStyle = document.initialContainingBlockStyle();
         else
             m_rootElementStyle = documentElementStyle ? documentElementStyle : documentElement->renderStyle();
     }
@@ -154,12 +154,12 @@ Resolver::Resolver(Document& document)
     // is always from the document that owns the style selector
     FrameView* view = m_document.view();
     if (view)
-        m_mediaQueryEvaluator = MediaQueryEvaluator { view->mediaType() };
+        m_mediaQueryEvaluator = LegacyMediaQueryEvaluator { view->mediaType() };
     else
-        m_mediaQueryEvaluator = MediaQueryEvaluator { };
+        m_mediaQueryEvaluator = LegacyMediaQueryEvaluator { };
 
     if (auto* documentElement = m_document.documentElement()) {
-        m_rootDefaultStyle = styleForElement(*documentElement, { m_document.renderStyle() }, RuleMatchingBehavior::MatchOnlyUserAgentRules).renderStyle;
+        m_rootDefaultStyle = styleForElement(*documentElement, { m_document.initialContainingBlockStyle() }, RuleMatchingBehavior::MatchOnlyUserAgentRules).renderStyle;
         // Turn off assertion against font lookups during style resolver initialization. We may need root style font for media queries.
         m_document.fontSelector().incrementIsComputingRootStyleFont();
         m_rootDefaultStyle->fontCascade().update(&m_document.fontSelector());
@@ -168,7 +168,7 @@ Resolver::Resolver(Document& document)
     }
 
     if (m_rootDefaultStyle && view)
-        m_mediaQueryEvaluator = MediaQueryEvaluator { view->mediaType(), m_document, m_rootDefaultStyle.get() };
+        m_mediaQueryEvaluator = LegacyMediaQueryEvaluator { view->mediaType(), m_document, m_rootDefaultStyle.get() };
 
     m_ruleSets.resetAuthorStyle();
     m_ruleSets.resetUserAgentMediaQueryStyle();
@@ -478,15 +478,15 @@ std::unique_ptr<RenderStyle> Resolver::pseudoStyleForElement(const Element& elem
 std::unique_ptr<RenderStyle> Resolver::styleForPage(int pageIndex)
 {
     auto* documentElement = m_document.documentElement();
-    if (!documentElement)
+    if (!documentElement || !documentElement->renderStyle())
         return RenderStyle::createPtr();
 
-    auto state = State(*documentElement, m_document.renderStyle());
+    auto state = State(*documentElement, m_document.initialContainingBlockStyle());
 
     state.setStyle(RenderStyle::createPtr());
     state.style()->inheritFrom(*state.rootElementStyle());
 
-    PageRuleCollector collector(m_ruleSets, state.rootElementStyle()->direction());
+    PageRuleCollector collector(m_ruleSets, documentElement->renderStyle()->direction());
     collector.matchAllPageRules(pageIndex);
 
     auto& result = collector.matchResult();

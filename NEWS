@@ -1,67 +1,18 @@
 ================
-WebKitGTK 2.38.2
+WebKitGTK 2.39.1
 ================
 
-What's new in WebKitGTK 2.38.2?
+What's new in WebKitGTK 2.39.1?
 
-  - Fix scrolling issues in some sites having fixed background.
-  - Fix prolonged buffering during progressive live playback.
-  - Fix the build with accessibility disabled.
+  - Use ANGLE for WebGL implementation and enable WebGL2.
+  - Remove internal nested wayland compositor making libwpe mandatory when building with wayland enabled.
+  - Prefer EGL over X11, intead of GLX, where available.
+  - Add support for background-repeat: space.
+  - Add API to check if a response policy decision is for the main resource.
+  - Fix rendering of checkbox and radio buttons in black backgrounds.
+  - Make checkbox, radio and inner spin button scale along by page zoom.
+  - Add support for get computed label and get computed role WebDriver commands.
   - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.38.1
-================
-
-What's new in WebKitGTK 2.38.1?
-
-  - Make xdg-dbus-proxy work if host session bus address is an abstract socket.
-  - Use a single xdg-dbus-proxy process when sandbox is enabled.
-  - Fix high resolution video playback due to unimplemented changeType operation.
-  - Ensure GSubprocess uses posix_spawn() again and inherit file descriptors.
-  - Fix player stucking in buffering (paused) state for progressive streaming.
-  - Do not try to preconnect on link click when link preconnect setting is disabled.
-  - Fix close status code returned when the client closes a WebSocket in some cases.
-  - Fix media player duration calculation.
-  - Fix several crashes and rendering issues.
-
-================
-WebKitGTK 2.38.0
-================
-
-What's new in WebKitGTK 2.38.0?
-
-  - Fix jumpy elements whewn scrolling gitlab with async scrolling.
-  - Fix web-process-terminated signal not being emitted for the first web view when sandbox is enabled.
-  - Fix build with CMake < 3.17.
-  - Fix the build with GStreamer < 1.18.
-  - Fix several crashes and rendering issues.
-
-=================
-WebKitGTK 2.37.91
-=================
-
-What's new in WebKitGTK 2.37.91?
-
-  - Cache and reuse image-based backing stores to improve memory consumption.
-  - Fix printing with bubblewrap sandbox enabled
-  - Deprecate enable-frame-flattening setting because the functionality will be removed for 2.40.
-  - Fix deadlock when disposing player while handling rotation tag.
-  - Fix several crashes and rendering issues.
-  - Translation updates: Polish.
-
-=================
-WebKitGTK 2.37.90
-=================
-
-What's new in WebKitGTK 2.37.90?
-
-  - Remove libnotify dependency.
-  - Add support for service worker notifications.
-  - Add support for loading the notification icon.
-  - Add support for pac proxy type in WebDriver.
-  - Fix several crashes and rendering issues.
-  - Translation updates: Swedish.
 
 ================
 WebKitGTK 2.37.1

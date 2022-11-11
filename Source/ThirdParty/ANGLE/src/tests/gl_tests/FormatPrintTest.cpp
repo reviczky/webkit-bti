@@ -65,10 +65,10 @@ TEST_P(FormatPrintTest, PrintAllSupportedFormats)
 
             // Lookup enum strings from enum
             std::stringstream resultStringStream;
-            gl::OutputGLenumString(resultStringStream, gl::GLenumGroup::InternalFormat,
+            gl::OutputGLenumString(resultStringStream, gl::GLESEnum::InternalFormat,
                                    internalFormat.first);
             resultStringStream << ",";
-            gl::OutputGLenumString(resultStringStream, gl::GLenumGroup::PixelType,
+            gl::OutputGLenumString(resultStringStream, gl::GLESEnum::PixelType,
                                    typeFormatPair.first);
             resultStringStream << ",";
 
@@ -106,6 +106,7 @@ TEST_P(FormatPrintTest, PrintAllSupportedFormats)
 }
 
 ANGLE_INSTANTIATE_TEST(FormatPrintTest, ES2_VULKAN(), ES3_VULKAN());
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(FormatPrintTest);
 
 }  // anonymous namespace
 

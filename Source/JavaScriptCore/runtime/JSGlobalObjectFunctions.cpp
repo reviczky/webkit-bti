@@ -26,6 +26,7 @@
 #include "JSGlobalObjectFunctions.h"
 
 #include "CallFrame.h"
+#include "ImportMap.h"
 #include "IndirectEvalExecutable.h"
 #include "InlineCallFrame.h"
 #include "Interpreter.h"
@@ -813,6 +814,15 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncBuiltinDescribe, (JSGlobalObject* globalObjec
     return JSValue::encode(jsString(globalObject->vm(), toString(callFrame->argument(0))));
 }
 
+JSC_DEFINE_HOST_FUNCTION(globalFuncImportMapStatus, (JSGlobalObject* globalObject, CallFrame*))
+{
+    // https://wicg.github.io/import-maps/#integration-wait-for-import-maps
+    globalObject->importMap().setAcquiringImportMaps();
+    if (auto* promise = globalObject->importMapStatusPromise())
+        return JSValue::encode(promise);
+    return JSValue::encode(jsUndefined());
+}
+
 JSC_DEFINE_HOST_FUNCTION(globalFuncImportModule, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     VM& vm = globalObject->vm();
@@ -828,7 +838,7 @@ JSC_DEFINE_HOST_FUNCTION(globalFuncImportModule, (JSGlobalObject* globalObject, 
 
     // We always specify parameters as undefined. Once dynamic import() starts accepting fetching parameters,
     // we should retrieve this from the arguments.
-    JSValue parameters = jsUndefined();
+    JSValue parameters = callFrame->argument(1);
     auto* internalPromise = globalObject->moduleLoader()->importModule(globalObject, specifier, parameters, sourceOrigin);
     RETURN_IF_EXCEPTION(scope, JSValue::encode(promise->rejectWithCaughtException(globalObject, scope)));
 

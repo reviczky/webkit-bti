@@ -109,7 +109,7 @@ using JSOrWasmInstruction = std::variant<const JSInstruction*, const WasmInstruc
         bool m_valid { false };
         HandlerType m_type;
 #if ENABLE(JIT)
-        MacroAssemblerCodePtr<ExceptionHandlerPtrTag> m_nativeCode;
+        CodePtr<ExceptionHandlerPtrTag> m_nativeCode;
 #endif
 
         JSOrWasmInstruction m_catchPCForInterpreter;
@@ -169,7 +169,7 @@ using JSOrWasmInstruction = std::variant<const JSInstruction*, const WasmInstruc
             return returnValue;
         }
 
-        CallFrameClosure prepareForRepeatCall(FunctionExecutable*, CallFrame*, ProtoCallFrame*, JSFunction*, int argumentCountIncludingThis, JSScope*, const ArgList&);
+        CallFrameClosure prepareForRepeatCall(FunctionExecutable*, ProtoCallFrame*, JSFunction*, int argumentCountIncludingThis, JSScope*, const ArgList&);
 
         JSValue execute(CallFrameClosure&);
 
@@ -185,7 +185,7 @@ using JSOrWasmInstruction = std::variant<const JSInstruction*, const WasmInstruc
 #endif // ENABLE(COMPUTED_GOTO_OPCODES)
     };
 
-    JSValue eval(JSGlobalObject*, CallFrame*, ECMAMode);
+    JSValue eval(CallFrame*, JSValue thisValue, JSScope*, ECMAMode);
 
     inline CallFrame* calleeFrameForVarargs(CallFrame*, unsigned numUsedStackSlots, unsigned argumentCountIncludingThis);
 

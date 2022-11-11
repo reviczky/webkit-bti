@@ -203,28 +203,12 @@ LayoutSize RenderSVGModelObject::offsetFromContainer(RenderElement& container, c
     return locationOffsetEquivalent();
 }
 
-void RenderSVGModelObject::addFocusRingRects(Vector<LayoutRect>& rects, const LayoutPoint& additionalOffset, const RenderLayerModelObject*)
+void RenderSVGModelObject::addFocusRingRects(Vector<LayoutRect>& rects, const LayoutPoint& additionalOffset, const RenderLayerModelObject*) const
 {
     auto repaintBoundingBox = enclosingLayoutRect(repaintRectInLocalCoordinates());
     if (repaintBoundingBox.size().isEmpty())
         return;
     rects.append(LayoutRect(additionalOffset, repaintBoundingBox.size()));
-}
-
-bool RenderSVGModelObject::shouldPaintSVGRenderer(const PaintInfo& paintInfo) const
-{
-    ASSERT(!paintInfo.context().paintingDisabled());
-
-    if ((paintInfo.phase != PaintPhase::Foreground && paintInfo.phase != PaintPhase::ClippingMask && paintInfo.phase != PaintPhase::Mask && paintInfo.phase != PaintPhase::Outline && paintInfo.phase != PaintPhase::SelfOutline))
-        return false;
-
-    if (!paintInfo.shouldPaintWithinRoot(*this))
-        return false;
-
-    if (style().visibility() == Visibility::Hidden || style().display() == DisplayType::None)
-        return false;
-
-    return true;
 }
 
 // FloatRect::intersects does not consider horizontal or vertical lines (because of isEmpty()).

@@ -649,7 +649,7 @@ RegisterID* PropertyListNode::emitBytecode(BytecodeGenerator& generator, Registe
             continue;
         }
 
-        if (p->isStaticClassField()) {
+        if (p->isStaticClassElement()) {
             ASSERT(staticFieldLocations);
             staticFieldLocations->append(p->position());
             continue;
@@ -719,7 +719,7 @@ RegisterID* PropertyListNode::emitBytecode(BytecodeGenerator& generator, Registe
                 continue;
             }
 
-            if (p->isStaticClassField()) {
+            if (p->isStaticClassElement()) {
                 ASSERT(staticFieldLocations);
                 staticFieldLocations->append(p->position());
                 continue;
@@ -1204,7 +1204,7 @@ RegisterID* EvalFunctionCallNode::emitBytecode(BytecodeGenerator& generator, Reg
     if (isOptionalChainBase())
         generator.emitOptionalCheck(func.get());
 
-    return generator.emitCallEval(returnValue.get(), func.get(), callArguments, divot(), divotStart(), divotEnd(), DebuggableCall::No);
+    return generator.emitCallDirectEval(returnValue.get(), func.get(), callArguments, divot(), divotStart(), divotEnd(), DebuggableCall::No);
 }
 
 // ------------------------------ FunctionCallValueNode ----------------------------------
@@ -1261,6 +1261,25 @@ RegisterID* FunctionCallValueNode::emitBytecode(BytecodeGenerator& generator, Re
     RegisterID* ret = generator.emitCallInTailPosition(returnValue.get(), func.get(), NoExpectedFunction, callArguments, divot(), divotStart(), divotEnd(), DebuggableCall::Yes);
     generator.emitProfileType(returnValue.get(), divotStart(), divotEnd());
     return ret;
+}
+
+// ------------------------------ StaticBlockFunctionCallNode ----------------------------------
+
+RegisterID* StaticBlockFunctionCallNode::emitBytecode(BytecodeGenerator& generator, RegisterID* dst)
+{
+    // There are two possible optimizations in this implementation.
+    // https://bugs.webkit.org/show_bug.cgi?id=245925
+    RefPtr homeObject = emitHomeObjectForCallee(generator);
+    RefPtr function = generator.emitNode(m_expr);
+    emitPutHomeObject(generator, function.get(), homeObject.get()); 
+    RefPtr returnValue = generator.finalDestination(dst, function.get());
+
+    CallArguments callArguments(generator, nullptr);
+    generator.move(callArguments.thisRegister(), generator.thisRegister());
+    RefPtr result = generator.emitCallInTailPosition(returnValue.get(), function.get(), NoExpectedFunction, callArguments, divot(), divotStart(), divotEnd(), DebuggableCall::Yes);
+
+    generator.emitProfileType(returnValue.get(), divotStart(), divotEnd());
+    return result.get();
 }
 
 // ------------------------------ FunctionCallResolveNode ----------------------------------
@@ -1342,6 +1361,20 @@ RegisterID* BytecodeIntrinsicNode::emit_intrinsic_getByIdDirectPrivate(BytecodeG
     return generator.emitDirectGetById(generator.finalDestination(dst), base.get(), generator.parserArena().identifierArena().makeIdentifier(generator.vm(), symbol));
 }
 
+RegisterID* BytecodeIntrinsicNode::emit_intrinsic_getByValWithThis(BytecodeGenerator& generator, RegisterID* dst)
+{
+    ArgumentListNode* node = m_args->m_listNode;
+    RefPtr<RegisterID> base = generator.emitNode(node);
+    node = node->m_next;
+    RefPtr<RegisterID> thisValue = generator.emitNode(node);
+    node = node->m_next;
+    RefPtr<RegisterID> property = generator.emitNodeForProperty(node);
+
+    ASSERT(!node->m_next);
+
+    return generator.emitGetByVal(generator.finalDestination(dst), base.get(), thisValue.get(), property.get());
+}
+
 RegisterID* BytecodeIntrinsicNode::emit_intrinsic_getPrototypeOf(BytecodeGenerator& generator, RegisterID* dst)
 {
     ArgumentListNode* node = m_args->m_listNode;
@@ -1372,6 +1405,8 @@ static JSGenerator::Field generatorInternalFieldIndex(BytecodeIntrinsicNode* nod
         return JSGenerator::Field::This;
     if (node->entry().emitter() == &BytecodeIntrinsicNode::emit_intrinsic_generatorFieldFrame)
         return JSGenerator::Field::Frame;
+    if (node->entry().emitter() == &BytecodeIntrinsicNode::emit_intrinsic_generatorFieldContext)
+        return JSGenerator::Field::Context;
     RELEASE_ASSERT_NOT_REACHED();
     return JSGenerator::Field::State;
 }
@@ -1925,6 +1960,19 @@ RegisterID* BytecodeIntrinsicNode::emit_intrinsic_newArrayWithSize(JSC::Bytecode
 
     RefPtr<RegisterID> finalDestination = generator.finalDestination(dst);
     generator.emitNewArrayWithSize(finalDestination.get(), size.get());
+    return finalDestination.get();
+}
+
+RegisterID* BytecodeIntrinsicNode::emit_intrinsic_newArrayWithSpecies(JSC::BytecodeGenerator& generator, JSC::RegisterID* dst)
+{
+    ArgumentListNode* node = m_args->m_listNode;
+    RefPtr<RegisterID> size = generator.emitNode(node);
+    node = node->m_next;
+    RefPtr<RegisterID> array = generator.emitNode(node);
+    ASSERT(!node->m_next);
+
+    RefPtr<RegisterID> finalDestination = generator.finalDestination(dst);
+    generator.emitNewArrayWithSpecies(finalDestination.get(), size.get(), array.get());
     return finalDestination.get();
 }
 
@@ -4880,19 +4928,17 @@ void FunctionNode::emitBytecode(BytecodeGenerator& generator, RegisterID*)
         // load and call @asyncFunctionResume
         RefPtr<RegisterID> asyncFunctionResume = generator.moveLinkTimeConstant(nullptr, LinkTimeConstant::asyncFunctionResume);
 
-        CallArguments args(generator, nullptr, 4);
+        CallArguments args(generator, nullptr, 3);
         unsigned argumentCount = 0;
         generator.emitLoad(args.thisRegister(), jsUndefined());
         generator.move(args.argumentRegister(argumentCount++), generator.generatorRegister());
-        generator.move(args.argumentRegister(argumentCount++), generator.promiseRegister());
         generator.emitLoad(args.argumentRegister(argumentCount++), jsUndefined());
         generator.emitLoad(args.argumentRegister(argumentCount++), JSGenerator::ResumeMode::NormalMode);
         // JSTextPosition(int _line, int _offset, int _lineStartOffset)
         JSTextPosition divot(firstLine(), startOffset(), lineStartOffset());
 
-        RefPtr<RegisterID> result = generator.newTemporary();
-        generator.emitCallInTailPosition(result.get(), asyncFunctionResume.get(), NoExpectedFunction, args, divot, divot, divot, DebuggableCall::No);
-        generator.emitReturn(result.get());
+        generator.emitCall(generator.newTemporary(), asyncFunctionResume.get(), NoExpectedFunction, args, divot, divot, divot, DebuggableCall::No);
+        generator.emitReturn(generator.promiseRegister());
         break;
     }
 
@@ -5272,14 +5318,15 @@ static void assignDefaultValueIfUndefined(BytecodeGenerator& generator, Register
 
 void ArrayPatternNode::bindValue(BytecodeGenerator& generator, RegisterID* rhs) const
 {
+    RefPtr<RegisterID> iterable = rhs;
     RefPtr<RegisterID> iterator = generator.newTemporary();
+    RefPtr<RegisterID> nextOrIndex = generator.newTemporary();
     {
-        generator.emitGetById(iterator.get(), rhs, generator.propertyNames().iteratorSymbol);
-        CallArguments args(generator, nullptr);
-        generator.move(args.thisRegister(), rhs);
-        generator.emitCall(iterator.get(), iterator.get(), NoExpectedFunction, args, divot(), divotStart(), divotEnd(), DebuggableCall::No);
+        RefPtr<RegisterID> iteratorSymbol = generator.emitGetById(generator.newTemporary(), iterable.get(), generator.propertyNames().iteratorSymbol);
+        CallArguments args(generator, nullptr, 0);
+        generator.move(args.thisRegister(), iterable.get());
+        generator.emitIteratorOpen(iterator.get(), nextOrIndex.get(), iteratorSymbol.get(), args, this);
     }
-    RefPtr<RegisterID> nextMethod = generator.emitGetById(generator.newTemporary(), iterator.get(), generator.propertyNames().next);
 
     if (m_targetPatterns.isEmpty()) {
         generator.emitIteratorGenericClose(iterator.get(), this);
@@ -5298,14 +5345,12 @@ void ArrayPatternNode::bindValue(BytecodeGenerator& generator, RegisterID* rhs) 
                 generator.emitJumpIfTrue(done.get(), iterationSkipped.get());
 
             RefPtr<RegisterID> value = generator.newTemporary();
-            generator.emitIteratorGenericNext(value.get(), nextMethod.get(), iterator.get(), this);
-            generator.emitGetById(done.get(), value.get(), generator.propertyNames().done);
-            generator.emitJumpIfTrue(done.get(), iterationSkipped.get());
-            generator.emitGetById(value.get(), value.get(), generator.propertyNames().value);
-
             {
                 Ref<Label> valueIsSet = generator.newLabel();
-                generator.emitJump(valueIsSet.get());
+                CallArguments nextArgs(generator, nullptr, 0);
+                generator.move(nextArgs.thisRegister(), iterator.get());
+                generator.emitIteratorNext(done.get(), value.get(), iterable.get(), nextOrIndex.get(), nextArgs, this);
+                generator.emitJumpIfFalse(done.get(), valueIsSet.get());
                 generator.emitLabel(iterationSkipped.get());
                 generator.emitLoad(value.get(), jsUndefined());
                 generator.emitLabel(valueIsSet.get());
@@ -5334,10 +5379,12 @@ void ArrayPatternNode::bindValue(BytecodeGenerator& generator, RegisterID* rhs) 
             generator.emitLabel(loopStart.get());
 
             RefPtr<RegisterID> value = generator.newTemporary();
-            generator.emitIteratorGenericNext(value.get(), nextMethod.get(), iterator.get(), this);
-            generator.emitGetById(done.get(), value.get(), generator.propertyNames().done);
-            generator.emitJumpIfTrue(done.get(), iterationDone.get());
-            generator.emitGetById(value.get(), value.get(), generator.propertyNames().value);
+            {
+                CallArguments nextArgs(generator, nullptr, 0);
+                generator.move(nextArgs.thisRegister(), iterator.get());
+                generator.emitIteratorNext(done.get(), value.get(), iterable.get(), nextOrIndex.get(), nextArgs, this);
+                generator.emitJumpIfTrue(done.get(), iterationDone.get());
+            }
 
             generator.emitDirectPutByVal(array.get(), index.get(), value.get());
             generator.emitInc(index.get());

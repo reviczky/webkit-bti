@@ -67,21 +67,23 @@ ContextNULL::ContextNULL(const gl::State &state,
     ASSERT(mAllocationTracker != nullptr);
 
     mExtensions                               = gl::Extensions();
+    mExtensions.copyCompressedTextureCHROMIUM = true;
+    mExtensions.copyTextureCHROMIUM           = true;
+    mExtensions.debugMarkerEXT                = true;
     mExtensions.fenceNV                       = true;
     mExtensions.framebufferBlitANGLE          = true;
     mExtensions.framebufferBlitNV             = true;
     mExtensions.instancedArraysANGLE          = true;
     mExtensions.instancedArraysEXT            = true;
-    mExtensions.pixelBufferObjectNV           = true;
-    mExtensions.mapbufferOES                  = true;
     mExtensions.mapBufferRangeEXT             = true;
-    mExtensions.copyTextureCHROMIUM           = true;
-    mExtensions.copyCompressedTextureCHROMIUM = true;
-    mExtensions.textureRectangleANGLE         = true;
-    mExtensions.textureUsageANGLE             = true;
-    mExtensions.vertexArrayObjectOES          = true;
-    mExtensions.debugMarkerEXT                = true;
-    mExtensions.translatedShaderSourceANGLE   = true;
+    mExtensions.mapbufferOES                  = true;
+    mExtensions.pixelBufferObjectNV           = true;
+    mExtensions.shaderPixelLocalStorageANGLE  = state.getClientVersion() >= gl::Version(3, 1);
+    mExtensions.shaderPixelLocalStorageCoherentANGLE = mExtensions.shaderPixelLocalStorageANGLE;
+    mExtensions.textureRectangleANGLE                = true;
+    mExtensions.textureUsageANGLE                    = true;
+    mExtensions.translatedShaderSourceANGLE          = true;
+    mExtensions.vertexArrayObjectOES                 = true;
 
     mExtensions.textureStorageEXT               = true;
     mExtensions.rgb8Rgba8OES                    = true;
@@ -107,6 +109,18 @@ ContextNULL::ContextNULL(const gl::State &state,
 
     const gl::Version maxClientVersion(3, 1);
     mCaps = GenerateMinimumCaps(maxClientVersion, mExtensions);
+
+    if (mExtensions.shaderPixelLocalStorageANGLE)
+    {
+        // [ANGLE_shader_pixel_local_storage], Table 6.X: MAX_PIXEL_LOCAL_STORAGE_PLANES_ANGLE must
+        // be at least 4.
+        //
+        // ES 3.1, Table 20.44: MAX_FRAGMENT_IMAGE_UNIFORMS can be 0.
+        //
+        // Support at least 4 fragment shader image units if we want pixel local storage.
+        mCaps.maxShaderImageUniforms[gl::ShaderType::Fragment] =
+            std::max(mCaps.maxShaderImageUniforms[gl::ShaderType::Fragment], 4);
+    }
 
     InitMinimumTextureCapsMap(maxClientVersion, mExtensions, &mTextureCaps);
 }
@@ -403,6 +417,13 @@ const gl::Extensions &ContextNULL::getNativeExtensions() const
 const gl::Limitations &ContextNULL::getNativeLimitations() const
 {
     return mLimitations;
+}
+
+ShPixelLocalStorageType ContextNULL::getNativePixelLocalStorageType() const
+{
+    return getNativeExtensions().shaderPixelLocalStorageANGLE
+               ? ShPixelLocalStorageType::ImageStoreNativeFormats
+               : ShPixelLocalStorageType::NotSupported;
 }
 
 CompilerImpl *ContextNULL::createCompiler()

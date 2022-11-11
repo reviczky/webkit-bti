@@ -48,8 +48,8 @@
 #include "UserGestureIndicator.h"
 #include "UserMediaController.h"
 #include "UserMediaRequest.h"
+#include <wtf/CryptographicallyRandomNumber.h>
 #include <wtf/IsoMallocInlines.h>
-#include <wtf/RandomNumber.h>
 
 namespace WebCore {
 
@@ -290,7 +290,7 @@ static inline MediaDeviceInfo::Kind toMediaDeviceInfoKind(CaptureDevice::DeviceT
     return MediaDeviceInfo::Kind::Audioinput;
 }
 
-void MediaDevices::exposeDevices(const Vector<CaptureDevice>& newDevices, const String& deviceIDHashSalt, EnumerateDevicesPromise&& promise)
+void MediaDevices::exposeDevices(const Vector<CaptureDevice>& newDevices, MediaDeviceHashSalts&& deviceIDHashSalts, EnumerateDevicesPromise&& promise)
 {
     if (isContextStopped())
         return;
@@ -312,8 +312,13 @@ void MediaDevices::exposeDevices(const Vector<CaptureDevice>& newDevices, const 
         if (!canAccessSpeaker && newDevice.type() == CaptureDevice::DeviceType::Speaker)
             continue;
 
-        auto deviceId = RealtimeMediaSourceCenter::singleton().hashStringWithSalt(newDevice.persistentId(), deviceIDHashSalt);
-        auto groupId = RealtimeMediaSourceCenter::singleton().hashStringWithSalt(newDevice.groupId(), m_groupIdHashSalt);
+        auto& center = RealtimeMediaSourceCenter::singleton();
+        String deviceId;
+        if (newDevice.isEphemeral())
+            deviceId = center.hashStringWithSalt(newDevice.persistentId(), deviceIDHashSalts.ephemeralDeviceSalt);
+        else
+            deviceId = center.hashStringWithSalt(newDevice.persistentId(), deviceIDHashSalts.persistentDeviceSalt);
+        auto groupId = center.hashStringWithSalt(newDevice.groupId(), m_groupIdHashSalt);
 
         if (newDevice.type() == CaptureDevice::DeviceType::Speaker)
             m_audioOutputDeviceIdToPersistentId.add(deviceId, newDevice.persistentId());
@@ -341,10 +346,10 @@ void MediaDevices::enumerateDevices(EnumerateDevicesPromise&& promise)
         return;
     }
 
-    controller->enumerateMediaDevices(*document, [this, weakThis = WeakPtr { *this }, promise = WTFMove(promise)](const auto& newDevices, const auto& deviceIDHashSalt) mutable {
+    controller->enumerateMediaDevices(*document, [this, weakThis = WeakPtr { *this }, promise = WTFMove(promise)](const auto& newDevices, MediaDeviceHashSalts&& deviceIDHashSalts) mutable {
         if (!weakThis)
             return;
-        exposeDevices(newDevices, deviceIDHashSalt, WTFMove(promise));
+        exposeDevices(newDevices, WTFMove(deviceIDHashSalts), WTFMove(promise));
     });
 }
 
@@ -363,6 +368,7 @@ MediaTrackSupportedConstraints MediaDevices::getSupportedConstraints()
     result.echoCancellation = supported.supportsEchoCancellation();
     result.deviceId = supported.supportsDeviceId();
     result.groupId = supported.supportsGroupId();
+    result.displaySurface = supported.supportsDisplaySurface();
 
     return result;
 }
@@ -402,7 +408,7 @@ void MediaDevices::listenForDeviceChanges()
         if (!weakThis || isContextStopped() || m_scheduledEventTimer.isActive())
             return;
 
-        m_scheduledEventTimer.startOneShot(Seconds(randomNumber() / 2));
+        m_scheduledEventTimer.startOneShot(Seconds(cryptographicallyRandomUnitInterval() / 2));
     });
 }
 
@@ -411,7 +417,7 @@ bool MediaDevices::addEventListener(const AtomString& eventType, Ref<EventListen
     if (eventType == eventNames().devicechangeEvent)
         listenForDeviceChanges();
 
-    return EventTargetWithInlineData::addEventListener(eventType, WTFMove(listener), options);
+    return EventTarget::addEventListener(eventType, WTFMove(listener), options);
 }
 
 } // namespace WebCore

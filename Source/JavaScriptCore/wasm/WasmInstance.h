@@ -153,6 +153,27 @@ public:
         }
         slot->m_primitive = bits;
     }
+
+    v128_t loadV128Global(unsigned i) const
+    {
+        Global::Value* slot = m_globals.get() + i;
+        if (m_globalsToBinding.get(i)) {
+            slot = slot->m_pointer;
+            if (!slot)
+                return { };
+        }
+        return slot->m_vector;
+    }
+    void setGlobal(unsigned i, v128_t bits)
+    {
+        Global::Value* slot = m_globals.get() + i;
+        if (m_globalsToBinding.get(i)) {
+            slot = slot->m_pointer;
+            if (!slot)
+                return;
+        }
+        slot->m_vector = bits;
+    }
     void setGlobal(unsigned, JSValue);
     void linkGlobal(unsigned, Ref<Global>&&);
     const BitVector& globalsToMark() { return m_globalsToMark; }
@@ -195,7 +216,7 @@ public:
         // Target instance and entrypoint are only set for wasm->wasm calls, and are otherwise nullptr. The embedder-specific logic occurs through import function.
         Instance* targetInstance { nullptr };
         WasmToWasmImportableFunction::LoadLocation wasmEntrypointLoadLocation { nullptr };
-        MacroAssemblerCodePtr<WasmEntryPtrTag> wasmToEmbedderStub;
+        CodePtr<WasmEntryPtrTag> wasmToEmbedderStub;
         void* importFunction { nullptr }; // In a JS embedding, this is a WriteBarrier<JSObject>.
     };
     unsigned numImportFunctions() const { return m_numImportFunctions; }

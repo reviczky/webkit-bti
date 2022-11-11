@@ -26,14 +26,11 @@
 #include "config.h"
 #include "LayoutIntegrationInlineContentBuilder.h"
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "InlineDisplayBox.h"
 #include "InlineFormattingState.h"
 #include "LayoutBoxGeometry.h"
 #include "LayoutIntegrationBoxTree.h"
 #include "LayoutIntegrationInlineContent.h"
-#include "LayoutReplacedBox.h"
 #include "LayoutState.h"
 #include "RenderBlockFlow.h"
 #include "StringTruncator.h"
@@ -82,27 +79,34 @@ void InlineContentBuilder::build(Layout::InlineFormattingState& inlineFormatting
     createDisplayLines(inlineFormattingState, inlineContent);
 }
 
+void InlineContentBuilder::updateLineOverflow(Layout::InlineFormattingState& inlineFormattingState, InlineContent& inlineContent) const
+{
+    inlineContent.lines.clear();
+    createDisplayLines(inlineFormattingState, inlineContent);
+}
+
 void InlineContentBuilder::createDisplayLines(Layout::InlineFormattingState& inlineFormattingState, InlineContent& inlineContent) const
 {
     auto& lines = inlineFormattingState.lines();
     auto& boxes = inlineContent.boxes;
     size_t boxIndex = 0;
     inlineContent.lines.reserveInitialCapacity(lines.size());
+
+    auto& rootBoxStyle = m_blockFlow.style();
     for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
         auto& line = lines[lineIndex];
         auto scrollableOverflowRect = line.scrollableOverflow();
 
         auto adjustOverflowLogicalWidthWithBlockFlowQuirk = [&] {
-            auto& rootStyle = m_blockFlow.style();
-            auto isHorizontalWritingMode = rootStyle.isHorizontalWritingMode();
+            auto isHorizontalWritingMode = rootBoxStyle.isHorizontalWritingMode();
             auto adjustedOverflowLogicalWidth = lineOverflowLogicalWidth(m_blockFlow, line.contentLogicalWidth());
             auto scrollableOverflowLogicalWidth = isHorizontalWritingMode ? scrollableOverflowRect.width() : scrollableOverflowRect.height();
             if (adjustedOverflowLogicalWidth > scrollableOverflowLogicalWidth) {
                 auto overflowValue = adjustedOverflowLogicalWidth - scrollableOverflowLogicalWidth;
                 if (isHorizontalWritingMode)
-                    rootStyle.isLeftToRightDirection() ? scrollableOverflowRect.shiftMaxXEdgeBy(overflowValue) : scrollableOverflowRect.shiftXEdgeBy(-overflowValue);
+                    rootBoxStyle.isLeftToRightDirection() ? scrollableOverflowRect.shiftMaxXEdgeBy(overflowValue) : scrollableOverflowRect.shiftXEdgeBy(-overflowValue);
                 else
-                    rootStyle.isLeftToRightDirection() ? scrollableOverflowRect.shiftMaxYEdgeBy(overflowValue) : scrollableOverflowRect.shiftYEdgeBy(-overflowValue);
+                    rootBoxStyle.isLeftToRightDirection() ? scrollableOverflowRect.shiftMaxYEdgeBy(overflowValue) : scrollableOverflowRect.shiftYEdgeBy(-overflowValue);
             }
         };
         adjustOverflowLogicalWidthWithBlockFlowQuirk();
@@ -112,11 +116,13 @@ void InlineContentBuilder::createDisplayLines(Layout::InlineFormattingState& inl
         // Collect overflow from boxes.
         for (; boxIndex < boxes.size() && boxes[boxIndex].lineIndex() == lineIndex; ++boxIndex) {
             auto& box = boxes[boxIndex];
+            if (box.isRootInlineBox())
+                continue;
 
             lineInkOverflowRect.unite(box.inkOverflow());
 
             auto& layoutBox = box.layoutBox();
-            if (layoutBox.isReplacedBox()) {
+            if (layoutBox.isAtomicInlineLevelBox()) {
                 // Similar to LegacyInlineFlowBox::addReplacedChildOverflow.
                 auto& renderer = downcast<RenderBox>(m_boxTree.rendererForLayoutBox(layoutBox));
                 if (!renderer.hasSelfPaintingLayer()) {
@@ -124,7 +130,7 @@ void InlineContentBuilder::createDisplayLines(Layout::InlineFormattingState& inl
                     childInkOverflow.move(box.left(), box.top());
                     lineInkOverflowRect.unite(childInkOverflow);
                 }
-                auto childScrollableOverflow = renderer.logicalLayoutOverflowRectForPropagation(&renderer.parent()->style());
+                auto childScrollableOverflow = renderer.layoutOverflowRectForPropagation(&renderer.parent()->style());
                 childScrollableOverflow.move(box.left(), box.top());
                 scrollableOverflowRect.unite(childScrollableOverflow);
             }
@@ -139,11 +145,13 @@ void InlineContentBuilder::createDisplayLines(Layout::InlineFormattingState& inl
         auto boxCount = boxIndex - firstBoxIndex;
         if (!inlineContent.hasVisualOverflow() && lineInkOverflowRect != line.scrollableOverflow())
             inlineContent.setHasVisualOverflow();
-        inlineContent.lines.append({ firstBoxIndex, boxCount, FloatRect { line.lineBoxRect() }, line.enclosingTopAndBottom().top, line.enclosingTopAndBottom().bottom, scrollableOverflowRect, lineInkOverflowRect, line.baseline(), line.baselineType(), line.contentLogicalOffset(), line.contentLogicalWidth(), line.isHorizontal() });
+        auto ellipsis = std::optional<Line::Ellipsis> { };
+        if (auto ellipsisVisualRect = line.ellipsisVisualRect())
+            ellipsis = { *ellipsisVisualRect, rootBoxStyle.isLeftToRightDirection() };
+        inlineContent.lines.append({ firstBoxIndex, boxCount, FloatRect { line.lineBoxRect() }, line.enclosingTopAndBottom().top, line.enclosingTopAndBottom().bottom, scrollableOverflowRect, lineInkOverflowRect, line.baseline(), line.baselineType(), line.contentLogicalOffset(), line.contentLogicalWidth(), line.isHorizontal(), ellipsis });
     }
 }
 
 }
 }
 
-#endif

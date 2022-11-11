@@ -35,10 +35,12 @@
 #endif  // !defined(ANGLE_REPLAY_EXPORT)
 
 using DecompressCallback              = uint8_t *(*)(const std::vector<uint8_t> &);
+using DeleteCallback                  = void (*)(uint8_t *);
 using ValidateSerializedStateCallback = void (*)(const char *, const char *, uint32_t);
 
 extern "C" {
-ANGLE_REPLAY_EXPORT void SetBinaryDataDecompressCallback(DecompressCallback callback);
+ANGLE_REPLAY_EXPORT void SetBinaryDataDecompressCallback(DecompressCallback decompressCallback,
+                                                         DeleteCallback deleteCallback);
 ANGLE_REPLAY_EXPORT void SetBinaryDataDir(const char *dataDir);
 ANGLE_REPLAY_EXPORT void SetupReplay();
 ANGLE_REPLAY_EXPORT void ReplayFrame(uint32_t frameIndex);
@@ -110,6 +112,9 @@ using SyncResourceMap = std::unordered_map<uintptr_t, GLsync>;
 extern SyncResourceMap gSyncMap;
 using ContextMap = std::unordered_map<uint32_t, EGLContext>;
 extern ContextMap gContextMap;
+
+using SurfaceMap = std::unordered_map<uint32_t, EGLSurface>;
+extern SurfaceMap gSurfaceMap;
 
 void UpdateClientArrayPointer(int arrayIndex, const void *data, uint64_t size);
 using BufferHandleMap = std::unordered_map<GLuint, void *>;

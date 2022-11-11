@@ -55,7 +55,7 @@ EGLImageKHR CreateImageKHR(Thread *thread,
     ANGLE_EGL_TRY_RETURN(thread, display->createImage(context, target, buffer, attributes, &image),
                          "", GetDisplayIfValid(display), EGL_NO_IMAGE);
 
-    ANGLE_CAPTURE_EGL(EGLCreateImage, thread, target, buffer, attributes, image);
+    ANGLE_CAPTURE_EGL(EGLCreateImage, thread, context, target, buffer, attributes, image);
 
     thread->setSuccess();
     return static_cast<EGLImage>(image);
@@ -211,6 +211,7 @@ EGLDisplay GetPlatformDisplayEXT(Thread *thread,
     {
         case EGL_PLATFORM_ANGLE_ANGLE:
         case EGL_PLATFORM_GBM_KHR:
+        case EGL_PLATFORM_WAYLAND_EXT:
         {
             return egl::Display::GetDisplayFromNativeDisplay(
                 platform, gl::bitCast<EGLNativeDisplayType>(native_display), attribMap);
@@ -955,6 +956,19 @@ EGLBoolean QueryDmaBufModifiersEXT(Thread *thread,
                          "eglQueryDmaBufModifiersEXT", GetDisplayIfValid(display), EGL_FALSE);
     thread->setSuccess();
     return EGL_TRUE;
+}
+
+void *CopyMetalSharedEventANGLE(Thread *thread, Display *display, Sync *syncObject)
+{
+    ANGLE_EGL_TRY_RETURN(thread, display->prepareForCall(), "eglCopyMetalSharedEventANGLE",
+                         GetDisplayIfValid(display), nullptr);
+    void *result = nullptr;
+    ANGLE_EGL_TRY_RETURN(thread, syncObject->copyMetalSharedEventANGLE(display, &result),
+                         "eglCopyMetalSharedEventANGLE", GetSyncIfValid(display, syncObject),
+                         nullptr);
+
+    thread->setSuccess();
+    return result;
 }
 
 }  // namespace egl

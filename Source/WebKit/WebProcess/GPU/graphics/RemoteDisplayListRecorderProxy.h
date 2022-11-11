@@ -27,7 +27,7 @@
 
 #if ENABLE(GPU_PROCESS)
 
-#include "RemoteRenderingBackendProxy.h"
+#include "DisplayListRecorderFlushIdentifier.h"
 #include <WebCore/DisplayListRecorder.h>
 #include <WebCore/DrawGlyphsRecorder.h>
 #include <WebCore/GraphicsContext.h>
@@ -36,26 +36,19 @@
 namespace WebKit {
 
 class RemoteRenderingBackendProxy;
+class RemoteImageBufferProxy;
 
 class RemoteDisplayListRecorderProxy : public WebCore::DisplayList::Recorder {
 public:
-    RemoteDisplayListRecorderProxy(WebCore::ImageBuffer&, RemoteRenderingBackendProxy&, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&);
+    RemoteDisplayListRecorderProxy(RemoteImageBufferProxy&, RemoteRenderingBackendProxy&, const WebCore::FloatRect& initialClip, const WebCore::AffineTransform&);
     ~RemoteDisplayListRecorderProxy() = default;
 
     void convertToLuminanceMask() final;
     void transformToColorSpace(const WebCore::DestinationColorSpace&) final;
-    void flushContext(WebCore::GraphicsContextFlushIdentifier);
+    void flushContext(DisplayListRecorderFlushIdentifier);
 
 private:
-    template<typename T>
-    void send(T&& message)
-    {
-        if (UNLIKELY(!(m_renderingBackend && m_imageBuffer)))
-            return;
-
-        m_imageBuffer->backingStoreWillChange();
-        m_renderingBackend->sendToStream(WTFMove(message), m_destinationBufferIdentifier);
-    }
+    template<typename T> void send(T&& message);
 
     friend class WebCore::DrawGlyphsRecorder;
 
@@ -142,7 +135,7 @@ private:
     RefPtr<WebCore::ImageBuffer> createAlignedImageBuffer(const WebCore::FloatRect&, const WebCore::DestinationColorSpace&, std::optional<WebCore::RenderingMethod>) const final;
 
     WebCore::RenderingResourceIdentifier m_destinationBufferIdentifier;
-    WeakPtr<WebCore::ImageBuffer> m_imageBuffer;
+    WeakPtr<RemoteImageBufferProxy> m_imageBuffer;
     WeakPtr<RemoteRenderingBackendProxy> m_renderingBackend;
 };
 

@@ -32,6 +32,7 @@
 #include "NetworkCache.h"
 #include "NetworkLoad.h"
 #include "NetworkSession.h"
+#include <WebCore/NetworkConnectionIntegrity.h>
 #include <WebCore/ServiceWorkerJob.h>
 #include <WebCore/TextResourceDecoder.h>
 #include <WebCore/WorkerFetchResult.h>
@@ -60,7 +61,9 @@ ServiceWorkerSoftUpdateLoader::ServiceWorkerSoftUpdateLoader(NetworkSession& ses
         // We set cache policy to disable speculative loading/async revalidation from the cache.
         request.setCachePolicy(ResourceRequestCachePolicy::ReturnCacheDataDontLoad);
 
-        session.cache()->retrieve(request, NetworkCache::GlobalFrameID { }, NavigatingToAppBoundDomain::No, [this, weakThis = WeakPtr { *this }, request, shouldRefreshCache](auto&& entry, auto&&) mutable {
+        OptionSet<NetworkConnectionIntegrity> networkConnectionIntegrityPolicy;
+        bool allowPrivacyProxy { true };
+        session.cache()->retrieve(request, NetworkCache::GlobalFrameID { }, NavigatingToAppBoundDomain::No, allowPrivacyProxy, networkConnectionIntegrityPolicy, [this, weakThis = WeakPtr { *this }, request, shouldRefreshCache](auto&& entry, auto&&) mutable {
             if (!weakThis)
                 return;
             if (!m_session) {

@@ -66,14 +66,14 @@ struct OSRExit;
 // Every CallLinkRecord contains a reference to the call instruction & the function
 // that it needs to be linked to.
 struct CallLinkRecord {
-    CallLinkRecord(MacroAssembler::Call call, FunctionPtr<OperationPtrTag> function)
+    CallLinkRecord(MacroAssembler::Call call, CodePtr<OperationPtrTag> function)
         : m_call(call)
         , m_function(function)
     {
     }
 
     MacroAssembler::Call m_call;
-    FunctionPtr<OperationPtrTag> m_function;
+    CodePtr<OperationPtrTag> m_function;
 };
 
 // === JITCompiler ===
@@ -141,14 +141,14 @@ public:
     }
 
     // Add a call out from JIT code, without an exception check.
-    Call appendCall(const FunctionPtr<CFunctionPtrTag> function)
+    Call appendCall(const CodePtr<CFunctionPtrTag> function)
     {
         Call functionCall = call(OperationPtrTag);
         m_calls.append(CallLinkRecord(functionCall, function.retagged<OperationPtrTag>()));
         return functionCall;
     }
 
-    Call appendOperationCall(const FunctionPtr<OperationPtrTag> function)
+    Call appendOperationCall(const CodePtr<OperationPtrTag> function)
     {
         Call functionCall = call(OperationPtrTag);
         m_calls.append(CallLinkRecord(functionCall, function));
@@ -162,9 +162,9 @@ public:
     
     void exceptionCheck();
 
-    void exceptionCheckWithCallFrameRollback()
+    void exceptionJumpWithCallFrameRollback()
     {
-        m_exceptionChecksWithCallFrameRollback.append(emitExceptionCheck(vm()));
+        m_exceptionChecksWithCallFrameRollback.append(jump());
     }
 
     OSRExitCompilationInfo& appendExitInfo(MacroAssembler::JumpList jumpsToFail = MacroAssembler::JumpList())
@@ -193,7 +193,12 @@ public:
     {
         m_getByVals.append(InlineCacheWrapper<JITGetByValGenerator>(gen, slowPath));
     }
-    
+
+    void addGetByValWithThis(const JITGetByValWithThisGenerator& gen, SlowPathGenerator* slowPath)
+    {
+        m_getByValsWithThis.append(InlineCacheWrapper<JITGetByValWithThisGenerator>(gen, slowPath));
+    }
+
     void addPutById(const JITPutByIdGenerator& gen, SlowPathGenerator* slowPath)
     {
         m_putByIds.append(InlineCacheWrapper<JITPutByIdGenerator>(gen, slowPath));
@@ -234,7 +239,7 @@ public:
         m_privateBrandAccesses.append(InlineCacheWrapper<JITPrivateBrandAccessGenerator>(gen, slowPath));
     }
 
-    void addJSCall(Label slowPathStart, Label doneLocation, OptimizingCallLinkInfo* info)
+    void addJSCall(Label slowPathStart, Label doneLocation, CompileTimeCallLinkInfo info)
     {
         m_jsCalls.append(JSCallRecord(slowPathStart, doneLocation, info));
     }
@@ -307,6 +312,7 @@ public:
     class LinkableConstant final : public CCallHelpers::ConstantMaterializer {
     public:
         enum NonCellTag { NonCell };
+        enum GlobalObjectTag { GlobalObject };
         LinkableConstant() = default;
         LinkableConstant(JITCompiler&, JSCell*);
         LinkableConstant(LinkerIR::Constant index)
@@ -328,6 +334,11 @@ public:
             return LinkableConstant(jit, structure.get());
         }
 
+        static LinkableConstant globalObject(JITCompiler& jit, Node* node)
+        {
+            return LinkableConstant(jit, GlobalObject, node->origin.semantic);
+        }
+
         bool isUnlinked() const { return m_index != UINT_MAX; }
 
         void* pointer() const { return m_pointer; }
@@ -343,6 +354,7 @@ public:
 
     private:
         LinkableConstant(JITCompiler&, void*, NonCellTag);
+        LinkableConstant(JITCompiler&, GlobalObjectTag, CodeOrigin);
 
         LinkerIR::Constant m_index { UINT_MAX };
         void* m_pointer { nullptr };
@@ -371,6 +383,7 @@ public:
     }
 
     std::tuple<CompileTimeStructureStubInfo, LinkableConstant> addStructureStubInfo();
+    std::tuple<CompileTimeCallLinkInfo, LinkableConstant> addCallLinkInfo(CodeOrigin);
     LinkerIR::Constant addToConstantPool(LinkerIR::Type, void*);
 
 private:
@@ -408,7 +421,7 @@ private:
 
 
     struct JSCallRecord {
-        JSCallRecord(Label slowPathStart, Label doneLocation, OptimizingCallLinkInfo* info)
+        JSCallRecord(Label slowPathStart, Label doneLocation, CompileTimeCallLinkInfo info)
             : slowPathStart(slowPathStart)
             , doneLocation(doneLocation)
             , info(info)
@@ -417,7 +430,7 @@ private:
         
         Label slowPathStart;
         Label doneLocation;
-        OptimizingCallLinkInfo* info;
+        CompileTimeCallLinkInfo info;
     };
     
     struct JSDirectCallRecord {
@@ -434,6 +447,7 @@ private:
     Vector<InlineCacheWrapper<JITGetByIdGenerator>, 4> m_getByIds;
     Vector<InlineCacheWrapper<JITGetByIdWithThisGenerator>, 4> m_getByIdsWithThis;
     Vector<InlineCacheWrapper<JITGetByValGenerator>, 4> m_getByVals;
+    Vector<InlineCacheWrapper<JITGetByValWithThisGenerator>, 4> m_getByValsWithThis;
     Vector<InlineCacheWrapper<JITPutByIdGenerator>, 4> m_putByIds;
     Vector<InlineCacheWrapper<JITPutByValGenerator>, 4> m_putByVals;
     Vector<InlineCacheWrapper<JITDelByIdGenerator>, 4> m_delByIds;
@@ -449,9 +463,8 @@ private:
     Vector<DFG::OSREntryData> m_osrEntry;
     Vector<DFG::OSRExit> m_osrExit;
     Vector<DFG::SpeculationRecovery> m_speculationRecovery;
-    Vector<LinkerIR::Value> m_constantPool;
-    HashMap<LinkerIR::Value, LinkerIR::Constant, LinkerIR::ValueHash, LinkerIR::ValueTraits> m_constantPoolMap;
     SegmentedVector<DFG::UnlinkedStructureStubInfo> m_unlinkedStubInfos;
+    SegmentedVector<DFG::UnlinkedCallLinkInfo> m_unlinkedCallLinkInfos;
     
     struct ExceptionHandlingOSRExitInfo {
         OSRExitCompilationInfo& exitInfo;

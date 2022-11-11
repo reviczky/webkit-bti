@@ -28,7 +28,6 @@
 
 #include "Animation.h"
 #include "CSSAnimation.h"
-#include "CSSComputedStyleDeclaration.h"
 #include "CSSKeyframeRule.h"
 #include "CSSPropertyAnimation.h"
 #include "CSSPropertyNames.h"
@@ -37,6 +36,7 @@
 #include "CSSStyleDeclaration.h"
 #include "CSSTimingFunctionValue.h"
 #include "CSSTransition.h"
+#include "ComputedStyleExtractor.h"
 #include "Element.h"
 #include "FontCascade.h"
 #include "FrameView.h"
@@ -75,21 +75,21 @@ static inline void invalidateElement(const std::optional<const Styleable>& style
         styleable->element.invalidateStyleInternal();
 }
 
-String KeyframeEffect::CSSPropertyIDToIDLAttributeName(CSSPropertyID cssPropertyId)
+String KeyframeEffect::CSSPropertyIDToIDLAttributeName(CSSPropertyID property)
 {
     // https://drafts.csswg.org/web-animations-1/#animation-property-name-to-idl-attribute-name
     // 1. If property follows the <custom-property-name> production, return property.
 
     // 2. If property refers to the CSS float property, return the string "cssFloat".
-    if (cssPropertyId == CSSPropertyFloat)
+    if (property == CSSPropertyFloat)
         return "cssFloat"_s;
 
     // 3. If property refers to the CSS offset property, return the string "cssOffset".
-    if (cssPropertyId == CSSPropertyOffset)
+    if (property == CSSPropertyOffset)
         return "cssOffset"_s;
 
     // 4. Otherwise, return the result of applying the CSS property to IDL attribute algorithm [CSSOM] to property.
-    return getJSPropertyName(cssPropertyId);
+    return nameForIDL(property);
 }
 
 static inline CSSPropertyID IDLAttributeNameToAnimationPropertyName(const AtomString& idlAttributeName)
@@ -233,6 +233,8 @@ static inline ExceptionOr<KeyframeEffect::KeyframeLikeObject> processKeyframeLik
     Vector<JSC::Identifier> animationProperties;
     for (auto& inputProperty : inputProperties) {
         auto cssProperty = IDLAttributeNameToAnimationPropertyName(inputProperty.string());
+        if (!isExposed(cssProperty, &document.settings()))
+            cssProperty = CSSPropertyInvalid;
         auto resolvedCSSProperty = CSSProperty::resolveDirectionAwareProperty(cssProperty, RenderStyle::initialDirection(), RenderStyle::initialWritingMode());
         if (CSSPropertyAnimation::isPropertyAnimatable(resolvedCSSProperty))
             animationProperties.append(inputProperty);
@@ -240,7 +242,7 @@ static inline ExceptionOr<KeyframeEffect::KeyframeLikeObject> processKeyframeLik
 
     // 5. Sort animation properties in ascending order by the Unicode codepoints that define each property name.
     std::sort(animationProperties.begin(), animationProperties.end(), [](auto& lhs, auto& rhs) {
-        return lhs.string().string().utf8() < rhs.string().string().utf8();
+        return codePointCompareLessThan(lhs.string().string(), rhs.string().string());
     });
 
     // 6. For each property name in animation properties,
@@ -275,6 +277,7 @@ static inline ExceptionOr<KeyframeEffect::KeyframeLikeObject> processKeyframeLik
         // 4. Calculate the normalized property name as the result of applying the IDL attribute name to animation property name algorithm to property name.
         auto propertyName = animationProperties[i].string();
         auto cssPropertyID = IDLAttributeNameToAnimationPropertyName(propertyName);
+        ASSERT(isExposed(cssPropertyID, &document.settings()));
 
         // 5. Add a property to to keyframe output with normalized property name as the property name, and property values as the property value.
         if (cssPropertyID == CSSPropertyCustom)
@@ -631,7 +634,6 @@ auto KeyframeEffect::getKeyframes(Document& document) -> Vector<ComputedKeyframe
     }
 
     auto* target = m_target.get();
-    auto* renderer = this->renderer();
     auto* lastStyleChangeEventStyle = targetStyleable()->lastStyleChangeEventStyle();
     auto& elementStyle = lastStyleChangeEventStyle ? *lastStyleChangeEventStyle : currentStyle();
 
@@ -704,7 +706,7 @@ auto KeyframeEffect::getKeyframes(Document& document) -> Vector<ComputedKeyframe
                 }
             }
             if (styleString.isEmpty()) {
-                if (auto cssValue = computedStyleExtractor.valueForPropertyInStyle(style, cssPropertyId, renderer))
+                if (auto cssValue = computedStyleExtractor.valueForPropertyInStyle(style, cssPropertyId, nullptr, ComputedStyleExtractor::PropertyValueType::Computed))
                     styleString = cssValue->cssText();
             }
             computedKeyframe.styleStrings.set(cssPropertyId, styleString);
@@ -1061,8 +1063,10 @@ void KeyframeEffect::computeDeclarativeAnimationBlendingKeyframes(const RenderSt
     ASSERT(is<DeclarativeAnimation>(animation()));
     if (is<CSSAnimation>(animation()))
         computeCSSAnimationBlendingKeyframes(newStyle, resolutionContext);
-    else if (is<CSSTransition>(animation()))
-        computeCSSTransitionBlendingKeyframes(oldStyle, newStyle);
+    else if (is<CSSTransition>(animation())) {
+        ASSERT(oldStyle);
+        computeCSSTransitionBlendingKeyframes(*oldStyle, newStyle);
+    }
 }
 
 void KeyframeEffect::computeCSSAnimationBlendingKeyframes(const RenderStyle& unanimatedStyle, const Style::ResolutionContext& resolutionContext)
@@ -1087,12 +1091,12 @@ void KeyframeEffect::computeCSSAnimationBlendingKeyframes(const RenderStyle& una
     setBlendingKeyframes(keyframeList);
 }
 
-void KeyframeEffect::computeCSSTransitionBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle)
+void KeyframeEffect::computeCSSTransitionBlendingKeyframes(const RenderStyle& oldStyle, const RenderStyle& newStyle)
 {
     ASSERT(is<CSSTransition>(animation()));
     ASSERT(document());
 
-    if (!oldStyle || m_blendingKeyframes.size())
+    if (m_blendingKeyframes.size())
         return;
 
     auto property = downcast<CSSTransition>(animation())->property();
@@ -1103,7 +1107,7 @@ void KeyframeEffect::computeCSSTransitionBlendingKeyframes(const RenderStyle* ol
 
     KeyframeList keyframeList(m_keyframesName);
 
-    KeyframeValue fromKeyframeValue(0, RenderStyle::clonePtr(*oldStyle));
+    KeyframeValue fromKeyframeValue(0, RenderStyle::clonePtr(oldStyle));
     fromKeyframeValue.addProperty(property);
     keyframeList.insert(WTFMove(fromKeyframeValue));
 
@@ -1191,8 +1195,11 @@ void KeyframeEffect::setAnimation(WebAnimation* animation)
 {
     bool animationChanged = animation != this->animation();
     AnimationEffect::setAnimation(animation);
-    if (animationChanged)
+    if (animationChanged) {
+        if (m_blendingKeyframesSource == BlendingKeyframesSource::CSSAnimation)
+            clearBlendingKeyframes();
         updateEffectStackMembership();
+    }
 }
 
 const std::optional<const Styleable> KeyframeEffect::targetStyleable() const
@@ -1307,7 +1314,8 @@ void KeyframeEffect::apply(RenderStyle& targetStyle, const Style::ResolutionCont
     if (!computedTiming.progress)
         return;
 
-    setAnimatedPropertiesInStyle(targetStyle, computedTiming.progress.value());
+    ASSERT(computedTiming.currentIteration);
+    setAnimatedPropertiesInStyle(targetStyle, *computedTiming.progress, *computedTiming.currentIteration);
 }
 
 bool KeyframeEffect::isCurrentlyAffectingProperty(CSSPropertyID property, Accelerated accelerated) const
@@ -1421,9 +1429,9 @@ void KeyframeEffect::getAnimatedStyle(std::unique_ptr<RenderStyle>& animatedStyl
     if (!renderer() || !animation())
         return;
 
-    auto progress = getComputedTiming().progress;
-    LOG_WITH_STREAM(Animations, stream << "KeyframeEffect " << this << " getAnimatedStyle - progress " << progress);
-    if (!progress)
+    auto computedTiming = getComputedTiming();
+    LOG_WITH_STREAM(Animations, stream << "KeyframeEffect " << this << " getAnimatedStyle - progress " << computedTiming.progress);
+    if (!computedTiming.progress)
         return;
 
     if (!animatedStyle) {
@@ -1433,10 +1441,11 @@ void KeyframeEffect::getAnimatedStyle(std::unique_ptr<RenderStyle>& animatedStyl
             animatedStyle = RenderStyle::clonePtr(renderer()->style());
     }
 
-    setAnimatedPropertiesInStyle(*animatedStyle.get(), progress.value());
+    ASSERT(computedTiming.currentIteration);
+    setAnimatedPropertiesInStyle(*animatedStyle.get(), *computedTiming.progress, *computedTiming.currentIteration);
 }
 
-void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, double iterationProgress)
+void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, double iterationProgress,  double currentIteration)
 {
     auto& properties = m_blendingKeyframes.properties();
 
@@ -1589,6 +1598,20 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, doub
                     auto endKeyframeCompositeOperation = endKeyframe.compositeOperation().value_or(m_compositeOperation);
                     if (endKeyframeCompositeOperation != CompositeOperation::Replace)
                         CSSPropertyAnimation::blendProperties(this, cssPropertyId, endKeyframeStyle, targetStyle, *endKeyframe.style(), 1, endKeyframeCompositeOperation);
+                }
+
+                // If this keyframe effect has an iteration composite operation of accumulate,
+                if (m_iterationCompositeOperation == IterationCompositeOperation::Accumulate) {
+                    // apply the following step current iteration times:
+                    for (auto i = 0; i < currentIteration; ++i) {
+                        // replace the property value of target property on keyframe with the result of combining the
+                        // property value on the final keyframe in property-specific keyframes (Va) with the property
+                        // value on keyframe (Vb) using the accumulation procedure defined for target property.
+                        if (!startKeyframe.key() && !hasImplicitZeroKeyframe)
+                            CSSPropertyAnimation::blendProperties(this, cssPropertyId, startKeyframeStyle, *endKeyframe.style(), startKeyframeStyle, 1, CompositeOperation::Accumulate);
+                        if (endKeyframe.key() == 1 && !hasImplicitOneKeyframe)
+                            CSSPropertyAnimation::blendProperties(this, cssPropertyId, endKeyframeStyle, *endKeyframe.style(), endKeyframeStyle, 1, CompositeOperation::Accumulate);
+                    }
                 }
             }
         }
@@ -1785,6 +1808,8 @@ void KeyframeEffect::animationDidChangeTimingProperties()
         }
     } else if (canBeAccelerated())
         m_runningAccelerated = RunningAccelerated::NotStarted;
+
+    invalidate();
 }
 
 void KeyframeEffect::transformRelatedPropertyDidChange()
@@ -1879,8 +1904,11 @@ void KeyframeEffect::applyPendingAcceleratedActions()
         for (const auto& effect : effectStack->sortedEffects()) {
             if (this == effect.get())
                 break;
-            if (auto progress = effect->getComputedTiming().progress)
-                effect->setAnimatedPropertiesInStyle(*underlyingStyle, *progress);
+            auto computedTiming = effect->getComputedTiming();
+            if (computedTiming.progress) {
+                ASSERT(computedTiming.currentIteration);
+                effect->setAnimatedPropertiesInStyle(*underlyingStyle, *computedTiming.progress, *computedTiming.currentIteration);
+            }
         }
 
         KeyframeList explicitKeyframes(m_blendingKeyframes.animationName());
@@ -2207,6 +2235,15 @@ Seconds KeyframeEffect::timeToNextTick(BasicEffectTiming timing) const
     }
 
     return AnimationEffect::timeToNextTick(timing);
+}
+
+void KeyframeEffect::setIterationComposite(IterationCompositeOperation iterationCompositeOperation)
+{
+    if (m_iterationCompositeOperation == iterationCompositeOperation)
+        return;
+
+    m_iterationCompositeOperation = iterationCompositeOperation;
+    invalidate();
 }
 
 void KeyframeEffect::setComposite(CompositeOperation compositeOperation)

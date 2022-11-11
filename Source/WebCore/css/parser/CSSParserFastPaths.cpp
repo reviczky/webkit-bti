@@ -37,6 +37,7 @@
 #include "CSSProperty.h"
 #include "CSSPropertyParser.h"
 #include "CSSPropertyParserHelpers.h"
+#include "CSSTransformListValue.h"
 #include "CSSValueList.h"
 #include "CSSValuePool.h"
 #include "DeprecatedGlobalSettings.h"
@@ -320,7 +321,7 @@ static std::optional<uint8_t> parseColorIntOrPercentage(const CharacterType*& st
 
     // Clamp negative values at zero.
     ASSERT(localValue <= 255);
-    return negative ? 0 : static_cast<uint8_t>(localValue);
+    return negative ? 0 : convertPrescaledSRGBAFloatToSRGBAByte(localValue);
 }
 
 template <typename CharacterType>
@@ -602,9 +603,6 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
             || valueID == CSSValueMiddle || (valueID >= CSSValueBeforeEdge && valueID <= CSSValueMathematical);
     case CSSPropertyAll:
         return false; // Only accepts css-wide keywords
-    case CSSPropertyBackgroundRepeatX: // repeat | no-repeat
-    case CSSPropertyBackgroundRepeatY: // repeat | no-repeat
-        return valueID == CSSValueRepeat || valueID == CSSValueNoRepeat;
     case CSSPropertyBorderCollapse: // collapse | separate
         return valueID == CSSValueCollapse || valueID == CSSValueSeparate;
     case CSSPropertyBorderTopStyle: // <border-style>
@@ -837,10 +835,6 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return valueID == CSSValueNormal || valueID == CSSValuePre || valueID == CSSValuePreWrap || valueID == CSSValuePreLine || valueID == CSSValueNowrap || valueID == CSSValueBreakSpaces;
     case CSSPropertyWordBreak: // normal | break-all | keep-all | break-word (this is a custom extension)
         return valueID == CSSValueNormal || valueID == CSSValueBreakAll || valueID == CSSValueKeepAll || valueID == CSSValueBreakWord;
-#if ENABLE(CSS_TRAILING_WORD)
-    case CSSPropertyAppleTrailingWord: // auto | -apple-partially-balanced
-        return valueID == CSSValueAuto || valueID == CSSValueWebkitPartiallyBalanced;
-#endif
 #if ENABLE(APPLE_PAY)
     case CSSPropertyApplePayButtonStyle: // white | white-outline | black
         return valueID == CSSValueWhite || valueID == CSSValueWhiteOutline || valueID == CSSValueBlack;
@@ -883,8 +877,6 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return valueID == CSSValueNormal || valueID == CSSValueSub || valueID == CSSValueSuper;
     case CSSPropertyFontVariantCaps: // normal | small-caps | all-small-caps | petite-caps | all-petite-caps | unicase | titling-caps
         return valueID == CSSValueNormal || valueID == CSSValueSmallCaps || valueID == CSSValueAllSmallCaps || valueID == CSSValuePetiteCaps || valueID == CSSValueAllPetiteCaps || valueID == CSSValueUnicase || valueID == CSSValueTitlingCaps;
-    case CSSPropertyFontVariantAlternates: // We only support the normal and historical-forms values.
-        return valueID == CSSValueNormal || valueID == CSSValueHistoricalForms;
 #if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     case CSSPropertyWebkitOverflowScrolling:
         return valueID == CSSValueAuto || valueID == CSSValueTouch;
@@ -931,7 +923,6 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
     case CSSPropertyFlexWrap:
     case CSSPropertyFloat:
     case CSSPropertyFontKerning:
-    case CSSPropertyFontVariantAlternates:
     case CSSPropertyFontVariantCaps:
     case CSSPropertyFontVariantPosition:
     case CSSPropertyImageOrientation:
@@ -1015,9 +1006,6 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
     // case CSSPropertyHyphens:
     // case CSSPropertyOverflowAnchor:
     // case CSSPropertyScrollSnapType:
-#if ENABLE(CSS_TRAILING_WORD)
-    case CSSPropertyAppleTrailingWord:
-#endif
 #if ENABLE(CSS_COMPOSITING)
     case CSSPropertyIsolation:
     case CSSPropertyMixBlendMode:
@@ -1345,7 +1333,7 @@ static RefPtr<CSSValueList> parseSimpleTransformList(const CharType* chars, unsi
         return nullptr;
     const CharType*& pos = chars;
     const CharType* end = chars + length;
-    RefPtr<CSSValueList> transformList;
+    RefPtr<CSSTransformListValue> transformList;
     while (pos < end) {
         while (pos < end && isCSSSpace(*pos))
             ++pos;
@@ -1355,7 +1343,7 @@ static RefPtr<CSSValueList> parseSimpleTransformList(const CharType* chars, unsi
         if (!transformValue)
             return nullptr;
         if (!transformList)
-            transformList = CSSValueList::createSpaceSeparated();
+            transformList = CSSTransformListValue::create();
         transformList->append(*transformValue);
     }
     return transformList;
@@ -1383,7 +1371,7 @@ RefPtr<CSSValue> CSSParserFastPaths::maybeParseValue(CSSPropertyID propertyID, S
 {
     if (auto result = parseSimpleLengthValue(propertyID, string, context.mode))
         return result;
-    if ((propertyID == CSSPropertyCaretColor || propertyID == CSSPropertyAccentColor) && isCSSPropertyExposed(propertyID, &context.propertySettings))
+    if ((propertyID == CSSPropertyCaretColor || propertyID == CSSPropertyAccentColor) && isExposed(propertyID, &context.propertySettings))
         return parseColorWithAuto(string, context);
     if (CSSProperty::isColorProperty(propertyID))
         return parseColor(string, context);

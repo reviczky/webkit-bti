@@ -41,7 +41,7 @@ Ref<LoadableModuleScript> LoadableModuleScript::create(const AtomString& nonce, 
 
 LoadableModuleScript::LoadableModuleScript(const AtomString& nonce, const AtomString& integrity, ReferrerPolicy policy, const AtomString& crossOriginMode, const String& charset, const AtomString& initiatorName, bool isInUserAgentShadowTree)
     : LoadableScript(nonce, policy, crossOriginMode, charset, initiatorName, isInUserAgentShadowTree)
-    , m_parameters(ModuleFetchParameters::create(integrity, /* isTopLevelModule */ true))
+    , m_parameters(ModuleFetchParameters::create(JSC::ScriptFetchParameters::Type::JavaScript, integrity, /* isTopLevelModule */ true))
 {
 }
 
@@ -52,9 +52,14 @@ bool LoadableModuleScript::isLoaded() const
     return m_isLoaded;
 }
 
-std::optional<LoadableScript::Error> LoadableModuleScript::error() const
+bool LoadableModuleScript::hasError() const
 {
-    return m_error;
+    return !!m_error;
+}
+
+std::optional<LoadableScript::Error> LoadableModuleScript::takeError()
+{
+    return std::exchange(m_error, std::nullopt);
 }
 
 bool LoadableModuleScript::wasCanceled() const

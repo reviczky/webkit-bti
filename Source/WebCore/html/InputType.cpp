@@ -91,7 +91,13 @@ using namespace HTMLNames;
 typedef bool (Settings::*InputTypeConditionalFunction)() const;
 typedef const AtomString& (*InputTypeNameFunction)();
 typedef Ref<InputType> (*InputTypeFactoryFunction)(HTMLInputElement&);
-typedef MemoryCompactLookupOnlyRobinHoodHashMap<AtomString, std::pair<InputTypeConditionalFunction, InputTypeFactoryFunction>> InputTypeFactoryMap;
+
+struct InputTypeFactory {
+    InputTypeConditionalFunction conditionalFunction;
+    InputTypeFactoryFunction factoryFunction;
+};
+
+typedef MemoryCompactLookupOnlyRobinHoodHashMap<AtomString, InputTypeFactory> InputTypeFactoryMap;
 
 template<class T> static Ref<InputType> createInputType(HTMLInputElement& element)
 {
@@ -143,26 +149,38 @@ static InputTypeFactoryMap createInputTypeFactoryMap()
 
     InputTypeFactoryMap map;
     for (auto& inputType : inputTypes)
-        map.add(inputType.nameFunction(), std::make_pair(inputType.conditionalFunction, inputType.factoryFunction));
+        map.add(inputType.nameFunction(), InputTypeFactory { inputType.conditionalFunction, inputType.factoryFunction });
     return map;
 }
 
-static inline std::pair<InputTypeConditionalFunction, InputTypeFactoryFunction> findFactory(const AtomString& typeName)
+static inline std::pair<const AtomString&, InputTypeFactory*> findFactory(const AtomString& typeName)
 {
     static NeverDestroyed factoryMap = createInputTypeFactoryMap();
-    auto factory = factoryMap.get().get(typeName);
-    if (UNLIKELY(!factory.second))
-        factory = factoryMap.get().get(typeName.convertToASCIILowercase());
-    return factory;
+    auto& map = factoryMap.get();
+    auto it = map.find(typeName);
+    if (UNLIKELY(it == map.end())) {
+        it = map.find(typeName.convertToASCIILowercase());
+        if (it == map.end())
+            return { nullAtom(), nullptr };
+    }
+    return { it->key, &it->value };
 }
 
-Ref<InputType> InputType::create(HTMLInputElement& element, const AtomString& typeName)
+RefPtr<InputType> InputType::createIfDifferent(HTMLInputElement& element, const AtomString& typeName, InputType* currentInputType)
 {
     if (!typeName.isEmpty()) {
-        auto [conditional, factory] = findFactory(typeName);
-        if (LIKELY(factory && (!conditional || std::invoke(conditional, element.document().settings()))))
-            return factory(element);
+        auto& currentTypeName = currentInputType ? currentInputType->formControlType() : nullAtom();
+        if (typeName == currentTypeName)
+            return nullptr;
+        if (auto factory = findFactory(typeName); LIKELY(factory.second)) {
+            if (factory.first == currentTypeName)
+                return nullptr;
+            if (!factory.second->conditionalFunction || std::invoke(factory.second->conditionalFunction, element.document().settings()))
+                return factory.second->factoryFunction(element);
+        }
     }
+    if (currentInputType && currentInputType->formControlType() == InputTypeNames::text())
+        return nullptr;
     return adoptRef(*new TextInputType(element));
 }
 
@@ -813,8 +831,7 @@ void InputType::setValue(const String& sanitizedValue, bool valueChanged, TextFi
     bool wasInRange = isInRange(element()->value());
     bool inRange = isInRange(sanitizedValue);
 
-    bool dummy;
-    auto oldDirection = element()->directionalityIfhasDirAutoAttribute(dummy);
+    auto oldDirection = element()->directionalityIfDirIsAuto();
 
     std::optional<Style::PseudoClassChangeInvalidation> styleInvalidation;
     if (wasInRange != inRange)
@@ -822,7 +839,7 @@ void InputType::setValue(const String& sanitizedValue, bool valueChanged, TextFi
 
     element()->setValueInternal(sanitizedValue, eventBehavior);
 
-    if (oldDirection != element()->directionalityIfhasDirAutoAttribute(dummy))
+    if (oldDirection.value_or(TextDirection::LTR) != element()->directionalityIfDirIsAuto().value_or(TextDirection::LTR))
         element()->invalidateStyleInternal();
 
     switch (eventBehavior) {

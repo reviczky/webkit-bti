@@ -26,14 +26,12 @@
 #include "config.h"
 #include "DisplayView.h"
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "DeprecatedGlobalSettings.h"
 #include "DisplayTree.h"
 #include "DisplayTreeBuilder.h"
 #include "Frame.h"
 #include "FrameView.h"
-#include "LayoutContainerBox.h"
+#include "LayoutElementBox.h"
 #include "Page.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -107,4 +105,3 @@ float View::deviceScaleFactor() const
 } // namespace Display
 } // namespace WebCore
 
-#endif // ENABLE(LAYOUT_FORMATTING_CONTEXT)

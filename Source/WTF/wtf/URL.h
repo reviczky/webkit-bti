@@ -78,6 +78,8 @@ public:
 
     WTF_EXPORT_PRIVATE String strippedForUseAsReferrer() const;
 
+    WTF_EXPORT_PRIVATE String strippedForUseAsReferrerWithExplicitPort() const;
+
     // Makes a deep copy. Helpful only if you need to use a URL on another
     // thread. Since the underlying StringImpl objects are immutable, there's
     // no other reason to ever prefer isolatedCopy() over plain old assignment.
@@ -174,7 +176,7 @@ public:
 
     WTF_EXPORT_PRIVATE void setFragmentIdentifier(StringView);
     WTF_EXPORT_PRIVATE void removeFragmentIdentifier();
-
+    WTF_EXPORT_PRIVATE String consumefragmentDirective();
     WTF_EXPORT_PRIVATE void removeQueryAndFragmentIdentifier();
 
     WTF_EXPORT_PRIVATE static bool hostIsIPAddress(StringView);
@@ -204,11 +206,8 @@ public:
 
     WTF_EXPORT_PRIVATE void dump(PrintStream&) const;
 
-    template<typename Encoder> void encode(Encoder&) const;
-    template<typename Decoder> static WARN_UNUSED_RETURN bool decode(Decoder&, URL&);
-    template<typename Decoder> static std::optional<URL> decode(Decoder&);
-
     WTF_EXPORT_PRIVATE bool hasSpecialScheme() const;
+    WTF_EXPORT_PRIVATE bool hasLocalScheme() const;
 
 private:
     friend class URLParser;
@@ -300,29 +299,6 @@ template<> struct DefaultHash<URL>;
 template<> struct HashTraits<URL>;
 
 // Function template and inline function definitions.
-
-template<typename Encoder> void URL::encode(Encoder& encoder) const
-{
-    encoder << m_string;
-}
-
-template<typename Decoder> bool URL::decode(Decoder& decoder, URL& url)
-{
-    auto optionalURL = decode(decoder);
-    if (!optionalURL)
-        return false;
-    url = WTFMove(*optionalURL);
-    return true;
-}
-
-template<typename Decoder> std::optional<URL> URL::decode(Decoder& decoder)
-{
-    std::optional<String> string;
-    decoder >> string;
-    if (!string)
-        return std::nullopt;
-    return URL(WTFMove(*string));
-}
 
 inline bool operator==(const URL& a, const URL& b)
 {

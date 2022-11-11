@@ -152,16 +152,6 @@
 #include "PointerLockController.h"
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/EventHandlerAdditions.cpp>
-#else
-
-static void addPointerTypeToHitTestRequest(OptionSet<WebCore::HitTestRequest::Type> &, String )
-{
-}
-
-#endif
-
 namespace WebCore {
 
 using namespace HTMLNames;
@@ -499,9 +489,12 @@ bool EventHandler::updateSelectionForMouseDownDispatchingSelectStart(Node* targe
         return false;
     }
 
-    if (selection.isRange())
+    if (selection.isRange()) {
         m_selectionInitiationState = ExtendedSelection;
-    else {
+#if ENABLE(DRAG_SUPPORT)
+        m_dragStartSelection = selection.range();
+#endif
+    } else {
         granularity = TextGranularity::CharacterGranularity;
         m_selectionInitiationState = PlacedCaret;
     }
@@ -600,14 +593,17 @@ bool EventHandler::handleMousePressEventDoubleClick(const MouseEventWithHitTestR
     if (event.event().button() != LeftButton)
         return false;
 
-    if (m_frame.selection().isRange())
+    if (m_frame.selection().isRange()) {
         // A double-click when range is already selected
         // should not change the selection.  So, do not call
         // selectClosestWordFromHitTestResult, but do set
         // m_beganSelectingText to prevent handleMouseReleaseEvent
         // from setting caret selection.
         m_selectionInitiationState = ExtendedSelection;
-    else if (mouseDownMayStartSelect())
+#if ENABLE(DRAG_SUPPORT)
+        m_dragStartSelection = m_frame.selection().selection().range();
+#endif
+    } else if (mouseDownMayStartSelect())
         selectClosestWordFromHitTestResult(event.hitTestResult(), shouldAppendTrailingWhitespace(event, m_frame));
 
     return true;
@@ -1003,10 +999,12 @@ void EventHandler::updateSelectionForMouseDrag(const HitTestResult& hitTestResul
         return;
     }
 
+    bool shouldSetDragStartSelection = false;
     if (m_selectionInitiationState != ExtendedSelection) {
         // Always extend selection here because it's caused by a mouse drag
         m_selectionInitiationState = ExtendedSelection;
         newSelection = VisibleSelection(targetPosition);
+        shouldSetDragStartSelection = true;
     }
 
     RefPtr rootUserSelectAllForMousePressNode = Position::rootUserSelectAllForNode(m_mousePressNode.get());
@@ -1027,8 +1025,20 @@ void EventHandler::updateSelectionForMouseDrag(const HitTestResult& hitTestResul
             newSelection.setExtent(targetPosition);
     }
 
-    if (m_frame.selection().granularity() != TextGranularity::CharacterGranularity)
+    if (m_frame.selection().granularity() != TextGranularity::CharacterGranularity) {
         newSelection.expandUsingGranularity(m_frame.selection().granularity());
+        if (!newSelection.isBaseFirst() && !oldSelection.isBaseFirst() && oldSelection.end() < newSelection.end())
+            newSelection.setBase(oldSelection.end());
+        else if (newSelection.isBaseFirst() && !oldSelection.isBaseFirst() && oldSelection.start() < newSelection.start() && m_dragStartSelection) {
+            VisibleSelection dragStartSelection { *m_dragStartSelection };
+            dragStartSelection.expandUsingGranularity(m_frame.selection().granularity());
+            if (!dragStartSelection.isNoneOrOrphaned())
+                newSelection.setBase(dragStartSelection.start());
+        }
+    }
+
+    if (shouldSetDragStartSelection)
+        m_dragStartSelection = newSelection.range();
 
     m_frame.selection().setSelectionByMouseIfDifferent(newSelection, m_frame.selection().granularity(),
         FrameSelection::EndPointsAdjustmentMode::AdjustAtBidiBoundary);
@@ -1271,13 +1281,17 @@ bool EventHandler::scrollRecursively(ScrollDirection direction, ScrollGranularit
     if (scrollOverflow(direction, granularity, startingNode))
         return true;    
     RefPtr frame = &m_frame;
-    RefPtr view = frame->view();
+    RefPtr localFrame = frame;
+    if (!localFrame)
+        return false;
+    RefPtr view = localFrame->view();
     if (view && view->scroll(direction, granularity))
         return true;
-    frame = frame->tree().parent();
-    if (!frame)
+    RefPtr parent = frame->tree().parent();
+    if (!parent)
         return false;
-    return frame->eventHandler().scrollRecursively(direction, granularity, m_frame.ownerElement());
+    RefPtr localParent = dynamicDowncast<LocalFrame>(parent.get());
+    return localParent->eventHandler().scrollRecursively(direction, granularity, m_frame.ownerElement());
 }
 
 bool EventHandler::logicalScrollRecursively(ScrollLogicalDirection direction, ScrollGranularity granularity, Node* startingNode)
@@ -1304,11 +1318,14 @@ bool EventHandler::logicalScrollRecursively(ScrollLogicalDirection direction, Sc
     if (scrolled)
         return true;
 
-    frame = frame->tree().parent();
-    if (!frame)
+    RefPtr parent = frame->tree().parent();
+    if (!parent)
+        return false;
+    RefPtr localParent = dynamicDowncast<LocalFrame>(parent.get());
+    if (!localParent)
         return false;
 
-    return frame->eventHandler().logicalScrollRecursively(direction, granularity, m_frame.ownerElement());
+    return localParent->eventHandler().logicalScrollRecursively(direction, granularity, m_frame.ownerElement());
 }
 
 IntPoint EventHandler::lastKnownMousePosition() const
@@ -1790,7 +1807,6 @@ bool EventHandler::handleMousePressEvent(const PlatformMouseEvent& platformMouse
         layer->setInResizeMode(true);
         m_resizeLayer = WeakPtr { layer };
         m_offsetFromResizeCorner = layer->offsetFromResizeCorner(localPoint);
-        invalidateClick();
         return true;
     }
 
@@ -1999,7 +2015,10 @@ bool EventHandler::handleMouseMoveEvent(const PlatformMouseEvent& platformMouseE
     }
 #endif
     
-    addPointerTypeToHitTestRequest(hitType, platformMouseEvent.pointerType());
+#if ENABLE(PENCIL_HOVER)
+    if (platformMouseEvent.pointerType() == WebCore::penPointerEventType())
+        hitType.add(WebCore::HitTestRequest::Type::PenEvent);
+#endif
     
     HitTestRequest request(hitType);
     MouseEventWithHitTestResults mouseEvent = prepareMouseEvent(request, platformMouseEvent);
@@ -2274,7 +2293,7 @@ bool EventHandler::dispatchDragEvent(const AtomString& eventType, Element& dragT
 
     auto dragEvent = DragEvent::create(eventType, Event::CanBubble::Yes, Event::IsCancelable::Yes, Event::IsComposed::Yes,
         event.timestamp().approximateMonotonicTime(), &m_frame.windowProxy(), 0,
-        event.globalPosition(), event.position(), event.movementDelta(),
+        event.globalPosition(), event.position(), event.movementDelta().x(), event.movementDelta().y(),
         event.modifiers(), 0, 0, nullptr, event.force(), NoTap, &dataTransfer);
 
     dragTarget.dispatchEvent(dragEvent);
@@ -2492,6 +2511,7 @@ bool EventHandler::performDragAndDrop(const PlatformMouseEvent& event, std::uniq
 void EventHandler::clearDragState()
 {
     stopAutoscrollTimer();
+    m_dragStartSelection = std::nullopt;
     m_dragTarget = nullptr;
     m_capturingMouseEventsElement = nullptr;
     m_shouldOnlyFireDragOverEvent = false;
@@ -3666,7 +3686,7 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     auto keydown = KeyboardEvent::create(keyDownEvent, &m_frame.windowProxy());
     if (matchedAnAccessKey)
         keydown->preventDefault();
-    keydown->setTarget(element);
+    keydown->setTarget(element.copyRef());
 
     auto setHasFocusVisibleIfNeeded = [initialKeyEvent, keydown](Element& element) {
         // If the user interacts with the page via the keyboard, the currently focused element should match :focus-visible.
@@ -3699,7 +3719,7 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     if (handledByInputMethod) {
         keyDownEvent.setWindowsVirtualKeyCode(CompositionEventKeyCode);
         keydown = KeyboardEvent::create(keyDownEvent, &m_frame.windowProxy());
-        keydown->setTarget(element);
+        keydown->setTarget(element.copyRef());
         keydown->setIsDefaultEventHandlerIgnored();
     }
     
@@ -3736,7 +3756,7 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     if (keyPressEvent.text().isEmpty())
         return keydownResult;
     auto keypress = KeyboardEvent::create(keyPressEvent, &m_frame.windowProxy());
-    keypress->setTarget(element);
+    keypress->setTarget(element.copyRef());
     if (keydownResult)
         keypress->preventDefault();
 #if PLATFORM(COCOA)
@@ -4175,7 +4195,7 @@ bool EventHandler::handleDrag(const MouseEventWithHitTestResults& event, CheckDr
             }
         }
 
-        if (dragState().source && dragState().type == DragSourceAction::Image) {
+        if (dragState().source && dragState().type.containsAny({ DragSourceAction::DHTML, DragSourceAction::Image })) {
             if (auto* renderImage = dynamicDowncast<RenderImage>(dragState().source->renderer())) {
                 auto* image = renderImage->cachedImage();
                 if (image && !image->isCORSSameOrigin())
@@ -4412,8 +4432,11 @@ bool EventHandler::startKeyboardScrollAnimationOnEnclosingScrollableContainer(Sc
 
     if (node) {
         auto renderer = node->renderer();
+        if (!renderer)
+            return false;
+
         RenderBox& renderBox = renderer->enclosingBox();
-        if (renderer && !renderer->isListBox() && startKeyboardScrollAnimationOnRenderBoxAndItsAncestors(direction, granularity, &renderBox))
+        if (!renderer->isListBox() && startKeyboardScrollAnimationOnRenderBoxAndItsAncestors(direction, granularity, &renderBox))
             return true;
     }
     return false;
@@ -4458,11 +4481,14 @@ bool EventHandler::keyboardScrollRecursively(std::optional<ScrollDirection> dire
         return true;
 
     RefPtr frame = &m_frame;
-    frame = frame->tree().parent();
-    if (!frame)
+    RefPtr parent = frame->tree().parent();
+    if (!parent)
+        return false;
+    RefPtr localParent = dynamicDowncast<LocalFrame>(parent.get());
+    if (!localParent)
         return false;
 
-    return frame->eventHandler().keyboardScrollRecursively(direction, granularity, m_frame.ownerElement());
+    return localParent->eventHandler().keyboardScrollRecursively(direction, granularity, m_frame.ownerElement());
 }
 
 void EventHandler::defaultArrowEventHandler(FocusDirection focusDirection, KeyboardEvent& event)

@@ -79,7 +79,7 @@ public:
     CSSValueID keywordSizeAsIdentifier() const
     {
         CSSValueID identifier = m_keywordSize ? static_cast<CSSValueID>(CSSValueXxSmall + m_keywordSize - 1) : CSSValueInvalid;
-        ASSERT(identifier == CSSValueInvalid || (identifier >= CSSValueXxSmall && identifier <= CSSValueWebkitXxxLarge));
+        ASSERT(identifier == CSSValueInvalid || (identifier >= CSSValueXxSmall && identifier <= CSSValueXxxLarge));
         return identifier;
     }
     FontSmoothingMode fontSmoothing() const { return static_cast<FontSmoothingMode>(m_fontSmoothing); }
@@ -99,8 +99,8 @@ public:
     }
     void setKeywordSizeFromIdentifier(CSSValueID identifier)
     {
-        ASSERT(!identifier || (identifier >= CSSValueXxSmall && identifier <= CSSValueWebkitXxxLarge));
-        static_assert(CSSValueWebkitXxxLarge - CSSValueXxSmall + 1 == 8, "Maximum keyword size should be 8.");
+        ASSERT(!identifier || (identifier >= CSSValueXxSmall && identifier <= CSSValueXxxLarge));
+        static_assert(CSSValueXxxLarge - CSSValueXxSmall + 1 == 8, "Maximum keyword size should be 8.");
         setKeywordSize(identifier ? identifier - CSSValueXxSmall + 1 : 0);
     }
     void setFontSmoothing(FontSmoothingMode smoothing) { m_fontSmoothing = static_cast<unsigned>(smoothing); }
@@ -127,13 +127,16 @@ public:
     static Kerning initialKerning() { return Kerning::Auto; }
     static FontSmoothingMode initialFontSmoothing() { return FontSmoothingMode::AutoSmoothing; }
     static TextRenderingMode initialTextRenderingMode() { return TextRenderingMode::AutoTextRendering; }
-    static FontSynthesis initialFontSynthesis() { return FontSynthesisWeight | FontSynthesisStyle | FontSynthesisSmallCaps; }
+    static FontSynthesisLonghandValue initialFontSynthesisWeight() { return FontSynthesisLonghandValue::Auto; }
+    static FontSynthesisLonghandValue initialFontSynthesisStyle() { return FontSynthesisLonghandValue::Auto; }
+    static FontSynthesisLonghandValue initialFontSynthesisSmallCaps() { return FontSynthesisLonghandValue::Auto; }
     static FontVariantPosition initialVariantPosition() { return FontVariantPosition::Normal; }
     static FontVariantCaps initialVariantCaps() { return FontVariantCaps::Normal; }
-    static FontVariantAlternates initialVariantAlternates() { return FontVariantAlternates::Normal; }
+    static FontVariantAlternates initialVariantAlternates() { return FontVariantAlternates::Normal(); }
     static FontOpticalSizing initialOpticalSizing() { return FontOpticalSizing::Enabled; }
     static const AtomString& initialSpecifiedLocale() { return nullAtom(); }
     static FontPalette initialFontPalette() { return { FontPalette::Type::Normal, nullAtom() }; }
+    static std::optional<float> initialFontSizeAdjust() { return std::nullopt; }
 
 private:
     Ref<RefCountedFixedVector<AtomString>> m_families;

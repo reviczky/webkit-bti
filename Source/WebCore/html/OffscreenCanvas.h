@@ -55,6 +55,7 @@ class CSSValuePool;
 class DeferredPromise;
 class HTMLCanvasElement;
 class ImageBitmap;
+class ImageBitmapRenderingContext;
 class ImageData;
 class OffscreenCanvasRenderingContext2D;
 class WebGL2RenderingContext;
@@ -68,6 +69,7 @@ using OffscreenRenderingContext = std::variant<
 #if ENABLE(WEBGL2)
     RefPtr<WebGL2RenderingContext>,
 #endif
+    RefPtr<ImageBitmapRenderingContext>,
     RefPtr<OffscreenCanvasRenderingContext2D>
 >;
 
@@ -89,16 +91,16 @@ public:
             return buffer->memoryCost();
         return 0;
     }
-    WeakPtr<HTMLCanvasElement> takePlaceholderCanvas();
+    WeakPtr<HTMLCanvasElement, WeakPtrImplWithEventTargetData> takePlaceholderCanvas();
 
 private:
     RefPtr<ImageBuffer> m_buffer;
     IntSize m_size;
     bool m_originClean;
-    WeakPtr<HTMLCanvasElement> m_placeholderCanvas;
+    WeakPtr<HTMLCanvasElement, WeakPtrImplWithEventTargetData> m_placeholderCanvas;
 };
 
-class OffscreenCanvas final : public RefCounted<OffscreenCanvas>, public CanvasBase, public EventTargetWithInlineData, private ContextDestructionObserver {
+class OffscreenCanvas final : public RefCounted<OffscreenCanvas>, public CanvasBase, public EventTarget, private ContextDestructionObserver {
     WTF_MAKE_ISO_ALLOCATED(OffscreenCanvas);
 public:
 
@@ -110,7 +112,8 @@ public:
     enum class RenderingContextType {
         _2d,
         Webgl,
-        Webgl2
+        Webgl2,
+        Bitmaprenderer
     };
 
     static bool enabledForContext(ScriptExecutionContext&);
@@ -124,6 +127,8 @@ public:
     unsigned height() const final;
     void setWidth(unsigned);
     void setHeight(unsigned);
+
+    void setImageBufferAndMarkDirty(RefPtr<ImageBuffer>&&) final;
 
     CanvasRenderingContext* renderingContext() const final { return m_context.get(); }
 
@@ -199,7 +204,7 @@ private:
             return adoptRef(*new PlaceholderData);
         }
 
-        WeakPtr<HTMLCanvasElement> canvas;
+        WeakPtr<HTMLCanvasElement, WeakPtrImplWithEventTargetData> canvas;
         RefPtr<ImageBufferPipe::Source> bufferPipeSource;
         RefPtr<ImageBuffer> pendingCommitBuffer;
         mutable Lock bufferLock;

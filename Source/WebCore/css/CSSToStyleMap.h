@@ -28,6 +28,9 @@
 namespace WebCore {
 
 class Animation;
+class CSSBorderImageSliceValue;
+class CSSBorderImageWidthValue;
+class CSSPrimitiveValue;
 class CSSValue;
 class FillLayer;
 class LengthBox;
@@ -53,8 +56,7 @@ public:
     void mapFillBlendMode(CSSPropertyID, FillLayer&, const CSSValue&);
     void mapFillOrigin(CSSPropertyID, FillLayer&, const CSSValue&);
     void mapFillImage(CSSPropertyID, FillLayer&, CSSValue&);
-    void mapFillRepeatX(CSSPropertyID, FillLayer&, const CSSValue&);
-    void mapFillRepeatY(CSSPropertyID, FillLayer&, const CSSValue&);
+    void mapFillRepeat(CSSPropertyID, FillLayer&, const CSSValue&);
     void mapFillSize(CSSPropertyID, FillLayer&, const CSSValue&);
     void mapFillXPosition(CSSPropertyID, FillLayer&, const CSSValue&);
     void mapFillYPosition(CSSPropertyID, FillLayer&, const CSSValue&);
@@ -73,9 +75,12 @@ public:
 
     void mapNinePieceImage(CSSValue*, NinePieceImage&);
     void mapNinePieceImageSlice(CSSValue&, NinePieceImage&);
+    void mapNinePieceImageSlice(CSSBorderImageSliceValue&, NinePieceImage&);
     void mapNinePieceImageWidth(CSSValue&, NinePieceImage&);
+    void mapNinePieceImageWidth(CSSBorderImageWidthValue&, NinePieceImage&);
     LengthBox mapNinePieceImageQuad(CSSValue&);
     void mapNinePieceImageRepeat(CSSValue&, NinePieceImage&);
+    void mapNinePieceImageRepeat(CSSPrimitiveValue&, NinePieceImage&);
 
 private:
     RenderStyle* style() const;

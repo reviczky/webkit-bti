@@ -167,8 +167,7 @@ bool ValidReadPixelsUnsignedNormalizedDepthType(const Context *context,
                                                 const gl::InternalFormat *info,
                                                 GLenum type)
 {
-    bool supportsReadDepthNV = (context->getExtensions().readDepthNV && (info->depthBits > 0) &&
-                                (info->componentCount == 1));
+    bool supportsReadDepthNV = context->getExtensions().readDepthNV && (info->depthBits > 0);
     switch (type)
     {
         case GL_UNSIGNED_SHORT:
@@ -185,7 +184,7 @@ bool ValidReadPixelsFloatDepthType(const Context *context,
                                    GLenum type)
 {
     return context->getExtensions().readDepthNV && (type == GL_FLOAT) &&
-           context->getExtensions().depthBufferFloat2NV && (info->componentCount == 1);
+           context->getExtensions().depthBufferFloat2NV;
 }
 
 bool ValidReadPixelsFormatType(const Context *context,
@@ -210,6 +209,9 @@ bool ValidReadPixelsFormatType(const Context *context,
                     return context->getExtensions().readStencilNV && (type == GL_UNSIGNED_BYTE);
                 case GL_DEPTH_COMPONENT:
                     return ValidReadPixelsUnsignedNormalizedDepthType(context, info, type);
+                case GL_DEPTH_STENCIL_OES:
+                    return context->getExtensions().readDepthStencilNV &&
+                           (type == GL_UNSIGNED_INT_24_8_OES) && info->stencilBits > 0;
                 case GL_RGBX8_ANGLE:
                     return context->getExtensions().rgbxInternalFormatANGLE &&
                            (type == GL_UNSIGNED_BYTE);
@@ -234,6 +236,9 @@ bool ValidReadPixelsFormatType(const Context *context,
                     return (type == GL_FLOAT);
                 case GL_DEPTH_COMPONENT:
                     return ValidReadPixelsFloatDepthType(context, info, type);
+                case GL_DEPTH_STENCIL_OES:
+                    return context->getExtensions().readDepthStencilNV &&
+                           type == GL_FLOAT_32_UNSIGNED_INT_24_8_REV && info->stencilBits > 0;
                 default:
                     return false;
             }
@@ -475,7 +480,7 @@ bool ValidateFragmentShaderColorBufferMaskMatch(const Context *context)
 
 bool ValidateFragmentShaderColorBufferTypeMatch(const Context *context)
 {
-    const ProgramExecutable *executable = context->getState().getProgramExecutable();
+    const ProgramExecutable *executable = context->getState().getLinkedProgramExecutable(context);
     const Framebuffer *framebuffer      = context->getState().getDrawFramebuffer();
 
     return ValidateComponentTypeMasks(executable->getFragmentOutputsTypeMask().to_ulong(),
@@ -797,7 +802,7 @@ bool ValidateTransformFeedbackPrimitiveMode(const Context *context,
         return transformFeedbackPrimitiveMode == renderPrimitiveMode;
     }
 
-    const ProgramExecutable *executable = context->getState().getProgramExecutable();
+    const ProgramExecutable *executable = context->getState().getLinkedProgramExecutable(context);
     ASSERT(executable);
     if (executable->hasLinkedShaderStage(ShaderType::Geometry))
     {
@@ -906,7 +911,7 @@ bool ValidateDrawInstancedANGLE(const Context *context, angle::EntryPoint entryP
 {
     // Verify there is at least one active attribute with a divisor of zero
     const State &state                  = context->getState();
-    const ProgramExecutable *executable = state.getProgramExecutable();
+    const ProgramExecutable *executable = state.getLinkedProgramExecutable(context);
 
     if (!executable)
     {
@@ -2541,7 +2546,7 @@ bool ValidateGetQueryObjectValueBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -2957,7 +2962,7 @@ bool ValidateStateQuery(const Context *context,
         case GL_TEXTURE_BINDING_RECTANGLE_ANGLE:
             if (!context->getExtensions().textureRectangleANGLE)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -2965,7 +2970,7 @@ bool ValidateStateQuery(const Context *context,
             if (!context->getExtensions().EGLStreamConsumerExternalNV &&
                 !context->getExtensions().EGLImageExternalOES)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -3942,7 +3947,8 @@ bool ValidateCopyTexImageParametersBase(const Context *context,
 
         if (!formatInfo.textureSupport(context->getClientVersion(), context->getExtensions()))
         {
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                      internalformat);
             return false;
         }
 
@@ -4200,7 +4206,7 @@ const char *ValidateDrawStates(const Context *context)
     if (context->getClientVersion() >= Version(2, 0))
     {
         Program *program                    = state.getLinkedProgram(context);
-        ProgramPipeline *programPipeline    = state.getProgramPipeline();
+        ProgramPipeline *programPipeline    = state.getLinkedProgramPipeline(context);
         const ProgramExecutable *executable = state.getProgramExecutable();
 
         bool programIsYUVOutput = false;
@@ -4330,6 +4336,25 @@ const char *ValidateDrawStates(const Context *context)
         }
     }
 
+    return nullptr;
+}
+
+const char *ValidateProgramPipeline(const Context *context)
+{
+    const State &state = context->getState();
+    // If we are running GLES1, there is no current program.
+    if (context->getClientVersion() >= Version(2, 0))
+    {
+        ProgramPipeline *programPipeline = state.getProgramPipeline();
+        if (programPipeline)
+        {
+            const char *errorMsg = ValidateProgramPipelineAttachedPrograms(programPipeline);
+            if (errorMsg)
+            {
+                return errorMsg;
+            }
+        }
+    }
     return nullptr;
 }
 
@@ -4983,21 +5008,24 @@ bool ValidateEGLImageTargetTexture2DOES(const Context *context,
         case TextureType::_2D:
             if (!context->getExtensions().EGLImageOES)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                          ToGLenum(type));
             }
             break;
 
         case TextureType::_2DArray:
             if (!context->getExtensions().EGLImageArrayEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                          ToGLenum(type));
             }
             break;
 
         case TextureType::External:
             if (!context->getExtensions().EGLImageExternalOES)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                          ToGLenum(type));
             }
             break;
 
@@ -5217,7 +5245,7 @@ bool ValidateGetBufferPointervBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -5495,7 +5523,7 @@ bool ValidateGetFramebufferAttachmentParameterivBase(const Context *context,
             if (clientVersion < 3 ||
                 !(context->getExtensions().multiviewOVR || context->getExtensions().multiview2OVR))
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -5503,7 +5531,7 @@ bool ValidateGetFramebufferAttachmentParameterivBase(const Context *context,
         case GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_SAMPLES_EXT:
             if (!context->getExtensions().multisampledRenderToTextureEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -5511,7 +5539,7 @@ bool ValidateGetFramebufferAttachmentParameterivBase(const Context *context,
         case GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING:
             if (clientVersion < 3 && !context->getExtensions().sRGBEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -5937,7 +5965,7 @@ bool ValidateGetProgramivBase(const Context *context,
             if (context->getClientMajorVersion() < 3 &&
                 !context->getExtensions().getProgramBinaryOES)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -6044,7 +6072,7 @@ bool ValidateGetProgramivBase(const Context *context,
             }
             break;
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -6706,7 +6734,7 @@ bool ValidateGetBufferParameterBase(const Context *context,
         case GL_BUFFER_ACCESS_OES:
             if (!extensions.mapbufferOES)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -6716,7 +6744,7 @@ bool ValidateGetBufferParameterBase(const Context *context,
             if (context->getClientMajorVersion() < 3 && !extensions.mapbufferOES &&
                 !extensions.mapBufferRangeEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -6734,7 +6762,7 @@ bool ValidateGetBufferParameterBase(const Context *context,
         case GL_BUFFER_MAP_LENGTH:
             if (context->getClientMajorVersion() < 3 && !extensions.mapBufferRangeEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -6757,7 +6785,7 @@ bool ValidateGetBufferParameterBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -6808,7 +6836,8 @@ bool ValidateGetRenderbufferParameterivBase(const Context *context,
             break;
 
         case GL_RENDERBUFFER_SAMPLES_ANGLE:
-            if (!context->getExtensions().framebufferMultisampleANGLE)
+            if (context->getClientMajorVersion() < 3 &&
+                !context->getExtensions().framebufferMultisampleANGLE)
             {
                 context->validationError(entryPoint, GL_INVALID_ENUM, kExtensionNotEnabled);
                 return false;
@@ -6842,7 +6871,7 @@ bool ValidateGetRenderbufferParameterivBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -6911,7 +6940,7 @@ bool ValidateGetShaderivBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -6949,7 +6978,7 @@ bool ValidateGetTexParameterBase(const Context *context,
 
     if (context->getClientMajorVersion() == 1 && !IsValidGLES1TextureParameter(pname))
     {
-        context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+        context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
         return false;
     }
 
@@ -6964,7 +6993,7 @@ bool ValidateGetTexParameterBase(const Context *context,
         case GL_TEXTURE_USAGE_ANGLE:
             if (!context->getExtensions().textureUsageANGLE)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -6979,7 +7008,7 @@ bool ValidateGetTexParameterBase(const Context *context,
         case GL_TEXTURE_IMMUTABLE_FORMAT:
             if (context->getClientMajorVersion() < 3 && !context->getExtensions().textureStorageEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -7005,7 +7034,7 @@ bool ValidateGetTexParameterBase(const Context *context,
         case GL_TEXTURE_COMPARE_FUNC:
             if (context->getClientMajorVersion() < 3 && !context->getExtensions().shadowSamplersEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -7013,7 +7042,7 @@ bool ValidateGetTexParameterBase(const Context *context,
         case GL_TEXTURE_SRGB_DECODE_EXT:
             if (!context->getExtensions().textureSRGBDecodeEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -7041,7 +7070,7 @@ bool ValidateGetTexParameterBase(const Context *context,
         case GL_MEMORY_SIZE_ANGLE:
             if (!context->getExtensions().memorySizeANGLE)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -7090,8 +7119,11 @@ bool ValidateGetTexParameterBase(const Context *context,
             }
             break;
 
+        case GL_REQUIRED_TEXTURE_IMAGE_UNITS_OES:
+            break;
+
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -7131,7 +7163,7 @@ bool ValidateGetVertexAttribBase(const Context *context,
     {
         if (pname != GL_VERTEX_ATTRIB_ARRAY_POINTER)
         {
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
         }
     }
@@ -7155,7 +7187,8 @@ bool ValidateGetVertexAttribBase(const Context *context,
                 if (context->getClientMajorVersion() < 3 &&
                     !context->getExtensions().instancedArraysAny())
                 {
-                    context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                    context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                              pname);
                     return false;
                 }
                 break;
@@ -7163,7 +7196,8 @@ bool ValidateGetVertexAttribBase(const Context *context,
             case GL_VERTEX_ATTRIB_ARRAY_INTEGER:
                 if (context->getClientMajorVersion() < 3)
                 {
-                    context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                    context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                              pname);
                     return false;
                 }
                 break;
@@ -7178,7 +7212,7 @@ bool ValidateGetVertexAttribBase(const Context *context,
                 break;
 
             default:
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
         }
     }
@@ -7355,6 +7389,7 @@ bool ValidateReadPixelsBase(const Context *context,
             readBuffer = readFramebuffer->getDepthAttachment();
             break;
         case GL_STENCIL_INDEX_OES:
+        case GL_DEPTH_STENCIL_OES:
             readBuffer = readFramebuffer->getStencilOrDepthStencilAttachment();
             break;
         default:
@@ -7411,6 +7446,7 @@ bool ValidateReadPixelsBase(const Context *context,
     {
         case GL_DEPTH_COMPONENT:
         case GL_STENCIL_INDEX_OES:
+        case GL_DEPTH_STENCIL_OES:
             // Only rely on ValidReadPixelsFormatType for depth/stencil formats
             break;
         default:
@@ -7523,7 +7559,7 @@ bool ValidateTexParameterBase(const Context *context,
 
     if (context->getClientMajorVersion() == 1 && !IsValidGLES1TextureParameter(pname))
     {
-        context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+        context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
         return false;
     }
 
@@ -7549,12 +7585,12 @@ bool ValidateTexParameterBase(const Context *context,
             if (target == TextureType::External &&
                 !context->getExtensions().EGLImageExternalEssl3OES)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             if (target == TextureType::VideoImage && !context->getExtensions().videoTextureWEBGL)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             }
             break;
 
@@ -7627,7 +7663,7 @@ bool ValidateTexParameterBase(const Context *context,
         case GL_TEXTURE_USAGE_ANGLE:
             if (!context->getExtensions().textureUsageANGLE)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
 
@@ -7638,7 +7674,8 @@ bool ValidateTexParameterBase(const Context *context,
                     break;
 
                 default:
-                    context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                    context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                              pname);
                     return false;
             }
             break;
@@ -7688,7 +7725,8 @@ bool ValidateTexParameterBase(const Context *context,
                     break;
 
                 default:
-                    context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                    context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                              pname);
                     return false;
             }
             break;
@@ -7739,7 +7777,8 @@ bool ValidateTexParameterBase(const Context *context,
                     break;
 
                 default:
-                    context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                    context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported,
+                                              pname);
                     return false;
             }
             break;
@@ -7818,7 +7857,7 @@ bool ValidateTexParameterBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -7890,7 +7929,7 @@ bool ValidateGetActiveUniformBlockivBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -8015,7 +8054,7 @@ bool ValidateSamplerParameterBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -8090,7 +8129,7 @@ bool ValidateGetSamplerParameterBase(const Context *context,
         case GL_TEXTURE_SRGB_DECODE_EXT:
             if (!context->getExtensions().textureSRGBDecodeEXT)
             {
-                context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+                context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
                 return false;
             }
             break;
@@ -8105,7 +8144,7 @@ bool ValidateGetSamplerParameterBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -8187,7 +8226,7 @@ bool ValidateGetInternalFormativBase(const Context *context,
             break;
 
         default:
-            context->validationError(entryPoint, GL_INVALID_ENUM, kEnumNotSupported);
+            context->validationErrorF(entryPoint, GL_INVALID_ENUM, kEnumNotSupported, pname);
             return false;
     }
 
@@ -8572,5 +8611,34 @@ bool ValidateProgramExecutableXFBBuffersPresent(const Context *context,
     }
 
     return true;
+}
+
+bool ValidateLogicOpCommon(const Context *context,
+                           angle::EntryPoint entryPoint,
+                           LogicalOperation opcodePacked)
+{
+    switch (opcodePacked)
+    {
+        case LogicalOperation::And:
+        case LogicalOperation::AndInverted:
+        case LogicalOperation::AndReverse:
+        case LogicalOperation::Clear:
+        case LogicalOperation::Copy:
+        case LogicalOperation::CopyInverted:
+        case LogicalOperation::Equiv:
+        case LogicalOperation::Invert:
+        case LogicalOperation::Nand:
+        case LogicalOperation::Noop:
+        case LogicalOperation::Nor:
+        case LogicalOperation::Or:
+        case LogicalOperation::OrInverted:
+        case LogicalOperation::OrReverse:
+        case LogicalOperation::Set:
+        case LogicalOperation::Xor:
+            return true;
+        default:
+            context->validationError(entryPoint, GL_INVALID_ENUM, kInvalidLogicOp);
+            return false;
+    }
 }
 }  // namespace gl

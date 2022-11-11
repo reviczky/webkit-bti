@@ -82,6 +82,7 @@ private:
     bool requiresLayer() const final { return true; }
 
     bool updateLayoutSizeIfNeeded();
+    bool paintingAffectedByExternalOffset() const;
 
     // To prevent certain legacy code paths to hit assertions in debug builds, when switching off LBSE (during the teardown of the LBSE tree).
     std::optional<FloatRect> computeFloatVisibleRectInContainer(const FloatRect&, const RenderLayerModelObject*, VisibleRectContext) const final { return std::nullopt; }
@@ -101,6 +102,7 @@ private:
 
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) final;
     void updateFromStyle() final;
+    void updateFromElement() final;
     void updateLayerTransform() final;
 
     bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction) final;

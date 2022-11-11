@@ -33,8 +33,8 @@
 #include "RemoteGraphicsContextGLMessages.h"
 #include "RemoteGraphicsContextGLProxyMessages.h"
 #include "StreamConnectionWorkQueue.h"
+#include <WebCore/ByteArrayPixelBuffer.h>
 #include <WebCore/GraphicsContext.h>
-#include <WebCore/GraphicsContextGLOpenGL.h>
 #include <WebCore/NotImplemented.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
@@ -62,7 +62,7 @@ IPC::StreamConnectionWorkQueue& remoteGraphicsContextGLStreamWorkQueue()
     return instance.get();
 }
 
-#if !PLATFORM(COCOA) && !PLATFORM(WIN) && !USE(LIBGBM)
+#if !PLATFORM(COCOA) && !USE(GRAPHICS_LAYER_WC) && !USE(LIBGBM)
 Ref<RemoteGraphicsContextGL> RemoteGraphicsContextGL::create(GPUConnectionToWebProcess& gpuConnectionToWebProcess, GraphicsContextGLAttributes&& attributes, GraphicsContextGLIdentifier graphicsContextGLIdentifier, RemoteRenderingBackend& renderingBackend, IPC::StreamConnectionBuffer&& stream)
 {
     ASSERT_NOT_REACHED();
@@ -171,7 +171,7 @@ void RemoteGraphicsContextGL::reshape(int32_t width, int32_t height)
         forceContextLost();
 }
 
-#if !PLATFORM(COCOA) && !PLATFORM(WIN) && !USE(LIBGBM)
+#if !PLATFORM(COCOA) && !USE(GRAPHICS_LAYER_WC) && !USE(LIBGBM)
 void RemoteGraphicsContextGL::prepareForDisplay(CompletionHandler<void()>&& completionHandler)
 {
     assertIsCurrent(workQueue());
@@ -386,15 +386,6 @@ void RemoteGraphicsContextGL::multiDrawElementsInstancedBaseVertexBaseInstanceAN
     const Vector<GCGLint> baseVertices = vectorCopyCast<GCGLint, 3>(countsOffsetsInstanceCountsBaseVerticesAndBaseInstances);
     const Vector<GCGLuint> baseInstances = vectorCopyCast<GCGLuint, 4>(countsOffsetsInstanceCountsBaseVerticesAndBaseInstances);
     m_context->multiDrawElementsInstancedBaseVertexBaseInstanceANGLE(mode, GCGLSpanTuple { counts.data(), offsets, instanceCounts.data(), baseVertices.data(), baseInstances.data(), counts.size() }, type);
-}
-
-void RemoteGraphicsContextGL::paintRenderingResultsToPixelBuffer(CompletionHandler<void(std::optional<IPC::PixelBufferReference>&&)>&& completionHandler)
-{
-    std::optional<IPC::PixelBufferReference> returnValue;
-    assertIsCurrent(workQueue());
-    if (auto pixelBuffer = m_context->paintRenderingResultsToPixelBuffer())
-        returnValue = pixelBuffer.releaseNonNull();
-    completionHandler(WTFMove(returnValue));
 }
 
 } // namespace WebKit

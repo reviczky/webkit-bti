@@ -304,6 +304,10 @@ ANGLE_INLINE int GetNativeVisualID(const InternalFormat &internalFormat)
     nativeVisualId =
         angle::android::GLInternalFormatToNativePixelFormat(internalFormat.internalFormat);
 #endif
+#if defined(ANGLE_PLATFORM_LINUX) && defined(ANGLE_USES_GBM)
+    nativeVisualId = angle::GLInternalFormatToGbmFourCCFormat(internalFormat.internalFormat);
+#endif
+
     return nativeVisualId;
 }
 
@@ -427,7 +431,6 @@ ANGLE_INLINE bool IsETC1Format(const GLenum format)
     switch (format)
     {
         case GL_ETC1_RGB8_OES:
-        case GL_ETC1_SRGB8_NV:
             return true;
 
         default:

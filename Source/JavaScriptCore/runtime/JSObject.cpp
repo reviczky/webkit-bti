@@ -778,7 +778,7 @@ bool JSObject::putInlineSlow(JSGlobalObject* globalObject, PropertyName property
 
         bool hasProperty = false;
         unsigned attributes;
-        PutPropertySlot::PutValueFunc customSetter = nullptr;
+        PutValueFunc customSetter = nullptr;
         PropertyOffset offset = structure->get(vm, propertyName, attributes);
         if (isValidOffset(offset)) {
             hasProperty = true;
@@ -874,7 +874,7 @@ static NEVER_INLINE bool definePropertyOnReceiverSlow(JSGlobalObject* globalObje
             return typeError(globalObject, scope, shouldThrow, ReadonlyPropertyWriteError);
 
         if (slot.attributes() & PropertyAttribute::CustomValue) {
-            PutPropertySlot::PutValueFunc customSetter = slot.customSetter();
+            PutValueFunc customSetter = slot.customSetter();
             if (customSetter)
                 RELEASE_AND_RETURN(scope, customSetter(receiver->globalObject(), JSValue::encode(receiver), JSValue::encode(value), propertyName));
         }
@@ -1272,6 +1272,7 @@ ContiguousJSValues JSObject::convertUndecidedToInt32(VM& vm)
 
 ContiguousDoubles JSObject::convertUndecidedToDouble(VM& vm)
 {
+    ASSERT(Options::allowDoubleShape());
     ASSERT(hasUndecided(indexingType()));
 
     Butterfly* butterfly = m_butterfly.get();
@@ -1547,6 +1548,7 @@ void JSObject::convertUndecidedForValue(VM& vm, JSValue value)
     }
     
     if (type == DoubleShape) {
+        ASSERT(Options::allowDoubleShape());
         convertUndecidedToDouble(vm);
         return;
     }
@@ -1562,7 +1564,7 @@ void JSObject::createInitialForValueAndSet(VM& vm, unsigned index, JSValue value
         return;
     }
     
-    if (value.isDouble()) {
+    if (value.isDouble() && Options::allowDoubleShape()) {
         double doubleValue = value.asNumber();
         if (doubleValue == doubleValue) {
             createInitialDouble(vm, index + 1).at(this, index) = doubleValue;
@@ -1577,7 +1579,7 @@ void JSObject::convertInt32ForValue(VM& vm, JSValue value)
 {
     ASSERT(!value.isInt32());
     
-    if (value.isDouble() && !std::isnan(value.asDouble())) {
+    if (value.isDouble() && !std::isnan(value.asDouble()) && Options::allowDoubleShape()) {
         convertInt32ToDouble(vm);
         return;
     }
@@ -1678,6 +1680,7 @@ ContiguousJSValues JSObject::tryMakeWritableInt32Slow(VM& vm)
 
 ContiguousDoubles JSObject::tryMakeWritableDoubleSlow(VM& vm)
 {
+    ASSERT(Options::allowDoubleShape());
     ASSERT(inherits(info()));
 
     if (isCopyOnWrite(indexingMode())) {
@@ -1918,7 +1921,7 @@ bool JSObject::setPrototypeWithCycleCheck(VM& vm, JSGlobalObject* globalObject, 
 
     // Default realm global objects should have mutable prototypes despite having
     // a Proxy globalThis.
-    ASSERT(this->isGlobalObject() || methodTable()->toThis(this, globalObject, ECMAMode::sloppy()) == this);
+    ASSERT(this->isGlobalObject() || JSValue(this).toThis(globalObject, ECMAMode::sloppy()) == this);
 
     if (this->getPrototypeDirect() == prototype)
         return true;
@@ -2605,11 +2608,6 @@ JSString* JSObject::toString(JSGlobalObject* globalObject) const
     RELEASE_AND_RETURN(scope, primitive.toString(globalObject));
 }
 
-JSValue JSObject::toThis(JSCell* cell, JSGlobalObject*, ECMAMode)
-{
-    return jsCast<JSObject*>(cell);
-}
-
 void JSObject::seal(VM& vm)
 {
     if (isSealed(vm))
@@ -2762,9 +2760,10 @@ bool JSObject::defineOwnIndexedProperty(JSGlobalObject* globalObject, unsigned i
         if (canGetIndexQuickly(index) && canDoFastPutDirectIndex(this)) {
             DeferTermination deferScope(vm);
             PropertyDescriptor currentDescriptor;
-            ASSERT(getOwnPropertyDescriptor(globalObject, Identifier::from(vm, index), currentDescriptor));
+            bool found = getOwnPropertyDescriptor(globalObject, Identifier::from(vm, index), currentDescriptor);
             scope.assertNoException();
-            ASSERT(currentDescriptor.attributes() == emptyAttributesDescriptor.attributes());
+            if (found)
+                ASSERT(currentDescriptor.attributes() == emptyAttributesDescriptor.attributes());
         }
 #endif
         // Fast case: we're putting a regular property to a regular array
@@ -2991,6 +2990,7 @@ bool JSObject::putByIndexBeyondVectorLengthWithoutAttributes(JSGlobalObject* glo
         return true;
         
     case DoubleShape: {
+        ASSERT(Options::allowDoubleShape());
         ASSERT(value.isNumber());
         double valueAsDouble = value.asNumber();
         ASSERT(valueAsDouble == valueAsDouble);
@@ -3123,6 +3123,7 @@ bool JSObject::putByIndexBeyondVectorLength(JSGlobalObject* globalObject, unsign
         RELEASE_AND_RETURN(scope, putByIndexBeyondVectorLengthWithoutAttributes<Int32Shape>(globalObject, i, value));
         
     case ALL_DOUBLE_INDEXING_TYPES:
+        ASSERT(Options::allowDoubleShape());
         RELEASE_AND_RETURN(scope, putByIndexBeyondVectorLengthWithoutAttributes<DoubleShape>(globalObject, i, value));
         
     case ALL_CONTIGUOUS_INDEXING_TYPES:
@@ -3288,6 +3289,7 @@ bool JSObject::putDirectIndexSlowOrBeyondVectorLength(JSGlobalObject* globalObje
     }
         
     case ALL_DOUBLE_INDEXING_TYPES: {
+        ASSERT(Options::allowDoubleShape());
         ASSERT(!indexingShouldBeSparse());
         if (attributes)
             return putDirectIndexBeyondVectorLengthWithArrayStorage(globalObject, i, value, attributes, mode, ensureArrayStorageExistsAndEnterDictionaryIndexingMode(vm));
@@ -3441,6 +3443,7 @@ unsigned JSObject::countElements(Butterfly* butterfly)
             break;
             
         case DoubleShape: {
+            ASSERT(Options::allowDoubleShape());
             double value = butterfly->contiguousDouble().at(this, i);
             if (value == value)
                 numValues++;
@@ -3465,6 +3468,7 @@ unsigned JSObject::countElements()
         return countElements<Int32Shape>(butterfly());
         
     case ALL_DOUBLE_INDEXING_TYPES:
+        ASSERT(Options::allowDoubleShape());
         return countElements<DoubleShape>(butterfly());
         
     case ALL_CONTIGUOUS_INDEXING_TYPES:

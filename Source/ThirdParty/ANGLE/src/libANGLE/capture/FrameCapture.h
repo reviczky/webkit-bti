@@ -19,8 +19,9 @@
 
 namespace gl
 {
-enum class GLenumGroup;
-}
+enum class BigGLEnum;
+enum class GLESEnum;
+}  // namespace gl
 
 namespace angle
 {
@@ -38,7 +39,8 @@ struct ParamCapture : angle::NonCopyable
     std::string name;
     ParamType type;
     ParamValue value;
-    gl::GLenumGroup enumGroup;  // only used for param type GLenum, GLboolean and GLbitfield
+    gl::GLESEnum enumGroup;   // only used for param type GLenum, GLboolean and GLbitfield
+    gl::BigGLEnum bigGLEnum;  // only used for param type GLenum, GLboolean and GLbitfield
     ParamData data;
     int dataNElements           = 0;
     int arrayClientPointerIndex = -1;
@@ -60,7 +62,12 @@ class ParamBuffer final : angle::NonCopyable
     void setValueParamAtIndex(const char *paramName, ParamType paramType, T paramValue, int index);
     template <typename T>
     void addEnumParam(const char *paramName,
-                      gl::GLenumGroup enumGroup,
+                      gl::GLESEnum enumGroup,
+                      ParamType paramType,
+                      T paramValue);
+    template <typename T>
+    void addEnumParam(const char *paramName,
+                      gl::BigGLEnum enumGroup,
                       ParamType paramType,
                       T paramValue);
 
@@ -353,8 +360,8 @@ class ResourceTracker final : angle::NonCopyable
 
     std::vector<CallCapture> &getBufferBindingCalls() { return mBufferBindingCalls; }
 
-    void setBufferMapped(GLuint id);
-    void setBufferUnmapped(GLuint id);
+    void setBufferMapped(gl::ContextID contextID, GLuint id);
+    void setBufferUnmapped(gl::ContextID contextID, GLuint id);
 
     bool getStartingBuffersMappedCurrent(GLuint id) const;
     bool getStartingBuffersMappedInitial(GLuint id) const;
@@ -386,10 +393,9 @@ class ResourceTracker final : angle::NonCopyable
     }
     void setModifiedDefaultUniform(gl::ShaderProgramID programID, gl::UniformLocation location);
 
-    TrackedResource &getTrackedResource(ResourceIDType type)
-    {
-        return mTrackedResources[static_cast<uint32_t>(type)];
-    }
+    TrackedResource &getTrackedResource(gl::ContextID contextID, ResourceIDType type);
+
+    void getContextIDs(std::set<gl::ContextID> &idsOut);
 
   private:
     // Buffer map calls will map a buffer with correct offset, length, and access flags
@@ -421,7 +427,9 @@ class ResourceTracker final : angle::NonCopyable
     // Calls per default uniform to return to original state
     DefaultUniformCallsPerProgramMap mDefaultUniformResetCalls;
 
-    TrackedResourceArray mTrackedResources;
+    // Tracked resources per context
+    TrackedResourceArray mTrackedResourcesShared;
+    std::map<gl::ContextID, TrackedResourceArray> mTrackedResourcesPerContext;
 };
 
 // Used by the CPP replay to filter out unnecessary code.
@@ -634,7 +642,8 @@ class FrameCaptureShared final : angle::NonCopyable
     // Returns a frame index starting from "1" as the first frame.
     uint32_t getReplayFrameIndex() const;
 
-    void trackBufferMapping(CallCapture *call,
+    void trackBufferMapping(const gl::Context *context,
+                            CallCapture *call,
                             gl::BufferID id,
                             gl::Buffer *buffer,
                             GLintptr offset,
@@ -644,6 +653,7 @@ class FrameCaptureShared final : angle::NonCopyable
 
     void trackTextureUpdate(const gl::Context *context, const CallCapture &call);
     void trackDefaultUniformUpdate(const gl::Context *context, const CallCapture &call);
+    void trackVertexArrayUpdate(const gl::Context *context, const CallCapture &call);
 
     const std::string &getShaderSource(gl::ShaderProgramID id) const;
     void setShaderSource(gl::ShaderProgramID id, std::string sources);
@@ -720,31 +730,31 @@ class FrameCaptureShared final : angle::NonCopyable
     }
 
     template <typename ResourceType>
-    void handleGennedResource(ResourceType resourceID)
+    void handleGennedResource(const gl::Context *context, ResourceType resourceID)
     {
         if (isCaptureActive())
         {
             ResourceIDType idType    = GetResourceIDTypeFromType<ResourceType>::IDType;
-            TrackedResource &tracker = mResourceTracker.getTrackedResource(idType);
+            TrackedResource &tracker = mResourceTracker.getTrackedResource(context->id(), idType);
             tracker.setGennedResource(resourceID.value);
         }
     }
 
     template <typename ResourceType>
-    bool resourceIsGenerated(ResourceType resourceID)
+    bool resourceIsGenerated(const gl::Context *context, ResourceType resourceID)
     {
         ResourceIDType idType    = GetResourceIDTypeFromType<ResourceType>::IDType;
-        TrackedResource &tracker = mResourceTracker.getTrackedResource(idType);
+        TrackedResource &tracker = mResourceTracker.getTrackedResource(context->id(), idType);
         return tracker.resourceIsGenerated(resourceID.value);
     }
 
     template <typename ResourceType>
-    void handleDeletedResource(ResourceType resourceID)
+    void handleDeletedResource(const gl::Context *context, ResourceType resourceID)
     {
         if (isCaptureActive())
         {
             ResourceIDType idType    = GetResourceIDTypeFromType<ResourceType>::IDType;
-            TrackedResource &tracker = mResourceTracker.getTrackedResource(idType);
+            TrackedResource &tracker = mResourceTracker.getTrackedResource(context->id(), idType);
             tracker.setDeletedResource(resourceID.value);
         }
     }
@@ -773,7 +783,7 @@ class FrameCaptureShared final : angle::NonCopyable
                                     std::vector<CallCapture> *shareGroupSetupCalls,
                                     ResourceIDToSetupCallsMap *resourceIDToSetupCalls);
     template <typename ParamValueType>
-    void maybeGenResourceOnBind(CallCapture &call);
+    void maybeGenResourceOnBind(const gl::Context *context, CallCapture &call);
     void maybeCapturePostCallUpdates(const gl::Context *context);
     void maybeCaptureDrawArraysClientData(const gl::Context *context,
                                           CallCapture &call,
@@ -838,8 +848,6 @@ class FrameCaptureShared final : angle::NonCopyable
     bool mCaptureActive;
     std::vector<uint32_t> mActiveFrameIndices;
 
-    bool mMidExecutionCaptureActive;
-
     // Cache most recently compiled and linked sources.
     ShaderSourceMap mCachedShaderSource;
     ProgramSourceMap mCachedProgramSources;
@@ -889,13 +897,25 @@ void ParamBuffer::setValueParamAtIndex(const char *paramName,
 
 template <typename T>
 void ParamBuffer::addEnumParam(const char *paramName,
-                               gl::GLenumGroup enumGroup,
+                               gl::GLESEnum enumGroup,
                                ParamType paramType,
                                T paramValue)
 {
     ParamCapture capture(paramName, paramType);
     InitParamValue(paramType, paramValue, &capture.value);
     capture.enumGroup = enumGroup;
+    mParamCaptures.emplace_back(std::move(capture));
+}
+
+template <typename T>
+void ParamBuffer::addEnumParam(const char *paramName,
+                               gl::BigGLEnum enumGroup,
+                               ParamType paramType,
+                               T paramValue)
+{
+    ParamCapture capture(paramName, paramType);
+    InitParamValue(paramType, paramValue, &capture.value);
+    capture.bigGLEnum = enumGroup;
     mParamCaptures.emplace_back(std::move(capture));
 }
 
@@ -1127,6 +1147,16 @@ template <>
 void WriteParamValueReplay<ParamType::TEGLClientBuffer>(std::ostream &os,
                                                         const CallCapture &call,
                                                         EGLClientBuffer value);
+
+template <>
+void WriteParamValueReplay<ParamType::TEGLConfig>(std::ostream &os,
+                                                  const CallCapture &call,
+                                                  EGLConfig value);
+
+template <>
+void WriteParamValueReplay<ParamType::TEGLSurface>(std::ostream &os,
+                                                   const CallCapture &call,
+                                                   EGLSurface value);
 
 // General fallback for any unspecific type.
 template <ParamType ParamT, typename T>

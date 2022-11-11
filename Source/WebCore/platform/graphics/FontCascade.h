@@ -198,10 +198,8 @@ public:
     static bool leftExpansionOpportunity(StringView, TextDirection);
     static bool rightExpansionOpportunity(StringView, TextDirection);
 
-    WEBCORE_EXPORT static void setShouldUseSmoothing(bool);
-    WEBCORE_EXPORT static bool shouldUseSmoothing();
-
-    static bool isSubpixelAntialiasingAvailable();
+    WEBCORE_EXPORT static void setShouldUseSmoothingForTesting(bool);
+    WEBCORE_EXPORT static bool shouldUseSmoothingForTesting();
 
     enum class CodePath : uint8_t { Auto, Simple, Complex, SimpleWithGlyphOverflow };
     CodePath codePath(const TextRun&, std::optional<unsigned> from = std::nullopt, std::optional<unsigned> to = std::nullopt) const;

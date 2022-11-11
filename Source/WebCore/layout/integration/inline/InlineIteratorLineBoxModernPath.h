@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-
 #include "InlineIteratorBoxModernPath.h"
 #include "LayoutIntegrationInlineContent.h"
 #include "RenderBlockFlow.h"
@@ -56,6 +54,10 @@ public:
     float inkOverflowTop() const { return line().inkOverflow().y(); }
     float inkOverflowBottom() const { return line().inkOverflow().maxY(); }
 
+    bool hasEllipsis() const { return line().hasEllipsis(); }
+    FloatRect ellipsisVisualRectIgnoringBlockDirection() const { return line().ellipsisVisualRect(); }
+    TextRun ellipsisText() const { return line().ellipsisText(); }
+
     float contentLogicalTopAdjustedForPrecedingLineBox() const { return !m_lineIndex ? contentLogicalTop() : LineBoxIteratorModernPath(*m_inlineContent, m_lineIndex - 1).contentLogicalBottomAdjustedForFollowingLineBox(); }
     // FIXME: Implement.
     float contentLogicalBottomAdjustedForFollowingLineBox() const { return contentLogicalBottom(); }
@@ -65,7 +67,7 @@ public:
     bool isHorizontal() const { return line().isHorizontal(); }
     FontBaseline baselineType() const { return line().baselineType(); }
 
-    const RenderBlockFlow& containingBlock() const { return m_inlineContent->containingBlock(); }
+    const RenderBlockFlow& formattingContextRoot() const { return m_inlineContent->formattingContextRoot(); }
 
     RenderFragmentContainer* containingFragment() const { return nullptr; }
     bool isFirstAfterPageBreak() const { return line().isFirstAfterPageBreak(); }
@@ -126,6 +128,4 @@ private:
 
 }
 }
-
-#endif
 

@@ -410,7 +410,7 @@ auto Scope::collectActiveStyleSheets() -> ActiveStyleSheetCollection
             // (thus making it PREFERRED or ALTERNATE rather than
             // PERSISTENT).
             auto& rel = element.attributeWithoutSynchronization(relAttr);
-            if (!enabledViaScript && !title.isEmpty()) {
+            if (!enabledViaScript && sheet && !title.isEmpty()) {
                 // Yes, we have a title.
                 if (m_preferredStylesheetSetName.isEmpty()) {
                     // No preferred set has been established. If
@@ -433,6 +433,20 @@ auto Scope::collectActiveStyleSheets() -> ActiveStyleSheetCollection
         if (sheet)
             sheets.append(WTFMove(sheet));
     }
+
+    auto canActivateAdoptedStyleSheet = [&](auto& sheet) {
+        if (sheet.disabled())
+            return false;
+        return sheet.title().isEmpty() || sheet.title() == m_preferredStylesheetSetName;
+    };
+
+    for (auto& adoptedStyleSheet : treeScope().adoptedStyleSheets()) {
+        if (!canActivateAdoptedStyleSheet(*adoptedStyleSheet))
+            continue;
+        styleSheetsForStyleSheetsList.append(adoptedStyleSheet);
+        sheets.append(adoptedStyleSheet);
+    }
+
     return { WTFMove(sheets), WTFMove(styleSheetsForStyleSheetsList) };
 }
 
@@ -650,6 +664,13 @@ void Scope::clearPendingUpdate()
 {
     m_pendingUpdateTimer.stop();
     m_pendingUpdate = { };
+}
+
+TreeScope& Scope::treeScope()
+{
+    if (m_shadowRoot)
+        return *m_shadowRoot;
+    return m_document;
 }
 
 void Scope::scheduleUpdate(UpdateType update)
