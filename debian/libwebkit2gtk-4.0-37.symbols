@@ -1683,6 +1683,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_response_policy_decision_get_request@Base 2.5.3
  webkit_response_policy_decision_get_response@Base 2.5.3
  webkit_response_policy_decision_get_type@Base 2.5.3
+ webkit_response_policy_decision_is_main_frame_main_resource@Base 2.39.1
  webkit_response_policy_decision_is_mime_type_supported@Base 2.5.3
  webkit_save_mode_get_type@Base 2.5.3
  webkit_script_dialog_close@Base 2.23.1
