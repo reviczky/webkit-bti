@@ -7,6 +7,8 @@ webkit2gtk (2.39.1-1) UNRELEASED; urgency=medium
   * debian/control.in:
     - Add build dependencies on unifdef, libavif-dev and
       libgstreamer-plugins-bad1.0-dev (for webrtc).
+    - Disable the gtk4 (5.0 API) build, upstream replaced this with the
+      6.0 API which is not stable yet.
   * debian/libwebkit2gtk-4.0-37.install:
     - WebKit2GTK-*.mo is now WebKitGTK-*.mo.
   * debian/libwebkit2gtk-4.0-dev.install:
