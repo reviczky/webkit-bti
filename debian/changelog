@@ -19,6 +19,8 @@ webkit2gtk (2.39.1-1) UNRELEASED; urgency=medium
     - Don't build ANGLE with SSE support in i386.
   * debian/patches/fix-non-unified-build.patch:
     - Fix non-unified build.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 11 Nov 2022 12:28:22 +0100
 
