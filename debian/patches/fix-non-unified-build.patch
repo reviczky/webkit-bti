@@ -1,0 +1,28 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Fix non-unified build
+Forwarded: no
+Index: webkitgtk/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
++++ webkitgtk/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
+@@ -35,6 +35,8 @@
+ #include <wtf/DataLog.h>
+ #include <wtf/Gigacage.h>
+ #include <wtf/Lock.h>
++#include <wtf/NeverDestroyed.h>
++#include <wtf/OSAllocator.h>
+ #include <wtf/Platform.h>
+ #include <wtf/PrintStream.h>
+ #include <wtf/SafeStrerror.h>
+Index: webkitgtk/Source/ThirdParty/ANGLE/src/libANGLE/Constants.h
+===================================================================
+--- webkitgtk.orig/Source/ThirdParty/ANGLE/src/libANGLE/Constants.h
++++ webkitgtk/Source/ThirdParty/ANGLE/src/libANGLE/Constants.h
+@@ -11,6 +11,7 @@
+ 
+ #include "common/platform.h"
+ 
++#include <stddef.h>
+ #include <stdint.h>
+ 
+ namespace gl
