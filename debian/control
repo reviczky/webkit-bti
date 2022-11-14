@@ -96,7 +96,7 @@ Description: Web content engine library for GTK - documentation
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  .
  This package contains the documentation and is valid for versions 4.0,
- 4.1 and 5.0 of the API.
+ 4.1 and 6.0 of the API.
 
 Package: webkit2gtk-driver
 Architecture: any
