@@ -254,10 +254,11 @@ override_dh_auto_configure:
 		done ; \
 	fi
 	$(SOUP2_BUILD) dh_auto_configure -Bbuild-soup2 -- \
-		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=ON
+		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=ON \
+		-DENABLE_DOCUMENTATION=OFF
 	$(SOUP3_BUILD) dh_auto_configure -Bbuild-soup3 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_SOUP2=OFF \
-		-DENABLE_WEBDRIVER=OFF -DENABLE_DOCUMENTATION=OFF
+		-DENABLE_WEBDRIVER=OFF
 	$(GTK4_BUILD) dh_auto_configure -Bbuild-gtk4 -- \
 		$(EXTRA_CMAKE_ARGUMENTS) -DUSE_GTK4=ON \
 		-DENABLE_WEBDRIVER=OFF -DENABLE_DOCUMENTATION=OFF
@@ -289,16 +290,12 @@ override_dh_auto_clean: debian/control
 override_dh_install:
 ifeq ($(USE_PREBUILT_DOCS),YES)
 	mkdir -p debian/tmp/usr/share/gtk-doc/html
-	cp -r Documentation/webkit2gtk-4.1 debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
-	cp -r Documentation/jsc-glib-4.1 debian/tmp/usr/share/gtk-doc/html/javascriptcoregtk-4.0
-	cp -r Documentation/webkit2gtk-web-extension-4.1 debian/tmp/usr/share/gtk-doc/html/webkit2gtk-web-extension-4.0
-	for f in webkit2gtk javascriptcoregtk webkit2gtk-web-extension; do \
-		mv debian/tmp/usr/share/gtk-doc/html/$$f-4.0/$$f-4.1.devhelp2 \
-			debian/tmp/usr/share/gtk-doc/html/$$f-4.0/$$f-4.0.devhelp2 ; \
-	done
+	cp -r Documentation/webkit2gtk-4.1 debian/tmp/usr/share/gtk-doc/html/
+	cp -r Documentation/jsc-glib-4.1 debian/tmp/usr/share/gtk-doc/html/javascriptcoregtk-4.1
+	cp -r Documentation/webkit2gtk-web-extension-4.1 debian/tmp/usr/share/gtk-doc/html/
 else
-	mkdir -p debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
-	touch debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
+	mkdir -p debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.1
+	touch debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.1/index.html
 endif
 	dh_install
 	jdupes -rl debian/libwebkit2gtk-4.0-doc/usr
