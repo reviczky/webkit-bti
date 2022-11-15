@@ -8,6 +8,8 @@ webkit2gtk (2.39.1-2) UNRELEASED; urgency=medium
   * Use the documentation from the 4.1 API build. This simplifies the
     build process a bit (the package is still named 4.0-doc to make
     backports easier).
+  * debian/rules:
+    - Build the 4.1 API version of the WebKit WebDriver if possible.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Nov 2022 13:01:12 +0100
 

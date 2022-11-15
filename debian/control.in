@@ -100,7 +100,7 @@ Description: Web content engine library for GTK - documentation
 Package: webkit2gtk-driver
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
+Depends: @WEBDRIVER_DEP_PKG@ (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Description: WebKitGTK WebDriver support
