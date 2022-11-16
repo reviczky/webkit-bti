@@ -57,11 +57,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DWTF_CPU_ARM64_CORTEXA53=OFF
 endif
 
-# Disable Gold where it causes build problems, see #949618
-ifneq (,$(filter $(DEB_HOST_ARCH),powerpc))
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_LD_GOLD=OFF
-endif
-
 # Lower memory requirements on architectures with only 2 GB address space
 ifneq (,$(filter $(DEB_HOST_ARCH),mips mipsel sh4))
 	CFLAGS := $(CFLAGS:-g1=-g0)

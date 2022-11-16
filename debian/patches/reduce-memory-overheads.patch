@@ -1,20 +1,18 @@
 From: Alberto Garcia <berto@igalia.com>
-Subject: Reduce memory usage when not using the Gold linker
+Subject: Reduce memory usage
 Bug-Debian: https://bugs.debian.org/949621
 Forwarded: no
 Index: webkitgtk/Source/cmake/OptionsCommon.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/OptionsCommon.cmake
 +++ webkitgtk/Source/cmake/OptionsCommon.cmake
-@@ -165,6 +165,12 @@ option(GCC_OFFLINEASM_SOURCE_MAP
+@@ -165,6 +165,10 @@ option(GCC_OFFLINEASM_SOURCE_MAP
  
  option(USE_APPLE_ICU "Use Apple's internal ICU" ${APPLE})
  
 +# Pass --reduce-memory-overheads to the bfd linker in order to save memory
-+if (NOT USE_LD_GOLD)
-+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--reduce-memory-overheads")
-+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--reduce-memory-overheads")
-+endif ()
++set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--reduce-memory-overheads")
++set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--reduce-memory-overheads")
 +
  # Enable the usage of OpenMP.
  #  - At this moment, OpenMP is only used as an alternative implementation
