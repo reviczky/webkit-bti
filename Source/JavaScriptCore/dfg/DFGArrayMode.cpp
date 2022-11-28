@@ -233,6 +233,10 @@ ArrayMode ArrayMode::refine(
             // are non-configurable.
             return ArrayMode(Array::Generic, action());
         }
+        if (graph.hasExitSite(node->origin.semantic, UnexpectedResizableArrayBufferView)) {
+            constexpr bool mayBeResizableOrGrowableSharedTypedArray = true;
+            return result.withArrayClassAndSpeculation(result.arrayClass(), result.speculation(), result.mayBeLargeTypedArray(), mayBeResizableOrGrowableSharedTypedArray);
+        }
         return result;
     };
     
@@ -414,8 +418,9 @@ Structure* ArrayMode::originalArrayStructure(Graph& graph, const CodeOrigin& cod
         TypedArrayType type = typedArrayType();
         if (type == NotTypedArray)
             return nullptr;
-        
-        return globalObject->typedArrayStructureConcurrently(type);
+
+        bool isResizableOrGrowableShared = false;
+        return globalObject->typedArrayStructureConcurrently(type, isResizableOrGrowableShared);
     }
         
     default:
@@ -889,6 +894,10 @@ bool ArrayMode::permitsBoundsCheckLowering() const
 void ArrayMode::dump(PrintStream& out) const
 {
     out.print(type(), "+", arrayClass(), "+", speculation(), "+", conversion(), "+", action());
+    if (mayBeLargeTypedArray())
+        out.print("+LargeTypedArray");
+    if (mayBeResizableOrGrowableSharedTypedArray())
+        out.print("+ResizableOrGrowableSharedTypedArray");
 }
 
 } } // namespace JSC::DFG

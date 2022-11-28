@@ -292,6 +292,7 @@ set(WTF_PUBLIC_HEADERS
     ThreadMessage.h
     ThreadSafetyAnalysis.h
     ThreadSafeRefCounted.h
+    ThreadSafeWeakPtr.h
     ThreadSanitizerSupport.h
     ThreadSpecific.h
     Threading.h
@@ -316,7 +317,6 @@ set(WTF_PUBLIC_HEADERS
     UniqueArray.h
     UniqueRef.h
     UniqueRefVector.h
-    UnsafePointer.h
     VMTags.h
     ValueCheck.h
     Vector.h

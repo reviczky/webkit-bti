@@ -275,7 +275,7 @@ static inline Ref<CSSBorderImageSliceValue> valueForNinePieceImageSlice(const Ni
     quad->setBottom(WTFMove(bottom));
     quad->setLeft(WTFMove(left));
 
-    return CSSBorderImageSliceValue::create(CSSValuePool::singleton().createValue(WTFMove(quad)), image.fill());
+    return CSSBorderImageSliceValue::create(WTFMove(quad), image.fill());
 }
 
 static Ref<CSSPrimitiveValue> valueForNinePieceImageQuad(const LengthBox& box, const RenderStyle& style)
@@ -603,14 +603,6 @@ static Ref<CSSPrimitiveValue> autoOrZoomAdjustedValue(Length length, const Rende
     return zoomAdjustedPixelValueForLength(length, style);
 }
 
-static Ref<CSSValueList> borderRadiusCornerValues(const LengthSize& radius, const RenderStyle& style)
-{
-    auto list = CSSValueList::createSpaceSeparated();
-    list->append(percentageOrZoomAdjustedValue(radius.width, style));
-    list->append(percentageOrZoomAdjustedValue(radius.height, style));
-    return list;
-}
-
 static Ref<CSSValue> valueForQuotes(const QuotesData* quotes)
 {
     if (!quotes)
@@ -626,14 +618,19 @@ static Ref<CSSValue> valueForQuotes(const QuotesData* quotes)
     return list;
 }
 
-static Ref<CSSValue> borderRadiusCornerValue(const LengthSize& radius, const RenderStyle& style)
+static Ref<Pair> borderRadiusCornerValues(const LengthSize& radius, const RenderStyle& style)
 {
-    if (radius.width == radius.height)
-        return percentageOrZoomAdjustedValue(radius.width, style);
-    return borderRadiusCornerValues(radius, style);
+    auto x = percentageOrZoomAdjustedValue(radius.width, style);
+    auto y = radius.width == radius.height ? x.copyRef() : percentageOrZoomAdjustedValue(radius.height, style);
+    return Pair::create(WTFMove(x), WTFMove(y));
 }
 
-static Ref<CSSValueList> borderRadiusShorthandValue(const RenderStyle& style)
+static Ref<CSSPrimitiveValue> borderRadiusCornerValue(const LengthSize& radius, const RenderStyle& style)
+{
+    return CSSValuePool::singleton().createValue(borderRadiusCornerValues(radius, style));
+}
+
+static Ref<CSSValueList> borderRadiusShorthandValue(const RenderStyle& style, CSSPropertyID propertyID)
 {
     auto list = CSSValueList::createSlashSeparated();
     bool showHorizontalBottomLeft = style.borderTopRightRadius().width != style.borderBottomLeftRadius().width;
@@ -645,32 +642,42 @@ static Ref<CSSValueList> borderRadiusShorthandValue(const RenderStyle& style)
     bool showVerticalTopRight = showVerticalBottomRight || (style.borderTopRightRadius().height != style.borderTopLeftRadius().height);
 
     auto topLeftRadius = borderRadiusCornerValues(style.borderTopLeftRadius(), style);
+    CSSValue* topLeftRadiusX = topLeftRadius->first();
+    CSSValue* topLeftRadiusY = topLeftRadius->second();
     auto topRightRadius = borderRadiusCornerValues(style.borderTopRightRadius(), style);
+    CSSValue* topRightRadiusX = topRightRadius->first();
+    CSSValue* topRightRadiusY = topRightRadius->second();
     auto bottomRightRadius = borderRadiusCornerValues(style.borderBottomRightRadius(), style);
+    CSSValue* bottomRightRadiusX = bottomRightRadius->first();
+    CSSValue* bottomRightRadiusY = bottomRightRadius->second();
     auto bottomLeftRadius = borderRadiusCornerValues(style.borderBottomLeftRadius(), style);
+    CSSValue* bottomLeftRadiusX = bottomLeftRadius->first();
+    CSSValue* bottomLeftRadiusY = bottomLeftRadius->second();
 
     auto horizontalRadii = CSSValueList::createSpaceSeparated();
-    horizontalRadii->append(*topLeftRadius->item(0));
+    horizontalRadii->append(*topLeftRadiusX);
     if (showHorizontalTopRight)
-        horizontalRadii->append(*topRightRadius->item(0));
+        horizontalRadii->append(*topRightRadiusX);
     if (showHorizontalBottomRight)
-        horizontalRadii->append(*bottomRightRadius->item(0));
+        horizontalRadii->append(*bottomRightRadiusX);
     if (showHorizontalBottomLeft)
-        horizontalRadii->append(*bottomLeftRadius->item(0));
+        horizontalRadii->append(*bottomLeftRadiusX);
 
     list->append(WTFMove(horizontalRadii));
 
     auto verticalRadiiList = CSSValueList::createSpaceSeparated();
-    verticalRadiiList->append(*topLeftRadius->item(1));
+    verticalRadiiList->append(*topLeftRadiusY);
     if (showVerticalTopRight)
-        verticalRadiiList->append(*topRightRadius->item(1));
+        verticalRadiiList->append(*topRightRadiusY);
     if (showVerticalBottomRight)
-        verticalRadiiList->append(*bottomRightRadius->item(1));
+        verticalRadiiList->append(*bottomRightRadiusY);
     if (showVerticalBottomLeft)
-        verticalRadiiList->append(*bottomLeftRadius->item(1));
+        verticalRadiiList->append(*bottomLeftRadiusY);
 
     if (!verticalRadiiList->equals(downcast<CSSValueList>(*list->item(0))))
         list->append(WTFMove(verticalRadiiList));
+    else if (propertyID == CSSPropertyWebkitBorderRadius && showHorizontalTopRight && !showHorizontalBottomRight)
+        downcast<CSSValueList>(list->item(0))->append(*bottomRightRadiusX);
 
     return list;
 }
@@ -723,12 +730,6 @@ static Ref<CSSFunctionValue> matrixTransformValue(const TransformationMatrix& tr
     }
 
     return transformValue.releaseNonNull();
-}
-
-static bool rendererCanBeTransformed(RenderObject* renderer)
-{
-    // Inline renderers do not support transforms.
-    return renderer && !is<RenderInline>(*renderer);
 }
 
 static Ref<CSSValue> computedTransform(RenderElement* renderer, const RenderStyle& style, ComputedStyleExtractor::PropertyValueType valueType)
@@ -899,7 +900,7 @@ static Ref<CSSValue> computedTransform(RenderElement* renderer, const RenderStyl
 static Ref<CSSValue> computedTranslate(RenderObject* renderer, const RenderStyle& style)
 {
     auto* translate = style.translate();
-    if (!translate || !rendererCanBeTransformed(renderer) || translate->isIdentity())
+    if (!translate || is<RenderInline>(renderer) || translate->isIdentity())
         return CSSValuePool::singleton().createIdentifierValue(CSSValueNone);
 
     auto list = CSSValueList::createSpaceSeparated();
@@ -922,7 +923,7 @@ static Ref<CSSValue> computedScale(RenderObject* renderer, const RenderStyle& st
 {
     auto* scale = style.scale();
     auto& cssValuePool = CSSValuePool::singleton();
-    if (!scale || !rendererCanBeTransformed(renderer) || scale->isIdentity())
+    if (!scale || is<RenderInline>(renderer) || scale->isIdentity())
         return cssValuePool.createIdentifierValue(CSSValueNone);
 
     auto list = CSSValueList::createSpaceSeparated();
@@ -939,7 +940,7 @@ static Ref<CSSValue> computedRotate(RenderObject* renderer, const RenderStyle& s
 {
     auto* rotate = style.rotate();
     auto& cssValuePool = CSSValuePool::singleton();
-    if (!rotate || !rendererCanBeTransformed(renderer) || rotate->isIdentity())
+    if (!rotate || is<RenderInline>(renderer) || rotate->isIdentity())
         return cssValuePool.createIdentifierValue(CSSValueNone);
 
     if (!rotate->is3DOperation() || (!rotate->x() && !rotate->y() && rotate->z()))
@@ -2490,6 +2491,11 @@ static inline bool hasValidStyleForProperty(Element& element, CSSPropertyID prop
     if (!element.document().childNeedsStyleRecalc())
         return true;
 
+    if (auto* keyframeEffectStack = Styleable(element, PseudoId::None).keyframeEffectStack()) {
+        if (keyframeEffectStack->containsProperty(propertyID))
+            return false;
+    }
+
     auto isQueryContainer = [&](Element& element) {
         auto* style = element.renderStyle();
         return style && style->containerType() != ContainerType::Normal;
@@ -2767,12 +2773,12 @@ static Ref<CSSFontValue> fontShorthandValue(const RenderStyle& style, ComputedSt
         if (variantSettingsOmittingExpressible.caps == FontVariantCaps::Small)
             variantSettingsOmittingExpressible.caps = FontVariantCaps::Normal;
 
-        // FIXME: This also needs to check for the effects of CSSPropertyFontKerning.
         // When we add font-language-override, also add code to check for non-expressible values for it here.
         return variantSettingsOmittingExpressible.isAllNormal()
             && fontStretch
             && fontStyle
             && !description.fontSizeAdjust()
+            && description.kerning() == Kerning::Auto
             && description.featureSettings().isEmpty()
             && description.opticalSizing() == FontOpticalSizing::Enabled
             && description.variationSettings().isEmpty()
@@ -2805,7 +2811,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::propertyValue(CSSPropertyID propertyID,
     if (!styledElement)
         return nullptr;
 
-    if (!isExposed(propertyID, &m_element->document().settings())) {
+    if (!isExposed(propertyID, m_element->document().settings())) {
         // Exit quickly, and avoid us ever having to update layout in this case.
         return nullptr;
     }
@@ -2855,7 +2861,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     auto& cssValuePool = CSSValuePool::singleton();
     propertyID = CSSProperty::resolveDirectionAwareProperty(propertyID, style.direction(), style.writingMode());
 
-    ASSERT(isExposed(propertyID, &m_element->document().settings()));
+    ASSERT(isExposed(propertyID, m_element->document().settings()));
 
     switch (propertyID) {
     case CSSPropertyInvalid:
@@ -3610,8 +3616,12 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return willChangePropertyValue(style.willChange());
     case CSSPropertyWordBreak:
         return cssValuePool.createValue(style.wordBreak());
-    case CSSPropertyWordSpacing:
-        return zoomAdjustedPixelValue(style.fontCascade().wordSpacing(), style);
+    case CSSPropertyWordSpacing: {
+        auto& wordSpacingLength = style.wordSpacing();
+        if (wordSpacingLength.isFixed() || wordSpacingLength.isAuto())
+            return zoomAdjustedPixelValue(style.fontCascade().wordSpacing(), style);
+        return cssValuePool.createValue(wordSpacingLength, style);
+    }
     case CSSPropertyLineBreak:
         return cssValuePool.createValue(style.lineBreak());
     case CSSPropertyWebkitNbspMode:
@@ -3997,7 +4007,8 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyBorderInlineWidth:
         return getCSSPropertyValuesFor2SidesShorthand(borderInlineWidthShorthand());
     case CSSPropertyBorderRadius:
-        return borderRadiusShorthandValue(style);
+    case CSSPropertyWebkitBorderRadius:
+        return borderRadiusShorthandValue(style, propertyID);
     case CSSPropertyBorderRight:
         return getCSSPropertyValuesForShorthandProperties(borderRightShorthand());
     case CSSPropertyBorderStyle:
@@ -4226,7 +4237,6 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return nullptr;
 
     /* Unimplemented -webkit- properties */
-    case CSSPropertyWebkitBorderRadius:
     case CSSPropertyWebkitMask:
     case CSSPropertyPerspectiveOriginX:
     case CSSPropertyPerspectiveOriginY:

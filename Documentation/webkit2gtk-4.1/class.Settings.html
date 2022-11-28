@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.1</p>
+        <p>Library Version: 2.39.2</p>
         
       </div>
       
@@ -2215,10 +2215,10 @@ reflective <span class="caps">XSS</span> attacks on vulnerable web&nbsp;sites.</
 
           <div class="docblock">
             <p>The <code>WebKitHardwareAccelerationPolicy</code> to decide how to enable and disable
-hardware acceleration. The default value <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND</code>
-enables the hardware acceleration when the web contents request it.
+hardware acceleration. The value <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND</code>
+enables hardware acceleration only when the web content requests it.
 It&#8217;s possible to enforce hardware acceleration to be always enabled
-by using <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code>. And it&#8217;s also possible to disable it
+by using <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code>, or to disable it
 completely using <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER</code>. Note that disabling hardware
 acceleration might cause some websites to not render correctly or consume more <span class="caps">CPU</span>.</p>
           </div>

@@ -176,7 +176,11 @@ RefPtr<Memory> Memory::tryCreate(VM& vm, PageCount initial, PageCount maximum, M
         constexpr bool readable = false;
         constexpr bool writable = false;
         if (!OSAllocator::protect(fastMemory + initialBytes, BufferMemoryHandle::fastMappedBytes() - initialBytes, readable, writable)) {
-            dataLog("mprotect failed: ", safeStrerror(errno).data(), "\n");
+#if OS(WINDOWS)
+            dataLogLn("mprotect failed: ", static_cast<int>(GetLastError()));
+#else
+            dataLogLn("mprotect failed: ", safeStrerror(errno).data());
+#endif
             RELEASE_ASSERT_NOT_REACHED();
         }
 
@@ -228,7 +232,11 @@ RefPtr<Memory> Memory::tryCreate(VM& vm, PageCount initial, PageCount maximum, M
         constexpr bool readable = false;
         constexpr bool writable = false;
         if (!OSAllocator::protect(slowMemory + initialBytes, maximumBytes - initialBytes, readable, writable)) {
-            dataLog("mprotect failed: ", safeStrerror(errno).data(), "\n");
+#if OS(WINDOWS)
+            dataLogLn("mprotect failed: ", static_cast<int>(GetLastError()));
+#else
+            dataLogLn("mprotect failed: ", safeStrerror(errno).data());
+#endif
             RELEASE_ASSERT_NOT_REACHED();
         }
 
@@ -263,7 +271,7 @@ Expected<PageCount, GrowFailReason> Memory::growShared(VM& vm, PageCount delta)
 
     PageCount oldPageCount;
     PageCount newPageCount;
-    Expected<void, GrowFailReason> result;
+    Expected<int64_t, GrowFailReason> result;
     {
         std::optional<Locker<Lock>> locker;
         // m_shared may not be exist, if this is zero byte memory with zero byte maximum size.
@@ -298,8 +306,8 @@ Expected<PageCount, GrowFailReason> Memory::growShared(VM& vm, PageCount delta)
     m_growSuccessCallback(GrowSuccessTag, oldPageCount, newPageCount);
     // Update cache for instance
     for (auto& instance : m_instances) {
-        if (instance.get() != nullptr)
-            instance.get()->updateCachedMemory();
+        if (auto strongReference = instance.get())
+            strongReference->updateCachedMemory();
     }
     return oldPageCount;
 }
@@ -385,11 +393,15 @@ Expected<PageCount, GrowFailReason> Memory::grow(VM& vm, PageCount delta)
         constexpr bool readable = true;
         constexpr bool writable = true;
         if (!OSAllocator::protect(startAddress, extraBytes, readable, writable)) {
-            dataLog("mprotect failed: ", safeStrerror(errno).data(), "\n");
+#if OS(WINDOWS)
+            dataLogLn("mprotect failed: ", static_cast<int>(GetLastError()));
+#else
+            dataLogLn("mprotect failed: ", safeStrerror(errno).data());
+#endif
             RELEASE_ASSERT_NOT_REACHED();
         }
 
-        m_handle->growToSize(desiredSize);
+        m_handle->updateSize(desiredSize);
         return success();
     }
 #endif
@@ -446,16 +458,16 @@ bool Memory::init(uint32_t offset, const uint8_t* data, uint32_t length)
     return true;
 }
 
-void Memory::registerInstance(Instance* instance)
+void Memory::registerInstance(Instance& instance)
 {
     size_t count = m_instances.size();
     for (size_t index = 0; index < count; index++) {
         if (m_instances.at(index).get() == nullptr) {
-            m_instances.at(index) = *instance;
+            m_instances.at(index) = { instance };
             return;
         }
     }
-    m_instances.append(*instance);
+    m_instances.append({ instance });
 }
 
 void Memory::dump(PrintStream& out) const

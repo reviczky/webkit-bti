@@ -26,6 +26,8 @@
 #include "config.h"
 #include "LayoutIntegrationLineLayout.h"
 
+#include "BlockFormattingState.h"
+#include "BlockLayoutState.h"
 #include "DeprecatedGlobalSettings.h"
 #include "EventRegion.h"
 #include "FloatingState.h"
@@ -55,6 +57,7 @@
 #include "RenderImage.h"
 #include "RenderInline.h"
 #include "RenderLayer.h"
+#include "RenderLayoutState.h"
 #include "RenderLineBreak.h"
 #include "RenderListBox.h"
 #include "RenderListItem.h"
@@ -73,6 +76,7 @@ namespace LayoutIntegration {
 LineLayout::LineLayout(RenderBlockFlow& flow)
     : m_boxTree(flow)
     , m_layoutState(flow.view().ensureLayoutState())
+    , m_blockFormattingState(layoutState().ensureBlockFormattingState(rootLayoutBox()))
     , m_inlineFormattingState(layoutState().ensureInlineFormattingState(rootLayoutBox()))
 {
 }
@@ -81,6 +85,7 @@ LineLayout::~LineLayout()
 {
     clearInlineContent();
     layoutState().destroyInlineFormattingState(rootLayoutBox());
+    layoutState().destroyBlockFormattingState(rootLayoutBox());
 }
 
 static inline bool isContentRenderer(const RenderObject& renderer)
@@ -159,7 +164,20 @@ bool LineLayout::shouldSwitchToLegacyOnInvalidation() const
     // FIXME: Support partial invalidation in LFC.
     // This avoids O(n^2) when lots of boxes are being added dynamically while forcing layouts between.
     constexpr size_t maximimumBoxTreeSizeForInvalidation = 128;
-    return m_boxTree.boxCount() > maximimumBoxTreeSizeForInvalidation;
+    if (m_boxTree.boxCount() <= maximimumBoxTreeSizeForInvalidation)
+        return false;
+    auto isSegmentedTextContent = [&] {
+        // Large text content is broken into smaller (65k) pieces. Modern line layout should be able to handle it just fine.
+        auto renderers = m_boxTree.renderers();
+        ASSERT(renderers.size());
+        for (size_t index = 0; index < renderers.size() - 1; ++index) {
+            if (!is<RenderText>(renderers[index]) || downcast<RenderText>(*renderers[index]).length() < Text::defaultLengthLimit)
+                return false;
+        }
+        return is<RenderText>(renderers[renderers.size() - 1]);
+    };
+    auto isEditable = rootLayoutBox().style().effectiveUserModify() != UserModify::ReadOnly;
+    return isEditable || !isSegmentedTextContent();
 }
 
 void LineLayout::updateReplacedDimensions(const RenderBox& replaced)
@@ -190,9 +208,19 @@ void LineLayout::updateListMarkerDimensions(const RenderListMarker& listMarker)
     if (layoutBox.isListMarkerOutside()) {
         auto& listMarkerGeometry = m_inlineFormattingState.boxGeometry(layoutBox);
         auto horizontalMargin = listMarkerGeometry.horizontalMargin();
-        ASSERT(m_inlineContentConstraints);
-        auto outsideOffset = m_inlineContentConstraints->horizontal().logicalLeft;
-        listMarkerGeometry.setHorizontalMargin({ horizontalMargin.start - outsideOffset, horizontalMargin.end + outsideOffset });  
+        auto* associatedListItem = listMarker.listItem();
+        auto markerLogicalOffset = LayoutUnit { };
+        for (auto* ancestor = listMarker.containingBlock(); ancestor; ancestor = ancestor->containingBlock()) {
+            markerLogicalOffset += (ancestor->borderStart() + ancestor->paddingStart());
+            if (ancestor == associatedListItem)
+                break;
+        }
+        horizontalMargin.start -= markerLogicalOffset;
+        // When the list marker is not the direct child of the list item, we also
+        // have to make sure that the line content does not get pulled in to logical left direction due to
+        // the large negative margin (i.e. this ensures that logical left of the list content stays at the line start)
+        horizontalMargin.end += markerLogicalOffset;
+        listMarkerGeometry.setHorizontalMargin({ horizontalMargin.start, horizontalMargin.end });
     }
 }
 
@@ -427,6 +455,24 @@ std::pair<LayoutUnit, LayoutUnit> LineLayout::computeIntrinsicWidthConstraints()
     return { constraints.minimum, constraints.maximum };
 }
 
+static inline std::optional<Layout::BlockLayoutState::LineClamp> lineClamp(const RenderBlockFlow& rootRenderer)
+{
+    auto& layoutState = *rootRenderer.view().frameView().layoutContext().layoutState();
+    if (layoutState.hasLineClamp()) {
+        // FIXME: This is a rather odd behavior when we let line-clamp place ellipsis on a line and still
+        // continue with constructing subsequent, visible lines on the block (other browsers match this exoctic behavior).
+        auto isLineClampRootOverflowHidden = true;
+        for (const RenderBlock* ancestor = &rootRenderer; ancestor; ancestor = ancestor->containingBlock()) {
+            if (!ancestor->style().lineClamp().isNone()) {
+                isLineClampRootOverflowHidden = ancestor->style().overflowY() == Overflow::Hidden;
+                break;
+            }
+        }
+        return Layout::BlockLayoutState::LineClamp { *layoutState.maximumLineCountForLineClamp(), layoutState.visibleLineCountForLineClamp().value_or(0), isLineClampRootOverflowHidden };
+    }
+    return { };
+}
+
 void LineLayout::layout()
 {
     auto& rootLayoutBox = this->rootLayoutBox();
@@ -439,7 +485,8 @@ void LineLayout::layout()
     // FIXME: Do not clear the lines and boxes here unconditionally, but consult with the damage object instead.
     clearInlineContent();
     ASSERT(m_inlineContentConstraints);
-    Layout::InlineFormattingContext { rootLayoutBox, m_inlineFormattingState, m_lineDamage.get() }.layoutInFlowContentForIntegration(*m_inlineContentConstraints);
+    auto blockLayoutState = Layout::BlockLayoutState { m_blockFormattingState.floatingState(), lineClamp(flow()) };
+    Layout::InlineFormattingContext { rootLayoutBox, m_inlineFormattingState, m_lineDamage.get() }.layoutInFlowContentForIntegration(*m_inlineContentConstraints, blockLayoutState);
 
     constructContent();
 
@@ -448,13 +495,16 @@ void LineLayout::layout()
 
 void LineLayout::constructContent()
 {
-    auto inlineContentBuilder = InlineContentBuilder { flow(), m_boxTree };
-    inlineContentBuilder.build(m_inlineFormattingState, ensureInlineContent());
-    ASSERT(m_inlineContent);
+    if (!m_inlineFormattingState.lines().isEmpty()) {
+        InlineContentBuilder { flow(), m_boxTree }.build(m_inlineFormattingState, ensureInlineContent());
+        ASSERT(m_inlineContent);
+        m_inlineContent->clearGapAfterLastLine = m_inlineFormattingState.clearGapAfterLastLine();
+        m_inlineContent->shrinkToFit();
+    }
 
     auto& blockFlow = flow();
     auto& rootStyle = blockFlow.style();
-    auto isLeftToRightFloatingStateInlineDirection = m_inlineFormattingState.floatingState().isLeftToRightDirection();
+    auto isLeftToRightFloatingStateInlineDirection = m_blockFormattingState.floatingState().isLeftToRightDirection();
     auto isHorizontalWritingMode = rootStyle.isHorizontalWritingMode();
     auto isFlippedBlocksWritingMode = rootStyle.isFlippedBlocksWritingMode();
     for (auto& renderObject : m_boxTree.renderers()) {
@@ -503,8 +553,6 @@ void LineLayout::constructContent()
         renderer.setLocation(Layout::BoxGeometry::borderBoxRect(logicalGeometry).topLeft());
     }
 
-    m_inlineContent->clearGapAfterLastLine = m_inlineFormattingState.clearGapAfterLastLine();
-    m_inlineContent->shrinkToFit();
     m_inlineFormattingState.shrinkToFit();
 }
 
@@ -546,7 +594,7 @@ void LineLayout::prepareLayoutState()
 
 void LineLayout::prepareFloatingState()
 {
-    auto& floatingState = m_inlineFormattingState.floatingState();
+    auto& floatingState = m_blockFormattingState.floatingState();
     floatingState.clear();
 
     if (!flow().containsFloats())
@@ -611,6 +659,7 @@ LayoutUnit LineLayout::contentLogicalHeight() const
     if (!m_inlineContent)
         return { };
 
+    // FIXME: Content height with line-clamp and non-hidden overflow computes to the clamped content.
     auto& lines = m_inlineContent->lines;
     auto flippedContentHeightForWritingMode = rootLayoutBox().style().isHorizontalWritingMode()
         ? lines.last().lineBoxBottom() - lines.first().lineBoxTop()

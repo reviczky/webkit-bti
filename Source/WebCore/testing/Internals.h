@@ -326,7 +326,6 @@ public:
     ExceptionOr<void> setMarkedTextMatchesAreHighlighted(bool);
 
     void invalidateFontCache();
-    void setFontSmoothingEnabled(bool);
 
     ExceptionOr<void> setLowPowerModeEnabled(bool);
     ExceptionOr<void> setOutsideViewportThrottlingEnabled(bool);
@@ -852,6 +851,8 @@ public:
 
     bool hasTransientActivation();
 
+    bool consumeTransientActivation();
+
     RefPtr<GCObservation> observeGC(JSC::JSValue);
 
     enum class UserInterfaceLayoutDirection : uint8_t { LTR, RTL };
@@ -1357,6 +1358,8 @@ public:
 
     void avoidIOSurfaceSizeCheckInWebProcess(HTMLCanvasElement&);
     bool hasSleepDisabler() const;
+
+    void acceptTypedArrays(Int32Array&);
 
 private:
     explicit Internals(Document&);

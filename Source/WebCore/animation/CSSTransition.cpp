@@ -27,11 +27,11 @@
 #include "CSSTransition.h"
 
 #include "Animation.h"
+#include "CSSTransitionEvent.h"
 #include "DocumentTimeline.h"
 #include "InspectorInstrumentation.h"
 #include "KeyframeEffect.h"
 #include "StyleResolver.h"
-#include "TransitionEvent.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -93,9 +93,9 @@ void CSSTransition::setTimingProperties(Seconds delay, Seconds duration)
     unsuspendEffectInvalidation();
 }
 
-Ref<AnimationEventBase> CSSTransition::createEvent(const AtomString& eventType, double elapsedTime, const String& pseudoId, std::optional<Seconds> timelineTime)
+Ref<DeclarativeAnimationEvent> CSSTransition::createEvent(const AtomString& eventType, double elapsedTime, const String& pseudoId)
 {
-    return TransitionEvent::create(eventType, nameString(m_property), elapsedTime, pseudoId, timelineTime, this);
+    return CSSTransitionEvent::create(eventType, this, std::nullopt, elapsedTime, pseudoId, nameString(m_property));
 }
 
 } // namespace WebCore

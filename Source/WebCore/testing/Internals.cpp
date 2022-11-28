@@ -307,6 +307,10 @@
 #include "RTCPeerConnection.h"
 #endif
 
+#if USE(LIBWEBRTC)
+#include "LibWebRTCProvider.h"
+#endif
+
 #if ENABLE(MEDIA_SOURCE)
 #include "MockMediaPlayerMediaSource.h"
 #endif
@@ -1884,11 +1888,6 @@ ExceptionOr<void> Internals::setMarkedTextMatchesAreHighlighted(bool flag)
 void Internals::invalidateFontCache()
 {
     FontCache::invalidateAllFontCaches();
-}
-
-void Internals::setFontSmoothingEnabled(bool enabled)
-{
-    FontCascade::setShouldUseSmoothingForTesting(enabled);
 }
 
 ExceptionOr<void> Internals::setLowPowerModeEnabled(bool isEnabled)
@@ -5273,6 +5272,15 @@ bool Internals::hasTransientActivation()
     return false;
 }
 
+bool Internals::consumeTransientActivation()
+{
+    if (auto* document = contextDocument()) {
+        if (auto* window = document->domWindow())
+            return window->consumeTransientActivation();
+    }
+    return false;
+}
+
 double Internals::lastHandledUserGestureTimestamp()
 {
     Document* document = contextDocument();
@@ -6976,6 +6984,11 @@ bool Internals::hasSleepDisabler() const
 {
     auto* document = contextDocument();
     return document ? document->hasSleepDisabler() : false;
+}
+
+void Internals::acceptTypedArrays(Int32Array&)
+{
+    // Do nothing.
 }
 
 } // namespace WebCore

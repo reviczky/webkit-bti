@@ -29,13 +29,13 @@
 #include "FilterEffect.h"
 #include "FilterImage.h"
 #include "FilterResults.h"
+#include "FilterStyle.h"
 #include "ImageBuffer.h"
 
 namespace WebCore {
 
-Filter::Filter(Filter::Type filterType, RenderingMode renderingMode, const FloatSize& filterScale, ClipOperation clipOperation, const FloatRect& filterRegion)
+Filter::Filter(Filter::Type filterType, const FloatSize& filterScale, ClipOperation clipOperation, const FloatRect& filterRegion)
     : FilterFunction(filterType)
-    , m_renderingMode(renderingMode)
     , m_filterScale(filterScale)
     , m_clipOperation(clipOperation)
     , m_filterRegion(filterRegion)
@@ -82,6 +82,35 @@ bool Filter::clampFilterRegionIfNeeded()
     return true;
 }
 
+RenderingMode Filter::renderingMode() const
+{
+    if (m_filterRenderingMode == FilterRenderingMode::Software)
+        return RenderingMode::Unaccelerated;
+    
+    if (m_filterRenderingMode == FilterRenderingMode::Accelerated)
+        return RenderingMode::Accelerated;
+    
+    ASSERT_NOT_REACHED();
+    return RenderingMode::Unaccelerated;
+}
+
+void Filter::setFilterRenderingMode(OptionSet<FilterRenderingMode> preferredFilterRenderingModes)
+{
+    auto filterRenderingModes = preferredFilterRenderingModes & supportedFilterRenderingModes();
+
+    if (filterRenderingModes.contains(FilterRenderingMode::GraphicsContext)) {
+        setFilterRenderingMode(FilterRenderingMode::GraphicsContext);
+        return;
+    }
+
+    if (filterRenderingModes.contains(FilterRenderingMode::Accelerated)) {
+        setFilterRenderingMode(FilterRenderingMode::Accelerated);
+        return;
+    }
+
+    setFilterRenderingMode(FilterRenderingMode::Software);
+}
+
 RefPtr<FilterImage> Filter::apply(ImageBuffer* sourceImage, const FloatRect& sourceImageRect, FilterResults& results)
 {
     RefPtr<FilterImage> input;
@@ -99,6 +128,18 @@ RefPtr<FilterImage> Filter::apply(ImageBuffer* sourceImage, const FloatRect& sou
 
     result->correctPremultipliedPixelBuffer();
     result->transformToColorSpace(DestinationColorSpace::SRGB());
+    return result;
+}
+
+FilterStyleVector Filter::createFilterStyles(const FloatRect& sourceImageRect) const
+{
+    auto input = FilterStyle { std::nullopt, m_filterRegion, sourceImageRect };
+    auto result = createFilterStyles(input);
+    if (result.isEmpty())
+        return { };
+
+    result.reverse();
+    result.shrinkToFit();
     return result;
 }
 

@@ -249,7 +249,7 @@ void ServiceWorkerFetchTask::processResponse(ResourceResponse&& response, bool n
         m_loader.setResponse(WTFMove(response));
 }
 
-void ServiceWorkerFetchTask::didReceiveData(const IPC::SharedBufferReference& data, int64_t encodedDataLength)
+void ServiceWorkerFetchTask::didReceiveData(const IPC::SharedBufferReference& data, uint64_t encodedDataLength)
 {
     if (m_isDone)
         return;
@@ -448,7 +448,7 @@ void ServiceWorkerFetchTask::loadBodyFromPreloader()
         return;
     }
 
-    m_preloader->waitForBody([weakThis = WeakPtr { *this }, this](auto&& chunk, int length) {
+    m_preloader->waitForBody([weakThis = WeakPtr { *this }, this](auto&& chunk, uint64_t length) {
         if (!weakThis)
             return;
         if (!m_preloader->error().isNull()) {
@@ -483,7 +483,7 @@ NetworkSession* ServiceWorkerFetchTask::session()
 
 bool ServiceWorkerFetchTask::convertToDownload(DownloadManager& manager, DownloadID downloadID, const ResourceRequest& request, const ResourceResponse& response)
 {
-    if (m_preloader  && !m_preloader->isServiceWorkerNavigationPreloadEnabled())
+    if (m_preloader)
         return m_preloader->convertToDownload(manager, downloadID, request, response);
 
     auto* session = this->session();
