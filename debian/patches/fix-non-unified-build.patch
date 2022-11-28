@@ -14,15 +14,3 @@ Index: webkitgtk/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
  #include <wtf/Platform.h>
  #include <wtf/PrintStream.h>
  #include <wtf/SafeStrerror.h>
-Index: webkitgtk/Source/ThirdParty/ANGLE/src/libANGLE/Constants.h
-===================================================================
---- webkitgtk.orig/Source/ThirdParty/ANGLE/src/libANGLE/Constants.h
-+++ webkitgtk/Source/ThirdParty/ANGLE/src/libANGLE/Constants.h
-@@ -11,6 +11,7 @@
- 
- #include "common/platform.h"
- 
-+#include <stddef.h>
- #include <stdint.h>
- 
- namespace gl

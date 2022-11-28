@@ -118,7 +118,7 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-@@ -50,7 +50,9 @@ struct SameSizeAsFontCascadeDescription
+@@ -54,7 +54,9 @@ struct SameSizeAsFontCascadeDescription
      float size2;
      unsigned bitfields3 : 10;
  };
@@ -158,7 +158,7 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5477,3 +5482,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5494,3 +5499,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  

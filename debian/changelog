@@ -1,6 +1,7 @@
 webkit2gtk (2.39.2-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * Refresh all patches.
   * Make the gtk4 build work again (this is now the 6.0 API). In this
     build upstream finally removed the '2' suffix so webkit2gtk is now
     webkitgtk again in all file names.
