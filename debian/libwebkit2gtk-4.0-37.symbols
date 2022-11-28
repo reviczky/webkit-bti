@@ -68,6 +68,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_context_menu_action_get_type@Base 2.5.3
  webkit_context_menu_append@Base 2.5.3
  webkit_context_menu_first@Base 2.5.3
+ webkit_context_menu_get_event@Base 2.39.2
  webkit_context_menu_get_item_at_position@Base 2.5.3
  webkit_context_menu_get_items@Base 2.5.3
  webkit_context_menu_get_n_items@Base 2.5.3
@@ -1632,6 +1633,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_notification_permission_request_get_type@Base 2.8.1
  webkit_option_menu_activate_item@Base 2.17.4
  webkit_option_menu_close@Base 2.17.4
+ webkit_option_menu_get_event@Base 2.39.2
  webkit_option_menu_get_item@Base 2.17.4
  webkit_option_menu_get_n_items@Base 2.17.4
  webkit_option_menu_get_type@Base 2.17.4
@@ -1696,6 +1698,11 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_script_dialog_ref@Base 2.23.1
  webkit_script_dialog_type_get_type@Base 2.5.3
  webkit_script_dialog_unref@Base 2.23.1
+ webkit_script_message_reply_get_type@Base 2.39.2
+ webkit_script_message_reply_ref@Base 2.39.2
+ webkit_script_message_reply_return_error_message@Base 2.39.2
+ webkit_script_message_reply_return_value@Base 2.39.2
+ webkit_script_message_reply_unref@Base 2.39.2
  webkit_script_world_get_default@Base 2.5.3
  webkit_script_world_get_name@Base 2.21.4
  webkit_script_world_get_type@Base 2.5.3
@@ -1911,6 +1918,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_user_content_manager_new@Base 2.5.3
  webkit_user_content_manager_register_script_message_handler@Base 2.8.1
  webkit_user_content_manager_register_script_message_handler_in_world@Base 2.21.92
+ webkit_user_content_manager_register_script_message_handler_with_reply@Base 2.39.2
  webkit_user_content_manager_remove_all_filters@Base 2.23.91
  webkit_user_content_manager_remove_all_scripts@Base 2.5.3
  webkit_user_content_manager_remove_all_style_sheets@Base 2.5.3
