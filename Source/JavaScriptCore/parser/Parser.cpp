@@ -1295,13 +1295,16 @@ template <class TreeBuilder> TreeDestructuringPattern Parser<LexerType>::parseDe
                     innerPattern = parseBindingOrAssignmentElement(context, kind, exportType, duplicateIdentifier, hasDestructuringPattern, bindingContext, depth + 1);
                 else {
                     semanticFailIfTrue(escapedKeyword, "Cannot use abbreviated destructuring syntax for keyword '", propertyName->impl(), "'");
+                    semanticFailIfTrue(isDisallowedIdentifierAwait(identifierToken), "Cannot use 'await' as a ", destructuringKindToVariableKindName(kind), " ", disallowedIdentifierAwaitReason());
                     if (kind == DestructuringKind::DestructureToExpressions) {
                         bool isEvalOrArguments = m_vm.propertyNames->eval == *propertyName || m_vm.propertyNames->arguments == *propertyName;
                         if (isEvalOrArguments && strictMode())
                             reclassifyExpressionError(ErrorIndicatesPattern, ErrorIndicatesNothing);
                         failIfTrueIfStrict(isEvalOrArguments, "Cannot modify '", propertyName->impl(), "' in strict mode");
+
+                        if (match(EQUAL))
+                            currentScope()->useVariable(propertyName, m_vm.propertyNames->eval == *propertyName);
                     }
-                    semanticFailIfTrue(isDisallowedIdentifierAwait(identifierToken), "Cannot use 'await' as a ", destructuringKindToVariableKindName(kind), " ", disallowedIdentifierAwaitReason());
                     innerPattern = createBindingPattern(context, kind, exportType, *propertyName, identifierToken, bindingContext, duplicateIdentifier);
                 }
             } else {
@@ -1526,7 +1529,7 @@ template <class TreeBuilder> TreeStatement Parser<LexerType>::parseForStatement(
         if (match(OPENBRACE) || match(OPENBRACKET)) {
             SavePoint savePoint = createSavePoint(context);
             declsStart = tokenStartPosition();
-            pattern = tryParseDestructuringPatternExpression(context, AssignmentContext::DeclarationStatement);
+            pattern = tryParseDestructuringPatternExpression(context, AssignmentContext::AssignmentExpression);
             declsEnd = lastTokenEndPosition();
             if (pattern && (match(INTOKEN) || matchContextualKeyword(m_vm.propertyNames->of)))
                 goto enumerationLoop;
@@ -1929,7 +1932,8 @@ template <class TreeBuilder> TreeStatement Parser<LexerType>::parseBlockStatemen
             newScope->preventVarDeclarations();
             break;
         case BlockType::StaticBlock:
-            newScope->setIsStaticBlock();
+            newScope->setSourceParseMode(SourceParseMode::ClassStaticBlockMode);
+            newScope->setExpectedSuperBinding(SuperBinding::Needed);
             break;
         case BlockType::Normal:
             newScope->preventVarDeclarations();
@@ -3200,7 +3204,6 @@ parseMethod:
             matchOrFail(OPENBRACE, "Expected block statement for class static block");
             size_t usedVariablesSize = currentScope()->currentUsedVariablesSize();
             currentScope()->pushUsedVariableSet();
-            SetForScope parsingWithClassStaticBlockMode(m_parseMode, parseMode);
             DepthManager statementDepth(&m_statementDepth);
             m_statementDepth = 1;
             failIfFalse(parseBlockStatement(context, BlockType::StaticBlock), "Cannot parse class static block");
@@ -5352,6 +5355,7 @@ template <class TreeBuilder> TreeExpression Parser<LexerType>::parseMemberExpres
     do {
         TreeExpression optionalChainBase = 0;
         JSTokenLocation optionalChainLocation;
+        bool isOptionalCall = false;
         JSTokenType type = m_token.m_type;
 
         if (match(QUESTIONDOT)) {
@@ -5434,12 +5438,9 @@ template <class TreeBuilder> TreeExpression Parser<LexerType>::parseMemberExpres
                             functionScope->setInnerArrowFunctionUsesSuperCall();
                     }
 
-                    bool isOptionalCall = optionalChainLocation.endOffset == static_cast<unsigned>(expressionEnd.offset);
+                    isOptionalCall = optionalChainLocation.endOffset == static_cast<unsigned>(expressionEnd.offset);
                     base = context.makeFunctionCallNode(startLocation, base, previousBaseWasSuper, arguments, expressionStart,
                         expressionEnd, lastTokenEndPosition(), callOrApplyDepthScope ? callOrApplyDepthScope->distanceToInnermostChild() : 0, isOptionalCall);
-
-                    if (isOptionalCall)
-                        optionalChainBase = base;
                 }
                 break;
             }
@@ -5487,7 +5488,7 @@ template <class TreeBuilder> TreeExpression Parser<LexerType>::parseMemberExpres
         }
 endOfChain:
         if (optionalChainBase)
-            base = context.createOptionalChain(optionalChainLocation, optionalChainBase, base, !match(QUESTIONDOT));
+            base = context.createOptionalChain(optionalChainLocation, isOptionalCall ? 0 : optionalChainBase, base, !match(QUESTIONDOT));
     } while (match(QUESTIONDOT));
 
     semanticFailIfTrue(baseIsSuper, newCount ? "Cannot use new with super call" : "super is not valid in this context");

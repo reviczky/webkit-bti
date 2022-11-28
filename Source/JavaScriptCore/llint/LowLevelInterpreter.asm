@@ -1357,6 +1357,7 @@ macro getByValTypedArray(base, index, finishIntGetByVal, finishDoubleGetByVal, s
     
     # Sweet, now we know that we have a typed array. Do some basic things now.
 
+    btbnz JSArrayBufferView::m_mode[base], (constexpr isResizableOrGrowableSharedMode), slowPath
     if LARGE_TYPED_ARRAYS
         bqaeq index, JSArrayBufferView::m_length[base], slowPath
         bqbeq index, SmallTypedArrayMaxLength, .smallTypedArray
@@ -1367,13 +1368,13 @@ macro getByValTypedArray(base, index, finishIntGetByVal, finishDoubleGetByVal, s
     end
 
     loadp JSArrayBufferView::m_vector[base], t3
-    # maxByteLength and scratch are intentionally undefined on this branch because they are not used on other platforms.
+    # length and scratch are intentionally undefined on this branch because they are not used on other platforms.
     if ARM64E
-        const maxByteLength = t6
+        const length = t6
         const scratch = t7
-        loadq JSArrayBufferView::m_maxByteLength[base], maxByteLength
+        loadq JSArrayBufferView::m_length[base], length
     end
-    cagedPrimitive(t3, maxByteLength, base, scratch)
+    cagedPrimitive(t3, length, base, scratch)
 
     # Now bisect through the various types:
     #    Int8ArrayType,

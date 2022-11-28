@@ -185,7 +185,8 @@ public:
     MonotonicTime lastActivationTimestamp() const { return m_lastActivationTimestamp; }
     void notifyActivated(MonotonicTime);
     WEBCORE_EXPORT bool hasTransientActivation() const;
-    bool consumeTransientActivation();
+    bool hasStickyActivation() const;
+    WEBCORE_EXPORT bool consumeTransientActivation();
 
     WEBCORE_EXPORT Location& location();
     void setLocation(DOMWindow& activeWindow, const URL& completedURL, SetLocationLocking = LockHistoryBasedOnGestureState);

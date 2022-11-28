@@ -1766,6 +1766,18 @@ UseGPUProcessForWebGLEnabled:
       "PLATFORM(WIN)": true
       default: false
 
+UserActivationAPIEnabled:
+   type: bool
+   humanReadableName: "User Activation API"
+   humanReadableDescription: "Enable User Activation API"
+   defaultValue:
+     WebKitLegacy:
+       default: false
+     WebKit:
+       default: false
+     WebCore:
+       default: false
+
 UserGesturePromisePropagationEnabled:
   type: bool
   humanReadableName: "UserGesture Promise Propagation"
@@ -1785,6 +1797,18 @@ VP9SWDecoderEnabledOnBattery:
   condition: ENABLE(VP9)
   defaultValue:
     WebKit:
+      default: false
+
+VerticalFormControlsEnabled:
+  type: bool
+  humanReadableName: "Vertical form control support"
+  humanReadableDescription: "Enable support for form controls in vertical writing mode"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
       default: false
 
 VisualViewportAPIEnabled:
@@ -1866,11 +1890,11 @@ WebAnimationsIterationCompositeEnabled:
   humanReadableDescription: "Support for the KeyframeEffect.iterationComposite property"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 WebAnimationsMutableTimelinesEnabled:
   type: bool

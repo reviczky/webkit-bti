@@ -313,16 +313,6 @@ AsynchronousSpellCheckingEnabled:
     WebCore:
       default: false
 
-AttachmentElementEnabled:
-  type: bool
-  webcoreBinding: DeprecatedGlobalSettings
-  condition: ENABLE(ATTACHMENT_ELEMENT)
-  defaultValue:
-    WebKitLegacy:
-      default: WebKit::defaultAttachmentElementEnabled()
-    WebKit:
-      default: false
-
 AuthorAndUserStylesEnabled:
   type: bool
   webKitLegacyPreferenceKey: WebKitAuthorAndUserStylesEnabledPreferenceKey
@@ -2507,17 +2497,6 @@ WantsBalancedSetDefersLoadingBehavior:
 WebArchiveDebugModeEnabled:
   type: bool
   webKitLegacyPreferenceKey: WebKitWebArchiveDebugModeEnabledPreferenceKey
-  condition: ENABLE(WEB_ARCHIVE)
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: false
-    WebCore:
-      default: false
-
-WebArchiveTestingModeEnabled:
-  type: bool
   condition: ENABLE(WEB_ARCHIVE)
   defaultValue:
     WebKitLegacy:

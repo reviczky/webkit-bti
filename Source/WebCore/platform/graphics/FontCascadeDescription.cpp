@@ -32,6 +32,10 @@
 
 #include <wtf/text/StringHash.h>
 
+#if USE(CORE_TEXT)
+#include "FontCascade.h"
+#endif
+
 namespace WebCore {
 
 struct SameSizeAsFontCascadeDescription {
@@ -129,6 +133,16 @@ String FontCascadeDescription::foldedFamilyName(const String& family)
         return family;
 #endif
     return family.convertToASCIILowercase();
+}
+
+FontSmoothingMode FontCascadeDescription::usedFontSmoothing() const
+{
+    auto fontSmoothingMode = fontSmoothing();
+#if USE(CORE_TEXT)
+    if (FontCascade::shouldDisableFontSubpixelAntialiasingForTesting() && (fontSmoothingMode == FontSmoothingMode::AutoSmoothing || fontSmoothingMode == FontSmoothingMode::SubpixelAntialiased))
+        return FontSmoothingMode::Antialiased;
+#endif
+    return fontSmoothingMode;
 }
 
 } // namespace WebCore

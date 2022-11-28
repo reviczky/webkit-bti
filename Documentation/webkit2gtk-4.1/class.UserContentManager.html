@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.1</p>
+        <p>Library Version: 2.39.2</p>
         
       </div>
       
@@ -108,6 +108,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
     <a class="method" href="method.UserContentManager.register_script_message_handler_in_world.html">register_script_message_handler_in_world</a>
   
+    <a class="method" href="method.UserContentManager.register_script_message_handler_with_reply.html">register_script_message_handler_with_reply</a>
+  
     <a class="method" href="method.UserContentManager.remove_all_filters.html">remove_all_filters</a>
   
     <a class="method" href="method.UserContentManager.remove_all_scripts.html">remove_all_scripts</a>
@@ -139,6 +141,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
     <a class="signal" href="signal.UserContentManager.script-message-received.html">script-message-received</a>
   
+    <a class="signal" href="signal.UserContentManager.script-message-with-reply-received.html">script-message-with-reply-received</a>
+  
   </div>
 </div>
 
@@ -166,7 +170,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitUserContentManager.cpp#L50">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitUserContentManager.cpp#L51">[src]</a>
           
         </h4>
 
@@ -345,6 +349,14 @@ they will affect the web pages loaded&nbsp;afterwards.</p>
         </div>
       
         <div class="">
+          <h6><a href="method.UserContentManager.register_script_message_handler_with_reply.html">webkit_user_content_manager_register_script_message_handler_with_reply</a></h6>
+          <div class="docblock">
+            <p>Registers a new user script message handler in script world with name <code>world_name</code>.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.UserContentManager.remove_all_filters.html">webkit_user_content_manager_remove_all_filters</a></h6>
           <div class="docblock">
             <p>Removes all content filters from the given <code>WebKitUserContentManager</code>.</p>
@@ -457,6 +469,17 @@ they will affect the web pages loaded&nbsp;afterwards.</p>
 <code>webkit_user_content_manager_register_script_message_handler()</code></p>
           </div>
           <div class="docblock"><p>Available since: 2.8</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="signal.UserContentManager.script-message-with-reply-received.html">WebKit2.UserContentManager::script-message-with-reply-received</a></h6>
+          <div class="docblock">
+            <p>This signal is emitted when JavaScript in a web view calls
+<code>window.webkit.messageHandlers.<name>.postMessage()</code>, after registering
+<code><name></code> using
+<code>webkit_user_content_manager_register_script_message_handler_with_reply()</code></p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
         </div>
       
       </div>

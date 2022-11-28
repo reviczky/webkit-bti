@@ -961,11 +961,16 @@ ExceptionOr<void> DOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobalObjec
             }
         }
 
+        auto* globalObject = document()->globalObject();
+        if (!globalObject)
+            return;
+
         UserGestureIndicator userGestureIndicator(userGestureToForward);
         InspectorInstrumentation::willDispatchPostMessage(frame, postMessageIdentifier);
 
-        auto event = MessageEvent::create(message.message.releaseNonNull(), sourceOrigin, { }, incumbentWindowProxy ? std::make_optional(MessageEventSource(WTFMove(incumbentWindowProxy))) : std::nullopt, MessagePort::entanglePorts(*document(), WTFMove(message.transferredPorts)));
-        dispatchEvent(event);
+        auto ports = MessagePort::entanglePorts(*document(), WTFMove(message.transferredPorts));
+        auto event = MessageEvent::create(*globalObject, message.message.releaseNonNull(), sourceOrigin, { }, incumbentWindowProxy ? std::make_optional(MessageEventSource(WTFMove(incumbentWindowProxy))) : std::nullopt, WTFMove(ports));
+        dispatchEvent(event.event);
 
         InspectorInstrumentation::didDispatchPostMessage(frame, postMessageIdentifier);
     });
@@ -1553,6 +1558,14 @@ bool DOMWindow::hasTransientActivation() const
 {
     auto now = MonotonicTime::now();
     return now >= m_lastActivationTimestamp && now < (m_lastActivationTimestamp + transientActivationDuration());
+}
+
+// When the current high resolution time given W is greater than or equal to the last activation timestamp in W,
+// W is said to have sticky activation. (https://html.spec.whatwg.org/multipage/interaction.html#sticky-activation)
+bool DOMWindow::hasStickyActivation() const
+{
+    auto now = MonotonicTime::now();
+    return now >= m_lastActivationTimestamp;
 }
 
 // https://html.spec.whatwg.org/multipage/interaction.html#consume-user-activation
