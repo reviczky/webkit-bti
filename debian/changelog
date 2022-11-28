@@ -14,6 +14,8 @@ webkit2gtk (2.39.2-1) UNRELEASED; urgency=medium
     - Build the 4.1 API version of the WebKit WebDriver if possible.
     - Stop passing -DUSE_LD_GOLD=OFF, this option no longer exists (and
       update reduce-memory-overheads.patch accordingly).
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 14 Nov 2022 13:01:12 +0100
 

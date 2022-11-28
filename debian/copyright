@@ -111,8 +111,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2015 Jordan Harband
            2015 Tobias Reiss <tobi+webkit@basecode.de>
            2015, 2018 Andy VanWagoner <andy@vanwagoner.family>
-           2015, 2018-2019 Janne Grunau
-           2015, 2018-2021 Martin Storsjo
            2015-2016 Sukolsak Sakshuwong <sukolsak@gmail.com>
            2015-2017 Canon Inc
            2015-2020 Devin Rousso <webkit@devinrousso.com>
@@ -128,17 +126,9 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2017 Endless Mobile Inc
            2017 Oleksandr Skachkov <gskackhov@gmail.com>
            2018 Google LLC
-           2018 Niklas Haas
            2018 Yusuke Suzuki <yusukesuzuki@slowstart.org>
            2018 mce sys Ltd
-           2018-2022 Two Orioles, LLC
-           2018-2022 VideoLAN and dav1d authors
-           2019 B Krishnan Iyer
            2019 Carlos Eduardo Ramalho <cadubentzen@gmail.com>
-           2019 James Almer <jamrial@gmail.com>
-           2019 Joe Drago
-           2019 Luca Barbato
-           2019 Michail Alvanos
            2019 the V8 project authors
            2019-2021 Alexey Shvayka <shvaikalesh@gmail.com>
            2020 Cloudinary Inc
@@ -173,8 +163,6 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/ThirdParty/pdfjs/build/*
        Source/ThirdParty/pdfjs/web/*
        Source/WTF/wtf/*
-       Source/WebCore/PAL/libavif/android_jni/gradlew
-       Source/WebCore/PAL/libavif/tests/test_cmd.sh
        Source/WebGPU/WebGPU/metal-cpp/Foundation/*
        Source/WebGPU/WebGPU/metal-cpp/Metal/*
        Source/WebGPU/WebGPU/metal-cpp/QuartzCore/*
@@ -189,7 +177,6 @@ Copyright: 2008-2021 The Khronos Group Inc
            2017 The Abseil Authors
            2020 The SwiftShader Authors
            2020-2022 Apple Inc
-           2022 Google LLC
 License: Apache-2.0
 
 Files: Source/WTF/wtf/Markable.h
@@ -201,10 +188,6 @@ Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
        Source/WTF/wtf/RobinHoodHashTable.h
 Copyright: 2015-2022 Apple Inc
 License: BSD-2-clause or Expat
-
-Files: Source/WebCore/PAL/libavif/dav1d/tools/compat/getopt.c
-Copyright: 2002 Todd C. Miller <Todd.Miller@courtesan.com>
-License: BSD-2-clause or ISC
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
        Source/WTF/wtf/DateMath.cpp
@@ -920,6 +903,7 @@ License: BSL-1.0
 
 Files: Source/JavaScriptCore/Scripts/jsmin.py
        Source/JavaScriptCore/disassembler/zydis/Zydis/*
+       Source/ThirdParty/ANGLE/src/libANGLE/renderer/vulkan/shaders/src/third_party/etc_decoder/etc_decoder.h
        Source/ThirdParty/ANGLE/src/libANGLE/renderer/vulkan/shaders/src/third_party/ffx_spd/*
        Source/ThirdParty/ANGLE/src/third_party/volk/*
        Source/ThirdParty/ANGLE/third_party/renderdoc/src/renderdoc_app.h
@@ -930,6 +914,7 @@ Copyright: 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard
            2015-2018 Baldur Karlsson
            2017-2020 Advanced Micro Devices Inc
            2018-2019 Arseny Kapoulkine <arseny.kapoulkine@gmail.com>
+           2020-2022 Hans-Kristian Arntzen
 License: Expat
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.h
@@ -1466,11 +1451,11 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/html/DOMURL.cpp
        Source/WebCore/html/EmailInputType.cpp
        Source/WebCore/html/FileInputType.cpp
-       Source/WebCore/html/FormAssociatedElement.cpp
        Source/WebCore/html/FormAssociatedElement.h
        Source/WebCore/html/FormController.cpp
        Source/WebCore/html/FormController.h
-       Source/WebCore/html/FormNamedItem.h
+       Source/WebCore/html/FormListedElement.cpp
+       Source/WebCore/html/FormListedElement.h
        Source/WebCore/html/HTMLAnchorElement.cpp
        Source/WebCore/html/HTMLAnchorElement.h
        Source/WebCore/html/HTMLAreaElement.cpp
@@ -2719,7 +2704,6 @@ Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
        Tools/TestWebKitAPI/Tests/WPEQt/*
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestAuthentication.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestAutomationSession.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestConsoleMessage.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestDOMElement.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestEditor.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestFrame.cpp
