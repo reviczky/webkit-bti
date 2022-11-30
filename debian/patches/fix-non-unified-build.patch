@@ -14,3 +14,129 @@ Index: webkitgtk/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
  #include <wtf/Platform.h>
  #include <wtf/PrintStream.h>
  #include <wtf/SafeStrerror.h>
+Index: webkitgtk/Source/WebCore/animation/DeclarativeAnimation.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/animation/DeclarativeAnimation.cpp
++++ webkitgtk/Source/WebCore/animation/DeclarativeAnimation.cpp
+@@ -25,8 +25,10 @@
+ 
+ #include "config.h"
+ #include "DeclarativeAnimation.h"
++#include "DeclarativeAnimationEvent.h"
+ 
+ #include "Animation.h"
++#include "AnimationEventBase.h"
+ #include "CSSAnimation.h"
+ #include "CSSTransition.h"
+ #include "DocumentTimeline.h"
+Index: webkitgtk/Source/WebCore/bindings/js/StructuredClone.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/bindings/js/StructuredClone.cpp
++++ webkitgtk/Source/WebCore/bindings/js/StructuredClone.cpp
+@@ -28,6 +28,7 @@
+ #include "StructuredClone.h"
+ 
+ #include "JSDOMBinding.h"
++#include "JSDOMConvertBufferSource.h"
+ #include "JSDOMExceptionHandling.h"
+ #include <JavaScriptCore/JSTypedArrays.h>
+ 
+Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
++++ webkitgtk/Source/WebCore/css/CSSValue.cpp
+@@ -76,6 +76,7 @@
+ #include "DeprecatedCSSOMPrimitiveValue.h"
+ #include "DeprecatedCSSOMValueList.h"
+ #include "EventTarget.h"
++#include "Rect.h"
+ 
+ namespace WebCore {
+ 
+Index: webkitgtk/Source/WebCore/css/StylePropertyShorthand.h
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/StylePropertyShorthand.h
++++ webkitgtk/Source/WebCore/css/StylePropertyShorthand.h
+@@ -22,6 +22,7 @@
+ #pragma once
+ 
+ #include "CSSPropertyNames.h"
++#include "CSSValueKeywords.h"
+ #include <wtf/Vector.h>
+ 
+ namespace WebCore {
+Index: webkitgtk/Source/WebCore/css/parser/CSSPropertyParser.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/parser/CSSPropertyParser.cpp
++++ webkitgtk/Source/WebCore/css/parser/CSSPropertyParser.cpp
+@@ -33,6 +33,7 @@
+ #include "CSSComputedStyleDeclaration.h"
+ #include "CSSCustomPropertyValue.h"
+ #include "CSSFontPaletteValuesOverrideColorsValue.h"
++#include "CSSFontStyleRangeValue.h"
+ #include "CSSFontVariantLigaturesParser.h"
+ #include "CSSFontVariantNumericParser.h"
+ #include "CSSGridLineNamesValue.h"
+Index: webkitgtk/Source/WebCore/css/parser/CSSPropertyParserHelpers.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/parser/CSSPropertyParserHelpers.cpp
++++ webkitgtk/Source/WebCore/css/parser/CSSPropertyParserHelpers.cpp
+@@ -29,6 +29,8 @@
+ 
+ #include "config.h"
+ #include "CSSPropertyParserHelpers.h"
++#include "CSSPropertyParser.h"
++#include "CSSPropertyParsing.h"
+ 
+ #include "CSSBackgroundRepeatValue.h"
+ #include "CSSBasicShapes.h"
+Index: webkitgtk/Source/WebCore/style/UserAgentStyle.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/style/UserAgentStyle.cpp
++++ webkitgtk/Source/WebCore/style/UserAgentStyle.cpp
+@@ -44,7 +44,9 @@
+ #include "HTMLHtmlElement.h"
+ #include "HTMLInputElement.h"
+ #include "HTMLMediaElement.h"
++#include "HTMLMeterElement.h"
+ #include "HTMLObjectElement.h"
++#include "HTMLProgressElement.h"
+ #include "HTMLSpanElement.h"
+ #include "LegacyMediaQueryEvaluator.h"
+ #include "MathMLElement.h"
+Index: webkitgtk/Source/WebCore/svg/SVGLengthValue.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/svg/SVGLengthValue.cpp
++++ webkitgtk/Source/WebCore/svg/SVGLengthValue.cpp
+@@ -24,6 +24,7 @@
+ 
+ #include "AnimationUtilities.h"
+ #include "CSSPrimitiveValue.h"
++#include "SVGElement.h"
+ #include "SVGLengthContext.h"
+ #include "SVGParserUtilities.h"
+ #include <wtf/text/StringConcatenateNumbers.h>
+Index: webkitgtk/Source/WebKit/Shared/WebEventConversion.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/Shared/WebEventConversion.cpp
++++ webkitgtk/Source/WebKit/Shared/WebEventConversion.cpp
+@@ -24,6 +24,7 @@
+  */
+ 
+ #include "config.h"
++#include "WebEventModifier.h"
+ #include "WebEventConversion.h"
+ 
+ #include "WebKeyboardEvent.h"
+Index: webkitgtk/Source/JavaScriptCore/runtime/WaiterListManager.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/runtime/WaiterListManager.cpp
++++ webkitgtk/Source/JavaScriptCore/runtime/WaiterListManager.cpp
+@@ -27,6 +27,7 @@
+ #include "config.h"
+ #include "WaiterListManager.h"
+ 
++#include "JSCInlines.h"
+ #include "JSGlobalObject.h"
+ #include "JSLock.h"
+ #include "ObjectConstructor.h"
