@@ -140,3 +140,15 @@ Index: webkitgtk/Source/JavaScriptCore/runtime/WaiterListManager.cpp
  #include "JSGlobalObject.h"
  #include "JSLock.h"
  #include "ObjectConstructor.h"
+Index: webkitgtk/Source/WebCore/bindings/js/InternalWritableStream.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/bindings/js/InternalWritableStream.cpp
++++ webkitgtk/Source/WebCore/bindings/js/InternalWritableStream.cpp
+@@ -28,6 +28,7 @@
+ 
+ #include "Exception.h"
+ #include "WebCoreJSClientData.h"
++#include <JavaScriptCore/JSArrayBufferViewInlines.h>
+ 
+ namespace WebCore {
+ 

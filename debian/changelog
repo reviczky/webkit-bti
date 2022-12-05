@@ -1,3 +1,10 @@
+webkit2gtk (2.39.2-2) UNRELEASED; urgency=medium
+
+  * debian/patches/fix-non-unified-build.patch:
+    - Update to fix a FTBFS in mipsel.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 05 Dec 2022 01:00:35 +0100
+
 webkit2gtk (2.39.2-1) experimental; urgency=medium
 
   * New upstream development release.
