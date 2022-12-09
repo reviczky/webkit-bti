@@ -2,6 +2,9 @@ webkit2gtk (2.39.2-2) UNRELEASED; urgency=medium
 
   * debian/patches/fix-non-unified-build.patch:
     - Update to fix a FTBFS in mipsel.
+  * debian/control.in:
+    - Require libgstreamer-plugins-bad1.0-dev >= 1.20.0, this is needed
+      for USE_GSTREAMER_TRANSCODER.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 05 Dec 2022 01:00:35 +0100
 
