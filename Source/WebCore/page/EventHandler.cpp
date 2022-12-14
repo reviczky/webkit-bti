@@ -696,6 +696,7 @@ bool EventHandler::handleMousePressEventSingleClick(const MouseEventWithHitTestR
                     baseNode = newSelection.base().containerNode();
                 if (baseNode) {
                     auto expandedBaseSelection = expandSelectionToRespectSelectOnMouseDown(*baseNode, VisibleSelection { newSelection.visibleBase() });
+                    expandedBaseSelection.expandUsingGranularity(m_frame.selection().granularity());
                     if (expandedBaseSelection.isRange()) {
                         if (newSelection.isBaseFirst() && pos < newSelection.start())
                             newSelection.setBase(expandedBaseSelection.end());
@@ -2346,7 +2347,7 @@ static std::pair<bool, RefPtr<Frame>> contentFrameForNode(Node* target)
     if (!is<HTMLFrameElementBase>(target))
         return { false, nullptr };
 
-    return { true, downcast<HTMLFrameElementBase>(*target).contentFrame() };
+    return { true, dynamicDowncast<LocalFrame>(downcast<HTMLFrameElementBase>(*target).contentFrame()) };
 }
 
 static std::optional<DragOperation> convertDropZoneOperationToDragOperation(const String& dragOperation)

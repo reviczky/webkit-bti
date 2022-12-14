@@ -35,29 +35,14 @@ namespace WebCore {
 
 std::unique_ptr<FilterTargetSwitcher> FilterTargetSwitcher::create(GraphicsContext& destinationContext, Filter& filter, const FloatRect &sourceImageRect, const DestinationColorSpace& colorSpace, FilterResults* results)
 {
-    if (filter.filterRenderingMode() == FilterRenderingMode::GraphicsContext)
-        return makeUnique<FilterStyleTargetSwitcher>(destinationContext, filter, sourceImageRect);
+    if (filter.filterRenderingModes().contains(FilterRenderingMode::GraphicsContext))
+        return makeUnique<FilterStyleTargetSwitcher>(filter, sourceImageRect);
     return makeUnique<FilterImageTargetSwitcher>(destinationContext, filter, sourceImageRect, colorSpace, results);
 }
 
 FilterTargetSwitcher::FilterTargetSwitcher(Filter& filter)
     : m_filter(&filter)
 {
-}
-
-void FilterTargetSwitcher::willDrawSourceImage(GraphicsContext& destinationContext, const FloatRect& repaintRect)
-{
-    if (auto* context = drawingContext(destinationContext)) {
-        context->save();
-        context->clearRect(repaintRect);
-        context->clip(repaintRect);
-    }
-}
-
-void FilterTargetSwitcher::didDrawSourceImage(GraphicsContext& destinationContext)
-{
-    if (auto* context = drawingContext(destinationContext))
-        context->restore();
 }
 
 } // namespace WebCore

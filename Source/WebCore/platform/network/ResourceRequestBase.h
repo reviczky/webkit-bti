@@ -132,7 +132,7 @@ public:
     WEBCORE_EXPORT void setCachePolicy(ResourceRequestCachePolicy cachePolicy);
     
     WEBCORE_EXPORT double timeoutInterval() const; // May return 0 when using platform default.
-    void setTimeoutInterval(double timeoutInterval);
+    WEBCORE_EXPORT void setTimeoutInterval(double);
     
     WEBCORE_EXPORT const URL& firstPartyForCookies() const;
     WEBCORE_EXPORT void setFirstPartyForCookies(const URL&);
@@ -212,7 +212,7 @@ public:
     bool platformRequestUpdated() const { return m_platformRequestUpdated; }
 
     WEBCORE_EXPORT bool allowCookies() const;
-    void setAllowCookies(bool allowCookies);
+    WEBCORE_EXPORT void setAllowCookies(bool);
 
     WEBCORE_EXPORT ResourceLoadPriority priority() const;
     WEBCORE_EXPORT void setPriority(ResourceLoadPriority);
@@ -334,6 +334,18 @@ template<> struct EnumTraits<WebCore::ResourceRequestCachePolicy> {
     >;
 };
 
+template<> struct EnumTraitsForPersistence<WebCore::ResourceRequestCachePolicy> {
+    using values = EnumValues<
+        WebCore::ResourceRequestCachePolicy,
+        WebCore::ResourceRequestCachePolicy::UseProtocolCachePolicy,
+        WebCore::ResourceRequestCachePolicy::ReloadIgnoringCacheData,
+        WebCore::ResourceRequestCachePolicy::ReturnCacheDataElseLoad,
+        WebCore::ResourceRequestCachePolicy::ReturnCacheDataDontLoad,
+        WebCore::ResourceRequestCachePolicy::DoNotUseAnyCache,
+        WebCore::ResourceRequestCachePolicy::RefreshAnyCacheData
+    >;
+};
+
 template<> struct EnumTraits<WebCore::ResourceRequestBase::SameSiteDisposition> {
     using values = EnumValues<
         WebCore::ResourceRequestBase::SameSiteDisposition,
@@ -343,7 +355,31 @@ template<> struct EnumTraits<WebCore::ResourceRequestBase::SameSiteDisposition> 
     >;
 };
 
+template<> struct EnumTraitsForPersistence<WebCore::ResourceRequestBase::SameSiteDisposition> {
+    using values = EnumValues<
+        WebCore::ResourceRequestBase::SameSiteDisposition,
+        WebCore::ResourceRequestBase::SameSiteDisposition::Unspecified,
+        WebCore::ResourceRequestBase::SameSiteDisposition::SameSite,
+        WebCore::ResourceRequestBase::SameSiteDisposition::CrossSite
+    >;
+};
+
 template<> struct EnumTraits<WebCore::ResourceRequestRequester> {
+    using values = EnumValues<
+        WebCore::ResourceRequestRequester,
+        WebCore::ResourceRequestRequester::Unspecified,
+        WebCore::ResourceRequestRequester::Main,
+        WebCore::ResourceRequestRequester::XHR,
+        WebCore::ResourceRequestRequester::Fetch,
+        WebCore::ResourceRequestRequester::Media,
+        WebCore::ResourceRequestRequester::ImportScripts,
+        WebCore::ResourceRequestRequester::Ping,
+        WebCore::ResourceRequestRequester::Beacon,
+        WebCore::ResourceRequestRequester::EventSource
+    >;
+};
+
+template<> struct EnumTraitsForPersistence<WebCore::ResourceRequestRequester> {
     using values = EnumValues<
         WebCore::ResourceRequestRequester,
         WebCore::ResourceRequestRequester::Unspecified,

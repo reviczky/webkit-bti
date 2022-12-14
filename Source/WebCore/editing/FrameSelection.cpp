@@ -27,8 +27,10 @@
 #include "FrameSelection.h"
 
 #include "AXObjectCache.h"
+#include "CaretAnimator.h"
 #include "CharacterData.h"
 #include "ColorBlending.h"
+#include "DOMWindow.h"
 #include "DeleteSelectionCommand.h"
 #include "DocumentInlines.h"
 #include "Editing.h"
@@ -69,6 +71,7 @@
 #include "RenderedPosition.h"
 #include "ScriptDisallowedScope.h"
 #include "Settings.h"
+#include "SimpleCaretAnimator.h"
 #include "SimpleRange.h"
 #include "SpatialNavigation.h"
 #include "StyleProperties.h"
@@ -163,14 +166,10 @@ static inline bool isPageActive(Document* document)
 FrameSelection::FrameSelection(Document* document)
     : m_document(document)
     , m_granularity(TextGranularity::CharacterGranularity)
-#if ENABLE(TEXT_CARET)
-    , m_caretBlinkTimer(*this, &FrameSelection::caretBlinkTimerFired)
-#endif
     , m_appearanceUpdateTimer(*this, &FrameSelection::appearanceUpdateTimerFired)
+    , m_caretAnimator(makeUniqueRef<SimpleCaretAnimator>(*this))
     , m_caretInsidePositionFixed(false)
     , m_absCaretBoundsDirty(true)
-    , m_caretPaint(true)
-    , m_isCaretBlinkingSuspended(false)
     , m_focused(document && document->frame() && document->page() && document->page()->focusController().focusedFrame() == document->frame())
     , m_isActive(isPageActive(document))
     , m_shouldShowBlockCursor(false)
@@ -178,7 +177,6 @@ FrameSelection::FrameSelection(Document* document)
     , m_alwaysAlignCursorOnScrollWhenRevealingSelection(false)
 #if PLATFORM(IOS_FAMILY)
     , m_updateAppearanceEnabled(false)
-    , m_caretBlinks(true)
 #endif
 {
     if (shouldAlwaysUseDirectionalSelection(m_document.get()))
@@ -194,6 +192,8 @@ FrameSelection::FrameSelection(Document* document)
     setCaretVisibility(activeAndFocused ? Visible : Hidden, ShouldUpdateAppearance::No);
 #endif
 }
+
+FrameSelection::~FrameSelection() = default;
 
 Element* FrameSelection::rootEditableElementOrDocumentElement() const
 {
@@ -682,18 +682,29 @@ void FrameSelection::textWasReplaced(CharacterData& node, unsigned offset, unsig
     if (isNone() || !node.isConnected())
         return;
 
+    Position anchor = m_selection.anchor();
+    Position focus = m_selection.focus();
     Position base = m_selection.base();
     Position extent = m_selection.extent();
     Position start = m_selection.start();
     Position end = m_selection.end();
+    if (m_document->settings().liveRangeSelectionEnabled()) {
+        updatePositionAfterAdoptingTextReplacement(anchor, node, offset, oldLength, newLength);
+        updatePositionAfterAdoptingTextReplacement(focus, node, offset, oldLength, newLength);
+    }
     updatePositionAfterAdoptingTextReplacement(base, node, offset, oldLength, newLength);
     updatePositionAfterAdoptingTextReplacement(extent, node, offset, oldLength, newLength);
     updatePositionAfterAdoptingTextReplacement(start, node, offset, oldLength, newLength);
     updatePositionAfterAdoptingTextReplacement(end, node, offset, oldLength, newLength);
 
-    if (base != m_selection.base() || extent != m_selection.extent() || start != m_selection.start() || end != m_selection.end()) {
+    bool liveRangeSelectionEnabled = node.document().settings().liveRangeSelectionEnabled();
+    if ((liveRangeSelectionEnabled && (anchor != m_selection.anchor() || focus != m_selection.focus()))
+        || base != m_selection.base() || extent != m_selection.extent() || start != m_selection.start() || end != m_selection.end()) {
         VisibleSelection newSelection;
-        if (base != extent)
+
+        if (liveRangeSelectionEnabled)
+            newSelection.setWithoutValidation(anchor, focus);
+        else if (base != extent)
             newSelection.setWithoutValidation(base, extent);
         else if (m_selection.isDirectional() && !m_selection.isBaseFirst())
             newSelection.setWithoutValidation(end, start);
@@ -1641,7 +1652,7 @@ void FrameSelection::willBeRemovedFromFrame()
     m_granularity = TextGranularity::CharacterGranularity;
 
 #if ENABLE(TEXT_CARET)
-    m_caretBlinkTimer.stop();
+    caretAnimator().stop();
 #endif
 
     if (auto* view = m_document->renderView())
@@ -1706,6 +1717,15 @@ bool CaretBase::updateCaretRect(Document& document, const VisiblePosition& caret
     m_caretLocalRect = localCaretRectInRendererForCaretPainting(caretPosition, renderer);
     return !m_caretLocalRect.isEmpty();
 }
+
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/FrameSelectionAdditions.cpp>
+#else
+void CaretBase::fillCaretRect(const Node&, GraphicsContext& context, const FloatRect& caret, const Color& color) const
+{
+    context.fillRect(caret, color);
+}
+#endif
 
 RenderBlock* FrameSelection::caretRendererWithoutUpdatingLayout() const
 {
@@ -1839,7 +1859,7 @@ void CaretBase::invalidateCaretRect(Node* node, bool caretRectChanged)
 
 void FrameSelection::paintCaret(GraphicsContext& context, const LayoutPoint& paintOffset, const LayoutRect& clipRect)
 {
-    if (m_selection.isCaret() && m_caretPaint && m_selection.start().deprecatedNode())
+    if (m_selection.isCaret() && caretAnimator().isVisible() && m_selection.start().deprecatedNode())
         CaretBase::paintCaret(*m_selection.start().deprecatedNode(), context, paintOffset, clipRect);
 }
 
@@ -1886,13 +1906,33 @@ void CaretBase::paintCaret(const Node& node, GraphicsContext& context, const Lay
         caretColor = CaretBase::computeCaretColor(element->renderer()->style(), &node);
 
     auto pixelSnappedCaretRect = snapRectToDevicePixels(caret, node.document().deviceScaleFactor());
-    context.fillRect(pixelSnappedCaretRect, caretColor);
+    fillCaretRect(node, context, pixelSnappedCaretRect, caretColor);
 #else
     UNUSED_PARAM(node);
     UNUSED_PARAM(context);
     UNUSED_PARAM(paintOffset);
     UNUSED_PARAM(clipRect);
 #endif
+}
+
+void FrameSelection::setCaretBlinkingSuspended(bool suspended)
+{
+    caretAnimator().setBlinkingSuspended(suspended);
+}
+
+bool FrameSelection::isCaretBlinkingSuspended() const
+{
+    return caretAnimator().isBlinkingSuspended();
+}
+
+void FrameSelection::caretAnimationDidUpdate(CaretAnimator&)
+{
+    invalidateCaretRect();
+}
+
+Document* FrameSelection::document()
+{
+    return m_document.get();
 }
 
 void FrameSelection::debugRenderer(RenderObject* renderer, bool selected) const
@@ -2229,18 +2269,15 @@ void FrameSelection::updateAppearance()
     // If the caret moved, stop the blink timer so we can restart with a
     // black caret in the new location.
     if (caretRectChangedOrCleared || !shouldBlink || shouldStopBlinkingDueToTypingCommand(m_document.get()))
-        m_caretBlinkTimer.stop();
+        caretAnimator().stop();
 
     // Start blinking with a black caret. Be sure not to restart if we're
     // already blinking in the right location.
-    if (shouldBlink && !m_caretBlinkTimer.isActive()) {
-        if (Seconds blinkInterval = RenderTheme::singleton().caretBlinkInterval())
-            m_caretBlinkTimer.startRepeating(blinkInterval);
+    if (shouldBlink && !caretAnimator().isActive()) {
+        if (m_document && m_document->domWindow())
+            caretAnimator().start(m_document->domWindow()->nowTimestamp());
 
-        if (!m_caretPaint) {
-            m_caretPaint = true;
-            invalidateCaretRect();
-        }
+        caretAnimator().setVisible(true);
     }
 #endif
 
@@ -2299,29 +2336,13 @@ void FrameSelection::setCaretVisibility(CaretVisibility visibility, ShouldUpdate
         updateSelectionAppearanceNow();
 
 #if ENABLE(TEXT_CARET)
-    if (m_caretPaint) {
-        m_caretPaint = false;
-        invalidateCaretRect();
-    }
+    caretAnimator().setVisible(false);
+
     CaretBase::setCaretVisibility(visibility);
 #endif
 
     if (doAppearanceUpdate == ShouldUpdateAppearance::Yes)
         updateAppearance();
-}
-
-void FrameSelection::caretBlinkTimerFired()
-{
-#if ENABLE(TEXT_CARET)
-    if (!isCaret())
-        return;
-    ASSERT(caretIsVisible());
-    bool caretPaint = m_caretPaint;
-    if (isCaretBlinkingSuspended() && caretPaint)
-        return;
-    m_caretPaint = !caretPaint;
-    invalidateCaretRect();
-#endif
 }
 
 // Helper function that tells whether a particular node is an element that has an entire
@@ -2870,28 +2891,11 @@ void FrameSelection::clearCurrentSelection()
     setSelection(VisibleSelection());
 }
 
-void FrameSelection::setCaretBlinks(bool caretBlinks)
-{
-    if (m_caretBlinks == caretBlinks)
-        return;
-#if ENABLE(TEXT_CARET)
-    m_document->updateLayoutIgnorePendingStylesheets();
-    if (m_caretPaint) {
-        m_caretPaint = false; 
-        invalidateCaretRect(); 
-    }
-#endif
-    if (caretBlinks)
-        setFocusedElementIfNeeded();
-    m_caretBlinks = caretBlinks;
-    updateAppearance();
-}
-
 void FrameSelection::setCaretColor(const Color& caretColor)
 {
     if (m_caretColor != caretColor) {
         m_caretColor = caretColor;
-        if (caretIsVisible() && m_caretBlinks && isCaret())
+        if (caretIsVisible() && isCaret())
             invalidateCaretRect();
     }
 }

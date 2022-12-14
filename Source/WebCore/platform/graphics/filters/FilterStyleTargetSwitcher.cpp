@@ -31,13 +31,13 @@
 
 namespace WebCore {
 
-FilterStyleTargetSwitcher::FilterStyleTargetSwitcher(GraphicsContext&, Filter& filter, const FloatRect& sourceImageRect)
+FilterStyleTargetSwitcher::FilterStyleTargetSwitcher(Filter& filter, const FloatRect& sourceImageRect)
     : FilterTargetSwitcher(filter)
     , m_filterStyles(filter.createFilterStyles(sourceImageRect))
 {
 }
 
-void FilterStyleTargetSwitcher::willDrawSourceImage(GraphicsContext& destinationContext, const FloatRect&)
+void FilterStyleTargetSwitcher::beginDrawSourceImage(GraphicsContext& destinationContext)
 {
     for (auto& filterStyle : m_filterStyles) {
         destinationContext.save();
@@ -47,7 +47,7 @@ void FilterStyleTargetSwitcher::willDrawSourceImage(GraphicsContext& destination
     }
 }
 
-void FilterStyleTargetSwitcher::didDrawSourceImage(GraphicsContext& destinationContext)
+void FilterStyleTargetSwitcher::endDrawSourceImage(GraphicsContext& destinationContext)
 {
     for ([[maybe_unused]] auto& filterStyle : makeReversedRange(m_filterStyles)) {
         destinationContext.endTransparencyLayer();

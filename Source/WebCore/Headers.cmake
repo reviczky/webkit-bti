@@ -2,6 +2,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/WebGPU/GPU.h
     Modules/WebGPU/GPUAdapter.h
     Modules/WebGPU/GPUAddressMode.h
+    Modules/WebGPU/GPUAutoLayoutMode.h
     Modules/WebGPU/GPUBindGroup.h
     Modules/WebGPU/GPUBindGroupDescriptor.h
     Modules/WebGPU/GPUBindGroupEntry.h
@@ -625,9 +626,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/DeprecatedCSSOMValue.h
     css/DeprecatedCSSOMValueList.h
     css/FontLoadTimingOverride.h
-    css/LegacyMediaQueryEvaluator.h
     css/MediaList.h
-    css/MediaQueryExpression.h
     css/MediaQueryParserContext.h
     css/Rect.h
     css/StyleColor.h
@@ -853,6 +852,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     editing/TextIterator.h
     editing/TextIteratorBehavior.h
     editing/TextManipulationController.h
+    editing/TextManipulationItem.h
+    editing/TextManipulationToken.h
     editing/UndoStep.h
     editing/VisiblePosition.h
     editing/VisibleSelection.h
@@ -1249,6 +1250,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/ReducedResolutionSeconds.h
     page/RemoteDOMWindow.h
     page/RemoteFrame.h
+    page/RemoteFrameClient.h
     page/RenderingUpdateScheduler.h
     page/ScreenOrientationLockType.h
     page/ScreenOrientationType.h
@@ -1295,6 +1297,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/WheelEventTestMonitor.h
     page/WindowFeatures.h
     page/WindowOrWorkerGlobalScope.h
+    page/WorkerClient.h
 
     page/csp/CSPViolationReportBody.h
     page/csp/ContentSecurityPolicy.h
@@ -1331,6 +1334,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/scrolling/ThreadedScrollingTree.h
 
     platform/AbortableTaskQueue.h
+    platform/CaretAnimator.h
     platform/CPUMonitor.h
     platform/ColorChooser.h
     platform/ColorChooserClient.h
@@ -1361,6 +1365,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/FileMonitor.h
     platform/FileStreamClient.h
     platform/FloatConversion.h
+    platform/GraphicsClient.h
     platform/HostWindow.h
     platform/KeyboardScrollingAnimator.h
     platform/KeyboardScroll.h
@@ -1453,6 +1458,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/SharedBuffer.h
     platform/SharedBufferChunkReader.h
     platform/SharedStringHash.h
+    platform/SimpleCaretAnimator.h
     platform/SleepDisabler.h
     platform/SleepDisablerClient.h
     platform/SleepDisablerIdentifier.h
@@ -1772,6 +1778,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/filters/SourceGraphic.h
     platform/graphics/filters/SpotLightSource.h
 
+    platform/graphics/formcontrols/ControlPartType.h
+
     platform/graphics/iso/ISOBox.h
     platform/graphics/iso/ISOOriginalFormatBox.h
     platform/graphics/iso/ISOProtectionSchemeInfoBox.h
@@ -1788,8 +1796,13 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/opentype/OpenTypeVerticalData.h
 
     platform/graphics/transforms/AffineTransform.h
+    platform/graphics/transforms/IdentityTransformOperation.h
+    platform/graphics/transforms/Matrix3DTransformOperation.h
+    platform/graphics/transforms/MatrixTransformOperation.h
+    platform/graphics/transforms/PerspectiveTransformOperation.h
     platform/graphics/transforms/RotateTransformOperation.h
     platform/graphics/transforms/ScaleTransformOperation.h
+    platform/graphics/transforms/SkewTransformOperation.h
     platform/graphics/transforms/TransformOperation.h
     platform/graphics/transforms/TransformOperations.h
     platform/graphics/transforms/TransformState.h
@@ -1934,6 +1947,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     plugins/PluginViewBase.h
 
     rendering/BreakLines.h
+    rendering/CaretRectComputation.h
     rendering/CSSFilter.h
     rendering/ClipRect.h
     rendering/EventRegion.h
@@ -2047,6 +2061,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/StyleScrollSnapPoints.h
     rendering/style/StyleSelfAlignmentData.h
     rendering/style/StyleSurroundData.h
+    rendering/style/StyleTextEdge.h
     rendering/style/StyleTransformData.h
     rendering/style/StyleVisualData.h
     rendering/style/TextDecorationThickness.h
@@ -2080,6 +2095,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     svg/SVGLengthValue.h
     svg/SVGParserUtilities.h
     svg/SVGParsingError.h
+    svg/SVGPathByteStream.h
+    svg/SVGPathConsumer.h
+    svg/SVGPathUtilities.h
     svg/SVGPreserveAspectRatioValue.h
     svg/SVGStringList.h
     svg/SVGTests.h
