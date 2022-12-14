@@ -5,7 +5,7 @@ webkit2gtk (2.39.3-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
   * debian/patches/fix-non-unified-build.patch:
-    - Update to fix a FTBFS in mipsel.
+    - Update for 2.93.3.
   * debian/control.in:
     - Require libgstreamer-plugins-bad1.0-dev >= 1.20.0, this is needed
       for USE_GSTREAMER_TRANSCODER.

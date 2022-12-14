@@ -152,3 +152,212 @@ Index: webkitgtk/Source/WebCore/bindings/js/InternalWritableStream.cpp
  
  namespace WebCore {
  
+Index: webkitgtk/Source/WebCore/css/ComputedStyleExtractor.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/ComputedStyleExtractor.cpp
++++ webkitgtk/Source/WebCore/css/ComputedStyleExtractor.cpp
+@@ -43,6 +43,7 @@
+ #include "CSSPropertyAnimation.h"
+ #include "CSSRayValue.h"
+ #include "CSSReflectValue.h"
++#include "CSSRegisteredCustomProperty.h"
+ #include "CSSShadowValue.h"
+ #include "CSSTimingFunctionValue.h"
+ #include "CSSTransformListValue.h"
+Index: webkitgtk/Source/WebCore/css/CSSCustomPropertyValue.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/CSSCustomPropertyValue.cpp
++++ webkitgtk/Source/WebCore/css/CSSCustomPropertyValue.cpp
+@@ -27,9 +27,11 @@
+ #include "CSSCustomPropertyValue.h"
+ 
+ #include "CSSCalcValue.h"
++#include "CSSMarkup.h"
+ #include "CSSParserIdioms.h"
+ #include "CSSTokenizer.h"
+ #include "ColorSerialization.h"
++#include "RenderStyle.h"
+ 
+ namespace WebCore {
+ 
+Index: webkitgtk/Source/WebCore/css/CSSValueList.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/CSSValueList.cpp
++++ webkitgtk/Source/WebCore/css/CSSValueList.cpp
+@@ -21,6 +21,7 @@
+ #include "config.h"
+ #include "CSSValueList.h"
+ 
++#include "CSSPrimitiveValue.h"
+ #include <wtf/text/StringBuilder.h>
+ 
+ namespace WebCore {
+Index: webkitgtk/Source/WebCore/css/parser/CSSPropertySyntax.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/parser/CSSPropertySyntax.cpp
++++ webkitgtk/Source/WebCore/css/parser/CSSPropertySyntax.cpp
+@@ -26,6 +26,7 @@
+ #include "CSSPropertySyntax.h"
+ 
+ #include "CSSParserIdioms.h"
++#include "CSSParserTokenRange.h"
+ #include "CSSTokenizer.h"
+ #include "ParsingUtilities.h"
+ 
+Index: webkitgtk/Source/WebCore/css/query/MediaQueryParser.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/query/MediaQueryParser.cpp
++++ webkitgtk/Source/WebCore/css/query/MediaQueryParser.cpp
+@@ -25,6 +25,7 @@
+ #include "config.h"
+ #include "MediaQueryParser.h"
+ 
++#include "CommonAtomStrings.h"
+ #include "CSSMarkup.h"
+ #include "CSSTokenizer.h"
+ #include "CSSValueKeywords.h"
+Index: webkitgtk/Source/WebCore/css/typedom/InlineStylePropertyMap.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/typedom/InlineStylePropertyMap.cpp
++++ webkitgtk/Source/WebCore/css/typedom/InlineStylePropertyMap.cpp
+@@ -26,7 +26,10 @@
+ #include "config.h"
+ #include "InlineStylePropertyMap.h"
+ 
++#include "CSSCustomPropertyValue.h"
++#include "Document.h"
+ #include "StyledElement.h"
++#include "StyleProperties.h"
+ 
+ namespace WebCore {
+ 
+Index: webkitgtk/Source/WebCore/page/FrameSnapshotting.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/page/FrameSnapshotting.cpp
++++ webkitgtk/Source/WebCore/page/FrameSnapshotting.cpp
+@@ -39,6 +39,7 @@
+ #include "FrameView.h"
+ #include "GeometryUtilities.h"
+ #include "GraphicsContext.h"
++#include "HostWindow.h"
+ #include "ImageBuffer.h"
+ #include "Page.h"
+ #include "RenderAncestorIterator.h"
+Index: webkitgtk/Source/WebCore/rendering/GridMasonryLayout.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/rendering/GridMasonryLayout.cpp
++++ webkitgtk/Source/WebCore/rendering/GridMasonryLayout.cpp
+@@ -23,6 +23,7 @@
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ #include "config.h"
++#include "RenderGrid.h"
+ #include "GridMasonryLayout.h"
+ 
+ #include "GridLayoutFunctions.h"
+Index: webkitgtk/Source/WebCore/page/RemoteFrame.h
+===================================================================
+--- webkitgtk.orig/Source/WebCore/page/RemoteFrame.h
++++ webkitgtk/Source/WebCore/page/RemoteFrame.h
+@@ -28,6 +28,7 @@
+ #include "AbstractFrame.h"
+ #include <wtf/RefPtr.h>
+ #include <wtf/TypeCasts.h>
++#include <wtf/UniqueRef.h>
+ 
+ namespace WebCore {
+ 
+Index: webkitgtk/Source/WebCore/page/RemoteFrame.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/page/RemoteFrame.cpp
++++ webkitgtk/Source/WebCore/page/RemoteFrame.cpp
+@@ -26,6 +26,8 @@
+ #include "config.h"
+ #include "RemoteFrame.h"
+ 
++#include "Document.h"
++#include "HTMLFrameOwnerElement.h"
+ #include "RemoteDOMWindow.h"
+ #include "RemoteFrameClient.h"
+ 
+Index: webkitgtk/Source/WebKit/Shared/WebPageCreationParameters.h
+===================================================================
+--- webkitgtk.orig/Source/WebKit/Shared/WebPageCreationParameters.h
++++ webkitgtk/Source/WebKit/Shared/WebPageCreationParameters.h
+@@ -40,6 +40,7 @@
+ #include <WebCore/ContentSecurityPolicy.h>
+ #include <WebCore/DestinationColorSpace.h>
+ #include <WebCore/FloatSize.h>
++#include <WebCore/FrameIdentifier.h>
+ #include <WebCore/HighlightVisibility.h>
+ #include <WebCore/IntSize.h>
+ #include <WebCore/LayoutMilestone.h>
+Index: webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.h
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/ProvisionalFrameProxy.h
++++ webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.h
+@@ -27,7 +27,11 @@
+ 
+ #include "MessageReceiver.h"
+ #include "MessageSender.h"
++#include "UserData.h"
++#include "VisitedLinkStore.h"
+ #include "WebPageProxyIdentifier.h"
++#include <WebCore/DocumentLoader.h>
++#include <WebCore/CertificateInfo.h>
+ #include <WebCore/FrameIdentifier.h>
+ #include <WebCore/FrameLoaderTypes.h>
+ #include <WebCore/PageIdentifier.h>
+Index: webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebWorkerClient.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/WebProcess/WebCoreSupport/WebWorkerClient.cpp
++++ webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebWorkerClient.cpp
+@@ -29,6 +29,7 @@
+ #include "ImageBufferShareableBitmapBackend.h"
+ #include "RemoteImageBufferProxy.h"
+ #include "RemoteRenderingBackendProxy.h"
++#include "WebPage.h"
+ 
+ #if ENABLE(WEBGL) && ENABLE(GPU_PROCESS)
+ #include "RemoteGraphicsContextGLProxy.h"
+Index: webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/ProvisionalFrameProxy.cpp
++++ webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.cpp
+@@ -32,9 +32,12 @@
+ #include "LoadParameters.h"
+ #include "WebFrameProxy.h"
+ #include "WebFrameProxyMessages.h"
++#include "WebPageMessages.h"
+ #include "WebPageProxyMessages.h"
+ #include "WebProcessMessages.h"
+ 
++using namespace WebCore;
++
+ namespace WebKit {
+ 
+ ProvisionalFrameProxy::ProvisionalFrameProxy(WebFrameProxy& frame, Ref<WebProcessProxy>&& process, const WebCore::ResourceRequest& request)
+Index: webkitgtk/Source/WebKit/UIProcess/Notifications/ServiceWorkerNotificationHandler.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/Notifications/ServiceWorkerNotificationHandler.cpp
++++ webkitgtk/Source/WebKit/UIProcess/Notifications/ServiceWorkerNotificationHandler.cpp
+@@ -26,6 +26,7 @@
+ #include "config.h"
+ #include "ServiceWorkerNotificationHandler.h"
+ 
++#include "Logging.h"
+ #include "WebsiteDataStore.h"
+ #include <WebCore/NotificationData.h>
+ #include <wtf/Scope.h>
+Index: webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebRemoteFrameClient.h
+===================================================================
+--- webkitgtk.orig/Source/WebKit/WebProcess/WebCoreSupport/WebRemoteFrameClient.h
++++ webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebRemoteFrameClient.h
+@@ -26,6 +26,7 @@
+ #pragma once
+ 
+ #include <WebCore/RemoteFrameClient.h>
++#include "WebFrame.h"
+ 
+ namespace WebKit {
+ 
