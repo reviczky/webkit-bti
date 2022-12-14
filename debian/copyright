@@ -16,7 +16,6 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2005, 2007-2022 Google Inc
            2005, 2008-2013 Nokia
            2005-2006 Alexey Proskuryakov
-           2005-2006 Kimmo Kinnunen <kimmo.t.kinnunen@nokia.com>
            2005-2008 Eric Seidel <eric@webkit.org>
            2006 Alexander Kellett <lypanov@kde.org>
            2006 Graham Dennis <graham.dennis@gmail.com>
@@ -887,7 +886,7 @@ Files: Source/WebCore/css/CSSSupportsRule.cpp
        Source/WebKit/UIProcess/API/glib/WebKitSettings.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitSettings.cpp
 Copyright: 2011-2012 Motorola Mobility
-           2020 Apple Inc
+           2020, 2022 Apple Inc
 License: BSD-3-clause-motorola
 
 Files: Source/WebCore/html/track/VTTScanner.cpp
@@ -1287,8 +1286,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/css/ComputedStyleExtractor.h
        Source/WebCore/css/Counter.h
        Source/WebCore/css/DeprecatedCSSOMRGBColor.h
-       Source/WebCore/css/MediaFeatureNames.cpp
-       Source/WebCore/css/MediaFeatureNames.h
        Source/WebCore/css/MediaList.cpp
        Source/WebCore/css/MediaList.h
        Source/WebCore/css/MediaQueryList.cpp
@@ -1755,6 +1752,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/nicosia/*
        Source/WebCore/platform/graphics/texmap/*
        Source/WebCore/platform/graphics/transforms/*
+       Source/WebCore/platform/gstreamer/*
        Source/WebCore/platform/gtk/*
        Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp
        Source/WebCore/platform/mediarecorder/*
@@ -2458,6 +2456,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/WebKitOptionMenuItemPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitOptionMenuPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitPermissionRequest.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitPermissionStateQuery.cpp
+       Source/WebKit/UIProcess/API/glib/WebKitPermissionStateQueryPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitPlugin.cpp
        Source/WebKit/UIProcess/API/glib/WebKitPointerLockPermissionRequest.cpp
        Source/WebKit/UIProcess/API/glib/WebKitPointerLockPermissionRequestPrivate.h
@@ -2698,6 +2698,8 @@ Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitScriptWorld.cpp
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebEditor.cpp
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebExtension.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebFormManager.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebFormManagerPrivate.h
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebHitTestResult.cpp
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebPage.cpp
        Tools/TestWebKitAPI/Tests/JavaScriptCore/glib/TestJSC.cpp
@@ -2732,7 +2734,7 @@ Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
        Tools/TestWebKitAPI/Tests/WebKitGtk/TestWebKitVersion.cpp
        Tools/TestWebKitAPI/Tests/WebKitGtk/TestWebViewEditor.cpp
 Copyright: 2010 Tieto Corporation
-           2011-2015, 2017-2020 Igalia S.L.
+           2011-2015, 2017-2020, 2022 Igalia S.L.
            2014, 2021 Collabora Ltd
            2015 Red Hat Inc
            2017 Aidan Holm <aidanholm@gmail.com>
