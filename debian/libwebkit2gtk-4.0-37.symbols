@@ -1650,6 +1650,13 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_permission_request_allow@Base 2.5.3
  webkit_permission_request_deny@Base 2.5.3
  webkit_permission_request_get_type@Base 2.5.3
+ webkit_permission_state_get_type@Base 2.39.3
+ webkit_permission_state_query_finish@Base 2.39.3
+ webkit_permission_state_query_get_name@Base 2.39.3
+ webkit_permission_state_query_get_security_origin@Base 2.39.3
+ webkit_permission_state_query_get_type@Base 2.39.3
+ webkit_permission_state_query_ref@Base 2.39.3
+ webkit_permission_state_query_unref@Base 2.39.3
  webkit_plugin_error_get_type@Base 2.5.3
  webkit_plugin_error_quark@Base 2.5.3
  webkit_plugin_get_description@Base 2.5.3
@@ -2008,6 +2015,11 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_extension_mode_get_type@Base 2.37.1
  webkit_web_extension_send_message_to_context@Base 2.27.2
  webkit_web_extension_send_message_to_context_finish@Base 2.27.2
+ webkit_web_form_manager_get_type@Base 2.39.3
+ webkit_web_form_manager_input_element_auto_fill@Base 2.39.3
+ webkit_web_form_manager_input_element_is_auto_filled@Base 2.39.3
+ webkit_web_form_manager_input_element_is_user_edited@Base 2.39.3
+ webkit_web_hit_test_result_get_js_node@Base 2.39.3
  webkit_web_hit_test_result_get_node@Base 2.8.1
  webkit_web_hit_test_result_get_type@Base 2.8.1
  webkit_web_inspector_attach@Base 2.5.3
@@ -2022,6 +2034,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_inspector_show@Base 2.5.3
  webkit_web_page_get_dom_document@Base 2.5.3
  webkit_web_page_get_editor@Base 2.10.0
+ webkit_web_page_get_form_manager@Base 2.39.3
  webkit_web_page_get_id@Base 2.5.3
  webkit_web_page_get_main_frame@Base 2.5.3
  webkit_web_page_get_type@Base 2.5.3
