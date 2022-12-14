@@ -69,7 +69,7 @@ Index: webkitgtk/Source/WebCore/css/parser/CSSPropertyParser.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/parser/CSSPropertyParser.cpp
 +++ webkitgtk/Source/WebCore/css/parser/CSSPropertyParser.cpp
-@@ -33,6 +33,7 @@
+@@ -35,6 +35,7 @@
  #include "CSSComputedStyleDeclaration.h"
  #include "CSSCustomPropertyValue.h"
  #include "CSSFontPaletteValuesOverrideColorsValue.h"
@@ -102,8 +102,8 @@ Index: webkitgtk/Source/WebCore/style/UserAgentStyle.cpp
  #include "HTMLObjectElement.h"
 +#include "HTMLProgressElement.h"
  #include "HTMLSpanElement.h"
- #include "LegacyMediaQueryEvaluator.h"
  #include "MathMLElement.h"
+ #include "MediaQueryEvaluator.h"
 Index: webkitgtk/Source/WebCore/svg/SVGLengthValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/svg/SVGLengthValue.cpp
