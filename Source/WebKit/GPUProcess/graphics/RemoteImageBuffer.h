@@ -30,23 +30,25 @@
 #include "QualifiedRenderingResourceIdentifier.h"
 #include "RemoteRenderingBackend.h"
 #include "ScopedActiveMessageReceiveQueue.h"
+#include "ScopedRenderingResourcesRequest.h"
 #include <WebCore/ImageBuffer.h>
 
 namespace WebKit {
 
 class RemoteDisplayListRecorder;
+class RemoteRenderingBackend;
 
 class RemoteImageBuffer : public WebCore::ImageBuffer {
 public:
     template<typename BackendType>
     static RefPtr<RemoteImageBuffer> create(const WebCore::FloatSize& size, float resolutionScale, const WebCore::DestinationColorSpace& colorSpace, WebCore::PixelFormat pixelFormat, WebCore::RenderingPurpose purpose, RemoteRenderingBackend& remoteRenderingBackend, QualifiedRenderingResourceIdentifier renderingResourceIdentifier)
     {
-        auto context = ImageBuffer::CreationContext { nullptr
+        auto context = WebCore::ImageBufferCreationContext { nullptr
 #if HAVE(IOSURFACE)
             , &remoteRenderingBackend.ioSurfacePool()
 #endif
         };
-        
+
         auto imageBuffer = ImageBuffer::create<BackendType, RemoteImageBuffer>(size, resolutionScale, colorSpace, pixelFormat, purpose, context, remoteRenderingBackend, renderingResourceIdentifier);
         if (!imageBuffer)
             return nullptr;
@@ -57,6 +59,8 @@ public:
         remoteRenderingBackend.didCreateImageBufferBackend(backend->createBackendHandle(), renderingResourceIdentifier, *imageBuffer->m_remoteDisplayList.get());
         return imageBuffer;
     }
+
+    static RefPtr<RemoteImageBuffer> createTransfer(Ref<RemoteImageBuffer>&&, RemoteRenderingBackend&, QualifiedRenderingResourceIdentifier);
 
     RemoteImageBuffer(const WebCore::ImageBufferBackend::Parameters&, const WebCore::ImageBufferBackend::Info&, std::unique_ptr<WebCore::ImageBufferBackend>&&, RemoteRenderingBackend&, QualifiedRenderingResourceIdentifier);
     ~RemoteImageBuffer();

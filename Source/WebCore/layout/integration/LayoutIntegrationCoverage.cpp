@@ -329,9 +329,6 @@ static OptionSet<AvoidanceReason> canUseForStyle(const RenderElement& renderer, 
             for (auto* flexItem = ancestor->firstChild(); flexItem; flexItem = flexItem->nextInFlowSibling()) {
                 if (!is<RenderBlockFlow>(*flexItem))
                     return false;
-                auto* firstInFlowChild = downcast<RenderBlockFlow>(*flexItem).firstChild();
-                if (!firstInFlowChild || !firstInFlowChild->isInline())
-                    return false;
                 // No anchor box support either (let's just disable content with links).
                 for (auto* inFlowChild = downcast<RenderBlockFlow>(*flexItem).lastChild(); inFlowChild; inFlowChild = inFlowChild->previousInFlowSibling()) {
                     if (inFlowChild->style().isLink())
@@ -398,9 +395,6 @@ static OptionSet<AvoidanceReason> canUseForChild(const RenderObject& child, Incl
         if (style.shapeOutside())
             return false;
         if (renderer.isOutOfFlowPositioned()) {
-            // FIXME: We don't collect out-of-flow boxes from nested subtrees.
-            if (renderer.parent() != renderer.containingBlock())
-                return false;
             if (!renderer.parent()->style().isLeftToRightDirection() || !renderer.parent()->style().isHorizontalWritingMode())
                 return false;
             if (is<RenderLayerModelObject>(renderer.parent()) && downcast<RenderLayerModelObject>(*renderer.parent()).shouldPlaceVerticalScrollbarOnLeft())

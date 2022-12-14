@@ -51,7 +51,6 @@
 #include "EditorClient.h"
 #include "EmptyAttachmentElementClient.h"
 #include "EmptyFrameLoaderClient.h"
-#include "FileChooser.h"
 #include "FormState.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
@@ -1050,9 +1049,9 @@ ObjectContentType EmptyFrameLoaderClient::objectContentType(const URL&, const St
     return ObjectContentType::None;
 }
 
-String EmptyFrameLoaderClient::overrideMediaType() const
+AtomString EmptyFrameLoaderClient::overrideMediaType() const
 {
-    return { };
+    return nullAtom();
 }
 
 void EmptyFrameLoaderClient::redirectDataToPlugin(Widget&)

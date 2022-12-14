@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2WebExtension</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.2</p>
+        <p>Library Version: 2.39.3</p>
         
       </div>
       
@@ -88,6 +88,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 <div class="section">
   <h5>Instance methods</h5>
   <div class="links">
+  
+    <a class="method" href="method.WebHitTestResult.get_js_node.html">get_js_node</a>
   
     <a class="method" href="method.WebHitTestResult.get_node.html">get_node</a>
   
@@ -131,7 +133,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebHitTestResult.cpp#L34">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebHitTestResult.cpp#L44">[src]</a>
           
         </h4>
 
@@ -262,11 +264,19 @@ about the <code>WebKitDOMNode</code> in the coordinates of the Hit&nbsp;Test.</p
       <div class="docblock">
       
         <div class="">
+          <h6><a href="method.WebHitTestResult.get_js_node.html">webkit_web_hit_test_result_get_js_node</a></h6>
+          <div class="docblock">
+            <p>Get the <code>JSCValue</code> for the <span class="caps">DOM</span> node in <code>world</code> at the coordinates of the Hit&nbsp;Test.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="deprecated">
           <h6><a href="method.WebHitTestResult.get_node.html">webkit_web_hit_test_result_get_node</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitDOMNode</code> in the coordinates of the Hit&nbsp;Test.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.8</p></div>
+          <div class="docblock"><p>Available since: 2.8</p><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>
@@ -373,14 +383,14 @@ about the <code>WebKitDOMNode</code> in the coordinates of the Hit&nbsp;Test.</p
       
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.WebHitTestResult.node.html">WebKit2WebExtension.WebHitTestResult:node</a></h6>
 
           <div class="docblock">
             <p>The <code>WebKitDOMNode</code>.</p>
           </div>
 
-          
+          <div class="docblock"><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>

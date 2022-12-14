@@ -135,7 +135,8 @@ static bool isValidRuleHeaderText(const String& headerText, StyleRuleType styleR
         // Make sure the engine can parse the provided `@` rule, even if it only uses unsupported features. As long as
         // the rule text is entirely consumed and it creates a rule of the expected type, we consider it valid because
         // we will be able to continue to edit the rule in the future.
-        CSSParserImpl parser(parserContextForDocument(document), atRuleIdentifier + ' ' + headerText + " {}");
+        CSSParserContext context(parserContextForDocument(document)); // CSSParserImpl holds a reference to this.
+        CSSParserImpl parser(context, atRuleIdentifier + ' ' + headerText + " {}");
         if (!parser.tokenizer())
             return false;
 
@@ -807,6 +808,9 @@ Ref<Protocol::CSS::CSSStyle> InspectorStyle::styleWithProperties() const
 
         CSSPropertyID propertyId = cssPropertyID(name);
 
+        if (isCustomPropertyName(name))
+            propertyId = CSSPropertyID::CSSPropertyCustom;
+
         // Default "parsedOk" == true.
         if (!propertyEntry.parsedOk || !isExposed(propertyId, m_style->settings()))
             property->setParsedOk(false);
@@ -838,7 +842,7 @@ Ref<Protocol::CSS::CSSStyle> InspectorStyle::styleWithProperties() const
                 bool shouldInactivate = false;
 
                 // Canonicalize property names to treat non-prefixed and vendor-prefixed property names the same (opacity vs. -webkit-opacity).
-                String canonicalPropertyName = propertyId ? nameString(propertyId) : name;
+                String canonicalPropertyName = propertyId != CSSPropertyID::CSSPropertyInvalid && propertyId != CSSPropertyID::CSSPropertyCustom ? nameString(propertyId) : name;
                 HashMap<String, RefPtr<Protocol::CSS::CSSProperty>>::iterator activeIt = propertyNameToPreviousActiveProperty.find(canonicalPropertyName);
                 if (activeIt != propertyNameToPreviousActiveProperty.end()) {
                     if (propertyEntry.parsedOk) {

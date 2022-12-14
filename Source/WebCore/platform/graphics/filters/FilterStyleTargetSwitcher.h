@@ -33,11 +33,13 @@ namespace WebCore {
 class FilterStyleTargetSwitcher : public FilterTargetSwitcher {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    FilterStyleTargetSwitcher(GraphicsContext& destinationContext, Filter&, const FloatRect &sourceImageRect);
+    FilterStyleTargetSwitcher(Filter&, const FloatRect &sourceImageRect);
 
 private:
-    void willDrawSourceImage(GraphicsContext& destinationContext, const FloatRect& repaintRect) override;
-    void didDrawSourceImage(GraphicsContext& destinationContext) override;
+    bool needsRedrawSourceImage() const override { return true; }
+
+    void beginDrawSourceImage(GraphicsContext& destinationContext) override;
+    void endDrawSourceImage(GraphicsContext& destinationContext) override;
 
     FilterStyleVector m_filterStyles;
 };

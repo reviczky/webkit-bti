@@ -104,7 +104,6 @@ struct WebPageCreationParameters {
     bool paginationBehavesLikeColumns;
     double pageLength;
     double gapBetweenPages;
-    bool paginationLineGridEnabled;
     
     String userAgent;
 
@@ -156,7 +155,8 @@ struct WebPageCreationParameters {
 
 #if PLATFORM(MAC)
     std::optional<WebCore::DestinationColorSpace> colorSpace;
-    bool useSystemAppearance;
+    bool useSystemAppearance { false };
+    bool useFormSemanticContext { false };
 #endif
 #if ENABLE(META_VIEWPORT)
     bool ignoresViewportScaleLimits;
@@ -278,6 +278,8 @@ struct WebPageCreationParameters {
     bool hasResizableWindows { false };
 
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
+
+    std::optional<WebCore::FrameIdentifier> mainFrameIdentifier;
 };
 
 } // namespace WebKit

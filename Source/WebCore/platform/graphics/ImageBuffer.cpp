@@ -32,6 +32,7 @@
 #include "Filter.h"
 #include "FilterImage.h"
 #include "FilterResults.h"
+#include "FilterStyleTargetSwitcher.h"
 #include "GraphicsContext.h"
 #include "HostWindow.h"
 #include "MIMETypeRegistry.h"
@@ -51,7 +52,7 @@ namespace WebCore {
 static const float MaxClampedLength = 4096;
 static const float MaxClampedArea = MaxClampedLength * MaxClampedLength;
 
-RefPtr<ImageBuffer> ImageBuffer::create(const FloatSize& size, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat, OptionSet<ImageBufferOptions> options, const CreationContext& creationContext)
+RefPtr<ImageBuffer> ImageBuffer::create(const FloatSize& size, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat, OptionSet<ImageBufferOptions> options, const ImageBufferCreationContext& creationContext)
 {
     RefPtr<ImageBuffer> imageBuffer;
 
@@ -64,9 +65,9 @@ RefPtr<ImageBuffer> ImageBuffer::create(const FloatSize& size, RenderingPurpose 
             imageBuffer = DisplayList::ImageBuffer::create<UnacceleratedImageBufferBackend>(size, resolutionScale, colorSpace, pixelFormat, purpose, creationContext);
     }
 
-    if (creationContext.hostWindow && !imageBuffer) {
+    if (creationContext.graphicsClient && !imageBuffer) {
         auto renderingMode = options.contains(ImageBufferOptions::Accelerated) ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
-        imageBuffer = creationContext.hostWindow->createImageBuffer(size, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, creationContext.avoidIOSurfaceSizeCheckInWebProcessForTesting);
+        imageBuffer = creationContext.graphicsClient->createImageBuffer(size, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, creationContext.avoidIOSurfaceSizeCheckInWebProcessForTesting);
     }
 
     if (imageBuffer)
@@ -185,6 +186,11 @@ RefPtr<ImageBuffer> ImageBuffer::clone() const
     return copyImageBuffer(const_cast<ImageBuffer&>(*this), PreserveResolution::Yes);
 }
 
+RefPtr<ImageBuffer> ImageBuffer::cloneForDifferentThread()
+{
+    return clone();
+}
+
 GraphicsContext& ImageBuffer::context() const
 {
     ASSERT(m_backend);
@@ -198,6 +204,11 @@ void ImageBuffer::flushContext()
         flushDrawingContext();
         backend->flushContext();
     }
+}
+
+std::unique_ptr<ImageBufferBackend> ImageBuffer::takeBackend()
+{
+    return WTFMove(m_backend);
 }
 
 IntSize ImageBuffer::backendSize() const
@@ -234,8 +245,24 @@ RefPtr<NativeImage> ImageBuffer::sinkIntoNativeImage()
     return nullptr;
 }
 
+RefPtr<ImageBuffer> ImageBuffer::sinkIntoBufferForDifferentThread(RefPtr<ImageBuffer> buffer)
+{
+    if (!buffer)
+        return nullptr;
+    ASSERT(buffer->hasOneRef());
+    return buffer->sinkIntoBufferForDifferentThread();
+}
+
+RefPtr<ImageBuffer> ImageBuffer::sinkIntoBufferForDifferentThread()
+{
+    ASSERT(hasOneRef());
+    return this;
+}
+
 RefPtr<Image> ImageBuffer::filteredImage(Filter& filter)
 {
+    ASSERT(!filter.filterRenderingModes().contains(FilterRenderingMode::GraphicsContext));
+
     auto* backend = ensureBackendCreated();
     if (!backend)
         return nullptr;
@@ -252,6 +279,28 @@ RefPtr<Image> ImageBuffer::filteredImage(Filter& filter)
         return nullptr;
 
     return imageBuffer->copyImage();
+}
+
+RefPtr<Image> ImageBuffer::filteredImage(Filter& filter, std::function<void(GraphicsContext&)> drawCallback)
+{
+    std::unique_ptr<FilterTargetSwitcher> targetSwitcher;
+
+    if (filter.filterRenderingModes().contains(FilterRenderingMode::GraphicsContext)) {
+        targetSwitcher = makeUnique<FilterStyleTargetSwitcher>(filter, FloatRect { { }, logicalSize() });
+        if (!targetSwitcher)
+            return nullptr;
+        targetSwitcher->beginDrawSourceImage(context());
+    }
+
+    drawCallback(context());
+
+    if (filter.filterRenderingModes().contains(FilterRenderingMode::GraphicsContext)) {
+        ASSERT(targetSwitcher);
+        targetSwitcher->endDrawSourceImage(context());
+        return copyImage();
+    }
+
+    return filteredImage(filter);
 }
 
 #if USE(CAIRO)

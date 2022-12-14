@@ -77,9 +77,10 @@ JSC_DEFINE_HOST_FUNCTION(callWebAssemblyFunction, (JSGlobalObject* globalObject,
     JSWebAssemblyInstance* instance = wasmFunction->instance();
     Wasm::Instance* wasmInstance = &instance->instance();
 
+    if (signature.argumentsOrResultsIncludeV128())
+        return throwVMTypeError(globalObject, scope, Wasm::errorMessageForExceptionType(Wasm::ExceptionType::TypeErrorInvalidV128Use));
+
     for (unsigned argIndex = 0; argIndex < signature.argumentCount(); ++argIndex) {
-        if (signature.argumentType(argIndex).isV128())
-            return JSValue::encode(throwException(globalObject, scope, createTypeError(globalObject, Wasm::errorMessageForExceptionType(Wasm::ExceptionType::TypeErrorInvalidV128Use))));
         uint64_t value = fromJSValue(globalObject, signature.argumentType(argIndex), callFrame->argument(argIndex));
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
         boxedArgs.append(JSValue::decode(value));
@@ -143,7 +144,7 @@ RegisterSet WebAssemblyFunction::calleeSaves() const
     // Pessimistically save callee saves in BoundsChecking mode since the LLInt always bounds checks
     RegisterSetBuilder result = Wasm::PinnedRegisterInfo::get().toSave(MemoryMode::BoundsChecking);
     if (usesTagRegisters()) {
-        RegisterSetBuilder tagCalleeSaves = RegisterSetBuilder::calleeSaveRegisters();
+        RegisterSetBuilder tagCalleeSaves = RegisterSetBuilder::vmCalleeSaveRegisters();
         tagCalleeSaves.filter(RegisterSetBuilder::runtimeTagRegisters());
         result.merge(tagCalleeSaves);
     }

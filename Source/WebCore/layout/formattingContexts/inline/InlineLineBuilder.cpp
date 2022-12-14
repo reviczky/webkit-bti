@@ -365,6 +365,7 @@ LineBuilder::LineContent LineBuilder::layoutInlineContent(const LineInput& lineI
         , m_line.contentLogicalWidth()
         , m_line.contentLogicalRight()
         , m_line.hangingTrailingContentWidth()
+        , isFirstLine() ? LineContent::FirstFormattedLine::WithinIFC : LineContent::FirstFormattedLine::No
         , isLastLine
         , m_line.nonSpanningInlineLevelBoxCount()
         , computedVisualOrder(m_line)
@@ -595,17 +596,20 @@ LineBuilder::InlineItemRange LineBuilder::close(const InlineItemRange& needsLayo
         switch (ellipsisPolicy) {
         case LineInput::LineEndingEllipsisPolicy::No:
             break;
-        case LineInput::LineEndingEllipsisPolicy::WhenContentOverflows: {
+        case LineInput::LineEndingEllipsisPolicy::WhenContentOverflowsInInlineDirection:
             if (m_line.contentLogicalWidth() > horizontalAvailableSpace) {
                 auto ellipsisWidth = rootStyle.fontCascade().width(TextUtil::ellipsisTextRun());
                 auto logicalRightForContentWithoutEllipsis = std::max(0.f, horizontalAvailableSpace - ellipsisWidth);
                 m_line.truncate(logicalRightForContentWithoutEllipsis);
             }
             break;
-        }
+        case LineInput::LineEndingEllipsisPolicy::WhenContentOverflowsInBlockDirection:
+            if (isLastLine)
+                break;
+            FALLTHROUGH;
         case LineInput::LineEndingEllipsisPolicy::Always: {
             auto ellipsisWidth = rootStyle.fontCascade().width(TextUtil::ellipsisTextRun());
-            if (m_line.contentLogicalWidth() + ellipsisWidth > horizontalAvailableSpace) {
+            if (m_line.contentLogicalWidth() && m_line.contentLogicalWidth() + ellipsisWidth > horizontalAvailableSpace) {
                 auto logicalRightForContentWithoutEllipsis = std::max(0.f, horizontalAvailableSpace - ellipsisWidth);
                 m_line.truncate(logicalRightForContentWithoutEllipsis);
             }
@@ -956,7 +960,7 @@ bool LineBuilder::tryPlacingFloatBox(const InlineItem& floatItem, LineBoxConstra
     boxGeometry.setLogicalTopLeft(floatingPosition);
     auto floatBoxItem = floatingContext.toFloatItem(floatBox);
     auto isLogicalLeftPositionedInFloatingState = floatBoxItem.isLeftPositioned();
-    floatingState()->append(WTFMove(floatBoxItem));
+    floatingState()->append(floatBoxItem);
     m_placedFloats.append(&floatItem);
 
     auto intersects = [&] {
