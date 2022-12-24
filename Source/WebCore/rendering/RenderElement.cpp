@@ -316,7 +316,7 @@ inline bool RenderElement::shouldRepaintForStyleDifference(StyleDifference diff)
     return diff == StyleDifference::Repaint || (diff == StyleDifference::RepaintIfText && hasImmediateNonWhitespaceTextChild());
 }
 
-void RenderElement::updateFillImages(const FillLayer* oldLayers, const FillLayer& newLayers)
+void RenderElement::updateFillImages(const FillLayer* oldLayers, const FillLayer* newLayers)
 {
     auto fillImagesAreIdentical = [](const FillLayer* layer1, const FillLayer* layer2) -> bool {
         if (layer1 == layer2)
@@ -337,7 +337,7 @@ void RenderElement::updateFillImages(const FillLayer* oldLayers, const FillLayer
     };
 
     auto isRegisteredWithNewFillImages = [&]() -> bool {
-        for (auto* layer = &newLayers; layer; layer = layer->next()) {
+        for (auto* layer = newLayers; layer; layer = layer->next()) {
             if (layer->image() && !layer->image()->hasClient(*this))
                 return false;
         }
@@ -346,11 +346,11 @@ void RenderElement::updateFillImages(const FillLayer* oldLayers, const FillLayer
 
     // If images have the same characteristics and this element is already registered as a
     // client to the new images, there is nothing to do.
-    if (fillImagesAreIdentical(oldLayers, &newLayers) && isRegisteredWithNewFillImages())
+    if (fillImagesAreIdentical(oldLayers, newLayers) && isRegisteredWithNewFillImages())
         return;
 
     // Add before removing, to avoid removing all clients of an image that is in both sets.
-    for (auto* layer = &newLayers; layer; layer = layer->next()) {
+    for (auto* layer = newLayers; layer; layer = layer->next()) {
         if (layer->image())
             layer->image()->addClient(*this);
     }
@@ -882,11 +882,20 @@ static inline bool areCursorsEqual(const RenderStyle* a, const RenderStyle* b)
 
 void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
 {
-    updateFillImages(oldStyle ? &oldStyle->backgroundLayers() : nullptr, m_style.backgroundLayers());
-    updateFillImages(oldStyle ? &oldStyle->maskLayers() : nullptr, m_style.maskLayers());
-    updateImage(oldStyle ? oldStyle->borderImage().image() : nullptr, m_style.borderImage().image());
-    updateImage(oldStyle ? oldStyle->maskBoxImage().image() : nullptr, m_style.maskBoxImage().image());
-    updateShapeImage(oldStyle ? oldStyle->shapeOutside() : nullptr, m_style.shapeOutside());
+    auto registerImages = [this](auto* style, auto* oldStyle) {
+        if (!style && !oldStyle)
+            return;
+        updateFillImages(oldStyle ? &oldStyle->backgroundLayers() : nullptr, style ? &style->backgroundLayers() : nullptr);
+        updateFillImages(oldStyle ? &oldStyle->maskLayers() : nullptr, style ? &style->maskLayers() : nullptr);
+        updateImage(oldStyle ? oldStyle->borderImage().image() : nullptr, style ? style->borderImage().image() : nullptr);
+        updateImage(oldStyle ? oldStyle->maskBoxImage().image() : nullptr, style ? style->maskBoxImage().image() : nullptr);
+        updateShapeImage(oldStyle ? oldStyle->shapeOutside() : nullptr, style ? style->shapeOutside() : nullptr);
+    };
+
+    registerImages(&style(), oldStyle);
+
+    // Are there other pseudo-elements that need the resources to be registered?
+    registerImages(style().getCachedPseudoStyle(PseudoId::FirstLine), oldStyle ? oldStyle->getCachedPseudoStyle(PseudoId::FirstLine) : nullptr);
 
     SVGRenderSupport::styleChanged(*this, oldStyle);
 
@@ -1012,24 +1021,29 @@ void RenderElement::willBeDestroyed()
 
     clearSubtreeLayoutRootIfNeeded();
 
+    auto unregisterImage = [this](auto* image) {
+        if (image)
+            image->removeClient(*this);
+    };
+
+    auto unregisterImages = [&](auto& style) {
+        for (auto* backgroundLayer = &style.backgroundLayers(); backgroundLayer; backgroundLayer = backgroundLayer->next())
+            unregisterImage(backgroundLayer->image());
+        for (auto* maskLayer = &style.maskLayers(); maskLayer; maskLayer = maskLayer->next())
+            unregisterImage(maskLayer->image());
+        unregisterImage(style.borderImage().image());
+        unregisterImage(style.maskBoxImage().image());
+        if (auto shapeValue = style.shapeOutside())
+            unregisterImage(shapeValue->image());
+    };
+
     if (hasInitializedStyle()) {
-        for (auto* bgLayer = &m_style.backgroundLayers(); bgLayer; bgLayer = bgLayer->next()) {
-            if (auto* backgroundImage = bgLayer->image())
-                backgroundImage->removeClient(*this);
-        }
-        for (auto* maskLayer = &m_style.maskLayers(); maskLayer; maskLayer = maskLayer->next()) {
-            if (auto* maskImage = maskLayer->image())
-                maskImage->removeClient(*this);
-        }
-        if (auto* borderImage = m_style.borderImage().image())
-            borderImage->removeClient(*this);
-        if (auto* maskBoxImage = m_style.maskBoxImage().image())
-            maskBoxImage->removeClient(*this);
-        if (auto shapeValue = m_style.shapeOutside()) {
-            if (auto shapeImage = shapeValue->image())
-                shapeImage->removeClient(*this);
-        }
+        unregisterImages(m_style);
+
+        if (auto* firstLineStyle = style().getCachedPseudoStyle(PseudoId::FirstLine))
+            unregisterImages(*firstLineStyle);
     }
+
     if (m_hasPausedImageAnimations)
         view().removeRendererWithPausedImageAnimations(*this);
 }
