@@ -1,3 +1,32 @@
+webkit2gtk (2.38.3-1~deb10u1) buster-security; urgency=high
+
+  * Rebuild for buster-security.
+  * debian/patches/force-single-process.patch:
+    - Force the single-process mode in Evolution and Geary
+  * debian/patches/support-old-cmake.patch:
+    - Fix build with cmake < 3.15
+  * debian/patches/no-gtk-overlay-scrolling.patch:
+    - Gtk in buster does not have 'gtk-overlay-scrolling' so remove the
+      constant warnings about its absence (Closes: #1024535).
+  * debian/control.in:
+    - Remove build dependencies on ccache, libwpebackend-fdo-1.0-dev,
+      libmanette-0.2-dev and liblcms2-dev.
+    - Switch build dependency from libenchant-2-dev to libenchant-dev.
+    - Switch build dependencies on libgl-dev and libgles-dev with
+      libgl1-mesa-dev and libgles2-mesa-dev.
+  * Downgrade xdg-desktop-portal-gtk from a recommendation to a
+    suggestion (See #989307)
+  * debian/rules:
+    - Set ENABLE_SOUP3=NO, ENABLE_GTK4=NO and USE_PREBUILT_DOCS=YES. This
+      builds the 4.0 API packages only (soup2 build).
+    - Build with -DENABLE_GAMEPAD=OFF -DUSE_LCMS=OFF.
+  * Set the debhelper compatibility level back to 10. This fixes a dh_dwz
+    error ".debug_info section not present"
+    - Add debian/compat file.
+    - Update build dependency on debhelper.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 30 Dec 2022 15:08:37 +0100
+
 webkit2gtk (2.38.3-1) unstable; urgency=high
 
   * New upstream release.
