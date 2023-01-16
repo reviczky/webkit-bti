@@ -71,6 +71,13 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(ContainerNode);
 
+struct SameSizeAsContainerNode : public Node {
+    void* firstChild;
+    void* lastChild;
+};
+
+static_assert(sizeof(ContainerNode) == sizeof(SameSizeAsContainerNode), "ContainerNode should stay small");
+
 static void dispatchChildInsertionEvents(Node&);
 static void dispatchChildRemovalEvents(Ref<Node>&);
 
@@ -327,11 +334,15 @@ void ContainerNode::removeDetachedChildren()
     removeDetachedChildrenInContainer(*this);
 }
 
+static inline bool mayHaveDisplayContents(Element *element)
+{
+    return element && (element->hasDisplayContents() || element->displayContentsChanged());
+}
+
 static inline void destroyRenderTreeIfNeeded(Node& child)
 {
     auto childAsElement = dynamicDowncast<Element>(child);
-    auto hasDisplayContents = childAsElement && childAsElement->hasDisplayContents();
-    if (!child.renderer() && !hasDisplayContents)
+    if (!child.renderer() && !mayHaveDisplayContents(childAsElement))
         return;
     if (childAsElement)
         RenderTreeUpdater::tearDownRenderers(*childAsElement);

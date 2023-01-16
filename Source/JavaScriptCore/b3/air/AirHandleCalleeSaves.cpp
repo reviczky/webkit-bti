@@ -59,11 +59,11 @@ void handleCalleeSaves(Code& code)
 void handleCalleeSaves(Code& code, RegisterSetBuilder usedCalleeSaves)
 {
     // We filter to really get the callee saves.
-    usedCalleeSaves.filter(RegisterSetBuilder::vmCalleeSaveRegisters());
+    usedCalleeSaves.filter(RegisterSetBuilder::calleeSaveRegisters());
     usedCalleeSaves.filter(code.mutableRegs());
     usedCalleeSaves.exclude(RegisterSetBuilder::stackRegisters()); // We don't need to save FP here.
 
-    auto calleSavesToSave = usedCalleeSaves.buildWithLowerBits();
+    auto calleSavesToSave = usedCalleeSaves.buildAndValidate();
 
     if (!calleSavesToSave.numberOfSetRegisters())
         return;

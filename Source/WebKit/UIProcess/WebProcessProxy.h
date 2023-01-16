@@ -133,6 +133,9 @@ typedef BackgroundWebProcessCounter::Token BackgroundWebProcessToken;
 enum WebProcessWithAudibleMediaCounterType { };
 using WebProcessWithAudibleMediaCounter = RefCounter<WebProcessWithAudibleMediaCounterType>;
 using WebProcessWithAudibleMediaToken = WebProcessWithAudibleMediaCounter::Token;
+enum WebProcessWithMediaStreamingCounterType { };
+using WebProcessWithMediaStreamingCounter = RefCounter<WebProcessWithMediaStreamingCounterType>;
+using WebProcessWithMediaStreamingToken = WebProcessWithMediaStreamingCounter::Token;
 enum class CheckBackForwardList : bool { No, Yes };
 
 class WebProcessProxy : public AuxiliaryProcessProxy, private ProcessThrottlerClient {
@@ -383,6 +386,7 @@ public:
 #endif
 
     void updateAudibleMediaAssertions();
+    void updateMediaStreamingActivity();
 
     void setRemoteWorkerUserAgent(const String&);
     void updateRemoteWorkerPreferencesStore(const WebPreferencesStore&);
@@ -452,12 +456,15 @@ public:
 #endif
     void getNotifications(const URL&, const String&, CompletionHandler<void(Vector<WebCore::NotificationData>&&)>&&);
 
+    void setAppBadge(std::optional<WebPageProxyIdentifier>, const WebCore::SecurityOriginData&, std::optional<uint64_t> badge);
+    void setClientBadge(WebPageProxyIdentifier, const WebCore::SecurityOriginData&, std::optional<uint64_t> badge);
+
     WebCore::CrossOriginMode crossOriginMode() const { return m_crossOriginMode; }
     LockdownMode lockdownMode() const { return m_lockdownMode; }
 
 #if PLATFORM(COCOA)
     std::optional<audit_token_t> auditToken() const;
-    SandboxExtension::Handle fontdMachExtensionHandle(SandboxExtension::MachBootstrapOptions) const;
+    Vector<SandboxExtension::Handle> fontdMachExtensionHandles(SandboxExtension::MachBootstrapOptions) const;
 #endif
 
     bool isConnectedToHardwareConsole() const { return m_isConnectedToHardwareConsole; }
@@ -713,6 +720,8 @@ private:
         WebProcessWithAudibleMediaToken token;
     };
     std::optional<AudibleMediaActivity> m_audibleMediaActivity;
+
+    std::optional<WebProcessWithMediaStreamingToken> m_mediaStreamingActivity;
 
     ShutdownPreventingScopeCounter m_shutdownPreventingScopeCounter;
 

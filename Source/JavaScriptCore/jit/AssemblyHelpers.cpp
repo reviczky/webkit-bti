@@ -43,6 +43,7 @@
 #if ENABLE(WEBASSEMBLY)
 #include "WasmMemoryInformation.h"
 #include "WasmContextInlines.h"
+#include "WasmInstance.h"
 #endif
 
 namespace JSC {
@@ -1065,12 +1066,6 @@ AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs val
 void AssemblyHelpers::loadWasmContextInstance(GPRReg dst)
 {
     JIT_COMMENT(*this, "Load wasm context instance to ", dst);
-#if ENABLE(FAST_TLS_JIT)
-    if (Wasm::Context::useFastTLS()) {
-        loadFromTLSPtr(fastTLSOffsetForKey(WTF_WASM_CONTEXT_KEY), dst);
-        return;
-    }
-#endif
     move(Wasm::PinnedRegisterInfo::get().wasmContextInstancePointer, dst);
     JIT_COMMENT(*this, "Load wasm instance done");
 }
@@ -1078,32 +1073,26 @@ void AssemblyHelpers::loadWasmContextInstance(GPRReg dst)
 void AssemblyHelpers::storeWasmContextInstance(GPRReg src)
 {
     JIT_COMMENT(*this, "Store wasm context instance from", src);
-#if ENABLE(FAST_TLS_JIT)
-    if (Wasm::Context::useFastTLS()) {
-        storeToTLSPtr(src, fastTLSOffsetForKey(WTF_WASM_CONTEXT_KEY));
-        return;
-    }
-#endif
     move(src, Wasm::PinnedRegisterInfo::get().wasmContextInstancePointer);
     JIT_COMMENT(*this, "Store wasm context instance done");
 }
 
 bool AssemblyHelpers::loadWasmContextInstanceNeedsMacroScratchRegister()
 {
-#if ENABLE(FAST_TLS_JIT)
-    if (Wasm::Context::useFastTLS())
-        return loadFromTLSPtrNeedsMacroScratchRegister();
-#endif
     return false;
 }
 
 bool AssemblyHelpers::storeWasmContextInstanceNeedsMacroScratchRegister()
 {
-#if ENABLE(FAST_TLS_JIT)
-    if (Wasm::Context::useFastTLS())
-        return storeToTLSPtrNeedsMacroScratchRegister();
-#endif
     return false;
+}
+
+void AssemblyHelpers::prepareWasmCallOperation(GPRReg instanceGPR)
+{
+    UNUSED_PARAM(instanceGPR);
+#if !USE(BUILTIN_FRAME_ADDRESS) || ASSERT_ENABLED
+    storePtr(GPRInfo::callFrameRegister, Address(instanceGPR, Wasm::Instance::offsetOfTemporaryCallFrame()));
+#endif
 }
 
 #endif // ENABLE(WEBASSEMBLY)
@@ -1188,7 +1177,7 @@ void AssemblyHelpers::copyCalleeSavesToEntryFrameCalleeSavesBufferImpl(GPRReg ca
 #endif
 }
 
-void AssemblyHelpers::cageWithoutUntagging(Gigacage::Kind kind, GPRReg storage)
+void AssemblyHelpers::cageWithoutUntagging(Gigacage::Kind kind, GPRReg storage, bool mayBeNull)
 {
 #if GIGACAGE_ENABLED
     if (!Gigacage::isEnabled(kind))
@@ -1198,35 +1187,41 @@ void AssemblyHelpers::cageWithoutUntagging(Gigacage::Kind kind, GPRReg storage)
     RegisterID tempReg = InvalidGPRReg;
     Jump skip;
     if (kind == Gigacage::Primitive) {
-        skip = branchPtr(Equal, storage, TrustedImmPtr(JSArrayBufferView::nullVectorPtr()));
+        if (mayBeNull)
+            skip = branchPtr(Equal, storage, TrustedImmPtr(JSArrayBufferView::nullVectorPtr()));
         tempReg = getCachedMemoryTempRegisterIDAndInvalidate();
-        move(storage, tempReg);
+        and64(TrustedImm64(Gigacage::mask(kind)), storage, tempReg);
+        addPtr(TrustedImmPtr(Gigacage::basePtr(kind)), tempReg);
         // Flip the registers since bitFieldInsert only inserts into the low bits.
         std::swap(storage, tempReg);
+    } else {
+        and64(TrustedImm64(Gigacage::mask(kind)), storage);
+        addPtr(TrustedImmPtr(Gigacage::basePtr(kind)), storage);
     }
-#endif
-    andPtr(TrustedImmPtr(Gigacage::mask(kind)), storage);
-    addPtr(TrustedImmPtr(Gigacage::basePtr(kind)), storage);
-#if CPU(ARM64E)
     if (kind == Gigacage::Primitive)
         insertBitField64(storage, TrustedImm32(0), TrustedImm32(64 - maxNumberOfAllowedPACBits), tempReg);
     if (skip.isSet())
         skip.link(this);
+#else
+    UNUSED_PARAM(mayBeNull);
+    andPtr(TrustedImmPtr(Gigacage::mask(kind)), storage);
+    addPtr(TrustedImmPtr(Gigacage::basePtr(kind)), storage);
 #endif
 
 #else
     UNUSED_PARAM(kind);
     UNUSED_PARAM(storage);
+    UNUSED_PARAM(mayBeNull);
 #endif
 }
 
 // length may be the same register as scratch.
-void AssemblyHelpers::cageConditionallyAndUntag(Gigacage::Kind kind, GPRReg storage, GPRReg length, GPRReg scratch, bool validateAuth)
+void AssemblyHelpers::cageConditionallyAndUntag(Gigacage::Kind kind, GPRReg storage, GPRReg length, GPRReg scratch, bool validateAuth, bool mayBeNull)
 {
 #if GIGACAGE_ENABLED
     if (Gigacage::isEnabled(kind)) {
         if (kind != Gigacage::Primitive || Gigacage::disablingPrimitiveGigacageIsForbidden())
-            cageWithoutUntagging(kind, storage);
+            cageWithoutUntagging(kind, storage, mayBeNull);
         else {
 #if CPU(ARM64E)
             if (length == scratch)
@@ -1234,7 +1229,8 @@ void AssemblyHelpers::cageConditionallyAndUntag(Gigacage::Kind kind, GPRReg stor
 #endif
             JumpList done;
 #if CPU(ARM64E)
-            done.append(branchPtr(Equal, storage, TrustedImmPtr(JSArrayBufferView::nullVectorPtr())));
+            if (mayBeNull)
+                done.append(branchPtr(Equal, storage, TrustedImmPtr(JSArrayBufferView::nullVectorPtr())));
 #endif
             done.append(branchTest8(NonZero, AbsoluteAddress(&Gigacage::disablePrimitiveGigacageRequested)));
 
@@ -1265,6 +1261,7 @@ void AssemblyHelpers::cageConditionallyAndUntag(Gigacage::Kind kind, GPRReg stor
     UNUSED_PARAM(storage);
     UNUSED_PARAM(length);
     UNUSED_PARAM(scratch);
+    UNUSED_PARAM(mayBeNull);
 }
 
 void AssemblyHelpers::emitSave(const RegisterAtOffsetList& list)
@@ -1287,10 +1284,10 @@ void AssemblyHelpers::emitSave(const RegisterAtOffsetList& list)
     spooler.finalizeFPR();
 }
 
-void AssemblyHelpers::emitRestore(const RegisterAtOffsetList& list)
+void AssemblyHelpers::emitRestore(const RegisterAtOffsetList& list, GPRReg baseGPR)
 {
     JIT_COMMENT(*this, "emitRestore ", list);
-    LoadRegSpooler spooler(*this, framePointerRegister);
+    LoadRegSpooler spooler(*this, baseGPR);
 
     size_t registerCount = list.registerCount();
     size_t i = 0;

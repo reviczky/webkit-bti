@@ -33,6 +33,7 @@
 #import "RemoteLayerTreeContext.h"
 #import "RemoteLayerTreePropertyApplier.h"
 #import <WebCore/AnimationUtilities.h>
+#import <WebCore/ColorSpaceCG.h>
 #import <WebCore/EventRegion.h>
 #import <WebCore/GraphicsContext.h>
 #import <WebCore/GraphicsLayerCA.h>
@@ -212,7 +213,7 @@ void PlatformCALayerRemote::recursiveBuildTransaction(RemoteLayerTreeContext& co
 void PlatformCALayerRemote::didCommit()
 {
     m_properties.addedAnimations.clear();
-    m_properties.keyPathsOfAnimationsToRemove.clear();
+    m_properties.keysOfAnimationsToRemove.clear();
     m_properties.resetChangedProperties();
 }
 
@@ -238,6 +239,14 @@ void PlatformCALayerRemote::updateBackingStore()
     RemoteLayerBackingStore::Parameters parameters;
     parameters.type = m_acceleratesDrawing ? RemoteLayerBackingStore::Type::IOSurface : RemoteLayerBackingStore::Type::Bitmap;
     parameters.size = m_properties.bounds.size();
+
+#if PLATFORM(IOS_FAMILY)
+    parameters.colorSpace = m_wantsDeepColorBackingStore ? DestinationColorSpace { extendedSRGBColorSpaceRef() } : DestinationColorSpace::SRGB();
+#else
+    if (auto displayColorSpace = m_context->displayColorSpace())
+        parameters.colorSpace = displayColorSpace.value();
+#endif
+
     parameters.scale = m_properties.contentsScale;
     parameters.deepColor = m_wantsDeepColorBackingStore;
     parameters.isOpaque = m_properties.opaque;
@@ -411,7 +420,7 @@ void PlatformCALayerRemote::removeAnimationForKey(const String& key)
             return pair.first == key;
         });
     }
-    m_properties.keyPathsOfAnimationsToRemove.add(key);
+    m_properties.keysOfAnimationsToRemove.add(key);
     m_properties.notePropertiesChanged(RemoteLayerTreeTransaction::AnimationsChanged);
 }
 
@@ -420,9 +429,9 @@ RefPtr<PlatformCAAnimation> PlatformCALayerRemote::animationForKey(const String&
     return m_animations.get(key);
 }
 
-static inline bool isEquivalentLayer(const PlatformCALayer* layer, GraphicsLayer::PlatformLayerID layerID)
+static inline bool isEquivalentLayer(const PlatformCALayer* layer, const std::optional<GraphicsLayer::PlatformLayerID>& layerID)
 {
-    GraphicsLayer::PlatformLayerID newLayerID = layer ? layer->layerID() : 0;
+    auto newLayerID = layer ? layer->layerID() : GraphicsLayer::PlatformLayerID { };
     return layerID == newLayerID;
 }
 
@@ -452,7 +461,7 @@ void PlatformCALayerRemote::setMask(PlatformCALayer* layer)
         m_properties.maskLayerID = m_maskLayer->layerID();
     } else {
         m_maskLayer = nullptr;
-        m_properties.maskLayerID = 0;
+        m_properties.maskLayerID = { };
     }
 
     m_properties.notePropertiesChanged(RemoteLayerTreeTransaction::MaskLayerChanged);
@@ -466,7 +475,7 @@ void PlatformCALayerRemote::setClonedLayer(const PlatformCALayer* layer)
     if (layer)
         m_properties.clonedLayerID = layer->layerID();
     else
-        m_properties.clonedLayerID = 0;
+        m_properties.clonedLayerID = { };
 
     m_properties.notePropertiesChanged(RemoteLayerTreeTransaction::ClonedContentsChanged);
 }
@@ -821,6 +830,9 @@ float PlatformCALayerRemote::contentsScale() const
 
 void PlatformCALayerRemote::setContentsScale(float value)
 {
+    if (m_layerType == LayerTypeTransformLayer)
+        return;
+
     m_properties.contentsScale = value;
     m_properties.notePropertiesChanged(RemoteLayerTreeTransaction::ContentsScaleChanged);
 

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2013 Google Inc. All rights reserved.
  * Copyright (C) 2006 Alexey Proskuryakov (ap@webkit.org)
  * Copyright (C) 2012 Digia Plc. and/or its subsidiary(-ies)
  *
@@ -427,7 +428,7 @@ void EventHandler::clear()
 
 void EventHandler::nodeWillBeRemoved(Node& nodeToBeRemoved)
 {
-    if (nodeToBeRemoved.contains(m_clickNode.get()))
+    if (nodeToBeRemoved.containsIncludingShadowDOM(m_clickNode.get()))
         m_clickNode = nullptr;
 }
 
@@ -1369,7 +1370,7 @@ RefPtr<Frame> EventHandler::subframeForTargetNode(Node* node)
     if (!is<FrameView>(widget))
         return nullptr;
 
-    return &downcast<FrameView>(*widget).frame();
+    return dynamicDowncast<LocalFrame>(downcast<FrameView>(*widget).frame());
 }
 
 static bool isSubmitImage(Node* node)
@@ -1746,6 +1747,9 @@ bool EventHandler::handleMousePressEvent(const PlatformMouseEvent& platformMouse
 #if !ENABLE(IOS_TOUCH_EVENTS)
     cancelFakeMouseMoveEvent();
 #endif
+    if (m_eventHandlerWillResetCapturingMouseEventsElement)
+        m_capturingMouseEventsElement = nullptr;
+
     m_mousePressed = true;
     m_capturesDragging = true;
     setLastKnownMousePosition(platformMouseEvent);
@@ -3016,7 +3020,7 @@ bool EventHandler::handleWheelEventInternal(const PlatformWheelEvent& event, Opt
     LOG_WITH_STREAM(Scrolling, stream << "EventHandler::handleWheelEvent " << event << " processing steps " << processingSteps);
     auto monitor = m_frame.page()->wheelEventTestMonitor();
     if (monitor)
-        monitor->receivedWheelEvent(event);
+        monitor->receivedWheelEventWithPhases(event.phase(), event.momentumPhase());
 
     auto deferrer = WheelEventTestMonitorCompletionDeferrer { monitor.get(), this, WheelEventTestMonitor::DeferReason::HandlingWheelEventOnMainThread };
 #endif
@@ -4523,7 +4527,7 @@ bool EventHandler::focusedScrollableAreaShouldUseSmoothKeyboardScrolling()
 
 bool EventHandler::shouldUseSmoothKeyboardScrollingForFocusedScrollableArea()
 {
-    return m_frame.settings().eventHandlerDrivenSmoothKeyboardScrollingEnabled() && focusedScrollableAreaShouldUseSmoothKeyboardScrolling();
+    return m_frame.settings().eventHandlerDrivenSmoothKeyboardScrollingEnabled() && focusedScrollableAreaShouldUseSmoothKeyboardScrolling() && m_frame.settings().scrollAnimatorEnabled();
 }
 
 bool EventHandler::keyboardScrollRecursively(std::optional<ScrollDirection> direction, std::optional<ScrollGranularity> granularity, Node* startingNode)
@@ -4977,10 +4981,14 @@ bool EventHandler::passMouseReleaseEventToSubframe(MouseEventWithHitTestResults&
 
 bool EventHandler::passWheelEventToWidget(const PlatformWheelEvent& event, Widget& widget, OptionSet<WheelEventProcessingSteps> processingSteps)
 {
-    if (!is<FrameView>(widget))
+    auto* frameView = dynamicDowncast<FrameView>(widget);
+    if (!frameView)
+        return false;
+    RefPtr localFrame = dynamicDowncast<LocalFrame>(frameView->frame());
+    if (!localFrame)
         return false;
 
-    return Ref(downcast<FrameView>(widget).frame())->eventHandler().handleWheelEvent(event, processingSteps);
+    return localFrame->eventHandler().handleWheelEvent(event, processingSteps);
 }
 
 bool EventHandler::tabsToAllFormControls(KeyboardEvent*) const

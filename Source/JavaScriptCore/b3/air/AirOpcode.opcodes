@@ -123,6 +123,12 @@ Add32 U:G:32, UZD:G:32
     x86: Tmp, Addr
     x86: Tmp, Index
 
+arm64: AddZeroExtend64 U:G:64, U:G:32, D:G:64
+    Tmp, Tmp*, Tmp
+
+arm64: AddSignExtend64 U:G:64, U:G:32, D:G:64
+    Tmp, Tmp*, Tmp
+
 x86: Add8 U:G:8, UD:G:8
     Imm, Addr
     Imm, Index
@@ -211,7 +217,7 @@ arm64: Sub64 U:G:64, U:G:64, D:G:64
     Tmp, Tmp, Tmp, Tmp, Tmp, Tmp
 
 SubDouble U:F:64, U:F:64, D:F:64
-    arm: Tmp, Tmp, Tmp
+    arm x86_64_avx: Tmp, Tmp, Tmp
     x86: Tmp, Addr, Tmp
     x86: Tmp, Index, Tmp
 
@@ -220,7 +226,7 @@ x86: SubDouble U:F:64, UD:F:64
     Addr, Tmp
 
 SubFloat U:F:32, U:F:32, D:F:32
-    arm: Tmp, Tmp, Tmp
+    arm x86_64_avx: Tmp, Tmp, Tmp
     x86: Tmp, Addr, Tmp
     x86: Tmp, Index, Tmp
 
@@ -337,14 +343,14 @@ x86: MulFloat U:F:32, UD:F:32
     Tmp, Tmp
     Addr, Tmp
 
-arm: DivDouble U:F:64, U:F:32, D:F:64
+arm x86_64_avx: DivDouble U:F:64, U:F:64, D:F:64
     Tmp, Tmp, Tmp
 
 x86: DivDouble U:F:64, UD:F:64
     Tmp, Tmp
     Addr, Tmp
 
-arm: DivFloat U:F:32, U:F:32, D:F:32
+arm x86_64_avx: DivFloat U:F:32, U:F:32, D:F:32
     Tmp, Tmp, Tmp
 
 x86: DivFloat U:F:32, UD:F:32
@@ -770,6 +776,9 @@ MoveDouble U:F:64, D:F:64, S:F:64
 MoveZeroToDouble D:F:64
     Tmp
 
+MoveZeroToFloat D:F:32
+    Tmp
+
 64: Move64ToDouble U:G:64, D:F:64
     Tmp, Tmp
     x86: Addr, Tmp as loadDouble
@@ -1088,25 +1097,25 @@ x86_64: AtomicStrongCAS64 U:G:32, UD:G:64, U:G:64, UD:G:64, ZD:G:8 /effects
     StatusCond, Tmp*, Tmp, Addr, Tmp
     StatusCond, Tmp*, Tmp, Index, Tmp
 
-x86 arm64e: AtomicStrongCAS8 UD:G:8, U:G:8, UD:G:8 /effects
+x86 arm64_lse: AtomicStrongCAS8 UD:G:8, U:G:8, UD:G:8 /effects
     x86: Tmp*, Tmp, Addr
     x86: Tmp*, Tmp, Index
-    arm64e: Tmp, Tmp, SimpleAddr
+    arm64_lse: Tmp, Tmp, SimpleAddr
 
-x86 arm64e: AtomicStrongCAS16 UD:G:16, U:G:32, UD:G:16 /effects
+x86 arm64_lse: AtomicStrongCAS16 UD:G:16, U:G:32, UD:G:16 /effects
     x86: Tmp*, Tmp, Addr
     x86: Tmp*, Tmp, Index
-    arm64e: Tmp, Tmp, SimpleAddr
+    arm64_lse: Tmp, Tmp, SimpleAddr
 
-x86 arm64e: AtomicStrongCAS32 UD:G:32, U:G:32, UD:G:32 /effects
+x86 arm64_lse: AtomicStrongCAS32 UD:G:32, U:G:32, UD:G:32 /effects
     x86: Tmp*, Tmp, Addr
     x86: Tmp*, Tmp, Index
-    arm64e: Tmp, Tmp, SimpleAddr
+    arm64_lse: Tmp, Tmp, SimpleAddr
 
-x86_64 arm64e: AtomicStrongCAS64 UD:G:64, U:G:64, UD:G:64 /effects
+x86_64 arm64_lse: AtomicStrongCAS64 UD:G:64, U:G:64, UD:G:64 /effects
     x86_64: Tmp*, Tmp, Addr
     x86_64: Tmp*, Tmp, Index
-    arm64e: Tmp, Tmp, SimpleAddr
+    arm64_lse: Tmp, Tmp, SimpleAddr
 
 x86: BranchAtomicStrongCAS8 U:G:32, UD:G:8, U:G:8, UD:G:8 /branch /effects
     StatusCond, Tmp*, Tmp, Addr
@@ -1369,64 +1378,64 @@ arm64: Depend32 U:G:32, ZD:G:32
 arm64: Depend64 U:G:64, ZD:G:64
     Tmp, Tmp
 
-arm64e: AtomicXchgAdd8 U:G:8, UD:G:8, ZD:G:32 /effects
+arm64_lse: AtomicXchgAdd8 U:G:8, UD:G:8, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgAdd16 U:G:16, UD:G:16, ZD:G:32 /effects
+arm64_lse: AtomicXchgAdd16 U:G:16, UD:G:16, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgAdd32 U:G:32, UD:G:32, ZD:G:32 /effects
+arm64_lse: AtomicXchgAdd32 U:G:32, UD:G:32, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgAdd64 U:G:64, UD:G:64, ZD:G:64 /effects
+arm64_lse: AtomicXchgAdd64 U:G:64, UD:G:64, ZD:G:64 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgOr8 U:G:8, UD:G:8, ZD:G:32 /effects
+arm64_lse: AtomicXchgOr8 U:G:8, UD:G:8, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgOr16 U:G:16, UD:G:16, ZD:G:32 /effects
+arm64_lse: AtomicXchgOr16 U:G:16, UD:G:16, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgOr32 U:G:32, UD:G:32, ZD:G:32 /effects
+arm64_lse: AtomicXchgOr32 U:G:32, UD:G:32, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgOr64 U:G:64, UD:G:64, ZD:G:64 /effects
+arm64_lse: AtomicXchgOr64 U:G:64, UD:G:64, ZD:G:64 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgClear8 U:G:8, UD:G:8, ZD:G:32 /effects
+arm64_lse: AtomicXchgClear8 U:G:8, UD:G:8, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgClear16 U:G:16, UD:G:16, ZD:G:32 /effects
+arm64_lse: AtomicXchgClear16 U:G:16, UD:G:16, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgClear32 U:G:32, UD:G:32, ZD:G:32 /effects
+arm64_lse: AtomicXchgClear32 U:G:32, UD:G:32, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgClear64 U:G:64, UD:G:64, ZD:G:64 /effects
+arm64_lse: AtomicXchgClear64 U:G:64, UD:G:64, ZD:G:64 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgXor8 U:G:8, UD:G:8, ZD:G:32 /effects
+arm64_lse: AtomicXchgXor8 U:G:8, UD:G:8, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgXor16 U:G:16, UD:G:16, ZD:G:32 /effects
+arm64_lse: AtomicXchgXor16 U:G:16, UD:G:16, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgXor32 U:G:32, UD:G:32, ZD:G:32 /effects
+arm64_lse: AtomicXchgXor32 U:G:32, UD:G:32, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchgXor64 U:G:64, UD:G:64, ZD:G:64 /effects
+arm64_lse: AtomicXchgXor64 U:G:64, UD:G:64, ZD:G:64 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchg8 U:G:8, UD:G:8, ZD:G:32 /effects
+arm64_lse: AtomicXchg8 U:G:8, UD:G:8, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchg16 U:G:16, UD:G:16, ZD:G:32 /effects
+arm64_lse: AtomicXchg16 U:G:16, UD:G:16, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchg32 U:G:32, UD:G:32, ZD:G:32 /effects
+arm64_lse: AtomicXchg32 U:G:32, UD:G:32, ZD:G:32 /effects
     Tmp, SimpleAddr, Tmp
 
-arm64e: AtomicXchg64 U:G:64, UD:G:64, ZD:G:64 /effects
+arm64_lse: AtomicXchg64 U:G:64, UD:G:64, ZD:G:64 /effects
     Tmp, SimpleAddr, Tmp
 
 Compare32 U:G:32, U:G:32, U:G:32, ZD:G:32
@@ -1697,18 +1706,21 @@ RetDouble U:F:64 /return
 64: VectorExtractLaneFloat32 U:G:8, U:F:128, D:F:32
     Imm, Tmp, Tmp
 
-64: VectorSplat8 U:G:8, D:F:128
+64: VectorSplatInt8 U:G:8, D:F:128
     Tmp, Tmp
-64: VectorSplat16 U:G:16, D:F:128
+64: VectorSplatInt16 U:G:16, D:F:128
     Tmp, Tmp
-64: VectorSplat32 U:G:32, D:F:128
+64: VectorSplatInt32 U:G:32, D:F:128
     Tmp, Tmp
-64: VectorSplat64 U:G:64, D:F:128
+64: VectorSplatInt64 U:G:64, D:F:128
     Tmp, Tmp
 64: VectorSplatFloat32 U:F:32, D:F:128
     Tmp, Tmp
 64: VectorSplatFloat64 U:F:64, D:F:128
     Tmp, Tmp
+
+x86_64: CompareFloatingPointVectorUnordered U:G:Ptr, U:F:128, U:F:128, D:F:128
+    SIMDInfo, Tmp, Tmp, Tmp
 
 64: CompareFloatingPointVector U:G:32, U:G:Ptr, U:F:128, U:F:128, D:F:128
     DoubleCond, SIMDInfo, Tmp, Tmp, Tmp
@@ -1755,11 +1767,17 @@ arm64: VectorUnsignedMin U:G:Ptr, U:F:128, D:F:128
 64: VectorMax U:G:Ptr, U:F:128, U:F:128, D:F:128
     SIMDInfo, Tmp, Tmp, Tmp
 
-64: VectorPmin U:G:Ptr, U:F:128, U:F:128, D:F:128, S:F:128
+arm64: VectorPmin U:G:Ptr, U:F:128, U:F:128, D:F:128, S:F:128
     SIMDInfo, Tmp, Tmp, Tmp, Tmp
 
-64: VectorPmax U:G:Ptr, U:F:128, U:F:128, D:F:128, S:F:128 
+arm64: VectorPmax U:G:Ptr, U:F:128, U:F:128, D:F:128, S:F:128
     SIMDInfo, Tmp, Tmp, Tmp, Tmp
+
+x86_64: VectorPmin U:G:Ptr, U:F:128, U:F:128, D:F:128
+    SIMDInfo, Tmp, Tmp, Tmp
+
+x86_64: VectorPmax U:G:Ptr, U:F:128, U:F:128, D:F:128
+    SIMDInfo, Tmp, Tmp, Tmp
 
 64: VectorNarrow U:G:Ptr, U:F:128, U:F:128, D:F:128, S:F:128
     SIMDInfo, Tmp, Tmp, Tmp, Tmp
@@ -1797,7 +1815,19 @@ x86_64: VectorUshr U:G:Ptr, U:F:128, U:F:128, D:F:128
 arm64: VectorSshl U:G:Ptr, U:F:128, U:F:128, D:F:128
     SIMDInfo, Tmp, Tmp, Tmp
 
-arm64: VectorSshr8 U:G:Ptr, U:F:128, U:G:8, D:F:128
+x86_64: VectorUshl8 U:F:128, U:F:128, D:F:128, S:F:128, S:F:128
+    Tmp, Tmp, Tmp, Tmp, Tmp
+
+x86_64: VectorUshr8 U:F:128, U:F:128, D:F:128, S:F:128, S:F:128
+    Tmp, Tmp, Tmp, Tmp, Tmp
+
+x86_64: VectorSshr8 U:F:128, U:F:128, D:F:128, S:F:128, S:F:128
+    Tmp, Tmp, Tmp, Tmp, Tmp
+
+x86_64: VectorUshr8 U:G:Ptr, U:F:128, U:G:8, D:F:128
+    SIMDInfo, Tmp, Imm, Tmp
+
+64: VectorSshr8 U:G:Ptr, U:F:128, U:G:8, D:F:128
     SIMDInfo, Tmp, Imm, Tmp
 
 arm64: VectorHorizontalAdd U:G:Ptr, U:F:128, D:F:128
@@ -1815,10 +1845,13 @@ arm64: VectorExtractPair U:G:Ptr, U:G:8, U:F:128, U:F:128, D:F:128
 64: VectorAbs U:G:Ptr, U:F:128, D:F:128
     SIMDInfo, Tmp, Tmp
 
+x86_64: VectorAbsInt64 U:F:128, D:F:128, S:F:128
+    Tmp, Tmp, Tmp
+
 arm64: VectorNeg U:G:Ptr, U:F:128, D:F:128
     SIMDInfo, Tmp, Tmp
 
-64: VectorPopcnt U:G:Ptr, U:F:128, D:F:128
+arm64: VectorPopcnt U:G:Ptr, U:F:128, D:F:128
     SIMDInfo, Tmp, Tmp
 
 64: VectorCeil U:G:Ptr, U:F:128, D:F:128
@@ -1832,6 +1865,12 @@ arm64: VectorNeg U:G:Ptr, U:F:128, D:F:128
 
 arm64: VectorTruncSat U:G:Ptr, U:F:128, D:F:128
     SIMDInfo, Tmp, Tmp
+
+x86_64: VectorTruncSat U:G:Ptr, U:F:128, D:F:128, S:G:64, S:F:128, S:F:128
+    SIMDInfo, Tmp, Tmp, Tmp, Tmp, Tmp
+
+x86_64: VectorTruncSatUnsignedFloat32 U:F:128, D:F:128, S:G:64, S:F:128, S:F:128
+    Tmp, Tmp, Tmp, Tmp, Tmp
 
 x86_64: VectorTruncSatSignedFloat64 U:F:128, D:F:128, S:G:64, S:F:128
     Tmp, Tmp, Tmp, Tmp
@@ -1938,10 +1977,10 @@ arm64: VectorMulSat U:F:128, U:F:128, D:F:128
 x86_64: VectorMulSat U:F:128, U:F:128, D:F:128, S:G:64, S:F:128
     Tmp, Tmp, Tmp, Tmp, Tmp
 
-arm64: VectorDotProductInt32 U:F:128, U:F:128, D:F:128, S:F:128
+arm64: VectorDotProduct U:F:128, U:F:128, D:F:128, S:F:128
     Tmp, Tmp, Tmp, Tmp
 
-x86_64: VectorDotProductInt32 U:F:128, U:F:128, D:F:128
+x86_64: VectorDotProduct U:F:128, U:F:128, D:F:128
     Tmp, Tmp, Tmp
 
 64: VectorSwizzle U:F:128, U:F:128, D:F:128

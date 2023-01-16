@@ -765,6 +765,8 @@ void run(const char* filter)
     RUN(testTrappingStoreElimination());
     RUN(testMoveConstants());
     RUN(testMoveConstantsWithLargeOffsets());
+    if (Options::useWebAssemblySIMD())
+        RUN(testMoveConstantsSIMD());
     RUN(testPCOriginMapDoesntInsertNops());
     RUN(testPinRegisters());
     RUN(testReduceStrengthReassociation(true));
@@ -813,6 +815,7 @@ void run(const char* filter)
     RUN(testWasmBoundsCheck(std::numeric_limits<unsigned>::max() - 5));
 
     RUN(testWasmAddress());
+    RUN(testWasmAddressWithOffset());
     
     RUN(testFastTLSLoad());
     RUN(testFastTLSStore());

@@ -37,6 +37,7 @@
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
 #include "LegacyCustomProtocolManager.h"
 #endif
+#include "LoadedWebArchive.h"
 #include "Logging.h"
 #include "NetworkConnectionToWebProcess.h"
 #include "NetworkContentRuleListManagerMessages.h"
@@ -262,6 +263,11 @@ void NetworkProcess::didClose(IPC::Connection&)
         platformFlushCookies(session.sessionID(), [callbackAggregator] { });
         session.storageManager().syncLocalStorage([callbackAggregator] { });
     });
+
+#if PLATFORM(COCOA)
+    if (m_mediaStreamingActivitityToken != NOTIFY_TOKEN_INVALID)
+        notify_cancel(m_mediaStreamingActivitityToken);
+#endif
 }
 
 void NetworkProcess::didCreateDownload()
@@ -328,7 +334,7 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
     m_ftpEnabled = parameters.ftpEnabled;
 
     for (auto [processIdentifier, domain] : parameters.allowedFirstPartiesForCookies)
-        addAllowedFirstPartyForCookies(processIdentifier, WTFMove(domain), [] { });
+        addAllowedFirstPartyForCookies(processIdentifier, WTFMove(domain), LoadedWebArchive::No, [] { });
 
     for (auto& supplement : m_supplements.values())
         supplement->initialize(parameters);
@@ -386,12 +392,25 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
         session->storageManager().startReceivingMessageFromConnection(connection.connection());
 }
 
-void NetworkProcess::addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier processIdentifier, WebCore::RegistrableDomain&& firstPartyForCookies, CompletionHandler<void()>&& completionHandler)
+void NetworkProcess::addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier processIdentifier, WebCore::RegistrableDomain&& firstPartyForCookies, LoadedWebArchive loadedWebArchive, CompletionHandler<void()>&& completionHandler)
+{
+    auto& pair = m_allowedFirstPartiesForCookies.ensure(processIdentifier, [] {
+        return std::make_pair(LoadedWebArchive::No, HashSet<RegistrableDomain> { });
+    }).iterator->value;
+
+    pair.second.add(WTFMove(firstPartyForCookies));
+
+    if (loadedWebArchive == LoadedWebArchive::Yes)
+        pair.first = LoadedWebArchive::Yes;
+
+    completionHandler();
+}
+
+void NetworkProcess::webProcessWillLoadWebArchive(WebCore::ProcessIdentifier processIdentifier)
 {
     m_allowedFirstPartiesForCookies.ensure(processIdentifier, [] {
-        return HashSet<RegistrableDomain> { };
-    }).iterator->value.add(WTFMove(firstPartyForCookies));
-    completionHandler();
+        return std::make_pair(LoadedWebArchive::Yes, HashSet<RegistrableDomain> { });
+    }).iterator->value.first = LoadedWebArchive::Yes;
 }
 
 bool NetworkProcess::allowsFirstPartyForCookies(WebCore::ProcessIdentifier processIdentifier, const URL& firstParty)
@@ -421,11 +440,16 @@ bool NetworkProcess::allowsFirstPartyForCookies(WebCore::ProcessIdentifier proce
         return false;
     }
 
-    if (!decltype(iterator->value)::isValidValue(firstPartyDomain)) {
+    if (iterator->value.first == LoadedWebArchive::Yes)
+        return true;
+
+    auto& set = iterator->value.second;
+    if (!std::remove_reference_t<decltype(set)>::isValidValue(firstPartyDomain)) {
         ASSERT_NOT_REACHED();
         return false;
     }
-    auto result = iterator->value.contains(firstPartyDomain);
+
+    auto result = set.contains(firstPartyDomain);
     ASSERT(result);
     return result;
 }
@@ -1365,6 +1389,31 @@ bool NetworkProcess::privateClickMeasurementEnabled() const
     return m_privateClickMeasurementEnabled;
 }
 
+void NetworkProcess::notifyMediaStreamingActivity(bool activity)
+{
+#if PLATFORM(COCOA)
+    static const char* notifyMediaStreamingName = "com.apple.WebKit.mediaStreamingActivity";
+
+    if (m_mediaStreamingActivitityToken == NOTIFY_TOKEN_INVALID) {
+        auto status = notify_register_check(notifyMediaStreamingName, &m_mediaStreamingActivitityToken);
+        if (status != NOTIFY_STATUS_OK || m_mediaStreamingActivitityToken == NOTIFY_TOKEN_INVALID) {
+            RELEASE_LOG_ERROR(IPC, "notify_register_check() for %s failed with status (%d) 0x%X", notifyMediaStreamingName, status, status);
+            m_mediaStreamingActivitityToken = NOTIFY_TOKEN_INVALID;
+            return;
+        }
+    }
+    auto status = notify_set_state(m_mediaStreamingActivitityToken, activity ? 1 : 0);
+    if (status != NOTIFY_STATUS_OK) {
+        RELEASE_LOG_ERROR(IPC, "notify_set_state() for %s failed with status (%d) 0x%X", notifyMediaStreamingName, status, status);
+        return;
+    }
+    status = notify_post(notifyMediaStreamingName);
+    RELEASE_LOG_ERROR_IF(status != NOTIFY_STATUS_OK, IPC, "notify_post() for %s failed with status (%d) 0x%X", notifyMediaStreamingName, status, status);
+#else
+    UNUSED_PARAM(activity);
+#endif
+}
+
 void NetworkProcess::setPrivateClickMeasurementDebugMode(PAL::SessionID sessionID, bool enabled)
 {
     if (auto* session = networkSession(sessionID))
@@ -1509,12 +1558,6 @@ void NetworkProcess::fetchWebsiteData(PAL::SessionID sessionID, OptionSet<Websit
             callbackAggregator->m_websiteData.entries.append({ securityOrigin, WebsiteDataType::Credentials, 0 });
     }
 
-    if (websiteDataTypes.contains(WebsiteDataType::DOMCache) && session) {
-        CacheStorage::Engine::fetchEntries(*session, fetchOptions.contains(WebsiteDataFetchOption::ComputeSizes), [callbackAggregator](auto entries) mutable {
-            callbackAggregator->m_websiteData.entries.appendVector(entries);
-        });
-    }
-
 #if PLATFORM(COCOA) || USE(SOUP)
     if (websiteDataTypes.contains(WebsiteDataType::HSTSCache))
         callbackAggregator->m_websiteData.hostNamesWithHSTSCache = hostNamesWithHSTSCache(sessionID);
@@ -1587,9 +1630,6 @@ void NetworkProcess::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<Websi
             session->credentialStorage().clearCredentials();
         WebCore::CredentialStorage::clearSessionCredentials();
     }
-
-    if (websiteDataTypes.contains(WebsiteDataType::DOMCache) && session)
-        CacheStorage::Engine::clearAllCaches(*session, [clearTasksHandler] { });
 
 #if ENABLE(SERVICE_WORKER)
     bool clearServiceWorkers = websiteDataTypes.contains(WebsiteDataType::DOMCache) || websiteDataTypes.contains(WebsiteDataType::ServiceWorkerRegistrations);
@@ -1690,11 +1730,6 @@ void NetworkProcess::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, Optio
             session->clearPrivateClickMeasurementForRegistrableDomain(RegistrableDomain::uncheckedCreateFromHost(originData.host), [clearTasksHandler] { });
     }
 
-    if (websiteDataTypes.contains(WebsiteDataType::DOMCache) && session) {
-        for (auto& originData : originDatas)
-            CacheStorage::Engine::clearCachesForOrigin(*session, SecurityOriginData { originData }, [clearTasksHandler] { });
-    }
-
 #if ENABLE(SERVICE_WORKER)
     bool clearServiceWorkers = websiteDataTypes.contains(WebsiteDataType::DOMCache) || websiteDataTypes.contains(WebsiteDataType::ServiceWorkerRegistrations);
     if (clearServiceWorkers && !sessionID.isEphemeral() && session) {
@@ -1759,17 +1794,6 @@ static Vector<String> filterForRegistrableDomains(const Vector<RegistrableDomain
     Vector<String> result;
     for (const auto& value : foundValues) {
         if (registrableDomains.contains(RegistrableDomain::uncheckedCreateFromHost(value)))
-            result.append(value);
-    }
-    
-    return result;
-}
-
-static Vector<WebsiteData::Entry> filterForRegistrableDomains(const Vector<RegistrableDomain>& registrableDomains, const Vector<WebsiteData::Entry>& foundValues)
-{
-    Vector<WebsiteData::Entry> result;
-    for (const auto& value : foundValues) {
-        if (registrableDomains.contains(RegistrableDomain::uncheckedCreateFromHost(value.origin.host)))
             result.append(value);
     }
     
@@ -1884,21 +1908,6 @@ void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::Sess
         auto origins = WebCore::CredentialStorage::originsWithSessionCredentials();
         auto originsToDelete = filterForRegistrableDomains(origins, domainsToDeleteAllScriptWrittenStorageFor, callbackAggregator->m_domains);
         WebCore::CredentialStorage::removeSessionCredentialsWithOrigins(originsToDelete);
-    }
-    
-    if (websiteDataTypes.contains(WebsiteDataType::DOMCache) && session) {
-        CacheStorage::Engine::fetchEntries(*session, fetchOptions.contains(WebsiteDataFetchOption::ComputeSizes), [domainsToDeleteAllScriptWrittenStorageFor, session = WeakPtr { session }, callbackAggregator](auto entries) mutable {
-            
-            auto entriesToDelete = filterForRegistrableDomains(domainsToDeleteAllScriptWrittenStorageFor, entries);
-
-            for (const auto& entry : entriesToDelete)
-                callbackAggregator->m_domains.add(RegistrableDomain::uncheckedCreateFromHost(entry.origin.host));
-
-            if (session) {
-                for (auto& entry : entriesToDelete)
-                    CacheStorage::Engine::clearCachesForOrigin(*session, SecurityOriginData { entry.origin }, [callbackAggregator] { });
-            }
-        });
     }
     
 #if ENABLE(SERVICE_WORKER)
@@ -2033,12 +2042,6 @@ void NetworkProcess::registrableDomainsWithWebsiteData(PAL::SessionID sessionID,
             for (auto& securityOrigin : securityOrigins)
                 callbackAggregator->m_websiteData.entries.append({ securityOrigin, WebsiteDataType::Credentials, 0 });
         }
-    }
-    
-    if (websiteDataTypes.contains(WebsiteDataType::DOMCache) && session) {
-        CacheStorage::Engine::fetchEntries(*session, fetchOptions.contains(WebsiteDataFetchOption::ComputeSizes), [callbackAggregator](auto entries) mutable {
-            callbackAggregator->m_websiteData.entries.appendVector(entries);
-        });
     }
     
 #if ENABLE(SERVICE_WORKER)
@@ -2334,12 +2337,18 @@ void NetworkProcess::resetQuota(PAL::SessionID sessionID, CompletionHandler<void
     completionHandler();
 }
 
-void NetworkProcess::clearStorage(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+void NetworkProcess::resetStoragePersistedState(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
 {
     if (auto* session = networkSession(sessionID))
-        session->storageManager().clearStorageForTesting(WTFMove(completionHandler));
+        session->storageManager().resetStoragePersistedState(WTFMove(completionHandler));
     else
         completionHandler();
+}
+
+void NetworkProcess::cloneSessionStorageForWebPage(PAL::SessionID sessionID, WebPageProxyIdentifier sourcePage, WebPageProxyIdentifier destinationPage)
+{
+    if (auto* session = networkSession(sessionID))
+        session->storageManager().cloneSessionStorageForWebPage(sourcePage, destinationPage);
 }
 
 void NetworkProcess::didIncreaseQuota(PAL::SessionID sessionID, ClientOrigin&& origin, QuotaIncreaseRequestIdentifier identifier, std::optional<uint64_t> newQuota)

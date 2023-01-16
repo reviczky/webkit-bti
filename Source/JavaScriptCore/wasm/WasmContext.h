@@ -37,13 +37,10 @@ class Instance;
 
 struct Context {
     Instance* load() const;
-    void store(Instance*, void* softStackLimit);
-
-    static bool useFastTLS();
+    void store(Instance*);
 
     Instance** pointerToInstance()
     {
-        ASSERT(!useFastTLS());
         return &instance;
     }
 

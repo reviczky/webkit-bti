@@ -145,6 +145,12 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/applicationmanifest/ApplicationManifest.h
     Modules/applicationmanifest/ApplicationManifestParser.h
 
+    Modules/audiosession/DOMAudioSession.h
+
+    Modules/badge/BadgeClient.h
+    Modules/badge/EmptyBadgeClient.h
+    Modules/badge/WorkerBadgeProxy.h
+
     Modules/cache/CacheQueryOptions.h
     Modules/cache/CacheStorageConnection.h
     Modules/cache/DOMCacheEngine.h
@@ -186,6 +192,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/filesystemaccess/StorageManagerFileSystemAccess.h
     Modules/filesystemaccess/WorkerFileSystemStorageConnection.h
     Modules/filesystemaccess/WorkerFileSystemStorageConnectionCallbackIdentifier.h
+
+    Modules/gamepad/GamepadEffectParameters.h
+    Modules/gamepad/GamepadHapticEffectType.h
 
     Modules/geolocation/Geolocation.h
     Modules/geolocation/GeolocationClient.h
@@ -366,6 +375,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/storage/DummyStorageProvider.h
     Modules/storage/StorageConnection.h
+    Modules/storage/StorageEstimate.h
     Modules/storage/StorageManager.h
     Modules/storage/StorageProvider.h
     Modules/storage/WorkerStorageConnection.h
@@ -440,6 +450,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     accessibility/AXLogger.h
     accessibility/AXObjectCache.h
+    accessibility/AXTreeStore.h
     accessibility/AXTextStateChangeIntent.h
     accessibility/AccessibilityListBox.h
     accessibility/AccessibilityMenuListPopup.h
@@ -587,10 +598,13 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     crypto/SerializedCryptoKeyWrap.h
 
     css/CSSConditionRule.h
+    css/CSSCounterStyle.h
+    css/CSSCounterStyleDescriptors.h
+    css/CSSCounterStyleRegistry.h
+    css/CSSCounterStyleRule.h
     css/CSSCustomPropertyValue.h
     css/CSSFontFaceRule.h
     css/CSSFontPaletteValuesRule.h
-    css/CSSFontFamily.h
     css/CSSGridIntegerRepeatValue.h
     css/CSSGroupingRule.h
     css/CSSImportRule.h
@@ -642,8 +656,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/parser/CSSParser.h
     css/parser/CSSParserContext.h
     css/parser/CSSParserMode.h
+    css/parser/CSSParserSelector.h
     css/parser/CSSParserToken.h
     css/parser/CSSParserTokenRange.h
+    css/parser/CSSSelectorParser.h
 
     css/query/GenericMediaQueryTypes.h
     css/query/MediaQuery.h
@@ -1093,6 +1109,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     loader/EmptyFrameLoaderClient.h
     loader/EphemeralNonce.h
     loader/FetchOptions.h
+    loader/FetchOptionsCache.h
+    loader/FetchOptionsCredentials.h
+    loader/FetchOptionsDestination.h
+    loader/FetchOptionsMode.h
+    loader/FetchOptionsRedirect.h
     loader/FontLoadRequest.h
     loader/FormState.h
     loader/FormSubmission.h
@@ -1151,6 +1172,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     loader/archive/mhtml/MHTMLArchive.h
 
+    loader/cache/AllowedFonts.h
     loader/cache/CachedFontLoadRequest.h
     loader/cache/CachePolicy.h
     loader/cache/CachedImage.h
@@ -1167,6 +1189,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     page/AbstractDOMWindow.h
     page/AbstractFrame.h
+    page/AbstractFrameView.h
     page/ActivityState.h
     page/ActivityStateChangeObserver.h
     page/AdjustViewSizeOrNot.h
@@ -1251,6 +1274,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/RemoteDOMWindow.h
     page/RemoteFrame.h
     page/RemoteFrameClient.h
+    page/RemoteFrameView.h
     page/RenderingUpdateScheduler.h
     page/ScreenOrientationLockType.h
     page/ScreenOrientationType.h
@@ -1724,6 +1748,25 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/angle/ANGLEUtilities.h
     platform/graphics/angle/GraphicsContextGLANGLE.h
 
+    platform/graphics/controls/ButtonPart.h
+    platform/graphics/controls/ColorWellPart.h
+    platform/graphics/controls/ControlFactory.h
+    platform/graphics/controls/ControlPart.h
+    platform/graphics/controls/ControlStyle.h
+    platform/graphics/controls/InnerSpinButtonPart.h
+    platform/graphics/controls/MenuListButtonPart.h
+    platform/graphics/controls/MenuListPart.h
+    platform/graphics/controls/MeterPart.h
+    platform/graphics/controls/PlatformControl.h
+    platform/graphics/controls/ProgressBarPart.h
+    platform/graphics/controls/SearchFieldCancelButtonPart.h
+    platform/graphics/controls/SearchFieldPart.h
+    platform/graphics/controls/SliderThumbPart.h
+    platform/graphics/controls/SliderTrackPart.h
+    platform/graphics/controls/TextAreaPart.h
+    platform/graphics/controls/TextFieldPart.h
+    platform/graphics/controls/ToggleButtonPart.h
+
     platform/graphics/displaylists/DisplayList.h
     platform/graphics/displaylists/DisplayListDrawingContext.h
     platform/graphics/displaylists/DisplayListImageBuffer.h
@@ -1777,8 +1820,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/filters/SourceAlpha.h
     platform/graphics/filters/SourceGraphic.h
     platform/graphics/filters/SpotLightSource.h
-
-    platform/graphics/formcontrols/ControlPartType.h
 
     platform/graphics/iso/ISOBox.h
     platform/graphics/iso/ISOOriginalFormatBox.h
@@ -1935,6 +1976,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/text/TextBoundaries.h
     platform/text/TextCheckerClient.h
     platform/text/TextChecking.h
+    platform/text/TextCheckingRequestIdentifier.h
     platform/text/TextDirection.h
     platform/text/TextFlags.h
     platform/text/UnicodeBidi.h
@@ -2084,6 +2126,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     storage/StorageQuotaManager.h
     storage/StorageType.h
 
+    style/StyleAppearance.h
     style/StyleChange.h
     style/StyleScope.h
     style/StyleScopeOrdinal.h

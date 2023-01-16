@@ -28,8 +28,10 @@
 #include "config.h"
 #include "StyleScope.h"
 
+#include "CSSCounterStyleRegistry.h"
 #include "CSSFontSelector.h"
 #include "CSSStyleSheet.h"
+#include "CustomPropertyRegistry.h"
 #include "Element.h"
 #include "ElementChildIterator.h"
 #include "ElementRareData.h"
@@ -47,6 +49,7 @@
 #include "SVGStyleElement.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
+#include "StyleBuilder.h"
 #include "StyleInvalidator.h"
 #include "StyleResolver.h"
 #include "StyleSheetContents.h"
@@ -65,6 +68,8 @@ namespace Style {
 Scope::Scope(Document& document)
     : m_document(document)
     , m_pendingUpdateTimer(*this, &Scope::pendingUpdateTimerFired)
+    , m_customPropertyRegistry(makeUniqueRef<CustomPropertyRegistry>(*this))
+    , m_counterStyleRegistry(makeUniqueRef<CSSCounterStyleRegistry>())
 {
 }
 
@@ -72,6 +77,8 @@ Scope::Scope(ShadowRoot& shadowRoot)
     : m_document(shadowRoot.documentScope())
     , m_shadowRoot(&shadowRoot)
     , m_pendingUpdateTimer(*this, &Scope::pendingUpdateTimerFired)
+    , m_customPropertyRegistry(makeUniqueRef<CustomPropertyRegistry>(*this))
+    , m_counterStyleRegistry(makeUniqueRef<CSSCounterStyleRegistry>())
 {
 }
 
@@ -101,7 +108,7 @@ void Scope::createDocumentResolver()
 
     SetForScope isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
 
-    m_resolver = Resolver::create(m_document);
+    m_resolver = Resolver::create(m_document, Resolver::ScopeType::Document);
 
     m_document.fontSelector().buildStarted();
 
@@ -122,7 +129,7 @@ void Scope::createOrFindSharedShadowTreeResolver()
     auto result = documentScope().m_sharedShadowTreeResolvers.ensure(WTFMove(key), [&] {
         SetForScope isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
 
-        m_resolver = Resolver::create(m_document);
+        m_resolver = Resolver::create(m_document, Resolver::ScopeType::ShadowTree);
 
         m_resolver->ruleSets().setUsesSharedUserStyle(!isForUserAgentShadowTree());
         m_resolver->appendAuthorStyleSheets(m_activeStyleSheets);
@@ -156,6 +163,7 @@ auto Scope::makeResolverSharingKey() -> ResolverSharingKey
 void Scope::clearResolver()
 {
     m_resolver = nullptr;
+    customPropertyRegistry().clearRegisteredFromStylesheets();
 }
 
 void Scope::releaseMemory()
@@ -589,6 +597,7 @@ void Scope::updateResolver(Vector<RefPtr<CSSStyleSheet>>& activeStyleSheets, Res
     SetForScope isUpdatingStyleResolver { m_isUpdatingStyleResolver, true };
 
     if (updateType == ResolverUpdateType::Reset) {
+        customPropertyRegistry().clearRegisteredFromStylesheets();
         m_resolver->ruleSets().resetAuthorStyle();
         m_resolver->appendAuthorStyleSheets(activeStyleSheets);
         return;

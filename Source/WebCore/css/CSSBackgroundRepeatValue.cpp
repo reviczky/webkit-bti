@@ -26,6 +26,7 @@
 #include "config.h"
 #include "CSSBackgroundRepeatValue.h"
 
+#include "CSSValuePool.h"
 #include "Rect.h"
 #include <wtf/text/WTFString.h>
 
@@ -35,6 +36,13 @@ CSSBackgroundRepeatValue::CSSBackgroundRepeatValue(Ref<CSSPrimitiveValue>&& repe
     : CSSValue(BackgroundRepeatClass)
     , m_xValue(WTFMove(repeatXValue))
     , m_yValue(WTFMove(repeatYValue))
+{
+}
+
+CSSBackgroundRepeatValue::CSSBackgroundRepeatValue(CSSValueID repeatXValue, CSSValueID repeatYValue)
+    : CSSValue(BackgroundRepeatClass)
+    , m_xValue(CSSPrimitiveValue::create(repeatXValue))
+    , m_yValue(CSSPrimitiveValue::create(repeatYValue))
 {
 }
 

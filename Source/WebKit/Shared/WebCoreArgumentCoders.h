@@ -110,6 +110,7 @@ class AuthenticationChallenge;
 class BlobPart;
 class CertificateInfo;
 class Color;
+class ControlPart;
 class SharedBuffer;
 class CSPViolationReportBody;
 class Credential;
@@ -154,7 +155,6 @@ struct DictationAlternative;
 struct DictionaryPopupInfo;
 struct EventTrackingRegions;
 struct ExceptionDetails;
-struct FontAttributes;
 struct FileChooserSettings;
 struct TextRecognitionDataDetector;
 struct Length;
@@ -446,11 +446,6 @@ template<> struct ArgumentCoder<Ref<WebCore::SecurityOrigin>> {
     static std::optional<Ref<WebCore::SecurityOrigin>> decode(Decoder&);
 };
 
-template<> struct ArgumentCoder<WebCore::FontAttributes> {
-    static void encode(Encoder&, const WebCore::FontAttributes&);
-    static std::optional<WebCore::FontAttributes> decode(Decoder&);
-};
-
 #if ENABLE(ATTACHMENT_ELEMENT)
 
 template<> struct ArgumentCoder<WebCore::SerializedAttachmentData> {
@@ -488,6 +483,12 @@ template<> struct ArgumentCoder<WebCore::SystemImage> {
     template<typename Encoder>
     static void encode(Encoder&, const WebCore::SystemImage&);
     static std::optional<Ref<WebCore::SystemImage>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebCore::ControlPart> {
+    template<typename Encoder>
+    static void encode(Encoder&, const WebCore::ControlPart&);
+    static std::optional<Ref<WebCore::ControlPart>> decode(Decoder&);
 };
 
 #if ENABLE(DATA_DETECTION)

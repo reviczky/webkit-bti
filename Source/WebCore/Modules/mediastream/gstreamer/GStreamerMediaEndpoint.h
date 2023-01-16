@@ -134,6 +134,8 @@ private:
     void prepareDataChannel(GstWebRTCDataChannel*, gboolean isLocal);
     void onDataChannel(GstWebRTCDataChannel*);
 
+    WARN_UNUSED_RETURN GRefPtr<GstElement> requestAuxiliarySender(GstWebRTCDTLSTransport*);
+
     MediaStream& mediaStreamFromRTCStream(String mediaStreamId);
 
     void addRemoteStream(GstPad*);
@@ -144,7 +146,7 @@ private:
 
     void processSDPMessage(const GstSDPMessage*, Function<void(unsigned index, const char* mid, const GstSDPMedia*)>);
 
-    GRefPtr<GstPad> requestPad(unsigned mlineIndex, const GRefPtr<GstCaps>&);
+    GRefPtr<GstPad> requestPad(unsigned mlineIndex, const GRefPtr<GstCaps>&, const String& mediaStreamID);
 
 #if !RELEASE_LOG_DISABLED
     void gatherStatsForLogging();
@@ -187,6 +189,8 @@ private:
 
     using DataChannelHandlerIdentifier = ObjectIdentifier<GstWebRTCDataChannel>;
     HashMap<DataChannelHandlerIdentifier, UniqueRef<GStreamerDataChannelHandler>> m_incomingDataChannels;
+
+    HashMap<unsigned, GRefPtr<GstElement>> m_auxiliarySenders;
 };
 
 } // namespace WebCore

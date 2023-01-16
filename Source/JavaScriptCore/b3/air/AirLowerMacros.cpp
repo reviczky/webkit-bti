@@ -139,16 +139,16 @@ void lowerMacros(Code& code)
                 if (!isX86())
                     return;
 
-                Tmp lhs = inst.args[1].tmp();
-                Tmp rhs = inst.args[2].tmp();
-                Tmp dst = inst.args[3].tmp(); // Bitmask is passed via dst.
+                Tmp lhs = inst.args[0].tmp();
+                Tmp rhs = inst.args[1].tmp();
+                Tmp dst = inst.args[2].tmp(); // Bitmask is passed via dst.
                 auto* origin = inst.origin;
 
                 Tmp scratch = code.newTmp(FP);
 
-                insertionSet.insert(instIndex, VectorAnd, origin, lhs, dst, scratch);
-                insertionSet.insert(instIndex, VectorAndnot, origin, rhs, dst, dst);
-                insertionSet.insert(instIndex, VectorOr, origin, scratch, dst, dst);
+                insertionSet.insert(instIndex, VectorAnd, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), lhs, dst, scratch);
+                insertionSet.insert(instIndex, VectorAndnot, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), rhs, dst, dst);
+                insertionSet.insert(instIndex, VectorOr, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), scratch, dst, dst);
 
                 inst = Inst();
             };
@@ -217,6 +217,81 @@ void lowerMacros(Code& code)
                 inst = Inst();
             };
 
+            auto handleVectorMin = [&] {
+                if (!isX86() || !scalarTypeIsFloatingPoint(inst.args[0].simdInfo().lane))
+                    return;
+
+                // Intel's vectorized minimum instruction has slightly different semantics to the WebAssembly vectorized
+                // minimum instruction, namely in terms of signed zero values and propagating NaNs. VectorPmin implements
+                // a fast version of this instruction that compiles down to a single op, without conforming to the exact
+                // semantics. In order to precisely implement VectorMin, we need to do extra work on Intel to check for
+                // the necessary edge cases.
+
+                SIMDInfo simdInfo = inst.args[0].simdInfo();
+                Tmp lhs = inst.args[1].tmp();
+                Tmp rhs = inst.args[2].tmp();
+                Tmp dst = inst.args[3].tmp();
+                auto* origin = inst.origin;
+
+                Tmp tmp = code.newTmp(FP);
+
+                // Compute result in both directions.
+                insertionSet.insert(instIndex, VectorPmin, origin, Arg::simdInfo(simdInfo), rhs, lhs, tmp);
+                insertionSet.insert(instIndex, VectorPmin, origin, Arg::simdInfo(simdInfo), lhs, rhs, dst);
+
+                // OR results, propagating the sign bit for negative zeroes, and NaNs.
+                insertionSet.insert(instIndex, VectorOr, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), tmp, dst, tmp);
+
+                // Canonicalize NaNs by checking for unordered values and clearing payload if necessary.
+                insertionSet.insert(instIndex, CompareFloatingPointVectorUnordered, origin, Arg::simdInfo(simdInfo), dst, tmp, dst);
+                insertionSet.insert(instIndex, VectorOr, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), tmp, dst, tmp);
+                SIMDLane equivalentIntegerLane = simdInfo.lane == SIMDLane::f32x4 ? SIMDLane::i32x4 : SIMDLane::i64x2;
+                insertionSet.insert(instIndex, VectorUshr8, origin, Arg::simdInfo({ equivalentIntegerLane, SIMDSignMode::None }), dst, Arg::imm(simdInfo.lane == SIMDLane::f32x4 ? 10 : 13), dst);
+                insertionSet.insert(instIndex, VectorAndnot, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), tmp, dst, dst);
+
+                inst = Inst();
+            };
+
+            auto handleVectorMax = [&] {
+                if (!isX86() || !scalarTypeIsFloatingPoint(inst.args[0].simdInfo().lane))
+                    return;
+
+                // Intel's vectorized maximum instruction has slightly different semantics to the WebAssembly vectorized
+                // minimum instruction, namely in terms of signed zero values and propagating NaNs. VectorPmax implements
+                // a fast version of this instruction that compiles down to a single op, without conforming to the exact
+                // semantics. In order to precisely implement VectorMax, we need to do extra work on Intel to check for
+                // the necessary edge cases.
+
+                SIMDInfo simdInfo = inst.args[0].simdInfo();
+                Tmp lhs = inst.args[1].tmp();
+                Tmp rhs = inst.args[2].tmp();
+                Tmp dst = inst.args[3].tmp();
+                auto* origin = inst.origin;
+
+                Tmp tmp = code.newTmp(FP);
+
+                // Compute result in both directions.
+                insertionSet.insert(instIndex, VectorPmax, origin, Arg::simdInfo(simdInfo), rhs, lhs, tmp);
+                insertionSet.insert(instIndex, VectorPmax, origin, Arg::simdInfo(simdInfo), lhs, rhs, dst);
+
+                // Check for discrepancies by XORing the two results together.
+                insertionSet.insert(instIndex, VectorXor, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), tmp, dst, dst);
+
+                // OR results, propagating the sign bit for negative zeroes, and NaNs.
+                insertionSet.insert(instIndex, VectorOr, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), tmp, dst, tmp);
+
+                // Propagate discrepancies in the sign bit.
+                insertionSet.insert(instIndex, VectorSub, origin, Arg::simdInfo(simdInfo), tmp, dst, tmp);
+
+                // Canonicalize NaNs by checking for unordered values and clearing payload if necessary.
+                insertionSet.insert(instIndex, CompareFloatingPointVectorUnordered, origin, Arg::simdInfo(simdInfo), dst, tmp, dst);
+                SIMDLane equivalentIntegerLane = simdInfo.lane == SIMDLane::f32x4 ? SIMDLane::i32x4 : SIMDLane::i64x2;
+                insertionSet.insert(instIndex, VectorUshr8, origin, Arg::simdInfo({ equivalentIntegerLane, SIMDSignMode::None }), dst, Arg::imm(simdInfo.lane == SIMDLane::f32x4 ? 10 : 13), dst);
+                insertionSet.insert(instIndex, VectorAndnot, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), tmp, dst, dst);
+
+                inst = Inst();
+            };
+
             auto handleVectorAnyTrue = [&] {
                 if (!isARM64())
                     return;
@@ -279,8 +354,8 @@ void lowerMacros(Code& code)
                 // Intel doesn't have a vector absolute-value instruction for floats, so we have to manually
                 // set the sign bit.
 
-                Tmp vec = inst.args[0].tmp();
-                Tmp dst = inst.args[1].tmp();
+                Tmp vec = inst.args[1].tmp();
+                Tmp dst = inst.args[2].tmp();
                 auto* origin = inst.origin;
 
                 Tmp fptmp = code.newTmp(FP);
@@ -295,8 +370,22 @@ void lowerMacros(Code& code)
                     insertionSet.insert(instIndex, Move64ToDouble, origin, gptmp, fptmp);
                     insertionSet.insert(instIndex, VectorSplatFloat64, origin, fptmp, fptmp);
                 }
-                insertionSet.insert(instIndex, VectorAnd, origin, Arg::simdInfo(simdInfo), vec, fptmp, dst);
+                insertionSet.insert(instIndex, VectorAnd, origin, Arg::simdInfo({ SIMDLane::v128, SIMDSignMode::None }), vec, fptmp, dst);
 
+                inst = Inst();
+            };
+
+            auto handleVectorExtaddPairwise = [&] {
+                SIMDInfo simdInfo = inst.args[0].simdInfo();
+
+                if (!isX86() || simdInfo.lane != SIMDLane::i16x8 || simdInfo.signMode != SIMDSignMode::Unsigned)
+                    return;
+
+                Tmp vec = inst.args[1].tmp();
+                Tmp dst = inst.args[2].tmp();
+                auto* origin = inst.origin;
+
+                insertionSet.insert(instIndex, VectorExtaddPairwiseUnsignedInt16, origin, vec, dst, code.newTmp(FP));
                 inst = Inst();
             };
 
@@ -399,6 +488,15 @@ void lowerMacros(Code& code)
                 break;
             case VectorBitwiseSelect:
                 handleVectorBitwiseSelect();
+                break;
+            case VectorMin:
+                handleVectorMin();
+                break;
+            case VectorMax:
+                handleVectorMax();
+                break;
+            case VectorExtaddPairwise:
+                handleVectorExtaddPairwise();
                 break;
             default:
                 break;

@@ -21,6 +21,7 @@
 
 #if USE(ATSPI)
 #include "AccessibilityAtspi.h"
+#include "AccessibilityAtspiEnums.h"
 #include "AccessibilityObjectInterface.h"
 #include "IntRect.h"
 #include <wtf/OptionSet.h>
@@ -82,11 +83,11 @@ public:
     WEBCORE_EXPORT CString name() const;
     WEBCORE_EXPORT CString description() const;
     WEBCORE_EXPORT String locale() const;
-    WEBCORE_EXPORT unsigned role() const;
+    WEBCORE_EXPORT Atspi::Role role() const;
     WEBCORE_EXPORT unsigned childCount() const;
     WEBCORE_EXPORT Vector<RefPtr<AccessibilityObjectAtspi>> children() const;
     WEBCORE_EXPORT AccessibilityObjectAtspi* childAt(unsigned) const;
-    WEBCORE_EXPORT uint64_t state() const;
+    WEBCORE_EXPORT OptionSet<Atspi::State> states() const;
     bool isDefunct() const;
     void stateChanged(const char*, bool);
     WEBCORE_EXPORT HashMap<String, String> attributes() const;
@@ -166,7 +167,7 @@ private:
     void childAdded(AccessibilityObjectAtspi&);
     void childRemoved(AccessibilityObjectAtspi&);
 
-    std::optional<unsigned> effectiveRole() const;
+    std::optional<Atspi::Role> effectiveRole() const;
     String effectiveRoleName() const;
     String roleName() const;
     const char* effectiveLocalizedRoleName() const;
@@ -174,6 +175,7 @@ private:
     void buildAttributes(GVariantBuilder*) const;
     void buildRelationSet(GVariantBuilder*) const;
     void buildInterfaces(GVariantBuilder*) const;
+    void buildStates(GVariantBuilder*) const;
 
     bool focus() const;
     float opacity() const;
@@ -234,7 +236,7 @@ private:
         bool matchAttributes(AccessibilityObjectAtspi&);
 
         struct {
-            uint64_t value { 0 };
+            OptionSet<Atspi::State> value;
             uint16_t type { 0 };
         } states;
 
@@ -244,7 +246,7 @@ private:
         } attributes;
 
         struct {
-            Vector<unsigned> value;
+            Vector<Atspi::Role> value;
             uint16_t type { 0 };
         } roles;
 

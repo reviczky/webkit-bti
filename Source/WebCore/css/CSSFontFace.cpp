@@ -60,7 +60,7 @@ template<typename T> void iterateClients(HashSet<CSSFontFace::Client*>& clients,
 
 void CSSFontFace::appendSources(CSSFontFace& fontFace, CSSValueList& srcList, ScriptExecutionContext* context, bool isInitiatingElementInUserAgentShadowTree)
 {
-    bool allowDownloading = context && context->settingsValues().downloadableBinaryFontsEnabled;
+    bool allowDownloading = context && (context->settingsValues().downloadableBinaryFontAllowedTypes != DownloadableBinaryFontAllowedTypes::None);
     for (auto& src : srcList) {
         // An item in the list either specifies a string (local font name) or a URL (remote font to download).
         if (auto local = dynamicDowncast<CSSFontFaceSrcLocalValue>(src.get())) {
@@ -351,7 +351,7 @@ String CSSFontFace::family() const
     auto firstFamily = dynamicDowncast<CSSPrimitiveValue>(familyList->item(0));
     if (!firstFamily || !firstFamily->isFontFamily())
         return { };
-    return firstFamily->fontFamily().familyName;
+    return firstFamily->stringValue();
 }
 
 String CSSFontFace::style() const

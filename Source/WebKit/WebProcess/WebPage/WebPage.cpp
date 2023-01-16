@@ -73,6 +73,7 @@
 #include "WebAttachmentElementClient.h"
 #include "WebBackForwardListItem.h"
 #include "WebBackForwardListProxy.h"
+#include "WebBadgeClient.h"
 #include "WebBroadcastChannelRegistry.h"
 #include "WebCacheStorageProvider.h"
 #include "WebChromeClient.h"
@@ -201,6 +202,7 @@
 #include <WebCore/HTMLPlugInElement.h>
 #include <WebCore/HTMLSelectElement.h>
 #include <WebCore/HTMLTextFormControlElement.h>
+#include <WebCore/HTTPParsers.h>
 #include <WebCore/Highlight.h>
 #include <WebCore/HighlightRegister.h>
 #include <WebCore/HistoryController.h>
@@ -348,10 +350,6 @@
 #include <WebCore/DataDetectionResultsStorage.h>
 #endif
 
-#if ENABLE(VIDEO) && USE(GSTREAMER)
-#include <WebCore/MediaPlayerRequestInstallMissingPluginsCallback.h>
-#endif
-
 #if ENABLE(MEDIA_STREAM) && USE(GSTREAMER)
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
 #endif
@@ -463,13 +461,6 @@ Ref<WebPage> WebPage::create(PageIdentifier pageID, WebPageCreationParameters&& 
 
     if (WebProcess::singleton().injectedBundle())
         WebProcess::singleton().injectedBundle()->didCreatePage(page.ptr());
-
-#if HAVE(SANDBOX_STATE_FLAGS)
-    // This call is not meant to actually read a preference, but is only here to trigger a sandbox rule in the
-    // WebContent process, which will toggle a sandbox variable used to determine if the WebContent process
-    // has finished launching. This call should be replaced with proper API when available.
-    CFPreferencesGetAppIntegerValue(CFSTR("key"), CFSTR("com.apple.WebKit.WebContent.Launch"), nullptr);
-#endif
 
     return page;
 }
@@ -624,8 +615,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
         makeUniqueRef<MediaRecorderProvider>(*this),
         WebProcess::singleton().broadcastChannelRegistry(),
         makeUniqueRef<WebStorageProvider>(),
-        makeUniqueRef<WebModelPlayerProvider>(*this)
+        makeUniqueRef<WebModelPlayerProvider>(*this),
+        WebProcess::singleton().badgeClient()
     );
+
     pageConfiguration.chromeClient = new WebChromeClient(*this);
 #if ENABLE(CONTEXT_MENUS)
     pageConfiguration.contextMenuClient = new WebContextMenuClient(this);
@@ -714,8 +707,8 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #endif
 
 #if HAVE(STATIC_FONT_REGISTRY)
-    if (parameters.fontMachExtensionHandle)
-        WebProcess::singleton().switchFromStaticFontRegistryToUserFontRegistry(WTFMove(*parameters.fontMachExtensionHandle));
+    if (parameters.fontMachExtensionHandles.size())
+        WebProcess::singleton().switchFromStaticFontRegistryToUserFontRegistry(WTFMove(parameters.fontMachExtensionHandles));
 #endif
 
     pageConfiguration.mainFrameIdentifier = parameters.mainFrameIdentifier;
@@ -949,6 +942,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
     m_page->setCanUseCredentialStorage(parameters.canUseCredentialStorage);
 
+#if HAVE(MACH_BOOTSTRAP_EXTENSION)
+    SandboxExtension::consumePermanently(parameters.machBootstrapHandle);
+#endif
+
 #if HAVE(SANDBOX_STATE_FLAGS)
     if (!m_page->settings().offlineWebApplicationCacheEnabled()) {
         // This call is not meant to actually read a preference, but is only here to trigger a sandbox rule in the
@@ -956,9 +953,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
         // This call should be replaced with proper API when available.
         CFPreferencesGetAppIntegerValue(CFSTR("key"), CFSTR("com.apple.WebKit.WebContent.AppCacheDisabled"), nullptr);
     }
-#endif
 
-#if HAVE(SANDBOX_STATE_FLAGS)
     auto auditToken = WebProcess::singleton().auditTokenForSelf();
     auto experimentalSandbox = parameters.store.getBoolValueForKey(WebPreferencesKey::experimentalSandboxEnabledKey());
     if (experimentalSandbox)
@@ -978,6 +973,9 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     updateThrottleState();
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     updateImageAnimationEnabled();
+#endif
+#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
+    setLookalikeCharacterStrings(WTFMove(parameters.lookalikeCharacterStrings));
 #endif
 }
 
@@ -1605,13 +1603,6 @@ void WebPage::close()
     m_printOperation = nullptr;
 #endif
 
-#if ENABLE(VIDEO) && USE(GSTREAMER)
-    if (m_installMediaPluginsCallback) {
-        m_installMediaPluginsCallback->invalidate();
-        m_installMediaPluginsCallback = nullptr;
-    }
-#endif
-
     m_sandboxExtensionTracker.invalidate();
 
 #if ENABLE(TEXT_AUTOSIZING)
@@ -1954,7 +1945,7 @@ void WebPage::goToBackForwardItem(uint64_t navigationID, const BackForwardItemId
 
 #if ENABLE(PUBLIC_SUFFIX_LIST)
     if (topPrivatelyControlledDomain)
-        WebCore::setTopPrivatelyControlledDomain(item->url().string(), *topPrivatelyControlledDomain);
+        WebCore::setTopPrivatelyControlledDomain(URL(item->url().string()).host().toString(), *topPrivatelyControlledDomain);
 #endif
 
     ASSERT(!m_pendingNavigationID);
@@ -1972,28 +1963,6 @@ void WebPage::tryRestoreScrollPosition()
 WebPage& WebPage::fromCorePage(Page& page)
 {
     return static_cast<WebChromeClient&>(page.chrome().client()).page();
-}
-
-static std::optional<FrameTreeNodeData> frameTreeNodeData(AbstractFrame& frame)
-{
-    std::optional<FrameTreeNodeData> info;
-    if (auto* webFrame = WebFrame::fromCoreFrame(frame)) {
-        Vector<FrameTreeNodeData> children;
-        for (auto* childFrame = frame.tree().firstChild(); childFrame; childFrame = childFrame->tree().nextSibling()) {
-            if (auto childInfo = frameTreeNodeData(*childFrame))
-                children.append(WTFMove(*childInfo));
-        }
-        info = FrameTreeNodeData {
-            webFrame->info(),
-            WTFMove(children)
-        };
-    }
-    return info;
-}
-
-void WebPage::getAllFrames(CompletionHandler<void(FrameTreeNodeData&&)>&& completionHandler)
-{
-    completionHandler(*frameTreeNodeData(m_page->mainFrame()));
 }
 
 void WebPage::setSize(const WebCore::IntSize& viewSize)
@@ -2788,9 +2757,18 @@ static DestinationColorSpace snapshotColorSpace(SnapshotOptions options, WebPage
     return DestinationColorSpace::SRGB();
 }
 
+static ImageOptions snapshotImageOptions(Frame& frame)
+{
+#if ENABLE(PDFKIT_PLUGIN)
+    return WebPage::pluginViewForFrame(&frame) ? ImageOptionsLocal : ImageOptionsShareable;
+#else
+    return ImageOptionsShareable;
+#endif
+}
+
 RefPtr<WebImage> WebPage::snapshotAtSize(const IntRect& rect, const IntSize& bitmapSize, SnapshotOptions options, Frame& frame, FrameView& frameView)
 {
-    auto snapshot = WebImage::create(bitmapSize, snapshotOptionsToImageOptions(options), snapshotColorSpace(options, *this), &m_page->chrome().client());
+    auto snapshot = WebImage::create(bitmapSize, snapshotImageOptions(frame), snapshotColorSpace(options, *this), &m_page->chrome().client());
     if (!snapshot)
         return nullptr;
 
@@ -3186,7 +3164,7 @@ void WebPage::mouseEvent(const WebMouseEvent& mouseEvent, std::optional<Vector<S
 #endif
 
     if (!shouldHandleEvent) {
-        send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(mouseEvent.type()), false));
+        send(Messages::WebPageProxy::DidReceiveEvent(mouseEvent.type(), false));
         return;
     }
 
@@ -3208,19 +3186,14 @@ void WebPage::mouseEvent(const WebMouseEvent& mouseEvent, std::optional<Vector<S
         handled = handleMouseEvent(mouseEvent, this);
     }
 
-    send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(mouseEvent.type()), handled));
+    send(Messages::WebPageProxy::DidReceiveEvent(mouseEvent.type(), handled));
 
     revokeSandboxExtensions(mouseEventSandboxExtensions);
 }
 
-static bool handleWheelEvent(const WebWheelEvent& wheelEvent, Page* page, OptionSet<WheelEventProcessingSteps> processingSteps)
+void WebPage::handleWheelEvent(const WebWheelEvent& event, const OptionSet<WheelEventProcessingSteps>& processingSteps)
 {
-    Frame& frame = page->mainFrame();
-    if (!frame.view())
-        return false;
-
-    PlatformWheelEvent platformWheelEvent = platform(wheelEvent);
-    return page->userInputBridge().handleWheelEvent(platformWheelEvent, processingSteps);
+    wheelEvent(event, processingSteps, EventDispatcher::WheelEventOrigin::UIProcess);
 }
 
 bool WebPage::wheelEvent(const WebWheelEvent& wheelEvent, OptionSet<WheelEventProcessingSteps> processingSteps, EventDispatcher::WheelEventOrigin wheelEventOrigin)
@@ -3229,10 +3202,18 @@ bool WebPage::wheelEvent(const WebWheelEvent& wheelEvent, OptionSet<WheelEventPr
 
     CurrentEvent currentEvent(wheelEvent);
 
-    bool handled = handleWheelEvent(wheelEvent, m_page.get(), processingSteps);
+    auto dispatchWheelEvent = [&](const WebWheelEvent& wheelEvent, OptionSet<WheelEventProcessingSteps> processingSteps) {
+        auto& frame = m_page->mainFrame();
+        if (!frame.view())
+            return false;
+
+        auto platformWheelEvent = platform(wheelEvent);
+        return m_page->userInputBridge().handleWheelEvent(platformWheelEvent, processingSteps);
+    };
+    bool handled = dispatchWheelEvent(wheelEvent, processingSteps);
 
     if (processingSteps.contains(WheelEventProcessingSteps::MainThreadForScrolling) && wheelEventOrigin == EventDispatcher::WheelEventOrigin::UIProcess)
-        send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(wheelEvent.type()), handled));
+        send(Messages::WebPageProxy::DidReceiveEvent(wheelEvent.type(), handled));
 
     return handled;
 }
@@ -3254,7 +3235,7 @@ static bool handleKeyEvent(const WebKeyboardEvent& keyboardEvent, Page* page)
     if (!page->mainFrame().view())
         return false;
 
-    if (keyboardEvent.type() == WebEvent::Char && keyboardEvent.isSystemKey())
+    if (keyboardEvent.type() == WebEventType::Char && keyboardEvent.isSystemKey())
         return page->userInputBridge().handleAccessKeyEvent(platform(keyboardEvent));
     return page->userInputBridge().handleKeyEvent(platform(keyboardEvent));
 }
@@ -3271,7 +3252,7 @@ void WebPage::keyEvent(const WebKeyboardEvent& keyboardEvent)
 
     bool handled = handleKeyEvent(keyboardEvent, m_page.get());
 
-    send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(keyboardEvent.type()), handled));
+    send(Messages::WebPageProxy::DidReceiveEvent(keyboardEvent.type(), handled));
 }
 
 bool WebPage::handleKeyEventByRelinquishingFocusToChrome(const KeyboardEvent& event)
@@ -3405,7 +3386,7 @@ void WebPage::updatePotentialTapSecurityOrigin(const WebTouchEvent& touchEvent, 
     if (!touchEvent.isPotentialTap())
         return;
 
-    if (touchEvent.type() != WebEvent::TouchStart)
+    if (touchEvent.type() != WebEventType::TouchStart)
         return;
 
     auto& mainFrame = m_page->mainFrame();
@@ -3436,7 +3417,7 @@ void WebPage::touchEvent(const WebTouchEvent& touchEvent)
 
     bool handled = handleTouchEvent(touchEvent, m_page.get());
 
-    send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(touchEvent.type()), handled));
+    send(Messages::WebPageProxy::DidReceiveEvent(touchEvent.type(), handled));
 }
 #endif
 
@@ -3463,7 +3444,7 @@ void WebPage::gestureEvent(const WebGestureEvent& gestureEvent)
 {
     CurrentEvent currentEvent(gestureEvent);
     bool handled = handleGestureEvent(gestureEvent, m_page.get());
-    send(Messages::WebPageProxy::DidReceiveEvent(static_cast<uint32_t>(gestureEvent.type()), handled));
+    send(Messages::WebPageProxy::DidReceiveEvent(gestureEvent.type(), handled));
 }
 #endif
 
@@ -3596,7 +3577,7 @@ void WebPage::setInitialFocus(bool forward, bool isKeyboardEventValid, const Web
     Ref frame = focusController->focusedOrMainFrame();
     frame->document()->setFocusedElement(nullptr);
 
-    if (isKeyboardEventValid && event.type() == WebEvent::KeyDown) {
+    if (isKeyboardEventValid && event.type() == WebEventType::KeyDown) {
         PlatformKeyboardEvent platformEvent(platform(event));
         platformEvent.disambiguateKeyDownEvent(PlatformEvent::RawKeyDown);
         focusController->setInitialFocus(forward ? FocusDirection::Forward : FocusDirection::Backward, &KeyboardEvent::create(platformEvent, &frame->windowProxy()).get());
@@ -4153,6 +4134,9 @@ static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferenc
     settings.setPictureInPictureAPIEnabled(false);
 #endif
     settings.setSpeechRecognitionEnabled(false);
+#if ENABLE(SPEECH_SYNTHESIS)
+    settings.setSpeechSynthesisAPIEnabled(false);
+#endif
 #if ENABLE(NOTIFICATIONS)
     settings.setNotificationsEnabled(false);
 #endif
@@ -4172,7 +4156,7 @@ static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferenc
 #if ENABLE(WEB_AUDIO)
     settings.setWebAudioEnabled(false);
 #endif
-    settings.setDownloadableBinaryFontsEnabled(false);
+    settings.setDownloadableBinaryFontAllowedTypes(DownloadableBinaryFontAllowedTypes::Restricted);
 #if ENABLE(WEB_RTC)
     settings.setPeerConnectionEnabled(false);
     settings.setWebRTCEncodedTransformEnabled(false);
@@ -4186,10 +4170,17 @@ static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferenc
 #if USE(SYSTEM_PREVIEW)
     settings.setSystemPreviewEnabled(false);
 #endif
+    settings.setEmbedElementEnabled(false);
     settings.setFileReaderAPIEnabled(false);
     settings.setFileSystemAccessEnabled(false);
     settings.setIndexedDBAPIEnabled(false);
-    
+#if ENABLE(SERVICE_WORKER)
+    settings.setServiceWorkersEnabled(false);
+    settings.setServiceWorkerNavigationPreloadEnabled(false);
+#endif
+    settings.setWebLocksAPIEnabled(false);
+    settings.setCacheAPIEnabled(false);
+
     settings.setAllowedMediaContainerTypes(store.getStringValueForKey(WebPreferencesKey::mediaContainerTypesAllowedInLockdownModeKey()));
     settings.setAllowedMediaCodecTypes(store.getStringValueForKey(WebPreferencesKey::mediaCodecTypesAllowedInLockdownModeKey()));
     settings.setAllowedMediaVideoCodecIDs(store.getStringValueForKey(WebPreferencesKey::mediaVideoCodecIDsAllowedInLockdownModeKey()));
@@ -4199,7 +4190,6 @@ static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferenc
     // FIXME: This seems like an odd place to put logic for setting global state in CoreGraphics.
 #if HAVE(LOCKDOWN_MODE_PDF_ADDITIONS)
     CGEnterLockdownModeForPDF();
-    CGEnterLockdownModeForFonts();
 #endif
 }
 
@@ -4334,10 +4324,6 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
 #endif
 #if HAVE(SCENEKIT)
     m_useSceneKitForModel = store.getBoolValueForKey(WebPreferencesKey::useSceneKitForModelKey());
-#endif
-
-#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-    m_sanitizeLookalikeCharactersInLinksEnabled = store.getBoolValueForKey(WebPreferencesKey::sanitizeLookalikeCharactersInLinksEnabledKey());
 #endif
 
     if (settings.showMediaStatsContextMenuItemEnabled())
@@ -4519,18 +4505,25 @@ void WebPage::finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags> fl
 #endif
 }
 
-void WebPage::willStartPlatformRenderingUpdate()
+void WebPage::willStartRenderingUpdateDisplay()
 {
     if (m_isClosed)
         return;
-    m_page->willStartPlatformRenderingUpdate();
+    m_page->willStartRenderingUpdateDisplay();
 }
 
-void WebPage::didCompletePlatformRenderingUpdate()
+void WebPage::didCompleteRenderingUpdateDisplay()
 {
     if (m_isClosed)
         return;
-    m_page->didCompletePlatformRenderingUpdate();
+    m_page->didCompleteRenderingUpdateDisplay();
+}
+
+void WebPage::didCompleteRenderingFrame()
+{
+    if (m_isClosed)
+        return;
+    m_page->didCompleteRenderingFrame();
 }
 
 void WebPage::releaseMemory(Critical)
@@ -5065,10 +5058,16 @@ void WebPage::changeSelectedIndex(int32_t index)
 }
 
 #if PLATFORM(IOS_FAMILY)
-void WebPage::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vector<String>& files, const String& displayString, const IPC::DataReference& iconData, SandboxExtension::Handle&& frontboardServicesSandboxExtensionHandle, SandboxExtension::Handle&& iconServicesSandboxExtensionHandle)
+void WebPage::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vector<String>& files, const String& displayString, const IPC::DataReference& iconData, WebKit::SandboxExtension::Handle&& machBootstrapHandle, SandboxExtension::Handle&& frontboardServicesSandboxExtensionHandle, SandboxExtension::Handle&& iconServicesSandboxExtensionHandle)
 {
     if (!m_activeOpenPanelResultListener)
         return;
+
+    auto machBootstrapSandboxExtension = SandboxExtension::create(WTFMove(machBootstrapHandle));
+    if (machBootstrapSandboxExtension) {
+        bool consumed = machBootstrapSandboxExtension->consume();
+        ASSERT_UNUSED(consumed, consumed);
+    }
 
 #if HAVE(FRONTBOARD_SYSTEM_APP_SERVICES)
     auto frontboardServicesSandboxExtension = SandboxExtension::create(WTFMove(frontboardServicesSandboxExtensionHandle));
@@ -5084,6 +5083,7 @@ void WebPage::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vector<St
         bool consumed = iconServicesSandboxExtension->consume();
         ASSERT_UNUSED(consumed, consumed);
     }
+
     RELEASE_ASSERT(!sandbox_check(getpid(), "mach-lookup", static_cast<enum sandbox_filter_type>(SANDBOX_FILTER_GLOBAL_NAME | SANDBOX_CHECK_NO_REPORT), "com.apple.iconservices"));
 
     RefPtr<Icon> icon;
@@ -5109,6 +5109,10 @@ void WebPage::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vector<St
         ASSERT_UNUSED(revoked, revoked);
     }
 
+    if (machBootstrapSandboxExtension) {
+        bool revoked = machBootstrapSandboxExtension->revoke();
+        ASSERT_UNUSED(revoked, revoked);
+    }
 }
 #endif
 
@@ -5150,9 +5154,9 @@ void WebPage::didReceiveGeolocationPermissionDecision(GeolocationIdentifier geol
 
 #if ENABLE(MEDIA_STREAM)
 
-void WebPage::userMediaAccessWasGranted(UserMediaRequestIdentifier userMediaID, WebCore::CaptureDevice&& audioDevice, WebCore::CaptureDevice&& videoDevice, WebCore::MediaDeviceHashSalts&& mediaDeviceIdentifierHashSalts, SandboxExtension::Handle&& handle, CompletionHandler<void()>&& completionHandler)
+void WebPage::userMediaAccessWasGranted(UserMediaRequestIdentifier userMediaID, WebCore::CaptureDevice&& audioDevice, WebCore::CaptureDevice&& videoDevice, WebCore::MediaDeviceHashSalts&& mediaDeviceIdentifierHashSalts, Vector<SandboxExtension::Handle>&& handles, CompletionHandler<void()>&& completionHandler)
 {
-    SandboxExtension::consumePermanently(handle);
+    SandboxExtension::consumePermanently(handles);
 
     m_userMediaPermissionRequestManager->userMediaAccessWasGranted(userMediaID, WTFMove(audioDevice), WTFMove(videoDevice), WTFMove(mediaDeviceIdentifierHashSalts), WTFMove(completionHandler));
 }
@@ -6019,18 +6023,18 @@ void WebPage::handleAlternativeTextUIResult(const String& result)
 void WebPage::simulateMouseDown(int button, WebCore::IntPoint position, int clickCount, WKEventModifiers modifiers, WallTime time)
 {
     static_assert(sizeof(WKEventModifiers) >= sizeof(WebEventModifier), "WKEventModifiers must be greater than or equal to the size of WebEventModifier");
-    mouseEvent(WebMouseEvent({ WebMouseEvent::MouseDown, fromAPI(modifiers), time }, static_cast<WebMouseEventButton>(button), 0, position, position, 0, 0, 0, clickCount, WebCore::ForceAtClick, WebMouseEventSyntheticClickType::NoTap), std::nullopt);
+    mouseEvent(WebMouseEvent({ WebEventType::MouseDown, fromAPI(modifiers), time }, static_cast<WebMouseEventButton>(button), 0, position, position, 0, 0, 0, clickCount, WebCore::ForceAtClick, WebMouseEventSyntheticClickType::NoTap), std::nullopt);
 }
 
 void WebPage::simulateMouseUp(int button, WebCore::IntPoint position, int clickCount, WKEventModifiers modifiers, WallTime time)
 {
     static_assert(sizeof(WKEventModifiers) >= sizeof(WebEventModifier), "WKEventModifiers must be greater than or equal to the size of WebEventModifier");
-    mouseEvent(WebMouseEvent({ WebMouseEvent::MouseUp, fromAPI(modifiers), time }, static_cast<WebMouseEventButton>(button), 0, position, position, 0, 0, 0, clickCount, WebCore::ForceAtClick, WebMouseEventSyntheticClickType::NoTap), std::nullopt);
+    mouseEvent(WebMouseEvent({ WebEventType::MouseUp, fromAPI(modifiers), time }, static_cast<WebMouseEventButton>(button), 0, position, position, 0, 0, 0, clickCount, WebCore::ForceAtClick, WebMouseEventSyntheticClickType::NoTap), std::nullopt);
 }
 
 void WebPage::simulateMouseMotion(WebCore::IntPoint position, WallTime time)
 {
-    mouseEvent(WebMouseEvent({ WebMouseEvent::MouseMove, OptionSet<WebEventModifier> { }, time }, WebMouseEventButton::NoButton, 0, position, position, 0, 0, 0, 0, 0, WebMouseEventSyntheticClickType::NoTap), std::nullopt);
+    mouseEvent(WebMouseEvent({ WebEventType::MouseMove, OptionSet<WebEventModifier> { }, time }, WebMouseEventButton::NoButton, 0, position, position, 0, 0, 0, 0, 0, WebMouseEventSyntheticClickType::NoTap), std::nullopt);
 }
 
 void WebPage::setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline, const Vector<CompositionHighlight>& highlights)
@@ -6096,15 +6100,16 @@ static bool pageContainsAnyHorizontalScrollbars(Frame* mainFrame)
         if (!frameView)
             continue;
 
-        const HashSet<ScrollableArea*>* scrollableAreas = frameView->scrollableAreas();
+        auto scrollableAreas = frameView->scrollableAreas();
         if (!scrollableAreas)
             continue;
 
-        for (auto* scrollableArea : *scrollableAreas) {
+        for (auto& area : *scrollableAreas) {
+            CheckedPtr<ScrollableArea> scrollableArea(area);
             if (!scrollableArea->scrollbarsCanBeActive())
                 continue;
 
-            if (hasEnabledHorizontalScrollbar(scrollableArea))
+            if (hasEnabledHorizontalScrollbar(scrollableArea.get()))
                 return true;
         }
     }
@@ -6763,6 +6768,11 @@ void WebPage::didReplaceMultipartContent(const WebFrame& frame)
 
 void WebPage::didCommitLoad(WebFrame* frame)
 {
+#if HAVE(SANDBOX_STATE_FLAGS)
+    auto auditToken = WebProcess::singleton().auditTokenForSelf();
+    sandbox_enable_state_flag("WebContentProcessLaunched", *auditToken);
+#endif
+
 #if PLATFORM(IOS_FAMILY)
     auto firstTransactionIDAfterDidCommitLoad = downcast<RemoteLayerTreeDrawingArea>(*m_drawingArea).nextTransactionID();
     frame->setFirstLayerTreeTransactionIDAfterDidCommitLoad(firstTransactionIDAfterDidCommitLoad);
@@ -7901,6 +7911,15 @@ void WebPage::synchronizeCORSDisablingPatternsWithNetworkProcess()
     WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::SetCORSDisablingPatterns(m_identifier, m_corsDisablingPatterns), 0);
 }
 
+#if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
+void WebPage::isAnyAnimationAllowedToPlayDidChange(bool anyAnimationCanPlay)
+{
+    if (!m_page->settings().imageAnimationControlEnabled())
+        return;
+    send(Messages::WebPageProxy::IsAnyAnimationAllowedToPlayDidChange(anyAnimationCanPlay));
+}
+#endif
+
 void WebPage::isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags state)
 {
     send(Messages::WebPageProxy::IsPlayingMediaDidChange(state));
@@ -8351,7 +8370,19 @@ void WebPage::updateImageAnimationEnabled()
 {
     corePage()->setImageAnimationEnabled(WebProcess::singleton().imageAnimationEnabled());
 }
-#endif
+
+void WebPage::pauseAllAnimations(CompletionHandler<void()>&& completionHandler)
+{
+    corePage()->setImageAnimationEnabled(false);
+    completionHandler();
+}
+
+void WebPage::playAllAnimations(CompletionHandler<void()>&& completionHandler)
+{
+    corePage()->setImageAnimationEnabled(true);
+    completionHandler();
+}
+#endif // ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
 
 bool WebPage::isUsingUISideCompositing() const
 {
@@ -8360,6 +8391,41 @@ bool WebPage::isUsingUISideCompositing() const
 #else
     return false;
 #endif
+}
+
+#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
+
+void WebPage::setLookalikeCharacterStrings(Vector<String>&& strings)
+{
+    m_lookalikeCharacterStrings.clear();
+    m_lookalikeCharacterStrings.reserveInitialCapacity(strings.size());
+    for (auto& string : strings)
+        m_lookalikeCharacterStrings.add(string);
+}
+
+#endif // ENABLE(NETWORK_CONNECTION_INTEGRITY)
+
+bool WebPage::shouldSkipDecidePolicyForResponse(const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& request) const
+{
+    if (!m_skipDecidePolicyForResponseIfPossible)
+        return false;
+
+    constexpr auto noContent = 204;
+    constexpr auto smallestError = 400;
+    auto statusCode = response.httpStatusCode();
+    if (statusCode == noContent || statusCode >= smallestError)
+        return false;
+
+    if (!equalIgnoringASCIICase(response.mimeType(), "text/html"_s))
+        return false;
+
+    if (response.url().isLocalFile())
+        return false;
+
+    if (auto components = response.httpHeaderField(HTTPHeaderName::ContentDisposition).split(';'); !components.isEmpty() && equalIgnoringASCIICase(stripLeadingAndTrailingHTTPSpaces(components[0]), "attachment"_s))
+        return false;
+
+    return true;
 }
 
 } // namespace WebKit

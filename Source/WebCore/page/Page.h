@@ -22,6 +22,7 @@
 
 #include "ActivityState.h"
 #include "AnimationFrameRate.h"
+#include "BadgeClient.h"
 #include "Color.h"
 #include "ContentSecurityPolicy.h"
 #include "DisabledAdaptations.h"
@@ -636,7 +637,15 @@ public:
     WEBCORE_EXPORT void updateRendering();
     // A call to updateRendering() that is not followed by a call to finalizeRenderingUpdate().
     WEBCORE_EXPORT void isolatedUpdateRendering();
+    // Called when the rendering update steps are complete, but before painting.
     WEBCORE_EXPORT void finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags>);
+
+    // Called before and after the "display" steps of the rendering update: painting, and when we push
+    // layers to the platform compositor.
+    WEBCORE_EXPORT void willStartRenderingUpdateDisplay();
+    WEBCORE_EXPORT void didCompleteRenderingUpdateDisplay();
+    // Called after didCompleteRenderingUpdateDisplay, but in the same run loop iteration (i.e. before zero-delay timers triggered from the rendering update).
+    WEBCORE_EXPORT void didCompleteRenderingFrame();
 
     // Schedule a rendering update that coordinates with display refresh.
     WEBCORE_EXPORT void scheduleRenderingUpdate(OptionSet<RenderingUpdateStep> requestedSteps);
@@ -647,17 +656,14 @@ public:
     WEBCORE_EXPORT void startTrackingRenderingUpdates();
     WEBCORE_EXPORT unsigned renderingUpdateCount() const;
 
-    // A "platform rendering update" here describes the work done by the system graphics framework before work is submitted to the system compositor.
-    // On macOS, this is a CoreAnimation commit.
-    WEBCORE_EXPORT void willStartPlatformRenderingUpdate();
-    WEBCORE_EXPORT void didCompletePlatformRenderingUpdate();
-
     WEBCORE_EXPORT void suspendScriptedAnimations();
     WEBCORE_EXPORT void resumeScriptedAnimations();
     bool scriptedAnimationsSuspended() const { return m_scriptedAnimationsSuspended; }
 
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     WEBCORE_EXPORT void setImageAnimationEnabled(bool);
+    void addIndividuallyPlayingAnimationElement(HTMLImageElement&);
+    void removeIndividuallyPlayingAnimationElement(HTMLImageElement&);
 #endif
     bool imageAnimationEnabled() const { return m_imageAnimationEnabled; }
 
@@ -952,8 +958,8 @@ public:
 
     bool httpsUpgradeEnabled() const { return m_httpsUpgradeEnabled; }
 
-    URL sanitizeForCopyOrShare(const URL&) const;
-    String sanitizeForCopyOrShare(const String&) const;
+    URL sanitizeLookalikeCharacters(const URL&) const;
+    String sanitizeLookalikeCharacters(const String&) const;
 
     LoadSchedulingMode loadSchedulingMode() const { return m_loadSchedulingMode; }
     void setLoadSchedulingMode(LoadSchedulingMode);
@@ -994,6 +1000,12 @@ public:
 #if ENABLE(IMAGE_ANALYSIS)
     WEBCORE_EXPORT void analyzeImagesForFindInPage(Function<void()>&& callback);
 #endif
+
+    BadgeClient& badgeClient() { return m_badgeClient.get(); }
+
+    void willBeginScrolling();
+    void didFinishScrolling();
+
 private:
     struct Navigation {
         RegistrableDomain domain;
@@ -1157,6 +1169,8 @@ private:
 
     bool m_canStartMedia { true };
     bool m_imageAnimationEnabled { true };
+    // Elements containing animations that are individually playing (potentially overriding the page-wide m_imageAnimationEnabled state).
+    WeakHashSet<HTMLImageElement, WeakPtrImplWithEventTargetData> m_individuallyPlayingAnimationElements;
 
     TimerThrottlingState m_timerThrottlingState { TimerThrottlingState::Disabled };
     MonotonicTime m_timerThrottlingStateLastChangedTime;
@@ -1354,6 +1368,8 @@ private:
 #endif
 
     ContentSecurityPolicyModeForExtension m_contentSecurityPolicyModeForExtension { ContentSecurityPolicyModeForExtension::None };
+
+    Ref<BadgeClient> m_badgeClient;
 };
 
 inline PageGroup& Page::group()

@@ -298,7 +298,7 @@ bool StreamServerConnection::dispatchOutOfStreamMessage(Decoder&& decoder)
 
     RefPtr<StreamMessageReceiver> receiver;
     {
-        auto key = std::make_pair(static_cast<uint8_t>(message->messageReceiverName()), message->destinationID());
+        auto key = std::make_pair(static_cast<uint8_t>(message->messageReceiverName()), static_cast<uint64_t>(message->destinationID()));
         Locker locker { m_receiversLock };
         receiver = m_receivers.get(key);
     }

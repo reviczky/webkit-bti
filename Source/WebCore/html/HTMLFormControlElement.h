@@ -48,8 +48,6 @@ class HTMLFormControlElement : public LabelableElement, public FormListedElement
 public:
     virtual ~HTMLFormControlElement();
 
-    HTMLFormElement* form() const final { return FormListedElement::form(); }
-
     WEBCORE_EXPORT String formEnctype() const;
     WEBCORE_EXPORT void setFormEnctype(const AtomString&);
     WEBCORE_EXPORT String formMethod() const;
@@ -67,6 +65,9 @@ public:
 
     bool wasChangedSinceLastFormControlChangeEvent() const { return m_wasChangedSinceLastFormControlChangeEvent; }
     void setChangedSinceLastFormControlChangeEvent(bool);
+
+    bool wasInteractedWithSinceLastFormSubmitEvent() const { return m_wasInteractedWithSinceLastFormSubmitEvent; }
+    void setInteractedWithSinceLastFormSubmitEvent(bool);
 
     virtual void dispatchFormControlChangeEvent();
     void dispatchChangeEvent();
@@ -114,6 +115,9 @@ public:
     void updateValidity();
     void setCustomValidity(const String&) override;
 
+    bool matchesUserInvalidPseudoClass() const;
+    bool matchesUserValidPseudoClass() const;
+
     virtual bool supportsReadOnly() const { return false; }
     bool isReadOnly() const { return supportsReadOnly() && m_hasReadOnlyAttribute; }
     bool isMutable() const { return !isDisabledFormControl() && !isReadOnly(); }
@@ -159,6 +163,7 @@ protected:
     // This must be called any time the result of willValidate() has changed.
     void updateWillValidateAndValidity();
     virtual bool computeWillValidate() const;
+    virtual bool readOnlyBarsFromConstraintValidation() const { return false; }
 
     bool validationMessageShadowTreeContains(const Node&) const;
 
@@ -218,6 +223,7 @@ private:
     unsigned m_isValid : 1;
 
     unsigned m_wasChangedSinceLastFormControlChangeEvent : 1;
+    unsigned m_wasInteractedWithSinceLastFormSubmitEvent : 1;
 };
 
 class DelayedUpdateValidityScope {

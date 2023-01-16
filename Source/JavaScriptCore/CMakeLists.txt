@@ -128,7 +128,6 @@ set(JavaScriptCore_OBJECT_LUT_SOURCES
     runtime/TemporalTimeZonePrototype.cpp
 
     wasm/js/JSWebAssembly.cpp
-    wasm/js/JSToWasmICCallee.cpp
     wasm/js/WebAssemblyArrayConstructor.cpp
     wasm/js/WebAssemblyArrayPrototype.cpp
     wasm/js/WebAssemblyCompileErrorConstructor.cpp
@@ -861,7 +860,6 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     inspector/remote/RemoteInspectionTarget.h
     inspector/remote/RemoteInspector.h
 
-    interpreter/AbstractPC.h
     interpreter/CLoopStack.h
     interpreter/CallFrame.h
     interpreter/CallFrameInlines.h
@@ -1282,6 +1280,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     wasm/WasmFunctionCodeBlockGenerator.h
     wasm/WasmHandlerInfo.h
     wasm/WasmIndexOrName.h
+    wasm/WasmLLIntBuiltin.h
     wasm/WasmLLIntTierUpCounter.h
     wasm/WasmMemory.h
     wasm/WasmMemoryInformation.h
@@ -1536,7 +1535,6 @@ endif ()
 
 WEBKIT_COMPUTE_SOURCES(JavaScriptCore)
 WEBKIT_FRAMEWORK(JavaScriptCore)
-WEBKIT_FRAMEWORK_TARGET(JavaScriptCore)
 
 target_precompile_headers(JavaScriptCore PRIVATE JavaScriptCorePrefix.h)
 

@@ -47,6 +47,7 @@
 #include "CacheStorageProvider.h"
 #include "CachedImage.h"
 #include "CachedResourceLoader.h"
+#include "CanvasBase.h"
 #include "CertificateInfo.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
@@ -387,10 +388,6 @@
 #include "ImageControlsMac.h"
 #endif
 
-#if ENABLE(GAMEPAD)
-#include "MockGamepadProvider.h"
-#endif
-
 using JSC::CallData;
 using JSC::CodeBlock;
 using JSC::FunctionExecutable;
@@ -649,8 +646,8 @@ void Internals::resetToConsistentState(Page& page)
     WebCore::MediaRecorder::setCustomPrivateRecorderCreator(nullptr);
 #endif
 
-    HTMLCanvasElement::setMaxPixelMemoryForTesting(std::nullopt);
-    HTMLCanvasElement::setMaxCanvasAreaForTesting(std::nullopt);
+    CanvasBase::setMaxPixelMemoryForTesting(std::nullopt);
+    CanvasBase::setMaxCanvasAreaForTesting(std::nullopt);
     DOMWindow::overrideTransientActivationDurationForTesting(std::nullopt);
 
 #if PLATFORM(IOS)
@@ -721,10 +718,6 @@ Internals::Internals(Document& document)
     VP9TestingOverrides::singleton().setHardwareDecoderDisabled(std::nullopt);
     VP9TestingOverrides::singleton().setVP9DecoderDisabled(std::nullopt);
     VP9TestingOverrides::singleton().setVP9ScreenSizeAndScale(std::nullopt);
-#endif
-
-#if ENABLE(GAMEPAD)
-    MockGamepadProvider::singleton().clearMockGamepads();
 #endif
 }
 
@@ -2960,7 +2953,7 @@ unsigned Internals::numberOfScrollableAreas()
     unsigned count = 0;
     Frame* frame = document->frame();
     if (frame->view()->scrollableAreas())
-        count += frame->view()->scrollableAreas()->size();
+        count += frame->view()->scrollableAreas()->computeSize();
 
     for (AbstractFrame* child = frame->tree().firstChild(); child; child = child->tree().nextSibling()) {
         auto* localChild = dynamicDowncast<LocalFrame>(child);
@@ -2970,7 +2963,7 @@ unsigned Internals::numberOfScrollableAreas()
         if (!frameView)
             continue;
         if (frameView->scrollableAreas())
-            count += frameView->scrollableAreas()->size();
+            count += frameView->scrollableAreas()->computeSize();
     }
 
     return count;
@@ -3043,7 +3036,7 @@ ExceptionOr<uint64_t> Internals::layerIDForElement(Element& element)
         return Exception { NotFoundError };
 
     auto* backing = layerModelObject.layer()->backing();
-    return backing->graphicsLayer()->primaryLayerID();
+    return backing->graphicsLayer()->primaryLayerID().toUInt64();
 }
 
 static OptionSet<PlatformLayerTreeAsTextFlags> toPlatformLayerTreeFlags(unsigned short flags)
@@ -6356,11 +6349,11 @@ String Internals::highlightPseudoElementColor(const AtomString& highlightName, E
     if (!parentStyle)
         return { };
 
-    auto style = styleResolver.pseudoStyleForElement(element, { PseudoId::Highlight, highlightName }, { parentStyle });
-    if (!style)
+    auto resolvedStyle = styleResolver.styleForPseudoElement(element, { PseudoId::Highlight, highlightName }, { parentStyle });
+    if (!resolvedStyle)
         return { };
 
-    return serializationForCSS(style->color());
+    return serializationForCSS(resolvedStyle->style->color());
 }
     
 Internals::TextIndicatorInfo::TextIndicatorInfo()
@@ -6404,12 +6397,12 @@ void Internals::setMockWebAuthenticationConfiguration(const MockWebAuthenticatio
 
 void Internals::setMaxCanvasPixelMemory(unsigned size)
 {
-    HTMLCanvasElement::setMaxPixelMemoryForTesting(size);
+    CanvasBase::setMaxPixelMemoryForTesting(size);
 }
 
 void Internals::setMaxCanvasArea(unsigned size)
 {
-    HTMLCanvasElement::setMaxCanvasAreaForTesting(size);
+    CanvasBase::setMaxCanvasAreaForTesting(size);
 }
 
 int Internals::processIdentifier() const
@@ -6980,8 +6973,8 @@ void Internals::avoidIOSurfaceSizeCheckInWebProcess(HTMLCanvasElement& element)
     if (!page)
         return;
     page->settings().setMaximumAccelerated2dCanvasSize(UINT_MAX);
-    HTMLCanvasElement::setMaxCanvasAreaForTesting(UINT_MAX);
-    HTMLCanvasElement::setMaxPixelMemoryForTesting(UINT_MAX);
+    CanvasBase::setMaxCanvasAreaForTesting(UINT_MAX);
+    CanvasBase::setMaxPixelMemoryForTesting(UINT_MAX);
     element.setAvoidIOSurfaceSizeCheckInWebProcessForTesting();
 }
 

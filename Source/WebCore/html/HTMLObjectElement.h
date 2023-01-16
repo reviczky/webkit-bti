@@ -48,13 +48,8 @@ public:
     static bool checkValidity() { return true; }
     static bool reportValidity() { return true; }
 
-    void setCustomValidity(const String&) final { }
-    String validationMessage() const final { return String(); }
-
     using HTMLPlugInImageElement::ref;
     using HTMLPlugInImageElement::deref;
-
-    HTMLFormElement* form() const final { return FormListedElement::form(); }
 
 private:
     HTMLObjectElement(const QualifiedName&, Document&, HTMLFormElement*);

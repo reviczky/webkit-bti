@@ -38,6 +38,7 @@
 #include "NetworkProcessMessages.h"
 #include "ShouldGrandfatherStatistics.h"
 #include "StorageAccessStatus.h"
+#include "UnifiedOriginStorageLevel.h"
 #include "WebBackForwardCache.h"
 #include "WebKit2Initialize.h"
 #include "WebNotificationManagerProxy.h"
@@ -1873,7 +1874,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
 #if !HAVE(NSURLSESSION_WEBSOCKET)
     networkSessionParameters.shouldAcceptInsecureCertificatesForWebSockets = m_configuration->shouldAcceptInsecureCertificatesForWebSockets();
 #endif
-    networkSessionParameters.shouldUseCustomStoragePaths = m_configuration->shouldUseCustomStoragePaths();
+    networkSessionParameters.unifiedOriginStorageLevel = m_configuration->unifiedOriginStorageLevel();
     networkSessionParameters.perOriginStorageQuota = perOriginStorageQuota();
     networkSessionParameters.perThirdPartyOriginStorageQuota = perThirdPartyOriginStorageQuota();
     networkSessionParameters.localStorageDirectory = resolvedLocalStorageDirectory();
@@ -1961,9 +1962,9 @@ void WebsiteDataStore::resetQuota(CompletionHandler<void()>&& completionHandler)
     networkProcess().resetQuota(m_sessionID, [callbackAggregator] { });
 }
 
-void WebsiteDataStore::clearStorage(CompletionHandler<void()>&& completionHandler)
+void WebsiteDataStore::resetStoragePersistedState(CompletionHandler<void()>&& completionHandler)
 {
-    networkProcess().clearStorage(m_sessionID, WTFMove(completionHandler));
+    networkProcess().resetStoragePersistedState(m_sessionID, WTFMove(completionHandler));
 }
 
 #if !PLATFORM(COCOA)
@@ -1990,10 +1991,11 @@ bool WebsiteDataStore::networkProcessHasEntitlementForTesting(const String&)
     return false;
 }
 
-bool WebsiteDataStore::defaultShouldUseCustomStoragePaths()
+UnifiedOriginStorageLevel WebsiteDataStore::defaultUnifiedOriginStorageLevel()
 {
-    return true;
+    return UnifiedOriginStorageLevel::None;
 }
+
 #endif // !PLATFORM(COCOA)
 
 #if !USE(GLIB) && !PLATFORM(COCOA)
@@ -2162,6 +2164,11 @@ void WebsiteDataStore::openWindowFromServiceWorker(const String& urlString, cons
     };
 
     m_client->openWindowFromServiceWorker(urlString, serviceWorkerOrigin, WTFMove(innerCallback));
+}
+
+void WebsiteDataStore::workerUpdatedAppBadge(const WebCore::SecurityOriginData& origin, std::optional<uint64_t> badge)
+{
+    m_client->workerUpdatedAppBadge(origin, badge);
 }
 
 #if ENABLE(INSPECTOR_NETWORK_THROTTLING)

@@ -21,7 +21,6 @@
 #include "WebKitWebContext.h"
 
 #include "APIAutomationClient.h"
-#include "APIDownloadClient.h"
 #include "APIInjectedBundleClient.h"
 #include "APIPageConfiguration.h"
 #include "APIProcessPoolConfiguration.h"
@@ -32,7 +31,6 @@
 #include "TextCheckerState.h"
 #include "WebAutomationSession.h"
 #include "WebKitAutomationSessionPrivate.h"
-#include "WebKitDownloadClient.h"
 #include "WebKitDownloadPrivate.h"
 #include "WebKitFaviconDatabasePrivate.h"
 #include "WebKitGeolocationManagerPrivate.h"
@@ -117,7 +115,7 @@ using namespace WebKit;
 
 enum {
     PROP_0,
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && !USE(GTK4)
     PROP_LOCAL_STORAGE_DIRECTORY,
 #endif
     PROP_WEBSITE_DATA_MANAGER,
@@ -334,7 +332,7 @@ static void webkitWebContextGetProperty(GObject* object, guint propID, GValue* v
     WebKitWebContext* context = WEBKIT_WEB_CONTEXT(object);
 
     switch (propID) {
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && !USE(GTK4)
     case PROP_LOCAL_STORAGE_DIRECTORY:
         g_value_set_string(value, context->priv->localStorageDirectory.data());
         break;
@@ -363,7 +361,7 @@ static void webkitWebContextSetProperty(GObject* object, guint propID, const GVa
     WebKitWebContext* context = WEBKIT_WEB_CONTEXT(object);
 
     switch (propID) {
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && !USE(GTK4)
     case PROP_LOCAL_STORAGE_DIRECTORY:
         context->priv->localStorageDirectory = g_value_get_string(value);
         break;
@@ -422,8 +420,13 @@ static void webkitWebContextConstructed(GObject* object)
     }
     configuration.setTimeZoneOverride(String::fromUTF8(priv->timeZoneOverride.data(), priv->timeZoneOverride.length()));
 
-    if (!priv->websiteDataManager)
-        priv->websiteDataManager = adoptGRef(webkit_website_data_manager_new("local-storage-directory", priv->localStorageDirectory.data(), nullptr));
+    if (!priv->websiteDataManager) {
+        priv->websiteDataManager = adoptGRef(webkit_website_data_manager_new(
+#if !ENABLE(2022_GLIB_API)
+                    "local-storage-directory", priv->localStorageDirectory.data(),
+#endif
+        nullptr));
+    }
 
     priv->processPool = WebProcessPool::create(configuration);
     priv->processPool->setUserMessageHandler([webContext](UserMessage&& message, CompletionHandler<void(UserMessage&&)>&& completionHandler) {
@@ -441,7 +444,6 @@ static void webkitWebContextConstructed(GObject* object)
 #endif
 
     attachInjectedBundleClientToContext(webContext);
-    attachDownloadClientToContext(webContext);
 
     priv->geolocationManager = adoptGRef(webkitGeolocationManagerCreate(priv->processPool->supplement<WebGeolocationManagerProxy>()));
     priv->notificationProvider = makeUnique<WebKitNotificationProvider>(priv->processPool->supplement<WebNotificationManagerProxy>(), webContext);
@@ -457,7 +459,6 @@ static void webkitWebContextDispose(GObject* object)
     if (!priv->clientsDetached) {
         priv->clientsDetached = true;
         priv->processPool->setInjectedBundleClient(nullptr);
-        priv->processPool->setLegacyDownloadClient(nullptr);
     }
 
     if (priv->faviconDatabase) {
@@ -489,7 +490,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     gObjectClass->constructed = webkitWebContextConstructed;
     gObjectClass->dispose = webkitWebContextDispose;
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && !USE(GTK4)
     /**
      * WebKitWebContext:local-storage-directory:
      *
@@ -975,6 +976,7 @@ void webkit_web_context_clear_cache(WebKitWebContext* context)
     websiteDataStore.removeData(websiteDataTypes, -WallTime::infinity(), [] { });
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_context_set_network_proxy_settings:
  * @context: a #WebKitWebContext
@@ -1001,14 +1003,7 @@ void webkit_web_context_set_network_proxy_settings(WebKitWebContext* context, We
 
     webkit_website_data_manager_set_network_proxy_settings(context->priv->websiteDataManager.get(), proxyMode, proxySettings);
 }
-
-typedef HashMap<DownloadProxy*, GRefPtr<WebKitDownload> > DownloadsMap;
-
-static DownloadsMap& downloadsMap()
-{
-    static NeverDestroyed<DownloadsMap> downloads;
-    return downloads;
-}
+#endif
 
 /**
  * webkit_web_context_download_uri:
@@ -1029,7 +1024,17 @@ WebKitDownload* webkit_web_context_download_uri(WebKitWebContext* context, const
     g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), nullptr);
     g_return_val_if_fail(uri, nullptr);
 
-    GRefPtr<WebKitDownload> download = webkitWebContextStartDownload(context, uri, nullptr);
+    WebCore::ResourceRequest request(String::fromUTF8(uri));
+    auto& websiteDataStore = webkitWebsiteDataManagerGetDataStore(context->priv->websiteDataManager.get());
+    auto& downloadProxy = context->priv->processPool->download(websiteDataStore, nullptr, request);
+    auto download = webkitDownloadCreate(downloadProxy);
+    downloadProxy.setDidStartCallback([context = GRefPtr<WebKitWebContext> { context }, download = download.get()](auto* downloadProxy) {
+        if (!downloadProxy)
+            return;
+
+        webkitDownloadStarted(download);
+        webkitWebContextDownloadStarted(context.get(), download);
+    });
     return download.leakRef();
 }
 
@@ -1186,6 +1191,7 @@ WebKitSecurityManager* webkit_web_context_get_security_manager(WebKitWebContext*
     return priv->securityManager.get();
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_context_set_additional_plugins_directory:
  * @context: a #WebKitWebContext
@@ -1244,6 +1250,7 @@ GList* webkit_web_context_get_plugins_finish(WebKitWebContext* context, GAsyncRe
 
     return static_cast<GList*>(g_task_propagate_pointer(G_TASK(result), error));
 }
+#endif
 
 /**
  * webkit_web_context_register_uri_scheme:
@@ -1544,6 +1551,7 @@ void webkit_web_context_set_preferred_languages(WebKitWebContext* context, const
     context->priv->processPool->setOverrideLanguages(WTFMove(languages));
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_context_set_tls_errors_policy:
  * @context: a #WebKitWebContext
@@ -1576,6 +1584,7 @@ WebKitTLSErrorsPolicy webkit_web_context_get_tls_errors_policy(WebKitWebContext*
 
     return webkit_website_data_manager_get_tls_errors_policy(context->priv->websiteDataManager.get());
 }
+#endif
 
 /**
  * webkit_web_context_set_web_extensions_directory:
@@ -1622,7 +1631,7 @@ void webkit_web_context_set_web_extensions_initialization_user_data(WebKitWebCon
     context->priv->webExtensionsInitializationUserData = userData;
 }
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && !USE(GTK4)
 /**
  * webkit_web_context_set_disk_cache_directory:
  * @context: a #WebKitWebContext
@@ -1748,6 +1757,7 @@ WebKitProcessModel webkit_web_context_get_process_model(WebKitWebContext* contex
     return context->priv->processModel;
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_context_set_web_process_count_limit:
  * @context: the #WebKitWebContext
@@ -1791,6 +1801,7 @@ guint webkit_web_context_get_web_process_count_limit(WebKitWebContext* context)
 
     return 0;
 }
+#endif
 
 static void addOriginToMap(WebKitSecurityOrigin* origin, HashMap<String, bool>* map, bool allowed)
 {
@@ -1921,29 +1932,6 @@ const gchar* webkit_web_context_get_time_zone_override(WebKitWebContext* context
 void webkitWebContextInitializeNotificationPermissions(WebKitWebContext* context)
 {
     g_signal_emit(context, signals[INITIALIZE_NOTIFICATION_PERMISSIONS], 0);
-}
-
-WebKitDownload* webkitWebContextGetOrCreateDownload(DownloadProxy* downloadProxy)
-{
-    GRefPtr<WebKitDownload> download = downloadsMap().get(downloadProxy);
-    if (download)
-        return download.get();
-
-    download = adoptGRef(webkitDownloadCreate(downloadProxy));
-    downloadsMap().set(downloadProxy, download.get());
-    return download.get();
-}
-
-WebKitDownload* webkitWebContextStartDownload(WebKitWebContext* context, const char* uri, WebPageProxy* initiatingPage)
-{
-    WebCore::ResourceRequest request(String::fromUTF8(uri));
-    auto& websiteDataStore = webkitWebsiteDataManagerGetDataStore(context->priv->websiteDataManager.get());
-    return webkitWebContextGetOrCreateDownload(&context->priv->processPool->download(websiteDataStore, initiatingPage, request));
-}
-
-void webkitWebContextRemoveDownload(DownloadProxy* downloadProxy)
-{
-    downloadsMap().remove(downloadProxy);
 }
 
 void webkitWebContextDownloadStarted(WebKitWebContext* context, WebKitDownload* download)

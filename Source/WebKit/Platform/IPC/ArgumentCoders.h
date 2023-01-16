@@ -75,33 +75,43 @@ template<typename T, size_t Extent> struct ArgumentCoder<Span<T, Extent>> {
     template<typename Encoder>
     static void encode(Encoder& encoder, const Span<T, Extent>& span)
     {
-        if constexpr (Extent == WTF::dynamic_extent)
-            encoder << static_cast<uint64_t>(span.size());
-        encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(span.data()), span.size() * sizeof(T), alignof(T));
+        static_assert(Extent, "Can't encode a fixed size of 0");
+
+        if constexpr (Extent == WTF::dynamic_extent) {
+            auto size = static_cast<uint64_t>(span.size());
+            encoder << size;
+            if (!size)
+                return;
+        }
+        encoder.encodeSpan(span);
     }
+
     template<typename Decoder>
     static std::optional<Span<T, Extent>> decode(Decoder& decoder)
     {
-        std::optional<uint64_t> size;
+        static_assert(Extent, "Can't decode a fixed size of 0");
+
+        size_t size = Extent;
         if constexpr (Extent == WTF::dynamic_extent) {
-            size = decoder.template decode<uint64_t>();
-            if (!size)
+            auto decodedSize = decoder.template decode<uint64_t>();
+            if (!decodedSize)
                 return std::nullopt;
-            if (!*size)
-                return Span<T, Extent>();
-        } else {
-            size = Extent;
-            static_assert(Extent, "Can't decode a fixed size of 0");
+            if (!*decodedSize)
+                return Span<T, Extent> { };
+
+            if (!isInBounds<size_t>(*decodedSize))
+                return std::nullopt;
+            size = static_cast<size_t>(*decodedSize);
         }
 
-        auto dataSize = CheckedSize { *size } * sizeof(T);
-        if (UNLIKELY(dataSize.hasOverflowed()))
+        auto data = decoder.template decodeSpan<T>(size);
+        if (!data.data() || data.size() != size)
             return std::nullopt;
 
-        const uint8_t* data = decoder.decodeFixedLengthReference(dataSize, alignof(T));
-        if (!data)
-            return std::nullopt;
-        return Span<T, Extent>(reinterpret_cast<const T*>(data), static_cast<size_t>(*size));
+        if constexpr (Extent == WTF::dynamic_extent)
+            return data;
+        else
+            return Span<T, Extent> { data.data(), Extent };
     }
 };
 
@@ -705,21 +715,20 @@ template<typename... Types> struct ArgumentCoder<std::variant<Types...>> {
 
         unsigned i = variant.index();
         encoder << i;
-        encode(encoder, std::forward<T>(variant), std::index_sequence_for<Types...> { }, i);
+        encode(encoder, std::forward<T>(variant), std::index_sequence<> { }, i);
     }
 
     template<typename Encoder, typename T, size_t... Indices>
     static void encode(Encoder& encoder, T&& variant, std::index_sequence<Indices...>, unsigned i)
     {
-        constexpr size_t Index = sizeof...(Types) - sizeof...(Indices);
-        static_assert(Index < sizeof...(Types));
-        if (Index == i) {
-            encoder << std::get<Index>(std::forward<T>(variant));
-            return;
+        constexpr size_t index = sizeof...(Indices);
+        if constexpr (index < sizeof...(Types)) {
+            if (index == i) {
+                encoder << std::get<index>(std::forward<T>(variant));
+                return;
+            }
+            encode(encoder, std::forward<T>(variant), std::make_index_sequence<index + 1> { }, i);
         }
-
-        if constexpr (sizeof...(Indices) > 1)
-            encode(encoder, std::forward<T>(variant), std::make_index_sequence<sizeof...(Indices) - 1> { }, i);
     }
 
     template<typename Decoder>
@@ -728,24 +737,23 @@ template<typename... Types> struct ArgumentCoder<std::variant<Types...>> {
         auto i = decoder.template decode<unsigned>();
         if (!i || *i >= sizeof...(Types))
             return std::nullopt;
-        return decode(decoder, std::index_sequence_for<Types...> { }, *i);
+        return decode(decoder, std::index_sequence<> { }, *i);
     }
 
     template<typename Decoder, size_t... Indices>
     static std::optional<std::variant<Types...>> decode(Decoder& decoder, std::index_sequence<Indices...>, unsigned i)
     {
-        constexpr size_t Index = sizeof...(Types) - sizeof...(Indices);
-        static_assert(Index < sizeof...(Types));
-        if (Index == i) {
-            auto optional = decoder.template decode<typename std::variant_alternative_t<Index, std::variant<Types...>>>();
-            if (!optional)
-                return std::nullopt;
-            return std::make_optional<std::variant<Types...>>(WTFMove(*optional));
-        }
-
-        if constexpr (sizeof...(Indices) > 1)
-            return decode(decoder, std::make_index_sequence<sizeof...(Indices) - 1> { }, i);
-        return std::nullopt;
+        constexpr size_t index = sizeof...(Indices);
+        if constexpr (index < sizeof...(Types)) {
+            if (index == i) {
+                auto optional = decoder.template decode<typename std::variant_alternative_t<index, std::variant<Types...>>>();
+                if (!optional)
+                    return std::nullopt;
+                return std::make_optional<std::variant<Types...>>(WTFMove(*optional));
+            }
+            return decode(decoder, std::make_index_sequence<index + 1> { }, i);
+        } else
+            return std::nullopt;
     }
 };
 

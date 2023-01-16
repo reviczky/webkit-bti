@@ -27,6 +27,7 @@
 
 #include "AXIsolatedTree.h"
 #include "AXTextStateChangeIntent.h"
+#include "AXTreeStore.h"
 #include "AccessibilityObject.h"
 #include "SimpleRange.h"
 #include "Timer.h"
@@ -143,8 +144,10 @@ enum AXTextChange { AXTextInserted, AXTextDeleted, AXTextAttributesChanged };
 
 enum class PostTarget { Element, ObservableParent };
 
-class AXObjectCache : public CanMakeWeakPtr<AXObjectCache> {
-    WTF_MAKE_NONCOPYABLE(AXObjectCache); WTF_MAKE_FAST_ALLOCATED;
+class AXObjectCache : public CanMakeWeakPtr<AXObjectCache>
+    , public AXTreeStore<AXObjectCache> {
+    WTF_MAKE_NONCOPYABLE(AXObjectCache);
+    WTF_MAKE_FAST_ALLOCATED;
     friend class AXIsolatedTree;
     friend WTF::TextStream& operator<<(WTF::TextStream&, AXObjectCache&);
 public:
@@ -227,7 +230,6 @@ public:
     const Element* rootAXEditableElement(const Node*);
     bool nodeIsTextControl(const Node*);
 
-    AXID platformGenerateAXID() const;
     AccessibilityObject* objectForID(const AXID& id) const { return m_objects.get(id); }
     Vector<RefPtr<AXCoreObject>> objectsForIDs(const Vector<AXID>&) const;
 
@@ -286,6 +288,7 @@ public:
         AXColumnCountChanged,
         AXColumnIndexChanged,
         AXColumnSpanChanged,
+        AXControlledObjectsChanged,
         AXCurrentStateChanged,
         AXDescribedByChanged,
         AXDisabledStateChanged,
@@ -526,6 +529,10 @@ private:
     static AXRelationType symmetricRelation(AXRelationType);
     void addRelation(Element*, Element*, AXRelationType);
     void addRelation(AccessibilityObject*, AccessibilityObject*, AXRelationType, AddingSymmetricRelation = AddingSymmetricRelation::No);
+    void removeRelationByID(AXID originID, AXID targetID, AXRelationType);
+    void addRelations(Element&, const QualifiedName&);
+    void updateRelations(Element&, const QualifiedName&);
+    void removeRelations(Element&, AXRelationType);
     void updateRelationsIfNeeded();
     void updateRelationsForTree(ContainerNode&);
     void relationsNeedUpdate(bool);
