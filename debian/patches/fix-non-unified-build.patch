@@ -1,363 +1,208 @@
 From: Alberto Garcia <berto@igalia.com>
 Subject: Fix non-unified build
 Forwarded: no
-Index: webkitgtk/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
+Index: webkitgtk/Source/WebCore/css/CSSCounterStyle.h
 ===================================================================
---- webkitgtk.orig/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
-+++ webkitgtk/Source/JavaScriptCore/runtime/BufferMemoryHandle.cpp
-@@ -35,6 +35,8 @@
- #include <wtf/DataLog.h>
- #include <wtf/Gigacage.h>
- #include <wtf/Lock.h>
-+#include <wtf/NeverDestroyed.h>
-+#include <wtf/OSAllocator.h>
- #include <wtf/Platform.h>
- #include <wtf/PrintStream.h>
- #include <wtf/SafeStrerror.h>
-Index: webkitgtk/Source/WebCore/animation/DeclarativeAnimation.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/animation/DeclarativeAnimation.cpp
-+++ webkitgtk/Source/WebCore/animation/DeclarativeAnimation.cpp
-@@ -25,8 +25,10 @@
- 
- #include "config.h"
- #include "DeclarativeAnimation.h"
-+#include "DeclarativeAnimationEvent.h"
- 
- #include "Animation.h"
-+#include "AnimationEventBase.h"
- #include "CSSAnimation.h"
- #include "CSSTransition.h"
- #include "DocumentTimeline.h"
-Index: webkitgtk/Source/WebCore/bindings/js/StructuredClone.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/bindings/js/StructuredClone.cpp
-+++ webkitgtk/Source/WebCore/bindings/js/StructuredClone.cpp
+--- webkitgtk.orig/Source/WebCore/css/CSSCounterStyle.h
++++ webkitgtk/Source/WebCore/css/CSSCounterStyle.h
 @@ -28,6 +28,7 @@
- #include "StructuredClone.h"
- 
- #include "JSDOMBinding.h"
-+#include "JSDOMConvertBufferSource.h"
- #include "JSDOMExceptionHandling.h"
- #include <JavaScriptCore/JSTypedArrays.h>
- 
-Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
-+++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -76,6 +76,7 @@
- #include "DeprecatedCSSOMPrimitiveValue.h"
- #include "DeprecatedCSSOMValueList.h"
- #include "EventTarget.h"
-+#include "Rect.h"
+ #include "CSSCounterStyleDescriptors.h"
+ #include <wtf/Forward.h>
+ #include <wtf/text/AtomString.h>
++#include <wtf/WeakPtr.h>
  
  namespace WebCore {
  
-Index: webkitgtk/Source/WebCore/css/StylePropertyShorthand.h
+Index: webkitgtk/Source/WebCore/Modules/gamepad/GamepadEffectParameters.h
 ===================================================================
---- webkitgtk.orig/Source/WebCore/css/StylePropertyShorthand.h
-+++ webkitgtk/Source/WebCore/css/StylePropertyShorthand.h
-@@ -22,6 +22,7 @@
- #pragma once
+--- webkitgtk.orig/Source/WebCore/Modules/gamepad/GamepadEffectParameters.h
++++ webkitgtk/Source/WebCore/Modules/gamepad/GamepadEffectParameters.h
+@@ -27,6 +27,8 @@
+ 
+ #if ENABLE(GAMEPAD)
+ 
++#include <wtf/Seconds.h>
++
+ namespace WebCore {
+ 
+ struct GamepadEffectParameters {
+Index: webkitgtk/Source/WebCore/animation/WebAnimationUtilities.h
+===================================================================
+--- webkitgtk.orig/Source/WebCore/animation/WebAnimationUtilities.h
++++ webkitgtk/Source/WebCore/animation/WebAnimationUtilities.h
+@@ -27,6 +27,7 @@
+ 
+ #include "ExceptionOr.h"
+ #include "RenderStyleConstants.h"
++#include "WebAnimationTypes.h"
+ #include <wtf/Forward.h>
+ #include <wtf/Markable.h>
+ #include <wtf/Seconds.h>
+Index: webkitgtk/Source/WebCore/bindings/js/JSHTMLElementCustom.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/bindings/js/JSHTMLElementCustom.cpp
++++ webkitgtk/Source/WebCore/bindings/js/JSHTMLElementCustom.cpp
+@@ -29,6 +29,7 @@
+ #include "CustomElementRegistry.h"
+ #include "DOMWindow.h"
+ #include "Document.h"
++#include "FormAssociatedElement.h"
+ #include "HTMLFormElement.h"
+ #include "JSCustomElementInterface.h"
+ #include "JSDOMConstructorBase.h"
+Index: webkitgtk/Source/WebCore/css/CSSCounterStyleDescriptors.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/CSSCounterStyleDescriptors.cpp
++++ webkitgtk/Source/WebCore/css/CSSCounterStyleDescriptors.cpp
+@@ -26,6 +26,9 @@
+ #include "config.h"
+ #include "CSSCounterStyleDescriptors.h"
+ 
++#include "CSSCounterStyleRule.h"
++#include "CSSValueList.h"
++#include "Pair.h"
+ #include "StyleProperties.h"
+ 
+ #include <utility>
+Index: webkitgtk/Source/WebCore/css/parser/CSSParserContext.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/parser/CSSParserContext.cpp
++++ webkitgtk/Source/WebCore/css/parser/CSSParserContext.cpp
+@@ -27,6 +27,7 @@
+ #include "CSSParserContext.h"
  
  #include "CSSPropertyNames.h"
-+#include "CSSValueKeywords.h"
- #include <wtf/Vector.h>
- 
- namespace WebCore {
-Index: webkitgtk/Source/WebCore/css/parser/CSSPropertyParser.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/parser/CSSPropertyParser.cpp
-+++ webkitgtk/Source/WebCore/css/parser/CSSPropertyParser.cpp
-@@ -35,6 +35,7 @@
- #include "CSSComputedStyleDeclaration.h"
- #include "CSSCustomPropertyValue.h"
- #include "CSSFontPaletteValuesOverrideColorsValue.h"
-+#include "CSSFontStyleRangeValue.h"
- #include "CSSFontVariantLigaturesParser.h"
- #include "CSSFontVariantNumericParser.h"
- #include "CSSGridLineNamesValue.h"
-Index: webkitgtk/Source/WebCore/css/parser/CSSPropertyParserHelpers.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/parser/CSSPropertyParserHelpers.cpp
-+++ webkitgtk/Source/WebCore/css/parser/CSSPropertyParserHelpers.cpp
-@@ -29,6 +29,8 @@
- 
- #include "config.h"
- #include "CSSPropertyParserHelpers.h"
-+#include "CSSPropertyParser.h"
-+#include "CSSPropertyParsing.h"
- 
- #include "CSSBackgroundRepeatValue.h"
- #include "CSSBasicShapes.h"
-Index: webkitgtk/Source/WebCore/style/UserAgentStyle.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/style/UserAgentStyle.cpp
-+++ webkitgtk/Source/WebCore/style/UserAgentStyle.cpp
-@@ -44,7 +44,9 @@
- #include "HTMLHtmlElement.h"
- #include "HTMLInputElement.h"
- #include "HTMLMediaElement.h"
-+#include "HTMLMeterElement.h"
- #include "HTMLObjectElement.h"
-+#include "HTMLProgressElement.h"
- #include "HTMLSpanElement.h"
- #include "MathMLElement.h"
- #include "MediaQueryEvaluator.h"
-Index: webkitgtk/Source/WebCore/svg/SVGLengthValue.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/svg/SVGLengthValue.cpp
-+++ webkitgtk/Source/WebCore/svg/SVGLengthValue.cpp
-@@ -24,6 +24,7 @@
- 
- #include "AnimationUtilities.h"
- #include "CSSPrimitiveValue.h"
-+#include "SVGElement.h"
- #include "SVGLengthContext.h"
- #include "SVGParserUtilities.h"
- #include <wtf/text/StringConcatenateNumbers.h>
-Index: webkitgtk/Source/WebKit/Shared/WebEventConversion.cpp
-===================================================================
---- webkitgtk.orig/Source/WebKit/Shared/WebEventConversion.cpp
-+++ webkitgtk/Source/WebKit/Shared/WebEventConversion.cpp
-@@ -24,6 +24,7 @@
-  */
- 
- #include "config.h"
-+#include "WebEventModifier.h"
- #include "WebEventConversion.h"
- 
- #include "WebKeyboardEvent.h"
-Index: webkitgtk/Source/JavaScriptCore/runtime/WaiterListManager.cpp
-===================================================================
---- webkitgtk.orig/Source/JavaScriptCore/runtime/WaiterListManager.cpp
-+++ webkitgtk/Source/JavaScriptCore/runtime/WaiterListManager.cpp
-@@ -27,6 +27,7 @@
- #include "config.h"
- #include "WaiterListManager.h"
- 
-+#include "JSCInlines.h"
- #include "JSGlobalObject.h"
- #include "JSLock.h"
- #include "ObjectConstructor.h"
-Index: webkitgtk/Source/WebCore/bindings/js/InternalWritableStream.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/bindings/js/InternalWritableStream.cpp
-+++ webkitgtk/Source/WebCore/bindings/js/InternalWritableStream.cpp
-@@ -28,6 +28,7 @@
- 
- #include "Exception.h"
- #include "WebCoreJSClientData.h"
-+#include <JavaScriptCore/JSArrayBufferViewInlines.h>
- 
- namespace WebCore {
- 
-Index: webkitgtk/Source/WebCore/css/ComputedStyleExtractor.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/ComputedStyleExtractor.cpp
-+++ webkitgtk/Source/WebCore/css/ComputedStyleExtractor.cpp
-@@ -43,6 +43,7 @@
- #include "CSSPropertyAnimation.h"
- #include "CSSRayValue.h"
- #include "CSSReflectValue.h"
-+#include "CSSRegisteredCustomProperty.h"
- #include "CSSShadowValue.h"
- #include "CSSTimingFunctionValue.h"
- #include "CSSTransformListValue.h"
-Index: webkitgtk/Source/WebCore/css/CSSCustomPropertyValue.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/CSSCustomPropertyValue.cpp
-+++ webkitgtk/Source/WebCore/css/CSSCustomPropertyValue.cpp
-@@ -27,9 +27,11 @@
- #include "CSSCustomPropertyValue.h"
- 
- #include "CSSCalcValue.h"
-+#include "CSSMarkup.h"
- #include "CSSParserIdioms.h"
- #include "CSSTokenizer.h"
- #include "ColorSerialization.h"
-+#include "RenderStyle.h"
- 
- namespace WebCore {
- 
-Index: webkitgtk/Source/WebCore/css/CSSValueList.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/CSSValueList.cpp
-+++ webkitgtk/Source/WebCore/css/CSSValueList.cpp
-@@ -21,6 +21,7 @@
- #include "config.h"
- #include "CSSValueList.h"
- 
-+#include "CSSPrimitiveValue.h"
- #include <wtf/text/StringBuilder.h>
- 
- namespace WebCore {
-Index: webkitgtk/Source/WebCore/css/parser/CSSPropertySyntax.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/parser/CSSPropertySyntax.cpp
-+++ webkitgtk/Source/WebCore/css/parser/CSSPropertySyntax.cpp
-@@ -26,6 +26,7 @@
- #include "CSSPropertySyntax.h"
- 
- #include "CSSParserIdioms.h"
-+#include "CSSParserTokenRange.h"
- #include "CSSTokenizer.h"
- #include "ParsingUtilities.h"
- 
-Index: webkitgtk/Source/WebCore/css/query/MediaQueryParser.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/query/MediaQueryParser.cpp
-+++ webkitgtk/Source/WebCore/css/query/MediaQueryParser.cpp
-@@ -25,6 +25,7 @@
- #include "config.h"
- #include "MediaQueryParser.h"
- 
-+#include "CommonAtomStrings.h"
- #include "CSSMarkup.h"
- #include "CSSTokenizer.h"
- #include "CSSValueKeywords.h"
-Index: webkitgtk/Source/WebCore/css/typedom/InlineStylePropertyMap.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/typedom/InlineStylePropertyMap.cpp
-+++ webkitgtk/Source/WebCore/css/typedom/InlineStylePropertyMap.cpp
-@@ -26,7 +26,10 @@
- #include "config.h"
- #include "InlineStylePropertyMap.h"
- 
-+#include "CSSCustomPropertyValue.h"
-+#include "Document.h"
- #include "StyledElement.h"
-+#include "StyleProperties.h"
- 
- namespace WebCore {
- 
-Index: webkitgtk/Source/WebCore/page/FrameSnapshotting.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/page/FrameSnapshotting.cpp
-+++ webkitgtk/Source/WebCore/page/FrameSnapshotting.cpp
-@@ -39,6 +39,7 @@
- #include "FrameView.h"
- #include "GeometryUtilities.h"
- #include "GraphicsContext.h"
-+#include "HostWindow.h"
- #include "ImageBuffer.h"
++#include "CSSValuePool.h"
+ #include "Document.h"
+ #include "DocumentLoader.h"
  #include "Page.h"
- #include "RenderAncestorIterator.h"
-Index: webkitgtk/Source/WebCore/rendering/GridMasonryLayout.cpp
+Index: webkitgtk/Source/WebCore/workers/service/context/ServiceWorkerThread.cpp
 ===================================================================
---- webkitgtk.orig/Source/WebCore/rendering/GridMasonryLayout.cpp
-+++ webkitgtk/Source/WebCore/rendering/GridMasonryLayout.cpp
-@@ -23,6 +23,7 @@
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  */
- #include "config.h"
-+#include "RenderGrid.h"
- #include "GridMasonryLayout.h"
- 
- #include "GridLayoutFunctions.h"
-Index: webkitgtk/Source/WebCore/page/RemoteFrame.h
+--- webkitgtk.orig/Source/WebCore/workers/service/context/ServiceWorkerThread.cpp
++++ webkitgtk/Source/WebCore/workers/service/context/ServiceWorkerThread.cpp
+@@ -43,6 +43,7 @@
+ #include "PushEvent.h"
+ #include "PushSubscription.h"
+ #include "PushSubscriptionChangeEvent.h"
++#include "ResourceResponse.h"
+ #include "SWContextManager.h"
+ #include "SecurityOrigin.h"
+ #include "ServiceWorkerFetch.h"
+Index: webkitgtk/Source/WebCore/style/CustomPropertyRegistry.cpp
 ===================================================================
---- webkitgtk.orig/Source/WebCore/page/RemoteFrame.h
-+++ webkitgtk/Source/WebCore/page/RemoteFrame.h
-@@ -28,6 +28,7 @@
- #include "AbstractFrame.h"
- #include <wtf/RefPtr.h>
- #include <wtf/TypeCasts.h>
-+#include <wtf/UniqueRef.h>
+--- webkitgtk.orig/Source/WebCore/style/CustomPropertyRegistry.cpp
++++ webkitgtk/Source/WebCore/style/CustomPropertyRegistry.cpp
+@@ -27,6 +27,7 @@
  
- namespace WebCore {
- 
-Index: webkitgtk/Source/WebCore/page/RemoteFrame.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/page/RemoteFrame.cpp
-+++ webkitgtk/Source/WebCore/page/RemoteFrame.cpp
-@@ -26,6 +26,8 @@
- #include "config.h"
- #include "RemoteFrame.h"
- 
+ #include "CSSPropertyParser.h"
+ #include "CSSRegisteredCustomProperty.h"
 +#include "Document.h"
-+#include "HTMLFrameOwnerElement.h"
- #include "RemoteDOMWindow.h"
- #include "RemoteFrameClient.h"
- 
-Index: webkitgtk/Source/WebKit/Shared/WebPageCreationParameters.h
+ #include "StyleBuilder.h"
+ #include "StyleResolver.h"
+ #include "StyleScope.h"
+Index: webkitgtk/Source/WebCore/style/RuleSetBuilder.cpp
 ===================================================================
---- webkitgtk.orig/Source/WebKit/Shared/WebPageCreationParameters.h
-+++ webkitgtk/Source/WebKit/Shared/WebPageCreationParameters.h
+--- webkitgtk.orig/Source/WebCore/style/RuleSetBuilder.cpp
++++ webkitgtk/Source/WebCore/style/RuleSetBuilder.cpp
+@@ -35,6 +35,7 @@
+ #include "CSSKeyframesRule.h"
+ #include "CSSSelectorParser.h"
+ #include "CustomPropertyRegistry.h"
++#include "Document.h"
+ #include "MediaQueryEvaluator.h"
+ #include "StyleResolver.h"
+ #include "StyleRuleImport.h"
+Index: webkitgtk/Source/WebCore/workers/service/context/ServiceWorkerFetch.h
+===================================================================
+--- webkitgtk.orig/Source/WebCore/workers/service/context/ServiceWorkerFetch.h
++++ webkitgtk/Source/WebCore/workers/service/context/ServiceWorkerFetch.h
+@@ -28,6 +28,7 @@
+ #if ENABLE(SERVICE_WORKER)
+ 
+ #include "FetchIdentifier.h"
++#include "ResourceResponse.h"
+ #include "ScriptExecutionContextIdentifier.h"
+ #include <wtf/Ref.h>
+ #include <wtf/ThreadSafeRefCounted.h>
+@@ -40,7 +41,6 @@ class FormData;
+ class NetworkLoadMetrics;
+ class ResourceError;
+ class ResourceRequest;
+-class ResourceResponse;
+ class ServiceWorkerGlobalScope;
+ class ServiceWorkerGlobalScope;
+ class SharedBuffer;
+Index: webkitgtk/Source/WebKit/NetworkProcess/storage/OriginStorageManager.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/NetworkProcess/storage/OriginStorageManager.cpp
++++ webkitgtk/Source/WebKit/NetworkProcess/storage/OriginStorageManager.cpp
 @@ -40,6 +40,7 @@
- #include <WebCore/ContentSecurityPolicy.h>
- #include <WebCore/DestinationColorSpace.h>
- #include <WebCore/FloatSize.h>
-+#include <WebCore/FrameIdentifier.h>
- #include <WebCore/HighlightVisibility.h>
- #include <WebCore/IntSize.h>
- #include <WebCore/LayoutMilestone.h>
-Index: webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.h
-===================================================================
---- webkitgtk.orig/Source/WebKit/UIProcess/ProvisionalFrameProxy.h
-+++ webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.h
-@@ -27,7 +27,11 @@
+ #include "UnifiedOriginStorageLevel.h"
+ #include "WebsiteDataType.h"
+ #include <WebCore/SQLiteFileSystem.h>
++#include <WebCore/StorageEstimate.h>
+ #include <wtf/FileSystem.h>
  
- #include "MessageReceiver.h"
- #include "MessageSender.h"
-+#include "UserData.h"
-+#include "VisitedLinkStore.h"
- #include "WebPageProxyIdentifier.h"
-+#include <WebCore/DocumentLoader.h>
-+#include <WebCore/CertificateInfo.h>
- #include <WebCore/FrameIdentifier.h>
- #include <WebCore/FrameLoaderTypes.h>
- #include <WebCore/PageIdentifier.h>
-Index: webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebWorkerClient.cpp
+ namespace WebKit {
+Index: webkitgtk/Source/WebKit/UIProcess/WebPageProxy.cpp
 ===================================================================
---- webkitgtk.orig/Source/WebKit/WebProcess/WebCoreSupport/WebWorkerClient.cpp
-+++ webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebWorkerClient.cpp
-@@ -29,6 +29,7 @@
- #include "ImageBufferShareableBitmapBackend.h"
- #include "RemoteImageBufferProxy.h"
- #include "RemoteRenderingBackendProxy.h"
-+#include "WebPage.h"
- 
- #if ENABLE(WEBGL) && ENABLE(GPU_PROCESS)
- #include "RemoteGraphicsContextGLProxy.h"
-Index: webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.cpp
-===================================================================
---- webkitgtk.orig/Source/WebKit/UIProcess/ProvisionalFrameProxy.cpp
-+++ webkitgtk/Source/WebKit/UIProcess/ProvisionalFrameProxy.cpp
-@@ -32,9 +32,12 @@
- #include "LoadParameters.h"
- #include "WebFrameProxy.h"
- #include "WebFrameProxyMessages.h"
-+#include "WebPageMessages.h"
- #include "WebPageProxyMessages.h"
- #include "WebProcessMessages.h"
+--- webkitgtk.orig/Source/WebKit/UIProcess/WebPageProxy.cpp
++++ webkitgtk/Source/WebKit/UIProcess/WebPageProxy.cpp
+@@ -343,6 +343,8 @@
+ #define WEBPAGEPROXY_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", PID=%i] WebPageProxy::" fmt, this, m_identifier.toUInt64(), m_webPageID.toUInt64(), m_process->processIdentifier(), ##__VA_ARGS__)
+ #define WEBPAGEPROXY_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", PID=%i] WebPageProxy::" fmt, this, m_identifier.toUInt64(), m_webPageID.toUInt64(), m_process->processIdentifier(), ##__VA_ARGS__)
  
 +using namespace WebCore;
 +
- namespace WebKit {
+ // Represents the number of wheel events we can hold in the queue before we start pushing them preemptively.
+ static const unsigned wheelEventQueueSizeThreshold = 10;
  
- ProvisionalFrameProxy::ProvisionalFrameProxy(WebFrameProxy& frame, Ref<WebProcessProxy>&& process, const WebCore::ResourceRequest& request)
-Index: webkitgtk/Source/WebKit/UIProcess/Notifications/ServiceWorkerNotificationHandler.cpp
+Index: webkitgtk/Source/WebCore/style/RuleData.cpp
 ===================================================================
---- webkitgtk.orig/Source/WebKit/UIProcess/Notifications/ServiceWorkerNotificationHandler.cpp
-+++ webkitgtk/Source/WebKit/UIProcess/Notifications/ServiceWorkerNotificationHandler.cpp
-@@ -26,6 +26,7 @@
- #include "config.h"
- #include "ServiceWorkerNotificationHandler.h"
- 
-+#include "Logging.h"
- #include "WebsiteDataStore.h"
- #include <WebCore/NotificationData.h>
- #include <wtf/Scope.h>
-Index: webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebRemoteFrameClient.h
+--- webkitgtk.orig/Source/WebCore/style/RuleData.cpp
++++ webkitgtk/Source/WebCore/style/RuleData.cpp
+@@ -35,6 +35,7 @@
+ #include "CSSSelectorList.h"
+ #include "CommonAtomStrings.h"
+ #include "HTMLNames.h"
++#include "ScriptExecutionContext.h"
+ #include "SecurityOrigin.h"
+ #include "SelectorChecker.h"
+ #include "SelectorFilter.h"
+Index: webkitgtk/Source/WebCore/style/StyleTreeResolver.cpp
 ===================================================================
---- webkitgtk.orig/Source/WebKit/WebProcess/WebCoreSupport/WebRemoteFrameClient.h
-+++ webkitgtk/Source/WebKit/WebProcess/WebCoreSupport/WebRemoteFrameClient.h
-@@ -26,6 +26,7 @@
- #pragma once
+--- webkitgtk.orig/Source/WebCore/style/StyleTreeResolver.cpp
++++ webkitgtk/Source/WebCore/style/StyleTreeResolver.cpp
+@@ -48,6 +48,7 @@
+ #include "Settings.h"
+ #include "ShadowRoot.h"
+ #include "StyleAdjuster.h"
++#include "StyleBuilder.h"
+ #include "StyleFontSizeFunctions.h"
+ #include "StyleResolver.h"
+ #include "StyleScope.h"
+Index: webkitgtk/Source/WebCore/style/RuleSet.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/style/RuleSet.cpp
++++ webkitgtk/Source/WebCore/style/RuleSet.cpp
+@@ -38,6 +38,7 @@
+ #include "MediaQueryEvaluator.h"
+ #include "RuleSetBuilder.h"
+ #include "SVGElement.h"
++#include "ScriptExecutionContext.h"
+ #include "SecurityOrigin.h"
+ #include "SelectorChecker.h"
+ #include "SelectorFilter.h"
+Index: webkitgtk/Source/WebCore/css/CSSCounterStyleRegistry.h
+===================================================================
+--- webkitgtk.orig/Source/WebCore/css/CSSCounterStyleRegistry.h
++++ webkitgtk/Source/WebCore/css/CSSCounterStyleRegistry.h
+@@ -28,7 +28,7 @@
+ #include "CSSCounterStyle.h"
+ #include <wtf/Forward.h>
+ #include <wtf/HashMap.h>
+-#include <wtf/text/AtomString.h>
++#include <wtf/text/AtomStringHash.h>
  
- #include <WebCore/RemoteFrameClient.h>
-+#include "WebFrame.h"
- 
- namespace WebKit {
+ namespace WebCore {
  

@@ -36,7 +36,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -43,6 +43,8 @@ struct SameSizeAsElementRareData : NodeR
+@@ -44,6 +44,8 @@ struct SameSizeAsElementRareData : NodeR
      ExplicitlySetAttrElementsMap explicitlySetAttrElementsMap;
  };
  
@@ -63,7 +63,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -60,10 +60,12 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -59,10 +59,12 @@ struct SameSizeAsShadowRoot : public Doc
      std::optional<HashMap<AtomString, AtomString>> partMappings;
  };
  
@@ -74,7 +74,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
  #endif
 +#endif
  
- ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type, SlotAssignmentMode assignmentMode, DelegatesFocus delegatesFocus, AvailableToElementInternals availableToElementInternals)
+ ShadowRoot::ShadowRoot(Document& document, ShadowRootMode mode, SlotAssignmentMode assignmentMode, DelegatesFocus delegatesFocus, Cloneable cloneable, AvailableToElementInternals availableToElementInternals)
      : DocumentFragment(document, CreateShadowRoot)
 Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
@@ -183,7 +183,7 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
 +++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -84,7 +84,9 @@ struct SameSizeAsCSSValue {
+@@ -85,7 +85,9 @@ struct SameSizeAsCSSValue {
      uint32_t bitfields;
  };
  
