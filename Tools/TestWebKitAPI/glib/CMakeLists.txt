@@ -20,6 +20,14 @@ set(WebKitGLibAPITests_INCLUDE_DIRECTORIES
     ${WebCore_PRIVATE_FRAMEWORK_HEADERS}
 )
 
+if (USE_LIBWEBRTC)
+    list(APPEND WebKitGLibAPITests_INCLUDE_DIRECTORIES
+        "${THIRDPARTY_DIR}/libwebrtc/Source"
+        "${THIRDPARTY_DIR}/libwebrtc/Source/third_party/abseil-cpp"
+        "${THIRDPARTY_DIR}/libwebrtc/Source/webrtc"
+    )
+endif ()
+
 set(WebKitGLibAPITests_SYSTEM_INCLUDE_DIRECTORIES
     ${GIO_UNIX_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
@@ -160,8 +168,8 @@ ADD_WK2_TEST(TestDOMElement ${TOOLS_DIR}/TestWebKitAPI/Tests/WebKitGLib/TestDOME
 ADD_WK2_TEST(TestGeolocationManager ${TOOLS_DIR}/TestWebKitAPI/Tests/WebKitGLib/TestGeolocationManager.cpp)
 ADD_WK2_TEST(TestInputMethodContext ${TOOLS_DIR}/TestWebKitAPI/Tests/WebKitGLib/TestInputMethodContext.cpp)
 
-# FIXME: Enable for WPE
-if (PORT STREQUAL "GTK")
+# FIXME: Enable for WPE and GTK4
+if (PORT STREQUAL "GTK" AND NOT USE_GTK4)
     ADD_WK2_TEST(TestCookieManager ${TOOLS_DIR}/TestWebKitAPI/Tests/WebKitGLib/TestCookieManager.cpp)
 endif ()
 

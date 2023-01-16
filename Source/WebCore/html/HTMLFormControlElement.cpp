@@ -73,6 +73,7 @@ HTMLFormControlElement::HTMLFormControlElement(const QualifiedName& tagName, Doc
     , m_willValidate(true)
     , m_isValid(true)
     , m_wasChangedSinceLastFormControlChangeEvent(false)
+    , m_wasInteractedWithSinceLastFormSubmitEvent(false)
 {
     setHasCustomStyleResolveCallbacks();
 }
@@ -294,6 +295,22 @@ void HTMLFormControlElement::setChangedSinceLastFormControlChangeEvent(bool chan
     m_wasChangedSinceLastFormControlChangeEvent = changed;
 }
 
+void HTMLFormControlElement::setInteractedWithSinceLastFormSubmitEvent(bool interactedWith)
+{
+    if (m_wasInteractedWithSinceLastFormSubmitEvent == interactedWith)
+        return;
+
+    auto isInvalid = matchesInvalidPseudoClass();
+    auto isValid = matchesValidPseudoClass();
+
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, {
+        { CSSSelector::PseudoClassUserInvalid, isInvalid && interactedWith },
+        { CSSSelector::PseudoClassUserValid, isValid && interactedWith },
+    });
+
+    m_wasInteractedWithSinceLastFormSubmitEvent = interactedWith;
+}
+
 void HTMLFormControlElement::dispatchChangeEvent()
 {
     dispatchScopedEvent(Event::create(eventNames().changeEvent, Event::CanBubble::Yes, Event::IsCancelable::No));
@@ -308,6 +325,7 @@ void HTMLFormControlElement::dispatchFormControlChangeEvent()
 {
     dispatchChangeEvent();
     setChangedSinceLastFormControlChangeEvent(false);
+    setInteractedWithSinceLastFormSubmitEvent(true);
 }
 
 void HTMLFormControlElement::dispatchFormControlInputEvent()
@@ -383,8 +401,9 @@ bool HTMLFormControlElement::computeWillValidate() const
         m_dataListAncestorState = NotInsideDataList;
 #endif
     }
-    // readonly bars constraint validation for *all* <input> elements, regardless of the <input> type, for compat reasons.
-    return m_dataListAncestorState == NotInsideDataList && !isDisabledFormControl() && !m_hasReadOnlyAttribute;
+    // readonly attribute bars *all* <input> elements from constraint validation, regardless of the <input> type, for compat reasons:
+    // https://html.spec.whatwg.org/multipage/input.html#the-readonly-attribute:barred-from-constraint-validation
+    return m_dataListAncestorState == NotInsideDataList && !isDisabledFormControl() && !(m_hasReadOnlyAttribute && readOnlyBarsFromConstraintValidation());
 }
 
 bool HTMLFormControlElement::willValidate() const
@@ -544,7 +563,12 @@ void HTMLFormControlElement::updateValidity()
     bool newIsValid = this->computeValidity();
 
     if (newIsValid != m_isValid) {
-        Style::PseudoClassChangeInvalidation styleInvalidation(*this, { { CSSSelector::PseudoClassValid, newIsValid }, { CSSSelector::PseudoClassInvalid, !newIsValid } });
+        Style::PseudoClassChangeInvalidation styleInvalidation(*this, {
+            { CSSSelector::PseudoClassValid, newIsValid },
+            { CSSSelector::PseudoClassInvalid, !newIsValid },
+            { CSSSelector::PseudoClassUserValid, newIsValid && m_wasInteractedWithSinceLastFormSubmitEvent },
+            { CSSSelector::PseudoClassUserInvalid, !newIsValid && m_wasInteractedWithSinceLastFormSubmitEvent },
+        });
 
         m_isValid = newIsValid;
 
@@ -582,6 +606,16 @@ bool HTMLFormControlElement::validationMessageShadowTreeContains(const Node& nod
     return m_validationMessage && m_validationMessage->shadowTreeContains(node);
 }
 
+bool HTMLFormControlElement::matchesUserInvalidPseudoClass() const
+{
+    return m_wasInteractedWithSinceLastFormSubmitEvent && matchesInvalidPseudoClass();
+}
+
+bool HTMLFormControlElement::matchesUserValidPseudoClass() const
+{
+    return m_wasInteractedWithSinceLastFormSubmitEvent && matchesValidPseudoClass();
+}
+
 void HTMLFormControlElement::dispatchBlurEvent(RefPtr<Element>&& newFocusedElement)
 {
     HTMLElement::dispatchBlurEvent(WTFMove(newFocusedElement));
@@ -589,8 +623,6 @@ void HTMLFormControlElement::dispatchBlurEvent(RefPtr<Element>&& newFocusedEleme
 }
 
 #if ENABLE(AUTOCORRECT)
-
-// FIXME: We should look to share this code with class HTMLFormElement instead of duplicating the logic.
 
 bool HTMLFormControlElement::shouldAutocorrect() const
 {

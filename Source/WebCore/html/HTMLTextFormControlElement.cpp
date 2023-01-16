@@ -2,8 +2,9 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2022 Apple Inc. All rights reserved.
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
+ * Copyright (C) 2014 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -228,10 +229,11 @@ String HTMLTextFormControlElement::selectedText() const
 void HTMLTextFormControlElement::dispatchFormControlChangeEvent()
 {
     if (m_textAsOfLastFormControlChangeEvent != value()) {
-        dispatchChangeEvent();
         setTextAsOfLastFormControlChangeEvent(value());
+        dispatchChangeEvent();
     }
     setChangedSinceLastFormControlChangeEvent(false);
+    setInteractedWithSinceLastFormSubmitEvent(true);
 }
 
 ExceptionOr<void> HTMLTextFormControlElement::setRangeText(StringView replacement)
@@ -740,27 +742,26 @@ String HTMLTextFormControlElement::valueWithHardLineBreaks() const
     if (!renderer)
         return value();
 
-    Node* softLineBreakNode = nullptr;
-    unsigned softLineBreakOffset = 0;
+    Node* breakNode = nullptr;
+    unsigned breakOffset = 0;
     auto currentLineBox = InlineIterator::firstLineBoxFor(*renderer);
     if (!currentLineBox)
         return value();
 
     auto skipToNextSoftLineBreakPosition = [&] {
-        for (; currentLineBox; currentLineBox.traverseNext()) {
+        while (currentLineBox) {
             auto lastRun = currentLineBox->lastLeafBox();
             ASSERT(lastRun);
-            auto& renderer = lastRun->renderer();
-            auto lineEndsWithBR = is<RenderLineBreak>(renderer) && !downcast<RenderLineBreak>(renderer).isWBR();
-            if (!lineEndsWithBR) {
-                softLineBreakNode = renderer.node();
-                softLineBreakOffset = lastRun->maximumCaretOffset();
-                currentLineBox.traverseNext();
+            // Skip last line.
+            currentLineBox.traverseNext();
+            if (currentLineBox && !lastRun->isLineBreak()) {
+                breakNode = lastRun->renderer().node();
+                breakOffset = lastRun->maximumCaretOffset();
                 return;
             }
         }
-        softLineBreakNode = nullptr;
-        softLineBreakOffset = 0;
+        breakNode = nullptr;
+        breakOffset = 0;
     };
 
     skipToNextSoftLineBreakPosition();
@@ -773,17 +774,17 @@ String HTMLTextFormControlElement::valueWithHardLineBreaks() const
             String data = downcast<Text>(*node).data();
             unsigned length = data.length();
             unsigned position = 0;
-            while (softLineBreakNode == node && softLineBreakOffset <= length) {
-                if (softLineBreakOffset > position) {
-                    result.appendSubstring(data, position, softLineBreakOffset - position);
-                    position = softLineBreakOffset;
+            while (breakNode == node && breakOffset <= length) {
+                if (breakOffset > position) {
+                    result.appendSubstring(data, position, breakOffset - position);
+                    position = breakOffset;
                     result.append(newlineCharacter);
                 }
                 skipToNextSoftLineBreakPosition();
             }
             result.appendSubstring(data, position, length - position);
         }
-        while (softLineBreakNode == node)
+        while (breakNode == node)
             skipToNextSoftLineBreakPosition();
     }
     stripTrailingNewline(result);

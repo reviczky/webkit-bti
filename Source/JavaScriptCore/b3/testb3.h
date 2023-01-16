@@ -555,6 +555,7 @@ void testTrappingLoadDCE();
 void testTrappingStoreElimination();
 void testMoveConstants();
 void testMoveConstantsWithLargeOffsets();
+void testMoveConstantsSIMD();
 void testPCOriginMapDoesntInsertNops();
 void testBitOrBitOrArgImmImm32(int, int, int c);
 void testBitOrImmBitOrArgImm32(int, int, int c);
@@ -1170,6 +1171,7 @@ void testFloatMaxMin();
 void testDoubleMaxMin();
 
 void testWasmAddressDoesNotCSE();
+void testWasmAddressWithOffset();
 void testStoreAfterClobberExitsSideways();
 void testStoreAfterClobberDifferentWidth();
 void testStoreAfterClobberDifferentWidthSuccessor();

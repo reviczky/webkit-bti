@@ -564,6 +564,14 @@ void RenderLayerCompositor::customPositionForVisibleRectComputation(const Graphi
     position = -scrollPosition;
 }
 
+bool RenderLayerCompositor::shouldDumpPropertyForLayer(const GraphicsLayer* layer, const char* propertyName, OptionSet<LayerTreeAsTextOptions>) const
+{
+    if (!strcmp(propertyName, "anchorPoint"))
+        return layer->anchorPoint() != FloatPoint3D(0.5f, 0.5f, 0);
+
+    return true;
+}
+
 void RenderLayerCompositor::notifyFlushRequired(const GraphicsLayer*)
 {
     scheduleRenderingUpdate();
@@ -1598,7 +1606,7 @@ void RenderLayerCompositor::logLayerInfo(const RenderLayer& layer, const char* p
     absoluteBounds.move(layer.offsetFromAncestor(m_renderView.layer()));
     
     StringBuilder logString;
-    logString.append(pad(' ', 12 + depth * 2, hex(reinterpret_cast<uintptr_t>(&layer), Lowercase)), " id ", backing->graphicsLayer()->primaryLayerID(), " (", absoluteBounds.x().toFloat(), ',', absoluteBounds.y().toFloat(), '-', absoluteBounds.maxX().toFloat(), ',', absoluteBounds.maxY().toFloat(), ") ", FormattedNumber::fixedWidth(backing->backingStoreMemoryEstimate() / 1024, 2), "KB");
+    logString.append(pad(' ', 12 + depth * 2, hex(reinterpret_cast<uintptr_t>(&layer), Lowercase)), " id ", backing->graphicsLayer()->primaryLayerID().toUInt64(), " (", absoluteBounds.x().toFloat(), ',', absoluteBounds.y().toFloat(), '-', absoluteBounds.maxX().toFloat(), ',', absoluteBounds.maxY().toFloat(), ") ", FormattedNumber::fixedWidth(backing->backingStoreMemoryEstimate() / 1024, 2), "KB");
 
     if (!layer.renderer().style().hasAutoUsedZIndex())
         logString.append(" z-index: ", layer.renderer().style().usedZIndex());
@@ -2666,8 +2674,11 @@ static FullScreenDescendant isDescendantOfFullScreenLayer(const RenderLayer& lay
         return FullScreenDescendant::NotApplicable;
 
     auto* fullScreenRenderer = dynamicDowncast<RenderLayerModelObject>(fullScreenElement->renderer());
+    if (!fullScreenRenderer)
+        return FullScreenDescendant::NotApplicable;
+
     auto* fullScreenLayer = fullScreenRenderer->layer();
-    if (!fullScreenRenderer || !fullScreenLayer)
+    if (!fullScreenLayer)
         return FullScreenDescendant::NotApplicable;
 
     auto backdropRenderer = fullScreenRenderer->backdropRenderer();
@@ -3831,7 +3842,10 @@ bool RenderLayerCompositor::documentUsesTiledBacking() const
 
 bool RenderLayerCompositor::isMainFrameCompositor() const
 {
-    return m_renderView.frameView().frame().isMainFrame();
+    auto* localFrame = dynamicDowncast<LocalFrame>(m_renderView.frameView().frame());
+    if (!localFrame)
+        return false;
+    return localFrame->isMainFrame();
 }
 
 bool RenderLayerCompositor::shouldCompositeOverflowControls() const
@@ -4242,8 +4256,8 @@ void RenderLayerCompositor::ensureRootLayer()
 
 #if PLATFORM(IOS_FAMILY)
         // Page scale is applied above this on iOS, so we'll just say that our root layer applies it.
-        auto& frame = m_renderView.frameView().frame();
-        if (frame.isMainFrame())
+        auto* frame = dynamicDowncast<LocalFrame>(m_renderView.frameView().frame());
+        if (frame && frame->isMainFrame())
             m_rootContentsLayer->setAppliesPageScale();
 #endif
 
@@ -4370,8 +4384,8 @@ void RenderLayerCompositor::attachRootLayer(RootLayerAttachment attachment)
             ASSERT_NOT_REACHED();
             break;
         case RootLayerAttachedViaChromeClient: {
-            auto& frame = m_renderView.frameView().frame();
-            page().chrome().client().attachRootGraphicsLayer(frame, rootGraphicsLayer());
+            if (auto* frame = dynamicDowncast<LocalFrame>(m_renderView.frameView().frame()))
+                page().chrome().client().attachRootGraphicsLayer(*frame, rootGraphicsLayer());
             break;
         }
         case RootLayerAttachedViaEnclosingFrame: {
@@ -4421,12 +4435,11 @@ void RenderLayerCompositor::detachRootLayer()
         break;
     }
     case RootLayerAttachedViaChromeClient: {
-        auto& frame = m_renderView.frameView().frame();
-
-        if (auto* scrollingCoordinator = this->scrollingCoordinator())
-            scrollingCoordinator->frameViewWillBeDetached(m_renderView.frameView());
-
-        page().chrome().client().attachRootGraphicsLayer(frame, nullptr);
+        if (auto* frame = dynamicDowncast<LocalFrame>(m_renderView.frameView().frame())) {
+            if (auto* scrollingCoordinator = this->scrollingCoordinator())
+                scrollingCoordinator->frameViewWillBeDetached(m_renderView.frameView());
+            page().chrome().client().attachRootGraphicsLayer(*frame, nullptr);
+        }
     }
     break;
     case RootLayerUnattached:
@@ -4450,15 +4463,13 @@ void RenderLayerCompositor::rootLayerAttachmentChanged()
     if (m_rootLayerAttachment == RootLayerUnattached)
         return;
 
-    auto& frame = m_renderView.frameView().frame();
-
     // The attachment can affect whether the RenderView layer's paintsIntoWindow() behavior,
     // so call updateDrawsContent() to update that.
     auto* layer = m_renderView.layer();
     if (auto* backing = layer ? layer->backing() : nullptr)
         backing->updateDrawsContent();
 
-    if (!frame.isMainFrame())
+    if (auto* frame = dynamicDowncast<LocalFrame>(m_renderView.frameView().frame()); !frame || !frame->isMainFrame())
         return;
 
     Ref<GraphicsLayer> overlayHost = page().pageOverlayController().layerWithDocumentOverlays();

@@ -155,6 +155,8 @@ public:
 
     bool propertyMatches(CSSPropertyID, const CSSValue*) const;
 
+    StyleProperties() = default;
+
 protected:
     StyleProperties(CSSParserMode cssParserMode, StylePropertiesType type)
         : m_cssParserMode(cssParserMode)
@@ -193,12 +195,12 @@ private:
     String getLayeredShorthandValue(const StylePropertyShorthand&) const;
     String get2Values(const StylePropertyShorthand&) const;
     String get4Values(const StylePropertyShorthand&) const;
-    String borderSpacingValue(const StylePropertyShorthand&) const;
     String fontValue(const StylePropertyShorthand&) const;
-    String fontVariantValue(const StylePropertyShorthand&) const;
+    String fontVariantValue() const;
     String fontSynthesisValue() const;
     String offsetValue() const;
     String commonShorthandChecks(const StylePropertyShorthand&) const;
+    bool hasAllInitialValues(const StylePropertyShorthand&) const;
     StringBuilder asTextInternal() const;
 
     friend class PropertySetCSSStyleDeclaration;
@@ -246,6 +248,7 @@ class MutableStyleProperties final : public StyleProperties {
 public:
     WEBCORE_EXPORT static Ref<MutableStyleProperties> create(CSSParserMode = HTMLQuirksMode);
     static Ref<MutableStyleProperties> create(Vector<CSSProperty>&&);
+    static Ref<MutableStyleProperties> createEmpty();
 
     WEBCORE_EXPORT ~MutableStyleProperties();
 
@@ -290,7 +293,7 @@ public:
     Vector<CSSProperty, 4> m_propertyVector;
 
     // Methods for querying and altering CSS custom properties.
-    bool setCustomProperty(const Document*, const String& propertyName, const String& value, bool important, CSSParserContext);
+    bool setCustomProperty(const String& propertyName, const String& value, bool important, CSSParserContext);
     bool removeCustomProperty(const String& propertyName, String* returnText = nullptr);
 
 private:

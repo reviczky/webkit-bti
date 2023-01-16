@@ -742,6 +742,9 @@ css/CSSComputedStyleDeclaration.cpp
 css/CSSConditionRule.cpp
 css/CSSContainerRule.cpp
 css/CSSContentDistributionValue.cpp
+css/CSSCounterStyle.cpp
+css/CSSCounterStyleDescriptors.cpp
+css/CSSCounterStyleRegistry.cpp
 css/CSSCounterStyleRule.cpp
 css/CSSCrossfadeValue.cpp
 css/CSSCursorImageValue.cpp
@@ -786,6 +789,7 @@ css/CSSPageRule.cpp
 css/CSSPaintImageValue.cpp
 css/CSSPrimitiveValue.cpp
 css/CSSProperty.cpp
+css/CSSPropertyRule.cpp
 css/CSSPropertySourceData.cpp
 css/CSSRayValue.cpp
 css/CSSReflectValue.cpp
@@ -854,6 +858,7 @@ css/calc/CSSCalcPrimitiveValueNode.cpp
 css/calc/CSSCalcSymbolTable.cpp
 css/calc/CSSCalcValue.cpp
 css/parser/CSSAtRuleID.cpp
+css/parser/CSSCustomPropertySyntax.cpp
 css/parser/CSSParser.cpp
 css/parser/CSSParserContext.cpp
 css/parser/CSSParserFastPaths.cpp
@@ -868,7 +873,6 @@ css/parser/CSSPropertyParserHelpers.cpp
 css/parser/CSSPropertyParserWorkerSafe.cpp
 css/parser/CSSSelectorParser.cpp
 css/parser/CSSSupportsParser.cpp
-css/parser/CSSPropertySyntax.cpp
 css/parser/CSSTokenizer.cpp
 css/parser/CSSTokenizerInputStream.cpp
 css/parser/CSSVariableParser.cpp
@@ -1737,6 +1741,7 @@ loader/archive/ArchiveResource.cpp
 loader/archive/ArchiveResourceCollection.cpp
 loader/archive/mhtml/MHTMLArchive.cpp
 loader/archive/mhtml/MHTMLParser.cpp
+loader/cache/AllowedFonts.cpp
 loader/cache/CachedApplicationManifest.cpp
 loader/cache/CachedCSSStyleSheet.cpp
 loader/cache/CachedFont.cpp
@@ -1853,6 +1858,7 @@ page/ProcessWarming.cpp
 page/Quirks.cpp
 page/RemoteDOMWindow.cpp
 page/RemoteFrame.cpp
+page/RemoteFrameView.cpp
 page/RenderingUpdateScheduler.cpp
 page/ResizeObservation.cpp
 page/ResizeObserver.cpp
@@ -1899,6 +1905,7 @@ page/scrolling/ScrollAnchoringController.cpp
 page/scrolling/ScrollSnapOffsetsInfo.cpp
 page/scrolling/ScrollLatchingController.cpp
 page/scrolling/ScrollingConstraints.cpp
+page/scrolling/ScrollingCoordinatorTypes.cpp
 page/scrolling/ScrollingCoordinator.cpp
 page/scrolling/ScrollingStateFixedNode.cpp
 page/scrolling/ScrollingStateFrameHostingNode.cpp
@@ -2195,6 +2202,12 @@ platform/graphics/VelocityData.cpp
 platform/graphics/WebMResourceClient.cpp
 platform/graphics/WOFFFileFormat.cpp
 platform/graphics/WidthIterator.cpp
+platform/graphics/controls/ControlFactory.cpp
+platform/graphics/controls/ControlPart.cpp
+platform/graphics/controls/ControlStyle.cpp
+platform/graphics/controls/MeterPart.cpp
+platform/graphics/controls/ProgressBarPart.cpp
+platform/graphics/controls/SliderTrackPart.cpp
 platform/graphics/cpu/arm/filters/FEBlendNeonApplier.cpp
 platform/graphics/displaylists/DisplayList.cpp
 platform/graphics/displaylists/DisplayListDrawingContext.cpp
@@ -2257,7 +2270,6 @@ platform/graphics/filters/software/FETileSoftwareApplier.cpp
 platform/graphics/filters/software/FETurbulenceSoftwareApplier.cpp
 platform/graphics/filters/software/SourceAlphaSoftwareApplier.cpp
 platform/graphics/filters/software/SourceGraphicSoftwareApplier.cpp
-platform/graphics/formcontrols/ControlPartType.cpp
 platform/graphics/iso/ISOBox.cpp
 platform/graphics/iso/ISOOriginalFormatBox.cpp
 platform/graphics/iso/ISOProtectionSchemeInfoBox.cpp
@@ -2687,6 +2699,7 @@ style/ChildChangeInvalidation.cpp
 style/ClassChangeInvalidation.cpp
 style/ColorFromPrimitiveValue.cpp
 style/ContainerQueryEvaluator.cpp
+style/CustomPropertyRegistry.cpp
 style/ElementRuleCollector.cpp
 style/FilterOperationsBuilder.cpp
 style/HasSelectorFilter.cpp
@@ -2703,6 +2716,7 @@ style/RuleFeature.cpp
 style/RuleSet.cpp
 style/RuleSetBuilder.cpp
 style/StyleAdjuster.cpp
+style/StyleAppearance.cpp
 style/StyleBuilder.cpp
 style/StyleBuilderState.cpp
 style/StyleChange.cpp
@@ -3082,6 +3096,7 @@ JSCSSNamespaceRule.cpp
 JSCSSPageRule.cpp
 JSCSSPaintCallback.cpp
 JSCSSPaintSize.cpp
+JSCSSPropertyRule.cpp
 JSCSSRule.cpp
 JSCSSRuleList.cpp
 JSCSSStyleDeclaration.cpp
@@ -3441,6 +3456,9 @@ JSGPUVertexStepMode.cpp
 JSGainNode.cpp
 JSGainOptions.cpp
 JSGamepad.cpp
+JSGamepadEffectParameters.cpp
+JSGamepadHapticActuator.cpp
+JSGamepadHapticEffectType.cpp
 JSGamepadButton.cpp
 JSGamepadEvent.cpp
 JSGeolocation.cpp

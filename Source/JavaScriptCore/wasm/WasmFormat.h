@@ -104,6 +104,14 @@ inline bool isRefType(Type type)
     return type.isFuncref() || type.isExternref();
 }
 
+// If this is a type, returns true iff it's a ref type; if it's a packed type, returns false
+inline bool isRefType(StorageType type)
+{
+    if (type.is<Type>())
+        return isRefType(type.as<Type>());
+    return false;
+}
+
 inline bool isExternref(Type type)
 {
     if (Options::useWebAssemblyTypedFunctionReferences())
@@ -155,7 +163,7 @@ inline bool isRefWithTypeIndex(Type type)
 }
 
 // Determine if the ref type has a placeholder type index that is used
-// for an unresoled recursive reference in a recursion group.
+// for an unresolved recursive reference in a recursion group.
 inline bool isRefWithRecursiveReference(Type type)
 {
     if (!Options::useWebAssemblyGC())
@@ -168,6 +176,14 @@ inline bool isRefWithRecursiveReference(Type type)
     }
 
     return false;
+}
+
+inline bool isRefWithRecursiveReference(StorageType storageType)
+{
+    if (storageType.is<PackedType>())
+        return false;
+
+    return isRefWithRecursiveReference(storageType.as<Type>());
 }
 
 inline bool isTypeIndexHeapType(int32_t heapType)
@@ -183,20 +199,11 @@ inline bool isSubtypeIndex(TypeIndex sub, TypeIndex parent)
     if (sub == parent)
         return true;
 
-    const TypeDefinition& sig = TypeInformation::get(sub).unroll();
-    if (sig.is<Subtype>()) {
-        const Subtype& subtype = *sig.as<Subtype>();
-        const TypeDefinition& parentSig = TypeInformation::get(parent).unroll();
-        if (parentSig.is<Subtype>()) {
-            if (subtype.displaySize() < parentSig.as<Subtype>()->displaySize())
-                return false;
-            return parent == subtype.displayType(subtype.displaySize() - parentSig.as<Subtype>()->displaySize() - 1);
-        }
-        // If not a subtype itself, the parent must be at the top of the display.
-        return parent == subtype.displayType(subtype.displaySize() - 1);
-    }
+    auto subRTT = TypeInformation::tryGetCanonicalRTT(sub);
+    auto parentRTT = TypeInformation::tryGetCanonicalRTT(parent);
+    ASSERT(subRTT.has_value() && parentRTT.has_value());
 
-    return false;
+    return subRTT.value()->isSubRTT(*parentRTT.value());
 }
 
 inline bool isSubtype(Type sub, Type parent)
@@ -221,6 +228,15 @@ inline bool isSubtype(Type sub, Type parent)
     return sub == parent;
 }
 
+inline bool isSubtype(StorageType sub, StorageType parent)
+{
+    if (sub.is<PackedType>() || parent.is<PackedType>())
+        return sub == parent;
+
+    ASSERT(sub.is<Type>() && parent.is<Type>());
+    return isSubtype(sub.as<Type>(), parent.as<Type>());
+}
+
 inline bool isValidHeapTypeKind(TypeKind kind)
 {
     switch (kind) {
@@ -239,6 +255,14 @@ inline bool isValidHeapTypeKind(TypeKind kind)
 inline bool isDefaultableType(Type type)
 {
     return !type.isRef();
+}
+
+inline bool isDefaultableType(StorageType type)
+{
+    if (type.is<Type>())
+        return !type.as<Type>().isRef();
+    // All packed types are defaultable.
+    return true;
 }
 
 enum class ExternalKind : uint8_t {
@@ -400,8 +424,7 @@ struct Segment {
 struct Element {
     WTF_MAKE_STRUCT_FAST_ALLOCATED;
 
-    // nullFuncIndex represents the case when an element segment (of type funcref)
-    // contains a null element.
+    // nullFuncIndex represents the case when an element segment contains a null element.
     constexpr static uint32_t nullFuncIndex = UINT32_MAX;
 
     enum class Kind : uint8_t {
@@ -508,7 +531,6 @@ struct Entrypoint {
 
 struct InternalFunction {
     WTF_MAKE_STRUCT_FAST_ALLOCATED;
-    Vector<CodeLocationDataLabelPtr<WasmEntryPtrTag>> calleeMoveLocations;
 #if ENABLE(WEBASSEMBLY_B3JIT)
     StackMaps stackmaps;
 #endif
@@ -528,10 +550,16 @@ struct WasmToWasmImportableFunction {
 
     // FIXME: Pack type index and code pointer into one 64-bit value. See <https://bugs.webkit.org/show_bug.cgi?id=165511>.
     TypeIndex typeIndex { TypeDefinition::invalidIndex };
-    LoadLocation entrypointLoadLocation;
+    LoadLocation entrypointLoadLocation { };
 };
 using FunctionIndexSpace = Vector<WasmToWasmImportableFunction>;
 
 } } // namespace JSC::Wasm
+
+namespace WTF {
+
+void printInternal(PrintStream&, JSC::Wasm::TableElementType);
+
+} // namespace WTF
 
 #endif // ENABLE(WEBASSEMBLY)

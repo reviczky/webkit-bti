@@ -35,6 +35,7 @@
 #include "BackForwardController.h"
 #include "CSSComputedStyleDeclaration.h"
 #include "CSSPropertyNames.h"
+#include "CSSValuePool.h"
 #include "CachedCSSStyleSheet.h"
 #include "CachedResourceLoader.h"
 #include "Chrome.h"
@@ -162,6 +163,7 @@ Frame::Frame(Page& page, HTMLFrameOwnerElement* ownerElement, UniqueRef<FrameLoa
     , m_eventHandler(makeUniqueRef<EventHandler>(*this))
 {
     ProcessWarming::initializeNames();
+    StaticCSSValuePool::init();
 
     if (ownerElement) {
         m_mainFrame.selfOnlyRef();
@@ -731,17 +733,18 @@ Frame* Frame::frameForWidget(const Widget& widget)
 
     // Assume all widgets are either a FrameView or owned by a RenderWidget.
     // FIXME: That assumption is not right for scroll bars!
-    return &downcast<FrameView>(widget).frame();
+    return dynamicDowncast<LocalFrame>(downcast<FrameView>(widget).frame());
 }
 
 void Frame::clearTimers(FrameView *view, Document *document)
 {
-    if (view) {
-        view->layoutContext().unscheduleLayout();
-        if (auto* timelines = document->timelinesController())
-            timelines->suspendAnimations();
-        view->frame().eventHandler().stopAutoscrollTimer();
-    }
+    if (!view)
+        return;
+    view->layoutContext().unscheduleLayout();
+    if (auto* timelines = document->timelinesController())
+        timelines->suspendAnimations();
+    if (auto* localFrame = dynamicDowncast<LocalFrame>(view->frame()))
+        localFrame->eventHandler().stopAutoscrollTimer();
 }
 
 void Frame::clearTimers()
@@ -892,6 +895,11 @@ DOMWindow* Frame::window() const
 AbstractDOMWindow* Frame::virtualWindow() const
 {
     return window();
+}
+
+AbstractFrameView* Frame::virtualView() const
+{
+    return m_view.get();
 }
 
 String Frame::trackedRepaintRectsAsText() const

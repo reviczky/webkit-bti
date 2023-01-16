@@ -49,14 +49,6 @@ CSSUnitType CSSUnitValue::parseUnit(const String& unit)
         return CSSUnitType::CSS_NUMBER;
     if (unit == "percent"_s)
         return CSSUnitType::CSS_PERCENTAGE;
-
-    // FIXME: Remove these when LineHeightUnitsEnabled is changed back to true or removed
-    // https://bugs.webkit.org/show_bug.cgi?id=211351
-    if (unit == "lh"_s)
-        return CSSUnitType::CSS_LHS;
-    if (unit == "rlh"_s)
-        return CSSUnitType::CSS_RLHS;
-
     return CSSParserToken::stringToUnitType(unit);
 }
 
@@ -227,6 +219,8 @@ static bool isValueOutOfRangeForProperty(CSSPropertyID propertyID, double value,
     case CSSPropertyFontStretch:
     case CSSPropertyGridAutoColumns:
     case CSSPropertyGridAutoRows:
+    case CSSPropertyGridTemplateColumns:
+    case CSSPropertyGridTemplateRows:
     case CSSPropertyInlineSize:
     case CSSPropertyLineHeight:
     case CSSPropertyMaxBlockSize:
@@ -249,7 +243,10 @@ static bool isValueOutOfRangeForProperty(CSSPropertyID propertyID, double value,
     case CSSPropertyScrollPaddingLeft:
     case CSSPropertyScrollPaddingRight:
     case CSSPropertyScrollPaddingTop:
+    case CSSPropertyStrokeDasharray:
     case CSSPropertyStrokeMiterlimit:
+    case CSSPropertyStrokeWidth:
+    case CSSPropertyTransitionDuration:
         return value < 0;
     case CSSPropertyFontWeight:
         return value < 1 || value > 1000;
@@ -267,7 +264,7 @@ RefPtr<CSSValue> CSSUnitValue::toCSSValueWithProperty(CSSPropertyID propertyID) 
         auto sumNode = CSSCalcOperationNode::createSum(Vector { node.releaseNonNull() });
         if (!sumNode)
             return nullptr;
-        return CSSPrimitiveValue::create(CSSCalcValue::create(sumNode.releaseNonNull(), true /* allowsNegativePercentage */));
+        return CSSPrimitiveValue::create(CSSCalcValue::create(sumNode.releaseNonNull()));
     }
     return toCSSValue();
 }

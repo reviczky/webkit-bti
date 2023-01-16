@@ -30,6 +30,7 @@
 
 #include "ANGLEInstancedArrays.h"
 #include "CachedImage.h"
+#include "Chrome.h"
 #include "DOMWindow.h"
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
@@ -355,7 +356,7 @@ private:
 };
 
 #define ADD_VALUES_TO_SET(set, arr) \
-    set.add(arr, arr + WTF_ARRAY_LENGTH(arr))
+    set.add(arr, arr + std::size(arr))
 
 InspectorScopedShaderProgramHighlight::InspectorScopedShaderProgramHighlight(WebGLRenderingContextBase& context, WebGLProgram* program)
     : m_context(context)
@@ -484,22 +485,6 @@ static void removeActiveContext(WebGLRenderingContextBase& context)
     ASSERT_UNUSED(didContain, didContain);
 }
 
-static GraphicsClient* getGraphicsClient(CanvasBase& canvas)
-{
-    if (auto* canvasElement = dynamicDowncast<HTMLCanvasElement>(canvas)) {
-        Document& document = canvasElement->document();
-        RefPtr<Frame> frame = document.frame();
-        if (!frame)
-            return nullptr;
-
-        return document.view()->root()->hostWindow();
-    }
-    if (is<WorkerGlobalScope>(canvas.scriptExecutionContext()))
-        return downcast<WorkerGlobalScope>(canvas.scriptExecutionContext())->workerClient();
-
-    return nullptr;
-}
-
 std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(CanvasBase& canvas, WebGLContextAttributes& attributes, WebGLVersion type)
 {
     auto scriptExecutionContext = canvas.scriptExecutionContext();
@@ -514,7 +499,7 @@ std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(Can
     UNUSED_PARAM(type);
 #endif
 
-    GraphicsClient* graphicsClient = getGraphicsClient(canvas);
+    GraphicsClient* graphicsClient = canvas.graphicsClient();
 
     auto* canvasElement = dynamicDowncast<HTMLCanvasElement>(canvas);
 
@@ -3737,15 +3722,19 @@ ExceptionOr<void> WebGLRenderingContextBase::texImageSourceHelper(TexImageFuncti
             return { };
         }
 
-        // FIXME: Implement remote video frame optimization.
-        auto internalFrame = frame->internalFrame();
-        IntSize frameSize { static_cast<int>(frame->displayWidth()), static_cast<int>(frame->displayHeight()) };
-        auto imageBuffer = m_generatedImageCache.imageBuffer(frameSize, DestinationColorSpace::SRGB());
-        if (!imageBuffer)
+        auto texture = validateTexImageBinding(functionName, functionID, target);
+        if (!texture)
             return { };
 
-        imageBuffer->context().paintVideoFrame(*internalFrame, { { }, frameSize }, true);
-        auto image = imageBuffer->copyImage(DontCopyBackingStore);
+        auto internalFrame = frame->internalFrame();
+        bool sourceImageRectIsDefault = inputSourceImageRect == sentinelEmptyRect() || inputSourceImageRect == IntRect(0, 0, static_cast<int>(internalFrame->presentationSize().width()), static_cast<int>(internalFrame->presentationSize().height()));
+        if (functionID == TexImageFunctionID::TexImage2D && texture && sourceImageRectIsDefault && type == GraphicsContextGL::UNSIGNED_BYTE && !level) {
+            if (m_context->copyTextureFromVideoFrame(*internalFrame, texture->object(), target, level, internalformat, format, type, m_unpackPremultiplyAlpha, m_unpackFlipY))
+                return { };
+        }
+
+        // Fallback pure SW path.
+        auto image = m_context->videoFrameToImage(*internalFrame);
         if (!image)
             return { };
 
@@ -5530,7 +5519,7 @@ void WebGLRenderingContextBase::maybeRestoreContext()
     if (!scriptExecutionContext->settingsValues().webGLEnabled)
         return;
 
-    GraphicsClient* graphicsClient = getGraphicsClient(canvasBase());
+    GraphicsClient* graphicsClient = canvasBase().graphicsClient();
     if (!graphicsClient)
         return;
 

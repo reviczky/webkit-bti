@@ -31,6 +31,7 @@
 #include "CanvasBase.h"
 #include "ClientOrigin.h"
 #include "ContainerNode.h"
+#include "DOMAudioSession.h"
 #include "DisabledAdaptations.h"
 #include "DocumentEventTiming.h"
 #include "FocusOptions.h"
@@ -101,6 +102,7 @@ class AppHighlightStorage;
 class Attr;
 class CanvasBase;
 class CDATASection;
+class CSSCounterStyleRegistry;
 class CSSCustomPropertyValue;
 class CSSFontSelector;
 class CSSStyleDeclaration;
@@ -259,7 +261,6 @@ class GPUCanvasContext;
 
 struct ApplicationManifest;
 struct BoundaryPoint;
-struct CSSRegisteredCustomProperty;
 struct HighlightRangeData;
 struct IntersectionObserverData;
 struct SecurityPolicyViolationEventInit;
@@ -283,6 +284,7 @@ using MediaProducerMutedStateFlags = OptionSet<MediaProducerMutedState>;
 using PlatformDisplayID = uint32_t;
 
 namespace Style {
+class CustomPropertyRegistry;
 class Resolver;
 class Scope;
 class Update;
@@ -591,6 +593,10 @@ public:
     ExtensionStyleSheets& extensionStyleSheets() { return *m_extensionStyleSheets; }
     const ExtensionStyleSheets& extensionStyleSheets() const { return *m_extensionStyleSheets; }
 
+    const Style::CustomPropertyRegistry& customPropertyRegistry() const;
+    const CSSCounterStyleRegistry& counterStyleRegistry() const;
+    CSSCounterStyleRegistry& counterStyleRegistry();
+
     bool gotoAnchorNeededAfterStylesheetsLoad() { return m_gotoAnchorNeededAfterStylesheetsLoad; }
     void setGotoAnchorNeededAfterStylesheetsLoad(bool b) { m_gotoAnchorNeededAfterStylesheetsLoad = b; }
 
@@ -657,7 +663,7 @@ public:
 
     void didBecomeCurrentDocumentInFrame();
     void destroyRenderTree();
-    void willBeRemovedFromFrame();
+    WEBCORE_EXPORT void willBeRemovedFromFrame();
 
     // Override ScriptExecutionContext methods to do additional work
     WEBCORE_EXPORT bool shouldBypassMainWorldContentSecurityPolicy() const final;
@@ -1624,9 +1630,6 @@ public:
     void updateMainArticleElementAfterLayout();
     bool hasMainArticleElement() const { return !!m_mainArticleElement; }
 
-    const auto& registeredCSSCustomProperties() const { return m_registeredCSSCustomProperties; }
-    bool registerCSSCustomProperty(CSSRegisteredCustomProperty&&);
-
     const FixedVector<CSSPropertyID>& exposedComputedCSSPropertyIDs();
 
 #if ENABLE(CSS_PAINTING_API)
@@ -1729,6 +1732,11 @@ public:
 
     // This should be used over the settings lazy loading image flag due to a quirk, which may occur causing website images to fail to load properly.
     bool lazyImageLoadingEnabled() const;
+
+#if ENABLE(DOM_AUDIO_SESSION)
+    void setAudioSessionType(DOMAudioSession::Type type) { m_audioSessionType = type; }
+    DOMAudioSession::Type audioSessionType() const { return m_audioSessionType; }
+#endif
 
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
@@ -2284,8 +2292,6 @@ private:
     String m_referrerOverride;
 #endif
     
-    HashMap<AtomString, std::unique_ptr<CSSRegisteredCustomProperty>> m_registeredCSSCustomProperties;
-
     std::optional<FixedVector<CSSPropertyID>> m_exposedComputedCSSPropertyIDs;
 
 #if ENABLE(CSS_PAINTING_API)
@@ -2335,6 +2341,10 @@ private:
     std::unique_ptr<WakeLockManager> m_wakeLockManager;
 
     std::unique_ptr<SleepDisabler> m_sleepDisabler;
+
+#if ENABLE(DOM_AUDIO_SESSION)
+    DOMAudioSession::Type m_audioSessionType { DOMAudioSession::Type::Auto };
+#endif
 };
 
 Element* eventTargetElementForDocument(Document*);

@@ -30,6 +30,7 @@
 #include "CPU.h"
 #include "JITOperationValidation.h"
 #include "LLIntCommon.h"
+#include "MacroAssembler.h"
 #include "MinimumReservedZoneSize.h"
 #include <algorithm>
 #include <limits>
@@ -577,6 +578,7 @@ void Options::notifyOptionsChanged()
 #if !CPU(X86_64) && !CPU(ARM64)
     Options::useConcurrentGC() = false;
     Options::forceUnlinkedDFG() = false;
+    Options::useWebAssemblySIMD() = false;
 #endif
 
     if (!Options::allowDoubleShape())
@@ -593,9 +595,6 @@ void Options::notifyOptionsChanged()
             Options::useDFGJIT() = false;
             Options::useFTLJIT() = false;
         }
-
-        if (!Options::useWebAssembly())
-            Options::useFastTLSForWasmContext() = false;
 
         if (Options::dumpDisassembly()
             || Options::asyncDisassembly()
@@ -659,16 +658,21 @@ void Options::notifyOptionsChanged()
         ASSERT((static_cast<int64_t>(Options::thresholdForOptimizeAfterLongWarmUp()) << Options::reoptimizationRetryCounterMax()) > 0);
         ASSERT((static_cast<int64_t>(Options::thresholdForOptimizeAfterLongWarmUp()) << Options::reoptimizationRetryCounterMax()) <= static_cast<int64_t>(std::numeric_limits<int32_t>::max()));
 
-        // FIXME: This should be removed when we add LLint/OMG support for WASM SIMD
-        if (Options::useWebAssemblySIMD()) {
-            bool isValid = true;
-            isValid &= Options::useBBQJIT();
-            isValid &= !Options::webAssemblyBBQAirModeThreshold();
-            isValid &= Options::wasmBBQUsesAir();
-            isValid &= Options::useWasmLLInt();
-            isValid &= Options::wasmLLIntTiersUpToBBQ();
-            if (!isValid)
-                Options::useWebAssemblySIMD() = false;
+        if (!Options::useBBQJIT() && Options::useOMGJIT())
+            Options::wasmLLIntTiersUpToBBQ() = false;
+
+#if CPU(X86_64)
+        if (!MacroAssembler::supportsAVX())
+            Options::useWebAssemblySIMD() = false;
+#endif
+
+        if (Options::forceAllFunctionsToUseSIMD() && !Options::useWebAssemblySIMD())
+            Options::forceAllFunctionsToUseSIMD() = false;
+
+        if (Options::useWebAssemblySIMD() && !Options::useWasmLLInt()) {
+            // The LLInt is responsible for discovering if functions use SIMD.
+            // If we can't run using it, then we should be conservative.
+            Options::forceAllFunctionsToUseSIMD() = true;
         }
     }
 

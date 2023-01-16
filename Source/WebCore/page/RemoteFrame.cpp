@@ -26,8 +26,11 @@
 #include "config.h"
 #include "RemoteFrame.h"
 
+#include "Document.h"
+#include "HTMLFrameOwnerElement.h"
 #include "RemoteDOMWindow.h"
 #include "RemoteFrameClient.h"
+#include "RemoteFrameView.h"
 
 namespace WebCore {
 
@@ -59,6 +62,16 @@ void RemoteFrame::didFinishLoadInAnotherProcess()
     // FIXME: Do something so that this would not have caused the load event to fire before a state change
     // but now does cause the load event to fire.
     ownerElement->document().checkCompleted();
+}
+
+AbstractFrameView* RemoteFrame::virtualView() const
+{
+    return m_view.get();
+}
+
+void RemoteFrame::setView(RefPtr<RemoteFrameView>&& view)
+{
+    m_view = WTFMove(view);
 }
 
 } // namespace WebCore

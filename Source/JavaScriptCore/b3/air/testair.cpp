@@ -103,25 +103,10 @@ T invoke(const Compilation& code, Arguments... arguments)
     T (*function)(Arguments...);
     T result;
 
-    // On some platforms, notably ARMv7, some C ABI callee save registers are in fact caller save
-    // in the JIT ABI. We need to store and restore these when invoking JIT code. Note the list of
-    // registers to save here is the same as those saved in the pushCalleeSaves macro in llint.
-#if CPU(ARM64) || CPU(ARM64E) || CPU(X86_64) || CPU(RISCV64)
-    // All C ABI callee save registers are also JIT callee save registers.
-#elif CPU(ARM)
-    asm goto("" ::: "r4", "r5", "r6", "r8", "r9", "d15" : clobber);
-#else
-#   error "Not implemented on platform"
-#endif
-
     executableAddress = untagCFunctionPtr<JITCompilationPtrTag>(code.code().taggedPtr());
     function = bitwise_cast<T(*)(Arguments...)>(executableAddress);
     result = function(arguments...);
 
-#if CPU(ARM)
-clobber:
-    asm volatile(""); // Important: this is here to prevent tail call optimization.
-#endif
     return result;
 }
 
@@ -2091,7 +2076,7 @@ void testLea32()
     BasicBlock* root = code.addBlock();
 
     int32_t a = 0x11223344;
-    int32_t b = 1 << (isARM() ? 11 : 13);
+    int32_t b = 1 << (isARM_THUMB2() ? 11 : 13);
 
     root->append(Lea32, nullptr, Arg::addr(Tmp(GPRInfo::argumentGPR0), b), Tmp(GPRInfo::returnValueGPR));
     root->append(Ret32, nullptr, Tmp(GPRInfo::returnValueGPR));
@@ -2131,14 +2116,14 @@ void testElideSimpleMove()
 
         auto compilation = compile(proc);
         CString disassembly = compilation->disassembly();
-        std::regex findRRMove(isARM64() ? "mov\\s+x\\d+, x\\d+\\n" : isARM() ? "mov\\s+\\w+, \\w+\\n" : "mov %\\w+, %\\w+\\n");
+        std::regex findRRMove(isARM64() ? "mov\\s+x\\d+, x\\d+\\n" : isARM_THUMB2() ? "mov\\s+\\w+, \\w+\\n" : "mov %\\w+, %\\w+\\n");
         auto result = matchAll(disassembly, findRRMove);
         if (isARM64()) {
             if (!Options::defaultB3OptLevel())
                 CHECK(result.size() == 2);
             else
                 CHECK(result.size() == 0);
-        } else if (isARM()) {
+        } else if (isARM_THUMB2()) {
             if (!Options::defaultB3OptLevel())
                 CHECK(result.size() == 4);
             else
@@ -2226,7 +2211,7 @@ void testElideMoveThenRealloc()
 
         Tmp tmp = code.newTmp(B3::GP);
         Arg negOne;
-        if (isARM64() || isARM()) {
+        if (isARM64() || isARM_THUMB2()) {
             negOne = code.newTmp(B3::GP);
             root->append(Move, nullptr, Arg::bigImm(-1), negOne);
         } else if (isX86())

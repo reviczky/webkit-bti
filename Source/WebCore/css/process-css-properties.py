@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (C) 2022 Apple Inc. All rights reserved.
+# Copyright (C) 2022-2023 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -36,8 +36,8 @@ import sys
 import textwrap
 
 
-def quote_iterable(iterable, suffix=""):
-    return (f'"{x}"{suffix}' for x in iterable)
+def quote_iterable(iterable, *, mark='"', suffix=''):
+    return (f'{mark}{x}{mark}{suffix}' for x in iterable)
 
 
 def count_iterable(iterable):
@@ -181,7 +181,7 @@ class Name(object):
 
 
 class PropertyName(Name):
-    def __init__(self, name, *, name_for_methods):
+    def __init__(self, name, *, name_for_methods=None):
         super().__init__(name)
         self.name_for_methods = PropertyName._compute_name_for_methods(name_for_methods, self.id_without_prefix)
 
@@ -301,14 +301,7 @@ class Value:
         self.keyword_term = self._build_keyword_term()
 
     def _build_keyword_term(self):
-        dictionary = {"kind": "keyword", "value": self.value_keyword_name}
-        if self.comment:
-            dictionary["comment"] = self.comment
-        if self.settings_flag:
-            dictionary["settings-flag"] = self.settings_flag
-        if self.status:
-            dictionary["status"] = self.status
-        return KeywordTerm(**dictionary)
+        return KeywordTerm(self.value_keyword_name, comment=self.comment, settings_flag=self.settings_flag, status=self.status)
 
     def __str__(self):
         return f"Value {vars(self)}"
@@ -450,7 +443,7 @@ class Longhand:
         return Longhand(**json_value)
 
 
-class CodeGenProperties:
+class StylePropertyCodeGenProperties:
     schema = Schema(
         Schema.Entry("aliases", allowed_types=[list], default_value=[]),
         Schema.Entry("auto-functions", allowed_types=[bool], default_value=False),
@@ -460,8 +453,6 @@ class CodeGenProperties:
         Schema.Entry("conditional-converter", allowed_types=[str]),
         Schema.Entry("converter", allowed_types=[str]),
         Schema.Entry("custom", allowed_types=[str]),
-        Schema.Entry("custom-parser", allowed_types=[bool]),
-        Schema.Entry("descriptor-only", allowed_types=[bool], default_value=False),
         Schema.Entry("enable-if", allowed_types=[str]),
         Schema.Entry("fast-path-inherited", allowed_types=[bool], default_value=False),
         Schema.Entry("fill-layer-property", allowed_types=[bool], default_value=False),
@@ -473,17 +464,20 @@ class CodeGenProperties:
         Schema.Entry("logical-property-group", allowed_types=[dict]),
         Schema.Entry("longhands", allowed_types=[list]),
         Schema.Entry("name-for-methods", allowed_types=[str]),
-        Schema.Entry("parser-function", allowed_types=[str]),
         Schema.Entry("parser-exported", allowed_types=[bool]),
-        Schema.Entry("parser-grammar", allowed_types=[list, dict, str]),
+        Schema.Entry("parser-function", allowed_types=[str]),
+        Schema.Entry("parser-function-allows-number-or-integer-input", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-additional-parameters", allowed_types=[list], default_value=[]),
+        Schema.Entry("parser-function-requires-context", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-context-mode", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-current-shorthand", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-current-property", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-quirks-mode", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-value-pool", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-grammar", allowed_types=[str]),
         Schema.Entry("parser-grammar-comment", allowed_types=[str]),
-        Schema.Entry("parser-requires-additional-parameters", allowed_types=[list], default_value=[]),
-        Schema.Entry("parser-requires-context", allowed_types=[bool], default_value=False),
-        Schema.Entry("parser-requires-context-mode", allowed_types=[bool], default_value=False),
-        Schema.Entry("parser-requires-current-shorthand", allowed_types=[bool], default_value=False),
-        Schema.Entry("parser-requires-current-property", allowed_types=[bool], default_value=False),
-        Schema.Entry("parser-requires-quirks-mode", allowed_types=[bool], default_value=False),
-        Schema.Entry("parser-requires-value-pool", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-grammar-unused", allowed_types=[str]),
+        Schema.Entry("parser-grammar-unused-reason", allowed_types=[str]),
         Schema.Entry("related-property", allowed_types=[str]),
         Schema.Entry("separator", allowed_types=[str]),
         Schema.Entry("setter", allowed_types=[str]),
@@ -501,11 +495,11 @@ class CodeGenProperties:
     )
 
     def __init__(self, property_name, **dictionary):
-        CodeGenProperties.schema.set_attributes_from_dictionary(dictionary, instance=self)
+        StylePropertyCodeGenProperties.schema.set_attributes_from_dictionary(dictionary, instance=self)
         self.property_name = property_name
 
     def __str__(self):
-        return f"CodeGenProperties {vars(self)}"
+        return f"StylePropertyCodeGenProperties {vars(self)}"
 
     def __repr__(self):
         return self.__str__()
@@ -516,7 +510,7 @@ class CodeGenProperties:
             json_value = parsing_context.select_enabled_variant(json_value, label=f"{key_path}.codegen-properties")
 
         assert(type(json_value) is dict)
-        CodeGenProperties.schema.validate_dictionary(parsing_context, f"{key_path}.codegen-properties", json_value, label=f"CodeGenProperties")
+        StylePropertyCodeGenProperties.schema.validate_dictionary(parsing_context, f"{key_path}.codegen-properties", json_value, label=f"StylePropertyCodeGenProperties")
 
         property_name = PropertyName(name, name_for_methods=json_value.get("name-for-methods"))
 
@@ -546,7 +540,7 @@ class CodeGenProperties:
         if "longhands" in json_value:
             json_value["longhands"] = list(compact_map(lambda value: Longhand.from_json(parsing_context, f"{key_path}.codegen-properties", value), json_value["longhands"]))
             if not json_value["longhands"]:
-                longhands = None
+                del json_value["longhands"]
 
         if "computable" in json_value:
             if json_value["computable"]:
@@ -583,11 +577,34 @@ class CodeGenProperties:
                 raise Exception(f"{key_path} can't have both a related property and be high priority.")
 
         if json_value.get("parser-grammar"):
-            grammar = Grammar.from_json(parsing_context, f"{key_path}", name, json_value["parser-grammar"])
+            for entry_name in ["parser-function", "parser-function-requires-additional-parameters", "parser-function-requires-context", "parser-function-requires-context-mode", "parser-function-requires-current-shorthand", "parser-function-requires-current-property", "parser-function-requires-quirks-mode", "parser-function-requires-value-pool", "skip-parser", "longhands"]:
+                if entry_name in json_value:
+                    raise Exception(f"{key_path} can't have both 'parser-grammar' and '{entry_name}'.")
+            grammar = Grammar.from_string(parsing_context, f"{key_path}", name, json_value["parser-grammar"])
             grammar.perform_fixups(parsing_context.parsed_shared_grammar_rules)
             json_value["parser-grammar"] = grammar
 
-        return CodeGenProperties(property_name, **json_value)
+        if json_value.get("parser-grammar-unused"):
+            if "parser-grammar-unused-reason" not in json_value:
+                raise Exception(f"{key_path} must have 'parser-grammar-unused-reason' specified when using 'parser-grammar-unused'.")
+            # If we have a "parser-grammar-unused" specified, we still process it to ensure that at least it is syntatically valid, we just
+            # won't actually use it for generation.
+            grammar = Grammar.from_string(parsing_context, f"{key_path}", name, json_value["parser-grammar-unused"])
+            grammar.perform_fixups(parsing_context.parsed_shared_grammar_rules)
+            json_value["parser-grammar-unused"] = grammar
+
+        if json_value.get("parser-grammar-unused-reason"):
+            if "parser-grammar-unused" not in json_value:
+                raise Exception(f"{key_path} must have 'parser-grammar-unused' specified when using 'parser-grammar-unused-reason'.")
+
+        if json_value.get("parser-function"):
+            if "parser-grammar-unused" not in json_value:
+                raise Exception(f"{key_path} must have 'parser-grammar-unused' specified when using 'parser-function'.")
+            for entry_name in ["skip-parser", "longhands", "parser-grammar"]:
+                if entry_name in json_value:
+                    raise Exception(f"{key_path} can't have both 'parser-function' and '{entry_name}'.")
+
+        return StylePropertyCodeGenProperties(property_name, **json_value)
 
     @property
     def is_logical(self):
@@ -606,7 +623,7 @@ class CodeGenProperties:
         return self.related_property or self.logical_property_group
 
 
-class Property:
+class StyleProperty:
     schema = Schema(
         Schema.Entry("animatable", allowed_types=[bool], default_value=False),
         Schema.Entry("codegen-properties", allowed_types=[dict, list]),
@@ -617,10 +634,9 @@ class Property:
     )
 
     def __init__(self, **dictionary):
-        Property.schema.set_attributes_from_dictionary(dictionary, instance=self)
+        StyleProperty.schema.set_attributes_from_dictionary(dictionary, instance=self)
         self.property_name = self.codegen_properties.property_name
         self.synonymous_properties = []
-        self._fast_path_keyword_terms_sorted_by_name = None
 
     def __str__(self):
         return self.name
@@ -631,9 +647,9 @@ class Property:
     @staticmethod
     def from_json(parsing_context, key_path, name, json_value):
         assert(type(json_value) is dict)
-        Property.schema.validate_dictionary(parsing_context, f"{key_path}.{name}", json_value, label=f"Property")
+        StyleProperty.schema.validate_dictionary(parsing_context, f"{key_path}.{name}", json_value, label=f"Property")
 
-        codegen_properties = CodeGenProperties.from_json(parsing_context, f"{key_path}.{name}", name, json_value.get("codegen-properties", {}))
+        codegen_properties = StylePropertyCodeGenProperties.from_json(parsing_context, f"{key_path}.{name}", name, json_value.get("codegen-properties", {}))
         json_value["codegen-properties"] = codegen_properties
 
         if codegen_properties.enable_if is not None and not parsing_context.is_enabled(conditional=codegen_properties.enable_if):
@@ -647,20 +663,31 @@ class Property:
             return None
 
         if "values" in json_value:
-            values = list(filter(lambda value: value is not None, map(lambda value: Value.from_json(parsing_context, f"{key_path}.{name}", value), json_value["values"])))
-            if codegen_properties.parser_grammar:
-                codegen_properties.parser_grammar.perform_fixups_for_values_references(values)
-            json_value["values"] = values
+            if not (codegen_properties.parser_grammar or codegen_properties.skip_parser or codegen_properties.parser_function or codegen_properties.longhands):
+                raise Exception(f"'{name}' must specify a 'parser-grammar', 'skip-parser', 'parser-function' or 'longhands' when specifying a 'values' array.")
 
-        return Property(**json_value)
+            json_value["values"] = list(filter(lambda value: value is not None, map(lambda value: Value.from_json(parsing_context, f"{key_path}.{name}", value), json_value["values"])))
+
+            if codegen_properties.parser_grammar:
+                codegen_properties.parser_grammar.perform_fixups_for_values_references(json_value["values"])
+            elif codegen_properties.parser_grammar_unused:
+                codegen_properties.parser_grammar_unused.perform_fixups_for_values_references(json_value["values"])
+
+            if codegen_properties.parser_grammar:
+                codegen_properties.parser_grammar.check_against_values(json_value.get("values", []))
+            elif codegen_properties.parser_grammar_unused:
+                if parsing_context.check_unused_grammars_values or parsing_context.verbose:
+                    codegen_properties.parser_grammar_unused.check_against_values(json_value.get("values", []))
+
+        return StyleProperty(**json_value)
 
     def perform_fixups_for_synonyms(self, all_properties):
         # If 'synonym' was specified, replace the name with references to the Property object, and vice-versa a back-reference on that Property object back to this.
         if self.codegen_properties.synonym:
-            if self.codegen_properties.synonym not in all_properties.properties_by_name:
+            if self.codegen_properties.synonym not in all_properties.all_by_name:
                 raise Exception(f"Property {self.name} has an unknown synonym: {self.codegen_properties.synonym}.")
 
-            original = all_properties.properties_by_name[self.codegen_properties.synonym]
+            original = all_properties.all_by_name[self.codegen_properties.synonym]
             original.synonymous_properties.append(self)
 
             self.codegen_properties.synonym = original
@@ -668,15 +695,15 @@ class Property:
     def perform_fixups_for_longhands(self, all_properties):
         # If 'longhands' was specified, replace the names with references to the Property objects.
         if self.codegen_properties.longhands:
-            self.codegen_properties.longhands = [all_properties.properties_by_name[longhand.value] for longhand in self.codegen_properties.longhands]
+            self.codegen_properties.longhands = [all_properties.all_by_name[longhand.value] for longhand in self.codegen_properties.longhands]
 
     def perform_fixups_for_related_properties(self, all_properties):
         # If 'related-property' was specified, validate the relationship and replace the name with a reference to the Property object.
         if self.codegen_properties.related_property:
-            if self.codegen_properties.related_property not in all_properties.properties_by_name:
+            if self.codegen_properties.related_property not in all_properties.all_by_name:
                 raise Exception(f"Property {self.name} has an unknown related property: {self.codegen_properties.related_property}.")
 
-            related_property = all_properties.properties_by_name[self.codegen_properties.related_property]
+            related_property = all_properties.all_by_name[self.codegen_properties.related_property]
             if type(related_property.codegen_properties.related_property) is str:
                 if related_property.codegen_properties.related_property != self.name:
                     raise Exception(f"Property {self.name} has {related_property.name} as a related property, but it's not reciprocal.")
@@ -730,6 +757,14 @@ class Property:
     def id(self):
         return self.property_name.id
 
+    # Used for parsing and consume methods. It is prefixed with a 'kind' for descriptors, and left unprefixed for style properties.
+    # Examples:
+    #       style property 'column-width' would generate a consume method called `consumeColumnWidth`
+    #       @font-face descriptor 'font-display' would generate a consume method called `consumeFontFaceFontDisplay`
+    @property
+    def name_for_parsing_methods(self):
+        return self.id_without_prefix
+
     @property
     def name_for_methods(self):
         return self.property_name.name_for_methods
@@ -759,50 +794,6 @@ class Property:
                     return True
 
         return False
-
-    @property
-    def is_eligible_for_fast_path(self):
-        if self.codegen_properties.longhands or self.codegen_properties.descriptor_only or self.codegen_properties.skip_parser:
-            return False
-        return True
-
-    @property
-    def _fast_path_keyword_terms(self):
-        if not self.is_eligible_for_fast_path:
-            return []
-        if self.codegen_properties.parser_grammar:
-            return self.codegen_properties.parser_grammar.fast_path_keyword_terms
-        return (value.keyword_term for value in self.values if value.keyword_term.is_eligible_for_fast_path)
-
-    @property
-    def fast_path_keyword_terms_sorted_by_name(self):
-        if not self.is_eligible_for_fast_path:
-            return []
-        if not self._fast_path_keyword_terms_sorted_by_name:
-            self._fast_path_keyword_terms_sorted_by_name = sorted(self._fast_path_keyword_terms, key=functools.cmp_to_key(Properties._sort_with_prefixed_properties_last))
-        return self._fast_path_keyword_terms_sorted_by_name
-
-    @property
-    def has_only_keyword_terms(self):
-        if self.codegen_properties.parser_grammar:
-            return self.codegen_properties.parser_grammar.has_only_keyword_terms
-        return self.values is not None
-
-    @property
-    def has_fast_path_keyword_terms(self):
-        if not self.is_eligible_for_fast_path:
-            return False
-        if self.codegen_properties.parser_grammar:
-            return self.codegen_properties.parser_grammar.has_fast_path_keyword_terms
-        return self.values and any(value.keyword_term.is_eligible_for_fast_path for value in self.values)
-
-    @property
-    def has_only_fast_path_keyword_terms(self):
-        if not self.is_eligible_for_fast_path:
-            return False
-        if self.codegen_properties.parser_grammar:
-            return self.codegen_properties.parser_grammar.has_only_fast_path_keyword_terms
-        return self.values and all(value.keyword_term.is_eligible_for_fast_path for value in self.values)
 
     # Specialized properties to compute method names.
 
@@ -847,8 +838,8 @@ class Property:
         raise Exception(f"Unrecognized FillLayer property name: '{self.name}")
 
 
-class Properties:
-    def __init__(self, *properties):
+class StyleProperties:
+    def __init__(self, properties):
         self.properties = properties
         self.properties_by_name = {property.name: property for property in properties}
         self.logical_property_groups = {}
@@ -859,10 +850,30 @@ class Properties:
         self._perform_fixups()
 
     def __str__(self):
-        return "Properties"
+        return "StyleProperties"
 
     def __repr__(self):
         return self.__str__()
+
+    @property
+    def id(self):
+        return 'StyleProperty'
+
+    @property
+    def name(self):
+        return 'style'
+
+    @property
+    def noun(self):
+        return 'property'
+
+    @property
+    def supports_current_shorthand(self):
+        return True
+
+    @staticmethod
+    def from_json(parsing_context, key_path, json_value):
+        return StyleProperties(list(compact_map(lambda item: StyleProperty.from_json(parsing_context, key_path, item[0], item[1]), json_value.items())))
 
     # Updates any references to other properties that were by name (e.g. string) with a direct
     # reference to the property object.
@@ -874,30 +885,20 @@ class Properties:
     @property
     def all(self):
         if not self._all:
-            self._all = sorted(self.properties, key=functools.cmp_to_key(Properties._sort_by_descending_priority_and_name))
+            self._all = sorted(self.properties, key=functools.cmp_to_key(StyleProperties._sort_by_descending_priority_and_name))
         return self._all
+
+    # Returns the map of property names to properties.
+    @property
+    def all_by_name(self):
+        return self.properties_by_name
 
     # Returns the set of all properties that are included in computed styles. Sorted lexically by name with prefixed properties last.
     @property
     def all_computed(self):
         if not self._all_computed:
-            self._all_computed = sorted([property for property in self.all if not property.is_skipped_from_computed_style], key=functools.cmp_to_key(Properties._sort_with_prefixed_properties_last))
+            self._all_computed = sorted([property for property in self.all if not property.is_skipped_from_computed_style], key=functools.cmp_to_key(StyleProperties._sort_with_prefixed_properties_last))
         return self._all_computed
-
-    # Returns a generator for the set of properties that are conditionally included depending on settings. Default decreasing priority and name sorting.
-    @property
-    def all_with_settings_flag(self):
-        return (property for property in self.all if property.codegen_properties.settings_flag)
-
-    # Returns a generator for the set of properties that are marked internal-only. Default decreasing priority and name sorting.
-    @property
-    def all_internal_only(self):
-        return (property for property in self.all if property.codegen_properties.internal_only)
-
-    # Returns a generator for the set properties that are NOT marked internal. Default decreasing priority and name sorting.
-    @property
-    def all_non_internal_only(self):
-        return (property for property in self.all if not property.codegen_properties.internal_only)
 
     # Returns a generator for the set of properties that have an associate longhand, the so-called shorthands. Default decreasing priority and name sorting.
     @property
@@ -908,11 +909,6 @@ class Properties:
     @property
     def all_non_shorthands(self):
         return (property for property in self.all if not property.codegen_properties.longhands)
-
-    # Returns a generator for the set of properties that can accept a single value keyword. Default decreasing priority and name sorting.
-    @property
-    def all_with_fast_path_keyword_terms(self):
-        return (property for property in self.all if property.has_fast_path_keyword_terms)
 
     # Returns a generator for the set of properties that are direction-aware (aka flow-sensative). Sorted first by property group name and then by property name.
     @property
@@ -928,13 +924,6 @@ class Properties:
             for kind in ["logical", "physical"]:
                 for resolver, property in sorted(property_group[kind].items(), key=lambda x: x[1].name):
                     yield property
-
-    # Returns the set of settings-flags used by any property. Uniqued and sorted lexically.
-    @property
-    def settings_flags(self):
-        if not self._settings_flags:
-            self._settings_flags = sorted(list(set([property.codegen_properties.settings_flag for property in self.properties if property.codegen_properties.settings_flag])))
-        return self._settings_flags
 
     # Default sorting algorithm for properties.
     def _sort_by_descending_priority_and_name(a, b):
@@ -978,7 +967,7 @@ class Properties:
         if not a_is_sink_priority and b_is_sink_priority:
             return -1
 
-        return Properties._sort_with_prefixed_properties_last(a, b)
+        return StyleProperties._sort_with_prefixed_properties_last(a, b)
 
     def _sort_with_prefixed_properties_last(a, b):
         # Sort prefixed names to the back.
@@ -997,59 +986,424 @@ class Properties:
         return 0
 
 
+class DescriptorCodeGenProperties:
+    schema = Schema(
+        Schema.Entry("aliases", allowed_types=[list], default_value=[]),
+        Schema.Entry("comment", allowed_types=[str]),
+        Schema.Entry("enable-if", allowed_types=[str]),
+        Schema.Entry("internal-only", allowed_types=[bool], default_value=False),
+        Schema.Entry("longhands", allowed_types=[list]),
+        Schema.Entry("parser-exported", allowed_types=[bool]),
+        Schema.Entry("parser-function", allowed_types=[str]),
+        Schema.Entry("parser-function-allows-number-or-integer-input", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-additional-parameters", allowed_types=[list], default_value=[]),
+        Schema.Entry("parser-function-requires-context", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-context-mode", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-current-shorthand", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-current-property", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-quirks-mode", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-function-requires-value-pool", allowed_types=[bool], default_value=False),
+        Schema.Entry("parser-grammar", allowed_types=[str]),
+        Schema.Entry("parser-grammar-comment", allowed_types=[str]),
+        Schema.Entry("parser-grammar-unused", allowed_types=[str]),
+        Schema.Entry("parser-grammar-unused-reason", allowed_types=[str]),
+        Schema.Entry("settings-flag", allowed_types=[str]),
+        Schema.Entry("skip-codegen", allowed_types=[bool], default_value=False),
+        Schema.Entry("skip-parser", allowed_types=[bool], default_value=False),
+    )
+
+    def __init__(self, descriptor_name, **dictionary):
+        DescriptorCodeGenProperties.schema.set_attributes_from_dictionary(dictionary, instance=self)
+        self.descriptor_name = descriptor_name
+
+        # By defining these to None, we can utilize the shared sorting method, StyleProperties._sort_by_descending_priority_and_name.
+        self.top_priority = None
+        self.high_priority = None
+        self.sink_priority = None
+        self.is_deferred = None
+
+    def __str__(self):
+        return f"DescriptorCodeGenProperties {vars(self)}"
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    def from_json(parsing_context, key_path, name, json_value):
+        if type(json_value) is list:
+            json_value = parsing_context.select_enabled_variant(json_value, label=f"{key_path}.codegen-properties")
+
+        assert(type(json_value) is dict)
+        DescriptorCodeGenProperties.schema.validate_dictionary(parsing_context, f"{key_path}.codegen-properties", json_value, label=f"DescriptorCodeGenProperties")
+
+        descriptor_name = PropertyName(name)
+
+        if "longhands" in json_value:
+            json_value["longhands"] = list(compact_map(lambda value: Longhand.from_json(parsing_context, f"{key_path}.codegen-properties", value), json_value["longhands"]))
+            if not json_value["longhands"]:
+                del json_value["longhands"]
+
+        if json_value.get("parser-grammar"):
+            for entry_name in ["parser-function", "parser-function-requires-additional-parameters", "parser-function-requires-context", "parser-function-requires-context-mode", "parser-function-requires-current-shorthand", "parser-function-requires-current-property", "parser-function-requires-quirks-mode", "parser-function-requires-value-pool", "skip-parser", "longhands"]:
+                if entry_name in json_value:
+                    raise Exception(f"{key_path} can't have both 'parser-grammar' and '{entry_name}.")
+            grammar = Grammar.from_string(parsing_context, f"{key_path}", name, json_value["parser-grammar"])
+            grammar.perform_fixups(parsing_context.parsed_shared_grammar_rules)
+            json_value["parser-grammar"] = grammar
+
+        if json_value.get("parser-grammar-unused"):
+            if "parser-grammar-unused-reason" not in json_value:
+                raise Exception(f"{key_path} must have 'parser-grammar-unused-reason' specified when using 'parser-grammar-unused'.")
+            # If we have a "parser-grammar-unused" specified, we still process it to ensure that at least it is syntatically valid, we just
+            # won't actually use it for generation.
+            grammar = Grammar.from_string(parsing_context, f"{key_path}", name, json_value["parser-grammar-unused"])
+            grammar.perform_fixups(parsing_context.parsed_shared_grammar_rules)
+            json_value["parser-grammar-unused"] = grammar
+
+        if json_value.get("parser-grammar-unused-reason"):
+            if "parser-grammar-unused" not in json_value:
+                raise Exception(f"{key_path} must have 'parser-grammar-unused' specified when using 'parser-grammar-unused-reason'.")
+
+        if json_value.get("parser-function"):
+            if "parser-grammar-unused" not in json_value:
+                raise Exception(f"{key_path} must have 'parser-grammar-unused' specified when using 'parser-function'.")
+            for entry_name in ["skip-parser", "longhands"]:
+                if entry_name in json_value:
+                    raise Exception(f"{key_path} can't have both 'parser-function' and '{entry_name}'.")
+
+        return DescriptorCodeGenProperties(descriptor_name, **json_value)
+
+
+class Descriptor:
+    schema = Schema(
+        Schema.Entry("codegen-properties", allowed_types=[dict, list]),
+        Schema.Entry("specification", allowed_types=[dict], convert_to=Specification),
+        Schema.Entry("status", allowed_types=[dict, str], convert_to=Status),
+        Schema.Entry("values", allowed_types=[list]),
+    )
+
+    def __init__(self, descriptor_set_name, **dictionary):
+        Descriptor.schema.set_attributes_from_dictionary(dictionary, instance=self)
+        self.descriptor_set_name = descriptor_set_name
+        self.descriptor_name = self.codegen_properties.descriptor_name
+
+    def __str__(self):
+        return f"{self.name} ({self.descriptor_set_name})"
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    def from_json(parsing_context, key_path, name, json_value, descriptor_set_name):
+        assert(type(json_value) is dict)
+        Descriptor.schema.validate_dictionary(parsing_context, f"{key_path}.{name}", json_value, label=f"Descriptor")
+
+        codegen_properties = DescriptorCodeGenProperties.from_json(parsing_context, f"{key_path}.{name}", name, json_value.get("codegen-properties", {}))
+        json_value["codegen-properties"] = codegen_properties
+
+        if codegen_properties.enable_if is not None and not parsing_context.is_enabled(conditional=codegen_properties.enable_if):
+            if parsing_context.verbose:
+                print(f"SKIPPED {name} due to failing to satisfy 'enable-if' condition, '{json_value['codegen-properties'].enable_if}', with active macro set")
+            return None
+
+        if codegen_properties.skip_codegen is not None and codegen_properties.skip_codegen:
+            if parsing_context.verbose:
+                print(f"SKIPPED {name} due to 'skip-codegen'")
+            return None
+
+
+        if "values" in json_value:
+            if not (codegen_properties.parser_grammar or codegen_properties.skip_parser or codegen_properties.parser_function or codegen_properties.longhands):
+                raise Exception(f"'{name}' must specify a 'parser-grammar', 'skip-parser', 'parser-function' or 'longhands' when specifying a 'values' array.")
+
+            json_value["values"] = list(filter(lambda value: value is not None, map(lambda value: Value.from_json(parsing_context, f"{key_path}.{name}", value), json_value["values"])))
+
+            if codegen_properties.parser_grammar:
+                codegen_properties.parser_grammar.perform_fixups_for_values_references(json_value["values"])
+            elif codegen_properties.parser_grammar_unused:
+                codegen_properties.parser_grammar_unused.perform_fixups_for_values_references(json_value["values"])
+
+            if codegen_properties.parser_grammar:
+                codegen_properties.parser_grammar.check_against_values(json_value.get("values", []))
+            elif codegen_properties.parser_grammar_unused:
+                if parsing_context.check_unused_grammars_values or parsing_context.verbose:
+                    codegen_properties.parser_grammar_unused.check_against_values(json_value.get("values", []))
+
+        return Descriptor(descriptor_set_name, **json_value)
+
+    def perform_fixups_for_longhands(self, all_descriptors):
+        # If 'longhands' was specified, replace the names with references to the Descriptor objects.
+        if self.codegen_properties.longhands:
+            self.codegen_properties.longhands = [all_descriptors.all_by_name[longhand.value] for longhand in self.codegen_properties.longhands]
+
+    def perform_fixups(self, all_descriptors):
+        self.perform_fixups_for_longhands(all_descriptors)
+
+    @property
+    def id_without_prefix(self):
+        return self.descriptor_name.id_without_prefix
+
+    # Used for parsing and consume methods. It is prefixed with the rule type for descriptors, and left unprefixed for style properties.
+    # Examples:
+    #       style property 'column-width' would generate a consume method called `consumeColumnWidth`
+    #       @font-face descriptor 'font-display' would generate a consume method called `consumeFontFaceFontDisplay`
+    @property
+    def name_for_parsing_methods(self):
+        return Name.convert_name_to_id(self.descriptor_set_name[1:]) + self.descriptor_name.id_without_prefix
+
+    @property
+    def id_without_prefix_with_lowercase_first_letter(self):
+        return self.descriptor_name.id_without_prefix_with_lowercase_first_letter
+
+    @property
+    def id_without_scope(self):
+        return self.descriptor_name.id_without_scope
+
+    @property
+    def id(self):
+        return self.descriptor_name.id
+
+    @property
+    def name(self):
+        return self.descriptor_name.name
+
+    @property
+    def aliases(self):
+        return self.codegen_properties.aliases
+
+
+# Provides access to each descriptor in a grouped set of descriptor (e.g. @font-face, @counter-styles, etc.) There is
+# one of these per rule type, e.g. @font-face, @counter-styles, etc.
+class DescriptorSet:
+    def __init__(self, name, descriptors):
+        self.name = name
+        self.descriptors = descriptors
+        self.descriptors_by_name = {descriptor.name: descriptor for descriptor in descriptors}
+        self._all = None
+        self._perform_fixups()
+
+    @staticmethod
+    def from_json(parsing_context, key_path, name, json_value):
+        return DescriptorSet(name, list(compact_map(lambda item: Descriptor.from_json(parsing_context, f"{key_path}.{name}", item[0], item[1], name), json_value.items())))
+
+    def _perform_fixups(self):
+        for descriptor in self.descriptors:
+            descriptor.perform_fixups(self)
+
+    @property
+    def id(self):
+        return f'{Name.convert_name_to_id(self.name[1:])}Descriptor'
+
+    @property
+    def noun(self):
+        return 'descriptor'
+
+    @property
+    def supports_current_shorthand(self):
+        return False
+
+    @property
+    def all(self):
+        if not self._all:
+            self._all = sorted(self.descriptors, key=functools.cmp_to_key(StyleProperties._sort_by_descending_priority_and_name))
+        return self._all
+
+    @property
+    def all_by_name(self):
+        return self.descriptors_by_name
+
+
+# Provides access to each of the grouped sets of descriptor (e.g. @font-face, @counter-styles, etc. which are
+# stored as DescriptorSet instances) via either the `descriptor_sets` list or by name as dynamic attributes.
+#
+# e.g. font_face_descriptor_set = descriptors.font_face
+#
+class Descriptors:
+    def __init__(self, descriptor_sets):
+        self.descriptor_sets = descriptor_sets
+        for descriptor_set in descriptor_sets:
+            setattr(self, descriptor_set.name.replace('@', 'at-').replace('-', '_'), descriptor_set)
+
+    def __str__(self):
+        return f"Descriptors"
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    def from_json(parsing_context, key_path, json_value):
+        return Descriptors([DescriptorSet.from_json(parsing_context, key_path, name, descriptors) for (name, descriptors) in json_value.items()])
+
+    # Returns a generator for the set of descriptors.
+    @property
+    def all(self):
+        return itertools.chain.from_iterable(descriptor_set.all for descriptor_set in self.descriptor_sets)
+
+
+class PropertiesAndDescriptors:
+    def __init__(self, style_properties, descriptors):
+        self.style_properties = style_properties
+        self.descriptors = descriptors
+        self._all_grouped_by_name = None
+        self._all_by_name = None
+        self._all_unique = None
+        self._settings_flags = None
+
+    def __str__(self):
+        return "PropertiesAndDescriptors"
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    def from_json(parsing_context, *, properties_json_value, descriptors_json_value):
+        return PropertiesAndDescriptors(
+            StyleProperties.from_json(parsing_context, "properties", properties_json_value),
+            Descriptors.from_json(parsing_context, "descriptors", descriptors_json_value),
+        )
+
+    def _compute_all_grouped_by_name(self):
+        return [self.all_by_name[property.name] for property in self.all_unique]
+
+    def _compute_all_by_name(self):
+        result = {}
+        for property in self.all_properties_and_descriptors:
+            result.setdefault(property.name, []).append(property)
+        return result
+
+    def _compute_all_unique(self):
+        # NOTE: This is computes the ordered set of properties and descriptors that correspond to the CSSPropertyID
+        # enumeration and related lookup tables and functions.
+
+        result = list(self.style_properties.all)
+        name_set = set(self.style_properties.all_by_name.keys())
+
+        for descriptor in self.descriptors.all:
+            if descriptor.name in name_set:
+                continue
+            result.append(descriptor)
+            name_set.add(descriptor.name)
+
+        # FIXME: It doesn't make a lot of sense to sort the descriptors like this, but this maintains
+        # the current behavior and has no negative side effect. In the future, we should either separate
+        # the descriptors out of CSSPropertyID or the descriptor-only ones together in some fashion.
+        return sorted(result, key=functools.cmp_to_key(StyleProperties._sort_by_descending_priority_and_name))
+
+    # Returns a generator for the set of all properties and descriptors.
+    @property
+    def all_properties_and_descriptors(self):
+        return itertools.chain(self.style_properties.all, self.descriptors.all)
+
+    # Returns a list of all the property or descriptor sets (e.g. 'style', '@counter-style', '@font-face', etc.).
+    @property
+    def all_sets(self):
+        return [self.style_properties] + self.descriptors.descriptor_sets
+
+    # Returns the set of properties and descriptors that have unique names, preferring style properties when
+    # there is a conflict. This set corresponds one-to-one in membership and order with CSSPropertyID.
+    @property
+    def all_unique(self):
+        if not self._all_unique:
+            self._all_unique = self._compute_all_unique()
+        return self._all_unique
+
+    # Returns a parallel list to `all_unique`, but rather than containing the canonical property, each entry
+    # in this list is a list of all properties or descriptors with the unique name.
+    @property
+    def all_grouped_by_name(self):
+        if not self._all_grouped_by_name:
+            self._all_grouped_by_name = self._compute_all_grouped_by_name()
+        return self._all_grouped_by_name
+
+    # Returns a map of names to lists of the properties or descriptors with that name.
+    @property
+    def all_by_name(self):
+        if not self._all_by_name:
+            self._all_by_name = self._compute_all_by_name()
+        return self._all_by_name
+
+    # Returns a generator for the set of properties and descriptors that are conditionally included depending on settings. If two properties
+    # or descriptors have the same name, we only return the canonical one and only if all the variants have settings flags.
+    #
+    # For example, there are two "speak-as" entries. One is a style property and the other is @counter-style descriptor. Only the one of the
+    # two, the @counter-style descriptor, has settings_flags set, so we don't return anything for that name.
+    @property
+    def all_unique_with_settings_flag(self):
+        return (property_set[0] for property_set in self.all_grouped_by_name if all(property.codegen_properties.settings_flag for property in property_set))
+
+    # Returns a generator for the subset of `self.all_unique` that are marked internal-only.
+    @property
+    def all_unique_internal_only(self):
+        return (property for property in self.all_unique if property.codegen_properties.internal_only)
+
+    # Returns a generator for the subset of `self.all_unique` that are NOT marked internal.
+    @property
+    def all_unique_non_internal_only(self):
+        return (property for property in self.all_unique if not property.codegen_properties.internal_only)
+
+    @property
+    def all_descriptor_only(self):
+        return (descriptor for descriptor in self.descriptors.all if descriptor.name not in self.style_properties.all_by_name)
+
+    # Returns the set of settings-flags used by any property or descriptor. Uniqued and sorted lexically.
+    @property
+    def settings_flags(self):
+        if not self._settings_flags:
+            self._settings_flags = sorted(list(set([property.codegen_properties.settings_flag for property in self.all_properties_and_descriptors if property.codegen_properties.settings_flag])))
+        return self._settings_flags
+
+
 # MARK: - Property Parsing
 
 class Term:
-    schema = Schema(
-        Schema.Entry("comment", allowed_types=[str]),
-        Schema.Entry("enable-if", allowed_types=[str]),
-        Schema.Entry("kind", allowed_types=[str], required=True),
-        Schema.Entry("status", allowed_types=[str]),
-    )
-
     @staticmethod
     def wrap_with_multiplier(multiplier, term):
         if multiplier.kind == BNFNodeMultiplier.Kind.ZERO_OR_ONE:
-            raise Exception("Unsupported multiplier '?'")
+            return OptionalTerm.wrapping_term(term, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.SPACE_SEPARATED_ZERO_OR_MORE:
-            raise Exception("Unsupported multiplier '*'")
+            return UnboundedRepetitionTerm.wrapping_term(term, variation=' ', min=0, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.SPACE_SEPARATED_ONE_OR_MORE:
-            raise Exception("Unsupported multiplier '+'")
+            return UnboundedRepetitionTerm.wrapping_term(term, variation=' ', min=1, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.SPACE_SEPARATED_EXACT:
-            raise Exception("Unsupported multiplier '{A}'")
+            return FixedSizeRepetitionTerm.wrapping_term(term, variation=' ', size=multiplier.range.min, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.SPACE_SEPARATED_AT_LEAST:
-            raise Exception("Unsupported multiplier '{A,}'")
+            return UnboundedRepetitionTerm.wrapping_term(term, variation=' ', min=multiplier.range.min, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.SPACE_SEPARATED_BETWEEN:
-            raise Exception("Unsupported multiplier '{A,B}'")
+            return BoundedRepetitionTerm.wrapping_term(term, variation=' ', min=multiplier.range.min, max=multiplier.range.max, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.COMMA_SEPARATED_ONE_OR_MORE:
-            return RepetitionTerm.wrapping_term(term)
+            return UnboundedRepetitionTerm.wrapping_term(term, variation=',', min=1, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.COMMA_SEPARATED_EXACT:
-            raise Exception("Unsupported multiplier '#{A}'")
+            return FixedSizeRepetitionTerm.wrapping_term(term, variation=',', size=multiplier.range.min, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.COMMA_SEPARATED_AT_LEAST:
-            raise Exception("Unsupported multiplier '#{A,}'")
+            return UnboundedRepetitionTerm.wrapping_term(term, variation=',', min=multiplier.range.min, annotation=multiplier.annotation)
         elif multiplier.kind == BNFNodeMultiplier.Kind.COMMA_SEPARATED_BETWEEN:
-            raise Exception("Unsupported multiplier '#{A,B}'")
+            return BoundedRepetitionTerm.wrapping_term(term, variation=',', min=multiplier.range.min, max=multiplier.range.max, annotation=multiplier.annotation)
 
     @staticmethod
     def from_node(node):
         if isinstance(node, BNFGroupingNode):
             if node.kind == BNFGroupingNode.Kind.MATCH_ALL_ORDERED:
+                # FIXME: This should be part of the GroupTerm's simplification.
                 if len(node.members) == 1:
                     term = Term.from_node(node.members[0])
                 else:
-                    raise Exception("Unsupported grouping. 'orderer' (e.g. [<length> <length>])")
+                    term = GroupTerm.from_node(node)
             elif node.kind == BNFGroupingNode.Kind.MATCH_ONE:
                 term = MatchOneTerm.from_node(node)
             elif node.kind == BNFGroupingNode.Kind.MATCH_ALL_ANY_ORDER:
-                raise Exception("Unsupported grouping. 'all unordered' (e.g. [<length> && <length>])")
+                term = GroupTerm.from_node(node)
             elif node.kind == BNFGroupingNode.Kind.MATCH_ONE_OR_MORE_ANY_ORDER:
-                raise Exception("Unsupported grouping. 'one or more unordered' (e.g. [<length> || <length>])")
+                term = GroupTerm.from_node(node)
             else:
                 raise Exception(f"Unknown grouping kind '{node.kind}' in BNF parse tree node '{node}'")
         elif isinstance(node, BNFReferenceNode):
             term = ReferenceTerm.from_node(node)
+        elif isinstance(node, BNFFunctionNode):
+            term = FunctionTerm.from_node(node)
         elif isinstance(node, BNFKeywordNode):
             term = KeywordTerm.from_node(node)
+        elif isinstance(node, BNFLiteralNode):
+            term = LiteralTerm.from_node(node)
         else:
             raise Exception(f"Unknown node '{node}' in BNF parse tree")
 
@@ -1059,47 +1413,6 @@ class Term:
             term = Term.wrap_with_multiplier(node.multiplier, term)
 
         return term
-
-    @staticmethod
-    def from_json(parsing_context, key_path, json_value):
-        if type(json_value) is str:
-            if RepetitionTerm.is_repetition_term(json_value):
-                return RepetitionTerm.from_json(parsing_context, key_path, {"kind": "repetition", "value": json_value})
-            elif ReferenceTerm.is_reference_term(json_value):
-                return ReferenceTerm.from_json(parsing_context, key_path, {"kind": "reference", "value": json_value})
-            else:
-                return KeywordTerm.from_json(parsing_context, key_path, {"kind": "keyword", "value": json_value})
-
-        if type(json_value) is list:
-            return MatchOneTerm.from_json(parsing_context, key_path, {"kind": "match-one", "value": json_value})
-
-        assert(type(json_value) is dict)
-        if "value" not in json_value:
-            raise Exception(f"Invalid Term found at {key_path}. All terms must have a 'value' specified.")
-
-        if "kind" not in json_value:
-            # If "kind" is not explicitly defined, check to see if one of the shorthands is being used.
-            if type(json_value["value"]) is str:
-                if RepetitionTerm.is_repetition_term(json_value["value"]):
-                    return RepetitionTerm.from_json(parsing_context, key_path, {"kind": "repetition", **json_value})
-                elif ReferenceTerm.is_reference_term(json_value["value"]):
-                    return ReferenceTerm.from_json(parsing_context, key_path, {"kind": "reference", **json_value})
-                else:
-                    return KeywordTerm.from_json(parsing_context, key_path, {"kind": "keyword", **json_value})
-
-            raise Exception(f"Unknown Term found at {key_path}. The kind of term could not be determined from the value. Please add an explicit 'kind' property.")
-
-        kind = json_value["kind"]
-        if kind == "match-one":
-            return MatchOneTerm.from_json(parsing_context, key_path, json_value)
-        elif kind == "reference":
-            return ReferenceTerm.from_json(parsing_context, key_path, json_value)
-        elif kind == "keyword":
-            return KeywordTerm.from_json(parsing_context, key_path, json_value)
-        elif kind == "repetition":
-            return RepetitionTerm.from_json(parsing_context, key_path, json_value)
-        else:
-            raise Exception(f"Invalid Term found at {key_path}. Unknown 'kind' specified: '{kind}'.")
 
 
 class BuiltinSchema:
@@ -1197,19 +1510,11 @@ class BuiltinSchema:
 # Reference terms look like keyword terms, but are surrounded by '<' and '>' characters (i.e. "<number>").
 # They can either reference a rule from the grammer-rules set, in which case they will be replaced by
 # the real term during fixup, or a builtin rule, in which case they will inform the generator to call
-# out to a handwritten consumer.
+# out to a handwritten consumer. Example:
 #
-#   { "kind": "reference", "value": "<length unitless-allowed>" }
-#
-# or using shorthand
-#
-#   "<length unitless-allowed>"
+#   e.g. "<length unitless-allowed>"
 #
 class ReferenceTerm:
-    schema = Term.schema + Schema(
-        Schema.Entry("value", allowed_types=[str], required=True),
-    )
-
     builtins = BuiltinSchema(
         BuiltinSchema.Entry("angle", "consumeAngle",
             BuiltinSchema.OptionalParameter("mode", values={"svg": "SVGAttributeMode", "strict": "HTMLStandardMode"}, default=None),
@@ -1230,7 +1535,8 @@ class ReferenceTerm:
         BuiltinSchema.Entry("integer", "consumeInteger",
             BuiltinSchema.OptionalParameter("value_range", values={"[0,inf]": "IntegerValueRange::NonNegative", "[1,inf]": "IntegerValueRange::Positive"}, default="IntegerValueRange::All")),
         BuiltinSchema.Entry("number", "consumeNumber",
-            BuiltinSchema.OptionalParameter("value_range", values={"[0,inf]": "ValueRange::NonNegative"}, default="ValueRange::All")),
+            # FIXME: "FontWeight" is not real. Add support for arbitrary ranges.
+            BuiltinSchema.OptionalParameter("value_range", values={"[0,inf]": "ValueRange::NonNegative", "[1,1000]": "ValueRange::FontWeight"}, default="ValueRange::All")),
         BuiltinSchema.Entry("percentage", "consumePercent",
             BuiltinSchema.OptionalParameter("value_range", values={"[0,inf]": "ValueRange::NonNegative"}, default="ValueRange::All")),
         BuiltinSchema.Entry("position", "consumePosition",
@@ -1242,22 +1548,76 @@ class ReferenceTerm:
         BuiltinSchema.Entry("custom-ident", "consumeCustomIdent"),
         BuiltinSchema.Entry("dashed-ident", "consumeDashedIdent"),
         BuiltinSchema.Entry("url", "consumeURL"),
+        BuiltinSchema.Entry("feature-tag-value", "consumeFeatureTagValue"),
+        BuiltinSchema.Entry("variation-tag-value", "consumeVariationTagValue"),
     )
 
-    def __init__(self, **dictionary):
-        ReferenceTerm.schema.set_attributes_from_dictionary(dictionary, instance=self)
-
-        # Removes the '<' and '>' characters and splits on whitespace to get the parts.
-        parts = self.value[1:-1].split()
-
+    def __init__(self, name, is_internal, is_function_reference, parameters):
         # Store the first (and perhaps only) part as the reference's name (e.g. for <length-percentage [0,inf] unitless-allowed> store 'length-percentage').
-        self.name = Name(parts[0])
+        self.name = Name(name)
 
-        # Store any remaining pars as the parameters (e.g. for <length-percentage [0,inf] unitless-allowed> store ['[0,inf]', 'unitless-allowed']).
-        self.parameters = parts[1:]
+        # Store whether this is an 'internal' reference (e.g. as indicated by the double angle brackets <<values>>).
+        self.is_internal = is_internal
+
+        # Store whether this is a function reference (e.g. as indicated by function notation <rect()>).
+        self.is_function_reference = is_function_reference
+
+        # Store any remaining parts as the parameters (e.g. for <length-percentage [0,inf] unitless-allowed> store ['[0,inf]', 'unitless-allowed']).
+        self.parameters = parameters
 
         # Check name and parameters against the builtins schemas to verify if they are well formed.
         self.builtin = ReferenceTerm.builtins.validate_and_construct_if_builtin(self.name, self.parameters)
+
+    def __str__(self):
+        if self.is_function_reference:
+            name = self.name.name + '()'
+        else:
+            name = self.name.name
+        base = ' '.join([name] + self.parameters)
+        if self.is_internal:
+            return f"<<{base}>>"
+        return f"<{base}>"
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    def from_node(node):
+        assert(type(node) is BNFReferenceNode)
+        return ReferenceTerm(node.name, node.is_internal, node.is_function_reference, [str(attribute) for attribute in node.attributes])
+
+    def perform_fixups(self, all_rules):
+        # Replace a reference with the term it references if it can be found.
+        name_for_lookup = str(self)
+        if name_for_lookup in all_rules.rules_by_name:
+            return all_rules.rules_by_name[name_for_lookup].grammar.root_term.perform_fixups(all_rules)
+        return self
+
+
+    def perform_fixups_for_values_references(self, values):
+        # NOTE: The actual name in the grammar is "<<values>>", which we store as is_internal + 'values'.
+        if self.is_internal and self.name.name == "values":
+            return MatchOneTerm.from_values(values)
+        return self
+
+    @property
+    def is_builtin(self):
+        return self.builtin is not None
+
+    @property
+    def supported_keywords(self):
+        return set()
+
+
+# LiteralTerm represents a direct match of a literal character or string. The
+# syntax in the CSS specifications is either a bare delimiter character or a
+# string surrounded by single quotes.
+#
+#   e.g. "'['" or ","
+#
+class LiteralTerm:
+    def __init__(self, value):
+        self.value = value
 
     def __str__(self):
         return f"'{self.value}'"
@@ -1266,71 +1626,36 @@ class ReferenceTerm:
         return self.__str__()
 
     @staticmethod
-    def is_reference_term(string):
-        string = string.strip()
-        return string.startswith('<') and string.endswith('>')
-
-    @staticmethod
     def from_node(node):
-        assert(type(node) is BNFReferenceNode)
-
-        # FIXME: Don't stringify and reparse. Refactor __init__ to allow passing in the structued attributes.
-        dictionary = {
-            "value": node.stringified_without_multipliers
-        }
-
-        return ReferenceTerm(**dictionary)
-
-    @staticmethod
-    def from_json(parsing_context, key_path, json_value):
-        assert(type(json_value) is dict)
-        ReferenceTerm.schema.validate_dictionary(parsing_context, key_path, json_value, label=f"ReferenceTerm")
-
-        if "enable-if" in json_value and not parsing_context.is_enabled(conditional=json_value["enable-if"]):
-            if parsing_context.verbose:
-                print(f"SKIPPED grammar term {json_value['value']} in {key_path} due to failing to satisfy 'enable-if' condition, '{json_value['enable-if']}', with active macro set")
-            return None
-
-        return ReferenceTerm(**json_value)
+        assert(type(node) is BNFLiteralNode)
+        return LiteralTerm(node.value)
 
     def perform_fixups(self, all_rules):
-        # Replace a reference with the term it references if it can be found.
-        if self.value in all_rules.rules_by_name:
-            return all_rules.rules_by_name[self.value].grammar.root_term
         return self
 
     def perform_fixups_for_values_references(self, values):
-        # NOTE: The actual name in the JSON is "<<values>>", but the out layer is stripped on construction.
-        if self.name.name == "<values>":
-            # FIXME: This should really return a "MatchOneTerm" if len(values) > 1 and not a list.
-            return [value.keyword_term for value in values]
         return self
 
     @property
-    def is_builtin(self):
-        return self.builtin is not None
+    def supported_keywords(self):
+        return set()
 
 
 # KeywordTerm represents a direct keyword match. The syntax in the CSS specifications
 # is a bare string.
 #
-#   { "kind": "keyword", "value": "auto" }
+#   e.g. "auto" or "box"
 #
-# or using shorthand
-#
-#   "auto"
 class KeywordTerm:
-    schema = Term.schema + Schema(
-        Schema.Entry("aliased-to", allowed_types=[str], convert_to=ValueKeywordName),
-        Schema.Entry("settings-flag", allowed_types=[str]),
-        Schema.Entry("value", allowed_types=[str], required=True, convert_to=ValueKeywordName),
-    )
-
-    def __init__(self, **dictionary):
-        KeywordTerm.schema.set_attributes_from_dictionary(dictionary, instance=self)
+    def __init__(self, value, *, aliased_to=None, comment=None, settings_flag=None, status=None):
+        self.value = value
+        self.aliased_to = aliased_to
+        self.comment = comment
+        self.settings_flag = settings_flag
+        self.status = status
 
     def __str__(self):
-        return f"'{self.value}'"
+        return self.value.name
 
     def __repr__(self):
         return self.__str__()
@@ -1338,30 +1663,17 @@ class KeywordTerm:
     @staticmethod
     def from_node(node):
         assert(type(node) is BNFKeywordNode)
-
-        dictionary = {
-            "value": ValueKeywordName(node.keyword)
-        }
-
-        return KeywordTerm(**dictionary)
-
-    @staticmethod
-    def from_json(parsing_context, key_path, json_value):
-        assert(type(json_value) is dict)
-        KeywordTerm.schema.validate_dictionary(parsing_context, key_path, json_value, label=f"KeywordTerm")
-
-        if "enable-if" in json_value and not parsing_context.is_enabled(conditional=json_value["enable-if"]):
-            if parsing_context.verbose:
-                print(f"SKIPPED grammar term {json_value['value']} in {key_path} due to failing to satisfy 'enable-if' condition, '{json_value['enable-if']}', with active macro set")
-            return None
-
-        return KeywordTerm(**json_value)
+        return KeywordTerm(ValueKeywordName(node.keyword))
 
     def perform_fixups(self, all_rules):
         return self
 
     def perform_fixups_for_values_references(self, values):
         return self
+
+    @property
+    def supported_keywords(self):
+        return {self.value.name}
 
     @property
     def requires_context(self):
@@ -1381,88 +1693,52 @@ class KeywordTerm:
 # MatchOneTerm represents a set of terms, only one of which can match. The
 # syntax in the CSS specifications is a '|' between terms.
 #
-#   {
-#       "kind": "match-one",
-#       "value": [
-#           "auto"
-#           "reverse",
-#           "<angle unitless-allowed unitless-zero-allowed>"
-#       ]
-#   }
-#
-# or using shorthand
-#
-#   ["auto", "reverse", "<angle unitless-allowed unitless-zero-allowed>"]
+#   e.g. "auto" | "reverse" | "<angle unitless-allowed unitless-zero-allowed>"
 #
 class MatchOneTerm:
-    schema = Term.schema + Schema(
-        Schema.Entry("value", allowed_types=[list], required=True),
-    )
-
-    def __init__(self, **dictionary):
-        MatchOneTerm.schema.set_attributes_from_dictionary(dictionary, instance=self)
+    def __init__(self, terms):
+        self.terms = terms
 
     def __str__(self):
-        return f"[{' | '.join(map(lambda t: str(t), self.terms))}]"
+        return f"[ {' | '.join(str(term) for term in self.terms)} ]"
 
     def __repr__(self):
         return self.__str__()
-
-    @property
-    def terms(self):
-        return self.value
-
-    @terms.setter
-    def terms(self, value):
-        self.value = value
 
     @staticmethod
     def from_node(node):
         assert(type(node) is BNFGroupingNode)
         assert(node.kind is BNFGroupingNode.Kind.MATCH_ONE)
 
-        dictionary = {
-            "value": list(compact_map(lambda member: Term.from_node(member), node.members))
-        }
-
-        return MatchOneTerm(**dictionary)
+        return MatchOneTerm(list(compact_map(lambda member: Term.from_node(member), node.members)))
 
     @staticmethod
-    def from_json(parsing_context, key_path, json_value):
-        assert(type(json_value) is dict)
-        MatchOneTerm.schema.validate_dictionary(parsing_context, key_path, json_value, label=f"MatchOneTerm")
-
-        if "enable-if" in json_value and not parsing_context.is_enabled(conditional=json_value["enable-if"]):
-            if parsing_context.verbose:
-                print(f"SKIPPED grammar term {json_value['value']} in {key_path} due to failing to satisfy 'enable-if' condition, '{json_value['enable-if']}', with active macro set")
-            return None
-
-        json_value["value"] = list(compact_map(lambda value: Term.from_json(parsing_context, f"{key_path}", value), json_value["value"]))
-
-        return MatchOneTerm(**json_value)
+    def from_values(values):
+        return MatchOneTerm(list(compact_map(lambda value: value.keyword_term, values)))
 
     def perform_fixups(self, all_rules):
-        updated_terms = []
-        for term in self.terms:
-            updated_term = term.perform_fixups(all_rules)
-            if isinstance(updated_term, MatchOneTerm):
-                updated_terms += updated_term.terms
-            else:
-                updated_terms += [updated_term]
-
-        self.terms = updated_terms
+        self.terms = MatchOneTerm.simplify(term.perform_fixups(all_rules) for term in self.terms)
 
         if len(self.terms) == 1:
             return self.terms[0]
         return self
 
     def perform_fixups_for_values_references(self, values):
-        self.terms = flatten([term.perform_fixups_for_values_references(values) for term in self.terms])
+        self.terms = MatchOneTerm.simplify(term.perform_fixups_for_values_references(values) for term in self.terms)
+
+        if len(self.terms) == 1:
+            return self.terms[0]
         return self
 
-    @property
-    def is_values_reference(self):
-        return False
+    @staticmethod
+    def simplify(terms):
+        simplified_terms = []
+        for term in terms:
+            if isinstance(term, MatchOneTerm):
+                simplified_terms += term.terms
+            else:
+                simplified_terms += [term]
+        return simplified_terms
 
     @property
     def has_keyword_term(self):
@@ -1488,55 +1764,176 @@ class MatchOneTerm:
     def has_only_fast_path_keyword_terms(self):
         return all(isinstance(term, KeywordTerm) and term.is_eligible_for_fast_path for term in self.terms)
 
+    @property
+    def supported_keywords(self):
+        result = set()
+        for term in self.terms:
+            result.update(term.supported_keywords)
+        return result
 
-class RepetitionTerm:
-    schema = Term.schema + Schema(
-        Schema.Entry("single-value-optimization", allowed_types=[bool], default_value=True),
-        Schema.Entry("value", allowed_types=[list, dict, str], required=True),
-    )
 
-    def __init__(self, repeated_term, **dictionary):
-        RepetitionTerm.schema.set_attributes_from_dictionary(dictionary, instance=self)
-        self.repeated_term = repeated_term
+# GroupTerm represents matching a list of provided terms with
+# options for whether the matches are ordered and whether all
+# terms must be matched. The syntax in the CSS specifications
+# uses space separtion with square brackets (these can be ellided
+# at the root level) as the base syntax for an match all ordered
+# group, and adds '||' and '&&' combinators to indicate 'match
+# one or more + any order' and 'match all + any order' respectively.
+#
+#   e.g. "[ <length> <length> ]" or "[ <length> && <string> && <number> ]"
+#
+class GroupTerm:
+    def __init__(self, subterms, kind, annotation):
+        self.subterms = subterms
+        self.kind = kind
+
+        self._process_annotation(annotation)
 
     def __str__(self):
-        return f"[{str(self.repeated_term)}#]"
+        return '[ ' + self.stringified_without_brackets + ' ]'
 
     def __repr__(self):
         return self.__str__()
 
-    @staticmethod
-    def is_repetition_term(string):
-        return string.strip().endswith('#')
-
-    @staticmethod
-    def extract_subterm(string):
-        assert(RepetitionTerm.is_repetition_term(string))
-        return string.strip()[:-1]
-
-    @staticmethod
-    def wrapping_term(term):
-        return RepetitionTerm(term)
-
-    @staticmethod
-    def from_json(parsing_context, key_path, json_value):
-        assert(type(json_value) is dict)
-        RepetitionTerm.schema.validate_dictionary(parsing_context, key_path, json_value, label=f"RepetitionTerm")
-
-        if "enable-if" in json_value and not parsing_context.is_enabled(conditional=json_value["enable-if"]):
-            if parsing_context.verbose:
-                print(f"SKIPPED grammar term {json_value['value']} in {key_path} due to failing to satisfy 'enable-if' condition, '{json_value['enable-if']}', with active macro set")
-            return None
-
-        if type(json_value["value"]) is str:
-            if not RepetitionTerm.is_repetition_term(json_value["value"]):
-                raise Exception(f"Invalid string value '{json_value['value']}' for repetition term at '{key_path}.")
-            repeated_term = Term.from_json(parsing_context, key_path, RepetitionTerm.extract_subterm(json_value["value"]))
+    @property
+    def stringified_without_brackets(self):
+        if self.kind != BNFGroupingNode.Kind.MATCH_ALL_ORDERED:
+            join_string = ' ' + str(self.kind.value) + ' '
         else:
-            repeated_term = json_value["value"]
-        del json_value["value"]
+            join_string = ' '
+        return join_string.join(str(subterm) for subterm in self.subterms)
 
-        return RepetitionTerm(repeated_term, **json_value)
+    def _process_annotation(self, annotation):
+        if not annotation:
+            return
+        # FIXME: Add initialization of annotation state here if/when group specific annotations are needed.
+        for directive in annotation.directives:
+            raise Exception(f"Unknown grouping annotation directive '{directive}'.")
+
+    @staticmethod
+    def from_node(node):
+        assert(type(node) is BNFGroupingNode)
+        return GroupTerm(list(compact_map(lambda member: Term.from_node(member), node.members)), node.kind, node.annotation)
+
+    def perform_fixups(self, all_rules):
+        self.subterms = [subterm.perform_fixups(all_rules) for subterm in self.subterms]
+
+        if len(self.subterms) == 1:
+            return self.subterms[0]
+        return self
+
+    def perform_fixups_for_values_references(self, values):
+        self.subterms = [subterm.perform_fixups_for_values_references(values) for subterm in self.subterms]
+
+        if len(self.subterms) == 1:
+            return self.subterms[0]
+        return self
+
+    @property
+    def supported_keywords(self):
+        result = set()
+        for subterm in self.subterms:
+            result.update(subterm.supported_keywords)
+        return result
+
+
+# OptionalTerm represents matching a term that is allowed to
+# be ommited. The syntax in the CSS specifications uses a
+# trailing '?'.
+#
+#   e.g. "<length>?" or "[ <length> <string> ]?"
+#
+class OptionalTerm:
+    def __init__(self, subterm, *, annotation):
+        self.subterm = subterm
+
+        self._process_annotation(annotation)
+
+    def __str__(self):
+        return f"{str(self.subterm)}?"
+
+    def __repr__(self):
+        return self.__str__()
+
+    def _process_annotation(self, annotation):
+        if not annotation:
+            return
+        for directive in annotation.directives:
+            raise Exception(f"Unknown optional term annotation directive '{directive}'.")
+
+    @staticmethod
+    def wrapping_term(subterm, *, annotation):
+        return OptionalTerm(subterm, annotation=annotation)
+
+    def perform_fixups(self, all_rules):
+        self.subterm = self.subterm.perform_fixups(all_rules)
+        return self
+
+    def perform_fixups_for_values_references(self, values):
+        self.subterm = self.subterm.perform_fixups_for_values_references(values)
+        return self
+
+    @property
+    def supported_keywords(self):
+        return self.subterm.supported_keywords
+
+
+# UnboundedRepetitionTerm represents matching a list of terms
+# separated by either spaces or commas. The syntax in the CSS
+# specifications uses a trailing 'multiplier' such as '#', '*',
+# '+', and '{A,}'.
+#
+#   e.g. "<length>#" or "<length>+"
+#
+class UnboundedRepetitionTerm:
+    def __init__(self, repeated_term, *, variation, min, annotation):
+        self.repeated_term = repeated_term
+        self.variation = variation
+        self.min = min
+
+        self.single_value_optimization = True
+        self._process_annotation(annotation)
+
+    def __str__(self):
+        return str(self.repeated_term) + self.stringified_suffix + self.stringified_annotation
+
+    def __repr__(self):
+        return self.__str__()
+
+    @property
+    def stringified_suffix(self):
+        if self.variation == ' ':
+            if self.min == 0:
+                return '*'
+            elif self.min == 1:
+                return '+'
+            else:
+                return '{' + str(self.min) + ',}'
+        if self.variation == ',':
+            if self.min == 1:
+                return '#'
+            else:
+                return '#{' + str(self.min) + ',}'
+        raise Exception(f"Unknown UnboundedRepetitionTerm variation '{self.variation}'")
+
+    @property
+    def stringified_annotation(self):
+        if not self.single_value_optimization:
+            return '@(no-single-item-opt)'
+        return ''
+
+    def _process_annotation(self, annotation):
+        if not annotation:
+            return
+        for directive in annotation.directives:
+            if directive == 'no-single-item-opt':
+                self.single_value_optimization = False
+            else:
+                raise Exception(f"Unknown multiplier annotation directive '{directive}'.")
+
+    @staticmethod
+    def wrapping_term(term, *, variation, min, annotation):
+        return UnboundedRepetitionTerm(term, variation=variation, min=min, annotation=annotation)
 
     def perform_fixups(self, all_rules):
         self.repeated_term = self.repeated_term.perform_fixups(all_rules)
@@ -1546,12 +1943,160 @@ class RepetitionTerm:
         self.repeated_term = self.repeated_term.perform_fixups_for_values_references(values)
         return self
 
+    @property
+    def supported_keywords(self):
+        return self.repeated_term.supported_keywords
+
+
+# BoundedRepetitionTerm represents matching a list of terms
+# separated by either spaces or commas where the list of terms
+# has a length between provided upper and lower bounds . The
+# syntax in the CSS specifications uses a trailing 'multiplier'
+# range '{A,B}' with a '#' prefix for comma speparation.
+#
+#   e.g. "<length>{1,2}" or "<length>#{3,5}"
+#
+class BoundedRepetitionTerm:
+    def __init__(self, repeated_term, *, variation, min, max, annotation):
+        self.repeated_term = repeated_term
+        self.variation = variation
+        self.min = min
+        self.max = max
+
+        self._process_annotation(annotation)
+
+    def __str__(self):
+        return str(self.repeated_term) + self.stringified_suffix
+
+    def __repr__(self):
+        return self.__str__()
+
+    @property
+    def stringified_suffix(self):
+        if self.variation == ' ':
+            return '{' + str(self.min) + ',' + str(self.max) + '}'
+        if self.variation == ',':
+            return '#{' + str(self.min) + ',' + str(self.max) + '}'
+        raise Exception(f"Unknown BoundedRepetitionTerm variation '{self.variation}'")
+
+    def _process_annotation(self, annotation):
+        if not annotation:
+            return
+        for directive in annotation.directives:
+            raise Exception(f"Unknown bounded repetition term annotation directive '{directive}'.")
+
+    @staticmethod
+    def wrapping_term(term, *, variation, min, max, annotation):
+        return BoundedRepetitionTerm(term, variation=variation, min=min, max=max, annotation=annotation)
+
+    def perform_fixups(self, all_rules):
+        self.repeated_term = self.repeated_term.perform_fixups(all_rules)
+        return self
+
+    def perform_fixups_for_values_references(self, values):
+        self.repeated_term = self.repeated_term.perform_fixups_for_values_references(values)
+        return self
+
+    @property
+    def supported_keywords(self):
+        return self.repeated_term.supported_keywords
+
+
+# FixedSizeRepetitionTerm represents matching a list of terms
+# separated by either spaces or commas where the list of terms
+# has a length that is exactly provided length. The syntax in
+# the CSS specifications uses a trailing 'multiplier' length
+# '{A}' with a '#' prefix for comma speparation.
+#
+#   e.g. "<length>{2}" or "<length>#{4}"
+#
+class FixedSizeRepetitionTerm:
+    def __init__(self, repeated_term, *, variation, size, annotation):
+        self.repeated_term = repeated_term
+        self.variation = variation
+        self.size = size
+
+        self._process_annotation(annotation)
+
+    def __str__(self):
+        return str(self.repeated_term) + self.stringified_suffix
+
+    def __repr__(self):
+        return self.__str__()
+
+    @property
+    def stringified_suffix(self):
+        if self.variation == ' ':
+            return '{' + str(self.size) + '}'
+        if self.variation == ',':
+            return '#{' + str(self.size) + '}'
+        raise Exception(f"Unknown FixedSizeRepetitionTerm variation '{self.variation}'")
+
+    def _process_annotation(self, annotation):
+        if not annotation:
+            return
+        for directive in annotation.directives:
+            raise Exception(f"Unknown fixed size repetition term annotation directive '{directive}'.")
+
+    @staticmethod
+    def wrapping_term(term, *, variation, size, annotation):
+        return FixedSizeRepetitionTerm(term, variation=variation, size=size, annotation=annotation)
+
+    def perform_fixups(self, all_rules):
+        self.repeated_term = self.repeated_term.perform_fixups(all_rules)
+        return self
+
+    def perform_fixups_for_values_references(self, values):
+        self.repeated_term = self.repeated_term.perform_fixups_for_values_references(values)
+        return self
+
+    @property
+    def supported_keywords(self):
+        return self.repeated_term.supported_keywords
+
+
+# FunctionTerm represents matching a use of the CSS function call syntax
+# which provides a way for specifications to differentiate groups by
+# name. The syntax in the CSS specifications is an identifier followed
+# by parenthesis with an optional group term inside the parenthesis.
+#
+#   e.g. "rect(<length>#{4})" or "ray()"
+#
+class FunctionTerm:
+    def __init__(self, name, parameter_group_term):
+        self.name = name
+        self.parameter_group_term = parameter_group_term
+
+    def __str__(self):
+        return self.name + '(' + str(self.parameter_group_term) + ')'
+
+    def __repr__(self):
+        return self.__str__()
+
+    @staticmethod
+    def from_node(node):
+        assert(type(node) is BNFFunctionNode)
+        return FunctionTerm(node.name, Term.from_node(node.parameter_group))
+
+    def perform_fixups(self, all_rules):
+        self.parameter_group_term = self.parameter_group_term.perform_fixups(all_rules)
+        return self
+
+    def perform_fixups_for_values_references(self, values):
+        self.parameter_group_term = self.parameter_group_term.perform_fixups_for_values_references(values)
+        return self
+
+    @property
+    def supported_keywords(self):
+        return self.parameter_group_term.supported_keywords
+
 
 # Container for the name and root term for a grammar. Used for both shared rules and property specific grammars.
 class Grammar:
     def __init__(self, name, root_term):
         self.name = name
         self.root_term = root_term
+        self._fast_path_keyword_terms_sorted_by_name = None
 
     def __str__(self):
         return f"{self.name} {self.root_term}"
@@ -1560,16 +2105,27 @@ class Grammar:
         return self.__str__()
 
     @staticmethod
-    def from_json(parsing_context, key_path, name, json_value):
-        if type(json_value) is str:
-            return Grammar(name, Term.from_node(BNFParser(json_value).parse()))
-        return Grammar(name, Term.from_json(parsing_context, key_path, json_value))
+    def from_string(parsing_context, key_path, name, string):
+        assert(type(string) is str)
+        return Grammar(name, Term.from_node(BNFParser(parsing_context, key_path, string).parse()))
 
     def perform_fixups(self, all_rules):
         self.root_term = self.root_term.perform_fixups(all_rules)
 
     def perform_fixups_for_values_references(self, values):
         self.root_term = self.root_term.perform_fixups_for_values_references(values)
+
+    def check_against_values(self, values):
+        keywords_supported_by_grammar = self.supported_keywords
+        keywords_listed_as_values = frozenset(value.name for value in values)
+
+        mark = "'"
+        keywords_only_in_grammar = keywords_supported_by_grammar - keywords_listed_as_values
+        if keywords_only_in_grammar:
+            print(f"WARNING: '{self.name}' Found some keywords in parser grammar not list in 'values' array: ({ ', '.join(quote_iterable((keyword for keyword in keywords_only_in_grammar), mark=mark)) })")
+        keywords_only_in_values = keywords_listed_as_values - keywords_supported_by_grammar
+        if keywords_only_in_values:
+            print(f"WARNING: '{self.name}' Found some keywords in 'values' array not supported by the parser grammar: ({ ', '.join(quote_iterable((keyword for keyword in keywords_only_in_values), mark=mark)) })")
 
     @property
     def has_fast_path_keyword_terms(self):
@@ -1595,13 +2151,24 @@ class Grammar:
             return self.root_term.fast_path_keyword_terms
         return []
 
+    @property
+    def fast_path_keyword_terms_sorted_by_name(self):
+        if not self._fast_path_keyword_terms_sorted_by_name:
+            self._fast_path_keyword_terms_sorted_by_name = sorted(self.fast_path_keyword_terms, key=functools.cmp_to_key(StyleProperties._sort_with_prefixed_properties_last))
+        return self._fast_path_keyword_terms_sorted_by_name
+
+    @property
+    def supported_keywords(self):
+        return self.root_term.supported_keywords
+
 
 # A shared grammar rule and metadata describing it. Part of the set of rules tracked by SharedGrammarRules.
 class SharedGrammarRule:
     schema = Schema(
+        Schema.Entry("aliased-to", allowed_types=[str], convert_to=ValueKeywordName),
         Schema.Entry("comment", allowed_types=[str]),
         Schema.Entry("exported", allowed_types=[bool], default_value=False),
-        Schema.Entry("grammar", allowed_types=[list, dict, str], required=True),
+        Schema.Entry("grammar", allowed_types=[str], required=True),
         Schema.Entry("specification", allowed_types=[dict], convert_to=Specification),
         Schema.Entry("status", allowed_types=[dict, str], convert_to=Status),
     )
@@ -1622,7 +2189,14 @@ class SharedGrammarRule:
         assert(type(json_value) is dict)
         SharedGrammarRule.schema.validate_dictionary(parsing_context, f"{key_path}.{name}", json_value, label=f"SharedGrammarRule")
 
-        json_value["grammar"] = Grammar.from_json(parsing_context, f"{key_path}.{name}", name, json_value["grammar"])
+        grammar = Grammar.from_string(parsing_context, f"{key_path}.{name}", name, json_value["grammar"])
+
+        if "aliased-to" in json_value:
+            if not isinstance(grammar.root_term, KeywordTerm):
+                raise Exception(f"Invalid use of 'aliased-to' found at '{key_path}'. 'aliased-to' can only be used with grammars that consist of a single keyword term.")
+            grammar.root_term.aliased_to = json_value["aliased-to"]
+
+        json_value["grammar"] = grammar
 
         return SharedGrammarRule(name, **json_value)
 
@@ -1632,7 +2206,7 @@ class SharedGrammarRule:
 
 # Shared grammar rules used to aid in defining property specific grammars.
 class SharedGrammarRules:
-    def __init__(self, *rules):
+    def __init__(self, rules):
         self.rules = rules
         self.rules_by_name = {rule.name: rule for rule in rules}
         self._all = None
@@ -1644,6 +2218,10 @@ class SharedGrammarRules:
 
     def __repr__(self):
         return self.__str__()
+
+    @staticmethod
+    def from_json(parsing_context, key_path, json_value):
+        return SharedGrammarRules(list(compact_map(lambda item: SharedGrammarRule.from_json(parsing_context, key_path, item[0], item[1]), json_value.items())))
 
     # Updates any references to other rules with a direct reference to the rule object.
     def _perform_fixups(self):
@@ -1664,44 +2242,26 @@ class ParsingContext:
             Schema.Entry("categories", allowed_types=[dict], required=True),
             Schema.Entry("instructions", allowed_types=[list], required=True),
             Schema.Entry("properties", allowed_types=[dict], required=True),
+            Schema.Entry("descriptors", allowed_types=[dict], required=True),
             Schema.Entry("shared-grammar-rules", allowed_types=[dict], required=True),
         )
 
-    def __init__(self, json_value, *, defines_string, parsing_for_codegen, verbose):
+    def __init__(self, json_value, *, defines_string, parsing_for_codegen, check_unused_grammars_values, verbose):
         ParsingContext.TopLevelObject.schema.validate_dictionary(self, "$", json_value, label="top level object")
 
         self.json_value = json_value
         self.conditionals = frozenset((defines_string or '').split(' '))
         self.parsing_for_codegen = parsing_for_codegen
+        self.check_unused_grammars_values = check_unused_grammars_values
         self.verbose = verbose
         self.parsed_shared_grammar_rules = None
-        self.parsed_properties = None
+        self.parsed_properties_and_descriptors = None
 
     def parse_shared_grammar_rules(self):
-        self.parsed_shared_grammar_rules = SharedGrammarRules(
-            *list(
-                filter(
-                    lambda value: value is not None,
-                    map(
-                        lambda item: SharedGrammarRule.from_json(self, "$shared-grammar-rules", item[0], item[1]),
-                        self.json_value["shared-grammar-rules"].items()
-                    )
-                )
-            )
-        )
+        self.parsed_shared_grammar_rules = SharedGrammarRules.from_json(self, "$shared-grammar-rules", self.json_value["shared-grammar-rules"])
 
-    def parse_properties(self):
-        self.parsed_properties = Properties(
-            *list(
-                filter(
-                    lambda value: value is not None,
-                    map(
-                        lambda item: Property.from_json(self, "$properties", item[0], item[1]),
-                        self.json_value["properties"].items()
-                    )
-                )
-            )
-        )
+    def parse_properties_and_descriptors(self):
+        self.parsed_properties_and_descriptors = PropertiesAndDescriptors.from_json(self, properties_json_value=self.json_value["properties"], descriptors_json_value=self.json_value["descriptors"])
 
     def is_enabled(self, *, conditional):
         if conditional[0] == '!':
@@ -1722,8 +2282,8 @@ class ParsingContext:
 # MARK: - Code Generation
 
 class GenerationContext:
-    def __init__(self, properties, shared_grammar_rules, *, verbose, gperf_executable):
-        self.properties = properties
+    def __init__(self, properties_and_descriptors, shared_grammar_rules, *, verbose, gperf_executable):
+        self.properties_and_descriptors = properties_and_descriptors
         self.shared_grammar_rules = shared_grammar_rules
         self.verbose = verbose
         self.gperf_executable = gperf_executable
@@ -1804,7 +2364,7 @@ class GenerationContext:
             to.write(f"class {class_};")
         to.newline()
 
-    def generate_property_id_switch_function(self, *, to, signature, properties, mapping, default, prologue=None, epilogue=None):
+    def generate_property_id_switch_function(self, *, to, signature, iterable, mapping, default, mapping_to_property=lambda p: p, prologue=None, epilogue=None):
         to.write(f"{signature}")
         to.write(f"{{")
 
@@ -1814,10 +2374,10 @@ class GenerationContext:
 
             to.write(f"switch (id) {{")
 
-            for property in properties:
-                to.write(f"case {property.id}:")
+            for item in iterable:
+                to.write(f"case {mapping_to_property(item).id}:")
                 with to.indent():
-                    to.write(f"{mapping(property)}")
+                    to.write(f"{mapping(item)}")
 
             to.write(f"default:")
             with to.indent():
@@ -1830,15 +2390,15 @@ class GenerationContext:
         to.write(f"}}")
         to.newline()
 
-    def generate_property_id_switch_function_bool(self, *, to, signature, properties):
+    def generate_property_id_switch_function_bool(self, *, to, signature, iterable, mapping_to_property=lambda p: p):
         to.write(f"{signature}")
         to.write(f"{{")
 
         with to.indent():
             to.write(f"switch (id) {{")
 
-            for property in properties:
-                to.write(f"case {property.id}:")
+            for item in iterable:
+                to.write(f"case {mapping_to_property(item).id}:")
 
             with to.indent():
                 to.write(f"return true;")
@@ -1858,8 +2418,12 @@ class GenerateCSSPropertyNames:
         self.generation_context = generation_context
 
     @property
+    def properties_and_descriptors(self):
+        return self.generation_context.properties_and_descriptors
+
+    @property
     def properties(self):
-        return self.generation_context.properties
+        return self.generation_context.properties_and_descriptors.style_properties
 
     def generate(self):
         self.generate_css_property_names_h()
@@ -1920,14 +2484,14 @@ class GenerateCSSPropertyNames:
             static_assert(numCSSProperties + 1 <= 65535, "CSSPropertyID should fit into uint16_t.");
             """)
 
-        all_computed_property_ids = (f"{property.id}," for property in self.properties.all_computed)
-        to.write(f"const std::array<CSSPropertyID, {count_iterable(self.properties.all_computed)}> computedPropertyIDs {{")
+        all_computed_property_ids = (f"{property.id}," for property in self.properties_and_descriptors.style_properties.all_computed)
+        to.write(f"const std::array<CSSPropertyID, {count_iterable(self.properties_and_descriptors.style_properties.all_computed)}> computedPropertyIDs {{")
         with to.indent():
             to.write_lines(all_computed_property_ids)
         to.write("};")
         to.newline()
 
-        all_property_name_strings = quote_iterable(self.properties.all, "_s,")
+        all_property_name_strings = quote_iterable((f"{property.name}" for property in self.properties_and_descriptors.all_unique), suffix="_s,")
         to.write(f"constexpr ASCIILiteral propertyNameStrings[numCSSProperties] = {{")
         with to.indent():
             to.write_lines(all_property_name_strings)
@@ -1961,10 +2525,10 @@ class GenerateCSSPropertyNames:
             """)
 
     def _generate_gperf_keywords(self, *, to):
-        # Concatenates a list of 'propererty-name, property-id' strings with a second list of 'property-alias, property-id' strings.
+        # Concatenates a list of unique 'propererty-name, property-id' strings with a second list of all 'property-alias, property-id' strings.
         all_property_names_and_aliases_with_ids = itertools.chain(
-              [f'{property.name}, {property.id}'                        for property in self.properties.all],
-            *[[f'{alias}, {property.id}' for alias in property.aliases] for property in self.properties.all]
+              [f'{property.name}, {property.id}'                        for property in self.properties_and_descriptors.all_unique],
+            *[[f'{alias}, {property.id}' for alias in property.aliases] for property in self.properties_and_descriptors.all_properties_and_descriptors]
         )
 
         to.write("%%")
@@ -2038,7 +2602,7 @@ class GenerateCSSPropertyNames:
             to.write(f"auto textflow = makeTextFlow(writingMode, direction);")
             to.write(f"switch (id) {{")
 
-            for group_name, property_group in sorted(self.properties.logical_property_groups.items(), key=lambda x: x[0]):
+            for group_name, property_group in sorted(self.properties_and_descriptors.style_properties.logical_property_groups.items(), key=lambda x: x[0]):
                 kind = property_group["kind"]
                 kind_as_id = PropertyName.convert_name_to_id(kind)
 
@@ -2067,7 +2631,7 @@ class GenerateCSSPropertyNames:
         self.generation_context.generate_property_id_switch_function(
             to=to,
             signature="static bool isExposedNotInvalidAndNotInternal(CSSPropertyID id, const CSSPropertySettings& settings)",
-            properties=self.properties.all_with_settings_flag,
+            iterable=self.properties_and_descriptors.all_unique_with_settings_flag,
             mapping=lambda p: f"return settings.{p.codegen_properties.settings_flag};",
             default="return true;"
         )
@@ -2075,7 +2639,7 @@ class GenerateCSSPropertyNames:
         self.generation_context.generate_property_id_switch_function(
             to=to,
             signature="static bool isExposedNotInvalidAndNotInternal(CSSPropertyID id, const Settings& settings)",
-            properties=self.properties.all_with_settings_flag,
+            iterable=self.properties_and_descriptors.all_unique_with_settings_flag,
             mapping=lambda p: f"return settings.{p.codegen_properties.settings_flag}();",
             default="return true;"
         )
@@ -2115,7 +2679,7 @@ class GenerateCSSPropertyNames:
         """)
 
     def _generate_is_inherited_property(self, *, to):
-        all_inherited_and_ids = (f'{"true " if property.inherited else "false"}, // {property.id}' for property in self.properties.all)
+        all_inherited_and_ids = (f'{"true " if hasattr(property, "inherited") and property.inherited else "false"}, // {property.id}' for property in self.properties_and_descriptors.all_unique)
 
         to.write(f"constexpr bool isInheritedPropertyTable[numCSSProperties + {GenerationContext.number_of_predefined_properties}] = {{")
         with to.indent():
@@ -2139,7 +2703,7 @@ class GenerateCSSPropertyNames:
         with to.indent():
             to.write(f"switch (id1) {{")
 
-            for group_name, property_group in sorted(self.properties.logical_property_groups.items(), key=lambda x: x[0]):
+            for group_name, property_group in sorted(self.properties_and_descriptors.style_properties.logical_property_groups.items(), key=lambda x: x[0]):
                 logical = property_group["logical"]
                 physical = property_group["physical"]
                 for first in [logical, physical]:
@@ -2166,7 +2730,7 @@ class GenerateCSSPropertyNames:
         to.newline()
 
     def _generate_css_property_settings_constructor(self, *, to):
-        first_settings_initializer, *remaining_settings_initializers = [f"{flag} {{ settings.{flag}() }}" for flag in self.properties.settings_flags]
+        first_settings_initializer, *remaining_settings_initializers = [f"{flag} {{ settings.{flag}() }}" for flag in self.properties_and_descriptors.settings_flags]
 
         to.write(f"CSSPropertySettings::CSSPropertySettings(const Settings& settings)")
         with to.indent():
@@ -2178,7 +2742,7 @@ class GenerateCSSPropertyNames:
         to.newline()
 
     def _generate_css_property_settings_operator_equal(self, *, to):
-        first, *middle, last = (f"a.{flag} == b.{flag}" for flag in self.properties.settings_flags)
+        first, *middle, last = (f"a.{flag} == b.{flag}" for flag in self.properties_and_descriptors.settings_flags)
 
         to.write(f"bool operator==(const CSSPropertySettings& a, const CSSPropertySettings& b)")
         to.write(f"{{")
@@ -2192,7 +2756,7 @@ class GenerateCSSPropertyNames:
         to.newline()
 
     def _generate_css_property_settings_hasher(self, *, to):
-        first, *middle, last = (f"settings.{flag} << {i}" for (i, flag) in enumerate(self.properties.settings_flags))
+        first, *middle, last = (f"settings.{flag} << {i}" for (i, flag) in enumerate(self.properties_and_descriptors.settings_flags))
 
         to.write(f"void add(Hasher& hasher, const CSSPropertySettings& settings)")
         to.write(f"{{")
@@ -2205,6 +2769,25 @@ class GenerateCSSPropertyNames:
             to.write(f"add(hasher, bits);")
         to.write(f"}}")
         to.newline()
+
+    def _term_matches_number_or_integer(self, term):
+        if isinstance(term, ReferenceTerm):
+            if term.name.name == "number" or term.name.name == "integer":
+                return True
+        elif isinstance(term, MatchOneTerm):
+            for inner_term in term.terms:
+                if self._term_matches_number_or_integer(inner_term):
+                    return True
+        elif isinstance(term, UnboundedRepetitionTerm):
+            return self._term_matches_number_or_integer(term.repeated_term)
+        return False
+
+    def _property_matches_number_or_integer(self, p):
+        if p.codegen_properties.parser_function_allows_number_or_integer_input:
+            return True
+        if not p.codegen_properties.parser_grammar:
+            return False
+        return self._term_matches_number_or_integer(p.codegen_properties.parser_grammar.root_term)
 
     def generate_css_property_names_gperf(self):
         with open('CSSPropertyNames.gperf', 'w') as output_file:
@@ -2229,7 +2812,7 @@ class GenerateCSSPropertyNames:
             self.generation_context.generate_property_id_switch_function_bool(
                 to=writer,
                 signature="bool isInternal(CSSPropertyID id)",
-                properties=self.properties.all_internal_only
+                iterable=(p for p in self.properties_and_descriptors.all_unique if p.codegen_properties.internal_only)
             )
 
             self._generate_is_exposed_functions(
@@ -2243,7 +2826,7 @@ class GenerateCSSPropertyNames:
             self.generation_context.generate_property_id_switch_function(
                 to=writer,
                 signature="CSSPropertyID relatedProperty(CSSPropertyID id)",
-                properties=(p for p in self.properties.all if p.codegen_properties.related_property),
+                iterable=(p for p in self.properties_and_descriptors.style_properties.all if p.codegen_properties.related_property),
                 mapping=lambda p: f"return {p.codegen_properties.related_property.id};",
                 default="return CSSPropertyID::CSSPropertyInvalid;"
             )
@@ -2251,21 +2834,21 @@ class GenerateCSSPropertyNames:
             self.generation_context.generate_property_id_switch_function(
                 to=writer,
                 signature="Vector<String> CSSProperty::aliasesForProperty(CSSPropertyID id)",
-                properties=(p for p in self.properties.all if p.codegen_properties.aliases),
-                mapping=lambda p: f"return {{ {', '.join(quote_iterable(p.codegen_properties.aliases, '_s'))} }};",
+                iterable=(p for p in self.properties_and_descriptors.style_properties.all if p.codegen_properties.aliases),
+                mapping=lambda p: f"return {{ {', '.join(quote_iterable(p.codegen_properties.aliases, suffix='_s'))} }};",
                 default="return { };"
             )
 
             self.generation_context.generate_property_id_switch_function_bool(
                 to=writer,
                 signature="bool CSSProperty::isColorProperty(CSSPropertyID id)",
-                properties=(p for p in self.properties.all if p.codegen_properties.color_property)
+                iterable=(p for p in self.properties_and_descriptors.style_properties.all if p.codegen_properties.color_property)
             )
 
             self.generation_context.generate_property_id_switch_function(
                 to=writer,
                 signature="UChar CSSProperty::listValuedPropertySeparator(CSSPropertyID id)",
-                properties=(p for p in self.properties.all if p.codegen_properties.separator),
+                iterable=(p for p in self.properties_and_descriptors.style_properties.all if p.codegen_properties.separator),
                 mapping=lambda p: f"return '{ p.codegen_properties.separator[0] }';",
                 default="break;",
                 epilogue="return '\\0';"
@@ -2273,14 +2856,20 @@ class GenerateCSSPropertyNames:
 
             self.generation_context.generate_property_id_switch_function_bool(
                 to=writer,
+                signature="bool CSSProperty::allowsNumberOrIntegerInput(CSSPropertyID id)",
+                iterable=(p for p in self.properties_and_descriptors.style_properties.all if self._property_matches_number_or_integer(p))
+            )
+
+            self.generation_context.generate_property_id_switch_function_bool(
+                to=writer,
                 signature="bool CSSProperty::isDirectionAwareProperty(CSSPropertyID id)",
-                properties=self.properties.all_direction_aware_properties
+                iterable=self.properties_and_descriptors.style_properties.all_direction_aware_properties
             )
 
             self.generation_context.generate_property_id_switch_function_bool(
                 to=writer,
                 signature="bool CSSProperty::isInLogicalPropertyGroup(CSSPropertyID id)",
-                properties=self.properties.all_in_logical_property_group
+                iterable=self.properties_and_descriptors.style_properties.all_in_logical_property_group
             )
 
             self._generate_are_in_same_logical_property_group_with_different_mappings_logic(
@@ -2306,7 +2895,7 @@ class GenerateCSSPropertyNames:
             self.generation_context.generate_property_id_switch_function_bool(
                 to=writer,
                 signature="bool CSSProperty::isDescriptorOnly(CSSPropertyID id)",
-                properties=(p for p in self.properties.all if p.codegen_properties.descriptor_only)
+                iterable=self.properties_and_descriptors.all_descriptor_only
             )
 
             self._generate_css_property_settings_constructor(
@@ -2347,7 +2936,7 @@ class GenerateCSSPropertyNames:
             first_deferred_property = None
             last_deferred_property = None
 
-            for property in self.properties.all:
+            for property in self.properties_and_descriptors.all_unique:
                 if property.codegen_properties.longhands:
                     if not first_shorthand_property:
                         first_shorthand_property = property
@@ -2394,11 +2983,11 @@ class GenerateCSSPropertyNames:
         to.write(f"constexpr auto lastShorthandProperty = {last_shorthand_property.id};")
         to.write(f"constexpr uint16_t numCSSPropertyLonghands = firstShorthandProperty - firstCSSProperty;")
 
-        to.write(f"extern const std::array<CSSPropertyID, {count_iterable(self.properties.all_computed)}> computedPropertyIDs;")
+        to.write(f"extern const std::array<CSSPropertyID, {count_iterable(self.properties_and_descriptors.style_properties.all_computed)}> computedPropertyIDs;")
         to.newline()
 
     def _generate_css_property_names_h_property_settings(self, *, to):
-        settings_variable_declarations = (f"bool {flag} {{ false }};" for flag in self.properties.settings_flags)
+        settings_variable_declarations = (f"bool {flag} {{ false }};" for flag in self.properties_and_descriptors.settings_flags)
 
         to.write(f"struct CSSPropertySettings {{")
         with to.indent():
@@ -2530,8 +3119,8 @@ class GenerateCSSStyleDeclarationPropertyNames:
         self.generation_context = generation_context
 
     @property
-    def properties(self):
-        return self.generation_context.properties
+    def properties_and_descriptors(self):
+        return self.generation_context.properties_and_descriptors
 
     def generate(self):
         self.generate_css_style_declaration_property_names_idl()
@@ -2592,7 +3181,7 @@ class GenerateCSSStyleDeclarationPropertyNames:
             )
 
             name_or_alias_to_property = {}
-            for property in self.properties.all_non_internal_only:
+            for property in self.properties_and_descriptors.all_unique_non_internal_only:
                 name_or_alias_to_property[property.name] = property
                 for alias in property.aliases:
                     name_or_alias_to_property[alias] = property
@@ -2680,8 +3269,12 @@ class GenerateStyleBuilderGenerated:
         self.generation_context = generation_context
 
     @property
-    def properties(self):
-        return self.generation_context.properties
+    def properties_and_descriptors(self):
+        return self.generation_context.properties_and_descriptors
+
+    @property
+    def style_properties(self):
+        return self.generation_context.properties_and_descriptors.style_properties
 
     def generate(self):
         self.generate_style_builder_generated_cpp()
@@ -2923,7 +3516,7 @@ class GenerateStyleBuilderGenerated:
                 else:
                     return "downcast<CSSPrimitiveValue>(value)"
 
-            if property in self.properties.properties_by_name["font"].codegen_properties.longhands and "Initial" not in property.codegen_properties.custom and not property.codegen_properties.converter:
+            if property in self.style_properties.all_by_name["font"].codegen_properties.longhands and "Initial" not in property.codegen_properties.custom and not property.codegen_properties.converter:
                 to.write(f"if (is<CSSPrimitiveValue>(value) && CSSPropertyParserHelpers::isSystemFontShorthand(downcast<CSSPrimitiveValue>(value).valueID())) {{")
                 with to.indent():
                     to.write(f"applyInitial{property.id_without_prefix}(builderState);")
@@ -2973,7 +3566,7 @@ class GenerateStyleBuilderGenerated:
         to.write(f"public:")
 
         with to.indent():
-            for property in self.properties.all:
+            for property in self.style_properties.all:
                 if property.codegen_properties.longhands:
                     continue
                 if property.codegen_properties.skip_builder:
@@ -3015,7 +3608,13 @@ class GenerateStyleBuilderGenerated:
                     return "BuilderCustom"
                 return "BuilderFunctions"
 
-            for property in self.properties.all:
+            for property in self.properties_and_descriptors.all_unique:
+                if not isinstance(property, StyleProperty):
+                    to.write(f"case {property.id}:")
+                    with to.indent():
+                        to.write(f"break;")
+                    continue
+                
                 if property.codegen_properties.synonym:
                     continue
 
@@ -3093,8 +3692,8 @@ class GenerateStylePropertyShorthandFunctions:
         self.generation_context = generation_context
 
     @property
-    def properties(self):
-        return self.generation_context.properties
+    def style_properties(self):
+        return self.generation_context.properties_and_descriptors.style_properties
 
     def generate(self):
         self.generate_style_property_shorthand_functions_h()
@@ -3104,7 +3703,7 @@ class GenerateStylePropertyShorthandFunctions:
 
     def _generate_style_property_shorthand_functions_declarations(self, *, to):
         # Skip non-shorthand properties (aka properties WITH longhands).
-        for property in self.properties.all_shorthands:
+        for property in self.style_properties.all_shorthands:
             to.write(f"StylePropertyShorthand {property.id_without_prefix_with_lowercase_first_letter}Shorthand();")
         to.newline()
 
@@ -3133,7 +3732,7 @@ class GenerateStylePropertyShorthandFunctions:
     # MARK: - Helper generator functions for StylePropertyShorthandFunctions.cpp
 
     def _generate_style_property_shorthand_functions_accessors(self, *, to, longhand_to_shorthands, shorthand_to_longhand_count):
-        for property in self.properties.all_shorthands:
+        for property in self.style_properties.all_shorthands:
             to.write(f"StylePropertyShorthand {property.id_without_prefix_with_lowercase_first_letter}Shorthand()")
             to.write(f"{{")
             with to.indent():
@@ -3143,7 +3742,7 @@ class GenerateStylePropertyShorthandFunctions:
                     shorthand_to_longhand_count[property] = 0
                     for longhand in property.codegen_properties.longhands:
                         if longhand.name == "all":
-                            for inner_property in self.properties.all_non_shorthands:
+                            for inner_property in self.style_properties.all_non_shorthands:
                                 if inner_property.name == "direction" or inner_property.name == "unicode-bidi":
                                     continue
                                 longhand_to_shorthands.setdefault(inner_property, [])
@@ -3225,7 +3824,7 @@ class GenerateStylePropertyShorthandFunctions:
                 self.generation_context.generate_property_id_switch_function(
                     to=writer,
                     signature="StylePropertyShorthand shorthandForProperty(CSSPropertyID id)",
-                    properties=self.properties.all_shorthands,
+                    iterable=self.style_properties.all_shorthands,
                     mapping=lambda p: f"return {p.id_without_prefix_with_lowercase_first_letter}Shorthand();",
                     default="return { };"
                 )
@@ -3243,7 +3842,7 @@ class GenerateCSSPropertyParsing:
         self.generation_context = generation_context
 
         # Create a handler for each property and add it to the `property_consumers` map.
-        self.property_consumers = {property: PropertyConsumer.make(property) for property in generation_context.properties.all}
+        self.property_consumers = {property: PropertyConsumer.make(property) for property in generation_context.properties_and_descriptors.all_properties_and_descriptors}
         self.shared_grammar_rule_consumers = {shared_grammar_rule: SharedGrammarRuleConsumer.make(shared_grammar_rule) for shared_grammar_rule in generation_context.shared_grammar_rules.all}
 
     def generate(self):
@@ -3251,8 +3850,8 @@ class GenerateCSSPropertyParsing:
         self.generate_css_property_parsing_cpp()
 
     @property
-    def properties(self):
-        return self.generation_context.properties
+    def properties_and_descriptors(self):
+        return self.generation_context.properties_and_descriptors
 
     @property
     def shared_grammar_rules(self):
@@ -3260,11 +3859,26 @@ class GenerateCSSPropertyParsing:
 
     @property
     def all_property_consumers(self):
-        return (self.property_consumers[property] for property in self.properties.all)
+        return (self.property_consumers[property] for property in self.properties_and_descriptors.all_properties_and_descriptors)
 
     @property
     def all_shared_grammar_rule_consumers(self):
         return (self.shared_grammar_rule_consumers[shared_grammar_rule] for shared_grammar_rule in self.shared_grammar_rules.all)
+
+    @property
+    def all_property_parsing_collections(self):
+        ParsingCollection = collections.namedtuple('ParsingCollection', ['id', 'name', 'noun', 'supports_current_shorthand', 'consumers'])
+
+        result = []
+        for set in self.properties_and_descriptors.all_sets:
+            result += [ParsingCollection(set.id, set.name, set.noun, set.supports_current_shorthand, list(self.property_consumers[property] for property in set.all))]
+        return result
+
+    @property
+    def all_consumers_grouped_by_kind(self):
+        ConsumerCollection = collections.namedtuple('ConsumerCollection', ['description', 'consumers'])
+
+        return [ConsumerCollection(f'{parsing_collection.name} {parsing_collection.noun}', parsing_collection.consumers) for parsing_collection in self.all_property_parsing_collections] + [ConsumerCollection(f'shared', list(self.all_shared_grammar_rule_consumers))]
 
     def generate_css_property_parsing_h(self):
         with open('CSSPropertyParsing.h', 'w') as output_file:
@@ -3337,19 +3951,25 @@ class GenerateCSSPropertyParsing:
                     to=writer
                 )
 
-                self._generate_css_property_parsing_cpp_parse(
-                    to=writer
-                )
+                for parsing_collection in self.all_property_parsing_collections:
+                    self._generate_css_property_parsing_cpp_parse_property(
+                        to=writer,
+                        parsing_collection=parsing_collection
+                    )
 
-                self._generate_css_property_parsing_cpp_is_keyword_valid_aggregate(
-                    to=writer
-                )
+                    keyword_fast_path_eligible_property_consumers = [consumer for consumer in parsing_collection.consumers if consumer.keyword_fast_path_generator]
 
-                self.generation_context.generate_property_id_switch_function_bool(
-                    to=writer,
-                    signature="bool CSSPropertyParsing::isKeywordProperty(CSSPropertyID id)",
-                    properties=self.properties.all_with_fast_path_keyword_terms,
-                )
+                    self._generate_css_property_parsing_cpp_is_keyword_valid_for_property(
+                        to=writer,
+                        parsing_collection=parsing_collection,
+                        keyword_fast_path_eligible_property_consumers=keyword_fast_path_eligible_property_consumers
+                    )
+
+                    self._generate_css_property_parsing_cpp_is_keyword_fast_path_eligible_for_property(
+                        to=writer,
+                        parsing_collection=parsing_collection,
+                        keyword_fast_path_eligible_property_consumers=keyword_fast_path_eligible_property_consumers
+                    )
 
     # MARK: - Helper generator functions for CSSPropertyParsing.h
 
@@ -3357,56 +3977,68 @@ class GenerateCSSPropertyParsing:
         to.write(f"struct CSSPropertyParsing {{")
 
         with to.indent():
-            to.write_block("""\
-                // Parse and return a single value.
-                static RefPtr<CSSValue> parse(CSSParserTokenRange&, CSSPropertyID id, CSSPropertyID currentShorthand, const CSSParserContext&);
+            for parsing_collection in self.all_property_parsing_collections:
+                to.write(f"// Parse and return a single longhand {parsing_collection.name} {parsing_collection.noun}.")
+                if parsing_collection.supports_current_shorthand:
+                    to.write(f"static RefPtr<CSSValue> parse{parsing_collection.id}(CSSParserTokenRange&, CSSPropertyID id, CSSPropertyID currentShorthand, const CSSParserContext&);")
+                else:
+                    to.write(f"static RefPtr<CSSValue> parse{parsing_collection.id}(CSSParserTokenRange&, CSSPropertyID id, const CSSParserContext&);")
+                to.write(f"// Fast path bare-keyword support.")
+                to.write(f"static bool isKeywordValidFor{parsing_collection.id}(CSSPropertyID, CSSValueID, const CSSParserContext&);")
+                to.write(f"static bool isKeywordFastPathEligible{parsing_collection.id}(CSSPropertyID);")
+                to.newline()
 
-                // Returns true if the bare keyword value forms a valid construction when used with the
-                // provided property.
-                static bool isKeywordValidForProperty(CSSPropertyID, CSSValueID, const CSSParserContext&);
+            to.write(f"// Direct consumers.")
 
-                // Returns true for properties that are valid to pass to `isKeywordValidForProperty`. This
-                // corresponds to the set of properties where a bare keyword value is a valid construction.
-                // NOTE: This will return true for properties that allow values that aren't keywords. All
-                // that it validates is that the property can be valid with a keyword value. (For example,
-                // 'list-style-type' supports a litany of keyword values, but also supports a string value.)
-                static bool isKeywordProperty(CSSPropertyID);
-                """)
-
-            for property_consumer in self.all_property_consumers:
-                property_consumer.generate_export_declaration(to=to)
-
-            for shared_grammar_rule_consumer in self.all_shared_grammar_rule_consumers:
-                shared_grammar_rule_consumer.generate_export_declaration(to=to)
+            for description, consumers in self.all_consumers_grouped_by_kind:
+                if any(consumer.is_exported for consumer in consumers):
+                    to.newline()
+                    to.write(f"// Exported {description} consumers.")
+                    for consumer in (consumer for consumer in consumers if consumer.is_exported):
+                        consumer.generate_export_declaration(to=to)
 
         to.write(f"}};")
         to.newline()
 
     # MARK: - Helper generator functions for CSSPropertyParsing.cpp
 
-    def _generate_css_property_parsing_cpp_is_keyword_valid_aggregate(self, *, to):
-        to.write(f"bool CSSPropertyParsing::isKeywordValidForProperty(CSSPropertyID id, CSSValueID keyword, const CSSParserContext& context)")
-        to.write(f"{{")
-
-        with to.indent():
-            to.write(f"switch (id) {{")
-
-            for property_consumer in self.all_property_consumers:
-                keyword_fast_path_generator = property_consumer.keyword_fast_path_generator
-                if not keyword_fast_path_generator:
-                    continue
-
-                to.write(f"case {property_consumer.property.id}:")
-                with to.indent():
-                    to.write(f"return {keyword_fast_path_generator.generate_call_string(keyword_string='keyword', context_string='context')};")
-
-            to.write(f"default:")
+    def _generate_css_property_parsing_cpp_is_keyword_valid_for_property(self, *, to, parsing_collection, keyword_fast_path_eligible_property_consumers):
+        if not keyword_fast_path_eligible_property_consumers:
+            to.write(f"bool CSSPropertyParsing::isKeywordValidFor{parsing_collection.id}(CSSPropertyID, CSSValueID, const CSSParserContext&)")
+            to.write(f"{{")
             with to.indent():
                 to.write(f"return false;")
-
             to.write(f"}}")
-        to.write(f"}}")
-        to.newline()
+            to.newline()
+            return
+
+        requires_context = any(propopery_consumer.keyword_fast_path_generator.requires_context for propopery_consumer in keyword_fast_path_eligible_property_consumers)
+
+        self.generation_context.generate_property_id_switch_function(
+            to=to,
+            signature=f"bool CSSPropertyParsing::isKeywordValidFor{parsing_collection.id}(CSSPropertyID id, CSSValueID keyword, const CSSParserContext&{' context' if requires_context else ''})",
+            iterable=keyword_fast_path_eligible_property_consumers,
+            mapping=lambda property_consumer: f"return {property_consumer.keyword_fast_path_generator.generate_call_string(keyword_string='keyword', context_string='context')};",
+            default="return false;",
+            mapping_to_property=lambda property_consumer: property_consumer.property
+        )
+
+    def _generate_css_property_parsing_cpp_is_keyword_fast_path_eligible_for_property(self, *, to, parsing_collection, keyword_fast_path_eligible_property_consumers):
+        if not keyword_fast_path_eligible_property_consumers:
+            to.write(f"bool CSSPropertyParsing::isKeywordFastPathEligible{parsing_collection.id}(CSSPropertyID)")
+            to.write(f"{{")
+            with to.indent():
+                to.write(f"return false;")
+            to.write(f"}}")
+            to.newline()
+            return
+
+        self.generation_context.generate_property_id_switch_function_bool(
+            to=to,
+            signature=f"bool CSSPropertyParsing::isKeywordFastPathEligible{parsing_collection.id}(CSSPropertyID id)",
+            iterable=keyword_fast_path_eligible_property_consumers,
+            mapping_to_property=lambda property_consumer: property_consumer.property
+        )
 
     def _generate_css_property_parsing_cpp_property_parsing_functions(self, *, to):
         # First generate definitions for all the keyword-only fast path predicate functions.
@@ -3426,12 +4058,18 @@ class GenerateCSSPropertyParsing:
             if property_consumer.property.codegen_properties.parser_exported:
                 property_consumer.generate_definition(to=to)
 
-        # And finally all the exported shared grammar rule consumers.
+        # And finally all the exported shared grammar rule consumers (these will be static members of the CSSPropertyParsing struct).
         for shared_grammar_rule_consumer in self.all_shared_grammar_rule_consumers:
             shared_grammar_rule_consumer.generate_definition(to=to)
 
-    def _generate_css_property_parsing_cpp_parse(self, *, to):
-        to.write(f"RefPtr<CSSValue> CSSPropertyParsing::parse(CSSParserTokenRange& range, CSSPropertyID id, CSSPropertyID currentShorthand, const CSSParserContext& context)")
+    def _generate_css_property_parsing_cpp_parse_property(self, *, to, parsing_collection):
+        if parsing_collection.supports_current_shorthand:
+            to.write(f"RefPtr<CSSValue> CSSPropertyParsing::parse{parsing_collection.id}(CSSParserTokenRange& range, CSSPropertyID id, CSSPropertyID currentShorthand, const CSSParserContext& context)")
+            current_shorthand_string = "currentShorthand"
+        else:
+            to.write(f"RefPtr<CSSValue> CSSPropertyParsing::parse{parsing_collection.id}(CSSParserTokenRange& range, CSSPropertyID id, const CSSParserContext& context)")
+            current_shorthand_string = None
+
         to.write(f"{{")
         with to.indent():
             to.write(f"if (!isExposed(id, context.propertySettings) && !isInternal(id)) {{")
@@ -3447,18 +4085,18 @@ class GenerateCSSPropertyParsing:
             PropertyReturnExpression = collections.namedtuple('PropertyReturnExpression', ['property', 'return_expression'])
             property_and_return_expressions = []
 
-            for property_consumer in self.all_property_consumers:
-                return_expression = property_consumer.generate_call_string(
+            for consumer in parsing_collection.consumers:
+                return_expression = consumer.generate_call_string(
                     range_string="range",
                     id_string="id",
-                    current_shorthand_string="currentShorthand",
+                    current_shorthand_string=current_shorthand_string,
                     context_string="context")
 
                 if return_expression is None:
                     continue
 
                 property_and_return_expressions.append(
-                    PropertyReturnExpression(property_consumer.property, return_expression))
+                    PropertyReturnExpression(consumer.property, return_expression))
 
             # Take the list of pairs of (value, return-expression-to-use-for-value), and
             # group them by their 'return-expression' to avoid unnecessary duplication of
@@ -3473,7 +4111,7 @@ class GenerateCSSPropertyParsing:
                 property_and_return_expressions_grouped_by_expression.append(PropertiesReturnExpression(properties, return_expression))
 
             def _sort_by_first_property(a, b):
-                return Properties._sort_by_descending_priority_and_name(a.properties[0], b.properties[0])
+                return StyleProperties._sort_by_descending_priority_and_name(a.properties[0], b.properties[0])
 
             to.write(f"switch (id) {{")
             for properties, return_expression in sorted(property_and_return_expressions_grouped_by_expression, key=functools.cmp_to_key(_sort_by_first_property)):
@@ -3548,15 +4186,84 @@ class TermGenerator(object):
     def make(term, keyword_fast_path_generator=None):
         if isinstance(term, MatchOneTerm):
             return TermGeneratorMatchOneTerm(term, keyword_fast_path_generator)
-        elif isinstance(term, RepetitionTerm):
-            return TermGeneratorRepetitionTerm(term)
+        elif isinstance(term, OptionalTerm):
+            return TermGeneratorOptionalTerm(term)
+        elif isinstance(term, GroupTerm):
+            return TermGeneratorGroupTerm(term)
+        elif isinstance(term, UnboundedRepetitionTerm):
+            return TermGeneratorUnboundedRepetitionTerm(term)
         elif isinstance(term, ReferenceTerm):
             return TermGeneratorReferenceTerm(term)
+        elif isinstance(term, FunctionTerm):
+            return TermGeneratorFunctionTerm(term)
+        elif isinstance(term, LiteralTerm):
+            return TermGeneratorLiteralTerm(term)
+        elif isinstance(term, KeywordTerm):
+            return TermGeneratorNonFastPathKeywordTerm([term])
         else:
             raise Exception(f"Unknown term type - {type(term)} - {term}")
 
 
-class TermGeneratorRepetitionTerm(TermGenerator):
+class TermGeneratorGroupTerm(TermGenerator):
+    def __init__(self, term):
+        self.term = term
+        self.subterm_generators = [TermGenerator.make(subterm) for subterm in term.subterms]
+        self.requires_context = any(subterm_generator.requires_context for subterm_generator in self.subterm_generators)
+
+    def generate_conditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+    def generate_unconditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+
+class TermGeneratorOptionalTerm(TermGenerator):
+    def __init__(self, optional_term):
+        self.term = optional_term
+        self.subterm_generator = TermGenerator.make(optional_term.subterm, None)
+        self.requires_context = self.subterm_generator.requires_context
+
+    def generate_conditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+    def generate_unconditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+
+class TermGeneratorFunctionTerm(TermGenerator):
+    def __init__(self, term):
+        self.term = term
+        self.parameter_group_generator = TermGenerator.make(term.parameter_group_term)
+        self.requires_context = self.parameter_group_generator.requires_context
+
+    def generate_conditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+    def generate_unconditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+
+class TermGeneratorLiteralTerm(TermGenerator):
+    def __init__(self, term):
+        self.term = term
+        self.requires_context = self.term.requires_context
+
+    def generate_conditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+    def generate_unconditional(self, *, to, range_string, context_string):
+        # FIXME: Implement generation.
+        pass
+
+
+class TermGeneratorUnboundedRepetitionTerm(TermGenerator):
     def __init__(self, term):
         self.term = term
         self.repeated_term_generator = TermGenerator.make(term.repeated_term, None)
@@ -3605,6 +4312,8 @@ class TermGeneratorMatchOneTerm(TermGenerator):
         non_fast_path_keyword_terms = []
         reference_terms = []
         repetition_terms = []
+        group_terms = []
+        optional_terms = []
 
         for sub_term in term.terms:
             if isinstance(sub_term, KeywordTerm):
@@ -3614,10 +4323,18 @@ class TermGeneratorMatchOneTerm(TermGenerator):
                     non_fast_path_keyword_terms.append(sub_term)
             elif isinstance(sub_term, ReferenceTerm):
                 reference_terms.append(sub_term)
-            elif isinstance(sub_term, RepetitionTerm):
+            elif isinstance(sub_term, UnboundedRepetitionTerm):
                 repetition_terms.append(sub_term)
+            elif isinstance(sub_term, BoundedRepetitionTerm):
+                repetition_terms.append(sub_term)
+            elif isinstance(sub_term, FixedSizeRepetitionTerm):
+                repetition_terms.append(sub_term)
+            elif isinstance(sub_term, GroupTerm):
+                group_terms.append(sub_term)
+            elif isinstance(sub_term, OptionalTerm):
+                optional_terms.append(sub_term)
             else:
-                raise Exception(f"Only KeywordTerm, ReferenceTerm and RepetitionTerm terms are supported inside MatchOneTerm at this time: '{term}' - {sub_term}")
+                raise Exception(f"Only KeywordTerm, ReferenceTerm and UnboundedRepetitionTerm terms are supported inside MatchOneTerm at this time: '{term}' - {sub_term}")
 
         # Build a list of generators for the terms, starting with all (if any) the keywords at once.
         term_generators = []
@@ -3629,7 +4346,11 @@ class TermGeneratorMatchOneTerm(TermGenerator):
         if reference_terms:
             term_generators += [TermGeneratorReferenceTerm(sub_term) for sub_term in reference_terms]
         if repetition_terms:
-            term_generators += [TermGeneratorRepetitionTerm(sub_term) for sub_term in repetition_terms]
+            term_generators += [TermGeneratorUnboundedRepetitionTerm(sub_term) for sub_term in repetition_terms]
+        if group_terms:
+            term_generators += [TermGeneratorGroupTerm(sub_term) for sub_term in group_terms]
+        if repetition_terms:
+            term_generators += [TermGeneratorOptionalTerm(sub_term) for sub_term in optional_terms]
         return term_generators
 
     def generate_conditional(self, *, to, range_string, context_string):
@@ -3685,18 +4406,9 @@ class TermGeneratorReferenceTerm(TermGenerator):
                 if builtin.quirky_colors:
                     return f"{builtin.consume_function_name}({range_string}, {context_string}, {context_string}.mode == HTMLQuirksMode)"
                 return f"{builtin.consume_function_name}({range_string}, {context_string})"
-            elif isinstance(builtin, BuiltinResolutionConsumer):
-                return f"{builtin.consume_function_name}({range_string})"
-            elif isinstance(builtin, BuiltinStringConsumer):
-                return f"{builtin.consume_function_name}({range_string})"
-            elif isinstance(builtin, BuiltinCustomIdentConsumer):
-                return f"{builtin.consume_function_name}({range_string})"
-            elif isinstance(builtin, BuiltinDashedIdentConsumer):
-                return f"{builtin.consume_function_name}({range_string})"
-            elif isinstance(builtin, BuiltinURLConsumer):
-                return f"{builtin.consume_function_name}({range_string})"
             else:
-                raise Exception(f"Unknown builtin type used: {builtin.name.name}")
+                assert(not self.requires_context)
+                return f"{builtin.consume_function_name}({range_string})"
         else:
             return f"consume{self.term.name.id_without_prefix}({range_string}, {context_string})"
 
@@ -3731,6 +4443,10 @@ class TermGeneratorReferenceTerm(TermGenerator):
             elif isinstance(builtin, BuiltinDashedIdentConsumer):
                 return False
             elif isinstance(builtin, BuiltinURLConsumer):
+                return False
+            elif isinstance(builtin, BuiltinFeatureTagValueConsumer):
+                return False
+            elif isinstance(builtin, BuiltinVariationTagValueConsumer):
                 return False
             else:
                 raise Exception(f"Unknown builtin type used: {builtin.name.name}")
@@ -3791,7 +4507,7 @@ class TermGeneratorNonFastPathKeywordTerm(TermGenerator):
                         to.write(f"{default_string};")
 
                 to.write(f"{range_string}.consumeIncludingWhitespace();")
-                to.write(f"return CSSValuePool::singleton().createIdentifierValue({return_expression.return_value});")
+                to.write(f"return CSSPrimitiveValue::create({return_expression.return_value});")
 
         to.write(f"default:")
         with to.indent():
@@ -3920,6 +4636,7 @@ class KeywordFastPathGenerator:
 #
 #   def generate_export_declaration(self, *, to):
 #   def generate_definition(self, *, to):
+#   var is_exported
 #
 class SharedGrammarRuleConsumer(object):
     @staticmethod
@@ -3938,6 +4655,10 @@ class SkipSharedGrammarRuleConsumer(SharedGrammarRuleConsumer):
 
     def __repr__(self):
         return self.__str__()
+
+    @property
+    def is_exported(self):
+        return False
 
     def generate_export_declaration(self, *, to):
         pass
@@ -3973,6 +4694,10 @@ class GeneratedSharedGrammarRuleConsumer(SharedGrammarRuleConsumer):
             name=f"consume{shared_grammar_rule.name_for_methods.id_without_prefix}",
             parameters=GeneratedSharedGrammarRuleConsumer._build_parameters(requires_context))
 
+    @property
+    def is_exported(self):
+        return True
+
     def generate_export_declaration(self, *, to):
         to.write(f"static {self.signature.declaration_string};")
 
@@ -3995,10 +4720,9 @@ class GeneratedSharedGrammarRuleConsumer(SharedGrammarRuleConsumer):
 #        descriptor-only properties, shorthand properties, and properties marked 'skip-parser`.
 #
 #   - `CustomPropertyConsumer`:
-#        Used when the property has been marked with `custom-parser` or `parser-function`. These
-#        property consumers never generate a `consume` function of their own, and call the defined
-#        `consume` function (either based on the property name if `custom-parser` or the one declared
-#        in `parser-function`) directly from the main `parse` function.
+#        Used when the property has been marked with `parser-function`. These property consumers never
+#        generate a `consume` function of their own, and call the defined `consume` function declared
+#        in `parser-function` directly from the main `parse` function.
 #
 #   - `FastPathKeywordOnlyPropertyConsumer`:
 #        The only allowed values for this property are fast path eligible keyword values. These property
@@ -4021,22 +4745,23 @@ class GeneratedSharedGrammarRuleConsumer(SharedGrammarRuleConsumer):
 #        called from the main `parse` function. If the parser grammar allows for any keyword only valid
 #        parses (e.g. for the grammar [ none | <image> ], "none" is a valid keyword only parse), these
 #        property consumers will also emit a `keyword-only fast path` function (e.g. `isKeywordValidFor*`)
-#        and ensure that it is called from the main `isKeywordValidForProperty` function.
+#        and ensure that it is called from the main `isKeywordValidForStyleProperty` function.
 #
 # `PropertyConsumer` abstract interface:
 #
 #   def generate_call_string(self, *, range_string, id_string, current_shorthand_string, context_string):
 #   def generate_export_declaration(self, *, to):
 #   def generate_definition(self, *, to):
+#   var is_exported
 #   var keyword_fast_path_generator
 
 class PropertyConsumer(object):
     @staticmethod
     def make(property):
-        if property.codegen_properties.longhands or property.codegen_properties.descriptor_only or property.codegen_properties.skip_parser:
+        if property.codegen_properties.longhands or property.codegen_properties.skip_parser:
             return SkipPropertyConsumer(property)
 
-        if property.codegen_properties.custom_parser or property.codegen_properties.parser_function:
+        if property.codegen_properties.parser_function:
             return CustomPropertyConsumer(property)
 
         if property.codegen_properties.parser_grammar:
@@ -4044,11 +4769,6 @@ class PropertyConsumer(object):
                 return FastPathKeywordOnlyPropertyConsumer(property)
             if isinstance(property.codegen_properties.parser_grammar.root_term, ReferenceTerm):
                 return DirectPropertyConsumer(property)
-            return GeneratedPropertyConsumer(property)
-
-        if property.has_only_keyword_terms:
-            if property.has_only_fast_path_keyword_terms:
-                return FastPathKeywordOnlyPropertyConsumer(property)
             return GeneratedPropertyConsumer(property)
 
         raise Exception(f"Invalid property definition for '{property.id}'. Style properties must either specify values or a custom parser.")
@@ -4060,7 +4780,7 @@ class SkipPropertyConsumer(PropertyConsumer):
         self.property = property
 
     def __str__(self):
-        return "SkipPropertyConsumer"
+        return f"SkipPropertyConsumer for {self.property}"
 
     def __repr__(self):
         return self.__str__()
@@ -4075,40 +4795,43 @@ class SkipPropertyConsumer(PropertyConsumer):
         pass
 
     @property
+    def is_exported(self):
+        return False
+
+    @property
     def keyword_fast_path_generator(self):
         return None
 
 
-# Property consumer used for properties with `custom-parser` or `parser-function` defined.
+# Property consumer used for properties with `parser-function` defined.
 class CustomPropertyConsumer(PropertyConsumer):
     def __init__(self, property):
         self.property = property
 
     def __str__(self):
-        return "CustomPropertyConsumer"
+        return f"CustomPropertyConsumer for {self.property}"
 
     def __repr__(self):
         return self.__str__()
 
     def generate_call_string(self, *, range_string, id_string, current_shorthand_string, context_string):
         parameters = []
-        if self.property.codegen_properties.parser_requires_current_property:
+        if self.property.codegen_properties.parser_function_requires_current_property:
             parameters.append(id_string)
         parameters.append(range_string)
-        if self.property.codegen_properties.parser_requires_current_shorthand:
+        if self.property.codegen_properties.parser_function_requires_current_shorthand:
             parameters.append(current_shorthand_string)
-        if self.property.codegen_properties.parser_requires_context:
+        if self.property.codegen_properties.parser_function_requires_context:
             parameters.append(context_string)
-        if self.property.codegen_properties.parser_requires_context_mode:
+        if self.property.codegen_properties.parser_function_requires_context_mode:
             parameters.append(f"{context_string}.mode")
-        if self.property.codegen_properties.parser_requires_quirks_mode:
+        if self.property.codegen_properties.parser_function_requires_quirks_mode:
             parameters.append(f"{context_string}.mode == HTMLQuirksMode")
-        if self.property.codegen_properties.parser_requires_value_pool:
+        if self.property.codegen_properties.parser_function_requires_value_pool:
             parameters.append("CSSValuePool::singleton()")
-        parameters += self.property.codegen_properties.parser_requires_additional_parameters
+        parameters += self.property.codegen_properties.parser_function_requires_additional_parameters
 
-        # If a "parser-function" has been specified, use that, otherwise assume the 'consume' function uses the property name.
-        function = self.property.codegen_properties.parser_function or f"consume{self.property.id_without_prefix}"
+        function = self.property.codegen_properties.parser_function
 
         # Merge the scope, function and parameters to form the final invocation.
         return f"{function}({', '.join(parameters)})"
@@ -4120,6 +4843,10 @@ class CustomPropertyConsumer(PropertyConsumer):
         pass
 
     @property
+    def is_exported(self):
+        return False
+
+    @property
     def keyword_fast_path_generator(self):
         return None
 
@@ -4128,12 +4855,12 @@ class CustomPropertyConsumer(PropertyConsumer):
 class FastPathKeywordOnlyPropertyConsumer(PropertyConsumer):
     def __init__(self, property):
         self.property = property
-        self.keyword_fast_path_generator = KeywordFastPathGenerator(f"isKeywordValidFor{property.id_without_prefix}", property.fast_path_keyword_terms_sorted_by_name)
+        self.keyword_fast_path_generator = KeywordFastPathGenerator(f"isKeywordValidFor{property.name_for_parsing_methods}", property.codegen_properties.parser_grammar.fast_path_keyword_terms_sorted_by_name)
         self.term_generator = TermGeneratorFastPathKeywordTerms(self.keyword_fast_path_generator)
         self.signature = FastPathKeywordOnlyPropertyConsumer._build_signature(property, self.keyword_fast_path_generator)
 
     def __str__(self):
-        return "FastPathKeywordOnlyPropertyConsumer"
+        return f"FastPathKeywordOnlyPropertyConsumer for {self.property}"
 
     def __repr__(self):
         return self.__str__()
@@ -4156,7 +4883,7 @@ class FastPathKeywordOnlyPropertyConsumer(PropertyConsumer):
         return FunctionSignature(
             result_type="RefPtr<CSSValue>",
             scope=FastPathKeywordOnlyPropertyConsumer._build_scope(property),
-            name=f"consume{property.id_without_prefix}",
+            name=f"consume{property.name_for_parsing_methods}",
             parameters=FastPathKeywordOnlyPropertyConsumer._build_parameters(keyword_fast_path_generator))
 
     def generate_call_string(self, *, range_string, id_string=None, current_shorthand_string=None, context_string):
@@ -4167,12 +4894,16 @@ class FastPathKeywordOnlyPropertyConsumer(PropertyConsumer):
     # For "direct" and "fast-path keyword only" consumers, we only generate the property specific
     # defintion if the property has been marked as exported.
 
+    @property
+    def is_exported(self):
+        return self.property.codegen_properties.parser_exported
+
     def generate_export_declaration(self, *, to):
-        if self.property.codegen_properties.parser_exported:
+        if self.is_exported:
             to.write(f"static {self.signature.declaration_string};")
 
     def generate_definition(self, *, to):
-        if self.property.codegen_properties.parser_exported:
+        if self.is_exported:
             to.write(f"{self.signature.definition_string}")
             to.write(f"{{")
             with to.indent():
@@ -4190,7 +4921,7 @@ class DirectPropertyConsumer(PropertyConsumer):
         self.signature = DirectPropertyConsumer._build_signature(self.property, self.term_generator)
 
     def __str__(self):
-        return "DirectPropertyConsumer"
+        return f"DirectPropertyConsumer for {self.property}"
 
     def __repr__(self):
         return self.__str__()
@@ -4213,7 +4944,7 @@ class DirectPropertyConsumer(PropertyConsumer):
         return FunctionSignature(
             result_type="RefPtr<CSSValue>",
             scope=DirectPropertyConsumer._build_scope(property),
-            name=f"consume{property.id_without_prefix}",
+            name=f"consume{property.name_for_parsing_methods}",
             parameters=DirectPropertyConsumer._build_parameters(term_generator))
 
     def generate_call_string(self, *, range_string, id_string=None, current_shorthand_string=None, context_string):
@@ -4225,12 +4956,16 @@ class DirectPropertyConsumer(PropertyConsumer):
     # For "direct" and "fast-path keyword only" consumers, we only generate the property specific
     # defintion if the property has been marked as exported.
 
+    @property
+    def is_exported(self):
+        return self.property.codegen_properties.parser_exported
+
     def generate_export_declaration(self, *, to):
-        if self.property.codegen_properties.parser_exported:
+        if self.is_exported:
             to.write(f"static {self.signature.declaration_string};")
 
     def generate_definition(self, *, to):
-        if self.property.codegen_properties.parser_exported:
+        if self.is_exported:
             to.write(f"{self.signature.definition_string}")
             to.write(f"{{")
             with to.indent():
@@ -4253,7 +4988,7 @@ class GeneratedPropertyConsumer(PropertyConsumer):
         self.signature = GeneratedPropertyConsumer._build_signature(property, self.requires_context)
 
     def __str__(self):
-        return "GeneratedPropertyConsumer"
+        return f"GeneratedPropertyConsumer for {self.property}"
 
     def __repr__(self):
         return self.__str__()
@@ -4276,13 +5011,13 @@ class GeneratedPropertyConsumer(PropertyConsumer):
         return FunctionSignature(
             result_type="RefPtr<CSSValue>",
             scope=GeneratedPropertyConsumer._build_scope(property),
-            name=f"consume{property.id_without_prefix}",
+            name=f"consume{property.name_for_parsing_methods}",
             parameters=GeneratedPropertyConsumer._build_parameters(property, requires_context))
 
     @staticmethod
     def _build_keyword_fast_path_generator(property):
-        if property.has_fast_path_keyword_terms:
-            return KeywordFastPathGenerator(f"isKeywordValidFor{property.id_without_prefix}", property.fast_path_keyword_terms_sorted_by_name)
+        if property.codegen_properties.parser_grammar.has_fast_path_keyword_terms:
+            return KeywordFastPathGenerator(f"isKeywordValidFor{property.name_for_parsing_methods}", property.codegen_properties.parser_grammar.fast_path_keyword_terms_sorted_by_name)
         return None
 
     def generate_call_string(self, *, range_string, id_string, current_shorthand_string, context_string):
@@ -4291,12 +5026,16 @@ class GeneratedPropertyConsumer(PropertyConsumer):
             parameters += [context_string]
         return self.signature.generate_call_string(parameters)
 
+    @property
+    def is_exported(self):
+        return self.property.codegen_properties.parser_exported
+
     def generate_export_declaration(self, *, to):
-        if self.property.codegen_properties.parser_exported:
+        if self.is_exported:
             to.write(f"static {self.signature.declaration_string};")
 
     def generate_definition(self, *, to):
-        if self.property.codegen_properties.parser_exported:
+        if self.is_exported:
             to.write(f"{self.signature.definition_string}")
         else:
             to.write(f"static {self.signature.definition_string}")
@@ -4334,6 +5073,8 @@ class BNFToken(StringEqualingEnum):
     GTGT    = re.compile(r'>>')
     LT      = re.compile(r'<')
     GT      = re.compile(r'>')
+    SQUOTE  = re.compile(r'\'')
+    ATPAREN = re.compile(r'@\(')
 
     # Multipliers.
     HASH    = re.compile(r'#')
@@ -4348,7 +5089,11 @@ class BNFToken(StringEqualingEnum):
     ANDAND  = re.compile(r'&&')
     COMMA   = re.compile(r',')
 
+    # Literals
+    SLASH   = re.compile(r'/')
+
     # Identifiers.
+    FUNC    = re.compile(r'[_a-zA-Z\-][_a-zA-Z0-9\-]*\(')
     ID      = re.compile(r'[_a-zA-Z\-][_a-zA-Z0-9\-]*')
 
     # Whitespace.
@@ -4392,12 +5137,29 @@ class BNFRepetitionModifier:
         self.max = None
 
     def __str__(self):
-        if self.kind == BNFRepetitionModifier.Kind.EXACT:
+        if self.kind is None:
+            return "[UNSET RepetitionModifier]"
+        elif self.kind == BNFRepetitionModifier.Kind.EXACT:
             return '{' + self.min + '}'
         elif self.kind == BNFRepetitionModifier.Kind.AT_LEAST:
             return '{' + self.min + ',}'
         elif self.kind == BNFRepetitionModifier.Kind.BETWEEN:
             return '{' + self.min + ',' + self.max + '}'
+        raise Exception("Unknown repetition kind: {self.kind}")
+
+
+# BNFAnnotations are introduced by trailing '@(foo-bar baz)' and are an
+# extension to the syntax used by CSS, added to allow passing additional
+# metadata to the generators for parser creation.
+class BNFAnnotation:
+    def __init__(self):
+        self.directives = []
+
+    def __str__(self):
+        return '@(' + ' '.join(self.directives) + ')'
+
+    def add_directive(self, directive):
+        self.directives.append(directive)
 
 
 # Node multipliers are introduced by trailing symbols like '#', '+', '*', and '{1,4}'.
@@ -4418,8 +5180,15 @@ class BNFNodeMultiplier:
     def __init__(self):
         self.kind = None
         self.range = None
+        self.annotation = None
 
     def __str__(self):
+        if self.annotation:
+            return self.stringified_without_annotation + str(self.annotation)
+        return self.stringified_without_annotation
+
+    @property
+    def stringified_without_annotation(self):
         if self.kind == BNFNodeMultiplier.Kind.ZERO_OR_ONE:
             return '?'
         elif self.kind == BNFNodeMultiplier.Kind.SPACE_SEPARATED_ZERO_OR_MORE:
@@ -4443,17 +5212,20 @@ class BNFNodeMultiplier:
         return ''
 
     def add(self, multiplier):
+        if self.annotation:
+            raise Exception("Invalid to stack another multiplier on top of a multiplier that has already received an annotation.")
+
         if self.kind is None:
             if isinstance(multiplier, BNFRepetitionModifier):
                 if multiplier.kind == BNFRepetitionModifier.Kind.EXACT:
                     self.kind = BNFNodeMultiplier.Kind.SPACE_SEPARATED_EXACT
-                    self.range = mulitplier
+                    self.range = multiplier
                 elif multiplier.kind == BNFRepetitionModifier.Kind.AT_LEAST:
                     self.kind = BNFNodeMultiplier.Kind.SPACE_SEPARATED_AT_LEAST
-                    self.range = mulitplier
+                    self.range = multiplier
                 elif multiplier.kind == BNFRepetitionModifier.Kind.BETWEEN:
                     self.kind = BNFNodeMultiplier.Kind.SPACE_SEPARATED_BETWEEN
-                    self.range = mulitplier
+                    self.range = multiplier
             else:
                 self.kind = BNFNodeMultiplier.Kind(multiplier)
         elif self.kind == BNFNodeMultiplier.Kind.ZERO_OR_ONE:
@@ -4472,13 +5244,13 @@ class BNFNodeMultiplier:
             if isinstance(multiplier, BNFRepetitionModifier):
                 if multiplier.kind == BNFRepetitionModifier.Kind.EXACT:
                     self.kind = BNFNodeMultiplier.Kind.COMMA_SEPARATED_EXACT
-                    self.range = mulitplier
+                    self.range = multiplier
                 elif multiplier.kind == BNFRepetitionModifier.Kind.AT_LEAST:
                     self.kind = BNFNodeMultiplier.Kind.COMMA_SEPARATED_AT_LEAST
-                    self.range = mulitplier
+                    self.range = multiplier
                 elif multiplier.kind == BNFRepetitionModifier.Kind.BETWEEN:
                     self.kind = BNFNodeMultiplier.Kind.COMMA_SEPARATED_BETWEEN
-                    self.range = mulitplier
+                    self.range = multiplier
             else:
                 raise Exception("Invalid to stack a non-range multiplier on top of '#'.")
         elif self.kind == BNFNodeMultiplier.Kind.COMMA_SEPARATED_EXACT:
@@ -4487,6 +5259,28 @@ class BNFNodeMultiplier:
             raise Exception("Invalid to stack another multiplier on top of a comma modifier range multiplier.")
         elif self.kind == BNFNodeMultiplier.Kind.COMMA_SEPARATED_BETWEEN:
             raise Exception("Invalid to stack another multiplier on top of a comma modifier range multiplier.")
+
+    def add_annotation(self, annotation):
+        if self.annotation:
+            raise Exception("Invalid to add an annotation to a multiplier node that already has an annotation.")
+
+        SUPPORTED_DIRECTIVES = {
+            'no-single-item-opt': {
+                BNFNodeMultiplier.Kind.SPACE_SEPARATED_ZERO_OR_MORE,
+                BNFNodeMultiplier.Kind.SPACE_SEPARATED_ONE_OR_MORE,
+                BNFNodeMultiplier.Kind.SPACE_SEPARATED_AT_LEAST,
+                BNFNodeMultiplier.Kind.COMMA_SEPARATED_ONE_OR_MORE,
+                BNFNodeMultiplier.Kind.COMMA_SEPARATED_AT_LEAST
+            },
+        }
+
+        for directive in annotation.directives:
+            if directive not in SUPPORTED_DIRECTIVES:
+                raise Exception(f"Unknown annotation directive '{directive}' for multiplier '{self}'.")
+            if self.kind not in SUPPORTED_DIRECTIVES[directive]:
+                raise Exception(f"Unsupported annotation directive '{directive}' for multiplier '{self}'.")
+
+        self.annotation = annotation
 
 
 # https://drafts.csswg.org/css-values-4/#component-combinators
@@ -4502,21 +5296,25 @@ class BNFGroupingNode:
         self.members = []
         self.multiplier = BNFNodeMultiplier()
         self.is_initial = is_initial
+        self.annotation = None
 
     def __str__(self):
         return self.stringified_without_multipliers + str(self.multiplier)
 
     @property
     def stringified_without_multipliers(self):
+        if self.is_initial:
+            return self.stringified_without_brackets_or_multipliers
+        return '[ ' + self.stringified_without_brackets_or_multipliers + ' ]'
+
+    @property
+    def stringified_without_brackets_or_multipliers(self):
         if self.kind != BNFGroupingNode.Kind.MATCH_ALL_ORDERED:
-            join_string = ' ' + self.kind.name + ' '
+            join_string = ' ' + self.kind.value + ' '
         else:
             join_string = ' '
 
-        members_string = join_string.join(str(member) for member in self.members)
-        if self.is_initial:
-            return members_string
-        return '[ ' + members_string + ' ]'
+        return join_string.join(str(member) for member in self.members)
 
     def add(self, member):
         self.members.append(member)
@@ -4524,6 +5322,60 @@ class BNFGroupingNode:
     @property
     def last(self):
         return self.members[-1]
+
+    def add_annotation(self, annotation):
+        if self.multiplier.kind:
+            self.multiplier.add_annotation(annotation)
+            return
+
+        if self.annotation:
+            raise Exception("Invalid to add an annotation to a grouping node that already has an annotation.")
+
+        SUPPORTED_DIRECTIVES = {
+            'primitive-pair': {
+                BNFGroupingNode.Kind.MATCH_ALL_ORDERED,
+                BNFGroupingNode.Kind.MATCH_ALL_ANY_ORDER,
+                BNFGroupingNode.Kind.MATCH_ONE_OR_MORE_ANY_ORDER,
+            },
+        }
+
+        for directive in annotation.directives:
+            if directive not in SUPPORTED_DIRECTIVES:
+                raise Exception(f"Unknown annotation directive '{directive}' for grouping '{self}'.")
+            if self.kind not in SUPPORTED_DIRECTIVES[directive]:
+                raise Exception(f"Unsupported annotation directive '{directive}' for grouping '{self}'.")
+
+        self.annotation = annotation
+
+
+# https://drafts.csswg.org/css-values-4/#functional-notation
+class BNFFunctionNode:
+    def __init__(self, name):
+        self.name = name
+        self.parameter_group = BNFGroupingNode()
+        self.multiplier = BNFNodeMultiplier()
+
+    def __str__(self):
+        return self.stringified_without_multipliers + str(self.multiplier)
+
+    @property
+    def stringified_without_multipliers(self):
+        return self.name + '(' + self.parameter_group.stringified_without_brackets_or_multipliers + ')'
+
+    @property
+    def kind(self):
+        return self.parameter_group.kind
+
+    @kind.setter
+    def kind(self, kind):
+        self.parameter_group.kind = kind
+
+    def add(self, member):
+        self.parameter_group.add(member)
+
+    @property
+    def last(self):
+        return self.parameter_group.last
 
 
 class BNFReferenceNode:
@@ -4533,13 +5385,15 @@ class BNFReferenceNode:
             self.max = None
 
         def __str__(self):
-            return f"[{self.min},{self.max}]"
+            return '[' + str(self.min) + ',' + str(self.max) + ']'
 
     def __init__(self, *, is_internal=False):
         self.name = None
         self.is_internal = is_internal
+        self.is_function_reference = False
         self.attributes = []
         self.multiplier = BNFNodeMultiplier()
+        self.annotation = None
 
     def __str__(self):
         return self.stringified_without_multipliers + str(self.multiplier)
@@ -4553,18 +5407,40 @@ class BNFReferenceNode:
             prefix = '<'
             suffix = '>'
 
+        if self.is_function_reference:
+            name = self.name + '()'
+        else:
+            name = self.name
+
         if self.attributes:
-            return prefix + str(self.name) + ' ' + ' '.join(str(attribute) for attribute in self.attributes) + suffix
-        return prefix + str(self.name) + suffix
+            return prefix + str(name) + ' ' + ' '.join(str(attribute) for attribute in self.attributes) + suffix
+        return prefix + str(name) + suffix
 
     def add_attribute(self, attribute):
         self.attributes.append(attribute)
+
+    def add_annotation(self, annotation):
+        if self.multiplier.kind:
+            self.multiplier.add_annotation(annotation)
+            return
+
+        if self.annotation:
+            raise Exception("Invalid to add an annotation to a reference node that already has an annotation.")
+
+        SUPPORTED_DIRECTIVES = {}
+
+        for directive in annotation.directives:
+            if directive not in SUPPORTED_DIRECTIVES:
+                raise Exception(f"Unknown annotation directive '{directive}' for reference node '{self}'.")
+
+        self.annotation = annotation
 
 
 class BNFKeywordNode:
     def __init__(self, keyword):
         self.keyword = keyword
         self.multiplier = BNFNodeMultiplier()
+        self.annotation = None
 
     def __str__(self):
         return self.stringified_without_multipliers + str(self.multiplier)
@@ -4572,6 +5448,52 @@ class BNFKeywordNode:
     @property
     def stringified_without_multipliers(self):
         return self.keyword
+
+    def add_annotation(self, annotation):
+        if self.multiplier.kind:
+            self.multiplier.add_annotation(annotation)
+            return
+
+        if self.annotation:
+            raise Exception("Invalid to add an annotation to a keyword node that already has an annotation.")
+
+        SUPPORTED_DIRECTIVES = {}
+
+        for directive in annotation.directives:
+            if directive not in SUPPORTED_DIRECTIVES:
+                raise Exception(f"Unknown annotation directive '{directive}' for keyword '{self}'.")
+
+        self.annotation = annotation
+
+
+class BNFLiteralNode:
+    def __init__(self, value=None):
+        self.value = value
+        self.multiplier = BNFNodeMultiplier()
+        self.annotation = None
+
+    def __str__(self):
+        return self.stringified_without_multipliers + str(self.multiplier)
+
+    @property
+    def stringified_without_multipliers(self):
+        return str(self.value)
+
+    def add_annotation(self, annotation):
+        if self.multiplier.kind:
+            self.multiplier.add_annotation(annotation)
+            return
+
+        if self.annotation:
+            raise Exception("Invalid to add an annotation to a literal node that already has an annotation.")
+
+        SUPPORTED_DIRECTIVES = {}
+
+        for directive in annotation.directives:
+            if directive not in SUPPORTED_DIRECTIVES:
+                raise Exception(f"Unknown annotation directive '{directive}' for literal '{self}'.")
+
+        self.annotation = annotation
 
 
 class BNFParserState(enum.Enum):
@@ -4583,7 +5505,8 @@ class BNFParserState(enum.Enum):
     INTERNAL_REFERENCE_INITIAL = enum.auto()
     INTERNAL_REFERENCE_SEEN_ID = enum.auto()
     REFERENCE_INITIAL = enum.auto()
-    REFERENCE_SEEN_ID = enum.auto()
+    REFERENCE_SEEN_FUNCTION_OPEN = enum.auto()
+    REFERENCE_SEEN_ID_OR_FUNCTION = enum.auto()
     REFERENCE_RANGE_INITIAL = enum.auto()
     REFERENCE_RANGE_SEEN_MIN = enum.auto()
     REFERENCE_RANGE_SEEN_MIN_AND_COMMA = enum.auto()
@@ -4592,6 +5515,10 @@ class BNFParserState(enum.Enum):
     REPETITION_MODIFIER_SEEN_MIN = enum.auto()
     REPETITION_MODIFIER_SEEN_MIN_AND_COMMA = enum.auto()
     REPETITION_MODIFIER_SEEN_MAX = enum.auto()
+    QUOTED_LITERAL_INITIAL = enum.auto()
+    QUOTED_LITERAL_SEEN_ID = enum.auto()
+    ANNOTATION_INITIAL = enum.auto()
+    ANNOTATION_SEEN_ID = enum.auto()
     DONE = enum.auto()
 
 
@@ -4613,10 +5540,17 @@ class BNFParser:
         BNFToken.QMARK.name,
     }
 
+    SUPPORTED_UNQUOTED_LITERALS = {
+        BNFToken.COMMA.name,
+        BNFToken.SLASH.name
+    }
+
     DEBUG_PRINT_STATE = 0
     DEBUG_PRINT_TOKENS = 0
 
-    def __init__(self, data):
+    def __init__(self, parsing_context, key_path, data):
+        self.parsing_context = parsing_context
+        self.key_path = key_path
         self.data = data
         self.root = BNFGroupingNode(is_initial=True)
         self.state_stack = []
@@ -4632,7 +5566,8 @@ class BNFParser:
             BNFParserState.INTERNAL_REFERENCE_INITIAL: BNFParser.parse_INTERNAL_REFERENCE_INITIAL,
             BNFParserState.INTERNAL_REFERENCE_SEEN_ID: BNFParser.parse_INTERNAL_REFERENCE_SEEN_ID,
             BNFParserState.REFERENCE_INITIAL: BNFParser.parse_REFERENCE_INITIAL,
-            BNFParserState.REFERENCE_SEEN_ID: BNFParser.parse_REFERENCE_SEEN_ID,
+            BNFParserState.REFERENCE_SEEN_FUNCTION_OPEN: BNFParser.parse_REFERENCE_SEEN_FUNCTION_OPEN,
+            BNFParserState.REFERENCE_SEEN_ID_OR_FUNCTION: BNFParser.parse_REFERENCE_SEEN_ID_OR_FUNCTION,
             BNFParserState.REFERENCE_RANGE_INITIAL: BNFParser.parse_REFERENCE_RANGE_INITIAL,
             BNFParserState.REFERENCE_RANGE_SEEN_MIN: BNFParser.parse_REFERENCE_RANGE_SEEN_MIN,
             BNFParserState.REFERENCE_RANGE_SEEN_MIN_AND_COMMA: BNFParser.parse_REFERENCE_RANGE_SEEN_MIN_AND_COMMA,
@@ -4641,6 +5576,10 @@ class BNFParser:
             BNFParserState.REPETITION_MODIFIER_SEEN_MIN: BNFParser.parse_REPETITION_MODIFIER_SEEN_MIN,
             BNFParserState.REPETITION_MODIFIER_SEEN_MIN_AND_COMMA: BNFParser.parse_REPETITION_MODIFIER_SEEN_MIN_AND_COMMA,
             BNFParserState.REPETITION_MODIFIER_SEEN_MAX: BNFParser.parse_REPETITION_MODIFIER_SEEN_MAX,
+            BNFParserState.QUOTED_LITERAL_INITIAL: BNFParser.parse_QUOTED_LITERAL_INITIAL,
+            BNFParserState.QUOTED_LITERAL_SEEN_ID: BNFParser.parse_QUOTED_LITERAL_SEEN_ID,
+            BNFParserState.ANNOTATION_INITIAL: BNFParser.parse_ANNOTATION_INITIAL,
+            BNFParserState.ANNOTATION_SEEN_ID: BNFParser.parse_ANNOTATION_SEEN_ID,
         }
 
         for token in BNFLexer(self.data):
@@ -4650,7 +5589,7 @@ class BNFParser:
             state = self.state_stack[-1]
 
             if BNFParser.DEBUG_PRINT_STATE:
-                print("STATE: " + state.state.name)
+                print("STATE: " + state.state.name + " " + str(state.node))
             if BNFParser.DEBUG_PRINT_TOKENS:
                 print("TOKEN: " + str(token))
             PARSER_THUNKS[state.state](self, token, state)
@@ -4667,7 +5606,11 @@ class BNFParser:
         self.state_stack.append(BNFParserStateInfo(new_state, new_node))
 
     def pop(self):
-        self.state_stack.pop()
+        return self.state_stack.pop()
+
+    @property
+    def top(self):
+        return self.state_stack[-1]
 
     def unexpected(self, token, state):
         return Exception(f"Unexpected token '{token}' found while in state '{state.state.name}'")
@@ -4679,31 +5622,40 @@ class BNFParser:
         self.push(BNFParserState.UNKNOWN_GROUPING_INITIAL, self.root)
 
     def exit_initial_grouping(self, token, state):
-        if state.node.is_initial:
+        if isinstance(state.node, BNFGroupingNode) and state.node.is_initial:
             self.transition_top(to=BNFParserState.DONE)
             return
         raise self.unexpected(token, state)
 
     # Non-initial BNFGroupingNode. e.g. "[foo bar]", "[foo | bar]", etc.
     def enter_new_grouping(self, token, state):
-        new_grouping = BNFGroupingNode()
-        state.node.add(new_grouping)
-        self.push(BNFParserState.UNKNOWN_GROUPING_INITIAL, new_grouping)
+        self.push(BNFParserState.UNKNOWN_GROUPING_INITIAL, BNFGroupingNode())
 
     def exit_grouping(self, token, state):
-        if not state.node.is_initial:
+        if isinstance(state.node, BNFGroupingNode) and not state.node.is_initial:
             self.pop()
+            self.top.node.add(state.node)
+            return
+        raise self.unexpected(token, state)
+
+    # BNFFunctionNode. e.g. "foo(<bar>)"
+    def enter_new_function(self, token, state):
+        self.push(BNFParserState.UNKNOWN_GROUPING_INITIAL, BNFFunctionNode(token.value[:-1]))
+
+    def exit_function(self, token, state):
+        if isinstance(state.node, BNFFunctionNode):
+            self.pop()
+            self.top.node.add(state.node)
             return
         raise self.unexpected(token, state)
 
     # Internal BNFReferenceNodes. e.g. "<<values>>"
     def enter_new_internal_reference(self, token, state):
-        new_reference = BNFReferenceNode(is_internal=True)
-        state.node.add(new_reference)
-        self.push(BNFParserState.INTERNAL_REFERENCE_INITIAL, new_reference)
+        self.push(BNFParserState.INTERNAL_REFERENCE_INITIAL, BNFReferenceNode(is_internal=True))
 
     def exit_internal_reference(self, token, state):
         self.pop()
+        self.top.node.add(state.node)
 
     # Non-internal BNFReferenceNodes. e.g. "<length>"
     def enter_new_reference(self, token, state):
@@ -4716,21 +5668,35 @@ class BNFParser:
 
     # BNFRepetitionModifier. e.g. {A,B}
     def enter_new_repetition_modifier(self, token, state):
-        new_repetition_modifier = BNFRepetitionModifier()
-        state.node.last.multiplier.add(new_repetition_modifier)
-        self.push(BNFParserState.REPETITION_MODIFIER_INITIAL, new_repetition_modifier)
+        self.push(BNFParserState.REPETITION_MODIFIER_INITIAL, BNFRepetitionModifier())
 
     def exit_repetition_modifier(self, token, state):
         self.pop()
+        self.top.node.last.multiplier.add(state.node)
 
     # BNFReferenceNode.RangeAttribute. e.g. [0,inf]
     def enter_range_attribute(self, token, state):
-        new_range_attribute = BNFReferenceNode.RangeAttribute()
-        state.node.add_attribute(new_range_attribute)
-        self.push(BNFParserState.REFERENCE_RANGE_INITIAL, new_range_attribute)
+        self.push(BNFParserState.REFERENCE_RANGE_INITIAL, BNFReferenceNode.RangeAttribute())
 
     def exit_range_attribute(self, token, state):
         self.pop()
+        self.top.node.add_attribute(state.node)
+
+    # BNFLiteralNode. e.g. '['
+    def enter_new_quoted_literal(self, token, state):
+        self.push(BNFParserState.QUOTED_LITERAL_INITIAL, BNFLiteralNode())
+
+    def exit_quoted_literal(self, token, state):
+        self.pop()
+        self.top.node.add(state.node)
+
+    # BNFAnnotation. e.g. @(foo-bar baz)
+    def enter_new_annotation(self, token, state):
+        self.push(BNFParserState.ANNOTATION_INITIAL, BNFAnnotation())
+
+    def exit_annotation(self, token, state):
+        self.pop()
+        self.top.node.last.add_annotation(state.node)
 
     # MARK: Parsing Thunks.
 
@@ -4750,9 +5716,29 @@ class BNFParser:
             self.enter_new_reference(token, state)
             return
 
+        if token.name == BNFToken.FUNC:
+            self.transition_top(to=BNFParserState.UNKNOWN_GROUPING_SEEN_TERM)
+            self.enter_new_function(token, state)
+            return
+
         if token.name == BNFToken.ID:
             self.transition_top(to=BNFParserState.UNKNOWN_GROUPING_SEEN_TERM)
             state.node.add(BNFKeywordNode(token.value))
+            return
+
+        if token.name == BNFToken.SQUOTE:
+            self.transition_top(to=BNFParserState.UNKNOWN_GROUPING_SEEN_TERM)
+            self.enter_new_quoted_literal(token, state)
+            return
+
+        if token.name in BNFParser.SUPPORTED_UNQUOTED_LITERALS:
+            self.transition_top(to=BNFParserState.UNKNOWN_GROUPING_SEEN_TERM)
+            state.node.add(BNFLiteralNode(token.value))
+            return
+
+        if token.name == BNFToken.RPAREN:
+            self.transition_top(to=BNFParserState.UNKNOWN_GROUPING_SEEN_TERM)
+            self.exit_function(token, state)
             return
 
         raise self.unexpected(token, state)
@@ -4764,6 +5750,10 @@ class BNFParser:
 
         if token.name == BNF_EOF_TOKEN:
             self.exit_initial_grouping(token, state)
+            return
+
+        if token.name == BNFToken.RPAREN:
+            self.exit_function(token, state)
             return
 
         if token.name == BNFToken.LSQUARE:
@@ -4781,9 +5771,24 @@ class BNFParser:
             self.enter_new_reference(token, state)
             return
 
+        if token.name == BNFToken.FUNC:
+            self.transition_top(to=BNFParserState.KNOWN_ORDERED_GROUPING)
+            self.enter_new_function(token, state)
+            return
+
         if token.name == BNFToken.ID:
             self.transition_top(to=BNFParserState.KNOWN_ORDERED_GROUPING)
             state.node.add(BNFKeywordNode(token.value))
+            return
+
+        if token.name == BNFToken.SQUOTE:
+            self.transition_top(to=BNFParserState.KNOWN_ORDERED_GROUPING)
+            self.enter_new_quoted_literal(token, state)
+            return
+
+        if token.name in BNFParser.SUPPORTED_UNQUOTED_LITERALS:
+            self.transition_top(to=BNFParserState.KNOWN_ORDERED_GROUPING)
+            state.node.add(BNFLiteralNode(token.value))
             return
 
         if token.name in BNFParser.COMBINATOR_FOR_TOKEN:
@@ -4793,6 +5798,10 @@ class BNFParser:
 
         if token.name in BNFParser.SIMPLE_MULTIPLIERS:
             state.node.last.multiplier.add(token.value)
+            return
+
+        if token.name == BNFToken.ATPAREN:
+            self.enter_new_annotation(token, state)
             return
 
         if token.name == BNFToken.LBRACE:
@@ -4810,6 +5819,10 @@ class BNFParser:
             self.exit_initial_grouping(token, state)
             return
 
+        if token.name == BNFToken.RPAREN:
+            self.exit_function(token, state)
+            return
+
         if token.name == BNFToken.LSQUARE:
             self.enter_new_grouping(token, state)
             return
@@ -4824,6 +5837,26 @@ class BNFParser:
 
         if token.name == BNFToken.ID:
             state.node.add(BNFKeywordNode(token.value))
+            return
+
+        if token.name == BNFToken.SQUOTE:
+            self.enter_new_quoted_literal(token, state)
+            return
+
+        if token.name in BNFParser.SUPPORTED_UNQUOTED_LITERALS:
+            state.node.add(BNFLiteralNode(token.value))
+            return
+
+        if token.name == BNFToken.FUNC:
+            self.enter_new_function(token, state)
+            return
+
+        if token.name in BNFParser.SIMPLE_MULTIPLIERS:
+            state.node.last.multiplier.add(token.value)
+            return
+
+        if token.name == BNFToken.ATPAREN:
+            self.enter_new_annotation(token, state)
             return
 
         raise self.unexpected(token, state)
@@ -4844,12 +5877,19 @@ class BNFParser:
             self.enter_new_reference(token, state)
             return
 
+        if token.name == BNFToken.FUNC:
+            self.transition_top(to=BNFParserState.KNOWN_COMBINATOR_GROUPING_COMBINATOR_OR_CLOSE_REQUIRED)
+            self.enter_new_function(token, state)
+            return
+
         if token.name == BNFToken.ID:
             self.transition_top(to=BNFParserState.KNOWN_COMBINATOR_GROUPING_COMBINATOR_OR_CLOSE_REQUIRED)
             state.node.add(BNFKeywordNode(token.value))
             return
 
-        if token.name == BNFToken.RSQUARE or token.name == EOF:
+        # FIXME: Does it make any sense to support literals here? e.g. [ <foo> && , ]
+
+        if token.name == BNFToken.RSQUARE or token.name == BNFToken.FUNC or token.name == EOF:
             raise Exception(f"Unexpected token '{token}'. Groupings can't end in a combinator.")
         raise self.unexpected(token, state)
 
@@ -4862,6 +5902,10 @@ class BNFParser:
             self.exit_initial_grouping(token, state)
             return
 
+        if token.name == BNFToken.RPAREN:
+            self.exit_function(token, state)
+            return
+
         if token.name in BNFParser.COMBINATOR_FOR_TOKEN:
             if state.node.kind == BNFParser.COMBINATOR_FOR_TOKEN[token.name]:
                 self.transition_top(to=BNFParserState.KNOWN_COMBINATOR_GROUPING_TERM_REQUIRED)
@@ -4872,6 +5916,10 @@ class BNFParser:
             state.node.last.multiplier.add(token.value)
             return
 
+        if token.name == BNFToken.ATPAREN:
+            self.enter_new_annotation(token, state)
+            return
+
         if token.name == BNFToken.LBRACE:
             self.enter_new_repetition_modifier(token, state)
             return
@@ -4879,21 +5927,30 @@ class BNFParser:
         raise self.unexpected(token, state)
 
     def parse_REFERENCE_INITIAL(self, token, state):
-        if token.name == BNFToken.LT:
-            state.node.is_special = True
+        if token.name == BNFToken.FUNC:
+            self.transition_top(to=BNFParserState.REFERENCE_SEEN_FUNCTION_OPEN)
+            state.node.is_function_reference = True
+            state.node.name = token.value[:-1]
             return
 
         if token.name == BNFToken.ID:
-            self.transition_top(to=BNFParserState.REFERENCE_SEEN_ID)
+            self.transition_top(to=BNFParserState.REFERENCE_SEEN_ID_OR_FUNCTION)
             state.node.name = token.value
             return
 
         raise self.unexpected(token, state)
 
-    def parse_REFERENCE_SEEN_ID(self, token, state):
+    def parse_REFERENCE_SEEN_FUNCTION_OPEN(self, token, state):
+        if token.name == BNFToken.RPAREN:
+            self.transition_top(to=BNFParserState.REFERENCE_SEEN_ID_OR_FUNCTION)
+            return
+
+        raise self.unexpected(token, state)
+
+    def parse_REFERENCE_SEEN_ID_OR_FUNCTION(self, token, state):
         if token.name == BNFToken.ID:
             state.node.add_attribute(token.value)
-            # Remain in BNFParserState.REFERENCE_SEEN_ID.
+            # Remain in BNFParserState.REFERENCE_SEEN_ID_OR_FUNCTION.
             return
 
         if token.name == BNFToken.LSQUARE:
@@ -5001,6 +6058,38 @@ class BNFParser:
 
         raise self.unexpected(token, state)
 
+    def parse_QUOTED_LITERAL_INITIAL(self, token, state):
+        # Take the value regardless of token name.
+        self.transition_top(to=BNFParserState.QUOTED_LITERAL_SEEN_ID)
+        state.node.value = token.value
+
+    def parse_QUOTED_LITERAL_SEEN_ID(self, token, state):
+        if token.name == BNFToken.SQUOTE:
+            self.exit_quoted_literal(token, state)
+            return
+
+        # Append the value regardles of the token value.
+        state.node.value = state.node.value + token.value
+
+    def parse_ANNOTATION_INITIAL(self, token, state):
+        if token.name == BNFToken.ID:
+            self.transition_top(to=BNFParserState.ANNOTATION_SEEN_ID)
+            state.node.add_directive(token.value)
+            return
+
+        raise self.unexpected(token, state)
+
+    def parse_ANNOTATION_SEEN_ID(self, token, state):
+        if token.name == BNFToken.ID:
+            state.node.add_directive(token.value)
+            return
+
+        if token.name == BNFToken.RPAREN:
+            self.exit_annotation(token, state)
+            return
+
+        raise self.unexpected(token, state)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Process CSS property definitions.')
@@ -5008,19 +6097,30 @@ def main():
     parser.add_argument('--defines')
     parser.add_argument('--gperf-executable')
     parser.add_argument('-v', '--verbose', action='store_true')
+    parser.add_argument('--dump-unused-grammars', action='store_true')
+    parser.add_argument('--check-unused-grammars-values', action='store_true')
     args = parser.parse_args()
 
     with open(args.properties, "r") as properties_file:
         properties_json = json.load(properties_file)
 
-    parsing_context = ParsingContext(properties_json, defines_string=args.defines, parsing_for_codegen=True, verbose=args.verbose)
+    parsing_context = ParsingContext(properties_json, defines_string=args.defines, parsing_for_codegen=True, check_unused_grammars_values=args.check_unused_grammars_values, verbose=args.verbose)
     parsing_context.parse_shared_grammar_rules()
-    parsing_context.parse_properties()
+    parsing_context.parse_properties_and_descriptors()
 
     if args.verbose:
-        print(f"{len(parsing_context.parsed_properties.properties)} properties active for code generation")
+        print(f"{len(parsing_context.parsed_shared_grammar_rules.rules)} shared grammar rules active for code generation")
+        for set in parsing_context.parsed_properties_and_descriptors.all_sets:
+            print(f"{len(set.all)} {set.name} {set.noun} active for code generation")
+        print(f"{len(parsing_context.parsed_properties_and_descriptors.all_unique)} uniquely named properties and descriptors active for code generation")
 
-    generation_context = GenerationContext(parsing_context.parsed_properties, parsing_context.parsed_shared_grammar_rules, verbose=args.verbose, gperf_executable=args.gperf_executable)
+    if args.dump_unused_grammars:
+        for property in parsing_context.parsed_properties_and_descriptors.all_properties_and_descriptors:
+            if property.codegen_properties.parser_grammar_unused:
+                print(str(property).rjust(40, " ") + "  " + str(property.codegen_properties.parser_grammar_unused.root_term))
+                print("           ".rjust(40, " ") + "  " + str(property.codegen_properties.parser_grammar_unused_reason))
+
+    generation_context = GenerationContext(parsing_context.parsed_properties_and_descriptors, parsing_context.parsed_shared_grammar_rules, verbose=args.verbose, gperf_executable=args.gperf_executable)
 
     generators = [
         GenerateCSSPropertyNames,

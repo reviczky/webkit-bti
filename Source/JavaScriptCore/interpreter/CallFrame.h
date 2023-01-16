@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include "AbstractPC.h"
 #include "CPU.h"
 #include "CalleeBits.h"
 #include "MacroAssemblerCodeRef.h"
@@ -178,7 +177,7 @@ using JSInstruction = BaseInstruction<JSOpcodeTraits>;
         inline SUPPRESS_ASAN CodeBlock* unsafeCodeBlock() const;
         inline JSScope* scope(int scopeRegisterOffset) const;
 
-        JS_EXPORT_PRIVATE bool isAnyWasmCallee();
+        JS_EXPORT_PRIVATE bool isAnyWasmCallee() const;
 
         // Global object in which the currently executing code was defined.
         // Differs from VM::deprecatedVMEntryGlobalObject() during function calls across web browser frames.
@@ -205,11 +204,10 @@ using JSInstruction = BaseInstruction<JSOpcodeTraits>;
 
         static ptrdiff_t callerFrameOffset() { return OBJECT_OFFSETOF(CallerFrameAndPC, callerFrame); }
 
-        ReturnAddressPtr returnPC() const { return ReturnAddressPtr::fromTaggedPC(callerFrameAndPC().returnPC, this + CallerFrameAndPC::sizeInRegisters); }
+        void* returnPCForInspection() const { return removeCodePtrTag(callerFrameAndPC().returnPC); }
         bool hasReturnPC() const { return !!callerFrameAndPC().returnPC; }
         void clearReturnPC() { callerFrameAndPC().returnPC = nullptr; }
         static ptrdiff_t returnPCOffset() { return OBJECT_OFFSETOF(CallerFrameAndPC, returnPC); }
-        AbstractPC abstractReturnPC(VM& vm) { return AbstractPC(vm, this); }
 
         bool callSiteBitsAreBytecodeOffset() const;
         bool callSiteBitsAreCodeOriginIndex() const;
@@ -385,6 +383,11 @@ JS_EXPORT_PRIVATE bool isFromJSCode(void* returnAddress);
 #define DECLARE_CALL_FRAME(vm) ((vm).topCallFrame)
 #endif
 
+#if USE(BUILTIN_FRAME_ADDRESS)
+#define DECLARE_WASM_CALL_FRAME(instance) DECLARE_CALL_FRAME(instance->vm())
+#else
+#define DECLARE_WASM_CALL_FRAME(instance) ((instance)->temporaryCallFrame())
+#endif
 
 } // namespace JSC
 

@@ -23,7 +23,6 @@
 #if USE(GSTREAMER_WEBRTC)
 
 #include "GStreamerRegistryScanner.h"
-#include "GStreamerVideoCaptureSource.h"
 #include "GStreamerVideoEncoder.h"
 #include <wtf/glib/WTFGType.h>
 
@@ -121,14 +120,16 @@ bool RealtimeOutgoingVideoSourceGStreamer::setPayloadType(const GRefPtr<GstCaps>
         if (!profile)
             profile = "baseline";
         gst_caps_set_simple(encoderCaps.get(), "profile", G_TYPE_STRING, profile, nullptr);
+    } else if (encoding == "h265"_s) {
+        encoderCaps = adoptGRef(gst_caps_new_empty_simple("video/x-h265"));
+        // FIXME: profile tier level?
     } else {
         GST_ERROR_OBJECT(m_bin.get(), "Unsupported outgoing video encoding: %s", encodingName);
         return false;
     }
 
-    // FIXME: Re-enable auto-header-extension. Currently triggers caps negotiation error.
     // Align MTU with libwebrtc implementation, also helping to reduce packet fragmentation.
-    g_object_set(m_payloader.get(), "auto-header-extension", FALSE, "mtu", 1200, nullptr);
+    g_object_set(m_payloader.get(), "mtu", 1200, nullptr);
 
     if (!webrtcVideoEncoderSetFormat(WEBKIT_WEBRTC_VIDEO_ENCODER(m_encoder.get()), WTFMove(encoderCaps))) {
         GST_ERROR_OBJECT(m_bin.get(), "Unable to set encoder format");

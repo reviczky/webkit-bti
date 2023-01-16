@@ -1242,6 +1242,7 @@ bool RenderStyle::changeRequiresRepaintIfText(const RenderStyle& other, OptionSe
         || m_visualData->textDecorationLine != other.m_visualData->textDecorationLine
         || m_rareNonInheritedData->textDecorationStyle != other.m_rareNonInheritedData->textDecorationStyle
         || m_rareNonInheritedData->textDecorationColor != other.m_rareNonInheritedData->textDecorationColor
+        || m_rareNonInheritedData->textDecorationThickness != other.m_rareNonInheritedData->textDecorationThickness
         || m_rareInheritedData->textDecorationSkipInk != other.m_rareInheritedData->textDecorationSkipInk
         || m_rareInheritedData->textFillColor != other.m_rareInheritedData->textFillColor
         || m_rareInheritedData->textStrokeColor != other.m_rareInheritedData->textStrokeColor
@@ -2669,6 +2670,12 @@ void RenderStyle::setNonInheritedCustomPropertyValue(const AtomString& name, Ref
     m_rareNonInheritedData.access().customProperties.access().setCustomPropertyValue(name, WTFMove(value));
 }
 
+bool RenderStyle::customPropertiesEqual(const RenderStyle& other) const
+{
+    return m_rareNonInheritedData->customProperties == other.m_rareNonInheritedData->customProperties
+        && m_rareInheritedData->customProperties == other.m_rareInheritedData->customProperties;
+}
+
 const LengthBox& RenderStyle::scrollMargin() const
 {
     return m_rareNonInheritedData->scrollMargin;
@@ -2830,7 +2837,7 @@ bool RenderStyle::hasReferenceFilterOnly() const
     if (!hasFilter())
         return false;
     auto& filterOperations = m_rareNonInheritedData->filter->operations;
-    return filterOperations.size() == 1 && filterOperations.at(0)->type() == FilterOperation::REFERENCE;
+    return filterOperations.size() == 1 && filterOperations.at(0)->type() == FilterOperation::Type::Reference;
 }
 
 float RenderStyle::outlineWidth() const

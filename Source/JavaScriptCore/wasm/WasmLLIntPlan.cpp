@@ -39,6 +39,7 @@
 #include "WasmCallee.h"
 #include "WasmLLIntGenerator.h"
 #include "WasmTypeDefinitionInlines.h"
+#include <wtf/GraphNodeWorklist.h>
 
 namespace JSC { namespace Wasm {
 
@@ -97,6 +98,14 @@ void LLIntPlan::compileFunction(uint32_t functionIndex)
         return;
     }
 
+    Locker locker { m_lock };
+
+    for (auto successor : parseAndCompileResult->get()->tailCallSuccessors())
+        addTailCallEdge(m_moduleInformation->importFunctionCount() + parseAndCompileResult->get()->functionIndex(), successor);
+
+    if (parseAndCompileResult->get()->tailCallClobbersInstance())
+        m_moduleInformation->addClobberingTailCall(m_moduleInformation->importFunctionCount() + parseAndCompileResult->get()->functionIndex());
+
     m_wasmInternalFunctions[functionIndex] = WTFMove(*parseAndCompileResult);
 }
 
@@ -151,6 +160,8 @@ void LLIntPlan::didCompleteCompilation()
 
         m_entryThunks = FINALIZE_CODE(linkBuffer, JITCompilationPtrTag, "Wasm LLInt entry thunks");
         m_callees = m_calleesVector.data();
+        if (!m_moduleInformation->clobberingTailCalls().isEmpty())
+            computeTransitiveTailCalls();
     }
 
     if (m_compilerMode == CompilerMode::Validation)
@@ -163,7 +174,8 @@ void LLIntPlan::didCompleteCompilation()
             CCallHelpers jit;
             // The LLInt always bounds checks
             MemoryMode mode = MemoryMode::BoundsChecking;
-            std::unique_ptr<InternalFunction> function = createJSToWasmWrapper(jit, signature, &m_unlinkedWasmToWasmCalls[functionIndex], m_moduleInformation.get(), mode, functionIndex);
+            Ref<EmbedderEntrypointCallee> callee = EmbedderEntrypointCallee::create();
+            std::unique_ptr<InternalFunction> function = createJSToWasmWrapper(jit, callee.get(), signature, &m_unlinkedWasmToWasmCalls[functionIndex], m_moduleInformation.get(), mode, functionIndex);
 
             LinkBuffer linkBuffer(jit, nullptr, LinkBuffer::Profile::Wasm, JITCompilationCanFail);
             if (UNLIKELY(linkBuffer.didFailToAllocate())) {
@@ -175,11 +187,7 @@ void LLIntPlan::didCompleteCompilation()
                 FINALIZE_CODE(linkBuffer, JITCompilationPtrTag, "Embedder->WebAssembly entrypoint[%i] %s", functionIndex, signature.toString().ascii().data()),
                 nullptr);
 
-            Ref<EmbedderEntrypointCallee> callee = EmbedderEntrypointCallee::create(WTFMove(function->entrypoint));
-            // FIXME: remove this repatchPointer - just pass in the callee directly
-            // https://bugs.webkit.org/show_bug.cgi?id=166462
-            for (auto& moveLocation : function->calleeMoveLocations)
-                MacroAssembler::repatchPointer(moveLocation, CalleeBits::boxWasm(callee.ptr()));
+            callee->setEntrypoint(WTFMove(function->entrypoint));
 
             auto result = m_embedderCallees.add(functionIndex, WTFMove(callee));
             ASSERT_UNUSED(result, result.isNewEntry);
@@ -238,6 +246,34 @@ bool LLIntPlan::didReceiveFunctionData(unsigned, const FunctionData&)
     return true;
 }
 
+void LLIntPlan::addTailCallEdge(uint32_t callerIndex, uint32_t calleeIndex)
+{
+    auto it = m_tailCallGraph.find(calleeIndex);
+    if (it == m_tailCallGraph.end())
+        it = m_tailCallGraph.add(calleeIndex, TailCallGraph::MappedType()).iterator;
+    it->value.add(callerIndex);
+}
+
+void LLIntPlan::computeTransitiveTailCalls() const
+{
+    GraphNodeWorklist<uint32_t, HashSet<uint32_t, IntHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>> worklist;
+
+    for (auto clobberingTailCall : m_moduleInformation->clobberingTailCalls())
+        worklist.push(clobberingTailCall);
+
+    while (worklist.notEmpty()) {
+        auto node = worklist.pop();
+        auto it = m_tailCallGraph.find(node);
+        if (it == m_tailCallGraph.end())
+            continue;
+        for (const auto &successor : it->value) {
+            if (worklist.saw(successor))
+                continue;
+            m_moduleInformation->addClobberingTailCall(successor);
+            worklist.push(successor);
+        }
+    }
+}
 } } // namespace JSC::Wasm
 
 #endif // ENABLE(WEBASSEMBLY)

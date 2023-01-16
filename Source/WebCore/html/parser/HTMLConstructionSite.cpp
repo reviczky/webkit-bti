@@ -534,8 +534,7 @@ void HTMLConstructionSite::insertHTMLElement(AtomHTMLToken&& token)
 
 void HTMLConstructionSite::insertHTMLTemplateElement(AtomHTMLToken&& token)
 {
-    if (m_document.settings().streamingDeclarativeShadowDOMEnabled() && m_parserContentPolicy.contains(ParserContentPolicy::AllowDeclarativeShadowDOM)
-        && !currentElement().document().templateDocumentHost()) {
+    if (m_document.settings().declarativeShadowDOMEnabled() && m_parserContentPolicy.contains(ParserContentPolicy::AllowDeclarativeShadowDOM)) {
         std::optional<ShadowRootMode> mode;
         bool delegatesFocus = false;
         for (auto& attribute : token.attributes()) {
@@ -760,12 +759,6 @@ inline Document& HTMLConstructionSite::ownerDocumentForCurrentNode()
     if (is<HTMLTemplateElement>(currentNode()))
         return downcast<HTMLTemplateElement>(currentNode()).fragmentForInsertion().document();
     return currentNode().document();
-}
-
-void HTMLConstructionSite::attachDeclarativeShadowRootIfNeeded(Element& shadowHost, HTMLTemplateElement& templateElement)
-{
-    if (m_parserContentPolicy.contains(ParserContentPolicy::AllowDeclarativeShadowDOM) && m_document.settings().declarativeShadowDOMEnabled() && !shadowHost.document().templateDocumentHost())
-        templateElement.attachAsDeclarativeShadowRootIfNeeded(shadowHost);
 }
 
 static inline JSCustomElementInterface* findCustomElementInterface(Document& ownerDocument, const AtomString& localName)

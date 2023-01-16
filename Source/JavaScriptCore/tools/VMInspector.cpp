@@ -361,7 +361,7 @@ void VMInspector::dumpCallFrame(VM* vm, CallFrame* callFrame, unsigned framesToS
 
 void VMInspector::dumpRegisters(CallFrame* callFrame)
 {
-    CodeBlock* codeBlock = callFrame->codeBlock();
+    CodeBlock* codeBlock = callFrame->isAnyWasmCallee() ? nullptr : callFrame->codeBlock();
     if (!codeBlock) {
         dataLog("Dumping host frame registers not supported.\n");
         return;
@@ -412,9 +412,10 @@ void VMInspector::dumpRegisters(CallFrame* callFrame)
     dataLogLn(codeBlock);
     --it;
 #if ENABLE(JIT)
-    AbstractPC pc = callFrame->abstractReturnPC(vm);
-    if (pc.hasJITReturnAddress())
-        dataLogF("[ReturnPC]                 | %10p | %p \n", it, pc.jitReturnAddress().value());
+    if (Options::useJIT()) {
+        void* pc = callFrame->returnPCForInspection();
+        dataLogF("[ReturnPC]                 | %10p | %p \n", it, pc);
+    }
     --it;
 #endif
     dataLogF("[CallerFrame]              | %10p | %p \n", it, callFrame->callerFrame());

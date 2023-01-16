@@ -23,7 +23,6 @@
 
 #include "CSSBasicShapes.h"
 #include "CSSCalcValue.h"
-#include "CSSFontFamily.h"
 #include "CSSHelper.h"
 #include "CSSMarkup.h"
 #include "CSSParserIdioms.h"
@@ -31,6 +30,7 @@
 #include "CSSPropertyNames.h"
 #include "CSSToLengthConversionData.h"
 #include "CSSValueKeywords.h"
+#include "CSSValuePool.h"
 #include "CalculationCategory.h"
 #include "CalculationValue.h"
 #include "Color.h"
@@ -51,8 +51,6 @@
 #include <wtf/text/StringConcatenateNumbers.h>
 
 namespace WebCore {
-
-bool CSSPrimitiveValue::s_useLegacyPrecision;
 
 static inline bool isValidCSSUnitTypeForDoubleConversion(CSSUnitType unitType)
 {
@@ -158,6 +156,7 @@ static inline bool isStringType(CSSUnitType type)
     case CSSUnitType::CSS_URI:
     case CSSUnitType::CSS_ATTR:
     case CSSUnitType::CSS_COUNTER_NAME:
+    case CSSUnitType::CSS_FONT_FAMILY:
         return true;
     case CSSUnitType::CSS_CALC:
     case CSSUnitType::CSS_CALC_PERCENTAGE_WITH_LENGTH:
@@ -180,7 +179,6 @@ static inline bool isStringType(CSSUnitType type)
     case CSSUnitType::CSS_X:
     case CSSUnitType::CSS_EMS:
     case CSSUnitType::CSS_EXS:
-    case CSSUnitType::CSS_FONT_FAMILY:
     case CSSUnitType::CSS_FR:
     case CSSUnitType::CSS_GRAD:
     case CSSUnitType::CSS_HZ:
@@ -288,13 +286,6 @@ CSSUnitType CSSPrimitiveValue::primitiveType() const
     return CSSUnitType::CSS_UNKNOWN;
 }
 
-CSSPrimitiveValue::CSSPrimitiveValue(CSSValueID valueID)
-    : CSSValue(PrimitiveClass)
-{
-    setPrimitiveUnitType(CSSUnitType::CSS_VALUE_ID);
-    m_value.valueID = valueID;
-}
-
 CSSPrimitiveValue::CSSPrimitiveValue(CSSPropertyID propertyID)
     : CSSValue(PrimitiveClass)
 {
@@ -368,8 +359,10 @@ CSSPrimitiveValue::CSSPrimitiveValue(const LengthSize& lengthSize, const RenderS
 }
 
 CSSPrimitiveValue::CSSPrimitiveValue(StaticCSSValueTag, CSSValueID valueID)
-    : CSSPrimitiveValue(valueID)
+    : CSSValue(PrimitiveClass)
 {
+    setPrimitiveUnitType(CSSUnitType::CSS_VALUE_ID);
+    m_value.valueID = valueID;
     makeStatic();
 }
 
@@ -386,10 +379,9 @@ CSSPrimitiveValue::CSSPrimitiveValue(StaticCSSValueTag, double num, CSSUnitType 
 }
 
 CSSPrimitiveValue::CSSPrimitiveValue(StaticCSSValueTag, ImplicitInitialValueTag)
-    : CSSPrimitiveValue(CSSValueInitial)
+    : CSSPrimitiveValue(StaticCSSValue, CSSValueInitial)
 {
-    m_isImplicit = true;
-    makeStatic();
+    m_isImplicitInitialValue = true;
 }
 
 void CSSPrimitiveValue::init(const Length& length)
@@ -511,6 +503,7 @@ void CSSPrimitiveValue::cleanup()
     case CSSUnitType::CSS_URI:
     case CSSUnitType::CSS_ATTR:
     case CSSUnitType::CSS_COUNTER_NAME:
+    case CSSUnitType::CSS_FONT_FAMILY:
         if (m_value.string)
             m_value.string->deref();
         break;
@@ -536,11 +529,6 @@ void CSSPrimitiveValue::cleanup()
         break;
     case CSSUnitType::CSS_SHAPE:
         m_value.shape->deref();
-        break;
-    case CSSUnitType::CSS_FONT_FAMILY:
-        ASSERT(m_value.fontFamily);
-        delete m_value.fontFamily;
-        m_value.fontFamily = nullptr;
         break;
     case CSSUnitType::CSS_RGBCOLOR:
         ASSERT(m_value.color);
@@ -622,6 +610,28 @@ void CSSPrimitiveValue::cleanup()
         cssTextCache().remove(this);
         m_hasCachedCSSText = false;
     }
+}
+
+Ref<CSSPrimitiveValue> CSSPrimitiveValue::create(double value, CSSUnitType type)
+{
+    if (auto values = [type]() -> LazyNeverDestroyed<CSSPrimitiveValue>* {
+        switch (type) {
+        case CSSUnitType::CSS_NUMBER:
+            return staticCSSValuePool->m_numberValues;
+        case CSSUnitType::CSS_PERCENTAGE:
+            return staticCSSValuePool->m_percentValues;
+        case CSSUnitType::CSS_PX:
+            return staticCSSValuePool->m_pixelValues;
+        default:
+            return nullptr;
+        }
+    }()) {
+        int intValue = value;
+        double roundTripValue = intValue;
+        if (!memcmp(&value, &roundTripValue, sizeof(double)) && intValue >= 0 && intValue <= StaticCSSValuePool::maximumCacheableIntegerValue)
+            return values[intValue].get();
+    }
+    return adoptRef(*new CSSPrimitiveValue(value, type));
 }
 
 double CSSPrimitiveValue::computeDegrees() const
@@ -1193,10 +1203,9 @@ String CSSPrimitiveValue::stringValue() const
     case CSSUnitType::CSS_STRING:
     case CSSUnitType::CustomIdent:
     case CSSUnitType::CSS_ATTR:
+    case CSSUnitType::CSS_FONT_FAMILY:
     case CSSUnitType::CSS_URI:
         return m_value.string;
-    case CSSUnitType::CSS_FONT_FAMILY:
-        return m_value.fontFamily->familyName;
     case CSSUnitType::CSS_VALUE_ID:
         return nameString(m_value.valueID);
     case CSSUnitType::CSS_PROPERTY_ID:
@@ -1220,8 +1229,6 @@ NEVER_INLINE String CSSPrimitiveValue::formatInfiniteOrNanValue(ASCIILiteral suf
 
 NEVER_INLINE String CSSPrimitiveValue::formatNumberValue(ASCIILiteral suffix) const
 {
-    if (m_cachedCSSTextUsesLegacyPrecision)
-        return formatIntegerValue(suffix);
     if (std::isnan(m_value.num) || std::isinf(m_value.num))
         return formatInfiniteOrNanValue(suffix);
     return makeString(FormattedCSSNumber::create(m_value.num), suffix);
@@ -1415,11 +1422,13 @@ ALWAYS_INLINE String CSSPrimitiveValue::formatNumberForCustomCSSText() const
         return builder.toString();
     }
     case CSSUnitType::CSS_FONT_FAMILY:
-        return serializeFontFamily(m_value.fontFamily->familyName);
+        return serializeFontFamily(m_value.string);
     case CSSUnitType::CSS_URI:
         return serializeURL(m_value.string);
     case CSSUnitType::CSS_VALUE_ID:
-        return nameString(m_value.valueID);
+        // Per the specification, we should lowercase keywords during serialization:
+        // https://www.w3.org/TR/cssom-1/#serialize-a-css-component-value
+        return nameStringForSerialization(m_value.valueID);
     case CSSUnitType::CSS_PROPERTY_ID:
         return nameString(m_value.propertyID);
     case CSSUnitType::CSS_ATTR:
@@ -1516,11 +1525,10 @@ String CSSPrimitiveValue::customCSSText() const
 
     CSSTextCache& cssTextCache = WebCore::cssTextCache();
 
-    if (m_hasCachedCSSText && m_cachedCSSTextUsesLegacyPrecision == s_useLegacyPrecision) {
+    if (m_hasCachedCSSText) {
         ASSERT(cssTextCache.contains(this));
         return cssTextCache.get(this);
     }
-    m_cachedCSSTextUsesLegacyPrecision = s_useLegacyPrecision;
 
     String text = formatNumberForCustomCSSText();
 
@@ -1610,6 +1618,7 @@ bool CSSPrimitiveValue::equals(const CSSPrimitiveValue& other) const
     case CSSUnitType::CSS_URI:
     case CSSUnitType::CSS_ATTR:
     case CSSUnitType::CSS_COUNTER_NAME:
+    case CSSUnitType::CSS_FONT_FAMILY:
         return equal(m_value.string, other.m_value.string);
     case CSSUnitType::CSS_COUNTER:
         return m_value.counter && other.m_value.counter && m_value.counter->equals(*other.m_value.counter);
@@ -1625,8 +1634,6 @@ bool CSSPrimitiveValue::equals(const CSSPrimitiveValue& other) const
         return m_value.calc && other.m_value.calc && m_value.calc->equals(*other.m_value.calc);
     case CSSUnitType::CSS_SHAPE:
         return m_value.shape && other.m_value.shape && m_value.shape->equals(*other.m_value.shape);
-    case CSSUnitType::CSS_FONT_FAMILY:
-        return fontFamily() == other.fontFamily();
     case CSSUnitType::CSS_IDENT:
     case CSSUnitType::CSS_UNICODE_RANGE:
     case CSSUnitType::CSS_CALC_PERCENTAGE_WITH_NUMBER:
@@ -1682,11 +1689,6 @@ void CSSPrimitiveValue::collectDirectRootComputationalDependencies(HashSet<CSSPr
     default:
         break;
     }
-}
-
-bool CSSPrimitiveValue::isCSSWideKeyword() const
-{
-    return WebCore::isCSSWideKeyword(valueID());
 }
 
 } // namespace WebCore

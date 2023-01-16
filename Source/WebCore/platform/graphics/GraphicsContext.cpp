@@ -374,6 +374,11 @@ void GraphicsContext::drawPattern(ImageBuffer& image, const FloatRect& destRect,
     image.drawPattern(*this, destRect, tileRect, patternTransform, phase, spacing, options);
 }
 
+void GraphicsContext::drawControlPart(ControlPart& part, const FloatRect& rect, float deviceScaleFactor, const ControlStyle& style)
+{
+    part.draw(*this, rect, deviceScaleFactor, style);
+}
+
 void GraphicsContext::clipRoundedRect(const FloatRoundedRect& rect)
 {
     Path path;
@@ -605,9 +610,7 @@ void GraphicsContext::paintFrameForMedia(MediaPlayer& player, const FloatRect& d
 {
     player.playerPrivate()->paintCurrentFrameInContext(*this, destination);
 }
-#endif
 
-#if ENABLE(WEB_CODECS)
 void GraphicsContext::paintVideoFrame(VideoFrame& frame, const FloatRect& destination, bool shouldDiscardAlpha)
 {
     frame.paintInContext(*this, destination, ImageOrientation::None, shouldDiscardAlpha);
