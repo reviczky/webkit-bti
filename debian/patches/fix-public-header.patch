@@ -1,0 +1,51 @@
+From: Thomas Devoogdt <thomas.devoogdt@barco.com>
+Subject: Fix webkit.h public header
+Bug: https://bugs.webkit.org/show_bug.cgi?id=250701
+Index: webkitgtk/Source/WebKit/Scripts/glib/generate-api-header.py
+===================================================================
+--- webkitgtk.orig/Source/WebKit/Scripts/glib/generate-api-header.py
++++ webkitgtk/Source/WebKit/Scripts/glib/generate-api-header.py
+@@ -30,7 +30,7 @@ API_SINGLE_HEADER_CHECK = {
+     "gtk4": '''#if !defined(__WEBKIT_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+ #error \"Only <webkit/webkit.h> can be included directly.\"
+ #endif''',
+-    "gtk": '''#if !defined(__WEBKIT2_H_INSIDE__) && !defined(BUILDING_WEBKIT)
++    "gtk": '''#if !defined(__WEBKIT_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+ #error \"Only <webkit2/webkit2.h> can be included directly.\"
+ #endif''',
+     "wpe": '''#if !defined(__WEBKIT_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+@@ -54,7 +54,7 @@ SHARED_API_SINGLE_HEADER_CHECK = {
+     "gtk4": '''#if !defined(__WEBKIT_H_INSIDE__) && !defined(__WEBKIT_WEB_EXTENSION_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+ #error \"Only <webkit/webkit.h> can be included directly.\"
+ #endif''',
+-    "gtk": '''#if !defined(__WEBKIT2_H_INSIDE__) && !defined(__WEBKIT_WEB_EXTENSION_H_INSIDE__) && !defined(BUILDING_WEBKIT)
++    "gtk": '''#if !defined(__WEBKIT_H_INSIDE__) && !defined(__WEBKIT_WEB_EXTENSION_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+ #error \"Only <webkit2/webkit2.h> can be included directly.\"
+ #endif''',
+     "wpe": '''#if !defined(__WEBKIT_H_INSIDE__) && !defined(__WEBKIT_WEB_EXTENSION_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+Index: webkitgtk/Source/WebKit/UIProcess/API/gtk/WebKitEnumTypesGtk3.h.in
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/gtk/WebKitEnumTypesGtk3.h.in
++++ webkitgtk/Source/WebKit/UIProcess/API/gtk/WebKitEnumTypesGtk3.h.in
+@@ -18,7 +18,7 @@
+  * Boston, MA 02110-1301, USA.
+  */
+ 
+-#if !defined(__WEBKIT2_H_INSIDE__) && !defined(BUILDING_WEBKIT)
++#if !defined(__WEBKIT_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+ #error "Only <webkit2/webkit2.h> can be included directly."
+ #endif
+ 
+Index: webkitgtk/Source/WebKit/UIProcess/API/gtk/WebKitVersion.h.in
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/gtk/WebKitVersion.h.in
++++ webkitgtk/Source/WebKit/UIProcess/API/gtk/WebKitVersion.h.in
+@@ -17,7 +17,7 @@
+  * Boston, MA 02110-1301, USA.
+  */
+ 
+-#if !defined(__WEBKIT@WEBKITGTK_API_INFIX@_H_INSIDE__) && !defined(__WEBKIT_WEB_EXTENSION_H_INSIDE__) && !defined(BUILDING_WEBKIT)
++#if !defined(__WEBKIT_H_INSIDE__) && !defined(__WEBKIT_WEB_EXTENSION_H_INSIDE__) && !defined(BUILDING_WEBKIT)
+ #error "Only <webkit@WEBKITGTK_API_INFIX@/webkit@WEBKITGTK_API_INFIX@.h> can be included directly."
+ #endif
+ 

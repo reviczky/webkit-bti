@@ -2,6 +2,8 @@ webkit2gtk (2.39.4-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/patches/fix-public-header.patch:
+    - Fix regression in the public headers (webkit bug #250701).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 16 Jan 2023 17:09:17 +0100
 
