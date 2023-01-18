@@ -6,6 +6,8 @@ webkit2gtk (2.39.4-1) UNRELEASED; urgency=medium
     - Fix regression in the public headers (webkit bug #250701).
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 16 Jan 2023 17:09:17 +0100
 

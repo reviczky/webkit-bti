@@ -8,7 +8,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            1999-2000 Lars Knoll <knoll@kde.org>
            1999-2001 Harri Porten <porten@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
-           2003-2022 Apple Inc
+           2003-2023 Apple Inc
            2004-2006 Rob Buis <buis@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
            2005 Frerich Raabe <raabe@kde.org>
@@ -110,6 +110,8 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2015 Jordan Harband
            2015 Tobias Reiss <tobi+webkit@basecode.de>
            2015, 2018 Andy VanWagoner <andy@vanwagoner.family>
+           2015, 2018-2019 Janne Grunau
+           2015, 2018-2021 Martin Storsjo
            2015-2016 Sukolsak Sakshuwong <sukolsak@gmail.com>
            2015-2017 Canon Inc
            2015-2020 Devin Rousso <webkit@devinrousso.com>
@@ -125,9 +127,17 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2017 Endless Mobile Inc
            2017 Oleksandr Skachkov <gskackhov@gmail.com>
            2018 Google LLC
+           2018 Niklas Haas
            2018 Yusuke Suzuki <yusukesuzuki@slowstart.org>
            2018 mce sys Ltd
+           2018-2022 Two Orioles, LLC
+           2018-2022 VideoLAN and dav1d authors
+           2019 B Krishnan Iyer
            2019 Carlos Eduardo Ramalho <cadubentzen@gmail.com>
+           2019 James Almer <jamrial@gmail.com>
+           2019 Joe Drago
+           2019 Luca Barbato
+           2019 Michail Alvanos
            2019 the V8 project authors
            2019-2021 Alexey Shvayka <shvaikalesh@gmail.com>
            2020 Cloudinary Inc
@@ -162,6 +172,8 @@ Files: Source/ThirdParty/ANGLE/include/CL/*
        Source/ThirdParty/pdfjs/build/*
        Source/ThirdParty/pdfjs/web/*
        Source/WTF/wtf/*
+       Source/WebCore/PAL/ThirdParty/libavif/android_jni/gradlew
+       Source/WebCore/PAL/ThirdParty/libavif/tests/test_cmd.sh
        Source/WebGPU/WebGPU/metal-cpp/Foundation/*
        Source/WebGPU/WebGPU/metal-cpp/Metal/*
        Source/WebGPU/WebGPU/metal-cpp/QuartzCore/*
@@ -176,6 +188,7 @@ Copyright: 2008-2021 The Khronos Group Inc
            2017 The Abseil Authors
            2020 The SwiftShader Authors
            2020-2022 Apple Inc
+           2022 Google LLC
 License: Apache-2.0
 
 Files: Source/WTF/wtf/Markable.h
@@ -187,6 +200,10 @@ Files: Source/JavaScriptCore/runtime/JSGenericTypedArrayViewPrototypeFunctions.h
        Source/WTF/wtf/RobinHoodHashTable.h
 Copyright: 2015-2022 Apple Inc
 License: BSD-2-clause or Expat
+
+Files: Source/WebCore/PAL/ThirdParty/libavif/ThirdParty/dav1d/tools/compat/getopt.c
+Copyright: 2002 Todd C. Miller <Todd.Miller@courtesan.com>
+License: BSD-2-clause or ISC
 
 Files: Source/JavaScriptCore/runtime/JSDateMath.cpp
        Source/WTF/wtf/DateMath.cpp
@@ -843,7 +860,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WTF/StringCommon.cpp
        Tools/TestWebKitAPI/Tests/WebCore/*
        Tools/TestWebKitAPI/WTFTestUtilities.h
-Copyright: 2004-2022 Apple Inc
+Copyright: 2004-2023 Apple Inc
            2005-2021 Google Inc
            2006-2008, 2010, 2012 the V8 project authors
            2007-2009 Torch Mobile Inc
@@ -1720,7 +1737,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/gstreamer/MainThreadNotifier.h
        Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.h
-       Source/WebCore/platform/graphics/gstreamer/MediaPlayerRequestInstallMissingPluginsCallback.h
        Source/WebCore/platform/graphics/gstreamer/MediaSampleGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/MediaSampleGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/PlatformDisplayGStreamer.cpp
@@ -2430,7 +2446,6 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/WebKitInputMethodContext.cpp
        Source/WebKit/UIProcess/API/glib/WebKitInputMethodContextPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitInstallMissingMediaPluginsPermissionRequest.cpp
-       Source/WebKit/UIProcess/API/glib/WebKitInstallMissingMediaPluginsPermissionRequestPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitJavascriptResult.cpp
        Source/WebKit/UIProcess/API/glib/WebKitJavascriptResultPrivate.h
        Source/WebKit/UIProcess/API/glib/WebKitMediaKeySystemPermissionRequest.cpp
@@ -2554,7 +2569,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2000-2003 Dirk Mueller <mueller@kde.org>
            2001 Tobias Anton <anton@stud.fbi.fh-darmstadt.de>
            2002-2003 The Karbon Developers
-           2002-2022 Apple Inc
+           2002-2023 Apple Inc
            2003-2017 Inc
            2004 Zack Rusin <zack@kde.org>
            2004, 2015, 2017, 2022 Red Hat Inc
@@ -2666,6 +2681,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2020 Noam Rosenthal <noam@webkit.org>
            2020 WikiMedia Inc
            2021 Zixing Liu
+           2023 Tetsuharu Ohzeki <tetsuharu.ohzeki@gmail.com>
 License: LGPL-2+
 
 Files: Source/WebCore/html/HTMLDocument.cpp
@@ -2677,7 +2693,7 @@ License: LGPL-2+ or MPL-1.1
 Files: Source/WebCore/loader/FTPDirectoryParser.cpp
        Source/WebCore/loader/FTPDirectoryParser.h
 Copyright: 2002 Cyrus Patel <cyp@fb14.uni-mainz.de>
-           2007, 2013 Apple Inc
+           2007-2023 Apple Inc
 License: LGPL-2.1
 
 Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
@@ -2770,7 +2786,7 @@ License: MPL-2.0
 Files: debian/*
 Copyright: 2007-2009 Mike Hommey <glandium@debian.org>
            2009 Gustavo Noronha Silva <kov@debian.org>
-           2014-2022 Alberto Garcia <berto@igalia.com>
+           2014-2023 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+
 
 License: AFL-2.0
