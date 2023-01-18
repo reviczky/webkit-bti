@@ -201,7 +201,9 @@ WEBKIT_DH_RENAME_SOUP3 = sed -e 's/4\.0-18/4.1-0/g' \
 			     -e 's/4\.0/4.1/g'
 
 # This converts debhelper file names and contents to the gtk4 versions
-WEBKIT_DH_RENAME_GTK4 = sed -e 's/4\.0-18/6.0-0/g' \
+WEBKIT_DH_RENAME_GTK4 = sed -e '/usr\/include\/webkitgtk-4.0\/webkit2/d' \
+			    -e '/usr\/include\/webkitgtk-4.0\/webkitdom/d' \
+			    -e 's/4\.0-18/6.0-0/g' \
 			    -e 's/4\.0-37/6.0-0/g' \
 			    -e 's/4\.0\.so\.37/6.0.so.0/g' \
 			    -e 's/4\.0/6.0/g' \
