@@ -10,6 +10,10 @@ webkit2gtk (2.39.4-1) UNRELEASED; urgency=medium
     - Update copyright information of all files.
   * debian/control.in:
     - Update Standards-Version to 4.6.2 (no changes).
+    - Rename obsolete packages in Build-Depends:
+      + libfontconfig1-dev -> libfontconfig-dev
+      + libfreetype6-dev   -> libfreetype-dev
+      + libegl1-mesa-dev   -> libegl-dev
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 16 Jan 2023 17:09:17 +0100
 
