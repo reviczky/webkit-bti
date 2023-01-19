@@ -174,7 +174,7 @@ else ifeq ($(ENABLE_SOUP2),YES)
 	WEBDRIVER_DEP_PKG = libwebkit2gtk-4.0-37
 else
 	ENABLE_WEBDRIVER_GTK4 = -DENABLE_WEBDRIVER=ON
-	WEBDRIVER_DEP_PKG = libwebkitgtk-6.0-0
+	WEBDRIVER_DEP_PKG = libwebkitgtk-6.0-1
 endif
 
 # The debhelper files for the soup2, soup3 and gtk4 builds are identical
@@ -204,8 +204,8 @@ WEBKIT_DH_RENAME_SOUP3 = sed -e 's/4\.0-18/4.1-0/g' \
 WEBKIT_DH_RENAME_GTK4 = sed -e '/usr\/include\/webkitgtk-4.0\/webkit2/d' \
 			    -e '/usr\/include\/webkitgtk-4.0\/webkitdom/d' \
 			    -e 's/4\.0-18/6.0-0/g' \
-			    -e 's/4\.0-37/6.0-0/g' \
-			    -e 's/4\.0\.so\.37/6.0.so.0/g' \
+			    -e 's/4\.0-37/6.0-1/g' \
+			    -e 's/4\.0\.so\.37/6.0.so.1/g' \
 			    -e 's/4\.0/6.0/g' \
 			    -e 's/webkit2/webkit/g' \
 			    -e 's/WebKit2/WebKit/g' \
@@ -247,7 +247,7 @@ endif
 		    -e 's/@WK_API_VERSION@/6.0/g' \
 		    -e 's/@LIBJSC_PKG@/libjavascriptcoregtk-6.0-0/g' \
 		    -e 's/@WEBKIT@/webkit/g' \
-		    -e 's/@LIBWEBKITGTK_PKG@/libwebkitgtk-6.0-0/g' \
+		    -e 's/@LIBWEBKITGTK_PKG@/libwebkitgtk-6.0-1/g' \
 		    -e 's/@GTK_VERSION@/4/g' \
 		    -e 's/@SOUP_VERSION@/3/g' \
 		>> debian/control
@@ -319,7 +319,7 @@ override_dh_makeshlibs:
 	$(SOUP2_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.0-18
 	$(SOUP3_BUILD) dh_makeshlibs -plibwebkit2gtk-4.1-0 -Xinjected-bundle
 	$(SOUP3_BUILD) dh_makeshlibs -plibjavascriptcoregtk-4.1-0
-	$(GTK4_BUILD)  dh_makeshlibs -plibwebkitgtk-6.0-0 -Xinjected-bundle
+	$(GTK4_BUILD)  dh_makeshlibs -plibwebkitgtk-6.0-1 -Xinjected-bundle
 	$(GTK4_BUILD)  dh_makeshlibs -plibjavascriptcoregtk-6.0-0
 
 override_dh_missing:
