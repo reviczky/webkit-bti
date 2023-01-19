@@ -351,6 +351,8 @@ static unsigned maximumWebProcessRelaunchAttempts = 1;
 static const Seconds audibleActivityClearDelay = 10_s;
 static const Seconds tryCloseTimeoutDelay = 50_ms;
 
+using namespace WebCore;
+
 namespace WebKit {
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, webPageProxyCounter, ("WebPageProxy"));
@@ -9039,6 +9041,11 @@ void WebPageProxy::queryPermission(const ClientOrigin& clientOrigin, const Permi
         // this topOrigin has requested permission to use the Notifications API previously.
         if (m_notificationPermissionRequesters.contains(clientOrigin.topOrigin))
             shouldChangeDeniedToPrompt = false;
+
+        if (sessionID().isEphemeral()) {
+            completionHandler(shouldChangeDeniedToPrompt ? PermissionState::Prompt : PermissionState::Denied);
+            return;
+        }
 #endif
     } else if (descriptor.name == PermissionName::ScreenWakeLock) {
         name = "screen-wake-lock"_s;

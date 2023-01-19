@@ -436,6 +436,10 @@ static void webkitWebContextConstructed(GObject* object)
         g_signal_emit(webContext, signals[USER_MESSAGE_RECEIVED], 0, userMessage.get(), &returnValue);
     });
 
+#if ENABLE(2022_GLIB_API)
+    priv->processPool->setSandboxEnabled(true);
+#endif
+
     priv->processModel = WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES;
 
 #if ENABLE(MEMORY_SAMPLER)
@@ -503,8 +507,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     sObjProperties[PROP_LOCAL_STORAGE_DIRECTORY] =
         g_param_spec_string(
             "local-storage-directory",
-            _("Local Storage Directory"),
-            _("The directory where local storage data will be saved"),
+            nullptr, nullptr,
             nullptr,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 #endif
@@ -519,8 +522,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     sObjProperties[PROP_WEBSITE_DATA_MANAGER] =
         g_param_spec_object(
             "website-data-manager",
-            _("Website Data Manager"),
-            _("The WebKitWebsiteDataManager associated with this context"),
+            nullptr, nullptr,
             WEBKIT_TYPE_WEBSITE_DATA_MANAGER,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
@@ -541,8 +543,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     sObjProperties[PROP_PSON_ENABLED] =
         g_param_spec_boolean(
             "process-swap-on-cross-site-navigation-enabled",
-            _("Swap Processes on Cross-Site Navigation"),
-            _("Whether swap Web processes on cross-site navigations is enabled"),
+            nullptr, nullptr,
             FALSE,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
@@ -560,8 +561,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     sObjProperties[PROP_USE_SYSTEM_APPEARANCE_FOR_SCROLLBARS] =
         g_param_spec_boolean(
             "use-system-appearance-for-scrollbars",
-            _("Use system appearance for scrollbars"),
-            _("Whether to use system appearance for rendering scrollbars"),
+            nullptr, nullptr,
             TRUE,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 #endif
@@ -576,8 +576,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     sObjProperties[PROP_MEMORY_PRESSURE_SETTINGS] =
         g_param_spec_boxed(
             "memory-pressure-settings",
-            _("Memory Pressure Settings"),
-            _("The WebKitMemoryPressureSettings applied to the web processes created by this context"),
+            nullptr, nullptr,
             WEBKIT_TYPE_MEMORY_PRESSURE_SETTINGS,
             static_cast<GParamFlags>(WEBKIT_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 
@@ -598,8 +597,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     sObjProperties[PROP_TIME_ZONE_OVERRIDE] =
         g_param_spec_string(
             "time-zone-override",
-            _("Time Zone Override"),
-            _("The time zone to use instead of the system one"),
+            nullptr, nullptr,
             nullptr,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
@@ -1324,6 +1322,7 @@ void webkit_web_context_register_uri_scheme(WebKitWebContext* context, const cha
         g_critical("Cannot register URI scheme %s more than once", scheme);
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_context_set_sandbox_enabled:
  * @context: a #WebKitWebContext
@@ -1348,6 +1347,7 @@ void webkit_web_context_set_sandbox_enabled(WebKitWebContext* context, gboolean 
 
     context->priv->processPool->setSandboxEnabled(enabled);
 }
+#endif
 
 static bool pathIsBlocked(const char* path)
 {
@@ -1399,6 +1399,7 @@ void webkit_web_context_add_path_to_sandbox(WebKitWebContext* context, const cha
     context->priv->processPool->addSandboxPath(path, permission);
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_context_get_sandbox_enabled:
  * @context: a #WebKitWebContext
@@ -1415,6 +1416,7 @@ gboolean webkit_web_context_get_sandbox_enabled(WebKitWebContext* context)
 
     return context->priv->processPool->sandboxEnabled();
 }
+#endif
 
 /**
  * webkit_web_context_get_spell_checking_enabled:

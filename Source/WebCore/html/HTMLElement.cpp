@@ -56,6 +56,7 @@
 #include "HTMLFieldSetElement.h"
 #include "HTMLFormElement.h"
 #include "HTMLInputElement.h"
+#include "HTMLMaybeFormAssociatedCustomElement.h"
 #include "HTMLMediaElement.h"
 #include "HTMLNames.h"
 #include "HTMLOptGroupElement.h"
@@ -66,6 +67,7 @@
 #include "HTMLTextFormControlElement.h"
 #include "ImageOverlay.h"
 #include "JSHTMLElement.h"
+#include "LabelsNodeList.h"
 #include "MediaControlsHost.h"
 #include "NodeTraversal.h"
 #include "PseudoClassChangeInvalidation.h"
@@ -762,11 +764,6 @@ FormAssociatedElement* HTMLElement::asFormAssociatedElement()
     return nullptr;
 }
 
-FormListedElement* HTMLElement::asFormListedElement()
-{
-    return nullptr;
-}
-
 static void setHasDirAutoFlagRecursively(Node* firstNode, bool flag, Node* lastNode = nullptr)
 {
     firstNode->setSelfOrPrecedingNodesAffectDirAuto(flag);
@@ -1097,12 +1094,21 @@ bool HTMLElement::canBeActuallyDisabled() const
         || is<HTMLTextAreaElement>(*this)
         || is<HTMLOptGroupElement>(*this)
         || is<HTMLOptionElement>(*this)
-        || is<HTMLFieldSetElement>(*this);
+        || is<HTMLFieldSetElement>(*this)
+        || (is<HTMLMaybeFormAssociatedCustomElement>(*this) && downcast<HTMLMaybeFormAssociatedCustomElement>(*this).isFormAssociatedCustomElement());
 }
 
 bool HTMLElement::isActuallyDisabled() const
 {
     return canBeActuallyDisabled() && isDisabledFormControl();
+}
+
+RefPtr<NodeList> HTMLElement::labels()
+{
+    if (!isLabelable())
+        return nullptr;
+
+    return ensureRareData().ensureNodeLists().addCacheWithAtomName<LabelsNodeList>(*this, starAtom());
 }
 
 #if ENABLE(AUTOCAPITALIZE)
