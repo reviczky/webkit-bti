@@ -1576,8 +1576,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_result_unref@Base 2.5.3
  webkit_load_event_get_type@Base 2.5.3
  webkit_media_capture_state_get_type@Base 2.33.3
- webkit_media_error_get_type@Base 2.39.4-1
- webkit_media_error_quark@Base 2.39.4-1
+#(gtk4-only)webkit_media_error_get_type@Base 2.39.4
+#(gtk4-only)webkit_media_error_quark@Base 2.39.4
  webkit_media_key_system_permission_get_name@Base 2.31.90
  webkit_media_key_system_permission_request_get_type@Base 2.31.90
  webkit_memory_pressure_settings_copy@Base 2.33.3
