@@ -6,4 +6,3 @@ dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-ftbfs-hurd.patch
 fix-non-unified-build.patch
-fix-public-header.patch
