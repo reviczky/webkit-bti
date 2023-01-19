@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.4</p>
+        <p>Library Version: 2.39.5</p>
         
       </div>
       
@@ -94,6 +94,11 @@ uses webkit2gtk-4.0, you must first port to webkit2gtk-4.1 by eliminating use
 of libsoup 2. See <a href="https://libsoup.org/libsoup-3.0/migrating-from-libsoup-2.html">Migrating from libsoup 2</a>
 for guidance on this. After first migrating to webkit2gtk-4.1, then it is
 time to start looking into&nbsp;webkitgtk-6.0.</p>
+<h2 id="mandatory-web-process-sandbox">Mandatory Web Process Sandbox<a class="md-anchor" href="#mandatory-web-process-sandbox" title="Permanent link"></a></h2>
+<p>The <code>webkit_web_context_set_sandbox_enabled()</code> and <code>webkit_web_context_get_sandbox_enabled()</code>
+functions have been removed. The web process sandbox is now always enabled. If
+your application&#8217;s web process needs to access extra directories, use
+WebKit.WebContext.add_path_to_sandbox to mount them in the&nbsp;sandbox.</p>
 <h2 id="mandatory-process-swap-on-cross-site-navigation">Mandatory Process Swap on Cross-site Navigation<a class="md-anchor" href="#mandatory-process-swap-on-cross-site-navigation" title="Permanent link"></a></h2>
 <p>The <code>WebKitWebContext:process-swap-on-cross-site-navigation-enabled</code> property
 has been removed. Process swapping is now mandatory. Your application should be
@@ -113,6 +118,8 @@ enabled. This property was previously disabled by&nbsp;default.</p>
     <p id="toc-title">Content</p>
     <ul class="toc-list">
       
+        
+        <li class="toc-list-item"><a href="#mandatory-web-process-sandbox"><span class="link-text">Mandatory Web Process Sandbox</span></a></li>
         
         <li class="toc-list-item"><a href="#mandatory-process-swap-on-cross-site-navigation"><span class="link-text">Mandatory Process Swap on Cross-site Navigation</span></a></li>
         
