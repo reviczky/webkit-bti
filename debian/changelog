@@ -1,5 +1,6 @@
-webkit2gtk (2.39.4-2) UNRELEASED; urgency=medium
+webkit2gtk (2.39.5-1) UNRELEASED; urgency=medium
 
+  * New upstream development release.
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Mark with (gtk3-only) all symbols that were removed from the GTK4
       build.
