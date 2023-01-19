@@ -209,7 +209,7 @@ WEBKIT_DH_RENAME_GTK4 = sed -e '/usr\/include\/webkitgtk-4.0\/webkit2/d' \
 			    -e 's/4\.0/6.0/g' \
 			    -e 's/webkit2/webkit/g' \
 			    -e 's/WebKit2/WebKit/g' \
-			    -e 's/^ (gtk3-only)/\#/'
+			    -e '/gtk3-only/s/^ /\#/'
 
 %:
 	dh $@ --with gir --buildsystem=cmake+ninja $(EXTRA_DH_ARGUMENTS)
