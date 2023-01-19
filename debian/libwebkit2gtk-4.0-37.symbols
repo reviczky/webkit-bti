@@ -1977,7 +1977,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (gtk3-only)webkit_web_context_get_plugins@Base 2.5.3
  (gtk3-only)webkit_web_context_get_plugins_finish@Base 2.5.3
  webkit_web_context_get_process_model@Base 2.5.3
- webkit_web_context_get_sandbox_enabled@Base 2.25.1
+ (gtk3-only)webkit_web_context_get_sandbox_enabled@Base 2.25.1
  webkit_web_context_get_security_manager@Base 2.5.3
  webkit_web_context_get_spell_checking_enabled@Base 2.5.3
  webkit_web_context_get_spell_checking_languages@Base 2.5.3
@@ -2004,7 +2004,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (gtk3-only)webkit_web_context_set_network_proxy_settings@Base 2.15.3
  webkit_web_context_set_preferred_languages@Base 2.5.3
  webkit_web_context_set_process_model@Base 2.5.3
- webkit_web_context_set_sandbox_enabled@Base 2.25.1
+ (gtk3-only)webkit_web_context_set_sandbox_enabled@Base 2.25.1
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  (gtk3-only)webkit_web_context_set_use_system_appearance_for_scrollbars@Base 2.29.1
