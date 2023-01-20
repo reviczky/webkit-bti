@@ -8,6 +8,8 @@ webkit2gtk (2.39.5-1) UNRELEASED; urgency=medium
     - Drop fix-public-header.patch.
   * debian/rules:
     - Rename libwebkitgtk-6.0-0 to libwebkitgtk-6.0-1 after a soname bump.
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 19 Jan 2023 12:13:48 +0100
 
