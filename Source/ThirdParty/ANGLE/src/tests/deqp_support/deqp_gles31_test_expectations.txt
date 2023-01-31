@@ -122,6 +122,10 @@
 1442 OPENGL : dEQP-GLES31.functional.program_interface_query.uniform_block.referenced_by.* = FAIL
 4933 OPENGL : dEQP-GLES31.functional.texture.texture_buffer.render_modify.as_fragment_texture.mapbuffer_* = FAIL
 5353 NVIDIA OPENGL : dEQP-GLES31.functional.image_load_store.*.atomic.exchange_r32f* = FAIL
+b/266710445 LINUX OPENGL NVIDIA : dEQP-GLES31.functional.image_load_store.buffer.atomic.comp_swap_r32i_return_value = SKIP
+b/266710445 LINUX OPENGL NVIDIA : dEQP-GLES31.functional.image_load_store.buffer.atomic.comp_swap_r32ui_return_value = SKIP
+b/266710445 WIN OPENGL NVIDIA : dEQP-GLES31.functional.image_load_store.buffer.atomic.comp_swap_r32i_return_value = SKIP
+b/266710445 WIN OPENGL NVIDIA : dEQP-GLES31.functional.image_load_store.buffer.atomic.comp_swap_r32ui_return_value = SKIP
 
 // Slow / timeout on Linux GL
 5197 LINUX OPENGL : dEQP-GLES31.functional.compute.indirect_dispatch.gen_in_compute.large_offset = TIMEOUT
@@ -390,6 +394,9 @@
 6194 PIXEL4ORXL VULKAN : dEQP-GLES31.functional.shaders.multisample_interpolation.interpolate_at_offset.array_element.* = FAIL
 
 // Pixel 6 expectations
+// We added back the spirv precision match fixer code because IMG needs it, but the code added back was causing the test to
+// crash on ARM. Skip this test for now until we add a feature to only enable the precision match ficer on IMG
+7488 PIXEL6 VULKAN : dEQP-GLES31.functional.shaders.linkage.es31.tessellation.varying.rules.internal_different_precision = SKIP
 
 // Geometry shader support:
 // This fails on pre-release Android T drivers as of 3/25/22:

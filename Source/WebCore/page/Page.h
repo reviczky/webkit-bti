@@ -238,6 +238,12 @@ enum class RenderingUpdateStep : uint32_t {
     CaretAnimation                  = 1 << 17,
 };
 
+enum LookalikeCharacterSanitizationTrigger : uint8_t {
+    Unspecified,
+    Navigation,
+    Copy,
+};
+
 constexpr OptionSet<RenderingUpdateStep> updateRenderingSteps = {
     RenderingUpdateStep::FlushAutofocusCandidates,
     RenderingUpdateStep::Resize,
@@ -551,7 +557,7 @@ public:
 
     WEBCORE_EXPORT DiagnosticLoggingClient& diagnosticLoggingClient() const;
 
-    WEBCORE_EXPORT void logMediaDiagnosticMessage(const FormData*) const;
+    WEBCORE_EXPORT void logMediaDiagnosticMessage(const RefPtr<FormData>&) const;
 
     PerformanceLoggingClient* performanceLoggingClient() const { return m_performanceLoggingClient.get(); }
 
@@ -958,8 +964,9 @@ public:
 
     bool httpsUpgradeEnabled() const { return m_httpsUpgradeEnabled; }
 
-    URL sanitizeLookalikeCharacters(const URL&) const;
-    String sanitizeLookalikeCharacters(const String&) const;
+    URL sanitizeLookalikeCharacters(const URL&, LookalikeCharacterSanitizationTrigger) const;
+    String sanitizeLookalikeCharacters(const String&, LookalikeCharacterSanitizationTrigger) const;
+    URL allowedLookalikeCharacters(const URL&) const;
 
     LoadSchedulingMode loadSchedulingMode() const { return m_loadSchedulingMode; }
     void setLoadSchedulingMode(LoadSchedulingMode);

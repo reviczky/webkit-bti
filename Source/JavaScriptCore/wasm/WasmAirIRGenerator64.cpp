@@ -483,7 +483,7 @@ public:
         return { };
     }
 
-    auto addSIMDSwizzleHelperX86(ExpressionType& a, ExpressionType& b, ExpressionType& result) -> PartialResult
+    auto fixupOutOfBoundsIndicesForSwizzle(ExpressionType& a, ExpressionType& b, ExpressionType& result) -> PartialResult
     {
         ASSERT(isX86() && result.type() == Types::V128);
         // Let each byte mask be 112 (0x70) then after VectorAddSat
@@ -529,7 +529,7 @@ public:
         }
 
         if (isX86() && airOp == B3::Air::VectorSwizzle) {
-            addSIMDSwizzleHelperX86(a, b, result);
+            fixupOutOfBoundsIndicesForSwizzle(a, b, result);
             return { };
         }
 
@@ -715,11 +715,7 @@ private:
 
     bool useSignalingMemory() const
     {
-#if ENABLE(WEBASSEMBLY_SIGNALING_MEMORY)
         return m_mode == MemoryMode::Signaling;
-#else
-        return false;
-#endif
     }
 
 };
@@ -957,7 +953,7 @@ auto AirIRGenerator64::addRefIsNull(ExpressionType value, ExpressionType& result
 
 inline AirIRGenerator64::ExpressionType AirIRGenerator64::emitCheckAndPreparePointer(ExpressionType pointer, uint32_t offset, uint32_t sizeOfOperation)
 {
-    ASSERT(m_memoryBaseGPR);
+    static_assert(GPRInfo::wasmBaseMemoryPointer != InvalidGPRReg);
 
     auto result = g64();
 
@@ -965,7 +961,7 @@ inline AirIRGenerator64::ExpressionType AirIRGenerator64::emitCheckAndPreparePoi
     case MemoryMode::BoundsChecking: {
         // In bound checking mode, while shared wasm memory partially relies on signal handler too, we need to perform bound checking
         // to ensure that no memory access exceeds the current memory size.
-        ASSERT(m_boundsCheckingSizeGPR);
+        static_assert(GPRInfo::wasmBoundsCheckingSizeRegister != InvalidGPRReg);
         ASSERT(sizeOfOperation + offset > offset);
         auto temp = g64();
         append(Move, Arg::bigImm(static_cast<uint64_t>(sizeOfOperation) + offset - 1), temp);
@@ -977,15 +973,15 @@ inline AirIRGenerator64::ExpressionType AirIRGenerator64::emitCheckAndPreparePoi
         }
 
         emitCheck([&] {
-            return Inst(Branch64, nullptr, Arg::relCond(MacroAssembler::AboveOrEqual), temp, Tmp(m_boundsCheckingSizeGPR));
+            return Inst(Branch64, nullptr, Arg::relCond(MacroAssembler::AboveOrEqual), temp, Tmp(GPRInfo::wasmBoundsCheckingSizeRegister));
         }, [=, this] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
             this->emitThrowException(jit, ExceptionType::OutOfBoundsMemoryAccess);
         });
         break;
     }
 
-#if ENABLE(WEBASSEMBLY_SIGNALING_MEMORY)
     case MemoryMode::Signaling: {
+#if ENABLE(WEBASSEMBLY_SIGNALING_MEMORY)
         // We've virtually mapped 4GiB+redzone for this memory. Only the user-allocated pages are addressable, contiguously in range [0, current],
         // and everything above is mapped PROT_NONE. We don't need to perform any explicit bounds check in the 4GiB range because WebAssembly register
         // memory accesses are 32-bit. However WebAssembly register + offset accesses perform the addition in 64-bit which can push an access above
@@ -1015,15 +1011,15 @@ inline AirIRGenerator64::ExpressionType AirIRGenerator64::emitCheckAndPreparePoi
                 this->emitThrowException(jit, ExceptionType::OutOfBoundsMemoryAccess);
             });
         }
+#endif
         break;
     }
-#endif
     }
 
     if constexpr (isARM64())
-        append(AddZeroExtend64, Tmp(m_memoryBaseGPR), pointer, result);
+        append(AddZeroExtend64, Tmp(GPRInfo::wasmBaseMemoryPointer), pointer, result);
     else
-        append(Add64, Tmp(m_memoryBaseGPR), result);
+        append(Add64, Tmp(GPRInfo::wasmBaseMemoryPointer), result);
     return result;
 }
 
@@ -1677,27 +1673,45 @@ auto AirIRGenerator64::addSIMDShuffle(v128_t imm, ExpressionType a, ExpressionTy
 {
     result = v128();
 
-    if (isX86()) {
+    if constexpr (isX86()) {
+        v128_t leftImm = imm;
+        v128_t rightImm = imm;
+        for (unsigned i = 0; i < 16; ++i) {
+            if (leftImm.u8x16[i] > 15)
+                leftImm.u8x16[i] = 0xFF; // Force OOB
+            if (rightImm.u8x16[i] < 16 || rightImm.u8x16[i] > 31)
+                rightImm.u8x16[i] = 0xFF; // Force OOB
+        }
         // Store each byte (w/ index < 16) of `a` to result
         // and zero clear each byte (w/ index > 15) in result.
-        auto indexes = addConstant(imm);
-        addSIMDSwizzleHelperX86(a, indexes, result);
+        auto left = v128();
+        auto leftImmConst = addConstant(leftImm);
+        append(B3::Air::VectorSwizzle, a, leftImmConst, left);
 
         // Store each byte (w/ index - 16 >= 0) of `b` to result2
         // and zero clear each byte (w/ index - 16 < 0) in result2.
-        auto result2 = v128();
-        v128_t mask;
-        mask.u64x2[0] = 0x1010101010101010;
-        mask.u64x2[1] = 0x1010101010101010;
-        append(VectorSub, Arg::simdInfo(SIMDInfo { SIMDLane::i8x16, SIMDSignMode::None }), indexes, addConstant(mask), indexes);
-        append(B3::Air::VectorSwizzle, b, indexes, result2);
+        auto right = v128();
+        auto rightImmConst = addConstant(rightImm);
+        append(B3::Air::VectorSwizzle, b, rightImmConst, right);
 
-        // Since each index in [0, 31], we can return result2 VectorOr result.
-        append(VectorOr, Arg::simdInfo(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }), result, result2, result);
+        append(VectorOr, Arg::simdInfo(SIMDInfo { SIMDLane::v128, SIMDSignMode::None }), left, right, result);
         return { };
     }
 
-    append(VectorShuffle, Arg::bigImm(imm.u64x2[0]), Arg::bigImm(imm.u64x2[1]), a, b, result);
+    if constexpr (!isARM64())
+        UNREACHABLE_FOR_PLATFORM();
+
+#if CPU(ARM64)
+    // The tbl instruction requires these values to be adjacent.
+    Tmp n(ARM64Registers::q30);
+    Tmp m(ARM64Registers::q31);
+#else
+    Tmp n;
+    Tmp m;
+#endif
+    append(MoveVector, a, n);
+    append(MoveVector, b, m);
+    append(VectorSwizzle2, n, m, addConstant(imm), result);
 
     return { };
 }
@@ -1922,11 +1936,10 @@ Tmp AirIRGenerator64::emitCatchImpl(CatchKind kind, ControlType& data, unsigned 
     patch->clobberLate(clobberLate);
     patch->resultConstraints.append(B3::ValueRep::reg(GPRInfo::returnValueGPR));
     patch->resultConstraints.append(B3::ValueRep::reg(GPRInfo::returnValueGPR2));
-    GPRReg wasmContextInstanceGPR = m_wasmContextInstanceGPR;
-    patch->setGenerator([=] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+    patch->setGenerator([=](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         JIT_COMMENT(jit, "Catch entrypoint patchpoint after loading from scratch buffer");
         AllowMacroScratchRegisterUsage allowScratch(jit);
-        jit.prepareWasmCallOperation(wasmContextInstanceGPR);
+        jit.prepareWasmCallOperation(GPRInfo::wasmContextInstancePointer);
         jit.move(params[2].gpr(), GPRInfo::argumentGPR0);
         CCallHelpers::Call call = jit.call(OperationPtrTag);
         jit.addLinkTask([call] (LinkBuffer& linkBuffer) {

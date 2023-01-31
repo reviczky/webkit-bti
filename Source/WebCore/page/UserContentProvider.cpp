@@ -49,7 +49,7 @@ UserContentProvider::UserContentProvider()
 
 UserContentProvider::~UserContentProvider()
 {
-    ASSERT(m_pages.computesEmpty());
+    ASSERT(m_pages.isEmptyIgnoringNullReferences());
 }
 
 void UserContentProvider::addPage(Page& page)
@@ -110,7 +110,7 @@ static void sanitizeLookalikeCharactersIfNeeded(ContentRuleListResults& results,
     if (RefPtr frame = initiatingDocumentLoader.frame(); !frame || !frame->isMainFrame())
         return;
 
-    if (auto adjustedURL = page.chrome().client().sanitizeLookalikeCharacters(url); adjustedURL != url)
+    if (auto adjustedURL = page.chrome().client().sanitizeLookalikeCharacters(url, LookalikeCharacterSanitizationTrigger::Navigation); adjustedURL != url)
         results.summary.redirectActions.append({ { ContentExtensions::RedirectAction::URLAction { adjustedURL.string() } }, adjustedURL });
 }
 

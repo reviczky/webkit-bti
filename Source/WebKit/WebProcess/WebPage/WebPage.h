@@ -147,6 +147,10 @@
 #include <WebCore/PlatformTouchEvent.h>
 #endif
 
+#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
+#include <WebCore/LookalikeCharactersSanitizationData.h>
+#endif
+
 #if ENABLE(MAC_GESTURE_EVENTS)
 #include <WebKitAdditions/PlatformGestureEventMac.h>
 #endif
@@ -1494,7 +1498,8 @@ public:
 
     void isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags);
 
-    URL sanitizeLookalikeCharacters(const URL&);
+    URL sanitizeLookalikeCharacters(const URL&, WebCore::LookalikeCharacterSanitizationTrigger);
+    URL allowedLookalikeCharacters(const URL&);
 
 #if ENABLE(IMAGE_ANALYSIS)
     void requestTextRecognition(WebCore::Element&, WebCore::TextRecognitionOptions&&, CompletionHandler<void(RefPtr<WebCore::Element>&&)>&& = { });
@@ -1661,6 +1666,7 @@ private:
 
 #if ENABLE(NETWORK_CONNECTION_INTEGRITY)
     void setLookalikeCharacterStrings(Vector<String>&&);
+    void setAllowedLookalikeCharacterStrings(Vector<WebCore::LookalikeCharactersSanitizationData>&&);
 #endif
 
 #if ENABLE(META_VIEWPORT)
@@ -2557,6 +2563,7 @@ private:
 
 #if ENABLE(NETWORK_CONNECTION_INTEGRITY)
     HashSet<String> m_lookalikeCharacterStrings;
+    HashMap<WebCore::RegistrableDomain, String> m_allowedLookalikeCharacterStrings;
 #endif
 
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
@@ -2575,7 +2582,8 @@ inline bool WebPage::shouldAvoidComputingPostLayoutDataForEditorState() const { 
 #endif
 
 #if !PLATFORM(COCOA)
-inline URL WebPage::sanitizeLookalikeCharacters(const URL& url) { return url; }
+inline URL WebPage::sanitizeLookalikeCharacters(const URL& url, WebCore::LookalikeCharacterSanitizationTrigger) { return url; }
+inline URL WebPage::allowedLookalikeCharacters(const URL& url) { return url; }
 #endif
 
 #if PLATFORM(IOS_FAMILY)

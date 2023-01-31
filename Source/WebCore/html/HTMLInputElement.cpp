@@ -1720,7 +1720,8 @@ void HTMLInputElement::resetListAttributeTargetObserver()
 
 void HTMLInputElement::dataListMayHaveChanged()
 {
-    m_inputType->dataListMayHaveChanged();
+    auto protectedInputType = m_inputType;
+    protectedInputType->dataListMayHaveChanged();
 }
 
 bool HTMLInputElement::isFocusingWithDataListDropdown() const
@@ -2037,7 +2038,10 @@ ListAttributeTargetObserver::ListAttributeTargetObserver(const AtomString& id, H
 
 void ListAttributeTargetObserver::idTargetChanged()
 {
-    m_element->dataListMayHaveChanged();
+    m_element->document().eventLoop().queueTask(TaskSource::DOMManipulation, [element = m_element] {
+        if (element)
+            element->dataListMayHaveChanged();
+    });
 }
 #endif
 

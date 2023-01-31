@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.5</p>
+        <p>Library Version: 2.39.7</p>
         
       </div>
       
@@ -181,6 +181,12 @@ dialog by connecting to the <code>WebKitPrintOperation::create-custom-widget</co
 signal, creating a new WebKitPrintCustomWidget with
 <code>webkit_print_custom_widget_new()</code> and returning it from there. You can later
 use <code>webkit_print_operation_run_dialog()</code> to display the&nbsp;dialog.</p>
+<p>Unfortunately, use of custom widgets is incompatible with modern
+containerized application frameworks like Flatpak. A print dialog
+constructed in the application process will not have access to host
+printers, so instead it must be constructed by a desktop portal service
+running on the host system. Because this print dialog runs in a separate
+process, it&#8217;s not possible to attach a custom&nbsp;widget.</p>
         </div>
 
         <div class="docblock">
@@ -189,6 +195,9 @@ use <code>webkit_print_operation_run_dialog()</code> to display the&nbsp;dialog.
             
             <tr><td>Available since:</td><td>2.16</td></tr>
             
+            
+            <tr><td>Deprecated since:</td><td>2.40</td></tr>
+            <tr><td colspan="2"><p>Please do not use it in newly written&nbsp;code.</p></td></tr>
             
           </table>
         </div>
@@ -276,14 +285,14 @@ use <code>webkit_print_operation_run_dialog()</code> to display the&nbsp;dialog.
 
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="ctor.PrintCustomWidget.new.html">webkit_print_custom_widget_new</a></h6>
 
           <div class="docblock">
             <p>Create a new <code>WebKitPrintCustomWidget</code> with given <code>widget</code> and <code>title</code>.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.16</p></div>
+          <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>
@@ -301,20 +310,20 @@ use <code>webkit_print_operation_run_dialog()</code> to display the&nbsp;dialog.
 
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.PrintCustomWidget.get_title.html">webkit_print_custom_widget_get_title</a></h6>
           <div class="docblock">
             <p>Return the value of <code>WebKitPrintCustomWidget:title</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.16</p></div>
+          <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.PrintCustomWidget.get_widget.html">webkit_print_custom_widget_get_widget</a></h6>
           <div class="docblock">
             <p>Return the value of <code>WebKitPrintCustomWidget:widget</code> property.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.16</p></div>
+          <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>
@@ -347,24 +356,24 @@ use <code>webkit_print_operation_run_dialog()</code> to display the&nbsp;dialog.
       
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.PrintCustomWidget.title.html">WebKit2.PrintCustomWidget:title</a></h6>
 
           <div class="docblock">
             <p>The title of the custom&nbsp;widget.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.16</p></div>
+          <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.PrintCustomWidget.widget.html">WebKit2.PrintCustomWidget:widget</a></h6>
 
           <div class="docblock">
             <p>The custom <code>GtkWidget</code> that will be embedded in the&nbsp;dialog.</p>
           </div>
 
-          <div class="docblock"><p>Available since: 2.16</p></div>
+          <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>
@@ -389,24 +398,24 @@ use <code>webkit_print_operation_run_dialog()</code> to display the&nbsp;dialog.
       
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="signal.PrintCustomWidget.apply.html">WebKit2.PrintCustomWidget::apply</a></h6>
           <div class="docblock">
             <p>Emitted right before the printing will start. You should read the information
 from the widget and update the content based on it if necessary. The widget
 is not guaranteed to be valid at a later&nbsp;time.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.16</p></div>
+          <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="signal.PrintCustomWidget.update.html">WebKit2.PrintCustomWidget::update</a></h6>
           <div class="docblock">
             <p>Emitted after change of selected printer in the dialog. The actual page setup
 and print settings are available and the custom widget can actualize itself
 according to their&nbsp;values.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.16</p></div>
+          <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>

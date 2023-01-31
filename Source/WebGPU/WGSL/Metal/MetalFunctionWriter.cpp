@@ -26,6 +26,7 @@
 #include "config.h"
 #include "MetalFunctionWriter.h"
 
+#include "API.h"
 #include "AST.h"
 #include "ASTStringDumper.h"
 #include "ASTVisitor.h"
@@ -41,8 +42,9 @@ namespace Metal {
 
 class FunctionDefinitionWriter : public AST::Visitor {
 public:
-    FunctionDefinitionWriter(StringBuilder& stringBuilder)
+    FunctionDefinitionWriter(AST::ShaderModule& shaderModule, StringBuilder& stringBuilder)
         : m_stringBuilder(stringBuilder)
+        , m_shaderModule(shaderModule)
     {
     }
 
@@ -54,6 +56,8 @@ public:
     void visit(AST::BuiltinAttribute&) override;
     void visit(AST::LocationAttribute&) override;
     void visit(AST::StageAttribute&) override;
+    void visit(AST::GroupAttribute&) override;
+    void visit(AST::BindingAttribute&) override;
 
     void visit(AST::FunctionDecl&) override;
     void visit(AST::StructDecl&) override;
@@ -67,8 +71,11 @@ public:
     void visit(AST::Float32Literal&) override;
     void visit(AST::IdentifierExpression&) override;
     void visit(AST::Int32Literal&) override;
+    void visit(AST::Uint32Literal&) override;
     void visit(AST::StructureAccess&) override;
     void visit(AST::UnaryExpression&) override;
+    void visit(AST::BinaryExpression&) override;
+    void visit(AST::PointerDereference&) override;
 
     void visit(AST::Statement&) override;
     void visit(AST::AssignmentStatement&) override;
@@ -78,11 +85,19 @@ public:
     void visit(AST::ArrayType&) override;
     void visit(AST::NamedType&) override;
     void visit(AST::ParameterizedType&) override;
+    void visit(AST::StructType&) override;
+    void visit(AST::ReferenceType&) override;
 
     void visit(AST::Parameter&) override;
+    void visitArgumentBufferParameter(AST::Parameter&);
 
+private:
     StringBuilder& m_stringBuilder;
+    AST::ShaderModule& m_shaderModule;
     Indentation<4> m_indent { 0 };
+    std::optional<AST::StructRole> m_structRole;
+    std::optional<AST::StageAttribute::Stage> m_entryPointStage;
+    std::optional<String> m_suffix;
 };
 
 void FunctionDefinitionWriter::visit(AST::ShaderModule& shaderModule)
@@ -93,20 +108,38 @@ void FunctionDefinitionWriter::visit(AST::ShaderModule& shaderModule)
 void FunctionDefinitionWriter::visit(AST::FunctionDecl& functionDefinition)
 {
     // FIXME: visit return attributes
-    ASSERT(functionDefinition.maybeReturnType());
     for (auto& attribute : functionDefinition.attributes()) {
         checkErrorAndVisit(attribute);
         m_stringBuilder.append(" ");
     }
-    checkErrorAndVisit(*functionDefinition.maybeReturnType());
+
+    if (functionDefinition.maybeReturnType())
+        checkErrorAndVisit(*functionDefinition.maybeReturnType());
+    else
+        m_stringBuilder.append("void");
+
     m_stringBuilder.append(" ", functionDefinition.name(), "(");
     bool first = true;
     for (auto& parameter : functionDefinition.parameters()) {
         if (!first)
             m_stringBuilder.append(", ");
-        checkErrorAndVisit(parameter);
+        switch (parameter.role()) {
+        case AST::ParameterRole::UserDefined:
+            checkErrorAndVisit(parameter);
+            break;
+        case AST::ParameterRole::StageIn:
+            checkErrorAndVisit(parameter);
+            m_stringBuilder.append(" [[stage_in]]");
+            break;
+        case AST::ParameterRole::ArgumentBuffer:
+            visitArgumentBufferParameter(parameter);
+            break;
+        }
         first = false;
     }
+    // Clear the flag set while serializing StageAttribute
+    m_entryPointStage = std::nullopt;
+
     m_stringBuilder.append(")\n");
     m_stringBuilder.append("{\n");
     IndentationScope scope(m_indent);
@@ -117,6 +150,7 @@ void FunctionDefinitionWriter::visit(AST::FunctionDecl& functionDefinition)
 void FunctionDefinitionWriter::visit(AST::StructDecl& structDecl)
 {
     // FIXME: visit struct attributes
+    m_structRole = { structDecl.role() };
     m_stringBuilder.append(m_indent, "struct ", structDecl.name(), " {\n");
     {
         IndentationScope scope(m_indent);
@@ -124,6 +158,10 @@ void FunctionDefinitionWriter::visit(AST::StructDecl& structDecl)
             m_stringBuilder.append(m_indent);
             visit(member.type());
             m_stringBuilder.append(" ", member.name());
+            if (m_suffix.has_value()) {
+                m_stringBuilder.append(*m_suffix);
+                m_suffix.reset();
+            }
             for (auto &attribute : member.attributes()) {
                 m_stringBuilder.append(" ");
                 visit(attribute);
@@ -132,18 +170,21 @@ void FunctionDefinitionWriter::visit(AST::StructDecl& structDecl)
         }
     }
     m_stringBuilder.append(m_indent, "};\n\n");
+    m_structRole = std::nullopt;
 }
 
 void FunctionDefinitionWriter::visit(AST::VariableDecl& variableDecl)
 {
     ASSERT(variableDecl.maybeTypeDecl());
 
+    m_stringBuilder.append(m_indent);
     visit(*variableDecl.maybeTypeDecl());
     m_stringBuilder.append(" ", variableDecl.name());
     if (variableDecl.maybeInitializer()) {
         m_stringBuilder.append(" = ");
         visit(*variableDecl.maybeInitializer());
     }
+    m_stringBuilder.append(";\n");
 }
 
 void FunctionDefinitionWriter::visit(AST::Attribute& attribute)
@@ -164,11 +205,17 @@ void FunctionDefinitionWriter::visit(AST::BuiltinAttribute& builtin)
         return;
     }
 
+    if (builtin.name() == "global_invocation_id"_s) {
+        m_stringBuilder.append("[[thread_position_in_grid]]");
+        return;
+    }
+
     ASSERT_NOT_REACHED();
 }
 
 void FunctionDefinitionWriter::visit(AST::StageAttribute& stage)
 {
+    m_entryPointStage = { stage.stage() };
     switch (stage.stage()) {
     case AST::StageAttribute::Stage::Vertex:
         m_stringBuilder.append("[[vertex]]");
@@ -177,13 +224,45 @@ void FunctionDefinitionWriter::visit(AST::StageAttribute& stage)
         m_stringBuilder.append("[[fragment]]");
         break;
     case AST::StageAttribute::Stage::Compute:
-        m_stringBuilder.append("[[compute]]");
+        m_stringBuilder.append("[[kernel]]");
         break;
     }
 }
 
+void FunctionDefinitionWriter::visit(AST::GroupAttribute& group)
+{
+    unsigned bufferIndex = group.group();
+    if (m_entryPointStage.has_value() && *m_entryPointStage == AST::StageAttribute::Stage::Vertex) {
+        auto max = m_shaderModule.configuration().maxBuffersPlusVertexBuffersForVertexStage;
+        bufferIndex = vertexBufferIndexForBindGroup(bufferIndex, max);
+    }
+    m_stringBuilder.append("[[buffer(", bufferIndex, ")]]");
+}
+
+void FunctionDefinitionWriter::visit(AST::BindingAttribute& binding)
+{
+    m_stringBuilder.append("[[id(", binding.binding(), ")]]");
+}
+
 void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
 {
+    if (m_structRole.has_value()) {
+        auto role = *m_structRole;
+        switch (role) {
+        case AST::StructRole::UserDefined:
+            break;
+        case AST::StructRole::VertexOutput:
+        case AST::StructRole::FragmentInput:
+            m_stringBuilder.append("[[user(loc", location.location(), ")]]");
+            return;
+        case AST::StructRole::ArgumentBuffer:
+            return;
+        case AST::StructRole::VertexInput:
+        case AST::StructRole::ComputeInput:
+            // FIXME: not sure if these should actually be attributes or not
+            break;
+        }
+    }
     m_stringBuilder.append("[[attribute(", location.location(), ")]]");
 }
 
@@ -195,7 +274,13 @@ void FunctionDefinitionWriter::visit(AST::TypeDecl& type)
 void FunctionDefinitionWriter::visit(AST::ArrayType& type)
 {
     ASSERT(type.maybeElementType());
-    ASSERT(type.maybeElementCount());
+
+    if (!type.maybeElementCount()) {
+        visit(*type.maybeElementType());
+        m_suffix = { "[1]"_s };
+        return;
+    }
+
     m_stringBuilder.append("array<");
     visit(*type.maybeElementType());
     m_stringBuilder.append(", ");
@@ -217,57 +302,89 @@ void FunctionDefinitionWriter::visit(AST::NamedType& type)
 
 void FunctionDefinitionWriter::visit(AST::ParameterizedType& type)
 {
+    const auto& vec = [&](size_t size) {
+        m_stringBuilder.append("vec<");
+        visit(type.elementType());
+        m_stringBuilder.append(", ", size, ">");
+    };
+
+    const auto& matrix = [&](size_t rows, size_t columns) {
+        m_stringBuilder.append("matrix<");
+        visit(type.elementType());
+        m_stringBuilder.append(", ", columns, ", ", rows, ">");
+    };
+
     switch (type.base()) {
     case AST::ParameterizedType::Base::Vec2:
-        m_stringBuilder.append("vec<");
-        visit(type.elementType());
-        m_stringBuilder.append(", 2>");
+        vec(2);
         break;
     case AST::ParameterizedType::Base::Vec3:
-        m_stringBuilder.append("vec<");
-        visit(type.elementType());
-        m_stringBuilder.append(", 3>");
+        vec(3);
         break;
     case AST::ParameterizedType::Base::Vec4:
-        m_stringBuilder.append("vec<");
-        visit(type.elementType());
-        m_stringBuilder.append(", 4>");
+        vec(4);
         break;
 
     // FIXME: Implement the following types
     case AST::ParameterizedType::Base::Mat2x2:
-        ASSERT_NOT_REACHED();
+        matrix(2, 2);
         break;
     case AST::ParameterizedType::Base::Mat2x3:
-        ASSERT_NOT_REACHED();
+        matrix(2, 3);
         break;
     case AST::ParameterizedType::Base::Mat2x4:
-        ASSERT_NOT_REACHED();
+        matrix(2, 4);
         break;
     case AST::ParameterizedType::Base::Mat3x2:
-        ASSERT_NOT_REACHED();
+        matrix(3, 2);
         break;
     case AST::ParameterizedType::Base::Mat3x3:
-        ASSERT_NOT_REACHED();
+        matrix(3, 3);
         break;
     case AST::ParameterizedType::Base::Mat3x4:
-        ASSERT_NOT_REACHED();
+        matrix(3, 4);
         break;
     case AST::ParameterizedType::Base::Mat4x2:
-        ASSERT_NOT_REACHED();
+        matrix(4, 2);
         break;
     case AST::ParameterizedType::Base::Mat4x3:
-        ASSERT_NOT_REACHED();
+        matrix(4, 3);
         break;
     case AST::ParameterizedType::Base::Mat4x4:
+        matrix(4, 4);
         break;
     }
+}
+
+void FunctionDefinitionWriter::visit(AST::StructType& structType)
+{
+    m_stringBuilder.append(structType.structDecl().name());
+}
+
+void FunctionDefinitionWriter::visit(AST::ReferenceType& type)
+{
+    // FIXME: We can't assume this will always be device. The ReferenceType should
+    // have knowledge about the memory region
+    m_stringBuilder.append("device ");
+    visit(type.type());
+    m_stringBuilder.append("&");
 }
 
 void FunctionDefinitionWriter::visit(AST::Parameter& parameter)
 {
     visit(parameter.type());
     m_stringBuilder.append(" ", parameter.name());
+    for (auto& attribute : parameter.attributes()) {
+        m_stringBuilder.append(" ");
+        checkErrorAndVisit(attribute);
+    }
+}
+
+void FunctionDefinitionWriter::visitArgumentBufferParameter(AST::Parameter& parameter)
+{
+    m_stringBuilder.append("constant ");
+    visit(parameter.type());
+    m_stringBuilder.append("& ", parameter.name());
     for (auto& attribute : parameter.attributes()) {
         m_stringBuilder.append(" ");
         checkErrorAndVisit(attribute);
@@ -316,6 +433,26 @@ void FunctionDefinitionWriter::visit(AST::UnaryExpression& unary)
     visit(unary.expression());
 }
 
+void FunctionDefinitionWriter::visit(AST::BinaryExpression& binary)
+{
+    visit(binary.lhs());
+    switch (binary.operation()) {
+    case AST::BinaryOperation::Add:
+        m_stringBuilder.append(" + ");
+        break;
+    case AST::BinaryOperation::Multiply:
+        m_stringBuilder.append(" * ");
+        break;
+    }
+    visit(binary.rhs());
+}
+
+void FunctionDefinitionWriter::visit(AST::PointerDereference& pointerDereference)
+{
+    m_stringBuilder.append("(*");
+    visit(pointerDereference.target());
+    m_stringBuilder.append(")");
+}
 void FunctionDefinitionWriter::visit(AST::ArrayAccess& access)
 {
     visit(access.base());
@@ -347,6 +484,12 @@ void FunctionDefinitionWriter::visit(AST::Int32Literal& literal)
     m_stringBuilder.append(literal.value());
 }
 
+void FunctionDefinitionWriter::visit(AST::Uint32Literal& literal)
+{
+    // FIXME: this might not serialize all values correctly
+    m_stringBuilder.append(literal.value());
+}
+
 void FunctionDefinitionWriter::visit(AST::AbstractFloatLiteral& literal)
 {
     // FIXME: this might not serialize all values correctly
@@ -361,36 +504,33 @@ void FunctionDefinitionWriter::visit(AST::Float32Literal& literal)
 
 void FunctionDefinitionWriter::visit(AST::Statement& statement)
 {
-    if (statement.kind() != AST::Node::Kind::CompoundStatement)
-        m_stringBuilder.append(m_indent);
-
     AST::Visitor::visit(statement);
-
-    if (statement.kind() != AST::Node::Kind::CompoundStatement)
-        m_stringBuilder.append(";\n");
 }
 
 void FunctionDefinitionWriter::visit(AST::AssignmentStatement& assignment)
 {
+    m_stringBuilder.append(m_indent);
     if (assignment.maybeLhs()) {
         visit(*assignment.maybeLhs());
         m_stringBuilder.append(" = ");
     }
     visit(assignment.rhs());
+    m_stringBuilder.append(";\n");
 }
 
 void FunctionDefinitionWriter::visit(AST::ReturnStatement& statement)
 {
-    m_stringBuilder.append("return");
+    m_stringBuilder.append(m_indent, "return");
     if (statement.maybeExpression()) {
         m_stringBuilder.append(" ");
         visit(*statement.maybeExpression());
     }
+    m_stringBuilder.append(";\n");
 }
 
 RenderMetalFunctionEntryPoints emitMetalFunctions(StringBuilder& stringBuilder, AST::ShaderModule& module)
 {
-    FunctionDefinitionWriter functionDefinitionWriter(stringBuilder);
+    FunctionDefinitionWriter functionDefinitionWriter(module, stringBuilder);
     functionDefinitionWriter.visit(module);
 
     // FIXME: return the actual entry points

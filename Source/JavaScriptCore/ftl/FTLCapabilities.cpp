@@ -194,6 +194,7 @@ inline CapabilityLevel canCompile(Node* node)
     case TailCallForwardVarargs:
     case TailCallForwardVarargsInlinedCaller:
     case ConstructForwardVarargs:
+    case CallWasm:
     case VarargsLength:
     case LoadVarargs:
     case ValueToInt32:
@@ -265,6 +266,7 @@ inline CapabilityLevel canCompile(Node* node)
     case ExtractValueFromWeakMapGet:
     case SetAdd:
     case MapSet:
+    case MapOrSetDelete:
     case WeakMapGet:
     case WeakSetAdd:
     case WeakMapSet:

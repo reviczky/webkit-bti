@@ -450,8 +450,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     accessibility/AXLogger.h
     accessibility/AXObjectCache.h
-    accessibility/AXTreeStore.h
+    accessibility/AXTextMarker.h
     accessibility/AXTextStateChangeIntent.h
+    accessibility/AXTreeStore.h
     accessibility/AccessibilityListBox.h
     accessibility/AccessibilityMenuListPopup.h
     accessibility/AccessibilityMockObject.h
@@ -525,6 +526,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     bindings/js/JSDOMMicrotask.h
     bindings/js/JSDOMOperation.h
     bindings/js/JSDOMPromiseDeferred.h
+    bindings/js/JSDOMPromiseDeferredForward.h
     bindings/js/JSDOMWindowBase.h
     bindings/js/JSDOMWrapper.h
     bindings/js/JSDOMWrapperCache.h
@@ -640,11 +642,15 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/DeprecatedCSSOMValue.h
     css/DeprecatedCSSOMValueList.h
     css/FontLoadTimingOverride.h
+    css/ImmutableStyleProperties.h
     css/MediaList.h
     css/MediaQueryParserContext.h
+    css/MutableStyleProperties.h
     css/Rect.h
+    css/ShorthandSerializer.h
     css/StyleColor.h
     css/StyleProperties.h
+    css/StylePropertiesInlines.h
     css/StyleRule.h
     css/StyleRuleType.h
     css/StyleSheet.h
@@ -869,6 +875,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     editing/TextIterator.h
     editing/TextIteratorBehavior.h
     editing/TextManipulationController.h
+    editing/TextManipulationControllerExclusionRule.h
+    editing/TextManipulationControllerManipulationFailure.h
     editing/TextManipulationItem.h
     editing/TextManipulationToken.h
     editing/UndoStep.h
@@ -905,6 +913,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/Autofill.h
     html/CachedHTMLCollection.h
     html/CanvasBase.h
+    html/CanvasObserver.h
     html/CollectionTraversal.h
     html/CollectionType.h
     html/CustomElementFormValue.h
@@ -1021,6 +1030,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/canvas/ImageBitmapRenderingContextSettings.h
     html/canvas/WebGLAny.h
     html/canvas/WebGLContextAttributes.h
+    html/canvas/WebGLStateTracker.h
 
     html/forms/FileIconLoader.h
 
@@ -1250,6 +1260,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/ImageAnalysisQueue.h
     page/InteractionRegion.h
     page/LayoutMilestone.h
+    page/LookalikeCharactersSanitizationData.h
     page/MediaCanStartListener.h
     page/MediaControlsContextMenuItem.h
     page/MediaProducer.h
@@ -1512,7 +1523,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/VideoFrameTimeMetadata.h
     platform/VideoPixelFormat.h
     platform/WebCorePersistentCoders.h
-    platform/WebGLStateTracker.h
     platform/Widget.h
     platform/WindowsKeyboardCodes.h
 
@@ -1628,6 +1638,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/FontSelectorClient.h
     platform/graphics/FontTaggedSettings.h
     platform/graphics/FourCC.h
+    platform/graphics/GCGLSpan.h
     platform/graphics/GLContext.h
     platform/graphics/GeometryUtilities.h
     platform/graphics/Glyph.h
@@ -1640,13 +1651,15 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/GradientColorStops.h
     platform/graphics/GraphicsContext.h
     platform/graphics/GraphicsContextGL.h
+    platform/graphics/GraphicsContextGLActiveInfo.h
     platform/graphics/GraphicsContextGLAttributes.h
+    platform/graphics/GraphicsContextGLEnums.h
     platform/graphics/GraphicsContextGLState.h
     platform/graphics/GraphicsContextState.h
     platform/graphics/GraphicsContextStateSaver.h
     platform/graphics/GraphicsLayer.h
-    platform/graphics/GraphicsLayerContentsDisplayDelegate.h
     platform/graphics/GraphicsLayerClient.h
+    platform/graphics/GraphicsLayerContentsDisplayDelegate.h
     platform/graphics/GraphicsLayerFactory.h
     platform/graphics/GraphicsLayerTransform.h
     platform/graphics/GraphicsLayerUpdater.h

@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2WebExtension</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.5</p>
+        <p>Library Version: 2.39.7</p>
         
       </div>
       
@@ -156,23 +156,23 @@ be either <code>webkit_web_extension_initialize()</code> with prototype <code>We
 <code>webkit_web_extension_initialize_with_user_data()</code> with prototype <code>WebKitWebExtensionInitializeWithUserDataFunction</code>.
 This function has to be public and it has to use the #G_MODULE_EXPORT macro. It is called when the
 web process is&nbsp;initialized.</p>
-<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
-<span class="nf">web_page_created_callback</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebExtension</span><span class="w"> </span><span class="o">*</span><span class="n">extension</span><span class="p">,</span><span class="w"></span>
-<span class="w">                           </span><span class="n">WebKitWebPage</span><span class="w">      </span><span class="o">*</span><span class="n">web_page</span><span class="p">,</span><span class="w"></span>
-<span class="w">                           </span><span class="n">gpointer</span><span class="w">            </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">g_print</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Page %d created for %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="w"></span>
-<span class="w">             </span><span class="n">webkit_web_page_get_id</span><span class="w"> </span><span class="p">(</span><span class="n">web_page</span><span class="p">),</span><span class="w"></span>
-<span class="w">             </span><span class="n">webkit_web_page_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_page</span><span class="p">));</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span>
+<span class="nf">web_page_created_callback</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebExtension</span><span class="w"> </span><span class="o">*</span><span class="n">extension</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">WebKitWebPage</span><span class="w">      </span><span class="o">*</span><span class="n">web_page</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">gpointer</span><span class="w">            </span><span class="n">user_data</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="n">g_print</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Page %d created for %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span>
+<span class="w">             </span><span class="n">webkit_web_page_get_id</span><span class="w"> </span><span class="p">(</span><span class="n">web_page</span><span class="p">),</span>
+<span class="w">             </span><span class="n">webkit_web_page_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_page</span><span class="p">));</span>
+<span class="p">}</span>
 
-<span class="n">G_MODULE_EXPORT</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
-<span class="n">webkit_web_extension_initialize</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebExtension</span><span class="w"> </span><span class="o">*</span><span class="n">extension</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">extension</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;page-created&quot;</span><span class="p">,</span><span class="w"></span>
-<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">web_page_created_callback</span><span class="p">),</span><span class="w"></span>
-<span class="w">                      </span><span class="nb">NULL</span><span class="p">);</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="n">G_MODULE_EXPORT</span><span class="w"> </span><span class="kt">void</span>
+<span class="n">webkit_web_extension_initialize</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebExtension</span><span class="w"> </span><span class="o">*</span><span class="n">extension</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">extension</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;page-created&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">web_page_created_callback</span><span class="p">),</span>
+<span class="w">                      </span><span class="nb">NULL</span><span class="p">);</span>
+<span class="p">}</span>
 </code></pre></div>
 
 <p>The previous piece of code shows a trivial example of an extension that notifies when
@@ -185,30 +185,30 @@ function, you have to call <code>webkit_web_context_set_web_extensions_initializ
 the desired data as parameter. You can see an example of this in the following piece of&nbsp;code:</p>
 <div class="codehilite"><pre><span></span><code><span class="cp">#define WEB_EXTENSIONS_DIRECTORY </span><span class="c1">// ...</span>
 
-<span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
-<span class="nf">initialize_web_extensions</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebContext</span><span class="w"> </span><span class="o">*</span><span class="n">context</span><span class="p">,</span><span class="w"></span>
-<span class="w">                           </span><span class="n">gpointer</span><span class="w">          </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
+<span class="k">static</span><span class="w"> </span><span class="kt">void</span>
+<span class="nf">initialize_web_extensions</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebContext</span><span class="w"> </span><span class="o">*</span><span class="n">context</span><span class="p">,</span>
+<span class="w">                           </span><span class="n">gpointer</span><span class="w">          </span><span class="n">user_data</span><span class="p">)</span>
+<span class="p">{</span>
 <span class="w">  </span><span class="c1">// Web Extensions get a different ID for each Web Process</span>
-<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="n">guint32</span><span class="w"> </span><span class="n">unique_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"></span>
+<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="n">guint32</span><span class="w"> </span><span class="n">unique_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
 
-<span class="w">  </span><span class="n">webkit_web_context_set_web_extensions_directory</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">     </span><span class="n">context</span><span class="p">,</span><span class="w"> </span><span class="n">WEB_EXTENSIONS_DIRECTORY</span><span class="p">);</span><span class="w"></span>
-<span class="w">  </span><span class="n">webkit_web_context_set_web_extensions_initialization_user_data</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">     </span><span class="n">context</span><span class="p">,</span><span class="w"> </span><span class="n">g_variant_new_uint32</span><span class="w"> </span><span class="p">(</span><span class="n">unique_id</span><span class="o">++</span><span class="p">));</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="w">  </span><span class="n">webkit_web_context_set_web_extensions_directory</span><span class="w"> </span><span class="p">(</span>
+<span class="w">     </span><span class="n">context</span><span class="p">,</span><span class="w"> </span><span class="n">WEB_EXTENSIONS_DIRECTORY</span><span class="p">);</span>
+<span class="w">  </span><span class="n">webkit_web_context_set_web_extensions_initialization_user_data</span><span class="w"> </span><span class="p">(</span>
+<span class="w">     </span><span class="n">context</span><span class="p">,</span><span class="w"> </span><span class="n">g_variant_new_uint32</span><span class="w"> </span><span class="p">(</span><span class="n">unique_id</span><span class="o">++</span><span class="p">));</span>
+<span class="p">}</span>
 
-<span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">argc</span><span class="p">,</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="o">**</span><span class="n">argv</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">  </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">webkit_web_context_get_default</span><span class="w"> </span><span class="p">(),</span><span class="w"></span>
-<span class="w">                   </span><span class="s">&quot;initialize-web-extensions&quot;</span><span class="p">,</span><span class="w"></span>
-<span class="w">                    </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">initialize_web_extensions</span><span class="p">),</span><span class="w"></span>
-<span class="w">                    </span><span class="nb">NULL</span><span class="p">);</span><span class="w"></span>
+<span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">argc</span><span class="p">,</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="o">**</span><span class="n">argv</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">  </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">webkit_web_context_get_default</span><span class="w"> </span><span class="p">(),</span>
+<span class="w">                   </span><span class="s">&quot;initialize-web-extensions&quot;</span><span class="p">,</span>
+<span class="w">                    </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">initialize_web_extensions</span><span class="p">),</span>
+<span class="w">                    </span><span class="nb">NULL</span><span class="p">);</span>
 
-<span class="w">  </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_new</span><span class="w"> </span><span class="p">();</span><span class="w"></span>
+<span class="w">  </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_new</span><span class="w"> </span><span class="p">();</span>
 
 <span class="w">  </span><span class="c1">// ...</span>
-<span class="p">}</span><span class="w"></span>
+<span class="p">}</span>
 </code></pre></div>
         </div>
 

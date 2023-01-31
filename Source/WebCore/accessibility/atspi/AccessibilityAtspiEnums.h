@@ -229,7 +229,7 @@ enum class Relation {
     ErrorFor,
 };
 
-enum CoordinateType {
+enum class CoordinateType {
     ScreenCoordinates,
     WindowCoordinates,
     ParentCoordinates,
@@ -246,7 +246,7 @@ enum ComponentLayer {
     WindowLayer,
 };
 
-enum ScrollType {
+enum class ScrollType {
     TopLeft,
     BottomRight,
     TopEdge,

@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.5</p>
+        <p>Library Version: 2.39.7</p>
         
       </div>
       
@@ -281,7 +281,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L85">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L90">[src]</a>
           
         </h4>
 
@@ -293,9 +293,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           <p>Manages aspects common to all <code>WebKitWebView</code><!-- -->s</p>
 <p>The <code>WebKitWebContext</code> manages all aspects common to all
 <code>WebKitWebView</code><!-- -->s.</p>
-<p>You can define the <code>WebKitCacheModel</code> and <code>WebKitProcessModel</code> with
-<code>webkit_web_context_set_cache_model()</code> and
-webkit_web_context_set_process_model(), depending on the needs of
+<p>You can define the <code>WebKitCacheModel</code> with
+webkit_web_context_set_cache_model(), depending on the needs of
 your application. You can access the <code>WebKitSecurityManager</code> to specify
 the behaviour of your application regarding security using&nbsp;webkit_web_context_get_security_manager().</p>
 <p>It is also possible to change your preferred language or enable
@@ -556,12 +555,12 @@ not appropriate for Internet&nbsp;applications.</p>
           <div class="docblock"><p>Deprecated since: 2.32</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebContext.get_process_model.html">webkit_web_context_get_process_model</a></h6>
           <div class="docblock">
-            <p>Returns the current process&nbsp;model.</p>
+            <p>Returns <code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.4</p></div>
+          <div class="docblock"><p>Available since: 2.4</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -740,12 +739,15 @@ not appropriate for Internet&nbsp;applications.</p>
           
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebContext.set_process_model.html">webkit_web_context_set_process_model</a></h6>
           <div class="docblock">
-            <p>Specifies a process model for&nbsp;WebViews.</p>
+            <p>This function previously allowed specifying the process model to use.
+However, since 2.26, the only allowed process model is
+<code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>, so this function
+does&nbsp;nothing.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.4</p></div>
+          <div class="docblock"><p>Available since: 2.4</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">

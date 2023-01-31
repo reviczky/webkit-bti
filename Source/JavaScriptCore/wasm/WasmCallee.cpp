@@ -72,11 +72,14 @@ inline void Callee::runWithDowncast(const Func& func)
     case CompilationMode::OMGForOSREntryMode:
         break;
 #endif
-    case CompilationMode::EmbedderEntrypointMode:
-        func(static_cast<EmbedderEntrypointCallee*>(this));
+    case CompilationMode::JSEntrypointMode:
+        func(static_cast<JSEntrypointCallee*>(this));
         break;
     case CompilationMode::JSToWasmICMode:
         func(static_cast<JSToWasmICCallee*>(this));
+        break;
+    case CompilationMode::WasmToJSMode:
+        func(static_cast<WasmToJSCallee*>(this));
         break;
     }
 }
@@ -150,30 +153,10 @@ void JITCallee::setEntrypoint(Wasm::Entrypoint&& entrypoint)
     CalleeRegistry::singleton().registerCallee(this);
 }
 
-ptrdiff_t JSToWasmICCallee::previousInstanceOffset(const RegisterAtOffsetList& calleeSaveRegisters)
+WasmToJSCallee::WasmToJSCallee()
+    : Callee(Wasm::CompilationMode::WasmToJSMode)
 {
-    ptrdiff_t result = calleeSaveRegisters.registerCount() * sizeof(CPURegister);
-    result = -result - sizeof(CPURegister);
-#if ASSERT_ENABLED
-    ptrdiff_t minOffset = 1;
-    for (const RegisterAtOffset& regAtOffset : calleeSaveRegisters) {
-        ptrdiff_t offset = regAtOffset.offset();
-        ASSERT(offset < 0);
-        minOffset = std::min(offset, minOffset);
-#if USE(JSVALUE32_64)
-        ASSERT(!regAtOffset.reg().isFPR()); // Because FPRs are wider than sizeof(CPURegister)
-#endif
-    }
-    ASSERT(minOffset - static_cast<ptrdiff_t>(sizeof(CPURegister)) == result);
-#endif
-    return result;
-}
-
-Wasm::Instance* JSToWasmICCallee::previousInstance(CallFrame* callFrame)
-{
-    ASSERT(callFrame->callee().asWasmCallee() == this);
-    auto* result = *bitwise_cast<Wasm::Instance**>(bitwise_cast<char*>(callFrame) + previousInstanceOffset(m_entrypoint.calleeSaveRegisters));
-    return result;
+    CalleeRegistry::singleton().registerCallee(this);
 }
 
 LLIntCallee::LLIntCallee(FunctionCodeBlockGenerator& generator, size_t index, std::pair<const Name*, RefPtr<NameSection>>&& name)

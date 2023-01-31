@@ -28,7 +28,9 @@
 #if ENABLE(WEBGL)
 
 #include "DestinationColorSpace.h"
+#include "GraphicsContextGLActiveInfo.h"
 #include "GraphicsContextGLAttributes.h"
+#include "GraphicsContextGLEnums.h"
 #include "GraphicsLayerContentsDisplayDelegate.h"
 #include "GraphicsTypesGL.h"
 #include "Image.h"
@@ -46,6 +48,14 @@
 #endif
 #endif
 
+inline constexpr size_t gcGLSpanDynamicExtent = std::numeric_limits<size_t>::max();
+
+template<typename T, size_t Extent = gcGLSpanDynamicExtent>
+class GCGLSpan;
+
+template<typename... Types>
+struct GCGLSpanTuple;
+
 namespace WebCore {
 class ImageBuffer;
 class PixelBuffer;
@@ -57,12 +67,6 @@ class GraphicsContextGLCV;
 class MediaPlayer;
 class VideoFrame;
 #endif
-
-struct GraphicsContextGLActiveInfo {
-    String name;
-    GCGLenum type;
-    GCGLint size;
-};
 
 class GraphicsContextGL;
 
@@ -712,6 +716,9 @@ public:
     static constexpr GCGLenum SRGB8_ALPHA8_EXT = 0x8C43;
     static constexpr GCGLenum FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING_EXT = 0x8210;
 
+    // EXT_color_buffer_half_float
+    static constexpr GCGLenum FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE_EXT = 0x8211;
+
     // EXT_blend_minmax enums
     static constexpr GCGLenum MIN_EXT = 0x8007;
     static constexpr GCGLenum MAX_EXT = 0x8008;
@@ -818,6 +825,19 @@ public:
     static constexpr GCGLenum RG16_SNORM_EXT = 0x8F99;
     static constexpr GCGLenum RGB16_SNORM_EXT = 0x8F9A;
     static constexpr GCGLenum RGBA16_SNORM_EXT = 0x8F9B;
+
+    // GL_ANGLE_clip_cull_distance
+    static constexpr GCGLenum MAX_CLIP_DISTANCES_ANGLE = 0x0D32;
+    static constexpr GCGLenum MAX_CULL_DISTANCES_ANGLE = 0x82F9;
+    static constexpr GCGLenum MAX_COMBINED_CLIP_AND_CULL_DISTANCES_ANGLE = 0x82FA;
+    static constexpr GCGLenum CLIP_DISTANCE0_ANGLE = 0x3000;
+    static constexpr GCGLenum CLIP_DISTANCE1_ANGLE = 0x3001;
+    static constexpr GCGLenum CLIP_DISTANCE2_ANGLE = 0x3002;
+    static constexpr GCGLenum CLIP_DISTANCE3_ANGLE = 0x3003;
+    static constexpr GCGLenum CLIP_DISTANCE4_ANGLE = 0x3004;
+    static constexpr GCGLenum CLIP_DISTANCE5_ANGLE = 0x3005;
+    static constexpr GCGLenum CLIP_DISTANCE6_ANGLE = 0x3006;
+    static constexpr GCGLenum CLIP_DISTANCE7_ANGLE = 0x3007;
 
     // GL_ANGLE_provoking_vertex
     static constexpr GCGLenum FIRST_VERTEX_CONVENTION_ANGLE = 0x8E4D;
@@ -1526,11 +1546,7 @@ public:
     // on the content.
     WEBCORE_EXPORT void markLayerComposited();
 
-    enum class SimulatedEventForTesting {
-        ContextChange,
-        GPUStatusFailure,
-        Timeout
-    };
+    using SimulatedEventForTesting = GraphicsContextGLSimulatedEventForTesting;
     virtual void simulateEventForTesting(SimulatedEventForTesting) = 0;
 
 #if ENABLE(VIDEO) && USE(AVFOUNDATION)
@@ -1603,48 +1619,6 @@ private:
 };
 
 WEBCORE_EXPORT RefPtr<GraphicsContextGL> createWebProcessGraphicsContextGL(const GraphicsContextGLAttributes&, SerialFunctionDispatcher* = nullptr);
-
-inline GCGLfloat GraphicsContextGL::getFloat(GCGLenum pname)
-{
-    GCGLfloat value[1] { };
-    getFloatv(pname, value);
-    return value[0];
-}
-
-inline GCGLboolean GraphicsContextGL::getBoolean(GCGLenum pname)
-{
-    GCGLboolean value[1] { };
-    getBooleanv(pname, value);
-    return value[0];
-}
-
-inline GCGLint GraphicsContextGL::getInteger(GCGLenum pname)
-{
-    GCGLint value[1] { };
-    getIntegerv(pname, value);
-    return value[0];
-}
-
-inline GCGLint GraphicsContextGL::getIntegeri(GCGLenum pname, GCGLuint index)
-{
-    GCGLint value[4] { };
-    getIntegeri_v(pname, index, value);
-    return value[0];
-}
-
-inline GCGLint GraphicsContextGL::getActiveUniformBlocki(GCGLuint program, GCGLuint uniformBlockIndex, GCGLenum pname)
-{
-    GCGLint value[1] { };
-    getActiveUniformBlockiv(program, uniformBlockIndex, pname, value);
-    return value[0];
-}
-
-inline GCGLint GraphicsContextGL::getInternalformati(GCGLenum target, GCGLenum internalformat, GCGLenum pname)
-{
-    GCGLint value[1] { };
-    getInternalformativ(target, internalformat, pname, value);
-    return value[0];
-}
 
 inline GCGLOwned::~GCGLOwned()
 {

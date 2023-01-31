@@ -128,17 +128,7 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
     : m_outputCallback(WTFMove(outputCallback))
     , m_postTaskCallback(WTFMove(postTaskCallback))
 {
-    GUniquePtr<char> elementName(gst_element_get_name(element.get()));
-    auto elementHasProperty = [&](const char* name) -> bool {
-        return g_object_class_find_property(G_OBJECT_GET_CLASS(element.get()), name);
-    };
-    if (g_str_has_prefix(elementName.get(), "avdec")) {
-        if (elementHasProperty("max-threads"))
-            g_object_set(element.get(), "max-threads", 1, nullptr);
-    }
-
-    if (elementHasProperty("max-errors"))
-        g_object_set(element.get(), "max-errors", 0, nullptr);
+    configureVideoDecoderForHarnessing(element);
 
     GST_DEBUG_OBJECT(element.get(), "Configuring decoder for codec %s", codecName.ascii().data());
     GRefPtr<GstCaps> inputCaps;
@@ -167,20 +157,20 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
     }
 
     gst_caps_set_simple(inputCaps.get(), "width", G_TYPE_INT, config.width, "height", G_TYPE_INT, config.height, nullptr);
-    m_harness = GStreamerElementHarness::create(WTFMove(element), [protectedThis = Ref { *this }, this](const GRefPtr<GstBuffer>& outputBuffer) {
+    m_harness = GStreamerElementHarness::create(WTFMove(element), [protectedThis = Ref { *this }, this](auto& stream, const GRefPtr<GstBuffer>& outputBuffer) {
         if (protectedThis->m_isClosed)
             return;
 
         GST_TRACE_OBJECT(m_harness->element(), "Got frame with PTS: %" GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_PTS(outputBuffer.get())));
 
         if (m_presentationSize.isEmpty())
-            m_presentationSize = getVideoResolutionFromCaps(m_harness->outputCaps().get()).value_or(FloatSize { 0, 0 });
+            m_presentationSize = getVideoResolutionFromCaps(stream.outputCaps().get()).value_or(FloatSize { 0, 0 });
 
-        m_postTaskCallback([protectedThis = Ref { *this }, this, outputBuffer = GRefPtr<GstBuffer>(outputBuffer)]() mutable {
+        m_postTaskCallback([protectedThis = Ref { *this }, this, outputBuffer = GRefPtr<GstBuffer>(outputBuffer), outputCaps = stream.outputCaps()]() mutable {
             if (protectedThis->m_isClosed)
                 return;
 
-            auto sample = adoptGRef(gst_sample_new(outputBuffer.get(), m_harness->outputCaps().get(), nullptr, nullptr));
+            auto sample = adoptGRef(gst_sample_new(outputBuffer.get(), outputCaps.get(), nullptr, nullptr));
             auto videoFrame = VideoFrameGStreamer::create(WTFMove(sample), m_presentationSize, fromGstClockTime(GST_BUFFER_PTS(outputBuffer.get())));
 
             m_outputCallback(VideoDecoder::DecodedFrame { WTFMove(videoFrame), static_cast<int64_t>(GST_BUFFER_PTS(outputBuffer.get())), GST_BUFFER_DURATION(outputBuffer.get()) });
@@ -207,15 +197,15 @@ void GStreamerInternalVideoDecoder::decode(Span<const uint8_t> frameData, bool i
 
     auto bufferSize = data.size();
     auto bufferData = data.data();
-    auto* buffer = gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, bufferData, bufferSize, 0, bufferSize, new Vector<uint8_t>(WTFMove(data)), [](gpointer data) {
+    auto buffer = adoptGRef(gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, bufferData, bufferSize, 0, bufferSize, new Vector<uint8_t>(WTFMove(data)), [](gpointer data) {
         delete static_cast<Vector<uint8_t>*>(data);
-    });
+    }));
 
-    GST_BUFFER_DTS(buffer) = GST_BUFFER_PTS(buffer) = timestamp;
+    GST_BUFFER_DTS(buffer.get()) = GST_BUFFER_PTS(buffer.get()) = timestamp;
     if (duration)
-        GST_BUFFER_DURATION(buffer) = *duration;
+        GST_BUFFER_DURATION(buffer.get()) = *duration;
 
-    auto result = m_harness->pushBuffer(buffer);
+    auto result = m_harness->pushBuffer(WTFMove(buffer));
     m_postTaskCallback([protectedThis = Ref { *this }, callback = WTFMove(callback), result]() mutable {
         if (protectedThis->m_isClosed)
             return;

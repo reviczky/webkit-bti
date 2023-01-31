@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.5</p>
+        <p>Library Version: 2.39.7</p>
         
       </div>
       
@@ -183,9 +183,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 <p>Using a <code>WebKitUserContentManager</code> user <span class="caps">CSS</span> style sheets can be set to
 be injected in the web pages loaded by a <code>WebKitWebView</code>, by&nbsp;webkit_user_content_manager_add_style_sheet().</p>
 <p>To use a <code>WebKitUserContentManager</code>, it must be created using
-webkit_user_content_manager_new(), and then passed to
-webkit_web_view_new_with_user_content_manager(). User style
-sheets can be created with&nbsp;webkit_user_style_sheet_new().</p>
+webkit_user_content_manager_new(), and then used to construct
+a <code>WebKitWebView</code>. User style sheets can be created with&nbsp;webkit_user_style_sheet_new().</p>
 <p>User style sheets can be added and removed at any time, but
 they will affect the web pages loaded&nbsp;afterwards.</p>
         </div>

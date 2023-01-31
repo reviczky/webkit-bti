@@ -564,6 +564,9 @@ auto AirIRGenerator32::emitCheckAndPreparePointer(ExpressionType pointer, uint32
         });
         break;
     }
+    case MemoryMode::Signaling: {
+        break;
+    }
     }
 
     append(AddPtr, memoryBase, result);
@@ -938,15 +941,14 @@ Tmp AirIRGenerator32::emitCatchImpl(CatchKind kind, ControlType& data, unsigned 
     patch->resultConstraints.append(B3::ValueRep::reg(GPRInfo::returnValueGPR));
     patch->resultConstraints.append(B3::ValueRep::SomeRegister);
     patch->resultConstraints.append(B3::ValueRep::SomeRegister); // result Tag
-    GPRReg wasmContextInstanceGPR = m_wasmContextInstanceGPR;
-    patch->setGenerator([=] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+    patch->setGenerator([=](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
         // Returning one EncodedJSValue on the stack
         constexpr int32_t resultSpace = WTF::roundUpToMultipleOf<stackAlignmentBytes()>(static_cast<int32_t>(sizeof(EncodedJSValue)));
         jit.subPtr(CCallHelpers::TrustedImm32(resultSpace), MacroAssembler::stackPointerRegister);
         jit.move(params[3].gpr(), GPRInfo::argumentGPR0);
         jit.move(MacroAssembler::stackPointerRegister, GPRInfo::argumentGPR1);
-        jit.prepareWasmCallOperation(wasmContextInstanceGPR);
+        jit.prepareWasmCallOperation(GPRInfo::wasmContextInstancePointer);
         CCallHelpers::Call call = jit.call(OperationPtrTag);
         jit.addLinkTask([call] (LinkBuffer& linkBuffer) {
             linkBuffer.link<OperationPtrTag>(call, operationWasmRetrieveAndClearExceptionIfCatchable);
@@ -1156,10 +1158,19 @@ auto AirIRGenerator32::addRethrow(unsigned, ControlType& data) -> PartialResult
     patch->clobber(RegisterSetBuilder::registersToSaveForJSCall(RegisterSetBuilder::allScalarRegisters()));
     patch->effects.terminal = true;
 
+    // Unfortunately, this operation doesn't use `emitCCall` because of the
+    // extra support in `preparePatchpointForExceptions`--as a result, this
+    // chunk below is platform specific and unlikely to work on architectures
+    // other than arm32
+
     Vector<ConstrainedTmp, 3> patchArgs;
+#if CPU(ARM_THUMB2)
     patchArgs.append(ConstrainedTmp(instanceValue(), B3::ValueRep::reg(GPRInfo::argumentGPR0)));
-    patchArgs.append(ConstrainedTmp(TypedTmp(data.exception().lo(), Types::I32), B3::ValueRep::reg(GPRInfo::argumentGPR1)));
-    patchArgs.append(ConstrainedTmp(TypedTmp(data.exception().hi(), Types::I32), B3::ValueRep::reg(GPRInfo::argumentGPR2)));
+    patchArgs.append(ConstrainedTmp(TypedTmp(data.exception().lo(), Types::I32), B3::ValueRep::reg(GPRInfo::argumentGPR2)));
+    patchArgs.append(ConstrainedTmp(TypedTmp(data.exception().hi(), Types::I32), B3::ValueRep::reg(GPRInfo::argumentGPR3)));
+#else
+#  error "Unsupported architecture" // see comment above
+#endif
 
     auto handle = preparePatchpointForExceptions(patch, patchArgs);
     patch->setGenerator([this, handle] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {

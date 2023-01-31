@@ -31,6 +31,9 @@
 #include <wtf/EnumClassOperatorOverloads.h>
 
 namespace JSC  {
+namespace Wasm {
+class Instance;
+}
 
 template<typename> struct BaseInstruction;
 struct JSOpcodeTraits;
@@ -177,8 +180,6 @@ using JSInstruction = BaseInstruction<JSOpcodeTraits>;
         inline SUPPRESS_ASAN CodeBlock* unsafeCodeBlock() const;
         inline JSScope* scope(int scopeRegisterOffset) const;
 
-        JS_EXPORT_PRIVATE bool isAnyWasmCallee() const;
-
         // Global object in which the currently executing code was defined.
         // Differs from VM::deprecatedVMEntryGlobalObject() during function calls across web browser frames.
         JSGlobalObject* lexicalGlobalObject(VM&) const;
@@ -204,6 +205,7 @@ using JSInstruction = BaseInstruction<JSOpcodeTraits>;
 
         static ptrdiff_t callerFrameOffset() { return OBJECT_OFFSETOF(CallerFrameAndPC, callerFrame); }
 
+        void* rawReturnPCForInspection() const { return callerFrameAndPC().returnPC; }
         void* returnPCForInspection() const { return removeCodePtrTag(callerFrameAndPC().returnPC); }
         bool hasReturnPC() const { return !!callerFrameAndPC().returnPC; }
         void clearReturnPC() { callerFrameAndPC().returnPC = nullptr; }
@@ -216,6 +218,11 @@ using JSInstruction = BaseInstruction<JSOpcodeTraits>;
         unsigned unsafeCallSiteAsRawBits() const;
         CallSiteIndex callSiteIndex() const;
         CallSiteIndex unsafeCallSiteIndex() const;
+
+#if ENABLE(WEBASSEMBLY)
+        Wasm::Instance* wasmInstance() const;
+#endif
+
     private:
         unsigned callSiteBitsAsBytecodeOffset() const;
 #if ENABLE(WEBASSEMBLY)

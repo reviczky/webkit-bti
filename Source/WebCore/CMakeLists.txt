@@ -89,6 +89,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/crypto/parameters"
     "${WEBCORE_DIR}/css"
     "${WEBCORE_DIR}/css/calc"
+    "${WEBCORE_DIR}/css/color"
     "${WEBCORE_DIR}/css/parser"
     "${WEBCORE_DIR}/css/query"
     "${WEBCORE_DIR}/css/typedom"
@@ -1651,6 +1652,7 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPUIndexFormat.idl
     Modules/WebGPU/GPULoadOp.idl
     Modules/WebGPU/GPUMapMode.idl
+    Modules/WebGPU/GPUMipmapFilterMode.idl
     Modules/WebGPU/GPUMultisampleState.idl
     Modules/WebGPU/GPUObjectBase.idl
     Modules/WebGPU/GPUObjectDescriptorBase.idl
@@ -1754,6 +1756,7 @@ set(WebCore_PLUG_INS_RESOURCES
 )
 
 set(WebCore_LIBRARIES
+    ICU::uc
     LibXml2::LibXml2
     SQLite::SQLite3
     ZLIB::ZLIB
@@ -1889,6 +1892,7 @@ if (ENABLE_WEBGL)
         html/canvas/OESVertexArrayObject.cpp
         html/canvas/WebGL2RenderingContext.cpp
         html/canvas/WebGLBuffer.cpp
+        html/canvas/WebGLClipCullDistance.cpp
         html/canvas/WebGLColorBufferFloat.cpp
         html/canvas/WebGLCompressedTextureASTC.cpp
         html/canvas/WebGLCompressedTextureETC.cpp
@@ -1957,6 +1961,7 @@ list(APPEND WebCore_IDL_FILES
     html/canvas/WebGL2RenderingContext.idl
     html/canvas/WebGLActiveInfo.idl
     html/canvas/WebGLBuffer.idl
+    html/canvas/WebGLClipCullDistance.idl
     html/canvas/WebGLColorBufferFloat.idl
     html/canvas/WebGLCompressedTextureASTC.idl
     html/canvas/WebGLCompressedTextureETC.idl
@@ -2301,12 +2306,15 @@ set(WebCoreTestSupport_INTERFACE_INCLUDE_DIRECTORIES
 )
 
 WEBKIT_FRAMEWORK_DECLARE(WebCore)
-WEBKIT_FRAMEWORK_DECLARE(WebCoreTestSupport)
+WEBKIT_LIBRARY_DECLARE(WebCoreTestSupport)
 WEBKIT_INCLUDE_CONFIG_FILES_IF_EXISTS()
+
+list(APPEND WebCoreTestSupport_LIBRARIES ${WebCore_LIBRARIES})
+list(APPEND WebCoreTestSupport_PRIVATE_LIBRARIES ${WebCore_PRIVATE_LIBRARIES})
+list(APPEND WebCoreTestSupport_DEPENDENCIES WebCore)
 
 MAKE_HASH_TOOLS(${WEBCORE_DIR}/platform/ColorData)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/ColorData.cpp)
-
 
 # Generate DOMJITAbstractHeapRepository.h
 add_custom_command(
@@ -2641,6 +2649,7 @@ WEBKIT_COPY_FILES(WebCore_CopyPrivateHeaders
     FLATTENED
 )
 list(APPEND WebCore_INTERFACE_DEPENDENCIES WebCore_CopyPrivateHeaders)
+list(APPEND WebCoreTestSupport_INTERFACE_DEPENDENCIES WebCore_CopyPrivateHeaders)
 # WebCore_CopyPrivateHeaders needs to have a direct or indirect
 # dependency of WebCore target for CMake Visual Studio generator to
 # eliminate duplicated custom commands. Otherwise, CSSPropertyNames.h
@@ -2676,15 +2685,7 @@ list(APPEND WebCoreTestSupport_INCLUDE_DIRECTORIES ${WebCore_INCLUDE_DIRECTORIES
 list(APPEND WebCoreTestSupport_PRIVATE_INCLUDE_DIRECTORIES ${WebCore_PRIVATE_INCLUDE_DIRECTORIES})
 list(APPEND WebCoreTestSupport_SYSTEM_INCLUDE_DIRECTORIES ${WebCore_SYSTEM_INCLUDE_DIRECTORIES})
 
-if (WebCore_LIBRARY_TYPE STREQUAL SHARED)
-    list(APPEND WebCoreTestSupport_PRIVATE_LIBRARIES WebCore)
-else ()
-    list(APPEND WebCoreTestSupport_LIBRARIES ${WebCore_LIBRARIES})
-    list(APPEND WebCoreTestSupport_PRIVATE_LIBRARIES ${WebCore_PRIVATE_LIBRARIES})
-    list(APPEND WebCoreTestSupport_DEPENDENCIES WebCore)
-endif ()
-
-WEBKIT_FRAMEWORK(WebCoreTestSupport)
+WEBKIT_LIBRARY(WebCoreTestSupport)
 
 if (${WebCore_LIBRARY_TYPE} MATCHES "SHARED")
     set_target_properties(WebCore PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})

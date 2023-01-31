@@ -108,7 +108,7 @@
 #include "SpellChecker.h"
 #include "SpellingCorrectionCommand.h"
 #include "StaticPasteboard.h"
-#include "StyleProperties.h"
+#include "StylePropertiesInlines.h"
 #include "StyleTreeResolver.h"
 #include "SystemSoundManager.h"
 #include "TelephoneNumberDetector.h"
@@ -1649,7 +1649,7 @@ void Editor::copyURL(const URL& url, const String& title, Pasteboard& pasteboard
 {
     auto sanitizedURL = url;
     if (auto* page = m_document.page())
-        sanitizedURL = page->sanitizeLookalikeCharacters(url);
+        sanitizedURL = page->sanitizeLookalikeCharacters(url, LookalikeCharacterSanitizationTrigger::Copy);
 
     PasteboardURL pasteboardURL;
     pasteboardURL.url = sanitizedURL;

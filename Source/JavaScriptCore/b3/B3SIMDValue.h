@@ -39,6 +39,7 @@ public:
         switch (kind.opcode()) {
         case VectorExtractLane:
         case VectorReplaceLane:
+        case VectorDupElement:
         case VectorEqual:
         case VectorNotEqual:
         case VectorLessThan:
@@ -91,7 +92,6 @@ public:
         case VectorExtaddPairwise:
         case VectorMulSat:
         case VectorSwizzle:
-        case VectorShuffle:
         case VectorDotProduct:
             return true;
         default:

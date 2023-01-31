@@ -354,13 +354,11 @@ ExceptionOr<void> HTMLFormElement::requestSubmit(HTMLElement* submitter)
     RefPtr<HTMLFormControlElement> control;
     if (submitter) {
         // https://html.spec.whatwg.org/multipage/forms.html#dom-form-requestsubmit
-        if (!is<HTMLFormControlElement>(submitter))
-            return Exception { TypeError };
-        control = downcast<HTMLFormControlElement>(submitter);
-        if (!control->isSubmitButton())
-            return Exception { TypeError };
+        control = dynamicDowncast<HTMLFormControlElement>(*submitter);
+        if (!control || !control->isSubmitButton())
+            return Exception { TypeError, "The specified element is not a submit button."_s };
         if (control->form() != this)
-            return Exception { NotFoundError };
+            return Exception { NotFoundError, "The specified element is not owned by this form element."_s };
     }
 
     submitIfPossible(nullptr, control.get(), SubmittedByJavaScript);
@@ -653,7 +651,7 @@ void HTMLFormElement::addInvalidFormControl(const HTMLElement& formControlElemen
     ASSERT(static_cast<const Element&>(formControlElement).matchesInvalidPseudoClass());
 
     std::optional<Style::PseudoClassChangeInvalidation> styleInvalidation;
-    if (m_invalidFormControls.computesEmpty())
+    if (m_invalidFormControls.isEmptyIgnoringNullReferences())
         emplace(styleInvalidation, *this, { { CSSSelector::PseudoClassValid, false }, { CSSSelector::PseudoClassInvalid, true } });
 
     m_invalidFormControls.add(formControlElement);
@@ -899,7 +897,7 @@ void HTMLFormElement::removeFromPastNamesMap(FormAssociatedElement& item)
 
 bool HTMLFormElement::matchesValidPseudoClass() const
 {
-    return m_invalidFormControls.computesEmpty();
+    return m_invalidFormControls.isEmptyIgnoringNullReferences();
 }
 
 bool HTMLFormElement::matchesInvalidPseudoClass() const

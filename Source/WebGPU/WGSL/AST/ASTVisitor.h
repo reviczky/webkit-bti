@@ -47,6 +47,7 @@ public:
     virtual void visit(GroupAttribute&);
     virtual void visit(LocationAttribute&);
     virtual void visit(StageAttribute&);
+    virtual void visit(WorkgroupSizeAttribute&);
 
     // Declaration
     virtual void visit(Decl&);
@@ -67,6 +68,9 @@ public:
     virtual void visit(StructureAccess&);
     virtual void visit(Uint32Literal&);
     virtual void visit(UnaryExpression&);
+    virtual void visit(BinaryExpression&);
+    virtual void visit(PointerDereference&);
+    virtual void visit(IdentityExpression&);
 
     // Statement
     virtual void visit(Statement&);
@@ -80,6 +84,8 @@ public:
     virtual void visit(ArrayType&);
     virtual void visit(NamedType&);
     virtual void visit(ParameterizedType&);
+    virtual void visit(StructType&);
+    virtual void visit(ReferenceType&);
 
     virtual void visit(Parameter&);
     virtual void visit(StructMember&);

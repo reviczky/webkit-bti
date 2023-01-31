@@ -171,7 +171,7 @@ GStreamerInternalVideoEncoder::GStreamerInternalVideoEncoder(const String& codec
     , m_postTaskCallback(WTFMove(postTaskCallback))
 {
     GRefPtr<GstElement> element = gst_element_factory_make("webkitvideoencoder", nullptr);
-    m_harness = GStreamerElementHarness::create(WTFMove(element), [protectedThis = Ref { *this }, this](const GRefPtr<GstBuffer>& outputBuffer) {
+    m_harness = GStreamerElementHarness::create(WTFMove(element), [protectedThis = Ref { *this }, this](auto&, const GRefPtr<GstBuffer>& outputBuffer) {
         if (protectedThis->m_isClosed)
             return;
 
@@ -288,10 +288,10 @@ bool GStreamerInternalVideoEncoder::encode(VideoEncoder::RawFrame&& rawFrame, bo
         GST_BUFFER_DTS(outputBuffer.get()) = GST_BUFFER_DTS(buffer);
         GST_BUFFER_DURATION(outputBuffer.get()) = GST_BUFFER_DURATION(buffer);
         auto convertedSample = adoptGRef(gst_sample_new(outputBuffer.get(), outputCaps.get(), nullptr, nullptr));
-        result = m_harness->pushSample(convertedSample.get());
+        result = m_harness->pushSample(WTFMove(convertedSample));
     } else
 #endif
-        result = m_harness->pushSample(sample);
+        result = m_harness->pushSample(GRefPtr<GstSample>(sample));
 
     return result;
 }

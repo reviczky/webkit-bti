@@ -345,7 +345,6 @@ void MediaPlayerPrivateGStreamer::load(const String& urlString)
     m_readyState = MediaPlayer::ReadyState::HaveNothing;
     m_player->readyStateChanged();
     m_areVolumeAndMuteInitialized = false;
-    m_hasTaintedOrigin = std::nullopt;
 
     if (!m_isDelayingLoad)
         commitLoad();
@@ -801,36 +800,10 @@ unsigned long long MediaPlayerPrivateGStreamer::totalBytes() const
     return m_totalBytes;
 }
 
-bool MediaPlayerPrivateGStreamer::hasSingleSecurityOrigin() const
+std::optional<bool> MediaPlayerPrivateGStreamer::isCrossOrigin(const SecurityOrigin& origin) const
 {
-    if (!m_source)
-        return false;
-
-    if (!WEBKIT_IS_WEB_SRC(m_source.get()))
-        return true;
-
-    GUniqueOutPtr<char> originalURI, resolvedURI;
-    g_object_get(m_source.get(), "location", &originalURI.outPtr(), "resolved-location", &resolvedURI.outPtr(), nullptr);
-    if (!originalURI || !resolvedURI)
-        return false;
-    if (!g_strcmp0(originalURI.get(), resolvedURI.get()))
-        return true;
-
-    Ref<SecurityOrigin> resolvedOrigin(SecurityOrigin::createFromString(String::fromUTF8(resolvedURI.get())));
-    Ref<SecurityOrigin> requestedOrigin(SecurityOrigin::createFromString(String::fromUTF8(originalURI.get())));
-    return resolvedOrigin->isSameSchemeHostPort(requestedOrigin.get());
-}
-
-std::optional<bool> MediaPlayerPrivateGStreamer::wouldTaintOrigin(const SecurityOrigin& origin) const
-{
-    GST_TRACE_OBJECT(pipeline(), "Checking %u origins", m_origins.size());
-    for (auto& responseOrigin : m_origins) {
-        if (!origin.isSameOriginDomain(*responseOrigin)) {
-            GST_DEBUG_OBJECT(pipeline(), "Found reachable response origin");
-            return true;
-        }
-    }
-    GST_DEBUG_OBJECT(pipeline(), "No valid response origin found");
+    if (WEBKIT_IS_WEB_SRC(m_source.get()))
+        return webKitSrcIsCrossOrigin(WEBKIT_WEB_SRC(m_source.get()), origin);
     return false;
 }
 
@@ -1885,7 +1858,6 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
             GST_DEBUG_OBJECT(pipeline(), "Processing HTTP headers: %" GST_PTR_FORMAT, structure);
             if (const char* uri = gst_structure_get_string(structure, "uri")) {
                 URL url { String::fromLatin1(uri) };
-                m_origins.add(SecurityOrigin::create(url));
 
                 if (url != m_url) {
                     GST_DEBUG_OBJECT(pipeline(), "Ignoring HTTP response headers for non-main URI.");
@@ -2821,22 +2793,14 @@ void MediaPlayerPrivateGStreamer::configureDepayloader(GstElement* depayloader)
     if (!isMediaStreamPlayer())
         return;
 
-    auto depayloaderHasProperty = [&depayloader](const char* name) -> bool {
-        return g_object_class_find_property(G_OBJECT_GET_CLASS(depayloader), name);
-    };
-
-    if (depayloaderHasProperty("request-keyframe"))
+    if (gstObjectHasProperty(depayloader, "request-keyframe"))
         g_object_set(depayloader, "request-keyframe", TRUE, nullptr);
-    if (depayloaderHasProperty("wait-for-keyframe"))
+    if (gstObjectHasProperty(depayloader, "wait-for-keyframe"))
         g_object_set(depayloader, "wait-for-keyframe", TRUE, nullptr);
 }
 
 void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
 {
-    auto decoderHasProperty = [&decoder](const char* name) -> bool {
-        return g_object_class_find_property(G_OBJECT_GET_CLASS(decoder), name);
-    };
-
     GUniquePtr<char> name(gst_element_get_name(decoder));
     if (g_str_has_prefix(name.get(), "v4l2"))
         m_videoDecoderPlatform = GstVideoDecoderPlatform::Video4Linux;
@@ -2848,7 +2812,7 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
         // Set the decoder maximum number of threads to a low, fixed value, not depending on the
         // platform. This also helps with processing metrics gathering. When using the default value
         // the decoder introduces artificial processing latency reflecting the maximum number of threads.
-        if (decoderHasProperty("max-threads"))
+        if (gstObjectHasProperty(decoder, "max-threads"))
             g_object_set(decoder, "max-threads", 2, nullptr);
     }
 #if USE(TEXTURE_MAPPER_GL)
@@ -2858,15 +2822,14 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
     if (!isMediaStreamPlayer())
         return;
 
-    if (decoderHasProperty("automatic-request-sync-points"))
+    if (gstObjectHasProperty(decoder, "automatic-request-sync-points"))
         g_object_set(decoder, "automatic-request-sync-points", TRUE, nullptr);
-    if (decoderHasProperty("discard-corrupted-frames"))
+    if (gstObjectHasProperty(decoder, "discard-corrupted-frames"))
         g_object_set(decoder, "discard-corrupted-frames", TRUE, nullptr);
-    if (decoderHasProperty("output-corrupt"))
+    if (gstObjectHasProperty(decoder, "output-corrupt"))
         g_object_set(decoder, "output-corrupt", FALSE, nullptr);
-    if (decoderHasProperty("max-errors"))
+    if (gstObjectHasProperty(decoder, "max-errors"))
         g_object_set(decoder, "max-errors", -1, nullptr);
-
 
     auto pad = adoptGRef(gst_element_get_static_pad(decoder, "src"));
     gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM | GST_PAD_PROBE_TYPE_BUFFER), [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
@@ -3900,7 +3863,7 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSink()
             if (gst_debug_category_get_threshold(webkit_media_player_debug) < GST_LEVEL_TRACE)
                 g_object_set(m_fpsSink.get(), "text-overlay", FALSE , nullptr);
 
-            if (g_object_class_find_property(G_OBJECT_GET_CLASS(m_fpsSink.get()), "video-sink")) {
+            if (gstObjectHasProperty(m_fpsSink.get(), "video-sink")) {
                 g_object_set(m_fpsSink.get(), "video-sink", m_videoSink.get(), nullptr);
                 videoSink = m_fpsSink.get();
             } else

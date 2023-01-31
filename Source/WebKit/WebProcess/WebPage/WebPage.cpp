@@ -43,6 +43,7 @@
 #include "InjectUserScriptImmediately.h"
 #include "InjectedBundle.h"
 #include "InjectedBundleScriptWorld.h"
+#include "LibWebRTCCodecs.h"
 #include "LibWebRTCProvider.h"
 #include "LoadParameters.h"
 #include "Logging.h"
@@ -641,7 +642,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     });
 #endif
 
-#if ENABLE(SPEECH_SYNTHESIS)
+#if ENABLE(SPEECH_SYNTHESIS) && !USE(GSTREAMER)
     pageConfiguration.speechSynthesisClient = makeUnique<WebSpeechSynthesisClient>(*this);
 #endif
 
@@ -976,6 +977,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #endif
 #if ENABLE(NETWORK_CONNECTION_INTEGRITY)
     setLookalikeCharacterStrings(WTFMove(parameters.lookalikeCharacterStrings));
+    setAllowedLookalikeCharacterStrings(WTFMove(parameters.allowedLookalikeCharacterStrings));
 #endif
 }
 
@@ -2870,12 +2872,12 @@ WebContextMenu* WebPage::contextMenuAtPointInWindow(const IntPoint& point)
     corePage()->contextMenuController().clearContextMenu();
 
     // Simulate a mouse click to generate the correct menu.
-    PlatformMouseEvent mousePressEvent(point, point, RightButton, PlatformEvent::MousePressed, 1, { }, WallTime::now(), WebCore::ForceAtClick, WebCore::NoTap);
+    PlatformMouseEvent mousePressEvent(point, point, RightButton, PlatformEvent::Type::MousePressed, 1, { }, WallTime::now(), WebCore::ForceAtClick, WebCore::NoTap);
     corePage()->userInputBridge().handleMousePressEvent(mousePressEvent);
     Ref mainFrame = corePage()->mainFrame();
     bool handled = corePage()->userInputBridge().handleContextMenuEvent(mousePressEvent, mainFrame);
     auto* menu = handled ? &contextMenu() : nullptr;
-    PlatformMouseEvent mouseReleaseEvent(point, point, RightButton, PlatformEvent::MouseReleased, 1, { }, WallTime::now(), WebCore::ForceAtClick, WebCore::NoTap);
+    PlatformMouseEvent mouseReleaseEvent(point, point, RightButton, PlatformEvent::Type::MouseReleased, 1, { }, WallTime::now(), WebCore::ForceAtClick, WebCore::NoTap);
     corePage()->userInputBridge().handleMouseReleaseEvent(mouseReleaseEvent);
 
     return menu;
@@ -3104,7 +3106,7 @@ static bool handleMouseEvent(const WebMouseEvent& mouseEvent, WebPage* page)
     PlatformMouseEvent platformMouseEvent = platform(mouseEvent);
 
     switch (platformMouseEvent.type()) {
-        case PlatformEvent::MousePressed: {
+        case PlatformEvent::Type::MousePressed: {
 #if ENABLE(CONTEXT_MENUS)
             if (isContextClick(platformMouseEvent))
                 page->corePage()->contextMenuController().clearContextMenu();
@@ -3117,12 +3119,12 @@ static bool handleMouseEvent(const WebMouseEvent& mouseEvent, WebPage* page)
 #endif
             return handled;
         }
-        case PlatformEvent::MouseReleased:
+        case PlatformEvent::Type::MouseReleased:
             if (mouseEvent.gestureWasCancelled() == GestureWasCancelled::Yes)
                 frame.eventHandler().invalidateClick();
             return page->corePage()->userInputBridge().handleMouseReleaseEvent(platformMouseEvent);
 
-        case PlatformEvent::MouseMoved:
+        case PlatformEvent::Type::MouseMoved:
 #if PLATFORM(COCOA)
             // We need to do a full, normal hit test during this mouse event if the page is active or if a mouse
             // button is currently pressed. It is possible that neither of those things will be true since on
@@ -3134,9 +3136,9 @@ static bool handleMouseEvent(const WebMouseEvent& mouseEvent, WebPage* page)
 #endif
             return page->corePage()->userInputBridge().handleMouseMoveEvent(platformMouseEvent);
 
-        case PlatformEvent::MouseForceChanged:
-        case PlatformEvent::MouseForceDown:
-        case PlatformEvent::MouseForceUp:
+        case PlatformEvent::Type::MouseForceChanged:
+        case PlatformEvent::Type::MouseForceDown:
+        case PlatformEvent::Type::MouseForceUp:
             return page->corePage()->userInputBridge().handleMouseForceEvent(platformMouseEvent);
 
         default:
@@ -3579,7 +3581,7 @@ void WebPage::setInitialFocus(bool forward, bool isKeyboardEventValid, const Web
 
     if (isKeyboardEventValid && event.type() == WebEventType::KeyDown) {
         PlatformKeyboardEvent platformEvent(platform(event));
-        platformEvent.disambiguateKeyDownEvent(PlatformEvent::RawKeyDown);
+        platformEvent.disambiguateKeyDownEvent(PlatformEvent::Type::RawKeyDown);
         focusController->setInitialFocus(forward ? FocusDirection::Forward : FocusDirection::Backward, &KeyboardEvent::create(platformEvent, &frame->windowProxy()).get());
         completionHandler();
         return;
@@ -4209,8 +4211,8 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
 #endif
 
     bool requiresUserGestureForMedia = store.getBoolValueForKey(WebPreferencesKey::requiresUserGestureForMediaPlaybackKey());
-    settings.setVideoPlaybackRequiresUserGesture(requiresUserGestureForMedia || store.getBoolValueForKey(WebPreferencesKey::requiresUserGestureForVideoPlaybackKey()));
-    settings.setAudioPlaybackRequiresUserGesture(requiresUserGestureForMedia || store.getBoolValueForKey(WebPreferencesKey::requiresUserGestureForAudioPlaybackKey()));
+    settings.setRequiresUserGestureForVideoPlayback(requiresUserGestureForMedia || store.getBoolValueForKey(WebPreferencesKey::requiresUserGestureForVideoPlaybackKey()));
+    settings.setRequiresUserGestureForAudioPlayback(requiresUserGestureForMedia || store.getBoolValueForKey(WebPreferencesKey::requiresUserGestureForAudioPlaybackKey()));
     settings.setUserInterfaceDirectionPolicy(static_cast<WebCore::UserInterfaceDirectionPolicy>(store.getUInt32ValueForKey(WebPreferencesKey::userInterfaceDirectionPolicyKey())));
     settings.setSystemLayoutDirection(static_cast<TextDirection>(store.getUInt32ValueForKey(WebPreferencesKey::systemLayoutDirectionKey())));
     settings.setJavaScriptRuntimeFlags(static_cast<RuntimeFlags>(store.getUInt32ValueForKey(WebPreferencesKey::javaScriptRuntimeFlagsKey())));
@@ -4328,6 +4330,10 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
 
     if (settings.showMediaStatsContextMenuItemEnabled())
         settings.setTrackConfigurationEnabled(true);
+
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/WebPageUpdatePreferencesAdditions.cpp>
+#endif
 
     m_page->settingsDidChange();
 }
@@ -4771,7 +4777,7 @@ void WebPage::dragEnded(WebCore::IntPoint clientPosition, WebCore::IntPoint glob
     if (!view)
         return;
     // FIXME: These are fake modifier keys here, but they should be real ones instead.
-    PlatformMouseEvent event(adjustedClientPosition, adjustedGlobalPosition, LeftButton, PlatformEvent::MouseMoved, 0, { }, WallTime::now(), 0, WebCore::NoTap);
+    PlatformMouseEvent event(adjustedClientPosition, adjustedGlobalPosition, LeftButton, PlatformEvent::Type::MouseMoved, 0, { }, WallTime::now(), 0, WebCore::NoTap);
     m_page->mainFrame().eventHandler().dragSourceEndedAt(event, dragOperationMask);
 
     send(Messages::WebPageProxy::DidEndDragging());
@@ -5091,7 +5097,7 @@ void WebPage::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vector<St
         RetainPtr<CFDataRef> dataRef = adoptCF(CFDataCreate(nullptr, iconData.data(), iconData.size()));
         RetainPtr<CGDataProviderRef> imageProviderRef = adoptCF(CGDataProviderCreateWithCFData(dataRef.get()));
         RetainPtr<CGImageRef> imageRef = adoptCF(CGImageCreateWithPNGDataProvider(imageProviderRef.get(), nullptr, true, kCGRenderingIntentDefault));
-        icon = Icon::createIconForImage(WTFMove(imageRef));
+        icon = Icon::create(WTFMove(imageRef));
     }
 
     m_activeOpenPanelResultListener->didChooseFilesWithDisplayStringAndIcon(files, displayString, icon.get());
@@ -8394,7 +8400,6 @@ bool WebPage::isUsingUISideCompositing() const
 }
 
 #if ENABLE(NETWORK_CONNECTION_INTEGRITY)
-
 void WebPage::setLookalikeCharacterStrings(Vector<String>&& strings)
 {
     m_lookalikeCharacterStrings.clear();
@@ -8403,6 +8408,13 @@ void WebPage::setLookalikeCharacterStrings(Vector<String>&& strings)
         m_lookalikeCharacterStrings.add(string);
 }
 
+void WebPage::setAllowedLookalikeCharacterStrings(Vector<LookalikeCharactersSanitizationData>&& allowStrings)
+{
+    m_allowedLookalikeCharacterStrings.clear();
+    m_allowedLookalikeCharacterStrings.reserveInitialCapacity(allowStrings.size());
+    for (auto& data : allowStrings)
+        m_allowedLookalikeCharacterStrings.add(data.domain, data.lookalikeCharacters);
+}
 #endif // ENABLE(NETWORK_CONNECTION_INTEGRITY)
 
 bool WebPage::shouldSkipDecidePolicyForResponse(const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& request) const

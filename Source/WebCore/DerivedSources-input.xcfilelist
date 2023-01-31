@@ -98,6 +98,7 @@ $(PROJECT_DIR)/Modules/WebGPU/GPUImageDataLayout.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPUIndexFormat.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPULoadOp.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPUMapMode.idl
+$(PROJECT_DIR)/Modules/WebGPU/GPUMipmapFilterMode.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPUMultisampleState.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPUObjectBase.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPUObjectDescriptorBase.idl
@@ -1385,6 +1386,7 @@ $(PROJECT_DIR)/html/canvas/PredefinedColorSpace.idl
 $(PROJECT_DIR)/html/canvas/WebGL2RenderingContext.idl
 $(PROJECT_DIR)/html/canvas/WebGLActiveInfo.idl
 $(PROJECT_DIR)/html/canvas/WebGLBuffer.idl
+$(PROJECT_DIR)/html/canvas/WebGLClipCullDistance.idl
 $(PROJECT_DIR)/html/canvas/WebGLColorBufferFloat.idl
 $(PROJECT_DIR)/html/canvas/WebGLCompressedTextureASTC.idl
 $(PROJECT_DIR)/html/canvas/WebGLCompressedTextureETC.idl

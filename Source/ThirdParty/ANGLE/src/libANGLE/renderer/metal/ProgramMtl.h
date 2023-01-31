@@ -18,13 +18,11 @@
 #include "common/Optional.h"
 #include "common/utilities.h"
 #include "libANGLE/renderer/ProgramImpl.h"
-#include "libANGLE/renderer/ShaderInterfaceVariableInfoMap.h"
-#include "libANGLE/renderer/glslang_wrapper_utils.h"
 #include "libANGLE/renderer/metal/mtl_buffer_pool.h"
 #include "libANGLE/renderer/metal/mtl_command_buffer.h"
 #include "libANGLE/renderer/metal/mtl_common.h"
 #include "libANGLE/renderer/metal/mtl_context_device.h"
-#include "libANGLE/renderer/metal/mtl_glslang_mtl_utils.h"
+#include "libANGLE/renderer/metal/mtl_msl_utils.h"
 #include "libANGLE/renderer/metal/mtl_resources.h"
 #include "libANGLE/renderer/metal/mtl_state_cache.h"
 
@@ -32,6 +30,61 @@ namespace rx
 {
 #define SHADER_ENTRY_NAME @"main0"
 class ContextMtl;
+
+struct UBOConversionInfo
+{
+
+    UBOConversionInfo(const std::vector<sh::BlockMemberInfo> &stdInfo,
+                      const std::vector<sh::BlockMemberInfo> &metalInfo,
+                      size_t stdSize,
+                      size_t metalSize)
+        : _stdInfo(stdInfo), _metalInfo(metalInfo), _stdSize(stdSize), _metalSize(metalSize)
+    {
+        _needsConversion = _calculateNeedsConversion();
+    }
+    const std::vector<sh::BlockMemberInfo> &stdInfo() const { return _stdInfo; }
+    const std::vector<sh::BlockMemberInfo> &metalInfo() const { return _metalInfo; }
+    size_t stdSize() const { return _stdSize; }
+    size_t metalSize() const { return _metalSize; }
+
+    bool needsConversion() const { return _needsConversion; }
+
+  private:
+    std::vector<sh::BlockMemberInfo> _stdInfo, _metalInfo;
+    size_t _stdSize, _metalSize;
+    bool _needsConversion;
+
+    bool _calculateNeedsConversion()
+    {
+        if (_stdSize != _metalSize)
+        {
+            return true;
+        }
+        if (_stdInfo.size() != _metalInfo.size())
+        {
+            return true;
+        }
+        for (size_t i = 0; i < _stdInfo.size(); ++i)
+        {
+            // If the matrix is trasnposed
+            if (_stdInfo[i].isRowMajorMatrix)
+            {
+                return true;
+            }
+            // If we have a bool
+            if (gl::VariableComponentType(_stdInfo[i].type) == GL_BOOL)
+            {
+                return true;
+            }
+            // If any offset information is different
+            if (!(_stdInfo[i] == _metalInfo[i]))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+};
 
 struct ProgramArgumentBufferEncoderMtl
 {
@@ -181,6 +234,11 @@ class ProgramMtl : public ProgramImpl, public mtl::RenderPipelineCacheSpecialize
     angle::Result initDefaultUniformBlocks(const gl::Context *glContext);
     angle::Result resizeDefaultUniformBlocksMemory(const gl::Context *glContext,
                                                    const gl::ShaderMap<size_t> &requiredBufferSize);
+
+    void saveInterfaceBlockInfo(gl::BinaryOutputStream *stream);
+    angle::Result loadInterfaceBlockInfo(const gl::Context *glContext,
+                                         gl::BinaryInputStream *stream);
+
     void saveDefaultUniformBlocksInfo(gl::BinaryOutputStream *stream);
     angle::Result loadDefaultUniformBlocksInfo(const gl::Context *glContext,
                                                gl::BinaryInputStream *stream);
@@ -202,6 +260,9 @@ class ProgramMtl : public ProgramImpl, public mtl::RenderPipelineCacheSpecialize
                                                     mtl::RenderCommandEncoder *cmdEncoder,
                                                     const std::vector<gl::InterfaceBlock> &blocks,
                                                     gl::ShaderType shaderType);
+
+    void initUniformBlocksRemapper(gl::Shader *shader, const gl::Context *glContext);
+
     angle::Result encodeUniformBuffersInfoArgumentBuffer(
         ContextMtl *context,
         mtl::RenderCommandEncoder *cmdEncoder,
@@ -250,7 +311,9 @@ class ProgramMtl : public ProgramImpl, public mtl::RenderPipelineCacheSpecialize
     bool mProgramHasFlatAttributes;
     gl::ShaderBitSet mDefaultUniformBlocksDirty;
     gl::ShaderBitSet mSamplerBindingsDirty;
+
     gl::ShaderMap<DefaultUniformBlock> mDefaultUniformBlocks;
+    std::unordered_map<std::string, UBOConversionInfo> mUniformBlockConversions;
 
     // Translated metal shaders:
     gl::ShaderMap<mtl::TranslatedShaderInfo> mMslShaderTranslateInfo;
@@ -270,8 +333,6 @@ class ProgramMtl : public ProgramImpl, public mtl::RenderPipelineCacheSpecialize
 
     // Cached references of current shader variants.
     gl::ShaderMap<ProgramShaderObjVariantMtl *> mCurrentShaderVariants;
-
-    ShaderInterfaceVariableInfoMap mVariableInfoMap;
     // Scratch data:
     // Legalized buffers and their offsets. For example, uniform buffer's offset=1 is not a valid
     // offset, it will be converted to legal offset and the result is stored in this array.

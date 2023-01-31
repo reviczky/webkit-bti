@@ -426,6 +426,21 @@ Value* Value::sqrtConstant(Procedure&) const
     return nullptr;
 }
 
+Value* Value::vectorAndConstant(Procedure&, const Value*) const
+{
+    return nullptr;
+}
+
+Value* Value::vectorOrConstant(Procedure&, const Value*) const
+{
+    return nullptr;
+}
+
+Value* Value::vectorXorConstant(Procedure&, const Value*) const
+{
+    return nullptr;
+}
+
 TriState Value::equalConstant(const Value*) const
 {
     return TriState::Indeterminate;
@@ -634,6 +649,7 @@ Effects Value::effects() const
     case FMax:
     case VectorExtractLane:
     case VectorReplaceLane:
+    case VectorDupElement:
     case VectorEqual:
     case VectorNotEqual:
     case VectorLessThan:
@@ -687,7 +703,6 @@ Effects Value::effects() const
     case VectorExtaddPairwise:
     case VectorMulSat:
     case VectorSwizzle:
-    case VectorShuffle:
         break;
     case Div:
     case UDiv:

@@ -40,6 +40,7 @@
 namespace JSC {
 
 class LLIntOffsetsExtractor;
+class JSGlobalObject;
 class JSWebAssemblyInstance;
 
 namespace Wasm {
@@ -52,22 +53,24 @@ class Instance : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Instance
 public:
     using FunctionWrapperMap = HashMap<uint32_t, WriteBarrier<Unknown>, IntHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>;
 
-    static Ref<Instance> create(VM&, Ref<Module>&&);
+    static Ref<Instance> create(VM&, JSGlobalObject*, Ref<Module>&&);
 
-    void setOwner(void* owner)
+    void setOwner(JSWebAssemblyInstance* owner)
     {
         m_owner = owner;
     }
 
     JS_EXPORT_PRIVATE ~Instance();
 
-    template<typename T> T* owner() const { return reinterpret_cast<T*>(m_owner); }
+    JSWebAssemblyInstance* owner() const { return m_owner; }
     static ptrdiff_t offsetOfOwner() { return OBJECT_OFFSETOF(Instance, m_owner); }
     static ptrdiff_t offsetOfVM() { return OBJECT_OFFSETOF(Instance, m_vm); }
+    static ptrdiff_t offsetOfGlobalObject() { return OBJECT_OFFSETOF(Instance, m_globalObject); }
 
     size_t extraMemoryAllocated() const;
 
     VM& vm() const { return *m_vm; }
+    JSGlobalObject* globalObject() const { return m_globalObject; }
     Module& module() const { return m_module.get(); }
     CalleeGroup* calleeGroup() const { return module().calleeGroupFor(memory()->mode()); }
     Memory* memory() const { return m_memory.get(); }
@@ -201,11 +204,11 @@ public:
     // Tail accessors.
     static constexpr size_t offsetOfTail() { return WTF::roundUpToMultipleOf<sizeof(uint64_t)>(sizeof(Instance)); }
     struct ImportFunctionInfo {
-        // Target instance and entrypoint are only set for wasm->wasm calls, and are otherwise nullptr. The embedder-specific logic occurs through import function.
+        // Target instance and entrypoint are only set for wasm->wasm calls, and are otherwise nullptr. The js-specific logic occurs through import function.
         Instance* targetInstance { nullptr };
         WasmToWasmImportableFunction::LoadLocation wasmEntrypointLoadLocation { nullptr };
-        CodePtr<WasmEntryPtrTag> wasmToEmbedderStub;
-        void* importFunction { nullptr }; // In a JS embedding, this is a WriteBarrier<JSObject>.
+        CodePtr<WasmEntryPtrTag> importFunctionStub;
+        WriteBarrier<JSObject> importFunction { };
     };
     unsigned numImportFunctions() const { return m_numImportFunctions; }
     ImportFunctionInfo* importFunctionInfo(size_t importFunctionNum)
@@ -215,9 +218,9 @@ public:
     }
     static size_t offsetOfTargetInstance(size_t importFunctionNum) { return offsetOfTail() + importFunctionNum * sizeof(ImportFunctionInfo) + OBJECT_OFFSETOF(ImportFunctionInfo, targetInstance); }
     static size_t offsetOfWasmEntrypointLoadLocation(size_t importFunctionNum) { return offsetOfTail() + importFunctionNum * sizeof(ImportFunctionInfo) + OBJECT_OFFSETOF(ImportFunctionInfo, wasmEntrypointLoadLocation); }
-    static size_t offsetOfWasmToEmbedderStub(size_t importFunctionNum) { return offsetOfTail() + importFunctionNum * sizeof(ImportFunctionInfo) + OBJECT_OFFSETOF(ImportFunctionInfo, wasmToEmbedderStub); }
+    static size_t offsetOfImportFunctionStub(size_t importFunctionNum) { return offsetOfTail() + importFunctionNum * sizeof(ImportFunctionInfo) + OBJECT_OFFSETOF(ImportFunctionInfo, importFunctionStub); }
     static size_t offsetOfImportFunction(size_t importFunctionNum) { return offsetOfTail() + importFunctionNum * sizeof(ImportFunctionInfo) + OBJECT_OFFSETOF(ImportFunctionInfo, importFunction); }
-    template<typename T> T* importFunction(unsigned importFunctionNum) { return reinterpret_cast<T*>(&importFunctionInfo(importFunctionNum)->importFunction); }
+    WriteBarrier<JSObject>& importFunction(unsigned importFunctionNum) { return importFunctionInfo(importFunctionNum)->importFunction; }
 
     static_assert(sizeof(ImportFunctionInfo) == WTF::roundUpToMultipleOf<sizeof(uint64_t)>(sizeof(ImportFunctionInfo)), "We rely on this for the alignment to be correct");
     static constexpr size_t offsetOfTablePtr(unsigned numImportFunctions, unsigned i) { return offsetOfTail() + sizeof(ImportFunctionInfo) * numImportFunctions + sizeof(Table*) * i; }
@@ -233,14 +236,15 @@ public:
     }
 
 private:
-    Instance(VM&, Ref<Module>&&);
+    Instance(VM&, JSGlobalObject*, Ref<Module>&&);
     
     static size_t allocationSize(Checked<size_t> numImportFunctions, Checked<size_t> numTables, Checked<size_t> numGlobals)
     {
         return roundUpToMultipleOf<sizeof(Global::Value)>(offsetOfTail() + sizeof(ImportFunctionInfo) * numImportFunctions + sizeof(Table*) * numTables) + sizeof(Global::Value) * numGlobals;
     }
-    void* m_owner { nullptr }; // In a JS embedding, this is a JSWebAssemblyInstance*.
     VM* m_vm;
+    JSWebAssemblyInstance* m_owner { nullptr };
+    JSGlobalObject* m_globalObject; // This is kept by JSWebAssemblyInstance*.
     CagedPtr<Gigacage::Primitive, void, tagCagedPtr> m_cachedMemory;
     size_t m_cachedBoundsCheckingSize { 0 };
     Ref<Module> m_module;

@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.5</p>
+        <p>Library Version: 2.39.7</p>
         
       </div>
       
@@ -189,16 +189,16 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Declaration
         <a class="anchor" href="#declaration"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/WebKitBuild/Release/WebKitGTK/DerivedSources/webkit/WebKitWebContext.h#L283">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/WebKitBuild/Release/WebKitGTK/DerivedSources/webkit/WebKitWebContext.h#L284">[src]</a>
         
       </h4>
 
       <div class="docblock c-decl">
-        <pre><code><div class="highlight"><pre><span></span><span class="kt">void</span><span class="w"></span>
-<span class="n">webkit_web_context_set_process_model</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitWebContext</span><span class="o">*</span><span class="w"> </span><span class="n">context</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitProcessModel</span><span class="w"> </span><span class="n">process_model</span><span class="w"></span>
-<span class="p">)</span><span class="w"></span>
+        <pre><code><div class="highlight"><pre><span></span><span class="kt">void</span>
+<span class="n">webkit_web_context_set_process_model</span><span class="w"> </span><span class="p">(</span>
+<span class="w">  </span><span class="n">WebKitWebContext</span><span class="o">*</span><span class="w"> </span><span class="n">context</span><span class="p">,</span>
+<span class="w">  </span><span class="n">WebKitProcessModel</span><span class="w"> </span><span class="n">process_model</span>
+<span class="p">)</span>
 </pre></div>
 </code></pre>
       </div>
@@ -209,25 +209,15 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1700">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1767">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Specifies a process model for&nbsp;WebViews.</p>
-<p>Specifies a process model for WebViews, which WebKit will use to
-determine how auxiliary processes are&nbsp;handled.</p>
-<p><code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code> will use
-one process per view most of the time, while still allowing for web
-views to share a process when needed (for example when different
-views interact with each other). Using this model, when a process
-hangs or crashes, only the WebViews using it stop working, while
-the rest of the WebViews in the application will still function&nbsp;normally.</p>
-<p><code>WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS</code> is deprecated since 2.26,
-using it has no effect for security&nbsp;reasons.</p>
-<p>This method <strong>must be called before any web process has been created</strong>,
-as early as possible in your application. Calling it later will make
-your application&nbsp;crash.</p>
+        <p>This function previously allowed specifying the process model to use.
+However, since 2.26, the only allowed process model is
+<code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>, so this function
+does&nbsp;nothing.</p>
       </div>
 
       <div class="docblock">
@@ -236,6 +226,9 @@ your application&nbsp;crash.</p>
           
           <tr><td>Available since:</td><td>2.4</td></tr>
           
+          
+          <tr><td>Deprecated since:</td><td>2.40</td></tr>
+          <tr><td colspan="2"><p>Please do not use it in newly written&nbsp;code.</p></td></tr>
           
           
           

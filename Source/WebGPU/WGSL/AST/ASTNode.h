@@ -43,6 +43,7 @@ public:
         GroupAttribute,
         LocationAttribute,
         StageAttribute,
+        WorkgroupSizeAttribute,
 
         // Decl
         FunctionDecl,
@@ -63,6 +64,9 @@ public:
         StructureAccess,
         Uint32Literal,
         UnaryExpression,
+        BinaryExpression,
+        PointerDereference,
+        IdentityExpression,
 
         ShaderModule,
 
@@ -76,6 +80,8 @@ public:
         ArrayType,
         NamedType,
         ParameterizedType,
+        StructType,
+        ReferenceType,
 
         Parameter,
         StructMember,
