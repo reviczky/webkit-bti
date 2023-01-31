@@ -62,7 +62,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),mips mipsel sh4))
 	CFLAGS := $(CFLAGS:-g1=-g0)
 	CFLAGS := $(CFLAGS:-O2=-Os)
 	CPPFLAGS += --param ggc-min-expand=10
-	EXTRA_CMAKE_ARGUMENTS += -DENABLE_UNIFIED_BUILDS=OFF
 endif
 
 # See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=93876

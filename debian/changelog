@@ -3,6 +3,8 @@ webkit2gtk (2.39.7-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/rules:
     - Rename libwebkitgtk-6.0-1 to libwebkitgtk-6.0-2 after a soname bump.
+  * Drop debian/rules/fix-non-unified-build.patch and use unified builds
+    in mipsel.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 31 Jan 2023 16:33:13 +0100
 
