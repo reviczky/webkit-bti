@@ -301,7 +301,7 @@ WebProcessPool::~WebProcessPool()
 #endif
 
 #if ENABLE(GAMEPAD)
-    if (!m_processesUsingGamepads.computesEmpty())
+    if (!m_processesUsingGamepads.isEmptyIgnoringNullReferences())
         UIGamepadProvider::singleton().processPoolStoppedUsingGamepads(*this);
 #endif
 
@@ -400,19 +400,6 @@ void WebProcessPool::textCheckerStateChanged()
 void WebProcessPool::setApplicationIsActive(bool isActive)
 {
     m_webProcessCache->setApplicationIsActive(isActive);
-}
-
-void WebProcessPool::screenPropertiesStateChanged()
-{
-#if PLATFORM(COCOA)
-    auto screenProperties = WebCore::collectScreenProperties();
-    sendToAllProcesses(Messages::WebProcess::SetScreenProperties(screenProperties));
-
-#if PLATFORM(MAC)
-    if (auto process = gpuProcess())
-        process->setScreenProperties(screenProperties);
-#endif
-#endif
 }
 
 static bool shouldReportAuxiliaryProcessCrash(ProcessTerminationReason reason)
@@ -1599,7 +1586,7 @@ void WebProcessPool::startedUsingGamepads(IPC::Connection& connection)
     if (!proxy)
         return;
 
-    bool wereAnyProcessesUsingGamepads = !m_processesUsingGamepads.computesEmpty();
+    bool wereAnyProcessesUsingGamepads = !m_processesUsingGamepads.isEmptyIgnoringNullReferences();
 
     ASSERT(!m_processesUsingGamepads.contains(*proxy));
     m_processesUsingGamepads.add(*proxy);
@@ -1633,12 +1620,12 @@ void WebProcessPool::stopGamepadEffects(unsigned gamepadIndex, const String& gam
 
 void WebProcessPool::processStoppedUsingGamepads(WebProcessProxy& process)
 {
-    bool wereAnyProcessesUsingGamepads = !m_processesUsingGamepads.computesEmpty();
+    bool wereAnyProcessesUsingGamepads = !m_processesUsingGamepads.isEmptyIgnoringNullReferences();
 
     ASSERT(m_processesUsingGamepads.contains(process));
     m_processesUsingGamepads.remove(process);
 
-    if (wereAnyProcessesUsingGamepads && m_processesUsingGamepads.computesEmpty())
+    if (wereAnyProcessesUsingGamepads && m_processesUsingGamepads.isEmptyIgnoringNullReferences())
         UIGamepadProvider::singleton().processPoolStoppedUsingGamepads(*this);
 }
 

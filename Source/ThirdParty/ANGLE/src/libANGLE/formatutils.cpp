@@ -1166,12 +1166,12 @@ static InternalFormatInfoMap BuildInternalFormatInfoMap()
 
     // ANGLE Depth stencil formats
     //                         | Internal format         |sized| D |S | X | Format            | Type                             | Component type        | Texture supported                                                                            | Filterable                                                                             | Texture attachment                                                                           | Renderbuffer                                                                                              | Blend
-    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT16,     true, 16, 0,  0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT,                 GL_UNSIGNED_NORMALIZED, RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::depthTextureOES>,       RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::depthTextureOES>, RequireES<1, 0>,                                                                               RequireES<1, 0>,                                                                                             RequireES<1, 0>);
-    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT24,     true, 24, 0,  8, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,                   GL_UNSIGNED_NORMALIZED, RequireES<3, 0>,                                                                               RequireESOrExt<3, 0, &Extensions::depthTextureANGLE>,                                    RequireES<3, 0>,                                                                               RequireESOrExt<3, 0, &Extensions::depth24OES>,                                                               RequireESOrExt<3, 0, &Extensions::depth24OES>);
-    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT32F,    true, 32, 0,  0, GL_DEPTH_COMPONENT, GL_FLOAT,                          GL_FLOAT,               RequireES<3, 0>,                                                                               RequireESOrExt<3, 0, &Extensions::depthTextureANGLE>,                                    RequireES<3, 0>,                                                                               RequireES<3, 0>,                                                                                             RequireES<3, 0>);
-    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT32_OES, true, 32, 0,  0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,                   GL_UNSIGNED_NORMALIZED, RequireExtOrExt<&Extensions::depthTextureANGLE, &Extensions::depthTextureOES>,                 AlwaysSupported,                                                                         RequireExtOrExt<&Extensions::depthTextureANGLE, &Extensions::depthTextureOES>,                 RequireExtOrExtOrExt<&Extensions::depthTextureANGLE, &Extensions::depthTextureOES, &Extensions::depth32OES>, RequireExtOrExtOrExt<&Extensions::depthTextureANGLE, &Extensions::depthTextureOES, &Extensions::depth32OES>);
-    AddDepthStencilFormat(&map, GL_DEPTH24_STENCIL8,      true, 24, 8,  0, GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8,              GL_UNSIGNED_NORMALIZED, RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::packedDepthStencilOES>, AlwaysSupported,                                                                         RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::packedDepthStencilOES>, RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::packedDepthStencilOES>,               RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::packedDepthStencilOES>);
-    AddDepthStencilFormat(&map, GL_DEPTH32F_STENCIL8,     true, 32, 8, 24, GL_DEPTH_STENCIL,   GL_FLOAT_32_UNSIGNED_INT_24_8_REV, GL_FLOAT,               RequireESOrExt<3, 0, &Extensions::depthBufferFloat2NV>,                                        AlwaysSupported,                                                                         RequireESOrExt<3, 0, &Extensions::depthBufferFloat2NV>,                                        RequireESOrExt<3, 0, &Extensions::depthBufferFloat2NV>,                                                      RequireESOrExt<3, 0, &Extensions::depthBufferFloat2NV>);
+    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT16,     true, 16, 0,  0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT,                 GL_UNSIGNED_NORMALIZED, RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::depthTextureOES>,       RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::depthTextureOES>, RequireES<1, 0>,                                                                               RequireES<1, 0>,                                                                                             NeverSupported);
+    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT24,     true, 24, 0,  8, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,                   GL_UNSIGNED_NORMALIZED, RequireES<3, 0>,                                                                               RequireESOrExt<3, 0, &Extensions::depthTextureANGLE>,                                    RequireES<3, 0>,                                                                               RequireESOrExt<3, 0, &Extensions::depth24OES>,                                                               NeverSupported);
+    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT32F,    true, 32, 0,  0, GL_DEPTH_COMPONENT, GL_FLOAT,                          GL_FLOAT,               RequireES<3, 0>,                                                                               RequireESOrExt<3, 0, &Extensions::depthTextureANGLE>,                                    RequireES<3, 0>,                                                                               RequireES<3, 0>,                                                                                             NeverSupported);
+    AddDepthStencilFormat(&map, GL_DEPTH_COMPONENT32_OES, true, 32, 0,  0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT,                   GL_UNSIGNED_NORMALIZED, RequireExtOrExt<&Extensions::depthTextureANGLE, &Extensions::depthTextureOES>,                 AlwaysSupported,                                                                         RequireExtOrExt<&Extensions::depthTextureANGLE, &Extensions::depthTextureOES>,                 RequireExtOrExtOrExt<&Extensions::depthTextureANGLE, &Extensions::depthTextureOES, &Extensions::depth32OES>, NeverSupported);
+    AddDepthStencilFormat(&map, GL_DEPTH24_STENCIL8,      true, 24, 8,  0, GL_DEPTH_STENCIL,   GL_UNSIGNED_INT_24_8,              GL_UNSIGNED_NORMALIZED, RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::packedDepthStencilOES>, AlwaysSupported,                                                                         RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::packedDepthStencilOES>, RequireESOrExtOrExt<3, 0, &Extensions::depthTextureANGLE, &Extensions::packedDepthStencilOES>,               NeverSupported);
+    AddDepthStencilFormat(&map, GL_DEPTH32F_STENCIL8,     true, 32, 8, 24, GL_DEPTH_STENCIL,   GL_FLOAT_32_UNSIGNED_INT_24_8_REV, GL_FLOAT,               RequireESOrExt<3, 0, &Extensions::depthBufferFloat2NV>,                                        AlwaysSupported,                                                                         RequireESOrExt<3, 0, &Extensions::depthBufferFloat2NV>,                                        RequireESOrExt<3, 0, &Extensions::depthBufferFloat2NV>,                                                      NeverSupported);
     // STENCIL_INDEX8 is special-cased, see around the bottom of the list.
 
     // Luminance alpha formats
@@ -1319,8 +1319,8 @@ static InternalFormatInfoMap BuildInternalFormatInfoMap()
     // - Multisampled buffer are disallowed for non-normalized integer component types and we want to support it for STENCIL_INDEX8
     // - All other stencil formats (all depth-stencil) are either float or normalized
     // - It affects only validation of internalformat in RenderbufferStorageMultisample.
-    //                         | Internal format  |sized|D |S |X | Format          | Type            | Component type        | Texture supported                               | Filterable    | Texture attachment                              | Renderbuffer   | Blend
-    AddDepthStencilFormat(&map, GL_STENCIL_INDEX8, true, 0, 8, 0, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, GL_UNSIGNED_NORMALIZED, RequireESOrExt<1, 0, &Extensions::textureStencil8OES>, NeverSupported, RequireESOrExt<1, 0, &Extensions::textureStencil8OES>, RequireES<1, 0>, RequireES<1, 0>);
+    //                         | Internal format  |sized|D |S |X | Format          | Type            | Component type        | Texture supported                                    | Filterable    | Texture attachment                                   | Renderbuffer   | Blend
+    AddDepthStencilFormat(&map, GL_STENCIL_INDEX8, true, 0, 8, 0, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, GL_UNSIGNED_NORMALIZED, RequireESOrExt<3, 2, &Extensions::textureStencil8OES>, NeverSupported, RequireESOrExt<3, 2, &Extensions::textureStencil8OES>, RequireES<1, 0>, NeverSupported);
 
     // From GL_ANGLE_lossy_etc_decode
     //                       | Internal format                                                |W |H |D |BS |CC| SRGB | Texture supported                      | Filterable     | Texture attachment | Renderbuffer  | Blend
@@ -1846,17 +1846,19 @@ bool InternalFormat::computeCompressedImageSize(const Extents &size, GLuint *res
 
     CheckedNumeric<GLuint> checkedBlockWidth(compressedBlockWidth);
     CheckedNumeric<GLuint> checkedBlockHeight(compressedBlockHeight);
+    CheckedNumeric<GLuint> checkedBlockDepth(compressedBlockDepth);
     GLuint minBlockWidth, minBlockHeight;
     std::tie(minBlockWidth, minBlockHeight) = getCompressedImageMinBlocks();
 
     ASSERT(compressed);
     auto numBlocksWide = (checkedWidth + checkedBlockWidth - 1u) / checkedBlockWidth;
     auto numBlocksHigh = (checkedHeight + checkedBlockHeight - 1u) / checkedBlockHeight;
+    auto numBlocksDeep = (checkedDepth + checkedBlockDepth - 1u) / checkedBlockDepth;
     if (numBlocksWide.IsValid() && numBlocksWide.ValueOrDie() < minBlockWidth)
         numBlocksWide = minBlockWidth;
     if (numBlocksHigh.IsValid() && numBlocksHigh.ValueOrDie() < minBlockHeight)
         numBlocksHigh = minBlockHeight;
-    auto bytes = numBlocksWide * numBlocksHigh * pixelBytes * checkedDepth;
+    auto bytes = numBlocksWide * numBlocksHigh * numBlocksDeep * pixelBytes;
     return CheckedMathResult(bytes, resultOut);
 }
 
@@ -1870,22 +1872,10 @@ std::pair<GLuint, GLuint> InternalFormat::getCompressedImageMinBlocks() const
     // ANGLE's texture tables are written in terms of blocks. The 4BPP formats use 4x4 blocks, and
     // the 2BPP formats, 8x4 blocks. Therefore, both kinds of formats require a minimum of 2x2
     // blocks.
-    switch (internalFormat)
+    if (IsPVRTC1Format(internalFormat))
     {
-        case GL_COMPRESSED_RGB_PVRTC_4BPPV1_IMG:
-        case GL_COMPRESSED_RGB_PVRTC_2BPPV1_IMG:
-        case GL_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG:
-        case GL_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG:
-        case GL_COMPRESSED_SRGB_PVRTC_2BPPV1_EXT:
-        case GL_COMPRESSED_SRGB_PVRTC_4BPPV1_EXT:
-        case GL_COMPRESSED_SRGB_ALPHA_PVRTC_2BPPV1_EXT:
-        case GL_COMPRESSED_SRGB_ALPHA_PVRTC_4BPPV1_EXT:
-            minBlockWidth  = 2;
-            minBlockHeight = 2;
-            break;
-
-        default:
-            break;
+        minBlockWidth  = 2;
+        minBlockHeight = 2;
     }
 
     return std::make_pair(minBlockWidth, minBlockHeight);

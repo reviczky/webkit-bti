@@ -52,7 +52,6 @@
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/ServiceWorkerIdentifier.h>
 #include <WebCore/ServiceWorkerTypes.h>
-#include <WebCore/StorageQuotaManager.h>
 #include <memory>
 #include <wtf/CrossThreadTask.h>
 #include <wtf/Function.h>
@@ -336,8 +335,6 @@ public:
     void setPCMFraudPreventionValuesForTesting(PAL::SessionID, String&& unlinkableToken, String&& secretToken, String&& signature, String&& keyID, CompletionHandler<void()>&&);
     void setPrivateClickMeasurementAppBundleIDForTesting(PAL::SessionID, String&& appBundleIDForTesting, CompletionHandler<void()>&&);
 
-    RefPtr<WebCore::StorageQuotaManager> storageQuotaManager(PAL::SessionID, const WebCore::ClientOrigin&);
-
     void addKeptAliveLoad(Ref<NetworkResourceLoader>&&);
     void removeKeptAliveLoad(NetworkResourceLoader&);
 
@@ -397,6 +394,7 @@ public:
     void setEmulatedConditions(PAL::SessionID, std::optional<int64_t>&& bytesPerSecondLimit);
 #endif
 
+    void deleteWebsiteDataForOrigin(PAL::SessionID, OptionSet<WebsiteDataType>, const WebCore::ClientOrigin&, CompletionHandler<void()>&&);
     void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, const Vector<String>& HSTSCacheHostnames, const Vector<RegistrableDomain>&, CompletionHandler<void()>&&);
 
     bool allowsFirstPartyForCookies(WebCore::ProcessIdentifier, const URL&);
@@ -442,8 +440,6 @@ private:
     void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince, CompletionHandler<void()>&&);
     void clearCachedCredentials(PAL::SessionID);
 
-    void initializeQuotaUsers(WebCore::StorageQuotaManager&, PAL::SessionID, const WebCore::ClientOrigin&);
-
     // FIXME: This should take a session ID so we can identify which disk cache to delete.
     void clearDiskCache(WallTime modifiedSince, CompletionHandler<void()>&&);
 
@@ -461,7 +457,7 @@ private:
 
     void setCacheModel(CacheModel);
     void setCacheModelSynchronouslyForTesting(CacheModel, CompletionHandler<void()>&&);
-    void allowSpecificHTTPSCertificateForHost(const WebCore::CertificateInfo&, const String& host);
+    void allowSpecificHTTPSCertificateForHost(PAL::SessionID, const WebCore::CertificateInfo&, const String& host);
     void allowTLSCertificateChainForLocalPCMTesting(PAL::SessionID, const WebCore::CertificateInfo&);
     void setAllowsAnySSLCertificateForWebSocket(bool, CompletionHandler<void()>&&);
 

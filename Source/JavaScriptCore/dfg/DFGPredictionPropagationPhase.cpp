@@ -916,6 +916,7 @@ private:
         case CallForwardVarargs:
         case ConstructForwardVarargs:
         case TailCallForwardVarargsInlinedCaller:
+        case CallWasm:
         case GetGlobalVar:
         case GetGlobalLexicalVariable:
         case GetClosureVar:
@@ -1059,6 +1060,8 @@ private:
             setPrediction(SpecDoubleReal);
             break;
         }
+
+        case MapOrSetDelete:
         case DeleteByVal:
         case DeleteById:
         case MultiDeleteByOffset:

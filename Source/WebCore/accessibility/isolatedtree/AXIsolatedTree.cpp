@@ -91,7 +91,7 @@ Ref<AXIsolatedTree> AXIsolatedTree::create(AXObjectCache* axObjectCache)
 
     // Now that the tree is ready to take client requests, add it to the tree
     // maps so that it can be found.
-    AXTreeStore::add(tree->treeID(), tree.copyRef());
+    AXTreeStore::add(tree->treeID(), tree.ptr());
     auto pageID = axObjectCache->pageID();
     Locker locker { s_storeLock };
     ASSERT(!treePageCache().contains(*pageID));
@@ -168,7 +168,7 @@ Vector<RefPtr<AXCoreObject>> AXIsolatedTree::objectsForIDs(const Vector<AXID>& a
     return result;
 }
 
-void AXIsolatedTree::generateSubtree(AXCoreObject& axObject)
+void AXIsolatedTree::generateSubtree(AccessibilityObject& axObject)
 {
     AXTRACE("AXIsolatedTree::generateSubtree"_s);
     ASSERT(isMainThread());
@@ -186,7 +186,7 @@ static bool shouldCreateNodeChange(AXCoreObject& axObject)
     return !axObject.isDetached() && !axObject.accessibilityIsIgnored();
 }
 
-std::optional<AXIsolatedTree::NodeChange> AXIsolatedTree::nodeChangeForObject(Ref<AXCoreObject> axObject, AttachWrapper attachWrapper)
+std::optional<AXIsolatedTree::NodeChange> AXIsolatedTree::nodeChangeForObject(Ref<AccessibilityObject> axObject, AttachWrapper attachWrapper)
 {
     ASSERT(isMainThread());
     ASSERT(!axObject->isDetached());
@@ -337,7 +337,7 @@ void AXIsolatedTree::collectNodeChangesForSubtree(AXCoreObject& axObject)
     m_nodeMap.set(axObject.objectID(), ParentChildrenIDs { axParent ? axParent->objectID() : AXID(), WTFMove(axChildrenIDs) });
 }
 
-void AXIsolatedTree::updateNode(AXCoreObject& axObject)
+void AXIsolatedTree::updateNode(AccessibilityObject& axObject)
 {
     AXTRACE("AXIsolatedTree::updateNode"_s);
     AXLOG(&axObject);
@@ -361,7 +361,7 @@ void AXIsolatedTree::updateNode(AXCoreObject& axObject)
     }
 
     // Not able to update axObject. This may be because it is a descendant of a barren object such as a button. In that case, try to update its parent.
-    if (!downcast<AccessibilityObject>(axObject).isDescendantOfBarrenParent())
+    if (!axObject.isDescendantOfBarrenParent())
         return;
 
     auto* axParent = axObject.parentObjectUnignored();
@@ -374,10 +374,9 @@ void AXIsolatedTree::updateNode(AXCoreObject& axObject)
     }
 }
 
-void AXIsolatedTree::updatePropertiesForSelfAndDescendants(AXCoreObject& axObject, const Vector<AXPropertyName>& properties)
+void AXIsolatedTree::updatePropertiesForSelfAndDescendants(AccessibilityObject& axObject, const Vector<AXPropertyName>& properties)
 {
     ASSERT(isMainThread());
-    ASSERT(is<AccessibilityObject>(axObject));
 
     Accessibility::enumerateDescendants<AXCoreObject>(axObject, true, [&properties, this] (auto& descendant) {
         updateNodeProperties(descendant, properties);
@@ -502,7 +501,7 @@ void AXIsolatedTree::updateNodeProperties(AXCoreObject& axObject, const Vector<A
     m_pendingPropertyChanges.append({ axObject.objectID(), propertyMap });
 }
 
-void AXIsolatedTree::updateNodeAndDependentProperties(AXCoreObject& axObject)
+void AXIsolatedTree::updateNodeAndDependentProperties(AccessibilityObject& axObject)
 {
     ASSERT(isMainThread());
 
@@ -672,7 +671,7 @@ void AXIsolatedTree::updateLoadingProgress(double newProgressValue)
     m_loadingProgress = newProgressValue;
 }
 
-void AXIsolatedTree::removeNode(const AXCoreObject& axObject)
+void AXIsolatedTree::removeNode(const AccessibilityObject& axObject)
 {
     AXTRACE("AXIsolatedTree::removeNode"_s);
     AXLOG(makeString("objectID ", axObject.objectID().loggingString()));
@@ -683,7 +682,7 @@ void AXIsolatedTree::removeNode(const AXCoreObject& axObject)
     queueRemovals({ axObject.objectID() });
 }
 
-void AXIsolatedTree::removeSubtreeFromNodeMap(AXID objectID, AXCoreObject* axParent)
+void AXIsolatedTree::removeSubtreeFromNodeMap(AXID objectID, AccessibilityObject* axParent)
 {
     AXTRACE("AXIsolatedTree::removeSubtreeFromNodeMap"_s);
     AXLOG(makeString("Removing subtree for objectID ", objectID.loggingString()));
@@ -773,15 +772,7 @@ void AXIsolatedTree::applyPendingChanges()
         // We don't need to bother clearing out any other non-cycle-causing member variables as they
         // will be cleaned up automatically when the tree is destroyed.
 
-#ifndef NDEBUG
         ASSERT(AXTreeStore::contains(treeID()));
-        if (auto tree = AXTreeStore::treeForID(treeID())) {
-            // At this point, there should only be two references left to this tree -- one in the map,
-            // and the `protectedThis` above.
-            ASSERT(tree->refCount() == 2, "Unexpected refcount before attempting to destroy isolated tree: %d", tree->refCount());
-        }
-#endif
-
         AXTreeStore::remove(treeID());
         return;
     }

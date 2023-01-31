@@ -81,6 +81,7 @@ set(WTF_PUBLIC_HEADERS
     FastTLS.h
     FilePrintStream.h
     FileSystem.h
+    FixedBitVector.h
     FixedVector.h
     FixedWidthDouble.h
     FlipBytes.h
@@ -331,6 +332,7 @@ set(WTF_PUBLIC_HEADERS
     WeakHashCountedSet.h
     WeakHashMap.h
     WeakHashSet.h
+    WeakListHashSet.h
     WeakPtr.h
     WeakRandom.h
     WeakRandomNumber.h

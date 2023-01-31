@@ -49,6 +49,7 @@ public:
     void visit(GroupAttribute&) override;
     void visit(LocationAttribute&) override;
     void visit(StageAttribute&) override;
+    void visit(WorkgroupSizeAttribute&) override;
 
     // Declaration
     void visit(FunctionDecl&) override;
@@ -67,6 +68,8 @@ public:
     void visit(StructureAccess&) override;
     void visit(Uint32Literal&) override;
     void visit(UnaryExpression&) override;
+    void visit(BinaryExpression&) override;
+    void visit(PointerDereference&) override;
 
     // Statement
     void visit(AssignmentStatement&) override;
@@ -78,6 +81,8 @@ public:
     void visit(ArrayType&) override;
     void visit(NamedType&) override;
     void visit(ParameterizedType&) override;
+    void visit(StructType&) override;
+    void visit(ReferenceType&) override;
 
     void visit(Parameter&) override;
     void visit(StructMember&) override;

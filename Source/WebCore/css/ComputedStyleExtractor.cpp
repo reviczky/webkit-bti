@@ -1759,6 +1759,11 @@ static Ref<CSSValue> valueForPosition(const RenderStyle& style, const LengthPoin
     return list;
 }
 
+static bool isAuto(const LengthPoint& position)
+{
+    return position.x().isAuto() && position.y().isAuto();
+}
+
 static Ref<CSSValue> valueForPositionOrAuto(const RenderStyle& style, const LengthPoint& position)
 {
     if (position.x().isAuto() && position.y().isAuto())
@@ -2634,19 +2639,37 @@ static Ref<CSSValueList> valueForOffsetRotate(const OffsetRotation& rotation)
 
 static Ref<CSSValue> valueForOffsetShorthand(const RenderStyle& style)
 {
-    // offset is serialized as follow:
-    // [offset-position] [offset-path] [offset-distance] [offset-rotate] / [offset-anchor]
+    // [ <'offset-position'>? [ <'offset-path'> [ <'offset-distance'> || <'offset-rotate'> ]? ]? ]! [ / <'offset-anchor'> ]?
+
     // The first four elements are serialized in a space separated CSSValueList.
     // This is then combined with offset-anchor in a slash separated CSSValueList.
 
-    auto outerList = CSSValueList::createSlashSeparated();
     auto innerList = CSSValueList::createSpaceSeparated();
-    innerList->append(valueForPositionOrAuto(style, style.offsetPosition()));
-    innerList->append(valueForPathOperation(style, style.offsetPath(), SVGPathConversion::ForceAbsolute));
-    innerList->append(CSSPrimitiveValue::create(style.offsetDistance(), style));
-    innerList->append(valueForOffsetRotate(style.offsetRotate()));
-    outerList->append(WTFMove(innerList));
-    outerList->append(valueForPositionOrAuto(style, style.offsetAnchor()));
+
+    if (!isAuto(style.offsetPosition()))
+        innerList->append(valueForPositionOrAuto(style, style.offsetPosition()));
+
+    bool nonInitialDistance = !style.offsetDistance().isZero();
+    bool nonInitialRotate = style.offsetRotate() != style.initialOffsetRotate();
+
+    if (style.offsetPath() || nonInitialDistance || nonInitialRotate)
+        innerList->append(valueForPathOperation(style, style.offsetPath(), SVGPathConversion::ForceAbsolute));
+
+    if (nonInitialDistance)
+        innerList->append(CSSPrimitiveValue::create(style.offsetDistance(), style));
+    if (nonInitialRotate)
+        innerList->append(valueForOffsetRotate(style.offsetRotate()));
+
+    auto inner = innerList->length()
+        ? Ref<CSSValue> { WTFMove(innerList) }
+        : Ref<CSSValue> { CSSPrimitiveValue::create(CSSValueAuto) };
+
+    if (isAuto(style.offsetAnchor()))
+        return inner;
+
+    auto outerList = CSSValueList::createSlashSeparated();
+    outerList->append(WTFMove(inner));
+    outerList->append(valueForPosition(style, style.offsetAnchor()));
     return outerList;
 }
 
@@ -4389,16 +4412,16 @@ Ref<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForGridShorthand(c
     return list;
 }
 
-Ref<MutableStyleProperties> ComputedStyleExtractor::copyPropertiesInSet(const CSSPropertyID* set, unsigned length)
+Ref<MutableStyleProperties> ComputedStyleExtractor::copyProperties(Span<const CSSPropertyID> properties)
 {
-    Vector<CSSProperty> list;
-    list.reserveInitialCapacity(length);
-    for (unsigned i = 0; i < length; ++i) {
-        if (auto value = propertyValue(set[i]))
-            list.uncheckedAppend(CSSProperty(set[i], WTFMove(value), false));
+    Vector<CSSProperty> vector;
+    vector.reserveInitialCapacity(properties.size());
+    for (auto property : properties) {
+        if (auto value = propertyValue(property))
+            vector.uncheckedAppend(CSSProperty(property, WTFMove(value), false));
     }
-    list.shrinkToFit();
-    return MutableStyleProperties::create(WTFMove(list));
+    vector.shrinkToFit();
+    return MutableStyleProperties::create(WTFMove(vector));
 }
 
 Ref<MutableStyleProperties> ComputedStyleExtractor::copyProperties()

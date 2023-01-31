@@ -33,9 +33,11 @@ enum class CompilationMode : uint8_t {
     BBQForOSREntryMode,
     OMGMode,
     OMGForOSREntryMode,
-    EmbedderEntrypointMode,
+    JSEntrypointMode,
     JSToWasmICMode,
+    WasmToJSMode,
 };
+static constexpr unsigned numberOfRepatchableMode = 5;
 
 const char* makeString(CompilationMode);
 
@@ -45,8 +47,9 @@ constexpr inline bool isOSREntry(CompilationMode compilationMode)
     case CompilationMode::LLIntMode:
     case CompilationMode::BBQMode:
     case CompilationMode::OMGMode:
-    case CompilationMode::EmbedderEntrypointMode:
+    case CompilationMode::JSEntrypointMode:
     case CompilationMode::JSToWasmICMode:
+    case CompilationMode::WasmToJSMode:
         return false;
     case CompilationMode::BBQForOSREntryMode:
     case CompilationMode::OMGForOSREntryMode:
@@ -64,8 +67,9 @@ constexpr inline bool isAnyBBQ(CompilationMode compilationMode)
     case CompilationMode::OMGForOSREntryMode:
     case CompilationMode::LLIntMode:
     case CompilationMode::OMGMode:
-    case CompilationMode::EmbedderEntrypointMode:
+    case CompilationMode::JSEntrypointMode:
     case CompilationMode::JSToWasmICMode:
+    case CompilationMode::WasmToJSMode:
         return false;
     }
     RELEASE_ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();
@@ -80,8 +84,9 @@ constexpr inline bool isAnyOMG(CompilationMode compilationMode)
     case CompilationMode::BBQMode:
     case CompilationMode::BBQForOSREntryMode:
     case CompilationMode::LLIntMode:
-    case CompilationMode::EmbedderEntrypointMode:
+    case CompilationMode::JSEntrypointMode:
     case CompilationMode::JSToWasmICMode:
+    case CompilationMode::WasmToJSMode:
         return false;
     }
     RELEASE_ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();

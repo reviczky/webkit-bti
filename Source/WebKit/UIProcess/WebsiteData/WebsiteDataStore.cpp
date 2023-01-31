@@ -62,7 +62,6 @@
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
-#include <WebCore/StorageQuotaManager.h>
 #include <WebCore/WebLockRegistry.h>
 #include <wtf/CallbackAggregator.h>
 #include <wtf/CompletionHandler.h>
@@ -253,7 +252,7 @@ SOAuthorizationCoordinator& WebsiteDataStore::soAuthorizationCoordinator(const W
 
 static Ref<NetworkProcessProxy> networkProcessForSession(PAL::SessionID sessionID)
 {
-#if PLATFORM(GTK) || PLATFORM(WPE)
+#if ((PLATFORM(GTK) || PLATFORM(WPE)) && !ENABLE(2022_GLIB_API))
     if (sessionID.isEphemeral()) {
         // Reuse a previous persistent session network process for ephemeral sessions.
         for (auto* dataStore : allDataStores().values()) {
@@ -342,18 +341,22 @@ void WebsiteDataStore::resolveDirectoriesIfNecessary()
         m_resolvedConfiguration->setCookieStorageFile(FileSystem::pathByAppendingComponent(resolvedCookieDirectory, FileSystem::pathFileName(m_configuration->cookieStorageFile())));
     }
 
-    // Do not back up cache type data.
-    std::array allCacheDirectories = {
-        resolvedApplicationCacheDirectory()
-        , resolvedMediaCacheDirectory()
-        , resolvedNetworkCacheDirectory()
+    // Default paths of WebsiteDataStore created with identifer are not under caches or tmp directory,
+    // so we need to explicitly exclude them from backup.
+    if (m_configuration->identifier()) {
+        Vector<String> allCacheDirectories = {
+            resolvedApplicationCacheDirectory()
+            , resolvedMediaCacheDirectory()
+            , resolvedNetworkCacheDirectory()
 #if ENABLE(ARKIT_INLINE_PREVIEW)
-        , resolvedModelElementCacheDirectory()
+            , resolvedModelElementCacheDirectory()
 #endif
-    };
-
-    for (const auto& directory : allCacheDirectories)
-        FileSystem::setExcludedFromBackup(directory, true);
+        };
+        m_queue->dispatch([directories = crossThreadCopy(WTFMove(allCacheDirectories))]() {
+            for (auto& directory : directories)
+                FileSystem::setExcludedFromBackup(directory, true);
+        });
+    }
 
     // Clear data of deprecated types asynchronously.
     if (auto webSQLDirectory = m_configuration->webSQLDatabaseDirectory(); !webSQLDirectory.isEmpty()) {
@@ -1495,7 +1498,7 @@ static String computeMediaKeyFile(const String& mediaKeyDirectory)
 
 void WebsiteDataStore::allowSpecificHTTPSCertificateForHost(const WebCore::CertificateInfo& certificate, const String& host)
 {
-    networkProcess().send(Messages::NetworkProcess::AllowSpecificHTTPSCertificateForHost(certificate, host), 0);
+    networkProcess().send(Messages::NetworkProcess::AllowSpecificHTTPSCertificateForHost(sessionID(), certificate, host), 0);
 }
 
 void WebsiteDataStore::allowTLSCertificateChainForLocalPCMTesting(const WebCore::CertificateInfo& certificate)
@@ -2065,7 +2068,7 @@ void WebsiteDataStore::forwardManagedDomainsToITPIfInitialized(CompletionHandler
 {
     auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
     auto managedDomains = managedDomainsIfInitialized();
-    if (!managedDomains || managedDomains->get().isEmpty())
+    if (!managedDomains || managedDomains->isEmpty())
         return;
 
     auto propagateManagedDomains = [callbackAggregator] (WebsiteDataStore* store, const HashSet<WebCore::RegistrableDomain>& domains) {

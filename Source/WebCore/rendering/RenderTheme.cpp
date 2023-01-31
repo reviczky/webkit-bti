@@ -374,11 +374,6 @@ StyleAppearance RenderTheme::autoAppearanceForElement(RenderStyle& style, const 
     if (!elementPtr)
         return StyleAppearance::None;
 
-#if ENABLE(SERVICE_CONTROLS)
-    if (isImageControl(*elementPtr))
-        return StyleAppearance::ImageControlsButton;
-#endif
-
     Ref element = *elementPtr;
 
     if (is<HTMLInputElement>(element)) {
@@ -419,8 +414,14 @@ StyleAppearance RenderTheme::autoAppearanceForElement(RenderStyle& style, const 
         return StyleAppearance::None;
     }
 
-    if (is<HTMLButtonElement>(element))
+    if (is<HTMLButtonElement>(element)) {
+#if ENABLE(SERVICE_CONTROLS)
+        if (isImageControlsButton(element.get()))
+            return StyleAppearance::ImageControlsButton;
+#endif
+
         return StyleAppearance::Button;
+    }
 
     if (is<HTMLSelectElement>(element)) {
 #if PLATFORM(IOS_FAMILY)
@@ -740,10 +741,11 @@ bool RenderTheme::paint(const RenderBox& box, ControlPart& part, const PaintInfo
 
     float deviceScaleFactor = box.document().deviceScaleFactor();
     auto zoomedRect = snapRectToDevicePixels(rect, deviceScaleFactor);
+    auto borderRect = FloatRoundedRect(box.style().getRoundedBorderFor(LayoutRect(zoomedRect)));
     auto controlStyle = extractControlStyleForRenderer(box);
     auto& context = paintInfo.context();
 
-    context.drawControlPart(part, zoomedRect, deviceScaleFactor, controlStyle);
+    context.drawControlPart(part, borderRect, deviceScaleFactor, controlStyle);
     return false;
 }
 

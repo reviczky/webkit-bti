@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.5</p>
+        <p>Library Version: 2.39.7</p>
         
       </div>
       
@@ -186,15 +186,15 @@ which can be embedded into an application to show the&nbsp;inspector.</p>
 <code>WebKitWebView</code> has set the <code>WebKitSettings:enable-developer-extras</code>
 to true, otherwise no inspector is&nbsp;available.</p>
 <div class="codehilite"><pre><span></span><code><span class="c1">// Enable the developer extras</span>
-<span class="n">WebKitSettings</span><span class="w"> </span><span class="o">*</span><span class="n">settings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_settings</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">));</span><span class="w"></span>
-<span class="n">g_object_set</span><span class="w"> </span><span class="p">(</span><span class="n">G_OBJECT</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span><span class="w"> </span><span class="s">&quot;enable-developer-extras&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">TRUE</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span><span class="w"></span>
+<span class="n">WebKitSettings</span><span class="w"> </span><span class="o">*</span><span class="n">settings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_settings</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">));</span>
+<span class="n">g_object_set</span><span class="w"> </span><span class="p">(</span><span class="n">G_OBJECT</span><span class="p">(</span><span class="n">settings</span><span class="p">),</span><span class="w"> </span><span class="s">&quot;enable-developer-extras&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">TRUE</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span>
 
 <span class="c1">// Load some data or reload to be able to inspect the page</span>
-<span class="n">webkit_web_view_load_uri</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">),</span><span class="w"> </span><span class="s">&quot;http://www.gnome.org&quot;</span><span class="p">);</span><span class="w"></span>
+<span class="n">webkit_web_view_load_uri</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">),</span><span class="w"> </span><span class="s">&quot;http://www.gnome.org&quot;</span><span class="p">);</span>
 
 <span class="c1">// Show the inspector</span>
-<span class="n">WebKitWebInspector</span><span class="w"> </span><span class="o">*</span><span class="n">inspector</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_inspector</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">));</span><span class="w"></span>
-<span class="n">webkit_web_inspector_show</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_INSPECTOR</span><span class="p">(</span><span class="n">inspector</span><span class="p">));</span><span class="w"></span>
+<span class="n">WebKitWebInspector</span><span class="w"> </span><span class="o">*</span><span class="n">inspector</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_inspector</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="p">(</span><span class="n">my_webview</span><span class="p">));</span>
+<span class="n">webkit_web_inspector_show</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_INSPECTOR</span><span class="p">(</span><span class="n">inspector</span><span class="p">));</span>
 </code></pre></div>
         </div>
 

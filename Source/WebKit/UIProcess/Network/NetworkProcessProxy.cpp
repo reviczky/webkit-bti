@@ -1433,7 +1433,7 @@ void NetworkProcessProxy::removeSession(WebsiteDataStore& websiteDataStore)
     if (canSendMessage())
         send(Messages::NetworkProcess::DestroySession { websiteDataStore.sessionID() }, 0);
 
-    if (m_websiteDataStores.computesEmpty())
+    if (m_websiteDataStores.isEmptyIgnoringNullReferences())
         defaultNetworkProcess() = nullptr;
 }
 
@@ -1875,6 +1875,22 @@ void NetworkProcessProxy::notifyMediaStreamingActivity(bool activity)
         return;
 
     send(Messages::NetworkProcess::NotifyMediaStreamingActivity(activity), 0);
+}
+
+void NetworkProcessProxy::deleteWebsiteDataInWebProcessesForOrigin(OptionSet<WebsiteDataType> dataTypes, const WebCore::ClientOrigin& origin, PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+{
+    RELEASE_LOG(Process, "%p - NetworkProcessProxy::deleteWebsiteDataInWebProcessesForOrigin BEGIN", this);
+    auto callbackAggregator = CallbackAggregator::create([protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
+        RELEASE_LOG(Process, "%p - NetworkProcessProxy::deleteWebsiteDataInWebProcessesForOrigin END", protectedThis.ptr());
+        completionHandler();
+    });
+    RefPtr websiteDataStore = websiteDataStoreFromSessionID(sessionID);
+    if (!websiteDataStore)
+        return;
+    for (auto& process : websiteDataStore->processes()) {
+        if (process.canSendMessage() && !process.isDummyProcessProxy())
+            process.sendWithAsyncReply(Messages::WebProcess::DeleteWebsiteDataForOrigin(dataTypes, origin), [callbackAggregator] { });
+    }
 }
 
 #if ENABLE(NETWORK_ISSUE_REPORTING)

@@ -2438,6 +2438,13 @@ public:
 
     DEFINE_SIGNED_SIMD_FUNCS(vectorExtractLane);
 
+    void vectorDupElement(SIMDLane simdLane, TrustedImm32 lane, FPRegisterID src, FPRegisterID dest)
+    {
+        UNUSED_PARAM(simdLane); UNUSED_PARAM(lane); UNUSED_PARAM(src); UNUSED_PARAM(dest);
+    }
+
+    DEFINE_SIMD_FUNCS(vectorDupElement);
+
     void compareFloatingPointVectorUnordered(SIMDInfo simdInfo, FPRegisterID left, FPRegisterID right, FPRegisterID dest)
     {
         RELEASE_ASSERT(supportsAVX());
@@ -3960,15 +3967,13 @@ public:
         m_assembler.vpmaddwd_rrr(b, a, dest);
     }
 
-    void vectorShuffle(TrustedImm64 immLow, TrustedImm64 immHigh, FPRegisterID a, FPRegisterID b, FPRegisterID dest) { (void) immLow; (void) immHigh; (void) a; (void) b; (void) dest; }
-
     // Misc helper functions.
 
     static bool supportsFloatingPoint() { return true; }
     static bool supportsFloatingPointTruncate() { return true; }
     static bool supportsFloatingPointSqrt() { return true; }
     static bool supportsFloatingPointAbs() { return true; }
-    
+
     template<PtrTag resultTag, PtrTag locationTag>
     static CodePtr<resultTag> readCallTarget(CodeLocationCall<locationTag> call)
     {

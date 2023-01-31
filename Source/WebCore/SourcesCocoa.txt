@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2022 Apple Inc. All rights reserved.
+// Copyright (C) 2017-2023 Apple Inc. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -126,6 +126,7 @@ Modules/speech/cocoa/WebSpeechRecognizerTask.mm
 Modules/speech/cocoa/WebSpeechRecognizerTaskMock.mm
 Modules/system-preview/ARKitBadgeSystemImage.mm
 Modules/webdatabase/cocoa/DatabaseManagerCocoa.mm
+accessibility/cocoa/AXTextMarkerCocoa.mm
 accessibility/ios/AXObjectCacheIOS.mm
 accessibility/ios/AccessibilityObjectIOS.mm
 accessibility/ios/WebAccessibilityObjectWrapperIOS.mm
@@ -151,6 +152,7 @@ crypto/mac/CryptoAlgorithmAES_GCMMac.cpp
 crypto/mac/CryptoAlgorithmAES_KWMac.cpp
 crypto/mac/CryptoAlgorithmECDHMac.cpp
 crypto/mac/CryptoAlgorithmECDSAMac.cpp
+crypto/mac/CryptoAlgorithmEd25519Cocoa.cpp
 crypto/mac/CryptoAlgorithmHKDFMac.cpp
 crypto/mac/CryptoAlgorithmHMACMac.cpp
 crypto/mac/CryptoAlgorithmPBKDF2Mac.cpp
@@ -160,6 +162,7 @@ crypto/mac/CryptoAlgorithmRSA_OAEPMac.cpp
 crypto/mac/CryptoAlgorithmRSA_PSSMac.cpp
 crypto/mac/CryptoAlgorithmRegistryMac.cpp
 crypto/mac/CryptoKeyECMac.cpp
+crypto/mac/CryptoKeyOKPCocoa.cpp
 crypto/mac/CryptoKeyMac.cpp
 crypto/mac/CryptoKeyRSAMac.cpp
 crypto/mac/CryptoUtilitiesCocoa.cpp
@@ -193,6 +196,7 @@ editing/mac/TextAlternativeWithRange.mm @no-unify
 editing/mac/TextUndoInsertionMarkupMac.mm
 fileapi/FileCocoa.mm
 history/mac/HistoryItemMac.mm
+html/canvas/GPUCanvasContextCocoa.cpp
 html/shadow/YouTubeEmbedShadowElement.cpp
 inspector/mac/PageDebuggerMac.mm
 loader/archive/cf/LegacyWebArchive.cpp
@@ -232,6 +236,8 @@ page/scrolling/cocoa/ScrollingTreeFixedNodeCocoa.mm
 page/scrolling/cocoa/ScrollingTreeOverflowScrollProxyNodeCocoa.mm
 page/scrolling/cocoa/ScrollingTreePositionedNodeCocoa.mm
 page/scrolling/cocoa/ScrollingTreeStickyNodeCocoa.mm
+page/scrolling/mac/ScrollerMac.mm
+page/scrolling/mac/ScrollerPairMac.mm
 page/scrolling/mac/ScrollingCoordinatorMac.mm
 page/scrolling/mac/ScrollingStateScrollingNodeMac.mm
 page/scrolling/mac/ScrollingTreeFrameScrollingNodeMac.mm

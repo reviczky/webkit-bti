@@ -114,6 +114,7 @@ namespace JSC {
     macro(StringPrototypeToLowerCaseIntrinsic) \
     macro(NumberPrototypeToStringIntrinsic) \
     macro(NumberIsIntegerIntrinsic) \
+    macro(NumberConstructorIntrinsic) \
     macro(IMulIntrinsic) \
     macro(RandomIntrinsic) \
     macro(FRoundIntrinsic) \
@@ -127,6 +128,7 @@ namespace JSC {
     macro(JSMapGetIntrinsic) \
     macro(JSMapHasIntrinsic) \
     macro(JSMapSetIntrinsic) \
+    macro(JSMapDeleteIntrinsic) \
     macro(JSMapValuesIntrinsic) \
     macro(JSMapKeysIntrinsic) \
     macro(JSMapEntriesIntrinsic) \
@@ -136,6 +138,7 @@ namespace JSC {
     macro(JSMapBucketValueIntrinsic) \
     macro(JSSetHasIntrinsic) \
     macro(JSSetAddIntrinsic) \
+    macro(JSSetDeleteIntrinsic) \
     macro(JSSetValuesIntrinsic) \
     macro(JSSetEntriesIntrinsic) \
     macro(JSSetBucketHeadIntrinsic) \

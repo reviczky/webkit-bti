@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2007-2009 Torch Mobile, Inc.
  * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
  *
@@ -618,10 +618,6 @@
 #define HAVE_ALTERNATE_ICONS 1
 #endif
 
-#if PLATFORM(MAC)
-#define HAVE_LARGE_CONTROL_SIZE 1
-#endif
-
 #if (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 140000)
 #define HAVE_UICONTEXTMENU_LOCATION 1
 #endif
@@ -1136,7 +1132,7 @@
 #define HAVE_SCENEKIT 1
 #endif
 
-#if PLATFORM(COCOA) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#if PLATFORM(COCOA)
 #define HAVE_WEBGPU_IMPLEMENTATION 1
 #endif
 
@@ -1399,4 +1395,8 @@
 
 #if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 130000)
 #define HAVE_STAGE_MANAGER_NS_WINDOW_COLLECTION_BEHAVIORS 1
+#endif
+
+#if PLATFORM(IOS)
+#define HAVE_PICTUREINPICTUREPLAYERLAYERVIEW 1
 #endif

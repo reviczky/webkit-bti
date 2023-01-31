@@ -423,7 +423,7 @@ void RenderFlexibleBox::layoutBlock(bool relayoutChildren, LayoutUnit)
     LayoutUnit previousHeight = logicalHeight();
     setLogicalHeight(borderAndPaddingLogicalHeight() + scrollbarLogicalHeight());
     {
-        LayoutStateMaintainer statePusher(*this, locationOffset(), hasTransform() || hasReflection() || style().isFlippedBlocksWritingMode());
+        LayoutStateMaintainer statePusher(*this, locationOffset(), isTransformed() || hasReflection() || style().isFlippedBlocksWritingMode());
 
         preparePaginationBeforeBlockLayout(relayoutChildren);
 
@@ -910,7 +910,7 @@ LayoutUnit RenderFlexibleBox::mainAxisMarginExtentForChild(const RenderBox& chil
     LayoutUnit marginStart;
     LayoutUnit marginEnd;
     if (isHorizontalFlow())
-        child.computeInlineDirectionMargins(*this, child.containingBlockLogicalWidthForContentInFragment(nullptr), child.logicalWidth(), marginStart, marginEnd);
+        child.computeInlineDirectionMargins(*this, child.containingBlockLogicalWidthForContentInFragment(nullptr), child.logicalWidth(), { }, marginStart, marginEnd);
     else
         child.computeBlockDirectionMargins(*this, marginStart, marginEnd);
     return marginStart + marginEnd;
@@ -926,7 +926,7 @@ LayoutUnit RenderFlexibleBox::crossAxisMarginExtentForChild(const RenderBox& chi
     if (isHorizontalFlow())
         child.computeBlockDirectionMargins(*this, marginStart, marginEnd);
     else
-        child.computeInlineDirectionMargins(*this, child.containingBlockLogicalWidthForContentInFragment(nullptr), child.logicalWidth(), marginStart, marginEnd);
+        child.computeInlineDirectionMargins(*this, child.containingBlockLogicalWidthForContentInFragment(nullptr), child.logicalWidth(), { }, marginStart, marginEnd);
     return marginStart + marginEnd;
 }
 

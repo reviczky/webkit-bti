@@ -185,7 +185,7 @@ void ArgumentCoder<DOMCacheEngine::Record>::encode(Encoder& encoder, const DOMCa
     }, [&](const Ref<FormData>& formData) {
         encoder << false;
         encoder << true;
-        formData->encode(encoder);
+        encoder << formData;
     }, [&](const std::nullptr_t&) {
         encoder << false;
         encoder << false;
@@ -246,10 +246,11 @@ std::optional<DOMCacheEngine::Record> ArgumentCoder<DOMCacheEngine::Record>::dec
         if (!decoder.decode(hasFormDataBody))
             return std::nullopt;
         if (hasFormDataBody) {
-            auto formData = FormData::decode(decoder);
+            std::optional<Ref<WebCore::FormData>> formData;
+            decoder >> formData;
             if (!formData)
                 return std::nullopt;
-            responseBody = formData.releaseNonNull();
+            responseBody = *formData;
         }
     }
 
@@ -1160,32 +1161,6 @@ bool ArgumentCoder<ServiceWorkerOrClientIdentifier>::decode(Decoder& decoder, Se
 
 #endif
 
-void ArgumentCoder<RefPtr<SecurityOrigin>>::encode(Encoder& encoder, const RefPtr<SecurityOrigin>& origin)
-{
-    encoder << *origin;
-}
-
-std::optional<RefPtr<SecurityOrigin>> ArgumentCoder<RefPtr<SecurityOrigin>>::decode(Decoder& decoder)
-{
-    auto origin = SecurityOrigin::decode(decoder);
-    if (!origin)
-        return std::nullopt;
-    return origin;
-}
-
-void ArgumentCoder<Ref<SecurityOrigin>>::encode(Encoder& encoder, const Ref<SecurityOrigin>& origin)
-{
-    encoder << origin.get();
-}
-
-std::optional<Ref<SecurityOrigin>> ArgumentCoder<Ref<SecurityOrigin>>::decode(Decoder& decoder)
-{
-    auto origin = SecurityOrigin::decode(decoder);
-    if (!origin)
-        return std::nullopt;
-    return origin.releaseNonNull();
-}
-
 #if ENABLE(ATTACHMENT_ELEMENT)
 
 void ArgumentCoder<SerializedAttachmentData>::encode(IPC::Encoder& encoder, const WebCore::SerializedAttachmentData& data)
@@ -1249,7 +1224,7 @@ static constexpr size_t minimumPageSize = 4096;
 
 void ArgumentCoder<WebCore::FragmentedSharedBuffer>::encode(Encoder& encoder, const WebCore::FragmentedSharedBuffer& buffer)
 {
-    uint64_t bufferSize = buffer.size();
+    size_t bufferSize = buffer.size();
     encoder << bufferSize;
     if (!bufferSize)
         return;
@@ -1261,7 +1236,7 @@ void ArgumentCoder<WebCore::FragmentedSharedBuffer>::encode(Encoder& encoder, co
         // over the IPC. ConnectionUnix.cpp already uses shared memory to send any IPC message that is
         // too large. See https://bugs.webkit.org/show_bug.cgi?id=208571.
         for (const auto& element : buffer)
-            encoder.encodeFixedLengthData(element.segment->data(), element.segment->size(), 1);
+            encoder.encodeSpan(Span { element.segment->data(), element.segment->size() });
     } else {
         SharedMemory::Handle handle;
         {
@@ -1275,7 +1250,7 @@ void ArgumentCoder<WebCore::FragmentedSharedBuffer>::encode(Encoder& encoder, co
 
 std::optional<Ref<WebCore::FragmentedSharedBuffer>> ArgumentCoder<WebCore::FragmentedSharedBuffer>::decode(Decoder& decoder)
 {
-    uint64_t bufferSize = 0;
+    size_t bufferSize = 0;
     if (!decoder.decode(bufferSize))
         return std::nullopt;
 
@@ -1283,15 +1258,10 @@ std::optional<Ref<WebCore::FragmentedSharedBuffer>> ArgumentCoder<WebCore::Fragm
         return SharedBuffer::create();
 
     if (useUnixDomainSockets() || bufferSize < minimumPageSize) {
-        if (!decoder.bufferIsLargeEnoughToContain<uint8_t>(bufferSize))
+        auto data = decoder.decodeSpan<uint8_t>(bufferSize);
+        if (!data.data())
             return std::nullopt;
-
-        Vector<uint8_t> data;
-        data.grow(bufferSize);
-        if (!decoder.decodeFixedLengthData(data.data(), data.size(), 1))
-            return std::nullopt;
-
-        return SharedBuffer::create(WTFMove(data));
+        return SharedBuffer::create(data);
     }
 
     SharedMemory::Handle handle;
@@ -1400,7 +1370,7 @@ void ArgumentCoder<SystemImage>::encode(Encoder& encoder, const SystemImage& sys
 #endif
 #if USE(SYSTEM_PREVIEW)
     case SystemImageType::ARKitBadge:
-        downcast<ARKitBadgeSystemImage>(systemImage).encode(encoder);
+        encoder << downcast<ARKitBadgeSystemImage>(systemImage);
         return;
 #endif
 #if USE(APPKIT)
@@ -1444,8 +1414,13 @@ std::optional<Ref<SystemImage>> ArgumentCoder<SystemImage>::decode(Decoder& deco
     }
 #endif
 #if USE(SYSTEM_PREVIEW)
-    case SystemImageType::ARKitBadge:
-        return ARKitBadgeSystemImage::decode(decoder);
+    case SystemImageType::ARKitBadge: {
+        std::optional<Ref<ARKitBadgeSystemImage>> image;
+        decoder >> image;
+        if (!image)
+            return std::nullopt;
+        return WTFMove(*image);
+    }
 #endif
 #if USE(APPKIT)
     case SystemImageType::AppKitControl: {

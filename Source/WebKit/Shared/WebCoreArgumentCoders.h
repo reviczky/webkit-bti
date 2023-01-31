@@ -80,9 +80,7 @@
 #endif
 
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
-#include "ArrayReference.h"
-#include <WebCore/GraphicsContextGL.h>
-#include <WebCore/GraphicsTypesGL.h>
+#include <WebCore/GraphicsContextGLEnums.h>
 #endif
 
 #if ENABLE(WEBXR)
@@ -139,7 +137,6 @@ class ResourceError;
 class ResourceRequest;
 class ResourceResponse;
 class ScriptBuffer;
-class SecurityOrigin;
 class SerializedScriptValue;
 class FragmentedSharedBuffer;
 class StickyPositionViewportConstraints;
@@ -436,16 +433,6 @@ template<> struct ArgumentCoder<WebCore::ServiceWorkerOrClientIdentifier> {
 
 #endif
 
-template<> struct ArgumentCoder<RefPtr<WebCore::SecurityOrigin>> {
-    static void encode(Encoder&, const RefPtr<WebCore::SecurityOrigin>&);
-    static std::optional<RefPtr<WebCore::SecurityOrigin>> decode(Decoder&);
-};
-
-template<> struct ArgumentCoder<Ref<WebCore::SecurityOrigin>> {
-    static void encode(Encoder&, const Ref<WebCore::SecurityOrigin>&);
-    static std::optional<Ref<WebCore::SecurityOrigin>> decode(Decoder&);
-};
-
 #if ENABLE(ATTACHMENT_ELEMENT)
 
 template<> struct ArgumentCoder<WebCore::SerializedAttachmentData> {
@@ -614,12 +601,12 @@ template <> struct EnumTraits<WebCore::CDMInstance::HDCPStatus> {
 #endif
 
 #if ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
-template <> struct EnumTraits<WebCore::GraphicsContextGL::SimulatedEventForTesting> {
+template <> struct EnumTraits<WebCore::GraphicsContextGLSimulatedEventForTesting> {
     using values = EnumValues<
-    WebCore::GraphicsContextGL::SimulatedEventForTesting,
-    WebCore::GraphicsContextGL::SimulatedEventForTesting::ContextChange,
-    WebCore::GraphicsContextGL::SimulatedEventForTesting::GPUStatusFailure,
-    WebCore::GraphicsContextGL::SimulatedEventForTesting::Timeout
+    WebCore::GraphicsContextGLSimulatedEventForTesting,
+    WebCore::GraphicsContextGLSimulatedEventForTesting::ContextChange,
+    WebCore::GraphicsContextGLSimulatedEventForTesting::GPUStatusFailure,
+    WebCore::GraphicsContextGLSimulatedEventForTesting::Timeout
     >;
 };
 #endif

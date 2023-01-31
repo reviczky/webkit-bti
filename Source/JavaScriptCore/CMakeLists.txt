@@ -902,6 +902,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     jit/RegisterMap.h
     jit/RegisterSet.h
     jit/SIMDInfo.h
+    jit/SIMDShuffle.h
     jit/ScratchRegisterAllocator.h
     jit/Snippet.h
     jit/SnippetParams.h
@@ -1269,17 +1270,18 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     wasm/WasmBranchHints.h
     wasm/WasmCallee.h
     wasm/WasmCalleeGroup.h
+    wasm/WasmCallsiteCollection.h
     wasm/WasmCapabilities.h
     wasm/WasmCompilationMode.h
     wasm/WasmContext.h
     wasm/WasmCreationMode.h
-    wasm/WasmEmbedder.h
     wasm/WasmExceptionType.h
     wasm/WasmFaultSignalHandler.h
     wasm/WasmFormat.h
     wasm/WasmFunctionCodeBlockGenerator.h
     wasm/WasmHandlerInfo.h
     wasm/WasmIndexOrName.h
+    wasm/WasmJS.h
     wasm/WasmLLIntBuiltin.h
     wasm/WasmLLIntTierUpCounter.h
     wasm/WasmMemory.h

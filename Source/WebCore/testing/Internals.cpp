@@ -40,6 +40,7 @@
 #include "Blob.h"
 #include "CSSKeyframesRule.h"
 #include "CSSMediaRule.h"
+#include "CSSParser.h"
 #include "CSSPropertyParser.h"
 #include "CSSStyleRule.h"
 #include "CSSSupportsRule.h"
@@ -197,6 +198,7 @@
 #include "ScrollingCoordinator.h"
 #include "ScrollingMomentumCalculator.h"
 #include "SecurityOrigin.h"
+#include "SelectorFilter.h"
 #include "SerializedScriptValue.h"
 #include "ServiceWorker.h"
 #include "ServiceWorkerProvider.h"
@@ -350,8 +352,6 @@
 
 #if PLATFORM(MAC)
 #include "GraphicsChecksMac.h"
-#include "NSScrollerImpDetails.h"
-#include "ScrollbarThemeMac.h"
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -3036,7 +3036,7 @@ ExceptionOr<uint64_t> Internals::layerIDForElement(Element& element)
         return Exception { NotFoundError };
 
     auto* backing = layerModelObject.layer()->backing();
-    return backing->graphicsLayer()->primaryLayerID().toUInt64();
+    return backing->graphicsLayer()->primaryLayerID().object().toUInt64();
 }
 
 static OptionSet<PlatformLayerTreeAsTextFlags> toPlatformLayerTreeFlags(unsigned short flags)
@@ -3204,6 +3204,25 @@ ExceptionOr<String> Internals::scrollingTreeAsText() const
 
     scrollingCoordinator->commitTreeStateIfNeeded();
     return scrollingCoordinator->scrollingTreeAsText();
+}
+
+ExceptionOr<bool> Internals::haveScrollingTree() const
+{
+    auto* document = contextDocument();
+    if (!document || !document->frame())
+        return Exception { InvalidAccessError };
+
+    document->updateLayoutIgnorePendingStylesheets();
+
+    auto page = document->page();
+    if (!page)
+        return false;
+
+    auto scrollingCoordinator = page->scrollingCoordinator();
+    if (!scrollingCoordinator)
+        return false;
+
+    return scrollingCoordinator->haveScrollingTree();
 }
 
 ExceptionOr<String> Internals::synchronousScrollingReasons() const
@@ -3982,18 +4001,12 @@ JSC::JSValue Internals::evaluateInWorldIgnoringException(const String& name, con
     return scriptController.executeScriptInWorldIgnoringException(world, source);
 }
 
+#if !PLATFORM(MAC)
 void Internals::setUsesOverlayScrollbars(bool enabled)
 {
     WebCore::DeprecatedGlobalSettings::setUsesOverlayScrollbars(enabled);
-#if PLATFORM(MAC)
-    ScrollerStyle::setUseOverlayScrollbars(enabled);
-    ScrollbarTheme& theme = ScrollbarTheme::theme();
-    if (theme.isMockTheme())
-        return;
-
-    static_cast<ScrollbarThemeMac&>(theme).preferencesChanged();
-#endif
 }
+#endif
 
 void Internals::forceReload(bool endToEnd)
 {
@@ -6875,9 +6888,9 @@ String Internals::dumpStyleResolvers()
 
     dumpResolver("document resolver", document->styleScope().resolver());
 
-    for (auto* shadowRoot : document->inDocumentShadowRoots()) {
-        auto* name = shadowRoot->mode() == ShadowRootMode::UserAgent ? "shadow root resolver (user agent)" : "shadow root resolver (author)";
-        dumpResolver(name, shadowRoot->styleScope().resolver());
+    for (auto& shadowRoot : document->inDocumentShadowRoots()) {
+        auto* name = shadowRoot.mode() == ShadowRootMode::UserAgent ? "shadow root resolver (user agent)" : "shadow root resolver (author)";
+        dumpResolver(name, const_cast<ShadowRoot&>(shadowRoot).styleScope().resolver());
     }
 
     return result.toString();
@@ -6987,6 +7000,18 @@ bool Internals::hasSleepDisabler() const
 void Internals::acceptTypedArrays(Int32Array&)
 {
     // Do nothing.
+}
+
+Internals::SelectorFilterHashCounts Internals::selectorFilterHashCounts(const String& selector)
+{
+    auto parser = CSSParser { { *contextDocument() } };
+    auto selectorList = parser.parseSelector(selector);
+    if (!selectorList)
+        return { };
+    
+    auto hashes = SelectorFilter::collectHashesForTesting(*selectorList->first());
+
+    return { hashes.ids.size(), hashes.classes.size(), hashes.tags.size(), hashes.attributes.size() };
 }
 
 } // namespace WebCore

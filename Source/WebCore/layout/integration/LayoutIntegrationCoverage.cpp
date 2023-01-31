@@ -139,9 +139,6 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
     case AvoidanceReason::ContentIsSVG:
         stream << "SVG content";
         break;
-    case AvoidanceReason::FlowHasInitialLetter:
-        stream << "intial letter";
-        break;
     default:
         break;
     }
@@ -294,8 +291,6 @@ static OptionSet<AvoidanceReason> canUseForStyle(const RenderElement& renderer, 
     OptionSet<AvoidanceReason> reasons;
     if (style.writingMode() == WritingMode::BottomToTop)
         SET_REASON_AND_RETURN_IF_NEEDED(FlowHasUnsupportedWritingMode, reasons, includeReasons);
-    if (style.styleType() == PseudoId::FirstLetter && (!style.initialLetter().isEmpty() || style.initialLetterDrop() || style.initialLetterHeight()))
-        SET_REASON_AND_RETURN_IF_NEEDED(FlowHasInitialLetter, reasons, includeReasons);
     // These are non-standard properties.
     if (style.lineAlign() != LineAlign::None)
         SET_REASON_AND_RETURN_IF_NEEDED(FlowHasLineAlignEdges, reasons, includeReasons);
@@ -330,7 +325,7 @@ static OptionSet<AvoidanceReason> canUseForStyle(const RenderElement& renderer, 
     return reasons;
 }
 
-static OptionSet<AvoidanceReason> canUseForChild(const RenderObject& child, IncludeReasons includeReasons)
+static OptionSet<AvoidanceReason> canUseForChild(const RenderBlockFlow& flow, const RenderObject& child, IncludeReasons includeReasons)
 {
     OptionSet<AvoidanceReason> reasons;
 
@@ -371,6 +366,10 @@ static OptionSet<AvoidanceReason> canUseForChild(const RenderObject& child, Incl
             if (renderer.isFloating() && !renderer.parent()->style().isHorizontalWritingMode())
                 return false;
 #endif
+            if (renderer.isFloating() && flow.fragmentedFlowState() != RenderObject::NotInsideFragmentedFlow) {
+                // Floats inside fragmentation need integration support.
+                return false;
+            }
             if (renderer.isOutOfFlowPositioned()) {
                 if (!renderer.parent()->style().isLeftToRightDirection())
                     return false;
@@ -456,7 +455,7 @@ OptionSet<AvoidanceReason> canUseForLineLayoutWithReason(const RenderBlockFlow& 
 
     for (auto walker = InlineWalker(flow); !walker.atEnd(); walker.advance()) {
         auto& child = *walker.current();
-        if (auto childReasons = canUseForChild(child, includeReasons))
+        if (auto childReasons = canUseForChild(flow, child, includeReasons))
             ADD_REASONS_AND_RETURN_IF_NEEDED(childReasons, reasons, includeReasons);
     }
     auto styleReasons = canUseForStyle(flow, includeReasons);

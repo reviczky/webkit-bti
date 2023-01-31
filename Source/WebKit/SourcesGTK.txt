@@ -157,6 +157,7 @@ UIProcess/API/glib/WebKitNavigationAction.cpp @no-unify
 UIProcess/API/glib/WebKitNavigationClient.cpp @no-unify
 UIProcess/API/glib/WebKitNavigationPolicyDecision.cpp @no-unify
 UIProcess/API/glib/WebKitNetworkProxySettings.cpp @no-unify
+UIProcess/API/glib/WebKitNetworkSession.cpp @no-unify
 UIProcess/API/glib/WebKitNotification.cpp @no-unify
 UIProcess/API/glib/WebKitNotificationPermissionRequest.cpp @no-unify
 UIProcess/API/glib/WebKitNotificationProvider.cpp @no-unify
@@ -207,7 +208,6 @@ UIProcess/API/gtk/WebKitEmojiChooser.cpp @no-unify
 UIProcess/API/gtk/WebKitInputMethodContextGtk.cpp @no-unify
 UIProcess/API/gtk/WebKitInputMethodContextImplGtk.cpp @no-unify
 UIProcess/API/gtk/WebKitPopupMenu.cpp @no-unify
-UIProcess/API/gtk/WebKitPrintCustomWidget.cpp @no-unify
 UIProcess/API/gtk/WebKitPrintOperation.cpp @no-unify
 UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.cpp @no-unify
 UIProcess/API/gtk/WebKitScriptDialogGtk.cpp @no-unify
@@ -257,6 +257,8 @@ UIProcess/glib/WebPageProxyGLib.cpp
 UIProcess/glib/WebProcessPoolGLib.cpp
 UIProcess/glib/WebProcessProxyGLib.cpp
 UIProcess/glib/WebsiteDataStoreGLib.cpp @no-unify
+
+UIProcess/gstreamer/WebPageProxyGStreamer.cpp
 
 UIProcess/gtk/AcceleratedBackingStore.cpp @no-unify
 UIProcess/gtk/AcceleratedBackingStoreWayland.cpp @no-unify

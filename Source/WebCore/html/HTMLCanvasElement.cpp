@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Alp Toker <alp@atoker.com>
  * Copyright (C) 2010 Torch Mobile (Beijing) Co. Ltd. All rights reserved.
  *
@@ -40,6 +40,7 @@
 #include "EventNames.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
+#include "GPU.h"
 #include "GPUBasedCanvasRenderingContext.h"
 #include "GPUCanvasContext.h"
 #include "GeometryUtilities.h"
@@ -57,6 +58,7 @@
 #include "JSNodeCustom.h"
 #include "Logging.h"
 #include "MIMETypeRegistry.h"
+#include "Navigator.h"
 #include "OffscreenCanvas.h"
 #include "PlaceholderRenderingContext.h"
 #include "RenderElement.h"
@@ -255,13 +257,11 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
         }
 #endif
 
-#if HAVE(WEBGPU_IMPLEMENTATION)
         if (m_context->isWebGPU()) {
             if (!isWebGPUType(contextId))
                 return { std::nullopt };
             return { downcast<GPUCanvasContext>(m_context.get()) };
         }
-#endif
 
         ASSERT_NOT_REACHED();
         return std::optional<RenderingContext> { std::nullopt };
@@ -308,14 +308,17 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
     }
 #endif
 
-#if HAVE(WEBGPU_IMPLEMENTATION)
     if (isWebGPUType(contextId)) {
-        auto context = createContextWebGPU(contextId);
+        GPU* gpu = nullptr;
+        if (auto* window = document().domWindow()) {
+            // FIXME: Should we be instead getting this through jsDynamicCast<JSDOMWindow*>(state)->wrapped().navigator().gpu()?
+            gpu = window->navigator().gpu();
+        }
+        auto context = createContextWebGPU(contextId, gpu);
         if (!context)
             return { std::nullopt };
         return { context };
     }
-#endif
 
     return std::optional<RenderingContext> { std::nullopt };
 }
@@ -333,10 +336,8 @@ CanvasRenderingContext* HTMLCanvasElement::getContext(const String& type)
         return getContextWebGL(HTMLCanvasElement::toWebGLVersion(type));
 #endif
 
-#if HAVE(WEBGPU_IMPLEMENTATION)
     if (HTMLCanvasElement::isWebGPUType(type))
-        return getContextWebGPU(type);
-#endif
+        return getContextWebGPU(type, nullptr);
 
     return nullptr;
 }
@@ -522,16 +523,15 @@ bool HTMLCanvasElement::isWebGPUType(const String& type)
     return type == "webgpu"_s;
 }
 
-#if HAVE(WEBGPU_IMPLEMENTATION)
-GPUCanvasContext* HTMLCanvasElement::createContextWebGPU(const String& type)
+GPUCanvasContext* HTMLCanvasElement::createContextWebGPU(const String& type, GPU* gpu)
 {
     ASSERT_UNUSED(type, HTMLCanvasElement::isWebGPUType(type));
     ASSERT(!m_context);
 
-    if (!document().settings().webGPU())
+    if (!document().settings().webGPU() || !gpu)
         return nullptr;
 
-    m_context = GPUCanvasContext::create(*this);
+    m_context = GPUCanvasContext::create(*this, *gpu);
 
     if (m_context) {
         // Adds the current document as an observer, so that the document calls prepareForDisplay
@@ -545,7 +545,7 @@ GPUCanvasContext* HTMLCanvasElement::createContextWebGPU(const String& type)
     return static_cast<GPUCanvasContext*>(m_context.get());
 }
 
-GPUCanvasContext* HTMLCanvasElement::getContextWebGPU(const String& type)
+GPUCanvasContext* HTMLCanvasElement::getContextWebGPU(const String& type, GPU* gpu)
 {
     ASSERT_UNUSED(type, HTMLCanvasElement::isWebGPUType(type));
 
@@ -556,11 +556,10 @@ GPUCanvasContext* HTMLCanvasElement::getContextWebGPU(const String& type)
         return nullptr;
 
     if (!m_context)
-        return createContextWebGPU(type);
+        return createContextWebGPU(type, gpu);
 
     return static_cast<GPUCanvasContext*>(m_context.get());
 }
-#endif // HAVE(WEBGPU_IMPLEMENTATION)
 
 void HTMLCanvasElement::didDraw(const std::optional<FloatRect>& rect)
 {

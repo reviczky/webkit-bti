@@ -28,12 +28,6 @@ namespace sh
 struct ShaderVariable;
 }
 
-constexpr bool ShPixelLocalStorageTypeUsesImages(ShPixelLocalStorageType type)
-{
-    return type == ShPixelLocalStorageType::ImageStoreR32PackedFormats ||
-           type == ShPixelLocalStorageType::ImageStoreNativeFormats;
-}
-
 namespace gl
 {
 
@@ -316,9 +310,7 @@ bool IsClearEntryPoint(EntryPoint entryPoint);
 bool IsQueryEntryPoint(EntryPoint entryPoint);
 }  // namespace angle
 
-#if !defined(ANGLE_ENABLE_WINDOWS_UWP)
 void writeFile(const char *path, const void *data, size_t size);
-#endif
 
 #if defined(ANGLE_PLATFORM_WINDOWS)
 void ScheduleYield();

@@ -55,6 +55,7 @@
 #include "StringObject.h"
 #include "StructureCache.h"
 #include "StructureRareDataInlines.h"
+#include "WasmTypeDefinitionInlines.h"
 #include "WebAssemblyModuleRecord.h"
 #include <wtf/BooleanLattice.h>
 #include <wtf/CheckedArithmetic.h>
@@ -1502,6 +1503,10 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         setForNode(node, m_vm.hashMapBucketMapStructure.get());
         break;
 
+    case MapOrSetDelete:
+        setNonCellTypeForNode(node, SpecBoolean);
+        break;
+
     case WeakSetAdd:
     case WeakMapSet:
         break;
@@ -2812,7 +2817,13 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     }
 
     case ToNumber: {
+        if (node->child1().useKind() == StringUse) {
+            setNonCellTypeForNode(node, SpecBytecodeNumber);
+            break;
+        }
+
         JSValue childConst = forNode(node->child1()).value();
+
         if (childConst && childConst.isNumber()) {
             didFoldClobberWorld();
             setConstant(node, childConst);
@@ -4637,6 +4648,49 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         clobberWorld();
         makeHeapTopForNode(node);
         break;
+
+    case CallWasm: {
+#if ENABLE(WEBASSEMBLY)
+        clobberWorld();
+
+        WebAssemblyFunction* wasmFunction = node->castOperand<WebAssemblyFunction*>();
+        const auto& typeDefinition = Wasm::TypeInformation::get(wasmFunction->typeIndex()).expand();
+        const auto& signature = *typeDefinition.as<Wasm::FunctionSignature>();
+        if (signature.returnsVoid()) {
+            setConstant(node, jsUndefined());
+            break;
+        }
+
+        ASSERT(signature.returnCount() == 1);
+        auto type = signature.returnType(0);
+        switch (type.kind) {
+        case Wasm::TypeKind::I32: {
+            setNonCellTypeForNode(node, SpecInt32Only);
+            break;
+        }
+        case Wasm::TypeKind::I64: {
+            setTypeForNode(node, SpecBigInt);
+            break;
+        }
+        case Wasm::TypeKind::Ref:
+        case Wasm::TypeKind::RefNull:
+        case Wasm::TypeKind::Funcref:
+        case Wasm::TypeKind::Externref: {
+            makeHeapTopForNode(node);
+            break;
+        }
+        case Wasm::TypeKind::F32:
+        case Wasm::TypeKind::F64: {
+            setNonCellTypeForNode(node, SpecBytecodeDouble);
+            break;
+        }
+        default: {
+            break;
+        }
+        }
+#endif
+        break;
+    }
 
     case ForceOSRExit:
     case CheckBadValue:

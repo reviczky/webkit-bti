@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.5</p>
+        <p>Library Version: 2.39.7</p>
         
       </div>
       
@@ -189,15 +189,15 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Declaration
         <a class="anchor" href="#declaration"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/WebKitBuild/Release/WebKitGTK/DerivedSources/webkit/WebKitWebContext.h#L287">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/WebKitBuild/Release/WebKitGTK/DerivedSources/webkit/WebKitWebContext.h#L288">[src]</a>
         
       </h4>
 
       <div class="docblock c-decl">
-        <pre><code><div class="highlight"><pre><span></span><span class="n">WebKitProcessModel</span><span class="w"></span>
-<span class="n">webkit_web_context_get_process_model</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitWebContext</span><span class="o">*</span><span class="w"> </span><span class="n">context</span><span class="w"></span>
-<span class="p">)</span><span class="w"></span>
+        <pre><code><div class="highlight"><pre><span></span><span class="n">WebKitProcessModel</span>
+<span class="n">webkit_web_context_get_process_model</span><span class="w"> </span><span class="p">(</span>
+<span class="w">  </span><span class="n">WebKitWebContext</span><span class="o">*</span><span class="w"> </span><span class="n">context</span>
+<span class="p">)</span>
 </pre></div>
 </code></pre>
       </div>
@@ -208,13 +208,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1742">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L1789">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Returns the current process&nbsp;model.</p>
-<p>For more information about this value
+        <p>Returns <code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>.</p>
+<p>For more information about why this function is deprecated,
 see&nbsp;webkit_web_context_set_process_model().</p>
       </div>
 
@@ -224,6 +224,9 @@ see&nbsp;webkit_web_context_set_process_model().</p>
           
           <tr><td>Available since:</td><td>2.4</td></tr>
           
+          
+          <tr><td>Deprecated since:</td><td>2.40</td></tr>
+          <tr><td colspan="2"><p>Please do not use it in newly written&nbsp;code.</p></td></tr>
           
           
           
@@ -251,7 +254,7 @@ see&nbsp;webkit_web_context_set_process_model().</p>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>
-            <td><p>The current <code>WebKitProcessModel</code>.</p></td>
+            <td><p><code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>.</p></td>
           </tr>
           
           

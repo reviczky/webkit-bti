@@ -86,6 +86,11 @@ void RenderLayerScrollableArea::clear()
     auto& renderer = m_layer.renderer();
     if (m_registeredScrollableArea)
         renderer.view().frameView().removeScrollableArea(this);
+    
+    if (m_isRegisteredForAnimatedScroll) {
+        renderer.view().frameView().removeScrollableAreaForAnimatedScroll(this);
+        m_isRegisteredForAnimatedScroll = false;
+    }
 
 #if ENABLE(IOS_TOUCH_EVENTS)
     unregisterAsTouchEventListenerForScrolling();
@@ -828,19 +833,16 @@ void RenderLayerScrollableArea::invalidateScrollCornerRect(const IntRect& rect)
         m_resizer->repaintRectangle(rect);
 }
 
-static bool scrollbarHiddenByStyle(Scrollbar* scrollbar)
+NativeScrollbarVisibility RenderLayerScrollableArea::horizontalNativeScrollbarVisibility() const
 {
-    return scrollbar && scrollbar->isHiddenByStyle();
+    auto scrollbar = horizontalScrollbar();
+    return Scrollbar::nativeScrollbarVisibility(scrollbar);
 }
 
-bool RenderLayerScrollableArea::horizontalScrollbarHiddenByStyle() const
+NativeScrollbarVisibility RenderLayerScrollableArea::verticalNativeScrollbarVisibility() const
 {
-    return scrollbarHiddenByStyle(horizontalScrollbar());
-}
-
-bool RenderLayerScrollableArea::verticalScrollbarHiddenByStyle() const
-{
-    return scrollbarHiddenByStyle(verticalScrollbar());
+    auto scrollbar = verticalScrollbar();
+    return Scrollbar::nativeScrollbarVisibility(scrollbar);
 }
 
 bool RenderLayerScrollableArea::canShowNonOverlayScrollbars() const
@@ -992,14 +994,14 @@ int RenderLayerScrollableArea::horizontalScrollbarHeight(OverlayScrollbarSizeRel
 
 OverscrollBehavior RenderLayerScrollableArea::horizontalOverscrollBehavior() const
 {
-    if (m_layer.renderBox() && m_layer.renderBox()->canBeScrolledAndHasScrollableArea())
+    if (m_layer.renderBox())
         return m_layer.renderer().style().overscrollBehaviorX();
     return OverscrollBehavior::Auto;
 }
 
 OverscrollBehavior RenderLayerScrollableArea::verticalOverscrollBehavior() const
 {
-    if (m_layer.renderBox() && m_layer.renderBox()->canBeScrolledAndHasScrollableArea())
+    if (m_layer.renderBox())
         return m_layer.renderer().style().overscrollBehaviorY();
     return OverscrollBehavior::Auto;
 }

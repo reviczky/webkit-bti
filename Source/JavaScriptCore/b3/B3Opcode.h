@@ -347,6 +347,7 @@ enum Opcode : uint8_t {
     // SIMD instructions
     VectorExtractLane,
     VectorReplaceLane,
+    VectorDupElement, // Currently only some architectures support this.
 
     VectorSplat,
 
@@ -410,7 +411,6 @@ enum Opcode : uint8_t {
     VectorExtaddPairwise,
     VectorMulSat,
     VectorSwizzle,
-    VectorShuffle,
 
     // SSA support, in the style of DFG SSA.
     Upsilon, // This uses the UpsilonValue class.
@@ -418,14 +418,14 @@ enum Opcode : uint8_t {
 
     // Jump.
     Jump,
-    
+
     // Polymorphic branch, usable with any integer type. Branches if not equal to zero. The 0-index
     // successor is the true successor.
     Branch,
 
     // Switch. Switches over either Int32 or Int64. Uses the SwitchValue class.
     Switch,
-    
+
     // Multiple entrypoints are supported via the EntrySwitch operation. Place this in the root
     // block and list the entrypoints as the successors. All blocks backwards-reachable from
     // EntrySwitch are duplicated for each entrypoint.

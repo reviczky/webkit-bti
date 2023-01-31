@@ -906,8 +906,8 @@ void AsyncScrollingCoordinator::setScrollingNodeScrollableAreaGeometry(Scrolling
     scrollParameters.verticalOverscrollBehavior = scrollableArea.verticalOverscrollBehavior();
     scrollParameters.horizontalScrollbarMode = scrollableArea.horizontalScrollbarMode();
     scrollParameters.verticalScrollbarMode = scrollableArea.verticalScrollbarMode();
-    scrollParameters.horizontalScrollbarHiddenByStyle = scrollableArea.horizontalScrollbarHiddenByStyle();
-    scrollParameters.verticalScrollbarHiddenByStyle = scrollableArea.verticalScrollbarHiddenByStyle();
+    scrollParameters.horizontalNativeScrollbarVisibility = scrollableArea.horizontalNativeScrollbarVisibility();
+    scrollParameters.verticalNativeScrollbarVisibility = scrollableArea.verticalNativeScrollbarVisibility();
     scrollParameters.useDarkAppearanceForScrollbars = scrollableArea.useDarkAppearanceForScrollbars();
 
     scrollingNode->setScrollableAreaParameters(scrollParameters);
@@ -1072,6 +1072,11 @@ String AsyncScrollingCoordinator::scrollingTreeAsText(OptionSet<ScrollingStateTr
         return emptyString();
 
     return m_scrollingTree->scrollingTreeAsText(behavior);
+}
+
+bool AsyncScrollingCoordinator::haveScrollingTree() const
+{
+    return !!m_scrollingTree;
 }
 
 void AsyncScrollingCoordinator::setActiveScrollSnapIndices(ScrollingNodeID scrollingNodeID, std::optional<unsigned> horizontalIndex, std::optional<unsigned> verticalIndex)

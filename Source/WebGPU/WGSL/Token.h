@@ -83,10 +83,13 @@ enum class TokenType: uint32_t {
     LT,
     Minus,
     MinusMinus,
+    Plus,
+    PlusPlus,
     Period,
     ParenLeft,
     ParenRight,
     Semicolon,
+    Star,
     // FIXME: add all the other special tokens
 };
 
