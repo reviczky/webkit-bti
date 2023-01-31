@@ -1625,6 +1625,26 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_network_proxy_settings_free@Base 2.15.3
  webkit_network_proxy_settings_get_type@Base 2.15.3
  webkit_network_proxy_settings_new@Base 2.15.3
+#(gtk4-only)webkit_network_session_allow_tls_certificate_for_host@Base 2.39.7
+#(gtk4-only)webkit_network_session_download_uri@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_cookie_manager@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_default@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_itp_enabled@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_itp_summary@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_itp_summary_finish@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_persistent_credential_storage_enabled@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_tls_errors_policy@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_type@Base 2.39.7
+#(gtk4-only)webkit_network_session_get_website_data_manager@Base 2.39.7
+#(gtk4-only)webkit_network_session_is_ephemeral@Base 2.39.7
+#(gtk4-only)webkit_network_session_new@Base 2.39.7
+#(gtk4-only)webkit_network_session_new_ephemeral@Base 2.39.7
+#(gtk4-only)webkit_network_session_prefetch_dns@Base 2.39.7
+#(gtk4-only)webkit_network_session_set_itp_enabled@Base 2.39.7
+#(gtk4-only)webkit_network_session_set_memory_pressure_settings@Base 2.39.7
+#(gtk4-only)webkit_network_session_set_persistent_credential_storage_enabled@Base 2.39.7
+#(gtk4-only)webkit_network_session_set_proxy_settings@Base 2.39.7
+#(gtk4-only)webkit_network_session_set_tls_errors_policy@Base 2.39.7
  webkit_notification_clicked@Base 2.12.0
  webkit_notification_close@Base 2.8.1
  webkit_notification_get_body@Base 2.8.1
@@ -1675,10 +1695,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_policy_decision_use_with_policies@Base 2.29.2
  webkit_policy_error_get_type@Base 2.5.3
  webkit_policy_error_quark@Base 2.5.3
- webkit_print_custom_widget_get_title@Base 2.15.90
- webkit_print_custom_widget_get_type@Base 2.15.90
- webkit_print_custom_widget_get_widget@Base 2.15.90
- webkit_print_custom_widget_new@Base 2.15.90
+ (gtk3-only)webkit_print_custom_widget_get_title@Base 2.15.90
+ (gtk3-only)webkit_print_custom_widget_get_type@Base 2.15.90
+ (gtk3-only)webkit_print_custom_widget_get_widget@Base 2.15.90
+ (gtk3-only)webkit_print_custom_widget_new@Base 2.15.90
  webkit_print_error_get_type@Base 2.5.3
  webkit_print_error_quark@Base 2.5.3
  webkit_print_operation_get_page_setup@Base 2.5.3
@@ -1690,7 +1710,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_print_operation_run_dialog@Base 2.5.3
  webkit_print_operation_set_page_setup@Base 2.5.3
  webkit_print_operation_set_print_settings@Base 2.5.3
- webkit_process_model_get_type@Base 2.5.3
+ (gtk3-only)webkit_process_model_get_type@Base 2.5.3
  webkit_response_policy_decision_get_request@Base 2.5.3
  webkit_response_policy_decision_get_response@Base 2.5.3
  webkit_response_policy_decision_get_type@Base 2.5.3
@@ -1965,18 +1985,18 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_user_style_sheet_ref@Base 2.5.3
  webkit_user_style_sheet_unref@Base 2.5.3
  webkit_web_context_add_path_to_sandbox@Base 2.25.1
- webkit_web_context_allow_tls_certificate_for_host@Base 2.5.3
- webkit_web_context_clear_cache@Base 2.5.3
- webkit_web_context_download_uri@Base 2.5.3
+ (gtk3-only)webkit_web_context_allow_tls_certificate_for_host@Base 2.5.3
+ (gtk3-only)webkit_web_context_clear_cache@Base 2.5.3
+ (gtk3-only)webkit_web_context_download_uri@Base 2.5.3
  webkit_web_context_get_cache_model@Base 2.5.3
- webkit_web_context_get_cookie_manager@Base 2.5.3
+ (gtk3-only)webkit_web_context_get_cookie_manager@Base 2.5.3
  webkit_web_context_get_default@Base 2.5.3
- webkit_web_context_get_favicon_database@Base 2.5.3
- webkit_web_context_get_favicon_database_directory@Base 2.5.3
+ (gtk3-only)webkit_web_context_get_favicon_database@Base 2.5.3
+ (gtk3-only)webkit_web_context_get_favicon_database_directory@Base 2.5.3
  webkit_web_context_get_geolocation_manager@Base 2.25.1
  (gtk3-only)webkit_web_context_get_plugins@Base 2.5.3
  (gtk3-only)webkit_web_context_get_plugins_finish@Base 2.5.3
- webkit_web_context_get_process_model@Base 2.5.3
+ (gtk3-only)webkit_web_context_get_process_model@Base 2.5.3
  (gtk3-only)webkit_web_context_get_sandbox_enabled@Base 2.25.1
  webkit_web_context_get_security_manager@Base 2.5.3
  webkit_web_context_get_spell_checking_enabled@Base 2.5.3
@@ -1986,24 +2006,24 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_type@Base 2.5.3
  (gtk3-only)webkit_web_context_get_use_system_appearance_for_scrollbars@Base 2.29.1
  (gtk3-only)webkit_web_context_get_web_process_count_limit@Base 2.10.0
- webkit_web_context_get_website_data_manager@Base 2.10.0
+ (gtk3-only)webkit_web_context_get_website_data_manager@Base 2.10.0
  webkit_web_context_initialize_notification_permissions@Base 2.15.3
  webkit_web_context_is_automation_allowed@Base 2.17.3
- webkit_web_context_is_ephemeral@Base 2.15.4
+ (gtk3-only)webkit_web_context_is_ephemeral@Base 2.15.4
  webkit_web_context_new@Base 2.8.1
- webkit_web_context_new_ephemeral@Base 2.15.4
- webkit_web_context_new_with_website_data_manager@Base 2.10.0
- webkit_web_context_prefetch_dns@Base 2.5.3
+ (gtk3-only)webkit_web_context_new_ephemeral@Base 2.15.4
+ (gtk3-only)webkit_web_context_new_with_website_data_manager@Base 2.10.0
+ (gtk3-only)webkit_web_context_prefetch_dns@Base 2.5.3
  webkit_web_context_register_uri_scheme@Base 2.5.3
  webkit_web_context_send_message_to_all_extensions@Base 2.27.2
  (gtk3-only)webkit_web_context_set_additional_plugins_directory@Base 2.5.3
  webkit_web_context_set_automation_allowed@Base 2.17.3
  webkit_web_context_set_cache_model@Base 2.5.3
  (gtk3-only)webkit_web_context_set_disk_cache_directory@Base 2.5.3
- webkit_web_context_set_favicon_database_directory@Base 2.5.3
+ (gtk3-only)webkit_web_context_set_favicon_database_directory@Base 2.5.3
  (gtk3-only)webkit_web_context_set_network_proxy_settings@Base 2.15.3
  webkit_web_context_set_preferred_languages@Base 2.5.3
- webkit_web_context_set_process_model@Base 2.5.3
+ (gtk3-only)webkit_web_context_set_process_model@Base 2.5.3
  (gtk3-only)webkit_web_context_set_sandbox_enabled@Base 2.25.1
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
@@ -2079,6 +2099,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (gtk3-only)webkit_web_view_get_javascript_global_context@Base 2.5.3
  webkit_web_view_get_main_resource@Base 2.5.3
  webkit_web_view_get_microphone_capture_state@Base 2.33.3
+#(gtk4-only)webkit_web_view_get_network_session@Base 2.39.7
  webkit_web_view_get_page_id@Base 2.5.3
  webkit_web_view_get_session_state@Base 2.12.0
  webkit_web_view_get_settings@Base 2.5.3
@@ -2090,7 +2111,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_get_uri@Base 2.5.3
  webkit_web_view_get_user_content_manager@Base 2.5.3
  webkit_web_view_get_web_extension_mode@Base 2.37.1
- webkit_web_view_get_website_data_manager@Base 2.15.90
+ (gtk3-only)webkit_web_view_get_website_data_manager@Base 2.15.90
  webkit_web_view_get_website_policies@Base 2.29.2
  webkit_web_view_get_window_properties@Base 2.5.3
  webkit_web_view_get_zoom_level@Base 2.5.3
@@ -2099,7 +2120,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_go_to_back_forward_list_item@Base 2.5.3
  webkit_web_view_is_controlled_by_automation@Base 2.17.3
  webkit_web_view_is_editable@Base 2.8.1
- webkit_web_view_is_ephemeral@Base 2.15.4
+ (gtk3-only)webkit_web_view_is_ephemeral@Base 2.15.4
  webkit_web_view_is_loading@Base 2.5.3
  webkit_web_view_is_playing_audio@Base 2.8.1
  webkit_web_view_load_alternate_html@Base 2.5.3
@@ -2109,10 +2130,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_load_request@Base 2.5.3
  webkit_web_view_load_uri@Base 2.5.3
  webkit_web_view_new@Base 2.5.3
- webkit_web_view_new_with_context@Base 2.5.3
+ (gtk3-only)webkit_web_view_new_with_context@Base 2.5.3
  webkit_web_view_new_with_related_view@Base 2.5.3
- webkit_web_view_new_with_settings@Base 2.5.3
- webkit_web_view_new_with_user_content_manager@Base 2.5.3
+ (gtk3-only)webkit_web_view_new_with_settings@Base 2.5.3
+ (gtk3-only)webkit_web_view_new_with_user_content_manager@Base 2.5.3
  webkit_web_view_reload@Base 2.5.3
  webkit_web_view_reload_bypass_cache@Base 2.5.3
  webkit_web_view_restore_session_state@Base 2.12.0
@@ -2161,32 +2182,35 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_fetch_finish@Base 2.15.4
  webkit_website_data_manager_get_base_cache_directory@Base 2.10.0
  webkit_website_data_manager_get_base_data_directory@Base 2.10.0
- webkit_website_data_manager_get_cookie_manager@Base 2.15.90
+ (gtk3-only)webkit_website_data_manager_get_cookie_manager@Base 2.15.90
  (gtk3-only)webkit_website_data_manager_get_disk_cache_directory@Base 2.10.0
  (gtk3-only)webkit_website_data_manager_get_dom_cache_directory@Base 2.29.2
+#(gtk4-only)webkit_website_data_manager_get_favicon_database@Base 2.39.7
+#(gtk4-only)webkit_website_data_manager_get_favicons_enabled@Base 2.39.7
  (gtk3-only)webkit_website_data_manager_get_hsts_cache_directory@Base 2.25.92
  (gtk3-only)webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  (gtk3-only)webkit_website_data_manager_get_itp_directory@Base 2.29.2
- webkit_website_data_manager_get_itp_enabled@Base 2.29.2
+ (gtk3-only)webkit_website_data_manager_get_itp_enabled@Base 2.29.2
  webkit_website_data_manager_get_itp_summary@Base 2.29.4
  webkit_website_data_manager_get_itp_summary_finish@Base 2.29.4
  (gtk3-only)webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  (gtk3-only)webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
- webkit_website_data_manager_get_persistent_credential_storage_enabled@Base 2.29.2
+ (gtk3-only)webkit_website_data_manager_get_persistent_credential_storage_enabled@Base 2.29.2
  (gtk3-only)webkit_website_data_manager_get_service_worker_registrations_directory@Base 2.29.2
- webkit_website_data_manager_get_tls_errors_policy@Base 2.31.1
+ (gtk3-only)webkit_website_data_manager_get_tls_errors_policy@Base 2.31.1
  webkit_website_data_manager_get_type@Base 2.10.0
  (gtk3-only)webkit_website_data_manager_get_websql_directory@Base 2.10.0
  webkit_website_data_manager_is_ephemeral@Base 2.15.4
- webkit_website_data_manager_new@Base 2.10.0
- webkit_website_data_manager_new_ephemeral@Base 2.15.4
+ (gtk3-only)webkit_website_data_manager_new@Base 2.10.0
+ (gtk3-only)webkit_website_data_manager_new_ephemeral@Base 2.15.4
  webkit_website_data_manager_remove@Base 2.15.4
  webkit_website_data_manager_remove_finish@Base 2.15.4
- webkit_website_data_manager_set_itp_enabled@Base 2.29.2
- webkit_website_data_manager_set_memory_pressure_settings@Base 2.33.3
- webkit_website_data_manager_set_network_proxy_settings@Base 2.31.1
- webkit_website_data_manager_set_persistent_credential_storage_enabled@Base 2.29.2
- webkit_website_data_manager_set_tls_errors_policy@Base 2.31.1
+#(gtk4-only)webkit_website_data_manager_set_favicons_enabled@Base 2.39.7
+ (gtk3-only)webkit_website_data_manager_set_itp_enabled@Base 2.29.2
+ (gtk3-only)webkit_website_data_manager_set_memory_pressure_settings@Base 2.33.3
+ (gtk3-only)webkit_website_data_manager_set_network_proxy_settings@Base 2.31.1
+ (gtk3-only)webkit_website_data_manager_set_persistent_credential_storage_enabled@Base 2.29.2
+ (gtk3-only)webkit_website_data_manager_set_tls_errors_policy@Base 2.31.1
  webkit_website_data_ref@Base 2.15.4
  webkit_website_data_types_get_type@Base 2.15.4
  webkit_website_data_unref@Base 2.15.4
