@@ -1,4 +1,4 @@
-webkit2gtk (2.39.7-1) UNRELEASED; urgency=medium
+webkit2gtk (2.39.7-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/rules:
@@ -8,7 +8,7 @@ webkit2gtk (2.39.7-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 31 Jan 2023 16:33:13 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 31 Jan 2023 18:23:34 +0100
 
 webkit2gtk (2.39.5-1) experimental; urgency=medium
 
