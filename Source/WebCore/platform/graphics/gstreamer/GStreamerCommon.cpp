@@ -28,6 +28,7 @@
 #include "DMABufVideoSinkGStreamer.h"
 #include "GLVideoSinkGStreamer.h"
 #include "GStreamerAudioMixer.h"
+#include "GStreamerRegistryScanner.h"
 #include "GUniquePtrGStreamer.h"
 #include "GstAllocatorFastMalloc.h"
 #include "IntSize.h"
@@ -332,10 +333,20 @@ bool isThunderRanked()
 }
 #endif
 
+static void registerInternalVideoEncoder()
+{
+    // TODO: Remove this ifdef, this element doesn't explicitly use MediaStream APIs and can
+    // also be used for WebCodec video encoding.
+#if ENABLE(MEDIA_STREAM)
+    gst_element_register(nullptr, "webrtcvideoencoder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEBRTC_VIDEO_ENCODER);
+#endif
+}
+
 void registerWebKitGStreamerElements()
 {
     static std::once_flag onceFlag;
-    std::call_once(onceFlag, [] {
+    bool registryWasUpdated = false;
+    std::call_once(onceFlag, [&registryWasUpdated] {
 
 #if ENABLE(ENCRYPTED_MEDIA) && ENABLE(THUNDER)
         if (!CDMFactoryThunder::singleton().supportedKeySystems().isEmpty()) {
@@ -353,8 +364,8 @@ void registerWebKitGStreamerElements()
 
 #if ENABLE(MEDIA_STREAM)
         gst_element_register(nullptr, "mediastreamsrc", GST_RANK_PRIMARY, WEBKIT_TYPE_MEDIA_STREAM_SRC);
-        gst_element_register(nullptr, "webrtcvideoencoder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEBRTC_VIDEO_ENCODER);
 #endif
+        registerInternalVideoEncoder();
 
 #if ENABLE(MEDIA_SOURCE)
         gst_element_register(nullptr, "webkitmediasrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_MEDIA_SRC);
@@ -405,7 +416,28 @@ void registerWebKitGStreamerElements()
             if (auto vaapiPlugin = adoptGRef(gst_registry_find_plugin(registry, "vaapi")))
                 gst_registry_remove_plugin(registry, vaapiPlugin.get());
         }
+        registryWasUpdated = true;
     });
+
+    // The GStreamer registry might be updated after the scanner was initialized, so in this situation
+    // we need to reset the internal state of the registry scanner.
+    if (registryWasUpdated && !GStreamerRegistryScanner::singletonNeedsInitialization())
+        GStreamerRegistryScanner::singleton().refresh();
+}
+
+void registerWebKitGStreamerVideoEncoder()
+{
+    static std::once_flag onceFlag;
+    bool registryWasUpdated = false;
+    std::call_once(onceFlag, [&registryWasUpdated] {
+        registerInternalVideoEncoder();
+        registryWasUpdated = true;
+    });
+
+    // The video encoder might be registered after the scanner was initialized, so in this situation
+    // we need to reset the internal state of the registry scanner.
+    if (registryWasUpdated && !GStreamerRegistryScanner::singletonNeedsInitialization())
+        GStreamerRegistryScanner::singleton().refresh();
 }
 
 unsigned getGstPlayFlag(const char* nick)
@@ -481,6 +513,9 @@ void connectSimpleBusMessageCallback(GstElement* pipeline, Function<void(GstMess
             GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN_CAST(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, dotFileName.utf8().data());
             break;
         }
+        case GST_MESSAGE_LATENCY:
+            gst_bin_recalculate_latency(GST_BIN_CAST(pipeline));
+            break;
         default:
             break;
         }
@@ -725,6 +760,127 @@ GstClockTime webkitGstElementGetCurrentRunningTime(GstElement* element)
 }
 #endif
 
+PlatformVideoColorSpace videoColorSpaceFromCaps(const GstCaps* caps)
+{
+    GstVideoInfo info;
+    if (!gst_video_info_from_caps(&info, caps))
+        return { };
+
+    return videoColorSpaceFromInfo(info);
 }
+
+PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
+{
+#ifndef GST_DISABLE_GST_DEBUG
+    GUniquePtr<char> colorimetry(gst_video_colorimetry_to_string(&GST_VIDEO_INFO_COLORIMETRY(&info)));
+#endif
+    PlatformVideoColorSpace colorSpace;
+    switch (GST_VIDEO_INFO_COLORIMETRY(&info).matrix) {
+    case GST_VIDEO_COLOR_MATRIX_RGB:
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Rgb;
+        break;
+    case GST_VIDEO_COLOR_MATRIX_BT709:
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Bt709;
+        break;
+    case GST_VIDEO_COLOR_MATRIX_BT601:
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Bt470bg;
+        break;
+    default:
+#ifndef GST_DISABLE_GST_DEBUG
+        GST_WARNING("Unhandled colorspace matrix from %s", colorimetry.get());
+#endif
+        break;
+    }
+
+    switch (GST_VIDEO_INFO_COLORIMETRY(&info).transfer) {
+    case GST_VIDEO_TRANSFER_SRGB:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Iec6196621;
+        break;
+    case GST_VIDEO_TRANSFER_BT709:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Bt709;
+        break;
+#if GST_CHECK_VERSION(1, 18, 0)
+    case GST_VIDEO_TRANSFER_BT601:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Smpte170m;
+        break;
+#endif
+    default:
+#ifndef GST_DISABLE_GST_DEBUG
+        GST_WARNING("Unhandled colorspace transfer from %s", colorimetry.get());
+#endif
+        break;
+    }
+
+    switch (GST_VIDEO_INFO_COLORIMETRY(&info).primaries) {
+    case GST_VIDEO_COLOR_PRIMARIES_BT709:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Bt709;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_BT470BG:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Bt470bg;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_SMPTE170M:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Smpte170m;
+        break;
+    default:
+#ifndef GST_DISABLE_GST_DEBUG
+        GST_WARNING("Unhandled colorspace primaries from %s", colorimetry.get());
+#endif
+        break;
+    }
+    return colorSpace;
+}
+
+void fillVideoInfoColorimetryFromColorSpace(GstVideoInfo* info, const PlatformVideoColorSpace& colorSpace)
+{
+    if (colorSpace.matrix) {
+        switch (*colorSpace.matrix) {
+        case PlatformVideoMatrixCoefficients::Rgb:
+            GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_RGB;
+            break;
+        case PlatformVideoMatrixCoefficients::Bt709:
+            GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_BT709;
+            break;
+        case PlatformVideoMatrixCoefficients::Bt470bg:
+            GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_BT601;
+            break;
+        default:
+            break;
+        };
+    }
+
+    if (colorSpace.transfer) {
+        switch (*colorSpace.transfer) {
+        case PlatformVideoTransferCharacteristics::Iec6196621:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_SRGB;
+            break;
+        case PlatformVideoTransferCharacteristics::Bt709:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_BT709;
+            break;
+        case PlatformVideoTransferCharacteristics::Smpte170m:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_BT601;
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (colorSpace.primaries) {
+        switch (*colorSpace.primaries) {
+        case PlatformVideoColorPrimaries::Bt709:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_BT709;
+            break;
+        case PlatformVideoColorPrimaries::Bt470bg:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_BT470BG;
+            break;
+        case PlatformVideoColorPrimaries::Smpte170m:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_SMPTE170M;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+} // namespace WebCore
 
 #endif // USE(GSTREAMER)

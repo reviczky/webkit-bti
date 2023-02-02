@@ -823,14 +823,14 @@ void Document::commonTeardown()
     m_documentFragmentForInnerOuterHTML = nullptr;
 
     auto intersectionObservers = m_intersectionObservers;
-    for (auto& intersectionObserver : intersectionObservers) {
-        if (intersectionObserver)
+    for (auto& weakIntersectionObserver : intersectionObservers) {
+        if (RefPtr intersectionObserver = weakIntersectionObserver.get())
             intersectionObserver->disconnect();
     }
 
     auto resizeObservers = m_resizeObservers;
-    for (auto& resizeObserver : resizeObservers) {
-        if (resizeObserver)
+    for (auto& weakResizeObserver : resizeObservers) {
+        if (RefPtr resizeObserver = weakResizeObserver.get())
             resizeObserver->disconnect();
     }
 
@@ -3019,7 +3019,8 @@ ExceptionOr<void> Document::open(Document* entryDocument)
         bool isNavigating = m_frame->loader().policyChecker().delegateIsDecidingNavigationPolicy() || m_frame->loader().state() == FrameState::Provisional || m_frame->navigationScheduler().hasQueuedNavigation();
         if (m_frame->loader().policyChecker().delegateIsDecidingNavigationPolicy())
             m_frame->loader().policyChecker().stopCheck();
-        if (isNavigating)
+        // Null-checking m_frame again as `policyChecker().stopCheck()` may have cleared it.
+        if (isNavigating && m_frame)
             m_frame->loader().stopAllLoaders();
     }
 
@@ -4418,11 +4419,14 @@ void Document::runScrollSteps()
     if (frameView) {
         MonotonicTime now = MonotonicTime::now();
         bool scrollAnimationsInProgress = serviceScrollAnimationForScrollableArea(frameView.get(), now);
-        if (auto* scrollableAreas = frameView->scrollableAreas()) {
-            for (auto* scrollableArea : *scrollableAreas) {
-                if (serviceScrollAnimationForScrollableArea(scrollableArea, now))
-                    scrollAnimationsInProgress = true;
-            }
+        HashSet<ScrollableArea*> scrollableAreasToUpdate;
+        if (auto userScrollableAreas = frameView->scrollableAreas())
+            scrollableAreasToUpdate.add(userScrollableAreas->begin(), userScrollableAreas->end());
+        if (auto nonUserScrollableAreas = frameView->scrollableAreasForAnimatedScroll())
+            scrollableAreasToUpdate.add(nonUserScrollableAreas->begin(), nonUserScrollableAreas->end());
+        for (auto* scrollableArea : scrollableAreasToUpdate) {
+            if (serviceScrollAnimationForScrollableArea(scrollableArea, now))
+                scrollAnimationsInProgress = true;
         }
         if (scrollAnimationsInProgress)
             page()->scheduleRenderingUpdate({ RenderingUpdateStep::Scroll });
@@ -9069,7 +9073,7 @@ void Document::dispatchSystemPreviewActionEvent(const SystemPreviewInfo& systemP
     if (!is<HTMLAnchorElement>(element))
         return;
 
-    if (!element->isConnected() || &element->document() != this)
+    if (&element->document() != this)
         return;
 
     auto event = MessageEvent::create(message, securityOrigin().toString());
@@ -9248,6 +9252,11 @@ bool Document::isSameSiteForCookies(const URL& url) const
 {
     auto domain = isTopDocument() ? RegistrableDomain(securityOrigin().data()) : RegistrableDomain(siteForCookies());
     return domain.matches(url);
+}
+
+bool Document::lazyImageLoadingEnabled() const
+{
+    return m_settings->lazyImageLoadingEnabled() && !m_quirks->shouldDisableLazyImageLoadingQuirk();
 }
 
 } // namespace WebCore

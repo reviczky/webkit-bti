@@ -45,7 +45,7 @@ RealtimeIncomingVideoSourceGStreamer::RealtimeIncomingVideoSourceGStreamer(AtomS
     m_currentSettings = RealtimeMediaSourceSettings { };
     m_currentSettings->setSupportedConstraints(WTFMove(constraints));
 
-    auto sinkPad = adoptGRef(gst_element_get_static_pad(m_valve.get(), "sink"));
+    auto sinkPad = adoptGRef(gst_element_get_static_pad(bin(), "sink"));
     gst_pad_add_probe(sinkPad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_BUFFER), [](GstPad*, GstPadProbeInfo* info, gpointer) -> GstPadProbeReturn {
         auto videoFrameTimeMetadata = std::make_optional<VideoFrameTimeMetadata>({ });
         videoFrameTimeMetadata->receiveTime = MonotonicTime::now().secondsSinceEpoch();
@@ -99,11 +99,15 @@ const GstStructure* RealtimeIncomingVideoSourceGStreamer::stats()
 {
     m_stats.reset(gst_structure_new_empty("incoming-video-stats"));
     forEachVideoFrameObserver([&](auto& observer) {
-        if (gst_structure_has_field(m_stats.get(), "frames-decoded"))
+        auto stats = observer.queryAdditionalStats();
+        if (!stats)
             return;
 
-        if (auto decodedFrames = observer.queryDecodedVideoFramesCount())
-            gst_structure_set(m_stats.get(), "frames-decoded", G_TYPE_UINT64, *decodedFrames, nullptr);
+        gst_structure_foreach(stats.get(), reinterpret_cast<GstStructureForeachFunc>(+[](GQuark fieldId, const GValue* value, gpointer userData) -> gboolean {
+            auto* source = reinterpret_cast<RealtimeIncomingVideoSourceGStreamer*>(userData);
+            gst_structure_set_value(source->m_stats.get(), g_quark_to_string(fieldId), value);
+            return TRUE;
+        }), this);
     });
     return m_stats.get();
 }
