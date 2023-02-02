@@ -1,6 +1,8 @@
 webkit2gtk (2.38.4-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/control.in:
+    - Update Standards-Version to 4.6.2 (no changes).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 02 Feb 2023 10:50:05 +0100
 
