@@ -132,7 +132,6 @@ public:
     virtual ~MediaPlayerPrivateGStreamer();
 
     static void registerMediaEngine(MediaEngineRegistrar);
-    static MediaPlayer::SupportsType extendedSupportsType(const MediaEngineSupportParameters&, MediaPlayer::SupportsType);
     static bool supportsKeySystem(const String& keySystem, const String& mimeType);
 
     bool hasVideo() const final { return m_hasVideo; }
@@ -408,6 +407,8 @@ protected:
 
     void incrementDecodedVideoFramesCount() { m_decodedVideoFrames++; }
     uint64_t decodedVideoFramesCount() const { return m_decodedVideoFrames; }
+
+    bool updateVideoSinkStatistics();
 
 private:
     class TaskAtMediaTimeScheduler {

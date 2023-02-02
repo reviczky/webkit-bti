@@ -260,6 +260,17 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const MediaTime& position, float rat
     return true;
 }
 
+void MediaPlayerPrivateGStreamerMSE::setNetworkState(MediaPlayer::NetworkState networkState)
+{
+    if (networkState == m_mediaSourceNetworkState)
+        return;
+
+    m_mediaSourceNetworkState = networkState;
+    m_networkState = networkState;
+    updateStates();
+    m_player->networkStateChanged();
+}
+
 void MediaPlayerPrivateGStreamerMSE::setReadyState(MediaPlayer::ReadyState mediaSourceReadyState)
 {
     // Something important to bear in mind is that the readyState we get here comes from MediaSource.
@@ -477,9 +488,8 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamerMSE::supportsType(const Med
     auto& gstRegistryScanner = GStreamerRegistryScannerMSE::singleton();
     result = gstRegistryScanner.isContentTypeSupported(GStreamerRegistryScanner::Configuration::Decoding, parameters.type, parameters.contentTypesRequiringHardwareSupport);
 
-    auto finalResult = extendedSupportsType(parameters, result);
-    GST_DEBUG("Supported: %s", convertEnumerationToString(finalResult).utf8().data());
-    return finalResult;
+    GST_DEBUG("Supported: %s", convertEnumerationToString(result).utf8().data());
+    return result;
 }
 
 MediaTime MediaPlayerPrivateGStreamerMSE::maxMediaTimeSeekable() const
