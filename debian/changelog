@@ -7,6 +7,8 @@ webkit2gtk (2.38.4-1) UNRELEASED; urgency=medium
       + libfontconfig1-dev -> libfontconfig-dev
       + libfreetype6-dev   -> libfreetype-dev
       + libegl1-mesa-dev   -> libegl-dev
+  * debian/copyright:
+    - Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 02 Feb 2023 10:50:05 +0100
 

@@ -8,12 +8,12 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            1999-2000 Lars Knoll <knoll@kde.org>
            1999-2001 Harri Porten <porten@kde.org>
            2001 Dirk Mueller <mueller@kde.org>
-           2003-2022 Apple Inc
+           2003-2023 Apple Inc
            2004-2006 Rob Buis <buis@kde.org>
            2004-2008 Nikolas Zimmermann <zimmermann@kde.org>
            2005 Frerich Raabe <raabe@kde.org>
            2005 Maksim Orlovich <maksim@kde.org>
-           2005, 2007-2013, 2015, 2017-2021 Google Inc
+           2005, 2007-2022 Google Inc
            2005, 2008-2013 Nokia
            2005-2006 Alexey Proskuryakov
            2005-2006 Kimmo Kinnunen <kimmo.t.kinnunen@nokia.com>
@@ -134,6 +134,7 @@ Copyright: 1999 Antti Koivisto <koivisto@kde.org>
            2020 Cloudinary Inc
            2020 Darryl Pogue <darryl@dpogue.ca>
            2020 Jan-Michael Brummer <jan.brummer@tabos.org>
+           2020 RDK Management
            2020 WikiMedia Foundation. All Rights Reserve
            2021 7-2022 Apple Inc
            2021 Purism SPC
@@ -838,6 +839,7 @@ Files: Source/JavaScriptCore/Scripts/xxd.pl
        Tools/TestWebKitAPI/Tests/WTF/SHA1.cpp
        Tools/TestWebKitAPI/Tests/WTF/SaturatedArithmeticOperations.cpp
        Tools/TestWebKitAPI/Tests/WTF/StringBuilder.cpp
+       Tools/TestWebKitAPI/Tests/WTF/StringCommon.cpp
        Tools/TestWebKitAPI/Tests/WebCore/*
        Tools/TestWebKitAPI/WTFStringUtilities.h
 Copyright: 2004-2022 Apple Inc
@@ -1685,9 +1687,13 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/freetype/FontCacheFreeType.h
        Source/WebCore/platform/graphics/freetype/FontCustomPlatformDataFreeType.cpp
        Source/WebCore/platform/graphics/freetype/FontPlatformDataFreeType.cpp
+       Source/WebCore/platform/graphics/freetype/FontSetCache.cpp
+       Source/WebCore/platform/graphics/freetype/FontSetCache.h
        Source/WebCore/platform/graphics/freetype/RefPtrFontconfig.cpp
        Source/WebCore/platform/graphics/freetype/RefPtrFontconfig.h
        Source/WebCore/platform/graphics/glx/*
+       Source/WebCore/platform/graphics/gstreamer/AppSinkWorkaround.cpp
+       Source/WebCore/platform/graphics/gstreamer/AppSinkWorkaround.h
        Source/WebCore/platform/graphics/gstreamer/DMABufVideoSinkGStreamer.cpp
        Source/WebCore/platform/graphics/gstreamer/DMABufVideoSinkGStreamer.h
        Source/WebCore/platform/graphics/gstreamer/GLVideoSinkGStreamer.cpp
@@ -1746,6 +1752,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/platform/graphics/nicosia/*
        Source/WebCore/platform/graphics/texmap/*
        Source/WebCore/platform/graphics/transforms/*
+       Source/WebCore/platform/gstreamer/*
        Source/WebCore/platform/gtk/*
        Source/WebCore/platform/image-decoders/ScalableImageDecoder.cpp
        Source/WebCore/platform/mediarecorder/*
@@ -1984,6 +1991,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/LegacyRenderSVGShape.h
        Source/WebCore/rendering/svg/LegacyRenderSVGTransformableContainer.cpp
        Source/WebCore/rendering/svg/LegacyRenderSVGTransformableContainer.h
+       Source/WebCore/rendering/svg/LegacyRenderSVGViewportContainer.cpp
+       Source/WebCore/rendering/svg/LegacyRenderSVGViewportContainer.h
        Source/WebCore/rendering/svg/RenderSVGBlock.cpp
        Source/WebCore/rendering/svg/RenderSVGBlock.h
        Source/WebCore/rendering/svg/RenderSVGContainer.cpp
@@ -2045,6 +2054,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebCore/rendering/svg/SVGInlineFlowBox.h
        Source/WebCore/rendering/svg/SVGInlineTextBox.cpp
        Source/WebCore/rendering/svg/SVGInlineTextBox.h
+       Source/WebCore/rendering/svg/SVGLayerTransformUpdater.h
        Source/WebCore/rendering/svg/SVGMarkerData.h
        Source/WebCore/rendering/svg/SVGPathData.cpp
        Source/WebCore/rendering/svg/SVGPathData.h
@@ -2612,7 +2622,7 @@ Copyright: 1997 Martin Jones <mjones@kde.org>
            2000-2003 Dirk Mueller <mueller@kde.org>
            2001 Tobias Anton <anton@stud.fbi.fh-darmstadt.de>
            2002-2003 The Karbon Developers
-           2002-2022 Apple Inc
+           2002-2023 Apple Inc
            2003-2017 Inc
            2004 Zack Rusin <zack@kde.org>
            2004, 2015, 2017, 2022 Red Hat Inc
@@ -2812,7 +2822,9 @@ Copyright: 2010 Tieto Corporation
            2017 Endless Mobile Inc
 License: LGPL-2.1+
 
-Files: Source/WebCore/platform/image-decoders/jpeg/JPEGImageDecoder.cpp
+Files: Source/WebCore/platform/ScrollAlignment.cpp
+       Source/WebCore/platform/ScrollAlignment.h
+       Source/WebCore/platform/image-decoders/jpeg/JPEGImageDecoder.cpp
        Source/WebCore/platform/image-decoders/png/PNGImageDecoder.cpp
        Source/WebCore/rendering/RenderLayer.cpp
        Source/WebCore/rendering/RenderLayer.h
@@ -2845,7 +2857,7 @@ License: public-domain
 Files: debian/*
 Copyright: 2007-2009 Mike Hommey <glandium@debian.org>
            2009 Gustavo Noronha Silva <kov@debian.org>
-           2014-2022 Alberto Garcia <berto@igalia.com>
+           2014-2023 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+
 
 License: AFL-2.0
