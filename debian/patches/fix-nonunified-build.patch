@@ -1,0 +1,14 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Fix non-unified build
+Index: webkitgtk/Source/WebCore/html/HTMLInputElement.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/html/HTMLInputElement.cpp
++++ webkitgtk/Source/WebCore/html/HTMLInputElement.cpp
+@@ -43,6 +43,7 @@
+ #include "DocumentInlines.h"
+ #include "Editor.h"
+ #include "ElementInlines.h"
++#include "EventLoop.h"
+ #include "EventNames.h"
+ #include "FileChooser.h"
+ #include "FileInputType.h"
