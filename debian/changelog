@@ -1,5 +1,8 @@
 webkit2gtk (2.38.4-2) UNRELEASED; urgency=medium
 
+  * The WebKitGTK security advisory WSA-2023-0001 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    - CVE-2022-42826, CVE-2023-23517, CVE-2023-23518 (fixed in 2.38.4).
   * debian/patches/fix-nonunified-build.patch:
     - Fix non-unified build (FTBFS in mipsel).
 
