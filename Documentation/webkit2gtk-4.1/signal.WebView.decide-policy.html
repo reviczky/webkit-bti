@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.4</p>
+        <p>Library Version: 2.38.5</p>
         
       </div>
       
@@ -159,13 +159,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
       </h4>
 
       <div class="docblock">
-        <pre><code><div class="highlight"><pre><span></span><span class="n">gboolean</span><span class="w"></span>
-<span class="n">decide_policy</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKit2PolicyDecision</span><span class="o">*</span><span class="w"> </span><span class="n">decision</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitPolicyDecisionType</span><span class="w"> </span><span class="n">decision_type</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span><span class="w"></span>
-<span class="p">)</span><span class="w"></span>
+        <pre><code><div class="highlight"><pre><span></span><span class="n">gboolean</span>
+<span class="n">decide_policy</span><span class="w"> </span><span class="p">(</span>
+<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span>
+<span class="w">  </span><span class="n">WebKit2PolicyDecision</span><span class="o">*</span><span class="w"> </span><span class="n">decision</span><span class="p">,</span>
+<span class="w">  </span><span class="n">WebKitPolicyDecisionType</span><span class="w"> </span><span class="n">decision_type</span><span class="p">,</span>
+<span class="w">  </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span>
+<span class="p">)</span>
 </pre></div>
 </code></pre>
       </div>
@@ -186,32 +186,32 @@ decision, such as whether to navigate to a page, open a new window or whether or
 not to download a resource. The <code>WebKitNavigationPolicyDecision</code> passed in the
 <code>decision</code> argument is a generic type, but should be casted to a more
 specific type when making the decision. For&nbsp;example:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="n">gboolean</span><span class="w"></span>
-<span class="nf">decide_policy_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
-<span class="w">                  </span><span class="n">WebKitPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">decision</span><span class="p">,</span><span class="w"></span>
-<span class="w">                  </span><span class="n">WebKitPolicyDecisionType</span><span class="w"> </span><span class="n">type</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
+<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="n">gboolean</span>
+<span class="nf">decide_policy_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
+<span class="w">                  </span><span class="n">WebKitPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">decision</span><span class="p">,</span>
+<span class="w">                  </span><span class="n">WebKitPolicyDecisionType</span><span class="w"> </span><span class="n">type</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span>
 <span class="w">        </span><span class="c1">// Make a policy decision here</span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">WebKitNavigationPolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">navigation_decision</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span>
 <span class="w">        </span><span class="c1">// Make a policy decision here</span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="n">WebKitResponsePolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_RESPONSE_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</span><span class="p">:</span>
+<span class="w">        </span><span class="n">WebKitResponsePolicyDecision</span><span class="w"> </span><span class="o">*</span><span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WEBKIT_RESPONSE_POLICY_DECISION</span><span class="w"> </span><span class="p">(</span><span class="n">decision</span><span class="p">);</span>
 <span class="w">        </span><span class="c1">// Make a policy decision here</span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="k">default</span><span class="o">:</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">default</span><span class="o">:</span>
 <span class="w">        </span><span class="c1">// Making no decision results in webkit_policy_decision_use()</span>
-<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">FALSE</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TRUE</span><span class="p">;</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">FALSE</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">TRUE</span><span class="p">;</span>
+<span class="p">}</span>
 </code></pre></div>
 
 <p>It is possible to make policy decision asynchronously, by simply calling <code>g_object_ref()</code>

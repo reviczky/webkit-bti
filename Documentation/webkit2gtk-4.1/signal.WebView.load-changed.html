@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.4</p>
+        <p>Library Version: 2.38.5</p>
         
       </div>
       
@@ -159,12 +159,12 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
       </h4>
 
       <div class="docblock">
-        <pre><code><div class="highlight"><pre><span></span><span class="kt">void</span><span class="w"></span>
-<span class="n">load_changed</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitLoadEvent</span><span class="w"> </span><span class="n">load_event</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span><span class="w"></span>
-<span class="p">)</span><span class="w"></span>
+        <pre><code><div class="highlight"><pre><span></span><span class="kt">void</span>
+<span class="n">load_changed</span><span class="w"> </span><span class="p">(</span>
+<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span>
+<span class="w">  </span><span class="n">WebKitLoadEvent</span><span class="w"> </span><span class="n">load_event</span><span class="p">,</span>
+<span class="w">  </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span>
+<span class="p">)</span>
 </pre></div>
 </code></pre>
       </div>
@@ -194,32 +194,32 @@ When the page content starts arriving the signal is emitted with
 <code>WEBKIT_LOAD_COMMITTED</code> event.</p>
 <p>You can handle this signal and use a switch to track any ongoing
 load&nbsp;operation.</p>
-<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">web_view_load_changed</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w">  </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
-<span class="w">                                   </span><span class="n">WebKitLoadEvent</span><span class="w"> </span><span class="n">load_event</span><span class="p">,</span><span class="w"></span>
-<span class="w">                                   </span><span class="n">gpointer</span><span class="w">        </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">load_event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_STARTED</span><span class="p">:</span><span class="w"></span>
+<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">web_view_load_changed</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w">  </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">WebKitLoadEvent</span><span class="w"> </span><span class="n">load_event</span><span class="p">,</span>
+<span class="w">                                   </span><span class="n">gpointer</span><span class="w">        </span><span class="n">user_data</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">load_event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_STARTED</span><span class="p">:</span>
 <span class="w">        </span><span class="c1">// New load, we have now a provisional URI</span>
-<span class="w">        </span><span class="n">provisional_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
+<span class="w">        </span><span class="n">provisional_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
 <span class="w">        </span><span class="c1">// Here we could start a spinner or update the</span>
 <span class="w">        </span><span class="c1">// location bar with the provisional URI</span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_REDIRECTED</span><span class="p">:</span><span class="w"></span>
-<span class="w">        </span><span class="n">redirected_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_COMMITTED</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_REDIRECTED</span><span class="p">:</span>
+<span class="w">        </span><span class="n">redirected_uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_COMMITTED</span><span class="p">:</span>
 <span class="w">        </span><span class="c1">// The load is being performed. Current URI is</span>
 <span class="w">        </span><span class="c1">// the final one and it won&#39;t change unless a new</span>
 <span class="w">        </span><span class="c1">// load is requested or a navigation within the</span>
 <span class="w">        </span><span class="c1">// same page is performed</span>
-<span class="w">        </span><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_FINISHED</span><span class="p">:</span><span class="w"></span>
+<span class="w">        </span><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_uri</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">WEBKIT_LOAD_FINISHED</span><span class="p">:</span>
 <span class="w">        </span><span class="c1">// Load finished, we can now stop the spinner</span>
-<span class="w">        </span><span class="k">break</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="w">        </span><span class="k">break</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
 </code></pre></div>
       </div>
 

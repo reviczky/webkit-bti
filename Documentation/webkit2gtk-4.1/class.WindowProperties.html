@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.4</p>
+        <p>Library Version: 2.38.5</p>
         
       </div>
       
@@ -177,46 +177,46 @@ and the request to show the <code>WebKitWebView</code> fullscreen.</p>
 <p>The <code>WebKitWebView::ready-to-show</code> signal handler is the proper place
 to apply the initial window properties. Then you can monitor the
 <code>WebKitWindowProperties</code> by connecting to ::notify&nbsp;signal.</p>
-<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">ready_to_show_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"> </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">window</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="n">WebKitWindowProperties</span><span class="w"> </span><span class="o">*</span><span class="n">window_properties</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="n">gboolean</span><span class="w"> </span><span class="n">visible</span><span class="p">;</span><span class="w"></span>
+<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">ready_to_show_cb</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"> </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="n">GtkWidget</span><span class="w"> </span><span class="o">*</span><span class="n">window</span><span class="p">;</span>
+<span class="w">    </span><span class="n">WebKitWindowProperties</span><span class="w"> </span><span class="o">*</span><span class="n">window_properties</span><span class="p">;</span>
+<span class="w">    </span><span class="n">gboolean</span><span class="w"> </span><span class="n">visible</span><span class="p">;</span>
 
 <span class="w">    </span><span class="c1">// Create the window to contain the WebKitWebView.</span>
-<span class="w">    </span><span class="n">window</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">browser_window_new</span><span class="w"> </span><span class="p">();</span><span class="w"></span>
-<span class="w">    </span><span class="n">gtk_container_add</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_CONTAINER</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">));</span><span class="w"></span>
-<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">));</span><span class="w"></span>
+<span class="w">    </span><span class="n">window</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">browser_window_new</span><span class="w"> </span><span class="p">();</span>
+<span class="w">    </span><span class="n">gtk_container_add</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_CONTAINER</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">));</span>
+<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WIDGET</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">));</span>
 
 <span class="w">    </span><span class="c1">// Get the WebKitWindowProperties of the web view and monitor it.</span>
-<span class="w">    </span><span class="n">window_properties</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_window_properties</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::geometry&quot;</span><span class="p">,</span><span class="w"></span>
-<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_geometry_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::toolbar-visible&quot;</span><span class="p">,</span><span class="w"></span>
-<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_toolbar_visibility_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::menubar-visible&quot;</span><span class="p">,</span><span class="w"></span>
-<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_menubar_visibility_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">window_properties</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_get_window_properties</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">);</span>
+<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::geometry&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_geometry_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span>
+<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::toolbar-visible&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_toolbar_visibility_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span>
+<span class="w">    </span><span class="n">g_signal_connect</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;notify::menubar-visible&quot;</span><span class="p">,</span>
+<span class="w">                      </span><span class="n">G_CALLBACK</span><span class="w"> </span><span class="p">(</span><span class="n">window_menubar_visibility_changed</span><span class="p">),</span><span class="w"> </span><span class="n">window</span><span class="p">);</span>
 
 <span class="w">    </span><span class="c1">// Apply the window properties before showing the window.</span>
-<span class="w">    </span><span class="n">visible</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_window_properties_get_toolbar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">browser_window_set_toolbar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">BROWSER_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">visible</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">visible</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_window_properties_get_menubar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">browser_window_set_menubar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">BROWSER_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">visible</span><span class="p">);</span><span class="w"></span>
+<span class="w">    </span><span class="n">visible</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_window_properties_get_toolbar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">);</span>
+<span class="w">    </span><span class="n">browser_window_set_toolbar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">BROWSER_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">visible</span><span class="p">);</span>
+<span class="w">    </span><span class="n">visible</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_window_properties_get_menubar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">);</span>
+<span class="w">    </span><span class="n">browser_window_set_menubar_visible</span><span class="w"> </span><span class="p">(</span><span class="n">BROWSER_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">visible</span><span class="p">);</span>
 
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">webkit_window_properties_get_fullscreen</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="n">gtk_window_fullscreen</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">));</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="n">GdkRectangle</span><span class="w"> </span><span class="n">geometry</span><span class="p">;</span><span class="w"></span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">webkit_window_properties_get_fullscreen</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">gtk_window_fullscreen</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">));</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">GdkRectangle</span><span class="w"> </span><span class="n">geometry</span><span class="p">;</span>
 
-<span class="w">        </span><span class="n">gtk_window_set_resizable</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"></span>
-<span class="w">                                  </span><span class="n">webkit_window_properties_get_resizable</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">));</span><span class="w"></span>
-<span class="w">        </span><span class="n">webkit_window_properties_get_geometry</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">geometry</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="n">gtk_window_move</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">y</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="n">gtk_window_resize</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">width</span><span class="p">,</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">height</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">        </span><span class="n">gtk_window_set_resizable</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span>
+<span class="w">                                  </span><span class="n">webkit_window_properties_get_resizable</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">));</span>
+<span class="w">        </span><span class="n">webkit_window_properties_get_geometry</span><span class="w"> </span><span class="p">(</span><span class="n">window_properties</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">geometry</span><span class="p">);</span>
+<span class="w">        </span><span class="n">gtk_window_move</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">y</span><span class="p">);</span>
+<span class="w">        </span><span class="n">gtk_window_resize</span><span class="w"> </span><span class="p">(</span><span class="n">GTK_WINDOW</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">),</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">width</span><span class="p">,</span><span class="w"> </span><span class="n">geometry</span><span class="p">.</span><span class="n">height</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
 
-<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">);</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="n">gtk_widget_show</span><span class="w"> </span><span class="p">(</span><span class="n">window</span><span class="p">);</span>
+<span class="p">}</span>
 </code></pre></div>
         </div>
 
@@ -242,19 +242,19 @@ to apply the initial window properties. Then you can monitor the
         <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Generated by graphviz version 2.40.1 (20161225.0304)
+<!-- Generated by graphviz version 2.43.0 (0)
  -->
 <!-- Title: hierarchy Pages: 1 -->
-<svg width="173pt" height="116pt"
- viewBox="0.00 0.00 173.29 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="208pt" height="116pt"
+ viewBox="0.00 0.00 208.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
 <title>hierarchy</title>
 <!-- this -->
 <g id="node1" class="node">
 <title>this</title>
 <g id="a_node1"><a xlink:title="WebKitWindowProperties">
-<path fill="none" stroke="#000000" d="M153.4317,-36C153.4317,-36 11.8559,-36 11.8559,-36 5.8559,-36 -.1441,-30 -.1441,-24 -.1441,-24 -.1441,-12 -.1441,-12 -.1441,-6 5.8559,0 11.8559,0 11.8559,0 153.4317,0 153.4317,0 159.4317,0 165.4317,-6 165.4317,-12 165.4317,-12 165.4317,-24 165.4317,-24 165.4317,-30 159.4317,-36 153.4317,-36"/>
-<text text-anchor="middle" x="82.6438" y="-13.8" font-family="Times,serif" font-size="14.00" fill="#000000">WebKitWindowProperties</text>
+<path fill="none" stroke="black" d="M188,-36C188,-36 12,-36 12,-36 6,-36 0,-30 0,-24 0,-24 0,-12 0,-12 0,-6 6,0 12,0 12,0 188,0 188,0 194,0 200,-6 200,-12 200,-12 200,-24 200,-24 200,-30 194,-36 188,-36"/>
+<text text-anchor="middle" x="100" y="-14.3" font-family="Times,serif" font-size="14.00">WebKitWindowProperties</text>
 </a>
 </g>
 </g>
@@ -262,15 +262,15 @@ to apply the initial window properties. Then you can monitor the
 <g id="node2" class="node">
 <title>ancestor_0</title>
 <g id="a_node2"><a xlink:title="GObject.Object">
-<path fill="none" stroke="#000000" d="M102.5688,-108C102.5688,-108 62.7188,-108 62.7188,-108 56.7188,-108 50.7188,-102 50.7188,-96 50.7188,-96 50.7188,-84 50.7188,-84 50.7188,-78 56.7188,-72 62.7188,-72 62.7188,-72 102.5688,-72 102.5688,-72 108.5688,-72 114.5688,-78 114.5688,-84 114.5688,-84 114.5688,-96 114.5688,-96 114.5688,-102 108.5688,-108 102.5688,-108"/>
-<text text-anchor="middle" x="82.6438" y="-85.8" font-family="Times,serif" font-size="14.00" fill="#000000">GObject</text>
+<path fill="none" stroke="black" d="M125,-108C125,-108 75,-108 75,-108 69,-108 63,-102 63,-96 63,-96 63,-84 63,-84 63,-78 69,-72 75,-72 75,-72 125,-72 125,-72 131,-72 137,-78 137,-84 137,-84 137,-96 137,-96 137,-102 131,-108 125,-108"/>
+<text text-anchor="middle" x="100" y="-86.3" font-family="Times,serif" font-size="14.00">GObject</text>
 </a>
 </g>
 </g>
 <!-- ancestor_0&#45;&#45;this -->
 <g id="edge1" class="edge">
 <title>ancestor_0&#45;&#45;this</title>
-<path fill="none" stroke="#000000" d="M82.6438,-71.8314C82.6438,-61 82.6438,-47.2876 82.6438,-36.4133"/>
+<path fill="none" stroke="black" d="M100,-71.7C100,-60.85 100,-46.92 100,-36.1"/>
 </g>
 </g>
 </svg>
@@ -383,7 +383,7 @@ to apply the initial window properties. Then you can monitor the
 
       
         
-        <div class="toggle-wrapper default-hide ancestor-methods"><h5 style="display:block;">Methods inherited from <a class="external" href="javascript:void(0)" data-link="class.Object.html" data-namespace="GObject">GObject</a> (42)</h5>
+        <div class="toggle-wrapper default-hide ancestor-methods"><h5 style="display:block;">Methods inherited from <a class="external" href="javascript:void(0)" data-link="class.Object.html" data-namespace="GObject">GObject</a> (43)</h5>
           <div class="docblock">
           
             <div class="docblock">
@@ -555,6 +555,10 @@ void
   );
   
 }</code></pre>
+      </div>
+
+      <div class="docblock">
+        No description available.
       </div>
 
       
