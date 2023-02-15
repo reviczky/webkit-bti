@@ -1,9 +1,12 @@
-webkit2gtk (2.38.5-1) UNRELEASED; urgency=high
+webkit2gtk (2.38.5-1) unstable; urgency=high
 
   * New upstream release.
+  * The WebKitGTK security advisory WSA-2023-0002 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    - CVE-2023-23529 (fixed in 2.38.5).
   * Remove debian/patches/fix-nonunified-build.patch.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 15 Feb 2023 11:17:45 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 15 Feb 2023 18:10:55 +0100
 
 webkit2gtk (2.38.4-2) unstable; urgency=high
 
