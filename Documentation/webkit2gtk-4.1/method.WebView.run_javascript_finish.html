@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.4</p>
+        <p>Library Version: 2.38.5</p>
         
       </div>
       
@@ -278,12 +278,12 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
       </h4>
 
       <div class="docblock c-decl">
-        <pre><code><div class="highlight"><pre><span></span><span class="n">WebKitJavascriptResult</span><span class="o">*</span><span class="w"></span>
-<span class="n">webkit_web_view_run_javascript_finish</span><span class="w"> </span><span class="p">(</span><span class="w"></span>
-<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">GAsyncResult</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"></span>
-<span class="w">  </span><span class="n">GError</span><span class="o">**</span><span class="w"> </span><span class="n">error</span><span class="w"></span>
-<span class="p">)</span><span class="w"></span>
+        <pre><code><div class="highlight"><pre><span></span><span class="n">WebKitJavascriptResult</span><span class="o">*</span>
+<span class="n">webkit_web_view_run_javascript_finish</span><span class="w"> </span><span class="p">(</span>
+<span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">web_view</span><span class="p">,</span>
+<span class="w">  </span><span class="n">GAsyncResult</span><span class="o">*</span><span class="w"> </span><span class="n">result</span><span class="p">,</span>
+<span class="w">  </span><span class="n">GError</span><span class="o">**</span><span class="w"> </span><span class="n">error</span>
+<span class="p">)</span>
 </pre></div>
 </code></pre>
       </div>
@@ -302,45 +302,45 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <p>Finish an asynchronous operation started with&nbsp;webkit_web_view_run_javascript().</p>
 <p>This is an example of using <code>webkit_web_view_run_javascript()</code> with a script returning
 a&nbsp;string:</p>
-<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
-<span class="nf">web_view_javascript_finished</span><span class="w"> </span><span class="p">(</span><span class="n">GObject</span><span class="w">      </span><span class="o">*</span><span class="n">object</span><span class="p">,</span><span class="w"></span>
-<span class="w">                              </span><span class="n">GAsyncResult</span><span class="w"> </span><span class="o">*</span><span class="n">result</span><span class="p">,</span><span class="w"></span>
-<span class="w">                              </span><span class="n">gpointer</span><span class="w">      </span><span class="n">user_data</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">WebKitJavascriptResult</span><span class="w"> </span><span class="o">*</span><span class="n">js_result</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="n">JSCValue</span><span class="w">               </span><span class="o">*</span><span class="n">value</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="n">GError</span><span class="w">                 </span><span class="o">*</span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span><span class="w"></span>
+<div class="codehilite"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="kt">void</span>
+<span class="nf">web_view_javascript_finished</span><span class="w"> </span><span class="p">(</span><span class="n">GObject</span><span class="w">      </span><span class="o">*</span><span class="n">object</span><span class="p">,</span>
+<span class="w">                              </span><span class="n">GAsyncResult</span><span class="w"> </span><span class="o">*</span><span class="n">result</span><span class="p">,</span>
+<span class="w">                              </span><span class="n">gpointer</span><span class="w">      </span><span class="n">user_data</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="n">WebKitJavascriptResult</span><span class="w"> </span><span class="o">*</span><span class="n">js_result</span><span class="p">;</span>
+<span class="w">    </span><span class="n">JSCValue</span><span class="w">               </span><span class="o">*</span><span class="n">value</span><span class="p">;</span>
+<span class="w">    </span><span class="n">GError</span><span class="w">                 </span><span class="o">*</span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span>
 
-<span class="w">    </span><span class="n">js_result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_run_javascript_finish</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="w"> </span><span class="p">(</span><span class="n">object</span><span class="p">),</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">error</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">js_result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="o">-&gt;</span><span class="n">message</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="n">g_error_free</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="k">return</span><span class="p">;</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="n">js_result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_run_javascript_finish</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="w"> </span><span class="p">(</span><span class="n">object</span><span class="p">),</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">error</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">js_result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="o">-&gt;</span><span class="n">message</span><span class="p">);</span>
+<span class="w">        </span><span class="n">g_error_free</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
 
-<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_javascript_result_get_js_value</span><span class="w"> </span><span class="p">(</span><span class="n">js_result</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_is_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="n">gchar</span><span class="w">        </span><span class="o">*</span><span class="n">str_value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_value_to_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="n">JSCException</span><span class="w"> </span><span class="o">*</span><span class="n">exception</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_context_get_exception</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_get_context</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">));</span><span class="w"></span>
-<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">exception</span><span class="p">)</span><span class="w"></span>
-<span class="w">            </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">jsc_exception_get_message</span><span class="w"> </span><span class="p">(</span><span class="n">exception</span><span class="p">));</span><span class="w"></span>
-<span class="w">        </span><span class="k">else</span><span class="w"></span>
-<span class="w">            </span><span class="n">g_print</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Script result: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">str_value</span><span class="p">);</span><span class="w"></span>
-<span class="w">        </span><span class="n">g_free</span><span class="w"> </span><span class="p">(</span><span class="n">str_value</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
-<span class="w">        </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: unexpected return value&quot;</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="p">}</span><span class="w"></span>
-<span class="w">    </span><span class="n">webkit_javascript_result_unref</span><span class="w"> </span><span class="p">(</span><span class="n">js_result</span><span class="p">);</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_javascript_result_get_js_value</span><span class="w"> </span><span class="p">(</span><span class="n">js_result</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_is_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">gchar</span><span class="w">        </span><span class="o">*</span><span class="n">str_value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_value_to_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
+<span class="w">        </span><span class="n">JSCException</span><span class="w"> </span><span class="o">*</span><span class="n">exception</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_context_get_exception</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_get_context</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">));</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">exception</span><span class="p">)</span>
+<span class="w">            </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">jsc_exception_get_message</span><span class="w"> </span><span class="p">(</span><span class="n">exception</span><span class="p">));</span>
+<span class="w">        </span><span class="k">else</span>
+<span class="w">            </span><span class="n">g_print</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Script result: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">str_value</span><span class="p">);</span>
+<span class="w">        </span><span class="n">g_free</span><span class="w"> </span><span class="p">(</span><span class="n">str_value</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: unexpected return value&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="n">webkit_javascript_result_unref</span><span class="w"> </span><span class="p">(</span><span class="n">js_result</span><span class="p">);</span>
+<span class="p">}</span>
 
-<span class="k">static</span><span class="w"> </span><span class="kt">void</span><span class="w"></span>
-<span class="nf">web_view_get_link_url</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span><span class="w"></span>
-<span class="w">                       </span><span class="k">const</span><span class="w"> </span><span class="n">gchar</span><span class="w">   </span><span class="o">*</span><span class="n">link_id</span><span class="p">)</span><span class="w"></span>
-<span class="p">{</span><span class="w"></span>
-<span class="w">    </span><span class="n">gchar</span><span class="w"> </span><span class="o">*</span><span class="n">script</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_strdup_printf</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;window.document.getElementById(&#39;%s&#39;).href;&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">link_id</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">webkit_web_view_run_javascript</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">,</span><span class="w"> </span><span class="n">script</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">,</span><span class="w"> </span><span class="n">web_view_javascript_finished</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span><span class="w"></span>
-<span class="w">    </span><span class="n">g_free</span><span class="w"> </span><span class="p">(</span><span class="n">script</span><span class="p">);</span><span class="w"></span>
-<span class="p">}</span><span class="w"></span>
+<span class="k">static</span><span class="w"> </span><span class="kt">void</span>
+<span class="nf">web_view_get_link_url</span><span class="w"> </span><span class="p">(</span><span class="n">WebKitWebView</span><span class="w"> </span><span class="o">*</span><span class="n">web_view</span><span class="p">,</span>
+<span class="w">                       </span><span class="k">const</span><span class="w"> </span><span class="n">gchar</span><span class="w">   </span><span class="o">*</span><span class="n">link_id</span><span class="p">)</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="n">gchar</span><span class="w"> </span><span class="o">*</span><span class="n">script</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_strdup_printf</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;window.document.getElementById(&#39;%s&#39;).href;&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">link_id</span><span class="p">);</span>
+<span class="w">    </span><span class="n">webkit_web_view_run_javascript</span><span class="w"> </span><span class="p">(</span><span class="n">web_view</span><span class="p">,</span><span class="w"> </span><span class="n">script</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">,</span><span class="w"> </span><span class="n">web_view_javascript_finished</span><span class="p">,</span><span class="w"> </span><span class="nb">NULL</span><span class="p">);</span>
+<span class="w">    </span><span class="n">g_free</span><span class="w"> </span><span class="p">(</span><span class="n">script</span><span class="p">);</span>
+<span class="p">}</span>
 </code></pre></div>
       </div>
 
