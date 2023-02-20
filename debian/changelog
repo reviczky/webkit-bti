@@ -2,6 +2,9 @@ webkit2gtk (2.39.90-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/rules:
+    - Remove /usr/include/*/JavaScriptCore from the GTK4 build's .install
+      files.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 20 Feb 2023 11:53:05 +0100
 
