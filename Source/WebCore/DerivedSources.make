@@ -376,6 +376,8 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/mediarecorder/MediaRecorderErrorEvent.idl \
     $(WebCore)/Modules/mediasource/AudioTrack+MediaSource.idl \
     $(WebCore)/Modules/mediasource/DOMURL+MediaSource.idl \
+    $(WebCore)/Modules/mediasource/ManagedMediaSource.idl \
+    $(WebCore)/Modules/mediasource/ManagedSourceBuffer.idl \
     $(WebCore)/Modules/mediasource/MediaSource.idl \
     $(WebCore)/Modules/mediasource/SourceBuffer.idl \
     $(WebCore)/Modules/mediasource/SourceBufferList.idl \
@@ -1046,6 +1048,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/TextEncoderStream.idl \
     $(WebCore)/dom/TextEncoderStreamEncoder.idl \
     $(WebCore)/dom/TextEvent.idl \
+    $(WebCore)/dom/ToggleEvent.idl \
     $(WebCore)/dom/TreeWalker.idl \
     $(WebCore)/dom/UIEvent.idl \
     $(WebCore)/dom/UIEventInit.idl \
@@ -1198,6 +1201,8 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/canvas/EXTBlendMinMax.idl \
     $(WebCore)/html/canvas/EXTColorBufferFloat.idl \
     $(WebCore)/html/canvas/EXTColorBufferHalfFloat.idl \
+    $(WebCore)/html/canvas/EXTDisjointTimerQuery.idl \
+    $(WebCore)/html/canvas/EXTDisjointTimerQueryWebGL2.idl \
     $(WebCore)/html/canvas/EXTFloatBlend.idl \
     $(WebCore)/html/canvas/EXTFragDepth.idl \
     $(WebCore)/html/canvas/EXTShaderTextureLOD.idl \
@@ -1257,6 +1262,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/canvas/WebGLShaderPrecisionFormat.idl \
     $(WebCore)/html/canvas/WebGLSync.idl \
     $(WebCore)/html/canvas/WebGLTexture.idl \
+    $(WebCore)/html/canvas/WebGLTimerQueryEXT.idl \
     $(WebCore)/html/canvas/WebGLTransformFeedback.idl \
     $(WebCore)/html/canvas/WebGLUniformLocation.idl \
     $(WebCore)/html/canvas/WebGLVertexArrayObject.idl \
@@ -1868,9 +1874,11 @@ USER_AGENT_STYLE_SHEETS = \
     $(WebCore)/css/mathml.css \
     $(WebCore)/css/mediaControls.css \
     $(WebCore)/css/plugIns.css \
+    $(WebCore)/css/popover.css \
     $(WebCore)/css/quirks.css \
     $(WebCore)/css/svg.css \
     $(WebCore)/html/shadow/mac/imageControlsMac.css \
+    $(WebCore)/html/shadow/attachmentElementShadow.css \
     $(WebCore)/html/shadow/imageOverlay.css \
     $(WebCore)/html/shadow/meterElementShadow.css \
     ModernMediaControls.css \

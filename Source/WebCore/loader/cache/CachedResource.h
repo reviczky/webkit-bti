@@ -62,7 +62,7 @@ enum class CachePolicy : uint8_t;
 // from CachedResourceClient, to get the function calls in case the requested data has arrived.
 // This class also does the actual communication with the loader to obtain the resource from the network.
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CachedResource);
-class CachedResource {
+class CachedResource : public CanMakeWeakPtr<CachedResource> {
     WTF_MAKE_NONCOPYABLE(CachedResource);
     WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(CachedResource);
     friend class MemoryCache;
@@ -258,7 +258,7 @@ public:
     bool isPreloaded() const { return m_preloadCount; }
     void increasePreloadCount() { ++m_preloadCount; }
     void decreasePreloadCount() { ASSERT(m_preloadCount); --m_preloadCount; }
-    bool isLinkPreload() { return m_isLinkPreload; }
+    bool isLinkPreload() const { return m_isLinkPreload; }
     void setLinkPreload() { m_isLinkPreload = true; }
     bool hasUnknownEncoding() { return m_hasUnknownEncoding; }
     void setHasUnknownEncoding(bool hasUnknownEncoding) { m_hasUnknownEncoding = hasUnknownEncoding; }
@@ -373,13 +373,13 @@ private:
     RefPtr<SecurityOrigin> m_origin;
     AtomString m_initiatorType;
 
+    RedirectChainCacheStatus m_redirectChainCacheStatus;
+
     unsigned m_encodedSize { 0 };
     unsigned m_decodedSize { 0 };
     unsigned m_accessCount { 0 };
     unsigned m_handleCount { 0 };
     unsigned m_preloadCount { 0 };
-
-    RedirectChainCacheStatus m_redirectChainCacheStatus;
 
     Type m_type : bitWidthOfType;
 

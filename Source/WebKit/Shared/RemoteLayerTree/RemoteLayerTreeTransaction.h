@@ -25,9 +25,9 @@
 
 #pragma once
 
+#include "Connection.h"
 #include "DrawingAreaInfo.h"
 #include "EditorState.h"
-#include "GenericCallback.h"
 #include "PlatformCAAnimationRemote.h"
 #include "RemoteLayerBackingStore.h"
 #include "TransactionID.h"
@@ -121,7 +121,10 @@ public:
         uint32_t hostingContextID;
         float hostingDeviceScaleFactor;
         bool preservesFlip;
-        
+
+        // FIXME: This could be a variant<CustomData, HostData, ModelData, NoData>.
+        Markable<WebCore::LayerHostingContextIdentifier> hostIdentifier;
+
 #if ENABLE(MODEL_ELEMENT)
         RefPtr<WebCore::Model> model;
 #endif
@@ -235,6 +238,10 @@ public:
     const LayerPropertiesMap& changedLayerProperties() const { return m_changedLayerProperties; }
     LayerPropertiesMap& changedLayerProperties() { return m_changedLayerProperties; }
 
+    void setRemoteContextHostedIdentifier(Markable<WebCore::LayerHostingContextIdentifier> identifier) { m_remoteContextHostedIdentifier = identifier; }
+    Markable<WebCore::LayerHostingContextIdentifier> remoteContextHostedIdentifier() const { return m_remoteContextHostedIdentifier; }
+    bool isMainFrameProcessTransaction() const { return !m_remoteContextHostedIdentifier; }
+
     WebCore::IntSize contentsSize() const { return m_contentsSize; }
     void setContentsSize(const WebCore::IntSize& size) { m_contentsSize = size; };
 
@@ -309,7 +316,7 @@ public:
     ActivityStateChangeID activityStateChangeID() const { return m_activityStateChangeID; }
     void setActivityStateChangeID(ActivityStateChangeID activityStateChangeID) { m_activityStateChangeID = activityStateChangeID; }
 
-    typedef CallbackID TransactionCallbackID;
+    using TransactionCallbackID = IPC::AsyncReplyID;
     const Vector<TransactionCallbackID>& callbackIDs() const { return m_callbackIDs; }
     void setCallbackIDs(Vector<TransactionCallbackID>&& callbackIDs) { m_callbackIDs = WTFMove(callbackIDs); }
 
@@ -329,6 +336,8 @@ private:
     WebCore::GraphicsLayer::PlatformLayerID m_rootLayerID;
     HashSet<RefPtr<PlatformCALayerRemote>> m_changedLayers; // Only used in the Web process.
     LayerPropertiesMap m_changedLayerProperties; // Only used in the UI process.
+
+    Markable<WebCore::LayerHostingContextIdentifier> m_remoteContextHostedIdentifier;
 
     Vector<LayerCreationProperties> m_createdLayers;
     Vector<WebCore::GraphicsLayer::PlatformLayerID> m_destroyedLayerIDs;

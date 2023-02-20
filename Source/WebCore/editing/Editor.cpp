@@ -532,7 +532,11 @@ bool Editor::canCopy() const
 
 bool Editor::canPaste() const
 {
-    if (m_document.frame()->mainFrame().loader().shouldSuppressTextInputFromEditing())
+    auto* localFrame = dynamicDowncast<LocalFrame>(m_document.frame()->mainFrame());
+    if (!localFrame)
+        return false;
+
+    if (localFrame->loader().shouldSuppressTextInputFromEditing())
         return false;
 
     return canEdit();
@@ -796,7 +800,11 @@ bool Editor::tryDHTMLCut()
 
 bool Editor::shouldInsertText(const String& text, const std::optional<SimpleRange>& range, EditorInsertAction action) const
 {
-    if (m_document.frame()->mainFrame().loader().shouldSuppressTextInputFromEditing() && action == EditorInsertAction::Typed)
+    auto* localFrame = dynamicDowncast<LocalFrame>(m_document.frame()->mainFrame());
+    if (!localFrame)
+        return false;
+
+    if (localFrame->loader().shouldSuppressTextInputFromEditing() && action == EditorInsertAction::Typed)
         return false;
 
     return client() && client()->shouldInsertText(text, range, action);
@@ -2894,7 +2902,11 @@ void Editor::markAndReplaceFor(const SpellCheckRequest& request, const Vector<Te
 
     for (unsigned i = 0; i < results.size(); i++) {
         auto spellingRangeEndOffset = paragraph.checkingEnd() + offsetDueToReplacement;
-        TextCheckingType resultType = results[i].type;
+        if (!results[i].type.hasExactlyOneBitSet()) {
+            ASSERT_NOT_REACHED();
+            continue;
+        }
+        TextCheckingType resultType = *results[i].type.toSingleValue();
         auto resultLocation = results[i].range.location + offsetDueToReplacement;
         auto resultLength = results[i].range.length;
         auto resultEndLocation = resultLocation + resultLength;

@@ -43,12 +43,12 @@
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/PrivateClickMeasurement.h>
 #include <WebCore/RegistrableDomain.h>
+#include <WebCore/SWServerDelegate.h>
 #include <pal/SessionID.h>
 #include <wtf/HashSet.h>
 #include <wtf/Ref.h>
 #include <wtf/Seconds.h>
 #include <wtf/ThreadSafeWeakHashSet.h>
-#include <wtf/UUID.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -63,7 +63,7 @@ enum class IncludeHttpOnlyCookies : bool;
 enum class NetworkConnectionIntegrity : uint8_t;
 enum class ShouldSample : bool;
 struct ClientOrigin;
-struct SecurityOriginData;
+class SecurityOriginData;
 }
 
 namespace WTF {
@@ -99,21 +99,27 @@ namespace NetworkCache {
 class Cache;
 }
 
-class NetworkSession : public CanMakeWeakPtr<NetworkSession> {
+class NetworkSession
+#if ENABLE(SERVICE_WORKER)
+    : public WebCore::SWServerDelegate {
+#else
+    : public CanMakeWeakPtr<NetworkSession> {
+#endif
     WTF_MAKE_FAST_ALLOCATED;
 public:
     static std::unique_ptr<NetworkSession> create(NetworkProcess&, const NetworkSessionCreationParameters&);
     virtual ~NetworkSession();
 
     virtual void invalidateAndCancel();
-    virtual void clearCredentials() { };
     virtual bool shouldLogCookieInformation() const { return false; }
     virtual Vector<WebCore::SecurityOriginData> hostNamesWithAlternativeServices() const { return { }; }
     virtual void deleteAlternativeServicesForHostNames(const Vector<String>&) { }
     virtual void clearAlternativeServices(WallTime) { }
+    virtual HashSet<WebCore::SecurityOriginData> originsWithCredentials() { return { }; }
+    virtual void removeCredentialsForOrigins(const Vector<WebCore::SecurityOriginData>&) { }
+    virtual void clearCredentials(WallTime) { }
 
     PAL::SessionID sessionID() const { return m_sessionID; }
-    std::optional<UUID> dataStoreIdentifier() const { return m_dataStoreIdentifier; }
     NetworkProcess& networkProcess() { return m_networkProcess; }
     WebCore::NetworkStorageSession* networkStorageSession() const;
 
@@ -198,7 +204,6 @@ public:
     void lowMemoryHandler(WTF::Critical);
 
 #if ENABLE(SERVICE_WORKER)
-    void addSoftUpdateLoader(std::unique_ptr<ServiceWorkerSoftUpdateLoader>&& loader) { m_softUpdateLoaders.add(WTFMove(loader)); }
     void removeSoftUpdateLoader(ServiceWorkerSoftUpdateLoader* loader) { m_softUpdateLoaders.remove(loader); }
     void addNavigationPreloaderTask(ServiceWorkerFetchTask&);
     ServiceWorkerFetchTask* navigationPreloaderTaskFromFetchIdentifier(WebCore::FetchIdentifier);
@@ -264,8 +269,14 @@ protected:
     void forwardResourceLoadStatisticsSettings();
 #endif
 
+#if ENABLE(SERVICE_WORKER)
+    void softUpdate(WebCore::ServiceWorkerJobData&&, bool shouldRefreshCache, WebCore::ResourceRequest&&, CompletionHandler<void(WebCore::WorkerFetchResult&&)>&&) final;
+    void createContextConnection(const WebCore::RegistrableDomain&, std::optional<WebCore::ProcessIdentifier>, std::optional<WebCore::ScriptExecutionContextIdentifier>, CompletionHandler<void()>&&) final;
+    void appBoundDomains(CompletionHandler<void(HashSet<WebCore::RegistrableDomain>&&)>&&) final;
+    void addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier, std::optional<WebCore::ProcessIdentifier>, WebCore::RegistrableDomain&&) final;
+#endif
+
     PAL::SessionID m_sessionID;
-    std::optional<UUID> m_dataStoreIdentifier;
     Ref<NetworkProcess> m_networkProcess;
     ThreadSafeWeakHashSet<NetworkDataTask> m_dataTaskSet;
 #if ENABLE(TRACKING_PREVENTION)

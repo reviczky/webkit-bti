@@ -819,6 +819,10 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTColorBufferFloat.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTColorBufferFloat.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTColorBufferHalfFloat.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTColorBufferHalfFloat.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTDisjointTimerQuery.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTDisjointTimerQuery.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTDisjointTimerQueryWebGL2.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTDisjointTimerQueryWebGL2.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTFloatBlend.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTFloatBlend.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTFragDepth.cpp
@@ -1591,6 +1595,10 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSLongRange.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSLongRange.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMallocStatistics.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMallocStatistics.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSManagedMediaSource.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSManagedMediaSource.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSManagedSourceBuffer.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSManagedSourceBuffer.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMathMLElement.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMathMLElement.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMathMLElementWrapperFactory.cpp
@@ -2705,6 +2713,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTextTrackList.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTextTrackList.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTimeRanges.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTimeRanges.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSToggleEvent.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSToggleEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTrackEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTrackEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTransferFunction.cpp
@@ -2897,6 +2907,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLSync.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLSync.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLTexture.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLTexture.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLTimerQueryEXT.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLTimerQueryEXT.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLTransformFeedback.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLTransformFeedback.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLUniformLocation.cpp

@@ -32,7 +32,7 @@
 #include "RemoteTexture.h"
 #include "StreamServerConnection.h"
 #include "WebGPUObjectHeap.h"
-#include <pal/graphics/WebGPU/WebGPUPresentationConfiguration.h>
+#include <pal/graphics/WebGPU/WebGPUCanvasConfiguration.h>
 #include <pal/graphics/WebGPU/WebGPUPresentationContext.h>
 #include <pal/graphics/WebGPU/WebGPUTexture.h>
 
@@ -54,9 +54,9 @@ void RemotePresentationContext::stopListeningForIPC()
     m_streamConnection->stopReceivingMessages(Messages::RemotePresentationContext::messageReceiverName(), m_identifier.toUInt64());
 }
 
-void RemotePresentationContext::configure(const WebGPU::PresentationConfiguration& presentationConfiguration)
+void RemotePresentationContext::configure(const WebGPU::CanvasConfiguration& canvasConfiguration)
 {
-    auto convertedConfiguration = m_objectHeap.convertFromBacking(presentationConfiguration);
+    auto convertedConfiguration = m_objectHeap.convertFromBacking(canvasConfiguration);
     ASSERT(convertedConfiguration);
     if (!convertedConfiguration)
         return;
@@ -84,18 +84,6 @@ void RemotePresentationContext::getCurrentTexture(WebGPUIdentifier identifier)
     auto remoteTexture = RemoteTexture::create(*texture, m_objectHeap, m_streamConnection.copyRef(), identifier);
     m_objectHeap.addObject(identifier, remoteTexture);
 }
-
-void RemotePresentationContext::present()
-{
-    m_backing->present();
-}
-
-#if PLATFORM(COCOA)
-void RemotePresentationContext::prepareForDisplay(CompletionHandler<void(WTF::MachSendRight&&)>&& completionHandler)
-{
-    m_backing->prepareForDisplay(WTFMove(completionHandler));
-}
-#endif
 
 } // namespace WebKit
 

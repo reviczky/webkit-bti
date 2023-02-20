@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2020-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -70,9 +70,15 @@ IPC::ArrayReferenceTuple<Types...> toArrayReferenceTuple(const GCGLSpanTuple<Spa
 
 }
 
-RemoteGraphicsContextGLProxy::RemoteGraphicsContextGLProxy(IPC::Connection& connection, SerialFunctionDispatcher& dispatcher, const GraphicsContextGLAttributes& attributes, RenderingBackendIdentifier renderingBackend, Ref<RemoteVideoFrameObjectHeapProxy>&& videoFrameObjectHeapProxy)
+RemoteGraphicsContextGLProxy::RemoteGraphicsContextGLProxy(IPC::Connection& connection, SerialFunctionDispatcher& dispatcher, const GraphicsContextGLAttributes& attributes, RenderingBackendIdentifier renderingBackend
+#if ENABLE(VIDEO)
+    , Ref<RemoteVideoFrameObjectHeapProxy>&& videoFrameObjectHeapProxy
+#endif
+    )
     : GraphicsContextGL(attributes)
+#if ENABLE(VIDEO)
     , m_videoFrameObjectHeapProxy(WTFMove(videoFrameObjectHeapProxy))
+#endif
 {
     constexpr unsigned connectionBufferSizeLog2 = 21;
     auto [clientConnection, serverConnectionHandle] = IPC::StreamClientConnection::create(connectionBufferSizeLog2);
@@ -97,11 +103,7 @@ void RemoteGraphicsContextGLProxy::setContextVisibility(bool)
 
 bool RemoteGraphicsContextGLProxy::isGLES2Compliant() const
 {
-#if ENABLE(WEBGL2)
     return contextAttributes().webGLVersion == GraphicsContextGLWebGLVersion::WebGL2;
-#else
-    return false;
-#endif
 }
 
 void RemoteGraphicsContextGLProxy::markContextChanged()
@@ -329,27 +331,22 @@ void RemoteGraphicsContextGLProxy::readnPixels(GCGLint x, GCGLint y, GCGLsizei w
 void RemoteGraphicsContextGLProxy::readnPixelsSharedMemory(GCGLint x, GCGLint y, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, GCGLSpan<GCGLvoid> data)
 {
     if (!isContextLost()) {
-        std::optional<SharedMemory::Handle> handle;
-#if PLATFORM(COCOA)
-        handle = SharedMemory::Handle::create(data.data(), data.size(), SharedMemory::Protection::ReadWrite);
-#else
         auto buffer = SharedMemory::allocate(data.size());
-        if (buffer) {
-            handle = buffer->createHandle(SharedMemory::Protection::ReadWrite);
-            memcpy(buffer->data(), data.data(), data.size());
+        if (!buffer) {
+            markContextLost();
+            return;
         }
-#endif
+        auto handle = buffer->createHandle(SharedMemory::Protection::ReadWrite);
         if (!handle || handle->isNull()) {
             markContextLost();
             return;
         }
+        memcpy(buffer->data(), data.data(), data.size());
         auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::ReadnPixels2(x, y, width, height, format, type, WTFMove(*handle)));
         if (sendResult) {
-#if !PLATFORM(COCOA)
             auto [success] = sendResult.takeReply();
             if (success)
                 memcpy(data.data(), buffer->data(), data.size());
-#endif
         } else
             markContextLost();
     }

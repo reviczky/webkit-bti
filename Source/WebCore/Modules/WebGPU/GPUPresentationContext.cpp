@@ -26,14 +26,14 @@
 #include "config.h"
 #include "GPUPresentationContext.h"
 
-#include "GPUPresentationConfiguration.h"
+#include "GPUCanvasConfiguration.h"
 #include "GPUTexture.h"
 
 namespace WebCore {
 
-void GPUPresentationContext::configure(const GPUPresentationConfiguration& presentationConfiguration)
+void GPUPresentationContext::configure(const GPUCanvasConfiguration& canvasConfiguration)
 {
-    m_backing->configure(presentationConfiguration.convertToBacking());
+    m_backing->configure(canvasConfiguration.convertToBacking());
 }
 
 void GPUPresentationContext::unconfigure()
@@ -53,15 +53,7 @@ RefPtr<GPUTexture> GPUPresentationContext::getCurrentTexture()
 
 void GPUPresentationContext::present()
 {
-    m_backing->present();
     m_currentTexture = nullptr;
 }
-
-#if PLATFORM(COCOA)
-void GPUPresentationContext::prepareForDisplay(CompletionHandler<void(WTF::MachSendRight&&)>&& completionHandler)
-{
-    m_backing->prepareForDisplay(WTFMove(completionHandler));
-}
-#endif
 
 } // namespace WebCore

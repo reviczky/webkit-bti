@@ -48,7 +48,7 @@ enum class MediationRequirement : uint8_t;
 struct AuthenticatorResponseData;
 struct PublicKeyCredentialCreationOptions;
 struct PublicKeyCredentialRequestOptions;
-struct SecurityOriginData;
+class SecurityOriginData;
 
 using RequestCompletionHandler = CompletionHandler<void(WebCore::AuthenticatorResponseData&&, WebCore::AuthenticatorAttachment, WebCore::ExceptionData&&)>;
 using QueryCompletionHandler = CompletionHandler<void(bool)>;
@@ -64,6 +64,7 @@ public:
     virtual void getAssertion(const Frame&, const SecurityOrigin&, const Vector<uint8_t>&, const PublicKeyCredentialRequestOptions&, MediationRequirement, const ScopeAndCrossOriginParent&, RequestCompletionHandler&&) = 0;
     virtual void isConditionalMediationAvailable(const SecurityOrigin&, QueryCompletionHandler&&) = 0;
     virtual void isUserVerifyingPlatformAuthenticatorAvailable(const SecurityOrigin&, QueryCompletionHandler&&) = 0;
+    virtual void cancel() = 0;
 
     virtual void resetUserGestureRequirement() { }
 };

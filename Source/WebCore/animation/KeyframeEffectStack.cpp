@@ -153,38 +153,13 @@ OptionSet<AnimationImpact> KeyframeEffectStack::applyKeyframeEffects(RenderStyle
             || targetStyle.transform() != previousStyle.transform();
     }();
 
-    auto fontSizeChanged = previousLastStyleChangeEventStyle && previousLastStyleChangeEventStyle->computedFontSize() != targetStyle.computedFontSize();
-    auto propertyAffectingLogicalPropertiesChanged = previousLastStyleChangeEventStyle && (previousLastStyleChangeEventStyle->direction() != targetStyle.direction() || previousLastStyleChangeEventStyle->writingMode() != targetStyle.writingMode());
-
     auto unanimatedStyle = RenderStyle::clone(targetStyle);
 
     for (const auto& effect : sortedEffects()) {
+        auto keyframeRecomputationReason = effect->recomputeKeyframesIfNecessary(previousLastStyleChangeEventStyle, unanimatedStyle, resolutionContext);
+
         ASSERT(effect->animation());
         auto* animation = effect->animation();
-
-        auto inheritedPropertyChanged = [&]() {
-            if (previousLastStyleChangeEventStyle) {
-                for (auto property : effect->inheritedProperties()) {
-                    ASSERT(effect->target());
-                    if (!CSSPropertyAnimation::propertiesEqual(property, *previousLastStyleChangeEventStyle, targetStyle, effect->target()->document()))
-                        return true;
-                }
-            }
-            return false;
-        };
-
-        auto cssVariableChanged = [&]() {
-            if (previousLastStyleChangeEventStyle && effect->containsCSSVariableReferences()) {
-                if (!previousLastStyleChangeEventStyle->customPropertiesEqual(targetStyle))
-                    return true;
-            }
-            return false;
-        };
-
-        auto logicalPropertyDidChange = propertyAffectingLogicalPropertiesChanged && effect->animatesDirectionAwareProperty();
-        if (logicalPropertyDidChange || fontSizeChanged || inheritedPropertyChanged() || cssVariableChanged())
-            effect->propertyAffectingKeyframeResolutionDidChange(unanimatedStyle, resolutionContext);
-
         animation->resolve(targetStyle, resolutionContext);
 
         if (effect->isRunningAccelerated() || effect->isAboutToRunAccelerated())
@@ -197,7 +172,7 @@ OptionSet<AnimationImpact> KeyframeEffectStack::applyKeyframeEffects(RenderStyle
             effect->transformRelatedPropertyDidChange();
 
         // If one of the effect's resolved property changed it could affect whether that effect's animation is removed.
-        if (logicalPropertyDidChange) {
+        if (keyframeRecomputationReason && *keyframeRecomputationReason == KeyframeEffect::RecomputationReason::LogicalPropertyChange) {
             ASSERT(animation->timeline());
             animation->timeline()->animationTimingDidChange(*animation);
         }
@@ -271,5 +246,27 @@ void KeyframeEffectStack::lastStyleChangeEventStyleDidChange(const RenderStyle* 
     for (auto& effect : m_effects)
         effect->lastStyleChangeEventStyleDidChange(previousStyle, currentStyle);
 }
+
+void KeyframeEffectStack::didApplyCascade(const RenderStyle& styleBeforeCascade, const RenderStyle& styleAfterCascade, const HashSet<AnimatableProperty> animatedProperties, const Document& document)
+{
+    HashSet<AnimatableProperty> acceleratedPropertiesOverriddenByCascade;
+    if (styleBeforeCascade != styleAfterCascade) {
+        for (auto animatedProperty : animatedProperties) {
+            if (!CSSPropertyAnimation::animationOfPropertyIsAccelerated(animatedProperty))
+                continue;
+            if (!CSSPropertyAnimation::propertiesEqual(animatedProperty, styleBeforeCascade, styleAfterCascade, document))
+                acceleratedPropertiesOverriddenByCascade.add(animatedProperty);
+        }
+    }
+
+    if (acceleratedPropertiesOverriddenByCascade == m_acceleratedPropertiesOverriddenByCascade)
+        return;
+
+    m_acceleratedPropertiesOverriddenByCascade = WTFMove(acceleratedPropertiesOverriddenByCascade);
+
+    for (auto& effect : m_effects)
+        effect->acceleratedPropertiesOverriddenByCascadeDidChange();
+}
+
 
 } // namespace WebCore

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,9 +40,14 @@
 #include "WebGLContextAttributes.h"
 #include "WebGLFramebuffer.h"
 #include "WebGLProgram.h"
+#include "WebGLQuery.h"
 #include "WebGLRenderbuffer.h"
+#include "WebGLSampler.h"
 #include "WebGLStateTracker.h"
 #include "WebGLTexture.h"
+#include "WebGLTimerQueryEXT.h"
+#include "WebGLTransformFeedback.h"
+#include "WebGLVertexArrayObject.h"
 #include "WebGLVertexArrayObjectOES.h"
 #include <JavaScriptCore/ArrayBufferView.h>
 #include <JavaScriptCore/ConsoleTypes.h>
@@ -51,16 +56,6 @@
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/ListHashSet.h>
 #include <wtf/Lock.h>
-
-#if ENABLE(WEB_CODECS)
-#include "WebCodecsVideoFrame.h"
-#endif
-
-#if ENABLE(WEBGL2)
-#include "WebGLSampler.h"
-#include "WebGLTransformFeedback.h"
-#include "WebGLVertexArrayObject.h"
-#endif
 
 #if ENABLE(WEBXR)
 #include "JSDOMPromiseDeferredForward.h"
@@ -82,6 +77,8 @@ class ANGLEInstancedArrays;
 class EXTBlendMinMax;
 class EXTColorBufferFloat;
 class EXTColorBufferHalfFloat;
+class EXTDisjointTimerQuery;
+class EXTDisjointTimerQueryWebGL2;
 class EXTFloatBlend;
 class EXTFragDepth;
 class EXTShaderTextureLOD;
@@ -106,6 +103,7 @@ class OESVertexArrayObject;
 #if ENABLE(OFFSCREEN_CANVAS)
 class OffscreenCanvas;
 #endif
+class WebCodecsVideoFrame;
 class WebCoreOpaqueRoot;
 class WebGLActiveInfo;
 class WebGLClipCullDistance;
@@ -486,6 +484,8 @@ protected:
     WebGLRenderingContextBase(CanvasBase&, WebGLContextAttributes);
     WebGLRenderingContextBase(CanvasBase&, Ref<GraphicsContextGL>&&, WebGLContextAttributes);
 
+    friend class EXTDisjointTimerQuery;
+    friend class EXTDisjointTimerQueryWebGL2;
     friend class EXTTextureCompressionBPTC;
     friend class EXTTextureCompressionRGTC;
     friend class OESDrawBuffersIndexed;
@@ -735,6 +735,8 @@ protected:
     RefPtr<EXTBlendMinMax> m_extBlendMinMax;
     RefPtr<EXTColorBufferFloat> m_extColorBufferFloat;
     RefPtr<EXTColorBufferHalfFloat> m_extColorBufferHalfFloat;
+    RefPtr<EXTDisjointTimerQuery> m_extDisjointTimerQuery;
+    RefPtr<EXTDisjointTimerQueryWebGL2> m_extDisjointTimerQueryWebGL2;
     RefPtr<EXTFloatBlend> m_extFloatBlend;
     RefPtr<EXTFragDepth> m_extFragDepth;
     RefPtr<EXTShaderTextureLOD> m_extShaderTextureLOD;
@@ -786,6 +788,7 @@ protected:
     float getFloatParameter(GCGLenum);
     int getIntParameter(GCGLenum);
     unsigned getUnsignedIntParameter(GCGLenum);
+    virtual long long getInt64Parameter(GCGLenum) = 0;
     RefPtr<Float32Array> getWebGLFloatArrayParameter(GCGLenum);
     RefPtr<Int32Array> getWebGLIntArrayParameter(GCGLenum);
 

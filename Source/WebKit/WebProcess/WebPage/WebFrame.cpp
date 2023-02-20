@@ -206,6 +206,11 @@ WebCore::Frame* WebFrame::coreFrame() const
     return dynamicDowncast<LocalFrame>(m_coreFrame.get());
 }
 
+WebCore::RemoteFrame* WebFrame::coreRemoteFrame() const
+{
+    return dynamicDowncast<RemoteFrame>(m_coreFrame.get());
+}
+
 FrameInfoData WebFrame::info() const
 {
     auto* parent = parentFrame();
@@ -266,7 +271,7 @@ void WebFrame::continueWillSubmitForm(FormSubmitListenerIdentifier listenerID)
         completionHandler();
 }
 
-void WebFrame::didCommitLoadInAnotherProcess()
+void WebFrame::didCommitLoadInAnotherProcess(WebCore::LayerHostingContextIdentifier layerHostingContextIdentifier)
 {
     RefPtr coreFrame = m_coreFrame.get();
     if (!coreFrame)
@@ -301,7 +306,7 @@ void WebFrame::didCommitLoadInAnotherProcess()
     coreFrame->disconnectOwnerElement();
     auto client = makeUniqueRef<WebRemoteFrameClient>(*this, WTFMove(invalidator));
 
-    auto newFrame = WebCore::RemoteFrame::create(*corePage, m_frameID, ownerElement.get(), WTFMove(client));
+    auto newFrame = WebCore::RemoteFrame::create(*corePage, m_frameID, ownerElement.get(), WTFMove(client), layerHostingContextIdentifier);
     auto remoteFrameView = WebCore::RemoteFrameView::create(newFrame);
     // FIXME: We need a corresponding setView(nullptr) during teardown to break the ref cycle.
     newFrame->setView(remoteFrameView.ptr());
@@ -312,6 +317,8 @@ void WebFrame::didCommitLoadInAnotherProcess()
     if (ownerElement) {
         // FIXME: This is also done in the WebCore::Frame constructor. Move one to make this more symmetric.
         ownerElement->setContentFrame(*m_coreFrame);
+
+        ownerElement->scheduleInvalidateStyleAndLayerComposition();
     }
 }
 
@@ -945,6 +952,13 @@ String WebFrame::mimeTypeForResourceWithURL(const URL& url) const
     return String();
 }
 
+void WebFrame::updateRemoteFrameSize(WebCore::IntSize size)
+{
+    // FIXME: This should probably be a WebFrameProxy message, but WebFrameProxy::commitProvisionalFrame currently removes the parent frame's process as a message receiver.
+    if (m_page)
+        m_page->send(Messages::WebPageProxy::UpdateRemoteFrameSize(m_frameID, size));
+}
+
 void WebFrame::setTextDirection(const String& direction)
 {
     auto* localFrame = dynamicDowncast<LocalFrame>(m_coreFrame.get());
@@ -1017,7 +1031,10 @@ std::optional<NavigatingToAppBoundDomain> WebFrame::isTopFrameNavigatingToAppBou
     auto* localFrame = dynamicDowncast<LocalFrame>(m_coreFrame.get());
     if (!localFrame)
         return std::nullopt;
-    return fromCoreFrame(localFrame->mainFrame())->isNavigatingToAppBoundDomain();
+    auto* localMainFrame = dynamicDowncast<LocalFrame>(localFrame->mainFrame());
+    if (!localMainFrame)
+        return std::nullopt;
+    return fromCoreFrame(*localMainFrame)->isNavigatingToAppBoundDomain();
 }
 #endif
 

@@ -1088,7 +1088,7 @@ public:
     void drawToPDFiOS(WebCore::FrameIdentifier, const PrintInfo&, size_t, CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
 #endif
 
-    void drawToPDF(WebCore::FrameIdentifier, const std::optional<WebCore::FloatRect>&, CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
+    void drawToPDF(WebCore::FrameIdentifier, const std::optional<WebCore::FloatRect>&, bool allowTransparentBackground,  CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
 
 #if PLATFORM(GTK)
     void drawPagesForPrinting(WebCore::FrameIdentifier, const PrintInfo&, CompletionHandler<void(std::optional<SharedMemory::Handle>&&, WebCore::ResourceError&&)>&&);
@@ -1251,7 +1251,7 @@ public:
     bool shouldExtendIncrementalRenderingSuppression() { return !m_activeRenderingSuppressionTokens.isEmpty(); }
 
     WebCore::ScrollPinningBehavior scrollPinningBehavior() { return m_scrollPinningBehavior; }
-    void setScrollPinningBehavior(uint32_t /* WebCore::ScrollPinningBehavior */ pinning);
+    void setScrollPinningBehavior(WebCore::ScrollPinningBehavior);
 
     std::optional<WebCore::ScrollbarOverlayStyle> scrollbarOverlayStyle() { return m_scrollbarOverlayStyle; }
     void setScrollbarOverlayStyle(std::optional<uint32_t /* WebCore::ScrollbarOverlayStyle */> scrollbarStyle);
@@ -1608,6 +1608,8 @@ public:
 
     bool shouldSkipDecidePolicyForResponse(const WebCore::ResourceResponse&, const WebCore::ResourceRequest&) const;
     void setSkipDecidePolicyForResponseIfPossible(bool value) { m_skipDecidePolicyForResponseIfPossible = value; }
+
+    Markable<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier() const { return m_layerHostingContextIdentifier; }
 
 private:
     WebPage(WebCore::PageIdentifier, WebPageCreationParameters&&);
@@ -2437,7 +2439,7 @@ private:
     HashSet<unsigned> m_activeRenderingSuppressionTokens;
     unsigned m_maximumRenderingSuppressionToken { 0 };
     
-    WebCore::ScrollPinningBehavior m_scrollPinningBehavior { WebCore::DoNotPin };
+    WebCore::ScrollPinningBehavior m_scrollPinningBehavior { WebCore::ScrollPinningBehavior::DoNotPin };
     std::optional<WebCore::ScrollbarOverlayStyle> m_scrollbarOverlayStyle;
 
     bool m_useAsyncScrolling { false };
@@ -2534,6 +2536,7 @@ private:
     Vector<String> m_corsDisablingPatterns;
 
     std::unique_ptr<WebCore::CachedPage> m_cachedPage;
+    Markable<WebCore::LayerHostingContextIdentifier> m_layerHostingContextIdentifier;
 
 #if ENABLE(IPC_TESTING_API)
     bool m_ipcTestingAPIEnabled { false };

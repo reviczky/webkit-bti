@@ -249,8 +249,13 @@ static bool isFrameFamiliarWith(AbstractFrame& abstractFrameA, AbstractFrame& ab
     if (!frameA || !frameB)
         return false;
 
-    auto* frameAOpener = frameA->mainFrame().loader().opener();
-    auto* frameBOpener = frameB->mainFrame().loader().opener();
+    auto* mainFrameA = dynamicDowncast<LocalFrame>(frameA->mainFrame());
+    auto* mainFrameB = dynamicDowncast<LocalFrame>(frameB->mainFrame());
+    if (!mainFrameA || !mainFrameB)
+        return false;
+
+    auto* frameAOpener = mainFrameA->loader().opener();
+    auto* frameBOpener = mainFrameB->loader().opener();
     return (frameAOpener && frameAOpener->page() == frameB->page()) || (frameBOpener && frameBOpener->page() == frameA->page()) || (frameAOpener && frameBOpener && frameAOpener->page() == frameBOpener->page());
 }
 
@@ -277,7 +282,7 @@ AbstractFrame* FrameTree::find(const AtomString& name, AbstractFrame& activeFram
 
     // Then the rest of the tree.
     auto* localFrame = dynamicDowncast<LocalFrame>(m_thisFrame);
-    for (AbstractFrame* frame = localFrame ? &localFrame->mainFrame() : nullptr; frame; frame = frame->tree().traverseNext()) {
+    for (AbstractFrame* frame = localFrame ? dynamicDowncast<LocalFrame>(localFrame->mainFrame()) : nullptr; frame; frame = frame->tree().traverseNext()) {
         if (frame->tree().uniqueName() == name)
             return frame;
     }
@@ -345,6 +350,28 @@ AbstractFrame* FrameTree::traverseNext(const AbstractFrame* stayWithin) const
         return sibling;
     }
 
+    return nullptr;
+}
+
+AbstractFrame* FrameTree::traverseNextSkippingChildren(const AbstractFrame* stayWithin) const
+{
+    if (&m_thisFrame == stayWithin)
+        return nullptr;
+    if (auto* sibling = nextSibling())
+        return sibling;
+    return nextAncestorSibling(stayWithin);
+}
+
+AbstractFrame* FrameTree::nextAncestorSibling(const AbstractFrame* stayWithin) const
+{
+    ASSERT(!nextSibling());
+    ASSERT(&m_thisFrame != stayWithin);
+    for (auto* ancestor = parent(); ancestor; ancestor = ancestor->tree().parent()) {
+        if (ancestor == stayWithin)
+            return nullptr;
+        if (auto ancestorSibling = ancestor->tree().nextSibling())
+            return ancestorSibling;
+    }
     return nullptr;
 }
 
@@ -429,7 +456,7 @@ AbstractFrame* FrameTree::traverseNext(CanWrap canWrap, DidWrap* didWrap) const
         auto* localFrame = dynamicDowncast<LocalFrame>(m_thisFrame);
         if (!localFrame)
             return nullptr;
-        return &localFrame->mainFrame();
+        return dynamicDowncast<LocalFrame>(localFrame->mainFrame());
     }
 
     return nullptr;

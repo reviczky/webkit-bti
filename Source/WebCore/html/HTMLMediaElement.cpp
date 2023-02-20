@@ -4255,8 +4255,10 @@ void HTMLMediaElement::setMuted(bool muted)
             }
         }
 
-        if (mutedStateChanged)
+        if (mutedStateChanged) {
             scheduleEvent(eventNames().volumechangeEvent);
+            scheduleUpdateShouldAutoplay();
+        }
 
         updateShouldPlay();
 
@@ -5599,18 +5601,6 @@ bool HTMLMediaElement::mediaPlayerAcceleratedCompositingEnabled()
     return document().settings().acceleratedCompositingEnabled();
 }
 
-#if PLATFORM(WIN) && USE(AVFOUNDATION)
-
-GraphicsDeviceAdapter* HTMLMediaElement::mediaPlayerGraphicsDeviceAdapter() const
-{
-    auto* page = document().page();
-    if (!page)
-        return nullptr;
-    return page->chrome().client().graphicsDeviceAdapter();
-}
-
-#endif
-
 void HTMLMediaElement::scheduleMediaEngineWasUpdated()
 {
     if (m_mediaEngineUpdatedTaskCancellationGroup.hasPendingTask())
@@ -6468,8 +6458,10 @@ void HTMLMediaElement::enqueuePlaybackTargetAvailabilityChangedEvent(EnqueueBeha
 
     ALWAYS_LOG(LOGIDENTIFIER, "hasTargets = ", hasTargets);
     m_lastTargetAvailabilityEventState = hasTargets;
+#if ENABLE(WIRELESS_PLAYBACK_TARGET_AVAILABILITY_API)
     auto event = WebKitPlaybackTargetAvailabilityEvent::create(eventNames().webkitplaybacktargetavailabilitychangedEvent, hasTargets);
     scheduleEvent(WTFMove(event));
+#endif
     scheduleUpdateMediaState();
 }
 
@@ -6657,6 +6649,10 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
     ALWAYS_LOG(LOGIDENTIFIER, ", m_videoFullscreenMode = ", m_videoFullscreenMode, ", mode = ", mode);
     ASSERT(mode != VideoFullscreenModeNone);
 
+    auto* window = document().domWindow();
+    if (!window)
+        return;
+
     if (m_videoFullscreenMode == mode)
         return;
 
@@ -6673,6 +6669,9 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
         return;
     }
 #endif
+
+    if (mediaSession().hasBehaviorRestriction(MediaElementSession::RequireUserGestureForFullscreen))
+        window->consumeTransientActivation();
 
     queueTaskKeepingObjectAlive(*this, TaskSource::MediaElement, [this, mode, logIdentifier = LOGIDENTIFIER] {
         if (isContextStopped())
@@ -7814,7 +7813,11 @@ const std::optional<Vector<FourCC>>& HTMLMediaElement::allowedMediaCaptionFormat
 
 void HTMLMediaElement::mediaPlayerBufferedTimeRangesChanged()
 {
-    if (!m_textTracks || m_bufferedTimeRangesChangedTaskCancellationGroup.hasPendingTask())
+    if (!m_textTracks || m_readyState < HAVE_ENOUGH_DATA || m_bufferedTimeRangesChangedTaskCancellationGroup.hasPendingTask())
+        return;
+
+    auto duration = durationMediaTime();
+    if (!duration.isValid() || duration.toDouble() < 60.)
         return;
 
     auto logSiteIdentifier = LOGIDENTIFIER;

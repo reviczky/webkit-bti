@@ -39,6 +39,8 @@ public:
 private:
     WEBCORE_EXPORT RemoteFrameView(RemoteFrame&);
 
+    bool isRemoteFrameView() const final { return true; }
+
     void invalidateRect(const IntRect&) final;
     bool isActive() const final;
     bool forceUpdateScrollbarsOnMainThreadForPerformanceTesting() const final;
@@ -64,6 +66,8 @@ private:
     void updateLayerPositionsAfterScrolling() final;
     void updateCompositingLayersAfterScrolling() final;
 
+    void setFrameRect(const IntRect&) final;
+
     const Ref<RemoteFrame> m_frame;
 };
 
@@ -71,4 +75,5 @@ private:
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::RemoteFrameView)
 static bool isType(const WebCore::AbstractFrameView& view) { return view.viewType() == WebCore::AbstractFrameView::FrameViewType::Remote; }
+static bool isType(const WebCore::Widget& widget) { return widget.isRemoteFrameView(); }
 SPECIALIZE_TYPE_TRAITS_END()

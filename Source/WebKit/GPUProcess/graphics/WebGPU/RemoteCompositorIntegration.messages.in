@@ -25,8 +25,9 @@
 
 messages -> RemoteCompositorIntegration NotRefCounted Stream {
 #if PLATFORM(COCOA)
-void GetRenderBuffers() -> (Vector<MachSendRight> renderBuffers) Synchronous NotStreamEncodableReply
+void RecreateRenderBuffers(int width, int height) -> (Vector<MachSendRight> renderBuffers) Synchronous NotStreamEncodableReply
 #endif
+void PrepareForDisplay() -> (bool dummy) Synchronous NotStreamEncodableReply // Because CanvasRenderingContext::prepareForDisplay() requires the layer contents synchronously, this needs to be Synchronous.
 }
 
 #endif

@@ -48,6 +48,7 @@ ProvisionalFrameProxy::ProvisionalFrameProxy(WebFrameProxy& frame, Ref<WebProces
     , m_visitedLinkStore(frame.page()->visitedLinkStore())
     , m_pageID(frame.page()->webPageID()) // FIXME: Generate a new one? This can conflict. And we probably want something like ProvisionalPageProxy to respond to messages anyways.
     , m_webPageID(frame.page()->identifier())
+    , m_layerHostingContextIdentifier(WebCore::LayerHostingContextIdentifier::generate())
 {
     m_process->markProcessAsRecentlyUsed();
     m_process->addProvisionalFrameProxy(*this);
@@ -63,9 +64,13 @@ ProvisionalFrameProxy::ProvisionalFrameProxy(WebFrameProxy& frame, Ref<WebProces
 
     auto parameters = page.creationParameters(m_process, *drawingArea);
     parameters.isProcessSwap = true; // FIXME: This should be a parameter to creationParameters rather than doctoring up the parameters afterwards.
+    parameters.topContentInset = 0;
+    parameters.layerHostingContextIdentifier = m_layerHostingContextIdentifier;
     parameters.mainFrameIdentifier = frame.frameID();
     m_process->send(Messages::WebProcess::CreateWebPage(m_pageID, parameters), 0);
     m_process->addVisitedLinkStoreUser(page.visitedLinkStore(), page.identifier());
+
+    drawingArea->attachToProvisionalFrameProcess(m_process);
 
     LoadParameters loadParameters;
     loadParameters.request = request;
@@ -91,6 +96,12 @@ ProvisionalFrameProxy::~ProvisionalFrameProxy()
 void ProvisionalFrameProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     ASSERT(decoder.messageReceiverName() == Messages::WebPageProxy::messageReceiverName());
+
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    // FIXME: This needs to be handled correctly in a way that doesn't cause assertions or crashes..
+    if (decoder.messageName() == Messages::WebPageProxy::DidCreateContextInWebProcessForVisibilityPropagation::name())
+        return;
+#endif
 
     if (decoder.messageName() == Messages::WebPageProxy::DecidePolicyForResponse::name()) {
         IPC::handleMessage<Messages::WebPageProxy::DecidePolicyForResponse>(connection, decoder, this, &ProvisionalFrameProxy::decidePolicyForResponse);

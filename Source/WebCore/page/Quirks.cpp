@@ -1367,7 +1367,7 @@ bool Quirks::shouldDisableEndFullscreenEventWhenEnteringPictureInPictureFromFull
 
 bool Quirks::shouldAllowNavigationToCustomProtocolWithoutUserGesture(StringView protocol, const SecurityOriginData& requesterOrigin)
 {
-    return protocol == "msteams"_s && (requesterOrigin.host == "teams.live.com"_s || requesterOrigin.host == "teams.microsoft.com"_s);
+    return protocol == "msteams"_s && (requesterOrigin.host() == "teams.live.com"_s || requesterOrigin.host() == "teams.microsoft.com"_s);
 }
 
 #if ENABLE(IMAGE_ANALYSIS)
@@ -1480,6 +1480,22 @@ bool Quirks::shouldNavigatorPluginsBeEmpty() const
 #else
     return false;
 #endif
+}
+
+// Fix for the UNIQLO app (rdar://104519846).
+bool Quirks::shouldDisableLazyIframeLoadingQuirk() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldDisableLazyIframeLoadingQuirk) {
+#if PLATFORM(IOS_FAMILY)
+        m_shouldDisableLazyIframeLoadingQuirk = !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::NoUNIQLOLazyIframeLoadingQuirk) && IOSApplication::isUNIQLOApp();
+#else
+        m_shouldDisableLazyIframeLoadingQuirk = false;
+#endif
+    }
+    return *m_shouldDisableLazyIframeLoadingQuirk;
 }
 
 bool Quirks::shouldDisableLazyImageLoadingQuirk() const

@@ -253,6 +253,8 @@ namespace WebCore {
     macro(KeyframeEffect) \
     macro(Lock) \
     macro(LockManager) \
+    macro(ManagedMediaSource) \
+    macro(ManagedSourceBuffer) \
     macro(MathMLElement) \
     macro(MathMLMathElement) \
     macro(MediaCapabilities) \
@@ -398,6 +400,7 @@ namespace WebCore {
     macro(TextEncoderStreamEncoder) \
     macro(TextTrackCue) \
     macro(TextTrackCueGeneric) \
+    macro(ToggleEvent) \
     macro(TransformStream) \
     macro(TransformStreamDefaultController) \
     macro(UndoItem) \

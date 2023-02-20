@@ -50,6 +50,8 @@ public:
     RemoteGPUProxy& parent() { return m_parent; }
     RemoteGPUProxy& root() { return m_parent->root(); }
 
+    void present();
+
 private:
     friend class DowncastConvertToBackingContext;
 
@@ -74,16 +76,10 @@ private:
         return root().streamClientConnection().sendSync(WTFMove(message), backing(), defaultSendTimeout);
     }
 
-    void configure(const PAL::WebGPU::PresentationConfiguration&) final;
+    void configure(const PAL::WebGPU::CanvasConfiguration&) final;
     void unconfigure() final;
 
     RefPtr<PAL::WebGPU::Texture> getCurrentTexture() final;
-
-    void present() final;
-
-#if PLATFORM(COCOA)
-    void prepareForDisplay(CompletionHandler<void(WTF::MachSendRight&&)>&&) final;
-#endif
 
     WebGPUIdentifier m_backing;
     Ref<ConvertToBackingContext> m_convertToBackingContext;
