@@ -1,0 +1,49 @@
+From: Adrian Perez de Castro <aperez@igalia.com>
+Subject: Fix installed API headers
+Bug: https://bugs.webkit.org/show_bug.cgi?id=252562
+Origin: https://github.com/WebKit/WebKit/commit/5f8dc9d4cc01a31e53670acdcf7a9c4ea4626f58
+Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitJavascriptResult.h.in
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitJavascriptResult.h.in
++++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitJavascriptResult.h.in
+@@ -26,7 +26,7 @@
+ #include <glib-object.h>
+ #include <@API_INCLUDE_PREFIX@/WebKitDefines.h>
+ 
+-#if PLATFORM(GTK)
++#if PLATFORM(GTK) && !ENABLE(2022_GLIB_API)
+ #include <JavaScriptCore/JSBase.h>
+ #endif
+ 
+@@ -46,7 +46,7 @@ webkit_javascript_result_ref
+ WEBKIT_API void
+ webkit_javascript_result_unref              (WebKitJavascriptResult *js_result);
+ 
+-#if PLATFORM(GTK) && !USE(GTK4)
++#if PLATFORM(GTK) && !ENABLE(2022_GLIB_API)
+ WEBKIT_DEPRECATED JSGlobalContextRef
+ webkit_javascript_result_get_global_context (WebKitJavascriptResult *js_result);
+ 
+Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebView.h.in
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitWebView.h.in
++++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebView.h.in
+@@ -59,7 +59,9 @@
+ #endif
+ 
+ #if PLATFORM(GTK)
++#if !ENABLE(2022_GLIB_API)
+ #include <JavaScriptCore/JSBase.h>
++#endif
+ #include <webkit/WebKitColorChooserRequest.h>
+ #include <webkit/WebKitWebInspector.h>
+ #include <webkit/WebKitWebViewBase.h>
+@@ -628,7 +630,7 @@ webkit_web_view_execute_editing_command_
+ WEBKIT_API WebKitFindController *
+ webkit_web_view_get_find_controller                  (WebKitWebView             *web_view);
+ 
+-#if PLATFORM(GTK) && !USE(GTK4)
++#if PLATFORM(GTK) && !ENABLE(2022_GLIB_API)
+ WEBKIT_DEPRECATED JSGlobalContextRef
+ webkit_web_view_get_javascript_global_context        (WebKitWebView             *web_view);
+ #endif
