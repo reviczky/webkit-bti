@@ -36,6 +36,8 @@
 #include "APINavigation.h"
 #include "APIPageConfiguration.h"
 #include "APIProcessPoolConfiguration.h"
+#include "APIString.h"
+#include "APIURLRequest.h"
 #include "AuxiliaryProcessMessages.h"
 #include "AuxiliaryProcessProxy.h"
 #include "DownloadProxy.h"
@@ -57,6 +59,7 @@
 #include "UIGamepad.h"
 #include "UIGamepadProvider.h"
 #include "UIProcessLogInitialization.h"
+#include "WKAPICast.h"
 #include "WKContextPrivate.h"
 #include "WebAutomationSession.h"
 #include "WebBackForwardCache.h"
@@ -149,8 +152,6 @@ namespace WebKit {
 using namespace WebCore;
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, processPoolCounter, ("WebProcessPool"));
-
-constexpr Seconds serviceWorkerTerminationDelay { 5_s };
 
 #if ENABLE(GPU_PROCESS)
 constexpr Seconds resetGPUProcessCrashCountDelay { 30_s };

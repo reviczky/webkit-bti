@@ -197,7 +197,7 @@
 #include <JavaScriptCore/RemoteInspector.h>
 #endif
 
-#if ENABLE(GPU_PROCESS)
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)
 #include "RemoteMediaPlayerManager.h"
 #endif
 
@@ -248,9 +248,6 @@
 #define WEBPROCESS_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [sessionID=%" PRIu64 "] WebProcess::" fmt, this, RELEASE_LOG_SESSION_ID, ##__VA_ARGS__)
 #define WEBPROCESS_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [sessionID=%" PRIu64 "] WebProcess::" fmt, this, RELEASE_LOG_SESSION_ID, ##__VA_ARGS__)
 #endif
-
-// This should be less than plugInAutoStartExpirationTimeThreshold in PlugInAutoStartProvider.
-static const Seconds plugInAutoStartExpirationTimeUpdateThreshold { 29 * 24 * 60 * 60 };
 
 // This should be greater than tileRevalidationTimeout in TileController.
 static const Seconds nonVisibleProcessGraphicsCleanupDelay { 10_s };
@@ -333,7 +330,7 @@ WebProcess::WebProcess()
     addSupplement<UserMediaCaptureManager>();
 #endif
 
-#if ENABLE(GPU_PROCESS)
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)
     addSupplement<RemoteMediaPlayerManager>();
 #endif
 
@@ -455,7 +452,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 
 #if PLATFORM(MAC)
             // If this is a process we keep around for performance, kill it on memory pressure instead of trying to free up its memory.
-            if (m_processType == ProcessType::CachedWebContent || m_processType == ProcessType::PrewarmedWebContent || areAllPagesSuspended()) {
+            if (!m_isSuspending && (m_processType == ProcessType::CachedWebContent || m_processType == ProcessType::PrewarmedWebContent || areAllPagesSuspended())) {
                 if (m_processType == ProcessType::CachedWebContent)
                     WEBPROCESS_RELEASE_LOG(Process, "initializeWebProcess: Cached WebProcess is exiting due to memory pressure");
                 else if (m_processType == ProcessType::PrewarmedWebContent)
@@ -1039,9 +1036,9 @@ uint64_t WebProcess::userGestureTokenIdentifier(RefPtr<UserGestureToken> token)
     if (!token || !token->processingUserGesture())
         return 0;
 
-    auto result = m_userGestureTokens.ensure(token.get(), [] { return nextUserGestureTokenIdentifier(); });
+    auto result = m_userGestureTokens.ensure(*token, [] { return nextUserGestureTokenIdentifier(); });
     if (result.isNewEntry) {
-        result.iterator->key->addDestructionObserver([] (UserGestureToken& tokenBeingDestroyed) {
+        result.iterator->key.addDestructionObserver([] (UserGestureToken& tokenBeingDestroyed) {
             WebProcess::singleton().userGestureTokenDestroyed(tokenBeingDestroyed);
         });
     }
@@ -1051,7 +1048,7 @@ uint64_t WebProcess::userGestureTokenIdentifier(RefPtr<UserGestureToken> token)
 
 void WebProcess::userGestureTokenDestroyed(UserGestureToken& token)
 {
-    auto identifier = m_userGestureTokens.take(&token);
+    auto identifier = m_userGestureTokens.take(token);
     parentProcessConnection()->send(Messages::WebProcessProxy::DidDestroyUserGestureToken(identifier), 0);
 }
 
@@ -1458,6 +1455,15 @@ void WebProcess::deleteWebsiteDataForOrigin(OptionSet<WebsiteDataType> websiteDa
         MemoryCache::singleton().removeResourcesWithOrigin(origin);
         if (origin.topOrigin == origin.clientOrigin)
             BackForwardCache::singleton().clearEntriesForOrigins({ RefPtr<SecurityOrigin> { origin.clientOrigin.securityOrigin() } });
+    }
+    completionHandler();
+}
+
+void WebProcess::reloadExecutionContextsForOrigin(const ClientOrigin& origin, std::optional<FrameIdentifier> triggeringFrame, CompletionHandler<void()>&& completionHandler)
+{
+    for (auto& page : m_pageMap.values()) {
+        if (auto* corePage = page->corePage())
+            corePage->reloadExecutionContextsForOrigin(origin, triggeringFrame);
     }
     completionHandler();
 }

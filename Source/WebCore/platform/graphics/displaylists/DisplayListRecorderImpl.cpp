@@ -42,8 +42,8 @@
 namespace WebCore {
 namespace DisplayList {
 
-RecorderImpl::RecorderImpl(DisplayList& displayList, const GraphicsContextState& state, const FloatRect& initialClip, const AffineTransform& initialCTM, DrawGlyphsMode drawGlyphsMode)
-    : Recorder(state, initialClip, initialCTM, drawGlyphsMode)
+RecorderImpl::RecorderImpl(DisplayList& displayList, const GraphicsContextState& state, const FloatRect& initialClip, const AffineTransform& initialCTM, const DestinationColorSpace& colorSpace, DrawGlyphsMode drawGlyphsMode)
+    : Recorder(state, initialClip, initialCTM, colorSpace, drawGlyphsMode)
     , m_displayList(displayList)
 {
     LOG_WITH_STREAM(DisplayLists, stream << "\nRecording with clip " << initialClip);
@@ -431,16 +431,6 @@ bool RecorderImpl::recordResourceUse(DecomposedGlyphs& decomposedGlyphs)
 {
     m_displayList.cacheDecomposedGlyphs(decomposedGlyphs);
     return true;
-}
-
-// FIXME: share with ShadowData
-static inline float shadowPaintingExtent(float blurRadius)
-{
-    // Blurring uses a Gaussian function whose std. deviation is m_radius/2, and which in theory
-    // extends to infinity. In 8-bit contexts, however, rounding causes the effect to become
-    // undetectable at around 1.4x the radius.
-    const float radiusExtentMultiplier = 1.4;
-    return ceilf(blurRadius * radiusExtentMultiplier);
 }
 
 } // namespace DisplayList

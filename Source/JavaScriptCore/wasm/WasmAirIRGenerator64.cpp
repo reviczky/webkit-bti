@@ -676,12 +676,19 @@ private:
         inst.args.append(tmp.tmp());
     }
 
-    void emitMove(const TypedTmp& src, const TypedTmp& dst)
+    // emitMoveWithoutTypeCheck is like emitMove, but does not assert anything
+    // about the wasm types of `src` and `dst` (in no-assert builds, they are the same)
+    void emitMoveWithoutTypeCheck(const TypedTmp& src, const TypedTmp& dst)
     {
         if (src == dst)
             return;
-        ASSERT(isSubtype(src.type(), dst.type()));
         append(moveOpForValueType(src.type()), src, dst);
+    }
+
+    void emitMove(const TypedTmp& src, const TypedTmp& dst)
+    {
+        ASSERT(isSubtype(src.type(), dst.type()));
+        emitMoveWithoutTypeCheck(src, dst);
     }
 
     void emitMove(const ValueLocation& location, const TypedTmp& dest)
@@ -981,7 +988,6 @@ inline AirIRGenerator64::ExpressionType AirIRGenerator64::emitCheckAndPreparePoi
     }
 
     case MemoryMode::Signaling: {
-#if ENABLE(WEBASSEMBLY_SIGNALING_MEMORY)
         // We've virtually mapped 4GiB+redzone for this memory. Only the user-allocated pages are addressable, contiguously in range [0, current],
         // and everything above is mapped PROT_NONE. We don't need to perform any explicit bounds check in the 4GiB range because WebAssembly register
         // memory accesses are 32-bit. However WebAssembly register + offset accesses perform the addition in 64-bit which can push an access above
@@ -1011,7 +1017,6 @@ inline AirIRGenerator64::ExpressionType AirIRGenerator64::emitCheckAndPreparePoi
                 this->emitThrowException(jit, ExceptionType::OutOfBoundsMemoryAccess);
             });
         }
-#endif
         break;
     }
     }
@@ -1930,7 +1935,7 @@ Tmp AirIRGenerator64::emitCatchImpl(CatchKind kind, ControlType& data, unsigned 
 
     B3::PatchpointValue* patch = addPatchpoint(m_proc.addTuple({ B3::pointerType(), B3::pointerType() }));
     patch->effects.exitsSideways = true;
-    patch->clobber(RegisterSetBuilder::macroClobberedRegisters());
+    patch->clobber(RegisterSetBuilder::macroClobberedGPRs());
     auto clobberLate = RegisterSetBuilder::registersToSaveForJSCall(m_proc.usesSIMD() ? RegisterSetBuilder::allRegisters() : RegisterSetBuilder::allScalarRegisters());
     clobberLate.add(GPRInfo::argumentGPR0, IgnoreVectors);
     patch->clobberLate(clobberLate);
@@ -1977,14 +1982,25 @@ auto AirIRGenerator64::addReturn(const ControlData& data, const Stack& returnVal
         TypedTmp tmp = returnValues[offset + i];
 
         if (rep.isStack()) {
-            append(moveForType(toB3Type(tmp.type())), tmp, Arg::addr(Tmp(GPRInfo::callFrameRegister), rep.offsetFromFP()));
+            Arg arg = Arg::addr(Tmp(GPRInfo::callFrameRegister), rep.offsetFromFP());
+            B3::Air::Opcode opcode = moveForType(toB3Type(tmp.type()));
+            Width width = tmp.type().width();
+            if (arg.isValidForm(opcode, width))
+                append(opcode, tmp, arg);
+            else {
+                auto immTmp = self().gPtr();
+                auto newPtr = self().gPtr();
+                append(Move, Arg::bigImm(arg.offset()), immTmp);
+                append(AddPtr, Tmp(GPRInfo::callFrameRegister), immTmp, newPtr);
+                append(opcode, tmp, Arg::addr(newPtr));
+            }
             continue;
         }
 
         ASSERT(rep.isReg());
         if (data.signature()->as<FunctionSignature>()->returnType(i).isI32())
             append(Move32, tmp, tmp);
-        returnConstraints.append(ConstrainedTmp(tmp, wasmCallInfo.results[i].location));
+        returnConstraints.append(ConstrainedTmp(tmp, rep));
     }
 
     emitPatchpoint(m_currentBlock, patch, ResultList { }, WTFMove(returnConstraints));
@@ -2049,7 +2065,7 @@ auto AirIRGenerator64::emitCallPatchpoint(BasicBlock* block, B3::Type returnType
     auto* patchpoint = addPatchpoint(returnType);
     patchpoint->effects.writesPinned = true;
     patchpoint->effects.readsPinned = true;
-    patchpoint->clobberEarly(RegisterSetBuilder::macroClobberedRegisters());
+    patchpoint->clobberEarly(RegisterSetBuilder::macroClobberedGPRs());
     patchpoint->clobberLate(RegisterSetBuilder::registersToSaveForJSCall(m_proc.usesSIMD() ? RegisterSetBuilder::allRegisters() : RegisterSetBuilder::allScalarRegisters()));
 
     size_t offset = patchArgs.size();
@@ -2142,7 +2158,7 @@ auto AirIRGenerator64::emitTailCallPatchpoint(BasicBlock* block, const Checked<i
     clobbers.merge(RegisterSetBuilder::calleeSaveRegisters());
     clobbers.exclude(RegisterSetBuilder::stackRegisters());
     patchpoint->clobber(clobbers);
-    patchpoint->clobberEarly(RegisterSetBuilder::macroClobberedRegisters());
+    patchpoint->clobberEarly(RegisterSetBuilder::macroClobberedGPRs());
 
     for (unsigned i = 0; i < tmpArgs.size(); ++i) {
         TypedTmp tmp = tmpArgs[i];
@@ -2413,7 +2429,7 @@ auto AirIRGenerator64::addF64ConvertUI64(ExpressionType arg, ExpressionType& res
     patchpoint->effects = B3::Effects::none();
     if (isX86())
         patchpoint->numGPScratchRegisters = 1;
-    patchpoint->clobber(RegisterSetBuilder::macroClobberedRegisters());
+    patchpoint->clobber(RegisterSetBuilder::macroClobberedGPRs());
     patchpoint->setGenerator([=](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
 #if CPU(X86_64)
@@ -2433,7 +2449,7 @@ auto AirIRGenerator64::addF32ConvertUI64(ExpressionType arg, ExpressionType& res
     patchpoint->effects = B3::Effects::none();
     if (isX86())
         patchpoint->numGPScratchRegisters = 1;
-    patchpoint->clobber(RegisterSetBuilder::macroClobberedRegisters());
+    patchpoint->clobber(RegisterSetBuilder::macroClobberedGPRs());
     patchpoint->setGenerator([=](CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
         AllowMacroScratchRegisterUsage allowScratch(jit);
 #if CPU(X86_64)
@@ -2503,7 +2519,7 @@ auto AirIRGenerator64::addUncheckedFloatingPointTruncation(FloatingPointTruncati
         switch (kind) {
         case FloatingPointTruncationKind::F32ToU64: {
             auto signBitConstant = addConstant(Types::F32, bitwise_cast<uint32_t>(static_cast<float>(std::numeric_limits<uint64_t>::max() - std::numeric_limits<int64_t>::max())));
-            patchpoint->clobber(RegisterSetBuilder::macroClobberedRegisters());
+            patchpoint->clobber(RegisterSetBuilder::macroClobberedGPRs());
             patchpoint->numFPScratchRegisters = 1;
             emitPatchpoint(
                 m_currentBlock, patchpoint,
@@ -2514,7 +2530,7 @@ auto AirIRGenerator64::addUncheckedFloatingPointTruncation(FloatingPointTruncati
         }
         case FloatingPointTruncationKind::F64ToU64: {
             auto signBitConstant = addConstant(Types::F64, bitwise_cast<uint64_t>(static_cast<double>(std::numeric_limits<uint64_t>::max() - std::numeric_limits<int64_t>::max())));
-            patchpoint->clobber(RegisterSetBuilder::macroClobberedRegisters());
+            patchpoint->clobber(RegisterSetBuilder::macroClobberedGPRs());
             patchpoint->numFPScratchRegisters = 1;
             emitPatchpoint(
                 m_currentBlock, patchpoint,

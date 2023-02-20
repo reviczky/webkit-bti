@@ -182,6 +182,7 @@
 #include "RenderLayerScrollableArea.h"
 #include "RenderListBox.h"
 #include "RenderMenuList.h"
+#include "RenderSearchField.h"
 #include "RenderTheme.h"
 #include "RenderThemeIOS.h"
 #include "RenderTreeAsText.h"
@@ -299,6 +300,7 @@
 #if ENABLE(MEDIA_STREAM)
 #include "MediaStream.h"
 #include "MockRealtimeMediaSourceCenter.h"
+#include "VideoFrame.h"
 #endif
 
 #if ENABLE(MEDIA_RECORDER)
@@ -1105,15 +1107,15 @@ unsigned Internals::imageDecodeCount(HTMLImageElement& element)
     return bitmapImage ? bitmapImage->decodeCountForTesting() : 0;
 }
 
-unsigned Internals::pdfDocumentCachingCount(HTMLImageElement& element)
+unsigned Internals::imageCachedSubimageCreateCount(HTMLImageElement& element)
 {
 #if USE(CG)
-    auto* pdfDocumentImage = pdfDocumentImageFromImageElement(element);
-    return pdfDocumentImage ? pdfDocumentImage->cachingCountForTesting() : 0;
+    if (auto* pdfDocumentImage = pdfDocumentImageFromImageElement(element))
+        return pdfDocumentImage->cachedSubimageCreateCountForTesting();
 #else
     UNUSED_PARAM(element);
-    return 0;
 #endif
+    return 0;
 }
 
 unsigned Internals::remoteImagesCountForTesting() const
@@ -1554,6 +1556,18 @@ ExceptionOr<void> Internals::setSpeechUtteranceDuration(double duration)
     return { };
 }
 
+unsigned Internals::minimumExpectedVoiceCount()
+{
+    // https://webkit.org/b/250656
+#if PLATFORM(MAC)
+    return 21;
+#elif USE(GLIB)
+    return 4;
+#else
+    return 1;
+#endif
+}
+
 #endif
 
 #if ENABLE(WEB_RTC)
@@ -1969,7 +1983,12 @@ ExceptionOr<void> Internals::scrollBySimulatingWheelEvent(Element& element, doub
     ScrollableArea* scrollableArea;
 
     if (&element == document->scrollingElementForAPI()) {
-        FrameView* frameView = box.frame().mainFrame().view();
+
+        auto* localFrame = dynamicDowncast<LocalFrame>(box.frame().mainFrame());
+        if (!localFrame)
+            return Exception { InvalidAccessError };
+
+        FrameView* frameView = localFrame->view();
         if (!frameView || !frameView->isScrollable())
             return Exception { InvalidAccessError };
 
@@ -2213,6 +2232,24 @@ auto Internals::autoFillButtonType(const HTMLInputElement& element) -> AutoFillB
 auto Internals::lastAutoFillButtonType(const HTMLInputElement& element) -> AutoFillButtonType
 {
     return toInternalsAutoFillButtonType(element.lastAutoFillButtonType());
+}
+
+Vector<String> Internals::recentSearches(const HTMLInputElement& element)
+{
+    if (!element.isSearchField())
+        return { };
+
+    element.document().updateLayoutIgnorePendingStylesheets();
+    auto* renderer = element.renderer();
+    if (!is<RenderSearchField>(renderer))
+        return { };
+
+    Vector<String> result;
+    auto& searchField = downcast<RenderSearchField>(*renderer);
+    for (auto search : searchField.recentSearches())
+        result.append(search.string);
+
+    return result;
 }
 
 ExceptionOr<void> Internals::scrollElementToRect(Element& element, int x, int y, int w, int h)
@@ -2866,7 +2903,7 @@ uint64_t Internals::messagePortIdentifier(const MessagePort& port) const
 
 bool Internals::isMessagePortAlive(uint64_t messagePortIdentifier) const
 {
-    MessagePortIdentifier portIdentifier { Process::identifier(), makeObjectIdentifier<MessagePortIdentifier::PortIdentifierType>(messagePortIdentifier) };
+    MessagePortIdentifier portIdentifier { Process::identifier(), makeObjectIdentifier<PortIdentifierType>(messagePortIdentifier) };
     return MessagePort::isMessagePortAliveForTesting(portIdentifier);
 }
 
@@ -7012,6 +7049,16 @@ Internals::SelectorFilterHashCounts Internals::selectorFilterHashCounts(const St
     auto hashes = SelectorFilter::collectHashesForTesting(*selectorList->first());
 
     return { hashes.ids.size(), hashes.classes.size(), hashes.tags.size(), hashes.attributes.size() };
+}
+
+bool Internals::isVisuallyNonEmpty() const
+{
+    auto* document = contextDocument();
+    if (!document || !document->frame())
+        return false;
+
+    auto* frameView = document->frame()->view();
+    return frameView && frameView->isVisuallyNonEmpty();
 }
 
 } // namespace WebCore

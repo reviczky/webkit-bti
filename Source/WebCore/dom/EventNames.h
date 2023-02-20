@@ -67,12 +67,14 @@ namespace WebCore {
     macro(beforeload) \
     macro(beforepaste) \
     macro(beforeprint) \
+    macro(beforetoggle) \
     macro(beforeunload) \
     macro(beginEvent) \
     macro(blocked) \
     macro(blur) \
     macro(boundary) \
     macro(bufferedamountlow) \
+    macro(bufferedchange) \
     macro(cached) \
     macro(cancel) \
     macro(canplay) \
@@ -122,6 +124,7 @@ namespace WebCore {
     macro(end) \
     macro(endEvent) \
     macro(ended) \
+    macro(endstreaming) \
     macro(enter) \
     macro(enterpictureinpicture) \
     macro(error) \
@@ -267,6 +270,7 @@ namespace WebCore {
     macro(stalled) \
     macro(start) \
     macro(started) \
+    macro(startstreaming) \
     macro(statechange) \
     macro(stop) \
     macro(storage) \

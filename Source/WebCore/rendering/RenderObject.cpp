@@ -62,6 +62,7 @@
 #include "RenderLineBreak.h"
 #include "RenderMultiColumnFlow.h"
 #include "RenderMultiColumnSet.h"
+#include "RenderMultiColumnSpannerPlaceholder.h"
 #include "RenderRuby.h"
 #include "RenderSVGBlock.h"
 #include "RenderSVGInline.h"
@@ -109,18 +110,18 @@ RenderObject::SetLayoutNeededForbiddenScope::~SetLayoutNeededForbiddenScope()
 
 #endif
 
-struct SameSizeAsRenderObject {
+struct SameSizeAsRenderObject : CanMakeWeakPtr<SameSizeAsRenderObject> {
     virtual ~SameSizeAsRenderObject() = default; // Allocate vtable pointer.
 #if ASSERT_ENABLED
-    bool weakPtrFactorWasConstructedOnMainThread;
-    HashSet<void*> cachedResourceClientAssociatedResources;
+    WeakHashSet<void*> cachedResourceClientAssociatedResources;
 #endif
-    void* pointers[5];
+    WeakPtr<Node, WeakPtrImplWithEventTargetData> node;
+    void* pointers[3];
+    CheckedPtr<Layout::Box> layoutBox;
 #if ASSERT_ENABLED
     unsigned m_debugBitfields : 2;
 #endif
     unsigned m_bitfields;
-    WeakPtr<Node> m_node;
 };
 
 #if CPU(ADDRESS64)
@@ -915,6 +916,7 @@ void RenderObject::propagateRepaintToParentWithOutlineAutoIfNeeded(const RenderL
     bool repaintRectNeedsConverting = false;
     // Issue repaint on the renderer with outline: auto.
     for (const auto* renderer = this; renderer; renderer = renderer->parent()) {
+        const auto* originalRenderer = renderer;
         if (is<RenderMultiColumnSet>(renderer->previousSibling())) {
             auto previousMultiColumnSet = downcast<RenderMultiColumnSet>(renderer->previousSibling());
             auto enclosingMultiColumnFlow = previousMultiColumnSet->multiColumnFlow();
@@ -928,7 +930,7 @@ void RenderObject::propagateRepaintToParentWithOutlineAutoIfNeeded(const RenderL
         ASSERT(rendererHasOutlineAutoAncestor
             || renderer->outlineStyleForRepaint().outlineStyleIsAuto() == OutlineIsAuto::On
             || (is<RenderBoxModelObject>(*renderer) && downcast<RenderBoxModelObject>(*renderer).isContinuation()));
-        if (renderer == &repaintContainer && rendererHasOutlineAutoAncestor)
+        if (originalRenderer == &repaintContainer && rendererHasOutlineAutoAncestor)
             repaintRectNeedsConverting = true;
         if (rendererHasOutlineAutoAncestor)
             continue;
@@ -1719,8 +1721,16 @@ void RenderObject::willBeDestroyed()
 
 void RenderObject::insertedIntoTree(IsInternalMove)
 {
-    if (auto* container = LayoutIntegration::LineLayout::blockContainer(*this))
-        container->invalidateLineLayoutPath();
+    if (auto* container = LayoutIntegration::LineLayout::blockContainer(*this)) {
+        auto shouldInvalidateLineLayoutPath = true;
+        if (auto* modernLineLayout = container->modernLineLayout()) {
+            shouldInvalidateLineLayoutPath = LayoutIntegration::LineLayout::shouldInvalidateLineLayoutPathAfterContentChange(*container, *this, *modernLineLayout);
+            if (!shouldInvalidateLineLayoutPath && LayoutIntegration::LineLayout::canUseFor(*container))
+                modernLineLayout->insertedIntoTree(*parent(), *this);
+        }
+        if (shouldInvalidateLineLayoutPath)
+            container->invalidateLineLayoutPath();
+    }
 
     // FIXME: We should ASSERT(isRooted()) here but generated content makes some out-of-order insertion.
     if (!isFloating() && parent()->childrenInline())

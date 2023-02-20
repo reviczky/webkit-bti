@@ -30,10 +30,9 @@
 #include "AST.h"
 #include "ASTStringDumper.h"
 #include "ASTVisitor.h"
-#include <wtf/DataLog.h>
-#include <wtf/HashMap.h>
-#include <wtf/HashSet.h>
-#include <wtf/SetForScope.h>
+#include "WGSLShaderModule.h"
+
+#include <wtf/SortedArrayMap.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WGSL {
@@ -42,7 +41,7 @@ namespace Metal {
 
 class FunctionDefinitionWriter : public AST::Visitor {
 public:
-    FunctionDefinitionWriter(AST::ShaderModule& shaderModule, StringBuilder& stringBuilder)
+    FunctionDefinitionWriter(ShaderModule& shaderModule, StringBuilder& stringBuilder)
         : m_stringBuilder(stringBuilder)
         , m_shaderModule(shaderModule)
     {
@@ -50,7 +49,9 @@ public:
 
     virtual ~FunctionDefinitionWriter() = default;
 
-    void visit(AST::ShaderModule&) override;
+    using AST::Visitor::visit;
+
+    void visit(ShaderModule&) override;
 
     void visit(AST::Attribute&) override;
     void visit(AST::BuiltinAttribute&) override;
@@ -59,53 +60,52 @@ public:
     void visit(AST::GroupAttribute&) override;
     void visit(AST::BindingAttribute&) override;
 
-    void visit(AST::FunctionDecl&) override;
-    void visit(AST::StructDecl&) override;
-    void visit(AST::VariableDecl&) override;
+    void visit(AST::Function&) override;
+    void visit(AST::Structure&) override;
+    void visit(AST::Variable&) override;
 
-    void visit(AST::Expression&) override;
     void visit(AST::AbstractFloatLiteral&) override;
-    void visit(AST::AbstractIntLiteral&) override;
-    void visit(AST::ArrayAccess&) override;
-    void visit(AST::CallableExpression&) override;
+    void visit(AST::AbstractIntegerLiteral&) override;
+    void visit(AST::BinaryExpression&) override;
+    void visit(AST::CallExpression&) override;
+    void visit(AST::Expression&) override;
+    void visit(AST::FieldAccessExpression&) override;
     void visit(AST::Float32Literal&) override;
     void visit(AST::IdentifierExpression&) override;
-    void visit(AST::Int32Literal&) override;
-    void visit(AST::Uint32Literal&) override;
-    void visit(AST::StructureAccess&) override;
+    void visit(AST::IndexAccessExpression&) override;
+    void visit(AST::PointerDereferenceExpression&) override;
+    void visit(AST::Signed32Literal&) override;
+    void visit(AST::Unsigned32Literal&) override;
     void visit(AST::UnaryExpression&) override;
-    void visit(AST::BinaryExpression&) override;
-    void visit(AST::PointerDereference&) override;
 
     void visit(AST::Statement&) override;
     void visit(AST::AssignmentStatement&) override;
     void visit(AST::ReturnStatement&) override;
 
-    void visit(AST::TypeDecl&) override;
-    void visit(AST::ArrayType&) override;
-    void visit(AST::NamedType&) override;
-    void visit(AST::ParameterizedType&) override;
-    void visit(AST::StructType&) override;
-    void visit(AST::ReferenceType&) override;
+    void visit(AST::ArrayTypeName&) override;
+    void visit(AST::NamedTypeName&) override;
+    void visit(AST::ParameterizedTypeName&) override;
+    void visit(AST::ReferenceTypeName&) override;
+    void visit(AST::StructTypeName&) override;
 
     void visit(AST::Parameter&) override;
     void visitArgumentBufferParameter(AST::Parameter&);
 
 private:
     StringBuilder& m_stringBuilder;
-    AST::ShaderModule& m_shaderModule;
+    ShaderModule& m_shaderModule;
     Indentation<4> m_indent { 0 };
-    std::optional<AST::StructRole> m_structRole;
+    std::optional<AST::StructureRole> m_structRole;
     std::optional<AST::StageAttribute::Stage> m_entryPointStage;
     std::optional<String> m_suffix;
 };
 
-void FunctionDefinitionWriter::visit(AST::ShaderModule& shaderModule)
+void FunctionDefinitionWriter::visit(ShaderModule& shaderModule)
 {
     AST::Visitor::visit(shaderModule);
 }
 
-void FunctionDefinitionWriter::visit(AST::FunctionDecl& functionDefinition)
+void FunctionDefinitionWriter::visit(AST::Function& functionDefinition)
 {
     // FIXME: visit return attributes
     for (auto& attribute : functionDefinition.attributes()) {
@@ -131,7 +131,7 @@ void FunctionDefinitionWriter::visit(AST::FunctionDecl& functionDefinition)
             checkErrorAndVisit(parameter);
             m_stringBuilder.append(" [[stage_in]]");
             break;
-        case AST::ParameterRole::ArgumentBuffer:
+        case AST::ParameterRole::BindGroup:
             visitArgumentBufferParameter(parameter);
             break;
         }
@@ -147,7 +147,7 @@ void FunctionDefinitionWriter::visit(AST::FunctionDecl& functionDefinition)
     m_stringBuilder.append("}\n\n");
 }
 
-void FunctionDefinitionWriter::visit(AST::StructDecl& structDecl)
+void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
 {
     // FIXME: visit struct attributes
     m_structRole = { structDecl.role() };
@@ -173,12 +173,12 @@ void FunctionDefinitionWriter::visit(AST::StructDecl& structDecl)
     m_structRole = std::nullopt;
 }
 
-void FunctionDefinitionWriter::visit(AST::VariableDecl& variableDecl)
+void FunctionDefinitionWriter::visit(AST::Variable& variableDecl)
 {
-    ASSERT(variableDecl.maybeTypeDecl());
+    ASSERT(variableDecl.maybeTypeName());
 
     m_stringBuilder.append(m_indent);
-    visit(*variableDecl.maybeTypeDecl());
+    visit(*variableDecl.maybeTypeName());
     m_stringBuilder.append(" ", variableDecl.name());
     if (variableDecl.maybeInitializer()) {
         m_stringBuilder.append(" = ");
@@ -195,18 +195,25 @@ void FunctionDefinitionWriter::visit(AST::Attribute& attribute)
 void FunctionDefinitionWriter::visit(AST::BuiltinAttribute& builtin)
 {
     // FIXME: we should replace this with something more efficient, like a trie
-    if (builtin.name() == "vertex_index"_s) {
-        m_stringBuilder.append("[[vertex_id]]");
-        return;
-    }
+    static constexpr std::pair<ComparableASCIILiteral, ASCIILiteral> builtinMappings[] {
+        { "frag_depth", "depth(any)"_s },
+        { "front_facing", "front_facing"_s },
+        { "global_invocation_id", "thread_position_in_grid"_s },
+        { "instance_index", "instance_id"_s },
+        { "local_invocation_id", "thread_position_in_threadgroup"_s },
+        { "local_invocation_index", "thread_index_in_threadgroup"_s },
+        { "num_workgroups", "threadgroups_per_grid"_s },
+        { "position", "position"_s },
+        { "sample_index", "sample_id"_s },
+        { "sample_mask", "sample_mask"_s },
+        { "vertex_index", "vertex_id"_s },
+        { "workgroup_id", "threadgroup_position_in_grid"_s },
+    };
+    static constexpr SortedArrayMap builtins { builtinMappings };
 
-    if (builtin.name() == "position"_s) {
-        m_stringBuilder.append("[[position]]");
-        return;
-    }
-
-    if (builtin.name() == "global_invocation_id"_s) {
-        m_stringBuilder.append("[[thread_position_in_grid]]");
+    auto mappedBuiltin = builtins.get(builtin.name().id());
+    if (mappedBuiltin) {
+        m_stringBuilder.append("[[", mappedBuiltin, "]]");
         return;
     }
 
@@ -249,16 +256,16 @@ void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
     if (m_structRole.has_value()) {
         auto role = *m_structRole;
         switch (role) {
-        case AST::StructRole::UserDefined:
+        case AST::StructureRole::UserDefined:
             break;
-        case AST::StructRole::VertexOutput:
-        case AST::StructRole::FragmentInput:
+        case AST::StructureRole::VertexOutput:
+        case AST::StructureRole::FragmentInput:
             m_stringBuilder.append("[[user(loc", location.location(), ")]]");
             return;
-        case AST::StructRole::ArgumentBuffer:
+        case AST::StructureRole::BindGroup:
             return;
-        case AST::StructRole::VertexInput:
-        case AST::StructRole::ComputeInput:
+        case AST::StructureRole::VertexInput:
+        case AST::StructureRole::ComputeInput:
             // FIXME: not sure if these should actually be attributes or not
             break;
         }
@@ -266,12 +273,7 @@ void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
     m_stringBuilder.append("[[attribute(", location.location(), ")]]");
 }
 
-void FunctionDefinitionWriter::visit(AST::TypeDecl& type)
-{
-    AST::Visitor::visit(type);
-}
-
-void FunctionDefinitionWriter::visit(AST::ArrayType& type)
+void FunctionDefinitionWriter::visit(AST::ArrayTypeName& type)
 {
     ASSERT(type.maybeElementType());
 
@@ -288,7 +290,7 @@ void FunctionDefinitionWriter::visit(AST::ArrayType& type)
     m_stringBuilder.append(">");
 }
 
-void FunctionDefinitionWriter::visit(AST::NamedType& type)
+void FunctionDefinitionWriter::visit(AST::NamedTypeName& type)
 {
     if (type.name() == "i32"_s)
         m_stringBuilder.append("int");
@@ -300,7 +302,7 @@ void FunctionDefinitionWriter::visit(AST::NamedType& type)
         m_stringBuilder.append(type.name());
 }
 
-void FunctionDefinitionWriter::visit(AST::ParameterizedType& type)
+void FunctionDefinitionWriter::visit(AST::ParameterizedTypeName& type)
 {
     const auto& vec = [&](size_t size) {
         m_stringBuilder.append("vec<");
@@ -315,53 +317,48 @@ void FunctionDefinitionWriter::visit(AST::ParameterizedType& type)
     };
 
     switch (type.base()) {
-    case AST::ParameterizedType::Base::Vec2:
+    case AST::ParameterizedTypeName::Base::Vec2:
         vec(2);
         break;
-    case AST::ParameterizedType::Base::Vec3:
+    case AST::ParameterizedTypeName::Base::Vec3:
         vec(3);
         break;
-    case AST::ParameterizedType::Base::Vec4:
+    case AST::ParameterizedTypeName::Base::Vec4:
         vec(4);
         break;
 
     // FIXME: Implement the following types
-    case AST::ParameterizedType::Base::Mat2x2:
+    case AST::ParameterizedTypeName::Base::Mat2x2:
         matrix(2, 2);
         break;
-    case AST::ParameterizedType::Base::Mat2x3:
+    case AST::ParameterizedTypeName::Base::Mat2x3:
         matrix(2, 3);
         break;
-    case AST::ParameterizedType::Base::Mat2x4:
+    case AST::ParameterizedTypeName::Base::Mat2x4:
         matrix(2, 4);
         break;
-    case AST::ParameterizedType::Base::Mat3x2:
+    case AST::ParameterizedTypeName::Base::Mat3x2:
         matrix(3, 2);
         break;
-    case AST::ParameterizedType::Base::Mat3x3:
+    case AST::ParameterizedTypeName::Base::Mat3x3:
         matrix(3, 3);
         break;
-    case AST::ParameterizedType::Base::Mat3x4:
+    case AST::ParameterizedTypeName::Base::Mat3x4:
         matrix(3, 4);
         break;
-    case AST::ParameterizedType::Base::Mat4x2:
+    case AST::ParameterizedTypeName::Base::Mat4x2:
         matrix(4, 2);
         break;
-    case AST::ParameterizedType::Base::Mat4x3:
+    case AST::ParameterizedTypeName::Base::Mat4x3:
         matrix(4, 3);
         break;
-    case AST::ParameterizedType::Base::Mat4x4:
+    case AST::ParameterizedTypeName::Base::Mat4x4:
         matrix(4, 4);
         break;
     }
 }
 
-void FunctionDefinitionWriter::visit(AST::StructType& structType)
-{
-    m_stringBuilder.append(structType.structDecl().name());
-}
-
-void FunctionDefinitionWriter::visit(AST::ReferenceType& type)
+void FunctionDefinitionWriter::visit(AST::ReferenceTypeName& type)
 {
     // FIXME: We can't assume this will always be device. The ReferenceType should
     // have knowledge about the memory region
@@ -370,9 +367,14 @@ void FunctionDefinitionWriter::visit(AST::ReferenceType& type)
     m_stringBuilder.append("&");
 }
 
+void FunctionDefinitionWriter::visit(AST::StructTypeName& structType)
+{
+    m_stringBuilder.append(structType.structure().name());
+}
+
 void FunctionDefinitionWriter::visit(AST::Parameter& parameter)
 {
-    visit(parameter.type());
+    visit(parameter.typeName());
     m_stringBuilder.append(" ", parameter.name());
     for (auto& attribute : parameter.attributes()) {
         m_stringBuilder.append(" ");
@@ -383,7 +385,7 @@ void FunctionDefinitionWriter::visit(AST::Parameter& parameter)
 void FunctionDefinitionWriter::visitArgumentBufferParameter(AST::Parameter& parameter)
 {
     m_stringBuilder.append("constant ");
-    visit(parameter.type());
+    visit(parameter.typeName());
     m_stringBuilder.append("& ", parameter.name());
     for (auto& attribute : parameter.attributes()) {
         m_stringBuilder.append(" ");
@@ -396,10 +398,10 @@ void FunctionDefinitionWriter::visit(AST::Expression& expression)
     AST::Visitor::visit(expression);
 }
 
-void FunctionDefinitionWriter::visit(AST::CallableExpression& call)
+void FunctionDefinitionWriter::visit(AST::CallExpression& call)
 {
     bool first = true;
-    if (call.target().kind() == AST::Node::Kind::ArrayType) {
+    if (is<AST::ArrayTypeName>(call.target())) {
         m_stringBuilder.append("{\n");
         {
             IndentationScope scope(m_indent);
@@ -429,31 +431,62 @@ void FunctionDefinitionWriter::visit(AST::UnaryExpression& unary)
     switch (unary.operation()) {
     case AST::UnaryOperation::Negate:
         m_stringBuilder.append("-");
+        break;
+
+    case AST::UnaryOperation::AddressOf:
+    case AST::UnaryOperation::Complement:
+    case AST::UnaryOperation::Dereference:
+    case AST::UnaryOperation::Not:
+        // FIXME: Implement these
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
     }
     visit(unary.expression());
 }
 
 void FunctionDefinitionWriter::visit(AST::BinaryExpression& binary)
 {
-    visit(binary.lhs());
+    visit(binary.leftExpression());
     switch (binary.operation()) {
     case AST::BinaryOperation::Add:
         m_stringBuilder.append(" + ");
         break;
+    case AST::BinaryOperation::Subtract:
+        m_stringBuilder.append(" - ");
+        break;
     case AST::BinaryOperation::Multiply:
         m_stringBuilder.append(" * ");
         break;
+
+    case AST::BinaryOperation::Divide:
+    case AST::BinaryOperation::Modulo:
+    case AST::BinaryOperation::And:
+    case AST::BinaryOperation::Or:
+    case AST::BinaryOperation::Xor:
+    case AST::BinaryOperation::LeftShift:
+    case AST::BinaryOperation::RightShift:
+    case AST::BinaryOperation::Equal:
+    case AST::BinaryOperation::NotEqual:
+    case AST::BinaryOperation::GreaterThan:
+    case AST::BinaryOperation::GreaterEqual:
+    case AST::BinaryOperation::LessThan:
+    case AST::BinaryOperation::LessEqual:
+    case AST::BinaryOperation::ShortCircuitAnd:
+    case AST::BinaryOperation::ShortCircuitOr:
+        // FIXME: Implement these
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
     }
-    visit(binary.rhs());
+    visit(binary.rightExpression());
 }
 
-void FunctionDefinitionWriter::visit(AST::PointerDereference& pointerDereference)
+void FunctionDefinitionWriter::visit(AST::PointerDereferenceExpression& pointerDereference)
 {
     m_stringBuilder.append("(*");
     visit(pointerDereference.target());
     m_stringBuilder.append(")");
 }
-void FunctionDefinitionWriter::visit(AST::ArrayAccess& access)
+void FunctionDefinitionWriter::visit(AST::IndexAccessExpression& access)
 {
     visit(access.base());
     m_stringBuilder.append("[");
@@ -466,25 +499,25 @@ void FunctionDefinitionWriter::visit(AST::IdentifierExpression& identifier)
     m_stringBuilder.append(identifier.identifier());
 }
 
-void FunctionDefinitionWriter::visit(AST::StructureAccess& access)
+void FunctionDefinitionWriter::visit(AST::FieldAccessExpression& access)
 {
     visit(access.base());
     m_stringBuilder.append(".", access.fieldName());
 }
 
-void FunctionDefinitionWriter::visit(AST::AbstractIntLiteral& literal)
+void FunctionDefinitionWriter::visit(AST::AbstractIntegerLiteral& literal)
 {
     // FIXME: this might not serialize all values correctly
     m_stringBuilder.append(literal.value());
 }
 
-void FunctionDefinitionWriter::visit(AST::Int32Literal& literal)
+void FunctionDefinitionWriter::visit(AST::Signed32Literal& literal)
 {
     // FIXME: this might not serialize all values correctly
     m_stringBuilder.append(literal.value());
 }
 
-void FunctionDefinitionWriter::visit(AST::Uint32Literal& literal)
+void FunctionDefinitionWriter::visit(AST::Unsigned32Literal& literal)
 {
     // FIXME: this might not serialize all values correctly
     m_stringBuilder.append(literal.value());
@@ -510,10 +543,8 @@ void FunctionDefinitionWriter::visit(AST::Statement& statement)
 void FunctionDefinitionWriter::visit(AST::AssignmentStatement& assignment)
 {
     m_stringBuilder.append(m_indent);
-    if (assignment.maybeLhs()) {
-        visit(*assignment.maybeLhs());
-        m_stringBuilder.append(" = ");
-    }
+    visit(assignment.lhs());
+    m_stringBuilder.append(" = ");
     visit(assignment.rhs());
     m_stringBuilder.append(";\n");
 }
@@ -528,7 +559,7 @@ void FunctionDefinitionWriter::visit(AST::ReturnStatement& statement)
     m_stringBuilder.append(";\n");
 }
 
-RenderMetalFunctionEntryPoints emitMetalFunctions(StringBuilder& stringBuilder, AST::ShaderModule& module)
+RenderMetalFunctionEntryPoints emitMetalFunctions(StringBuilder& stringBuilder, ShaderModule& module)
 {
     FunctionDefinitionWriter functionDefinitionWriter(module, stringBuilder);
     functionDefinitionWriter.visit(module);

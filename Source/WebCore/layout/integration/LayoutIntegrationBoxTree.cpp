@@ -227,6 +227,7 @@ void BoxTree::buildTreeForInlineContent()
         };
         appendChild(childLayoutBox(), childRenderer);
     }
+    m_renderers.shrinkToFit();
 }
 
 void BoxTree::buildTreeForFlexContent()
@@ -236,6 +237,7 @@ void BoxTree::buildTreeForFlexContent()
         auto flexItem = makeUniqueRef<Layout::ElementBox>(elementAttributes(flexItemRenderer), WTFMove(style));
         appendChild(WTFMove(flexItem), flexItemRenderer);
     }
+    m_renderers.shrinkToFit();
 }
 
 void BoxTree::appendChild(UniqueRef<Layout::Box> childBox, RenderObject& childRenderer)
@@ -262,6 +264,12 @@ void BoxTree::updateStyle(const RenderBoxModelObject& renderer)
         if (child->isInlineTextBox())
             child->updateStyle(RenderStyle::createAnonymousStyleWithDisplay(rendererStyle, DisplayType::Inline), firstLineStyleFor(renderer));
     }
+}
+
+const Layout::Box& BoxTree::insert(const RenderElement&, RenderObject& child)
+{
+    appendChild(createLayoutBox(child), child);
+    return layoutBoxForRenderer(child);
 }
 
 const Layout::ElementBox& BoxTree::rootLayoutBox() const
@@ -383,7 +391,7 @@ void showInlineContent(TextStream& stream, const InlineContent& inlineContent, s
                     runStream << "Generic inline level box";
                 runStream << " at (" << box.left() << "," << box.top() << ") size " << box.width() << "x" << box.height();
                 if (box.isText())
-                    runStream << " run(" << box.text()->start() << ", " << box.text()->end() << ")";
+                    runStream << " run(" << box.text().start() << ", " << box.text().end() << ")";
                 runStream << " renderer->(" << &inlineContent.rendererForLayoutBox(box.layoutBox()) << ")";
                 runStream.nextLine();
             }

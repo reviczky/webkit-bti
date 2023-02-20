@@ -197,10 +197,6 @@ const Seconds fakeMouseMoveShortInterval = { 100_ms };
 const Seconds fakeMouseMoveLongInterval = { 250_ms };
 #endif
 
-// The amount of time to wait for a cursor update on style and layout changes
-// Set to 50Hz, no need to be faster than common screen refresh rate
-static const Seconds cursorUpdateInterval { 20_ms };
-
 const int maximumCursorSize = 128;
 
 #if ENABLE(MOUSE_CURSOR_SCALE)
@@ -1213,10 +1209,11 @@ HitTestResult EventHandler::hitTestResultAtPoint(const LayoutPoint& point, Optio
     // We always send hitTestResultAtPoint to the main frame if we have one,
     // otherwise we might hit areas that are obscured by higher frames.
     if (!m_frame.isMainFrame()) {
-        Ref mainFrame = m_frame.mainFrame();
-        if (RefPtr frameView = m_frame.view(), mainView = mainFrame->view(); frameView && mainView) {
-            IntPoint mainFramePoint = mainView->rootViewToContents(frameView->contentsToRootView(roundedIntPoint(point)));
-            return mainFrame->eventHandler().hitTestResultAtPoint(mainFramePoint, hitType);
+        if (RefPtr mainFrame = dynamicDowncast<LocalFrame>(m_frame.mainFrame())) {
+            if (RefPtr frameView = m_frame.view(), mainView = mainFrame->view(); frameView && mainView) {
+                IntPoint mainFramePoint = mainView->rootViewToContents(frameView->contentsToRootView(roundedIntPoint(point)));
+                return mainFrame->eventHandler().hitTestResultAtPoint(mainFramePoint, hitType);
+            }
         }
     }
 
@@ -1475,7 +1472,11 @@ std::optional<Cursor> EventHandler::selectCursor(const HitTestResult& result, bo
         return std::nullopt;
 
 #if ENABLE(PAN_SCROLLING)
-    if (m_frame.mainFrame().eventHandler().panScrollInProgress())
+    auto* localFrame = dynamicDowncast<LocalFrame>(m_frame.mainFrame());
+    if (!localFrame)
+        return std::nullopt;
+
+    if (localFrame->eventHandler().panScrollInProgress())
         return std::nullopt;
 #endif
 
@@ -1804,7 +1805,11 @@ bool EventHandler::handleMousePressEvent(const PlatformMouseEvent& platformMouse
 #if ENABLE(PAN_SCROLLING)
     // We store whether pan scrolling is in progress before calling stopAutoscrollTimer()
     // because it will set m_autoscrollType to NoAutoscroll on return.
-    bool isPanScrollInProgress = Ref(m_frame.mainFrame())->eventHandler().panScrollInProgress();
+    auto* localFrame = dynamicDowncast<LocalFrame>(m_frame.mainFrame());
+    if (!localFrame)
+        return false;
+
+    bool isPanScrollInProgress = Ref(*localFrame)->eventHandler().panScrollInProgress();
     stopAutoscrollTimer();
     if (isPanScrollInProgress) {
         // We invalidate the click when exiting pan scrolling so that we don't inadvertently navigate
@@ -2774,19 +2779,6 @@ void EventHandler::notifyScrollableAreasOfMouseEvents(const AtomString& eventTyp
         scrollableAreaForNodeUnderMouse->mouseEnteredContentArea();
 }
 
-static RefPtr<Element> findFirstMouseFocusableElementInComposedTree(Element& host)
-{
-    ASSERT(host.shadowRoot());
-    for (auto& node : composedTreeDescendants(host)) {
-        if (!is<Element>(node))
-            continue;
-        auto& element = downcast<Element>(node);
-        if (element.isMouseFocusable())
-            return &element;
-    }
-    return nullptr;
-}
-
 bool EventHandler::dispatchMouseEvent(const AtomString& eventType, Node* targetNode, int clickCount, const PlatformMouseEvent& platformMouseEvent, FireMouseOverOut fireMouseOverOut)
 {
     Ref<Frame> protectedFrame(m_frame);
@@ -2821,7 +2813,7 @@ bool EventHandler::dispatchMouseEvent(const AtomString& eventType, Node* targetN
     for (element = m_elementUnderMouse.get(); element; element = element->parentElementInComposedTree()) {
         if (RefPtr shadowRoot = element->shadowRoot()) {
             if (shadowRoot->delegatesFocus()) {
-                element = findFirstMouseFocusableElementInComposedTree(*element);
+                element = Element::findFocusDelegateForTarget(*shadowRoot, FocusTrigger::Click);
                 m_mouseDownDelegatedFocus = true;
                 break;
             }
@@ -3655,7 +3647,11 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
         capsLockStateMayHaveChanged();
 
 #if ENABLE(PAN_SCROLLING)
-    if (Ref(m_frame.mainFrame())->eventHandler().panScrollInProgress()) {
+    auto* localFrame = dynamicDowncast<LocalFrame>(m_frame.mainFrame());
+    if (!localFrame)
+        return false;
+
+    if (Ref(*localFrame)->eventHandler().panScrollInProgress()) {
         // If a key is pressed while the panScroll is in progress then we want to stop
         if (initialKeyEvent.type() == PlatformEvent::Type::KeyDown || initialKeyEvent.type() == PlatformEvent::Type::RawKeyDown)
             stopAutoscrollTimer();

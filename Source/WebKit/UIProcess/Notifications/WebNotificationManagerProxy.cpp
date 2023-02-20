@@ -28,6 +28,7 @@
 
 #include "APIArray.h"
 #include "APINotificationProvider.h"
+#include "APINumber.h"
 #include "APISecurityOrigin.h"
 #include "Logging.h"
 #include "WebNotification.h"
@@ -327,7 +328,7 @@ static Vector<String> apiArrayToSecurityOriginStrings(API::Array* origins)
 
 void WebNotificationManagerProxy::providerDidUpdateNotificationPolicy(const API::SecurityOrigin* origin, bool enabled)
 {
-    RELEASE_LOG(Notifications, "Provider did update notification policy for origin %" PRIVATE_LOG_STRING " to %d", origin->securityOrigin().toString().utf8().data(), enabled);
+    RELEASE_LOG(Notifications, "Provider did update notification policy for origin %" SENSITIVE_LOG_STRING " to %d", origin->securityOrigin().toString().utf8().data(), enabled);
 
     auto originString = origin->securityOrigin().toString();
     if (originString.isEmpty())

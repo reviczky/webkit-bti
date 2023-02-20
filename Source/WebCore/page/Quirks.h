@@ -40,7 +40,7 @@ class HTMLVideoElement;
 class LayoutUnit;
 class PlatformMouseEvent;
 class WeakPtrImplWithEventTargetData;
-struct SecurityOriginData;
+class SecurityOriginData;
 
 #if ENABLE(TRACKING_PREVENTION)
 class RegistrableDomain;
@@ -162,6 +162,7 @@ public:
     bool needsVideoShouldMaintainAspectRatioQuirk() const;
 
     bool shouldDisableLazyImageLoadingQuirk() const;
+    bool shouldDisableLazyIframeLoadingQuirk() const;
     
 private:
     bool needsQuirks() const;
@@ -220,6 +221,7 @@ private:
     mutable std::optional<bool> m_shouldNavigatorPluginsBeEmpty;
 #endif
     mutable std::optional<bool> m_shouldDisableLazyImageLoadingQuirk;
+    mutable std::optional<bool> m_shouldDisableLazyIframeLoadingQuirk;
 };
 
 } // namespace WebCore

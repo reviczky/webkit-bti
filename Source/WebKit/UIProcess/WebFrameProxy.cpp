@@ -28,6 +28,8 @@
 
 #include "APINavigation.h"
 #include "Connection.h"
+#include "DrawingAreaMessages.h"
+#include "DrawingAreaProxy.h"
 #include "FrameTreeNodeData.h"
 #include "ProvisionalFrameProxy.h"
 #include "ProvisionalPageProxy.h"
@@ -398,7 +400,7 @@ void WebFrameProxy::commitProvisionalFrame(FrameIdentifier frameID, FrameInfoDat
     // FIXME: Not only is this a race condition, but we still want to receive messages,
     // such as if the parent frame navigates the remote frame.
     m_provisionalFrame->process().provisionalFrameCommitted(*this);
-    send(Messages::WebFrame::DidCommitLoadInAnotherProcess());
+    send(Messages::WebFrame::DidCommitLoadInAnotherProcess(m_provisionalFrame->layerHostingContextIdentifier()));
     m_process->removeMessageReceiver(Messages::WebFrameProxy::messageReceiverName(), m_frameID.object());
     m_process = std::exchange(m_provisionalFrame, nullptr)->process();
     m_process->addMessageReceiver(Messages::WebFrameProxy::messageReceiverName(), m_frameID.object(), *this);
@@ -406,6 +408,23 @@ void WebFrameProxy::commitProvisionalFrame(FrameIdentifier frameID, FrameInfoDat
     if (m_page) {
         m_subframePage = makeUnique<SubframePageProxy>(*this, *m_page, m_process);
         m_page->didCommitLoadForFrame(frameID, WTFMove(frameInfo), WTFMove(request), navigationID, mimeType, frameHasCustomContentProvider, frameLoadType, certificateInfo, usedLegacyTLS, privateRelayed, containsPluginDocument, hasInsecureContent, mouseEventPolicy, userData);
+    }
+}
+
+void WebFrameProxy::updateRemoteFrameSize(WebCore::IntSize newSize)
+{
+    if (!m_page)
+        return;
+    auto* drawingArea = m_page->drawingArea();
+    if (!drawingArea)
+        return;
+    if (m_subframePage) {
+#if PLATFORM(COCOA)
+        m_subframePage->sendWithAsyncReply(Messages::DrawingArea::UpdateGeometry(newSize, false /* flushSynchronously */, MachSendRight()), [] { }, drawingArea->identifier());
+#endif
+#if ENABLE(META_VIEWPORT)
+        m_subframePage->send(Messages::WebPage::SetViewportConfigurationViewLayoutSize(newSize, m_page->layoutSizeScaleFactor(), m_page->minimumEffectiveDeviceWidth()));
+#endif
     }
 }
 

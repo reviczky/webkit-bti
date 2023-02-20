@@ -34,6 +34,7 @@
 #include "FrameView.h"
 #include "GeometryUtilities.h"
 #include "HTMLAnchorElement.h"
+#include "HTMLAttachmentElement.h"
 #include "HTMLButtonElement.h"
 #include "HTMLFieldSetElement.h"
 #include "HTMLFormControlElement.h"
@@ -85,6 +86,11 @@ static bool shouldAllowElement(const Element& element)
 
 static bool shouldAllowNonPointerCursorForElement(const Element& element)
 {
+#if ENABLE(ATTACHMENT_ELEMENT)
+    if (is<HTMLAttachmentElement>(element))
+        return true;
+#endif
+
     if (is<HTMLFormControlElement>(element))
         return true;
 
@@ -100,15 +106,20 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
         return std::nullopt;
 
     auto bounds = region.bounds();
-
     if (bounds.isEmpty())
         return std::nullopt;
 
-    auto& mainFrameView = *regionRenderer.document().frame()->mainFrame().view();
-    auto layoutSize = mainFrameView.layoutSize();
+    auto* localFrame = dynamicDowncast<LocalFrame>(regionRenderer.document().frame()->mainFrame());
+    if (!localFrame)
+        return std::nullopt;
+
+    auto& mainFrameView = *localFrame->view();
+
+    FloatSize frameViewSize = mainFrameView.size();
     // Adding some wiggle room, we use this to avoid extreme cases.
-    layoutSize.scale(1.3, 1.3);
-    auto layoutArea = layoutSize.area();
+    auto scale = 1 / mainFrameView.visibleContentScaleFactor() + 0.2;
+    frameViewSize.scale(scale, scale);
+    auto frameViewArea = frameViewSize.area();
 
     auto checkedRegionArea = bounds.area<RecordOverflow>();
     if (checkedRegionArea.hasOverflowed())
@@ -139,7 +150,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     bool hasListener = renderer.style().eventListenerRegionTypes().contains(EventListenerRegionType::MouseClick);
     bool hasPointer = cursorTypeForElement(*element) == CursorType::Pointer || shouldAllowNonPointerCursorForElement(*element);
     if (!hasListener || !hasPointer) {
-        bool isOverlay = checkedRegionArea.value() <= layoutArea && renderer.style().specifiedZIndex() > 0;
+        bool isOverlay = checkedRegionArea.value() <= frameViewArea && (renderer.style().specifiedZIndex() > 0 || renderer.isFixedPositioned());
         if (isOverlay) {
             Region boundsRegion;
             boundsRegion.unite(bounds);
@@ -155,7 +166,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
         return std::nullopt;
     }
 
-    if (checkedRegionArea.value() > layoutArea / 2)
+    if (checkedRegionArea.value() > frameViewArea / 2)
         return std::nullopt;
 
     bool isInlineNonBlock = renderer.isInline() && !renderer.isReplacedOrInlineBlock();

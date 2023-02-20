@@ -44,9 +44,9 @@ RemoteCompositorIntegrationProxy::RemoteCompositorIntegrationProxy(RemoteGPUProx
 RemoteCompositorIntegrationProxy::~RemoteCompositorIntegrationProxy() = default;
 
 #if PLATFORM(COCOA)
-Vector<MachSendRight> RemoteCompositorIntegrationProxy::getRenderBuffers()
+Vector<MachSendRight> RemoteCompositorIntegrationProxy::recreateRenderBuffers(int height, int width)
 {
-    auto sendResult = sendSync(Messages::RemoteCompositorIntegration::GetRenderBuffers());
+    auto sendResult = sendSync(Messages::RemoteCompositorIntegration::RecreateRenderBuffers(height, width));
     if (!sendResult)
         return { };
 
@@ -54,6 +54,16 @@ Vector<MachSendRight> RemoteCompositorIntegrationProxy::getRenderBuffers()
     return renderBuffers;
 }
 #endif
+
+void RemoteCompositorIntegrationProxy::prepareForDisplay(CompletionHandler<void()>&& completionHandler)
+{
+    auto sendResult = sendSync(Messages::RemoteCompositorIntegration::PrepareForDisplay());
+    UNUSED_VARIABLE(sendResult);
+
+    m_presentationContext->present();
+
+    completionHandler();
+}
 
 } // namespace WebKit::WebGPU
 

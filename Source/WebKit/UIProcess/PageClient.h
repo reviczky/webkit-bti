@@ -79,9 +79,6 @@ OBJC_CLASS UIScrollEvent;
 OBJC_CLASS UIScrollView;
 OBJC_CLASS _WKRemoteObjectRegistry;
 
-#if USE(APPKIT)
-OBJC_CLASS WKView;
-#endif
 #endif
 
 namespace API {
@@ -516,8 +513,10 @@ public:
 #endif
     virtual bool isTextRecognitionInFullscreenVideoEnabled() const { return false; }
 
+#if ENABLE(VIDEO)
     virtual void beginTextRecognitionForVideoInElementFullscreen(const ShareableBitmapHandle&, WebCore::FloatRect) { }
     virtual void cancelTextRecognitionForVideoInElementFullscreen() { }
+#endif
 
     // Auxiliary Client Creation
 #if ENABLE(FULLSCREEN_API)

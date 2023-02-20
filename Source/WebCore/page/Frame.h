@@ -139,7 +139,7 @@ public:
 
     WEBCORE_EXPORT void willDetachPage();
 
-    Frame& mainFrame() const;
+    AbstractFrame& mainFrame() const;
     bool isMainFrame() const { return this == static_cast<void*>(&m_mainFrame); }
 
     Document* document() const;
@@ -303,6 +303,7 @@ private:
     void dropChildren();
 
     FrameType frameType() const final { return FrameType::Local; }
+    void frameDetached();
 
     AbstractFrameView* virtualView() const final;
     AbstractDOMWindow* virtualWindow() const final;
@@ -374,7 +375,7 @@ inline Document* Frame::document() const
     return m_doc.get();
 }
 
-inline Frame& Frame::mainFrame() const
+inline AbstractFrame& Frame::mainFrame() const
 {
     return m_mainFrame;
 }

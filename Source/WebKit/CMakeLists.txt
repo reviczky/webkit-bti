@@ -1,5 +1,3 @@
-include(WebKitCommon)
-
 set_property(DIRECTORY . PROPERTY FOLDER "WebKit")
 
 set(WebKit_PRIVATE_INCLUDE_DIRECTORIES
@@ -599,7 +597,6 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/WebGPU/WebGPUOutOfMemoryError.serialization.in
     Shared/WebGPU/WebGPUPipelineDescriptorBase.serialization.in
     Shared/WebGPU/WebGPUPipelineLayoutDescriptor.serialization.in
-    Shared/WebGPU/WebGPUPresentationConfiguration.serialization.in
     Shared/WebGPU/WebGPUPresentationContextDescriptor.serialization.in
     Shared/WebGPU/WebGPUPrimitiveState.serialization.in
     Shared/WebGPU/WebGPUProgrammableStage.serialization.in

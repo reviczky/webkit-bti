@@ -53,6 +53,7 @@
 #include "JSArrayIterator.h"
 #include "JSAsyncGenerator.h"
 #include "JSBigInt.h"
+#include "JSBoundFunction.h"
 #include "JSGenericTypedArrayViewConstructorInlines.h"
 #include "JSGenericTypedArrayViewInlines.h"
 #include "JSImmutableButterfly.h"
@@ -1336,13 +1337,19 @@ JSC_DEFINE_JIT_OPERATION(operationRegExpMatchFastGlobalString, EncodedJSValue, (
         })));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationParseIntNoRadixGeneric, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue value))
+JSC_DEFINE_JIT_OPERATION(operationParseIntGenericNoRadix, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue encodedValue))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    return toStringView(globalObject, JSValue::decode(value), [&] (StringView view) {
+    JSValue value = JSValue::decode(encodedValue);
+    if (value.isNumber()) {
+        if (auto result = parseIntDouble(value.asNumber()))
+            return parseIntResult(result.value());
+    }
+
+    return toStringView(globalObject, value, [&] (StringView view) {
         // This version is as if radix was undefined. Hence, undefined.toNumber() === 0.
         return parseIntResult(parseInt(view, 0));
     });
@@ -1362,6 +1369,18 @@ JSC_DEFINE_JIT_OPERATION(operationParseIntStringNoRadix, EncodedJSValue, (JSGlob
     return parseIntResult(parseInt(viewWithString.view, 0));
 }
 
+JSC_DEFINE_JIT_OPERATION(operationParseIntDoubleNoRadix, EncodedJSValue, (JSGlobalObject* globalObject, double value))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    if (auto result = parseIntDouble(value))
+        return parseIntResult(result.value());
+
+    return parseIntResult(parseInt(String::number(value), 0));
+}
+
 JSC_DEFINE_JIT_OPERATION(operationParseIntString, EncodedJSValue, (JSGlobalObject* globalObject, JSString* string, int32_t radix))
 {
     VM& vm = globalObject->vm();
@@ -1375,17 +1394,49 @@ JSC_DEFINE_JIT_OPERATION(operationParseIntString, EncodedJSValue, (JSGlobalObjec
     return parseIntResult(parseInt(viewWithString.view, radix));
 }
 
-JSC_DEFINE_JIT_OPERATION(operationParseIntGeneric, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue value, int32_t radix))
+JSC_DEFINE_JIT_OPERATION(operationParseIntGeneric, EncodedJSValue, (JSGlobalObject* globalObject, EncodedJSValue encodedValue, int32_t radix))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
 
-    return toStringView(globalObject, JSValue::decode(value), [&] (StringView view) {
+    JSValue value = JSValue::decode(encodedValue);
+    if (radix == 10 && value.isNumber()) {
+        if (auto result = parseIntDouble(value.asNumber()))
+            return parseIntResult(result.value());
+    }
+
+    return toStringView(globalObject, value, [&] (StringView view) {
         return parseIntResult(parseInt(view, radix));
     });
 }
-        
+
+JSC_DEFINE_JIT_OPERATION(operationParseIntDouble, EncodedJSValue, (JSGlobalObject* globalObject, double value, int32_t radix))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    if (radix == 10) {
+        if (auto result = parseIntDouble(value))
+            return parseIntResult(result.value());
+    }
+
+    return parseIntResult(parseInt(String::number(value), radix));
+}
+
+JSC_DEFINE_JIT_OPERATION(operationParseIntInt32, EncodedJSValue, (JSGlobalObject* globalObject, int32_t value, int32_t radix))
+{
+    VM& vm = globalObject->vm();
+    CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
+    JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
+
+    if (radix == 10)
+        return JSValue::encode(jsNumber(value));
+
+    return parseIntResult(parseInt(String::number(value), radix));
+}
+
 JSC_DEFINE_JIT_OPERATION(operationRegExpTestString, size_t, (JSGlobalObject* globalObject, RegExpObject* regExpObject, JSString* input))
 {
     SuperSamplerScope superSamplerScope(false);
@@ -2017,20 +2068,42 @@ JSC_DEFINE_JIT_OPERATION(operationCreateClonedArguments, JSCell*, (JSGlobalObjec
         globalObject, structure, argumentStart, length, callee);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationCreateArgumentsButterfly, JSCell*, (JSGlobalObject* globalObject, Register* argumentStart, uint32_t argumentCount))
+JSC_DEFINE_JIT_OPERATION(operationCreateArgumentsButterflyExcludingThis, JSCell*, (JSGlobalObject* globalObject, Register* argumentStart, uint32_t argumentCount, JSCell* target))
 {
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
     auto scope = DECLARE_THROW_SCOPE(vm);
+    ASSERT(argumentCount > 1);
 
-    JSImmutableButterfly* butterfly = JSImmutableButterfly::tryCreate(vm, vm.immutableButterflyStructures[arrayIndexFromIndexingType(CopyOnWriteArrayWithContiguous) - NumberOfIndexingShapes].get(), argumentCount);
+    CheckedInt32 totalCount = argumentCount - 1;
+    int32_t additionalCount = 0;
+    JSImmutableButterfly* boundArgs = nullptr;
+    if (target->inherits<JSBoundFunction>()) {
+        JSBoundFunction* boundFunction = jsCast<JSBoundFunction*>(target);
+        if (boundFunction->canCloneBoundArgs()) {
+            boundArgs = boundFunction->boundArgs();
+            additionalCount = boundArgs ? boundArgs->length() : 0;
+            totalCount += additionalCount;
+            if (totalCount.hasOverflowed()) {
+                throwOutOfMemoryError(globalObject, scope);
+                return nullptr;
+            }
+        }
+    }
+
+    JSImmutableButterfly* butterfly = JSImmutableButterfly::tryCreate(vm, vm.immutableButterflyStructures[arrayIndexFromIndexingType(CopyOnWriteArrayWithContiguous) - NumberOfIndexingShapes].get(), totalCount.value());
     if (!butterfly) {
         throwOutOfMemoryError(globalObject, scope);
         return nullptr;
     }
-    for (unsigned index = 0; index < argumentCount; ++index)
-        butterfly->setIndex(vm, index, argumentStart[index].jsValue());
+    if (additionalCount) {
+        ASSERT(boundArgs);
+        for (int32_t index = 0; index < additionalCount; ++index)
+            butterfly->setIndex(vm, index, boundArgs->get(index));
+    }
+    for (unsigned index = 0; index < (argumentCount - 1); ++index)
+        butterfly->setIndex(vm, index + additionalCount, argumentStart[index + 1].jsValue());
     return butterfly;
 }
 

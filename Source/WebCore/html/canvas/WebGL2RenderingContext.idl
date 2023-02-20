@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -55,8 +55,8 @@ typedef (ImageBitmap or ImageData or HTMLImageElement or HTMLCanvasElement
 
 [
     ActiveDOMObject,
-    Conditional=WEBGL2,
-    EnabledBySetting=WebGL2Enabled,
+    Conditional=WEBGL,
+    EnabledBySetting=WebGLEnabled,
     GenerateIsReachable=ImplCanvasBase,
     JSCustomMarkFunction,
     JSGenerateToJSObject,
@@ -420,7 +420,7 @@ typedef (ImageBitmap or ImageData or HTMLImageElement or HTMLCanvasElement
     GLboolean isQuery(WebGLQuery? query);
     undefined beginQuery(GLenum target, WebGLQuery query);
     undefined endQuery(GLenum target);
-    WebGLQuery? getQuery(GLenum target, GLenum pname);
+    [OverrideIDLType=IDLWebGLAny] any getQuery(GLenum target, GLenum pname);
     [OverrideIDLType=IDLWebGLAny] any getQueryParameter(WebGLQuery query, GLenum pname);
 
     // Sampler Objects.

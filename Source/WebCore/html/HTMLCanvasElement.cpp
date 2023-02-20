@@ -82,9 +82,6 @@
 #if ENABLE(WEBGL)
 #include "WebGLContextAttributes.h"
 #include "WebGLRenderingContext.h"
-#endif
-
-#if ENABLE(WEBGL2)
 #include "WebGL2RenderingContext.h"
 #endif
 
@@ -250,10 +247,8 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
                 return std::optional<RenderingContext> { std::nullopt };
             if (is<WebGLRenderingContext>(*m_context))
                 return std::optional<RenderingContext> { RefPtr<WebGLRenderingContext> { &downcast<WebGLRenderingContext>(*m_context) } };
-#if ENABLE(WEBGL2)
             ASSERT(is<WebGL2RenderingContext>(*m_context));
             return std::optional<RenderingContext> { RefPtr<WebGL2RenderingContext> { &downcast<WebGL2RenderingContext>(*m_context) } };
-#endif
         }
 #endif
 
@@ -301,10 +296,9 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
 
         if (is<WebGLRenderingContext>(*context))
             return std::optional<RenderingContext> { RefPtr<WebGLRenderingContext> { &downcast<WebGLRenderingContext>(*context) } };
-#if ENABLE(WEBGL2)
+
         ASSERT(is<WebGL2RenderingContext>(*context));
         return std::optional<RenderingContext> { RefPtr<WebGL2RenderingContext> { &downcast<WebGL2RenderingContext>(*context) } };
-#endif
     }
 #endif
 
@@ -408,21 +402,15 @@ bool HTMLCanvasElement::isWebGLType(const String& type)
 {
     // Retain support for the legacy "webkit-3d" name.
     return type == "webgl"_s || type == "experimental-webgl"_s
-#if ENABLE(WEBGL2)
         || type == "webgl2"_s
-#endif
         || type == "webkit-3d"_s;
 }
 
 GraphicsContextGLWebGLVersion HTMLCanvasElement::toWebGLVersion(const String& type)
 {
     ASSERT(isWebGLType(type));
-#if ENABLE(WEBGL2)
     if (type == "webgl2"_s)
         return WebGLVersion::WebGL2;
-#else
-    UNUSED_PARAM(type);
-#endif
     return WebGLVersion::WebGL1;
 }
 
@@ -913,7 +901,7 @@ void HTMLCanvasElement::createImageBuffer() const
 
     m_hasCreatedImageBuffer = true;
     m_didClearImageBuffer = true;
-    CanvasBase::createImageBuffer(m_usesDisplayListDrawing.value_or(false), m_avoidBackendSizeCheckForTesting);
+    setImageBuffer(allocateImageBuffer(m_usesDisplayListDrawing.value_or(false), m_avoidBackendSizeCheckForTesting));
 
 #if USE(IOSURFACE_CANVAS_BACKING_STORE)
     if (m_context && m_context->is2d()) {

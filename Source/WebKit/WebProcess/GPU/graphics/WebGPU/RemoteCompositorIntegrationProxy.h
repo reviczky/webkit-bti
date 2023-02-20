@@ -28,6 +28,7 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "RemoteGPUProxy.h"
+#include "RemotePresentationContextProxy.h"
 #include "WebGPUIdentifier.h"
 #include <pal/graphics/WebGPU/WebGPUCompositorIntegration.h>
 
@@ -47,6 +48,12 @@ public:
 
     RemoteGPUProxy& parent() { return m_parent; }
     RemoteGPUProxy& root() { return m_parent; }
+
+    void setPresentationContext(RemotePresentationContextProxy& presentationContext)
+    {
+        ASSERT(!m_presentationContext);
+        m_presentationContext = &presentationContext;
+    }
 
 private:
     friend class DowncastConvertToBackingContext;
@@ -73,12 +80,15 @@ private:
     }
 
 #if PLATFORM(COCOA)
-    Vector<MachSendRight> getRenderBuffers() override;
+    Vector<MachSendRight> recreateRenderBuffers(int width, int height) override;
 #endif
+
+    void prepareForDisplay(CompletionHandler<void()>&&) override;
 
     WebGPUIdentifier m_backing;
     Ref<ConvertToBackingContext> m_convertToBackingContext;
     Ref<RemoteGPUProxy> m_parent;
+    RefPtr<RemotePresentationContextProxy> m_presentationContext;
 };
 
 } // namespace WebKit::WebGPU

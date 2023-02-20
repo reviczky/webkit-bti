@@ -26,6 +26,7 @@
 #pragma once
 
 #include "APIObject.h"
+#include <wtf/Markable.h>
 #include <wtf/URL.h>
 #include <wtf/UUID.h>
 #include <wtf/text/WTFString.h>
@@ -78,6 +79,9 @@ public:
 
     const String& javaScriptConfigurationDirectory() const { return m_javaScriptConfigurationDirectory; }
     void setJavaScriptConfigurationDirectory(String&& directory) { m_javaScriptConfigurationDirectory = WTFMove(directory); }
+
+    const String& searchFieldHistoryDirectory() const { return m_searchFieldHistoryDirectory; }
+    void setSearchFieldHistoryDirectory(String&& directory) { m_searchFieldHistoryDirectory = WTFMove(directory); }
 
     // indexedDBDatabaseDirectory is sort of deprecated. Data is migrated from here to
     // generalStoragePath unless useCustomStoragePaths is true.
@@ -236,7 +240,7 @@ private:
     IsPersistent m_isPersistent { IsPersistent::No };
 
     UnifiedOriginStorageLevel m_unifiedOriginStorageLevel;
-    std::optional<UUID> m_identifier;
+    Markable<UUID> m_identifier;
     String m_baseCacheDirectory;
     String m_baseDataDirectory;
     String m_cacheStorageDirectory;
@@ -265,6 +269,7 @@ private:
     String m_deviceIdHashSaltsStorageDirectory;
     String m_resourceLoadStatisticsDirectory;
     String m_javaScriptConfigurationDirectory;
+    String m_searchFieldHistoryDirectory;
     String m_cookieStorageFile;
     String m_sourceApplicationBundleIdentifier;
     String m_sourceApplicationSecondaryIdentifier;

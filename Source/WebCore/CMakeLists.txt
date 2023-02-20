@@ -1,12 +1,7 @@
-cmake_minimum_required(VERSION 3.16)
-
-include(WebKitCommon)
-include(target/TargetWTF)
-include(target/TargetJavaScriptCore)
-include(WebCoreMacros.cmake)
-include(Headers.cmake)
-
 set_property(DIRECTORY . PROPERTY FOLDER "WebCore")
+
+include(Headers.cmake)
+include(WebCoreMacros.cmake)
 
 add_subdirectory(PAL/pal)
 
@@ -409,6 +404,8 @@ set(WebCore_NON_SVG_IDL_FILES
 
     Modules/mediasource/AudioTrack+MediaSource.idl
     Modules/mediasource/DOMURL+MediaSource.idl
+    Modules/mediasource/ManagedMediaSource.idl
+    Modules/mediasource/ManagedSourceBuffer.idl
     Modules/mediasource/MediaSource.idl
     Modules/mediasource/SourceBuffer.idl
     Modules/mediasource/SourceBufferList.idl
@@ -1052,6 +1049,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/TextEncoderStream.idl
     dom/TextEncoderStreamEncoder.idl
     dom/TextEvent.idl
+    dom/ToggleEvent.idl
     dom/Touch.idl
     dom/TouchEvent.idl
     dom/TouchList.idl
@@ -1745,8 +1743,10 @@ set(WebCore_USER_AGENT_STYLE_SHEETS
     ${WEBCORE_DIR}/css/html.css
     ${WEBCORE_DIR}/css/mathml.css
     ${WEBCORE_DIR}/css/plugIns.css
+    ${WEBCORE_DIR}/css/popover.css
     ${WEBCORE_DIR}/css/quirks.css
     ${WEBCORE_DIR}/css/svg.css
+    ${WEBCORE_DIR}/html/shadow/attachmentElementShadow.css
     ${WEBCORE_DIR}/html/shadow/imageOverlay.css
     ${WEBCORE_DIR}/html/shadow/meterElementShadow.css
 )
@@ -1872,6 +1872,8 @@ if (ENABLE_WEBGL)
         html/canvas/EXTBlendMinMax.cpp
         html/canvas/EXTColorBufferFloat.cpp
         html/canvas/EXTColorBufferHalfFloat.cpp
+        html/canvas/EXTDisjointTimerQuery.cpp
+        html/canvas/EXTDisjointTimerQueryWebGL2.cpp
         html/canvas/EXTFloatBlend.cpp
         html/canvas/EXTFragDepth.cpp
         html/canvas/EXTShaderTextureLOD.cpp
@@ -1926,6 +1928,7 @@ if (ENABLE_WEBGL)
         html/canvas/WebGLSharedObject.cpp
         html/canvas/WebGLSync.cpp
         html/canvas/WebGLTexture.cpp
+        html/canvas/WebGLTimerQueryEXT.cpp
         html/canvas/WebGLTransformFeedback.cpp
         html/canvas/WebGLUniformLocation.cpp
         html/canvas/WebGLVertexArrayObject.cpp
@@ -1939,6 +1942,8 @@ list(APPEND WebCore_IDL_FILES
     html/canvas/EXTBlendMinMax.idl
     html/canvas/EXTColorBufferFloat.idl
     html/canvas/EXTColorBufferHalfFloat.idl
+    html/canvas/EXTDisjointTimerQuery.idl
+    html/canvas/EXTDisjointTimerQueryWebGL2.idl
     html/canvas/EXTFloatBlend.idl
     html/canvas/EXTFragDepth.idl
     html/canvas/EXTShaderTextureLOD.idl
@@ -1991,6 +1996,7 @@ list(APPEND WebCore_IDL_FILES
     html/canvas/WebGLShaderPrecisionFormat.idl
     html/canvas/WebGLSync.idl
     html/canvas/WebGLTexture.idl
+    html/canvas/WebGLTimerQueryEXT.idl
     html/canvas/WebGLTransformFeedback.idl
     html/canvas/WebGLUniformLocation.idl
     html/canvas/WebGLVertexArrayObject.idl
@@ -2166,7 +2172,7 @@ set(MODERN_MEDIA_CONTROLS_STYLE_SHEETS
     "${WEBCORE_DIR}/Modules/modern-media-controls/controls/watchos-media-controls.css"
 )
 
-if (PORT STREQUAL "GTK" OR PORT STREQUAL "WPE" OR WTF_PLATFORM_WIN_CAIRO)
+if (USE_THEME_ADWAITA)
     list(APPEND MODERN_MEDIA_CONTROLS_STYLE_SHEETS
         "${WEBCORE_DIR}/Modules/modern-media-controls/controls/adwaita-overrides.css"
     )
@@ -2690,10 +2696,4 @@ WEBKIT_LIBRARY(WebCoreTestSupport)
 if (${WebCore_LIBRARY_TYPE} MATCHES "SHARED")
     set_target_properties(WebCore PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
     install(TARGETS WebCore DESTINATION "${LIB_INSTALL_DIR}")
-endif ()
-
-if (MSVC)
-    set_target_properties(WebCore PROPERTIES
-        COMPILE_PDB_NAME ${WebCore_OUTPUT_NAME}
-    )
 endif ()

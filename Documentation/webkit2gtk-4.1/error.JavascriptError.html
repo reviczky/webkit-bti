@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.7</p>
+        <p>Library Version: 2.39.90</p>
         
       </div>
       
@@ -154,8 +154,18 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         </tr>
       
         <tr>
-          <td><a id="failed" href="#failed"><code title="Value: 699">WEBKIT_JAVASCRIPT_ERROR_SCRIPT_FAILED</code></a></td>
+          <td><a id="script_failed" href="#script_failed"><code title="Value: 699">WEBKIT_JAVASCRIPT_ERROR_SCRIPT_FAILED</code></a></td>
           <td><p>An exception was raised in JavaScript&nbsp;execution.</p></td>
+        </tr>
+      
+        <tr>
+          <td><a id="invalid_parameter" href="#invalid_parameter"><code title="Value: 600">WEBKIT_JAVASCRIPT_ERROR_INVALID_PARAMETER</code></a></td>
+          <td><p>An unsupported parameter has been used to call and async function from <span class="caps">API</span>. Since&nbsp;2.40</p></td>
+        </tr>
+      
+        <tr>
+          <td><a id="invalid_result" href="#invalid_result"><code title="Value: 601">WEBKIT_JAVASCRIPT_ERROR_INVALID_RESULT</code></a></td>
+          <td><p>The result of JavaScript execution could not be returned. Since&nbsp;2.40</p></td>
         </tr>
       
       </table>

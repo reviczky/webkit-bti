@@ -725,7 +725,7 @@ void Graph::determineReachability()
     }
 }
 
-void Graph::resetReachability()
+void Graph::clearReachability()
 {
     for (BlockIndex blockIndex = m_blocks.size(); blockIndex--;) {
         BasicBlock* block = m_blocks[blockIndex].get();
@@ -734,7 +734,11 @@ void Graph::resetReachability()
         block->isReachable = false;
         block->predecessors.clear();
     }
-    
+}
+
+void Graph::resetReachability()
+{
+    clearReachability();
     determineReachability();
 }
 
@@ -1441,6 +1445,22 @@ JSArrayBufferView* Graph::tryGetFoldableView(JSValue value, ArrayMode arrayMode)
     if (arrayMode.type() != Array::AnyTypedArray && arrayMode.typedArrayType() == NotTypedArray)
         return nullptr;
     return tryGetFoldableView(value);
+}
+
+JSValue Graph::tryGetConstantGetter(Node* getterSetter)
+{
+    auto* cell = getterSetter->dynamicCastConstant<GetterSetter*>();
+    if (!cell)
+        return JSValue();
+    return cell->getterConcurrently();
+}
+
+JSValue Graph::tryGetConstantSetter(Node* getterSetter)
+{
+    auto* cell = getterSetter->dynamicCastConstant<GetterSetter*>();
+    if (!cell)
+        return JSValue();
+    return cell->setterConcurrently();
 }
 
 void Graph::registerFrozenValues()

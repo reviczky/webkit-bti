@@ -35,6 +35,7 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "ColorBlending.h"
+#include "ContainerNode.h"
 #include "DOMWindow.h"
 #include "DebugPageOverlays.h"
 #include "DocumentInlines.h"
@@ -199,6 +200,7 @@ FrameView::FrameView(Frame& frame)
     , m_delayedScrollToFocusedElementTimer(*this, &FrameView::scrollToFocusedElementTimerFired)
     , m_speculativeTilingEnableTimer(*this, &FrameView::speculativeTilingEnableTimerFired)
     , m_delayedTextFragmentIndicatorTimer(*this, &FrameView::textFragmentIndicatorTimerFired)
+    , m_mediaType(screenAtom())
 {
     init();
 
@@ -1605,6 +1607,21 @@ void FrameView::removeSlowRepaintObject(RenderElement& renderer)
     updateCanBlitOnScrollRecursively();
 }
 
+bool FrameView::hasSlowRepaintObject(const RenderElement& renderer) const
+{
+    return m_slowRepaintObjects && m_slowRepaintObjects->contains(renderer);
+}
+
+bool FrameView::hasSlowRepaintObjects() const
+{
+    return m_slowRepaintObjects && !m_slowRepaintObjects->isEmptyIgnoringNullReferences();
+}
+
+bool FrameView::hasViewportConstrainedObjects() const
+{
+    return m_viewportConstrainedObjects && !m_viewportConstrainedObjects->isEmptyIgnoringNullReferences();
+}
+
 void FrameView::addViewportConstrainedObject(RenderLayerModelObject& object)
 {
     if (!m_viewportConstrainedObjects)
@@ -2026,7 +2043,7 @@ ScrollPosition FrameView::minimumScrollPosition() const
 {
     ScrollPosition minimumPosition = ScrollView::minimumScrollPosition();
 
-    if (m_frame->isMainFrame() && m_scrollPinningBehavior == PinToBottom)
+    if (m_frame->isMainFrame() && m_scrollPinningBehavior == ScrollPinningBehavior::PinToBottom)
         minimumPosition.setY(maximumScrollPosition().y());
     
     return minimumPosition;
@@ -2036,7 +2053,7 @@ ScrollPosition FrameView::maximumScrollPosition() const
 {
     ScrollPosition maximumPosition = ScrollView::maximumScrollPosition();
 
-    if (m_frame->isMainFrame() && m_scrollPinningBehavior == PinToTop)
+    if (m_frame->isMainFrame() && m_scrollPinningBehavior == ScrollPinningBehavior::PinToTop)
         maximumPosition.setY(minimumScrollPosition().y());
     
     return maximumPosition;
@@ -2048,7 +2065,7 @@ ScrollPosition FrameView::unscaledMinimumScrollPosition() const
         IntRect unscaledDocumentRect = renderView->unscaledDocumentRect();
         ScrollPosition minimumPosition = unscaledDocumentRect.location();
 
-        if (m_frame->isMainFrame() && m_scrollPinningBehavior == PinToBottom)
+        if (m_frame->isMainFrame() && m_scrollPinningBehavior == ScrollPinningBehavior::PinToBottom)
             minimumPosition.setY(unscaledMaximumScrollPosition().y());
 
         return minimumPosition;
@@ -2063,7 +2080,7 @@ ScrollPosition FrameView::unscaledMaximumScrollPosition() const
         IntRect unscaledDocumentRect = renderView->unscaledDocumentRect();
         unscaledDocumentRect.expand(0, headerHeight() + footerHeight());
         ScrollPosition maximumPosition = ScrollPosition(unscaledDocumentRect.maxXMaxYCorner() - visibleSize()).expandedTo({ 0, 0 });
-        if (m_frame->isMainFrame() && m_scrollPinningBehavior == PinToTop)
+        if (m_frame->isMainFrame() && m_scrollPinningBehavior == ScrollPinningBehavior::PinToTop)
             maximumPosition.setY(unscaledMinimumScrollPosition().y());
 
         return maximumPosition;
@@ -2884,12 +2901,6 @@ void FrameView::resumeVisibleImageAnimations(const IntRect& visibleRect)
         renderView->resumePausedImageAnimationsIfNeeded(visibleRect);
 }
 
-void FrameView::updatePlayStateForAllAnimations(const IntRect& visibleRect)
-{
-    if (auto* renderView = m_frame->contentRenderer())
-        renderView->updatePlayStateForAllAnimations(visibleRect);
-}
-
 void FrameView::updateScriptedAnimationsAndTimersThrottlingState(const IntRect& visibleRect)
 {
     if (m_frame->isMainFrame())
@@ -2925,12 +2936,20 @@ void FrameView::resumeVisibleImageAnimationsIncludingSubframes()
     });
 }
 
+#if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
+void FrameView::updatePlayStateForAllAnimations(const IntRect& visibleRect)
+{
+    if (auto* renderView = m_frame->contentRenderer())
+        renderView->updatePlayStateForAllAnimations(visibleRect);
+}
+
 void FrameView::updatePlayStateForAllAnimationsIncludingSubframes()
 {
     applyRecursivelyWithVisibleRect([] (FrameView& frameView, const IntRect& visibleRect) {
         frameView.updatePlayStateForAllAnimations(visibleRect);
     });
 }
+#endif // ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
 
 void FrameView::updateLayerPositionsAfterScrolling()
 {
@@ -3196,13 +3215,13 @@ void FrameView::addedOrRemovedScrollbar()
     InspectorInstrumentation::didAddOrRemoveScrollbars(*this);
 }
 
-TiledBacking::Scrollability FrameView::computeScrollability() const
+OptionSet<TiledBacking::Scrollability> FrameView::computeScrollability() const
 {
     auto* page = m_frame->page();
 
     // Use smaller square tiles if the Window is not active to facilitate app napping.
     if (!page || !page->isWindowActive())
-        return TiledBacking::HorizontallyScrollable | TiledBacking::VerticallyScrollable;
+        return { TiledBacking::Scrollability::HorizontallyScrollable, TiledBacking::Scrollability::VerticallyScrollable };
 
     bool horizontallyScrollable;
     bool verticallyScrollable;
@@ -3224,12 +3243,12 @@ TiledBacking::Scrollability FrameView::computeScrollability() const
         verticallyScrollable = clippedByAncestorView || verticalScrollbar();
     }
 
-    TiledBacking::Scrollability scrollability = TiledBacking::NotScrollable;
+    OptionSet<TiledBacking::Scrollability> scrollability = TiledBacking::Scrollability::NotScrollable;
     if (horizontallyScrollable)
-        scrollability = TiledBacking::HorizontallyScrollable;
+        scrollability.add(TiledBacking::Scrollability::HorizontallyScrollable);
 
     if (verticallyScrollable)
-        scrollability |= TiledBacking::VerticallyScrollable;
+        scrollability.add(TiledBacking::Scrollability::VerticallyScrollable);
 
     return scrollability;
 }
@@ -5052,6 +5071,9 @@ void FrameView::checkAndDispatchDidReachVisuallyNonEmptyState()
             for (auto& resource : resources) {
                 if (resource.value->isLoaded())
                     continue;
+                // ResourceLoadPriority::VeryLow is used for resources that are not needed to render.
+                if (resource.value->loadPriority() == ResourceLoadPriority::VeryLow)
+                    continue;
                 if (resource.value->type() == CachedResource::Type::CSSStyleSheet || resource.value->type() == CachedResource::Type::FontResource)
                     return true;
             }
@@ -5697,8 +5719,11 @@ AXObjectCache* FrameView::axObjectCache() const
     // FIXME: We should generally always be using the main-frame cache rather than
     // using it as a fallback as we do here.
     if (!cache && !m_frame->isMainFrame()) {
-        if (auto* mainFrameDocument = m_frame->mainFrame().document())
-            cache = mainFrameDocument->existingAXObjectCache();
+        auto localMainFrame = dynamicDowncast<LocalFrame>(m_frame->mainFrame());
+        if (localMainFrame) {
+            if (auto* mainFrameDocument = localMainFrame->document())
+                cache = mainFrameDocument->existingAXObjectCache();
+        }
     }
     return cache;
 }
@@ -5879,6 +5904,11 @@ void FrameView::setScrollPinningBehavior(ScrollPinningBehavior pinning)
 ScrollBehaviorForFixedElements FrameView::scrollBehaviorForFixedElements() const
 {
     return m_frame->settings().backgroundShouldExtendBeyondPage() ? StickToViewportBounds : StickToDocumentBounds;
+}
+
+AbstractFrame& FrameView::frame() const
+{
+    return m_frame;
 }
 
 RenderView* FrameView::renderView() const

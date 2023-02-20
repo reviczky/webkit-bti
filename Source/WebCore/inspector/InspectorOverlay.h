@@ -201,8 +201,8 @@ public:
     bool shouldShowOverlay() const;
 
     void hideHighlight();
-    void highlightNodeList(RefPtr<NodeList>&&, const Highlight::Config&);
-    void highlightNode(Node*, const Highlight::Config&);
+    void highlightNodeList(RefPtr<NodeList>&&, const Highlight::Config&, const std::optional<Grid::Config>& = std::nullopt, const std::optional<Flex::Config>& = std::nullopt, bool showRulers = false);
+    void highlightNode(Node*, const Highlight::Config&, const std::optional<Grid::Config>& = std::nullopt, const std::optional<Flex::Config>& = std::nullopt, bool showRulers = false);
     void highlightQuad(std::unique_ptr<FloatQuad>, const Highlight::Config&);
 
     void setShowPaintRects(bool);
@@ -210,7 +210,6 @@ public:
     unsigned paintRectCount() const { return m_paintRects.size(); }
 
     void setShowRulers(bool);
-    void setShowRulersDuringElementSelection(bool enabled) { m_showRulersDuringElementSelection = enabled; }
 
     Node* highlightedNode() const;
     unsigned gridOverlayCount() const { return m_activeGridOverlays.size(); }
@@ -222,6 +221,7 @@ public:
 
     // Multiple grid and flex overlays can be active at the same time. These methods
     // will fail if the node is not a grid or if the node has been GC'd.
+
     Inspector::ErrorStringOr<void> setGridOverlayForNode(Node&, const InspectorOverlay::Grid::Config&);
     Inspector::ErrorStringOr<void> clearGridOverlayForNode(Node&);
     void clearAllGridOverlays();
@@ -262,6 +262,8 @@ private:
     RefPtr<Node> m_highlightNode;
     RefPtr<NodeList> m_highlightNodeList;
     Highlight::Config m_nodeHighlightConfig;
+    std::optional<Grid::Config> m_nodeGridOverlayConfig;
+    std::optional<Flex::Config> m_nodeFlexOverlayConfig;
 
     std::unique_ptr<FloatQuad> m_highlightQuad;
     Highlight::Config m_quadHighlightConfig;
@@ -275,7 +277,7 @@ private:
     bool m_indicating { false };
     bool m_showPaintRects { false };
     bool m_showRulers { false };
-    bool m_showRulersDuringElementSelection { false };
+    bool m_showRulersForNodeHighlight { false };
 };
 
 #if PLATFORM(IOS_FAMILY)

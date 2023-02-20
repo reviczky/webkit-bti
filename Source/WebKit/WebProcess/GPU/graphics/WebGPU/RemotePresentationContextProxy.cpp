@@ -30,8 +30,8 @@
 
 #include "RemotePresentationContextMessages.h"
 #include "RemoteTextureProxy.h"
+#include "WebGPUCanvasConfiguration.h"
 #include "WebGPUConvertToBackingContext.h"
-#include "WebGPUPresentationConfiguration.h"
 
 namespace WebKit::WebGPU {
 
@@ -44,9 +44,9 @@ RemotePresentationContextProxy::RemotePresentationContextProxy(RemoteGPUProxy& p
 
 RemotePresentationContextProxy::~RemotePresentationContextProxy() = default;
 
-void RemotePresentationContextProxy::configure(const PAL::WebGPU::PresentationConfiguration& presentationConfiguration)
+void RemotePresentationContextProxy::configure(const PAL::WebGPU::CanvasConfiguration& canvasConfiguration)
 {
-    auto convertedConfiguration = m_convertToBackingContext->convertToBacking(presentationConfiguration);
+    auto convertedConfiguration = m_convertToBackingContext->convertToBacking(canvasConfiguration);
     if (!convertedConfiguration) {
         // FIXME: Implement error handling.
         return;
@@ -77,30 +77,8 @@ RefPtr<PAL::WebGPU::Texture> RemotePresentationContextProxy::getCurrentTexture()
 
 void RemotePresentationContextProxy::present()
 {
-    auto sendResult = send(Messages::RemotePresentationContext::Present());
-    UNUSED_VARIABLE(sendResult);
     m_currentTexture = nullptr;
 }
-
-#if PLATFORM(COCOA)
-void RemotePresentationContextProxy::prepareForDisplay(CompletionHandler<void(WTF::MachSendRight&&)>&& completionHandler)
-{
-    MachSendRight emptyResult;
-    auto sendResult = sendSync(Messages::RemotePresentationContext::PrepareForDisplay());
-    if (!sendResult) {
-        completionHandler(WTFMove(emptyResult));
-        return;
-    }
-
-    auto [sendRight] = sendResult.takeReply();
-    if (!sendRight) {
-        completionHandler(WTFMove(emptyResult));
-        return;
-    }
-
-    completionHandler(WTFMove(sendRight));
-}
-#endif
 
 } // namespace WebKit::WebGPU
 
