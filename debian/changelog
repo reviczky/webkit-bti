@@ -5,6 +5,8 @@ webkit2gtk (2.39.90-1) UNRELEASED; urgency=medium
   * debian/rules:
     - Remove /usr/include/*/JavaScriptCore from the GTK4 build's .install
       files.
+    - Build with -DDEBUG_FISSION=OFF since it adds the -gsplit-dwarf flag
+      that is currently not supported by dh_dwz (see #1016936).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 20 Feb 2023 11:53:05 +0100
 
