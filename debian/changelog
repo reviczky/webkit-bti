@@ -7,7 +7,8 @@ webkit2gtk (2.39.90-1) UNRELEASED; urgency=medium
       files.
     - Build with -DDEBUG_FISSION=OFF since it adds the -gsplit-dwarf flag
       that is currently not supported by dh_dwz (see #1016936).
-    - Rename libwebkitgtk-6.0-2 to libwebkitgtk-6.0-3 after a soname bump.
+    - Rename libjavascriptcoregtk-6.0-0 to libjavascriptcoregtk-6.0-1 and
+      libwebkitgtk-6.0-2 to libwebkitgtk-6.0-3 after their soname bumps.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 20 Feb 2023 11:53:05 +0100
 
