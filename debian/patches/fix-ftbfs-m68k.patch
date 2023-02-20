@@ -89,8 +89,8 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 +#endif
  
  struct SameSizeAsRenderStyle {
-     void* dataRefs[7];
-@@ -88,7 +90,9 @@ struct SameSizeAsRenderStyle {
+     void* nonInheritedDataRefs[1];
+@@ -89,7 +91,9 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -98,8 +98,8 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
 +#endif
  
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(PseudoStyleCache);
  DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderStyle);
- 
 Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/StyleBoxData.cpp
@@ -183,7 +183,7 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
 +++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -85,7 +85,9 @@ struct SameSizeAsCSSValue {
+@@ -87,7 +87,9 @@ struct SameSizeAsCSSValue {
      uint32_t bitfields;
  };
  
