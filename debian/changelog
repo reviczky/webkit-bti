@@ -13,6 +13,8 @@ webkit2gtk (2.39.90-1) UNRELEASED; urgency=medium
     - Update symbols.
   * debian/patches/fix-api-headers.patch:
     - Fix API headers.
+  * debian/patches/fix-ftbfs-i386.patch:
+    - Fix FTBFS in i386.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 20 Feb 2023 11:53:05 +0100
 

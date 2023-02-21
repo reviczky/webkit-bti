@@ -1,0 +1,16 @@
+From: Michael Catanzaro <mcatanzaro@redhat.com>
+Subject: Fix FTBFS in i386
+Bug: https://bugs.webkit.org/show_bug.cgi?id=252617
+Origin: https://github.com/WebKit/WebKit/commit/f51987a0f316621a0ab324696c9a576bbaf1e686
+Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/llint/LowLevelInterpreter.cpp
++++ webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter.cpp
+@@ -39,6 +39,7 @@
+ #include "LLIntData.h"
+ #include "LLIntSlowPaths.h"
+ #include "JSCInlines.h"
++#include "SuperSampler.h"
+ #include <wtf/Assertions.h>
+ #include <wtf/MathExtras.h>
+ 
