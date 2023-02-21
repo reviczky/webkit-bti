@@ -1,4 +1,4 @@
-webkit2gtk (2.39.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.39.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
@@ -18,7 +18,7 @@ webkit2gtk (2.39.90-1) UNRELEASED; urgency=medium
   * debian/copyright:
     - Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 20 Feb 2023 11:53:05 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 21 Feb 2023 15:19:20 +0100
 
 webkit2gtk (2.39.7-1) experimental; urgency=medium
 
