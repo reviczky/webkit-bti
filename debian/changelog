@@ -1,3 +1,10 @@
+webkit2gtk (2.39.91-2) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    - Disable AVIF and GStreamer transcoding on Ubuntu (Jeremy Bicha).
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 10 Mar 2023 00:01:24 +0100
+
 webkit2gtk (2.39.91-1) experimental; urgency=medium
 
   * New upstream development release.
