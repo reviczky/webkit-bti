@@ -66,7 +66,7 @@ ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
 endif
 
 # Lower memory requirements on architectures with only 2 GB address space
-ifneq (,$(filter $(DEB_HOST_ARCH),mips mipsel sh4))
+ifneq (,$(filter $(DEB_HOST_ARCH),m68k mips mipsel sh4))
 	CFLAGS := $(CFLAGS:-g1=-g0)
 	CFLAGS := $(CFLAGS:-O2=-Os)
 	CPPFLAGS += --param ggc-min-expand=10

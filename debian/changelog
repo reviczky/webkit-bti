@@ -3,6 +3,8 @@ webkit2gtk (2.39.90-2) UNRELEASED; urgency=medium
   * debian/rules:
     - Disable WebGL in armel and mipsel to work around a FTBFS caused by
       upstream bug #252670.
+    - Use reduced optimizations on m68k in order to lower memory
+      requirements (John Paul Adrian Glaubitz) (Closes: #1032404).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 22 Feb 2023 16:07:33 +0100
 
