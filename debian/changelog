@@ -1,5 +1,6 @@
-webkit2gtk (2.39.90-2) UNRELEASED; urgency=medium
+webkit2gtk (2.39.91-1) UNRELEASED; urgency=medium
 
+  * New upstream development release.
   * debian/rules:
     - Disable WebGL in armel and mipsel to work around a FTBFS caused by
       upstream bug #252670.
