@@ -13,7 +13,7 @@ export CCACHE_DIR=$(CURDIR)/ccache
 # gtk4 build  -> 6.0 API packages
 ENABLE_SOUP2=YES
 ENABLE_SOUP3=YES
-ENABLE_GTK4=NO
+ENABLE_GTK4=YES
 # Set to YES to use the docs from the tarball instead of generating them.
 # Use only if gi-docgen is not available.
 USE_PREBUILT_DOCS=NO

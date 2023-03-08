@@ -9,6 +9,7 @@ webkit2gtk (2.39.91-1) UNRELEASED; urgency=medium
     - Rename libwebkitgtk-6.0-3 to libwebkitgtk-6.0-4 after a soname bump.
     - Rename WebKit2WebExtension to WebKitWebProcessExtension in the GTK4
       build's install files.
+    - Enable the GTK4 packages (6.0 API) now that the API is stable.
   * Remove fix-api-headers.patch and fix-ftbfs-i386.patch.
   * debian/patches/fix-gtk4-build.patch:
     - Fix the GTK4 build.
