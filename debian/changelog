@@ -15,6 +15,8 @@ webkit2gtk (2.39.91-1) UNRELEASED; urgency=medium
     - Fix the GTK4 build.
   * debian/libwebkit2gtk-4.0-37.symbols:
     - Update symbols.
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 22 Feb 2023 16:07:33 +0100
 
