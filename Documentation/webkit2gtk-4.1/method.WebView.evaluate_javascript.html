@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.90</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -307,7 +307,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L4000">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L4028">[src]</a>
         
       </h4>
 
@@ -328,18 +328,16 @@ a&nbsp;string:</p>
 <span class="w">                              </span><span class="n">GAsyncResult</span><span class="w"> </span><span class="o">*</span><span class="n">result</span><span class="p">,</span>
 <span class="w">                              </span><span class="n">gpointer</span><span class="w">      </span><span class="n">user_data</span><span class="p">)</span>
 <span class="p">{</span>
-<span class="w">    </span><span class="n">WebKitJavascriptResult</span><span class="w"> </span><span class="o">*</span><span class="n">js_result</span><span class="p">;</span>
 <span class="w">    </span><span class="n">JSCValue</span><span class="w">               </span><span class="o">*</span><span class="n">value</span><span class="p">;</span>
 <span class="w">    </span><span class="n">GError</span><span class="w">                 </span><span class="o">*</span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span>
 
-<span class="w">    </span><span class="n">js_result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_evaluate_javascript_finish</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="w"> </span><span class="p">(</span><span class="n">object</span><span class="p">),</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">error</span><span class="p">);</span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">js_result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_web_view_evaluate_javascript_finish</span><span class="w"> </span><span class="p">(</span><span class="n">WEBKIT_WEB_VIEW</span><span class="w"> </span><span class="p">(</span><span class="n">object</span><span class="p">),</span><span class="w"> </span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">error</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">g_warning</span><span class="w"> </span><span class="p">(</span><span class="s">&quot;Error running javascript: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">error</span><span class="o">-&gt;</span><span class="n">message</span><span class="p">);</span>
 <span class="w">        </span><span class="n">g_error_free</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="p">);</span>
 <span class="w">        </span><span class="k">return</span><span class="p">;</span>
 <span class="w">    </span><span class="p">}</span>
 
-<span class="w">    </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">webkit_javascript_result_get_js_value</span><span class="w"> </span><span class="p">(</span><span class="n">js_result</span><span class="p">);</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_is_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">gchar</span><span class="w">        </span><span class="o">*</span><span class="n">str_value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_value_to_string</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
 <span class="w">        </span><span class="n">JSCException</span><span class="w"> </span><span class="o">*</span><span class="n">exception</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jsc_context_get_exception</span><span class="w"> </span><span class="p">(</span><span class="n">jsc_value_get_context</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="p">));</span>

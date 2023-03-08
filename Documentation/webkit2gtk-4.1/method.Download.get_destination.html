@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.90</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -144,14 +144,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L448">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L489">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Obtains the <span class="caps">URI</span> to which the downloaded file will be&nbsp;written.</p>
-<p>You
-can connect to <code>WebKitDownload::created-destination</code> to make
+        <p>Obtains the destination to which the downloaded file will be&nbsp;written.</p>
+<p>You can connect to <code>WebKitDownload::created-destination</code> to make
 sure this method returns a valid&nbsp;destination.</p>
       </div>
 
@@ -194,13 +193,13 @@ sure this method returns a valid&nbsp;destination.</p>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>
-            <td><p>The destination <span class="caps">URI</span> or <code>NULL</code>.</p></td>
+            <td><p>The destination or <code>NULL</code>.</p></td>
           </tr>
           
           
           
           <tr><td>&nbsp;</td><td title="transfer: none">The data is owned by the instance.</td></tr>
-          
+          <tr><td>&nbsp;</td><td>The return value can be <code>NULL</code>.</td></tr>
           <tr><td>&nbsp;</td><td>The value is a NUL terminated UTF-8 string.</td></tr>
         </table>
       </div>
