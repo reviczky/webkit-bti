@@ -7,6 +7,8 @@ webkit2gtk (2.39.91-1) UNRELEASED; urgency=medium
     - Use reduced optimizations on m68k in order to lower memory
       requirements (John Paul Adrian Glaubitz) (Closes: #1032404).
     - Rename libwebkitgtk-6.0-3 to libwebkitgtk-6.0-4 after a soname bump.
+    - Rename WebKit2WebExtension to WebKitWebProcessExtension in the GTK4
+      build's install files.
   * Remove fix-api-headers.patch and fix-ftbfs-i386.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 22 Feb 2023 16:07:33 +0100
