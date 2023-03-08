@@ -10,6 +10,8 @@ webkit2gtk (2.39.91-1) UNRELEASED; urgency=medium
     - Rename WebKit2WebExtension to WebKitWebProcessExtension in the GTK4
       build's install files.
   * Remove fix-api-headers.patch and fix-ftbfs-i386.patch.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    - Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 22 Feb 2023 16:07:33 +0100
 

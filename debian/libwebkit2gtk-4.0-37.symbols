@@ -1,9 +1,9 @@
 libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
 * Build-Depends-Package: libwebkit2gtk-4.0-dev
  (c++)"WebKit::NetworkProcessMain(int, char**)@Base" 2.27.90
+ (c++)"WebKit::WebProcessExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.39.91
+ (c++)"WebKit::WebProcessExtensionManager::singleton()@Base" 2.39.91
  (c++)"WebKit::WebProcessMain(int, char**)@Base" 2.27.90
- (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
- (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
  webkit_application_info_get_version@Base 2.17.90
@@ -1569,11 +1569,11 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_error_get_type@Base 2.5.3
  webkit_javascript_error_quark@Base 2.5.3
  (gtk3-only)webkit_javascript_result_get_global_context@Base 2.5.3
- webkit_javascript_result_get_js_value@Base 2.21.1
- webkit_javascript_result_get_type@Base 2.5.3
+ (gtk3-only)webkit_javascript_result_get_js_value@Base 2.21.1
+ (gtk3-only)webkit_javascript_result_get_type@Base 2.5.3
  (gtk3-only)webkit_javascript_result_get_value@Base 2.5.3
- webkit_javascript_result_ref@Base 2.5.3
- webkit_javascript_result_unref@Base 2.5.3
+ (gtk3-only)webkit_javascript_result_ref@Base 2.5.3
+ (gtk3-only)webkit_javascript_result_unref@Base 2.5.3
  webkit_load_event_get_type@Base 2.5.3
  webkit_media_capture_state_get_type@Base 2.33.3
 #(gtk4-only)webkit_media_error_get_type@Base 2.39.4
@@ -1895,6 +1895,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_region_get_type@Base 2.5.3
  webkit_tls_errors_policy_get_type@Base 2.5.3
  webkit_uri_for_display@Base 2.23.90
+ webkit_uri_scheme_request_get_http_body@Base 2.39.91
  webkit_uri_request_get_http_headers@Base 2.5.3
  webkit_uri_request_get_http_method@Base 2.12.0
  webkit_uri_request_get_type@Base 2.5.3
@@ -2031,16 +2032,18 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  (gtk3-only)webkit_web_context_set_use_system_appearance_for_scrollbars@Base 2.29.1
  (gtk3-only)webkit_web_context_set_tls_errors_policy@Base 2.5.3
- webkit_web_context_set_web_extensions_directory@Base 2.5.3
- webkit_web_context_set_web_extensions_initialization_user_data@Base 2.5.3
+ (gtk3-only)webkit_web_context_set_web_extensions_directory@Base 2.5.3
+ (gtk3-only)webkit_web_context_set_web_extensions_initialization_user_data@Base 2.5.3
  (gtk3-only)webkit_web_context_set_web_process_count_limit@Base 2.10.0
+#(gtk4-only)webkit_web_context_set_web_process_extensions_directory@Base 2.39.91
+#(gtk4-only)webkit_web_context_set_web_process_extensions_initialization_user_data@Base 2.39.91
  webkit_web_editor_get_page@Base 2.10.0
  webkit_web_editor_get_type@Base 2.10.0
- webkit_web_extension_get_page@Base 2.5.3
- webkit_web_extension_get_type@Base 2.5.3
+ (gtk3-only)webkit_web_extension_get_page@Base 2.5.3
+ (gtk3-only)webkit_web_extension_get_type@Base 2.5.3
  webkit_web_extension_mode_get_type@Base 2.37.1
- webkit_web_extension_send_message_to_context@Base 2.27.2
- webkit_web_extension_send_message_to_context_finish@Base 2.27.2
+ (gtk3-only)webkit_web_extension_send_message_to_context@Base 2.27.2
+ (gtk3-only)webkit_web_extension_send_message_to_context_finish@Base 2.27.2
  webkit_web_form_manager_get_type@Base 2.39.3
  webkit_web_form_manager_input_element_auto_fill@Base 2.39.3
  webkit_web_form_manager_input_element_is_auto_filled@Base 2.39.3
@@ -2079,6 +2082,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_page_get_uri@Base 2.5.3
  webkit_web_page_send_message_to_view@Base 2.27.2
  webkit_web_page_send_message_to_view_finish@Base 2.27.2
+#(gtk4-only)webkit_web_process_extension_get_page@Base 2.39.91
+#(gtk4-only)webkit_web_process_extension_get_type@Base 2.39.91
+#(gtk4-only)webkit_web_process_extension_send_message_to_context@Base 2.39.91
+#(gtk4-only)webkit_web_process_extension_send_message_to_context_finish@Base 2.39.91
  webkit_web_process_termination_reason_get_type@Base 2.19.4
  webkit_web_resource_get_data@Base 2.5.3
  webkit_web_resource_get_data_finish@Base 2.5.3
