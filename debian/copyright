@@ -2404,6 +2404,8 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Source/WebKit/UIProcess/API/glib/IconDatabase.h
        Source/WebKit/UIProcess/API/glib/InputMethodFilter.cpp
        Source/WebKit/UIProcess/API/glib/InputMethodFilter.h
+       Source/WebKit/UIProcess/API/glib/KeyAutoRepeatHandler.cpp
+       Source/WebKit/UIProcess/API/glib/KeyAutoRepeatHandler.h
        Source/WebKit/UIProcess/API/glib/WebKitApplicationInfo.cpp
        Source/WebKit/UIProcess/API/glib/WebKitAuthenticationRequest.cpp
        Source/WebKit/UIProcess/API/glib/WebKitAuthenticationRequestPrivate.h
@@ -2544,7 +2546,7 @@ Files: Source/JavaScriptCore/API/JSAPIValueWrapper.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestResources.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestSSL.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitPolicyClient.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/WebExtensionTest.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/WebProcessExtensionTest.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/WebProcessTest.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/WebProcessTest.h
        Tools/TestWebKitAPI/Tests/WebKitGtk/*
@@ -2717,6 +2719,7 @@ Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebFormManagerPrivate.h
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebHitTestResult.cpp
        Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebPage.cpp
+       Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebProcessExtension.cpp
        Tools/TestWebKitAPI/Tests/JavaScriptCore/glib/TestJSC.cpp
        Tools/TestWebKitAPI/Tests/WPEQt/*
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestAuthentication.cpp
@@ -2730,7 +2733,6 @@ Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestMultiprocess.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestOptionMenu.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestUIClient.cpp
-       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebExtensions.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitFaviconDatabase.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitFindController.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitNetworkSession.cpp
@@ -2739,6 +2741,7 @@ Files: Source/WebCore/platform/graphics/OpenGLShims.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitUserContentManager.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebContext.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebKitWebView.cpp
+       Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebProcessExtensions.cpp
        Tools/TestWebKitAPI/Tests/WebKitGLib/TestWebsiteData.cpp
        Tools/TestWebKitAPI/Tests/WebKitGtk/TestContextMenu.cpp
        Tools/TestWebKitAPI/Tests/WebKitGtk/TestDOMClientRect.cpp
