@@ -1,4 +1,4 @@
-webkit2gtk (2.39.91-1) UNRELEASED; urgency=medium
+webkit2gtk (2.39.91-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/rules:
@@ -20,7 +20,7 @@ webkit2gtk (2.39.91-1) UNRELEASED; urgency=medium
   * debian/copyright:
     - Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 22 Feb 2023 16:07:33 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 08 Mar 2023 19:21:39 +0100
 
 webkit2gtk (2.39.90-1) experimental; urgency=medium
 
