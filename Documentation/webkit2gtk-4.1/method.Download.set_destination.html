@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.39.90</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -133,7 +133,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <pre><code><div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="n">webkit_download_set_destination</span><span class="w"> </span><span class="p">(</span>
 <span class="w">  </span><span class="n">WebKitDownload</span><span class="o">*</span><span class="w"> </span><span class="n">download</span><span class="p">,</span>
-<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="n">gchar</span><span class="o">*</span><span class="w"> </span><span class="n">uri</span>
+<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="n">gchar</span><span class="o">*</span><span class="w"> </span><span class="n">destination</span>
 <span class="p">)</span>
 </pre></div>
 </code></pre>
@@ -145,22 +145,21 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L467">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L511">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Sets the <span class="caps">URI</span> to which the downloaded file will be&nbsp;written.</p>
+        <p>Sets the destination to which the downloaded file will be&nbsp;written.</p>
 <p>This method should be called before the download transfer
 starts or it will not have any effect on the ongoing download
 operation. To set the destination using the filename suggested
 by the server connect to <code>WebKitDownload::decide-destination</code>
 signal and call webkit_download_set_destination(). If you want to
-set a fixed destination <span class="caps">URI</span> that doesn&#8217;t depend on the suggested
-filename you can connect to notify::response signal and call
-webkit_download_set_destination().
-If <code>WebKitDownload::decide-destination</code> signal is not handled
-and destination <span class="caps">URI</span> is not set when the download transfer starts,
+set a fixed destination that doesn&#8217;t depend on the suggested
+filename you can connect to notify::response signal and call&nbsp;webkit_download_set_destination().</p>
+<p>If <code>WebKitDownload::decide-destination</code> signal is not handled
+and destination is not set when the download transfer starts,
 the file will be saved with the filename suggested by the server in
 <code>G_USER_DIRECTORY_DOWNLOAD</code> directory.</p>
       </div>
@@ -190,12 +189,12 @@ the file will be saved with the filename suggested by the server in
         <table class="arguments">
           
           <tr class="arg-name">
-            <td><code>uri</code></td>
+            <td><code>destination</code></td>
             <td><code>const gchar*</code></td>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>
-            <td><p>The destination <span class="caps">URI</span>.</p></td>
+            <td><p>The&nbsp;destination.</p></td>
           </tr>
           
           

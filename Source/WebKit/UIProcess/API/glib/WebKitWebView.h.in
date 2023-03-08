@@ -59,7 +59,9 @@
 #endif
 
 #if PLATFORM(GTK)
+#if !ENABLE(2022_GLIB_API)
 #include <JavaScriptCore/JSBase.h>
+#endif
 #include <webkit/WebKitColorChooserRequest.h>
 #include <webkit/WebKitWebInspector.h>
 #include <webkit/WebKitWebViewBase.h>
@@ -628,7 +630,7 @@ webkit_web_view_execute_editing_command_with_argument(WebKitWebView             
 WEBKIT_API WebKitFindController *
 webkit_web_view_get_find_controller                  (WebKitWebView             *web_view);
 
-#if PLATFORM(GTK) && !USE(GTK4)
+#if PLATFORM(GTK) && !ENABLE(2022_GLIB_API)
 WEBKIT_DEPRECATED JSGlobalContextRef
 webkit_web_view_get_javascript_global_context        (WebKitWebView             *web_view);
 #endif
@@ -643,7 +645,7 @@ webkit_web_view_evaluate_javascript                  (WebKitWebView             
                                                       GAsyncReadyCallback        callback,
                                                       gpointer                   user_data);
 
-WEBKIT_API WebKitJavascriptResult *
+WEBKIT_API JSCValue *
 webkit_web_view_evaluate_javascript_finish           (WebKitWebView             *web_view,
                                                       GAsyncResult              *result,
                                                       GError                   **error);
@@ -659,7 +661,7 @@ webkit_web_view_call_async_javascript_function       (WebKitWebView             
                                                       GAsyncReadyCallback        callback,
                                                       gpointer                   user_data);
 
-WEBKIT_API WebKitJavascriptResult *
+WEBKIT_API JSCValue *
 webkit_web_view_call_async_javascript_function_finish(WebKitWebView             *web_view,
                                                       GAsyncResult              *result,
                                                       GError                   **error);

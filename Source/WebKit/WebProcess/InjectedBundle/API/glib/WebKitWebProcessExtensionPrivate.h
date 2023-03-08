@@ -22,8 +22,14 @@
 #include "InjectedBundle.h"
 #include "UserMessage.h"
 #include "WKDeclarationSpecifiers.h"
-#include "WebKitWebExtension.h"
 
-WebKitWebExtension* webkitWebExtensionCreate(WebKit::InjectedBundle*);
-void webkitWebExtensionDidReceiveUserMessage(WebKitWebExtension*, WebKit::UserMessage&&);
-WK_EXPORT void webkitWebExtensionSetGarbageCollectOnPageDestroy(WebKitWebExtension*);
+#if ENABLE(2022_GLIB_API)
+#include "WebKitWebProcessExtension.h"
+#else
+#include "WebKitWebExtension.h"
+typedef _WebKitWebExtension WebKitWebProcessExtension;
+#endif
+
+WebKitWebProcessExtension* webkitWebProcessExtensionCreate(WebKit::InjectedBundle*);
+void webkitWebProcessExtensionDidReceiveUserMessage(WebKitWebProcessExtension*, WebKit::UserMessage&&);
+WK_EXPORT void webkitWebProcessExtensionSetGarbageCollectOnPageDestroy(WebKitWebProcessExtension*);
