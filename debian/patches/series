@@ -5,5 +5,3 @@ prefer-pthread.patch
 dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-ftbfs-hurd.patch
-fix-api-headers.patch
-fix-ftbfs-i386.patch
