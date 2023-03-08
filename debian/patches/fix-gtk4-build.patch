@@ -1,0 +1,75 @@
+From: Adrian Perez de Castro <aperez@igalia.com>
+Subject: Fix GTK 4 build
+Origin: https://github.com/WebKit/WebKit/commit/10c9256883bf38b9fbcfbc91577783d4df90d1bd
+Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitUserContentManager.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitUserContentManager.cpp
++++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitUserContentManager.cpp
+@@ -23,7 +23,6 @@
+ #include "APISerializedScriptValue.h"
+ #include "InjectUserScriptImmediately.h"
+ #include "WebKitInitialize.h"
+-#include "WebKitJavascriptResultPrivate.h"
+ #include "WebKitUserContentManagerPrivate.h"
+ #include "WebKitUserContentPrivate.h"
+ #include "WebKitWebContextPrivate.h"
+@@ -36,6 +35,10 @@
+ #include "WPEView.h"
+ #endif
+ 
++#if !ENABLE(2022_GLIB_API)
++#include "WebKitJavascriptResultPrivate.h"
++#endif
++
+ using namespace WebCore;
+ using namespace WebKit;
+ 
+Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp
++++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp
+@@ -46,7 +46,6 @@
+ #include "WebKitHitTestResultPrivate.h"
+ #include "WebKitIconLoadingClient.h"
+ #include "WebKitInputMethodContextPrivate.h"
+-#include "WebKitJavascriptResultPrivate.h"
+ #include "WebKitNavigationClient.h"
+ #include "WebKitNotificationPrivate.h"
+ #include "WebKitPermissionStateQueryPrivate.h"
+@@ -106,6 +105,8 @@
+ 
+ #if ENABLE(2022_GLIB_API)
+ #include "WebKitNetworkSessionPrivate.h"
++#else
++#include "WebKitJavascriptResultPrivate.h"
+ #endif
+ 
+ using namespace WebKit;
+Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitAutocleanups.h.in
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitAutocleanups.h.in
++++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitAutocleanups.h.in
+@@ -87,7 +87,9 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitApp
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitCredential, webkit_credential_free)
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitITPFirstParty, webkit_itp_first_party_unref)
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitITPThirdParty, webkit_itp_third_party_unref)
++#if !ENABLE(2022_GLIB_API)
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitJavascriptResult, webkit_javascript_result_unref)
++#endif
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitMemoryPressureSettings, webkit_memory_pressure_settings_free)
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitNavigationAction, webkit_navigation_action_free)
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (WebKitNetworkProxySettings, webkit_network_proxy_settings_free)
+Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebView.h.in
+===================================================================
+--- webkitgtk.orig/Source/WebKit/UIProcess/API/glib/WebKitWebView.h.in
++++ webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebView.h.in
+@@ -36,7 +36,9 @@
+ #include <@API_INCLUDE_PREFIX@/WebKitFormSubmissionRequest.h>
+ #include <@API_INCLUDE_PREFIX@/WebKitHitTestResult.h>
+ #include <@API_INCLUDE_PREFIX@/WebKitInputMethodContext.h>
++#if !ENABLE(2022_GLIB_API)
+ #include <@API_INCLUDE_PREFIX@/WebKitJavascriptResult.h>
++#endif
+ #include <@API_INCLUDE_PREFIX@/WebKitNavigationAction.h>
+ #include <@API_INCLUDE_PREFIX@/WebKitNotification.h>
+ #include <@API_INCLUDE_PREFIX@/WebKitOptionMenu.h>
