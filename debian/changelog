@@ -8,6 +8,8 @@ wpewebkit (2.39.91-1) UNRELEASED; urgency=medium
   * debian/rules:
     - Build with -DDEBUG_FISSION=OFF since it adds the -gsplit-dwarf flag
       that is currently not supported by dh_dwz (see #1016936).
+  * debian/source/lintian-overrides:
+    - Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 Mar 2023 17:49:40 +0100
 
