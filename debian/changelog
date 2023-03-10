@@ -2,6 +2,9 @@ wpewebkit (2.39.91-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/control.in:
+    - Add build dependencies on libgstreamer-plugins-bad1.0-dev, unidef
+      and libavif-dev.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 Mar 2023 17:49:40 +0100
 
