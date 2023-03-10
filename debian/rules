@@ -48,6 +48,9 @@ endif
 # most buildds. Use -g1 in all architectures to make them smaller.
 CFLAGS := $(CFLAGS:-g=-g1)
 
+# Don't build with -gsplit-dwarf (see #1016936)
+EXTRA_CMAKE_ARGUMENTS += -DDEBUG_FISSION=OFF
+
 # Use the CLoop Javascript interpreter and disable the JIT. This is
 # slow but it is the most compatible solution for old (non-SSE2) CPUs.
 ifneq (,$(filter $(DEB_HOST_ARCH),i386))
