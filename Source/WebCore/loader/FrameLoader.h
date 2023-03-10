@@ -54,6 +54,7 @@
 
 namespace WebCore {
 
+class AbstractFrame;
 class Archive;
 class CachedFrameBase;
 class CachedPage;
@@ -84,6 +85,7 @@ enum class NewLoadInProgress : bool;
 enum class NavigationPolicyDecision : uint8_t;
 enum class ShouldTreatAsContinuingLoad : uint8_t;
 enum class UsedLegacyTLS : bool;
+enum class WasPrivateRelayed : bool;
 enum class IsMainResource : bool { No, Yes };
 enum class ShouldUpdateAppInitiatedValue : bool { No, Yes };
 
@@ -216,7 +218,7 @@ public:
     FrameLoaderClient& client() { return m_client.get(); }
 
     WEBCORE_EXPORT std::optional<PageIdentifier> pageID() const;
-    WEBCORE_EXPORT std::optional<FrameIdentifier> frameID() const;
+    WEBCORE_EXPORT FrameIdentifier frameID() const;
 
     void setDefersLoading(bool);
 
@@ -271,6 +273,8 @@ public:
     FrameLoaderStateMachine& stateMachine() { return m_stateMachine; }
     const FrameLoaderStateMachine& stateMachine() const { return m_stateMachine; }
 
+    void advanceStatePastInitialEmptyDocument();
+
     // FIXME: should return RefPtr.
     WEBCORE_EXPORT Frame* findFrameForNavigation(const AtomString& name, Document* activeDocument = nullptr);
 
@@ -297,6 +301,9 @@ public:
     void loadProgressingStatusChanged();
 
     const URL& previousURL() const { return m_previousURL; }
+
+    bool isHTTPFallbackInProgress() const { return m_isHTTPFallbackInProgress; }
+    void setHTTPFallbackInProgress(bool value) { m_isHTTPFallbackInProgress = value; }
 
     WEBCORE_EXPORT void completePageTransitionIfNeeded();
 
@@ -332,6 +339,8 @@ private:
         MayNotAttemptCacheOnlyLoadForFormSubmissionItem
     };
 
+    void executeJavaScriptURL(const URL&, const NavigationAction&);
+
     bool allChildrenAreComplete() const; // immediate children, not all descendants
 
     void checkTimerFired();
@@ -363,8 +372,9 @@ private:
     bool shouldPerformFragmentNavigation(bool isFormSubmission, const String& httpMethod, FrameLoadType, const URL&);
     void scrollToFragmentWithParentBoundary(const URL&, bool isNewNavigation = true);
 
-    void dispatchDidFailProvisionalLoad(DocumentLoader& provisionalDocumentLoader, const ResourceError&);
+    void dispatchDidFailProvisionalLoad(DocumentLoader& provisionalDocumentLoader, const ResourceError&, WillInternallyHandleFailure);
     void checkLoadCompleteForThisFrame();
+    void handleLoadFailureRecovery(DocumentLoader&, const ResourceError&, bool);
 
     void setDocumentLoader(DocumentLoader*);
     void setPolicyDocumentLoader(DocumentLoader*);
@@ -377,7 +387,7 @@ private:
 
     bool shouldReloadToHandleUnreachableURL(DocumentLoader&);
 
-    void dispatchDidCommitLoad(std::optional<HasInsecureContent> initialHasInsecureContent, std::optional<UsedLegacyTLS> initialUsedLegacyTLS);
+    void dispatchDidCommitLoad(std::optional<HasInsecureContent> initialHasInsecureContent, std::optional<UsedLegacyTLS> initialUsedLegacyTLS, std::optional<WasPrivateRelayed> initialWasPrivateRelayed);
 
     void loadWithDocumentLoader(DocumentLoader*, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, CompletionHandler<void()>&& = [] { }); // Calls continueLoadAfterNavigationPolicy
     void load(DocumentLoader&, const SecurityOrigin* requesterOrigin); // Calls loadWithDocumentLoader
@@ -427,7 +437,7 @@ private:
     void clearProvisionalLoadForPolicyCheck();
     bool hasOpenedFrames() const;
 
-    bool preventsParentFromBeingComplete(const Frame&) const;
+    bool preventsParentFromBeingComplete(const AbstractFrame&) const;
 
     Frame& m_frame;
     UniqueRef<FrameLoaderClient> m_client;
@@ -504,6 +514,7 @@ private:
     bool m_alwaysAllowLocalWebarchive { false };
 
     bool m_inStopForBackForwardCache { false };
+    bool m_isHTTPFallbackInProgress { false };
 };
 
 // This function is called by createWindow() in JSDOMWindowBase.cpp, for example, for

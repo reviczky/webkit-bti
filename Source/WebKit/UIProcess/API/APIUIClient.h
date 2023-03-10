@@ -26,6 +26,7 @@
 #pragma once
 
 #include "APIInspectorConfiguration.h"
+#include "APISecurityOrigin.h"
 #include "WKPage.h"
 #include "WebEvent.h"
 #include "WebHitTestResultData.h"
@@ -34,6 +35,7 @@
 #include <WebCore/FloatRect.h>
 #include <WebCore/ModalContainerTypes.h>
 #include <WebCore/PermissionState.h>
+#include <WebCore/ScreenOrientationType.h>
 #include <wtf/CompletionHandler.h>
 
 #if PLATFORM(COCOA)
@@ -58,7 +60,7 @@ namespace WebCore {
 class RegistrableDomain;
 class ResourceRequest;
 struct FontAttributes;
-struct SecurityOriginData;
+class SecurityOriginData;
 struct WindowFeatures;
 }
 
@@ -108,7 +110,7 @@ public:
     virtual void runJavaScriptPrompt(WebKit::WebPageProxy&, const WTF::String&, const WTF::String&, WebKit::WebFrameProxy*, WebKit::FrameInfoData&&, Function<void(const WTF::String&)>&& completionHandler) { completionHandler(WTF::String()); }
 
     virtual void setStatusText(WebKit::WebPageProxy*, const WTF::String&) { }
-    virtual void mouseDidMoveOverElement(WebKit::WebPageProxy&, const WebKit::WebHitTestResultData&, OptionSet<WebKit::WebEvent::Modifier>, Object*) { }
+    virtual void mouseDidMoveOverElement(WebKit::WebPageProxy&, const WebKit::WebHitTestResultData&, OptionSet<WebKit::WebEventModifier>, Object*) { }
 
     virtual void didNotHandleKeyEvent(WebKit::WebPageProxy*, const WebKit::NativeWebKeyboardEvent&) { }
     virtual void didNotHandleWheelEvent(WebKit::WebPageProxy*, const WebKit::NativeWebWheelEvent&) { }
@@ -138,6 +140,9 @@ public:
     {
         completionHandler(currentQuota);
     }
+
+    virtual bool lockScreenOrientation(WebKit::WebPageProxy&, WebCore::ScreenOrientationType) { return false; }
+    virtual void unlockScreenOrientation(WebKit::WebPageProxy&) { }
 
     virtual bool needsFontAttributes() const { return false; }
     virtual void didChangeFontAttributes(const WebCore::FontAttributes&) { }
@@ -175,6 +180,7 @@ public:
 #endif
     virtual RetainPtr<NSArray> actionsForElement(_WKActivatedElementInfo *, RetainPtr<NSArray> defaultActions) { return defaultActions; }
     virtual void didNotHandleTapAsClick(const WebCore::IntPoint&) { }
+    virtual void statusBarWasTapped() { }
 #endif
 #if PLATFORM(COCOA)
     virtual PlatformViewController *presentingViewController() { return nullptr; }
@@ -196,8 +202,6 @@ public:
 
     virtual void imageOrMediaDocumentSizeChanged(const WebCore::IntSize&) { }
 
-    virtual void didExceedBackgroundResourceLimitWhileInForeground(WebKit::WebPageProxy&, WKResourceLimit) { }
-    
     virtual void didShowSafeBrowsingWarning() { }
 
     virtual void confirmPDFOpening(WebKit::WebPageProxy&, const WTF::URL&, WebKit::FrameInfoData&&, CompletionHandler<void(bool)>&& completionHandler) { completionHandler(true); }
@@ -220,8 +224,6 @@ public:
     virtual void didEnableInspectorBrowserDomain(WebKit::WebPageProxy&) { }
     virtual void didDisableInspectorBrowserDomain(WebKit::WebPageProxy&) { }
 
-    virtual void decidePolicyForSpeechRecognitionPermissionRequest(WebKit::WebPageProxy& page, API::SecurityOrigin& origin, CompletionHandler<void(bool)>&& completionHandler) { page.requestSpeechRecognitionPermissionByDefaultAction(origin.securityOrigin(), WTFMove(completionHandler)); }
-
     virtual void decidePolicyForMediaKeySystemPermissionRequest(WebKit::WebPageProxy& page, API::SecurityOrigin& origin, const WTF::String& keySystem, CompletionHandler<void(bool)>&& completionHandler) { page.requestMediaKeySystemPermissionByDefaultAction(origin.securityOrigin(), WTFMove(completionHandler)); }
 
     virtual void queryPermission(const WTF::String& permissionName, API::SecurityOrigin& origin, CompletionHandler<void(std::optional<WebCore::PermissionState>)>&& completionHandler) { completionHandler({ }); }
@@ -231,6 +233,9 @@ public:
     virtual void startXRSession(WebKit::WebPageProxy&, CompletionHandler<void(RetainPtr<id>)>&& completionHandler) { completionHandler(nil); }
     virtual void endXRSession(WebKit::WebPageProxy&) { }
 #endif
+
+    virtual void updateAppBadge(WebKit::WebPageProxy&, const WebCore::SecurityOriginData&, std::optional<uint64_t>) { }
+    virtual void updateClientBadge(WebKit::WebPageProxy&, const WebCore::SecurityOriginData&, std::optional<uint64_t>) { }
 };
 
 } // namespace API

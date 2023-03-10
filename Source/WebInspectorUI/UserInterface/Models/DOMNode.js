@@ -162,13 +162,18 @@ WI.DOMNode = class DOMNode extends WI.Object
         if (!InspectorBackend.Enum.CSS.LayoutFlag) {
             let layoutFlags = [WI.DOMNode.LayoutFlag.Rendered];
             if (payload.layoutContextType)
-                layoutFlags.append(payload.layoutContextType);
+                layoutFlags.push(payload.layoutContextType);
             this.layoutFlags = layoutFlags;
         } else
             this.layoutFlags = payload.layoutFlags;
     }
 
     // Static
+
+    static get defaultLayoutOverlayColor()
+    {
+        return new WI.Color(WI.Color.Format.HSL, WI.DOMNode._defaultLayoutOverlayConfiguration.colors[0]);
+    }
 
     static resetDefaultLayoutOverlayConfiguration()
     {
@@ -273,10 +278,8 @@ WI.DOMNode = class DOMNode extends WI.Object
         layoutFlags ||= [];
         console.assert(Array.isArray(layoutFlags), layoutFlags);
         console.assert(layoutFlags.every((layoutFlag) => Object.values(WI.DOMNode.LayoutFlag).includes(layoutFlag)), layoutFlags);
-        console.assert(layoutFlags.filter((layoutFlag) => WI.DOMNode._LayoutContextTypes.includes(layoutFlag)).length <= 1, this._layoutFlags);
-
-        if (Array.shallowEqual(layoutFlags, this._layoutFlags))
-            return;
+        console.assert(layoutFlags.filter((layoutFlag) => WI.DOMNode._LayoutContextTypes.includes(layoutFlag)).length <= 1, layoutFlags);
+        console.assert(!layoutFlags.length || !Array.shallowEqual(layoutFlags, this._layoutFlags), layoutFlags);
 
         let oldLayoutContextType = this.layoutContextType;
 
@@ -630,7 +633,10 @@ WI.DOMNode = class DOMNode extends WI.Object
         }
 
         let target = WI.assumingMainTarget();
-        target.DOMAgent.highlightNode(WI.DOMManager.buildHighlightConfig(mode), this.id);
+        target.DOMAgent.highlightNode.invoke({
+            nodeId: this.id,
+            ...WI.DOMManager.buildHighlightConfigs(mode),
+        });
     }
 
     showLayoutOverlay({color} = {})
@@ -650,12 +656,21 @@ WI.DOMNode = class DOMNode extends WI.Object
 
         switch (this.layoutContextType) {
         case WI.DOMNode.LayoutFlag.Grid:
-            agentCommandArguments.gridColor = color.toProtocol();
-            agentCommandArguments.showLineNames = WI.settings.gridOverlayShowLineNames.value;
-            agentCommandArguments.showLineNumbers = WI.settings.gridOverlayShowLineNumbers.value;
-            agentCommandArguments.showExtendedGridLines = WI.settings.gridOverlayShowExtendedGridLines.value;
-            agentCommandArguments.showTrackSizes = WI.settings.gridOverlayShowTrackSizes.value;
-            agentCommandArguments.showAreaNames = WI.settings.gridOverlayShowAreaNames.value;
+            agentCommandArguments.gridOverlayConfig = {
+                gridColor: color.toProtocol(),
+                showLineNames: WI.settings.gridOverlayShowLineNames.value,
+                showLineNumbers: WI.settings.gridOverlayShowLineNumbers.value,
+                showExtendedGridLines: WI.settings.gridOverlayShowExtendedGridLines.value,
+                showTrackSizes: WI.settings.gridOverlayShowTrackSizes.value,
+                showAreaNames: WI.settings.gridOverlayShowAreaNames.value,
+            };
+
+            // COMPATIBILITY (macOS 13.3, iOS 16.4): DOM.GridOverlayConfig did not exist yet.
+            if (!target.hasCommand("DOM.showGridOverlay", "gridOverlayConfig")) {
+                for (let [key, value] in Object.entries(agentCommandArguments.gridOverlayConfig))
+                    agentCommandArguments[key] = value;
+            }
+
             agentCommandFunction = target.DOMAgent.showGridOverlay;
 
             if (!this._layoutOverlayShowing) {
@@ -668,8 +683,17 @@ WI.DOMNode = class DOMNode extends WI.Object
             break;
 
         case WI.DOMNode.LayoutFlag.Flex:
-            agentCommandArguments.flexColor = color.toProtocol();
-            agentCommandArguments.showOrderNumbers = WI.settings.flexOverlayShowOrderNumbers.value;
+            agentCommandArguments.flexOverlayConfig = {
+                flexColor: color.toProtocol(),
+                showOrderNumbers: WI.settings.flexOverlayShowOrderNumbers.value,
+            };
+
+            // COMPATIBILITY (macOS 13.3, iOS 16.4): DOM.FlexOverlayConfig did not exist yet.
+            if (!target.hasCommand("DOM.showFlexOverlay", "flexOverlayConfig")) {
+                for (let [key, value] in Object.entries(agentCommandArguments.flexOverlayConfig))
+                    agentCommandArguments[key] = value;
+            }
+
             agentCommandFunction = target.DOMAgent.showFlexOverlay;
 
             if (!this._layoutOverlayShowing)
@@ -834,20 +858,6 @@ WI.DOMNode = class DOMNode extends WI.Object
             return;
 
         let target = WI.assumingMainTarget();
-
-        // COMPATIBILITY (iOS 11.0): DOM.insertAdjacentHTML did not exist.
-        if (!target.hasCommand("DOM.insertAdjacentHTML")) {
-            WI.RemoteObject.resolveNode(this).then((object) => {
-                function inspectedPage_node_insertAdjacentHTML(position, html) {
-                    this.insertAdjacentHTML(position, html);
-                }
-
-                object.callFunction(inspectedPage_node_insertAdjacentHTML, [position, html]);
-                object.release();
-            });
-            return;
-        }
-
         target.DOMAgent.insertAdjacentHTML(this.id, position, html, this._makeUndoableCallback());
     }
 
@@ -863,18 +873,21 @@ WI.DOMNode = class DOMNode extends WI.Object
         target.DOMAgent.removeNode(this.id, this._makeUndoableCallback(callback));
     }
 
-    getEventListeners(callback)
+    getEventListeners({includeAncestors} = {})
     {
         console.assert(!this._destroyed, this);
-        if (this._destroyed) {
-            callback("ERROR: node is destroyed");
-            return;
-        }
+        if (this._destroyed)
+            return Promise.reject("ERROR: node is destroyed");
 
-        console.assert(WI.domManager.inspectedNode === this);
+        includeAncestors ??= true;
+
+        console.assert(WI.domManager.inspectedNode === this || !includeAncestors, this, includeAncestors);
 
         let target = WI.assumingMainTarget();
-        target.DOMAgent.getEventListenersForNode(this.id, callback);
+        return target.DOMAgent.getEventListenersForNode.invoke({
+            nodeId: this.id,
+            includeAncestors,
+        });
     }
 
     accessibilityProperties(callback)
@@ -1355,6 +1368,8 @@ WI.DOMNode.CustomElementState = {
 // Corresponds to `CSS.LayoutFlag`.
 WI.DOMNode.LayoutFlag = {
     Rendered: "rendered",
+    Event: "event",
+    Scrollable: "scrollable",
 
     // These are mutually exclusive.
     Flex: "flex",

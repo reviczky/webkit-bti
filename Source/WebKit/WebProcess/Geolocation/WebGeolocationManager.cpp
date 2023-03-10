@@ -74,7 +74,7 @@ void WebGeolocationManager::registerWebPage(WebPage& page, const String& authori
     pageSets.pageSet.add(page);
     if (needsHighAccuracy)
         pageSets.highAccuracyPageSet.add(page);
-    m_pageToRegistrableDomain.add(&page, registrableDomain);
+    m_pageToRegistrableDomain.add(page, registrableDomain);
 
     if (!wasUpdating) {
         m_process.parentProcessConnection()->send(Messages::WebGeolocationManagerProxy::StartUpdating(registrableDomain, page.webPageProxyIdentifier(), authorizationToken, needsHighAccuracy), 0);
@@ -88,7 +88,7 @@ void WebGeolocationManager::registerWebPage(WebPage& page, const String& authori
 
 void WebGeolocationManager::unregisterWebPage(WebPage& page)
 {
-    auto registrableDomain = m_pageToRegistrableDomain.take(&page);
+    auto registrableDomain = m_pageToRegistrableDomain.take(page);
     if (registrableDomain.string().isEmpty())
         return;
 
@@ -110,13 +110,13 @@ void WebGeolocationManager::unregisterWebPage(WebPage& page)
             m_process.parentProcessConnection()->send(Messages::WebGeolocationManagerProxy::SetEnableHighAccuracy(registrableDomain, highAccuracyShouldBeEnabled), 0);
     }
 
-    if (pageSets.pageSet.computesEmpty() && pageSets.highAccuracyPageSet.computesEmpty())
+    if (pageSets.pageSet.isEmptyIgnoringNullReferences() && pageSets.highAccuracyPageSet.isEmptyIgnoringNullReferences())
         m_pageSets.remove(it);
 }
 
 void WebGeolocationManager::setEnableHighAccuracyForPage(WebPage& page, bool enabled)
 {
-    auto registrableDomain = m_pageToRegistrableDomain.get(&page);
+    auto registrableDomain = m_pageToRegistrableDomain.get(page);
     if (registrableDomain.string().isEmpty())
         return;
 
@@ -173,12 +173,12 @@ void WebGeolocationManager::didFailToDeterminePosition(const WebCore::Registrabl
 
 bool WebGeolocationManager::isUpdating(const PageSets& pageSets) const
 {
-    return !pageSets.pageSet.computesEmpty();
+    return !pageSets.pageSet.isEmptyIgnoringNullReferences();
 }
 
 bool WebGeolocationManager::isHighAccuracyEnabled(const PageSets& pageSets) const
 {
-    return !pageSets.highAccuracyPageSet.computesEmpty();
+    return !pageSets.highAccuracyPageSet.isEmptyIgnoringNullReferences();
 }
 
 #if PLATFORM(IOS_FAMILY)

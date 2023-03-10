@@ -28,7 +28,6 @@
 
 #if ENABLE(MOMENTUM_EVENT_DISPATCHER)
 
-#include "EventDispatcher.h"
 #include "Logging.h"
 #include "WebProcess.h"
 #include "WebProcessProxyMessages.h"
@@ -43,9 +42,9 @@ static constexpr Seconds deltaHistoryMaximumInterval = 150_ms;
 static constexpr WebCore::FramesPerSecond idealCurveFrameRate = 60;
 static constexpr Seconds idealCurveFrameInterval = 1_s / idealCurveFrameRate;
 
-MomentumEventDispatcher::MomentumEventDispatcher(EventDispatcher& dispatcher)
+MomentumEventDispatcher::MomentumEventDispatcher(Client& client)
     : m_observerID(DisplayLinkObserverID::generate())
-    , m_dispatcher(dispatcher)
+    , m_client(client)
 {
 }
 
@@ -178,7 +177,7 @@ void MomentumEventDispatcher::dispatchSyntheticMomentumEvent(WebWheelEvent::Phas
     // FIXME: Ideally we would stick legitimate rawPlatformDeltas on the event,
     // but currently nothing will consume them, and we'd have to keep track of them separately.
     WebWheelEvent syntheticEvent(
-        WebEvent::Wheel,
+        { WebEventType::Wheel, m_lastIncomingEvent->modifiers(), time },
         m_currentGesture.initiatingEvent->position(),
         m_currentGesture.initiatingEvent->globalPosition(),
         appKitAcceleratedDelta,
@@ -190,12 +189,11 @@ void MomentumEventDispatcher::dispatchSyntheticMomentumEvent(WebWheelEvent::Phas
         true,
         m_currentGesture.initiatingEvent->scrollCount(),
         delta,
-        m_lastIncomingEvent->modifiers(),
-        time,
         time,
         { },
         WebWheelEvent::MomentumEndType::Unknown);
-    m_dispatcher.internalWheelEvent(m_currentGesture.pageIdentifier, syntheticEvent, m_lastRubberBandableEdges, EventDispatcher::WheelEventOrigin::MomentumEventDispatcher);
+
+    m_client.handleSyntheticWheelEvent(m_currentGesture.pageIdentifier, syntheticEvent, m_lastRubberBandableEdges);
 
 #if ENABLE(MOMENTUM_EVENT_DISPATCHER_TEMPORARY_LOGGING)
     m_currentLogState.totalGeneratedOffset += appKitAcceleratedDelta.height();
@@ -248,9 +246,7 @@ void MomentumEventDispatcher::didEndMomentumPhase()
 
 #if ENABLE(MOMENTUM_EVENT_DISPATCHER_TEMPORARY_LOGGING)
     RELEASE_LOG(ScrollAnimations, "MomentumEventDispatcher ending synthetic momentum phase with total offset %.1f %.1f, duration %f (event offset would have been %.1f %.1f) (tail index %d of %zu)", m_currentGesture.currentOffset.width(), m_currentGesture.currentOffset.height(), (MonotonicTime::now() - m_currentGesture.startTime).seconds(), m_currentGesture.accumulatedEventOffset.width(), m_currentGesture.accumulatedEventOffset.height(), m_currentGesture.currentTailDeltaIndex, m_currentGesture.tailDeltaTable.size());
-    m_dispatcher.queue().dispatchAfter(1_s, [this] {
-        flushLog();
-    });
+    m_client.flushMomentumEventLoggingSoon();
 #endif
 
     stopDisplayLink();
@@ -266,7 +262,7 @@ void MomentumEventDispatcher::setScrollingAccelerationCurve(WebCore::PageIdentif
 #if ENABLE(MOMENTUM_EVENT_DISPATCHER_TEMPORARY_LOGGING)
     WTF::TextStream stream(WTF::TextStream::LineMode::SingleLine);
     stream << curve;
-    RELEASE_LOG(ScrollAnimations, "MomentumEventDispatcher set curve %{public}s", stream.release().utf8().data());
+    RELEASE_LOG(ScrollAnimations, "MomentumEventDispatcher set curve %" PUBLIC_LOG_STRING, stream.release().utf8().data());
 #endif
 }
 

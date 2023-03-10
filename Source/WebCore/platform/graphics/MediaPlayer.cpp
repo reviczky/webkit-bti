@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -44,6 +44,8 @@
 #include "PlatformTextTrack.h"
 #include "PlatformTimeRanges.h"
 #include "SecurityOrigin.h"
+#include "VideoFrame.h"
+#include "VideoFrameMetadata.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <wtf/Lock.h>
 #include <wtf/NeverDestroyed.h>
@@ -88,10 +90,6 @@
 #endif
 
 #endif // PLATFORM(COCOA)
-
-#if PLATFORM(WIN) && USE(AVFOUNDATION) && !USE(GSTREAMER)
-#include "MediaPlayerPrivateAVFoundationCF.h"
-#endif
 
 #if USE(EXTERNAL_HOLEPUNCH)
 #include "MediaPlayerPrivateHolePunch.h"
@@ -159,12 +157,10 @@ public:
     unsigned long long totalBytes() const final { return 0; }
     bool didLoadingProgress() const final { return false; }
 
-    void setSize(const IntSize&) final { }
+    void setPresentationSize(const IntSize&) final { }
 
     void paint(GraphicsContext&, const FloatRect&) final { }
     DestinationColorSpace colorSpace() final { return DestinationColorSpace::SRGB(); }
-
-    bool hasSingleSecurityOrigin() const final { return true; }
 };
 
 #if !RELEASE_LOG_DISABLED
@@ -296,10 +292,6 @@ static void buildMediaEnginesVector() WTF_REQUIRES_LOCK(mediaEngineVectorLock)
 
 #if ENABLE(MEDIA_STREAM)
         MediaPlayerPrivateMediaStreamAVFObjC::registerMediaEngine(addMediaEngine);
-#endif
-
-#if PLATFORM(WIN)
-        MediaPlayerPrivateAVFoundationCF::registerMediaEngine(addMediaEngine);
 #endif
     }
 #endif // USE(AVFOUNDATION)
@@ -480,7 +472,7 @@ void MediaPlayer::invalidate()
     m_client = &nullMediaPlayerClient();
 }
 
-bool MediaPlayer::load(const URL& url, const ContentType& contentType, const String& keySystem)
+bool MediaPlayer::load(const URL& url, const ContentType& contentType, const String& keySystem, bool requiresRemotePlayback)
 {
     ASSERT(!m_reloadTimer.isActive());
 
@@ -490,6 +482,7 @@ bool MediaPlayer::load(const URL& url, const ContentType& contentType, const Str
     m_contentType = contentType;
     m_url = url;
     m_keySystem = keySystem.convertToASCIILowercase();
+    m_requiresRemotePlayback = requiresRemotePlayback;
     m_contentMIMETypeWasInferredFromExtension = false;
 
 #if ENABLE(MEDIA_SOURCE)
@@ -531,6 +524,7 @@ bool MediaPlayer::load(const URL& url, const ContentType& contentType, MediaSour
     m_contentType = contentType;
     m_url = url;
     m_keySystem = emptyString();
+    m_requiresRemotePlayback = false;
     m_contentMIMETypeWasInferredFromExtension = false;
     loadWithNextMediaEngine(nullptr);
     return m_currentMediaEngine;
@@ -544,6 +538,7 @@ bool MediaPlayer::load(MediaStreamPrivate& mediaStream)
 
     m_mediaStream = &mediaStream;
     m_keySystem = emptyString();
+    m_requiresRemotePlayback = false;
     m_contentType = { };
     m_contentMIMETypeWasInferredFromExtension = false;
     loadWithNextMediaEngine(nullptr);
@@ -1057,10 +1052,13 @@ void MediaPlayer::didLoadingProgress(DidLoadingProgressCompletionHandler&& callb
     m_private->didLoadingProgressAsync(WTFMove(callback));
 }
 
-void MediaPlayer::setSize(const IntSize& size)
-{ 
-    m_size = size;
-    m_private->setSize(size);
+void MediaPlayer::setPresentationSize(const IntSize& size)
+{
+    if (m_presentationSize == size)
+        return;
+
+    m_presentationSize = size;
+    m_private->setPresentationSize(size);
 }
 
 void MediaPlayer::setPageIsVisible(bool visible)
@@ -1255,20 +1253,15 @@ void MediaPlayer::setShouldMaintainAspectRatio(bool maintainAspectRatio)
     m_private->setShouldMaintainAspectRatio(maintainAspectRatio);
 }
 
-bool MediaPlayer::hasSingleSecurityOrigin() const
-{
-    return m_private->hasSingleSecurityOrigin();
-}
-
 bool MediaPlayer::didPassCORSAccessCheck() const
 {
     return m_private->didPassCORSAccessCheck();
 }
 
-bool MediaPlayer::wouldTaintOrigin(const SecurityOrigin& origin) const
+bool MediaPlayer::isCrossOrigin(const SecurityOrigin& origin) const
 {
-    if (auto wouldTaint = m_private->wouldTaintOrigin(origin))
-        return *wouldTaint;
+    if (auto crossOrigin = m_private->isCrossOrigin(origin))
+        return *crossOrigin;
 
     if (m_url.protocolIsData())
         return false;
@@ -1521,13 +1514,6 @@ long MediaPlayer::platformErrorCode() const
 
     return m_private->platformErrorCode();
 }
-
-#if PLATFORM(WIN) && USE(AVFOUNDATION)
-GraphicsDeviceAdapter* MediaPlayer::graphicsDeviceAdapter() const
-{
-    return client().mediaPlayerGraphicsDeviceAdapter();
-}
-#endif
 
 CachedResourceLoader* MediaPlayer::cachedResourceLoader()
 {
@@ -1822,6 +1808,11 @@ void MediaPlayer::renderVideoWillBeDestroyed()
     m_private->renderVideoWillBeDestroyed();
 }
 
+void MediaPlayer::setShouldDisableHDR(bool shouldDisable)
+{
+    m_private->setShouldDisableHDR(shouldDisable);
+}
+
 void MediaPlayer::playerContentBoxRectChanged(const LayoutRect& rect)
 {
     m_private->playerContentBoxRectChanged(rect);
@@ -1886,7 +1877,7 @@ String convertEnumerationToString(MediaPlayer::ReadyState enumerationValue)
     static_assert(static_cast<size_t>(MediaPlayer::ReadyState::HaveCurrentData) == 2, "MediaPlayer::ReadyState::HaveCurrentData is not 2 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::ReadyState::HaveFutureData) == 3, "MediaPlayer::ReadyState::HaveFutureData is not 3 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::ReadyState::HaveEnoughData) == 4, "MediaPlayer::ReadyState::HaveEnoughData is not 4 as expected");
-    ASSERT(static_cast<size_t>(enumerationValue) < WTF_ARRAY_LENGTH(values));
+    ASSERT(static_cast<size_t>(enumerationValue) < std::size(values));
     return values[static_cast<size_t>(enumerationValue)];
 }
 
@@ -1908,7 +1899,7 @@ String convertEnumerationToString(MediaPlayer::NetworkState enumerationValue)
     static_assert(static_cast<size_t>(MediaPlayer::NetworkState::FormatError) == 4, "MediaPlayer::NetworkState::FormatError is not 4 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::NetworkState::NetworkError) == 5, "MediaPlayer::NetworkError is not 5 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::NetworkState::DecodeError) == 6, "MediaPlayer::NetworkState::DecodeError is not 6 as expected");
-    ASSERT(static_cast<size_t>(enumerationValue) < WTF_ARRAY_LENGTH(values));
+    ASSERT(static_cast<size_t>(enumerationValue) < std::size(values));
     return values[static_cast<size_t>(enumerationValue)];
 }
 
@@ -1922,7 +1913,7 @@ String convertEnumerationToString(MediaPlayer::Preload enumerationValue)
     static_assert(!static_cast<size_t>(MediaPlayer::Preload::None), "MediaPlayer::Preload::None is not 0 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::Preload::MetaData) == 1, "MediaPlayer::Preload::MetaData is not 1 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::Preload::Auto) == 2, "MediaPlayer::Preload::Auto is not 2 as expected");
-    ASSERT(static_cast<size_t>(enumerationValue) < WTF_ARRAY_LENGTH(values));
+    ASSERT(static_cast<size_t>(enumerationValue) < std::size(values));
     return values[static_cast<size_t>(enumerationValue)];
 }
 
@@ -1936,7 +1927,7 @@ String convertEnumerationToString(MediaPlayer::SupportsType enumerationValue)
     static_assert(!static_cast<size_t>(MediaPlayer::SupportsType::IsNotSupported), "MediaPlayer::SupportsType::IsNotSupported is not 0 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::SupportsType::IsSupported) == 1, "MediaPlayer::SupportsType::IsSupported is not 1 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::SupportsType::MayBeSupported) == 2, "MediaPlayer::SupportsType::MayBeSupported is not 2 as expected");
-    ASSERT(static_cast<size_t>(enumerationValue) < WTF_ARRAY_LENGTH(values));
+    ASSERT(static_cast<size_t>(enumerationValue) < std::size(values));
     return values[static_cast<size_t>(enumerationValue)];
 }
 
@@ -1952,7 +1943,7 @@ String convertEnumerationToString(MediaPlayer::BufferingPolicy enumerationValue)
     static_assert(static_cast<size_t>(MediaPlayer::BufferingPolicy::LimitReadAhead) == 1, "MediaPlayer::LimitReadAhead is not 1 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::BufferingPolicy::MakeResourcesPurgeable) == 2, "MediaPlayer::MakeResourcesPurgeable is not 2 as expected");
     static_assert(static_cast<size_t>(MediaPlayer::BufferingPolicy::PurgeResources) == 3, "MediaPlayer::PurgeResources is not 3 as expected");
-    ASSERT(static_cast<size_t>(enumerationValue) < WTF_ARRAY_LENGTH(values));
+    ASSERT(static_cast<size_t>(enumerationValue) < std::size(values));
     return values[static_cast<size_t>(enumerationValue)];
 }
 

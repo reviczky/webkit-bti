@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2005-2022 Apple Inc. All rights reserved.
- * Copyright (C) 2014 Google Inc. All rights reserved.
+ * Copyright (C) 2013-2014 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -55,7 +55,6 @@
 #include "InsertNodeBeforeCommand.h"
 #include "InsertParagraphSeparatorCommand.h"
 #include "InsertTextCommand.h"
-#include "LegacyInlineTextBox.h"
 #include "MergeIdenticalElementsCommand.h"
 #include "NodeTraversal.h"
 #include "RemoveNodeCommand.h"
@@ -479,6 +478,11 @@ void CompositeEditCommand::setShouldRetainAutocorrectionIndicator(bool)
 AtomString CompositeEditCommand::inputEventTypeName() const
 {
     return inputTypeNameForEditingAction(editingAction());
+}
+
+bool CompositeEditCommand::isInputMethodComposing() const
+{
+    return isInputMethodComposingForEditingAction(editingAction());
 }
 
 //
@@ -930,6 +934,11 @@ void CompositeEditCommand::rebalanceWhitespaceAt(const Position& position)
     rebalanceWhitespaceOnTextSubstring(*textNode, position.offsetInContainerNode(), position.offsetInContainerNode());
 }
 
+static bool isWhitespaceForRebalance(Text& textNode, UChar character)
+{
+    return deprecatedIsEditingWhitespace(character) && (character != '\n' || !textNode.renderer() || !textNode.renderer()->style().preserveNewline());
+}
+
 void CompositeEditCommand::rebalanceWhitespaceOnTextSubstring(Text& textNode, int startOffset, int endOffset)
 {
     String text = textNode.data();
@@ -937,11 +946,11 @@ void CompositeEditCommand::rebalanceWhitespaceOnTextSubstring(Text& textNode, in
 
     // Set upstream and downstream to define the extent of the whitespace surrounding text[offset].
     unsigned upstream = std::max(0, startOffset);
-    while (upstream > 0 && deprecatedIsEditingWhitespace(text[upstream - 1]))
+    while (upstream > 0 && isWhitespaceForRebalance(textNode, text[upstream - 1]))
         upstream--;
     
     unsigned downstream = std::max(0, endOffset);
-    while (downstream < text.length() && deprecatedIsEditingWhitespace(text[downstream]))
+    while (downstream < text.length() && isWhitespaceForRebalance(textNode, text[downstream]))
         downstream++;
     
     int length = downstream - upstream;
@@ -954,8 +963,9 @@ void CompositeEditCommand::rebalanceWhitespaceOnTextSubstring(Text& textNode, in
     String string = text.substring(upstream, length);
     // FIXME: Because of the problem mentioned at the top of this function, we must also use nbsps at the start/end of the string because
     // this function doesn't get all surrounding whitespace, just the whitespace in the current text node.
+    const bool nextSiblingIsTextNodeWithoutLeadingSpace = textNode.nextSibling() && textNode.nextSibling()->isTextNode() && downcast<Text>(textNode.nextSibling())->data().length() && !deprecatedIsEditingWhitespace(downcast<Text>(textNode.nextSibling())->data()[0]);
     String rebalancedString = stringWithRebalancedWhitespace(string, isStartOfParagraph(visibleUpstreamPos) || !upstream,
-        isEndOfParagraph(visibleDownstreamPos) || downstream == text.length());
+        (isEndOfParagraph(visibleDownstreamPos) || downstream == text.length()) && !nextSiblingIsTextNodeWithoutLeadingSpace);
 
     if (string != rebalancedString)
         replaceTextInNodePreservingMarkers(textNode, upstream, length, rebalancedString);
@@ -985,12 +995,19 @@ void CompositeEditCommand::prepareWhitespaceAtPositionForSplit(Position& positio
 
     VisiblePosition visiblePos(position);
     VisiblePosition previousVisiblePos(visiblePos.previous());
-    Position previous(previousVisiblePos.deepEquivalent());
+    replaceCollapsibleWhitespaceWithNonBreakingSpaceIfNeeded(previousVisiblePos);
+    replaceCollapsibleWhitespaceWithNonBreakingSpaceIfNeeded(visiblePos);
+}
+
+void CompositeEditCommand::replaceCollapsibleWhitespaceWithNonBreakingSpaceIfNeeded(const VisiblePosition& visiblePosition)
+{
+    if (!deprecatedIsCollapsibleWhitespace(visiblePosition.characterAfter()))
+        return;
     
-    if (deprecatedIsCollapsibleWhitespace(previousVisiblePos.characterAfter()) && is<Text>(*previous.deprecatedNode()) && !is<HTMLBRElement>(*previous.deprecatedNode()))
-        replaceTextInNodePreservingMarkers(downcast<Text>(*previous.deprecatedNode()), previous.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
-    if (deprecatedIsCollapsibleWhitespace(visiblePos.characterAfter()) && is<Text>(*position.deprecatedNode()) && !is<HTMLBRElement>(*position.deprecatedNode()))
-        replaceTextInNodePreservingMarkers(downcast<Text>(*position.deprecatedNode()), position.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
+    Position pos = visiblePosition.deepEquivalent().downstream();
+    if (!pos.containerNode() || !is<Text>(*pos.containerNode()) || is<HTMLBRElement>(*pos.deprecatedNode()))
+        return;
+    replaceTextInNodePreservingMarkers(*pos.containerText(), pos.offsetInContainerNode(), 1, nonBreakingSpaceString());
 }
 
 void CompositeEditCommand::rebalanceWhitespace()

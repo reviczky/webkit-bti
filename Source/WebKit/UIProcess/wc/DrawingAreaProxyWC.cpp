@@ -29,6 +29,8 @@
 #include "config.h"
 #include "DrawingAreaProxyWC.h"
 
+#if USE(GRAPHICS_LAYER_WC)
+
 #include "DrawingAreaMessages.h"
 #include "UpdateInfo.h"
 #include "WebCoreArgumentCoders.h"
@@ -37,8 +39,8 @@
 
 namespace WebKit {
 
-DrawingAreaProxyWC::DrawingAreaProxyWC(WebPageProxy& webPageProxy, WebProcessProxy& process)
-    : DrawingAreaProxy(DrawingAreaType::WC, webPageProxy, process)
+DrawingAreaProxyWC::DrawingAreaProxyWC(WebPageProxy& webPageProxy)
+    : DrawingAreaProxy(DrawingAreaType::WC, webPageProxy)
 {
 }
 
@@ -56,19 +58,19 @@ void DrawingAreaProxyWC::sizeDidChange()
 {
     discardBackingStore();
     m_currentBackingStoreStateID++;
-    send(Messages::DrawingArea::UpdateGeometry(m_currentBackingStoreStateID, m_size));
+    m_webPageProxy.send(Messages::DrawingArea::UpdateGeometry(m_currentBackingStoreStateID, m_size), m_identifier);
 }
 
-void DrawingAreaProxyWC::dispatchAfterEnsuringDrawing(WTF::Function<void(CallbackBase::Error)>&& completionHandler)
+void DrawingAreaProxyWC::dispatchAfterEnsuringDrawing(CompletionHandler<void()>&& completionHandler)
 {
-    completionHandler(CallbackBase::Error::None);
+    completionHandler();
 }
 
 void DrawingAreaProxyWC::update(uint64_t backingStoreStateID, const UpdateInfo& updateInfo)
 {
     if (backingStoreStateID == m_currentBackingStoreStateID)
         incorporateUpdate(updateInfo);
-    send(Messages::DrawingArea::DidUpdate());
+    m_webPageProxy.send(Messages::DrawingArea::DisplayDidRefresh(), m_identifier);
 }
 
 void DrawingAreaProxyWC::enterAcceleratedCompositingMode(uint64_t backingStoreStateID, const LayerTreeContext&)
@@ -101,3 +103,5 @@ void DrawingAreaProxyWC::discardBackingStore()
 }
 
 } // namespace WebKit
+
+#endif // USE(GRAPHICS_LAYER_WC)

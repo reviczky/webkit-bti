@@ -31,6 +31,7 @@
 #include "GPUConnectionToWebProcess.h"
 #include "GPUProcessConnection.h"
 #include "RemoteGraphicsContextGLMessages.h"
+#include "RemoteRenderingBackendProxy.h"
 #include "WCPlatformLayerGCGL.h"
 #include "WebProcess.h"
 #include <WebCore/GraphicsLayerContentsDisplayDelegate.h>
@@ -70,8 +71,16 @@ public:
     RefPtr<WebCore::VideoFrame> paintCompositedResultsToVideoFrame() final { return nullptr; }
 #endif
 private:
-    RemoteGraphicsContextGLProxyWC(GPUProcessConnection& gpuProcessConnection, const WebCore::GraphicsContextGLAttributes& attributes, RenderingBackendIdentifier renderingBackend)
-        : RemoteGraphicsContextGLProxy(gpuProcessConnection, attributes, renderingBackend)
+    RemoteGraphicsContextGLProxyWC(IPC::Connection& connection, SerialFunctionDispatcher& dispatcher, const WebCore::GraphicsContextGLAttributes& attributes, RenderingBackendIdentifier renderingBackend
+#if ENABLE(VIDEO)
+    , Ref<RemoteVideoFrameObjectHeapProxy>&& videoFrameObjectHeapProxy
+#endif
+    )
+#if ENABLE(VIDEO)
+        : RemoteGraphicsContextGLProxy(connection, dispatcher, attributes, renderingBackend, WTFMove(videoFrameObjectHeapProxy))
+#else
+        : RemoteGraphicsContextGLProxy(connection, dispatcher, attributes, renderingBackend)
+#endif
         , m_layerContentsDisplayDelegate(PlatformLayerDisplayDelegate::create(makeUnique<WCPlatformLayerGCGL>()))
     {
     }
@@ -84,12 +93,12 @@ void RemoteGraphicsContextGLProxyWC::prepareForDisplay()
 {
     if (isContextLost())
         return;
-    std::optional<WCContentBufferIdentifier> contentBuffer;
-    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::PrepareForDisplay(), Messages::RemoteGraphicsContextGL::PrepareForDisplay::Reply(contentBuffer));
+    auto sendResult = sendSync(Messages::RemoteGraphicsContextGL::PrepareForDisplay());
     if (!sendResult) {
         markContextLost();
         return;
     }
+    auto& [contentBuffer] = sendResult.reply();
     if (contentBuffer)
         static_cast<WCPlatformLayerGCGL*>(m_layerContentsDisplayDelegate->platformLayer())->addContentBufferIdentifier(*contentBuffer);
     markLayerComposited();
@@ -97,9 +106,17 @@ void RemoteGraphicsContextGLProxyWC::prepareForDisplay()
 
 }
 
-RefPtr<RemoteGraphicsContextGLProxy> RemoteGraphicsContextGLProxy::create(const WebCore::GraphicsContextGLAttributes& attributes, RenderingBackendIdentifier renderingBackend)
+RefPtr<RemoteGraphicsContextGLProxy> RemoteGraphicsContextGLProxy::create(IPC::Connection& connection, const WebCore::GraphicsContextGLAttributes& attributes, RemoteRenderingBackendProxy& renderingBackend
+#if ENABLE(VIDEO)
+    , Ref<RemoteVideoFrameObjectHeapProxy>&& videoFrameObjectHeapProxy
+#endif
+    )
 {
-    return adoptRef(new RemoteGraphicsContextGLProxyWC(WebProcess::singleton().ensureGPUProcessConnection(), attributes, renderingBackend));
+    return adoptRef(new RemoteGraphicsContextGLProxyWC(connection, renderingBackend.dispatcher(), attributes, renderingBackend.ensureBackendCreated()
+#if ENABLE(VIDEO)
+        , WTFMove(videoFrameObjectHeapProxy)
+#endif
+    ));
 }
 
 }

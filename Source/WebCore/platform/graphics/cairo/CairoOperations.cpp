@@ -391,14 +391,14 @@ FloatRect computeLineBoundsAndAntialiasingModeForText(GraphicsContextCairo& plat
 // is refactored as a static public function.
 static float dashedLineCornerWidthForStrokeWidth(float strokeWidth, StrokeStyle strokeStyle, float strokeThickness)
 {
-    return strokeStyle == DottedStroke ? strokeThickness : std::min(2.0f * strokeThickness, std::max(strokeThickness, strokeWidth / 3.0f));
+    return strokeStyle == StrokeStyle::DottedStroke ? strokeThickness : std::min(2.0f * strokeThickness, std::max(strokeThickness, strokeWidth / 3.0f));
 }
 
 // FIXME: Replace once GraphicsContext::dashedLinePatternWidthForStrokeWidth()
 // is refactored as a static public function.
 static float dashedLinePatternWidthForStrokeWidth(float strokeWidth, StrokeStyle strokeStyle, float strokeThickness)
 {
-    return strokeStyle == DottedStroke ? strokeThickness : std::min(3.0f * strokeThickness, std::max(strokeThickness, strokeWidth / 3.0f));
+    return strokeStyle == StrokeStyle::DottedStroke ? strokeThickness : std::min(3.0f * strokeThickness, std::max(strokeThickness, strokeWidth / 3.0f));
 }
 
 // FIXME: Replace once GraphicsContext::dashedLinePatternOffsetForPatternAndStrokeWidth()
@@ -458,20 +458,20 @@ void setStrokeStyle(GraphicsContextCairo& platformContext, StrokeStyle strokeSty
 
     cairo_t* cr = platformContext.cr();
     switch (strokeStyle) {
-    case NoStroke:
+    case StrokeStyle::NoStroke:
         // FIXME: is it the right way to emulate NoStroke?
         cairo_set_line_width(cr, 0);
         break;
-    case SolidStroke:
-    case DoubleStroke:
-    case WavyStroke:
+    case StrokeStyle::SolidStroke:
+    case StrokeStyle::DoubleStroke:
+    case StrokeStyle::WavyStroke:
         // FIXME: https://bugs.webkit.org/show_bug.cgi?id=94110 - Needs platform support.
         cairo_set_dash(cr, 0, 0, 0);
         break;
-    case DottedStroke:
+    case StrokeStyle::DottedStroke:
         cairo_set_dash(cr, dotPattern, 2, 0);
         break;
-    case DashedStroke:
+    case StrokeStyle::DashedStroke:
         cairo_set_dash(cr, dashPattern, 2, 0);
         break;
     }
@@ -508,44 +508,6 @@ IntRect getClipBounds(GraphicsContextCairo& platformContext)
     double x1, x2, y1, y2;
     cairo_clip_extents(platformContext.cr(), &x1, &y1, &x2, &y2);
     return enclosingIntRect(FloatRect(x1, y1, x2 - x1, y2 - y1));
-}
-
-FloatRect roundToDevicePixels(GraphicsContextCairo& platformContext, const FloatRect& rect)
-{
-    FloatRect result;
-    double x = rect.x();
-    double y = rect.y();
-
-    cairo_t* cr = platformContext.cr();
-    cairo_user_to_device(cr, &x, &y);
-    x = round(x);
-    y = round(y);
-    cairo_device_to_user(cr, &x, &y);
-    result.setX(narrowPrecisionToFloat(x));
-    result.setY(narrowPrecisionToFloat(y));
-
-    // We must ensure width and height are at least 1 (or -1) when
-    // we're given float values in the range between 0 and 1 (or -1 and 0).
-    double width = rect.width();
-    double height = rect.height();
-    cairo_user_to_device_distance(cr, &width, &height);
-    if (width > -1 && width < 0)
-        width = -1;
-    else if (width > 0 && width < 1)
-        width = 1;
-    else
-        width = round(width);
-    if (height > -1 && height < 0)
-        height = -1;
-    else if (height > 0 && height < 1)
-        height = 1;
-    else
-        height = round(height);
-    cairo_device_to_user_distance(cr, &width, &height);
-    result.setWidth(narrowPrecisionToFloat(width));
-    result.setHeight(narrowPrecisionToFloat(height));
-
-    return result;
 }
 
 bool isAcceleratedContext(GraphicsContextCairo& platformContext)
@@ -830,6 +792,9 @@ void clearRect(GraphicsContextCairo& platformContext, const FloatRect& rect)
 
 void drawGlyphs(GraphicsContextCairo& platformContext, const FillSource& fillSource, const StrokeSource& strokeSource, const ShadowState& shadowState, const FloatPoint& point, cairo_scaled_font_t* scaledFont, double syntheticBoldOffset, const Vector<cairo_glyph_t>& glyphs, float xOffset, TextDrawingModeFlags textDrawingMode, float strokeThickness, const FloatSize& shadowOffset, const Color& shadowColor, FontSmoothingMode fontSmoothingMode)
 {
+#if USE(FREETYPE)
+    Locker cairoFontLocker(cairoFontLock());
+#endif
     drawGlyphsShadow(platformContext, shadowState, textDrawingMode, shadowOffset, shadowColor, point, scaledFont, syntheticBoldOffset, glyphs, fontSmoothingMode);
 
     cairo_t* cr = platformContext.cr();
@@ -868,7 +833,7 @@ void drawPlatformImage(GraphicsContextCairo& platformContext, cairo_surface_t* s
         Cairo::State::setCompositeOperation(platformContext, options.compositeOperator(), options.blendMode());
 
     FloatRect dst = destRect;
-    if (options.orientation() != ImageOrientation::None) {
+    if (options.orientation() != ImageOrientation::Orientation::None) {
         // ImageOrientation expects the origin to be at (0, 0).
         Cairo::translate(platformContext, dst.x(), dst.y());
         dst.setLocation(FloatPoint());
@@ -885,10 +850,10 @@ void drawPlatformImage(GraphicsContextCairo& platformContext, cairo_surface_t* s
     platformContext.restore();
 }
 
-void drawPattern(GraphicsContextCairo& platformContext, cairo_surface_t* surface, const IntSize& size, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& patternTransform, const FloatPoint& phase, const ImagePaintingOptions& options)
+void drawPattern(GraphicsContextCairo& platformContext, cairo_surface_t* surface, const IntSize& size, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
 {
     // FIXME: Investigate why the size has to be passed in as an IntRect.
-    drawPatternToCairoContext(platformContext.cr(), surface, size, tileRect, patternTransform, phase, toCairoOperator(options.compositeOperator(), options.blendMode()), options.interpolationQuality(), destRect);
+    drawPatternToCairoContext(platformContext.cr(), surface, size, tileRect, patternTransform, phase, spacing, toCairoOperator(options.compositeOperator(), options.blendMode()), options.interpolationQuality(), destRect);
 }
 
 void drawSurface(GraphicsContextCairo& platformContext, cairo_surface_t* surface, const FloatRect& destRect, const FloatRect& originalSrcRect, InterpolationQuality imageInterpolationQuality, float globalAlpha, const ShadowState& shadowState, OrientationSizing orientationSizing)
@@ -991,7 +956,7 @@ void drawRect(GraphicsContextCairo& platformContext, const FloatRect& rect, floa
 
     fillRectWithColor(cr, rect, fillColor);
 
-    if (strokeStyle != NoStroke) {
+    if (strokeStyle != StrokeStyle::NoStroke) {
         setSourceRGBAFromColor(cr, strokeColor);
         FloatRect r(rect);
         r.inflate(-.5f);
@@ -1012,7 +977,7 @@ void drawLine(GraphicsContextCairo& platformContext, const FloatPoint& point1, c
 
     cairo_t* cairoContext = platformContext.cr();
     float cornerWidth = 0;
-    bool drawsDashedLine = strokeStyle == DottedStroke || strokeStyle == DashedStroke;
+    bool drawsDashedLine = strokeStyle == StrokeStyle::DottedStroke || strokeStyle == StrokeStyle::DashedStroke;
 
     if (drawsDashedLine) {
         cairo_save(cairoContext);
@@ -1088,16 +1053,16 @@ void drawLinesForText(GraphicsContextCairo& platformContext, const FloatPoint& p
 
 void drawDotsForDocumentMarker(GraphicsContextCairo& platformContext, const FloatRect& rect, DocumentMarkerLineStyle style)
 {
-    if (style.mode != DocumentMarkerLineStyle::Mode::Spelling
-        && style.mode != DocumentMarkerLineStyle::Mode::Grammar)
+    if (style.mode != DocumentMarkerLineStyleMode::Spelling
+        && style.mode != DocumentMarkerLineStyleMode::Grammar)
         return;
 
     cairo_t* cr = platformContext.cr();
     cairo_save(cr);
 
-    if (style.mode == DocumentMarkerLineStyle::Mode::Spelling)
+    if (style.mode == DocumentMarkerLineStyleMode::Spelling)
         cairo_set_source_rgb(cr, 1, 0, 0);
-    else if (style.mode == DocumentMarkerLineStyle::Mode::Grammar)
+    else if (style.mode == DocumentMarkerLineStyleMode::Grammar)
         cairo_set_source_rgb(cr, 0, 1, 0);
 
     drawErrorUnderline(cr, rect.x(), rect.y(), rect.width(), rect.height());
@@ -1121,7 +1086,7 @@ void drawEllipse(GraphicsContextCairo& platformContext, const FloatRect& rect, c
         cairo_fill_preserve(cr);
     }
 
-    if (strokeStyle != NoStroke) {
+    if (strokeStyle != StrokeStyle::NoStroke) {
         setSourceRGBAFromColor(cr, strokeColor);
         cairo_set_line_width(cr, strokeThickness);
         cairo_stroke(cr);

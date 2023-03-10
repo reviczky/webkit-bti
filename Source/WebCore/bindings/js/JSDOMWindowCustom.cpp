@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2022 Apple Inc. All rights reserved.
  * Copyright (C) 2011 Google Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -33,6 +33,7 @@
 #include "JSDOMConvertNullable.h"
 #include "JSDOMConvertNumbers.h"
 #include "JSDOMConvertStrings.h"
+#include "JSDOMGlobalObjectInlines.h"
 #include "JSDOMMicrotask.h"
 #include "JSDatabase.h"
 #include "JSDatabaseCallback.h"
@@ -144,7 +145,7 @@ bool jsDOMWindowGetOwnPropertySlotRestrictedAccess(JSDOMGlobalObject* thisObject
         || propertyName == builtinNames.openerPublicName()
         || propertyName == builtinNames.parentPublicName()) {
         auto* entry = classInfo->staticPropHashTable->entry(propertyName);
-        auto* setter = propertyName == builtinNames.locationPublicName() ? entry->propertyPutter() : nullptr;
+        auto setter = propertyName == builtinNames.locationPublicName() ? entry->propertyPutter() : nullptr;
         auto* getterSetter = thisObject->createCrossOriginGetterSetter(&lexicalGlobalObject, propertyName, entry->propertyGetter(), setter);
         slot.setGetterSlot(thisObject, PropertyAttribute::Accessor | PropertyAttribute::DontEnum, getterSetter);
         return true;
@@ -157,7 +158,7 @@ bool jsDOMWindowGetOwnPropertySlotRestrictedAccess(JSDOMGlobalObject* thisObject
     // FIXME: Add support to named attributes on RemoteFrames.
     auto* frame = window.frame();
     if (frame && is<Frame>(*frame)) {
-        if (auto* scopedChild = downcast<Frame>(*frame).tree().scopedChild(propertyNameToAtomString(propertyName))) {
+        if (auto* scopedChild = dynamicDowncast<LocalFrame>(downcast<Frame>(*frame).tree().scopedChild(propertyNameToAtomString(propertyName)))) {
             slot.setValue(thisObject, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum, toJS(&lexicalGlobalObject, scopedChild->document()->domWindow()));
             return true;
         }
@@ -236,8 +237,10 @@ bool JSDOMWindow::getOwnPropertySlotByIndex(JSObject* object, JSGlobalObject* le
 
     // These are also allowed cross-origin, so come before the access check.
     if (frame && index < frame->tree().scopedChildCount()) {
-        slot.setValue(thisObject, static_cast<unsigned>(JSC::PropertyAttribute::ReadOnly), toJS(lexicalGlobalObject, frame->tree().scopedChild(index)->document()->domWindow()));
-        return true;
+        if (auto* scopedChild = dynamicDowncast<LocalFrame>(frame->tree().scopedChild(index))) {
+            slot.setValue(thisObject, static_cast<unsigned>(JSC::PropertyAttribute::ReadOnly), toJS(lexicalGlobalObject, scopedChild->document()->domWindow()));
+            return true;
+        }
     }
 
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, window, ThrowSecurityError))
@@ -258,7 +261,7 @@ bool JSDOMWindow::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, Propert
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(*lexicalGlobalObject, thisObject->wrapped(), errorMessage)) {
         // We only allow setting "location" attribute cross-origin.
         if (propertyName == builtinNames(vm).locationPublicName()) {
-            auto* setter = s_info.staticPropHashTable->entry(propertyName)->propertyPutter();
+            auto setter = s_info.staticPropHashTable->entry(propertyName)->propertyPutter();
             scope.release();
             setter(lexicalGlobalObject, JSValue::encode(slot.thisValue()), JSValue::encode(value), propertyName);
             return true;

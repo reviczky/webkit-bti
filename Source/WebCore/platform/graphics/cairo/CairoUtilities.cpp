@@ -30,7 +30,6 @@
 #if USE(CAIRO)
 
 #include "AffineTransform.h"
-#include "CairoUniquePtr.h"
 #include "Color.h"
 #include "FloatPoint.h"
 #include "FloatRect.h"
@@ -49,13 +48,49 @@
 
 namespace WebCore {
 
-#if USE(CAIRO) && !PLATFORM(GTK)
-const cairo_font_options_t* getDefaultCairoFontOptions()
+#if USE(FREETYPE)
+RecursiveLock& cairoFontLock()
 {
-    static NeverDestroyed<cairo_font_options_t*> options = cairo_font_options_create();
-    return options;
+    static RecursiveLock s_lock;
+    return s_lock;
 }
 #endif
+
+static cairo_font_options_t* defaultCairoFontOptions()
+{
+    static cairo_font_options_t* s_defaultCairoFontOptions = cairo_font_options_create();
+    return s_defaultCairoFontOptions;
+}
+
+const cairo_font_options_t* getDefaultCairoFontOptions()
+{
+    return defaultCairoFontOptions();
+}
+
+static bool s_disableCairoFontHintingForTesting = false;
+
+void disableCairoFontHintingForTesting()
+{
+    cairo_font_options_set_hint_metrics(defaultCairoFontOptions(), CAIRO_HINT_METRICS_ON);
+    cairo_font_options_set_hint_style(defaultCairoFontOptions(), CAIRO_HINT_STYLE_NONE);
+
+    s_disableCairoFontHintingForTesting = true;
+}
+
+void setDefaultCairoHintOptions(cairo_hint_metrics_t hintMetrics, cairo_hint_style_t hintStyle)
+{
+    if (s_disableCairoFontHintingForTesting)
+        return;
+
+    cairo_font_options_set_hint_metrics(defaultCairoFontOptions(), hintMetrics);
+    cairo_font_options_set_hint_style(defaultCairoFontOptions(), hintStyle);
+}
+
+void setDefaultCairoAntialiasOptions(cairo_antialias_t antialias, cairo_subpixel_order_t subpixelOrder)
+{
+    cairo_font_options_set_antialias(defaultCairoFontOptions(), antialias);
+    cairo_font_options_set_subpixel_order(defaultCairoFontOptions(), subpixelOrder);
+}
 
 void copyContextProperties(cairo_t* srcCr, cairo_t* dstCr)
 {
@@ -189,7 +224,7 @@ cairo_operator_t toCairoOperator(CompositeOperator op, BlendMode blendOp)
 }
 
 void drawPatternToCairoContext(cairo_t* cr, cairo_surface_t* image, const IntSize& imageSize, const FloatRect& tileRect,
-    const AffineTransform& patternTransform, const FloatPoint& phase, cairo_operator_t op, InterpolationQuality imageInterpolationQuality, const FloatRect& destRect)
+    const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, cairo_operator_t op, InterpolationQuality imageInterpolationQuality, const FloatRect& destRect)
 {
     // Avoid NaN
     if (!std::isfinite(phase.x()) || !std::isfinite(phase.y()))
@@ -205,6 +240,19 @@ void drawPatternToCairoContext(cairo_t* cr, cairo_surface_t* image, const IntSiz
         cairo_set_source_surface(clippedImageContext.get(), image, -tileRect.x(), -tileRect.y());
         cairo_paint(clippedImageContext.get());
         image = clippedImageSurface.get();
+    }
+
+    RefPtr<cairo_surface_t> imageWithSpacingSurface;
+    if (spacing.width() || spacing.height()) {
+        IntSize imageWithSpacingSize = IntSize(
+            tileRect.width() + spacing.width() / patternTransform.a(),
+            tileRect.height() + spacing.height() / patternTransform.d()
+        );
+        imageWithSpacingSurface = adoptRef(cairo_image_surface_create(CAIRO_FORMAT_ARGB32, imageWithSpacingSize.width(), imageWithSpacingSize.height()));
+        RefPtr<cairo_t> imageWithSpacingContext = adoptRef(cairo_create(imageWithSpacingSurface.get()));
+        cairo_set_source_surface(imageWithSpacingContext.get(), image, 0, 0);
+        cairo_paint(imageWithSpacingContext.get());
+        image = imageWithSpacingSurface.get();
     }
 
     cairo_pattern_t* pattern = cairo_pattern_create_for_surface(image);
@@ -261,8 +309,8 @@ void drawPatternToCairoContext(cairo_t* cr, cairo_surface_t* image, const IntSiz
     double phaseOffsetX = phase.x() + tileRect.x() * patternTransform.a() + dx;
     double phaseOffsetY = phase.y() + tileRect.y() * patternTransform.d() + dy;
     // this is where we perform the (x mod w, y mod h) metioned above, but with floats instead of integers.
-    phaseOffsetX -= std::trunc(phaseOffsetX / (tileRect.width() * patternTransform.a())) * tileRect.width() * patternTransform.a();
-    phaseOffsetY -= std::trunc(phaseOffsetY / (tileRect.height() * patternTransform.d())) * tileRect.height() * patternTransform.d();
+    phaseOffsetX -= std::trunc(phaseOffsetX / (tileRect.width() * patternTransform.a() + spacing.width())) * (tileRect.width() * patternTransform.a() + spacing.width());
+    phaseOffsetY -= std::trunc(phaseOffsetY / (tileRect.height() * patternTransform.d() + spacing.height())) * (tileRect.height() * patternTransform.d() + spacing.height());
     cairo_matrix_t phaseMatrix = {1, 0, 0, 1, phaseOffsetX, phaseOffsetY};
     cairo_matrix_t combined;
     cairo_matrix_multiply(&combined, &patternMatrix, &phaseMatrix);

@@ -32,6 +32,7 @@
 typedef struct _SoupSession SoupSession;
 
 namespace WebCore {
+class CertificateInfo;
 class SoupNetworkSession;
 struct SoupNetworkProxySettings;
 }
@@ -60,11 +61,12 @@ public:
     bool persistentCredentialStorageEnabled() const { return m_persistentCredentialStorageEnabled; }
 
     void setIgnoreTLSErrors(bool);
+    void allowSpecificHTTPSCertificateForHost(const WebCore::CertificateInfo&, const String&);
     void setProxySettings(const WebCore::SoupNetworkProxySettings&);
 
 private:
-    std::unique_ptr<WebSocketTask> createWebSocketTask(WebPageProxyIdentifier, NetworkSocketChannel&, const WebCore::ResourceRequest&, const String& protocol, const WebCore::ClientOrigin&, bool) final;
-    void clearCredentials() final;
+    std::unique_ptr<WebSocketTask> createWebSocketTask(WebPageProxyIdentifier, NetworkSocketChannel&, const WebCore::ResourceRequest&, const String& protocol, const WebCore::ClientOrigin&, bool, bool, OptionSet<WebCore::NetworkConnectionIntegrity>) final;
+    void clearCredentials(WallTime) final;
 
     std::unique_ptr<WebCore::SoupNetworkSession> m_networkSession;
     bool m_persistentCredentialStorageEnabled { true };

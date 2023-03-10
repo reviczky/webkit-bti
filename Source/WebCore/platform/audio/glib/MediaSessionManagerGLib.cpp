@@ -29,7 +29,6 @@
 #include "NowPlayingInfo.h"
 #include "PlatformMediaSession.h"
 #include "PlatformStrategies.h"
-
 #include <gio/gio.h>
 #include <wtf/glib/GUniquePtr.h>
 
@@ -135,7 +134,7 @@ void MediaSessionManagerGLib::beginInterruption(PlatformMediaSession::Interrupti
 {
     if (type == PlatformMediaSession::InterruptionType::SystemInterruption) {
         forEachSession([] (auto& session) {
-            session.clearHasPlayedSinceLastInterruption();
+            session.clearHasPlayedAudiblySinceLastInterruption();
         });
     }
 

@@ -65,14 +65,14 @@ String WebsiteDataRecord::displayNameForHostName(const String& hostName)
 
 String WebsiteDataRecord::displayNameForOrigin(const WebCore::SecurityOriginData& securityOrigin)
 {
-    const auto& protocol = securityOrigin.protocol;
+    const auto& protocol = securityOrigin.protocol();
 
     if (protocol == "file"_s)
         return displayNameForLocalFiles();
 
 #if ENABLE(PUBLIC_SUFFIX_LIST)
     if (protocol == "http"_s || protocol == "https"_s)
-        return WebCore::topPrivatelyControlledDomain(securityOrigin.host);
+        return WebCore::topPrivatelyControlledDomain(securityOrigin.host());
 #endif
 
     return String();
@@ -106,7 +106,7 @@ void WebsiteDataRecord::addAlternativeServicesHostname(const String& hostName)
 #endif
 }
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
 void WebsiteDataRecord::addResourceLoadStatisticsRegistrableDomain(const WebCore::RegistrableDomain& domain)
 {
     types.add(WebsiteDataType::ResourceLoadStatistics);
@@ -137,7 +137,7 @@ bool WebsiteDataRecord::matches(const WebCore::RegistrableDomain& domain) const
     }
 
     for (const auto& dataRecordOriginData : origins) {
-        if (hostIsInDomain(dataRecordOriginData.host, domain.string()))
+        if (hostIsInDomain(dataRecordOriginData.host(), domain.string()))
             return true;
     }
 
@@ -167,7 +167,7 @@ WebsiteDataRecord WebsiteDataRecord::isolatedCopy() const &
         crossThreadCopy(cookieHostNames),
         crossThreadCopy(HSTSCacheHostNames),
         crossThreadCopy(alternativeServicesHostNames),
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
         crossThreadCopy(resourceLoadStatisticsRegistrableDomains),
 #endif
     };
@@ -183,7 +183,7 @@ WebsiteDataRecord WebsiteDataRecord::isolatedCopy() &&
         crossThreadCopy(WTFMove(cookieHostNames)),
         crossThreadCopy(WTFMove(HSTSCacheHostNames)),
         crossThreadCopy(WTFMove(alternativeServicesHostNames)),
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
         crossThreadCopy(WTFMove(resourceLoadStatisticsRegistrableDomains)),
 #endif
     };

@@ -38,7 +38,7 @@ const char* FileSystemTestData = "This is a test";
 
 static void createTestFile(const String& path)
 {
-    auto fileHandle = FileSystem::openFile(path, FileSystem::FileOpenMode::Write);
+    auto fileHandle = FileSystem::openFile(path, FileSystem::FileOpenMode::Truncate);
     EXPECT_TRUE(FileSystem::isHandleValid(fileHandle));
     FileSystem::writeToFile(fileHandle, FileSystemTestData, strlen(FileSystemTestData));
     FileSystem::closeFile(fileHandle);
@@ -345,7 +345,7 @@ TEST_F(FileSystemTest, deleteEmptyDirectoryContainingDSStoreFile)
 
     // Create .DSStore file.
     auto dsStorePath = FileSystem::pathByAppendingComponent(tempEmptyFolderPath(), ".DS_Store"_s);
-    auto dsStoreHandle = FileSystem::openFile(dsStorePath, FileSystem::FileOpenMode::Write);
+    auto dsStoreHandle = FileSystem::openFile(dsStorePath, FileSystem::FileOpenMode::Truncate);
     FileSystem::writeToFile(dsStoreHandle, FileSystemTestData, strlen(FileSystemTestData));
     FileSystem::closeFile(dsStoreHandle);
     EXPECT_TRUE(FileSystem::fileExists(dsStorePath));
@@ -361,14 +361,14 @@ TEST_F(FileSystemTest, deleteEmptyDirectoryOnNonEmptyDirectory)
 
     // Create .DSStore file.
     auto dsStorePath = FileSystem::pathByAppendingComponent(tempEmptyFolderPath(), ".DS_Store"_s);
-    auto dsStoreHandle = FileSystem::openFile(dsStorePath, FileSystem::FileOpenMode::Write);
+    auto dsStoreHandle = FileSystem::openFile(dsStorePath, FileSystem::FileOpenMode::Truncate);
     FileSystem::writeToFile(dsStoreHandle, FileSystemTestData, strlen(FileSystemTestData));
     FileSystem::closeFile(dsStoreHandle);
     EXPECT_TRUE(FileSystem::fileExists(dsStorePath));
 
     // Create a dummy file.
     auto dummyFilePath = FileSystem::pathByAppendingComponent(tempEmptyFolderPath(), "dummyFile"_s);
-    auto dummyFileHandle = FileSystem::openFile(dummyFilePath, FileSystem::FileOpenMode::Write);
+    auto dummyFileHandle = FileSystem::openFile(dummyFilePath, FileSystem::FileOpenMode::Truncate);
     FileSystem::writeToFile(dummyFileHandle, FileSystemTestData, strlen(FileSystemTestData));
     FileSystem::closeFile(dummyFileHandle);
     EXPECT_TRUE(FileSystem::fileExists(dummyFilePath));
@@ -438,7 +438,7 @@ TEST_F(FileSystemTest, moveDirectory)
     EXPECT_TRUE(FileSystem::deleteFile(temporaryTestFolder));
     EXPECT_TRUE(FileSystem::makeAllDirectories(temporaryTestFolder));
     auto testFilePath = FileSystem::pathByAppendingComponent(temporaryTestFolder, "testFile"_s);
-    auto fileHandle = FileSystem::openFile(testFilePath, FileSystem::FileOpenMode::Write);
+    auto fileHandle = FileSystem::openFile(testFilePath, FileSystem::FileOpenMode::Truncate);
     FileSystem::writeToFile(fileHandle, FileSystemTestData, strlen(FileSystemTestData));
     FileSystem::closeFile(fileHandle);
 
@@ -638,12 +638,12 @@ static void runGetFileModificationTimeTest(const String& path, Function<std::opt
 
     unsigned timeout = 0;
     while (*modificationTime >= WallTime::now() && ++timeout < 20)
-        TestWebKitAPI::Util::sleep(0.1);
+        TestWebKitAPI::Util::runFor(0.1_s);
     EXPECT_LT(modificationTime->secondsSinceEpoch().value(), WallTime::now().secondsSinceEpoch().value());
 
     auto timeBeforeModification = WallTime::now();
 
-    TestWebKitAPI::Util::sleep(2);
+    TestWebKitAPI::Util::runFor(2_s);
 
     // Modify the file.
     auto fileHandle = FileSystem::openFile(path, FileSystem::FileOpenMode::ReadWrite);
@@ -674,10 +674,10 @@ TEST_F(FileSystemTest, updateFileModificationTime)
 
     unsigned timeout = 0;
     while (*modificationTime >= WallTime::now() && ++timeout < 20)
-        TestWebKitAPI::Util::sleep(0.1);
+        TestWebKitAPI::Util::runFor(0.1_s);
     EXPECT_LT(modificationTime->secondsSinceEpoch().value(), WallTime::now().secondsSinceEpoch().value());
 
-    TestWebKitAPI::Util::sleep(1);
+    TestWebKitAPI::Util::runFor(1_s);
 
     EXPECT_TRUE(FileSystem::updateFileModificationTime(tempFilePath()));
     auto newModificationTime = FileSystem::fileModificationTime(tempFilePath());

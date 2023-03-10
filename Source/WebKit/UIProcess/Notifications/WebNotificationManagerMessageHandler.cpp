@@ -28,6 +28,7 @@
 
 #include "ServiceWorkerNotificationHandler.h"
 #include "WebPageProxy.h"
+#include <WebCore/NotificationData.h>
 
 namespace WebKit {
 
@@ -43,6 +44,8 @@ void WebNotificationManagerMessageHandler::requestSystemNotificationPermission(c
 
 void WebNotificationManagerMessageHandler::showNotification(IPC::Connection& connection, const WebCore::NotificationData& data, RefPtr<WebCore::NotificationResources>&& resources, CompletionHandler<void()>&& callback)
 {
+    RELEASE_LOG(Push, "WebNotificationManagerMessageHandler showNotification called");
+
     if (!data.serviceWorkerRegistrationURL.isEmpty()) {
         ServiceWorkerNotificationHandler::singleton().showNotification(connection, data, WTFMove(resources), WTFMove(callback));
         return;

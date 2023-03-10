@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(GPU_PROCESS)
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)
 
 #include "Connection.h"
 #include "MessageReceiver.h"
@@ -60,7 +60,7 @@
 #endif
 
 #if PLATFORM(COCOA)
-#include "SharedRingBufferStorage.h"
+#include "SharedCARingBuffer.h"
 #endif
 
 #if USE(AVFOUNDATION)
@@ -76,6 +76,7 @@ class AudioTrackPrivate;
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
 class MediaPlaybackTargetContext;
 #endif
+class SecurityOriginData;
 class VideoTrackPrivate;
 
 struct FourCC;
@@ -131,10 +132,10 @@ public:
 
     void getConfiguration(RemoteMediaPlayerConfiguration&);
 
-    void prepareForPlayback(bool privateMode, WebCore::MediaPlayerEnums::Preload, bool preservesPitch, bool prepareForRendering, float videoContentScale, WebCore::DynamicRangeMode, CompletionHandler<void(std::optional<LayerHostingContextID>&& inlineLayerHostingContextId)>&&);
+    void prepareForPlayback(bool privateMode, WebCore::MediaPlayerEnums::Preload, bool preservesPitch, bool prepareForRendering, WebCore::IntSize presentationSize, float videoContentScale, WebCore::DynamicRangeMode);
     void prepareForRendering();
 
-    void load(URL&&, std::optional<SandboxExtension::Handle>&&, const WebCore::ContentType&, const String&, CompletionHandler<void(RemoteMediaPlayerConfiguration&&)>&&);
+    void load(URL&&, std::optional<SandboxExtension::Handle>&&, const WebCore::ContentType&, const String&, bool, CompletionHandler<void(RemoteMediaPlayerConfiguration&&)>&&);
 #if ENABLE(MEDIA_SOURCE)
     void loadMediaSource(URL&&, const WebCore::ContentType&, bool webMParserEnabled, RemoteMediaSourceIdentifier, CompletionHandler<void(RemoteMediaPlayerConfiguration&&)>&&);
 #endif
@@ -165,6 +166,8 @@ public:
     void setShouldDisableSleep(bool);
     void setRate(double);
     void didLoadingProgress(CompletionHandler<void(bool)>&&);
+
+    void setPresentationSize(const WebCore::IntSize&);
 
 #if PLATFORM(COCOA)
     void setVideoInlineSizeFenced(const WebCore::FloatSize&, const WTF::MachSendRight&);
@@ -209,7 +212,7 @@ public:
 
     using PerformTaskAtMediaTimeCompletionHandler = CompletionHandler<void(std::optional<MediaTime>, std::optional<MonotonicTime>)>;
     void performTaskAtMediaTime(const MediaTime&, MonotonicTime, PerformTaskAtMediaTimeCompletionHandler&&);
-    void wouldTaintOrigin(struct WebCore::SecurityOriginData, CompletionHandler<void(std::optional<bool>)>&&);
+    void isCrossOrigin(WebCore::SecurityOriginData, CompletionHandler<void(std::optional<bool>)>&&);
 
     void setVideoPlaybackMetricsUpdateInterval(double);
 
@@ -311,6 +314,7 @@ private:
     const std::optional<Vector<WebCore::FourCC>>& allowedMediaCaptionFormatTypes() const final { return m_configuration.allowedMediaCaptionFormatTypes; };
 
     bool mediaPlayerPrefersSandboxedParsing() const final { return m_configuration.prefersSandboxedParsing; }
+    bool mediaPlayerShouldDisableHDR() const final { return m_configuration.shouldDisableHDR; }
 
     void startUpdateCachedStateMessageTimer();
     void updateCachedState(bool = false);
@@ -347,6 +351,8 @@ private:
 #endif
     void videoFrameForCurrentTimeIfChanged(CompletionHandler<void(std::optional<RemoteVideoFrameProxy::Properties>&&, bool)>&&);
 
+    void setShouldDisableHDR(bool);
+
 #if !RELEASE_LOG_DISABLED
     const Logger& mediaPlayerLogger() final { return m_logger; }
     const void* mediaPlayerLogIdentifier() { return reinterpret_cast<const void*>(m_configuration.logIdentifier); }
@@ -371,7 +377,7 @@ private:
     WeakPtr<RemoteMediaPlayerManagerProxy> m_manager;
     WebCore::MediaPlayerEnums::MediaEngineIdentifier m_engineIdentifier;
     Vector<WebCore::ContentType> m_typesRequiringHardwareSupport;
-    RunLoop::Timer<RemoteMediaPlayerProxy> m_updateCachedStateMessageTimer;
+    RunLoop::Timer m_updateCachedStateMessageTimer;
     RemoteMediaPlayerState m_cachedState;
     RemoteMediaPlayerProxyConfiguration m_configuration;
     PerformTaskAtMediaTimeCompletionHandler m_performTaskAtMediaTimeCompletionHandler;
@@ -411,4 +417,4 @@ private:
 
 } // namespace WebKit
 
-#endif
+#endif // ENABLE(GPU_PROCESS) && ENABLE(VIDEO)

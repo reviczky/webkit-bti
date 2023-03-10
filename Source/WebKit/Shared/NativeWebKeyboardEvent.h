@@ -36,6 +36,7 @@ OBJC_CLASS NSView;
 #endif
 
 #if PLATFORM(GTK)
+#include <WebCore/GRefPtrGtk.h>
 #include <WebCore/GUniquePtrGtk.h>
 #if USE(GTK4)
 typedef struct _GdkEvent GdkEvent;
@@ -67,15 +68,15 @@ public:
     NativeWebKeyboardEvent(NSEvent *, bool handledByInputMethod, bool replacesSoftSpace, const Vector<WebCore::KeypressCommand>&);
 #elif PLATFORM(GTK)
     NativeWebKeyboardEvent(const NativeWebKeyboardEvent&);
-    NativeWebKeyboardEvent(GdkEvent*, const String&, Vector<String>&& commands);
+    NativeWebKeyboardEvent(GdkEvent*, const String&, bool isAutoRepeat, Vector<String>&& commands);
     NativeWebKeyboardEvent(const String&, std::optional<Vector<WebCore::CompositionUnderline>>&&, std::optional<EditingRange>&&);
-    NativeWebKeyboardEvent(Type, const String& text, const String& key, const String& code, const String& keyIdentifier, int windowsVirtualKeyCode, int nativeVirtualKeyCode, Vector<String>&& commands, bool isKeypad, OptionSet<Modifier>);
+    NativeWebKeyboardEvent(WebEventType, const String& text, const String& key, const String& code, const String& keyIdentifier, int windowsVirtualKeyCode, int nativeVirtualKeyCode, Vector<String>&& commands, bool isAutoRepeat, bool isKeypad, OptionSet<WebEventModifier>);
 #elif PLATFORM(IOS_FAMILY)
     enum class HandledByInputMethod : bool { No, Yes };
     NativeWebKeyboardEvent(::WebEvent *, HandledByInputMethod);
 #elif USE(LIBWPE)
     enum class HandledByInputMethod : bool { No, Yes };
-    NativeWebKeyboardEvent(struct wpe_input_keyboard_event*, const String&, HandledByInputMethod, std::optional<Vector<WebCore::CompositionUnderline>>&&, std::optional<EditingRange>&&);
+    NativeWebKeyboardEvent(struct wpe_input_keyboard_event*, const String&, bool isAutoRepeat, HandledByInputMethod, std::optional<Vector<WebCore::CompositionUnderline>>&&, std::optional<EditingRange>&&);
 #elif PLATFORM(WIN)
     NativeWebKeyboardEvent(HWND, UINT message, WPARAM, LPARAM, Vector<MSG>&& pendingCharEvents);
 #endif
@@ -96,6 +97,8 @@ public:
 private:
 #if USE(APPKIT)
     RetainPtr<NSEvent> m_nativeEvent;
+#elif PLATFORM(GTK) && USE(GTK4)
+    GRefPtr<GdkEvent> m_nativeEvent;
 #elif PLATFORM(GTK)
     GUniquePtr<GdkEvent> m_nativeEvent;
 #elif PLATFORM(IOS_FAMILY)

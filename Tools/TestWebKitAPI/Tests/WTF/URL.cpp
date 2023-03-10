@@ -24,12 +24,15 @@
  */
 
 #include "config.h"
-#include "WTFStringUtilities.h"
+
+#include "Test.h"
+#include "WTFTestUtilities.h"
 #include <wtf/HashSet.h>
 #include <wtf/MainThread.h>
 #include <wtf/StringPrintStream.h>
 #include <wtf/URL.h>
 #include <wtf/URLParser.h>
+#include <wtf/Vector.h>
 #include <wtf/text/StringHash.h>
 
 namespace TestWebKitAPI {
@@ -516,55 +519,88 @@ TEST_F(WTF_URL, URLIsEqualIgnoringQueryAndFragments)
 
 TEST_F(WTF_URL, URLRemoveQueryParameters)
 {
-    URL url = createURL("http://www.webkit.org/?key=val"_s);
-    URL url1 = createURL("http://www.webkit.org/?key=val&key1=val1"_s);
-    URL url2 = createURL("http://www.webkit.org/?"_s);
-    URL url3 = createURL("http://www.webkit.org/?key=val#fragment"_s);
-    URL url4 = createURL("http://www.webkit.org/?key=val&key=val#fragment"_s);
-    URL url5 = createURL("http://www.webkit.org/?key&key=#fragment"_s);
-    URL url6 = createURL("http://www.webkit.org/#fragment"_s);
-    URL url7 = createURL("http://www.webkit.org/?key=val#fragment"_s);
-    URL url8 = createURL("http://www.webkit.org/"_s);
-    URL url9 = createURL("http://www.webkit.org/#fragment"_s);
-    URL url10 = createURL("http://www.webkit.org/?key=val#fragment"_s);
-    URL url11 = createURL("http://www.webkit.org/?key=val&key1=val1#fragment"_s);
-    URL url12 = createURL("http://www.webkit.org/?key=val&key1=val1#fragment"_s);
-    URL url13 = createURL("http://www.webkit.org"_s);
-    
+    const auto url = createURL("http://www.webkit.org/?key=val"_s);
+    auto url1 = createURL("http://www.webkit.org/?key=val&key1=val1"_s);
+    auto url2 = createURL("http://www.webkit.org/?"_s);
+    auto url3 = createURL("http://www.webkit.org/?key=val#fragment"_s);
+    auto url4 = createURL("http://www.webkit.org/?key=val&key=val#fragment"_s);
+    auto url5 = createURL("http://www.webkit.org/?key&key=#fragment"_s);
+    auto url6 = createURL("http://www.webkit.org/#fragment"_s);
+    auto url7 = createURL("http://www.webkit.org/?key=val#fragment"_s);
+    const auto url8 = createURL("http://www.webkit.org/"_s);
+    const auto url9 = createURL("http://www.webkit.org/#fragment"_s);
+    const auto url10 = createURL("http://www.webkit.org/?key=val#fragment"_s);
+    auto url11 = createURL("http://www.webkit.org/?key=val&key1=val1#fragment"_s);
+    auto url12 = createURL("http://www.webkit.org/?key=val&key1=val1#fragment"_s);
+    auto url13 = createURL("http://www.webkit.org"_s);
+    auto url14 = createURL("http://www.webkit.org/?u+v=x+%20y&key1=foo"_s);
+    auto url15 = createURL("http://www.webkit.org/?u+v=x+%20y"_s);
+
     HashSet<String> keyRemovalSet1 { "key"_s };
     HashSet<String> keyRemovalSet2 { "key1"_s };
     HashSet<String> keyRemovalSet3 { "key2"_s };
     HashSet<String> keyRemovalSet4 { "key"_s, "key1"_s };
-    
-    removeQueryParameters(url1, keyRemovalSet2);
+
+    auto checkRemovedParameters = [](int lineNumber, const Vector<String>& removedParameters, std::initializer_list<String>&& expected) {
+        Vector<String> expectedParameters { WTFMove(expected) };
+        bool areEqual = removedParameters == expectedParameters;
+        EXPECT_TRUE(areEqual);
+        if (areEqual)
+            return;
+
+        WTFLogAlways("Test failed at %s:%d", __FILE__, lineNumber);
+        WTFLogAlways("- Got %zu parameter(s)", removedParameters.size());
+        for (auto& parameter : removedParameters)
+            WTFLogAlways("    %s", parameter.utf8().data());
+        WTFLogAlways("- Expected %zu parameter(s)", expectedParameters.size());
+        for (auto& parameter : expectedParameters)
+            WTFLogAlways("    %s", parameter.utf8().data());
+    };
+
+    auto removedParameters1 = removeQueryParameters(url1, keyRemovalSet2);
     EXPECT_EQ(url1.string(), url.string());
-    
-    removeQueryParameters(url2, keyRemovalSet1);
-    EXPECT_EQ(url2.string(), url8.string());
-    
-    removeQueryParameters(url3, keyRemovalSet1);
+    checkRemovedParameters(__LINE__, removedParameters1, { "key1"_s });
+
+    const auto originalURL2 = url2;
+    auto removedParameters2 = removeQueryParameters(url2, keyRemovalSet1);
+    EXPECT_EQ(url2.string(), originalURL2.string());
+    checkRemovedParameters(__LINE__, removedParameters2, { });
+
+    auto removedParameters3 = removeQueryParameters(url3, keyRemovalSet1);
     EXPECT_EQ(url3.string(), url6.string());
-    
-    removeQueryParameters(url4, keyRemovalSet1);
+    checkRemovedParameters(__LINE__, removedParameters3, { "key"_s });
+
+    auto removedParameters4 = removeQueryParameters(url4, keyRemovalSet1);
     EXPECT_EQ(url4.string(), url6.string());
-    
-    removeQueryParameters(url5, keyRemovalSet1);
+    checkRemovedParameters(__LINE__, removedParameters4, { "key"_s, "key"_s });
+
+    auto removedParameters5 = removeQueryParameters(url5, keyRemovalSet1);
     EXPECT_EQ(url5.string(), url6.string());
-    
-    removeQueryParameters(url6, keyRemovalSet1);
+    checkRemovedParameters(__LINE__, removedParameters5, { "key"_s, "key"_s });
+
+    auto removedParameters6 = removeQueryParameters(url6, keyRemovalSet1);
     EXPECT_EQ(url6.string(), url9.string());
-    
-    removeQueryParameters(url7, keyRemovalSet2);
+    checkRemovedParameters(__LINE__, removedParameters6, { });
+
+    auto removedParameters7 = removeQueryParameters(url7, keyRemovalSet2);
     EXPECT_EQ(url7.string(), url10.string());
-    
-    removeQueryParameters(url11, keyRemovalSet3);
+    checkRemovedParameters(__LINE__, removedParameters7, { });
+
+    auto removedParameters11 = removeQueryParameters(url11, keyRemovalSet3);
     EXPECT_EQ(url11.string(), url12.string());
-    
-    removeQueryParameters(url12, keyRemovalSet4);
+    checkRemovedParameters(__LINE__, removedParameters11, { });
+
+    auto removedParameters12 = removeQueryParameters(url12, keyRemovalSet4);
     EXPECT_EQ(url12.string(), url9.string());
-    
-    removeQueryParameters(url13, keyRemovalSet1);
+    checkRemovedParameters(__LINE__, removedParameters12, { "key"_s, "key1"_s });
+
+    auto removedParameters13 = removeQueryParameters(url13, keyRemovalSet1);
     EXPECT_EQ(url13.string(), url8.string());
+    checkRemovedParameters(__LINE__, removedParameters13, { });
+
+    auto removedParameters14 = removeQueryParameters(url14, keyRemovalSet4);
+    EXPECT_EQ(url14.string(), url15.string());
+    checkRemovedParameters(__LINE__, removedParameters14, { "key1"_s });
 }
 
 TEST_F(WTF_URL, IsolatedCopy)

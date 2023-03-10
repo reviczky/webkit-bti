@@ -27,7 +27,6 @@
 
 #include "Attachment.h"
 #include "MessageNames.h"
-#include "StringReference.h"
 #include <WebCore/SharedBuffer.h>
 #include <wtf/Forward.h>
 #include <wtf/OptionSet.h>
@@ -60,17 +59,23 @@ public:
     void setShouldDispatchMessageWhenWaitingForSyncReply(ShouldDispatchWhenWaitingForSyncReply);
     ShouldDispatchWhenWaitingForSyncReply shouldDispatchMessageWhenWaitingForSyncReply() const;
 
+    bool isFullySynchronousModeForTesting() const;
     void setFullySynchronousModeForTesting();
     void setShouldMaintainOrderingWithAsyncMessages();
+    bool isAllowedWhenWaitingForSyncReply() const { return messageAllowedWhenWaitingForSyncReply(messageName()) || isFullySynchronousModeForTesting(); }
+    bool isAllowedWhenWaitingForUnboundedSyncReply() const { return messageAllowedWhenWaitingForUnboundedSyncReply(messageName()); }
 
     void wrapForTesting(UniqueRef<Encoder>&&);
 
-    void encodeFixedLengthData(const uint8_t* data, size_t, size_t alignment);
+    template<typename T, size_t Extent>
+    void encodeSpan(const Span<T, Extent>&);
+    template<typename T>
+    void encodeObject(const T&);
 
     template<typename T>
     Encoder& operator<<(T&& t)
     {
-        ArgumentCoder<std::remove_const_t<std::remove_reference_t<T>>, void>::encode(*this, std::forward<T>(t));
+        ArgumentCoder<std::remove_cvref_t<T>, void>::encode(*this, std::forward<T>(t));
         return *this;
     }
 
@@ -105,5 +110,24 @@ private:
 
     Vector<Attachment> m_attachments;
 };
+
+template<typename T, size_t Extent>
+inline void Encoder::encodeSpan(const Span<T, Extent>& span)
+{
+    auto* data = reinterpret_cast<const uint8_t*>(span.data());
+    size_t size = span.size_bytes();
+    constexpr size_t alignment = alignof(T);
+    ASSERT(!(reinterpret_cast<uintptr_t>(data) % alignment));
+
+    uint8_t* buffer = grow(alignment, size);
+    memcpy(buffer, data, size);
+}
+
+template<typename T>
+inline void Encoder::encodeObject(const T& object)
+{
+    static_assert(std::is_trivially_copyable_v<T>);
+    encodeSpan(Span { std::addressof(object), 1 });
+}
 
 } // namespace IPC

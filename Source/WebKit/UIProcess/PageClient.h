@@ -71,6 +71,7 @@ OBJC_CLASS AVPlayerViewController;
 OBJC_CLASS CALayer;
 OBJC_CLASS NSFileWrapper;
 OBJC_CLASS NSMenu;
+OBJC_CLASS NSObject;
 OBJC_CLASS NSSet;
 OBJC_CLASS NSTextAlternatives;
 OBJC_CLASS UIGestureRecognizer;
@@ -78,9 +79,6 @@ OBJC_CLASS UIScrollEvent;
 OBJC_CLASS UIScrollView;
 OBJC_CLASS _WKRemoteObjectRegistry;
 
-#if USE(APPKIT)
-OBJC_CLASS WKView;
-#endif
 #endif
 
 namespace API {
@@ -144,7 +142,6 @@ enum class UndoOrRedo : bool;
 enum class TapHandlingResult : uint8_t;
 
 class ContextMenuContextData;
-class DownloadProxy;
 class DrawingAreaProxy;
 class NativeWebGestureEvent;
 class NativeWebKeyboardEvent;
@@ -199,6 +196,10 @@ class InstallMissingMediaPluginsPermissionRequest;
 using LayerHostingContextID = uint32_t;
 #endif
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+class WebKitWebResourceLoadManager;
+#endif
+
 class PageClient : public CanMakeWeakPtr<PageClient> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -228,7 +229,7 @@ public:
     // Return whether the view is visible.
     virtual bool isViewVisible() = 0;
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     virtual bool canTakeForegroundAssertions() = 0;
 #endif
 
@@ -271,8 +272,6 @@ public:
     virtual void removeAllPDFHUDs() = 0;
 #endif
     
-    virtual void handleDownloadRequest(DownloadProxy&) = 0;
-
     virtual bool handleRunOpenPanel(WebPageProxy*, WebFrameProxy*, const FrameInfoData&, API::OpenPanelParameters*, WebOpenPanelResultListenerProxy*) { return false; }
     virtual bool showShareSheet(const WebCore::ShareDataWithParsedURL&, WTF::CompletionHandler<void (bool)>&&) { return false; }
     virtual void showContactPicker(const WebCore::ContactsRequestData&, WTF::CompletionHandler<void(std::optional<Vector<WebCore::ContactInfo>>&&)>&& completionHandler) { completionHandler(std::nullopt); }
@@ -289,7 +288,7 @@ public:
 #if PLATFORM(GTK)
     virtual void startDrag(WebCore::SelectionData&&, OptionSet<WebCore::DragOperation>, RefPtr<ShareableBitmap>&& dragImage, WebCore::IntPoint&& dragImageHotspot) = 0;
 #else
-    virtual void startDrag(const WebCore::DragItem&, const ShareableBitmap::Handle&) { }
+    virtual void startDrag(const WebCore::DragItem&, const ShareableBitmapHandle&) { }
 #endif
     virtual void didPerformDragOperation(bool) { }
     virtual void didPerformDragControllerAction() { }
@@ -434,6 +433,8 @@ public:
     virtual CGRect boundsOfLayerInLayerBackedWindowCoordinates(CALayer *) const = 0;
 
     virtual WebCore::DestinationColorSpace colorSpace() = 0;
+
+    virtual bool useFormSemanticContext() const = 0;
     
     virtual NSView *viewForPresentingRevealPopover() const = 0;
 
@@ -451,14 +452,18 @@ public:
     virtual void registerInsertionUndoGrouping() = 0;
 
     virtual void setEditableElementIsFocused(bool) = 0;
+
+    virtual void setCaretDecorationVisibility(bool) = 0;
 #endif // PLATFORM(MAC)
+
+#if PLATFORM(COCOA)
+    virtual void didCommitLayerTree(const RemoteLayerTreeTransaction&) = 0;
+    virtual void layerTreeCommitComplete() = 0;
+#endif
 
 #if PLATFORM(IOS_FAMILY)
     virtual void commitPotentialTapFailed() = 0;
     virtual void didGetTapHighlightGeometries(WebKit::TapIdentifier requestID, const WebCore::Color&, const Vector<WebCore::FloatQuad>& highlightedQuads, const WebCore::IntSize& topLeftRadius, const WebCore::IntSize& topRightRadius, const WebCore::IntSize& bottomLeftRadius, const WebCore::IntSize& bottomRightRadius, bool nodeHasBuiltInClickHandling) = 0;
-
-    virtual void didCommitLayerTree(const RemoteLayerTreeTransaction&) = 0;
-    virtual void layerTreeCommitComplete() = 0;
 
     virtual void couldNotRestorePageState() = 0;
     virtual void restorePageState(std::optional<WebCore::FloatPoint> scrollPosition, const WebCore::FloatPoint& scrollOrigin, const WebCore::FloatBoxExtent& obscuredInsetsOnSave, double scale) = 0;
@@ -503,13 +508,15 @@ public:
     virtual WebCore::Color contentViewBackgroundColor() = 0;
     virtual String sceneID() = 0;
 
-    virtual void beginTextRecognitionForFullscreenVideo(const ShareableBitmap::Handle&, AVPlayerViewController *) = 0;
+    virtual void beginTextRecognitionForFullscreenVideo(const ShareableBitmapHandle&, AVPlayerViewController *) = 0;
     virtual void cancelTextRecognitionForFullscreenVideo(AVPlayerViewController *) = 0;
 #endif
     virtual bool isTextRecognitionInFullscreenVideoEnabled() const { return false; }
 
-    virtual void beginTextRecognitionForVideoInElementFullscreen(const ShareableBitmap::Handle&, WebCore::FloatRect) { }
+#if ENABLE(VIDEO)
+    virtual void beginTextRecognitionForVideoInElementFullscreen(const ShareableBitmapHandle&, WebCore::FloatRect) { }
     virtual void cancelTextRecognitionForVideoInElementFullscreen() { }
+#endif
 
     // Auxiliary Client Creation
 #if ENABLE(FULLSCREEN_API)
@@ -545,6 +552,7 @@ public:
 
     virtual void pinnedStateWillChange() { }
     virtual void pinnedStateDidChange() { }
+    virtual void drawPageBorderForPrinting(WebCore::FloatSize&& size) { }
     virtual bool scrollingUpdatesDisabledForTesting() { return false; }
 
     virtual bool hasSafeBrowsingWarning() const { return false; }
@@ -553,14 +561,12 @@ public:
 
     virtual void makeViewBlank(bool) { }
 
-#if HAVE(PASTEBOARD_DATA_OWNER)
     virtual WebCore::DataOwnerType dataOwnerForPasteboard(PasteboardAccessIntent) const { return WebCore::DataOwnerType::Undefined; }
-#endif
 
     virtual bool hasResizableWindows() const { return false; }
 
 #if ENABLE(IMAGE_ANALYSIS)
-    virtual void requestTextRecognition(const URL& imageURL, const ShareableBitmap::Handle& imageData, const String& sourceLanguageIdentifier, const String& targetLanguageIdentifier, CompletionHandler<void(WebCore::TextRecognitionResult&&)>&& completion) { completion({ }); }
+    virtual void requestTextRecognition(const URL& imageURL, const ShareableBitmapHandle& imageData, const String& sourceLanguageIdentifier, const String& targetLanguageIdentifier, CompletionHandler<void(WebCore::TextRecognitionResult&&)>&& completion) { completion({ }); }
     virtual void computeHasVisualSearchResults(const URL&, ShareableBitmap&, CompletionHandler<void(bool)>&& completion) { completion(false); }
 #endif
 
@@ -593,10 +599,6 @@ public:
 
     virtual void refView() = 0;
     virtual void derefView() = 0;
-
-#if ENABLE(VIDEO) && USE(GSTREAMER)
-    virtual bool decidePolicyForInstallMissingMediaPluginsPermissionRequest(InstallMissingMediaPluginsPermissionRequest&) = 0;
-#endif
 
     virtual void pageDidScroll(const WebCore::IntPoint&) { }
 
@@ -644,7 +646,7 @@ public:
 #endif
 
 #if USE(WPE_RENDERER)
-    virtual IPC::Attachment hostFileDescriptor() = 0;
+    virtual UnixFileDescriptor hostFileDescriptor() = 0;
 #endif
 
     virtual void didChangeWebPageID() const { }
@@ -665,6 +667,10 @@ public:
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     virtual void didEnterFullscreen() = 0;
     virtual void didExitFullscreen() = 0;
+#endif
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    virtual WebKitWebResourceLoadManager* webResourceLoadManager() = 0;
 #endif
 };
 

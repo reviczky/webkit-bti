@@ -1,119 +1,83 @@
-=================
-WPE WebKit 2.38.5
-=================
+==================
+WPE WebKit 2.39.91
+==================
 
-What's new in WPE WebKit 2.38.5?
+What's new in WPE WebKit 2.39.91?
 
+  - Rename WebKitWebExtension to WebKitWebProcessExtension in the new API.
+  - Remove WebKitJavascriptResult in favor of using JSCValue directly in the
+    new API.
+  - Add new API to get the request body of WebKitURISchemeRequest.
+  - Make it possible to handle WebKitDownload::decide-destination signal
+    asynchronously.
+  - Allow WebKitDownload destination to be a path instead of a URI.
+  - Make the output from webkit://gpu exportable as JSON.
+  - Improve scrolling performance in accelerated compositing mode.
+  - Implement KeyboardEvent.repeat.
+  - Fix the build in Ubuntu 20.04 and Debian Stable.
+  - Fix several crashes and rendering issues.
+
+==================
+WPE WebKit 2.39.90
+==================
+
+  - Add network session API when building with the new API.
+  - Add new JavaScript execution APIs.
+  - Add support for speech synthesis using Flite.
+  - Always update the active URI of WebKitFrame.
+  - Bring back the WebKitConsoleMessage API implementation.
+  - Do not allow the sandbox to mount the entire home directory.
+  - Fix criticals from webkitOptionMenuSetEvent when opening any combo box.
   - Fix large memory allocation when uploading content.
   - Fix scrolling after a history navigation with PSON enabled.
-  - Always update the active URI of WebKitFrame.
-  - Fix the build with the external hole-punch media playback enabled.
-  - Fix the build on Ubuntu 20.04.
+  - Fix the webkit.h public header causing applications failing to build.
+  - Enable WebGL2 by default, which was disabled by mistake.
+  - Fix the build with WebGL disabled.
+  - Remove the favicon functionality when building with the new API.
+  - Make most public types final (non-derivable) and class struct declarations
+    private when building with the new API.
+  - Merge functions of registering and unregistering script message handler in
+    the new API.
+  - Remove most of the webkit_web_view_new_with_*() constructors when building
+    with the new GLib API.
+  - Remove webkit_web_context_get/set_process_model when building with the new
+    GLib API.
   - Fix several crashes and rendering issues.
 
 =================
-WPE WebKit 2.38.4
+WPE WebKit 2.39.4
 =================
 
-What's new in WPE WebKit 2.38.4?
+What's new in WPE WebKit 2.39.4?
 
-  - Improve GStreamer multimedia playback across the board with improved
-    codec selection logic, better handling of latency, and improving
-    frame discard to avoid audio/video desynchronizationg, among other
-    fixes.
-  - Disable HLS media playback by default, which makes web sites use MSE
-    instead. If needed WEBKIT_GST_ENABLE_HLS_SUPPORT=1 can be set in the
-    environment to enable it back.
-  - Fix MediaSession API not showing artwork images.
-  - Fix MediaSession MPRIS usage when running inside a Flatpak sandbox.
-  - Fix input element controls to correctly scale when applying a zoom
-    factor different than the default.
-  - Fix leakage of Web processes in certain situations.
-  - Fix the injected bundle not being found when running inside a sandbox.
-  - Fix the build with ENABLE_INTROSPECTION when cross-compiling.
-  - FIx the build with ENABLE_WEBGL disabled.
-  - Fix the build with GStreamer-based WebRTC enabled.
+  - Use ANGLE for the WebGL implementation and enable WebGL2.
+  - Add support for background-repeat: space.
+  - Add API to check if a response policy decision is for the main resource.
+  - Add support for the "get computed label" and "get computed role"
+    WebDriver commands.
+  - Add API to support asynchronously returning values from user script messages.
+  - Add API to query the permission state of web features.
+  - Add API to disable Web security.
+  - Add support for client side certificates on WebSocket connections.
+  - Add webkit_web_hit_test_result_get_js_node() to get the JSCValue for the node.
+  - Add WebKitWebFormManager and deprecate WebKitWebPage form related signals.
+  - Make checkbox, radio and inner spin button scale along by page zoom.
+  - Use async scrolling also for keyboard scrolling.
+  - Deprecate the WebKitConsoleMessage API.
+  - Deprecate the event parameter of WebKitWebView::context-menu and
+    WebKitWebView::show-option-menu signals in favor of a getter in
+    WebKitContextMenu and WebKitOptionMenu.
+  - Do not emit context-menu signals for media settings popup menu.
+  - Do not perform position queries on the video sink when a player
+    is for audio only.
+  - Fix WebGL when sandbox is enabled.
+  - Fix loading of media documents.
+  - Fix first party for cookies set on every media request.
+  - Fix gibberish text when loading alternate data.
+  - Fix rendering of checkbox and radio buttons on black backgrounds.
   - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.38.3
-=================
-
-What's new in WPE WebKit 2.38.3?
-
- - Fix runtime critical warnings from media player.
- - Fix network process crash when fetching website data on ephemeral session.
- - Fix the build with Ruby 3.2.
- - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.38.2
-=================
-
-What's new in WPE WebKit 2.38.2?
-
-  - Fix scrolling issues in some sites having fixed background.
-  - Fix prolonged buffering during progressive live playback.
-  - Fix the build with accessibility disabled.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.38.1
-=================
-
-What's new in WPE WebKit 2.38.1?
-
-  - Make xdg-dbus-proxy work if host session bus address is an abstract socket.
-  - Use a single xdg-dbus-proxy process when sandbox is enabled.
-  - Fix high resolution video playback due to unimplemented changeType operation.
-  - Ensure GSubprocess uses posix_spawn() again and inherit file descriptors.
-  - Fix player stucking in buffering (paused) state for progressive streaming.
-  - Do not try to preconnect on link click when link preconnect setting is disabled.
-  - Fix close status code returned when the client closes a WebSocket in some cases.
-  - Fix media player duration calculation.
-  - Fix several crashes and rendering issues.
-
-=================
-WPE WebKit 2.38.0
-=================
-
-What's new in WPE WebKit 2.38.0?
-
-  - Fix jumpy elements when scrolling GitLab with async scrolling.
-  - Fix kinetic scrolling with elements that use overflow scrolling.
-  - Fix WebKitWebView:web-process-terminated signal not being emitted
-    for the first web view when sandboxing is enabled.
-  - Fix build with CMake < 3.17.
-  - Fix the build with GStreamer < 1.18.
-  - Fix the build when targeting Android.
-  - Fix several crashes and rendering issues.
-
-==================
-WPE WebKit 2.37.91
-==================
-
-What's new in WPE WebKit 2.37.91?
-
-  - Cache and reuse image-based backing stores to improve memory consumption.
-  - Deprecate enable-frame-flattening setting because the functionality will
-    be removed in 2.40.
-  - Fix deadlock when disposing player while handling rotation tag.
-  - Fix several crashes and rendering issues.
-  - Translation updates: Polish.
-
-==================
-WPE WebKit 2.37.90
-==================
-
-What's new in WPE WebKit 2.37.90?
-
-  - Remove the libnotify dependency.
-  - Add support for generating crash reports using Breakpad.
-  - Add support for service worker notifications.
-  - Add support for loading notification icons.
-  - Add support for PAC proxy in the WebDriver implementation.
-  - Fix the build with USE_SYSTEM_MALLOC=ON.
-  - Fix several crashes and rendering issues.
+  - Fix several warnings when building for ARMv7 (32-bits).
+  - Fix web process leak when webkit_download_set_destination is called with empty destination.
 
 =================
 WPE WebKit 2.37.1

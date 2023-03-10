@@ -20,6 +20,8 @@
 #include "config.h"
 #include "WebKitJavascriptResult.h"
 
+#if !ENABLE(2022_GLIB_API)
+
 #include "APISerializedScriptValue.h"
 #include "WebKitJavascriptResultPrivate.h"
 #include <jsc/JSCContextPrivate.h>
@@ -34,8 +36,7 @@
 struct _WebKitJavascriptResult {
     explicit _WebKitJavascriptResult(WebCore::SerializedScriptValue& serializedScriptValue)
     {
-        auto* jsContext = SharedJavascriptContext::singleton().getOrCreateContext();
-        jsValue = jscContextGetOrCreateValue(jsContext, serializedScriptValue.deserialize(jscContextGetJSContext(jsContext), nullptr));
+        jsValue = API::SerializedScriptValue::deserialize(serializedScriptValue);
     }
 
     GRefPtr<JSCValue> jsValue;
@@ -142,3 +143,5 @@ JSCValue* webkit_javascript_result_get_js_value(WebKitJavascriptResult* javascri
     g_return_val_if_fail(javascriptResult, nullptr);
     return javascriptResult->jsValue.get();
 }
+
+#endif

@@ -33,14 +33,12 @@
 #include "StorageAreaMapMessages.h"
 #include "StorageNamespaceImpl.h"
 #include "WebPage.h"
-#include "WebPageGroupProxy.h"
 #include "WebProcess.h"
 #include <WebCore/DOMWindow.h>
 #include <WebCore/Document.h>
 #include <WebCore/EventNames.h>
 #include <WebCore/Frame.h>
 #include <WebCore/Page.h>
-#include <WebCore/PageGroup.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/Storage.h>
 #include <WebCore/StorageEventDispatcher.h>
@@ -258,9 +256,7 @@ void StorageAreaMap::dispatchLocalStorageEvent(const std::optional<StorageAreaIm
 {
     ASSERT(isLocalStorage(type()));
 
-    // Namespace IDs for local storage namespaces are currently equivalent to web page group IDs.
-    auto& pageGroup = *WebProcess::singleton().webPageGroup(m_namespace.pageGroupID())->corePageGroup();
-    StorageEventDispatcher::dispatchLocalStorageEvents(key, oldValue, newValue, pageGroup, m_securityOrigin, urlString, [storageAreaImplID](auto& storage) {
+    StorageEventDispatcher::dispatchLocalStorageEvents(key, oldValue, newValue, nullptr, m_securityOrigin, urlString, [storageAreaImplID](auto& storage) {
         return static_cast<StorageAreaImpl&>(storage.area()).identifier() == storageAreaImplID;
     });
 }
@@ -290,10 +286,8 @@ void StorageAreaMap::sendConnectMessage(SendMode mode)
     auto type = computeStorageType();
 
     if (mode == SendMode::Sync) {
-        StorageAreaIdentifier remoteAreaIdentifier;
-        HashMap<String, String> items;
-        uint64_t messageIdentifier;
-        ipcConnection.sendSync(Messages::NetworkStorageManager::ConnectToStorageAreaSync(type, m_identifier, namespaceIdentifier, origin), Messages::NetworkStorageManager::ConnectToStorageAreaSync::Reply(remoteAreaIdentifier, items, messageIdentifier), 0);
+        auto sendResult = ipcConnection.sendSync(Messages::NetworkStorageManager::ConnectToStorageAreaSync(type, m_identifier, namespaceIdentifier, origin), 0);
+        auto [remoteAreaIdentifier, items, messageIdentifier] = sendResult.takeReplyOr(StorageAreaIdentifier { }, HashMap<String, String> { }, 0);
         didConnect(remoteAreaIdentifier, WTFMove(items), messageIdentifier);
         return;
     }

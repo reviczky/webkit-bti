@@ -40,7 +40,7 @@
 #include "WebProcessPool.h"
 #include <WebCore/CompositionUnderline.h>
 #if ENABLE(GAMEPAD)
-#include <WebCore/WPEGamepadProvider.h>
+#include <WebCore/GamepadProviderLibWPE.h>
 #endif
 #include <wpe/wpe.h>
 #include <wtf/NeverDestroyed.h>
@@ -57,7 +57,9 @@ static Vector<View*>& viewsVector()
 
 View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseConfiguration)
     : m_client(makeUnique<API::ViewClient>())
+#if ENABLE(TOUCH_EVENTS)
     , m_touchGestureController(makeUnique<TouchGestureController>())
+#endif
     , m_pageClient(makeUnique<PageClientImpl>(*this))
     , m_size { 800, 600 }
     , m_viewStateFlags { WebCore::ActivityState::WindowIsActive, WebCore::ActivityState::IsFocused, WebCore::ActivityState::IsVisible, WebCore::ActivityState::IsInWindow }
@@ -230,6 +232,7 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
         // handle_touch_event
         [](void* data, struct wpe_input_touch_event* event)
         {
+#if ENABLE(TOUCH_EVENTS)
             auto& view = *reinterpret_cast<View*>(data);
             auto& page = view.page();
 
@@ -267,6 +270,7 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
             }
 
             page.handleTouchEvent(touchEvent);
+#endif
         },
         // padding
         nullptr,
@@ -294,7 +298,7 @@ View::View(struct wpe_view_backend* backend, const API::PageConfiguration& baseC
         [](void* data)
         {
             auto& view = *reinterpret_cast<View*>(data);
-            view.page().fullScreenManager()->requestEnterFullScreen();
+            view.page().fullScreenManager()->requestRestoreFullScreen();
         },
         // request_exit_fullscreen
         [](void* data)
@@ -339,11 +343,6 @@ void View::frameDisplayed()
     m_client->frameDisplayed(*this);
 }
 
-void View::handleDownloadRequest(DownloadProxy& download)
-{
-    m_client->handleDownloadRequest(*this, download);
-}
-
 void View::willStartLoad()
 {
     m_client->willStartLoad(*this);
@@ -357,6 +356,11 @@ void View::didChangePageID()
 void View::didReceiveUserMessage(UserMessage&& message, CompletionHandler<void(UserMessage&&)>&& completionHandler)
 {
     m_client->didReceiveUserMessage(*this, WTFMove(message), WTFMove(completionHandler));
+}
+
+WebKitWebResourceLoadManager* View::webResourceLoadManager()
+{
+    return m_client->webResourceLoadManager();
 }
 
 void View::setInputMethodContext(WebKitInputMethodContext* context)
@@ -377,10 +381,10 @@ void View::setInputMethodState(std::optional<InputMethodState>&& state)
 void View::selectionDidChange()
 {
     const auto& editorState = m_pageProxy->editorState();
-    if (!editorState.isMissingPostLayoutData) {
-        m_inputMethodFilter.notifyCursorRect(editorState.postLayoutData().caretRectAtStart);
-        m_inputMethodFilter.notifySurrounding(editorState.postLayoutData().surroundingContext, editorState.postLayoutData().surroundingContextCursorPosition,
-            editorState.postLayoutData().surroundingContextSelectionPosition);
+    if (editorState.hasPostLayoutAndVisualData()) {
+        m_inputMethodFilter.notifyCursorRect(editorState.visualData->caretRectAtStart);
+        m_inputMethodFilter.notifySurrounding(editorState.postLayoutData->surroundingContext, editorState.postLayoutData->surroundingContextCursorPosition,
+            editorState.postLayoutData->surroundingContextSelectionPosition);
     }
 }
 
@@ -416,11 +420,17 @@ void View::setViewState(OptionSet<WebCore::ActivityState::Flag> flags)
 
 void View::handleKeyboardEvent(struct wpe_input_keyboard_event* event)
 {
+    auto isAutoRepeat = false;
+    if (event->pressed)
+        isAutoRepeat = m_keyAutoRepeatHandler.keyPress(event->key_code);
+    else
+        m_keyAutoRepeatHandler.keyRelease();
+
     auto filterResult = m_inputMethodFilter.filterKeyEvent(event);
     if (filterResult.handled)
         return;
 
-    page().handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(event, event->pressed ? filterResult.keyText : String(), NativeWebKeyboardEvent::HandledByInputMethod::No, std::nullopt, std::nullopt));
+    page().handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(event, event->pressed ? filterResult.keyText : String(), isAutoRepeat, NativeWebKeyboardEvent::HandledByInputMethod::No, std::nullopt, std::nullopt));
 }
 
 void View::synthesizeCompositionKeyPress(const String& text, std::optional<Vector<WebCore::CompositionUnderline>>&& underlines, std::optional<EditingRange>&& selectionRange)
@@ -430,7 +440,7 @@ void View::synthesizeCompositionKeyPress(const String& text, std::optional<Vecto
     // composition results. WPE doesn't have an equivalent, so we send VoidSymbol
     // here to WebCore. PlatformKeyEvent converts this code into VK_PROCESSKEY.
     static struct wpe_input_keyboard_event event = { 0, WPE_KEY_VoidSymbol, 0, true, 0 };
-    page().handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(&event, text, NativeWebKeyboardEvent::HandledByInputMethod::Yes, WTFMove(underlines), WTFMove(selectionRange)));
+    page().handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(&event, text, false, NativeWebKeyboardEvent::HandledByInputMethod::Yes, WTFMove(underlines), WTFMove(selectionRange)));
 }
 
 void View::close()
@@ -466,7 +476,7 @@ WebKit::WebPageProxy* View::platformWebPageProxyForGamepadInput()
     if (views.isEmpty())
         return nullptr;
 
-    struct wpe_view_backend* viewBackend = WebCore::WPEGamepadProvider::singleton().inputView();
+    struct wpe_view_backend* viewBackend = WebCore::GamepadProviderLibWPE::singleton().inputView();
 
     size_t index = notFound;
 

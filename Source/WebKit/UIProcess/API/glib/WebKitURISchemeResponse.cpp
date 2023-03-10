@@ -65,7 +65,7 @@ struct _WebKitURISchemeResponsePrivate {
     GUniquePtr<SoupMessageHeaders> headers;
 };
 
-WEBKIT_DEFINE_TYPE(WebKitURISchemeResponse, webkit_uri_scheme_response, G_TYPE_OBJECT)
+WEBKIT_DEFINE_FINAL_TYPE(WebKitURISchemeResponse, webkit_uri_scheme_response, G_TYPE_OBJECT, GObject)
 
 static void webkitURISchemeResponseSetProperty(GObject* object, guint propId, const GValue* value, GParamSpec* paramSpec)
 {
@@ -101,8 +101,7 @@ static void webkit_uri_scheme_response_class_init(WebKitURISchemeResponseClass* 
     sObjProperties[PROP_STREAM] = 
         g_param_spec_object(
             "stream",
-            _("Input stream"),
-            _("The input stream to read from."),
+            nullptr, nullptr,
             G_TYPE_INPUT_STREAM,
             static_cast<GParamFlags>(WEBKIT_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 
@@ -116,8 +115,7 @@ static void webkit_uri_scheme_response_class_init(WebKitURISchemeResponseClass* 
     sObjProperties[PROP_STREAM_LENGTH] = 
         g_param_spec_int64(
             "stream-length",
-            _("Input stream length"),
-            _("The input stream length in bytes. -1 for unknown length."),
+            nullptr, nullptr,
             -1, INT64_MAX, -1,
             static_cast<GParamFlags>(WEBKIT_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 

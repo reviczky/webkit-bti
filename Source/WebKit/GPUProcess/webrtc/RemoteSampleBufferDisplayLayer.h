@@ -40,6 +40,7 @@
 namespace WebCore {
 class ImageTransferSessionVT;
 class LocalSampleBufferDisplayLayer;
+enum class VideoFrameRotation : uint16_t;
 };
 
 namespace WebKit {
@@ -52,7 +53,8 @@ public:
     ~RemoteSampleBufferDisplayLayer();
 
     using WebCore::SampleBufferDisplayLayer::Client::weakPtrFactory;
-    using WeakValueType = WebCore::SampleBufferDisplayLayer::Client::WeakValueType;
+    using WebCore::SampleBufferDisplayLayer::Client::WeakValueType;
+    using WebCore::SampleBufferDisplayLayer::Client::WeakPtrImplType;
 
     using LayerInitializationCallback = CompletionHandler<void(std::optional<LayerHostingContextID>)>;
     void initialize(bool hideRootLayer, WebCore::IntSize, LayerInitializationCallback&&);
@@ -70,7 +72,7 @@ private:
 #endif
     void updateDisplayMode(bool hideDisplayLayer, bool hideRootLayer);
     void updateAffineTransform(CGAffineTransform);
-    void updateBoundsAndPosition(CGRect, WebCore::VideoFrame::Rotation);
+    void updateBoundsAndPosition(CGRect, WebCore::VideoFrameRotation);
     void flush();
     void flushAndRemoveImage();
     void play();
@@ -94,7 +96,7 @@ private:
     std::unique_ptr<WebCore::LocalSampleBufferDisplayLayer> m_sampleBufferDisplayLayer;
     std::unique_ptr<LayerHostingContext> m_layerHostingContext;
     SharedVideoFrameReader m_sharedVideoFrameReader;
-    ThreadAssertion m_consumeThread NO_UNIQUE_ADDRESS;
+    ThreadLikeAssertion m_consumeThread NO_UNIQUE_ADDRESS;
 
 };
 

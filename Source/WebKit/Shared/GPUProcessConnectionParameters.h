@@ -36,7 +36,7 @@ namespace WebKit {
 struct GPUProcessConnectionParameters {
     WebCore::ProcessIdentity webProcessIdentity;
     Vector<String> overrideLanguages;
-    bool isCaptivePortalModeEnabled { false };
+    bool isLockdownModeEnabled { false };
 #if ENABLE(IPC_TESTING_API)
     bool ignoreInvalidMessageForTesting { false };
 #endif
@@ -45,13 +45,14 @@ struct GPUProcessConnectionParameters {
 #endif
 #if ENABLE(VP9)
     std::optional<bool> hasVP9HardwareDecoder;
+    std::optional<bool> hasVP9ExtensionSupport;
 #endif
 
     void encode(IPC::Encoder& encoder) const
     {
         encoder << webProcessIdentity;
         encoder << overrideLanguages;
-        encoder << isCaptivePortalModeEnabled;
+        encoder << isLockdownModeEnabled;
 #if ENABLE(IPC_TESTING_API)
         encoder << ignoreInvalidMessageForTesting;
 #endif
@@ -60,6 +61,7 @@ struct GPUProcessConnectionParameters {
 #endif
 #if ENABLE(VP9)
         encoder << hasVP9HardwareDecoder;
+        encoder << hasVP9ExtensionSupport;
 #endif
     }
 
@@ -67,7 +69,7 @@ struct GPUProcessConnectionParameters {
     {
         auto webProcessIdentity = decoder.decode<WebCore::ProcessIdentity>();
         auto overrideLanguages = decoder.decode<Vector<String>>();
-        auto isCaptivePortalModeEnabled = decoder.decode<bool>();
+        auto isLockdownModeEnabled = decoder.decode<bool>();
 #if ENABLE(IPC_TESTING_API)
         auto ignoreInvalidMessageForTesting = decoder.decode<bool>();
 #endif
@@ -76,6 +78,7 @@ struct GPUProcessConnectionParameters {
 #endif
 #if ENABLE(VP9)
         auto hasVP9HardwareDecoder = decoder.decode<std::optional<bool>>();
+        auto hasVP9ExtensionSupport = decoder.decode<std::optional<bool>>();
 #endif
         if (!decoder.isValid())
             return std::nullopt;
@@ -83,7 +86,7 @@ struct GPUProcessConnectionParameters {
         return GPUProcessConnectionParameters {
             WTFMove(*webProcessIdentity),
             WTFMove(*overrideLanguages),
-            *isCaptivePortalModeEnabled,
+            *isLockdownModeEnabled,
 #if ENABLE(IPC_TESTING_API)
             *ignoreInvalidMessageForTesting,
 #endif
@@ -92,6 +95,7 @@ struct GPUProcessConnectionParameters {
 #endif
 #if ENABLE(VP9)
             WTFMove(*hasVP9HardwareDecoder),
+            WTFMove(*hasVP9ExtensionSupport),
 #endif
         };
     }

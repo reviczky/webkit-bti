@@ -89,11 +89,6 @@ bool GraphicsLayer::supportsLayerType(Type type)
     ASSERT_NOT_REACHED();
     return false;
 }
-
-bool GraphicsLayer::supportsSubpixelAntialiasedLayerText()
-{
-    return false;
-}
 #endif
 
 #if !USE(COORDINATED_GRAPHICS)
@@ -122,7 +117,6 @@ GraphicsLayer::GraphicsLayer(Type type, GraphicsLayerClient& layerClient)
     , m_type(type)
     , m_beingDestroyed(false)
     , m_contentsOpaque(false)
-    , m_supportsSubpixelAntialiasedText(false)
     , m_preserves3D(type == Type::Structural)
     , m_backfaceVisibility(true)
     , m_masksToBounds(false)
@@ -618,7 +612,7 @@ FloatRect GraphicsLayer::adjustCoverageRectForMovement(const FloatRect& coverage
     return unionRect(coverageRect, expandedRect);
 }
 
-String GraphicsLayer::animationNameForTransition(AnimatedPropertyID property)
+String GraphicsLayer::animationNameForTransition(AnimatedProperty property)
 {
     // | is not a valid identifier character in CSS, so this can never conflict with a keyframe identifier.
     return makeString("-|transition", static_cast<int>(property), '-');
@@ -634,6 +628,11 @@ void GraphicsLayer::resumeAnimations()
 
 void GraphicsLayer::setContentsDisplayDelegate(RefPtr<GraphicsLayerContentsDisplayDelegate>&&, ContentsLayerPurpose)
 {
+}
+
+RefPtr<GraphicsLayerAsyncContentsDisplayDelegate> GraphicsLayer::createAsyncContentsDisplayDelegate()
+{
+    return nullptr;
 }
 
 void GraphicsLayer::getDebugBorderInfo(Color& color, float& width) const
@@ -695,9 +694,9 @@ static inline const FilterOperations& filterOperationsAt(const KeyframeValueList
 int GraphicsLayer::validateFilterOperations(const KeyframeValueList& valueList)
 {
 #if ENABLE(FILTERS_LEVEL_2)
-    ASSERT(valueList.property() == AnimatedPropertyFilter || valueList.property() == AnimatedPropertyWebkitBackdropFilter);
+    ASSERT(valueList.property() == AnimatedProperty::Filter || valueList.property() == AnimatedProperty::WebkitBackdropFilter);
 #else
-    ASSERT(valueList.property() == AnimatedPropertyFilter);
+    ASSERT(valueList.property() == AnimatedProperty::Filter);
 #endif
 
     if (valueList.size() < 2)
@@ -820,7 +819,7 @@ void GraphicsLayer::dumpProperties(TextStream& ts, OptionSet<LayerTreeAsTextOpti
     if (m_boundsOrigin != FloatPoint())
         ts << indent << "(bounds origin " << m_boundsOrigin.x() << " " << m_boundsOrigin.y() << ")\n";
 
-    if (m_anchorPoint != FloatPoint3D(0.5f, 0.5f, 0)) {
+    if (client().shouldDumpPropertyForLayer(this, "anchorPoint", options)) {
         ts << indent << "(anchor " << m_anchorPoint.x() << " " << m_anchorPoint.y();
         if (m_anchorPoint.z())
             ts << " " << m_anchorPoint.z();
@@ -844,9 +843,6 @@ void GraphicsLayer::dumpProperties(TextStream& ts, OptionSet<LayerTreeAsTextOpti
     bool needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack = client().needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack(*this);
     if (m_contentsOpaque || needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack)
         ts << indent << "(contentsOpaque " << (m_contentsOpaque || needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack) << ")\n";
-
-    if (m_supportsSubpixelAntialiasedText)
-        ts << indent << "(supports subpixel antialiased text " << m_supportsSubpixelAntialiasedText << ")\n";
 
     if (m_masksToBounds && options & LayerTreeAsTextOptions::IncludeClipping)
         ts << indent << "(clips " << m_masksToBounds << ")\n";

@@ -73,7 +73,7 @@ WI.DOMManager = class DOMManager extends WI.Object
                 this.ensureDocument();
             });
 
-            if (WI.isEngineeringBuild) {
+            if (WI.engineeringSettingsAllowed()) {
                 if (DOMManager.supportsEditingUserAgentShadowTrees({target}))
                     target.DOMAgent.setAllowEditingUserAgentShadowTrees(WI.settings.engineeringAllowEditingUserAgentShadowTrees.value);
             }
@@ -87,25 +87,48 @@ WI.DOMManager = class DOMManager extends WI.Object
 
     // Static
 
-    static buildHighlightConfig(mode)
+    static buildHighlightConfigs(mode)
     {
         mode = mode || "all";
 
-        let highlightConfig = {showInfo: mode === "all"};
+        let commandArguments = {
+            highlightConfig: {showInfo: mode === "all"},
+        };
 
         if (mode === "all" || mode === "content")
-            highlightConfig.contentColor = {r: 111, g: 168, b: 220, a: 0.66};
+            commandArguments.highlightConfig.contentColor = {r: 111, g: 168, b: 220, a: 0.66};
 
         if (mode === "all" || mode === "padding")
-            highlightConfig.paddingColor = {r: 147, g: 196, b: 125, a: 0.66};
+            commandArguments.highlightConfig.paddingColor = {r: 147, g: 196, b: 125, a: 0.66};
 
         if (mode === "all" || mode === "border")
-            highlightConfig.borderColor = {r: 255, g: 229, b: 153, a: 0.66};
+            commandArguments.highlightConfig.borderColor = {r: 255, g: 229, b: 153, a: 0.66};
 
         if (mode === "all" || mode === "margin")
-            highlightConfig.marginColor = {r: 246, g: 178, b: 107, a: 0.66};
+            commandArguments.highlightConfig.marginColor = {r: 246, g: 178, b: 107, a: 0.66};
 
-        return highlightConfig;
+        if (WI.settings.showGridOverlayDuringElementSelection.value) {
+            commandArguments.gridOverlayConfig = {
+                gridColor: WI.DOMNode.defaultLayoutOverlayColor.toProtocol(),
+                showLineNames: WI.settings.gridOverlayShowLineNames.value,
+                showLineNumbers: WI.settings.gridOverlayShowLineNumbers.value,
+                showExtendedGridLines: WI.settings.gridOverlayShowExtendedGridLines.value,
+                showTrackSizes: WI.settings.gridOverlayShowTrackSizes.value,
+                showAreaNames: WI.settings.gridOverlayShowAreaNames.value,
+            };
+        }
+
+        if (WI.settings.showFlexOverlayDuringElementSelection.value) {
+            commandArguments.flexOverlayConfig = {
+                flexColor: WI.DOMNode.defaultLayoutOverlayColor.toProtocol(),
+                showOrderNumbers: WI.settings.flexOverlayShowOrderNumbers.value,
+            };
+        }
+
+        if (WI.settings.showRulersDuringElementSelection.value)
+            commandArguments.showRulers = true;
+
+        return commandArguments;
     }
 
     static wrapClientCallback(callback)
@@ -118,11 +141,6 @@ WI.DOMManager = class DOMManager extends WI.Object
                 console.error("Error during DOMAgent operation: " + error);
             callback(error ? null : result);
         };
-    }
-
-    static supportsDisablingEventListeners()
-    {
-        return InspectorBackend.hasCommand("DOM.setEventListenerDisabled");
     }
 
     static supportsEventListenerBreakpoints()
@@ -604,9 +622,7 @@ WI.DOMManager = class DOMManager extends WI.Object
             // Re-resolve the node in the console's object group when adding to the console.
             let domNode = this.nodeForId(nodeId);
             WI.RemoteObject.resolveNode(domNode, WI.RuntimeManager.ConsoleObjectGroup).then((remoteObject) => {
-                const specialLogStyles = true;
-                const shouldRevealConsole = false;
-                WI.consoleLogViewController.appendImmediateExecutionWithResult(WI.UIString("Selected Element"), remoteObject, specialLogStyles, shouldRevealConsole);
+                WI.consoleLogViewController.appendImmediateExecutionWithResult(WI.UIString("Selected Element"), remoteObject, {addSpecialUserLogClass: true});
             });
         }
 
@@ -615,12 +631,6 @@ WI.DOMManager = class DOMManager extends WI.Object
 
     highlightDOMNodeList(nodes, mode)
     {
-        let target = WI.assumingMainTarget();
-
-        // COMPATIBILITY (iOS 11): DOM.highlightNodeList did not exist.
-        if (!target.hasCommand("DOM.highlightNodeList"))
-            return;
-
         if (this._hideDOMNodeHighlightTimeout) {
             clearTimeout(this._hideDOMNodeHighlightTimeout);
             this._hideDOMNodeHighlightTimeout = undefined;
@@ -635,10 +645,14 @@ WI.DOMManager = class DOMManager extends WI.Object
             nodeIds.push(node.id);
         }
 
-        target.DOMAgent.highlightNodeList(nodeIds, DOMManager.buildHighlightConfig(mode));
+        let target = WI.assumingMainTarget();
+        target.DOMAgent.highlightNodeList.invoke({
+            nodeIds,
+            ...WI.DOMManager.buildHighlightConfigs(mode),
+        });
     }
 
-    highlightSelector(selectorText, frameId, mode)
+    highlightSelector(selectorString, frameId, mode)
     {
         if (this._hideDOMNodeHighlightTimeout) {
             clearTimeout(this._hideDOMNodeHighlightTimeout);
@@ -646,7 +660,11 @@ WI.DOMManager = class DOMManager extends WI.Object
         }
 
         let target = WI.assumingMainTarget();
-        target.DOMAgent.highlightSelector(DOMManager.buildHighlightConfig(mode), selectorText, frameId);
+        target.DOMAgent.highlightSelector.invoke({
+            selectorString,
+            frameId,
+            ...WI.DOMManager.buildHighlightConfigs(mode),
+        });
     }
 
     highlightRect(rect, usePageCoordinates)
@@ -693,12 +711,10 @@ WI.DOMManager = class DOMManager extends WI.Object
             return;
 
         let target = WI.assumingMainTarget();
-        let commandArguments = {
+        target.DOMAgent.setInspectModeEnabled.invoke({
             enabled,
-            highlightConfig: DOMManager.buildHighlightConfig(),
-            showRulers: WI.settings.showRulersDuringElementSelection.value,
-        };
-        target.DOMAgent.setInspectModeEnabled.invoke(commandArguments, (error) => {
+            ...WI.DOMManager.buildHighlightConfigs(),
+        }, (error) => {
             if (error) {
                 WI.reportInternalError(error);
                 return;
@@ -731,14 +747,6 @@ WI.DOMManager = class DOMManager extends WI.Object
         };
 
         let target = WI.assumingMainTarget();
-
-        // COMPATIBILITY (iOS 11): DOM.setInspectedNode did not exist.
-        if (!target.hasCommand("DOM.setInspectedNode")) {
-            if (target.hasCommand("Console.addInspectedNode"))
-                target.ConsoleAgent.addInspectedNode(node.id, callback);
-            return;
-        }
-
         target.DOMAgent.setInspectedNode(node.id, callback);
     }
 

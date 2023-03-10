@@ -86,6 +86,7 @@ WebKitWebView* webkit_web_view_new(WebKitWebViewBackend* backend)
         nullptr));
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_view_new_with_context:
  * @backend: (transfer full) (not nullable): wrapped WPE view backend which
@@ -109,11 +110,15 @@ WebKitWebView* webkit_web_view_new_with_context(WebKitWebViewBackend* backend, W
 
     return WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
         "backend", backend,
+#if !ENABLE(2022_GLIB_API)
         "is-ephemeral", webkit_web_context_is_ephemeral(context),
+#endif
         "web-context", context,
         nullptr));
 }
+#endif
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_view_new_with_related_view: (constructor)
  * @backend: (transfer full) (not nullable): wrapped WPE view backend which
@@ -196,6 +201,7 @@ WebKitWebView* webkit_web_view_new_with_user_content_manager(WebKitWebViewBacken
         "user-content-manager", userContentManager,
         nullptr));
 }
+#endif
 
 /**
  * webkit_web_view_set_background_color:
