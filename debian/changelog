@@ -10,6 +10,7 @@ wpewebkit (2.39.91-1) UNRELEASED; urgency=medium
       that is currently not supported by dh_dwz (see #1016936).
   * debian/source/lintian-overrides:
     - Update source-is-missing overrides.
+  * Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 Mar 2023 17:49:40 +0100
 
