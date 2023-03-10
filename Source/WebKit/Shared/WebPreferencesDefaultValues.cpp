@@ -54,8 +54,19 @@ bool defaultCSSOMViewScrollingAPIEnabled()
     return !result;
 }
 
+bool defaultShouldPrintBackgrounds()
+{
+    static bool result = !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::DefaultsToExcludingBackgroundsWhenPrinting);
+    return result;
+}
+
 #if !USE(APPLE_INTERNAL_SDK)
 bool defaultAlternateFormControlDesignEnabled()
+{
+    return false;
+}
+
+bool defaultVideoFullscreenRequiresElementFullscreen()
 {
     return false;
 }
@@ -146,7 +157,25 @@ bool defaultCaptureAudioInUIProcessEnabled()
     return false;
 }
 
+bool defaultManageCaptureStatusBarInGPUProcessEnabled()
+{
+#if PLATFORM(IOS_FAMILY)
+    // FIXME: Enable by default for all applications.
+    return !WebCore::IOSApplication::isMobileSafari() && !WebCore::IOSApplication::isSafariViewService();
+#else
+    return false;
+#endif
+}
+
 #endif // ENABLE(MEDIA_STREAM)
+
+#if ENABLE(MANAGED_MEDIA_SOURCE)
+bool defaultManagedMediaSourceEnabled()
+{
+    // TBD
+    return false;
+}
+#endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
 bool defaultMediaSessionCoordinatorEnabled()
@@ -163,6 +192,16 @@ bool defaultMediaSessionCoordinatorEnabled()
 }
 #endif
 
+bool defaultShouldTakeSuspendedAssertions()
+{
+#if PLATFORM(IOS_FAMILY)
+    static bool newSDK = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::FullySuspendsBackgroundContent);
+    return !newSDK;
+#else
+    return true;
+#endif
+}
+
 bool defaultShowModalDialogEnabled()
 {
 #if PLATFORM(COCOA)
@@ -172,5 +211,16 @@ bool defaultShowModalDialogEnabled()
     return false;
 #endif
 }
+
+#if ENABLE(GAMEPAD)
+bool defaultGamepadVibrationActuatorEnabled()
+{
+#if HAVE(WIDE_GAMECONTROLLER_SUPPORT)
+    return true;
+#else
+    return false;
+#endif
+}
+#endif
 
 } // namespace WebKit

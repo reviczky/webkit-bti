@@ -125,7 +125,7 @@ RefPtr<GPUProcessConnection> GPUProcessConnection::create(IPC::Connection& paren
     if (!connectionIdentifiers)
         return nullptr;
 
-    parentConnection.send(Messages::WebProcessProxy::CreateGPUProcessConnection(connectionIdentifiers->client, getGPUProcessConnectionParameters()), 0);
+    parentConnection.send(Messages::WebProcessProxy::CreateGPUProcessConnection(connectionIdentifiers->client, getGPUProcessConnectionParameters()), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 
     auto instance = adoptRef(*new GPUProcessConnection(WTFMove(connectionIdentifiers->server)));
 #if ENABLE(IPC_TESTING_API)
@@ -136,9 +136,9 @@ RefPtr<GPUProcessConnection> GPUProcessConnection::create(IPC::Connection& paren
 }
 
 GPUProcessConnection::GPUProcessConnection(IPC::Connection::Identifier&& connectionIdentifier)
-    : m_connection(IPC::Connection::createServerConnection(connectionIdentifier, *this))
+    : m_connection(IPC::Connection::createServerConnection(connectionIdentifier))
 {
-    m_connection->open();
+    m_connection->open(*this);
 
     addLanguageChangeObserver(this, languagesChanged);
 
@@ -214,12 +214,12 @@ RemoteVideoFrameObjectHeapProxy& GPUProcessConnection::videoFrameObjectHeapProxy
         m_videoFrameObjectHeapProxy = RemoteVideoFrameObjectHeapProxy::create(*this);
     return *m_videoFrameObjectHeapProxy;
 }
-#endif
 
 RemoteMediaPlayerManager& GPUProcessConnection::mediaPlayerManager()
 {
     return *WebProcess::singleton().supplement<RemoteMediaPlayerManager>();
 }
+#endif
 
 #if PLATFORM(COCOA) && ENABLE(WEB_AUDIO)
 RemoteAudioSourceProviderManager& GPUProcessConnection::audioSourceProviderManager()
@@ -232,10 +232,12 @@ RemoteAudioSourceProviderManager& GPUProcessConnection::audioSourceProviderManag
 
 bool GPUProcessConnection::dispatchMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
+#if ENABLE(VIDEO)
     if (decoder.messageReceiverName() == Messages::MediaPlayerPrivateRemote::messageReceiverName()) {
         WebProcess::singleton().supplement<RemoteMediaPlayerManager>()->didReceivePlayerMessage(connection, decoder);
         return true;
     }
+#endif
 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     if (decoder.messageReceiverName() == Messages::UserMediaCaptureManager::messageReceiverName()) {
@@ -258,11 +260,6 @@ bool GPUProcessConnection::dispatchMessage(IPC::Connection& connection, IPC::Dec
 #endif
     if (messageReceiverMap().dispatchMessage(connection, decoder))
         return true;
-
-#if ENABLE(WEBGL)
-    if (decoder.messageReceiverName() == Messages::RemoteGraphicsContextGLProxy::messageReceiverName())
-        return RemoteGraphicsContextGLProxy::handleMessageToRemovedDestination(connection, decoder);
-#endif
 
 #if USE(AUDIO_SESSION)
     if (decoder.messageReceiverName() == Messages::RemoteAudioSession::messageReceiverName()) {
@@ -308,8 +305,10 @@ void GPUProcessConnection::didInitialize(std::optional<GPUProcessConnectionInfo>
         return;
     }
     m_hasInitialized = true;
-#if ENABLE(VP9)
-    m_hasVP9HardwareDecoder = info->hasVP9HardwareDecoder;
+
+#if ENABLE(VP9) && USE(LIBWEBRTC) && PLATFORM(COCOA)
+    WebProcess::singleton().libWebRTCCodecs().setVP9VTBSupport(info->hasVP9HardwareDecoder);
+    WebProcess::singleton().libWebRTCCodecs().setHasVP9ExtensionSupport(info->hasVP9ExtensionSupport);
 #endif
 }
 
@@ -327,7 +326,9 @@ bool GPUProcessConnection::waitForDidInitialize()
 
 void GPUProcessConnection::didReceiveRemoteCommand(PlatformMediaSession::RemoteControlCommandType type, const PlatformMediaSession::RemoteCommandArgument& argument)
 {
+#if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::sharedManager().processDidReceiveRemoteControlCommand(type, argument);
+#endif
 }
 
 #if ENABLE(ROUTING_ARBITRATION)
@@ -381,14 +382,6 @@ void GPUProcessConnection::enableVP9Decoders(bool enableVP8Decoder, bool enableV
     m_enableVP9SWDecoder = enableVP9SWDecoder;
     connection().send(Messages::GPUConnectionToWebProcess::EnableVP9Decoders(enableVP8Decoder, enableVP9Decoder, enableVP9SWDecoder), { });
 }
-
-bool GPUProcessConnection::hasVP9HardwareDecoder()
-{
-    if (!waitForDidInitialize())
-        return false;
-    return m_hasVP9HardwareDecoder;
-}
-
 #endif
 
 void GPUProcessConnection::updateMediaConfiguration()
@@ -400,7 +393,9 @@ void GPUProcessConnection::updateMediaConfiguration()
         settingsChanged = true;
 
 #if ENABLE(VP9)
-    if (m_mediaOverridesForTesting.vp9HardwareDecoderDisabled != VP9TestingOverrides::singleton().hardwareDecoderDisabled() || m_mediaOverridesForTesting.vp9ScreenSizeAndScale != VP9TestingOverrides::singleton().vp9ScreenSizeAndScale())
+    if (m_mediaOverridesForTesting.vp9HardwareDecoderDisabled != VP9TestingOverrides::singleton().hardwareDecoderDisabled()
+        || m_mediaOverridesForTesting.vp9DecoderDisabled != VP9TestingOverrides::singleton().vp9DecoderDisabled()
+        || m_mediaOverridesForTesting.vp9ScreenSizeAndScale != VP9TestingOverrides::singleton().vp9ScreenSizeAndScale())
         settingsChanged = true;
 #endif
 
@@ -413,6 +408,7 @@ void GPUProcessConnection::updateMediaConfiguration()
 
 #if ENABLE(VP9)
         .vp9HardwareDecoderDisabled = VP9TestingOverrides::singleton().hardwareDecoderDisabled(),
+        .vp9DecoderDisabled = VP9TestingOverrides::singleton().vp9DecoderDisabled(),
         .vp9ScreenSizeAndScale = VP9TestingOverrides::singleton().vp9ScreenSizeAndScale(),
 #endif
     };

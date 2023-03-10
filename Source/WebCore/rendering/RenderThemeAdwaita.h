@@ -26,6 +26,8 @@
 
 #pragma once
 
+#if USE(THEME_ADWAITA)
+
 #include "RenderTheme.h"
 
 namespace WebCore {
@@ -85,7 +87,7 @@ private:
 
     Seconds animationRepeatIntervalForProgressBar(const RenderProgress&) const final;
     Seconds animationDurationForProgressBar(const RenderProgress&) const final;
-    IntRect progressBarRectForBounds(const RenderObject&, const IntRect&) const final;
+    IntRect progressBarRectForBounds(const RenderProgress&, const IntRect&) const final;
     bool paintProgressBar(const RenderObject&, const PaintInfo&, const IntRect&) final;
 
     bool paintSliderTrack(const RenderObject&, const PaintInfo&, const IntRect&) final;
@@ -106,3 +108,5 @@ private:
 };
 
 } // namespace WebCore
+
+#endif // USE(THEME_ADWAITA)

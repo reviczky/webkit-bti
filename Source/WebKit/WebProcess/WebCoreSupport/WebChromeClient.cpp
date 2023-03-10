@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,6 @@
 #include "FrameInfoData.h"
 #include "HangDetectionDisabler.h"
 #include "ImageBufferShareableBitmapBackend.h"
-#include "InjectedBundleNavigationAction.h"
 #include "InjectedBundleNodeHandle.h"
 #include "NavigationActionData.h"
 #include "NetworkConnectionToWebProcessMessages.h"
@@ -42,6 +41,7 @@
 #include "PageBanner.h"
 #include "PluginView.h"
 #include "RemoteGPUProxy.h"
+#include "RemoteImageBufferProxy.h"
 #include "RemoteRenderingBackendProxy.h"
 #include "SharedBufferReference.h"
 #include "UserData.h"
@@ -64,11 +64,13 @@
 #include "WebProcessPoolMessages.h"
 #include "WebProcessProxyMessages.h"
 #include "WebSearchPopupMenu.h"
+#include "WebWorkerClient.h"
 #include <WebCore/AppHighlight.h>
 #include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/AXObjectCache.h>
 #include <WebCore/ColorChooser.h>
 #include <WebCore/ContentRuleListResults.h>
+#include <WebCore/CookieConsentDecisionResult.h>
 #include <WebCore/DataListSuggestionPicker.h>
 #include <WebCore/DatabaseTracker.h>
 #include <WebCore/DocumentLoader.h>
@@ -131,6 +133,10 @@
 #include "TiledCoreAnimationScrollingCoordinator.h"
 #endif
 
+#if PLATFORM(COCOA)
+#include "WebIconUtilities.h"
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 using namespace HTMLNames;
@@ -184,11 +190,8 @@ FloatRect WebChromeClient::windowRect()
         return m_page.windowFrameInUnflippedScreenCoordinates();
 #endif
 
-    FloatRect newWindowFrame;
-
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetWindowFrame(), Messages::WebPageProxy::GetWindowFrame::Reply(newWindowFrame), m_page.identifier()))
-        return FloatRect();
-
+    auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetWindowFrame(), m_page.identifier());
+    auto [newWindowFrame] = sendResult.takeReplyOr(FloatRect { });
     return newWindowFrame;
 #endif
 }
@@ -250,7 +253,7 @@ bool WebChromeClient::canTakeFocus(FocusDirection)
 
 void WebChromeClient::takeFocus(FocusDirection direction)
 {
-    m_page.send(Messages::WebPageProxy::TakeFocus(static_cast<uint8_t>(direction)));
+    m_page.send(Messages::WebPageProxy::TakeFocus(direction));
 }
 
 void WebChromeClient::focusedElementChanged(Element* element)
@@ -271,6 +274,23 @@ void WebChromeClient::focusedFrameChanged(Frame* frame)
     WebProcess::singleton().parentProcessConnection()->send(Messages::WebPageProxy::FocusedFrameChanged(webFrame ? std::make_optional(webFrame->frameID()) : std::nullopt), m_page.identifier());
 }
 
+OptionSet<WebEventModifier> modifiersForNavigationAction(const NavigationAction& navigationAction)
+{
+    OptionSet<WebEventModifier> modifiers;
+    auto keyStateEventData = navigationAction.keyStateEventData();
+    if (keyStateEventData && keyStateEventData->isTrusted) {
+        if (keyStateEventData->shiftKey)
+            modifiers.add(WebEventModifier::ShiftKey);
+        if (keyStateEventData->ctrlKey)
+            modifiers.add(WebEventModifier::ControlKey);
+        if (keyStateEventData->altKey)
+            modifiers.add(WebEventModifier::AltKey);
+        if (keyStateEventData->metaKey)
+            modifiers.add(WebEventModifier::MetaKey);
+    }
+    return modifiers;
+}
+
 Page* WebChromeClient::createWindow(Frame& frame, const WindowFeatures& windowFeatures, const NavigationAction& navigationAction)
 {
 #if ENABLE(FULLSCREEN_API)
@@ -280,25 +300,43 @@ Page* WebChromeClient::createWindow(Frame& frame, const WindowFeatures& windowFe
 
     auto& webProcess = WebProcess::singleton();
 
-    NavigationActionData navigationActionData;
-    navigationActionData.navigationType = navigationAction.type();
-    navigationActionData.modifiers = InjectedBundleNavigationAction::modifiersForNavigationAction(navigationAction);
-    navigationActionData.mouseButton = InjectedBundleNavigationAction::mouseButtonForNavigationAction(navigationAction);
-    navigationActionData.syntheticClickType = InjectedBundleNavigationAction::syntheticClickTypeForNavigationAction(navigationAction);
-    navigationActionData.clickLocationInRootViewCoordinates = InjectedBundleNavigationAction::clickLocationInRootViewCoordinatesForNavigationAction(navigationAction);
-    navigationActionData.userGestureTokenIdentifier = webProcess.userGestureTokenIdentifier(navigationAction.userGestureToken());
-    navigationActionData.canHandleRequest = m_page.canHandleRequest(navigationAction.resourceRequest());
-    navigationActionData.shouldOpenExternalURLsPolicy = navigationAction.shouldOpenExternalURLsPolicy();
-    navigationActionData.downloadAttribute = navigationAction.downloadAttribute();
-    navigationActionData.privateClickMeasurement = navigationAction.privateClickMeasurement();
+    auto& mouseEventData = navigationAction.mouseEventData();
+
+    NavigationActionData navigationActionData {
+        navigationAction.type(),
+        modifiersForNavigationAction(navigationAction),
+        mouseButton(navigationAction),
+        syntheticClickType(navigationAction),
+        webProcess.userGestureTokenIdentifier(navigationAction.userGestureToken()),
+        m_page.canHandleRequest(navigationAction.resourceRequest()),
+        navigationAction.shouldOpenExternalURLsPolicy(),
+        navigationAction.downloadAttribute(),
+        mouseEventData ? mouseEventData->locationInRootViewCoordinates : FloatPoint { },
+        false, /* isRedirect */
+        false, /* treatAsSameOriginNavigation */
+        false, /* hasOpenedFrames */
+        false, /* openedByDOMWithOpener */
+        navigationAction.newFrameOpenerPolicy() == NewFrameOpenerPolicy::Allow, /* hasOpener */
+        { }, /* requesterOrigin */
+        std::nullopt, /* targetBackForwardItemIdentifier */
+        std::nullopt, /* sourceBackForwardItemIdentifier */
+        WebCore::LockHistory::No,
+        WebCore::LockBackForwardList::No,
+        { }, /* clientRedirectSourceForHistory */
+        0, /* effectiveSandboxFlags */
+        navigationAction.privateClickMeasurement(),
+#if PLATFORM(MAC) || HAVE(UIKIT_WITH_MOUSE_SUPPORT)
+        std::nullopt, /* webHitTestResultData */
+#endif
+    };
 
     WebFrame* webFrame = WebFrame::fromCoreFrame(frame);
 
-    std::optional<PageIdentifier> newPageID;
-    std::optional<WebPageCreationParameters> parameters;
-    if (!webProcess.parentProcessConnection()->sendSync(Messages::WebPageProxy::CreateNewPage(webFrame->info(), webFrame->page()->webPageProxyIdentifier(), navigationAction.resourceRequest(), windowFeatures, navigationActionData), Messages::WebPageProxy::CreateNewPage::Reply(newPageID, parameters), m_page.identifier(), IPC::Timeout::infinity(), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages))
+    auto sendResult = webProcess.parentProcessConnection()->sendSync(Messages::WebPageProxy::CreateNewPage(webFrame->info(), webFrame->page()->webPageProxyIdentifier(), navigationAction.resourceRequest(), windowFeatures, navigationActionData), m_page.identifier(), IPC::Timeout::infinity(), { IPC::SendSyncOption::MaintainOrderingWithAsyncMessages, IPC::SendSyncOption::InformPlatformProcessWillSuspend });
+    if (!sendResult)
         return nullptr;
 
+    auto [newPageID, parameters] = sendResult.takeReply();
     if (!newPageID)
         return nullptr;
     ASSERT(parameters);
@@ -312,9 +350,9 @@ Page* WebChromeClient::createWindow(Frame& frame, const WindowFeatures& windowFe
 bool WebChromeClient::testProcessIncomingSyncMessagesWhenWaitingForSyncReply()
 {
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
-    bool handled = false;
-    if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::TestProcessIncomingSyncMessagesWhenWaitingForSyncReply(m_page.webPageProxyIdentifier()), Messages::NetworkConnectionToWebProcess::TestProcessIncomingSyncMessagesWhenWaitingForSyncReply::Reply(handled), 0))
-        return false;
+
+    auto sendResult = WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::TestProcessIncomingSyncMessagesWhenWaitingForSyncReply(m_page.webPageProxyIdentifier()), 0);
+    auto [handled] = sendResult.takeReplyOr(false);
     return handled;
 }
 
@@ -349,10 +387,8 @@ bool WebChromeClient::toolbarsVisible()
     if (toolbarsVisibility != API::InjectedBundle::PageUIClient::UIElementVisibility::Unknown)
         return toolbarsVisibility == API::InjectedBundle::PageUIClient::UIElementVisibility::Visible;
     
-    bool toolbarsAreVisible = true;
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetToolbarsAreVisible(), Messages::WebPageProxy::GetToolbarsAreVisible::Reply(toolbarsAreVisible), m_page.identifier()))
-        return true;
-
+    auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetToolbarsAreVisible(), m_page.identifier());
+    auto [toolbarsAreVisible] = sendResult.takeReplyOr(true);
     return toolbarsAreVisible;
 }
 
@@ -367,10 +403,8 @@ bool WebChromeClient::statusbarVisible()
     if (statusbarVisibility != API::InjectedBundle::PageUIClient::UIElementVisibility::Unknown)
         return statusbarVisibility == API::InjectedBundle::PageUIClient::UIElementVisibility::Visible;
 
-    bool statusBarIsVisible = true;
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetStatusBarIsVisible(), Messages::WebPageProxy::GetStatusBarIsVisible::Reply(statusBarIsVisible), m_page.identifier()))
-        return true;
-
+    auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetStatusBarIsVisible(), m_page.identifier());
+    auto [statusBarIsVisible] = sendResult.takeReplyOr(true);
     return statusBarIsVisible;
 }
 
@@ -396,10 +430,8 @@ bool WebChromeClient::menubarVisible()
     if (menubarVisibility != API::InjectedBundle::PageUIClient::UIElementVisibility::Unknown)
         return menubarVisibility == API::InjectedBundle::PageUIClient::UIElementVisibility::Visible;
     
-    bool menuBarIsVisible = true;
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetMenuBarIsVisible(), Messages::WebPageProxy::GetMenuBarIsVisible::Reply(menuBarIsVisible), m_page.identifier()))
-        return true;
-
+    auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetMenuBarIsVisible(), m_page.identifier());
+    auto [menuBarIsVisible] = sendResult.takeReplyOr(true);
     return menuBarIsVisible;
 }
 
@@ -428,13 +460,10 @@ bool WebChromeClient::runBeforeUnloadConfirmPanel(const String& message, Frame& 
 {
     WebFrame* webFrame = WebFrame::fromCoreFrame(frame);
 
-    bool shouldClose = false;
-
     HangDetectionDisabler hangDetectionDisabler;
 
-    if (!m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunBeforeUnloadConfirmPanel(webFrame->frameID(), webFrame->info(), message), Messages::WebPageProxy::RunBeforeUnloadConfirmPanel::Reply(shouldClose)))
-        return false;
-
+    auto sendResult = m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunBeforeUnloadConfirmPanel(webFrame->frameID(), webFrame->info(), message));
+    auto [shouldClose] = sendResult.takeReplyOr(false);
     return shouldClose;
 }
 
@@ -479,7 +508,7 @@ void WebChromeClient::runJavaScriptAlert(Frame& frame, const String& alertText)
     HangDetectionDisabler hangDetectionDisabler;
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
 
-    m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptAlert(webFrame->frameID(), webFrame->info(), alertText), Messages::WebPageProxy::RunJavaScriptAlert::Reply(), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages);
+    m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptAlert(webFrame->frameID(), webFrame->info(), alertText), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages);
 }
 
 bool WebChromeClient::runJavaScriptConfirm(Frame& frame, const String& message)
@@ -497,10 +526,8 @@ bool WebChromeClient::runJavaScriptConfirm(Frame& frame, const String& message)
     HangDetectionDisabler hangDetectionDisabler;
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
 
-    bool result = false;
-    if (!m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptConfirm(webFrame->frameID(), webFrame->info(), message), Messages::WebPageProxy::RunJavaScriptConfirm::Reply(result), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages))
-        return false;
-
+    auto sendResult = m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptConfirm(webFrame->frameID(), webFrame->info(), message), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages);
+    auto [result] = sendResult.takeReplyOr(false);
     return result;
 }
 
@@ -519,9 +546,11 @@ bool WebChromeClient::runJavaScriptPrompt(Frame& frame, const String& message, c
     HangDetectionDisabler hangDetectionDisabler;
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
 
-    if (!m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptPrompt(webFrame->frameID(), webFrame->info(), message, defaultValue), Messages::WebPageProxy::RunJavaScriptPrompt::Reply(result), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages))
+    auto sendResult = m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::RunJavaScriptPrompt(webFrame->frameID(), webFrame->info(), message, defaultValue), IPC::SendSyncOption::MaintainOrderingWithAsyncMessages);
+    if (!sendResult)
         return false;
 
+    std::tie(result) = sendResult.takeReply();
     return !result.isNull();
 }
 
@@ -659,7 +688,7 @@ void WebChromeClient::contentsSizeChanged(Frame& frame, const IntSize& size) con
 
     m_page.drawingArea()->mainFrameContentSizeChanged(size);
 
-    if (frameView && !frameView->delegatesScrolling())  {
+    if (frameView && !frameView->delegatesScrollingToNativeView())  {
         bool hasHorizontalScrollbar = frameView->horizontalScrollbar();
         bool hasVerticalScrollbar = frameView->verticalScrollbar();
 
@@ -714,7 +743,7 @@ void WebChromeClient::mouseDidMoveOverElement(const HitTestResult& hitTestResult
     RefPtr<API::Object> userData;
 
     // Notify the bundle client.
-    m_page.injectedBundleUIClient().mouseDidMoveOverElement(&m_page, hitTestResult, OptionSet<WebEvent::Modifier>::fromRaw(modifierFlags), userData);
+    m_page.injectedBundleUIClient().mouseDidMoveOverElement(&m_page, hitTestResult, OptionSet<WebEventModifier>::fromRaw(modifierFlags), userData);
 
     // Notify the UIProcess.
     WebHitTestResultData webHitTestResultData(hitTestResult, toolTip);
@@ -737,7 +766,7 @@ void WebChromeClient::print(Frame& frame, const StringWithDirection& title)
     auto truncatedTitle = truncateFromEnd(title, maxTitleLength);
 
     IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
-    m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::PrintFrame(webFrame->frameID(), truncatedTitle.string, pdfFirstPageSize), Messages::WebPageProxy::PrintFrame::Reply());
+    m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::PrintFrame(webFrame->frameID(), truncatedTitle.string, pdfFirstPageSize));
 }
 
 void WebChromeClient::reachedMaxAppCacheSize(int64_t)
@@ -756,8 +785,8 @@ void WebChromeClient::reachedApplicationCacheOriginQuota(SecurityOrigin& origin,
     if (!cacheStorage.calculateQuotaForOrigin(origin, currentQuota))
         return;
 
-    uint64_t newQuota = 0;
-    m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::ReachedApplicationCacheOriginQuota(origin.data().databaseIdentifier(), currentQuota, totalBytesNeeded), Messages::WebPageProxy::ReachedApplicationCacheOriginQuota::Reply(newQuota));
+    auto sendResult = m_page.sendSyncWithDelayedReply(Messages::WebPageProxy::ReachedApplicationCacheOriginQuota(origin.data().databaseIdentifier(), currentQuota, totalBytesNeeded));
+    auto [newQuota] = sendResult.takeReplyOr(0);
 
     cacheStorage.storeUpdatedQuotaForOrigin(&origin, newQuota);
 }
@@ -835,7 +864,7 @@ void WebChromeClient::setCursorHiddenUntilMouseMoves(bool hiddenUntilMouseMoves)
     m_page.send(Messages::WebPageProxy::SetCursorHiddenUntilMouseMoves(hiddenUntilMouseMoves));
 }
 
-#if !PLATFORM(IOS_FAMILY)
+#if !PLATFORM(COCOA)
 
 RefPtr<Icon> WebChromeClient::createIconForFiles(const Vector<String>& filenames)
 {
@@ -892,22 +921,39 @@ WebCore::DisplayRefreshMonitorFactory* WebChromeClient::displayRefreshMonitorFac
 RefPtr<ImageBuffer> WebChromeClient::createImageBuffer(const FloatSize& size, RenderingMode renderingMode, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat, bool avoidBackendSizeCheck) const
 {
     if (!WebProcess::singleton().shouldUseRemoteRenderingFor(purpose)) {
-        if (purpose != RenderingPurpose::ShareableSnapshot)
+        if (purpose != RenderingPurpose::ShareableSnapshot && purpose != RenderingPurpose::ShareableLocalSnapshot)
             return nullptr;
 
-        return ImageBuffer::create<ImageBufferShareableBitmapBackend>(size, resolutionScale, colorSpace, PixelFormat::BGRA8, RenderingPurpose::ShareableSnapshot, { });
+        return ImageBuffer::create<ImageBufferShareableBitmapBackend>(size, resolutionScale, colorSpace, PixelFormat::BGRA8, purpose, { });
     }
 
     return m_page.ensureRemoteRenderingBackendProxy().createImageBuffer(size, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, avoidBackendSizeCheck);
 }
+
+RefPtr<ImageBuffer> WebChromeClient::sinkIntoImageBuffer(std::unique_ptr<SerializedImageBuffer> imageBuffer)
+{
+    if (!is<RemoteSerializedImageBufferProxy>(imageBuffer))
+        return SerializedImageBuffer::sinkIntoImageBuffer(WTFMove(imageBuffer));
+    auto remote = std::unique_ptr<RemoteSerializedImageBufferProxy>(static_cast<RemoteSerializedImageBufferProxy*>(imageBuffer.release()));
+    return RemoteSerializedImageBufferProxy::sinkIntoImageBuffer(WTFMove(remote), m_page.ensureRemoteRenderingBackendProxy());
+}
 #endif
+
+std::unique_ptr<WebCore::WorkerClient> WebChromeClient::createWorkerClient(SerialFunctionDispatcher& dispatcher)
+{
+    return makeUnique<WebWorkerClient>(&m_page, dispatcher);
+}
 
 #if ENABLE(WEBGL)
 RefPtr<GraphicsContextGL> WebChromeClient::createGraphicsContextGL(const GraphicsContextGLAttributes& attributes) const
 {
 #if ENABLE(GPU_PROCESS)
     if (WebProcess::singleton().shouldUseRemoteRenderingForWebGL())
-        return RemoteGraphicsContextGLProxy::create(attributes, m_page.ensureRemoteRenderingBackendProxy().ensureBackendCreated());
+        return RemoteGraphicsContextGLProxy::create(WebProcess::singleton().ensureGPUProcessConnection().connection(), attributes, m_page.ensureRemoteRenderingBackendProxy()
+#if ENABLE(VIDEO)
+            , WebProcess::singleton().ensureGPUProcessConnection().videoFrameObjectHeapProxy()
+#endif
+        );
 #endif
     return WebCore::createWebProcessGraphicsContextGL(attributes);
 }
@@ -915,14 +961,12 @@ RefPtr<GraphicsContextGL> WebChromeClient::createGraphicsContextGL(const Graphic
 
 RefPtr<PAL::WebGPU::GPU> WebChromeClient::createGPUForWebGPU() const
 {
-#if HAVE(WEBGPU_IMPLEMENTATION)
 #if ENABLE(GPU_PROCESS)
     return RemoteGPUProxy::create(WebProcess::singleton().ensureGPUProcessConnection(), WebGPU::DowncastConvertToBackingContext::create(), WebGPUIdentifier::generate(), m_page.ensureRemoteRenderingBackendProxy().ensureBackendCreated());
-#else
+#elif HAVE(WEBGPU_IMPLEMENTATION)
     return PAL::WebGPU::create([](PAL::WebGPU::WorkItem&& workItem) {
         callOnMainRunLoop(WTFMove(workItem));
     });
-#endif
 #else
     return nullptr;
 #endif
@@ -1233,6 +1277,13 @@ bool WebChromeClient::shouldUseTiledBackingForFrameView(const FrameView& frameVi
     return m_page.drawingArea()->shouldUseTiledBackingForFrameView(frameView);
 }
 
+#if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
+void WebChromeClient::isAnyAnimationAllowedToPlayDidChange(bool anyAnimationCanPlay)
+{
+    m_page.isAnyAnimationAllowedToPlayDidChange(anyAnimationCanPlay);
+}
+#endif
+
 void WebChromeClient::isPlayingMediaDidChange(MediaProducerMediaStateFlags state)
 {
     m_page.isPlayingMediaDidChange(state);
@@ -1247,17 +1298,23 @@ void WebChromeClient::handleAutoplayEvent(AutoplayEvent event, OptionSet<Autopla
 
 bool WebChromeClient::wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey) const
 {
-    bool succeeded;
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::WrapCryptoKey(key), Messages::WebPageProxy::WrapCryptoKey::Reply(succeeded, wrappedKey), m_page.identifier()))
+    auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::WrapCryptoKey(key), m_page.identifier());
+    if (!sendResult)
         return false;
+
+    bool succeeded;
+    std::tie(succeeded, wrappedKey) = sendResult.takeReply();
     return succeeded;
 }
 
 bool WebChromeClient::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t>& key) const
 {
-    bool succeeded;
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::UnwrapCryptoKey(wrappedKey), Messages::WebPageProxy::UnwrapCryptoKey::Reply(succeeded, key), m_page.identifier()))
+    auto sendResult = WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::UnwrapCryptoKey(wrappedKey), m_page.identifier());
+    if (!sendResult)
         return false;
+
+    bool succeeded;
+    std::tie(succeeded, key) = sendResult.takeReply();
     return succeeded;
 }
 
@@ -1275,14 +1332,6 @@ void WebChromeClient::storeAppHighlight(WebCore::AppHighlight&& highlight) const
 void WebChromeClient::setTextIndicator(const WebCore::TextIndicatorData& indicatorData) const
 {
     m_page.setTextIndicator(indicatorData);
-}
-
-String WebChromeClient::signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const URL& url) const
-{
-    String result;
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::SignedPublicKeyAndChallengeString(keySizeIndex, challengeString, url), Messages::WebPageProxy::SignedPublicKeyAndChallengeString::Reply(result), m_page.identifier()))
-        return emptyString();
-    return result;
 }
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
@@ -1401,21 +1450,12 @@ void WebChromeClient::imageOrMediaDocumentSizeChanged(const IntSize& newSize)
     m_page.imageOrMediaDocumentSizeChanged(newSize);
 }
 
-#if ENABLE(VIDEO) && USE(GSTREAMER)
-
-void WebChromeClient::requestInstallMissingMediaPlugins(const String& details, const String& description, MediaPlayerRequestInstallMissingPluginsCallback& callback)
-{
-    m_page.requestInstallMissingMediaPlugins(details, description, callback);
-}
-
-#endif
-
 void WebChromeClient::didInvalidateDocumentMarkerRects()
 {
     m_page.findController().didInvalidateDocumentMarkerRects();
 }
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
 void WebChromeClient::hasStorageAccess(RegistrableDomain&& subFrameDomain, RegistrableDomain&& topFrameDomain, Frame& frame, CompletionHandler<void(bool)>&& completionHandler)
 {
     auto* webFrame = WebFrame::fromCoreFrame(frame);
@@ -1495,6 +1535,16 @@ void WebChromeClient::requestTextRecognition(Element& element, TextRecognitionOp
 }
 
 #endif
+
+URL WebChromeClient::sanitizeLookalikeCharacters(const URL& url, LookalikeCharacterSanitizationTrigger trigger) const
+{
+    return m_page.sanitizeLookalikeCharacters(url, trigger);
+}
+
+URL WebChromeClient::allowedLookalikeCharacters(const URL& url) const
+{
+    return m_page.allowedLookalikeCharacters(url);
+}
 
 #if ENABLE(TEXT_AUTOSIZING)
 

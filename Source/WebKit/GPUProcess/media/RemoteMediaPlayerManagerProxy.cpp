@@ -26,7 +26,7 @@
 #include "config.h"
 #include "RemoteMediaPlayerManagerProxy.h"
 
-#if ENABLE(GPU_PROCESS)
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)
 
 #include "GPUConnectionToWebProcess.h"
 #include "GPUProcess.h"
@@ -196,7 +196,7 @@ Logger& RemoteMediaPlayerManagerProxy::logger()
 }
 #endif
 
-ShareableBitmap::Handle RemoteMediaPlayerManagerProxy::bitmapImageForCurrentTime(WebCore::MediaPlayerIdentifier identifier)
+ShareableBitmapHandle RemoteMediaPlayerManagerProxy::bitmapImageForCurrentTime(WebCore::MediaPlayerIdentifier identifier)
 {
     auto player = mediaPlayer(identifier);
     if (!player)
@@ -217,11 +217,12 @@ ShareableBitmap::Handle RemoteMediaPlayerManagerProxy::bitmapImageForCurrentTime
 
     context->drawNativeImage(*image, imageSize, FloatRect { { }, imageSize }, FloatRect { { }, imageSize });
 
-    ShareableBitmap::Handle bitmapHandle;
-    bitmap->createHandle(bitmapHandle);
-    return bitmapHandle;
+    auto bitmapHandle = bitmap->createHandle();
+    if (!bitmapHandle)
+        return { };
+    return WTFMove(*bitmapHandle);
 }
 
 } // namespace WebKit
 
-#endif
+#endif // ENABLE(GPU_PROCESS) && ENABLE(VIDEO)

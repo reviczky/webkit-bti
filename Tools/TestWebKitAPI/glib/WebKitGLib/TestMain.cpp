@@ -86,7 +86,7 @@ static gboolean dbusServerConnection(GDBusServer* server, GDBusConnection* conne
     g_assert(!Test::s_dbusConnections.contains(connection));
     Test::s_dbusConnections.append(connection);
 
-    g_dbus_connection_signal_subscribe(connection, nullptr, "org.webkit.gtk.WebExtensionTest", "PageCreated", "/org/webkit/gtk/WebExtensionTest",
+    g_dbus_connection_signal_subscribe(connection, nullptr, "org.webkit.gtk.WebProcessExtensionTest", "PageCreated", "/org/webkit/gtk/WebProcessExtensionTest",
         nullptr, G_DBUS_SIGNAL_FLAGS_NONE, [](GDBusConnection* connection, const char*, const char*, const char*, const char*, GVariant* parameters, gpointer) {
             guint64 pageID;
             g_variant_get(parameters, "(t)", &pageID);
@@ -127,6 +127,8 @@ int main(int argc, char** argv)
     g_set_prgname(FileSystem::currentExecutableName().data());
     g_setenv("WEBKIT_EXEC_PATH", WEBKIT_EXEC_PATH, FALSE);
     g_setenv("WEBKIT_INJECTED_BUNDLE_PATH", WEBKIT_INJECTED_BUNDLE_PATH, FALSE);
+    // Sandbox requires using GApplication.
+    g_setenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1", TRUE);
     g_setenv("LC_ALL", "C", TRUE);
     g_setenv("GIO_USE_VFS", "local", TRUE);
     g_setenv("GSETTINGS_BACKEND", "memory", TRUE);

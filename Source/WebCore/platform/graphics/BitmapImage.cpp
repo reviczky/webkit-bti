@@ -156,9 +156,9 @@ RefPtr<NativeImage> BitmapImage::preTransformedNativeImageForCurrentFrame(bool r
     if (!image)
         return image;
 
-    auto orientation = respectOrientation ? orientationForCurrentFrame() : ImageOrientation(ImageOrientation::None);
+    auto orientation = respectOrientation ? orientationForCurrentFrame() : ImageOrientation(ImageOrientation::Orientation::None);
     auto correctedSize = m_source->densityCorrectedSize(orientation);
-    if (orientation == ImageOrientation::None && !correctedSize)
+    if (orientation == ImageOrientation::Orientation::None && !correctedSize)
         return image;
 
     auto correctedSizeFloat = correctedSize ? FloatSize(correctedSize.value()) : size();
@@ -247,8 +247,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
 
     RefPtr<NativeImage> image;
     if (options.decodingMode() == DecodingMode::Asynchronous) {
-        ASSERT(!canAnimate());
-        ASSERT(!m_currentFrame || m_animationFinished);
+        ASSERT(!m_currentFrame || !canAnimate());
 
         bool frameIsCompatible = frameHasDecodedNativeImageCompatibleWithOptionsAtIndex(m_currentFrame, m_currentSubsamplingLevel, DecodingOptions(sizeForDrawing));
         bool frameIsBeingDecoded = frameIsBeingDecodedAndIsCompatibleWithOptionsAtIndex(m_currentFrame, DecodingOptions(sizeForDrawing));
@@ -319,7 +318,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
     }
 
     auto orientation = options.orientation();
-    if (orientation == ImageOrientation::FromImage) {
+    if (orientation == ImageOrientation::Orientation::FromImage) {
         orientation = frameOrientationAtIndex(m_currentFrame);
         drawNativeImage(*image, context, destRect, srcRect, IntSize(sourceSize(orientation)), { options, orientation });
     } else
@@ -343,7 +342,7 @@ void BitmapImage::drawPattern(GraphicsContext& ctxt, const FloatRect& destRect, 
         if (m_currentFrameDecodingStatus == DecodingStatus::Invalid)
             m_source->destroyIncompleteDecodedData();
         
-        Image::drawPattern(ctxt, destRect, tileRect, transform, phase, spacing, { options, ImageOrientation::FromImage });
+        Image::drawPattern(ctxt, destRect, tileRect, transform, phase, spacing, { options, ImageOrientation::Orientation::FromImage });
         m_currentFrameDecodingStatus = frameDecodingStatusAtIndex(m_currentFrame);
         return;
     }
@@ -358,7 +357,7 @@ void BitmapImage::drawPattern(GraphicsContext& ctxt, const FloatRect& destRect, 
         // Temporarily reset image observer, we don't want to receive any changeInRect() calls due to this relayout.
         setImageObserver(nullptr);
 
-        draw(buffer->context(), tileRect, tileRect, { options, DecodingMode::Synchronous, ImageOrientation::FromImage });
+        draw(buffer->context(), tileRect, tileRect, { options, DecodingMode::Synchronous, ImageOrientation::Orientation::FromImage });
 
         setImageObserver(observer);
         buffer->convertToLuminanceMask();
@@ -369,12 +368,12 @@ void BitmapImage::drawPattern(GraphicsContext& ctxt, const FloatRect& destRect, 
     }
 
     ctxt.setDrawLuminanceMask(false);
-    m_cachedImage->drawPattern(ctxt, destRect, tileRect, transform, phase, spacing, { options, ImageOrientation::FromImage });
+    m_cachedImage->drawPattern(ctxt, destRect, tileRect, transform, phase, spacing, { options, ImageOrientation::Orientation::FromImage });
 }
 
 bool BitmapImage::shouldAnimate() const
 {
-    return repetitionCount() && !m_animationFinished && imageObserver();
+    return repetitionCount() && !m_animationFinished && imageObserver() && imageObserver()->allowsAnimation(*this);
 }
 
 bool BitmapImage::canAnimate() const
@@ -636,7 +635,7 @@ void BitmapImage::imageFrameAvailableAtIndex(size_t index)
         LOG(Images, "BitmapImage::%s - %p - url: %s [More data makes frameCount() > 1]", __FUNCTION__, this, sourceURL().string().utf8().data());
     }
 
-    ASSERT(index == m_currentFrame && !m_currentFrame);
+    ASSERT((!index && !m_currentFrame) || !canAnimate());
     if (m_source->isAsyncDecodingQueueIdle())
         m_source->stopAsyncDecodingQueue();
 

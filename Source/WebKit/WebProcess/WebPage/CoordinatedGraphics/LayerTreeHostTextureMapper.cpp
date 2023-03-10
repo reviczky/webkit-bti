@@ -35,6 +35,7 @@
 #include <WebCore/Document.h>
 #include <WebCore/Frame.h>
 #include <WebCore/FrameView.h>
+#include <WebCore/GraphicsContext.h>
 #include <WebCore/GraphicsLayerTextureMapper.h>
 #include <WebCore/Page.h>
 #include <WebCore/Settings.h>
@@ -275,9 +276,9 @@ RefPtr<WebCore::DisplayRefreshMonitor> LayerTreeHost::createDisplayRefreshMonito
     return nullptr;
 }
 
-HWND LayerTreeHost::window()
+GLNativeWindowType LayerTreeHost::window()
 {
-    return reinterpret_cast<HWND>(m_webPage.nativeWindowHandle());
+    return reinterpret_cast<GLNativeWindowType>(m_webPage.nativeWindowHandle());
 }
 
 bool LayerTreeHost::enabled()

@@ -38,7 +38,7 @@ WebsitePolicies::WebsitePolicies() = default;
 Ref<WebsitePolicies> WebsitePolicies::copy() const
 {
     auto policies = WebsitePolicies::create();
-    policies->setContentBlockersEnabled(m_contentBlockersEnabled);
+    policies->m_contentExtensionEnablement = m_contentExtensionEnablement;
     policies->m_activeContentRuleListActionPatterns = m_activeContentRuleListActionPatterns;
     policies->setAllowedAutoplayQuirks(m_allowedAutoplayQuirks);
     policies->setAutoplayPolicy(m_autoplayPolicy);
@@ -58,16 +58,17 @@ Ref<WebsitePolicies> WebsitePolicies::copy() const
     policies->setAllowContentChangeObserverQuirk(m_allowContentChangeObserverQuirk);
     policies->setWebsiteDataStore(m_websiteDataStore.get());
     policies->setUserContentController(m_userContentController.get());
+    policies->setNetworkConnectionIntegrityPolicy(m_networkConnectionIntegrityPolicy);
     policies->setIdempotentModeAutosizingOnlyHonorsPercentages(m_idempotentModeAutosizingOnlyHonorsPercentages);
-    policies->setLegacyCustomHeaderFields(Vector<WebCore::HTTPHeaderField> { m_legacyCustomHeaderFields });
     policies->setCustomHeaderFields(Vector<WebCore::CustomHeaderFields> { m_customHeaderFields });
     policies->setAllowSiteSpecificQuirksToOverrideContentMode(m_allowSiteSpecificQuirksToOverrideContentMode);
     policies->setApplicationNameForDesktopUserAgent(m_applicationNameForDesktopUserAgent);
     policies->setAllowsContentJavaScript(m_allowsContentJavaScript);
-    policies->setCaptivePortalModeEnabled(m_captivePortalModeEnabled);
+    policies->setLockdownModeEnabled(m_lockdownModeEnabled);
     policies->setMouseEventPolicy(m_mouseEventPolicy);
     policies->setModalContainerObservationPolicy(m_modalContainerObservationPolicy);
     policies->setColorSchemePreference(m_colorSchemePreference);
+    policies->setAllowPrivacyProxy(m_allowPrivacyProxy);
     return policies;
 }
 
@@ -85,15 +86,12 @@ void WebsitePolicies::setUserContentController(RefPtr<WebKit::WebUserContentCont
 
 WebKit::WebsitePoliciesData WebsitePolicies::data()
 {
-    bool hasLegacyCustomHeaderFields = legacyCustomHeaderFields().size();
     Vector<WebCore::CustomHeaderFields> customHeaderFields;
-    customHeaderFields.reserveInitialCapacity(this->customHeaderFields().size() + hasLegacyCustomHeaderFields);
+    customHeaderFields.reserveInitialCapacity(this->customHeaderFields().size());
     customHeaderFields.appendVector(this->customHeaderFields());
-    if (hasLegacyCustomHeaderFields)
-        customHeaderFields.uncheckedAppend({ legacyCustomHeaderFields(), { }});
 
     return {
-        contentBlockersEnabled(),
+        m_contentExtensionEnablement,
         activeContentRuleListActionPatterns(),
         allowedAutoplayQuirks(),
         autoplayPolicy(),
@@ -114,13 +112,15 @@ WebKit::WebsitePoliciesData WebsitePolicies::data()
         m_mouseEventPolicy,
         m_modalContainerObservationPolicy,
         m_colorSchemePreference,
-        m_idempotentModeAutosizingOnlyHonorsPercentages
+        m_networkConnectionIntegrityPolicy,
+        m_idempotentModeAutosizingOnlyHonorsPercentages,
+        m_allowPrivacyProxy
     };
 }
 
-bool WebsitePolicies::captivePortalModeEnabled() const
+bool WebsitePolicies::lockdownModeEnabled() const
 {
-    return m_captivePortalModeEnabled ? *m_captivePortalModeEnabled : WebKit::captivePortalModeEnabledBySystem();
+    return m_lockdownModeEnabled ? *m_lockdownModeEnabled : WebKit::lockdownModeEnabledBySystem();
 }
 
 }

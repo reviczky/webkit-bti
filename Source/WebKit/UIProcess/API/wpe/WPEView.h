@@ -27,6 +27,7 @@
 
 #include "APIObject.h"
 #include "InputMethodFilter.h"
+#include "KeyAutoRepeatHandler.h"
 #include "PageClientImpl.h"
 #include "WebPageProxy.h"
 #include <WebCore/ActivityState.h>
@@ -53,8 +54,8 @@ struct CompositionUnderline;
 }
 
 namespace WebKit {
-class DownloadProxy;
 class TouchGestureController;
+class WebKitWebResourceLoadManager;
 class WebPageGroup;
 class WebProcessPool;
 struct EditingRange;
@@ -75,10 +76,10 @@ public:
     // Client methods
     void setClient(std::unique_ptr<API::ViewClient>&&);
     void frameDisplayed();
-    void handleDownloadRequest(WebKit::DownloadProxy&);
     void willStartLoad();
     void didChangePageID();
     void didReceiveUserMessage(WebKit::UserMessage&&, CompletionHandler<void(WebKit::UserMessage&&)>&&);
+    WebKit::WebKitWebResourceLoadManager* webResourceLoadManager();
 
     void setInputMethodContext(WebKitInputMethodContext*);
     WebKitInputMethodContext* inputMethodContext() const;
@@ -107,7 +108,9 @@ public:
     WebKitWebViewAccessible* accessible() const;
 #endif
 
+#if ENABLE(TOUCH_EVENTS)
     WebKit::TouchGestureController& touchGestureController() const { return *m_touchGestureController; }
+#endif
 #if ENABLE(GAMEPAD)
     static WebKit::WebPageProxy* platformWebPageProxyForGamepadInput();
 #endif
@@ -121,7 +124,9 @@ private:
 
     std::unique_ptr<API::ViewClient> m_client;
 
+#if ENABLE(TOUCH_EVENTS)
     std::unique_ptr<WebKit::TouchGestureController> m_touchGestureController;
+#endif
     std::unique_ptr<WebKit::PageClientImpl> m_pageClient;
     RefPtr<WebKit::WebPageProxy> m_pageProxy;
     WebCore::IntSize m_size;
@@ -141,6 +146,7 @@ private:
     bool m_verticalScrollActive { false };
 
     WebKit::InputMethodFilter m_inputMethodFilter;
+    WebKit::KeyAutoRepeatHandler m_keyAutoRepeatHandler;
 };
 
 } // namespace WKWPE

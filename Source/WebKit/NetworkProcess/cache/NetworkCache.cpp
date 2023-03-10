@@ -37,6 +37,7 @@
 #include <WebCore/HTTPHeaderNames.h>
 #include <WebCore/LowPowerModeNotifier.h>
 #include <WebCore/NetworkStorageSession.h>
+#include <WebCore/RegistrableDomain.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/SharedBuffer.h>
@@ -156,7 +157,7 @@ Key Cache::makeCacheKey(const WebCore::ResourceRequest& request)
     // FIXME: This implements minimal Range header disk cache support. We don't parse
     // ranges so only the same exact range request will be served from the cache.
     String range = request.httpHeaderField(WebCore::HTTPHeaderName::Range);
-    return { request.cachePartition(), resourceType(), range, request.url().string(), m_storage->salt() };
+    return { request.cachePartition(), resourceType(), range, request.url().stringWithoutFragmentIdentifier(), m_storage->salt() };
 }
 
 static bool cachePolicyAllowsExpired(WebCore::ResourceRequestCachePolicy policy)
@@ -283,7 +284,7 @@ static StoreDecision makeStoreDecision(const WebCore::ResourceRequest& originalR
             return StoreDecision::NoDueToHTTPStatusCode;
     }
 
-    bool isMainResource = originalRequest.requester() == WebCore::ResourceRequest::Requester::Main;
+    bool isMainResource = originalRequest.requester() == WebCore::ResourceRequestRequester::Main;
     bool storeUnconditionallyForHistoryNavigation = isMainResource || originalRequest.priority() == WebCore::ResourceLoadPriority::VeryHigh;
     if (!storeUnconditionallyForHistoryNavigation) {
         auto now = WallTime::now();
@@ -303,8 +304,8 @@ static StoreDecision makeStoreDecision(const WebCore::ResourceRequest& originalR
     // FIXME: We should introduce a separate media cache partition that doesn't affect other resources.
     // FIXME: We should also make sure make the MSE paths are copy-free so we can use mapped buffers from disk effectively.
     auto requester = originalRequest.requester();
-    bool isDefinitelyStreamingMedia = requester == WebCore::ResourceRequest::Requester::Media;
-    bool isLikelyStreamingMedia = requester == WebCore::ResourceRequest::Requester::XHR && isMediaMIMEType(response.mimeType());
+    bool isDefinitelyStreamingMedia = requester == WebCore::ResourceRequestRequester::Media;
+    bool isLikelyStreamingMedia = requester == WebCore::ResourceRequestRequester::XHR && isMediaMIMEType(response.mimeType());
     if (isLikelyStreamingMedia || isDefinitelyStreamingMedia)
         return StoreDecision::NoDueToStreamingMedia;
 
@@ -317,7 +318,7 @@ static bool inline canRequestUseSpeculativeRevalidation(const WebCore::ResourceR
     if (request.isConditional())
         return false;
 
-    if (request.requester() == WebCore::ResourceRequest::Requester::XHR || request.requester() == WebCore::ResourceRequest::Requester::Fetch)
+    if (request.requester() == WebCore::ResourceRequestRequester::XHR || request.requester() == WebCore::ResourceRequestRequester::Fetch)
         return false;
 
     switch (request.cachePolicy()) {
@@ -337,13 +338,13 @@ static bool inline canRequestUseSpeculativeRevalidation(const WebCore::ResourceR
 #endif
 
 #if ENABLE(NETWORK_CACHE_STALE_WHILE_REVALIDATE)
-void Cache::startAsyncRevalidationIfNeeded(const WebCore::ResourceRequest& request, const NetworkCache::Key& key, std::unique_ptr<Entry>&& entry, const GlobalFrameID& frameID, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain)
+void Cache::startAsyncRevalidationIfNeeded(const WebCore::ResourceRequest& request, const NetworkCache::Key& key, std::unique_ptr<Entry>&& entry, const GlobalFrameID& frameID, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, bool allowPrivacyProxy, OptionSet<WebCore::NetworkConnectionIntegrity> networkConnectionIntegrityPolicy)
 {
     m_pendingAsyncRevalidations.ensure(key, [&] {
         auto addResult = m_pendingAsyncRevalidationByPage.ensure(frameID, [] {
             return WeakHashSet<AsyncRevalidation>();
         });
-        auto revalidation = makeUnique<AsyncRevalidation>(*this, frameID, request, WTFMove(entry), isNavigatingToAppBoundDomain, [this, key](auto result) {
+        auto revalidation = makeUnique<AsyncRevalidation>(*this, frameID, request, WTFMove(entry), isNavigatingToAppBoundDomain, allowPrivacyProxy, networkConnectionIntegrityPolicy, [this, key](auto result) {
             ASSERT(m_pendingAsyncRevalidations.contains(key));
             m_pendingAsyncRevalidations.remove(key);
             LOG(NetworkCache, "(NetworkProcess) revalidation completed for '%s' with result %d", key.identifier().utf8().data(), static_cast<int>(result));
@@ -363,11 +364,11 @@ void Cache::browsingContextRemoved(WebPageProxyIdentifier webPageProxyID, WebCor
 #endif
 }
 
-void Cache::retrieve(const WebCore::ResourceRequest& request, const GlobalFrameID& frameID, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, RetrieveCompletionHandler&& completionHandler)
+void Cache::retrieve(const WebCore::ResourceRequest& request, const GlobalFrameID& frameID, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, bool allowPrivacyProxy, OptionSet<WebCore::NetworkConnectionIntegrity> networkConnectionIntegrityPolicy, RetrieveCompletionHandler&& completionHandler)
 {
     ASSERT(request.url().protocolIsInHTTPFamily());
 
-    LOG(NetworkCache, "(NetworkProcess) retrieving %s priority %d", request.url().string().ascii().data(), static_cast<int>(request.priority()));
+    LOG(NetworkCache, "(NetworkProcess) retrieving %s priority %d", request.url().stringWithoutFragmentIdentifier().ascii().data(), static_cast<int>(request.priority()));
 
     Key storageKey = makeCacheKey(request);
     auto priority = static_cast<unsigned>(request.priority());
@@ -379,7 +380,7 @@ void Cache::retrieve(const WebCore::ResourceRequest& request, const GlobalFrameI
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
     bool canUseSpeculativeRevalidation = m_speculativeLoadManager && canRequestUseSpeculativeRevalidation(request);
     if (canUseSpeculativeRevalidation)
-        m_speculativeLoadManager->registerLoad(frameID, request, storageKey, isNavigatingToAppBoundDomain);
+        m_speculativeLoadManager->registerLoad(frameID, request, storageKey, isNavigatingToAppBoundDomain, allowPrivacyProxy, networkConnectionIntegrityPolicy);
 #endif
 
     auto retrieveDecision = makeRetrieveDecision(request);
@@ -401,7 +402,7 @@ void Cache::retrieve(const WebCore::ResourceRequest& request, const GlobalFrameI
     }
 #endif
 
-    m_storage->retrieve(storageKey, priority, [this, protectedThis = Ref { *this }, request, completionHandler = WTFMove(completionHandler), info = WTFMove(info), storageKey, networkProcess = Ref { networkProcess() }, sessionID = m_sessionID, frameID, isNavigatingToAppBoundDomain](auto record, auto timings) mutable {
+    m_storage->retrieve(storageKey, priority, [this, protectedThis = Ref { *this }, request, completionHandler = WTFMove(completionHandler), info = WTFMove(info), storageKey, networkProcess = Ref { networkProcess() }, sessionID = m_sessionID, frameID, isNavigatingToAppBoundDomain, allowPrivacyProxy, networkConnectionIntegrityPolicy](auto record, auto timings) mutable {
         info.storageTimings = timings;
 
         if (!record) {
@@ -420,7 +421,7 @@ void Cache::retrieve(const WebCore::ResourceRequest& request, const GlobalFrameI
 #if ENABLE(NETWORK_CACHE_STALE_WHILE_REVALIDATE)
             auto entryCopy = makeUnique<Entry>(*entry);
             entryCopy->setNeedsValidation(true);
-            startAsyncRevalidationIfNeeded(request, storageKey, WTFMove(entryCopy), frameID, isNavigatingToAppBoundDomain);
+            startAsyncRevalidationIfNeeded(request, storageKey, WTFMove(entryCopy), frameID, isNavigatingToAppBoundDomain, allowPrivacyProxy, networkConnectionIntegrityPolicy);
 #else
             UNUSED_PARAM(frameID);
             UNUSED_PARAM(this);
@@ -468,7 +469,7 @@ std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, con
 {
     ASSERT(responseData);
 
-    LOG(NetworkCache, "(NetworkProcess) storing %s, partition %s", request.url().string().latin1().data(), makeCacheKey(request).partition().latin1().data());
+    LOG(NetworkCache, "(NetworkProcess) storing %s, partition %s", request.url().stringWithoutFragmentIdentifier().latin1().data(), makeCacheKey(request).partition().latin1().data());
 
     StoreDecision storeDecision = makeStoreDecision(request, response, responseData ? responseData->size() : 0);
     if (storeDecision != StoreDecision::Yes) {
@@ -497,7 +498,8 @@ std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, con
                     completionHandler(mappedBody);
                 return;
             }
-            mappedBody.shareableResource->createHandle(mappedBody.shareableResourceHandle);
+            if (auto handle = mappedBody.shareableResource->createHandle())
+                mappedBody.shareableResourceHandle = WTFMove(*handle);
         }
 #endif
         if (completionHandler)
@@ -520,7 +522,7 @@ std::unique_ptr<Entry> Cache::storeRedirect(const WebCore::ResourceRequest& requ
 
     auto cacheEntry = makeRedirectEntry(request, response, redirectRequest);
 
-#if ENABLE(INTELLIGENT_TRACKING_PREVENTION)
+#if ENABLE(TRACKING_PREVENTION)
     if (maxAgeCap) {
         LOG(NetworkCache, "(NetworkProcess) capping max age for redirect %s -> %s", request.url().string().latin1().data(), redirectRequest.url().string().latin1().data());
         cacheEntry->capMaxAge(maxAgeCap.value());
@@ -597,6 +599,23 @@ void Cache::traverse(Function<void(const TraversalEntry*)>&& traverseHandler)
     });
 }
 
+void Cache::traverse(const String& partition, Function<void(const TraversalEntry*)>&& traverseHandler)
+{
+    m_storage->traverse(resourceType(), partition, { }, [traverseHandler = WTFMove(traverseHandler)] (const Storage::Record* record, const Storage::RecordInfo& recordInfo) mutable {
+        if (!record) {
+            traverseHandler(nullptr);
+            return;
+        }
+
+        auto entry = Entry::decodeStorageRecord(*record);
+        if (!entry)
+            return;
+
+        TraversalEntry traversalEntry { *entry, recordInfo };
+        traverseHandler(&traversalEntry);
+    });
+}
+
 String Cache::dumpFilePath() const
 {
     return pathByAppendingComponent(m_storage->versionPath(), "dump.json"_s);
@@ -604,7 +623,7 @@ String Cache::dumpFilePath() const
 
 void Cache::dumpContentsToFile()
 {
-    auto fd = openFile(dumpFilePath(), FileOpenMode::Write);
+    auto fd = openFile(dumpFilePath(), FileOpenMode::Truncate);
     if (!isHandleValid(fd))
         return;
 
@@ -697,5 +716,67 @@ void Cache::storeData(const DataKey& dataKey, const uint8_t* data, size_t size)
     m_storage->store(record, { });
 }
 
+void Cache::fetchData(bool shouldComputeSize, CompletionHandler<void(Vector<WebsiteData::Entry>&&)>&& completionHandler)
+{
+    HashMap<WebCore::SecurityOriginData, uint64_t> originsAndSizes;
+    traverse([protectedThis = Ref { *this }, shouldComputeSize, completionHandler = WTFMove(completionHandler), originsAndSizes = WTFMove(originsAndSizes)](auto* traversalEntry) mutable {
+        if (traversalEntry) {
+            auto url = traversalEntry->entry.response().url();
+            auto result = originsAndSizes.add({ url.protocol().toString(), url.host().toString(), url.port() }, 0);
+            if (shouldComputeSize)
+                result.iterator->value += traversalEntry->entry.sourceStorageRecord().header.size() + traversalEntry->recordInfo.bodySize;
+            return;
+        }
+
+        auto entries = WTF::map(originsAndSizes, [](auto& originAndSize) {
+            return WebsiteData::Entry { originAndSize.key, WebsiteDataType::DiskCache, originAndSize.value };
+        });
+        completionHandler(WTFMove(entries));
+    });
 }
+
+void Cache::deleteData(const Vector<WebCore::SecurityOriginData>& origins, CompletionHandler<void()>&& completionHandler)
+{
+    HashSet<WebCore::SecurityOriginData> originSet;
+    for (auto& origin : origins)
+        originSet.add(origin);
+
+    Vector<NetworkCache::Key> keysToDelete;
+    traverse([this, protectedThis = Ref { *this }, originSet = WTFMove(originSet), completionHandler = WTFMove(completionHandler), keysToDelete = WTFMove(keysToDelete)](auto* traversalEntry) mutable {
+        if (traversalEntry) {
+            auto origin = WebCore::SecurityOriginData::fromURLWithoutStrictOpaqueness(traversalEntry->entry.response().url());
+            if (originSet.contains(origin))
+                keysToDelete.append(traversalEntry->entry.key());
+            return;
+        }
+
+        remove(keysToDelete, WTFMove(completionHandler));
+    });
 }
+
+void Cache::deleteDataForRegistrableDomains(const Vector<WebCore::RegistrableDomain>& domains, CompletionHandler<void(HashSet<WebCore::RegistrableDomain>&&)>&& completionHandler)
+{
+    HashSet<WebCore::RegistrableDomain> domainSet;
+    for (auto& domain : domains)
+        domainSet.add(domain);
+
+    Vector<NetworkCache::Key> keysToDelete;
+    HashSet<WebCore::RegistrableDomain> domainsDeleted;
+    traverse([this, protectedThis = Ref { *this }, domainSet = WTFMove(domainSet), completionHandler = WTFMove(completionHandler), keysToDelete = WTFMove(keysToDelete), domainsDeleted = WTFMove(domainsDeleted)](auto* traversalEntry) mutable {
+        if (traversalEntry) {
+            auto domain = WebCore::RegistrableDomain { traversalEntry->entry.response().url() };
+            if (domainSet.contains(domain)) {
+                keysToDelete.append(traversalEntry->entry.key());
+                domainsDeleted.add(domain);
+            }
+            return;
+        }
+
+        remove(keysToDelete, [completionHandler = WTFMove(completionHandler), domainsDeleted = WTFMove(domainsDeleted)]() mutable {
+            completionHandler(WTFMove(domainsDeleted));
+        });
+    });
+}
+
+} // namespace NetworkCache
+} // namespace WebKit

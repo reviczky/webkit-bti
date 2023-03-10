@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,6 +37,7 @@
 #include "RemoteExternalTexture.h"
 #include "RemotePipelineLayout.h"
 #include "RemoteQuerySet.h"
+#include "RemoteQueue.h"
 #include "RemoteRenderBundleEncoder.h"
 #include "RemoteRenderPipeline.h"
 #include "RemoteSampler.h"
@@ -64,6 +65,7 @@
 #include <pal/graphics/WebGPU/WebGPUPipelineLayoutDescriptor.h>
 #include <pal/graphics/WebGPU/WebGPUQuerySet.h>
 #include <pal/graphics/WebGPU/WebGPUQuerySetDescriptor.h>
+#include <pal/graphics/WebGPU/WebGPUQueue.h>
 #include <pal/graphics/WebGPU/WebGPURenderBundleEncoder.h>
 #include <pal/graphics/WebGPU/WebGPURenderBundleEncoderDescriptor.h>
 #include <pal/graphics/WebGPU/WebGPURenderPipeline.h>
@@ -74,7 +76,6 @@
 #include <pal/graphics/WebGPU/WebGPUShaderModuleDescriptor.h>
 #include <pal/graphics/WebGPU/WebGPUTexture.h>
 #include <pal/graphics/WebGPU/WebGPUTextureDescriptor.h>
-
 
 namespace WebKit {
 
@@ -95,7 +96,7 @@ void RemoteDevice::stopListeningForIPC()
     m_streamConnection->stopReceivingMessages(Messages::RemoteDevice::messageReceiverName(), m_identifier.toUInt64());
 }
 
-RemoteQueue& RemoteDevice::queue()
+Ref<RemoteQueue> RemoteDevice::queue()
 {
     return m_queue;
 }

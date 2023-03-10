@@ -310,6 +310,15 @@
     display: inline-block;
 }
 
+.console-message .timestamp {
+    color: var(--text-color-tertiary);
+    padding-inline-end: 5px;
+}
+
+.console-session:not(.timestamps-visible) .console-message .timestamp {
+    display: none;
+}
+
 @media (prefers-color-scheme: dark) {
     .console-message .syntax-highlighted {
         background-color: unset;

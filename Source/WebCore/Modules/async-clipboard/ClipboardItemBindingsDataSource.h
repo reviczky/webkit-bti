@@ -36,6 +36,7 @@ namespace WebCore {
 class Blob;
 class SharedBuffer;
 class DOMPromise;
+class WeakPtrImplWithEventTargetData;
 class FileReaderLoader;
 class PasteboardCustomData;
 class ScriptExecutionContext;
@@ -56,9 +57,9 @@ private:
     using BufferOrString = std::variant<String, Ref<SharedBuffer>>;
     class ClipboardItemTypeLoader : public FileReaderLoaderClient, public RefCounted<ClipboardItemTypeLoader> {
     public:
-        static Ref<ClipboardItemTypeLoader> create(const String& type, CompletionHandler<void()>&& completionHandler)
+        static Ref<ClipboardItemTypeLoader> create(Clipboard& writingDestination, const String& type, CompletionHandler<void()>&& completionHandler)
         {
-            return adoptRef(*new ClipboardItemTypeLoader(type, WTFMove(completionHandler)));
+            return adoptRef(*new ClipboardItemTypeLoader(writingDestination, type, WTFMove(completionHandler)));
         }
 
         ~ClipboardItemTypeLoader();
@@ -71,10 +72,12 @@ private:
         const BufferOrString& data() { return m_data; }
 
     private:
-        ClipboardItemTypeLoader(const String& type, CompletionHandler<void()>&&);
+        ClipboardItemTypeLoader(Clipboard&, const String& type, CompletionHandler<void()>&&);
 
         void sanitizeDataIfNeeded();
         void invokeCompletionHandler();
+
+        String dataAsString() const;
 
         // FileReaderLoaderClient methods.
         void didStartLoading() final { }
@@ -86,12 +89,13 @@ private:
         BufferOrString m_data;
         std::unique_ptr<FileReaderLoader> m_blobLoader;
         CompletionHandler<void()> m_completionHandler;
+        WeakPtr<Clipboard, WeakPtrImplWithEventTargetData> m_writingDestination;
     };
 
     unsigned m_numberOfPendingClipboardTypes { 0 };
     CompletionHandler<void(std::optional<PasteboardCustomData>)> m_completionHandler;
     Vector<Ref<ClipboardItemTypeLoader>> m_itemTypeLoaders;
-    WeakPtr<Clipboard> m_writingDestination;
+    WeakPtr<Clipboard, WeakPtrImplWithEventTargetData> m_writingDestination;
 
     Vector<KeyValuePair<String, RefPtr<DOMPromise>>> m_itemPromises;
 };

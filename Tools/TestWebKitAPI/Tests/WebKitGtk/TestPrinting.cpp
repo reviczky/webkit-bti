@@ -227,7 +227,9 @@ public:
 
     GtkWidget* createWebView()
     {
-        GtkWidget* newWebView = webkit_web_view_new_with_related_view(m_webView);
+        GtkWidget* newWebView = GTK_WIDGET(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+            "related-view", m_webView,
+            nullptr));
         g_object_ref_sink(newWebView);
 
         assertObjectIsDeletedWhenTestFinishes(G_OBJECT(newWebView));
@@ -289,6 +291,7 @@ static void testPrintOperationCloseAfterPrint(CloseAfterPrintTest* test, gconstp
     test->waitUntilPrintFinishedAndViewClosed();
 }
 
+#if !ENABLE(2022_GLIB_API)
 class PrintCustomWidgetTest: public WebViewTest {
 public:
     MAKE_GLIB_TEST_FIXTURE(PrintCustomWidgetTest);
@@ -307,7 +310,9 @@ public:
 
     static void updateCallback(WebKitPrintCustomWidget* customWidget, GtkPageSetup*, GtkPrintSettings*, PrintCustomWidgetTest* test)
     {
+        ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         g_assert_true(test->m_widget == webkit_print_custom_widget_get_widget(customWidget));
+        ALLOW_DEPRECATED_DECLARATIONS_END
 
         test->m_updateEmitted = true;
         // Would be nice to avoid the 1 second timeout here - but I didn't found
@@ -332,7 +337,9 @@ public:
         g_signal_connect(printCustomWidget, "apply", G_CALLBACK(applyCallback), test);
         g_signal_connect(printCustomWidget, "update", G_CALLBACK(updateCallback), test);
 
+        ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         GtkWidget* widget = webkit_print_custom_widget_get_widget(printCustomWidget);
+        ALLOW_DEPRECATED_DECLARATIONS_END
         test->assertObjectIsDeletedWhenTestFinishes(G_OBJECT(widget));
         g_signal_connect(widget, "realize", G_CALLBACK(widgetRealizeCallback), test);
 
@@ -380,7 +387,9 @@ public:
     WebKitPrintCustomWidget* createPrintCustomWidget()
     {
         m_widget = gtk_label_new("Label");
+        ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         return webkit_print_custom_widget_new(m_widget, "Custom Widget");
+        ALLOW_DEPRECATED_DECLARATIONS_END
     }
 
     void startPrinting()
@@ -451,6 +460,7 @@ static void testPrintCustomWidget(PrintCustomWidgetTest* test, gconstpointer)
     g_assert_true(test->m_updateEmitted);
     g_assert_true(test->m_applyEmitted);
 }
+#endif // !ENABLE(2022_GLIB_API)
 #endif // HAVE_GTK_UNIX_PRINTING
 
 void beforeAll()
@@ -461,7 +471,9 @@ void beforeAll()
     PrintTest::add("WebKitPrintOperation", "print", testPrintOperationPrint);
     PrintTest::add("WebKitPrintOperation", "print-errors", testPrintOperationErrors);
     CloseAfterPrintTest::add("WebKitPrintOperation", "close-after-print", testPrintOperationCloseAfterPrint);
+#if !ENABLE(2022_GLIB_API)
     PrintCustomWidgetTest::add("WebKitPrintOperation", "custom-widget", testPrintCustomWidget);
+#endif
 #endif
 }
 

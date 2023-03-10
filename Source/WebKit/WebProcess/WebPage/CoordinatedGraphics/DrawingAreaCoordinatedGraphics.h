@@ -66,6 +66,8 @@ private:
 #endif
 
     bool supportsAsyncScrolling() const override;
+    void registerScrollingTree() override;
+    void unregisterScrollingTree() override;
 
     WebCore::GraphicsLayerFactory* graphicsLayerFactory() override;
     void setRootCompositingLayer(WebCore::GraphicsLayer*) override;
@@ -83,7 +85,7 @@ private:
     // IPC message handlers.
     void updateBackingStoreState(uint64_t backingStoreStateID, bool respondImmediately, float deviceScaleFactor, const WebCore::IntSize&, const WebCore::IntSize& scrollOffset) override;
     void targetRefreshRateDidChange(unsigned rate) override;
-    void didUpdate() override;
+    void displayDidRefresh() override;
 
 #if PLATFORM(GTK)
     void adjustTransientZoom(double scale, WebCore::FloatPoint origin) override;
@@ -134,13 +136,13 @@ private:
     // won't paint until painting has resumed again.
     bool m_isPaintingSuspended { false };
 
-    RunLoop::Timer<DrawingAreaCoordinatedGraphics> m_exitCompositingTimer;
+    RunLoop::Timer m_exitCompositingTimer;
 
     // The layer tree host that handles accelerated compositing.
     std::unique_ptr<LayerTreeHost> m_layerTreeHost;
 
     std::unique_ptr<LayerTreeHost> m_previousLayerTreeHost;
-    RunLoop::Timer<DrawingAreaCoordinatedGraphics> m_discardPreviousLayerTreeHostTimer;
+    RunLoop::Timer m_discardPreviousLayerTreeHostTimer;
 
     WebCore::Region m_dirtyRegion;
     WebCore::IntRect m_scrollRect;
@@ -155,7 +157,7 @@ private:
     bool m_supportsAsyncScrolling { true };
     bool m_forceRepaintAfterBackingStoreStateUpdate { false };
 
-    RunLoop::Timer<DrawingAreaCoordinatedGraphics> m_displayTimer;
+    RunLoop::Timer m_displayTimer;
 
 #if PLATFORM(GTK)
     bool m_transientZoom { false };

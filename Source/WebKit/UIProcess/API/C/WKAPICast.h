@@ -51,8 +51,7 @@
 namespace API {
 class ContentRuleList;
 class ContentRuleListStore;
-class InternalDebugFeature;
-class ExperimentalFeature;
+class Feature;
 class FrameHandle;
 class FrameInfo;
 class HTTPCookieStore;
@@ -122,7 +121,7 @@ WK_ADD_API_MAPPING(WKContextConfigurationRef, API::ProcessPoolConfiguration)
 WK_ADD_API_MAPPING(WKContextMenuListenerRef, WebContextMenuListenerProxy)
 WK_ADD_API_MAPPING(WKCredentialRef, WebCredential)
 WK_ADD_API_MAPPING(WKDownloadRef, DownloadProxy)
-WK_ADD_API_MAPPING(WKExperimentalFeatureRef, API::ExperimentalFeature)
+WK_ADD_API_MAPPING(WKFeatureRef, API::Feature)
 WK_ADD_API_MAPPING(WKFormSubmissionListenerRef, WebFormSubmissionListenerProxy)
 WK_ADD_API_MAPPING(WKFramePolicyListenerRef, WebFramePolicyListenerProxy)
 WK_ADD_API_MAPPING(WKFrameHandleRef, API::FrameHandle)
@@ -135,7 +134,6 @@ WK_ADD_API_MAPPING(WKHTTPCookieStoreRef, API::HTTPCookieStore)
 WK_ADD_API_MAPPING(WKHitTestResultRef, API::HitTestResult)
 WK_ADD_API_MAPPING(WKIconDatabaseRef, WebIconDatabase)
 WK_ADD_API_MAPPING(WKInspectorRef, WebInspectorUIProxy)
-WK_ADD_API_MAPPING(WKInternalDebugFeatureRef, API::InternalDebugFeature)
 WK_ADD_API_MAPPING(WKMediaKeySystemPermissionCallbackRef, MediaKeySystemPermissionCallback)
 WK_ADD_API_MAPPING(WKQueryPermissionResultCallbackRef, QueryPermissionResultCallback)
 WK_ADD_API_MAPPING(WKMessageListenerRef, API::MessageListener)
@@ -419,36 +417,6 @@ inline WKStorageBlockingPolicy toAPI(WebCore::StorageBlockingPolicy policy)
 
     ASSERT_NOT_REACHED();
     return kWKAllowAllStorage;
-}
-
-inline WebCore::WebGLLoadPolicy toWebGLLoadPolicy(WKWebGLLoadPolicy webGLLoadPolicy)
-{
-    switch (webGLLoadPolicy) {
-    case kWKWebGLLoadPolicyLoadNormally:
-        return WebCore::WebGLLoadPolicy::WebGLAllowCreation;
-    case kWKWebGLLoadPolicyBlocked:
-        return WebCore::WebGLLoadPolicy::WebGLBlockCreation;
-    case kWKWebGLLoadPolicyPending:
-        return WebCore::WebGLLoadPolicy::WebGLPendingCreation;
-    }
-    
-    ASSERT_NOT_REACHED();
-    return WebCore::WebGLLoadPolicy::WebGLAllowCreation;
-}
-
-inline WKWebGLLoadPolicy toAPI(WebCore::WebGLLoadPolicy webGLLoadPolicy)
-{
-    switch (webGLLoadPolicy) {
-    case WebCore::WebGLLoadPolicy::WebGLAllowCreation:
-        return kWKWebGLLoadPolicyLoadNormally;
-    case WebCore::WebGLLoadPolicy::WebGLBlockCreation:
-        return kWKWebGLLoadPolicyBlocked;
-    case WebCore::WebGLLoadPolicy::WebGLPendingCreation:
-        return kWKWebGLLoadPolicyPending;
-    }
-
-    ASSERT_NOT_REACHED();
-    return kWKWebGLLoadPolicyLoadNormally;
 }
 
 } // namespace WebKit

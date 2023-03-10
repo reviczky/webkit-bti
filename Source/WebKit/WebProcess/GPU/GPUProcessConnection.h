@@ -78,9 +78,8 @@ public:
 #endif
 #if ENABLE(VIDEO)
     RemoteVideoFrameObjectHeapProxy& videoFrameObjectHeapProxy();
-#endif
-
     RemoteMediaPlayerManager& mediaPlayerManager();
+#endif
 
 #if PLATFORM(COCOA) && ENABLE(WEB_AUDIO)
     RemoteAudioSourceProviderManager& audioSourceProviderManager();
@@ -94,7 +93,6 @@ public:
     bool isVP8DecoderEnabled() const { return m_enableVP8Decoder; }
     bool isVP9DecoderEnabled() const { return m_enableVP9Decoder; }
     bool isVPSWDecoderEnabled() const { return m_enableVP9SWDecoder; }
-    bool hasVP9HardwareDecoder();
 #endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
@@ -157,7 +155,6 @@ private:
     bool m_enableVP8Decoder { false };
     bool m_enableVP9Decoder { false };
     bool m_enableVP9SWDecoder { false };
-    bool m_hasVP9HardwareDecoder { false };
 #endif
 
 #if PLATFORM(COCOA)

@@ -33,9 +33,12 @@
 #include "RemoteAudioHardwareListenerIdentifier.h"
 #include "RemoteAudioSessionIdentifier.h"
 #include "RemoteGPU.h"
+#include "RemoteImageBuffer.h"
 #include "RemoteRemoteCommandListenerIdentifier.h"
+#include "RemoteSerializedImageBufferIdentifier.h"
 #include "RenderingBackendIdentifier.h"
 #include "ScopedActiveMessageReceiveQueue.h"
+#include "ThreadSafeObjectHeap.h"
 #include "WebGPUIdentifier.h"
 #include <WebCore/LibWebRTCEnumTraits.h>
 #include <WebCore/NowPlayingManager.h>
@@ -75,7 +78,7 @@ enum class Synchronous : bool;
 
 namespace WebCore {
 class SecurityOrigin;
-struct SecurityOriginData;
+class SecurityOriginData;
 }
 
 namespace WebKit {
@@ -93,13 +96,9 @@ class RemoteCDMFactoryProxy;
 class RemoteImageDecoderAVFProxy;
 class RemoteLegacyCDMFactoryProxy;
 class RemoteMediaEngineConfigurationFactoryProxy;
-class RemoteMediaPlayerManagerProxy;
-class RemoteMediaRecorderManager;
-class RemoteMediaResourceManager;
 class RemoteMediaSessionHelperProxy;
 class RemoteRemoteCommandListenerProxy;
 class RemoteRenderingBackend;
-class RemoteGraphicsContextGL;
 class RemoteSampleBufferDisplayLayerManager;
 class UserMediaCaptureManagerProxy;
 struct GPUProcessConnectionParameters;
@@ -112,7 +111,14 @@ class RemoteWCLayerTreeHost;
 #endif
 
 #if ENABLE(VIDEO)
+class RemoteMediaPlayerManagerProxy;
+class RemoteMediaRecorderManager;
+class RemoteMediaResourceManager;
 class RemoteVideoFrameObjectHeap;
+#endif
+
+#if ENABLE(WEBGL)
+class RemoteGraphicsContextGL;
 #endif
 
 class GPUConnectionToWebProcess
@@ -120,22 +126,25 @@ class GPUConnectionToWebProcess
     , public WebCore::NowPlayingManager::Client
     , IPC::Connection::Client {
 public:
-    static Ref<GPUConnectionToWebProcess> create(GPUProcess&, WebCore::ProcessIdentifier, PAL::SessionID, IPC::Connection::Identifier&&, GPUProcessConnectionParameters&&);
+    static Ref<GPUConnectionToWebProcess> create(GPUProcess&, WebCore::ProcessIdentifier, PAL::SessionID, IPC::Connection::Handle&&, GPUProcessConnectionParameters&&);
     virtual ~GPUConnectionToWebProcess();
 
     using WebCore::NowPlayingManager::Client::weakPtrFactory;
-    using WeakValueType = WebCore::NowPlayingManager::Client::WeakValueType;
+    using WebCore::NowPlayingManager::Client::WeakValueType;
+    using WebCore::NowPlayingManager::Client::WeakPtrImplType;
 
     IPC::Connection& connection() { return m_connection.get(); }
     IPC::MessageReceiverMap& messageReceiverMap() { return m_messageReceiverMap; }
     GPUProcess& gpuProcess() { return m_gpuProcess.get(); }
     WebCore::ProcessIdentifier webProcessIdentifier() const { return m_webProcessIdentifier; }
 
+#if ENABLE(VIDEO)
     RemoteMediaResourceManager& remoteMediaResourceManager();
+#endif
 
     PAL::SessionID sessionID() const { return m_sessionID; }
 
-    bool isCaptivePortalModeEnabled() const { return m_isCaptivePortalModeEnabled; }
+    bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled; }
 
     Logger& logger();
 
@@ -180,10 +189,10 @@ public:
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     RemoteLegacyCDMFactoryProxy& legacyCdmFactoryProxy();
 #endif
-
     RemoteMediaEngineConfigurationFactoryProxy& mediaEngineConfigurationFactoryProxy();
+#if ENABLE(VIDEO)
     RemoteMediaPlayerManagerProxy& remoteMediaPlayerManagerProxy() { return m_remoteMediaPlayerManagerProxy.get(); }
-
+#endif
 #if USE(AUDIO_SESSION)
     RemoteAudioSessionProxyManager& audioSessionManager();
 #endif
@@ -199,6 +208,8 @@ public:
 
     void lowMemoryHandler(WTF::Critical, WTF::Synchronous);
 
+    ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteSerializedImageBuffer>>& serializedImageBufferHeap() { return m_remoteSerializedImageBufferObjectHeap; }
+
 #if ENABLE(WEBGL)
     void releaseGraphicsContextGLForTesting(GraphicsContextGLIdentifier);
 #endif
@@ -208,12 +219,14 @@ public:
     using RemoteRenderingBackendMap = HashMap<RenderingBackendIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteRenderingBackend>>;
     const RemoteRenderingBackendMap& remoteRenderingBackendMap() const { return m_remoteRenderingBackendMap; }
 
+    RemoteRenderingBackend* remoteRenderingBackend(RenderingBackendIdentifier);
+
 #if HAVE(AUDIT_TOKEN)
     const std::optional<audit_token_t>& presentingApplicationAuditToken() const { return m_presentingApplicationAuditToken; }
 #endif
 
 private:
-    GPUConnectionToWebProcess(GPUProcess&, WebCore::ProcessIdentifier, PAL::SessionID, IPC::Connection::Identifier&&, GPUProcessConnectionParameters&&);
+    GPUConnectionToWebProcess(GPUProcess&, WebCore::ProcessIdentifier, PAL::SessionID, IPC::Connection::Handle&&, GPUProcessConnectionParameters&&);
 
 #if ENABLE(WEB_AUDIO)
     RemoteAudioDestinationManager& remoteAudioDestinationManager();
@@ -226,15 +239,16 @@ private:
     RemoteMediaRecorderManager& mediaRecorderManager();
 #endif
 
-    void createRenderingBackend(RemoteRenderingBackendCreationParameters&&, IPC::Attachment&&, IPC::StreamConnectionBuffer&&);
+    void createRenderingBackend(RemoteRenderingBackendCreationParameters&&, IPC::StreamServerConnection::Handle&&);
     void releaseRenderingBackend(RenderingBackendIdentifier);
+    void releaseSerializedImageBuffer(RemoteSerializedImageBufferWriteReference&&);
 
 #if ENABLE(WEBGL)
-    void createGraphicsContextGL(WebCore::GraphicsContextGLAttributes, GraphicsContextGLIdentifier, RenderingBackendIdentifier, IPC::StreamConnectionBuffer&&);
+    void createGraphicsContextGL(WebCore::GraphicsContextGLAttributes, GraphicsContextGLIdentifier, RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);
     void releaseGraphicsContextGL(GraphicsContextGLIdentifier);
 #endif
 
-    void createRemoteGPU(WebGPUIdentifier, RenderingBackendIdentifier, IPC::StreamConnectionBuffer&&);
+    void createRemoteGPU(WebGPUIdentifier, RenderingBackendIdentifier, IPC::StreamServerConnection::Handle&&);
 
     void clearNowPlayingInfo();
     void setNowPlayingInfo(WebCore::NowPlayingInfo&&);
@@ -300,8 +314,10 @@ private:
 #if ENABLE(WEB_AUDIO)
     std::unique_ptr<RemoteAudioDestinationManager> m_remoteAudioDestinationManager;
 #endif
+#if ENABLE(VIDEO)
     std::unique_ptr<RemoteMediaResourceManager> m_remoteMediaResourceManager;
     UniqueRef<RemoteMediaPlayerManagerProxy> m_remoteMediaPlayerManagerProxy;
+#endif
     PAL::SessionID m_sessionID;
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     std::unique_ptr<UserMediaCaptureManagerProxy> m_userMediaCaptureManagerProxy;
@@ -335,6 +351,7 @@ private:
 #endif
     using RemoteGPUMap = HashMap<WebGPUIdentifier, IPC::ScopedActiveMessageReceiveQueue<RemoteGPU>>;
     RemoteGPUMap m_remoteGPUMap;
+    ThreadSafeObjectHeap<RemoteSerializedImageBufferIdentifier, RefPtr<RemoteSerializedImageBuffer>> m_remoteSerializedImageBufferObjectHeap;
 #if ENABLE(ENCRYPTED_MEDIA)
     std::unique_ptr<RemoteCDMFactoryProxy> m_cdmFactoryProxy;
 #endif
@@ -367,7 +384,7 @@ private:
 
     RefPtr<RemoteRemoteCommandListenerProxy> m_remoteRemoteCommandListener;
     bool m_isActiveNowPlayingProcess { false };
-    bool m_isCaptivePortalModeEnabled { false };
+    bool m_isLockdownModeEnabled { false };
 
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
     UniqueRef<LocalAudioSessionRoutingArbitrator> m_routingArbitrator;

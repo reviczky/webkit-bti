@@ -92,6 +92,7 @@ ElementRuleCollector::ElementRuleCollector(const Element& element, const ScopeRu
     , m_userStyle(ruleSets.userStyle())
     , m_userAgentMediaQueryStyle(ruleSets.userAgentMediaQueryStyle())
     , m_selectorMatchingState(selectorMatchingState)
+    , m_result(makeUnique<MatchResult>())
 {
     ASSERT(!m_selectorMatchingState || m_selectorMatchingState->selectorFilter.parentStackIsConsistent(element.parentNode()));
 }
@@ -100,6 +101,7 @@ ElementRuleCollector::ElementRuleCollector(const Element& element, const RuleSet
     : m_element(element)
     , m_authorStyle(authorStyle)
     , m_selectorMatchingState(selectorMatchingState)
+    , m_result(makeUnique<MatchResult>())
 {
     ASSERT(!m_selectorMatchingState || m_selectorMatchingState->selectorFilter.parentStackIsConsistent(element.parentNode()));
 }
@@ -107,7 +109,12 @@ ElementRuleCollector::ElementRuleCollector(const Element& element, const RuleSet
 const MatchResult& ElementRuleCollector::matchResult() const
 {
     ASSERT(m_mode == SelectorChecker::Mode::ResolvingStyle);
-    return m_result;
+    return *m_result;
+}
+
+std::unique_ptr<MatchResult> ElementRuleCollector::releaseMatchResult()
+{
+    return WTFMove(m_result);
 }
 
 const Vector<RefPtr<const StyleRule>>& ElementRuleCollector::matchedRuleList() const
@@ -134,7 +141,7 @@ inline void ElementRuleCollector::addElementStyleProperties(const StylePropertie
         return;
 
     if (!isCacheable)
-        m_result.isCacheable = false;
+        m_result->isCacheable = false;
 
     auto matchedProperty = MatchedProperties { propertySet };
     matchedProperty.cascadeLayerPriority = priority;
@@ -214,15 +221,15 @@ void ElementRuleCollector::collectMatchingRules(const MatchRequest& matchRequest
 }
 
 
-Vector<MatchedProperties>& ElementRuleCollector::declarationsForOrigin(MatchResult& matchResult, DeclarationOrigin declarationOrigin)
+Vector<MatchedProperties>& ElementRuleCollector::declarationsForOrigin(DeclarationOrigin declarationOrigin)
 {
     switch (declarationOrigin) {
-    case DeclarationOrigin::UserAgent: return matchResult.userAgentDeclarations;
-    case DeclarationOrigin::User: return matchResult.userDeclarations;
-    case DeclarationOrigin::Author: return matchResult.authorDeclarations;
+    case DeclarationOrigin::UserAgent: return m_result->userAgentDeclarations;
+    case DeclarationOrigin::User: return m_result->userDeclarations;
+    case DeclarationOrigin::Author: return m_result->authorDeclarations;
     }
     ASSERT_NOT_REACHED();
-    return matchResult.authorDeclarations;
+    return m_result->authorDeclarations;
 }
 
 void ElementRuleCollector::sortAndTransferMatchedRules(DeclarationOrigin declarationOrigin)
@@ -238,7 +245,7 @@ void ElementRuleCollector::sortAndTransferMatchedRules(DeclarationOrigin declara
 void ElementRuleCollector::transferMatchedRules(DeclarationOrigin declarationOrigin, std::optional<ScopeOrdinal> fromScope)
 {
     if (m_mode != SelectorChecker::Mode::CollectingRules)
-        declarationsForOrigin(m_result, declarationOrigin).reserveCapacity(m_matchedRules.size());
+        declarationsForOrigin(declarationOrigin).reserveCapacity(m_matchedRules.size());
 
     for (; m_matchedRuleTransferIndex < m_matchedRules.size(); ++m_matchedRuleTransferIndex) {
         auto& matchedRule = m_matchedRules[m_matchedRuleTransferIndex];
@@ -283,12 +290,12 @@ bool ElementRuleCollector::matchesAnyAuthorRules()
 void ElementRuleCollector::matchShadowPseudoElementRules(CascadeLevel level)
 {
     ASSERT(element().isInShadowTree());
-    auto& shadowRoot = *element().containingShadowRoot();
-    if (shadowRoot.mode() != ShadowRootMode::UserAgent)
+    auto* shadowRoot = element().containingShadowRoot();
+    if (!shadowRoot || shadowRoot->mode() != ShadowRootMode::UserAgent)
         return;
 
     // Look up shadow pseudo elements also from the host scope style as they are web-exposed.
-    auto* hostRules = Scope::forNode(*shadowRoot.host()).resolver().ruleSets().styleForCascadeLevel(level);
+    auto* hostRules = Scope::forNode(*shadowRoot->host()).resolver().ruleSets().styleForCascadeLevel(level);
     if (!hostRules)
         return;
 
@@ -337,6 +344,8 @@ void ElementRuleCollector::matchSlottedPseudoElementRules(CascadeLevel level)
 void ElementRuleCollector::matchPartPseudoElementRules(CascadeLevel level)
 {
     ASSERT(element().isInShadowTree());
+    if (!element().containingShadowRoot())
+        return;
 
     bool isUAShadowPseudoElement = element().containingShadowRoot()->mode() == ShadowRootMode::UserAgent && !element().shadowPseudoId().isNull();
 
@@ -595,10 +604,9 @@ void ElementRuleCollector::matchAllRules(bool matchAuthorAndUserStyles, bool inc
         addElementStyleProperties(styledElement.additionalPresentationalHintStyle(), RuleSet::cascadeLayerPriorityForPresentationalHints);
 
         if (is<HTMLElement>(styledElement)) {
-            bool isAuto;
-            auto textDirection = downcast<HTMLElement>(styledElement).directionalityIfhasDirAutoAttribute(isAuto);
-            auto& properties = textDirection == TextDirection::LTR ? leftToRightDeclaration() : rightToLeftDeclaration();
-            if (isAuto)
+            auto result = downcast<HTMLElement>(styledElement).directionalityIfDirIsAuto();
+            auto& properties = result.value_or(TextDirection::LTR) == TextDirection::LTR ? leftToRightDeclaration() : rightToLeftDeclaration();
+            if (result)
                 addMatchedProperties({ &properties }, DeclarationOrigin::Author);
         }
     }
@@ -648,33 +656,31 @@ void ElementRuleCollector::addMatchedProperties(MatchedProperties&& matchedPrope
 {
     // FIXME: This should be moved to the matched properties cache code.
     auto computeIsCacheable = [&] {
-        if (!m_result.isCacheable)
+        if (!m_result->isCacheable)
             return false;
 
         if (matchedProperties.styleScopeOrdinal != ScopeOrdinal::Element)
             return false;
 
-        auto& properties = *matchedProperties.properties;
-        for (unsigned i = 0, count = properties.propertyCount(); i < count; ++i) {
+        for (auto current : *matchedProperties.properties) {
             // Currently the property cache only copy the non-inherited values and resolve
             // the inherited ones.
             // Here we define some exception were we have to resolve some properties that are not inherited
             // by default. If those exceptions become too common on the web, it should be possible
             // to build a list of exception to resolve instead of completely disabling the cache.
-            StyleProperties::PropertyReference current = properties.propertyAt(i);
             if (current.isInherited())
                 continue;
 
             // If the property value is explicitly inherited, we need to apply further non-inherited properties
             // as they might override the value inherited here. For this reason we don't allow declarations with
             // explicitly inherited properties to be cached.
-            const CSSValue& value = *current.value();
-            if (value.isInheritValue())
+            auto& value = *current.value();
+            if (isValueID(value, CSSValueInherit))
                 return false;
 
             // The value currentColor has implicitely the same side effect. It depends on the value of color,
             // which is an inherited value, making the non-inherited property implicitly inherited.
-            if (is<CSSPrimitiveValue>(value) && downcast<CSSPrimitiveValue>(value).valueID() == CSSValueCurrentcolor)
+            if (is<CSSPrimitiveValue>(value) && StyleColor::isCurrentColor(downcast<CSSPrimitiveValue>(value)))
                 return false;
 
             if (value.hasVariableReferences())
@@ -684,15 +690,15 @@ void ElementRuleCollector::addMatchedProperties(MatchedProperties&& matchedPrope
         return true;
     };
 
-    m_result.isCacheable = computeIsCacheable();
+    m_result->isCacheable = computeIsCacheable();
 
-    declarationsForOrigin(m_result, declarationOrigin).append(WTFMove(matchedProperties));
+    declarationsForOrigin(declarationOrigin).append(WTFMove(matchedProperties));
 }
 
 void ElementRuleCollector::addAuthorKeyframeRules(const StyleRuleKeyframe& keyframe)
 {
-    ASSERT(m_result.authorDeclarations.isEmpty());
-    m_result.authorDeclarations.append({ &keyframe.properties(), SelectorChecker::MatchAll, propertyAllowlistForPseudoId(m_pseudoElementRequest.pseudoId) });
+    ASSERT(m_result->authorDeclarations.isEmpty());
+    m_result->authorDeclarations.append({ &keyframe.properties(), SelectorChecker::MatchAll, propertyAllowlistForPseudoId(m_pseudoElementRequest.pseudoId) });
 }
 
 }

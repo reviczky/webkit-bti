@@ -27,6 +27,11 @@
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/WTFGType.h>
 
+#if PLATFORM(GTK)
+#include <WebCore/GRefPtrGtk.h>
+#include <WebCore/GUniquePtrGtk.h>
+#endif
+
 using namespace WebKit;
 using namespace WebCore;
 
@@ -52,9 +57,16 @@ struct _WebKitContextMenuPrivate {
     GList* items;
     WebKitContextMenuItem* parentItem;
     GRefPtr<GVariant> userData;
+#if PLATFORM(GTK)
+#if USE(GTK4)
+    GRefPtr<GdkEvent> event;
+#else
+    GUniquePtr<GdkEvent> event;
+#endif
+#endif
 };
 
-WEBKIT_DEFINE_TYPE(WebKitContextMenu, webkit_context_menu, G_TYPE_OBJECT)
+WEBKIT_DEFINE_FINAL_TYPE(WebKitContextMenu, webkit_context_menu, G_TYPE_OBJECT, GObject)
 
 static void webkitContextMenuDispose(GObject* object)
 {
@@ -93,6 +105,17 @@ WebKitContextMenu* webkitContextMenuCreate(const Vector<WebContextMenuItemData>&
 
     return menu;
 }
+
+#if PLATFORM(GTK)
+#if USE(GTK4)
+void webkitContextMenuSetEvent(WebKitContextMenu* menu, GRefPtr<GdkEvent>&& event)
+#else
+void webkitContextMenuSetEvent(WebKitContextMenu* menu, GUniquePtr<GdkEvent>&& event)
+#endif
+{
+    menu->priv->event = WTFMove(event);
+}
+#endif
 
 void webkitContextMenuSetParentItem(WebKitContextMenu* menu, WebKitContextMenuItem* item)
 {
@@ -372,3 +395,37 @@ GVariant* webkit_context_menu_get_user_data(WebKitContextMenu* menu)
 
     return menu->priv->userData.get();
 }
+
+#if PLATFORM(GTK)
+/**
+ * webkit_context_menu_get_event:
+ * @menu: a #WebKitContextMenu
+ *
+ * Gets the #GdkEvent that triggered the context menu. This function only returns a valid
+ * #GdkEvent when called for a #WebKitContextMenu passed to #WebKitWebView::context-menu
+ * signal; in all other cases, %NULL is returned.
+ *
+ * The returned #GdkEvent is expected to be one of the following types:
+ * <itemizedlist>
+ * <listitem><para>
+ * a #GdkEventButton of type %GDK_BUTTON_PRESS when the context menu was triggered with mouse.
+ * </para></listitem>
+ * <listitem><para>
+ * a #GdkEventKey of type %GDK_KEY_PRESS if the keyboard was used to show the menu.
+ * </para></listitem>
+ * <listitem><para>
+ * a generic #GdkEvent of type %GDK_NOTHING when the #GtkWidget::popup-menu signal was used to show the context menu.
+ * </para></listitem>
+ * </itemizedlist>
+ *
+ * Returns: (transfer none): the menu event or %NULL.
+ *
+ * Since: 2.40
+ */
+GdkEvent* webkit_context_menu_get_event(WebKitContextMenu* menu)
+{
+    g_return_val_if_fail(WEBKIT_IS_CONTEXT_MENU(menu), nullptr);
+
+    return menu->priv->event.get();
+}
+#endif

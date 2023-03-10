@@ -41,7 +41,7 @@ public:
 
     Exception isolatedCopy() const & { return Exception { m_code, m_message.isolatedCopy() }; }
     Exception isolatedCopy() && { return Exception { m_code, WTFMove(m_message).isolatedCopy() }; }
-
+    
 private:
     ExceptionCode m_code;
     String m_message;
@@ -52,5 +52,6 @@ inline Exception::Exception(ExceptionCode code, String message)
     , m_message { WTFMove(message) }
 {
 }
+
 
 } // namespace WebCore

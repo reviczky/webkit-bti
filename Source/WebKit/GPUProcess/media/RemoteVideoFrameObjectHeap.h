@@ -29,28 +29,29 @@
 #include "Connection.h"
 #include "RemoteVideoFrameProxy.h"
 #include "ThreadSafeObjectHeap.h"
-#include <WebCore/DestinationColorSpace.h>
-#include <WebCore/VideoFrame.h>
+#include "WorkQueueMessageReceiver.h"
 
 #if PLATFORM(COCOA)
 #include "SharedVideoFrame.h"
 #endif
 
 namespace WebCore {
+class DestinationColorSpace;
 class PixelBufferConformerCV;
+class VideoFrame;
 }
 
 namespace WebKit {
 
 // Holds references to all VideoFrame instances that are mapped from GPU process to Web process.
-class RemoteVideoFrameObjectHeap final : public IPC::Connection::WorkQueueMessageReceiver {
+class RemoteVideoFrameObjectHeap final : public IPC::WorkQueueMessageReceiver {
 public:
     static Ref<RemoteVideoFrameObjectHeap> create(Ref<IPC::Connection>&&);
     ~RemoteVideoFrameObjectHeap();
 
     void close();
     RemoteVideoFrameProxy::Properties add(Ref<WebCore::VideoFrame>&&);
-    RefPtr<WebCore::VideoFrame> get(RemoteVideoFrameReadReference&& read) { return m_heap.retire(WTFMove(read), 0_s); }
+    RefPtr<WebCore::VideoFrame> get(RemoteVideoFrameReadReference&&);
 
     void stopListeningForIPC(Ref<RemoteVideoFrameObjectHeap>&&) { close(); }
 

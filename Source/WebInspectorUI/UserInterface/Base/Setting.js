@@ -153,15 +153,15 @@ WI.EngineeringSetting = class EngineeringSetting extends WI.Setting
 {
     get value()
     {
-        if (WI.isEngineeringBuild)
+        if (WI.engineeringSettingsAllowed())
             return super.value;
         return this.defaultValue;
     }
 
     set value(value)
     {
-        console.assert(WI.isEngineeringBuild);
-        if (WI.isEngineeringBuild)
+        console.assert(WI.engineeringSettingsAllowed());
+        if (WI.engineeringSettingsAllowed())
             super.value = value;
     }
 };
@@ -193,6 +193,7 @@ WI.settings = {
     clearLogOnNavigate: new WI.Setting("clear-log-on-navigate", true),
     clearNetworkOnNavigate: new WI.Setting("clear-network-on-navigate", true),
     cpuTimelineThreadDetailsExpanded: new WI.Setting("cpu-timeline-thread-details-expanded", false),
+    domTreeDeemphasizesNodesThatAreNotRendered: new WI.Setting("dom-tree-deemphasizes-nodes-that-are-not-rendered", true),
     emulateInUserGesture: new WI.Setting("emulate-in-user-gesture", false),
     enableControlFlowProfiler: new WI.Setting("enable-control-flow-profiler", false),
     enableElementsTabIndependentStylesDetailsSidebarPanel: new WI.Setting("elements-tab-independent-styles-details-panel", true),
@@ -213,8 +214,11 @@ WI.settings = {
     searchRegularExpression: new WI.Setting("search-regular-expression", false),
     selectedNetworkDetailContentViewIdentifier: new WI.Setting("network-detail-content-view-identifier", "preview"),
     sourceMapsEnabled: new WI.Setting("source-maps-enabled", true),
+    showConsoleMessageTimestamps: new WI.Setting("show-console-message-timestamps", false),
     showCSSPropertySyntaxInDocumentationPopover: new WI.Setting("show-css-property-syntax-in-documentation-popover", false),
     showCanvasPath: new WI.Setting("show-canvas-path", false),
+    showFlexOverlayDuringElementSelection: new WI.Setting("show-grid-overlay-during-element-selection", true),
+    showGridOverlayDuringElementSelection: new WI.Setting("show-flex-overlay-during-element-selection", true),
     showImageGrid: new WI.Setting("show-image-grid", true),
     showInvisibleCharacters: new WI.Setting("show-invisible-characters", !!WI.Setting.migrateValue("show-invalid-characters")),
     showJavaScriptTypeInformation: new WI.Setting("show-javascript-type-information", false),
@@ -233,6 +237,7 @@ WI.settings = {
     experimentalAllowInspectingInspector: new WI.Setting("experimental-allow-inspecting-inspector", false),
     experimentalCSSSortPropertyNameAutocompletionByUsage: new WI.Setting("experimental-css-sort-property-name-autocompletion-by-usage", true),
     experimentalEnableNetworkEmulatedCondition: new WI.Setting("experimental-enable-network-emulated-condition", false),
+    experimentalLimitSourceCodeHighlighting: new WI.Setting("engineering-limit-source-code-highlighting", false),
 
     // Protocol
     protocolLogAsText: new WI.Setting("protocol-log-as-text", false),
@@ -247,7 +252,6 @@ WI.settings = {
     engineeringShowInternalObjectsInHeapSnapshot: new WI.EngineeringSetting("engineering-show-internal-objects-in-heap-snapshot", false),
     engineeringShowPrivateSymbolsInHeapSnapshot: new WI.EngineeringSetting("engineering-show-private-symbols-in-heap-snapshot", false),
     engineeringAllowEditingUserAgentShadowTrees: new WI.EngineeringSetting("engineering-allow-editing-user-agent-shadow-trees", false),
-    engineeringShowMockWebExtensionTab: new WI.EngineeringSetting("engineering-show-mock-web-extension-tab", false),
 
     // Debug
     debugShowConsoleEvaluations: new WI.DebugSetting("debug-show-console-evaluations", false),
@@ -258,4 +262,5 @@ WI.settings = {
     debugEnableDiagnosticLogging: new WI.DebugSetting("debug-enable-diagnostic-logging", true),
     debugAutoLogDiagnosticEvents: new WI.DebugSetting("debug-auto-log-diagnostic-events", false),
     debugLayoutDirection: new WI.DebugSetting("debug-layout-direction-override", "system"),
+    debugShowMockWebExtensionTab: new WI.DebugSetting("debug-show-mock-web-extension-tab", false),
 };

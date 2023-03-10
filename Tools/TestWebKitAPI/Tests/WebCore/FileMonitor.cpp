@@ -27,7 +27,6 @@
 
 #include "Test.h"
 #include "Utilities.h"
-#include "WTFStringUtilities.h"
 #include <WebCore/FileMonitor.h>
 #include <wtf/FileSystem.h>
 #include <wtf/MainThread.h>
@@ -344,7 +343,7 @@ TEST_F(FileMonitorTest, DetectDeleteButNotSubsequentChange)
     testQueue->dispatch([this] () mutable {
         EXPECT_FALSE(FileSystem::fileExists(tempFilePath()));
 
-        auto handle = FileSystem::openFile(tempFilePath(), FileSystem::FileOpenMode::Write);
+        auto handle = FileSystem::openFile(tempFilePath(), FileSystem::FileOpenMode::Truncate);
         ASSERT_NE(handle, FileSystem::invalidPlatformFileHandle);
 
         int rc = FileSystem::writeToFile(handle, FileMonitorTestData.utf8().data(), FileMonitorTestData.length());

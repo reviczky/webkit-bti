@@ -93,7 +93,7 @@ struct _JSCContextPrivate {
     Vector<JSCContextExceptionHandler> exceptionHandlers;
 };
 
-WEBKIT_DEFINE_TYPE(JSCContext, jsc_context, G_TYPE_OBJECT)
+WEBKIT_DEFINE_FINAL_TYPE(JSCContext, jsc_context, G_TYPE_OBJECT, GObject)
 
 static void jscContextSetVirtualMachine(JSCContext* context, GRefPtr<JSCVirtualMachine>&& vm)
 {
@@ -185,8 +185,7 @@ static void jsc_context_class_init(JSCContextClass* klass)
         PROP_VIRTUAL_MACHINE,
         g_param_spec_object(
             "virtual-machine",
-            "JSCVirtualMachine",
-            "JSC Virtual Machine",
+            nullptr, nullptr,
             JSC_TYPE_VIRTUAL_MACHINE,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 }

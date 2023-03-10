@@ -93,7 +93,7 @@ ServiceWorkerFetchTask::ServiceWorkerFetchTask(WebSWServerConnection& swServerCo
     SWFETCH_RELEASE_LOG("ServiceWorkerFetchTask: (serverConnectionIdentifier=%" PRIu64 ", serviceWorkerRegistrationIdentifier=%" PRIu64 ", serviceWorkerIdentifier=%" PRIu64 ", %d)", m_serverConnectionIdentifier.toUInt64(), m_serviceWorkerRegistrationIdentifier.toUInt64(), m_serviceWorkerIdentifier.toUInt64(), isWorkerReady);
 
     // We only do the timeout logic for main document navigations because it is not Web-compatible to do so for subresources.
-    if (loader.parameters().request.requester() == WebCore::ResourceRequest::Requester::Main) {
+    if (loader.parameters().request.requester() == WebCore::ResourceRequestRequester::Main) {
         m_timeoutTimer = makeUnique<Timer>(*this, &ServiceWorkerFetchTask::timeoutTimerFired);
         m_timeoutTimer->startOneShot(loader.connectionToWebProcess().networkProcess().serviceWorkerFetchTimeout());
     }
@@ -169,7 +169,7 @@ void ServiceWorkerFetchTask::startFetch()
     cleanHTTPRequestHeadersForAccessControl(request, m_loader.parameters().httpHeadersToKeep);
 
     String clientIdentifier;
-    if (m_loader.parameters().options.mode != FetchOptions::Mode::Navigate && m_loader.parameters().options.destination != FetchOptions::Destination::Worker) {
+    if (m_loader.parameters().options.mode != FetchOptions::Mode::Navigate) {
         if (auto identifier = m_loader.parameters().options.clientIdentifier)
             clientIdentifier = identifier->toString();
     }
@@ -249,7 +249,7 @@ void ServiceWorkerFetchTask::processResponse(ResourceResponse&& response, bool n
         m_loader.setResponse(WTFMove(response));
 }
 
-void ServiceWorkerFetchTask::didReceiveData(const IPC::SharedBufferReference& data, int64_t encodedDataLength)
+void ServiceWorkerFetchTask::didReceiveData(const IPC::SharedBufferReference& data, uint64_t encodedDataLength)
 {
     if (m_isDone)
         return;
@@ -448,7 +448,7 @@ void ServiceWorkerFetchTask::loadBodyFromPreloader()
         return;
     }
 
-    m_preloader->waitForBody([weakThis = WeakPtr { *this }, this](auto&& chunk, int length) {
+    m_preloader->waitForBody([weakThis = WeakPtr { *this }, this](auto&& chunk, uint64_t length) {
         if (!weakThis)
             return;
         if (!m_preloader->error().isNull()) {

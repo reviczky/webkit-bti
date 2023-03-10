@@ -40,8 +40,10 @@
 #include <WebCore/ContentSecurityPolicy.h>
 #include <WebCore/DestinationColorSpace.h>
 #include <WebCore/FloatSize.h>
+#include <WebCore/FrameIdentifier.h>
 #include <WebCore/HighlightVisibility.h>
 #include <WebCore/IntSize.h>
+#include <WebCore/LayerHostingContextIdentifier.h>
 #include <WebCore/LayoutMilestone.h>
 #include <WebCore/MediaProducer.h>
 #include <WebCore/PageIdentifier.h>
@@ -55,6 +57,14 @@
 
 #if ENABLE(APPLICATION_MANIFEST)
 #include <WebCore/ApplicationManifest.h>
+#endif
+
+#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
+#include <WebCore/LookalikeCharactersSanitizationData.h>
+#endif
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+#include "WebExtensionControllerParameters.h"
 #endif
 
 namespace IPC {
@@ -100,7 +110,6 @@ struct WebPageCreationParameters {
     bool paginationBehavesLikeColumns;
     double pageLength;
     double gapBetweenPages;
-    bool paginationLineGridEnabled;
     
     String userAgent;
 
@@ -152,7 +161,8 @@ struct WebPageCreationParameters {
 
 #if PLATFORM(MAC)
     std::optional<WebCore::DestinationColorSpace> colorSpace;
-    bool useSystemAppearance;
+    bool useSystemAppearance { false };
+    bool useFormSemanticContext { false };
 #endif
 #if ENABLE(META_VIEWPORT)
     bool ignoresViewportScaleLimits;
@@ -179,15 +189,15 @@ struct WebPageCreationParameters {
     Vector<SandboxExtension::Handle> gpuMachExtensionHandles;
 #endif
 #if HAVE(STATIC_FONT_REGISTRY)
-    std::optional<SandboxExtension::Handle> fontMachExtensionHandle;
+    Vector<SandboxExtension::Handle> fontMachExtensionHandles;
 #endif
 #if HAVE(APP_ACCENT_COLORS)
     WebCore::Color accentColor;
 #endif
 #if USE(WPE_RENDERER)
-    IPC::Attachment hostFileDescriptor;
+    UnixFileDescriptor hostFileDescriptor;
 #endif
-#if PLATFORM(WIN)
+#if USE(GRAPHICS_LAYER_TEXTURE_MAPPER) || USE(GRAPHICS_LAYER_WC)
     uint64_t nativeWindowHandle;
 #endif
 #if USE(GRAPHICS_LAYER_WC)
@@ -215,6 +225,10 @@ struct WebPageCreationParameters {
     bool enumeratingAllNetworkInterfacesEnabled { false };
 
     UserContentControllerParameters userContentControllerParameters;
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+    std::optional<WebExtensionControllerParameters> webExtensionControllerParameters;
+#endif
 
     std::optional<WebCore::Color> backgroundColor;
 
@@ -270,6 +284,18 @@ struct WebPageCreationParameters {
     bool hasResizableWindows { false };
 
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
+
+    std::optional<WebCore::FrameIdentifier> mainFrameIdentifier;
+    Markable<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier;
+
+#if ENABLE(NETWORK_CONNECTION_INTEGRITY)
+    Vector<String> lookalikeCharacterStrings;
+    Vector<WebCore::LookalikeCharactersSanitizationData> allowedLookalikeCharacterStrings;
+#endif
+
+#if HAVE(MACH_BOOTSTRAP_EXTENSION)
+    SandboxExtension::Handle machBootstrapHandle;
+#endif
 };
 
 } // namespace WebKit
