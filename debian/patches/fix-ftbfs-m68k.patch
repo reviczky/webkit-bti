@@ -36,7 +36,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -45,6 +45,8 @@ struct SameSizeAsElementRareData : NodeR
+@@ -44,6 +44,8 @@ struct SameSizeAsElementRareData : NodeR
      ExplicitlySetAttrElementsMap explicitlySetAttrElementsMap;
  };
  
@@ -45,11 +45,42 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 +#endif
  
  } // namespace WebCore
+Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/dom/NodeRareData.cpp
++++ webkitgtk/Source/WebCore/dom/NodeRareData.cpp
+@@ -42,7 +42,9 @@ struct SameSizeAsNodeRareData {
+     WeakPtr<Node, WeakPtrImplWithEventTargetData> m_weakPointer;
+ };
+ 
++#if !defined(__m68k__)
+ static_assert(sizeof(NodeRareData) == sizeof(SameSizeAsNodeRareData), "NodeRareData should stay small");
++#endif
+ 
+ // Ensure the 10 bits reserved for the m_connectedFrameCount cannot overflow
+ static_assert(Page::maxNumberOfFrames < 1024, "Frame limit should fit in rare data count");
+Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
++++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
+@@ -59,10 +59,12 @@ struct SameSizeAsShadowRoot : public Doc
+     std::optional<HashMap<AtomString, AtomString>> partMappings;
+ };
+ 
++#if !defined(__m68k__)
+ static_assert(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), "shadowroot should stay small");
+ #if !ASSERT_ENABLED
+ static_assert(sizeof(WeakPtr<Element, WeakPtrImplWithEventTargetData>) == sizeof(void*), "WeakPtr should be same size as raw pointer");
+ #endif
++#endif
+ 
+ ShadowRoot::ShadowRoot(Document& document, ShadowRootMode mode, SlotAssignmentMode assignmentMode, DelegatesFocus delegatesFocus, Cloneable cloneable, AvailableToElementInternals availableToElementInternals)
+     : DocumentFragment(document, CreateShadowRoot)
 Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/RenderStyle.cpp
 +++ webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
-@@ -68,7 +68,9 @@ struct SameSizeAsBorderValue {
+@@ -70,7 +70,9 @@ struct SameSizeAsBorderValue {
      int m_restBits;
  };
  
@@ -58,8 +89,8 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 +#endif
  
  struct SameSizeAsRenderStyle {
-     void* dataRefs[7];
-@@ -86,7 +88,9 @@ struct SameSizeAsRenderStyle {
+     void* nonInheritedDataRefs[1];
+@@ -89,7 +91,9 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -67,8 +98,50 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
 +#endif
  
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(PseudoStyleCache);
  DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderStyle);
+Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/rendering/style/StyleBoxData.cpp
++++ webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
+@@ -33,7 +33,9 @@ struct SameSizeAsStyleBoxData : public R
+     uint32_t bitfields;
+ };
  
++#if !defined(__m68k__)
+ static_assert(sizeof(StyleBoxData) == sizeof(SameSizeAsStyleBoxData), "StyleBoxData should not grow");
++#endif
+ 
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(StyleBoxData);
+ 
+Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
++++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
+@@ -54,7 +54,9 @@ struct SameSizeAsFontCascadeDescription
+     float size2;
+     unsigned bitfields3 : 10;
+ };
++#if !defined(__m68k__)
+ static_assert(sizeof(FontCascadeDescription) == sizeof(SameSizeAsFontCascadeDescription), "FontCascadeDescription should stay small");
++#endif
+ 
+ FontCascadeDescription::FontCascadeDescription()
+     : m_families(RefCountedFixedVector<AtomString>::create(1))
+Index: webkitgtk/Source/WebCore/style/RuleData.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/style/RuleData.cpp
++++ webkitgtk/Source/WebCore/style/RuleData.cpp
+@@ -57,7 +57,9 @@ struct SameSizeAsRuleData {
+     unsigned d[4];
+ };
+ 
++#if !defined(__m68k__)
+ static_assert(sizeof(RuleData) == sizeof(SameSizeAsRuleData), "RuleData should stay small");
++#endif
+ 
+ static inline MatchBasedOnRuleHash computeMatchBasedOnRuleHash(const CSSSelector& selector)
+ {
 Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
@@ -85,72 +158,13 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5468,3 +5473,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5497,3 +5502,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  
 +#if defined(__m68k__) || defined(__SH4__)
 +#pragma GCC pop_options
 +#endif
-Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
-+++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -82,7 +82,9 @@ struct SameSizeAsCSSValue {
-     uint32_t bitfields;
- };
- 
-+#if !defined(__m68k__)
- static_assert(sizeof(CSSValue) == sizeof(SameSizeAsCSSValue), "CSS value should stay small");
-+#endif
- 
- DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CSSValue);
- 
-Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/dom/NodeRareData.cpp
-+++ webkitgtk/Source/WebCore/dom/NodeRareData.cpp
-@@ -41,7 +41,9 @@ struct SameSizeAsNodeRareData {
-     void* m_pointer[2];
- };
- 
-+#if !defined(__m68k__)
- static_assert(sizeof(NodeRareData) == sizeof(SameSizeAsNodeRareData), "NodeRareData should stay small");
-+#endif
- 
- // Ensure the 10 bits reserved for the m_connectedFrameCount cannot overflow
- static_assert(Page::maxNumberOfFrames < 1024, "Frame limit should fit in rare data count");
-Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
-+++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -60,10 +60,12 @@ struct SameSizeAsShadowRoot : public Doc
-     std::optional<HashMap<AtomString, AtomString>> partMappings;
- };
- 
-+#if !defined(__m68k__)
- static_assert(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), "shadowroot should stay small");
- #if !ASSERT_ENABLED
- static_assert(sizeof(WeakPtr<Element>) == sizeof(void*), "WeakPtr should be same size as raw pointer");
- #endif
-+#endif
- 
- ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type, DelegatesFocus delegatesFocus)
-     : DocumentFragment(document, CreateShadowRoot)
-Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-+++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-@@ -49,7 +49,9 @@ struct SameSizeAsFontCascadeDescription
-     unsigned bitfields3 : 10;
- };
- 
-+#if !defined(__m68k__)
- static_assert(sizeof(FontCascadeDescription) == sizeof(SameSizeAsFontCascadeDescription), "FontCascadeDescription should stay small");
-+#endif
- 
- FontCascadeDescription::FontCascadeDescription()
-     : m_families(RefCountedFixedVector<AtomString>::create(1))
 Index: webkitgtk/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
@@ -165,31 +179,17 @@ Index: webkitgtk/Source/WebCore/rendering/LegacyInlineFlowBox.cpp
  
  #if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
  
-Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
+Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
---- webkitgtk.orig/Source/WebCore/rendering/style/StyleBoxData.cpp
-+++ webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
-@@ -33,7 +33,9 @@ struct SameSizeAsStyleBoxData : public R
+--- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
++++ webkitgtk/Source/WebCore/css/CSSValue.cpp
+@@ -87,7 +87,9 @@ struct SameSizeAsCSSValue {
      uint32_t bitfields;
  };
  
 +#if !defined(__m68k__)
- static_assert(sizeof(StyleBoxData) == sizeof(SameSizeAsStyleBoxData), "StyleBoxData should not grow");
+ static_assert(sizeof(CSSValue) == sizeof(SameSizeAsCSSValue), "CSS value should stay small");
 +#endif
  
- DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(StyleBoxData);
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CSSValue);
  
-Index: webkitgtk/Source/WebCore/style/RuleData.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/style/RuleData.cpp
-+++ webkitgtk/Source/WebCore/style/RuleData.cpp
-@@ -57,7 +57,9 @@ struct SameSizeAsRuleData {
-     unsigned d[4];
- };
- 
-+#if !defined(__m68k__)
- static_assert(sizeof(RuleData) == sizeof(SameSizeAsRuleData), "RuleData should stay small");
-+#endif
- 
- static inline MatchBasedOnRuleHash computeMatchBasedOnRuleHash(const CSSSelector& selector)
- {
