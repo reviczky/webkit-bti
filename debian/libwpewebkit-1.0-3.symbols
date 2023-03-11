@@ -5,8 +5,8 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
 * Build-Depends-Package: libwpewebkit-1.0-dev
  _ZN6WebKit14WebProcessMainEiPPc@Base 2.28.0
  _ZN6WebKit18NetworkProcessMainEiPPc@Base 2.28.0
- (optional)_ZN6WebKit22WebKitExtensionManager10initializeEPNS_14InjectedBundleEPN3API6ObjectE@Base 2.24.1
- (optional)_ZN6WebKit22WebKitExtensionManager9singletonEv@Base 2.24.1
+ (optional)_ZN6WebKit26WebProcessExtensionManager10initializeEPNS_14InjectedBundleEPN3API6ObjectE@Base 2.39.91
+ (optional)_ZN6WebKit26WebProcessExtensionManager9singletonEv@Base 2.39.91
  jsc_class_add_constructor@Base 2.24.1
  jsc_class_add_constructor_variadic@Base 2.24.1
  jsc_class_add_constructorv@Base 2.24.1
@@ -185,16 +185,16 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_cache_model_get_type@Base 2.24.1
  webkit_color_get_type@Base 2.24.1
  webkit_color_parse@Base 2.24.1
- webkit_console_message_copy@Base 2.24.1
- webkit_console_message_free@Base 2.24.1
- webkit_console_message_get_level@Base 2.24.1
- webkit_console_message_get_line@Base 2.24.1
- webkit_console_message_get_source@Base 2.24.1
- webkit_console_message_get_source_id@Base 2.24.1
- webkit_console_message_get_text@Base 2.24.1
- webkit_console_message_get_type@Base 2.24.1
- webkit_console_message_level_get_type@Base 2.24.1
- webkit_console_message_source_get_type@Base 2.24.1
+ (api10-only)webkit_console_message_copy@Base 2.24.1
+ (api10-only)webkit_console_message_free@Base 2.24.1
+ (api10-only)webkit_console_message_get_level@Base 2.24.1
+ (api10-only)webkit_console_message_get_line@Base 2.24.1
+ (api10-only)webkit_console_message_get_source@Base 2.24.1
+ (api10-only)webkit_console_message_get_source_id@Base 2.24.1
+ (api10-only)webkit_console_message_get_text@Base 2.24.1
+ (api10-only)webkit_console_message_get_type@Base 2.24.1
+ (api10-only)webkit_console_message_level_get_type@Base 2.24.1
+ (api10-only)webkit_console_message_source_get_type@Base 2.24.1
  webkit_context_menu_action_get_type@Base 2.24.1
  webkit_context_menu_append@Base 2.24.1
  webkit_context_menu_first@Base 2.24.1
@@ -249,15 +249,15 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_credential_new_for_certificate_pin@Base 2.34.0
  webkit_credential_persistence_get_type@Base 2.24.1
  webkit_device_info_permission_request_get_type@Base 2.24.1
- webkit_dom_document_get_type@Base 2.24.1
- webkit_dom_element_get_type@Base 2.24.1
- webkit_dom_element_html_input_element_get_auto_filled@Base 2.24.1
- webkit_dom_element_html_input_element_is_user_edited@Base 2.24.1
- webkit_dom_element_html_input_element_set_auto_filled@Base 2.24.1
- webkit_dom_element_html_input_element_set_editing_value@Base 2.24.1
- webkit_dom_node_for_js_value@Base 2.24.1
- webkit_dom_node_get_type@Base 2.24.1
- webkit_dom_object_get_type@Base 2.24.1
+ (api10-only)webkit_dom_document_get_type@Base 2.24.1
+ (api10-only)webkit_dom_element_get_type@Base 2.24.1
+ (api10-only)webkit_dom_element_html_input_element_get_auto_filled@Base 2.24.1
+ (api10-only)webkit_dom_element_html_input_element_is_user_edited@Base 2.24.1
+ (api10-only)webkit_dom_element_html_input_element_set_auto_filled@Base 2.24.1
+ (api10-only)webkit_dom_element_html_input_element_set_editing_value@Base 2.24.1
+ (api10-only)webkit_dom_node_for_js_value@Base 2.24.1
+ (api10-only)webkit_dom_node_get_type@Base 2.24.1
+ (api10-only)webkit_dom_object_get_type@Base 2.24.1
  webkit_download_cancel@Base 2.24.1
  webkit_download_error_get_type@Base 2.24.1
  webkit_download_error_quark@Base 2.24.1
@@ -280,11 +280,11 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_editor_state_is_redo_available@Base 2.24.1
  webkit_editor_state_is_undo_available@Base 2.24.1
  webkit_editor_typing_attributes_get_type@Base 2.24.1
- webkit_favicon_database_clear@Base 2.24.1
- webkit_favicon_database_error_get_type@Base 2.24.1
- webkit_favicon_database_error_quark@Base 2.24.1
- webkit_favicon_database_get_favicon_uri@Base 2.24.1
- webkit_favicon_database_get_type@Base 2.24.1
+ (api10-only)webkit_favicon_database_clear@Base 2.24.1
+ (api10-only)webkit_favicon_database_error_get_type@Base 2.24.1
+ (api10-only)webkit_favicon_database_error_quark@Base 2.24.1
+ (api10-only)webkit_favicon_database_get_favicon_uri@Base 2.24.1
+ (api10-only)webkit_favicon_database_get_type@Base 2.24.1
  webkit_file_chooser_request_cancel@Base 2.24.1
  webkit_file_chooser_request_get_mime_types@Base 2.24.1
  webkit_file_chooser_request_get_select_multiple@Base 2.24.1
@@ -305,12 +305,12 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_form_submission_request_get_type@Base 2.24.1
  webkit_form_submission_request_list_text_fields@Base 2.24.1
  webkit_form_submission_request_submit@Base 2.24.1
- webkit_form_submission_step_get_type@Base 2.24.1
+ (api10-only)webkit_form_submission_step_get_type@Base 2.24.1
  webkit_frame_get_id@Base 2.26.2
  webkit_frame_get_js_context@Base 2.24.1
  webkit_frame_get_js_context_for_script_world@Base 2.24.1
- webkit_frame_get_js_value_for_dom_object@Base 2.24.1
- webkit_frame_get_js_value_for_dom_object_in_script_world@Base 2.24.1
+ (api10-only)webkit_frame_get_js_value_for_dom_object@Base 2.24.1
+ (api10-only)webkit_frame_get_js_value_for_dom_object_in_script_world@Base 2.24.1
  webkit_frame_get_type@Base 2.24.1
  webkit_frame_get_uri@Base 2.24.1
  webkit_frame_is_main_frame@Base 2.24.1
@@ -366,8 +366,8 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_input_method_underline_set_color@Base 2.28.0
  webkit_input_purpose_get_type@Base 2.28.0
  webkit_insecure_content_event_get_type@Base 2.24.1
- webkit_install_missing_media_plugins_permission_request_get_description@Base 2.24.1
- webkit_install_missing_media_plugins_permission_request_get_type@Base 2.24.1
+ (api10-only)webkit_install_missing_media_plugins_permission_request_get_description@Base 2.24.1
+ (api10-only)webkit_install_missing_media_plugins_permission_request_get_type@Base 2.24.1
  webkit_itp_first_party_get_domain@Base 2.30.0
  webkit_itp_first_party_get_last_update_time@Base 2.30.0
  webkit_itp_first_party_get_type@Base 2.30.0
@@ -381,12 +381,14 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_itp_third_party_unref@Base 2.30.0
  webkit_javascript_error_get_type@Base 2.24.1
  webkit_javascript_error_quark@Base 2.24.1
- webkit_javascript_result_get_js_value@Base 2.24.1
- webkit_javascript_result_get_type@Base 2.24.1
- webkit_javascript_result_ref@Base 2.24.1
- webkit_javascript_result_unref@Base 2.24.1
+ (api10-only)webkit_javascript_result_get_js_value@Base 2.24.1
+ (api10-only)webkit_javascript_result_get_type@Base 2.24.1
+ (api10-only)webkit_javascript_result_ref@Base 2.24.1
+ (api10-only)webkit_javascript_result_unref@Base 2.24.1
  webkit_load_event_get_type@Base 2.24.1
  webkit_media_capture_state_get_type@Base 2.34.0
+#(api20-only)webkit_media_error_get_type@Base 2.39.91
+#(api20-only)webkit_media_error_quark@Base 2.39.91
  webkit_media_key_system_permission_get_name@Base 2.32.0
  webkit_media_key_system_permission_request_get_type@Base 2.32.0
  webkit_memory_pressure_settings_copy@Base 2.34.0
@@ -403,14 +405,15 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_memory_pressure_settings_set_memory_limit@Base 2.34.0
  webkit_memory_pressure_settings_set_poll_interval@Base 2.34.0
  webkit_memory_pressure_settings_set_strict_threshold@Base 2.34.0
- webkit_mime_info_get_description@Base 2.24.1
- webkit_mime_info_get_extensions@Base 2.24.1
- webkit_mime_info_get_mime_type@Base 2.24.1
- webkit_mime_info_get_type@Base 2.24.1
- webkit_mime_info_ref@Base 2.24.1
- webkit_mime_info_unref@Base 2.24.1
+ (api10-only)webkit_mime_info_get_description@Base 2.24.1
+ (api10-only)webkit_mime_info_get_extensions@Base 2.24.1
+ (api10-only)webkit_mime_info_get_mime_type@Base 2.24.1
+ (api10-only)webkit_mime_info_get_type@Base 2.24.1
+ (api10-only)webkit_mime_info_ref@Base 2.24.1
+ (api10-only)webkit_mime_info_unref@Base 2.24.1
  webkit_navigation_action_copy@Base 2.24.1
  webkit_navigation_action_free@Base 2.24.1
+ webkit_navigation_action_get_frame_name@Base 2.39.91
  webkit_navigation_action_get_modifiers@Base 2.24.1
  webkit_navigation_action_get_mouse_button@Base 2.24.1
  webkit_navigation_action_get_navigation_type@Base 2.24.1
@@ -418,7 +421,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_navigation_action_get_type@Base 2.24.1
  webkit_navigation_action_is_redirect@Base 2.24.1
  webkit_navigation_action_is_user_gesture@Base 2.24.1
- webkit_navigation_policy_decision_get_frame_name@Base 2.24.1
+ (api10-only)webkit_navigation_policy_decision_get_frame_name@Base 2.24.1
  webkit_navigation_policy_decision_get_navigation_action@Base 2.24.1
  webkit_navigation_policy_decision_get_type@Base 2.24.1
  webkit_navigation_type_get_type@Base 2.24.1
@@ -430,6 +433,26 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_network_proxy_settings_free@Base 2.24.1
  webkit_network_proxy_settings_get_type@Base 2.24.1
  webkit_network_proxy_settings_new@Base 2.24.1
+#(api20-only)webkit_network_session_allow_tls_certificate_for_host@Base 2.39.91
+#(api20-only)webkit_network_session_download_uri@Base 2.39.91
+#(api20-only)webkit_network_session_get_cookie_manager@Base 2.39.91
+#(api20-only)webkit_network_session_get_default@Base 2.39.91
+#(api20-only)webkit_network_session_get_itp_enabled@Base 2.39.91
+#(api20-only)webkit_network_session_get_itp_summary@Base 2.39.91
+#(api20-only)webkit_network_session_get_itp_summary_finish@Base 2.39.91
+#(api20-only)webkit_network_session_get_persistent_credential_storage_enabled@Base 2.39.91
+#(api20-only)webkit_network_session_get_tls_errors_policy@Base 2.39.91
+#(api20-only)webkit_network_session_get_type@Base 2.39.91
+#(api20-only)webkit_network_session_get_website_data_manager@Base 2.39.91
+#(api20-only)webkit_network_session_is_ephemeral@Base 2.39.91
+#(api20-only)webkit_network_session_new@Base 2.39.91
+#(api20-only)webkit_network_session_new_ephemeral@Base 2.39.91
+#(api20-only)webkit_network_session_prefetch_dns@Base 2.39.91
+#(api20-only)webkit_network_session_set_itp_enabled@Base 2.39.91
+#(api20-only)webkit_network_session_set_memory_pressure_settings@Base 2.39.91
+#(api20-only)webkit_network_session_set_persistent_credential_storage_enabled@Base 2.39.91
+#(api20-only)webkit_network_session_set_proxy_settings@Base 2.39.91
+#(api20-only)webkit_network_session_set_tls_errors_policy@Base 2.39.91
  webkit_notification_clicked@Base 2.24.1
  webkit_notification_close@Base 2.24.1
  webkit_notification_get_body@Base 2.24.1
@@ -456,13 +479,20 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_permission_request_allow@Base 2.24.1
  webkit_permission_request_deny@Base 2.24.1
  webkit_permission_request_get_type@Base 2.24.1
- webkit_plugin_error_get_type@Base 2.24.1
- webkit_plugin_error_quark@Base 2.24.1
- webkit_plugin_get_description@Base 2.24.1
- webkit_plugin_get_mime_info_list@Base 2.24.1
- webkit_plugin_get_name@Base 2.24.1
- webkit_plugin_get_path@Base 2.24.1
- webkit_plugin_get_type@Base 2.24.1
+ webkit_permission_state_get_type@Base 2.39.91
+ webkit_permission_state_query_finish@Base 2.39.91
+ webkit_permission_state_query_get_name@Base 2.39.91
+ webkit_permission_state_query_get_security_origin@Base 2.39.91
+ webkit_permission_state_query_get_type@Base 2.39.91
+ webkit_permission_state_query_ref@Base 2.39.91
+ webkit_permission_state_query_unref@Base 2.39.91
+ (api10-only)webkit_plugin_error_get_type@Base 2.24.1
+ (api10-only)webkit_plugin_error_quark@Base 2.24.1
+ (api10-only)webkit_plugin_get_description@Base 2.24.1
+ (api10-only)webkit_plugin_get_mime_info_list@Base 2.24.1
+ (api10-only)webkit_plugin_get_name@Base 2.24.1
+ (api10-only)webkit_plugin_get_path@Base 2.24.1
+ (api10-only)webkit_plugin_get_type@Base 2.24.1
  webkit_policy_decision_download@Base 2.24.1
  webkit_policy_decision_get_type@Base 2.24.1
  webkit_policy_decision_ignore@Base 2.24.1
@@ -471,11 +501,12 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_policy_decision_use_with_policies@Base 2.30.0
  webkit_policy_error_get_type@Base 2.24.1
  webkit_policy_error_quark@Base 2.24.1
- webkit_process_model_get_type@Base 2.24.1
+ (api10-only)webkit_process_model_get_type@Base 2.24.1
  webkit_rectangle_get_type@Base 2.28.0
  webkit_response_policy_decision_get_request@Base 2.24.1
  webkit_response_policy_decision_get_response@Base 2.24.1
  webkit_response_policy_decision_get_type@Base 2.24.1
+ webkit_response_policy_decision_is_main_frame_main_resource@Base 2.39.91
  webkit_response_policy_decision_is_mime_type_supported@Base 2.24.1
  webkit_save_mode_get_type@Base 2.24.1
  webkit_script_dialog_close@Base 2.24.1
@@ -488,6 +519,11 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_script_dialog_ref@Base 2.24.1
  webkit_script_dialog_type_get_type@Base 2.24.1
  webkit_script_dialog_unref@Base 2.24.1
+ webkit_script_message_reply_get_type@Base 2.39.91
+ webkit_script_message_reply_ref@Base 2.39.91
+ webkit_script_message_reply_return_error_message@Base 2.39.91
+ webkit_script_message_reply_return_value@Base 2.39.91
+ webkit_script_message_reply_unref@Base 2.39.91
  webkit_script_world_get_default@Base 2.24.1
  webkit_script_world_get_name@Base 2.24.1
  webkit_script_world_get_type@Base 2.24.1
@@ -510,7 +546,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_security_origin_get_port@Base 2.24.1
  webkit_security_origin_get_protocol@Base 2.24.1
  webkit_security_origin_get_type@Base 2.24.1
- webkit_security_origin_is_opaque@Base 2.24.1
+ (api10-only)webkit_security_origin_is_opaque@Base 2.24.1
  webkit_security_origin_new@Base 2.24.1
  webkit_security_origin_new_for_uri@Base 2.24.1
  webkit_security_origin_ref@Base 2.24.1
@@ -526,18 +562,19 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_settings_get_default_font_family@Base 2.24.1
  webkit_settings_get_default_font_size@Base 2.24.1
  webkit_settings_get_default_monospace_font_size@Base 2.24.1
+ webkit_settings_get_disable_web_security@Base 2.39.91
  webkit_settings_get_draw_compositing_indicators@Base 2.24.1
- webkit_settings_get_enable_accelerated_2d_canvas@Base 2.24.1
+ (api10-only)webkit_settings_get_enable_accelerated_2d_canvas@Base 2.24.1
  webkit_settings_get_enable_caret_browsing@Base 2.24.1
  webkit_settings_get_enable_developer_extras@Base 2.24.1
  webkit_settings_get_enable_dns_prefetching@Base 2.24.1
  webkit_settings_get_enable_encrypted_media@Base 2.24.1
- webkit_settings_get_enable_frame_flattening@Base 2.24.1
+ (api10-only)webkit_settings_get_enable_frame_flattening@Base 2.24.1
  webkit_settings_get_enable_fullscreen@Base 2.24.1
  webkit_settings_get_enable_html5_database@Base 2.24.1
  webkit_settings_get_enable_html5_local_storage@Base 2.24.1
  webkit_settings_get_enable_hyperlink_auditing@Base 2.24.1
- webkit_settings_get_enable_java@Base 2.24.1
+ (api10-only)webkit_settings_get_enable_java@Base 2.24.1
  webkit_settings_get_enable_javascript@Base 2.24.1
  webkit_settings_get_enable_javascript_markup@Base 2.24.1
  webkit_settings_get_enable_media@Base 2.26.2
@@ -547,7 +584,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_settings_get_enable_mock_capture_devices@Base 2.24.1
  webkit_settings_get_enable_offline_web_application_cache@Base 2.24.1
  webkit_settings_get_enable_page_cache@Base 2.24.1
- webkit_settings_get_enable_plugins@Base 2.24.1
+ (api10-only)webkit_settings_get_enable_plugins@Base 2.24.1
  webkit_settings_get_enable_resizable_text_areas@Base 2.24.1
  webkit_settings_get_enable_site_specific_quirks@Base 2.24.1
  webkit_settings_get_enable_smooth_scrolling@Base 2.24.1
@@ -557,7 +594,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_settings_get_enable_webgl@Base 2.24.1
  webkit_settings_get_enable_webrtc@Base 2.38.0
  webkit_settings_get_enable_write_console_messages_to_stdout@Base 2.24.1
- webkit_settings_get_enable_xss_auditor@Base 2.24.1
+ (api10-only)webkit_settings_get_enable_xss_auditor@Base 2.24.1
  webkit_settings_get_fantasy_font_family@Base 2.24.1
  webkit_settings_get_javascript_can_access_clipboard@Base 2.24.1
  webkit_settings_get_javascript_can_open_windows_automatically@Base 2.24.1
@@ -586,18 +623,19 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_settings_set_default_font_family@Base 2.24.1
  webkit_settings_set_default_font_size@Base 2.24.1
  webkit_settings_set_default_monospace_font_size@Base 2.24.1
+ webkit_settings_set_disable_web_security@Base 2.39.91
  webkit_settings_set_draw_compositing_indicators@Base 2.24.1
- webkit_settings_set_enable_accelerated_2d_canvas@Base 2.24.1
+ (api10-only)webkit_settings_set_enable_accelerated_2d_canvas@Base 2.24.1
  webkit_settings_set_enable_caret_browsing@Base 2.24.1
  webkit_settings_set_enable_developer_extras@Base 2.24.1
  webkit_settings_set_enable_dns_prefetching@Base 2.24.1
  webkit_settings_set_enable_encrypted_media@Base 2.24.1
- webkit_settings_set_enable_frame_flattening@Base 2.24.1
+ (api10-only)webkit_settings_set_enable_frame_flattening@Base 2.24.1
  webkit_settings_set_enable_fullscreen@Base 2.24.1
  webkit_settings_set_enable_html5_database@Base 2.24.1
  webkit_settings_set_enable_html5_local_storage@Base 2.24.1
  webkit_settings_set_enable_hyperlink_auditing@Base 2.24.1
- webkit_settings_set_enable_java@Base 2.24.1
+ (api10-only)webkit_settings_set_enable_java@Base 2.24.1
  webkit_settings_set_enable_javascript@Base 2.24.1
  webkit_settings_set_enable_javascript_markup@Base 2.24.1
  webkit_settings_set_enable_media@Base 2.26.2
@@ -607,7 +645,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_settings_set_enable_mock_capture_devices@Base 2.24.1
  webkit_settings_set_enable_offline_web_application_cache@Base 2.24.1
  webkit_settings_set_enable_page_cache@Base 2.24.1
- webkit_settings_set_enable_plugins@Base 2.24.1
+ (api10-only)webkit_settings_set_enable_plugins@Base 2.24.1
  webkit_settings_set_enable_resizable_text_areas@Base 2.24.1
  webkit_settings_set_enable_site_specific_quirks@Base 2.24.1
  webkit_settings_set_enable_smooth_scrolling@Base 2.24.1
@@ -617,7 +655,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_settings_set_enable_webgl@Base 2.24.1
  webkit_settings_set_enable_webrtc@Base 2.38.0
  webkit_settings_set_enable_write_console_messages_to_stdout@Base 2.24.1
- webkit_settings_set_enable_xss_auditor@Base 2.24.1
+ (api10-only)webkit_settings_set_enable_xss_auditor@Base 2.24.1
  webkit_settings_set_fantasy_font_family@Base 2.24.1
  webkit_settings_set_javascript_can_access_clipboard@Base 2.24.1
  webkit_settings_set_javascript_can_open_windows_automatically@Base 2.24.1
@@ -655,6 +693,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_uri_scheme_request_finish_error@Base 2.24.1
  webkit_uri_scheme_request_finish_with_response@Base 2.36.0
  webkit_uri_scheme_request_get_http_headers@Base 2.36.0
+ webkit_uri_scheme_request_get_http_body@Base 2.39.91
  webkit_uri_scheme_request_get_http_method@Base 2.36.0
  webkit_uri_scheme_request_get_path@Base 2.24.1
  webkit_uri_scheme_request_get_scheme@Base 2.24.1
@@ -692,7 +731,8 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_user_content_manager_get_type@Base 2.24.1
  webkit_user_content_manager_new@Base 2.24.1
  webkit_user_content_manager_register_script_message_handler@Base 2.24.1
- webkit_user_content_manager_register_script_message_handler_in_world@Base 2.24.1
+ (api10-only)webkit_user_content_manager_register_script_message_handler_in_world@Base 2.24.1
+ webkit_user_content_manager_register_script_message_handler_with_reply@Base 2.39.91
  webkit_user_content_manager_remove_all_filters@Base 2.24.1
  webkit_user_content_manager_remove_all_scripts@Base 2.24.1
  webkit_user_content_manager_remove_all_style_sheets@Base 2.24.1
@@ -701,7 +741,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_user_content_manager_remove_script@Base 2.32.0
  webkit_user_content_manager_remove_style_sheet@Base 2.32.0
  webkit_user_content_manager_unregister_script_message_handler@Base 2.24.1
- webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.24.1
+ (api10-only)webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.24.1
  webkit_user_media_permission_is_for_audio_device@Base 2.24.1
  webkit_user_media_permission_is_for_display_device@Base 2.34.0
  webkit_user_media_permission_is_for_video_device@Base 2.24.1
@@ -728,67 +768,92 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_user_style_sheet_ref@Base 2.24.1
  webkit_user_style_sheet_unref@Base 2.24.1
  webkit_web_context_add_path_to_sandbox@Base 2.26.2
- webkit_web_context_allow_tls_certificate_for_host@Base 2.24.1
- webkit_web_context_clear_cache@Base 2.24.1
- webkit_web_context_download_uri@Base 2.24.1
+ (api10-only)webkit_web_context_allow_tls_certificate_for_host@Base 2.24.1
+ (api10-only)webkit_web_context_clear_cache@Base 2.24.1
+ (api10-only)webkit_web_context_download_uri@Base 2.24.1
  webkit_web_context_get_cache_model@Base 2.24.1
- webkit_web_context_get_cookie_manager@Base 2.24.1
+ (api10-only)webkit_web_context_get_cookie_manager@Base 2.24.1
  webkit_web_context_get_default@Base 2.24.1
- webkit_web_context_get_favicon_database@Base 2.24.1
- webkit_web_context_get_favicon_database_directory@Base 2.24.1
+ (api10-only)webkit_web_context_get_favicon_database@Base 2.24.1
+ (api10-only)webkit_web_context_get_favicon_database_directory@Base 2.24.1
  webkit_web_context_get_geolocation_manager@Base 2.26.2
- webkit_web_context_get_plugins@Base 2.24.1
- webkit_web_context_get_plugins_finish@Base 2.24.1
- webkit_web_context_get_process_model@Base 2.24.1
- webkit_web_context_get_sandbox_enabled@Base 2.26.2
+#(api20-only)webkit_web_context_get_network_session_for_automation@Base 2.39.91
+ (api10-only)webkit_web_context_get_plugins@Base 2.24.1
+ (api10-only)webkit_web_context_get_plugins_finish@Base 2.24.1
+ (api10-only)webkit_web_context_get_process_model@Base 2.24.1
+ (api10-only)webkit_web_context_get_sandbox_enabled@Base 2.26.2
  webkit_web_context_get_security_manager@Base 2.24.1
  webkit_web_context_get_spell_checking_enabled@Base 2.24.1
  webkit_web_context_get_spell_checking_languages@Base 2.24.1
  webkit_web_context_get_time_zone_override@Base 2.38.0
- webkit_web_context_get_tls_errors_policy@Base 2.24.1
+ (api10-only)webkit_web_context_get_tls_errors_policy@Base 2.24.1
  webkit_web_context_get_type@Base 2.24.1
- webkit_web_context_get_web_process_count_limit@Base 2.24.1
- webkit_web_context_get_website_data_manager@Base 2.24.1
+ (api10-only)webkit_web_context_get_web_process_count_limit@Base 2.24.1
+ (api10-only)webkit_web_context_get_website_data_manager@Base 2.24.1
  webkit_web_context_initialize_notification_permissions@Base 2.24.1
  webkit_web_context_is_automation_allowed@Base 2.24.1
- webkit_web_context_is_ephemeral@Base 2.24.1
+ (api10-only)webkit_web_context_is_ephemeral@Base 2.24.1
  webkit_web_context_new@Base 2.24.1
- webkit_web_context_new_ephemeral@Base 2.24.1
- webkit_web_context_new_with_website_data_manager@Base 2.24.1
- webkit_web_context_prefetch_dns@Base 2.24.1
+ (api10-only)webkit_web_context_new_ephemeral@Base 2.24.1
+ (api10-only)webkit_web_context_new_with_website_data_manager@Base 2.24.1
+ (api10-only)webkit_web_context_prefetch_dns@Base 2.24.1
  webkit_web_context_register_uri_scheme@Base 2.24.1
  webkit_web_context_send_message_to_all_extensions@Base 2.28.0
- webkit_web_context_set_additional_plugins_directory@Base 2.24.1
+ (api10-only)webkit_web_context_set_additional_plugins_directory@Base 2.24.1
  webkit_web_context_set_automation_allowed@Base 2.24.1
  webkit_web_context_set_cache_model@Base 2.24.1
- webkit_web_context_set_favicon_database_directory@Base 2.24.1
- webkit_web_context_set_network_proxy_settings@Base 2.24.1
+ (api10-only)webkit_web_context_set_favicon_database_directory@Base 2.24.1
+ (api10-only)webkit_web_context_set_network_proxy_settings@Base 2.24.1
  webkit_web_context_set_preferred_languages@Base 2.24.1
- webkit_web_context_set_process_model@Base 2.24.1
- webkit_web_context_set_sandbox_enabled@Base 2.26.2
+ (api10-only)webkit_web_context_set_process_model@Base 2.24.1
+ (api10-only)webkit_web_context_set_sandbox_enabled@Base 2.26.2
  webkit_web_context_set_spell_checking_enabled@Base 2.24.1
  webkit_web_context_set_spell_checking_languages@Base 2.24.1
- webkit_web_context_set_tls_errors_policy@Base 2.24.1
- webkit_web_context_set_web_extensions_directory@Base 2.24.1
- webkit_web_context_set_web_extensions_initialization_user_data@Base 2.24.1
- webkit_web_context_set_web_process_count_limit@Base 2.24.1
+ (api10-only)webkit_web_context_set_tls_errors_policy@Base 2.24.1
+ (api10-only)webkit_web_context_set_web_extensions_directory@Base 2.24.1
+ (api10-only)webkit_web_context_set_web_extensions_initialization_user_data@Base 2.24.1
+ (api10-only)webkit_web_context_set_web_process_count_limit@Base 2.24.1
+#(api20-only)webkit_web_context_set_web_process_extensions_directory@Base 2.39.91
+#(api20-only)webkit_web_context_set_web_process_extensions_initialization_user_data@Base 2.39.91
  webkit_web_editor_get_page@Base 2.24.1
  webkit_web_editor_get_type@Base 2.24.1
- webkit_web_extension_get_page@Base 2.24.1
- webkit_web_extension_get_type@Base 2.24.1
+ (api10-only)webkit_web_extension_get_page@Base 2.24.1
+ (api10-only)webkit_web_extension_get_type@Base 2.24.1
  webkit_web_extension_mode_get_type@Base 2.38.0
- webkit_web_extension_send_message_to_context@Base 2.28.0
- webkit_web_extension_send_message_to_context_finish@Base 2.28.0
- webkit_web_hit_test_result_get_node@Base 2.24.1
+ (api10-only)webkit_web_extension_send_message_to_context@Base 2.28.0
+ (api10-only)webkit_web_extension_send_message_to_context_finish@Base 2.28.0
+ webkit_web_form_manager_get_type@Base 2.39.91
+ webkit_web_form_manager_input_element_auto_fill@Base 2.39.91
+ webkit_web_form_manager_input_element_is_auto_filled@Base 2.39.91
+ webkit_web_form_manager_input_element_is_user_edited@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_context_is_editable@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_context_is_image@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_context_is_link@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_context_is_media@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_context_is_scrollbar@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_context_is_selection@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_get_context@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_get_image_uri@Base 2.39.91
+ webkit_web_hit_test_result_get_js_node@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_get_link_label@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_get_link_title@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_get_link_uri@Base 2.39.91
+#(api20-only)webkit_web_hit_test_result_get_media_uri@Base 2.39.91
+ (api10-only)webkit_web_hit_test_result_get_node@Base 2.24.1
  webkit_web_hit_test_result_get_type@Base 2.24.1
- webkit_web_page_get_dom_document@Base 2.24.1
+ (api10-only)webkit_web_page_get_dom_document@Base 2.24.1
  webkit_web_page_get_editor@Base 2.24.1
+ webkit_web_page_get_form_manager@Base 2.39.91
  webkit_web_page_get_id@Base 2.24.1
  webkit_web_page_get_main_frame@Base 2.24.1
  webkit_web_page_get_type@Base 2.24.1
  webkit_web_page_get_uri@Base 2.24.1
  webkit_web_page_send_message_to_view@Base 2.28.0
  webkit_web_page_send_message_to_view_finish@Base 2.28.0
+#(api20-only)webkit_web_process_extension_get_page@Base 2.39.91
+#(api20-only)webkit_web_process_extension_get_type@Base 2.39.91
+#(api20-only)webkit_web_process_extension_send_message_to_context@Base 2.39.91
+#(api20-only)webkit_web_process_extension_send_message_to_context_finish@Base 2.39.91
  webkit_web_process_termination_reason_get_type@Base 2.24.1
  webkit_web_resource_get_data@Base 2.24.1
  webkit_web_resource_get_data_finish@Base 2.24.1
@@ -799,12 +864,16 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_web_view_backend_get_type@Base 2.24.1
  webkit_web_view_backend_get_wpe_backend@Base 2.24.1
  webkit_web_view_backend_new@Base 2.24.1
+ webkit_web_view_call_async_javascript_function@Base 2.39.91
+ webkit_web_view_call_async_javascript_function_finish@Base 2.39.91
  webkit_web_view_can_execute_editing_command@Base 2.24.1
  webkit_web_view_can_execute_editing_command_finish@Base 2.24.1
  webkit_web_view_can_go_back@Base 2.24.1
  webkit_web_view_can_go_forward@Base 2.24.1
  webkit_web_view_can_show_mime_type@Base 2.24.1
  webkit_web_view_download_uri@Base 2.24.1
+ webkit_web_view_evaluate_javascript@Base 2.39.91
+ webkit_web_view_evaluate_javascript_finish@Base 2.39.91
  webkit_web_view_execute_editing_command@Base 2.24.1
  webkit_web_view_execute_editing_command_with_argument@Base 2.24.1
  webkit_web_view_get_automation_presentation_type@Base 2.28.0
@@ -824,6 +893,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_web_view_get_is_web_process_responsive@Base 2.34.0
  webkit_web_view_get_main_resource@Base 2.24.1
  webkit_web_view_get_microphone_capture_state@Base 2.34.0
+#(api20-only)webkit_web_view_get_network_session@Base 2.39.91
  webkit_web_view_get_page_id@Base 2.24.1
  webkit_web_view_get_session_state@Base 2.24.1
  webkit_web_view_get_settings@Base 2.24.1
@@ -833,7 +903,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_web_view_get_uri@Base 2.24.1
  webkit_web_view_get_user_content_manager@Base 2.24.1
  webkit_web_view_get_web_extension_mode@Base 2.38.0
- webkit_web_view_get_website_data_manager@Base 2.24.1
+ (api10-only)webkit_web_view_get_website_data_manager@Base 2.24.1
  webkit_web_view_get_website_policies@Base 2.30.0
  webkit_web_view_get_window_properties@Base 2.24.1
  webkit_web_view_get_zoom_level@Base 2.24.1
@@ -842,7 +912,7 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_web_view_go_to_back_forward_list_item@Base 2.24.1
  webkit_web_view_is_controlled_by_automation@Base 2.24.1
  webkit_web_view_is_editable@Base 2.24.1
- webkit_web_view_is_ephemeral@Base 2.24.1
+ (api10-only)webkit_web_view_is_ephemeral@Base 2.24.1
  webkit_web_view_is_loading@Base 2.24.1
  webkit_web_view_is_playing_audio@Base 2.24.1
  webkit_web_view_load_alternate_html@Base 2.24.1
@@ -852,21 +922,21 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_web_view_load_request@Base 2.24.1
  webkit_web_view_load_uri@Base 2.24.1
  webkit_web_view_new@Base 2.24.1
- webkit_web_view_new_with_context@Base 2.24.1
- webkit_web_view_new_with_related_view@Base 2.24.1
- webkit_web_view_new_with_settings@Base 2.24.1
- webkit_web_view_new_with_user_content_manager@Base 2.24.1
+ (api10-only)webkit_web_view_new_with_context@Base 2.24.1
+ (api10-only)webkit_web_view_new_with_related_view@Base 2.24.1
+ (api10-only)webkit_web_view_new_with_settings@Base 2.24.1
+ (api10-only)webkit_web_view_new_with_user_content_manager@Base 2.24.1
  webkit_web_view_reload@Base 2.24.1
  webkit_web_view_reload_bypass_cache@Base 2.24.1
  webkit_web_view_remove_frame_displayed_callback@Base 2.24.1
  webkit_web_view_restore_session_state@Base 2.24.1
- webkit_web_view_run_async_javascript_function_in_world@Base 2.38.0
- webkit_web_view_run_javascript@Base 2.24.1
- webkit_web_view_run_javascript_finish@Base 2.24.1
- webkit_web_view_run_javascript_from_gresource@Base 2.24.1
- webkit_web_view_run_javascript_from_gresource_finish@Base 2.24.1
- webkit_web_view_run_javascript_in_world@Base 2.24.1
- webkit_web_view_run_javascript_in_world_finish@Base 2.24.1
+ (api10-only)webkit_web_view_run_async_javascript_function_in_world@Base 2.38.0
+ (api10-only)webkit_web_view_run_javascript@Base 2.24.1
+ (api10-only)webkit_web_view_run_javascript_finish@Base 2.24.1
+ (api10-only)webkit_web_view_run_javascript_from_gresource@Base 2.24.1
+ (api10-only)webkit_web_view_run_javascript_from_gresource_finish@Base 2.24.1
+ (api10-only)webkit_web_view_run_javascript_in_world@Base 2.24.1
+ (api10-only)webkit_web_view_run_javascript_in_world_finish@Base 2.24.1
  webkit_web_view_save@Base 2.24.1
  webkit_web_view_save_finish@Base 2.24.1
  webkit_web_view_save_to_file@Base 2.24.1
@@ -905,32 +975,32 @@ libWPEWebKit-1.0.so.3 libwpewebkit-1.0-3 #MINVER#
  webkit_website_data_manager_fetch_finish@Base 2.24.1
  webkit_website_data_manager_get_base_cache_directory@Base 2.24.1
  webkit_website_data_manager_get_base_data_directory@Base 2.24.1
- webkit_website_data_manager_get_cookie_manager@Base 2.24.1
- webkit_website_data_manager_get_disk_cache_directory@Base 2.24.1
- webkit_website_data_manager_get_dom_cache_directory@Base 2.30.0
- webkit_website_data_manager_get_hsts_cache_directory@Base 2.26.2
- webkit_website_data_manager_get_indexeddb_directory@Base 2.24.1
- webkit_website_data_manager_get_itp_directory@Base 2.30.0
- webkit_website_data_manager_get_itp_enabled@Base 2.30.0
+ (api10-only)webkit_website_data_manager_get_cookie_manager@Base 2.24.1
+ (api10-only)webkit_website_data_manager_get_disk_cache_directory@Base 2.24.1
+ (api10-only)webkit_website_data_manager_get_dom_cache_directory@Base 2.30.0
+ (api10-only)webkit_website_data_manager_get_hsts_cache_directory@Base 2.26.2
+ (api10-only)webkit_website_data_manager_get_indexeddb_directory@Base 2.24.1
+ (api10-only)webkit_website_data_manager_get_itp_directory@Base 2.30.0
+ (api10-only)webkit_website_data_manager_get_itp_enabled@Base 2.30.0
  webkit_website_data_manager_get_itp_summary@Base 2.30.0
  webkit_website_data_manager_get_itp_summary_finish@Base 2.30.0
- webkit_website_data_manager_get_local_storage_directory@Base 2.24.1
- webkit_website_data_manager_get_offline_application_cache_directory@Base 2.24.1
- webkit_website_data_manager_get_persistent_credential_storage_enabled@Base 2.30.0
- webkit_website_data_manager_get_service_worker_registrations_directory@Base 2.30.0
- webkit_website_data_manager_get_tls_errors_policy@Base 2.32.0
+ (api10-only)webkit_website_data_manager_get_local_storage_directory@Base 2.24.1
+ (api10-only)webkit_website_data_manager_get_offline_application_cache_directory@Base 2.24.1
+ (api10-only)webkit_website_data_manager_get_persistent_credential_storage_enabled@Base 2.30.0
+ (api10-only)webkit_website_data_manager_get_service_worker_registrations_directory@Base 2.30.0
+ (api10-only)webkit_website_data_manager_get_tls_errors_policy@Base 2.32.0
  webkit_website_data_manager_get_type@Base 2.24.1
- webkit_website_data_manager_get_websql_directory@Base 2.24.1
+ (api10-only)webkit_website_data_manager_get_websql_directory@Base 2.24.1
  webkit_website_data_manager_is_ephemeral@Base 2.24.1
- webkit_website_data_manager_new@Base 2.24.1
- webkit_website_data_manager_new_ephemeral@Base 2.24.1
+ (api10-only)webkit_website_data_manager_new@Base 2.24.1
+ (api10-only)webkit_website_data_manager_new_ephemeral@Base 2.24.1
  webkit_website_data_manager_remove@Base 2.24.1
  webkit_website_data_manager_remove_finish@Base 2.24.1
- webkit_website_data_manager_set_itp_enabled@Base 2.30.0
- webkit_website_data_manager_set_memory_pressure_settings@Base 2.34.0
- webkit_website_data_manager_set_network_proxy_settings@Base 2.32.0
- webkit_website_data_manager_set_persistent_credential_storage_enabled@Base 2.30.0
- webkit_website_data_manager_set_tls_errors_policy@Base 2.32.0
+ (api10-only)webkit_website_data_manager_set_itp_enabled@Base 2.30.0
+ (api10-only)webkit_website_data_manager_set_memory_pressure_settings@Base 2.34.0
+ (api10-only)webkit_website_data_manager_set_network_proxy_settings@Base 2.32.0
+ (api10-only)webkit_website_data_manager_set_persistent_credential_storage_enabled@Base 2.30.0
+ (api10-only)webkit_website_data_manager_set_tls_errors_policy@Base 2.32.0
  webkit_website_data_ref@Base 2.24.1
  webkit_website_data_types_get_type@Base 2.24.1
  webkit_website_data_unref@Base 2.24.1
