@@ -13,6 +13,7 @@ wpewebkit (2.39.91-1) UNRELEASED; urgency=medium
   * Update copyright information of all files.
   * Replace the 1.1 API build with the new 2.0 one.
     - Rename all packages from 1.1 -> 2.0.
+    - Rename libwpewebkit-1.0-doc to libwpewebkit-doc.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 Mar 2023 17:49:40 +0100
 

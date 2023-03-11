@@ -56,7 +56,7 @@ Depends: libwpewebkit-2.0-1 (= ${binary:Version}),
          libsoup-3.0-dev,
          libwpe-1.0-dev,
          ${misc:Depends}
-Suggests: libwpewebkit-1.0-doc
+Suggests: libwpewebkit-doc
 Description: Web content engine for embedded devices - development files
  WebKit is a modern web engine that is able to display content such as
  HTML, SVG, XML, and others. It also supports DOM, XMLHttpRequest,
@@ -116,11 +116,22 @@ Description: WPE WebKit WebDriver support
 
 Package: libwpewebkit-1.0-doc
 Build-Profiles: <!nodoc>
+Section: oldlibs
+Architecture: all
+Multi-Arch: foreign
+Depends: libwpewebkit-doc, ${misc:Depends}
+Description: WPE WebKit documentation (transitional package)
+ This is a transitional dummy package, it can be safely removed.
+
+Package: libwpewebkit-doc
+Build-Profiles: <!nodoc>
 Section: doc
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}
 Suggests: devhelp
+Breaks: libwpewebkit-1.0-doc (<< 2.39.91)
+Replaces: libwpewebkit-1.0-doc (<< 2.39.91)
 Description: Web content engine for embedded devices - documentation
  WebKit is a modern web engine that is able to display content such as
  HTML, SVG, XML, and others. It also supports DOM, XMLHttpRequest,
