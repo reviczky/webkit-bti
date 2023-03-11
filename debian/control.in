@@ -131,5 +131,4 @@ Description: Web content engine for embedded devices - documentation
  hardware acceleration in mind, leveraging common 3D graphics APIs for
  best performance.
  .
- This package contains the documentation and is valid for versions 1.0
- and 1.1 of the API.
+ This package contains the documentation.
