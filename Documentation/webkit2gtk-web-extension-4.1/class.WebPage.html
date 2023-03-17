@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2WebExtension</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -92,6 +92,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="method.WebPage.get_dom_document.html">get_dom_document</a>
   
     <a class="method" href="method.WebPage.get_editor.html">get_editor</a>
+  
+    <a class="method" href="method.WebPage.get_form_manager.html">get_form_manager</a>
   
     <a class="method" href="method.WebPage.get_id.html">get_id</a>
   
@@ -166,12 +168,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebPage.cpp#L67">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitWebPage.cpp#L64">[src]</a>
           
         </h4>
 
         <pre><code>class WebKit2WebExtension.WebPage : GObject.Object {
-  parent: GObject
+  parent: GObject,
+  priv: WebKitWebPagePrivate*
 }</pre></code>
 
         <div class="docblock">
@@ -273,12 +276,12 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebPage.get_dom_document.html">webkit_web_page_get_dom_document</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitDOMDocument</code> currently loaded in <code>web_page</code>.</p>
           </div>
-          
+          <div class="docblock"><p>Deprecated since: 2.40.</p></div>
         </div>
       
         <div class="">
@@ -287,6 +290,14 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
             <p>Gets the <code>WebKitWebEditor</code> of a <code>WebKitWebPage</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.10</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.WebPage.get_form_manager.html">webkit_web_page_get_form_manager</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WebKitWebFormManager</code> of <code>web_page</code> in <code>world</code>.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -391,7 +402,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
       
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="signal.WebPage.console-message-sent.html">WebKit2WebExtension.WebPage::console-message-sent</a></h6>
           <div class="docblock">
             <p>Emitted when a message is sent to the console. This can be a message
@@ -399,7 +410,7 @@ produced by the use of JavaScript console <span class="caps">API</span>, a JavaS
 a security error or other errors, warnings, debug or log messages.
 The <code>console_message</code> contains information of the&nbsp;message.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.12</p></div>
+          <div class="docblock"><p>Available since: 2.12</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -410,7 +421,7 @@ give the application a chance to customize the proposed menu,
 build its own context menu or pass user data to the <span class="caps">UI</span> Process.
 This signal is useful when the information available in the <span class="caps">UI</span> Process
 is not enough to build or customize the context menu, for example, to
-add menu entries depending on the <code>WebKitDOMNode</code> at the coordinates of the
+add menu entries depending on the node at the coordinates of the
 <code>hit_test_result</code>. Otherwise, it&#8217;s recommended to use <code>WebKitWebView::context-menu</code>
 signal&nbsp;instead.</p>
           </div>
@@ -435,14 +446,14 @@ dynamically. This signal might be emitted multiple times for the same web&nbsp;p
           <div class="docblock"><p>Available since: 2.16</p><p>Deprecated since: 2.26</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="signal.WebPage.form-controls-associated-for-frame.html">WebKit2WebExtension.WebPage::form-controls-associated-for-frame</a></h6>
           <div class="docblock">
             <p>Emitted after form elements (or form associated elements) are associated to a particular web
 page. This is useful to implement form auto filling for web pages where form fields are added
 dynamically. This signal might be emitted multiple times for the same web&nbsp;page.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.26</p></div>
+          <div class="docblock"><p>Available since: 2.26</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -466,13 +477,13 @@ using&nbsp;webkit_user_message_send_reply().</p>
           <div class="docblock"><p>Available since: 2.28</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="signal.WebPage.will-submit-form.html">WebKit2WebExtension.WebPage::will-submit-form</a></h6>
           <div class="docblock">
             <p>This signal is emitted to indicate various points during form
 submission. <code>step</code> indicates the current stage of form&nbsp;submission.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.20</p></div>
+          <div class="docblock"><p>Available since: 2.20</p><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>

@@ -164,7 +164,7 @@ void WebSWServerConnection::updateWorkerStateInClient(ServiceWorkerIdentifier wo
     send(Messages::WebSWClientConnection::UpdateWorkerState(worker, state));
 }
 
-void WebSWServerConnection::controlClient(const NetworkResourceLoadParameters& parameters, SWServerRegistration& registration, const ResourceRequest& request)
+void WebSWServerConnection::controlClient(const NetworkResourceLoadParameters& parameters, SWServerRegistration& registration, const ResourceRequest& request, WebCore::ProcessIdentifier webProcessIdentifier)
 {
     ServiceWorkerClientType clientType;
     if (parameters.options.destination  == FetchOptions::Destination::Worker)
@@ -174,7 +174,7 @@ void WebSWServerConnection::controlClient(const NetworkResourceLoadParameters& p
     else
         clientType = ServiceWorkerClientType::Window;
 
-    auto clientIdentifier = *parameters.options.clientIdentifier;
+    ScriptExecutionContextIdentifier clientIdentifier { *parameters.options.resultingClientIdentifier, webProcessIdentifier };
     // As per step 12 of https://w3c.github.io/ServiceWorker/#on-fetch-request-algorithm, the active service worker should be controlling the document.
     // We register the service worker client using the identifier provided by DocumentLoader and notify DocumentLoader about it.
     // If notification is successful, DocumentLoader is responsible to unregister the service worker client as needed.
@@ -186,13 +186,13 @@ void WebSWServerConnection::controlClient(const NetworkResourceLoadParameters& p
 
     auto ancestorOrigins = map(parameters.frameAncestorOrigins, [](auto& origin) { return origin->toString(); });
     ServiceWorkerClientData data { clientIdentifier, clientType, ServiceWorkerClientFrameType::None, request.url(), URL(), parameters.webPageID, parameters.webFrameID, request.isAppInitiated() ? WebCore::LastNavigationWasAppInitiated::Yes : WebCore::LastNavigationWasAppInitiated::No, false, false, 0, WTFMove(ancestorOrigins) };
-    registerServiceWorkerClient(ClientOrigin { registration.key().topOrigin(), SecurityOriginData::fromURL(request.url()) }, WTFMove(data), registration.identifier(), request.httpUserAgent());
+    registerServiceWorkerClient(ClientOrigin { registration.key().topOrigin(), SecurityOriginData::fromURLWithoutStrictOpaqueness(request.url()) }, WTFMove(data), registration.identifier(), request.httpUserAgent());
 }
 
 std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(NetworkResourceLoader& loader, const ResourceRequest& request)
 {
     if (loader.parameters().serviceWorkersMode == ServiceWorkersMode::None) {
-        if (loader.parameters().request.requester() == ResourceRequest::Requester::Fetch && isNavigationRequest(loader.parameters().options.destination)) {
+        if (loader.parameters().request.requester() == ResourceRequestRequester::Fetch && isNavigationRequest(loader.parameters().options.destination)) {
             if (auto task = ServiceWorkerFetchTask::fromNavigationPreloader(*this, loader, request, session()))
                 return task;
         }
@@ -204,14 +204,15 @@ std::unique_ptr<ServiceWorkerFetchTask> WebSWServerConnection::createFetchTask(N
 
     std::optional<ServiceWorkerRegistrationIdentifier> serviceWorkerRegistrationIdentifier;
     if (loader.parameters().options.mode == FetchOptions::Mode::Navigate || loader.parameters().options.destination == FetchOptions::Destination::Worker || loader.parameters().options.destination == FetchOptions::Destination::Sharedworker) {
-        auto topOrigin = loader.parameters().isMainFrameNavigation ? SecurityOriginData::fromURL(request.url()) : loader.parameters().topOrigin->data();
+        auto topOrigin = loader.parameters().isMainFrameNavigation ? SecurityOriginData::fromURLWithoutStrictOpaqueness(request.url()) : loader.parameters().topOrigin->data();
         auto* registration = doRegistrationMatching(topOrigin, request.url());
         if (!registration)
             return nullptr;
 
         serviceWorkerRegistrationIdentifier = registration->identifier();
-        controlClient(loader.parameters(), *registration, request);
-        loader.setResultingClientIdentifier(loader.parameters().options.clientIdentifier->toString());
+        controlClient(loader.parameters(), *registration, request, loader.connectionToWebProcess().webProcessIdentifier());
+        if (auto resultingClientIdentifier = loader.parameters().options.resultingClientIdentifier)
+            loader.setResultingClientIdentifier(resultingClientIdentifier->toString());
         loader.setServiceWorkerRegistration(*registration);
     } else {
         if (!loader.parameters().serviceWorkerRegistrationIdentifier)
@@ -276,6 +277,9 @@ void WebSWServerConnection::startFetch(ServiceWorkerFetchTask& task, SWServerWor
 
         auto identifier = task->serviceWorkerIdentifier();
         server().runServiceWorkerIfNecessary(identifier, [weakThis = WTFMove(weakThis), this, task = WTFMove(task)](auto* contextConnection) mutable {
+#if RELEASE_LOG_DISABLED
+            UNUSED_PARAM(this);
+#endif
             if (!task)
                 return;
             
@@ -400,16 +404,16 @@ void WebSWServerConnection::getRegistrations(const SecurityOriginData& topOrigin
 void WebSWServerConnection::registerServiceWorkerClient(WebCore::ClientOrigin&& clientOrigin, ServiceWorkerClientData&& data, const std::optional<ServiceWorkerRegistrationIdentifier>& controllingServiceWorkerRegistrationIdentifier, String&& userAgent)
 {
     CONNECTION_MESSAGE_CHECK(data.identifier.processIdentifier() == identifier());
-    CONNECTION_MESSAGE_CHECK(!clientOrigin.topOrigin.isEmpty());
+    CONNECTION_MESSAGE_CHECK(!clientOrigin.topOrigin.isNull());
 
     auto& contextOrigin = clientOrigin.clientOrigin;
     if (data.url.protocolIsInHTTPFamily()) {
         // We do not register any sandbox document.
-        if (contextOrigin != SecurityOriginData::fromURL(data.url))
+        if (contextOrigin != SecurityOriginData::fromURLWithoutStrictOpaqueness(data.url))
             return;
     }
 
-    CONNECTION_MESSAGE_CHECK(!contextOrigin.isEmpty());
+    CONNECTION_MESSAGE_CHECK(!contextOrigin.isNull());
 
     bool isNewOrigin = WTF::allOf(m_clientOrigins.values(), [&contextOrigin](auto& origin) {
         return contextOrigin != origin.clientOrigin;
@@ -514,7 +518,14 @@ void WebSWServerConnection::subscribeToPushService(WebCore::ServiceWorkerRegistr
         return;
     }
 
-    session()->notificationManager().subscribeToPushService(registration->scopeURLWithoutFragment(), WTFMove(applicationServerKey), WTFMove(completionHandler));
+    session()->notificationManager().subscribeToPushService(registration->scopeURLWithoutFragment(), WTFMove(applicationServerKey), [weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler), registrableDomain = RegistrableDomain(registration->data().scopeURL)] (Expected<PushSubscriptionData, ExceptionData>&& result) mutable {
+        if (auto resourceLoadStatistics = weakThis && weakThis->session() ? weakThis->session()->resourceLoadStatistics() : nullptr; result && resourceLoadStatistics) {
+            return resourceLoadStatistics->setMostRecentWebPushInteractionTime(WTFMove(registrableDomain), [result = WTFMove(result), completionHandler = WTFMove(completionHandler)] () mutable {
+                completionHandler(WTFMove(result));
+            });
+        }
+        completionHandler(WTFMove(result));
+    });
 #endif
 }
 
@@ -680,9 +691,9 @@ void WebSWServerConnection::focusServiceWorkerClient(WebCore::ScriptExecutionCon
     sendWithAsyncReply(Messages::WebSWClientConnection::FocusServiceWorkerClient { clientIdentifier }, WTFMove(callback));
 }
 
-void WebSWServerConnection::transferServiceWorkerLoadToNewWebProcess(NetworkResourceLoader& loader, WebCore::SWServerRegistration& registration)
+void WebSWServerConnection::transferServiceWorkerLoadToNewWebProcess(NetworkResourceLoader& loader, WebCore::SWServerRegistration& registration, WebCore::ProcessIdentifier webProcessIdentifier)
 {
-    controlClient(loader.parameters(), registration, loader.originalRequest());
+    controlClient(loader.parameters(), registration, loader.originalRequest(), webProcessIdentifier);
 }
 
 std::optional<SWServer::GatheredClientData> WebSWServerConnection::gatherClientData(ScriptExecutionContextIdentifier clientIdentifier)

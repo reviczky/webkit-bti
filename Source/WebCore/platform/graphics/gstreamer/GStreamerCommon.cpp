@@ -56,7 +56,10 @@
 
 #if ENABLE(MEDIA_STREAM)
 #include "GStreamerMediaStreamSource.h"
-#include "GStreamerVideoEncoder.h"
+#endif
+
+#if ENABLE(SPEECH_SYNTHESIS)
+#include "WebKitFliteSourceGStreamer.h"
 #endif
 
 #if ENABLE(ENCRYPTED_MEDIA) && ENABLE(THUNDER)
@@ -65,6 +68,7 @@
 #endif
 
 #if ENABLE(VIDEO)
+#include "VideoEncoderPrivateGStreamer.h"
 #include "WebKitWebSourceGStreamer.h"
 #endif
 
@@ -76,6 +80,8 @@ GST_DEBUG_CATEGORY(webkit_gst_common_debug);
 #define GST_CAT_DEFAULT webkit_gst_common_debug
 
 namespace WebCore {
+
+static GstClockTime s_webkitGstInitTime;
 
 GstPad* webkitGstGhostPadFromStaticTemplate(GstStaticPadTemplate* staticPadTemplate, const gchar* name, GstPad* target)
 {
@@ -292,6 +298,7 @@ bool ensureGStreamerInitialized()
 
         GUniqueOutPtr<GError> error;
         isGStreamerInitialized = gst_init_check(&argc, &argv, &error.outPtr());
+        s_webkitGstInitTime = gst_util_get_timestamp();
         ASSERT_WITH_MESSAGE(isGStreamerInitialized, "GStreamer initialization failed: %s", error ? error->message : "unknown error occurred");
         g_strfreev(argv);
         GST_DEBUG_CATEGORY_INIT(webkit_gst_common_debug, "webkitcommon", 0, "WebKit Common utilities");
@@ -314,31 +321,10 @@ bool ensureGStreamerInitialized()
     return isGStreamerInitialized;
 }
 
-#if ENABLE(ENCRYPTED_MEDIA) && ENABLE(THUNDER)
-// WebM does not specify a protection system ID so it can happen that
-// the ClearKey decryptor is chosen instead of the Thunder one for
-// Widevine (and viceversa) which can can create chaos. This is an
-// environment variable to set in run time if we prefer to rank higher
-// Thunder or ClearKey. If we want to run tests with Thunder, we need
-// to set this environment variable to Thunder and that decryptor will
-// be ranked higher when there is no protection system set (as in
-// WebM).
-// FIXME: In https://bugs.webkit.org/show_bug.cgi?id=214826 we say we
-// should migrate to use GST_PLUGIN_FEATURE_RANK but we can't yet
-// because our lowest dependency is 1.16.
-bool isThunderRanked()
-{
-    const char* value = g_getenv("WEBKIT_GST_EME_RANK_PRIORITY");
-    return value && equalIgnoringASCIICase(value, "Thunder"_s);
-}
-#endif
-
 static void registerInternalVideoEncoder()
 {
-    // TODO: Remove this ifdef, this element doesn't explicitly use MediaStream APIs and can
-    // also be used for WebCodec video encoding.
-#if ENABLE(MEDIA_STREAM)
-    gst_element_register(nullptr, "webrtcvideoencoder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEBRTC_VIDEO_ENCODER);
+#if ENABLE(VIDEO)
+    gst_element_register(nullptr, "webkitvideoencoder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_VIDEO_ENCODER);
 #endif
 }
 
@@ -348,18 +334,16 @@ void registerWebKitGStreamerElements()
     bool registryWasUpdated = false;
     std::call_once(onceFlag, [&registryWasUpdated] {
 
-#if ENABLE(ENCRYPTED_MEDIA) && ENABLE(THUNDER)
-        if (!CDMFactoryThunder::singleton().supportedKeySystems().isEmpty()) {
-            unsigned thunderRank = isThunderRanked() ? 300 : 100;
-            gst_element_register(nullptr, "webkitthunder", GST_RANK_PRIMARY + thunderRank, WEBKIT_TYPE_MEDIA_THUNDER_DECRYPT);
-        }
-#ifndef NDEBUG
-        else if (isThunderRanked()) {
-            GST_WARNING("Thunder is up-ranked as preferred decryptor but Thunder is not supporting any encryption system. Is "
-                "Thunder running? Are the plugins built?");
-        }
-#endif
+        // Rank guidelines are as following:
+        // - Use GST_RANK_PRIMARY for elements meant to be auto-plugged and for which we know
+        //   there's no other alternative outside of WebKit.
+        // - Use GST_RANK_PRIMARY+100 for elements meant to be auto-plugged and that we know there
+        //   is an alternative outside of WebKit.
+        // - Use GST_RANK_NONE for elements explicitely created by WebKit (no auto-plugging).
 
+#if ENABLE(ENCRYPTED_MEDIA) && ENABLE(THUNDER)
+        if (!CDMFactoryThunder::singleton().supportedKeySystems().isEmpty())
+            gst_element_register(nullptr, "webkitthunder", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_MEDIA_THUNDER_DECRYPT);
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -368,7 +352,11 @@ void registerWebKitGStreamerElements()
         registerInternalVideoEncoder();
 
 #if ENABLE(MEDIA_SOURCE)
-        gst_element_register(nullptr, "webkitmediasrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_MEDIA_SRC);
+        gst_element_register(nullptr, "webkitmediasrc", GST_RANK_PRIMARY, WEBKIT_TYPE_MEDIA_SRC);
+#endif
+
+#if ENABLE(SPEECH_SYNTHESIS)
+        gst_element_register(nullptr, "webkitflitesrc", GST_RANK_NONE, WEBKIT_TYPE_FLITE_SRC);
 #endif
 
 #if ENABLE(VIDEO)
@@ -396,10 +384,18 @@ void registerWebKitGStreamerElements()
             }
         }
 
+        // Prevent decodebin(3) from auto-plugging hlsdemux if it was disabled. UAs should be able
+        // to fallback to MSE when this happens.
+        const char* hlsSupport = g_getenv("WEBKIT_GST_ENABLE_HLS_SUPPORT");
+        if (!hlsSupport || !g_strcmp0(hlsSupport, "0")) {
+            if (auto factory = adoptGRef(gst_element_factory_find("hlsdemux")))
+                gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE_CAST(factory.get()), GST_RANK_NONE);
+        }
+
         // The new demuxers based on adaptivedemux2 cannot be used in WebKit yet because this new
         // base class does not abstract away network access. They can't work in a sandboxed
         // media process, so demote their rank in order to prevent decodebin3 from auto-plugging them.
-        if (webkitGstCheckVersion(1, 21, 0)) {
+        if (webkitGstCheckVersion(1, 22, 0)) {
             const char* const elementNames[] = { "dashdemux2", "hlsdemux2", "mssdemux2" };
             for (unsigned i = 0; i < G_N_ELEMENTS(elementNames); i++) {
                 if (auto factory = adoptGRef(gst_element_factory_find(elementNames[i])))
@@ -760,6 +756,11 @@ GstClockTime webkitGstElementGetCurrentRunningTime(GstElement* element)
 }
 #endif
 
+GstClockTime webkitGstInitTime()
+{
+    return s_webkitGstInitTime;
+}
+
 PlatformVideoColorSpace videoColorSpaceFromCaps(const GstCaps* caps)
 {
     GstVideoInfo info;
@@ -771,6 +772,7 @@ PlatformVideoColorSpace videoColorSpaceFromCaps(const GstCaps* caps)
 
 PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
 {
+    ensureGStreamerInitialized();
 #ifndef GST_DISABLE_GST_DEBUG
     GUniquePtr<char> colorimetry(gst_video_colorimetry_to_string(&GST_VIDEO_INFO_COLORIMETRY(&info)));
 #endif
@@ -783,7 +785,19 @@ PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
         colorSpace.matrix = PlatformVideoMatrixCoefficients::Bt709;
         break;
     case GST_VIDEO_COLOR_MATRIX_BT601:
-        colorSpace.matrix = PlatformVideoMatrixCoefficients::Bt470bg;
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Smpte170m;
+        break;
+    case GST_VIDEO_COLOR_MATRIX_SMPTE240M:
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Smpte240m;
+        break;
+    case GST_VIDEO_COLOR_MATRIX_FCC:
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Fcc;
+        break;
+    case GST_VIDEO_COLOR_MATRIX_BT2020:
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Bt2020ConstantLuminance;
+        break;
+    case GST_VIDEO_COLOR_MATRIX_UNKNOWN:
+        colorSpace.matrix = PlatformVideoMatrixCoefficients::Unspecified;
         break;
     default:
 #ifndef GST_DISABLE_GST_DEBUG
@@ -803,7 +817,40 @@ PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
     case GST_VIDEO_TRANSFER_BT601:
         colorSpace.transfer = PlatformVideoTransferCharacteristics::Smpte170m;
         break;
+    case GST_VIDEO_TRANSFER_SMPTE2084:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::SmpteSt2084;
+        break;
+    case GST_VIDEO_TRANSFER_ARIB_STD_B67:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::AribStdB67Hlg;
+        break;
+    case GST_VIDEO_TRANSFER_BT2020_10:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Bt2020_10bit;
+        break;
 #endif
+    case GST_VIDEO_TRANSFER_BT2020_12:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Bt2020_12bit;
+        break;
+    case GST_VIDEO_TRANSFER_GAMMA10:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Linear;
+        break;
+    case GST_VIDEO_TRANSFER_GAMMA22:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Gamma22curve;
+        break;
+    case GST_VIDEO_TRANSFER_GAMMA28:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Gamma28curve;
+        break;
+    case GST_VIDEO_TRANSFER_SMPTE240M:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Smpte240m;
+        break;
+    case GST_VIDEO_TRANSFER_LOG100:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Log;
+        break;
+    case GST_VIDEO_TRANSFER_LOG316:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::LogSqrt;
+        break;
+    case GST_VIDEO_TRANSFER_UNKNOWN:
+        colorSpace.transfer = PlatformVideoTransferCharacteristics::Unspecified;
+        break;
     default:
 #ifndef GST_DISABLE_GST_DEBUG
         GST_WARNING("Unhandled colorspace transfer from %s", colorimetry.get());
@@ -818,8 +865,32 @@ PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
     case GST_VIDEO_COLOR_PRIMARIES_BT470BG:
         colorSpace.primaries = PlatformVideoColorPrimaries::Bt470bg;
         break;
+    case GST_VIDEO_COLOR_PRIMARIES_BT470M:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Bt470m;
+        break;
     case GST_VIDEO_COLOR_PRIMARIES_SMPTE170M:
         colorSpace.primaries = PlatformVideoColorPrimaries::Smpte170m;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_SMPTERP431:
+        colorSpace.primaries = PlatformVideoColorPrimaries::SmpteRp431;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_SMPTEEG432:
+        colorSpace.primaries = PlatformVideoColorPrimaries::SmpteEg432;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_FILM:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Film;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_BT2020:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Bt2020;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_SMPTE240M:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Smpte240m;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_EBU3213:
+        colorSpace.primaries = PlatformVideoColorPrimaries::JedecP22Phosphors;
+        break;
+    case GST_VIDEO_COLOR_PRIMARIES_UNKNOWN:
+        colorSpace.primaries = PlatformVideoColorPrimaries::Unspecified;
         break;
     default:
 #ifndef GST_DISABLE_GST_DEBUG
@@ -827,11 +898,16 @@ PlatformVideoColorSpace videoColorSpaceFromInfo(const GstVideoInfo& info)
 #endif
         break;
     }
+
+    if (GST_VIDEO_INFO_COLORIMETRY(&info).range != GST_VIDEO_COLOR_RANGE_UNKNOWN)
+        colorSpace.fullRange = GST_VIDEO_INFO_COLORIMETRY(&info).range == GST_VIDEO_COLOR_RANGE_0_255;
+
     return colorSpace;
 }
 
 void fillVideoInfoColorimetryFromColorSpace(GstVideoInfo* info, const PlatformVideoColorSpace& colorSpace)
 {
+    ensureGStreamerInitialized();
     if (colorSpace.matrix) {
         switch (*colorSpace.matrix) {
         case PlatformVideoMatrixCoefficients::Rgb:
@@ -840,13 +916,26 @@ void fillVideoInfoColorimetryFromColorSpace(GstVideoInfo* info, const PlatformVi
         case PlatformVideoMatrixCoefficients::Bt709:
             GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_BT709;
             break;
-        case PlatformVideoMatrixCoefficients::Bt470bg:
+        case PlatformVideoMatrixCoefficients::Smpte170m:
             GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_BT601;
+            break;
+        case PlatformVideoMatrixCoefficients::Smpte240m:
+            GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_SMPTE240M;
+            break;
+        case PlatformVideoMatrixCoefficients::Fcc:
+            GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_FCC;
+            break;
+        case PlatformVideoMatrixCoefficients::Bt2020ConstantLuminance:
+            GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_BT2020;
+            break;
+        case PlatformVideoMatrixCoefficients::Unspecified:
+            GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_UNKNOWN;
             break;
         default:
             break;
         };
-    }
+    } else
+        GST_VIDEO_INFO_COLORIMETRY(info).matrix = GST_VIDEO_COLOR_MATRIX_UNKNOWN;
 
     if (colorSpace.transfer) {
         switch (*colorSpace.transfer) {
@@ -860,11 +949,45 @@ void fillVideoInfoColorimetryFromColorSpace(GstVideoInfo* info, const PlatformVi
         case PlatformVideoTransferCharacteristics::Smpte170m:
             GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_BT601;
             break;
+        case PlatformVideoTransferCharacteristics::SmpteSt2084:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_SMPTE2084;
+            break;
+        case PlatformVideoTransferCharacteristics::AribStdB67Hlg:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_ARIB_STD_B67;
+            break;
+        case PlatformVideoTransferCharacteristics::Bt2020_10bit:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_BT2020_10;
+            break;
 #endif
+        case PlatformVideoTransferCharacteristics::Bt2020_12bit:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_BT2020_12;
+            break;
+        case PlatformVideoTransferCharacteristics::Linear:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_GAMMA10;
+            break;
+        case PlatformVideoTransferCharacteristics::Gamma22curve:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_GAMMA22;
+            break;
+        case PlatformVideoTransferCharacteristics::Gamma28curve:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_GAMMA28;
+            break;
+        case PlatformVideoTransferCharacteristics::Smpte240m:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_SMPTE240M;
+            break;
+        case PlatformVideoTransferCharacteristics::Log:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_LOG100;
+            break;
+        case PlatformVideoTransferCharacteristics::LogSqrt:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_LOG316;
+            break;
+        case PlatformVideoTransferCharacteristics::Unspecified:
+            GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_UNKNOWN;
+            break;
         default:
             break;
         }
-    }
+    } else
+        GST_VIDEO_INFO_COLORIMETRY(info).transfer = GST_VIDEO_TRANSFER_UNKNOWN;
 
     if (colorSpace.primaries) {
         switch (*colorSpace.primaries) {
@@ -874,13 +997,67 @@ void fillVideoInfoColorimetryFromColorSpace(GstVideoInfo* info, const PlatformVi
         case PlatformVideoColorPrimaries::Bt470bg:
             GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_BT470BG;
             break;
+        case PlatformVideoColorPrimaries::Bt470m:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_BT470M;
+            break;
         case PlatformVideoColorPrimaries::Smpte170m:
             GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_SMPTE170M;
+            break;
+        case PlatformVideoColorPrimaries::SmpteRp431:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_SMPTERP431;
+            break;
+        case PlatformVideoColorPrimaries::SmpteEg432:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_SMPTEEG432;
+            break;
+        case PlatformVideoColorPrimaries::Film:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_FILM;
+            break;
+        case PlatformVideoColorPrimaries::Bt2020:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_BT2020;
+            break;
+        case PlatformVideoColorPrimaries::Smpte240m:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_SMPTE240M;
+            break;
+        case PlatformVideoColorPrimaries::JedecP22Phosphors:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_EBU3213;
+            break;
+        case PlatformVideoColorPrimaries::Unspecified:
+            GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_UNKNOWN;
             break;
         default:
             break;
         }
-    }
+    } else
+        GST_VIDEO_INFO_COLORIMETRY(info).primaries = GST_VIDEO_COLOR_PRIMARIES_UNKNOWN;
+
+    if (colorSpace.fullRange)
+        GST_VIDEO_INFO_COLORIMETRY(info).range = *colorSpace.fullRange ? GST_VIDEO_COLOR_RANGE_0_255 : GST_VIDEO_COLOR_RANGE_16_235;
+    else
+        GST_VIDEO_INFO_COLORIMETRY(info).range = GST_VIDEO_COLOR_RANGE_UNKNOWN;
+}
+
+void configureVideoDecoderForHarnessing(const GRefPtr<GstElement>& element)
+{
+    if (gstObjectHasProperty(element.get(), "max-threads"))
+        g_object_set(element.get(), "max-threads", 1, nullptr);
+
+    if (gstObjectHasProperty(element.get(), "max-errors"))
+        g_object_set(element.get(), "max-errors", 0, nullptr);
+}
+
+static bool gstObjectHasProperty(GstObject* gstObject, const char* name)
+{
+    return g_object_class_find_property(G_OBJECT_GET_CLASS(gstObject), name);
+}
+
+bool gstObjectHasProperty(GstElement* element, const char* name)
+{
+    return gstObjectHasProperty(GST_OBJECT_CAST(element), name);
+}
+
+bool gstObjectHasProperty(GstPad* pad, const char* name)
+{
+    return gstObjectHasProperty(GST_OBJECT_CAST(pad), name);
 }
 
 } // namespace WebCore

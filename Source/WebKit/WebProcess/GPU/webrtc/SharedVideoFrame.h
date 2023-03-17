@@ -30,8 +30,9 @@
 #include "IPCSemaphore.h"
 #include "RemoteVideoFrameIdentifier.h"
 #include "SharedMemory.h"
+#include <WebCore/IntSize.h>
 #include <WebCore/ProcessIdentity.h>
-#include <WebCore/VideoFrame.h>
+#include <wtf/MediaTime.h>
 #include <wtf/RefPtr.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/UniqueRef.h>
@@ -41,6 +42,8 @@ typedef struct __CVPixelBufferPool* CVPixelBufferPoolRef;
 
 namespace WebCore {
 class SharedVideoFrameInfo;
+class VideoFrame;
+enum class VideoFrameRotation : uint16_t;
 }
 
 namespace webrtc {
@@ -55,7 +58,7 @@ class RemoteVideoFrameObjectHeap;
 struct SharedVideoFrame {
     MediaTime time;
     bool mirrored { false };
-    WebCore::VideoFrame::Rotation rotation { WebCore::VideoFrame::Rotation::None };
+    WebCore::VideoFrameRotation rotation { };
     using Buffer = std::variant<std::nullptr_t, RemoteVideoFrameReadReference, MachSendRight, WebCore::IntSize>;
     Buffer buffer;
 
@@ -73,6 +76,8 @@ public:
 #if USE(LIBWEBRTC)
     std::optional<SharedVideoFrame::Buffer> writeBuffer(const webrtc::VideoFrame&, const Function<void(IPC::Semaphore&)>&, const Function<void(const SharedMemory::Handle&)>&);
 #endif
+    std::optional<SharedVideoFrame::Buffer> writeBuffer(const WebCore::VideoFrame&, const Function<void(IPC::Semaphore&)>&, const Function<void(const SharedMemory::Handle&)>&);
+
     void disable();
     bool isDisabled() const { return m_isDisabled; }
 
@@ -83,7 +88,6 @@ private:
     bool allocateStorage(size_t, const Function<void(const SharedMemory::Handle&)>&);
     bool prepareWriting(const WebCore::SharedVideoFrameInfo&, const Function<void(IPC::Semaphore&)>&, const Function<void(const SharedMemory::Handle&)>&);
 
-    std::optional<SharedVideoFrame::Buffer> writeBuffer(const WebCore::VideoFrame&, const Function<void(IPC::Semaphore&)>&, const Function<void(const SharedMemory::Handle&)>&);
 #if USE(LIBWEBRTC)
     std::optional<SharedVideoFrame::Buffer> writeBuffer(webrtc::VideoFrameBuffer&, const Function<void(IPC::Semaphore&)>&, const Function<void(const SharedMemory::Handle&)>&);
 #endif
@@ -99,6 +103,8 @@ private:
 class SharedVideoFrameReader {
     WTF_MAKE_FAST_ALLOCATED;
 public:
+    ~SharedVideoFrameReader();
+
     enum class UseIOSurfaceBufferPool { No, Yes };
     explicit SharedVideoFrameReader(RefPtr<RemoteVideoFrameObjectHeap>&&, const WebCore::ProcessIdentity& = { }, UseIOSurfaceBufferPool = UseIOSurfaceBufferPool::Yes);
     SharedVideoFrameReader();

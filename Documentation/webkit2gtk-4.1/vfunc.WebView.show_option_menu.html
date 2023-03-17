@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -112,6 +112,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="vfunc.WebView.permission_request.html">permission_request</a>
   
     <a class="method" href="vfunc.WebView.print.html">print</a>
+  
+    <a class="method" href="vfunc.WebView.query_permission_state.html">query_permission_state</a>
   
     <a class="method" href="vfunc.WebView.ready_to_show.html">ready_to_show</a>
   
@@ -157,7 +159,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Declaration
         <a href="#declaration" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/gtk/WebKitWebView.h#L306">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/WebKitBuild/Release/WebKitGTK/DerivedSources/webkit/WebKitWebView.h#L310">[src]</a>
         
       </h4>
 
@@ -165,8 +167,9 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <pre><code><div class="highlight"><pre><span></span><span class="n">gboolean</span>
 <span class="n">show_option_menu</span><span class="w"> </span><span class="p">(</span>
 <span class="w">  </span><span class="n">WebKitWebView</span><span class="o">*</span><span class="w"> </span><span class="n">web_view</span><span class="p">,</span>
-<span class="w">  </span><span class="n">GdkRectangle</span><span class="o">*</span><span class="w"> </span><span class="n">rectangle</span><span class="p">,</span>
-<span class="w">  </span><span class="n">WebKitOptionMenu</span><span class="o">*</span><span class="w"> </span><span class="n">menu</span>
+<span class="w">  </span><span class="n">WebKitOptionMenu</span><span class="o">*</span><span class="w"> </span><span class="n">menu</span><span class="p">,</span>
+<span class="w">  </span><span class="n">GdkEvent</span><span class="o">*</span><span class="w"> </span><span class="n">event</span><span class="p">,</span>
+<span class="w">  </span><span class="n">GdkRectangle</span><span class="o">*</span><span class="w"> </span><span class="n">rectangle</span>
 <span class="p">)</span>
 </pre></div>
 </code></pre>
@@ -206,8 +209,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <table class="arguments">
           
           <tr class="arg-name">
-            <td><code>rectangle</code></td>
-            <td><a href="javascript:void(0)" data-link="struct.Rectangle.html" data-namespace="Gdk" class="external"><code>GdkRectangle</code></a></td>
+            <td><code>menu</code></td>
+            <td><a href="class.OptionMenu.html"><code>WebKitOptionMenu</code></a></td>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>
@@ -224,8 +227,26 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           
           
           <tr class="arg-name">
-            <td><code>menu</code></td>
-            <td><a href="class.OptionMenu.html"><code>WebKitOptionMenu</code></a></td>
+            <td><code>event</code></td>
+            <td><a href="javascript:void(0)" data-link="union.Event.html" data-namespace="Gdk" class="external"><code>GdkEvent</code></a></td>
+          </tr>
+          <tr class="arg-description">
+            <td>&nbsp;</td>
+            <td>No description available.</td>
+          </tr>
+          
+          
+          
+          
+          
+          
+          
+          <tr><td>&nbsp;</td><td title="transfer: none">The data is owned by the caller of the function.</td></tr>
+          
+          
+          <tr class="arg-name">
+            <td><code>rectangle</code></td>
+            <td><a href="javascript:void(0)" data-link="struct.Rectangle.html" data-namespace="Gdk" class="external"><code>GdkRectangle</code></a></td>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>

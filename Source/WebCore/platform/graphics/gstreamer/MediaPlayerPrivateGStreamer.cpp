@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "MediaPlayerPrivateGStreamer.h"
+#include "VideoFrameGStreamer.h"
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)
 
@@ -38,7 +39,6 @@
 #include "IntRect.h"
 #include "Logging.h"
 #include "MediaPlayer.h"
-#include "MediaPlayerRequestInstallMissingPluginsCallback.h"
 #include "MIMETypeRegistry.h"
 #include "NotImplemented.h"
 #include "SecurityOrigin.h"
@@ -226,11 +226,6 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
         m_fillTimer.stop();
 
     m_readyTimerHandler.stop();
-    for (auto& missingPluginCallback : m_missingPluginCallbacks) {
-        if (missingPluginCallback)
-            missingPluginCallback->invalidate();
-    }
-    m_missingPluginCallbacks.clear();
 
     if (m_videoSink) {
         GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
@@ -350,7 +345,6 @@ void MediaPlayerPrivateGStreamer::load(const String& urlString)
     m_readyState = MediaPlayer::ReadyState::HaveNothing;
     m_player->readyStateChanged();
     m_areVolumeAndMuteInitialized = false;
-    m_hasTaintedOrigin = std::nullopt;
 
     if (!m_isDelayingLoad)
         commitLoad();
@@ -806,36 +800,10 @@ unsigned long long MediaPlayerPrivateGStreamer::totalBytes() const
     return m_totalBytes;
 }
 
-bool MediaPlayerPrivateGStreamer::hasSingleSecurityOrigin() const
+std::optional<bool> MediaPlayerPrivateGStreamer::isCrossOrigin(const SecurityOrigin& origin) const
 {
-    if (!m_source)
-        return false;
-
-    if (!WEBKIT_IS_WEB_SRC(m_source.get()))
-        return true;
-
-    GUniqueOutPtr<char> originalURI, resolvedURI;
-    g_object_get(m_source.get(), "location", &originalURI.outPtr(), "resolved-location", &resolvedURI.outPtr(), nullptr);
-    if (!originalURI || !resolvedURI)
-        return false;
-    if (!g_strcmp0(originalURI.get(), resolvedURI.get()))
-        return true;
-
-    Ref<SecurityOrigin> resolvedOrigin(SecurityOrigin::createFromString(String::fromUTF8(resolvedURI.get())));
-    Ref<SecurityOrigin> requestedOrigin(SecurityOrigin::createFromString(String::fromUTF8(originalURI.get())));
-    return resolvedOrigin->isSameSchemeHostPort(requestedOrigin.get());
-}
-
-std::optional<bool> MediaPlayerPrivateGStreamer::wouldTaintOrigin(const SecurityOrigin& origin) const
-{
-    GST_TRACE_OBJECT(pipeline(), "Checking %u origins", m_origins.size());
-    for (auto& responseOrigin : m_origins) {
-        if (!origin.isSameOriginDomain(*responseOrigin)) {
-            GST_DEBUG_OBJECT(pipeline(), "Found reachable response origin");
-            return true;
-        }
-    }
-    GST_DEBUG_OBJECT(pipeline(), "No valid response origin found");
+    if (WEBKIT_IS_WEB_SRC(m_source.get()))
+        return webKitSrcIsCrossOrigin(WEBKIT_WEB_SRC(m_source.get()), origin);
     return false;
 }
 
@@ -958,8 +926,10 @@ static void setSyncOnClock(GstElement *element, bool sync)
 
 void MediaPlayerPrivateGStreamer::syncOnClock(bool sync)
 {
+#if !USE(WESTEROS_SINK)
     setSyncOnClock(videoSink(), sync);
     setSyncOnClock(audioSink(), sync);
+#endif
 }
 
 template <typename TrackPrivateType>
@@ -1243,6 +1213,8 @@ void MediaPlayerPrivateGStreamer::loadingFailed(MediaPlayer::NetworkState networ
 
 GstElement* MediaPlayerPrivateGStreamer::createAudioSink()
 {
+    // For platform specific audio sinks, they need to be properly upranked so that they get properly autoplugged.
+
     auto role = m_player->isVideoPlayer() ? "video"_s : "music"_s;
     GstElement* audioSink = createPlatformAudioSink(role);
     RELEASE_ASSERT(audioSink);
@@ -1739,7 +1711,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         gst_message_parse_error(message, &err.outPtr(), &debug.outPtr());
         GST_ERROR_OBJECT(pipeline(), "%s (url=%s) (code=%d)", err->message, m_url.string().utf8().data(), err->code);
 
-        if (m_shouldResetPipeline || !m_missingPluginCallbacks.isEmpty() || m_didErrorOccur)
+        if (m_shouldResetPipeline || m_didErrorOccur)
             break;
 
         m_errorMessage = String::fromLatin1(err->message);
@@ -1825,11 +1797,32 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         asyncStateChangeDone();
         break;
     case GST_MESSAGE_STATE_CHANGED: {
-        if (!messageSourceIsPlaybin || m_isDelayingLoad)
-            break;
-
         GstState newState;
         gst_message_parse_state_changed(message, &currentState, &newState, nullptr);
+
+#if USE(GSTREAMER_HOLEPUNCH) && USE(WPEWEBKIT_PLATFORM_BCM_NEXUS)
+        if (currentState == GST_STATE_NULL && newState == GST_STATE_READY) {
+            // If we didn't create a video sink, store a reference to the created one.
+            if (!m_videoSink) {
+                // Detect the videoSink element. Getting the video-sink property of the pipeline requires
+                // locking some elements, which may lead to deadlocks during playback. Instead, identify
+                // the videoSink based on its metadata.
+                GstElement* element = GST_ELEMENT(GST_MESSAGE_SRC(message));
+                if (GST_IS_BASE_SINK(element)) {
+                    const gchar* klassStr = gst_element_get_metadata(element, "klass");
+                    if (strstr(klassStr, "Sink") && strstr(klassStr, "Video")) {
+                        m_videoSink = element;
+
+                        // Ensure that there's a buffer with the transparent rectangle available when playback is going to start.
+                        pushNextHolePunchBuffer();
+                    }
+                }
+            }
+        }
+#endif
+
+        if (!messageSourceIsPlaybin || m_isDelayingLoad)
+            break;
 
         GST_DEBUG_OBJECT(pipeline(), "Changed state from %s to %s", gst_element_state_get_name(currentState), gst_element_state_get_name(newState));
 
@@ -1880,42 +1873,16 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         gst_bin_recalculate_latency(GST_BIN(m_pipeline.get()));
         break;
     case GST_MESSAGE_ELEMENT:
-        if (gst_is_missing_plugin_message(message)) {
-#if !USE(GSTREAMER_FULL)
-            if (gst_install_plugins_supported()) {
-                auto missingPluginCallback = MediaPlayerRequestInstallMissingPluginsCallback::create([weakThis = WeakPtr { *this }](uint32_t result, MediaPlayerRequestInstallMissingPluginsCallback& missingPluginCallback) {
-                    if (!weakThis) {
-                        GST_INFO("got missing pluging installation callback in destroyed player with result %u", result);
-                        return;
-                    }
-
-                    GST_DEBUG("got missing plugin installation callback with result %u", result);
-                    RefPtr<MediaPlayerRequestInstallMissingPluginsCallback> protectedMissingPluginCallback = &missingPluginCallback;
-                    weakThis->m_missingPluginCallbacks.removeFirst(protectedMissingPluginCallback);
-                    if (result != GST_INSTALL_PLUGINS_SUCCESS)
-                        return;
-
-                    weakThis->changePipelineState(GST_STATE_READY);
-                    weakThis->changePipelineState(GST_STATE_PAUSED);
-                });
-                m_missingPluginCallbacks.append(missingPluginCallback.copyRef());
-                GUniquePtr<char> detail(gst_missing_plugin_message_get_installer_detail(message));
-                GUniquePtr<char> description(gst_missing_plugin_message_get_description(message));
-                m_player->requestInstallMissingPlugins(String::fromUTF8(detail.get()), String::fromUTF8(description.get()), missingPluginCallback.get());
-            }
-#endif
-        }
 #if USE(GSTREAMER_MPEGTS)
-        else if (GstMpegtsSection* section = gst_message_parse_mpegts_section(message)) {
+        if (GstMpegtsSection* section = gst_message_parse_mpegts_section(message)) {
             processMpegTsSection(section);
             gst_mpegts_section_unref(section);
-        }
+        } else
 #endif
-        else if (gst_structure_has_name(structure, "http-headers")) {
+        if (gst_structure_has_name(structure, "http-headers")) {
             GST_DEBUG_OBJECT(pipeline(), "Processing HTTP headers: %" GST_PTR_FORMAT, structure);
             if (const char* uri = gst_structure_get_string(structure, "uri")) {
                 URL url { String::fromLatin1(uri) };
-                m_origins.add(SecurityOrigin::create(url));
 
                 if (url != m_url) {
                     GST_DEBUG_OBJECT(pipeline(), "Ignoring HTTP response headers for non-main URI.");
@@ -2165,11 +2132,17 @@ void MediaPlayerPrivateGStreamer::processTableOfContentsEntry(GstTocEntry* entry
 
 void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
 {
+#if PLATFORM(BROADCOM) || USE(WESTEROS_SINK)
+    configureElementPlatformQuirks(element);
+#endif
+
     GUniquePtr<char> elementName(gst_element_get_name(element));
     auto elementClass = makeString(gst_element_get_metadata(element, GST_ELEMENT_METADATA_KLASS));
     auto classifiers = elementClass.split('/');
 
-    if (g_str_has_prefix(elementName.get(), "urisourcebin") && isMediaSource())
+    // In GStreamer 1.20 and older urisourcebin mishandles source elements with dynamic pads. This
+    // is not an issue in 1.22.
+    if (webkitGstCheckVersion(1, 22, 0) && g_str_has_prefix(elementName.get(), "urisourcebin") && (isMediaSource() || isMediaStreamPlayer()))
         g_object_set(element, "use-buffering", FALSE, nullptr);
 
     // Collect processing time metrics for video decoders and converters.
@@ -2201,6 +2174,56 @@ void MediaPlayerPrivateGStreamer::configureElement(GstElement* element)
     if (!g_strcmp0(G_OBJECT_TYPE_NAME(G_OBJECT(element)), "GstQueue2"))
         g_object_set(G_OBJECT(element), "high-watermark", 0.10, nullptr);
 }
+
+#if PLATFORM(BROADCOM) || USE(WESTEROS_SINK)
+void MediaPlayerPrivateGStreamer::configureElementPlatformQuirks(GstElement* element)
+{
+    GST_DEBUG_OBJECT(pipeline(), "Element set-up for %s", GST_ELEMENT_NAME(element));
+
+#if PLATFORM(BROADCOM)
+    if (g_str_has_prefix(GST_ELEMENT_NAME(element), "brcmaudiosink"))
+        g_object_set(G_OBJECT(element), "async", TRUE, nullptr);
+#endif
+
+#if USE(WESTEROS_SINK)
+    static GstCaps* westerosSinkCaps = nullptr;
+    static GType westerosSinkType = G_TYPE_INVALID;
+    static std::once_flag onceFlag;
+    std::call_once(onceFlag, [] {
+        GRefPtr<GstElementFactory> westerosfactory = adoptGRef(gst_element_factory_find("westerossink"));
+        if (westerosfactory) {
+            gst_object_unref(gst_plugin_feature_load(GST_PLUGIN_FEATURE(westerosfactory.get())));
+            westerosSinkType = gst_element_factory_get_element_type(westerosfactory.get());
+            for (auto* t = gst_element_factory_get_static_pad_templates(westerosfactory.get()); !t; t = g_list_next(t)) {
+                GstStaticPadTemplate* padtemplate = static_cast<GstStaticPadTemplate*>(t->data);
+                if (padtemplate->direction != GST_PAD_SINK)
+                    continue;
+                if (westerosSinkCaps)
+                    westerosSinkCaps = gst_caps_merge(westerosSinkCaps, gst_static_caps_get(&padtemplate->static_caps));
+                else
+                    westerosSinkCaps = gst_static_caps_get(&padtemplate->static_caps);
+            }
+        }
+    });
+#if ENABLE(MEDIA_STREAM)
+    if (G_TYPE_CHECK_INSTANCE_TYPE(G_OBJECT(element), westerosSinkType)) {
+        if (!m_streamPrivate && gstObjectHasProperty(element, "immediate-output")) {
+            GST_DEBUG_OBJECT(pipeline(), "Enable 'immediate-output' in WesterosSink");
+            g_object_set(G_OBJECT(element), "immediate-output", TRUE, nullptr);
+        }
+    }
+#endif
+    // FIXME: Following is a hack needed to get westeros-sink autoplug correctly with playbin3.
+    if (!m_isLegacyPlaybin && westerosSinkCaps && g_str_has_prefix(GST_ELEMENT_NAME(element), "decodebin3")) {
+        GRefPtr<GstCaps> defaultCaps;
+        g_object_get(element, "caps", &defaultCaps.outPtr(), NULL);
+        defaultCaps = adoptGRef(gst_caps_merge(defaultCaps.leakRef(), gst_caps_ref(westerosSinkCaps)));
+        g_object_set(element, "caps", defaultCaps.get(), NULL);
+        GST_ERROR_OBJECT(pipeline(), "setting stop caps tp %" GST_PTR_FORMAT, defaultCaps.get());
+    }
+#endif
+}
+#endif
 
 void MediaPlayerPrivateGStreamer::configureDownloadBuffer(GstElement* element)
 {
@@ -2404,7 +2427,8 @@ void MediaPlayerPrivateGStreamer::updateStates()
         // the media element gets a chance to enable its page sleep disabler.
         // Emitting this notification in more cases triggers unwanted code paths
         // and test timeouts.
-        if (stateReallyChanged && (m_oldState != m_currentState) && (m_oldState == GST_STATE_PAUSED && m_currentState == GST_STATE_PLAYING) && !shouldPauseForBuffering) {
+        if (stateReallyChanged && (m_oldState != m_currentState) && (m_oldState == GST_STATE_PAUSED && m_currentState == GST_STATE_PLAYING) && !shouldPauseForBuffering
+            && !m_isSeeking) {
             GST_INFO_OBJECT(pipeline(), "Playback state changed from %s to %s. Notifying the media player client", gst_element_state_get_name(m_oldState), gst_element_state_get_name(m_currentState));
             shouldUpdatePlaybackState = true;
         }
@@ -2842,11 +2866,19 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url)
     if (!m_player->isVideoPlayer())
         return;
 
+#if !USE(GSTREAMER_HOLEPUNCH)
     GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
     if (videoSinkPad)
         g_signal_connect(videoSinkPad.get(), "notify::caps", G_CALLBACK(+[](GstPad* videoSinkPad, GParamSpec*, MediaPlayerPrivateGStreamer* player) {
             player->videoSinkCapsChanged(videoSinkPad);
         }), this);
+#endif
+
+#if USE(WESTEROS_SINK)
+    // Configure Westeros sink before it allocates resources.
+    if (m_videoSink)
+        configureElementPlatformQuirks(m_videoSink.get());
+#endif
 }
 
 void MediaPlayerPrivateGStreamer::configureDepayloader(GstElement* depayloader)
@@ -2854,22 +2886,14 @@ void MediaPlayerPrivateGStreamer::configureDepayloader(GstElement* depayloader)
     if (!isMediaStreamPlayer())
         return;
 
-    auto depayloaderHasProperty = [&depayloader](const char* name) -> bool {
-        return g_object_class_find_property(G_OBJECT_GET_CLASS(depayloader), name);
-    };
-
-    if (depayloaderHasProperty("request-keyframe"))
+    if (gstObjectHasProperty(depayloader, "request-keyframe"))
         g_object_set(depayloader, "request-keyframe", TRUE, nullptr);
-    if (depayloaderHasProperty("wait-for-keyframe"))
+    if (gstObjectHasProperty(depayloader, "wait-for-keyframe"))
         g_object_set(depayloader, "wait-for-keyframe", TRUE, nullptr);
 }
 
 void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
 {
-    auto decoderHasProperty = [&decoder](const char* name) -> bool {
-        return g_object_class_find_property(G_OBJECT_GET_CLASS(decoder), name);
-    };
-
     GUniquePtr<char> name(gst_element_get_name(decoder));
     if (g_str_has_prefix(name.get(), "v4l2"))
         m_videoDecoderPlatform = GstVideoDecoderPlatform::Video4Linux;
@@ -2881,7 +2905,7 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
         // Set the decoder maximum number of threads to a low, fixed value, not depending on the
         // platform. This also helps with processing metrics gathering. When using the default value
         // the decoder introduces artificial processing latency reflecting the maximum number of threads.
-        if (decoderHasProperty("max-threads"))
+        if (gstObjectHasProperty(decoder, "max-threads"))
             g_object_set(decoder, "max-threads", 2, nullptr);
     }
 #if USE(TEXTURE_MAPPER_GL)
@@ -2891,15 +2915,14 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
     if (!isMediaStreamPlayer())
         return;
 
-    if (decoderHasProperty("automatic-request-sync-points"))
+    if (gstObjectHasProperty(decoder, "automatic-request-sync-points"))
         g_object_set(decoder, "automatic-request-sync-points", TRUE, nullptr);
-    if (decoderHasProperty("discard-corrupted-frames"))
+    if (gstObjectHasProperty(decoder, "discard-corrupted-frames"))
         g_object_set(decoder, "discard-corrupted-frames", TRUE, nullptr);
-    if (decoderHasProperty("output-corrupt"))
+    if (gstObjectHasProperty(decoder, "output-corrupt"))
         g_object_set(decoder, "output-corrupt", FALSE, nullptr);
-    if (decoderHasProperty("max-errors"))
+    if (gstObjectHasProperty(decoder, "max-errors"))
         g_object_set(decoder, "max-errors", -1, nullptr);
-
 
     auto pad = adoptGRef(gst_element_get_static_pad(decoder, "src"));
     gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM | GST_PAD_PROBE_TYPE_BUFFER), [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
@@ -3180,8 +3203,14 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
         }
     }
 
+    ++m_sampleCount;
+
     auto& proxy = downcast<Nicosia::ContentLayerTextureMapperImpl>(m_nicosiaLayer->impl()).proxy();
     ASSERT(is<TextureMapperPlatformLayerProxyDMABuf>(proxy));
+
+    Locker locker { proxy.lock() };
+    if (!proxy.isActive())
+        return;
 
     // Currently we have to cover two ways of detecting a DMABuf memory. The most reliable is by detecting
     // the memory:DMABuf feature on the GstCaps object. All sensible decoders yielding DMABufs specify this.
@@ -3192,11 +3221,6 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
     if (isDMABufMemory) {
         // In case of a hardware decoder that's yielding dmabuf memory, we can take the relevant data and
         // push it into the composition process.
-
-        ++m_sampleCount;
-        Locker locker { proxy.lock() };
-        if (!proxy.isActive())
-            return;
 
         // Provide the DMABufObject with a relevant handle (memory address). When provided for the first time,
         // the lambda will be invoked and all dmabuf data is filled in.
@@ -3215,6 +3239,9 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
                 // the reference is dropped once the release flag is signalled. There's ways to achieve that,
                 // but left for later.
                 object.releaseFlag = DMABufReleaseFlag { };
+
+                // No way (yet) to retrieve the modifier information. Until then, no modifiers are specified
+                // for this DMABufObject (via the modifierPresent and modifierValue member variables).
 
                 // For each plane, the relevant data (stride, offset, skip, dmabuf fd) is retrieved and assigned
                 // as appropriate. Modifier values are zeroed out for now, since GStreamer doesn't yet provide
@@ -3235,7 +3262,6 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
                     gst_video_format_info_component(videoInfo.finfo, i, comp);
                     object.offset[i] = offset;
                     object.stride[i] = GST_VIDEO_INFO_PLANE_STRIDE(&videoInfo, i);
-                    object.modifier[i] = 0;
                 }
                 return WTFMove(object);
             });
@@ -3254,6 +3280,8 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
         return;
 
     auto swapchainBuffer = m_swapchain->getBuffer(bufferDescription);
+    if (!swapchainBuffer)
+        return;
 
     // Source helper struct, maps the raw memory and exposes the mapped data for copying.
     struct Source {
@@ -3285,6 +3313,12 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
 
     // Destination helper struct, maps the gbm_bo object into CPU-memory space and copies from the accompanying Source in fill().
     struct Destination {
+        static Lock& mappingLock()
+        {
+            static Lock s_mappingLock;
+            return s_mappingLock;
+        }
+
         Destination(struct gbm_bo* bo, uint32_t width, uint32_t height)
             : bo(bo)
         {
@@ -3332,18 +3366,14 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
         if (gst_buffer_find_memory(buffer, offset, 1, &memid, &length, &skip)) {
             auto* mem = gst_buffer_peek_memory(buffer, memid);
 
+            Locker locker { Destination::mappingLock() };
+
             Source source(mem, offset, stride, planeData.height);
             Destination destination(planeData.bo, planeData.width, planeData.height);
-
             if (source.valid && destination.valid)
                 destination.fill(source);
         }
     }
-
-    ++m_sampleCount;
-    Locker locker { proxy.lock() };
-    if (!proxy.isActive())
-        return;
 
     // The updated buffer is pushed into the composition stage. The DMABufObject handle uses the swapchain address as the handle base.
     // When the buffer is pushed for the first time, the lambda will be invoked to retrieve a more complete DMABufObject for the
@@ -3375,27 +3405,27 @@ static ImageOrientation getVideoOrientation(const GstTagList* tagList)
     GUniqueOutPtr<gchar> tag;
     if (!gst_tag_list_get_string(tagList, GST_TAG_IMAGE_ORIENTATION, &tag.outPtr())) {
         GST_DEBUG("No image_orientation tag, applying no rotation.");
-        return ImageOrientation::None;
+        return ImageOrientation::Orientation::None;
     }
 
     GST_DEBUG("Found image_orientation tag: %s", tag.get());
     if (!g_strcmp0(tag.get(), "flip-rotate-0"))
-        return ImageOrientation::OriginTopRight;
+        return ImageOrientation::Orientation::OriginTopRight;
     if (!g_strcmp0(tag.get(), "rotate-180"))
-        return ImageOrientation::OriginBottomRight;
+        return ImageOrientation::Orientation::OriginBottomRight;
     if (!g_strcmp0(tag.get(), "flip-rotate-180"))
-        return ImageOrientation::OriginBottomLeft;
+        return ImageOrientation::Orientation::OriginBottomLeft;
     if (!g_strcmp0(tag.get(), "flip-rotate-270"))
-        return ImageOrientation::OriginLeftTop;
+        return ImageOrientation::Orientation::OriginLeftTop;
     if (!g_strcmp0(tag.get(), "rotate-90"))
-        return ImageOrientation::OriginRightTop;
+        return ImageOrientation::Orientation::OriginRightTop;
     if (!g_strcmp0(tag.get(), "flip-rotate-90"))
-        return ImageOrientation::OriginRightBottom;
+        return ImageOrientation::Orientation::OriginRightBottom;
     if (!g_strcmp0(tag.get(), "rotate-270"))
-        return ImageOrientation::OriginLeftBottom;
+        return ImageOrientation::Orientation::OriginLeftBottom;
 
     // Default rotation.
-    return ImageOrientation::None;
+    return ImageOrientation::Orientation::None;
 }
 
 void MediaPlayerPrivateGStreamer::updateVideoOrientation(const GstTagList* tagList)
@@ -3438,11 +3468,11 @@ void MediaPlayerPrivateGStreamer::updateVideoSizeAndOrientationFromCaps(const Gs
     auto pad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
     ASSERT(pad);
     auto tagsEvent = adoptGRef(gst_pad_get_sticky_event(pad.get(), GST_EVENT_TAG, 0));
-    auto orientation = ImageOrientation::None;
+    auto orientation = ImageOrientation::Orientation::None;
     if (tagsEvent) {
         GstTagList* tagList;
         gst_event_parse_tag(tagsEvent.get(), &tagList);
-        orientation = getVideoOrientation(tagList);
+        orientation = getVideoOrientation(tagList).orientation();
     }
 
     setVideoSourceOrientation(orientation);
@@ -3648,7 +3678,7 @@ void MediaPlayerPrivateGStreamer::flushCurrentBuffer()
 }
 #endif
 
-void MediaPlayerPrivateGStreamer::setSize(const IntSize& size)
+void MediaPlayerPrivateGStreamer::setPresentationSize(const IntSize& size)
 {
     m_size = size;
 }
@@ -3665,63 +3695,9 @@ void MediaPlayerPrivateGStreamer::paint(GraphicsContext& context, const FloatRec
     if (!GST_IS_SAMPLE(m_sample.get()))
         return;
 
-#if USE(GSTREAMER_GL)
-    // Ensure the input is RGBA. We handle YUV video natively, so we need to do
-    // this conversion on-demand here.
-    GstBuffer* buffer = gst_sample_get_buffer(m_sample.get());
-    if (UNLIKELY(!GST_IS_BUFFER(buffer)))
-        return;
-
-    GstCaps* caps = gst_sample_get_caps(m_sample.get());
-
-    GstVideoInfo videoInfo;
-    gst_video_info_init(&videoInfo);
-    if (!gst_video_info_from_caps(&videoInfo, caps))
-        return;
-
-    GstMemory* memory = gst_buffer_peek_memory(buffer, 0);
-    bool hasExternalOESTexture = false;
-    if (gst_is_gl_memory(memory))
-        hasExternalOESTexture = gst_gl_memory_get_texture_target(GST_GL_MEMORY_CAST(memory)) == GST_GL_TEXTURE_TARGET_EXTERNAL_OES;
-
-    if (!GST_VIDEO_INFO_IS_RGB(&videoInfo) || hasExternalOESTexture) {
-        if (!m_colorConvert)
-            m_colorConvert = adoptGRef(gst_gl_color_convert_new(GST_GL_BASE_MEMORY_CAST(memory)->context));
-
-        if (!m_colorConvertInputCaps || !gst_caps_is_equal(m_colorConvertInputCaps.get(), caps)) {
-            m_colorConvertInputCaps = caps;
-            m_colorConvertOutputCaps = adoptGRef(gst_caps_copy(caps));
-
-            // These caps must match the internal format of a cairo surface with CAIRO_FORMAT_ARGB32,
-            // so we don't need to perform color conversions when painting the video frame.
-#if G_BYTE_ORDER == G_LITTLE_ENDIAN
-            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "BGRA" : "BGRx";
-#else
-            const char* formatString = GST_VIDEO_INFO_HAS_ALPHA(&videoInfo) ? "ARGB" : "xRGB";
-#endif
-            gst_caps_set_simple(m_colorConvertOutputCaps.get(), "format", G_TYPE_STRING, formatString,
-                "texture-target", G_TYPE_STRING, GST_GL_TEXTURE_TARGET_2D_STR, nullptr);
-            if (!gst_gl_color_convert_set_caps(m_colorConvert.get(), caps, m_colorConvertOutputCaps.get()))
-                return;
-        }
-
-        GRefPtr<GstBuffer> rgbBuffer = adoptGRef(gst_gl_color_convert_perform(m_colorConvert.get(), buffer));
-        if (UNLIKELY(!GST_IS_BUFFER(rgbBuffer.get())))
-            return;
-
-        const GstStructure* info = gst_sample_get_info(m_sample.get());
-        m_sample = adoptGRef(gst_sample_new(rgbBuffer.get(), m_colorConvertOutputCaps.get(),
-            gst_sample_get_segment(m_sample.get()), info ? gst_structure_copy(info) : nullptr));
-    }
-#endif
-
-    auto gstImage = ImageGStreamer::createImage(m_sample.get());
-    if (!gstImage)
-        return;
-
-    FloatRect imageRect = m_videoSourceOrientation.usesWidthAsHeight() ? FloatRect(gstImage->rect().location(), gstImage->rect().size().transposedSize()) : gstImage->rect();
-
-    context.drawImage(gstImage->image(), rect, imageRect, { gstImage->hasAlpha() ? CompositeOperator::SourceOver : CompositeOperator::Copy, m_videoSourceOrientation });
+    auto* buffer = gst_sample_get_buffer(m_sample.get());
+    auto frame = VideoFrameGStreamer::createWrappedSample(m_sample, fromGstClockTime(GST_BUFFER_PTS(buffer)));
+    frame->paintInContext(context, rect, m_videoSourceOrientation, false);
 }
 
 DestinationColorSpace MediaPlayerPrivateGStreamer::colorSpace()
@@ -3766,6 +3742,18 @@ RefPtr<NativeImage> MediaPlayerPrivateGStreamer::nativeImageForCurrentTime()
 }
 #endif // USE(GSTREAMER_GL)
 
+RefPtr<VideoFrame> MediaPlayerPrivateGStreamer::videoFrameForCurrentTime()
+{
+    Locker sampleLocker { m_sampleMutex };
+
+    if (!GST_IS_SAMPLE(m_sample.get()))
+        return nullptr;
+
+    GRefPtr<GstSample> sample = m_sample;
+    auto size = getVideoResolutionFromCaps(gst_sample_get_caps(sample.get())).value_or(FloatSize { 0, 0 });
+    return VideoFrameGStreamer::create(WTFMove(sample), size);
+}
+
 bool MediaPlayerPrivateGStreamer::setVideoSourceOrientation(ImageOrientation orientation)
 {
     if (m_videoSourceOrientation == orientation)
@@ -3781,20 +3769,20 @@ bool MediaPlayerPrivateGStreamer::setVideoSourceOrientation(ImageOrientation ori
 #if USE(TEXTURE_MAPPER_GL)
 void MediaPlayerPrivateGStreamer::updateTextureMapperFlags()
 {
-    switch (m_videoSourceOrientation) {
-    case ImageOrientation::OriginTopLeft:
+    switch (m_videoSourceOrientation.orientation()) {
+    case ImageOrientation::Orientation::OriginTopLeft:
         m_textureMapperFlags = 0;
         break;
-    case ImageOrientation::OriginRightTop:
+    case ImageOrientation::Orientation::OriginRightTop:
         m_textureMapperFlags = TextureMapperGL::ShouldRotateTexture90;
         break;
-    case ImageOrientation::OriginBottomRight:
+    case ImageOrientation::Orientation::OriginBottomRight:
         m_textureMapperFlags = TextureMapperGL::ShouldRotateTexture180;
         break;
-    case ImageOrientation::OriginLeftBottom:
+    case ImageOrientation::Orientation::OriginLeftBottom:
         m_textureMapperFlags = TextureMapperGL::ShouldRotateTexture270;
         break;
-    case ImageOrientation::OriginBottomLeft:
+    case ImageOrientation::Orientation::OriginBottomLeft:
         m_textureMapperFlags = TextureMapperGL::ShouldFlipTexture;
         break;
     default:
@@ -3847,6 +3835,10 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSinkGL()
         return nullptr;
     }
 
+    const char* desiredVideoSink = g_getenv("WEBKIT_GST_CUSTOM_VIDEO_SINK");
+    if (desiredVideoSink)
+        return makeGStreamerElement(desiredVideoSink, nullptr);
+
     if (!webKitGLVideoSinkProbePlatform()) {
         g_warning("WebKit wasn't able to find the GL video sink dependencies. Hardware-accelerated zero-copy video rendering can't be enabled without this plugin.");
         return nullptr;
@@ -3865,7 +3857,17 @@ static void setRectangleToVideoSink(GstElement* videoSink, const IntRect& rect)
 {
     // Here goes the platform-dependant code to set to the videoSink the size
     // and position of the video rendering window. Mark them unused as default.
-    UNUSED_PARAM(videoSink);
+
+    if (!videoSink)
+        return;
+
+#if USE(WESTEROS_SINK) || USE(WPEWEBKIT_PLATFORM_BCM_NEXUS)
+    // Valid for brcmvideosink and westerossink.
+    GUniquePtr<gchar> rectString(g_strdup_printf("%d,%d,%d,%d", rect.x(), rect.y(), rect.width(), rect.height()));
+    g_object_set(videoSink, "rectangle", rectString.get(), nullptr);
+    return;
+#endif
+
     UNUSED_PARAM(rect);
 }
 
@@ -3881,9 +3883,20 @@ GstElement* MediaPlayerPrivateGStreamer::createHolePunchVideoSink()
 {
     // Here goes the platform-dependant code to create the videoSink. As a default
     // we use a fakeVideoSink so nothing is drawn to the page.
-    GstElement* videoSink =  makeGStreamerElement("fakevideosink", nullptr);
 
+#if USE(WESTEROS_SINK)
+    // Westeros using holepunch.
+    GstElement* videoSink = makeGStreamerElement("westerossink", "WesterosVideoSink");
+    g_object_set(G_OBJECT(videoSink), "zorder", 0.0f, nullptr);
     return videoSink;
+#endif
+
+#if USE(WPEWEBKIT_PLATFORM_BCM_NEXUS)
+    // Nexus boxes use autovideosink.
+    return nullptr;
+#endif
+
+    return makeGStreamerElement("fakevideosink", nullptr);
 }
 
 void MediaPlayerPrivateGStreamer::pushNextHolePunchBuffer()
@@ -3975,7 +3988,7 @@ GstElement* MediaPlayerPrivateGStreamer::createVideoSink()
             if (gst_debug_category_get_threshold(webkit_media_player_debug) < GST_LEVEL_TRACE)
                 g_object_set(m_fpsSink.get(), "text-overlay", FALSE , nullptr);
 
-            if (g_object_class_find_property(G_OBJECT_GET_CLASS(m_fpsSink.get()), "video-sink")) {
+            if (gstObjectHasProperty(m_fpsSink.get(), "video-sink")) {
                 g_object_set(m_fpsSink.get(), "video-sink", m_videoSink.get(), nullptr);
                 videoSink = m_fpsSink.get();
             } else

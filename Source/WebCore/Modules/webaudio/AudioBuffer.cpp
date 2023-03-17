@@ -151,6 +151,7 @@ void AudioBuffer::releaseMemory()
     Locker locker { m_channelsLock };
     m_channels = { };
     m_channelWrappers = { };
+    m_needsAdditionalNoise = false;
 }
 
 ExceptionOr<JSC::JSValue> AudioBuffer::getChannelData(JSDOMGlobalObject& globalObject, unsigned channelIndex)
@@ -161,7 +162,8 @@ ExceptionOr<JSC::JSValue> AudioBuffer::getChannelData(JSDOMGlobalObject& globalO
 
     auto& channelData = m_channels[channelIndex];
     auto constructJSArray = [&] {
-        return JSC::JSFloat32Array::create(globalObject.vm(), globalObject.typedArrayStructure(JSC::TypeFloat32), channelData.copyRef());
+        constexpr bool isResizableOrGrowableShared = false;
+        return JSC::JSFloat32Array::create(globalObject.vm(), globalObject.typedArrayStructure(JSC::TypeFloat32, isResizableOrGrowableShared), channelData.copyRef());
     };
 
     if (globalObject.worldIsNormal()) {
@@ -302,6 +304,7 @@ bool AudioBuffer::copyTo(AudioBuffer& other) const
     for (unsigned channelIndex = 0; channelIndex < numberOfChannels(); ++channelIndex)
         memcpy(other.rawChannelData(channelIndex), m_channels[channelIndex]->data(), length() * sizeof(float));
 
+    other.m_needsAdditionalNoise = m_needsAdditionalNoise;
     return true;
 }
 

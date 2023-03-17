@@ -35,6 +35,7 @@
 #include "WebPage.h"
 #include "WebPageCreationParameters.h"
 #include "WebPreferencesKeys.h"
+#include "WebProcess.h"
 #include <WebCore/Frame.h>
 #include <WebCore/FrameView.h>
 #include <WebCore/GraphicsContext.h>
@@ -241,7 +242,7 @@ void DrawingAreaCoordinatedGraphics::setLayerTreeStateIsFrozen(bool isFrozen)
 void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore& store)
 {
     Settings& settings = m_webPage.corePage()->settings();
-#if PLATFORM(WAYLAND) && USE(WPE_RENDERER)
+#if PLATFORM(WAYLAND)
     if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland
         && &PlatformDisplay::sharedDisplayForCompositing() == &PlatformDisplay::sharedDisplay()) {
         // We failed to create the shared display for compositing, disable accelerated compositing.
@@ -300,6 +301,22 @@ void DrawingAreaCoordinatedGraphics::didChangeViewportAttributes(ViewportAttribu
 bool DrawingAreaCoordinatedGraphics::supportsAsyncScrolling() const
 {
     return m_supportsAsyncScrolling;
+}
+
+void DrawingAreaCoordinatedGraphics::registerScrollingTree()
+{
+#if ENABLE(SCROLLING_THREAD)
+    if (m_supportsAsyncScrolling)
+        WebProcess::singleton().eventDispatcher().addScrollingTreeForPage(m_webPage);
+#endif
+}
+
+void DrawingAreaCoordinatedGraphics::unregisterScrollingTree()
+{
+#if ENABLE(SCROLLING_THREAD)
+    if (m_supportsAsyncScrolling)
+        WebProcess::singleton().eventDispatcher().removeScrollingTreeForPage(m_webPage);
+#endif
 }
 
 GraphicsLayerFactory* DrawingAreaCoordinatedGraphics::graphicsLayerFactory()
@@ -470,7 +487,7 @@ void DrawingAreaCoordinatedGraphics::targetRefreshRateDidChange(unsigned rate)
 #endif
 }
 
-void DrawingAreaCoordinatedGraphics::didUpdate()
+void DrawingAreaCoordinatedGraphics::displayDidRefresh()
 {
     // We might get didUpdate messages from the UI process even after we've
     // entered accelerated compositing mode. Ignore them.
@@ -833,7 +850,9 @@ void DrawingAreaCoordinatedGraphics::display(UpdateInfo& updateInfo)
     if (!bitmap)
         return;
 
-    if (!bitmap->createHandle(updateInfo.bitmapHandle))
+    if (auto handle = bitmap->createHandle())
+        updateInfo.bitmapHandle = WTFMove(*handle);
+    else
         return;
 
     auto rects = m_dirtyRegion.rects();

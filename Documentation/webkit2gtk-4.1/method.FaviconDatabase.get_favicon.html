@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -111,7 +111,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Declaration
         <a class="anchor" href="#declaration"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/gtk/WebKitFaviconDatabase.h#L84">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/WebKitBuild/Release/WebKitGTK/DerivedSources/webkit/WebKitFaviconDatabase.h#L73">[src]</a>
         
       </h4>
 
@@ -134,23 +134,18 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a class="anchor" href="#description"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitFaviconDatabase.cpp#L198">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitFaviconDatabase.cpp#L201">[src]</a>
         
       </h4>
 
       <div class="docblock">
-        <p>Asynchronously obtains a #cairo_surface_t of the&nbsp;favicon.</p>
-<p>Asynchronously obtains a #cairo_surface_t of the favicon for the
+        <p>Asynchronously obtains a favicon&nbsp;image.</p>
+<p>Asynchronously obtains an image of the favicon for the
 given page <span class="caps">URI</span>. It returns the cached icon if it&#8217;s in the database
 asynchronously waiting for the icon to be read from the&nbsp;database.</p>
 <p>This is an asynchronous method. When the operation is finished, callback will
 be invoked. You can then call <code>webkit_favicon_database_get_favicon_finish()</code>
 to get the result of the&nbsp;operation.</p>
-<p>You must call <code>webkit_web_context_set_favicon_database_directory()</code> for
-the <code>WebKitWebContext</code> associated with this <code>WebKitFaviconDatabase</code>
-before attempting to use this function; otherwise,
-<code>webkit_favicon_database_get_favicon_finish()</code> will return
-<code>WEBKIT_FAVICON_DATABASE_ERROR_NOT_INITIALIZED</code>.</p>
       </div>
 
       <div class="docblock">

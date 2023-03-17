@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -122,7 +122,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitInstallMissingMediaPluginsPermissionRequest.cpp#L39">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitInstallMissingMediaPluginsPermissionRequest.cpp#L28">[src]</a>
           
         </h4>
 
@@ -131,13 +131,9 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
 }</pre></code>
 
         <div class="docblock">
-          <p>A permission request for installing missing media&nbsp;plugins.</p>
-<p>WebKitInstallMissingMediaPluginsPermissionRequest represents a request for
-permission to decide whether WebKit should try to start a helper application to
-install missing media plugins when the media backend couldn&#8217;t play a media because
-the required plugins were not&nbsp;available.</p>
-<p>When a WebKitInstallMissingMediaPluginsPermissionRequest is not handled by the user,
-it is allowed by&nbsp;default.</p>
+          <p>Previously, a permission request for installing missing media&nbsp;plugins.</p>
+<p>WebKitInstallMissingMediaPluginsPermissionRequest will no longer ever be created, so
+you can remove any code that attempts to handle&nbsp;it.</p>
         </div>
 
         <div class="docblock">
@@ -146,6 +142,9 @@ it is allowed by&nbsp;default.</p>
             
             <tr><td>Available since:</td><td>2.10</td></tr>
             
+            
+            <tr><td>Deprecated since:</td><td>2.40</td></tr>
+            <tr><td colspan="2"><p>Please do not use it in newly written&nbsp;code.</p></td></tr>
             
           </table>
         </div>
@@ -268,12 +267,12 @@ it is allowed by&nbsp;default.</p>
 
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.InstallMissingMediaPluginsPermissionRequest.get_description.html">webkit_install_missing_media_plugins_permission_request_get_description</a></h6>
           <div class="docblock">
-            <p>Gets the description about the missing&nbsp;plugins.</p>
+            <p>This function returns an empty&nbsp;string.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.10</p></div>
+          <div class="docblock"><p>Available since: 2.10</p><p>Deprecated since: 2.40</p></div>
         </div>
       
       </div>

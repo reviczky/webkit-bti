@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -281,21 +281,21 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L88">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp#L93">[src]</a>
           
         </h4>
 
         <pre><code>class WebKit2.WebContext : GObject.Object {
-  parent: GObject
+  parent: GObject,
+  priv: WebKitWebContextPrivate*
 }</pre></code>
 
         <div class="docblock">
           <p>Manages aspects common to all <code>WebKitWebView</code><!-- -->s</p>
 <p>The <code>WebKitWebContext</code> manages all aspects common to all
 <code>WebKitWebView</code><!-- -->s.</p>
-<p>You can define the <code>WebKitCacheModel</code> and <code>WebKitProcessModel</code> with
-<code>webkit_web_context_set_cache_model()</code> and
-webkit_web_context_set_process_model(), depending on the needs of
+<p>You can define the <code>WebKitCacheModel</code> with
+webkit_web_context_set_cache_model(), depending on the needs of
 your application. You can access the <code>WebKitSecurityManager</code> to specify
 the behaviour of your application regarding security using&nbsp;webkit_web_context_get_security_manager().</p>
 <p>It is also possible to change your preferred language or enable
@@ -556,12 +556,12 @@ not appropriate for Internet&nbsp;applications.</p>
           <div class="docblock"><p>Deprecated since: 2.32</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebContext.get_process_model.html">webkit_web_context_get_process_model</a></h6>
           <div class="docblock">
-            <p>Returns the current process&nbsp;model.</p>
+            <p>Returns <code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.4</p></div>
+          <div class="docblock"><p>Available since: 2.4</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -679,7 +679,7 @@ not appropriate for Internet&nbsp;applications.</p>
         <div class="">
           <h6><a href="method.WebContext.send_message_to_all_extensions.html">webkit_web_context_send_message_to_all_extensions</a></h6>
           <div class="docblock">
-            <p>Send <code>message</code> to all <code>WebKitWebExtension</code><!-- -->s associated to <code>context</code>.</p>
+            <p>Send <code>message</code> to all web process extensions associated to <code>context</code>.</p>
           </div>
           <div class="docblock"><p>Available since: 2.28</p></div>
         </div>
@@ -740,12 +740,15 @@ not appropriate for Internet&nbsp;applications.</p>
           
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebContext.set_process_model.html">webkit_web_context_set_process_model</a></h6>
           <div class="docblock">
-            <p>Specifies a process model for&nbsp;WebViews.</p>
+            <p>This function previously allowed specifying the process model to use.
+However, since 2.26, the only allowed process model is
+<code>WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code>, so this function
+does&nbsp;nothing.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.4</p></div>
+          <div class="docblock"><p>Available since: 2.4</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -791,7 +794,7 @@ not appropriate for Internet&nbsp;applications.</p>
         <div class="">
           <h6><a href="method.WebContext.set_web_extensions_directory.html">webkit_web_context_set_web_extensions_directory</a></h6>
           <div class="docblock">
-            <p>Set the directory where WebKit will look for Web&nbsp;Extensions.</p>
+            <p>Set the directory where WebKit will look for web process&nbsp;extensions.</p>
           </div>
           
         </div>
@@ -799,7 +802,7 @@ not appropriate for Internet&nbsp;applications.</p>
         <div class="">
           <h6><a href="method.WebContext.set_web_extensions_initialization_user_data.html">webkit_web_context_set_web_extensions_initialization_user_data</a></h6>
           <div class="docblock">
-            <p>Set user data to be passed to Web Extensions on&nbsp;initialization.</p>
+            <p>Set user data to be passed to web process extensions on&nbsp;initialization.</p>
           </div>
           <div class="docblock"><p>Available since: 2.4</p></div>
         </div>
@@ -976,7 +979,7 @@ and&nbsp;webkit_web_context_set_web_extensions_directory().</p>
           <h6><a href="signal.WebContext.user-message-received.html">WebKit2.WebContext::user-message-received</a></h6>
           <div class="docblock">
             <p>This signal is emitted when a <code>WebKitUserMessage</code> is received from a
-<code>WebKitWebExtension</code>. You can reply to the message using&nbsp;webkit_user_message_send_reply().</p>
+web process extension. You can reply to the message using&nbsp;webkit_user_message_send_reply().</p>
           </div>
           <div class="docblock"><p>Available since: 2.28</p></div>
         </div>

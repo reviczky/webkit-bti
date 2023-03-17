@@ -1,4 +1,10 @@
 set(TESTWEBKITAPI_DIR "${TOOLS_DIR}/TestWebKitAPI")
+set(TestWebKitAPI_DISABLED_WARNINGS
+    -Wno-dangling-else
+    -Wno-sign-compare
+    -Wno-undef
+    -Wno-unused-parameter
+)
 
 macro(WEBKIT_TEST _target)
     WEBKIT_EXECUTABLE(${_target})
@@ -9,10 +15,7 @@ macro(WEBKIT_TEST _target)
     )
 
     if (COMPILER_IS_GCC_OR_CLANG)
-        WEBKIT_ADD_TARGET_CXX_FLAGS(${_target} -Wno-dangling-else
-                                               -Wno-sign-compare
-                                               -Wno-undef
-                                               -Wno-unused-parameter)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(${_target} ${TestWebKitAPI_DISABLED_WARNINGS})
     endif ()
 endmacro()
 
@@ -20,6 +23,7 @@ endmacro()
 set(TestWTF_SOURCES
     Counters.cpp
     TestsController.cpp
+    Utilities.cpp
 
     Tests/WTF/AtomString.cpp
     Tests/WTF/Bitmap.cpp
@@ -32,9 +36,10 @@ set(TestWTF_SOURCES
     Tests/WTF/CompactRefPtr.cpp
     Tests/WTF/CompactRefPtrTuple.cpp
     Tests/WTF/CompactUniquePtrTuple.cpp
+    Tests/WTF/CompletionHandlerTests.cpp
     Tests/WTF/ConcurrentPtrHashSet.cpp
     Tests/WTF/Condition.cpp
-    Tests/WTF/CrossThreadCopier.cpp
+    Tests/WTF/CrossThreadCopierTests.cpp
     Tests/WTF/CrossThreadTask.cpp
     Tests/WTF/DataMutex.cpp
     Tests/WTF/DateMath.cpp
@@ -43,6 +48,7 @@ set(TestWTF_SOURCES
     Tests/WTF/EnumTraits.cpp
     Tests/WTF/Expected.cpp
     Tests/WTF/FileSystem.cpp
+    Tests/WTF/FixedBitVector.cpp
     Tests/WTF/FixedVector.cpp
     Tests/WTF/Function.cpp
     Tests/WTF/HashCountedSet.cpp
@@ -91,6 +97,7 @@ set(TestWTF_SOURCES
     Tests/WTF/SentinelLinkedList.cpp
     Tests/WTF/SetForScope.cpp
     Tests/WTF/Span.cpp
+    Tests/WTF/StackTraceTest.cpp
     Tests/WTF/StdLibExtras.cpp
     Tests/WTF/StringBuilder.cpp
     Tests/WTF/StringCommon.cpp
@@ -99,6 +106,7 @@ set(TestWTF_SOURCES
     Tests/WTF/StringImpl.cpp
     Tests/WTF/StringOperators.cpp
     Tests/WTF/StringParsingBuffer.cpp
+    Tests/WTF/StringSearch.cpp
     Tests/WTF/StringToIntegerConversion.cpp
     Tests/WTF/StringView.cpp
     Tests/WTF/SynchronizedFixedQueue.cpp
@@ -111,6 +119,7 @@ set(TestWTF_SOURCES
     Tests/WTF/URLParser.cpp
     Tests/WTF/UniqueArray.cpp
     Tests/WTF/UniqueRef.cpp
+    Tests/WTF/UniqueRefVector.cpp
     Tests/WTF/Vector.cpp
     Tests/WTF/WTFString.cpp
     Tests/WTF/WeakPtr.cpp
@@ -169,6 +178,7 @@ endif ()
 if (ENABLE_WEBCORE)
     set(TestWebCore_SOURCES
         TestsController.cpp
+        Utilities.cpp
 
         Tests/WebCore/AffineTransform.cpp
         Tests/WebCore/CSSParser.cpp
@@ -219,7 +229,12 @@ if (ENABLE_WEBCORE)
         ${TESTWEBKITAPI_DIR}
     )
 
+    set(TestWebCore_DEFINITIONS
+      WEBKIT_SRC_DIR="${CMAKE_SOURCE_DIR}"
+    )
+
     WEBKIT_EXECUTABLE_DECLARE(TestWebCore)
+    target_compile_definitions(TestWebCore PUBLIC TestWebCore_DEFINITIONS)
 endif ()
 
 # TestWebKitLegacy definitions
@@ -231,21 +246,24 @@ if (ENABLE_WEBKIT_LEGACY)
     set(TestWebKitLegacy_LIBRARIES
         WebKit::gtest
     )
+
+    set(TestWebKitLegacy_FRAMEWORKS
+        JavaScriptCore
+        PAL
+        WTF
+        WebCore
+    )
+    if (NOT USE_SYSTEM_MALLOC)
+        list(APPEND TestWebKitLegacy_FRAMEWORKS bmalloc)
+    endif ()
     if (NOT APPLE)
-        list(APPEND TestWebKitLegacy_LIBRARIES
-            WebKitLegacy
-        )
+        list(APPEND TestWebKitLegacy_FRAMEWORKS WebKitLegacy)
     endif ()
 
     set(TestWebKitLegacy_PRIVATE_INCLUDE_DIRECTORIES
         ${CMAKE_BINARY_DIR}
         ${TESTWEBKITAPI_DIR}
-        ${PAL_FRAMEWORK_HEADERS_DIR}
-        ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR}
-        ${WebKitLegacy_FRAMEWORK_HEADERS_DIR}
     )
-
-    set(TestWebKitLegacy_DEPENDENCIES WebKitLegacyFrameworkHeaders)
 
     WEBKIT_EXECUTABLE_DECLARE(TestWebKitLegacy)
 endif ()
@@ -253,6 +271,8 @@ endif ()
 # TestWebKit definitions
 if (ENABLE_WEBKIT)
     set(TestWebKit_SOURCES
+        Utilities.cpp
+
         Tests/WebKit/AboutBlankLoad.cpp
         Tests/WebKit/CanHandleRequest.cpp
         Tests/WebKit/DOMWindowExtensionBasic.cpp
@@ -337,16 +357,15 @@ if (ENABLE_WEBKIT)
     target_link_libraries(TestWebKitAPIBase PRIVATE WebKit::WebKit WebKit::gtest)
 
     if (COMPILER_IS_GCC_OR_CLANG)
-        WEBKIT_ADD_TARGET_CXX_FLAGS(TestWebKitAPIBase -Wno-dangling-else
-                                                      -Wno-sign-compare
-                                                      -Wno-undef
-                                                      -Wno-unused-parameter)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(TestWebKitAPIBase ${TestWebKitAPI_DISABLED_WARNINGS} -Wno-deprecated-declarations)
     endif ()
 
     set(TestWebKitAPIInjectedBundle_SOURCES
         InjectedBundleController.cpp
         InjectedBundleMain.cpp
         PlatformUtilities.cpp
+        Utilities.cpp
+
         Tests/WebKit/CanHandleRequest_Bundle.cpp
         Tests/WebKit/DidAssociateFormControls_Bundle.cpp
         Tests/WebKit/DOMWindowExtensionBasic_Bundle.cpp
@@ -389,10 +408,7 @@ if (ENABLE_WEBKIT)
     target_link_libraries(TestWebKitAPIInjectedBundle PRIVATE WebKit::WebKit WebKit::gtest)
 
     if (COMPILER_IS_GCC_OR_CLANG)
-        WEBKIT_ADD_TARGET_CXX_FLAGS(TestWebKitAPIInjectedBundle -Wno-dangling-else
-                                                                -Wno-sign-compare
-                                                                -Wno-undef
-                                                                -Wno-unused-parameter)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(TestWebKitAPIInjectedBundle ${TestWebKitAPI_DISABLED_WARNINGS})
     endif ()
 
     WEBKIT_EXECUTABLE_DECLARE(TestWebKit)

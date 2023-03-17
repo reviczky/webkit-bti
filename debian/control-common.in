@@ -82,12 +82,12 @@ Description: Web content engine library for GTK
  .
  This package contains the shared libraries.
 
-Package: libwebkit2gtk-@WK_API_VERSION@-dev
+Package: lib@WEBKIT@gtk-@WK_API_VERSION@-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
 Depends: @LIBWEBKITGTK_PKG@ (= ${binary:Version}),
-         gir1.2-webkit2-@WK_API_VERSION@ (= ${binary:Version}),
+         gir1.2-@WEBKIT@-@WK_API_VERSION@ (= ${binary:Version}),
          libgtk-@GTK_VERSION@-dev,
          @SOUPDEV_PKG@,
          libjavascriptcoregtk-@WK_API_VERSION@-dev (= ${binary:Version}),
@@ -106,7 +106,7 @@ Description: Web content engine library for GTK - development files
  .
  This package contains the development files.
 
-Package: gir1.2-webkit2-@WK_API_VERSION@
+Package: gir1.2-@WEBKIT@-@WK_API_VERSION@
 Section: introspection
 Architecture: any
 Multi-Arch: same

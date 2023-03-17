@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -183,12 +183,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L40">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L42">[src]</a>
           
         </h4>
 
         <pre><code>class WebKit2.Download : GObject.Object {
-  parent: GObject
+  parent: GObject,
+  priv: WebKitDownloadPrivate*
 }</pre></code>
 
         <div class="docblock">
@@ -314,7 +315,7 @@ and handle the download process&nbsp;itself.</p>
         <div class="">
           <h6><a href="method.Download.get_destination.html">webkit_download_get_destination</a></h6>
           <div class="docblock">
-            <p>Obtains the <span class="caps">URI</span> to which the downloaded file will be&nbsp;written.</p>
+            <p>Obtains the destination to which the downloaded file will be&nbsp;written.</p>
           </div>
           
         </div>
@@ -381,7 +382,7 @@ connecting to the notify::estimated-progress signal of <code>download</code>.</p
         <div class="">
           <h6><a href="method.Download.set_destination.html">webkit_download_set_destination</a></h6>
           <div class="docblock">
-            <p>Sets the <span class="caps">URI</span> to which the downloaded file will be&nbsp;written.</p>
+            <p>Sets the destination to which the downloaded file will be&nbsp;written.</p>
           </div>
           
         </div>
@@ -432,7 +433,7 @@ the download will&nbsp;fail.</p>
           <h6><a href="property.Download.destination.html">WebKit2.Download:destination</a></h6>
 
           <div class="docblock">
-            <p>The local <span class="caps">URI</span> to where the download will be&nbsp;saved.</p>
+            <p>The local path to where the download will be&nbsp;saved.</p>
           </div>
 
           
@@ -499,8 +500,9 @@ created successfully at <code>destination</code>.</p>
           <h6><a href="signal.Download.decide-destination.html">WebKit2.Download::decide-destination</a></h6>
           <div class="docblock">
             <p>This signal is emitted after response is received to
-decide a destination <span class="caps">URI</span> for the download. If this signal is not
-handled the file will be downloaded to <code>G_USER_DIRECTORY_DOWNLOAD</code>
+decide a destination for the download using
+webkit_download_set_destination(). If this signal is not
+handled, the file will be downloaded to <code>G_USER_DIRECTORY_DOWNLOAD</code>
 directory using <code>suggested_filename</code>.</p>
           </div>
           

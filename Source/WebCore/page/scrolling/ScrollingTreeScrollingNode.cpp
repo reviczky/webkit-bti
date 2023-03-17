@@ -36,6 +36,7 @@
 #include "ScrollingStateScrollingNode.h"
 #include "ScrollingStateTree.h"
 #include "ScrollingTree.h"
+#include "ScrollingTreeScrollingNodeDelegate.h"
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
@@ -104,6 +105,9 @@ void ScrollingTreeScrollingNode::commitStateAfterChildren(const ScrollingStateNo
     const ScrollingStateScrollingNode& scrollingStateNode = downcast<ScrollingStateScrollingNode>(stateNode);
     if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::RequestedScrollPosition))
         handleScrollPositionRequest(scrollingStateNode.requestedScrollData());
+
+    if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::Property::KeyboardScrollData))
+        handleKeyboardScrollRequest(scrollingStateNode.keyboardScrollData());
 
     // This synthetic bit is added back in ScrollingTree::propagateSynchronousScrollingReasons().
 #if ENABLE(SCROLLING_THREAD)
@@ -234,6 +238,7 @@ void ScrollingTreeScrollingNode::setScrollSnapInProgress(bool isSnapping)
 
 void ScrollingTreeScrollingNode::willStartAnimatedScroll()
 {
+    scrollingTree().scrollingTreeNodeWillStartAnimatedScroll(*this);
 }
 
 void ScrollingTreeScrollingNode::didStopAnimatedScroll()
@@ -242,9 +247,42 @@ void ScrollingTreeScrollingNode::didStopAnimatedScroll()
     scrollingTree().scrollingTreeNodeDidStopAnimatedScroll(*this);
 }
 
+void ScrollingTreeScrollingNode::willStartWheelEventScroll()
+{
+    scrollingTree().scrollingTreeNodeWillStartWheelEventScroll(*this);
+}
+
+void ScrollingTreeScrollingNode::didStopWheelEventScroll()
+{
+    scrollingTree().scrollingTreeNodeDidStopWheelEventScroll(*this);
+}
+
+bool ScrollingTreeScrollingNode::startAnimatedScrollToPosition(FloatPoint destinationPosition)
+{
+    return m_delegate ? m_delegate->startAnimatedScrollToPosition(destinationPosition) : false;
+}
+
+void ScrollingTreeScrollingNode::stopAnimatedScroll()
+{
+    if (m_delegate)
+        m_delegate->stopAnimatedScroll();
+}
+
+void ScrollingTreeScrollingNode::serviceScrollAnimation(MonotonicTime currentTime)
+{
+    if (m_delegate)
+        m_delegate->serviceScrollAnimation(currentTime);
+}
+
 void ScrollingTreeScrollingNode::setScrollAnimationInProgress(bool animationInProgress)
 {
     scrollingTree().setScrollAnimationInProgressForNode(scrollingNodeID(), animationInProgress);
+}
+
+void ScrollingTreeScrollingNode::handleKeyboardScrollRequest(const RequestedKeyboardScrollData& scrollData)
+{
+    if (m_delegate)
+        m_delegate->handleKeyboardScrollRequest(scrollData);
 }
 
 void ScrollingTreeScrollingNode::handleScrollPositionRequest(const RequestedScrollData& requestedScrollData)
@@ -271,10 +309,11 @@ void ScrollingTreeScrollingNode::handleScrollPositionRequest(const RequestedScro
 
 FloatPoint ScrollingTreeScrollingNode::adjustedScrollPosition(const FloatPoint& scrollPosition, ScrollClamping clamping) const
 {
+    auto adjustedPosition = m_delegate ? m_delegate->adjustedScrollPosition(scrollPosition) : scrollPosition;
     if (clamping == ScrollClamping::Clamped)
-        return clampScrollPosition(scrollPosition);
+        return clampScrollPosition(adjustedPosition);
 
-    return scrollPosition;
+    return adjustedPosition;
 }
 
 void ScrollingTreeScrollingNode::scrollBy(const FloatSize& delta, ScrollClamping clamp)

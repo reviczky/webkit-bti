@@ -38,14 +38,14 @@ enum {
 
 /**
  * WebKitUserMessage:
- * @See_also: #WebKitWebContext, #WebKitWebView, #WebKitWebExtension, #WebKitWebPage
+ * @See_also: #WebKitWebContext, #WebKitWebView, #WebKitWebPage
  *
- * Message that can be sent between the UI process and web extensions.
+ * Message that can be sent between the UI process and web process extensions.
  *
  * A WebKitUserMessage is a message that can be used for the communication between the UI process
- * and web extensions. A WebKitUserMessage always has a name, and it can also include parameters and
- * UNIX file descriptors. Messages can be sent from a #WebKitWebContext to all #WebKitWebExtension<!-- -->s,
- * from a #WebKitWebExtension to its corresponding #WebKitWebContext, and from a #WebKitWebView to its
+ * and web process extensions. A WebKitUserMessage always has a name, and it can also include parameters and
+ * UNIX file descriptors. Messages can be sent from a #WebKitWebContext to all web process extensions,
+ * from a web process extension to its corresponding #WebKitWebContext, and from a #WebKitWebView to its
  * corresponding #WebKitWebPage (and vice versa). One to one messages can be replied to directly with
  * webkit_user_message_send_reply().
  *
@@ -56,7 +56,7 @@ struct _WebKitUserMessagePrivate {
     CompletionHandler<void(UserMessage&&)> replyHandler;
 };
 
-WEBKIT_DEFINE_TYPE(WebKitUserMessage, webkit_user_message, G_TYPE_INITIALLY_UNOWNED)
+WEBKIT_DEFINE_FINAL_TYPE(WebKitUserMessage, webkit_user_message, G_TYPE_INITIALLY_UNOWNED, GInitiallyUnowned)
 
 /**
  * webkit_user_message_error_quark:
@@ -136,8 +136,7 @@ static void webkit_user_message_class_init(WebKitUserMessageClass* klass)
         PROP_NAME,
         g_param_spec_string(
             "name",
-            _("Name"),
-            _("The user message name"),
+            nullptr, nullptr,
             nullptr,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 
@@ -155,8 +154,7 @@ static void webkit_user_message_class_init(WebKitUserMessageClass* klass)
         PROP_PARAMETERS,
         g_param_spec_variant(
             "parameters",
-            _("Parameters"),
-            _("The user message parameters"),
+            nullptr, nullptr,
             G_VARIANT_TYPE_ANY,
             nullptr,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
@@ -173,8 +171,7 @@ static void webkit_user_message_class_init(WebKitUserMessageClass* klass)
         PROP_FD_LIST,
         g_param_spec_object(
             "fd-list",
-            _("File Descriptor List"),
-            _("The user message list of file descriptors"),
+            nullptr, nullptr,
             G_TYPE_UNIX_FD_LIST,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 }

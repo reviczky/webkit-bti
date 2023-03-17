@@ -2,4 +2,4 @@ usr/lib/*/libwebkit2gtk-4.0.so.*
 usr/lib/*/webkit2gtk-4.0/*Process
 usr/lib/*/webkit2gtk-4.0/MiniBrowser
 usr/lib/*/webkit2gtk-4.0/injected-bundle
-usr/share/locale/*/LC_MESSAGES/WebKit2GTK-4.0.mo
+usr/share/locale/*/LC_MESSAGES/WebKitGTK-4.0.mo

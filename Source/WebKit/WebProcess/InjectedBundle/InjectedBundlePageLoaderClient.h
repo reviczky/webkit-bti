@@ -47,7 +47,7 @@ public:
     explicit InjectedBundlePageLoaderClient(const WKBundlePageLoaderClientBase*);
 
     void willLoadURLRequest(WebPage&, const WebCore::ResourceRequest&, API::Object*) override;
-    void willLoadDataRequest(WebPage&, const WebCore::ResourceRequest&, WebCore::FragmentedSharedBuffer*, const WTF::String&, const WTF::String&, const URL&, API::Object*) override;
+    void willLoadDataRequest(WebPage&, const WebCore::ResourceRequest&, RefPtr<WebCore::FragmentedSharedBuffer>, const WTF::String&, const WTF::String&, const URL&, API::Object*) override;
 
     void didStartProvisionalLoadForFrame(WebPage&, WebFrame&, RefPtr<API::Object>&) override;
     void didReceiveServerRedirectForProvisionalLoadForFrame(WebPage&, WebFrame&, RefPtr<API::Object>&) override;
@@ -62,7 +62,6 @@ public:
     void didRemoveFrameFromHierarchy(WebPage&, WebFrame&, RefPtr<API::Object>&) override;
     void didDisplayInsecureContentForFrame(WebPage&, WebFrame&, RefPtr<API::Object>&) override;
     void didRunInsecureContentForFrame(WebPage&, WebFrame&, RefPtr<API::Object>&) override;
-    void didDetectXSSForFrame(WebPage&, WebFrame&, RefPtr<API::Object>&) override;
 
     void didFirstLayoutForFrame(WebPage&, WebFrame&, RefPtr<API::Object>&) override;
     void didFirstVisuallyNonEmptyLayoutForFrame(WebPage&, WebFrame&, RefPtr<API::Object>&) override;

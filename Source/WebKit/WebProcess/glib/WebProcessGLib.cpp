@@ -27,10 +27,10 @@
 #include "config.h"
 #include "WebProcess.h"
 
-#include "WebKitExtensionManager.h"
-#include "WebKitWebExtensionPrivate.h"
+#include "WebKitWebProcessExtensionPrivate.h"
 #include "WebPage.h"
 #include "WebProcessCreationParameters.h"
+#include "WebProcessExtensionManager.h"
 
 #if ENABLE(REMOTE_INSPECTOR)
 #include <JavaScriptCore/RemoteInspector.h>
@@ -42,10 +42,6 @@
 
 #include <WebCore/ApplicationGLib.h>
 #include <WebCore/MemoryCache.h>
-
-#if PLATFORM(WAYLAND)
-#include "WaylandCompositorDisplay.h"
-#endif
 
 #if USE(WPE_RENDERER)
 #include <WebCore/PlatformDisplayLibWPE.h>
@@ -72,6 +68,8 @@
 #include "GtkSettingsManagerProxy.h"
 #include <gtk/gtk.h>
 #endif
+
+#include <WebCore/CairoUtilities.h>
 
 namespace WebKit {
 
@@ -117,25 +115,19 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
             wpe_loader_init(parameters.implementationLibraryName.data());
 
         RELEASE_ASSERT(is<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()));
-        downcast<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()).initialize(parameters.hostClientFileDescriptor.release().release());
+        downcast<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()).initialize(parameters.hostClientFileDescriptor.release());
     }
 #endif
 
 #if PLATFORM(WAYLAND)
-    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland) {
-#if USE(WPE_RENDERER)
-        if (!parameters.isServiceWorkerProcess) {
-            auto hostClientFileDescriptor = parameters.hostClientFileDescriptor.release().release();
-            if (hostClientFileDescriptor != -1) {
-                wpe_loader_init(parameters.implementationLibraryName.data());
-                m_wpeDisplay = WebCore::PlatformDisplayLibWPE::create();
-                if (!m_wpeDisplay->initialize(hostClientFileDescriptor))
-                    m_wpeDisplay = nullptr;
-            }
+    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland && !parameters.isServiceWorkerProcess) {
+        auto hostClientFileDescriptor = parameters.hostClientFileDescriptor.release();
+        if (hostClientFileDescriptor != -1) {
+            wpe_loader_init(parameters.implementationLibraryName.data());
+            m_wpeDisplay = WebCore::PlatformDisplayLibWPE::create();
+            if (!m_wpeDisplay->initialize(hostClientFileDescriptor))
+                m_wpeDisplay = nullptr;
         }
-#else
-        m_waylandCompositorDisplay = WaylandCompositorDisplay::create(parameters.waylandCompositorDisplayName);
-#endif
     }
 #endif
 
@@ -165,10 +157,12 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
     AccessibilityAtspi::singleton().connect(parameters.accessibilityBusAddress);
 #endif
 
+    if (parameters.disableFontHintingForTesting)
+        disableCairoFontHintingForTesting();
+
 #if PLATFORM(GTK)
     GtkSettingsManagerProxy::singleton().applySettings(WTFMove(parameters.gtkSettings));
 #endif
-
 }
 
 void WebProcess::platformSetWebsiteDataStoreParameters(WebProcessDataStoreParameters&&)
@@ -179,10 +173,10 @@ void WebProcess::platformTerminate()
 {
 }
 
-void WebProcess::sendMessageToWebExtension(UserMessage&& message)
+void WebProcess::sendMessageToWebProcessExtension(UserMessage&& message)
 {
-    if (auto* extension = WebKitExtensionManager::singleton().extension())
-        webkitWebExtensionDidReceiveUserMessage(extension, WTFMove(message));
+    if (auto* extension = WebProcessExtensionManager::singleton().extension())
+        webkitWebProcessExtensionDidReceiveUserMessage(extension, WTFMove(message));
 }
 
 #if PLATFORM(GTK) && !USE(GTK4)
@@ -192,7 +186,7 @@ void WebProcess::setUseSystemAppearanceForScrollbars(bool useSystemAppearanceFor
 }
 #endif
 
-void WebProcess::grantAccessToAssetServices(WebKit::SandboxExtension::Handle&&)
+void WebProcess::grantAccessToAssetServices(Vector<WebKit::SandboxExtension::Handle>&&)
 {
 }
 
@@ -200,7 +194,7 @@ void WebProcess::revokeAccessToAssetServices()
 {
 }
 
-void WebProcess::switchFromStaticFontRegistryToUserFontRegistry(WebKit::SandboxExtension::Handle&&)
+void WebProcess::switchFromStaticFontRegistryToUserFontRegistry(Vector<WebKit::SandboxExtension::Handle>&&)
 {
 }
 

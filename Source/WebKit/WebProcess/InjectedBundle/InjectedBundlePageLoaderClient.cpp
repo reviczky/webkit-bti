@@ -65,7 +65,7 @@ static void releaseSharedBuffer(unsigned char*, const void* data)
     static_cast<const SharedBuffer*>(data)->deref();
 }
 
-void InjectedBundlePageLoaderClient::willLoadDataRequest(WebPage& page, const ResourceRequest& request, FragmentedSharedBuffer* sharedBuffer, const String& MIMEType, const String& encodingName, const URL& unreachableURL, API::Object* userData)
+void InjectedBundlePageLoaderClient::willLoadDataRequest(WebPage& page, const ResourceRequest& request, RefPtr<FragmentedSharedBuffer> sharedBuffer, const String& MIMEType, const String& encodingName, const URL& unreachableURL, API::Object* userData)
 {
     if (!m_client.willLoadDataRequest)
         return;
@@ -205,16 +205,6 @@ void InjectedBundlePageLoaderClient::didRunInsecureContentForFrame(WebPage& page
 
     WKTypeRef userDataToPass = nullptr;
     m_client.didRunInsecureContentForFrame(toAPI(&page), toAPI(&frame), &userDataToPass, m_client.base.clientInfo);
-    userData = adoptRef(toImpl(userDataToPass));
-}
-
-void InjectedBundlePageLoaderClient::didDetectXSSForFrame(WebPage& page, WebFrame& frame, RefPtr<API::Object>& userData)
-{
-    if (!m_client.didDetectXSSForFrame)
-        return;
-
-    WKTypeRef userDataToPass = nullptr;
-    m_client.didDetectXSSForFrame(toAPI(&page), toAPI(&frame), &userDataToPass, m_client.base.clientInfo);
     userData = adoptRef(toImpl(userDataToPass));
 }
 

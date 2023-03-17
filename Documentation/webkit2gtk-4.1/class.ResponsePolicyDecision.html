@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -92,6 +92,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="method.ResponsePolicyDecision.get_request.html">get_request</a>
   
     <a class="method" href="method.ResponsePolicyDecision.get_response.html">get_response</a>
+  
+    <a class="method" href="method.ResponsePolicyDecision.is_main_frame_main_resource.html">is_main_frame_main_resource</a>
   
     <a class="method" href="method.ResponsePolicyDecision.is_mime_type_supported.html">is_mime_type_supported</a>
   
@@ -142,7 +144,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         </h4>
 
         <pre><code>class WebKit2.ResponsePolicyDecision : WebKit2.PolicyDecision {
-  parent: WebKitPolicyDecision
+  parent: WebKitPolicyDecision,
+  priv: WebKitResponsePolicyDecisionPrivate*
 }</pre></code>
 
         <div class="docblock">
@@ -280,6 +283,14 @@ whether or not to download a particular resource or to load it&nbsp;normally.</p
             <p>Gets the value of the <code>WebKitResponsePolicyDecision:response</code> property.</p>
           </div>
           
+        </div>
+      
+        <div class="">
+          <h6><a href="method.ResponsePolicyDecision.is_main_frame_main_resource.html">webkit_response_policy_decision_is_main_frame_main_resource</a></h6>
+          <div class="docblock">
+            <p>Gets whether the request is the main frame main&nbsp;resource.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
         </div>
       
         <div class="">

@@ -7,7 +7,7 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Alberto Garcia <berto@igalia.com>
 X-Ubuntu-Use-Langpack: no
 Build-Depends: debhelper-compat (= 12),
-               ccache [!i386],
+               ccache [!i386 !m68k],
                bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                xdg-dbus-proxy [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
@@ -35,6 +35,8 @@ Build-Depends: debhelper-compat (= 12),
                bison,
                flex,
                ruby:native,
+               unifdef,
+               libavif-dev,
                libjpeg-dev,
                libopenjp2-7-dev (>= 2.2.0),
                libpng-dev,
@@ -43,6 +45,7 @@ Build-Depends: debhelper-compat (= 12),
                libxt-dev,
                libgstreamer1.0-dev (>= 1.14.0),
                libgstreamer-plugins-base1.0-dev (>= 1.14.0),
+               libgstreamer-plugins-bad1.0-dev (>= 1.20.0),
                libenchant-2-dev,
                libsecret-1-dev,
                gobject-introspection (>= 1.32.0),
@@ -92,12 +95,12 @@ Description: Web content engine library for GTK - documentation
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  .
  This package contains the documentation and is valid for versions 4.0,
- 4.1 and 5.0 of the API.
+ 4.1 and 6.0 of the API.
 
 Package: webkit2gtk-driver
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
+Depends: @WEBDRIVER_DEP_PKG@ (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Description: WebKitGTK WebDriver support

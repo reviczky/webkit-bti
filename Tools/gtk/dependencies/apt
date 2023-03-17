@@ -29,12 +29,14 @@ PACKAGES+=(
     libupower-glib-dev
     libvorbis-dev
     libvpx-dev
+    libwpe-1.0-dev
+    libwpebackend-fdo-1.0-dev
     libxcomposite-dev
     libxt-dev
     libxtst-dev
     nasm
+    unifdef
     xfonts-utils
-    $(aptIfExists libenchant-dev)
 
     # These are dependencies necessary for running tests.
     cups-daemon

@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -106,6 +106,10 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   <h5>Instance methods</h5>
   <div class="links">
   
+    <a class="method" href="method.WebView.call_async_javascript_function.html">call_async_javascript_function</a>
+  
+    <a class="method" href="method.WebView.call_async_javascript_function_finish.html">call_async_javascript_function_finish</a>
+  
     <a class="method" href="method.WebView.can_execute_editing_command.html">can_execute_editing_command</a>
   
     <a class="method" href="method.WebView.can_execute_editing_command_finish.html">can_execute_editing_command_finish</a>
@@ -117,6 +121,10 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="method.WebView.can_show_mime_type.html">can_show_mime_type</a>
   
     <a class="method" href="method.WebView.download_uri.html">download_uri</a>
+  
+    <a class="method" href="method.WebView.evaluate_javascript.html">evaluate_javascript</a>
+  
+    <a class="method" href="method.WebView.evaluate_javascript_finish.html">evaluate_javascript_finish</a>
   
     <a class="method" href="method.WebView.execute_editing_command.html">execute_editing_command</a>
   
@@ -372,6 +380,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
     <a class="signal" href="signal.WebView.print.html">print</a>
   
+    <a class="signal" href="signal.WebView.query-permission-state.html">query-permission-state</a>
+  
     <a class="signal" href="signal.WebView.ready-to-show.html">ready-to-show</a>
   
     <a class="signal" href="signal.WebView.resource-load-started.html">resource-load-started</a>
@@ -437,6 +447,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
     <a class="method" href="vfunc.WebView.print.html">print</a>
   
+    <a class="method" href="vfunc.WebView.query_permission_state.html">query_permission_state</a>
+  
     <a class="method" href="vfunc.WebView.ready_to_show.html">ready_to_show</a>
   
     <a class="method" href="vfunc.WebView.resource_load_started.html">resource_load_started</a>
@@ -484,12 +496,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L107">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L114">[src]</a>
           
         </h4>
 
         <pre><code>class WebKit2.WebView : WebKit2.WebViewBase {
-  parent: WebKitWebViewBase
+  parent: WebKitWebViewBase,
+  priv: WebKitWebViewPrivate*
 }</pre></code>
 
         <div class="docblock">
@@ -781,6 +794,27 @@ you don&#8217;t need to embed it in a <code>GtkScrolledWindow</code>.</p>
       <div class="docblock">
       
         <div class="">
+          <h6><a href="method.WebView.call_async_javascript_function.html">webkit_web_view_call_async_javascript_function</a></h6>
+          <div class="docblock">
+            <p>Asynchronously call <code>body</code> with <code>arguments</code> in the script world with name <code>world_name</code> of the main frame current context in <code>web_view</code>.
+The <code>arguments</code> values must be one of the following types, or contain only the following GVariant types: number, string and dictionary.
+The result of the operation can be a Promise that will be properly passed to the callback.
+If <code>world_name</code> is <code>NULL</code>, the default world is used. Any value that is not <code>NULL</code> is a distin ct world.
+The <code>source_uri</code> will be shown in exceptions and doesn&#8217;t affect the behavior of the script.
+When not provided, the document <span class="caps">URL</span> is&nbsp;used.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.WebView.call_async_javascript_function_finish.html">webkit_web_view_call_async_javascript_function_finish</a></h6>
+          <div class="docblock">
+            <p>Finish an asynchronous operation started with&nbsp;webkit_web_view_call_async_javascript_function().</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.WebView.can_execute_editing_command.html">webkit_web_view_can_execute_editing_command</a></h6>
           <div class="docblock">
             <p>Asynchronously check if it is possible to execute the given editing&nbsp;command.</p>
@@ -826,6 +860,25 @@ you don&#8217;t need to embed it in a <code>GtkScrolledWindow</code>.</p>
             <p>Requests downloading of the specified <span class="caps">URI</span> string for <code>web_view</code>.</p>
           </div>
           
+        </div>
+      
+        <div class="">
+          <h6><a href="method.WebView.evaluate_javascript.html">webkit_web_view_evaluate_javascript</a></h6>
+          <div class="docblock">
+            <p>Asynchronously evaluate <code>script</code> in the script world with name <code>world_name</code> of the main frame current context in <code>web_view</code>.
+If <code>world_name</code> is <code>NULL</code>, the default world is used. Any value that is not <code>NULL</code> is a distinct world.
+The <code>source_uri</code> will be shown in exceptions and doesn&#8217;t affect the behavior of the script.
+When not provided, the document <span class="caps">URL</span> is&nbsp;used.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.WebView.evaluate_javascript_finish.html">webkit_web_view_evaluate_javascript_finish</a></h6>
+          <div class="docblock">
+            <p>Finish an asynchronous operation started with&nbsp;webkit_web_view_evaluate_javascript().</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -1247,60 +1300,63 @@ using any cached&nbsp;data.</p>
           <div class="docblock"><p>Available since: 2.12</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebView.run_async_javascript_function_in_world.html">webkit_web_view_run_async_javascript_function_in_world</a></h6>
           <div class="docblock">
-            No description available.
+            <p>Asynchronously run <code>body</code> in the script world with name <code>world_name</code> of the current page context in
+<code>web_view</code>. If WebKitSettings:enable-javascript is <span class="caps">FALSE</span>, this method will do nothing. This <span class="caps">API</span>
+differs from <code>webkit_web_view_run_javascript_in_world()</code> in that the JavaScript function can return a
+Promise and its result will be properly passed to the&nbsp;callback.</p>
           </div>
-          
+          <div class="docblock"><p>Available since: 2.38</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebView.run_javascript.html">webkit_web_view_run_javascript</a></h6>
           <div class="docblock">
             <p>Asynchronously run <code>script</code> in the context of the current page in <code>web_view</code>.</p>
           </div>
-          
+          <div class="docblock"><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebView.run_javascript_finish.html">webkit_web_view_run_javascript_finish</a></h6>
           <div class="docblock">
             <p>Finish an asynchronous operation started with&nbsp;webkit_web_view_run_javascript().</p>
           </div>
-          
+          <div class="docblock"><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebView.run_javascript_from_gresource.html">webkit_web_view_run_javascript_from_gresource</a></h6>
           <div class="docblock">
             <p>Asynchronously run the script from <code>resource</code>.</p>
           </div>
-          
+          <div class="docblock"><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebView.run_javascript_from_gresource_finish.html">webkit_web_view_run_javascript_from_gresource_finish</a></h6>
           <div class="docblock">
             <p>Finish an asynchronous operation started with&nbsp;webkit_web_view_run_javascript_from_gresource().</p>
           </div>
-          
+          <div class="docblock"><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebView.run_javascript_in_world.html">webkit_web_view_run_javascript_in_world</a></h6>
           <div class="docblock">
             <p>Asynchronously run <code>script</code> in the script&nbsp;world.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.22</p></div>
+          <div class="docblock"><p>Available since: 2.22</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.WebView.run_javascript_in_world_finish.html">webkit_web_view_run_javascript_in_world_finish</a></h6>
           <div class="docblock">
             <p>Finish an asynchronous operation started with&nbsp;webkit_web_view_run_javascript_in_world().</p>
           </div>
-          <div class="docblock"><p>Available since: 2.22</p></div>
+          <div class="docblock"><p>Available since: 2.22</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -1783,8 +1839,8 @@ true})</code>) this property will be set to <code>WEBKIT_MEDIA_CAPTURE_STATE_ACT
 
           <div class="docblock">
             <p>The related <code>WebKitWebView</code> used when creating the view to share the
-same web process. This property is not readable because the related
-web view is only valid during the object&nbsp;construction.</p>
+same web process and network session. This property is not readable
+because the related web view is only valid during the object&nbsp;construction.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.4</p></div>
@@ -2349,6 +2405,16 @@ the print dialog. You can call <code>webkit_print_operation_set_print_settings()
 event so that the print dialog is&nbsp;shown.</p>
           </div>
           
+        </div>
+      
+        <div class="">
+          <h6><a href="signal.WebView.query-permission-state.html">WebKit2.WebView::query-permission-state</a></h6>
+          <div class="docblock">
+            <p>This signal allows the User-Agent to respond to permission requests for powerful features, as
+specified by the <a href="https://w3c.github.io/permissions/">Permissions <span class="caps">W3C</span> Specification</a>.
+You can reply to the query using&nbsp;webkit_permission_state_query_finish().</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
         </div>
       
         <div class="">
@@ -3158,8 +3224,9 @@ its value set through g_object_set_property(), g_object_set(), et&nbsp;al.</p>
   );
   gboolean (* show_option_menu) (
     WebKitWebView* web_view,
-    GdkRectangle* rectangle,
-    WebKitOptionMenu* menu
+    WebKitOptionMenu* menu,
+    GdkEvent* event,
+    GdkRectangle* rectangle
   );
   void (* web_process_terminated) (
     WebKitWebView* web_view,
@@ -3169,8 +3236,9 @@ its value set through g_object_set_property(), g_object_set(), et&nbsp;al.</p>
     WebKitWebView* web_view,
     WebKitUserMessage* message
   );
-  void (* _webkit_reserved0) (
-void
+  gboolean (* query_permission_state) (
+    WebKitWebView* web_view,
+    WebKitPermissionStateQuery* query
   );
   
 }</code></pre>
@@ -3489,8 +3557,9 @@ void
           <td style="vertical-align:top"><code>show_option_menu</code></td>
           <td style="vertical-align:top"><pre><code>gboolean (* show_option_menu) (
     WebKitWebView* web_view,
-    GdkRectangle* rectangle,
-    WebKitOptionMenu* menu
+    WebKitOptionMenu* menu,
+    GdkEvent* event,
+    GdkRectangle* rectangle
   )</code></pre></td>
         </tr>
         <tr>
@@ -3523,9 +3592,10 @@ void
         </td>
         
         <tr>
-          <td style="vertical-align:top"><code>_webkit_reserved0</code></td>
-          <td style="vertical-align:top"><pre><code>void (* _webkit_reserved0) (
-void
+          <td style="vertical-align:top"><code>query_permission_state</code></td>
+          <td style="vertical-align:top"><pre><code>gboolean (* query_permission_state) (
+    WebKitWebView* web_view,
+    WebKitPermissionStateQuery* query
   )</code></pre></td>
         </tr>
         <tr>
@@ -3690,6 +3760,16 @@ void
       
       <div class="">
         <h6 id="vfunc-print"><a href="vfunc.WebView.print.html">WebKit2.WebViewClass.print</a></h6>
+
+        <div class="docblock">
+          No description available.
+        </div>
+
+          
+      </div>
+      
+      <div class="">
+        <h6 id="vfunc-query_permission_state"><a href="vfunc.WebView.query_permission_state.html">WebKit2.WebViewClass.query_permission_state</a></h6>
 
         <div class="docblock">
           No description available.

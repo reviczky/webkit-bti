@@ -21,6 +21,7 @@
 #include "WebKitFindController.h"
 
 #include "APIFindClient.h"
+#include "WebFindOptions.h"
 #include "WebKitEnumTypes.h"
 #include "WebKitWebViewPrivate.h"
 #include <glib/gi18n-lib.h>
@@ -80,7 +81,7 @@ struct _WebKitFindControllerPrivate {
 
 static guint signals[LAST_SIGNAL] = { 0, };
 
-WEBKIT_DEFINE_TYPE(WebKitFindController, webkit_find_controller, G_TYPE_OBJECT)
+WEBKIT_DEFINE_FINAL_TYPE(WebKitFindController, webkit_find_controller, G_TYPE_OBJECT, GObject)
 
 static inline OptionSet<WebKit::FindOptions> toWebFindOptions(uint32_t findOptions)
 {
@@ -196,8 +197,7 @@ static void webkit_find_controller_class_init(WebKitFindControllerClass* findCla
     g_object_class_install_property(gObjectClass,
                                     PROP_TEXT,
                                     g_param_spec_string("text",
-                                                        _("Search text"),
-                                                        _("Text to search for in the view"),
+                                                        nullptr, nullptr,
                                                         0,
                                                         WEBKIT_PARAM_READABLE));
 
@@ -209,8 +209,7 @@ static void webkit_find_controller_class_init(WebKitFindControllerClass* findCla
     g_object_class_install_property(gObjectClass,
                                     PROP_OPTIONS,
                                     g_param_spec_flags("options",
-                                                       _("Search Options"),
-                                                       _("Search options to be used in the search operation"),
+                                                       nullptr, nullptr,
                                                        WEBKIT_TYPE_FIND_OPTIONS,
                                                        WEBKIT_FIND_OPTIONS_NONE,
                                                        WEBKIT_PARAM_READABLE));
@@ -223,8 +222,7 @@ static void webkit_find_controller_class_init(WebKitFindControllerClass* findCla
     g_object_class_install_property(gObjectClass,
                                     PROP_MAX_MATCH_COUNT,
                                     g_param_spec_uint("max-match-count",
-                                                      _("Maximum matches count"),
-                                                      _("The maximum number of matches in a given text to report"),
+                                                      nullptr, nullptr,
                                                       0, G_MAXUINT, 0,
                                                       WEBKIT_PARAM_READABLE));
 
@@ -236,8 +234,7 @@ static void webkit_find_controller_class_init(WebKitFindControllerClass* findCla
     g_object_class_install_property(gObjectClass,
                                     PROP_WEB_VIEW,
                                     g_param_spec_object("web-view",
-                                                        _("WebView"),
-                                                        _("The WebView associated with this find controller"),
+                                                        nullptr, nullptr,
                                                         WEBKIT_TYPE_WEB_VIEW,
                                                         static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 

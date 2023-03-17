@@ -34,6 +34,10 @@
 #include <WebCore/SampleBufferDisplayLayer.h>
 #include <wtf/WeakPtr.h>
 
+namespace WebCore {
+enum class VideoFrameRotation : uint16_t;
+}
+
 namespace WebKit {
 
 class SampleBufferDisplayLayerManager;
@@ -48,7 +52,8 @@ public:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
     using GPUProcessConnection::Client::weakPtrFactory;
-    using WeakValueType = GPUProcessConnection::Client::WeakValueType;
+    using GPUProcessConnection::Client::WeakValueType;
+    using GPUProcessConnection::Client::WeakPtrImplType;
 
 private:
     SampleBufferDisplayLayer(SampleBufferDisplayLayerManager&, WebCore::SampleBufferDisplayLayer::Client&);
@@ -62,7 +67,7 @@ private:
     bool didFail() const final;
     void updateDisplayMode(bool hideDisplayLayer, bool hideRootLayer) final;
     void updateAffineTransform(CGAffineTransform) final;
-    void updateBoundsAndPosition(CGRect, WebCore::VideoFrame::Rotation) final;
+    void updateBoundsAndPosition(CGRect, WebCore::VideoFrameRotation) final;
     void flush() final;
     void flushAndRemoveImage() final;
     void play() final;

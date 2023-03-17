@@ -47,7 +47,9 @@ class PlatformCALayerRemote;
 class RemoteLayerBackingStoreCollection;
 enum class SwapBuffersDisplayRequirement : uint8_t;
 
-using UseOutOfLineSurfaces = WebCore::ImageBuffer::CreationContext::UseOutOfLineSurfaces;
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
+using UseCGDisplayListImageCache = WebCore::ImageBufferCreationContext::UseCGDisplayListImageCache;
+#endif
 
 class RemoteLayerBackingStore {
     WTF_MAKE_NONCOPYABLE(RemoteLayerBackingStore);
@@ -56,20 +58,55 @@ public:
     RemoteLayerBackingStore(PlatformCALayerRemote*);
     ~RemoteLayerBackingStore();
 
-    enum class Type : uint8_t {
+    enum class Type : bool {
         IOSurface,
         Bitmap
     };
 
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
     enum class IncludeDisplayList : bool { No, Yes };
-    void ensureBackingStore(Type, WebCore::FloatSize, float scale, bool deepColor, bool isOpaque, IncludeDisplayList, UseOutOfLineSurfaces);
+#endif
+
+    struct Parameters {
+        Type type { Type::Bitmap };
+        WebCore::FloatSize size;
+        WebCore::DestinationColorSpace colorSpace { WebCore::DestinationColorSpace::SRGB() };
+        float scale { 1.0f };
+        bool deepColor { false };
+        bool isOpaque { false };
+
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
+        IncludeDisplayList includeDisplayList { IncludeDisplayList::No };
+        UseCGDisplayListImageCache useCGDisplayListImageCache { UseCGDisplayListImageCache::No };
+#endif
+        
+        void encode(IPC::Encoder&) const;
+        static WARN_UNUSED_RETURN bool decode(IPC::Decoder&, Parameters&);
+
+        bool operator==(const Parameters& other) const
+        {
+            return (type == other.type
+                && size == other.size
+                && colorSpace == other.colorSpace
+                && scale == other.scale
+                && deepColor == other.deepColor
+                && isOpaque == other.isOpaque
+#if ENABLE(CG_DISPLAY_LIST_BACKED_IMAGE_BUFFER)
+                && includeDisplayList == other.includeDisplayList
+                && useCGDisplayListImageCache == other.useCGDisplayListImageCache
+#endif
+                );
+        }
+    };
+
+    void ensureBackingStore(const Parameters&);
 
     void setNeedsDisplay(const WebCore::IntRect);
     void setNeedsDisplay();
 
     void setContents(WTF::MachSendRight&& surfaceHandle);
 
-    // Returns true if we need encode the buffer.
+    // Returns true if we need to encode the buffer.
     bool layerWillBeDisplayed();
     bool needsDisplay() const;
 
@@ -77,11 +114,13 @@ public:
     void prepareToDisplay();
     void paintContents();
 
-    WebCore::FloatSize size() const { return m_size; }
-    float scale() const { return m_scale; }
+    WebCore::FloatSize size() const { return m_parameters.size; }
+    float scale() const { return m_parameters.scale; }
+    bool usesDeepColorBackingStore() const;
+    WebCore::DestinationColorSpace colorSpace() const { return m_parameters.colorSpace; }
     WebCore::PixelFormat pixelFormat() const;
-    Type type() const { return m_type; }
-    bool isOpaque() const { return m_isOpaque; }
+    Type type() const { return m_parameters.type; }
+    bool isOpaque() const { return m_parameters.isOpaque; }
     unsigned bytesPerPixel() const;
 
     PlatformCALayerRemote* layer() const { return m_layer; }
@@ -117,17 +156,19 @@ public:
     bool setBufferVolatile(BufferType);
     WebCore::SetNonVolatileResult setFrontBufferNonVolatile();
 
-    bool hasEmptyDirtyRegion() const { return m_dirtyRegion.isEmpty() || m_size.isEmpty(); }
+    bool hasEmptyDirtyRegion() const { return m_dirtyRegion.isEmpty() || m_parameters.size.isEmpty(); }
     bool supportsPartialRepaint() const;
 
     MonotonicTime lastDisplayTime() const { return m_lastDisplayTime; }
 
     void clearBackingStore();
 
+    static RetainPtr<id> layerContentsBufferFromBackendHandle(ImageBufferBackendHandle&&, LayerContentsType);
+
 private:
     RemoteLayerBackingStoreCollection* backingStoreCollection() const;
 
-    void drawInContext(WebCore::GraphicsContext&);
+    void drawInContext(WebCore::GraphicsContext&, WTF::Function<void()>&& additionalContextSetupCallback = nullptr);
 
     struct Buffer {
         RefPtr<WebCore::ImageBuffer> imageBuffer;
@@ -149,9 +190,7 @@ private:
 
     PlatformCALayerRemote* m_layer;
 
-    WebCore::FloatSize m_size;
-    float m_scale { 1.0f };
-    bool m_isOpaque { false };
+    Parameters m_parameters;
 
     WebCore::Region m_dirtyRegion;
 
@@ -162,7 +201,7 @@ private:
 
     // Used in the UI Process.
     std::optional<ImageBufferBackendHandle> m_bufferHandle;
-    // FIXME: This should be removed and m_bufferHandle should be used to ref the buffer once ShareableBitmap::Handle
+    // FIXME: This should be removed and m_bufferHandle should be used to ref the buffer once ShareableBitmapHandle
     // can be encoded multiple times. http://webkit.org/b/234169
     std::optional<MachSendRight> m_contentsBufferHandle;
 
@@ -173,34 +212,9 @@ private:
 
     Vector<std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher>> m_frontBufferFlushers;
 
-    Type m_type;
-    IncludeDisplayList m_includeDisplayList { IncludeDisplayList::No };
-    UseOutOfLineSurfaces m_useOutOfLineSurfaces { UseOutOfLineSurfaces::No };
-    bool m_deepColor { false };
-
     WebCore::RepaintRectList m_paintingRects;
 
     MonotonicTime m_lastDisplayTime;
 };
 
 } // namespace WebKit
-
-namespace WTF {
-
-template<> struct EnumTraits<WebKit::RemoteLayerBackingStore::Type> {
-    using values = EnumValues<
-        WebKit::RemoteLayerBackingStore::Type,
-        WebKit::RemoteLayerBackingStore::Type::IOSurface,
-        WebKit::RemoteLayerBackingStore::Type::Bitmap
-    >;
-};
-
-template<> struct EnumTraits<WebKit::RemoteLayerBackingStore::IncludeDisplayList> {
-    using values = EnumValues<
-        WebKit::RemoteLayerBackingStore::IncludeDisplayList,
-        WebKit::RemoteLayerBackingStore::IncludeDisplayList::No,
-        WebKit::RemoteLayerBackingStore::IncludeDisplayList::Yes
-    >;
-};
-
-} // namespace WTF

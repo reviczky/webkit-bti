@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -84,6 +84,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   <div class="links">
   
     <a class="signal current" href="signal.UserContentManager.script-message-received.html">script-message-received</a>
+  
+    <a class="signal" href="signal.UserContentManager.script-message-with-reply-received.html">script-message-with-reply-received</a>
   
   </div>
 </div>
@@ -110,7 +112,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <pre><code><div class="highlight"><pre><span></span><span class="kt">void</span>
 <span class="n">script_message_received</span><span class="w"> </span><span class="p">(</span>
 <span class="w">  </span><span class="n">WebKitUserContentManager</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span>
-<span class="w">  </span><span class="n">WebKitJavascriptResult</span><span class="o">*</span><span class="w"> </span><span class="n">js_result</span><span class="p">,</span>
+<span class="w">  </span><span class="n">WebKitJavascriptResult</span><span class="o">*</span><span class="w"> </span><span class="n">value</span><span class="p">,</span>
 <span class="w">  </span><span class="n">gpointer</span><span class="w"> </span><span class="n">user_data</span>
 <span class="p">)</span>
 </pre></div>
@@ -123,7 +125,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a href="#description" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitUserContentManager.cpp#L86">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitUserContentManager.cpp#L88">[src]</a>
         
       </h4>
 
@@ -165,12 +167,12 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <table class="arguments">
           
           <tr class="arg-name">
-            <td><code>js_result</code></td>
+            <td><code>value</code></td>
             <td><a href="struct.JavascriptResult.html"><code>WebKitJavascriptResult</code></a></td>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>
-            <td><p>The <code>WebKitJavascriptResult</code> holding the value received from the JavaScript&nbsp;world.</p></td>
+            <td><p>The value received from the JavaScript&nbsp;world.</p></td>
           </tr>
           
           

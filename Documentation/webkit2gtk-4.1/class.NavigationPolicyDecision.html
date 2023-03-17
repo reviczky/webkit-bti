@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -151,12 +151,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitNavigationPolicyDecision.cpp#L36">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitNavigationPolicyDecision.cpp#L35">[src]</a>
           
         </h4>
 
         <pre><code>class WebKit2.NavigationPolicyDecision : WebKit2.PolicyDecision {
-  parent: WebKitPolicyDecision
+  parent: WebKitPolicyDecision,
+  priv: WebKitNavigationPolicyDecisionPrivate*
 }</pre></code>
 
         <div class="docblock">
@@ -279,12 +280,12 @@ the navigation was triggered by a mouse&nbsp;event.</p>
 
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.NavigationPolicyDecision.get_frame_name.html">webkit_navigation_policy_decision_get_frame_name</a></h6>
           <div class="docblock">
             <p>Gets the value of the <code>WebKitNavigationPolicyDecision:frame-name</code> property.</p>
           </div>
-          
+          <div class="docblock"><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="deprecated">
@@ -385,7 +386,7 @@ the navigation was triggered by a mouse&nbsp;event.</p>
       
       <div class="docblock">
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="property.NavigationPolicyDecision.frame-name.html">WebKit2.NavigationPolicyDecision:frame-name</a></h6>
 
           <div class="docblock">
@@ -395,7 +396,7 @@ link with a target attribute equal to &#8220;_blank&#8221;, this property will c
 value of that attribute. In all other cases, this value will be <code>NULL</code>.</p>
           </div>
 
-          
+          <div class="docblock"><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="deprecated">

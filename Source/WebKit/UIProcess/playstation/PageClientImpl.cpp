@@ -30,6 +30,10 @@
 #include "PlayStationWebView.h"
 #include "WebPageProxy.h"
 
+#if USE(GRAPHICS_LAYER_WC)
+#include "DrawingAreaProxyWC.h"
+#endif
+
 namespace WebKit {
 
 PageClientImpl::PageClientImpl(PlayStationWebView& view)
@@ -38,9 +42,15 @@ PageClientImpl::PageClientImpl(PlayStationWebView& view)
 }
 
 // PageClient's pure virtual functions
-std::unique_ptr<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy& processProxy)
+std::unique_ptr<DrawingAreaProxy> PageClientImpl::createDrawingAreaProxy(WebProcessProxy&)
 {
-    return makeUnique<DrawingAreaProxyCoordinatedGraphics>(*m_view.page(), processProxy);
+#if USE(GRAPHICS_LAYER_WC)
+    if (m_view.page()->preferences().useGPUProcessForDOMRenderingEnabled()
+        || m_view.page()->preferences().useGPUProcessForCanvasRenderingEnabled()
+        || m_view.page()->preferences().useGPUProcessForWebGLEnabled())
+        return makeUnique<DrawingAreaProxyWC>(*m_view.page());
+#endif
+    return makeUnique<DrawingAreaProxyCoordinatedGraphics>(*m_view.page());
 }
 
 void PageClientImpl::setViewNeedsDisplay(const WebCore::Region& region)
@@ -105,10 +115,6 @@ void PageClientImpl::toolTipChanged(const String&, const String&)
 void PageClientImpl::didCommitLoadForMainFrame(const String& mimeType, bool useCustomContentProvider)
 {
     notImplemented();
-}
-
-void PageClientImpl::handleDownloadRequest(DownloadProxy&)
-{
 }
 
 void PageClientImpl::didChangeContentSize(const WebCore::IntSize& size)
@@ -190,6 +196,13 @@ RefPtr<WebPopupMenuProxy> PageClientImpl::createPopupMenuProxy(WebPageProxy&  pa
     notImplemented();
     return { };
 }
+
+#if USE(GRAPHICS_LAYER_WC)
+bool PageClientImpl::usesOffscreenRendering() const
+{
+    return false;
+}
+#endif
 
 void PageClientImpl::enterAcceleratedCompositingMode(const LayerTreeContext& context)
 {

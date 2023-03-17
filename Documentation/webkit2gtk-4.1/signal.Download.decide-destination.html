@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -131,15 +131,21 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a href="#description" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L277">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitDownload.cpp#L291">[src]</a>
         
       </h4>
 
       <div class="docblock">
         <p>This signal is emitted after response is received to
-decide a destination <span class="caps">URI</span> for the download. If this signal is not
-handled the file will be downloaded to <code>G_USER_DIRECTORY_DOWNLOAD</code>
+decide a destination for the download using
+webkit_download_set_destination(). If this signal is not
+handled, the file will be downloaded to <code>G_USER_DIRECTORY_DOWNLOAD</code>
 directory using <code>suggested_filename</code>.</p>
+<p>Since 2.40, you may handle this signal asynchronously by
+returning <code>TRUE</code> without calling webkit_download_set_destination().
+This indicates intent to eventually call webkit_download_set_destination().
+In this case, the download will not proceed until the destination is set
+or cancelled with&nbsp;webkit_download_cancel().</p>
       </div>
 
       <div class="docblock">
@@ -207,8 +213,8 @@ directory using <code>suggested_filename</code>.</p>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>
-            <td><p><code>TRUE</code> to stop other handlers from being invoked for the event.
-  <code>FALSE</code> to propagate the event&nbsp;further.</p></td>
+            <td><p><code>TRUE</code> to stop other handlers from being invoked for the event,
+  or <code>FALSE</code> to propagate the event&nbsp;further.</p></td>
           </tr>
           
           

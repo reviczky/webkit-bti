@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -112,6 +112,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="signal" href="signal.WebView.permission-request.html">permission-request</a>
   
     <a class="signal" href="signal.WebView.print.html">print</a>
+  
+    <a class="signal" href="signal.WebView.query-permission-state.html">query-permission-state</a>
   
     <a class="signal" href="signal.WebView.ready-to-show.html">ready-to-show</a>
   
@@ -177,7 +179,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         Description
         <a href="#description" class="anchor"></a>
         
-        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/glib/WebKitWebView.cpp#L2077">[src]</a>
+        <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/UIProcess/API/gtk/WebKitWebViewGtk3.cpp#L51">[src]</a>
         
       </h4>
 
@@ -209,21 +211,8 @@ or build its own context menu.
  signal because showing the proposed context menu is the default behaviour.
 </para></listitem>
 </itemizedlist></p>
-<p>The <code>event</code> is expected to be one of the following types:
-<itemizedlist>
-<listitem><para>
-a <code>GdkEventButton</code> of type <code>GDK_BUTTON_PRESS</code> when the context menu
-was triggered with mouse.
-</para></listitem>
-<listitem><para>
-a <code>GdkEventKey</code> of type <code>GDK_KEY_PRESS</code> if the keyboard was used to show
-the menu.
-</para></listitem>
-<listitem><para>
-a generic <code>GdkEvent</code> of type <code>GDK_NOTHING</code> when the <code>GtkWidget::popup-menu</code>
-signal was used to show the context menu.
-</para></listitem>
-</itemizedlist></p>
+<p>The <code>event</code> parameter is now deprecated. Use <code>webkit_context_menu_get_event()</code> to get the
+<code>GdkEvent</code> that triggered the context&nbsp;menu.</p>
 <p>If the signal handler returns <code>FALSE</code> the context menu represented by <code>context_menu</code>
 will be shown, if it return <code>TRUE</code> the context menu will not be&nbsp;shown.</p>
 <p>The proposed <code>WebKitContextMenu</code> passed in <code>context_menu</code> argument is only valid
@@ -280,7 +269,7 @@ during the signal&nbsp;emission.</p>
           </tr>
           <tr class="arg-description">
             <td>&nbsp;</td>
-            <td><p>The <code>GdkEvent</code> that triggered the context&nbsp;menu.</p></td>
+            <td><p>The <code>GdkEvent</code> that triggered the context menu. Deprecated&nbsp;2.40.</p></td>
           </tr>
           
           

@@ -103,7 +103,6 @@ class AudioSourceProviderGStreamer;
 class AudioTrackPrivateGStreamer;
 class InbandMetadataTextTrackPrivateGStreamer;
 class InbandTextTrackPrivateGStreamer;
-class MediaPlayerRequestInstallMissingPluginsCallback;
 class VideoTrackPrivateGStreamer;
 
 #if USE(TEXTURE_MAPPER_DMABUF)
@@ -161,7 +160,7 @@ public:
     MediaPlayer::NetworkState networkState() const final;
     MediaPlayer::ReadyState readyState() const final;
     void setPageIsVisible(bool visible) final { m_visible = visible; }
-    void setSize(const IntSize&) final;
+    void setPresentationSize(const IntSize&) final;
     // Prefer MediaTime based methods over float based.
     float duration() const final { return durationMediaTime().toFloat(); }
     double durationDouble() const final { return durationMediaTime().toDouble(); }
@@ -178,8 +177,7 @@ public:
     MediaTime minMediaTimeSeekable() const final { return MediaTime::zeroTime(); }
     bool didLoadingProgress() const final;
     unsigned long long totalBytes() const final;
-    bool hasSingleSecurityOrigin() const final;
-    std::optional<bool> wouldTaintOrigin(const SecurityOrigin&) const final;
+    std::optional<bool> isCrossOrigin(const SecurityOrigin&) const final;
     void simulateAudioInterruption() final;
 #if ENABLE(WEB_AUDIO)
     AudioSourceProvider* audioSourceProvider() final;
@@ -216,6 +214,7 @@ public:
     bool copyVideoTextureToPlatformTexture(GraphicsContextGL*, PlatformGLObject, GCGLenum, GCGLint, GCGLenum, GCGLenum, GCGLenum, bool, bool) override;
     RefPtr<NativeImage> nativeImageForCurrentTime() override;
 #endif
+    RefPtr<VideoFrame> videoFrameForCurrentTime() override;
 
     void updateEnabledVideoTrack();
     void updateEnabledAudioTrack();
@@ -383,9 +382,6 @@ protected:
 
 #if USE(GSTREAMER_GL)
     std::unique_ptr<VideoTextureCopierGStreamer> m_videoTextureCopier;
-    GRefPtr<GstGLColorConvert> m_colorConvert;
-    GRefPtr<GstCaps> m_colorConvertInputCaps;
-    GRefPtr<GstCaps> m_colorConvertOutputCaps;
 #endif
 
     ImageOrientation m_videoSourceOrientation;
@@ -494,6 +490,9 @@ private:
     void configureDepayloader(GstElement*);
     void configureVideoDecoder(GstElement*);
     void configureElement(GstElement*);
+#if PLATFORM(BROADCOM) || USE(WESTEROS_SINK)
+    void configureElementPlatformQuirks(GstElement*);
+#endif
 
     void setPlaybinURL(const URL& urlString);
 
@@ -531,8 +530,8 @@ private:
     bool m_hasAudio { false };
     Condition m_drawCondition;
     Lock m_drawLock;
-    RunLoop::Timer<MediaPlayerPrivateGStreamer> m_drawTimer WTF_GUARDED_BY_LOCK(m_drawLock);
-    RunLoop::Timer<MediaPlayerPrivateGStreamer> m_readyTimerHandler;
+    RunLoop::Timer m_drawTimer WTF_GUARDED_BY_LOCK(m_drawLock);
+    RunLoop::Timer m_readyTimerHandler;
 #if USE(TEXTURE_MAPPER_GL)
 #if USE(NICOSIA)
     RefPtr<Nicosia::ContentLayer> m_nicosiaLayer;
@@ -569,7 +568,6 @@ private:
     std::unique_ptr<AudioSourceProviderGStreamer> m_audioSourceProvider;
 #endif
     GRefPtr<GstElement> m_downloadBuffer;
-    Vector<RefPtr<MediaPlayerRequestInstallMissingPluginsCallback>> m_missingPluginCallbacks;
 
     HashMap<AtomString, Ref<AudioTrackPrivateGStreamer>> m_audioTracks;
     HashMap<AtomString, Ref<VideoTrackPrivateGStreamer>> m_videoTracks;
@@ -583,9 +581,6 @@ private:
     uint64_t m_httpResponseTotalSize { 0 };
     uint64_t m_networkReadPosition { 0 };
     mutable uint64_t m_readPositionAtLastDidLoadingProgress { 0 };
-
-    HashSet<RefPtr<WebCore::SecurityOrigin>> m_origins;
-    std::optional<bool> m_hasTaintedOrigin { std::nullopt };
 
     GRefPtr<GstElement> m_fpsSink { nullptr };
     uint64_t m_totalVideoFrames { 0 };

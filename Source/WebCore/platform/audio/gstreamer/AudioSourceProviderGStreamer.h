@@ -61,7 +61,7 @@ public:
     void configureAudioBin(GstElement* audioBin, GstElement* audioSink);
 
     void provideInput(AudioBus*, size_t framesToProcess) override;
-    void setClient(AudioSourceProviderClient*) override;
+    void setClient(WeakPtr<AudioSourceProviderClient>&&) override;
     const AudioSourceProviderClient* client() const { return m_client.get(); }
 
     void handleNewDeinterleavePad(GstPad*);
@@ -73,6 +73,8 @@ public:
 
 private:
 #if ENABLE(MEDIA_STREAM)
+    WeakPtr<MediaStreamTrackPrivate> m_captureSource;
+    RefPtr<MediaStreamPrivate> m_streamPrivate;
     GRefPtr<GstElement> m_pipeline;
 #endif
     enum MainThreadNotification {

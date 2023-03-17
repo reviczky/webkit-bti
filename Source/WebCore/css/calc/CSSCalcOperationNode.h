@@ -27,6 +27,7 @@
 
 #include "CSSCalcExpressionNode.h"
 #include "CalcOperator.h"
+#include <wtf/Vector.h>
 
 namespace WebCore {
 
@@ -115,8 +116,7 @@ private:
     double doubleValue(CSSUnitType) const final;
     double computeLengthPx(const CSSToLengthConversionData&) const final;
 
-    void collectDirectComputationalDependencies(HashSet<CSSPropertyID>&) const final;
-    void collectDirectRootComputationalDependencies(HashSet<CSSPropertyID>&) const final;
+    void collectComputedStyleDependencies(ComputedStyleDependencies&) const final;
     bool convertingToLengthRequiresNonNullStyle(int lengthConversion) const final;
 
     void dump(TextStream&) const final;
@@ -132,7 +132,7 @@ private:
     
     static double convertToTopLevelValue(double value)
     {
-        if (isnan(value))
+        if (std::isnan(value))
             value = std::numeric_limits<double>::infinity();
         return value;
     }

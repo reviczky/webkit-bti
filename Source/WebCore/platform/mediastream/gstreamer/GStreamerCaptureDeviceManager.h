@@ -75,7 +75,7 @@ public:
     static GStreamerDisplayCaptureDeviceManager& singleton();
     const Vector<CaptureDevice>& captureDevices() final { return m_devices; };
     void computeCaptureDevices(CompletionHandler<void()>&&) final;
-    CaptureSourceOrError createDisplayCaptureSource(const CaptureDevice&, String&&, const MediaConstraints*);
+    CaptureSourceOrError createDisplayCaptureSource(const CaptureDevice&, MediaDeviceHashSalts&&, const MediaConstraints*);
 
     enum PipeWireOutputType {
         Monitor = 1 << 0,
@@ -83,6 +83,9 @@ public:
     };
 
     void stopSource(const String& persistentID);
+
+    // DisplayCaptureManager interface
+    bool requiresCaptureDevicesEnumeration() const final { return true; }
 
 protected:
     void notifyResponse(GVariant* parameters) { m_currentResponseCallback(parameters); }

@@ -141,14 +141,9 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         this._buttonsNavigationItemGroup = new WI.GroupNavigationItem([this._harImportNavigationItem, this._harExportNavigationItem, new WI.DividerNavigationItem]);
         this._buttonsNavigationItemGroup.visibilityPriority = WI.NavigationItem.VisibilityPriority.Low;
 
-        // COMPATIBILITY (iOS 10.3): Network.setResourceCachingDisabled did not exist.
-        if (InspectorBackend.hasCommand("Network.setResourceCachingDisabled")) {
-            this._disableResourceCacheNavigationItem = new WI.CheckboxNavigationItem("network-disable-resource-cache", WI.UIString("Disable Caches"), WI.settings.resourceCachingDisabled.value);
-            this._disableResourceCacheNavigationItem.visibilityPriority = WI.NavigationItem.VisibilityPriority.High;
-            this._disableResourceCacheNavigationItem.addEventListener(WI.CheckboxNavigationItem.Event.CheckedDidChange, this._toggleDisableResourceCache, this);
-
-            WI.settings.resourceCachingDisabled.addEventListener(WI.Setting.Event.Changed, this._resourceCachingDisabledSettingChanged, this);
-        }
+        this._disableResourceCacheNavigationItem = new WI.CheckboxNavigationItem("network-disable-resource-cache", WI.UIString("Disable Caches"), WI.settings.resourceCachingDisabled.value);
+        this._disableResourceCacheNavigationItem.visibilityPriority = WI.NavigationItem.VisibilityPriority.High;
+        this._disableResourceCacheNavigationItem.addEventListener(WI.CheckboxNavigationItem.Event.CheckedDidChange, this._toggleDisableResourceCache, this);
 
         // COMPATIBILITY (macOS 13.0, iOS 16.0): Network.setEmulatedConditions did not exist.
         if (WI.settings.experimentalEnableNetworkEmulatedCondition.value && InspectorBackend.hasCommand("Network.setEmulatedConditions")) {
@@ -180,7 +175,8 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         WI.Resource.addEventListener(WI.Resource.Event.TransferSizeDidChange, this._resourceTransferSizeDidChange, this);
         WI.networkManager.addEventListener(WI.NetworkManager.Event.MainFrameDidChange, this._mainFrameDidChange, this);
 
-        WI.settings.clearNetworkOnNavigate.addEventListener(WI.Setting.Event.Changed, this._handleClearNetworkOnNavigateChanged, this)
+        WI.settings.clearNetworkOnNavigate.addEventListener(WI.Setting.Event.Changed, this._handleClearNetworkOnNavigateChanged, this);
+        WI.settings.resourceCachingDisabled.addEventListener(WI.Setting.Event.Changed, this._resourceCachingDisabledSettingChanged, this);
         if (WI.MediaInstrument.supported())
             WI.settings.groupMediaRequestsByDOMNode.addEventListener(WI.Setting.Event.Changed, this._handleGroupMediaRequestsByDOMNodeChanged, this);
 
@@ -1327,6 +1323,9 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         let statisticsContainer = this.element.appendChild(document.createElement("div"));
         statisticsContainer.className = "statistics";
 
+        this._referencePageLinkElement = statisticsContainer.appendChild(document.createElement("div"));
+        this._handleCurrentResourceDetailViewDidChange();
+
         let createStatisticElement = (name, image) => {
             let statistic = this._statistics[name];
             if (!statistic)
@@ -1587,9 +1586,12 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
 
     _highlightRelatedResourcesForHoveredResource()
     {
+        let highlightInitiated = !isNaN(this._hoveredRowIndex) && WI.modifierKeys.shiftKey;
+        this.element.classList.toggle("highlight-initiated", highlightInitiated);
+
         let needsRestyle = false;
 
-        if (isNaN(this._hoveredRowIndex) || !WI.modifierKeys.shiftKey) {
+        if (!highlightInitiated) {
             for (let entry of this._activeCollection.entries) {
                 if (entry.rowClassNames.length)
                     needsRestyle = true;
@@ -1637,6 +1639,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
 
         this.removeSubview(this._detailView);
         this._detailView = null;
+        this._handleCurrentResourceDetailViewDidChange();
 
         this._table.updateLayout(WI.View.LayoutReason.Resize);
         this._table.reloadVisibleColumnCells(this._waterfallColumn);
@@ -1651,9 +1654,10 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
             return;
 
         if (!this._detailView) {
-            if (object instanceof WI.Resource)
+            if (object instanceof WI.Resource) {
                 this._detailView = new WI.NetworkResourceDetailView(object, this);
-            else if (object instanceof WI.DOMNode) {
+                this._detailView.addEventListener(WI.ContentBrowser.Event.CurrentContentViewDidChange, this._handleCurrentResourceDetailViewDidChange, this);
+            } else if (object instanceof WI.DOMNode) {
                 this._detailView = new WI.NetworkDOMNodeDetailView(object, this);
             }
 
@@ -1675,6 +1679,9 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         // Currently the ResourceDetailView is in the heirarchy but has not yet done a layout so we
         // end up seeing the table behind it. This forces us to layout now instead of after a beat.
         this.updateLayout();
+
+        if (!oldDetailView)
+            this._handleCurrentResourceDetailViewDidChange();
     }
 
     _positionDetailView()
@@ -1994,7 +2001,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
 
         let rowClassNames = [];
 
-        if (this._hoveredRowIndex) {
+        if (!isNaN(this._hoveredRowIndex) && WI.modifierKeys.shiftKey) {
             let hoveredEntry = this._activeCollection.filteredEntries[this._hoveredRowIndex];
             if (hoveredEntry?.resource?.initiatedResources.includes(resource))
                 rowClassNames.push("initiated");
@@ -2660,6 +2667,16 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
     _handleGlobalModifierKeysDidChange(event)
     {
         this._highlightRelatedResourcesForHoveredResource();
+    }
+
+    _handleCurrentResourceDetailViewDidChange(event)
+    {
+        let oldReferencePageLinkElement = this._referencePageLinkElement;
+
+        let referencePage = this._detailView?.referencePage ?? WI.ReferencePage.NetworkTab;
+        this._referencePageLinkElement = referencePage.createLinkElement();
+
+        oldReferencePageLinkElement.parentNode.replaceChild(this._referencePageLinkElement, oldReferencePageLinkElement);
     }
 };
 

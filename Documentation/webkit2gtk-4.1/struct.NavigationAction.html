@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -92,6 +92,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="method.NavigationAction.copy.html">copy</a>
   
     <a class="method" href="method.NavigationAction.free.html">free</a>
+  
+    <a class="method" href="method.NavigationAction.get_frame_name.html">get_frame_name</a>
   
     <a class="method" href="method.NavigationAction.get_modifiers.html">get_modifiers</a>
   
@@ -187,6 +189,18 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           </div>
 
           <div class="docblock"><p>Available since: 2.6</p></div>
+        </div>
+      
+        <div class="">
+          <h6><a href="method.NavigationAction.get_frame_name.html">webkit_navigation_action_get_frame_name</a></h6>
+
+          <div class="docblock">
+            <p>Gets the <code>navigation</code> target frame name. For example if navigation was triggered by clicking a
+link with a target attribute equal to &#8220;_blank&#8221;, this will return the value of that attribute.
+In all other cases this function will return <code>NULL</code>.</p>
+          </div>
+
+          <div class="docblock"><p>Available since: 2.40</p></div>
         </div>
       
         <div class="">

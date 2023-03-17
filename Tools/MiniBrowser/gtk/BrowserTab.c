@@ -125,10 +125,7 @@ static gboolean decidePolicy(WebKitWebView *webView, WebKitPolicyDecision *decis
     if (webkit_response_policy_decision_is_mime_type_supported(responseDecision))
         return FALSE;
 
-    WebKitWebResource *mainResource = webkit_web_view_get_main_resource(webView);
-    WebKitURIRequest *request = webkit_response_policy_decision_get_request(responseDecision);
-    const char *requestURI = webkit_uri_request_get_uri(request);
-    if (g_strcmp0(webkit_web_resource_get_uri(mainResource), requestURI))
+    if (!webkit_response_policy_decision_is_main_frame_main_resource(responseDecision))
         return FALSE;
 
     webkit_policy_decision_download(decision);
@@ -221,7 +218,11 @@ static void tlsErrorsDialogResponse(GtkWidget *dialog, gint response, BrowserTab
         GTlsCertificate *certificate = (GTlsCertificate *)g_object_get_data(G_OBJECT(dialog), "certificate");
 #if SOUP_CHECK_VERSION(2, 91, 0)
         GUri *uri = g_uri_parse(failingURI, SOUP_HTTP_URI_FLAGS, NULL);
+#if GTK_CHECK_VERSION(3, 98, 5)
+        webkit_network_session_allow_tls_certificate_for_host(webkit_web_view_get_network_session(tab->webView), certificate, g_uri_get_host(uri));
+#else
         webkit_web_context_allow_tls_certificate_for_host(webkit_web_view_get_context(tab->webView), certificate, g_uri_get_host(uri));
+#endif
         g_uri_unref(uri);
 #else
         SoupURI *uri = soup_uri_new(failingURI);
@@ -322,10 +323,6 @@ static gboolean decidePermissionRequest(WebKitWebView *webView, WebKitPermission
         else if (isForDisplayDevice)
             mediaType = "display";
         text = g_strdup_printf("Allow access to %s device?", mediaType);
-    } else if (WEBKIT_IS_INSTALL_MISSING_MEDIA_PLUGINS_PERMISSION_REQUEST(request)) {
-        title = "Media plugin missing request";
-        text = g_strdup_printf("The media backend was unable to find a plugin to play the requested media:\n%s.\nAllow to search and install the missing plugin?",
-            webkit_install_missing_media_plugins_permission_request_get_description(WEBKIT_INSTALL_MISSING_MEDIA_PLUGINS_PERMISSION_REQUEST(request)));
     } else if (WEBKIT_IS_DEVICE_INFO_PERMISSION_REQUEST(request)) {
         char* origin = getWebViewOrigin(webView);
         if (g_hash_table_contains(userMediaPermissionGrantedOrigins, origin)) {
@@ -743,8 +740,7 @@ static void browser_tab_class_init(BrowserTabClass *klass)
         PROP_VIEW,
         g_param_spec_object(
             "view",
-            "View",
-            "The web view of this tab",
+            NULL, NULL,
             WEBKIT_TYPE_WEB_VIEW,
             G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 }
@@ -788,7 +784,7 @@ void browser_tab_load_uri(BrowserTab *tab, const char *uri)
         return;
     }
 
-    webkit_web_view_run_javascript(tab->webView, strstr(uri, "javascript:"), NULL, NULL, NULL);
+    webkit_web_view_evaluate_javascript(tab->webView, strstr(uri, "javascript:"), -1, NULL, NULL, NULL, NULL, NULL);
 }
 
 GtkWidget *browser_tab_get_title_widget(BrowserTab *tab)

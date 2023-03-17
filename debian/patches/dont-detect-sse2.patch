@@ -2,12 +2,25 @@ From: Alberto Garcia <berto@igalia.com>
 Subject: Don't check for SSE2 support on i386
 Bug-Debian: https://bugs.debian.org/930935
 Forwarded: no
+Index: webkitgtk/Source/ThirdParty/ANGLE/src/common/platform.h
+===================================================================
+--- webkitgtk.orig/Source/ThirdParty/ANGLE/src/common/platform.h
++++ webkitgtk/Source/ThirdParty/ANGLE/src/common/platform.h
+@@ -102,7 +102,7 @@
+ #if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64)
+ #    include <intrin.h>
+ #    define ANGLE_USE_SSE
+-#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
++#elif defined(__GNUC__) && defined(__x86_64__)
+ #    include <x86intrin.h>
+ #    define ANGLE_USE_SSE
+ #endif
 Index: webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/WebKitCompilerFlags.cmake
 +++ webkitgtk/Source/cmake/WebKitCompilerFlags.cmake
-@@ -154,15 +154,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
-         WEBKIT_PREPEND_GLOBAL_CXX_FLAGS(-Wno-odr)
+@@ -177,15 +177,6 @@ if (COMPILER_IS_GCC_OR_CLANG)
+         WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-fmax-errors=20)
      endif ()
  
 -    # Force SSE2 fp on x86 builds.

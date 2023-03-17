@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -70,12 +70,17 @@ private:
         return root().streamClientConnection().send(WTFMove(message), backing(), defaultSendTimeout);
     }
     template<typename T>
-    WARN_UNUSED_RETURN IPC::Connection::SendSyncResult sendSync(T&& message, typename T::Reply&& reply)
+    WARN_UNUSED_RETURN IPC::Connection::SendSyncResult<T> sendSync(T&& message)
     {
-        return root().streamClientConnection().sendSync(WTFMove(message), WTFMove(reply), backing(), defaultSendTimeout);
+        return root().streamClientConnection().sendSync(WTFMove(message), backing(), defaultSendTimeout);
+    }
+    template<typename T, typename C>
+    WARN_UNUSED_RETURN IPC::StreamClientConnection::AsyncReplyID sendWithAsyncReply(T&& message, C&& completionHandler)
+    {
+        return root().streamClientConnection().sendWithAsyncReply(WTFMove(message), completionHandler, backing(), defaultSendTimeout);
     }
 
-    PAL::WebGPU::Queue& queue() final;
+    Ref<PAL::WebGPU::Queue> queue() final;
 
     void destroy() final;
 

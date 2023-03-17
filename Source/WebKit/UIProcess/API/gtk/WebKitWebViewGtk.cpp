@@ -152,7 +152,7 @@ struct WindowStateEvent {
 
     Type type;
     CompletionHandler<void()> completionHandler;
-    RunLoop::Timer<WindowStateEvent> completeTimer;
+    RunLoop::Timer completeTimer;
 };
 
 static const char* gWindowStateEventID = "wk-window-state-event";
@@ -330,9 +330,10 @@ void webkitWebViewRestoreWindow(WebKitWebView* view, CompletionHandler<void()>&&
  */
 GtkWidget* webkit_web_view_new()
 {
-    return webkit_web_view_new_with_context(webkit_web_context_get_default());
+    return GTK_WIDGET(g_object_new(WEBKIT_TYPE_WEB_VIEW, nullptr));
 }
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_view_new_with_context:
  * @context: the #WebKitWebContext to be used by the #WebKitWebView
@@ -351,11 +352,15 @@ GtkWidget* webkit_web_view_new_with_context(WebKitWebContext* context)
     g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), 0);
 
     return GTK_WIDGET(g_object_new(WEBKIT_TYPE_WEB_VIEW,
+#if !ENABLE(2022_GLIB_API)
         "is-ephemeral", webkit_web_context_is_ephemeral(context),
+#endif
         "web-context", context,
         nullptr));
 }
+#endif
 
+#if !ENABLE(2022_GLIB_API)
 /**
  * webkit_web_view_new_with_related_view: (constructor)
  * @web_view: the related #WebKitWebView
@@ -426,6 +431,7 @@ GtkWidget* webkit_web_view_new_with_user_content_manager(WebKitUserContentManage
 
     return GTK_WIDGET(g_object_new(WEBKIT_TYPE_WEB_VIEW, "user-content-manager", userContentManager, nullptr));
 }
+#endif
 
 /**
  * webkit_web_view_set_background_color:
@@ -491,41 +497,4 @@ void webkit_web_view_get_background_color(WebKitWebView* webView, GdkRGBA* rgba)
 
     auto& page = *webkitWebViewBaseGetPage(reinterpret_cast<WebKitWebViewBase*>(webView));
     *rgba = page.backgroundColor().value_or(WebCore::Color::white);
-}
-
-guint createShowOptionMenuSignal(WebKitWebViewClass* webViewClass)
-{
-    /**
-     * WebKitWebView::show-option-menu:
-     * @web_view: the #WebKitWebView on which the signal is emitted
-     * @menu: the #WebKitOptionMenu
-     * @event: the #GdkEvent that triggered the menu, or %NULL
-     * @rectangle: the option element area
-     *
-     * This signal is emitted when a select element in @web_view needs to display a
-     * dropdown menu. This signal can be used to show a custom menu, using @menu to get
-     * the details of all items that should be displayed. The area of the element in the
-     * #WebKitWebView is given as @rectangle parameter, it can be used to position the
-     * menu. If this was triggered by a user interaction, like a mouse click,
-     * @event parameter provides the #GdkEvent.
-     * To handle this signal asynchronously you should keep a ref of the @menu.
-     *
-     * The default signal handler will pop up a #GtkMenu.
-     *
-     * Returns: %TRUE to stop other handlers from being invoked for the event.
-     *   %FALSE to propagate the event further.
-     *
-     * Since: 2.18
-     */
-    return g_signal_new(
-        "show-option-menu",
-        G_TYPE_FROM_CLASS(webViewClass),
-        G_SIGNAL_RUN_LAST,
-        G_STRUCT_OFFSET(WebKitWebViewClass, show_option_menu),
-        g_signal_accumulator_true_handled, nullptr,
-        g_cclosure_marshal_generic,
-        G_TYPE_BOOLEAN, 3,
-        WEBKIT_TYPE_OPTION_MENU,
-        GDK_TYPE_EVENT | G_SIGNAL_TYPE_STATIC_SCOPE,
-        GDK_TYPE_RECTANGLE | G_SIGNAL_TYPE_STATIC_SCOPE);
 }

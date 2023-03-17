@@ -65,17 +65,13 @@ typedef struct _JSCClassPrivate {
     JSC::Weak<JSC::JSObject> prototype;
 } JSCClassPrivate;
 
-struct _JSCClass {
-    GObject parent;
-
-    JSCClassPrivate* priv;
-};
-
+#if !ENABLE(2022_GLIB_API)
 struct _JSCClassClass {
     GObjectClass parent_class;
 };
+#endif
 
-WEBKIT_DEFINE_TYPE(JSCClass, jsc_class, G_TYPE_OBJECT)
+WEBKIT_DEFINE_FINAL_TYPE(JSCClass, jsc_class, G_TYPE_OBJECT, GObject)
 
 class VTableExceptionHandler {
 public:
@@ -337,8 +333,7 @@ static void jsc_class_class_init(JSCClassClass* klass)
         PROP_CONTEXT,
         g_param_spec_object(
             "context",
-            "JSCContext",
-            "JSC Context",
+            nullptr, nullptr,
             JSC_TYPE_CONTEXT,
             static_cast<GParamFlags>(WEBKIT_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY)));
 
@@ -351,8 +346,7 @@ static void jsc_class_class_init(JSCClassClass* klass)
         PROP_NAME,
         g_param_spec_string(
             "name",
-            "Name",
-            "The class name",
+            nullptr, nullptr,
             nullptr,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 
@@ -365,8 +359,7 @@ static void jsc_class_class_init(JSCClassClass* klass)
         PROP_PARENT,
         g_param_spec_object(
             "parent",
-            "Partent",
-            "The parent class",
+            nullptr, nullptr,
             JSC_TYPE_CLASS,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 }

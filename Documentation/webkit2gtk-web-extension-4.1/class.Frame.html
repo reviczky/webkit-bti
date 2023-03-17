@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2WebExtension</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -138,12 +138,13 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
           Description
           <a href="#description" class="anchor"></a>
           
-          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitFrame.cpp#L40">[src]</a>
+          <a class="srclink" title="go to source location" href="https://github.com/WebKit/WebKit/tree/Source/WebKit/WebProcess/InjectedBundle/API/glib/WebKitFrame.cpp#L44">[src]</a>
           
         </h4>
 
         <pre><code>class WebKit2WebExtension.Frame : GObject.Object {
-  parent: GObject
+  parent: GObject,
+  priv: WebKitFramePrivate*
 }</pre></code>
 
         <div class="docblock">
@@ -293,22 +294,22 @@ between the WebKit and JavaScriptCore&nbsp;APIs.</p>
           <div class="docblock"><p>Available since: 2.22</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.Frame.get_js_value_for_dom_object.html">webkit_frame_get_js_value_for_dom_object</a></h6>
           <div class="docblock">
             <p>Get a <code>JSCValue</code> referencing the given <span class="caps">DOM</span> object. The value is created in the JavaScript execution
 context of <code>frame</code>.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.22</p></div>
+          <div class="docblock"><p>Available since: 2.22</p><p>Deprecated since: 2.40</p></div>
         </div>
       
-        <div class="">
+        <div class="deprecated">
           <h6><a href="method.Frame.get_js_value_for_dom_object_in_script_world.html">webkit_frame_get_js_value_for_dom_object_in_script_world</a></h6>
           <div class="docblock">
             <p>Get a <code>JSCValue</code> referencing the given <span class="caps">DOM</span> object. The value is created in the JavaScript execution
 context of <code>frame</code> for the given <code>WebKitScriptWorld</code>.</p>
           </div>
-          <div class="docblock"><p>Available since: 2.22</p></div>
+          <div class="docblock"><p>Available since: 2.22</p><p>Deprecated since: 2.40</p></div>
         </div>
       
         <div class="">

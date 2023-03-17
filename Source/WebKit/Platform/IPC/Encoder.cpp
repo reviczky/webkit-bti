@@ -104,6 +104,11 @@ void Encoder::setShouldDispatchMessageWhenWaitingForSyncReply(ShouldDispatchWhen
     }
 }
 
+bool Encoder::isFullySynchronousModeForTesting() const
+{
+    return messageFlags().contains(MessageFlags::UseFullySynchronousModeForTesting);
+}
+
 void Encoder::setFullySynchronousModeForTesting()
 {
     messageFlags().add(MessageFlags::UseFullySynchronousModeForTesting);
@@ -186,14 +191,6 @@ uint8_t* Encoder::grow(size_t alignment, size_t size)
     m_bufferPointer = m_buffer + alignedSize + size;
 
     return m_buffer + alignedSize;
-}
-
-void Encoder::encodeFixedLengthData(const uint8_t* data, size_t size, size_t alignment)
-{
-    ASSERT(!(reinterpret_cast<uintptr_t>(data) % alignment));
-
-    uint8_t* buffer = grow(alignment, size);
-    memcpy(buffer, data, size);
 }
 
 void Encoder::addAttachment(Attachment&& attachment)

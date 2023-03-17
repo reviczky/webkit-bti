@@ -36,7 +36,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -45,6 +45,8 @@ struct SameSizeAsElementRareData : NodeR
+@@ -44,6 +44,8 @@ struct SameSizeAsElementRareData : NodeR
      ExplicitlySetAttrElementsMap explicitlySetAttrElementsMap;
  };
  
@@ -49,8 +49,8 @@ Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/NodeRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/NodeRareData.cpp
-@@ -41,7 +41,9 @@ struct SameSizeAsNodeRareData {
-     void* m_pointer[2];
+@@ -42,7 +42,9 @@ struct SameSizeAsNodeRareData {
+     WeakPtr<Node, WeakPtrImplWithEventTargetData> m_weakPointer;
  };
  
 +#if !defined(__m68k__)
@@ -63,24 +63,24 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -60,10 +60,12 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -59,10 +59,12 @@ struct SameSizeAsShadowRoot : public Doc
      std::optional<HashMap<AtomString, AtomString>> partMappings;
  };
  
 +#if !defined(__m68k__)
  static_assert(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), "shadowroot should stay small");
  #if !ASSERT_ENABLED
- static_assert(sizeof(WeakPtr<Element>) == sizeof(void*), "WeakPtr should be same size as raw pointer");
+ static_assert(sizeof(WeakPtr<Element, WeakPtrImplWithEventTargetData>) == sizeof(void*), "WeakPtr should be same size as raw pointer");
  #endif
 +#endif
  
- ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type, DelegatesFocus delegatesFocus)
+ ShadowRoot::ShadowRoot(Document& document, ShadowRootMode mode, SlotAssignmentMode assignmentMode, DelegatesFocus delegatesFocus, Cloneable cloneable, AvailableToElementInternals availableToElementInternals)
      : DocumentFragment(document, CreateShadowRoot)
 Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/RenderStyle.cpp
 +++ webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
-@@ -68,7 +68,9 @@ struct SameSizeAsBorderValue {
+@@ -70,7 +70,9 @@ struct SameSizeAsBorderValue {
      int m_restBits;
  };
  
@@ -89,8 +89,8 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 +#endif
  
  struct SameSizeAsRenderStyle {
-     void* dataRefs[7];
-@@ -86,7 +88,9 @@ struct SameSizeAsRenderStyle {
+     void* nonInheritedDataRefs[1];
+@@ -89,7 +91,9 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -98,8 +98,8 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
 +#endif
  
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(PseudoStyleCache);
  DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderStyle);
- 
 Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/StyleBoxData.cpp
@@ -118,10 +118,10 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 +++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
-@@ -49,7 +49,9 @@ struct SameSizeAsFontCascadeDescription
+@@ -54,7 +54,9 @@ struct SameSizeAsFontCascadeDescription
+     float size2;
      unsigned bitfields3 : 10;
  };
- 
 +#if !defined(__m68k__)
  static_assert(sizeof(FontCascadeDescription) == sizeof(SameSizeAsFontCascadeDescription), "FontCascadeDescription should stay small");
 +#endif
@@ -158,7 +158,7 @@ Index: webkitgtk/Source/JavaScriptCore/bytecompiler/BytecodeGenerator.cpp
  namespace JSC {
  
  template<typename CallOp, typename = std::true_type>
-@@ -5468,3 +5473,6 @@ void printInternal(PrintStream& out, JSC
+@@ -5497,3 +5502,6 @@ void printInternal(PrintStream& out, JSC
  
  } // namespace WTF
  
@@ -183,7 +183,7 @@ Index: webkitgtk/Source/WebCore/css/CSSValue.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSValue.cpp
 +++ webkitgtk/Source/WebCore/css/CSSValue.cpp
-@@ -82,7 +82,9 @@ struct SameSizeAsCSSValue {
+@@ -87,7 +87,9 @@ struct SameSizeAsCSSValue {
      uint32_t bitfields;
  };
  

@@ -43,7 +43,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
   
 
   
-  <script src="urlmap.js"></script>
+  <script src="gtk3-urlmap.js"></script>
   
   
   <script src="fzy.js"></script>
@@ -69,7 +69,7 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         <h3><a href="index.html">WebKit2</a></h3>
         <p>API Version: 4.1</p>
         
-        <p>Library Version: 2.38.5</p>
+        <p>Library Version: 2.39.91</p>
         
       </div>
       
@@ -130,6 +130,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="method.Settings.get_default_font_size.html">get_default_font_size</a>
   
     <a class="method" href="method.Settings.get_default_monospace_font_size.html">get_default_monospace_font_size</a>
+  
+    <a class="method" href="method.Settings.get_disable_web_security.html">get_disable_web_security</a>
   
     <a class="method" href="method.Settings.get_draw_compositing_indicators.html">get_draw_compositing_indicators</a>
   
@@ -250,6 +252,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="method" href="method.Settings.set_default_font_size.html">set_default_font_size</a>
   
     <a class="method" href="method.Settings.set_default_monospace_font_size.html">set_default_monospace_font_size</a>
+  
+    <a class="method" href="method.Settings.set_disable_web_security.html">set_disable_web_security</a>
   
     <a class="method" href="method.Settings.set_draw_compositing_indicators.html">set_draw_compositing_indicators</a>
   
@@ -381,6 +385,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
     <a class="property" href="property.Settings.default-font-size.html">default-font-size</a>
   
     <a class="property" href="property.Settings.default-monospace-font-size.html">default-monospace-font-size</a>
+  
+    <a class="property" href="property.Settings.disable-web-security.html">disable-web-security</a>
   
     <a class="property" href="property.Settings.draw-compositing-indicators.html">draw-compositing-indicators</a>
   
@@ -516,7 +522,8 @@ SPDX-License-Identifier: Apache-2.0 OR GPL-3.0-or-later
         </h4>
 
         <pre><code>class WebKit2.Settings : GObject.Object {
-  parent_instance: GObject
+  parent: GObject,
+  priv: WebKitSettingsPrivate*
 }</pre></code>
 
         <div class="docblock">
@@ -769,6 +776,14 @@ contains default&nbsp;settings.</p>
         </div>
       
         <div class="">
+          <h6><a href="method.Settings.get_disable_web_security.html">webkit_settings_get_disable_web_security</a></h6>
+          <div class="docblock">
+            <p>Get the <code>WebKitSettings:disable-web-security</code> property.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.Settings.get_draw_compositing_indicators.html">webkit_settings_get_draw_compositing_indicators</a></h6>
           <div class="docblock">
             <p>Get the <code>WebKitSettings:draw-compositing-indicators</code> property.</p>
@@ -827,9 +842,9 @@ contains default&nbsp;settings.</p>
         <div class="deprecated">
           <h6><a href="method.Settings.get_enable_frame_flattening.html">webkit_settings_get_enable_frame_flattening</a></h6>
           <div class="docblock">
-            <p>Get the <code>WebKitSettings:enable-frame-flattening</code> property.</p>
+            <p>Frame flattening is no longer supported. This function returns <code>FALSE</code>.</p>
           </div>
-          <div class="docblock"><p>Deprecated since: 2.38.</p></div>
+          <div class="docblock"><p>Deprecated since: 2.38</p></div>
         </div>
       
         <div class="">
@@ -1249,6 +1264,14 @@ contains default&nbsp;settings.</p>
         </div>
       
         <div class="">
+          <h6><a href="method.Settings.set_disable_web_security.html">webkit_settings_set_disable_web_security</a></h6>
+          <div class="docblock">
+            <p>Set the <code>WebKitSettings:disable-web-security</code> property.</p>
+          </div>
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="">
           <h6><a href="method.Settings.set_draw_compositing_indicators.html">webkit_settings_set_draw_compositing_indicators</a></h6>
           <div class="docblock">
             <p>Set the <code>WebKitSettings:draw-compositing-indicators</code> property.</p>
@@ -1307,9 +1330,9 @@ contains default&nbsp;settings.</p>
         <div class="deprecated">
           <h6><a href="method.Settings.set_enable_frame_flattening.html">webkit_settings_set_enable_frame_flattening</a></h6>
           <div class="docblock">
-            <p>Set the <code>WebKitSettings:enable-frame-flattening</code> property.</p>
+            <p>Frame flattening is no longer supported. This function does&nbsp;nothing.</p>
           </div>
-          <div class="docblock"><p>Deprecated since: 2.38.</p></div>
+          <div class="docblock"><p>Deprecated since: 2.38</p></div>
         </div>
       
         <div class="">
@@ -1808,6 +1831,16 @@ monospace font if no font size is&nbsp;specified.</p>
         </div>
       
         <div class="">
+          <h6><a href="property.Settings.disable-web-security.html">WebKit2.Settings:disable-web-security</a></h6>
+
+          <div class="docblock">
+            <p>Enable or disable support for Web Security on&nbsp;pages.</p>
+          </div>
+
+          <div class="docblock"><p>Available since: 2.40</p></div>
+        </div>
+      
+        <div class="">
           <h6><a href="property.Settings.draw-compositing-indicators.html">WebKit2.Settings:draw-compositing-indicators</a></h6>
 
           <div class="docblock">
@@ -1890,9 +1923,7 @@ with the ENABLE_ENCRYPTED_MEDIA&nbsp;flag.</p>
           <h6><a href="property.Settings.enable-frame-flattening.html">WebKit2.Settings:enable-frame-flattening</a></h6>
 
           <div class="docblock">
-            <p>Whether to enable the frame flattening. With this setting each subframe is expanded
-to its contents, which will flatten all the frames to become one scrollable page.
-On touch devices scrollable subframes on a page can result in a confusing user&nbsp;experience.</p>
+            <p>Frame flattening is no longer supported. This property does&nbsp;nothing.</p>
           </div>
 
           <div class="docblock"><p>Deprecated since: 2.38</p></div>
@@ -2217,12 +2248,8 @@ reflective <span class="caps">XSS</span> attacks on vulnerable web&nbsp;sites.</
 
           <div class="docblock">
             <p>The <code>WebKitHardwareAccelerationPolicy</code> to decide how to enable and disable
-hardware acceleration. The default value <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND</code>
-enables the hardware acceleration when the web contents request it.
-It&#8217;s possible to enforce hardware acceleration to be always enabled
-by using <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code>. And it&#8217;s also possible to disable it
-completely using <code>WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER</code>. Note that disabling hardware
-acceleration might cause some websites to not render correctly or consume more <span class="caps">CPU</span>.</p>
+hardware acceleration. Disabling hardware acceleration might
+cause some websites to not render correctly or consume more <span class="caps">CPU</span>.</p>
           </div>
 
           <div class="docblock"><p>Available since: 2.16</p></div>

@@ -37,6 +37,7 @@
 #include <wtf/RunLoop.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
+#include <wtf/glib/RunLoopSourcePriority.h>
 
 namespace API {
 
@@ -47,6 +48,7 @@ public:
     SharedJSContext()
         : m_timer(RunLoop::main(), this, &SharedJSContext::releaseContextIfNecessary)
     {
+        m_timer.setPriority(RunLoopSourcePriority::ReleaseUnusedResourcesTimer);
     }
 
     JSCContext* ensureContext()
@@ -77,7 +79,7 @@ public:
 
 private:
     GRefPtr<JSCContext> m_context;
-    RunLoop::Timer<SharedJSContext> m_timer;
+    RunLoop::Timer m_timer;
     MonotonicTime m_lastUseTime;
 };
 
@@ -87,9 +89,22 @@ static SharedJSContext& sharedContext()
     return sharedContext.get();
 }
 
+JSCContext* SerializedScriptValue::sharedJSCContext()
+{
+    return sharedContext().ensureContext();
+}
+
+GRefPtr<JSCValue> SerializedScriptValue::deserialize(WebCore::SerializedScriptValue& serializedScriptValue)
+{
+    ASSERT(RunLoop::isMain());
+
+    auto* context = sharedJSCContext();
+    return jscContextGetOrCreateValue(context, serializedScriptValue.deserialize(jscContextGetJSContext(context), nullptr));
+}
+
 static GRefPtr<JSCValue> valueFromGVariant(JSCContext* context, GVariant* variant)
 {
-    if (g_variant_is_container(variant)) {
+    if (g_variant_is_of_type(variant, G_VARIANT_TYPE("a{sv}"))) {
         auto result = adoptGRef(jsc_value_new_object(context, nullptr, nullptr));
         GVariantIter iter;
         g_variant_iter_init(&iter, variant);
@@ -123,7 +138,6 @@ static GRefPtr<JSCValue> valueFromGVariant(JSCContext* context, GVariant* varian
     if (g_variant_is_of_type(variant, G_VARIANT_TYPE_STRING))
         return adoptGRef(jsc_value_new_string(context, g_variant_get_string(variant, nullptr)));
 
-    g_warning("Unhandled %s GVariant for conversion to JSCValue", g_variant_get_type_string(variant));
     return nullptr;
 }
 
@@ -133,7 +147,7 @@ static RefPtr<WebCore::SerializedScriptValue> coreValueFromGVariant(GVariant* va
         return nullptr;
 
     ASSERT(RunLoop::isMain());
-    auto* context = sharedContext().ensureContext();
+    auto* context = SerializedScriptValue::sharedJSCContext();
     auto value = valueFromGVariant(context, variant);
     if (!value)
         return nullptr;
@@ -151,6 +165,12 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::createFromGVariant(GVariant
     if (!coreValue)
         return nullptr;
     return create(coreValue.releaseNonNull());
+}
+
+RefPtr<SerializedScriptValue> SerializedScriptValue::createFromJSCValue(JSCValue* value)
+{
+    ASSERT(jsc_value_get_context(value) == sharedJSCContext());
+    return create(jscContextGetJSContext(jsc_value_get_context(value)), jscValueGetJSValue(value), nullptr);
 }
 
 }; // namespace API

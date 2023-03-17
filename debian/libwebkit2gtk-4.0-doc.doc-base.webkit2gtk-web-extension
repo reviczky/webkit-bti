@@ -5,5 +5,5 @@ Abstract: This is the reference manual of the WebKit2 web extension and DOM API
 Section: Programming
 
 Format: HTML
-Index: /usr/share/doc/libwebkit2gtk-4.0-doc/html/webkit2gtk-web-extension-4.0/index.html
-Files: /usr/share/doc/libwebkit2gtk-4.0-doc/html/webkit2gtk-web-extension-4.0/*.html
+Index: /usr/share/doc/libwebkit2gtk-4.0-doc/html/webkit2gtk-web-extension-4.1/index.html
+Files: /usr/share/doc/libwebkit2gtk-4.0-doc/html/webkit2gtk-web-extension-4.1/*.html

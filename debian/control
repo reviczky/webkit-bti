@@ -8,7 +8,7 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Alberto Garcia <berto@igalia.com>
 X-Ubuntu-Use-Langpack: no
 Build-Depends: debhelper-compat (= 12),
-               ccache [!i386],
+               ccache [!i386 !m68k],
                bubblewrap (>= 0.3.1) [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                xdg-dbus-proxy [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
                libseccomp-dev [!alpha !ia64 !m68k !riscv64 !sh4 !sparc64 !hurd-any !kfreebsd-any],
@@ -36,6 +36,8 @@ Build-Depends: debhelper-compat (= 12),
                bison,
                flex,
                ruby:native,
+               unifdef,
+               libavif-dev,
                libjpeg-dev,
                libopenjp2-7-dev (>= 2.2.0),
                libpng-dev,
@@ -44,6 +46,7 @@ Build-Depends: debhelper-compat (= 12),
                libxt-dev,
                libgstreamer1.0-dev (>= 1.14.0),
                libgstreamer-plugins-base1.0-dev (>= 1.14.0),
+               libgstreamer-plugins-bad1.0-dev (>= 1.20.0),
                libenchant-2-dev,
                libsecret-1-dev,
                gobject-introspection (>= 1.32.0),
@@ -93,12 +96,12 @@ Description: Web content engine library for GTK - documentation
  WebKitGTK is a WebKit port designed to be used in GTK applications.
  .
  This package contains the documentation and is valid for versions 4.0,
- 4.1 and 5.0 of the API.
+ 4.1 and 6.0 of the API.
 
 Package: webkit2gtk-driver
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
+Depends: libwebkit2gtk-4.1-0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Description: WebKitGTK WebDriver support
@@ -376,7 +379,7 @@ Description: Web content engine library for GTK - GObject introspection data
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
 
-Package: libjavascriptcoregtk-5.0-0
+Package: libjavascriptcoregtk-6.0-1
 Section: libs
 Architecture: any
 Multi-Arch: same
@@ -389,16 +392,16 @@ Description: JavaScript engine library from WebKitGTK
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK port of WebKit (API version 5.0).
+ This build comes from the GTK port of WebKit (API version 6.0).
  .
  This package contains the shared libraries.
 
-Package: libjavascriptcoregtk-5.0-dev
+Package: libjavascriptcoregtk-6.0-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: libjavascriptcoregtk-5.0-0 (= ${binary:Version}),
-         gir1.2-javascriptcoregtk-5.0 (= ${binary:Version}),
+Depends: libjavascriptcoregtk-6.0-1 (= ${binary:Version}),
+         gir1.2-javascriptcoregtk-6.0 (= ${binary:Version}),
          libglib2.0-dev,
          ${misc:Depends}
 Description: JavaScript engine library from WebKitGTK - development files
@@ -407,16 +410,16 @@ Description: JavaScript engine library from WebKitGTK - development files
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK port of WebKit (API version 5.0).
+ This build comes from the GTK port of WebKit (API version 6.0).
  .
  This package contains the development files.
 
-Package: gir1.2-javascriptcoregtk-5.0
+Package: gir1.2-javascriptcoregtk-6.0
 Section: introspection
 Architecture: any
 Multi-Arch: same
 Depends: ${gir:Depends},
-         libjavascriptcoregtk-5.0-0 (= ${binary:Version}),
+         libjavascriptcoregtk-6.0-1 (= ${binary:Version}),
          ${misc:Depends}
 Description: JavaScript engine library from WebKitGTK - GObject introspection data
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
@@ -424,17 +427,17 @@ Description: JavaScript engine library from WebKitGTK - GObject introspection da
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK port of WebKit (API version 5.0).
+ This build comes from the GTK port of WebKit (API version 6.0).
  .
  This package contains the introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
 
-Package: libwebkit2gtk-5.0-0
+Package: libwebkitgtk-6.0-4
 Section: libs
 Architecture: any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
-Depends: libjavascriptcoregtk-5.0-0 (= ${binary:Version}),
+Depends: libjavascriptcoregtk-6.0-1 (= ${binary:Version}),
          gstreamer1.0-plugins-base,
          gstreamer1.0-plugins-good,
          ${bwrap:Depends},
@@ -455,20 +458,20 @@ Description: Web content engine library for GTK
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 5.0 of the API and uses libsoup v3 for
+ This build provides version 6.0 of the API and uses libsoup v3 for
  the networking stack and the GTK 4 widget toolkit.
  .
  This package contains the shared libraries.
 
-Package: libwebkit2gtk-5.0-dev
+Package: libwebkitgtk-6.0-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: libwebkit2gtk-5.0-0 (= ${binary:Version}),
-         gir1.2-webkit2-5.0 (= ${binary:Version}),
+Depends: libwebkitgtk-6.0-4 (= ${binary:Version}),
+         gir1.2-webkit-6.0 (= ${binary:Version}),
          libgtk-4-dev,
          libsoup-3.0-dev,
-         libjavascriptcoregtk-5.0-dev (= ${binary:Version}),
+         libjavascriptcoregtk-6.0-dev (= ${binary:Version}),
          ${misc:Depends}
 Description: Web content engine library for GTK - development files
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
@@ -479,17 +482,17 @@ Description: Web content engine library for GTK - development files
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 5.0 of the API and uses libsoup v3 for
+ This build provides version 6.0 of the API and uses libsoup v3 for
  the networking stack and the GTK 4 widget toolkit.
  .
  This package contains the development files.
 
-Package: gir1.2-webkit2-5.0
+Package: gir1.2-webkit-6.0
 Section: introspection
 Architecture: any
 Multi-Arch: same
-Depends: gir1.2-javascriptcoregtk-5.0 (= ${binary:Version}),
-         libwebkit2gtk-5.0-0 (= ${binary:Version}),
+Depends: gir1.2-javascriptcoregtk-6.0 (= ${binary:Version}),
+         libwebkitgtk-6.0-4 (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
 Description: Web content engine library for GTK - GObject introspection data
@@ -501,7 +504,7 @@ Description: Web content engine library for GTK - GObject introspection data
  supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  WebKitGTK is a WebKit port designed to be used in GTK applications.
- This build provides version 5.0 of the API and uses libsoup v3 for
+ This build provides version 6.0 of the API and uses libsoup v3 for
  the networking stack and the GTK 4 widget toolkit.
  .
  This package contains introspection data, which can be used by

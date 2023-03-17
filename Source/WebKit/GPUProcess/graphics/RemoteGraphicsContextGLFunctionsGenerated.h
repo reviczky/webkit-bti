@@ -296,18 +296,18 @@
         assertIsCurrent(workQueue());
         m_context->generateMipmap(target);
     }
-    void getActiveAttrib(uint32_t program, uint32_t index, CompletionHandler<void(bool, WebCore::GraphicsContextGL::ActiveInfo&&)>&& completionHandler)
+    void getActiveAttrib(uint32_t program, uint32_t index, CompletionHandler<void(bool, struct WebCore::GraphicsContextGLActiveInfo&&)>&& completionHandler)
     {
         bool returnValue = { };
-        WebCore::GraphicsContextGL::ActiveInfo arg2 { };
+        struct WebCore::GraphicsContextGLActiveInfo arg2 { };
         assertIsCurrent(workQueue());
         returnValue = m_context->getActiveAttrib(program, index, arg2);
         completionHandler(returnValue, WTFMove(arg2));
     }
-    void getActiveUniform(uint32_t program, uint32_t index, CompletionHandler<void(bool, WebCore::GraphicsContextGL::ActiveInfo&&)>&& completionHandler)
+    void getActiveUniform(uint32_t program, uint32_t index, CompletionHandler<void(bool, struct WebCore::GraphicsContextGLActiveInfo&&)>&& completionHandler)
     {
         bool returnValue = { };
-        WebCore::GraphicsContextGL::ActiveInfo arg2 { };
+        struct WebCore::GraphicsContextGLActiveInfo arg2 { };
         assertIsCurrent(workQueue());
         returnValue = m_context->getActiveUniform(program, index, arg2);
         completionHandler(returnValue, WTFMove(arg2));
@@ -333,16 +333,16 @@
         returnValue = m_context->getString(name);
         completionHandler(WTFMove(returnValue));
     }
-    void getFloatv(uint32_t pname, uint64_t valueSize, CompletionHandler<void(IPC::ArrayReference<float>)>&& completionHandler)
+    void getFloatv(uint32_t pname, size_t valueSize, CompletionHandler<void(IPC::ArrayReference<float>)>&& completionHandler)
     {
-        Vector<GCGLfloat, 16> value(static_cast<size_t>(valueSize), 0);
+        Vector<GCGLfloat, 16> value(valueSize, 0);
         assertIsCurrent(workQueue());
         m_context->getFloatv(pname, value);
         completionHandler(IPC::ArrayReference<float>(reinterpret_cast<float*>(value.data()), value.size()));
     }
-    void getIntegerv(uint32_t pname, uint64_t valueSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
+    void getIntegerv(uint32_t pname, size_t valueSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
     {
-        Vector<GCGLint, 4> value(static_cast<size_t>(valueSize), 0);
+        Vector<GCGLint, 4> value(valueSize, 0);
         assertIsCurrent(workQueue());
         m_context->getIntegerv(pname, value);
         completionHandler(IPC::ArrayReference<int32_t>(reinterpret_cast<int32_t*>(value.data()), value.size()));
@@ -375,9 +375,9 @@
         returnValue = m_context->getProgrami(program, pname);
         completionHandler(returnValue);
     }
-    void getBooleanv(uint32_t pname, uint64_t valueSize, CompletionHandler<void(IPC::ArrayReference<bool>)>&& completionHandler)
+    void getBooleanv(uint32_t pname, size_t valueSize, CompletionHandler<void(IPC::ArrayReference<bool>)>&& completionHandler)
     {
-        Vector<GCGLboolean, 4> value(static_cast<size_t>(valueSize), 0);
+        Vector<GCGLboolean, 4> value(valueSize, 0);
         assertIsCurrent(workQueue());
         m_context->getBooleanv(pname, value);
         completionHandler(IPC::ArrayReference<bool>(reinterpret_cast<bool*>(value.data()), value.size()));
@@ -446,23 +446,23 @@
         returnValue = m_context->getTexParameteri(target, pname);
         completionHandler(returnValue);
     }
-    void getUniformfv(uint32_t program, int32_t location, uint64_t valueSize, CompletionHandler<void(IPC::ArrayReference<float>)>&& completionHandler)
+    void getUniformfv(uint32_t program, int32_t location, size_t valueSize, CompletionHandler<void(IPC::ArrayReference<float>)>&& completionHandler)
     {
-        Vector<GCGLfloat, 16> value(static_cast<size_t>(valueSize), 0);
+        Vector<GCGLfloat, 16> value(valueSize, 0);
         assertIsCurrent(workQueue());
         m_context->getUniformfv(program, location, value);
         completionHandler(IPC::ArrayReference<float>(reinterpret_cast<float*>(value.data()), value.size()));
     }
-    void getUniformiv(uint32_t program, int32_t location, uint64_t valueSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
+    void getUniformiv(uint32_t program, int32_t location, size_t valueSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
     {
-        Vector<GCGLint, 4> value(static_cast<size_t>(valueSize), 0);
+        Vector<GCGLint, 4> value(valueSize, 0);
         assertIsCurrent(workQueue());
         m_context->getUniformiv(program, location, value);
         completionHandler(IPC::ArrayReference<int32_t>(reinterpret_cast<int32_t*>(value.data()), value.size()));
     }
-    void getUniformuiv(uint32_t program, int32_t location, uint64_t valueSize, CompletionHandler<void(IPC::ArrayReference<uint32_t>)>&& completionHandler)
+    void getUniformuiv(uint32_t program, int32_t location, size_t valueSize, CompletionHandler<void(IPC::ArrayReference<uint32_t>)>&& completionHandler)
     {
-        Vector<GCGLuint, 4> value(static_cast<size_t>(valueSize), 0);
+        Vector<GCGLuint, 4> value(valueSize, 0);
         assertIsCurrent(workQueue());
         m_context->getUniformuiv(program, location, value);
         completionHandler(IPC::ArrayReference<uint32_t>(reinterpret_cast<uint32_t*>(value.data()), value.size()));
@@ -869,9 +869,9 @@
         assertIsCurrent(workQueue());
         m_context->copyBufferSubData(readTarget, writeTarget, static_cast<GCGLintptr>(readOffset), static_cast<GCGLintptr>(writeOffset), static_cast<GCGLsizeiptr>(arg4));
     }
-    void getBufferSubData(uint32_t target, uint64_t offset, uint64_t dataSize, CompletionHandler<void(IPC::ArrayReference<uint8_t>)>&& completionHandler)
+    void getBufferSubData(uint32_t target, uint64_t offset, size_t dataSize, CompletionHandler<void(IPC::ArrayReference<uint8_t>)>&& completionHandler)
     {
-        Vector<GCGLchar, 4> data(static_cast<size_t>(dataSize), 0);
+        Vector<GCGLchar, 4> data(dataSize, 0);
         assertIsCurrent(workQueue());
         m_context->getBufferSubData(target, static_cast<GCGLintptr>(offset), data);
         completionHandler(IPC::ArrayReference<uint8_t>(reinterpret_cast<uint8_t*>(data.data()), data.size()));
@@ -1122,9 +1122,9 @@
         assertIsCurrent(workQueue());
         m_context->endQuery(target);
     }
-    void getQuery(uint32_t target, uint32_t pname, CompletionHandler<void(uint32_t)>&& completionHandler)
+    void getQuery(uint32_t target, uint32_t pname, CompletionHandler<void(int32_t)>&& completionHandler)
     {
-        PlatformGLObject returnValue = { };
+        GCGLint returnValue = { };
         assertIsCurrent(workQueue());
         returnValue = m_context->getQuery(target, pname);
         completionHandler(returnValue);
@@ -1261,9 +1261,9 @@
         assertIsCurrent(workQueue());
         m_context->transformFeedbackVaryings(program, varyings, bufferMode);
     }
-    void getTransformFeedbackVarying(uint32_t program, uint32_t index, CompletionHandler<void(WebCore::GraphicsContextGL::ActiveInfo&&)>&& completionHandler)
+    void getTransformFeedbackVarying(uint32_t program, uint32_t index, CompletionHandler<void(struct WebCore::GraphicsContextGLActiveInfo&&)>&& completionHandler)
     {
-        WebCore::GraphicsContextGL::ActiveInfo arg2 { };
+        struct WebCore::GraphicsContextGLActiveInfo arg2 { };
         assertIsCurrent(workQueue());
         m_context->getTransformFeedbackVarying(program, index, arg2);
         completionHandler(WTFMove(arg2));
@@ -1321,9 +1321,9 @@
         assertIsCurrent(workQueue());
         m_context->uniformBlockBinding(program, uniformBlockIndex, uniformBlockBinding);
     }
-    void getActiveUniformBlockiv(uint32_t program, uint32_t uniformBlockIndex, uint32_t pname, uint64_t paramsSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
+    void getActiveUniformBlockiv(uint32_t program, uint32_t uniformBlockIndex, uint32_t pname, size_t paramsSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
     {
-        Vector<GCGLint, 4> params(static_cast<size_t>(paramsSize), 0);
+        Vector<GCGLint, 4> params(paramsSize, 0);
         assertIsCurrent(workQueue());
         m_context->getActiveUniformBlockiv(program, uniformBlockIndex, pname, params);
         completionHandler(IPC::ArrayReference<int32_t>(reinterpret_cast<int32_t*>(params.data()), params.size()));
@@ -1339,6 +1339,68 @@
     {
         assertIsCurrent(workQueue());
         m_context->drawBuffersEXT(makeGCGLSpan(reinterpret_cast<const GCGLenum*>(bufs.data()), bufs.size()));
+    }
+    void createQueryEXT(CompletionHandler<void(uint32_t)>&& completionHandler)
+    {
+        PlatformGLObject returnValue = { };
+        assertIsCurrent(workQueue());
+        returnValue = m_context->createQueryEXT();
+        completionHandler(returnValue);
+    }
+    void deleteQueryEXT(uint32_t query)
+    {
+        assertIsCurrent(workQueue());
+        m_context->deleteQueryEXT(query);
+    }
+    void isQueryEXT(uint32_t query, CompletionHandler<void(bool)>&& completionHandler)
+    {
+        GCGLboolean returnValue = { };
+        assertIsCurrent(workQueue());
+        returnValue = m_context->isQueryEXT(query);
+        completionHandler(static_cast<bool>(returnValue));
+    }
+    void beginQueryEXT(uint32_t target, uint32_t query)
+    {
+        assertIsCurrent(workQueue());
+        m_context->beginQueryEXT(target, query);
+    }
+    void endQueryEXT(uint32_t target)
+    {
+        assertIsCurrent(workQueue());
+        m_context->endQueryEXT(target);
+    }
+    void queryCounterEXT(uint32_t query, uint32_t target)
+    {
+        assertIsCurrent(workQueue());
+        m_context->queryCounterEXT(query, target);
+    }
+    void getQueryiEXT(uint32_t target, uint32_t pname, CompletionHandler<void(int32_t)>&& completionHandler)
+    {
+        GCGLint returnValue = { };
+        assertIsCurrent(workQueue());
+        returnValue = m_context->getQueryiEXT(target, pname);
+        completionHandler(returnValue);
+    }
+    void getQueryObjectiEXT(uint32_t query, uint32_t pname, CompletionHandler<void(int32_t)>&& completionHandler)
+    {
+        GCGLint returnValue = { };
+        assertIsCurrent(workQueue());
+        returnValue = m_context->getQueryObjectiEXT(query, pname);
+        completionHandler(returnValue);
+    }
+    void getQueryObjectui64EXT(uint32_t query, uint32_t pname, CompletionHandler<void(uint64_t)>&& completionHandler)
+    {
+        GCGLuint64 returnValue = { };
+        assertIsCurrent(workQueue());
+        returnValue = m_context->getQueryObjectui64EXT(query, pname);
+        completionHandler(static_cast<uint64_t>(returnValue));
+    }
+    void getInteger64EXT(uint32_t pname, CompletionHandler<void(int64_t)>&& completionHandler)
+    {
+        GCGLint64 returnValue = { };
+        assertIsCurrent(workQueue());
+        returnValue = m_context->getInteger64EXT(pname);
+        completionHandler(static_cast<int64_t>(returnValue));
     }
     void enableiOES(uint32_t target, uint32_t index)
     {
@@ -1385,11 +1447,28 @@
         assertIsCurrent(workQueue());
         m_context->drawElementsInstancedBaseVertexBaseInstanceANGLE(mode, count, type, static_cast<GCGLintptr>(offset), instanceCount, baseVertex, baseInstance);
     }
-    void getInternalformativ(uint32_t target, uint32_t internalformat, uint32_t pname, uint64_t paramsSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
+    void provokingVertexANGLE(uint32_t provokeMode)
     {
-        Vector<GCGLint, 4> params(static_cast<size_t>(paramsSize), 0);
+        assertIsCurrent(workQueue());
+        m_context->provokingVertexANGLE(provokeMode);
+    }
+    void getInternalformativ(uint32_t target, uint32_t internalformat, uint32_t pname, size_t paramsSize, CompletionHandler<void(IPC::ArrayReference<int32_t>)>&& completionHandler)
+    {
+        Vector<GCGLint, 4> params(paramsSize, 0);
         assertIsCurrent(workQueue());
         m_context->getInternalformativ(target, internalformat, pname, params);
         completionHandler(IPC::ArrayReference<int32_t>(reinterpret_cast<int32_t*>(params.data()), params.size()));
+    }
+    void setDrawingBufferColorSpace(WebCore::DestinationColorSpace&& arg0)
+    {
+        assertIsCurrent(workQueue());
+        m_context->setDrawingBufferColorSpace(arg0);
+    }
+    void paintRenderingResultsToPixelBuffer(CompletionHandler<void(RefPtr<WebCore::PixelBuffer>&&)>&& completionHandler)
+    {
+        RefPtr<WebCore::PixelBuffer> returnValue = { };
+        assertIsCurrent(workQueue());
+        returnValue = m_context->paintRenderingResultsToPixelBuffer();
+        completionHandler(WTFMove(returnValue));
     }
 
