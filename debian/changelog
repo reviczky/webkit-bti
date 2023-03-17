@@ -8,8 +8,8 @@ webkit2gtk (2.40.0-1) UNRELEASED; urgency=medium
   * debian/rules:
     - Build with -DDEBUG_FISSION=OFF since it adds the -gsplit-dwarf flag
       that is currently not supported by dh_dwz (see #1016936).
-    - Disable WebGL in armel and mipsel to work around a FTBFS caused by
-      upstream bug #252670.
+    - Disable WebGL in armel, mipsel, m68k, powerpc and sh4 to work around
+      a FTBFS caused by upstream bug #252670.
     - Stop passing -DUSE_LD_GOLD=OFF, this option no longer exists (and
       update reduce-memory-overheads.patch accordingly).
     - Use reduced optimizations on m68k in order to lower memory
