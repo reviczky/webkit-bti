@@ -2,6 +2,8 @@ webkit2gtk (2.40.0-2) UNRELEASED; urgency=medium
 
   * debian/patches/fix-script-message-received-marshaller.patch:
     - Cherry pick fix for a regression that affects Epiphany.
+  * debian/patches/fix-gst-crash.patch:
+    - Cherry pick fix for a GStreamer-related crash.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 18 Mar 2023 11:41:32 +0100
 
