@@ -148,6 +148,11 @@ else
 	DH_GENCONTROL_ARGS += -Vgst:Recommends="gstreamer1.0-libav, gstreamer1.0-plugins-bad"
 endif
 
+# This is loaded at runtime using libepoxy so add an explicit dependency (#1033230)
+ifneq (,$(filter $(DEB_HOST_ARCH),arm64 armel armhf))
+	DH_GENCONTROL_ARGS += -Vgles:Depends="libgles2"
+endif
+
 CXXFLAGS=$(CFLAGS)
 
 # Disable commands and binary packages of the builds that we don't want

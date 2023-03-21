@@ -61,6 +61,7 @@ Depends: @LIBJSC_PKG@ (= ${binary:Version}),
          gstreamer1.0-plugins-good,
          ${bwrap:Depends},
          ${shlibs:Depends},
+         ${gles:Depends},
          ${misc:Depends}
 Recommends: gstreamer1.0-gl,
             libgl1-mesa-dri,
