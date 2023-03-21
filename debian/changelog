@@ -1,4 +1,4 @@
-webkit2gtk (2.40.0-3) UNRELEASED; urgency=medium
+webkit2gtk (2.40.0-3) unstable; urgency=medium
 
   * debian/{rules,control.in}:
     - Add dependency on libgles2 on arm (Closes: #1033230).
