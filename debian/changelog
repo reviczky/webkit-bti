@@ -1,5 +1,7 @@
 wpewebkit (2.39.91-2) UNRELEASED; urgency=medium
 
+  * debian/gbp.conf:
+    - Update upstream branch name.
   * debian/rules:
     - Disable WebGL in armel and mipsel to work around a FTBFS caused by
       upstream bug #252670.
