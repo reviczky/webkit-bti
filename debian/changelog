@@ -1,4 +1,4 @@
-wpewebkit (2.40.0-1) UNRELEASED; urgency=medium
+wpewebkit (2.40.0-1) experimental; urgency=medium
 
   * New upstream release.
   * Refresh all patches.
@@ -8,7 +8,7 @@ wpewebkit (2.40.0-1) UNRELEASED; urgency=medium
     - Disable WebGL in armel and mipsel to work around a FTBFS caused by
       upstream bug #252670.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 15 Mar 2023 17:45:55 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 22 Mar 2023 13:39:34 +0100
 
 wpewebkit (2.39.91-1) experimental; urgency=medium
 
