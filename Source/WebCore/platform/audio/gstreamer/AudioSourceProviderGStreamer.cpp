@@ -105,7 +105,7 @@ AudioSourceProviderGStreamer::AudioSourceProviderGStreamer(MediaStreamTrackPriva
     m_pipeline = gst_element_factory_make("pipeline", pipelineName.utf8().data());
     GST_DEBUG_OBJECT(m_pipeline.get(), "MediaStream WebAudio provider created");
 
-    m_streamPrivate = MediaStreamPrivate::create(source.logger(), { source });
+    m_streamPrivate = MediaStreamPrivate::create(Logger::create(this), { source });
 
     m_audioSinkBin = gst_parse_bin_from_description("tee name=audioTee", true, nullptr);
 
@@ -178,7 +178,9 @@ AudioSourceProviderGStreamer::AudioSourceProviderGStreamer(MediaStreamTrackPriva
 
 AudioSourceProviderGStreamer::~AudioSourceProviderGStreamer()
 {
+#if ENABLE(MEDIA_STREAM)
     GST_DEBUG_OBJECT(m_pipeline.get(), "Disposing");
+#endif
     m_notifier->invalidate();
 
     auto deinterleave = adoptGRef(gst_bin_get_by_name(GST_BIN_CAST(m_audioSinkBin.get()), "deinterleave"));
@@ -192,8 +194,8 @@ AudioSourceProviderGStreamer::~AudioSourceProviderGStreamer()
 #if ENABLE(MEDIA_STREAM)
     if (m_pipeline)
         gst_element_set_state(m_pipeline.get(), GST_STATE_NULL);
-#endif
     GST_DEBUG_OBJECT(m_pipeline.get(), "Disposing DONE");
+#endif
 }
 
 void AudioSourceProviderGStreamer::configureAudioBin(GstElement* audioBin, GstElement* audioSink)
