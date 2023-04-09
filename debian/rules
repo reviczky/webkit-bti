@@ -55,6 +55,11 @@ ifneq (,$(filter $(DEB_HOST_ARCH),armel mipsel m68k powerpc sh4))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_WEBGL=OFF
 endif
 
+# libgbm-dev is not available in the Hurd (#1033999)
+ifneq (,$(filter $(DEB_HOST_ARCH),hurd-i386))
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_GBM=OFF
+endif
+
 # Systemd/elogind and libmanette are Linux-only
 ifneq ($(DEB_HOST_ARCH_OS),linux)
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JOURNALD_LOG=OFF -DENABLE_GAMEPAD=OFF

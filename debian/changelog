@@ -1,3 +1,10 @@
+webkit2gtk (2.40.0-4) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    - Build with -DUSE_GBM=OFF in the Hurd (Closes: #1033999).
+
+ -- Alberto Garcia <berto@igalia.com>  Sun, 09 Apr 2023 16:38:48 +0200
+
 webkit2gtk (2.40.0-3) unstable; urgency=medium
 
   * debian/{rules,control.in}:
